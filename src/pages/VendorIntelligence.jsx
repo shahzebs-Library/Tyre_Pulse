@@ -79,7 +79,7 @@ function fmtPct(v) {
 }
 
 function cpkColor(cpk) {
-  if (cpk == null || !isFinite(cpk)) return 'text-gray-500'
+  if (cpk == null || !isFinite(cpk)) return 'text-[var(--text-muted)]'
   if (cpk <= 1.0) return 'text-green-400'
   if (cpk <= 2.0) return 'text-yellow-400'
   return 'text-red-400'
@@ -100,15 +100,15 @@ function riskColor(rate) {
 
 function rankBadgeStyle(rank) {
   if (rank === 1) return { bg: 'bg-yellow-500/20 border-yellow-500/50', text: 'text-yellow-400', icon: '🥇' }
-  if (rank === 2) return { bg: 'bg-gray-400/10 border-gray-400/40', text: 'text-gray-300', icon: '🥈' }
+  if (rank === 2) return { bg: 'bg-gray-400/10 border-gray-400/40', text: 'text-[var(--text-secondary)]', icon: '🥈' }
   if (rank === 3) return { bg: 'bg-amber-700/20 border-amber-700/40', text: 'text-amber-600', icon: '🥉' }
-  return { bg: 'bg-gray-800/40 border-gray-700/30', text: 'text-gray-400', icon: null }
+  return { bg: 'bg-[var(--surface-2)] border-[var(--border-bright)]', text: 'text-[var(--text-secondary)]', icon: null }
 }
 
 function miniBar(pct, color = '#3b82f6') {
   const clamped = Math.min(Math.max(pct, 0), 100)
   return (
-    <div className="h-1.5 bg-gray-800 rounded-full overflow-hidden mt-1">
+    <div className="h-1.5 bg-[var(--surface-2)] rounded-full overflow-hidden mt-1">
       <div className="h-full rounded-full transition-all duration-500" style={{ width: `${clamped}%`, backgroundColor: color }} />
     </div>
   )
@@ -643,7 +643,7 @@ export default function VendorIntelligence() {
 
   // ── Sort indicator component ────────────────────────────────────────────
   function SortIcon({ col, activeCol, dir }) {
-    if (col !== activeCol) return <Minus size={11} className="text-gray-600 ml-0.5" />
+    if (col !== activeCol) return <Minus size={11} className="text-[var(--text-dim)] ml-0.5" />
     return dir === 'desc'
       ? <ChevronDown size={11} className="text-green-400 ml-0.5" />
       : <ChevronUp size={11} className="text-green-400 ml-0.5" />
@@ -652,7 +652,7 @@ export default function VendorIntelligence() {
   function Th({ col, label, onSort, activeCol, dir, className = '' }) {
     return (
       <th
-        className={`table-header text-right py-2 px-3 cursor-pointer select-none hover:text-white transition-colors ${className}`}
+        className={`table-header text-right py-2 px-3 cursor-pointer select-none hover:text-[var(--text-primary)] transition-colors ${className}`}
         onClick={() => onSort(col)}
       >
         <span className="flex items-center justify-end gap-0.5">
@@ -666,7 +666,7 @@ export default function VendorIntelligence() {
   // ── Loading / Error / Empty ───────────────────────────────────────────────
   if (loading) {
     return (
-      <div className="flex flex-col items-center justify-center h-72 gap-4 text-gray-400">
+      <div className="flex flex-col items-center justify-center h-72 gap-4 text-[var(--text-secondary)]">
         <RefreshCw className="animate-spin text-green-500" size={36} />
         <span className="text-sm">{t('vendorintel.loading')}</span>
       </div>
@@ -680,7 +680,7 @@ export default function VendorIntelligence() {
         <span className="text-sm font-medium">{error}</span>
         <button
           onClick={load}
-          className="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-white rounded-lg text-sm transition-colors"
+          className="px-4 py-2 bg-[var(--surface-2)] hover:bg-[var(--surface-3)] text-[var(--text-primary)] rounded-lg text-sm transition-colors"
         >
           {t('vendorintel.retry')}
         </button>
@@ -703,19 +703,19 @@ export default function VendorIntelligence() {
           <div className="flex items-center gap-2">
             <button
               onClick={handleExcelExport}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-lg text-xs transition-colors border border-gray-700"
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-[var(--surface-2)] hover:bg-[var(--surface-3)] text-[var(--text-secondary)] rounded-lg text-xs transition-colors border border-[var(--border-bright)]"
             >
               <Download size={13} /> {t('vendorintel.actions.excel')}
             </button>
             <button
               onClick={handlePdfExport}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-lg text-xs transition-colors border border-gray-700"
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-[var(--surface-2)] hover:bg-[var(--surface-3)] text-[var(--text-secondary)] rounded-lg text-xs transition-colors border border-[var(--border-bright)]"
             >
               <FileText size={13} /> {t('vendorintel.actions.pdf')}
             </button>
             <button
               onClick={() => setEmailModalOpen(true)}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-lg text-xs transition-colors border border-gray-700"
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-[var(--surface-2)] hover:bg-[var(--surface-3)] text-[var(--text-secondary)] rounded-lg text-xs transition-colors border border-[var(--border-bright)]"
             >
               <Mail size={13} /> {t('vendorintel.actions.emailReport')}
             </button>
@@ -729,11 +729,11 @@ export default function VendorIntelligence() {
         <PeriodFilter records={records} value={period} onChange={setPeriod} />
 
         {/* Divider */}
-        <div className="h-4 w-px bg-gray-700" />
+        <div className="h-4 w-px bg-[var(--surface-3)]" />
 
         {/* Site filter */}
         <select
-          className="bg-gray-800 border border-gray-700 text-gray-300 text-xs rounded-lg px-3 py-1.5 focus:outline-none focus:border-green-600"
+          className="bg-[var(--surface-2)] border border-[var(--border-bright)] text-[var(--text-secondary)] text-xs rounded-lg px-3 py-1.5 focus:outline-none focus:border-green-600"
           value={siteFilter}
           onChange={e => setSiteFilter(e.target.value)}
         >
@@ -743,7 +743,7 @@ export default function VendorIntelligence() {
 
         {/* Position filter */}
         <select
-          className="bg-gray-800 border border-gray-700 text-gray-300 text-xs rounded-lg px-3 py-1.5 focus:outline-none focus:border-green-600"
+          className="bg-[var(--surface-2)] border border-[var(--border-bright)] text-[var(--text-secondary)] text-xs rounded-lg px-3 py-1.5 focus:outline-none focus:border-green-600"
           value={positionFilter}
           onChange={e => setPositionFilter(e.target.value)}
         >
@@ -754,35 +754,35 @@ export default function VendorIntelligence() {
 
         {/* Min records */}
         <div className="flex items-center gap-2">
-          <span className="text-xs text-gray-500">{t('vendorintel.filters.minRecords')}</span>
+          <span className="text-xs text-[var(--text-muted)]">{t('vendorintel.filters.minRecords')}</span>
           <input
             type="number"
             min={1}
             max={50}
             value={minRecords}
             onChange={e => setMinRecords(Math.max(1, Number(e.target.value)))}
-            className="bg-gray-800 border border-gray-700 text-gray-300 text-xs rounded-lg px-2 py-1.5 w-16 focus:outline-none focus:border-green-600"
+            className="bg-[var(--surface-2)] border border-[var(--border-bright)] text-[var(--text-secondary)] text-xs rounded-lg px-2 py-1.5 w-16 focus:outline-none focus:border-green-600"
           />
         </div>
 
         <button
           onClick={load}
-          className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white rounded-lg text-xs transition-colors"
+          className="flex items-center gap-1.5 px-3 py-1.5 bg-[var(--surface-2)] hover:bg-[var(--surface-3)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] rounded-lg text-xs transition-colors"
         >
           <RefreshCw size={12} /> {t('vendorintel.filters.refresh')}
         </button>
 
-        <span className="ml-auto text-xs text-gray-500">{t('vendorintel.filters.recordsCount', { count: filteredRecords.length.toLocaleString() })}</span>
+        <span className="ml-auto text-xs text-[var(--text-muted)]">{t('vendorintel.filters.recordsCount', { count: filteredRecords.length.toLocaleString() })}</span>
       </div>
 
       {/* ─── Section Toggle ──────────────────────────────────────────────────── */}
-      <div className="flex gap-1 p-1 bg-gray-900 border border-gray-800 rounded-xl w-fit">
+      <div className="flex gap-1 p-1 bg-[var(--surface-1)] border border-[var(--border-dim)] rounded-xl w-fit">
         <button
           onClick={() => setActiveSection('vendors')}
           className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
             activeSection === 'vendors'
               ? 'bg-green-600 text-white shadow-sm'
-              : 'text-gray-400 hover:text-white'
+              : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
           }`}
         >
           <Package size={15} /> {t('vendorintel.sections.brandRankings')}
@@ -792,7 +792,7 @@ export default function VendorIntelligence() {
           className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
             activeSection === 'workshops'
               ? 'bg-green-600 text-white shadow-sm'
-              : 'text-gray-400 hover:text-white'
+              : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
           }`}
         >
           <Building2 size={15} /> {t('vendorintel.sections.workshopPerformance')}
@@ -819,7 +819,7 @@ export default function VendorIntelligence() {
               </h2>
 
               {!hasVendorData ? (
-                <div className="card text-center py-16 text-gray-600 text-sm">
+                <div className="card text-center py-16 text-[var(--text-dim)] text-sm">
                   {t('vendorintel.vendor.emptyThreshold', { minRecords })}
                 </div>
               ) : (
@@ -835,25 +835,25 @@ export default function VendorIntelligence() {
                           initial={{ opacity: 0, scale: 0.97 }}
                           animate={{ opacity: 1, scale: 1 }}
                           transition={{ delay: v.rank * 0.05 }}
-                          className={`bg-gray-900 border rounded-xl p-5 ${badge.bg}`}
+                          className={`bg-[var(--surface-1)] border rounded-xl p-5 ${badge.bg}`}
                         >
                           <div className="flex items-start justify-between mb-3">
                             <div className="flex items-center gap-2">
                               <span className="text-2xl">{badge.icon ?? `#${v.rank}`}</span>
                               <div>
                                 <p className={`text-xs font-bold uppercase tracking-wider ${badge.text}`}>{t('vendorintel.vendor.rank', { rank: v.rank })}</p>
-                                <p className="text-lg font-bold text-white">{v.brand}</p>
+                                <p className="text-lg font-bold text-[var(--text-primary)]">{v.brand}</p>
                               </div>
                             </div>
                             <div className="text-right">
-                              <p className="text-2xl font-black text-white">{v.displayScore.toFixed(0)}</p>
-                              <p className="text-[10px] text-gray-500">{t('vendorintel.vendor.outOf100')}</p>
+                              <p className="text-2xl font-black text-[var(--text-primary)]">{v.displayScore.toFixed(0)}</p>
+                              <p className="text-[10px] text-[var(--text-muted)]">{t('vendorintel.vendor.outOf100')}</p>
                             </div>
                           </div>
 
                           {/* Score bar */}
                           <div className="mb-4">
-                            <div className="h-2 bg-gray-800 rounded-full overflow-hidden">
+                            <div className="h-2 bg-[var(--surface-2)] rounded-full overflow-hidden">
                               <div
                                 className={`h-full rounded-full transition-all duration-700 ${
                                   v.rank === 1 ? 'bg-yellow-400' : v.rank === 2 ? 'bg-gray-400' : 'bg-amber-600'
@@ -868,7 +868,7 @@ export default function VendorIntelligence() {
                             {/* CPK */}
                             <div>
                               <div className="flex justify-between text-xs mb-0.5">
-                                <span className="text-gray-500">{t('vendorintel.vendor.avgCpk')}</span>
+                                <span className="text-[var(--text-muted)]">{t('vendorintel.vendor.avgCpk')}</span>
                                 <span className={`font-semibold ${cpkColor(v.avgCpk)}`}>
                                   {v.avgCpk != null ? fmtCpk(v.avgCpk, activeCurrency) : t('vendorintel.na')}
                                 </span>
@@ -881,7 +881,7 @@ export default function VendorIntelligence() {
                             {/* Failure Rate */}
                             <div>
                               <div className="flex justify-between text-xs mb-0.5">
-                                <span className="text-gray-500">{t('vendorintel.vendor.failureRate')}</span>
+                                <span className="text-[var(--text-muted)]">{t('vendorintel.vendor.failureRate')}</span>
                                 <span className={`font-semibold ${riskColor((v.failureRate ?? 0) * 100)}`}>
                                   {fmtPct(v.failureRate)}
                                 </span>
@@ -891,14 +891,14 @@ export default function VendorIntelligence() {
                             {/* Avg Life */}
                             <div>
                               <div className="flex justify-between text-xs mb-0.5">
-                                <span className="text-gray-500">{t('vendorintel.vendor.avgTyreLife')}</span>
-                                <span className="text-gray-200 font-medium">{fmtKm(v.avgLifeKm)}</span>
+                                <span className="text-[var(--text-muted)]">{t('vendorintel.vendor.avgTyreLife')}</span>
+                                <span className="text-[var(--text-primary)] font-medium">{fmtKm(v.avgLifeKm)}</span>
                               </div>
                             </div>
                             {/* Scrap Rate */}
                             <div>
                               <div className="flex justify-between text-xs mb-0.5">
-                                <span className="text-gray-500">{t('vendorintel.vendor.scrapRate')}</span>
+                                <span className="text-[var(--text-muted)]">{t('vendorintel.vendor.scrapRate')}</span>
                                 <span className={`font-semibold ${(v.scrapRate ?? 0) > 0.20 ? 'text-red-400' : (v.scrapRate ?? 0) > 0.10 ? 'text-yellow-400' : 'text-green-400'}`}>
                                   {fmtPct(v.scrapRate)}
                                 </span>
@@ -906,14 +906,14 @@ export default function VendorIntelligence() {
                             </div>
                             {/* Records */}
                             <div className="flex justify-between text-xs">
-                              <span className="text-gray-500">{t('vendorintel.vendor.totalRecords')}</span>
-                              <span className="text-gray-200 font-medium">{v.count.toLocaleString()}</span>
+                              <span className="text-[var(--text-muted)]">{t('vendorintel.vendor.totalRecords')}</span>
+                              <span className="text-[var(--text-primary)] font-medium">{v.count.toLocaleString()}</span>
                             </div>
                           </div>
 
-                          <div className="mt-3 pt-3 border-t border-gray-800 flex justify-between text-xs">
-                            <span className="text-gray-500">{t('vendorintel.vendor.totalInvestment')}</span>
-                            <span className="text-gray-200 font-semibold">{totalCostDisplay}</span>
+                          <div className="mt-3 pt-3 border-t border-[var(--border-dim)] flex justify-between text-xs">
+                            <span className="text-[var(--text-muted)]">{t('vendorintel.vendor.totalInvestment')}</span>
+                            <span className="text-[var(--text-primary)] font-semibold">{totalCostDisplay}</span>
                           </div>
                         </motion.div>
                       )
@@ -922,33 +922,33 @@ export default function VendorIntelligence() {
 
                   {/* Remaining brands compact table */}
                   {enrichedVendors.length > 3 && (
-                    <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 overflow-x-auto">
-                      <p className="text-xs font-semibold text-gray-400 mb-3">{t('vendorintel.vendor.remainingBrands')}</p>
+                    <div className="bg-[var(--surface-1)] border border-[var(--border-dim)] rounded-xl p-4 overflow-x-auto">
+                      <p className="text-xs font-semibold text-[var(--text-secondary)] mb-3">{t('vendorintel.vendor.remainingBrands')}</p>
                       <table className="min-w-full text-xs">
                         <thead>
                           <tr>
-                            <th className="text-left py-2 pr-4 text-gray-500 font-medium">{t('vendorintel.vendor.columns.rank')}</th>
-                            <th className="text-left py-2 pr-4 text-gray-500 font-medium">{t('vendorintel.vendor.columns.brand')}</th>
-                            <th className="text-right py-2 px-3 text-gray-500 font-medium">{t('vendorintel.vendor.columns.records')}</th>
-                            <th className="text-right py-2 px-3 text-gray-500 font-medium">{t('vendorintel.vendor.columns.avgCpk')}</th>
-                            <th className="text-right py-2 px-3 text-gray-500 font-medium">{t('vendorintel.vendor.columns.failureRate')}</th>
-                            <th className="text-right py-2 px-3 text-gray-500 font-medium">{t('vendorintel.vendor.columns.avgLife')}</th>
-                            <th className="text-right py-2 px-3 text-gray-500 font-medium">{t('vendorintel.vendor.columns.score')}</th>
+                            <th className="text-left py-2 pr-4 text-[var(--text-muted)] font-medium">{t('vendorintel.vendor.columns.rank')}</th>
+                            <th className="text-left py-2 pr-4 text-[var(--text-muted)] font-medium">{t('vendorintel.vendor.columns.brand')}</th>
+                            <th className="text-right py-2 px-3 text-[var(--text-muted)] font-medium">{t('vendorintel.vendor.columns.records')}</th>
+                            <th className="text-right py-2 px-3 text-[var(--text-muted)] font-medium">{t('vendorintel.vendor.columns.avgCpk')}</th>
+                            <th className="text-right py-2 px-3 text-[var(--text-muted)] font-medium">{t('vendorintel.vendor.columns.failureRate')}</th>
+                            <th className="text-right py-2 px-3 text-[var(--text-muted)] font-medium">{t('vendorintel.vendor.columns.avgLife')}</th>
+                            <th className="text-right py-2 px-3 text-[var(--text-muted)] font-medium">{t('vendorintel.vendor.columns.score')}</th>
                           </tr>
                         </thead>
                         <tbody>
                           {enrichedVendors.slice(3).map((v, i) => (
                             <tr key={v.brand} className={i % 2 === 0 ? '' : 'bg-white/[0.02]'}>
-                              <td className="py-2 pr-4 text-gray-500">#{v.rank}</td>
-                              <td className="py-2 pr-4 font-medium text-gray-200">{v.brand}</td>
-                              <td className="py-2 px-3 text-right text-gray-300">{v.count}</td>
+                              <td className="py-2 pr-4 text-[var(--text-muted)]">#{v.rank}</td>
+                              <td className="py-2 pr-4 font-medium text-[var(--text-primary)]">{v.brand}</td>
+                              <td className="py-2 px-3 text-right text-[var(--text-secondary)]">{v.count}</td>
                               <td className={`py-2 px-3 text-right font-semibold ${cpkColor(v.avgCpk)}`}>
                                 {v.avgCpk != null ? v.avgCpk.toFixed(4) : t('vendorintel.na')}
                               </td>
                               <td className={`py-2 px-3 text-right font-semibold ${riskColor((v.failureRate ?? 0) * 100)}`}>
                                 {fmtPct(v.failureRate)}
                               </td>
-                              <td className="py-2 px-3 text-right text-gray-300">{fmtKm(v.avgLifeKm)}</td>
+                              <td className="py-2 px-3 text-right text-[var(--text-secondary)]">{fmtKm(v.avgLifeKm)}</td>
                               <td className="py-2 px-3 text-right text-green-400 font-semibold">{v.displayScore.toFixed(0)}</td>
                             </tr>
                           ))}
@@ -971,13 +971,13 @@ export default function VendorIntelligence() {
                   {/* Radar chart */}
                   <div className="card">
                     <p className="text-xs font-semibold text-[var(--text-primary)] mb-1">{t('vendorintel.vendor.radarTitle')}</p>
-                    <p className="text-[10px] text-gray-600 mb-3">{t('vendorintel.vendor.radarSub')}</p>
+                    <p className="text-[10px] text-[var(--text-dim)] mb-3">{t('vendorintel.vendor.radarSub')}</p>
                     {radarData ? (
                       <div style={{ height: 300 }}>
                         <Radar data={radarData} options={radarOpts()} />
                       </div>
                     ) : (
-                      <div className="flex items-center justify-center h-[300px] text-gray-600 text-xs">
+                      <div className="flex items-center justify-center h-[300px] text-[var(--text-dim)] text-xs">
                         {t('vendorintel.vendor.radarInsufficient')}
                       </div>
                     )}
@@ -986,7 +986,7 @@ export default function VendorIntelligence() {
                   {/* CPK bar chart */}
                   <div className="card">
                     <p className="text-xs font-semibold text-[var(--text-primary)] mb-1">{t('vendorintel.vendor.cpkChartTitle', { currency: activeCurrency })}</p>
-                    <p className="text-[10px] text-gray-600 mb-3">{t('vendorintel.vendor.cpkChartSub')}</p>
+                    <p className="text-[10px] text-[var(--text-dim)] mb-3">{t('vendorintel.vendor.cpkChartSub')}</p>
                     {cpkBarData.labels.length > 0 ? (
                       <div style={{ height: 280 }}>
                         <Bar
@@ -1010,7 +1010,7 @@ export default function VendorIntelligence() {
                         />
                       </div>
                     ) : (
-                      <div className="flex items-center justify-center h-[280px] text-gray-600 text-xs">
+                      <div className="flex items-center justify-center h-[280px] text-[var(--text-dim)] text-xs">
                         {t('vendorintel.vendor.cpkChartEmpty')}
                       </div>
                     )}
@@ -1019,7 +1019,7 @@ export default function VendorIntelligence() {
                   {/* Tyre Life bar chart */}
                   <div className="card">
                     <p className="text-xs font-semibold text-[var(--text-primary)] mb-1">{t('vendorintel.vendor.lifeChartTitle')}</p>
-                    <p className="text-[10px] text-gray-600 mb-3">{t('vendorintel.vendor.lifeChartSub')}</p>
+                    <p className="text-[10px] text-[var(--text-dim)] mb-3">{t('vendorintel.vendor.lifeChartSub')}</p>
                     {lifeBarData.labels.length > 0 ? (
                       <div style={{ height: 280 }}>
                         <Bar
@@ -1057,7 +1057,7 @@ export default function VendorIntelligence() {
                         />
                       </div>
                     ) : (
-                      <div className="flex items-center justify-center h-[280px] text-gray-600 text-xs">
+                      <div className="flex items-center justify-center h-[280px] text-[var(--text-dim)] text-xs">
                         {t('vendorintel.vendor.lifeChartEmpty')}
                       </div>
                     )}
@@ -1066,7 +1066,7 @@ export default function VendorIntelligence() {
                   {/* Failure Rate bar chart */}
                   <div className="card">
                     <p className="text-xs font-semibold text-[var(--text-primary)] mb-1">{t('vendorintel.vendor.failureChartTitle')}</p>
-                    <p className="text-[10px] text-gray-600 mb-3">{t('vendorintel.vendor.failureChartSub')}</p>
+                    <p className="text-[10px] text-[var(--text-dim)] mb-3">{t('vendorintel.vendor.failureChartSub')}</p>
                     {failureBarData.labels.length > 0 ? (
                       <div style={{ height: 280 }}>
                         <Bar
@@ -1104,7 +1104,7 @@ export default function VendorIntelligence() {
                         />
                       </div>
                     ) : (
-                      <div className="flex items-center justify-center h-[280px] text-gray-600 text-xs">
+                      <div className="flex items-center justify-center h-[280px] text-[var(--text-dim)] text-xs">
                         {t('vendorintel.vendor.failureChartEmpty')}
                       </div>
                     )}
@@ -1119,12 +1119,12 @@ export default function VendorIntelligence() {
                 <h2 className="text-sm font-semibold text-[var(--text-primary)] mb-3 flex items-center gap-2">
                   <Target size={15} className="text-green-400" /> {t('vendorintel.vendor.fullTableTitle')}
                 </h2>
-                <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 overflow-x-auto">
+                <div className="bg-[var(--surface-1)] border border-[var(--border-dim)] rounded-xl p-4 overflow-x-auto">
                   <table className="min-w-full text-xs">
                     <thead>
-                      <tr className="border-b border-gray-800">
-                        <th className="text-left py-2.5 pr-4 text-gray-500 font-medium">{t('vendorintel.vendor.columns.rank')}</th>
-                        <th className="text-left py-2.5 pr-4 text-gray-500 font-medium">{t('vendorintel.vendor.columns.brand')}</th>
+                      <tr className="border-b border-[var(--border-dim)]">
+                        <th className="text-left py-2.5 pr-4 text-[var(--text-muted)] font-medium">{t('vendorintel.vendor.columns.rank')}</th>
+                        <th className="text-left py-2.5 pr-4 text-[var(--text-muted)] font-medium">{t('vendorintel.vendor.columns.brand')}</th>
                         <Th col="count" label={t('vendorintel.vendor.columns.records')} onSort={handleSort} activeCol={sortCol} dir={sortDir} />
                         <Th col="validCount" label={t('vendorintel.vendor.columns.validCpk')} onSort={handleSort} activeCol={sortCol} dir={sortDir} />
                         <Th col="avgCpk" label={t('vendorintel.vendor.columns.avgCpk')} onSort={handleSort} activeCol={sortCol} dir={sortDir} />
@@ -1146,16 +1146,16 @@ export default function VendorIntelligence() {
                                 {badge.icon ? badge.icon : `#${v.rank}`}
                               </span>
                             </td>
-                            <td className="py-2.5 pr-4 font-semibold text-gray-200">{v.brand}</td>
-                            <td className="py-2.5 px-3 text-right text-gray-300">{v.count.toLocaleString()}</td>
-                            <td className="py-2.5 px-3 text-right text-gray-400">{v.validCount}</td>
+                            <td className="py-2.5 pr-4 font-semibold text-[var(--text-primary)]">{v.brand}</td>
+                            <td className="py-2.5 px-3 text-right text-[var(--text-secondary)]">{v.count.toLocaleString()}</td>
+                            <td className="py-2.5 px-3 text-right text-[var(--text-secondary)]">{v.validCount}</td>
                             <td className={`py-2.5 px-3 text-right font-semibold ${cpkColor(v.avgCpk)}`}>
                               {v.avgCpk != null ? v.avgCpk.toFixed(4) : t('vendorintel.na')}
                             </td>
-                            <td className="py-2.5 px-3 text-right text-gray-400">
+                            <td className="py-2.5 px-3 text-right text-[var(--text-secondary)]">
                               {v.medianCpk != null ? v.medianCpk.toFixed(4) : t('vendorintel.na')}
                             </td>
-                            <td className="py-2.5 px-3 text-right text-gray-300">
+                            <td className="py-2.5 px-3 text-right text-[var(--text-secondary)]">
                               {v.avgLifeKm != null && v.avgLifeKm > 0 ? Math.round(v.avgLifeKm).toLocaleString() : t('vendorintel.na')}
                             </td>
                             <td className={`py-2.5 px-3 text-right font-semibold ${riskColor((v.failureRate ?? 0) * 100)}`}>
@@ -1164,11 +1164,11 @@ export default function VendorIntelligence() {
                             <td className={`py-2.5 px-3 text-right font-semibold ${(v.scrapRate ?? 0) > 0.20 ? 'text-red-400' : (v.scrapRate ?? 0) > 0.10 ? 'text-yellow-400' : 'text-green-400'}`}>
                               {fmtPct(v.scrapRate)}
                             </td>
-                            <td className="py-2.5 px-3 text-right text-gray-300">
+                            <td className="py-2.5 px-3 text-right text-[var(--text-secondary)]">
                               {fmtCurrency(v.totalCost, activeCurrency)}
                             </td>
                             <td className="py-2.5 px-3 text-right">
-                              <span className={`font-bold text-sm ${v.rank <= 3 ? badge.text : 'text-gray-400'}`}>
+                              <span className={`font-bold text-sm ${v.rank <= 3 ? badge.text : 'text-[var(--text-secondary)]'}`}>
                                 {v.displayScore.toFixed(0)}
                               </span>
                             </td>
@@ -1203,7 +1203,7 @@ export default function VendorIntelligence() {
               </h2>
 
               {!hasWorkshopData ? (
-                <div className="card text-center py-16 text-gray-600 text-sm">
+                <div className="card text-center py-16 text-[var(--text-dim)] text-sm">
                   {t('vendorintel.workshop.emptyThreshold', { minRecords })}
                 </div>
               ) : (
@@ -1218,25 +1218,25 @@ export default function VendorIntelligence() {
                           initial={{ opacity: 0, scale: 0.97 }}
                           animate={{ opacity: 1, scale: 1 }}
                           transition={{ delay: w.rank * 0.05 }}
-                          className={`bg-gray-900 border rounded-xl p-5 ${badge.bg}`}
+                          className={`bg-[var(--surface-1)] border rounded-xl p-5 ${badge.bg}`}
                         >
                           <div className="flex items-start justify-between mb-3">
                             <div className="flex items-center gap-2">
                               <span className="text-2xl">{badge.icon ?? `#${w.rank}`}</span>
                               <div>
                                 <p className={`text-xs font-bold uppercase tracking-wider ${badge.text}`}>{t('vendorintel.vendor.rank', { rank: w.rank })}</p>
-                                <p className="text-base font-bold text-white">{w.site}</p>
+                                <p className="text-base font-bold text-[var(--text-primary)]">{w.site}</p>
                               </div>
                             </div>
                             <div className="text-right">
-                              <p className="text-2xl font-black text-white">{w.displayScore.toFixed(0)}</p>
-                              <p className="text-[10px] text-gray-500">{t('vendorintel.vendor.outOf100')}</p>
+                              <p className="text-2xl font-black text-[var(--text-primary)]">{w.displayScore.toFixed(0)}</p>
+                              <p className="text-[10px] text-[var(--text-muted)]">{t('vendorintel.vendor.outOf100')}</p>
                             </div>
                           </div>
 
                           {/* Score bar */}
                           <div className="mb-4">
-                            <div className="h-2 bg-gray-800 rounded-full overflow-hidden">
+                            <div className="h-2 bg-[var(--surface-2)] rounded-full overflow-hidden">
                               <div
                                 className={`h-full rounded-full transition-all duration-700 ${
                                   w.rank === 1 ? 'bg-yellow-400' : w.rank === 2 ? 'bg-gray-400' : 'bg-amber-600'
@@ -1248,12 +1248,12 @@ export default function VendorIntelligence() {
 
                           <div className="space-y-2">
                             <div className="flex justify-between text-xs">
-                              <span className="text-gray-500">{t('vendorintel.workshop.records')}</span>
-                              <span className="text-gray-200 font-medium">{w.recordCount.toLocaleString()}</span>
+                              <span className="text-[var(--text-muted)]">{t('vendorintel.workshop.records')}</span>
+                              <span className="text-[var(--text-primary)] font-medium">{w.recordCount.toLocaleString()}</span>
                             </div>
                             <div>
                               <div className="flex justify-between text-xs mb-0.5">
-                                <span className="text-gray-500">{t('vendorintel.workshop.highRiskPct')}</span>
+                                <span className="text-[var(--text-muted)]">{t('vendorintel.workshop.highRiskPct')}</span>
                                 <span className={`font-semibold ${riskColor(w.highRiskPct)}`}>
                                   {fmtNum(w.highRiskPct)}%
                                 </span>
@@ -1264,18 +1264,18 @@ export default function VendorIntelligence() {
                               )}
                             </div>
                             <div className="flex justify-between text-xs">
-                              <span className="text-gray-500">{t('vendorintel.workshop.avgCpk')}</span>
+                              <span className="text-[var(--text-muted)]">{t('vendorintel.workshop.avgCpk')}</span>
                               <span className={`font-semibold ${cpkColor(w.avgCpk)}`}>
                                 {w.avgCpk != null ? fmtCpk(w.avgCpk, activeCurrency) : t('vendorintel.na')}
                               </span>
                             </div>
                             <div className="flex justify-between text-xs">
-                              <span className="text-gray-500">{t('vendorintel.workshop.avgCostPerTyre')}</span>
-                              <span className="text-gray-200 font-medium">{fmtCurrency(w.avgCost, activeCurrency)}</span>
+                              <span className="text-[var(--text-muted)]">{t('vendorintel.workshop.avgCostPerTyre')}</span>
+                              <span className="text-[var(--text-primary)] font-medium">{fmtCurrency(w.avgCost, activeCurrency)}</span>
                             </div>
                             <div>
                               <div className="flex justify-between text-xs mb-0.5">
-                                <span className="text-gray-500">{t('vendorintel.workshop.actionCloseRate')}</span>
+                                <span className="text-[var(--text-muted)]">{t('vendorintel.workshop.actionCloseRate')}</span>
                                 <span className={`font-semibold ${(w.actionCloseRate ?? 0) >= 0.7 ? 'text-green-400' : (w.actionCloseRate ?? 0) >= 0.4 ? 'text-yellow-400' : 'text-red-400'}`}>
                                   {fmtPct(w.actionCloseRate)}
                                 </span>
@@ -1290,26 +1290,26 @@ export default function VendorIntelligence() {
 
                   {/* Remaining workshops compact */}
                   {workshops.length > 3 && (
-                    <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 overflow-x-auto">
-                      <p className="text-xs font-semibold text-gray-400 mb-3">{t('vendorintel.workshop.allSitesTitle')}</p>
+                    <div className="bg-[var(--surface-1)] border border-[var(--border-dim)] rounded-xl p-4 overflow-x-auto">
+                      <p className="text-xs font-semibold text-[var(--text-secondary)] mb-3">{t('vendorintel.workshop.allSitesTitle')}</p>
                       <table className="min-w-full text-xs">
                         <thead>
                           <tr>
-                            <th className="text-left py-2 pr-4 text-gray-500 font-medium">{t('vendorintel.workshop.columns.rank')}</th>
-                            <th className="text-left py-2 pr-4 text-gray-500 font-medium">{t('vendorintel.workshop.columns.site')}</th>
-                            <th className="text-right py-2 px-3 text-gray-500 font-medium">{t('vendorintel.workshop.columns.records')}</th>
-                            <th className="text-right py-2 px-3 text-gray-500 font-medium">{t('vendorintel.workshop.columns.highRiskPct')}</th>
-                            <th className="text-right py-2 px-3 text-gray-500 font-medium">{t('vendorintel.workshop.columns.avgCpk')}</th>
-                            <th className="text-right py-2 px-3 text-gray-500 font-medium">{t('vendorintel.workshop.columns.closeRate')}</th>
-                            <th className="text-right py-2 px-3 text-gray-500 font-medium">{t('vendorintel.workshop.columns.score')}</th>
+                            <th className="text-left py-2 pr-4 text-[var(--text-muted)] font-medium">{t('vendorintel.workshop.columns.rank')}</th>
+                            <th className="text-left py-2 pr-4 text-[var(--text-muted)] font-medium">{t('vendorintel.workshop.columns.site')}</th>
+                            <th className="text-right py-2 px-3 text-[var(--text-muted)] font-medium">{t('vendorintel.workshop.columns.records')}</th>
+                            <th className="text-right py-2 px-3 text-[var(--text-muted)] font-medium">{t('vendorintel.workshop.columns.highRiskPct')}</th>
+                            <th className="text-right py-2 px-3 text-[var(--text-muted)] font-medium">{t('vendorintel.workshop.columns.avgCpk')}</th>
+                            <th className="text-right py-2 px-3 text-[var(--text-muted)] font-medium">{t('vendorintel.workshop.columns.closeRate')}</th>
+                            <th className="text-right py-2 px-3 text-[var(--text-muted)] font-medium">{t('vendorintel.workshop.columns.score')}</th>
                           </tr>
                         </thead>
                         <tbody>
                           {workshops.slice(3).map((w, i) => (
                             <tr key={w.site} className={i % 2 === 0 ? '' : 'bg-white/[0.02]'}>
-                              <td className="py-2 pr-4 text-gray-500">#{w.rank}</td>
-                              <td className="py-2 pr-4 font-medium text-gray-200">{w.site}</td>
-                              <td className="py-2 px-3 text-right text-gray-300">{w.recordCount}</td>
+                              <td className="py-2 pr-4 text-[var(--text-muted)]">#{w.rank}</td>
+                              <td className="py-2 pr-4 font-medium text-[var(--text-primary)]">{w.site}</td>
+                              <td className="py-2 px-3 text-right text-[var(--text-secondary)]">{w.recordCount}</td>
                               <td className={`py-2 px-3 text-right font-semibold ${riskColor(w.highRiskPct)}`}>
                                 {fmtNum(w.highRiskPct)}%
                               </td>
@@ -1341,7 +1341,7 @@ export default function VendorIntelligence() {
                   {/* High Risk % by Site */}
                   <div className="card">
                     <p className="text-xs font-semibold text-[var(--text-primary)] mb-1">{t('vendorintel.workshop.riskChartTitle')}</p>
-                    <p className="text-[10px] text-gray-600 mb-3">{t('vendorintel.workshop.riskChartSub')}</p>
+                    <p className="text-[10px] text-[var(--text-dim)] mb-3">{t('vendorintel.workshop.riskChartSub')}</p>
                     <div style={{ height: 260 }}>
                       <Bar
                         data={workshopRiskData}
@@ -1370,7 +1370,7 @@ export default function VendorIntelligence() {
                   {/* Avg CPK by Site */}
                   <div className="card">
                     <p className="text-xs font-semibold text-[var(--text-primary)] mb-1">{t('vendorintel.workshop.cpkChartTitle', { currency: activeCurrency })}</p>
-                    <p className="text-[10px] text-gray-600 mb-3">{t('vendorintel.workshop.cpkChartSub')}</p>
+                    <p className="text-[10px] text-[var(--text-dim)] mb-3">{t('vendorintel.workshop.cpkChartSub')}</p>
                     <div style={{ height: 260 }}>
                       <Bar
                         data={workshopCpkData}
@@ -1400,7 +1400,7 @@ export default function VendorIntelligence() {
                 {/* Action Close Rate */}
                 <div className="card">
                   <p className="text-xs font-semibold text-[var(--text-primary)] mb-1">{t('vendorintel.workshop.closeChartTitle')}</p>
-                  <p className="text-[10px] text-gray-600 mb-3">{t('vendorintel.workshop.closeChartSub')}</p>
+                  <p className="text-[10px] text-[var(--text-dim)] mb-3">{t('vendorintel.workshop.closeChartSub')}</p>
                   <div style={{ height: 220 }}>
                     <Bar
                       data={workshopCloseData}
@@ -1439,17 +1439,17 @@ export default function VendorIntelligence() {
                 <h2 className="text-sm font-semibold text-[var(--text-primary)] mb-3 flex items-center gap-2">
                   <Target size={15} className="text-green-400" /> {t('vendorintel.workshop.tableTitle')}
                 </h2>
-                <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 overflow-x-auto">
+                <div className="bg-[var(--surface-1)] border border-[var(--border-dim)] rounded-xl p-4 overflow-x-auto">
                   <table className="min-w-full text-xs">
                     <thead>
-                      <tr className="border-b border-gray-800">
-                        <th className="text-left py-2.5 pr-4 text-gray-500 font-medium">{t('vendorintel.workshop.columns.rank')}</th>
-                        <th className="text-left py-2.5 pr-4 text-gray-500 font-medium">{t('vendorintel.workshop.columns.site')}</th>
+                      <tr className="border-b border-[var(--border-dim)]">
+                        <th className="text-left py-2.5 pr-4 text-[var(--text-muted)] font-medium">{t('vendorintel.workshop.columns.rank')}</th>
+                        <th className="text-left py-2.5 pr-4 text-[var(--text-muted)] font-medium">{t('vendorintel.workshop.columns.site')}</th>
                         <Th col="recordCount" label={t('vendorintel.workshop.columns.records')} onSort={handleWorkshopSort} activeCol={workshopSortCol} dir={workshopSortDir} />
                         <Th col="highRiskPct" label={t('vendorintel.workshop.columns.highRiskPct')} onSort={handleWorkshopSort} activeCol={workshopSortCol} dir={workshopSortDir} />
                         <Th col="avgCpk" label={t('vendorintel.workshop.columns.avgCpk')} onSort={handleWorkshopSort} activeCol={workshopSortCol} dir={workshopSortDir} />
                         <Th col="avgCost" label={t('vendorintel.workshop.columns.avgCost')} onSort={handleWorkshopSort} activeCol={workshopSortCol} dir={workshopSortDir} />
-                        <th className="text-right py-2.5 px-3 text-gray-500 font-medium">{t('vendorintel.workshop.columns.actionsRaised')}</th>
+                        <th className="text-right py-2.5 px-3 text-[var(--text-muted)] font-medium">{t('vendorintel.workshop.columns.actionsRaised')}</th>
                         <Th col="actionCloseRate" label={t('vendorintel.workshop.columns.closeRatePct')} onSort={handleWorkshopSort} activeCol={workshopSortCol} dir={workshopSortDir} />
                         <Th col="displayScore" label={t('vendorintel.workshop.columns.score')} onSort={handleWorkshopSort} activeCol={workshopSortCol} dir={workshopSortDir} />
                       </tr>
@@ -1465,23 +1465,23 @@ export default function VendorIntelligence() {
                                 {badge.icon ?? `#${w.rank}`}
                               </span>
                             </td>
-                            <td className="py-2.5 pr-4 font-semibold text-gray-200">{w.site}</td>
-                            <td className="py-2.5 px-3 text-right text-gray-300">{w.recordCount.toLocaleString()}</td>
+                            <td className="py-2.5 pr-4 font-semibold text-[var(--text-primary)]">{w.site}</td>
+                            <td className="py-2.5 px-3 text-right text-[var(--text-secondary)]">{w.recordCount.toLocaleString()}</td>
                             <td className={`py-2.5 px-3 text-right font-semibold ${riskColor(w.highRiskPct)}`}>
                               {fmtNum(w.highRiskPct)}%
                             </td>
                             <td className={`py-2.5 px-3 text-right font-semibold ${cpkColor(w.avgCpk)}`}>
                               {w.avgCpk != null ? w.avgCpk.toFixed(4) : t('vendorintel.na')}
                             </td>
-                            <td className="py-2.5 px-3 text-right text-gray-300">
+                            <td className="py-2.5 px-3 text-right text-[var(--text-secondary)]">
                               {fmtCurrency(w.avgCost, activeCurrency)}
                             </td>
-                            <td className="py-2.5 px-3 text-right text-gray-400">{siteActions.length}</td>
+                            <td className="py-2.5 px-3 text-right text-[var(--text-secondary)]">{siteActions.length}</td>
                             <td className={`py-2.5 px-3 text-right font-semibold ${(w.actionCloseRate ?? 0) >= 0.7 ? 'text-green-400' : (w.actionCloseRate ?? 0) >= 0.4 ? 'text-yellow-400' : 'text-red-400'}`}>
                               {fmtPct(w.actionCloseRate)}
                             </td>
                             <td className="py-2.5 px-3 text-right">
-                              <span className={`font-bold text-sm ${w.rank <= 3 ? badge.text : 'text-gray-400'}`}>
+                              <span className={`font-bold text-sm ${w.rank <= 3 ? badge.text : 'text-[var(--text-secondary)]'}`}>
                                 {w.displayScore.toFixed(0)}
                               </span>
                             </td>
@@ -1505,7 +1505,7 @@ export default function VendorIntelligence() {
         </h2>
 
         {recommendations.length === 0 ? (
-          <div className="bg-gray-900 border border-green-800/40 rounded-xl p-4 flex items-center gap-3 bg-green-950/10">
+          <div className="bg-[var(--surface-1)] border border-green-800/40 rounded-xl p-4 flex items-center gap-3 bg-green-950/10">
             <CheckCircle size={20} className="text-green-400 flex-shrink-0" />
             <div>
               <p className="text-sm font-semibold text-green-300">{t('vendorintel.recommendations.allGoodTitle')}</p>
@@ -1527,7 +1527,7 @@ export default function VendorIntelligence() {
                   initial={{ opacity: 0, x: -8 }}
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ delay: i * 0.04 }}
-                  className={`bg-gray-900 border rounded-xl p-4 ${style.border} ${style.bg}`}
+                  className={`bg-[var(--surface-1)] border rounded-xl p-4 ${style.border} ${style.bg}`}
                 >
                   <div className="flex items-start gap-3">
                     <div className="flex-shrink-0 mt-0.5">{style.icon}</div>
@@ -1537,7 +1537,7 @@ export default function VendorIntelligence() {
                           {t(`vendorintel.recommendations.priority.${rec.priority}`)}
                         </span>
                       </div>
-                      <p className="text-xs text-gray-300 leading-relaxed">{rec.text}</p>
+                      <p className="text-xs text-[var(--text-secondary)] leading-relaxed">{rec.text}</p>
                     </div>
                   </div>
                 </motion.div>
@@ -1552,7 +1552,7 @@ export default function VendorIntelligence() {
         <h2 className="text-sm font-semibold text-[var(--text-primary)] mb-3 flex items-center gap-2">
           <Star size={15} className="text-yellow-400" /> {t('vendorintel.execSummary.title')}
         </h2>
-        <div className="bg-gray-900 border border-gray-700/50 rounded-xl p-5">
+        <div className="bg-[var(--surface-1)] border border-[var(--border-bright)] rounded-xl p-5">
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
 
             {/* Best Value Brand */}
@@ -1561,8 +1561,8 @@ export default function VendorIntelligence() {
                 <TrendingDown size={14} className="text-green-400" />
                 <span className="text-xs font-semibold text-green-300">{t('vendorintel.execSummary.bestValueBrand')}</span>
               </div>
-              <p className="text-lg font-black text-white">{execSummary.bestBrand?.brand ?? '-'}</p>
-              <p className="text-xs text-gray-400 mt-0.5">
+              <p className="text-lg font-black text-[var(--text-primary)]">{execSummary.bestBrand?.brand ?? '-'}</p>
+              <p className="text-xs text-[var(--text-secondary)] mt-0.5">
                 {execSummary.bestBrand?.avgCpk != null
                   ? t('vendorintel.execSummary.avgCpkPerKm', { cpk: fmtCpk(execSummary.bestBrand.avgCpk, activeCurrency) })
                   : t('vendorintel.execSummary.noCpkData')}
@@ -1576,8 +1576,8 @@ export default function VendorIntelligence() {
                 <TrendingUp size={14} className="text-red-400" />
                 <span className="text-xs font-semibold text-red-300">{t('vendorintel.execSummary.highestCostBrand')}</span>
               </div>
-              <p className="text-lg font-black text-white">{execSummary.worstBrand?.brand ?? '-'}</p>
-              <p className="text-xs text-gray-400 mt-0.5">
+              <p className="text-lg font-black text-[var(--text-primary)]">{execSummary.worstBrand?.brand ?? '-'}</p>
+              <p className="text-xs text-[var(--text-secondary)] mt-0.5">
                 {execSummary.worstBrand?.avgCpk != null
                   ? t('vendorintel.execSummary.avgCpkPerKm', { cpk: fmtCpk(execSummary.worstBrand.avgCpk, activeCurrency) })
                   : t('vendorintel.execSummary.noCpkData')}
@@ -1609,8 +1609,8 @@ export default function VendorIntelligence() {
                 <CheckCircle size={14} className="text-blue-400" />
                 <span className="text-xs font-semibold text-blue-300">{t('vendorintel.execSummary.bestPerformingSite')}</span>
               </div>
-              <p className="text-lg font-black text-white">{execSummary.bestSite?.site ?? '-'}</p>
-              <p className="text-xs text-gray-400 mt-0.5">
+              <p className="text-lg font-black text-[var(--text-primary)]">{execSummary.bestSite?.site ?? '-'}</p>
+              <p className="text-xs text-[var(--text-secondary)] mt-0.5">
                 {execSummary.bestSite
                   ? t('vendorintel.execSummary.siteScoreLine', { score: execSummary.bestSite.displayScore.toFixed(0), pct: fmtNum(execSummary.bestSite.highRiskPct) })
                   : t('vendorintel.execSummary.noSiteData')}
@@ -1624,8 +1624,8 @@ export default function VendorIntelligence() {
                 <AlertTriangle size={14} className="text-orange-400" />
                 <span className="text-xs font-semibold text-orange-300">{t('vendorintel.execSummary.siteNeedingAttention')}</span>
               </div>
-              <p className="text-lg font-black text-white">{execSummary.worstSite?.site ?? '-'}</p>
-              <p className="text-xs text-gray-400 mt-0.5">
+              <p className="text-lg font-black text-[var(--text-primary)]">{execSummary.worstSite?.site ?? '-'}</p>
+              <p className="text-xs text-[var(--text-secondary)] mt-0.5">
                 {execSummary.worstSite
                   ? t('vendorintel.execSummary.siteScoreLine', { score: execSummary.worstSite.displayScore.toFixed(0), pct: fmtNum(execSummary.worstSite.highRiskPct) })
                   : t('vendorintel.execSummary.noSiteData')}
@@ -1639,8 +1639,8 @@ export default function VendorIntelligence() {
                 <Wrench size={14} className="text-purple-400" />
                 <span className="text-xs font-semibold text-purple-300">{t('vendorintel.execSummary.totalFleetInvestment')}</span>
               </div>
-              <p className="text-lg font-black text-white">{fmtCurrency(execSummary.totalFleetInvestment, activeCurrency)}</p>
-              <p className="text-xs text-gray-400 mt-0.5">
+              <p className="text-lg font-black text-[var(--text-primary)]">{fmtCurrency(execSummary.totalFleetInvestment, activeCurrency)}</p>
+              <p className="text-xs text-[var(--text-secondary)] mt-0.5">
                 {t('vendorintel.execSummary.acrossRecords', { count: filteredRecords.filter(r => Number(r.cost_per_tyre) > 0).length.toLocaleString() })}
               </p>
               <p className="text-[11px] text-purple-400/70 mt-1">

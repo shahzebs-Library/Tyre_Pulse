@@ -216,21 +216,21 @@ function AssetDrawer({ asset, tyres = [], workOrders, currency, onClose }) {
     <motion.div
       initial={{ x: '100%' }} animate={{ x: 0 }} exit={{ x: '100%' }}
       transition={{ type: 'tween', duration: 0.3 }}
-      className="fixed right-0 top-0 h-full w-full max-w-2xl bg-gray-900 border-l border-gray-800 z-50 flex flex-col shadow-2xl"
+      className="fixed right-0 top-0 h-full w-full max-w-2xl bg-[var(--surface-1)] border-l border-[var(--border-dim)] z-50 flex flex-col shadow-2xl"
     >
       {/* Header */}
-      <div className="flex items-center justify-between p-5 border-b border-gray-800 bg-gray-900 shrink-0">
+      <div className="flex items-center justify-between p-5 border-b border-[var(--border-dim)] bg-[var(--surface-1)] shrink-0">
         <div>
-          <p className="text-xs text-gray-500 uppercase tracking-widest mb-1">{t('assetmgmt.drawer.assetProfile')}</p>
-          <h2 className="text-xl font-bold text-white">{asset.asset_no}</h2>
-          <p className="text-sm text-gray-400">{asset.vehicle_type} · {asset.make} {asset.model} {asset.year}</p>
-          <p className="text-xs text-gray-500 mt-0.5"><MapPin className="inline w-3 h-3 mr-1" />{asset.site ?? '-'}</p>
+          <p className="text-xs text-[var(--text-muted)] uppercase tracking-widest mb-1">{t('assetmgmt.drawer.assetProfile')}</p>
+          <h2 className="text-xl font-bold text-[var(--text-primary)]">{asset.asset_no}</h2>
+          <p className="text-sm text-[var(--text-secondary)]">{asset.vehicle_type} · {asset.make} {asset.model} {asset.year}</p>
+          <p className="text-xs text-[var(--text-muted)] mt-0.5"><MapPin className="inline w-3 h-3 mr-1" />{asset.site ?? '-'}</p>
         </div>
         <div className="flex items-center gap-3">
-          <span className={`px-2 py-1 rounded-full text-xs font-semibold ${asset.active ? 'bg-green-900/50 text-green-300' : 'bg-gray-800 text-gray-400'}`}>
+          <span className={`px-2 py-1 rounded-full text-xs font-semibold ${asset.active ? 'bg-green-900/50 text-green-300' : 'bg-[var(--surface-2)] text-[var(--text-secondary)]'}`}>
             {asset.active ? t('assetmgmt.drawer.active') : t('assetmgmt.drawer.inactive')}
           </span>
-          <button onClick={onClose} className="p-2 rounded-lg hover:bg-gray-800 text-gray-400 hover:text-white transition-colors">
+          <button onClick={onClose} className="p-2 rounded-lg hover:bg-[var(--surface-2)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors">
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -241,7 +241,7 @@ function AssetDrawer({ asset, tyres = [], workOrders, currency, onClose }) {
 
         {/* Tyre Position Diagram */}
         <div className="card">
-          <h3 className="text-sm font-semibold text-gray-300 mb-3 flex items-center gap-2"><Layers className="w-4 h-4 text-blue-400" /> {t('assetmgmt.drawer.tyrePositionMap')}</h3>
+          <h3 className="text-sm font-semibold text-[var(--text-secondary)] mb-3 flex items-center gap-2"><Layers className="w-4 h-4 text-blue-400" /> {t('assetmgmt.drawer.tyrePositionMap')}</h3>
           <div className="flex gap-4 items-start">
             <div className="flex-1">
               <TyrePositionDiagram tyres={activeTyres} />
@@ -250,21 +250,21 @@ function AssetDrawer({ asset, tyres = [], workOrders, currency, onClose }) {
               {Object.entries(RISK_COLOR).map(([level, c]) => (
                 <div key={level} className="flex items-center gap-2 text-xs">
                   <span className={`w-3 h-3 rounded-full`} style={{ background: c.hex }} />
-                  <span className="text-gray-400">{level}</span>
+                  <span className="text-[var(--text-secondary)]">{level}</span>
                 </div>
               ))}
               <div className="flex items-center gap-2 text-xs mt-1">
                 <span className="w-3 h-3 rounded-full bg-gray-600 opacity-40" />
-                <span className="text-gray-400">{t('assetmgmt.drawer.noDataLegend')}</span>
+                <span className="text-[var(--text-secondary)]">{t('assetmgmt.drawer.noDataLegend')}</span>
               </div>
             </div>
           </div>
         </div>
 
         {/* Active Tyres Table */}
-        <div className="bg-gray-800 rounded-xl border border-gray-700 overflow-hidden">
-          <div className="p-4 border-b border-gray-700">
-            <h3 className="text-sm font-semibold text-gray-300 flex items-center gap-2">
+        <div className="bg-[var(--surface-2)] rounded-xl border border-[var(--border-bright)] overflow-hidden">
+          <div className="p-4 border-b border-[var(--border-bright)]">
+            <h3 className="text-sm font-semibold text-[var(--text-secondary)] flex items-center gap-2">
               <Activity className="w-4 h-4 text-green-400" /> {t('assetmgmt.drawer.activeTyres', { count: activeTyres.length })}
             </h3>
           </div>
@@ -272,13 +272,13 @@ function AssetDrawer({ asset, tyres = [], workOrders, currency, onClose }) {
             <div className="overflow-x-auto">
               <table className="w-full text-xs">
                 <thead>
-                  <tr className="border-b border-gray-700">
+                  <tr className="border-b border-[var(--border-bright)]">
                     {[
                       t('assetmgmt.drawer.columns.position'), t('assetmgmt.drawer.columns.serial'), t('assetmgmt.drawer.columns.brand'),
                       t('assetmgmt.drawer.columns.size'), t('assetmgmt.drawer.columns.tread'), t('assetmgmt.drawer.columns.risk'),
                       t('assetmgmt.drawer.columns.daysFitted'), t('assetmgmt.drawer.columns.cpk'),
                     ].map(h => (
-                      <th key={h} className="px-3 py-2 text-left text-gray-500 font-medium whitespace-nowrap">{h}</th>
+                      <th key={h} className="px-3 py-2 text-left text-[var(--text-muted)] font-medium whitespace-nowrap">{h}</th>
                     ))}
                   </tr>
                 </thead>
@@ -287,21 +287,21 @@ function AssetDrawer({ asset, tyres = [], workOrders, currency, onClose }) {
                     const days = t.issue_date ? daysSince(t.issue_date) : null
                     const km = (parseFloat(t.km_at_removal) || 0) - (parseFloat(t.km_at_fitment) || 0)
                     const cpk = km > 0 && t.cost_per_tyre ? (parseFloat(t.cost_per_tyre) / km).toFixed(4) : '-'
-                    const rc = RISK_COLOR[t.risk_level] ?? { bg: 'bg-gray-800', text: 'text-gray-400' }
+                    const rc = RISK_COLOR[t.risk_level] ?? { bg: 'bg-[var(--surface-2)]', text: 'text-[var(--text-secondary)]' }
                     return (
-                      <tr key={t.id ?? i} className="border-b border-gray-700/50 hover:bg-gray-700/30 transition-colors">
-                        <td className="px-3 py-2 font-mono text-gray-300">{t.position ?? '-'}</td>
-                        <td className="px-3 py-2 text-gray-300">{t.serial_number ?? '-'}</td>
-                        <td className="px-3 py-2 text-gray-300">{t.brand ?? '-'}</td>
-                        <td className="px-3 py-2 text-gray-400">{t.size ?? '-'}</td>
-                        <td className="px-3 py-2 text-gray-300">{t.tread_depth ? `${t.tread_depth}mm` : '-'}</td>
+                      <tr key={t.id ?? i} className="border-b border-[var(--border-bright)] hover:bg-[var(--surface-3)] transition-colors">
+                        <td className="px-3 py-2 font-mono text-[var(--text-secondary)]">{t.position ?? '-'}</td>
+                        <td className="px-3 py-2 text-[var(--text-secondary)]">{t.serial_number ?? '-'}</td>
+                        <td className="px-3 py-2 text-[var(--text-secondary)]">{t.brand ?? '-'}</td>
+                        <td className="px-3 py-2 text-[var(--text-secondary)]">{t.size ?? '-'}</td>
+                        <td className="px-3 py-2 text-[var(--text-secondary)]">{t.tread_depth ? `${t.tread_depth}mm` : '-'}</td>
                         <td className="px-3 py-2">
                           {t.risk_level ? (
                             <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${rc.bg} ${rc.text}`}>{t.risk_level}</span>
-                          ) : <span className="text-gray-600">-</span>}
+                          ) : <span className="text-[var(--text-dim)]">-</span>}
                         </td>
-                        <td className="px-3 py-2 text-gray-400">{days != null ? `${days}d` : '-'}</td>
-                        <td className="px-3 py-2 text-gray-400">{cpk}</td>
+                        <td className="px-3 py-2 text-[var(--text-secondary)]">{days != null ? `${days}d` : '-'}</td>
+                        <td className="px-3 py-2 text-[var(--text-secondary)]">{cpk}</td>
                       </tr>
                     )
                   })}
@@ -309,13 +309,13 @@ function AssetDrawer({ asset, tyres = [], workOrders, currency, onClose }) {
               </table>
             </div>
           ) : (
-            <div className="p-6 text-center text-gray-500 text-sm">{t('assetmgmt.drawer.noActiveTyres')}</div>
+            <div className="p-6 text-center text-[var(--text-muted)] text-sm">{t('assetmgmt.drawer.noActiveTyres')}</div>
           )}
         </div>
 
         {/* Monthly Cost Chart */}
         <div className="card">
-          <h3 className="text-sm font-semibold text-gray-300 mb-3 flex items-center gap-2">
+          <h3 className="text-sm font-semibold text-[var(--text-secondary)] mb-3 flex items-center gap-2">
             <TrendingUp className="w-4 h-4 text-blue-400" /> {t('assetmgmt.drawer.monthlyCostChartTitle')}
           </h3>
           <div className="h-44">
@@ -325,21 +325,21 @@ function AssetDrawer({ asset, tyres = [], workOrders, currency, onClose }) {
 
         {/* Work Orders */}
         {assetWOs.length > 0 && (
-          <div className="bg-gray-800 rounded-xl border border-gray-700 overflow-hidden">
-            <div className="p-4 border-b border-gray-700">
-              <h3 className="text-sm font-semibold text-gray-300 flex items-center gap-2">
+          <div className="bg-[var(--surface-2)] rounded-xl border border-[var(--border-bright)] overflow-hidden">
+            <div className="p-4 border-b border-[var(--border-bright)]">
+              <h3 className="text-sm font-semibold text-[var(--text-secondary)] flex items-center gap-2">
                 <Zap className="w-4 h-4 text-yellow-400" /> {t('assetmgmt.drawer.recentWorkOrders')}
               </h3>
             </div>
-            <div className="divide-y divide-gray-700/50">
+            <div className="divide-y divide-[var(--border-bright)]">
               {assetWOs.map((wo, i) => (
                 <div key={wo.id ?? i} className="px-4 py-3 flex items-center justify-between">
                   <div>
-                    <p className="text-sm text-gray-300">{wo.work_type ?? t('assetmgmt.drawer.workOrderFallback')}</p>
-                    <p className="text-xs text-gray-500">{fmtDate(wo.created_at)}</p>
+                    <p className="text-sm text-[var(--text-secondary)]">{wo.work_type ?? t('assetmgmt.drawer.workOrderFallback')}</p>
+                    <p className="text-xs text-[var(--text-muted)]">{fmtDate(wo.created_at)}</p>
                   </div>
                   <div className="flex items-center gap-3">
-                    {wo.total_cost && <span className="text-xs text-gray-400">{fmtCurrency(wo.total_cost, currency)}</span>}
+                    {wo.total_cost && <span className="text-xs text-[var(--text-secondary)]">{fmtCurrency(wo.total_cost, currency)}</span>}
                     <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${
                       wo.status === 'Completed' ? 'bg-green-900/50 text-green-300' :
                       wo.status === 'Open' ? 'bg-blue-900/50 text-blue-300' :
@@ -355,21 +355,21 @@ function AssetDrawer({ asset, tyres = [], workOrders, currency, onClose }) {
         {/* Lifetime Cost */}
         <div className="bg-gradient-to-br from-blue-900/20 to-blue-800/10 rounded-xl border border-blue-800/30 p-4 flex items-center justify-between">
           <div>
-            <p className="text-xs text-gray-500 uppercase tracking-widest">{t('assetmgmt.drawer.totalLifetimeCost')}</p>
-            <p className="text-2xl font-bold text-white mt-1">{fmtCurrency(totalCost, currency)}</p>
-            <p className="text-xs text-gray-500 mt-1">{t('assetmgmt.drawer.tyreRecordsTotal', { count: tyres.length })}</p>
+            <p className="text-xs text-[var(--text-muted)] uppercase tracking-widest">{t('assetmgmt.drawer.totalLifetimeCost')}</p>
+            <p className="text-2xl font-bold text-[var(--text-primary)] mt-1">{fmtCurrency(totalCost, currency)}</p>
+            <p className="text-xs text-[var(--text-muted)] mt-1">{t('assetmgmt.drawer.tyreRecordsTotal', { count: tyres.length })}</p>
           </div>
           <DollarSign className="w-10 h-10 text-blue-500 opacity-40" />
         </div>
 
         {/* Recommendations */}
         <div className="card">
-          <h3 className="text-sm font-semibold text-gray-300 mb-3 flex items-center gap-2">
+          <h3 className="text-sm font-semibold text-[var(--text-secondary)] mb-3 flex items-center gap-2">
             <Target className="w-4 h-4 text-purple-400" /> {t('assetmgmt.drawer.recommendations')}
           </h3>
           <div className="space-y-2">
             {recommendations.map((r, i) => {
-              const rc = RISK_COLOR[r.level] ?? { bg: 'bg-gray-800', text: 'text-gray-400' }
+              const rc = RISK_COLOR[r.level] ?? { bg: 'bg-[var(--surface-2)]', text: 'text-[var(--text-secondary)]' }
               return (
                 <div key={i} className={`flex items-start gap-3 p-3 rounded-lg ${rc.bg} bg-opacity-20`}>
                   <AlertTriangle className={`w-4 h-4 mt-0.5 shrink-0 ${rc.text}`} />
@@ -442,76 +442,76 @@ function AssetModal({ asset, sites, countries, onSave, onClose }) {
     >
       <motion.div
         initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
-        className="bg-gray-900 rounded-2xl border border-gray-800 w-full max-w-lg shadow-2xl"
+        className="bg-[var(--surface-1)] rounded-2xl border border-[var(--border-dim)] w-full max-w-lg shadow-2xl"
       >
-        <div className="flex items-center justify-between p-5 border-b border-gray-800">
-          <h2 className="text-lg font-bold text-white flex items-center gap-2">
+        <div className="flex items-center justify-between p-5 border-b border-[var(--border-dim)]">
+          <h2 className="text-lg font-bold text-[var(--text-primary)] flex items-center gap-2">
             <Truck className="w-5 h-5 text-blue-400" />
             {isEdit ? t('assetmgmt.modal.editTitle') : t('assetmgmt.modal.addTitle')}
           </h2>
-          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-gray-800 text-gray-400 hover:text-white transition-colors">
+          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-[var(--surface-2)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors">
             <X className="w-5 h-5" />
           </button>
         </div>
         <div className="p-5 space-y-4">
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="text-xs text-gray-400 mb-1 block">{t('assetmgmt.modal.assetNo')}</label>
+              <label className="text-xs text-[var(--text-secondary)] mb-1 block">{t('assetmgmt.modal.assetNo')}</label>
               <input
                 value={form.asset_no}
                 onChange={e => set('asset_no', e.target.value.toUpperCase())}
                 placeholder={t('assetmgmt.modal.placeholders.assetNo')}
-                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-blue-500"
+                className="w-full bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] placeholder-gray-600 focus:outline-none focus:border-blue-500"
               />
             </div>
             <div>
-              <label className="text-xs text-gray-400 mb-1 block">{t('assetmgmt.modal.vehicleType')}</label>
+              <label className="text-xs text-[var(--text-secondary)] mb-1 block">{t('assetmgmt.modal.vehicleType')}</label>
               <select
                 value={form.vehicle_type}
                 onChange={e => set('vehicle_type', e.target.value)}
-                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500"
+                className="w-full bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none focus:border-blue-500"
               >
                 <option value="">{t('assetmgmt.modal.selectType')}</option>
                 {VEHICLE_TYPES.map(vt => <option key={vt}>{vt}</option>)}
               </select>
             </div>
             <div>
-              <label className="text-xs text-gray-400 mb-1 block">{t('assetmgmt.modal.make')}</label>
+              <label className="text-xs text-[var(--text-secondary)] mb-1 block">{t('assetmgmt.modal.make')}</label>
               <input value={form.make} onChange={e => set('make', e.target.value)} placeholder={t('assetmgmt.modal.placeholders.make')}
-                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-blue-500" />
+                className="w-full bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] placeholder-gray-600 focus:outline-none focus:border-blue-500" />
             </div>
             <div>
-              <label className="text-xs text-gray-400 mb-1 block">{t('assetmgmt.modal.model')}</label>
+              <label className="text-xs text-[var(--text-secondary)] mb-1 block">{t('assetmgmt.modal.model')}</label>
               <input value={form.model} onChange={e => set('model', e.target.value)} placeholder={t('assetmgmt.modal.placeholders.model')}
-                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-blue-500" />
+                className="w-full bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] placeholder-gray-600 focus:outline-none focus:border-blue-500" />
             </div>
             <div>
-              <label className="text-xs text-gray-400 mb-1 block">{t('assetmgmt.modal.year')}</label>
+              <label className="text-xs text-[var(--text-secondary)] mb-1 block">{t('assetmgmt.modal.year')}</label>
               <input type="number" min="1990" max="2030" value={form.year} onChange={e => set('year', e.target.value)} placeholder={t('assetmgmt.modal.placeholders.year')}
-                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-blue-500" />
+                className="w-full bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] placeholder-gray-600 focus:outline-none focus:border-blue-500" />
             </div>
             <div>
-              <label className="text-xs text-gray-400 mb-1 block">{t('assetmgmt.modal.site')}</label>
+              <label className="text-xs text-[var(--text-secondary)] mb-1 block">{t('assetmgmt.modal.site')}</label>
               <input value={form.site} onChange={e => set('site', e.target.value)} placeholder={t('assetmgmt.modal.placeholders.site')}
                 list="am-sites-list"
-                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-blue-500" />
+                className="w-full bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] placeholder-gray-600 focus:outline-none focus:border-blue-500" />
               <datalist id="am-sites-list">{sites.map(s => <option key={s} value={s} />)}</datalist>
             </div>
             <div>
-              <label className="text-xs text-gray-400 mb-1 block">{t('assetmgmt.modal.country')}</label>
+              <label className="text-xs text-[var(--text-secondary)] mb-1 block">{t('assetmgmt.modal.country')}</label>
               <select value={form.country} onChange={e => set('country', e.target.value)}
-                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500">
+                className="w-full bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none focus:border-blue-500">
                 <option value="">{t('assetmgmt.modal.select')}</option>
                 {(countries.length ? countries : ['KSA','UAE','Egypt']).map(c => <option key={c}>{c}</option>)}
               </select>
             </div>
             <div className="flex items-center gap-3 mt-1">
-              <label className="text-xs text-gray-400">{t('assetmgmt.modal.activeStatus')}</label>
+              <label className="text-xs text-[var(--text-secondary)]">{t('assetmgmt.modal.activeStatus')}</label>
               <button onClick={() => set('active', !form.active)} className="flex items-center gap-2">
                 {form.active
                   ? <ToggleRight className="w-8 h-8 text-green-400" />
-                  : <ToggleLeft className="w-8 h-8 text-gray-600" />}
-                <span className={`text-sm font-medium ${form.active ? 'text-green-400' : 'text-gray-500'}`}>
+                  : <ToggleLeft className="w-8 h-8 text-[var(--text-dim)]" />}
+                <span className={`text-sm font-medium ${form.active ? 'text-green-400' : 'text-[var(--text-muted)]'}`}>
                   {form.active ? t('assetmgmt.modal.active') : t('assetmgmt.modal.inactive')}
                 </span>
               </button>
@@ -520,7 +520,7 @@ function AssetModal({ asset, sites, countries, onSave, onClose }) {
           {error && <p className="text-red-400 text-xs bg-red-900/20 rounded-lg px-3 py-2">{error}</p>}
         </div>
         <div className="flex justify-end gap-3 px-5 pb-5">
-          <button onClick={onClose} className="px-4 py-2 rounded-lg bg-gray-800 text-gray-300 text-sm hover:bg-gray-700 transition-colors">{t('assetmgmt.modal.cancel')}</button>
+          <button onClick={onClose} className="px-4 py-2 rounded-lg bg-[var(--surface-2)] text-[var(--text-secondary)] text-sm hover:bg-[var(--surface-3)] transition-colors">{t('assetmgmt.modal.cancel')}</button>
           <button onClick={handleSave} disabled={saving}
             className="px-5 py-2 rounded-lg bg-blue-600 text-white text-sm font-semibold hover:bg-blue-500 disabled:opacity-50 transition-colors flex items-center gap-2">
             {saving ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
@@ -547,11 +547,11 @@ function KpiCard({ icon: Icon, label, value, sub, color = 'blue', trend }) {
     <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}
       className={`bg-gradient-to-br ${c.bg} rounded-xl border ${c.border} p-5 flex flex-col gap-2`}>
       <div className="flex items-center justify-between">
-        <span className="text-xs text-gray-500 uppercase tracking-widest font-medium">{label}</span>
+        <span className="text-xs text-[var(--text-muted)] uppercase tracking-widest font-medium">{label}</span>
         <Icon className={`w-5 h-5 ${c.icon}`} />
       </div>
-      <p className="text-2xl font-bold text-white leading-tight">{value ?? '-'}</p>
-      {sub && <p className="text-xs text-gray-500">{sub}</p>}
+      <p className="text-2xl font-bold text-[var(--text-primary)] leading-tight">{value ?? '-'}</p>
+      {sub && <p className="text-xs text-[var(--text-muted)]">{sub}</p>}
       {trend != null && (
         <p className={`text-xs font-medium flex items-center gap-1 ${trend >= 0 ? 'text-green-400' : 'text-red-400'}`}>
           {trend >= 0 ? <TrendingUp className="w-3 h-3" /> : <TrendingUp className="w-3 h-3 rotate-180" />}
@@ -769,7 +769,7 @@ export default function AssetManagement() {
     setPage(0)
   }
   function SortIcon({ col }) {
-    if (sortCol !== col) return <ChevronDown className="w-3 h-3 text-gray-600 inline ml-1" />
+    if (sortCol !== col) return <ChevronDown className="w-3 h-3 text-[var(--text-dim)] inline ml-1" />
     return sortDir === 'asc'
       ? <ChevronUp className="w-3 h-3 text-blue-400 inline ml-1" />
       : <ChevronDown className="w-3 h-3 text-blue-400 inline ml-1" />
@@ -848,15 +848,15 @@ export default function AssetManagement() {
           icon={Truck}
           actions={<>
             <button onClick={() => setRefreshKey(k => k + 1)}
-              className="p-2 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white transition-colors border border-gray-700">
+              className="p-2 rounded-lg bg-[var(--surface-2)] hover:bg-[var(--surface-3)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors border border-[var(--border-bright)]">
               <RefreshCw className="w-4 h-4" />
             </button>
             <button onClick={handleExcelExport}
-              className="flex items-center gap-2 px-3 py-2 rounded-lg bg-gray-800 hover:bg-gray-700 text-green-400 hover:text-green-300 text-sm transition-colors border border-gray-700">
+              className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[var(--surface-2)] hover:bg-[var(--surface-3)] text-green-400 hover:text-green-300 text-sm transition-colors border border-[var(--border-bright)]">
               <FileSpreadsheet className="w-4 h-4" /> {t('assetmgmt.actions.excel')}
             </button>
             <button onClick={handlePdfExport}
-              className="flex items-center gap-2 px-3 py-2 rounded-lg bg-gray-800 hover:bg-gray-700 text-red-400 hover:text-red-300 text-sm transition-colors border border-gray-700">
+              className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[var(--surface-2)] hover:bg-[var(--surface-3)] text-red-400 hover:text-red-300 text-sm transition-colors border border-[var(--border-bright)]">
               <FileText className="w-4 h-4" /> {t('assetmgmt.actions.pdf')}
             </button>
             {isAdmin && (
@@ -878,7 +878,7 @@ export default function AssetManagement() {
         </div>
 
         {/* Tab Navigation */}
-        <div className="flex gap-1 bg-gray-900 rounded-xl p-1 border border-gray-800 w-fit">
+        <div className="flex gap-1 bg-[var(--surface-1)] rounded-xl p-1 border border-[var(--border-dim)] w-fit">
           {[
             { id: 'registry', label: t('assetmgmt.tabs.registry'), icon: Layers },
             { id: 'charts', label: t('assetmgmt.tabs.charts'), icon: BarChart2 },
@@ -886,7 +886,7 @@ export default function AssetManagement() {
           ].map(tab => (
             <button key={tab.id} onClick={() => setActiveTab(tab.id)}
               className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                activeTab === tab.id ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-white hover:bg-gray-800'
+                activeTab === tab.id ? 'bg-blue-600 text-white' : 'text-[var(--text-secondary)] hover:text-white hover:bg-[var(--surface-2)]'
               }`}>
               <tab.icon className="w-4 h-4" />
               {tab.label}
@@ -903,16 +903,16 @@ export default function AssetManagement() {
               <div className="card">
                 <div className="flex flex-col sm:flex-row gap-3">
                   <div className="relative flex-1">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--text-muted)]" />
                     <input
                       value={search}
                       onChange={e => { setSearch(e.target.value); setPage(0) }}
                       placeholder="Search by asset no, make, model..."
-                      className="w-full bg-gray-800 border border-gray-700 rounded-lg pl-10 pr-4 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-blue-500"
+                      className="w-full bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-lg pl-10 pr-4 py-2.5 text-sm text-[var(--text-primary)] placeholder-gray-600 focus:outline-none focus:border-blue-500"
                     />
                   </div>
                   <button onClick={() => setShowFilters(v => !v)}
-                    className={`flex items-center gap-2 px-4 py-2.5 rounded-lg border text-sm font-medium transition-colors ${showFilters ? 'bg-blue-900/40 border-blue-700 text-blue-300' : 'bg-gray-800 border-gray-700 text-gray-400 hover:text-white'}`}>
+                    className={`flex items-center gap-2 px-4 py-2.5 rounded-lg border text-sm font-medium transition-colors ${showFilters ? 'bg-blue-900/40 border-blue-700 text-blue-300' : 'bg-[var(--surface-2)] border-[var(--border-bright)] text-[var(--text-secondary)] hover:text-white'}`}>
                     <Filter className="w-4 h-4" />
                     Filters
                     {(filterSite || filterCountry || filterType || filterStatus || filterRisk) && (
@@ -925,34 +925,34 @@ export default function AssetManagement() {
                   {showFilters && (
                     <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }}
                       className="overflow-hidden">
-                      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mt-4 pt-4 border-t border-gray-800">
+                      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mt-4 pt-4 border-t border-[var(--border-dim)]">
                         {[
                           { label: 'Site', value: filterSite, onChange: setFilterSite, opts: siteOptions },
                           { label: 'Country', value: filterCountry, onChange: setFilterCountry, opts: countryOptions },
                           { label: 'Vehicle Type', value: filterType, onChange: setFilterType, opts: typeOptions },
                         ].map(f => (
                           <div key={f.label}>
-                            <label className="text-xs text-gray-500 mb-1 block">{f.label}</label>
+                            <label className="text-xs text-[var(--text-muted)] mb-1 block">{f.label}</label>
                             <select value={f.value} onChange={e => { f.onChange(e.target.value); setPage(0) }}
-                              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500">
+                              className="w-full bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none focus:border-blue-500">
                               <option value="">All</option>
                               {f.opts.map(o => <option key={o}>{o}</option>)}
                             </select>
                           </div>
                         ))}
                         <div>
-                          <label className="text-xs text-gray-500 mb-1 block">Status</label>
+                          <label className="text-xs text-[var(--text-muted)] mb-1 block">Status</label>
                           <select value={filterStatus} onChange={e => { setFilterStatus(e.target.value); setPage(0) }}
-                            className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500">
+                            className="w-full bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none focus:border-blue-500">
                             <option value="">All</option>
                             <option value="active">Active</option>
                             <option value="inactive">Inactive</option>
                           </select>
                         </div>
                         <div>
-                          <label className="text-xs text-gray-500 mb-1 block">Risk Level</label>
+                          <label className="text-xs text-[var(--text-muted)] mb-1 block">Risk Level</label>
                           <select value={filterRisk} onChange={e => { setFilterRisk(e.target.value); setPage(0) }}
-                            className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500">
+                            className="w-full bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none focus:border-blue-500">
                             <option value="">All</option>
                             {['Critical','High','Medium','Low'].map(r => <option key={r}>{r}</option>)}
                           </select>
@@ -964,9 +964,9 @@ export default function AssetManagement() {
               </div>
 
               {/* Table */}
-              <div className="bg-gray-900 rounded-xl border border-gray-800 overflow-hidden">
-                <div className="px-5 py-3 border-b border-gray-800 flex items-center justify-between">
-                  <span className="text-sm text-gray-400">
+              <div className="bg-[var(--surface-1)] rounded-xl border border-[var(--border-dim)] overflow-hidden">
+                <div className="px-5 py-3 border-b border-[var(--border-dim)] flex items-center justify-between">
+                  <span className="text-sm text-[var(--text-secondary)]">
                     {filteredAssets.length} asset{filteredAssets.length !== 1 ? 's' : ''}
                     {filteredAssets.length !== enrichedAssets.length && ` (filtered from ${enrichedAssets.length})`}
                   </span>
@@ -981,13 +981,13 @@ export default function AssetManagement() {
                   <div className="flex flex-col items-center justify-center py-20 text-center px-6">
                     <AlertTriangle className="w-12 h-12 mb-3 text-red-400" />
                     <p className="text-red-300 font-medium">Could not load fleet assets</p>
-                    <p className="text-gray-500 text-sm mt-1 max-w-md">{loadError}</p>
+                    <p className="text-[var(--text-muted)] text-sm mt-1 max-w-md">{loadError}</p>
                     <button onClick={() => setRefreshKey(k => k + 1)} className="mt-4 inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-sm rounded-lg transition-colors">
                       <RefreshCw size={16} /> Retry
                     </button>
                   </div>
                 ) : pageAssets.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center py-20 text-gray-600">
+                  <div className="flex flex-col items-center justify-center py-20 text-[var(--text-dim)]">
                     <Truck className="w-12 h-12 mb-3 opacity-30" />
                     <p className="text-sm">No assets found. Adjust filters or add your first asset.</p>
                   </div>
@@ -995,7 +995,7 @@ export default function AssetManagement() {
                   <div className="overflow-x-auto">
                     <table className="w-full text-sm">
                       <thead>
-                        <tr className="border-b border-gray-800 text-xs text-gray-500 uppercase tracking-wider">
+                        <tr className="border-b border-[var(--border-dim)] text-xs text-[var(--text-muted)] uppercase tracking-wider">
                           {[
                             { col: 'asset_no', label: 'Asset No' },
                             { col: 'vehicle_type', label: 'Type' },
@@ -1011,7 +1011,7 @@ export default function AssetManagement() {
                           ].map(h => (
                             <th key={h.label}
                               onClick={h.col ? () => toggleSort(h.col) : undefined}
-                              className={`px-4 py-3 text-left font-medium whitespace-nowrap ${h.col ? 'cursor-pointer hover:text-gray-300 select-none' : ''}`}>
+                              className={`px-4 py-3 text-left font-medium whitespace-nowrap ${h.col ? 'cursor-pointer hover:text-[var(--text-secondary)] select-none' : ''}`}>
                               {h.label}
                               {h.col && <SortIcon col={h.col} />}
                             </th>
@@ -1023,49 +1023,49 @@ export default function AssetManagement() {
                           const rc = RISK_COLOR[a._worstRisk]
                           return (
                             <tr key={a.id ?? a.asset_no ?? i}
-                              className="border-b border-gray-800/50 hover:bg-gray-800/40 transition-colors">
+                              className="border-b border-[var(--border-dim)] hover:bg-[var(--surface-2)] transition-colors">
                               <td className="px-4 py-3 font-mono font-semibold text-blue-300">{a.asset_no}</td>
-                              <td className="px-4 py-3 text-gray-300">{a.vehicle_type ?? '-'}</td>
-                              <td className="px-4 py-3 text-gray-300 max-w-[140px] truncate">
+                              <td className="px-4 py-3 text-[var(--text-secondary)]">{a.vehicle_type ?? '-'}</td>
+                              <td className="px-4 py-3 text-[var(--text-secondary)] max-w-[140px] truncate">
                                 {[a.make, a.model].filter(Boolean).join(' ') || '-'}
                               </td>
-                              <td className="px-4 py-3 text-gray-400">{a.year ?? '-'}</td>
-                              <td className="px-4 py-3 text-gray-400 max-w-[120px] truncate">{a.site ?? '-'}</td>
+                              <td className="px-4 py-3 text-[var(--text-secondary)]">{a.year ?? '-'}</td>
+                              <td className="px-4 py-3 text-[var(--text-secondary)] max-w-[120px] truncate">{a.site ?? '-'}</td>
                               <td className="px-4 py-3 text-center">
-                                <span className="font-semibold text-white">{a._activeCount}</span>
+                                <span className="font-semibold text-[var(--text-primary)]">{a._activeCount}</span>
                                 {a._totalCount > a._activeCount && (
-                                  <span className="text-gray-600 text-xs ml-1">/{a._totalCount}</span>
+                                  <span className="text-[var(--text-dim)] text-xs ml-1">/{a._totalCount}</span>
                                 )}
                               </td>
                               <td className="px-4 py-3">
                                 {rc ? (
                                   <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${rc.bg} ${rc.text}`}>{a._worstRisk}</span>
-                                ) : <span className="text-gray-600">-</span>}
+                                ) : <span className="text-[var(--text-dim)]">-</span>}
                               </td>
-                              <td className="px-4 py-3 text-gray-300">
-                                {a._ytdCost > 0 ? fmtCurrency(a._ytdCost, activeCurrency) : <span className="text-gray-600">-</span>}
+                              <td className="px-4 py-3 text-[var(--text-secondary)]">
+                                {a._ytdCost > 0 ? fmtCurrency(a._ytdCost, activeCurrency) : <span className="text-[var(--text-dim)]">-</span>}
                               </td>
-                              <td className="px-4 py-3 text-gray-400 whitespace-nowrap">
+                              <td className="px-4 py-3 text-[var(--text-secondary)] whitespace-nowrap">
                                 {a._latestDate ? (
                                   <span className={a._noRecentRecord ? 'text-orange-400' : ''}>
                                     {fmtDate(a._latestDate)}
                                   </span>
-                                ) : <span className="text-gray-600">-</span>}
+                                ) : <span className="text-[var(--text-dim)]">-</span>}
                               </td>
                               <td className="px-4 py-3">
-                                <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${a.active ? 'bg-green-900/50 text-green-300' : 'bg-gray-800 text-gray-500'}`}>
+                                <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${a.active ? 'bg-green-900/50 text-green-300' : 'bg-[var(--surface-2)] text-[var(--text-muted)]'}`}>
                                   {a.active ? 'Active' : 'Inactive'}
                                 </span>
                               </td>
                               <td className="px-4 py-3">
                                 <div className="flex items-center gap-1">
                                   <button onClick={() => setDrawerAsset(a)}
-                                    className="p-1.5 rounded-lg hover:bg-gray-700 text-gray-400 hover:text-blue-400 transition-colors" title="View detail">
+                                    className="p-1.5 rounded-lg hover:bg-[var(--surface-3)] text-[var(--text-secondary)] hover:text-blue-400 transition-colors" title="View detail">
                                     <Eye className="w-4 h-4" />
                                   </button>
                                   {isAdmin && (
                                     <button onClick={() => setEditAsset(a)}
-                                      className="p-1.5 rounded-lg hover:bg-gray-700 text-gray-400 hover:text-yellow-400 transition-colors" title="Edit asset">
+                                      className="p-1.5 rounded-lg hover:bg-[var(--surface-3)] text-[var(--text-secondary)] hover:text-yellow-400 transition-colors" title="Edit asset">
                                       <Edit2 className="w-4 h-4" />
                                     </button>
                                   )}
@@ -1081,24 +1081,24 @@ export default function AssetManagement() {
 
                 {/* Pagination */}
                 {totalPages > 1 && (
-                  <div className="flex items-center justify-between px-5 py-3 border-t border-gray-800 text-sm text-gray-400">
+                  <div className="flex items-center justify-between px-5 py-3 border-t border-[var(--border-dim)] text-sm text-[var(--text-secondary)]">
                     <span>Page {page + 1} of {totalPages}</span>
                     <div className="flex items-center gap-2">
                       <button disabled={page === 0} onClick={() => setPage(p => p - 1)}
-                        className="p-1.5 rounded-lg hover:bg-gray-800 disabled:opacity-30 transition-colors">
+                        className="p-1.5 rounded-lg hover:bg-[var(--surface-2)] disabled:opacity-30 transition-colors">
                         <ChevronLeft className="w-4 h-4" />
                       </button>
                       {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
                         const pg = Math.max(0, Math.min(page - 2 + i, totalPages - 1))
                         return (
                           <button key={pg} onClick={() => setPage(pg)}
-                            className={`w-8 h-8 rounded-lg text-xs font-medium transition-colors ${pg === page ? 'bg-blue-600 text-white' : 'hover:bg-gray-800'}`}>
+                            className={`w-8 h-8 rounded-lg text-xs font-medium transition-colors ${pg === page ? 'bg-blue-600 text-white' : 'hover:bg-[var(--surface-2)]'}`}>
                             {pg + 1}
                           </button>
                         )
                       })}
                       <button disabled={page >= totalPages - 1} onClick={() => setPage(p => p + 1)}
-                        className="p-1.5 rounded-lg hover:bg-gray-800 disabled:opacity-30 transition-colors">
+                        className="p-1.5 rounded-lg hover:bg-[var(--surface-2)] disabled:opacity-30 transition-colors">
                         <ChevronRight className="w-4 h-4" />
                       </button>
                     </div>
@@ -1113,27 +1113,27 @@ export default function AssetManagement() {
             <motion.div key="charts" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-6">
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <div className="card">
-                  <h3 className="text-sm font-semibold text-gray-300 mb-4 flex items-center gap-2">
+                  <h3 className="text-sm font-semibold text-[var(--text-secondary)] mb-4 flex items-center gap-2">
                     <BarChart2 className="w-4 h-4 text-blue-400" /> Vehicle Type Distribution
                   </h3>
                   <div className="h-64">
                     {typeChartData.labels.length ? (
                       <Doughnut data={typeChartData} options={DONUT_OPTS} />
                     ) : (
-                      <div className="flex items-center justify-center h-full text-gray-600 text-sm">No data available</div>
+                      <div className="flex items-center justify-center h-full text-[var(--text-dim)] text-sm">No data available</div>
                     )}
                   </div>
                 </div>
 
                 <div className="card">
-                  <h3 className="text-sm font-semibold text-gray-300 mb-4 flex items-center gap-2">
+                  <h3 className="text-sm font-semibold text-[var(--text-secondary)] mb-4 flex items-center gap-2">
                     <MapPin className="w-4 h-4 text-green-400" /> Assets per Site by Risk Status
                   </h3>
                   <div className="h-64">
                     {siteRiskChartData.labels.length ? (
                       <Bar data={siteRiskChartData} options={{ ...CHART_OPTS, plugins: { ...CHART_OPTS.plugins }, scales: { ...CHART_OPTS.scales, x: { ...CHART_OPTS.scales.x, stacked: true }, y: { ...CHART_OPTS.scales.y, stacked: true } } }} />
                     ) : (
-                      <div className="flex items-center justify-center h-full text-gray-600 text-sm">No site data available</div>
+                      <div className="flex items-center justify-center h-full text-[var(--text-dim)] text-sm">No site data available</div>
                     )}
                   </div>
                 </div>
@@ -1141,13 +1141,13 @@ export default function AssetManagement() {
 
               {/* Summary stats */}
               <div className="card">
-                <h3 className="text-sm font-semibold text-gray-300 mb-4 flex items-center gap-2">
+                <h3 className="text-sm font-semibold text-[var(--text-secondary)] mb-4 flex items-center gap-2">
                   <Award className="w-4 h-4 text-yellow-400" /> Fleet Summary by Type
                 </h3>
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
-                      <tr className="text-xs text-gray-500 uppercase border-b border-gray-800">
+                      <tr className="text-xs text-[var(--text-muted)] uppercase border-b border-[var(--border-dim)]">
                         {['Vehicle Type','Count','Active','At Risk','Avg YTD Cost','Health Avg'].map(h => (
                           <th key={h} className="px-4 py-2 text-left font-medium">{h}</th>
                         ))}
@@ -1161,20 +1161,20 @@ export default function AssetManagement() {
                         const avgCost = group.reduce((s, a) => s + (a._ytdCost || 0), 0) / (group.length || 1)
                         const avgHealth = group.reduce((s, a) => s + a._healthScore, 0) / (group.length || 1)
                         return (
-                          <tr key={type} className="border-b border-gray-800/50 hover:bg-gray-800/30 transition-colors">
-                            <td className="px-4 py-3 text-gray-300 font-medium">{type}</td>
-                            <td className="px-4 py-3 text-white font-semibold">{group.length}</td>
+                          <tr key={type} className="border-b border-[var(--border-dim)] hover:bg-[var(--surface-2)] transition-colors">
+                            <td className="px-4 py-3 text-[var(--text-secondary)] font-medium">{type}</td>
+                            <td className="px-4 py-3 text-[var(--text-primary)] font-semibold">{group.length}</td>
                             <td className="px-4 py-3 text-green-400">{active}</td>
                             <td className="px-4 py-3">
-                              {atRisk > 0 ? <span className="text-red-400 font-semibold">{atRisk}</span> : <span className="text-gray-600">0</span>}
+                              {atRisk > 0 ? <span className="text-red-400 font-semibold">{atRisk}</span> : <span className="text-[var(--text-dim)]">0</span>}
                             </td>
-                            <td className="px-4 py-3 text-gray-300">{fmtCurrency(avgCost, activeCurrency)}</td>
+                            <td className="px-4 py-3 text-[var(--text-secondary)]">{fmtCurrency(avgCost, activeCurrency)}</td>
                             <td className="px-4 py-3">
                               <div className="flex items-center gap-2">
-                                <div className="flex-1 bg-gray-800 rounded-full h-1.5 max-w-20">
+                                <div className="flex-1 bg-[var(--surface-2)] rounded-full h-1.5 max-w-20">
                                   <div className={`h-1.5 rounded-full ${SCORE_COLOR(avgHealth)}`} style={{ width: `${avgHealth}%` }} />
                                 </div>
-                                <span className="text-gray-400 text-xs">{Math.round(avgHealth)}</span>
+                                <span className="text-[var(--text-secondary)] text-xs">{Math.round(avgHealth)}</span>
                               </div>
                             </td>
                           </tr>
@@ -1192,17 +1192,17 @@ export default function AssetManagement() {
             <motion.div key="health" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-4">
               <div className="card">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5">
-                  <h3 className="text-sm font-semibold text-gray-300 flex items-center gap-2">
+                  <h3 className="text-sm font-semibold text-[var(--text-secondary)] flex items-center gap-2">
                     <Shield className="w-4 h-4 text-purple-400" /> Asset Health Score Matrix
                   </h3>
-                  <div className="flex items-center gap-3 text-xs text-gray-500">
+                  <div className="flex items-center gap-3 text-xs text-[var(--text-muted)]">
                     <div className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-green-500" />80-100</div>
                     <div className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-yellow-500" />60-79</div>
                     <div className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-orange-500" />40-59</div>
                     <div className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-red-500" />0-39</div>
                   </div>
                 </div>
-                <p className="text-xs text-gray-500 mb-4">
+                <p className="text-xs text-[var(--text-muted)] mb-4">
                   Score = Tread compliance (40%) + Risk level (40%) + Inspection recency (20%). Sorted by score ascending.
                 </p>
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-2">
@@ -1213,13 +1213,13 @@ export default function AssetManagement() {
                       <button
                         key={a.id ?? a.asset_no}
                         onClick={() => setDrawerAsset(a)}
-                        className="bg-gray-800 rounded-lg p-3 text-left hover:bg-gray-700 transition-colors border border-gray-700 hover:border-gray-600 group"
+                        className="bg-[var(--surface-2)] rounded-lg p-3 text-left hover:bg-[var(--surface-3)] transition-colors border border-[var(--border-bright)] hover:border-[var(--border-bright)] group"
                       >
                         <div className={`w-full h-1.5 rounded-full mb-2 ${SCORE_COLOR(a._healthScore)}`} />
-                        <p className="text-xs font-mono font-semibold text-gray-200 truncate group-hover:text-white">{a.asset_no}</p>
-                        <p className="text-xs text-gray-500 truncate">{a.vehicle_type ?? '-'}</p>
+                        <p className="text-xs font-mono font-semibold text-[var(--text-primary)] truncate group-hover:text-[var(--text-primary)]">{a.asset_no}</p>
+                        <p className="text-xs text-[var(--text-muted)] truncate">{a.vehicle_type ?? '-'}</p>
                         <div className="flex items-center justify-between mt-2">
-                          <span className="text-lg font-bold text-white">{a._healthScore}</span>
+                          <span className="text-lg font-bold text-[var(--text-primary)]">{a._healthScore}</span>
                           {a._worstRisk && (
                             <span className="text-xs" style={{ color: RISK_COLOR[a._worstRisk]?.hex }}>
                               {a._worstRisk?.[0]}
@@ -1230,7 +1230,7 @@ export default function AssetManagement() {
                     ))
                   }
                   {enrichedAssets.filter(a => a.active !== false).length === 0 && (
-                    <div className="col-span-full text-center py-12 text-gray-600 text-sm">
+                    <div className="col-span-full text-center py-12 text-[var(--text-dim)] text-sm">
                       No active assets to display.
                     </div>
                   )}
@@ -1239,7 +1239,7 @@ export default function AssetManagement() {
 
               {/* Bottom 10 worst */}
               {enrichedAssets.filter(a => a.active !== false && a._healthScore < 60).length > 0 && (
-                <div className="bg-gray-900 rounded-xl border border-red-900/30 p-5">
+                <div className="bg-[var(--surface-1)] rounded-xl border border-red-900/30 p-5">
                   <h3 className="text-sm font-semibold text-red-400 mb-4 flex items-center gap-2">
                     <AlertTriangle className="w-4 h-4" /> Low Health Assets - Immediate Review Required
                   </h3>
@@ -1250,15 +1250,15 @@ export default function AssetManagement() {
                       .slice(0, 10)
                       .map(a => (
                         <div key={a.id ?? a.asset_no}
-                          className="flex items-center justify-between p-3 bg-gray-800 rounded-lg border border-gray-700 hover:border-red-900/40 transition-colors cursor-pointer"
+                          className="flex items-center justify-between p-3 bg-[var(--surface-2)] rounded-lg border border-[var(--border-bright)] hover:border-red-900/40 transition-colors cursor-pointer"
                           onClick={() => setDrawerAsset(a)}>
                           <div className="flex items-center gap-4">
-                            <div className={`w-10 h-10 rounded-lg ${SCORE_COLOR(a._healthScore)} flex items-center justify-center font-bold text-white text-sm`}>
+                            <div className={`w-10 h-10 rounded-lg ${SCORE_COLOR(a._healthScore)} flex items-center justify-center font-bold text-[var(--text-primary)] text-sm`}>
                               {a._healthScore}
                             </div>
                             <div>
-                              <p className="text-sm font-semibold text-white font-mono">{a.asset_no}</p>
-                              <p className="text-xs text-gray-500">{a.vehicle_type ?? '-'} · {a.site ?? '-'}</p>
+                              <p className="text-sm font-semibold text-[var(--text-primary)] font-mono">{a.asset_no}</p>
+                              <p className="text-xs text-[var(--text-muted)]">{a.vehicle_type ?? '-'} · {a.site ?? '-'}</p>
                             </div>
                           </div>
                           <div className="flex items-center gap-4">
@@ -1267,8 +1267,8 @@ export default function AssetManagement() {
                                 {a._worstRisk}
                               </span>
                             )}
-                            <span className="text-xs text-gray-500">{a._activeCount} tyres</span>
-                            <Eye className="w-4 h-4 text-gray-600 hover:text-blue-400" />
+                            <span className="text-xs text-[var(--text-muted)]">{a._activeCount} tyres</span>
+                            <Eye className="w-4 h-4 text-[var(--text-dim)] hover:text-blue-400" />
                           </div>
                         </div>
                       ))

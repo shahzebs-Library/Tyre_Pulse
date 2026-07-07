@@ -87,8 +87,8 @@ function stageColor(stage) {
     case 'Retread Eligible':return 'text-cyan-400 bg-cyan-400/10'
     case 'Retreaded':       return 'text-blue-400 bg-blue-400/10'
     case 'Scrapped':        return 'text-red-400 bg-red-400/10'
-    case 'Removed':         return 'text-gray-400 bg-gray-400/10'
-    default:                return 'text-gray-500 bg-gray-500/10'
+    case 'Removed':         return 'text-[var(--text-secondary)] bg-gray-400/10'
+    default:                return 'text-[var(--text-muted)] bg-gray-500/10'
   }
 }
 
@@ -354,7 +354,7 @@ export default function TyreLifecycle() {
       <div className="flex items-center justify-center h-64">
         <div className="flex flex-col items-center gap-3">
           <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
-          <p className="text-gray-400 text-sm">Loading lifecycle data...</p>
+          <p className="text-[var(--text-secondary)] text-sm">Loading lifecycle data...</p>
         </div>
       </div>
     )
@@ -368,10 +368,10 @@ export default function TyreLifecycle() {
         icon={Activity}
         actions={
           <div className="flex items-center gap-2">
-            <button onClick={handlePdfExport} className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-lg text-sm text-gray-300 transition-colors">
+            <button onClick={handlePdfExport} className="flex items-center gap-1.5 px-3 py-1.5 bg-[var(--surface-2)] hover:bg-[var(--surface-3)] border border-[var(--border-bright)] rounded-lg text-sm text-[var(--text-secondary)] transition-colors">
               <FileText size={14} /> PDF
             </button>
-            <button onClick={handleExcelExport} className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-lg text-sm text-gray-300 transition-colors">
+            <button onClick={handleExcelExport} className="flex items-center gap-1.5 px-3 py-1.5 bg-[var(--surface-2)] hover:bg-[var(--surface-3)] border border-[var(--border-bright)] rounded-lg text-sm text-[var(--text-secondary)] transition-colors">
               <FileSpreadsheet size={14} /> Excel
             </button>
           </div>
@@ -399,13 +399,13 @@ export default function TyreLifecycle() {
               key={label}
               initial={{ opacity: 0, y: 12 }}
               animate={{ opacity: 1, y: 0 }}
-              className="bg-gray-900 border border-gray-800 rounded-xl p-4"
+              className="bg-[var(--surface-1)] border border-[var(--border-dim)] rounded-xl p-4"
             >
               <div className={`w-8 h-8 rounded-lg flex items-center justify-center mb-3 ${colorMap[color]}`}>
                 <Icon size={16} />
               </div>
-              <p className="text-2xl font-bold text-white">{value}{suffix}</p>
-              <p className="text-xs text-gray-500 mt-1">{label}</p>
+              <p className="text-2xl font-bold text-[var(--text-primary)]">{value}{suffix}</p>
+              <p className="text-xs text-[var(--text-muted)] mt-1">{label}</p>
             </motion.div>
           )
         })}
@@ -413,31 +413,31 @@ export default function TyreLifecycle() {
 
       {/* Filters */}
       <div className="card p-4 space-y-3">
-        <div className="flex items-center gap-2 text-sm text-gray-400 font-medium">
+        <div className="flex items-center gap-2 text-sm text-[var(--text-secondary)] font-medium">
           <Filter size={14} />
           <span>Filters</span>
           {hasFilter && (
-            <button onClick={clearFilters} className="ml-auto flex items-center gap-1 text-xs text-gray-500 hover:text-white transition-colors">
+            <button onClick={clearFilters} className="ml-auto flex items-center gap-1 text-xs text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors">
               <X size={12} /> Clear
             </button>
           )}
         </div>
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
           <div className="relative col-span-2 sm:col-span-1">
-            <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-500" />
+            <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
             <input
               type="text"
               placeholder="Serial / Asset..."
               value={search}
               onChange={e => setSearch(e.target.value)}
-              className="w-full bg-gray-800 border border-gray-700 rounded-lg pl-8 pr-3 py-1.5 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-blue-500"
+              className="w-full bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-lg pl-8 pr-3 py-1.5 text-sm text-[var(--text-primary)] placeholder-gray-500 focus:outline-none focus:border-blue-500"
             />
           </div>
 
           <select
             value={filterBrand}
             onChange={e => setFilterBrand(e.target.value)}
-            className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none focus:border-blue-500"
+            className="bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-lg px-3 py-1.5 text-sm text-[var(--text-primary)] focus:outline-none focus:border-blue-500"
           >
             <option value="">All Brands</option>
             {uniqueBrands.map(b => <option key={b} value={b}>{b}</option>)}
@@ -446,7 +446,7 @@ export default function TyreLifecycle() {
           <select
             value={filterSite}
             onChange={e => setFilterSite(e.target.value)}
-            className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none focus:border-blue-500"
+            className="bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-lg px-3 py-1.5 text-sm text-[var(--text-primary)] focus:outline-none focus:border-blue-500"
           >
             <option value="">All Sites</option>
             {uniqueSites.map(s => <option key={s} value={s}>{s}</option>)}
@@ -455,7 +455,7 @@ export default function TyreLifecycle() {
           <select
             value={filterCategory}
             onChange={e => setFilterCategory(e.target.value)}
-            className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none focus:border-blue-500"
+            className="bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-lg px-3 py-1.5 text-sm text-[var(--text-primary)] focus:outline-none focus:border-blue-500"
           >
             <option value="">All Categories</option>
             {['New', 'Retread', 'Repaired', 'Scrap'].map(c => <option key={c} value={c}>{c}</option>)}
@@ -496,9 +496,9 @@ export default function TyreLifecycle() {
                     <Icon size={15} className={c.text} />
                   </div>
                   <p className={`text-2xl font-bold ${c.text}`}>{stage.count.toLocaleString()}</p>
-                  <p className="text-xs text-gray-400 mt-0.5 leading-tight">{stage.label}</p>
-                  <p className="text-xs text-gray-500 mt-1">{stage.pct}% of total</p>
-                  <p className="text-xs text-gray-600 mt-0.5">
+                  <p className="text-xs text-[var(--text-secondary)] mt-0.5 leading-tight">{stage.label}</p>
+                  <p className="text-xs text-[var(--text-muted)] mt-1">{stage.pct}% of total</p>
+                  <p className="text-xs text-[var(--text-dim)] mt-0.5">
                     {stage.avgCost > 0
                       ? `Avg ${activeCurrency} ${Math.round(stage.avgCost).toLocaleString()}`
                       : '-'
@@ -507,7 +507,7 @@ export default function TyreLifecycle() {
                 </motion.div>
                 {i < funnel.length - 1 && (
                   <div className="hidden sm:flex items-center justify-center w-6 shrink-0">
-                    <ChevronRight size={16} className="text-gray-600" />
+                    <ChevronRight size={16} className="text-[var(--text-dim)]" />
                   </div>
                 )}
               </div>
@@ -525,7 +525,7 @@ export default function TyreLifecycle() {
             {brandChart.labels.length > 0 ? (
               <Bar data={brandChart} options={{ ...BASE_CHART_OPTS, plugins: { legend: LEGEND } }} />
             ) : (
-              <div className="flex items-center justify-center h-full text-gray-600 text-sm">
+              <div className="flex items-center justify-center h-full text-[var(--text-dim)] text-sm">
                 No km data available
               </div>
             )}
@@ -539,7 +539,7 @@ export default function TyreLifecycle() {
             {costDonut.datasets[0].data.some(v => v > 0) ? (
               <Doughnut data={costDonut} options={DONUT_OPTS} />
             ) : (
-              <div className="flex items-center justify-center h-full text-gray-600 text-sm">
+              <div className="flex items-center justify-center h-full text-[var(--text-dim)] text-sm">
                 No cost data available
               </div>
             )}
@@ -566,11 +566,11 @@ export default function TyreLifecycle() {
       </div>
 
       {/* Lifecycle Table */}
-      <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
-        <div className="px-5 py-4 border-b border-gray-800 flex items-center justify-between">
+      <div className="bg-[var(--surface-1)] border border-[var(--border-dim)] rounded-xl overflow-hidden">
+        <div className="px-5 py-4 border-b border-[var(--border-dim)] flex items-center justify-between">
           <h2 className="text-sm font-semibold text-[var(--text-primary)]">
             Tyre Lifecycle Table
-            <span className="ml-2 text-gray-600 font-normal text-xs">
+            <span className="ml-2 text-[var(--text-dim)] font-normal text-xs">
               {(page - 1) * PAGE_SIZE + 1}-{Math.min(page * PAGE_SIZE, filtered.length)} of {filtered.length}
             </span>
           </h2>
@@ -578,17 +578,17 @@ export default function TyreLifecycle() {
             <button
               disabled={page === 1}
               onClick={() => setPage(p => p - 1)}
-              className="p-1.5 rounded-lg bg-gray-800 border border-gray-700 disabled:opacity-30 hover:bg-gray-700 transition-colors"
+              className="p-1.5 rounded-lg bg-[var(--surface-2)] border border-[var(--border-bright)] disabled:opacity-30 hover:bg-[var(--surface-3)] transition-colors"
             >
-              <ChevronLeft size={14} className="text-gray-400" />
+              <ChevronLeft size={14} className="text-[var(--text-secondary)]" />
             </button>
-            <span className="text-xs text-gray-500">{page}/{totalPages}</span>
+            <span className="text-xs text-[var(--text-muted)]">{page}/{totalPages}</span>
             <button
               disabled={page === totalPages}
               onClick={() => setPage(p => p + 1)}
-              className="p-1.5 rounded-lg bg-gray-800 border border-gray-700 disabled:opacity-30 hover:bg-gray-700 transition-colors"
+              className="p-1.5 rounded-lg bg-[var(--surface-2)] border border-[var(--border-bright)] disabled:opacity-30 hover:bg-[var(--surface-3)] transition-colors"
             >
-              <ChevronRight size={14} className="text-gray-400" />
+              <ChevronRight size={14} className="text-[var(--text-secondary)]" />
             </button>
           </div>
         </div>
@@ -596,7 +596,7 @@ export default function TyreLifecycle() {
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="text-left text-xs text-gray-500 border-b border-gray-800 bg-gray-950/50">
+              <tr className="text-left text-xs text-[var(--text-muted)] border-b border-[var(--border-dim)] bg-[var(--surface-0)]">
                 <th className="px-4 py-3 font-medium">Serial</th>
                 <th className="px-4 py-3 font-medium">Brand</th>
                 <th className="px-4 py-3 font-medium">Size</th>
@@ -614,7 +614,7 @@ export default function TyreLifecycle() {
             <tbody>
               {pageData.length === 0 ? (
                 <tr>
-                  <td colSpan={12} className="text-center py-16 text-gray-600 text-sm">
+                  <td colSpan={12} className="text-center py-16 text-[var(--text-dim)] text-sm">
                     No records match the current filters
                   </td>
                 </tr>
@@ -628,18 +628,18 @@ export default function TyreLifecycle() {
                     <>
                       <tr
                         key={r.id}
-                        className="border-b border-gray-800/50 hover:bg-gray-800/30 transition-colors cursor-pointer"
+                        className="border-b border-[var(--border-dim)] hover:bg-[var(--surface-2)] transition-colors cursor-pointer"
                         onClick={() => r.serial_number && toggleExpand(r.serial_number)}
                       >
-                        <td className="px-4 py-3 font-mono text-xs text-gray-300">{r.serial_number || '-'}</td>
-                        <td className="px-4 py-3 text-white font-medium">{r.brand || '-'}</td>
-                        <td className="px-4 py-3 text-gray-400 text-xs">{r.size || '-'}</td>
-                        <td className="px-4 py-3 text-gray-400 text-xs">{r.position || '-'}</td>
-                        <td className="px-4 py-3 text-gray-400 text-xs">{r.asset_no || '-'}</td>
-                        <td className="px-4 py-3 text-gray-400 text-xs">{r.site || '-'}</td>
-                        <td className="px-4 py-3 text-gray-400 text-xs">{r.issue_date || '-'}</td>
-                        <td className="px-4 py-3 text-gray-300 text-right tabular-nums">
-                          {km != null ? km.toLocaleString() : <span className="text-gray-600">-</span>}
+                        <td className="px-4 py-3 font-mono text-xs text-[var(--text-secondary)]">{r.serial_number || '-'}</td>
+                        <td className="px-4 py-3 text-[var(--text-primary)] font-medium">{r.brand || '-'}</td>
+                        <td className="px-4 py-3 text-[var(--text-secondary)] text-xs">{r.size || '-'}</td>
+                        <td className="px-4 py-3 text-[var(--text-secondary)] text-xs">{r.position || '-'}</td>
+                        <td className="px-4 py-3 text-[var(--text-secondary)] text-xs">{r.asset_no || '-'}</td>
+                        <td className="px-4 py-3 text-[var(--text-secondary)] text-xs">{r.site || '-'}</td>
+                        <td className="px-4 py-3 text-[var(--text-secondary)] text-xs">{r.issue_date || '-'}</td>
+                        <td className="px-4 py-3 text-[var(--text-secondary)] text-right tabular-nums">
+                          {km != null ? km.toLocaleString() : <span className="text-[var(--text-dim)]">-</span>}
                         </td>
                         <td className="px-4 py-3">
                           <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
@@ -651,15 +651,15 @@ export default function TyreLifecycle() {
                             {r.category || 'New'}
                           </span>
                         </td>
-                        <td className="px-4 py-3 text-right tabular-nums text-xs text-gray-400">
-                          {cpkV != null ? cpkV.toFixed(4) : <span className="text-gray-600">-</span>}
+                        <td className="px-4 py-3 text-right tabular-nums text-xs text-[var(--text-secondary)]">
+                          {cpkV != null ? cpkV.toFixed(4) : <span className="text-[var(--text-dim)]">-</span>}
                         </td>
                         <td className="px-4 py-3">
                           <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${stageColor(stage)}`}>
                             {stage}
                           </span>
                         </td>
-                        <td className="px-4 py-3 text-gray-600">
+                        <td className="px-4 py-3 text-[var(--text-dim)]">
                           {r.serial_number && (
                             isExp ? <ChevronUp size={14} /> : <ChevronDown size={14} />
                           )}
@@ -670,7 +670,7 @@ export default function TyreLifecycle() {
                       <AnimatePresence>
                         {isExp && r.serial_number && (
                           <tr key={`${r.id}-expand`}>
-                            <td colSpan={12} className="bg-gray-950/60 border-b border-gray-800">
+                            <td colSpan={12} className="bg-[var(--surface-0)] border-b border-[var(--border-dim)]">
                               <motion.div
                                 initial={{ opacity: 0, height: 0 }}
                                 animate={{ opacity: 1, height: 'auto' }}
@@ -678,16 +678,16 @@ export default function TyreLifecycle() {
                                 transition={{ duration: 0.2 }}
                                 className="px-6 py-4"
                               >
-                                <p className="text-xs font-semibold text-gray-400 mb-3">
-                                  Transfer History - Serial: <span className="text-white font-mono">{r.serial_number}</span>
+                                <p className="text-xs font-semibold text-[var(--text-secondary)] mb-3">
+                                  Transfer History - Serial: <span className="text-[var(--text-primary)] font-mono">{r.serial_number}</span>
                                 </p>
                                 {!serialHistory[r.serial_number] ? (
-                                  <p className="text-xs text-gray-600">Loading...</p>
+                                  <p className="text-xs text-[var(--text-dim)]">Loading...</p>
                                 ) : serialHistory[r.serial_number].length === 0 ? (
-                                  <p className="text-xs text-gray-600">No history records found</p>
+                                  <p className="text-xs text-[var(--text-dim)]">No history records found</p>
                                 ) : (
                                   <div className="relative pl-4">
-                                    <div className="absolute left-1.5 top-0 bottom-0 w-px bg-gray-700" />
+                                    <div className="absolute left-1.5 top-0 bottom-0 w-px bg-[var(--surface-3)]" />
                                     {serialHistory[r.serial_number].map((h, idx) => {
                                       const hStage = lifecycleStage(h)
                                       const hKm    = kmRun(h)
@@ -699,11 +699,11 @@ export default function TyreLifecycle() {
                                             hStage === 'In Service'? 'bg-green-500' : 'bg-gray-500'
                                           }`} />
                                           <div className="pl-3 flex flex-wrap gap-x-6 gap-y-1 text-xs">
-                                            <span className="text-gray-400">{h.issue_date || '-'}</span>
-                                            <span className="text-white">Asset: <span className="text-gray-300">{h.asset_no || '-'}</span></span>
-                                            <span className="text-white">Site: <span className="text-gray-300">{h.site || '-'}</span></span>
-                                            <span className="text-white">Position: <span className="text-gray-300">{h.position || '-'}</span></span>
-                                            <span className="text-white">km: <span className="text-gray-300">{hKm != null ? hKm.toLocaleString() : '-'}</span></span>
+                                            <span className="text-[var(--text-secondary)]">{h.issue_date || '-'}</span>
+                                            <span className="text-[var(--text-primary)]">Asset: <span className="text-[var(--text-secondary)]">{h.asset_no || '-'}</span></span>
+                                            <span className="text-[var(--text-primary)]">Site: <span className="text-[var(--text-secondary)]">{h.site || '-'}</span></span>
+                                            <span className="text-[var(--text-primary)]">Position: <span className="text-[var(--text-secondary)]">{h.position || '-'}</span></span>
+                                            <span className="text-[var(--text-primary)]">km: <span className="text-[var(--text-secondary)]">{hKm != null ? hKm.toLocaleString() : '-'}</span></span>
                                             <span className={`px-1.5 py-0.5 rounded font-medium ${stageColor(hStage)}`}>{hStage}</span>
                                           </div>
                                         </div>
@@ -726,13 +726,13 @@ export default function TyreLifecycle() {
 
         {/* Bottom pagination */}
         {totalPages > 1 && (
-          <div className="px-5 py-3 border-t border-gray-800 flex items-center justify-between">
-            <span className="text-xs text-gray-600">
+          <div className="px-5 py-3 border-t border-[var(--border-dim)] flex items-center justify-between">
+            <span className="text-xs text-[var(--text-dim)]">
               Page {page} of {totalPages} · {filtered.length} records
             </span>
             <div className="flex items-center gap-1.5">
-              <button onClick={() => setPage(1)} disabled={page === 1} className="px-2 py-1 text-xs rounded bg-gray-800 border border-gray-700 text-gray-400 disabled:opacity-30 hover:bg-gray-700 transition-colors">«</button>
-              <button onClick={() => setPage(p => p - 1)} disabled={page === 1} className="px-2 py-1 text-xs rounded bg-gray-800 border border-gray-700 text-gray-400 disabled:opacity-30 hover:bg-gray-700 transition-colors">‹</button>
+              <button onClick={() => setPage(1)} disabled={page === 1} className="px-2 py-1 text-xs rounded bg-[var(--surface-2)] border border-[var(--border-bright)] text-[var(--text-secondary)] disabled:opacity-30 hover:bg-[var(--surface-3)] transition-colors">«</button>
+              <button onClick={() => setPage(p => p - 1)} disabled={page === 1} className="px-2 py-1 text-xs rounded bg-[var(--surface-2)] border border-[var(--border-bright)] text-[var(--text-secondary)] disabled:opacity-30 hover:bg-[var(--surface-3)] transition-colors">‹</button>
               {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
                 const start = Math.max(1, Math.min(page - 2, totalPages - 4))
                 const p = start + i
@@ -743,15 +743,15 @@ export default function TyreLifecycle() {
                     className={`px-2 py-1 text-xs rounded border transition-colors ${
                       p === page
                         ? 'bg-blue-600 border-blue-600 text-white'
-                        : 'bg-gray-800 border-gray-700 text-gray-400 hover:bg-gray-700'
+                        : 'bg-[var(--surface-2)] border-[var(--border-bright)] text-[var(--text-secondary)] hover:bg-[var(--surface-3)]'
                     }`}
                   >
                     {p}
                   </button>
                 )
               })}
-              <button onClick={() => setPage(p => p + 1)} disabled={page === totalPages} className="px-2 py-1 text-xs rounded bg-gray-800 border border-gray-700 text-gray-400 disabled:opacity-30 hover:bg-gray-700 transition-colors">›</button>
-              <button onClick={() => setPage(totalPages)} disabled={page === totalPages} className="px-2 py-1 text-xs rounded bg-gray-800 border border-gray-700 text-gray-400 disabled:opacity-30 hover:bg-gray-700 transition-colors">»</button>
+              <button onClick={() => setPage(p => p + 1)} disabled={page === totalPages} className="px-2 py-1 text-xs rounded bg-[var(--surface-2)] border border-[var(--border-bright)] text-[var(--text-secondary)] disabled:opacity-30 hover:bg-[var(--surface-3)] transition-colors">›</button>
+              <button onClick={() => setPage(totalPages)} disabled={page === totalPages} className="px-2 py-1 text-xs rounded bg-[var(--surface-2)] border border-[var(--border-bright)] text-[var(--text-secondary)] disabled:opacity-30 hover:bg-[var(--surface-3)] transition-colors">»</button>
             </div>
           </div>
         )}

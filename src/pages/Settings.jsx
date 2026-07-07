@@ -17,7 +17,7 @@ import TwoFactorSetup from '../components/TwoFactorSetup'
 const ROLE_BADGE = {
   Admin:   'bg-purple-900/50 text-purple-300 border border-purple-700/50',
   Manager: 'bg-blue-900/50 text-blue-300 border border-blue-700/50',
-  Viewer:  'bg-gray-800 text-gray-300 border border-gray-700',
+  Viewer:  'bg-[var(--surface-2)] text-[var(--text-secondary)] border border-[var(--border-bright)]',
 }
 
 const DATE_FORMATS = ['DD/MM/YYYY', 'MM/DD/YYYY', 'YYYY-MM-DD']
@@ -442,17 +442,17 @@ export default function Settings() {
 
         {/* Profile */}
         <div className="card space-y-4">
-          <h2 className="text-base font-semibold text-white flex items-center gap-2"><User size={16} /> Profile</h2>
+          <h2 className="text-base font-semibold text-[var(--text-primary)] flex items-center gap-2"><User size={16} /> Profile</h2>
           <div className="flex items-center gap-4 py-2">
             <div
-              className="w-14 h-14 rounded-full flex items-center justify-center text-xl font-bold text-white flex-shrink-0"
+              className="w-14 h-14 rounded-full flex items-center justify-center text-xl font-bold text-[var(--text-primary)] flex-shrink-0"
               style={{ background: 'linear-gradient(135deg, #16a34a 0%, #15803d 100%)' }}
             >
               {initials}
             </div>
             <div className="min-w-0">
-              <p className="text-white font-medium text-sm truncate">{profileForm.full_name || profile?.username || 'No name set'}</p>
-              <p className="text-gray-400 text-xs mt-0.5 truncate">{user?.email}</p>
+              <p className="text-[var(--text-primary)] font-medium text-sm truncate">{profileForm.full_name || profile?.username || 'No name set'}</p>
+              <p className="text-[var(--text-secondary)] text-xs mt-0.5 truncate">{user?.email}</p>
               <span className="inline-block mt-1 text-xs px-2 py-0.5 rounded-full bg-teal-900/40 text-teal-300 border border-teal-700/30">
                 Tyre Man
               </span>
@@ -493,7 +493,7 @@ export default function Settings() {
 
         {/* Change Password */}
         <div className="card space-y-4">
-          <h2 className="text-base font-semibold text-white flex items-center gap-2">
+          <h2 className="text-base font-semibold text-[var(--text-primary)] flex items-center gap-2">
             <Lock size={16} className="text-green-400" /> Change Password
           </h2>
           <form onSubmit={handlePasswordChange} className="space-y-3">
@@ -551,11 +551,11 @@ export default function Settings() {
 
         {/* About */}
         <div className="card">
-          <h2 className="text-base font-semibold text-white flex items-center gap-2 mb-3"><Info size={16} /> About</h2>
-          <div className="space-y-1 text-sm text-gray-400">
-            <p><span className="text-gray-500">App:</span> <span className="text-white font-medium">TyrePulse</span></p>
-            <p><span className="text-gray-500">Version:</span> <span className="text-white font-medium">v2.5.0</span></p>
-            <p><span className="text-gray-500">Support:</span> Contact your tyre planning engineer</p>
+          <h2 className="text-base font-semibold text-[var(--text-primary)] flex items-center gap-2 mb-3"><Info size={16} /> About</h2>
+          <div className="space-y-1 text-sm text-[var(--text-secondary)]">
+            <p><span className="text-[var(--text-muted)]">App:</span> <span className="text-[var(--text-primary)] font-medium">TyrePulse</span></p>
+            <p><span className="text-[var(--text-muted)]">Version:</span> <span className="text-[var(--text-primary)] font-medium">v2.5.0</span></p>
+            <p><span className="text-[var(--text-muted)]">Support:</span> Contact your tyre planning engineer</p>
           </div>
         </div>
       </div>
@@ -581,19 +581,19 @@ export default function Settings() {
 
         {/* Column 1 - Profile */}
         <div className="card space-y-4">
-          <h2 className="text-base font-semibold text-white flex items-center gap-2"><User size={16} /> Profile</h2>
+          <h2 className="text-base font-semibold text-[var(--text-primary)] flex items-center gap-2"><User size={16} /> Profile</h2>
 
           {/* Avatar */}
           <div className="flex flex-col items-center gap-3 py-2">
             <div
-              className="w-16 h-16 rounded-full flex items-center justify-center text-xl font-bold text-white select-none"
+              className="w-16 h-16 rounded-full flex items-center justify-center text-xl font-bold text-[var(--text-primary)] select-none"
               style={{ background: 'linear-gradient(135deg, #16a34a 0%, #15803d 100%)' }}
             >
               {initials}
             </div>
             <div className="text-center">
-              <p className="text-white font-medium">{profileForm.full_name || 'No name set'}</p>
-              <p className="text-gray-400 text-xs mt-0.5">{user?.email}</p>
+              <p className="text-[var(--text-primary)] font-medium">{profileForm.full_name || 'No name set'}</p>
+              <p className="text-[var(--text-secondary)] text-xs mt-0.5">{user?.email}</p>
             </div>
           </div>
 
@@ -628,7 +628,7 @@ export default function Settings() {
               {profile?.country?.length > 0 && (
                 <div>
                   <label className="label mb-1">Country</label>
-                  <span className="text-xs px-2 py-1 rounded bg-gray-800 text-gray-300 border border-gray-700">
+                  <span className="text-xs px-2 py-1 rounded bg-[var(--surface-2)] text-[var(--text-secondary)] border border-[var(--border-bright)]">
                     {Array.isArray(profile.country) ? profile.country.join(', ') : profile.country}
                   </span>
                 </div>
@@ -659,7 +659,7 @@ export default function Settings() {
 
         {/* App Preferences */}
         <div className="card space-y-4">
-          <h2 className="text-base font-semibold text-white flex items-center gap-2"><Settings2 size={16} /> App Preferences</h2>
+          <h2 className="text-base font-semibold text-[var(--text-primary)] flex items-center gap-2"><Settings2 size={16} /> App Preferences</h2>
 
           {/* Language */}
           <div>
@@ -744,14 +744,14 @@ export default function Settings() {
 
         {/* Column 3 - Alert Thresholds */}
         <div className="card space-y-4">
-          <h2 className="text-base font-semibold text-white flex items-center gap-2"><Bell size={16} /> Alert Thresholds</h2>
-          <p className="text-xs text-gray-500">
+          <h2 className="text-base font-semibold text-[var(--text-primary)] flex items-center gap-2"><Bell size={16} /> Alert Thresholds</h2>
+          <p className="text-xs text-[var(--text-muted)]">
             Controls when risk alerts are triggered. Legacy fields stored locally; extended thresholds synced to database.
           </p>
 
           {isAdmin ? (
             <form onSubmit={saveThresholds} className="space-y-3">
-              <p className="text-xs text-gray-400 font-medium uppercase tracking-wide">Legacy Thresholds</p>
+              <p className="text-xs text-[var(--text-secondary)] font-medium uppercase tracking-wide">Legacy Thresholds</p>
               <div>
                 <label className="label">High Risk Threshold (%)</label>
                 <input
@@ -763,7 +763,7 @@ export default function Settings() {
                   max={100}
                   step={1}
                 />
-                <p className="text-xs text-gray-500 mt-1">Flag tyres with risk score above this %</p>
+                <p className="text-xs text-[var(--text-muted)] mt-1">Flag tyres with risk score above this %</p>
               </div>
               <div>
                 <label className="label">Critical Cost Threshold</label>
@@ -775,7 +775,7 @@ export default function Settings() {
                   min={0}
                   step={1000}
                 />
-                <p className="text-xs text-gray-500 mt-1">Alert when total repair cost exceeds this value</p>
+                <p className="text-xs text-[var(--text-muted)] mt-1">Alert when total repair cost exceeds this value</p>
               </div>
               <div>
                 <label className="label">Low Tread Depth (mm)</label>
@@ -788,10 +788,10 @@ export default function Settings() {
                   max={20}
                   step={0.5}
                 />
-                <p className="text-xs text-gray-500 mt-1">Warn when tread depth falls below this value</p>
+                <p className="text-xs text-[var(--text-muted)] mt-1">Warn when tread depth falls below this value</p>
               </div>
 
-              <p className="text-xs text-gray-400 font-medium uppercase tracking-wide pt-2">Extended Thresholds</p>
+              <p className="text-xs text-[var(--text-secondary)] font-medium uppercase tracking-wide pt-2">Extended Thresholds</p>
               {ALERT_THRESHOLD_FIELDS.map(f => (
                 <div key={f.key}>
                   <label className="label">{f.label}</label>
@@ -820,30 +820,30 @@ export default function Settings() {
             </form>
           ) : (
             <div className="space-y-3">
-              <p className="text-xs text-gray-400 font-medium uppercase tracking-wide">Legacy Thresholds</p>
+              <p className="text-xs text-[var(--text-secondary)] font-medium uppercase tracking-wide">Legacy Thresholds</p>
               <table className="w-full text-sm">
-                <tbody className="divide-y divide-gray-800">
+                <tbody className="divide-y divide-[var(--border-dim)]">
                   <tr>
-                    <td className="py-1.5 text-gray-400">High Risk Threshold</td>
-                    <td className="py-1.5 text-white text-right">{highRiskPct}%</td>
+                    <td className="py-1.5 text-[var(--text-secondary)]">High Risk Threshold</td>
+                    <td className="py-1.5 text-[var(--text-primary)] text-right">{highRiskPct}%</td>
                   </tr>
                   <tr>
-                    <td className="py-1.5 text-gray-400">Critical Cost Threshold</td>
-                    <td className="py-1.5 text-white text-right">{critCostThresh.toLocaleString()}</td>
+                    <td className="py-1.5 text-[var(--text-secondary)]">Critical Cost Threshold</td>
+                    <td className="py-1.5 text-[var(--text-primary)] text-right">{critCostThresh.toLocaleString()}</td>
                   </tr>
                   <tr>
-                    <td className="py-1.5 text-gray-400">Low Tread Depth</td>
-                    <td className="py-1.5 text-white text-right">{lowTreadMm} mm</td>
+                    <td className="py-1.5 text-[var(--text-secondary)]">Low Tread Depth</td>
+                    <td className="py-1.5 text-[var(--text-primary)] text-right">{lowTreadMm} mm</td>
                   </tr>
                 </tbody>
               </table>
-              <p className="text-xs text-gray-400 font-medium uppercase tracking-wide pt-2">Extended Thresholds</p>
+              <p className="text-xs text-[var(--text-secondary)] font-medium uppercase tracking-wide pt-2">Extended Thresholds</p>
               <table className="w-full text-sm">
-                <tbody className="divide-y divide-gray-800">
+                <tbody className="divide-y divide-[var(--border-dim)]">
                   {ALERT_THRESHOLD_FIELDS.map(f => (
                     <tr key={f.key}>
-                      <td className="py-1.5 text-gray-400">{f.label}</td>
-                      <td className="py-1.5 text-white text-right">{alertThresholds[f.key]}</td>
+                      <td className="py-1.5 text-[var(--text-secondary)]">{f.label}</td>
+                      <td className="py-1.5 text-[var(--text-primary)] text-right">{alertThresholds[f.key]}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -856,7 +856,7 @@ export default function Settings() {
       {/* KPI Targets Editor */}
       <div className="card">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-base font-semibold text-white flex items-center gap-2">
+          <h2 className="text-base font-semibold text-[var(--text-primary)] flex items-center gap-2">
             <Target size={16} /> KPI Targets - {currentYear}
           </h2>
           {isAdmin && !editingKpi && (
@@ -912,11 +912,11 @@ export default function Settings() {
               {KPI_FIELDS.map(f => {
                 const val = kpiTargets[f.key]
                 return (
-                  <div key={f.key} className="bg-gray-800/50 rounded-lg px-4 py-3 flex items-center justify-between">
-                    <span className="text-gray-400 text-sm">{f.label}</span>
-                    <span className="text-white font-medium text-sm">
+                  <div key={f.key} className="bg-[var(--surface-2)] rounded-lg px-4 py-3 flex items-center justify-between">
+                    <span className="text-[var(--text-secondary)] text-sm">{f.label}</span>
+                    <span className="text-[var(--text-primary)] font-medium text-sm">
                       {val === '' || val === null || val === undefined ? (
-                        <span className="text-gray-600 text-xs italic">Not set</span>
+                        <span className="text-[var(--text-dim)] text-xs italic">Not set</span>
                       ) : (
                         Number(val).toLocaleString()
                       )}
@@ -931,17 +931,17 @@ export default function Settings() {
 
       {/* Data Management */}
       <div className="card">
-        <h2 className="text-base font-semibold text-white flex items-center gap-2 mb-4"><Database size={16} /> Data Management</h2>
-        <p className="text-xs text-gray-500 mb-3">Last 3 data uploads</p>
+        <h2 className="text-base font-semibold text-[var(--text-primary)] flex items-center gap-2 mb-4"><Database size={16} /> Data Management</h2>
+        <p className="text-xs text-[var(--text-muted)] mb-3">Last 3 data uploads</p>
         {uploadHistory.length === 0 ? (
-          <p className="text-gray-500 text-sm">No uploads yet</p>
+          <p className="text-[var(--text-muted)] text-sm">No uploads yet</p>
         ) : (
           <div className="space-y-2">
             {uploadHistory.map(u => (
-              <div key={u.id} className="flex items-center justify-between bg-gray-800/50 rounded-lg px-3 py-2 text-sm">
+              <div key={u.id} className="flex items-center justify-between bg-[var(--surface-2)] rounded-lg px-3 py-2 text-sm">
                 <div>
-                  <p className="text-white text-sm">{(u.file_names ?? []).join(', ') || 'Unknown file'}</p>
-                  <p className="text-xs text-gray-500">{new Date(u.uploaded_at).toLocaleString()}</p>
+                  <p className="text-[var(--text-primary)] text-sm">{(u.file_names ?? []).join(', ') || 'Unknown file'}</p>
+                  <p className="text-xs text-[var(--text-muted)]">{new Date(u.uploaded_at).toLocaleString()}</p>
                 </div>
                 <div className="text-right">
                   <span className="text-green-400 text-xs">+{u.records_added}</span>
@@ -961,7 +961,7 @@ export default function Settings() {
       {/* Scheduled Reports */}
       <div className="card">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-base font-semibold text-white flex items-center gap-2">
+          <h2 className="text-base font-semibold text-[var(--text-primary)] flex items-center gap-2">
             <Clock size={16} /> Scheduled Reports
           </h2>
           <button
@@ -990,8 +990,8 @@ export default function Settings() {
 
         {/* Add form */}
         {showAddForm && (
-          <div className="bg-gray-800/60 border border-gray-700/60 rounded-xl p-4 mb-5 space-y-4">
-            <p className="text-xs font-semibold text-gray-300 uppercase tracking-wider">New Schedule</p>
+          <div className="bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-xl p-4 mb-5 space-y-4">
+            <p className="text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wider">New Schedule</p>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               <div>
                 <label className="label">Report Name</label>
@@ -1034,7 +1034,7 @@ export default function Settings() {
               </div>
               <div>
                 <label className="label">Delivery</label>
-                <div className="input flex items-center text-gray-400 text-sm cursor-default select-none">Email digest</div>
+                <div className="input flex items-center text-[var(--text-secondary)] text-sm cursor-default select-none">Email digest</div>
               </div>
               <div className={newSchedule.frequency === 'Daily' ? 'sm:col-span-2 lg:col-span-1' : ''}>
                 <label className="label flex items-center gap-1"><Mail size={12} /> Recipients</label>
@@ -1044,7 +1044,7 @@ export default function Settings() {
                   value={newSchedule.recipients}
                   onChange={e => setNewSchedule(s => ({ ...s, recipients: e.target.value }))}
                 />
-                <p className="text-xs text-gray-500 mt-1">Comma-separated email addresses</p>
+                <p className="text-xs text-[var(--text-muted)] mt-1">Comma-separated email addresses</p>
               </div>
             </div>
             <div className="flex items-center gap-3 pt-1">
@@ -1069,41 +1069,41 @@ export default function Settings() {
 
         {/* Schedules table */}
         {schedules.length === 0 ? (
-          <div className="text-center py-10 border border-dashed border-gray-700 rounded-xl">
-            <Clock size={28} className="text-gray-600 mx-auto mb-3" />
-            <p className="text-gray-500 text-sm">No scheduled reports configured</p>
-            <p className="text-gray-600 text-xs mt-1">Click Add Schedule to get started</p>
+          <div className="text-center py-10 border border-dashed border-[var(--border-bright)] rounded-xl">
+            <Clock size={28} className="text-[var(--text-dim)] mx-auto mb-3" />
+            <p className="text-[var(--text-muted)] text-sm">No scheduled reports configured</p>
+            <p className="text-[var(--text-dim)] text-xs mt-1">Click Add Schedule to get started</p>
           </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-gray-700/60">
-                  <th className="text-left py-2 px-3 text-gray-400 font-medium text-xs uppercase tracking-wide">Report</th>
-                  <th className="text-left py-2 px-3 text-gray-400 font-medium text-xs uppercase tracking-wide">Schedule</th>
-                  <th className="text-left py-2 px-3 text-gray-400 font-medium text-xs uppercase tracking-wide">Format</th>
-                  <th className="text-left py-2 px-3 text-gray-400 font-medium text-xs uppercase tracking-wide">Recipients</th>
-                  <th className="text-center py-2 px-3 text-gray-400 font-medium text-xs uppercase tracking-wide">Status</th>
-                  <th className="text-right py-2 px-3 text-gray-400 font-medium text-xs uppercase tracking-wide">Actions</th>
+                <tr className="border-b border-[var(--border-bright)]">
+                  <th className="text-left py-2 px-3 text-[var(--text-secondary)] font-medium text-xs uppercase tracking-wide">Report</th>
+                  <th className="text-left py-2 px-3 text-[var(--text-secondary)] font-medium text-xs uppercase tracking-wide">Schedule</th>
+                  <th className="text-left py-2 px-3 text-[var(--text-secondary)] font-medium text-xs uppercase tracking-wide">Format</th>
+                  <th className="text-left py-2 px-3 text-[var(--text-secondary)] font-medium text-xs uppercase tracking-wide">Recipients</th>
+                  <th className="text-center py-2 px-3 text-[var(--text-secondary)] font-medium text-xs uppercase tracking-wide">Status</th>
+                  <th className="text-right py-2 px-3 text-[var(--text-secondary)] font-medium text-xs uppercase tracking-wide">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-800/60">
+              <tbody className="divide-y divide-[var(--border-dim)]">
                 {schedules.map(schedule => (
-                  <tr key={schedule.id} className="hover:bg-gray-800/30 transition-colors group">
+                  <tr key={schedule.id} className="hover:bg-[var(--surface-2)] transition-colors group">
                     <td className="py-3 px-3">
-                      <span className="text-white font-medium">{schedule.reportName}</span>
+                      <span className="text-[var(--text-primary)] font-medium">{schedule.reportName}</span>
                     </td>
                     <td className="py-3 px-3">
-                      <span className="text-gray-300">{getScheduleLabel(schedule)}</span>
+                      <span className="text-[var(--text-secondary)]">{getScheduleLabel(schedule)}</span>
                     </td>
                     <td className="py-3 px-3">
-                      <span className="text-xs px-2 py-1 rounded bg-gray-800 text-gray-300 border border-gray-700">
+                      <span className="text-xs px-2 py-1 rounded bg-[var(--surface-2)] text-[var(--text-secondary)] border border-[var(--border-bright)]">
                         Email digest
                       </span>
                     </td>
                     <td className="py-3 px-3 max-w-xs">
-                      <span className="text-gray-400 text-xs truncate block">
-                        {schedule.recipients || <span className="italic text-gray-600">No recipients</span>}
+                      <span className="text-[var(--text-secondary)] text-xs truncate block">
+                        {schedule.recipients || <span className="italic text-[var(--text-dim)]">No recipients</span>}
                       </span>
                     </td>
                     <td className="py-3 px-3 text-center">
@@ -1121,7 +1121,7 @@ export default function Settings() {
                           }`}
                         />
                       </button>
-                      <span className={`block text-xs mt-0.5 ${schedule.active ? 'text-green-400' : 'text-gray-500'}`}>
+                      <span className={`block text-xs mt-0.5 ${schedule.active ? 'text-green-400' : 'text-[var(--text-muted)]'}`}>
                         {schedule.active ? 'Active' : 'Paused'}
                       </span>
                     </td>
@@ -1172,10 +1172,10 @@ export default function Settings() {
 
       {/* About */}
       <div className="card">
-        <h2 className="text-base font-semibold text-white flex items-center gap-2 mb-3"><Info size={16} /> About</h2>
-        <div className="space-y-1 text-sm text-gray-400">
-          <p><span className="text-gray-500">Version:</span> <span className="text-white font-medium">v2.5.0</span></p>
-          <p><span className="text-gray-500">Support:</span> Report an issue via the help menu</p>
+        <h2 className="text-base font-semibold text-[var(--text-primary)] flex items-center gap-2 mb-3"><Info size={16} /> About</h2>
+        <div className="space-y-1 text-sm text-[var(--text-secondary)]">
+          <p><span className="text-[var(--text-muted)]">Version:</span> <span className="text-[var(--text-primary)] font-medium">v2.5.0</span></p>
+          <p><span className="text-[var(--text-muted)]">Support:</span> Report an issue via the help menu</p>
         </div>
       </div>
 
@@ -1193,7 +1193,7 @@ function TwoFactorCard({ mfaEnabled, onEnable, confirmRemoveMfa, setConfirmRemov
   return (
     <div className="card space-y-4">
       <div className="flex items-center justify-between">
-        <h2 className="text-base font-semibold text-white flex items-center gap-2">
+        <h2 className="text-base font-semibold text-[var(--text-primary)] flex items-center gap-2">
           <Shield size={16} className="text-orange-400" /> Two-Factor Authentication
         </h2>
         {mfaEnabled ? (
@@ -1201,13 +1201,13 @@ function TwoFactorCard({ mfaEnabled, onEnable, confirmRemoveMfa, setConfirmRemov
             <ShieldCheck size={12} /> Enabled
           </span>
         ) : (
-          <span className="inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full bg-gray-800 text-gray-500 border border-gray-700 font-semibold">
+          <span className="inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full bg-[var(--surface-2)] text-[var(--text-muted)] border border-[var(--border-bright)] font-semibold">
             <ShieldOff size={12} /> Disabled
           </span>
         )}
       </div>
 
-      <p className="text-gray-400 text-xs leading-relaxed">
+      <p className="text-[var(--text-secondary)] text-xs leading-relaxed">
         Two-factor authentication adds an extra layer of security. After entering your password, you will be asked for a code from your authenticator app.
       </p>
 
@@ -1241,7 +1241,7 @@ function TwoFactorCard({ mfaEnabled, onEnable, confirmRemoveMfa, setConfirmRemov
                 <button
                   type="button"
                   onClick={() => setConfirmRemoveMfa(false)}
-                  className="flex-1 py-2 rounded-lg bg-gray-800 border border-gray-700 text-gray-300 hover:text-white text-sm font-medium transition-colors"
+                  className="flex-1 py-2 rounded-lg bg-[var(--surface-2)] border border-[var(--border-bright)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] text-sm font-medium transition-colors"
                 >
                   Cancel
                 </button>

@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useMemo, useRef, useState, useCal
 import { supabase } from '../lib/supabase'
 import { queryClient } from '../lib/queryClient'
 import { setMonitoringUser, clearMonitoringUser } from '../lib/monitoring'
+import { identifyUser, resetAnalyticsUser } from '../lib/analytics'
 import { audit } from '../lib/auditLogger'
 
 const AuthContext = createContext(null)
@@ -100,6 +101,7 @@ export function AuthProvider({ children }) {
       unsubscribeFromProfile()
       setMfaEnabled(false)
       clearMonitoringUser()
+      resetAnalyticsUser()
       setLoading(false)
       return
     }
@@ -154,7 +156,10 @@ export function AuthProvider({ children }) {
 
     setProfile(p)
     // Monitoring context: id + role + site only — never email or name.
-    if (p) setMonitoringUser({ id: p.id, role: p.role, site: p.site })
+    if (p) {
+      setMonitoringUser({ id: p.id, role: p.role, site: p.site })
+      identifyUser({ id: p.id, role: p.role, site: p.site })
+    }
     setModulePerms(permsRes.data ?? {})
     setMfaEnabled((factorsRes.data?.totp?.length ?? 0) > 0)
     setLoading(false)

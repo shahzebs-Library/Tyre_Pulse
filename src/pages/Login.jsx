@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Eye, EyeOff, ArrowRight, Mail, AlertCircle, CheckCircle2,
-  Loader2, User, Zap, Sun, Moon, Wifi, WifiOff,
+  Loader2, User, Zap, Sun, Moon, Wifi, WifiOff, Clock,
   BarChart3, Shield, Smartphone, Brain, TrendingUp, Bell,
 } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
@@ -199,6 +199,7 @@ export default function Login() {
   const [error, setError]             = useState('')
   const [loading, setLoading]         = useState(false)
   const [signupDone, setSignupDone]   = useState(false)
+  const [pendingApproval, setPendingApproval] = useState(false)
   const [showLoginPw, setShowLoginPw] = useState(false)
   const [showSignupPw, setShowSignupPw] = useState(false)
   const [showConfirmPw, setShowConfirmPw] = useState(false)
@@ -226,6 +227,12 @@ export default function Login() {
   useEffect(() => {
     if (sessionExpired) localStorage.removeItem('tp_session_expired')
     if (accessRevoked)  localStorage.removeItem('tp_access_revoked')
+    // If approval was pending/revoked mid-session, land straight on the clear
+    // "awaiting approval" state instead of a bare form.
+    if (localStorage.getItem('tp_pending_approval') === '1') {
+      localStorage.removeItem('tp_pending_approval')
+      setPendingApproval(true)
+    }
   }, [])
 
   async function handleLogin(e) {
@@ -247,6 +254,18 @@ export default function Login() {
       } else {
         setError(t('auth.login.errNoMfaFactor'))
       }
+      setLoading(false)
+      return
+    }
+    // Valid credentials but the account isn't usable yet — show a clear reason,
+    // and do NOT count these as failed password attempts (no lockout cooldown).
+    if (result?.code === 'pending_approval') {
+      setPendingApproval(true)
+      setLoading(false)
+      return
+    }
+    if (result?.code === 'account_locked') {
+      setError(t('auth.login.accessRevokedBanner'))
       setLoading(false)
       return
     }
@@ -306,7 +325,7 @@ export default function Login() {
     setForgotLoading(false)
   }
 
-  function switchTab(val) { setTab(val); setError(''); setSignupDone(false); setForgotMode(false); setForgotSent(false) }
+  function switchTab(val) { setTab(val); setError(''); setSignupDone(false); setForgotMode(false); setForgotSent(false); setPendingApproval(false) }
 
   const inputStyle = (field) => ({
     width: '100%',
@@ -549,7 +568,7 @@ export default function Login() {
               }}/>
 
               {/* Tabs */}
-              {!forgotMode && (
+              {!forgotMode && !pendingApproval && (
                 <div style={{ display:'flex', marginBottom:24, gap:4 }}>
                   {[['login','Sign In'],['signup','Create Account']].map(([val,label]) => (
                     <button key={val} onClick={() => switchTab(val)} style={{
@@ -586,8 +605,38 @@ export default function Login() {
                 )}
               </AnimatePresence>
 
+              {/* ── PENDING APPROVAL (valid password, account not yet approved) ── */}
+              {pendingApproval && (
+                <motion.div key="pending" initial={{ opacity:0, scale:0.96 }} animate={{ opacity:1, scale:1 }}
+                  style={{ textAlign:'center', padding:'8px 0' }}>
+                  <div style={{
+                    width:64, height:64, borderRadius:20, margin:'0 auto 18px',
+                    background:'rgba(234,179,8,0.1)', border:'1.5px solid rgba(234,179,8,0.28)',
+                    display:'flex', alignItems:'center', justifyContent:'center',
+                    boxShadow:'0 0 40px rgba(234,179,8,0.2)',
+                  }}>
+                    <Clock size={30} style={{ color:'#facc15' }}/>
+                  </div>
+                  <div style={{fontSize:18, fontWeight:800, color:'#fff', marginBottom:8, letterSpacing:'-0.02em'}}>
+                    {t('auth.awaitingApprovalTitle')}
+                  </div>
+                  <div style={{fontSize:13, color:'rgba(255,255,255,0.45)', lineHeight:1.6, maxWidth:300, margin:'0 auto'}}>
+                    {t('auth.awaitingApprovalBody')}
+                  </div>
+                  <div style={{fontSize:12, color:'rgba(255,255,255,0.3)', lineHeight:1.5, maxWidth:300, margin:'10px auto 0'}}>
+                    {t('auth.awaitingApprovalContact')}
+                  </div>
+                  <button onClick={() => { setPendingApproval(false); setPassword('') }} style={{
+                    marginTop:22, width:'100%', padding:'12px', borderRadius:14, border:'none',
+                    background:'linear-gradient(135deg, #16a34a, #15803d)',
+                    color:'#fff', fontSize:14, fontWeight:700, cursor:'pointer',
+                    boxShadow:'0 4px 24px rgba(22,163,74,0.3)',
+                  }}>{t('auth.login.backToSignInBtn')}</button>
+                </motion.div>
+              )}
+
               {/* ── LOGIN FORM ───────────────────────────────────────────── */}
-              {tab === 'login' && !forgotMode && (
+              {tab === 'login' && !forgotMode && !pendingApproval && (
                 <motion.form key="login"
                   initial={{ opacity:0, x:12 }} animate={{ opacity:1, x:0 }} exit={{ opacity:0, x:-12 }}
                   transition={{ duration:0.2 }}
@@ -674,31 +723,6 @@ export default function Login() {
                     {loading ? 'Signing in...' : !isOnline ? 'No Connection' : 'Sign In'}
                     {!loading && isOnline && <ArrowRight size={15}/>}
                   </button>
-
-                  {/* Divider with PWA hint */}
-                  <div style={{ display:'flex', alignItems:'center', gap:8 }}>
-                    <div style={{ flex:1, height:1, background:'rgba(255,255,255,0.07)' }}/>
-                    <span style={{ fontSize:10, color:'rgba(255,255,255,0.22)', fontWeight:600, letterSpacing:'0.06em', whiteSpace:'nowrap' }}>
-                      INSTALL AS APP
-                    </span>
-                    <div style={{ flex:1, height:1, background:'rgba(255,255,255,0.07)' }}/>
-                  </div>
-                  <div style={{ display:'flex', gap:8, justifyContent:'center', flexWrap:'wrap' }}>
-                    {[
-                      { icon:'📱', label:'Add to Home Screen' },
-                      { icon:'💻', label:'Desktop PWA' },
-                    ].map(({ icon, label }) => (
-                      <div key={label} style={{
-                        display:'flex', alignItems:'center', gap:5,
-                        padding:'5px 12px', borderRadius:8,
-                        background:'rgba(255,255,255,0.03)',
-                        border:'1px solid rgba(255,255,255,0.07)',
-                        fontSize:11, color:'rgba(255,255,255,0.3)', fontWeight:500,
-                      }}>
-                        <span style={{fontSize:12}}>{icon}</span>{label}
-                      </div>
-                    ))}
-                  </div>
                 </motion.form>
               )}
 

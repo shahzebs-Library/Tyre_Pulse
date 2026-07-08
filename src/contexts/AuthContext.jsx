@@ -29,6 +29,10 @@ export function AuthProvider({ children }) {
   const profileChannelRef  = useRef(null)
   const currentUserIdRef   = useRef(null)
   const lastActivityRef    = useRef(Date.now())
+  // True while signIn() is running its own approval/lock check, so the auth
+  // state-change handler defers the sign-out + messaging to signIn (which
+  // returns a specific reason to the login form).
+  const manualSignInRef    = useRef(false)
   const [modulePerms, setModulePerms] = useState(null)
   const [mfaEnabled, setMfaEnabled] = useState(false)
 
@@ -146,8 +150,19 @@ export function AuthProvider({ children }) {
     const p = profileRes.data
     // Enforce locked / unapproved accounts immediately on the client
     if (p && (p.locked === true || p.approved === false)) {
+      // During a manual sign-in, signIn() owns the sign-out and returns the
+      // specific reason to the login form. Just clear state here so an
+      // unapproved profile is never exposed, and let signIn do the rest.
+      if (manualSignInRef.current) {
+        setProfile(null)
+        setModulePerms({})
+        setLoading(false)
+        return
+      }
+      // Mid-session change (e.g. an admin revokes approval while active):
+      // sign out and flag the correct banner for the next page load.
       await supabase.auth.signOut()
-      localStorage.setItem('tp_access_revoked', '1')
+      localStorage.setItem(p.locked === true ? 'tp_access_revoked' : 'tp_pending_approval', '1')
       setProfile(null)
       setModulePerms({})
       setLoading(false)
@@ -191,16 +206,42 @@ export function AuthProvider({ children }) {
       email = resolved
     }
 
-    const { error } = await supabase.auth.signInWithPassword({ email, password })
-    if (error) return error
-    audit.login() // fire-and-forget LOGIN row in audit_log_v2 (never throws)
+    manualSignInRef.current = true
+    try {
+      const { data: authData, error } = await supabase.auth.signInWithPassword({ email, password })
+      if (error) return error
 
-    // Check whether MFA challenge is still required for this session
-    const { data: aalData } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel()
-    if (aalData?.nextLevel === 'aal2' && aalData?.currentLevel !== 'aal2') {
-      return { mfaRequired: true }
+      // The password was valid — but the account may be pending approval or
+      // locked. Without this gate the app signs in then silently signs back
+      // out, leaving the login button stuck on "Signing in…" with no message.
+      // Detect it here and return a specific, actionable reason.
+      const uid = authData?.user?.id
+      if (uid) {
+        const { data: prof } = await supabase
+          .from('profiles').select('approved,locked').eq('id', uid).single()
+        if (prof?.locked === true) {
+          await supabase.auth.signOut()
+          return { code: 'account_locked' }
+        }
+        if (prof && prof.approved === false) {
+          await supabase.auth.signOut()
+          return { code: 'pending_approval' }
+        }
+      }
+
+      audit.login() // fire-and-forget LOGIN row in audit_log_v2 (never throws)
+
+      // Check whether MFA challenge is still required for this session
+      const { data: aalData } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel()
+      if (aalData?.nextLevel === 'aal2' && aalData?.currentLevel !== 'aal2') {
+        return { mfaRequired: true }
+      }
+      return null
+    } finally {
+      // Small defer so the concurrent auth state-change handler observes the
+      // flag before it flips back; prevents a wrong-banner flag being set.
+      setTimeout(() => { manualSignInRef.current = false }, 1500)
     }
-    return null
   }, [])
 
   const signOut = useCallback(async () => {

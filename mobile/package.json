@@ -10,6 +10,7 @@
     "doctor": "expo-doctor",
     "build:android:preview": "eas build --platform android --profile preview",
     "build:android:production": "eas build --platform android --profile production",
+    "build:android:apk": "eas build --platform android --profile production-apk",
     "submit:android": "eas submit --platform android --profile production --latest",
     "release:android": "eas build --platform android --profile production --auto-submit",
     "update": "eas update --branch production"

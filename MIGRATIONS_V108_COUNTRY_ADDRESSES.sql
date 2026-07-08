@@ -51,10 +51,12 @@ CREATE TRIGGER set_updated_at_country_addresses BEFORE UPDATE ON public.country_
 -- ── RLS: org isolation for everyone; writes are admin-only (org config) ──────
 ALTER TABLE public.country_addresses ENABLE ROW LEVEL SECURITY;
 
+-- MUST be RESTRICTIVE: a PERMISSIVE org policy would OR with the open
+-- country_addresses_select below and defeat isolation (see V112).
 DROP POLICY IF EXISTS country_addresses_org_isolation ON public.country_addresses;
-CREATE POLICY country_addresses_org_isolation ON public.country_addresses FOR ALL
-  USING (organisation_id IS NULL OR organisation_id = public.app_current_org())
-  WITH CHECK (organisation_id IS NULL OR organisation_id = public.app_current_org());
+CREATE POLICY country_addresses_org_isolation ON public.country_addresses AS RESTRICTIVE FOR ALL
+  USING (organisation_id IS NULL OR organisation_id = public.app_current_org() OR public.app_is_org_admin())
+  WITH CHECK (organisation_id IS NULL OR organisation_id = public.app_current_org() OR public.app_is_org_admin());
 
 -- Read: any authenticated member of the org (org isolation above still applies).
 DROP POLICY IF EXISTS country_addresses_select ON public.country_addresses;

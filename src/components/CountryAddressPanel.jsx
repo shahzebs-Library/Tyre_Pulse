@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useMemo } from 'react'
+import { useEffect, useState, useCallback, useMemo, useRef } from 'react'
 import {
   MapPin, Save, Loader2, Check, AlertTriangle, RotateCcw, Trash2,
   ChevronDown, Building2, Sparkles,
@@ -46,16 +46,34 @@ export default function CountryAddressPanel({ canEdit }) {
   const [savingC, setSavingC] = useState(null)   // country being saved
   const [okMsg, setOkMsg]     = useState('')
 
+  // Snapshot of the last-persisted values, read inside the setForms updater to
+  // decide which countries have unsaved edits worth preserving across a refresh.
+  const savedRef = useRef({})
   const hydrate = useCallback((storedRows) => {
     const list = buildCountryAddressList(COUNTRIES, storedRows, branding)
-    const f = {}, s = {}, m = {}
+    const s = {}, m = {}, fresh = {}
     for (const item of list) {
       const { country, saved: isSaved, prefilled, ...fields } = item
-      f[country] = fields
       s[country] = { ...fields }
       m[country] = { saved: isSaved, prefilled }
+      fresh[country] = fields
     }
-    setForms(f); setSaved(s); setMeta(m)
+    setMeta(m)
+    setSaved(s)
+    // Preserve a country the user is mid-editing (dirty vs its previous saved
+    // snapshot); refresh everything else. Prevents a save/branding refresh from
+    // silently discarding unsaved input in another expanded country.
+    setForms((prev) => {
+      const out = {}
+      for (const country of Object.keys(fresh)) {
+        const pf = prev[country]
+        const ps = savedRef.current[country]
+        const dirty = pf && ps && COUNTRY_ADDRESS_FIELDS.some((k) => (pf[k] || '') !== (ps[k] || ''))
+        out[country] = dirty ? pf : fresh[country]
+      }
+      return out
+    })
+    savedRef.current = s
   }, [branding])
 
   const load = useCallback(async () => {

@@ -245,7 +245,16 @@ export default function Login() {
       return
     }
     setError(''); setLoading(true)
-    const result = await signIn(identifier, password)
+    let result
+    try {
+      result = await signIn(identifier, password)
+    } catch (err) {
+      // Any unexpected failure (network drop, RPC crash) must surface a message
+      // and release the button — never leave it stuck on "Signing in…".
+      setError(err?.message || t('auth.login.errUnexpected'))
+      setLoading(false)
+      return
+    }
     if (result?.mfaRequired) {
       const { data: factors } = await supabase.auth.mfa.listFactors()
       const factor = factors?.totp?.[0]
@@ -296,33 +305,44 @@ export default function Login() {
     if (!/^[a-zA-Z0-9._-]+$/.test(uname)) { setError('Username may only contain letters, numbers, and . _ -'); return }
     if (!empId)                 { setError('Employee ID is required.'); return }
     setLoading(true)
-    // Supabase Auth needs an email, but users sign up with just a username +
-    // Employee ID. We mint a synthetic, non-routable address from the username
-    // that the user never sees; a DB trigger (V82) auto-confirms it and creates
-    // the profile (username, employee_id, role, approved=false). Login by
-    // username / Employee ID resolves back to this address.
-    const slug = uname.toLowerCase().replace(/[^a-z0-9]+/g, '.').replace(/(^\.+|\.+$)/g, '') || 'user'
-    const syntheticEmail = `${slug}@users.tyrepulse.app`
-    const { error: authErr } = await supabase.auth.signUp({
-      email: syntheticEmail,
-      password,
-      options: { data: { username: uname, full_name: fullName.trim() || null, employee_id: empId, region: 'KSA' } },
-    })
-    if (authErr) {
-      const taken = /already registered|already been registered|duplicate|already exists|database error/i.test(authErr.message || '')
-      setError(taken ? 'That username or Employee ID is already taken. Please choose another.' : authErr.message)
-      setLoading(false); return
+    try {
+      // Supabase Auth needs an email, but users sign up with just a username +
+      // Employee ID. We mint a synthetic, non-routable address from the username
+      // that the user never sees; a DB trigger (V82) auto-confirms it and creates
+      // the profile (username, employee_id, role, approved=false). Login by
+      // username / Employee ID resolves back to this address.
+      const slug = uname.toLowerCase().replace(/[^a-z0-9]+/g, '.').replace(/(^\.+|\.+$)/g, '') || 'user'
+      const syntheticEmail = `${slug}@users.tyrepulse.app`
+      const { error: authErr } = await supabase.auth.signUp({
+        email: syntheticEmail,
+        password,
+        options: { data: { username: uname, full_name: fullName.trim() || null, employee_id: empId, region: 'KSA' } },
+      })
+      if (authErr) {
+        const taken = /already registered|already been registered|duplicate|already exists|database error/i.test(authErr.message || '')
+        setError(taken ? 'That username or Employee ID is already taken. Please choose another.' : authErr.message)
+        return
+      }
+      setSignupDone(true)
+    } catch (err) {
+      setError(err?.message || t('auth.login.errUnexpected'))
+    } finally {
+      setLoading(false)
     }
-    setSignupDone(true); setLoading(false)
   }
 
   async function handleForgot(e) {
     e.preventDefault(); setError(''); setForgotLoading(true)
-    const { error: fErr } = await supabase.auth.resetPasswordForEmail(forgotEmail, {
-      redirectTo: window.location.origin + '/reset-password',
-    })
-    if (fErr) setError(fErr.message); else setForgotSent(true)
-    setForgotLoading(false)
+    try {
+      const { error: fErr } = await supabase.auth.resetPasswordForEmail(forgotEmail, {
+        redirectTo: window.location.origin + '/reset-password',
+      })
+      if (fErr) setError(fErr.message); else setForgotSent(true)
+    } catch (err) {
+      setError(err?.message || t('auth.login.errUnexpected'))
+    } finally {
+      setForgotLoading(false)
+    }
   }
 
   function switchTab(val) { setTab(val); setError(''); setSignupDone(false); setForgotMode(false); setForgotSent(false); setPendingApproval(false) }

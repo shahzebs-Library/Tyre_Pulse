@@ -77,7 +77,16 @@ export function AuthProvider({ children }) {
         'postgres_changes',
         { event: 'UPDATE', schema: 'public', table: 'profiles', filter: `id=eq.${userId}` },
         (payload) => {
-          setProfile(payload.new)
+          const np = payload.new
+          // Enforce a mid-session lock / approval revocation immediately: an
+          // admin locking or un-approving an active user must end the session
+          // now (with the correct login message), not on the next reload.
+          if (np && (np.locked === true || np.approved === false)) {
+            localStorage.setItem(np.locked === true ? 'tp_access_revoked' : 'tp_pending_approval', '1')
+            audit.logout().finally(() => supabase.auth.signOut())
+            return
+          }
+          setProfile(np)
         }
       )
       .subscribe()

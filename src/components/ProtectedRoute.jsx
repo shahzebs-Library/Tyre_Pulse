@@ -9,6 +9,28 @@ export default function ProtectedRoute({ children }) {
   if (loading) return <LoadingSpinner />
   if (!user) return <Navigate to="/login" replace />
 
+  // Defense-in-depth for a locked account (the realtime handler also signs it
+  // out): never render the app for a suspended user.
+  if (profile && profile.locked === true) {
+    return (
+      <div className="min-h-screen flex items-center justify-center px-4">
+        <div className="text-center max-w-sm">
+          <div className="inline-flex items-center justify-center w-16 h-16 rounded-full mb-5"
+            style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.25)' }}>
+            <span className="text-4xl">🔒</span>
+          </div>
+          <h2 className="text-xl font-bold text-white mb-3">{t('auth.accountSuspendedTitle')}</h2>
+          <p className="text-gray-400 text-sm leading-relaxed">{t('auth.login.accessRevokedBanner')}</p>
+          <button
+            onClick={() => import('../lib/supabase').then(m => m.supabase.auth.signOut())}
+            className="mt-6 text-sm text-gray-500 hover:text-green-400 transition-colors">
+            {t('common.signOut')}
+          </button>
+        </div>
+      </div>
+    )
+  }
+
   // Block unapproved accounts - approved must be explicitly true
   // null / undefined = legacy account treated as approved; false = explicitly pending
   if (profile && profile.approved === false) {

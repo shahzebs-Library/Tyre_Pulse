@@ -8,7 +8,7 @@ import { supabase } from '../../lib/supabase'
 import { sanitizeSearchTerm } from '../../lib/searchFilter'
 import { useConsoleAuth } from '../ConsoleAuthContext'
 
-const ROLES = ['Admin', 'Manager', 'Director', 'Inspector', 'Tyre Man', 'Reporter', 'Driver']
+const ROLES = ['Admin', 'Manager', 'Director', 'Inspector', 'Tyre Man', 'Reporter', 'Driver', 'Integration Admin', 'Data Engineer', 'Automation']
 
 export default function ConsoleUsers() {
   const { logAction, activeOrg } = useConsoleAuth()
@@ -390,6 +390,9 @@ function RoleBadge({ role }) {
     'Tyre Man': 'text-teal-300 bg-teal-900/30',
     Reporter: 'text-green-300 bg-green-900/30',
     Driver: 'text-yellow-300 bg-yellow-900/30',
+    'Integration Admin': 'text-emerald-300 bg-emerald-900/30',
+    'Data Engineer': 'text-cyan-300 bg-cyan-900/30',
+    Automation: 'text-indigo-300 bg-indigo-900/30',
   }
   return (
     <span className={`text-[10px] px-1.5 py-0.5 rounded font-semibold ${c[role] ?? 'text-gray-400 bg-gray-800'}`}>{role ?? '-'}</span>

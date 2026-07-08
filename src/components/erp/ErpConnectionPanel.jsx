@@ -11,7 +11,10 @@ import * as erp from '../../lib/api/erp'
  */
 export default function ErpConnectionPanel() {
   const { profile } = useAuth()
-  const isAdmin = String(profile?.role || '').toLowerCase() === 'admin'
+  // Who may edit the ERP connection: full admins plus the scoped integration
+  // roles. Mirrors the app_settings `erp_connection` RLS (MIGRATIONS_V107).
+  const ERP_EDITOR_ROLES = new Set(['admin', 'integration admin', 'automation'])
+  const isAdmin = ERP_EDITOR_ROLES.has(String(profile?.role || '').trim().toLowerCase())
 
   const [cfg, setCfg] = useState(erp.DEFAULT_ERP)
   const [loading, setLoading] = useState(true)
@@ -122,7 +125,7 @@ export default function ErpConnectionPanel() {
           {saving ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />} Save connection
         </button>
       ) : (
-        <p className="text-xs text-[var(--text-muted)]">Only an administrator can change the ERP connection.</p>
+        <p className="text-xs text-[var(--text-muted)]">Only an administrator or an integration role (Integration Admin / Automation) can change the ERP connection.</p>
       )}
     </form>
   )

@@ -5,5 +5,8 @@
   "Inspector": "Inspector",
   "Tyre Man": "Tyre Technician",
   "Reporter": "Reporter",
-  "Driver": "Driver"
+  "Driver": "Driver",
+  "Integration Admin": "Integration Admin",
+  "Data Engineer": "Data Engineer",
+  "Automation": "Automation"
 }

@@ -16,6 +16,10 @@ const ROLE_DEFAULTS = {
   'Tyre Man': k => ['dashboard','tyre_records','inspections','alerts','stock','work_orders','gate_pass'].includes(k),
   Reporter: k => ['dashboard','analytics','kpi_scorecard','reports','executive_report','tyre_records'].includes(k),
   Driver:   k => ['dashboard','inspections','alerts'].includes(k),
+  // Data & integration roles — ERP Sync Hub owners, no user administration.
+  'Integration Admin': k => ['dashboard','alerts','erp_sync','data_cleaning','upload_data','custom_data','audit_trail'].includes(k),
+  'Data Engineer':     k => ['dashboard','alerts','erp_sync','data_cleaning','upload_data','custom_data','tyre_records','fleet_master','analytics'].includes(k),
+  Automation:          k => ['dashboard','alerts','erp_sync','upload_data','custom_data'].includes(k),
 }
 
 export function AuthProvider({ children }) {

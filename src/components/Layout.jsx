@@ -41,6 +41,14 @@ import { useCommandPalette } from '../contexts/CommandPaletteContext'
 const ANALYTICS_ROLES = ['Admin', 'Manager', 'Director']
 const A = true // adminOnly shorthand (was the Admin-only "Intelligence" group)
 
+// Data & integration roles (see AuthContext ROLE_DEFAULTS / MIGRATIONS_V107).
+// Item-level `roles` gating so these focused roles reach their modules in the
+// sidebar without granting full tenant administration.
+const ERP_ROLES = ['Admin', 'Integration Admin', 'Data Engineer', 'Automation']
+const UPLOAD_ROLES = ['Admin', 'Integration Admin', 'Data Engineer', 'Automation']
+const CLEANING_ROLES = ['Admin', 'Integration Admin', 'Data Engineer']
+const AUDIT_ROLES = ['Admin', 'Integration Admin']
+
 // Eight operational workspaces (directive Phase 5) + Overview. Every route is
 // unchanged - pages are only regrouped and no journey is removed.
 const NAV_GROUPS = [
@@ -65,7 +73,7 @@ const NAV_GROUPS = [
       { to: '/vehicle-history',     label: 'Vehicle History',    icon: Car, adminOnly: A },
       { to: '/anomalies',           label: 'Anomaly Scan',       icon: AlertTriangle, adminOnly: A },
       { to: '/maintenance-calendar', label: 'Maintenance Calendar', icon: Calendar, adminOnly: A },
-      { to: '/erp-sync',            label: 'ERP Sync',           icon: Database, adminOnly: A },
+      { to: '/erp-sync',            label: 'ERP Sync',           icon: Database, roles: ERP_ROLES },
     ],
   },
   {
@@ -162,11 +170,11 @@ const NAV_GROUPS = [
   {
     label: 'Administration & Data',
     items: [
-      { to: '/cleaning',         label: 'Data Cleaning',      icon: Wand2, adminOnly: true },
+      { to: '/cleaning',         label: 'Data Cleaning',      icon: Wand2, roles: CLEANING_ROLES },
       { to: '/data-intake',      label: 'Data Intake Center', icon: Database },
-      { to: '/upload-approvals', label: 'Upload Approvals',   icon: ClipboardList, adminOnly: true },
+      { to: '/upload-approvals', label: 'Upload Approvals',   icon: ClipboardList, roles: UPLOAD_ROLES },
       { to: '/custom-data',      label: 'Custom Data',        icon: Database },
-      { to: '/audit',            label: 'Audit Trail',        icon: ClipboardList, adminOnly: true },
+      { to: '/audit',            label: 'Audit Trail',        icon: ClipboardList, roles: AUDIT_ROLES },
       { to: '/security-center',  label: 'Security Center',    icon: ShieldCheck },
       { to: '/permission-matrix', label: 'Permission Matrix', icon: ShieldCheck, adminOnly: true },
       { to: '/system-health',    label: 'System Health',      icon: HeartPulse, adminOnly: true },
@@ -201,6 +209,9 @@ function roleBadgeClass(role) {
     case 'Inspector': return 'bg-purple-900/40 text-purple-300 border border-purple-700/30 text-[10px] px-2 py-0.5 rounded-full font-semibold'
     case 'Director':  return 'bg-blue-900/40 text-blue-300 border border-blue-700/30 text-[10px] px-2 py-0.5 rounded-full font-semibold'
     case 'Tyre Man':  return 'bg-teal-900/40 text-teal-300 border border-teal-700/30 text-[10px] px-2 py-0.5 rounded-full font-semibold'
+    case 'Integration Admin': return 'bg-emerald-900/40 text-emerald-300 border border-emerald-700/30 text-[10px] px-2 py-0.5 rounded-full font-semibold'
+    case 'Data Engineer':     return 'bg-cyan-900/40 text-cyan-300 border border-cyan-700/30 text-[10px] px-2 py-0.5 rounded-full font-semibold'
+    case 'Automation':        return 'bg-indigo-900/40 text-indigo-300 border border-indigo-700/30 text-[10px] px-2 py-0.5 rounded-full font-semibold'
     default:          return 'bg-gray-800/60 text-gray-400 text-[10px] px-2 py-0.5 rounded-full font-semibold'
   }
 }

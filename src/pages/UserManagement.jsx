@@ -15,7 +15,10 @@ import OrgBrandingPanel from '../components/OrgBrandingPanel'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const ROLES = ['Admin', 'Manager', 'Inspector', 'Director', 'Reporter', 'Tyre Man']
+const ROLES = [
+  'Admin', 'Manager', 'Inspector', 'Director', 'Reporter', 'Tyre Man', 'Driver',
+  'Integration Admin', 'Data Engineer', 'Automation',
+]
 
 const ROLE_BADGE = {
   Admin:      'bg-red-900/50 text-red-300 border border-red-700/40',
@@ -24,6 +27,10 @@ const ROLE_BADGE = {
   Director:   'bg-blue-900/50 text-blue-300 border border-blue-700/40',
   Reporter:   'bg-[var(--input-bg)] text-[var(--text-muted)] border border-[var(--input-border)]',
   'Tyre Man': 'bg-teal-900/50 text-teal-300 border border-teal-700/40',
+  Driver:     'bg-slate-800/60 text-slate-300 border border-slate-600/40',
+  'Integration Admin': 'bg-emerald-900/50 text-emerald-300 border border-emerald-700/40',
+  'Data Engineer':     'bg-cyan-900/50 text-cyan-300 border border-cyan-700/40',
+  Automation:          'bg-indigo-900/50 text-indigo-300 border border-indigo-700/40',
 }
 
 const COUNTRIES = ['KSA', 'UAE', 'Qatar', 'Kuwait', 'Bahrain', 'Oman', 'Jordan', 'Iraq', 'Egypt']
@@ -43,26 +50,31 @@ const MATRIX_FEATURES = [
   'Anomaly Scan',
   'Data Cleaning',
   'Upload Data',
+  'ERP Sync',
   'Audit Trail',
   'User Management',
 ]
 
 // Values: 'Full' | 'Read' | 'Write' | 'Checklist' | null
+// Columns: operational roles first, then the data & integration roles
+// (Integration Admin / Data Engineer / Automation). Driver is dashboard-only
+// and omitted from this summary grid.
 const MATRIX_DATA = {
-  'Dashboard':          { Admin: 'Full', Manager: 'Full', Inspector: null,   Director: 'Full', Reporter: 'Read',  'Tyre Man': null        },
-  'Tyre Records':       { Admin: 'Full', Manager: 'Full', Inspector: null,   Director: 'Read', Reporter: 'Full',  'Tyre Man': null        },
-  'Analytics':          { Admin: 'Full', Manager: 'Full', Inspector: null,   Director: 'Full', Reporter: 'Read',  'Tyre Man': null        },
-  'Fleet Analytics':    { Admin: 'Full', Manager: 'Full', Inspector: null,   Director: 'Full', Reporter: null,    'Tyre Man': null        },
-  'KPI Scorecard':      { Admin: 'Full', Manager: 'Full', Inspector: null,   Director: 'Full', Reporter: null,    'Tyre Man': null        },
-  'Stock Management':   { Admin: 'Full', Manager: 'Full', Inspector: null,   Director: 'Read', Reporter: 'Read',  'Tyre Man': null        },
-  'Corrective Actions': { Admin: 'Full', Manager: 'Full', Inspector: null,   Director: 'Read', Reporter: 'Write', 'Tyre Man': null        },
-  'Inspections':        { Admin: 'Full', Manager: 'Full', Inspector: 'Full', Director: 'Read', Reporter: 'Write', 'Tyre Man': 'Checklist' },
-  'Smart Analytics':    { Admin: 'Full', Manager: null,   Inspector: null,   Director: 'Full', Reporter: null,    'Tyre Man': null        },
-  'Anomaly Scan':       { Admin: 'Full', Manager: 'Read', Inspector: null,   Director: null,   Reporter: null,    'Tyre Man': null        },
-  'Data Cleaning':      { Admin: 'Full', Manager: null,   Inspector: null,   Director: null,   Reporter: null,    'Tyre Man': null        },
-  'Upload Data':        { Admin: 'Full', Manager: 'Full', Inspector: null,   Director: null,   Reporter: 'Full',  'Tyre Man': null        },
-  'Audit Trail':        { Admin: 'Full', Manager: 'Read', Inspector: null,   Director: null,   Reporter: null,    'Tyre Man': null        },
-  'User Management':    { Admin: 'Full', Manager: null,   Inspector: null,   Director: null,   Reporter: null,    'Tyre Man': null        },
+  'Dashboard':          { Admin: 'Full', Manager: 'Full', Inspector: null,   Director: 'Full', Reporter: 'Read',  'Tyre Man': null,         'Integration Admin': 'Read', 'Data Engineer': 'Read', Automation: 'Read' },
+  'Tyre Records':       { Admin: 'Full', Manager: 'Full', Inspector: null,   Director: 'Read', Reporter: 'Full',  'Tyre Man': null,         'Integration Admin': null,   'Data Engineer': 'Read', Automation: null   },
+  'Analytics':          { Admin: 'Full', Manager: 'Full', Inspector: null,   Director: 'Full', Reporter: 'Read',  'Tyre Man': null,         'Integration Admin': null,   'Data Engineer': 'Read', Automation: null   },
+  'Fleet Analytics':    { Admin: 'Full', Manager: 'Full', Inspector: null,   Director: 'Full', Reporter: null,    'Tyre Man': null,         'Integration Admin': null,   'Data Engineer': 'Read', Automation: null   },
+  'KPI Scorecard':      { Admin: 'Full', Manager: 'Full', Inspector: null,   Director: 'Full', Reporter: null,    'Tyre Man': null,         'Integration Admin': null,   'Data Engineer': null,   Automation: null   },
+  'Stock Management':   { Admin: 'Full', Manager: 'Full', Inspector: null,   Director: 'Read', Reporter: 'Read',  'Tyre Man': null,         'Integration Admin': null,   'Data Engineer': null,   Automation: null   },
+  'Corrective Actions': { Admin: 'Full', Manager: 'Full', Inspector: null,   Director: 'Read', Reporter: 'Write', 'Tyre Man': null,         'Integration Admin': null,   'Data Engineer': null,   Automation: null   },
+  'Inspections':        { Admin: 'Full', Manager: 'Full', Inspector: 'Full', Director: 'Read', Reporter: 'Write', 'Tyre Man': 'Checklist', 'Integration Admin': null,   'Data Engineer': null,   Automation: null   },
+  'Smart Analytics':    { Admin: 'Full', Manager: null,   Inspector: null,   Director: 'Full', Reporter: null,    'Tyre Man': null,         'Integration Admin': null,   'Data Engineer': null,   Automation: null   },
+  'Anomaly Scan':       { Admin: 'Full', Manager: 'Read', Inspector: null,   Director: null,   Reporter: null,    'Tyre Man': null,         'Integration Admin': null,   'Data Engineer': null,   Automation: null   },
+  'Data Cleaning':      { Admin: 'Full', Manager: null,   Inspector: null,   Director: null,   Reporter: null,    'Tyre Man': null,         'Integration Admin': 'Full', 'Data Engineer': 'Full', Automation: null   },
+  'Upload Data':        { Admin: 'Full', Manager: 'Full', Inspector: null,   Director: null,   Reporter: 'Full',  'Tyre Man': null,         'Integration Admin': 'Full', 'Data Engineer': 'Full', Automation: 'Full' },
+  'ERP Sync':           { Admin: 'Full', Manager: null,   Inspector: null,   Director: null,   Reporter: null,    'Tyre Man': null,         'Integration Admin': 'Full', 'Data Engineer': 'Read', Automation: 'Full' },
+  'Audit Trail':        { Admin: 'Full', Manager: 'Read', Inspector: null,   Director: null,   Reporter: null,    'Tyre Man': null,         'Integration Admin': 'Read', 'Data Engineer': null,   Automation: null   },
+  'User Management':    { Admin: 'Full', Manager: null,   Inspector: null,   Director: null,   Reporter: null,    'Tyre Man': null,         'Integration Admin': null,   'Data Engineer': null,   Automation: null   },
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────

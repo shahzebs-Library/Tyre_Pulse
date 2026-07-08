@@ -78,6 +78,9 @@ export const ROLE_VIEW_DEFAULTS = {
   'Tyre Man': { type: 'only', keys: ['dashboard', 'tyre_records', 'inspections', 'alerts', 'stock', 'work_orders', 'gate_pass'] },
   Reporter:  { type: 'only', keys: ['dashboard', 'analytics', 'kpi_scorecard', 'reports', 'executive_report', 'tyre_records'] },
   Driver:    { type: 'only', keys: ['dashboard', 'inspections', 'alerts'] },
+  'Integration Admin': { type: 'only', keys: ['dashboard', 'alerts', 'erp_sync', 'data_cleaning', 'upload_data', 'custom_data', 'audit_trail'] },
+  'Data Engineer':     { type: 'only', keys: ['dashboard', 'alerts', 'erp_sync', 'data_cleaning', 'upload_data', 'custom_data', 'tyre_records', 'fleet_master', 'analytics'] },
+  Automation:          { type: 'only', keys: ['dashboard', 'alerts', 'erp_sync', 'upload_data', 'custom_data'] },
 }
 
 /** Default view access for a role/module — mirrors AuthContext exactly. Unknown role → false. */

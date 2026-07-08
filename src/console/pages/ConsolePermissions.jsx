@@ -3,7 +3,7 @@ import { Layers, RefreshCw, Save, CheckCircle, XCircle, AlertTriangle, Info } fr
 import { supabase } from '../../lib/supabase'
 import { useConsoleAuth } from '../ConsoleAuthContext'
 
-const ROLES = ['Admin', 'Manager', 'Director', 'Inspector', 'Tyre Man', 'Reporter', 'Driver']
+const ROLES = ['Admin', 'Manager', 'Director', 'Inspector', 'Tyre Man', 'Reporter', 'Driver', 'Integration Admin', 'Data Engineer', 'Automation']
 
 const MODULES = [
   { key: 'dashboard',           label: 'Dashboard',              group: 'Core' },
@@ -94,6 +94,12 @@ export default function ConsolePermissions() {
             map[k] = ['dashboard', 'analytics', 'kpi_scorecard', 'reports', 'executive_report', 'tyre_records'].includes(m.key)
           } else if (role === 'Driver') {
             map[k] = ['dashboard', 'inspections', 'alerts'].includes(m.key)
+          } else if (role === 'Integration Admin') {
+            map[k] = ['dashboard', 'alerts', 'erp_sync', 'data_cleaning', 'upload_data', 'custom_data', 'audit_trail'].includes(m.key)
+          } else if (role === 'Data Engineer') {
+            map[k] = ['dashboard', 'alerts', 'erp_sync', 'data_cleaning', 'upload_data', 'custom_data', 'tyre_records', 'fleet_master', 'analytics'].includes(m.key)
+          } else if (role === 'Automation') {
+            map[k] = ['dashboard', 'alerts', 'erp_sync', 'upload_data', 'custom_data'].includes(m.key)
           } else {
             map[k] = false
           }

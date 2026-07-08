@@ -54,6 +54,9 @@ const AUTH_CONTEXT_ROLE_DEFAULTS = {
   'Tyre Man': (k) => ['dashboard', 'tyre_records', 'inspections', 'alerts', 'stock', 'work_orders', 'gate_pass'].includes(k),
   Reporter: (k) => ['dashboard', 'analytics', 'kpi_scorecard', 'reports', 'executive_report', 'tyre_records'].includes(k),
   Driver: (k) => ['dashboard', 'inspections', 'alerts'].includes(k),
+  'Integration Admin': (k) => ['dashboard', 'alerts', 'erp_sync', 'data_cleaning', 'upload_data', 'custom_data', 'audit_trail'].includes(k),
+  'Data Engineer': (k) => ['dashboard', 'alerts', 'erp_sync', 'data_cleaning', 'upload_data', 'custom_data', 'tyre_records', 'fleet_master', 'analytics'].includes(k),
+  Automation: (k) => ['dashboard', 'alerts', 'erp_sync', 'upload_data', 'custom_data'].includes(k),
 }
 
 describe('defaults mirror AuthContext ROLE_DEFAULTS exactly', () => {
@@ -312,10 +315,13 @@ describe('persistence', () => {
 
 // ── Registry sanity ──────────────────────────────────────────────────────────
 describe('registries', () => {
-  it('exposes the 7 real roles with Admin first', () => {
-    expect(ROLES).toHaveLength(7)
+  it('exposes the 10 real roles with Admin first', () => {
+    expect(ROLES).toHaveLength(10)
     expect(ROLES[0]).toBe('Admin')
-    expect(ROLES).toEqual(expect.arrayContaining(['Admin', 'Manager', 'Director', 'Reporter', 'Tyre Man', 'Inspector', 'Driver']))
+    expect(ROLES).toEqual(expect.arrayContaining([
+      'Admin', 'Manager', 'Director', 'Reporter', 'Tyre Man', 'Inspector', 'Driver',
+      'Integration Admin', 'Data Engineer', 'Automation',
+    ]))
   })
 
   it('exposes the 6 capability dimensions with only view enforced today', () => {

@@ -40,7 +40,8 @@ export default function RegisterScreen() {
 
   const [step, setStep]             = useState<Step>('form')
   const [fullName, setFullName]     = useState('')
-  const [email, setEmail]           = useState('')
+  const [username, setUsername]     = useState('')
+  const [employeeId, setEmployeeId] = useState('')
   const [phone, setPhone]           = useState('')
   const [password, setPassword]     = useState('')
   const [confirm, setConfirm]       = useState('')
@@ -69,8 +70,9 @@ export default function RegisterScreen() {
 
   function validate(): string | null {
     if (!fullName.trim())        return 'Full name is required.'
-    if (!email.trim())           return 'Email address is required.'
-    if (!/\S+@\S+\.\S+/.test(email)) return 'Enter a valid email address.'
+    if (username.trim().length < 3) return 'Username must be at least 3 characters.'
+    if (!/^[a-zA-Z0-9._-]+$/.test(username.trim())) return 'Username may only contain letters, numbers, and . _ -'
+    if (!employeeId.trim())      return 'Employee ID is required.'
     if (password.length < 8)    return 'Password must be at least 8 characters.'
     if (password !== confirm)    return 'Passwords do not match.'
     if (!site.trim())            return 'Please enter your site / work location.'
@@ -84,17 +86,33 @@ export default function RegisterScreen() {
     setLoading(true)
 
     try {
+      const uname = username.trim()
+      const empId = employeeId.trim()
+      // Match the web: users sign up with a username + Employee ID, not an email.
+      // Supabase Auth still needs an email, so we mint a synthetic, non-routable
+      // address from the username (identical slug logic to the web app). A DB
+      // trigger (V82) auto-confirms it; login resolves username / Employee ID
+      // back to this address via get_email_by_identifier.
+      const slug = uname.toLowerCase().replace(/[^a-z0-9]+/g, '.').replace(/(^\.+|\.+$)/g, '') || 'user'
+      const syntheticEmail = `${slug}@users.tyrepulse.app`
+
       // 1. Create Supabase Auth user
       const { data: authData, error: authErr } = await supabase.auth.signUp({
-        email: email.trim().toLowerCase(),
+        email: syntheticEmail,
         password,
         options: {
-          data: { full_name: fullName.trim() },
+          data: {
+            username: uname,
+            full_name: fullName.trim() || null,
+            employee_id: empId,
+            region: 'KSA',
+          },
         },
       })
 
       if (authErr) {
-        setError(authErr.message)
+        const taken = /already registered|already been registered|duplicate|already exists|database error/i.test(authErr.message || '')
+        setError(taken ? 'That username or Employee ID is already taken. Please choose another.' : authErr.message)
         return
       }
 
@@ -104,20 +122,25 @@ export default function RegisterScreen() {
         return
       }
 
-      // 2. Insert pending profile (approved: false - admin must approve)
+      // 2. Upsert the pending profile with the mobile-specific fields (role/site).
+      //    A DB trigger already created the base row (username, employee_id,
+      //    approved:false); this stamps the chosen role and site.
       const { error: profileErr } = await supabase.from('profiles').upsert({
-        id:        userId,
-        full_name: fullName.trim(),
-        email:     email.trim().toLowerCase(),
-        phone:     phone.trim() || null,
+        id:          userId,
+        full_name:   fullName.trim(),
+        username:    uname,
+        employee_id: empId,
+        email:       syntheticEmail,
+        phone:       phone.trim() || null,
         role,
-        site:      site.trim(),
-        approved:  false,
+        site:        site.trim(),
+        approved:    false,
       }, { onConflict: 'id' })
 
       if (profileErr) {
-        // Profile insert failed - log but still show success since auth user was created
-        console.warn('Profile insert failed:', profileErr.message)
+        // Profile update failed - log but still show success since the auth user
+        // and its trigger-created profile exist.
+        console.warn('Profile upsert failed:', profileErr.message)
       }
 
       setStep('pending')
@@ -143,10 +166,11 @@ export default function RegisterScreen() {
             You will be able to sign in once an administrator approves your account.
           </Text>
           <View style={styles.pendingCard}>
-            <Row label="Name"  value={fullName} />
-            <Row label="Email" value={email} />
-            <Row label="Role"  value={role} />
-            <Row label="Site"  value={site} />
+            <Row label="Name"        value={fullName} />
+            <Row label="Username"    value={username} />
+            <Row label="Employee ID" value={employeeId} />
+            <Row label="Role"        value={role} />
+            <Row label="Site"        value={site} />
           </View>
           <TouchableOpacity style={styles.goLoginBtn} onPress={() => router.replace('/(auth)/login')}>
             <Text style={styles.goLoginText}>Back to Sign In</Text>
@@ -223,19 +247,35 @@ export default function RegisterScreen() {
               </View>
             </Field>
 
-            {/* Email */}
-            <Field label="Email Address *" textAlign={textAlign}>
+            {/* Username */}
+            <Field label="Username *" textAlign={textAlign}>
               <View style={[styles.inputWrapper, isRTL && styles.inputWrapperRTL]}>
-                <Ionicons name="mail-outline" size={18} color="#94a3b8" style={styles.inputIcon} />
+                <Ionicons name="at-outline" size={18} color="#94a3b8" style={styles.inputIcon} />
                 <TextInput
                   style={[styles.input, { textAlign }]}
-                  value={email}
-                  onChangeText={v => { setEmail(v); setError(null) }}
-                  placeholder="your@email.com"
+                  value={username}
+                  onChangeText={v => { setUsername(v); setError(null) }}
+                  placeholder="e.g. mohammed.ali"
                   placeholderTextColor="#94a3b8"
                   autoCapitalize="none"
                   autoCorrect={false}
-                  keyboardType="email-address"
+                  returnKeyType="next"
+                />
+              </View>
+            </Field>
+
+            {/* Employee ID */}
+            <Field label="Employee ID *" textAlign={textAlign}>
+              <View style={[styles.inputWrapper, isRTL && styles.inputWrapperRTL]}>
+                <Ionicons name="id-card-outline" size={18} color="#94a3b8" style={styles.inputIcon} />
+                <TextInput
+                  style={[styles.input, { textAlign }]}
+                  value={employeeId}
+                  onChangeText={v => { setEmployeeId(v); setError(null) }}
+                  placeholder="e.g. EMP-1042"
+                  placeholderTextColor="#94a3b8"
+                  autoCapitalize="characters"
+                  autoCorrect={false}
                   returnKeyType="next"
                 />
               </View>

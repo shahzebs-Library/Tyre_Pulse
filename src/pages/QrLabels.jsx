@@ -504,9 +504,9 @@ export default function QrLabels() {
                         <td className="px-3 py-2.5 text-gray-400 text-xs">{item.site || '-'}</td>
                         {mode === 'tyres' && (
                           <td className="px-3 py-2.5">
-                            {item.status && (
+                            {item.risk_level && (
                               <span className="text-[10px] px-2 py-0.5 rounded-full bg-gray-800/80 text-gray-400 border border-gray-700/50">
-                                {item.status}
+                                {item.risk_level}
                               </span>
                             )}
                           </td>

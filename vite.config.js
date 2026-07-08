@@ -10,7 +10,11 @@ export default defineConfig({
   plugins: [
     react(),
     VitePWA({
-      registerType: 'prompt',
+      // autoUpdate: a new deploy activates on the next load/navigation without
+      // the user having to accept a prompt. 'prompt' + skipWaiting:false left
+      // users stranded on stale builds (old routes redirecting, AI calls failing
+      // against an outdated service worker) until they happened to click update.
+      registerType: 'autoUpdate',
       injectRegister: 'auto',
       includeAssets: [
         'favicon.svg',
@@ -85,8 +89,9 @@ export default defineConfig({
         navigateFallbackDenylist: [/^\/api\//, /^\/supabase\//],
         offlineGoogleAnalytics: false,
         cleanupOutdatedCaches: true,
-        // prompt registerType: user explicitly triggers SKIP_WAITING via updateServiceWorker()
-        skipWaiting: false,
+        // autoUpdate: take over as soon as the new SW installs so users are
+        // never left on a stale build.
+        skipWaiting: true,
         clientsClaim: true,
         runtimeCaching: [
           // SECURITY: authenticated Supabase traffic is NEVER cached in the

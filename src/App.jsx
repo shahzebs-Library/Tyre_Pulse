@@ -193,7 +193,7 @@ function MainApp() {
                   <Layout>
                     <Routes>
                       <Route path="/"            element={<Safe><HomeRoute /></Safe>} />
-                      <Route path="/tyres"       element={<Safe><TyreRecords /></Safe>} />
+                      <Route path="/tyres"       element={<Safe><ModuleRoute moduleKey="tyre_records"><TyreRecords /></ModuleRoute></Safe>} />
                       {/* ── Analytics ── */}
                       <Route path="/analytics"    element={<Safe><ModuleRoute moduleKey="analytics"><Analytics /></ModuleRoute></Safe>} />
                       <Route path="/brand-perf"   element={<Safe><ModuleRoute moduleKey="brand_performance"><BrandPerformance /></ModuleRoute></Safe>} />
@@ -203,26 +203,26 @@ function MainApp() {
                       <Route path="/country-comp" element={<Safe><ModuleRoute moduleKey="country_comparison"><CountryComparison /></ModuleRoute></Safe>} />
                       <Route path="/comparison"   element={<Safe><ModuleRoute moduleKey="analytics"><Comparison /></ModuleRoute></Safe>} />
                       {/* ── Operations ── */}
-                      <Route path="/stock"       element={<Safe><StockManagement /></Safe>} />
-                      <Route path="/budgets"     element={<Safe><Budgets /></Safe>} />
-                      <Route path="/actions"     element={<Safe><CorrectiveActions /></Safe>} />
+                      <Route path="/stock"       element={<Safe><ModuleRoute moduleKey="stock"><StockManagement /></ModuleRoute></Safe>} />
+                      <Route path="/budgets"     element={<Safe><ModuleRoute moduleKey="budgets"><Budgets /></ModuleRoute></Safe>} />
+                      <Route path="/actions"     element={<Safe><ModuleRoute moduleKey="corrective_actions"><CorrectiveActions /></ModuleRoute></Safe>} />
                       <Route path="/accidents"   element={<Safe><FlagRoute flag="accidents_module"><Accidents /></FlagRoute></Safe>} />
-                      <Route path="/rca"         element={<Safe><RcaRecords /></Safe>} />
-                      <Route path="/inspections" element={<Safe><Inspections /></Safe>} />
-                      <Route path="/alerts"      element={<Safe><Alerts /></Safe>} />
-                      <Route path="/fleet-master"         element={<Safe><FleetMaster /></Safe>} />
+                      <Route path="/rca"         element={<Safe><ModuleRoute moduleKey="rca"><RcaRecords /></ModuleRoute></Safe>} />
+                      <Route path="/inspections" element={<Safe><ModuleRoute moduleKey="inspections"><Inspections /></ModuleRoute></Safe>} />
+                      <Route path="/alerts"      element={<Safe><ModuleRoute moduleKey="alerts"><Alerts /></ModuleRoute></Safe>} />
+                      <Route path="/fleet-master"         element={<Safe><ModuleRoute moduleKey="fleet_master"><FleetMaster /></ModuleRoute></Safe>} />
                       <Route path="/vehicle/:assetNo"     element={<Safe><FlagRoute flag="vehicle_360"><Vehicle360 /></FlagRoute></Safe>} />
-                      <Route path="/reports"              element={<Safe><Reports /></Safe>} />
-                      <Route path="/report-center"       element={<Safe><ReportCenter /></Safe>} />
+                      <Route path="/reports"              element={<Safe><ModuleRoute moduleKey="reports"><Reports /></ModuleRoute></Safe>} />
+                      <Route path="/report-center"       element={<Safe><ModuleRoute moduleKey="reports"><ReportCenter /></ModuleRoute></Safe>} />
                       <Route path="/scheduled-reports"   element={<Safe><FlagRoute flag="report_scheduling"><ScheduledReports /></FlagRoute></Safe>} />
                       <Route path="/knowledge-base"       element={<Safe><FlagRoute flag="ai_tools"><KnowledgeBase /></FlagRoute></Safe>} />
                       <Route path="/ai-cost-monitor"      element={<Safe><FlagRoute flag="ai_tools"><AiCostMonitor /></FlagRoute></Safe>} />
-                      <Route path="/gate-pass"            element={<Safe><GatePass /></Safe>} />
+                      <Route path="/gate-pass"            element={<Safe><ModuleRoute moduleKey="gate_pass"><GatePass /></ModuleRoute></Safe>} />
                       <Route path="/serial-tracker"       element={<Safe><SerialTracker /></Safe>} />
-                      <Route path="/work-orders"          element={<Safe><WorkOrders /></Safe>} />
+                      <Route path="/work-orders"          element={<Safe><ModuleRoute moduleKey="work_orders"><WorkOrders /></ModuleRoute></Safe>} />
                       <Route path="/maintenance-calendar" element={<Safe><MaintenanceCalendar /></Safe>} />
                       <Route path="/safety-compliance"    element={<Safe><SafetyCompliance /></Safe>} />
-                      <Route path="/assets"               element={<Safe><AssetManagement /></Safe>} />
+                      <Route path="/assets"               element={<Safe><ModuleRoute moduleKey="fleet_master"><AssetManagement /></ModuleRoute></Safe>} />
                       <Route path="/inspection-planner"   element={<Safe><InspectionPlanner /></Safe>} />
                       <Route path="/warranty"             element={<Safe><WarrantyTracker /></Safe>} />
                       <Route path="/tyre-exchange"        element={<Safe><TyreExchange /></Safe>} />
@@ -275,7 +275,7 @@ function MainApp() {
                       <Route path="/data-intake" element={<Safe><FlagRoute flag="data_intake"><DataIntakeCenter /></FlagRoute></Safe>} />
                       <Route path="/data-intake/history" element={<Safe><FlagRoute flag="data_intake"><DataIntakeHistory /></FlagRoute></Safe>} />
                       <Route path="/upload-approvals" element={<Safe><FlagRoute flag="data_intake"><UploadApprovals /></FlagRoute></Safe>} />
-                      <Route path="/custom-data" element={<Safe><CustomData /></Safe>} />
+                      <Route path="/custom-data" element={<Safe><ModuleRoute moduleKey="custom_data"><CustomData /></ModuleRoute></Safe>} />
                       <Route path="/settings"    element={<Safe><Settings /></Safe>} />
                       <Route path="/scan"        element={<Safe><TyreScan /></Safe>} />
                       <Route path="/qr-labels"   element={<Safe><QrLabels /></Safe>} />

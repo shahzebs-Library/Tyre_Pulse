@@ -15,10 +15,13 @@
     "aliasSaveFailed": "Could not save alias.",
     "fxSaveFailed": "Could not save FX rate.",
     "fxApproveFailed": "Could not approve rate.",
-    "reverseFailed": "Reverse failed."
+    "reverseFailed": "Reverse failed.",
+    "commitFailed": "Commit failed.",
+    "commitNoRows": "No rows were committed — {failed} row(s) failed. Open Rows to see why."
   },
   "confirm": {
-    "reverseImport": "Reverse import {module}/{country}? This deletes only the rows this batch created."
+    "reverseImport": "Reverse import {module}/{country}? This deletes only the rows this batch created.",
+    "commitImport": "Commit {module}/{country} ({rows} rows) to the live table now? Ready and warning rows are inserted; error rows are skipped."
   },
   "imports": {
     "columns": {
@@ -33,7 +36,9 @@
     "empty": "No imports yet.",
     "showReconcileDetail": "Show reconciliation detail",
     "rowsAction": "Rows",
-    "reverseAction": "Reverse"
+    "reverseAction": "Reverse",
+    "commitAction": "Commit",
+    "commitActionTitle": "Approve & commit this staged batch to its live table"
   },
   "reconcile": {
     "heading": "Reconciliation",

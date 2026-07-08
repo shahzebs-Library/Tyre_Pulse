@@ -127,6 +127,32 @@ export default function DataIntakeHistory() {
     finally { setBusyId(null) }
   }
 
+  // Finish a staged / pending batch WITHOUT re-running the wizard: submit →
+  // approve → commit → enrich, then refresh. This is the action that was missing
+  // — a staged batch (rows validated, action=insert) never reached its live
+  // table because nothing outside the upload wizard could commit it.
+  async function commitStaged(batch) {
+    if (!window.confirm(t('intakehistory.confirm.commitImport', { module: batch.module, country: batch.country || activeCountry, rows: batch.total_rows || 0 }))) return
+    setBusyId(batch.id); setError('')
+    try {
+      await imports.submitForApproval(batch.id)
+      await imports.approveBatch(batch.id)
+      const res = await imports.commitBatch(batch.id)
+      // Fill blanks on existing records from this file (mirrors the wizard).
+      try { await imports.enrichBatch(batch.id) } catch { /* enrichment is best-effort */ }
+      // Value-producing automation — best-effort, never blocks the commit.
+      if (res?.status === 'committed') {
+        imports.runPostImportAutomation(batch.id, batch.module, { country: batch.country || activeCountry }).catch(() => {})
+      }
+      await load()
+      if (res && res.inserted === 0 && res.failed > 0) {
+        setError(t('intakehistory.errors.commitNoRows', { failed: res.failed }))
+      }
+    } catch (e) {
+      setError(e?.message || t('intakehistory.errors.commitFailed'))
+    } finally { setBusyId(null) }
+  }
+
   return (
     <div className="p-6 max-w-[1800px] mx-auto text-secondary">
       <div className="flex items-center justify-between mb-5">
@@ -183,6 +209,9 @@ export default function DataIntakeHistory() {
                       <td className="px-3 py-2 text-muted text-xs">{b.created_at ? new Date(b.created_at).toLocaleString('en-GB') : ''}</td>
                       <td className="px-3 py-2 text-right whitespace-nowrap">
                         <button onClick={() => openDrill(b)} className="text-xs text-secondary hover:text-[var(--text-primary)] inline-flex items-center gap-1">{t('intakehistory.imports.rowsAction')} <ChevronRight size={13} /></button>
+                        {isElevated && b.import_status !== 'committed' && b.import_status !== 'reversed' && (
+                          <button onClick={() => commitStaged(b)} disabled={busyId === b.id} className="ml-3 text-xs text-green-400 hover:text-green-300 inline-flex items-center gap-1" title={t('intakehistory.imports.commitActionTitle')}>{busyId === b.id ? <Loader2 size={12} className="animate-spin" /> : <CheckCircle2 size={12} />} {t('intakehistory.imports.commitAction')}</button>
+                        )}
                         {isElevated && b.import_status === 'committed' && (
                           <button onClick={() => reverse(b)} disabled={busyId === b.id} className="ml-3 text-xs text-red-400 hover:text-red-300 inline-flex items-center gap-1">{busyId === b.id ? <Loader2 size={12} className="animate-spin" /> : <RotateCcw size={12} />} {t('intakehistory.imports.reverseAction')}</button>
                         )}

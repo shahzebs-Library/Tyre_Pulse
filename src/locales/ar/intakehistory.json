@@ -15,10 +15,13 @@
     "aliasSaveFailed": "تعذر حفظ الاسم البديل.",
     "fxSaveFailed": "تعذر حفظ سعر الصرف.",
     "fxApproveFailed": "تعذر اعتماد السعر.",
-    "reverseFailed": "فشل التراجع عن الاستيراد."
+    "reverseFailed": "فشل التراجع عن الاستيراد.",
+    "commitFailed": "فشل الترحيل.",
+    "commitNoRows": "لم يتم ترحيل أي صفوف — فشل {failed} صف. افتح الصفوف لمعرفة السبب."
   },
   "confirm": {
-    "reverseImport": "هل تريد التراجع عن استيراد {module}/{country}؟ سيؤدي هذا إلى حذف الصفوف التي أنشأتها هذه الدفعة فقط."
+    "reverseImport": "هل تريد التراجع عن استيراد {module}/{country}؟ سيؤدي هذا إلى حذف الصفوف التي أنشأتها هذه الدفعة فقط.",
+    "commitImport": "هل تريد ترحيل {module}/{country} ({rows} صف) إلى الجدول المباشر الآن؟ تُدرج الصفوف الجاهزة والتحذيرية وتُتجاهل صفوف الأخطاء."
   },
   "imports": {
     "columns": {
@@ -33,7 +36,9 @@
     "empty": "لا توجد عمليات استيراد بعد.",
     "showReconcileDetail": "عرض تفاصيل التسوية",
     "rowsAction": "الصفوف",
-    "reverseAction": "تراجع"
+    "reverseAction": "تراجع",
+    "commitAction": "ترحيل",
+    "commitActionTitle": "اعتماد وترحيل هذه الدفعة المجهّزة إلى جدولها المباشر"
   },
   "reconcile": {
     "heading": "التسوية",

@@ -18,15 +18,21 @@ function resolveVehicleType(vt) {
   }
   if (PREFIX_MAP[prefix]) return PREFIX_MAP[prefix]
 
-  // Keyword fallback
-  if (s.includes('tri') || s.includes('mixer'))            return 'Tri-mixer'
+  // Keyword fallback — covers the real fleet's vehicle_type spellings
+  // (Tr-Mixer, Wheel_Loader, Line/Spider/Stationary Pump, Placing Boom, …).
+  // Non-wheeled / trailer-mounted equipment (generator, chiller, plant, …) has
+  // no standard axle layout, so it maps to the neutral 4-tyre Pickup shape until
+  // a per-type layout is defined.
+  if (s.includes('tri') || s.includes('mixer') || s.includes('transit')) return 'Tri-mixer'
+  if (s.includes('boom') || s.includes('placing'))         return 'Concrete pump'
   if (s.includes('concrete') || s.includes('pump'))        return 'Concrete pump'
-  if (s.includes('wheel') && s.includes('load'))           return 'Wheel loader'
   if (s.includes('skid'))                                  return 'Skid loader'
+  if (s.includes('wheel') || s.includes('loader') || s.includes('load')) return 'Wheel loader'
   if (s.includes('canter'))                                return 'Canter'
-  if (s.includes('bus'))                                   return 'Bus'
+  if (s.includes('bus') || s.includes('coaster'))          return 'Bus'
   if (s.includes('tata'))                                  return 'Tata'
   if (s.includes('ashok') || s.includes('leyland'))        return 'Ashok Leyland'
+  if (s.includes('pickup') || s.includes('pick up') || s.includes('pick-up')) return 'Pickup'
   return 'Pickup'
 }
 

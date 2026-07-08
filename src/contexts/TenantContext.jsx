@@ -13,9 +13,12 @@
 import { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react'
 import { useAuth } from './AuthContext'
 import { getOrgBranding, withBrandingDefaults } from '../lib/api/branding'
+import { listCountryAddresses, resolveAddress } from '../lib/api/countryAddresses'
 
 const TenantContext = createContext({
   branding: null,          // merged-with-defaults branding, or null before load
+  countryAddresses: [],    // saved per-country address rows (V108)
+  resolveAddress: () => null, // (country) → effective address (country row → org fallback)
   orgId: null,
   orgName: null,
   loading: true,
@@ -26,13 +29,14 @@ const TenantContext = createContext({
 export function TenantProvider({ children }) {
   const { user, profile } = useAuth()
   const [branding, setBranding] = useState(null)
+  const [countryAddresses, setCountryAddresses] = useState([])
   const [orgId, setOrgId]       = useState(null)
   const [orgName, setOrgName]   = useState(null)
   const [loading, setLoading]   = useState(true)
   const [error, setError]       = useState(null)
 
   const refreshBranding = useCallback(async () => {
-    if (!user) { setBranding(null); setLoading(false); return }
+    if (!user) { setBranding(null); setCountryAddresses([]); setLoading(false); return }
     setLoading(true); setError(null)
     try {
       const raw = await getOrgBranding(null) // caller's own org
@@ -46,6 +50,13 @@ export function TenantProvider({ children }) {
       setBranding(withBrandingDefaults(null))
     } finally {
       setLoading(false)
+    }
+    // Country addresses are best-effort and independent of branding success.
+    try {
+      setCountryAddresses(await listCountryAddresses())
+    } catch (err) {
+      console.warn('[TenantContext] country addresses load failed:', err?.message || err)
+      setCountryAddresses([])
     }
   }, [user])
 
@@ -83,9 +94,17 @@ export function TenantProvider({ children }) {
     }
   }, [branding])
 
+  const resolveCountryAddress = useCallback(
+    (country) => resolveAddress(country, countryAddresses, branding),
+    [countryAddresses, branding],
+  )
+
   const value = useMemo(
-    () => ({ branding, orgId, orgName, loading, error, refreshBranding }),
-    [branding, orgId, orgName, loading, error, refreshBranding],
+    () => ({
+      branding, countryAddresses, resolveAddress: resolveCountryAddress,
+      orgId, orgName, loading, error, refreshBranding,
+    }),
+    [branding, countryAddresses, resolveCountryAddress, orgId, orgName, loading, error, refreshBranding],
   )
 
   return (

@@ -1,0 +1,17 @@
+-- ============================================================================
+-- MIGRATIONS_V115 — scope report_country_* RPCs to the caller's org + countries
+-- ============================================================================
+-- report_country_metrics() / report_country_trends() are SECURITY DEFINER and
+-- aggregate tyre_records with NO org or country predicate, so they bypass RLS
+-- and return every organisation's and every country's aggregates to any
+-- authenticated caller (a cross-org + cross-country leak the V114 row policies
+-- can't catch, since SECURITY DEFINER runs as owner).
+--
+-- Adds the same predicates used by the RLS policies directly inside each RPC:
+--   organisation_id IS NULL OR = app_current_org() OR app_is_org_admin()
+--   app_can_see_country(country)
+--
+-- Applied live in V115. (Full function bodies applied via apply_migration.)
+-- ============================================================================
+-- See the applied migration for the full CREATE OR REPLACE bodies; the only
+-- change vs the originals is the two extra AND predicates in each WHERE clause.

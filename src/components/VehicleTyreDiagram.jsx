@@ -1397,8 +1397,30 @@ const LEVEL_TO_RISK = {
 }
 
 // ── Main Component ─────────────────────────────────────────────────────────────
+// Stationary / non-wheeled equipment that has NO tyres to inspect.
+const NO_TYRE_EQUIPMENT = ['generator', 'genset', 'chiller', 'ice plant', 'ice-plant', 'bt-plant', 'bt plant', 'batch', 'reclaimer', 'compressor', 'tower light', 'light tower']
+export function isTyrelessEquipment(vt) {
+  if (!vt) return false
+  const s = String(vt).toLowerCase().trim()
+  return NO_TYRE_EQUIPMENT.some((k) => s.includes(k))
+}
+
 export default function VehicleTyreDiagram({ vehicleType, positions, tyreData, onPositionClick, onTyreClick, width = 240 }) {
   const resolved = resolveVehicleType(vehicleType)
+
+  // Equipment without tyres (generator, chiller, ice/batch plant, reclaimer …):
+  // show a clear "no tyres" state instead of a misleading 4-tyre layout.
+  if (isTyrelessEquipment(vehicleType)) {
+    return (
+      <div className="flex flex-col items-center justify-center gap-2 py-10 px-6 text-center"
+        style={{ minHeight: 160 }}>
+        <span className="text-3xl">🏭</span>
+        <p className="text-sm font-semibold text-gray-200">{vehicleType || 'Equipment'}</p>
+        <p className="text-xs text-gray-500 max-w-[200px]">Stationary equipment — no tyres to inspect.</p>
+      </div>
+    )
+  }
+
   const layout = LAYOUTS[resolved] || LAYOUTS['Pickup']
 
   const { emoji, viewH, Body, tyres } = layout;

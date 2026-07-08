@@ -392,6 +392,15 @@ function resolveLayout(vehicleType: string): string {
   return '6w'
 }
 
+// Stationary / non-wheeled equipment (generator, chiller, ice/batch plant,
+// reclaimer …) has NO tyres — show a clear state instead of a fake layout.
+const NO_TYRE_EQUIPMENT = ['generator', 'genset', 'chiller', 'ice plant', 'ice-plant', 'bt-plant', 'bt plant', 'batch', 'reclaimer', 'compressor', 'tower light', 'light tower']
+export function isTyrelessEquipment(vehicleType?: string | null): boolean {
+  if (!vehicleType) return false
+  const s = String(vehicleType).toLowerCase().trim()
+  return NO_TYRE_EQUIPMENT.some(k => s.includes(k))
+}
+
 // ── Component ──────────────────────────────────────────────────────────────────
 interface Props {
   vehicleType: string
@@ -446,6 +455,19 @@ export default function VehicleTyreDiagram({
       width:  (svgW + pad * 2)  * scale,
       height: (svgH + pad * 2)  * scale,
     }
+  }
+
+  // Equipment without tyres → clear state instead of a fake 6-wheeler.
+  if (isTyrelessEquipment(vehicleType)) {
+    return (
+      <View style={[styles.container, { paddingVertical: 28, alignItems: 'center' }]}>
+        <Text style={{ fontSize: 30 }}>🏭</Text>
+        <Text style={{ fontSize: 14, fontWeight: '700', color: '#0f172a', marginTop: 6 }}>{vehicleType || 'Equipment'}</Text>
+        <Text style={{ fontSize: 12, color: '#64748b', marginTop: 2, textAlign: 'center' }}>
+          Stationary equipment — no tyres to inspect.
+        </Text>
+      </View>
+    )
   }
 
   return (

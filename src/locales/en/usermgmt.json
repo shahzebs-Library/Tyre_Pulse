@@ -24,7 +24,8 @@
     "users": "Users",
     "matrix": "Access Control",
     "branding": "Branding",
-    "activity": "Activity"
+    "activity": "Activity",
+    "sites": "Sites"
   },
   "filters": {
     "searchPlaceholder": "Search by name, username or employee ID",

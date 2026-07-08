@@ -13,6 +13,7 @@ import PageHeader from '../components/ui/PageHeader'
 import AccessControlMatrix from '../components/AccessControlMatrix'
 import OrgBrandingPanel from '../components/OrgBrandingPanel'
 import CountryAddressPanel from '../components/CountryAddressPanel'
+import SitesMasterPanel from '../components/SitesMasterPanel'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -386,6 +387,7 @@ export default function UserManagement() {
   const [expandedRow, setExpandedRow] = useState(null)
 
   const isAdmin = currentProfile?.role === 'Admin'
+  const isManager = currentProfile?.role === 'Manager'
 
   // ── Toast helper ──────────────────────────────────────────────────────────
 
@@ -761,6 +763,7 @@ export default function UserManagement() {
           { id: 'users',    label: t('usermgmt.tabs.users'),        icon: Users    },
           { id: 'matrix',   label: t('usermgmt.tabs.matrix'), icon: LayoutGrid  },
           { id: 'branding', label: t('usermgmt.tabs.branding'),     icon: Palette  },
+          { id: 'sites',    label: t('usermgmt.tabs.sites'),        icon: MapPin   },
           { id: 'activity', label: t('usermgmt.tabs.activity'),      icon: Activity },
         ].map(({ id, label, icon: Icon }) => (
           <button
@@ -1065,6 +1068,13 @@ export default function UserManagement() {
           <div className="card">
             <CountryAddressPanel canEdit={isAdmin || !!currentProfile?.is_super_admin} />
           </div>
+        </div>
+      )}
+
+      {/* ── SITES MASTER TAB ──────────────────────────────────────────────────── */}
+      {activeTab === 'sites' && (
+        <div className="card">
+          <SitesMasterPanel canEdit={isAdmin || isManager || !!currentProfile?.is_super_admin} />
         </div>
       )}
 

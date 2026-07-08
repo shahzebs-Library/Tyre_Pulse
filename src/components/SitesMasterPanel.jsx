@@ -5,7 +5,7 @@ import {
 } from 'lucide-react'
 import { COUNTRIES, COUNTRY_LABEL } from '../contexts/SettingsContext'
 import {
-  listSites, upsertSite, deleteSite, setSiteStatus, emptySite,
+  listSites, upsertSite, deleteSite, setSiteActive, emptySite,
   SITE_TYPES,
 } from '../lib/api/sites'
 
@@ -49,8 +49,8 @@ export default function SitesMasterPanel({ canEdit }) {
     const q = query.trim().toLowerCase()
     return rows
       .filter((r) => String(r.country || '').toLowerCase() === country.toLowerCase())
-      .filter((r) => !q || [r.site_name, r.site_code, r.city].some((v) => String(v || '').toLowerCase().includes(q)))
-      .sort((a, b) => String(a.site_name).localeCompare(String(b.site_name)))
+      .filter((r) => !q || [r.name, r.site_code, r.city].some((v) => String(v || '').toLowerCase().includes(q)))
+      .sort((a, b) => String(a.name).localeCompare(String(b.name)))
   }, [rows, country, query])
 
   const countByCountry = useMemo(() => {
@@ -60,7 +60,7 @@ export default function SitesMasterPanel({ canEdit }) {
   }, [rows])
 
   async function handleAdd() {
-    if (!canEdit || !addForm.site_name.trim()) return
+    if (!canEdit || !addForm.name.trim()) return
     setBusyId('__add__'); setError(''); setOkMsg('')
     try {
       await upsertSite(addForm)
@@ -72,7 +72,7 @@ export default function SitesMasterPanel({ canEdit }) {
   }
 
   async function handleSaveEdit() {
-    if (!canEdit || !editForm?.site_name.trim()) return
+    if (!canEdit || !editForm?.name.trim()) return
     setBusyId(editId); setError(''); setOkMsg('')
     try {
       await upsertSite(editForm)
@@ -86,13 +86,13 @@ export default function SitesMasterPanel({ canEdit }) {
   async function toggleStatus(site) {
     if (!canEdit) return
     setBusyId(site.id); setError(''); setOkMsg('')
-    try { await setSiteStatus(site.id, site.status === 'active' ? 'inactive' : 'active'); await load() }
+    try { await setSiteActive(site.id, site.active === false); await load() }
     catch (e) { setError(e?.message || 'Could not change status.') }
     finally { setBusyId(null) }
   }
 
   async function handleDelete(site) {
-    if (!canEdit || !window.confirm(`Delete site “${site.site_name}” (${site.country})? This cannot be undone.`)) return
+    if (!canEdit || !window.confirm(`Delete site “${site.name}” (${site.country})? This cannot be undone.`)) return
     setBusyId(site.id); setError(''); setOkMsg('')
     try { await deleteSite(site.id); await load(); setOkMsg('Site deleted.') }
     catch (e) { setError(e?.message || 'Could not delete the site.') }
@@ -156,7 +156,7 @@ export default function SitesMasterPanel({ canEdit }) {
         <div className="rounded-xl border border-blue-700/30 bg-blue-950/10 p-3 space-y-3">
           <p className="text-xs font-semibold text-blue-200">New site in {COUNTRY_LABEL[country] || country}</p>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
-            {field(addForm, setAddForm, 'site_name', { placeholder: 'Site name *' })}
+            {field(addForm, setAddForm, 'name', { placeholder: 'Site name *' })}
             {field(addForm, setAddForm, 'site_code', { placeholder: 'Code' })}
             <select value={addForm.site_type} onChange={(e) => setAddForm((f) => ({ ...f, site_type: e.target.value }))} className="input text-sm w-full capitalize">
               {SITE_TYPES.map((t) => <option key={t} value={t} className="capitalize">{t}</option>)}
@@ -164,7 +164,7 @@ export default function SitesMasterPanel({ canEdit }) {
             {field(addForm, setAddForm, 'city', { placeholder: 'City' })}
           </div>
           <div className="flex justify-end">
-            <button type="button" onClick={handleAdd} disabled={!addForm.site_name.trim() || busyId === '__add__'} className="btn-primary text-xs gap-1.5 disabled:opacity-40">
+            <button type="button" onClick={handleAdd} disabled={!addForm.name.trim() || busyId === '__add__'} className="btn-primary text-xs gap-1.5 disabled:opacity-40">
               {busyId === '__add__' ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />} Save site
             </button>
           </div>
@@ -193,7 +193,7 @@ export default function SitesMasterPanel({ canEdit }) {
                 {editing ? (
                   <div className="space-y-2">
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
-                      {field(editForm, setEditForm, 'site_name', { placeholder: 'Site name *' })}
+                      {field(editForm, setEditForm, 'name', { placeholder: 'Site name *' })}
                       {field(editForm, setEditForm, 'site_code', { placeholder: 'Code' })}
                       <select value={editForm.site_type} onChange={(e) => setEditForm((f) => ({ ...f, site_type: e.target.value }))} className="input text-sm w-full capitalize">
                         {SITE_TYPES.map((t) => <option key={t} value={t} className="capitalize">{t}</option>)}
@@ -202,7 +202,7 @@ export default function SitesMasterPanel({ canEdit }) {
                     </div>
                     <div className="flex items-center justify-end gap-2">
                       <button type="button" onClick={() => { setEditId(null); setEditForm(null) }} className="btn-secondary text-xs gap-1.5"><X size={13} /> Cancel</button>
-                      <button type="button" onClick={handleSaveEdit} disabled={!editForm?.site_name.trim() || busyId === s.id} className="btn-primary text-xs gap-1.5 disabled:opacity-40">
+                      <button type="button" onClick={handleSaveEdit} disabled={!editForm?.name.trim() || busyId === s.id} className="btn-primary text-xs gap-1.5 disabled:opacity-40">
                         {busyId === s.id ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />} Save
                       </button>
                     </div>
@@ -211,16 +211,16 @@ export default function SitesMasterPanel({ canEdit }) {
                   <div className="flex items-center gap-3">
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <span className={`text-sm font-medium ${s.status === 'active' ? 'text-gray-100' : 'text-gray-500 line-through'}`}>{s.site_name}</span>
+                        <span className={`text-sm font-medium ${s.active !== false ? 'text-gray-100' : 'text-gray-500 line-through'}`}>{s.name}</span>
                         {s.site_code && <span className="text-[10px] text-gray-500 font-mono">{s.site_code}</span>}
                         <span className={`text-[10px] px-1.5 py-0.5 rounded capitalize ${TYPE_BADGE[s.site_type] || TYPE_BADGE.other}`}>{s.site_type}</span>
-                        {s.status !== 'active' && <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-900/30 text-red-300">inactive</span>}
+                        {s.active === false && <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-900/30 text-red-300">inactive</span>}
                       </div>
                       {s.city && <p className="text-[11px] text-gray-500">{s.city}</p>}
                     </div>
                     {canEdit && (
                       <div className="flex items-center gap-1 shrink-0">
-                        <button type="button" onClick={() => toggleStatus(s)} disabled={busyId === s.id} title={s.status === 'active' ? 'Deactivate' : 'Activate'} className="p-1.5 rounded hover:bg-white/5 text-gray-400 hover:text-amber-300 disabled:opacity-40">
+                        <button type="button" onClick={() => toggleStatus(s)} disabled={busyId === s.id} title={s.active !== false ? 'Deactivate' : 'Activate'} className="p-1.5 rounded hover:bg-white/5 text-gray-400 hover:text-amber-300 disabled:opacity-40">
                           {busyId === s.id ? <Loader2 size={13} className="animate-spin" /> : <Power size={13} />}
                         </button>
                         <button type="button" onClick={() => { setEditId(s.id); setEditForm({ ...emptySite(s.country), ...s }) }} title="Edit" className="p-1.5 rounded hover:bg-white/5 text-gray-400 hover:text-blue-300">

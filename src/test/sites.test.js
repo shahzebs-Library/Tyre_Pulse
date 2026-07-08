@@ -5,11 +5,11 @@ import {
 } from '../lib/api/sites'
 
 const rows = [
-  { country: 'KSA', site_name: 'Riyadh Depot', status: 'active' },
-  { country: 'KSA', site_name: 'Jeddah Yard',  status: 'active' },
-  { country: 'KSA', site_name: 'Dammam Old',   status: 'inactive' },
-  { country: 'UAE', site_name: 'Dubai Hub',    status: 'active' },
-  { country: 'ksa', site_name: 'riyadh depot', status: 'active' }, // dup (case/space)
+  { country: 'KSA', name: 'Riyadh Depot', active: true },
+  { country: 'KSA', name: 'Jeddah Yard',  active: true },
+  { country: 'KSA', name: 'Dammam Old',   active: false },
+  { country: 'UAE', name: 'Dubai Hub',    active: true },
+  { country: 'ksa', name: 'riyadh depot', active: true }, // dup (case/space)
 ]
 
 describe('siteKey', () => {
@@ -21,7 +21,7 @@ describe('siteKey', () => {
 
 describe('groupSitesByCountry', () => {
   it('buckets rows by country and defaults blank to Unassigned', () => {
-    const g = groupSitesByCountry([{ country: 'KSA', site_name: 'A' }, { country: '', site_name: 'B' }])
+    const g = groupSitesByCountry([{ country: 'KSA', name: 'A' }, { country: '', name: 'B' }])
     expect(g.KSA).toHaveLength(1)
     expect(g.Unassigned).toHaveLength(1)
   })
@@ -44,11 +44,11 @@ describe('siteOptionsForCountry', () => {
 })
 
 describe('emptySite', () => {
-  it('carries the country and every editable field with valid defaults', () => {
+  it('carries the country and valid defaults', () => {
     const s = emptySite('KSA')
     expect(s.country).toBe('KSA')
     expect(s.site_type).toBe('other')
-    expect(s.status).toBe('active')
+    expect(s.active).toBe(true)
     for (const f of SITE_FIELDS) expect(f in s).toBe(true)
     expect(SITE_TYPES).toContain(s.site_type)
   })

@@ -221,34 +221,69 @@ export async function saveSheets(batchId, sheets) {
 }
 
 /** Bulk-insert staged rows (chunked to stay within request limits). */
-// Insert one chunk, retrying transient network failures. A big/​wide file used to
-// fail here with a bare "Failed to fetch" because a single 500-row POST body (four
-// JSONB blobs per row) exceeded the gateway's request-size limit, leaving the
-// batch staged with 0 rows.
-async function insertRowChunk(chunk, attempts = 4) {
+// Insert one chunk, self-healing around transient / oversized requests. A big or
+// wide file (four JSONB blobs per row) can drop a POST with a bare "Failed to
+// fetch" or hit a statement timeout, which used to abort the whole import and
+// leave the batch staged with 0 rows. Strategy:
+//   1. Retry transient network/timeout failures with jittered backoff.
+//   2. If retries are exhausted AND the chunk is still splittable, BISECT it and
+//      retry the halves — a smaller request almost always succeeds where a large
+//      one was dropped or timed out, so the import shrinks itself instead of
+//      failing. Recurses down toward a single row.
+//   3. Deterministic DB errors (RLS, constraint, validation) are NOT retried or
+//      bisected — they surface immediately with their real message, never the
+//      misleading "request too large" guess.
+const TRANSIENT_RE = /failed to fetch|network|load failed|timeout|statement timeout|too large|request entity|payload|413|econnreset|connection|fetch failed/i
+
+function isTransient(e) {
+  return e?.name === 'TypeError' || TRANSIENT_RE.test(e?.message || '')
+}
+
+async function insertRowChunk(chunk, { attempts = 5, depth = 0 } = {}) {
   for (let a = 1; a <= attempts; a++) {
     try {
       const { error } = await supabase.from('import_rows').insert(chunk)
       if (error) throw new ServiceError(error.message, error.code, error)
       return
     } catch (e) {
-      const networkish = e?.name === 'TypeError' || /failed to fetch|network|load failed|timeout/i.test(e?.message || '')
-      if (!networkish || a === attempts) {
-        throw new ServiceError(
-          networkish
-            ? `Could not save the rows after ${attempts} attempts — the request may be too large or the connection dropped. Try a smaller file or a stronger connection.`
-            : (e?.message || 'Could not stage the rows.'),
-          e?.code, e,
-        )
+      // Deterministic server-side rejection — retrying/bisecting can't help.
+      if (!isTransient(e)) {
+        throw new ServiceError(e?.message || 'Could not stage the rows.', e?.code, e)
       }
-      await new Promise((res) => setTimeout(res, 400 * a * a)) // 0.4s, 1.6s, 3.6s backoff
+      if (a < attempts) {
+        // Jittered exponential backoff: ~0.3s, 0.9s, 1.8s, 3.0s (+ up to 250ms)
+        // so parallel retries don't resynchronise onto the same instant.
+        const wait = 300 * a * a + Math.floor(Math.random() * 250)
+        await new Promise((res) => setTimeout(res, wait))
+        continue
+      }
+      // Retries exhausted. Split the request in half and let each half retry
+      // from scratch — the dominant cause (oversized body / slow chunk) vanishes
+      // once the request is small enough. depth guard is a runaway backstop.
+      if (chunk.length > 1 && depth < 16) {
+        const mid = Math.ceil(chunk.length / 2)
+        await insertRowChunk(chunk.slice(0, mid), { attempts, depth: depth + 1 })
+        await insertRowChunk(chunk.slice(mid), { attempts, depth: depth + 1 })
+        return
+      }
+      // A single row still cannot be saved after every retry — surface the real
+      // cause so it is actionable, not a generic "too large" message.
+      throw new ServiceError(
+        `Could not save a row after repeated attempts — ${e?.message || 'the connection dropped'}. `
+        + 'The connection looks unstable; check your network and retry from Intake History.',
+        e?.code, e,
+      )
     }
   }
 }
 
 export async function stageRows(batchId, rows) {
-  const MAX_ROWS = 500          // hard cap per request (byte budget still applies)
-  const MAX_BYTES = 1_200_000   // ~1.2 MB serialized budget per request
+  // Conservative initial request size — small enough to clear gateway limits and
+  // finish well inside the statement timeout on the first try. If a chunk still
+  // fails transiently, insertRowChunk bisects it further, so these are ceilings,
+  // not a reliability cliff.
+  const MAX_ROWS = 300          // hard cap per request (byte budget still applies)
+  const MAX_BYTES = 800_000     // ~0.8 MB serialized budget per request
   const payload = rows.map((r) => ({
     batch_id: batchId,
     sheet_name: r.sheetName ?? null,

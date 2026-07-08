@@ -14,6 +14,7 @@ import { useLanguage } from '../contexts/LanguageContext'
 import { formatDate } from '../lib/formatters'
 import { exportToPptx, exportToExcel, exportToPdf, exportDailyExecutivePdf } from '../lib/exportUtils'
 import PageHeader from '../components/ui/PageHeader'
+import SectionTabs, { REPORTS_TABS } from '../components/ui/SectionTabs'
 import LoadingState from '../components/LoadingState'
 import EmptyState from '../components/EmptyState'
 
@@ -193,6 +194,7 @@ export default function ReportCenter() {
 
   return (
     <div className="space-y-6 animate-in">
+      <SectionTabs tabs={REPORTS_TABS} />
       <PageHeader title={t('reportcenter.title')} subtitle={t('reportcenter.subtitle')} icon={FileText} />
 
       {/* Toast */}

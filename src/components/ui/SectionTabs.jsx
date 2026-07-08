@@ -1,7 +1,7 @@
 import { NavLink } from 'react-router-dom'
 import {
   ClipboardCheck, Cpu, LayoutGrid, BarChart2, Microscope, BarChartBig,
-  GitBranch, HeartPulse, Search, GitMerge,
+  GitBranch, HeartPulse, Search, GitMerge, FileText, Download, Wand2,
 } from 'lucide-react'
 
 /**
@@ -58,4 +58,10 @@ export const FLEET_TABS = [
 export const RCA_TABS = [
   { to: '/rca',        label: 'RCA Records',       icon: Search },
   { to: '/root-cause', label: 'Root Cause Engine', icon: GitMerge },
+]
+
+export const REPORTS_TABS = [
+  { to: '/reports',        label: 'Reports',        icon: FileText },
+  { to: '/report-center',  label: 'Report Center',  icon: Download },
+  { to: '/report-builder', label: 'Report Builder', icon: Wand2 },
 ]

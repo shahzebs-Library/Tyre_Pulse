@@ -99,8 +99,7 @@ export const NAV_COMMANDS = [
   { id: 'continuous-improvement', label: 'Continuous Improvement', path: '/continuous-improvement', icon: 'Zap', adminOnly: true, moduleKey: 'analytics' },
   // Administration & Data
   { id: 'cleaning',       label: 'Data Cleaning',        path: '/cleaning',     icon: 'Trash2',     adminOnly: true, moduleKey: 'data_cleaning' },
-  { id: 'data-intake',    label: 'Data Intake Center',   path: '/data-intake',  icon: 'Upload' },
-  { id: 'upload',         label: 'Upload Data',          path: '/upload',       icon: 'Upload' },
+  { id: 'data-intake',    label: 'Data Intake Center',   path: '/data-intake',  icon: 'Upload', keywords: ['upload', 'import', 'excel', 'csv', 'file'] },
   { id: 'upload-approvals', label: 'Upload Approvals',   path: '/upload-approvals', icon: 'ClipboardCheck', adminOnly: true },
   { id: 'custom-data',    label: 'Custom Data',          path: '/custom-data',  icon: 'FileText' },
   { id: 'audit',          label: 'Audit Trail',          path: '/audit',        icon: 'History',    adminOnly: true, moduleKey: 'audit_trail' },
@@ -121,8 +120,7 @@ export const NAV_COMMANDS = [
 // Quick actions - same RBAC descriptors as their target routes.
 export const ACTION_COMMANDS = [
   { id: 'action-new-inspection', label: 'New Inspection',       path: '/inspections', icon: 'ClipboardCheck', keywords: ['create', 'add'] },
-  { id: 'action-data-intake',    label: 'Open Data Intake',     path: '/data-intake', icon: 'Upload',         keywords: ['import', 'excel'] },
-  { id: 'action-upload',         label: 'Upload Excel Data',    path: '/upload',      icon: 'Upload',         keywords: ['import', 'file'] },
+  { id: 'action-data-intake',    label: 'Upload / Import Data',  path: '/data-intake', icon: 'Upload',         keywords: ['import', 'excel', 'upload', 'file', 'csv'] },
   { id: 'action-scan',           label: 'Scan a Tyre QR Code',  path: '/scan',        icon: 'QrCode',         keywords: ['camera'] },
   { id: 'action-alerts',         label: 'View Active Alerts',   path: '/alerts',      icon: 'Bell',           adminOnly: true },
   { id: 'action-settings',       label: 'Open Settings',        path: '/settings',    icon: 'Settings',       keywords: ['preferences', 'theme'] },

@@ -961,7 +961,7 @@ export default function Dashboard() {
       <div className="flex flex-wrap gap-2">
         <ActionTile to="/anomalies" icon={AlertTriangle} label={t('dashboard.quickActions.anomalyScan')} color="#fca5a5" bg="rgba(239,68,68,0.08)" border="rgba(239,68,68,0.2)" />
         <ActionTile to="/alerts"    icon={Bell}          label={t('dashboard.quickActions.viewAlerts')}      color="#fde68a" bg="rgba(245,158,11,0.08)" border="rgba(245,158,11,0.2)" />
-        <ActionTile to="/upload"    icon={Upload}        label={t('dashboard.quickActions.uploadData')}      color="#93c5fd" bg="rgba(59,130,246,0.08)"  border="rgba(59,130,246,0.2)" />
+        <ActionTile to="/data-intake" icon={Upload}      label={t('dashboard.quickActions.uploadData')}      color="#93c5fd" bg="rgba(59,130,246,0.08)"  border="rgba(59,130,246,0.2)" />
         <ActionTile to="/inspections" icon={ClipboardCheck} label={t('dashboard.quickActions.inspections')}   color="#86efac" bg="rgba(22,163,74,0.08)"  border="rgba(22,163,74,0.2)" />
         <ActionTile to="/ai-command-center" icon={Cpu}   label={t('dashboard.quickActions.aiCommand')}       color="#d8b4fe" bg="rgba(139,92,246,0.08)" border="rgba(139,92,246,0.2)" />
       </div>

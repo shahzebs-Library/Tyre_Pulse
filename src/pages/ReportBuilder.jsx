@@ -6,6 +6,7 @@ import {
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import PageHeader from '../components/ui/PageHeader'
+import SectionTabs, { REPORTS_TABS } from '../components/ui/SectionTabs'
 import EnterpriseTable from '../components/ui/EnterpriseTable'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import {
@@ -318,6 +319,7 @@ export default function ReportBuilder() {
   // ── render ──────────────────────────────────────────────────────────────
   return (
     <div className="space-y-5">
+      <SectionTabs tabs={REPORTS_TABS} />
       <PageHeader
         title="Report Builder"
         subtitle="Compose, save and export custom reports from any fleet dataset"

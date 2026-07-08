@@ -139,8 +139,6 @@ const NAV_GROUPS = [
     label: 'Reports & Executive',
     items: [
       { to: '/reports',           label: 'Reports',           icon: FileText },
-      { to: '/report-center',     label: 'Report Center',     icon: Download },
-      { to: '/report-builder',    label: 'Report Builder',    icon: Wand2 },
       { to: '/dashboard-builder', label: 'Dashboard Builder', icon: LayoutGrid },
       { to: '/scheduled-reports', label: 'Scheduled Reports', icon: CalendarCheck2 },
       { to: '/executive-report',  label: 'Executive Report',  icon: BookOpen, adminOnly: A },
@@ -166,7 +164,6 @@ const NAV_GROUPS = [
     items: [
       { to: '/cleaning',         label: 'Data Cleaning',      icon: Wand2, adminOnly: true },
       { to: '/data-intake',      label: 'Data Intake Center', icon: Database },
-      { to: '/upload',           label: 'Upload Data',        icon: Upload },
       { to: '/upload-approvals', label: 'Upload Approvals',   icon: ClipboardList, adminOnly: true },
       { to: '/custom-data',      label: 'Custom Data',        icon: Database },
       { to: '/audit',            label: 'Audit Trail',        icon: ClipboardList, adminOnly: true },

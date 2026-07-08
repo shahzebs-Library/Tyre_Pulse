@@ -3,6 +3,7 @@ import { motion } from 'framer-motion'
 import { FileText, ChevronRight, Download, ArrowLeft, Printer, Mail } from 'lucide-react'
 import { SkeletonTable } from '../components/ui/Skeleton'
 import PageHeader from '../components/ui/PageHeader'
+import SectionTabs, { REPORTS_TABS } from '../components/ui/SectionTabs'
 import { supabase } from '../lib/supabase'
 import { useSettings } from '../contexts/SettingsContext'
 import { useLanguage } from '../contexts/LanguageContext'
@@ -338,6 +339,7 @@ export default function Reports() {
 
   return (
     <div className="space-y-6">
+      <SectionTabs tabs={REPORTS_TABS} />
       <PageHeader
         title={t('reports.title')}
         subtitle={t('reports.subtitle')}

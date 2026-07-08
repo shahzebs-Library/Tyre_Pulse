@@ -42,8 +42,13 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     schema: 'public',
   },
   global: {
-    headers: { 'x-app-name': 'tyrepulse' },
-    // keepalive keeps connections alive across page visibility changes
+    // NOTE: do NOT add custom request headers here. supabase-js applies global
+    // headers to EVERY request including Edge Function calls, which turns them
+    // into non-safelisted CORS requests — any header the function's
+    // Access-Control-Allow-Headers doesn't list makes the browser block the
+    // whole call ("Request header field ... is not allowed"). A prior
+    // 'x-app-name' header (read by nothing) caused exactly that on chat-ai.
+    // keepalive keeps connections alive across page visibility changes.
     fetch: (url, options = {}) => fetch(url, { ...options, keepalive: true }),
   },
   realtime: {

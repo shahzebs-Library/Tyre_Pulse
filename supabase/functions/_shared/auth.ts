@@ -54,11 +54,17 @@ export function corsHeaders(req: Request): Record<string, string> {
     }
   }
 
+  // Reflect whatever headers the browser asks to send (the app attaches a custom
+  // `x-app-name` header globally via supabase-js — a static allow-list that omits
+  // it makes the preflight fail with "Request header field x-app-name is not
+  // allowed"). Headers are not a security boundary here (the JWT is), so echoing
+  // the requested set is safe and future-proof; fall back to the known set.
+  const requestedHeaders = req.headers.get('access-control-request-headers')
   return {
     'Access-Control-Allow-Origin': allowOrigin,
-    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+    'Access-Control-Allow-Headers': requestedHeaders || 'authorization, x-client-info, apikey, content-type, x-app-name',
     'Access-Control-Allow-Methods': 'POST, OPTIONS',
-    'Vary': 'Origin',
+    'Vary': 'Origin, Access-Control-Request-Headers',
   }
 }
 

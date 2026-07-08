@@ -20,7 +20,7 @@ import {
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { detectAlerts, countAlertsBySeverity } from '../lib/alertEngine'
-import { syncPendingInspections, getPendingCount } from '../lib/offlineQueue'
+import { syncPendingInspections, getPendingCount, getFailedCount, getFailedInspections, retryFailedInspection } from '../lib/offlineQueue'
 import { useWakeLock } from '../hooks/useWakeLock'
 import { useRealtimeSync } from '../hooks/useRealtime'
 import { useFeatureFlags } from '../hooks/useFeatureFlags'
@@ -225,6 +225,8 @@ function TyreManShell({ children, alertCount }) {
   const location = useLocation()
   const { acquire: acquireWakeLock, release: releaseWakeLock } = useWakeLock()
   const [pendingCount, setPendingCount] = useState(0)
+  const [failedCount, setFailedCount]   = useState(0)
+  const [retrying, setRetrying]         = useState(false)
 
   // Force light theme for the TyreMan mobile shell
   useEffect(() => {
@@ -256,13 +258,30 @@ function TyreManShell({ children, alertCount }) {
       if (navigator.onLine) {
         await syncPendingInspections(supabase)
       }
-      const count = await getPendingCount()
-      setPendingCount(count)
+      const [pending, failed] = await Promise.all([getPendingCount(), getFailedCount()])
+      setPendingCount(pending)
+      setFailedCount(failed)
     }
     syncAndCount()
     window.addEventListener('online', syncAndCount)
     return () => window.removeEventListener('online', syncAndCount)
   }, [])
+
+  // Requeue dead-lettered inspections (exhausted their auto-retries) and flush.
+  const retryFailedSyncs = useCallback(async () => {
+    if (retrying) return
+    setRetrying(true)
+    try {
+      const failed = await getFailedInspections()
+      await Promise.all(failed.map(f => retryFailedInspection(f._queueId)))
+      if (navigator.onLine) await syncPendingInspections(supabase)
+      const [pending, stillFailed] = await Promise.all([getPendingCount(), getFailedCount()])
+      setPendingCount(pending)
+      setFailedCount(stillFailed)
+    } finally {
+      setRetrying(false)
+    }
+  }, [retrying])
 
   return (
     <div
@@ -306,6 +325,18 @@ function TyreManShell({ children, alertCount }) {
             >
               ⏳ {pendingCount}
             </span>
+          )}
+          {failedCount > 0 && (
+            <button
+              type="button"
+              onClick={retryFailedSyncs}
+              disabled={retrying}
+              className="text-[9px] font-bold px-2 py-0.5 rounded-full disabled:opacity-60"
+              style={{ background: '#fee2e2', color: '#991b1b', border: '1px solid #fecaca' }}
+              title={`${failedCount} inspection${failedCount !== 1 ? 's' : ''} failed to sync — tap to retry`}
+            >
+              {retrying ? '…' : `⚠ ${failedCount}`}
+            </button>
           )}
           <LanguageSwitcher />
           <NavLink

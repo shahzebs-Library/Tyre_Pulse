@@ -41,7 +41,7 @@ const POSITIONS = ['All', 'Steer', 'Drive', 'Trailer', 'Other']
 const POSITION_I18N_KEYS = { All: 'all', Steer: 'steer', Drive: 'drive', Trailer: 'trailer', Other: 'other' }
 
 const CHART_THEME = {
-  gridcolor:'var(--text-muted)',
+  gridColor:'var(--text-muted)',
   tickColor: '#9ca3af',
   tooltipBg: '#1f2937',
 }
@@ -127,7 +127,7 @@ function barOpts(horizontal = false, tickCallback) {
       legend: { display: false },
       tooltip: {
         backgroundColor: CHART_THEME.tooltipBg,
-        titlecolor:'var(--panel-ink)',
+        titleColor:'var(--panel-ink)',
         bodyColor: '#d1d5db',
         padding: 10,
         cornerRadius: 8,
@@ -157,7 +157,7 @@ function radarOpts() {
       },
       tooltip: {
         backgroundColor: CHART_THEME.tooltipBg,
-        titlecolor:'var(--panel-ink)',
+        titleColor:'var(--panel-ink)',
         bodyColor: '#d1d5db',
         padding: 10,
         cornerRadius: 8,
@@ -997,7 +997,7 @@ export default function VendorIntelligence() {
                               legend: { display: false },
                               tooltip: {
                                 backgroundColor: CHART_THEME.tooltipBg,
-                                titlecolor:'var(--panel-ink)',
+                                titleColor:'var(--panel-ink)',
                                 bodyColor: '#d1d5db',
                                 padding: 10,
                                 cornerRadius: 8,
@@ -1030,7 +1030,7 @@ export default function VendorIntelligence() {
                               legend: { display: false },
                               tooltip: {
                                 backgroundColor: CHART_THEME.tooltipBg,
-                                titlecolor:'var(--panel-ink)',
+                                titleColor:'var(--panel-ink)',
                                 bodyColor: '#d1d5db',
                                 padding: 10,
                                 cornerRadius: 8,
@@ -1077,7 +1077,7 @@ export default function VendorIntelligence() {
                               legend: { display: false },
                               tooltip: {
                                 backgroundColor: CHART_THEME.tooltipBg,
-                                titlecolor:'var(--panel-ink)',
+                                titleColor:'var(--panel-ink)',
                                 bodyColor: '#d1d5db',
                                 padding: 10,
                                 cornerRadius: 8,
@@ -1351,7 +1351,7 @@ export default function VendorIntelligence() {
                             legend: { display: false },
                             tooltip: {
                               backgroundColor: CHART_THEME.tooltipBg,
-                              titlecolor:'var(--panel-ink)',
+                              titleColor:'var(--panel-ink)',
                               bodyColor: '#d1d5db',
                               padding: 10,
                               cornerRadius: 8,
@@ -1380,7 +1380,7 @@ export default function VendorIntelligence() {
                             legend: { display: false },
                             tooltip: {
                               backgroundColor: CHART_THEME.tooltipBg,
-                              titlecolor:'var(--panel-ink)',
+                              titleColor:'var(--panel-ink)',
                               bodyColor: '#d1d5db',
                               padding: 10,
                               cornerRadius: 8,
@@ -1410,7 +1410,7 @@ export default function VendorIntelligence() {
                           legend: { display: false },
                           tooltip: {
                             backgroundColor: CHART_THEME.tooltipBg,
-                            titlecolor:'var(--panel-ink)',
+                            titleColor:'var(--panel-ink)',
                             bodyColor: '#d1d5db',
                             padding: 10,
                             cornerRadius: 8,

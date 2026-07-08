@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
+import { useState, useEffect, useMemo, useCallback, useRef, Fragment } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { supabase } from '../lib/supabase'
 import { fetchAllPages } from '../lib/fetchAll'
@@ -969,7 +969,7 @@ export default function TyreSizeAnalysis() {
                 const isExpanded = expandedSize === m.size
                 const brandBreakdown = isExpanded ? getBrandBreakdown(m.size) : []
                 return (
-                  <>
+                  <Fragment key={m.size}>
                     <tr
                       key={m.size}
                       onClick={() => setExpandedSize(isExpanded ? null : m.size)}
@@ -1042,7 +1042,7 @@ export default function TyreSizeAnalysis() {
                         </tr>
                       )}
                     </AnimatePresence>
-                  </>
+                  </Fragment>
                 )
               })}
             </tbody>

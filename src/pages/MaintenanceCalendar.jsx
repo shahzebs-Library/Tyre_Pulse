@@ -29,6 +29,15 @@ const EVENT_COLORS = {
   overdue_work_order:  { dot: 'bg-red-600',    chip: 'bg-red-950/70 border-red-600 text-red-200',       label: 'Overdue' },
 }
 
+// Static Tailwind classes so the JIT compiler does not purge dynamically
+// interpolated `text-${color}-400` utilities in production builds.
+const KPI_TEXT_COLOR = {
+  blue:   'text-blue-400',
+  red:    'text-red-400',
+  green:  'text-green-400',
+  orange: 'text-orange-400',
+}
+
 const PRIORITY_BADGE = {
   Critical: 'bg-red-900/50 text-red-300 border-red-700',
   High:     'bg-orange-900/50 text-orange-300 border-orange-700',
@@ -526,10 +535,10 @@ export default function MaintenanceCalendar() {
             <div className={`absolute top-0 right-0 w-24 h-24 rounded-full opacity-5 ${dotColor}`}
               style={{ transform: 'translate(30%, -30%)' }} />
             <div className="flex items-center gap-2 mb-3">
-              <Icon size={16} className={`text-${color}-400`} />
+              <Icon size={16} className={KPI_TEXT_COLOR[color]} />
               <span className="text-[var(--text-muted)] text-xs font-medium">{label}</span>
             </div>
-            <div className={`text-3xl font-bold text-${color}-400 mb-1`}>{value}</div>
+            <div className={`text-3xl font-bold ${KPI_TEXT_COLOR[color]} mb-1`}>{value}</div>
             <div className="text-[var(--text-dim)] text-xs">{desc}</div>
           </motion.div>
         ))}

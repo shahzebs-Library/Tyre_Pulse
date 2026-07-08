@@ -288,7 +288,8 @@ export default function StockManagement() {
       if (!d) return
       if (!map[d]) map[d] = { in: 0, out: 0 }
       const qty = r.qty ?? 1
-      map[d].out += qty
+      if (qty < 0) map[d].in += -qty
+      else map[d].out += qty
     })
     return Object.entries(map).sort(([a], [b]) => a.localeCompare(b))
   }, [tlRecords])
@@ -307,10 +308,10 @@ export default function StockManagement() {
     labels: tlByDate.map(([d]) => d),
     datasets: [{
       label: t('stock.timeline.netChangeLabel'),
-      data: tlByDate.map(([, v]) => v.out - v.in),
+      data: tlByDate.map(([, v]) => v.in - v.out),
       backgroundColor: tlByDate.map(([, v]) => {
-        const net = v.out - v.in
-        return net > 0 ? 'rgba(239,68,68,0.6)' : 'rgba(34,197,94,0.6)'
+        const net = v.in - v.out
+        return net > 0 ? 'rgba(34,197,94,0.6)' : 'rgba(239,68,68,0.6)'
       }),
       borderRadius: 4,
     }],

@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from 'react'
+import { useState, useEffect, useMemo, useCallback, Fragment } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Chart as ChartJS,
@@ -625,9 +625,8 @@ export default function TyreLifecycle() {
                   const cpkV  = cpk(r)
                   const isExp = expandedSerial === r.serial_number
                   return (
-                    <>
+                    <Fragment key={r.id}>
                       <tr
-                        key={r.id}
                         className="border-b border-[var(--border-dim)] hover:bg-[var(--surface-2)] transition-colors cursor-pointer"
                         onClick={() => r.serial_number && toggleExpand(r.serial_number)}
                       >
@@ -716,7 +715,7 @@ export default function TyreLifecycle() {
                           </tr>
                         )}
                       </AnimatePresence>
-                    </>
+                    </Fragment>
                   )
                 })
               )}

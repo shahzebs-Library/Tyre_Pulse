@@ -1018,8 +1018,8 @@ export default function ContinuousImprovement() {
         {
           label: 'Target',
           data: kpiScorecard.map(k => k.target),
-          backgroundcolor:'var(--text-muted)',
-          bordercolor:'var(--text-muted)',
+          backgroundColor:'var(--text-muted)',
+          borderColor:'var(--text-muted)',
           borderWidth: 1,
           borderRadius: 4,
         },

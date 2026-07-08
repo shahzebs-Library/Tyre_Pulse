@@ -29,7 +29,7 @@ const CHART_OPTS = {
   maintainAspectRatio: false,
   plugins: {
     legend: { labels: { color: '#9ca3af', boxWidth: 10, padding: 12 } },
-    tooltip: { backgroundColor: 'var(--panel-2)', titlecolor:'var(--panel-ink)', bodyColor: '#9ca3af', borderColor: 'var(--hairline)', borderWidth: 1, padding: 10 },
+    tooltip: { backgroundColor: 'var(--panel-2)', titleColor:'var(--panel-ink)', bodyColor: '#9ca3af', borderColor: 'var(--hairline)', borderWidth: 1, padding: 10 },
   },
   scales: {
     x: { ticks: { color: '#6b7280', font: { size: 11 } }, grid: { color: '#1f2937' } },

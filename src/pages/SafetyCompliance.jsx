@@ -476,15 +476,18 @@ export default function SafetyCompliance() {
                   { label: 'Critical Tyres', value: compliance.criticalCount, icon: AlertOctagon, color: 'red' },
                   { label: 'High Risk Tyres', value: compliance.highRiskCount, icon: AlertTriangle, color: 'orange' },
                   { label: 'Accidents (Period)', value: compliance.accidents, icon: Car, color: 'yellow' },
-                ].map(({ label, value, icon: Icon, color }) => (
+                ].map(({ label, value, icon: Icon, color }) => {
+                  const colorClass = { blue: 'text-blue-400', red: 'text-red-400', orange: 'text-orange-400', yellow: 'text-yellow-400' }[color] || 'text-blue-400';
+                  return (
                   <div key={label} className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-4">
                     <div className={`flex items-center gap-2 mb-2`}>
-                      <Icon size={16} className={`text-${color}-400`} />
+                      <Icon size={16} className={colorClass} />
                       <span className="text-[var(--text-muted)] text-xs">{label}</span>
                     </div>
-                    <div className={`text-2xl font-bold text-${color}-400`}>{value}</div>
+                    <div className={`text-2xl font-bold ${colorClass}`}>{value}</div>
                   </div>
-                ))}
+                  );
+                })}
               </div>
             </motion.div>
           )}

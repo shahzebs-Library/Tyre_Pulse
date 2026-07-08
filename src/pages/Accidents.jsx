@@ -107,7 +107,7 @@ const CHART_OPTS_BASE = {
   maintainAspectRatio: false,
   plugins: {
     legend: { display: false },
-    tooltip: { backgroundColor: 'var(--panel-2)', titlecolor:'var(--panel-ink)', bodyColor: '#9ca3af', borderColor: 'var(--hairline)', borderWidth: 1 },
+    tooltip: { backgroundColor: 'var(--panel-2)', titleColor:'var(--panel-ink)', bodyColor: '#9ca3af', borderColor: 'var(--hairline)', borderWidth: 1 },
   },
   scales: {
     x: { ticks: { color: '#6b7280', font: { size: 11 } }, grid: { color: '#1f2937' } },
@@ -399,7 +399,7 @@ export default function Accidents() {
     maintainAspectRatio: false,
     plugins: {
       legend: { display: false },
-      tooltip: { backgroundColor: 'var(--panel-2)', titlecolor:'var(--panel-ink)', bodyColor: '#9ca3af', borderColor: 'var(--hairline)', borderWidth: 1 },
+      tooltip: { backgroundColor: 'var(--panel-2)', titleColor:'var(--panel-ink)', bodyColor: '#9ca3af', borderColor: 'var(--hairline)', borderWidth: 1 },
     },
     scales: {
       x: { ticks: { color: '#6b7280', font: { size: 11 } }, grid: { color: '#1f2937' } },

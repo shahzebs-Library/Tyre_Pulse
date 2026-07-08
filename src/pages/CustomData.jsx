@@ -7,7 +7,7 @@
  * and promotable to permanent field synonyms so future uploads auto-map them.
  */
 
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo, Fragment } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { supabase } from '../lib/supabase'
 import * as customData from '../lib/api/customData'
@@ -708,8 +708,8 @@ export default function CustomData() {
                       const expanded = expandedRows.has(r.id)
                       const efKeys   = Object.keys(r.extra_fields ?? {})
                       return (
-                        <>
-                          <tr key={r.id} className="hover:bg-[var(--input-bg)]/30 transition-colors cursor-pointer"
+                        <Fragment key={r.id}>
+                          <tr className="hover:bg-[var(--input-bg)]/30 transition-colors cursor-pointer"
                             onClick={() => setExpandedRows(s => { const n = new Set(s); n.has(r.id) ? n.delete(r.id) : n.add(r.id); return n })}>
                             <td className="table-cell">
                               <ChevronRight size={12} className={`text-[var(--text-muted)] transition-transform ${expanded ? 'rotate-90' : ''}`} />
@@ -746,7 +746,7 @@ export default function CustomData() {
                               </td>
                             </tr>
                           )}
-                        </>
+                        </Fragment>
                       )
                     })}
                   </tbody>

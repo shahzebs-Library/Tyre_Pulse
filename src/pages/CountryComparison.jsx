@@ -19,7 +19,7 @@ const COLOR_PALETTE = ['#3b82f6', '#10b981', '#f59e0b', '#ec4899', '#8b5cf6', '#
 
 const BAR_OPTS = {
   responsive: true, maintainAspectRatio: false,
-  plugins: { legend: { display: false }, tooltip: { backgroundColor: 'var(--panel-2)', titlecolor:'var(--panel-ink)', bodyColor: '#9ca3af' } },
+  plugins: { legend: { display: false }, tooltip: { backgroundColor: 'var(--panel-2)', titleColor:'#e5e7eb', bodyColor: '#9ca3af' } },
   scales: {
     x: { grid: { color: '#1a2030' }, ticks: { color: '#6b7280', font: { size: 11 } } },
     y: { grid: { color: '#1a2030' }, ticks: { color: '#6b7280', font: { size: 11 } } },

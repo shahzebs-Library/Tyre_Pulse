@@ -22,7 +22,7 @@ ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend)
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 const CHART_THEME = {
-  gridcolor:'var(--text-muted)',
+  gridColor:'var(--text-muted)',
   tickColor: '#6b7280',
   tooltipBg: '#1f2937',
 }
@@ -183,7 +183,7 @@ function barOptions(horizontal = false) {
       legend: { display: false },
       tooltip: {
         backgroundColor: CHART_THEME.tooltipBg,
-        titlecolor:'var(--panel-ink)',
+        titleColor:'var(--panel-ink)',
         bodyColor: '#d1d5db',
         padding: 10,
         cornerRadius: 8,

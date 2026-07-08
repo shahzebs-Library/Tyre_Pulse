@@ -86,7 +86,7 @@ const DOUGHNUT_OPTS = {
 }
 
 const PALETTE = [
-  '#3b82f6', '#f59e0b', '#10b981', '#ef4444', '#10b981', '#6b7280',
+  '#3b82f6', '#f59e0b', '#10b981', '#ef4444', '#14b8a6', '#6b7280',
 ]
 
 const FAILURE_PALETTE = [

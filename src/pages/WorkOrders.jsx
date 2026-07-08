@@ -61,6 +61,16 @@ const PRIORITY_CONFIG = {
   Low:      { color: 'text-blue-400',   dot: 'bg-blue-500' },
 }
 
+const KPI_TEXT_COLOR = {
+  blue:   'text-blue-400',
+  yellow: 'text-yellow-400',
+  orange: 'text-orange-400',
+  red:    'text-red-400',
+  green:  'text-green-400',
+  purple: 'text-purple-400',
+  teal:   'text-teal-400',
+}
+
 const WORK_TYPES = [
   'Tyre Change','Inspection','Repair','Rotation',
   'Balancing','Alignment','Retread','Puncture Repair',
@@ -566,10 +576,10 @@ export default function WorkOrders() {
         ].map(({ label, value, color, icon: Icon }) => (
           <div key={label} className="card p-4">
             <div className={`flex items-center gap-2 mb-2`}>
-              <Icon size={16} className={`text-${color}-400`} />
+              <Icon size={16} className={KPI_TEXT_COLOR[color]} />
               <span className="text-[var(--text-secondary)] text-xs">{label}</span>
             </div>
-            <div className={`text-2xl font-bold tabular-nums text-${color}-400`}>{value}</div>
+            <div className={`text-2xl font-bold tabular-nums ${KPI_TEXT_COLOR[color]}`}>{value}</div>
           </div>
         ))}
       </div>

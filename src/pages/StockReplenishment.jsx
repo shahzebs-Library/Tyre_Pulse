@@ -126,13 +126,14 @@ export default function StockReplenishment() {
     setLoading(true)
     setError(null)
     try {
-      const ninety = new Date()
-      ninety.setDate(ninety.getDate() - 90)
-      const ninetyStr = ninety.toISOString().slice(0, 10)
+      // Load ~6 months so the 6-bucket consumption bar/trend charts are fully populated.
+      const sinceDate = new Date()
+      sinceDate.setDate(sinceDate.getDate() - 183)
+      const sinceStr = sinceDate.toISOString().slice(0, 10)
 
       const [stockRows, tyreRows] = await Promise.all([
         purchaseOrders.listReplenishmentStock({ country: activeCountry }),
-        purchaseOrders.listReplenishmentTyreRecords({ country: activeCountry, sinceDate: ninetyStr }),
+        purchaseOrders.listReplenishmentTyreRecords({ country: activeCountry, sinceDate: sinceStr }),
       ])
 
       setStockData(stockRows || [])
@@ -147,11 +148,15 @@ export default function StockReplenishment() {
 
   useEffect(() => { load() }, [load])
 
-  // ── Derived: consumption map (site+brand+size → qty/month for last 90d) ────
+  // ── Derived: consumption map (site+brand+size → qty/month over loaded window) ─
   const consumptionMap = useMemo(() => {
-    // map key → count of issues in last 90 days
+    // Restrict to the trailing 90 days so the per-month rate stays a true 90-day
+    // rate even though tyre_records is now loaded over a ~6-month window (for charts).
+    const ninetyDaysAgo = new Date()
+    ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90)
     const map = {}
     tyreRecords.forEach(r => {
+      if (r.issue_date && new Date(r.issue_date) < ninetyDaysAgo) return
       const key = `${r.site}||${r.brand}||${r.size}`
       map[key] = (map[key] || 0) + 1
     })
@@ -278,7 +283,7 @@ export default function StockReplenishment() {
       const d = new Date(); d.setMonth(d.getMonth() - 5 + i)
       return d.toISOString().slice(0, 7)
     })
-    // Need full tyre_records for 6 months - we only loaded 90d; use what we have
+    // tyre_records is loaded over ~6 months so all six monthly buckets populate
     const sizeTotals = {}
     tyreRecords.forEach(r => {
       sizeTotals[r.size] = (sizeTotals[r.size] || 0) + 1

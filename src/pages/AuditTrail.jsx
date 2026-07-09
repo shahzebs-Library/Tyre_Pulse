@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react'
+import React, { useEffect, useState, useCallback, useMemo } from 'react'
 import { supabase } from '../lib/supabase'
 import { exportToExcel } from '../lib/exportUtils'
 import { useAuth } from '../contexts/AuthContext'
@@ -9,6 +9,7 @@ import {
 } from 'lucide-react'
 import { motion } from 'framer-motion'
 import PageHeader from '../components/ui/PageHeader'
+import EnterpriseTable from '../components/ui/EnterpriseTable'
 
 const PAGE_SIZE = 50
 
@@ -35,11 +36,6 @@ function fmtVal(v) {
   return String(v)
 }
 
-/**
- * Expanded audit row: field-level old → new diff built from old_values /
- * new_values (written by src/lib/audit.js — changed fields only for UPDATE,
- * full record for CREATE/DELETE). Falls back to the legacy `details` JSON.
- */
 function AuditChangeDetail({ row }) {
   const oldV = nonEmpty(row.old_values) ? row.old_values : null
   const newRaw = nonEmpty(row.new_values) ? row.new_values : null
@@ -115,11 +111,9 @@ export default function AuditTrail() {
   const { profile } = useAuth()
   const [activeTab, setActiveTab] = useState('audit')
 
-  // ── Summary stats ──────────────────────────────────────────────────────────
   const [stats, setStats] = useState({ totalEvents: 0, uploadsMonth: 0, recordsMonth: 0, activeUsers: 0 })
   const [statsLoading, setStatsLoading] = useState(true)
 
-  // ── Audit Log tab ──────────────────────────────────────────────────────────
   const [auditRows, setAuditRows]   = useState([])
   const [auditTotal, setAuditTotal] = useState(0)
   const [auditPage, setAuditPage]   = useState(0)
@@ -127,26 +121,22 @@ export default function AuditTrail() {
   const [expandedRow, setExpandedRow]   = useState(null)
   const [auditSearch, setAuditSearch]   = useState('')
 
-  // Filters
   const [dateFrom, setDateFrom]         = useState('')
   const [dateTo, setDateTo]             = useState('')
   const [actionFilter, setActionFilter] = useState('')
   const [userFilter, setUserFilter]     = useState('')
   const [userOptions, setUserOptions]   = useState([])
 
-  // ── Upload History tab ─────────────────────────────────────────────────────
   const [uploadRows, setUploadRows]   = useState([])
   const [uploadTotal, setUploadTotal] = useState(0)
   const [uploadPage, setUploadPage]   = useState(0)
   const [uploadLoading, setUploadLoading] = useState(false)
 
-  // ── Batch delete state ─────────────────────────────────────────────────────
   const [deleteTarget, setDeleteTarget] = useState(null)
   const [deleteConfirm, setDeleteConfirm] = useState('')
   const [deleting, setDeleting] = useState(false)
   const [deleteError, setDeleteError] = useState('')
 
-  // ── Load summary stats ─────────────────────────────────────────────────────
   useEffect(() => {
     async function loadStats() {
       setStatsLoading(true)
@@ -165,19 +155,13 @@ export default function AuditTrail() {
         const recordsMonth  = (monthRes.data ?? []).reduce((s, r) => s + (r.record_count ?? 0), 0)
         const activeUsers   = new Set((activeRes.data ?? []).map(r => r.user_id).filter(Boolean)).size
 
-        setStats({
-          totalEvents: totalRes.count ?? 0,
-          uploadsMonth,
-          recordsMonth,
-          activeUsers,
-        })
+        setStats({ totalEvents: totalRes.count ?? 0, uploadsMonth, recordsMonth, activeUsers })
       } catch { /* ignore */ }
       setStatsLoading(false)
     }
     loadStats()
   }, [])
 
-  // ── Load user options for filter dropdown ──────────────────────────────────
   useEffect(() => {
     async function loadUsers() {
       const { data } = await supabase.from('profiles').select('id, full_name, username')
@@ -186,7 +170,6 @@ export default function AuditTrail() {
     loadUsers()
   }, [])
 
-  // ── Load audit log ─────────────────────────────────────────────────────────
   const loadAudit = useCallback(async () => {
     setAuditLoading(true)
     try {
@@ -210,7 +193,6 @@ export default function AuditTrail() {
 
   useEffect(() => { if (activeTab === 'audit') loadAudit() }, [loadAudit, activeTab])
 
-  // ── Load upload history ────────────────────────────────────────────────────
   const loadUploadHistory = useCallback(async () => {
     setUploadLoading(true)
     try {
@@ -228,7 +210,6 @@ export default function AuditTrail() {
 
   useEffect(() => { if (activeTab === 'upload') loadUploadHistory() }, [loadUploadHistory, activeTab])
 
-  // ── Export handlers ────────────────────────────────────────────────────────
   async function exportAuditLog() {
     const { data } = await supabase
       .from('audit_log_v2')
@@ -284,15 +265,11 @@ export default function AuditTrail() {
     setDeleting(true)
     setDeleteError('')
     try {
-      // 1) Delete the tyre records this batch produced (may be 0 — a batch can be
-      //    orphaned metadata whose rows were never committed or already cleared).
       const { data: delRows, error: recErr } = await supabase
         .from('tyre_records').delete().eq('upload_batch_id', deleteTarget.batchId).select('id')
       if (recErr) throw recErr
       const removed = delRows?.length ?? 0
 
-      // 2) Always remove the Upload History entry itself so the batch disappears
-      //    from the list — this is what "Delete Batch" means to the user.
       const { data: histRows, error: histErr } = await supabase
         .from('upload_history').delete().eq('batch_id', deleteTarget.batchId).select('id')
       if (histErr) throw histErr
@@ -314,7 +291,6 @@ export default function AuditTrail() {
   const auditPages  = Math.ceil(auditTotal  / PAGE_SIZE)
   const uploadPages = Math.ceil(uploadTotal / PAGE_SIZE)
 
-  // Client-side search filter on current page rows
   const searchTerm = auditSearch.trim().toLowerCase()
   const visibleAuditRows = searchTerm
     ? auditRows.filter(row => {
@@ -324,6 +300,124 @@ export default function AuditTrail() {
         return userName.includes(searchTerm) || action.includes(searchTerm) || table.includes(searchTerm)
       })
     : auditRows
+
+  // EnterpriseTable columns for audit log
+  const auditColumns = useMemo(() => [
+    {
+      id: 'created_at',
+      header: 'Timestamp',
+      accessorFn: r => r.created_at ? formatDateTime(r.created_at) : '-',
+      size: 160,
+      cell: ({ getValue }) => <span className="text-gray-400 text-xs whitespace-nowrap">{getValue()}</span>,
+    },
+    {
+      id: 'user',
+      header: 'User',
+      accessorFn: r => r.profiles?.full_name ?? r.profiles?.username ?? 'Unknown',
+      size: 140,
+      cell: ({ getValue, row }) => row.original.profiles?.full_name || row.original.profiles?.username
+        ? <span className="text-gray-200">{getValue()}</span>
+        : <span className="text-gray-600">Unknown</span>,
+    },
+    {
+      id: 'action',
+      header: 'Action',
+      accessorFn: r => r.action ?? '-',
+      size: 100,
+      cell: ({ getValue }) => {
+        const val = getValue()
+        return val !== '-' ? (
+          <span className={`badge border ${ACTION_BADGE[val] ?? 'bg-gray-800 text-gray-400 border-gray-700'}`}>{val}</span>
+        ) : '-'
+      },
+    },
+    { id: 'table_name', header: 'Table', accessorFn: r => r.table_name ?? '-', size: 120 },
+    {
+      id: 'record_count',
+      header: 'Records',
+      accessorFn: r => r.record_count ?? '-',
+      size: 80,
+      meta: { align: 'right' },
+    },
+    {
+      id: 'details',
+      header: 'Details',
+      accessorFn: r => hasExpandable(r) ? 'expand' : '-',
+      size: 80,
+      enableSorting: false,
+      meta: { export: false },
+      cell: ({ row }) => hasExpandable(row.original) ? (
+        <button
+          onClick={() => setExpandedRow(expandedRow === row.original.id ? null : row.original.id)}
+          className="text-xs text-blue-400 hover:text-blue-300 transition-colors"
+        >
+          {expandedRow === row.original.id ? 'Hide' : 'Show'}
+        </button>
+      ) : <span className="text-gray-700">-</span>,
+    },
+  ], [expandedRow])
+
+  // EnterpriseTable columns for upload history
+  const uploadColumns = useMemo(() => {
+    const cols = [
+      {
+        id: 'file_names',
+        header: 'File Names',
+        accessorFn: r => Array.isArray(r.file_names) ? r.file_names.join(', ') : (r.file_names ?? '-'),
+        size: 200,
+        cell: ({ getValue }) => <span className="text-gray-200 max-w-xs truncate block">{getValue()}</span>,
+      },
+      {
+        id: 'records_added',
+        header: 'Records Added',
+        accessorFn: r => r.records_added ?? 0,
+        size: 100,
+        meta: { align: 'right' },
+        cell: ({ getValue }) => <span className="text-green-400 font-medium">{getValue().toLocaleString()}</span>,
+      },
+      {
+        id: 'records_skipped',
+        header: 'Records Skipped',
+        accessorFn: r => r.records_skipped ?? 0,
+        size: 100,
+        meta: { align: 'right' },
+        cell: ({ getValue }) => <span className="text-amber-400">{getValue().toLocaleString()}</span>,
+      },
+      {
+        id: 'uploaded_by',
+        header: 'Uploaded By',
+        accessorFn: r => r.profiles?.full_name ?? r.profiles?.username ?? 'Unknown',
+        size: 140,
+      },
+      {
+        id: 'uploaded_at',
+        header: 'Uploaded At',
+        accessorFn: r => r.uploaded_at ? formatDateTime(r.uploaded_at) : '-',
+        size: 160,
+        cell: ({ getValue }) => <span className="text-gray-400 text-xs whitespace-nowrap">{getValue()}</span>,
+      },
+      { id: 'region', header: 'Region', accessorFn: r => r.region ?? '-', size: 100 },
+    ]
+    if (profile?.role === 'Admin') {
+      cols.push({
+        id: 'delete',
+        header: 'Delete Batch',
+        accessorFn: r => r.batch_id ?? '',
+        size: 120,
+        enableSorting: false,
+        meta: { export: false },
+        cell: ({ row }) => row.original.batch_id ? (
+          <button
+            onClick={() => setDeleteTarget({ batchId: row.original.batch_id, count: row.original.records_added, date: row.original.uploaded_at })}
+            className="text-xs text-red-400 border border-red-800/50 hover:bg-red-900/20 px-2 py-1 rounded transition-colors"
+          >
+            Delete Batch
+          </button>
+        ) : <span className="text-gray-700 text-xs">-</span>,
+      })
+    }
+    return cols
+  }, [profile?.role])
 
   return (
     <div className="space-y-4">
@@ -419,81 +513,45 @@ export default function AuditTrail() {
             </div>
           </div>
 
-          {/* Table */}
-          <div className="card p-0 overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr>
-                    {['Timestamp', 'User', 'Action', 'Table', 'Records', 'Details'].map(h => (
-                      <th key={h} className="table-header">{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {auditLoading ? (
-                    <tr><td colSpan={6} className="text-center py-12 text-gray-500">Loading...</td></tr>
-                  ) : visibleAuditRows.length === 0 ? (
-                    <tr><td colSpan={6} className="text-center py-12 text-gray-500">No audit events found</td></tr>
-                  ) : visibleAuditRows.map(row => (
-                    <React.Fragment key={row.id}>
-                      <tr className="hover:bg-gray-800/30 transition-colors">
-                        <td className="table-cell text-gray-400 text-xs whitespace-nowrap">
-                          {formatDateTime(row.created_at)}
-                        </td>
-                        <td className="table-cell text-gray-200">
-                          {row.profiles?.full_name ?? row.profiles?.username ?? <span className="text-gray-600">Unknown</span>}
-                        </td>
-                        <td className="table-cell">
-                          {row.action ? (
-                            <span className={`badge border ${ACTION_BADGE[row.action] ?? 'bg-gray-800 text-gray-400 border-gray-700'}`}>
-                              {row.action}
-                            </span>
-                          ) : '-'}
-                        </td>
-                        <td className="table-cell text-gray-400">{row.table_name ?? '-'}</td>
-                        <td className="table-cell text-gray-200 text-right">{row.record_count ?? '-'}</td>
-                        <td className="table-cell">
-                          {hasExpandable(row) ? (
-                            <button
-                              onClick={() => setExpandedRow(expandedRow === row.id ? null : row.id)}
-                              className="text-xs text-blue-400 hover:text-blue-300 transition-colors"
-                            >
-                              {expandedRow === row.id ? 'Hide' : 'Show'}
-                            </button>
-                          ) : <span className="text-gray-700">-</span>}
-                        </td>
-                      </tr>
-                      {expandedRow === row.id && (
-                        <tr className="bg-gray-900/50">
-                          <td colSpan={6} className="px-4 pb-3 pt-0">
-                            <AuditChangeDetail row={row} />
-                          </td>
-                        </tr>
-                      )}
-                    </React.Fragment>
-                  ))}
-                </tbody>
-              </table>
+          {/* Expanded row detail rendering */}
+          {visibleAuditRows.map(row => expandedRow === row.id && (
+            <div key={`detail-${row.id}`} className="card bg-gray-900/50">
+              <AuditChangeDetail row={row} />
             </div>
+          ))}
 
-            {auditPages > 1 && (
-              <div className="flex items-center justify-between px-4 py-3 border-t border-gray-800">
-                <p className="text-sm text-gray-400">
-                  Showing {auditPage * PAGE_SIZE + 1}-{Math.min((auditPage + 1) * PAGE_SIZE, auditTotal)} of {auditTotal.toLocaleString()}
-                </p>
-                <div className="flex items-center gap-2">
-                  <button onClick={() => setAuditPage(p => Math.max(0, p - 1))} disabled={auditPage === 0} className="btn-secondary py-1.5 px-3 disabled:opacity-40">
-                    <ChevronLeft size={16} />
-                  </button>
-                  <span className="text-sm text-gray-400">Page {auditPage + 1} of {auditPages}</span>
-                  <button onClick={() => setAuditPage(p => Math.min(auditPages - 1, p + 1))} disabled={auditPage >= auditPages - 1} className="btn-secondary py-1.5 px-3 disabled:opacity-40">
-                    <ChevronRight size={16} />
-                  </button>
-                </div>
-              </div>
-            )}
+          {/* EnterpriseTable */}
+          <div className="card p-0 overflow-hidden">
+            <EnterpriseTable
+              columns={auditColumns}
+              data={visibleAuditRows}
+              getRowId={(row) => String(row.id)}
+              enableGlobalFilter={false}
+              enableSorting={true}
+              enableExport={false}
+              enableColumnVisibility={false}
+              initialPageSize={50}
+              pageSizeOptions={[50]}
+              emptyMessage={auditLoading ? 'Loading...' : 'No audit events found'}
+            />
           </div>
+
+          {auditPages > 1 && (
+            <div className="flex items-center justify-between px-4 py-3">
+              <p className="text-sm text-gray-400">
+                Showing {auditPage * PAGE_SIZE + 1}-{Math.min((auditPage + 1) * PAGE_SIZE, auditTotal)} of {auditTotal.toLocaleString()}
+              </p>
+              <div className="flex items-center gap-2">
+                <button onClick={() => setAuditPage(p => Math.max(0, p - 1))} disabled={auditPage === 0} className="btn-secondary py-1.5 px-3 disabled:opacity-40">
+                  <ChevronLeft size={16} />
+                </button>
+                <span className="text-sm text-gray-400">Page {auditPage + 1} of {auditPages}</span>
+                <button onClick={() => setAuditPage(p => Math.min(auditPages - 1, p + 1))} disabled={auditPage >= auditPages - 1} className="btn-secondary py-1.5 px-3 disabled:opacity-40">
+                  <ChevronRight size={16} />
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -507,73 +565,36 @@ export default function AuditTrail() {
           </div>
 
           <div className="card p-0 overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr>
-                    {['File Names', 'Records Added', 'Records Skipped', 'Uploaded By', 'Uploaded At', 'Region', ...(profile?.role === 'Admin' ? ['Delete Batch'] : [])].map(h => (
-                      <th key={h} className="table-header">{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {uploadLoading ? (
-                    <tr><td colSpan={profile?.role === 'Admin' ? 7 : 6} className="text-center py-12 text-gray-500">Loading...</td></tr>
-                  ) : uploadRows.length === 0 ? (
-                    <tr><td colSpan={profile?.role === 'Admin' ? 7 : 6} className="text-center py-12 text-gray-500">No upload history found</td></tr>
-                  ) : uploadRows.map(row => (
-                    <tr key={row.id} className="hover:bg-gray-800/30 transition-colors">
-                      <td className="table-cell text-gray-200 max-w-xs truncate">
-                        {Array.isArray(row.file_names)
-                          ? row.file_names.join(', ')
-                          : (row.file_names ?? '-')}
-                      </td>
-                      <td className="table-cell text-green-400 text-right font-medium">
-                        {(row.records_added ?? 0).toLocaleString()}
-                      </td>
-                      <td className="table-cell text-amber-400 text-right">
-                        {(row.records_skipped ?? 0).toLocaleString()}
-                      </td>
-                      <td className="table-cell text-gray-200">
-                        {row.profiles?.full_name ?? row.profiles?.username ?? <span className="text-gray-600">Unknown</span>}
-                      </td>
-                      <td className="table-cell text-gray-400 text-xs whitespace-nowrap">
-                        {formatDateTime(row.uploaded_at)}
-                      </td>
-                      <td className="table-cell text-gray-400">{row.region ?? '-'}</td>
-                      {profile?.role === 'Admin' && (
-                        <td className="table-cell">
-                          {row.batch_id ? (
-                            <button onClick={() => setDeleteTarget({ batchId: row.batch_id, count: row.records_added, date: row.uploaded_at })}
-                              className="text-xs text-red-400 border border-red-800/50 hover:bg-red-900/20 px-2 py-1 rounded transition-colors">
-                              Delete Batch
-                            </button>
-                          ) : <span className="text-gray-700 text-xs">-</span>}
-                        </td>
-                      )}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-
-            {uploadPages > 1 && (
-              <div className="flex items-center justify-between px-4 py-3 border-t border-gray-800">
-                <p className="text-sm text-gray-400">
-                  Showing {uploadPage * PAGE_SIZE + 1}-{Math.min((uploadPage + 1) * PAGE_SIZE, uploadTotal)} of {uploadTotal.toLocaleString()}
-                </p>
-                <div className="flex items-center gap-2">
-                  <button onClick={() => setUploadPage(p => Math.max(0, p - 1))} disabled={uploadPage === 0} className="btn-secondary py-1.5 px-3 disabled:opacity-40">
-                    <ChevronLeft size={16} />
-                  </button>
-                  <span className="text-sm text-gray-400">Page {uploadPage + 1} of {uploadPages}</span>
-                  <button onClick={() => setUploadPage(p => Math.min(uploadPages - 1, p + 1))} disabled={uploadPage >= uploadPages - 1} className="btn-secondary py-1.5 px-3 disabled:opacity-40">
-                    <ChevronRight size={16} />
-                  </button>
-                </div>
-              </div>
-            )}
+            <EnterpriseTable
+              columns={uploadColumns}
+              data={uploadRows}
+              getRowId={(row) => String(row.id)}
+              enableGlobalFilter={false}
+              enableSorting={true}
+              enableExport={false}
+              enableColumnVisibility={false}
+              initialPageSize={50}
+              pageSizeOptions={[50]}
+              emptyMessage={uploadLoading ? 'Loading...' : 'No upload history found'}
+            />
           </div>
+
+          {uploadPages > 1 && (
+            <div className="flex items-center justify-between px-4 py-3">
+              <p className="text-sm text-gray-400">
+                Showing {uploadPage * PAGE_SIZE + 1}-{Math.min((uploadPage + 1) * PAGE_SIZE, uploadTotal)} of {uploadTotal.toLocaleString()}
+              </p>
+              <div className="flex items-center gap-2">
+                <button onClick={() => setUploadPage(p => Math.max(0, p - 1))} disabled={uploadPage === 0} className="btn-secondary py-1.5 px-3 disabled:opacity-40">
+                  <ChevronLeft size={16} />
+                </button>
+                <span className="text-sm text-gray-400">Page {uploadPage + 1} of {uploadPages}</span>
+                <button onClick={() => setUploadPage(p => Math.min(uploadPages - 1, p + 1))} disabled={uploadPage >= uploadPages - 1} className="btn-secondary py-1.5 px-3 disabled:opacity-40">
+                  <ChevronRight size={16} />
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
 

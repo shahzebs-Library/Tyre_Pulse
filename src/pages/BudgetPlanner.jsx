@@ -14,6 +14,7 @@ import {
 import { Bar, Line, Doughnut } from 'react-chartjs-2'
 import PageHeader from '../components/ui/PageHeader'
 import BudgetTabs from '../components/budgets/BudgetTabs'
+import EnterpriseTable from '../components/ui/EnterpriseTable'
 import { fetchAllPages } from '../lib/fetchAll'
 import {
   DollarSign, TrendingUp, TrendingDown, AlertTriangle, CheckCircle,
@@ -774,6 +775,38 @@ export default function BudgetPlanner() {
     ? <ArrowDownRight className="w-4 h-4 text-green-400 inline" />
     : <ArrowUpRight className="w-4 h-4 text-red-400 inline" />
 
+  // Brand analysis columns for EnterpriseTable
+  const brandColumns = useMemo(() => [
+    { id: 'brand', header: t('budgetplanner.brand.columns.brand'), accessorFn: r => r.brand, size: 140,
+      cell: ({ getValue }) => <span className="text-[var(--text-primary)] font-medium">{getValue()}</span>,
+    },
+    { id: 'thisYear', header: t('budgetplanner.brand.columns.thisYear'), accessorFn: r => r.thisYear, size: 120, meta: { align: 'right' },
+      cell: ({ getValue }) => <span className="text-blue-400">{fmt(getValue(), activeCurrency)}</span>,
+    },
+    { id: 'lastYear', header: t('budgetplanner.brand.columns.lastYear'), accessorFn: r => r.lastYear, size: 120, meta: { align: 'right' },
+      cell: ({ getValue }) => <span className="text-[var(--text-muted)]">{fmt(getValue(), activeCurrency)}</span>,
+    },
+    { id: 'change', header: t('budgetplanner.brand.columns.change'), accessorFn: r => r.change, size: 100, meta: { align: 'right' },
+      cell: ({ getValue }) => {
+        const v = getValue()
+        return v != null
+          ? <span className={`font-medium ${v > 0 ? 'text-red-400' : 'text-green-400'}`}>{(v > 0 ? '+' : '') + fmtPct(v)}</span>
+          : <span className="text-[var(--text-muted)]">{t('budgetplanner.na')}</span>
+      },
+    },
+    { id: 'cpk', header: t('budgetplanner.brand.columns.cpk'), accessorFn: r => r.cpk, size: 120, meta: { align: 'right' },
+      cell: ({ getValue }) => <span className="text-[var(--text-secondary)]">{fmtCpk(getValue(), activeCurrency)}</span>,
+    },
+    { id: 'cpkChange', header: t('budgetplanner.brand.columns.cpkDelta'), accessorFn: r => r.cpkChange, size: 100, meta: { align: 'right' },
+      cell: ({ getValue }) => {
+        const v = getValue()
+        return v != null
+          ? <span className={`font-medium ${v > 0 ? 'text-red-400' : 'text-green-400'}`}>{(v > 0 ? '+' : '') + fmtPct(v)}</span>
+          : <span className="text-[var(--text-muted)]">{t('budgetplanner.na')}</span>
+      },
+    },
+  ], [activeCurrency, t])
+
   if (loading || budgetsLoading) return (
     <div className="flex items-center justify-center h-96">
       <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
@@ -1327,43 +1360,18 @@ export default function BudgetPlanner() {
               {t('budgetplanner.brand.analysis')}
             </h2>
           </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-[var(--input-border)]">
-                  {[
-                    t('budgetplanner.brand.columns.brand'),
-                    t('budgetplanner.brand.columns.thisYear'),
-                    t('budgetplanner.brand.columns.lastYear'),
-                    t('budgetplanner.brand.columns.change'),
-                    t('budgetplanner.brand.columns.cpk'),
-                    t('budgetplanner.brand.columns.cpkDelta'),
-                  ].map(h => (
-                    <th key={h} className="text-left text-[var(--text-muted)] font-medium px-4 py-3 whitespace-nowrap">{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {brandData.slice(0, 10).map((b, i) => (
-                  <tr key={b.brand} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/30">
-                    <td className="px-4 py-2.5 text-[var(--text-primary)] font-medium">{b.brand}</td>
-                    <td className="px-4 py-2.5 text-blue-400">{fmt(b.thisYear, activeCurrency)}</td>
-                    <td className="px-4 py-2.5 text-[var(--text-muted)]">{fmt(b.lastYear, activeCurrency)}</td>
-                    <td className={`px-4 py-2.5 font-medium ${b.change == null ? 'text-[var(--text-muted)]' : b.change > 0 ? 'text-red-400' : 'text-green-400'}`}>
-                      {b.change != null ? (b.change > 0 ? '+' : '') + fmtPct(b.change) : t('budgetplanner.na')}
-                    </td>
-                    <td className="px-4 py-2.5 text-[var(--text-secondary)]">{fmtCpk(b.cpk, activeCurrency)}</td>
-                    <td className={`px-4 py-2.5 font-medium ${b.cpkChange == null ? 'text-[var(--text-muted)]' : b.cpkChange > 0 ? 'text-red-400' : 'text-green-400'}`}>
-                      {b.cpkChange != null ? (b.cpkChange > 0 ? '+' : '') + fmtPct(b.cpkChange) : t('budgetplanner.na')}
-                    </td>
-                  </tr>
-                ))}
-                {brandData.length === 0 && (
-                  <tr><td colSpan={6} className="text-center text-[var(--text-dim)] py-8">{t('budgetplanner.brand.noDataAvailable')}</td></tr>
-                )}
-              </tbody>
-            </table>
-          </div>
+          <EnterpriseTable
+            columns={brandColumns}
+            data={brandData.slice(0, 10)}
+            getRowId={(row) => row.brand}
+            enableGlobalFilter={false}
+            enableSorting={false}
+            enableExport={false}
+            enableColumnVisibility={false}
+            initialPageSize={10}
+            pageSizeOptions={[10]}
+            emptyMessage={t('budgetplanner.brand.noDataAvailable')}
+          />
         </motion.div>
       </div>
 

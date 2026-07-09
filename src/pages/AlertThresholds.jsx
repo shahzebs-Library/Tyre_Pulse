@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import {
-  Bell, BellOff, Plus, Edit2, Trash2, Mail, MailOff,
+  Bell, Plus, Edit2, Trash2, Mail,
   CheckCircle, XCircle, Clock, Tag, Layers, Zap,
   ChevronRight, AlertTriangle, Gauge, Calendar, DollarSign,
   Search, Filter, X, Save, Loader2, ToggleLeft, ToggleRight,
@@ -201,17 +201,11 @@ function ThresholdCard({ threshold, onEdit, onDelete, onToggle }) {
       <div className="px-4 py-2.5 border-t border-[var(--input-border)]/60 flex items-center justify-between gap-2">
         {/* Notification methods */}
         <div className="flex items-center gap-2">
-          <span title={threshold.notify_email ? 'Email on' : 'Email off'}>
-            {threshold.notify_email
-              ? <Mail className="w-3.5 h-3.5 text-blue-400" />
-              : <MailOff className="w-3.5 h-3.5 text-[var(--text-dim)]" />
-            }
+<span title={threshold.notify_email ? 'Email on' : 'Email off'}>
+            <Mail className={`w-3.5 h-3.5 ${threshold.notify_email ? 'text-blue-400' : 'text-[var(--text-dim)]'}`} />
           </span>
           <span title={threshold.notify_in_app ? 'In-app on' : 'In-app off'}>
-            {threshold.notify_in_app
-              ? <Bell className="w-3.5 h-3.5 text-orange-400" />
-              : <BellOff className="w-3.5 h-3.5 text-[var(--text-dim)]" />
-            }
+            <Bell className={`w-3.5 h-3.5 ${threshold.notify_in_app ? 'text-orange-400' : 'text-[var(--text-dim)]'}`} />
           </span>
           <span className="text-[var(--text-dim)] text-xs mx-1">|</span>
           <span className="text-[var(--text-muted)] text-xs">

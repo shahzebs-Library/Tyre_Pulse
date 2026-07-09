@@ -1,11 +1,12 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import {
   DollarSign, Zap, TrendingUp, AlertCircle, BarChart2,
-  ChevronDown, RefreshCw, Calendar, User, Globe,
+  ChevronDown, RefreshCw,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import PageHeader from '../components/ui/PageHeader'
+import EnterpriseTable from '../components/ui/EnterpriseTable'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -77,14 +78,14 @@ function groupByFeature(logs) {
 
 function StatCard({ label, value, sub, icon: Icon, color, bg }) {
   return (
-    <div className="bg-gray-900 border border-gray-800 rounded-xl p-5 flex items-center gap-4">
+    <div className="bg-[var(--surface-2)] border border-[var(--border-dim)] rounded-xl p-5 flex items-center gap-4">
       <div className={`w-11 h-11 rounded-xl ${bg} flex items-center justify-center flex-shrink-0`}>
         <Icon className={`w-5 h-5 ${color}`} />
       </div>
       <div className="min-w-0">
-        <p className="text-2xl font-bold text-white leading-tight">{value}</p>
-        <p className="text-xs text-gray-500 mt-0.5">{label}</p>
-        {sub && <p className="text-xs text-gray-600 mt-0.5">{sub}</p>}
+        <p className="text-2xl font-bold text-[var(--text-primary)] leading-tight">{value}</p>
+        <p className="text-xs text-[var(--text-muted)] mt-0.5">{label}</p>
+        {sub && <p className="text-xs text-[var(--text-muted)] mt-0.5">{sub}</p>}
       </div>
     </div>
   )
@@ -169,6 +170,70 @@ export default function AiCostMonitor() {
   }
   const topSites = Object.values(userMap).sort((a, b) => b.cost - a.cost).slice(0, 8)
 
+  // EnterpriseTable columns for the log table
+  const logColumns = useMemo(() => [
+    {
+      id: 'created_at',
+      header: 'Timestamp',
+      accessorFn: row => new Date(row.created_at).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }),
+      size: 140,
+    },
+    {
+      id: 'model',
+      header: 'Model',
+      accessorFn: row => row.model ?? '-',
+      size: 150,
+      meta: { filterVariant: 'select' },
+    },
+    {
+      id: 'feature',
+      header: 'Feature',
+      accessorFn: row => row.feature ?? 'unknown',
+      size: 100,
+      meta: {
+        filterVariant: 'select',
+        exportValue: row => row.feature ?? 'unknown',
+      },
+      cell: ({ getValue }) => {
+        const val = getValue()
+        return (
+          <span className="px-2 py-0.5 rounded-full text-xs font-medium" style={{ backgroundColor: (FEATURE_COLORS[val] ?? FEATURE_COLORS.other) + '20', color: FEATURE_COLORS[val] ?? FEATURE_COLORS.other }}>
+            {val}
+          </span>
+        )
+      },
+    },
+    {
+      id: 'prompt_tokens',
+      header: 'Prompt',
+      accessorFn: row => formatTokens(row.prompt_tokens ?? 0),
+      size: 80,
+      meta: { align: 'right' },
+    },
+    {
+      id: 'completion_tokens',
+      header: 'Completion',
+      accessorFn: row => formatTokens(row.completion_tokens ?? 0),
+      size: 100,
+      meta: { align: 'right' },
+    },
+    {
+      id: 'cost',
+      header: 'Cost',
+      accessorFn: row => estimateCost(row),
+      size: 90,
+      meta: { align: 'right' },
+      cell: ({ getValue }) => <span className="text-green-400 font-medium">{formatUSD(getValue())}</span>,
+      sortingFn: (a, b) => estimateCost(a.original) - estimateCost(b.original),
+    },
+    {
+      id: 'site',
+      header: 'Site',
+      accessorFn: row => row.site ?? '-',
+      size: 100,
+    },
+  ], [])
+
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
@@ -183,7 +248,7 @@ export default function AiCostMonitor() {
           <button
             key={r.days}
             onClick={() => setRangeDays(r.days)}
-            className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${rangeDays === r.days ? 'bg-green-500 text-white' : 'bg-gray-900 text-gray-400 border border-gray-700 hover:border-gray-500'}`}
+            className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${rangeDays === r.days ? 'bg-green-500 text-white' : 'bg-[var(--surface-2)] text-[var(--text-muted)] border border-[var(--border-dim)] hover:border-[var(--accent)]'}`}
           >
             {r.label}
           </button>
@@ -192,30 +257,30 @@ export default function AiCostMonitor() {
         {allFeatures.length > 1 && (
           <div className="relative">
             <select
-              className="appearance-none bg-gray-900 border border-gray-700 rounded-lg pl-3 pr-8 py-2 text-sm text-white focus:outline-none focus:border-green-500 transition-colors"
+              className="appearance-none bg-[var(--surface-2)] border border-[var(--border-dim)] rounded-lg pl-3 pr-8 py-2 text-sm text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)] transition-colors"
               value={filterFeature} onChange={e => setFilterFeature(e.target.value)}
             >
               <option value="all">All Features</option>
               {allFeatures.map(f => <option key={f} value={f}>{f}</option>)}
             </select>
-            <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-500 pointer-events-none" />
+            <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[var(--text-muted)] pointer-events-none" />
           </div>
         )}
 
         {allModels.length > 1 && (
           <div className="relative">
             <select
-              className="appearance-none bg-gray-900 border border-gray-700 rounded-lg pl-3 pr-8 py-2 text-sm text-white focus:outline-none focus:border-green-500 transition-colors"
+              className="appearance-none bg-[var(--surface-2)] border border-[var(--border-dim)] rounded-lg pl-3 pr-8 py-2 text-sm text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)] transition-colors"
               value={filterModel} onChange={e => setFilterModel(e.target.value)}
             >
               <option value="all">All Models</option>
               {allModels.map(m => <option key={m} value={m}>{m}</option>)}
             </select>
-            <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-500 pointer-events-none" />
+            <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[var(--text-muted)] pointer-events-none" />
           </div>
         )}
 
-        <button onClick={fetchLogs} className="ml-auto p-2 rounded-lg bg-gray-900 border border-gray-700 text-gray-400 hover:border-gray-500 hover:text-white transition-colors">
+        <button onClick={fetchLogs} className="ml-auto p-2 rounded-lg bg-[var(--surface-2)] border border-[var(--border-dim)] text-[var(--text-muted)] hover:border-[var(--accent)] hover:text-[var(--text-primary)] transition-colors">
           <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
         </button>
       </div>
@@ -224,7 +289,7 @@ export default function AiCostMonitor() {
         <div className="flex items-center gap-2 text-red-400 text-sm bg-red-400/10 border border-red-400/20 rounded-xl px-4 py-3">
           <AlertCircle className="w-4 h-4" />{error}
           {error.includes('does not exist') && (
-            <span className="ml-2 text-gray-500">- Apply MIGRATIONS_V44 to create the ai_token_logs table.</span>
+            <span className="ml-2 text-[var(--text-muted)]">- Apply MIGRATIONS_V44 to create the ai_token_logs table.</span>
           )}
         </div>
       )}
@@ -238,25 +303,25 @@ export default function AiCostMonitor() {
       </div>
 
       {totalCalls === 0 && !loading ? (
-        <div className="text-center py-16 text-gray-500 bg-gray-900 border border-gray-800 rounded-2xl">
+        <div className="text-center py-16 text-[var(--text-muted)] bg-[var(--surface-2)] border border-[var(--border-dim)] rounded-2xl">
           <DollarSign className="w-10 h-10 mx-auto mb-3 opacity-30" />
-          <p className="font-medium text-gray-400">No AI usage data yet</p>
+          <p className="font-medium text-[var(--text-secondary)]">No AI usage data yet</p>
           <p className="text-sm mt-1">Token logs will appear here once the chat-ai edge function is updated to write to ai_token_logs.</p>
         </div>
       ) : (
         <>
           {/* Daily token sparkline */}
           {dailyData.length > 0 && (
-            <div className="bg-gray-900 border border-gray-800 rounded-2xl p-5">
+            <div className="bg-[var(--surface-2)] border border-[var(--border-dim)] rounded-2xl p-5">
               <div className="flex items-center justify-between mb-3">
-                <h3 className="text-white font-semibold">Daily Token Usage</h3>
-                <div className="flex items-center gap-4 text-xs text-gray-500">
+                <h3 className="text-[var(--text-primary)] font-semibold">Daily Token Usage</h3>
+                <div className="flex items-center gap-4 text-xs text-[var(--text-muted)]">
                   <span>{dailyData[0]?.date?.slice(5)} → {dailyData[dailyData.length - 1]?.date?.slice(5)}</span>
                   <span className="text-green-400 font-medium">{formatTokens(totalTokens)} total</span>
                 </div>
               </div>
               <Sparkline data={dailyData} dataKey="tokens" color="#16a34a" height={72} />
-              <div className="flex justify-between text-gray-600 text-xs mt-1 px-0.5">
+              <div className="flex justify-between text-[var(--text-muted)] text-xs mt-1 px-0.5">
                 {dailyData.filter((_, i) => i === 0 || i === Math.floor(dailyData.length / 2) || i === dailyData.length - 1)
                   .map(d => <span key={d.date}>{d.date.slice(5)}</span>)}
               </div>
@@ -265,10 +330,9 @@ export default function AiCostMonitor() {
 
           {/* Cost by feature + site breakdown */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            {/* Feature breakdown */}
             {featureData.length > 0 && (
-              <div className="bg-gray-900 border border-gray-800 rounded-2xl p-5">
-                <h3 className="text-white font-semibold mb-4">Cost by Feature</h3>
+              <div className="bg-[var(--surface-2)] border border-[var(--border-dim)] rounded-2xl p-5">
+                <h3 className="text-[var(--text-primary)] font-semibold mb-4">Cost by Feature</h3>
                 <div className="space-y-3">
                   {featureData.map(f => {
                     const pct = totalCost > 0 ? (f.cost / totalCost) * 100 : 0
@@ -276,13 +340,13 @@ export default function AiCostMonitor() {
                     return (
                       <div key={f.feature}>
                         <div className="flex items-center justify-between text-sm mb-1.5">
-                          <span className="text-gray-300 font-medium capitalize">{f.feature}</span>
-                          <div className="flex items-center gap-3 text-gray-400 text-xs">
+                          <span className="text-[var(--text-secondary)] font-medium capitalize">{f.feature}</span>
+                          <div className="flex items-center gap-3 text-[var(--text-muted)] text-xs">
                             <span>{formatTokens(f.tokens)} tokens</span>
-                            <span className="font-semibold text-white">{formatUSD(f.cost)}</span>
+                            <span className="font-semibold text-[var(--text-primary)]">{formatUSD(f.cost)}</span>
                           </div>
                         </div>
-                        <div className="w-full bg-gray-800 rounded-full h-2">
+                        <div className="w-full bg-[var(--input-bg)] rounded-full h-2">
                           <div className="h-2 rounded-full transition-all" style={{ width: `${pct.toFixed(1)}%`, backgroundColor: color }} />
                         </div>
                       </div>
@@ -292,20 +356,19 @@ export default function AiCostMonitor() {
               </div>
             )}
 
-            {/* Top sites by spend - CSS horizontal bars */}
             {topSites.length > 0 && (
-              <div className="bg-gray-900 border border-gray-800 rounded-2xl p-5">
-                <h3 className="text-white font-semibold mb-4">Spend by Site</h3>
+              <div className="bg-[var(--surface-2)] border border-[var(--border-dim)] rounded-2xl p-5">
+                <h3 className="text-[var(--text-primary)] font-semibold mb-4">Spend by Site</h3>
                 <div className="space-y-3">
                   {topSites.map(s => {
                     const pct = topSites[0].cost > 0 ? (s.cost / topSites[0].cost) * 100 : 0
                     return (
                       <div key={s.site}>
                         <div className="flex items-center justify-between text-sm mb-1.5">
-                          <span className="text-gray-300 text-xs font-medium truncate max-w-36">{s.site}</span>
+                          <span className="text-[var(--text-secondary)] text-xs font-medium truncate max-w-36">{s.site}</span>
                           <span className="text-green-400 text-xs font-semibold">{formatUSD(s.cost)}</span>
                         </div>
-                        <div className="w-full bg-gray-800 rounded-full h-2">
+                        <div className="w-full bg-[var(--input-bg)] rounded-full h-2">
                           <div className="h-2 rounded-full bg-green-500 transition-all" style={{ width: `${pct.toFixed(1)}%` }} />
                         </div>
                       </div>
@@ -316,47 +379,29 @@ export default function AiCostMonitor() {
             )}
           </div>
 
-          {/* Recent log table */}
-          <div className="bg-gray-900 border border-gray-800 rounded-2xl overflow-hidden">
-            <div className="px-5 py-4 border-b border-gray-800 flex items-center justify-between">
-              <h3 className="text-white font-semibold">Recent Usage Log</h3>
-              <span className="text-gray-500 text-sm">{logs.length.toLocaleString()} records</span>
+          {/* Recent usage log - EnterpriseTable */}
+          <div className="bg-[var(--surface-2)] border border-[var(--border-dim)] rounded-2xl overflow-hidden">
+            <div className="px-5 py-4 border-b border-[var(--border-dim)] flex items-center justify-between">
+              <h3 className="text-[var(--text-primary)] font-semibold">Recent Usage Log</h3>
+              <span className="text-[var(--text-muted)] text-sm">{logs.length.toLocaleString()} records</span>
             </div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-gray-800">
-                    {['Timestamp', 'Model', 'Feature', 'Prompt', 'Completion', 'Cost', 'Site'].map(h => (
-                      <th key={h} className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-800">
-                  {logs.slice(0, 50).map(log => (
-                    <tr key={log.id} className="hover:bg-gray-800/40 transition-colors">
-                      <td className="px-4 py-3 text-gray-400 text-xs whitespace-nowrap">
-                        {new Date(log.created_at).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                      </td>
-                      <td className="px-4 py-3 text-gray-300 text-xs max-w-32 truncate">{log.model}</td>
-                      <td className="px-4 py-3">
-                        <span className="px-2 py-0.5 rounded-full text-xs font-medium" style={{ backgroundColor: (FEATURE_COLORS[log.feature] ?? FEATURE_COLORS.other) + '20', color: FEATURE_COLORS[log.feature] ?? FEATURE_COLORS.other }}>
-                          {log.feature ?? 'unknown'}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-gray-400 text-xs text-right">{formatTokens(log.prompt_tokens ?? 0)}</td>
-                      <td className="px-4 py-3 text-gray-400 text-xs text-right">{formatTokens(log.completion_tokens ?? 0)}</td>
-                      <td className="px-4 py-3 text-green-400 text-xs font-medium text-right">{formatUSD(estimateCost(log))}</td>
-                      <td className="px-4 py-3 text-gray-500 text-xs">{log.site ?? '-'}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              {logs.length > 50 && (
-                <div className="px-5 py-3 border-t border-gray-800 text-gray-500 text-xs">
-                  Showing 50 of {logs.length.toLocaleString()} records - narrow the date range or filter to see more.
-                </div>
-              )}
-            </div>
+            <EnterpriseTable
+              columns={logColumns}
+              data={logs}
+              loading={loading}
+              error={error}
+              onRetry={fetchLogs}
+              enableGlobalFilter={true}
+              searchPlaceholder="Search logs…"
+              enableColumnFilters={true}
+              enableSorting={true}
+              enableExport={true}
+              exportFileName="ai_cost_logs"
+              initialPageSize={25}
+              pageSizeOptions={[25, 50, 100]}
+              emptyMessage="No logs match your filters"
+              skeletonRows={8}
+            />
           </div>
         </>
       )}

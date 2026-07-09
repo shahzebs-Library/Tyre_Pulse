@@ -16,6 +16,7 @@ import {
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
 import SegmentedControl from '../components/ui/SegmentedControl'
+import EnterpriseTable from '../components/ui/EnterpriseTable'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend)
 
@@ -417,74 +418,80 @@ export default function Comparison() {
             </div>
           </div>
 
-          {/* Table */}
-          <div className="card p-0 overflow-hidden">
-            <div className="flex items-center justify-between px-4 py-3 border-b border-gray-800">
-              <h3 className="text-sm font-semibold text-white">
-                {dimension === 'overall' ? t('comparison.table.monthlyBreakdown') : dimension === 'site' ? t('comparison.table.siteBreakdown') : t('comparison.table.brandBreakdown')}
-                <span className="text-gray-500 font-normal ml-2">{t('comparison.table.rows', { count: tableRows.length })}</span>
-              </h3>
-              <div className="flex gap-2">
-                <button onClick={doExcelExport} className="btn-secondary flex items-center gap-1.5 text-xs px-2.5 py-1.5">
-                  <Download size={12} /> {t('comparison.actions.excel')}
-                </button>
-                <button onClick={doPdfExport} className="btn-secondary flex items-center gap-1.5 text-xs px-2.5 py-1.5">
-                  <FileText size={12} /> {t('comparison.actions.pdf')}
-                </button>
-              </div>
-            </div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead className="bg-gray-800/50">
-                  <tr className="text-left text-gray-400 text-xs">
-                    <th className="px-4 py-2.5">{dimension === 'overall' ? t('comparison.table.month') : dimension === 'site' ? t('comparison.table.site') : t('comparison.table.brand')}</th>
-                    <th className="px-3 py-2.5 text-green-400">{t('comparison.periodAYear', { year: periodA.year })}</th>
-                    <th className="px-3 py-2.5 text-blue-400">{t('comparison.periodBYear', { year: periodB.year })}</th>
-                    <th className="px-3 py-2.5">{t('comparison.table.difference')}</th>
-                    <th className="px-3 py-2.5">{t('comparison.table.pctChange')}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {tableRows.map((r, idx) => (
-                    <tr key={idx} className="border-b border-gray-800/50 hover:bg-gray-800/20 transition-colors">
-                      <td className="px-4 py-2 text-white font-medium">{r.label}</td>
-                      <td className="px-3 py-2 text-gray-300">
-                        {metric === 'cost' ? formatCurrencyCompact(r.a, activeCurrency) : r.a.toLocaleString()}
-                      </td>
-                      <td className="px-3 py-2 text-gray-300">
-                        {metric === 'cost' ? formatCurrencyCompact(r.b, activeCurrency) : r.b.toLocaleString()}
-                      </td>
-                      <td className={`px-3 py-2 font-semibold ${r.diff > 0 ? 'text-red-400' : r.diff < 0 ? 'text-green-400' : 'text-gray-500'}`}>
-                        {r.diff > 0 ? '+' : ''}{metric === 'cost' ? formatCurrencyCompact(r.diff, activeCurrency) : r.diff.toLocaleString()}
-                      </td>
-                      <td className="px-3 py-2">
-                        <DeltaBadge diff={r.diff} pct={Math.abs(r.pct)} />
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-                {totals && (
-                  <tfoot className="bg-gray-800/60 font-semibold text-sm border-t border-gray-700">
-                    <tr>
-                      <td className="px-4 py-2.5 text-white">{t('comparison.table.total')}</td>
-                      <td className="px-3 py-2.5 text-green-300">
-                        {metric === 'cost' ? formatCurrencyCompact(totals.a, activeCurrency) : totals.a.toLocaleString()}
-                      </td>
-                      <td className="px-3 py-2.5 text-blue-300">
-                        {metric === 'cost' ? formatCurrencyCompact(totals.b, activeCurrency) : totals.b.toLocaleString()}
-                      </td>
-                      <td className={`px-3 py-2.5 ${totals.diff > 0 ? 'text-red-400' : totals.diff < 0 ? 'text-green-400' : 'text-gray-500'}`}>
-                        {totals.diff > 0 ? '+' : ''}{metric === 'cost' ? formatCurrencyCompact(totals.diff, activeCurrency) : totals.diff.toLocaleString()}
-                      </td>
-                      <td className="px-3 py-2.5">
-                        <DeltaBadge diff={totals.diff} pct={Math.abs(totals.pct)} />
-                      </td>
-                    </tr>
-                  </tfoot>
-                )}
-              </table>
-            </div>
-          </div>
+          {/* Table - EnterpriseTable */}
+          {(() => {
+            const labelHeader = dimension === 'overall' ? t('comparison.table.month') : dimension === 'site' ? t('comparison.table.site') : t('comparison.table.brand')
+            const periodAHeader = t('comparison.periodAYear', { year: periodA.year })
+            const periodBHeader = t('comparison.periodBYear', { year: periodB.year })
+            const tableData = totals ? [...tableRows, { ...totals, _isTotal: true }] : tableRows
+            const compColumns = [
+              {
+                id: 'label',
+                header: labelHeader,
+                accessorFn: r => r.label,
+                size: 140,
+                cell: ({ row }) => <span className={row.original._isTotal ? 'font-bold text-white' : 'font-medium text-white'}>{row.original.label}</span>,
+              },
+              {
+                id: 'a',
+                header: periodAHeader,
+                accessorFn: r => metric === 'cost' ? formatCurrencyCompact(r.a, activeCurrency) : r.a.toLocaleString(),
+                size: 120,
+                meta: { align: 'right' },
+                cell: ({ row }) => <span className={row.original._isTotal ? 'text-green-300 font-semibold' : 'text-gray-300'}>{metric === 'cost' ? formatCurrencyCompact(row.original.a, activeCurrency) : row.original.a.toLocaleString()}</span>,
+              },
+              {
+                id: 'b',
+                header: periodBHeader,
+                accessorFn: r => metric === 'cost' ? formatCurrencyCompact(r.b, activeCurrency) : r.b.toLocaleString(),
+                size: 120,
+                meta: { align: 'right' },
+                cell: ({ row }) => <span className={row.original._isTotal ? 'text-blue-300 font-semibold' : 'text-gray-300'}>{metric === 'cost' ? formatCurrencyCompact(row.original.b, activeCurrency) : row.original.b.toLocaleString()}</span>,
+              },
+              {
+                id: 'diff',
+                header: t('comparison.table.difference'),
+                accessorFn: r => r.diff,
+                size: 120,
+                meta: { align: 'right' },
+                cell: ({ getValue, row }) => {
+                  const val = getValue()
+                  const color = val > 0 ? 'text-red-400' : val < 0 ? 'text-green-400' : 'text-gray-500'
+                  const prefix = val > 0 ? '+' : ''
+                  return <span className={`font-semibold ${color}`}>{prefix}{metric === 'cost' ? formatCurrencyCompact(val, activeCurrency) : val.toLocaleString()}</span>
+                },
+              },
+              {
+                id: 'pct',
+                header: t('comparison.table.pctChange'),
+                accessorFn: r => r.pct,
+                size: 100,
+                cell: ({ getValue, row }) => <DeltaBadge diff={row.original.diff} pct={Math.abs(getValue())} />,
+              },
+            ]
+            return (
+              <EnterpriseTable
+                columns={compColumns}
+                data={tableData}
+                enableGlobalFilter={false}
+                enableColumnFilters={false}
+                enableSorting={false}
+                enableColumnVisibility={false}
+                enableExport={false}
+                className="border border-[var(--border-dim)]"
+                toolbarExtras={
+                  <div className="flex gap-2">
+                    <button onClick={doExcelExport} className="btn-secondary flex items-center gap-1.5 text-xs px-2.5 py-1.5">
+                      <Download size={12} /> {t('comparison.actions.excel')}
+                    </button>
+                    <button onClick={doPdfExport} className="btn-secondary flex items-center gap-1.5 text-xs px-2.5 py-1.5">
+                      <FileText size={12} /> {t('comparison.actions.pdf')}
+                    </button>
+                  </div>
+                }
+              />
+            )
+          })()}
         </>
       )}
 

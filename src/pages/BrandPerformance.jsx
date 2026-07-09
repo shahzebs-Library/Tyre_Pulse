@@ -7,7 +7,7 @@ import {
   PointElement, Title, Tooltip, Legend,
 } from 'chart.js'
 import { Bar, Line } from 'react-chartjs-2'
-import { Maximize2, X, BarChart2, Download, FileText, Search, Award, TrendingUp, TrendingDown, AlertTriangle, RefreshCw } from 'lucide-react'
+import { Maximize2, X, BarChart2, Download, FileText, Award, AlertTriangle, RefreshCw } from 'lucide-react'
 import { SkeletonCards, SkeletonChart } from '../components/ui/Skeleton'
 import { motion } from 'framer-motion'
 import PageHeader from '../components/ui/PageHeader'
@@ -16,6 +16,7 @@ import { ChartModal } from '../components/ChartModal'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import { formatCurrencyCompact } from '../lib/formatters'
 import { fetchAllPages } from '../lib/fetchAll'
+import EnterpriseTable from '../components/ui/EnterpriseTable'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, LineElement, PointElement, Title, Tooltip, Legend)
 
@@ -321,119 +322,108 @@ export default function BrandPerformance() {
         </div>
       </div>
 
-      {/* Ranking table */}
-      <div className="card p-0 overflow-hidden">
-        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-800 gap-3 flex-wrap">
-          <h3 className="text-sm font-medium text-gray-300">Brand Ranking Table</h3>
-          <div className="flex items-center gap-2 flex-wrap ml-auto">
-            <div className="relative">
-              <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-500" />
-              <input
-                className="input pl-7 text-xs py-1.5 w-36"
-                placeholder="Search brand..."
-                value={tableSearch}
-                onChange={e => setTableSearch(e.target.value)}
-              />
-            </div>
-            <button
-              onClick={() => exportToExcel(
-                metrics.map((b, i) => ({
-                  rank: i + 1, brand: b.brand, records: b.count,
-                  total_cost: b.totalCost, avg_cost: Math.round(b.avgCost),
-                  failure_rate: b.failureRate.toFixed(1) + '%',
-                  top_category: b.topCategory, risk_score: b.riskScore.toFixed(2),
-                })),
-                ['rank','brand','records','total_cost','avg_cost','failure_rate','top_category','risk_score'],
-                ['Rank','Brand','Records','Total Cost','Avg Cost','Failure Rate','Top Category','Risk Score'],
-                'TyrePulse_BrandPerformance'
-              )}
-              className="btn-secondary flex items-center gap-1.5 text-xs px-2.5 py-1.5"
-            >
-              <Download size={12} /> Excel
-            </button>
-            <button
-              onClick={() => exportToPdf(
-                metrics.map((b, i) => ({
-                  rank: i + 1, brand: b.brand, records: b.count,
-                  total_cost: formatCurrencyCompact(b.totalCost, activeCurrency),
-                  failure_rate: b.failureRate.toFixed(1) + '%',
-                  risk_score: b.riskScore.toFixed(2),
-                })),
-                [
-                  { key: 'rank',         header: '#' },
-                  { key: 'brand',        header: 'Brand' },
-                  { key: 'records',      header: 'Records' },
-                  { key: 'total_cost',   header: 'Total Cost' },
-                  { key: 'failure_rate', header: 'Failure Rate' },
-                  { key: 'risk_score',   header: 'Risk Score' },
-                ],
-                'Brand Performance Report',
-                'TyrePulse_BrandPerformance',
-                'landscape'
-              )}
-              className="btn-secondary flex items-center gap-1.5 text-xs px-2.5 py-1.5"
-            >
-              <FileText size={12} /> PDF
-            </button>
-          </div>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-gray-800/50">
-              <tr className="text-left text-gray-400 text-xs">
-                <th className="px-4 py-2.5">#</th>
-                <th className="px-3 py-2.5">Brand</th>
-                <th className="px-3 py-2.5 text-right">Records</th>
-                <th className="px-3 py-2.5 text-right">Total Cost</th>
-                <th className="px-3 py-2.5 text-right">Avg/Tyre</th>
-                <th className="px-3 py-2.5 text-right">Failure Rate</th>
-                <th className="px-3 py-2.5">Top Failure</th>
-                <th className="px-3 py-2.5 text-right">Risk Score</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredMetrics.map((b, i) => (
-                <tr
-                  key={b.brand}
-                  className="border-b border-gray-800/50 hover:bg-gray-800/30 cursor-pointer transition-colors"
-                  onClick={() => setSelected(selected === b.brand ? null : b.brand)}
-                >
-                  <td className="px-4 py-2 text-gray-500 text-xs">{metrics.indexOf(b) + 1}</td>
-                  <td className="px-3 py-2 font-medium text-white">{b.brand}</td>
-                  <td className="px-3 py-2 text-gray-300 text-right">{b.count}</td>
-                  <td className="px-3 py-2 text-gray-300 text-right">
-                    {formatCurrencyCompact(b.totalCost, activeCurrency)}
-                  </td>
-                  <td className="px-3 py-2 text-gray-300 text-right">
-                    {formatCurrencyCompact(b.avgCost, activeCurrency)}
-                  </td>
-                  <td className="px-3 py-2 text-right">
-                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
-                      b.failureRate > 30 ? 'bg-red-900/40 text-red-400' :
-                      b.failureRate > 15 ? 'bg-yellow-900/40 text-yellow-400' :
-                      'bg-green-900/40 text-green-400'
-                    }`}>
-                      {b.failureRate.toFixed(1)}%
-                    </span>
-                  </td>
-                  <td className="px-3 py-2 text-gray-400 text-xs">{b.topCategory}</td>
-                  <td className="px-3 py-2 text-right">
-                    <span className={`text-xs font-mono ${
-                      b.riskScore > 2 ? 'text-red-400' :
-                      b.riskScore > 1.5 ? 'text-yellow-400' : 'text-green-400'
-                    }`}>
-                      {b.riskScore.toFixed(2)}
-                    </span>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          {filteredMetrics.length === 0 && (
-            <div className="text-center py-8 text-gray-500 text-sm">No brands match "{tableSearch}"</div>
-          )}
-        </div>
-      </div>
+      {/* Ranking table - EnterpriseTable */}
+      {(() => {
+        const brandColumns = [
+          {
+            id: 'rank',
+            header: '#',
+            accessorFn: (_, i) => metrics.indexOf(_) + 1,
+            size: 40,
+            enableSorting: false,
+            meta: { align: 'center' },
+          },
+          {
+            id: 'brand',
+            header: 'Brand',
+            accessorFn: row => row.brand,
+            size: 120,
+            cell: ({ getValue }) => <span className="font-medium text-[var(--text-primary)]">{getValue()}</span>,
+          },
+          {
+            id: 'count',
+            header: 'Records',
+            accessorFn: row => row.count,
+            size: 80,
+            meta: { align: 'right' },
+          },
+          {
+            id: 'totalCost',
+            header: 'Total Cost',
+            accessorFn: row => formatCurrencyCompact(row.totalCost, activeCurrency),
+            size: 110,
+            meta: { align: 'right' },
+          },
+          {
+            id: 'avgCost',
+            header: 'Avg/Tyre',
+            accessorFn: row => formatCurrencyCompact(row.avgCost, activeCurrency),
+            size: 100,
+            meta: { align: 'right' },
+          },
+          {
+            id: 'failureRate',
+            header: 'Failure Rate',
+            accessorFn: row => row.failureRate,
+            size: 110,
+            meta: { align: 'right' },
+            cell: ({ getValue }) => {
+              const val = getValue()
+              return (
+                <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                  val > 30 ? 'bg-red-900/40 text-red-400' :
+                  val > 15 ? 'bg-yellow-900/40 text-yellow-400' :
+                  'bg-green-900/40 text-green-400'
+                }`}>
+                  {val.toFixed(1)}%
+                </span>
+              )
+            },
+            sortingFn: (a, b) => a.original.failureRate - b.original.failureRate,
+          },
+          {
+            id: 'topCategory',
+            header: 'Top Failure',
+            accessorFn: row => row.topCategory ?? '-',
+            size: 120,
+          },
+          {
+            id: 'riskScore',
+            header: 'Risk Score',
+            accessorFn: row => row.riskScore,
+            size: 100,
+            meta: { align: 'right' },
+            cell: ({ getValue }) => {
+              const val = getValue()
+              return (
+                <span className={`text-xs font-mono ${
+                  val > 2 ? 'text-red-400' :
+                  val > 1.5 ? 'text-yellow-400' : 'text-green-400'
+                }`}>
+                  {val.toFixed(2)}
+                </span>
+              )
+            },
+          },
+        ]
+        return (
+          <EnterpriseTable
+            columns={brandColumns}
+            data={filteredMetrics}
+            loading={false}
+            enableGlobalFilter={true}
+            searchPlaceholder="Search brand..."
+            enableSorting={true}
+            enableExport={true}
+            exportFileName="TyrePulse_BrandPerformance"
+            initialPageSize={25}
+            pageSizeOptions={[10, 25, 50]}
+            emptyMessage={`No brands match your filters`}
+            onRowClick={(row) => setSelected(selected === row.brand ? null : row.brand)}
+            enableRowSelection={false}
+          />
+        )
+      })()}
 
       {/* Drill-down panel */}
       {selected && <BrandDrillDown brand={selected} records={selectedData} />}

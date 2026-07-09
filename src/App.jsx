@@ -48,6 +48,7 @@ const FleetAnalytics         = lazy(() => import('./pages/FleetAnalytics'))
 const KpiScorecard           = lazy(() => import('./pages/KpiScorecard'))
 const Inspections            = lazy(() => import('./pages/Inspections'))
 const Alerts                 = lazy(() => import('./pages/Alerts'))
+const AlertThresholds        = lazy(() => import('./pages/AlertThresholds'))
 const Anomalies              = lazy(() => import('./pages/Anomalies'))
 const CountryComparison      = lazy(() => import('./pages/CountryComparison'))
 const VehicleHistory         = lazy(() => import('./pages/VehicleHistory'))
@@ -209,7 +210,8 @@ function MainApp() {
                       <Route path="/accidents"   element={<Safe><FlagRoute flag="accidents_module"><Accidents /></FlagRoute></Safe>} />
                       <Route path="/rca"         element={<Safe><ModuleRoute moduleKey="rca"><RcaRecords /></ModuleRoute></Safe>} />
                       <Route path="/inspections" element={<Safe><ModuleRoute moduleKey="inspections"><Inspections /></ModuleRoute></Safe>} />
-                      <Route path="/alerts"      element={<Safe><ModuleRoute moduleKey="alerts"><Alerts /></ModuleRoute></Safe>} />
+<Route path="/alerts"      element={<Safe><ModuleRoute moduleKey="alerts"><Alerts /></ModuleRoute></Safe>} />
+                      <Route path="/alert-thresholds" element={<Safe><ModuleRoute moduleKey="alerts"><AlertThresholds /></ModuleRoute></Safe>} />
                       <Route path="/fleet-master"         element={<Safe><ModuleRoute moduleKey="fleet_master"><FleetMaster /></ModuleRoute></Safe>} />
                       <Route path="/vehicle/:assetNo"     element={<Safe><FlagRoute flag="vehicle_360"><Vehicle360 /></FlagRoute></Safe>} />
                       <Route path="/reports"              element={<Safe><ModuleRoute moduleKey="reports"><Reports /></ModuleRoute></Safe>} />

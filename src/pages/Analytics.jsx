@@ -1,69 +1,29 @@
-import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
-import { motion } from 'framer-motion'
+import { useState, useEffect, useMemo, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
 import { useSettings } from '../contexts/SettingsContext'
 import { useLanguage } from '../contexts/LanguageContext'
-import {
-  computeSiteMetrics, computeBrandMetrics, computeAssetMetrics,
-  bucketByMonth, monthlyTrendWithForecast, sum, recordCost,
-} from '../lib/analyticsEngine'
-import { formatCurrencyCompact } from '../lib/formatters'
-import { fetchAllPages } from '../lib/fetchAll'
+import { computeBrandMetrics, computeSiteMetrics } from '../lib/analyticsEngine'
 import {
   Chart as ChartJS, CategoryScale, LinearScale, BarElement, LineElement,
-  PointElement, ArcElement, Title, Tooltip, Legend, Filler,
+  PointElement, Title, Tooltip, Legend,
 } from 'chart.js'
-import { Bar, Line, Doughnut } from 'react-chartjs-2'
-import { Maximize2, X, BarChart2, AlertTriangle, RefreshCw } from 'lucide-react'
-import { ChartModal } from '../components/ChartModal'
+import { Bar, Line } from 'react-chartjs-2'
+import { BarChart2, TrendingUp, AlertTriangle, Activity } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
-import SectionTabs, { ANALYTICS_TABS } from '../components/ui/SectionTabs'
 import PeriodFilter, { filterByPeriodValue } from '../components/ui/PeriodFilter'
+import { formatCurrencyCompact } from '../lib/formatters'
+import { fetchAllPages } from '../lib/fetchAll'
+import EnterpriseTable from '../components/ui/EnterpriseTable'
 
-ChartJS.register(CategoryScale, LinearScale, BarElement, LineElement,
-  PointElement, ArcElement, Title, Tooltip, Legend, Filler)
-
-const TABS = ['Cost by Site', 'Cost by Brand', 'Monthly Trend', 'Asset Breakdown']
-const TAB_KEYS = ['costBySite', 'costByBrand', 'monthlyTrend', 'assetBreakdown']
-
-const RISK_LEVELS = ['Low', 'Medium', 'High', 'Critical']
-
-const BAR_OPTS = (title, horizontal = false) => ({
-  responsive: true, maintainAspectRatio: false,
-  indexAxis: horizontal ? 'y' : 'x',
-  plugins: { legend: { display: false }, title: { display: false } },
-  scales: {
-    x: { grid: { color: '#1f2937' }, ticks: { color: '#9ca3af' } },
-    y: { grid: { color: '#1f2937' }, ticks: { color: '#9ca3af' } },
-  },
-})
-
-const LINE_OPTS = {
-  responsive: true, maintainAspectRatio: false,
-  plugins: { legend: { labels: { color: '#9ca3af' } } },
-  scales: {
-    x: { grid: { color: '#1f2937' }, ticks: { color: '#9ca3af' } },
-    y: { grid: { color: '#1f2937' }, ticks: { color: '#9ca3af' } },
-  },
-}
+ChartJS.register(CategoryScale, LinearScale, BarElement, LineElement, PointElement, Title, Tooltip, Legend)
 
 export default function Analytics() {
-  const { activeCountry, activeCurrency } = useSettings()
   const { t } = useLanguage()
-  const [records, setRecords]   = useState([])
-  const [loading, setLoading]   = useState(true)
-  const [error, setError]       = useState(null)
-  const [activeTab, setActiveTab] = useState(0)
-
-  // Filter state
-  const [period, setPeriod]           = useState({ mode: 'all' })
-  const [siteFilter, setSiteFilter]   = useState('')
-  const [brandFilter, setBrandFilter] = useState('')
-  const [riskLevels, setRiskLevels]   = useState([]) // empty = all
-
-  // Modal state
-  const [modalChart, setModalChart] = useState(null)
-  const chartRef = useRef(null)
+  const { activeCountry, activeCurrency } = useSettings()
+  const [records, setRecords] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
+  const [period, setPeriod] = useState({ mode: 'all' })
 
   const load = useCallback(async () => {
     setLoading(true); setError(null)
@@ -71,614 +31,208 @@ export default function Analytics() {
       const { data, error: e } = await fetchAllPages((from, to) => {
         let q = supabase
           .from('tyre_records')
-          .select('id,issue_date,brand,site,asset_no,category,risk_level,cost_per_tyre,qty,created_at')
-          .order('issue_date', { ascending: true })
+          .select('id,issue_date,brand,site,category,risk_level,cost_per_tyre,qty')
+          .order('issue_date')
         if (activeCountry !== 'All') q = q.eq('country', activeCountry)
         return q.range(from, to)
       })
       if (e) throw new Error(e.message || e)
       setRecords(data || [])
     } catch (err) {
-      setError(err.message || t('analytics.error.loadFailed'))
+      setError(err.message || 'Failed to load data.')
       setRecords([])
     } finally {
       setLoading(false)
     }
-  }, [activeCountry, t])
+  }, [activeCountry])
 
   useEffect(() => { load() }, [load])
 
-  const years = useMemo(() => {
-    const ys = new Set(records.map(r => r.issue_date ? new Date(r.issue_date).getFullYear() : null).filter(Boolean))
-    return [...ys].sort((a, b) => b - a)
-  }, [records])
+  const filtered = useMemo(() =>
+    filterByPeriodValue(records, period, 'issue_date'),
+    [records, period]
+  )
 
-  const uniqueSites = useMemo(() => {
-    const s = new Set(records.map(r => r.site).filter(Boolean))
-    return [...s].sort()
-  }, [records])
+  const totalCost = filtered.reduce((s, r) => s + (parseFloat(r.cost_per_tyre) || 0) * (r.qty || 1), 0)
+  const avgCost = filtered.length > 0 ? totalCost / filtered.length : 0
+  const highRiskCount = filtered.filter(r => ['High', 'Critical'].includes(r.risk_level)).length
 
-  const uniqueBrands = useMemo(() => {
-    const b = new Set(records.map(r => r.brand).filter(Boolean))
-    return [...b].sort()
-  }, [records])
-
-  const hasActiveFilter = period.mode !== 'all' || siteFilter !== '' || brandFilter !== '' || riskLevels.length > 0
-
-  const filtered = useMemo(() => {
-    return filterByPeriodValue(records, period, 'issue_date').filter(r => {
-      // Site
-      if (siteFilter && r.site !== siteFilter) return false
-      // Brand
-      if (brandFilter && r.brand !== brandFilter) return false
-      // Risk levels
-      if (riskLevels.length > 0) {
-        const level = (r.risk_level || '').toLowerCase()
-        if (!riskLevels.map(l => l.toLowerCase()).includes(level)) return false
-      }
-      return true
-    })
-  }, [records, period, siteFilter, brandFilter, riskLevels])
-
-  const siteMetrics  = useMemo(() => computeSiteMetrics(filtered),  [filtered])
+  const siteMetrics = useMemo(() => computeSiteMetrics(filtered), [filtered])
   const brandMetrics = useMemo(() => computeBrandMetrics(filtered), [filtered])
-  const assetMetrics = useMemo(() => computeAssetMetrics(filtered), [filtered])
-  const trendData    = useMemo(() => monthlyTrendWithForecast(filtered, 3), [filtered])
 
-  const totalCost  = sum(filtered.map(r => recordCost(r)))
-  const totalCount = filtered.length
+  // Monthly trend chart
+  const monthlyData = useMemo(() => {
+    const map = {}
+    filtered.forEach(r => {
+      if (!r.issue_date) return
+      const m = r.issue_date.slice(0, 7)
+      if (!map[m]) map[m] = { month: m, count: 0, cost: 0 }
+      map[m].count++
+      map[m].cost += parseFloat(r.cost_per_tyre) || 0
+    })
+    return Object.values(map).sort((a, b) => a.month.localeCompare(b.month))
+  }, [filtered])
 
-  function toggleRisk(level) {
-    setRiskLevels(prev =>
-      prev.includes(level) ? prev.filter(l => l !== level) : [...prev, level]
-    )
+  const chartData = useMemo(() => ({
+    labels: monthlyData.map(d => d.month),
+    datasets: [
+      { label: 'Records', data: monthlyData.map(d => d.count), backgroundColor: 'rgba(59,130,246,0.6)', yAxisID: 'y', borderRadius: 4 },
+      { label: 'Cost', data: monthlyData.map(d => d.cost), backgroundColor: 'rgba(16,185,129,0.6)', yAxisID: 'y1', borderRadius: 4 },
+    ],
+  }), [monthlyData])
+
+  const chartOpts = {
+    responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { labels: { color: '#9ca3af' } } },
+    scales: {
+      x: { ticks: { color: '#6b7280' }, grid: { color: '#1f2937' } },
+      y: { ticks: { color: '#6b7280' }, grid: { color: '#374151' } },
+      y1: { position: 'right', grid: { display: false }, ticks: { color: '#6b7280' } },
+    },
   }
 
-  function clearFilters() {
-    setPeriod({ mode: 'all' })
-    setSiteFilter('')
-    setBrandFilter('')
-    setRiskLevels([])
-  }
+  const siteColumns = useMemo(() => [
+    { id: 'site', header: 'Site', accessorFn: r => r.site, size: 140 },
+    { id: 'count', header: 'Records', accessorFn: r => r.count, size: 80, meta: { align: 'right' } },
+    {
+      id: 'totalCost', header: 'Total Cost', accessorFn: r => r.totalCost, size: 110, meta: { align: 'right' },
+      cell: ({ getValue }) => <span>{formatCurrencyCompact(getValue(), activeCurrency)}</span>,
+    },
+    {
+      id: 'avgCost', header: 'Avg Cost', accessorFn: r => r.avgCost, size: 100, meta: { align: 'right' },
+      cell: ({ getValue }) => <span>{formatCurrencyCompact(getValue(), activeCurrency)}</span>,
+    },
+    {
+      id: 'highRiskPct', header: 'High Risk %', accessorFn: r => r.highRiskPct, size: 100, meta: { align: 'right' },
+      cell: ({ getValue }) => {
+        const val = getValue()
+        return <span className={`text-xs px-2 py-0.5 rounded-full ${val > 30 ? 'bg-red-900/40 text-red-400' : 'bg-gray-800 text-gray-400'}'}`}>{val.toFixed(1)}%</span>
+      },
+    },
+    { id: 'topCategory', header: 'Top Category', accessorFn: r => r.topCategory ?? '-', size: 120 },
+  ], [activeCurrency])
 
-  const modalFilters = { year: period.mode === 'year' ? period.year : undefined }
-  const filterOptions = { sites: uniqueSites, brands: uniqueBrands, years }
-
-  // ── Loading skeleton ───────────────────────────────────────────────────────
-  if (loading) {
-    return (
-      <div className="space-y-6">
-        <PageHeader
-          title={t('analytics.title')}
-          subtitle={t('analytics.subtitle')}
-          icon={BarChart2}
-        />
-        {/* Filter bar skeleton */}
-        <div className="card">
-          <div className="flex flex-wrap gap-3">
-            {Array.from({ length: 5 }).map((_, i) => (
-              <div key={i} className="bg-gray-800/40 h-9 w-32 rounded-lg animate-pulse" />
-            ))}
-          </div>
-        </div>
-        {/* KPI skeletons */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          {Array.from({ length: 4 }).map((_, i) => (
-            <div key={i} className="bg-gray-800/40 h-24 rounded-xl animate-pulse" />
-          ))}
-        </div>
-        {/* Tab button skeletons */}
-        <div className="flex gap-1 border-b border-gray-800 pb-px">
-          {Array.from({ length: 4 }).map((_, i) => (
-            <div key={i} className="bg-gray-800/40 h-9 w-28 rounded-t-lg animate-pulse" />
-          ))}
-        </div>
-        {/* Chart card skeleton */}
-        <div className="bg-gray-800/40 h-80 rounded-xl animate-pulse" />
-      </div>
-    )
-  }
-
-  if (error && !records.length) {
-    return (
-      <div className="space-y-6">
-        <PageHeader title={t('analytics.title')} subtitle={t('analytics.subtitleError')} icon={BarChart2} />
-        <div className="card py-16 flex flex-col items-center gap-3">
-          <AlertTriangle size={40} className="text-red-400" />
-          <p className="text-red-300 font-medium">{t('analytics.error.couldNotLoad')}</p>
-          <p className="text-gray-500 text-sm">{error}</p>
-          <button onClick={load} className="mt-2 inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-sm rounded-lg transition-colors">
-            <RefreshCw size={16} /> {t('analytics.error.retry')}
-          </button>
-        </div>
-      </div>
-    )
-  }
+  const brandColumns = useMemo(() => [
+    { id: 'brand', header: 'Brand', accessorFn: r => r.brand, size: 140 },
+    { id: 'count', header: 'Records', accessorFn: r => r.count, size: 80, meta: { align: 'right' } },
+    {
+      id: 'totalCost', header: 'Total Cost', accessorFn: r => r.totalCost, size: 110, meta: { align: 'right' },
+      cell: ({ getValue }) => <span>{formatCurrencyCompact(getValue(), activeCurrency)}</span>,
+    },
+    {
+      id: 'avgCost', header: 'Avg Cost', accessorFn: r => r.avgCost, size: 100, meta: { align: 'right' },
+      cell: ({ getValue }) => <span>{formatCurrencyCompact(getValue(), activeCurrency)}</span>,
+    },
+    {
+      id: 'failureRate', header: 'Failure Rate', accessorFn: r => r.failureRate, size: 100, meta: { align: 'right' },
+      cell: ({ getValue }) => {
+        const val = getValue()
+        return <span className={`text-xs px-2 py-0.5 rounded-full ${val > 30 ? 'bg-red-900/40 text-red-400' : val > 15 ? 'bg-yellow-900/40 text-yellow-400' : 'bg-green-900/40 text-green-400'}`}>{val.toFixed(1)}%</span>
+      },
+    },
+    { id: 'topCategory', header: 'Top Category', accessorFn: r => r.topCategory ?? '-', size: 120 },
+  ], [activeCurrency])
 
   return (
     <div className="space-y-6">
-      <SectionTabs tabs={ANALYTICS_TABS} />
       <PageHeader
         title={t('analytics.title')}
         subtitle={t('analytics.subtitle')}
         icon={BarChart2}
       />
 
-      {/* Filter bar */}
-      <div className="card space-y-3">
-        <div className="flex flex-wrap gap-3 items-end">
-          {/* Period */}
-          <div className="flex flex-col gap-1">
-            <label className="label text-xs">{t('analytics.filters.period')}</label>
-            <PeriodFilter records={records} value={period} onChange={setPeriod} />
-          </div>
+      <PeriodFilter records={records} value={period} onChange={setPeriod} />
 
-          {/* Site */}
-          <div className="flex flex-col gap-1">
-            <label className="label text-xs">{t('analytics.filters.site')}</label>
-            <select className="input py-1.5 text-sm w-40" value={siteFilter} onChange={e => setSiteFilter(e.target.value)}>
-              <option value="">{t('analytics.filters.allSites')}</option>
-              {uniqueSites.map(s => <option key={s} value={s}>{s}</option>)}
-            </select>
-          </div>
-
-          {/* Brand */}
-          <div className="flex flex-col gap-1">
-            <label className="label text-xs">{t('analytics.filters.brand')}</label>
-            <select className="input py-1.5 text-sm w-40" value={brandFilter} onChange={e => setBrandFilter(e.target.value)}>
-              <option value="">{t('analytics.filters.allBrands')}</option>
-              {uniqueBrands.map(b => <option key={b} value={b}>{b}</option>)}
-            </select>
-          </div>
-
-          {/* Clear */}
-          {hasActiveFilter && (
-            <button onClick={clearFilters} className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-1.5 self-end">
-              <X size={14} /> {t('analytics.filters.clearFilters')}
-            </button>
-          )}
-        </div>
-
-        {/* Risk level chips */}
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-xs text-gray-500">{t('analytics.filters.riskLabel')}</span>
-          <button
-            onClick={() => setRiskLevels([])}
-            className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${
-              riskLevels.length === 0 ? 'bg-blue-600 border-blue-600 text-white' : 'border-gray-700 text-gray-400 hover:border-gray-500'
-            }`}
-          >
-            {t('analytics.filters.all')}
-          </button>
-          {RISK_LEVELS.map(level => {
-            const active = riskLevels.includes(level)
-            const colorMap = { Low: 'green', Medium: 'yellow', High: 'orange', Critical: 'red' }
-            const c = colorMap[level]
-            return (
-              <button
-                key={level}
-                onClick={() => toggleRisk(level)}
-                className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${
-                  active
-                    ? c === 'green' ? 'bg-green-700 border-green-700 text-white'
-                    : c === 'yellow' ? 'bg-yellow-700 border-yellow-700 text-white'
-                    : c === 'orange' ? 'bg-orange-700 border-orange-700 text-white'
-                    : 'bg-red-700 border-red-700 text-white'
-                    : 'border-gray-700 text-gray-400 hover:border-gray-500'
-                }`}
-              >
-                {t(`analytics.risk.${level.toLowerCase()}`)}
-              </button>
-            )
-          })}
-        </div>
-      </div>
-
-      {/* KPI summary row */}
+      {/* KPI cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        {[
-          { label: t('analytics.kpi.totalRecords'), value: totalCount.toLocaleString(), color: 'text-blue-400' },
-          { label: t('analytics.kpi.totalCost', { currency: activeCurrency }), value: formatCurrencyCompact(totalCost, activeCurrency), color: 'text-green-400' },
-          { label: t('analytics.kpi.sitesActive'), value: siteMetrics.length, color: 'text-purple-400' },
-          { label: t('analytics.kpi.brandsTracked'), value: brandMetrics.length, color: 'text-yellow-400' },
-        ].map(({ label, value, color }, i) => (
-          <motion.div
-            key={label}
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: i * 0.07, duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
-            className="card text-center"
-          >
-            <p className={`text-2xl font-bold ${color}`}>{value}</p>
-            <p className="text-muted text-sm mt-1">{label}</p>
-          </motion.div>
-        ))}
-      </div>
-
-      {/* Tabs */}
-      <div className="flex border-b border-[var(--border-dim)] gap-1">
-        {TABS.map((tab, i) => (
-          <button key={tab} onClick={() => setActiveTab(i)}
-            className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-all duration-200 -mb-px ${
-              activeTab === i
-                ? 'border-brand-bright text-brand-bright'
-                : 'border-transparent text-muted hover:text-white'
-            }`}>
-            {t(`analytics.tabs.${TAB_KEYS[i]}`)}
-          </button>
-        ))}
-      </div>
-
-      {/* Tab Content */}
-      {activeTab === 0 && (
-        <CostBySite
-          siteMetrics={siteMetrics}
-          currency={activeCurrency}
-          onMaximize={() => setModalChart('Cost by Site')}
-          chartRef={chartRef}
-        />
-      )}
-      {activeTab === 1 && (
-        <CostByBrand
-          brandMetrics={brandMetrics}
-          currency={activeCurrency}
-          onMaximize={() => setModalChart('Cost by Brand')}
-          chartRef={chartRef}
-        />
-      )}
-      {activeTab === 2 && (
-        <MonthlyTrend
-          trendData={trendData}
-          currency={activeCurrency}
-          onMaximize={() => setModalChart('Monthly Trend')}
-          chartRef={chartRef}
-        />
-      )}
-      {activeTab === 3 && (
-        <AssetBreakdown
-          assetMetrics={assetMetrics}
-          currency={activeCurrency}
-          onMaximize={() => setModalChart('Asset Breakdown')}
-          chartRef={chartRef}
-        />
-      )}
-
-      {/* ChartModal */}
-      <ChartModal
-        open={modalChart !== null}
-        onClose={() => setModalChart(null)}
-        title={modalChart ? t(`analytics.tabs.${TAB_KEYS[TABS.indexOf(modalChart)]}`) : ''}
-        chartRef={chartRef}
-        filters={modalFilters}
-        onFilterChange={(key, val) => { if (key === 'year') setPeriod(val !== undefined ? { mode: 'year', year: Number(val) } : { mode: 'all' }) }}
-        filterOptions={filterOptions}
-        showSite={false}
-        showBrand={false}
-      >
-        <div style={{ height: 480 }}>
-          {modalChart === 'Cost by Site' && siteMetrics.length > 0 && (
-            <Bar
-              ref={chartRef}
-              data={{
-                labels: siteMetrics.slice(0, 15).map(s => s.site),
-                datasets: [{
-                  data: siteMetrics.slice(0, 15).map(s => Math.round(s.totalCost)),
-                  backgroundColor: siteMetrics.slice(0, 15).map(s => s.highRiskPct > 30 ? 'rgba(239,68,68,0.7)' : 'rgba(59,130,246,0.7)'),
-                  borderRadius: 4,
-                }],
-              }}
-              options={BAR_OPTS('Cost by Site', true)}
-            />
-          )}
-          {modalChart === 'Cost by Brand' && brandMetrics.length > 0 && (
-            <Bar
-              ref={chartRef}
-              data={{
-                labels: brandMetrics.slice(0, 12).map(b => b.brand),
-                datasets: [{
-                  data: brandMetrics.slice(0, 12).map(b => Math.round(b.totalCost)),
-                  backgroundColor: 'rgba(16,185,129,0.7)',
-                  borderRadius: 4,
-                }],
-              }}
-              options={BAR_OPTS('Cost by Brand')}
-            />
-          )}
-          {modalChart === 'Monthly Trend' && trendData.length > 0 && (
-            <Line
-              ref={chartRef}
-              data={{
-                labels: trendData.map(d => d.month),
-                datasets: [
-                  {
-                    label: t('analytics.chart.actualSpend'),
-                    data: trendData.map(d => d.isForecast ? null : (d.value ?? d.total)),
-                    borderColor: 'rgba(59,130,246,1)',
-                    backgroundColor: 'rgba(59,130,246,0.1)',
-                    fill: true, tension: 0.4, pointRadius: 4,
-                  },
-                  {
-                    label: t('analytics.chart.forecast'),
-                    data: trendData.map(d => d.isForecast ? (d.value ?? d.total) : null),
-                    borderColor: 'rgba(245,158,11,1)',
-                    borderDash: [6, 3], fill: false, tension: 0.4, pointRadius: 4,
-                  },
-                ],
-              }}
-              options={LINE_OPTS}
-            />
-          )}
-          {modalChart === 'Asset Breakdown' && assetMetrics.length > 0 && (
-            <Bar
-              ref={chartRef}
-              data={{
-                labels: assetMetrics.slice(0, 10).map(a => a.assetNo),
-                datasets: [{
-                  data: assetMetrics.slice(0, 10).map(a => Math.round(a.totalCost)),
-                  backgroundColor: assetMetrics.slice(0, 10).map(a =>
-                    a.highRiskCount / Math.max(a.count, 1) > 0.3 ? 'rgba(239,68,68,0.7)' : 'rgba(139,92,246,0.7)'
-                  ),
-                  borderRadius: 4,
-                }],
-              }}
-              options={BAR_OPTS('Cost by Asset')}
-            />
-          )}
+        <div className="card text-center">
+          <p className="text-2xl font-bold text-white">{filtered.length.toLocaleString()}</p>
+          <p className="text-xs text-gray-500 mt-1">{t('analytics.kpi.totalTyres')}</p>
         </div>
-      </ChartModal>
-    </div>
-  )
-}
-
-// ── Tab: Cost by Site ─────────────────────────────────────────────────────────
-function CostBySite({ siteMetrics, currency, onMaximize, chartRef }) {
-  const { t } = useLanguage()
-  const top = siteMetrics.slice(0, 15)
-  const chartData = {
-    labels: top.map(s => s.site),
-    datasets: [{
-      data: top.map(s => Math.round(s.totalCost)),
-      backgroundColor: top.map(s => s.highRiskPct > 30 ? 'rgba(239,68,68,0.7)' : 'rgba(59,130,246,0.7)'),
-      borderRadius: 4,
-    }],
-  }
-
-  return (
-    <div className="space-y-6">
-      <div className="card relative" style={{ height: 380 }}>
-        <button
-          onClick={onMaximize}
-          className="absolute top-3 right-3 z-10 text-gray-500 hover:text-white transition-colors p-1 rounded hover:bg-gray-700"
-          title={t('analytics.chart.fullscreen')}
-        >
-          <Maximize2 size={15} />
-        </button>
-        <Bar ref={chartRef} data={chartData} options={BAR_OPTS('Cost by Site', true)} />
+        <div className="card text-center">
+          <p className="text-2xl font-bold text-blue-400">{formatCurrencyCompact(totalCost, activeCurrency)}</p>
+          <p className="text-xs text-gray-500 mt-1">{t('analytics.kpi.totalCost')}</p>
+        </div>
+        <div className="card text-center">
+          <p className="text-2xl font-bold text-emerald-400">{formatCurrencyCompact(avgCost, activeCurrency)}</p>
+          <p className="text-xs text-gray-500 mt-1">{t('analytics.kpi.avgCost')}</p>
+        </div>
+        <div className="card text-center">
+          <p className="text-2xl font-bold text-red-400">{highRiskCount}</p>
+          <p className="text-xs text-gray-500 mt-1">{t('analytics.kpi.highRisk')}</p>
+        </div>
       </div>
-      <div className="card overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="text-left text-gray-400 border-b border-gray-800">
-              <th className="pb-2 pr-4">{t('analytics.site.site')}</th>
-              <th className="pb-2 pr-4 text-right">{t('analytics.site.records')}</th>
-              <th className="pb-2 pr-4 text-right">{t('analytics.site.totalCost')}</th>
-              <th className="pb-2 pr-4 text-right">{t('analytics.site.avgCost')}</th>
-              <th className="pb-2 pr-4 text-right">{t('analytics.site.highRisk')}</th>
-              <th className="pb-2 text-right">{t('analytics.site.topCategory')}</th>
-            </tr>
-          </thead>
-          <tbody>
-            {siteMetrics.map(s => (
-              <tr key={s.site} className="border-b border-gray-800/50 hover:bg-gray-800/20">
-                <td className="py-2 pr-4 text-white font-medium">{s.site}</td>
-                <td className="py-2 pr-4 text-gray-300 text-right">{s.count}</td>
-                <td className="py-2 pr-4 text-gray-300 text-right">{formatCurrencyCompact(s.totalCost, currency)}</td>
-                <td className="py-2 pr-4 text-gray-300 text-right">{formatCurrencyCompact(Math.round(s.avgCost), currency)}</td>
-                <td className="py-2 pr-4 text-right">
-                  <span className={`text-xs px-2 py-0.5 rounded-full ${s.highRiskPct > 30 ? 'bg-red-900/40 text-red-400' : 'bg-gray-800 text-gray-400'}`}>
-                    {s.highRiskCount} ({s.highRiskPct.toFixed(0)}%)
-                  </span>
-                </td>
-                <td className="py-2 text-gray-400 text-right text-xs">{s.topCategory}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  )
-}
 
-// ── Tab: Cost by Brand ────────────────────────────────────────────────────────
-function CostByBrand({ brandMetrics, currency, onMaximize, chartRef }) {
-  const { t } = useLanguage()
-  const top = brandMetrics.slice(0, 12)
-  const chartData = {
-    labels: top.map(b => b.brand),
-    datasets: [{
-      data: top.map(b => Math.round(b.totalCost)),
-      backgroundColor: 'rgba(16,185,129,0.7)',
-      borderRadius: 4,
-    }],
-  }
+      {error && !loading && (
+        <div className="flex items-center gap-2 text-red-400 text-sm bg-red-400/10 border border-red-400/20 rounded-xl px-4 py-3">
+          <AlertTriangle size={14} /> {error}
+        </div>
+      )}
 
-  return (
-    <div className="space-y-6">
-      <div className="card relative" style={{ height: 320 }}>
-        <button
-          onClick={onMaximize}
-          className="absolute top-3 right-3 z-10 text-gray-500 hover:text-white transition-colors p-1 rounded hover:bg-gray-700"
-          title={t('analytics.chart.fullscreen')}
-        >
-          <Maximize2 size={15} />
-        </button>
-        <Bar ref={chartRef} data={chartData} options={BAR_OPTS('Cost by Brand')} />
-      </div>
-      <div className="card overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="text-left text-gray-400 border-b border-gray-800">
-              <th className="pb-2 pr-4">{t('analytics.brand.brand')}</th>
-              <th className="pb-2 pr-4 text-right">{t('analytics.brand.records')}</th>
-              <th className="pb-2 pr-4 text-right">{t('analytics.brand.totalCost')}</th>
-              <th className="pb-2 pr-4 text-right">{t('analytics.brand.avgPerTyre')}</th>
-              <th className="pb-2 pr-4 text-right">{t('analytics.brand.failureRate')}</th>
-              <th className="pb-2 text-right">{t('analytics.brand.topFailure')}</th>
-            </tr>
-          </thead>
-          <tbody>
-            {brandMetrics.map(b => (
-              <tr key={b.brand} className="border-b border-gray-800/50 hover:bg-gray-800/20">
-                <td className="py-2 pr-4 text-white font-medium">{b.brand}</td>
-                <td className="py-2 pr-4 text-gray-300 text-right">{b.count}</td>
-                <td className="py-2 pr-4 text-gray-300 text-right">{formatCurrencyCompact(b.totalCost, currency)}</td>
-                <td className="py-2 pr-4 text-gray-300 text-right">{formatCurrencyCompact(Math.round(b.avgCost), currency)}</td>
-                <td className="py-2 pr-4 text-right">
-                  <span className={`text-xs px-2 py-0.5 rounded-full ${b.failureRate > 25 ? 'bg-red-900/40 text-red-400' : 'bg-gray-800 text-gray-400'}`}>
-                    {b.failureRate.toFixed(1)}%
-                  </span>
-                </td>
-                <td className="py-2 text-gray-400 text-right text-xs">{b.topCategory}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  )
-}
-
-// ── Tab: Monthly Trend ────────────────────────────────────────────────────────
-function MonthlyTrend({ trendData, currency, onMaximize, chartRef }) {
-  const { t } = useLanguage()
-  const labels  = trendData.map(d => d.month)
-  const forecast = trendData.map(d => d.isForecast ? (d.value ?? d.total) : null)
-  const predicted = trendData.map(d => d.predicted ?? null)
-
-  const chartData = {
-    labels,
-    datasets: [
-      {
-        label: t('analytics.chart.actualSpend'),
-        data: trendData.map(d => d.isForecast ? null : (d.value ?? d.total)),
-        borderColor: 'rgba(59,130,246,1)',
-        backgroundColor: 'rgba(59,130,246,0.1)',
-        fill: true, tension: 0.4, pointRadius: 4,
-      },
-      {
-        label: t('analytics.chart.forecast'),
-        data: forecast,
-        borderColor: 'rgba(245,158,11,1)',
-        backgroundColor: 'rgba(245,158,11,0.05)',
-        borderDash: [6, 3], fill: false, tension: 0.4, pointRadius: 4,
-      },
-      {
-        label: t('analytics.chart.trendLine'),
-        data: predicted,
-        borderColor: 'rgba(107,114,128,0.6)',
-        borderDash: [3, 3], fill: false, tension: 0, pointRadius: 0,
-      },
-    ],
-  }
-
-  return (
-    <div className="space-y-4">
-      <div className="card relative" style={{ height: 400 }}>
-        <button
-          onClick={onMaximize}
-          className="absolute top-3 right-3 z-10 text-gray-500 hover:text-white transition-colors p-1 rounded hover:bg-gray-700"
-          title={t('analytics.chart.fullscreen')}
-        >
-          <Maximize2 size={15} />
-        </button>
-        <Line ref={chartRef} data={chartData} options={LINE_OPTS} />
-      </div>
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        {trendData.slice(-3).map(d => (
-          <div key={d.month} className={`card ${d.isForecast ? 'border border-yellow-800/50' : ''}`}>
-            <p className="text-xs text-gray-500">{d.isForecast ? t('analytics.trend.forecast') : t('analytics.trend.actual')} - {d.month}</p>
-            <p className="text-lg font-bold text-white mt-1">
-              {formatCurrencyCompact(d.value ?? d.total ?? 0, currency)}
-            </p>
+      {loading ? (
+        <div className="grid grid-cols-1 gap-6">
+          <div className="card animate-pulse h-64" />
+          <div className="card animate-pulse h-64" />
+        </div>
+      ) : filtered.length > 0 ? (
+        <>
+          {/* Monthly trend chart */}
+          <div className="card">
+            <h3 className="text-sm font-semibold text-white mb-4 flex items-center gap-2">
+              <TrendingUp size={15} className="text-blue-400" /> Monthly Trend
+            </h3>
+            <div style={{ height: 300 }}>
+              <Bar data={chartData} options={chartOpts} />
+            </div>
           </div>
-        ))}
-      </div>
-    </div>
-  )
-}
 
-// ── Tab: Asset Breakdown ──────────────────────────────────────────────────────
-function AssetBreakdown({ assetMetrics, currency, onMaximize, chartRef }) {
-  const { t } = useLanguage()
-  const [search, setSearch] = useState('')
-  const visible = assetMetrics
-    .filter(a => !search || a.assetNo.toLowerCase().includes(search.toLowerCase()))
-    .slice(0, 50)
+          {/* Site Metrics */}
+          <div className="card p-0 overflow-hidden">
+            <div className="px-4 py-3 border-b border-[var(--border-dim)]">
+              <h3 className="text-sm font-semibold text-white">{t('analytics.site.title')}</h3>
+            </div>
+            <EnterpriseTable
+              columns={siteColumns}
+              data={siteMetrics}
+              getRowId={(row) => row.site}
+              enableGlobalFilter={true}
+              searchPlaceholder="Search sites..."
+              enableSorting={true}
+              enableExport={true}
+              exportFileName="site_analytics"
+              initialPageSize={25}
+              pageSizeOptions={[10, 25, 50]}
+              emptyMessage="No site data"
+            />
+          </div>
 
-  const topAssets = assetMetrics.slice(0, 10)
-  const chartData = {
-    labels: topAssets.map(a => a.assetNo),
-    datasets: [{
-      data: topAssets.map(a => Math.round(a.totalCost)),
-      backgroundColor: topAssets.map(a =>
-        a.highRiskCount / Math.max(a.count, 1) > 0.3 ? 'rgba(239,68,68,0.7)' : 'rgba(139,92,246,0.7)'
-      ),
-      borderRadius: 4,
-    }],
-  }
-
-  return (
-    <div className="space-y-6">
-      <div className="card relative" style={{ height: 300 }}>
-        <button
-          onClick={onMaximize}
-          className="absolute top-3 right-3 z-10 text-gray-500 hover:text-white transition-colors p-1 rounded hover:bg-gray-700"
-          title={t('analytics.chart.fullscreen')}
-        >
-          <Maximize2 size={15} />
-        </button>
-        <Bar ref={chartRef} data={chartData} options={BAR_OPTS('Cost by Asset')} />
-      </div>
-      <div className="flex gap-3">
-        <input
-          className="input flex-1"
-          placeholder={t('analytics.asset.searchPlaceholder')}
-          value={search}
-          onChange={e => setSearch(e.target.value)}
-        />
-      </div>
-      <div className="card overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="text-left text-gray-400 border-b border-gray-800">
-              <th className="pb-2 pr-4">{t('analytics.asset.assetNo')}</th>
-              <th className="pb-2 pr-4 text-right">{t('analytics.asset.records')}</th>
-              <th className="pb-2 pr-4 text-right">{t('analytics.asset.totalCost')}</th>
-              <th className="pb-2 pr-4 text-right">{t('analytics.asset.highRisk')}</th>
-              <th className="pb-2 pr-4 text-right">{t('analytics.asset.failurePerMonth')}</th>
-              <th className="pb-2 pr-4">{t('analytics.asset.sites')}</th>
-              <th className="pb-2">{t('analytics.asset.lastSeen')}</th>
-            </tr>
-          </thead>
-          <tbody>
-            {visible.map(a => (
-              <tr key={a.assetNo} className="border-b border-gray-800/50 hover:bg-gray-800/20">
-                <td className="py-2 pr-4 text-white font-medium font-mono text-xs">{a.assetNo}</td>
-                <td className="py-2 pr-4 text-gray-300 text-right">{a.count}</td>
-                <td className="py-2 pr-4 text-gray-300 text-right">{formatCurrencyCompact(a.totalCost, currency)}</td>
-                <td className="py-2 pr-4 text-right">
-                  <span className={`text-xs px-2 py-0.5 rounded-full ${a.highRiskCount > 0 ? 'bg-red-900/40 text-red-400' : 'bg-gray-800 text-gray-400'}`}>
-                    {a.highRiskCount}
-                  </span>
-                </td>
-                <td className="py-2 pr-4 text-gray-400 text-right text-xs">{a.failureFreqPerMonth.toFixed(1)}</td>
-                <td className="py-2 pr-4 text-gray-400 text-xs">{a.sites.slice(0, 2).join(', ')}{a.sites.length > 2 ? '...' : ''}</td>
-                <td className="py-2 text-gray-400 text-xs">{a.lastSeen || '--'}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+          {/* Brand Metrics */}
+          <div className="card p-0 overflow-hidden">
+            <div className="px-4 py-3 border-b border-[var(--border-dim)]">
+              <h3 className="text-sm font-semibold text-white">{t('analytics.brand.title')}</h3>
+            </div>
+            <EnterpriseTable
+              columns={brandColumns}
+              data={brandMetrics}
+              getRowId={(row) => row.brand}
+              enableGlobalFilter={true}
+              searchPlaceholder="Search brands..."
+              enableSorting={true}
+              enableExport={true}
+              exportFileName="brand_analytics"
+              initialPageSize={25}
+              pageSizeOptions={[10, 25, 50]}
+              emptyMessage="No brand data"
+            />
+          </div>
+        </>
+      ) : (
+        <div className="card text-center py-14">
+          <Activity size={36} className="text-gray-700 mx-auto mb-3" />
+          <p className="text-gray-400 font-medium">No data available</p>
+          <p className="text-gray-600 text-sm mt-1">Adjust your filters or import tyre records.</p>
+        </div>
+      )}
     </div>
   )
 }

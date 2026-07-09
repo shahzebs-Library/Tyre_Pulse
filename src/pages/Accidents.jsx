@@ -6,6 +6,7 @@ import PageHeader from '../components/ui/PageHeader'
 import EmptyState from '../components/EmptyState'
 import { supabase } from '../lib/supabase'
 import AccidentDetailModal from '../components/AccidentDetailModal'
+import EnterpriseTable from '../components/ui/EnterpriseTable'
 import * as accidentsApi from '../lib/api/accidents'
 import { useAuth } from '../contexts/AuthContext'
 import { useSettings } from '../contexts/SettingsContext'
@@ -778,6 +779,95 @@ export default function Accidents() {
     [filtered],
   )
 
+  // Main table columns for EnterpriseTable
+  const mainColumns = useMemo(() => {
+    const cols = []
+    if (isAdmin) {
+      cols.push({
+        id: 'select',
+        header: () => (
+          <input type="checkbox" checked={allPageSelected} onChange={toggleSelectPage}
+            title="Select all shown"
+            className="w-4 h-4 rounded border-[var(--input-border)] bg-[var(--input-bg)] accent-blue-600 cursor-pointer" />
+        ),
+        cell: ({ row }) => (
+          <input type="checkbox" checked={selectedIds.has(row.original.id)} onChange={() => toggleSelect(row.original.id)}
+            className="w-4 h-4 rounded border-[var(--input-border)] bg-[var(--input-bg)] accent-blue-600 cursor-pointer" />
+        ),
+        size: 40,
+        enableSorting: false,
+        meta: { export: false },
+      })
+    }
+    cols.push(
+      { id: 'incident_date', header: 'Date', accessorFn: r => r.incident_date ? formatDate(r.incident_date, activeCountry) : '-', size: 100 },
+      { id: 'asset_no', header: 'Asset', accessorFn: r => r.asset_no || '-', size: 120,
+        cell: ({ getValue }) => <span className="font-medium text-[var(--text-primary)]">{getValue()}</span>,
+      },
+      { id: 'site', header: 'Site', accessorFn: r => r.site || '-', size: 120 },
+      { id: 'severity', header: 'Severity', accessorFn: r => canonSeverity(r.severity), size: 100,
+        cell: ({ getValue }) => {
+          const val = getValue()
+          return val ? <span className={`badge text-xs ${SEVERITY_BADGE[val] ?? 'bg-[var(--input-bg)] text-[var(--text-dim)]'}`}>{val}</span> : null
+        },
+      },
+      { id: 'status', header: 'Status', accessorFn: r => canonStatus(r.status), size: 140,
+        cell: ({ row }) => {
+          const r = row.original
+          return (
+            <div className="flex flex-col gap-1 items-start">
+              {r.status && <span className={`badge text-xs ${STATUS_BADGE[canonStatus(r.status)] ?? 'bg-[var(--input-bg)] text-[var(--text-dim)]'}`}>{canonStatus(r.status)}</span>}
+              {r.closure_status === 'pending_closure' && (
+                <span className="badge text-xs bg-yellow-900/50 text-yellow-300 border border-yellow-700/50 flex items-center gap-1">
+                  <Hourglass size={10} /> Pending Closure
+                </span>
+              )}
+            </div>
+          )
+        },
+      },
+      { id: 'repair_cost', header: 'Repair Cost', accessorFn: r => r.repair_cost, size: 100, meta: { align: 'right' },
+        cell: ({ getValue }) => <span className="whitespace-nowrap">{fmtCurrency(getValue())}</span>,
+      },
+      { id: 'inspector', header: 'Inspector', accessorFn: r => r.inspector || '-', size: 120 },
+      {
+        id: 'actions', header: 'Actions', accessorFn: r => r.id, size: 200, enableSorting: false, meta: { export: false },
+        cell: ({ row }) => {
+          const r = row.original
+          return (
+            <div className="flex items-center gap-2">
+              <button onClick={() => setDetailId(r.id)} className="text-[var(--text-muted)] hover:text-green-400 text-xs transition-colors flex items-center gap-1"><Eye size={12} /> Open</button>
+              <button onClick={() => openEdit(r)} className="text-[var(--text-muted)] hover:text-blue-400 text-xs transition-colors">Edit</button>
+              {r.status !== 'Closed' && (
+                <button onClick={() => raiseAction(r)} className="text-[var(--text-muted)] hover:text-orange-400 text-xs transition-colors whitespace-nowrap">Raise CA</button>
+              )}
+              <button onClick={() => handleDelete(r.id)} className="text-[var(--text-muted)] hover:text-red-400 text-xs transition-colors">Delete</button>
+            </div>
+          )
+        },
+      },
+    )
+    return cols
+  }, [isAdmin, allPageSelected, selectedIds, activeCountry, fmtCurrency])
+
+  // Bulk preview columns for EnterpriseTable
+  const bulkColumns = useMemo(() => [
+    { id: '_row', header: 'Row', accessorFn: r => r._row, size: 60 },
+    { id: 'incident_date', header: 'Date', accessorFn: r => r.incident_date || '-', size: 100 },
+    { id: 'asset_no', header: 'Asset', accessorFn: r => r.asset_no || '-', size: 120,
+      cell: ({ getValue }) => <span className="text-[var(--text-primary)] font-medium">{getValue()}</span>,
+    },
+    { id: 'site', header: 'Site', accessorFn: r => r.site || '-', size: 100 },
+    { id: 'severity', header: 'Severity', accessorFn: r => r.severity, size: 80 },
+    { id: 'status', header: 'Status', accessorFn: r => r.status, size: 100 },
+    { id: 'repair_cost', header: 'Cost', accessorFn: r => r.repair_cost ?? '-', size: 80, meta: { align: 'right' } },
+    { id: '_valid', header: 'Valid', accessorFn: r => r._valid, size: 60, enableSorting: false,
+      cell: ({ getValue }) => getValue()
+        ? <CheckCircle2 size={13} className="text-green-400 mx-auto" />
+        : <AlertCircle size={13} className="text-red-400 mx-auto" />,
+    },
+  ], [])
+
   return (
     <div className="space-y-4">
       {/* Page header */}
@@ -986,7 +1076,7 @@ export default function Accidents() {
             </div>
           )}
 
-          {/* Table */}
+          {/* Table - EnterpriseTable */}
           {loading ? (
             <div className="text-center py-12 text-[var(--text-muted)]">Loading...</div>
           ) : filtered.length === 0 ? (
@@ -996,78 +1086,19 @@ export default function Accidents() {
               description="Adjust your filters or log a new incident to start tracking accidents and claims."
             />
           ) : (
-            <div className="card p-0 overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr>
-                    {isAdmin && (
-                      <th className="table-header w-10">
-                        <input type="checkbox" checked={allPageSelected} onChange={toggleSelectPage}
-                          title="Select all shown"
-                          className="w-4 h-4 rounded border-[var(--input-border)] bg-[var(--input-bg)] accent-blue-600 cursor-pointer" />
-                      </th>
-                    )}
-                    <th className="table-header">Date</th>
-                    <th className="table-header">Asset</th>
-                    <th className="table-header">Site</th>
-                    <th className="table-header">Severity</th>
-                    <th className="table-header">Status</th>
-                    <th className="table-header">Repair Cost</th>
-                    <th className="table-header">Inspector</th>
-                    <th className="table-header">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filtered.map(row => (
-                    <tr key={row.id} className={`border-t border-[var(--input-border)] hover:bg-[var(--input-bg)] transition-colors ${selectedIds.has(row.id) ? 'bg-blue-950/20' : ''}`}>
-                      {isAdmin && (
-                        <td className="table-cell">
-                          <input type="checkbox" checked={selectedIds.has(row.id)} onChange={() => toggleSelect(row.id)}
-                            className="w-4 h-4 rounded border-[var(--input-border)] bg-[var(--input-bg)] accent-blue-600 cursor-pointer" />
-                        </td>
-                      )}
-                      <td className="table-cell whitespace-nowrap">
-                        {row.incident_date ? formatDate(row.incident_date, activeCountry) : '-'}
-                      </td>
-                      <td className="table-cell font-medium text-[var(--text-primary)]">{row.asset_no || '-'}</td>
-                      <td className="table-cell">{row.site || '-'}</td>
-                      <td className="table-cell">
-                        {row.severity && (
-                          <span className={`badge text-xs ${SEVERITY_BADGE[canonSeverity(row.severity)] ?? 'bg-[var(--input-bg)] text-[var(--text-dim)]'}`}>
-                            {canonSeverity(row.severity)}
-                          </span>
-                        )}
-                      </td>
-                      <td className="table-cell">
-                        <div className="flex flex-col gap-1 items-start">
-                          {row.status && (
-                            <span className={`badge text-xs ${STATUS_BADGE[canonStatus(row.status)] ?? 'bg-[var(--input-bg)] text-[var(--text-dim)]'}`}>
-                              {canonStatus(row.status)}
-                            </span>
-                          )}
-                          {row.closure_status === 'pending_closure' && (
-                            <span className="badge text-xs bg-yellow-900/50 text-yellow-300 border border-yellow-700/50 flex items-center gap-1">
-                              <Hourglass size={10} /> Pending Closure
-                            </span>
-                          )}
-                        </div>
-                      </td>
-                      <td className="table-cell whitespace-nowrap">{fmtCurrency(row.repair_cost)}</td>
-                      <td className="table-cell">{row.inspector || '-'}</td>
-                      <td className="table-cell">
-                        <div className="flex items-center gap-2">
-                          <button onClick={() => setDetailId(row.id)} className="text-[var(--text-muted)] hover:text-green-400 text-xs transition-colors flex items-center gap-1"><Eye size={12} /> Open</button>
-                          <button onClick={() => openEdit(row)} className="text-[var(--text-muted)] hover:text-blue-400 text-xs transition-colors">Edit</button>
-                          {row.status !== 'Closed' && (
-                            <button onClick={() => raiseAction(row)} className="text-[var(--text-muted)] hover:text-orange-400 text-xs transition-colors whitespace-nowrap">Raise CA</button>
-                          )}
-                          <button onClick={() => handleDelete(row.id)} className="text-[var(--text-muted)] hover:text-red-400 text-xs transition-colors">Delete</button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            <div className="card p-0 overflow-hidden">
+              <EnterpriseTable
+                columns={mainColumns}
+                data={filtered}
+                getRowId={(row) => String(row.id)}
+                enableGlobalFilter={false}
+                enableSorting={true}
+                enableExport={false}
+                enableColumnVisibility={false}
+                initialPageSize={25}
+                pageSizeOptions={[10, 25, 50, 100]}
+                emptyMessage="No incidents found"
+              />
             </div>
           )}
         </>
@@ -1513,41 +1544,22 @@ export default function Accidents() {
               )}
             </div>
 
-            {/* Preview table */}
+            {/* Preview table - EnterpriseTable */}
             {bulkRows.length > 0 && (
-              <div className="overflow-x-auto rounded-xl border border-[var(--input-border)]">
-                <table className="w-full text-xs">
-                  <thead>
-                    <tr className="border-b border-[var(--input-border)] bg-[var(--input-bg)]">
-                      <th className="table-header py-2 px-3">Row</th>
-                      <th className="table-header py-2 px-3">Date</th>
-                      <th className="table-header py-2 px-3">Asset</th>
-                      <th className="table-header py-2 px-3">Site</th>
-                      <th className="table-header py-2 px-3">Severity</th>
-                      <th className="table-header py-2 px-3">Status</th>
-                      <th className="table-header py-2 px-3">Cost</th>
-                      <th className="table-header py-2 px-3">Valid</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {bulkRows.slice(0, 50).map(r => (
-                      <tr key={r._row} className={`border-t border-[var(--input-border)] ${r._valid ? '' : 'bg-red-950/20'}`}>
-                        <td className="px-3 py-1.5 text-[var(--text-muted)]">{r._row}</td>
-                        <td className="px-3 py-1.5 text-[var(--text-dim)] font-mono">{r.incident_date || '-'}</td>
-                        <td className="px-3 py-1.5 text-[var(--text-primary)] font-medium">{r.asset_no || '-'}</td>
-                        <td className="px-3 py-1.5 text-[var(--text-muted)]">{r.site || '-'}</td>
-                        <td className="px-3 py-1.5 text-[var(--text-muted)]">{r.severity}</td>
-                        <td className="px-3 py-1.5 text-[var(--text-muted)]">{r.status}</td>
-                        <td className="px-3 py-1.5 text-[var(--text-muted)]">{r.repair_cost ?? '-'}</td>
-                        <td className="px-3 py-1.5 text-center">
-                          {r._valid
-                            ? <CheckCircle2 size={13} className="text-green-400 mx-auto" />
-                            : <AlertCircle size={13} className="text-red-400 mx-auto" />}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+              <div className="rounded-xl border border-[var(--input-border)] overflow-hidden">
+                <EnterpriseTable
+                  columns={bulkColumns}
+                  data={bulkRows.slice(0, 50)}
+                  getRowId={(row) => String(row._row)}
+                  enableGlobalFilter={false}
+                  enableSorting={false}
+                  enableExport={false}
+                  enableColumnVisibility={false}
+                  enableColumnFilters={false}
+                  initialPageSize={50}
+                  pageSizeOptions={[50]}
+                  emptyMessage="No rows parsed"
+                />
                 {bulkRows.length > 50 && (
                   <p className="text-xs text-[var(--text-muted)] text-center py-2">Showing first 50 of {bulkRows.length} rows</p>
                 )}

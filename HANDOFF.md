@@ -1,11 +1,63 @@
 # TyrePulse - Developer Handoff
-**Last updated:** 7 July 2026 (Session 9)
-**Branch:** dev `claude/local-branch-visibility-aw3aw3` (Session 9 work, PR #26 → `main`); `main` auto-deploys to Vercel
-**Web build status:** ✅ Clean - builds, **964/964 tests passing**, auto-deploys to Vercel
-**Mobile build status:** ✅ EAS Android build green - **Expo SDK 54 / RN 0.81.5**, auto-builds on push to `main` (Session 9 touched no `mobile/` files)
+**Last updated:** 10 July 2026 (Session 10)
+**Branch:** `main` (auto-deploys to Vercel). Session 10 work was on `claude/enterprise-table-migration`, now merged to `main`.
+**Web build status:** ✅ Clean - builds with zero errors, auto-deploys to Vercel
+**Mobile build status:** ✅ EAS Android build green - **Expo SDK 54 / RN 0.81.5**, auto-builds on push to `main` (Session 10 touched no `mobile/` files)
 **DB migrations applied to live Supabase:** through **V86** (project `jhssdmeruxtrlqnwfksc`). ⚠️ **Session 9 authored V96–V103 but NONE are applied live yet** (the session had no access to the live project). They plus three new edge functions must be applied/deployed with the merge — see `docs/AUTOMATION_PLATFORM_DEPLOYMENT.md` for the runbook (apply order, `verify_jwt` flags, verification SQL). Earlier: V75 applied — `auth_rls_initplan` advisory cleared; V84 `system_config`, V85 `report_exec_digest`, V86 deepens that digest. The richer scheduled-report email ships only when the `send-scheduled-reports` **edge function is redeployed**.
 **Live URL under test:** tyre-pulse-peach.vercel.app
 **Active branches:** `main` · dev `claude/mobile-app-ui-features-tdfxy0` · frozen `claude/backend-step2-assets` (Go) · frozen `claude/mobile-kotlin-app` (Kotlin). All other feature branches consolidated into `main` (see `docs/BRANCH_CONSOLIDATION_2026-07-04.md`).
+
+---
+
+## Session 10 (10 July 2026) — EnterpriseTable migration: raw HTML tables → reusable component + charts
+
+**Theme:** Systematically migrate all raw `<table>` elements across the app's pages to the reusable `EnterpriseTable` component (built on @tanstack/react-table v8), adding charts where missing. This standardises sorting, filtering, search, pagination, and export across all data-heavy pages.
+
+**Gate after this session:** web build ✅ (zero errors, 3961 modules transformed) · mobile untouched · all changes merged to `main` and pushed.
+
+### Pages migrated (11 of 13)
+
+| Page | Tables Converted | Charts Added/Preserved |
+|------|-----------------|----------------------|
+| **AiCostMonitor** | AI log table → EnterpriseTable | — |
+| **BrandPerformance** | Brand ranking table → EnterpriseTable | — |
+| **Billing** | Invoice history → EnterpriseTable | — |
+| **Comparison** | Period comparison table → EnterpriseTable | — |
+| **Anomalies** | Anomaly detail tables → EnterpriseTable | — |
+| **CountryComparison** | Multi-country metrics → EnterpriseTable | Bar chart added |
+| **Analytics** | Site metrics + Brand metrics → EnterpriseTable | Monthly trend bar chart added |
+| **Budgets** | Monthly budget table → EnterpriseTable | **New: Budget vs Spend bar chart** |
+| **BudgetPlanner** | Brand analysis table → EnterpriseTable | Existing charts preserved (Bar, Line, Doughnut) |
+| **AuditTrail** | Audit log + Upload history → EnterpriseTable | — |
+| **Accidents** | Main incidents table + Bulk preview → EnterpriseTable | Existing charts preserved (monthly, severity, claims) |
+
+### Key features delivered
+- **Sorting** enabled on all EnterpriseTable instances
+- **Global search** on Analytics, Accidents, Budgets tables
+- **CSV export** on Analytics tables
+- **Row selection** with checkboxes on Accidents (Admin bulk delete preserved)
+- **Inline editing** preserved on Budgets status dropdown
+- **Budget vs Spend bar chart** added to Budgets page
+- **Monthly trend bar chart** added to Analytics page
+- All existing Chart.js charts preserved (Bar, Line, Doughnut)
+- Expandable row detail on AuditTrail (field-level before/after diff)
+- Admin-only Delete Batch button on AuditTrail upload history
+
+### Remaining (2 complex pages — deferred)
+- **AdvancedAnalytics** (1903 lines) — 8 tables including 2 CSS-based heatmaps. Heatmaps use cell-level background coloring that EnterpriseTable doesn't natively support; needs custom cell renderer approach.
+- **DataIntakeCenter** (1024 lines) — 5+ tables in a multi-step wizard with dynamic columns per module. Each step (upload → map → validate → approve) has different table structures.
+
+### Commits (Session 10)
+```
+9238cd6 chore: remove build output from git, add to gitignore
+4c02805 feat: migrate Accidents main table + bulk preview to EnterpriseTable
+017a360 feat: migrate BudgetPlanner brand analysis table to EnterpriseTable
+05673f9 feat: migrate AuditTrail to EnterpriseTable
+10aec2a push
+198dbaf feat: migrate Analytics to EnterpriseTable
+196ae04 feat: migrate CountryComparison to EnterpriseTable
+bcc2f2d feat: migrate AiCostMonitor, BrandPerformance, Billing, Comparison, Anomalies to EnterpriseTable
+```
 
 ---
 

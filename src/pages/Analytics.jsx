@@ -106,7 +106,7 @@ export default function Analytics() {
       id: 'highRiskPct', header: 'High Risk %', accessorFn: r => r.highRiskPct, size: 100, meta: { align: 'right' },
       cell: ({ getValue }) => {
         const val = getValue()
-        return <span className={`text-xs px-2 py-0.5 rounded-full ${val > 30 ? 'bg-red-900/40 text-red-400' : 'bg-gray-800 text-gray-400'}'}`}>{val.toFixed(1)}%</span>
+        return <span className={`text-xs px-2 py-0.5 rounded-full ${val > 30 ? 'bg-red-900/40 text-red-400' : 'bg-gray-800 text-gray-400'}`}>{val.toFixed(1)}%</span>
       },
     },
     { id: 'topCategory', header: 'Top Category', accessorFn: r => r.topCategory ?? '-', size: 120 },

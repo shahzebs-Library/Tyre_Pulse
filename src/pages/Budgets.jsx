@@ -13,7 +13,8 @@ import {
   Chart as ChartJS, CategoryScale, LinearScale, LineElement, PointElement,
   Filler, Tooltip, Legend, BarElement,
 } from 'chart.js'
-import { Line } from 'react-chartjs-2'
+import { Line, Bar } from 'react-chartjs-2'
+import EnterpriseTable from '../components/ui/EnterpriseTable'
 
 ChartJS.register(CategoryScale, LinearScale, LineElement, PointElement, Filler, Tooltip, Legend, BarElement)
 
@@ -173,6 +174,83 @@ export default function Budgets() {
   const utilPct = totalBudget > 0 ? Math.round((totalSpend / totalBudget) * 100) : 0
   const utilColor = utilPct >= 100 ? 'text-red-400' : utilPct >= 80 ? 'text-yellow-400' : 'text-green-400'
 
+  // Monthly budget vs spend bar chart (per-site)
+  const monthlyChartData = useMemo(() => {
+    if (viewMode !== 'month' || budgets.length === 0) return null
+    return {
+      labels: budgets.map(b => b.site),
+      datasets: [
+        {
+          label: t('budgets.columns.budget', { currency: activeCurrency }),
+          data: budgets.map(b => b.monthly_budget),
+          backgroundColor: 'rgba(59,130,246,0.6)',
+          borderRadius: 4,
+        },
+        {
+          label: t('budgets.columns.spent', { currency: activeCurrency }),
+          data: budgets.map(b => getSpend(b.site, filterMonth)),
+          backgroundColor: budgets.map(b => getSpend(b.site, filterMonth) > b.monthly_budget ? 'rgba(239,68,68,0.7)' : 'rgba(16,185,129,0.6)'),
+          borderRadius: 4,
+        },
+      ],
+    }
+  }, [viewMode, budgets, spending, filterMonth, activeCurrency, t])
+
+  // Monthly table columns for EnterpriseTable
+  const monthlyColumns = useMemo(() => [
+    { id: 'site', header: t('budgets.columns.site'), accessorFn: r => r.site, size: 160,
+      cell: ({ getValue }) => <span className="font-medium text-[var(--text-primary)]">{getValue()}</span>,
+    },
+    { id: 'budget', header: t('budgets.columns.budget', { currency: activeCurrency }), accessorFn: r => r.monthly_budget, size: 120, meta: { align: 'right' },
+      cell: ({ getValue }) => <span>{getValue().toLocaleString()}</span>,
+    },
+    { id: 'spent', header: t('budgets.columns.spent', { currency: activeCurrency }), accessorFn: r => getSpend(r.site, filterMonth), size: 120, meta: { align: 'right' },
+      cell: ({ getValue, row }) => {
+        const spent = getValue()
+        const over = spent > row.original.monthly_budget
+        return <span className={`font-medium ${over ? 'text-red-400' : 'text-[var(--text-secondary)]'}`}>{spent.toLocaleString()}</span>
+      },
+    },
+    { id: 'remaining', header: t('budgets.columns.remaining'), accessorFn: r => r.monthly_budget - getSpend(r.site, filterMonth), size: 120, meta: { align: 'right' },
+      cell: ({ getValue }) => {
+        const rem = getValue()
+        return <span className={`font-medium ${rem < 0 ? 'text-red-400' : 'text-green-400'}`}>{rem.toLocaleString()}</span>
+      },
+    },
+    { id: 'progress', header: t('budgets.columns.progress'), accessorFn: r => r.monthly_budget > 0 ? (getSpend(r.site, filterMonth) / r.monthly_budget) * 100 : 0, size: 150, enableSorting: true,
+      cell: ({ getValue }) => {
+        const rawPct = getValue()
+        const pct = Math.min(rawPct, 100)
+        return (
+          <div className="flex items-center gap-2">
+            <div className="w-24 h-1.5 bg-[var(--input-bg)] rounded-full overflow-hidden">
+              <div className="h-full rounded-full" style={{ width: `${pct}%`, background: rawPct > 100 ? '#ef4444' : '#16a34a' }} />
+            </div>
+            <span className={`text-xs font-medium ${rawPct >= 90 ? 'text-red-400' : rawPct >= 80 ? 'text-yellow-400' : 'text-[var(--text-muted)]'}`}>{rawPct.toFixed(0)}%</span>
+          </div>
+        )
+      },
+    },
+    { id: 'status', header: t('budgets.columns.status'), accessorFn: r => r.status ?? 'Draft', size: 120, enableSorting: false, meta: { export: false },
+      cell: ({ row }) => {
+        const b = row.original
+        return (
+          <select
+            className={`text-xs bg-transparent border-0 cursor-pointer rounded px-1 py-0.5 focus:outline-none ${STATUS_COLORS[b.status] ?? 'text-[var(--text-muted)]'}`}
+            value={b.status ?? 'Draft'}
+            onChange={async e => {
+              const newStatus = e.target.value
+              try { await budgetsApi.updateBudgetStatus(b.id, newStatus) } catch { /* non-blocking status update */ }
+              setBudgets(prev => prev.map(x => x.id === b.id ? { ...x, status: newStatus } : x))
+            }}
+          >
+            {STATUS_OPTIONS.map(s => <option key={s} value={s}>{t(`budgets.status.${s.toLowerCase()}`)}</option>)}
+          </select>
+        )
+      },
+    },
+  ], [activeCurrency, filterMonth, spending, t])
+
   const cumulativeChartData = useMemo(() => {
     if (viewMode !== 'annual' || !annualSites.length) return null
 
@@ -328,77 +406,47 @@ export default function Budgets() {
             </div>
           )}
 
-          <div className="card p-0 overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr>
-                    {[
-                      t('budgets.columns.site'),
-                      t('budgets.columns.budget', { currency: activeCurrency }),
-                      t('budgets.columns.spent', { currency: activeCurrency }),
-                      t('budgets.columns.remaining'),
-                      t('budgets.columns.progress'),
-                      t('budgets.columns.status'),
-                    ].map(h => (
-                      <th key={h} className="table-header">{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {loading ? (
-                    <>
-                      {Array.from({ length: 4 }).map((_, ri) => (
-                        <tr key={ri} className="animate-pulse border-b border-[var(--input-border)]/40">
-                          {Array.from({ length: 6 }).map((_, ci) => (
-                            <td key={ci} className="table-cell">
-                              <div className="h-3 rounded bg-[var(--input-bg)]/40" style={{ width: ci === 0 ? '80%' : ci === 4 ? '60%' : '55%' }} />
-                            </td>
-                          ))}
-                        </tr>
-                      ))}
-                    </>
-                  ) : budgets.length === 0 ? (
-                    <tr><td colSpan={6} className="text-center py-12 text-[var(--text-muted)]">{t('budgets.states.noBudgetsPeriod')}</td></tr>
-                  ) : budgets.map(b => {
-                    const spent = getSpend(b.site, filterMonth)
-                    const remaining = b.monthly_budget - spent
-                    const rawPct = b.monthly_budget > 0 ? (spent / b.monthly_budget) * 100 : 0
-                    const pct = Math.min(rawPct, 100)
-                    return (
-                      <tr key={b.id} className="hover:bg-[var(--input-bg)]/30">
-                        <td className="table-cell font-medium text-[var(--text-primary)]">{b.site}</td>
-                        <td className="table-cell">{b.monthly_budget.toLocaleString()}</td>
-                        <td className={`table-cell font-medium ${remaining < 0 ? 'text-red-400' : 'text-[var(--text-secondary)]'}`}>{spent.toLocaleString()}</td>
-                        <td className={`table-cell font-medium ${remaining < 0 ? 'text-red-400' : 'text-green-400'}`}>{remaining.toLocaleString()}</td>
-                        <td className="table-cell">
-                          <div className="flex items-center gap-2">
-                            <div className="w-24 h-1.5 bg-[var(--input-bg)] rounded-full overflow-hidden">
-                              <div className="h-full rounded-full" style={{ width: `${pct}%`, background: rawPct > 100 ? '#ef4444' : '#16a34a' }} />
-                            </div>
-                            <span className={`text-xs font-medium ${rawPct >= 90 ? 'text-red-400' : rawPct >= 80 ? 'text-yellow-400' : 'text-[var(--text-muted)]'}`}>{rawPct.toFixed(0)}%</span>
-                          </div>
-                        </td>
-                        <td className="table-cell">
-                          <select
-                            className={`text-xs bg-transparent border-0 cursor-pointer rounded px-1 py-0.5 focus:outline-none ${STATUS_COLORS[b.status] ?? 'text-[var(--text-muted)]'}`}
-                            value={b.status ?? 'Draft'}
-                            onChange={async e => {
-                              const newStatus = e.target.value
-                              try { await budgetsApi.updateBudgetStatus(b.id, newStatus) } catch { /* non-blocking status update */ }
-                              setBudgets(prev => prev.map(x => x.id === b.id ? { ...x, status: newStatus } : x))
-                            }}
-                          >
-                            {STATUS_OPTIONS.map(s => <option key={s} value={s}>{t(`budgets.status.${s.toLowerCase()}`)}</option>)}
-                          </select>
-                        </td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
+          {/* Budget vs Spend bar chart */}
+          {!loading && monthlyChartData && (
+            <div className="card">
+              <h3 className="text-sm font-medium text-[var(--text-muted)] mb-4">
+                {t('budgets.columns.budget', { currency: activeCurrency })} vs {t('budgets.columns.spent', { currency: activeCurrency })}
+              </h3>
+              <div style={{ height: 280 }}>
+                <Bar
+                  data={monthlyChartData}
+                  options={{
+                    responsive: true, maintainAspectRatio: false,
+                    plugins: { legend: { labels: { color: '#9ca3af' } } },
+                    scales: {
+                      x: { grid: { color: '#1f2937' }, ticks: { color: '#9ca3af' } },
+                      y: { grid: { color: '#1f2937' }, ticks: { color: '#9ca3af' } },
+                    },
+                  }}
+                />
+              </div>
             </div>
-          </div>
+          )}
+
+          {loading ? (
+            <div className="card animate-pulse h-64" />
+          ) : (
+            <div className="card p-0 overflow-hidden">
+              <EnterpriseTable
+                columns={monthlyColumns}
+                data={budgets}
+                getRowId={(row) => String(row.id)}
+                enableGlobalFilter={true}
+                searchPlaceholder="Search sites..."
+                enableSorting={true}
+                enableExport={true}
+                exportFileName={`budget-${filterYear}-${filterMonth}`}
+                initialPageSize={25}
+                pageSizeOptions={[10, 25, 50]}
+                emptyMessage={t('budgets.states.noBudgetsPeriod')}
+              />
+            </div>
+          )}
         </>
       )}
 

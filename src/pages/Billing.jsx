@@ -449,7 +449,7 @@ export default function Billing() {
             <p className="text-gray-400 text-sm mt-2">
               Your organisation will move to the <strong className="text-white">{confirm.plan.name}</strong> plan,
               billed <strong className="text-white">{interval}</strong>. Limits and features take effect immediately.
-              {confirm.direction === 'Downgrade' && ' Anything currently over the new limits stays but you won't be able to add more until you're back under the cap.'}
+              {confirm.direction === 'Downgrade' && " Anything currently over the new limits stays but you won't be able to add more until you're back under the cap."}
             </p>
             <div className="flex gap-3 mt-5">
               <button onClick={() => setConfirm(null)} className="btn-secondary flex-1 justify-center text-sm">Cancel</button>

@@ -5,7 +5,7 @@ import {
   ChevronLeft, ChevronRight, Download, FileSpreadsheet, FileText,
   Plus, X, Search, RefreshCw, Filter, ChevronDown, ChevronUp,
   Sliders, TrendingUp, TrendingDown, Minus, AlertOctagon, Eye,
-  Trash2, Edit3, Check, MapPin, User, Layers, BarChart2,
+  Trash2, Edit3, Check, MapPin, User, Layers, BarChart2, Lock,
 } from 'lucide-react'
 import {
   Chart as ChartJS, CategoryScale, LinearScale, BarElement,
@@ -20,6 +20,7 @@ import { useTenant } from '../contexts/TenantContext'
 import { resolvePdfBrand, pdfHeader, pdfFooter, pdfEmptyState, pdfTableTheme } from '../lib/exportUtils'
 import PageHeader from '../components/ui/PageHeader'
 import EmptyState from '../components/EmptyState'
+import EntityApprovalPanel from '../components/workflow/EntityApprovalPanel'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, LineElement, PointElement, Title, Tooltip, Legend)
 
@@ -168,6 +169,11 @@ function ScheduleModal({ onClose, onSave, prefill = null, assets = [], inspector
   const [assetSearch, setAssetSearch] = useState(form.asset_no)
   const [assetDropdown, setAssetDropdown] = useState(false)
   const [saving, setSaving] = useState(false)
+  // Approval-engine gate: locks Save for an existing PM-service record while its
+  // workflow is active (pending/in_review/returned) or locked (approved). Reset
+  // whenever a different record is opened in this modal.
+  const [wfLocked, setWfLocked] = useState(false)
+  useEffect(() => { setWfLocked(false) }, [prefill?.id])
 
   const filteredAssets = useMemo(
     () => assets.filter(a => a.asset_no?.toLowerCase().includes(assetSearch.toLowerCase())).slice(0, 10),
@@ -175,6 +181,8 @@ function ScheduleModal({ onClose, onSave, prefill = null, assets = [], inspector
   )
 
   async function handleSave() {
+    // Block edits to a record whose approval workflow is active/locked.
+    if (prefill?.id && wfLocked) return
     if (!form.asset_no || !form.inspection_date || !form.inspector_name) return
     setSaving(true)
     // `id` present → update; absent → insert (DB assigns uuid + timestamps).
@@ -302,13 +310,36 @@ function ScheduleModal({ onClose, onSave, prefill = null, assets = [], inspector
               className="w-full bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] placeholder-gray-500 focus:outline-none focus:border-blue-500 resize-none"
             />
           </div>
+
+          {/* PM Service Approval — only for an existing schedule record (edit mode). */}
+          {prefill?.id && (
+            <EntityApprovalPanel
+              entityType="pm_service"
+              entityId={prefill.id}
+              entityLabel={prefill.asset_no || prefill.id}
+              context={{
+                asset_no: prefill.asset_no,
+                due_date: prefill.inspection_date,
+                service_type: prefill.type,
+                status: prefill.status,
+                site: prefill.site,
+              }}
+              onStateChange={({ isActive, isLocked }) => setWfLocked(!!(isActive || isLocked))}
+              title="PM Service Approval"
+            />
+          )}
         </div>
 
         <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-[var(--input-border)]">
+          {prefill?.id && wfLocked && (
+            <span className="flex items-center gap-1 text-xs text-yellow-400 mr-auto">
+              <Lock size={12} /> Locked — in approval
+            </span>
+          )}
           <button onClick={onClose} className="px-4 py-2 text-sm text-gray-400 hover:text-[var(--text-primary)] transition-colors">Cancel</button>
           <button
             onClick={handleSave}
-            disabled={!form.asset_no || !form.inspection_date || !form.inspector_name || saving}
+            disabled={!form.asset_no || !form.inspection_date || !form.inspector_name || saving || (!!prefill?.id && wfLocked)}
             className="btn-primary gap-2 disabled:opacity-50"
           >
             {saving ? <><RefreshCw size={13} className="animate-spin" />Saving...</> : <><Check size={13} />Save</>}

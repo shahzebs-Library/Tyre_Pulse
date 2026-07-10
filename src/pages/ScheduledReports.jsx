@@ -2,12 +2,13 @@ import { useState, useEffect, useCallback } from 'react'
 import {
   Calendar, Clock, Mail, Plus, Edit2, Trash2, Eye, EyeOff,
   FileText, BarChart2, Truck, ClipboardList, DollarSign,
-  CheckCircle, XCircle, AlertCircle, ChevronDown, X, Save
+  CheckCircle, XCircle, AlertCircle, ChevronDown, X, Save, Lock
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { useLanguage } from '../contexts/LanguageContext'
 import SegmentedControl from '../components/ui/SegmentedControl'
+import EntityApprovalPanel from '../components/workflow/EntityApprovalPanel'
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -216,7 +217,7 @@ function SelectField({ value, onChange, children, className = '' }) {
   )
 }
 
-function Modal({ title, onClose, onSave, saving, form, setForm, emailError, setEmailError }) {
+function Modal({ title, onClose, onSave, saving, form, setForm, emailError, setEmailError, record, wfLocked, onWfStateChange }) {
   const { t } = useLanguage()
   const handleRecipientsBlur = () => {
     const { invalid } = validateEmails(form.recipients_raw)
@@ -350,6 +351,31 @@ function Modal({ title, onClose, onSave, saving, form, setForm, emailError, setE
               <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${form.active ? 'translate-x-5' : 'translate-x-0'}`} />
             </button>
           </div>
+
+          {/* Approval & Workflow Engine — status, immutable trail, approver action, start picker.
+              Executive/scheduled report publishing requires sign-off before it can be edited. */}
+          {record?.id && (
+            <EntityApprovalPanel
+              entityType="report_publish"
+              entityId={record.id}
+              entityLabel={record.name || record.report_type || record.id}
+              context={{
+                report_type: record.report_type,
+                frequency: record.frequency,
+                recipients: record.recipients,
+                status: record.active ? 'active' : 'inactive',
+                site: record.site,
+              }}
+              onStateChange={onWfStateChange}
+              title="Report Publishing Approval"
+            />
+          )}
+
+          {wfLocked && (
+            <div className="flex items-center gap-1.5 text-xs text-[var(--text-muted)]">
+              <Lock className="w-3 h-3" /> Locked — in approval
+            </div>
+          )}
         </div>
 
         {/* Footer */}
@@ -362,10 +388,13 @@ function Modal({ title, onClose, onSave, saving, form, setForm, emailError, setE
           </button>
           <button
             onClick={onSave}
-            disabled={saving}
+            disabled={saving || wfLocked}
+            title={wfLocked ? 'Locked — in approval' : undefined}
             className="px-5 py-2 text-sm font-medium text-white bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
           >
-            {saving ? (
+            {wfLocked ? (
+              <><Lock className="w-4 h-4" />{t('schedreports.modal.save')}</>
+            ) : saving ? (
               <><span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />{t('schedreports.modal.saving')}</>
             ) : (
               <><Save className="w-4 h-4" />{t('schedreports.modal.save')}</>
@@ -431,6 +460,10 @@ export default function ScheduledReports() {
   const [deleteTarget, setDeleteTarget] = useState(null)
   const [deleting, setDeleting] = useState(false)
 
+  // Approval-engine gate: locks the schedule's Save control while its publishing
+  // workflow is active (pending/in_review/returned) or locked (approved).
+  const [wfLocked, setWfLocked] = useState(false)
+
   const [filterFreq, setFilterFreq] = useState('all')
   const [filterActive, setFilterActive] = useState('all')
   const [search, setSearch] = useState('')
@@ -455,6 +488,10 @@ export default function ScheduledReports() {
   }, [])
 
   useEffect(() => { fetchSchedules() }, [fetchSchedules])
+
+  // Reset the approval lock whenever a different schedule (or none) is opened for
+  // edit; EntityApprovalPanel re-reports the true state via onStateChange.
+  useEffect(() => { setWfLocked(false) }, [editTarget?.id])
 
   // ── Modal helpers ───────────────────────────────────────────────────────────
 
@@ -490,6 +527,8 @@ export default function ScheduledReports() {
   // ── Save ─────────────────────────────────────────────────────────────────────
 
   const handleSave = async () => {
+    // Block edits to a schedule whose publishing approval is active/locked.
+    if (editTarget && wfLocked) return
     if (!form.name.trim()) { setEmailError(''); return }
 
     const { emails, invalid } = validateEmails(form.recipients_raw)
@@ -780,6 +819,9 @@ export default function ScheduledReports() {
           setForm={setForm}
           emailError={emailError}
           setEmailError={setEmailError}
+          record={editTarget}
+          wfLocked={wfLocked}
+          onWfStateChange={({ isActive, isLocked }) => setWfLocked(!!(isActive || isLocked))}
         />
       )}
 

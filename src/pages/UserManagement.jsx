@@ -12,6 +12,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import PageHeader from '../components/ui/PageHeader'
 import AccessControlMatrix from '../components/AccessControlMatrix'
 import OrgBrandingPanel from '../components/OrgBrandingPanel'
+import BrandLogoStudio from '../components/BrandLogoStudio'
 import CountryAddressPanel from '../components/CountryAddressPanel'
 import SitesMasterPanel from '../components/SitesMasterPanel'
 
@@ -1064,6 +1065,9 @@ export default function UserManagement() {
         <div className="space-y-4">
           <div className="card">
             <OrgBrandingPanel canEdit={isAdmin || !!currentProfile?.is_super_admin} />
+          </div>
+          <div className="card">
+            <BrandLogoStudio canEdit={isAdmin || !!currentProfile?.is_super_admin} />
           </div>
           <div className="card">
             <CountryAddressPanel canEdit={isAdmin || !!currentProfile?.is_super_admin} />

@@ -25,6 +25,8 @@ import { useWakeLock } from '../hooks/useWakeLock'
 import { useRealtimeSync } from '../hooks/useRealtime'
 import { useFeatureFlags } from '../hooks/useFeatureFlags'
 import TpLogo from '../assets/logo.svg'
+import { useTenant } from '../contexts/TenantContext'
+import { resolveBrandLogo } from '../lib/brand/library'
 import InstallPwaPrompt from './InstallPwaPrompt'
 import NotificationCenter from './NotificationCenter'
 import GlobalSearch from './GlobalSearch'
@@ -314,7 +316,7 @@ function TyreManShell({ children, alertCount }) {
             className="w-7 h-7 rounded-lg flex items-center justify-center"
             style={{ background: 'rgba(22,163,74,0.1)', border: '1px solid rgba(22,163,74,0.22)' }}
           >
-            <img src={TpLogo} alt="" className="w-4 h-4" />
+            <img src={appIcon} alt="" className="w-4 h-4 object-contain" />
           </div>
           <span
             className="font-extrabold text-sm tracking-tight"
@@ -454,6 +456,10 @@ export default function Layout({ children }) {
 
   const { profile, signOut }                = useAuth()
   const { t }                               = useLanguage()
+  const { branding }                        = useTenant()
+  // Org-assigned app icon (V120); falls back to the built-in mark so an
+  // unbranded org renders exactly as before.
+  const appIcon = resolveBrandLogo(branding, 'app_icon') || TpLogo
   const { activeCountry, setActiveCountry } = useSettings()
   const { theme, toggleTheme }              = useTheme()
   const navigate     = useNavigate()
@@ -642,7 +648,7 @@ export default function Layout({ children }) {
                 boxShadow: '0 0 20px rgba(22,163,74,0.4), inset 0 1px 0 rgba(255,255,255,0.06)',
               }}
             >
-              <img src={TpLogo} alt="" style={{ width: 18, height: 18 }} />
+              <img src={appIcon} alt="" style={{ width: 18, height: 18 }} className="object-contain" />
               {/* pulse ring */}
               <div className="absolute inset-0 rounded-xl animate-ping-green opacity-0 group-hover:opacity-100"
                 style={{ background: 'rgba(22,163,74,0.15)' }} />
@@ -998,7 +1004,7 @@ export default function Layout({ children }) {
           </button>
 
           <div className="flex items-center gap-2 flex-1 min-w-0">
-            <img src={TpLogo} alt="" className="w-5 h-5 flex-shrink-0" />
+            <img src={appIcon} alt="" className="w-5 h-5 flex-shrink-0 object-contain" />
             <span
               className="font-extrabold text-sm tracking-tight"
               style={{

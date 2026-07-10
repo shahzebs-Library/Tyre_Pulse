@@ -14,6 +14,22 @@ import { createContext, useContext, useState, useEffect, useCallback, useMemo } 
 import { useAuth } from './AuthContext'
 import { getOrgBranding, withBrandingDefaults } from '../lib/api/branding'
 import { listCountryAddresses, resolveAddress } from '../lib/api/countryAddresses'
+import { cacheResolvedLogos, clearCachedLogos, resolveBrandLogo } from '../lib/brand/library'
+
+/** Point the browser-tab icon at the org's favicon placement (V120). */
+function applyFavicon(branding) {
+  if (typeof document === 'undefined') return
+  const href = resolveBrandLogo(branding, 'favicon')
+  if (!href) return
+  let link = document.querySelector("link[rel~='icon']")
+  if (!link) {
+    link = document.createElement('link')
+    link.rel = 'icon'
+    document.head.appendChild(link)
+  }
+  link.type = href.endsWith('.svg') ? 'image/svg+xml' : 'image/png'
+  link.href = href
+}
 
 const TenantContext = createContext({
   branding: null,          // merged-with-defaults branding, or null before load
@@ -36,13 +52,18 @@ export function TenantProvider({ children }) {
   const [error, setError]       = useState(null)
 
   const refreshBranding = useCallback(async () => {
-    if (!user) { setBranding(null); setCountryAddresses([]); setLoading(false); return }
+    if (!user) { setBranding(null); setCountryAddresses([]); setLoading(false); clearCachedLogos(); return }
     setLoading(true); setError(null)
     try {
       const raw = await getOrgBranding(null) // caller's own org
+      const merged = withBrandingDefaults(raw)
       setOrgId(raw?.org_id ?? null)
       setOrgName(raw?.name ?? null)
-      setBranding(withBrandingDefaults(raw))
+      setBranding(merged)
+      // Persist resolved login/favicon logos for the next pre-auth visit, and
+      // point the browser tab at the org favicon for this session.
+      cacheResolvedLogos(merged)
+      applyFavicon(merged)
     } catch (err) {
       // Branding is non-critical chrome — fall back to defaults, never block the app.
       console.warn('[TenantContext] branding load failed:', err?.message || err)

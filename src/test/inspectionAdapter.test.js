@@ -129,7 +129,7 @@ describe('inspection adapter - duplicate classification (event-scoped)', () => {
       { country: 'KSA', ...make({}) },
     ]
     const out = classifyDuplicates(rows, 'inspection')
-    expect(out.every((r) => r.dup_status === 'duplicate')).toBe(true)
+    expect(out.map((r) => r.dup_status)).toEqual(['none', 'duplicate'])
   })
 
   it('same event key but disagreeing conflict field (findings) → conflict', () => {
@@ -138,7 +138,7 @@ describe('inspection adapter - duplicate classification (event-scoped)', () => {
       { country: 'KSA', ...make({ Findings: 'Cracked sidewall' }) },
     ]
     const out = classifyDuplicates(rows, 'inspection')
-    expect(out.every((r) => r.dup_status === 'conflict')).toBe(true)
+    expect(out.map((r) => r.dup_status)).toEqual(['none', 'conflict'])
   })
 
   it('same event key but disagreeing conflict field (status/severity) → conflict', () => {
@@ -147,7 +147,7 @@ describe('inspection adapter - duplicate classification (event-scoped)', () => {
       { country: 'KSA', ...make({ Status: 'In Progress', Severity: 'High' }) },
     ]
     const out = classifyDuplicates(rows, 'inspection')
-    expect(out.every((r) => r.dup_status === 'conflict')).toBe(true)
+    expect(out.map((r) => r.dup_status)).toEqual(['none', 'conflict'])
   })
 
   it('different inspector → distinct event → none (not a duplicate)', () => {

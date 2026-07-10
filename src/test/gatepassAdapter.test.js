@@ -102,7 +102,7 @@ describe('gatepass adapter - duplicate classification', () => {
       { country: 'KSA', asset_no: 'V-1', pass_date: '2024-01-12', site: 'Gate A', status: 'Cleared' },
     ]
     const out = classifyDuplicates(rows, 'gatepass')
-    expect(out.every((r) => r.dup_status === 'duplicate')).toBe(true)
+    expect(out.map((r) => r.dup_status)).toEqual(['none', 'duplicate'])
   })
 
   it('differing pass_date → none (distinct keys)', () => {
@@ -120,7 +120,7 @@ describe('gatepass adapter - duplicate classification', () => {
       { country: 'KSA', asset_no: 'V-1', pass_date: '2024-01-12', site: 'Gate B' },
     ]
     const out = classifyDuplicates(rows, 'gatepass')
-    expect(out.every((r) => r.dup_status === 'conflict')).toBe(true)
+    expect(out.map((r) => r.dup_status)).toEqual(['none', 'conflict'])
   })
 
   it('same key but disagreeing status → conflict', () => {
@@ -129,7 +129,7 @@ describe('gatepass adapter - duplicate classification', () => {
       { country: 'KSA', asset_no: 'V-1', pass_date: '2024-01-12', status: 'Denied' },
     ]
     const out = classifyDuplicates(rows, 'gatepass')
-    expect(out.every((r) => r.dup_status === 'conflict')).toBe(true)
+    expect(out.map((r) => r.dup_status)).toEqual(['none', 'conflict'])
   })
 
   it('same asset + date across different countries → none (country-scoped)', () => {

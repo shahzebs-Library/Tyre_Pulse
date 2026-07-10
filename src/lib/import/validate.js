@@ -320,6 +320,22 @@ function norm(v) {
   return String(v).trim().toLowerCase()
 }
 
+/**
+ * Whole-row fingerprint: a stable, order-independent signature of ALL of a row's
+ * transformed values. Two rows with the same fingerprint are byte-for-byte the
+ * same record; a differing fingerprint means the rows differ somewhere — even if
+ * they share a natural key. This is what separates a true duplicate (identical
+ * row) from a conflict (same key, different data), matching how a human reads it.
+ */
+export function rowFingerprint(view) {
+  const obj = view && typeof view === 'object' ? view : {}
+  return Object.keys(obj)
+    .filter((k) => obj[k] != null && String(obj[k]).trim() !== '')
+    .sort()
+    .map((k) => `${k}=${norm(obj[k])}`)
+    .join('')
+}
+
 function keyParts(parts) {
   const cleaned = parts.map(norm)
   if (cleaned.every((p) => p === '')) return null
@@ -329,8 +345,16 @@ function keyParts(parts) {
 }
 
 /**
- * Annotate rows with dup_status by natural key. Accepts rows shaped as either
- * the full transform result ({ transformed }) or a flat transformed object.
+ * Annotate rows with dup_status by natural key + whole-row fingerprint:
+ *   'none'      first row of a key, or a key seen only once (the keeper)
+ *   'duplicate' an exact whole-row copy of a row already seen (redundant), OR a
+ *               same-key row that only adds complementary data with no conflict-
+ *               field disagreement (mergeable)
+ *   'conflict'  same natural key AND a designated conflict field disagrees with the
+ *               keeper — a genuinely different record for the operator to resolve
+ * Sharing a key is NOT enough to be a hard conflict: the keeper is preserved and
+ * only a real conflict-field disagreement is escalated. Accepts rows shaped as
+ * either the full transform result ({ transformed }) or a flat transformed object.
  *
  * @param {Array<Record<string,*>>} rows
  * @param {'fleet'|'tyre'|'stock'} module
@@ -355,35 +379,63 @@ export function classifyDuplicates(rows, module) {
     groups.get(k).push(i)
   })
 
-  // Determine per-key status: a group of >1 is a duplicate; if any conflict
-  // field disagrees across the group it is a conflict.
-  /** @type {Map<string, 'none'|'duplicate'|'conflict'>} */
-  const keyStatus = new Map()
-  for (const [k, idxs] of groups) {
-    if (idxs.length <= 1) {
-      keyStatus.set(k, 'none')
-      continue
-    }
-    let conflict = false
-    for (const field of conflictFields) {
-      const seen = new Set()
-      for (const i of idxs) {
-        const val = norm(view(list[i])[field])
-        if (val !== '') seen.add(val)
+  // Per-ROW status (not per-key), so one key group can hold both an exact copy
+  // and a genuinely different record. Three realistic tiers:
+  //   · first row of a key                         → 'none'      (the keeper)
+  //   · exact whole-row copy of a row already seen → 'duplicate' (redundant — safe to skip)
+  //   · same key, no conflict-field disagreement   → 'duplicate' (complementary/mergeable —
+  //                                                   e.g. same accident under claim_no on one
+  //                                                   row and police_report_no on another)
+  //   · same key AND a designated conflict field   → 'conflict'  (a real disagreement the
+  //     disagrees with the keeper                     operator must resolve — never a silent skip)
+  const status = new Array(list.length).fill('none')
+  for (const [, idxs] of groups) {
+    if (idxs.length <= 1) continue
+    const seenFingerprints = new Set()
+    // Keeper's value for each conflict field — a later row that sets a DIFFERENT
+    // non-empty value on any of these is a true conflict.
+    const keeperConflictVals = {}
+    let keeperSet = false
+    for (const i of idxs) {
+      const v = view(list[i]) || {}
+      const fp = rowFingerprint(v)
+      if (seenFingerprints.has(fp)) {
+        status[i] = 'duplicate' // exact whole-row copy of a row already seen
+        continue
       }
-      if (seen.size > 1) {
-        conflict = true
-        break
+      seenFingerprints.add(fp)
+      if (!keeperSet) {
+        // First unique row of the key = keeper.
+        status[i] = 'none'
+        for (const field of conflictFields) {
+          const val = norm(v[field])
+          if (val !== '') keeperConflictVals[field] = val
+        }
+        keeperSet = true
+        continue
+      }
+      // Same key, not an exact copy: a conflict only when a designated conflict
+      // field is present on both and disagrees. Otherwise it is complementary
+      // data on the same record → 'duplicate' (mergeable, not a hard conflict).
+      let conflict = false
+      for (const field of conflictFields) {
+        const val = norm(v[field])
+        if (val !== '' && keeperConflictVals[field] != null && keeperConflictVals[field] !== val) {
+          conflict = true
+          break
+        }
+      }
+      status[i] = conflict ? 'conflict' : 'duplicate'
+      // Let the keeper accrue any conflict-field values it did not yet carry, so a
+      // later row disagreeing with an earlier complementary value is still caught.
+      for (const field of conflictFields) {
+        const val = norm(v[field])
+        if (val !== '' && keeperConflictVals[field] == null) keeperConflictVals[field] = val
       }
     }
-    keyStatus.set(k, conflict ? 'conflict' : 'duplicate')
   }
 
-  return list.map((r) => {
-    const k = keyFn(view(r) || {})
-    const dup_status = k != null ? keyStatus.get(k) || 'none' : 'none'
-    return { ...r, dup_status }
-  })
+  return list.map((r, i) => ({ ...r, dup_status: status[i] }))
 }
 
 /**

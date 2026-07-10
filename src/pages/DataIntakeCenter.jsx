@@ -87,6 +87,9 @@ export default function DataIntakeCenter() {
   const [forceFlagged, setForceFlagged] = useState(false)
   // Cross-file enrichment: fill blanks on existing live records instead of skipping.
   const [enrichExisting, setEnrichExisting] = useState(false)
+  // Per-row action override (approver's final say). Keyed by sourceRowNo →
+  // 'insert' | 'update' | 'skip' | 'reject'. Empty ⇒ use the smart default.
+  const [rowActionOverride, setRowActionOverride] = useState({})
   const [aliasMaps, setAliasMaps] = useState(null) // { site, supplier, brand } → Map
   const [fxRatesMap, setFxRatesMap] = useState(null) // { quoteCurrency: {rate,rate_date,source} }
 
@@ -117,6 +120,46 @@ export default function DataIntakeCenter() {
     () => wrongModuleWarning(counts, module, WRONG_MODULE_THRESHOLD),
     [counts, module],
   )
+
+  // Smart default action for a row, given the current global toggles. This is the
+  // system's recommendation; the operator can override it per row (rowActionOverride).
+  //  · error            → reject, unless force-include is on (elevated) → insert
+  //  · already live      → skip, unless enrich is on (elevated) → update
+  //  · exact whole-row copy inside this file → skip (redundant)
+  //  · everything else   → insert
+  const smartAction = useCallback((r) => {
+    if (r.validationStatus === 'error') return (forceFlagged && isElevated) ? 'insert' : 'reject'
+    if (r.liveDuplicate) return (enrichExisting && isElevated) ? 'update' : 'skip'
+    if (r.dupStatus === 'duplicate') return 'skip'
+    return 'insert'
+  }, [forceFlagged, enrichExisting, isElevated])
+
+  // The action that will actually run: the operator's per-row override wins;
+  // otherwise the smart default. Elevated approvers may override any row.
+  const effectiveAction = useCallback((r) => {
+    const ov = rowActionOverride[r.sourceRowNo]
+    return (ov && isElevated) ? ov : smartAction(r)
+  }, [rowActionOverride, isElevated, smartAction])
+
+  // Live tally of what will happen once staged, reflecting overrides + toggles.
+  const actionPlan = useMemo(() => {
+    const p = { insert: 0, update: 0, skip: 0, reject: 0, overridden: 0 }
+    for (const r of annotated) {
+      const a = effectiveAction(r)
+      p[a] = (p[a] || 0) + 1
+      if (rowActionOverride[r.sourceRowNo] && isElevated) p.overridden++
+    }
+    return p
+  }, [annotated, effectiveAction, rowActionOverride, isElevated])
+
+  const setAllActions = useCallback((action) => {
+    setRowActionOverride(() => {
+      if (action === null) return {}
+      const next = {}
+      for (const r of annotated) next[r.sourceRowNo] = action
+      return next
+    })
+  }, [annotated])
 
   // Uploaded files that never became an import (orphans from abandoned attempts).
   const orphanFiles = useMemo(() => files.filter((f) => f.orphan), [files])
@@ -389,20 +432,16 @@ export default function DataIntakeCenter() {
     // key already exists live is flagged duplicate and switched to 'skip' so the
     // commit never creates a second live row (conflicts are left for the operator).
     rows.forEach((r) => {
-      let action = r.validationStatus === 'error' ? 'reject' : 'insert'
       let isLiveDup = false
       if (liveKeys && r.validationStatus !== 'error') {
         const key = naturalKey(r.transformed, module)
-        if (key && liveKeys.has(key)) {
-          isLiveDup = true
-          if (r.dupStatus !== 'conflict') r.dupStatus = 'duplicate'
-          // Enrichment mode: instead of skipping the existing record, mark it to
-          // fill its blank fields from this file (server-side, fill-only-empty).
-          action = (enrichExisting && isElevated) ? 'update' : 'skip'
-        }
+        if (key && liveKeys.has(key)) isLiveDup = true
       }
       r.liveDuplicate = isLiveDup
-      r.action = action
+      // dupStatus is kept as the TRUE in-file classification (none/duplicate/
+      // conflict); "already live" is tracked separately as liveDuplicate so the
+      // operator can tell a whole-row copy apart from a same-key/different-data
+      // conflict. The action itself is derived on demand via effectiveAction().
     })
 
     const c = { total: rows.length, ready: 0, warning: 0, error: 0, duplicate: 0, conflict: 0, liveDuplicate: 0, countryConflict: 0, keyed: 0, amount: 0, qty: 0 }
@@ -427,6 +466,7 @@ export default function DataIntakeCenter() {
       const qv = Number(t.qty); if (Number.isFinite(qv)) c.qty += qv
     })
     c.amount = Math.round(c.amount * 100) / 100
+    setRowActionOverride({}) // fresh validation ⇒ back to smart defaults
     setAnnotated(rows); setCounts(c)
   }
   useEffect(() => { if (step === 2 && sheet && mapping.length) runValidation() }, [step]) // eslint-disable-line
@@ -439,22 +479,18 @@ export default function DataIntakeCenter() {
     setError(''); setBusy(true)
     try {
       await imports.stageRows(batchId, annotated.map((r) => {
-        // Derive the row action from the CURRENT toggle state + row flags, so a
-        // toggle flipped after validation still takes effect:
-        //  · force-include: push a validation-error row through the commit (a
-        //    genuinely-broken row still fails its own INSERT per-row, so the
-        //    batch is never corrupted).
-        //  · enrich: fill blanks on the matching existing record instead of skip.
-        const forced = forceFlagged && isElevated && r.validationStatus === 'error'
-        const enrich = enrichExisting && isElevated && r.liveDuplicate && r.validationStatus !== 'error'
-        let action
-        if (r.validationStatus === 'error') action = forced ? 'insert' : 'reject'
-        else if (r.liveDuplicate) action = enrich ? 'update' : 'skip'
-        else action = 'insert'
+        // The action is the operator's final call: their per-row override if set,
+        // otherwise the smart default derived from the current toggles + flags.
+        // A validation-error row that the operator chose to push through (insert/
+        // update) is downgraded to 'warning' so it is committed — a genuinely
+        // un-insertable row still fails its own per-row INSERT, so the batch is
+        // never corrupted.
+        const action = effectiveAction(r)
+        const forcedThrough = r.validationStatus === 'error' && (action === 'insert' || action === 'update')
         return {
           sheetName: sheet.name, sourceRowNo: r.sourceRowNo, raw: r.raw, mapped: r.mapped,
           transformed: r.transformed, custom: r.custom,
-          validationStatus: forced ? 'warning' : r.validationStatus,
+          validationStatus: forcedThrough ? 'warning' : r.validationStatus,
           dupStatus: r.dupStatus,
           action,
           fingerprint: r.fingerprint,
@@ -752,21 +788,71 @@ export default function DataIntakeCenter() {
               </p>
             </div>
           )}
+          {/* Action plan + bulk controls: the operator has the final say on every
+              row. The smart defaults are pre-selected; override any row (or all)
+              before staging. */}
+          <div className="flex flex-wrap items-center gap-2 text-xs">
+            <span className="text-[var(--text-secondary)]">Plan:</span>
+            {actionPlan.insert > 0 && <span className="px-2 py-0.5 rounded bg-green-900/30 text-green-300">{actionPlan.insert} insert</span>}
+            {actionPlan.update > 0 && <span className="px-2 py-0.5 rounded bg-sky-900/30 text-sky-300">{actionPlan.update} update</span>}
+            {actionPlan.skip > 0 && <span className="px-2 py-0.5 rounded bg-[var(--surface-2)] text-[var(--text-secondary)]">{actionPlan.skip} skip</span>}
+            {actionPlan.reject > 0 && <span className="px-2 py-0.5 rounded bg-red-900/30 text-red-300">{actionPlan.reject} reject</span>}
+            {isElevated && actionPlan.overridden > 0 && <span className="px-2 py-0.5 rounded bg-amber-900/30 text-amber-300">{actionPlan.overridden} overridden</span>}
+            {isElevated && (
+              <div className="ml-auto flex items-center gap-1.5">
+                <span className="text-[var(--text-muted)]">Set all:</span>
+                <button onClick={() => setAllActions('insert')} className="px-2 py-0.5 rounded bg-[var(--surface-2)] hover:bg-green-900/40 text-[var(--text-secondary)] hover:text-green-300">Insert</button>
+                <button onClick={() => setAllActions('update')} className="px-2 py-0.5 rounded bg-[var(--surface-2)] hover:bg-sky-900/40 text-[var(--text-secondary)] hover:text-sky-300">Update</button>
+                <button onClick={() => setAllActions('skip')} className="px-2 py-0.5 rounded bg-[var(--surface-2)] hover:bg-[var(--surface-3)] text-[var(--text-secondary)]">Skip</button>
+                <button onClick={() => setAllActions('reject')} className="px-2 py-0.5 rounded bg-[var(--surface-2)] hover:bg-red-900/40 text-[var(--text-secondary)] hover:text-red-300">Reject</button>
+                <button onClick={() => setAllActions(null)} className="px-2 py-0.5 rounded bg-[var(--surface-2)] hover:bg-[var(--surface-3)] text-[var(--text-muted)]">Reset to smart</button>
+              </div>
+            )}
+          </div>
           <div className="overflow-x-auto border border-[var(--border-dim)] rounded-xl max-h-80 overflow-y-auto">
             <table className="w-full text-sm">
-              <thead className="bg-[var(--surface-2)] text-[var(--text-secondary)] text-xs sticky top-0"><tr><th className="text-left px-3 py-2">#</th><th className="text-left px-3 py-2">Status</th><th className="text-left px-3 py-2">Dup</th><th className="text-left px-3 py-2">Issues</th></tr></thead>
+              <thead className="bg-[var(--surface-2)] text-[var(--text-secondary)] text-xs sticky top-0"><tr><th className="text-left px-3 py-2">#</th><th className="text-left px-3 py-2">Status</th><th className="text-left px-3 py-2">Dup</th><th className="text-left px-3 py-2">Issues</th><th className="text-left px-3 py-2">Action</th></tr></thead>
               <tbody>
-                {annotated.slice(0, 200).map((r) => (
+                {annotated.slice(0, 200).map((r) => {
+                  const act = effectiveAction(r)
+                  const overridden = isElevated && !!rowActionOverride[r.sourceRowNo]
+                  return (
                   <tr key={r.sourceRowNo} className="border-t border-[var(--border-dim)]">
                     <td className="px-3 py-1.5 text-[var(--text-muted)]">{r.sourceRowNo}</td>
                     <td className="px-3 py-1.5"><span className={`text-xs px-2 py-0.5 rounded ${statusColor(r.validationStatus)}`}>{r.validationStatus}</span></td>
-                    <td className="px-3 py-1.5 text-xs text-[var(--text-secondary)]">{r.liveDuplicate ? <span className="text-sky-400">already live · skip</span> : r.dupStatus !== 'none' ? r.dupStatus : '-'}</td>
-                    <td className="px-3 py-1.5 text-xs text-[var(--text-muted)] truncate max-w-[280px]">{r.issues.map((i) => i.message).join('; ') || '-'}</td>
+                    <td className="px-3 py-1.5 text-xs text-[var(--text-secondary)]">{r.liveDuplicate ? <span className="text-sky-400" title="A record with this key already exists in the live table">already live</span> : r.dupStatus === 'duplicate' ? <span className="text-[var(--text-muted)]" title="Exact whole-row copy of an earlier row in this file">exact copy</span> : r.dupStatus === 'conflict' ? <span className="text-amber-400" title="Same key as another row in this file but different data">conflict</span> : '-'}</td>
+                    <td className="px-3 py-1.5 text-xs text-[var(--text-muted)] truncate max-w-[240px]">{r.issues.map((i) => i.message).join('; ') || '-'}</td>
+                    <td className="px-3 py-1.5">
+                      {isElevated ? (
+                        <select
+                          value={act}
+                          onChange={(e) => {
+                            const val = e.target.value
+                            setRowActionOverride((prev) => {
+                              const next = { ...prev }
+                              if (val === smartAction(r)) delete next[r.sourceRowNo]
+                              else next[r.sourceRowNo] = val
+                              return next
+                            })
+                          }}
+                          className={`text-xs rounded px-1.5 py-1 bg-[var(--surface-2)] border ${overridden ? 'border-amber-600/60 text-amber-300' : 'border-[var(--border-dim)] text-[var(--text-secondary)]'}`}
+                        >
+                          <option value="insert">Insert</option>
+                          <option value="update">Update</option>
+                          <option value="skip">Skip</option>
+                          <option value="reject">Reject</option>
+                        </select>
+                      ) : (
+                        <span className={`text-xs px-2 py-0.5 rounded ${act === 'insert' ? 'text-green-300 bg-green-900/25' : act === 'update' ? 'text-sky-300 bg-sky-900/25' : act === 'reject' ? 'text-red-300 bg-red-900/25' : 'text-[var(--text-secondary)] bg-[var(--surface-2)]'}`}>{act}</span>
+                      )}
+                    </td>
                   </tr>
-                ))}
+                  )
+                })}
               </tbody>
             </table>
           </div>
+          {isElevated && <p className="text-xs text-[var(--text-muted)]">You have the final say on every row — override any action above. Anything set to <span className="text-green-300">Insert</span>/<span className="text-sky-300">Update</span> is committed even if it was flagged; genuinely un-insertable rows still fail safely per-row and are logged. Showing first 200 rows; bulk actions apply to the whole batch.</p>}
           {counts?.countryConflict > 0 && (
             <div className="bg-amber-900/20 border border-amber-600/50 rounded-xl p-4 space-y-2">
               <p className="text-sm text-amber-300 flex items-center gap-2"><AlertTriangle size={16} /> {counts.countryConflict} row(s) carry a country that differs from the selected import country <span className="font-semibold">{activeCountry}</span>.</p>

@@ -248,6 +248,20 @@ describe('import engine - duplicate classification', () => {
     // the unique row is not a duplicate
     expect(out[2].dup_status === 'none' || out[2].dup_status == null).toBe(true)
   })
+
+  it('distinguishes an EXACT whole-row copy (duplicate) from same-key-different-data (conflict)', () => {
+    const rows = [
+      { country: 'KSA', serial_no: 'S1', asset_no: 'A', brand: 'X' }, // keeper
+      { country: 'KSA', serial_no: 'S1', asset_no: 'A', brand: 'X' }, // identical → duplicate
+      { country: 'KSA', serial_no: 'S1', asset_no: 'B', brand: 'Y' }, // same key, different → conflict
+      { country: 'KSA', serial_no: 'S2', asset_no: 'C', brand: 'Z' }, // unique → none
+    ]
+    const out = classifyDuplicates(rows, 'tyre')
+    expect(out[0].dup_status).toBe('none')
+    expect(out[1].dup_status).toBe('duplicate')
+    expect(out[2].dup_status).toBe('conflict')
+    expect(out[3].dup_status).toBe('none')
+  })
 })
 
 describe('import engine - parsing helpers', () => {

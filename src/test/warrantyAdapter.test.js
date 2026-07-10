@@ -121,7 +121,7 @@ describe('warranty adapter - duplicate classification', () => {
       { country: 'KSA', serial_number: 'SN-100', claim_no: 'WAR-100', claim_status: 'Approved', credit_amount: 500, asset_no: 'V-1' },
     ]
     const out = classifyDuplicates(rows, 'warranty')
-    expect(out.every((r) => r.dup_status === 'duplicate')).toBe(true)
+    expect(out.map((r) => r.dup_status)).toEqual(['none', 'duplicate'])
   })
 
   it('same key but disagreeing claim_status → conflict', () => {
@@ -130,7 +130,7 @@ describe('warranty adapter - duplicate classification', () => {
       { country: 'KSA', serial_number: 'SN-200', claim_no: 'WAR-200', claim_status: 'Rejected' },
     ]
     const out = classifyDuplicates(rows, 'warranty')
-    expect(out.every((r) => r.dup_status === 'conflict')).toBe(true)
+    expect(out.map((r) => r.dup_status)).toEqual(['none', 'conflict'])
   })
 
   it('same key but disagreeing credit_amount → conflict', () => {
@@ -139,7 +139,7 @@ describe('warranty adapter - duplicate classification', () => {
       { country: 'KSA', serial_number: 'SN-300', claim_no: 'WAR-300', credit_amount: 999 },
     ]
     const out = classifyDuplicates(rows, 'warranty')
-    expect(out.every((r) => r.dup_status === 'conflict')).toBe(true)
+    expect(out.map((r) => r.dup_status)).toEqual(['none', 'conflict'])
   })
 
   it('same key but disagreeing asset_no → conflict', () => {
@@ -148,7 +148,7 @@ describe('warranty adapter - duplicate classification', () => {
       { country: 'KSA', serial_number: 'SN-400', claim_no: 'WAR-400', asset_no: 'V-2' },
     ]
     const out = classifyDuplicates(rows, 'warranty')
-    expect(out.every((r) => r.dup_status === 'conflict')).toBe(true)
+    expect(out.map((r) => r.dup_status)).toEqual(['none', 'conflict'])
   })
 
   it('different claim_no on same serial → distinct keys, none', () => {

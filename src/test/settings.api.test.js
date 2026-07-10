@@ -23,6 +23,7 @@ const h = vi.hoisted(() => {
       delete() { calls.delete = true; return b },
       upsert(v, opts) { calls.upsert = v; calls.upsertOpts = opts; return b },
       single() { return Promise.resolve(state.result) },
+      maybeSingle() { return Promise.resolve(state.result) },
       then(onF, onR) { return Promise.resolve(state.result).then(onF, onR) },
     }
     state.last = b

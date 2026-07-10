@@ -33,7 +33,8 @@ export function listKpiTargetsByYear(year) {
 
 /** The single `alert_thresholds` app_settings row (JSON value). */
 export function getAlertThresholds() {
-  return supabase.from('app_settings').select('value').eq('key', 'alert_thresholds').single()
+  // maybeSingle: the row is optional — .single() 406s when it doesn't exist yet.
+  return supabase.from('app_settings').select('value').eq('key', 'alert_thresholds').maybeSingle()
 }
 
 /** Upsert one global `settings` row (onConflict: key). Page builds the row. */

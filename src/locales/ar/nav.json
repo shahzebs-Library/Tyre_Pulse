@@ -80,6 +80,7 @@
     "/reports": "التقارير",
     "/scheduled-reports": "التقارير المجدولة",
     "/executive-report": "التقرير التنفيذي",
+    "/display": "وضع العرض التلفزيوني",
     "/ai-command-center": "مركز القيادة الذكي",
     "/knowledge-base": "قاعدة المعرفة",
     "/ai-cost-monitor": "مراقب تكلفة الذكاء الاصطناعي",
@@ -97,6 +98,11 @@
     "/upload-approvals": "موافقات الرفع",
     "/custom-data": "بيانات مخصّصة",
     "/audit": "سجل التدقيق",
+    "/security-center": "مركز الأمان",
+    "/permission-matrix": "مصفوفة الصلاحيات",
+    "/system-health": "صحة النظام",
+    "/tenant-health": "الاستخدام والتبني",
+    "/billing": "الفوترة والاشتراك",
     "/settings": "الإعدادات",
     "/users": "إدارة المستخدمين"
   }

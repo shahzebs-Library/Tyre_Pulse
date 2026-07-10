@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
+import { useState, useEffect, useMemo, useCallback, useRef, Fragment } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
@@ -869,9 +869,8 @@ export default function WarrantyTracker() {
                         const pctLife = c.expected_life_km > 0 ? (c.km_run / c.expected_life_km) * 100 : null
                         const lowLife = pctLife !== null && pctLife < 50
                         return (
-                          <>
+                          <Fragment key={c.id}>
                             <tr
-                              key={c.id}
                               className="border-b border-[var(--input-border)] hover:bg-[var(--input-bg)] cursor-pointer transition-colors"
                               onClick={() => setExpandedRow(expandedRow === c.id ? null : c.id)}
                             >
@@ -954,7 +953,7 @@ export default function WarrantyTracker() {
                                 </td>
                               </tr>
                             )}
-                          </>
+                          </Fragment>
                         )
                       })}
                     </tbody>

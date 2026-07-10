@@ -584,7 +584,7 @@ export default function Inspections() {
         asset_no: row.asset_no || null,
         priority: row.severity === 'Critical' ? 'Critical' : row.severity === 'High' ? 'High' : 'Medium',
         status: 'Open',
-        source: 'Observation',
+        // NOTE: corrective_actions has no `source` column — sending it 400s the insert.
         created_by: profile?.id ?? null,
       })
       if (data?.id) {

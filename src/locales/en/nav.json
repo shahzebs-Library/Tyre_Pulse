@@ -80,6 +80,7 @@
     "/reports": "Reports",
     "/scheduled-reports": "Scheduled Reports",
     "/executive-report": "Executive Report",
+    "/display": "TV Display Mode",
     "/ai-command-center": "AI Command Center",
     "/knowledge-base": "Knowledge Base",
     "/ai-cost-monitor": "AI Cost Monitor",
@@ -97,6 +98,11 @@
     "/upload-approvals": "Upload Approvals",
     "/custom-data": "Custom Data",
     "/audit": "Audit Trail",
+    "/security-center": "Security Center",
+    "/permission-matrix": "Permission Matrix",
+    "/system-health": "System Health",
+    "/tenant-health": "Usage & Adoption",
+    "/billing": "Billing & Subscription",
     "/settings": "Settings",
     "/users": "User Management"
   }

@@ -23,25 +23,82 @@ function groupByType(records) {
   return Object.values(map)
 }
 
+/**
+ * Derive tyre anomalies from raw tyre_records (no `anomalies` table exists).
+ *  - cost_anomaly : cost_per_tyre is a high statistical outlier (> mean + 2σ) or non-positive
+ *  - duplicate    : the same real serial number appears on more than one record
+ *  - missing_data : missing the fields needed for CPK / lifecycle analytics
+ * Returns full per-type counts plus a render-capped sample (each record may
+ * legitimately appear under more than one type).
+ */
+const SAMPLE_CAP_PER_TYPE = 200
+// NOTE: src/lib/anomalyEngine.js has a richer, tested rule engine (short-interval,
+// cost-spike, serial-reuse, duplicate-entry) used by Vehicle History / AI Analytics.
+// This lightweight local derivation feeds THIS page's 3-bucket flat-row UI; wiring
+// the shared engine in here is a worthwhile follow-up for deeper detection.
+function deriveTyreAnomalies(rows) {
+  const positiveCosts = rows
+    .map(r => Number(r.cost_per_tyre))
+    .filter(c => Number.isFinite(c) && c > 0)
+  let mean = 0, std = 0
+  if (positiveCosts.length) {
+    mean = positiveCosts.reduce((a, b) => a + b, 0) / positiveCosts.length
+    std = Math.sqrt(positiveCosts.reduce((a, b) => a + (b - mean) ** 2, 0) / positiveCosts.length)
+  }
+  const costCeiling = mean + 2 * std
+
+  const serialCounts = new Map()
+  for (const r of rows) {
+    const s = String(r.serial_no ?? '').trim()
+    if (s && s !== '0') serialCounts.set(s, (serialCounts.get(s) || 0) + 1)
+  }
+
+  const totals = { cost_anomaly: 0, duplicate: 0, missing_data: 0 }
+  const sample = []
+  const sampleCount = { cost_anomaly: 0, duplicate: 0, missing_data: 0 }
+  const push = (r, type) => {
+    totals[type] += 1
+    if (sampleCount[type] < SAMPLE_CAP_PER_TYPE) { sample.push({ ...r, type }); sampleCount[type] += 1 }
+  }
+
+  for (const r of rows) {
+    const cost = Number(r.cost_per_tyre)
+    const hasCost = r.cost_per_tyre != null && r.cost_per_tyre !== '' && Number.isFinite(cost)
+    if (hasCost && (cost <= 0 || (std > 0 && cost > costCeiling))) push(r, 'cost_anomaly')
+
+    const s = String(r.serial_no ?? '').trim()
+    if (s && s !== '0' && serialCounts.get(s) > 1) push(r, 'duplicate')
+
+    if (!hasCost || !r.issue_date || !r.asset_no) push(r, 'missing_data')
+  }
+  return { sample, totals }
+}
+
 export default function Anomalies() {
   const { profile } = useAuth()
   const { activeCountry, activeCurrency } = useSettings()
   const [records, setRecords] = useState([])
+  const [counts, setCounts] = useState({ cost_anomaly: 0, duplicate: 0, missing_data: 0 })
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
 
+  // There is no `anomalies` table in the DB — anomalies are DERIVED from
+  // tyre_records here (cost outliers, duplicate serials, missing analytics
+  // fields), matching the client-side detection Vehicle History already uses.
   const load = useCallback(async () => {
     setLoading(true); setError(null)
     try {
       let q = supabase
-        .from('anomalies')
-        .select('*')
-        .order('created_at', { ascending: false })
-        .limit(200)
+        .from('tyre_records')
+        .select('id, issue_date, brand, serial_no, asset_no, site, category, risk_level, cost_per_tyre, country')
+        .order('issue_date', { ascending: false, nullsFirst: false })
+        .limit(5000)
       if (activeCountry !== 'All' && activeCountry) q = q.eq('country', activeCountry)
       const { data, error: err } = await q
       if (err) throw err
-      setRecords(data || [])
+      const { sample, totals } = deriveTyreAnomalies(data || [])
+      setRecords(sample)
+      setCounts(totals)
     } catch (e) {
       setError(e.message || 'Failed to load anomalies')
     } finally {
@@ -52,9 +109,9 @@ export default function Anomalies() {
   useEffect(() => { load() }, [load])
 
   const groups = useMemo(() => groupByType(records), [records])
-  const costAnomalyCount = records.filter(r => r.type === 'cost_anomaly').length
-  const duplicateCount = records.filter(r => r.type === 'duplicate').length
-  const missingCount = records.filter(r => r.type === 'missing_data').length
+  const costAnomalyCount = counts.cost_anomaly
+  const duplicateCount = counts.duplicate
+  const missingCount = counts.missing_data
 
   // Columns for anomaly detail table (per-group records)
   const detailColumns = useMemo(() => [

@@ -86,9 +86,29 @@ const STATUS_BADGE = {
 // Mobile writes lowercase values (minor/severe, reported/closed); the web form
 // writes title-case. Canonicalise both vocabularies so badges & stats are correct.
 const SEVERITY_ALIAS = { minor: 'Minor', moderate: 'Major', major: 'Major', severe: 'Total Loss', fatal: 'Total Loss', 'total loss': 'Total Loss' }
-const STATUS_ALIAS = { reported: 'Reported', under_review: 'Under Investigation', under_investigation: 'Under Investigation', closed: 'Closed' }
+const STATUS_ALIAS = {
+  reported: 'Reported', under_review: 'Under Investigation', under_investigation: 'Under Investigation',
+  repair_in_progress: 'Repair In Progress', awaiting_parts: 'Awaiting Parts',
+  awaiting_approval: 'Awaiting Approval', insurance_claim: 'Insurance Claim', closed: 'Closed',
+}
 const canonSeverity = (s) => SEVERITY_ALIAS[String(s || '').toLowerCase()] || s || ''
 const canonStatus = (s) => STATUS_ALIAS[String(s || '').toLowerCase().replace(/\s+/g, '_')] || s || ''
+
+// Write-side reverse maps: the DB CHECK constraints store lowercase canonical
+// values. Accept either a UI label ('Minor'/'Reported') or an already-canonical
+// value (mobile/imports) and normalise to the DB vocabulary.
+const toDbSeverity = (s) => {
+  const v = String(s || '').toLowerCase().trim()
+  return ({ minor: 'minor', major: 'moderate', moderate: 'moderate', 'total loss': 'severe', severe: 'severe', fatal: 'fatal' })[v] || 'minor'
+}
+const toDbStatus = (s) => {
+  const v = String(s || '').toLowerCase().trim().replace(/\s+/g, '_')
+  return ({
+    reported: 'reported', under_investigation: 'under_review', under_review: 'under_review',
+    repair_in_progress: 'repair_in_progress', awaiting_parts: 'awaiting_parts',
+    awaiting_approval: 'awaiting_approval', insurance_claim: 'insurance_claim', closed: 'closed',
+  })[v] || 'reported'
+}
 const isClosed = (r) => r.closure_status === 'closed' || canonStatus(r.status) === 'Closed'
 
 const EMPTY_FORM = {
@@ -236,7 +256,10 @@ export default function Accidents() {
     // Paginate past the 1000-row cap so the list AND its exports are complete.
     const { data, error: err } = await accidentsApi.listAllAccidentsForPage({ country: activeCountry })
     if (err) setError(err.message)
-    else setRecords(data ?? [])
+    // Canonicalise the DB's lowercase status/severity to display labels once, so
+    // every label-based consumer (status/severity counts, funnel filters, charts,
+    // badges) agrees. Save/edit paths convert back via toDb*/canon* helpers.
+    else setRecords((data ?? []).map(r => ({ ...r, status: canonStatus(r.status), severity: canonSeverity(r.severity) })))
     setLoading(false)
   }, [activeCountry])
 
@@ -370,7 +393,13 @@ export default function Accidents() {
     if (!valid.length) return
     setBulkImporting(true)
     setBulkResult(null)
-    const payload = valid.map(({ _row, _valid, ...r }) => ({ ...r, created_by: profile?.id }))
+    const payload = valid.map(({ _row, _valid, ...r }) => ({
+      ...r,
+      site:        r.site || 'Unassigned',            // NOT NULL in DB
+      severity:    toDbSeverity(r.severity),           // map label → DB canonical
+      status:      toDbStatus(r.status),               // map label → DB canonical
+      reported_by: profile?.id,
+    }))
     const { error: err } = await accidentsApi.createAccidentForPage(payload)
     const skipped = bulkRows.filter(r => !r._valid).length
     if (err) {
@@ -638,8 +667,8 @@ export default function Accidents() {
       site:               row.site ?? '',
       country:            row.country ?? '',
       description:        row.description ?? '',
-      severity:           row.severity ?? 'Minor',
-      status:             row.status ?? 'Reported',
+      severity:           canonSeverity(row.severity) || 'Minor',
+      status:             canonStatus(row.status) || 'Reported',
       repair_cost:        row.repair_cost ?? '',
       insurance_claim_no: row.insurance_claim_no ?? '',
       inspector:          row.inspector ?? '',
@@ -673,17 +702,17 @@ export default function Accidents() {
     const payload = {
       incident_date:      form.incident_date || null,
       asset_no:           form.asset_no,
-      site:               form.site || null,
+      site:               form.site || 'Unassigned',   // site is NOT NULL (DB default 'Unassigned') — never send null
       country:            form.country || null,
       description:        form.description || null,
-      severity:           form.severity,
-      status:             form.status,
+      severity:           toDbSeverity(form.severity),
+      status:             toDbStatus(form.status),
       repair_cost:        form.repair_cost !== '' ? Number(form.repair_cost) : null,
       insurance_claim_no: form.insurance_claim_no || null,
       inspector:          form.inspector || null,
-      photos:             form.photos.length ? form.photos : null,
+      photos:             form.photos.length ? form.photos : [],  // photos is NOT NULL (DB default '[]') — never send null
     }
-    if (!editId) payload.created_by = profile?.id
+    if (!editId) payload.reported_by = profile?.id  // accidents has `reported_by`, not `created_by`
     const { error: err } = editId
       ? await accidentsApi.updateAccidentForPage(editId, payload)
       : await accidentsApi.createAccidentForPage(payload)

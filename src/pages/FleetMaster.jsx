@@ -120,6 +120,7 @@ export default function FleetMaster() {
   const [deleteTarget, setDeleteTarget]       = useState(null)
   const [saving, setSaving]                   = useState(false)
   const [formError, setFormError]             = useState('')
+  const [atLimit, setAtLimit]                 = useState(false)
   const [deleteError, setDeleteError]         = useState('')
   const [form, setForm]                       = useState(() => EMPTY_FORM())
 
@@ -204,10 +205,14 @@ export default function FleetMaster() {
   }, [activeCountry, records])
 
   // ── add / edit ────────────────────────────────────────────────────────────────
-  function openAdd() {
+  async function openAdd() {
     setForm(EMPTY_FORM(activeCountry !== 'All' ? activeCountry : 'KSA'))
     setEditRecord({})
     setFormError('')
+    // Proactively surface a reached plan cap so the Save button is disabled with a
+    // visible reason, instead of appearing active and silently failing on submit.
+    setAtLimit(false)
+    try { if (!(await canAddResource('vehicles'))) setAtLimit(true) } catch { /* fail open */ }
   }
 
   function openEdit(r) {
@@ -233,6 +238,7 @@ export default function FleetMaster() {
     })
     setEditRecord(r)
     setFormError('')
+    setAtLimit(false)  // edits never add to the count
   }
 
   async function saveRecord(e) {
@@ -914,8 +920,13 @@ export default function FleetMaster() {
               <CustomFieldsPanel data={editRecord.custom_data} title={t('fleetmaster.form.customFieldsTitle')} />
             )}
 
+            {atLimit && !editRecord.id && (
+              <div className="bg-amber-900/30 border border-amber-700 text-amber-300 rounded-lg px-4 py-2 text-sm">
+                {t('fleetmaster.form.planLimit')}
+              </div>
+            )}
             <div className="flex gap-3 pt-2">
-              <button type="submit" disabled={saving} className="btn-primary flex items-center gap-2 disabled:opacity-50">
+              <button type="submit" disabled={saving || (atLimit && !editRecord.id)} className="btn-primary flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
                 <Save size={15} /> {saving ? t('fleetmaster.form.saving') : t('fleetmaster.form.save')}
               </button>
               <button type="button" onClick={() => setEditRecord(null)} className="btn-secondary">{t('fleetmaster.form.cancel')}</button>

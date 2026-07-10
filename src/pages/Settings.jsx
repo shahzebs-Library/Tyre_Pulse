@@ -167,7 +167,16 @@ export default function Settings() {
     const { data } = await settingsApi.listSettings()
     if (data) {
       const map = {}
-      data.forEach(({ key, value }) => { map[key] = typeof value === 'string' ? JSON.parse(value) : value })
+      data.forEach(({ key, value }) => {
+        // `settings.value` is text and has drifted: some rows are JSON-encoded
+        // ("SAR", 1200), others are bare strings (KSA, EGP). Parse defensively so
+        // one un-encoded value can never abort the whole load.
+        if (typeof value === 'string') {
+          try { map[key] = JSON.parse(value) } catch { map[key] = value }
+        } else {
+          map[key] = value
+        }
+      })
       setAppSettings(s => ({ ...s, ...map }))
     }
   }

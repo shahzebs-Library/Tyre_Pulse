@@ -32,6 +32,10 @@
 
 **In-page interactions verified:** Dashboard exports (Excel/PDF/PPTX all download OK); Work Order detail drawer + approval panel; Tyre Record edit (update persists after #18 fix, verified + reverted).
 
+| 19 | Dashboard PPTX export | Executive deck came out **all-zero** (0 vehicles/tyres, SAR 0, every chart "No data") because `pptxExportTask` passed the dashboard's default **"This Month"** range (`Dashboard.jsx:216`) to `report_tyre_summary`, but the tyre data is historical (2025/`null` dates) → 0 for July. The headline KPIs are all-time (1,419) → screen-vs-export mismatch. | High | ✅ Fixed (exec PPTX now uses all-time/fleet-wide data; regenerated deck shows 412 vehicles / 1,419 tyres / SAR 1.30M + 7 populated charts) |
+
+**Export-content verification (opened the files):** **Excel** correct (Summary + 1000 data rows, site % sum to 100). **PDF** correct data (200-row table/KPI export; no charts by design). **PPTX** was broken (#19), now correct with real data + 7 charts. Charts degrade gracefully to "No data" on empty periods (good). NOT bugs: "confidinetial" = PDF text-extraction artifact; "all are fied" = the tenant's own configured branding disclaimer (`brand.disclaimer`). Minor nit: the three exports use different row scopes (Excel 1000 / PDF 200 / PPTX all-time) — each internally consistent.
+
 **Data-integrity pass:** all ~26 analytics/intelligence pages scanned for NaN/Infinity/undefined/broken-chart while loaded. Only Cost Center showed defects (#16, both fixed). Clean: Dashboard, Analytics, Advanced Analytics, Position/Pressure/Predictive/Fleet Intelligence, Benchmark, Tyre Lifecycle/Size/Specs, Rotation, KPI, Site/Country/Period Comparison, Fleet Analytics, Vendor Intelligence, Forecasting, Budget Planner, Fuel Efficiency, Downtime, Workshop, Compliance, Safety & Compliance, Inspection Intelligence, Smart Analytics.
 | 14 | Inspections → raise action | `raiseAction()` inserted `source:'Observation'` into `corrective_actions` (no such column) → silent 400 in an empty catch; "raise action from inspection" never created a linked action | High | ✅ Fixed (removed `source`; found by audit agent) |
 

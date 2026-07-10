@@ -551,8 +551,11 @@ export default function Dashboard() {
   }
   async function pptxExportTask() {
     const now = new Date()
+    // Executive deck is a whole-fleet overview: use all-time data (matching the
+    // headline KPIs), not the dashboard's period selector — a default "This Month"
+    // would otherwise render an all-zero deck when data is historical.
     const [{ data: sum }, actionRes] = await Promise.all([
-      dashboard.reportTyreSummary({ country: activeCountry, from: dateFrom, to: dateTo }),
+      dashboard.reportTyreSummary({ country: activeCountry }),
       dashboard.listOpenActionsForPptx(),
     ])
     const s = sum || {}

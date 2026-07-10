@@ -1,9 +1,9 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   FileText, FileSpreadsheet, Presentation, CalendarClock, Palette, Loader2,
-  CheckCircle2, AlertTriangle, X, RefreshCw, Download, Clock, Mail, ArrowRight,
+  CheckCircle2, AlertTriangle, X, RefreshCw, Download, Mail, ArrowRight,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { applyCountry } from '../lib/countryFilter'
@@ -15,8 +15,7 @@ import { formatDate } from '../lib/formatters'
 import { exportToPptx, exportToExcel, exportToPdf, exportDailyExecutivePdf } from '../lib/exportUtils'
 import PageHeader from '../components/ui/PageHeader'
 import SectionTabs, { REPORTS_TABS } from '../components/ui/SectionTabs'
-import LoadingState from '../components/LoadingState'
-import EmptyState from '../components/EmptyState'
+import EnterpriseTable from '../components/ui/EnterpriseTable'
 
 /**
  * ReportCenter — one place to generate the fleet's branded reports on demand and
@@ -78,6 +77,50 @@ export default function ReportCenter() {
     }
   }, [t])
   useEffect(() => { loadHistory() }, [loadHistory])
+
+  const historyColumns = useMemo(() => [
+    {
+      accessorKey: 'sent_at',
+      header: t('reportcenter.history.columns.sent'),
+      cell: ({ getValue }) => <span className="text-gray-400 text-xs whitespace-nowrap">{getValue() ? new Date(getValue()).toLocaleString() : '—'}</span>,
+    },
+    {
+      accessorKey: 'schedule_name',
+      header: t('reportcenter.history.columns.schedule'),
+      cell: ({ getValue }) => <span className="text-gray-200 text-sm">{getValue() || '—'}</span>,
+    },
+    {
+      accessorKey: 'report_type',
+      header: t('reportcenter.history.columns.type'),
+      meta: { filterVariant: 'select' },
+      cell: ({ getValue }) => <span className="text-gray-400 text-xs">{getValue() || '—'}</span>,
+    },
+    {
+      id: 'recipients',
+      accessorFn: r => (Array.isArray(r.recipients) ? r.recipients.length : 0),
+      header: t('reportcenter.history.columns.recipients'),
+      cell: ({ row }) => {
+        const rec = row.original.recipients
+        return <span className="text-gray-400 text-xs">{Array.isArray(rec) ? t('reportcenter.history.recipientsCount', { count: rec.length }) : '—'}</span>
+      },
+    },
+    {
+      accessorKey: 'status',
+      header: t('reportcenter.history.columns.status'),
+      meta: { filterVariant: 'select' },
+      cell: ({ row }) => {
+        const r = row.original
+        return (
+          <>
+            <span className={`text-xs font-medium ${STATUS_TINT[String(r.status || '').toLowerCase()] || 'text-gray-400'}`}>
+              {r.status || t('reportcenter.history.statusUnknown')}
+            </span>
+            {r.error && <span className="block text-[10px] text-red-400/80 truncate max-w-[220px]" title={r.error}>{r.error}</span>}
+          </>
+        )
+      },
+    },
+  ], [t])
 
   // ── Shared data fetch for the executive reports ────────────────────────────
   async function fetchExecData() {
@@ -282,51 +325,26 @@ export default function ReportCenter() {
       </div>
 
       {/* Delivery history */}
-      <div className="card p-0 overflow-hidden">
-        <div className="px-5 py-4 border-b border-gray-700/60 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Mail size={15} className="text-gray-400" />
-            <h2 className="text-base font-semibold text-white">{t('reportcenter.history.title')}</h2>
-          </div>
-          <button onClick={loadHistory} className="btn-secondary text-xs gap-1.5"><RefreshCw size={12} /> {t('reportcenter.history.refresh')}</button>
+      <div className="space-y-3">
+        <div className="flex items-center gap-2 px-1">
+          <Mail size={15} className="text-gray-400" />
+          <h2 className="text-base font-semibold text-white">{t('reportcenter.history.title')}</h2>
         </div>
-        {histLoading ? (
-          <LoadingState message={t('reportcenter.history.loading')} />
-        ) : histError ? (
-          <div className="flex flex-col items-center gap-2 py-10 text-center">
-            <AlertTriangle size={28} className="text-red-400" />
-            <p className="text-sm text-red-300">{histError}</p>
-            <button onClick={loadHistory} className="btn-secondary text-xs gap-1.5 mt-1"><RefreshCw size={12} /> {t('reportcenter.history.retry')}</button>
-          </div>
-        ) : history.length === 0 ? (
-          <EmptyState icon={Clock} title={t('reportcenter.history.emptyTitle')} description={t('reportcenter.history.emptyDesc')} />
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr>
-                  {['sent', 'schedule', 'type', 'recipients', 'status'].map(h => <th key={h} className="table-header text-left">{t(`reportcenter.history.columns.${h}`)}</th>)}
-                </tr>
-              </thead>
-              <tbody>
-                {history.map(r => (
-                  <tr key={r.id}>
-                    <td className="table-cell text-gray-400 text-xs whitespace-nowrap">{r.sent_at ? new Date(r.sent_at).toLocaleString() : '—'}</td>
-                    <td className="table-cell text-gray-200 text-sm">{r.schedule_name || '—'}</td>
-                    <td className="table-cell text-gray-400 text-xs">{r.report_type || '—'}</td>
-                    <td className="table-cell text-gray-400 text-xs">{Array.isArray(r.recipients) ? t('reportcenter.history.recipientsCount', { count: r.recipients.length }) : '—'}</td>
-                    <td className="table-cell">
-                      <span className={`text-xs font-medium ${STATUS_TINT[String(r.status || '').toLowerCase()] || 'text-gray-400'}`}>
-                        {r.status || t('reportcenter.history.statusUnknown')}
-                      </span>
-                      {r.error && <span className="block text-[10px] text-red-400/80 truncate max-w-[220px]" title={r.error}>{r.error}</span>}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
+        <EnterpriseTable
+          columns={historyColumns}
+          data={history}
+          getRowId={r => r.id}
+          loading={histLoading}
+          error={histError}
+          onRetry={loadHistory}
+          enableExport={false}
+          initialPageSize={25}
+          searchPlaceholder={t('reportcenter.history.title')}
+          emptyMessage={t('reportcenter.history.emptyTitle')}
+          toolbarExtras={
+            <button onClick={loadHistory} className="btn-secondary text-xs gap-1.5 flex items-center"><RefreshCw size={12} /> {t('reportcenter.history.refresh')}</button>
+          }
+        />
       </div>
     </div>
   )

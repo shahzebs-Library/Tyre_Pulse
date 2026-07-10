@@ -7,10 +7,10 @@ import { exportToPdf, exportToExcel } from '../lib/exportUtils'
 import { formatDate } from '../lib/formatters'
 import {
   ShieldCheck, ShieldClose, CheckCircle, XCircle, Printer, Clock,
-  Download, Search, RefreshCw, Activity, Upload,
+  Download, Activity, Upload,
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
-import EmptyState from '../components/EmptyState'
+import EnterpriseTable from '../components/ui/EnterpriseTable'
 import { gatePasses } from '../lib/api'
 import { logAudit } from '../lib/audit'
 import { publish } from '../lib/events'
@@ -41,7 +41,6 @@ export default function GatePass() {
 
   // Tab state: 'today' | 'history'
   const [logTab, setLogTab] = useState('today')
-  const [logSearch, setLogSearch] = useState('')
   const yesterday = (() => {
     const d = new Date()
     d.setDate(d.getDate() - 1)
@@ -240,16 +239,45 @@ export default function GatePass() {
     ? todayDisplay
     : formatDate(historyDate + 'T00:00:00', 'All', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
 
-  const filteredPassList = useMemo(() => {
-    if (!logSearch) return activePassList
-    const q = logSearch.toLowerCase()
-    return activePassList.filter(p =>
-      p.asset_no?.toLowerCase().includes(q) ||
-      p.site?.toLowerCase().includes(q) ||
-      p.status?.toLowerCase().includes(q) ||
-      p.denial_reason?.toLowerCase().includes(q)
-    )
-  }, [activePassList, logSearch])
+  const passColumns = useMemo(() => [
+    {
+      id: 'time',
+      accessorFn: p => p.created_at,
+      header: 'Time',
+      cell: ({ getValue }) => (
+        <span className="text-[var(--text-muted)] text-xs font-mono">
+          {new Date(getValue()).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}
+        </span>
+      ),
+      meta: { exportHeader: 'Time', exportValue: p => new Date(p.created_at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) },
+    },
+    {
+      accessorKey: 'asset_no',
+      header: 'Asset',
+      cell: ({ getValue }) => <span className="font-mono text-[var(--text-primary)] font-semibold">{getValue()}</span>,
+    },
+    {
+      accessorKey: 'site',
+      header: 'Site',
+      meta: { filterVariant: 'select' },
+      cell: ({ getValue }) => <span className="text-[var(--text-secondary)]">{getValue() || '-'}</span>,
+    },
+    {
+      accessorKey: 'status',
+      header: 'Status',
+      meta: { filterVariant: 'select', filterOptions: ['Cleared', 'Denied', 'Pending'] },
+      cell: ({ getValue }) => {
+        const s = getValue()
+        const cfg = STATUS_CONFIG[s] || STATUS_CONFIG.Pending
+        return <span className={`text-xs px-2 py-0.5 rounded-full border ${cfg.bg} ${cfg.color} ${cfg.border}`}>{s}</span>
+      },
+    },
+    {
+      accessorKey: 'denial_reason',
+      header: 'Reason',
+      cell: ({ getValue }) => <span className="text-[var(--text-muted)] text-xs">{getValue() || '-'}</span>,
+    },
+  ], [])
 
   return (
     <div className="space-y-6">
@@ -414,9 +442,10 @@ export default function GatePass() {
       </div>
 
       {/* Pass Log with Today / History tabs */}
-      <div className="card">
+      <div className="space-y-3">
+       <div className="card space-y-4">
         {/* Tab row */}
-        <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
+        <div className="flex items-center justify-between flex-wrap gap-3">
           <div className="flex gap-1 p-1 bg-gray-800/50 rounded-lg">
             {[['today', 'Today'], ['history', 'History']].map(([key, label]) => (
               <button
@@ -438,7 +467,7 @@ export default function GatePass() {
 
         {/* History date picker */}
         {logTab === 'history' && (
-          <div className="mb-4">
+          <div>
             <label className="label">Select Date</label>
             <input
               type="date"
@@ -449,69 +478,19 @@ export default function GatePass() {
             />
           </div>
         )}
+       </div>
 
-        {/* Log search */}
-        {activePassList.length > 0 && (
-          <div className="relative mb-3 max-w-xs">
-            <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
-            <input
-              className="input pl-8 text-sm"
-              placeholder="Search asset, site..."
-              value={logSearch}
-              onChange={e => setLogSearch(e.target.value)}
-            />
-          </div>
-        )}
-
-        {/* Table */}
-        {logTab === 'history' && historyLoading ? (
-          <div className="text-center py-8 text-gray-500">Loading...</div>
-        ) : filteredPassList.length === 0 ? (
-          <EmptyState
-            icon={ShieldCheck}
-            title="No gate passes"
-            description={logSearch ? 'No passes match the search' : logTab === 'today' ? 'No gate passes recorded today yet' : `No gate passes found for ${activeDateLabel}`}
-            compact
-          />
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-left text-gray-400 border-b border-gray-800 text-xs">
-                  <th className="pb-2 pr-4">Time</th>
-                  <th className="pb-2 pr-4">Asset</th>
-                  <th className="pb-2 pr-4">Site</th>
-                  <th className="pb-2 pr-4">Status</th>
-                  <th className="pb-2">Reason</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredPassList.map(p => {
-                  const cfg = STATUS_CONFIG[p.status] || STATUS_CONFIG.Pending
-                  return (
-                    <tr key={p.id} className="border-b border-gray-800/50 hover:bg-gray-800/20">
-                      <td className="py-2 pr-4 text-gray-400 text-xs font-mono">
-                        {new Date(p.created_at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}
-                      </td>
-                      <td className="py-2 pr-4 font-mono text-white font-semibold">{p.asset_no}</td>
-                      <td className="py-2 pr-4 text-gray-300">{p.site || '-'}</td>
-                      <td className="py-2 pr-4">
-                        <span className={`text-xs px-2 py-0.5 rounded-full border ${cfg.bg} ${cfg.color} ${cfg.border}`}>
-                          {p.status}
-                        </span>
-                      </td>
-                      <td className="py-2 text-gray-400 text-xs">{p.denial_reason || '-'}</td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-            <div className="px-0 pt-2 text-xs text-gray-600 text-right">
-              {filteredPassList.length} pass{filteredPassList.length !== 1 ? 'es' : ''}
-              {logSearch && activePassList.length !== filteredPassList.length && ` (filtered from ${activePassList.length})`}
-            </div>
-          </div>
-        )}
+        {/* Pass log table (search, sort, per-column filters, pagination + states) */}
+        <EnterpriseTable
+          columns={passColumns}
+          data={activePassList}
+          getRowId={p => p.id}
+          loading={logTab === 'history' && historyLoading}
+          enableExport={false}
+          initialPageSize={50}
+          searchPlaceholder="Search asset, site, status…"
+          emptyMessage={logTab === 'today' ? 'No gate passes recorded today yet' : `No gate passes found for ${activeDateLabel}`}
+        />
       </div>
     </div>
   )

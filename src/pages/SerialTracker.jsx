@@ -5,6 +5,13 @@ import { formatCurrencyCompact, formatDate } from '../lib/formatters'
 import { ScanLine, Search, Download, FileText, Upload } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
 import EmptyState from '../components/EmptyState'
+import EnterpriseTable from '../components/ui/EnterpriseTable'
+
+const BULK_STATUS_BADGE = {
+  Active:      'bg-green-900/30 text-green-400 border-green-700/50',
+  Retired:     'bg-[var(--surface-2)] text-[var(--text-secondary)] border-[var(--border-bright)]',
+  'Not Found': 'bg-[var(--surface-2)] text-[var(--text-muted)] border-[var(--border-bright)]',
+}
 
 function SearchSkeleton() {
   return (
@@ -79,7 +86,6 @@ export default function SerialTracker() {
   const [bulkFileName, setBulkFileName] = useState('')
   const [bulkDragOver, setBulkDragOver] = useState(false)
   const [bulkDone, setBulkDone]         = useState(false)
-  const [bulkSearch, setBulkSearch]     = useState('')
   const [statusFilter, setStatusFilter] = useState(null)
   const bulkFileRef = useRef(null)
 
@@ -187,7 +193,6 @@ export default function SerialTracker() {
     setBulkLoading(true)
     setBulkDone(false)
     setBulkResults([])
-    setBulkSearch('')
     setStatusFilter(null)
 
     const arrayBuffer = await file.arrayBuffer()
@@ -271,19 +276,56 @@ export default function SerialTracker() {
     return { total: found, active, retired, notFound }
   }, [bulkResults])
 
-  const filteredBulkResults = useMemo(() => {
-    let rows = bulkResults
-    if (statusFilter) rows = rows.filter(r => r.status === statusFilter)
-    if (bulkSearch.trim()) {
-      const q = bulkSearch.trim().toLowerCase()
-      rows = rows.filter(r =>
-        r.serial.toLowerCase().includes(q) ||
-        (r.last_asset || '').toLowerCase().includes(q) ||
-        r.status.toLowerCase().includes(q)
-      )
-    }
-    return rows
-  }, [bulkResults, bulkSearch, statusFilter])
+  // Chip pre-filter (status). Free-text search, sort, pagination and export are
+  // handled inside EnterpriseTable, so the chips only narrow by status.
+  const statusFilteredResults = useMemo(() => (
+    statusFilter ? bulkResults.filter(r => r.status === statusFilter) : bulkResults
+  ), [bulkResults, statusFilter])
+
+  const bulkColumns = useMemo(() => [
+    {
+      accessorKey: 'serial',
+      header: 'Serial No',
+      cell: ({ getValue }) => <span className="font-mono text-[var(--text-primary)]">{getValue()}</span>,
+    },
+    {
+      accessorKey: 'first_seen',
+      header: 'First Seen',
+      cell: ({ getValue }) => <span className="text-[var(--text-secondary)] text-xs">{formatDate(getValue())}</span>,
+      meta: { exportValue: r => (r.first_seen ? formatDate(r.first_seen) : '') },
+    },
+    {
+      accessorKey: 'last_asset',
+      header: 'Last Asset',
+      cell: ({ getValue }) => <span className="font-mono text-[var(--text-secondary)] text-xs">{getValue() || '-'}</span>,
+    },
+    {
+      accessorKey: 'total_records',
+      header: 'Records',
+      meta: { align: 'right' },
+      cell: ({ getValue }) => <span className="text-[var(--text-secondary)]">{getValue()}</span>,
+    },
+    {
+      accessorKey: 'cost',
+      header: 'Cost',
+      meta: { align: 'right', exportValue: r => r.cost || 0 },
+      cell: ({ getValue }) => {
+        const v = getValue()
+        return <span className="text-[var(--text-secondary)] text-xs">{v > 0 ? formatCurrencyCompact(v) : '-'}</span>
+      },
+    },
+    {
+      accessorKey: 'status',
+      header: 'Status',
+      meta: { filterVariant: 'select', filterOptions: ['Active', 'Retired', 'Not Found'] },
+      cell: ({ getValue }) => {
+        const s = getValue()
+        return (
+          <span className={`text-xs px-2 py-0.5 rounded-full border ${BULK_STATUS_BADGE[s] || BULK_STATUS_BADGE.Retired}`}>{s}</span>
+        )
+      },
+    },
+  ], [])
 
   return (
     <div className="space-y-6">
@@ -503,29 +545,10 @@ export default function SerialTracker() {
                         </button>
                       ))}
                     </div>
-                    <div className="flex items-center gap-2">
-                      <div className="relative">
-                        <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
-                        <input
-                          className="input text-sm pl-7 pr-3 py-1.5 w-44"
-                          placeholder="Filter results..."
-                          value={bulkSearch}
-                          onChange={e => setBulkSearch(e.target.value)}
-                        />
-                      </div>
-                      <button onClick={exportBulkExcel} className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-1.5">
-                        <Download size={14} /> Export
-                      </button>
-                    </div>
+                    {statusFilter && (
+                      <button onClick={() => setStatusFilter(null)} className="text-xs text-[var(--text-muted)] hover:text-[var(--text-secondary)] underline self-center">Clear filter</button>
+                    )}
                   </div>
-                  {(statusFilter || bulkSearch.trim()) && (
-                    <p className="text-xs text-[var(--text-muted)]">
-                      Showing {filteredBulkResults.length} of {bulkResults.length} results
-                      {statusFilter && <> · filtered by <span className="text-[var(--text-secondary)]">{statusFilter}</span></>}
-                      {bulkSearch.trim() && <> · matching <span className="text-[var(--text-secondary)]">"{bulkSearch}"</span></>}
-                      <button onClick={() => { setStatusFilter(null); setBulkSearch('') }} className="ml-2 text-[var(--text-muted)] hover:text-[var(--text-secondary)] underline">Clear</button>
-                    </p>
-                  )}
                 </div>
               )}
 
@@ -537,48 +560,21 @@ export default function SerialTracker() {
                     description="No serial numbers could be extracted from the file. Check that it has a recognised column header."
                   />
                 </div>
-              ) : filteredBulkResults.length === 0 ? (
-                <div className="card text-center py-10">
-                  <p className="text-[var(--text-secondary)]">No results match the current filter.</p>
-                  <button onClick={() => { setStatusFilter(null); setBulkSearch('') }} className="text-sm text-[var(--text-muted)] hover:text-[var(--text-secondary)] underline mt-1">Clear filters</button>
-                </div>
               ) : (
-                <div className="card overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="text-left text-[var(--text-secondary)] border-b border-[var(--border-dim)]">
-                        <th className="pb-2 pr-4">Serial No</th>
-                        <th className="pb-2 pr-4">First Seen</th>
-                        <th className="pb-2 pr-4">Last Asset</th>
-                        <th className="pb-2 pr-4 text-right">Records</th>
-                        <th className="pb-2 pr-4 text-right">Cost</th>
-                        <th className="pb-2">Status</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {filteredBulkResults.map(r => (
-                        <tr key={r.serial} className="border-b border-[var(--border-dim)] hover:bg-[var(--surface-2)]">
-                          <td className="py-2 pr-4 font-mono text-[var(--text-primary)]">{r.serial}</td>
-                          <td className="py-2 pr-4 text-[var(--text-secondary)] text-xs">{formatDate(r.first_seen)}</td>
-                          <td className="py-2 pr-4 font-mono text-[var(--text-secondary)] text-xs">{r.last_asset || '-'}</td>
-                          <td className="py-2 pr-4 text-[var(--text-secondary)] text-right">{r.total_records}</td>
-                          <td className="py-2 pr-4 text-[var(--text-secondary)] text-right text-xs">
-                            {r.cost > 0 ? formatCurrencyCompact(r.cost) : '-'}
-                          </td>
-                          <td className="py-2">
-                            {r.status === 'Not Found' ? (
-                              <span className="text-xs px-2 py-0.5 rounded-full border bg-[var(--surface-2)] text-[var(--text-muted)] border-[var(--border-bright)]">Not Found</span>
-                            ) : r.status === 'Active' ? (
-                              <span className="text-xs px-2 py-0.5 rounded-full border bg-green-900/30 text-green-400 border-green-700/50">Active</span>
-                            ) : (
-                              <span className="text-xs px-2 py-0.5 rounded-full border bg-[var(--surface-2)] text-[var(--text-secondary)] border-[var(--border-bright)]">Retired</span>
-                            )}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                <EnterpriseTable
+                  columns={bulkColumns}
+                  data={statusFilteredResults}
+                  getRowId={r => r.serial}
+                  searchPlaceholder="Search serial, asset, status…"
+                  emptyMessage={statusFilter ? `No ${statusFilter} serials in this file.` : 'No results match the current filter.'}
+                  enableExport={false}
+                  initialPageSize={50}
+                  toolbarExtras={
+                    <button onClick={exportBulkExcel} className="btn-secondary flex items-center gap-1.5 text-xs px-3 py-1.5">
+                      <Download size={13} /> Excel
+                    </button>
+                  }
+                />
               )}
             </>
           )}

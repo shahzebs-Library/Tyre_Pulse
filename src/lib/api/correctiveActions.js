@@ -4,7 +4,7 @@
  * read corrective_actions (RCA, KPIs, executive reports, gate-pass blockers),
  * so this is the single boundary for that table as pages migrate onto it.
  */
-import { supabase, unwrap } from './_client'
+import { supabase, unwrap, fetchAllPages } from './_client'
 
 // Least-privilege column set covering the CorrectiveActions page (list + detail
 // + edit form). Omits organisation_id (RLS-managed) and the legacy `photos`
@@ -18,9 +18,12 @@ const COLS =
  * @param {{country?:string}} [opts]
  */
 export async function listCorrectiveActions({ country } = {}) {
-  let q = supabase.from('corrective_actions').select(COLS).order('created_at', { ascending: false })
-  if (country && country !== 'All') q = q.eq('country', country)
-  return unwrap(await q)
+  return unwrap(await fetchAllPages((from, to) => {
+    let q = supabase.from('corrective_actions').select(COLS)
+      .order('created_at', { ascending: false }).order('id').range(from, to)
+    if (country && country !== 'All') q = q.eq('country', country)
+    return q
+  }))
 }
 
 /** Get one corrective action by id (or null if not found). */

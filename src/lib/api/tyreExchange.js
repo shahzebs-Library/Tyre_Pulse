@@ -8,7 +8,7 @@
  * `.eq('country', X)` (NOT null-safe) to preserve the page's prior behaviour
  * exactly. Explicit column list on the corpus (no SELECT *). Additive only.
  */
-import { supabase } from './_client'
+import { supabase, fetchAllPages } from './_client'
 
 /** Shared return / write-off marks (serial + mark_type). */
 export function listTyreStatusMarks() {
@@ -20,12 +20,16 @@ export function listTyreStatusMarks() {
  * a strict country scope when a specific country is active.
  */
 export function listExchangeTyreRecords({ country } = {}) {
-  let q = supabase
-    .from('tyre_records')
-    .select('id,asset_no,serial_number,serial_no,position,brand,size,tread_depth,cost_per_tyre,issue_date,km_at_fitment,km_at_removal,risk_level,site,country,category')
-    .order('issue_date', { ascending: true })
-  if (country !== 'All') q = q.eq('country', country)
-  return q
+  return fetchAllPages((from, to) => {
+    let q = supabase
+      .from('tyre_records')
+      .select('id,asset_no,serial_number,serial_no,position,brand,size,tread_depth,cost_per_tyre,issue_date,km_at_fitment,km_at_removal,risk_level,site,country,category')
+      .order('issue_date', { ascending: true })
+      .order('id', { ascending: true })
+      .range(from, to)
+    if (country !== 'All') q = q.eq('country', country)
+    return q
+  })
 }
 
 /** Recent stock movements (may be absent); newest first, capped at 500. */

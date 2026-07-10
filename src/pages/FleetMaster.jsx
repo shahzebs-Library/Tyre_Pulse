@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback, useMemo, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
+import { fetchAllPages } from '../lib/fetchAll'
 import { useAuth } from '../contexts/AuthContext'
 import { useSettings } from '../contexts/SettingsContext'
 import { useLanguage } from '../contexts/LanguageContext'
@@ -338,12 +339,14 @@ export default function FleetMaster() {
 
   // ── export ────────────────────────────────────────────────────────────────────
   async function fetchAll() {
-    let q = supabase.from('vehicle_fleet').select('*').order('asset_no')
-    if (search)       { const s = sanitizeSearchTerm(search); q = q.or(`asset_no.ilike.%${s}%,fleet_number.ilike.%${s}%,make.ilike.%${s}%,model.ilike.%${s}%`) }
-    if (siteFilter)   q = q.eq('site', siteFilter)
-    if (statusFilter) q = q.eq('status', statusFilter)
-    if (activeCountry !== 'All') q = q.eq('country', activeCountry)
-    const { data } = await q
+    const { data } = await fetchAllPages((from, to) => {
+      let q = supabase.from('vehicle_fleet').select('*').order('asset_no').order('id').range(from, to)
+      if (search)       { const s = sanitizeSearchTerm(search); q = q.or(`asset_no.ilike.%${s}%,fleet_number.ilike.%${s}%,make.ilike.%${s}%,model.ilike.%${s}%`) }
+      if (siteFilter)   q = q.eq('site', siteFilter)
+      if (statusFilter) q = q.eq('status', statusFilter)
+      if (activeCountry !== 'All') q = q.eq('country', activeCountry)
+      return q
+    })
     return data ?? []
   }
 

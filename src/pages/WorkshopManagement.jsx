@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { supabase } from '../lib/supabase'
 import { applyCountry } from '../lib/countryFilter'
+import { fetchAllPages } from '../lib/fetchAll'
 import { useSettings } from '../contexts/SettingsContext'
 import { useAuth } from '../contexts/AuthContext'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
@@ -485,20 +486,23 @@ export default function WorkshopManagement() {
     setLoading(true)
     setError(null)
     try {
-      let q = supabase
-        .from('work_orders')
-        .select('id,work_order_no,asset_no,status,priority,work_type,site,assigned_to:technician_name,labour_cost,parts_cost,total_cost,created_at,completed_at,scheduled_date:target_completion,description,parts_used')
-        .order('created_at', { ascending: false })
+      const { data, error: err } = await fetchAllPages((from, to) => {
+        let q = supabase
+          .from('work_orders')
+          .select('id,work_order_no,asset_no,status,priority,work_type,site,assigned_to:technician_name,labour_cost,parts_cost,total_cost,created_at,completed_at,scheduled_date:target_completion,description,parts_used')
+          .order('created_at', { ascending: false })
+          .order('id', { ascending: false })
 
-      if (site)     q = q.eq('site', site)
-      if (workType) q = q.eq('work_type', workType)
-      if (status)   q = q.eq('status', status)
-      if (priority) q = q.eq('priority', priority)
-      if (dateFrom) q = q.gte('created_at', dateFrom)
-      if (dateTo)   q = q.lte('created_at', dateTo + 'T23:59:59')
-      q = applyCountry(q, activeCountry)
+        if (site)     q = q.eq('site', site)
+        if (workType) q = q.eq('work_type', workType)
+        if (status)   q = q.eq('status', status)
+        if (priority) q = q.eq('priority', priority)
+        if (dateFrom) q = q.gte('created_at', dateFrom)
+        if (dateTo)   q = q.lte('created_at', dateTo + 'T23:59:59')
+        q = applyCountry(q, activeCountry)
 
-      const { data, error: err } = await q
+        return q.range(from, to)
+      })
       if (err) {
         if (err.code === '42P01' || err.message?.toLowerCase().includes('does not exist')) {
           setTableExists(false)

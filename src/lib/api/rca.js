@@ -3,7 +3,7 @@
  * lists (no SELECT *); additive, mirrors correctiveActions.js / inspections.js.
  * Single boundary for the rca_records table as pages migrate onto it.
  */
-import { supabase, unwrap } from './_client'
+import { supabase, unwrap, fetchAllPages } from './_client'
 
 // Least-privilege column set covering the RcaRecords page (list + detail +
 // edit form + create-linked-action). Omits organisation_id (RLS-managed) and
@@ -22,9 +22,12 @@ const LIST_SELECT = `${COLS}, corrective_action:corrective_action_id(id,title,st
  * @param {{country?:string}} [opts]
  */
 export async function listRcaRecords({ country } = {}) {
-  let q = supabase.from('rca_records').select(LIST_SELECT).order('created_at', { ascending: false })
-  if (country && country !== 'All') q = q.eq('country', country)
-  return unwrap(await q)
+  return unwrap(await fetchAllPages((from, to) => {
+    let q = supabase.from('rca_records').select(LIST_SELECT)
+      .order('created_at', { ascending: false }).order('id').range(from, to)
+    if (country && country !== 'All') q = q.eq('country', country)
+    return q
+  }))
 }
 
 /** Get one RCA record by id (or null if not found). */

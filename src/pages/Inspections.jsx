@@ -93,6 +93,22 @@ const EMPTY_FORM = {
 function isObservationType(t) { return OBSERVATION_TYPES.includes(t) }
 function isTrainingType(t)     { return TRAINING_TYPES.includes(t) }
 
+// The DB `inspections.inspection_type` CHECK only allows tyre-inspection types
+// (Routine/Pressure/Visual/Full/Pre-Trip). Observation & training records are a
+// UI overlay that share the same table, so their display type is persisted in
+// the unconstrained `custom_data.record_type` while the constrained column is
+// written with a CHECK-valid value. `dbInspectionType` maps a display type to a
+// storable value; `resolveRecordType` restores the display type on read.
+function dbInspectionType(displayType) {
+  return INSPECTION_TYPES.includes(displayType) ? displayType : 'Routine'
+}
+function resolveRecordType(row) {
+  const rt = row?.custom_data?.record_type
+  return (isObservationType(rt) || isTrainingType(rt) || INSPECTION_TYPES.includes(rt))
+    ? rt
+    : row?.inspection_type
+}
+
 const CHECKLIST_LABELS = {
   en: {
     title: 'Daily Inspection Checklist',
@@ -412,6 +428,9 @@ export default function Inspections() {
     const today = new Date().toISOString().split('T')[0]
     const enriched = (data || []).map(r => ({
       ...r,
+      // Restore the display type (observation/training) stored alongside the
+      // CHECK-valid inspection_type. Legacy rows fall back to inspection_type.
+      inspection_type: resolveRecordType(r),
       status: r.status !== 'Done' && r.status !== 'Cancelled' && r.scheduled_date < today
         ? 'Overdue' : r.status,
     }))
@@ -494,7 +513,15 @@ export default function Inspections() {
     if (!form.scheduled_date) return
     setSaving(true)
     setSaveError(null)
-    const payload = { ...form, created_by: profile?.id ?? null }
+    const displayType = form.inspection_type
+    const payload = {
+      ...form,
+      created_by: profile?.id ?? null,
+      // Persist a CHECK-valid inspection_type; carry the true display type
+      // (observation/training) in custom_data so it round-trips on read.
+      inspection_type: dbInspectionType(displayType),
+      custom_data: { ...(form.custom_data || {}), record_type: displayType },
+    }
     delete payload.id
 
     try {

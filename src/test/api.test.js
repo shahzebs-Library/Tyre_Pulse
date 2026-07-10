@@ -7,13 +7,14 @@ const h = vi.hoisted(() => {
   const state = { result: { data: [], error: null }, last: null, rpc: { data: null, error: null }, lastRpc: null }
   function rpc(name, args) { state.lastRpc = { name, args }; return Promise.resolve(state.rpc) }
   function from(table) {
-    const calls = { eq: [], or: [] }
+    const calls = { eq: [], or: [], range: [] }
     const b = {
       _table: table,
       _calls: calls,
       select() { return b },
       order() { return b },
       limit() { return b },
+      range(a, c) { calls.range.push([a, c]); return b },
       insert(v) { calls.insert = v; return b },
       update(v) { calls.update = v; return b },
       eq(c, v) { calls.eq.push([c, v]); return b },

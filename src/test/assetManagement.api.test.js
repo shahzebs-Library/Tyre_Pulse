@@ -15,6 +15,7 @@ const h = vi.hoisted(() => {
       eq(c, v) { calls.eq.push([c, v]); return b },
       insert(v) { calls.insert = v; return b },
       update(v) { calls.update = v; return b },
+      range(f, t) { calls.range = [f, t]; return b },
       then(onF, onR) { return Promise.resolve(state.result).then(onF, onR) },
     }
     state.last = b
@@ -73,9 +74,10 @@ describe('service layer - assetManagement', () => {
     expect(h.state.last._calls.insert).toEqual([{ asset_no: 'A2' }])
   })
 
-  it('pass-through surfaces the raw { data, error } the page reads', async () => {
+  it('listFleetMaster pages past the 1000-row cap and surfaces { data, error }', async () => {
     h.state.result = { data: [{ id: 'x' }], error: null }
     const res = await assetApi.listFleetMaster()
-    expect(res).toEqual({ data: [{ id: 'x' }], error: null })
+    expect(res).toEqual({ data: [{ id: 'x' }], error: null, truncated: false })
+    expect(h.state.last._calls.range).toEqual([0, 999])
   })
 })

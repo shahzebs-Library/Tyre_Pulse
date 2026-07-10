@@ -59,9 +59,11 @@ export async function updateStock(id, patch) {
  * @param {{country?:string}} [opts]
  */
 export async function listStockRecords({ country } = {}) {
-  let q = supabase.from('stock_records').select(COLS).order('site')
-  if (country && country !== 'All') q = q.eq('country', country)
-  return unwrap(await q)
+  return unwrap(await fetchAllPages((from, to) => {
+    let q = supabase.from('stock_records').select(COLS).order('site').order('id').range(from, to)
+    if (country && country !== 'All') q = q.eq('country', country)
+    return q
+  }))
 }
 
 /** Insert a stock record; returns only the new id (page mutation). */

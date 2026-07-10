@@ -8,7 +8,7 @@
  * this module only extracts the page's remaining inline queries. Read-only
  * pass-throughs return the raw query builder the page reads via `.data`.
  */
-import { supabase } from './_client'
+import { supabase, fetchAllPages } from './_client'
 
 /** Distinct-site source list for the site filter (non-null sites only). */
 export function listGatePassSites() {
@@ -20,9 +20,12 @@ export function listGatePassSites() {
  * site. Powers both the live "today" log and the historical date view.
  */
 export function listGatePasses({ date, site } = {}) {
-  let q = supabase.from('gate_passes').select('*').eq('pass_date', date).order('created_at', { ascending: false })
-  if (site) q = q.eq('site', site)
-  return q
+  return fetchAllPages((from, to) => {
+    let q = supabase.from('gate_passes').select('*').eq('pass_date', date)
+      .order('created_at', { ascending: false }).order('id', { ascending: false }).range(from, to)
+    if (site) q = q.eq('site', site)
+    return q
+  })
 }
 
 /**

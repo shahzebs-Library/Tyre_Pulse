@@ -13,6 +13,7 @@ const h = vi.hoisted(() => {
       select() { return b },
       order() { return b },
       limit() { return b },
+      range() { return b },
       insert(v) { calls.insert = v; return b },
       update(v) { calls.update = v; return b },
       eq(c, v) { calls.eq.push([c, v]); return b },

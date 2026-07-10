@@ -17,6 +17,7 @@ const h = vi.hoisted(() => {
       in(c, v) { calls.in.push([c, v]); return b },
       not(c, op, v) { calls.not.push([c, op, v]); return b },
       limit(n) { calls.limit = n; return b },
+      range(f, t) { calls.range = [f, t]; return b },
       insert(v) { calls.insert = v; return b },
       then(onF, onR) { return Promise.resolve(state.result).then(onF, onR) },
     }
@@ -74,9 +75,10 @@ describe('service layer - gatePassPage', () => {
     expect(h.state.last._calls.insert).toEqual({ asset_no: 'A1', status: 'Denied' })
   })
 
-  it('pass-through surfaces the raw { data, error } the page reads', async () => {
+  it('listGatePasses pages past the 1000-row cap and surfaces { data, error }', async () => {
     h.state.result = { data: [{ id: 'g1' }], error: null }
     const res = await gatePassPageApi.listGatePasses({ date: 'd' })
-    expect(res).toEqual({ data: [{ id: 'g1' }], error: null })
+    expect(res).toEqual({ data: [{ id: 'g1' }], error: null, truncated: false })
+    expect(h.state.last._calls.range).toEqual([0, 999])
   })
 })

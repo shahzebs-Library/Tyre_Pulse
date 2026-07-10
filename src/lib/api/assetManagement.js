@@ -8,11 +8,12 @@
  * `Promise.allSettled` / `.then`), preserving behaviour exactly. Country
  * filtering stays client-side in the page (unchanged). Additive only.
  */
-import { supabase } from './_client'
+import { supabase, fetchAllPages } from './_client'
 
-/** All fleet_master assets, ordered by asset number. */
+/** All fleet_master assets, ordered by asset number. Paged past the 1000-row cap. */
 export function listFleetMaster() {
-  return supabase.from('fleet_master').select('*').order('asset_no')
+  return fetchAllPages((from, to) =>
+    supabase.from('fleet_master').select('*').order('asset_no').order('id').range(from, to))
 }
 
 /** Per-asset overview aggregates via RPC (country passed straight through). */
@@ -20,9 +21,11 @@ export function reportAssetOverview({ country } = {}) {
   return supabase.rpc('report_asset_overview', { p_country: country })
 }
 
-/** Work orders feeding the asset registry cost/health columns. */
+/** Work orders feeding the asset registry cost/health columns. Paged past the 1000-row cap. */
 export function listAssetWorkOrders() {
-  return supabase.from('work_orders').select('id,asset_no,status,total_cost,created_at,work_type')
+  return fetchAllPages((from, to) =>
+    supabase.from('work_orders').select('id,asset_no,status,total_cost,created_at,work_type')
+      .order('id').range(from, to))
 }
 
 /** Tyres for a single asset (detail drawer), keyed by asset number. */

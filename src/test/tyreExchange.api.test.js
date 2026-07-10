@@ -15,6 +15,7 @@ const h = vi.hoisted(() => {
       eq(c, v) { calls.eq.push([c, v]); return b },
       or(e) { calls.or.push(e); return b },
       limit(n) { calls.limit = n; return b },
+      range(f, t) { calls.range = [f, t]; return b },
       upsert(v, o) { calls.upsert = v; calls.upsertOpts = o; return b },
       then(onF, onR) { return Promise.resolve(state.result).then(onF, onR) },
     }

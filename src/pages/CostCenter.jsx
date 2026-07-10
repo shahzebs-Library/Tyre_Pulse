@@ -116,7 +116,8 @@ function dateFromPreset(days) {
 }
 
 function cpkDeltaBadge(cpk, fleetAvg) {
-  if (cpk == null || fleetAvg == null || fleetAvg === 0) return null
+  // Non-finite guard too: a site with no CPK yields NaN (not null) and rendered "NaN%".
+  if (cpk == null || fleetAvg == null || fleetAvg === 0 || !isFinite(cpk) || !isFinite(fleetAvg)) return null
   const pct = ((cpk - fleetAvg) / fleetAvg) * 100
   if (Math.abs(pct) < 5) return { icon: Minus, label: '≈ avg', cls: 'text-gray-400' }
   if (pct > 0) return { icon: ArrowUpRight, label: `+${pct.toFixed(0)}%`, cls: 'text-red-400' }
@@ -1071,7 +1072,7 @@ export default function CostCenter() {
                   <p className="text-xs text-blue-300 font-medium">{t('costcenter.roi.benchmarkTitle')}</p>
                   <p className="text-sm text-gray-300 mt-0.5">
                     <span className="font-bold text-blue-300">{t('costcenter.roi.benchmarkTarget', { currency: activeCurrency, value: INDUSTRY_BENCHMARK_CPK })}</span>
-                    {kpis.fleetAvgCpk && (
+                    {Number.isFinite(kpis.fleetAvgCpk) && kpis.fleetAvgCpk > 0 && (
                       <span className="ml-2 text-gray-500">
                         ({kpis.fleetAvgCpk > INDUSTRY_BENCHMARK_CPK
                           ? t('costcenter.roi.aboveBenchmark', { pct: ((kpis.fleetAvgCpk / INDUSTRY_BENCHMARK_CPK - 1) * 100).toFixed(0) })

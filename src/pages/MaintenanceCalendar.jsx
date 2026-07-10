@@ -8,11 +8,12 @@ import { motion, AnimatePresence } from 'framer-motion'
 import {
   Calendar, ChevronLeft, ChevronRight, Clock, AlertTriangle,
   Wrench, CircleDot, Filter, RefreshCw, X, CheckCircle,
-  AlertOctagon, Loader2, Eye, ChevronDown,
+  AlertOctagon, Loader2, Eye, ChevronDown, Lock,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useSettings } from '../contexts/SettingsContext'
 import PageHeader from '../components/ui/PageHeader'
+import EntityApprovalPanel from '../components/workflow/EntityApprovalPanel'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 const DAY_NAMES    = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
@@ -166,6 +167,10 @@ export default function MaintenanceCalendar() {
   const [view, setView]               = useState('month') // 'month' | 'week' | 'day'
   const [selectedDay, setSelectedDay] = useState(null)    // Date | null
   const [selectedEvent, setSelectedEvent] = useState(null)
+  // Approval-engine gate: locks the open event's strongest mutation (the jump to
+  // edit the underlying record) while its workflow is active (pending/in_review/
+  // returned) or locked (approved). Re-reported by EntityApprovalPanel.
+  const [wfLocked, setWfLocked] = useState(false)
 
   // Filters
   const [typeFilter, setTypeFilter]   = useState('All')  // 'All' | 'Work Orders' | 'Tyre Alerts'
@@ -212,6 +217,10 @@ export default function MaintenanceCalendar() {
   }, [activeCountry])
 
   useEffect(() => { load() }, [load])
+
+  // Reset the approval lock whenever a different event (or none) is opened in the
+  // detail modal; EntityApprovalPanel re-reports the true state via onStateChange.
+  useEffect(() => { setWfLocked(false) }, [selectedEvent?.id])
 
   // ── Build unified events ─────────────────────────────────────────────────────
   const allEvents = useMemo(() => {
@@ -950,25 +959,70 @@ export default function MaintenanceCalendar() {
                   ))}
                 </div>
 
+                {/* Approval & Workflow Engine — gates the strongest mutation
+                    (jump to edit the underlying maintenance record) below. */}
+                <EntityApprovalPanel
+                  entityType="maintenance_request"
+                  entityId={selectedEvent.raw?.id ?? selectedEvent.id}
+                  entityLabel={selectedEvent.asset || selectedEvent.title || selectedEvent.id}
+                  context={{
+                    cost: selectedEvent.raw?.estimated_cost ?? selectedEvent.raw?.cost ?? null,
+                    priority: selectedEvent.priority,
+                    downtime_hours: selectedEvent.raw?.downtime_hours ?? null,
+                    asset_no: selectedEvent.asset,
+                    site: selectedEvent.raw?.site ?? null,
+                  }}
+                  onStateChange={({ isActive, isLocked }) => setWfLocked(!!(isActive || isLocked))}
+                  title="Maintenance Approval"
+                />
+
+                {wfLocked && (
+                  <div className="flex items-center gap-1.5 text-xs text-[var(--accent)]">
+                    <Lock size={12} /> Locked — in approval
+                  </div>
+                )}
+
                 {/* Action row */}
                 <div className="flex gap-3 pt-1">
                   {selectedEvent.source === 'work_order' && (
-                    <a
-                      href="/work-orders"
-                      className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-blue-700 hover:bg-blue-600 text-white text-sm font-medium rounded-xl transition-colors"
-                      onClick={() => setSelectedEvent(null)}
-                    >
-                      <Wrench size={15} /> View Work Order
-                    </a>
+                    wfLocked ? (
+                      <button
+                        type="button"
+                        disabled
+                        title="Locked — in approval"
+                        className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-blue-700 text-white text-sm font-medium rounded-xl opacity-40 cursor-not-allowed"
+                      >
+                        <Lock size={15} /> View Work Order
+                      </button>
+                    ) : (
+                      <a
+                        href="/work-orders"
+                        className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-blue-700 hover:bg-blue-600 text-white text-sm font-medium rounded-xl transition-colors"
+                        onClick={() => setSelectedEvent(null)}
+                      >
+                        <Wrench size={15} /> View Work Order
+                      </a>
+                    )
                   )}
                   {selectedEvent.source === 'tyre' && (
-                    <a
-                      href="/tyres"
-                      className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-orange-700 hover:bg-orange-600 text-white text-sm font-medium rounded-xl transition-colors"
-                      onClick={() => setSelectedEvent(null)}
-                    >
-                      <CircleDot size={15} /> View Tyre Record
-                    </a>
+                    wfLocked ? (
+                      <button
+                        type="button"
+                        disabled
+                        title="Locked — in approval"
+                        className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-orange-700 text-white text-sm font-medium rounded-xl opacity-40 cursor-not-allowed"
+                      >
+                        <Lock size={15} /> View Tyre Record
+                      </button>
+                    ) : (
+                      <a
+                        href="/tyres"
+                        className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-orange-700 hover:bg-orange-600 text-white text-sm font-medium rounded-xl transition-colors"
+                        onClick={() => setSelectedEvent(null)}
+                      >
+                        <CircleDot size={15} /> View Tyre Record
+                      </a>
+                    )
                   )}
                   <button
                     onClick={() => setSelectedEvent(null)}

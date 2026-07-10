@@ -6,10 +6,11 @@ import { useSettings } from '../contexts/SettingsContext'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import PageHeader from '../components/ui/PageHeader'
 import EmptyState from '../components/EmptyState'
+import EntityApprovalPanel from '../components/workflow/EntityApprovalPanel'
 import {
   User, Users, TrendingUp, TrendingDown, Award, AlertTriangle,
   BarChart2, Download, FileText, FileSpreadsheet, Search, Filter,
-  X, ChevronDown, ChevronUp, RefreshCw, Eye, Calendar, Upload,
+  X, ChevronDown, ChevronUp, RefreshCw, Eye, Calendar, Upload, Lock,
 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import {
@@ -271,6 +272,14 @@ function RiskBar({ score }) {
 function DriverDrawer({ driver, currency, onClose }) {
   const [drawerSort, setDrawerSort] = useState({ col: 'issue_date', dir: 'desc' })
 
+  // Approval & Workflow Engine gate. The open driver record is the disciplinary /
+  // violation subject under review; while its approval is active (pending /
+  // in_review / returned) or locked (approved) the formal PDF disciplinary export
+  // is disabled so a record mid-approval can't be issued out from under the
+  // workflow. State resets whenever a different driver is opened.
+  const [wfLocked, setWfLocked] = useState(false)
+  useEffect(() => { setWfLocked(false) }, [driver?.name])
+
   const sortedRecords = useMemo(() => {
     if (!driver) return []
     const recs = [...driver.records]
@@ -306,6 +315,9 @@ function DriverDrawer({ driver, currency, onClose }) {
 
   function handlePdfExport() {
     if (!driver) return
+    // Locked — this driver's disciplinary record is mid-approval; the formal
+    // export is blocked until the workflow completes.
+    if (wfLocked) return
     exportToPdf(
       sortedRecords.map(r => ({
         ...r,
@@ -379,10 +391,12 @@ function DriverDrawer({ driver, currency, onClose }) {
               <div className="flex items-center gap-2">
                 <button
                   onClick={handlePdfExport}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"
+                  disabled={wfLocked}
+                  title={wfLocked ? 'Locked — in approval' : 'Export disciplinary record PDF'}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                   style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)' }}
                 >
-                  <FileText size={13} /> PDF
+                  {wfLocked ? <Lock size={13} /> : <FileText size={13} />} PDF
                 </button>
                 <button
                   onClick={handleExcelExport}
@@ -421,8 +435,36 @@ function DriverDrawer({ driver, currency, onClose }) {
               ))}
             </div>
 
-            {/* Records table */}
+            {/* Records table + approval workflow */}
             <div className="flex-1 overflow-y-auto">
+              {/* ── Driver Violation Approval — Approval & Workflow Engine.
+                  The driver record is treated as the disciplinary / violation
+                  document under review; the shared engine gates its formal PDF
+                  export while an approval is active/locked. ─────────────────── */}
+              <div className="p-5 pb-0 space-y-3">
+                <EntityApprovalPanel
+                  entityType="driver_violation"
+                  entityId={driver.name}
+                  entityLabel={driver.name}
+                  context={{
+                    severity: performanceBadge(driver.riskScore).label,
+                    violation_type: 'tyre_cost_risk',
+                    points: driver.riskScore,
+                    failure_rate: Number(driver.failureRate?.toFixed?.(1)) || 0,
+                    high_risk_count: driver.highRiskCount,
+                    total_tyres: driver.totalTyres,
+                    total_cost: Math.round(driver.totalCost || 0),
+                  }}
+                  onStateChange={(s) => setWfLocked(!!(s?.isActive || s?.isLocked))}
+                  title="Driver Violation Approval"
+                />
+                {wfLocked && (
+                  <div className="flex items-center gap-1.5 text-xs text-[var(--accent)] bg-[var(--surface-1)] border border-[var(--input-border)] rounded-lg px-3 py-2">
+                    <Lock size={12} />
+                    Locked — in approval. The formal disciplinary PDF export is disabled until the workflow completes.
+                  </div>
+                )}
+              </div>
               <div className="p-5">
                 <p className="text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider mb-3">
                   Tyre Records ({driver.records.length})

@@ -4,8 +4,9 @@ import { stock } from '../lib/api'
 import { useAuth } from '../contexts/AuthContext'
 import { useSettings } from '../contexts/SettingsContext'
 import { useTenant } from '../contexts/TenantContext'
-import { Plus, Save, X, History, FileText, Download, ArrowLeftRight, Package, Upload } from 'lucide-react'
+import { Plus, Save, X, History, FileText, Download, ArrowLeftRight, Package, Upload, Lock } from 'lucide-react'
 import Skeleton from '../components/ui/Skeleton'
+import EntityApprovalPanel from '../components/workflow/EntityApprovalPanel'
 import { motion } from 'framer-motion'
 import PageHeader from '../components/ui/PageHeader'
 import { exportToExcel, exportToPdf, resolvePdfBrand, pdfHeader, pdfFooter, pdfTableTheme } from '../lib/exportUtils'
@@ -62,6 +63,10 @@ export default function StockManagement() {
   const [movements, setMovements]   = useState([])
   const [loadingMov, setLoadingMov] = useState(false)
   const [adjForm, setAdjForm]       = useState(null)
+  // Approval-engine gate: locks the ledger-post (issuance/adjustment) control for
+  // the open record while its workflow is active (pending/in_review/returned) or
+  // locked (approved). Reset whenever a different record's history is opened.
+  const [wfLocked, setWfLocked]     = useState(false)
 
   // Velocity state
   const [velocityMap, setVelocityMap] = useState({})
@@ -80,6 +85,10 @@ export default function StockManagement() {
   const [transferError, setTransferError] = useState('')
 
   useEffect(() => { load() }, [activeCountry])
+
+  // Reset the approval lock whenever a different record (or none) is opened in the
+  // history modal; EntityApprovalPanel re-reports the true state via onStateChange.
+  useEffect(() => { setWfLocked(false) }, [historyFor?.id])
 
   async function load() {
     setLoading(true)
@@ -191,6 +200,8 @@ export default function StockManagement() {
   }
 
   async function saveAdjustment() {
+    // Block the ledger post while the record's approval workflow is active/locked.
+    if (wfLocked) return
     if (!adjForm || !adjForm.qty_change) return
     const rec = historyFor
     setSaving(true); setError('')
@@ -850,6 +861,29 @@ export default function StockManagement() {
               <button onClick={() => setHistoryFor(null)} className="text-[var(--text-muted)] hover:text-[var(--text-primary)]"><X size={18} /></button>
             </div>
 
+            {/* Approval & Workflow Engine — status, immutable trail, approver action, start picker.
+                Gates the ledger-post (stock issuance/adjustment) control below via onStateChange. */}
+            <div className="p-4 border-b border-[var(--input-border)]">
+              <EntityApprovalPanel
+                entityType="stock_issue"
+                entityId={historyFor.id}
+                entityLabel={historyFor.description || historyFor.site || historyFor.id}
+                context={{
+                  quantity: historyFor.stock_qty,
+                  value: historyFor.reorder_qty ?? historyFor.min_level,
+                  movement_type: adjForm?.movement_type,
+                  site: historyFor.site,
+                }}
+                onStateChange={({ isActive, isLocked }) => setWfLocked(!!(isActive || isLocked))}
+                title="Stock Issuance Approval"
+              />
+              {wfLocked && (
+                <div className="flex items-center gap-1.5 text-xs text-[var(--text-muted)] mt-2">
+                  <Lock size={12} /> Locked — in approval
+                </div>
+              )}
+            </div>
+
             {/* Quick adjustment form */}
             {adjForm && (
               <div className="p-4 border-b border-[var(--input-border)] bg-[var(--input-bg)]/30">
@@ -886,9 +920,11 @@ export default function StockManagement() {
                 <div className="flex gap-2 mt-2">
                   <button
                     onClick={saveAdjustment}
-                    disabled={saving || adjForm.qty_change === 0}
-                    className="btn-primary text-xs px-3 py-1.5 disabled:opacity-50"
+                    disabled={saving || adjForm.qty_change === 0 || wfLocked}
+                    title={wfLocked ? 'Locked — in approval' : undefined}
+                    className="btn-primary text-xs px-3 py-1.5 flex items-center gap-1.5 disabled:opacity-50"
                   >
+                    {wfLocked && <Lock size={12} />}
                     {saving ? t('stock.historyModal.saving') : t('stock.historyModal.logMovementBtn')}
                   </button>
                   <span className="text-xs text-[var(--text-muted)] self-center">

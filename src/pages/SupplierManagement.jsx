@@ -15,13 +15,14 @@ import { formatDate } from '../lib/formatters'
 import { useLanguage } from '../contexts/LanguageContext'
 import PageHeader from '../components/ui/PageHeader'
 import EmptyState from '../components/EmptyState'
+import EntityApprovalPanel from '../components/workflow/EntityApprovalPanel'
 import {
   Building2, Star, TrendingUp, TrendingDown, Minus, Award, AlertTriangle,
   CheckCircle, Clock, Search, Filter, Download, FileText, FileSpreadsheet,
   RefreshCw, ChevronRight, ChevronLeft, ChevronDown, X, Plus, Edit3,
   BarChart3, DollarSign, Truck, Package, Target, Zap, ShieldCheck,
   ArrowUpRight, ArrowDownRight, Users, Calendar, FileCheck, Loader2,
-  SlidersHorizontal, Eye, Globe, MapPin, Hash, Upload,
+  SlidersHorizontal, Eye, Globe, MapPin, Hash, Upload, Lock,
 } from 'lucide-react'
 import { SkeletonCards, SkeletonTable } from '../components/ui/Skeleton'
 import { useNavigate } from 'react-router-dom'
@@ -253,9 +254,13 @@ function CpkBadge({ cpk, currency }) {
 }
 
 // ── Contract Modal ─────────────────────────────────────────────────────────────
-function ContractModal({ contract, onSave, onClose }) {
+function ContractModal({ contract, onSave, onClose, onLockChange }) {
   const { t } = useLanguage()
   const [saveError, setSaveError] = useState(null)
+  // Approval-engine gate: locks contract Save while the workflow is active
+  // (pending/in_review/returned) or locked (approved). Only a saved contract
+  // (with an id) is an approvable subject.
+  const [wfLocked, setWfLocked] = useState(false)
   const {
     register,
     handleSubmit,
@@ -274,6 +279,8 @@ function ContractModal({ contract, onSave, onClose }) {
   })
 
   async function submit(values) {
+    // Block edits to a contract whose approval workflow is active/locked.
+    if (contract?.id && wfLocked) return
     setSaveError(null)
     const err = await onSave(contract?.id ? { ...values, id: contract.id } : values)
     if (err) setSaveError(err)
@@ -340,15 +347,47 @@ function ContractModal({ contract, onSave, onClose }) {
               <AlertTriangle size={13} className="flex-shrink-0" /> {saveError}
             </div>
           )}
+          {contract?.id && wfLocked && (
+            <div className="col-span-2 flex items-center gap-1.5 text-xs text-[var(--accent)] bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg px-3 py-2">
+              <Lock size={12} className="flex-shrink-0" /> Locked — in approval
+            </div>
+          )}
           <FormActions
             className="col-span-2"
-            saving={isSubmitting}
+            saving={isSubmitting || (!!contract?.id && wfLocked)}
             onCancel={onClose}
             submitLabel={t('suppliers.contractModal.save')}
-            savingLabel={t('suppliers.contractModal.saving')}
+            savingLabel={contract?.id && wfLocked && !isSubmitting ? t('suppliers.contractModal.save') : t('suppliers.contractModal.saving')}
             cancelLabel={t('suppliers.contractModal.cancel')}
           />
         </form>
+
+        {/* Approval & Workflow — only a persisted contract is an approvable subject */}
+        {contract?.id && (
+          <div className="p-5 pt-0">
+            <EntityApprovalPanel
+              entityType="supplier"
+              entityId={contract.id}
+              entityLabel={contract.supplier_name || contract.id}
+              context={{
+                contract_value: contract.price_per_unit != null && contract.min_order != null
+                  ? Number(contract.price_per_unit) * Number(contract.min_order)
+                  : (contract.price_per_unit != null ? Number(contract.price_per_unit) : null),
+                price_per_unit: contract.price_per_unit != null ? Number(contract.price_per_unit) : null,
+                min_order: contract.min_order != null ? Number(contract.min_order) : null,
+                payment_terms: contract.payment_terms || null,
+                status: getContractStatus(contract),
+                country: contract.country || null,
+              }}
+              onStateChange={({ isActive, isLocked }) => {
+                const locked = !!(isActive || isLocked)
+                setWfLocked(locked)
+                onLockChange?.(contract.id, locked)
+              }}
+              title="Supplier Approval"
+            />
+          </div>
+        )}
       </motion.div>
     </div>
   )
@@ -661,6 +700,9 @@ export default function SupplierManagement() {
   const [contractsLoading, setContractsLoading] = useState(true)
   const [contractsError, setContractsError] = useState(null)
   const [contractModal, setContractModal] = useState(null)
+  // Approval-engine gate: id of the contract whose workflow is active/locked, so
+  // its row-level edit/delete controls are blocked while it is in approval.
+  const [lockedContractId, setLockedContractId] = useState(null)
   const [contractSearch, setContractSearch] = useState('')
   const [contractDeleteTarget, setContractDeleteTarget] = useState(null)
   const [contractDeleteError, setContractDeleteError] = useState(null)
@@ -1512,10 +1554,20 @@ export default function SupplierManagement() {
                             </td>
                             <td className="px-4 py-3">
                               <div className="flex items-center gap-1">
+                                {lockedContractId === c.id && (
+                                  <span title="Locked — in approval" className="inline-flex items-center gap-1 text-xs text-[var(--accent)] mr-1">
+                                    <Lock size={11} /> Locked
+                                  </span>
+                                )}
                                 <button onClick={() => setContractModal(c)} className="p-1.5 text-[var(--text-muted)] hover:text-blue-400 hover:bg-[var(--input-bg)] rounded">
                                   <Edit3 size={13} />
                                 </button>
-                                <button onClick={() => { setContractDeleteError(null); setContractDeleteTarget(c) }} className="p-1.5 text-[var(--text-muted)] hover:text-red-400 hover:bg-[var(--input-bg)] rounded">
+                                <button
+                                  onClick={() => { if (lockedContractId === c.id) return; setContractDeleteError(null); setContractDeleteTarget(c) }}
+                                  disabled={lockedContractId === c.id}
+                                  title={lockedContractId === c.id ? 'Locked — in approval' : undefined}
+                                  className="p-1.5 text-[var(--text-muted)] hover:text-red-400 hover:bg-[var(--input-bg)] rounded disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:text-[var(--text-muted)]"
+                                >
                                   <X size={13} />
                                 </button>
                               </div>
@@ -1719,7 +1771,8 @@ export default function SupplierManagement() {
           <ContractModal
             contract={contractModal?.id ? contractModal : null}
             onSave={saveContract}
-            onClose={() => setContractModal(null)}
+            onClose={() => { setContractModal(null); setLockedContractId(null) }}
+            onLockChange={(id, locked) => setLockedContractId(locked ? id : null)}
           />
         )}
       </AnimatePresence>

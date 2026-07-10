@@ -54,7 +54,7 @@ const TYRE_POSITIONS = {
   'skid loader':   ['FL', 'FR', 'RL', 'RR'],
   'canter':        ['FL', 'FR', 'RLo', 'RLi', 'RRi', 'RRo'],
   'tri-mixer':     ['F1L', 'F1R', 'F2L', 'F2R', 'R1Lo', 'R1Li', 'R1Ri', 'R1Ro', 'R2Lo', 'R2Li', 'R2Ri', 'R2Ro'],
-  'concrete pump': ['FL', 'FR', 'R1Lo', 'R1Li', 'R1Ri', 'R1Ro', 'R2Lo', 'R2Li', 'R2Ri', 'R2Ro', 'R3Lo', 'R3Li', 'R3Ri', 'R3Ro'],
+  'concrete pump': ['F1L', 'F1R', 'F2L', 'F2R', 'F3L', 'F3R', 'R1Lo', 'R1Li', 'R1Ri', 'R1Ro', 'R2Lo', 'R2Li', 'R2Ri', 'R2Ro'],
   'bus':           ['FL', 'FR', 'RLo', 'RLi', 'RRi', 'RRo'],
   'tata':          ['FL', 'FR', 'RLo', 'RLi', 'RRi', 'RRo'],
   'ashok leyland': ['FL', 'FR', 'RLo', 'RLi', 'RRi', 'RRo'],
@@ -75,10 +75,10 @@ function normVT(vt) {
   return 'pickup'
 }
 
-// Infer vehicle type from asset number prefix (TM→Tri-mixer, MO→Concrete pump, etc.)
+// Infer vehicle type from asset number prefix (TM→Tri-mixer, MP→Concrete pump, etc.)
 function inferVehicleTypeFromAsset(assetNo) {
   const prefix = ((assetNo || '').match(/^[A-Za-z]+/) || [''])[0].toUpperCase().substring(0, 2)
-  const map = { TM: 'Tri-mixer', PM: 'Concrete pump', WL: 'Wheel loader', SL: 'Skid loader', PL: 'Pickup', BH: 'Bus' }
+  const map = { TM: 'Tri-mixer', MP: 'Concrete pump', WL: 'Wheel loader', SL: 'Skid loader', PL: 'Pickup', BH: 'Bus' }
   return map[prefix] || null
 }
 

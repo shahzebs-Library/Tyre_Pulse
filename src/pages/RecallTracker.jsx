@@ -13,8 +13,9 @@ import {
   RefreshCw, CheckCircle, Clock, Activity, Package,
   Tag, Calendar, Building2, Wrench, TrendingDown,
   Info, BarChart3, List, GitBranch, Star, XCircle,
-  ArrowRight, Loader2, Flag, Hash, Layers,
+  ArrowRight, Loader2, Flag, Hash, Layers, Lock,
 } from 'lucide-react'
+import EntityApprovalPanel from '../components/workflow/EntityApprovalPanel'
 import { SkeletonTable } from '../components/ui/Skeleton'
 import * as recallsApi from '../lib/api/recalls'
 import { useSettings } from '../contexts/SettingsContext'
@@ -145,6 +146,11 @@ export default function RecallTracker() {
 
   const [drawer, setDrawer]   = useState(null)
   const [drawerSearch, setDrawerSearch] = useState('')
+  // Approval-engine gate: locks edit/close/delete for the recall open in the
+  // drawer while its workflow is active (pending/in_review/returned) or locked
+  // (approved). Reset on record change; EntityApprovalPanel re-reports via
+  // onStateChange.
+  const [wfLocked, setWfLocked] = useState(false)
 
   const bannerRef = useRef(null)
   const listRef   = useRef(null)
@@ -166,6 +172,10 @@ export default function RecallTracker() {
   useEffect(() => {
     loadRecalls()
   }, [loadRecalls])
+
+  // Reset the approval lock whenever a different recall (or none) is opened in
+  // the drawer; EntityApprovalPanel re-reports the true state via onStateChange.
+  useEffect(() => { setWfLocked(false) }, [drawer?.id])
 
   useEffect(() => {
     async function load() {
@@ -352,6 +362,8 @@ export default function RecallTracker() {
   }
 
   function openEdit(r) {
+    // Block editing a recall whose approval workflow is active/locked.
+    if (drawer?.id === r.id && wfLocked) return
     setForm({ ...r })
     setSizeInput('')
     setFormError('')
@@ -373,6 +385,8 @@ export default function RecallTracker() {
   }
 
   async function handleSave() {
+    // Block saving an edit to a recall whose approval workflow is active/locked.
+    if (editRecall && drawer?.id === editRecall && wfLocked) { setShowAddModal(false); return }
     if (!form.recall_number.trim()) { setFormError('Recall number required'); return }
     if (!form.brand.trim()) { setFormError('Brand required'); return }
     if (!form.issue_date) { setFormError('Issue date required'); return }
@@ -412,6 +426,8 @@ export default function RecallTracker() {
   }
 
   async function handleClose(recallId) {
+    // Status change (close) is an edit — blocked while approval is active/locked.
+    if (drawer?.id === recallId && wfLocked) return
     try {
       await recallsApi.updateRecall(recallId, { status: 'Closed', closed_at: new Date().toISOString() })
       await loadRecalls()
@@ -421,6 +437,8 @@ export default function RecallTracker() {
   }
 
   async function handleDelete(recallId) {
+    // Block deleting a recall whose approval workflow is active/locked.
+    if (drawer?.id === recallId && wfLocked) return
     if (!window.confirm('Delete this recall record?')) return
     try {
       await recallsApi.deleteRecall(recallId)
@@ -755,6 +773,7 @@ export default function RecallTracker() {
                   )}
                   {!loading && filtered.map((r, i) => {
                     const affectedCount = matchTyresForRecall(r).length
+                    const rowLocked = drawer?.id === r.id && wfLocked
                     return (
                       <motion.tr
                         key={r.id}
@@ -799,27 +818,30 @@ export default function RecallTracker() {
                             {isAdmin && r.status !== 'Closed' && (
                               <button
                                 onClick={() => handleClose(r.id)}
-                                className="flex items-center gap-1 px-2 py-1 bg-green-900/30 hover:bg-green-900/60 border border-green-700/50 rounded text-green-400 text-xs transition"
-                                title="Mark as Closed"
+                                disabled={rowLocked}
+                                className="flex items-center gap-1 px-2 py-1 bg-green-900/30 hover:bg-green-900/60 border border-green-700/50 rounded text-green-400 text-xs transition disabled:opacity-40 disabled:cursor-not-allowed"
+                                title={rowLocked ? 'Locked — in approval' : 'Mark as Closed'}
                               >
-                                <CheckCircle size={12} />
+                                {rowLocked ? <Lock size={12} /> : <CheckCircle size={12} />}
                               </button>
                             )}
                             {isAdmin && (
                               <>
                                 <button
                                   onClick={() => openEdit(r)}
-                                  className="p-1 text-[var(--text-muted)] hover:text-[var(--text-secondary)] transition"
-                                  title="Edit"
+                                  disabled={rowLocked}
+                                  className="p-1 text-[var(--text-muted)] hover:text-[var(--text-secondary)] transition disabled:opacity-40 disabled:cursor-not-allowed"
+                                  title={rowLocked ? 'Locked — in approval' : 'Edit'}
                                 >
-                                  <Activity size={12} />
+                                  {rowLocked ? <Lock size={12} /> : <Activity size={12} />}
                                 </button>
                                 <button
                                   onClick={() => handleDelete(r.id)}
-                                  className="p-1 text-[var(--text-dim)] hover:text-red-400 transition"
-                                  title="Delete"
+                                  disabled={rowLocked}
+                                  className="p-1 text-[var(--text-dim)] hover:text-red-400 transition disabled:opacity-40 disabled:cursor-not-allowed"
+                                  title={rowLocked ? 'Locked — in approval' : 'Delete'}
                                 >
-                                  <XCircle size={12} />
+                                  {rowLocked ? <Lock size={12} /> : <XCircle size={12} />}
                                 </button>
                               </>
                             )}
@@ -1162,6 +1184,29 @@ export default function RecallTracker() {
                 <button onClick={() => setDrawer(null)} className="text-[var(--text-muted)] hover:text-[var(--text-secondary)] shrink-0">
                   <X size={20} />
                 </button>
+              </div>
+
+              {/* Approval & Workflow Engine — safety-recall sign-off */}
+              <div className="p-4 border-b border-[var(--input-border)] space-y-3">
+                <EntityApprovalPanel
+                  entityType="recall"
+                  entityId={drawer.id}
+                  entityLabel={drawer.recall_number || drawer.brand || drawer.id}
+                  context={{
+                    severity: drawer.severity,
+                    affected_count: matchTyresForRecall(drawer).length,
+                    brand: drawer.brand,
+                    status: drawer.status,
+                    country: drawer.country,
+                  }}
+                  onStateChange={({ isActive, isLocked }) => setWfLocked(!!(isActive || isLocked))}
+                  title="Recall Approval"
+                />
+                {wfLocked && (
+                  <p className="flex items-center gap-1.5 text-xs text-[var(--text-muted)]">
+                    <Lock size={12} /> Locked — in approval
+                  </p>
+                )}
               </div>
 
               {/* Drawer count */}

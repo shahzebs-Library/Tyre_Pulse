@@ -15,7 +15,7 @@ import {
   X, Filter, Search, Building2, Truck, Layers,
   DollarSign, Settings2, Calendar, ArrowRight, Info,
   AlertOctagon, Gauge, Activity, ChevronRight, Wrench,
-  FileSpreadsheet, BarChart3, Target, MapPin,
+  FileSpreadsheet, BarChart3, Target, MapPin, Lock, ShieldCheck,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import * as rotations from '../lib/api/rotations'
@@ -24,6 +24,7 @@ import { useSettings } from '../contexts/SettingsContext'
 import { useTenant } from '../contexts/TenantContext'
 import { resolvePdfBrand, pdfHeader, pdfFooter, pdfEmptyState, pdfTableTheme } from '../lib/exportUtils'
 import PageHeader from '../components/ui/PageHeader'
+import EntityApprovalPanel from '../components/workflow/EntityApprovalPanel'
 import EmptyState from '../components/EmptyState'
 import { formatDate } from '../lib/formatters'
 
@@ -671,6 +672,14 @@ export default function RotationSchedule() {
   const [schedLoading, setSchedLoading] = useState(true)
   const [schedError,   setSchedError]   = useState(null)
   const [schedBusy,    setSchedBusy]    = useState(false)
+  // Approval-engine gate: the open scheduled rotation is the document under
+  // review. While its workflow is active (pending/in_review/returned) or locked
+  // (approved), the record's strongest mutation — completing/removing it — is
+  // blocked so an in-approval schedule can't be edited out from under the flow.
+  const [detailSchedule, setDetailSchedule] = useState(null)
+  const [wfLocked, setWfLocked] = useState(false)
+  // EntityApprovalPanel re-reports the true state via onStateChange on open.
+  useEffect(() => { setWfLocked(false) }, [detailSchedule?.id])
   const [activeTab, setActiveTab] = useState('status') // 'status' | 'schedule' | 'impact'
   const [sortCol,   setSortCol]   = useState('status')
   const [sortAsc,   setSortAsc]   = useState(true)
@@ -752,6 +761,12 @@ export default function RotationSchedule() {
   }, [activeCountry, fetchSchedules])
 
   const updateScheduleStatus = useCallback(async (id, status) => {
+    // Completing/transitioning a schedule is an edit — blocked while the open
+    // record's approval workflow is active/locked (server RLS also enforces).
+    if (detailSchedule?.id === id && wfLocked) {
+      setSchedError('This rotation is locked — an approval is in progress for it.')
+      return
+    }
     setSchedBusy(true)
     setSchedError(null)
     try {
@@ -762,7 +777,7 @@ export default function RotationSchedule() {
     } finally {
       setSchedBusy(false)
     }
-  }, [fetchSchedules])
+  }, [fetchSchedules, detailSchedule?.id, wfLocked])
 
   const removeSchedule = useCallback(async (id) => {
     setSchedBusy(true)
@@ -1660,24 +1675,36 @@ export default function RotationSchedule() {
                                     <div className="text-[var(--text-muted)] text-xs truncate max-w-xs">{s.notes || '-'}</div>
                                   </div>
                                 </div>
-                                <div className="flex items-center gap-2 flex-shrink-0">
-                                  <button
-                                    onClick={() => updateScheduleStatus(s.id, 'Completed')}
-                                    disabled={schedBusy}
-                                    className="p-1.5 bg-green-900/30 hover:bg-green-800/50 border border-green-800 text-green-400 rounded-lg transition-colors disabled:opacity-50"
-                                    title="Mark completed"
-                                  >
-                                    <CheckCircle size={13} />
-                                  </button>
-                                  <button
-                                    onClick={() => removeSchedule(s.id)}
-                                    disabled={schedBusy}
-                                    className="p-1.5 bg-[var(--input-bg)] hover:bg-red-900/30 border border-[var(--input-border)] hover:border-red-700 text-[var(--text-muted)] hover:text-red-400 rounded-lg transition-colors disabled:opacity-50"
-                                    title="Remove"
-                                  >
-                                    <X size={13} />
-                                  </button>
-                                </div>
+                                {(() => {
+                                  const rowLocked = wfLocked && detailSchedule?.id === s.id
+                                  return (
+                                    <div className="flex items-center gap-2 flex-shrink-0">
+                                      <button
+                                        onClick={() => setDetailSchedule(s)}
+                                        className="p-1.5 bg-[var(--input-bg)] hover:bg-gray-700 border border-[var(--input-border)] text-[var(--text-muted)] hover:text-[var(--text-primary)] rounded-lg transition-colors"
+                                        title="Approval"
+                                      >
+                                        <ShieldCheck size={13} />
+                                      </button>
+                                      <button
+                                        onClick={() => updateScheduleStatus(s.id, 'Completed')}
+                                        disabled={schedBusy || rowLocked}
+                                        className="p-1.5 bg-green-900/30 hover:bg-green-800/50 border border-green-800 text-green-400 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                        title={rowLocked ? 'Locked — in approval' : 'Mark completed'}
+                                      >
+                                        {rowLocked ? <Lock size={13} /> : <CheckCircle size={13} />}
+                                      </button>
+                                      <button
+                                        onClick={() => removeSchedule(s.id)}
+                                        disabled={schedBusy}
+                                        className="p-1.5 bg-[var(--input-bg)] hover:bg-red-900/30 border border-[var(--input-border)] hover:border-red-700 text-[var(--text-muted)] hover:text-red-400 rounded-lg transition-colors disabled:opacity-50"
+                                        title="Remove"
+                                      >
+                                        <X size={13} />
+                                      </button>
+                                    </div>
+                                  )
+                                })()}
                               </div>
                             ))}
                           </div>
@@ -1729,6 +1756,89 @@ export default function RotationSchedule() {
           onSave={entry => createSchedules([entry])}
         />
       )}
+
+      {/* ── Scheduled Rotation Approval Drawer ─────────────────────────────────
+          Wires the shared Approval & Workflow Engine onto a single scheduled
+          rotation (tyre_rotation entity). Smart rule support: cost / due_date /
+          positions / site travel in the context payload. */}
+      <AnimatePresence>
+        {detailSchedule && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 bg-black/60 flex justify-end"
+            onClick={() => setDetailSchedule(null)}
+          >
+            <motion.div
+              initial={{ x: '100%' }}
+              animate={{ x: 0 }}
+              exit={{ x: '100%' }}
+              transition={{ type: 'spring', damping: 30, stiffness: 300 }}
+              className="w-full max-w-lg h-full bg-[var(--surface-1)] border-l border-[var(--input-border)] overflow-y-auto"
+              onClick={e => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between p-6 border-b border-[var(--input-border)] sticky top-0 bg-[var(--surface-1)] z-10">
+                <div>
+                  <div className="flex items-center gap-2 text-[var(--text-primary)] font-semibold text-lg">
+                    <RotateCcw size={18} className="text-green-400" />
+                    {detailSchedule.asset}
+                  </div>
+                  <div className="text-sm text-[var(--text-muted)] mt-0.5">
+                    {detailSchedule.site} · {fmtDate(detailSchedule.scheduledDate)} · {detailSchedule.priority}
+                  </div>
+                </div>
+                <button
+                  onClick={() => setDetailSchedule(null)}
+                  className="p-2 hover:bg-[var(--input-bg)] rounded-lg text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              <div className="p-6 space-y-4">
+                <EntityApprovalPanel
+                  entityType="tyre_rotation"
+                  entityId={detailSchedule.id}
+                  entityLabel={detailSchedule.asset || detailSchedule.id}
+                  context={{
+                    asset_no: detailSchedule.asset,
+                    due_date: detailSchedule.scheduledDate,
+                    priority: detailSchedule.priority,
+                    status: detailSchedule.status,
+                    cost: Number(detailSchedule.currentKm) || 0,
+                    site: detailSchedule.site,
+                  }}
+                  onStateChange={(st) => setWfLocked(!!(st?.isActive || st?.isLocked))}
+                  title="Rotation Approval"
+                />
+
+                {wfLocked && (
+                  <div className="flex items-center gap-1.5 text-xs text-[var(--accent)] bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg px-3 py-2">
+                    <Lock size={12} />
+                    Locked — in approval. Completing this rotation is disabled until the workflow finishes.
+                  </div>
+                )}
+
+                {(() => {
+                  const rowLocked = wfLocked
+                  return (
+                    <button
+                      onClick={() => updateScheduleStatus(detailSchedule.id, 'Completed')}
+                      disabled={schedBusy || rowLocked || detailSchedule.status === 'Completed'}
+                      className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-green-700 hover:bg-green-600 text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                      title={rowLocked ? 'Locked — in approval' : 'Mark rotation completed'}
+                    >
+                      {rowLocked ? <Lock size={14} /> : <CheckCircle size={14} />}
+                      {detailSchedule.status === 'Completed' ? 'Completed' : 'Mark Completed'}
+                    </button>
+                  )
+                })()}
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   )
 }

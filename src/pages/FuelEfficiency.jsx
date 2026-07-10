@@ -12,7 +12,7 @@ import {
   ChevronDown, ChevronUp, RefreshCw, Loader2, Download,
   FileSpreadsheet, FileText, Settings2, Wind, Thermometer,
   DollarSign, BarChart2, Activity, Globe, CheckCircle, XCircle,
-  Info, ArrowUpRight, ArrowDownRight,
+  Info, ArrowUpRight, ArrowDownRight, ShieldCheck, Lock, X,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { fetchAllPages } from '../lib/fetchAll'
@@ -22,6 +22,7 @@ import { useLanguage } from '../contexts/LanguageContext'
 import { formatMonthYear } from '../lib/formatters'
 import { resolvePdfBrand, pdfHeader, pdfFooter, pdfEmptyState, pdfTableTheme } from '../lib/exportUtils'
 import PageHeader from '../components/ui/PageHeader'
+import EntityApprovalPanel from '../components/workflow/EntityApprovalPanel'
 
 ChartJS.register(
   CategoryScale, LinearScale, BarElement,
@@ -129,6 +130,19 @@ export default function FuelEfficiency() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [lastRefresh, setLastRefresh] = useState(null)
+
+  // ── Fuel-exception approval state ─────────────────────────────────────────
+  // A per-vehicle fuel-waste anomaly (row in "Fuel Savings Opportunities") is
+  // the approval subject requiring management sign-off before a formal
+  // exception report is issued. `reviewException` holds the open row; `wfLocked`
+  // mirrors the shared engine state so the row's strongest action (Issue
+  // Exception Report) is disabled while an approval is active/locked. The page
+  // is aggregated read-only analytics, so — as DriverManagement did by driver
+  // name — the exception is keyed by asset_no.
+  const [reviewException, setReviewException] = useState(null)
+  const [wfLocked, setWfLocked] = useState(false)
+  // Reset the lock whenever a different vehicle exception (or none) is opened.
+  useEffect(() => { setWfLocked(false) }, [reviewException?.asset_no])
 
   // ── Fetch ─────────────────────────────────────────────────────────────────
   const fetchData = useCallback(async () => {
@@ -963,6 +977,7 @@ export default function FuelEfficiency() {
                       <th className="px-4 py-3 text-right">{t('fuel.opportunitiesTable.columns.avgTread')}</th>
                       <th className="px-4 py-3 text-right">{t('fuel.opportunitiesTable.columns.monthlyWaste')}</th>
                       <th className="px-4 py-3 text-right">{t('fuel.opportunitiesTable.columns.potentialSaving')}</th>
+                      <th className="px-4 py-3 text-right">Review</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-[var(--border-dim)]">
@@ -983,6 +998,17 @@ export default function FuelEfficiency() {
                         </td>
                         <td className="px-4 py-3 text-right text-red-400">{fmtCur(v.totalExtraCostMonth, activeCurrency)}</td>
                         <td className="px-4 py-3 text-right text-green-400 font-semibold">{fmtCur(v.potentialSaving, activeCurrency)}</td>
+                        <td className="px-4 py-3 text-right">
+                          <button
+                            onClick={() => setReviewException(v)}
+                            title="Review fuel exception & manage approval"
+                            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-amber-300 hover:text-amber-200 transition-colors"
+                            style={{ background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.25)' }}
+                          >
+                            <ShieldCheck className="w-3.5 h-3.5" />
+                            Review
+                          </button>
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -1111,11 +1137,114 @@ export default function FuelEfficiency() {
           )}
         </>
       )}
+
+      {/* ── Fuel Exception Review & Approval Modal ─────────────────────────────
+          The reviewed vehicle row is the fuel-waste anomaly document under
+          management review. The shared Approval & Workflow Engine drives status,
+          the immutable trail, and requirement-gated actions; the page gates its
+          strongest action — issuing the formal exception report — while the
+          approval is active/locked. ──────────────────────────────────────── */}
+      <AnimatePresence>
+        {reviewException && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4"
+            onClick={() => setReviewException(null)}
+          >
+            <motion.div
+              initial={{ scale: 0.96, y: 16 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.96, y: 16 }}
+              onClick={(e) => e.stopPropagation()}
+              className="bg-[var(--surface-1)] border border-[var(--border-bright)] rounded-2xl w-full max-w-2xl max-h-[92vh] overflow-y-auto shadow-2xl"
+            >
+              <div className="sticky top-0 bg-[var(--surface-1)] border-b border-[var(--border-dim)] px-6 py-4 flex items-center justify-between z-10">
+                <div className="flex items-center gap-2">
+                  <AlertTriangle className="w-5 h-5 text-amber-400" />
+                  <div>
+                    <h2 className="text-[var(--text-primary)] font-bold text-lg leading-tight">
+                      {`Fuel Exception — ${reviewException.asset_no}`}
+                    </h2>
+                    <p className="text-xs text-[var(--text-muted)]">
+                      {reviewException.site} · {fmtCur(reviewException.totalExtraCostMonth, activeCurrency)}/mo
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setReviewException(null)}
+                  className="p-2 rounded-lg text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-2)] transition-colors"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <div className="p-6 space-y-5">
+                {/* Anomaly snapshot */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  <ExceptionStat label="Compliance" value={`${reviewException.compliancePct}%`} />
+                  <ExceptionStat label="Avg Tread" value={reviewException.avgTread != null ? `${reviewException.avgTread}mm` : t('fuel.na')} />
+                  <ExceptionStat label="Monthly Waste" value={fmtCur(reviewException.totalExtraCostMonth, activeCurrency)} />
+                  <ExceptionStat label="Annual Impact" value={fmtCur(reviewException.annualExtraCost, activeCurrency)} />
+                </div>
+
+                {/* Shared approval engine — keyed by asset_no (aggregated data) */}
+                <EntityApprovalPanel
+                  entityType="fuel_exception"
+                  entityId={reviewException.asset_no}
+                  entityLabel={reviewException.asset_no}
+                  context={{
+                    variance: reviewException.avgDevPct,
+                    cost: Math.round(reviewException.totalExtraCostMonth || 0),
+                    deviation_pct: reviewException.avgDevPct,
+                    compliance_pct: reviewException.compliancePct,
+                    avg_tread_mm: reviewException.avgTread,
+                    annual_cost: Math.round(reviewException.annualExtraCost || 0),
+                    site: reviewException.site,
+                  }}
+                  onStateChange={(s) => setWfLocked(!!(s?.isActive || s?.isLocked))}
+                  title="Fuel Exception Approval"
+                />
+
+                {/* Strongest action — gated while approval is active/locked */}
+                <div className="flex items-center justify-between gap-3 pt-1">
+                  {wfLocked ? (
+                    <span className="flex items-center gap-1.5 text-xs text-[var(--accent)]">
+                      <Lock className="w-3.5 h-3.5" />
+                      Locked — in approval
+                    </span>
+                  ) : <span />}
+                  <button
+                    onClick={() => { if (!wfLocked) exportPDF() }}
+                    disabled={wfLocked}
+                    title={wfLocked ? 'Locked — in approval' : 'Issue formal fuel exception report'}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-amber-300 hover:text-amber-200 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                    style={{ background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.25)' }}
+                  >
+                    {wfLocked ? <Lock className="w-3.5 h-3.5" /> : <FileText className="w-3.5 h-3.5" />}
+                    Issue Exception Report
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   )
 }
 
 // ── Sub-components ────────────────────────────────────────────────────────────
+
+function ExceptionStat({ label, value }) {
+  return (
+    <div className="bg-[var(--surface-2)] border border-[var(--border-dim)] rounded-lg px-3 py-2">
+      <p className="text-[var(--text-muted)] text-[11px] uppercase tracking-wide">{label}</p>
+      <p className="text-[var(--text-primary)] text-sm font-semibold mt-0.5">{value}</p>
+    </div>
+  )
+}
 
 function ConfigField({ label, value, onChange, step = 1, min = 0 }) {
   return (

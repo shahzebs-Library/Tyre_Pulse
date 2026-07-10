@@ -72,12 +72,13 @@ describe('service layer - tyreRecords', () => {
     expect(h.state.last._calls.range).toContainEqual([0, 49])
   })
 
-  it('listAllRecords selects all rows with the same filters, no count/range', async () => {
+  it('listAllRecords pages through all rows with the same filters (past the 1000 cap)', async () => {
     await tyreRecords.listAllRecords({ search: 'X', country: 'UAE' })
     expect(h.state.last._calls.select).toBe('*')
     expect(h.state.last._calls.selectOpts).toBeUndefined()
     expect(h.state.last._calls.or).toContain('country.eq.UAE,country.is.null')
-    expect(h.state.last._calls.range).toHaveLength(0)
+    // Now paginated via fetchAllPages: first page is range(0, 999).
+    expect(h.state.last._calls.range).toContainEqual([0, 999])
   })
 
   it('updateRecord / insertRecord target tyre_records', async () => {

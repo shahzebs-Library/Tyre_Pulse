@@ -11,7 +11,7 @@
  * `../lib/countryFilter` behaviour. The page keeps ownership of pagination math
  * and the 200-row batch loops; these functions relocate only the queries.
  */
-import { supabase, applyCountry } from './_client'
+import { supabase, applyCountry, fetchAllPages } from './_client'
 import { sanitizeSearchTerm } from '../searchFilter'
 
 /** Distinct non-null `site` values (raw rows) for the site filter dropdown. */
@@ -50,12 +50,18 @@ export function listRecords({ page, pageSize, search, siteFilter, brandFilter, r
  *   riskFilter?:string, country?:string}} opts
  */
 export function listAllRecords({ search, siteFilter, brandFilter, riskFilter, country } = {}) {
-  let q = supabase.from('tyre_records').select('*').order('issue_date', { ascending: false })
-  if (search) { const s = sanitizeSearchTerm(search); q = q.or(`asset_no.ilike.%${s}%,serial_no.ilike.%${s}%,mis_number.ilike.%${s}%,job_card.ilike.%${s}%`) }
-  if (siteFilter) q = q.eq('site', siteFilter)
-  if (brandFilter) q = q.eq('brand', brandFilter)
-  if (riskFilter) q = q.eq('risk_level', riskFilter)
-  return applyCountry(q, country)
+  // Page through every match: a single PostgREST select caps at 1000 rows, which
+  // silently truncated exports on fleets with >1000 records. Order by a stable
+  // unique tiebreaker (id) so pages don't overlap/skip when issue_date is equal/null.
+  return fetchAllPages((from, to) => {
+    let q = supabase.from('tyre_records').select('*')
+      .order('issue_date', { ascending: false }).order('id', { ascending: true })
+    if (search) { const s = sanitizeSearchTerm(search); q = q.or(`asset_no.ilike.%${s}%,serial_no.ilike.%${s}%,mis_number.ilike.%${s}%,job_card.ilike.%${s}%`) }
+    if (siteFilter) q = q.eq('site', siteFilter)
+    if (brandFilter) q = q.eq('brand', brandFilter)
+    if (riskFilter) q = q.eq('risk_level', riskFilter)
+    return applyCountry(q, country).range(from, to)
+  })
 }
 
 /** Update a single tyre record by id. */

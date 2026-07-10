@@ -172,6 +172,9 @@ export default function TyreRecords() {
     setFormError('')
     const payload = {
       ...form,
+      // Empty date field must be null, not '' — Postgres rejects '' for type date
+      // (22007), which broke editing/saving any record with no issue date.
+      issue_date: form.issue_date || null,
       qty: +form.qty || 1,
       // Store the actual entered cost, or null when left blank - never a default.
       cost_per_tyre: form.cost_per_tyre !== '' && form.cost_per_tyre != null ? +form.cost_per_tyre : null,

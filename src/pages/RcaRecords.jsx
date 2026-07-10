@@ -126,6 +126,8 @@ export default function RcaRecords() {
     setError('')
     const payload = {
       ...form,
+      // Empty date must be null, not '' — Postgres rejects '' for type date (22007).
+      failure_date:         form.failure_date || null,
       km_at_failure:        form.km_at_failure    ? +form.km_at_failure    : null,
       hours_at_failure:     form.hours_at_failure ? +form.hours_at_failure : null,
       contributing_factors: Array.isArray(form.contributing_factors) ? form.contributing_factors : [],

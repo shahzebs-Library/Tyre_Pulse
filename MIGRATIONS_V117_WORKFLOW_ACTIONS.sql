@@ -43,7 +43,7 @@
 CREATE OR REPLACE FUNCTION public.workflow_step_condition_passes(
   p_step jsonb, p_context jsonb
 )
-RETURNS boolean LANGUAGE plpgsql IMMUTABLE AS $$
+RETURNS boolean LANGUAGE plpgsql IMMUTABLE SET search_path = public AS $$
 DECLARE
   v_cond   jsonb;
   v_field  text;
@@ -121,7 +121,7 @@ GRANT  EXECUTE ON FUNCTION public.workflow_step_condition_passes(jsonb,jsonb) TO
 CREATE OR REPLACE FUNCTION public._workflow_next_runnable_step(
   p_steps jsonb, p_from int, p_context jsonb
 )
-RETURNS int LANGUAGE plpgsql IMMUTABLE AS $$
+RETURNS int LANGUAGE plpgsql IMMUTABLE SET search_path = public AS $$
 DECLARE
   v_total int := jsonb_array_length(p_steps);
   i int;
@@ -140,7 +140,11 @@ REVOKE EXECUTE ON FUNCTION public._workflow_next_runnable_step(jsonb,int,jsonb) 
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- 2. NEW workflow_act OVERLOAD (approve | reject | return + capture args).
+--    The V97 3-arg workflow_act had a DEFAULT on p_comment; CREATE OR REPLACE
+--    cannot alter defaults, so drop it first, then redefine the pair below.
 -- ─────────────────────────────────────────────────────────────────────────────
+DROP FUNCTION IF EXISTS public.workflow_act(uuid, text, text);
+
 CREATE OR REPLACE FUNCTION public.workflow_act(
   p_instance_id    uuid,
   p_action         text,                 -- 'approve' | 'reject' | 'return'

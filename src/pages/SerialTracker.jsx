@@ -332,6 +332,7 @@ export default function SerialTracker() {
           {!loading && searched && records.length === 0 && (
             <div className="card">
               <EmptyState
+                illustration="state/search-empty"
                 icon={ScanLine}
                 title="No records found"
                 description={`No tyre records match serial "${lastQuery}". Check spelling and capitalisation.`}
@@ -532,6 +533,7 @@ export default function SerialTracker() {
               {bulkResults.length === 0 ? (
                 <div className="card">
                   <EmptyState
+                    illustration="state/search-empty"
                     icon={FileText}
                     title="No serials found"
                     description="No serial numbers could be extracted from the file. Check that it has a recognised column header."

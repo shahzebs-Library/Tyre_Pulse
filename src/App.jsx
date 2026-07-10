@@ -38,6 +38,7 @@ const RcaRecords             = lazy(() => import('./pages/RcaRecords'))
 const DataCleaning           = lazy(() => import('./pages/DataCleaning'))
 const UploadData             = lazy(() => import('./pages/UploadData'))
 const DataIntakeCenter       = lazy(() => import('./pages/DataIntakeCenter'))
+const NotFound               = lazy(() => import('./pages/NotFound'))
 const DataIntakeHistory      = lazy(() => import('./pages/DataIntakeHistory'))
 const UploadApprovals        = lazy(() => import('./pages/UploadApprovals'))
 const Settings               = lazy(() => import('./pages/Settings'))
@@ -297,7 +298,7 @@ function MainApp() {
                       <Route path="/workflow-settings"   element={<Safe><FlagRoute flag="automation_platform"><WorkflowSettings /></FlagRoute></Safe>} />
                       <Route path="/automation-rules"    element={<Safe><FlagRoute flag="automation_platform"><AutomationRules /></FlagRoute></Safe>} />
                       <Route path="/integrations"        element={<Safe><FlagRoute flag="automation_platform"><Integrations /></FlagRoute></Safe>} />
-                      <Route path="*"            element={<Navigate to="/" replace />} />
+                      <Route path="*"            element={<NotFound />} />
                     </Routes>
                   </Layout>
                 </ProtectedRoute>

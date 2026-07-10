@@ -10,6 +10,7 @@ import {
 import { useAuth } from '../contexts/AuthContext'
 import { useLanguage } from '../contexts/LanguageContext'
 import { useSettings, COUNTRIES, COUNTRY_LABEL, COUNTRY_CURRENCY } from '../contexts/SettingsContext'
+import { Illustration } from './illustrations'
 
 /**
  * Role-based onboarding wizard.
@@ -304,6 +305,9 @@ export default function OnboardingWizard() {
               >
                 {current === 'welcome' && (
                   <div className="space-y-3">
+                    <div className="flex justify-center">
+                      <Illustration name="brand/onboarding" size={240} title="Welcome to Tyre Pulse" />
+                    </div>
                     <p className="text-sm leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
                       {content.tagline}
                     </p>

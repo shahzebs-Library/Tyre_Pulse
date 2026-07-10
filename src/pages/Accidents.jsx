@@ -1169,6 +1169,7 @@ export default function Accidents() {
             <div className="text-center py-12 text-[var(--text-muted)]">Loading...</div>
           ) : filtered.length === 0 ? (
             <EmptyState
+              illustration="module/accident"
               icon={AlertOctagon}
               title="No incidents found"
               description="Adjust your filters or log a new incident to start tracking accidents and claims."

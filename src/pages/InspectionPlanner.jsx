@@ -1242,6 +1242,7 @@ export default function InspectionPlanner() {
                 </div>
               ) : filteredOverdue.length === 0 ? (
                 <EmptyState
+                  illustration="module/inspections"
                   icon={CheckCircle2}
                   title="No overdue inspections"
                   description="All vehicles are on schedule."
@@ -1680,6 +1681,7 @@ export default function InspectionPlanner() {
                 </div>
               ) : filteredGap.length === 0 ? (
                 <EmptyState
+                  illustration="state/search-empty"
                   icon={Search}
                   title="No matching records"
                   description="No records match the selected filter."

@@ -1006,6 +1006,7 @@ export default function TyreScrapManagement() {
               {scrapped.length === 0 && !loading && (
                 <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl">
                   <EmptyState
+                    illustration="module/tyres"
                     icon={CheckCircle}
                     title="No scrapped tyres found"
                     description="Try adjusting the date range or filters above."

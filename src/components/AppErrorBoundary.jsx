@@ -1,6 +1,7 @@
 import { Component } from 'react'
-import { RefreshCw, AlertTriangle, ChevronDown } from 'lucide-react'
+import { RefreshCw, ChevronDown } from 'lucide-react'
 import { captureError } from '../lib/monitoring'
+import { Illustration } from './illustrations'
 
 /**
  * Root application error boundary.
@@ -46,8 +47,8 @@ export default class AppErrorBoundary extends Component {
         style={{ background: 'var(--bg-base)' }}
         role="alert"
       >
-        <div className="w-14 h-14 rounded-2xl mb-5 flex items-center justify-center bg-red-500/10 border border-red-500/25">
-          <AlertTriangle size={26} className="text-red-400" />
+        <div className="mb-5">
+          <Illustration name="state/error" size={220} title="Something went wrong" />
         </div>
 
         <h1 className="text-h2 text-center mb-2">Something went wrong</h1>

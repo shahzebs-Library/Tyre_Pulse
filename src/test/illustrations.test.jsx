@@ -21,8 +21,11 @@ describe('illustration system', () => {
     for (const [name, Cmp] of Object.entries(ILLUSTRATIONS)) {
       const html = renderToStaticMarkup(<Cmp title={`test ${name}`} animate={false} />)
       expect(html, name).toContain('<svg')
-      expect(html, name).toContain('role="img"')
-      expect(html, name).toContain('<title')           // a11y label present
+      // Either a meaningful image (role=img + <title>) or an explicitly
+      // decorative piece (aria-hidden), e.g. watermarks / dividers.
+      const meaningful = html.includes('role="img"') && html.includes('<title')
+      const decorative = html.includes('aria-hidden="true"')
+      expect(meaningful || decorative, `${name} is neither labelled nor decorative`).toBe(true)
       // No hard-coded dark surface hexes outside a var() fallback.
       for (const hex of FORBIDDEN_DARK) {
         const bare = new RegExp(`(?<!, )${hex}`, 'i') // allow `var(--x, #hex)`

@@ -299,7 +299,7 @@ export default function ReportCenter() {
             <button onClick={loadHistory} className="btn-secondary text-xs gap-1.5 mt-1"><RefreshCw size={12} /> {t('reportcenter.history.retry')}</button>
           </div>
         ) : history.length === 0 ? (
-          <EmptyState icon={Clock} title={t('reportcenter.history.emptyTitle')} description={t('reportcenter.history.emptyDesc')} />
+          <EmptyState illustration="module/reports" icon={Clock} title={t('reportcenter.history.emptyTitle')} description={t('reportcenter.history.emptyDesc')} />
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full">

@@ -120,6 +120,7 @@
     "scheduledFallback": "مجدول",
     "activeAlerts": "التنبيهات النشطة",
     "createWorkOrder": "إنشاء أمر عمل",
-    "scheduleInspection": "جدولة فحص"
+    "scheduleInspection": "جدولة فحص",
+    "startTyreChecklist": "بدء قائمة فحص الإطارات"
   }
 }

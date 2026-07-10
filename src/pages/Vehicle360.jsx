@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { useParams, Link } from 'react-router-dom'
-import { ArrowLeft, Camera, Upload, Loader2, MapPin, Save, CircleDot, DollarSign, AlertTriangle, Gauge as GaugeIcon, Car } from 'lucide-react'
+import { ArrowLeft, Camera, Upload, Loader2, MapPin, Save, CircleDot, DollarSign, AlertTriangle, Gauge as GaugeIcon, Car, ClipboardCheck } from 'lucide-react'
 import { useSettings } from '../contexts/SettingsContext'
 import * as v360 from '../lib/api/vehicle360'
 import { recordCost } from '../lib/analyticsEngine'
@@ -105,7 +105,15 @@ export default function Vehicle360() {
             <p className="text-sm text-[var(--text-muted)]">{vehicle.asset_no}{vehicle.vehicle_type ? ` · ${vehicle.vehicle_type}` : ''}{vehicle.site ? ` · ${vehicle.site}` : ''}</p>
           </div>
         </div>
-        {vehicle.status && <span className="text-xs font-semibold px-3 py-1.5 rounded-full bg-[var(--accent-wash,rgba(34,197,94,.12))] text-[var(--accent)]">{vehicle.status}</span>}
+        <div className="flex items-center gap-2">
+          <Link
+            to={`/inspections?asset=${encodeURIComponent(vehicle.asset_no)}`}
+            className="btn-primary flex items-center gap-2 text-sm"
+          >
+            <ClipboardCheck size={15} /> Start Tyre Checklist
+          </Link>
+          {vehicle.status && <span className="text-xs font-semibold px-3 py-1.5 rounded-full bg-[var(--accent-wash,rgba(34,197,94,.12))] text-[var(--accent)]">{vehicle.status}</span>}
+        </div>
       </div>
 
       {msg && (

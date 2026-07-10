@@ -44,7 +44,8 @@
     "missing": "ناقص",
     "noPolicy": "بدون سياسة",
     "edit": "تعديل",
-    "delete": "حذف"
+    "delete": "حذف",
+    "startChecklist": "بدء قائمة فحص الإطارات"
   },
   "pagination": {
     "showing": "عرض {from}-{to} من {total}",

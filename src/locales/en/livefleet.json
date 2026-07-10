@@ -120,6 +120,7 @@
     "scheduledFallback": "Scheduled",
     "activeAlerts": "Active Alerts",
     "createWorkOrder": "Create Work Order",
-    "scheduleInspection": "Schedule Inspection"
+    "scheduleInspection": "Schedule Inspection",
+    "startTyreChecklist": "Start Tyre Checklist"
   }
 }

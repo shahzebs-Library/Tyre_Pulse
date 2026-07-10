@@ -13,7 +13,7 @@ import {
   Truck, MapPin, Shield, Clock, Bell,
   Wrench, Calendar, Filter, Download,
   TrendingDown, Users, ToggleLeft, ToggleRight,
-  Eye, ChevronDown, ChevronUp, Radio,
+  Eye, ChevronDown, ChevronUp, Radio, ClipboardCheck,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { fetchAllPages } from '../lib/fetchAll'
@@ -1472,25 +1472,38 @@ export default function LiveFleetStatus() {
                 )}
 
                 {/* Quick actions */}
-                <div className="flex gap-3 pt-1 pb-2">
+                <div className="space-y-2 pt-1 pb-2">
+                  {/* Primary: start the tyre checklist for this vehicle — opens the
+                      Inspections checklist (same vehicle diagram) pre-loaded via deep-link. */}
                   <button
                     onClick={() => {
                       setDrawerOpen(false)
-                      navigate(`/work-orders?asset=${drawerVehicle.asset_no}`)
+                      navigate(`/inspections?asset=${encodeURIComponent(drawerVehicle.asset_no)}`)
                     }}
-                    className="btn-primary flex-1 gap-2"
+                    className="btn-primary w-full gap-2"
                   >
-                    <Wrench size={14} /> {t('livefleet.drawer.createWorkOrder')}
+                    <ClipboardCheck size={14} /> {t('livefleet.drawer.startTyreChecklist')}
                   </button>
-                  <button
-                    onClick={() => {
-                      setDrawerOpen(false)
-                      navigate(`/inspection-planner?asset=${drawerVehicle.asset_no}`)
-                    }}
-                    className="flex-1 flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg bg-[var(--surface-2)] hover:bg-[var(--surface-3)] border border-[var(--border-bright)] text-[var(--text-secondary)] text-sm font-medium transition-colors"
-                  >
-                    <Calendar size={14} /> {t('livefleet.drawer.scheduleInspection')}
-                  </button>
+                  <div className="flex gap-3">
+                    <button
+                      onClick={() => {
+                        setDrawerOpen(false)
+                        navigate(`/work-orders?asset=${drawerVehicle.asset_no}`)
+                      }}
+                      className="flex-1 flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg bg-[var(--surface-2)] hover:bg-[var(--surface-3)] border border-[var(--border-bright)] text-[var(--text-secondary)] text-sm font-medium transition-colors"
+                    >
+                      <Wrench size={14} /> {t('livefleet.drawer.createWorkOrder')}
+                    </button>
+                    <button
+                      onClick={() => {
+                        setDrawerOpen(false)
+                        navigate(`/inspection-planner?asset=${drawerVehicle.asset_no}`)
+                      }}
+                      className="flex-1 flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg bg-[var(--surface-2)] hover:bg-[var(--surface-3)] border border-[var(--border-bright)] text-[var(--text-secondary)] text-sm font-medium transition-colors"
+                    >
+                      <Calendar size={14} /> {t('livefleet.drawer.scheduleInspection')}
+                    </button>
+                  </div>
                 </div>
               </div>
             </motion.div>

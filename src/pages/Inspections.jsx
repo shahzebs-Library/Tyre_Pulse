@@ -310,6 +310,10 @@ export default function Inspections() {
   const [pdfBlobUrl, setPdfBlobUrl]   = useState(null)
   const [showPdfPreview, setShowPdfPreview] = useState(false)
   const diagramRef     = useRef(null)
+  // Offscreen copy of the SAME diagram, always mounted once a checklist is saved,
+  // so the PDF report can capture it even though the on-screen form (and its
+  // diagram) is replaced by the saved-confirmation view.
+  const checklistPdfDiagramRef = useRef(null)
   const [clSelectedPos, setClSelectedPos] = useState(null)
   // Row PDF export: render the live diagram offscreen, then capture its SVG.
   const [pdfRow, setPdfRow] = useState(null)
@@ -717,8 +721,11 @@ export default function Inspections() {
     const infoRows = Math.ceil(infoItems.length / 3)
     y += infoRows * 12 + 6
 
-    // ── Vehicle diagram - capture actual SVG rendered in the DOM ───────────────
+    // ── Vehicle diagram - capture the SAME diagram rendered in the DOM. In the
+    // saved view the on-screen form diagram is unmounted, so fall back to the
+    // always-mounted offscreen copy so the report is never missing the diagram.
     const svgEl = diagramRef.current?.querySelector('svg')
+      || checklistPdfDiagramRef.current?.querySelector('svg')
     if (svgEl) {
       try {
         const svgStr  = new XMLSerializer().serializeToString(svgEl)
@@ -2249,6 +2256,39 @@ export default function Inspections() {
           />
         </div>
       )}
+
+      {/* Offscreen copy of the checklist diagram for the "Daily Tyre Inspection
+          Report" PDF — always mounted once saved (the on-screen form diagram is
+          replaced by the saved-confirmation view), so the report always embeds
+          the SAME diagram the operator saw. */}
+      {clSaved && (() => {
+        const posSource = clPositions.length > 0
+          ? clPositions
+          : (Array.isArray(clSaved.tyre_conditions) ? clSaved.tyre_conditions
+            : (() => { try { return JSON.parse(clSaved.findings || '[]') } catch { return [] } })())
+        if (!Array.isArray(posSource) || posSource.length === 0) return null
+        return (
+          <div
+            ref={checklistPdfDiagramRef}
+            aria-hidden
+            style={{ position: 'fixed', left: -9999, top: 0, width: 360, opacity: 0, pointerEvents: 'none' }}
+          >
+            <VehicleTyreDiagram
+              vehicleType={clFleetInfo?.vehicle_type || clSaved.vehicle_type
+                || inferVehicleTypeFromAsset(clAsset || clSaved.asset_no) || 'Pickup'}
+              positions={posSource.map(p => ({
+                position: p.position,
+                risk_level: p.risk_level
+                  || (p.condition === 'Good' ? 'good'
+                    : p.condition === 'Wear' ? 'warning'
+                    : (p.condition === 'Damage' || p.condition === 'Puncture') ? 'critical'
+                    : 'none'),
+              }))}
+              width={340}
+            />
+          </div>
+        )
+      })()}
     </div>
   )
 }

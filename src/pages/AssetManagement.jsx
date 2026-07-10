@@ -1089,7 +1089,8 @@ export default function AssetManagement() {
                         <ChevronLeft className="w-4 h-4" />
                       </button>
                       {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                        const pg = Math.max(0, Math.min(page - 2 + i, totalPages - 1))
+                        const start = Math.max(0, Math.min(page - 2, totalPages - 5))
+                        const pg = start + i
                         return (
                           <button key={pg} onClick={() => setPage(pg)}
                             className={`w-8 h-8 rounded-lg text-xs font-medium transition-colors ${pg === page ? 'bg-blue-600 text-white' : 'hover:bg-[var(--surface-2)]'}`}>

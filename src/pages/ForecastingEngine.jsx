@@ -1029,7 +1029,7 @@ export default function ForecastingEngine() {
                 tooltip: {
                   ...BASE_OPTS.plugins.tooltip,
                   callbacks: {
-                    label: ctx => `${ctx.dataset.label}: ${ctx.parsed.y.toFixed(1)}%`,
+                    label: ctx => `${ctx.dataset.label}: ${ctx.parsed.y != null ? ctx.parsed.y.toFixed(1) + '%' : 'N/A'}`,
                   },
                 },
               },

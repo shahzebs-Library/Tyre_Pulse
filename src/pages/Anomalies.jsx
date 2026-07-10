@@ -103,7 +103,8 @@ export default function Anomalies() {
     {
       id: 'cost_per_tyre',
       header: 'Cost',
-      accessorFn: r => r.cost_per_tyre ? formatCurrencyCompact(r.cost_per_tyre, activeCurrency) : '-',
+      accessorFn: r => r.cost_per_tyre ?? null,
+      cell: ({ getValue }) => getValue() != null ? formatCurrencyCompact(getValue(), activeCurrency) : '-',
       size: 100,
       meta: { align: 'right' },
     },

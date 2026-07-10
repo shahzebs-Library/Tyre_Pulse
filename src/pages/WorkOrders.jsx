@@ -16,7 +16,7 @@ import {
   ChevronDown, ChevronUp, X, Edit2, Eye, Printer,
   Package, DollarSign, Calendar, User, Building2,
   AlertOctagon, Loader2, RefreshCw, TrendingUp,
-  FileSpreadsheet, Upload, Trash2,
+  FileSpreadsheet, Upload, Trash2, Lock,
 } from 'lucide-react'
 import { workOrders } from '../lib/api'
 import { logAudit } from '../lib/audit'

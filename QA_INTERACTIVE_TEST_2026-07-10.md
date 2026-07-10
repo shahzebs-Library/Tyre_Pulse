@@ -24,6 +24,12 @@
 | 15 | Fleet Master | "Save Vehicle" stayed enabled at the plan cap → silent no-op on click | Low (UX) | ✅ Fixed (proactive `canAddResource` check on open → disable button + inline reason) |
 | 16 | Cost Center | Rendered `NaN%` (CPK-delta badge missed non-finite) and `NaN` (`{fleetAvgCpk && …}` renders literal NaN when the value is NaN — React falsy-number footgun) | Low | ✅ Fixed (finite guards in `cpkDeltaBadge` + `Number.isFinite` render gate) |
 
+| 17 | Work Orders → approval | Starting an approval **crashed** the detail drawer: `WorkOrders.jsx` used `<Lock>` in 3 places but never imported it → JSX resolved to the browser global `window.Lock` → `TypeError: Illegal constructor` when the WO locked under approval | High | ✅ Fixed (import `Lock` from lucide-react) |
+
+**Approval workflow verified end-to-end:** Work Order → select chain → Start approval → **Approve** → instance `status='approved'` (RPC path works). The only defect was #17. A codebase-wide scan for undefined JSX components (all pages/components) found no other real cases (remaining hits are prop-renamed `<Icon>`, destructured locals, and JSDoc examples).
+
+**In-page interactions verified:** Dashboard exports (Excel/PDF/PPTX all download OK); Work Order detail drawer + approval panel.
+
 **Data-integrity pass:** all ~26 analytics/intelligence pages scanned for NaN/Infinity/undefined/broken-chart while loaded. Only Cost Center showed defects (#16, both fixed). Clean: Dashboard, Analytics, Advanced Analytics, Position/Pressure/Predictive/Fleet Intelligence, Benchmark, Tyre Lifecycle/Size/Specs, Rotation, KPI, Site/Country/Period Comparison, Fleet Analytics, Vendor Intelligence, Forecasting, Budget Planner, Fuel Efficiency, Downtime, Workshop, Compliance, Safety & Compliance, Inspection Intelligence, Smart Analytics.
 | 14 | Inspections → raise action | `raiseAction()` inserted `source:'Observation'` into `corrective_actions` (no such column) → silent 400 in an empty catch; "raise action from inspection" never created a linked action | High | ✅ Fixed (removed `source`; found by audit agent) |
 

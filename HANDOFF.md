@@ -1,11 +1,40 @@
 # TyrePulse - Developer Handoff
-**Last updated:** 10 July 2026 (Session 10)
-**Branch:** `main` (auto-deploys to Vercel). Session 10 work was on `claude/enterprise-table-migration`, now merged to `main`.
-**Web build status:** ✅ Clean - builds with zero errors, auto-deploys to Vercel
-**Mobile build status:** ✅ EAS Android build green - **Expo SDK 54 / RN 0.81.5**, auto-builds on push to `main` (Session 10 touched no `mobile/` files)
-**DB migrations applied to live Supabase:** through **V86** (project `jhssdmeruxtrlqnwfksc`). ⚠️ **Session 9 authored V96–V103 but NONE are applied live yet** (the session had no access to the live project). They plus three new edge functions must be applied/deployed with the merge — see `docs/AUTOMATION_PLATFORM_DEPLOYMENT.md` for the runbook (apply order, `verify_jwt` flags, verification SQL). Earlier: V75 applied — `auth_rls_initplan` advisory cleared; V84 `system_config`, V85 `report_exec_digest`, V86 deepens that digest. The richer scheduled-report email ships only when the `send-scheduled-reports` **edge function is redeployed**.
+**Last updated:** 10 July 2026 (Session 11)
+**Branch:** `main` (auto-deploys to Vercel). Session 11 work was built by parallel worktree agents and merged to `main` incrementally.
+**Web build status:** ✅ Clean - builds with zero errors, **1664 tests green**, auto-deploys to Vercel
+**Mobile build status:** ✅ EAS Android build green - **Expo SDK 54 / RN 0.81.5** (Session 11 touched no `mobile/` files — approval-engine mobile act/sign is Phase 5, not yet built)
+**DB migrations applied to live Supabase:** through **V119** (project `jhssdmeruxtrlqnwfksc`). Session 11 applied+verified **V116, V117, V117a, V118, V119** live via the Supabase MCP and deployed the **`workflow-notify`** edge function. (V96–V103 automation platform was applied in a prior session.)
 **Live URL under test:** tyre-pulse-peach.vercel.app
 **Active branches:** `main` · dev `claude/mobile-app-ui-features-tdfxy0` · frozen `claude/backend-step2-assets` (Go) · frozen `claude/mobile-kotlin-app` (Kotlin). All other feature branches consolidated into `main` (see `docs/BRANCH_CONSOLIDATION_2026-07-04.md`).
+
+---
+
+## Session 11 (10 July 2026) — Reports engine, Universal Approval & Workflow Engine (LIVE), centralized access-control core
+
+**Theme:** Built by many parallel worktree agents, integrated + verified together, committed to `main` incrementally. Three big tracks: (1) a state-faithful reports engine, (2) the Universal Approval & Workflow Engine — extended, applied live, and rolled out to 21 modules, (3) the centralized permission core + Master Access Control plan.
+
+**Gate:** web build ✅ zero errors · **1664 tests green** · migrations V116–V119 applied+verified live · `workflow-notify` edge fn deployed · all pushed to `main`.
+
+### 1. Reports engine (state-faithful PDF/Excel/CSV)
+- `src/lib/report/tableReport.js` + `src/components/ui/ExportMenu.jsx` + `src/hooks/useReportMeta.js`: EnterpriseTable's export now matches the exact on-screen state (filters/search/multi-sort/visible columns/selection) across 3 modes (Current View / Filtered / Selected) × PDF/Excel/CSV, branded via tenant logo/colours. Wired into 12 table pages.
+- **Optional server engine** scaffolded at `services/report-engine/` (Express + Playwright HTML→PDF, own Dockerfile/README, verified 57KB PDF). Dormant — the app uses it only if `VITE_REPORT_SERVICE_URL` is set (graceful client fallback). Needs a container host to deploy (Vercel serverless can't run Chromium). Spec: `pdf generator prompt.md`.
+
+### 2. Universal Approval & Workflow Engine — **LIVE**
+Extends the existing V97 engine. Full spec: `APPROVAL_WORKFLOW_ENGINE.md`.
+- **DB (applied+verified live):** V116 (expanded step schema — roles, assignee role|user, per-step require_signature/photo/gps/comment, `condition{field,op,value}`, statuses `in_review`/`returned`), V117 (`workflow_act` approve|reject|**return** with **server-side** requirement enforcement + conditional auto-skip; dropped the V97 3-arg first, kept a compat wrapper), V117a (search_path hardening), V118 (`approval_dashboard()` RPC + `my_pending_approvals` by user), V119 (`workflow_notifications` queue + `consume_event_workflow_notify` + `deliver_workflow_notifications` pg_cron, mirrors V99 webhook pattern). `process_domain_events` dispatches consumers dynamically → notify fires automatically.
+- **Edge fn deployed:** `workflow-notify` (verify_jwt=false; Email/Resend + Push/Expo + WhatsApp/Twilio, all env-gated). ⚠️ **Channels dormant until secrets set:** `WORKFLOW_NOTIFY_SECRET` (= seeded `cron_config.workflow_notify_secret`), `RESEND_API_KEY`/`FROM_EMAIL`, `TWILIO_*`. Push needs no key; WhatsApp also needs a phone source (`profiles` has none). See `docs/WORKFLOW_NOTIFICATIONS.md`.
+- **Shared UI:** `src/components/workflow/{ApprovalStatusBadge,ApprovalAction,ApprovalTrail,EntityApprovalPanel}.jsx` + `src/hooks/useEntityWorkflow.js`. `WorkflowSettings` rebuilt as a drag-and-drop visual builder + 4 starter templates; `Approvals` rebuilt as the manager dashboard (buckets/SLA/avg-time).
+- **Rolled out to 21 modules** (drop-in `<EntityApprovalPanel>` in each detail view + edits gated while under approval): Inspections, Accidents, WorkOrders, Procurement, Warranty, TyreExchange, TyreScrap, GatePass, Retread, AssetManagement, Stock, Maintenance, DriverManagement, Supplier, Fuel, Recalls, Rotation, WorkshopManagement, KnowledgeBase(document), ScheduledReports(report_publish), InspectionPlanner(pm_service).
+- **Made functional:** seeded **21 default approval chains live** (org-NULL) — the engine had 0 definitions and was inert. Uses roles real users hold (inspector/manager/director; admin overrides) with reference-flow conditions/signatures/SLAs. Customizable in `/workflow-settings`. Reversible: `delete from workflow_definitions where organisation_id is null`.
+
+### 3. Centralized access control (additive, NOT wired yet)
+- `src/lib/permissions/{registry,engine}.js` + `src/hooks/useCan.js` + `src/components/permissions/Can.jsx`: one `module.resource.action` deny-by-default engine (14 actions × 22 modules, 18 role templates, tenant/location scope, 41 tests).
+- `MASTER_ACCESS_CONTROL_PLAN.md`: maps the **FOUR** existing permission editors (PermissionMatrix, AccessControlMatrix tab in UserManagement, console ConsolePermissions [raw upsert, per-org — real conflict], static table) into one model. **Confirmation-gated** — old editors NOT retired; 3 "Uncertain" items need sign-off before any removal.
+
+### Follow-ups (owner action)
+- Set the notification secrets to activate email/push/WhatsApp.
+- Decide on Master Access Control consolidation (retire the 4 editors) — needs sign-off on the Uncertain items.
+- ~3 niche modules unwired (GRN≈Procurement, tyre returns/transfers≈TyreExchange, vehicle handover≈GatePass). Phase 5 = mobile act/sign + signature block in module PDFs.
 
 ---
 

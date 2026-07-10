@@ -14,9 +14,10 @@ import {
   RefreshCw, CheckCircle, Clock, AlertTriangle, XCircle,
   Edit2, Save, Loader2, Calendar, Tag, Package,
   Building2, Hash, Percent, CreditCard, Activity, Info,
-  ArrowUpRight, Layers, Zap, Target, List, PieChart, Upload,
+  ArrowUpRight, Layers, Zap, Target, List, PieChart, Upload, Lock,
 } from 'lucide-react'
 import { SkeletonTable } from '../components/ui/Skeleton'
+import EntityApprovalPanel from '../components/workflow/EntityApprovalPanel'
 import * as warranty from '../lib/api/warranty'
 import { useSettings } from '../contexts/SettingsContext'
 import { useAuth } from '../contexts/AuthContext'
@@ -190,6 +191,30 @@ export default function WarrantyTracker() {
   const [expandedRow, setExpandedRow]       = useState(null)
 
   const [claimsError, setClaimsError] = useState('')
+
+  // Approval-engine lock state for the claim currently open in the edit modal.
+  // While that claim is mid-approval (pending/in_review/returned) or approved &
+  // locked, its edit/save/status/delete controls are disabled — the server RPCs
+  // remain the authoritative boundary; this is the UI convenience gate.
+  const [wfLocked, setWfLocked] = useState({ isActive: false, isLocked: false, status: null })
+  const claimLocked = wfLocked.isActive || wfLocked.isLocked
+  // EntityApprovalPanel invokes onStateChange during its effect, so this must be
+  // a stable callback that only commits a change when a value actually differs —
+  // otherwise a fresh object each render would trigger an update loop.
+  const handleWfStateChange = useCallback((next) => {
+    setWfLocked(prev =>
+      prev.isActive === next.isActive &&
+      prev.isLocked === next.isLocked &&
+      prev.status === next.status
+        ? prev
+        : next,
+    )
+  }, [])
+  // Reset the approval lock whenever the open claim changes (or the modal
+  // closes) so one claim's approval state never leaks into another's controls.
+  useEffect(() => {
+    setWfLocked({ isActive: false, isLocked: false, status: null })
+  }, [editClaim?.id])
 
   const loadClaims = useCallback(async () => {
     try {
@@ -418,6 +443,8 @@ export default function WarrantyTracker() {
   }, [form.km_at_fitment, form.km_at_removal])
 
   const handleSave = useCallback(async () => {
+    // Editing an in-approval / approved claim is blocked — the workflow owns it.
+    if (editClaim && claimLocked) { setFormError('Locked — in approval. Edits are disabled while an approval is running or the claim is approved.'); return }
     if (!form.serial_number.trim()) { setFormError('Serial number is required.'); return }
     if (!form.brand.trim()) { setFormError('Brand is required.'); return }
     if (!form.failure_type) { setFormError('Failure type is required.'); return }
@@ -462,9 +489,16 @@ export default function WarrantyTracker() {
     } finally {
       setSaving(false)
     }
-  }, [claims, editClaim, form, kmRun, upsertClaim, profile])
+  }, [claims, editClaim, form, kmRun, upsertClaim, profile, claimLocked])
 
   const handleDelete = useCallback(async (id) => {
+    // Block deletion of the claim that is currently open in the approval-locked
+    // edit modal — a document under approval must not be removed out from under
+    // the workflow (server RLS/RPCs remain the hard boundary).
+    if (editClaim?.id === id && claimLocked) {
+      window.alert('Locked — in approval. This claim cannot be deleted while an approval is running or the claim is approved.')
+      return
+    }
     if (!window.confirm('Delete this warranty claim?')) return
     try {
       await removeClaim(id)
@@ -472,7 +506,7 @@ export default function WarrantyTracker() {
     } catch (e) {
       window.alert(e?.message || 'Could not delete the claim.')
     }
-  }, [removeClaim])
+  }, [removeClaim, editClaim, claimLocked])
 
   const exportPDF = useCallback(async () => {
     const { default: jsPDF } = await import('jspdf')
@@ -909,9 +943,11 @@ export default function WarrantyTracker() {
                                       </button>
                                       <button
                                         onClick={() => handleDelete(c.id)}
-                                        className="flex items-center gap-1.5 px-3 py-1.5 bg-red-900/30 hover:bg-red-800/40 border border-red-800/50 rounded-lg text-red-400 transition-colors"
+                                        disabled={editClaim?.id === c.id && claimLocked}
+                                        title={editClaim?.id === c.id && claimLocked ? 'Locked — in approval' : undefined}
+                                        className="flex items-center gap-1.5 px-3 py-1.5 bg-red-900/30 hover:bg-red-800/40 border border-red-800/50 rounded-lg text-red-400 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                                       >
-                                        <XCircle size={12} /> Delete
+                                        {editClaim?.id === c.id && claimLocked ? <Lock size={12} /> : <XCircle size={12} />} Delete
                                       </button>
                                     </div>
                                   </div>
@@ -1206,6 +1242,38 @@ export default function WarrantyTracker() {
                   </div>
                 )}
 
+                {/*
+                  Approval engine — wired for existing claims only (a claim must
+                  exist before it can enter an approval chain). While the claim is
+                  mid-approval or approved, `wfLocked` (via onStateChange) disables
+                  every edit/save/status control below. Charts/exports are untouched.
+                */}
+                {editClaim && (
+                  <>
+                    <EntityApprovalPanel
+                      entityType="warranty_claim"
+                      entityId={editClaim.id}
+                      entityLabel={editClaim.claim_no || editClaim.serial_number || editClaim.id}
+                      context={{
+                        claim_amount: Number(editClaim.credit_amount) || 0,
+                        status: editClaim.claim_status,
+                        brand: editClaim.brand,
+                        serial_number: editClaim.serial_number,
+                        country: editClaim.country,
+                      }}
+                      title="Warranty Approval"
+                      onStateChange={handleWfStateChange}
+                    />
+                    {claimLocked && (
+                      <div className="p-3 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg text-xs text-[var(--text-muted)] flex items-center gap-2">
+                        <Lock size={13} className="text-[var(--accent)]" />
+                        Locked — in approval. Edits, status changes, and deletion are disabled while this claim is under approval or approved.
+                      </div>
+                    )}
+                  </>
+                )}
+
+                <fieldset disabled={claimLocked} className="contents">
                 <div className="space-y-1">
                   <label className="text-xs text-[var(--text-muted)]">Serial Number *</label>
                   <div className="flex gap-2">
@@ -1335,15 +1403,17 @@ export default function WarrantyTracker() {
                     rows={3} placeholder="Describe the failure, location on tyre, etc."
                     className="w-full px-3 py-2 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg text-sm text-[var(--text-secondary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-blue-500 resize-none" />
                 </div>
+                </fieldset>
 
                 <div className="flex justify-end gap-3 pt-2">
                   <button onClick={() => { setShowAdd(false); setEditClaim(null) }}
                     className="btn-secondary">
                     Cancel
                   </button>
-                  <button onClick={handleSave} disabled={saving}
+                  <button onClick={handleSave} disabled={saving || claimLocked}
+                    title={claimLocked ? 'Locked — in approval' : undefined}
                     className="btn-primary gap-2 disabled:opacity-50">
-                    {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
+                    {claimLocked ? <Lock size={14} /> : saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
                     {editClaim ? 'Update Claim' : 'Save Claim'}
                   </button>
                 </div>

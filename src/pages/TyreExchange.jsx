@@ -11,9 +11,10 @@ import {
   Download, FileText, FileSpreadsheet, ChevronLeft, ChevronRight,
   CheckCircle, AlertTriangle, AlertCircle, History, Package,
   TrendingUp, RotateCcw, Truck, Eye, CheckSquare, XCircle,
-  Calendar, ChevronDown,
+  Calendar, ChevronDown, Lock,
 } from 'lucide-react'
 import * as exchangeApi from '../lib/api/tyreExchange'
+import EntityApprovalPanel from '../components/workflow/EntityApprovalPanel'
 import { useSettings } from '../contexts/SettingsContext'
 import { useTenant } from '../contexts/TenantContext'
 import { useAuth } from '../contexts/AuthContext'
@@ -229,6 +230,14 @@ export default function TyreExchange() {
   const [custodyInput, setCustodyInput] = useState('')
   const [custodySearched, setCustodySearched] = useState(false)
 
+  // ── Replacement approval workflow (Approval & Workflow Engine) ──────────────────
+  // The open custody record is treated as the tyre-replacement document under
+  // review. While its approval is active/locked, the record's mutation controls
+  // (mark returned / write off) are disabled so an in-approval document can't be
+  // edited out from under the workflow. State resets whenever the record changes.
+  const [wfLocked, setWfLocked] = useState(false)
+  useEffect(() => { setWfLocked(false) }, [custodySerial])
+
   // Return / write-off marks - persisted in tyre_status_marks (V62) so they are
   // shared across users and devices instead of living in one browser.
   const [returnedSerials, setReturnedSerials] = useState([])
@@ -326,6 +335,19 @@ export default function TyreExchange() {
     if (!custodySerial) return []
     return deriveCustody(records, custodySerial)
   }, [records, custodySerial])
+
+  // The current-state record for the searched serial: the tyre-replacement
+  // document the Approval & Workflow Engine tracks. Latest event in the chain.
+  const replacementRecord = useMemo(() => {
+    if (custodyChain.length === 0) return null
+    const r = custodyChain[custodyChain.length - 1]
+    return {
+      ...r,
+      serial: r.serial_number || r.serial_no || custodySerial,
+      replacement_cost: r.cost_per_tyre ?? null,
+      reason: r.category ?? null,
+    }
+  }, [custodyChain, custodySerial])
 
   // ── KPIs ──────────────────────────────────────────────────────────────────────
   const kpis = useMemo(() => {
@@ -465,6 +487,11 @@ export default function TyreExchange() {
   // so a rejected write can never silently pretend to be saved.
   async function persistMark(serial, markType, list, setList) {
     setMarkError('')
+    // Locked — this record is mid-approval; edits are blocked (server also enforces).
+    if (wfLocked && serial === replacementRecord?.serial) {
+      setMarkError(`${serial} is locked — an approval is in progress for this record.`)
+      return
+    }
     const prev = list
     setList([...list, serial])
     const { error } = await exchangeApi.upsertTyreStatusMark(serial, markType)
@@ -1189,6 +1216,32 @@ export default function TyreExchange() {
                     </div>
                   </div>
 
+                  {/* Tyre Replacement Approval — Approval & Workflow Engine.
+                      Smart rule: replacement_cost > 5000 SAR routes to Fleet Manager. */}
+                  {replacementRecord && (
+                    <EntityApprovalPanel
+                      entityType="tyre_change"
+                      entityId={replacementRecord.id}
+                      entityLabel={replacementRecord.serial}
+                      context={{
+                        replacement_cost: replacementRecord.replacement_cost,
+                        reason: replacementRecord.reason,
+                        asset_no: replacementRecord.asset_no,
+                        position: replacementRecord.position,
+                        site: replacementRecord.site,
+                      }}
+                      onStateChange={(s) => setWfLocked(!!(s?.isActive || s?.isLocked))}
+                      title="Tyre Replacement Approval"
+                    />
+                  )}
+
+                  {wfLocked && (
+                    <div className="flex items-center gap-1.5 text-xs text-[var(--accent)] bg-[var(--surface-1)] border border-[var(--input-border)] rounded-lg px-3 py-2">
+                      <Lock size={12} />
+                      Locked — in approval. This record’s return / write-off actions are disabled until the workflow completes.
+                    </div>
+                  )}
+
                   {/* Horizontal timeline */}
                   <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-6 overflow-x-auto">
                     <div className="flex items-start gap-0 min-w-max">
@@ -1387,22 +1440,37 @@ export default function TyreExchange() {
                               ) : '-'}
                             </td>
                             <td className="px-4 py-3">
-                              <div className="flex items-center justify-center gap-2">
-                                <button
-                                  onClick={() => markReturned(p.serial)}
-                                  className="flex items-center gap-1 px-2.5 py-1.5 bg-green-900/50 hover:bg-green-800/60 border border-green-700/50 text-green-300 rounded-lg text-xs transition-colors"
-                                  title="Mark as Returned"
-                                >
-                                  <CheckSquare size={12} /> Returned
-                                </button>
-                                <button
-                                  onClick={() => markWrittenOff(p.serial)}
-                                  className="flex items-center gap-1 px-2.5 py-1.5 bg-red-900/50 hover:bg-red-800/60 border border-red-700/50 text-red-300 rounded-lg text-xs transition-colors"
-                                  title="Write Off"
-                                >
-                                  <XCircle size={12} /> Write Off
-                                </button>
-                              </div>
+                              {(() => {
+                                const rowLocked = wfLocked && p.serial === replacementRecord?.serial
+                                return (
+                                  <div className="flex items-center justify-center gap-2">
+                                    {rowLocked && (
+                                      <span
+                                        className="flex items-center gap-1 text-[var(--accent)]"
+                                        title="Locked — in approval"
+                                      >
+                                        <Lock size={12} />
+                                      </span>
+                                    )}
+                                    <button
+                                      onClick={() => markReturned(p.serial)}
+                                      disabled={rowLocked}
+                                      className="flex items-center gap-1 px-2.5 py-1.5 bg-green-900/50 hover:bg-green-800/60 border border-green-700/50 text-green-300 rounded-lg text-xs transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-green-900/50"
+                                      title={rowLocked ? 'Locked — in approval' : 'Mark as Returned'}
+                                    >
+                                      <CheckSquare size={12} /> Returned
+                                    </button>
+                                    <button
+                                      onClick={() => markWrittenOff(p.serial)}
+                                      disabled={rowLocked}
+                                      className="flex items-center gap-1 px-2.5 py-1.5 bg-red-900/50 hover:bg-red-800/60 border border-red-700/50 text-red-300 rounded-lg text-xs transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-red-900/50"
+                                      title={rowLocked ? 'Locked — in approval' : 'Write Off'}
+                                    >
+                                      <XCircle size={12} /> Write Off
+                                    </button>
+                                  </div>
+                                )
+                              })()}
                             </td>
                           </tr>
                         ))

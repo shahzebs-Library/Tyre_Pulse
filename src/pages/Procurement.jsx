@@ -14,9 +14,10 @@ import {
   Plus, X, Edit2, FileText, DollarSign, Truck, Calendar,
   Download, FileSpreadsheet, RefreshCw, Loader2,
   Search, Filter, ChevronDown, ChevronUp,
-  TrendingUp, BarChart2, Eye, Printer,
+  TrendingUp, BarChart2, Eye, Printer, Lock,
 } from 'lucide-react'
 import * as procurementApi from '../lib/api/procurement'
+import EntityApprovalPanel from '../components/workflow/EntityApprovalPanel'
 import { useSettings } from '../contexts/SettingsContext'
 import { useAuth } from '../contexts/AuthContext'
 import { formatCurrency as _fmtCurrencyBase, formatDate, formatMonthYear, formatMonth } from '../lib/formatters'
@@ -140,6 +141,22 @@ export default function Procurement() {
   const [showForm, setShowForm]     = useState(false)
   const [editPO, setEditPO]         = useState(null)
   const [viewPO, setViewPO]         = useState(null)
+  // Approval-engine lock for the open PO. EntityApprovalPanel surfaces the
+  // active/locked state of the workflow via onStateChange; while a PO is
+  // mid-approval (pending/in_review/returned) or approved, its edit/save/
+  // status-change controls are disabled so the record can't drift from the
+  // approved snapshot. Reset whenever the open record changes.
+  const [wfLocked, setWfLocked]     = useState({ isActive: false, isLocked: false, status: null })
+  const poLocked = wfLocked.isActive || wfLocked.isLocked
+  const handleWfStateChange = useCallback((next) => {
+    setWfLocked(prev =>
+      prev.isActive === next.isActive &&
+      prev.isLocked === next.isLocked &&
+      prev.status === next.status
+        ? prev
+        : next,
+    )
+  }, [])
   const [formData, setFormData]     = useState(EMPTY_FORM)
   const [itemRow, setItemRow]       = useState({ ...EMPTY_ITEM })
   const [taxPct, setTaxPct]         = useState(15)
@@ -173,6 +190,12 @@ export default function Procurement() {
   }, [activeCountry])
 
   useEffect(() => { load() }, [load])
+
+  // Reset the approval lock whenever the open PO detail record changes, so the
+  // panel's onStateChange for the new record starts from a clean slate.
+  useEffect(() => {
+    setWfLocked({ isActive: false, isLocked: false, status: null })
+  }, [viewPO?.id])
 
   // ── Derived values ─────────────────────────────────────────────────────────
   const vendors = useMemo(() => ['All', ...Array.from(new Set(orders.map(o => o.vendor_name).filter(Boolean))).sort()], [orders])
@@ -389,6 +412,7 @@ export default function Procurement() {
     setFormData(f => ({ ...f, items: f.items.filter((_, i) => i !== idx) }))
   }
   function updateItemReceivedQty(poId, itemIdx, qty) {
+    if (viewPO?.id === poId && poLocked) return
     const po = orders.find(o => o.id === poId)
     if (!po) return
     const items = po.items.map((it, i) => i === itemIdx ? { ...it, received_qty: parseInt(qty) || 0 } : it)
@@ -405,6 +429,9 @@ export default function Procurement() {
 
   // ── Save ───────────────────────────────────────────────────────────────────
   async function handleSave() {
+    // Approval-locked records are immutable — the server RPCs are the real
+    // boundary, this is the UI guard mirroring it.
+    if (editPO && poLocked) { alert('Locked — in approval'); return }
     if (!formData.vendor_name.trim()) { alert(t('procurement.alerts.vendorRequired')); return }
     if (formData.items.length === 0)  { alert(t('procurement.alerts.lineItemRequired')); return }
     setSaving(true)
@@ -454,6 +481,9 @@ export default function Procurement() {
 
   // ── Status quick-update ────────────────────────────────────────────────────
   async function updateStatus(po, newStatus) {
+    // Block manual status changes on the PO that is currently under approval —
+    // its lifecycle is driven by the workflow engine.
+    if (viewPO?.id === po.id && poLocked) { alert('Locked — in approval'); return }
     const patch = { status: newStatus }
     if (newStatus === 'Delivered') patch.actual_delivery = new Date().toISOString().slice(0, 10)
     const { error: err } = await procurementApi.updatePurchaseOrder(po.id, patch)
@@ -1092,8 +1122,9 @@ export default function Procurement() {
                   <button onClick={() => setShowForm(false)} className="px-4 py-2 bg-[var(--surface-2)] border border-[var(--border-bright)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] text-sm rounded-lg transition-colors">
                     {t('procurement.modal.cancel')}
                   </button>
-                  <button onClick={handleSave} disabled={saving}
-                    className="flex items-center gap-2 px-5 py-2 bg-orange-600 hover:bg-orange-700 disabled:opacity-50 text-white text-sm font-semibold rounded-lg transition-colors">
+                  <button onClick={handleSave} disabled={saving || (editPO && poLocked)}
+                    title={editPO && poLocked ? 'Locked — in approval' : undefined}
+                    className="flex items-center gap-2 px-5 py-2 bg-orange-600 hover:bg-orange-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-semibold rounded-lg transition-colors">
                     {saving ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle size={16} />}
                     {saving ? t('procurement.modal.saving') : editPO ? t('procurement.modal.saveChanges') : t('procurement.modal.createPo')}
                   </button>
@@ -1181,7 +1212,9 @@ export default function Procurement() {
                       <div className="flex flex-wrap gap-2">
                         {next.map(ns => (
                           <button key={ns} onClick={() => updateStatus(viewPO, ns)}
-                            className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors ${
+                            disabled={poLocked}
+                            title={poLocked ? 'Locked — in approval' : undefined}
+                            className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
                               ns === 'Cancelled'  ? 'border-red-700 text-red-400 hover:bg-red-900/30' :
                               ns === 'Delivered'  ? 'border-teal-700 text-teal-400 hover:bg-teal-900/30' :
                               ns === 'Approved'   ? 'border-green-700 text-green-400 hover:bg-green-900/30' :
@@ -1243,7 +1276,9 @@ export default function Procurement() {
                             {['Ordered','Partial Delivery'].includes(viewPO.status) && (
                               <div className="flex items-center gap-2">
                                 <input type="number" min="0" max={it.quantity} defaultValue={received}
-                                  className="w-20 px-2 py-1 bg-[var(--surface-3)] border border-[var(--border-bright)] rounded text-[var(--text-primary)] text-xs focus:outline-none"
+                                  disabled={poLocked}
+                                  title={poLocked ? 'Locked — in approval' : undefined}
+                                  className="w-20 px-2 py-1 bg-[var(--surface-3)] border border-[var(--border-bright)] rounded text-[var(--text-primary)] text-xs focus:outline-none disabled:opacity-40 disabled:cursor-not-allowed"
                                   onBlur={e => updateItemReceivedQty(viewPO.id, idx, e.target.value)} />
                                 <span className="text-[var(--text-muted)] text-xs">{t('procurement.drawer.markReceivedQty')}</span>
                               </div>
@@ -1279,10 +1314,37 @@ export default function Procurement() {
                   </div>
                 )}
 
+                {/* Purchase approval — universal workflow engine. entity_type
+                    'purchase_order'; context carries the cost/priority signals
+                    the engine's threshold conditions route on (Finance/GM). The
+                    panel drives poLocked via onStateChange to freeze edits. */}
+                <EntityApprovalPanel
+                  entityType="purchase_order"
+                  entityId={viewPO.id}
+                  entityLabel={viewPO.po_number || viewPO.id}
+                  context={{
+                    total_amount: Number(viewPO.total_amount) || 0,
+                    status: viewPO.status,
+                    priority: viewPO.priority,
+                    supplier: viewPO.vendor_name,
+                    item_count: (viewPO.items || []).length,
+                  }}
+                  title="Purchase Approval"
+                  onStateChange={handleWfStateChange}
+                />
+
+                {poLocked && (
+                  <div className="flex items-center gap-1.5 text-xs text-[var(--accent)]">
+                    <Lock size={12} /> Locked — in approval
+                  </div>
+                )}
+
                 {/* Actions */}
                 <div className="flex gap-3 pt-2">
-                  <button onClick={() => { setViewPO(null); openEdit(viewPO) }}
-                    className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-orange-600 hover:bg-orange-700 text-white text-sm font-medium rounded-xl transition-colors">
+                  <button onClick={() => { if (poLocked) return; const po = viewPO; setViewPO(null); openEdit(po) }}
+                    disabled={poLocked}
+                    title={poLocked ? 'Locked — in approval' : undefined}
+                    className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-orange-600 hover:bg-orange-700 text-white text-sm font-medium rounded-xl transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-orange-600">
                     <Edit2 size={15} />{t('procurement.drawer.editPo')}
                   </button>
                   <button onClick={() => exportPDF(viewPO)}

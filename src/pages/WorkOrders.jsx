@@ -23,6 +23,7 @@ import { logAudit } from '../lib/audit'
 import { publish } from '../lib/events'
 import PageHeader from '../components/ui/PageHeader'
 import CustomFieldsPanel from '../components/CustomFieldsPanel'
+import EntityApprovalPanel from '../components/workflow/EntityApprovalPanel'
 import { useSettings } from '../contexts/SettingsContext'
 import { useAuth } from '../contexts/AuthContext'
 import { useTenant } from '../contexts/TenantContext'
@@ -151,6 +152,9 @@ export default function WorkOrders() {
   const [showForm, setShowForm]     = useState(false)
   const [editOrder, setEditOrder]   = useState(null)   // null = new
   const [viewOrder, setViewOrder]   = useState(null)   // detail drawer
+  // Approval-engine gate: locks edit/status/delete for the open record while its
+  // workflow is active (pending/in_review/returned) or locked (approved).
+  const [wfLocked, setWfLocked]     = useState(false)
   const [formData, setFormData]     = useState(EMPTY_FORM)
   const [partRow, setPartRow]       = useState({ part_name: '', quantity: 1, unit_cost: '' })
 
@@ -169,6 +173,10 @@ export default function WorkOrders() {
   }, [activeCountry])
 
   useEffect(() => { load() }, [load])
+
+  // Reset the approval lock whenever a different record (or none) is opened in the
+  // detail drawer; EntityApprovalPanel re-reports the true state via onStateChange.
+  useEffect(() => { setWfLocked(false) }, [viewOrder?.id])
 
   // ── Computed ──────────────────────────────────────────────────────────────
   const filtered = useMemo(() => {
@@ -347,6 +355,8 @@ export default function WorkOrders() {
 
   // ── Save ──────────────────────────────────────────────────────────────────
   async function handleSave() {
+    // Block edits to a record whose approval workflow is active/locked.
+    if (editOrder && wfLocked) return
     if (!formData.asset_no.trim() || !formData.work_type) {
       alert(t('workorders.form.validation'))
       return
@@ -402,6 +412,8 @@ export default function WorkOrders() {
 
   // ── Status transition ─────────────────────────────────────────────────────
   async function transitionStatus(order, newStatus) {
+    // Status changes are edits — blocked while the record's approval is active/locked.
+    if (viewOrder?.id === order.id && wfLocked) return
     const patch = { status: newStatus }
     if (newStatus === 'In Progress' && !order.started_at) patch.started_at = new Date().toISOString()
     if (newStatus === 'Completed') patch.completed_at = new Date().toISOString()
@@ -945,9 +957,10 @@ export default function WorkOrders() {
                 </div>
                 <div className="flex gap-3">
                   <button onClick={() => setShowForm(false)} className="btn-secondary">{t('workorders.form.cancel')}</button>
-                  <button onClick={handleSave} disabled={saving}
+                  <button onClick={handleSave} disabled={saving || (editOrder && wfLocked)}
+                    title={editOrder && wfLocked ? 'Locked — in approval' : undefined}
                     className="btn-primary gap-2 disabled:opacity-50">
-                    {saving ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle size={16} />}
+                    {editOrder && wfLocked ? <Lock size={16} /> : saving ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle size={16} />}
                     {saving ? t('workorders.form.saving') : editOrder ? t('workorders.form.save') : t('workorders.form.create')}
                   </button>
                 </div>
@@ -1037,20 +1050,42 @@ export default function WorkOrders() {
                   })()}
                 </div>
 
-                {/* Status transitions */}
+                {/* Status transitions — disabled while approval is active/locked */}
                 {STATUS_FLOW[viewOrder.status]?.length > 0 && (
                   <div>
                     <p className="text-[var(--text-secondary)] text-xs mb-2">{t('workorders.detail.transitionTo')}</p>
                     <div className="flex flex-wrap gap-2">
                       {STATUS_FLOW[viewOrder.status].map(ns => (
-                        <button key={ns} onClick={() => transitionStatus(viewOrder, ns)}
-                          className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors ${
+                        <button key={ns} onClick={() => transitionStatus(viewOrder, ns)} disabled={wfLocked}
+                          className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
                             ns === 'Cancelled' ? 'border-red-700 text-red-400 hover:bg-red-900/30' :
                             ns === 'Completed' ? 'border-green-700 text-green-400 hover:bg-green-900/30' :
                             'border-blue-700 text-blue-400 hover:bg-blue-900/30'
                           }`}>{ns}</button>
                       ))}
                     </div>
+                  </div>
+                )}
+
+                {/* Approval & Workflow Engine — status, immutable trail, approver action, start picker */}
+                <EntityApprovalPanel
+                  entityType="work_order"
+                  entityId={viewOrder.id}
+                  entityLabel={viewOrder.work_order_no || viewOrder.id}
+                  context={{
+                    total_cost: Number(viewOrder.total_cost) || 0,
+                    downtime_hours: Number(viewOrder.breakdown_hours) || 0,
+                    status: viewOrder.status,
+                    priority: viewOrder.priority,
+                    site: viewOrder.site,
+                  }}
+                  onStateChange={({ isActive, isLocked }) => setWfLocked(!!(isActive || isLocked))}
+                  title="Work Order Approval"
+                />
+
+                {wfLocked && (
+                  <div className="flex items-center gap-1.5 text-xs text-[var(--text-muted)]">
+                    <Lock size={12} /> Locked — in approval
                   </div>
                 )}
 
@@ -1132,9 +1167,10 @@ export default function WorkOrders() {
                 <CustomFieldsPanel data={viewOrder.custom_data} title={t('workorders.detail.customFields')} defaultOpen />
 
                 <div className="flex gap-3 pt-2">
-                  <button onClick={() => { setViewOrder(null); openEdit(viewOrder) }}
-                    className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-xl transition-colors">
-                    <Edit2 size={15} />{t('workorders.detail.edit')}
+                  <button onClick={() => { setViewOrder(null); openEdit(viewOrder) }} disabled={wfLocked}
+                    title={wfLocked ? 'Locked — in approval' : undefined}
+                    className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-xl transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-blue-600">
+                    {wfLocked ? <Lock size={15} /> : <Edit2 size={15} />}{t('workorders.detail.edit')}
                   </button>
                   <button onClick={() => exportJobCard(viewOrder)}
                     className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-[var(--surface-3)] hover:bg-gray-600 text-[var(--text-primary)] text-sm font-medium rounded-xl transition-colors">

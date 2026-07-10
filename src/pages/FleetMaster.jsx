@@ -10,7 +10,7 @@ import { sanitizeSearchTerm } from '../lib/searchFilter'
 import { canAddResource } from '../lib/api/billing'
 import {
   Search, Plus, Edit2, Trash2, Save, X, AlertTriangle,
-  FileSpreadsheet, Download, Upload, Truck
+  FileSpreadsheet, Download, Upload, Truck, ClipboardCheck
 } from 'lucide-react'
 import EnterpriseTable from '../components/ui/EnterpriseTable'
 import { useReportMeta } from '../hooks/useReportMeta'
@@ -547,6 +547,9 @@ export default function FleetMaster() {
           <div className="flex items-center gap-2">
             <button onClick={() => navigate(`/vehicle/${encodeURIComponent(r.asset_no)}`)} className="text-gray-400 hover:text-[var(--accent)] transition-colors" title="Open Vehicle 360">
               <Truck size={15} />
+            </button>
+            <button onClick={() => navigate(`/inspections?asset=${encodeURIComponent(r.asset_no)}`)} className="text-gray-400 hover:text-green-400 transition-colors" title={t('fleetmaster.table.startChecklist')}>
+              <ClipboardCheck size={15} />
             </button>
             <button onClick={() => openEdit(r)} className="text-gray-400 hover:text-yellow-400 transition-colors" title={t('fleetmaster.table.edit')}>
               <Edit2 size={15} />

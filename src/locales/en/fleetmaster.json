@@ -44,7 +44,8 @@
     "missing": "Missing",
     "noPolicy": "No policy",
     "edit": "Edit",
-    "delete": "Delete"
+    "delete": "Delete",
+    "startChecklist": "Start Tyre Checklist"
   },
   "pagination": {
     "showing": "Showing {from}-{to} of {total}",

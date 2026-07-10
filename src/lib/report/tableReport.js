@@ -91,6 +91,51 @@ export function describeTableState(table, mode) {
 }
 
 /**
+ * Build the portable report-definition payload from live table state — the same
+ * contract the server-side Playwright engine (services/report-engine) consumes.
+ * Charts are supplied by the caller (canvas → PNG data URL) since the table does
+ * not own them.
+ */
+export function buildReportDefinition({
+  table,
+  mode = EXPORT_MODES.FILTERED,
+  fileName = 'export',
+  title = 'Report',
+  company = '',
+  currency = 'SAR',
+  locale = 'en',
+  branding,
+  dateRange,
+  kpis,
+  charts,
+  orientation = 'landscape',
+}) {
+  const cols = getExportColumns(table)
+  const rows = toObjectRows(getRowsForMode(table, mode), cols)
+  return {
+    reportType: 'table',
+    title,
+    company,
+    currency,
+    locale,
+    dateRange,
+    exportMode: mode,
+    filtersSummary: describeTableState(table, mode),
+    columns: cols.map((c) => ({
+      key: c.id,
+      header: getColumnHeader(c),
+      align: c.columnDef.meta?.align || 'left',
+    })),
+    rows,
+    kpis,
+    charts,
+    branding,
+    orientation,
+    fileName,
+  }
+}
+
+/**
  * Run a state-faithful export.
  * @returns {Promise<number>} the number of rows exported (0 = nothing to export)
  */

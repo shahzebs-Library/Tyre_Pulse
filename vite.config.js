@@ -192,7 +192,8 @@ export default defineConfig({
     environment: 'jsdom',
     globals: true,
     setupFiles: ['./src/test/setup.js'],
-    exclude: ['**/.claude/**', '**/node_modules/**', '**/dist/**'],
+    // services/** has its own Node (node:test) suite — keep it out of vitest.
+    exclude: ['**/.claude/**', '**/node_modules/**', '**/dist/**', '**/services/**'],
     // Hermetic test env: modules that construct the Supabase client at import
     // time (src/lib/supabase.js) need the two public vars present. These are
     // dummy placeholders — no real project is contacted in unit tests. Only

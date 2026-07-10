@@ -1,0 +1,22 @@
+{
+  "name": "tyrepulse-report-engine",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Server-side PDF report engine for Tyre Pulse — Playwright HTML→PDF for pixel-perfect, branded, RTL-aware reports. Consumes the same report-definition payload the client engine produces.",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js",
+    "test": "node --test",
+    "postinstall": "playwright install chromium"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "express": "^4.21.2",
+    "playwright": "^1.61.1",
+    "zod": "^3.24.1"
+  }
+}

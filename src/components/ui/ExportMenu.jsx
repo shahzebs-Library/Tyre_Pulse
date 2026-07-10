@@ -2,10 +2,12 @@ import { useEffect, useRef, useState } from 'react'
 import { Download, FileText, FileSpreadsheet, FileType, Check, Loader2 } from 'lucide-react'
 import {
   runTableExport,
+  buildReportDefinition,
   EXPORT_MODES,
   EXPORT_FORMATS,
   modeLabel,
 } from '../../lib/report/tableReport'
+import { isServerReportsEnabled, generateServerPdf } from '../../lib/report/serverReport'
 
 /**
  * ExportMenu — state-faithful export dropdown for EnterpriseTable.
@@ -66,18 +68,30 @@ export default function ExportMenu({
   async function handleExport(format) {
     setBusy(format)
     setErrored(false)
+    const common = {
+      table,
+      mode,
+      fileName,
+      title: meta.title || fileName,
+      company: meta.company || '',
+      currency: meta.currency || 'SAR',
+      branding: meta.branding,
+      dateRange: meta.dateRange,
+    }
     try {
-      await runTableExport({
-        table,
-        format,
-        mode,
-        fileName,
-        title: meta.title || fileName,
-        company: meta.company || '',
-        currency: meta.currency || 'SAR',
-        branding: meta.branding,
-        dateRange: meta.dateRange,
-      })
+      // Prefer the server (Playwright) engine for print-grade PDFs when it is
+      // configured — but never let it block the user: fall back to the client
+      // renderer on any failure.
+      if (format === EXPORT_FORMATS.PDF && isServerReportsEnabled()) {
+        try {
+          await generateServerPdf(buildReportDefinition(common))
+          setOpen(false)
+          return
+        } catch (serverErr) {
+          console.warn('Server report failed, using client engine', serverErr)
+        }
+      }
+      await runTableExport({ ...common, format })
       setOpen(false)
     } catch (err) {
       // Surface failure instead of silently producing nothing.

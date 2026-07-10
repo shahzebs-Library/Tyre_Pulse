@@ -15,6 +15,7 @@ import {
   getColumnHeader,
   getRowsForMode,
   describeTableState,
+  buildReportDefinition,
   runTableExport,
   EXPORT_MODES,
   EXPORT_FORMATS,
@@ -127,6 +128,26 @@ describe('tableReport engine', () => {
     expect(rows).toHaveLength(2)
     expect(opts.currency).toBe('USD')
     expect(opts.meta['Export mode']).toBe('Filtered Report')
+  })
+
+  it('buildReportDefinition produces the portable server payload from live state', () => {
+    const def = buildReportDefinition({
+      table: makeTable(),
+      mode: EXPORT_MODES.FILTERED,
+      fileName: 'fleet',
+      title: 'Fleet',
+      company: 'RMC',
+      currency: 'SAR',
+    })
+    expect(def.title).toBe('Fleet')
+    expect(def.company).toBe('RMC')
+    expect(def.exportMode).toBe('filtered')
+    expect(def.columns).toEqual([
+      { key: 'name', header: 'Name', align: 'left' },
+      { key: 'cost', header: 'Cost (raw)', align: 'left' },
+    ])
+    expect(def.rows).toEqual([{ name: 'A', cost: 10 }, { name: 'B', cost: 20 }])
+    expect(def.filtersSummary['Export mode']).toBe('Filtered Report')
   })
 
   it('returns 0 and exports nothing when there are no exportable columns', async () => {

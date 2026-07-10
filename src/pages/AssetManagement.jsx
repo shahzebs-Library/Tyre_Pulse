@@ -13,7 +13,7 @@ import {
   ChevronDown, ChevronUp, AlertTriangle, CheckCircle, Clock,
   DollarSign, Activity, Shield, BarChart2, TrendingUp, Eye,
   ToggleLeft, ToggleRight, MapPin, Globe, Calendar, Zap, Target,
-  Award, Layers, Info,
+  Award, Layers, Info, Lock,
 } from 'lucide-react'
 import { SkeletonCards, SkeletonTable } from '../components/ui/Skeleton'
 import * as assetApi from '../lib/api/assetManagement'
@@ -24,6 +24,7 @@ import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import { formatCurrencyCompact, formatDate, formatMonthYear } from '../lib/formatters'
 import PageHeader from '../components/ui/PageHeader'
 import CustomFieldsPanel from '../components/CustomFieldsPanel'
+import EntityApprovalPanel from '../components/workflow/EntityApprovalPanel'
 
 ChartJS.register(
   CategoryScale, LinearScale,
@@ -161,7 +162,7 @@ function TyrePositionDiagram({ tyres = [] }) {
 }
 
 // ── Asset Detail Drawer ────────────────────────────────────────────────────────
-function AssetDrawer({ asset, tyres = [], workOrders, currency, onClose }) {
+function AssetDrawer({ asset, tyres = [], workOrders, currency, onClose, onEdit, canEdit = false, wfLocked = false, onWfStateChange }) {
   const { t } = useLanguage()
   const activeTyres = tyres.filter(t => !t.km_at_removal)
   const totalCost = tyres.reduce((s, t) => s + (parseFloat(t.cost_per_tyre) || 0) * (Number(t.qty) || 1), 0)
@@ -230,6 +231,17 @@ function AssetDrawer({ asset, tyres = [], workOrders, currency, onClose }) {
           <span className={`px-2 py-1 rounded-full text-xs font-semibold ${asset.active ? 'bg-green-900/50 text-green-300' : 'bg-[var(--surface-2)] text-[var(--text-secondary)]'}`}>
             {asset.active ? t('assetmgmt.drawer.active') : t('assetmgmt.drawer.inactive')}
           </span>
+          {canEdit && (
+            <button
+              onClick={() => !wfLocked && onEdit?.(asset)}
+              disabled={wfLocked}
+              title={wfLocked ? 'Locked — in approval' : t('assetmgmt.actions.editAsset')}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[var(--surface-2)] hover:bg-[var(--surface-3)] text-yellow-400 hover:text-yellow-300 text-sm transition-colors border border-[var(--border-bright)] disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              {wfLocked ? <Lock className="w-4 h-4" /> : <Edit2 className="w-4 h-4" />}
+              {t('assetmgmt.actions.editAsset')}
+            </button>
+          )}
           <button onClick={onClose} className="p-2 rounded-lg hover:bg-[var(--surface-2)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors">
             <X className="w-5 h-5" />
           </button>
@@ -238,6 +250,30 @@ function AssetDrawer({ asset, tyres = [], workOrders, currency, onClose }) {
 
       {/* Content */}
       <div className="flex-1 overflow-y-auto p-5 space-y-6">
+
+        {/* Asset Disposal — Approval & Workflow Engine (status, immutable trail,
+            approver action, start picker). Gates the asset edit/dispose path. */}
+        <EntityApprovalPanel
+          entityType="asset_disposal"
+          entityId={asset.id ?? asset.asset_no}
+          entityLabel={asset.asset_no || asset.id}
+          context={{
+            book_value: Number(asset._ytdCost) || 0,
+            disposal_reason: asset.active === false ? 'inactive' : null,
+            asset_type: asset.vehicle_type || null,
+            site: asset.site || null,
+            country: asset.country || null,
+            worst_risk: asset._worstRisk || null,
+          }}
+          onStateChange={onWfStateChange}
+          title={t('assetmgmt.drawer.disposalApprovalTitle')}
+        />
+
+        {wfLocked && (
+          <div className="flex items-center gap-1.5 text-xs text-[var(--text-muted)]">
+            <Lock className="w-3 h-3" /> Locked — in approval
+          </div>
+        )}
 
         {/* Tyre Position Diagram */}
         <div className="card">
@@ -388,7 +424,7 @@ function AssetDrawer({ asset, tyres = [], workOrders, currency, onClose }) {
 }
 
 // ── Add/Edit Asset Modal ────────────────────────────────────────────────────────
-function AssetModal({ asset, sites, countries, onSave, onClose }) {
+function AssetModal({ asset, sites, countries, onSave, onClose, locked = false }) {
   const { t } = useLanguage()
   const [form, setForm] = useState(asset ?? EMPTY_ASSET())
   const [saving, setSaving] = useState(false)
@@ -399,6 +435,8 @@ function AssetModal({ asset, sites, countries, onSave, onClose }) {
   function set(k, v) { setForm(prev => ({ ...prev, [k]: v })) }
 
   async function handleSave() {
+    // Block saving an edit to a record whose disposal approval is active/locked.
+    if (isEdit && locked) return
     if (!form.asset_no?.trim()) { setError(t('assetmgmt.modal.errRequired')); return }
     setSaving(true)
     setError('')
@@ -521,9 +559,10 @@ function AssetModal({ asset, sites, countries, onSave, onClose }) {
         </div>
         <div className="flex justify-end gap-3 px-5 pb-5">
           <button onClick={onClose} className="px-4 py-2 rounded-lg bg-[var(--surface-2)] text-[var(--text-secondary)] text-sm hover:bg-[var(--surface-3)] transition-colors">{t('assetmgmt.modal.cancel')}</button>
-          <button onClick={handleSave} disabled={saving}
-            className="px-5 py-2 rounded-lg bg-blue-600 text-white text-sm font-semibold hover:bg-blue-500 disabled:opacity-50 transition-colors flex items-center gap-2">
-            {saving ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+          <button onClick={handleSave} disabled={saving || (isEdit && locked)}
+            title={isEdit && locked ? 'Locked — in approval' : undefined}
+            className="px-5 py-2 rounded-lg bg-blue-600 text-white text-sm font-semibold hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2">
+            {isEdit && locked ? <Lock className="w-4 h-4" /> : saving ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
             {saving ? t('assetmgmt.modal.saving') : t('assetmgmt.modal.save')}
           </button>
         </div>
@@ -597,8 +636,17 @@ export default function AssetManagement() {
   // ── UI state ─────────────────────────────────────────────────────────────────
   const [drawerAsset, setDrawerAsset] = useState(null)
   const [editAsset, setEditAsset] = useState(null)
+  // Snapshot of the disposal lock at the moment an edit is initiated, so the edit
+  // modal stays gated even after the drawer (which owns the live lock) closes.
+  const [editLocked, setEditLocked] = useState(false)
   const [showAdd, setShowAdd] = useState(false)
   const [activeTab, setActiveTab] = useState('registry') // registry | charts | health
+  // Approval-engine gate: locks the asset edit/dispose path for the open record
+  // while its disposal workflow is active (pending/in_review/returned) or locked
+  // (approved). EntityApprovalPanel reports the true state via onStateChange.
+  const [wfLocked, setWfLocked] = useState(false)
+  // Reset the lock whenever a different asset (or none) is opened in the drawer.
+  useEffect(() => { setWfLocked(false) }, [drawerAsset?.id, drawerAsset?.asset_no])
 
   // ── load data ─────────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -1063,12 +1111,19 @@ export default function AssetManagement() {
                                     className="p-1.5 rounded-lg hover:bg-[var(--surface-3)] text-[var(--text-secondary)] hover:text-blue-400 transition-colors" title="View detail">
                                     <Eye className="w-4 h-4" />
                                   </button>
-                                  {isAdmin && (
-                                    <button onClick={() => setEditAsset(a)}
-                                      className="p-1.5 rounded-lg hover:bg-[var(--surface-3)] text-[var(--text-secondary)] hover:text-yellow-400 transition-colors" title="Edit asset">
-                                      <Edit2 className="w-4 h-4" />
-                                    </button>
-                                  )}
+                                  {isAdmin && (() => {
+                                    // Lock edit for the asset whose disposal approval is active/locked.
+                                    const rowLocked = wfLocked && drawerAsset &&
+                                      (drawerAsset.id === a.id || drawerAsset.asset_no === a.asset_no)
+                                    return (
+                                      <button onClick={() => { if (!rowLocked) { setEditLocked(false); setEditAsset(a) } }}
+                                        disabled={rowLocked}
+                                        className="p-1.5 rounded-lg hover:bg-[var(--surface-3)] text-[var(--text-secondary)] hover:text-yellow-400 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                                        title={rowLocked ? 'Locked — in approval' : 'Edit asset'}>
+                                        {rowLocked ? <Lock className="w-4 h-4" /> : <Edit2 className="w-4 h-4" />}
+                                      </button>
+                                    )
+                                  })()}
                                 </div>
                               </td>
                             </tr>
@@ -1295,6 +1350,10 @@ export default function AssetManagement() {
               workOrders={workOrders}
               currency={activeCurrency}
               onClose={() => setDrawerAsset(null)}
+              canEdit={isAdmin}
+              wfLocked={wfLocked}
+              onEdit={(a) => { setEditLocked(wfLocked); setDrawerAsset(null); setEditAsset(a) }}
+              onWfStateChange={({ isActive, isLocked }) => setWfLocked(!!(isActive || isLocked))}
             />
           </>
         )}
@@ -1307,8 +1366,9 @@ export default function AssetManagement() {
             asset={editAsset ?? null}
             sites={siteOptions}
             countries={countryOptions.length ? countryOptions : ['KSA','UAE','Egypt']}
-            onSave={() => { setShowAdd(false); setEditAsset(null); setRefreshKey(k => k + 1) }}
-            onClose={() => { setShowAdd(false); setEditAsset(null) }}
+            locked={!!editAsset && editLocked}
+            onSave={() => { setShowAdd(false); setEditAsset(null); setEditLocked(false); setRefreshKey(k => k + 1) }}
+            onClose={() => { setShowAdd(false); setEditAsset(null); setEditLocked(false) }}
           />
         )}
       </AnimatePresence>

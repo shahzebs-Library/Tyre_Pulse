@@ -83,6 +83,7 @@
   },
   "drawer": {
     "assetProfile": "ملف الأصل",
+    "disposalApprovalTitle": "موافقة التخلص من الأصل",
     "active": "نشطة",
     "inactive": "غير نشطة",
     "tyrePositionMap": "خريطة مواضع الإطارات",

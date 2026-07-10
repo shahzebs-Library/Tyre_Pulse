@@ -83,6 +83,7 @@
   },
   "drawer": {
     "assetProfile": "Asset Profile",
+    "disposalApprovalTitle": "Asset Disposal Approval",
     "active": "Active",
     "inactive": "Inactive",
     "tyrePositionMap": "Tyre Position Map",

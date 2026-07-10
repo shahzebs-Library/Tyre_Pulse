@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
+import { useState, useEffect, useMemo, useCallback, useRef, Fragment } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Chart as ChartJS,
@@ -12,9 +12,10 @@ import {
   RefreshCw, CheckCircle, Clock, DollarSign, Package,
   BarChart3, Building2, Tag, Calendar, Layers, Info,
   ChevronDown, ChevronUp, Loader2, XCircle, ArrowRight,
-  Recycle, AlertOctagon, ShieldAlert, Flame, Activity,
+  Recycle, AlertOctagon, ShieldAlert, Flame, Activity, Lock, ShieldCheck,
 } from 'lucide-react'
 import { SkeletonTable } from '../components/ui/Skeleton'
+import EntityApprovalPanel from '../components/workflow/EntityApprovalPanel'
 import * as scrapApi from '../lib/api/tyreScrap'
 import { fetchAllPages } from '../lib/fetchAll'
 import { useAuth } from '../contexts/AuthContext'
@@ -191,6 +192,22 @@ export default function TyreScrapManagement() {
   // team instead of one browser's localStorage.
   const [disposals, setDisposals] = useState({})
   const [disposalError, setDisposalError] = useState('')
+
+  // ── Approval & Workflow Engine (per disposal-log record) ──────────────────────
+  // Expanded row hosts <EntityApprovalPanel/>. While that record's workflow is
+  // active (pending/in_review/returned) or locked (approved), its scrap-status
+  // mutation (markDisposed) is disabled. Only one row is expanded at a time, so a
+  // single wfLocked flag is reset whenever a different record opens.
+  const [expandedId, setExpandedId] = useState(null)
+  const [wfLocked, setWfLocked] = useState(false)
+
+  const toggleExpanded = useCallback((id) => {
+    setExpandedId((prev) => {
+      const next = prev === id ? null : id
+      setWfLocked(false)   // reset lock when a different record opens/closes
+      return next
+    })
+  }, [])
 
   useEffect(() => {
     let cancelled = false
@@ -537,6 +554,8 @@ export default function TyreScrapManagement() {
 
   // ── Mark as disposed ──────────────────────────────────────────────────────────
   const markDisposed = useCallback((id, status = 'Disposed') => {
+    // Block the mutation while this record is mid-approval / approved-locked.
+    if (id === expandedId && wfLocked) return
     setDisposalError('')
     let prevStatus
     setDisposals(prev => {
@@ -550,7 +569,7 @@ export default function TyreScrapManagement() {
           setDisposalError(`Could not save the disposal status: ${err.message}`)
         }
       })
-  }, [])
+  }, [expandedId, wfLocked])
 
   // ── Monthly trend chart data ──────────────────────────────────────────────────
   const trendChartData = useMemo(() => ({
@@ -1368,6 +1387,7 @@ export default function TyreScrapManagement() {
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="border-b border-[var(--input-border)] text-[var(--text-muted)] text-xs">
+                        <th className="px-2 py-3 text-center w-8"></th>
                         <th className="px-4 py-3 text-left">Serial No</th>
                         <th className="px-4 py-3 text-left">Brand</th>
                         <th className="px-4 py-3 text-left">Size</th>
@@ -1385,7 +1405,7 @@ export default function TyreScrapManagement() {
                     <tbody>
                       {disposalLog.length === 0 && (
                         <tr>
-                          <td colSpan={12} className="px-4 py-14 text-center text-[var(--text-muted)]">
+                          <td colSpan={13} className="px-4 py-14 text-center text-[var(--text-muted)]">
                             <Trash2 className="inline mb-2 text-[var(--text-dim)]" size={36} />
                             <p className="mt-1 font-medium text-[var(--text-muted)]">No disposal records match current filters</p>
                             <p className="text-xs mt-0.5">Adjust search or date range to find records</p>
@@ -1396,14 +1416,27 @@ export default function TyreScrapManagement() {
                         const life   = kmLife(t)
                         const status = disposals[t.id] ?? 'Pending'
                         const cfg    = DISPOSAL_STATUSES[status] ?? DISPOSAL_STATUSES.Pending
+                        const isOpen     = expandedId === t.id
+                        const rowLocked  = isOpen && wfLocked
                         return (
+                          <Fragment key={t.id}>
                           <motion.tr
-                            key={t.id}
                             initial={{ opacity: 0 }}
                             animate={{ opacity: 1 }}
                             transition={{ delay: Math.min(i * 0.02, 0.4) }}
-                            className="border-b border-gray-800/60 hover:bg-gray-800/30 transition"
+                            className={`border-b border-gray-800/60 hover:bg-gray-800/30 transition ${isOpen ? 'bg-gray-800/40' : ''}`}
                           >
+                            <td className="px-2 py-2.5 text-center">
+                              <button
+                                onClick={() => toggleExpanded(t.id)}
+                                className="p-1 rounded text-[var(--text-muted)] hover:text-[var(--text-secondary)] hover:bg-[var(--input-bg)] transition"
+                                title={isOpen ? 'Hide approval' : 'Scrap approval'}
+                                aria-label={isOpen ? 'Hide approval' : 'Scrap approval'}
+                                aria-expanded={isOpen}
+                              >
+                                {isOpen ? <ChevronUp size={14} /> : <ShieldCheck size={14} />}
+                              </button>
+                            </td>
                             <td className="px-4 py-2.5 font-mono text-blue-300 text-xs">{t.serial_number ?? '-'}</td>
                             <td className="px-4 py-2.5 text-[var(--text-secondary)] font-medium">{t.brand ?? '-'}</td>
                             <td className="px-4 py-2.5 text-[var(--text-muted)] text-xs font-mono">{t.size ?? '-'}</td>
@@ -1426,7 +1459,14 @@ export default function TyreScrapManagement() {
                               <Badge label={status} cfg={cfg} />
                             </td>
                             <td className="px-4 py-2.5 text-center">
-                              {status === 'Pending' ? (
+                              {rowLocked ? (
+                                <span
+                                  className="inline-flex items-center gap-1 text-[10px] text-amber-400"
+                                  title="Locked — in approval"
+                                >
+                                  <Lock size={11} /> Locked
+                                </span>
+                              ) : status === 'Pending' ? (
                                 <div className="flex items-center justify-center gap-1">
                                   <button
                                     onClick={() => markDisposed(t.id, 'Disposed')}
@@ -1454,6 +1494,35 @@ export default function TyreScrapManagement() {
                               )}
                             </td>
                           </motion.tr>
+
+                          {isOpen && (
+                            <tr className="border-b border-gray-800/60 bg-gray-900/40">
+                              <td colSpan={13} className="px-4 py-4">
+                                <EntityApprovalPanel
+                                  entityType="tyre_scrap"
+                                  entityId={t.id}
+                                  entityLabel={t.serial_number || t.asset_no || t.id}
+                                  context={{
+                                    scrap_cost: t.cost_per_tyre != null
+                                      ? Number(t.cost_per_tyre) * (Number(t.qty) || 1)
+                                      : null,
+                                    reason: t.removal_reason ?? null,
+                                    brand: t.brand ?? null,
+                                    quantity: Number(t.qty) || 1,
+                                    site: t.site ?? null,
+                                    position: t.position ?? null,
+                                    risk_level: t.risk_level ?? null,
+                                  }}
+                                  onStateChange={({ isActive, isLocked }) => {
+                                    const locked = !!(isActive || isLocked)
+                                    setWfLocked((prev) => (prev === locked ? prev : locked))
+                                  }}
+                                  title="Scrap Approval"
+                                />
+                              </td>
+                            </tr>
+                          )}
+                          </Fragment>
                         )
                       })}
                     </tbody>

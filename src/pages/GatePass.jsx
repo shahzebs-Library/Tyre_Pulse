@@ -7,10 +7,11 @@ import { exportToPdf, exportToExcel } from '../lib/exportUtils'
 import { formatDate } from '../lib/formatters'
 import {
   ShieldCheck, ShieldClose, CheckCircle, XCircle, Printer, Clock,
-  Download, Search, RefreshCw, Activity, Upload,
+  Download, Search, RefreshCw, Activity, Upload, Lock,
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
 import EmptyState from '../components/EmptyState'
+import EntityApprovalPanel from '../components/workflow/EntityApprovalPanel'
 import { gatePasses } from '../lib/api'
 import { logAudit } from '../lib/audit'
 import { publish } from '../lib/events'
@@ -38,6 +39,10 @@ export default function GatePass() {
   const [issuing, setIssuing]         = useState(false)
   const [denialReason, setDenialReason] = useState('')
   const [showDenialInput, setShowDenialInput] = useState(false)
+  // Approval-engine gate: locks the issue/deny action for the asset under
+  // clearance while its workflow is active (pending/in_review/returned) or
+  // locked (approved). EntityApprovalPanel reports the true state via onStateChange.
+  const [wfLocked, setWfLocked] = useState(false)
 
   // Tab state: 'today' | 'history'
   const [logTab, setLogTab] = useState('today')
@@ -93,6 +98,11 @@ export default function GatePass() {
     }
   }, [logTab, siteFilter])
 
+  // Reset the approval lock whenever a different asset/inspection is loaded into
+  // the clearance panel (or cleared); EntityApprovalPanel re-reports the true
+  // state via onStateChange for the newly loaded record.
+  useEffect(() => { setWfLocked(false) }, [inspection?.id])
+
   async function checkClearance() {
     if (!assetSearch.trim()) return
     setChecking(true)
@@ -116,6 +126,8 @@ export default function GatePass() {
   }
 
   async function issuePass(status) {
+    // Block issuing/denying while the asset's approval workflow is active/locked.
+    if (wfLocked) return
     setIssuing(true); setIssueError('')
     const values = {
       asset_no:      assetSearch.trim(),
@@ -371,11 +383,36 @@ export default function GatePass() {
                 <p className="text-[11px] text-red-200/70 mt-1">Resolve/close these before the vehicle can be released.</p>
               </div>
             )}
+            {/* Approval & Workflow Engine — gate release behind a configurable
+                approval chain for this asset's gate pass. */}
+            <div className="mb-4">
+              <EntityApprovalPanel
+                entityType="gate_pass"
+                entityId={inspection.id}
+                entityLabel={inspection.asset_no || assetSearch.trim() || inspection.id}
+                context={{
+                  purpose: 'Vehicle handover / gate release',
+                  asset_no: assetSearch.trim() || inspection.asset_no,
+                  inspection_id: inspection.id,
+                  inspection_type: inspection.inspection_type,
+                  destination: null,
+                  site: siteFilter || inspection.site,
+                  pass_date: today,
+                }}
+                title="Gate Pass Approval"
+                onStateChange={({ isActive, isLocked }) => setWfLocked(!!(isActive || isLocked))}
+              />
+            </div>
+            {wfLocked && (
+              <div className="flex items-center gap-1.5 text-xs text-yellow-400 mb-2">
+                <Lock size={12} /> Locked — in approval
+              </div>
+            )}
             {issueError && !blockers?.blocked && <p className="text-red-400 text-xs mb-2">{issueError}</p>}
-            <button onClick={() => issuePass('Cleared')} disabled={issuing || blockers?.blocked}
+            <button onClick={() => issuePass('Cleared')} disabled={issuing || wfLocked || blockers?.blocked}
               className="btn-primary px-6 disabled:opacity-50"
-              title={blockers?.blocked ? 'Blocked by open critical safety items' : undefined}>
-              {issuing ? 'Issuing...' : blockers?.blocked ? 'Release blocked' : 'Issue Gate Pass'}
+              title={wfLocked ? 'Locked while in approval' : blockers?.blocked ? 'Blocked by open critical safety items' : undefined}>
+              {issuing ? 'Issuing...' : wfLocked ? 'Locked — in approval' : blockers?.blocked ? 'Release blocked' : 'Issue Gate Pass'}
             </button>
           </div>
         )}

@@ -192,6 +192,9 @@ export default defineConfig({
     environment: 'jsdom',
     globals: true,
     setupFiles: ['./src/test/setup.js'],
+    // Heavy jsdom render tests (e.g. the workflow panels) can exceed the 5s
+    // default under parallel CPU load — give them headroom to avoid flakiness.
+    testTimeout: 20000,
     // services/** has its own Node (node:test) suite — keep it out of vitest.
     exclude: ['**/.claude/**', '**/node_modules/**', '**/dist/**', '**/services/**'],
     // Hermetic test env: modules that construct the Supabase client at import

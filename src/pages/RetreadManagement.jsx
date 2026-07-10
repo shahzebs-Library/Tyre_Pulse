@@ -11,9 +11,10 @@ import {
   Loader2, AlertTriangle, CheckCircle, TrendingDown, TrendingUp,
   DollarSign, BarChart3, Package, Award, X, ChevronRight,
   Activity, Building2, Tag, Calendar, Layers, Info, Star,
-  ArrowRight, Recycle, CircleDollarSign, Target, Zap,
+  ArrowRight, Recycle, CircleDollarSign, Target, Zap, Lock,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
+import EntityApprovalPanel from '../components/workflow/EntityApprovalPanel'
 import { fetchAllPages } from '../lib/fetchAll'
 import { useAuth } from '../contexts/AuthContext'
 import { useSettings } from '../contexts/SettingsContext'
@@ -218,6 +219,15 @@ export default function RetreadManagement() {
 
   // Lifecycle drawer
   const [drawer, setDrawer]       = useState(null)
+
+  // Approval & Workflow Engine gate. The open retread casing (in the detail
+  // drawer) is the document under approval — retread send-outs / vendor decisions
+  // warrant sign-off. While its workflow is active (pending/in_review/returned) or
+  // locked (approved), the record's strongest mutation — its per-record export
+  // (the artifact a vendor acts on) — is disabled so an in-approval casing can't be
+  // exported out from under the workflow. State resets whenever the record changes.
+  const [wfLocked, setWfLocked] = useState(false)
+  useEffect(() => { setWfLocked(false) }, [drawer?.id])
 
   // ROI Calculator
   const [roi, setRoi] = useState({
@@ -607,6 +617,47 @@ export default function RetreadManagement() {
 
     doc.save(`TyrePulse_ROI_Analysis_${new Date().toISOString().slice(0, 10)}.pdf`)
   }, [roi, roiCalc, activeCurrency, branding, company])
+
+  // ── Per-record casing export (the retread send-out artifact) ────────────────
+  // Gated by the approval workflow: an in-approval / approved casing can't be
+  // exported out from under its workflow. The server remains the real boundary;
+  // this early-return is the client-side convenience guard.
+  const handleExportCasing = useCallback(async (rec) => {
+    if (!rec || wfLocked) return
+    exportToPdf(
+      [{
+        serial_number: rec.serial_number,
+        brand: rec.brand,
+        size: rec.size,
+        position: rec.position,
+        asset_no: rec.asset_no,
+        site: rec.site,
+        issue_date: rec.issue_date,
+        km_life: rec.km_life ?? '',
+        cost_per_tyre: rec.cost_per_tyre,
+        cpk: rec.cpk != null ? rec.cpk.toFixed(6) : '',
+        risk_level: rec.risk_level,
+        status: rec.status,
+      }],
+      [
+        { key: 'serial_number', header: 'Serial' },
+        { key: 'brand', header: 'Brand' },
+        { key: 'size', header: 'Size' },
+        { key: 'position', header: 'Position' },
+        { key: 'asset_no', header: 'Asset' },
+        { key: 'site', header: 'Site' },
+        { key: 'issue_date', header: 'Issue Date' },
+        { key: 'km_life', header: 'km Life' },
+        { key: 'cost_per_tyre', header: 'Cost' },
+        { key: 'cpk', header: 'CPK' },
+        { key: 'risk_level', header: 'Risk Level' },
+        { key: 'status', header: 'Status' },
+      ],
+      `Retread Casing - ${rec.serial_number ?? rec.asset_no ?? rec.id}`,
+      `TyrePulse_Retread_Casing_${rec.serial_number ?? rec.id}`,
+      'landscape',
+    )
+  }, [wfLocked])
 
   // ── Risk badge helper ──────────────────────────────────────────────────────
   function riskBadge(level) {
@@ -1332,10 +1383,43 @@ export default function RetreadManagement() {
                     </div>
                   </div>
                 )}
+
+                {/* Retread Approval — Approval & Workflow Engine.
+                    Retread send-outs / vendor decisions warrant sign-off.
+                    Smart rule: retread_cost > threshold routes to Fleet Manager. */}
+                <EntityApprovalPanel
+                  entityType="retread"
+                  entityId={drawer.id}
+                  entityLabel={drawer.serial_number || drawer.asset_no || drawer.id}
+                  context={{
+                    retread_cost: drawer.cost_per_tyre,
+                    vendor: drawer.brand,
+                    serial_no: drawer.serial_number,
+                    casing_condition: drawer.risk_level,
+                    site: drawer.site,
+                  }}
+                  onStateChange={(s) => setWfLocked(!!(s?.isActive || s?.isLocked))}
+                  title="Retread Approval"
+                />
+
+                {wfLocked && (
+                  <div className="flex items-center gap-1.5 text-xs text-[var(--accent)] bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg px-3 py-2">
+                    <Lock size={12} />
+                    Locked — in approval. This casing's export is disabled until the workflow completes.
+                  </div>
+                )}
               </div>
 
               {/* Drawer footer */}
-              <div className="p-3 border-t border-[var(--input-border)] flex justify-end">
+              <div className="p-3 border-t border-[var(--input-border)] flex justify-end gap-2">
+                <button
+                  onClick={() => handleExportCasing(drawer)}
+                  disabled={wfLocked}
+                  title={wfLocked ? 'Locked — in approval' : 'Export casing record'}
+                  className="flex items-center gap-1.5 px-4 py-2 bg-purple-700 hover:bg-purple-600 rounded-lg text-sm font-semibold text-white transition disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-purple-700"
+                >
+                  {wfLocked ? <Lock size={14} /> : <FileText size={14} />} Export Casing
+                </button>
                 <button
                   onClick={() => setDrawer(null)}
                   className="px-4 py-2 bg-[var(--input-bg)] hover:bg-[var(--input-bg-hover)] rounded-lg text-sm text-[var(--text-secondary)] transition"

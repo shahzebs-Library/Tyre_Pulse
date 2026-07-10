@@ -163,7 +163,7 @@ export function layoutCodes(key) {
 const _LEGACY_BASE = {
   FL: 'LHF1', FR: 'RHF1', RL: 'LHR1', RR: 'RHR1',
   RLo: 'LHRO', RLi: 'LHRI', RRi: 'RHRI', RRo: 'RHRO',
-  F1L: 'LHF1', F1R: 'RHF1', F2L: 'LHF2', F2R: 'RHF2',
+  F1L: 'LHF1', F1R: 'RHF1', F2L: 'LHF2', F2R: 'RHF2', F3L: 'LHF3', F3R: 'RHF3',
   R1Lo: 'LHR1-O', R1Li: 'LHR1-I', R1Ri: 'RHR1-I', R1Ro: 'RHR1-O',
   R2Lo: 'LHR2-O', R2Li: 'LHR2-I', R2Ri: 'RHR2-I', R2Ro: 'RHR2-O',
   R3Lo: 'LHR3-O', R3Li: 'LHR3-I', R3Ri: 'RHR3-I', R3Ro: 'RHR3-O',

@@ -37,7 +37,8 @@ describe('supplier adapter', () => {
       { country: 'UAE', supplier_code: 'BR01', supplier_name: 'Bridgestone' },
     ]
     const out = classifyDuplicates(rows, 'supplier')
-    expect(out[0].dup_status).not.toBe('none') // same code+country repeats
+    expect(out[0].dup_status).toBe('none')     // keeper (first of the code+country)
+    expect(out[1].dup_status).not.toBe('none') // same code+country repeats (name disagrees)
     expect(out[2].dup_status).toBe('none')     // different country
   })
 
@@ -76,7 +77,8 @@ describe('driver adapter', () => {
       { country: 'UAE', driver_id: 'EMP100', driver_name: 'Ahmed' },
     ]
     const out = classifyDuplicates(rows, 'driver')
-    expect(out[0].dup_status).toBe('conflict') // driver_name in CONFLICT_FIELDS
+    expect(out[0].dup_status).toBe('none')     // keeper (first of the driver_id+country)
+    expect(out[1].dup_status).toBe('conflict') // driver_name in CONFLICT_FIELDS disagrees
     expect(out[2].dup_status).toBe('none')     // different country
   })
 })

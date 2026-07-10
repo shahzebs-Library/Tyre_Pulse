@@ -165,7 +165,7 @@ describe('accident adapter - duplicate classification', () => {
       { country: 'KSA', insurance_claim_no: 'CL-100', asset_no: 'V-1', incident_date: '2024-01-12', claim_amount: 1000 },
     ]
     const out = classifyDuplicates(rows, 'accident')
-    expect(out.every((r) => r.dup_status === 'duplicate')).toBe(true)
+    expect(out.map((r) => r.dup_status)).toEqual(['none', 'duplicate'])
   })
 
   it('same country + same claim_no but disagreeing claim_amount → conflict', () => {
@@ -174,7 +174,7 @@ describe('accident adapter - duplicate classification', () => {
       { country: 'KSA', insurance_claim_no: 'CL-200', asset_no: 'V-1', claim_amount: 9999 },
     ]
     const out = classifyDuplicates(rows, 'accident')
-    expect(out.every((r) => r.dup_status === 'conflict')).toBe(true)
+    expect(out.map((r) => r.dup_status)).toEqual(['none', 'conflict'])
   })
 
   it('claim_no on one row and identical police_report_no fallback on the other still group', () => {
@@ -186,7 +186,9 @@ describe('accident adapter - duplicate classification', () => {
       { country: 'KSA', police_report_no: 'REF-7', asset_no: 'V-1' },
     ]
     const out = classifyDuplicates(rows, 'accident')
-    expect(out.every((r) => r.dup_status === 'duplicate')).toBe(true)
+    // Same accident under claim_no on one row and police_report_no on the other:
+    // complementary, no conflict-field disagreement ⇒ keeper + mergeable duplicate.
+    expect(out.map((r) => r.dup_status)).toEqual(['none', 'duplicate'])
   })
 
   it('same claim_no across different countries → none (country-scoped)', () => {

@@ -47,7 +47,8 @@ describe('adapters - country-scoped natural keys', () => {
       { country: 'KSA', asset_no: 'V-100' },
     ]
     const out = classifyDuplicates(rows, 'fleet')
-    expect(out.every((r) => r.dup_status === 'duplicate')).toBe(true)
+    // First occurrence is the keeper ('none'); the exact repeat is redundant.
+    expect(out.map((r) => r.dup_status)).toEqual(['none', 'duplicate'])
   })
 })
 
@@ -85,9 +86,9 @@ describe('adapters - repeated tyre serial is an event, not a drop', () => {
       { country: 'KSA', serial_no: 'TS-1', asset_no: 'A1' },
     ]
     const out = classifyDuplicates(rows, 'tyre')
-    // Both rows are retained and flagged - nothing is discarded.
+    // Both rows are retained; the first is the keeper, the exact repeat is flagged.
     expect(out).toHaveLength(2)
-    expect(out.every((r) => r.dup_status === 'duplicate')).toBe(true)
+    expect(out.map((r) => r.dup_status)).toEqual(['none', 'duplicate'])
   })
 
   it('repeated serial with disagreeing conflict field → conflict', () => {
@@ -97,7 +98,8 @@ describe('adapters - repeated tyre serial is an event, not a drop', () => {
     ]
     const out = classifyDuplicates(rows, 'tyre')
     expect(out).toHaveLength(2)
-    expect(out.every((r) => r.dup_status === 'conflict')).toBe(true)
+    // Same key, different data ⇒ keeper stays 'none', the divergent row is a conflict.
+    expect(out.map((r) => r.dup_status)).toEqual(['none', 'conflict'])
   })
 })
 

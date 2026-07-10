@@ -123,7 +123,7 @@ describe('workorder adapter - duplicate classification (WO-number identity)', ()
       { country: 'KSA', ...make({}) },
     ]
     const out = classifyDuplicates(rows, 'workorder')
-    expect(out.every((r) => r.dup_status === 'duplicate')).toBe(true)
+    expect(out.map((r) => r.dup_status)).toEqual(['none', 'duplicate'])
   })
 
   it('same WO across different countries → none (country-scoped)', () => {
@@ -141,7 +141,7 @@ describe('workorder adapter - duplicate classification (WO-number identity)', ()
       { country: 'KSA', ...make({ Status: 'Closed' }) },
     ]
     const out = classifyDuplicates(rows, 'workorder')
-    expect(out.every((r) => r.dup_status === 'conflict')).toBe(true)
+    expect(out.map((r) => r.dup_status)).toEqual(['none', 'conflict'])
   })
 })
 

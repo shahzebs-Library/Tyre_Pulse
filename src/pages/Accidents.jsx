@@ -1,11 +1,12 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { AlertOctagon, Plus, Search, X, Save, FileText, Download, BarChart2, Eye, Hourglass, Upload, CheckCircle2, AlertCircle, ChevronDown, Trash2, AlertTriangle } from 'lucide-react'
+import { AlertOctagon, Plus, Search, X, Save, FileText, Download, BarChart2, Eye, Hourglass, Upload, CheckCircle2, AlertCircle, ChevronDown, Trash2, AlertTriangle, Lock } from 'lucide-react'
 import { motion } from 'framer-motion'
 import PageHeader from '../components/ui/PageHeader'
 import EmptyState from '../components/EmptyState'
 import { supabase } from '../lib/supabase'
 import AccidentDetailModal from '../components/AccidentDetailModal'
+import EntityApprovalPanel from '../components/workflow/EntityApprovalPanel'
 import EnterpriseTable from '../components/ui/EnterpriseTable'
 import { useReportMeta } from '../hooks/useReportMeta'
 import * as accidentsApi from '../lib/api/accidents'
@@ -187,6 +188,27 @@ export default function Accidents() {
   const [statusFunnel, setStatusFunnel]        = useState('')
   const [onlyPendingClosure, setOnlyPendingClosure] = useState(false)
   const [detailId, setDetailId]                = useState(null)
+  // Approval-engine lock state for the currently-open accident. While the
+  // accident is mid-approval (pending/in_review/returned) or approved & locked,
+  // its edit/status-change/delete controls are disabled.
+  const [wfLocked, setWfLocked]                = useState({ isActive: false, isLocked: false, status: null })
+  const detailRecord = useMemo(
+    () => records.find(r => r.id === detailId) || null,
+    [records, detailId],
+  )
+  const detailLocked = wfLocked.isActive || wfLocked.isLocked
+  // EntityApprovalPanel invokes onStateChange during its render, so this must
+  // be a stable callback that only commits a state change when a value actually
+  // differs — otherwise a fresh object each render triggers an update loop.
+  const handleWfStateChange = useCallback((next) => {
+    setWfLocked(prev =>
+      prev.isActive === next.isActive &&
+      prev.isLocked === next.isLocked &&
+      prev.status === next.status
+        ? prev
+        : next,
+    )
+  }, [])
 
   // Multi-select bulk delete (Admin only)
   const isAdmin = (profile?.role || '').toLowerCase() === 'admin'
@@ -219,6 +241,12 @@ export default function Accidents() {
   }, [activeCountry])
 
   useEffect(() => { loadRecords() }, [loadRecords])
+
+  // Reset approval lock whenever the open detail record changes so state from a
+  // previously-open accident never leaks into another one's controls.
+  useEffect(() => {
+    setWfLocked({ isActive: false, isLocked: false, status: null })
+  }, [detailId])
 
   // Load fleet assets for search combobox
   useEffect(() => {
@@ -836,21 +864,50 @@ export default function Accidents() {
         id: 'actions', header: 'Actions', accessorFn: r => r.id, size: 200, enableSorting: false, meta: { export: false },
         cell: ({ row }) => {
           const r = row.original
+          // While this accident is mid-approval (or approved & locked) its
+          // mutating controls are disabled — the approval engine owns state.
+          const locked = detailId === r.id && detailLocked
           return (
             <div className="flex items-center gap-2">
               <button onClick={() => setDetailId(r.id)} className="text-[var(--text-muted)] hover:text-green-400 text-xs transition-colors flex items-center gap-1"><Eye size={12} /> Open</button>
-              <button onClick={() => openEdit(r)} className="text-[var(--text-muted)] hover:text-blue-400 text-xs transition-colors">Edit</button>
+              <button
+                onClick={() => openEdit(r)}
+                disabled={locked}
+                title={locked ? 'Locked — in approval' : undefined}
+                className="text-[var(--text-muted)] hover:text-blue-400 text-xs transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:text-[var(--text-muted)]"
+              >
+                Edit
+              </button>
               {r.status !== 'Closed' && (
-                <button onClick={() => raiseAction(r)} className="text-[var(--text-muted)] hover:text-orange-400 text-xs transition-colors whitespace-nowrap">Raise CA</button>
+                <button
+                  onClick={() => raiseAction(r)}
+                  disabled={locked}
+                  title={locked ? 'Locked — in approval' : undefined}
+                  className="text-[var(--text-muted)] hover:text-orange-400 text-xs transition-colors whitespace-nowrap disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:text-[var(--text-muted)]"
+                >
+                  Raise CA
+                </button>
               )}
-              <button onClick={() => handleDelete(r.id)} className="text-[var(--text-muted)] hover:text-red-400 text-xs transition-colors">Delete</button>
+              <button
+                onClick={() => handleDelete(r.id)}
+                disabled={locked}
+                title={locked ? 'Locked — in approval' : undefined}
+                className="text-[var(--text-muted)] hover:text-red-400 text-xs transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:text-[var(--text-muted)]"
+              >
+                Delete
+              </button>
+              {locked && (
+                <span className="flex items-center gap-1 text-[10px] text-[var(--accent)] whitespace-nowrap">
+                  <Lock size={10} /> Locked — in approval
+                </span>
+              )}
             </div>
           )
         },
       },
     )
     return cols
-  }, [isAdmin, allPageSelected, selectedIds, activeCountry, fmtCurrency])
+  }, [isAdmin, allPageSelected, selectedIds, activeCountry, fmtCurrency, detailId, detailLocked])
 
   // Bulk preview columns for EnterpriseTable
   const bulkColumns = useMemo(() => [
@@ -1447,6 +1504,37 @@ export default function Accidents() {
           onClose={() => setDetailId(null)}
           onChanged={loadRecords}
         />
+      )}
+
+      {/*
+        Universal Approval & Workflow Engine — Accident approval.
+        Reference flow: Driver reports → photos → GPS → workshop inspection →
+        estimate → insurance approval → repair → final inspection → released.
+        Rendered as a companion panel anchored beside the detail modal (the
+        detail modal is a separate, owned component we must not modify). While
+        the accident is mid-approval the row's edit/status/delete controls are
+        gated via `wfLocked` (see the actions column).
+      */}
+      {detailId && detailRecord && (
+        <div className="fixed z-[60] bottom-4 right-4 w-full max-w-sm max-h-[80vh] overflow-y-auto">
+          <EntityApprovalPanel
+            entityType="accident"
+            entityId={detailRecord.id}
+            entityLabel={detailRecord.insurance_claim_no || detailRecord.policy_no || detailRecord.asset_no || detailRecord.id}
+            context={{
+              severity: canonSeverity(detailRecord.severity),
+              is_major: ['Major', 'Total Loss'].includes(canonSeverity(detailRecord.severity)),
+              estimated_cost: Number(detailRecord.estimated_damage_cost) || Number(detailRecord.repair_cost) || 0,
+              repair_cost: Number(detailRecord.repair_cost) || 0,
+              parts_cost: Number(detailRecord.parts_cost) || 0,
+              claim_amount: Number(detailRecord.claim_amount) || 0,
+              country: detailRecord.country || null,
+              site: detailRecord.site || null,
+            }}
+            title="Accident Approval"
+            onStateChange={handleWfStateChange}
+          />
+        </div>
       )}
 
       {/* ── Bulk Delete Confirmation (Admin only) ───────────────────────────── */}

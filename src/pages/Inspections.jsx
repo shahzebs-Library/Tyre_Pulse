@@ -13,6 +13,7 @@ import { useTenant } from '../contexts/TenantContext'
 import { Download, FileText, Camera, ClipboardList, Eye, GraduationCap, CheckSquare, X, Share2, WifiOff, PenLine, Image as ImageIcon, Gauge, Clock, Send, CheckCircle2, ExternalLink, ChevronLeft, ChevronRight, Upload, Trash2, AlertTriangle } from 'lucide-react'
 import SignaturePad from '../components/SignaturePad'
 import CustomFieldsPanel from '../components/CustomFieldsPanel'
+import EntityApprovalPanel from '../components/workflow/EntityApprovalPanel'
 import { motion } from 'framer-motion'
 import PageHeader from '../components/ui/PageHeader'
 import VehicleTyreDiagram from '../components/VehicleTyreDiagram'
@@ -240,6 +241,10 @@ export default function Inspections() {
   const [bulkBusy, setBulkBusy]           = useState(false)
   const [loading, setLoading]   = useState(true)
   const [form, setForm]         = useState(null)
+  // Approval-engine lock for the record open in the edit modal. Set from
+  // <EntityApprovalPanel/> onStateChange; while true the record is mid-approval
+  // (pending/in_review/returned) or approved, so edits/saves are blocked.
+  const [wfLocked, setWfLocked] = useState(false)
   const [saving, setSaving]     = useState(false)
   const [saveError, setSaveError] = useState(null)
   const [filterStatus, setFilterStatus] = useState('all')
@@ -478,7 +483,12 @@ export default function Inspections() {
     reader.readAsDataURL(file)
   }
 
+  // Reset the approval lock whenever a different record is opened in the modal;
+  // <EntityApprovalPanel/> re-reports the true state via onStateChange on mount.
+  useEffect(() => { setWfLocked(false) }, [form?.id])
+
   async function save() {
+    if (wfLocked) return
     if (!form.title?.trim()) return
     if (!form.site?.trim()) return
     if (!form.scheduled_date) return
@@ -1978,7 +1988,40 @@ export default function Inspections() {
           <h3 className="text-lg font-bold text-[var(--text-primary)] mb-5">
             {form.id ? t('inspections.modal.editRecord') : t('inspections.modal.addRecord')}
           </h3>
-          <div className="space-y-4">
+
+          {/* Universal Approval & Workflow Engine — inspection approval + lock.
+              Only for persisted records (needs a stable entity id). While the
+              record is mid-approval or approved, edits/saves are disabled. */}
+          {form.id && (
+            <div className="mb-5">
+              <EntityApprovalPanel
+                entityType="inspection"
+                entityId={form.id}
+                entityLabel={form.asset_no || form.title || form.id}
+                context={{
+                  pressure: form.tyre_conditions?.[selectedTyre]?.pressure ?? null,
+                  tread: form.tread_depth ?? null,
+                  odometer: form.odometer_km ?? null,
+                  severity: form.severity ?? null,
+                  site: form.site ?? null,
+                  asset_no: form.asset_no ?? null,
+                  inspection_type: form.inspection_type ?? null,
+                }}
+                onStateChange={({ isActive, isLocked }) => {
+                  const locked = !!(isActive || isLocked)
+                  setWfLocked((prev) => (prev === locked ? prev : locked))
+                }}
+                title={t('inspections.approval.title') || 'Inspection Approval'}
+              />
+              {wfLocked && (
+                <div className="mt-2 flex items-center gap-1.5 text-xs text-amber-400">
+                  <AlertTriangle size={12} /> Locked — in approval
+                </div>
+              )}
+            </div>
+          )}
+
+          <fieldset disabled={wfLocked} className="space-y-4 disabled:opacity-60">
             <div>
               <label className="label">{t('inspections.modal.titleField')}</label>
               <input className="input" value={form.title}
@@ -2174,7 +2217,7 @@ export default function Inspections() {
                   onChange={e => setForm(f => ({ ...f, completed_date: e.target.value }))} />
               </div>
             )}
-          </div>
+          </fieldset>
           {saveError && (
             <div className="mt-4 p-3 rounded-lg bg-red-900/30 border border-red-700 text-red-300 text-sm">
               {saveError}
@@ -2183,7 +2226,8 @@ export default function Inspections() {
           <div className="flex gap-3 mt-4">
             <button onClick={() => { setForm(null); setSaveError(null) }} className="btn-secondary flex-1">{t('common.cancel')}</button>
             <button onClick={save}
-              disabled={saving || !form.title?.trim() || !form.site?.trim() || !form.scheduled_date}
+              disabled={wfLocked || saving || !form.title?.trim() || !form.site?.trim() || !form.scheduled_date}
+              title={wfLocked ? 'Locked — in approval' : undefined}
               className="btn-primary flex-1 disabled:opacity-50">
               {saving ? t('common.saving') : form.id ? t('inspections.modal.saveChanges') : t('common.add')}
             </button>

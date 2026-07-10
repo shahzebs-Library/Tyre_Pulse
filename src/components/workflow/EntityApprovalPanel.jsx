@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { ShieldCheck, Play, Loader2, Lock } from 'lucide-react'
 import { useEntityWorkflow } from '../../hooks/useEntityWorkflow'
 import ApprovalStatusBadge from './ApprovalStatusBadge'
@@ -32,8 +32,13 @@ export default function EntityApprovalPanel({
   const [pickDef, setPickDef] = useState('')
   const [msg, setMsg] = useState(null)
 
-  // Surface state to the parent so it can lock its form.
-  if (onStateChange) onStateChange({ isActive: wf.isActive, isLocked: wf.isLocked, status: wf.status })
+  // Surface state to the parent so it can lock its form — in an effect (never
+  // during render). A ref keeps an inline onStateChange out of the deps.
+  const onStateChangeRef = useRef(onStateChange)
+  useEffect(() => { onStateChangeRef.current = onStateChange })
+  useEffect(() => {
+    onStateChangeRef.current?.({ isActive: wf.isActive, isLocked: wf.isLocked, status: wf.status })
+  }, [wf.isActive, wf.isLocked, wf.status])
 
   async function handleAct(action, payload) {
     setMsg(null)

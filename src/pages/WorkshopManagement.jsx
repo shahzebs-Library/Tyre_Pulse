@@ -12,9 +12,10 @@ import {
   TrendingUp, TrendingDown, Search, Filter, X, Download, RefreshCw,
   FileSpreadsheet, FileText, ChevronLeft, ChevronRight, ChevronDown,
   Calendar, User, Building2, Zap, BarChart2, PieChart, Activity,
-  Package, Star, Award, Target, Maximize2, Loader2,
+  Package, Star, Award, Target, Maximize2, Loader2, Lock,
 } from 'lucide-react'
 import { SkeletonTable } from '../components/ui/Skeleton'
+import EntityApprovalPanel from '../components/workflow/EntityApprovalPanel'
 import {
   Chart as ChartJS, CategoryScale, LinearScale, BarElement,
   LineElement, PointElement, ArcElement, Title, Tooltip, Legend, Filler,
@@ -227,6 +228,54 @@ function ChartCard({ title, subtitle, children, height = 260, action }) {
 
 // ── Job Drawer ─────────────────────────────────────────────────────────────────
 function JobDrawer({ job, onClose, currency }) {
+  // Approval-engine gate: while this work order's QA sign-off workflow is active
+  // (pending/in_review/returned) or locked (approved), its strongest per-record
+  // action — the Job Card export (the artifact acted on downstream) — is disabled
+  // so an in-approval job can't be exported out from under the workflow. State
+  // resets whenever a different record opens. The server RLS remains the real
+  // boundary; this is the client-side convenience guard.
+  const [wfLocked, setWfLocked] = useState(false)
+  useEffect(() => { setWfLocked(false) }, [job?.id])
+
+  const handleExportJobCard = useCallback(() => {
+    if (!job || wfLocked) return
+    exportToPdf(
+      [{
+        work_order_no: job.work_order_no ?? job.id,
+        asset_no: job.asset_no ?? '',
+        site: job.site ?? '',
+        work_type: job.work_type ?? '',
+        priority: job.priority ?? '',
+        status: job.status ?? '',
+        assigned_to: job.assigned_to ?? '',
+        created_at: job.created_at ? formatDateTime(job.created_at) : '',
+        scheduled_date: job.scheduled_date ? formatDate(job.scheduled_date) : '',
+        completed_at: job.completed_at ? formatDateTime(job.completed_at) : '',
+        labour_cost: job.labour_cost ?? 0,
+        parts_cost: job.parts_cost ?? 0,
+        total_cost: job.total_cost ?? 0,
+      }],
+      [
+        { key: 'work_order_no', header: 'WO No' },
+        { key: 'asset_no', header: 'Asset' },
+        { key: 'site', header: 'Site' },
+        { key: 'work_type', header: 'Work Type' },
+        { key: 'priority', header: 'Priority' },
+        { key: 'status', header: 'Status' },
+        { key: 'assigned_to', header: 'Assigned To' },
+        { key: 'created_at', header: 'Created' },
+        { key: 'scheduled_date', header: 'Scheduled' },
+        { key: 'completed_at', header: 'Completed' },
+        { key: 'labour_cost', header: 'Labour Cost' },
+        { key: 'parts_cost', header: 'Parts Cost' },
+        { key: 'total_cost', header: 'Total Cost' },
+      ],
+      `Workshop Job Card - ${job.work_order_no ?? job.id}`,
+      `TyrePulse_Workshop_JobCard_${job.work_order_no ?? job.id}`,
+      'landscape',
+    )
+  }, [job, wfLocked])
+
   if (!job) return null
   let parts = []
   try { parts = typeof job.parts_used === 'string' ? JSON.parse(job.parts_used) : (job.parts_used || []) }
@@ -358,6 +407,51 @@ function JobDrawer({ job, onClose, currency }) {
               </div>
             </div>
           )}
+
+          {/* Workshop QA Approval — Approval & Workflow Engine.
+              A workshop job / quality-inspection sign-off warrants approval before
+              the job card is exported downstream. Smart rules may route high-cost
+              or overdue jobs to a manager. Mirrors WorkOrders / Retread wiring. */}
+          <EntityApprovalPanel
+            entityType="workshop_qa"
+            entityId={job.id}
+            entityLabel={job.work_order_no || job.asset_no || job.id}
+            context={{
+              score: job.score ?? job.quality_score,
+              status: job.status,
+              workshop: job.site,
+              work_type: job.work_type,
+              total_cost: Number(job.total_cost) || 0,
+              site: job.site,
+            }}
+            onStateChange={(s) => setWfLocked(!!(s?.isActive || s?.isLocked))}
+            title="Workshop QA Approval"
+          />
+
+          {wfLocked && (
+            <div className="flex items-center gap-1.5 text-xs text-[var(--accent)] bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg px-3 py-2">
+              <Lock size={12} />
+              Locked — in approval. This job card's export is disabled until the workflow completes.
+            </div>
+          )}
+        </div>
+
+        {/* Drawer footer — gated per-record action */}
+        <div className="sticky bottom-0 bg-[var(--surface-1)] border-t border-[var(--input-border)] p-3 flex justify-end gap-2">
+          <button
+            onClick={handleExportJobCard}
+            disabled={wfLocked}
+            title={wfLocked ? 'Locked — in approval' : 'Export job card'}
+            className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded-lg text-sm font-semibold text-white transition disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-blue-600"
+          >
+            {wfLocked ? <Lock size={14} /> : <FileText size={14} />} Export Job Card
+          </button>
+          <button
+            onClick={onClose}
+            className="px-4 py-2 bg-[var(--input-bg)] hover:bg-[var(--input-bg-hover)] rounded-lg text-sm text-[var(--text-secondary)] transition"
+          >
+            Close
+          </button>
         </div>
       </motion.div>
     </AnimatePresence>

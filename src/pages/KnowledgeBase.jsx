@@ -2,13 +2,14 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import {
   BookOpen, Upload, Search, Trash2, Tag, Globe, Truck,
   FileText, AlertCircle, CheckCircle, Clock, RefreshCw,
-  ChevronDown, X, Plus, Loader,
+  ChevronDown, X, Plus, Loader, Lock,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase' // retained solely for reindexMissingEmbeddings(supabase)
 import * as knowledgeDocuments from '../lib/api/knowledgeDocuments'
 import { useAuth } from '../contexts/AuthContext'
 import { generateEmbedding, reindexMissingEmbeddings } from '../lib/embeddingService'
 import PageHeader from '../components/ui/PageHeader'
+import EntityApprovalPanel from '../components/workflow/EntityApprovalPanel'
 import { formatDate } from '../lib/formatters'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -279,6 +280,11 @@ export default function KnowledgeBase() {
   const [reindexing, setReindexing] = useState(false)
   const [reindexResult, setReindexResult] = useState(null)
   const [stats, setStats] = useState({ total: 0, indexed: 0, pending: 0 })
+  // Per-document detail surface (approval sign-off host).
+  const [viewDoc, setViewDoc] = useState(null)
+  // Approval-engine gate: locks delete/publish for the open document while its
+  // workflow is active (pending/in_review/returned) or locked (approved).
+  const [wfLocked, setWfLocked] = useState(false)
 
   const canWrite = ['Admin', 'Manager'].includes(profile?.role)
 
@@ -305,13 +311,20 @@ export default function KnowledgeBase() {
 
   useEffect(() => { fetchDocs() }, [fetchDocs])
 
+  // Reset the approval lock whenever a different document (or none) is opened in
+  // the detail drawer; EntityApprovalPanel re-reports the true state via onStateChange.
+  useEffect(() => { setWfLocked(false) }, [viewDoc?.id])
+
   const handleDelete = async (id) => {
+    // Block deletion of a document whose approval workflow is active/locked.
+    if (viewDoc?.id === id && wfLocked) return
     if (!window.confirm('Delete this document from the knowledge base?')) return
     try {
       await knowledgeDocuments.deleteKnowledgeDocument(id)
     } catch (err) { setError(err.message); return }
     setDocs(prev => prev.filter(d => d.id !== id))
     setStats(prev => ({ ...prev, total: prev.total - 1 }))
+    if (viewDoc?.id === id) setViewDoc(null)
   }
 
   const handleReindex = async () => {
@@ -473,7 +486,13 @@ export default function KnowledgeBase() {
               {filtered.map(doc => (
                 <tr key={doc.id} className="hover:bg-[var(--surface-2)] transition-colors">
                   <td className="px-5 py-3.5">
-                    <p className="text-[var(--text-primary)] font-medium leading-tight">{doc.title}</p>
+                    <button
+                      type="button"
+                      onClick={() => setViewDoc(doc)}
+                      className="text-left text-[var(--text-primary)] font-medium leading-tight hover:text-green-400 transition-colors"
+                    >
+                      {doc.title}
+                    </button>
                     {doc.asset_no && (
                       <p className="text-[var(--text-muted)] text-xs mt-0.5 flex items-center gap-1">
                         <Truck className="w-3 h-3" />{doc.asset_no}
@@ -506,10 +525,11 @@ export default function KnowledgeBase() {
                     <td className="px-4 py-3.5">
                       <button
                         onClick={() => handleDelete(doc.id)}
-                        className="p-1.5 rounded-lg hover:bg-red-400/10 text-[var(--text-dim)] hover:text-red-400 transition-colors"
-                        title="Delete document"
+                        disabled={viewDoc?.id === doc.id && wfLocked}
+                        className="p-1.5 rounded-lg hover:bg-red-400/10 text-[var(--text-dim)] hover:text-red-400 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                        title={viewDoc?.id === doc.id && wfLocked ? 'Locked — in approval' : 'Delete document'}
                       >
-                        <Trash2 className="w-4 h-4" />
+                        {viewDoc?.id === doc.id && wfLocked ? <Lock className="w-4 h-4" /> : <Trash2 className="w-4 h-4" />}
                       </button>
                     </td>
                   )}
@@ -519,6 +539,82 @@ export default function KnowledgeBase() {
           </table>
           <div className="px-5 py-3 border-t border-[var(--border-dim)] text-[var(--text-muted)] text-xs">
             {filtered.length} document{filtered.length !== 1 ? 's' : ''}{filtered.length !== docs.length ? ` (filtered from ${docs.length})` : ''}
+          </div>
+        </div>
+      )}
+
+      {/* Document detail drawer — approval sign-off + gated destructive control */}
+      {viewDoc && (
+        <div className="fixed inset-0 z-50 flex justify-end bg-black/60 backdrop-blur-sm" onClick={() => setViewDoc(null)}>
+          <div
+            className="w-full max-w-lg h-full bg-[var(--surface-1)] border-l border-[var(--border-bright)] shadow-2xl flex flex-col"
+            onClick={e => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="flex items-start justify-between gap-3 p-5 border-b border-[var(--border-dim)]">
+              <div className="min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <p className="text-[var(--text-primary)] font-semibold truncate">{viewDoc.title}</p>
+                  <DocTypeBadge type={viewDoc.doc_type} />
+                </div>
+                <div className="flex items-center gap-3 mt-1 text-xs text-[var(--text-muted)]">
+                  <span className="flex items-center gap-1"><Globe className="w-3 h-3" />{viewDoc.site || 'All Sites'}</span>
+                  {viewDoc.asset_no && <span className="flex items-center gap-1"><Truck className="w-3 h-3" />{viewDoc.asset_no}</span>}
+                  <EmbedStatusBadge hasEmbedding={!!viewDoc.embedding} />
+                </div>
+              </div>
+              <button onClick={() => setViewDoc(null)} className="p-2 rounded-lg hover:bg-[var(--surface-2)] transition-colors flex-shrink-0">
+                <X className="w-5 h-5 text-[var(--text-secondary)]" />
+              </button>
+            </div>
+
+            <div className="overflow-y-auto p-5 flex flex-col gap-5 flex-1">
+              {(viewDoc.tags ?? []).length > 0 && (
+                <div className="flex flex-wrap gap-1.5">
+                  {(viewDoc.tags ?? []).map(tag => (
+                    <span key={tag} className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded bg-[var(--surface-3)] text-[var(--text-secondary)] text-xs">
+                      <Tag className="w-2.5 h-2.5" />{tag}
+                    </span>
+                  ))}
+                </div>
+              )}
+
+              {/* Approval & Workflow Engine */}
+              <EntityApprovalPanel
+                entityType="document"
+                entityId={viewDoc.id}
+                entityLabel={viewDoc.title || viewDoc.doc_type || viewDoc.id}
+                context={{
+                  doc_type: viewDoc.doc_type,
+                  asset_no: viewDoc.asset_no,
+                  tags: viewDoc.tags,
+                  site: viewDoc.site,
+                }}
+                onStateChange={({ isActive, isLocked }) => setWfLocked(!!(isActive || isLocked))}
+                title="Document Approval"
+              />
+            </div>
+
+            {/* Footer — destructive control, gated while approval is active/locked */}
+            {canWrite && (
+              <div className="p-5 border-t border-[var(--border-dim)] flex items-center justify-between gap-3">
+                {wfLocked
+                  ? (
+                    <span className="flex items-center gap-1.5 text-xs text-[var(--text-muted)]">
+                      <Lock className="w-3.5 h-3.5" /> Locked — in approval
+                    </span>
+                  )
+                  : <span className="text-xs text-[var(--text-muted)]">Removing a document also removes it from AI retrieval.</span>}
+                <button
+                  onClick={() => handleDelete(viewDoc.id)}
+                  disabled={wfLocked}
+                  title={wfLocked ? 'Locked — document is in an approval workflow' : 'Delete document'}
+                  className="flex items-center gap-2 px-4 py-2 rounded-lg bg-red-500/10 border border-red-400/30 text-red-400 text-sm font-medium hover:bg-red-500/20 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                >
+                  <Trash2 className="w-4 h-4" /> Delete
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}

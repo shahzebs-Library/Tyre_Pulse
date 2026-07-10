@@ -20,8 +20,11 @@ const DEFINITION_COLS =
 const INSTANCE_COLS =
   'id,definition_id,definition_name,entity_type,entity_id,entity_label,steps,current_step,step_started_at,status,context,started_by,started_at,completed_at'
 
-// Append-only audit trail columns for the instance timeline.
-const STEP_EVENT_COLS = 'id,instance_id,step_index,step_name,action,actor_id,comment,created_at'
+// Append-only audit trail columns for the instance timeline. Includes the
+// V116 capture columns (signature_data / printed_name / photo_urls / gps /
+// device_info) so the trail can render the full signature block.
+const STEP_EVENT_COLS =
+  'id,instance_id,step_index,step_name,action,actor_id,comment,signature_data,printed_name,photo_urls,gps,device_info,created_at'
 
 /**
  * List workflow definitions for the current organisation, newest first.
@@ -141,21 +144,68 @@ export async function startWorkflow({
 }
 
 /**
- * Approve or reject the current step of a pending instance. Role checks are
- * enforced server-side (step approver_role or admin).
+ * Act on the current step of an open instance (pending / in_review / returned).
+ * All authorisation, per-step requirement enforcement (signature / photo /
+ * GPS), conditional auto-skip on advance, and status transitions are performed
+ * server-side by the `workflow_act` RPC — this client call is convenience only.
+ *
+ * Backward-compatible signature. Both forms are supported:
+ *   actOnWorkflow(id, 'approve', 'looks good')          // legacy positional comment
+ *   actOnWorkflow(id, 'approve', {                       // new options object
+ *     comment, signature, printedName, photos, gps, deviceInfo,
+ *   })
+ *
  * @param {string} instanceId
- * @param {'approve'|'reject'} action
- * @param {string|null} [comment]
- * @returns {Promise<object>} e.g. {status:'pending',current_step,step} | {status:'approved'|'rejected'}
+ * @param {'approve'|'reject'|'return'} action
+ * @param {string|null|{
+ *   comment?:string|null, signature?:string|null, printedName?:string|null,
+ *   photos?:string[]|null, gps?:object|null, deviceInfo?:object|null
+ * }} [optionsOrComment] a plain comment string (legacy) or an options object.
+ * @returns {Promise<object>} e.g. {status:'in_review',current_step,step}
+ *   | {status:'approved'|'rejected'|'returned'}
  */
-export async function actOnWorkflow(instanceId, action, comment = null) {
+export async function actOnWorkflow(instanceId, action, optionsOrComment = null) {
+  const opts =
+    optionsOrComment && typeof optionsOrComment === 'object'
+      ? optionsOrComment
+      : { comment: optionsOrComment }
+
   return unwrap(
     await supabase.rpc('workflow_act', {
       p_instance_id: instanceId,
       p_action: action,
-      p_comment: comment,
+      p_comment: opts.comment ?? null,
+      p_signature_data: opts.signature ?? opts.signatureData ?? null,
+      p_printed_name: opts.printedName ?? null,
+      p_photo_urls: opts.photos ?? opts.photoUrls ?? null,
+      p_gps: opts.gps ?? null,
+      p_device_info: opts.deviceInfo ?? null,
     })
   )
+}
+
+/**
+ * Return the current document to the prior step for correction. Requires a
+ * comment (enforced server-side). The initiator is notified and a `returned`
+ * step event is recorded; history is preserved.
+ * @param {string} instanceId
+ * @param {{comment:string, signature?:string|null, printedName?:string|null,
+ *   photos?:string[]|null, gps?:object|null, deviceInfo?:object|null}} payload
+ * @returns {Promise<object>} {status:'returned', current_step}
+ */
+export async function returnWorkflow(instanceId, payload = {}) {
+  return actOnWorkflow(instanceId, 'return', payload)
+}
+
+/**
+ * Manager approval dashboard: org-scoped buckets (pending, overdue, returned,
+ * rejected, recently_approved) plus headline metrics (counts, avg approval
+ * time). Server-evaluated, org-scoped RPC.
+ * @returns {Promise<{metrics:object, buckets:{pending:Array,overdue:Array,
+ *   returned:Array,rejected:Array,recently_approved:Array}}>}
+ */
+export async function getApprovalDashboard() {
+  return unwrap(await supabase.rpc('approval_dashboard'))
 }
 
 /**

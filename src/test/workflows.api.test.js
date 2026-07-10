@@ -144,7 +144,11 @@ describe('service layer - workflows: RPCs', () => {
     h.state.rpc = { data: { status: 'approved' }, error: null }
     const res = await workflows.actOnWorkflow('i1', 'approve', 'LGTM')
     expect(h.state.lastRpc.name).toBe('workflow_act')
-    expect(h.state.lastRpc.args).toEqual({ p_instance_id: 'i1', p_action: 'approve', p_comment: 'LGTM' })
+    expect(h.state.lastRpc.args).toEqual({
+      p_instance_id: 'i1', p_action: 'approve', p_comment: 'LGTM',
+      p_signature_data: null, p_printed_name: null, p_photo_urls: null,
+      p_gps: null, p_device_info: null,
+    })
     expect(res).toEqual({ status: 'approved' })
   })
 

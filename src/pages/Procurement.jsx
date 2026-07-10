@@ -33,6 +33,17 @@ ChartJS.register(
 // ── Constants ─────────────────────────────────────────────────────────────────
 const STATUSES = ['Draft','Submitted','Approved','Ordered','Partial Delivery','Delivered','Cancelled','Closed']
 const PRIORITIES = ['Urgent','High','Normal','Low']
+
+// Static Tailwind classes so the JIT compiler does not purge dynamically
+// interpolated `text-${color}-400` KPI colours in production builds.
+const KPI_TEXT_COLOR = {
+  green:  'text-green-400',
+  yellow: 'text-yellow-400',
+  red:    'text-red-400',
+  teal:   'text-teal-400',
+  purple: 'text-purple-400',
+}
+const kpiText = (c) => KPI_TEXT_COLOR[c] || 'text-[var(--text-primary)]'
 const PAGE_SIZE = 20
 const BUDGET_KEY = 'tp_procurement_budget'
 
@@ -650,10 +661,10 @@ export default function Procurement() {
             animate={{ opacity: 1, y: 0 }}
           >
             <div className="flex items-center gap-2 mb-2">
-              <Icon size={16} className={`text-${color}-400`} />
+              <Icon size={16} className={kpiText(color)} />
               <span className="text-[var(--text-secondary)] text-xs">{label}</span>
             </div>
-            <div className={`text-2xl font-bold text-${color}-400`}>{value}</div>
+            <div className={`text-2xl font-bold ${kpiText(color)}`}>{value}</div>
             {sub && <p className="text-[var(--text-muted)] text-xs mt-1">{sub}</p>}
           </motion.div>
         ))}

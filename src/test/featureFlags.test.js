@@ -62,12 +62,11 @@ describe('FLAG_DEFS registry', () => {
     ]) {
       expect(keys).toContain(k)
     }
-    // All pre-existing capability flags default ON (zero change for live orgs).
-    // automation_platform is the deliberate exception: its backing DB layer
-    // (V96–V103 + edge functions) is not applied yet, so it MUST default OFF —
-    // flipping this to true without the DB live would error the Automation pages.
+    // Every capability flag defaults ON. automation_platform's backing DB layer
+    // (V96–V103 + edge functions) is applied live, so it too defaults ON to
+    // match the deployed feature_flags row.
     for (const d of FLAG_DEFS) {
-      expect(d.default).toBe(d.key === 'automation_platform' ? false : true)
+      expect(d.default).toBe(true)
     }
   })
 

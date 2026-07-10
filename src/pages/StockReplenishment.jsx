@@ -62,6 +62,18 @@ const CHART_OPTS = {
 
 const BAR_COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#06b6d4']
 
+// Static Tailwind classes so the JIT compiler does not purge dynamically
+// interpolated `text-${color}-400` KPI colours in production builds.
+const KPI_TEXT_COLOR = {
+  red:     'text-red-400',
+  orange:  'text-orange-400',
+  yellow:  'text-yellow-400',
+  emerald: 'text-emerald-400',
+  gray:    'text-gray-400',
+  blue:    'text-blue-400',
+}
+const kpiText = (c) => KPI_TEXT_COLOR[c] || 'text-[var(--text-primary)]'
+
 // ── Helpers ────────────────────────────────────────────────────────────────────
 function computeUrgency(daysRemaining, leadTimeDays) {
   if (daysRemaining <= 0) return 'Critical'
@@ -754,10 +766,10 @@ export default function StockReplenishment() {
             animate={{ opacity: 1, y: 0 }}
           >
             <div className="flex items-center gap-2 mb-2">
-              <Icon size={15} className={`text-${color}-400`} />
+              <Icon size={15} className={kpiText(color)} />
               <span className="text-[var(--text-muted)] text-xs">{label}</span>
             </div>
-            <div className={`text-2xl font-bold text-${color}-400`}>{value}</div>
+            <div className={`text-2xl font-bold ${kpiText(color)}`}>{value}</div>
             {sub && <p className="text-[var(--text-muted)] text-xs mt-1">{sub}</p>}
           </motion.div>
         ))}

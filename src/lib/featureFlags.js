@@ -108,8 +108,9 @@ export const FLAG_DEFS = [
     description:
       'Event Stream, Approval Workflows, Automation Rules, and API & Webhooks. ' +
       'Requires migrations V96–V103 + the automation edge functions to be applied ' +
-      'to the database first (see docs/AUTOMATION_PLATFORM_DEPLOYMENT.md) — keep OFF until then.',
-    // Temporarily enabled for testing - change back to false before production
+      'to the database first (see docs/AUTOMATION_PLATFORM_DEPLOYMENT.md).',
+    // V96–V103 + edge functions are applied to the live DB and the backing
+    // feature_flags row is TRUE, so this defaults ON to match the deployed state.
     default: true,
     category: 'Automation',
   },

@@ -110,6 +110,40 @@ export async function listStepEvents(instanceId) {
 }
 
 /**
+ * Latest workflow instance attached to a specific business entity, or null.
+ * Used by module pages (via useEntityWorkflow) to show the approval state of
+ * the document the user is looking at.
+ * @param {string} entityType
+ * @param {string|number} entityId
+ * @returns {Promise<object|null>}
+ */
+export async function getWorkflowForEntity(entityType, entityId) {
+  if (!entityType || entityId == null) return null
+  const rows = unwrap(
+    await supabase
+      .from('workflow_instances')
+      .select(INSTANCE_COLS)
+      .eq('entity_type', entityType)
+      .eq('entity_id', String(entityId))
+      .order('started_at', { ascending: false })
+      .limit(1)
+  )
+  return rows?.[0] ?? null
+}
+
+/**
+ * Active workflow definitions for one entity type (for the "start approval"
+ * picker on a module page). Filters the org's definitions to active ones whose
+ * entity_type matches.
+ * @param {string} entityType
+ * @returns {Promise<Array<object>>}
+ */
+export async function listDefinitionsForEntity(entityType) {
+  const all = await listWorkflowDefinitions()
+  return (all ?? []).filter((d) => d.active && d.entity_type === entityType)
+}
+
+/**
  * Approvals inbox: pending instances currently waiting on MY role (admins see
  * every pending run in the organisation). Server-evaluated RPC.
  * @returns {Promise<Array<object>>} workflow_instances rows

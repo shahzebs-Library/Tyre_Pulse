@@ -7,6 +7,7 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import PageHeader from '../components/ui/PageHeader'
 import EnterpriseTable from '../components/ui/EnterpriseTable'
+import { useReportMeta } from '../hooks/useReportMeta'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -112,6 +113,7 @@ function Sparkline({ data, dataKey, color = '#16a34a', height = 60 }) {
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 export default function AiCostMonitor() {
+  const reportMeta = useReportMeta('AI Cost & Usage')
   const { profile } = useAuth()
   const [logs, setLogs] = useState([])
   const [loading, setLoading] = useState(true)
@@ -386,6 +388,7 @@ export default function AiCostMonitor() {
               <span className="text-[var(--text-muted)] text-sm">{logs.length.toLocaleString()} records</span>
             </div>
             <EnterpriseTable
+              reportMeta={reportMeta}
               columns={logColumns}
               data={logs}
               loading={loading}

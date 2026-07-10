@@ -7,6 +7,7 @@ import EmptyState from '../components/EmptyState'
 import { supabase } from '../lib/supabase'
 import AccidentDetailModal from '../components/AccidentDetailModal'
 import EnterpriseTable from '../components/ui/EnterpriseTable'
+import { useReportMeta } from '../hooks/useReportMeta'
 import * as accidentsApi from '../lib/api/accidents'
 import { useAuth } from '../contexts/AuthContext'
 import { useSettings } from '../contexts/SettingsContext'
@@ -161,6 +162,7 @@ function monthLabel(key) {
 }
 
 export default function Accidents() {
+  const reportMeta = useReportMeta('Accident & Claims Tracker')
   const { profile } = useAuth()
   const { activeCountry, activeCurrency, appSettings } = useSettings()
   const fmtCurrency = (val) => _fmtCurrencyBase(val, activeCurrency, 0)
@@ -1088,6 +1090,7 @@ export default function Accidents() {
           ) : (
             <div className="card p-0 overflow-hidden">
               <EnterpriseTable
+                reportMeta={reportMeta}
                 columns={mainColumns}
                 data={filtered}
                 getRowId={(row) => String(row.id)}
@@ -1548,6 +1551,7 @@ export default function Accidents() {
             {bulkRows.length > 0 && (
               <div className="rounded-xl border border-[var(--input-border)] overflow-hidden">
                 <EnterpriseTable
+                  reportMeta={reportMeta}
                   columns={bulkColumns}
                   data={bulkRows.slice(0, 50)}
                   getRowId={(row) => String(row._row)}

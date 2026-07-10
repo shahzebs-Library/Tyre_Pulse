@@ -14,10 +14,12 @@ import PeriodFilter, { filterByPeriodValue } from '../components/ui/PeriodFilter
 import { formatCurrencyCompact } from '../lib/formatters'
 import { fetchAllPages } from '../lib/fetchAll'
 import EnterpriseTable from '../components/ui/EnterpriseTable'
+import { useReportMeta } from '../hooks/useReportMeta'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, LineElement, PointElement, Title, Tooltip, Legend)
 
 export default function Analytics() {
+  const reportMeta = useReportMeta('Fleet Analytics')
   const { t } = useLanguage()
   const { activeCountry, activeCurrency } = useSettings()
   const [records, setRecords] = useState([])
@@ -192,6 +194,7 @@ export default function Analytics() {
               <h3 className="text-sm font-semibold text-white">{t('analytics.site.title')}</h3>
             </div>
             <EnterpriseTable
+              reportMeta={reportMeta}
               columns={siteColumns}
               data={siteMetrics}
               getRowId={(row) => row.site}
@@ -212,6 +215,7 @@ export default function Analytics() {
               <h3 className="text-sm font-semibold text-white">{t('analytics.brand.title')}</h3>
             </div>
             <EnterpriseTable
+              reportMeta={reportMeta}
               columns={brandColumns}
               data={brandMetrics}
               getRowId={(row) => row.brand}

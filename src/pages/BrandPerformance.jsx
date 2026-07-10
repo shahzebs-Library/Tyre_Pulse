@@ -17,6 +17,7 @@ import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import { formatCurrencyCompact } from '../lib/formatters'
 import { fetchAllPages } from '../lib/fetchAll'
 import EnterpriseTable from '../components/ui/EnterpriseTable'
+import { useReportMeta } from '../hooks/useReportMeta'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, LineElement, PointElement, Title, Tooltip, Legend)
 
@@ -33,6 +34,7 @@ const CHART_OPTS = (horizontal = false) => ({
 const RISK_LEVELS = ['Low', 'Medium', 'High', 'Critical']
 
 export default function BrandPerformance() {
+  const reportMeta = useReportMeta('Brand Performance')
   const { activeCountry, activeCurrency } = useSettings()
   const [records, setRecords] = useState([])
   const [loading, setLoading] = useState(true)
@@ -408,6 +410,7 @@ export default function BrandPerformance() {
         ]
         return (
           <EnterpriseTable
+            reportMeta={reportMeta}
             columns={brandColumns}
             data={filteredMetrics}
             loading={false}

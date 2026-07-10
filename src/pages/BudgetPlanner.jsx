@@ -15,6 +15,7 @@ import { Bar, Line, Doughnut } from 'react-chartjs-2'
 import PageHeader from '../components/ui/PageHeader'
 import BudgetTabs from '../components/budgets/BudgetTabs'
 import EnterpriseTable from '../components/ui/EnterpriseTable'
+import { useReportMeta } from '../hooks/useReportMeta'
 import { fetchAllPages } from '../lib/fetchAll'
 import {
   DollarSign, TrendingUp, TrendingDown, AlertTriangle, CheckCircle,
@@ -97,6 +98,7 @@ function getQuarter(month) { return Math.floor(month / 3) }
 
 // ── Main Component ────────────────────────────────────────────────────────────
 export default function BudgetPlanner() {
+  const reportMeta = useReportMeta('Budget Plan')
   const { activeCurrency, activeCountry, appSettings } = useSettings()
   const { profile } = useAuth()
   const { branding } = useTenant()
@@ -1361,6 +1363,7 @@ export default function BudgetPlanner() {
             </h2>
           </div>
           <EnterpriseTable
+            reportMeta={reportMeta}
             columns={brandColumns}
             data={brandData.slice(0, 10)}
             getRowId={(row) => row.brand}

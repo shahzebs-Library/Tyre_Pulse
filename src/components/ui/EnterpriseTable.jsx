@@ -12,11 +12,11 @@ import {
 import { useVirtualizer } from '@tanstack/react-virtual'
 import {
   AlertTriangle, ChevronDown, ChevronLeft, ChevronRight, ChevronUp,
-  ChevronsUpDown, Columns, Download, RotateCcw, Search, X,
+  ChevronsUpDown, Columns, RotateCcw, Search, X,
 } from 'lucide-react'
 import { cn } from '../../lib/cn'
 import Skeleton from './Skeleton'
-import { buildCsv, downloadCsv } from '../../lib/tableExport'
+import ExportMenu from './ExportMenu'
 
 /**
  * EnterpriseTable - reusable data table built on @tanstack/react-table v8.
@@ -95,6 +95,9 @@ export default function EnterpriseTable({
   // export
   enableExport = true,
   exportFileName = 'table_export',
+  // report metadata for state-faithful PDF/Excel/CSV exports:
+  // { title, company, currency, branding, dateRange }
+  reportMeta = null,
 
   // extras
   toolbarExtras = null,
@@ -213,26 +216,6 @@ export default function EnterpriseTable({
       ? virtualizer.getTotalSize() - virtualItems[virtualItems.length - 1].end
       : 0
 
-  // ── CSV export (filtered + sorted rows, visible exportable columns) ────────
-  function handleExport() {
-    const exportCols = visibleLeafColumns.filter(
-      col => col.columnDef.meta?.export !== false && col.accessorFn
-    )
-    if (exportCols.length === 0) return
-    const headers = exportCols.map(col => {
-      const { meta, header } = col.columnDef
-      if (meta?.exportHeader) return meta.exportHeader
-      return typeof header === 'string' ? header : col.id
-    })
-    const exportRows = table.getPrePaginationRowModel().rows.map(row =>
-      exportCols.map(col => {
-        const exportValue = col.columnDef.meta?.exportValue
-        return exportValue ? exportValue(row.original) : row.getValue(col.id)
-      })
-    )
-    downloadCsv(buildCsv(headers, exportRows), exportFileName)
-  }
-
   // ── pagination footer values ───────────────────────────────────────────────
   const effectivePageIndex = manualPagination ? (pageIndex ?? 0) : table.getState().pagination?.pageIndex ?? 0
   const effectivePageCount = manualPagination ? (pageCount ?? 1) : table.getPageCount()
@@ -301,15 +284,13 @@ export default function EnterpriseTable({
             {toolbarExtras}
             {enableColumnVisibility && <ColumnVisibilityMenu table={table} />}
             {enableExport && !error && (
-              <button
-                type="button"
-                onClick={handleExport}
+              <ExportMenu
+                table={table}
+                fileName={exportFileName}
+                meta={reportMeta || {}}
+                hasSelection={selectedRows.length > 0}
                 disabled={loading}
-                className="btn-secondary py-1.5 px-3 text-xs flex items-center gap-1.5 disabled:opacity-40"
-                title="Export visible rows to CSV"
-              >
-                <Download size={13} /> CSV
-              </button>
+              />
             )}
           </div>
         </div>

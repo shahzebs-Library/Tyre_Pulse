@@ -8,6 +8,7 @@ import { useAuth } from '../contexts/AuthContext'
 import PageHeader from '../components/ui/PageHeader'
 import SectionTabs, { REPORTS_TABS } from '../components/ui/SectionTabs'
 import EnterpriseTable from '../components/ui/EnterpriseTable'
+import { useReportMeta } from '../hooks/useReportMeta'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import {
   AGG_FNS, DATASETS, DATASET_LIST, DEFAULT_LIMIT, LIST_OPS, MAX_LIMIT,
@@ -64,6 +65,7 @@ function fromConfigFilters(filters = []) {
 }
 
 export default function ReportBuilder() {
+  const reportMeta = useReportMeta('Custom Report')
   const { user, profile } = useAuth()
   const canBuild = BUILDER_ROLES.includes(profile?.role)
 
@@ -735,6 +737,7 @@ export default function ReportBuilder() {
           </div>
         ) : (
           <EnterpriseTable
+            reportMeta={reportMeta}
             columns={tableColumns}
             data={resultRows}
             loading={running}

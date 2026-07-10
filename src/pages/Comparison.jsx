@@ -17,6 +17,7 @@ import {
 import PageHeader from '../components/ui/PageHeader'
 import SegmentedControl from '../components/ui/SegmentedControl'
 import EnterpriseTable from '../components/ui/EnterpriseTable'
+import { useReportMeta } from '../hooks/useReportMeta'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend)
 
@@ -131,6 +132,7 @@ function PeriodPicker({ label, period, setPeriod, accentBg, accentText, accentBo
 
 // ── Main ───────────────────────────────────────────────────────────────────────
 export default function Comparison() {
+  const reportMeta = useReportMeta('Comparison')
   const { t } = useLanguage()
   const { activeCurrency } = useSettings()
 
@@ -471,6 +473,7 @@ export default function Comparison() {
             ]
             return (
               <EnterpriseTable
+                reportMeta={reportMeta}
                 columns={compColumns}
                 data={tableData}
                 enableGlobalFilter={false}

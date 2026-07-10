@@ -12,6 +12,7 @@ import {
 } from '../lib/entitlements'
 import { formatCurrency, formatDate } from '../lib/formatters'
 import EnterpriseTable from '../components/ui/EnterpriseTable'
+import { useReportMeta } from '../hooks/useReportMeta'
 
 const TONE = {
   blue:  'bg-blue-900/40 text-blue-300 border-blue-700/40',
@@ -85,6 +86,7 @@ function UsageMeter({ row, currency }) {
 }
 
 export default function Billing() {
+  const reportMeta = useReportMeta('Billing & Invoices')
   const { profile } = useAuth()
   const isAdmin = profile?.role === 'Admin'
   const {
@@ -425,6 +427,7 @@ export default function Billing() {
           </div>
         ) : (
           <EnterpriseTable
+            reportMeta={reportMeta}
             columns={invoiceColumns}
             data={invoices}
             getRowId={(row) => row.id}

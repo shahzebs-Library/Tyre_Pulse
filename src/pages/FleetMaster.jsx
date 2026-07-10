@@ -12,6 +12,7 @@ import {
   FileSpreadsheet, Download, Upload, Truck
 } from 'lucide-react'
 import EnterpriseTable from '../components/ui/EnterpriseTable'
+import { useReportMeta } from '../hooks/useReportMeta'
 import PageHeader from '../components/ui/PageHeader'
 import CustomFieldsPanel from '../components/CustomFieldsPanel'
 
@@ -88,6 +89,7 @@ const STATUS_BADGE = {
 const TABS = ['records', 'bulkUpload']
 
 export default function FleetMaster() {
+  const reportMeta = useReportMeta('Fleet Master')
   const navigate = useNavigate()
   const { profile } = useAuth()
   const { activeCountry, activeCurrency } = useSettings()
@@ -653,6 +655,7 @@ export default function FleetMaster() {
 
           {/* Table */}
           <EnterpriseTable
+            reportMeta={reportMeta}
             columns={tableColumns}
             data={records}
             getRowId={r => String(r.id)}

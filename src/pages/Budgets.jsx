@@ -15,6 +15,7 @@ import {
 } from 'chart.js'
 import { Line, Bar } from 'react-chartjs-2'
 import EnterpriseTable from '../components/ui/EnterpriseTable'
+import { useReportMeta } from '../hooks/useReportMeta'
 
 ChartJS.register(CategoryScale, LinearScale, LineElement, PointElement, Filler, Tooltip, Legend, BarElement)
 
@@ -47,6 +48,7 @@ function KpiSkeletons() {
 }
 
 export default function Budgets() {
+  const reportMeta = useReportMeta('Budgets & Cost')
   const { profile }   = useAuth()
   const { activeCountry, activeCurrency } = useSettings()
   const { t } = useLanguage()
@@ -433,6 +435,7 @@ export default function Budgets() {
           ) : (
             <div className="card p-0 overflow-hidden">
               <EnterpriseTable
+                reportMeta={reportMeta}
                 columns={monthlyColumns}
                 data={budgets}
                 getRowId={(row) => String(row.id)}

@@ -10,6 +10,7 @@ import {
 import { GitCompare, BarChart2, Globe, AlertTriangle, ChevronDown } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
 import EnterpriseTable from '../components/ui/EnterpriseTable'
+import { useReportMeta } from '../hooks/useReportMeta'
 import { formatCurrencyCompact } from '../lib/formatters'
 import { fetchAllPages } from '../lib/fetchAll'
 
@@ -34,6 +35,7 @@ const CHART_OPTS = {
 }
 
 export default function CountryComparison() {
+  const reportMeta = useReportMeta('Country Comparison')
   const { t } = useLanguage()
   const { activeCountry, activeCurrency } = useSettings()
   const [countries, setCountries] = useState([])
@@ -242,6 +244,7 @@ export default function CountryComparison() {
               <h3 className="text-sm font-semibold text-white">Detailed Metrics</h3>
             </div>
             <EnterpriseTable
+              reportMeta={reportMeta}
               columns={tableColumns}
               data={tableData}
               getRowId={(row) => row.key}

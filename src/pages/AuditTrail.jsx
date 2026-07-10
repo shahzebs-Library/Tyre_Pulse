@@ -10,6 +10,7 @@ import {
 import { motion } from 'framer-motion'
 import PageHeader from '../components/ui/PageHeader'
 import EnterpriseTable from '../components/ui/EnterpriseTable'
+import { useReportMeta } from '../hooks/useReportMeta'
 
 const PAGE_SIZE = 50
 
@@ -108,6 +109,7 @@ function SummaryCard({ label, value, color, loading }) {
 }
 
 export default function AuditTrail() {
+  const reportMeta = useReportMeta('Audit Trail')
   const { profile } = useAuth()
   const [activeTab, setActiveTab] = useState('audit')
 
@@ -523,6 +525,7 @@ export default function AuditTrail() {
           {/* EnterpriseTable */}
           <div className="card p-0 overflow-hidden">
             <EnterpriseTable
+              reportMeta={reportMeta}
               columns={auditColumns}
               data={visibleAuditRows}
               getRowId={(row) => String(row.id)}
@@ -566,6 +569,7 @@ export default function AuditTrail() {
 
           <div className="card p-0 overflow-hidden">
             <EnterpriseTable
+              reportMeta={reportMeta}
               columns={uploadColumns}
               data={uploadRows}
               getRowId={(row) => String(row.id)}

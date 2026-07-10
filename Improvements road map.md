@@ -1,5 +1,13 @@
 Tyre Pulse Enterprise Technology Roadmap & Architecture Plan
 
+> **▶ TOP PRIORITY (P0): Universal Approval & Workflow Engine.**
+> One configurable engine powering approvals for every module (inspections, tyre
+> replacement, accidents, purchase requests, +20 more) — visual builder, per-step
+> signature/photo/GPS/comment rules, conditional routing, SLA escalation,
+> approval dashboard, and in-app/email/WhatsApp/push notifications. Builds on the
+> existing V97 Workflow Engine + V100 Business Rules. Full spec, gap analysis and
+> phased plan: **[APPROVAL_WORKFLOW_ENGINE.md](APPROVAL_WORKFLOW_ENGINE.md)**.
+
 Objective
 
 Tyre Pulse is being built as a commercial enterprise Fleet & Tyre Management SaaS platform for GCC countries and later global markets. The platform must be fast, scalable, secure, AI-ready, and capable of supporting enterprise customers with thousands of vehicles and multiple branches.

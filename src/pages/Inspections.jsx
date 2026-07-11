@@ -12,6 +12,7 @@ import { exportToExcel, exportToPdf, exportInspectionDetailPdf, resolvePdfBrand,
 import { useTenant } from '../contexts/TenantContext'
 import { Download, FileText, Camera, ClipboardList, Eye, GraduationCap, CheckSquare, X, Share2, WifiOff, PenLine, Image as ImageIcon, Gauge, Clock, Send, CheckCircle2, ExternalLink, ChevronLeft, ChevronRight, Upload, Trash2, AlertTriangle } from 'lucide-react'
 import SignaturePad from '../components/SignaturePad'
+import StatusBadge from '../components/ui/StatusBadge'
 import CustomFieldsPanel from '../components/CustomFieldsPanel'
 import EntityApprovalPanel from '../components/workflow/EntityApprovalPanel'
 import { motion } from 'framer-motion'
@@ -1630,6 +1631,11 @@ export default function Inspections() {
                   {approveTarget.site ? ` · ${approveTarget.site}` : ''}
                   {' · '}{approveTarget.inspection_date || approveTarget.scheduled_date}
                 </div>
+                {approveTarget.approval_status && (
+                  <div style={{ marginTop: 8 }}>
+                    <StatusBadge status={approveTarget.approval_status} label={String(approveTarget.approval_status).replace(/_/g, ' ')} size={26} />
+                  </div>
+                )}
               </div>
               <button onClick={() => { setShowApproveModal(false); setSearchParams({}) }}
                 style={{ background: 'none', border: 'none', color: '#9ca3af', cursor: 'pointer' }}>

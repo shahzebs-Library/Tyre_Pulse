@@ -17,6 +17,7 @@ import PageHeader from '../components/ui/PageHeader'
 import SectionTabs, { REPORTS_TABS } from '../components/ui/SectionTabs'
 import LoadingState from '../components/LoadingState'
 import EmptyState from '../components/EmptyState'
+import { Illustration } from '../components/illustrations'
 
 /**
  * ReportCenter — one place to generate the fleet's branded reports on demand and
@@ -195,7 +196,21 @@ export default function ReportCenter() {
   return (
     <div className="space-y-6 animate-in">
       <SectionTabs tabs={REPORTS_TABS} />
-      <PageHeader title={t('reportcenter.title')} subtitle={t('reportcenter.subtitle')} icon={FileText} />
+
+      {/* Hero — decorative report cover art alongside the page title */}
+      <div className="relative overflow-hidden rounded-2xl border border-[var(--border-dim)] bg-[var(--surface-1)]">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 p-4 sm:p-5">
+          <PageHeader title={t('reportcenter.title')} subtitle={t('reportcenter.subtitle')} icon={FileText} />
+          <Illustration
+            name="report/cover-hero"
+            title={t('reportcenter.title')}
+            desc={reportCompany}
+            size={320}
+            decorative
+            className="hidden md:block flex-shrink-0 w-[280px] lg:w-[320px]"
+          />
+        </div>
+      </div>
 
       {/* Toast */}
       <AnimatePresence>

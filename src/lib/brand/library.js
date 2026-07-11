@@ -87,9 +87,15 @@ export function resolveBrandLogo(branding, slot) {
 /* ── Pre-auth cache ────────────────────────────────────────────────────────
  * The login screen and favicon render before TenantContext knows the org.
  * After branding loads we cache the resolved slot URLs so a returning visitor
- * sees the org's branded login/favicon on their next visit. Cleared on logout.
+ * sees the org's branded login/favicon on their next visit.
+ *
+ * The `login` and `favicon` slots are the app's *public face* — they must
+ * survive sign-out so the sign-in screen and browser tab stay branded when no
+ * user is present. All other (in-app) slots are org-scoped and dropped on
+ * logout so nothing leaks between accounts on a shared device.
  */
 const LS_KEY = 'tp.brandLogos.v1'
+const PUBLIC_SLOTS = ['login', 'favicon']
 
 export function cacheResolvedLogos(branding) {
   try {
@@ -103,8 +109,15 @@ export function cacheResolvedLogos(branding) {
   } catch { /* storage unavailable — non-critical */ }
 }
 
+/** Drop org-scoped logos on logout but KEEP the public login/favicon marks. */
 export function clearCachedLogos() {
-  try { localStorage.removeItem(LS_KEY) } catch { /* noop */ }
+  try {
+    const cur = JSON.parse(localStorage.getItem(LS_KEY) || '{}')
+    const kept = {}
+    for (const s of PUBLIC_SLOTS) if (cur[s]) kept[s] = cur[s]
+    if (Object.keys(kept).length) localStorage.setItem(LS_KEY, JSON.stringify(kept))
+    else localStorage.removeItem(LS_KEY)
+  } catch { /* noop */ }
 }
 
 export function readCachedLogo(slot) {

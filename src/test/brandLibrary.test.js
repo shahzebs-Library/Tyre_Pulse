@@ -1,9 +1,10 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, beforeEach } from 'vitest'
 import fs from 'node:fs'
 import path from 'node:path'
 import {
   BRAND_LOGOS, BRAND_LOGO_BY_ID, LOGO_SLOTS, LOGO_SLOT_KEYS,
   assetUrl, isUrlValue, resolveLogoValue, resolveBrandLogo,
+  cacheResolvedLogos, clearCachedLogos, readCachedLogo,
 } from '../lib/brand/library'
 
 const PUBLIC_DIR = path.resolve(__dirname, '../../public/brand/library')
@@ -78,5 +79,33 @@ describe('brand logo library', () => {
 
   it('exposes a fast id lookup', () => {
     for (const l of BRAND_LOGOS) expect(BRAND_LOGO_BY_ID[l.id]).toBe(l)
+  })
+})
+
+describe('pre-auth logo cache', () => {
+  const id = BRAND_LOGOS[0].id
+  beforeEach(() => localStorage.clear())
+
+  it('caches resolved slot logos and reads them back', () => {
+    cacheResolvedLogos({ logos: { login: id, app_icon: id, favicon: '/f.png' } })
+    expect(readCachedLogo('login')).toBe(assetUrl(id))
+    expect(readCachedLogo('app_icon')).toBe(assetUrl(id))
+    expect(readCachedLogo('favicon')).toBe('/f.png')
+  })
+
+  it('clearing (logout) KEEPS public login/favicon but drops org-scoped slots', () => {
+    cacheResolvedLogos({ logos: { login: id, favicon: '/f.png', app_icon: id, report_cover: id } })
+    clearCachedLogos()
+    expect(readCachedLogo('login')).toBe(assetUrl(id))   // survives sign-out
+    expect(readCachedLogo('favicon')).toBe('/f.png')     // survives sign-out
+    expect(readCachedLogo('app_icon')).toBeNull()        // org-scoped, dropped
+    expect(readCachedLogo('report_cover')).toBeNull()
+  })
+
+  it('clearing with no public logos empties the store', () => {
+    cacheResolvedLogos({ logos: { app_icon: id } })
+    clearCachedLogos()
+    expect(readCachedLogo('app_icon')).toBeNull()
+    expect(localStorage.getItem('tp.brandLogos.v1')).toBeNull()
   })
 })

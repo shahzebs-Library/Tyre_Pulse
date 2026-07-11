@@ -462,7 +462,7 @@ export default function Login() {
                 border:'1.5px solid rgba(22,163,74,0.4)',
                 boxShadow:'0 0 30px rgba(22,163,74,0.3)',
               }}>
-                <BrandIcon src={loginLogo} custom={loginLogo !== TpLogo} size={30} />
+                <BrandIcon src={loginLogo} custom={loginLogo !== TpLogo} chip={false} size={30} />
               </div>
               <div>
                 <div style={{fontSize:26, fontWeight:800, color:'#fff', letterSpacing:'-0.03em', lineHeight:1}}>TyrePulse</div>

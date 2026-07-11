@@ -17,4 +17,12 @@ describe('BrandIcon', () => {
     expect(html).toContain('bg-white')    // light chip → navy/coloured marks read
     expect(html).toContain('/brand/library/icon-mark.png')
   })
+
+  it('renders a custom logo transparent (no chip) when chip=false', () => {
+    const html = renderToStaticMarkup(<BrandIcon src="/brand/library/emblem-blue.png" custom chip={false} size={30} />)
+    expect(html).not.toContain('bg-white') // blends with the page background
+    expect(html).not.toContain('<span')
+    expect(html).toContain('<img')
+    expect(html).toContain('/brand/library/emblem-blue.png')
+  })
 })

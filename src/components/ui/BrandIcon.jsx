@@ -8,10 +8,15 @@
  * so its true colours always read. Pure/presentational: the caller resolves the
  * source and whether it is a custom logo.
  *
+ * Pass `chip={false}` to opt OUT of the white frame and render the logo
+ * transparent so it blends with whatever background sits behind it (e.g. the
+ * login screen, where the logo should match the page's own backdrop).
+ *
  *   <BrandIcon src={appIcon} custom={!!customAppIcon} size={18} />
+ *   <BrandIcon src={loginLogo} custom chip={false} size={30} />  // blends in
  */
-export default function BrandIcon({ src, custom = false, size = 18, className = '', imgClassName = '' }) {
-  if (custom) {
+export default function BrandIcon({ src, custom = false, chip = true, size = 18, className = '', imgClassName = '' }) {
+  if (custom && chip) {
     const pad = Math.max(2, Math.round(size * 0.14))
     return (
       <span

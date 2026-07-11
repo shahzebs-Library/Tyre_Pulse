@@ -1,11 +1,41 @@
 # TyrePulse - Developer Handoff
-**Last updated:** 10 July 2026 (Session 11)
-**Branch:** `main` (auto-deploys to Vercel). Session 11 work was built by parallel worktree agents and merged to `main` incrementally.
-**Web build status:** ✅ Clean - builds with zero errors, **1664 tests green**, auto-deploys to Vercel
-**Mobile build status:** ✅ EAS Android build green - **Expo SDK 54 / RN 0.81.5** (Session 11 touched no `mobile/` files — approval-engine mobile act/sign is Phase 5, not yet built)
-**DB migrations applied to live Supabase:** through **V119** (project `jhssdmeruxtrlqnwfksc`). Session 11 applied+verified **V116, V117, V117a, V118, V119** live via the Supabase MCP and deployed the **`workflow-notify`** edge function. (V96–V103 automation platform was applied in a prior session.)
+**Last updated:** 11 July 2026 (Session 12)
+**Branch:** `main` (auto-deploys to Vercel). Session 12 work was cherry-picked onto the latest `main` and verified together before push.
+**Web build status:** ✅ Clean - builds with zero errors, **1665 tests green**, auto-deploys to Vercel
+**Mobile build status:** ✅ EAS Android build green - **Expo SDK 54 / RN 0.81.5** (Session 12 touched no `mobile/` files)
+**DB migrations applied to live Supabase:** through **V119** (project `jhssdmeruxtrlqnwfksc`). Session 12 applied no migrations (front-end + report changes only).
 **Live URL under test:** tyre-pulse-peach.vercel.app
-**Active branches:** `main` · dev `claude/mobile-app-ui-features-tdfxy0` · frozen `claude/backend-step2-assets` (Go) · frozen `claude/mobile-kotlin-app` (Kotlin). All other feature branches consolidated into `main` (see `docs/BRANCH_CONSOLIDATION_2026-07-04.md`).
+**Active branches:** `main` · dev `claude/erp-sync-hub-roles-od8m1k` (holds 2 **table-standardization** commits deliberately kept OFF `main` — see Session 12 → Held) · dev `claude/mobile-app-ui-features-tdfxy0` · frozen `claude/backend-step2-assets` (Go) · frozen `claude/mobile-kotlin-app` (Kotlin). All other feature branches consolidated into `main` (see `docs/BRANCH_CONSOLIDATION_2026-07-04.md`).
+
+---
+
+## Session 12 (11 July 2026) — Data Intake override, vehicle diagram in checklist report + fleet-side entry, MP concrete-pump layout
+
+**Theme:** Targeted product fixes done directly in the main loop (no worktree agents — weekly agent limit), cherry-picked onto the latest `main` (which had advanced with Session 11's workflow engine) and verified together before push.
+
+**Gate:** web build ✅ zero errors · **1665 tests green** · no migrations · pushed to `main` (`0237b66 → 1563974`). All three cherry-picks auto-merged with no conflicts despite `main` having edited `Inspections.jsx`/`FleetMaster.jsx`.
+
+### 1. Data Intake — per-row approver override + precise duplicate/conflict
+- `src/pages/DataIntakeCenter.jsx`: the review step now gives the approver the final say on **every** row via an inline Insert/Update/Skip/Reject selector, a bulk "set all" bar, a live action-plan tally, and keeps the global force-include / enrich toggles as batch defaults. `smartAction`/`effectiveAction`/`actionPlan` centralise the derivation so toggles, per-row overrides and staging always agree.
+- `src/lib/import/validate.js`: `classifyDuplicates` rewritten per-row — first row of a key = keeper (`none`); an exact whole-row copy = `duplicate`; a same-key row that only adds complementary data = mergeable `duplicate`; only a real **conflict-field** disagreement escalates to `conflict`. New `rowFingerprint` export. Adapter dup-classification tests updated to the keeper+flag semantics.
+
+### 2. Vehicle diagram — now in the checklist report + fleet-side checklist entry
+- **Report fix (`src/pages/Inspections.jsx`):** the Daily Tyre Inspection Report was dropping the diagram — the exporter captured the on-screen form diagram, but once a checklist is saved that form is replaced by the saved-confirmation view (SVG `null` → table-only). Added an always-mounted **offscreen copy** of the same `VehicleTyreDiagram` (fed by the saved checklist's vehicle type + tyre conditions) and capture that as a fallback, so every report embeds the identical diagram.
+- **Fleet-side entry:** first-class "Start Tyre Checklist" action deep-linking to `/inspections?asset=<assetNo>` (pre-loads the checklist with the same diagram) in three places — **LiveFleetStatus** vehicle drawer (primary action by the tyre-health map), **FleetMaster** row action, **Vehicle360** header. en/ar locale keys added.
+
+### 3. Concrete pump (MP) — 3 single steer axles + 2 dual drive axles
+- Renamed asset prefix **PM → MP** (diagram resolver + `inferVehicleTypeFromAsset`) and remodelled the axle layout: 3 single-tyre steer axles (F1/F2/F3) + 2 dual-tyre drive axles (R1/R2) = 14 tyres (was 1 steer + 3 dual-rear).
+- Kept in lockstep: `VehicleTyreDiagram.jsx` LAYOUTS, `tyrePositions.js` `_LEGACY_BASE` (added `F3L→LHF3`,`F3R→RHF3`), `Inspections.jsx` `TYRE_POSITIONS['concrete pump']`, and the `exportUtils.js` PDF-fallback layout. Mobile diagram untouched (it resolves by axle-count, no type-named pump). Historical concrete-pump inspections keep their old IDs — expected when the axle model itself changes.
+
+### Held OFF main (dev branch `claude/erp-sync-hub-roles-od8m1k`)
+Two **table-standardization** commits were deliberately excluded from this merge per owner request ("keep tables hold"):
+- `4d51d63` Standardize **SerialTracker** & **GatePass** tables onto EnterpriseTable.
+- `e0a12ed` Standardize **ReportCenter** delivery-history table onto EnterpriseTable.
+To release later: rebase these two onto current `main` — note `main` has since edited `GatePass.jsx` (workflow lock), so that commit will need a small conflict resolution.
+
+### Follow-ups (owner action)
+- Decide when to release the two held table commits (above).
+- Broader raw-`<table>` → EnterpriseTable / chartjs → shared-echarts sweep remains paused (best run via the parallel workflow once the weekly agent limit resets).
 
 ---
 

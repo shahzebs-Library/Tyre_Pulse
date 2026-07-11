@@ -120,23 +120,29 @@ returns numeric language sql immutable as $$
 $$;
 
 -- Maps raw country string to one of: KSA | UAE | Egypt
--- Handles common variations so data from different sources unifies cleanly
+-- Handles common variations so data from different sources unifies cleanly.
+-- Unknown values are PRESERVED VERBATIM (never forced to 'KSA') and blank/null
+-- returns null, so a genuinely new country surfaces instead of misfiling into
+-- KSA. See MIGRATIONS_V121_NORMALIZE_COUNTRY_PRESERVE_UNKNOWN.sql.
 create or replace function public.normalize_country(raw text)
 returns text language sql immutable as $$
-  select case upper(trim(raw))
-    when 'KSA'                    then 'KSA'
-    when 'SA'                     then 'KSA'
-    when 'SAUDI'                  then 'KSA'
-    when 'SAUDI ARABIA'           then 'KSA'
-    when 'UAE'                    then 'UAE'
-    when 'AE'                     then 'UAE'
-    when 'UNITED ARAB EMIRATES'   then 'UAE'
-    when 'DUBAI'                  then 'UAE'
-    when 'ABU DHABI'              then 'UAE'
-    when 'EGYPT'                  then 'Egypt'
-    when 'EG'                     then 'Egypt'
-    when 'CAIRO'                  then 'Egypt'
-    else 'KSA'                    -- safe fallback
+  select case
+    when raw is null or btrim(raw) = '' then null
+    else case upper(btrim(raw))
+      when 'KSA'                    then 'KSA'
+      when 'SA'                     then 'KSA'
+      when 'SAUDI'                  then 'KSA'
+      when 'SAUDI ARABIA'           then 'KSA'
+      when 'UAE'                    then 'UAE'
+      when 'AE'                     then 'UAE'
+      when 'UNITED ARAB EMIRATES'   then 'UAE'
+      when 'DUBAI'                  then 'UAE'
+      when 'ABU DHABI'              then 'UAE'
+      when 'EGYPT'                  then 'Egypt'
+      when 'EG'                     then 'Egypt'
+      when 'CAIRO'                  then 'Egypt'
+      else btrim(raw)  -- preserve unknown country verbatim; never force 'KSA'
+    end
   end
 $$;
 
@@ -152,9 +158,9 @@ declare
   v_default_cost numeric;
 begin
 
-  -- ── Country: normalise or fall back to region, then 'KSA' ──
+  -- ── Country: normalise; keep region if country blank; never inject 'KSA' ──
   if new.country is null or trim(new.country) = '' then
-    new.country := public.normalize_country(coalesce(new.region, 'KSA'));
+    new.country := public.normalize_country(new.region);
   else
     new.country := public.normalize_country(new.country);
   end if;

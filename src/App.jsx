@@ -291,7 +291,7 @@ function MainApp() {
                       <Route path="/system-health"       element={<Safe><SystemHealth /></Safe>} />
                       <Route path="/tenant-health"       element={<Safe><TenantHealth /></Safe>} />
                       <Route path="/permission-matrix"   element={<Safe><PermissionMatrix /></Safe>} />
-                      <Route path="/brand-assets"        element={<Safe><BrandAssets /></Safe>} />
+                      <Route path="/brand-assets"        element={<Safe><RoleRoute allowed={['Admin']}><BrandAssets /></RoleRoute></Safe>} />
                       {/* ── Commercial: Subscription & Billing (roadmap #6) ── */}
                       <Route path="/billing"             element={<Safe><FlagRoute flag="billing"><Billing /></FlagRoute></Safe>} />
                       {/* ── Automation platform (backend V96–V103; flag OFF until DB applied) ── */}

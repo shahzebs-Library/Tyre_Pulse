@@ -234,7 +234,7 @@ function CategoryAccordion({ categoryKey, opportunities, onCreateAction, created
           >
             <div className="px-3 pb-3 space-y-2 border-t border-[var(--input-border)]">
               {opportunities.length === 0 ? (
-                <p className="text-xs text-[var(--text-dim)] py-3 text-center">No improvement opportunities detected - performing well in this area.</p>
+                <p className="text-xs text-[var(--text-dim)] py-3 text-center">No improvement opportunities detected, performing well in this area.</p>
               ) : (
                 opportunities.map((opp, i) => (
                   <OpportunityRow

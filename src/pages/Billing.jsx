@@ -76,7 +76,7 @@ function UsageMeter({ row, currency }) {
       )}
       {over && (
         <p className="text-xs text-red-400 mt-1.5 flex items-center gap-1">
-          <AlertTriangle size={11} /> Over plan limit — upgrade to add more.
+          <AlertTriangle size={11} /> Over plan limit. Upgrade to add more.
         </p>
       )}
       {warn && (
@@ -105,7 +105,7 @@ export default function Billing() {
     const params = new URLSearchParams(window.location.search)
     const outcome = params.get('checkout')
     if (!outcome) return
-    if (outcome === 'success') { setActionMsg('Payment received — your plan is now active.'); refresh() }
+    if (outcome === 'success') { setActionMsg('Payment received. Your plan is now active.'); refresh() }
     else if (outcome === 'cancel') setActionErr('Checkout was cancelled. Your plan is unchanged.')
     window.history.replaceState({}, '', '/billing')
     const id = setTimeout(() => { setActionMsg(''); setActionErr('') }, 5000)
@@ -156,7 +156,7 @@ export default function Billing() {
       await billing.setCancelAtPeriodEnd(sub.id, next)
       setActionMsg(next
         ? 'Subscription will cancel at the end of the current period.'
-        : 'Cancellation reverted — your subscription will renew.')
+        : 'Cancellation reverted. Your subscription will renew.')
       refresh()
     } catch (err) {
       setActionErr(err.message || 'Could not update the subscription.')
@@ -176,7 +176,7 @@ export default function Billing() {
     {
       id: 'period',
       header: 'Period',
-      accessorFn: r => r.period_start ? `${formatDate(r.period_start)} – ${formatDate(r.period_end)}` : '—',
+      accessorFn: r => r.period_start ? `${formatDate(r.period_start)} to ${formatDate(r.period_end)}` : '—',
       size: 200,
     },
     {
@@ -338,7 +338,7 @@ export default function Billing() {
           )}
           <p className="text-xs text-gray-500">
             Usage is measured live for your organisation. Reaching a limit blocks new records of that
-            type until you upgrade — historical data is never removed.
+            type until you upgrade. Historical data is never removed.
           </p>
         </div>
       </div>

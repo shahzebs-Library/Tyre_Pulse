@@ -117,7 +117,7 @@ export default function ErpConnectionPanel() {
         <p className="flex items-center gap-2 font-semibold text-[var(--text-primary)]"><KeyRound size={13} className="text-[var(--accent)]" /> Where does the API key go?</p>
         <p>Your ERP key/token is <b>never stored here or in the browser</b>. It's set once as a secure server secret. After saving this config, an admin runs:</p>
         <code className="block font-mono bg-black/30 rounded px-2 py-1.5 text-[11px] text-emerald-300 overflow-x-auto">supabase secrets set ERP_API_KEY=your-key-here</code>
-        <p className="flex items-start gap-1.5 text-[var(--text-muted)]"><Info size={12} className="mt-0.5 shrink-0" /> A scheduled edge function then reads that secret, pulls the selected entities from your ERP, and stages every row into the Data Intake Center for validation before commit — the same controlled pipeline as manual uploads.</p>
+        <p className="flex items-start gap-1.5 text-[var(--text-muted)]"><Info size={12} className="mt-0.5 shrink-0" /> A scheduled edge function then reads that secret, pulls the selected entities from your ERP, and stages every row into the Data Intake Center for validation before commit, the same controlled pipeline as manual uploads.</p>
       </div>
 
       {isAdmin ? (

@@ -103,7 +103,7 @@ export default function DisplayTokensPanel() {
     if (res.error) { setMsg({ type: 'err', text: res.error }); return }
     if (res.token) {
       setCreated({ token: res.token, url: buildDisplayUrl(res.token) })
-      setMsg({ type: 'ok', text: 'Display link created. Copy it now — the token is shown only once.' })
+      setMsg({ type: 'ok', text: 'Display link created. Copy it now; the token is shown only once.' })
       setShowForm(false)
       setForm(EMPTY_FORM)
       load()
@@ -154,7 +154,7 @@ export default function DisplayTokensPanel() {
       </div>
 
       <p className="text-xs text-[var(--text-secondary)] leading-relaxed">
-        Share a secure, read-only board for lobby and control-room TVs — no login required. The link
+        Share a secure, read-only board for lobby and control-room TVs, no login required. The link
         shows only aggregate KPIs and branding (never raw records). Boards render at{' '}
         <span className="font-mono text-[var(--text-primary)]">/display/&lt;token&gt;</span>.
       </p>
@@ -180,7 +180,7 @@ export default function DisplayTokensPanel() {
       {created && (
         <div className="rounded-lg px-3 py-3 bg-[var(--input-bg)] border border-[var(--accent)] space-y-3">
           <p className="text-xs font-semibold text-[var(--accent)] flex items-center gap-1.5">
-            <KeyRound size={13} /> Shareable link — shown once, copy it now
+            <KeyRound size={13} /> Shareable link: shown once, copy it now
           </p>
           <div className="space-y-2">
             <div className="flex items-center gap-2">

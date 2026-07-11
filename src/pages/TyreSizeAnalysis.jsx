@@ -1158,7 +1158,7 @@ export default function TyreSizeAnalysis() {
         <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-4">
           <h2 className="text-sm font-semibold text-[var(--text-secondary)] mb-4 flex items-center gap-2">
             <TrendingUp className="w-4 h-4 text-green-400" />
-            Top Size-Brand Combos - CPK Trend (12 months)
+            Top Size-Brand Combos: CPK Trend (12 months)
           </h2>
           {trendData.datasets.length === 0 ? (
             <div className="flex items-center justify-center h-56 text-[var(--text-muted)] text-sm">No trend data available</div>
@@ -1183,7 +1183,7 @@ export default function TyreSizeAnalysis() {
         {consolidationOps.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-12 gap-3 text-[var(--text-muted)]">
             <CheckCircle className="w-10 h-10 text-green-700" />
-            <p className="text-sm">No consolidation opportunities detected - fleet is well optimized</p>
+            <p className="text-sm">No consolidation opportunities detected, fleet is well optimized</p>
           </div>
         ) : (
           <div className="p-4 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">

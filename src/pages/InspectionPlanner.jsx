@@ -333,7 +333,7 @@ function ScheduleModal({ onClose, onSave, prefill = null, assets = [], inspector
         <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-[var(--input-border)]">
           {prefill?.id && wfLocked && (
             <span className="flex items-center gap-1 text-xs text-yellow-400 mr-auto">
-              <Lock size={12} /> Locked — in approval
+              <Lock size={12} /> Locked, in approval
             </span>
           )}
           <button onClick={onClose} className="px-4 py-2 text-sm text-gray-400 hover:text-[var(--text-primary)] transition-colors">Cancel</button>
@@ -376,7 +376,7 @@ function BulkModal({ selected, inspectors, onClose, onSave }) {
       inspection_date: dates[i % dates.length],
       inspection_time: '08:00',
       type,
-      notes: `Bulk scheduled - overdue by ${v.days_overdue} days`,
+      notes: `Bulk scheduled, overdue by ${v.days_overdue} days`,
       status: 'Scheduled',
     }))
     await onSave(items)
@@ -911,7 +911,7 @@ export default function InspectionPlanner() {
         .select('id')
       if (error) throw error
       if ((data?.length ?? 0) === 0) {
-        throw new Error('The inspection could not be deleted - you may not have permission, or it was already removed.')
+        throw new Error('The inspection could not be deleted. You may not have permission, or it was already removed.')
       }
       setDeleteTarget(null)
       await fetchSchedule()
@@ -1333,7 +1333,7 @@ export default function InspectionPlanner() {
               <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--input-border)]">
                 <div className="flex items-center gap-2">
                   <Calendar size={16} className="text-blue-400" />
-                  <h2 className="text-sm font-semibold text-[var(--text-primary)]">Upcoming Inspections - Next 30 Days</h2>
+                  <h2 className="text-sm font-semibold text-[var(--text-primary)]">Upcoming Inspections: Next 30 Days</h2>
                 </div>
                 <div className="flex items-center gap-2">
                   <button
@@ -1563,7 +1563,7 @@ export default function InspectionPlanner() {
             <div className="card">
               <div className="flex items-center gap-2 mb-5">
                 <BarChart2 size={16} className="text-blue-400" />
-                <h2 className="text-sm font-semibold text-[var(--text-primary)]">Inspection Frequency by Site - Last 6 Months</h2>
+                <h2 className="text-sm font-semibold text-[var(--text-primary)]">Inspection Frequency by Site: Last 6 Months</h2>
               </div>
               {loading ? (
                 <div className="h-72 bg-[var(--input-bg)] animate-pulse rounded-lg" />

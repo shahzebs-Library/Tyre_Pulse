@@ -169,7 +169,7 @@ function UploadModal({ onClose, onSuccess, sites }) {
             />
             <Upload className="w-8 h-8 text-[var(--text-muted)] mx-auto mb-2" />
             <p className="text-[var(--text-secondary)] text-sm font-medium">{file ? file.name : 'Drop a file or click to browse'}</p>
-            <p className="text-[var(--text-muted)] text-xs mt-1">.txt · .md · .csv · .json - or paste text below</p>
+            <p className="text-[var(--text-muted)] text-xs mt-1">.txt · .md · .csv · .json, or paste text below</p>
           </div>
 
           {/* Title */}
@@ -178,7 +178,7 @@ function UploadModal({ onClose, onSuccess, sites }) {
             <input
               className="w-full bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-lg px-3 py-2.5 text-[var(--text-primary)] text-sm focus:outline-none focus:border-green-500 transition-colors"
               value={form.title} onChange={e => set('title', e.target.value)}
-              placeholder="e.g. Tyre Pressure SOP - Heavy Fleet"
+              placeholder="e.g. Tyre Pressure SOP: Heavy Fleet"
             />
           </div>
 
@@ -527,7 +527,7 @@ export default function KnowledgeBase() {
                         onClick={() => handleDelete(doc.id)}
                         disabled={viewDoc?.id === doc.id && wfLocked}
                         className="p-1.5 rounded-lg hover:bg-red-400/10 text-[var(--text-dim)] hover:text-red-400 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                        title={viewDoc?.id === doc.id && wfLocked ? 'Locked — in approval' : 'Delete document'}
+                        title={viewDoc?.id === doc.id && wfLocked ? 'Locked, in approval' : 'Delete document'}
                       >
                         {viewDoc?.id === doc.id && wfLocked ? <Lock className="w-4 h-4" /> : <Trash2 className="w-4 h-4" />}
                       </button>
@@ -601,14 +601,14 @@ export default function KnowledgeBase() {
                 {wfLocked
                   ? (
                     <span className="flex items-center gap-1.5 text-xs text-[var(--text-muted)]">
-                      <Lock className="w-3.5 h-3.5" /> Locked — in approval
+                      <Lock className="w-3.5 h-3.5" /> Locked, in approval
                     </span>
                   )
                   : <span className="text-xs text-[var(--text-muted)]">Removing a document also removes it from AI retrieval.</span>}
                 <button
                   onClick={() => handleDelete(viewDoc.id)}
                   disabled={wfLocked}
-                  title={wfLocked ? 'Locked — document is in an approval workflow' : 'Delete document'}
+                  title={wfLocked ? 'Locked: document is in an approval workflow' : 'Delete document'}
                   className="flex items-center gap-2 px-4 py-2 rounded-lg bg-red-500/10 border border-red-400/30 text-red-400 text-sm font-medium hover:bg-red-500/20 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                 >
                   <Trash2 className="w-4 h-4" /> Delete

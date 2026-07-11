@@ -276,7 +276,7 @@ export default function AuditTrail() {
         .from('upload_history').delete().eq('batch_id', deleteTarget.batchId).select('id')
       if (histErr) throw histErr
       if ((histRows?.length ?? 0) === 0 && removed === 0) {
-        throw new Error('Nothing to delete — this batch has no records and no history entry (it may already be removed).')
+        throw new Error('Nothing to delete: this batch has no records and no history entry (it may already be removed).')
       }
 
       await logAuditEvent({ action: 'batch_delete', table_name: 'tyre_records', record_count: removed, details: { batch_id: deleteTarget.batchId } })

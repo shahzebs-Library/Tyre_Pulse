@@ -119,7 +119,7 @@ export default function SitesMasterPanel({ canEdit }) {
           </div>
           <div>
             <h3 className="text-sm font-semibold text-gray-100">Sites Master</h3>
-            <p className="text-xs text-gray-500">One canonical list of sites per country — the shared, selectable options used across the app.</p>
+            <p className="text-xs text-gray-500">One canonical list of sites per country: the shared, selectable options used across the app.</p>
           </div>
         </div>
         {canEdit && (
@@ -131,7 +131,7 @@ export default function SitesMasterPanel({ canEdit }) {
 
       {!canEdit && (
         <div className="flex items-center gap-2 text-xs text-amber-300 bg-amber-500/10 border border-amber-500/20 rounded-lg px-3 py-2">
-          <AlertTriangle size={14} /> Read-only — only an admin or manager can edit the sites master.
+          <AlertTriangle size={14} /> Read-only. Only an admin or manager can edit the sites master.
         </div>
       )}
 
@@ -182,7 +182,7 @@ export default function SitesMasterPanel({ canEdit }) {
         <div className="flex items-center gap-2 text-gray-400 text-sm py-10 justify-center"><Loader2 size={16} className="animate-spin" /> Loading sites…</div>
       ) : visible.length === 0 ? (
         <div className="text-center text-sm text-gray-500 py-10 border border-dashed border-white/10 rounded-xl">
-          No sites for {COUNTRY_LABEL[country] || country} yet{canEdit ? ' — add the first one above.' : '.'}
+          No sites for {COUNTRY_LABEL[country] || country} yet{canEdit ? '. Add the first one above.' : '.'}
         </div>
       ) : (
         <div className="border border-white/8 rounded-xl overflow-hidden divide-y divide-white/5">

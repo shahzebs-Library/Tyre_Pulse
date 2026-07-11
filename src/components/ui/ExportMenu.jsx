@@ -176,7 +176,7 @@ export default function ExportMenu({
 
           {errored && (
             <p className="mt-2 px-2 text-[10px] text-red-400">
-              Export failed — please retry.
+              Export failed, please retry.
             </p>
           )}
         </div>

@@ -21,7 +21,7 @@ const TEXT_FIELDS = [
   { key: 'contact_email', label: 'Contact email',         placeholder: 'reports@company.com' },
   { key: 'contact_phone', label: 'Contact phone',         placeholder: '+966 …' },
   { key: 'address',       label: 'Address',               placeholder: 'Street, City, Country', textarea: true },
-  { key: 'footer_text',   label: 'Report footer',         placeholder: 'Confidential — for internal use only', textarea: true },
+  { key: 'footer_text',   label: 'Report footer',         placeholder: 'Confidential: for internal use only', textarea: true },
   { key: 'disclaimer',    label: 'Legal disclaimer',      placeholder: 'This report is generated from…', textarea: true },
 ]
 
@@ -137,7 +137,7 @@ export default function OrgBrandingPanel({ canEdit }) {
 
       {!canEdit && (
         <div className="flex items-center gap-2 text-xs text-amber-300 bg-amber-500/10 border border-amber-500/20 rounded-lg px-3 py-2">
-          <AlertTriangle size={14} /> Read-only — only an organisation admin can edit branding.
+          <AlertTriangle size={14} /> Read-only. Only an organisation admin can edit branding.
         </div>
       )}
 

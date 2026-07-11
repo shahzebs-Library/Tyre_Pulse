@@ -109,7 +109,7 @@ const ROLE_CONTENT = {
       'Complete tyre inspection checklists offline',
       'Scan tyres and vehicles instantly',
       'Log tyre changes and workshop work orders',
-      'Work offline — everything syncs when you reconnect',
+      'Work offline, everything syncs when you reconnect',
     ],
     primary: { to: '/inspections', label: 'Open Checklist', icon: ClipboardCheck },
     features: [

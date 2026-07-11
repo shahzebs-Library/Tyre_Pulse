@@ -156,7 +156,7 @@ export default function BrandLogoStudio({ canEdit }) {
           </div>
           <div>
             <h3 className="text-sm font-semibold text-gray-100">Brand Logo Studio</h3>
-            <p className="text-xs text-gray-500">Place any Tyre Pulse logo across the app — {BRAND_LOGOS.length} variants, {LOGO_SLOTS.length} placements.</p>
+            <p className="text-xs text-gray-500">Place any Tyre Pulse logo across the app: {BRAND_LOGOS.length} variants, {LOGO_SLOTS.length} placements.</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -171,7 +171,7 @@ export default function BrandLogoStudio({ canEdit }) {
 
       {!canEdit && (
         <div className="flex items-center gap-2 text-xs text-amber-300 bg-amber-500/10 border border-amber-500/20 rounded-lg px-3 py-2">
-          <AlertTriangle size={14} /> Read-only — only an organisation admin can change logo placements.
+          <AlertTriangle size={14} /> Read-only. Only an organisation admin can change logo placements.
         </div>
       )}
 
@@ -222,7 +222,7 @@ export default function BrandLogoStudio({ canEdit }) {
 
             {/* Live preview of the active slot */}
             <div>
-              <label className="block text-xs font-medium text-gray-400 mb-1.5 mt-3">Preview — {activeMeta?.label}</label>
+              <label className="block text-xs font-medium text-gray-400 mb-1.5 mt-3">Preview: {activeMeta?.label}</label>
               <LogoThumb src={activeSrc} surface={activeMeta?.surface} className="w-full h-28 border border-white/10" />
               <p className="text-[10px] text-gray-500 mt-1.5">{activeMeta?.hint}</p>
             </div>

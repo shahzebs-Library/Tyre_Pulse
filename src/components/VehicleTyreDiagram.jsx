@@ -1420,7 +1420,7 @@ export default function VehicleTyreDiagram({ vehicleType, positions, tyreData, o
         style={{ minHeight: 160 }}>
         <span className="text-3xl">🏭</span>
         <p className="text-sm font-semibold text-gray-200">{vehicleType || 'Equipment'}</p>
-        <p className="text-xs text-gray-500 max-w-[200px]">Stationary equipment — no tyres to inspect.</p>
+        <p className="text-xs text-gray-500 max-w-[200px]">Stationary equipment, no tyres to inspect.</p>
       </div>
     )
   }

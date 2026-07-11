@@ -355,7 +355,7 @@ export default function DataIntakeCenter() {
         .map((m) => ({ sourceHeader: m.sourceHeader, target: m.target, confidence: m.confidence ?? 100 }))
       if (rules.length < 2) return                      // nothing worth remembering
       const base = (file?.name || '').replace(/\.[^.]+$/, '').trim()
-      const name = `${MODULE_LABELS[module] || module}${base ? ` — ${base}` : ''} (auto)`
+      const name = `${MODULE_LABELS[module] || module}${base ? `: ${base}` : ''} (auto)`
       await imports.saveProfile({ name, module, country: activeCountry, headerFingerprint: fp }, rules)
       autoSavedFp.current = fp
       imports.listProfiles({ module, country: activeCountry }).then(setProfiles).catch(() => {})
@@ -603,7 +603,7 @@ export default function DataIntakeCenter() {
         <h1 className="text-2xl font-bold text-[var(--text-primary)] mb-2">Data Intake Center</h1>
         <div className="bg-amber-900/20 border border-amber-700/50 rounded-xl p-6 text-amber-300 flex gap-3">
           <AlertTriangle className="shrink-0" />
-          <p>Select a single country (top bar) before importing. Every import is scoped to one country - mixing countries is not allowed.</p>
+          <p>Select a single country (top bar) before importing. Every import is scoped to one country, mixing countries is not allowed.</p>
         </div>
       </div>
     )
@@ -686,7 +686,7 @@ export default function DataIntakeCenter() {
           {appliedProfile && (
             <div className="bg-sky-900/20 border border-sky-700/50 rounded-xl p-3 text-sky-300 text-sm flex items-center gap-2">
               <Bookmark size={15} className="shrink-0" />
-              <span>Recognised format - mapping profile <span className="font-semibold text-white">“{appliedProfile.name}”</span> applied automatically{appliedProfile.unit_settings?.aggregate?.by ? ' (line items will be combined per record)' : ''}. Review below and adjust if needed.</span>
+              <span>Recognised format, mapping profile <span className="font-semibold text-white">“{appliedProfile.name}”</span> applied automatically{appliedProfile.unit_settings?.aggregate?.by ? ' (line items will be combined per record)' : ''}. Review below and adjust if needed.</span>
             </div>
           )}
           <div className="flex flex-wrap items-center justify-between gap-3">
@@ -731,7 +731,7 @@ export default function DataIntakeCenter() {
                             type="button"
                             onClick={() => setTarget(m.sourceHeader, m.suggestedTarget)}
                             className="mt-1 block text-[11px] text-amber-400 hover:text-amber-300 underline decoration-dotted"
-                            title="Low-confidence guess - click to apply"
+                            title="Low-confidence guess, click to apply"
                           >
                             Suggested: {targetOptions.find((t) => t.key === m.suggestedTarget)?.label || m.suggestedTarget}
                             {typeof m.suggestedConfidence === 'number' ? ` (${m.suggestedConfidence}%)` : ''}
@@ -769,7 +769,7 @@ export default function DataIntakeCenter() {
                 <p className="text-3xl font-bold text-emerald-300">{fmtMoney(counts.amount)}</p>
               </div>
               <p className="text-xs text-[var(--text-secondary)] max-w-xs">Derived from <span className="text-[var(--text-primary)]">{counts.qty || counts.total}</span> tyres × unit cost. Quantity and unit cost are stored; the total is computed so all spend rolls up in one place.
-                <span className="block mt-1 text-amber-300/90">Looks too high vs your file? Your cost column may already include the quantity — go Back and map it to <span className="font-semibold">"Total Amount"</span> instead; the per-tyre price is derived automatically.</span></p>
+                <span className="block mt-1 text-amber-300/90">Looks too high vs your file? Your cost column may already include the quantity, go Back and map it to <span className="font-semibold">"Total Amount"</span> instead; the per-tyre price is derived automatically.</span></p>
             </div>
           )}
           {granularityWarning && (
@@ -852,7 +852,7 @@ export default function DataIntakeCenter() {
               </tbody>
             </table>
           </div>
-          {isElevated && <p className="text-xs text-[var(--text-muted)]">You have the final say on every row — override any action above. Anything set to <span className="text-green-300">Insert</span>/<span className="text-sky-300">Update</span> is committed even if it was flagged; genuinely un-insertable rows still fail safely per-row and are logged. Showing first 200 rows; bulk actions apply to the whole batch.</p>}
+          {isElevated && <p className="text-xs text-[var(--text-muted)]">You have the final say on every row, override any action above. Anything set to <span className="text-green-300">Insert</span>/<span className="text-sky-300">Update</span> is committed even if it was flagged; genuinely un-insertable rows still fail safely per-row and are logged. Showing first 200 rows; bulk actions apply to the whole batch.</p>}
           {counts?.countryConflict > 0 && (
             <div className="bg-amber-900/20 border border-amber-600/50 rounded-xl p-4 space-y-2">
               <p className="text-sm text-amber-300 flex items-center gap-2"><AlertTriangle size={16} /> {counts.countryConflict} row(s) carry a country that differs from the selected import country <span className="font-semibold">{activeCountry}</span>.</p>
@@ -868,7 +868,7 @@ export default function DataIntakeCenter() {
               <p className="text-sm text-sky-300 flex items-center gap-2"><Database size={16} /> {counts.liveDuplicate} row(s) match records that already exist.</p>
               <label className="flex items-center gap-2 text-sm text-sky-200 cursor-pointer">
                 <input type="checkbox" checked={enrichExisting} onChange={(e) => setEnrichExisting(e.target.checked)} className="accent-sky-500" />
-                Enrich existing records — fill their blank fields from this file (don't skip).
+                Enrich existing records: fill their blank fields from this file (don't skip).
               </label>
               <p className="text-xs text-[var(--text-secondary)]">Combines this file with data already on record: it only fills fields that are currently empty and <span className="text-[var(--text-primary)]">never overwrites</span> a value you already have. Great for stitching together assets/tyres/work orders from different source files. Every change is audited.</p>
             </div>
@@ -878,9 +878,9 @@ export default function DataIntakeCenter() {
               <p className="text-sm text-red-300 flex items-center gap-2"><AlertTriangle size={16} /> {counts.error} row(s) failed validation and will be skipped by default.</p>
               <label className="flex items-center gap-2 text-sm text-red-200 cursor-pointer">
                 <input type="checkbox" checked={forceFlagged} onChange={(e) => setForceFlagged(e.target.checked)} className="accent-red-500" />
-                Force-include these {counts.error} flagged row(s) — commit them anyway.
+                Force-include these {counts.error} flagged row(s): commit them anyway.
               </label>
-              <p className="text-xs text-[var(--text-secondary)]">Use this to push through rows you know are acceptable despite a validation warning. Rows that are genuinely un-insertable (e.g. a missing required field) still fail safely at commit and are logged — the rest of the batch is unaffected.</p>
+              <p className="text-xs text-[var(--text-secondary)]">Use this to push through rows you know are acceptable despite a validation warning. Rows that are genuinely un-insertable (e.g. a missing required field) still fail safely at commit and are logged, the rest of the batch is unaffected.</p>
             </div>
           )}
           <div className="flex gap-2">
@@ -967,7 +967,7 @@ export default function DataIntakeCenter() {
               {module === 'tyre' && counts?.amount > 0 && (
                 <p className="text-sm text-emerald-300 border-t border-[var(--border-dim)] pt-3">Total tyre amount to be recorded: <span className="font-bold">{fmtMoney(counts.amount)}</span> across {counts.qty || counts.total} tyres.</p>
               )}
-              {!isElevated && <p className="text-xs text-amber-400">Your role can stage but not approve - this will be submitted for approval.</p>}
+              {!isElevated && <p className="text-xs text-amber-400">Your role can stage but not approve, this will be submitted for approval.</p>}
               <button onClick={commit} disabled={busy} className="px-4 py-2 rounded-lg bg-green-600 hover:bg-green-500 text-white text-sm flex items-center gap-2 disabled:opacity-50">{busy ? <Loader2 size={15} className="animate-spin" /> : <CheckCircle2 size={15} />} {isElevated ? 'Approve & commit' : 'Submit for approval'}</button>
               {busy && commitProgress && (
                 <div className="space-y-1.5">
@@ -1013,7 +1013,7 @@ export default function DataIntakeCenter() {
                   {result.failed > result.errors.length && (
                     <p className="text-[11px] text-red-300/70">...and {result.failed - result.errors.length} more - every failed row's reason is saved on the row (Validation issues, code COMMIT_FAILED).</p>
                   )}
-                  <p className="text-[11px] text-red-300/70 pt-1">Fix the source values (or the column mapping) and re-import the file - committed rows are skipped automatically.</p>
+                  <p className="text-[11px] text-red-300/70 pt-1">Fix the source values (or the column mapping) and re-import the file, committed rows are skipped automatically.</p>
                 </div>
               )}
               {automation && (automation.alerts > 0 || automation.actions > 0) && (

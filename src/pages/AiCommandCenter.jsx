@@ -645,7 +645,7 @@ export default function AiCommandCenter() {
     <div className="space-y-6">
       <PageHeader
         title="AI Command Center"
-        subtitle="Multi-agent fleet intelligence - Analyst · Engineer · QA · Planner"
+        subtitle="Multi-agent fleet intelligence: Analyst · Engineer · QA · Planner"
         icon={Brain}
         actions={
           <div className="flex items-center gap-2 flex-shrink-0">

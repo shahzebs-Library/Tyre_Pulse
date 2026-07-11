@@ -164,7 +164,7 @@ export default function CopilotCard({ task, context, className = '' }) {
         <>
           <AiText text={text} />
           <p className="mt-2 text-[10px] text-[var(--text-muted)]">
-            AI-generated from record data — verify before acting. Repeated views use a cached response.
+            AI-generated from record data; verify before acting. Repeated views use a cached response.
           </p>
         </>
       )}

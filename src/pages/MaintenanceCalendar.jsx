@@ -978,7 +978,7 @@ export default function MaintenanceCalendar() {
 
                 {wfLocked && (
                   <div className="flex items-center gap-1.5 text-xs text-[var(--accent)]">
-                    <Lock size={12} /> Locked — in approval
+                    <Lock size={12} /> Locked, in approval
                   </div>
                 )}
 
@@ -989,7 +989,7 @@ export default function MaintenanceCalendar() {
                       <button
                         type="button"
                         disabled
-                        title="Locked — in approval"
+                        title="Locked, in approval"
                         className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-blue-700 text-white text-sm font-medium rounded-xl opacity-40 cursor-not-allowed"
                       >
                         <Lock size={15} /> View Work Order
@@ -1009,7 +1009,7 @@ export default function MaintenanceCalendar() {
                       <button
                         type="button"
                         disabled
-                        title="Locked — in approval"
+                        title="Locked, in approval"
                         className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-orange-700 text-white text-sm font-medium rounded-xl opacity-40 cursor-not-allowed"
                       >
                         <Lock size={15} /> View Tyre Record

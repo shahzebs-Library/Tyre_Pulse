@@ -271,7 +271,7 @@ function RuleModal({ mode, initial, onSave, onClose, saving }) {
     if (form.actions.length === 0) e.actions = 'Add at least one action'
     else if (form.actions.some(a => a.type === 'emit_event' && !a.event_type.trim())) e.actions = 'Emitted events need an event type'
     const cd = Number(form.cooldown_minutes)
-    if (isNaN(cd) || cd < 0 || cd > 10080) e.cooldown_minutes = 'Cooldown must be 0–10080 minutes (7 days)'
+    if (isNaN(cd) || cd < 0 || cd > 10080) e.cooldown_minutes = 'Cooldown must be 0 to 10080 minutes (7 days)'
     setErrors(e)
     return Object.keys(e).length === 0
   }
@@ -372,7 +372,7 @@ function RuleModal({ mode, initial, onSave, onClose, saving }) {
             <div>
               <div className="flex items-center justify-between mb-2">
                 <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider">
-                  Conditions <span className="text-gray-600 font-normal normal-case">(all must match — blank = always)</span>
+                  Conditions <span className="text-gray-600 font-normal normal-case">(all must match, blank = always)</span>
                 </label>
                 <button
                   type="button"
@@ -384,7 +384,7 @@ function RuleModal({ mode, initial, onSave, onClose, saving }) {
               </div>
               {form.conditions.length === 0 ? (
                 <p className="text-gray-600 text-xs px-3 py-2.5 rounded-xl bg-gray-800/60 border border-gray-700/50">
-                  No conditions — actions run on every matching event.
+                  No conditions, actions run on every matching event.
                 </p>
               ) : (
                 <div className="space-y-2">
@@ -496,7 +496,7 @@ function RuleModal({ mode, initial, onSave, onClose, saving }) {
                           type="text"
                           value={a.message}
                           onChange={e => setAction(i, { message: e.target.value })}
-                          placeholder="Message (optional — defaults to rule name)"
+                          placeholder="Message (optional, defaults to rule name)"
                           className="w-full sm:col-span-2 bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-orange-500 transition-all"
                         />
                       </div>
@@ -512,7 +512,7 @@ function RuleModal({ mode, initial, onSave, onClose, saving }) {
                             className="flex-1 bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm font-mono placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-orange-500 transition-all"
                           />
                         </div>
-                        <p className="text-gray-600 text-[10px] mt-1">Emitted back into the event stream with the <code className="font-mono">rule.</code> prefix — usable as a webhook or workflow trigger.</p>
+                        <p className="text-gray-600 text-[10px] mt-1">Emitted back into the event stream with the <code className="font-mono">rule.</code> prefix, usable as a webhook or workflow trigger.</p>
                       </div>
                     )}
                   </div>
@@ -736,7 +736,7 @@ export default function AutomationRules() {
           <div className="text-center max-w-md">
             <p className="text-gray-300 text-lg font-medium">No automation rules yet</p>
             <p className="text-gray-500 text-sm mt-1">
-              React to fleet events automatically — e.g. notify managers when an inspection records tread depth
+              React to fleet events automatically, e.g. notify managers when an inspection records tread depth
               below 3&nbsp;mm at a specific site, or emit follow-up events for webhooks.
             </p>
             <button

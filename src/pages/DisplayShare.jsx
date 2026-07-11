@@ -423,7 +423,7 @@ export default function DisplayShare() {
           <h1 className="text-2xl font-bold text-white">Protected display</h1>
           <p className="text-slate-400">Enter the viewer password to show this board.</p>
           {reason === 'invalid_password' && (
-            <p className="text-red-400 text-sm w-full text-center">Incorrect password — please try again.</p>
+            <p className="text-red-400 text-sm w-full text-center">Incorrect password. Please try again.</p>
           )}
           <input
             type="password"

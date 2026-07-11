@@ -164,9 +164,9 @@ function ApiKeysTab({ search }) {
           <div className="flex items-start gap-2.5">
             <AlertTriangle className="w-4 h-4 text-orange-400 shrink-0 mt-0.5" />
             <div className="min-w-0 flex-1">
-              <p className="text-orange-300 text-sm font-semibold">API key &ldquo;{newKey.name}&rdquo; created — copy it now</p>
+              <p className="text-orange-300 text-sm font-semibold">API key &ldquo;{newKey.name}&rdquo; created. Copy it now.</p>
               <p className="text-orange-400/80 text-xs mt-0.5">
-                This is the only time the full key is shown. It cannot be recovered — only revoked and re-issued.
+                This is the only time the full key is shown. It cannot be recovered, only revoked and re-issued.
               </p>
             </div>
             <button onClick={() => setNewKey(null)} className="text-orange-400 hover:text-white transition-colors" aria-label="Dismiss">
@@ -537,7 +537,7 @@ function WebhookCard({ hook, onEdit, onDelete, onToggle }) {
           {hook.secret && <CopyButton value={hook.secret} label="Copy secret" />}
         </div>
         <p className="text-gray-600 text-[10px] mt-1.5">
-          HMAC-SHA256 of the raw body — header <code className="font-mono">X-TyrePulse-Signature: sha256=&lt;hex&gt;</code>
+          HMAC-SHA256 of the raw body, in header <code className="font-mono">X-TyrePulse-Signature: sha256=&lt;hex&gt;</code>
         </p>
       </div>
 
@@ -780,7 +780,7 @@ function DeliveriesTab({ search }) {
         {!loading && count > 0 && (
           <div className="px-4 py-3 border-t border-gray-700 flex items-center justify-between gap-3">
             <p className="text-gray-500 text-xs">
-              {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, count)} of {count.toLocaleString()} deliveries
+              {page * PAGE_SIZE + 1} to {Math.min((page + 1) * PAGE_SIZE, count)} of {count.toLocaleString()} deliveries
             </p>
             <div className="flex items-center gap-2">
               <button

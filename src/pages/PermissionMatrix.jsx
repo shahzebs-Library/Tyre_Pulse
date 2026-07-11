@@ -141,7 +141,7 @@ export default function PermissionMatrix() {
       )
     } catch (e) {
       setBaseline(prevBaseline)
-      setError(e.message || 'Could not save permission changes. Your edits are still here — try again.')
+      setError(e.message || 'Could not save permission changes. Your edits are still here, try again.')
     } finally {
       setSaving(false)
     }
@@ -221,10 +221,10 @@ export default function PermissionMatrix() {
         <Info size={15} className="text-brand-bright mt-0.5 shrink-0" />
         <div className="text-secondary leading-relaxed">
           <span className="font-semibold" style={{ color: 'var(--text-primary)' }}>Enforcement status: </span>
-          <span className="font-medium text-brand-bright">View</span> is enforced now — changes save through the
+          <span className="font-medium text-brand-bright">View</span> is enforced now, changes save through the
           existing access-control path (module_permissions) and apply on each user's next load.
           <span className="font-medium"> Create, Edit, Delete, Export and Approve</span> are stored here for
-          progressive enforcement and do not restrict anything yet — they will activate as modules adopt
+          progressive enforcement and do not restrict anything yet, they will activate as modules adopt
           capability checks.
         </div>
       </div>
@@ -401,7 +401,7 @@ function ModuleRow({ mod, draft, selected, setSelected, unsavedCells, overridden
                 const isDefault = defaults[selected.role][mod.key][c.key] === on
                 return (
                   <button key={c.key} type="button" onClick={() => toggleCap(selected.role, mod.key, c.key)}
-                    title={`${c.description}${c.enforced ? '' : ' (stored, not yet enforced)'}${isDefault ? '' : ' — differs from default'}`}
+                    title={`${c.description}${c.enforced ? '' : ' (stored, not yet enforced)'}${isDefault ? '' : ', differs from default'}`}
                     className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium transition-colors ${
                       on ? 'text-green-300' : 'text-dim hover:text-secondary'}`}
                     style={{

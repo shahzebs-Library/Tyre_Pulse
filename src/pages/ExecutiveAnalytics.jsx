@@ -394,7 +394,7 @@ export default function ExecutiveAnalytics() {
     const { rows, columns, headers } = toExcelRows(key, data)
     if (!rows.length) return
     await exportToExcel(rows, columns, headers, `executive-${key}`, title, {
-      title: `Executive Analytics — ${title}`,
+      title: `Executive Analytics: ${title}`,
       currency: activeCurrency,
       dateRange: `${dateFrom} → ${dateTo}`,
       meta: { Country: country },
@@ -427,7 +427,7 @@ export default function ExecutiveAnalytics() {
       <SectionTabs tabs={ANALYTICS_TABS} />
       <PageHeader
         title="Executive Analytics"
-        subtitle="Boardroom-grade fleet intelligence — heatmaps, flows, gauges and risk quadrants"
+        subtitle="Boardroom-grade fleet intelligence: heatmaps, flows, gauges and risk quadrants"
         icon={BarChart3}
         onRefresh={load}
         refreshing={loading}
@@ -470,7 +470,7 @@ export default function ExecutiveAnalytics() {
         <ChartCard
           className="xl:col-span-2"
           icon={Layers}
-          title="Tyre spend heatmap — site × month"
+          title="Tyre spend heatmap: site × month"
           subtitle="cost_per_tyre × qty grouped by site and issue month"
           loading={loading} error={slices.tyres.error} empty={tyresEmpty || !heatData.cells.length}
           onRetry={load}
@@ -499,11 +499,11 @@ export default function ExecutiveAnalytics() {
         <ChartCard
           icon={Network}
           title={sankeyData.mode === 'supplier'
-            ? 'Tyre flow — supplier → brand → site'
-            : 'Tyre flow — brand → size → site'}
+            ? 'Tyre flow: supplier → brand → site'
+            : 'Tyre flow: brand → size → site'}
           subtitle={sankeyData.mode === 'supplier'
             ? 'Tyre volume routed from suppliers through brands to fitting sites'
-            : 'Supplier data is sparse in this range — showing brand → size → site instead'}
+            : 'Supplier data is sparse in this range, showing brand → size → site instead'}
           loading={loading} error={slices.tyres.error} empty={tyresEmpty || !sankeyData.links.length}
           onRetry={load}
           onPng={() => exportPng('sankey')}
@@ -553,7 +553,7 @@ export default function ExecutiveAnalytics() {
           loading={loading}
           error={slices.openTyres.error || slices.inspections.error}
           empty={!loading && !riskData.points.length}
-          emptyText="No vehicles with open tyre risk or overdue inspections — fleet is in the clear."
+          emptyText="No vehicles with open tyre risk or overdue inspections. Fleet is in the clear."
           onRetry={load}
           onPng={() => exportPng('risk')}
           onExcel={() => exportXlsx('risk', riskData, 'Vehicle Risk Matrix')}

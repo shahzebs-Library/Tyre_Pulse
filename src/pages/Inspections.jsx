@@ -594,7 +594,7 @@ export default function Inspections() {
         deleted += data?.length ?? 0
       }
       if (deleted === 0) {
-        throw new Error('No rows were deleted — you may not have permission (Admin only) or they were already removed.')
+        throw new Error('No rows were deleted. You may not have permission (Admin only) or they were already removed.')
       }
       setBulkDeleteOpen(false)
       setSelectedIds(new Set())
@@ -652,7 +652,7 @@ export default function Inspections() {
     setClError(null)
     setClOffline(false)
     const payload = {
-      title: `Daily Tyre Inspection - ${clSite || clAsset} - ${clDate}`,
+      title: `Daily Tyre Inspection: ${clSite || clAsset}, ${clDate}`,
       inspection_type: 'Routine',
       site: clSite,
       asset_no: clAsset.trim(),
@@ -697,7 +697,7 @@ export default function Inspections() {
           setClError('Failed to queue offline. Please try again.')
         }
       } else {
-        setClError(error?.message || 'Save failed - please try again.')
+        setClError(error?.message || 'Save failed. Please try again.')
         vibrate(300)
       }
     }
@@ -1124,7 +1124,7 @@ export default function Inspections() {
                   <button
                     onClick={async () => {
                       await shareOrCopy({
-                        title: `TyrePulse Inspection - ${clSaved.asset_no}`,
+                        title: `TyrePulse Inspection: ${clSaved.asset_no}`,
                         text: `Daily tyre inspection for ${clSaved.asset_no} on ${clSaved.scheduled_date} completed. ${clPositions.filter(p => p.condition === 'Puncture' || p.condition === 'Damage').length} critical tyre(s) flagged.`,
                       })
                     }}
@@ -1195,7 +1195,7 @@ export default function Inspections() {
                         await supabase.functions.invoke('send-email', {
                           body: {
                             to: clApproverEmail,
-                            subject: `Inspection Approval Required - Asset ${clSaved.asset_no || clAsset}`,
+                            subject: `Inspection Approval Required: Asset ${clSaved.asset_no || clAsset}`,
                             body: buildApprovalEmailHtml({
                               assetNo: clSaved.asset_no || clAsset,
                               inspector: clInspector || profile?.full_name || '',
@@ -2049,7 +2049,7 @@ export default function Inspections() {
               />
               {wfLocked && (
                 <div className="mt-2 flex items-center gap-1.5 text-xs text-amber-400">
-                  <AlertTriangle size={12} /> Locked — in approval
+                  <AlertTriangle size={12} /> Locked, in approval
                 </div>
               )}
             </div>
@@ -2261,7 +2261,7 @@ export default function Inspections() {
             <button onClick={() => { setForm(null); setSaveError(null) }} className="btn-secondary flex-1">{t('common.cancel')}</button>
             <button onClick={save}
               disabled={wfLocked || saving || !form.title?.trim() || !form.site?.trim() || !form.scheduled_date}
-              title={wfLocked ? 'Locked — in approval' : undefined}
+              title={wfLocked ? 'Locked, in approval' : undefined}
               className="btn-primary flex-1 disabled:opacity-50">
               {saving ? t('common.saving') : form.id ? t('inspections.modal.saveChanges') : t('common.add')}
             </button>

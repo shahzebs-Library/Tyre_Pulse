@@ -91,7 +91,7 @@ export default function AccessControlMatrix({ canEdit }) {
     try {
       const n = await saveModulePermissions(changes)
       setPerms(structuredClone(draft))
-      setMsg(`Saved — ${n} access change${n !== 1 ? 's' : ''} applied. Affected users see it on their next load.`)
+      setMsg(`Saved. ${n} access change${n !== 1 ? 's' : ''} applied. Affected users see it on their next load.`)
     } catch (e) {
       setError(e.message || 'Could not save access changes.')
     } finally {

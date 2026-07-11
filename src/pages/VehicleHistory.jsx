@@ -94,7 +94,7 @@ function computeLocalRedFlags(assetRecords) {
           severity: 'high',
           record_ids: [r.id],
           records: [r],
-          message: `Suspiciously low mileage: tyre removed after only ${km} km - possible theft or misuse`,
+          message: `Suspiciously low mileage: tyre removed after only ${km} km, possible theft or misuse`,
           detail: `Asset ${r.asset_no}, fitment: ${kmFit} km, removal: ${kmRem} km on ${r.issue_date}`,
         })
       }
@@ -114,7 +114,7 @@ function computeLocalRedFlags(assetRecords) {
           severity: 'high',
           record_ids: [prev.id, curr.id],
           records: [prev, curr],
-          message: `Odometer inconsistency detected: km readings are not sequential - possible tampering`,
+          message: `Odometer inconsistency detected: km readings are not sequential, possible tampering`,
           detail: `Previous removal: ${prevRem} km (${prev.issue_date}), next fitment: ${currFit} km (${curr.issue_date})`,
         })
       }
@@ -186,7 +186,7 @@ function computeFleetPolicyFlags(assetRecords, fleetRecord) {
             severity: 'high',
             record_ids: [r.id],
             records: [r],
-            message: `Tyre removed after only ${km.toLocaleString()} km - below 40% of policy threshold (${Math.round(threshold).toLocaleString()} km)`,
+            message: `Tyre removed after only ${km.toLocaleString()} km, below 40% of policy threshold (${Math.round(threshold).toLocaleString()} km)`,
             detail: `Expected: ${fleetRecord.expected_km_per_tyre.toLocaleString()} km, actual: ${km.toLocaleString()} km on ${r.issue_date}`,
           })
         }

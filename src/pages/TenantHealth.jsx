@@ -195,7 +195,7 @@ export default function TenantHealth() {
     <div className="flex flex-col gap-6">
       <PageHeader
         title="Tenant Health"
-        subtitle={`Platform usage, adoption, and cost — last ${WINDOW_DAYS} days`}
+        subtitle={`Platform usage, adoption, and cost, last ${WINDOW_DAYS} days`}
         icon={Building2}
       />
 
@@ -246,7 +246,7 @@ export default function TenantHealth() {
 
       {/* Activity trend */}
       <Section
-        title={`Activity — events per day (${WINDOW_DAYS}d)`}
+        title={`Activity: events per day (${WINDOW_DAYS}d)`}
         icon={Activity}
         slice={activity}
         loading={loading}
@@ -332,7 +332,7 @@ export default function TenantHealth() {
           slice={ai}
           loading={loading}
           emptyText={ai?.status === 'ok' && ai.data.totalCalls === 0
-            ? 'No AI usage logged yet — ai_token_logs is empty. Spend will appear here once AI features start writing token logs.'
+            ? 'No AI usage logged yet. ai_token_logs is empty. Spend will appear here once AI features start writing token logs.'
             : null}
         >
           <DayBars data={ai?.data?.costPerDay} dataKey="cost" height={64} />
@@ -355,7 +355,7 @@ export default function TenantHealth() {
           slice={adoption}
           loading={loading}
           emptyText={adoption?.status === 'ok' && adoption.data.length === 0
-            ? 'No module activity in this window — adoption is derived from audit log activity.'
+            ? 'No module activity in this window. Adoption is derived from audit log activity.'
             : null}
         >
           <BarList

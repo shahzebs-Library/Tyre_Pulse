@@ -611,7 +611,7 @@ export default function PredictiveMaintenance() {
         { key: 'estimated_cost', header: 'Est. Cost' },
         { key: 'days_away',      header: 'Days Away' },
       ],
-      'Predictive Maintenance - Upcoming Tyre Replacements',
+      'Predictive Maintenance: Upcoming Tyre Replacements',
       `Predictive_Maintenance_${new Date().toISOString().slice(0,10)}`,
       'landscape',
     )
@@ -656,7 +656,7 @@ export default function PredictiveMaintenance() {
           <div className="flex items-center gap-2 flex-wrap">
             {!fleetMasterAvailable && (
               <span className="text-xs text-amber-400 border border-amber-800/40 bg-amber-900/20 px-2 py-1 rounded-lg">
-                Fleet master unavailable - using tyre records only
+                Fleet master unavailable, using tyre records only
               </span>
             )}
             <button onClick={handleExcelExport} className="btn-secondary flex items-center gap-2 text-xs px-3 py-1.5">
@@ -968,7 +968,7 @@ export default function PredictiveMaintenance() {
           {siteBreakdown.length > 0 && (
             <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-4">
               <div className="mb-4">
-                <h2 className="text-sm font-semibold text-[var(--text-primary)]">Site Breakdown - 12-Month Forecast</h2>
+                <h2 className="text-sm font-semibold text-[var(--text-primary)]">Site Breakdown: 12-Month Forecast</h2>
                 <p className="text-xs text-[var(--text-muted)]">Replacement demand and budget allocation by site</p>
               </div>
               <div className="overflow-x-auto">

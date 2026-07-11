@@ -1098,7 +1098,7 @@ export default function PressureIntelligence() {
                 {anomalies.length === 0 ? (
                   <div className="flex flex-col items-center py-12 gap-2">
                     <CheckCircle size={28} className="text-green-500" />
-                    <p className="text-gray-400 text-sm">No pressure anomalies detected - full compliance!</p>
+                    <p className="text-gray-400 text-sm">No pressure anomalies detected, full compliance!</p>
                   </div>
                 ) : (
                   <>

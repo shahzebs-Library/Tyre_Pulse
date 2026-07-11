@@ -444,7 +444,7 @@ export default function WarrantyTracker() {
 
   const handleSave = useCallback(async () => {
     // Editing an in-approval / approved claim is blocked — the workflow owns it.
-    if (editClaim && claimLocked) { setFormError('Locked — in approval. Edits are disabled while an approval is running or the claim is approved.'); return }
+    if (editClaim && claimLocked) { setFormError('Locked, in approval. Edits are disabled while an approval is running or the claim is approved.'); return }
     if (!form.serial_number.trim()) { setFormError('Serial number is required.'); return }
     if (!form.brand.trim()) { setFormError('Brand is required.'); return }
     if (!form.failure_type) { setFormError('Failure type is required.'); return }
@@ -496,7 +496,7 @@ export default function WarrantyTracker() {
     // edit modal — a document under approval must not be removed out from under
     // the workflow (server RLS/RPCs remain the hard boundary).
     if (editClaim?.id === id && claimLocked) {
-      window.alert('Locked — in approval. This claim cannot be deleted while an approval is running or the claim is approved.')
+      window.alert('Locked, in approval. This claim cannot be deleted while an approval is running or the claim is approved.')
       return
     }
     if (!window.confirm('Delete this warranty claim?')) return
@@ -943,7 +943,7 @@ export default function WarrantyTracker() {
                                       <button
                                         onClick={() => handleDelete(c.id)}
                                         disabled={editClaim?.id === c.id && claimLocked}
-                                        title={editClaim?.id === c.id && claimLocked ? 'Locked — in approval' : undefined}
+                                        title={editClaim?.id === c.id && claimLocked ? 'Locked, in approval' : undefined}
                                         className="flex items-center gap-1.5 px-3 py-1.5 bg-red-900/30 hover:bg-red-800/40 border border-red-800/50 rounded-lg text-red-400 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                                       >
                                         {editClaim?.id === c.id && claimLocked ? <Lock size={12} /> : <XCircle size={12} />} Delete
@@ -1266,7 +1266,7 @@ export default function WarrantyTracker() {
                     {claimLocked && (
                       <div className="p-3 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg text-xs text-[var(--text-muted)] flex items-center gap-2">
                         <Lock size={13} className="text-[var(--accent)]" />
-                        Locked — in approval. Edits, status changes, and deletion are disabled while this claim is under approval or approved.
+                        Locked, in approval. Edits, status changes, and deletion are disabled while this claim is under approval or approved.
                       </div>
                     )}
                   </>
@@ -1410,7 +1410,7 @@ export default function WarrantyTracker() {
                     Cancel
                   </button>
                   <button onClick={handleSave} disabled={saving || claimLocked}
-                    title={claimLocked ? 'Locked — in approval' : undefined}
+                    title={claimLocked ? 'Locked, in approval' : undefined}
                     className="btn-primary gap-2 disabled:opacity-50">
                     {claimLocked ? <Lock size={14} /> : saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
                     {editClaim ? 'Update Claim' : 'Save Claim'}

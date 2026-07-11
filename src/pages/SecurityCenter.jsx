@@ -372,7 +372,7 @@ export default function SecurityCenter() {
                     <td colSpan={4} className="text-center py-12 text-[var(--text-muted)]">
                       No login events recorded yet.
                       <span className="block text-xs mt-1 text-[var(--text-dim)]">
-                        Sign-in/sign-out auditing records new events from now on — history builds up as users log in.
+                        Sign-in/sign-out auditing records new events from now on. History builds up as users log in.
                       </span>
                     </td>
                   </tr>
@@ -401,7 +401,7 @@ export default function SecurityCenter() {
           <div className="p-5 border-b border-[var(--input-border)]">
             <h2 className="text-h4 flex items-center gap-2"><Database className="w-4 h-4 text-brand-bright" /> Security events</h2>
             <p className="text-xs text-[var(--text-muted)] mt-1">
-              Deletes, exports, uploads and bulk operations from the audit trail — last {SECURITY_EVENT_WINDOW_DAYS} days.
+              Deletes, exports, uploads and bulk operations from the audit trail, last {SECURITY_EVENT_WINDOW_DAYS} days.
             </p>
           </div>
           {eventsError ? (
@@ -452,7 +452,7 @@ export default function SecurityCenter() {
             icon={UserCheck}
             title="Admin approval gate"
             status="ok" statusLabel="Active"
-            detail="New accounts cannot sign in until an admin approves them — unapproved and locked accounts are signed out immediately."
+            detail="New accounts cannot sign in until an admin approves them. Unapproved and locked accounts are signed out immediately."
           />
           <ChecklistItem
             icon={Lock}
@@ -464,7 +464,7 @@ export default function SecurityCenter() {
             icon={Database}
             title="Row Level Security (RLS)"
             status="ok" statusLabel="Enforced"
-            detail="Data access is enforced at the database layer by Supabase RLS policies — the UI role gating is a convenience on top, not the boundary."
+            detail="Data access is enforced at the database layer by Supabase RLS policies. The UI role gating is a convenience on top, not the boundary."
           />
           <ChecklistItem
             icon={Clock}

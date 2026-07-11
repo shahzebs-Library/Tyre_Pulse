@@ -152,14 +152,14 @@ export default function CountryAddressPanel({ canEdit }) {
           </div>
           <div>
             <h3 className="text-sm font-semibold text-gray-100">Country Addresses</h3>
-            <p className="text-xs text-gray-500">One registered address per operating country — used on that country's reports, gate passes and procurement documents.</p>
+            <p className="text-xs text-gray-500">One registered address per operating country, used on that country's reports, gate passes and procurement documents.</p>
           </div>
         </div>
       </div>
 
       {!canEdit && (
         <div className="flex items-center gap-2 text-xs text-amber-300 bg-amber-500/10 border border-amber-500/20 rounded-lg px-3 py-2">
-          <AlertTriangle size={14} /> Read-only — only an organisation admin can edit country addresses.
+          <AlertTriangle size={14} /> Read-only. Only an organisation admin can edit country addresses.
         </div>
       )}
 
@@ -181,7 +181,7 @@ export default function CountryAddressPanel({ canEdit }) {
             const m = meta[country] || {}
             const dirty = isDirty(country)
             const expanded = open === country
-            const preview = formatAddressLine(form) || 'No address — inherits organisation address'
+            const preview = formatAddressLine(form) || 'No address, inherits organisation address'
             const badge = m.saved
               ? { text: 'Custom', cls: 'bg-emerald-900/40 text-emerald-300 border-emerald-700/40' }
               : { text: 'From org', cls: 'bg-slate-800/60 text-slate-300 border-slate-600/40' }

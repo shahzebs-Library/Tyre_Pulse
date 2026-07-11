@@ -54,7 +54,7 @@ const SMART_DEFAULTS = [
     min_speed_index: 'L',
     recommended_pressure: 110,
     min_tread_depth: 3,
-    notes: 'Drive axle - dual fitment. Deep traction pattern recommended',
+    notes: 'Drive axle, dual fitment. Deep traction pattern recommended',
   },
   {
     vehicle_type: 'Semi-Trailer',
@@ -76,7 +76,7 @@ const SMART_DEFAULTS = [
     min_speed_index: 'M',
     recommended_pressure: 115,
     min_tread_depth: 3,
-    notes: 'Mixer steer - higher payload consideration',
+    notes: 'Mixer steer, higher payload consideration',
   },
   {
     vehicle_type: 'Tipper',
@@ -87,7 +87,7 @@ const SMART_DEFAULTS = [
     min_speed_index: 'L',
     recommended_pressure: 110,
     min_tread_depth: 4,
-    notes: 'Tipper drive - aggressive pattern for off-road conditions',
+    notes: 'Tipper drive, aggressive pattern for off-road conditions',
   },
   {
     vehicle_type: 'Bus',
@@ -495,7 +495,7 @@ function DeleteConfirmModal({ spec, onClose, onConfirm }) {
             <h3 className="text-[var(--text-primary)] font-semibold">Delete Specification</h3>
           </div>
           <p className="text-[var(--text-muted)] text-sm mb-2">
-            Delete <span className="text-[var(--text-primary)] font-medium">{spec?.vehicle_type} - {spec?.position}</span>?
+            Delete <span className="text-[var(--text-primary)] font-medium">{spec?.vehicle_type}, {spec?.position}</span>?
           </p>
           <p className="text-[var(--text-muted)] text-xs mb-6">This action cannot be undone. Compliance records will show "No Spec Defined" for affected vehicles.</p>
           <div className="flex justify-end gap-3">
@@ -578,7 +578,7 @@ function RaiseWorkOrderModal({ asset, violations, country, createdBy, onClose })
                 </div>
                 <h3 className="text-[var(--text-primary)] font-semibold">Raise Work Order</h3>
               </div>
-              <p className="text-[var(--text-muted)] text-sm mb-2">Asset: <span className="text-[var(--text-primary)]">{asset.asset_no}</span> - Site: <span className="text-[var(--text-primary)]">{asset.site}</span></p>
+              <p className="text-[var(--text-muted)] text-sm mb-2">Asset: <span className="text-[var(--text-primary)]">{asset.asset_no}</span>, Site: <span className="text-[var(--text-primary)]">{asset.site}</span></p>
               <div className="bg-[var(--input-bg)] rounded-lg p-3 mb-4 space-y-1">
                 {violations.map((v, i) => (
                   <div key={i} className="flex items-center gap-2 text-xs text-orange-300">
@@ -1429,7 +1429,7 @@ export default function TyreSpecifications() {
               <div className="px-4 py-3 border-b border-[var(--input-border)] flex items-center justify-between">
                 <p className="text-[var(--text-primary)] font-medium text-sm flex items-center gap-2">
                   <AlertOctagon size={15} className="text-red-400" />
-                  Non-Conformance Report - Grouped by Asset
+                  Non-Conformance Report, Grouped by Asset
                 </p>
                 <span className="text-[var(--text-muted)] text-xs">{nonConformanceByAsset.length} vehicles with violations</span>
               </div>

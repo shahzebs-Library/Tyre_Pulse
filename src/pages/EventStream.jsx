@@ -185,7 +185,7 @@ export default function EventStream() {
             </span>
           </div>
           <p className="text-gray-400 text-sm ml-11">
-            Domain event outbox — auto-refreshes every 30s
+            Domain event outbox, auto-refreshes every 30s
             {lastRefresh && <span className="text-gray-600"> · updated {relativeTime(lastRefresh)}</span>}
           </p>
         </div>
@@ -360,7 +360,7 @@ export default function EventStream() {
           {!loading && count > 0 && (
             <div className="px-4 py-3 border-t border-gray-700 flex items-center justify-between gap-3">
               <p className="text-gray-500 text-xs">
-                {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, count)} of {count.toLocaleString()} events
+                {page * PAGE_SIZE + 1} to {Math.min((page + 1) * PAGE_SIZE, count)} of {count.toLocaleString()} events
               </p>
               <div className="flex items-center gap-2">
                 <button

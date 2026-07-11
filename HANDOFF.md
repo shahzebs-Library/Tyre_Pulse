@@ -3,7 +3,7 @@
 **Branch:** `main` (auto-deploys to Vercel). Session 14 shipped the whole brand/design-system pass across many small feature branches, each `--no-ff` merged to `main` and pushed.
 **Web build status:** ✅ Clean - builds with zero errors (`vite build` green); full suite **1694 tests green**, auto-deploys to Vercel. **Session 15 changes are UNCOMMITTED in the working tree** (19 files modified + 7 new page components + 6 new locale files) - review + commit pending.
 **Mobile build status:** ✅ Expo SDK 54 / RN 0.81.5. Session 13 added **Sentry crash/perf monitoring** + reliability fixes; `expo export --platform android` produces a clean Hermes bundle. Build the distribution APK from `main` with the `production-apk` EAS profile.
-**DB migrations applied to live Supabase:** through **V120** (project `jhssdmeruxtrlqnwfksc`). Session 14 applied **V120** (brand logo placements — extends `set_org_branding`).
+**DB migrations applied to live Supabase:** through **V121** (project `jhssdmeruxtrlqnwfksc`). Session 15 applied **V121** (`normalize_country` preserves unknown countries instead of forcing 'KSA' + drops the `tyre_records.country` DEFAULT 'KSA'). Session 14 applied **V120** (brand logo placements).
 **Live URL under test:** tyre-pulse-peach.vercel.app
 **Active branches:** `main` · dev `claude/erp-sync-hub-roles-od8m1k` (holds 2 **table-standardization** commits deliberately kept OFF `main` — see Session 12 → Held) · dev `claude/mobile-app-ui-features-tdfxy0` · frozen `claude/backend-step2-assets` (Go) · frozen `claude/mobile-kotlin-app` (Kotlin). All other feature branches consolidated into `main` (see `docs/BRANCH_CONSOLIDATION_2026-07-04.md`).
 
@@ -13,7 +13,13 @@
 
 **Theme:** Three reported problems (Country/Site comparison "not working", Retread numbers wrong, Accident page too thin) plus an app-wide UX directive — LARGE modals must become proper routed pages; only small things stay popups. Executed via a swarm of ~14 disjoint-ownership general-purpose/Explore agents (one module each, no shared-file writes — App.jsx wiring done by hand) + integration.
 
-**Gate:** web `vite build` ✅ zero errors (41s) · full suite **1694 tests green** (128 files, was 1685) · **NOT committed** — all changes sit in the working tree on `main`. No DB migration (findings only). No live-DB verification was possible this session (supabase MCP unauthorized) — see per-item live follow-ups.
+**Gate:** web `vite build` ✅ zero errors (41s) · full suite **1694 tests green** (128 files, was 1685) · **committed + pushed to `main`** (`b206ce3` app work, `f378aaa` V121) · **V121 applied live + verified**.
+
+### Live-data verification (ran against prod via Supabase MCP this session)
+- **`normalize_country` fix confirmed live:** `'Saudi Arabia'→KSA`, `'dubai'→UAE`, **`'Qatar'→Qatar` (preserved, no longer coerced to KSA)**, blank/null→null; `tyre_records.country` DEFAULT is now null.
+- **Comparison "not working" is largely a DATA reality, not just the code bug:** `tyre_records` = **1419 rows, ALL `country='KSA'`, 8 sites**. So Country Comparison inherently shows a single country until UAE/Egypt data is imported — the code fix (row-cap removal) is correct but there is only one country of data. **Site** Comparison works (8 sites; use country = All or KSA).
+- **Retread page will render empty against current data:** `category` is null on 1418/1419 rows (1 blank), **0 retread + 0 scrap** rows, no `retread_count` column. The 5 formula fixes are correct but there is no retread data to show — capture retreads as `category` `'Retread'`/`'Retread xN'` (or add a `retread_count` field) to populate it.
+- **Accident intelligence — partially populated (11 accidents, 1 country):** `accident_type` 11/11 and `driver_name` 11/11 → root-cause-by-type + repeat-driver analytics work; but **`liable_party`/`responsible_party` only 1/11** → the at-fault % reads mostly "unknown" (the new data-quality strip surfaces exactly this).
 
 ### 1. Comparison "not working" — root cause found + fixed
 - **CountryComparison.jsx (rewritten):** real bug was a **1000-row cap** — the country-list `useEffect` queried `tyre_records` with no `.range()`/`fetchAllPages`, so with per-country import batches the selector often surfaced one country and auto-selected it → nothing to compare. Now pages the full dataset via `fetchAllPages`, reuses the tested `computeCountryMetrics()` (was hand-rolling inferior math), applies `.eq('country', activeCountry)` scope like every other analytics page, and fixes a wrong i18n key + dead "best value" math. Proper loading/error/empty states.

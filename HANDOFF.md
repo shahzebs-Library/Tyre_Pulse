@@ -1,11 +1,46 @@
 # TyrePulse - Developer Handoff
-**Last updated:** 11 July 2026 (Session 12)
-**Branch:** `main` (auto-deploys to Vercel). Session 12 work was cherry-picked onto the latest `main` and verified together before push.
-**Web build status:** ✅ Clean - builds with zero errors, **1665 tests green**, auto-deploys to Vercel
-**Mobile build status:** ✅ EAS Android build green - **Expo SDK 54 / RN 0.81.5** (Session 12 touched no `mobile/` files)
-**DB migrations applied to live Supabase:** through **V119** (project `jhssdmeruxtrlqnwfksc`). Session 12 applied no migrations (front-end + report changes only).
+**Last updated:** 11 July 2026 (Session 13)
+**Branch:** `main` (auto-deploys to Vercel). Session 13 commits were fast-forwarded onto the latest `main` and pushed.
+**Web build status:** ✅ Clean - builds with zero errors (`vite build` green); anomaly engine **74/74 tests green**, auto-deploys to Vercel
+**Mobile build status:** ✅ Expo SDK 54 / RN 0.81.5. Session 13 added **Sentry crash/perf monitoring** + reliability fixes; `expo export --platform android` produces a clean Hermes bundle. Build the distribution APK from `main` with the `production-apk` EAS profile.
+**DB migrations applied to live Supabase:** through **V119** (project `jhssdmeruxtrlqnwfksc`). Session 13 applied no migrations (deleted one QA test account only).
 **Live URL under test:** tyre-pulse-peach.vercel.app
 **Active branches:** `main` · dev `claude/erp-sync-hub-roles-od8m1k` (holds 2 **table-standardization** commits deliberately kept OFF `main` — see Session 12 → Held) · dev `claude/mobile-app-ui-features-tdfxy0` · frozen `claude/backend-step2-assets` (Go) · frozen `claude/mobile-kotlin-app` (Kotlin). All other feature branches consolidated into `main` (see `docs/BRANCH_CONSOLIDATION_2026-07-04.md`).
+
+---
+
+## Session 13 (11 July 2026) — Mobile checklist UX + reliability, Sentry monitoring, Anomalies restore + workshop-visit analytics
+
+**Theme:** Mobile inspection-checklist fixes + crash monitoring ahead of the distributed APK, and a web Anomalies-page rebuild (rich engine restore + new workshop-visit analytics). Done in the main loop (no worktree agents except one general-purpose agent for the Anomalies rewrite).
+
+**Gate:** web `vite build` ✅ zero errors · anomaly engine **74/74 tests green** · mobile `expo export --platform android` clean Hermes bundle · pushed to `main` (`…→ cb76128`). DB: removed one QA test account (no migration).
+
+### 1. Mobile inspection checklist — UX + reliability (commit `bdfab93`)
+- Site picker → searchable **dropdown** (grouped by country), replacing the chip grid.
+- Tyre-pressure popup now **scrolls** on short/older screens (`flexShrink` + nested scroll) — fixes "can't go up/down on old phone".
+- **Save is instant** — no longer blocks on a fresh GPS capture at submit (uses the fix already warmed on the tyre step).
+- **False "1 file offline" fixed** — only a genuine no-signal save queues silently; a server rejection while online now surfaces a clear "saved on device, will retry" alert instead of a phantom stuck offline file (`expo-network` check in `handleSubmit`).
+- **Wrong-asset guard** — manual asset entry warns when the typed code isn't in the site fleet, with a "did you mean X?" one-tap fix (catches PM↔MP transpositions — the "showed other vehicle" report).
+- **`crypto` ReferenceError fixed** — `crypto.randomUUID()` threw on older Hermes runtimes and aborted submit *before* it could even queue offline (device-dependent "save works sometimes"); replaced with `mobile/lib/ids.ts` `safeUuid()`/`clientId()`. `apiClient.ts` already had a safe local variant.
+- Tyreman ID + date confirmed already read-only/locked-to-today (no change needed). EN/AR/UR strings added.
+
+### 2. Mobile crash/perf monitoring — Sentry (commit `162fb06`)
+- `@sentry/react-native` 7.2.0 + Expo config plugin + `mobile/metro.config.js` (`getSentryExpoConfig`). **Env-driven DSN** (`EXPO_PUBLIC_SENTRY_DSN`) via `mobile/lib/sentry.ts`: inert without a DSN, reports only from release builds (`enabled: !__DEV__`), operator tagged on login/logout. React render errors report through the existing `ErrorBoundary` — **deliberately NOT `Sentry.wrap()` on the expo-router root `_layout`** (it detaches the `AuthProvider` tree → "useAuth must be used within AuthProvider").
+- **Key hardening:** `eas.json` (all profiles) + `app.json` `extra` fallback switched from the **legacy JWT** anon key to the new `sb_publishable_…` key (matches `.env`; avoids breakage if Supabase disables legacy JWT auth).
+- **Sentry is ACTIVE** using the shared `shah-profile / javascript-nextjs` project DSN (org policy `403` blocks creating a dedicated RN project via API). Mobile events tag `platform=react-native` + `environment`. **Follow-up:** create a dedicated RN project in the Sentry UI and swap the DSN in `eas.json` (×3) + `app.json`.
+
+### 3. Web Anomalies page — restore rich detection + add workshop-visit analytics (commits `396fc36`, `cb76128`)
+- **Regression fixed:** the page had been reduced to 3 flat buckets (cost/duplicate/missing-data) via a thin local deriver, leaving the tested `src/lib/anomalyEngine.js` unused. Rewired to `detectAnomalies()` → all **6 detectors** (Short Interval, Same-Day Burst, Rapid Recurrence, Cost Spike, Serial Reuse, Exact Duplicate) with severity + plain-English message + explanation + record drill-down; kept a supplementary **Data-Quality** group. Severity KPI cards + per-type filter chips.
+- **Vehicle/serial/site search** restored (the old search-first drill-down).
+- **Workshop-visit analytics (new):** `computeVisitStats()` + `detectVisitFrequency()` added to `anomalyEngine.js` (**additive** — existing exports untouched, so Vehicle History / AI Analytics unaffected). A **"Workshop Visits"** view toggle: KPIs (visits this week / month / total / busiest vehicle) + a sortable, exportable per-vehicle table (total · weekly · monthly · 90d · **peak/90d** · **rate/mo** · last visit · total cost). A "visit" = an asset at the shop on a day (tyre-change events **unioned with `work_orders`**, deduped). New **FREQUENT_VISITS** anomaly flags vehicles returning abnormally often (≥3 visits/90d = High, ≥4 lifetime = Medium). Built on real data (1,394 tyre events, 412 vehicles). Engine tests **+9 (74/74)**.
+
+### 4. Data — QA test account removed
+- Deleted the mobile QA account `qatyreman` (auth user + profile + identity) from live Supabase — a known-password backdoor with 0 records. Verified 0/0/0. No migration.
+
+### Notes / follow-ups (owner action)
+- **Sentry:** create a dedicated Sentry React Native project (org `shah-profile`) and swap its DSN into `eas.json` (×3) + `app.json` so mobile crashes don't share the web (`javascript-nextjs`) project.
+- **APK:** build from `main` with the `production-apk` EAS profile → monitoring live from first install.
+- **Emulator note (dev-only, not app):** this 16 GB Windows box can't run Android Studio + emulator + Metro together (RAM/ANRs); keep the AVD at ~2048 MB. A stale Metro cache once masqueraded as a login bug — fix is `expo start -c` after killing orphaned `node` processes. See memory `mobile_metro_stale_bundle`.
 
 ---
 

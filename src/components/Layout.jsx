@@ -18,6 +18,24 @@ import {
   Recycle, Radio, PackagePlus, CalendarCheck2, BellRing, Brain, BarChart, Download,
   Webhook, CheckSquare, CreditCard, Palette,
 } from 'lucide-react'
+// Branded domain icons (custom Tyre Pulse set) for the clearest fleet/tyre nav
+// items. Same ({ size, strokeWidth }) API as Lucide, so they drop straight in.
+import TyreIc from './icons/tyre.icon'
+import TruckIc from './icons/truck.icon'
+import ScrapBinIc from './icons/scrap-bin.icon'
+import TyreRotationIc from './icons/tyre-rotation.icon'
+import PlyRatingIc from './icons/ply-rating.icon'
+import PsiGaugeIc from './icons/psi-gauge.icon'
+import FuelPumpIc from './icons/fuel-pump.icon'
+import WorkOrderIc from './icons/work-order.icon'
+import GatePassIc from './icons/gate-pass.icon'
+import WorkshopIc from './icons/workshop.icon'
+import SupplierTruckIc from './icons/supplier-truck.icon'
+import PurchaseOrderIc from './icons/purchase-order.icon'
+import TyreSwapIc from './icons/tyre-swap.icon'
+import AnomalyScanIc from './icons/anomaly-scan.icon'
+import ForecastTrendIc from './icons/forecast-trend.icon'
+import ServiceCalendarIc from './icons/service-calendar.icon'
 import { supabase } from '../lib/supabase'
 import { detectAlerts, countAlertsBySeverity } from '../lib/alertEngine'
 import { syncPendingInspections, getPendingCount, getFailedCount, getFailedInspections, retryFailedInspection } from '../lib/offlineQueue'
@@ -58,13 +76,13 @@ const NAV_GROUPS = [
     label: 'Overview',
     items: [
       { to: '/',      label: 'Dashboard',    icon: LayoutDashboard, end: true },
-      { to: '/tyres', label: 'Tyre Records', icon: CircleDot },
+      { to: '/tyres', label: 'Tyre Records', icon: TyreIc },
     ],
   },
   {
     label: 'Operations',
     items: [
-      { to: '/fleet-master',        label: 'Fleet Master',       icon: Truck },
+      { to: '/fleet-master',        label: 'Fleet Master',       icon: TruckIc },
       { to: '/assets',              label: 'Asset Management',   icon: LayoutGrid },
       { to: '/actions',             label: 'Corrective Actions', icon: ClipboardList },
       { to: '/rca',                 label: 'Root Cause',         icon: Search },
@@ -73,7 +91,7 @@ const NAV_GROUPS = [
       { to: '/serial-tracker',      label: 'Serial Tracker',     icon: ScanLine, adminOnly: A },
       { to: '/qr-labels',           label: 'QR Labels',          icon: QrCode, adminOnly: A },
       { to: '/vehicle-history',     label: 'Vehicle History',    icon: Car, adminOnly: A },
-      { to: '/anomalies',           label: 'Anomaly Scan',       icon: AlertTriangle, adminOnly: A },
+      { to: '/anomalies',           label: 'Anomaly Scan',       icon: AnomalyScanIc, adminOnly: A },
       { to: '/maintenance-calendar', label: 'Maintenance Calendar', icon: Calendar, adminOnly: A },
       { to: '/erp-sync',            label: 'ERP Sync',           icon: Database, roles: ERP_ROLES },
     ],
@@ -89,25 +107,25 @@ const NAV_GROUPS = [
       { to: '/country-comp', label: 'Country Comparison', icon: Globe,          roles: ANALYTICS_ROLES },
       { to: '/comparison',   label: 'Comparison',         icon: GitCompare,     roles: ANALYTICS_ROLES },
       { to: '/position-intelligence',  label: 'Position Intelligence',  icon: MapPin, adminOnly: A },
-      { to: '/pressure-intel',         label: 'Pressure Intelligence',  icon: Gauge, adminOnly: A },
-      { to: '/predictive-maintenance', label: 'Predictive Maintenance', icon: CalendarClock, adminOnly: A },
+      { to: '/pressure-intel',         label: 'Pressure Intelligence',  icon: PsiGaugeIc, adminOnly: A },
+      { to: '/predictive-maintenance', label: 'Predictive Maintenance', icon: ServiceCalendarIc, adminOnly: A },
       { to: '/benchmark',              label: 'Performance Benchmark',  icon: Target, adminOnly: A },
       { to: '/tyre-size',              label: 'Size Optimizer',         icon: Layers, adminOnly: A },
       { to: '/tyre-lifecycle',         label: 'Tyre Lifecycle',         icon: RefreshCw, adminOnly: A },
-      { to: '/tyre-exchange',          label: 'Tyre Exchange',          icon: ArrowLeftRight, adminOnly: A },
-      { to: '/tyre-specs',             label: 'Tyre Specifications',    icon: FileWarning, adminOnly: A },
-      { to: '/rotation',               label: 'Rotation Schedule',      icon: RotateCcw, adminOnly: A },
+      { to: '/tyre-exchange',          label: 'Tyre Exchange',          icon: TyreSwapIc, adminOnly: A },
+      { to: '/tyre-specs',             label: 'Tyre Specifications',    icon: PlyRatingIc, adminOnly: A },
+      { to: '/rotation',               label: 'Rotation Schedule',      icon: TyreRotationIc, adminOnly: A },
       { to: '/ai',                     label: 'Smart Analytics',        icon: Sparkles, adminOnly: A },
     ],
   },
   {
     label: 'Workshop & Downtime',
     items: [
-      { to: '/work-orders',     label: 'Work Orders',        icon: Wrench },
-      { to: '/gate-pass',       label: 'Gate Pass',          icon: ShieldCheck },
-      { to: '/workshop',        label: 'Workshop Management', icon: Wrench, adminOnly: A },
+      { to: '/work-orders',     label: 'Work Orders',        icon: WorkOrderIc },
+      { to: '/gate-pass',       label: 'Gate Pass',          icon: GatePassIc },
+      { to: '/workshop',        label: 'Workshop Management', icon: WorkshopIc, adminOnly: A },
       { to: '/downtime',        label: 'Downtime Tracker',   icon: Clock, adminOnly: A },
-      { to: '/fuel-efficiency', label: 'Fuel Efficiency',    icon: Fuel, adminOnly: A },
+      { to: '/fuel-efficiency', label: 'Fuel Efficiency',    icon: FuelPumpIc, adminOnly: A },
     ],
   },
   {
@@ -115,12 +133,12 @@ const NAV_GROUPS = [
     items: [
       { to: '/stock',               label: 'Stock',               icon: Package },
       { to: '/stock-replenishment', label: 'Stock Replenishment', icon: PackagePlus },
-      { to: '/scrap',               label: 'Scrap Management',    icon: FileWarning },
+      { to: '/scrap',               label: 'Scrap Management',    icon: ScrapBinIc },
       { to: '/budgets',             label: 'Budgets & Cost',      icon: DollarSign },
-      { to: '/procurement',         label: 'Procurement',         icon: ShoppingCart, adminOnly: A },
-      { to: '/suppliers',           label: 'Supplier Management', icon: Users, adminOnly: A },
+      { to: '/procurement',         label: 'Procurement',         icon: PurchaseOrderIc, adminOnly: A },
+      { to: '/suppliers',           label: 'Supplier Management', icon: SupplierTruckIc, adminOnly: A },
       { to: '/vendor-intelligence', label: 'Vendor Intelligence', icon: Trophy, adminOnly: A },
-      { to: '/forecasting',         label: 'Forecasting Engine',  icon: TrendingUp, adminOnly: A },
+      { to: '/forecasting',         label: 'Forecasting Engine',  icon: ForecastTrendIc, adminOnly: A },
     ],
   },
   {

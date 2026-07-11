@@ -206,7 +206,7 @@ function LogosSection() {
               title={`Click to copy id: ${l.id}`}
               className="group card !p-0 overflow-hidden text-left hover:border-green-700/50 transition-colors"
             >
-              <div className="h-32 flex items-center justify-center bg-[var(--bg-base)] border-b border-[var(--input-border)]/60 p-4 checker">
+              <div className="h-32 flex items-center justify-center border-b border-[var(--input-border)]/60 p-4 checker">
                 {url ? (
                   <img
                     src={url}

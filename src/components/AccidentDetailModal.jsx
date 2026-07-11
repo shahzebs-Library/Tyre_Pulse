@@ -13,17 +13,20 @@
  * backward compatibility but is no longer used by the Accidents page.
  */
 
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo, useId } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import {
   X, Save, Plus, Trash2, Send, Lock, CheckCircle2, XCircle,
   ShieldCheck, Hourglass, FileText, Wrench, MessageSquare, Briefcase, History, User, ClipboardList,
-  ArrowLeft, AlertOctagon, ChevronRight,
+  ArrowLeft, AlertOctagon, ChevronRight, Download, Loader2,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { useSettings } from '../contexts/SettingsContext'
+import { useTenant } from '../contexts/TenantContext'
+import { useSites } from '../hooks/useSites'
 import { formatCurrency as _fmtCurrencyBase } from '../lib/formatters'
+import { exportAccidentCasePdf } from '../lib/exportUtils'
 import { describeAuditRow } from '../lib/auditDiff'
 import { resolveStorageUrls } from '../lib/storageRefs'
 import CustomFieldsPanel from './CustomFieldsPanel'
@@ -87,6 +90,19 @@ function isElevated(role) {
   return ['admin', 'manager', 'director'].includes(String(role || '').toLowerCase().replace(/\s+/g, '_'))
 }
 
+// Suggested vocabularies for the case tracker. Rendered as datalist dropdowns —
+// operators pick a common value fast but can still type a bespoke one.
+const CASE_STAGE_OPTIONS = [
+  'Reported', 'Internal Report Preparation', 'Under Investigation', 'Insurance Filed',
+  'Awaiting Assessment', 'Under Repair', 'Awaiting Parts', 'Repair Completed',
+  'Claim Settlement', 'Closed',
+]
+const DAMAGE_CONDITION_OPTIONS = ['Minor', 'Moderate', 'Major Repair', 'Total Loss', 'Cosmetic', 'Structural']
+const CURRENT_STATUS_OPTIONS = [
+  'Reported', 'Under Investigation', 'Under Repair', 'Awaiting Parts',
+  'Awaiting Approval', 'Insurance Claim', 'Repair Completed', 'Closed',
+]
+
 const TABS = [
   { key: 'overview', label: 'Overview', icon: FileText },
   { key: 'tracker',  label: 'Tracker', icon: ClipboardList },
@@ -120,8 +136,11 @@ export default function AccidentDetailPage() {
 function AccidentDetail({ accidentId, onBack, onClose, onChanged, variant = 'page' }) {
   const { profile } = useAuth()
   const { activeCurrency } = useSettings()
+  const { branding } = useTenant()
+  const company = branding?.legal_name || branding?.display_name || 'TyrePulse'
   const elevated = isElevated(profile?.role)
   const fmtCurrency = (v) => _fmtCurrencyBase(v, activeCurrency, 0)
+  const [downloading, setDownloading] = useState(false)
 
   const [tab, setTab] = useState('overview')
   const [acc, setAcc] = useState(null)
@@ -154,8 +173,21 @@ function AccidentDetail({ accidentId, onBack, onClose, onChanged, variant = 'pag
 
   useEffect(() => { setLoading(true); setErr(''); load() }, [load])
 
+  const { options: siteOptions } = useSites(acc?.country)
   const closure = acc?.closure_status ?? 'open'
   const partsTotal = parts.reduce((s, p) => s + (Number(p.total_cost) || 0), 0)
+
+  const downloadCase = useCallback(async () => {
+    if (!acc) return
+    setDownloading(true); setErr('')
+    try {
+      await exportAccidentCasePdf(acc, { parts, remarks, branding, company, fmtCurrency })
+    } catch (e) {
+      setErr(e?.message || 'Could not generate the case PDF.')
+    } finally {
+      setDownloading(false)
+    }
+  }, [acc, parts, remarks, branding, company]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Live financial rail — gross cost, recovered, net exposure.
   const money = useMemo(() => {
@@ -245,12 +277,12 @@ function AccidentDetail({ accidentId, onBack, onClose, onChanged, variant = 'pag
         {tab === 'overview'  && (
           <div className="space-y-4">
             <CopilotCard task="summarize_accident" context={{ accident: acc, remarks, parts }} />
-            <OverviewTab acc={acc} />
+            <OverviewTab acc={acc} fmtCurrency={fmtCurrency} />
           </div>
         )}
-        {tab === 'tracker'   && <TrackerTab acc={acc} elevated={elevated} onSaved={() => { load(); onChanged?.() }} setErr={setErr} />}
-        {tab === 'claim'     && <ClaimTab acc={acc} elevated={elevated} onSaved={() => { load(); onChanged?.() }} setErr={setErr} />}
-        {tab === 'parts'     && <PartsTab acc={acc} parts={parts} partsTotal={partsTotal} elevated={elevated} profile={profile} reload={() => { load(); onChanged?.() }} setErr={setErr} />}
+        {tab === 'tracker'   && <TrackerTab acc={acc} elevated={elevated} siteOptions={siteOptions} onSaved={() => { load(); onChanged?.() }} setErr={setErr} />}
+        {tab === 'claim'     && <ClaimTab acc={acc} elevated={elevated} onSaved={() => { load(); onChanged?.() }} setErr={setErr} fmtCurrency={fmtCurrency} />}
+        {tab === 'parts'     && <PartsTab acc={acc} parts={parts} partsTotal={partsTotal} elevated={elevated} profile={profile} reload={() => { load(); onChanged?.() }} setErr={setErr} fmtCurrency={fmtCurrency} />}
         {tab === 'log'       && <LogTab acc={acc} remarks={remarks} profile={profile} reload={load} setErr={setErr} />}
         {tab === 'activity'  && <ActivityTab accidentId={acc.id} />}
         {tab === 'closure'   && (
@@ -296,13 +328,24 @@ function AccidentDetail({ accidentId, onBack, onClose, onChanged, variant = 'pag
   const status = canonStatus(acc.status)
   return (
     <div className="space-y-4 pb-24">
-      {/* Breadcrumb + back */}
-      <div className="flex items-center gap-2 text-xs text-[var(--text-muted)]">
-        <button onClick={dismiss} className="inline-flex items-center gap-1 hover:text-[var(--text-primary)] transition-colors">
-          <ArrowLeft size={13} /> Accidents
+      {/* Breadcrumb + back + case actions */}
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div className="flex items-center gap-2 text-xs text-[var(--text-muted)]">
+          <button onClick={dismiss} className="inline-flex items-center gap-1 hover:text-[var(--text-primary)] transition-colors">
+            <ArrowLeft size={13} /> Accidents
+          </button>
+          <ChevronRight size={12} />
+          <span className="text-[var(--text-dim)]">{acc.asset_no || 'Incident'} · #{String(acc.id).slice(0, 8).toUpperCase()}</span>
+        </div>
+        <button
+          onClick={downloadCase}
+          disabled={downloading}
+          className="btn-secondary text-xs inline-flex items-center gap-1.5 disabled:opacity-60"
+          title="Download the full case as a branded PDF"
+        >
+          {downloading ? <Loader2 size={13} className="animate-spin" /> : <Download size={13} />}
+          {downloading ? 'Preparing…' : 'Download Case'}
         </button>
-        <ChevronRight size={12} />
-        <span className="text-[var(--text-dim)]">{acc.asset_no || 'Incident'} · #{String(acc.id).slice(0, 8).toUpperCase()}</span>
       </div>
 
       {/* Header card + financial rail */}
@@ -377,7 +420,7 @@ export function AccidentDetailModal({ accidentId, onClose, onChanged }) {
 
 // ── Tabs ──────────────────────────────────────────────────────────────────────
 
-function OverviewTab({ acc }) {
+function OverviewTab({ acc, fmtCurrency }) {
   const photos = Array.isArray(acc.photos) ? acc.photos.filter(Boolean) : []
   const [resolvedPhotos, setResolvedPhotos] = useState([])
 
@@ -395,8 +438,8 @@ function OverviewTab({ acc }) {
         <KV label="Severity" value={acc.severity} />
         <KV label="Status" value={acc.status} />
         <KV label="Country" value={acc.country} />
-        <KV label="Repair cost" value={acc.repair_cost != null ? formatCurrency(acc.repair_cost) : '-'} />
-        <KV label="Parts cost" value={acc.parts_cost != null ? formatCurrency(acc.parts_cost) : '-'} />
+        <KV label="Repair cost" value={acc.repair_cost != null ? fmtCurrency(acc.repair_cost) : '-'} />
+        <KV label="Parts cost" value={acc.parts_cost != null ? fmtCurrency(acc.parts_cost) : '-'} />
         <KV label="Insurance claim no" value={acc.insurance_claim_no} />
         <KV label="Inspector" value={acc.inspector} />
         <KV label="Reported" value={acc.created_at ? new Date(acc.created_at).toLocaleString() : '-'} />
@@ -424,9 +467,11 @@ function OverviewTab({ acc }) {
   )
 }
 
-function TrackerTab({ acc, elevated, onSaved, setErr }) {
+function TrackerTab({ acc, elevated, siteOptions = [], onSaved, setErr }) {
   const [f, setF] = useState({
+    site: acc.site ?? '',
     location: acc.location ?? '',
+    incident_date: acc.incident_date ? String(acc.incident_date).slice(0, 10) : '',
     liable_party: acc.liable_party ?? '',
     case_stage: acc.case_stage ?? '',
     damage_condition: acc.damage_condition ?? '',
@@ -444,7 +489,9 @@ function TrackerTab({ acc, elevated, onSaved, setErr }) {
   async function save() {
     setSaving(true); setErr('')
     const { error } = await supabase.from('accidents').update({
+      site: f.site || null,
       location: f.location || null,
+      incident_date: f.incident_date || null,
       liable_party: f.liable_party || null,
       case_stage: f.case_stage || null,
       damage_condition: f.damage_condition || null,
@@ -465,6 +512,7 @@ function TrackerTab({ acc, elevated, onSaved, setErr }) {
     return (
       <div className="space-y-3">
         <div className="grid grid-cols-2 gap-3">
+          <KV label="Site" value={acc.site} />
           <KV label="Location" value={acc.location} />
           <KV label="Liability" value={acc.liable_party} highlight />
           <KV label="Case stage" value={acc.case_stage} />
@@ -473,7 +521,6 @@ function TrackerTab({ acc, elevated, onSaved, setErr }) {
           <KV label="Action to be taken" value={acc.action_to_be_taken} />
           <KV label="Responsible owner" value={acc.responsible_owner} />
           <KV label="Required action" value={acc.required_action} />
-          <KV label="Status update" value={acc.status_update_date} />
           <KV label="Expected release" value={acc.expected_release_date} />
         </div>
         {acc.status_update_note && <KV label="Status update note" value={acc.status_update_note} />}
@@ -485,11 +532,13 @@ function TrackerTab({ acc, elevated, onSaved, setErr }) {
   return (
     <div className="space-y-3">
       <div className="grid grid-cols-2 gap-3">
-        <Inp label="Location" value={f.location} onChange={v => set('location', v)} placeholder="e.g. GCC Plant" />
+        <Picker label="Site" value={f.site} onChange={v => set('site', v)} options={siteOptions} placeholder="Select or type a site" />
+        <Inp label="Incident date" type="date" value={f.incident_date} onChange={v => set('incident_date', v)} />
+        <Picker label="Location" value={f.location} onChange={v => set('location', v)} options={siteOptions} placeholder="e.g. GCC Plant" />
         <Inp label="Liability" value={f.liable_party} onChange={v => set('liable_party', v)} placeholder="e.g. 100% Third Party Liability" />
-        <Inp label="Case stage" value={f.case_stage} onChange={v => set('case_stage', v)} placeholder="e.g. Internal Report Preparation" />
-        <Inp label="Damage condition" value={f.damage_condition} onChange={v => set('damage_condition', v)} placeholder="Minor / Major Repair" />
-        <Inp label="Current status" value={f.current_status} onChange={v => set('current_status', v)} placeholder="e.g. Under Repair" />
+        <Picker label="Case stage" value={f.case_stage} onChange={v => set('case_stage', v)} options={CASE_STAGE_OPTIONS} placeholder="e.g. Under Investigation" />
+        <Picker label="Damage condition" value={f.damage_condition} onChange={v => set('damage_condition', v)} options={DAMAGE_CONDITION_OPTIONS} placeholder="Minor / Major Repair" />
+        <Picker label="Current status" value={f.current_status} onChange={v => set('current_status', v)} options={CURRENT_STATUS_OPTIONS} placeholder="e.g. Under Repair" />
         <Inp label="Responsible owner" value={f.responsible_owner} onChange={v => set('responsible_owner', v)} placeholder="Accountable person" />
       </div>
       <Inp label="Action to be taken" value={f.action_to_be_taken} onChange={v => set('action_to_be_taken', v)} placeholder="Next step" />
@@ -506,7 +555,7 @@ function TrackerTab({ acc, elevated, onSaved, setErr }) {
   )
 }
 
-function ClaimTab({ acc, elevated, onSaved, setErr }) {
+function ClaimTab({ acc, elevated, onSaved, setErr, fmtCurrency }) {
   const [f, setF] = useState({
     responsible_party: acc.responsible_party ?? '',
     liable_party: acc.liable_party ?? '',
@@ -556,9 +605,9 @@ function ClaimTab({ acc, elevated, onSaved, setErr }) {
 
   const NetCostCard = () => (
     <div className="grid grid-cols-3 gap-3 rounded-lg border border-gray-700 bg-gray-800/40 p-3">
-      <div><p className="text-[11px] uppercase tracking-wide text-gray-500">Gross cost</p><p className="text-sm font-semibold text-gray-200">{formatCurrency(grossCost)}</p></div>
-      <div><p className="text-[11px] uppercase tracking-wide text-gray-500">Recovered</p><p className="text-sm font-semibold text-green-400">{formatCurrency(Number(acc.recovered_amount) || 0)}</p></div>
-      <div><p className="text-[11px] uppercase tracking-wide text-gray-500">Net cost</p><p className="text-sm font-semibold text-orange-400">{formatCurrency(netCost)}</p></div>
+      <div><p className="text-[11px] uppercase tracking-wide text-gray-500">Gross cost</p><p className="text-sm font-semibold text-gray-200">{fmtCurrency(grossCost)}</p></div>
+      <div><p className="text-[11px] uppercase tracking-wide text-gray-500">Recovered</p><p className="text-sm font-semibold text-green-400">{fmtCurrency(Number(acc.recovered_amount) || 0)}</p></div>
+      <div><p className="text-[11px] uppercase tracking-wide text-gray-500">Net cost</p><p className="text-sm font-semibold text-orange-400">{fmtCurrency(netCost)}</p></div>
     </div>
   )
 
@@ -576,10 +625,10 @@ function ClaimTab({ acc, elevated, onSaved, setErr }) {
           <KV label="Driver" value={acc.driver_name} />
           <KV label="Insurer" value={acc.insurer} />
           <KV label="Policy / Claim no" value={acc.policy_no} />
-          <KV label="Claim amount" value={acc.claim_amount != null ? formatCurrency(acc.claim_amount) : '-'} />
-          <KV label="Approved" value={acc.claim_approved_amount != null ? formatCurrency(acc.claim_approved_amount) : '-'} />
-          <KV label="Deductible" value={acc.deductible != null ? formatCurrency(acc.deductible) : '-'} />
-          <KV label="Recovered amount" value={acc.recovered_amount != null ? formatCurrency(acc.recovered_amount) : '-'} highlight />
+          <KV label="Claim amount" value={acc.claim_amount != null ? fmtCurrency(acc.claim_amount) : '-'} />
+          <KV label="Approved" value={acc.claim_approved_amount != null ? fmtCurrency(acc.claim_approved_amount) : '-'} />
+          <KV label="Deductible" value={acc.deductible != null ? fmtCurrency(acc.deductible) : '-'} />
+          <KV label="Recovered amount" value={acc.recovered_amount != null ? fmtCurrency(acc.recovered_amount) : '-'} highlight />
           <KV label="Recovery source" value={RECOVERY_SOURCE_LABELS[acc.recovery_source ?? 'none']} />
           <KV label="Recovery date" value={acc.recovery_date} />
         </div>
@@ -692,7 +741,7 @@ function ActivityTab({ accidentId }) {
   )
 }
 
-function PartsTab({ acc, parts, partsTotal, elevated, profile, reload, setErr }) {
+function PartsTab({ acc, parts, partsTotal, elevated, profile, reload, setErr, fmtCurrency }) {
   const [adding, setAdding] = useState(false)
   const [f, setF] = useState({ part_name: '', part_number: '', quantity: '1', unit_cost: '', supplier: '', status: 'needed' })
   const [saving, setSaving] = useState(false)
@@ -744,8 +793,8 @@ function PartsTab({ acc, parts, partsTotal, elevated, profile, reload, setErr })
                     <div className="text-xs text-gray-500">{[p.part_number && `#${p.part_number}`, p.supplier].filter(Boolean).join(' · ')}</div>
                   </td>
                   <td className="table-cell">{Number(p.quantity)}</td>
-                  <td className="table-cell whitespace-nowrap">{formatCurrency(p.unit_cost)}</td>
-                  <td className="table-cell whitespace-nowrap font-semibold text-white">{formatCurrency(p.total_cost)}</td>
+                  <td className="table-cell whitespace-nowrap">{fmtCurrency(p.unit_cost)}</td>
+                  <td className="table-cell whitespace-nowrap font-semibold text-white">{fmtCurrency(p.total_cost)}</td>
                   <td className="table-cell"><span className={`badge text-xs ${PART_BADGE[p.status]}`}>{PART_LABELS[p.status]}</span></td>
                   {elevated && (
                     <td className="table-cell">
@@ -756,7 +805,7 @@ function PartsTab({ acc, parts, partsTotal, elevated, profile, reload, setErr })
               ))}
               <tr className="border-t border-gray-700 bg-gray-800/30">
                 <td className="table-cell font-semibold text-gray-300" colSpan={3}>Total parts cost</td>
-                <td className="table-cell font-bold text-green-400 whitespace-nowrap">{formatCurrency(partsTotal)}</td>
+                <td className="table-cell font-bold text-green-400 whitespace-nowrap">{fmtCurrency(partsTotal)}</td>
                 <td className="table-cell" colSpan={elevated ? 2 : 1}></td>
               </tr>
             </tbody>
@@ -930,6 +979,27 @@ function Inp({ label, value, onChange, type = 'text', placeholder }) {
     <div>
       <label className="label">{label}</label>
       <input type={type} className="input" value={value} placeholder={placeholder} onChange={e => onChange(e.target.value)} />
+    </div>
+  )
+}
+
+// Datalist-backed field: dropdown suggestions with free-text fallback, so a
+// common value is one click away but bespoke entries are still allowed.
+function Picker({ label, value, onChange, options = [], placeholder }) {
+  const listId = useId()
+  return (
+    <div>
+      <label className="label">{label}</label>
+      <input
+        className="input"
+        list={listId}
+        value={value}
+        placeholder={placeholder}
+        onChange={e => onChange(e.target.value)}
+      />
+      <datalist id={listId}>
+        {options.filter(Boolean).map(o => <option key={o} value={o} />)}
+      </datalist>
     </div>
   )
 }

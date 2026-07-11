@@ -1222,6 +1222,210 @@ export async function exportInspectionDetailPdf(row, opts = {}) {
   doc.save(`Inspection_${safe}.pdf`)
 }
 
+/**
+ * exportAccidentCasePdf — a complete, tenant-branded case file for one accident.
+ *
+ * Renders the full claims picture in a single downloadable A4 document: header
+ * card with severity/status, incident + asset meta, a financial summary
+ * (gross / recovered / net), case-management tracker, claim & recovery details,
+ * a parts & repairs table, and the chronological case log. Used by the
+ * `/accidents/:id` detail page "Download Case" action.
+ *
+ *   await exportAccidentCasePdf(acc, { parts, remarks, branding, company, fmtCurrency })
+ */
+export async function exportAccidentCasePdf(acc = {}, opts = {}) {
+  await ensurePdf()
+  const doc     = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
+  const pw      = doc.internal.pageSize.width
+  const ph      = doc.internal.pageSize.height
+  const mx      = 14
+  const company = opts.company || ''
+  const parts   = Array.isArray(opts.parts) ? opts.parts : []
+  const remarks = Array.isArray(opts.remarks) ? opts.remarks : []
+  const money   = (v) => (typeof opts.fmtCurrency === 'function'
+    ? opts.fmtCurrency(Number(v) || 0)
+    : `${(Number(v) || 0).toLocaleString('en-US')}`)
+  const brand   = await _pdfBrand(opts.branding)
+  const hdr     = { accent: brand.accent, logoData: brand.logoData }
+  const ftr     = { footerText: brand.footerText }
+  const dash    = (v) => (v == null || v === '' ? '-' : String(v))
+  const fmtDate = (v) => (v ? formatDate(v) : '-')
+
+  const newPageIfNeeded = (need, title = 'Accident Case Report') => {
+    if (y > ph - need) { doc.addPage(); _pageHeader(doc, title, '', company, hdr); y = 30 }
+  }
+
+  _pageHeader(doc, 'Accident Case Report', `Asset: ${dash(acc.asset_no)}`, company, hdr)
+  let y = 30
+
+  // ── Title card with severity ribbon ─────────────────────────────────────────
+  const sev = String(acc.severity || '').toLowerCase()
+  const sevRgb = /total|fatal|severe/.test(sev) ? P.crimson
+    : /major|moderate/.test(sev) ? P.scarlet : P.emerald
+  doc.setFillColor(...P.offWhite); doc.setDrawColor(...P.silver); doc.setLineWidth(0.4)
+  doc.roundedRect(mx, y, pw - mx * 2, 16, 2, 2, 'FD')
+  doc.setFillColor(...sevRgb); doc.roundedRect(mx, y, 4, 16, 2, 0, 'F')
+  doc.setFontSize(11); doc.setFont('helvetica', 'bold'); doc.setTextColor(...P.ink)
+  doc.text(`${dash(acc.asset_no)}  ·  Case #${String(acc.id || '').slice(0, 8).toUpperCase()}`, mx + 8, y + 7)
+  doc.setFontSize(7.5); doc.setFont('helvetica', 'normal'); doc.setTextColor(...P.ghost)
+  doc.text(`${dash(acc.severity)}  ·  ${dash(acc.status)}  ·  ${dash(acc.closure_status || 'open')}`, mx + 8, y + 13)
+  doc.setFillColor(...sevRgb); doc.roundedRect(pw - mx - 32, y + 4, 30, 8, 2, 2, 'F')
+  doc.setFontSize(7); doc.setFont('helvetica', 'bold'); doc.setTextColor(...P.white)
+  doc.text(String(acc.severity || 'N/A').toUpperCase().slice(0, 12), pw - mx - 17, y + 9.5, { align: 'center' })
+  y += 21
+
+  // ── Meta grid (2-col) ───────────────────────────────────────────────────────
+  const metaL = [
+    ['Site', dash(acc.site)],
+    ['Country', dash(acc.country)],
+    ['Incident date', fmtDate(acc.incident_date)],
+    ['Driver', dash(acc.driver_name)],
+    ['Location', dash(acc.location)],
+  ]
+  const metaR = [
+    ['Reported', acc.created_at ? new Date(acc.created_at).toLocaleString() : '-'],
+    ['Inspector', dash(acc.inspector)],
+    ['Insurer', dash(acc.insurer)],
+    ['Policy / Claim no', dash(acc.policy_no || acc.insurance_claim_no)],
+    ['Claim status', dash(acc.claim_status)],
+  ]
+  const half = (pw - mx * 2) / 2
+  metaL.forEach(([lbl, val], i) => {
+    const my = y + i * 10
+    doc.setFontSize(6.5); doc.setFont('helvetica', 'normal'); doc.setTextColor(...P.mist)
+    doc.text(lbl, mx, my)
+    doc.setFontSize(8.5); doc.setFont('helvetica', 'bold'); doc.setTextColor(...P.ink)
+    doc.text(doc.splitTextToSize(String(val), half - 6), mx, my + 5)
+    doc.setDrawColor(...P.silver); doc.setLineWidth(0.2); doc.line(mx, my + 7.5, mx + half - 4, my + 7.5)
+    doc.setFontSize(6.5); doc.setFont('helvetica', 'normal'); doc.setTextColor(...P.mist)
+    doc.text(metaR[i][0], mx + half, my)
+    doc.setFontSize(8.5); doc.setFont('helvetica', 'bold'); doc.setTextColor(...P.ink)
+    doc.text(doc.splitTextToSize(String(metaR[i][1]), half - 6), mx + half, my + 5)
+    doc.line(mx + half, my + 7.5, pw - mx, my + 7.5)
+  })
+  y += 55
+
+  // ── Financial summary ───────────────────────────────────────────────────────
+  const partsTotal = parts.reduce((s, p) => s + (Number(p.total_cost) || 0), 0)
+  const gross = (Number(acc.repair_cost) || 0) + (Number(acc.parts_cost) || partsTotal)
+  const recovered = Number(acc.recovered_amount) || 0
+  const net = Math.max(0, gross - recovered)
+  const fin = [
+    ['Gross cost', money(gross), P.ink],
+    ['Recovered', money(recovered), P.emerald],
+    ['Net exposure', money(net), P.scarlet],
+  ]
+  const finW = (pw - mx * 2 - 6) / 3
+  fin.forEach(([lbl, val, rgb], i) => {
+    const fx = mx + i * (finW + 3)
+    doc.setFillColor(...P.offWhite); doc.setDrawColor(...P.silver); doc.setLineWidth(0.3)
+    doc.roundedRect(fx, y, finW, 16, 2, 2, 'FD')
+    doc.setFontSize(6.5); doc.setFont('helvetica', 'normal'); doc.setTextColor(...P.mist)
+    doc.text(lbl.toUpperCase(), fx + 4, y + 6)
+    doc.setFontSize(10); doc.setFont('helvetica', 'bold'); doc.setTextColor(...rgb)
+    doc.text(String(val), fx + 4, y + 12)
+  })
+  y += 22
+
+  // ── Case management (tracker) ───────────────────────────────────────────────
+  const trackerRows = [
+    ['Liable party', acc.liable_party], ['Responsible party', acc.responsible_party],
+    ['Who pays', acc.payer], ['Case stage', acc.case_stage],
+    ['Damage condition', acc.damage_condition], ['Current status', acc.current_status],
+    ['Responsible owner', acc.responsible_owner], ['Required action', acc.required_action],
+    ['Action to be taken', acc.action_to_be_taken], ['Expected release', fmtDate(acc.expected_release_date)],
+  ].filter(([, v]) => v != null && v !== '')
+  if (trackerRows.length) {
+    newPageIfNeeded(60)
+    y = _sectionBar(doc, 'Case Management', y, mx, brand.accent) + 4
+    autoTable(doc, {
+      ..._tableTheme(brand.accent), startY: y,
+      body: trackerRows.map(([k, v]) => [k, String(v)]),
+      margin: { left: mx, right: mx },
+      columnStyles: { 0: { cellWidth: 50, fontStyle: 'bold', textColor: P.ghost }, 1: { cellWidth: 'auto' } },
+      showHead: false,
+    })
+    y = (doc.lastAutoTable?.finalY ?? y) + 8
+  }
+
+  // ── Claim & recovery ────────────────────────────────────────────────────────
+  const claimRows = [
+    ['Claim amount', acc.claim_amount != null ? money(acc.claim_amount) : null],
+    ['Approved amount', acc.claim_approved_amount != null ? money(acc.claim_approved_amount) : null],
+    ['Deductible', acc.deductible != null ? money(acc.deductible) : null],
+    ['Recovered amount', acc.recovered_amount != null ? money(acc.recovered_amount) : null],
+    ['Recovery source', acc.recovery_source], ['Recovery status', acc.recovery_status],
+    ['Recovery date', acc.recovery_date ? fmtDate(acc.recovery_date) : null],
+    ['Recovery reference', acc.recovery_reference],
+  ].filter(([, v]) => v != null && v !== '')
+  if (claimRows.length) {
+    newPageIfNeeded(50)
+    y = _sectionBar(doc, 'Claim & Recovery', y, mx, brand.accent) + 4
+    autoTable(doc, {
+      ..._tableTheme(brand.accent), startY: y,
+      body: claimRows.map(([k, v]) => [k, String(v)]),
+      margin: { left: mx, right: mx },
+      columnStyles: { 0: { cellWidth: 50, fontStyle: 'bold', textColor: P.ghost }, 1: { cellWidth: 'auto' } },
+      showHead: false,
+    })
+    y = (doc.lastAutoTable?.finalY ?? y) + 8
+  }
+
+  // ── Parts & repairs ─────────────────────────────────────────────────────────
+  if (parts.length) {
+    newPageIfNeeded(50)
+    y = _sectionBar(doc, 'Parts & Repairs', y, mx, brand.accent) + 4
+    autoTable(doc, {
+      ..._tableTheme(brand.accent), startY: y,
+      head: [['Part', 'Qty', 'Unit', 'Total', 'Status']],
+      body: parts.map(p => [
+        [p.part_name, p.part_number && `#${p.part_number}`].filter(Boolean).join(' '),
+        String(Number(p.quantity) || 0), money(p.unit_cost), money(p.total_cost), dash(p.status),
+      ]),
+      foot: [['Total parts cost', '', '', money(partsTotal), '']],
+      margin: { left: mx, right: mx },
+      columnStyles: { 1: { halign: 'right', cellWidth: 16 }, 2: { halign: 'right', cellWidth: 26 }, 3: { halign: 'right', cellWidth: 26 }, 4: { cellWidth: 24 } },
+    })
+    y = (doc.lastAutoTable?.finalY ?? y) + 8
+  }
+
+  // ── Case log ────────────────────────────────────────────────────────────────
+  if (remarks.length) {
+    newPageIfNeeded(40)
+    y = _sectionBar(doc, `Case Log (${remarks.length})`, y, mx, brand.accent) + 4
+    remarks.forEach(r => {
+      newPageIfNeeded(18)
+      doc.setFillColor(...P.indigo); doc.circle(mx + 2, y + 1.5, 1.4, 'F')
+      doc.setFontSize(8); doc.setFont('helvetica', 'normal'); doc.setTextColor(...P.ink)
+      const rl = doc.splitTextToSize(String(r.remark || ''), pw - mx * 2 - 10)
+      doc.text(rl, mx + 7, y + 2.5)
+      y += rl.length * 4.2 + 1
+      doc.setFontSize(6.5); doc.setTextColor(...P.mist)
+      doc.text(`${r.author_name || 'User'} · ${r.created_at ? new Date(r.created_at).toLocaleString() : ''}`, mx + 7, y + 2)
+      y += 6
+    })
+  }
+
+  // ── Description ─────────────────────────────────────────────────────────────
+  if (acc.description) {
+    newPageIfNeeded(30)
+    y = _sectionBar(doc, 'Description', y, mx, brand.accent) + 4
+    doc.setFontSize(8); doc.setFont('helvetica', 'normal'); doc.setTextColor(...P.ink)
+    const dl = doc.splitTextToSize(String(acc.description), pw - mx * 2)
+    doc.text(dl, mx, y); y += dl.length * 4.5 + 4
+  }
+
+  // ── Footers ─────────────────────────────────────────────────────────────────
+  const totalPages = doc.internal.getNumberOfPages()
+  for (let p = 1; p <= totalPages; p++) {
+    doc.setPage(p)
+    _pageFooter(doc, p, totalPages, company || 'Fleet Operations', ftr)
+  }
+
+  const safe = String(acc.asset_no || acc.id || 'case').replace(/[^a-z0-9]/gi, '_').slice(0, 40)
+  doc.save(`Accident_Case_${safe}.pdf`)
+}
+
 /* ── Public branded-PDF helper API ───────────────────────────────────────────
    Page-local jsPDF generators import these to get a consistent tenant-branded
    header/footer, empty-state and table theme without duplicating design code.

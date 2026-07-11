@@ -432,7 +432,7 @@ h2{font-size:14px;color:#16a34a;margin:16px 0 6px}
 .sev-Medium{color:#ca8a04}
 .sev-Low{color:#2563eb}
 </style></head><body>
-<h1>Tyre Pulse - Daily Operations Briefing</h1>
+<h1>Tyre Pulse: Daily Operations Briefing</h1>
 <p class="sub">${esc(fmtDisp(selectedDate))}</p>
 <h2>Today's Activity Summary</h2>
 <table><tr>${rows.map(([k]) => `<th>${esc(k)}</th>`).join('')}</tr>

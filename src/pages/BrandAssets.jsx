@@ -365,7 +365,7 @@ export default function BrandAssets() {
     <div className="space-y-5">
       <PageHeader
         title="Brand Assets"
-        subtitle="Living design-system gallery — logos, illustrations & icons. Click any asset to copy its id or snippet."
+        subtitle="Living design-system gallery: logos, illustrations & icons. Click any asset to copy its id or snippet."
         icon={Palette}
         badge="Design System"
       />

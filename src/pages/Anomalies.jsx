@@ -79,7 +79,7 @@ function detectDataQuality(rows) {
       site: r.site || '—',
       record_ids: [r.id],
       records: [r],
-      message: `Missing ${missing.join(', ')} — record cannot be used for CPK / lifecycle analytics`,
+      message: `Missing ${missing.join(', ')}, record cannot be used for CPK / lifecycle analytics`,
       detail: `${r.brand || 'Unknown brand'}${r.serial_no ? ` · serial ${r.serial_no}` : ''}${r.issue_date ? ` · ${r.issue_date}` : ''}`,
     })
   }

@@ -810,7 +810,7 @@ export default function Login() {
                     <CheckCircle2 size={30} style={{color:'#4ade80'}}/>
                   </div>
                   <div style={{fontSize:18, fontWeight:800, color:'#fff', marginBottom:8, letterSpacing:'-0.02em'}}>Reset link sent!</div>
-                  <div style={{fontSize:13, color:'rgba(255,255,255,0.4)', lineHeight:1.6}}>Check your inbox - link expires in 60 minutes.</div>
+                  <div style={{fontSize:13, color:'rgba(255,255,255,0.4)', lineHeight:1.6}}>Check your inbox, link expires in 60 minutes.</div>
                   <button onClick={() => { setForgotMode(false); setForgotSent(false) }} style={{
                     marginTop:22, width:'100%', padding:'12px', borderRadius:14, border:'none',
                     background:'linear-gradient(135deg, #16a34a, #15803d)',

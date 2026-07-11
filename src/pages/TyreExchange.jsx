@@ -489,7 +489,7 @@ export default function TyreExchange() {
     setMarkError('')
     // Locked — this record is mid-approval; edits are blocked (server also enforces).
     if (wfLocked && serial === replacementRecord?.serial) {
-      setMarkError(`${serial} is locked — an approval is in progress for this record.`)
+      setMarkError(`${serial} is locked: an approval is in progress for this record.`)
       return
     }
     const prev = list
@@ -1238,7 +1238,7 @@ export default function TyreExchange() {
                   {wfLocked && (
                     <div className="flex items-center gap-1.5 text-xs text-[var(--accent)] bg-[var(--surface-1)] border border-[var(--input-border)] rounded-lg px-3 py-2">
                       <Lock size={12} />
-                      Locked — in approval. This record’s return / write-off actions are disabled until the workflow completes.
+                      Locked, in approval. This record’s return / write-off actions are disabled until the workflow completes.
                     </div>
                   )}
 
@@ -1447,7 +1447,7 @@ export default function TyreExchange() {
                                     {rowLocked && (
                                       <span
                                         className="flex items-center gap-1 text-[var(--accent)]"
-                                        title="Locked — in approval"
+                                        title="Locked, in approval"
                                       >
                                         <Lock size={12} />
                                       </span>
@@ -1456,7 +1456,7 @@ export default function TyreExchange() {
                                       onClick={() => markReturned(p.serial)}
                                       disabled={rowLocked}
                                       className="flex items-center gap-1 px-2.5 py-1.5 bg-green-900/50 hover:bg-green-800/60 border border-green-700/50 text-green-300 rounded-lg text-xs transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-green-900/50"
-                                      title={rowLocked ? 'Locked — in approval' : 'Mark as Returned'}
+                                      title={rowLocked ? 'Locked, in approval' : 'Mark as Returned'}
                                     >
                                       <CheckSquare size={12} /> Returned
                                     </button>
@@ -1464,7 +1464,7 @@ export default function TyreExchange() {
                                       onClick={() => markWrittenOff(p.serial)}
                                       disabled={rowLocked}
                                       className="flex items-center gap-1 px-2.5 py-1.5 bg-red-900/50 hover:bg-red-800/60 border border-red-700/50 text-red-300 rounded-lg text-xs transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-red-900/50"
-                                      title={rowLocked ? 'Locked — in approval' : 'Write Off'}
+                                      title={rowLocked ? 'Locked, in approval' : 'Write Off'}
                                     >
                                       <XCircle size={12} /> Write Off
                                     </button>
@@ -1704,7 +1704,7 @@ export default function TyreExchange() {
               {/* Net flow analysis */}
               {siteFlowMatrix.sites.length > 0 && (
                 <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-4">
-                  <h3 className="text-sm font-medium text-[var(--text-secondary)] mb-4">Net Flow Analysis - Site Roles</h3>
+                  <h3 className="text-sm font-medium text-[var(--text-secondary)] mb-4">Net Flow Analysis: Site Roles</h3>
                   <div className="overflow-x-auto">
                     <table className="w-full text-sm">
                       <thead>

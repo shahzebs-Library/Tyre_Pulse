@@ -431,7 +431,7 @@ export default function Procurement() {
   async function handleSave() {
     // Approval-locked records are immutable — the server RPCs are the real
     // boundary, this is the UI guard mirroring it.
-    if (editPO && poLocked) { alert('Locked — in approval'); return }
+    if (editPO && poLocked) { alert('Locked, in approval'); return }
     if (!formData.vendor_name.trim()) { alert(t('procurement.alerts.vendorRequired')); return }
     if (formData.items.length === 0)  { alert(t('procurement.alerts.lineItemRequired')); return }
     setSaving(true)
@@ -483,7 +483,7 @@ export default function Procurement() {
   async function updateStatus(po, newStatus) {
     // Block manual status changes on the PO that is currently under approval —
     // its lifecycle is driven by the workflow engine.
-    if (viewPO?.id === po.id && poLocked) { alert('Locked — in approval'); return }
+    if (viewPO?.id === po.id && poLocked) { alert('Locked, in approval'); return }
     const patch = { status: newStatus }
     if (newStatus === 'Delivered') patch.actual_delivery = new Date().toISOString().slice(0, 10)
     const { error: err } = await procurementApi.updatePurchaseOrder(po.id, patch)
@@ -1123,7 +1123,7 @@ export default function Procurement() {
                     {t('procurement.modal.cancel')}
                   </button>
                   <button onClick={handleSave} disabled={saving || (editPO && poLocked)}
-                    title={editPO && poLocked ? 'Locked — in approval' : undefined}
+                    title={editPO && poLocked ? 'Locked, in approval' : undefined}
                     className="flex items-center gap-2 px-5 py-2 bg-orange-600 hover:bg-orange-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-semibold rounded-lg transition-colors">
                     {saving ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle size={16} />}
                     {saving ? t('procurement.modal.saving') : editPO ? t('procurement.modal.saveChanges') : t('procurement.modal.createPo')}
@@ -1213,7 +1213,7 @@ export default function Procurement() {
                         {next.map(ns => (
                           <button key={ns} onClick={() => updateStatus(viewPO, ns)}
                             disabled={poLocked}
-                            title={poLocked ? 'Locked — in approval' : undefined}
+                            title={poLocked ? 'Locked, in approval' : undefined}
                             className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
                               ns === 'Cancelled'  ? 'border-red-700 text-red-400 hover:bg-red-900/30' :
                               ns === 'Delivered'  ? 'border-teal-700 text-teal-400 hover:bg-teal-900/30' :
@@ -1277,7 +1277,7 @@ export default function Procurement() {
                               <div className="flex items-center gap-2">
                                 <input type="number" min="0" max={it.quantity} defaultValue={received}
                                   disabled={poLocked}
-                                  title={poLocked ? 'Locked — in approval' : undefined}
+                                  title={poLocked ? 'Locked, in approval' : undefined}
                                   className="w-20 px-2 py-1 bg-[var(--surface-3)] border border-[var(--border-bright)] rounded text-[var(--text-primary)] text-xs focus:outline-none disabled:opacity-40 disabled:cursor-not-allowed"
                                   onBlur={e => updateItemReceivedQty(viewPO.id, idx, e.target.value)} />
                                 <span className="text-[var(--text-muted)] text-xs">{t('procurement.drawer.markReceivedQty')}</span>
@@ -1335,7 +1335,7 @@ export default function Procurement() {
 
                 {poLocked && (
                   <div className="flex items-center gap-1.5 text-xs text-[var(--accent)]">
-                    <Lock size={12} /> Locked — in approval
+                    <Lock size={12} /> Locked, in approval
                   </div>
                 )}
 
@@ -1343,7 +1343,7 @@ export default function Procurement() {
                 <div className="flex gap-3 pt-2">
                   <button onClick={() => { if (poLocked) return; const po = viewPO; setViewPO(null); openEdit(po) }}
                     disabled={poLocked}
-                    title={poLocked ? 'Locked — in approval' : undefined}
+                    title={poLocked ? 'Locked, in approval' : undefined}
                     className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-orange-600 hover:bg-orange-700 text-white text-sm font-medium rounded-xl transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-orange-600">
                     <Edit2 size={15} />{t('procurement.drawer.editPo')}
                   </button>

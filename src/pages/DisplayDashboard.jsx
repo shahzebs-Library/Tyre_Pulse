@@ -669,7 +669,7 @@ export default function DisplayDashboard() {
                   {alerts.rows.length === 0 ? (
                     <div className="h-full flex flex-col items-center justify-center gap-3">
                       <ShieldCheck size={44} className="text-emerald-500/70" />
-                      <p className="text-slate-300 text-xl font-semibold">All clear — no active alerts</p>
+                      <p className="text-slate-300 text-xl font-semibold">All clear, no active alerts</p>
                     </div>
                   ) : (
                     <div className="space-y-3 overflow-hidden">

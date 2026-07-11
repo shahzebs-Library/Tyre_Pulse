@@ -1315,7 +1315,7 @@ export default function ComplianceDashboard() {
                       {nonCompliantTyres.length === 0 ? (
                         <div className="flex flex-col items-center py-12 gap-2">
                           <CheckCircle size={28} className="text-green-500" />
-                          <p className="text-[var(--text-muted)] text-sm">All tyres meet the fleet minimum tread depth - fully compliant!</p>
+                          <p className="text-[var(--text-muted)] text-sm">All tyres meet the fleet minimum tread depth, fully compliant!</p>
                         </div>
                       ) : (
                         <>
@@ -1491,7 +1491,7 @@ export default function ComplianceDashboard() {
                       {pressureAnomalies.length === 0 ? (
                         <div className="flex flex-col items-center py-12 gap-2">
                           <CheckCircle size={28} className="text-green-500" />
-                          <p className="text-[var(--text-muted)] text-sm">No pressure anomalies - all tyres have valid readings!</p>
+                          <p className="text-[var(--text-muted)] text-sm">No pressure anomalies, all tyres have valid readings!</p>
                         </div>
                       ) : (
                         <>

@@ -495,7 +495,7 @@ export default function InspectionIntelligence() {
       .forEach(i => recs.push({ priority: 'Medium', message: `Inspector "${i.inspector}" quality score ${(i.qualityScore * 100).toFixed(0)}% - remediation training recommended` }))
 
     if (parseFloat(complianceMetrics.pressureCovPct) < 50) {
-      recs.push({ priority: 'Medium', message: `Pressure data coverage at ${complianceMetrics.pressureCovPct}% - mandate pressure readings in all inspections` })
+      recs.push({ priority: 'Medium', message: `Pressure data coverage at ${complianceMetrics.pressureCovPct}%, mandate pressure readings in all inspections` })
     }
 
     complianceBySite
@@ -563,7 +563,7 @@ export default function InspectionIntelligence() {
     setRaisingAlert(vehicle.asset_no)
     try {
       await inspIntelApi.insertCorrectiveAction({
-        title: `Inspection overdue — ${vehicle.asset_no}`,
+        title: `Inspection overdue: ${vehicle.asset_no}`,
         asset_no: vehicle.asset_no,
         site: vehicle.site,
         country: activeCountry !== 'All' ? activeCountry : undefined,
@@ -1167,7 +1167,7 @@ export default function InspectionIntelligence() {
         {recommendations.length === 0 ? (
           <div className="flex items-center gap-2 text-green-400 py-4">
             <CheckCircle size={18} />
-            <span className="text-sm font-medium">All metrics within acceptable thresholds - no immediate action required</span>
+            <span className="text-sm font-medium">All metrics within acceptable thresholds, no immediate action required</span>
           </div>
         ) : (
           <div className="space-y-2">

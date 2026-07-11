@@ -81,7 +81,7 @@ export default function FeatureFlagsPanel() {
         )}
       </div>
       <p className="text-xs text-[var(--text-muted)] -mt-2">
-        Turn whole features on or off for your organisation — changes apply to every user, no deploy needed.
+        Turn whole features on or off for your organisation. Changes apply to every user, no deploy needed.
         {disabledCount > 0 && ` ${disabledCount} feature${disabledCount === 1 ? '' : 's'} currently disabled.`}
       </p>
 

@@ -53,7 +53,7 @@ export default class AppErrorBoundary extends Component {
 
         <h1 className="text-h2 text-center mb-2">Something went wrong</h1>
         <p className="text-body text-center max-w-sm mb-6">
-          TyrePulse hit an unexpected error. Reloading usually fixes it — your
+          TyrePulse hit an unexpected error. Reloading usually fixes it. Your
           data is safe and nothing was lost.
         </p>
 

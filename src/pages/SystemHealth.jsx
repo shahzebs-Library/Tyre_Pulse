@@ -64,12 +64,12 @@ const OVERALL_BANNER = {
     Icon: CheckCircle2,
   },
   [STATUS.DEGRADED]: {
-    text: 'Degraded performance — some subsystems need attention',
+    text: 'Degraded performance, some subsystems need attention',
     cls: 'border-amber-500/25 bg-amber-500/10 text-amber-300',
     Icon: AlertTriangle,
   },
   [STATUS.DOWN]: {
-    text: 'Outage detected — one or more subsystems are down',
+    text: 'Outage detected, one or more subsystems are down',
     cls: 'border-red-500/25 bg-red-500/10 text-red-300',
     Icon: XCircle,
   },
@@ -258,7 +258,7 @@ export default function SystemHealth() {
 
           <p className="text-[11px] text-muted">
             Checks run automatically every 60 seconds. Edge functions are probed
-            with a reachability ping only — no AI calls or emails are sent.
+            with a reachability ping only. No AI calls or emails are sent.
           </p>
         </>
       )}

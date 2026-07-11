@@ -363,7 +363,7 @@ function TyreManShell({ children, alertCount }) {
               disabled={retrying}
               className="text-[9px] font-bold px-2 py-0.5 rounded-full disabled:opacity-60"
               style={{ background: '#fee2e2', color: '#991b1b', border: '1px solid #fecaca' }}
-              title={`${failedCount} inspection${failedCount !== 1 ? 's' : ''} failed to sync — tap to retry`}
+              title={`${failedCount} inspection${failedCount !== 1 ? 's' : ''} failed to sync, tap to retry`}
             >
               {retrying ? '…' : `⚠ ${failedCount}`}
             </button>

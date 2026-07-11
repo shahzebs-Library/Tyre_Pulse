@@ -508,7 +508,7 @@ export default function PositionIntelligence() {
 
       <PageHeader
         title="Tyre Position Intelligence"
-        subtitle="Performance analysis by axle position - fastest wear, highest cost, failure-prone positions"
+        subtitle="Performance analysis by axle position: fastest wear, highest cost, failure-prone positions"
         icon={MapPin}
         actions={
           <div className="flex items-center gap-2">

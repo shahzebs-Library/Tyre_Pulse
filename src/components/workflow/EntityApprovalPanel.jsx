@@ -112,7 +112,7 @@ export default function EntityApprovalPanel({
         <>
           {wf.isLocked && wf.status === 'approved' && (
             <div className="flex items-center gap-1.5 text-xs text-[var(--accent)]">
-              <Lock size={12} /> Locked — approved, no further edits.
+              <Lock size={12} /> Locked: approved, no further edits.
             </div>
           )}
 

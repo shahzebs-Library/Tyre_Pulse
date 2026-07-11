@@ -493,7 +493,7 @@ export default function DashboardBuilder() {
               </button>
               <button type="button" onClick={handleSave} disabled={!canSaveInPlace || !dirty || saving}
                 className="btn-secondary text-xs gap-1.5 py-1.5 px-3 disabled:opacity-40 disabled:cursor-not-allowed"
-                title={canSaveInPlace ? 'Save changes' : 'Use "Save as new" — you don\'t own this layout'}>
+                title={canSaveInPlace ? 'Save changes' : 'Use "Save as new", you don\'t own this layout'}>
                 <Save size={12} /> {saving ? 'Saving…' : 'Save'}
               </button>
               <button type="button" onClick={() => setModal({ mode: 'saveAs' })} disabled={saving}
@@ -536,7 +536,7 @@ export default function DashboardBuilder() {
           <LayoutDashboard size={40} className="text-[var(--text-muted)]" />
           <p className="text-sm font-semibold text-[var(--text-primary)]">This layout is empty</p>
           <p className="text-xs text-[var(--text-muted)] max-w-sm">
-            Add widgets from the catalog to build your dashboard — KPIs, gauges, charts and lists, all live from your fleet data.
+            Add widgets from the catalog to build your dashboard: KPIs, gauges, charts and lists, all live from your fleet data.
           </p>
           <button type="button"
             onClick={() => { setEditMode(true); setDrawerOpen(true) }}

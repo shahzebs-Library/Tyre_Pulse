@@ -54,7 +54,7 @@ export default function PeriodFilter({ records = [], dateField = 'issue_date', v
           className="appearance-none bg-gray-900 border border-gray-700 hover:border-gray-500 rounded-lg pl-8 pr-8 py-1.5 text-sm text-gray-200 cursor-pointer"
           title="Period"
         >
-          <option value="all">All time{minDate ? ` (${minDate.slice(0, 4)}–${(maxDate || '').slice(0, 4)})` : ''}</option>
+          <option value="all">All time{minDate ? ` (${minDate.slice(0, 4)} to ${(maxDate || '').slice(0, 4)})` : ''}</option>
           {years.map((y) => <option key={y} value={y}>{y}</option>)}
           <option value="custom">Custom range…</option>
         </select>

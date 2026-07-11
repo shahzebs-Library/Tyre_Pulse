@@ -349,7 +349,7 @@ function ContractModal({ contract, onSave, onClose, onLockChange }) {
           )}
           {contract?.id && wfLocked && (
             <div className="col-span-2 flex items-center gap-1.5 text-xs text-[var(--accent)] bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg px-3 py-2">
-              <Lock size={12} className="flex-shrink-0" /> Locked — in approval
+              <Lock size={12} className="flex-shrink-0" /> Locked, in approval
             </div>
           )}
           <FormActions
@@ -1556,7 +1556,7 @@ export default function SupplierManagement() {
                             <td className="px-4 py-3">
                               <div className="flex items-center gap-1">
                                 {lockedContractId === c.id && (
-                                  <span title="Locked — in approval" className="inline-flex items-center gap-1 text-xs text-[var(--accent)] mr-1">
+                                  <span title="Locked, in approval" className="inline-flex items-center gap-1 text-xs text-[var(--accent)] mr-1">
                                     <Lock size={11} /> Locked
                                   </span>
                                 )}
@@ -1566,7 +1566,7 @@ export default function SupplierManagement() {
                                 <button
                                   onClick={() => { if (lockedContractId === c.id) return; setContractDeleteError(null); setContractDeleteTarget(c) }}
                                   disabled={lockedContractId === c.id}
-                                  title={lockedContractId === c.id ? 'Locked — in approval' : undefined}
+                                  title={lockedContractId === c.id ? 'Locked, in approval' : undefined}
                                   className="p-1.5 text-[var(--text-muted)] hover:text-red-400 hover:bg-[var(--input-bg)] rounded disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:text-[var(--text-muted)]"
                                 >
                                   <X size={13} />

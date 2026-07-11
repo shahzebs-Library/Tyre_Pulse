@@ -756,7 +756,7 @@ export default function DataCleaning() {
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <PageHeader
           title="Data Cleaning Engine"
-          subtitle="Rule-based auto-classification + Quality Intelligence - zero AI tokens required"
+          subtitle="Rule-based auto-classification + Quality Intelligence, zero AI tokens required"
           icon={Wand2}
         />
         <div className="flex gap-3">
@@ -1220,7 +1220,7 @@ export default function DataCleaning() {
             bgColor="bg-red-900/20 border-red-700/40"
           >
             {invalidPressure?.notApplicable ? (
-              <p className="text-xs text-[var(--text-muted)]">pressure_reading column not found in tyre_records - not applicable for this dataset.</p>
+              <p className="text-xs text-[var(--text-muted)]">pressure_reading column not found in tyre_records, not applicable for this dataset.</p>
             ) : (
               <>
                 <p className="text-xs text-[var(--text-muted)] mb-3">Pressure readings outside the valid range of 20-200 PSI.</p>
@@ -1251,7 +1251,7 @@ export default function DataCleaning() {
             bgColor="bg-yellow-900/20 border-yellow-700/40"
           >
             {missingTread?.notApplicable ? (
-              <p className="text-xs text-[var(--text-muted)]">tread_depth column not found - not applicable for this dataset.</p>
+              <p className="text-xs text-[var(--text-muted)]">tread_depth column not found, not applicable for this dataset.</p>
             ) : (
               <>
                 <div className="flex items-center gap-4 mb-3">
@@ -1300,7 +1300,7 @@ export default function DataCleaning() {
             bgColor="bg-blue-900/20 border-blue-700/40"
           >
             {missingInspect?.notApplicable ? (
-              <p className="text-xs text-[var(--text-muted)]">Inspections table not found - check not applicable for this database configuration.</p>
+              <p className="text-xs text-[var(--text-muted)]">Inspections table not found, check not applicable for this database configuration.</p>
             ) : (
               <>
                 <p className="text-xs text-[var(--text-muted)] mb-3">Vehicles with active tyres that have no inspection record in the last 30 days.</p>
@@ -1399,7 +1399,7 @@ export default function DataCleaning() {
               The classifier will run on all <strong className="text-[var(--text-primary)]">{stats.pending.toLocaleString()}</strong> pending records and save the results automatically.
               {filterSite && ` Only records from "${filterSite}" will be processed.`}
             </p>
-            <p className="text-yellow-300 text-sm mb-4">Low-confidence classifications will still be saved - no manual review step.</p>
+            <p className="text-yellow-300 text-sm mb-4">Low-confidence classifications will still be saved, no manual review step.</p>
             <div className="flex gap-3">
               <button onClick={approveAll} className="btn-primary flex items-center gap-2">
                 <CheckCheck size={15} /> Approve All

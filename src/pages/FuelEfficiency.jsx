@@ -1165,7 +1165,7 @@ export default function FuelEfficiency() {
                   <AlertTriangle className="w-5 h-5 text-amber-400" />
                   <div>
                     <h2 className="text-[var(--text-primary)] font-bold text-lg leading-tight">
-                      {`Fuel Exception — ${reviewException.asset_no}`}
+                      {`Fuel Exception: ${reviewException.asset_no}`}
                     </h2>
                     <p className="text-xs text-[var(--text-muted)]">
                       {reviewException.site} · {fmtCur(reviewException.totalExtraCostMonth, activeCurrency)}/mo
@@ -1212,13 +1212,13 @@ export default function FuelEfficiency() {
                   {wfLocked ? (
                     <span className="flex items-center gap-1.5 text-xs text-[var(--accent)]">
                       <Lock className="w-3.5 h-3.5" />
-                      Locked — in approval
+                      Locked, in approval
                     </span>
                   ) : <span />}
                   <button
                     onClick={() => { if (!wfLocked) exportPDF() }}
                     disabled={wfLocked}
-                    title={wfLocked ? 'Locked — in approval' : 'Issue formal fuel exception report'}
+                    title={wfLocked ? 'Locked, in approval' : 'Issue formal fuel exception report'}
                     className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-amber-300 hover:text-amber-200 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                     style={{ background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.25)' }}
                   >

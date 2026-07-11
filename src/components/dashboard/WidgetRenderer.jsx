@@ -232,7 +232,7 @@ function AlertsBySeverityWidget({ rows }) {
   if (!levels.length) {
     return (
       <ChartShell title="Alerts by Severity" icon={Bell}>
-        <EmptyNote text="No active alerts — all clear" />
+        <EmptyNote text="No active alerts, all clear" />
       </ChartShell>
     )
   }
@@ -344,7 +344,7 @@ function RecentAlertsWidget({ rows }) {
       {items.length === 0 ? (
         <div className="h-full flex flex-col items-center justify-center gap-2">
           <ShieldCheck size={28} className="text-green-500/80" />
-          <p className="text-sm text-[var(--text-muted)]">All clear — no active alerts</p>
+          <p className="text-sm text-[var(--text-muted)]">All clear, no active alerts</p>
         </div>
       ) : (
         <div className="space-y-2 overflow-y-auto h-full pr-1">

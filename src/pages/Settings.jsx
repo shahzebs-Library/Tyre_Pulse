@@ -354,7 +354,7 @@ export default function Settings() {
     setScheduleError('')
     const { data, error } = await settingsApi.deleteReportSchedule(id)
     if (error || (data?.length ?? 0) === 0) {
-      setScheduleError(error?.message || 'The schedule could not be deleted - check your permissions.')
+      setScheduleError(error?.message || 'The schedule could not be deleted. Check your permissions.')
       return
     }
     setTestMsg(prev => { const n = { ...prev }; delete n[id]; return n })
@@ -378,7 +378,7 @@ export default function Settings() {
       if (recipients.length === 0) throw new Error('No valid recipients')
       await sendReportEmail({
         to: recipients,
-        subject: `[Test] TyrePulse ${schedule.reportName} - ${getScheduleLabel(schedule)}`,
+        subject: `[Test] TyrePulse ${schedule.reportName}: ${getScheduleLabel(schedule)}`,
         bodyHtml: `<p style="font-family:Arial,sans-serif;color:#1e293b;">
           <strong>Test Delivery</strong><br><br>
           This is a test send for your scheduled report:<br><br>

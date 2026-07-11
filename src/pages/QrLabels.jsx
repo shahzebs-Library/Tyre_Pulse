@@ -254,7 +254,7 @@ export default function QrLabels() {
       <div className="space-y-6">
         <PageHeader
           title="QR Label Generator"
-          subtitle="Auto-generate QR code labels for tyres and vehicles - print and stick on assets"
+          subtitle="Auto-generate QR code labels for tyres and vehicles, print and stick on assets"
           icon={QrCode}
           actions={
             <div className="flex gap-2 flex-wrap">
@@ -548,10 +548,10 @@ export default function QrLabels() {
           </h3>
           <ol className="space-y-1 text-xs text-gray-500 list-decimal list-inside leading-relaxed">
             <li>Choose <strong className="text-gray-400">Tyre Serials</strong> (serial-level labels) or <strong className="text-gray-400">Vehicle Assets</strong> (vehicle-level labels)</li>
-            <li>Tick the rows you want - or use <strong className="text-gray-400">Select All</strong></li>
-            <li>Click <strong className="text-gray-400">Generate QRs</strong> - a live preview appears above the table</li>
+            <li>Tick the rows you want, or use <strong className="text-gray-400">Select All</strong></li>
+            <li>Click <strong className="text-gray-400">Generate QRs</strong>, a live preview appears above the table</li>
             <li>
-              <strong className="text-gray-400">Print Labels</strong> opens the browser print dialog - print on A4 label sheets
+              <strong className="text-gray-400">Print Labels</strong> opens the browser print dialog, print on A4 label sheets
               (3 × 4 = 12 per page). Or use <strong className="text-gray-400">Export PDF</strong> for a ready-to-send file.
             </li>
             <li>Cut and stick labels onto the tyre or vehicle windscreen / chassis plate</li>

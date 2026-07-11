@@ -1254,7 +1254,7 @@ export default function UploadData() {
                   </div>
                   <p className="text-xs text-gray-400 mb-3">
                     The smart mapping engine recognises hundreds of column name variations, abbreviations, and Arabic headers.
-                    Use any naming convention - the engine will match automatically. You can adjust any mapping before uploading.
+                    Use any naming convention. The engine will match automatically. You can adjust any mapping before uploading.
                   </p>
                   <div className="grid grid-cols-2 lg:grid-cols-3 gap-2">
                     {(uploadType === 'stock' ? STOCK_FIELDS : TYRE_FIELDS).filter(f => f.required).map(f => (
@@ -1306,7 +1306,7 @@ export default function UploadData() {
         {step === 'sheets' && (
           <div className="card space-y-4">
             <h2 className="text-base font-semibold text-white">Select Sheets to Import</h2>
-            <p className="text-sm text-gray-400">This workbook has {sheetOptions.length} sheets. Choose which to include - pivot and summary sheets are suggested to skip.</p>
+            <p className="text-sm text-gray-400">This workbook has {sheetOptions.length} sheets. Choose which to include. Pivot and summary sheets are suggested to skip.</p>
             <div className="space-y-2">
               {sheetOptions.map((s, i) => (
                 <label key={s.name} className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${s.selected ? 'border-green-700/50 bg-green-900/10' : 'border-gray-700 bg-gray-800/30'}`}>
@@ -1370,7 +1370,7 @@ export default function UploadData() {
                 <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
                   <div>
                     <h2 className="text-base font-semibold text-white">File Preview</h2>
-                    <p className="text-xs text-gray-500 mt-0.5">If the wrong row was detected as the header, pick the correct one - the table re-maps instantly.</p>
+                    <p className="text-xs text-gray-500 mt-0.5">If the wrong row was detected as the header, pick the correct one. The table re-maps instantly.</p>
                   </div>
                   <label className="flex items-center gap-2 text-xs text-gray-400">
                     Header row:
@@ -1381,7 +1381,7 @@ export default function UploadData() {
                     >
                       {rawAoa.slice(0, 15).map((r, i) => {
                         const label = (r || []).filter(c => c != null && String(c).trim() !== '').slice(0, 4).join(' | ').slice(0, 50)
-                        return <option key={i} value={i}>Row {i + 1}{label ? ` - ${label}` : ' (empty)'}</option>
+                        return <option key={i} value={i}>Row {i + 1}{label ? `: ${label}` : ' (empty)'}</option>
                       })}
                     </select>
                   </label>
@@ -1403,7 +1403,7 @@ export default function UploadData() {
                   </table>
                 </div>
                 {rows.length === 0 && (
-                  <p className="text-xs text-yellow-400 mt-2">No data rows detected below the current header row - try selecting a different header row above.</p>
+                  <p className="text-xs text-yellow-400 mt-2">No data rows detected below the current header row. Try selecting a different header row above.</p>
                 )}
               </div>
             )}
@@ -1462,7 +1462,7 @@ export default function UploadData() {
               <div className="flex flex-wrap items-center gap-3 mb-4 text-xs text-gray-500">
                 <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-green-500 inline-block" /> Exact / High match</span>
                 <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-yellow-500 inline-block" /> Medium match</span>
-                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-500 inline-block" /> No match - please select</span>
+                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-500 inline-block" /> No match: please select</span>
                 <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-gray-600 inline-block" /> Optional / Skipped</span>
               </div>
 
@@ -1548,7 +1548,7 @@ export default function UploadData() {
                   <AlertTriangle size={18} className="text-yellow-400" />
                   <span className="font-semibold text-yellow-300">Duplicate Check Results</span>
                 </div>
-                {dupCheck.reupload && <p className="text-yellow-300 text-sm mb-2">This looks like data you have already uploaded - {dupCheck.exact.length} matching records found.</p>}
+                {dupCheck.reupload && <p className="text-yellow-300 text-sm mb-2">This looks like data you have already uploaded: {dupCheck.exact.length} matching records found.</p>}
                 <div className="flex gap-4 text-sm mb-3">
                   {dupCheck.exact.length > 0 && <span className="text-red-300">{dupCheck.exact.length} exact duplicate{dupCheck.exact.length !== 1 ? 's' : ''}</span>}
                   {dupCheck.conflicts.length > 0 && <span className="text-orange-300">{dupCheck.conflicts.length} serial conflict{dupCheck.conflicts.length !== 1 ? 's' : ''}</span>}
@@ -1641,7 +1641,7 @@ export default function UploadData() {
                   </table>
                 </div>
                 {quality.some(qf => qf.required && qf.fillPct < 50) && (
-                  <p className="text-xs text-red-400 mt-2">⚠ A required field is under 50% filled - check the column mapping or header row before uploading.</p>
+                  <p className="text-xs text-red-400 mt-2">⚠ A required field is under 50% filled. Check the column mapping or header row before uploading.</p>
                 )}
               </div>
             )}
@@ -1675,7 +1675,7 @@ export default function UploadData() {
                   <input type="checkbox" className="accent-purple-500 mt-0.5" checked={useAI} onChange={e => setUseAI(e.target.checked)} />
                   <span className="text-sm text-gray-300">
                     Clean low-confidence rows with AI
-                    <span className="text-xs text-gray-500 block">Routes the {cleanPreview.review.toLocaleString()} "need review" rows through the secure AI cleaning function for better category/risk. Uses AI tokens - off by default.</span>
+                    <span className="text-xs text-gray-500 block">Routes the {cleanPreview.review.toLocaleString()} "need review" rows through the secure AI cleaning function for better category/risk. Uses AI tokens, off by default.</span>
                   </span>
                 </label>
               </div>
@@ -1705,7 +1705,7 @@ export default function UploadData() {
               ) : (
                 <div className="mt-4 mb-1 rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-4 py-2">
                   <p className="text-emerald-300 text-sm">
-                    Uploading to <span className="font-bold">{activeCountry}</span> - every row will be stamped with this country.
+                    Uploading to <span className="font-bold">{activeCountry}</span>. Every row will be stamped with this country.
                   </p>
                 </div>
               )}
@@ -1764,7 +1764,7 @@ export default function UploadData() {
                 <h2 className="text-xl font-bold text-white">{result.pending ? 'Submitted for Approval' : 'Upload Complete'}</h2>
                 <p className="text-gray-500 text-sm">
                   {result.pending
-                    ? `${(result.submitted ?? 0).toLocaleString()} ${result.pending ? 'records' : ''} sent to an administrator - they will appear once approved.`
+                    ? `${(result.submitted ?? 0).toLocaleString()} ${result.pending ? 'records' : ''} sent to an administrator. They will appear once approved.`
                     : 'Records imported and classified successfully'}
                 </p>
               </div>
@@ -1782,7 +1782,7 @@ export default function UploadData() {
                 <Info size={18} className="text-purple-400 flex-shrink-0 mt-0.5" />
                 <div>
                   <p className="text-white font-medium">
-                    {result.extraColCount} extra column{result.extraColCount !== 1 ? 's' : ''} saved as custom data - nothing was lost
+                    {result.extraColCount} extra column{result.extraColCount !== 1 ? 's' : ''} saved as custom data, nothing was lost
                   </p>
                   <p className="text-sm text-gray-400 mt-0.5">
                     All columns that don't match a standard field are preserved in Custom Data. You can browse, search, export, or teach the system to recognise them permanently.
@@ -1807,7 +1807,7 @@ export default function UploadData() {
             )}
             {result.skipLog?.length > 0 && (
               <details className="text-sm text-gray-400 mb-4">
-                <summary className="cursor-pointer text-yellow-400">View error log ({result.skipLog.length} row(s) skipped - see reason per row)</summary>
+                <summary className="cursor-pointer text-yellow-400">View error log ({result.skipLog.length} row(s) skipped, see reason per row)</summary>
                 <pre className="mt-2 bg-gray-800 rounded p-3 text-xs overflow-auto">{JSON.stringify(result.skipLog, null, 2)}</pre>
               </details>
             )}

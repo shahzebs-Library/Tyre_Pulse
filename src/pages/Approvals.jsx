@@ -341,7 +341,7 @@ function EngineUnavailable({ message, onRetry, retrying }) {
         <p className="text-white text-sm font-semibold">Approval engine not yet provisioned</p>
         <p className="text-gray-500 text-xs mt-1 max-w-md">
           The approval dashboard service is unavailable. This usually means the workflow
-          engine migrations (V116–V118) have not been applied to this environment yet.
+          engine migrations (V116 to V118) have not been applied to this environment yet.
         </p>
         {message && (
           <p className="text-gray-600 text-[11px] mt-2 font-mono break-all max-w-md">{message}</p>

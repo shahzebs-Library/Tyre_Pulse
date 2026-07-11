@@ -831,7 +831,7 @@ export default function FleetIntelligence() {
         { key: 'downtime_hours',     header: 'Downtime Hrs' },
         { key: 'last_change_date',   header: 'Last Change' },
       ],
-      'Fleet Management Intelligence - Top 20 Vehicles by Cost',
+      'Fleet Management Intelligence: Top 20 Vehicles by Cost',
       `Fleet_Intelligence_PDF_${new Date().toISOString().slice(0, 10)}`,
       'landscape',
     )

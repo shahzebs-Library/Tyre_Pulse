@@ -453,7 +453,7 @@ export default function EngineeringKpi() {
         { key: 'status',      header: 'Status' },
         { key: 'description', header: 'Description' },
       ],
-      'Engineering KPI Dashboard - All 17 KPIs',
+      'Engineering KPI Dashboard: All 17 KPIs',
       'TyrePulse_EngineeringKPIs',
       'landscape'
     )
@@ -535,7 +535,7 @@ export default function EngineeringKpi() {
         value: cpk.validCount === 0 ? 'N/A (no km data)' : `${currency} ${cpmVal.toFixed(4)}/mile`,
         subValue: `Derived from CPK × 1.609`,
         description: cpk.validCount > 0
-          ? `P10: ${currency} ${(cpk.p10Cpk * 1.60934).toFixed(4)} - P90: ${currency} ${(cpk.p90Cpk * 1.60934).toFixed(4)}`
+          ? `P10: ${currency} ${(cpk.p10Cpk * 1.60934).toFixed(4)}, P90: ${currency} ${(cpk.p90Cpk * 1.60934).toFixed(4)}`
           : 'Upload km_at_fitment & km_at_removal data',
         status: cpk.validCount === 0 ? 'neutral' : cpkStatus,
         trend: null,
@@ -650,7 +650,7 @@ export default function EngineeringKpi() {
         description: `Estimated scrap cost: ${currency} ${scrapRate.estimatedScrapCost.toLocaleString()}`,
         status: scrapStatus,
         trend: scrapPct > 15 ? 'up' : 'down',
-        trendLabel: scrapPct > 15 ? 'High scrap - investigate early removal' : 'Scrap within normal range',
+        trendLabel: scrapPct > 15 ? 'High scrap, investigate early removal' : 'Scrap within normal range',
       },
       // 12. Fleet Availability
       {
@@ -683,7 +683,7 @@ export default function EngineeringKpi() {
         status: trendStatus,
         trend: costTrend.trend === 'improving' ? 'down' : costTrend.trend === 'worsening' ? 'up' : null,
         trendLabel: costTrend.trend === 'improving' ? 'Costs declining'
-          : costTrend.trend === 'worsening' ? 'Costs increasing - action needed'
+          : costTrend.trend === 'worsening' ? 'Costs increasing, action needed'
           : 'Costs stable',
       },
       // 15. Vendor Performance
@@ -691,7 +691,7 @@ export default function EngineeringKpi() {
         title: 'Vendor Performance',
         value: topVendor ? `Top: ${topVendor.brand}` : 'N/A (no km data)',
         subValue: topVendor && topVendor.avgCpk > 0
-          ? `CPK: ${currency} ${topVendor.avgCpk.toFixed(4)}/km - Score: ${topVendor.score.toFixed(2)}`
+          ? `CPK: ${currency} ${topVendor.avgCpk.toFixed(4)}/km, Score: ${topVendor.score.toFixed(2)}`
           : topVendor ? 'No CPK data for top brand' : 'Upload km data for vendor ranking',
         description: bottomVendor && topVendor && bottomVendor.brand !== topVendor.brand
           ? `Worst: ${bottomVendor.brand} (CPK: ${bottomVendor.avgCpk > 0 ? `${currency} ${bottomVendor.avgCpk.toFixed(4)}` : 'N/A'})`
@@ -719,10 +719,10 @@ export default function EngineeringKpi() {
         value: `${cpk.coveragePct.toFixed(1)}% of records`,
         subValue: `${cpk.validCount} valid · ${cpk.totalCount - cpk.validCount} missing km data`,
         description: cpk.coveragePct < 50
-          ? 'Low coverage - CPK metrics unreliable. Upload km_at_fitment & km_at_removal.'
+          ? 'Low coverage: CPK metrics unreliable. Upload km_at_fitment & km_at_removal.'
           : cpk.coveragePct < 80
-            ? 'Moderate coverage - some CPK calculations may be skewed'
-            : 'Good coverage - CPK metrics are reliable',
+            ? 'Moderate coverage: some CPK calculations may be skewed'
+            : 'Good coverage: CPK metrics are reliable',
         status: cpk.coveragePct > 80 ? 'good' : cpk.coveragePct > 50 ? 'warning' : 'critical',
         trend: cpk.coveragePct > 80 ? 'up' : 'down',
         trendLabel: cpk.coveragePct > 80 ? 'High data quality' : 'Improve data entry for km fields',
@@ -978,7 +978,7 @@ export default function EngineeringKpi() {
               {/* Chart 1: CPK by Brand */}
               <div className="card">
                 <div className="flex items-center justify-between mb-3">
-                  <h3 className="text-sm font-medium text-gray-300">CPK by Brand - Top 10</h3>
+                  <h3 className="text-sm font-medium text-gray-300">CPK by Brand: Top 10</h3>
                   <span className="text-xs text-gray-500">Lower = better · Green &lt;1.0 · Yellow 1-2 · Red ≥2</span>
                 </div>
                 {cpkBrandChart ? (

@@ -947,7 +947,7 @@ export default function WorkflowSettings() {
             </div>
             <h1 className="text-2xl font-bold text-white">Approval Workflows</h1>
           </div>
-          <p className="text-gray-400 text-sm ml-11">Visually build multi-step approval chains — Start → step → step → Complete — per entity type</p>
+          <p className="text-gray-400 text-sm ml-11">Visually build multi-step approval chains, Start → step → step → Complete, per entity type</p>
         </div>
         <button
           onClick={() => { setModalError(null); setModal({ mode: 'create', initial: null }) }}

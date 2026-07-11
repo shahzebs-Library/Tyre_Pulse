@@ -405,14 +405,14 @@ export default function GatePass() {
             </div>
             {wfLocked && (
               <div className="flex items-center gap-1.5 text-xs text-yellow-400 mb-2">
-                <Lock size={12} /> Locked — in approval
+                <Lock size={12} /> Locked, in approval
               </div>
             )}
             {issueError && !blockers?.blocked && <p className="text-red-400 text-xs mb-2">{issueError}</p>}
             <button onClick={() => issuePass('Cleared')} disabled={issuing || wfLocked || blockers?.blocked}
               className="btn-primary px-6 disabled:opacity-50"
               title={wfLocked ? 'Locked while in approval' : blockers?.blocked ? 'Blocked by open critical safety items' : undefined}>
-              {issuing ? 'Issuing...' : wfLocked ? 'Locked — in approval' : blockers?.blocked ? 'Release blocked' : 'Issue Gate Pass'}
+              {issuing ? 'Issuing...' : wfLocked ? 'Locked, in approval' : blockers?.blocked ? 'Release blocked' : 'Issue Gate Pass'}
             </button>
           </div>
         )}

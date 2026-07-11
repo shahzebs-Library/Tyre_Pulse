@@ -25,7 +25,7 @@ export default function ImportTemplatePanel({ module }) {
         <FileSpreadsheet size={16} className="text-sky-400" />
         <div className="flex-1">
           <p className="text-sm font-semibold text-[var(--text-primary)]">
-            Import template — {supported.label}
+            Import template: {supported.label}
           </p>
           <p className="text-xs text-[var(--text-muted)]">
             {guide.length} columns · {requiredCount} required · headers pre-arranged to auto-map at 100%
@@ -50,7 +50,7 @@ export default function ImportTemplatePanel({ module }) {
         <div className="border-t border-sky-800/40 p-4 space-y-3">
           <p className="text-xs text-[var(--text-secondary)] flex items-start gap-1.5">
             <Info size={14} className="text-sky-400 shrink-0 mt-0.5" />
-            Fill the template and upload it — every column below is recognised automatically. You can
+            Fill the template and upload it. Every column below is recognised automatically. You can
             keep extra columns; unknown columns are preserved as custom fields, never dropped. Column
             order does not matter. Leave a cell blank when you don&apos;t have the value.
           </p>

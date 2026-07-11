@@ -1258,7 +1258,7 @@ export default function ExecutiveReport() {
           <Card>
             <SectionHeader
               icon={BarChart2}
-              title="Section 2 - KPI Dashboard"
+              title="Section 2: KPI Dashboard"
               subtitle={`${periodRecords.length.toLocaleString()} tyre records · ${periodValueLabel(period)}`}
               badge="12 Metrics"
             />
@@ -1294,7 +1294,7 @@ export default function ExecutiveReport() {
           <Card>
             <SectionHeader
               icon={AlertTriangle}
-              title="Section 3 - Root Cause Analysis"
+              title="Section 3: Root Cause Analysis"
               subtitle="Failure driver classification across all tyre events in period"
               badge={`${rootCauses.length} Categories`}
             />
@@ -1378,7 +1378,7 @@ export default function ExecutiveReport() {
           <Card>
             <SectionHeader
               icon={DollarSign}
-              title="Section 4 - Financial Impact"
+              title="Section 4: Financial Impact"
               subtitle="Cost analysis, budget tracking, and financial projections"
             />
 
@@ -1465,7 +1465,7 @@ export default function ExecutiveReport() {
           <Card>
             <SectionHeader
               icon={ShieldAlert}
-              title="Section 5 - Risk Assessment"
+              title="Section 5: Risk Assessment"
               subtitle="Fleet risk exposure, site matrix, and risk trend analysis"
             />
 
@@ -1548,7 +1548,7 @@ export default function ExecutiveReport() {
 
             {/* Risk matrix table */}
             <div className="mt-6">
-              <p className="text-xs text-[var(--text-secondary)] font-medium mb-2 uppercase tracking-wide">Risk Matrix - Sites × Risk Level</p>
+              <p className="text-xs text-[var(--text-secondary)] font-medium mb-2 uppercase tracking-wide">Risk Matrix: Sites × Risk Level</p>
               <div className="overflow-x-auto">
                 <table className="w-full text-xs">
                   <thead>
@@ -1647,7 +1647,7 @@ export default function ExecutiveReport() {
           <Card>
             <SectionHeader
               icon={Target}
-              title="Section 6 - Recommendations"
+              title="Section 6: Recommendations"
               subtitle="Prioritised management recommendations based on fleet intelligence"
               badge={`${recommendations.length} Actions`}
             />
@@ -1692,7 +1692,7 @@ export default function ExecutiveReport() {
                   <CheckCircle className="w-5 h-5 text-emerald-400" />
                 </div>
                 <div>
-                  <h2 className="text-lg font-semibold text-[var(--text-primary)]">Section 7 - Action Plan</h2>
+                  <h2 className="text-lg font-semibold text-[var(--text-primary)]">Section 7: Action Plan</h2>
                   <p className="text-sm text-[var(--text-secondary)] mt-0.5">30/60/90 day structured delivery plan</p>
                 </div>
               </div>
@@ -1707,9 +1707,9 @@ export default function ExecutiveReport() {
 
             {/* Phase dividers */}
             {[
-              { label: '30-Day Actions - Immediate', days: '0-30', color: 'text-red-400 border-red-500/30 bg-red-500/5', rows: actionPlan.slice(0, 4) },
-              { label: '60-Day Actions - Short Term', days: '30-60', color: 'text-amber-400 border-amber-500/30 bg-amber-500/5', rows: actionPlan.slice(4, 7) },
-              { label: '90-Day Actions - Strategic', days: '60-90', color: 'text-blue-400 border-blue-500/30 bg-blue-500/5', rows: actionPlan.slice(7) },
+              { label: '30-Day Actions: Immediate', days: '0-30', color: 'text-red-400 border-red-500/30 bg-red-500/5', rows: actionPlan.slice(0, 4) },
+              { label: '60-Day Actions: Short Term', days: '30-60', color: 'text-amber-400 border-amber-500/30 bg-amber-500/5', rows: actionPlan.slice(4, 7) },
+              { label: '90-Day Actions: Strategic', days: '60-90', color: 'text-blue-400 border-blue-500/30 bg-blue-500/5', rows: actionPlan.slice(7) },
             ].map(phase => (
               <div key={phase.label} className="mb-5">
                 <div className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border mb-3 ${phase.color}`}>

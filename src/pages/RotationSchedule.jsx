@@ -434,7 +434,7 @@ function RotationDrawer({ vehicle, onClose }) {
               {vehicle.wearImbalance != null && vehicle.wearImbalance > WEAR_IMBALANCE_MM && (
                 <div className="mt-3 flex items-center gap-2 text-xs text-orange-400 bg-orange-900/20 border border-orange-800 rounded-lg px-3 py-2">
                   <AlertTriangle size={13} />
-                  Steer-Drive tread imbalance of {vehicle.wearImbalance.toFixed(1)} mm - rotation recommended
+                  Steer-Drive tread imbalance of {vehicle.wearImbalance.toFixed(1)} mm, rotation recommended
                 </div>
               )}
             </div>
@@ -764,7 +764,7 @@ export default function RotationSchedule() {
     // Completing/transitioning a schedule is an edit — blocked while the open
     // record's approval workflow is active/locked (server RLS also enforces).
     if (detailSchedule?.id === id && wfLocked) {
-      setSchedError('This rotation is locked — an approval is in progress for it.')
+      setSchedError('This rotation is locked. An approval is in progress for it.')
       return
     }
     setSchedBusy(true)
@@ -1691,7 +1691,7 @@ export default function RotationSchedule() {
                                         onClick={() => updateScheduleStatus(s.id, 'Completed')}
                                         disabled={schedBusy || rowLocked}
                                         className="p-1.5 bg-green-900/30 hover:bg-green-800/50 border border-green-800 text-green-400 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                                        title={rowLocked ? 'Locked — in approval' : 'Mark completed'}
+                                        title={rowLocked ? 'Locked, in approval' : 'Mark completed'}
                                       >
                                         {rowLocked ? <Lock size={13} /> : <CheckCircle size={13} />}
                                       </button>
@@ -1817,7 +1817,7 @@ export default function RotationSchedule() {
                 {wfLocked && (
                   <div className="flex items-center gap-1.5 text-xs text-[var(--accent)] bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg px-3 py-2">
                     <Lock size={12} />
-                    Locked — in approval. Completing this rotation is disabled until the workflow finishes.
+                    Locked, in approval. Completing this rotation is disabled until the workflow finishes.
                   </div>
                 )}
 
@@ -1828,7 +1828,7 @@ export default function RotationSchedule() {
                       onClick={() => updateScheduleStatus(detailSchedule.id, 'Completed')}
                       disabled={schedBusy || rowLocked || detailSchedule.status === 'Completed'}
                       className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-green-700 hover:bg-green-600 text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-                      title={rowLocked ? 'Locked — in approval' : 'Mark rotation completed'}
+                      title={rowLocked ? 'Locked, in approval' : 'Mark rotation completed'}
                     >
                       {rowLocked ? <Lock size={14} /> : <CheckCircle size={14} />}
                       {detailSchedule.status === 'Completed' ? 'Completed' : 'Mark Completed'}

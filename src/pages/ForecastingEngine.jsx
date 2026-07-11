@@ -642,7 +642,7 @@ export default function ForecastingEngine() {
     exportToPdf(
       rows,
       ['Brand', 'Last 12mo Actual', 'Next 3mo Forecast', 'Next 12mo Forecast', 'Est. Cost 12mo'],
-      'TyrePulse - Forecasting Engine Report',
+      'TyrePulse: Forecasting Engine Report',
       'Brand Demand Forecast'
     )
   }
@@ -817,7 +817,7 @@ export default function ForecastingEngine() {
       </div>
 
       {/* ── Section 4 - Demand Forecast Chart ───────────────────────────── */}
-      <SectionCard title="Demand Forecast - Monthly Replacement Projections" icon={TrendingUp}>
+      <SectionCard title="Demand Forecast: Monthly Replacement Projections" icon={TrendingUp}>
         <div className="h-72">
           <Line
             data={demandChartData}
@@ -860,7 +860,7 @@ export default function ForecastingEngine() {
       </SectionCard>
 
       {/* ── Section 5 - Budget Forecast Chart ───────────────────────────── */}
-      <SectionCard title="Budget Forecast - Monthly Spend Projections" icon={DollarSign}>
+      <SectionCard title="Budget Forecast: Monthly Spend Projections" icon={DollarSign}>
         <div className="h-72">
           <Line
             data={budgetChartData}

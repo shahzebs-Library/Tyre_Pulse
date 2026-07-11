@@ -25,9 +25,9 @@ const INTEGRATION_TARGETS = [
 ]
 
 const SETUP_STEPS = [
-  { n: 1, title: 'Provision a connector', body: 'An administrator configures ERP endpoint, credentials (stored server-side) and the sync schedule. Requires API access - not available in read-only mode.' },
+  { n: 1, title: 'Provision a connector', body: 'An administrator configures ERP endpoint, credentials (stored server-side) and the sync schedule. Requires API access, not available in read-only mode.' },
   { n: 2, title: 'Map fields once',       body: 'Reuse a saved mapping profile from the Data Intake Center so ERP fields land in the correct TyrePulse columns with validation and currency normalisation.' },
-  { n: 3, title: 'Scheduled read-only sync', body: 'The connector pulls on a schedule, stages every row for review, and commits only validated records - the same controlled pipeline as manual imports.' },
+  { n: 3, title: 'Scheduled read-only sync', body: 'The connector pulls on a schedule, stages every row for review, and commits only validated records, the same controlled pipeline as manual imports.' },
 ]
 
 function TargetCard({ t }) {

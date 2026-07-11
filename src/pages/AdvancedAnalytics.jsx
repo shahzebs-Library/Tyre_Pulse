@@ -1462,7 +1462,7 @@ function VehicleTab({ data, currency, sortField, sortDir, onSort, sortedRows }) 
       </div>
 
       <Card>
-        <SectionTitle>All Vehicles - Tyre Cost Analysis</SectionTitle>
+        <SectionTitle>All Vehicles: Tyre Cost Analysis</SectionTitle>
         <div className="overflow-x-auto">
           <table className="w-full text-xs">
             <thead>
@@ -1867,7 +1867,7 @@ function FailureTab({ data, currency }) {
       {/* Month × Category heatmap */}
       {heatmap.length > 0 && (
         <Card>
-          <SectionTitle>Failure Seasonality - Month × Category Heat Map</SectionTitle>
+          <SectionTitle>Failure Seasonality: Month × Category Heat Map</SectionTitle>
           <div className="overflow-x-auto">
             <table className="text-xs">
               <thead>

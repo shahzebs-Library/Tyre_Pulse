@@ -440,7 +440,7 @@ export default function EnterpriseTable({
               <p className="text-sm text-muted">
                 {paginationLabel
                   ? paginationLabel({ from: fromRow, to: toRow, total: filteredTotal, page: effectivePageIndex + 1, pageCount: effectivePageCount })
-                  : `${fromRow.toLocaleString()}–${toRow.toLocaleString()} of ${filteredTotal.toLocaleString()}`}
+                  : `${fromRow.toLocaleString()} to ${toRow.toLocaleString()} of ${filteredTotal.toLocaleString()}`}
               </p>
               <div className="flex items-center gap-2">
                 {showPageSizeSelector && (

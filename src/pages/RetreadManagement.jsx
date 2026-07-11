@@ -829,7 +829,7 @@ export default function RetreadManagement() {
                   <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
                     <div className="lg:col-span-2 bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-4">
                       <p className="text-xs text-[var(--text-muted)] mb-3 font-medium flex items-center gap-1.5">
-                        <BarChart3 size={13} className="text-purple-400" /> Retread Fitments - Last 12 Months
+                        <BarChart3 size={13} className="text-purple-400" /> Retread Fitments: Last 12 Months
                       </p>
                       <div className="h-52">
                         <Bar
@@ -1030,7 +1030,7 @@ export default function RetreadManagement() {
                   {vendorData.trendChart.datasets.length > 0 && (
                     <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-4">
                       <p className="text-xs text-[var(--text-muted)] mb-3 font-medium flex items-center gap-1.5">
-                        <Activity size={13} className="text-purple-400" /> CPK Trend - Top 3 Vendors (Last 12 Months)
+                        <Activity size={13} className="text-purple-400" /> CPK Trend: Top 3 Vendors (Last 12 Months)
                       </p>
                       <div className="h-64">
                         <Line data={vendorData.trendChart} options={CHART_OPTS} />
@@ -1405,7 +1405,7 @@ export default function RetreadManagement() {
                 {wfLocked && (
                   <div className="flex items-center gap-1.5 text-xs text-[var(--accent)] bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg px-3 py-2">
                     <Lock size={12} />
-                    Locked — in approval. This casing's export is disabled until the workflow completes.
+                    Locked, in approval. This casing's export is disabled until the workflow completes.
                   </div>
                 )}
               </div>
@@ -1415,7 +1415,7 @@ export default function RetreadManagement() {
                 <button
                   onClick={() => handleExportCasing(drawer)}
                   disabled={wfLocked}
-                  title={wfLocked ? 'Locked — in approval' : 'Export casing record'}
+                  title={wfLocked ? 'Locked, in approval' : 'Export casing record'}
                   className="flex items-center gap-1.5 px-4 py-2 bg-purple-700 hover:bg-purple-600 rounded-lg text-sm font-semibold text-white transition disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-purple-700"
                 >
                   {wfLocked ? <Lock size={14} /> : <FileText size={14} />} Export Casing

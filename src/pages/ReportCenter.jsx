@@ -31,7 +31,7 @@ const pad = (n) => String(n).padStart(2, '0')
 const fmt = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
 
 const REPORTS = [
-  { id: 'pptx',  label: 'Executive PowerPoint', desc: '12-slide management deck — KPIs, risk, cost, recommendations.', icon: Presentation, tint: 'text-orange-400', bg: 'rgba(249,115,22,0.12)' },
+  { id: 'pptx',  label: 'Executive PowerPoint', desc: '12-slide management deck: KPIs, risk, cost, recommendations.', icon: Presentation, tint: 'text-orange-400', bg: 'rgba(249,115,22,0.12)' },
   { id: 'daily', label: 'Daily Executive PDF',  desc: 'One-page-per-section landscape operations brief.',            icon: FileText,     tint: 'text-green-400',  bg: 'rgba(22,163,74,0.12)' },
   { id: 'excel', label: 'Tyre Records (Excel)', desc: 'Filterable workbook of tyre records with cost columns.',       icon: FileSpreadsheet, tint: 'text-emerald-400', bg: 'rgba(16,185,129,0.12)' },
   { id: 'pdf',   label: 'Tyre Records (PDF)',   desc: 'Print-ready landscape table (top 200 records).',               icon: FileText,     tint: 'text-red-400',    bg: 'rgba(239,68,68,0.12)' },
@@ -161,7 +161,7 @@ export default function ReportCenter() {
               actions.length > 0 ? `${actions.length} corrective actions pending.` : 'No open corrective actions.',
             ],
             recommendations: [
-              criticalTyres > 0 ? { priority: 'Critical', text: `${criticalTyres} tyres critical — schedule immediate replacement.` } : null,
+              criticalTyres > 0 ? { priority: 'Critical', text: `${criticalTyres} tyres critical, schedule immediate replacement.` } : null,
               { priority: 'Low', text: 'Maintain weekly pressure checks and monthly tread measurements.' },
             ].filter(Boolean),
             branding,
@@ -181,7 +181,7 @@ export default function ReportCenter() {
         await exportToPdf(
           rows.slice(0, 200).map(t => ({ ...t, cost_per_tyre: t.cost_per_tyre || 0 })),
           [{ key: 'issue_date', header: 'Date', width: 24 }, { key: 'asset_no', header: 'Asset No', width: 28 }, { key: 'brand', header: 'Brand', width: 24 }, { key: 'site', header: 'Site', width: 30 }, { key: 'category', header: 'Category', width: 32 }, { key: 'risk_level', header: 'Risk', width: 20 }, { key: 'cost_per_tyre', header: `Cost (${activeCurrency})`, width: 24 }],
-          `${reportCompany} — Tyre Records · ${formatDate(now, activeCountry)}`,
+          `${reportCompany}: Tyre Records · ${formatDate(now, activeCountry)}`,
           `${reportCompany.replace(/\s+/g, '_')}_Tyres_${stamp}`, 'landscape', reportCompany)
       }
       setToast({ text: t('reportcenter.toast.success'), type: 'ok' })

@@ -427,7 +427,7 @@ export default function TyreScrapManagement() {
       const totalCost   = b.costs.reduce((s, v) => s + v, 0)
       const avgCPK      = avgKm && totalCost > 0 ? totalCost / (avgKm * b.scrap) : null
       const earlyPct    = b.scrap > 0 ? (b.earlyCount / b.scrap) * 100 : 0
-      const rec         = scrapRate > 20 ? 'High Scrap - Review' : 'Normal Performance'
+      const rec         = scrapRate > 20 ? 'High Scrap, Review' : 'Normal Performance'
       return { ...b, scrapRate, avgKm, avgCPK, earlyPct, rec }
     }).sort((a, b) => b.scrapRate - a.scrapRate)
   }, [filtered, fleetAvgKmLife])
@@ -839,9 +839,9 @@ export default function TyreScrapManagement() {
               }
               badge={
                 kpis.scrapRate > 25
-                  ? { label: 'Critical - Investigate', cls: 'text-red-400 bg-red-900/30 border-red-700' }
+                  ? { label: 'Critical, Investigate', cls: 'text-red-400 bg-red-900/30 border-red-700' }
                   : kpis.scrapRate > 15
-                  ? { label: 'Elevated - Monitor', cls: 'text-orange-400 bg-orange-900/30 border-orange-700' }
+                  ? { label: 'Elevated, Monitor', cls: 'text-orange-400 bg-orange-900/30 border-orange-700' }
                   : null
               }
             />
@@ -893,7 +893,7 @@ export default function TyreScrapManagement() {
                           {retreatOpportunity.count} tyre{retreatOpportunity.count !== 1 ? 's' : ''} this month may qualify for retreading
                         </p>
                         <p className="text-blue-400/80 text-xs">
-                          Estimated savings: {fmtCurrency(retreatOpportunity.savings, activeCurrency)} - retreading at 40% lower cost vs new replacement
+                          Estimated savings: {fmtCurrency(retreatOpportunity.savings, activeCurrency)}, retreading at 40% lower cost vs new replacement
                         </p>
                       </div>
                     </div>
@@ -906,7 +906,7 @@ export default function TyreScrapManagement() {
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
                 <div className="lg:col-span-2 bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-4">
                   <p className="text-xs text-[var(--text-muted)] font-medium mb-3 flex items-center gap-2">
-                    <TrendingDown className="text-red-400" size={13} /> Monthly Scrap Trend - Last 12 Months
+                    <TrendingDown className="text-red-400" size={13} /> Monthly Scrap Trend, Last 12 Months
                   </p>
                   <div className="h-52">
                     {monthlyTrend.some(m => m.count > 0)
@@ -994,7 +994,7 @@ export default function TyreScrapManagement() {
                       </table>
                       {earlyScrap.length > 8 && (
                         <p className="text-[var(--text-dim)] text-xs mt-2 text-center">
-                          + {earlyScrap.length - 8} more - use Disposal Log tab for full list
+                          + {earlyScrap.length - 8} more, use Disposal Log tab for full list
                         </p>
                       )}
                     </div>
@@ -1160,7 +1160,7 @@ export default function TyreScrapManagement() {
                               <Badge
                                 label={b.rec}
                                 cfg={
-                                  b.rec === 'High Scrap - Review'
+                                  b.rec === 'High Scrap, Review'
                                     ? { text: 'text-red-400', bg: 'bg-red-900/30', border: 'border-red-700' }
                                     : { text: 'text-green-400', bg: 'bg-green-900/20', border: 'border-green-700/50' }
                                 }
@@ -1188,7 +1188,7 @@ export default function TyreScrapManagement() {
               {/* Site grouped bar chart */}
               <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-4">
                 <p className="text-xs text-[var(--text-muted)] font-medium mb-3 flex items-center gap-2">
-                  <Building2 size={13} className="text-blue-400" /> Scrap Count by Site - Last 6 Months
+                  <Building2 size={13} className="text-blue-400" /> Scrap Count by Site, Last 6 Months
                 </p>
                 <div className="h-56">
                   {siteAnalysis.length > 0
@@ -1463,7 +1463,7 @@ export default function TyreScrapManagement() {
                               {rowLocked ? (
                                 <span
                                   className="inline-flex items-center gap-1 text-[10px] text-amber-400"
-                                  title="Locked — in approval"
+                                  title="Locked, in approval"
                                 >
                                   <Lock size={11} /> Locked
                                 </span>

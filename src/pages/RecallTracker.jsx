@@ -820,7 +820,7 @@ export default function RecallTracker() {
                                 onClick={() => handleClose(r.id)}
                                 disabled={rowLocked}
                                 className="flex items-center gap-1 px-2 py-1 bg-green-900/30 hover:bg-green-900/60 border border-green-700/50 rounded text-green-400 text-xs transition disabled:opacity-40 disabled:cursor-not-allowed"
-                                title={rowLocked ? 'Locked — in approval' : 'Mark as Closed'}
+                                title={rowLocked ? 'Locked, in approval' : 'Mark as Closed'}
                               >
                                 {rowLocked ? <Lock size={12} /> : <CheckCircle size={12} />}
                               </button>
@@ -831,7 +831,7 @@ export default function RecallTracker() {
                                   onClick={() => openEdit(r)}
                                   disabled={rowLocked}
                                   className="p-1 text-[var(--text-muted)] hover:text-[var(--text-secondary)] transition disabled:opacity-40 disabled:cursor-not-allowed"
-                                  title={rowLocked ? 'Locked — in approval' : 'Edit'}
+                                  title={rowLocked ? 'Locked, in approval' : 'Edit'}
                                 >
                                   {rowLocked ? <Lock size={12} /> : <Activity size={12} />}
                                 </button>
@@ -839,7 +839,7 @@ export default function RecallTracker() {
                                   onClick={() => handleDelete(r.id)}
                                   disabled={rowLocked}
                                   className="p-1 text-[var(--text-dim)] hover:text-red-400 transition disabled:opacity-40 disabled:cursor-not-allowed"
-                                  title={rowLocked ? 'Locked — in approval' : 'Delete'}
+                                  title={rowLocked ? 'Locked, in approval' : 'Delete'}
                                 >
                                   {rowLocked ? <Lock size={12} /> : <XCircle size={12} />}
                                 </button>
@@ -1205,7 +1205,7 @@ export default function RecallTracker() {
                 />
                 {wfLocked && (
                   <p className="flex items-center gap-1.5 text-xs text-[var(--text-muted)]">
-                    <Lock size={12} /> Locked — in approval
+                    <Lock size={12} /> Locked, in approval
                   </p>
                 )}
               </div>
@@ -1416,7 +1416,7 @@ export default function RecallTracker() {
 
                   {/* Serial prefix */}
                   <div>
-                    <label className="block text-xs text-[var(--text-muted)] mb-1">Serial Prefix Pattern <span className="text-[var(--text-muted)]">(optional - first 4 chars, e.g. MH23)</span></label>
+                    <label className="block text-xs text-[var(--text-muted)] mb-1">Serial Prefix Pattern <span className="text-[var(--text-muted)]">(optional, first 4 chars, e.g. MH23)</span></label>
                     <input
                       value={form.affected_serial_prefix}
                       onChange={e => setForm(f => ({ ...f, affected_serial_prefix: e.target.value.toUpperCase().slice(0, 4) }))}

@@ -373,7 +373,7 @@ function Modal({ title, onClose, onSave, saving, form, setForm, emailError, setE
 
           {wfLocked && (
             <div className="flex items-center gap-1.5 text-xs text-[var(--text-muted)]">
-              <Lock className="w-3 h-3" /> Locked — in approval
+              <Lock className="w-3 h-3" /> Locked, in approval
             </div>
           )}
         </div>
@@ -389,7 +389,7 @@ function Modal({ title, onClose, onSave, saving, form, setForm, emailError, setE
           <button
             onClick={onSave}
             disabled={saving || wfLocked}
-            title={wfLocked ? 'Locked — in approval' : undefined}
+            title={wfLocked ? 'Locked, in approval' : undefined}
             className="px-5 py-2 text-sm font-medium text-white bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
           >
             {wfLocked ? (

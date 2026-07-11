@@ -271,7 +271,7 @@ function JobDrawer({ job, onClose, currency }) {
         { key: 'parts_cost', header: 'Parts Cost' },
         { key: 'total_cost', header: 'Total Cost' },
       ],
-      `Workshop Job Card - ${job.work_order_no ?? job.id}`,
+      `Workshop Job Card: ${job.work_order_no ?? job.id}`,
       `TyrePulse_Workshop_JobCard_${job.work_order_no ?? job.id}`,
       'landscape',
     )
@@ -432,7 +432,7 @@ function JobDrawer({ job, onClose, currency }) {
           {wfLocked && (
             <div className="flex items-center gap-1.5 text-xs text-[var(--accent)] bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg px-3 py-2">
               <Lock size={12} />
-              Locked — in approval. This job card's export is disabled until the workflow completes.
+              Locked, in approval. This job card's export is disabled until the workflow completes.
             </div>
           )}
         </div>
@@ -442,7 +442,7 @@ function JobDrawer({ job, onClose, currency }) {
           <button
             onClick={handleExportJobCard}
             disabled={wfLocked}
-            title={wfLocked ? 'Locked — in approval' : 'Export job card'}
+            title={wfLocked ? 'Locked, in approval' : 'Export job card'}
             className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded-lg text-sm font-semibold text-white transition disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-blue-600"
           >
             {wfLocked ? <Lock size={14} /> : <FileText size={14} />} Export Job Card
@@ -1072,7 +1072,7 @@ export default function WorkshopManagement() {
                   {/* Job Volume Chart */}
                   <ChartCard
                     title="Job Volume by Site"
-                    subtitle="Completed jobs per site - last 12 months"
+                    subtitle="Completed jobs per site, last 12 months"
                     height={280}
                   >
                     {jobVolumeChart && jobVolumeChart.datasets.length > 0 ? (
@@ -1107,7 +1107,7 @@ export default function WorkshopManagement() {
                   {/* Turnaround Trend */}
                   <ChartCard
                     title="Turnaround Time Trend"
-                    subtitle="12-month rolling average hours - lower is better"
+                    subtitle="12-month rolling average hours, lower is better"
                     height={240}
                   >
                     {taTrendChart ? (
@@ -1445,7 +1445,7 @@ export default function WorkshopManagement() {
                   {/* Cost stacked bar */}
                   <ChartCard
                     title="Labour vs Parts Cost"
-                    subtitle="Monthly stacked breakdown - identify cost drivers"
+                    subtitle="Monthly stacked breakdown, identify cost drivers"
                     height={300}
                   >
                     {costChart ? (

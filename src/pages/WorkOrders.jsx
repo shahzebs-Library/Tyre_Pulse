@@ -958,7 +958,7 @@ export default function WorkOrders() {
                 <div className="flex gap-3">
                   <button onClick={() => setShowForm(false)} className="btn-secondary">{t('workorders.form.cancel')}</button>
                   <button onClick={handleSave} disabled={saving || (editOrder && wfLocked)}
-                    title={editOrder && wfLocked ? 'Locked — in approval' : undefined}
+                    title={editOrder && wfLocked ? 'Locked, in approval' : undefined}
                     className="btn-primary gap-2 disabled:opacity-50">
                     {editOrder && wfLocked ? <Lock size={16} /> : saving ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle size={16} />}
                     {saving ? t('workorders.form.saving') : editOrder ? t('workorders.form.save') : t('workorders.form.create')}
@@ -1085,7 +1085,7 @@ export default function WorkOrders() {
 
                 {wfLocked && (
                   <div className="flex items-center gap-1.5 text-xs text-[var(--text-muted)]">
-                    <Lock size={12} /> Locked — in approval
+                    <Lock size={12} /> Locked, in approval
                   </div>
                 )}
 
@@ -1168,7 +1168,7 @@ export default function WorkOrders() {
 
                 <div className="flex gap-3 pt-2">
                   <button onClick={() => { setViewOrder(null); openEdit(viewOrder) }} disabled={wfLocked}
-                    title={wfLocked ? 'Locked — in approval' : undefined}
+                    title={wfLocked ? 'Locked, in approval' : undefined}
                     className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-xl transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-blue-600">
                     {wfLocked ? <Lock size={15} /> : <Edit2 size={15} />}{t('workorders.detail.edit')}
                   </button>

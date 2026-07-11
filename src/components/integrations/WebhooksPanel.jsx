@@ -108,7 +108,7 @@ export default function WebhooksPanel() {
 
       <p className="text-xs text-[var(--text-secondary)] leading-relaxed">
         Push TyrePulse business events (work orders, gate passes, imports…) to external systems the
-        moment they happen. Endpoints must be <b>https</b> and public — internal/private addresses are blocked.
+        moment they happen. Endpoints must be <b>https</b> and public; internal/private addresses are blocked.
       </p>
 
       {msg && (
@@ -158,7 +158,7 @@ export default function WebhooksPanel() {
           {ep.description && <p className="text-[11px] text-[var(--text-muted)]">{ep.description}</p>}
           {testResults[ep.id] && (
             <p className={`text-[11px] ${testResults[ep.id].ok ? 'text-emerald-400' : 'text-red-400'}`}>
-              {testResults[ep.id].ok ? 'Test delivered.' : `Test failed: ${testResults[ep.id].reason} (a CORS block on the receiver looks like a network failure — see the note below)`}
+              {testResults[ep.id].ok ? 'Test delivered.' : `Test failed: ${testResults[ep.id].reason} (a CORS block on the receiver looks like a network failure, see the note below)`}
             </p>
           )}
         </div>
@@ -208,8 +208,8 @@ export default function WebhooksPanel() {
           </div>
           <p className="text-[11px] text-[var(--text-muted)] flex items-start gap-1.5">
             <KeyRound size={12} className="mt-0.5 shrink-0" />
-            With a secret set, every delivery carries <code className="font-mono">X-TyrePulse-Signature</code> — a hex
-            HMAC-SHA256 of the JSON body — so your receiver can verify it came from TyrePulse.
+            With a secret set, every delivery carries <code className="font-mono">X-TyrePulse-Signature</code>, a hex
+            HMAC-SHA256 of the JSON body, so your receiver can verify it came from TyrePulse.
           </p>
           <button type="submit" disabled={saving} className="btn-primary text-sm disabled:opacity-60">
             {saving ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />} {form.id ? 'Save changes' : 'Add webhook'}
@@ -233,8 +233,8 @@ export default function WebhooksPanel() {
         <p>Deliveries are sent <b>from the browser</b> the moment an event happens, so they are best-effort:
           the receiving endpoint must allow cross-origin (CORS) POSTs from this app's domain, and events fire only
           while someone has TyrePulse open.</p>
-        <p>For guaranteed, server-side delivery point the webhook at a relay — an <b>n8n webhook node</b>, a
-          Supabase edge function, or any serverless proxy — which accepts the signed POST and forwards it to
+        <p>For guaranteed, server-side delivery point the webhook at a relay, such as an <b>n8n webhook node</b>, a
+          Supabase edge function, or any serverless proxy, which accepts the signed POST and forwards it to
           systems that don't allow CORS.</p>
       </div>
     </div>

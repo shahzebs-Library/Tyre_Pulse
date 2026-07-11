@@ -466,7 +466,7 @@ export default function ReportBuilder() {
           </select>
 
           <p className="text-xs text-muted mb-2">
-            Columns — {selectedCols.length} of {dataset.columns.length} selected (order = report order)
+            Columns: {selectedCols.length} of {dataset.columns.length} selected (order = report order)
           </p>
           <div className="max-h-80 overflow-y-auto pr-1 space-y-1">
             {/* Selected first, in report order, with reorder controls */}
@@ -539,7 +539,7 @@ export default function ReportBuilder() {
 
           {/* Filter rows */}
           {filters.length === 0 ? (
-            <p className="text-xs text-muted mb-4">No filters — the report returns all rows up to the limit.</p>
+            <p className="text-xs text-muted mb-4">No filters. The report returns all rows up to the limit.</p>
           ) : (
             <div className="space-y-2 mb-4">
               {filters.map((f, i) => {
@@ -743,7 +743,7 @@ export default function ReportBuilder() {
             loading={running}
             error={runError}
             onRetry={runReport}
-            emptyMessage="No records match this report — adjust the filters and run again."
+            emptyMessage="No records match this report. Adjust the filters and run again."
             exportFileName={exportFile}
             initialPageSize={25}
           />

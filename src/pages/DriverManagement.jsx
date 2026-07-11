@@ -392,7 +392,7 @@ function DriverDrawer({ driver, currency, onClose }) {
                 <button
                   onClick={handlePdfExport}
                   disabled={wfLocked}
-                  title={wfLocked ? 'Locked — in approval' : 'Export disciplinary record PDF'}
+                  title={wfLocked ? 'Locked: in approval' : 'Export disciplinary record PDF'}
                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                   style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)' }}
                 >
@@ -461,7 +461,7 @@ function DriverDrawer({ driver, currency, onClose }) {
                 {wfLocked && (
                   <div className="flex items-center gap-1.5 text-xs text-[var(--accent)] bg-[var(--surface-1)] border border-[var(--input-border)] rounded-lg px-3 py-2">
                     <Lock size={12} />
-                    Locked — in approval. The formal disciplinary PDF export is disabled until the workflow completes.
+                    Locked: in approval. The formal disciplinary PDF export is disabled until the workflow completes.
                   </div>
                 )}
               </div>
@@ -1012,7 +1012,7 @@ export default function DriverManagement() {
           style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)' }}>
           <div className="flex items-center gap-2 mb-4">
             <TrendingUp size={14} className="text-blue-400" />
-            <h3 className="text-sm font-semibold text-[var(--text-primary)]">Driver Comparison - Avg CPK (Top 10)</h3>
+            <h3 className="text-sm font-semibold text-[var(--text-primary)]">Driver Comparison: Avg CPK (Top 10)</h3>
           </div>
           {cpkChartData.labels.length > 0 ? (
             <div style={{ height: 220 }}>

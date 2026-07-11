@@ -245,7 +245,7 @@ function AssetDrawer({ asset, tyres = [], workOrders, currency, onClose, onEdit,
             <button
               onClick={() => !wfLocked && onEdit?.(asset)}
               disabled={wfLocked}
-              title={wfLocked ? 'Locked — in approval' : t('assetmgmt.actions.editAsset')}
+              title={wfLocked ? 'Locked: in approval' : t('assetmgmt.actions.editAsset')}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[var(--surface-2)] hover:bg-[var(--surface-3)] text-yellow-400 hover:text-yellow-300 text-sm transition-colors border border-[var(--border-bright)] disabled:opacity-40 disabled:cursor-not-allowed"
             >
               {wfLocked ? <Lock className="w-4 h-4" /> : <Edit2 className="w-4 h-4" />}
@@ -281,7 +281,7 @@ function AssetDrawer({ asset, tyres = [], workOrders, currency, onClose, onEdit,
 
         {wfLocked && (
           <div className="flex items-center gap-1.5 text-xs text-[var(--text-muted)]">
-            <Lock className="w-3 h-3" /> Locked — in approval
+            <Lock className="w-3 h-3" /> Locked: in approval
           </div>
         )}
 
@@ -570,7 +570,7 @@ function AssetModal({ asset, sites, countries, onSave, onClose, locked = false }
         <div className="flex justify-end gap-3 px-5 pb-5">
           <button onClick={onClose} className="px-4 py-2 rounded-lg bg-[var(--surface-2)] text-[var(--text-secondary)] text-sm hover:bg-[var(--surface-3)] transition-colors">{t('assetmgmt.modal.cancel')}</button>
           <button onClick={handleSave} disabled={saving || (isEdit && locked)}
-            title={isEdit && locked ? 'Locked — in approval' : undefined}
+            title={isEdit && locked ? 'Locked: in approval' : undefined}
             className="px-5 py-2 rounded-lg bg-blue-600 text-white text-sm font-semibold hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2">
             {isEdit && locked ? <Lock className="w-4 h-4" /> : saving ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
             {saving ? t('assetmgmt.modal.saving') : t('assetmgmt.modal.save')}
@@ -1129,7 +1129,7 @@ export default function AssetManagement() {
                                       <button onClick={() => { if (!rowLocked) { setEditLocked(false); setEditAsset(a) } }}
                                         disabled={rowLocked}
                                         className="p-1.5 rounded-lg hover:bg-[var(--surface-3)] text-[var(--text-secondary)] hover:text-yellow-400 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-                                        title={rowLocked ? 'Locked — in approval' : 'Edit asset'}>
+                                        title={rowLocked ? 'Locked: in approval' : 'Edit asset'}>
                                         {rowLocked ? <Lock className="w-4 h-4" /> : <Edit2 className="w-4 h-4" />}
                                       </button>
                                     )

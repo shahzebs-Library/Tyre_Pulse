@@ -762,7 +762,7 @@ export default function Accidents() {
         deleted += data?.length ?? 0
       }
       if (deleted === 0) {
-        throw new Error('No rows were deleted — you may not have permission (Admin only) or they were already removed.')
+        throw new Error('No rows were deleted. You may not have permission (Admin only) or they were already removed.')
       }
       setBulkDeleteOpen(false)
       setSelectedIds(new Set())
@@ -902,7 +902,7 @@ export default function Accidents() {
               <button
                 onClick={() => openEdit(r)}
                 disabled={locked}
-                title={locked ? 'Locked — in approval' : undefined}
+                title={locked ? 'Locked: in approval' : undefined}
                 className="text-[var(--text-muted)] hover:text-blue-400 text-xs transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:text-[var(--text-muted)]"
               >
                 Edit
@@ -911,7 +911,7 @@ export default function Accidents() {
                 <button
                   onClick={() => raiseAction(r)}
                   disabled={locked}
-                  title={locked ? 'Locked — in approval' : undefined}
+                  title={locked ? 'Locked: in approval' : undefined}
                   className="text-[var(--text-muted)] hover:text-orange-400 text-xs transition-colors whitespace-nowrap disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:text-[var(--text-muted)]"
                 >
                   Raise CA
@@ -920,14 +920,14 @@ export default function Accidents() {
               <button
                 onClick={() => handleDelete(r.id)}
                 disabled={locked}
-                title={locked ? 'Locked — in approval' : undefined}
+                title={locked ? 'Locked: in approval' : undefined}
                 className="text-[var(--text-muted)] hover:text-red-400 text-xs transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:text-[var(--text-muted)]"
               >
                 Delete
               </button>
               {locked && (
                 <span className="flex items-center gap-1 text-[10px] text-[var(--accent)] whitespace-nowrap">
-                  <Lock size={10} /> Locked — in approval
+                  <Lock size={10} /> Locked: in approval
                 </span>
               )}
             </div>
@@ -1616,7 +1616,7 @@ export default function Accidents() {
 
             {/* Step 1 - download template */}
             <div className="bg-[var(--input-bg)] border border-[var(--input-border)] rounded-xl p-4 space-y-3">
-              <p className="text-sm font-semibold text-[var(--text-secondary)]">Step 1 - Download Template</p>
+              <p className="text-sm font-semibold text-[var(--text-secondary)]">Step 1: Download Template</p>
               <p className="text-xs text-[var(--text-muted)] leading-relaxed">
                 Use the official template to ensure correct column mapping. Required columns:
                 <span className="text-[var(--text-dim)] font-mono"> incident_date</span>,
@@ -1639,7 +1639,7 @@ export default function Accidents() {
 
             {/* Step 2 - upload file */}
             <div className="bg-[var(--input-bg)] border border-[var(--input-border)] rounded-xl p-4 space-y-3">
-              <p className="text-sm font-semibold text-[var(--text-secondary)]">Step 2 - Upload Your File</p>
+              <p className="text-sm font-semibold text-[var(--text-secondary)]">Step 2: Upload Your File</p>
               <input
                 ref={bulkInputRef}
                 type="file"

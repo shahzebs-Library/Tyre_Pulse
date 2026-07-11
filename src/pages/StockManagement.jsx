@@ -879,7 +879,7 @@ export default function StockManagement() {
               />
               {wfLocked && (
                 <div className="flex items-center gap-1.5 text-xs text-[var(--text-muted)] mt-2">
-                  <Lock size={12} /> Locked — in approval
+                  <Lock size={12} /> Locked, in approval
                 </div>
               )}
             </div>
@@ -921,7 +921,7 @@ export default function StockManagement() {
                   <button
                     onClick={saveAdjustment}
                     disabled={saving || adjForm.qty_change === 0 || wfLocked}
-                    title={wfLocked ? 'Locked — in approval' : undefined}
+                    title={wfLocked ? 'Locked, in approval' : undefined}
                     className="btn-primary text-xs px-3 py-1.5 flex items-center gap-1.5 disabled:opacity-50"
                   >
                     {wfLocked && <Lock size={12} />}

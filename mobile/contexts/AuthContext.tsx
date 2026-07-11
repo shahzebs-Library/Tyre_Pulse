@@ -5,6 +5,7 @@ import { Profile, normaliseRole } from '../lib/types'
 import { syncQueue, clearQueue } from '../lib/offlineQueue'
 import { syncRecordQueue, clearRecordQueue } from '../lib/recordQueue'
 import { clearPushToken, cancelDailyInspectionReminder } from '../lib/notifications'
+import { setSentryUser } from '../lib/sentry'
 
 /** Wipe all device-local, user-scoped state (offline queues + local reminders)
  *  so a different account on a shared device cannot inherit the prior user's
@@ -87,6 +88,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         subscribeToProfile(session.user.id)
       } else {
         setProfile(null)
+        setSentryUser(null)
         unsubscribeFromProfile()
         // On any sign-out (manual OR forced lockout) purge device-local queues.
         clearLocalUserState().catch(() => {})
@@ -111,6 +113,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           return
         }
         setProfile({ ...data, role: normaliseRole(data.role) } as Profile)
+        // Tag field crash reports with the operator behind them.
+        setSentryUser({ id: data.id, username: data.username })
       } else {
         setProfile(null)
       }

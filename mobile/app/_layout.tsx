@@ -1,4 +1,7 @@
 import 'react-native-url-polyfill/auto'
+// Import for its side effect: initialises Sentry (guarded by DSN) before the
+// app renders, so early crashes are captured.
+import '../lib/sentry'
 import { useEffect, useRef, useState } from 'react'
 import { Stack, useRouter } from 'expo-router'
 import { SafeAreaProvider } from 'react-native-safe-area-context'
@@ -16,7 +19,7 @@ import {
 
 SplashScreen.preventAutoHideAsync().catch(() => {})
 
-export default function RootLayout() {
+function RootLayout() {
   const [fontsLoaded, fontError] = useFonts({ ...Ionicons.font })
   const [timedOut, setTimedOut] = useState(false)
   const router = useRouter()
@@ -65,3 +68,10 @@ export default function RootLayout() {
     </ErrorBoundary>
   )
 }
+
+// NOTE: we deliberately do NOT use Sentry.wrap() on the expo-router root layout
+// — wrapping it can detach the provider tree (AuthProvider) from the routed
+// screens. Crash capture is instead provided by Sentry.init()'s global JS/native
+// handlers (installed via the ../lib/sentry import above) plus the ErrorBoundary,
+// which reports React render errors to Sentry itself.
+export default RootLayout

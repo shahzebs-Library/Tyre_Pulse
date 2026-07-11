@@ -3,6 +3,7 @@ import {
   View, Text, TouchableOpacity, StyleSheet, ScrollView, Platform,
 } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
+import { Sentry, sentryEnabled } from '../lib/sentry'
 
 interface Props { children: ReactNode }
 interface State { error: Error | null; info: string }
@@ -19,6 +20,12 @@ export class ErrorBoundary extends Component<Props, State> {
     if (__DEV__) {
       console.error('[ErrorBoundary] Caught error:', error.message)
       console.error('[ErrorBoundary] Stack:', info.componentStack)
+    }
+    // Report React render errors to Sentry (no-op when Sentry has no DSN).
+    if (sentryEnabled) {
+      Sentry.captureException(error, {
+        contexts: { react: { componentStack: info.componentStack } },
+      })
     }
     this.setState({ info: __DEV__ ? (info.componentStack ?? '') : '' })
   }

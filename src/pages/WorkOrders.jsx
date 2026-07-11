@@ -22,6 +22,7 @@ import { workOrders } from '../lib/api'
 import { logAudit } from '../lib/audit'
 import { publish } from '../lib/events'
 import PageHeader from '../components/ui/PageHeader'
+import StatusBadge from '../components/ui/StatusBadge'
 import CustomFieldsPanel from '../components/CustomFieldsPanel'
 import EntityApprovalPanel from '../components/workflow/EntityApprovalPanel'
 import { useSettings } from '../contexts/SettingsContext'
@@ -1042,9 +1043,7 @@ export default function WorkOrders() {
               <div className="p-6 space-y-5">
                 {/* Status + Priority */}
                 <div className="flex items-center gap-3">
-                  {(() => { const sc = STATUS_CONFIG[viewOrder.status] || STATUS_CONFIG.Open; const Icon = sc.icon
-                    return <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-sm font-medium border ${sc.color} ${sc.bg} ${sc.border}`}><Icon size={14} />{viewOrder.status}</span>
-                  })()}
+                  <StatusBadge status={viewOrder.status} size={30} />
                   {(() => { const pc = PRIORITY_CONFIG[viewOrder.priority] || PRIORITY_CONFIG.Medium
                     return <span className={`flex items-center gap-1.5 text-sm ${pc.color}`}><span className={`w-2.5 h-2.5 rounded-full ${pc.dot}`} />{t('workorders.detail.priorityBadge', { priority: viewOrder.priority })}</span>
                   })()}

@@ -11,6 +11,7 @@ import {
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
 import EmptyState from '../components/EmptyState'
+import StatusBadge from '../components/ui/StatusBadge'
 import EntityApprovalPanel from '../components/workflow/EntityApprovalPanel'
 import { gatePasses } from '../lib/api'
 import { logAudit } from '../lib/audit'
@@ -361,7 +362,7 @@ export default function GatePass() {
         {checkResult === 'found' && inspection && (
           <div className="rounded-xl p-5 mb-4" style={{ background: 'rgba(22,163,74,0.12)', border: '1px solid rgba(22,163,74,0.4)' }}>
             <div className="flex items-center gap-3 mb-3">
-              <CheckCircle size={28} className="text-green-400 flex-shrink-0" />
+              <StatusBadge state={blockers?.blocked ? 'critical' : 'verified'} showLabel={false} size={36} className="flex-shrink-0" />
               <div>
                 <p className="text-green-300 font-bold text-lg">CLEARED</p>
                 <p className="text-green-400/70 text-sm">Tyre inspection completed today</p>

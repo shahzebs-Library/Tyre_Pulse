@@ -3,7 +3,7 @@ import { Link, useSearchParams } from 'react-router-dom'
 import {
   UploadCloud, FileSpreadsheet, Wand2, ShieldCheck, CheckCircle2, AlertTriangle,
   Loader2, ArrowRight, ArrowLeft, RefreshCw, Database, Save, Bookmark, Paperclip, FileArchive,
-  Trash2, RotateCcw, Download, ChevronDown, ChevronRight,
+  Trash2, RotateCcw, Download, ChevronDown, ChevronRight, Activity,
 } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { useSettings } from '../contexts/SettingsContext'
@@ -17,11 +17,26 @@ import {
   headerFingerprint, aggregateStagedRows,
 } from '../lib/import'
 import * as imports from '../lib/api/imports'
+import { summarizeValidation, summarizeCommitResult, diagnoseBatchHealth, formatDiagnosticsReport } from '../lib/import/diagnostics'
+import { getBatchDiagnostics } from '../lib/api/importDiagnostics'
 import MappingProfilesManager from '../components/intake/MappingProfilesManager'
 import DataLinkPanel from '../components/intake/DataLinkPanel'
 import CostControlPanel from '../components/intake/CostControlPanel'
 import DataCompletenessPanel from '../components/intake/DataCompletenessPanel'
 import ImportTemplatePanel from '../components/intake/ImportTemplatePanel'
+import IntakeDiagnosticsPanel from '../components/intake/IntakeDiagnosticsPanel'
+
+// Trigger a client-side text download (diagnostics report export).
+function downloadText(filename, text) {
+  try {
+    const blob = new Blob([text || ''], { type: 'text/plain;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url; a.download = filename
+    document.body.appendChild(a); a.click(); a.remove()
+    setTimeout(() => URL.revokeObjectURL(url), 1000)
+  } catch { /* download is best-effort */ }
+}
 
 const MODULES = [
   { key: 'fleet', label: 'Fleet / Assets' },
@@ -160,6 +175,34 @@ export default function DataIntakeCenter() {
       return next
     })
   }, [annotated])
+
+  // ── Diagnostics ────────────────────────────────────────────────────────────
+  // Live analysis of the staged batch: health checks, grouped error reasons and
+  // the effective action plan — so the operator can see exactly what will happen
+  // (and why rows are blocked) before committing, and force/skip in one click.
+  const validationDiag = useMemo(
+    () => summarizeValidation(annotated, { module, actionOf: effectiveAction, overriddenCount: actionPlan.overridden }),
+    [annotated, module, effectiveAction, actionPlan.overridden],
+  )
+  const commitDiag = useMemo(() => (result ? summarizeCommitResult(result) : null), [result])
+
+  // Post-commit diagnosis for a batch in the "Recent imports" list.
+  const [diag, setDiag] = useState(null) // { batchId, checks, meta, loading, error }
+  const diagnoseRecent = useCallback(async (b) => {
+    if (diag?.batchId === b.id) { setDiag(null); return } // toggle off
+    setDiag({ batchId: b.id, loading: true, error: '', checks: [], meta: null })
+    try {
+      const d = await getBatchDiagnostics(b.id)
+      setDiag({
+        batchId: b.id, loading: false, error: '',
+        checks: diagnoseBatchHealth(d),
+        meta: { module: d.batch?.module, country: d.batch?.country, importStatus: d.batch?.import_status, total: d.batch?.total_rows, imported: d.batch?.imported_rows },
+        raw: d,
+      })
+    } catch (e) {
+      setDiag({ batchId: b.id, loading: false, error: e?.message || 'Could not load diagnostics.', checks: [], meta: null })
+    }
+  }, [diag])
 
   // Uploaded files that never became an import (orphans from abandoned attempts).
   const orphanFiles = useMemo(() => files.filter((f) => f.orphan), [files])
@@ -788,6 +831,22 @@ export default function DataIntakeCenter() {
               </p>
             </div>
           )}
+          {/* Diagnostics: health checks + grouped error reasons + one-click
+              force/skip. Gives the operator a clear "why" and a fast override. */}
+          <IntakeDiagnosticsPanel
+            mode="validate"
+            validation={validationDiag}
+            onDownload={() => downloadText(
+              `intake-diagnostics-${module}-${new Date().toISOString().slice(0, 10)}.txt`,
+              formatDiagnosticsReport({ meta: { module, country: activeCountry }, validation: validationDiag }),
+            )}
+            actions={{
+              canForce: isElevated,
+              onForceErrors: () => setForceFlagged(true),
+              onSkipErrors: () => setAllActions('skip'),
+              onReset: () => { setAllActions(null); setForceFlagged(false) },
+            }}
+          />
           {/* Action plan + bulk controls: the operator has the final say on every
               row. The smart defaults are pre-selected; override any row (or all)
               before staging. */}
@@ -1033,6 +1092,16 @@ export default function DataIntakeCenter() {
               )}
             </div>
           )}
+          {result && commitDiag && (
+            <IntakeDiagnosticsPanel
+              mode="result"
+              commit={commitDiag}
+              onDownload={() => downloadText(
+                `intake-result-${module}-${new Date().toISOString().slice(0, 10)}.txt`,
+                formatDiagnosticsReport({ meta: { module, country: activeCountry }, commit: commitDiag }),
+              )}
+            />
+          )}
         </div>
       )}
 
@@ -1060,6 +1129,11 @@ export default function DataIntakeCenter() {
                         className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded border border-[var(--border-bright)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:border-[var(--border-bright)]">
                         Open
                       </Link>
+                      <button onClick={() => diagnoseRecent(b)}
+                        title="Diagnose this batch (health, dropped rows, commit failures)"
+                        className={`inline-flex items-center gap-1 text-xs px-2 py-1 rounded border ${diag?.batchId === b.id ? 'border-sky-600/60 text-sky-300' : 'border-[var(--border-bright)] text-[var(--text-secondary)] hover:text-sky-300 hover:border-sky-700/50'}`}>
+                        <Activity size={12} /> Diagnose
+                      </button>
                       <button onClick={() => deleteRecent(b)} disabled={rowBusy}
                         title={committed ? 'Reverse this committed import' : 'Delete this staged batch'}
                         className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded border border-[var(--border-bright)] text-[var(--text-secondary)] hover:text-red-400 hover:border-red-700/50 disabled:opacity-50">
@@ -1074,6 +1148,21 @@ export default function DataIntakeCenter() {
             </tbody>
           </table>
         </div>
+        {diag && (
+          <div className="mt-3">
+            <IntakeDiagnosticsPanel
+              mode="batch"
+              loading={diag.loading}
+              error={diag.error}
+              batchHealth={diag.checks}
+              batchMeta={diag.meta}
+              onDownload={diag.raw ? () => downloadText(
+                `intake-batch-${diag.batchId?.slice?.(0, 8) || 'batch'}.txt`,
+                formatDiagnosticsReport({ meta: { batchId: diag.batchId, module: diag.meta?.module, country: diag.meta?.country }, batchHealth: diag.checks }),
+              ) : undefined}
+            />
+          </div>
+        )}
         <p className="mt-3 text-xs text-[var(--text-dim)]">Original files are stored privately; every source row is preserved. Commits run server-side (permission + country scope + idempotency). <Link to="/upload" className="underline">Legacy upload</Link></p>
       </div>
 

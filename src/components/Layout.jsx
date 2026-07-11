@@ -36,6 +36,9 @@ import TyreSwapIc from './icons/tyre-swap.icon'
 import AnomalyScanIc from './icons/anomaly-scan.icon'
 import ForecastTrendIc from './icons/forecast-trend.icon'
 import ServiceCalendarIc from './icons/service-calendar.icon'
+import StockBoxIc from './icons/stock-box.icon'
+import BarcodeScanIc from './icons/barcode-scan.icon'
+import OdometerIc from './icons/odometer.icon'
 import { supabase } from '../lib/supabase'
 import { detectAlerts, countAlertsBySeverity } from '../lib/alertEngine'
 import { syncPendingInspections, getPendingCount, getFailedCount, getFailedInspections, retryFailedInspection } from '../lib/offlineQueue'
@@ -89,9 +92,9 @@ const NAV_GROUPS = [
       { to: '/rca',                 label: 'Root Cause',         icon: Search },
       { to: '/daily-ops',           label: 'Daily Ops',          icon: Coffee, adminOnly: A },
       { to: '/live-fleet',          label: 'Live Fleet Status',  icon: Radio, adminOnly: A },
-      { to: '/serial-tracker',      label: 'Serial Tracker',     icon: ScanLine, adminOnly: A },
+      { to: '/serial-tracker',      label: 'Serial Tracker',     icon: BarcodeScanIc, adminOnly: A },
       { to: '/qr-labels',           label: 'QR Labels',          icon: QrCode, adminOnly: A },
-      { to: '/vehicle-history',     label: 'Vehicle History',    icon: Car, adminOnly: A },
+      { to: '/vehicle-history',     label: 'Vehicle History',    icon: OdometerIc, adminOnly: A },
       { to: '/anomalies',           label: 'Anomaly Scan',       icon: AnomalyScanIc, adminOnly: A },
       { to: '/maintenance-calendar', label: 'Maintenance Calendar', icon: Calendar, adminOnly: A },
       { to: '/erp-sync',            label: 'ERP Sync',           icon: Database, roles: ERP_ROLES },
@@ -132,7 +135,7 @@ const NAV_GROUPS = [
   {
     label: 'Stock & Procurement',
     items: [
-      { to: '/stock',               label: 'Stock',               icon: Package },
+      { to: '/stock',               label: 'Stock',               icon: StockBoxIc },
       { to: '/stock-replenishment', label: 'Stock Replenishment', icon: PackagePlus },
       { to: '/scrap',               label: 'Scrap Management',    icon: ScrapBinIc },
       { to: '/budgets',             label: 'Budgets & Cost',      icon: DollarSign },

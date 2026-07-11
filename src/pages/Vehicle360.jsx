@@ -7,6 +7,7 @@ import { recordCost } from '../lib/analyticsEngine'
 import Gauge from '../components/ui/Gauge'
 import StatTile from '../components/ui/StatTile'
 import VehicleMap from '../components/ui/VehicleMap'
+import StatusBadge from '../components/ui/StatusBadge'
 import LoadingState from '../components/LoadingState'
 import EmptyState from '../components/EmptyState'
 import CopilotCard from '../components/ai/CopilotCard'
@@ -112,7 +113,7 @@ export default function Vehicle360() {
           >
             <ClipboardCheck size={15} /> Start Tyre Checklist
           </Link>
-          {vehicle.status && <span className="text-xs font-semibold px-3 py-1.5 rounded-full bg-[var(--accent-wash,rgba(34,197,94,.12))] text-[var(--accent)]">{vehicle.status}</span>}
+          {vehicle.status && <StatusBadge status={vehicle.status} size={30} />}
         </div>
       </div>
 

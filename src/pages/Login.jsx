@@ -19,7 +19,8 @@ import BrandIcon from '../components/ui/BrandIcon'
 
 // Login renders before the org is known, so it uses the logo cached on this
 // device after the last successful sign-in (V120), falling back to the mark.
-const LOGIN_LOGO = readCachedLogo('login') || TpLogo
+// Read at render time (not module load) so it reflects the latest cached value
+// even after a client-side navigation from an authenticated session to /login.
 
 /* ── CSS injected once ────────────────────────────────────────────────────── */
 const STYLES = `
@@ -186,6 +187,7 @@ const FEATURES = [
 ]
 
 export default function Login() {
+  const loginLogo = readCachedLogo('login') || TpLogo
   const { signIn, user, loading: authLoading } = useAuth()
   const { isDark, toggleTheme } = useTheme()
   const { t }               = useLanguage()
@@ -460,7 +462,7 @@ export default function Login() {
                 border:'1.5px solid rgba(22,163,74,0.4)',
                 boxShadow:'0 0 30px rgba(22,163,74,0.3)',
               }}>
-                <BrandIcon src={LOGIN_LOGO} custom={LOGIN_LOGO !== TpLogo} size={30} />
+                <BrandIcon src={loginLogo} custom={loginLogo !== TpLogo} size={30} />
               </div>
               <div>
                 <div style={{fontSize:26, fontWeight:800, color:'#fff', letterSpacing:'-0.03em', lineHeight:1}}>TyrePulse</div>

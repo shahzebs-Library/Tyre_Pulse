@@ -1,11 +1,48 @@
 # TyrePulse - Developer Handoff
-**Last updated:** 11 July 2026 (Session 13)
-**Branch:** `main` (auto-deploys to Vercel). Session 13 commits were fast-forwarded onto the latest `main` and pushed.
-**Web build status:** ✅ Clean - builds with zero errors (`vite build` green); anomaly engine **74/74 tests green**, auto-deploys to Vercel
+**Last updated:** 11 July 2026 (Session 14)
+**Branch:** `main` (auto-deploys to Vercel). Session 14 shipped the whole brand/design-system pass across many small feature branches, each `--no-ff` merged to `main` and pushed.
+**Web build status:** ✅ Clean - builds with zero errors (`vite build` green); full suite **1685 tests green**, auto-deploys to Vercel
 **Mobile build status:** ✅ Expo SDK 54 / RN 0.81.5. Session 13 added **Sentry crash/perf monitoring** + reliability fixes; `expo export --platform android` produces a clean Hermes bundle. Build the distribution APK from `main` with the `production-apk` EAS profile.
-**DB migrations applied to live Supabase:** through **V119** (project `jhssdmeruxtrlqnwfksc`). Session 13 applied no migrations (deleted one QA test account only).
+**DB migrations applied to live Supabase:** through **V120** (project `jhssdmeruxtrlqnwfksc`). Session 14 applied **V120** (brand logo placements — extends `set_org_branding`).
 **Live URL under test:** tyre-pulse-peach.vercel.app
 **Active branches:** `main` · dev `claude/erp-sync-hub-roles-od8m1k` (holds 2 **table-standardization** commits deliberately kept OFF `main` — see Session 12 → Held) · dev `claude/mobile-app-ui-features-tdfxy0` · frozen `claude/backend-step2-assets` (Go) · frozen `claude/mobile-kotlin-app` (Kotlin). All other feature branches consolidated into `main` (see `docs/BRANCH_CONSOLIDATION_2026-07-04.md`).
+
+---
+
+## Session 14 (11 July 2026) — Brand & design-system pass: logo studio, illustration/icon system, copy cleanup
+
+**Theme:** A complete visual-identity layer for the web app — a placeable logo library, a theme-aware SVG illustration + custom icon system, and the branding/theme fixes to make it all read correctly. Built via multiple swarms of general-purpose agents (disjoint file ownership, purely additive → conflict-free) plus hand integration. All merged to `main`.
+
+**Gate:** web `vite build` ✅ zero errors · full suite **1685 tests green** · **V120 applied live** · every piece merged to `main` and pushed. Commit range `0237b66 → 5a4e426`.
+
+### 1. Brand Logo Studio + logo library (V120 live)
+- **21 curated Tyre Pulse logo variants** processed from source PNGs (flood-filled white→transparent preserving interior whites, auto-trimmed, downscaled, optimised): **`public/brand/library/*.png` (~1.3 MB total)** + generated manifest `src/lib/brand/library.generated.json`. Do NOT re-add the ~19 MB source zip.
+- `src/lib/brand/library.js`: variants + **7 placement slots** (app_icon, login, favicon, report_cover, email_header, mobile_splash, pdf_watermark) + resolver `resolveBrandLogo(branding, slot)` (asset id | URL | /path → src) + a pre-auth localStorage cache (`tp.brandLogos.v1`).
+- Admin UI **`BrandLogoStudio.jsx`** in **User Management → Branding** tab: pick org, pick slot, assign a variant or custom URL, live preview, save.
+- **`MIGRATIONS_V120_BRAND_LOGO_PLACEMENTS.sql` — APPLIED LIVE.** Rewrites `set_org_branding` to validate + persist a `logos` map (helper `_clean_brand_logos`, 7-slot allow-list) and **preserve it when a caller omits the key** (the old fn full-replaced branding → would have wiped placements when the colour editor saved). Mirrors `report_cover` → legacy `logo_url`.
+
+### 2. Enterprise illustration system (74 illustrations) + custom icon set (87 icons)
+- **`src/components/illustrations/`**: `tokens.js` (palette → CSS vars, Light/Dark + tenant-brand aware), `primitives.jsx` (a11y/motion-safe `IllustrationBase` shell + `BrandDefs` gradients with per-instance `useId` namespacing), **glob auto-discovery registry** (`import.meta.glob('./**/*.illustration.jsx')` — no central index, add-a-file = registered), `_CONTRACT.md`. **74** across `state/ error/ module/ brand/ badge/ marker/ widget/ vehicle/ marketing/ report/`.
+- **`src/components/icons/`**: `IconBase.jsx` (24×24, `currentColor` = theme-aware for free, stroke 1.75), glob registry, `TpIcon`, `_CONTRACT.md`. **87 domain icons** (tyre/wheel/axle/vehicle, fleet-ops/analytics/compliance, tyre-engineering/wear).
+- Reusable consumers: `EmptyState` gained an `illustration=` prop; new `StateScreen.jsx` (full-page 404/500/offline/etc).
+- **Brand Assets gallery** `src/pages/BrandAssets.jsx` — living styleguide at **`/brand-assets`** (Admin-gated: `RoleRoute allowed={['Admin']}` + `adminOnly` nav). Logos / Illustrations / Icons tabs, search + filters + click-to-copy; categories derive from the registry (auto-update).
+- Wired: branded 404 (`NotFound.jsx`), `AppErrorBoundary` crash art, `OnboardingWizard` hero, illustration-backed empty states across ~15 pages, marketing heroes (Login/Billing), vehicle silhouettes (FleetMaster/AssetManagement/VehicleTyreDiagram via `vehicleArt()`), **19 branded sidebar nav icons**, fleet-map pins (`VehicleMap` markers), and `StatusBadge` in detail views (Vehicle360 / WorkOrders / GatePass / Inspections). Lottie/Rive from the spec deliberately skipped (need binary assets + deps).
+
+### 3. Logo colour + theme fixes
+- **Logos rendered black** because the transparent, navy-heavy marks sat on the dark app surface. Added a light `.checker` utility (index.css) used for every logo tile in the Studio + gallery → true colours always show.
+- **`BrandIcon.jsx`**: default mark unchanged; a custom logo is framed on a white chip in the app chrome (legible on the green badge) but rendered transparent/blended on the **user login** (`chip={false}`) so it matches the dark page.
+- **Console super-admin login** (`ConsoleLogin.jsx`): blended monochrome-white wordmark (`filter: brightness(0) invert(1)`, no chip) so it reads on the near-black console.
+- Branded-login persistence: `clearCachedLogos()` keeps the public `login`/`favicon` slots on logout (drops org-scoped ones); Login reads the cached logo at render time. **Caveat:** needs one successful sign-in on a device first (branding is unknown pre-auth); true zero-touch per-tenant login needs subdomain/host resolution.
+
+### 4. Copy cleanup — remove em/en dashes from user-facing text
+- 5-agent swarm swept **83 files** (pages + components), replacing em/en dashes + spaced separator hyphens in visible copy with commas / colons / "to". **Preserved:** word-hyphens (real-time, multi-tenant, sign-in), code / classNames / i18n keys, comments/JSDoc, and the `—` "empty cell / no-data" placeholder glyphs. One label doubling as a compared value (`High Scrap, Review`) updated on both sides.
+
+### 5. Executive Report declutter
+- Removed the 4 decorative report illustrations (cover-hero, data-quality-seal, exec-summary-banner, section-divider) from `ExecutiveReport.jsx` — it's a formal print/PDF doc. **Rule:** branded art belongs in operational UI + detail views, NOT report/print layouts.
+
+### Notes / follow-ups (owner action)
+- **Brand it:** sign in as an **Admin** → `/users` → **Branding** tab (Logo Studio) to assign logos to slots; browse all assets at **`/brand-assets`**. Pick a **dark-legible** login logo (blue/coloured emblem) since the login logo now blends on the dark page.
+- Not force-placed (available via `<Illustration name>` / `<TpIcon name>`, browsable in the gallery): most of the 87 icons, badge/marker/widget art, and several report graphics.
 
 ---
 

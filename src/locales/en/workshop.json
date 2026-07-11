@@ -1,0 +1,53 @@
+{
+  "detail": {
+    "eyebrow": "Work Order",
+    "back": "Back to Workshop",
+    "loading": "Loading work order...",
+    "loadFailed": "Failed to load work order",
+    "retry": "Retry",
+    "notFoundTitle": "Work order not found",
+    "notFoundDesc": "No work order matches “{id}”. It may have been deleted or lies outside your current country scope.",
+    "onTime": "On Time",
+    "late": "Late",
+    "tabs": {
+      "overview": "Overview",
+      "costs": "Costs",
+      "parts": "Parts",
+      "approval": "QA Approval"
+    },
+    "fields": {
+      "asset": "Asset",
+      "site": "Site",
+      "workType": "Work Type",
+      "assignedTo": "Assigned To",
+      "created": "Created",
+      "scheduled": "Scheduled",
+      "completed": "Completed",
+      "turnaround": "Turnaround"
+    },
+    "cost": {
+      "heading": "Cost Breakdown",
+      "labour": "Labour Cost",
+      "parts": "Parts Cost",
+      "total": "Total Cost",
+      "labourShare": "Labour {pct}",
+      "partsShare": "Parts {pct}"
+    },
+    "description": "Description",
+    "parts": {
+      "heading": "Parts Used",
+      "empty": "No parts recorded for this work order.",
+      "fallbackName": "Part {n}",
+      "qty": "Qty: {qty}"
+    },
+    "approval": {
+      "title": "Workshop QA Approval",
+      "locked": "Locked, in approval. This job card's export is disabled until the workflow completes."
+    },
+    "export": {
+      "jobCard": "Export Job Card",
+      "locked": "Locked, in approval",
+      "tooltip": "Export job card"
+    }
+  }
+}

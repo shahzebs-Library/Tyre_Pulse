@@ -68,15 +68,24 @@ const DOUGHNUT_OPTS = {
 
 const RISK_HIGH = new Set(['High', 'Critical'])
 
+// Retread / scrap classification — kept identical to the rest of the app
+// (kpiEngine.computeRetreadPerformance, Dashboard, TyreExchange, ContinuousImprovement)
+// so a casing tagged "Retread", "Retreaded", or "Retread x2" is treated the same
+// everywhere. A strict === 'retread' match silently dropped multi-cycle casings.
+const RETREAD_RE = /retread/i
+const SCRAP_RE = /scrap/i
+const isRetread = (r) => RETREAD_RE.test(String(r?.category ?? ''))
+const isScrap = (r) => SCRAP_RE.test(String(r?.category ?? ''))
+
 const EXPORT_COLS = [
   'serial_number', 'brand', 'size', 'position', 'asset_no', 'site',
   'issue_date', 'km_at_fitment', 'km_at_removal', 'km_life', 'cost_per_tyre',
-  'cpk', 'category', 'risk_level', 'status',
+  'cpk', 'retread_cycle', 'category', 'risk_level', 'status',
 ]
 const EXPORT_HEADERS = [
   'Serial', 'Brand', 'Size', 'Position', 'Asset No', 'Site',
   'Issue Date', 'km at Fitment', 'km at Removal', 'km Life', 'Cost',
-  'CPK', 'Category', 'Risk Level', 'Status',
+  'CPK', 'Retread Cycle', 'Category', 'Risk Level', 'Status',
 ]
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
@@ -103,6 +112,26 @@ function fmtCurrency(val, currency) {
   return `${currency} ${Number(val).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`
 }
 
+// Retread cycle count: a casing can be retreaded multiple times, and each cycle
+// removes rubber/heat-cures the casing further, so cycle depth is a real
+// reliability signal. We read an explicit numeric cycle when the category or a
+// dedicated field encodes one ("Retread x2", "Retread 3", "2nd Retread"); a
+// bare "Retread"/"Retreaded" is cycle 1. Returns null for non-retreads.
+function retreadCycle(t) {
+  const cat = String(t?.category ?? '')
+  if (!/retread/i.test(cat)) return null
+  // Prefer an explicit structured field if the schema carries one.
+  const explicit = Number(t?.retread_count ?? t?.retread_cycle ?? t?.retread_number)
+  if (Number.isFinite(explicit) && explicit > 0) return Math.round(explicit)
+  // Otherwise parse a number out of the category label.
+  const m = cat.match(/(\d+)/)
+  if (m) {
+    const n = Number(m[1])
+    if (Number.isFinite(n) && n > 0) return n
+  }
+  return 1
+}
+
 function daysInService(t) {
   const start = t.issue_date
   const end = t.removal_date ?? null
@@ -122,13 +151,23 @@ function last12Months() {
   return months
 }
 
-function scoreVendor(v) {
-  // 0-100 composite: CPK efficiency 40%, success rate 40%, life km 20%
-  // Lower CPK is better; higher success/life is better
-  // Normalised relative to own data; use raw heuristics here
-  const cpkScore = v.avgCpk != null ? Math.max(0, 100 - v.avgCpk * 10000) : 50
+// 0-100 composite vendor score: CPK efficiency 40%, success rate 40%, life 20%.
+// CPK and life are normalised *relative to the fleet's own min/max* (min-max
+// scaling) rather than with a fixed magic multiplier — the previous
+// `100 - avgCpk*10000` collapsed to 0 for any currency/unit where CPK isn't a
+// tiny fraction, making the 40% CPK weight dead. `range` carries the fleet
+// bounds; a missing metric scores a neutral 50 so it neither helps nor hurts.
+function scoreVendor(v, range) {
+  const norm = (val, lo, hi, invert) => {
+    if (val == null || !Number.isFinite(val)) return 50
+    if (hi <= lo) return 50 // no spread in the fleet → neutral
+    const t = (val - lo) / (hi - lo)
+    return Math.round((invert ? 1 - t : t) * 100)
+  }
+  // Lower CPK is better → invert. Higher life/success is better.
+  const cpkScore = norm(v.avgCpk, range.cpkMin, range.cpkMax, true)
+  const lifeScore = norm(v.avgLife, range.lifeMin, range.lifeMax, false)
   const successScore = v.successRate ?? 50
-  const lifeScore = v.avgLife != null ? Math.min(100, (v.avgLife / 1000) * 10) : 50
   return Math.round(cpkScore * 0.4 + successScore * 0.4 + lifeScore * 0.2)
 }
 
@@ -265,11 +304,14 @@ export default function RetreadManagement() {
 
   // ── Derived datasets ───────────────────────────────────────────────────────
   const retreadRecords = useMemo(() =>
-    records.filter(r => r.category?.toLowerCase() === 'retread'),
+    records.filter(isRetread),
   [records])
 
+  // "New tyre" baseline for the CPK comparison must exclude scrap casings — a
+  // prematurely-scrapped tyre is not a healthy new-tyre reference and would
+  // distort the baseline (mirrors kpiEngine.computeRetreadPerformance).
   const newRecords = useMemo(() =>
-    records.filter(r => !r.category || r.category.toLowerCase() !== 'retread'),
+    records.filter(r => !isRetread(r) && !isScrap(r)),
   [records])
 
   // Enrich each retread record with computed fields
@@ -280,6 +322,7 @@ export default function RetreadManagement() {
       cpk: cpk(t),
       status: t.km_at_removal ? 'Removed' : 'Active',
       days_in_service: daysInService(t),
+      retread_cycle: retreadCycle(t),
     })),
   [retreadRecords])
 
@@ -299,11 +342,23 @@ export default function RetreadManagement() {
       ? newCpkVals.reduce((s, v) => s + v, 0) / newCpkVals.length
       : null
 
-    // Savings vs new
+    // Savings vs new — summed per tyre, not (delta × avg-life × count) which
+    // triple-counts (it multiplied an averaged per-km delta by average life AND
+    // by the total retread count, including still-fitted tyres with no life).
+    // For each retread with a real km-life, its realised saving is the km it ran
+    // at the new-tyre cost rate minus what the retread actually cost:
+    //   saving = newCpk × km_life − cost_per_tyre
+    // Summing over retreads that have both a life and a cost gives the true
+    // fleet saving delivered by retreading vs buying new for the same distance.
     let savings = null
-    if (retreadCpk != null && newCpk != null) {
-      const avgLifeKm = enriched.filter(t => t.km_life).reduce((s, t) => s + t.km_life, 0) / Math.max(1, enriched.filter(t => t.km_life).length)
-      savings = (newCpk - retreadCpk) * avgLifeKm * totalRetreads
+    if (newCpk != null) {
+      const measurable = enriched.filter(t => t.km_life && (parseFloat(t.cost_per_tyre) || 0) > 0)
+      if (measurable.length) {
+        savings = measurable.reduce(
+          (s, t) => s + (newCpk * t.km_life - (parseFloat(t.cost_per_tyre) || 0)),
+          0,
+        )
+      }
     }
 
     // Retread success rate: % not High/Critical at removal
@@ -311,7 +366,12 @@ export default function RetreadManagement() {
     const successCount = removed.filter(t => !RISK_HIGH.has(t.risk_level)).length
     const successRate = removed.length > 0 ? (successCount / removed.length) * 100 : null
 
-    return { totalRetreads, retreadCpk, newCpk, savings, successRate }
+    // Avg retread cycle depth across the fleet — reliability signal.
+    const cycleVals = enriched.map(t => t.retread_cycle).filter(v => v != null)
+    const avgCycle = cycleVals.length ? cycleVals.reduce((s, v) => s + v, 0) / cycleVals.length : null
+    const maxCycle = cycleVals.length ? Math.max(...cycleVals) : null
+
+    return { totalRetreads, retreadCpk, newCpk, savings, successRate, avgCycle, maxCycle }
   }, [enriched, newRecords])
 
   // ── Filter options ─────────────────────────────────────────────────────────
@@ -408,17 +468,111 @@ export default function RetreadManagement() {
     }).sort((a, b) => b.count - a.count)
   }, [enriched])
 
+  // ── Engineering intelligence: derive actionable insights from the real
+  //    computed data (no hardcoded/mock values). Each insight follows the
+  //    OS output format: observation → root cause → risk → action. Only
+  //    insights whose triggering condition is met are surfaced.
+  const insights = useMemo(() => {
+    const out = []
+    const removed = enriched.filter(t => t.km_at_removal)
+
+    // 1. CPK verdict — is retreading actually cheaper than new?
+    if (kpis.retreadCpk != null && kpis.newCpk != null) {
+      const deltaPct = kpis.newCpk > 0 ? ((kpis.newCpk - kpis.retreadCpk) / kpis.newCpk) * 100 : 0
+      if (kpis.retreadCpk <= kpis.newCpk) {
+        out.push({
+          tone: 'success',
+          title: `Retreading is cutting cost-per-km by ${deltaPct.toFixed(0)}%`,
+          body: `Fleet retread CPK (${fmtCpk(kpis.retreadCpk, activeCurrency)}) is below new-tyre CPK (${fmtCpk(kpis.newCpk, activeCurrency)}). Retreading is the correct economic choice for eligible casings — protect casing quality to keep this advantage.`,
+        })
+      } else {
+        out.push({
+          tone: 'danger',
+          title: `Retreads cost ${Math.abs(deltaPct).toFixed(0)}% MORE per km than new`,
+          body: `Retread CPK (${fmtCpk(kpis.retreadCpk, activeCurrency)}) exceeds new-tyre CPK (${fmtCpk(kpis.newCpk, activeCurrency)}). Root cause is usually short retread life (poor casing selection or vendor cure quality) or over-priced retreads. Action: audit the low-scoring vendors below and tighten casing acceptance criteria before further send-outs.`,
+        })
+      }
+    }
+
+    // 2. Success rate — casing/vendor reliability
+    if (kpis.successRate != null && removed.length >= 3) {
+      const failPct = 100 - kpis.successRate
+      if (kpis.successRate < 70) {
+        out.push({
+          tone: 'danger',
+          title: `${failPct.toFixed(0)}% of retreads reached high/critical risk at removal`,
+          body: `A high failure share points to casings retreaded past their safe limit, under-inflation in service, or a weak retread vendor. Action: cross-check the worst positions/vendors, enforce pressure compliance, and cap retread cycles on failure-prone sizes.`,
+        })
+      } else if (kpis.successRate >= 90) {
+        out.push({
+          tone: 'success',
+          title: `Strong retread reliability — ${kpis.successRate.toFixed(0)}% success at removal`,
+          body: `Casing selection and vendor quality are sound. Opportunity: extend the retread programme to more eligible casings to grow the CPK saving.`,
+        })
+      }
+    }
+
+    // 3. Worst vendor/brand outlier — root-cause the CPK/failure drag
+    const rankable = brandSummary.filter(b => b.avgCpk != null && b.count >= 2)
+    if (rankable.length >= 2) {
+      const worst = [...rankable].sort((a, b) => (b.avgCpk ?? 0) - (a.avgCpk ?? 0))[0]
+      const best = [...rankable].sort((a, b) => (a.avgCpk ?? 0) - (b.avgCpk ?? 0))[0]
+      if (worst && best && worst.brand !== best.brand && best.avgCpk > 0) {
+        const gap = ((worst.avgCpk - best.avgCpk) / best.avgCpk) * 100
+        if (gap >= 25) {
+          out.push({
+            tone: 'warning',
+            title: `${worst.brand} retreads cost ${gap.toFixed(0)}% more per km than ${best.brand}`,
+            body: `${worst.brand} averages ${fmtCpk(worst.avgCpk, activeCurrency)} vs ${best.brand} at ${fmtCpk(best.avgCpk, activeCurrency)}. Action: shift send-out volume toward ${best.brand} and put ${worst.brand} on review — a ${gap.toFixed(0)}% CPK gap across ${worst.count} casings is a direct, recoverable cost.`,
+          })
+        }
+      }
+    }
+
+    // 4. Cycle-depth risk — casings retreaded too many times
+    if (kpis.maxCycle != null && kpis.maxCycle >= 3) {
+      const deep = enriched.filter(t => (t.retread_cycle ?? 0) >= 3)
+      const deepFail = deep.filter(t => t.km_at_removal && RISK_HIGH.has(t.risk_level)).length
+      out.push({
+        tone: deepFail > 0 ? 'danger' : 'warning',
+        title: `${deep.length} casing(s) retreaded ${kpis.maxCycle}×${deepFail > 0 ? ` · ${deepFail} failed` : ''}`,
+        body: `Each retread cycle removes rubber and heat-cures the casing further, raising blow-out risk. ${deepFail > 0 ? 'Failures are already appearing at deep cycles. ' : ''}Action: set a maximum retread-cycle policy (commonly 2–3) and scrap casings that exceed it rather than re-sending.`,
+      })
+    }
+
+    // 5. Savings headline — quantified business impact
+    if (kpis.savings != null && kpis.savings > 0) {
+      out.push({
+        tone: 'success',
+        title: `Retreading has saved ${fmtCurrency(kpis.savings, activeCurrency)} vs buying new`,
+        body: `Measured across retreads with a completed life and a recorded cost, versus running new tyres the same distance at fleet new-tyre CPK. Reinvest the saving into casing management to compound it.`,
+      })
+    }
+
+    return out
+  }, [enriched, kpis, brandSummary, activeCurrency])
+
   // ── Vendor analysis ────────────────────────────────────────────────────────
   const vendorData = useMemo(() => {
     const newCpkVals = newRecords.map(t => cpk(t)).filter(v => v != null && isFinite(v))
     const newCpkAvg = newCpkVals.length ? newCpkVals.reduce((s, v) => s + v, 0) / newCpkVals.length : null
+
+    // Fleet-relative normalisation bounds for the vendor score (min-max scaling).
+    const cpkAll = brandSummary.map(b => b.avgCpk).filter(v => v != null && isFinite(v))
+    const lifeAll = brandSummary.map(b => b.avgLife).filter(v => v != null)
+    const range = {
+      cpkMin: cpkAll.length ? Math.min(...cpkAll) : 0,
+      cpkMax: cpkAll.length ? Math.max(...cpkAll) : 0,
+      lifeMin: lifeAll.length ? Math.min(...lifeAll) : 0,
+      lifeMax: lifeAll.length ? Math.max(...lifeAll) : 0,
+    }
 
     const vendors = brandSummary.map(b => {
       const cpkDiff = (newCpkAvg != null && b.avgCpk != null && b.avgLife != null)
         ? (newCpkAvg - b.avgCpk) * b.avgLife * b.count
         : null
       const failureRate = 100 - (b.successRate ?? 100)
-      const score = scoreVendor({ ...b })
+      const score = scoreVendor(b, range)
       return {
         ...b,
         failureRate,
@@ -472,8 +626,15 @@ export default function RetreadManagement() {
 
     const newCpkVal  = nC / nL
     const rCpkVal    = rC / rL
+    // Saving delivered over the retread's life: running a NEW tyre for the same
+    // rL km would cost newCpk×rL; the retread cost rC. (= rL·nC/nL − rC.)
     const savingsPerTyre = (newCpkVal - rCpkVal) * rL
-    const breakEvenKm = rL > 0 ? (nC - rC) / Math.max(0.0001, newCpkVal - rCpkVal) : 0
+    // Break-even distance: the km a retread must survive for its cost to be
+    // recovered at the new-tyre cost-per-km rate (rC = newCpk × km). Below this
+    // the retread was dearer than the equivalent new-tyre distance cost; above
+    // it, it saves money. The old formula divided a cost delta by a CPK delta,
+    // which is dimensionally km but not a real break-even point.
+    const breakEvenKm = newCpkVal > 0 ? rC / newCpkVal : 0
     const annualReplacements = fS * (100000 / Math.max(1, rL))
     const annualSavings = savingsPerTyre * annualReplacements
 
@@ -521,6 +682,7 @@ export default function RetreadManagement() {
       km_life: t.km_life,
       cost_per_tyre: t.cost_per_tyre,
       cpk: t.cpk != null ? t.cpk.toFixed(6) : '',
+      retread_cycle: t.retread_cycle ?? '',
       category: t.category,
       risk_level: t.risk_level,
       status: t.status,
@@ -764,7 +926,9 @@ export default function RetreadManagement() {
               icon={Recycle}
               label="Total Retread Tyres"
               value={kpis.totalRetreads.toLocaleString()}
-              sub={`of ${records.length.toLocaleString()} total`}
+              sub={kpis.avgCycle != null
+                ? `avg cycle ${kpis.avgCycle.toFixed(1)}× · max ${kpis.maxCycle}× · of ${records.length.toLocaleString()} total`
+                : `of ${records.length.toLocaleString()} total`}
               color="text-purple-400"
             />
             <KpiCard
@@ -825,6 +989,37 @@ export default function RetreadManagement() {
                 />
               ) : (
                 <>
+                  {/* Engineering Intelligence — data-driven insights & recommendations */}
+                  {insights.length > 0 && (
+                    <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl overflow-hidden">
+                      <div className="px-4 py-3 border-b border-[var(--input-border)] flex items-center gap-2">
+                        <Zap className="text-yellow-400" size={16} />
+                        <h2 className="font-semibold text-[var(--text-secondary)] text-sm">Retread Engineering Intelligence</h2>
+                        <span className="ml-auto text-[var(--text-dim)] text-xs">{insights.length} finding{insights.length === 1 ? '' : 's'}</span>
+                      </div>
+                      <div className="divide-y divide-[var(--input-border)]">
+                        {insights.map((ins, i) => {
+                          const tone = {
+                            success: { bar: 'bg-green-500', Icon: CheckCircle, ic: 'text-green-400' },
+                            warning: { bar: 'bg-yellow-500', Icon: AlertTriangle, ic: 'text-yellow-400' },
+                            danger:  { bar: 'bg-red-500',    Icon: AlertTriangle, ic: 'text-red-400' },
+                          }[ins.tone] ?? { bar: 'bg-blue-500', Icon: Info, ic: 'text-blue-400' }
+                          const { Icon } = tone
+                          return (
+                            <div key={i} className="flex gap-3 px-4 py-3">
+                              <div className={`w-0.5 rounded-full shrink-0 ${tone.bar}`} />
+                              <Icon className={`${tone.ic} shrink-0 mt-0.5`} size={16} />
+                              <div className="min-w-0">
+                                <p className="text-[var(--text-secondary)] text-sm font-semibold">{ins.title}</p>
+                                <p className="text-[var(--text-muted)] text-xs mt-0.5 leading-relaxed">{ins.body}</p>
+                              </div>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  )}
+
                   {/* Charts row */}
                   <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
                     <div className="lg:col-span-2 bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-4">
@@ -1091,6 +1286,7 @@ export default function RetreadManagement() {
                         <th className="px-4 py-3 text-left">Position</th>
                         <th className="px-4 py-3 text-left">Asset</th>
                         <th className="px-4 py-3 text-left">Site</th>
+                        <th className="px-4 py-3 text-center">Cycle</th>
                         <th className="px-4 py-3 text-center">km Life</th>
                         <th className="px-4 py-3 text-center">CPK</th>
                         <th className="px-4 py-3 text-center">Risk</th>
@@ -1102,7 +1298,7 @@ export default function RetreadManagement() {
                     <tbody>
                       {filtered.length === 0 && (
                         <tr>
-                          <td colSpan={12} className="px-4 py-14 text-center text-[var(--text-muted)]">
+                          <td colSpan={13} className="px-4 py-14 text-center text-[var(--text-muted)]">
                             <Recycle className="inline mb-2 text-[var(--text-dim)]" size={36} />
                             <p className="mt-1">No retread tyres match current filters</p>
                           </td>
@@ -1123,6 +1319,13 @@ export default function RetreadManagement() {
                           <td className="px-4 py-3 text-[var(--text-muted)] text-xs">{t.position ?? '-'}</td>
                           <td className="px-4 py-3 text-[var(--text-muted)] text-xs">{t.asset_no ?? '-'}</td>
                           <td className="px-4 py-3 text-[var(--text-muted)] text-xs">{t.site ?? '-'}</td>
+                          <td className="px-4 py-3 text-center text-xs">
+                            {t.retread_cycle != null ? (
+                              <span className={`font-semibold ${t.retread_cycle >= 3 ? 'text-red-400' : t.retread_cycle === 2 ? 'text-yellow-400' : 'text-[var(--text-secondary)]'}`}>
+                                {t.retread_cycle}×
+                              </span>
+                            ) : '-'}
+                          </td>
                           <td className="px-4 py-3 text-center text-[var(--text-secondary)] text-xs">
                             {t.km_life != null ? t.km_life.toLocaleString() : '-'}
                           </td>
@@ -1327,6 +1530,7 @@ export default function RetreadManagement() {
                       { label: 'Site', value: drawer.site },
                       { label: 'Country', value: drawer.country },
                       { label: 'Category', value: drawer.category },
+                      { label: 'Retread Cycle', value: drawer.retread_cycle != null ? `${drawer.retread_cycle}×` : null },
                       { label: 'Tread Depth', value: drawer.tread_depth != null ? `${drawer.tread_depth} mm` : null },
                     ].map(({ label, value }) => (
                       <div key={label}>

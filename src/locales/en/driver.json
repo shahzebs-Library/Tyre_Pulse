@@ -1,0 +1,72 @@
+{
+  "detail": {
+    "loading": "Loading driver record…",
+    "back": "Back to Drivers",
+    "rank": "Rank #{rank}",
+    "errorTitle": "Failed to load driver",
+    "retry": "Retry",
+    "notFoundTitle": "Driver not found",
+    "notFoundDesc": "No tyre records were found for \"{name}\". They may be outside the current country scope.",
+    "lockedTitle": "Locked: in approval",
+    "exportPdfTitle": "Export disciplinary record PDF",
+    "tabs": {
+      "profile": "Profile",
+      "performance": "Performance",
+      "incidents": "Incidents",
+      "records": "Tyre Records",
+      "notes": "Notes"
+    },
+    "stats": {
+      "totalTyres": "Total Tyres",
+      "avgCpk": "Avg CPK",
+      "totalCost": "Total Cost",
+      "failureRate": "Failure Rate",
+      "avgTyreLife": "Avg Tyre Life",
+      "highRisk": "High Risk",
+      "riskScore": "Risk Score",
+      "performance": "Performance",
+      "rank": "Rank"
+    },
+    "profile": {
+      "title": "Driver Profile",
+      "name": "Driver Name",
+      "rank": "Fleet Rank",
+      "performance": "Performance Band",
+      "sites": "Sites",
+      "countries": "Countries",
+      "driverId": "Driver ID"
+    },
+    "performance": {
+      "title": "Performance Metrics"
+    },
+    "incidents": {
+      "title": "Incident History",
+      "emptyTitle": "No incidents",
+      "emptyDesc": "This driver has no high-risk or critical tyre incidents on record."
+    },
+    "records": {
+      "title": "Tyre Records",
+      "emptyTitle": "No records found",
+      "emptyDesc": "No tyre records are available for this driver."
+    },
+    "notes": {
+      "title": "Notes",
+      "emptyTitle": "No notes",
+      "emptyDesc": "No removal-reason notes have been captured for this driver."
+    },
+    "approval": {
+      "title": "Driver Violation Approval",
+      "lockedNote": "Locked: in approval. The formal disciplinary PDF export is disabled until the workflow completes."
+    },
+    "cols": {
+      "asset": "Asset",
+      "brand": "Brand",
+      "date": "Date",
+      "cost": "Cost",
+      "cpk": "CPK",
+      "life": "Life",
+      "risk": "Risk",
+      "reason": "Reason"
+    }
+  }
+}

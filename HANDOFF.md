@@ -1,11 +1,52 @@
 # TyrePulse - Developer Handoff
-**Last updated:** 11 July 2026 (Session 14)
+**Last updated:** 11 July 2026 (Session 15)
 **Branch:** `main` (auto-deploys to Vercel). Session 14 shipped the whole brand/design-system pass across many small feature branches, each `--no-ff` merged to `main` and pushed.
-**Web build status:** ✅ Clean - builds with zero errors (`vite build` green); full suite **1685 tests green**, auto-deploys to Vercel
+**Web build status:** ✅ Clean - builds with zero errors (`vite build` green); full suite **1694 tests green**, auto-deploys to Vercel. **Session 15 changes are UNCOMMITTED in the working tree** (19 files modified + 7 new page components + 6 new locale files) - review + commit pending.
 **Mobile build status:** ✅ Expo SDK 54 / RN 0.81.5. Session 13 added **Sentry crash/perf monitoring** + reliability fixes; `expo export --platform android` produces a clean Hermes bundle. Build the distribution APK from `main` with the `production-apk` EAS profile.
 **DB migrations applied to live Supabase:** through **V120** (project `jhssdmeruxtrlqnwfksc`). Session 14 applied **V120** (brand logo placements — extends `set_org_branding`).
 **Live URL under test:** tyre-pulse-peach.vercel.app
 **Active branches:** `main` · dev `claude/erp-sync-hub-roles-od8m1k` (holds 2 **table-standardization** commits deliberately kept OFF `main` — see Session 12 → Held) · dev `claude/mobile-app-ui-features-tdfxy0` · frozen `claude/backend-step2-assets` (Go) · frozen `claude/mobile-kotlin-app` (Kotlin). All other feature branches consolidated into `main` (see `docs/BRANCH_CONSOLIDATION_2026-07-04.md`).
+
+---
+
+## Session 15 (11 July 2026) — Comparison + Retread correctness, Accident deepen, app-wide modal→page conversion
+
+**Theme:** Three reported problems (Country/Site comparison "not working", Retread numbers wrong, Accident page too thin) plus an app-wide UX directive — LARGE modals must become proper routed pages; only small things stay popups. Executed via a swarm of ~14 disjoint-ownership general-purpose/Explore agents (one module each, no shared-file writes — App.jsx wiring done by hand) + integration.
+
+**Gate:** web `vite build` ✅ zero errors (41s) · full suite **1694 tests green** (128 files, was 1685) · **NOT committed** — all changes sit in the working tree on `main`. No DB migration (findings only). No live-DB verification was possible this session (supabase MCP unauthorized) — see per-item live follow-ups.
+
+### 1. Comparison "not working" — root cause found + fixed
+- **CountryComparison.jsx (rewritten):** real bug was a **1000-row cap** — the country-list `useEffect` queried `tyre_records` with no `.range()`/`fetchAllPages`, so with per-country import batches the selector often surfaced one country and auto-selected it → nothing to compare. Now pages the full dataset via `fetchAllPages`, reuses the tested `computeCountryMetrics()` (was hand-rolling inferior math), applies `.eq('country', activeCountry)` scope like every other analytics page, and fixes a wrong i18n key + dead "best value" math. Proper loading/error/empty states.
+- **Comparison.jsx (`/comparison`, generic period-vs-period): 4 real bugs fixed** — (a) `activeCountry` never applied → admins saw cross-country data on this page only; (b) cost summed raw `cost_per_tyre` ignoring `qty` → now uses canonical `recordCost` from analyticsEngine; (c) Overall view bucketed by year only, letting Period A count Period B's selected months; (d) query error was swallowed → added error card + retry.
+- **SiteComparison.jsx:** audited, structurally sound (mirrors working BrandPerformance), left unchanged.
+- **Deeper root cause investigated & CLOSED:** hypothesised country-value mismatch (`.eq('country', activeCountry)` returning zero rows) **cannot happen** — `MASTER_ENGINE.sql` has a `BEFORE INSERT OR UPDATE` trigger `normalize_country()` + a backfill that canonicalises `country` to `KSA`/`UAE`/`Egypt` on every write from every source. No query-time aliasing added (would be dead code). **Latent trap (separate, low sev):** `normalize_country`'s `else 'KSA'` fallback silently misfiles any *unknown* country → `KSA`; revisit before any 4th-country expansion.
+
+### 2. Retread correctness (RetreadManagement.jsx) — 5 formula bugs fixed
+- Retread detection was `category === 'retread'` (dropped `"Retreaded"`/`"Retread x2"`); now `/retread/i` matching the rest of the app → counts no longer under-report.
+- "New tyre" CPK baseline was polluted by `Scrap` casings → now excluded (matches kpiEngine).
+- **Savings KPI over-counted** — multiplied an averaged per-km delta by avg life *and* total retread count; replaced with per-tyre `Σ(newCpk×km_life − cost)`.
+- Vendor CPK score used a dead magic constant (`100 − avgCpk*10000`) that zeroed the 40% CPK weight for real currency; replaced with min-max scaling.
+- ROI break-even was dimensionally incoherent; now "km a retread must survive to recover its cost."
+- **Added:** retread-cycle counting (multi-retread casings) + color-coded cycle column + deep-cycle blow-out risk, and a data-driven Retread Engineering Intelligence panel. 4/4 retread tests green.
+
+### 3. Accident module deepened + modal→page (Accidents.jsx, AccidentDetailModal.jsx, api/accidents.js)
+- Was thin (4 KPIs, modal detail). Now **6 KPI cards** (incl. at-fault %, per-100-vehicles, unrecovered $) + severity-mix strip + an **Engineering & Ops Intelligence panel** (repeat-offender assets/drivers, cost hotspots by site, root-cause groupings, recovery-leakage, data-quality flags, prioritised recommendations) — all data-driven, no mocks. Row-click navigation + global filter added; real skeleton/error states.
+- Detail **modal → page** at `/accidents/:id` (7 tabs preserved verbatim; `EntityApprovalPanel` moved onto the page as a sticky rail; approval lock now enforced end-to-end there). 26/26 accident tests green.
+
+### 4. App-wide modal→page conversion pass
+- Read-only inventory classified ~38 modals (SMALL keep vs LARGE→page). **7 LARGE converted to routed pages** (all features/approval workflows preserved, dead drawer code + orphaned imports removed, self-fetch by param, loading/error/not-found states):
+  - `AssetDrawer` → **`/assets/:assetNo`** (biggest — 3 call sites: AssetManagement/FleetHealthBoard/LiveFleetStatus; the two map/health quick-looks kept + given an "Open Full Asset Profile" button)
+  - `SupplierDrawer` → **`/suppliers/:supplierId`** · `DriverDrawer` → **`/driver-management/:driverId`** · `JobDrawer` → **`/workshop/:jobId`** · Recall drawer → **`/recalls/:recallId`**
+  - `WorkflowSettings` BuilderModal → **`/workflow-settings/builder/:defId?`** · `AutomationRules` RuleModal → **`/automation-rules/builder[/:ruleId]`**
+- **Correctly kept as modals** (verified compact/wizard, per the rule): RotationSchedule drawer, UploadApprovals IntakeRows + EditBatch, InspectionPlanner Bulk + Schedule, Console2FA, Approvals detail drawer, and all confirm/quick-edit/chart-zoom/email/upload dialogs.
+- Routes wired into `App.jsx` (grouped block). New i18n namespaces added: `driver`, `workflow`, `workshop` (auto-loaded via `import.meta.glob`). Asset/Supplier keys added to existing namespaces.
+
+### Notes / follow-ups (owner action)
+- **COMMIT PENDING:** nothing committed. `git status` = 19 modified + 7 new `src/pages/*Detail|*Builder.jsx` + 6 new `src/locales/*/{driver,workflow,workshop}.json`. Review then commit/push (auto-deploys to Vercel).
+- **Live-data smoke tests** (couldn't run here): set country switcher to **All** and confirm CountryComparison lists all countries + renders; confirm Retread counts/cycle (needs a `retread_count` field or `"Retread xN"` category to unlock cycle intelligence); Accident at-fault %/root-cause depend on `liable_party`/`accident_type`/`driver_name` being populated (a data-quality strip surfaces gaps).
+- **Deliberate behaviour changes:** transient row-level approval locks in the Asset registry and Recall list were dropped when their drawers were removed — the authoritative lock now lives on each detail page; **RLS remains the real enforcement boundary** (consistent with prior audit notes).
+- **Thin-page audit (next-session deepen targets):** `EngineeringKpi`, `StockManagement`, `Billing`, `ComplianceDashboard` flagged borderline; everything else audited is solid (400+ lines, real data, filters, states). Several converted detail pages duplicate small pure helper fns (per strict file-ownership) — optional later extraction to `src/lib/`.
+- **Remaining modal-sweep item deferred:** none LARGE outstanding; the queue is closed. Any future create/edit modal that grows multiple sections should follow the same →page pattern.
 
 ---
 

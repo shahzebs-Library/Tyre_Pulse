@@ -1,12 +1,10 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { AlertOctagon, Plus, Search, X, Save, FileText, Download, BarChart2, Eye, Hourglass, Upload, CheckCircle2, AlertCircle, ChevronDown, Trash2, AlertTriangle, Lock } from 'lucide-react'
+import { AlertOctagon, Plus, Search, X, Save, FileText, Download, BarChart2, Eye, Hourglass, Upload, CheckCircle2, AlertCircle, ChevronDown, Trash2, AlertTriangle, TrendingUp, Users, DollarSign, ShieldAlert, Lightbulb, ChevronRight } from 'lucide-react'
 import { motion } from 'framer-motion'
 import PageHeader from '../components/ui/PageHeader'
 import EmptyState from '../components/EmptyState'
 import { supabase } from '../lib/supabase'
-import AccidentDetailModal from '../components/AccidentDetailModal'
-import EntityApprovalPanel from '../components/workflow/EntityApprovalPanel'
 import EnterpriseTable from '../components/ui/EnterpriseTable'
 import { useReportMeta } from '../hooks/useReportMeta'
 import * as accidentsApi from '../lib/api/accidents'
@@ -207,28 +205,11 @@ export default function Accidents() {
   const [filterTo, setFilterTo]                = useState('')
   const [statusFunnel, setStatusFunnel]        = useState('')
   const [onlyPendingClosure, setOnlyPendingClosure] = useState(false)
-  const [detailId, setDetailId]                = useState(null)
-  // Approval-engine lock state for the currently-open accident. While the
-  // accident is mid-approval (pending/in_review/returned) or approved & locked,
-  // its edit/status-change/delete controls are disabled.
-  const [wfLocked, setWfLocked]                = useState({ isActive: false, isLocked: false, status: null })
-  const detailRecord = useMemo(
-    () => records.find(r => r.id === detailId) || null,
-    [records, detailId],
-  )
-  const detailLocked = wfLocked.isActive || wfLocked.isLocked
-  // EntityApprovalPanel invokes onStateChange during its render, so this must
-  // be a stable callback that only commits a state change when a value actually
-  // differs — otherwise a fresh object each render triggers an update loop.
-  const handleWfStateChange = useCallback((next) => {
-    setWfLocked(prev =>
-      prev.isActive === next.isActive &&
-      prev.isLocked === next.isLocked &&
-      prev.status === next.status
-        ? prev
-        : next,
-    )
-  }, [])
+
+  // Row → dedicated detail page (`/accidents/:id`). The former inline modal +
+  // companion approval panel now live on that route; the approval engine there
+  // owns the record's lock/edit gating end-to-end.
+  const openDetail = useCallback((id) => navigate(`/accidents/${id}`), [navigate])
 
   // Multi-select bulk delete (Admin only)
   const isAdmin = (profile?.role || '').toLowerCase() === 'admin'
@@ -264,12 +245,6 @@ export default function Accidents() {
   }, [activeCountry])
 
   useEffect(() => { loadRecords() }, [loadRecords])
-
-  // Reset approval lock whenever the open detail record changes so state from a
-  // previously-open accident never leaks into another one's controls.
-  useEffect(() => {
-    setWfLocked({ isActive: false, isLocked: false, status: null })
-  }, [detailId])
 
   // Load fleet assets for search combobox
   useEffect(() => {
@@ -429,8 +404,30 @@ export default function Accidents() {
       }, 0)
       avgDays = Math.round(total_days / closed.length)
     }
-    return { total, open, insur, cost, avgDays }
-  }, [records])
+
+    // Severity mix
+    const sevMix = { Minor: 0, Major: 0, 'Total Loss': 0 }
+    records.forEach(r => { const s = canonSeverity(r.severity); if (sevMix[s] !== undefined) sevMix[s]++ })
+
+    // At-fault %: a record is "at fault" when the liable/responsible party points
+    // to the driver/company rather than a third party. Only records with an
+    // explicit liability signal count toward the denominator so the ratio is honest.
+    const faultText = (r) => `${r.liable_party || ''} ${r.responsible_party || ''}`.toLowerCase()
+    const withLiability = records.filter(r => faultText(r).trim())
+    const thirdParty = /third\s*party|3rd\s*party|other\s*driver|not\s*at\s*fault|no\s*fault/
+    const atFaultCount = withLiability.filter(r => !thirdParty.test(faultText(r))).length
+    const atFaultPct = withLiability.length ? Math.round((atFaultCount / withLiability.length) * 100) : 0
+
+    // Average claim cost across records that actually carry a cost (repair+parts).
+    const withCost = records.filter(r => (Number(r.repair_cost) || 0) + (Number(r.parts_cost) || 0) > 0)
+    const avgClaim = withCost.length ? Math.round(cost / withCost.length) : 0
+
+    // Accidents per 100 vehicles (fleet-normalised frequency).
+    const fleetSize = fleetAssets.length
+    const per100 = fleetSize > 0 ? Number(((total / fleetSize) * 100).toFixed(1)) : 0
+
+    return { total, open, insur, cost, avgDays, sevMix, atFaultPct, atFaultCount, atFaultDenom: withLiability.length, avgClaim, per100, fleetSize }
+  }, [records, fleetAssets])
 
   // Monthly incidents chart (incidents tab)
   const chartData = useMemo(() => {
@@ -630,6 +627,105 @@ export default function Accidents() {
     () => records.filter(r => r.closure_status === 'pending_closure').length,
     [records],
   )
+
+  // ── Engineering / Ops Intelligence (V-accident intelligence layer) ──────────
+  // Derives repeat-offender assets & drivers, cost hotspots by site, root-cause
+  // groupings, and prioritised recommendations — all from the live record set.
+  const opsIntel = useMemo(() => {
+    const grossOf = (r) => (Number(r.repair_cost) || 0) + (Number(r.parts_cost) || 0)
+    const totalGross = records.reduce((s, r) => s + grossOf(r), 0)
+
+    // Repeat-offender assets (>= 2 incidents), ranked by count then cost.
+    const assetMap = {}
+    records.forEach(r => {
+      if (!r.asset_no) return
+      const a = assetMap[r.asset_no] || (assetMap[r.asset_no] = { asset_no: r.asset_no, site: r.site, count: 0, cost: 0, lastDate: null })
+      a.count++; a.cost += grossOf(r)
+      if (!a.lastDate || (r.incident_date && r.incident_date > a.lastDate)) a.lastDate = r.incident_date
+    })
+    const repeatAssets = Object.values(assetMap).filter(a => a.count >= 2)
+      .sort((a, b) => b.count - a.count || b.cost - a.cost).slice(0, 8)
+
+    // Repeat-offender drivers (>= 2 incidents).
+    const driverMap = {}
+    records.forEach(r => {
+      const d = (r.driver_name || '').trim()
+      if (!d) return
+      const o = driverMap[d] || (driverMap[d] = { driver: d, count: 0, cost: 0 })
+      o.count++; o.cost += grossOf(r)
+    })
+    const repeatDrivers = Object.values(driverMap).filter(d => d.count >= 2)
+      .sort((a, b) => b.count - a.count || b.cost - a.cost).slice(0, 8)
+
+    // Cost hotspots by site (cost, incident count, avg cost).
+    const siteMap = {}
+    records.forEach(r => {
+      const s = r.site || 'Unassigned'
+      const o = siteMap[s] || (siteMap[s] = { site: s, count: 0, cost: 0 })
+      o.count++; o.cost += grossOf(r)
+    })
+    const siteHotspots = Object.values(siteMap)
+      .map(s => ({ ...s, avg: s.count ? Math.round(s.cost / s.count) : 0, pct: totalGross ? Math.round((s.cost / totalGross) * 100) : 0 }))
+      .sort((a, b) => b.cost - a.cost).slice(0, 6)
+
+    // Root-cause groupings: prefer accident_type, fall back to damage_condition.
+    const causeMap = {}
+    records.forEach(r => {
+      const c = (r.accident_type || r.damage_condition || 'Uncategorised').trim() || 'Uncategorised'
+      const o = causeMap[c] || (causeMap[c] = { cause: c, count: 0, cost: 0 })
+      o.count++; o.cost += grossOf(r)
+    })
+    const rootCauses = Object.values(causeMap)
+      .map(c => ({ ...c, pct: records.length ? Math.round((c.count / records.length) * 100) : 0 }))
+      .sort((a, b) => b.count - a.count).slice(0, 8)
+    const uncategorised = records.filter(r => !(r.accident_type || r.damage_condition)).length
+
+    // Recovery leakage: closed/at-fault records with unrecovered cost.
+    const recoverable = records.filter(r =>
+      (r.claim_status && r.claim_status !== 'none') && (Number(r.recovered_amount) || 0) === 0 && grossOf(r) > 0)
+    const leakage = recoverable.reduce((s, r) => s + grossOf(r), 0)
+
+    // Data-quality flags.
+    const missingCost = records.filter(r => !((Number(r.repair_cost) || 0) + (Number(r.parts_cost) || 0) + (Number(r.estimated_damage_cost) || 0))).length
+    const missingDriver = records.filter(r => !(r.driver_name || '').trim()).length
+    const staleOpen = records.filter(r => !isClosed(r) && r.incident_date && (Date.now() - new Date(r.incident_date)) > 60 * 86400000).length
+
+    // Prioritised recommendations, each tied to a concrete number.
+    const recs = []
+    if (repeatAssets.length) {
+      const top = repeatAssets[0]
+      recs.push({ level: 'high', icon: 'asset', text: `Asset ${top.asset_no} has ${top.count} incidents (${fmtCurrency(top.cost)} total). Schedule a driver-behaviour review, alignment/brake inspection, and route audit for this unit.` })
+    }
+    if (repeatDrivers.length) {
+      const td = repeatDrivers[0]
+      recs.push({ level: 'high', icon: 'driver', text: `Driver "${td.driver}" is linked to ${td.count} incidents (${fmtCurrency(td.cost)}). Enrol in defensive-driving retraining and add to the watch list.` })
+    }
+    if (leakage > 0) {
+      recs.push({ level: 'high', icon: 'money', text: `${recoverable.length} filed claim${recoverable.length !== 1 ? 's' : ''} worth ${fmtCurrency(leakage)} have zero recovery logged. Chase insurer/third-party recovery to cut net exposure.` })
+    }
+    if (siteHotspots.length && siteHotspots[0].pct >= 30) {
+      recs.push({ level: 'medium', icon: 'site', text: `${siteHotspots[0].site} concentrates ${siteHotspots[0].pct}% of accident cost (${fmtCurrency(siteHotspots[0].cost)}). Audit yard layout, speed limits and manoeuvring space at this site.` })
+    }
+    if (stats.atFaultDenom >= 5 && stats.atFaultPct >= 50) {
+      recs.push({ level: 'medium', icon: 'fault', text: `${stats.atFaultPct}% of liability-tagged incidents are at-fault. High controllable-loss ratio — prioritise driver training and supervision.` })
+    }
+    if (uncategorised >= Math.max(3, records.length * 0.2)) {
+      recs.push({ level: 'low', icon: 'data', text: `${uncategorised} incidents have no accident type / damage condition. Enforce cause capture at intake so root-cause analytics stay reliable.` })
+    }
+    if (staleOpen > 0) {
+      recs.push({ level: 'medium', icon: 'time', text: `${staleOpen} incident${staleOpen !== 1 ? 's are' : ' is'} open >60 days. Review for stalled claims/repairs and drive to closure.` })
+    }
+    if (pendingClosures > 0) {
+      recs.push({ level: 'low', icon: 'time', text: `${pendingClosures} closure${pendingClosures !== 1 ? 's' : ''} awaiting admin approval. Clear the approval queue to finalise records.` })
+    }
+
+    return {
+      repeatAssets, repeatDrivers, siteHotspots, rootCauses, uncategorised,
+      leakage, recoverableCount: recoverable.length,
+      dataQuality: { missingCost, missingDriver, staleOpen },
+      recs,
+    }
+  }, [records, fmtCurrency, stats, pendingClosures])
 
   // ---- Incidents tab filtered data ----
   const filtered = useMemo(() => {
@@ -890,53 +986,39 @@ export default function Accidents() {
       },
       { id: 'inspector', header: 'Inspector', accessorFn: r => r.inspector || '-', size: 120 },
       {
-        id: 'actions', header: 'Actions', accessorFn: r => r.id, size: 200, enableSorting: false, meta: { export: false },
+        id: 'actions', header: 'Actions', accessorFn: r => r.id, size: 190, enableSorting: false, meta: { export: false },
         cell: ({ row }) => {
           const r = row.original
-          // While this accident is mid-approval (or approved & locked) its
-          // mutating controls are disabled — the approval engine owns state.
-          const locked = detailId === r.id && detailLocked
           return (
-            <div className="flex items-center gap-2">
-              <button onClick={() => setDetailId(r.id)} className="text-[var(--text-muted)] hover:text-green-400 text-xs transition-colors flex items-center gap-1"><Eye size={12} /> Open</button>
+            <div className="flex items-center gap-2" onClick={e => e.stopPropagation()}>
+              <button onClick={() => openDetail(r.id)} className="text-[var(--text-muted)] hover:text-green-400 text-xs transition-colors flex items-center gap-1"><Eye size={12} /> Open</button>
               <button
                 onClick={() => openEdit(r)}
-                disabled={locked}
-                title={locked ? 'Locked: in approval' : undefined}
-                className="text-[var(--text-muted)] hover:text-blue-400 text-xs transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:text-[var(--text-muted)]"
+                className="text-[var(--text-muted)] hover:text-blue-400 text-xs transition-colors"
               >
                 Edit
               </button>
               {r.status !== 'Closed' && (
                 <button
                   onClick={() => raiseAction(r)}
-                  disabled={locked}
-                  title={locked ? 'Locked: in approval' : undefined}
-                  className="text-[var(--text-muted)] hover:text-orange-400 text-xs transition-colors whitespace-nowrap disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:text-[var(--text-muted)]"
+                  className="text-[var(--text-muted)] hover:text-orange-400 text-xs transition-colors whitespace-nowrap"
                 >
                   Raise CA
                 </button>
               )}
               <button
                 onClick={() => handleDelete(r.id)}
-                disabled={locked}
-                title={locked ? 'Locked: in approval' : undefined}
-                className="text-[var(--text-muted)] hover:text-red-400 text-xs transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:text-[var(--text-muted)]"
+                className="text-[var(--text-muted)] hover:text-red-400 text-xs transition-colors"
               >
                 Delete
               </button>
-              {locked && (
-                <span className="flex items-center gap-1 text-[10px] text-[var(--accent)] whitespace-nowrap">
-                  <Lock size={10} /> Locked: in approval
-                </span>
-              )}
             </div>
           )
         },
       },
     )
     return cols
-  }, [isAdmin, allPageSelected, selectedIds, activeCountry, fmtCurrency, detailId, detailLocked])
+  }, [isAdmin, allPageSelected, selectedIds, activeCountry, fmtCurrency, openDetail])
 
   // Bulk preview columns for EnterpriseTable
   const bulkColumns = useMemo(() => [
@@ -1005,9 +1087,7 @@ export default function Accidents() {
         New: controlled, validated, audited accident &amp; insurance import with private evidence attachments and duplicate detection.
       </p>
 
-      {error && (
-        <div className="bg-red-900/30 border border-red-700 text-red-300 rounded-lg px-4 py-2 text-sm">{error}</div>
-      )}
+      {/* Load errors surface inline in the Incidents table area (with a retry). */}
 
       {/* Tabs */}
       <div className="flex gap-1 border-b border-[var(--input-border)]">
@@ -1057,32 +1137,54 @@ export default function Accidents() {
             </button>
           )}
 
-          {/* Stats row */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0 * 0.07, duration: 0.3, ease: [0.22, 1, 0.36, 1] }}>
-              <div className="card text-center">
-                <p className="text-2xl font-bold text-[var(--text-primary)]">{stats.total}</p>
-                <p className="text-xs text-[var(--text-muted)] mt-1">Total Incidents</p>
-              </div>
-            </motion.div>
-            <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 1 * 0.07, duration: 0.3, ease: [0.22, 1, 0.36, 1] }}>
-              <div className="card text-center">
-                <p className="text-2xl font-bold text-orange-400">{stats.open}</p>
-                <p className="text-xs text-[var(--text-muted)] mt-1">Open</p>
-              </div>
-            </motion.div>
-            <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 2 * 0.07, duration: 0.3, ease: [0.22, 1, 0.36, 1] }}>
-              <div className="card text-center">
-                <p className="text-2xl font-bold text-red-400">{stats.insur}</p>
-                <p className="text-xs text-[var(--text-muted)] mt-1">Insurance Claims</p>
-              </div>
-            </motion.div>
-            <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 3 * 0.07, duration: 0.3, ease: [0.22, 1, 0.36, 1] }}>
-              <div className="card text-center">
-                <p className="text-2xl font-bold text-green-400">{fmtCurrency(stats.cost)}</p>
-                <p className="text-xs text-[var(--text-muted)] mt-1">Total Repair Cost</p>
-              </div>
-            </motion.div>
+          {/* KPI header cards — real aggregates */}
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+            {[
+              { v: stats.total, label: 'Total Incidents', cls: 'text-[var(--text-primary)]', sub: stats.fleetSize ? `${stats.per100} / 100 vehicles` : null },
+              { v: stats.open, label: 'Open', cls: 'text-orange-400', sub: `${stats.total ? Math.round((stats.open / stats.total) * 100) : 0}% of all` },
+              { v: fmtCurrency(stats.cost), label: 'Total Cost (repair+parts)', cls: 'text-green-400', sub: 'gross exposure' },
+              { v: fmtCurrency(stats.avgClaim), label: 'Avg Cost / Incident', cls: 'text-emerald-400', sub: 'costed incidents' },
+              { v: `${stats.atFaultPct}%`, label: 'At-Fault Rate', cls: 'text-red-400', sub: stats.atFaultDenom ? `${stats.atFaultCount}/${stats.atFaultDenom} tagged` : 'no liability data' },
+              { v: stats.insur, label: 'Insurance Claims', cls: 'text-blue-400', sub: opsIntel.leakage > 0 ? `${fmtCurrency(opsIntel.leakage)} unrecovered` : 'all recovered' },
+            ].map((k, i) => (
+              <motion.div key={k.label} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05, duration: 0.3, ease: [0.22, 1, 0.36, 1] }}>
+                <div className="card text-center">
+                  <p className={`text-2xl font-bold ${k.cls}`}>{k.v}</p>
+                  <p className="text-xs text-[var(--text-muted)] mt-1">{k.label}</p>
+                  {k.sub && <p className="text-[10px] text-[var(--text-muted)]/70 mt-0.5">{k.sub}</p>}
+                </div>
+              </motion.div>
+            ))}
+          </div>
+
+          {/* Severity mix strip */}
+          <div className="card">
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-sm font-semibold text-[var(--text-dim)]">Severity Mix</p>
+              <span className="text-xs text-[var(--text-muted)]">{stats.total} incidents</span>
+            </div>
+            <div className="flex h-3 w-full rounded-full overflow-hidden bg-[var(--input-border)]">
+              {[
+                { k: 'Minor', c: '#6b7280' },
+                { k: 'Major', c: '#ea580c' },
+                { k: 'Total Loss', c: '#dc2626' },
+              ].map(s => {
+                const pct = stats.total ? (stats.sevMix[s.k] / stats.total) * 100 : 0
+                return pct > 0 ? <div key={s.k} title={`${s.k}: ${stats.sevMix[s.k]}`} style={{ width: `${pct}%`, background: s.c }} /> : null
+              })}
+            </div>
+            <div className="flex flex-wrap gap-4 mt-2">
+              {[
+                { k: 'Minor', c: 'bg-gray-500' },
+                { k: 'Major', c: 'bg-orange-500' },
+                { k: 'Total Loss', c: 'bg-red-500' },
+              ].map(s => (
+                <span key={s.k} className="inline-flex items-center gap-1.5 text-xs text-[var(--text-muted)]">
+                  <span className={`w-2.5 h-2.5 rounded-sm ${s.c}`} /> {s.k}
+                  <span className="text-[var(--text-dim)] font-medium">{stats.sevMix[s.k]}</span>
+                </span>
+              ))}
+            </div>
           </div>
 
           {/* Bar chart */}
@@ -1166,7 +1268,19 @@ export default function Accidents() {
 
           {/* Table - EnterpriseTable */}
           {loading ? (
-            <div className="text-center py-12 text-[var(--text-muted)]">Loading...</div>
+            <div className="card p-4 space-y-2.5" aria-busy="true" aria-label="Loading incidents">
+              <div className="h-9 bg-[var(--input-bg)] rounded animate-pulse" />
+              {Array.from({ length: 8 }).map((_, i) => (
+                <div key={i} className="h-11 bg-[var(--input-bg)]/60 rounded animate-pulse" style={{ animationDelay: `${i * 60}ms` }} />
+              ))}
+            </div>
+          ) : error ? (
+            <div className="card text-center py-12 space-y-3">
+              <AlertTriangle size={30} className="mx-auto text-red-400" />
+              <p className="text-[var(--text-primary)] font-semibold">Could not load incidents</p>
+              <p className="text-sm text-[var(--text-muted)]">{error}</p>
+              <button onClick={() => { setError(''); loadRecords() }} className="btn-secondary text-sm mx-auto">Retry</button>
+            </div>
           ) : filtered.length === 0 ? (
             <EmptyState
               illustration="module/accident"
@@ -1181,6 +1295,7 @@ export default function Accidents() {
                 columns={mainColumns}
                 data={filtered}
                 getRowId={(row) => String(row.id)}
+                onRowClick={(row) => openDetail(row.id)}
                 enableGlobalFilter={false}
                 enableSorting={true}
                 enableExport={false}
@@ -1311,6 +1426,136 @@ export default function Accidents() {
                   ? <p className="text-[var(--text-muted)] text-sm text-center py-12">No payer cost data</p>
                   : <div style={{ height: 180 }}><Bar data={payerCostChart} options={CHART_OPTS_H} /></div>}
               </div>
+            </div>
+          </div>
+
+          {/* ===== Engineering / Ops Intelligence ===== */}
+          <div className="card border-l-2 border-l-orange-500/60">
+            <div className="flex items-center gap-2 mb-1">
+              <ShieldAlert size={16} className="text-orange-400" />
+              <p className="text-sm font-semibold text-[var(--text-primary)]">Engineering & Ops Intelligence</p>
+            </div>
+            <p className="text-xs text-[var(--text-muted)] mb-4">Repeat offenders, cost hotspots, root causes and recommended actions — derived live from {stats.total} incident{stats.total !== 1 ? 's' : ''}.</p>
+
+            {/* Recommendations */}
+            {opsIntel.recs.length > 0 && (
+              <div className="mb-5 space-y-2">
+                <p className="text-xs font-semibold text-[var(--text-dim)] flex items-center gap-1.5"><Lightbulb size={13} className="text-yellow-400" /> Recommended Actions</p>
+                {opsIntel.recs.map((rec, i) => (
+                  <div key={i} className={`flex items-start gap-2.5 rounded-lg px-3 py-2 text-sm border ${
+                    rec.level === 'high' ? 'bg-red-950/30 border-red-800/50 text-red-200'
+                    : rec.level === 'medium' ? 'bg-orange-950/25 border-orange-800/40 text-orange-200'
+                    : 'bg-[var(--input-bg)] border-[var(--input-border)] text-[var(--text-dim)]'}`}>
+                    <span className={`mt-0.5 text-[9px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded shrink-0 ${
+                      rec.level === 'high' ? 'bg-red-800/60 text-red-100'
+                      : rec.level === 'medium' ? 'bg-orange-800/60 text-orange-100'
+                      : 'bg-gray-700 text-gray-300'}`}>{rec.level}</span>
+                    <span className="leading-snug">{rec.text}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+              {/* Repeat-offender assets */}
+              <div>
+                <p className="text-xs font-semibold text-[var(--text-dim)] flex items-center gap-1.5 mb-2"><TrendingUp size={13} className="text-red-400" /> Repeat-Offender Assets (2+ incidents)</p>
+                {opsIntel.repeatAssets.length === 0 ? (
+                  <p className="text-xs text-[var(--text-muted)] py-3">No asset has more than one incident — good fleet dispersion.</p>
+                ) : (
+                  <div className="space-y-1.5">
+                    {opsIntel.repeatAssets.map(a => (
+                      <button key={a.asset_no} onClick={() => { setTab('incidents'); setSearch(a.asset_no) }}
+                        className="w-full flex items-center justify-between gap-2 rounded-lg bg-[var(--input-bg)] hover:bg-[var(--input-bg-hover)] border border-[var(--input-border)] px-3 py-2 text-left transition-colors group">
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium text-[var(--text-primary)] font-mono truncate">{a.asset_no}</p>
+                          <p className="text-[11px] text-[var(--text-muted)] truncate">{a.site || '-'}</p>
+                        </div>
+                        <div className="text-right shrink-0">
+                          <p className="text-sm font-bold text-red-400">{a.count}<span className="text-[10px] font-normal text-[var(--text-muted)]"> incidents</span></p>
+                          <p className="text-[11px] text-[var(--text-dim)]">{fmtCurrency(a.cost)}</p>
+                        </div>
+                        <ChevronRight size={13} className="text-[var(--text-muted)] group-hover:text-[var(--text-primary)] shrink-0" />
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Repeat-offender drivers */}
+              <div>
+                <p className="text-xs font-semibold text-[var(--text-dim)] flex items-center gap-1.5 mb-2"><Users size={13} className="text-purple-400" /> Repeat-Offender Drivers (2+ incidents)</p>
+                {opsIntel.repeatDrivers.length === 0 ? (
+                  <p className="text-xs text-[var(--text-muted)] py-3">No driver linked to multiple incidents (or driver data not captured).</p>
+                ) : (
+                  <div className="space-y-1.5">
+                    {opsIntel.repeatDrivers.map(d => (
+                      <div key={d.driver} className="flex items-center justify-between gap-2 rounded-lg bg-[var(--input-bg)] border border-[var(--input-border)] px-3 py-2">
+                        <p className="text-sm font-medium text-[var(--text-primary)] truncate">{d.driver}</p>
+                        <div className="text-right shrink-0">
+                          <p className="text-sm font-bold text-purple-400">{d.count}<span className="text-[10px] font-normal text-[var(--text-muted)]"> incidents</span></p>
+                          <p className="text-[11px] text-[var(--text-dim)]">{fmtCurrency(d.cost)}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Cost hotspots by site */}
+              <div>
+                <p className="text-xs font-semibold text-[var(--text-dim)] flex items-center gap-1.5 mb-2"><DollarSign size={13} className="text-green-400" /> Cost Hotspots by Site</p>
+                {opsIntel.siteHotspots.length === 0 ? (
+                  <p className="text-xs text-[var(--text-muted)] py-3">No cost recorded yet.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {opsIntel.siteHotspots.map(s => (
+                      <div key={s.site}>
+                        <div className="flex items-center justify-between text-xs mb-1">
+                          <span className="text-[var(--text-dim)] truncate">{s.site} <span className="text-[var(--text-muted)]">· {s.count} · avg {fmtCurrency(s.avg)}</span></span>
+                          <span className="text-[var(--text-secondary)] font-medium shrink-0">{fmtCurrency(s.cost)} ({s.pct}%)</span>
+                        </div>
+                        <div className="w-full bg-[var(--input-border)] rounded-full h-1.5">
+                          <div className="h-1.5 rounded-full bg-green-500/80" style={{ width: `${s.pct}%` }} />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Root-cause groupings */}
+              <div>
+                <p className="text-xs font-semibold text-[var(--text-dim)] flex items-center gap-1.5 mb-2"><AlertOctagon size={13} className="text-blue-400" /> Root-Cause Groupings</p>
+                {opsIntel.rootCauses.length === 0 ? (
+                  <p className="text-xs text-[var(--text-muted)] py-3">No incidents to group.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {opsIntel.rootCauses.map(c => (
+                      <div key={c.cause}>
+                        <div className="flex items-center justify-between text-xs mb-1">
+                          <span className="text-[var(--text-dim)] truncate capitalize">{c.cause}</span>
+                          <span className="text-[var(--text-secondary)] font-medium shrink-0">{c.count} ({c.pct}%) · {fmtCurrency(c.cost)}</span>
+                        </div>
+                        <div className="w-full bg-[var(--input-border)] rounded-full h-1.5">
+                          <div className="h-1.5 rounded-full bg-blue-500/80" style={{ width: `${c.pct}%` }} />
+                        </div>
+                      </div>
+                    ))}
+                    {opsIntel.uncategorised > 0 && (
+                      <p className="text-[11px] text-yellow-500/80 pt-1">{opsIntel.uncategorised} incident{opsIntel.uncategorised !== 1 ? 's' : ''} lack a cause — capture accident type at intake.</p>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Data-quality strip */}
+            <div className="mt-5 pt-4 border-t border-[var(--input-border)] grid grid-cols-2 md:grid-cols-4 gap-3">
+              <div><p className="text-lg font-bold text-yellow-400">{opsIntel.dataQuality.missingCost}</p><p className="text-[11px] text-[var(--text-muted)]">Missing cost data</p></div>
+              <div><p className="text-lg font-bold text-yellow-400">{opsIntel.dataQuality.missingDriver}</p><p className="text-[11px] text-[var(--text-muted)]">Missing driver</p></div>
+              <div><p className="text-lg font-bold text-orange-400">{opsIntel.dataQuality.staleOpen}</p><p className="text-[11px] text-[var(--text-muted)]">Open &gt; 60 days</p></div>
+              <div><p className="text-lg font-bold text-red-400">{fmtCurrency(opsIntel.leakage)}</p><p className="text-[11px] text-[var(--text-muted)]">Unrecovered ({opsIntel.recoverableCount})</p></div>
             </div>
           </div>
 
@@ -1524,46 +1769,6 @@ export default function Accidents() {
               </div>
             </form>
           </div>
-        </div>
-      )}
-
-      {/* Deep claims detail (timeline, parts, claim, closure workflow) */}
-      {detailId && (
-        <AccidentDetailModal
-          accidentId={detailId}
-          onClose={() => setDetailId(null)}
-          onChanged={loadRecords}
-        />
-      )}
-
-      {/*
-        Universal Approval & Workflow Engine — Accident approval.
-        Reference flow: Driver reports → photos → GPS → workshop inspection →
-        estimate → insurance approval → repair → final inspection → released.
-        Rendered as a companion panel anchored beside the detail modal (the
-        detail modal is a separate, owned component we must not modify). While
-        the accident is mid-approval the row's edit/status/delete controls are
-        gated via `wfLocked` (see the actions column).
-      */}
-      {detailId && detailRecord && (
-        <div className="fixed z-[60] bottom-4 right-4 w-full max-w-sm max-h-[80vh] overflow-y-auto">
-          <EntityApprovalPanel
-            entityType="accident"
-            entityId={detailRecord.id}
-            entityLabel={detailRecord.insurance_claim_no || detailRecord.policy_no || detailRecord.asset_no || detailRecord.id}
-            context={{
-              severity: canonSeverity(detailRecord.severity),
-              is_major: ['Major', 'Total Loss'].includes(canonSeverity(detailRecord.severity)),
-              estimated_cost: Number(detailRecord.estimated_damage_cost) || Number(detailRecord.repair_cost) || 0,
-              repair_cost: Number(detailRecord.repair_cost) || 0,
-              parts_cost: Number(detailRecord.parts_cost) || 0,
-              claim_amount: Number(detailRecord.claim_amount) || 0,
-              country: detailRecord.country || null,
-              site: detailRecord.site || null,
-            }}
-            title="Accident Approval"
-            onStateChange={handleWfStateChange}
-          />
         </div>
       )}
 

@@ -11,7 +11,6 @@ import { useSettings } from '../contexts/SettingsContext'
 import { useAuth } from '../contexts/AuthContext'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import { computeSupplierScorecard } from '../lib/analytics/supplierScorecard'
-import { formatDate } from '../lib/formatters'
 import { useLanguage } from '../contexts/LanguageContext'
 import PageHeader from '../components/ui/PageHeader'
 import EmptyState from '../components/EmptyState'
@@ -19,7 +18,7 @@ import EntityApprovalPanel from '../components/workflow/EntityApprovalPanel'
 import {
   Building2, Star, TrendingUp, TrendingDown, Minus, Award, AlertTriangle,
   CheckCircle, Clock, Search, Filter, Download, FileText, FileSpreadsheet,
-  RefreshCw, ChevronRight, ChevronLeft, ChevronDown, X, Plus, Edit3,
+  RefreshCw, ChevronDown, X, Plus, Edit3,
   BarChart3, DollarSign, Truck, Package, Target, Zap, ShieldCheck,
   ArrowUpRight, ArrowDownRight, Users, Calendar, FileCheck, Loader2,
   SlidersHorizontal, Eye, Globe, MapPin, Hash, Upload, Lock,
@@ -31,7 +30,7 @@ import {
   CategoryScale, LinearScale, BarElement, LineElement, PointElement,
   RadialLinearScale, ArcElement, Title, Tooltip, Legend, Filler, RadarController,
 } from 'chart.js'
-import { Bar, Line, Radar, Doughnut } from 'react-chartjs-2'
+import { Bar, Radar, Doughnut } from 'react-chartjs-2'
 
 ChartJS.register(
   CategoryScale, LinearScale, BarElement, LineElement, PointElement,
@@ -46,15 +45,12 @@ const RATINGS = ['Preferred', 'Approved', 'Under Review', 'Probation']
 // i18n key lookup for RATINGS/CONTRACT_STATUSES labels (constants stay stable for logic/equality checks)
 const RATING_I18N_KEYS = { Preferred: 'preferred', Approved: 'approved', 'Under Review': 'underReview', Probation: 'probation' }
 const TAB_I18N_KEYS = ['directory', 'performance', 'spendAnalysis', 'contracts', 'recommendations', 'scorecard']
-// Categorical rating <-> numeric (rating column is numeric). Index is 1-based.
-const RATING_TO_NUM = RATINGS.reduce((acc, r, i) => { acc[r] = i + 1; return acc }, {})
-function ratingToNum(label) { return RATING_TO_NUM[label] ?? null }
+// Categorical rating -> numeric (rating column is numeric). Index is 1-based.
 function numToRating(num) {
   const idx = Math.round(Number(num)) - 1
   return RATINGS[idx] || null
 }
 // Whitelisted writable columns
-const RATING_COLS = ['brand', 'rating', 'notes', 'country', 'created_by']
 const CONTRACT_COLS = ['supplier_name', 'contract_start', 'contract_end', 'payment_terms', 'price_per_unit', 'min_order', 'notes', 'country', 'created_by']
 const PALETTE = [
   '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6',
@@ -393,295 +389,12 @@ function ContractModal({ contract, onSave, onClose, onLockChange }) {
   )
 }
 
-// ── Supplier Detail Drawer ─────────────────────────────────────────────────────
-function SupplierDrawer({ supplier, allMetrics, records, currency, isAdmin, onClose, onRatingChange, onSaveNotes }) {
-  const { t } = useLanguage()
-  const [page, setPage] = useState(0)
-  const [notes, setNotes] = useState(supplier.notes || '')
-  const [noteSaved, setNoteSaved] = useState(false)
-  const [noteSaving, setNoteSaving] = useState(false)
-  const [noteError, setNoteError] = useState(null)
-  const [radarKey] = useState(() => Math.random())
-  const pageSize = 8
-  const months = useMemo(() => getLast12Months(dataAnchorDate(supplier.recs)), [supplier.recs])
-
-  const radarScores = useMemo(() => computeRadarScores(supplier, allMetrics), [supplier, allMetrics])
-
-  const monthlySpend = useMemo(() => {
-    return months.map(m => {
-      const recs = supplier.recs.filter(r => toMonthKey(r.issue_date) === m)
-      return recs.reduce((s, r) => s + recordCost(r), 0)
-    })
-  }, [supplier.recs, months])
-
-  const sizeBreakdown = useMemo(() => {
-    const map = {}
-    supplier.recs.forEach(r => { if (r.size) map[r.size] = (map[r.size] || 0) + 1 })
-    return Object.entries(map).sort((a, b) => b[1] - a[1])
-  }, [supplier.recs])
-
-  const siteBreakdown = useMemo(() => {
-    const map = {}
-    supplier.recs.forEach(r => { if (r.site) map[r.site] = (map[r.site] || 0) + 1 })
-    return Object.entries(map).sort((a, b) => b[1] - a[1])
-  }, [supplier.recs])
-
-  const pagedRecs = supplier.recs.slice(page * pageSize, (page + 1) * pageSize)
-  const totalPages = Math.ceil(supplier.recs.length / pageSize)
-
-  useEffect(() => { setNotes(supplier.notes || ''); setNoteSaved(false); setNoteError(null) }, [supplier.brand, supplier.notes])
-
-  async function saveNotes() {
-    setNoteSaving(true)
-    setNoteError(null)
-    const err = await onSaveNotes(supplier.brand, notes)
-    setNoteSaving(false)
-    if (err) { setNoteError(err); return }
-    setNoteSaved(true)
-    setTimeout(() => setNoteSaved(false), 2000)
-  }
-
-  const radarData = {
-    labels: [t('suppliers.radarLabels.cpkScore'), t('suppliers.radarLabels.lifeScore'), t('suppliers.radarLabels.reliability'), t('suppliers.radarLabels.value'), t('suppliers.radarLabels.coverage')],
-    datasets: [{
-      label: supplier.brand,
-      data: [radarScores.cpkScore, radarScores.lifeScore, radarScores.reliabilityScore, radarScores.valueScore, radarScores.coverageScore],
-      backgroundColor: 'rgba(59,130,246,0.2)',
-      borderColor: '#3b82f6',
-      pointBackgroundColor: '#3b82f6',
-      borderWidth: 2,
-    }],
-  }
-
-  const radarOpts = {
-    responsive: true, maintainAspectRatio: false,
-    plugins: { legend: { display: false } },
-    scales: {
-      r: {
-        min: 0, max: 100,
-        ticks: { color: '#6b7280', font: { size: 10 }, stepSize: 25 },
-        grid: { color:'var(--text-muted)' },
-        pointLabels: { color: '#9ca3af', font: { size: 11 } },
-        angleLines: { color:'var(--text-muted)' },
-      },
-    },
-  }
-
-  const spendChartData = {
-    labels: months.map(m => { const [y, mo] = m.split('-'); return `${['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][parseInt(mo)-1]}` }),
-    datasets: [{
-      label: t('suppliers.monthlySpendLabel'),
-      data: monthlySpend,
-      backgroundColor: 'rgba(59,130,246,0.7)',
-      borderColor: '#3b82f6',
-      borderRadius: 4,
-    }],
-  }
-
-  return (
-    <motion.div
-      initial={{ x: '100%' }}
-      animate={{ x: 0 }}
-      exit={{ x: '100%' }}
-      transition={{ type: 'spring', damping: 30, stiffness: 300 }}
-      className="fixed right-0 top-0 h-full w-full max-w-2xl bg-[var(--surface-1)] border-l border-[var(--input-border)] z-40 flex flex-col shadow-2xl overflow-hidden"
-    >
-      {/* Header */}
-      <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--input-border)] flex-shrink-0">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-blue-900/40 border border-blue-700 flex items-center justify-center">
-            <Building2 size={18} className="text-blue-400" />
-          </div>
-          <div>
-            <h2 className="font-bold text-[var(--text-primary)] text-lg leading-none">{supplier.brand}</h2>
-            <div className="flex items-center gap-2 mt-1">
-              <RatingBadge rating={supplier.rating} />
-              <span className="text-xs text-[var(--text-muted)]">{supplier.count} {t('suppliers.drawer.tyresSuffix')}</span>
-            </div>
-          </div>
-        </div>
-        <button onClick={onClose} className="text-[var(--text-muted)] hover:text-[var(--text-primary)] p-2 rounded-lg hover:bg-[var(--input-bg)]">
-          <X size={18} />
-        </button>
-      </div>
-
-      <div className="flex-1 overflow-y-auto p-5 space-y-6">
-        {/* Radar + Stats */}
-        <div className="grid grid-cols-2 gap-4">
-          <div className="card">
-            <h4 className="text-xs text-[var(--text-muted)] uppercase tracking-wider mb-3">{t('suppliers.drawer.radarTitle')}</h4>
-            <div className="h-48">
-              <Radar key={radarKey} data={radarData} options={radarOpts} />
-            </div>
-          </div>
-          <div className="space-y-2">
-            {[
-              { label: t('suppliers.drawer.stats.avgCpk'), value: fmtCpk(supplier.avgCpk, currency), good: supplier.avgCpk != null && supplier.avgCpk <= CPK_BENCHMARK },
-              { label: t('suppliers.drawer.stats.avgTyreLife'), value: fmtKm(supplier.avgLife), good: supplier.avgLife > 80000 },
-              { label: t('suppliers.drawer.stats.failureRate'), value: fmtPct(supplier.failureRate), good: supplier.failureRate < FAILURE_THRESHOLD },
-              { label: t('suppliers.drawer.stats.spendThisYear'), value: fmtCurrency(supplier.spendThisYear, currency), good: null },
-              { label: t('suppliers.drawer.stats.totalSpend'), value: fmtCurrency(supplier.totalSpend, currency), good: null },
-              { label: t('suppliers.drawer.stats.sitesUsed'), value: supplier.sites.length, good: null },
-            ].map(item => (
-              <div key={item.label} className="flex items-center justify-between bg-[var(--surface-1)] border border-[var(--input-border)] rounded-lg px-3 py-2">
-                <span className="text-xs text-[var(--text-muted)]">{item.label}</span>
-                <span className={`text-sm font-semibold ${
-                  item.good === true ? 'text-emerald-400' : item.good === false ? 'text-red-400' : 'text-[var(--text-primary)]'
-                }`}>{item.value}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Monthly Spend Trend */}
-        <div className="card">
-          <h4 className="text-xs text-[var(--text-muted)] uppercase tracking-wider mb-3">{t('suppliers.drawer.monthlySpendTitle')}</h4>
-          <div className="h-40">
-            <Bar data={spendChartData} options={{ ...CHART_DEFAULTS, plugins: { ...CHART_DEFAULTS.plugins, legend: { display: false } } }} />
-          </div>
-        </div>
-
-        {/* Size & Site Breakdown */}
-        <div className="grid grid-cols-2 gap-4">
-          <div className="card">
-            <h4 className="text-xs text-[var(--text-muted)] uppercase tracking-wider mb-3">{t('suppliers.drawer.sizeDistribution')}</h4>
-            <div className="space-y-1.5 max-h-40 overflow-y-auto">
-              {sizeBreakdown.length === 0 && <p className="text-xs text-[var(--text-dim)]">{t('suppliers.drawer.noSizeData')}</p>}
-              {sizeBreakdown.map(([size, count]) => (
-                <div key={size} className="flex items-center gap-2">
-                  <div className="flex-1 text-xs text-[var(--text-secondary)] truncate">{size}</div>
-                  <div className="w-20 h-1.5 bg-[var(--input-bg)] rounded-full overflow-hidden">
-                    <div className="h-full bg-blue-500 rounded-full" style={{ width: `${(count / supplier.count) * 100}%` }} />
-                  </div>
-                  <span className="text-xs text-[var(--text-muted)] w-6 text-right">{count}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-          <div className="card">
-            <h4 className="text-xs text-[var(--text-muted)] uppercase tracking-wider mb-3">{t('suppliers.drawer.siteUsage')}</h4>
-            <div className="space-y-1.5 max-h-40 overflow-y-auto">
-              {siteBreakdown.length === 0 && <p className="text-xs text-[var(--text-dim)]">{t('suppliers.drawer.noSiteData')}</p>}
-              {siteBreakdown.map(([site, count]) => (
-                <div key={site} className="flex items-center gap-2">
-                  <div className="flex-1 text-xs text-[var(--text-secondary)] truncate">{site}</div>
-                  <div className="w-20 h-1.5 bg-[var(--input-bg)] rounded-full overflow-hidden">
-                    <div className="h-full bg-emerald-500 rounded-full" style={{ width: `${(count / supplier.count) * 100}%` }} />
-                  </div>
-                  <span className="text-xs text-[var(--text-muted)] w-6 text-right">{count}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        {/* Tyre Records Table */}
-        <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl overflow-hidden">
-          <div className="px-4 py-3 border-b border-[var(--input-border)] flex items-center justify-between">
-            <h4 className="text-xs text-[var(--text-muted)] uppercase tracking-wider">{t('suppliers.drawer.tyreRecords')}</h4>
-            <span className="text-xs text-[var(--text-dim)]">{t('suppliers.drawer.totalSuffix', { count: supplier.count })}</span>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs">
-              <thead>
-                <tr className="border-b border-[var(--input-border)]">
-                  {[
-                    t('suppliers.drawer.columns.serial'), t('suppliers.drawer.columns.size'), t('suppliers.drawer.columns.asset'),
-                    t('suppliers.drawer.columns.site'), t('suppliers.drawer.columns.cpk'), t('suppliers.drawer.columns.risk'), t('suppliers.drawer.columns.date'),
-                  ].map(h => (
-                    <th key={h} className="px-3 py-2 text-left text-[var(--text-muted)] font-medium">{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {pagedRecs.map(r => {
-                  const cpk = calcCpk(Number(r.cost_per_tyre), Number(r.km_at_fitment), Number(r.km_at_removal))
-                  const riskColor = { High: 'text-red-400', Critical: 'text-red-500', Medium: 'text-amber-400', Low: 'text-emerald-400' }[r.risk_level] || 'text-[var(--text-muted)]'
-                  return (
-                    <tr key={r.id} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/30">
-                      <td className="px-3 py-2 text-[var(--text-secondary)] font-mono truncate max-w-[80px]">{r.serial_number || '-'}</td>
-                      <td className="px-3 py-2 text-[var(--text-secondary)]">{r.size || '-'}</td>
-                      <td className="px-3 py-2 text-[var(--text-secondary)]">{r.asset_no || '-'}</td>
-                      <td className="px-3 py-2 text-[var(--text-secondary)]">{r.site || '-'}</td>
-                      <td className="px-3 py-2"><CpkBadge cpk={cpk} currency={currency} /></td>
-                      <td className={`px-3 py-2 ${riskColor}`}>{r.risk_level || '-'}</td>
-                      <td className="px-3 py-2 text-[var(--text-muted)]">{r.issue_date ? formatDate(r.issue_date) : '-'}</td>
-                    </tr>
-                  )
-                })}
-                {pagedRecs.length === 0 && (
-                  <tr><td colSpan={7} className="px-3 py-4 text-center text-[var(--text-dim)]">{t('suppliers.drawer.noRecords')}</td></tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-          {totalPages > 1 && (
-            <div className="flex items-center justify-between px-4 py-2 border-t border-[var(--input-border)]">
-              <button disabled={page === 0} onClick={() => setPage(p => p - 1)}
-                className="text-xs text-[var(--text-muted)] hover:text-[var(--text-primary)] disabled:opacity-30 flex items-center gap-1">
-                <ChevronLeft size={12} /> {t('suppliers.drawer.prev')}
-              </button>
-              <span className="text-xs text-[var(--text-dim)]">{t('suppliers.drawer.pageOf', { page: page + 1, total: totalPages })}</span>
-              <button disabled={page >= totalPages - 1} onClick={() => setPage(p => p + 1)}
-                className="text-xs text-[var(--text-muted)] hover:text-[var(--text-primary)] disabled:opacity-30 flex items-center gap-1">
-                {t('suppliers.drawer.next')} <ChevronRight size={12} />
-              </button>
-            </div>
-          )}
-        </div>
-
-        {/* Admin Rating Override */}
-        {isAdmin && (
-          <div className="card">
-            <h4 className="text-xs text-[var(--text-muted)] uppercase tracking-wider mb-3">{t('suppliers.drawer.ratingOverride')}</h4>
-            <div className="flex flex-wrap gap-2">
-              {RATINGS.map(r => (
-                <button key={r} onClick={() => onRatingChange(supplier.brand, r)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
-                    supplier.rating === r ? `${RATING_CONFIG[r].bg} ${RATING_CONFIG[r].color} ${RATING_CONFIG[r].border}` : 'bg-[var(--input-bg)] border-[var(--input-border)] text-[var(--text-muted)] hover:border-[var(--input-border)]'
-                  }`}>
-                  {t(`suppliers.ratings.${RATING_I18N_KEYS[r]}`)}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Notes */}
-        <div className="card">
-          <h4 className="text-xs text-[var(--text-muted)] uppercase tracking-wider mb-2">{t('suppliers.drawer.notes')}</h4>
-          <textarea
-            value={notes}
-            onChange={e => setNotes(e.target.value)}
-            rows={3}
-            placeholder={t('suppliers.drawer.notesPlaceholder')}
-            className="w-full bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none focus:border-blue-500 resize-none"
-          />
-          <div className="flex items-center gap-2 mt-2">
-            <button onClick={saveNotes} disabled={noteSaving}
-              className={`px-3 py-1.5 text-xs rounded-lg font-medium transition-colors flex items-center gap-1.5 disabled:opacity-50 ${noteSaved ? 'bg-emerald-700 text-emerald-200' : 'bg-[var(--input-bg)] hover:bg-[var(--input-bg-hover)] text-[var(--text-secondary)]'}`}>
-              {noteSaving && <Loader2 size={11} className="animate-spin" />}
-              {noteSaving ? t('suppliers.drawer.saving') : noteSaved ? t('suppliers.drawer.saved') : t('suppliers.drawer.saveNotes')}
-            </button>
-            {noteError && (
-              <span className="text-xs text-red-400 flex items-center gap-1">
-                <AlertTriangle size={11} /> {noteError}
-              </span>
-            )}
-          </div>
-        </div>
-      </div>
-    </motion.div>
-  )
-}
-
 // ── Main Component ─────────────────────────────────────────────────────────────
 export default function SupplierManagement() {
   const { t } = useLanguage()
   const navigate = useNavigate()
   const { activeCurrency, activeCountry } = useSettings()
-  const { user, profile } = useAuth()
-  const isAdmin = profile?.role === 'Admin'
+  const { user } = useAuth()
 
   const [records, setRecords] = useState([])
   const [loading, setLoading] = useState(true)
@@ -694,7 +407,6 @@ export default function SupplierManagement() {
   // ratings: { [brand]: { label, notes, id } } - persisted in supplier_ratings
   const [ratings, setRatings] = useState({})
   const [ratingsError, setRatingsError] = useState(null)
-  const [selectedSupplier, setSelectedSupplier] = useState(null)
   const [compareList, setCompareList] = useState([])
   const [contracts, setContracts] = useState([])
   const [contractsLoading, setContractsLoading] = useState(true)
@@ -824,40 +536,6 @@ export default function SupplierManagement() {
   }, [allMetrics])
 
   const scopedCountry = activeCountry && activeCountry !== 'All' ? activeCountry : null
-
-  // Upsert one supplier_ratings row per (brand, country), preserving the other field.
-  async function upsertRating(brand, { label, notes }) {
-    const existing = ratings[brand] || {}
-    const payload = pick({
-      brand,
-      rating: ratingToNum(label !== undefined ? label : existing.label),
-      notes: notes !== undefined ? notes : (existing.notes || ''),
-      country: scopedCountry,
-      created_by: user?.id || null,
-    }, RATING_COLS)
-    const { error: err } = await supplierApi.upsertSupplierRating(payload)
-    if (err) return err.message
-    await fetchRatings()
-    return null
-  }
-
-  // Rating override (Admin)
-  async function handleRatingChange(brand, rating) {
-    const err = await upsertRating(brand, { label: rating })
-    if (err) { setRatingsError(err); return }
-    if (selectedSupplier?.brand === brand) {
-      setSelectedSupplier(prev => ({ ...prev, rating }))
-    }
-  }
-
-  // Notes save (returns error string or null)
-  async function handleSaveNotes(brand, notes) {
-    const err = await upsertRating(brand, { notes })
-    if (!err && selectedSupplier?.brand === brand) {
-      setSelectedSupplier(prev => ({ ...prev, notes }))
-    }
-    return err
-  }
 
   // Compare list
   function toggleCompare(brand) {
@@ -1278,7 +956,7 @@ export default function SupplierManagement() {
                         )}
                       </div>
 
-                      <button onClick={() => setSelectedSupplier(supplier)}
+                      <button onClick={() => navigate(`/suppliers/${encodeURIComponent(supplier.brand)}`)}
                         className="w-full flex items-center justify-center gap-1.5 py-2 bg-[var(--input-bg)] hover:bg-[var(--input-bg-hover)] border border-[var(--input-border)] hover:border-[var(--input-border)] rounded-lg text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors">
                         <Eye size={12} /> {t('suppliers.directory.viewDetails')}
                       </button>
@@ -1738,31 +1416,6 @@ export default function SupplierManagement() {
               </table>
             </div>
           </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* Supplier Drawer */}
-      <AnimatePresence>
-        {selectedSupplier && (
-          <>
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="fixed inset-0 bg-black/50 backdrop-blur-sm z-30"
-              onClick={() => setSelectedSupplier(null)}
-            />
-            <SupplierDrawer
-              supplier={selectedSupplier}
-              allMetrics={allMetrics}
-              records={filteredRecords}
-              currency={activeCurrency}
-              isAdmin={isAdmin}
-              onClose={() => setSelectedSupplier(null)}
-              onRatingChange={handleRatingChange}
-              onSaveNotes={handleSaveNotes}
-            />
-          </>
         )}
       </AnimatePresence>
 

@@ -238,5 +238,21 @@
   },
   "errors": {
     "loadFailed": "Failed to load data"
+  },
+  "detail": {
+    "back": "Back to Suppliers",
+    "notFoundTitle": "Supplier not found",
+    "notFoundDesc": "No tyre records were found for \"{brand}\" in the current country scope. It may have been removed or filtered out.",
+    "tabs": {
+      "profile": "Profile",
+      "performance": "Performance",
+      "contracts": "Contracts",
+      "notes": "Notes"
+    },
+    "contracts": {
+      "emptyTitle": "No contracts for this supplier",
+      "emptyDesc": "No supplier contracts match this supplier name. Add or manage contracts from the Contracts tab on the Supplier Management page.",
+      "manageHint": "Contracts are read-only here. Create, edit, or delete them from the Contracts tab on the Supplier Management page."
+    }
   }
 }

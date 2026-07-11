@@ -1,22 +1,21 @@
-import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { supabase } from '../lib/supabase'
 import { applyCountry } from '../lib/countryFilter'
 import { fetchAllPages } from '../lib/fetchAll'
 import { useSettings } from '../contexts/SettingsContext'
-import { useAuth } from '../contexts/AuthContext'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
-import { formatDate, formatDateTime } from '../lib/formatters'
+import { formatDate } from '../lib/formatters'
 import PageHeader from '../components/ui/PageHeader'
 import {
   Wrench, ClipboardList, Clock, CheckCircle, DollarSign, AlertTriangle,
   TrendingUp, TrendingDown, Search, Filter, X, Download, RefreshCw,
   FileSpreadsheet, FileText, ChevronLeft, ChevronRight, ChevronDown,
   Calendar, User, Building2, Zap, BarChart2, PieChart, Activity,
-  Package, Star, Award, Target, Maximize2, Loader2, Lock,
+  Package, Star, Award, Target, Maximize2, Loader2,
 } from 'lucide-react'
 import { SkeletonTable } from '../components/ui/Skeleton'
-import EntityApprovalPanel from '../components/workflow/EntityApprovalPanel'
 import {
   Chart as ChartJS, CategoryScale, LinearScale, BarElement,
   LineElement, PointElement, ArcElement, Title, Tooltip, Legend, Filler,
@@ -227,248 +226,15 @@ function ChartCard({ title, subtitle, children, height = 260, action }) {
   )
 }
 
-// ── Job Drawer ─────────────────────────────────────────────────────────────────
-function JobDrawer({ job, onClose, currency }) {
-  // Approval-engine gate: while this work order's QA sign-off workflow is active
-  // (pending/in_review/returned) or locked (approved), its strongest per-record
-  // action — the Job Card export (the artifact acted on downstream) — is disabled
-  // so an in-approval job can't be exported out from under the workflow. State
-  // resets whenever a different record opens. The server RLS remains the real
-  // boundary; this is the client-side convenience guard.
-  const [wfLocked, setWfLocked] = useState(false)
-  useEffect(() => { setWfLocked(false) }, [job?.id])
-
-  const handleExportJobCard = useCallback(() => {
-    if (!job || wfLocked) return
-    exportToPdf(
-      [{
-        work_order_no: job.work_order_no ?? job.id,
-        asset_no: job.asset_no ?? '',
-        site: job.site ?? '',
-        work_type: job.work_type ?? '',
-        priority: job.priority ?? '',
-        status: job.status ?? '',
-        assigned_to: job.assigned_to ?? '',
-        created_at: job.created_at ? formatDateTime(job.created_at) : '',
-        scheduled_date: job.scheduled_date ? formatDate(job.scheduled_date) : '',
-        completed_at: job.completed_at ? formatDateTime(job.completed_at) : '',
-        labour_cost: job.labour_cost ?? 0,
-        parts_cost: job.parts_cost ?? 0,
-        total_cost: job.total_cost ?? 0,
-      }],
-      [
-        { key: 'work_order_no', header: 'WO No' },
-        { key: 'asset_no', header: 'Asset' },
-        { key: 'site', header: 'Site' },
-        { key: 'work_type', header: 'Work Type' },
-        { key: 'priority', header: 'Priority' },
-        { key: 'status', header: 'Status' },
-        { key: 'assigned_to', header: 'Assigned To' },
-        { key: 'created_at', header: 'Created' },
-        { key: 'scheduled_date', header: 'Scheduled' },
-        { key: 'completed_at', header: 'Completed' },
-        { key: 'labour_cost', header: 'Labour Cost' },
-        { key: 'parts_cost', header: 'Parts Cost' },
-        { key: 'total_cost', header: 'Total Cost' },
-      ],
-      `Workshop Job Card: ${job.work_order_no ?? job.id}`,
-      `TyrePulse_Workshop_JobCard_${job.work_order_no ?? job.id}`,
-      'landscape',
-    )
-  }, [job, wfLocked])
-
-  if (!job) return null
-  let parts = []
-  try { parts = typeof job.parts_used === 'string' ? JSON.parse(job.parts_used) : (job.parts_used || []) }
-  catch { parts = [] }
-
-  const ta = turnaroundHours(job)
-  const ot = isOnTime(job)
-
-  return (
-    <AnimatePresence>
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-        className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm"
-        onClick={onClose}
-      />
-      <motion.div
-        initial={{ x: '100%' }}
-        animate={{ x: 0 }}
-        exit={{ x: '100%' }}
-        transition={{ type: 'spring', damping: 30, stiffness: 300 }}
-        className="fixed right-0 top-0 h-full w-full max-w-xl z-50 bg-[var(--surface-1)] border-l border-[var(--input-border)] overflow-y-auto"
-        onClick={e => e.stopPropagation()}
-      >
-        <div className="sticky top-0 bg-[var(--surface-1)] border-b border-[var(--input-border)] px-6 py-4 flex items-center justify-between z-10">
-          <div>
-            <p className="text-xs text-[var(--text-muted)] uppercase tracking-wider">Work Order</p>
-            <h2 className="text-base font-bold text-[var(--text-primary)] mt-0.5">{job.work_order_no || job.id}</h2>
-          </div>
-          <button onClick={onClose} className="p-2 rounded-lg hover:bg-[var(--input-bg)] text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors">
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-
-        <div className="p-6 space-y-6">
-          {/* Status & Priority */}
-          <div className="flex gap-2 flex-wrap">
-            <span className={`px-3 py-1 rounded-full text-xs font-medium border ${statusBadgeClass(job.status)}`}>{job.status}</span>
-            <span className={`px-3 py-1 rounded-full text-xs font-medium border ${priorityBadgeClass(job.priority)}`}>{job.priority}</span>
-            {ot != null && (
-              <span className={`px-3 py-1 rounded-full text-xs font-medium border ${ot ? 'bg-green-500/20 text-green-400 border-green-500/30' : 'bg-red-500/20 text-red-400 border-red-500/30'}`}>
-                {ot ? 'On Time' : 'Late'}
-              </span>
-            )}
-          </div>
-
-          {/* Core details */}
-          <div className="grid grid-cols-2 gap-3">
-            {[
-              { label: 'Asset', value: job.asset_no },
-              { label: 'Site', value: job.site },
-              { label: 'Work Type', value: job.work_type },
-              { label: 'Assigned To', value: job.assigned_to },
-              { label: 'Created', value: job.created_at ? formatDateTime(job.created_at) : '-' },
-              { label: 'Scheduled', value: job.scheduled_date ? formatDate(job.scheduled_date) : '-' },
-              { label: 'Completed', value: job.completed_at ? formatDateTime(job.completed_at) : '-' },
-              { label: 'Turnaround', value: fmtHours(ta) },
-            ].map(({ label, value }) => (
-              <div key={label} className="bg-[var(--surface-1)] rounded-lg p-3">
-                <p className="text-xs text-[var(--text-muted)] mb-1">{label}</p>
-                <p className="text-sm text-[var(--text-primary)] font-medium">{value || '-'}</p>
-              </div>
-            ))}
-          </div>
-
-          {/* Cost breakdown */}
-          <div>
-            <h3 className="text-xs text-[var(--text-muted)] uppercase tracking-wider mb-3">Cost Breakdown</h3>
-            <div className="bg-[var(--surface-1)] rounded-xl overflow-hidden">
-              {[
-                { label: 'Labour Cost', value: job.labour_cost, color: 'bg-blue-500' },
-                { label: 'Parts Cost', value: job.parts_cost, color: 'bg-purple-500' },
-                { label: 'Total Cost', value: job.total_cost, color: 'bg-green-500', bold: true },
-              ].map(({ label, value, color, bold }) => (
-                <div key={label} className={`flex items-center justify-between px-4 py-3 ${bold ? 'border-t border-[var(--input-border)]' : ''}`}>
-                  <div className="flex items-center gap-2">
-                    <div className={`w-2 h-2 rounded-full ${color}`} />
-                    <span className={`text-sm ${bold ? 'text-[var(--text-primary)] font-semibold' : 'text-[var(--text-muted)]'}`}>{label}</span>
-                  </div>
-                  <span className={`text-sm font-medium ${bold ? 'text-[var(--text-primary)]' : 'text-[var(--text-secondary)]'}`}>
-                    {fmtCurrency(value, currency)}
-                  </span>
-                </div>
-              ))}
-            </div>
-            {job.total_cost > 0 && (
-              <div className="mt-2 bg-[var(--surface-1)] rounded-lg p-3">
-                <div className="flex gap-1 h-3 rounded overflow-hidden">
-                  <div
-                    className="bg-blue-500 rounded-l"
-                    style={{ width: `${((job.labour_cost || 0) / job.total_cost) * 100}%` }}
-                  />
-                  <div
-                    className="bg-purple-500 rounded-r"
-                    style={{ width: `${((job.parts_cost || 0) / job.total_cost) * 100}%` }}
-                  />
-                </div>
-                <div className="flex justify-between mt-1.5 text-xs text-[var(--text-muted)]">
-                  <span>Labour {job.total_cost > 0 ? fmtPct(((job.labour_cost || 0) / job.total_cost) * 100) : '-'}</span>
-                  <span>Parts {job.total_cost > 0 ? fmtPct(((job.parts_cost || 0) / job.total_cost) * 100) : '-'}</span>
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Description */}
-          {job.description && (
-            <div>
-              <h3 className="text-xs text-[var(--text-muted)] uppercase tracking-wider mb-2">Description</h3>
-              <p className="text-sm text-[var(--text-secondary)] bg-[var(--surface-1)] rounded-lg p-4 leading-relaxed">{job.description}</p>
-            </div>
-          )}
-
-          {/* Parts used */}
-          {parts.length > 0 && (
-            <div>
-              <h3 className="text-xs text-[var(--text-muted)] uppercase tracking-wider mb-3">Parts Used</h3>
-              <div className="space-y-2">
-                {parts.map((p, i) => (
-                  <div key={i} className="flex items-center justify-between bg-[var(--surface-1)] rounded-lg px-4 py-2">
-                    <span className="text-sm text-[var(--text-secondary)]">{p.name || p.part_name || p.description || `Part ${i + 1}`}</span>
-                    <div className="flex items-center gap-3 text-xs text-[var(--text-muted)]">
-                      {p.qty != null && <span>Qty: {p.qty}</span>}
-                      {p.cost != null && <span className="text-[var(--text-secondary)]">{fmtCurrency(p.cost, currency)}</span>}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Workshop QA Approval — Approval & Workflow Engine.
-              A workshop job / quality-inspection sign-off warrants approval before
-              the job card is exported downstream. Smart rules may route high-cost
-              or overdue jobs to a manager. Mirrors WorkOrders / Retread wiring. */}
-          <EntityApprovalPanel
-            entityType="workshop_qa"
-            entityId={job.id}
-            entityLabel={job.work_order_no || job.asset_no || job.id}
-            context={{
-              score: job.score ?? job.quality_score,
-              status: job.status,
-              workshop: job.site,
-              work_type: job.work_type,
-              total_cost: Number(job.total_cost) || 0,
-              site: job.site,
-            }}
-            onStateChange={(s) => setWfLocked(!!(s?.isActive || s?.isLocked))}
-            title="Workshop QA Approval"
-          />
-
-          {wfLocked && (
-            <div className="flex items-center gap-1.5 text-xs text-[var(--accent)] bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg px-3 py-2">
-              <Lock size={12} />
-              Locked, in approval. This job card's export is disabled until the workflow completes.
-            </div>
-          )}
-        </div>
-
-        {/* Drawer footer — gated per-record action */}
-        <div className="sticky bottom-0 bg-[var(--surface-1)] border-t border-[var(--input-border)] p-3 flex justify-end gap-2">
-          <button
-            onClick={handleExportJobCard}
-            disabled={wfLocked}
-            title={wfLocked ? 'Locked, in approval' : 'Export job card'}
-            className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded-lg text-sm font-semibold text-white transition disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-blue-600"
-          >
-            {wfLocked ? <Lock size={14} /> : <FileText size={14} />} Export Job Card
-          </button>
-          <button
-            onClick={onClose}
-            className="px-4 py-2 bg-[var(--input-bg)] hover:bg-[var(--input-bg-hover)] rounded-lg text-sm text-[var(--text-secondary)] transition"
-          >
-            Close
-          </button>
-        </div>
-      </motion.div>
-    </AnimatePresence>
-  )
-}
-
 // ── Main Component ─────────────────────────────────────────────────────────────
 export default function WorkshopManagement() {
   const { activeCurrency, activeCountry } = useSettings()
-  const { profile } = useAuth()
+  const navigate = useNavigate()
 
   const [orders, setOrders]       = useState([])
   const [loading, setLoading]     = useState(true)
   const [tableExists, setTableExists] = useState(true)
   const [error, setError]         = useState(null)
-  const [selectedJob, setSelectedJob] = useState(null)
 
   // Filters
   const [site, setSite]           = useState('')
@@ -1194,7 +960,7 @@ export default function WorkshopManagement() {
                                 initial={{ opacity: 0 }}
                                 animate={{ opacity: 1 }}
                                 transition={{ delay: i * 0.02 }}
-                                onClick={() => setSelectedJob(job)}
+                                onClick={() => navigate(`/workshop/${encodeURIComponent(job.id)}`)}
                                 className="hover:bg-[var(--input-bg)]/50 cursor-pointer transition-colors group"
                               >
                                 <td className="px-4 py-3 text-blue-400 font-mono text-xs whitespace-nowrap group-hover:text-blue-300">
@@ -1561,15 +1327,6 @@ export default function WorkshopManagement() {
           </>
         )}
       </div>
-
-      {/* Job Detail Drawer */}
-      {selectedJob && (
-        <JobDrawer
-          job={selectedJob}
-          onClose={() => setSelectedJob(null)}
-          currency={activeCurrency}
-        />
-      )}
     </div>
   )
 }

@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { useLanguage } from '../contexts/LanguageContext'
 import { useSettings } from '../contexts/SettingsContext'
 import { supabase } from '../lib/supabase'
@@ -10,9 +10,10 @@ import {
 import { exportToPdf, exportToExcel } from '../lib/exportUtils'
 import { formatCurrencyCompact } from '../lib/formatters'
 import { fetchAllPages } from '../lib/fetchAll'
+import { recordCost } from '../lib/analyticsEngine'
 import {
-  GitCompare, Download, FileText, TrendingUp, TrendingDown, Minus,
-  ArrowUpRight, ArrowDownRight, BarChart2, RefreshCw,
+  GitCompare, Download, FileText, TrendingUp, TrendingDown,
+  ArrowUpRight, ArrowDownRight, BarChart2, RefreshCw, AlertTriangle,
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
 import SegmentedControl from '../components/ui/SegmentedControl'
@@ -134,7 +135,7 @@ function PeriodPicker({ label, period, setPeriod, accentBg, accentText, accentBo
 export default function Comparison() {
   const reportMeta = useReportMeta('Comparison')
   const { t } = useLanguage()
-  const { activeCurrency } = useSettings()
+  const { activeCountry, activeCurrency } = useSettings()
 
   const [periodA, setPeriodA] = useState({ months: [0,1,2,3,4,5,6,7,8,9,10,11], year: now.getFullYear() - 1 })
   const [periodB, setPeriodB] = useState({ months: [0,1,2,3,4,5,6,7,8,9,10,11], year: now.getFullYear() })
@@ -143,18 +144,43 @@ export default function Comparison() {
   const [records, setRecords] = useState([])
   const [loading, setLoading] = useState(false)
   const [ran, setRan]         = useState(false)
+  const [error, setError]     = useState(null)
+
+  // The fetched dataset is scoped to activeCountry at query time. If the admin
+  // switches active country after running, the on-screen comparison no longer
+  // matches the selected scope — reset to the configure state so the user re-runs
+  // against the correct country rather than reading stale, mis-scoped figures.
+  useEffect(() => {
+    setRan(false)
+    setRecords([])
+    setError(null)
+  }, [activeCountry])
 
   async function runComparison() {
     if (periodA.months.length === 0 || periodB.months.length === 0) return
     setLoading(true)
+    setError(null)
     const minYear = Math.min(periodA.year, periodB.year)
     const maxYear = Math.max(periodA.year, periodB.year)
-    const { data } = await fetchAllPages((from, to) => supabase
-      .from('tyre_records')
-      .select('issue_date, cost:cost_per_tyre, site, brand')
-      .gte('issue_date', `${minYear}-01-01`)
-      .lte('issue_date', `${maxYear}-12-31`)
-      .range(from, to))
+    // Fetch qty so cost math matches recordCost() (cost_per_tyre × qty) used
+    // across the rest of the app; scope by activeCountry to stay consistent with
+    // Country/Brand/Site pages and respect the admin's active-country filter.
+    const { data, error: fetchErr } = await fetchAllPages((from, to) => {
+      let q = supabase
+        .from('tyre_records')
+        .select('issue_date, cost_per_tyre, qty, site, brand')
+        .gte('issue_date', `${minYear}-01-01`)
+        .lte('issue_date', `${maxYear}-12-31`)
+      if (activeCountry !== 'All') q = q.eq('country', activeCountry)
+      return q.range(from, to)
+    })
+    if (fetchErr) {
+      setError(fetchErr.message || 'Failed to load comparison data.')
+      setRecords([])
+      setRan(true)
+      setLoading(false)
+      return
+    }
     setRecords(data ?? [])
     setRan(true)
     setLoading(false)
@@ -177,9 +203,11 @@ export default function Comparison() {
         if (!r.issue_date) return
         const d = new Date(r.issue_date)
         const yr = d.getFullYear(), mo = d.getMonth()
-        const val = parseFloat(r.cost) || 0
-        if (yr === periodA.year && bktA[mo] !== undefined) { bktA[mo].count++; bktA[mo].cost += val }
-        if (yr === periodB.year && bktB[mo] !== undefined) { bktB[mo].count++; bktB[mo].cost += val }
+        const val = recordCost(r)
+        // Only bucket a month if it was selected for that period, so the
+        // "Overall" view honours the month chips (not just the year).
+        if (yr === periodA.year && periodA.months.includes(mo) && bktA[mo] !== undefined) { bktA[mo].count++; bktA[mo].cost += val }
+        if (yr === periodB.year && periodB.months.includes(mo) && bktB[mo] !== undefined) { bktB[mo].count++; bktB[mo].cost += val }
       })
 
       const aVals = allMonths.map(m => getVal(bktA[m]))
@@ -242,7 +270,7 @@ export default function Comparison() {
       const d = new Date(r.issue_date)
       const yr = d.getFullYear(), mo = d.getMonth()
       const dim = r[dimKey] ?? '(unknown)'
-      const val = parseFloat(r.cost) || 0
+      const val = recordCost(r)
       if (yr === periodA.year && periodA.months.includes(mo) && bktA[dim] !== undefined) { bktA[dim].count++; bktA[dim].cost += val }
       if (yr === periodB.year && periodB.months.includes(mo) && bktB[dim] !== undefined) { bktB[dim].count++; bktB[dim].cost += val }
     })
@@ -372,8 +400,24 @@ export default function Comparison() {
         )}
       </div>
 
+      {/* Error state */}
+      {ran && error && (
+        <div className="card flex flex-col items-center justify-center py-14 text-center">
+          <AlertTriangle size={36} className="text-red-400 mb-3" />
+          <p className="text-red-300 font-medium">{t('comparison.empty.noData')}</p>
+          <p className="text-gray-500 text-sm mt-1">{error}</p>
+          <button
+            onClick={runComparison}
+            disabled={loading || !canRun}
+            className="mt-4 inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-sm rounded-lg transition-colors"
+          >
+            <RefreshCw size={16} className={loading ? 'animate-spin' : ''} /> {t('comparison.run.rerun')}
+          </button>
+        </div>
+      )}
+
       {/* Results */}
-      {ran && chartData && tableRows.length > 0 && (
+      {ran && !error && chartData && tableRows.length > 0 && (
         <>
           {/* Summary KPIs */}
           {totals && (
@@ -498,7 +542,7 @@ export default function Comparison() {
         </>
       )}
 
-      {ran && (!chartData || tableRows.length === 0) && (
+      {ran && !error && (!chartData || tableRows.length === 0) && (
         <div className="card text-center py-14">
           <GitCompare size={36} className="text-gray-700 mx-auto mb-3" />
           <p className="text-gray-400 font-medium">{t('comparison.empty.noData')}</p>

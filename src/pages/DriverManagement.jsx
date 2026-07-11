@@ -6,11 +6,10 @@ import { useSettings } from '../contexts/SettingsContext'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import PageHeader from '../components/ui/PageHeader'
 import EmptyState from '../components/EmptyState'
-import EntityApprovalPanel from '../components/workflow/EntityApprovalPanel'
 import {
   User, Users, TrendingUp, TrendingDown, Award, AlertTriangle,
-  BarChart2, Download, FileText, FileSpreadsheet, Search, Filter,
-  X, ChevronDown, ChevronUp, RefreshCw, Eye, Calendar, Upload, Lock,
+  BarChart2, FileText, FileSpreadsheet, Search, Filter,
+  X, ChevronDown, ChevronUp, RefreshCw, Eye, Calendar, Upload,
 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import {
@@ -268,276 +267,6 @@ function RiskBar({ score }) {
   )
 }
 
-// ── Driver Detail Drawer ───────────────────────────────────────────────────────
-function DriverDrawer({ driver, currency, onClose }) {
-  const [drawerSort, setDrawerSort] = useState({ col: 'issue_date', dir: 'desc' })
-
-  // Approval & Workflow Engine gate. The open driver record is the disciplinary /
-  // violation subject under review; while its approval is active (pending /
-  // in_review / returned) or locked (approved) the formal PDF disciplinary export
-  // is disabled so a record mid-approval can't be issued out from under the
-  // workflow. State resets whenever a different driver is opened.
-  const [wfLocked, setWfLocked] = useState(false)
-  useEffect(() => { setWfLocked(false) }, [driver?.name])
-
-  const sortedRecords = useMemo(() => {
-    if (!driver) return []
-    const recs = [...driver.records]
-    recs.sort((a, b) => {
-      let va = a[drawerSort.col] ?? ''
-      let vb = b[drawerSort.col] ?? ''
-      if (typeof va === 'string') va = va.toLowerCase()
-      if (typeof vb === 'string') vb = vb.toLowerCase()
-      if (va < vb) return drawerSort.dir === 'asc' ? -1 : 1
-      if (va > vb) return drawerSort.dir === 'asc' ? 1 : -1
-      return 0
-    })
-    return recs
-  }, [driver, drawerSort])
-
-  function handleDrawerSort(col) {
-    setDrawerSort(prev => ({
-      col,
-      dir: prev.col === col && prev.dir === 'asc' ? 'desc' : 'asc',
-    }))
-  }
-
-  function handleExcelExport() {
-    if (!driver) return
-    exportToExcel(
-      sortedRecords,
-      ['asset_no', 'serial_no', 'brand', 'issue_date', 'cost_per_tyre', 'km_at_fitment', 'km_at_removal', 'risk_level', 'removal_reason'],
-      ['Asset No', 'Serial No', 'Brand', 'Issue Date', 'Cost', 'KM Fitment', 'KM Removal', 'Risk Level', 'Removal Reason'],
-      `driver_${driver.name.replace(/\s+/g, '_')}_history`,
-      'Driver History',
-    )
-  }
-
-  function handlePdfExport() {
-    if (!driver) return
-    // Locked — this driver's disciplinary record is mid-approval; the formal
-    // export is blocked until the workflow completes.
-    if (wfLocked) return
-    exportToPdf(
-      sortedRecords.map(r => ({
-        ...r,
-        cpk_display: fmtCpk(calcCpk(r.cost_per_tyre, r.km_at_fitment, r.km_at_removal), currency),
-        life_km: r.km_at_removal != null && r.km_at_fitment != null
-          ? Math.max(0, r.km_at_removal - r.km_at_fitment)
-          : '',
-      })),
-      [
-        { key: 'asset_no',        header: 'Asset No' },
-        { key: 'brand',           header: 'Brand' },
-        { key: 'issue_date',      header: 'Date' },
-        { key: 'cost_per_tyre',   header: 'Cost' },
-        { key: 'cpk_display',     header: 'CPK' },
-        { key: 'life_km',         header: 'Life (km)' },
-        { key: 'risk_level',      header: 'Risk Level' },
-        { key: 'removal_reason',  header: 'Removal Reason' },
-      ],
-      `Driver History - ${driver.name}`,
-      `driver_${driver.name.replace(/\s+/g, '_')}_history`,
-      'landscape',
-    )
-  }
-
-  const badge = driver ? performanceBadge(driver.riskScore) : null
-
-  return (
-    <AnimatePresence>
-      {driver && (
-        <>
-          {/* Backdrop */}
-          <motion.div
-            className="fixed inset-0 z-40"
-            style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(3px)' }}
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            onClick={onClose}
-          />
-          {/* Drawer */}
-          <motion.div
-            className="fixed right-0 top-0 h-full z-50 flex flex-col overflow-hidden"
-            style={{
-              width: 'min(760px, 92vw)',
-              background: 'linear-gradient(165deg, var(--panel) 0%, var(--panel-2) 100%)',
-              borderLeft: '1px solid rgba(22,163,74,0.15)',
-              boxShadow: '-24px 0 80px rgba(0,0,0,0.8)',
-            }}
-            initial={{ x: '100%' }}
-            animate={{ x: 0 }}
-            exit={{ x: '100%' }}
-            transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
-          >
-            {/* Drawer header */}
-            <div className="flex items-start justify-between p-5 border-b border-[var(--input-border)] flex-shrink-0">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl flex items-center justify-center text-white font-bold text-base"
-                  style={{ background: 'linear-gradient(135deg,#16a34a,#15803d)', boxShadow: '0 0 14px rgba(22,163,74,0.4)' }}>
-                  {driver.name[0]?.toUpperCase() ?? 'D'}
-                </div>
-                <div>
-                  <h2 className="text-base font-bold text-[var(--text-primary)]">{driver.name}</h2>
-                  <div className="flex items-center gap-2 mt-0.5">
-                    <span className={`text-[11px] px-2 py-0.5 rounded-full border font-semibold ${badge.cls}`}>
-                      {badge.label}
-                    </span>
-                    <span className="text-xs text-[var(--text-muted)]">Rank #{driver.rank}</span>
-                  </div>
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={handlePdfExport}
-                  disabled={wfLocked}
-                  title={wfLocked ? 'Locked: in approval' : 'Export disciplinary record PDF'}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-                  style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)' }}
-                >
-                  {wfLocked ? <Lock size={13} /> : <FileText size={13} />} PDF
-                </button>
-                <button
-                  onClick={handleExcelExport}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"
-                  style={{ background: 'rgba(34,197,94,0.1)', border: '1px solid rgba(34,197,94,0.2)' }}
-                >
-                  <FileSpreadsheet size={13} /> Excel
-                </button>
-                <button
-                  onClick={onClose}
-                  className="p-1.5 rounded-lg text-[var(--text-dim)] hover:text-[var(--text-primary)] transition-colors hover:bg-[var(--input-bg)]"
-                >
-                  <X size={15} />
-                </button>
-              </div>
-            </div>
-
-            {/* Driver stats */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 p-5 flex-shrink-0 border-b border-[var(--input-border)]">
-              {[
-                { label: 'Total Tyres', value: driver.totalTyres },
-                { label: 'Avg CPK', value: fmtCpk(driver.avgCpk, currency) },
-                { label: 'Total Cost', value: fmtCurrency(driver.totalCost, currency) },
-                { label: 'Failure Rate', value: fmtPct(driver.failureRate) },
-                { label: 'Avg Tyre Life', value: fmtKm(driver.avgTyreLife) },
-                { label: 'High Risk', value: driver.highRiskCount },
-                { label: 'Risk Score', value: driver.riskScore },
-                { label: 'Performance', value: badge.label },
-              ].map(({ label, value }) => (
-                <div key={label}
-                  className="rounded-lg p-3"
-                  style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
-                  <p className="text-[10px] text-[var(--text-dim)] mb-0.5">{label}</p>
-                  <p className="text-sm font-bold text-[var(--text-primary)] truncate">{value}</p>
-                </div>
-              ))}
-            </div>
-
-            {/* Records table + approval workflow */}
-            <div className="flex-1 overflow-y-auto">
-              {/* ── Driver Violation Approval — Approval & Workflow Engine.
-                  The driver record is treated as the disciplinary / violation
-                  document under review; the shared engine gates its formal PDF
-                  export while an approval is active/locked. ─────────────────── */}
-              <div className="p-5 pb-0 space-y-3">
-                <EntityApprovalPanel
-                  entityType="driver_violation"
-                  entityId={driver.name}
-                  entityLabel={driver.name}
-                  context={{
-                    severity: performanceBadge(driver.riskScore).label,
-                    violation_type: 'tyre_cost_risk',
-                    points: driver.riskScore,
-                    failure_rate: Number(driver.failureRate?.toFixed?.(1)) || 0,
-                    high_risk_count: driver.highRiskCount,
-                    total_tyres: driver.totalTyres,
-                    total_cost: Math.round(driver.totalCost || 0),
-                  }}
-                  onStateChange={(s) => setWfLocked(!!(s?.isActive || s?.isLocked))}
-                  title="Driver Violation Approval"
-                />
-                {wfLocked && (
-                  <div className="flex items-center gap-1.5 text-xs text-[var(--accent)] bg-[var(--surface-1)] border border-[var(--input-border)] rounded-lg px-3 py-2">
-                    <Lock size={12} />
-                    Locked: in approval. The formal disciplinary PDF export is disabled until the workflow completes.
-                  </div>
-                )}
-              </div>
-              <div className="p-5">
-                <p className="text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider mb-3">
-                  Tyre Records ({driver.records.length})
-                </p>
-                <div className="rounded-xl overflow-hidden" style={{ border: '1px solid rgba(255,255,255,0.07)' }}>
-                  <table className="w-full text-xs">
-                    <thead style={{ background: 'rgba(255,255,255,0.04)' }}>
-                      <tr>
-                        {[
-                          ['asset_no', 'Asset'],
-                          ['brand', 'Brand'],
-                          ['issue_date', 'Date'],
-                          ['cost_per_tyre', 'Cost'],
-                          ['cpk', 'CPK'],
-                          ['life', 'Life'],
-                          ['risk_level', 'Risk'],
-                          ['removal_reason', 'Reason'],
-                        ].map(([col, lbl]) => (
-                          <th
-                            key={col}
-                            className="px-3 py-2 text-left text-[10px] font-semibold text-[var(--text-dim)] uppercase tracking-wider cursor-pointer hover:text-[var(--text-muted)] transition-colors"
-                            onClick={() => handleDrawerSort(col)}
-                          >
-                            {lbl}
-                          </th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {sortedRecords.map((r, i) => {
-                        const cpk = calcCpk(r.cost_per_tyre, r.km_at_fitment, r.km_at_removal)
-                        const life = r.km_at_removal != null && r.km_at_fitment != null
-                          ? Math.max(0, r.km_at_removal - r.km_at_fitment)
-                          : null
-                        const riskLow = (r.risk_level ?? '').toLowerCase()
-                        const riskCls = riskLow === 'critical' ? 'text-red-400'
-                          : riskLow === 'high'     ? 'text-orange-400'
-                          : riskLow === 'medium'   ? 'text-yellow-400'
-                          : riskLow === 'low'      ? 'text-green-400'
-                          : 'text-[var(--text-muted)]'
-                        return (
-                          <tr
-                            key={r.id ?? i}
-                            className="border-t border-[var(--input-border)] hover:bg-white/[0.02] transition-colors"
-                          >
-                            <td className="px-3 py-2 text-[var(--text-dim)] font-medium">{r.asset_no ?? r.asset_number ?? '-'}</td>
-                            <td className="px-3 py-2 text-[var(--text-muted)]">{r.brand ?? '-'}</td>
-                            <td className="px-3 py-2 text-[var(--text-muted)]">{r.issue_date ? r.issue_date.slice(0, 10) : '-'}</td>
-                            <td className="px-3 py-2 text-[var(--text-dim)]">{r.cost_per_tyre != null ? `${currency} ${r.cost_per_tyre}` : '-'}</td>
-                            <td className={`px-3 py-2 font-mono ${cpkColor(cpk)}`}>{fmtCpk(cpk, currency)}</td>
-                            <td className="px-3 py-2 text-[var(--text-muted)]">{life != null ? fmtKm(life) : '-'}</td>
-                            <td className={`px-3 py-2 font-semibold capitalize ${riskCls}`}>{r.risk_level ?? '-'}</td>
-                            <td className="px-3 py-2 text-[var(--text-muted)] max-w-[120px] truncate">{r.removal_reason ?? '-'}</td>
-                          </tr>
-                        )
-                      })}
-                      {sortedRecords.length === 0 && (
-                        <tr>
-                          <td colSpan={8} className="px-4 py-8 text-center text-[var(--text-dim)] text-sm">No records found</td>
-                        </tr>
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            </div>
-          </motion.div>
-        </>
-      )}
-    </AnimatePresence>
-  )
-}
-
 // ── Main Component ─────────────────────────────────────────────────────────────
 export default function DriverManagement() {
   const navigate = useNavigate()
@@ -560,7 +289,6 @@ export default function DriverManagement() {
   // Table state
   const [sortCol, setSortCol] = useState('riskScore')
   const [sortDir, setSortDir] = useState('asc')
-  const [selectedDriver, setSelectedDriver] = useState(null)
 
   // Guards against a slow earlier response overwriting a newer one after the
   // active country changes (fetch-race cancellation).
@@ -1186,7 +914,7 @@ export default function DriverManagement() {
                       </td>
                       <td className="px-3 py-3">
                         <button
-                          onClick={() => setSelectedDriver(driver)}
+                          onClick={() => navigate(`/driver-management/${encodeURIComponent(driver.name)}`)}
                           className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"
                           style={{ background: 'rgba(22,163,74,0.08)', border: '1px solid rgba(22,163,74,0.2)' }}
                         >
@@ -1218,12 +946,6 @@ export default function DriverManagement() {
         )}
       </div>
 
-      {/* ── Driver Detail Drawer ─────────────────────────────────────────── */}
-      <DriverDrawer
-        driver={selectedDriver}
-        currency={activeCurrency}
-        onClose={() => setSelectedDriver(null)}
-      />
     </div>
   )
 }

@@ -1,0 +1,736 @@
+import { useState, useEffect, useMemo, useCallback } from 'react'
+import { useParams, useNavigate } from 'react-router-dom'
+import { motion, AnimatePresence } from 'framer-motion'
+import {
+  Chart as ChartJS,
+  CategoryScale, LinearScale,
+  BarElement, LineElement, PointElement,
+  ArcElement, Title, Tooltip, Legend, Filler,
+} from 'chart.js'
+import { Line } from 'react-chartjs-2'
+import {
+  ArrowLeft, Edit2, X, Save, RefreshCw, AlertTriangle, Activity,
+  DollarSign, TrendingUp, MapPin, Zap, Target, Layers, Lock,
+  ToggleLeft, ToggleRight, Truck, Wrench, ClipboardCheck, History,
+  Shield,
+} from 'lucide-react'
+import { supabase } from '../lib/supabase'
+import * as assetApi from '../lib/api/assetManagement'
+import { useSettings } from '../contexts/SettingsContext'
+import { useAuth } from '../contexts/AuthContext'
+import { useLanguage } from '../contexts/LanguageContext'
+import { formatCurrencyCompact, formatDate, formatMonthYear } from '../lib/formatters'
+import LoadingState from '../components/LoadingState'
+import EmptyState from '../components/EmptyState'
+import CustomFieldsPanel from '../components/CustomFieldsPanel'
+import EntityApprovalPanel from '../components/workflow/EntityApprovalPanel'
+import { Illustration } from '../components/illustrations'
+import { vehicleArt } from '../lib/brand/vehicleArt'
+
+ChartJS.register(
+  CategoryScale, LinearScale,
+  BarElement, LineElement, PointElement,
+  ArcElement, Title, Tooltip, Legend, Filler,
+)
+
+// ── Constants (mirrored from AssetManagement for visual parity) ─────────────────
+const RISK_ORDER = { Critical: 0, High: 1, Medium: 2, Low: 3 }
+const RISK_COLOR = {
+  Critical: { bg: 'bg-red-900/50',    text: 'text-red-300',    hex: '#dc2626' },
+  High:     { bg: 'bg-orange-900/50', text: 'text-orange-300', hex: '#ea580c' },
+  Medium:   { bg: 'bg-yellow-900/50', text: 'text-yellow-300', hex: '#ca8a04' },
+  Low:      { bg: 'bg-green-900/50',  text: 'text-green-300',  hex: '#16a34a' },
+}
+const VEHICLE_TYPES = ['Truck','Tipper','Mixer','Rigid','Semi-Trailer','Pickup','Crane','Loader','Tanker','Bus','Other']
+
+const CHART_OPTS = {
+  responsive: true,
+  maintainAspectRatio: false,
+  plugins: {
+    legend: { labels: { color: '#9ca3af', font: { size: 11 }, boxWidth: 12 } },
+    tooltip: {
+      backgroundColor: 'var(--panel-2)',
+      titleColor: '#f3f4f6',
+      bodyColor: '#9ca3af',
+      borderColor: 'rgba(59,130,246,0.3)',
+      borderWidth: 1,
+    },
+  },
+  scales: {
+    x: { ticks: { color: '#6b7280', font: { size: 11 } }, grid: { color: 'var(--text-muted)' } },
+    y: { ticks: { color: '#6b7280', font: { size: 11 } }, grid: { color: 'var(--text-muted)' } },
+  },
+}
+
+// ── Helpers ─────────────────────────────────────────────────────────────────────
+const fmtCurrency = (n, cur) => formatCurrencyCompact(n, cur)
+const fmtDate = (d) => formatDate(d)
+function daysSince(d) {
+  if (!d) return null
+  const ms = Date.now() - new Date(d).getTime()
+  return Math.floor(ms / 86_400_000)
+}
+function worstRisk(tyres) {
+  if (!tyres?.length) return null
+  return tyres.reduce((best, t) => {
+    if (t.risk_level && (best === null || (RISK_ORDER[t.risk_level] ?? 99) < (RISK_ORDER[best] ?? 99))) return t.risk_level
+    return best
+  }, null)
+}
+
+// ── Tyre Position SVG Diagram ─────────────────────────────────────────────────
+function TyrePositionDiagram({ tyres = [] }) {
+  const positions = [
+    { id: 'FL',  label: 'FL',  cx: 70,  cy: 90  },
+    { id: 'FR',  label: 'FR',  cx: 210, cy: 90  },
+    { id: 'RLO', label: 'RLO', cx: 52,  cy: 190 },
+    { id: 'RLI', label: 'RLI', cx: 78,  cy: 190 },
+    { id: 'RRI', label: 'RRI', cx: 202, cy: 190 },
+    { id: 'RRO', label: 'RRO', cx: 228, cy: 190 },
+  ]
+  const byPos = {}
+  tyres.forEach(t => { if (t.position) byPos[t.position] = t })
+
+  return (
+    <svg viewBox="0 0 280 260" className="w-full max-w-xs mx-auto">
+      <rect x={95} y={30} width={90} height={200} rx={8} fill="#1f2937" stroke="#374151" strokeWidth="2" />
+      <text x={140} y={58} textAnchor="middle" fontSize="22">🚛</text>
+      {[90, 190].map((y, i) => (
+        <line key={i} x1={95} x2={185} y1={y} y2={y} stroke="#4b5563" strokeWidth="1" strokeDasharray="4 4" />
+      ))}
+      {positions.map(p => {
+        const t = byPos[p.id]
+        const col = t ? (RISK_COLOR[t.risk_level]?.hex ?? '#374151') : '#374151'
+        const opacity = t ? 1 : 0.35
+        return (
+          <g key={p.id}>
+            <circle cx={p.cx} cy={p.cy} r={13} fill={col} opacity={opacity} stroke={col} strokeWidth="1.5" />
+            <text x={p.cx} y={p.cy + 4} textAnchor="middle" fill="#fff" fontSize="7" fontFamily="monospace" fontWeight="600">{p.label}</text>
+            {t && (
+              <text x={p.cx} y={p.cy + 26} textAnchor="middle" fill="#9ca3af" fontSize="6">{t.brand ?? ''}</text>
+            )}
+          </g>
+        )
+      })}
+    </svg>
+  )
+}
+
+// ── Inline Edit Panel ───────────────────────────────────────────────────────────
+// Self-contained editor for the detail page. Gated by the disposal-approval lock
+// (`locked`) exactly like the registry modal, and writes through the same
+// assetManagement API so behaviour matches the drawer's edit path.
+function EditPanel({ asset, sites, countries, onSaved, onClose, locked = false }) {
+  const { t } = useLanguage()
+  const [form, setForm] = useState(asset)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+  function set(k, v) { setForm(prev => ({ ...prev, [k]: v })) }
+
+  async function handleSave() {
+    if (locked) return
+    if (!form.asset_no?.trim()) { setError(t('assetmgmt.modal.errRequired')); return }
+    setSaving(true); setError('')
+    try {
+      const payload = {
+        asset_no: form.asset_no.trim().toUpperCase(),
+        vehicle_type: form.vehicle_type || null,
+        make: form.make || null,
+        model: form.model || null,
+        year: form.year ? parseInt(form.year) : null,
+        site: form.site || null,
+        country: form.country || null,
+        active: form.active,
+      }
+      // Detail page only ever edits an existing asset (loaded by :assetNo).
+      const { error: supaErr } = await assetApi.updateAsset(asset.id, payload)
+      if (supaErr) {
+        const dup = /duplicate key|unique constraint/i.test(supaErr.message || '')
+        setError(dup ? t('assetmgmt.modal.errDuplicate') : (supaErr.message || t('assetmgmt.modal.errSaveFailed')))
+        setSaving(false); return
+      }
+      onSaved(payload)
+    } catch (e) {
+      setError(e.message ?? t('assetmgmt.modal.errUnexpected'))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+      className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4"
+      onClick={(e) => e.target === e.currentTarget && onClose()}
+    >
+      <motion.div
+        initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
+        className="bg-[var(--surface-1)] rounded-2xl border border-[var(--border-dim)] w-full max-w-lg shadow-2xl"
+      >
+        <div className="flex items-center justify-between p-5 border-b border-[var(--border-dim)]">
+          <h2 className="text-lg font-bold text-[var(--text-primary)] flex items-center gap-2">
+            <Edit2 className="w-5 h-5 text-yellow-400" />
+            {t('assetmgmt.modal.editTitle')}
+          </h2>
+          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-[var(--surface-2)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+        <div className="p-5 space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="text-xs text-[var(--text-secondary)] mb-1 block">{t('assetmgmt.modal.assetNo')}</label>
+              <input value={form.asset_no ?? ''} onChange={e => set('asset_no', e.target.value.toUpperCase())}
+                className="w-full bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none focus:border-blue-500" />
+            </div>
+            <div>
+              <label className="text-xs text-[var(--text-secondary)] mb-1 block">{t('assetmgmt.modal.vehicleType')}</label>
+              <select value={form.vehicle_type ?? ''} onChange={e => set('vehicle_type', e.target.value)}
+                className="w-full bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none focus:border-blue-500">
+                <option value="">{t('assetmgmt.modal.selectType')}</option>
+                {VEHICLE_TYPES.map(vt => <option key={vt}>{vt}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="text-xs text-[var(--text-secondary)] mb-1 block">{t('assetmgmt.modal.make')}</label>
+              <input value={form.make ?? ''} onChange={e => set('make', e.target.value)}
+                className="w-full bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none focus:border-blue-500" />
+            </div>
+            <div>
+              <label className="text-xs text-[var(--text-secondary)] mb-1 block">{t('assetmgmt.modal.model')}</label>
+              <input value={form.model ?? ''} onChange={e => set('model', e.target.value)}
+                className="w-full bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none focus:border-blue-500" />
+            </div>
+            <div>
+              <label className="text-xs text-[var(--text-secondary)] mb-1 block">{t('assetmgmt.modal.year')}</label>
+              <input type="number" min="1990" max="2030" value={form.year ?? ''} onChange={e => set('year', e.target.value)}
+                className="w-full bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none focus:border-blue-500" />
+            </div>
+            <div>
+              <label className="text-xs text-[var(--text-secondary)] mb-1 block">{t('assetmgmt.modal.site')}</label>
+              <input value={form.site ?? ''} onChange={e => set('site', e.target.value)} list="ad-sites-list"
+                className="w-full bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none focus:border-blue-500" />
+              <datalist id="ad-sites-list">{sites.map(s => <option key={s} value={s} />)}</datalist>
+            </div>
+            <div>
+              <label className="text-xs text-[var(--text-secondary)] mb-1 block">{t('assetmgmt.modal.country')}</label>
+              <select value={form.country ?? ''} onChange={e => set('country', e.target.value)}
+                className="w-full bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none focus:border-blue-500">
+                <option value="">{t('assetmgmt.modal.select')}</option>
+                {(countries.length ? countries : ['KSA','UAE','Egypt']).map(c => <option key={c}>{c}</option>)}
+              </select>
+            </div>
+            <div className="flex items-center gap-3 mt-1">
+              <label className="text-xs text-[var(--text-secondary)]">{t('assetmgmt.modal.activeStatus')}</label>
+              <button onClick={() => set('active', !form.active)} className="flex items-center gap-2">
+                {form.active
+                  ? <ToggleRight className="w-8 h-8 text-green-400" />
+                  : <ToggleLeft className="w-8 h-8 text-[var(--text-dim)]" />}
+                <span className={`text-sm font-medium ${form.active ? 'text-green-400' : 'text-[var(--text-muted)]'}`}>
+                  {form.active ? t('assetmgmt.modal.active') : t('assetmgmt.modal.inactive')}
+                </span>
+              </button>
+            </div>
+          </div>
+          {error && <p className="text-red-400 text-xs bg-red-900/20 rounded-lg px-3 py-2">{error}</p>}
+        </div>
+        <div className="flex justify-end gap-3 px-5 pb-5">
+          <button onClick={onClose} className="px-4 py-2 rounded-lg bg-[var(--surface-2)] text-[var(--text-secondary)] text-sm hover:bg-[var(--surface-3)] transition-colors">{t('assetmgmt.modal.cancel')}</button>
+          <button onClick={handleSave} disabled={saving || locked}
+            title={locked ? 'Locked: in approval' : undefined}
+            className="px-5 py-2 rounded-lg bg-blue-600 text-white text-sm font-semibold hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2">
+            {locked ? <Lock className="w-4 h-4" /> : saving ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+            {saving ? t('assetmgmt.modal.saving') : t('assetmgmt.modal.save')}
+          </button>
+        </div>
+      </motion.div>
+    </motion.div>
+  )
+}
+
+// ── Asset Detail Page ─────────────────────────────────────────────────────────
+export default function AssetDetail() {
+  const { assetNo } = useParams()
+  const navigate = useNavigate()
+  const { profile } = useAuth()
+  const { activeCurrency } = useSettings()
+  const { t } = useLanguage()
+  const isAdmin = profile?.role === 'Admin'
+
+  const [asset, setAsset] = useState(null)
+  const [tyres, setTyres] = useState([])
+  const [workOrders, setWorkOrders] = useState([])
+  const [overview, setOverview] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+  const [refreshKey, setRefreshKey] = useState(0)
+
+  const [tab, setTab] = useState('overview') // overview | tyres | costs | workorders | approvals
+  const [editing, setEditing] = useState(false)
+  // Approval-engine gate: locks the asset edit/dispose path while the disposal
+  // workflow for this asset is active (pending/in_review/returned) or locked
+  // (approved). EntityApprovalPanel reports the true state via onStateChange.
+  const [wfLocked, setWfLocked] = useState(false)
+  useEffect(() => { setWfLocked(false) }, [assetNo])
+
+  const load = useCallback(async () => {
+    setLoading(true); setError('')
+    try {
+      const [assetRes, tyreRes, woRes, ovRes] = await Promise.allSettled([
+        supabase.from('fleet_master').select('*').eq('asset_no', assetNo).maybeSingle(),
+        assetApi.listAssetTyres(assetNo),
+        assetApi.listAssetWorkOrders(),
+        assetApi.reportAssetOverview({ country: 'All' }),
+      ])
+
+      if (assetRes.status === 'rejected') throw new Error(assetRes.reason?.message || String(assetRes.reason))
+      if (assetRes.value?.error) throw new Error(assetRes.value.error.message)
+
+      const tyreRows = tyreRes.status === 'fulfilled' ? (tyreRes.value.data ?? []) : []
+      const woRows   = woRes.status === 'fulfilled' ? (woRes.value.data ?? []) : []
+      const ovRows   = ovRes.status === 'fulfilled' ? (ovRes.value.data ?? []) : []
+      const ov       = ovRows.find(o => o.asset_no === assetNo) ?? null
+
+      // Fall back to a synthesized record from the overview when fleet_master has
+      // no row for this asset (asset seen only through tyre/overview data).
+      let record = assetRes.value?.data ?? null
+      if (!record) {
+        if (!tyreRows.length && !ov) { setAsset(null); setLoading(false); return }
+        record = {
+          id: null, asset_no: assetNo, vehicle_type: null,
+          make: null, model: null, year: null,
+          site: ov?.site ?? tyreRows[0]?.site ?? null,
+          country: ov?.country ?? tyreRows[0]?.country ?? null,
+          active: true,
+        }
+      }
+
+      setAsset(record)
+      setTyres(tyreRows)
+      setWorkOrders(woRows.filter(w => w.asset_no === assetNo))
+      setOverview(ov)
+    } catch (e) {
+      setError(e.message || t('assetmgmt.detail.loadError'))
+      setAsset(null)
+    } finally {
+      setLoading(false)
+    }
+  }, [assetNo, t])
+
+  useEffect(() => { load() }, [load, refreshKey])
+
+  // ── derived ────────────────────────────────────────────────────────────────
+  const activeTyres = useMemo(() => tyres.filter(t => !t.km_at_removal), [tyres])
+  const totalCost = useMemo(
+    () => tyres.reduce((s, t) => s + (parseFloat(t.cost_per_tyre) || 0) * (Number(t.qty) || 1), 0),
+    [tyres],
+  )
+  const derivedWorstRisk = useMemo(() => overview?.worst_risk ?? worstRisk(activeTyres), [overview, activeTyres])
+  const ytdCost = Number(overview?.ytd_cost) || 0
+
+  const monthlyData = useMemo(() => {
+    const now = new Date()
+    const labels = []; const costs = []
+    for (let i = 11; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
+      labels.push(formatMonthYear(d))
+      const mo = d.getMonth(); const yr = d.getFullYear()
+      const sum = tyres.filter(t => {
+        if (!t.issue_date) return false
+        const td = new Date(t.issue_date)
+        return td.getMonth() === mo && td.getFullYear() === yr
+      }).reduce((s, t) => s + (parseFloat(t.cost_per_tyre) || 0) * (Number(t.qty) || 1), 0)
+      costs.push(sum)
+    }
+    return { labels, costs }
+  }, [tyres])
+
+  const chartData = {
+    labels: monthlyData.labels,
+    datasets: [{
+      label: t('assetmgmt.drawer.monthlyCostSeriesLabel'),
+      data: monthlyData.costs,
+      borderColor: '#3b82f6',
+      backgroundColor: 'rgba(59,130,246,0.1)',
+      fill: true, tension: 0.4, pointRadius: 3,
+    }],
+  }
+
+  const recommendations = useMemo(() => {
+    const out = []
+    const criticalTyres = activeTyres.filter(t => t.risk_level === 'Critical')
+    const highTyres = activeTyres.filter(t => t.risk_level === 'High')
+    const lowTread = activeTyres.filter(t => parseFloat(t.tread_depth) < 3)
+    if (criticalTyres.length) out.push({ level: 'Critical', msg: t('assetmgmt.drawer.recCriticalRisk', { count: criticalTyres.length }) })
+    if (highTyres.length) out.push({ level: 'High', msg: t('assetmgmt.drawer.recHighRisk', { count: highTyres.length }) })
+    if (lowTread.length) out.push({ level: 'High', msg: t('assetmgmt.drawer.recLowTread', { count: lowTread.length }) })
+    if (!activeTyres.length) out.push({ level: 'Medium', msg: t('assetmgmt.drawer.recNoActive') })
+    if (out.length === 0) out.push({ level: 'Low', msg: t('assetmgmt.drawer.recAllGood') })
+    return out
+  }, [activeTyres, t])
+
+  const siteOptions = useMemo(() => [asset?.site].filter(Boolean), [asset])
+  const countryOptions = useMemo(() => [asset?.country].filter(Boolean), [asset])
+
+  // ── states ─────────────────────────────────────────────────────────────────
+  if (loading) {
+    return (
+      <div className="text-[var(--text-primary)]">
+        <div className="max-w-[1400px] mx-auto px-4 sm:px-6 py-6">
+          <BackButton onClick={() => navigate('/assets')} label={t('assetmgmt.detail.backToAssets')} />
+          <LoadingState message={t('assetmgmt.detail.loading')} />
+        </div>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="text-[var(--text-primary)]">
+        <div className="max-w-[1400px] mx-auto px-4 sm:px-6 py-6">
+          <BackButton onClick={() => navigate('/assets')} label={t('assetmgmt.detail.backToAssets')} />
+          <div className="flex flex-col items-center justify-center py-20 text-center px-6">
+            <AlertTriangle className="w-12 h-12 mb-3 text-red-400" />
+            <p className="text-red-300 font-medium">{t('assetmgmt.detail.loadErrorTitle')}</p>
+            <p className="text-[var(--text-muted)] text-sm mt-1 max-w-md">{error}</p>
+            <button onClick={() => setRefreshKey(k => k + 1)} className="mt-4 inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-sm rounded-lg transition-colors">
+              <RefreshCw size={16} /> {t('assetmgmt.detail.retry')}
+            </button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  if (!asset) {
+    return (
+      <div className="text-[var(--text-primary)]">
+        <div className="max-w-[1400px] mx-auto px-4 sm:px-6 py-6">
+          <BackButton onClick={() => navigate('/assets')} label={t('assetmgmt.detail.backToAssets')} />
+          <EmptyState
+            icon={Truck}
+            title={t('assetmgmt.detail.notFoundTitle', { assetNo })}
+            description={t('assetmgmt.detail.notFoundDesc')}
+            action={{ label: t('assetmgmt.detail.backToAssets'), onClick: () => navigate('/assets') }}
+          />
+        </div>
+      </div>
+    )
+  }
+
+  const TABS = [
+    { id: 'overview',   label: t('assetmgmt.detail.tabs.overview'),   icon: Layers },
+    { id: 'tyres',      label: t('assetmgmt.detail.tabs.tyres'),      icon: Activity },
+    { id: 'costs',      label: t('assetmgmt.detail.tabs.costs'),      icon: DollarSign },
+    { id: 'workorders', label: t('assetmgmt.detail.tabs.workOrders'), icon: Zap },
+    { id: 'approvals',  label: t('assetmgmt.detail.tabs.approvals'),  icon: Shield },
+  ]
+
+  return (
+    <div className="text-[var(--text-primary)]">
+      <div className="max-w-[1400px] mx-auto px-4 sm:px-6 py-6 space-y-6">
+
+        <BackButton onClick={() => navigate('/assets')} label={t('assetmgmt.detail.backToAssets')} />
+
+        {/* Header */}
+        <div className="bg-[var(--surface-1)] rounded-2xl border border-[var(--border-dim)] p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-4">
+            <Illustration
+              name={vehicleArt(asset.vehicle_type)}
+              size={100}
+              title={asset.vehicle_type || 'Vehicle'}
+              className="shrink-0 hidden sm:block"
+            />
+            <div>
+              <p className="text-xs text-[var(--text-muted)] uppercase tracking-widest mb-1">{t('assetmgmt.drawer.assetProfile')}</p>
+              <h1 className="text-2xl font-bold text-[var(--text-primary)]">{asset.asset_no}</h1>
+              <p className="text-sm text-[var(--text-secondary)]">
+                {[asset.vehicle_type, [asset.make, asset.model, asset.year].filter(Boolean).join(' ')].filter(Boolean).join(' · ')}
+              </p>
+              <p className="text-xs text-[var(--text-muted)] mt-0.5"><MapPin className="inline w-3 h-3 mr-1" />{asset.site ?? '-'} · {asset.country ?? '-'}</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-3">
+            <span className={`px-2 py-1 rounded-full text-xs font-semibold ${asset.active ? 'bg-green-900/50 text-green-300' : 'bg-[var(--surface-2)] text-[var(--text-secondary)]'}`}>
+              {asset.active ? t('assetmgmt.drawer.active') : t('assetmgmt.drawer.inactive')}
+            </span>
+            {derivedWorstRisk && (
+              <span className={`px-2 py-1 rounded-full text-xs font-semibold ${RISK_COLOR[derivedWorstRisk]?.bg} ${RISK_COLOR[derivedWorstRisk]?.text}`}>
+                {derivedWorstRisk}
+              </span>
+            )}
+            {isAdmin && asset.id != null && (
+              <button
+                onClick={() => !wfLocked && setEditing(true)}
+                disabled={wfLocked}
+                title={wfLocked ? 'Locked: in approval' : t('assetmgmt.actions.editAsset')}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[var(--surface-2)] hover:bg-[var(--surface-3)] text-yellow-400 hover:text-yellow-300 text-sm transition-colors border border-[var(--border-bright)] disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                {wfLocked ? <Lock className="w-4 h-4" /> : <Edit2 className="w-4 h-4" />}
+                {t('assetmgmt.actions.editAsset')}
+              </button>
+            )}
+          </div>
+        </div>
+
+        {wfLocked && (
+          <div className="flex items-center gap-1.5 text-xs text-[var(--text-muted)]">
+            <Lock className="w-3 h-3" /> {t('assetmgmt.detail.lockedInApproval')}
+          </div>
+        )}
+
+        {/* Quick-nav actions (deep-links preserved from the quick-look drawers) */}
+        <div className="flex flex-wrap gap-2">
+          <QuickLink icon={History} label={t('assetmgmt.detail.quick.vehicleHistory')} onClick={() => navigate(`/vehicle-history?asset=${encodeURIComponent(asset.asset_no)}`)} />
+          <QuickLink icon={Wrench} label={t('assetmgmt.detail.quick.workOrders')} onClick={() => navigate(`/work-orders?asset=${encodeURIComponent(asset.asset_no)}`)} />
+          <QuickLink icon={ClipboardCheck} label={t('assetmgmt.detail.quick.inspections')} onClick={() => navigate(`/inspections?asset=${encodeURIComponent(asset.asset_no)}`)} />
+        </div>
+
+        {/* Tabs */}
+        <div className="flex flex-wrap gap-1 bg-[var(--surface-1)] rounded-xl p-1 border border-[var(--border-dim)] w-fit">
+          {TABS.map(tb => (
+            <button key={tb.id} onClick={() => setTab(tb.id)}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                tab === tb.id ? 'bg-blue-600 text-white' : 'text-[var(--text-secondary)] hover:text-white hover:bg-[var(--surface-2)]'
+              }`}>
+              <tb.icon className="w-4 h-4" />
+              {tb.label}
+            </button>
+          ))}
+        </div>
+
+        <AnimatePresence mode="wait">
+          {/* ── Overview ──────────────────────────────────────────────────────── */}
+          {tab === 'overview' && (
+            <motion.div key="overview" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Tyre Position Diagram */}
+              <div className="card">
+                <h3 className="text-sm font-semibold text-[var(--text-secondary)] mb-3 flex items-center gap-2"><Layers className="w-4 h-4 text-blue-400" /> {t('assetmgmt.drawer.tyrePositionMap')}</h3>
+                <div className="flex gap-4 items-start">
+                  <div className="flex-1"><TyrePositionDiagram tyres={activeTyres} /></div>
+                  <div className="flex flex-col gap-2 pt-4">
+                    {Object.entries(RISK_COLOR).map(([level, c]) => (
+                      <div key={level} className="flex items-center gap-2 text-xs">
+                        <span className="w-3 h-3 rounded-full" style={{ background: c.hex }} />
+                        <span className="text-[var(--text-secondary)]">{level}</span>
+                      </div>
+                    ))}
+                    <div className="flex items-center gap-2 text-xs mt-1">
+                      <span className="w-3 h-3 rounded-full bg-gray-600 opacity-40" />
+                      <span className="text-[var(--text-secondary)]">{t('assetmgmt.drawer.noDataLegend')}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Recommendations */}
+              <div className="card">
+                <h3 className="text-sm font-semibold text-[var(--text-secondary)] mb-3 flex items-center gap-2">
+                  <Target className="w-4 h-4 text-purple-400" /> {t('assetmgmt.drawer.recommendations')}
+                </h3>
+                <div className="space-y-2">
+                  {recommendations.map((r, i) => {
+                    const rc = RISK_COLOR[r.level] ?? { bg: 'bg-[var(--surface-2)]', text: 'text-[var(--text-secondary)]' }
+                    return (
+                      <div key={i} className={`flex items-start gap-3 p-3 rounded-lg ${rc.bg} bg-opacity-20`}>
+                        <AlertTriangle className={`w-4 h-4 mt-0.5 shrink-0 ${rc.text}`} />
+                        <p className={`text-xs ${rc.text}`}>{r.msg}</p>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+
+              {/* Custom fields */}
+              <div className="lg:col-span-2">
+                <CustomFieldsPanel data={asset.custom_data} title={t('assetmgmt.drawer.customFieldsTitle')} />
+              </div>
+            </motion.div>
+          )}
+
+          {/* ── Tyres ─────────────────────────────────────────────────────────── */}
+          {tab === 'tyres' && (
+            <motion.div key="tyres" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+              <div className="bg-[var(--surface-2)] rounded-xl border border-[var(--border-bright)] overflow-hidden">
+                <div className="p-4 border-b border-[var(--border-bright)]">
+                  <h3 className="text-sm font-semibold text-[var(--text-secondary)] flex items-center gap-2">
+                    <Activity className="w-4 h-4 text-green-400" /> {t('assetmgmt.drawer.activeTyres', { count: activeTyres.length })}
+                  </h3>
+                </div>
+                {activeTyres.length ? (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-xs">
+                      <thead>
+                        <tr className="border-b border-[var(--border-bright)]">
+                          {[
+                            t('assetmgmt.drawer.columns.position'), t('assetmgmt.drawer.columns.serial'), t('assetmgmt.drawer.columns.brand'),
+                            t('assetmgmt.drawer.columns.size'), t('assetmgmt.drawer.columns.tread'), t('assetmgmt.drawer.columns.risk'),
+                            t('assetmgmt.drawer.columns.daysFitted'), t('assetmgmt.drawer.columns.cpk'),
+                          ].map(h => (
+                            <th key={h} className="px-3 py-2 text-left text-[var(--text-muted)] font-medium whitespace-nowrap">{h}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {activeTyres.map((tRow, i) => {
+                          const days = tRow.issue_date ? daysSince(tRow.issue_date) : null
+                          const km = (parseFloat(tRow.km_at_removal) || 0) - (parseFloat(tRow.km_at_fitment) || 0)
+                          const cpk = km > 0 && tRow.cost_per_tyre ? (parseFloat(tRow.cost_per_tyre) / km).toFixed(4) : '-'
+                          const rc = RISK_COLOR[tRow.risk_level] ?? { bg: 'bg-[var(--surface-2)]', text: 'text-[var(--text-secondary)]' }
+                          return (
+                            <tr key={tRow.id ?? i} className="border-b border-[var(--border-bright)] hover:bg-[var(--surface-3)] transition-colors">
+                              <td className="px-3 py-2 font-mono text-[var(--text-secondary)]">{tRow.position ?? '-'}</td>
+                              <td className="px-3 py-2 text-[var(--text-secondary)]">{tRow.serial_number ?? '-'}</td>
+                              <td className="px-3 py-2 text-[var(--text-secondary)]">{tRow.brand ?? '-'}</td>
+                              <td className="px-3 py-2 text-[var(--text-secondary)]">{tRow.size ?? '-'}</td>
+                              <td className="px-3 py-2 text-[var(--text-secondary)]">{tRow.tread_depth ? `${tRow.tread_depth}mm` : '-'}</td>
+                              <td className="px-3 py-2">
+                                {tRow.risk_level ? (
+                                  <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${rc.bg} ${rc.text}`}>{tRow.risk_level}</span>
+                                ) : <span className="text-[var(--text-dim)]">-</span>}
+                              </td>
+                              <td className="px-3 py-2 text-[var(--text-secondary)]">{days != null ? `${days}d` : '-'}</td>
+                              <td className="px-3 py-2 text-[var(--text-secondary)]">{cpk}</td>
+                            </tr>
+                          )
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <div className="p-6 text-center text-[var(--text-muted)] text-sm">{t('assetmgmt.drawer.noActiveTyres')}</div>
+                )}
+              </div>
+            </motion.div>
+          )}
+
+          {/* ── Costs ─────────────────────────────────────────────────────────── */}
+          {tab === 'costs' && (
+            <motion.div key="costs" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-6">
+              <div className="card">
+                <h3 className="text-sm font-semibold text-[var(--text-secondary)] mb-3 flex items-center gap-2">
+                  <TrendingUp className="w-4 h-4 text-blue-400" /> {t('assetmgmt.drawer.monthlyCostChartTitle')}
+                </h3>
+                <div className="h-56">
+                  <Line data={chartData} options={{ ...CHART_OPTS, plugins: { ...CHART_OPTS.plugins, legend: { display: false } } }} />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="bg-gradient-to-br from-blue-900/20 to-blue-800/10 rounded-xl border border-blue-800/30 p-4 flex items-center justify-between">
+                  <div>
+                    <p className="text-xs text-[var(--text-muted)] uppercase tracking-widest">{t('assetmgmt.drawer.totalLifetimeCost')}</p>
+                    <p className="text-2xl font-bold text-[var(--text-primary)] mt-1">{fmtCurrency(totalCost, activeCurrency)}</p>
+                    <p className="text-xs text-[var(--text-muted)] mt-1">{t('assetmgmt.drawer.tyreRecordsTotal', { count: tyres.length })}</p>
+                  </div>
+                  <DollarSign className="w-10 h-10 text-blue-500 opacity-40" />
+                </div>
+                <div className="bg-gradient-to-br from-purple-900/20 to-purple-800/10 rounded-xl border border-purple-800/30 p-4 flex items-center justify-between">
+                  <div>
+                    <p className="text-xs text-[var(--text-muted)] uppercase tracking-widest">{t('assetmgmt.detail.ytdCost')}</p>
+                    <p className="text-2xl font-bold text-[var(--text-primary)] mt-1">{fmtCurrency(ytdCost, activeCurrency)}</p>
+                    <p className="text-xs text-[var(--text-muted)] mt-1">{t('assetmgmt.detail.ytdCostSub')}</p>
+                  </div>
+                  <DollarSign className="w-10 h-10 text-purple-500 opacity-40" />
+                </div>
+              </div>
+            </motion.div>
+          )}
+
+          {/* ── Work Orders ───────────────────────────────────────────────────── */}
+          {tab === 'workorders' && (
+            <motion.div key="workorders" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+              <div className="bg-[var(--surface-2)] rounded-xl border border-[var(--border-bright)] overflow-hidden">
+                <div className="p-4 border-b border-[var(--border-bright)] flex items-center justify-between">
+                  <h3 className="text-sm font-semibold text-[var(--text-secondary)] flex items-center gap-2">
+                    <Zap className="w-4 h-4 text-yellow-400" /> {t('assetmgmt.drawer.recentWorkOrders')}
+                  </h3>
+                  <button onClick={() => navigate(`/work-orders?asset=${encodeURIComponent(asset.asset_no)}`)}
+                    className="text-xs text-blue-400 hover:text-blue-300 transition-colors">{t('assetmgmt.detail.viewAll')}</button>
+                </div>
+                {workOrders.length ? (
+                  <div className="divide-y divide-[var(--border-bright)]">
+                    {workOrders.slice(0, 20).map((wo, i) => (
+                      <div key={wo.id ?? i} className="px-4 py-3 flex items-center justify-between">
+                        <div>
+                          <p className="text-sm text-[var(--text-secondary)]">{wo.work_type ?? t('assetmgmt.drawer.workOrderFallback')}</p>
+                          <p className="text-xs text-[var(--text-muted)]">{fmtDate(wo.created_at)}</p>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          {wo.total_cost && <span className="text-xs text-[var(--text-secondary)]">{fmtCurrency(wo.total_cost, activeCurrency)}</span>}
+                          <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${
+                            wo.status === 'Completed' ? 'bg-green-900/50 text-green-300' :
+                            wo.status === 'Open' ? 'bg-blue-900/50 text-blue-300' :
+                            'bg-yellow-900/50 text-yellow-300'
+                          }`}>{wo.status ?? '-'}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="p-6 text-center text-[var(--text-muted)] text-sm">{t('assetmgmt.detail.noWorkOrders')}</div>
+                )}
+              </div>
+            </motion.div>
+          )}
+
+        </AnimatePresence>
+
+        {/* ── Approvals ───────────────────────────────────────────────────────
+            Mounted for every tab (not just "approvals") so the disposal-approval
+            state stays authoritative — the header edit gate depends on wfLocked,
+            which this panel reports. Only its container is toggled by tab. */}
+        <div className={tab === 'approvals' ? 'block' : 'hidden'}>
+          <EntityApprovalPanel
+            entityType="asset_disposal"
+            entityId={asset.id ?? asset.asset_no}
+            entityLabel={asset.asset_no || asset.id}
+            context={{
+              book_value: ytdCost,
+              disposal_reason: asset.active === false ? 'inactive' : null,
+              asset_type: asset.vehicle_type || null,
+              site: asset.site || null,
+              country: asset.country || null,
+              worst_risk: derivedWorstRisk || null,
+            }}
+            onStateChange={({ isActive, isLocked }) => setWfLocked(!!(isActive || isLocked))}
+            title={t('assetmgmt.drawer.disposalApprovalTitle')}
+          />
+        </div>
+      </div>
+
+      {/* Edit modal */}
+      <AnimatePresence>
+        {editing && asset.id != null && (
+          <EditPanel
+            asset={asset}
+            sites={siteOptions}
+            countries={countryOptions}
+            locked={wfLocked}
+            onClose={() => setEditing(false)}
+            onSaved={(payload) => { setEditing(false); setAsset(prev => ({ ...prev, ...payload })); setRefreshKey(k => k + 1) }}
+          />
+        )}
+      </AnimatePresence>
+    </div>
+  )
+}
+
+// ── Small building blocks ───────────────────────────────────────────────────────
+function BackButton({ onClick, label }) {
+  return (
+    <button onClick={onClick}
+      className="inline-flex items-center gap-2 text-sm text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors mb-4">
+      <ArrowLeft className="w-4 h-4" /> {label}
+    </button>
+  )
+}
+
+function QuickLink({ icon: Icon, label, onClick }) {
+  return (
+    <button onClick={onClick}
+      className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[var(--surface-2)] hover:bg-[var(--surface-3)] border border-[var(--border-bright)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] text-sm font-medium transition-colors">
+      <Icon className="w-4 h-4" /> {label}
+    </button>
+  )
+}

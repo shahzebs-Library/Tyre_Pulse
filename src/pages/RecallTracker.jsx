@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Chart as ChartJS,
@@ -13,9 +14,8 @@ import {
   RefreshCw, CheckCircle, Clock, Activity, Package,
   Tag, Calendar, Building2, Wrench, TrendingDown,
   Info, BarChart3, List, GitBranch, Star, XCircle,
-  ArrowRight, Loader2, Flag, Hash, Layers, Lock,
+  ArrowRight, Loader2, Flag, Hash, Layers,
 } from 'lucide-react'
-import EntityApprovalPanel from '../components/workflow/EntityApprovalPanel'
 import { SkeletonTable } from '../components/ui/Skeleton'
 import * as recallsApi from '../lib/api/recalls'
 import { useSettings } from '../contexts/SettingsContext'
@@ -121,6 +121,7 @@ const EMPTY_FORM = {
 }
 
 export default function RecallTracker() {
+  const navigate = useNavigate()
   const { profile } = useAuth()
   const { appSettings } = useSettings()
   const { branding } = useTenant()
@@ -144,14 +145,6 @@ export default function RecallTracker() {
   const [formError, setFormError]         = useState('')
   const [saving, setSaving]               = useState(false)
 
-  const [drawer, setDrawer]   = useState(null)
-  const [drawerSearch, setDrawerSearch] = useState('')
-  // Approval-engine gate: locks edit/close/delete for the recall open in the
-  // drawer while its workflow is active (pending/in_review/returned) or locked
-  // (approved). Reset on record change; EntityApprovalPanel re-reports via
-  // onStateChange.
-  const [wfLocked, setWfLocked] = useState(false)
-
   const bannerRef = useRef(null)
   const listRef   = useRef(null)
 
@@ -172,10 +165,6 @@ export default function RecallTracker() {
   useEffect(() => {
     loadRecalls()
   }, [loadRecalls])
-
-  // Reset the approval lock whenever a different recall (or none) is opened in
-  // the drawer; EntityApprovalPanel re-reports the true state via onStateChange.
-  useEffect(() => { setWfLocked(false) }, [drawer?.id])
 
   useEffect(() => {
     async function load() {
@@ -362,8 +351,6 @@ export default function RecallTracker() {
   }
 
   function openEdit(r) {
-    // Block editing a recall whose approval workflow is active/locked.
-    if (drawer?.id === r.id && wfLocked) return
     setForm({ ...r })
     setSizeInput('')
     setFormError('')
@@ -385,8 +372,6 @@ export default function RecallTracker() {
   }
 
   async function handleSave() {
-    // Block saving an edit to a recall whose approval workflow is active/locked.
-    if (editRecall && drawer?.id === editRecall && wfLocked) { setShowAddModal(false); return }
     if (!form.recall_number.trim()) { setFormError('Recall number required'); return }
     if (!form.brand.trim()) { setFormError('Brand required'); return }
     if (!form.issue_date) { setFormError('Issue date required'); return }
@@ -426,8 +411,6 @@ export default function RecallTracker() {
   }
 
   async function handleClose(recallId) {
-    // Status change (close) is an edit — blocked while approval is active/locked.
-    if (drawer?.id === recallId && wfLocked) return
     try {
       await recallsApi.updateRecall(recallId, { status: 'Closed', closed_at: new Date().toISOString() })
       await loadRecalls()
@@ -437,8 +420,6 @@ export default function RecallTracker() {
   }
 
   async function handleDelete(recallId) {
-    // Block deleting a recall whose approval workflow is active/locked.
-    if (drawer?.id === recallId && wfLocked) return
     if (!window.confirm('Delete this recall record?')) return
     try {
       await recallsApi.deleteRecall(recallId)
@@ -448,23 +429,12 @@ export default function RecallTracker() {
     }
   }
 
-  // ── Drawer ────────────────────────────────────────────────────────────────
-  function openDrawer(recall) {
-    setDrawer(recall)
-    setDrawerSearch('')
+  // ── Detail navigation ───────────────────────────────────────────────────────
+  // The affected-tyres record + approval workflow moved to the routed
+  // /recalls/:recallId detail page (RecallDetail.jsx) — large multi-section view.
+  function openRecall(recall) {
+    navigate(`/recalls/${encodeURIComponent(recall.id)}`)
   }
-
-  const drawerTyres = useMemo(() => {
-    if (!drawer) return []
-    const matches = matchTyresForRecall(drawer)
-    if (!drawerSearch) return matches
-    const s = drawerSearch.toLowerCase()
-    return matches.filter(t =>
-      t.serial_number?.toLowerCase().includes(s) ||
-      t.asset_no?.toLowerCase().includes(s) ||
-      t.site?.toLowerCase().includes(s)
-    )
-  }, [drawer, drawerSearch, matchTyresForRecall])
 
   // ── Export ────────────────────────────────────────────────────────────────
   async function exportPdf() {
@@ -773,7 +743,6 @@ export default function RecallTracker() {
                   )}
                   {!loading && filtered.map((r, i) => {
                     const affectedCount = matchTyresForRecall(r).length
-                    const rowLocked = drawer?.id === r.id && wfLocked
                     return (
                       <motion.tr
                         key={r.id}
@@ -810,7 +779,7 @@ export default function RecallTracker() {
                         <td className="px-4 py-3">
                           <div className="flex items-center gap-1">
                             <button
-                              onClick={() => openDrawer(r)}
+                              onClick={() => openRecall(r)}
                               className="flex items-center gap-1 px-2 py-1 bg-blue-900/30 hover:bg-blue-900/60 border border-blue-700/50 rounded text-blue-400 text-xs transition"
                             >
                               <Eye size={12} /> View
@@ -818,30 +787,27 @@ export default function RecallTracker() {
                             {isAdmin && r.status !== 'Closed' && (
                               <button
                                 onClick={() => handleClose(r.id)}
-                                disabled={rowLocked}
-                                className="flex items-center gap-1 px-2 py-1 bg-green-900/30 hover:bg-green-900/60 border border-green-700/50 rounded text-green-400 text-xs transition disabled:opacity-40 disabled:cursor-not-allowed"
-                                title={rowLocked ? 'Locked, in approval' : 'Mark as Closed'}
+                                className="flex items-center gap-1 px-2 py-1 bg-green-900/30 hover:bg-green-900/60 border border-green-700/50 rounded text-green-400 text-xs transition"
+                                title="Mark as Closed"
                               >
-                                {rowLocked ? <Lock size={12} /> : <CheckCircle size={12} />}
+                                <CheckCircle size={12} />
                               </button>
                             )}
                             {isAdmin && (
                               <>
                                 <button
                                   onClick={() => openEdit(r)}
-                                  disabled={rowLocked}
-                                  className="p-1 text-[var(--text-muted)] hover:text-[var(--text-secondary)] transition disabled:opacity-40 disabled:cursor-not-allowed"
-                                  title={rowLocked ? 'Locked, in approval' : 'Edit'}
+                                  className="p-1 text-[var(--text-muted)] hover:text-[var(--text-secondary)] transition"
+                                  title="Edit"
                                 >
-                                  {rowLocked ? <Lock size={12} /> : <Activity size={12} />}
+                                  <Activity size={12} />
                                 </button>
                                 <button
                                   onClick={() => handleDelete(r.id)}
-                                  disabled={rowLocked}
-                                  className="p-1 text-[var(--text-dim)] hover:text-red-400 transition disabled:opacity-40 disabled:cursor-not-allowed"
-                                  title={rowLocked ? 'Locked, in approval' : 'Delete'}
+                                  className="p-1 text-[var(--text-dim)] hover:text-red-400 transition"
+                                  title="Delete"
                                 >
-                                  {rowLocked ? <Lock size={12} /> : <XCircle size={12} />}
+                                  <XCircle size={12} />
                                 </button>
                               </>
                             )}
@@ -1151,145 +1117,6 @@ export default function RecallTracker() {
           </div>
         </div>
       )}
-
-      {/* ── Affected Tyres Drawer ── */}
-      <AnimatePresence>
-        {drawer && (
-          <>
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 0.5 }}
-              exit={{ opacity: 0 }}
-              className="fixed inset-0 bg-black z-40"
-              onClick={() => setDrawer(null)}
-            />
-            <motion.div
-              initial={{ x: '100%' }}
-              animate={{ x: 0 }}
-              exit={{ x: '100%' }}
-              transition={{ type: 'tween', duration: 0.25 }}
-              className="fixed right-0 top-0 h-full w-full max-w-2xl bg-[var(--surface-1)] border-l border-[var(--input-border)] z-50 flex flex-col overflow-hidden"
-            >
-              {/* Drawer Header */}
-              <div className="p-4 border-b border-[var(--input-border)] flex items-start justify-between gap-3">
-                <div>
-                  <div className="flex items-center gap-2 mb-1">
-                    <ShieldAlert className="text-red-400" size={18} />
-                    <span className="font-bold text-[var(--text-secondary)]">{drawer.recall_number}</span>
-                    <Badge label={drawer.severity} cfg={SEVERITY_CFG[drawer.severity]} small />
-                    <Badge label={drawer.status} cfg={STATUS_CFG[drawer.status]} small />
-                  </div>
-                  <p className="text-[var(--text-muted)] text-sm">{drawer.brand} - {drawer.description}</p>
-                  <p className="text-xs text-[var(--text-muted)] mt-1">{drawer.action_required}</p>
-                </div>
-                <button onClick={() => setDrawer(null)} className="text-[var(--text-muted)] hover:text-[var(--text-secondary)] shrink-0">
-                  <X size={20} />
-                </button>
-              </div>
-
-              {/* Approval & Workflow Engine — safety-recall sign-off */}
-              <div className="p-4 border-b border-[var(--input-border)] space-y-3">
-                <EntityApprovalPanel
-                  entityType="recall"
-                  entityId={drawer.id}
-                  entityLabel={drawer.recall_number || drawer.brand || drawer.id}
-                  context={{
-                    severity: drawer.severity,
-                    affected_count: matchTyresForRecall(drawer).length,
-                    brand: drawer.brand,
-                    status: drawer.status,
-                    country: drawer.country,
-                  }}
-                  onStateChange={({ isActive, isLocked }) => setWfLocked(!!(isActive || isLocked))}
-                  title="Recall Approval"
-                />
-                {wfLocked && (
-                  <p className="flex items-center gap-1.5 text-xs text-[var(--text-muted)]">
-                    <Lock size={12} /> Locked, in approval
-                  </p>
-                )}
-              </div>
-
-              {/* Drawer count */}
-              <div className="px-4 py-3 bg-[var(--input-bg)] flex items-center justify-between">
-                <span className="font-bold text-orange-400 text-lg">
-                  {matchTyresForRecall(drawer).length} affected fleet tyres
-                </span>
-                <div className="relative">
-                  <Search className="absolute left-2 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" size={13} />
-                  <input
-                    value={drawerSearch}
-                    onChange={e => setDrawerSearch(e.target.value)}
-                    placeholder="Search serial, asset, site..."
-                    className="pl-7 pr-3 py-1.5 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg text-xs text-[var(--text-secondary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-blue-600 w-48"
-                  />
-                </div>
-              </div>
-
-              {/* Drawer table */}
-              <div className="flex-1 overflow-y-auto">
-                <table className="w-full text-xs">
-                  <thead className="sticky top-0 bg-[var(--surface-1)] border-b border-[var(--input-border)]">
-                    <tr className="text-[var(--text-muted)]">
-                      <th className="px-3 py-2 text-left">Serial</th>
-                      <th className="px-3 py-2 text-left">Asset</th>
-                      <th className="px-3 py-2 text-left">Position</th>
-                      <th className="px-3 py-2 text-left">Site</th>
-                      <th className="px-3 py-2 text-left">Country</th>
-                      <th className="px-3 py-2 text-left">Status</th>
-                      <th className="px-3 py-2 text-left">Days Fitted</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {drawerTyres.length === 0 && (
-                      <tr>
-                        <td colSpan={7} className="px-3 py-10 text-center text-[var(--text-muted)]">
-                          {matchTyresForRecall(drawer).length === 0
-                            ? 'No fleet tyres match this recall criteria'
-                            : 'No results for current search'
-                          }
-                        </td>
-                      </tr>
-                    )}
-                    {drawerTyres.map(t => {
-                      const daysOn = t.issue_date ? daysBetween(t.issue_date, t.km_at_removal ? null : new Date().toISOString().slice(0, 10)) : null
-                      return (
-                        <tr key={t.id} className="border-b border-[var(--input-border)] hover:bg-[var(--input-bg)]">
-                          <td className="px-3 py-2 font-mono text-blue-300">{t.serial_number}</td>
-                          <td className="px-3 py-2 text-[var(--text-dim)]">{t.asset_no}</td>
-                          <td className="px-3 py-2 text-[var(--text-muted)]">{t.position}</td>
-                          <td className="px-3 py-2 text-[var(--text-muted)]">{t.site}</td>
-                          <td className="px-3 py-2 text-[var(--text-muted)]">{t.country}</td>
-                          <td className="px-3 py-2">
-                            <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${
-                              t.km_at_removal
-                                ? 'bg-gray-700 text-gray-300'
-                                : 'bg-green-900/40 text-green-400 border border-green-700/50'
-                            }`}>
-                              {t.km_at_removal ? 'Removed' : 'Fitted'}
-                            </span>
-                          </td>
-                          <td className="px-3 py-2 text-[var(--text-muted)]">{daysOn != null ? `${daysOn}d` : 'N/A'}</td>
-                        </tr>
-                      )
-                    })}
-                  </tbody>
-                </table>
-              </div>
-
-              {/* Drawer footer */}
-              <div className="p-3 border-t border-[var(--input-border)] flex justify-end">
-                <button
-                  onClick={() => setDrawer(null)}
-                  className="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-sm text-gray-300 transition"
-                >
-                  Close
-                </button>
-              </div>
-            </motion.div>
-          </>
-        )}
-      </AnimatePresence>
 
       {/* ── Add / Edit Recall Modal ── */}
       <AnimatePresence>

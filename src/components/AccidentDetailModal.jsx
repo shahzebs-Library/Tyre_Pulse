@@ -1,23 +1,51 @@
 /**
  * AccidentDetailModal.jsx
  *
- * Deep claims-management view for one accident (web). Tabs: Overview,
- * Claim & Responsibility, Parts & Repairs, Case Log, and the close →
- * admin-approval workflow. Backed by MIGRATIONS_V19 tables + RPCs.
+ * Deep claims-management view for one accident (web). Historically a modal;
+ * now the file also exports a full-page route component (`AccidentDetailPage`,
+ * the default export) rendered at `/accidents/:id`. Tabs: Overview, Tracker,
+ * Claim & Recovery, Parts & Repairs, Case Log, Activity, and the close →
+ * admin-approval workflow. Backed by MIGRATIONS_V19 tables + RPCs. The
+ * universal approval engine is mounted as an anchored side panel.
+ *
+ * The reusable `AccidentDetail` inner component holds all tab logic and is
+ * consumed by the page shell; the legacy modal wrapper is kept exported for
+ * backward compatibility but is no longer used by the Accidents page.
  */
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useParams, useNavigate } from 'react-router-dom'
 import {
   X, Save, Plus, Trash2, Send, Lock, CheckCircle2, XCircle,
   ShieldCheck, Hourglass, FileText, Wrench, MessageSquare, Briefcase, History, User, ClipboardList,
+  ArrowLeft, AlertOctagon, ChevronRight,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
-import { formatCurrency } from '../lib/formatters'
+import { useSettings } from '../contexts/SettingsContext'
+import { formatCurrency as _fmtCurrencyBase } from '../lib/formatters'
 import { describeAuditRow } from '../lib/auditDiff'
 import { resolveStorageUrls } from '../lib/storageRefs'
 import CustomFieldsPanel from './CustomFieldsPanel'
 import CopilotCard from './ai/CopilotCard'
+import EntityApprovalPanel from './workflow/EntityApprovalPanel'
+
+// Display canonicalisation — mirrors Accidents.jsx so the DB's lowercase
+// severity/status render as human labels in the detail view too.
+const SEVERITY_ALIAS = { minor: 'Minor', moderate: 'Major', major: 'Major', severe: 'Total Loss', fatal: 'Total Loss', 'total loss': 'Total Loss' }
+const STATUS_ALIAS = {
+  reported: 'Reported', under_review: 'Under Investigation', under_investigation: 'Under Investigation',
+  repair_in_progress: 'Repair In Progress', awaiting_parts: 'Awaiting Parts',
+  awaiting_approval: 'Awaiting Approval', insurance_claim: 'Insurance Claim', closed: 'Closed',
+}
+const canonSeverity = (s) => SEVERITY_ALIAS[String(s || '').toLowerCase()] || s || ''
+const canonStatus = (s) => STATUS_ALIAS[String(s || '').toLowerCase().replace(/\s+/g, '_')] || s || ''
+
+const SEVERITY_BADGE = {
+  Minor:        'bg-[var(--input-bg)] text-[var(--text-dim)] border border-[var(--input-border)]',
+  Major:        'bg-orange-900/50 text-orange-300 border border-orange-700/50',
+  'Total Loss': 'bg-red-900/50 text-red-300 border border-red-700/50',
+}
 
 const RECOVERY_SOURCES = ['none', 'insurer', 'third_party', 'driver', 'warranty']
 const RECOVERY_SOURCE_LABELS = { none: 'None', insurer: 'Insurer', third_party: 'Third Party', driver: 'Driver', warranty: 'Warranty' }
@@ -69,9 +97,31 @@ const TABS = [
   { key: 'closure',  label: 'Closure', icon: Lock },
 ]
 
-export default function AccidentDetailModal({ accidentId, onClose, onChanged }) {
+/**
+ * AccidentDetailPage — full-page route component for `/accidents/:id`.
+ *
+ * Replaces the former modal. Renders a breadcrumb + back control, a live
+ * financial summary rail, the full tabbed claims workspace, and the universal
+ * approval engine anchored as a companion panel. All tab components below are
+ * preserved verbatim from the modal implementation.
+ */
+export default function AccidentDetailPage() {
+  const { id } = useParams()
+  const navigate = useNavigate()
+  const back = useCallback(() => navigate('/accidents'), [navigate])
+  return <AccidentDetail accidentId={id} onBack={back} variant="page" />
+}
+
+/**
+ * AccidentDetail — the claims workspace body (loader, header, tabs, approval
+ * rail). `variant="page"` renders the full-page shell; `variant="modal"` keeps
+ * the legacy overlay presentation for the compatibility wrapper below.
+ */
+function AccidentDetail({ accidentId, onBack, onClose, onChanged, variant = 'page' }) {
   const { profile } = useAuth()
+  const { activeCurrency } = useSettings()
   const elevated = isElevated(profile?.role)
+  const fmtCurrency = (v) => _fmtCurrencyBase(v, activeCurrency, 0)
 
   const [tab, setTab] = useState('overview')
   const [acc, setAcc] = useState(null)
@@ -80,6 +130,14 @@ export default function AccidentDetailModal({ accidentId, onClose, onChanged }) 
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
+  // Approval-engine lock state for this accident (drives the header banner).
+  const [wf, setWf] = useState({ isActive: false, isLocked: false, status: null })
+  const handleWfStateChange = useCallback((next) => {
+    setWf(prev =>
+      prev.isActive === next.isActive && prev.isLocked === next.isLocked && prev.status === next.status
+        ? prev : next,
+    )
+  }, [])
 
   const load = useCallback(async () => {
     const [a, r, p] = await Promise.all([
@@ -94,12 +152,21 @@ export default function AccidentDetailModal({ accidentId, onClose, onChanged }) 
     setLoading(false)
   }, [accidentId])
 
-  useEffect(() => { load() }, [load])
+  useEffect(() => { setLoading(true); setErr(''); load() }, [load])
 
   const closure = acc?.closure_status ?? 'open'
   const partsTotal = parts.reduce((s, p) => s + (Number(p.total_cost) || 0), 0)
 
-  async function runRpc(fn, args, okMsg) {
+  // Live financial rail — gross cost, recovered, net exposure.
+  const money = useMemo(() => {
+    const repair = Number(acc?.repair_cost) || 0
+    const partsC = Number(acc?.parts_cost) || partsTotal
+    const gross = repair + partsC
+    const recovered = Number(acc?.recovered_amount) || 0
+    return { gross, recovered, net: Math.max(0, gross - recovered) }
+  }, [acc, partsTotal])
+
+  async function runRpc(fn, args) {
     setBusy(true); setErr('')
     const { error } = await supabase.rpc(fn, args)
     setBusy(false)
@@ -108,86 +175,204 @@ export default function AccidentDetailModal({ accidentId, onClose, onChanged }) 
     return true
   }
 
+  const dismiss = onBack || onClose
+
+  // ── Loading / not-found (page variant renders real skeleton + retry) ──
   if (loading) {
+    if (variant === 'modal') {
+      return (
+        <Backdrop onClose={onClose}>
+          <div className="bg-gray-900 border border-gray-700 rounded-xl p-12 text-center text-gray-500">Loading...</div>
+        </Backdrop>
+      )
+    }
     return (
-      <Backdrop onClose={onClose}>
-        <div className="bg-gray-900 border border-gray-700 rounded-xl p-12 text-center text-gray-500">Loading...</div>
-      </Backdrop>
+      <div className="space-y-4">
+        <button onClick={dismiss} className="inline-flex items-center gap-1.5 text-sm text-[var(--text-muted)] hover:text-[var(--text-primary)]"><ArrowLeft size={15} /> Back to Accidents</button>
+        <div className="card animate-pulse space-y-3">
+          <div className="h-6 w-48 bg-[var(--input-bg)] rounded" />
+          <div className="h-4 w-72 bg-[var(--input-bg)] rounded" />
+          <div className="grid grid-cols-3 gap-3 pt-2">
+            {[0, 1, 2].map(i => <div key={i} className="h-16 bg-[var(--input-bg)] rounded" />)}
+          </div>
+        </div>
+        <div className="card animate-pulse h-64" />
+      </div>
     )
   }
   if (!acc) {
+    if (variant === 'modal') {
+      return (
+        <Backdrop onClose={onClose}>
+          <div className="bg-gray-900 border border-gray-700 rounded-xl p-12 text-center text-red-400">{err || 'Not found'}</div>
+        </Backdrop>
+      )
+    }
+    return (
+      <div className="space-y-4">
+        <button onClick={dismiss} className="inline-flex items-center gap-1.5 text-sm text-[var(--text-muted)] hover:text-[var(--text-primary)]"><ArrowLeft size={15} /> Back to Accidents</button>
+        <div className="card text-center py-12 space-y-3">
+          <AlertOctagon size={32} className="mx-auto text-red-400" />
+          <p className="text-[var(--text-primary)] font-semibold">Accident record not found</p>
+          <p className="text-sm text-[var(--text-muted)]">{err || 'This record may have been deleted or you do not have access.'}</p>
+          <button onClick={load} className="btn-secondary text-sm mx-auto">Retry</button>
+        </div>
+      </div>
+    )
+  }
+
+  const body = (
+    <>
+      {/* Tabs */}
+      <div className="flex gap-1 px-4 border-b border-gray-800 overflow-x-auto">
+        {TABS.map(({ key, label, icon: Icon }) => (
+          <button
+            key={key}
+            onClick={() => setTab(key)}
+            className={`px-3 py-2.5 text-sm font-medium flex items-center gap-1.5 border-b-2 -mb-px whitespace-nowrap transition-colors ${
+              tab === key ? 'border-green-500 text-green-400' : 'border-transparent text-gray-400 hover:text-white'
+            }`}
+          >
+            <Icon size={14} /> {label}
+          </button>
+        ))}
+      </div>
+
+      {err && <div className="mx-6 mt-4 bg-red-900/30 border border-red-700 text-red-300 rounded-lg px-4 py-2 text-sm">{err}</div>}
+
+      {/* Body */}
+      <div className="flex-1 overflow-y-auto p-6">
+        {tab === 'overview'  && (
+          <div className="space-y-4">
+            <CopilotCard task="summarize_accident" context={{ accident: acc, remarks, parts }} />
+            <OverviewTab acc={acc} />
+          </div>
+        )}
+        {tab === 'tracker'   && <TrackerTab acc={acc} elevated={elevated} onSaved={() => { load(); onChanged?.() }} setErr={setErr} />}
+        {tab === 'claim'     && <ClaimTab acc={acc} elevated={elevated} onSaved={() => { load(); onChanged?.() }} setErr={setErr} />}
+        {tab === 'parts'     && <PartsTab acc={acc} parts={parts} partsTotal={partsTotal} elevated={elevated} profile={profile} reload={() => { load(); onChanged?.() }} setErr={setErr} />}
+        {tab === 'log'       && <LogTab acc={acc} remarks={remarks} profile={profile} reload={load} setErr={setErr} />}
+        {tab === 'activity'  && <ActivityTab accidentId={acc.id} />}
+        {tab === 'closure'   && (
+          <ClosureTab
+            acc={acc} closure={closure} elevated={elevated} busy={busy}
+            onRequest={(note) => runRpc('request_accident_closure', { p_accident_id: acc.id, p_note: note || null })}
+            onApprove={() => runRpc('approve_accident_closure', { p_accident_id: acc.id })}
+            onReject={(reason) => runRpc('reject_accident_closure', { p_accident_id: acc.id, p_reason: reason || null })}
+          />
+        )}
+      </div>
+    </>
+  )
+
+  // ── Legacy modal presentation (compatibility only) ──
+  if (variant === 'modal') {
     return (
       <Backdrop onClose={onClose}>
-        <div className="bg-gray-900 border border-gray-700 rounded-xl p-12 text-center text-red-400">{err || 'Not found'}</div>
+        <div className="bg-gray-900 border border-gray-700 rounded-xl w-full max-w-3xl my-4 flex flex-col max-h-[92vh]" onClick={e => e.stopPropagation()}>
+          <div className="flex items-center justify-between px-6 py-4 border-b border-gray-800">
+            <div className="flex items-center gap-3 min-w-0">
+              <AlertCircleHeaderIcon />
+              <div className="min-w-0">
+                <h2 className="text-lg font-semibold text-white truncate">
+                  {acc.asset_no || 'Accident'} <span className="text-gray-500 font-normal">· #{String(acc.id).slice(0, 8).toUpperCase()}</span>
+                </h2>
+                <p className="text-xs text-gray-500">{acc.site || '-'} · {acc.incident_date ? new Date(acc.incident_date).toLocaleDateString() : '-'}</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <ClosureBadge closure={closure} />
+              <button onClick={onClose} className="text-gray-400 hover:text-white"><X size={18} /></button>
+            </div>
+          </div>
+          {body}
+        </div>
       </Backdrop>
     )
   }
 
+  // ── Full-page presentation ──
+  const severity = canonSeverity(acc.severity)
+  const status = canonStatus(acc.status)
   return (
-    <Backdrop onClose={onClose}>
-      <div
-        className="bg-gray-900 border border-gray-700 rounded-xl w-full max-w-3xl my-4 flex flex-col max-h-[92vh]"
-        onClick={e => e.stopPropagation()}
-      >
-        {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-800">
+    <div className="space-y-4 pb-24">
+      {/* Breadcrumb + back */}
+      <div className="flex items-center gap-2 text-xs text-[var(--text-muted)]">
+        <button onClick={dismiss} className="inline-flex items-center gap-1 hover:text-[var(--text-primary)] transition-colors">
+          <ArrowLeft size={13} /> Accidents
+        </button>
+        <ChevronRight size={12} />
+        <span className="text-[var(--text-dim)]">{acc.asset_no || 'Incident'} · #{String(acc.id).slice(0, 8).toUpperCase()}</span>
+      </div>
+
+      {/* Header card + financial rail */}
+      <div className="card">
+        <div className="flex items-start justify-between flex-wrap gap-4">
           <div className="flex items-center gap-3 min-w-0">
             <AlertCircleHeaderIcon />
             <div className="min-w-0">
-              <h2 className="text-lg font-semibold text-white truncate">
-                {acc.asset_no || 'Accident'} <span className="text-gray-500 font-normal">· #{String(acc.id).slice(0, 8).toUpperCase()}</span>
-              </h2>
-              <p className="text-xs text-gray-500">{acc.site || '-'} · {acc.incident_date ? new Date(acc.incident_date).toLocaleDateString() : '-'}</p>
+              <h1 className="text-xl font-bold text-[var(--text-primary)] truncate">
+                {acc.asset_no || 'Accident'}
+                <span className="text-[var(--text-muted)] font-normal text-base"> · #{String(acc.id).slice(0, 8).toUpperCase()}</span>
+              </h1>
+              <p className="text-sm text-[var(--text-muted)] mt-0.5">
+                {acc.site || '-'}{acc.country ? ` · ${acc.country}` : ''} · {acc.incident_date ? new Date(acc.incident_date).toLocaleDateString() : '-'}
+              </p>
+              <div className="flex items-center gap-2 mt-2 flex-wrap">
+                {severity && <span className={`badge text-xs ${SEVERITY_BADGE[severity] ?? 'bg-gray-800 text-gray-300'}`}>{severity}</span>}
+                {status && <span className="badge text-xs bg-[var(--input-bg)] text-[var(--text-dim)] border border-[var(--input-border)]">{status}</span>}
+                <ClosureBadge closure={closure} />
+                {wf.isActive && <span className="badge text-xs bg-purple-900/50 text-purple-300 border border-purple-700/50 flex items-center gap-1"><Lock size={10} /> In approval</span>}
+              </div>
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            <ClosureBadge closure={closure} />
-            <button onClick={onClose} className="text-gray-400 hover:text-white"><X size={18} /></button>
+          <div className="grid grid-cols-3 gap-4 rounded-lg border border-[var(--input-border)] bg-[var(--input-bg)]/50 px-4 py-3">
+            <div><p className="text-[10px] uppercase tracking-wide text-[var(--text-muted)]">Gross cost</p><p className="text-sm font-bold text-[var(--text-primary)]">{fmtCurrency(money.gross)}</p></div>
+            <div><p className="text-[10px] uppercase tracking-wide text-[var(--text-muted)]">Recovered</p><p className="text-sm font-bold text-green-400">{fmtCurrency(money.recovered)}</p></div>
+            <div><p className="text-[10px] uppercase tracking-wide text-[var(--text-muted)]">Net exposure</p><p className="text-sm font-bold text-orange-400">{fmtCurrency(money.net)}</p></div>
           </div>
-        </div>
-
-        {/* Tabs */}
-        <div className="flex gap-1 px-4 border-b border-gray-800 overflow-x-auto">
-          {TABS.map(({ key, label, icon: Icon }) => (
-            <button
-              key={key}
-              onClick={() => setTab(key)}
-              className={`px-3 py-2.5 text-sm font-medium flex items-center gap-1.5 border-b-2 -mb-px whitespace-nowrap transition-colors ${
-                tab === key ? 'border-green-500 text-green-400' : 'border-transparent text-gray-400 hover:text-white'
-              }`}
-            >
-              <Icon size={14} /> {label}
-            </button>
-          ))}
-        </div>
-
-        {err && <div className="mx-6 mt-4 bg-red-900/30 border border-red-700 text-red-300 rounded-lg px-4 py-2 text-sm">{err}</div>}
-
-        {/* Body */}
-        <div className="flex-1 overflow-y-auto p-6">
-          {tab === 'overview'  && (
-            <div className="space-y-4">
-              <CopilotCard task="summarize_accident" context={{ accident: acc, remarks, parts }} />
-              <OverviewTab acc={acc} />
-            </div>
-          )}
-          {tab === 'tracker'   && <TrackerTab acc={acc} elevated={elevated} onSaved={() => { load(); onChanged?.() }} setErr={setErr} />}
-          {tab === 'claim'     && <ClaimTab acc={acc} elevated={elevated} onSaved={() => { load(); onChanged?.() }} setErr={setErr} />}
-          {tab === 'parts'     && <PartsTab acc={acc} parts={parts} partsTotal={partsTotal} elevated={elevated} profile={profile} reload={() => { load(); onChanged?.() }} setErr={setErr} />}
-          {tab === 'log'       && <LogTab acc={acc} remarks={remarks} profile={profile} reload={load} setErr={setErr} />}
-          {tab === 'activity'  && <ActivityTab accidentId={acc.id} />}
-          {tab === 'closure'   && (
-            <ClosureTab
-              acc={acc} closure={closure} elevated={elevated} busy={busy}
-              onRequest={(note) => runRpc('request_accident_closure', { p_accident_id: acc.id, p_note: note || null })}
-              onApprove={() => runRpc('approve_accident_closure', { p_accident_id: acc.id })}
-              onReject={(reason) => runRpc('reject_accident_closure', { p_accident_id: acc.id, p_reason: reason || null })}
-            />
-          )}
         </div>
       </div>
-    </Backdrop>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        {/* Main workspace */}
+        <div className="lg:col-span-2 card p-0 flex flex-col overflow-hidden">
+          {body}
+        </div>
+        {/* Approval engine rail */}
+        <div className="lg:col-span-1">
+          <div className="lg:sticky lg:top-4">
+            <EntityApprovalPanel
+              entityType="accident"
+              entityId={acc.id}
+              entityLabel={acc.insurance_claim_no || acc.policy_no || acc.asset_no || acc.id}
+              context={{
+                severity,
+                is_major: ['Major', 'Total Loss'].includes(severity),
+                estimated_cost: Number(acc.estimated_damage_cost) || Number(acc.repair_cost) || 0,
+                repair_cost: Number(acc.repair_cost) || 0,
+                parts_cost: Number(acc.parts_cost) || 0,
+                claim_amount: Number(acc.claim_amount) || 0,
+                country: acc.country || null,
+                site: acc.site || null,
+              }}
+              title="Accident Approval"
+              onStateChange={handleWfStateChange}
+            />
+          </div>
+        </div>
+      </div>
+    </div>
   )
+}
+
+/**
+ * AccidentDetailModal — legacy overlay wrapper. Retained for backward
+ * compatibility; the Accidents page now navigates to the `/accidents/:id`
+ * route instead. Not used internally.
+ */
+export function AccidentDetailModal({ accidentId, onClose, onChanged }) {
+  return <AccidentDetail accidentId={accidentId} onClose={onClose} onChanged={onChanged} variant="modal" />
 }
 
 // ── Tabs ──────────────────────────────────────────────────────────────────────

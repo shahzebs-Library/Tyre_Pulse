@@ -114,6 +114,33 @@
     "recAllGood": "All tyres within acceptable parameters. Continue routine inspections.",
     "customFieldsTitle": "Additional imported fields"
   },
+  "detail": {
+    "backToAssets": "Back to Assets",
+    "openAssetProfile": "Open Full Asset Profile",
+    "loading": "Loading asset profile...",
+    "loadError": "Failed to load the asset.",
+    "loadErrorTitle": "Could not load asset",
+    "retry": "Retry",
+    "notFoundTitle": "Asset \"{assetNo}\" not found",
+    "notFoundDesc": "This asset has no fleet or tyre records. It may have been removed or never imported.",
+    "lockedInApproval": "Locked: disposal approval in progress",
+    "viewAll": "View all",
+    "noWorkOrders": "No work orders recorded for this asset.",
+    "ytdCost": "YTD Tyre Cost",
+    "ytdCostSub": "Year-to-date, this vehicle",
+    "tabs": {
+      "overview": "Overview",
+      "tyres": "Tyres",
+      "costs": "Costs",
+      "workOrders": "Work Orders",
+      "approvals": "Approvals"
+    },
+    "quick": {
+      "vehicleHistory": "Vehicle History",
+      "workOrders": "Work Orders",
+      "inspections": "Inspections"
+    }
+  },
   "modal": {
     "editTitle": "Edit Asset",
     "addTitle": "Add Asset",

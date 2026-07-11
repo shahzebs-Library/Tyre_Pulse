@@ -1,4 +1,5 @@
-import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Chart as ChartJS,
@@ -8,12 +9,12 @@ import {
 } from 'chart.js'
 import { Bar, Line, Doughnut } from 'react-chartjs-2'
 import {
-  Truck, Plus, Edit2, X, Save, Search, Filter, Download,
+  Truck, Plus, Edit2, X, Save, Search, Filter,
   FileSpreadsheet, FileText, RefreshCw, ChevronLeft, ChevronRight,
-  ChevronDown, ChevronUp, AlertTriangle, CheckCircle, Clock,
+  ChevronDown, ChevronUp, AlertTriangle, Clock,
   DollarSign, Activity, Shield, BarChart2, TrendingUp, Eye,
-  ToggleLeft, ToggleRight, MapPin, Globe, Calendar, Zap, Target,
-  Award, Layers, Info, Lock,
+  ToggleLeft, ToggleRight, MapPin,
+  Award, Layers, Lock,
 } from 'lucide-react'
 import { SkeletonCards, SkeletonTable } from '../components/ui/Skeleton'
 import * as assetApi from '../lib/api/assetManagement'
@@ -21,12 +22,8 @@ import { useSettings } from '../contexts/SettingsContext'
 import { useAuth } from '../contexts/AuthContext'
 import { useLanguage } from '../contexts/LanguageContext'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
-import { formatCurrencyCompact, formatDate, formatMonthYear } from '../lib/formatters'
+import { formatCurrencyCompact, formatDate } from '../lib/formatters'
 import PageHeader from '../components/ui/PageHeader'
-import CustomFieldsPanel from '../components/CustomFieldsPanel'
-import EntityApprovalPanel from '../components/workflow/EntityApprovalPanel'
-import { Illustration } from '../components/illustrations'
-import { vehicleArt } from '../lib/brand/vehicleArt'
 
 ChartJS.register(
   CategoryScale, LinearScale,
@@ -37,7 +34,6 @@ ChartJS.register(
 // ── Constants ──────────────────────────────────────────────────────────────────
 const PAGE_SIZE = 25
 
-const RISK_ORDER = { Critical: 0, High: 1, Medium: 2, Low: 3 }
 const RISK_COLOR = {
   Critical: { bg: 'bg-red-900/50',    text: 'text-red-300',    hex: '#dc2626' },
   High:     { bg: 'bg-orange-900/50', text: 'text-orange-300', hex: '#ea580c' },
@@ -95,343 +91,7 @@ function fmt(n, dec = 0) {
 // Shared formatters; currency is always supplied from activeCurrency at call sites.
 const fmtCurrency = (n, cur) => formatCurrencyCompact(n, cur)
 const fmtDate = (d) => formatDate(d)
-function daysSince(d) {
-  if (!d) return null
-  const ms = Date.now() - new Date(d).getTime()
-  return Math.floor(ms / 86_400_000)
-}
-function worstRisk(tyres) {
-  if (!tyres?.length) return null
-  return tyres.reduce((best, t) => {
-    if (t.risk_level && (best === null || (RISK_ORDER[t.risk_level] ?? 99) < (RISK_ORDER[best] ?? 99))) return t.risk_level
-    return best
-  }, null)
-}
-function healthScore(tyres, latestDate) {
-  if (!tyres?.length) return 0
-  const treadScore = tyres.reduce((sum, t) => {
-    const td = parseFloat(t.tread_depth) || 0
-    if (td >= 6) return sum + 100
-    if (td >= 4) return sum + 70
-    if (td >= 2) return sum + 40
-    return sum + 10
-  }, 0) / tyres.length
-  const riskScore = tyres.reduce((sum, t) => {
-    const map = { Low: 100, Medium: 70, High: 40, Critical: 10 }
-    return sum + (map[t.risk_level] ?? 50)
-  }, 0) / tyres.length
-  const days = latestDate ? daysSince(latestDate) : 999
-  const recencyScore = days <= 7 ? 100 : days <= 14 ? 80 : days <= 30 ? 60 : days <= 60 ? 30 : 0
-  return Math.round(treadScore * 0.4 + riskScore * 0.4 + recencyScore * 0.2)
-}
 
-// ── Tyre Position SVG Diagram ─────────────────────────────────────────────────
-function TyrePositionDiagram({ tyres = [] }) {
-  const positions = [
-    { id: 'FL',  label: 'FL',  cx: 70,  cy: 90  },
-    { id: 'FR',  label: 'FR',  cx: 210, cy: 90  },
-    { id: 'RLO', label: 'RLO', cx: 52,  cy: 190 },
-    { id: 'RLI', label: 'RLI', cx: 78,  cy: 190 },
-    { id: 'RRI', label: 'RRI', cx: 202, cy: 190 },
-    { id: 'RRO', label: 'RRO', cx: 228, cy: 190 },
-  ]
-  const byPos = {}
-  tyres.forEach(t => { if (t.position) byPos[t.position] = t })
-
-  return (
-    <svg viewBox="0 0 280 260" className="w-full max-w-xs mx-auto">
-      <rect x={95} y={30} width={90} height={200} rx={8} fill="#1f2937" stroke="#374151" strokeWidth="2" />
-      <text x={140} y={58} textAnchor="middle" fontSize="22">🚛</text>
-      {[90, 190].map((y, i) => (
-        <line key={i} x1={95} x2={185} y1={y} y2={y} stroke="#4b5563" strokeWidth="1" strokeDasharray="4 4" />
-      ))}
-      {positions.map(p => {
-        const t = byPos[p.id]
-        const col = t ? (RISK_COLOR[t.risk_level]?.hex ?? '#374151') : '#374151'
-        const opacity = t ? 1 : 0.35
-        return (
-          <g key={p.id}>
-            <circle cx={p.cx} cy={p.cy} r={13} fill={col} opacity={opacity} stroke={col} strokeWidth="1.5" />
-            <text x={p.cx} y={p.cy + 4} textAnchor="middle" fill="#fff" fontSize="7" fontFamily="monospace" fontWeight="600">{p.label}</text>
-            {t && (
-              <text x={p.cx} y={p.cy + 26} textAnchor="middle" fill="#9ca3af" fontSize="6">{t.brand ?? ''}</text>
-            )}
-          </g>
-        )
-      })}
-    </svg>
-  )
-}
-
-// ── Asset Detail Drawer ────────────────────────────────────────────────────────
-function AssetDrawer({ asset, tyres = [], workOrders, currency, onClose, onEdit, canEdit = false, wfLocked = false, onWfStateChange }) {
-  const { t } = useLanguage()
-  const activeTyres = tyres.filter(t => !t.km_at_removal)
-  const totalCost = tyres.reduce((s, t) => s + (parseFloat(t.cost_per_tyre) || 0) * (Number(t.qty) || 1), 0)
-
-  // Monthly tyre cost chart (last 12 months)
-  const monthlyData = useMemo(() => {
-    const now = new Date()
-    const labels = []
-    const costs = []
-    for (let i = 11; i >= 0; i--) {
-      const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
-      labels.push(formatMonthYear(d))
-      const mo = d.getMonth()
-      const yr = d.getFullYear()
-      const sum = tyres.filter(t => {
-        if (!t.issue_date) return false
-        const td = new Date(t.issue_date)
-        return td.getMonth() === mo && td.getFullYear() === yr
-      }).reduce((s, t) => s + (parseFloat(t.cost_per_tyre) || 0) * (Number(t.qty) || 1), 0)
-      costs.push(sum)
-    }
-    return { labels, costs }
-  }, [tyres])
-
-  const chartData = {
-    labels: monthlyData.labels,
-    datasets: [{
-      label: t('assetmgmt.drawer.monthlyCostSeriesLabel'),
-      data: monthlyData.costs,
-      borderColor: '#3b82f6',
-      backgroundColor: 'rgba(59,130,246,0.1)',
-      fill: true,
-      tension: 0.4,
-      pointRadius: 3,
-    }],
-  }
-
-  const assetWOs = (workOrders ?? []).filter(w => w.asset_no === asset.asset_no).slice(0, 5)
-
-  // Recommendations engine
-  const recommendations = []
-  const criticalTyres = activeTyres.filter(t => t.risk_level === 'Critical')
-  const highTyres = activeTyres.filter(t => t.risk_level === 'High')
-  const lowTread = activeTyres.filter(t => parseFloat(t.tread_depth) < 3)
-  if (criticalTyres.length) recommendations.push({ level: 'Critical', msg: t('assetmgmt.drawer.recCriticalRisk', { count: criticalTyres.length }) })
-  if (highTyres.length) recommendations.push({ level: 'High', msg: t('assetmgmt.drawer.recHighRisk', { count: highTyres.length }) })
-  if (lowTread.length) recommendations.push({ level: 'High', msg: t('assetmgmt.drawer.recLowTread', { count: lowTread.length }) })
-  if (!activeTyres.length) recommendations.push({ level: 'Medium', msg: t('assetmgmt.drawer.recNoActive') })
-  if (recommendations.length === 0) recommendations.push({ level: 'Low', msg: t('assetmgmt.drawer.recAllGood') })
-
-  return (
-    <motion.div
-      initial={{ x: '100%' }} animate={{ x: 0 }} exit={{ x: '100%' }}
-      transition={{ type: 'tween', duration: 0.3 }}
-      className="fixed right-0 top-0 h-full w-full max-w-2xl bg-[var(--surface-1)] border-l border-[var(--border-dim)] z-50 flex flex-col shadow-2xl"
-    >
-      {/* Header */}
-      <div className="flex items-center justify-between p-5 border-b border-[var(--border-dim)] bg-[var(--surface-1)] shrink-0">
-        <div className="flex items-center gap-4">
-          <Illustration
-            name={vehicleArt(asset.vehicle_type)}
-            size={120}
-            title={asset.vehicle_type || 'Vehicle'}
-            className="shrink-0 hidden sm:block"
-          />
-          <div>
-            <p className="text-xs text-[var(--text-muted)] uppercase tracking-widest mb-1">{t('assetmgmt.drawer.assetProfile')}</p>
-            <h2 className="text-xl font-bold text-[var(--text-primary)]">{asset.asset_no}</h2>
-            <p className="text-sm text-[var(--text-secondary)]">{asset.vehicle_type} · {asset.make} {asset.model} {asset.year}</p>
-            <p className="text-xs text-[var(--text-muted)] mt-0.5"><MapPin className="inline w-3 h-3 mr-1" />{asset.site ?? '-'}</p>
-          </div>
-        </div>
-        <div className="flex items-center gap-3">
-          <span className={`px-2 py-1 rounded-full text-xs font-semibold ${asset.active ? 'bg-green-900/50 text-green-300' : 'bg-[var(--surface-2)] text-[var(--text-secondary)]'}`}>
-            {asset.active ? t('assetmgmt.drawer.active') : t('assetmgmt.drawer.inactive')}
-          </span>
-          {canEdit && (
-            <button
-              onClick={() => !wfLocked && onEdit?.(asset)}
-              disabled={wfLocked}
-              title={wfLocked ? 'Locked: in approval' : t('assetmgmt.actions.editAsset')}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[var(--surface-2)] hover:bg-[var(--surface-3)] text-yellow-400 hover:text-yellow-300 text-sm transition-colors border border-[var(--border-bright)] disabled:opacity-40 disabled:cursor-not-allowed"
-            >
-              {wfLocked ? <Lock className="w-4 h-4" /> : <Edit2 className="w-4 h-4" />}
-              {t('assetmgmt.actions.editAsset')}
-            </button>
-          )}
-          <button onClick={onClose} className="p-2 rounded-lg hover:bg-[var(--surface-2)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors">
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-      </div>
-
-      {/* Content */}
-      <div className="flex-1 overflow-y-auto p-5 space-y-6">
-
-        {/* Asset Disposal — Approval & Workflow Engine (status, immutable trail,
-            approver action, start picker). Gates the asset edit/dispose path. */}
-        <EntityApprovalPanel
-          entityType="asset_disposal"
-          entityId={asset.id ?? asset.asset_no}
-          entityLabel={asset.asset_no || asset.id}
-          context={{
-            book_value: Number(asset._ytdCost) || 0,
-            disposal_reason: asset.active === false ? 'inactive' : null,
-            asset_type: asset.vehicle_type || null,
-            site: asset.site || null,
-            country: asset.country || null,
-            worst_risk: asset._worstRisk || null,
-          }}
-          onStateChange={onWfStateChange}
-          title={t('assetmgmt.drawer.disposalApprovalTitle')}
-        />
-
-        {wfLocked && (
-          <div className="flex items-center gap-1.5 text-xs text-[var(--text-muted)]">
-            <Lock className="w-3 h-3" /> Locked: in approval
-          </div>
-        )}
-
-        {/* Tyre Position Diagram */}
-        <div className="card">
-          <h3 className="text-sm font-semibold text-[var(--text-secondary)] mb-3 flex items-center gap-2"><Layers className="w-4 h-4 text-blue-400" /> {t('assetmgmt.drawer.tyrePositionMap')}</h3>
-          <div className="flex gap-4 items-start">
-            <div className="flex-1">
-              <TyrePositionDiagram tyres={activeTyres} />
-            </div>
-            <div className="flex flex-col gap-2 pt-4">
-              {Object.entries(RISK_COLOR).map(([level, c]) => (
-                <div key={level} className="flex items-center gap-2 text-xs">
-                  <span className={`w-3 h-3 rounded-full`} style={{ background: c.hex }} />
-                  <span className="text-[var(--text-secondary)]">{level}</span>
-                </div>
-              ))}
-              <div className="flex items-center gap-2 text-xs mt-1">
-                <span className="w-3 h-3 rounded-full bg-gray-600 opacity-40" />
-                <span className="text-[var(--text-secondary)]">{t('assetmgmt.drawer.noDataLegend')}</span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Active Tyres Table */}
-        <div className="bg-[var(--surface-2)] rounded-xl border border-[var(--border-bright)] overflow-hidden">
-          <div className="p-4 border-b border-[var(--border-bright)]">
-            <h3 className="text-sm font-semibold text-[var(--text-secondary)] flex items-center gap-2">
-              <Activity className="w-4 h-4 text-green-400" /> {t('assetmgmt.drawer.activeTyres', { count: activeTyres.length })}
-            </h3>
-          </div>
-          {activeTyres.length ? (
-            <div className="overflow-x-auto">
-              <table className="w-full text-xs">
-                <thead>
-                  <tr className="border-b border-[var(--border-bright)]">
-                    {[
-                      t('assetmgmt.drawer.columns.position'), t('assetmgmt.drawer.columns.serial'), t('assetmgmt.drawer.columns.brand'),
-                      t('assetmgmt.drawer.columns.size'), t('assetmgmt.drawer.columns.tread'), t('assetmgmt.drawer.columns.risk'),
-                      t('assetmgmt.drawer.columns.daysFitted'), t('assetmgmt.drawer.columns.cpk'),
-                    ].map(h => (
-                      <th key={h} className="px-3 py-2 text-left text-[var(--text-muted)] font-medium whitespace-nowrap">{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {activeTyres.map((t, i) => {
-                    const days = t.issue_date ? daysSince(t.issue_date) : null
-                    const km = (parseFloat(t.km_at_removal) || 0) - (parseFloat(t.km_at_fitment) || 0)
-                    const cpk = km > 0 && t.cost_per_tyre ? (parseFloat(t.cost_per_tyre) / km).toFixed(4) : '-'
-                    const rc = RISK_COLOR[t.risk_level] ?? { bg: 'bg-[var(--surface-2)]', text: 'text-[var(--text-secondary)]' }
-                    return (
-                      <tr key={t.id ?? i} className="border-b border-[var(--border-bright)] hover:bg-[var(--surface-3)] transition-colors">
-                        <td className="px-3 py-2 font-mono text-[var(--text-secondary)]">{t.position ?? '-'}</td>
-                        <td className="px-3 py-2 text-[var(--text-secondary)]">{t.serial_number ?? '-'}</td>
-                        <td className="px-3 py-2 text-[var(--text-secondary)]">{t.brand ?? '-'}</td>
-                        <td className="px-3 py-2 text-[var(--text-secondary)]">{t.size ?? '-'}</td>
-                        <td className="px-3 py-2 text-[var(--text-secondary)]">{t.tread_depth ? `${t.tread_depth}mm` : '-'}</td>
-                        <td className="px-3 py-2">
-                          {t.risk_level ? (
-                            <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${rc.bg} ${rc.text}`}>{t.risk_level}</span>
-                          ) : <span className="text-[var(--text-dim)]">-</span>}
-                        </td>
-                        <td className="px-3 py-2 text-[var(--text-secondary)]">{days != null ? `${days}d` : '-'}</td>
-                        <td className="px-3 py-2 text-[var(--text-secondary)]">{cpk}</td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
-            </div>
-          ) : (
-            <div className="p-6 text-center text-[var(--text-muted)] text-sm">{t('assetmgmt.drawer.noActiveTyres')}</div>
-          )}
-        </div>
-
-        {/* Monthly Cost Chart */}
-        <div className="card">
-          <h3 className="text-sm font-semibold text-[var(--text-secondary)] mb-3 flex items-center gap-2">
-            <TrendingUp className="w-4 h-4 text-blue-400" /> {t('assetmgmt.drawer.monthlyCostChartTitle')}
-          </h3>
-          <div className="h-44">
-            <Line data={chartData} options={{ ...CHART_OPTS, plugins: { ...CHART_OPTS.plugins, legend: { display: false } } }} />
-          </div>
-        </div>
-
-        {/* Work Orders */}
-        {assetWOs.length > 0 && (
-          <div className="bg-[var(--surface-2)] rounded-xl border border-[var(--border-bright)] overflow-hidden">
-            <div className="p-4 border-b border-[var(--border-bright)]">
-              <h3 className="text-sm font-semibold text-[var(--text-secondary)] flex items-center gap-2">
-                <Zap className="w-4 h-4 text-yellow-400" /> {t('assetmgmt.drawer.recentWorkOrders')}
-              </h3>
-            </div>
-            <div className="divide-y divide-[var(--border-bright)]">
-              {assetWOs.map((wo, i) => (
-                <div key={wo.id ?? i} className="px-4 py-3 flex items-center justify-between">
-                  <div>
-                    <p className="text-sm text-[var(--text-secondary)]">{wo.work_type ?? t('assetmgmt.drawer.workOrderFallback')}</p>
-                    <p className="text-xs text-[var(--text-muted)]">{fmtDate(wo.created_at)}</p>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    {wo.total_cost && <span className="text-xs text-[var(--text-secondary)]">{fmtCurrency(wo.total_cost, currency)}</span>}
-                    <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${
-                      wo.status === 'Completed' ? 'bg-green-900/50 text-green-300' :
-                      wo.status === 'Open' ? 'bg-blue-900/50 text-blue-300' :
-                      'bg-yellow-900/50 text-yellow-300'
-                    }`}>{wo.status ?? '-'}</span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Lifetime Cost */}
-        <div className="bg-gradient-to-br from-blue-900/20 to-blue-800/10 rounded-xl border border-blue-800/30 p-4 flex items-center justify-between">
-          <div>
-            <p className="text-xs text-[var(--text-muted)] uppercase tracking-widest">{t('assetmgmt.drawer.totalLifetimeCost')}</p>
-            <p className="text-2xl font-bold text-[var(--text-primary)] mt-1">{fmtCurrency(totalCost, currency)}</p>
-            <p className="text-xs text-[var(--text-muted)] mt-1">{t('assetmgmt.drawer.tyreRecordsTotal', { count: tyres.length })}</p>
-          </div>
-          <DollarSign className="w-10 h-10 text-blue-500 opacity-40" />
-        </div>
-
-        {/* Recommendations */}
-        <div className="card">
-          <h3 className="text-sm font-semibold text-[var(--text-secondary)] mb-3 flex items-center gap-2">
-            <Target className="w-4 h-4 text-purple-400" /> {t('assetmgmt.drawer.recommendations')}
-          </h3>
-          <div className="space-y-2">
-            {recommendations.map((r, i) => {
-              const rc = RISK_COLOR[r.level] ?? { bg: 'bg-[var(--surface-2)]', text: 'text-[var(--text-secondary)]' }
-              return (
-                <div key={i} className={`flex items-start gap-3 p-3 rounded-lg ${rc.bg} bg-opacity-20`}>
-                  <AlertTriangle className={`w-4 h-4 mt-0.5 shrink-0 ${rc.text}`} />
-                  <p className={`text-xs ${rc.text}`}>{r.msg}</p>
-                </div>
-              )
-            })}
-          </div>
-        </div>
-
-        {/* Additional imported fields */}
-        <CustomFieldsPanel data={asset.custom_data} title={t('assetmgmt.drawer.customFieldsTitle')} />
-      </div>
-    </motion.div>
-  )
-}
 
 // ── Add/Edit Asset Modal ────────────────────────────────────────────────────────
 function AssetModal({ asset, sites, countries, onSave, onClose, locked = false }) {
@@ -613,6 +273,7 @@ function KpiCard({ icon: Icon, label, value, sub, color = 'blue', trend }) {
 
 // ── Main Component ────────────────────────────────────────────────────────────
 export default function AssetManagement() {
+  const navigate = useNavigate()
   const { profile } = useAuth()
   const { activeCurrency, activeCountry } = useSettings()
   const { t } = useLanguage()
@@ -621,8 +282,6 @@ export default function AssetManagement() {
   // ── data state ───────────────────────────────────────────────────────────────
   const [assets, setAssets] = useState([])
   const [overview, setOverview] = useState([])
-  const [drawerTyres, setDrawerTyres] = useState([])
-  const [workOrders, setWorkOrders] = useState([])
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState('')
   const [refreshKey, setRefreshKey] = useState(0)
@@ -644,19 +303,16 @@ export default function AssetManagement() {
   const [page, setPage] = useState(0)
 
   // ── UI state ─────────────────────────────────────────────────────────────────
-  const [drawerAsset, setDrawerAsset] = useState(null)
+  // Full asset detail (profile, tyres, costs, work orders, disposal approval) now
+  // lives on the dedicated /assets/:assetNo page — the registry navigates there.
   const [editAsset, setEditAsset] = useState(null)
-  // Snapshot of the disposal lock at the moment an edit is initiated, so the edit
-  // modal stays gated even after the drawer (which owns the live lock) closes.
-  const [editLocked, setEditLocked] = useState(false)
   const [showAdd, setShowAdd] = useState(false)
   const [activeTab, setActiveTab] = useState('registry') // registry | charts | health
-  // Approval-engine gate: locks the asset edit/dispose path for the open record
-  // while its disposal workflow is active (pending/in_review/returned) or locked
-  // (approved). EntityApprovalPanel reports the true state via onStateChange.
-  const [wfLocked, setWfLocked] = useState(false)
-  // Reset the lock whenever a different asset (or none) is opened in the drawer.
-  useEffect(() => { setWfLocked(false) }, [drawerAsset?.id, drawerAsset?.asset_no])
+
+  const openAsset = useCallback(
+    (assetNo) => navigate(`/assets/${encodeURIComponent(assetNo)}`),
+    [navigate],
+  )
 
   // ── load data ─────────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -667,10 +323,9 @@ export default function AssetManagement() {
     setLoading(true)
     setLoadError('')
     try {
-      const [assetsRes, ovRes, woRes] = await Promise.allSettled([
+      const [assetsRes, ovRes] = await Promise.allSettled([
         assetApi.listFleetMaster(),
         assetApi.reportAssetOverview({ country: activeCountry }),
-        assetApi.listAssetWorkOrders(),
       ])
 
       // Surface a hard load failure (offline / RLS-denied) rather than showing an
@@ -682,7 +337,6 @@ export default function AssetManagement() {
 
       let rawAssets = assetsRes.status === 'fulfilled' ? (assetsRes.value.data ?? []) : []
       const ov     = ovRes.status === 'fulfilled' ? (ovRes.value.data ?? []) : []
-      const rawWOs = woRes.status === 'fulfilled' ? (woRes.value.data ?? []) : []
 
       // If fleet_master is empty, synthesize from the per-asset overview
       if (rawAssets.length === 0 && ov.length > 0) {
@@ -700,7 +354,6 @@ export default function AssetManagement() {
 
       setAssets(filtered)
       setOverview(ov)
-      setWorkOrders(rawWOs)
     } catch (e) {
       setLoadError(e.message || t('assetmgmt.registry.loadErrorFallback'))
       setAssets([])
@@ -708,13 +361,6 @@ export default function AssetManagement() {
       setLoading(false)
     }
   }
-
-  // Lazy-load the open asset's tyres for the detail drawer.
-  useEffect(() => {
-    if (!drawerAsset) { setDrawerTyres([]); return }
-    assetApi.listAssetTyres(drawerAsset.asset_no)
-      .then(({ data }) => setDrawerTyres(data || []))
-  }, [drawerAsset])
 
   // ── derived data ──────────────────────────────────────────────────────────────
   const overviewMap = useMemo(() => {
@@ -1117,23 +763,17 @@ export default function AssetManagement() {
                               </td>
                               <td className="px-4 py-3">
                                 <div className="flex items-center gap-1">
-                                  <button onClick={() => setDrawerAsset(a)}
-                                    className="p-1.5 rounded-lg hover:bg-[var(--surface-3)] text-[var(--text-secondary)] hover:text-blue-400 transition-colors" title="View detail">
+                                  <button onClick={() => openAsset(a.asset_no)}
+                                    className="p-1.5 rounded-lg hover:bg-[var(--surface-3)] text-[var(--text-secondary)] hover:text-blue-400 transition-colors" title={t('assetmgmt.registry.viewDetail')}>
                                     <Eye className="w-4 h-4" />
                                   </button>
-                                  {isAdmin && (() => {
-                                    // Lock edit for the asset whose disposal approval is active/locked.
-                                    const rowLocked = wfLocked && drawerAsset &&
-                                      (drawerAsset.id === a.id || drawerAsset.asset_no === a.asset_no)
-                                    return (
-                                      <button onClick={() => { if (!rowLocked) { setEditLocked(false); setEditAsset(a) } }}
-                                        disabled={rowLocked}
-                                        className="p-1.5 rounded-lg hover:bg-[var(--surface-3)] text-[var(--text-secondary)] hover:text-yellow-400 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-                                        title={rowLocked ? 'Locked: in approval' : 'Edit asset'}>
-                                        {rowLocked ? <Lock className="w-4 h-4" /> : <Edit2 className="w-4 h-4" />}
-                                      </button>
-                                    )
-                                  })()}
+                                  {isAdmin && (
+                                    <button onClick={() => setEditAsset(a)}
+                                      className="p-1.5 rounded-lg hover:bg-[var(--surface-3)] text-[var(--text-secondary)] hover:text-yellow-400 transition-colors"
+                                      title={t('assetmgmt.registry.editAsset')}>
+                                      <Edit2 className="w-4 h-4" />
+                                    </button>
+                                  )}
                                 </div>
                               </td>
                             </tr>
@@ -1278,7 +918,7 @@ export default function AssetManagement() {
                     .map(a => (
                       <button
                         key={a.id ?? a.asset_no}
-                        onClick={() => setDrawerAsset(a)}
+                        onClick={() => openAsset(a.asset_no)}
                         className="bg-[var(--surface-2)] rounded-lg p-3 text-left hover:bg-[var(--surface-3)] transition-colors border border-[var(--border-bright)] hover:border-[var(--border-bright)] group"
                       >
                         <div className={`w-full h-1.5 rounded-full mb-2 ${SCORE_COLOR(a._healthScore)}`} />
@@ -1317,7 +957,7 @@ export default function AssetManagement() {
                       .map(a => (
                         <div key={a.id ?? a.asset_no}
                           className="flex items-center justify-between p-3 bg-[var(--surface-2)] rounded-lg border border-[var(--border-bright)] hover:border-red-900/40 transition-colors cursor-pointer"
-                          onClick={() => setDrawerAsset(a)}>
+                          onClick={() => openAsset(a.asset_no)}>
                           <div className="flex items-center gap-4">
                             <div className={`w-10 h-10 rounded-lg ${SCORE_COLOR(a._healthScore)} flex items-center justify-center font-bold text-[var(--text-primary)] text-sm`}>
                               {a._healthScore}
@@ -1347,28 +987,6 @@ export default function AssetManagement() {
         </AnimatePresence>
       </div>
 
-      {/* ── Asset Detail Drawer ────────────────────────────────────────────────── */}
-      <AnimatePresence>
-        {drawerAsset && (
-          <>
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-              className="fixed inset-0 bg-black/50 z-40"
-              onClick={() => setDrawerAsset(null)} />
-            <AssetDrawer
-              asset={drawerAsset}
-              tyres={drawerTyres}
-              workOrders={workOrders}
-              currency={activeCurrency}
-              onClose={() => setDrawerAsset(null)}
-              canEdit={isAdmin}
-              wfLocked={wfLocked}
-              onEdit={(a) => { setEditLocked(wfLocked); setDrawerAsset(null); setEditAsset(a) }}
-              onWfStateChange={({ isActive, isLocked }) => setWfLocked(!!(isActive || isLocked))}
-            />
-          </>
-        )}
-      </AnimatePresence>
-
       {/* ── Add/Edit Modal ─────────────────────────────────────────────────────── */}
       <AnimatePresence>
         {(showAdd || editAsset) && (
@@ -1376,9 +994,8 @@ export default function AssetManagement() {
             asset={editAsset ?? null}
             sites={siteOptions}
             countries={countryOptions.length ? countryOptions : ['KSA','UAE','Egypt']}
-            locked={!!editAsset && editLocked}
-            onSave={() => { setShowAdd(false); setEditAsset(null); setEditLocked(false); setRefreshKey(k => k + 1) }}
-            onClose={() => { setShowAdd(false); setEditAsset(null); setEditLocked(false) }}
+            onSave={() => { setShowAdd(false); setEditAsset(null); setRefreshKey(k => k + 1) }}
+            onClose={() => { setShowAdd(false); setEditAsset(null) }}
           />
         )}
       </AnimatePresence>

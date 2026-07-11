@@ -60,6 +60,7 @@ const Vehicle360             = lazy(() => import('./pages/Vehicle360'))
 const AuditTrail             = lazy(() => import('./pages/AuditTrail'))
 const ResetPassword          = lazy(() => import('./pages/ResetPassword'))
 const Accidents              = lazy(() => import('./pages/Accidents'))
+const AccidentDetail         = lazy(() => import('./components/AccidentDetailModal'))
 const Reports                = lazy(() => import('./pages/Reports'))
 const GatePass               = lazy(() => import('./pages/GatePass'))
 const SerialTracker          = lazy(() => import('./pages/SerialTracker'))
@@ -130,6 +131,14 @@ const AutomationRules        = lazy(() => import('./pages/AutomationRules'))
 const Integrations           = lazy(() => import('./pages/Integrations'))
 const Billing                = lazy(() => import('./pages/Billing'))
 const BrandAssets            = lazy(() => import('./pages/BrandAssets'))
+// ── Detail & builder pages (modal→page conversions, Session 15) ──
+const AssetDetail            = lazy(() => import('./pages/AssetDetail'))
+const SupplierDetail         = lazy(() => import('./pages/SupplierDetail'))
+const DriverDetail           = lazy(() => import('./pages/DriverDetail'))
+const WorkshopJobDetail      = lazy(() => import('./pages/WorkshopJobDetail'))
+const WorkflowBuilder        = lazy(() => import('./pages/WorkflowBuilder'))
+const RuleBuilder            = lazy(() => import('./pages/RuleBuilder'))
+const RecallDetail           = lazy(() => import('./pages/RecallDetail'))
 
 // ── Per-page error boundary ───────────────────────────────────────────────
 function Safe({ children }) {
@@ -210,6 +219,7 @@ function MainApp() {
                       <Route path="/budgets"     element={<Safe><ModuleRoute moduleKey="budgets"><Budgets /></ModuleRoute></Safe>} />
                       <Route path="/actions"     element={<Safe><ModuleRoute moduleKey="corrective_actions"><CorrectiveActions /></ModuleRoute></Safe>} />
                       <Route path="/accidents"   element={<Safe><FlagRoute flag="accidents_module"><Accidents /></FlagRoute></Safe>} />
+                      <Route path="/accidents/:id" element={<Safe><FlagRoute flag="accidents_module"><AccidentDetail /></FlagRoute></Safe>} />
                       <Route path="/rca"         element={<Safe><ModuleRoute moduleKey="rca"><RcaRecords /></ModuleRoute></Safe>} />
                       <Route path="/inspections" element={<Safe><ModuleRoute moduleKey="inspections"><Inspections /></ModuleRoute></Safe>} />
 <Route path="/alerts"      element={<Safe><ModuleRoute moduleKey="alerts"><Alerts /></ModuleRoute></Safe>} />
@@ -300,6 +310,15 @@ function MainApp() {
                       <Route path="/workflow-settings"   element={<Safe><FlagRoute flag="automation_platform"><WorkflowSettings /></FlagRoute></Safe>} />
                       <Route path="/automation-rules"    element={<Safe><FlagRoute flag="automation_platform"><AutomationRules /></FlagRoute></Safe>} />
                       <Route path="/integrations"        element={<Safe><FlagRoute flag="automation_platform"><Integrations /></FlagRoute></Safe>} />
+                      {/* ── Detail & builder pages (modal→page conversions, Session 15) ── */}
+                      <Route path="/assets/:assetNo"                   element={<Safe><ModuleRoute moduleKey="fleet_master"><AssetDetail /></ModuleRoute></Safe>} />
+                      <Route path="/suppliers/:supplierId"             element={<Safe><ModuleRoute moduleKey="stock"><SupplierDetail /></ModuleRoute></Safe>} />
+                      <Route path="/driver-management/:driverId"       element={<Safe><ModuleRoute moduleKey="fleet_master"><DriverDetail /></ModuleRoute></Safe>} />
+                      <Route path="/workshop/:jobId"                   element={<Safe><ModuleRoute moduleKey="work_orders"><WorkshopJobDetail /></ModuleRoute></Safe>} />
+                      <Route path="/recalls/:recallId"                 element={<Safe><RecallDetail /></Safe>} />
+                      <Route path="/workflow-settings/builder/:defId?" element={<Safe><FlagRoute flag="automation_platform"><WorkflowBuilder /></FlagRoute></Safe>} />
+                      <Route path="/automation-rules/builder"          element={<Safe><FlagRoute flag="automation_platform"><RuleBuilder /></FlagRoute></Safe>} />
+                      <Route path="/automation-rules/builder/:ruleId"  element={<Safe><FlagRoute flag="automation_platform"><RuleBuilder /></FlagRoute></Safe>} />
                       <Route path="*"            element={<NotFound />} />
                     </Routes>
                   </Layout>

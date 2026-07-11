@@ -1,0 +1,10 @@
+{
+  "builder": {
+    "back": "Back to workflows",
+    "createTitle": "Visual Workflow Builder",
+    "editTitle": "Edit Workflow",
+    "subtitle": "Build a multi-step approval chain, Start → step → step → Complete, with drag-to-reorder, conditions and per-step requirements.",
+    "useTemplate": "Use template",
+    "templateHint": "Load a ready-made reference flow, then customise it:"
+  }
+}

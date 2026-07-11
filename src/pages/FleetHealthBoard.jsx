@@ -945,19 +945,28 @@ export default function FleetHealthBoard() {
                 )}
 
                 {/* Actions */}
-                <div className="flex gap-3 pt-1">
+                <div className="space-y-3 pt-1">
+                  {/* Primary: open the dedicated full asset profile page. */}
                   <button
-                    onClick={() => navigate(`/vehicle-history?asset=${drawerVehicle.asset_no}`)}
-                    className="flex-1 btn-secondary flex items-center justify-center gap-2 text-sm"
+                    onClick={() => navigate(`/assets/${encodeURIComponent(drawerVehicle.asset_no)}`)}
+                    className="w-full btn-primary flex items-center justify-center gap-2 text-sm"
                   >
-                    <ExternalLink size={13} /> {t('fleethealth.drawer.viewInTyreRecords')}
+                    <Truck size={13} /> {t('assetmgmt.detail.openAssetProfile')}
                   </button>
-                  <button
-                    onClick={() => navigate(`/work-orders?asset=${drawerVehicle.asset_no}`)}
-                    className="flex-1 btn-primary flex items-center justify-center gap-2 text-sm"
-                  >
-                    <Wrench size={13} /> {t('fleethealth.drawer.createWorkOrder')}
-                  </button>
+                  <div className="flex gap-3">
+                    <button
+                      onClick={() => navigate(`/vehicle-history?asset=${drawerVehicle.asset_no}`)}
+                      className="flex-1 btn-secondary flex items-center justify-center gap-2 text-sm"
+                    >
+                      <ExternalLink size={13} /> {t('fleethealth.drawer.viewInTyreRecords')}
+                    </button>
+                    <button
+                      onClick={() => navigate(`/work-orders?asset=${drawerVehicle.asset_no}`)}
+                      className="flex-1 btn-secondary flex items-center justify-center gap-2 text-sm"
+                    >
+                      <Wrench size={13} /> {t('fleethealth.drawer.createWorkOrder')}
+                    </button>
+                  </div>
                 </div>
               </div>
             </motion.div>

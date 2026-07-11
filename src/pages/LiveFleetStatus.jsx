@@ -1473,14 +1473,24 @@ export default function LiveFleetStatus() {
 
                 {/* Quick actions */}
                 <div className="space-y-2 pt-1 pb-2">
-                  {/* Primary: start the tyre checklist for this vehicle — opens the
-                      Inspections checklist (same vehicle diagram) pre-loaded via deep-link. */}
+                  {/* Primary: open the dedicated full asset profile page. */}
+                  <button
+                    onClick={() => {
+                      setDrawerOpen(false)
+                      navigate(`/assets/${encodeURIComponent(drawerVehicle.asset_no)}`)
+                    }}
+                    className="btn-primary w-full gap-2"
+                  >
+                    <Truck size={14} /> {t('assetmgmt.detail.openAssetProfile')}
+                  </button>
+                  {/* Start the tyre checklist for this vehicle — opens the Inspections
+                      checklist (same vehicle diagram) pre-loaded via deep-link. */}
                   <button
                     onClick={() => {
                       setDrawerOpen(false)
                       navigate(`/inspections?asset=${encodeURIComponent(drawerVehicle.asset_no)}`)
                     }}
-                    className="btn-primary w-full gap-2"
+                    className="btn-secondary w-full gap-2"
                   >
                     <ClipboardCheck size={14} /> {t('livefleet.drawer.startTyreChecklist')}
                   </button>

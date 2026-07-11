@@ -38,7 +38,6 @@ import { useTenant } from '../contexts/TenantContext'
 import { useLanguage } from '../contexts/LanguageContext'
 import PageHeader from '../components/ui/PageHeader'
 import PeriodFilter, { filterByPeriodValue, periodLabel as periodValueLabel } from '../components/ui/PeriodFilter'
-import { Illustration } from '../components/illustrations'
 
 ChartJS.register(
   CategoryScale, LinearScale, BarElement,
@@ -1074,22 +1073,6 @@ export default function ExecutiveReport() {
 
       <div className="max-w-[1800px] mx-auto px-4 py-6 space-y-8">
 
-        {/* ── Report cover hero ───────────────────────────────────────────
-            Decorative, theme-aware banner. Prints cleanly on the white cover;
-            contained so it never forces a dark background or breaks pagination. */}
-        <div className="relative overflow-hidden rounded-2xl border border-[var(--border-dim)] bg-[var(--surface-1)] print:border-gray-200 print:bg-white">
-          <div className="flex items-center justify-center px-4 py-5 sm:py-7">
-            <Illustration
-              name="report/cover-hero"
-              title={t('execreport.header.title')}
-              desc={companyName}
-              size={520}
-              decorative
-              className="w-full max-w-[560px]"
-            />
-          </div>
-        </div>
-
         {/* ═══════════════════════════════════════════════════════════════
             SECTION 1 - EXECUTIVE SUMMARY
         ═══════════════════════════════════════════════════════════════ */}
@@ -1104,13 +1087,6 @@ export default function ExecutiveReport() {
                 <h2 className="text-lg font-semibold text-[var(--text-primary)]">{t('execreport.section1.title')}</h2>
               </div>
               <div className="flex items-center gap-2">
-                <Illustration
-                  name="report/data-quality-seal"
-                  title={t('execreport.section1.badge')}
-                  size={56}
-                  decorative
-                  className="hidden sm:block flex-shrink-0"
-                />
                 <span className="px-2.5 py-1 text-xs font-bold rounded-full bg-red-500/10 text-red-400 border border-red-500/20 tracking-wide">
                   {t('execreport.section1.confidential')}
                 </span>
@@ -1120,16 +1096,6 @@ export default function ExecutiveReport() {
               </div>
             </div>
 
-            {/* Executive summary banner (decorative header art) */}
-            <div className="mb-5 overflow-hidden rounded-xl">
-              <Illustration
-                name="report/exec-summary-banner"
-                title={t('execreport.section1.title')}
-                size={640}
-                decorative
-                className="w-full"
-              />
-            </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
              <div className="lg:col-span-2 bg-[var(--surface-1)] border border-[var(--border-dim)] rounded-xl p-5 space-y-4">
@@ -1241,15 +1207,6 @@ export default function ExecutiveReport() {
           </Card>
         </motion.div>
 
-        {/* ── Section divider (decorative) ──────────────────────────────── */}
-        <div className="flex items-center justify-center -my-2">
-          <Illustration
-            name="report/section-divider"
-            size={640}
-            decorative
-            className="w-full max-w-[640px] opacity-90"
-          />
-        </div>
 
         {/* ═══════════════════════════════════════════════════════════════
             SECTION 2 - KPI DASHBOARD

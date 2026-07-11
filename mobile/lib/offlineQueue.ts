@@ -3,6 +3,7 @@ import { supabase } from './supabase'
 import { uploadAllPositionPhotos } from './photoUpload'
 import { secureStorage } from './secureStorage'
 import { notifySyncSuccess, notifySyncFailure } from './notifications'
+import { clientId } from './ids'
 
 const QUEUE_KEY = 'tp_inspection_queue_v1'
 
@@ -22,7 +23,7 @@ async function saveQueue(queue: OfflineInspection[]): Promise<void> {
 export async function enqueueInspection(payload: InspectionPayload, clientUuid?: string): Promise<string> {
   // Reuse a client id shared with the online attempt (if any) so a lost response
   // can't create a duplicate — the queued retry upserts on the same key.
-  const id = clientUuid ?? `local_${crypto.randomUUID()}`
+  const id = clientUuid ?? clientId()
   const item: OfflineInspection = {
     id,
     payload,

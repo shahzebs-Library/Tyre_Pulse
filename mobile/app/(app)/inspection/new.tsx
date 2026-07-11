@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import {
   View, Text, ScrollView, TextInput, TouchableOpacity,
   StyleSheet, Alert, ActivityIndicator, StatusBar, Platform,
-  KeyboardAvoidingView, useWindowDimensions,
+  KeyboardAvoidingView, useWindowDimensions, Modal, Pressable,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useRouter, useLocalSearchParams } from 'expo-router'
@@ -11,6 +11,8 @@ import { useAuth } from '../../../contexts/AuthContext'
 import { useLanguage } from '../../../contexts/LanguageContext'
 import { supabase } from '../../../lib/supabase'
 import { enqueueInspection } from '../../../lib/offlineQueue'
+import { clientId } from '../../../lib/ids'
+import * as Network from 'expo-network'
 import { captureInspectionLocation, LocationStatus } from '../../../lib/location'
 import { uploadAllPositionPhotos } from '../../../lib/photoUpload'
 import TyrePositionCard from '../../../components/TyrePositionCard'
@@ -45,6 +47,9 @@ export default function NewInspectionScreen() {
   const [filteredVehicles, setFilteredVehicles] = useState<VehicleFleet[]>([])
   const [vehicleQuery, setVehicleQuery] = useState('')
   const [selectedSite, setSelectedSite] = useState(params.site ?? profile?.site ?? '')
+  // Site dropdown (replaces the old chip grid): open state + in-picker search.
+  const [sitePickerOpen, setSitePickerOpen] = useState(false)
+  const [siteSearch, setSiteSearch] = useState('')
   const [selectedVehicle, setSelectedVehicle] = useState<VehicleFleet | null>(null)
   const [manualAsset, setManualAsset] = useState('')
   const [manualVehicleType, setManualVehicleType] = useState('Truck')
@@ -85,6 +90,24 @@ export default function NewInspectionScreen() {
       v.model?.toLowerCase().includes(q)
     )
   }, [filteredVehicles, vehicleQuery])
+
+  // Manual-entry guard: flag when a hand-typed asset does not match any vehicle
+  // in the selected site's fleet, and surface the closest real asset. This
+  // catches transposed/mis-keyed codes (e.g. "PM123" typed for "MP123") that
+  // would otherwise silently create a generic vehicle with the wrong tyre layout.
+  const manualAssetCheck = useMemo(() => {
+    const raw = manualAsset.trim().toUpperCase()
+    if (!raw || vehicles.length === 0) return { known: true, suggestion: null as string | null }
+    const known = vehicles.some(v => v.asset_no?.toUpperCase() === raw)
+    if (known) return { known: true, suggestion: null }
+    // Closest match: same characters in any order, or a shared prefix/suffix.
+    const sorted = [...raw].sort().join('')
+    const suggestion = vehicles.find(v => {
+      const a = v.asset_no?.toUpperCase() ?? ''
+      return [...a].sort().join('') === sorted || a.includes(raw) || raw.includes(a)
+    })?.asset_no ?? null
+    return { known: false, suggestion }
+  }, [manualAsset, vehicles])
 
   // Progress: how many positions have at least one recorded value.
   const recordedCount = useMemo(() => {
@@ -280,17 +303,11 @@ export default function NewInspectionScreen() {
     const effectiveVehicle = getEffectiveVehicle()
     if (!effectiveVehicle) { setSubmitting(false); return }
 
-    // Resolve the GPS fix on the submit path. Usually already warmed from the
-    // tyre-step effect; if that hasn't resolved yet, make one bounded attempt.
-    // Never blocks the inspection - a null fix simply omits the coordinates.
-    let fix = gpsFix
-    if (!fix && (gpsStatus === 'idle' || gpsStatus === 'capturing')) {
-      setGpsStatus('capturing')
-      const result = await captureInspectionLocation()
-      fix = result.fix
-      setGpsFix(result.fix)
-      setGpsStatus(result.status)
-    }
+    // Use whatever GPS fix was warmed up on the tyre step. We deliberately do NOT
+    // block Save on a fresh capture here - waiting on the GPS radio was the main
+    // source of the slow "Save" tap. A null fix simply omits the coordinates and
+    // the geotag can be back-filled later; the inspection must save instantly.
+    const fix = gpsFix
 
     const inspectionDate = new Date().toISOString().split('T')[0]
     const odo = odometer.trim()
@@ -330,7 +347,9 @@ export default function NewInspectionScreen() {
 
     // One stable client id for BOTH the online attempt and any queued retry, so a
     // lost response after a committed insert can never create a duplicate.
-    const cuid = `local_${crypto.randomUUID()}`
+    // safeUuid avoids the `crypto` ReferenceError on older Hermes runtimes that
+    // would otherwise abort the save before it could even queue offline.
+    const cuid = clientId()
     try {
       const hasLocalPhotos = Object.values(conditionsCopy).some(
         pos => pos.photo_uri && !pos.photo_url
@@ -344,11 +363,30 @@ export default function NewInspectionScreen() {
         .upsert({ ...resolvedPayload, client_uuid: cuid }, { onConflict: 'client_uuid', ignoreDuplicates: true })
       if (error) throw error
       setStep('submit')
-    } catch {
+    } catch (err: any) {
+      // Decide WHY the online save failed so we never mislabel a server rejection
+      // as "offline". A dropped connection → queue silently (expected offline
+      // behaviour). A reachable-server error (RLS/validation/constraint) → the
+      // device is online, so surface it: still queue so no data is lost, but warn
+      // the user instead of leaving a phantom "1 file offline" that can never sync.
+      let online = false
+      try {
+        const net = await Network.getNetworkStateAsync()
+        online = !!net.isConnected && net.isInternetReachable !== false
+      } catch { online = false }
+
       // Queue the photo-resolved copy under the SAME client id: already-uploaded
       // photos keep their photo_url (no duplicate upload on sync); still-local
       // URIs retain photo_uri so the offline sync retries the upload.
       await enqueueInspection(resolvedPayload, cuid)
+
+      if (online) {
+        const reason = err?.message || err?.error_description || 'Unknown error.'
+        Alert.alert(
+          t('inspection.saveIssueTitle'),
+          `${t('inspection.saveIssueBody')}\n\n${reason}`,
+        )
+      }
       setStep('submit')
     } finally {
       setSubmitting(false)
@@ -388,7 +426,7 @@ export default function NewInspectionScreen() {
           <ScrollView style={styles.scroll} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
             <Text style={[styles.stepTitle, { textAlign }]}>{t('inspection.stepTitle')}</Text>
 
-            {/* ── Site picker ──────────────────────────────────────────────── */}
+            {/* ── Site picker (dropdown) ───────────────────────────────────── */}
             <View style={styles.field}>
               <Text style={[styles.fieldLabel, { textAlign }]}>{t('inspection.siteLabel')}</Text>
 
@@ -403,41 +441,24 @@ export default function NewInspectionScreen() {
                   autoCapitalize="words"
                 />
               ) : (
-                /* Group by country */
-                (() => {
-                  const byCountry: Record<string, string[]> = {}
-                  sites.forEach(s => {
-                    const c = s.country || 'Other'
-                    if (!byCountry[c]) byCountry[c] = []
-                    byCountry[c].push(s.name)
-                  })
-                  return Object.entries(byCountry).map(([country, names]) => (
-                    <View key={country} style={{ marginTop: 8 }}>
-                      {Object.keys(byCountry).length > 1 && (
-                        <Text style={styles.countryLabel}>{country}</Text>
-                      )}
-                      <View style={styles.siteGrid}>
-                        {names.map(name => (
-                          <TouchableOpacity
-                            key={name}
-                            style={[styles.siteChip, selectedSite === name && styles.siteChipActive]}
-                            onPress={() => { setSelectedSite(name); setSelectedVehicle(null); setUseManualEntry(false) }}
-                            activeOpacity={0.75}
-                          >
-                            <Ionicons
-                              name="location-outline"
-                              size={13}
-                              color={selectedSite === name ? '#fff' : '#64748b'}
-                            />
-                            <Text style={[styles.siteChipText, selectedSite === name && styles.siteChipTextActive]}>
-                              {name}
-                            </Text>
-                          </TouchableOpacity>
-                        ))}
-                      </View>
-                    </View>
-                  ))
-                })()
+                <TouchableOpacity
+                  style={[styles.dropdown, isRTL && styles.dropdownRTL]}
+                  onPress={() => { setSiteSearch(''); setSitePickerOpen(true) }}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name="location-outline" size={18} color="#16a34a" />
+                  <Text
+                    style={[
+                      styles.dropdownText,
+                      !selectedSite && styles.dropdownPlaceholder,
+                      { textAlign, flex: 1 },
+                    ]}
+                    numberOfLines={1}
+                  >
+                    {selectedSite || t('inspection.siteSelectPlaceholder')}
+                  </Text>
+                  <Ionicons name="chevron-down" size={18} color="#64748b" />
+                </TouchableOpacity>
               )}
             </View>
 
@@ -539,6 +560,33 @@ export default function NewInspectionScreen() {
                       autoCapitalize="characters"
                       autoCorrect={false}
                     />
+
+                    {/* Warn when the typed asset isn't in this site's fleet — with a
+                        one-tap correction to the closest real asset if we found one. */}
+                    {!manualAssetCheck.known && (
+                      <View style={[styles.assetWarn, isRTL && styles.navRTL]}>
+                        <Ionicons name="alert-circle-outline" size={16} color="#b45309" />
+                        <View style={{ flex: 1 }}>
+                          <Text style={[styles.assetWarnText, { textAlign }]}>
+                            {`"${manualAsset.trim().toUpperCase()}" isn't in the ${selectedSite} fleet — double-check the number.`}
+                          </Text>
+                          {manualAssetCheck.suggestion && (
+                            <TouchableOpacity
+                              onPress={() => {
+                                const match = vehicles.find(v => v.asset_no === manualAssetCheck.suggestion)
+                                if (match) { setSelectedVehicle(match); setUseManualEntry(false); setManualAsset('') }
+                              }}
+                              activeOpacity={0.7}
+                            >
+                              <Text style={[styles.assetWarnSuggest, { textAlign }]}>
+                                {`Did you mean ${manualAssetCheck.suggestion}? Tap to use it.`}
+                              </Text>
+                            </TouchableOpacity>
+                          )}
+                        </View>
+                      </View>
+                    )}
+
                     <Text style={styles.fieldLabel}>Vehicle Type</Text>
                     <View style={styles.chipRow}>
                       {['Truck', 'Bus', 'Trailer', 'Crane', 'Forklift', 'Pickup', 'SUV', 'Other'].map(vt => (
@@ -649,6 +697,97 @@ export default function NewInspectionScreen() {
             </TouchableOpacity>
           </ScrollView>
         </KeyboardAvoidingView>
+
+        {/* ── Site dropdown picker ─────────────────────────────────────────── */}
+        <Modal
+          visible={sitePickerOpen}
+          transparent
+          animationType="slide"
+          onRequestClose={() => setSitePickerOpen(false)}
+          statusBarTranslucent
+        >
+          <Pressable style={styles.pickerBackdrop} onPress={() => setSitePickerOpen(false)} />
+          <View style={styles.pickerSheet}>
+            <View style={styles.pickerHandle} />
+            <View style={[styles.pickerHeader, isRTL && styles.navRTL]}>
+              <Text style={styles.pickerTitle}>{t('inspection.sitePickerTitle')}</Text>
+              <TouchableOpacity onPress={() => setSitePickerOpen(false)} hitSlop={8}>
+                <Ionicons name="close" size={22} color="#64748b" />
+              </TouchableOpacity>
+            </View>
+
+            <View style={[styles.searchBox, isRTL && styles.searchBoxRTL, { marginTop: 4 }]}>
+              <Ionicons name="search-outline" size={18} color="#94a3b8" />
+              <TextInput
+                style={[styles.searchInput, { textAlign }]}
+                value={siteSearch}
+                onChangeText={setSiteSearch}
+                placeholder={t('inspection.siteSearchPlaceholder')}
+                placeholderTextColor="#94a3b8"
+                autoCorrect={false}
+              />
+              {siteSearch.length > 0 && (
+                <TouchableOpacity onPress={() => setSiteSearch('')}>
+                  <Ionicons name="close-circle" size={18} color="#cbd5e1" />
+                </TouchableOpacity>
+              )}
+            </View>
+
+            <ScrollView
+              style={styles.pickerList}
+              keyboardShouldPersistTaps="handled"
+              nestedScrollEnabled
+            >
+              {(() => {
+                const q = siteSearch.trim().toLowerCase()
+                const filtered = q
+                  ? sites.filter(s => s.name.toLowerCase().includes(q) || (s.country || '').toLowerCase().includes(q))
+                  : sites
+                if (filtered.length === 0) {
+                  return <Text style={styles.pickerEmpty}>{t('inspection.siteNoMatch')}</Text>
+                }
+                const byCountry: Record<string, string[]> = {}
+                filtered.forEach(s => {
+                  const c = s.country || 'Other'
+                  if (!byCountry[c]) byCountry[c] = []
+                  if (!byCountry[c].includes(s.name)) byCountry[c].push(s.name)
+                })
+                const multiCountry = Object.keys(byCountry).length > 1
+                return Object.entries(byCountry).map(([country, names]) => (
+                  <View key={country}>
+                    {multiCountry && <Text style={styles.pickerGroupLabel}>{country}</Text>}
+                    {names.map(name => {
+                      const active = selectedSite === name
+                      return (
+                        <TouchableOpacity
+                          key={name}
+                          style={[styles.pickerRow, isRTL && styles.navRTL, active && styles.pickerRowActive]}
+                          onPress={() => {
+                            setSelectedSite(name)
+                            setSelectedVehicle(null)
+                            setUseManualEntry(false)
+                            setSitePickerOpen(false)
+                          }}
+                          activeOpacity={0.7}
+                        >
+                          <Ionicons
+                            name="location-outline"
+                            size={18}
+                            color={active ? '#16a34a' : '#64748b'}
+                          />
+                          <Text style={[styles.pickerRowText, { textAlign, flex: 1 }, active && styles.pickerRowTextActive]}>
+                            {name}
+                          </Text>
+                          {active && <Ionicons name="checkmark-circle" size={20} color="#16a34a" />}
+                        </TouchableOpacity>
+                      )
+                    })}
+                  </View>
+                ))
+              })()}
+            </ScrollView>
+          </View>
+        </Modal>
       </SafeAreaView>
     )
   }
@@ -1089,6 +1228,46 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
 
+  // ── Site dropdown + picker modal ─────────────────────────────────────────────
+  dropdown: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    backgroundColor: '#fff', borderWidth: 1, borderColor: '#e2e8f0',
+    borderRadius: 12, paddingHorizontal: 12, height: 50,
+  },
+  dropdownRTL: { flexDirection: 'row-reverse' },
+  dropdownText: { fontSize: 15, fontWeight: '600', color: '#0f172a' },
+  dropdownPlaceholder: { color: '#94a3b8', fontWeight: '500' },
+  pickerBackdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(15,23,42,0.55)' },
+  pickerSheet: {
+    position: 'absolute', left: 0, right: 0, bottom: 0,
+    backgroundColor: '#fff', borderTopLeftRadius: 24, borderTopRightRadius: 24,
+    paddingHorizontal: 20, paddingTop: 10,
+    paddingBottom: Platform.OS === 'ios' ? 34 : 20, maxHeight: '80%',
+  },
+  pickerHandle: {
+    alignSelf: 'center', width: 40, height: 5, borderRadius: 3,
+    backgroundColor: '#e2e8f0', marginBottom: 12,
+  },
+  pickerHeader: {
+    flexDirection: 'row', alignItems: 'center',
+    justifyContent: 'space-between', marginBottom: 8,
+  },
+  pickerTitle: { fontSize: 17, fontWeight: '800', color: '#0f172a' },
+  pickerList: { marginTop: 10, flexGrow: 0, flexShrink: 1 },
+  pickerEmpty: { fontSize: 13, color: '#94a3b8', textAlign: 'center', paddingVertical: 24 },
+  pickerGroupLabel: {
+    fontSize: 10, fontWeight: '700', color: '#94a3b8',
+    textTransform: 'uppercase', letterSpacing: 0.8, marginTop: 10, marginBottom: 4,
+  },
+  pickerRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    paddingVertical: 14, paddingHorizontal: 12, borderRadius: 12,
+    borderBottomWidth: 1, borderBottomColor: '#f1f5f9',
+  },
+  pickerRowActive: { backgroundColor: 'rgba(22,163,74,0.06)' },
+  pickerRowText: { fontSize: 15, fontWeight: '600', color: '#334155' },
+  pickerRowTextActive: { color: '#15803d', fontWeight: '800' },
+
   // ── Site picker ─────────────────────────────────────────────────────────────
   countryLabel: {
     fontSize: 10, fontWeight: '700', color: '#94a3b8',
@@ -1132,4 +1311,12 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between', marginBottom: 2,
   },
   manualHeaderText: { fontSize: 13, fontWeight: '700', color: '#0f172a' },
+  assetWarn: {
+    flexDirection: 'row', alignItems: 'flex-start', gap: 8,
+    backgroundColor: 'rgba(245,158,11,0.08)',
+    borderWidth: 1, borderColor: 'rgba(245,158,11,0.25)',
+    borderRadius: 10, padding: 10,
+  },
+  assetWarnText: { fontSize: 12, color: '#b45309', fontWeight: '600', lineHeight: 17 },
+  assetWarnSuggest: { fontSize: 12, color: '#16a34a', fontWeight: '800', marginTop: 4 },
 })

@@ -69,12 +69,18 @@ export default function TyreDetailModal({ visible, position, data, onChange, onC
             </TouchableOpacity>
           </View>
 
-          {/* Editable detail */}
+          {/* Editable detail — flexShrink lets the list shrink to the space left
+              after the fixed header/handle/Done button so it can always scroll
+              internally (older/short screens with the keyboard open). */}
           <ScrollView
             style={styles.scroll}
             contentContainerStyle={styles.scrollContent}
             keyboardShouldPersistTaps="handled"
-            showsVerticalScrollIndicator={false}
+            keyboardDismissMode="on-drag"
+            showsVerticalScrollIndicator
+            nestedScrollEnabled
+            bounces
+            overScrollMode="always"
           >
             <TyreEditor data={data} onChange={onChange} />
           </ScrollView>
@@ -118,8 +124,8 @@ const styles = StyleSheet.create({
     width: 36, height: 36, borderRadius: 18, backgroundColor: '#f1f5f9',
     alignItems: 'center', justifyContent: 'center',
   },
-  scroll: { flexGrow: 0 },
-  scrollContent: { paddingBottom: 16 },
+  scroll: { flexGrow: 0, flexShrink: 1 },
+  scrollContent: { paddingBottom: 24 },
   doneBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
     backgroundColor: '#16a34a', borderRadius: 14, height: 52, marginTop: 6,

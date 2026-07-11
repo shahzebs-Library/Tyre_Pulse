@@ -505,6 +505,7 @@ export default function GatePass() {
           <div className="text-center py-8 text-gray-500">Loading...</div>
         ) : filteredPassList.length === 0 ? (
           <EmptyState
+            illustration="state/no-data"
             icon={ShieldCheck}
             title="No gate passes"
             description={logSearch ? 'No passes match the search' : logTab === 'today' ? 'No gate passes recorded today yet' : `No gate passes found for ${activeDateLabel}`}

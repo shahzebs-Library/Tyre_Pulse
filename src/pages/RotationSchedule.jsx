@@ -1091,6 +1091,7 @@ export default function RotationSchedule() {
         {noData ? (
           <div className="card">
             <EmptyState
+              illustration="module/tyres"
               icon={RotateCcw}
               title="No tyre records found"
               description="Upload tyre data to begin tracking rotation compliance."

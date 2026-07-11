@@ -13,6 +13,7 @@ import {
 import { formatCurrency, formatDate } from '../lib/formatters'
 import EnterpriseTable from '../components/ui/EnterpriseTable'
 import { useReportMeta } from '../hooks/useReportMeta'
+import { Illustration } from '../components/illustrations'
 
 const TONE = {
   blue:  'bg-blue-900/40 text-blue-300 border-blue-700/40',
@@ -262,10 +263,13 @@ export default function Billing() {
       {sub?.status === 'trialing' && trialDaysLeft !== null && (
         <div className="rounded-xl px-5 py-4 bg-gradient-to-r from-blue-950/60 to-indigo-950/40 border border-blue-800/40 flex items-center gap-3">
           <Clock size={18} className="text-blue-300 shrink-0" />
-          <p className="text-sm text-blue-200">
+          <p className="text-sm text-blue-200 flex-1">
             <strong>{trialDaysLeft} day{trialDaysLeft === 1 ? '' : 's'}</strong> left in your trial.
             {isAdmin ? ' Choose a plan below to keep uninterrupted access.' : ' Ask an administrator to select a plan.'}
           </p>
+          <div className="hidden sm:block shrink-0" aria-hidden="true">
+            <Illustration name="marketing/cta-upgrade" size={140} title="Upgrade your plan" />
+          </div>
         </div>
       )}
 
@@ -341,9 +345,14 @@ export default function Billing() {
 
       <div className="card">
         <div className="flex flex-wrap items-center justify-between gap-3 mb-5">
-          <h2 className="text-base font-semibold text-white flex items-center gap-2">
-            <Zap size={16} className="text-amber-400" /> Plans
-          </h2>
+          <div className="flex items-center gap-3">
+            <h2 className="text-base font-semibold text-white flex items-center gap-2">
+              <Zap size={16} className="text-amber-400" /> Plans
+            </h2>
+            <div className="hidden md:block shrink-0" aria-hidden="true">
+              <Illustration name="marketing/cost-savings" size={72} title="Save with the right plan" />
+            </div>
+          </div>
           <div className="inline-flex rounded-lg bg-gray-800 p-1 text-sm">
             {['monthly', 'annual'].map((iv) => (
               <button

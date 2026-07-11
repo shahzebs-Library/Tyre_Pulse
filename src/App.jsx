@@ -38,6 +38,7 @@ const RcaRecords             = lazy(() => import('./pages/RcaRecords'))
 const DataCleaning           = lazy(() => import('./pages/DataCleaning'))
 const UploadData             = lazy(() => import('./pages/UploadData'))
 const DataIntakeCenter       = lazy(() => import('./pages/DataIntakeCenter'))
+const NotFound               = lazy(() => import('./pages/NotFound'))
 const DataIntakeHistory      = lazy(() => import('./pages/DataIntakeHistory'))
 const UploadApprovals        = lazy(() => import('./pages/UploadApprovals'))
 const Settings               = lazy(() => import('./pages/Settings'))
@@ -128,6 +129,7 @@ const WorkflowSettings       = lazy(() => import('./pages/WorkflowSettings'))
 const AutomationRules        = lazy(() => import('./pages/AutomationRules'))
 const Integrations           = lazy(() => import('./pages/Integrations'))
 const Billing                = lazy(() => import('./pages/Billing'))
+const BrandAssets            = lazy(() => import('./pages/BrandAssets'))
 
 // ── Per-page error boundary ───────────────────────────────────────────────
 function Safe({ children }) {
@@ -289,6 +291,7 @@ function MainApp() {
                       <Route path="/system-health"       element={<Safe><SystemHealth /></Safe>} />
                       <Route path="/tenant-health"       element={<Safe><TenantHealth /></Safe>} />
                       <Route path="/permission-matrix"   element={<Safe><PermissionMatrix /></Safe>} />
+                      <Route path="/brand-assets"        element={<Safe><RoleRoute allowed={['Admin']}><BrandAssets /></RoleRoute></Safe>} />
                       {/* ── Commercial: Subscription & Billing (roadmap #6) ── */}
                       <Route path="/billing"             element={<Safe><FlagRoute flag="billing"><Billing /></FlagRoute></Safe>} />
                       {/* ── Automation platform (backend V96–V103; flag OFF until DB applied) ── */}
@@ -297,7 +300,7 @@ function MainApp() {
                       <Route path="/workflow-settings"   element={<Safe><FlagRoute flag="automation_platform"><WorkflowSettings /></FlagRoute></Safe>} />
                       <Route path="/automation-rules"    element={<Safe><FlagRoute flag="automation_platform"><AutomationRules /></FlagRoute></Safe>} />
                       <Route path="/integrations"        element={<Safe><FlagRoute flag="automation_platform"><Integrations /></FlagRoute></Safe>} />
-                      <Route path="*"            element={<Navigate to="/" replace />} />
+                      <Route path="*"            element={<NotFound />} />
                     </Routes>
                   </Layout>
                 </ProtectedRoute>

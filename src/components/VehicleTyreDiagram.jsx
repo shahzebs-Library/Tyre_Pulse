@@ -1,5 +1,7 @@
 import React from 'react';
 import { legacyPositionCode } from '../lib/tyrePositions';
+import { Illustration } from './illustrations';
+import { vehicleArt } from '../lib/brand/vehicleArt';
 
 // ── Vehicle type normaliser - maps any DB/prop value to a LAYOUTS key ──────────
 function resolveVehicleType(vt) {
@@ -1445,6 +1447,14 @@ export default function VehicleTyreDiagram({ vehicleType, positions, tyreData, o
 
   return (
     <div className="flex flex-col items-center gap-4">
+      {/* Vehicle silhouette — brand illustration matched to the vehicle type */}
+      <Illustration
+        name={vehicleArt(vehicleType)}
+        size={120}
+        title={vehicleType || 'Vehicle'}
+        className="opacity-90"
+      />
+
       {/* Title */}
       <div className="text-sm font-bold text-gray-100 flex items-center gap-2">
         <span className="text-xl">{emoji}</span>

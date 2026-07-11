@@ -13,6 +13,8 @@ import {
   FileSpreadsheet, Download, Upload, Truck, ClipboardCheck
 } from 'lucide-react'
 import EnterpriseTable from '../components/ui/EnterpriseTable'
+import { Illustration } from '../components/illustrations'
+import { vehicleArt } from '../lib/brand/vehicleArt'
 import { useReportMeta } from '../hooks/useReportMeta'
 import PageHeader from '../components/ui/PageHeader'
 import CustomFieldsPanel from '../components/CustomFieldsPanel'
@@ -485,7 +487,20 @@ export default function FleetMaster() {
     {
       accessorKey: 'vehicle_type',
       header: t('fleetmaster.columns.type'),
-      cell: ({ getValue }) => getValue() ?? '-',
+      cell: ({ getValue }) => {
+        const type = getValue()
+        return (
+          <span className="flex items-center gap-2">
+            <Illustration
+              name={vehicleArt(type)}
+              size={32}
+              title={type || 'Vehicle'}
+              className="shrink-0 opacity-80"
+            />
+            <span>{type ?? '-'}</span>
+          </span>
+        )
+      },
     },
     {
       accessorKey: 'year',

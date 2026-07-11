@@ -22,6 +22,7 @@ export const DEFAULT_BRANDING = Object.freeze({
   contact_email: '',
   contact_phone: '',
   website: '',
+  logos: {},          // placement map: slot → asset id | URL (V120)
 })
 
 /** Editable field keys sent to `set_org_branding` (order = form order). */
@@ -54,10 +55,21 @@ export async function setOrgBranding(orgId, branding) {
     const v = branding?.[k]
     if (v !== undefined && v !== null) payload[k] = typeof v === 'string' ? v.trim() : v
   }
+  // Logo placement map (V120). Only sent when explicitly provided so callers
+  // that don't manage placements (e.g. the colour/report editor) leave the
+  // stored logos untouched — the server preserves them when the key is absent.
+  if (branding?.logos && typeof branding.logos === 'object') {
+    const logos = {}
+    for (const [slot, val] of Object.entries(branding.logos)) {
+      const s = typeof val === 'string' ? val.trim() : ''
+      if (s) logos[slot] = s
+    }
+    payload.logos = logos
+  }
   return unwrap(await supabase.rpc('set_org_branding', { p_org_id: orgId, p_branding: payload }))
 }
 
 /** Merge stored branding over the defaults so the UI always has every field. */
 export function withBrandingDefaults(branding) {
-  return { ...DEFAULT_BRANDING, ...(branding || {}) }
+  return { ...DEFAULT_BRANDING, ...(branding || {}), logos: { ...(branding?.logos || {}) } }
 }

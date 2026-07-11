@@ -1109,6 +1109,7 @@ export default function DriverManagement() {
 
         {visibleDrivers.length === 0 ? (
           <EmptyState
+            illustration="module/fleet"
             icon={User}
             title="No drivers found"
             description="No drivers match the current filters. Try adjusting your search or date range."

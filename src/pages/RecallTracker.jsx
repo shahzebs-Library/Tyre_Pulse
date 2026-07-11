@@ -971,6 +971,7 @@ export default function RecallTracker() {
           </h2>
           {timeline.length === 0 && (
             <EmptyState
+              illustration="state/no-data"
               icon={GitBranch}
               title="No recalls logged yet"
               description="Recalls you add will appear here in chronological order."

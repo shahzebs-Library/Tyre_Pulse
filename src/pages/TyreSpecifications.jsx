@@ -1441,6 +1441,7 @@ export default function TyreSpecifications() {
                 </div>
               ) : nonConformanceByAsset.length === 0 ? (
                 <EmptyState
+                  illustration="state/success"
                   icon={CheckCircle}
                   title="Full Compliance"
                   description="No non-conforming fitments detected across the fleet."
@@ -1599,6 +1600,7 @@ export default function TyreSpecifications() {
 
               {history.length === 0 ? (
                 <EmptyState
+                  illustration="state/no-data"
                   icon={History}
                   title="No history yet"
                   description="Changes to specifications will be tracked here."

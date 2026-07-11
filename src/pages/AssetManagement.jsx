@@ -25,6 +25,8 @@ import { formatCurrencyCompact, formatDate, formatMonthYear } from '../lib/forma
 import PageHeader from '../components/ui/PageHeader'
 import CustomFieldsPanel from '../components/CustomFieldsPanel'
 import EntityApprovalPanel from '../components/workflow/EntityApprovalPanel'
+import { Illustration } from '../components/illustrations'
+import { vehicleArt } from '../lib/brand/vehicleArt'
 
 ChartJS.register(
   CategoryScale, LinearScale,
@@ -221,11 +223,19 @@ function AssetDrawer({ asset, tyres = [], workOrders, currency, onClose, onEdit,
     >
       {/* Header */}
       <div className="flex items-center justify-between p-5 border-b border-[var(--border-dim)] bg-[var(--surface-1)] shrink-0">
-        <div>
-          <p className="text-xs text-[var(--text-muted)] uppercase tracking-widest mb-1">{t('assetmgmt.drawer.assetProfile')}</p>
-          <h2 className="text-xl font-bold text-[var(--text-primary)]">{asset.asset_no}</h2>
-          <p className="text-sm text-[var(--text-secondary)]">{asset.vehicle_type} · {asset.make} {asset.model} {asset.year}</p>
-          <p className="text-xs text-[var(--text-muted)] mt-0.5"><MapPin className="inline w-3 h-3 mr-1" />{asset.site ?? '-'}</p>
+        <div className="flex items-center gap-4">
+          <Illustration
+            name={vehicleArt(asset.vehicle_type)}
+            size={120}
+            title={asset.vehicle_type || 'Vehicle'}
+            className="shrink-0 hidden sm:block"
+          />
+          <div>
+            <p className="text-xs text-[var(--text-muted)] uppercase tracking-widest mb-1">{t('assetmgmt.drawer.assetProfile')}</p>
+            <h2 className="text-xl font-bold text-[var(--text-primary)]">{asset.asset_no}</h2>
+            <p className="text-sm text-[var(--text-secondary)]">{asset.vehicle_type} · {asset.make} {asset.model} {asset.year}</p>
+            <p className="text-xs text-[var(--text-muted)] mt-0.5"><MapPin className="inline w-3 h-3 mr-1" />{asset.site ?? '-'}</p>
+          </div>
         </div>
         <div className="flex items-center gap-3">
           <span className={`px-2 py-1 rounded-full text-xs font-semibold ${asset.active ? 'bg-green-900/50 text-green-300' : 'bg-[var(--surface-2)] text-[var(--text-secondary)]'}`}>

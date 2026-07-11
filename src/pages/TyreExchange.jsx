@@ -1627,6 +1627,7 @@ export default function TyreExchange() {
 
                 {siteFlowMatrix.sites.length === 0 ? (
                   <EmptyState
+                    illustration="module/inventory"
                     icon={Truck}
                     title="No inter-site transfers"
                     description="No inter-site transfers detected in the current data set."

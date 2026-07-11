@@ -208,7 +208,7 @@ export default function Vehicle360() {
           <div className="card !p-0 overflow-hidden">
             <div className="px-4 py-3 border-b border-[var(--card-border,rgba(0,0,0,0.06))]"><h3 className="text-sm font-semibold text-[var(--text-primary)]">Fitted &amp; historical tyres</h3></div>
             {m.total === 0 ? (
-              <div className="px-4 py-8"><EmptyState icon={CircleDot} title="No tyre records" message="No tyres are recorded against this vehicle yet." /></div>
+              <div className="px-4 py-8"><EmptyState illustration="module/tyres" icon={CircleDot} title="No tyre records" message="No tyres are recorded against this vehicle yet." /></div>
             ) : (
               <div className="overflow-x-auto max-h-[420px] overflow-y-auto">
                 <table className="w-full text-xs">

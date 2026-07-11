@@ -12,7 +12,13 @@ import { useLanguage } from '../contexts/LanguageContext'
 import LanguageSwitcher from '../components/LanguageSwitcher'
 import { supabase } from '../lib/supabase'
 import TpLogo from '../assets/logo.svg'
+import { readCachedLogo } from '../lib/brand/library'
 import TwoFactorChallenge from '../components/TwoFactorChallenge'
+import { Illustration } from '../components/illustrations'
+
+// Login renders before the org is known, so it uses the logo cached on this
+// device after the last successful sign-in (V120), falling back to the mark.
+const LOGIN_LOGO = readCachedLogo('login') || TpLogo
 
 /* ── CSS injected once ────────────────────────────────────────────────────── */
 const STYLES = `
@@ -453,7 +459,7 @@ export default function Login() {
                 border:'1.5px solid rgba(22,163,74,0.4)',
                 boxShadow:'0 0 30px rgba(22,163,74,0.3)',
               }}>
-                <img src={TpLogo} alt="TyrePulse" style={{width:30, height:30}}/>
+                <img src={LOGIN_LOGO} alt="TyrePulse" style={{width:30, height:30, objectFit:'contain'}}/>
               </div>
               <div>
                 <div style={{fontSize:26, fontWeight:800, color:'#fff', letterSpacing:'-0.03em', lineHeight:1}}>TyrePulse</div>
@@ -470,6 +476,12 @@ export default function Login() {
             <p style={{ fontSize:14, color:'rgba(255,255,255,0.45)', lineHeight:1.6, margin:0, maxWidth:340 }}>
               {t('auth.login.heroDesc')}
             </p>
+
+            {/* Premium marketing hero — reinforces the brand moment without
+                touching the centered auth card on the right */}
+            <div style={{ marginTop:28, opacity:0.96, pointerEvents:'none' }}>
+              <Illustration name="marketing/hero-platform" size={300} title={t('auth.login.brandTagline')} />
+            </div>
           </div>
 
           {/* Features grid */}

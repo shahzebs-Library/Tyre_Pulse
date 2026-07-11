@@ -1206,6 +1206,7 @@ export default function SupplierManagement() {
           <motion.div key="dir" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
             {filteredSuppliers.length === 0 ? (
               <EmptyState
+                illustration="module/purchase-orders"
                 icon={Building2}
                 title={t('suppliers.directory.emptyTitle')}
                 description={t('suppliers.directory.emptyDesc')}

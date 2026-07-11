@@ -5,6 +5,8 @@
 import { describe, it, expect } from 'vitest'
 import {
   detectAnomalies,
+  detectVisitFrequency,
+  computeVisitStats,
   summariseAnomalies,
   ANOMALY_TYPES,
   ANOMALY_SEVERITY,
@@ -786,5 +788,109 @@ describe('detectAnomalies - duplicate serial number edge cases', () => {
     const dup = result.find(a => a.type === ANOMALY_TYPES.DUPLICATE_ENTRY)
     expect(dup).toBeDefined()
     expect(dup.count).toBe(4)
+  })
+})
+
+// ── Workshop visit frequency ───────────────────────────────────────────────────
+
+describe('computeVisitStats', () => {
+  it('returns empty for no records', () => {
+    expect(computeVisitStats([])).toEqual([])
+    expect(computeVisitStats(null)).toEqual([])
+  })
+
+  it('dedupes multiple records on the same asset+day into ONE visit', () => {
+    const records = [
+      makeRecord({ asset_no: 'V1', issue_date: '2025-01-10', serial_no: 'a' }),
+      makeRecord({ asset_no: 'V1', issue_date: '2025-01-10', serial_no: 'b' }),
+      makeRecord({ asset_no: 'V1', issue_date: '2025-01-10', serial_no: 'c' }),
+    ]
+    const [stat] = computeVisitStats(records, { now: new Date('2025-02-01') })
+    expect(stat.asset_no).toBe('V1')
+    expect(stat.total).toBe(1)            // one trip, not three
+    expect(stat.visits[0].items).toHaveLength(3)
+  })
+
+  it('counts distinct-day visits and computes rolling windows vs now', () => {
+    const records = [
+      makeRecord({ asset_no: 'V2', issue_date: '2025-01-01' }),
+      makeRecord({ asset_no: 'V2', issue_date: '2025-01-20' }),
+      makeRecord({ asset_no: 'V2', issue_date: '2025-01-28' }),
+    ]
+    const [s] = computeVisitStats(records, { now: new Date('2025-02-01') })
+    expect(s.total).toBe(3)
+    expect(s.first_visit).toBe('2025-01-01')
+    expect(s.last_visit).toBe('2025-01-28')
+    expect(s.last30).toBe(2)   // Jan 20 + Jan 28 within 30d of Feb 1
+    expect(s.last90).toBe(3)
+    expect(s.peak90).toBe(3)   // all three within a 90-day window
+  })
+
+  it('unions work_orders (opened_at) as visits', () => {
+    const records = [makeRecord({ asset_no: 'V3', issue_date: '2025-03-01' })]
+    const workOrders = [{ id: 'wo1', asset_no: 'V3', opened_at: '2025-03-15T09:00:00Z', total_cost: 500, site: 'Jeddah' }]
+    const [s] = computeVisitStats(records, { workOrders, now: new Date('2025-04-01') })
+    expect(s.total).toBe(2)
+  })
+
+  it('sorts assets by total visits descending', () => {
+    const records = [
+      makeRecord({ asset_no: 'LOW', issue_date: '2025-01-01' }),
+      makeRecord({ asset_no: 'HIGH', issue_date: '2025-01-01' }),
+      makeRecord({ asset_no: 'HIGH', issue_date: '2025-02-01' }),
+      makeRecord({ asset_no: 'HIGH', issue_date: '2025-03-01' }),
+    ]
+    const stats = computeVisitStats(records, { now: new Date('2025-04-01') })
+    expect(stats[0].asset_no).toBe('HIGH')
+    expect(stats[0].total).toBe(3)
+  })
+})
+
+describe('detectVisitFrequency', () => {
+  it('flags an asset with >=3 visits inside a 90-day window as HIGH', () => {
+    const records = [
+      makeRecord({ asset_no: 'FREQ', issue_date: '2025-01-05' }),
+      makeRecord({ asset_no: 'FREQ', issue_date: '2025-02-05' }),
+      makeRecord({ asset_no: 'FREQ', issue_date: '2025-03-05' }),
+    ]
+    const out = detectVisitFrequency(records, { now: new Date('2025-04-01') })
+    const a = out.find(x => x.asset_no === 'FREQ')
+    expect(a).toBeDefined()
+    expect(a.type).toBe(ANOMALY_TYPES.FREQUENT_VISITS)
+    expect(a.severity).toBe(ANOMALY_SEVERITY.HIGH)
+    expect(a.total).toBe(3)
+    expect(a.records.length).toBe(3)
+    expect(a.message).toContain('FREQ')
+  })
+
+  it('does NOT flag an asset with a single visit', () => {
+    const records = [makeRecord({ asset_no: 'ONCE', issue_date: '2025-01-01' })]
+    const out = detectVisitFrequency(records, { now: new Date('2025-04-01') })
+    expect(out.find(x => x.asset_no === 'ONCE')).toBeUndefined()
+  })
+
+  it('flags >=4 lifetime visits (spread out) as at least MEDIUM', () => {
+    const records = [
+      makeRecord({ asset_no: 'SPREAD', issue_date: '2024-01-01' }),
+      makeRecord({ asset_no: 'SPREAD', issue_date: '2024-05-01' }),
+      makeRecord({ asset_no: 'SPREAD', issue_date: '2024-09-01' }),
+      makeRecord({ asset_no: 'SPREAD', issue_date: '2025-01-01' }),
+    ]
+    const out = detectVisitFrequency(records, { now: new Date('2025-02-01') })
+    const a = out.find(x => x.asset_no === 'SPREAD')
+    expect(a).toBeDefined()
+    expect(['high', 'medium']).toContain(a.severity)
+  })
+
+  it('produces anomalies compatible with summariseAnomalies', () => {
+    const records = [
+      makeRecord({ asset_no: 'FREQ', issue_date: '2025-01-05' }),
+      makeRecord({ asset_no: 'FREQ', issue_date: '2025-02-05' }),
+      makeRecord({ asset_no: 'FREQ', issue_date: '2025-03-05' }),
+    ]
+    const out = detectVisitFrequency(records, { now: new Date('2025-04-01') })
+    const sum = summariseAnomalies(out)
+    expect(sum.total).toBe(out.length)
+    expect(sum.byType[ANOMALY_TYPES.FREQUENT_VISITS]).toBe(out.length)
   })
 })

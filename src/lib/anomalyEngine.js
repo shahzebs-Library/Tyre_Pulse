@@ -12,6 +12,7 @@ export const ANOMALY_TYPES = {
   COST_SPIKE:        'COST_SPIKE',         // Cost_per_tyre > 3σ above fleet mean
   SERIAL_REUSE:      'SERIAL_REUSE',       // Same serial_no appears on different assets
   DUPLICATE_ENTRY:   'DUPLICATE_ENTRY',    // Same asset+serial+date (exact duplicate)
+  FREQUENT_VISITS:   'FREQUENT_VISITS',    // Asset visits the workshop abnormally often
 }
 
 export const ANOMALY_SEVERITY = {
@@ -294,6 +295,7 @@ export const ANOMALY_TYPE_LABELS = {
   [ANOMALY_TYPES.COST_SPIKE]:       'Cost Spike',
   [ANOMALY_TYPES.SERIAL_REUSE]:     'Serial Reuse',
   [ANOMALY_TYPES.DUPLICATE_ENTRY]:  'Exact Duplicate',
+  [ANOMALY_TYPES.FREQUENT_VISITS]:  'Frequent Workshop Visits',
 }
 
 export const ANOMALY_TYPE_DESC = {
@@ -303,4 +305,153 @@ export const ANOMALY_TYPE_DESC = {
   [ANOMALY_TYPES.COST_SPIKE]:       'Tyre cost is a statistical outlier vs fleet average',
   [ANOMALY_TYPES.SERIAL_REUSE]:     'Same serial number recorded on multiple different assets',
   [ANOMALY_TYPES.DUPLICATE_ENTRY]:  'Identical asset + serial + date combination recorded more than once',
+  [ANOMALY_TYPES.FREQUENT_VISITS]:  'Asset returns to the workshop far more often than the fleet norm',
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Workshop-visit frequency
+// A "visit" = an asset appearing at the workshop on a given calendar day. It is
+// derived from tyre-change events (tyre_records.issue_date) and, when present,
+// work_orders (opened_at) — unioned and de-duplicated to one visit per day so an
+// asset with 3 tyres changed on one day counts as a single trip.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const DAY_MS = 86400000
+
+function normaliseVisitRecord(src, kind) {
+  if (kind === 'wo') {
+    return {
+      id: src.id,
+      issue_date: src.opened_at ? String(src.opened_at).slice(0, 10) : null,
+      brand: src.work_type || 'Work order',
+      serial_no: src.tyre_serial || null,
+      asset_no: src.asset_no || null,
+      site: src.site || null,
+      risk_level: null,
+      cost_per_tyre: Number(src.total_cost) > 0 ? Number(src.total_cost) : null,
+      _source: 'work_order',
+    }
+  }
+  return {
+    id: src.id,
+    issue_date: src.issue_date ? String(src.issue_date).slice(0, 10) : null,
+    brand: src.brand || null,
+    serial_no: src.serial_no || null,
+    asset_no: src.asset_no || null,
+    site: src.site || null,
+    risk_level: src.risk_level || null,
+    cost_per_tyre: Number(src.cost_per_tyre) > 0 ? Number(src.cost_per_tyre) : null,
+    _source: 'tyre_record',
+  }
+}
+
+/**
+ * Per-asset workshop-visit statistics.
+ * @param {Array} records      tyre_record rows (need asset_no + issue_date)
+ * @param {object} [opts]
+ * @param {Array}  [opts.workOrders] optional work_orders rows (asset_no + opened_at)
+ * @param {Date}   [opts.now]        reference "today" for rolling windows (default: now)
+ * @returns {Array} sorted by total visits desc, each:
+ *   { asset_no, site, total, first_visit, last_visit, visits_per_month,
+ *     last7, last30, last90, peak90, total_cost, visits:[{date, items:[record]}] }
+ */
+export function computeVisitStats(records, opts = {}) {
+  const { workOrders = [], now = new Date() } = opts
+  const byAsset = new Map() // asset -> Map(dateStr -> item[])
+
+  const add = (rec) => {
+    if (!rec.asset_no || !rec.issue_date) return
+    const d = rec.issue_date
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) return
+    if (!byAsset.has(rec.asset_no)) byAsset.set(rec.asset_no, new Map())
+    const days = byAsset.get(rec.asset_no)
+    if (!days.has(d)) days.set(d, [])
+    days.get(d).push(rec)
+  }
+  ;(records || []).forEach(r => add(normaliseVisitRecord(r, 'tyre')))
+  ;(workOrders || []).forEach(w => add(normaliseVisitRecord(w, 'wo')))
+
+  const nowMs = now.getTime()
+  const out = []
+  for (const [asset, days] of byAsset) {
+    const visits = [...days.entries()]
+      .map(([date, items]) => ({ date, items }))
+      .sort((a, b) => (a.date < b.date ? -1 : 1))
+    const times = visits.map(v => new Date(v.date).getTime())
+    const total = visits.length
+    const spanDays = Math.max(1, (times[times.length - 1] - times[0]) / DAY_MS)
+    const within = (win) => times.filter(t => nowMs - t >= 0 && nowMs - t <= win * DAY_MS).length
+
+    // Peak visits inside any rolling 90-day window (recency-independent — surfaces
+    // frequent flyers even in historical data).
+    let peak90 = 0
+    for (let i = 0; i < times.length; i++) {
+      let c = 0
+      for (let j = i; j < times.length; j++) {
+        if (times[j] - times[i] <= 90 * DAY_MS) c++
+        else break
+      }
+      if (c > peak90) peak90 = c
+    }
+
+    const totalCost = visits.reduce(
+      (s, v) => s + v.items.reduce((si, r) => si + (r.cost_per_tyre || 0), 0), 0,
+    )
+
+    out.push({
+      asset_no: asset,
+      site: visits.map(v => v.items.find(i => i.site)?.site).find(Boolean) || null,
+      total,
+      first_visit: visits[0].date,
+      last_visit: visits[visits.length - 1].date,
+      visits_per_month: +(total / (spanDays / 30)).toFixed(2),
+      last7: within(7),
+      last30: within(30),
+      last90: within(90),
+      peak90,
+      total_cost: Math.round(totalCost),
+      visits,
+    })
+  }
+  return out.sort((a, b) => b.total - a.total || b.peak90 - a.peak90)
+}
+
+/**
+ * Flag assets that return to the workshop abnormally often.
+ * @param {Array} records  tyre_record rows
+ * @param {object} [config] { peakWindowDays, peakHigh, totalWarn, workOrders, now }
+ * @returns {Anomaly[]} FREQUENT_VISITS anomalies (drill-down = the visit records)
+ */
+export function detectVisitFrequency(records, config = {}) {
+  const cfg = {
+    peakWindowDays: 90,
+    peakHigh: 3,   // ≥3 visits within a 90-day window → HIGH
+    totalWarn: 4,  // ≥4 lifetime visits → at least MEDIUM
+    ...config,
+  }
+  const stats = computeVisitStats(records, { workOrders: cfg.workOrders, now: cfg.now })
+  const anomalies = []
+  for (const s of stats) {
+    let severity = null
+    if (s.peak90 >= cfg.peakHigh) severity = ANOMALY_SEVERITY.HIGH
+    else if (s.total >= cfg.totalWarn) severity = ANOMALY_SEVERITY.MEDIUM
+    if (!severity) continue
+
+    const items = s.visits.flatMap(v => v.items)
+    anomalies.push({
+      id: `FV::${s.asset_no}`,
+      type: ANOMALY_TYPES.FREQUENT_VISITS,
+      severity,
+      asset_no: s.asset_no,
+      site: s.site,
+      record_ids: items.map(r => r.id),
+      records: items,
+      message: `Asset ${s.asset_no}: ${s.total} workshop visits (peak ${s.peak90} within ${cfg.peakWindowDays} days · ${s.visits_per_month}/month)`,
+      detail: `First ${s.first_visit} → last ${s.last_visit}. Frequent returns can signal a recurring fault, an ineffective prior repair, or asset misuse.`,
+      total: s.total,
+      peak90: s.peak90,
+      visitsPerMonth: s.visits_per_month,
+    })
+  }
+  return anomalies.sort((a, b) => b.peak90 - a.peak90 || b.total - a.total)
 }

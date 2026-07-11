@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, useCallback } from 'react'
 import {
   AlertTriangle, Activity, ChevronDown, ShieldAlert, ShieldQuestion,
   Zap, Clock, Layers, Repeat, DollarSign, Copy, Fingerprint,
+  Search, X, Wrench, CalendarClock, TrendingUp,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
@@ -12,6 +13,8 @@ import { formatCurrencyCompact } from '../lib/formatters'
 import { cn } from '../lib/cn'
 import {
   detectAnomalies,
+  detectVisitFrequency,
+  computeVisitStats,
   summariseAnomalies,
   ANOMALY_TYPES,
   ANOMALY_SEVERITY,
@@ -32,12 +35,14 @@ const TYPE_META = {
   [ANOMALY_TYPES.COST_SPIKE]:       { icon: DollarSign,   accent: 'text-emerald-400' },
   [ANOMALY_TYPES.SERIAL_REUSE]:     { icon: Fingerprint,  accent: 'text-sky-400' },
   [ANOMALY_TYPES.DUPLICATE_ENTRY]:  { icon: Copy,         accent: 'text-violet-400' },
+  [ANOMALY_TYPES.FREQUENT_VISITS]:  { icon: Wrench,       accent: 'text-rose-400' },
   [DATA_QUALITY]:                   { icon: ShieldQuestion, accent: 'text-gray-400' },
 }
 
 // Stable display order for the type filter chips + groups.
 const TYPE_ORDER = [
   ANOMALY_TYPES.RAPID_RECURRENCE,
+  ANOMALY_TYPES.FREQUENT_VISITS,
   ANOMALY_TYPES.SERIAL_REUSE,
   ANOMALY_TYPES.DUPLICATE_ENTRY,
   ANOMALY_TYPES.SHORT_INTERVAL,
@@ -90,9 +95,12 @@ export default function Anomalies() {
   const { profile } = useAuth()
   const { activeCountry, activeCurrency } = useSettings()
   const [anomalies, setAnomalies] = useState([])
+  const [visitStats, setVisitStats] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [activeType, setActiveType] = useState('ALL')
+  const [view, setView] = useState('anomalies') // 'anomalies' | 'visits'
+  const [search, setSearch] = useState('')
 
   const load = useCallback(async () => {
     setLoading(true); setError(null)
@@ -106,9 +114,27 @@ export default function Anomalies() {
       const { data, error: err } = await q
       if (err) throw err
       const rows = data || []
+
+      // Workshop visits are unioned from tyre-change events + work_orders (when
+      // present). The work_orders read is best-effort so an empty/blocked table
+      // never breaks the page.
+      let workOrders = []
+      try {
+        let wq = supabase
+          .from('work_orders')
+          .select('id, asset_no, tyre_serial, work_type, site, country, opened_at, total_cost')
+          .not('opened_at', 'is', null)
+          .limit(5000)
+        if (activeCountry !== 'All' && activeCountry) wq = wq.eq('country', activeCountry)
+        const { data: wo } = await wq
+        workOrders = wo || []
+      } catch { /* best-effort */ }
+
       const engine = detectAnomalies(rows)
       const dq = detectDataQuality(rows)
-      setAnomalies([...engine, ...dq])
+      const freq = detectVisitFrequency(rows, { workOrders })
+      setAnomalies([...freq, ...engine, ...dq])
+      setVisitStats(computeVisitStats(rows, { workOrders }))
     } catch (e) {
       setError(e.message || 'Failed to load anomalies')
     } finally {
@@ -118,16 +144,31 @@ export default function Anomalies() {
 
   useEffect(() => { load() }, [load])
 
+  // Free-text search across asset / serial / site / message (drives both views).
+  const q = search.trim().toLowerCase()
+  const matchesSearch = useCallback((a) => {
+    if (!q) return true
+    return (
+      String(a.asset_no ?? '').toLowerCase().includes(q) ||
+      String(a.site ?? '').toLowerCase().includes(q) ||
+      String(a.message ?? '').toLowerCase().includes(q) ||
+      (a.records || []).some(r =>
+        String(r.serial_no ?? '').toLowerCase().includes(q) ||
+        String(r.asset_no ?? '').toLowerCase().includes(q))
+    )
+  }, [q])
+
   // ── Severity KPIs (engine + DQ combined) ─────────────────────────────────
   const summary = useMemo(() => summariseAnomalies(anomalies), [anomalies])
 
   // ── Per-type counts (drives filter chips) ────────────────────────────────
   const typeCounts = useMemo(() => summary.byType, [summary])
 
-  // ── Filtered set for the active chip ─────────────────────────────────────
+  // ── Filtered set for the active chip + search ────────────────────────────
   const filtered = useMemo(
-    () => (activeType === 'ALL' ? anomalies : anomalies.filter(a => a.type === activeType)),
-    [anomalies, activeType],
+    () => anomalies.filter(a =>
+      (activeType === 'ALL' || a.type === activeType) && matchesSearch(a)),
+    [anomalies, activeType, matchesSearch],
   )
 
   // ── Group filtered anomalies by type (stable order) ──────────────────────
@@ -149,6 +190,49 @@ export default function Anomalies() {
       type: t, label: LABELS[t], desc: DESCS[t], count: typeCounts[t] || 0,
     }))]
   }, [typeCounts, summary.total])
+
+  // ── Workshop-visit analytics ─────────────────────────────────────────────
+  const visitFiltered = useMemo(() => {
+    if (!q) return visitStats
+    return visitStats.filter(v =>
+      String(v.asset_no ?? '').toLowerCase().includes(q) ||
+      String(v.site ?? '').toLowerCase().includes(q))
+  }, [visitStats, q])
+
+  const visitSummary = useMemo(() => {
+    const totalVisits = visitStats.reduce((s, v) => s + v.total, 0)
+    const thisWeek = visitStats.reduce((s, v) => s + v.last7, 0)
+    const thisMonth = visitStats.reduce((s, v) => s + v.last30, 0)
+    const busiest = visitStats[0] || null // already sorted by total desc
+    return { totalVisits, thisWeek, thisMonth, assets: visitStats.length, busiest }
+  }, [visitStats])
+
+  const visitColumns = useMemo(() => [
+    {
+      id: 'asset_no', header: 'Vehicle', accessorFn: r => r.asset_no ?? '-', size: 120,
+      cell: ({ getValue }) => <span className="font-mono text-blue-400">{getValue()}</span>,
+    },
+    { id: 'site', header: 'Site', accessorFn: r => r.site ?? '-', size: 130 },
+    { id: 'total', header: 'Total Visits', accessorFn: r => r.total, size: 100, meta: { align: 'right' } },
+    { id: 'last7', header: 'This Week', accessorFn: r => r.last7, size: 100, meta: { align: 'right' } },
+    { id: 'last30', header: 'This Month', accessorFn: r => r.last30, size: 100, meta: { align: 'right' } },
+    { id: 'last90', header: 'Last 90d', accessorFn: r => r.last90, size: 90, meta: { align: 'right' } },
+    {
+      id: 'peak90', header: 'Peak / 90d', accessorFn: r => r.peak90, size: 100, meta: { align: 'right' },
+      cell: ({ getValue }) => {
+        const v = getValue()
+        return <span className={cn(v >= 3 ? 'text-rose-400 font-semibold' : 'text-gray-300')}>{v}</span>
+      },
+    },
+    { id: 'visits_per_month', header: 'Rate /mo', accessorFn: r => r.visits_per_month, size: 90, meta: { align: 'right' } },
+    { id: 'last_visit', header: 'Last Visit', accessorFn: r => r.last_visit ?? '-', size: 110 },
+    {
+      id: 'total_cost', header: 'Total Cost',
+      accessorFn: r => r.total_cost || 0,
+      cell: ({ getValue }) => (getValue() > 0 ? formatCurrencyCompact(getValue(), activeCurrency) : '-'),
+      size: 110, meta: { align: 'right' },
+    },
+  ], [activeCurrency])
 
   // Drill-down columns for underlying records (shared across groups).
   const detailColumns = useMemo(() => [
@@ -192,66 +276,57 @@ export default function Anomalies() {
     <div className="space-y-6">
       <PageHeader
         title="Anomaly Intelligence"
-        subtitle="Rule-based detection of suspicious tyre records, cost outliers and data quality issues"
+        subtitle="Suspicious tyre records, cost outliers, data-quality issues and workshop-visit frequency — searchable by vehicle"
         icon={AlertTriangle}
       />
 
-      {/* Severity KPI cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <SeverityCard
-          label="High Severity" value={summary.bySeverity.high} icon={ShieldAlert}
-          valueClass="text-red-400" ringClass="ring-red-500/20"
-          hint="Immediate review required"
-        />
-        <SeverityCard
-          label="Medium Severity" value={summary.bySeverity.medium} icon={Zap}
-          valueClass="text-amber-400" ringClass="ring-amber-500/20"
-          hint="Investigate soon"
-        />
-        <SeverityCard
-          label="Low Severity" value={summary.bySeverity.low} icon={ShieldQuestion}
-          valueClass="text-emerald-400" ringClass="ring-emerald-500/20"
-          hint="Data quality / minor"
-        />
-        <SeverityCard
-          label="Total Anomalies" value={summary.total} icon={Activity}
-          valueClass="text-white" ringClass="ring-white/10"
-          hint={`Across ${chips.length - 1} detector${chips.length - 1 !== 1 ? 's' : ''}`}
-        />
-      </div>
-
-      {/* Type filter chips */}
-      {!loading && !error && anomalies.length > 0 && (
-        <div className="flex flex-wrap gap-2">
-          {chips.map(chip => {
-            const meta = chip.type === 'ALL' ? null : TYPE_META[chip.type]
-            const Icon = meta?.icon
-            const active = activeType === chip.type
+      {/* Toolbar: view toggle + vehicle search */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+        <div className="inline-flex rounded-lg border border-gray-800 bg-white/[0.02] p-0.5">
+          {[
+            { key: 'anomalies', label: 'Anomalies', icon: AlertTriangle },
+            { key: 'visits', label: 'Workshop Visits', icon: Wrench },
+          ].map(t => {
+            const active = view === t.key
+            const Icon = t.icon
             return (
               <button
-                key={chip.type}
+                key={t.key}
                 type="button"
-                onClick={() => setActiveType(chip.type)}
-                title={chip.desc}
+                onClick={() => setView(t.key)}
                 aria-pressed={active}
                 className={cn(
-                  'group flex items-center gap-2 rounded-lg px-3 py-1.5 text-sm border transition-colors',
-                  active
-                    ? 'bg-white/10 border-white/20 text-white'
-                    : 'bg-white/[0.02] border-gray-800 text-gray-400 hover:bg-white/5 hover:text-gray-200',
+                  'flex items-center gap-2 rounded-md px-3 py-1.5 text-sm transition-colors',
+                  active ? 'bg-white/10 text-white' : 'text-gray-400 hover:text-gray-200',
                 )}
               >
-                {Icon && <Icon size={14} className={cn(active ? meta.accent : 'text-gray-500 group-hover:text-gray-300')} />}
-                <span>{chip.label}</span>
-                <span className={cn(
-                  'rounded-md px-1.5 py-0.5 text-xs font-semibold',
-                  active ? 'bg-white/15 text-white' : 'bg-gray-800 text-gray-400',
-                )}>{chip.count}</span>
+                <Icon size={15} />
+                <span>{t.label}</span>
               </button>
             )
           })}
         </div>
-      )}
+        <div className="relative flex-1 sm:max-w-md">
+          <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
+          <input
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            placeholder="Search vehicle, serial or site…"
+            aria-label="Search anomalies and vehicles"
+            className="w-full rounded-lg border border-gray-800 bg-white/[0.02] py-2 pl-9 pr-9 text-sm text-gray-200 placeholder-gray-600 focus:border-gray-600 focus:outline-none"
+          />
+          {search && (
+            <button
+              type="button"
+              onClick={() => setSearch('')}
+              aria-label="Clear search"
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300"
+            >
+              <X size={15} />
+            </button>
+          )}
+        </div>
+      </div>
 
       {error && (
         <div className="flex items-center gap-2 text-red-400 text-sm bg-red-400/10 border border-red-400/20 rounded-xl px-4 py-3">
@@ -269,31 +344,163 @@ export default function Anomalies() {
             </div>
           ))}
         </div>
-      ) : anomalies.length === 0 && !error ? (
-        <div className="card py-16 text-center">
-          <Activity className="w-10 h-10 mx-auto mb-3 text-gray-700" />
-          <p className="text-gray-400 font-medium">No anomalies detected</p>
-          <p className="text-gray-600 text-sm mt-1">
-            Rule-based checks run automatically over the latest {`5,000`} records. Anomalies appear here when detected.
-          </p>
-        </div>
-      ) : groups.length === 0 ? (
-        <div className="card py-12 text-center">
-          <Activity className="w-8 h-8 mx-auto mb-2 text-gray-700" />
-          <p className="text-gray-400 text-sm">No anomalies for this filter.</p>
-        </div>
+      ) : view === 'visits' ? (
+        <WorkshopVisitsView
+          summary={visitSummary}
+          rows={visitFiltered}
+          columns={visitColumns}
+          activeCurrency={activeCurrency}
+          searching={!!q}
+        />
       ) : (
-        <div className="space-y-4">
-          {groups.map(group => (
-            <AnomalyTypeGroup
-              key={group.type}
-              group={group}
-              detailColumns={detailColumns}
-              defaultOpen={groups.length === 1 || activeType !== 'ALL'}
+        <>
+          {/* Severity KPI cards */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            <SeverityCard
+              label="High Severity" value={summary.bySeverity.high} icon={ShieldAlert}
+              valueClass="text-red-400" ringClass="ring-red-500/20"
+              hint="Immediate review required"
             />
-          ))}
-        </div>
+            <SeverityCard
+              label="Medium Severity" value={summary.bySeverity.medium} icon={Zap}
+              valueClass="text-amber-400" ringClass="ring-amber-500/20"
+              hint="Investigate soon"
+            />
+            <SeverityCard
+              label="Low Severity" value={summary.bySeverity.low} icon={ShieldQuestion}
+              valueClass="text-emerald-400" ringClass="ring-emerald-500/20"
+              hint="Data quality / minor"
+            />
+            <SeverityCard
+              label="Total Anomalies" value={summary.total} icon={Activity}
+              valueClass="text-white" ringClass="ring-white/10"
+              hint={`Across ${chips.length - 1} detector${chips.length - 1 !== 1 ? 's' : ''}`}
+            />
+          </div>
+
+          {/* Type filter chips */}
+          {anomalies.length > 0 && (
+            <div className="flex flex-wrap gap-2">
+              {chips.map(chip => {
+                const meta = chip.type === 'ALL' ? null : TYPE_META[chip.type]
+                const Icon = meta?.icon
+                const active = activeType === chip.type
+                return (
+                  <button
+                    key={chip.type}
+                    type="button"
+                    onClick={() => setActiveType(chip.type)}
+                    title={chip.desc}
+                    aria-pressed={active}
+                    className={cn(
+                      'group flex items-center gap-2 rounded-lg px-3 py-1.5 text-sm border transition-colors',
+                      active
+                        ? 'bg-white/10 border-white/20 text-white'
+                        : 'bg-white/[0.02] border-gray-800 text-gray-400 hover:bg-white/5 hover:text-gray-200',
+                    )}
+                  >
+                    {Icon && <Icon size={14} className={cn(active ? meta.accent : 'text-gray-500 group-hover:text-gray-300')} />}
+                    <span>{chip.label}</span>
+                    <span className={cn(
+                      'rounded-md px-1.5 py-0.5 text-xs font-semibold',
+                      active ? 'bg-white/15 text-white' : 'bg-gray-800 text-gray-400',
+                    )}>{chip.count}</span>
+                  </button>
+                )
+              })}
+            </div>
+          )}
+
+          {anomalies.length === 0 ? (
+            <div className="card py-16 text-center">
+              <Activity className="w-10 h-10 mx-auto mb-3 text-gray-700" />
+              <p className="text-gray-400 font-medium">No anomalies detected</p>
+              <p className="text-gray-600 text-sm mt-1">
+                Rule-based checks run automatically over the latest {`5,000`} records. Anomalies appear here when detected.
+              </p>
+            </div>
+          ) : groups.length === 0 ? (
+            <div className="card py-12 text-center">
+              <Activity className="w-8 h-8 mx-auto mb-2 text-gray-700" />
+              <p className="text-gray-400 text-sm">
+                {q ? `No anomalies match “${search}”.` : 'No anomalies for this filter.'}
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {groups.map(group => (
+                <AnomalyTypeGroup
+                  key={group.type}
+                  group={group}
+                  detailColumns={detailColumns}
+                  defaultOpen={groups.length === 1 || activeType !== 'ALL'}
+                />
+              ))}
+            </div>
+          )}
+        </>
       )}
+    </div>
+  )
+}
+
+function WorkshopVisitsView({ summary, rows, columns, activeCurrency, searching }) {
+  return (
+    <div className="space-y-6">
+      {/* Visit KPI cards */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <SeverityCard
+          label="Visits This Week" value={summary.thisWeek} icon={CalendarClock}
+          valueClass="text-sky-400" ringClass="ring-sky-500/20"
+          hint="Shop trips in the last 7 days"
+        />
+        <SeverityCard
+          label="Visits This Month" value={summary.thisMonth} icon={CalendarClock}
+          valueClass="text-indigo-400" ringClass="ring-indigo-500/20"
+          hint="Shop trips in the last 30 days"
+        />
+        <SeverityCard
+          label="Total Visits" value={summary.totalVisits} icon={Wrench}
+          valueClass="text-white" ringClass="ring-white/10"
+          hint={`${summary.assets} vehicle${summary.assets !== 1 ? 's' : ''} serviced`}
+        />
+        <SeverityCard
+          label="Busiest Vehicle"
+          value={summary.busiest ? summary.busiest.asset_no : '—'}
+          icon={TrendingUp}
+          valueClass="text-rose-400"
+          ringClass="ring-rose-500/20"
+          hint={summary.busiest ? `${summary.busiest.total} visits · peak ${summary.busiest.peak90}/90d` : 'No visits yet'}
+        />
+      </div>
+
+      <div className="card p-0 overflow-hidden">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-800">
+          <div>
+            <h3 className="font-semibold text-white">Workshop Visits by Vehicle</h3>
+            <p className="text-xs text-gray-500">
+              One visit = an asset at the workshop on a day (tyre changes + work orders). Sortable & exportable.
+            </p>
+          </div>
+          <span className="rounded-md bg-gray-800 px-2 py-0.5 text-xs font-semibold text-gray-300">
+            {rows.length}
+          </span>
+        </div>
+        <EnterpriseTable
+          columns={columns}
+          data={rows}
+          getRowId={r => r.asset_no}
+          enableGlobalFilter={false}
+          enableColumnFilters={false}
+          enableSorting
+          enableColumnVisibility={false}
+          enableExport
+          exportFileName="workshop_visits_by_vehicle"
+          initialPageSize={25}
+          pageSizeOptions={[10, 25, 50, 100]}
+          emptyMessage={searching ? 'No vehicles match your search.' : 'No workshop visits found.'}
+        />
+      </div>
     </div>
   )
 }

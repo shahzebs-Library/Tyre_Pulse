@@ -104,7 +104,7 @@
       },
       "supabaseUrl": "https://jhssdmeruxtrlqnwfksc.supabase.co",
       "supabaseAnonKey": "sb_publishable_UDEH7EeHA9S5-NNu4T-9Ug_R60IinrW",
-      "sentryDsn": ""
+      "sentryDsn": "https://530f25f43a3bbbff1679122847a0d3ec@o4511151917301760.ingest.de.sentry.io/4511237697568848"
     }
   }
 }

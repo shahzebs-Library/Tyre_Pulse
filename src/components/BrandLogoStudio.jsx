@@ -20,15 +20,17 @@ import { useTenant } from '../contexts/TenantContext'
  * Admin-gated `set_org_branding` RPC (V68/V120); non-admins are read-only.
  */
 
-const SURFACE_BG = { dark: '#0B1220', light: '#FFFFFF', any: '#111827' }
-
-/** Small checker-free logo tile rendered on a given surface. */
-function LogoThumb({ src, surface = 'light', className = '', style }) {
-  const bg = SURFACE_BG[surface] || SURFACE_BG.light
+/**
+ * Small logo tile. Logos are shown on a light checkerboard so their TRUE brand
+ * colours (navy / blue / etc.) are always visible — a dark app surface would
+ * make the dark-navy marks look solid black. `surface` is accepted for call-site
+ * compatibility but no longer tints the tile.
+ */
+function LogoThumb({ src, surface, className = '', style }) { // eslint-disable-line no-unused-vars
   return (
     <div
-      className={`rounded-lg flex items-center justify-center overflow-hidden ${className}`}
-      style={{ background: bg, ...style }}
+      className={`checker rounded-lg flex items-center justify-center overflow-hidden ${className}`}
+      style={style}
     >
       {src
         ? <img src={src} alt="" className="max-h-full max-w-full object-contain" onError={(e) => { e.currentTarget.style.opacity = 0.15 }} />

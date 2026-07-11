@@ -103,6 +103,12 @@ export default function ConsoleLogin() {
       <div className="w-full max-w-md relative z-10">
         {/* Icon + title */}
         <div className="flex flex-col items-center mb-8">
+          {/* Real full-colour brand lockup on a light chip so it reads on the
+              dark console (the navy logo would vanish on a dark surface). */}
+          <div className="checker rounded-xl px-4 py-2.5 mb-5 shadow-lg border border-white/10">
+            <img src="/brand/library/horizontal-classic.png" alt="Tyre Pulse"
+                 className="h-8 w-auto object-contain block" />
+          </div>
           <div className="w-16 h-16 rounded-2xl flex items-center justify-center mb-4 transition-all"
             style={{ background: step === 'totp' ? 'rgba(59,130,246,0.12)' : 'rgba(249,115,22,0.12)', border: `1px solid ${step === 'totp' ? 'rgba(59,130,246,0.3)' : 'rgba(249,115,22,0.3)'}`, boxShadow: `0 0 40px ${step === 'totp' ? 'rgba(59,130,246,0.15)' : 'rgba(249,115,22,0.15)'}` }}>
             {step === 'totp'

@@ -51,6 +51,8 @@ const MyChecklists           = lazy(() => import('./pages/MyChecklists'))
 const UploadApprovals        = lazy(() => import('./pages/UploadApprovals'))
 const Settings               = lazy(() => import('./pages/Settings'))
 const HelpCenter             = lazy(() => import('./pages/HelpCenter'))
+const TyreAgeCompliance      = lazy(() => import('./pages/TyreAgeCompliance'))
+const RoiCalculator          = lazy(() => import('./pages/RoiCalculator'))
 const Analytics              = lazy(() => import('./pages/Analytics'))
 const BrandPerformance       = lazy(() => import('./pages/BrandPerformance'))
 const SiteComparison         = lazy(() => import('./pages/SiteComparison'))
@@ -324,6 +326,8 @@ function MainApp() {
                       <Route path="/custom-data" element={<Safe><ModuleRoute moduleKey="custom_data"><CustomData /></ModuleRoute></Safe>} />
                       <Route path="/settings"    element={<Safe><Settings /></Safe>} />
                       <Route path="/help"        element={<Safe><HelpCenter /></Safe>} />
+                      <Route path="/tyre-age-compliance" element={<Safe><TyreAgeCompliance /></Safe>} />
+                      <Route path="/roi-calculator"      element={<Safe><RoiCalculator /></Safe>} />
                       <Route path="/scan"        element={<Safe><TyreScan /></Safe>} />
                       <Route path="/qr-labels"   element={<Safe><QrLabels /></Safe>} />
                       {/* ── Platform (roadmap tranche: pages self-gate their roles) ── */}

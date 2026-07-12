@@ -113,6 +113,11 @@ const VehicleReservations    = lazy(() => import('./pages/VehicleReservations'))
 const BreakdownCallouts      = lazy(() => import('./pages/BreakdownCallouts'))
 const Weighbridge            = lazy(() => import('./pages/Weighbridge'))
 const Emissions              = lazy(() => import('./pages/Emissions'))
+const ProofOfDelivery        = lazy(() => import('./pages/ProofOfDelivery'))
+const FuelTheftAlerts        = lazy(() => import('./pages/FuelTheftAlerts'))
+const VehicleHandover        = lazy(() => import('./pages/VehicleHandover'))
+const DriverTraining         = lazy(() => import('./pages/DriverTraining'))
+const Tachograph             = lazy(() => import('./pages/Tachograph'))
 const Analytics              = lazy(() => import('./pages/Analytics'))
 const BrandPerformance       = lazy(() => import('./pages/BrandPerformance'))
 const SiteComparison         = lazy(() => import('./pages/SiteComparison'))
@@ -450,6 +455,11 @@ function MainApp() {
                       <Route path="/breakdowns"            element={<Safe><BreakdownCallouts /></Safe>} />
                       <Route path="/weighbridge"           element={<Safe><Weighbridge /></Safe>} />
                       <Route path="/emissions"             element={<Safe><Emissions /></Safe>} />
+                      <Route path="/proof-of-delivery"     element={<Safe><ProofOfDelivery /></Safe>} />
+                      <Route path="/fuel-theft"            element={<Safe><FuelTheftAlerts /></Safe>} />
+                      <Route path="/handovers"             element={<Safe><VehicleHandover /></Safe>} />
+                      <Route path="/driver-training"       element={<Safe><DriverTraining /></Safe>} />
+                      <Route path="/tachograph"            element={<Safe><Tachograph /></Safe>} />
                       <Route path="/scan"        element={<Safe><TyreScan /></Safe>} />
                       <Route path="/qr-labels"   element={<Safe><QrLabels /></Safe>} />
                       {/* ── Platform (roadmap tranche: pages self-gate their roles) ── */}

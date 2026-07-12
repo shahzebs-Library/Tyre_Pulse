@@ -22,6 +22,7 @@ import {
   Leaf, BadgeCheck, ScrollText, Navigation,
   Boxes, Combine, Snowflake, BatteryCharging, Router, Video, Receipt,
   Satellite, Landmark, BookMarked, PhoneCall, Scale,
+  Droplet, KeyRound, GraduationCap, FileClock,
   Wallet, FileCheck, Building2,
 } from 'lucide-react'
 // Branded domain icons (custom Tyre Pulse set) for the clearest fleet/tyre nav
@@ -124,6 +125,8 @@ const NAV_GROUPS = [
       { to: '/gps-tracking',        label: 'GPS Tracking',       icon: Satellite, adminOnly: A },
       { to: '/reservations',        label: 'Vehicle Reservations', icon: BookMarked, adminOnly: A },
       { to: '/weighbridge',         label: 'Weighbridge',        icon: Scale, adminOnly: A },
+      { to: '/proof-of-delivery',   label: 'Proof of Delivery',  icon: PackageCheck, adminOnly: A },
+      { to: '/handovers',           label: 'Vehicle Handover',   icon: KeyRound, adminOnly: A },
     ],
   },
   {
@@ -221,6 +224,9 @@ const NAV_GROUPS = [
       { to: '/video-telematics',       label: 'Video Telematics',    icon: Video, adminOnly: A },
       { to: '/hours-of-service',       label: 'Hours of Service',    icon: Clock, adminOnly: A },
       { to: '/emissions',              label: 'Emissions Tests',     icon: Leaf, adminOnly: A },
+      { to: '/driver-training',        label: 'Driver Training',     icon: GraduationCap, adminOnly: A },
+      { to: '/tachograph',             label: 'Tachograph',          icon: FileClock, adminOnly: A },
+      { to: '/fuel-theft',             label: 'Fuel Theft Alerts',   icon: Droplet, adminOnly: A },
       { to: '/retread',                label: 'Retread Management',  icon: Recycle, adminOnly: A },
     ],
   },

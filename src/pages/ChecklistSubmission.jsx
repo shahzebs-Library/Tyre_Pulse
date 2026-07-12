@@ -3,9 +3,12 @@ import { useParams, useNavigate } from 'react-router-dom'
 import {
   ClipboardCheck, ArrowLeft, ChevronRight, AlertTriangle, AlertOctagon,
   Star, PenLine, RefreshCw, CheckCircle2, XCircle, Download, Loader2, Gauge,
+  Truck, MapPin, User,
 } from 'lucide-react'
 import { getSubmission } from '../lib/api/checklists'
-import { isLayoutField } from '../lib/checklist/fieldTypes'
+import { isLayoutField, isReferenceField, referenceSource } from '../lib/checklist/fieldTypes'
+
+const REFERENCE_ICON = { asset: Truck, site: MapPin, user: User }
 import { exportChecklistSubmissionPdf } from '../lib/exportUtils'
 import { useTenant } from '../contexts/TenantContext'
 import EntityApprovalPanel from '../components/workflow/EntityApprovalPanel'
@@ -262,6 +265,17 @@ export default function ChecklistSubmission() {
                         ))}
                         {Number(r.value) > 0 && <span className="ml-1.5 text-xs text-[var(--text-muted)]">{Number(r.value)}/5</span>}
                       </div>
+                    ) : isReferenceField(r.type) ? (
+                      (() => {
+                        const RefIcon = REFERENCE_ICON[referenceSource(r.type)] || Truck
+                        return displayValue(r.value) === '-' ? (
+                          <p className="text-sm text-[var(--text-primary)] mt-0.5">-</p>
+                        ) : (
+                          <p className="mt-1 inline-flex items-center gap-1.5 text-sm text-[var(--text-primary)]">
+                            <RefIcon size={14} className="text-[var(--text-muted)] shrink-0" /> {displayValue(r.value)}
+                          </p>
+                        )
+                      })()
                     ) : r.type === 'boolean' || typeof r.value === 'boolean' ? (
                       <p className="mt-1">
                         {r.value === true || r.value === 'true'

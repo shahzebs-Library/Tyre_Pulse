@@ -7,9 +7,10 @@ import {
 import { useSettings } from '../contexts/SettingsContext'
 import { useAuth } from '../contexts/AuthContext'
 import { getTemplate, createSubmission, uploadChecklistPhoto } from '../lib/api/checklists'
-import { blankAnswer, validateSubmission, isLayoutField, isFieldVisible, computeScore } from '../lib/checklist/fieldTypes'
+import { blankAnswer, validateSubmission, isLayoutField, isFieldVisible, computeScore, isReferenceField, referenceSource } from '../lib/checklist/fieldTypes'
 import { completeAssignment } from '../lib/api/checklistSchedules'
 import SignaturePad from '../components/SignaturePad'
+import ReferencePicker from '../components/checklist/ReferencePicker'
 
 function isMissingRelation(err) {
   const m = String(err?.message || '').toLowerCase()
@@ -306,6 +307,7 @@ export default function ChecklistRun() {
             field={field}
             value={answers[field.id]}
             error={errors[field.id]}
+            country={activeCountry}
             onChange={(v) => setAnswer(field.id, v)}
             photos={photos[field.id] || []}
             uploading={!!uploading[field.id]}
@@ -373,7 +375,7 @@ function BackLink({ onClick }) {
 }
 
 // ── Field renderer ─────────────────────────────────────────────────────────────
-function FieldRenderer({ field, value, error, onChange, photos, uploading, onPickPhoto, onRemovePhoto, signature, onOpenSignature }) {
+function FieldRenderer({ field, value, error, onChange, country, photos, uploading, onPickPhoto, onRemovePhoto, signature, onOpenSignature }) {
   const fileRef = useRef(null)
   const type = field?.type
 
@@ -402,6 +404,16 @@ function FieldRenderer({ field, value, error, onChange, photos, uploading, onPic
     <div id={`field-${field.id}`} className={`rounded-lg ${error ? 'ring-1 ring-red-500/50 p-3 -m-0.5 bg-red-900/5' : ''}`}>
       {type !== 'signature' && labelEl}
       {field.help && type !== 'section' && <p className="text-xs text-[var(--text-muted)] -mt-1 mb-1.5">{field.help}</p>}
+
+      {isReferenceField(type) && (
+        <ReferencePicker
+          source={referenceSource(type)}
+          value={value ?? ''}
+          onChange={(v) => onChange(v)}
+          country={country}
+          placeholder={`Select ${field.label || 'value'}`}
+        />
+      )}
 
       {type === 'text' && (
         <input className="input" value={value ?? ''} onChange={(e) => onChange(e.target.value)} placeholder="Enter value" />

@@ -5,12 +5,14 @@ import {
   ChevronUp, ChevronDown, GripVertical, AlertCircle, CheckCircle2, XCircle,
   Type, AlignLeft, Hash, List, ListChecks, ToggleRight, Calendar, Star,
   Camera, PenLine, Heading, Eye, Copy, X, Info, Filter, Scale, Target,
+  Truck, MapPin, User, Sparkles, Link2,
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
 import { useSettings } from '../contexts/SettingsContext'
 import {
   FIELD_TYPES, newField, typeHasOptions, isLayoutField, isValueField,
-  validateTemplate, fieldTypeDef,
+  validateTemplate, fieldTypeDef, isReferenceField, referenceSource,
+  FIELD_LIBRARY, fieldFromLibrary,
 } from '../lib/checklist/fieldTypes'
 import {
   getTemplate, createTemplate, updateTemplate, publishTemplate,
@@ -38,17 +40,33 @@ const TYPE_ICON = {
   boolean: ToggleRight,
   date: Calendar,
   rating: Star,
+  asset: Truck,
+  site: MapPin,
+  user: User,
   photo: Camera,
   signature: PenLine,
+}
+
+// Reference source → { icon, noun, placeholder } for editor + preview copy.
+const REFERENCE_META = {
+  asset: { Icon: Truck, noun: 'Assets', placeholder: 'Select an asset…' },
+  site:  { Icon: MapPin, noun: 'Sites', placeholder: 'Select a site…' },
+  user:  { Icon: User,  noun: 'Users', placeholder: 'Select a user…' },
+}
+
+function referenceMeta(type) {
+  const src = referenceSource(type)
+  return (src && REFERENCE_META[src]) || REFERENCE_META.asset
 }
 
 const GROUP_LABELS = {
   layout: 'Layout',
   input: 'Input',
   choice: 'Choice',
+  reference: 'Reference (live data)',
   media: 'Media',
 }
-const GROUP_ORDER = ['layout', 'input', 'choice', 'media']
+const GROUP_ORDER = ['layout', 'input', 'choice', 'reference', 'media']
 
 // Conditional-visibility operators (mirror lib/checklist/fieldTypes COND_OPS).
 // `needsValue` = the value input is shown for this operator.
@@ -427,12 +445,15 @@ function FieldRow({ field, index, total, expanded, error, allFields, scored, onT
   const layout = isLayoutField(field.type)
   const hasOptions = typeHasOptions(field.type)
   const isMedia = field.type === 'photo' || field.type === 'signature'
+  const isReference = isReferenceField(field.type)
+  const refMeta = isReference ? referenceMeta(field.type) : null
 
   const set = (key, value) => onChange({ ...field, [key]: value })
 
   return (
     <div
-      className={`rounded-xl border bg-[var(--surface-2)] transition-all ${
+      id={`field-${field.id}`}
+      className={`rounded-xl border bg-[var(--surface-2)] transition-all scroll-mt-4 ${
         error ? 'border-red-500/60' : 'border-[var(--border-dim)]'
       }`}
     >
@@ -487,6 +508,11 @@ function FieldRow({ field, index, total, expanded, error, allFields, scored, onT
             {field.required && !layout && <span className="text-amber-400">• required</span>}
             {field.allow_photo && !isMedia && !layout && <span>• photo</span>}
             {hasOptions && <span>• {(field.options || []).length} options</span>}
+            {isReference && (
+              <span className="inline-flex items-center gap-1 text-[var(--brand-bright)]">
+                • <Link2 className="w-2.5 h-2.5" /> live data
+              </span>
+            )}
             {field.visibleWhen && field.visibleWhen.field && (
               <span className="inline-flex items-center gap-1 text-[var(--brand-bright)]">
                 • <Filter className="w-2.5 h-2.5" /> conditional
@@ -580,6 +606,20 @@ function FieldRow({ field, index, total, expanded, error, allFields, scored, onT
                   placeholder="—"
                   className={INPUT_CLS}
                 />
+              </div>
+            </div>
+          )}
+
+          {isReference && refMeta && (
+            <div className="flex items-start gap-2 p-2.5 rounded-lg bg-[var(--surface-1)] border border-[var(--border-dim)]">
+              <span className="w-7 h-7 shrink-0 rounded-lg bg-brand-subtle text-[var(--brand-bright)] flex items-center justify-center">
+                <refMeta.Icon className="w-3.5 h-3.5" />
+              </span>
+              <div className="min-w-0">
+                <p className="text-xs font-semibold text-[var(--text-primary)]">Live reference field</p>
+                <p className="text-[11px] text-[var(--text-muted)] leading-snug mt-0.5">
+                  Filled from your real {refMeta.noun} at check time — no options to configure here.
+                </p>
               </div>
             </div>
           )}
@@ -692,6 +732,90 @@ function AddFieldMenu({ onAdd }) {
   )
 }
 
+// ─── Field library / suggestions panel ────────────────────────────────────────
+
+function LibraryChip({ type }) {
+  const def = fieldTypeDef(type)
+  const Icon = TYPE_ICON[type] || Type
+  return (
+    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-medium bg-[var(--surface-2)] border border-[var(--border-dim)] text-[var(--text-muted)] shrink-0">
+      <Icon className="w-2.5 h-2.5" /> {def?.label || type}
+    </span>
+  )
+}
+
+function FieldLibraryPanel({ onAdd }) {
+  const [open, setOpen] = useState(false)
+  const groups = Array.isArray(FIELD_LIBRARY) ? FIELD_LIBRARY : []
+
+  return (
+    <div className="rounded-xl border border-[var(--border-dim)] bg-[var(--surface-2)] overflow-hidden">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
+        className="w-full flex items-center gap-2.5 px-3 py-2.5 text-left hover:bg-[var(--surface-1)] transition-colors"
+      >
+        <span className="w-7 h-7 shrink-0 rounded-lg bg-brand-subtle text-[var(--brand-bright)] flex items-center justify-center">
+          <Sparkles className="w-4 h-4" />
+        </span>
+        <span className="flex-1 min-w-0">
+          <span className="block text-sm font-semibold text-[var(--text-primary)]">Add from library</span>
+          <span className="block text-[11px] text-[var(--text-muted)] leading-snug">
+            Curated tyre, vehicle &amp; safety fields — one click to add.
+          </span>
+        </span>
+        <ChevronDown className={`w-4 h-4 shrink-0 text-[var(--text-muted)] transition-transform ${open ? 'rotate-180' : ''}`} />
+      </button>
+
+      {open && (
+        <div className="border-t border-[var(--border-dim)] p-3 space-y-3 max-h-[420px] overflow-y-auto">
+          {groups.length === 0 ? (
+            <p className="text-xs text-[var(--text-muted)] italic">No library suggestions available.</p>
+          ) : (
+            groups.map((group) => {
+              const presets = Array.isArray(group?.fields) ? group.fields : []
+              if (!presets.length) return null
+              return (
+                <div key={group.category}>
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-muted)] mb-1.5">
+                    {group.category}
+                  </p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                    {presets.map((preset, i) => {
+                      const Icon = TYPE_ICON[preset?.type] || Type
+                      return (
+                        <button
+                          key={`${group.category}-${i}`}
+                          type="button"
+                          onClick={() => onAdd(preset)}
+                          className="group flex items-center gap-2 px-2.5 py-2 rounded-lg border border-[var(--border-dim)] bg-[var(--surface-1)] text-left hover:border-[var(--brand-bright)] hover:bg-brand-subtle transition-all"
+                          title={`Add "${preset?.label || preset?.type}"`}
+                        >
+                          <span className="w-6 h-6 shrink-0 rounded-md bg-brand-subtle text-[var(--brand-bright)] flex items-center justify-center">
+                            <Icon className="w-3.5 h-3.5" />
+                          </span>
+                          <span className="min-w-0 flex-1">
+                            <span className="block text-xs font-medium text-[var(--text-primary)] truncate">
+                              {preset?.label || 'Untitled'}
+                            </span>
+                          </span>
+                          <span className="hidden sm:block"><LibraryChip type={preset?.type} /></span>
+                          <Plus className="w-3.5 h-3.5 shrink-0 text-[var(--text-muted)] group-hover:text-[var(--brand-bright)]" />
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+              )
+            })
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ─── Runtime preview of one field ─────────────────────────────────────────────
 
 function ConditionalBadge({ field, allFields }) {
@@ -793,6 +917,16 @@ function PreviewField({ field, allFields, scored }) {
           ))}
         </div>
       )}
+      {isReferenceField(field.type) && (() => {
+        const meta = referenceMeta(field.type)
+        return (
+          <div className={`${INPUT_CLS} cursor-not-allowed flex items-center gap-2 text-[var(--text-muted)]`}>
+            <meta.Icon className="w-4 h-4 shrink-0 text-[var(--brand-bright)]" />
+            <span className="flex-1 truncate">{meta.placeholder}</span>
+            <ChevronDown className="w-4 h-4 shrink-0" />
+          </div>
+        )
+      })()}
       {field.type === 'photo' && (
         <div className="flex items-center gap-2 px-3 py-3 rounded-lg border border-dashed border-[var(--border-dim)] bg-[var(--surface-2)] text-[var(--text-muted)] text-sm">
           <Camera className="w-4 h-4" /> Photo capture
@@ -875,6 +1009,7 @@ export default function ChecklistBuilder() {
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState(null)
   const [savedNote, setSavedNote] = useState(null)
+  const [dirty, setDirty] = useState(false)
 
   // ── Load (edit mode) ──
   const load = useCallback(async () => {
@@ -889,6 +1024,7 @@ export default function ChecklistBuilder() {
       }
       setDraft(toDraft(row, activeCountry))
       setTemplateId(row.id)
+      setDirty(false)
     } catch (err) {
       setLoadError(err?.message || 'Failed to load the template.')
     } finally {
@@ -901,6 +1037,7 @@ export default function ChecklistBuilder() {
   // ── Mutators ──
   const set = (key, value) => {
     setDraft((d) => ({ ...d, [key]: value }))
+    setDirty(true)
     setSavedNote(null)
   }
 
@@ -908,17 +1045,35 @@ export default function ChecklistBuilder() {
     const f = newField(type)
     setDraft((d) => ({ ...d, fields: [...(d.fields || []), f] }))
     setExpandedId(f.id)
+    setDirty(true)
     setSavedNote(null)
+  }
+
+  const addFromLibrary = (preset) => {
+    const f = fieldFromLibrary(preset || {})
+    setDraft((d) => ({ ...d, fields: [...(d.fields || []), f] }))
+    setExpandedId(f.id)
+    setDirty(true)
+    setSavedNote(null)
+    // Bring the newly added field into view on the next paint.
+    if (typeof window !== 'undefined') {
+      window.requestAnimationFrame(() => {
+        const el = document.getElementById(`field-${f.id}`)
+        if (el && el.scrollIntoView) el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      })
+    }
   }
 
   const changeField = (fieldId, next) => {
     setDraft((d) => ({ ...d, fields: (d.fields || []).map((f) => (f.id === fieldId ? next : f)) }))
     setFieldErrors((e) => { const n = { ...e }; delete n[fieldId]; return n })
+    setDirty(true)
     setSavedNote(null)
   }
 
   const removeField = (index) => {
     setDraft((d) => ({ ...d, fields: (d.fields || []).filter((_, i) => i !== index) }))
+    setDirty(true)
     setSavedNote(null)
   }
 
@@ -932,6 +1087,7 @@ export default function ChecklistBuilder() {
       next.splice(index + 1, 0, copy)
       return { ...d, fields: next }
     })
+    setDirty(true)
     setSavedNote(null)
   }
 
@@ -943,6 +1099,7 @@ export default function ChecklistBuilder() {
       list.splice(to, 0, moved)
       return { ...d, fields: list }
     })
+    setDirty(true)
     setSavedNote(null)
   }
 
@@ -1047,6 +1204,7 @@ export default function ChecklistBuilder() {
     setSavedNote(null)
     try {
       const newId = await persist('draft')
+      setDirty(false)
       setSavedNote('Draft saved.')
       // Reflect the id in the URL so subsequent saves update (not duplicate).
       if (newId && !isEdit) navigate(`/checklist-builder/${newId}`, { replace: true })
@@ -1294,15 +1452,25 @@ export default function ChecklistBuilder() {
 
           {/* Fields */}
           <section className="card space-y-4">
-            <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center justify-between gap-3 flex-wrap">
               <div>
-                <h3 className="text-sm font-bold text-[var(--text-primary)]">Fields</h3>
+                <h3 className="text-sm font-bold text-[var(--text-primary)] flex items-center gap-2">
+                  Fields
+                  {dirty && (
+                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-semibold bg-amber-500/15 text-amber-400 border border-amber-500/30">
+                      Unsaved changes
+                    </span>
+                  )}
+                </h3>
                 <p className="text-xs text-[var(--text-muted)]">
                   {fields.length} field{fields.length === 1 ? '' : 's'} · {contentCount} answerable
+                  {scored && totalPoints > 0 ? ` · ${totalPoints} pt${totalPoints === 1 ? '' : 's'}` : ''}
                 </p>
               </div>
               <AddFieldMenu onAdd={addField} />
             </div>
+
+            <FieldLibraryPanel onAdd={addFromLibrary} />
 
             {fields.length === 0 ? (
               <div className="flex flex-col items-center justify-center text-center py-12 px-4 rounded-xl border border-dashed border-[var(--border-dim)] bg-[var(--surface-2)]">
@@ -1311,7 +1479,9 @@ export default function ChecklistBuilder() {
                 </div>
                 <p className="text-sm font-semibold text-[var(--text-primary)]">No fields yet</p>
                 <p className="text-xs text-[var(--text-muted)] mt-1 max-w-xs">
-                  Add sections and questions to build your checklist. Use “Add field” to choose a type.
+                  Start from the <span className="text-[var(--brand-bright)] font-medium">library</span> above for common
+                  tyre &amp; safety checks, or use <span className="text-[var(--brand-bright)] font-medium">Add field</span> to
+                  build one from scratch. Reference fields (Asset, Site, User) pull live data at check time.
                 </p>
               </div>
             ) : (
@@ -1430,6 +1600,7 @@ export default function ChecklistBuilder() {
             </div>
             <p className="text-[11px] text-[var(--text-muted)] mt-3 leading-relaxed">
               Fields render read-only here. Required questions are marked with a red asterisk.
+              Reference fields (Asset, Site, User) load live options at check time.
             </p>
           </div>
         </div>
@@ -1438,9 +1609,16 @@ export default function ChecklistBuilder() {
       {/* Sticky action bar */}
       <div className="fixed bottom-0 inset-x-0 z-10 lg:pl-[var(--sidebar-w,0px)]">
         <div className="border-t border-[var(--border-dim)] bg-[var(--surface-1)]/95 backdrop-blur-sm px-4 sm:px-6 py-3 flex items-center justify-between gap-3">
-          <p className="text-xs text-[var(--text-muted)] hidden sm:block">
-            {contentCount} answerable field{contentCount === 1 ? '' : 's'}
-            {draft.status === 'published' ? ' · currently published' : ' · draft'}
+          <p className="text-xs text-[var(--text-muted)] hidden sm:flex items-center gap-1.5">
+            <span>
+              {contentCount} answerable field{contentCount === 1 ? '' : 's'}
+              {draft.status === 'published' ? ' · currently published' : ' · draft'}
+            </span>
+            {dirty && (
+              <span className="inline-flex items-center gap-1 text-amber-400 font-medium">
+                <span className="w-1.5 h-1.5 rounded-full bg-amber-400" /> Unsaved
+              </span>
+            )}
           </p>
           <div className="flex items-center gap-2 ml-auto">
             <button

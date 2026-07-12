@@ -28,9 +28,77 @@ export const FIELD_TYPES = [
   { type: 'boolean',     label: 'Yes / No',        hasOptions: false, group: 'choice',  desc: 'A pass/fail or yes/no toggle.' },
   { type: 'date',        label: 'Date',            hasOptions: false, group: 'input',   desc: 'A calendar date.' },
   { type: 'rating',      label: 'Rating (1-5)',    hasOptions: false, group: 'choice',  desc: 'A 1 to 5 star/score rating.' },
+  // Reference fields resolve real data at fill time (no manual options).
+  { type: 'asset',       label: 'Asset / Vehicle', hasOptions: false, group: 'reference', source: 'asset', desc: 'Pick a real asset from the fleet.' },
+  { type: 'site',        label: 'Site',            hasOptions: false, group: 'reference', source: 'site',  desc: 'Pick a real site from the Sites master.' },
+  { type: 'user',        label: 'User / Person',   hasOptions: false, group: 'reference', source: 'user',  desc: 'Pick a real user from your organisation.' },
   { type: 'photo',       label: 'Photo capture',   hasOptions: false, group: 'media',   desc: 'One or more photos.' },
   { type: 'signature',   label: 'Signature',       hasOptions: false, group: 'media',   desc: 'A captured signature.' },
 ]
+
+// Reference field types resolve their choices from live data at fill time.
+export const REFERENCE_TYPES = ['asset', 'site', 'user']
+export function isReferenceField(type) { return REFERENCE_TYPES.includes(type) }
+export function referenceSource(type) { return fieldTypeDef(type)?.source || null }
+
+/**
+ * Curated, ready-to-add field suggestions grouped by category. The builder lets
+ * a designer click one to drop a fully-configured field in — so common tyre /
+ * fleet / safety checks don't have to be hand-built each time.
+ */
+export const FIELD_LIBRARY = [
+  {
+    category: 'Identification',
+    fields: [
+      { label: 'Asset / Vehicle', type: 'asset', required: true },
+      { label: 'Site', type: 'site', required: true },
+      { label: 'Inspector', type: 'user', required: true },
+      { label: 'Date of check', type: 'date', required: true },
+      { label: 'Odometer (km)', type: 'number', min: 0 },
+    ],
+  },
+  {
+    category: 'Tyre',
+    fields: [
+      { label: 'Tyre pressure (bar)', type: 'number', min: 0, max: 15, weight: 2, allow_photo: true },
+      { label: 'Tread depth (mm)', type: 'number', min: 0, max: 30, weight: 2 },
+      { label: 'Tyre condition', type: 'select', options: ['Good', 'Worn', 'Damaged', 'Flat', 'Missing'], weight: 3, passValues: ['Good'] },
+      { label: 'Visible damage?', type: 'boolean', allow_photo: true, weight: 2, passValues: [false] },
+      { label: 'Tyre position', type: 'select', options: ['Steer', 'Drive', 'Trailer', 'Spare'] },
+    ],
+  },
+  {
+    category: 'Vehicle & Safety',
+    fields: [
+      { label: 'Brakes OK?', type: 'boolean', weight: 3, passValues: [true] },
+      { label: 'Lights working?', type: 'boolean', weight: 2, passValues: [true] },
+      { label: 'Wheel nuts torqued?', type: 'boolean', weight: 3, passValues: [true] },
+      { label: 'Overall safety rating', type: 'rating' },
+      { label: 'Photo of any issue', type: 'photo' },
+    ],
+  },
+  {
+    category: 'Sign-off',
+    fields: [
+      { label: 'Notes / observations', type: 'textarea' },
+      { label: 'Action required?', type: 'boolean' },
+      { label: 'Follow-up owner', type: 'user' },
+      { label: 'Signature', type: 'signature' },
+    ],
+  },
+]
+
+/** Build a field from a library suggestion, merging its preset over defaults. */
+export function fieldFromLibrary(preset = {}) {
+  const base = newField(preset.type || 'text')
+  return {
+    ...base,
+    ...preset,
+    id: base.id, // always a fresh id
+    options: preset.options ?? base.options,
+    passValues: preset.passValues ?? base.passValues,
+  }
+}
 
 const BY_TYPE = Object.fromEntries(FIELD_TYPES.map((f) => [f.type, f]))
 
@@ -224,4 +292,5 @@ export default {
   FIELD_TYPES, fieldTypeDef, typeHasOptions, isLayoutField, isValueField,
   newField, newFieldId, blankAnswer, validateAnswer, validateSubmission, validateTemplate,
   evalCondition, isFieldVisible, computeScore,
+  REFERENCE_TYPES, isReferenceField, referenceSource, FIELD_LIBRARY, fieldFromLibrary,
 }

@@ -3,6 +3,7 @@ import {
   FIELD_TYPES, newField, newFieldId, typeHasOptions, isLayoutField, isValueField,
   blankAnswer, validateAnswer, validateSubmission, validateTemplate, fieldTypeDef,
   evalCondition, isFieldVisible, computeScore,
+  REFERENCE_TYPES, isReferenceField, referenceSource, FIELD_LIBRARY, fieldFromLibrary,
 } from '../lib/checklist/fieldTypes'
 
 describe('checklist fieldTypes registry', () => {
@@ -114,6 +115,33 @@ describe('checklist fieldTypes registry', () => {
     const s2 = computeScore(fields, { a: true, b: 'Good' }, 70)
     expect(s2.pct).toBe(100)
     expect(s2.passed).toBe(true)
+  })
+
+  it('reference field types are value fields with a live source', () => {
+    expect(REFERENCE_TYPES).toEqual(expect.arrayContaining(['asset', 'site', 'user']))
+    expect(isReferenceField('site')).toBe(true)
+    expect(isReferenceField('text')).toBe(false)
+    expect(referenceSource('asset')).toBe('asset')
+    expect(isValueField('site')).toBe(true)      // stores a value
+    expect(typeHasOptions('asset')).toBe(false)  // resolved live, not hand-listed
+    // Required reference field validates like text.
+    expect(validateAnswer({ type: 'site', label: 'Site', required: true }, '')).toMatch(/required/i)
+    expect(validateAnswer({ type: 'site', required: true }, 'Riyadh Depot')).toBeNull()
+  })
+
+  it('FIELD_LIBRARY + fieldFromLibrary produce ready-to-use fields', () => {
+    expect(Array.isArray(FIELD_LIBRARY)).toBe(true)
+    expect(FIELD_LIBRARY.length).toBeGreaterThan(0)
+    const preset = FIELD_LIBRARY[1].fields.find((f) => f.type === 'select')
+    const f = fieldFromLibrary(preset)
+    expect(f.id).toBeTruthy()
+    expect(f.type).toBe('select')
+    expect(f.label).toBe(preset.label)
+    expect(f.options).toEqual(preset.options)
+    // A weighted boolean preset carries its passValues through.
+    const bool = fieldFromLibrary({ label: 'Brakes OK?', type: 'boolean', weight: 3, passValues: [true] })
+    expect(bool.weight).toBe(3)
+    expect(bool.passValues).toEqual([true])
   })
 
   it('validateTemplate flags structural problems', () => {

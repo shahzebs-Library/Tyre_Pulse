@@ -177,7 +177,7 @@ export default function OpsIntelligence() {
             <button onClick={() => exportToExcel(exportRows, EXPORT_COLS, EXPORT_HEADERS, 'ops_intelligence_exceptions')} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!filtered.length}>
               <FileSpreadsheet size={14} /> Excel
             </button>
-            <button onClick={() => exportToPdf(exportRows, EXPORT_COLS, 'Ops Intelligence — Exception Command Center', 'ops_intelligence_exceptions', 'landscape')} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!filtered.length}>
+            <button onClick={() => exportToPdf(exportRows, EXPORT_COLS.map((k, i) => ({ key: k, header: EXPORT_HEADERS[i] })), 'Ops Intelligence — Exception Command Center', 'ops_intelligence_exceptions', 'landscape')} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!filtered.length}>
               <FileText size={14} /> PDF
             </button>
           </div>

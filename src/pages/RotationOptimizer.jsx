@@ -157,7 +157,7 @@ export default function RotationOptimizer() {
             <button onClick={() => exportToExcel(exportRows, EXPORT_COLS, EXPORT_HEADERS, 'rotation_optimizer')} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!exportRows.length}>
               <FileSpreadsheet size={14} /> Excel
             </button>
-            <button onClick={() => exportToPdf(exportRows, EXPORT_COLS, 'Rotation Optimizer', 'rotation_optimizer', 'landscape')} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!exportRows.length}>
+            <button onClick={() => exportToPdf(exportRows, EXPORT_COLS.map((k, i) => ({ key: k, header: EXPORT_HEADERS[i] })), 'Rotation Optimizer', 'rotation_optimizer', 'landscape')} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!exportRows.length}>
               <FileText size={14} /> PDF
             </button>
           </div>

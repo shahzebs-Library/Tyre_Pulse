@@ -164,7 +164,7 @@ export default function FleetRiskScore() {
             <button onClick={() => exportToExcel(exportRows, EXPORT_COLS, EXPORT_HEADERS, 'fleet_risk_score')} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!filtered.length}>
               <FileSpreadsheet size={14} /> Excel
             </button>
-            <button onClick={() => exportToPdf(exportRows, EXPORT_COLS, 'Fleet Risk Score', 'fleet_risk_score', 'landscape')} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!filtered.length}>
+            <button onClick={() => exportToPdf(exportRows, EXPORT_COLS.map((k, i) => ({ key: k, header: EXPORT_HEADERS[i] })), 'Fleet Risk Score', 'fleet_risk_score', 'landscape')} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!filtered.length}>
               <FileText size={14} /> PDF
             </button>
           </div>

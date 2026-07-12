@@ -169,7 +169,7 @@ export default function TechnicianScorecard() {
             <button onClick={() => exportToExcel(exportRows, EXPORT_COLS, EXPORT_HEADERS, 'technician_scorecard')} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!sorted.length}>
               <FileSpreadsheet size={14} /> Excel
             </button>
-            <button onClick={() => exportToPdf(exportRows, EXPORT_COLS, 'Technician Scorecard', 'technician_scorecard', 'landscape')} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!sorted.length}>
+            <button onClick={() => exportToPdf(exportRows, EXPORT_COLS.map((k, i) => ({ key: k, header: EXPORT_HEADERS[i] })), 'Technician Scorecard', 'technician_scorecard', 'landscape')} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!sorted.length}>
               <FileText size={14} /> PDF
             </button>
           </div>

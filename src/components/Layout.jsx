@@ -19,6 +19,7 @@ import {
   Recycle, Radio, PackagePlus, CalendarCheck2, BellRing, Brain, BarChart, Download,
   Webhook, CheckSquare, CreditCard, Palette, LifeBuoy,
   Award, PackageCheck, Calculator, Siren, ShieldAlert, SlidersHorizontal,
+  Leaf, BadgeCheck,
 } from 'lucide-react'
 // Branded domain icons (custom Tyre Pulse set) for the clearest fleet/tyre nav
 // items. Same ({ size, strokeWidth }) API as Lucide, so they drop straight in.
@@ -100,6 +101,8 @@ const NAV_GROUPS = [
       { to: '/anomalies',           label: 'Anomaly Scan',       icon: AnomalyScanIc, adminOnly: A },
       { to: '/maintenance-calendar', label: 'Maintenance Calendar', icon: Calendar, adminOnly: A },
       { to: '/erp-sync',            label: 'ERP Sync',           icon: Database, roles: ERP_ROLES },
+      { to: '/rfid',                label: 'RFID Registry',      icon: Radio, adminOnly: A },
+      { to: '/geofencing',          label: 'Geofencing',         icon: MapPin, adminOnly: A },
     ],
   },
   {
@@ -124,6 +127,7 @@ const NAV_GROUPS = [
       { to: '/tyre-passport',          label: 'Tyre Passport',          icon: ScanLine },
       { to: '/fleet-risk-score',       label: 'Fleet Risk Score',       icon: ShieldAlert, roles: ANALYTICS_ROLES },
       { to: '/rotation-optimizer',     label: 'Rotation Optimizer',     icon: RotateCcw, roles: ANALYTICS_ROLES },
+      { to: '/carbon-tracker',         label: 'Carbon Tracker',         icon: Leaf, roles: ANALYTICS_ROLES },
       { to: '/rotation',               label: 'Rotation Schedule',      icon: TyreRotationIc, adminOnly: A },
       { to: '/ai',                     label: 'Smart Analytics',        icon: Sparkles, adminOnly: A },
     ],
@@ -135,6 +139,7 @@ const NAV_GROUPS = [
       { to: '/gate-pass',       label: 'Gate Pass',          icon: GatePassIc },
       { to: '/workshop',        label: 'Workshop Management', icon: WorkshopIc, adminOnly: A },
       { to: '/technician-scorecard', label: 'Technician Scorecard', icon: Award, adminOnly: A },
+      { to: '/fuel-cards',      label: 'Fuel Cards',         icon: CreditCard, adminOnly: A },
       { to: '/downtime',        label: 'Downtime Tracker',   icon: Clock, adminOnly: A },
       { to: '/fuel-efficiency', label: 'Fuel Efficiency',    icon: FuelPumpIc, adminOnly: A },
     ],
@@ -147,6 +152,7 @@ const NAV_GROUPS = [
       { to: '/scrap',               label: 'Scrap Management',    icon: ScrapBinIc },
       { to: '/tyre-pool',           label: 'Tyre Pool',           icon: PackageCheck },
       { to: '/cost-scenario-planner', label: 'Cost Scenario Planner', icon: SlidersHorizontal, roles: ANALYTICS_ROLES },
+      { to: '/contracts',           label: 'Contracts',           icon: FileText },
       { to: '/budgets',             label: 'Budgets & Cost',      icon: DollarSign },
       { to: '/procurement',         label: 'Procurement',         icon: PurchaseOrderIc, adminOnly: A },
       { to: '/suppliers',           label: 'Supplier Management', icon: SupplierTruckIc, adminOnly: A },
@@ -159,6 +165,8 @@ const NAV_GROUPS = [
     items: [
       { to: '/inspections',            label: 'Inspections',         icon: ClipboardCheck },
       { to: '/fitment-validation',     label: 'Fitment Validation',  icon: ShieldCheck, roles: ANALYTICS_ROLES },
+      { to: '/tpms',                   label: 'TPMS',                icon: Radio, adminOnly: A },
+      { to: '/certifications',         label: 'Certifications',      icon: BadgeCheck },
       { to: '/checklists',             label: 'Checklists',          icon: ListChecks },
       { to: '/my-checklists',          label: 'My Checklists',       icon: ClipboardList },
       { to: '/checklist-schedules',    label: 'Checklist Schedules', icon: Calendar, adminOnly: A },
@@ -178,6 +186,7 @@ const NAV_GROUPS = [
     items: [
       { to: '/accidents',      label: 'Accidents',       icon: AlertOctagon },
       { to: '/warranty',       label: 'Warranty Tracker', icon: ShieldCheck },
+      { to: '/insurance-claims', label: 'Insurance Claims', icon: ShieldAlert },
       { to: '/recall-tracker', label: 'Recall Tracker',  icon: AlertCircle, adminOnly: A },
     ],
   },

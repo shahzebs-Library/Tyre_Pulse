@@ -156,7 +156,7 @@ export default function TyreAgeCompliance() {
             <button onClick={() => exportToExcel(exportRows, EXPORT_COLS, EXPORT_HEADERS, 'tyre_age_compliance')} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!filtered.length}>
               <FileSpreadsheet size={14} /> Excel
             </button>
-            <button onClick={() => exportToPdf(exportRows, EXPORT_COLS, 'Tyre Age Compliance', 'tyre_age_compliance', 'landscape')} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!filtered.length}>
+            <button onClick={() => exportToPdf(exportRows, EXPORT_COLS.map((k, i) => ({ key: k, header: EXPORT_HEADERS[i] })), 'Tyre Age Compliance', 'tyre_age_compliance', 'landscape')} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!filtered.length}>
               <FileText size={14} /> PDF
             </button>
           </div>

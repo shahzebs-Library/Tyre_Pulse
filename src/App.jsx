@@ -62,6 +62,14 @@ const OpsIntelligence        = lazy(() => import('./pages/OpsIntelligence'))
 const FleetRiskScore         = lazy(() => import('./pages/FleetRiskScore'))
 const RotationOptimizer      = lazy(() => import('./pages/RotationOptimizer'))
 const CostScenarioPlanner    = lazy(() => import('./pages/CostScenarioPlanner'))
+const CarbonTracker          = lazy(() => import('./pages/CarbonTracker'))
+const Tpms                   = lazy(() => import('./pages/Tpms'))
+const Contracts              = lazy(() => import('./pages/Contracts'))
+const Rfid                   = lazy(() => import('./pages/Rfid'))
+const Geofencing             = lazy(() => import('./pages/Geofencing'))
+const InsuranceClaims        = lazy(() => import('./pages/InsuranceClaims'))
+const FuelCards              = lazy(() => import('./pages/FuelCards'))
+const Certifications         = lazy(() => import('./pages/Certifications'))
 const Analytics              = lazy(() => import('./pages/Analytics'))
 const BrandPerformance       = lazy(() => import('./pages/BrandPerformance'))
 const SiteComparison         = lazy(() => import('./pages/SiteComparison'))
@@ -347,6 +355,14 @@ function MainApp() {
                       <Route path="/fleet-risk-score"      element={<Safe><FleetRiskScore /></Safe>} />
                       <Route path="/rotation-optimizer"    element={<Safe><RotationOptimizer /></Safe>} />
                       <Route path="/cost-scenario-planner" element={<Safe><CostScenarioPlanner /></Safe>} />
+                      <Route path="/carbon-tracker"        element={<Safe><CarbonTracker /></Safe>} />
+                      <Route path="/tpms"                  element={<Safe><Tpms /></Safe>} />
+                      <Route path="/contracts"             element={<Safe><Contracts /></Safe>} />
+                      <Route path="/rfid"                  element={<Safe><Rfid /></Safe>} />
+                      <Route path="/geofencing"            element={<Safe><Geofencing /></Safe>} />
+                      <Route path="/insurance-claims"      element={<Safe><InsuranceClaims /></Safe>} />
+                      <Route path="/fuel-cards"            element={<Safe><FuelCards /></Safe>} />
+                      <Route path="/certifications"        element={<Safe><Certifications /></Safe>} />
                       <Route path="/scan"        element={<Safe><TyreScan /></Safe>} />
                       <Route path="/qr-labels"   element={<Safe><QrLabels /></Safe>} />
                       {/* ── Platform (roadmap tranche: pages self-gate their roles) ── */}

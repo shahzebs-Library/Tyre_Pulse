@@ -41,6 +41,21 @@ export const REFERENCE_TYPES = ['asset', 'site', 'user']
 export function isReferenceField(type) { return REFERENCE_TYPES.includes(type) }
 export function referenceSource(type) { return fieldTypeDef(type)?.source || null }
 
+// Auto-filled fields are prefilled from context and locked at fill time.
+export const AUTO_VALUES = ['current_user', 'today']
+export function isAutoField(field) { return AUTO_VALUES.includes(field?.autoValue) }
+
+/**
+ * The value an auto field should carry, from live context. `ctx.userName` is the
+ * signed-in operator; `ctx.today` an ISO date (defaults to now). Returns '' when
+ * the field isn't auto.
+ */
+export function resolveAutoValue(field, ctx = {}) {
+  if (field?.autoValue === 'current_user') return ctx.userName || ''
+  if (field?.autoValue === 'today') return ctx.today || new Date().toISOString().slice(0, 10)
+  return ''
+}
+
 /**
  * Curated, ready-to-add field suggestions grouped by category. The builder lets
  * a designer click one to drop a fully-configured field in — so common tyre /
@@ -52,9 +67,10 @@ export const FIELD_LIBRARY = [
     fields: [
       { label: 'Asset / Vehicle', type: 'asset', required: true },
       { label: 'Site', type: 'site', required: true },
-      { label: 'Inspector', type: 'user', required: true },
-      { label: 'Date of check', type: 'date', required: true },
+      { label: 'Inspector', type: 'user', required: true, autoValue: 'current_user' },
+      { label: 'Date of check', type: 'date', required: true, autoValue: 'today' },
       { label: 'Odometer (km)', type: 'number', min: 0 },
+      { label: 'Hour meter (hrs)', type: 'number', min: 0 },
     ],
   },
   {
@@ -135,6 +151,9 @@ export function newField(type = 'text') {
     min: null,
     max: null,
     default: def.type === 'multiselect' ? [] : '',
+    // Auto-fill + lock: 'current_user' prefills the signed-in user's name,
+    // 'today' prefills the current date; both render read-only. `null` = normal.
+    autoValue: null,
     // Conditional visibility: show this field only when another field's answer
     // matches. `null` = always visible. Shape: { field, op, value }.
     visibleWhen: null,
@@ -293,4 +312,5 @@ export default {
   newField, newFieldId, blankAnswer, validateAnswer, validateSubmission, validateTemplate,
   evalCondition, isFieldVisible, computeScore,
   REFERENCE_TYPES, isReferenceField, referenceSource, FIELD_LIBRARY, fieldFromLibrary,
+  AUTO_VALUES, isAutoField, resolveAutoValue,
 }

@@ -5,14 +5,14 @@ import {
   ChevronUp, ChevronDown, GripVertical, AlertCircle, CheckCircle2, XCircle,
   Type, AlignLeft, Hash, List, ListChecks, ToggleRight, Calendar, Star,
   Camera, PenLine, Heading, Eye, Copy, X, Info, Filter, Scale, Target,
-  Truck, MapPin, User, Sparkles, Link2,
+  Truck, MapPin, User, Sparkles, Link2, Lock,
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
 import { useSettings } from '../contexts/SettingsContext'
 import {
   FIELD_TYPES, newField, typeHasOptions, isLayoutField, isValueField,
   validateTemplate, fieldTypeDef, isReferenceField, referenceSource,
-  FIELD_LIBRARY, fieldFromLibrary,
+  FIELD_LIBRARY, fieldFromLibrary, isAutoField,
 } from '../lib/checklist/fieldTypes'
 import {
   getTemplate, createTemplate, updateTemplate, publishTemplate,
@@ -651,6 +651,22 @@ function FieldRow({ field, index, total, expanded, error, allFields, scored, onT
             </div>
           )}
 
+          {/* Auto-fill + lock — only for user / date reference fields. */}
+          {(field.type === 'user' || field.type === 'date') && (
+            <div className="p-2.5 rounded-lg bg-[var(--surface-1)] border border-[var(--border-dim)]">
+              <Toggle
+                checked={isAutoField(field)}
+                onChange={(v) =>
+                  set('autoValue', v ? (field.type === 'user' ? 'current_user' : 'today') : null)
+                }
+                label={field.type === 'user'
+                  ? 'Auto-fill with current user & lock'
+                  : 'Auto-fill with today & lock'}
+                hint="Prefilled at fill time and shown read-only"
+              />
+            </div>
+          )}
+
           {/* Conditional visibility — every non-first field can reference another. */}
           <ConditionEditor field={field} allFields={allFields} onChange={onChange} />
 
@@ -859,11 +875,18 @@ function PreviewField({ field, allFields, scored }) {
           {label || <span className="text-[var(--text-muted)] italic">Untitled field</span>}
           {field.required && <span className="text-red-400 ml-1">*</span>}
         </label>
-        {showPoints && (
-          <span className="shrink-0 inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-semibold bg-brand-subtle text-[var(--brand-bright)]">
-            <Scale className="w-2.5 h-2.5" /> {weight} pt{weight === 1 ? '' : 's'}
-          </span>
-        )}
+        <div className="flex items-center gap-1.5 shrink-0">
+          {isAutoField(field) && (
+            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-semibold bg-brand-subtle text-[var(--brand-bright)]">
+              <Lock className="w-2.5 h-2.5" /> auto: {field.autoValue === 'current_user' ? 'current user' : 'today'}
+            </span>
+          )}
+          {showPoints && (
+            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-semibold bg-brand-subtle text-[var(--brand-bright)]">
+              <Scale className="w-2.5 h-2.5" /> {weight} pt{weight === 1 ? '' : 's'}
+            </span>
+          )}
+        </div>
       </div>
 
       {field.type === 'text' && (
@@ -1201,6 +1224,11 @@ export default function ChecklistBuilder() {
           min: f.type === 'number' ? (f.min ?? null) : null,
           max: f.type === 'number' ? (f.max ?? null) : null,
           default: f.default ?? '',
+          autoValue:
+            (f.type === 'user' || f.type === 'date') &&
+            (f.autoValue === 'current_user' || f.autoValue === 'today')
+              ? f.autoValue
+              : null,
           visibleWhen: sanitizeVisibleWhen(f, list),
           weight,
           passValues,

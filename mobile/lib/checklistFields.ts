@@ -18,6 +18,17 @@ export function referenceSource(type?: string): ReferenceSource | null {
   return isReferenceField(type) ? (type as ReferenceSource) : null
 }
 
+// Auto-filled + locked fields (inspector = current user, date = today).
+export const AUTO_VALUES = ['current_user', 'today']
+export function isAutoField(field: any): boolean {
+  return AUTO_VALUES.includes(field?.autoValue)
+}
+export function resolveAutoValue(field: any, ctx: { userName?: string; today?: string } = {}): string {
+  if (field?.autoValue === 'current_user') return ctx.userName || ''
+  if (field?.autoValue === 'today') return ctx.today || new Date().toISOString().slice(0, 10)
+  return ''
+}
+
 export interface VisibleWhen { field: string; op: string; value?: any }
 
 export interface ChecklistField {

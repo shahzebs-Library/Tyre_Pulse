@@ -23,6 +23,7 @@ import { getTemplate, submitChecklist, ChecklistTemplate } from '../../../lib/ch
 import {
   ChecklistField, blankAnswer, isValueField, isFieldVisible,
   validateSubmission, computeScore, isReferenceField, referenceSource,
+  isAutoField, resolveAutoValue,
 } from '../../../lib/checklistFields'
 
 export default function ChecklistFillScreen() {
@@ -58,9 +59,14 @@ export default function ChecklistFillScreen() {
       setTemplate(t)
       setTitle(t.name ?? '')
       // Seed blank answers for every value field so controlled inputs stay stable.
+      // Auto-fill + lock fields are prefilled from live context (inspector/today).
+      const today = new Date().toISOString().slice(0, 10)
+      const userName = profile?.full_name || profile?.username || ''
       const seed: Record<string, any> = {}
       for (const f of t.fields ?? []) {
-        if (isValueField(f.type)) seed[f.id] = blankAnswer(f)
+        if (isValueField(f.type)) {
+          seed[f.id] = isAutoField(f) ? resolveAutoValue(f, { userName, today }) : blankAnswer(f)
+        }
       }
       setAnswers(seed)
     } catch (e: any) {
@@ -68,7 +74,7 @@ export default function ChecklistFillScreen() {
     } finally {
       setLoading(false)
     }
-  }, [templateId])
+  }, [templateId, profile])
 
   useEffect(() => { load() }, [load])
 
@@ -373,6 +379,25 @@ function FieldRenderer({
     )
   }
 
+  // Auto-fill + lock: prefilled from context and shown read-only (no editable control).
+  if (isAutoField(field)) {
+    return (
+      <View style={styles.card}>
+        <Field label={field.label} required={field.required} help={field.help} error={error} textAlign={textAlign}>
+          <View style={styles.lockedRow}>
+            <Text style={[styles.lockedText, { textAlign }]} numberOfLines={1}>
+              {value != null && value !== '' ? String(value) : '—'}
+            </Text>
+            <View style={styles.lockedHint}>
+              <Ionicons name="lock-closed" size={12} color="#94a3b8" />
+              <Text style={styles.lockedHintText}>Auto · locked</Text>
+            </View>
+          </View>
+        </Field>
+      </View>
+    )
+  }
+
   return (
     <View style={styles.card}>
       <Field label={field.label} required={field.required} help={field.help} error={error} textAlign={textAlign}>
@@ -606,6 +631,15 @@ const styles = StyleSheet.create({
     fontSize: 14, color: '#0f172a',
   },
   textArea: { minHeight: 90, textAlignVertical: 'top' },
+
+  lockedRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    backgroundColor: '#f1f5f9', borderWidth: 1, borderColor: '#e2e8f0',
+    borderRadius: 12, paddingHorizontal: 12, paddingVertical: 11,
+  },
+  lockedText: { flex: 1, fontSize: 14, fontWeight: '600', color: '#475569' },
+  lockedHint: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  lockedHintText: { fontSize: 11, fontWeight: '700', color: '#94a3b8' },
 
   section: { marginTop: 6, paddingBottom: 2 },
   sectionLabel: {

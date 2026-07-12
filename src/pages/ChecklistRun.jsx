@@ -2,12 +2,12 @@ import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import {
   ClipboardCheck, ArrowLeft, ChevronRight, Loader2, AlertTriangle, AlertOctagon,
-  Send, Star, ImagePlus, X, PenLine, Camera, CheckCircle2, RefreshCw, Gauge,
+  Send, Star, ImagePlus, X, PenLine, Camera, CheckCircle2, RefreshCw, Gauge, Lock,
 } from 'lucide-react'
 import { useSettings } from '../contexts/SettingsContext'
 import { useAuth } from '../contexts/AuthContext'
 import { getTemplate, createSubmission, uploadChecklistPhoto } from '../lib/api/checklists'
-import { blankAnswer, validateSubmission, isLayoutField, isFieldVisible, computeScore, isReferenceField, referenceSource } from '../lib/checklist/fieldTypes'
+import { blankAnswer, validateSubmission, isLayoutField, isFieldVisible, computeScore, isReferenceField, referenceSource, isAutoField, resolveAutoValue } from '../lib/checklist/fieldTypes'
 import { completeAssignment } from '../lib/api/checklistSchedules'
 import SignaturePad from '../components/SignaturePad'
 import ReferencePicker from '../components/checklist/ReferencePicker'
@@ -49,10 +49,13 @@ export default function ChecklistRun() {
       if (!tpl) { setTemplate(null); setLoadError('not_found'); return }
       setTemplate(tpl)
       // Seed answers with blank values so controlled inputs stay controlled.
+      // Auto-fill + lock fields are prefilled from live context (inspector/today).
+      const today = new Date().toISOString().slice(0, 10)
+      const userName = profile?.full_name || profile?.username || ''
       const seeded = {}
       for (const f of Array.isArray(tpl.fields) ? tpl.fields : []) {
         if (f?.id && !isLayoutField(f.type) && f.type !== 'photo' && f.type !== 'signature') {
-          seeded[f.id] = blankAnswer(f)
+          seeded[f.id] = isAutoField(f) ? resolveAutoValue(f, { userName, today }) : blankAnswer(f)
         }
       }
       setAnswers(seeded)
@@ -61,7 +64,7 @@ export default function ChecklistRun() {
     } finally {
       setLoading(false)
     }
-  }, [templateId])
+  }, [templateId, profile])
 
   useEffect(() => { load() }, [load])
 
@@ -399,13 +402,26 @@ function FieldRenderer({ field, value, error, onChange, country, photos, uploadi
   )
 
   const allowInlinePhoto = field.allow_photo && type !== 'photo'
+  const auto = isAutoField(field)
 
   return (
     <div id={`field-${field.id}`} className={`rounded-lg ${error ? 'ring-1 ring-red-500/50 p-3 -m-0.5 bg-red-900/5' : ''}`}>
       {type !== 'signature' && labelEl}
       {field.help && type !== 'section' && <p className="text-xs text-[var(--text-muted)] -mt-1 mb-1.5">{field.help}</p>}
 
-      {isReferenceField(type) && (
+      {auto && (
+        <div>
+          <div className="input flex items-center gap-2 opacity-80 cursor-not-allowed select-none" aria-readonly="true" title="Auto-filled and locked">
+            <span className="flex-1 truncate text-[var(--text-primary)]">{value != null && value !== '' ? String(value) : '—'}</span>
+            <Lock size={14} className="shrink-0 text-[var(--text-muted)]" />
+          </div>
+          <p className="text-[11px] text-[var(--text-muted)] mt-1 flex items-center gap-1">
+            <Lock size={11} /> Auto-filled · locked
+          </p>
+        </div>
+      )}
+
+      {!auto && isReferenceField(type) && (
         <ReferencePicker
           source={referenceSource(type)}
           value={value ?? ''}
@@ -415,15 +431,15 @@ function FieldRenderer({ field, value, error, onChange, country, photos, uploadi
         />
       )}
 
-      {type === 'text' && (
+      {!auto && type === 'text' && (
         <input className="input" value={value ?? ''} onChange={(e) => onChange(e.target.value)} placeholder="Enter value" />
       )}
 
-      {type === 'textarea' && (
+      {!auto && type === 'textarea' && (
         <textarea className="input" rows={3} value={value ?? ''} onChange={(e) => onChange(e.target.value)} placeholder="Enter notes" />
       )}
 
-      {type === 'number' && (
+      {!auto && type === 'number' && (
         <input
           type="number" className="input" value={value ?? ''}
           min={field.min ?? undefined} max={field.max ?? undefined}
@@ -431,18 +447,18 @@ function FieldRenderer({ field, value, error, onChange, country, photos, uploadi
         />
       )}
 
-      {type === 'date' && (
+      {!auto && type === 'date' && (
         <input type="date" className="input" value={value ?? ''} onChange={(e) => onChange(e.target.value)} />
       )}
 
-      {type === 'select' && (
+      {!auto && type === 'select' && (
         <select className="input" value={value ?? ''} onChange={(e) => onChange(e.target.value)}>
           <option value="">— Select —</option>
           {(field.options || []).map((o) => <option key={o} value={o}>{o}</option>)}
         </select>
       )}
 
-      {type === 'multiselect' && (
+      {!auto && type === 'multiselect' && (
         <div className="flex flex-wrap gap-2">
           {(field.options || []).map((o) => {
             const arr = Array.isArray(value) ? value : []
@@ -463,7 +479,7 @@ function FieldRenderer({ field, value, error, onChange, country, photos, uploadi
         </div>
       )}
 
-      {type === 'boolean' && (
+      {!auto && type === 'boolean' && (
         <div className="flex items-center gap-2">
           {[['Yes', true], ['No', false]].map(([lbl, val]) => (
             <button
@@ -480,7 +496,7 @@ function FieldRenderer({ field, value, error, onChange, country, photos, uploadi
         </div>
       )}
 
-      {type === 'rating' && (
+      {!auto && type === 'rating' && (
         <div className="flex items-center gap-1.5">
           {[1, 2, 3, 4, 5].map((n) => (
             <button key={n} type="button" onClick={() => onChange(Number(value) === n ? 0 : n)} title={`${n}`}

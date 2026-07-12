@@ -4,6 +4,7 @@ import {
   blankAnswer, validateAnswer, validateSubmission, validateTemplate, fieldTypeDef,
   evalCondition, isFieldVisible, computeScore,
   REFERENCE_TYPES, isReferenceField, referenceSource, FIELD_LIBRARY, fieldFromLibrary,
+  isAutoField, resolveAutoValue,
 } from '../lib/checklist/fieldTypes'
 
 describe('checklist fieldTypes registry', () => {
@@ -142,6 +143,19 @@ describe('checklist fieldTypes registry', () => {
     const bool = fieldFromLibrary({ label: 'Brakes OK?', type: 'boolean', weight: 3, passValues: [true] })
     expect(bool.weight).toBe(3)
     expect(bool.passValues).toEqual([true])
+  })
+
+  it('auto fields resolve current-user / today and the library uses them', () => {
+    expect(isAutoField({ autoValue: 'current_user' })).toBe(true)
+    expect(isAutoField({ type: 'user' })).toBe(false)
+    expect(resolveAutoValue({ autoValue: 'current_user' }, { userName: 'Sam Ali' })).toBe('Sam Ali')
+    expect(resolveAutoValue({ autoValue: 'today' }, { today: '2026-07-12' })).toBe('2026-07-12')
+    expect(resolveAutoValue({ type: 'text' }, {})).toBe('')
+    // Library Inspector auto-fills the user; Date auto-fills today; hour meter exists.
+    const ident = FIELD_LIBRARY.find((g) => g.category === 'Identification').fields
+    expect(ident.find((f) => f.label === 'Inspector').autoValue).toBe('current_user')
+    expect(ident.find((f) => f.label === 'Date of check').autoValue).toBe('today')
+    expect(ident.some((f) => /hour meter/i.test(f.label))).toBe(true)
   })
 
   it('validateTemplate flags structural problems', () => {

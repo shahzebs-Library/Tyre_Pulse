@@ -1135,6 +1135,33 @@ export default function ChecklistBuilder() {
     }
   }
 
+  // ── Load guards (edit mode starts with a null draft until the fetch lands) ──
+  // Placed after every hook above so early returns never skip a hook.
+  if (loading) {
+    return (
+      <div className="space-y-4">
+        <div className="card animate-pulse h-24" />
+        <div className="card animate-pulse h-72" />
+      </div>
+    )
+  }
+  if (loadError) {
+    return (
+      <div className="card border border-red-800/50 flex items-start gap-3">
+        <AlertCircle className="w-5 h-5 text-red-400 mt-0.5 shrink-0" />
+        <div>
+          <p className="text-red-300 font-medium">Couldn't load this checklist template.</p>
+          <p className="text-[var(--text-muted)] text-sm mt-1">{String(loadError)}</p>
+          <div className="flex gap-2 mt-3">
+            <button onClick={load} className="btn-secondary text-sm">Retry</button>
+            <button onClick={() => navigate('/checklists')} className="btn-primary text-sm">Back to Checklists</button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+  if (!draft) return null
+
   const scored = !!draft.scored
   const passThreshold =
     draft.pass_threshold == null || draft.pass_threshold === ''

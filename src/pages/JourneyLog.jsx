@@ -12,7 +12,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import {
   Navigation, Plus, Search, X, Filter, FileSpreadsheet, FileText,
-  AlertTriangle, Loader2, Route, PlayCircle, Gauge, Pencil, Trash2, Send,
+  AlertTriangle, Loader2, Milestone, PlayCircle, Gauge, Pencil, Trash2, Send,
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
 import { useSettings } from '../contexts/SettingsContext'
@@ -179,7 +179,7 @@ export default function JourneyLog() {
   const kpis = [
     { label: 'Total journeys', value: summary.totalTrips, icon: Navigation, tone: 'text-[var(--text-primary)]' },
     { label: 'In progress', value: summary.byStatus.in_progress, icon: PlayCircle, tone: 'text-amber-400' },
-    { label: 'Total distance (km)', value: summary.totalDistance, icon: Route, tone: 'text-sky-400' },
+    { label: 'Total distance (km)', value: summary.totalDistance, icon: Milestone, tone: 'text-sky-400' },
     { label: 'Avg distance (km)', value: summary.avgDistance, icon: Gauge, tone: 'text-emerald-400' },
   ]
 

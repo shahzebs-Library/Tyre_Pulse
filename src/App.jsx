@@ -70,6 +70,10 @@ const Geofencing             = lazy(() => import('./pages/Geofencing'))
 const InsuranceClaims        = lazy(() => import('./pages/InsuranceClaims'))
 const FuelCards              = lazy(() => import('./pages/FuelCards'))
 const Certifications         = lazy(() => import('./pages/Certifications'))
+const PolicyManagement       = lazy(() => import('./pages/PolicyManagement'))
+const IncidentReports        = lazy(() => import('./pages/IncidentReports'))
+const JourneyLog             = lazy(() => import('./pages/JourneyLog'))
+const DigitalTwin            = lazy(() => import('./pages/DigitalTwin'))
 const Analytics              = lazy(() => import('./pages/Analytics'))
 const BrandPerformance       = lazy(() => import('./pages/BrandPerformance'))
 const SiteComparison         = lazy(() => import('./pages/SiteComparison'))
@@ -363,6 +367,11 @@ function MainApp() {
                       <Route path="/insurance-claims"      element={<Safe><InsuranceClaims /></Safe>} />
                       <Route path="/fuel-cards"            element={<Safe><FuelCards /></Safe>} />
                       <Route path="/certifications"        element={<Safe><Certifications /></Safe>} />
+                      <Route path="/policies"              element={<Safe><PolicyManagement /></Safe>} />
+                      <Route path="/incidents"             element={<Safe><IncidentReports /></Safe>} />
+                      <Route path="/journeys"              element={<Safe><JourneyLog /></Safe>} />
+                      <Route path="/digital-twin"          element={<Safe><DigitalTwin /></Safe>} />
+                      <Route path="/digital-twin/:assetNo" element={<Safe><DigitalTwin /></Safe>} />
                       <Route path="/scan"        element={<Safe><TyreScan /></Safe>} />
                       <Route path="/qr-labels"   element={<Safe><QrLabels /></Safe>} />
                       {/* ── Platform (roadmap tranche: pages self-gate their roles) ── */}

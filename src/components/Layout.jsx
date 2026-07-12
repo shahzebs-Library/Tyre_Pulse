@@ -19,7 +19,7 @@ import {
   Recycle, Radio, PackagePlus, CalendarCheck2, BellRing, Brain, BarChart, Download,
   Webhook, CheckSquare, CreditCard, Palette, LifeBuoy,
   Award, PackageCheck, Calculator, Siren, ShieldAlert, SlidersHorizontal,
-  Leaf, BadgeCheck,
+  Leaf, BadgeCheck, ScrollText, Navigation,
 } from 'lucide-react'
 // Branded domain icons (custom Tyre Pulse set) for the clearest fleet/tyre nav
 // items. Same ({ size, strokeWidth }) API as Lucide, so they drop straight in.
@@ -103,6 +103,7 @@ const NAV_GROUPS = [
       { to: '/erp-sync',            label: 'ERP Sync',           icon: Database, roles: ERP_ROLES },
       { to: '/rfid',                label: 'RFID Registry',      icon: Radio, adminOnly: A },
       { to: '/geofencing',          label: 'Geofencing',         icon: MapPin, adminOnly: A },
+      { to: '/journeys',            label: 'Journey Log',        icon: Navigation, adminOnly: A },
     ],
   },
   {
@@ -128,6 +129,7 @@ const NAV_GROUPS = [
       { to: '/fleet-risk-score',       label: 'Fleet Risk Score',       icon: ShieldAlert, roles: ANALYTICS_ROLES },
       { to: '/rotation-optimizer',     label: 'Rotation Optimizer',     icon: RotateCcw, roles: ANALYTICS_ROLES },
       { to: '/carbon-tracker',         label: 'Carbon Tracker',         icon: Leaf, roles: ANALYTICS_ROLES },
+      { to: '/digital-twin',           label: 'Digital Twin',           icon: Cpu, roles: ANALYTICS_ROLES },
       { to: '/rotation',               label: 'Rotation Schedule',      icon: TyreRotationIc, adminOnly: A },
       { to: '/ai',                     label: 'Smart Analytics',        icon: Sparkles, adminOnly: A },
     ],
@@ -167,6 +169,7 @@ const NAV_GROUPS = [
       { to: '/fitment-validation',     label: 'Fitment Validation',  icon: ShieldCheck, roles: ANALYTICS_ROLES },
       { to: '/tpms',                   label: 'TPMS',                icon: Radio, adminOnly: A },
       { to: '/certifications',         label: 'Certifications',      icon: BadgeCheck },
+      { to: '/policies',               label: 'Policy Management',    icon: ScrollText, adminOnly: A },
       { to: '/checklists',             label: 'Checklists',          icon: ListChecks },
       { to: '/my-checklists',          label: 'My Checklists',       icon: ClipboardList },
       { to: '/checklist-schedules',    label: 'Checklist Schedules', icon: Calendar, adminOnly: A },
@@ -187,6 +190,7 @@ const NAV_GROUPS = [
       { to: '/accidents',      label: 'Accidents',       icon: AlertOctagon },
       { to: '/warranty',       label: 'Warranty Tracker', icon: ShieldCheck },
       { to: '/insurance-claims', label: 'Insurance Claims', icon: ShieldAlert },
+      { to: '/incidents',        label: 'Incident Reports', icon: FileWarning },
       { to: '/recall-tracker', label: 'Recall Tracker',  icon: AlertCircle, adminOnly: A },
     ],
   },

@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import {
   ClipboardCheck, ArrowLeft, ChevronRight, AlertTriangle, AlertOctagon,
-  Star, PenLine, RefreshCw, CheckCircle2, XCircle, Download, Loader2,
+  Star, PenLine, RefreshCw, CheckCircle2, XCircle, Download, Loader2, Gauge,
 } from 'lucide-react'
 import { getSubmission } from '../lib/api/checklists'
 import { isLayoutField } from '../lib/checklist/fieldTypes'
@@ -214,6 +214,21 @@ export default function ChecklistSubmission() {
               </p>
               <div className="flex items-center gap-2 mt-2 flex-wrap">
                 <span className={`badge text-xs ${statusBadge(sub.status)}`}>{prettyStatus(sub.status)}</span>
+                {sub.score_pct != null && (
+                  <span
+                    className={`badge text-xs inline-flex items-center gap-1 ${
+                      sub.score_passed === true
+                        ? 'bg-green-900/40 text-green-300 border border-green-700/50'
+                        : sub.score_passed === false
+                          ? 'bg-red-900/40 text-red-300 border border-red-700/50'
+                          : 'bg-[var(--input-bg)] text-[var(--text-dim)] border border-[var(--input-border)]'
+                    }`}
+                    title="Checklist score"
+                  >
+                    <Gauge size={12} /> Score: {sub.score_pct}%
+                    {sub.score_passed != null && <span>· {sub.score_passed ? 'Passed' : 'Failed'}</span>}
+                  </span>
+                )}
                 {sub.asset_no && <span className="badge text-xs bg-[var(--input-bg)] text-[var(--text-dim)] border border-[var(--input-border)]">{sub.asset_no}</span>}
                 {sub.site && <span className="badge text-xs bg-[var(--input-bg)] text-[var(--text-dim)] border border-[var(--input-border)]">{sub.site}</span>}
                 {sub.country && <span className="badge text-xs bg-[var(--input-bg)] text-[var(--text-dim)] border border-[var(--input-border)]">{sub.country}</span>}

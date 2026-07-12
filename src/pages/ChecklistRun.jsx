@@ -1,13 +1,14 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import {
   ClipboardCheck, ArrowLeft, ChevronRight, Loader2, AlertTriangle, AlertOctagon,
-  Send, Star, ImagePlus, X, PenLine, Camera, CheckCircle2, RefreshCw,
+  Send, Star, ImagePlus, X, PenLine, Camera, CheckCircle2, RefreshCw, Gauge,
 } from 'lucide-react'
 import { useSettings } from '../contexts/SettingsContext'
 import { useAuth } from '../contexts/AuthContext'
 import { getTemplate, createSubmission, uploadChecklistPhoto } from '../lib/api/checklists'
-import { blankAnswer, validateSubmission, isLayoutField } from '../lib/checklist/fieldTypes'
+import { blankAnswer, validateSubmission, isLayoutField, isFieldVisible, computeScore } from '../lib/checklist/fieldTypes'
+import { completeAssignment } from '../lib/api/checklistSchedules'
 import SignaturePad from '../components/SignaturePad'
 
 function isMissingRelation(err) {
@@ -18,6 +19,8 @@ function isMissingRelation(err) {
 export default function ChecklistRun() {
   const { templateId } = useParams()
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const assignmentId = searchParams.get('assignment') || null
   const { activeCountry } = useSettings()
   const { profile } = useAuth()
   const back = useCallback(() => navigate('/checklists'), [navigate])
@@ -129,7 +132,7 @@ export default function ChecklistRun() {
 
     setSubmitting(true)
     try {
-      const created = await createSubmission({
+      const payload = {
         template_id: template.id,
         template_name: template.name,
         template_version: template.version ?? 1,
@@ -142,9 +145,25 @@ export default function ChecklistRun() {
         photos,
         signature_data: signature?.dataUrl ?? null,
         printed_name: signature?.dataUrl ? (inspectorName || null) : null,
-      })
-      if (created?.id) navigate(`/checklists/submission/${created.id}`)
-      else { setSubmitError('Submission saved but no id was returned.'); setSubmitting(false) }
+      }
+      if (template.scored) {
+        const score = computeScore(fields, answers, template.pass_threshold)
+        payload.score_pct = score.pct
+        payload.score_passed = score.passed
+      }
+      const created = await createSubmission(payload)
+      if (created?.id) {
+        // Complete a linked assignment when arriving via ?assignment=<id>. A
+        // completion failure must not block navigation to the saved submission.
+        if (assignmentId) {
+          try {
+            await completeAssignment(assignmentId, created.id)
+          } catch (err) {
+            setSubmitError(`Submission saved, but the assignment could not be marked complete: ${err?.message || 'unknown error'}`)
+          }
+        }
+        navigate(`/checklists/submission/${created.id}`)
+      } else { setSubmitError('Submission saved but no id was returned.'); setSubmitting(false) }
     } catch (err) {
       setSubmitError(err?.message || 'Could not submit the checklist.')
       setSubmitting(false)
@@ -202,7 +221,11 @@ export default function ChecklistRun() {
     )
   }
 
-  const contentFields = fields.filter((f) => f && f.type)
+  // Recomputed on every render against the live `answers` state so conditional
+  // fields appear/disappear as the user answers. Hidden fields never render and
+  // (via validateSubmission/computeScore) never block submit or affect the score.
+  const contentFields = fields.filter((f) => f && f.type && isFieldVisible(f, answers))
+  const liveScore = template.scored ? computeScore(fields, answers, template.pass_threshold) : null
 
   return (
     <div className="space-y-4 pb-24">
@@ -229,6 +252,21 @@ export default function ChecklistRun() {
               {activeCountry && activeCountry !== 'All' ? ` · ${activeCountry}` : ''}
             </p>
           </div>
+          {liveScore && liveScore.pct != null && (
+            <div
+              className={`ml-auto shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold border ${
+                liveScore.passed === true
+                  ? 'bg-green-900/30 text-green-300 border-green-700/50'
+                  : liveScore.passed === false
+                    ? 'bg-red-900/30 text-red-300 border-red-700/50'
+                    : 'bg-[var(--input-bg)] text-[var(--text-dim)] border-[var(--input-border)]'
+              }`}
+              title="Live score — updates as you fill the checklist"
+            >
+              <Gauge size={13} /> Score: {liveScore.pct}%
+              {liveScore.passed != null && <span>· {liveScore.passed ? 'Pass' : 'Fail'}</span>}
+            </div>
+          )}
         </div>
 
         {/* Optional header block */}

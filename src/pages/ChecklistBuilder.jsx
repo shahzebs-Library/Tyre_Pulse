@@ -4,12 +4,13 @@ import {
   ClipboardList, Plus, Trash2, Save, Loader2, Upload, ArrowLeft,
   ChevronUp, ChevronDown, GripVertical, AlertCircle, CheckCircle2, XCircle,
   Type, AlignLeft, Hash, List, ListChecks, ToggleRight, Calendar, Star,
-  Camera, PenLine, Heading, Eye, Copy, X, Info,
+  Camera, PenLine, Heading, Eye, Copy, X, Info, Filter, Scale, Target,
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
 import { useSettings } from '../contexts/SettingsContext'
 import {
-  FIELD_TYPES, newField, typeHasOptions, isLayoutField, validateTemplate, fieldTypeDef,
+  FIELD_TYPES, newField, typeHasOptions, isLayoutField, isValueField,
+  validateTemplate, fieldTypeDef,
 } from '../lib/checklist/fieldTypes'
 import {
   getTemplate, createTemplate, updateTemplate, publishTemplate,
@@ -48,6 +49,32 @@ const GROUP_LABELS = {
   media: 'Media',
 }
 const GROUP_ORDER = ['layout', 'input', 'choice', 'media']
+
+// Conditional-visibility operators (mirror lib/checklist/fieldTypes COND_OPS).
+// `needsValue` = the value input is shown for this operator.
+const CONDITION_OPS = [
+  { op: '=',          label: 'equals',          needsValue: true },
+  { op: '!=',         label: 'does not equal',  needsValue: true },
+  { op: '>',          label: 'greater than',    needsValue: true },
+  { op: '>=',         label: 'at least',        needsValue: true },
+  { op: '<',          label: 'less than',       needsValue: true },
+  { op: '<=',         label: 'at most',         needsValue: true },
+  { op: 'includes',   label: 'includes',        needsValue: true },
+  { op: 'empty',      label: 'is empty',        needsValue: false },
+  { op: 'not_empty',  label: 'is answered',     needsValue: false },
+]
+const CONDITION_OP_SET = new Set(CONDITION_OPS.map((o) => o.op))
+
+// A short human sentence for a rule, used in the summary row + preview badge.
+function describeCondition(rule, fields) {
+  if (!rule || !rule.field || !rule.op) return ''
+  const ref = (Array.isArray(fields) ? fields : []).find((f) => f && f.id === rule.field)
+  const name = String(ref?.label || '').trim() || 'a field'
+  const meta = CONDITION_OPS.find((o) => o.op === rule.op)
+  const verb = meta?.label || rule.op
+  const val = meta?.needsValue ? ` "${String(rule.value ?? '').trim() || '…'}"` : ''
+  return `${name} ${verb}${val}`
+}
 
 // Shared control classes (theme-aware via CSS vars).
 const INPUT_CLS =
@@ -140,9 +167,261 @@ function OptionsEditor({ options, onChange }) {
   )
 }
 
+// ─── Conditional-visibility editor ("Show only when…") ────────────────────────
+
+function ConditionEditor({ field, allFields, onChange }) {
+  // Any OTHER value-carrying field can be a source (guard against self-reference).
+  const sources = (Array.isArray(allFields) ? allFields : []).filter(
+    (f) => f && f.id !== field.id && isValueField(f.type),
+  )
+  const rule = field.visibleWhen && typeof field.visibleWhen === 'object' ? field.visibleWhen : null
+  const enabled = !!rule
+
+  const refField = rule ? sources.find((f) => f.id === rule.field) : null
+  const opMeta = rule ? CONDITION_OPS.find((o) => o.op === rule.op) : null
+  const needsValue = opMeta ? opMeta.needsValue : true
+
+  const setRule = (patch) => onChange({ ...field, visibleWhen: { ...rule, ...patch } })
+
+  const enable = () => {
+    const first = sources[0]
+    onChange({ ...field, visibleWhen: { field: first ? first.id : '', op: '=', value: '' } })
+  }
+  const clear = () => onChange({ ...field, visibleWhen: null })
+
+  // Value choices when the referenced field constrains its answers.
+  let valueChoices = null
+  if (refField) {
+    if (refField.type === 'select' || refField.type === 'multiselect') {
+      valueChoices = (Array.isArray(refField.options) ? refField.options : [])
+        .map((o) => String(o).trim()).filter(Boolean)
+        .map((o) => ({ value: o, label: o }))
+    } else if (refField.type === 'boolean') {
+      valueChoices = [{ value: 'true', label: 'Yes' }, { value: 'false', label: 'No' }]
+    }
+  }
+
+  return (
+    <div className="p-2.5 rounded-lg bg-[var(--surface-1)] border border-[var(--border-dim)]">
+      <div className="flex items-center justify-between gap-2">
+        <span className="flex items-center gap-1.5 text-[11px] font-semibold text-[var(--text-muted)] uppercase tracking-wider">
+          <Filter className="w-3.5 h-3.5" /> Conditional visibility
+        </span>
+        {enabled ? (
+          <button
+            type="button"
+            onClick={clear}
+            className="text-[11px] font-semibold text-[var(--text-muted)] hover:text-red-400 transition-colors"
+          >
+            Clear
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={enable}
+            disabled={sources.length === 0}
+            className="text-[11px] font-semibold text-[var(--brand-bright)] hover:opacity-80 disabled:opacity-40 transition-opacity"
+          >
+            Add rule
+          </button>
+        )}
+      </div>
+
+      {!enabled ? (
+        <p className="text-[11px] text-[var(--text-muted)] mt-1.5">
+          {sources.length === 0
+            ? 'Add another answerable field first to reference it here.'
+            : 'Always shown. Add a rule to show this field only when another answer matches.'}
+        </p>
+      ) : (
+        <div className="mt-2 space-y-2">
+          <p className="text-[11px] text-[var(--text-muted)]">Show this field only when…</p>
+          <div className="grid grid-cols-1 sm:grid-cols-[1.3fr,1fr] gap-2">
+            <select
+              value={rule.field || ''}
+              onChange={(e) => setRule({ field: e.target.value })}
+              className={INPUT_CLS}
+              aria-label="Reference field"
+            >
+              <option value="">— Select a field —</option>
+              {sources.map((f) => (
+                <option key={f.id} value={f.id}>
+                  {String(f.label || '').trim() || 'Untitled field'}
+                </option>
+              ))}
+            </select>
+            <select
+              value={rule.op || '='}
+              onChange={(e) => setRule({ op: e.target.value })}
+              className={INPUT_CLS}
+              aria-label="Condition operator"
+            >
+              {CONDITION_OPS.map((o) => (
+                <option key={o.op} value={o.op}>{o.label}</option>
+              ))}
+            </select>
+          </div>
+          {needsValue && (
+            valueChoices && valueChoices.length ? (
+              <select
+                value={rule.value ?? ''}
+                onChange={(e) => setRule({ value: e.target.value })}
+                className={INPUT_CLS}
+                aria-label="Condition value"
+              >
+                <option value="">— Select a value —</option>
+                {valueChoices.map((c) => (
+                  <option key={c.value} value={c.value}>{c.label}</option>
+                ))}
+              </select>
+            ) : (
+              <input
+                type="text"
+                value={rule.value ?? ''}
+                onChange={(e) => setRule({ value: e.target.value })}
+                placeholder="Value to match"
+                className={INPUT_CLS}
+                aria-label="Condition value"
+              />
+            )
+          )}
+          {!refField && (
+            <p className="text-[11px] text-amber-400/90 flex items-center gap-1">
+              <AlertCircle className="w-3 h-3 shrink-0" /> Pick a field to reference.
+            </p>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─── Passing-answers selector (choice / boolean scoring) ──────────────────────
+
+function PassValuesEditor({ field, onChange }) {
+  const selected = Array.isArray(field.passValues) ? field.passValues : []
+
+  if (field.type === 'boolean') {
+    const opts = [{ value: true, label: 'Yes' }, { value: false, label: 'No' }]
+    const toggle = (v) => {
+      const has = selected.includes(v)
+      const next = has ? selected.filter((x) => x !== v) : [...selected, v]
+      onChange({ ...field, passValues: next })
+    }
+    return (
+      <div>
+        <label className={LABEL_CLS}>Passing answer</label>
+        <div className="flex gap-2">
+          {opts.map((o) => {
+            const active = selected.includes(o.value)
+            return (
+              <button
+                key={o.label}
+                type="button"
+                onClick={() => toggle(o.value)}
+                className={`px-4 py-1.5 rounded-lg text-sm border transition-all ${
+                  active
+                    ? 'border-[var(--brand-bright)] bg-brand-subtle text-[var(--brand-bright)] font-semibold'
+                    : 'border-[var(--border-dim)] bg-[var(--surface-2)] text-[var(--text-secondary)] hover:border-[var(--brand-bright)]'
+                }`}
+              >
+                {o.label}
+              </button>
+            )
+          })}
+        </div>
+        <p className="text-[11px] text-[var(--text-muted)] mt-1">Selected answers earn the field's weight.</p>
+      </div>
+    )
+  }
+
+  // select / multiselect
+  const options = (Array.isArray(field.options) ? field.options : [])
+    .map((o) => String(o).trim()).filter(Boolean)
+  const toggle = (opt) => {
+    const has = selected.includes(opt)
+    const next = has ? selected.filter((x) => x !== opt) : [...selected, opt]
+    onChange({ ...field, passValues: next })
+  }
+
+  return (
+    <div>
+      <label className={LABEL_CLS}>Passing answers</label>
+      {options.length === 0 ? (
+        <p className="text-[11px] text-[var(--text-muted)] italic">Add options above to mark which pass.</p>
+      ) : (
+        <div className="flex flex-wrap gap-2">
+          {options.map((opt) => {
+            const active = selected.includes(opt)
+            return (
+              <button
+                key={opt}
+                type="button"
+                onClick={() => toggle(opt)}
+                className={`px-2.5 py-1 rounded-lg text-xs border transition-all ${
+                  active
+                    ? 'border-[var(--brand-bright)] bg-brand-subtle text-[var(--brand-bright)] font-semibold'
+                    : 'border-[var(--border-dim)] bg-[var(--surface-2)] text-[var(--text-secondary)] hover:border-[var(--brand-bright)]'
+                }`}
+              >
+                {active && <CheckCircle2 className="w-3 h-3 inline mr-1 -mt-0.5" />}{opt}
+              </button>
+            )
+          })}
+        </div>
+      )}
+      <p className="text-[11px] text-[var(--text-muted)] mt-1">
+        {options.length ? 'Selected answers earn the full weight.' : ''}
+      </p>
+    </div>
+  )
+}
+
+// ─── Per-field scoring editor (weight + passing answers) ──────────────────────
+
+function ScoringEditor({ field, onChange }) {
+  const hasPassValues = field.type === 'select' || field.type === 'multiselect' || field.type === 'boolean'
+  const weightVal = field.weight
+  const set = (key, value) => onChange({ ...field, [key]: value })
+
+  return (
+    <div className="p-2.5 rounded-lg bg-[var(--surface-1)] border border-[var(--border-dim)] space-y-3">
+      <span className="flex items-center gap-1.5 text-[11px] font-semibold text-[var(--text-muted)] uppercase tracking-wider">
+        <Scale className="w-3.5 h-3.5" /> Scoring
+      </span>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div>
+          <label className={LABEL_CLS}>
+            Weight (points) <span className="text-[var(--text-muted)] font-normal normal-case">(0 = not scored)</span>
+          </label>
+          <input
+            type="number"
+            min="0"
+            step="1"
+            value={weightVal ?? ''}
+            onChange={(e) => set('weight', e.target.value === '' ? null : Math.max(0, Number(e.target.value)))}
+            placeholder="—"
+            className={INPUT_CLS}
+          />
+        </div>
+        {hasPassValues && (
+          <div className="sm:pt-0">
+            <PassValuesEditor field={field} onChange={onChange} />
+          </div>
+        )}
+      </div>
+      {!hasPassValues && (
+        <p className="text-[11px] text-[var(--text-muted)]">
+          Any non-empty answer earns the weight for this field type.
+        </p>
+      )}
+    </div>
+  )
+}
+
 // ─── Field editor row ─────────────────────────────────────────────────────────
 
-function FieldRow({ field, index, total, expanded, error, onToggleExpand, onChange, onMove, onRemove, onDuplicate }) {
+function FieldRow({ field, index, total, expanded, error, allFields, scored, onToggleExpand, onChange, onMove, onRemove, onDuplicate }) {
   const def = fieldTypeDef(field.type)
   const Icon = TYPE_ICON[field.type] || Type
   const layout = isLayoutField(field.type)
@@ -208,6 +487,16 @@ function FieldRow({ field, index, total, expanded, error, onToggleExpand, onChan
             {field.required && !layout && <span className="text-amber-400">• required</span>}
             {field.allow_photo && !isMedia && !layout && <span>• photo</span>}
             {hasOptions && <span>• {(field.options || []).length} options</span>}
+            {field.visibleWhen && field.visibleWhen.field && (
+              <span className="inline-flex items-center gap-1 text-[var(--brand-bright)]">
+                • <Filter className="w-2.5 h-2.5" /> conditional
+              </span>
+            )}
+            {scored && Number(field.weight) > 0 && !layout && (
+              <span className="inline-flex items-center gap-1 text-[var(--brand-bright)]">
+                • <Scale className="w-2.5 h-2.5" /> {Number(field.weight)} pt{Number(field.weight) === 1 ? '' : 's'}
+              </span>
+            )}
           </p>
         </button>
 
@@ -322,6 +611,14 @@ function FieldRow({ field, index, total, expanded, error, onToggleExpand, onChan
             </div>
           )}
 
+          {/* Conditional visibility — every non-first field can reference another. */}
+          <ConditionEditor field={field} allFields={allFields} onChange={onChange} />
+
+          {/* Per-field scoring — only when the template is a scored checklist. */}
+          {scored && isValueField(field.type) && (
+            <ScoringEditor field={field} onChange={onChange} />
+          )}
+
           {error && (
             <p className="text-red-400 text-xs flex items-center gap-1.5">
               <AlertCircle className="w-3.5 h-3.5 shrink-0" /> {error}
@@ -397,8 +694,23 @@ function AddFieldMenu({ onAdd }) {
 
 // ─── Runtime preview of one field ─────────────────────────────────────────────
 
-function PreviewField({ field }) {
+function ConditionalBadge({ field, allFields }) {
+  if (!field?.visibleWhen || !field.visibleWhen.field) return null
+  return (
+    <span
+      className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-medium bg-brand-subtle text-[var(--brand-bright)] max-w-full"
+      title={`Shown when ${describeCondition(field.visibleWhen, allFields)}`}
+    >
+      <Filter className="w-2.5 h-2.5 shrink-0" />
+      <span className="truncate">shown when {describeCondition(field.visibleWhen, allFields)}</span>
+    </span>
+  )
+}
+
+function PreviewField({ field, allFields, scored }) {
   const label = String(field.label || '').trim()
+  const weight = Number(field.weight)
+  const showPoints = scored && !isLayoutField(field.type) && Number.isFinite(weight) && weight > 0
 
   if (field.type === 'section') {
     return (
@@ -408,6 +720,7 @@ function PreviewField({ field }) {
             {label || 'Section'}
           </h4>
           <div className="flex-1 h-px bg-[var(--border-dim)]" />
+          <ConditionalBadge field={field} allFields={allFields} />
         </div>
       </div>
     )
@@ -417,10 +730,17 @@ function PreviewField({ field }) {
 
   return (
     <div>
-      <label className="block text-sm font-medium text-[var(--text-primary)] mb-1.5">
-        {label || <span className="text-[var(--text-muted)] italic">Untitled field</span>}
-        {field.required && <span className="text-red-400 ml-1">*</span>}
-      </label>
+      <div className="flex items-start justify-between gap-2 mb-1.5">
+        <label className="block text-sm font-medium text-[var(--text-primary)]">
+          {label || <span className="text-[var(--text-muted)] italic">Untitled field</span>}
+          {field.required && <span className="text-red-400 ml-1">*</span>}
+        </label>
+        {showPoints && (
+          <span className="shrink-0 inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-semibold bg-brand-subtle text-[var(--brand-bright)]">
+            <Scale className="w-2.5 h-2.5" /> {weight} pt{weight === 1 ? '' : 's'}
+          </span>
+        )}
+      </div>
 
       {field.type === 'text' && (
         <input disabled placeholder="Short text answer" className={`${INPUT_CLS} cursor-not-allowed`} />
@@ -490,6 +810,11 @@ function PreviewField({ field }) {
           <Camera className="w-3 h-3" /> Photo attachment allowed
         </p>
       )}
+      {field.visibleWhen && field.visibleWhen.field && (
+        <div className="mt-1.5">
+          <ConditionalBadge field={field} allFields={allFields} />
+        </div>
+      )}
     </div>
   )
 }
@@ -506,6 +831,8 @@ function blankDraft(country) {
     status: 'draft',
     require_signature: false,
     require_approval: false,
+    scored: false,
+    pass_threshold: null,
     fields: [],
   }
 }
@@ -520,6 +847,11 @@ function toDraft(row, country) {
     status: row.status || 'draft',
     require_signature: !!row.require_signature,
     require_approval: !!row.require_approval,
+    scored: !!row.scored,
+    pass_threshold:
+      row.pass_threshold == null || row.pass_threshold === ''
+        ? null
+        : Math.min(100, Math.max(0, Number(row.pass_threshold))),
     fields: Array.isArray(row.fields) ? row.fields.map((f) => ({ ...newField(f.type), ...f })) : [],
   }
 }
@@ -619,31 +951,79 @@ export default function ChecklistBuilder() {
   // ── Derived counts ──
   const fields = draft?.fields || []
   const contentCount = useMemo(() => fields.filter((f) => !isLayoutField(f.type)).length, [fields])
+  const totalPoints = useMemo(
+    () =>
+      fields.reduce((sum, f) => {
+        const w = Number(f?.weight)
+        return isValueField(f.type) && Number.isFinite(w) && w > 0 ? sum + w : sum
+      }, 0),
+    [fields],
+  )
 
   // ── Persistence ──
-  const buildValues = (status) => ({
-    name: String(draft.name || '').trim(),
-    description: String(draft.description || '').trim() || null,
-    category: draft.category || null,
-    icon: draft.icon || null,
-    country: draft.country || (activeCountry !== 'All' ? activeCountry : null),
-    status,
-    require_signature: !!draft.require_signature,
-    require_approval: !!draft.require_approval,
-    fields: (draft.fields || []).map((f) => ({
-      id: f.id,
-      type: f.type,
-      label: String(f.label || '').trim(),
-      help: String(f.help || '').trim(),
-      section: f.section ?? null,
-      required: !!f.required,
-      allow_photo: !!f.allow_photo,
-      options: typeHasOptions(f.type) ? (f.options || []).map((o) => String(o).trim()).filter(Boolean) : [],
-      min: f.type === 'number' ? (f.min ?? null) : null,
-      max: f.type === 'number' ? (f.max ?? null) : null,
-      default: f.default ?? '',
-    })),
-  })
+  // Sanitize a conditional-visibility rule; returns null when incomplete/invalid.
+  const sanitizeVisibleWhen = (f, allFields) => {
+    const c = f?.visibleWhen
+    if (!c || typeof c !== 'object' || !c.field || !c.op) return null
+    if (!CONDITION_OP_SET.has(c.op)) return null
+    // Guard against self-reference and dangling ids.
+    if (c.field === f.id) return null
+    const ref = (Array.isArray(allFields) ? allFields : []).find((x) => x && x.id === c.field)
+    if (!ref) return null
+    const meta = CONDITION_OPS.find((o) => o.op === c.op)
+    return {
+      field: c.field,
+      op: c.op,
+      value: meta && meta.needsValue ? String(c.value ?? '') : '',
+    }
+  }
+
+  const scored = !!draft.scored
+  const passThreshold =
+    draft.pass_threshold == null || draft.pass_threshold === ''
+      ? null
+      : Math.min(100, Math.max(0, Number(draft.pass_threshold)))
+
+  const buildValues = (status) => {
+    const list = draft.fields || []
+    return {
+      name: String(draft.name || '').trim(),
+      description: String(draft.description || '').trim() || null,
+      category: draft.category || null,
+      icon: draft.icon || null,
+      country: draft.country || (activeCountry !== 'All' ? activeCountry : null),
+      status,
+      require_signature: !!draft.require_signature,
+      require_approval: !!draft.require_approval,
+      scored,
+      pass_threshold: scored ? passThreshold : null,
+      fields: list.map((f) => {
+        const valueField = isValueField(f.type)
+        const w = Number(f.weight)
+        const weight = valueField && Number.isFinite(w) && w > 0 ? w : null
+        const passValues =
+          valueField && Array.isArray(f.passValues)
+            ? f.passValues.filter((v) => v != null && v !== '')
+            : []
+        return {
+          id: f.id,
+          type: f.type,
+          label: String(f.label || '').trim(),
+          help: String(f.help || '').trim(),
+          section: f.section ?? null,
+          required: !!f.required,
+          allow_photo: !!f.allow_photo,
+          options: typeHasOptions(f.type) ? (f.options || []).map((o) => String(o).trim()).filter(Boolean) : [],
+          min: f.type === 'number' ? (f.min ?? null) : null,
+          max: f.type === 'number' ? (f.max ?? null) : null,
+          default: f.default ?? '',
+          visibleWhen: sanitizeVisibleWhen(f, list),
+          weight,
+          passValues,
+        }
+      }),
+    }
+  }
 
   // Persist and return the row id (create → new id, update → existing).
   const persist = async (status) => {
@@ -870,6 +1250,46 @@ export default function ChecklistBuilder() {
                 />
               </div>
             </div>
+
+            {/* Scoring */}
+            <div className="p-3 rounded-lg bg-[var(--surface-2)] border border-[var(--border-dim)] space-y-3">
+              <Toggle
+                checked={!!draft.scored}
+                onChange={(v) => set('scored', v)}
+                label="Scored checklist"
+                hint="Weight answers and compute a pass/fail percentage"
+              />
+              {draft.scored && (
+                <div className="pt-1 border-t border-[var(--border-dim)]">
+                  <label className={`${LABEL_CLS} mt-2 flex items-center gap-1.5`}>
+                    <Target className="w-3 h-3" /> Pass threshold %
+                  </label>
+                  <div className="flex items-center gap-2 max-w-[180px]">
+                    <input
+                      type="number"
+                      min="0"
+                      max="100"
+                      step="1"
+                      value={draft.pass_threshold ?? ''}
+                      onChange={(e) =>
+                        set(
+                          'pass_threshold',
+                          e.target.value === ''
+                            ? null
+                            : Math.min(100, Math.max(0, Number(e.target.value))),
+                        )
+                      }
+                      placeholder="e.g. 80"
+                      className={INPUT_CLS}
+                    />
+                    <span className="text-sm text-[var(--text-muted)]">%</span>
+                  </div>
+                  <p className="text-[11px] text-[var(--text-muted)] mt-1.5">
+                    Set the minimum score needed to pass. Give each field a weight in its editor.
+                  </p>
+                </div>
+              )}
+            </div>
           </section>
 
           {/* Fields */}
@@ -904,6 +1324,8 @@ export default function ChecklistBuilder() {
                     total={fields.length}
                     expanded={expandedId === f.id}
                     error={fieldErrors[f.id]}
+                    allFields={fields}
+                    scored={!!draft.scored}
                     onToggleExpand={toggleExpand}
                     onChange={(next) => changeField(f.id, next)}
                     onMove={moveField}
@@ -952,7 +1374,7 @@ export default function ChecklistBuilder() {
             <div className="rounded-xl border border-[var(--border-dim)] bg-[var(--surface-2)] p-4">
               <div className="flex items-start gap-3 pb-4 mb-4 border-b border-[var(--border-dim)]">
                 <span className="text-2xl leading-none">{draft.icon || '📋'}</span>
-                <div className="min-w-0">
+                <div className="min-w-0 flex-1">
                   <p className="text-sm font-bold text-[var(--text-primary)] truncate">
                     {String(draft.name || '').trim() || <span className="text-[var(--text-muted)] italic">Untitled checklist</span>}
                   </p>
@@ -961,6 +1383,18 @@ export default function ChecklistBuilder() {
                     : draft.category
                       ? <p className="text-xs text-[var(--text-muted)] mt-0.5">{draft.category}</p>
                       : null}
+                  {draft.scored && (
+                    <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold bg-brand-subtle text-[var(--brand-bright)]">
+                        <Scale className="w-2.5 h-2.5" /> {totalPoints} pt{totalPoints === 1 ? '' : 's'} total
+                      </span>
+                      {draft.pass_threshold != null && draft.pass_threshold !== '' && (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold bg-brand-subtle text-[var(--brand-bright)]">
+                          <Target className="w-2.5 h-2.5" /> pass ≥ {Number(draft.pass_threshold)}%
+                        </span>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -970,7 +1404,9 @@ export default function ChecklistBuilder() {
                 </p>
               ) : (
                 <div className="space-y-4">
-                  {fields.map((f) => <PreviewField key={f.id} field={f} />)}
+                  {fields.map((f) => (
+                    <PreviewField key={f.id} field={f} allFields={fields} scored={!!draft.scored} />
+                  ))}
                 </div>
               )}
 

@@ -67,7 +67,75 @@ export function newField(type = 'text') {
     min: null,
     max: null,
     default: def.type === 'multiselect' ? [] : '',
+    // Conditional visibility: show this field only when another field's answer
+    // matches. `null` = always visible. Shape: { field, op, value }.
+    visibleWhen: null,
+    // Scoring: an optional weight (points) + the answers that "pass". `null`
+    // weight = the field is not scored.
+    weight: null,
+    passValues: [],
   }
+}
+
+const COND_OPS = ['=', '!=', '>', '>=', '<', '<=', 'includes', 'empty', 'not_empty']
+
+/** Compare a value against a condition operator. Pure, null-safe. */
+export function evalCondition(op, actual, expected) {
+  const a = actual, e = expected
+  const num = (x) => (x === '' || x == null ? NaN : Number(x))
+  switch (op) {
+    case '=':  return String(a ?? '') === String(e ?? '')
+    case '!=': return String(a ?? '') !== String(e ?? '')
+    case '>':  return num(a) > num(e)
+    case '>=': return num(a) >= num(e)
+    case '<':  return num(a) < num(e)
+    case '<=': return num(a) <= num(e)
+    case 'includes': return Array.isArray(a) ? a.includes(e) : String(a ?? '').includes(String(e ?? ''))
+    case 'empty':     return a == null || a === '' || (Array.isArray(a) && a.length === 0)
+    case 'not_empty': return !(a == null || a === '' || (Array.isArray(a) && a.length === 0))
+    default: return true
+  }
+}
+
+/**
+ * Is a field currently visible given the answers so far? A field with no
+ * `visibleWhen` is always visible. An invalid/incomplete rule fails open
+ * (visible) so a misconfigured template never hides everything.
+ */
+export function isFieldVisible(field, answers = {}) {
+  const c = field?.visibleWhen
+  if (!c || !c.field || !c.op) return true
+  if (!COND_OPS.includes(c.op)) return true
+  return evalCondition(c.op, answers?.[c.field], c.value)
+}
+
+/**
+ * Compute a weighted score for a submission. Only fields with a numeric
+ * `weight` count. A field "passes" when its answer is in `passValues` (for
+ * choice/boolean) or is non-empty (fallback). Hidden fields are excluded.
+ * Returns { scored, earned, possible, pct, passed:boolean|null } — `passed`
+ * compares pct against `template.pass_threshold` when provided.
+ */
+export function computeScore(fields, answers = {}, passThreshold = null) {
+  let earned = 0, possible = 0, scored = 0
+  for (const f of Array.isArray(fields) ? fields : []) {
+    const w = Number(f?.weight)
+    if (!f || isLayoutField(f.type) || !Number.isFinite(w) || w <= 0) continue
+    if (!isFieldVisible(f, answers)) continue
+    scored += 1
+    possible += w
+    const val = answers?.[f.id]
+    let pass
+    if (Array.isArray(f.passValues) && f.passValues.length) {
+      pass = Array.isArray(val) ? val.some((v) => f.passValues.includes(v)) : f.passValues.includes(val)
+    } else {
+      pass = !(val == null || val === '' || (Array.isArray(val) && val.length === 0))
+    }
+    if (pass) earned += w
+  }
+  const pct = possible > 0 ? Math.round((earned / possible) * 100) : null
+  const passed = pct != null && passThreshold != null ? pct >= Number(passThreshold) : null
+  return { scored, earned, possible, pct, passed }
 }
 
 /** The empty/initial answer for a field. */
@@ -124,6 +192,8 @@ export function validateSubmission(fields, answers) {
   const errors = {}
   for (const f of Array.isArray(fields) ? fields : []) {
     if (isLayoutField(f.type) || f.type === 'photo' || f.type === 'signature') continue
+    // A hidden (conditionally excluded) field is not required/validated.
+    if (!isFieldVisible(f, answers)) continue
     const err = validateAnswer(f, answers?.[f.id])
     if (err) errors[f.id] = err
   }
@@ -153,4 +223,5 @@ export function validateTemplate(template) {
 export default {
   FIELD_TYPES, fieldTypeDef, typeHasOptions, isLayoutField, isValueField,
   newField, newFieldId, blankAnswer, validateAnswer, validateSubmission, validateTemplate,
+  evalCondition, isFieldVisible, computeScore,
 }

@@ -8,9 +8,9 @@
 import { supabase, unwrap, applyCountry } from './_client'
 
 const TEMPLATE_COLS =
-  'id,organisation_id,country,name,description,category,icon,status,version,require_signature,require_approval,fields,created_by,created_at,updated_at'
+  'id,organisation_id,country,name,description,category,icon,status,version,require_signature,require_approval,scored,pass_threshold,fields,created_by,created_at,updated_at'
 const SUBMISSION_COLS =
-  'id,template_id,template_name,template_version,country,site,asset_no,title,status,answers,photos,signature_data,printed_name,submitted_by,submitted_at,created_at,updated_at'
+  'id,template_id,template_name,template_version,country,site,asset_no,title,status,answers,photos,signature_data,printed_name,score_pct,score_passed,submitted_by,submitted_at,created_at,updated_at'
 
 const PHOTO_BUCKET = 'tyre-photos' // shared public media bucket (as inspections/accidents use)
 
@@ -39,6 +39,8 @@ export async function createTemplate(values) {
     status: values.status ?? 'draft',
     require_signature: !!values.require_signature,
     require_approval: !!values.require_approval,
+    scored: !!values.scored,
+    pass_threshold: values.pass_threshold ?? null,
     fields: Array.isArray(values.fields) ? values.fields : [],
   }
   return unwrap(await supabase.from('checklist_templates').insert(payload).select(TEMPLATE_COLS).single())
@@ -71,6 +73,8 @@ export async function duplicateTemplate(id) {
     status: 'draft',
     require_signature: src.require_signature,
     require_approval: src.require_approval,
+    scored: src.scored,
+    pass_threshold: src.pass_threshold,
     fields: src.fields || [],
   })
 }
@@ -108,6 +112,8 @@ export async function createSubmission(values) {
     photos: values.photos ?? {},
     signature_data: values.signature_data ?? null,
     printed_name: values.printed_name ?? null,
+    score_pct: values.score_pct ?? null,
+    score_passed: values.score_passed ?? null,
   }
   return unwrap(await supabase.from('checklist_submissions').insert(payload).select(SUBMISSION_COLS).single())
 }

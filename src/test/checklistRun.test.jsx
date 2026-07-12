@@ -12,7 +12,9 @@ let TEMPLATE = null
 vi.mock('react-router-dom', () => ({
   useParams: () => ({ templateId: 't1' }),
   useNavigate: () => nav,
+  useSearchParams: () => [new URLSearchParams(''), vi.fn()],
 }))
+vi.mock('../lib/api/checklistSchedules', () => ({ completeAssignment: vi.fn(() => Promise.resolve()) }))
 vi.mock('../contexts/SettingsContext', () => ({ useSettings: () => ({ activeCountry: 'KSA' }) }))
 vi.mock('../contexts/AuthContext', () => ({ useAuth: () => ({ profile: { id: 'u1', full_name: 'Sam', role: 'Manager' } }) }))
 vi.mock('../components/SignaturePad', () => ({ default: () => null }))

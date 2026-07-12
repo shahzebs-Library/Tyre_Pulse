@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import {
   FIELD_TYPES, newField, newFieldId, typeHasOptions, isLayoutField, isValueField,
   blankAnswer, validateAnswer, validateSubmission, validateTemplate, fieldTypeDef,
+  evalCondition, isFieldVisible, computeScore,
 } from '../lib/checklist/fieldTypes'
 
 describe('checklist fieldTypes registry', () => {
@@ -66,6 +67,53 @@ describe('checklist fieldTypes registry', () => {
     expect(res.errors.d).toBeUndefined()
     const ok = validateSubmission(fields, { a: 'hi', b: 5 })
     expect(ok.valid).toBe(true)
+  })
+
+  it('evalCondition covers the operator set', () => {
+    expect(evalCondition('=', 'Yes', 'Yes')).toBe(true)
+    expect(evalCondition('!=', 'a', 'b')).toBe(true)
+    expect(evalCondition('>=', 5, 3)).toBe(true)
+    expect(evalCondition('<', 2, 10)).toBe(true)
+    expect(evalCondition('includes', ['a', 'b'], 'b')).toBe(true)
+    expect(evalCondition('empty', '', null)).toBe(true)
+    expect(evalCondition('not_empty', 'x', null)).toBe(true)
+  })
+
+  it('isFieldVisible honours visibleWhen and fails open', () => {
+    const f = { id: 'note', type: 'text', visibleWhen: { field: 'q1', op: '=', value: 'Fail' } }
+    expect(isFieldVisible(f, { q1: 'Fail' })).toBe(true)
+    expect(isFieldVisible(f, { q1: 'Pass' })).toBe(false)
+    expect(isFieldVisible({ id: 'x', type: 'text' }, {})).toBe(true) // no rule
+    expect(isFieldVisible({ visibleWhen: { field: 'q1', op: 'BOGUS', value: 1 } }, {})).toBe(true) // fail open
+  })
+
+  it('validateSubmission skips a hidden required field', () => {
+    const fields = [
+      { id: 'q1', type: 'select', label: 'Result', options: ['Pass', 'Fail'], required: true },
+      { id: 'why', type: 'text', label: 'Why', required: true, visibleWhen: { field: 'q1', op: '=', value: 'Fail' } },
+    ]
+    // q1=Pass hides "why" → valid even though "why" is empty+required.
+    expect(validateSubmission(fields, { q1: 'Pass' }).valid).toBe(true)
+    // q1=Fail shows "why" → now required.
+    const r = validateSubmission(fields, { q1: 'Fail' })
+    expect(r.valid).toBe(false)
+    expect(r.errors.why).toBeTruthy()
+  })
+
+  it('computeScore weights visible fields and applies a threshold', () => {
+    const fields = [
+      { id: 'a', type: 'boolean', label: 'Brakes OK', weight: 2, passValues: [true] },
+      { id: 'b', type: 'select', label: 'Lights', weight: 1, options: ['Good', 'Bad'], passValues: ['Good'] },
+      { id: 'c', type: 'text', label: 'Notes' }, // unweighted → ignored
+    ]
+    const s = computeScore(fields, { a: true, b: 'Bad' }, 70)
+    expect(s.possible).toBe(3)
+    expect(s.earned).toBe(2)
+    expect(s.pct).toBe(67)
+    expect(s.passed).toBe(false)
+    const s2 = computeScore(fields, { a: true, b: 'Good' }, 70)
+    expect(s2.pct).toBe(100)
+    expect(s2.passed).toBe(true)
   })
 
   it('validateTemplate flags structural problems', () => {

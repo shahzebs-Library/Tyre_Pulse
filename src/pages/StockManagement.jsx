@@ -67,6 +67,10 @@ export default function StockManagement() {
   // the open record while its workflow is active (pending/in_review/returned) or
   // locked (approved). Reset whenever a different record's history is opened.
   const [wfLocked, setWfLocked]     = useState(false)
+  // Approval-engine gate for a Tyre Return ledger post (movement_type === 'return')
+  // in the history/adjust modal. Independent of the general stock_issue lock so a
+  // return-specific workflow can block only the return post it authorises.
+  const [returnWfLocked, setReturnWfLocked] = useState(false)
 
   // Velocity state
   const [velocityMap, setVelocityMap] = useState({})
@@ -83,12 +87,15 @@ export default function StockManagement() {
   const [transferring, setTransferring] = useState(false)
   const [transferMsg, setTransferMsg]   = useState('')
   const [transferError, setTransferError] = useState('')
+  // Approval-engine gate for the inter-site transfer post. Locks the "Transfer
+  // stock" control while the tyre_transfer workflow is active/locked.
+  const [transferWfLocked, setTransferWfLocked] = useState(false)
 
   useEffect(() => { load() }, [activeCountry])
 
   // Reset the approval lock whenever a different record (or none) is opened in the
   // history modal; EntityApprovalPanel re-reports the true state via onStateChange.
-  useEffect(() => { setWfLocked(false) }, [historyFor?.id])
+  useEffect(() => { setWfLocked(false); setReturnWfLocked(false) }, [historyFor?.id])
 
   async function load() {
     setLoading(true)
@@ -201,7 +208,9 @@ export default function StockManagement() {
 
   async function saveAdjustment() {
     // Block the ledger post while the record's approval workflow is active/locked.
+    // A Tyre Return post is additionally gated by its own return-authorization lock.
     if (wfLocked) return
+    if (adjForm?.movement_type === 'return' && returnWfLocked) return
     if (!adjForm || !adjForm.qty_change) return
     const rec = historyFor
     setSaving(true); setError('')
@@ -238,6 +247,9 @@ export default function StockManagement() {
     e.preventDefault()
     setTransferError('')
     setTransferMsg('')
+
+    // Block the transfer post while its approval workflow is active/locked.
+    if (transferWfLocked) { setTransferError('Transfer is locked pending approval.'); return }
 
     const { fromSite, toSite, qty, notes } = transferForm
     const transferQty = +qty
@@ -715,12 +727,45 @@ export default function StockManagement() {
                 </div>
               )}
 
+              {/* Inter-site Transfer Approval — gates the "Transfer stock" post below.
+                  Mounted only once a valid source stock record + transfer context
+                  exists. The second workflow step conditions on context.qty
+                  (auto-skips when qty < 10), so qty MUST be numeric. */}
+              {(() => {
+                const fromRecord = records.find(r => r.site === transferForm.fromSite)
+                if (!fromRecord || !transferForm.toSite || +transferForm.qty < 1) return null
+                return (
+                  <div className="space-y-2">
+                    <EntityApprovalPanel
+                      entityType="tyre_transfer"
+                      entityId={fromRecord.id}
+                      entityLabel={`${transferForm.fromSite} → ${transferForm.toSite}`}
+                      context={{
+                        qty: Number(transferForm.qty) || 0,
+                        from_site: transferForm.fromSite,
+                        to_site: transferForm.toSite,
+                        country: activeCountry,
+                        description: fromRecord.description || transferForm.notes || null,
+                      }}
+                      title="Inter-site Transfer Approval"
+                      onStateChange={({ isActive, isLocked }) => setTransferWfLocked(!!(isActive || isLocked))}
+                    />
+                    {transferWfLocked && (
+                      <div className="flex items-center gap-1.5 text-xs text-[var(--text-muted)]">
+                        <Lock size={12} /> Locked, in approval
+                      </div>
+                    )}
+                  </div>
+                )
+              })()}
+
               <button
                 type="submit"
-                disabled={transferring || !transferForm.fromSite || !transferForm.toSite || transferForm.qty < 1}
+                disabled={transferring || transferWfLocked || !transferForm.fromSite || !transferForm.toSite || transferForm.qty < 1}
+                title={transferWfLocked ? 'Locked, in approval' : undefined}
                 className="btn-primary w-full flex items-center justify-center gap-2 disabled:opacity-50"
               >
-                <ArrowLeftRight size={16} />
+                {transferWfLocked ? <Lock size={16} /> : <ArrowLeftRight size={16} />}
                 {transferring ? t('stock.transfer.transferring') : t('stock.transfer.transferStock')}
               </button>
             </form>
@@ -882,6 +927,32 @@ export default function StockManagement() {
                   <Lock size={12} /> Locked, in approval
                 </div>
               )}
+
+              {/* Tyre Return Authorization — shown only when the pending movement is a
+                  return. Gates the return ledger-post via returnWfLocked, keyed on the
+                  same stock record so it is independent of the stock_issue panel. */}
+              {adjForm?.movement_type === 'return' && (
+                <div className="mt-3">
+                  <EntityApprovalPanel
+                    entityType="tyre_return"
+                    entityId={historyFor.id}
+                    entityLabel={historyFor.description || historyFor.site || historyFor.id}
+                    context={{
+                      qty: Number(adjForm?.qty_change) || 0,
+                      site: historyFor.site,
+                      country: activeCountry,
+                      description: historyFor.description || null,
+                    }}
+                    onStateChange={({ isActive, isLocked }) => setReturnWfLocked(!!(isActive || isLocked))}
+                    title="Tyre Return Authorization"
+                  />
+                  {returnWfLocked && (
+                    <div className="flex items-center gap-1.5 text-xs text-[var(--text-muted)] mt-2">
+                      <Lock size={12} /> Return locked, in approval
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* Quick adjustment form */}
@@ -920,11 +991,11 @@ export default function StockManagement() {
                 <div className="flex gap-2 mt-2">
                   <button
                     onClick={saveAdjustment}
-                    disabled={saving || adjForm.qty_change === 0 || wfLocked}
-                    title={wfLocked ? 'Locked, in approval' : undefined}
+                    disabled={saving || adjForm.qty_change === 0 || wfLocked || (adjForm.movement_type === 'return' && returnWfLocked)}
+                    title={wfLocked || (adjForm.movement_type === 'return' && returnWfLocked) ? 'Locked, in approval' : undefined}
                     className="btn-primary text-xs px-3 py-1.5 flex items-center gap-1.5 disabled:opacity-50"
                   >
-                    {wfLocked && <Lock size={12} />}
+                    {(wfLocked || (adjForm.movement_type === 'return' && returnWfLocked)) && <Lock size={12} />}
                     {saving ? t('stock.historyModal.saving') : t('stock.historyModal.logMovementBtn')}
                   </button>
                   <span className="text-xs text-[var(--text-muted)] self-center">

@@ -157,6 +157,19 @@ export default function Procurement() {
         : next,
     )
   }, [])
+  // Goods Receipt (GRN) is a distinct approval booked against the same PO id.
+  // Its lifecycle does not gate PO edits (the PO already has its own lock via
+  // handleWfStateChange), so we only track its state locally for surfacing.
+  const [grnState, setGrnState] = useState({ isActive: false, isLocked: false, status: null })
+  const handleGrnStateChange = useCallback((next) => {
+    setGrnState(prev =>
+      prev.isActive === next.isActive &&
+      prev.isLocked === next.isLocked &&
+      prev.status === next.status
+        ? prev
+        : next,
+    )
+  }, [])
   const [formData, setFormData]     = useState(EMPTY_FORM)
   const [itemRow, setItemRow]       = useState({ ...EMPTY_ITEM })
   const [taxPct, setTaxPct]         = useState(15)
@@ -195,6 +208,7 @@ export default function Procurement() {
   // panel's onStateChange for the new record starts from a clean slate.
   useEffect(() => {
     setWfLocked({ isActive: false, isLocked: false, status: null })
+    setGrnState({ isActive: false, isLocked: false, status: null })
   }, [viewPO?.id])
 
   // ── Derived values ─────────────────────────────────────────────────────────
@@ -1336,6 +1350,32 @@ export default function Procurement() {
                 {poLocked && (
                   <div className="flex items-center gap-1.5 text-xs text-[var(--accent)]">
                     <Lock size={12} /> Locked, in approval
+                  </div>
+                )}
+
+                {/* Goods Receipt (GRN) approval — the *receiving* step booked
+                    against this PO, a distinct approval from the PO
+                    authorization above. The engine keys instances by
+                    (entity_type, entity_id), so goods_receipt coexists with
+                    purchase_order on the same PO id. context.value (the received
+                    PO value) drives the finance sign-off skip (< 10000). */}
+                <EntityApprovalPanel
+                  entityType="goods_receipt"
+                  entityId={viewPO.id}
+                  entityLabel={viewPO.po_number || viewPO.id}
+                  context={{
+                    value: Number(viewPO.total_amount) || 0,
+                    country: viewPO.country ?? null,
+                    site: viewPO.site ?? null,
+                    po_no: viewPO.po_number ?? null,
+                  }}
+                  title="Goods Receipt (GRN)"
+                  onStateChange={handleGrnStateChange}
+                />
+
+                {(grnState.isActive || grnState.isLocked) && (
+                  <div className="flex items-center gap-1.5 text-xs text-[var(--accent)]">
+                    <Package size={12} /> Goods receipt in approval
                   </div>
                 )}
 

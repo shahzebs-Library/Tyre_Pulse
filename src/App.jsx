@@ -109,6 +109,10 @@ const GpsTracking            = lazy(() => import('./pages/GpsTracking'))
 const HoursOfService         = lazy(() => import('./pages/HoursOfService'))
 const IftaReporting          = lazy(() => import('./pages/IftaReporting'))
 const ServiceRequests        = lazy(() => import('./pages/ServiceRequests'))
+const VehicleReservations    = lazy(() => import('./pages/VehicleReservations'))
+const BreakdownCallouts      = lazy(() => import('./pages/BreakdownCallouts'))
+const Weighbridge            = lazy(() => import('./pages/Weighbridge'))
+const Emissions              = lazy(() => import('./pages/Emissions'))
 const Analytics              = lazy(() => import('./pages/Analytics'))
 const BrandPerformance       = lazy(() => import('./pages/BrandPerformance'))
 const SiteComparison         = lazy(() => import('./pages/SiteComparison'))
@@ -442,6 +446,10 @@ function MainApp() {
                       <Route path="/hours-of-service"      element={<Safe><HoursOfService /></Safe>} />
                       <Route path="/ifta-reporting"        element={<Safe><IftaReporting /></Safe>} />
                       <Route path="/service-requests"      element={<Safe><ServiceRequests /></Safe>} />
+                      <Route path="/reservations"          element={<Safe><VehicleReservations /></Safe>} />
+                      <Route path="/breakdowns"            element={<Safe><BreakdownCallouts /></Safe>} />
+                      <Route path="/weighbridge"           element={<Safe><Weighbridge /></Safe>} />
+                      <Route path="/emissions"             element={<Safe><Emissions /></Safe>} />
                       <Route path="/scan"        element={<Safe><TyreScan /></Safe>} />
                       <Route path="/qr-labels"   element={<Safe><QrLabels /></Safe>} />
                       {/* ── Platform (roadmap tranche: pages self-gate their roles) ── */}

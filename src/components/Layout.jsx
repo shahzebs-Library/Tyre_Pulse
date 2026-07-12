@@ -21,7 +21,7 @@ import {
   Award, PackageCheck, Calculator, Siren, ShieldAlert, SlidersHorizontal,
   Leaf, BadgeCheck, ScrollText, Navigation,
   Boxes, Combine, Snowflake, BatteryCharging, Router, Video, Receipt,
-  Satellite, Landmark,
+  Satellite, Landmark, BookMarked, PhoneCall, Scale,
   Wallet, FileCheck, Building2,
 } from 'lucide-react'
 // Branded domain icons (custom Tyre Pulse set) for the clearest fleet/tyre nav
@@ -122,6 +122,8 @@ const NAV_GROUPS = [
       { to: '/load-planning',       label: 'Load Planning',      icon: Package, adminOnly: A },
       { to: '/toll-transactions',   label: 'Toll Transactions',  icon: Receipt, adminOnly: A },
       { to: '/gps-tracking',        label: 'GPS Tracking',       icon: Satellite, adminOnly: A },
+      { to: '/reservations',        label: 'Vehicle Reservations', icon: BookMarked, adminOnly: A },
+      { to: '/weighbridge',         label: 'Weighbridge',        icon: Scale, adminOnly: A },
     ],
   },
   {
@@ -168,6 +170,7 @@ const NAV_GROUPS = [
       { to: '/downtime',        label: 'Downtime Tracker',   icon: Clock, adminOnly: A },
       { to: '/fuel-efficiency', label: 'Fuel Efficiency',    icon: FuelPumpIc, adminOnly: A },
       { to: '/service-requests', label: 'Service Requests',   icon: LifeBuoy, adminOnly: A },
+      { to: '/breakdowns',      label: 'Breakdown Callouts', icon: PhoneCall, adminOnly: A },
     ],
   },
   {
@@ -217,6 +220,7 @@ const NAV_GROUPS = [
       { to: '/driver-safety',          label: 'Driver Safety',       icon: ShieldAlert, adminOnly: A },
       { to: '/video-telematics',       label: 'Video Telematics',    icon: Video, adminOnly: A },
       { to: '/hours-of-service',       label: 'Hours of Service',    icon: Clock, adminOnly: A },
+      { to: '/emissions',              label: 'Emissions Tests',     icon: Leaf, adminOnly: A },
       { to: '/retread',                label: 'Retread Management',  icon: Recycle, adminOnly: A },
     ],
   },

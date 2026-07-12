@@ -40,6 +40,10 @@ const UploadData             = lazy(() => import('./pages/UploadData'))
 const DataIntakeCenter       = lazy(() => import('./pages/DataIntakeCenter'))
 const NotFound               = lazy(() => import('./pages/NotFound'))
 const DataIntakeHistory      = lazy(() => import('./pages/DataIntakeHistory'))
+const Checklists             = lazy(() => import('./pages/Checklists'))
+const ChecklistBuilder       = lazy(() => import('./pages/ChecklistBuilder'))
+const ChecklistRun           = lazy(() => import('./pages/ChecklistRun'))
+const ChecklistSubmission    = lazy(() => import('./pages/ChecklistSubmission'))
 const UploadApprovals        = lazy(() => import('./pages/UploadApprovals'))
 const Settings               = lazy(() => import('./pages/Settings'))
 const Analytics              = lazy(() => import('./pages/Analytics'))
@@ -288,6 +292,11 @@ function MainApp() {
                       <Route path="/upload"      element={<Safe><FlagRoute flag="data_intake"><UploadData /></FlagRoute></Safe>} />
                       <Route path="/data-intake" element={<Safe><FlagRoute flag="data_intake"><DataIntakeCenter /></FlagRoute></Safe>} />
                       <Route path="/data-intake/history" element={<Safe><FlagRoute flag="data_intake"><DataIntakeHistory /></FlagRoute></Safe>} />
+                      <Route path="/checklists" element={<Safe><Checklists /></Safe>} />
+                      <Route path="/checklists/:templateId/run" element={<Safe><ChecklistRun /></Safe>} />
+                      <Route path="/checklists/submission/:id" element={<Safe><ChecklistSubmission /></Safe>} />
+                      <Route path="/checklist-builder" element={<Safe><RoleRoute allowed={['Admin', 'Manager', 'Director']}><ChecklistBuilder /></RoleRoute></Safe>} />
+                      <Route path="/checklist-builder/:id" element={<Safe><RoleRoute allowed={['Admin', 'Manager', 'Director']}><ChecklistBuilder /></RoleRoute></Safe>} />
                       <Route path="/upload-approvals" element={<Safe><FlagRoute flag="data_intake"><UploadApprovals /></FlagRoute></Safe>} />
                       <Route path="/custom-data" element={<Safe><ModuleRoute moduleKey="custom_data"><CustomData /></ModuleRoute></Safe>} />
                       <Route path="/settings"    element={<Safe><Settings /></Safe>} />

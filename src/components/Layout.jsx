@@ -7,7 +7,7 @@ import { useTheme } from '../contexts/ThemeContext'
 import {
   LayoutDashboard, CircleDot, Package, DollarSign,
   ClipboardList, Search, Upload, Settings, LogOut,
-  Menu, X, Wand2, BarChart2, Shield, ClipboardCheck,
+  Menu, X, Wand2, BarChart2, Shield, ClipboardCheck, ListChecks,
   Bell, GitBranch, Layers, AlertTriangle, Globe, Car, Users, User, Sparkles,
   Sun, Moon, Truck, AlertOctagon, FileText, ShieldCheck, ScanLine, GitCompare, QrCode,
   ChevronDown, ChevronRight,
@@ -149,6 +149,7 @@ const NAV_GROUPS = [
     label: 'Safety & Compliance',
     items: [
       { to: '/inspections',            label: 'Inspections',         icon: ClipboardCheck },
+      { to: '/checklists',             label: 'Checklists',          icon: ListChecks },
       { to: '/inspection-planner',     label: 'Inspection Planner',  icon: CalendarClock },
       { to: '/inspection-intelligence', label: 'Inspection Intelligence', icon: Activity, adminOnly: A },
       { to: '/safety-compliance',      label: 'Safety & Compliance', icon: ShieldCheck, adminOnly: A },

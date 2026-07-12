@@ -113,6 +113,8 @@ const NAV_GROUPS = [
       { to: '/telematics-devices',  label: 'Telematics Devices', icon: Router, adminOnly: A },
       { to: '/shifts',              label: 'Shift Scheduling',   icon: CalendarClock, adminOnly: A },
       { to: '/speed-limiter',       label: 'Speed Limiter',      icon: Gauge, adminOnly: A },
+      { to: '/engine-hours',        label: 'Engine Hours',       icon: Gauge, adminOnly: A },
+      { to: '/odometer-logs',       label: 'Odometer Logs',      icon: Activity, adminOnly: A },
     ],
   },
   {
@@ -151,6 +153,8 @@ const NAV_GROUPS = [
       { to: '/gate-pass',       label: 'Gate Pass',          icon: GatePassIc },
       { to: '/workshop',        label: 'Workshop Management', icon: WorkshopIc, adminOnly: A },
       { to: '/technician-scorecard', label: 'Technician Scorecard', icon: Award, adminOnly: A },
+      { to: '/pm-programs',     label: 'PM Programs',        icon: CalendarClock, adminOnly: A },
+      { to: '/dtc',             label: 'DTC Diagnostics',    icon: Cpu, adminOnly: A },
       { to: '/fuel-cards',      label: 'Fuel Cards',         icon: CreditCard, adminOnly: A },
       { to: '/fuel-delivery',   label: 'Fuel Delivery',      icon: Fuel, adminOnly: A },
       { to: '/equipment',       label: 'Tool & Equipment',   icon: Wrench, adminOnly: A },

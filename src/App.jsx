@@ -94,6 +94,10 @@ const Requisitions           = lazy(() => import('./pages/Requisitions'))
 const GoodsReceipt           = lazy(() => import('./pages/GoodsReceipt'))
 const Customers              = lazy(() => import('./pages/Customers'))
 const FleetRenewal           = lazy(() => import('./pages/FleetRenewal'))
+const DtcDiagnostics         = lazy(() => import('./pages/DtcDiagnostics'))
+const EngineHours            = lazy(() => import('./pages/EngineHours'))
+const OdometerLogs           = lazy(() => import('./pages/OdometerLogs'))
+const PmPrograms             = lazy(() => import('./pages/PmPrograms'))
 const Analytics              = lazy(() => import('./pages/Analytics'))
 const BrandPerformance       = lazy(() => import('./pages/BrandPerformance'))
 const SiteComparison         = lazy(() => import('./pages/SiteComparison'))
@@ -412,6 +416,10 @@ function MainApp() {
                       <Route path="/goods-receipt"         element={<Safe><GoodsReceipt /></Safe>} />
                       <Route path="/customers"             element={<Safe><Customers /></Safe>} />
                       <Route path="/fleet-renewal"         element={<Safe><FleetRenewal /></Safe>} />
+                      <Route path="/dtc"                   element={<Safe><DtcDiagnostics /></Safe>} />
+                      <Route path="/engine-hours"          element={<Safe><EngineHours /></Safe>} />
+                      <Route path="/odometer-logs"         element={<Safe><OdometerLogs /></Safe>} />
+                      <Route path="/pm-programs"           element={<Safe><PmPrograms /></Safe>} />
                       <Route path="/scan"        element={<Safe><TyreScan /></Safe>} />
                       <Route path="/qr-labels"   element={<Safe><QrLabels /></Safe>} />
                       {/* ── Platform (roadmap tranche: pages self-gate their roles) ── */}

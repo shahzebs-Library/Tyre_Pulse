@@ -69,6 +69,48 @@ export async function listAssignments(country?: string | null): Promise<Checklis
   return (data ?? []) as ChecklistAssignment[]
 }
 
+// ── Reference-field option sources (live data for asset/site/user pickers) ──
+
+function uniqSorted(values: (string | null | undefined)[]): string[] {
+  return Array.from(new Set(values.filter((v): v is string => !!v && !!v.trim())))
+    .sort((a, b) => a.localeCompare(b))
+}
+
+/** Distinct site names (Sites master, with a vehicle_fleet fallback). */
+export async function listSiteOptions(country?: string | null): Promise<string[]> {
+  try {
+    let q = supabase.from('sites').select('name').eq('active', true)
+    if (country && country !== 'All') q = q.or(`country.eq.${country},country.is.null`)
+    const { data, error } = await q.limit(1000)
+    if (!error && data && data.length) return uniqSorted(data.map((r: any) => r.name))
+  } catch { /* fall through to fleet fallback */ }
+  const { data } = await supabase.from('vehicle_fleet').select('site').limit(2000)
+  return uniqSorted((data ?? []).map((r: any) => r.site))
+}
+
+/** Distinct asset numbers from the fleet. */
+export async function listAssetOptions(country?: string | null): Promise<string[]> {
+  let q = supabase.from('vehicle_fleet').select('asset_no')
+  if (country && country !== 'All') q = q.or(`country.eq.${country},country.is.null`)
+  const { data, error } = await q.limit(3000)
+  if (error) throw error
+  return uniqSorted((data ?? []).map((r: any) => r.asset_no))
+}
+
+/** Org users as display names (full_name || username). */
+export async function listUserOptions(): Promise<string[]> {
+  const { data, error } = await supabase.from('profiles').select('full_name,username').limit(1000)
+  if (error) throw error
+  return uniqSorted((data ?? []).map((r: any) => r.full_name || r.username))
+}
+
+/** Load options for a reference source. */
+export async function listReferenceOptions(source: 'asset' | 'site' | 'user', country?: string | null): Promise<string[]> {
+  if (source === 'site') return listSiteOptions(country)
+  if (source === 'asset') return listAssetOptions(country)
+  return listUserOptions()
+}
+
 export interface SubmitInput {
   template: ChecklistTemplate
   answers: Record<string, any>

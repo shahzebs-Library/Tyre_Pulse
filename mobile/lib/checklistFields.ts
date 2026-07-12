@@ -7,7 +7,16 @@
 
 export type FieldType =
   | 'section' | 'text' | 'textarea' | 'number' | 'select' | 'multiselect'
-  | 'boolean' | 'date' | 'rating' | 'photo' | 'signature'
+  | 'boolean' | 'date' | 'rating' | 'asset' | 'site' | 'user' | 'photo' | 'signature'
+
+export type ReferenceSource = 'asset' | 'site' | 'user'
+export const REFERENCE_TYPES: FieldType[] = ['asset', 'site', 'user']
+export function isReferenceField(type?: string): boolean {
+  return REFERENCE_TYPES.includes(type as FieldType)
+}
+export function referenceSource(type?: string): ReferenceSource | null {
+  return isReferenceField(type) ? (type as ReferenceSource) : null
+}
 
 export interface VisibleWhen { field: string; op: string; value?: any }
 

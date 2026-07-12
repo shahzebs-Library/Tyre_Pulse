@@ -18,10 +18,11 @@ import { Ionicons } from '@expo/vector-icons'
 import { useAuth } from '../../../contexts/AuthContext'
 import { useLanguage } from '../../../contexts/LanguageContext'
 import PhotoCapture from '../../../components/PhotoCapture'
+import ChecklistReferencePicker from '../../../components/ChecklistReferencePicker'
 import { getTemplate, submitChecklist, ChecklistTemplate } from '../../../lib/checklists'
 import {
   ChecklistField, blankAnswer, isValueField, isFieldVisible,
-  validateSubmission, computeScore,
+  validateSubmission, computeScore, isReferenceField, referenceSource,
 } from '../../../lib/checklistFields'
 
 export default function ChecklistFillScreen() {
@@ -266,6 +267,7 @@ export default function ChecklistFillScreen() {
               error={errors[field.id]}
               printedName={printedName}
               textAlign={textAlign}
+              country={profile?.country ?? null}
               onChange={v => setAnswer(field.id, v)}
               onPhotos={urls => setFieldPhotos(field.id, urls)}
               onPrintedName={setPrintedName}
@@ -317,7 +319,7 @@ function Field({
 
 // ── Per-type field renderer ───────────────────────────────────────────────────
 function FieldRenderer({
-  field, value, photos, error, printedName, textAlign,
+  field, value, photos, error, printedName, textAlign, country,
   onChange, onPhotos, onPrintedName,
 }: {
   field: ChecklistField
@@ -326,6 +328,7 @@ function FieldRenderer({
   error?: string
   printedName: string
   textAlign: 'left' | 'right'
+  country?: string | null
   onChange: (v: any) => void
   onPhotos: (urls: string[]) => void
   onPrintedName: (v: string) => void
@@ -373,7 +376,7 @@ function FieldRenderer({
   return (
     <View style={styles.card}>
       <Field label={field.label} required={field.required} help={field.help} error={error} textAlign={textAlign}>
-        <ValueInput field={field} value={value} textAlign={textAlign} onChange={onChange} />
+        <ValueInput field={field} value={value} textAlign={textAlign} country={country} onChange={onChange} />
       </Field>
       {/* Any non-photo field flagged allow_photo gets an inline capture. */}
       {field.allow_photo && (
@@ -388,10 +391,24 @@ function FieldRenderer({
 
 // ── The actual input control per value type ───────────────────────────────────
 function ValueInput({
-  field, value, textAlign, onChange,
+  field, value, textAlign, country, onChange,
 }: {
-  field: ChecklistField; value: any; textAlign: 'left' | 'right'; onChange: (v: any) => void
+  field: ChecklistField; value: any; textAlign: 'left' | 'right'
+  country?: string | null; onChange: (v: any) => void
 }) {
+  // Reference fields (asset/site/user) use the live searchable picker.
+  if (isReferenceField(field.type)) {
+    return (
+      <ChecklistReferencePicker
+        source={referenceSource(field.type)!}
+        value={typeof value === 'string' ? value : ''}
+        onChange={onChange}
+        country={country}
+        placeholder={`Select a ${field.type}…`}
+      />
+    )
+  }
+
   switch (field.type) {
     case 'textarea':
       return (

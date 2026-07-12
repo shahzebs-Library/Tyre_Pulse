@@ -120,6 +120,7 @@ const NAV_GROUPS = [
       { to: '/tyre-exchange',          label: 'Tyre Exchange',          icon: TyreSwapIc, adminOnly: A },
       { to: '/tyre-specs',             label: 'Tyre Specifications',    icon: PlyRatingIc, adminOnly: A },
       { to: '/tyre-age-compliance',    label: 'Tyre Age Compliance',    icon: ShieldCheck, roles: ANALYTICS_ROLES },
+      { to: '/tyre-passport',          label: 'Tyre Passport',          icon: ScanLine },
       { to: '/rotation',               label: 'Rotation Schedule',      icon: TyreRotationIc, adminOnly: A },
       { to: '/ai',                     label: 'Smart Analytics',        icon: Sparkles, adminOnly: A },
     ],

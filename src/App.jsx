@@ -53,6 +53,7 @@ const Settings               = lazy(() => import('./pages/Settings'))
 const HelpCenter             = lazy(() => import('./pages/HelpCenter'))
 const TyreAgeCompliance      = lazy(() => import('./pages/TyreAgeCompliance'))
 const RoiCalculator          = lazy(() => import('./pages/RoiCalculator'))
+const TyrePassport           = lazy(() => import('./pages/TyrePassport'))
 const Analytics              = lazy(() => import('./pages/Analytics'))
 const BrandPerformance       = lazy(() => import('./pages/BrandPerformance'))
 const SiteComparison         = lazy(() => import('./pages/SiteComparison'))
@@ -328,6 +329,8 @@ function MainApp() {
                       <Route path="/help"        element={<Safe><HelpCenter /></Safe>} />
                       <Route path="/tyre-age-compliance" element={<Safe><TyreAgeCompliance /></Safe>} />
                       <Route path="/roi-calculator"      element={<Safe><RoiCalculator /></Safe>} />
+                      <Route path="/tyre-passport"         element={<Safe><TyrePassport /></Safe>} />
+                      <Route path="/tyre-passport/:serial" element={<Safe><TyrePassport /></Safe>} />
                       <Route path="/scan"        element={<Safe><TyreScan /></Safe>} />
                       <Route path="/qr-labels"   element={<Safe><QrLabels /></Safe>} />
                       {/* ── Platform (roadmap tranche: pages self-gate their roles) ── */}

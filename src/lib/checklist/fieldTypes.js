@@ -69,8 +69,9 @@ export const FIELD_LIBRARY = [
       { label: 'Site', type: 'site', required: true },
       { label: 'Inspector', type: 'user', required: true, autoValue: 'current_user' },
       { label: 'Date of check', type: 'date', required: true, autoValue: 'today' },
-      { label: 'Odometer (km)', type: 'number', min: 0 },
+      { label: 'KM meter (km)', type: 'number', min: 0 },
       { label: 'Hour meter (hrs)', type: 'number', min: 0 },
+      { label: 'Inspection interval', type: 'select', options: ['Monthly', 'Quarterly', 'Semi-annual', 'Annual', '4-Yearly'], required: true },
     ],
   },
   {

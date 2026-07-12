@@ -5,7 +5,7 @@ import {
   ChevronUp, ChevronDown, GripVertical, AlertCircle, CheckCircle2, XCircle,
   Type, AlignLeft, Hash, List, ListChecks, ToggleRight, Calendar, Star,
   Camera, PenLine, Heading, Eye, Copy, X, Info, Filter, Scale, Target,
-  Truck, MapPin, User, Sparkles, Link2, Lock,
+  Truck, MapPin, User, Sparkles, Link2, Lock, FileSpreadsheet,
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
 import { useSettings } from '../contexts/SettingsContext'
@@ -17,6 +17,7 @@ import {
 import {
   getTemplate, createTemplate, updateTemplate, publishTemplate,
 } from '../lib/api/checklists'
+import { buildTemplateFromRows } from '../lib/checklist/importChecklist'
 
 // ─── Static config ────────────────────────────────────────────────────────────
 
@@ -1034,6 +1035,12 @@ export default function ChecklistBuilder() {
   const [savedNote, setSavedNote] = useState(null)
   const [dirty, setDirty] = useState(false)
 
+  // ── One-time spreadsheet import (Excel / CSV → checklist template) ──
+  const importInputRef = useRef(null)
+  const [importing, setImporting] = useState(false)
+  const [importError, setImportError] = useState(null)
+  const [importNote, setImportNote] = useState(null)
+
   // ── Load (edit mode) ──
   const load = useCallback(async () => {
     if (!isEdit) return
@@ -1084,6 +1091,105 @@ export default function ChecklistBuilder() {
         const el = document.getElementById(`field-${f.id}`)
         if (el && el.scrollIntoView) el.scrollIntoView({ behavior: 'smooth', block: 'center' })
       })
+    }
+  }
+
+  // ── Import a maintenance/inspection sheet and load it as the editable draft ──
+  const MAX_IMPORT_BYTES = 10 * 1024 * 1024 // 10 MB guard against oversized workbooks
+
+  const openImportPicker = () => {
+    setImportError(null)
+    if (importInputRef.current) importInputRef.current.click()
+  }
+
+  const handleImportFile = async (e) => {
+    const input = e.target
+    const file = input?.files && input.files[0]
+    // Reset the input so re-selecting the same file still fires onChange.
+    if (input) input.value = ''
+    if (!file) return
+
+    setImportError(null)
+    setImportNote(null)
+
+    if (file.size === 0) {
+      setImportError('That file is empty — export the sheet again and retry.')
+      return
+    }
+    if (file.size > MAX_IMPORT_BYTES) {
+      setImportError('That file is too large (max 10 MB). Trim it and retry.')
+      return
+    }
+
+    setImporting(true)
+    try {
+      const XLSX = await import('xlsx')
+      const buf = await file.arrayBuffer()
+
+      let wb
+      try {
+        wb = XLSX.read(buf, { type: 'array' })
+      } catch {
+        setImportError('Could not read that file — upload a valid .xlsx, .xls or .csv.')
+        return
+      }
+
+      const sheetNames = Array.isArray(wb?.SheetNames) ? wb.SheetNames : []
+      if (!sheetNames.length) {
+        setImportError('That workbook has no sheets to import.')
+        return
+      }
+
+      const baseName =
+        String(file.name || '').replace(/\.[^.]+$/, '').replace(/[_-]+/g, ' ').trim() ||
+        'Imported checklist'
+
+      // Prefer the first sheet that yields a usable template.
+      let built = null
+      let sawSheetError = false
+      for (const sn of sheetNames) {
+        const ws = wb.Sheets[sn]
+        if (!ws) continue
+        const rows = XLSX.utils.sheet_to_json(ws, { header: 1, blankrows: false })
+        const result = buildTemplateFromRows(rows, { name: baseName })
+        if (result?.template) { built = result; break }
+        if (result?.stats?.error) sawSheetError = true
+      }
+
+      if (!built?.template) {
+        setImportError(
+          sawSheetError
+            ? "Couldn't find Category / Sub Category columns — check the sheet."
+            : "Couldn't build a checklist from that file — check the sheet has Category & Sub Category columns.",
+        )
+        return
+      }
+
+      const { template, stats } = built
+      // Load it as the current editable draft (same shape toDraft produces).
+      setDraft(toDraft(template, activeCountry))
+      setExpandedId(null)
+      setFieldErrors({})
+      setProblems([])
+      setSaveError(null)
+      setSavedNote(null)
+      setDirty(true)
+
+      const intervalsTxt =
+        Array.isArray(stats?.intervals) && stats.intervals.length
+          ? stats.intervals.join(', ')
+          : 'none detected'
+      const items = Number(stats?.items) || 0
+      const cats = Number(stats?.categories) || 0
+      setImportNote(
+        `Imported ${items} check${items === 1 ? '' : 's'} across ${cats} ` +
+          `categor${cats === 1 ? 'y' : 'ies'} · intervals: ${intervalsTxt}. ` +
+          'Review, edit and publish when ready.',
+      )
+    } catch (err) {
+      setImportError(err?.message || 'Import failed — please try a different file.')
+    } finally {
+      setImporting(false)
     }
   }
 
@@ -1526,6 +1632,56 @@ export default function ChecklistBuilder() {
             </div>
 
             <FieldLibraryPanel onAdd={addFromLibrary} />
+
+            {/* One-time Excel/CSV import → checklist template */}
+            <div className="rounded-xl border border-[var(--border-dim)] bg-[var(--surface-2)] overflow-hidden">
+              <div className="flex items-start gap-2.5 px-3 py-2.5">
+                <span className="w-7 h-7 shrink-0 rounded-lg bg-brand-subtle text-[var(--brand-bright)] flex items-center justify-center">
+                  <FileSpreadsheet className="w-4 h-4" />
+                </span>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-[var(--text-primary)]">Import from Excel/CSV</p>
+                  <p className="text-[11px] text-[var(--text-muted)] leading-snug">
+                    Upload a maintenance sheet — Category · Sub Category · Date Interval · Symptoms columns.
+                    A one-time import builds a ready-to-edit checklist you can review &amp; publish.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={openImportPicker}
+                  disabled={importing}
+                  className="btn-secondary text-xs px-3 py-1.5 flex items-center gap-1.5 shrink-0 disabled:opacity-60"
+                  title="Import a maintenance/inspection spreadsheet"
+                >
+                  {importing
+                    ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    : <Upload className="w-3.5 h-3.5" />}
+                  {importing ? 'Parsing…' : 'Upload file'}
+                </button>
+                <input
+                  ref={importInputRef}
+                  type="file"
+                  accept=".xlsx,.xls,.csv"
+                  onChange={handleImportFile}
+                  className="hidden"
+                  aria-hidden="true"
+                  tabIndex={-1}
+                />
+              </div>
+              {(importError || importNote) && (
+                <div className="border-t border-[var(--border-dim)] px-3 py-2">
+                  {importError ? (
+                    <p className="text-red-400 text-xs flex items-start gap-1.5">
+                      <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-0.5" /> {importError}
+                    </p>
+                  ) : (
+                    <p className="text-[var(--brand-bright)] text-xs flex items-start gap-1.5">
+                      <CheckCircle2 className="w-3.5 h-3.5 shrink-0 mt-0.5" /> {importNote}
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
 
             {fields.length === 0 ? (
               <div className="flex flex-col items-center justify-center text-center py-12 px-4 rounded-xl border border-dashed border-[var(--border-dim)] bg-[var(--surface-2)]">

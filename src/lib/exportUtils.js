@@ -1428,11 +1428,13 @@ export async function exportAccidentCasePdf(acc = {}, opts = {}) {
 
 /**
  * exportChecklistSubmissionPdf — a tenant-branded record of one checklist
- * submission. Renders a header, a title card (title/asset/site/country/status/
- * submitted), then one section per template `section` divider with each field
- * rendered as a "Label: value" row via autoTable. Photo fields are summarised as
- * a count (remote images are never fetched — CORS). A captured signature
- * data-URL is embedded under a Signature section. Used by the
+ * submission. Renders a branded header (tenant logo via `hdr.logoData`), a title
+ * card, a meta grid, a generation timestamp, then one section per template
+ * `section` divider with each field rendered as a "Label: value" row via
+ * autoTable. A dedicated Photos section fetches each captured public image
+ * (tyre-photos bucket) and embeds it in a captioned grid (capped, best-effort —
+ * a failed fetch is skipped, never thrown). A captured signature data-URL is
+ * embedded under a Signature section. Used by the
  * `/checklists/submissions/:id` page "Download PDF" action.
  *
  *   await exportChecklistSubmissionPdf(submission, { company, branding, fields })
@@ -1533,6 +1535,11 @@ export async function exportChecklistSubmissionPdf(submission = {}, opts = {}) {
   })
   y += 34
 
+  // ── Generation timestamp (report runtime — local to the operator) ────────────
+  doc.setFontSize(7); doc.setFont('helvetica', 'normal'); doc.setTextColor(...P.mist)
+  doc.text(`Generated: ${new Date().toLocaleString()}`, mx, y)
+  y += 7
+
   // ── Responses grouped by section divider ────────────────────────────────────
   const flush = (sectionLabel, rows) => {
     if (!rows.length) return
@@ -1562,6 +1569,131 @@ export async function exportChecklistSubmissionPdf(submission = {}, opts = {}) {
     rows.push([String(f.label || f.id || '-'), valueOf(f)])
   }
   flush(sectionLabel, rows)
+
+  // ── Photos ──────────────────────────────────────────────────────────────────
+  // Fetch each captured public image and embed it in a captioned grid. Fully
+  // guarded: a failed/blocked/oversized fetch is skipped (rendered as
+  // "image unavailable") so one bad URL never breaks the report. Total embeds
+  // are capped so a huge submission can't produce a runaway PDF.
+  const MAX_PHOTOS = 30
+  const submittedLabel = submission.submitted_at
+    ? new Date(submission.submitted_at).toLocaleString()
+    : ''
+
+  // Order photos by the field list first (for stable, labelled output), then
+  // append any photo keys not present in the field list.
+  const labelById = new Map()
+  for (const f of fields) { if (f && f.id != null) labelById.set(String(f.id), String(f.label || f.id)) }
+  const photoItems = []
+  const seenKeys = new Set()
+  const collectKey = (key) => {
+    const k = String(key)
+    if (seenKeys.has(k)) return
+    seenKeys.add(k)
+    const arr = photos[key]
+    if (!Array.isArray(arr)) return
+    const lbl = labelById.get(k) || k
+    for (const url of arr) if (typeof url === 'string' && url) photoItems.push({ label: lbl, url })
+  }
+  for (const f of fields) { if (f && f.id != null) collectKey(f.id) }
+  for (const key of Object.keys(photos)) collectKey(key)
+
+  if (photoItems.length) {
+    // Fetch a URL to { dataUrl, fmt } — never throws. Aborts slow requests so a
+    // hanging image URL can't stall report generation.
+    const fetchImageDataUrl = async (url) => {
+      if (!url || typeof url !== 'string') return null
+      if (typeof fetch !== 'function' || typeof FileReader === 'undefined') return null
+      try {
+        const ctrl = typeof AbortController === 'function' ? new AbortController() : null
+        const timer = ctrl && typeof setTimeout === 'function' ? setTimeout(() => ctrl.abort(), 12000) : null
+        let res
+        try {
+          res = await fetch(url, { mode: 'cors', signal: ctrl ? ctrl.signal : undefined })
+        } finally { if (timer && typeof clearTimeout === 'function') clearTimeout(timer) }
+        if (!res || !res.ok) return null
+        const blob = await res.blob()
+        if (!blob.type || !blob.type.startsWith('image/') || blob.size > 8_000_000) return null
+        const fmt = /png/i.test(blob.type) ? 'PNG' : /webp/i.test(blob.type) ? 'WEBP' : 'JPEG'
+        const dataUrl = await new Promise((resolve) => {
+          const fr = new FileReader()
+          fr.onload = () => resolve(typeof fr.result === 'string' ? fr.result : null)
+          fr.onerror = () => resolve(null)
+          fr.readAsDataURL(blob)
+        })
+        return dataUrl ? { dataUrl, fmt } : null
+      } catch { return null }
+    }
+
+    const omitted  = Math.max(0, photoItems.length - MAX_PHOTOS)
+    const toRender = photoItems.slice(0, MAX_PHOTOS)
+
+    newPageIfNeeded(40)
+    y = _sectionBar(doc, `Photos (${omitted ? `${toRender.length} of ${photoItems.length}` : toRender.length})`, y, mx, brand.accent) + 4
+
+    const cols = 3
+    const gap  = 6
+    const boxW = (pw - mx * 2 - gap * (cols - 1)) / cols  // ~56mm content-fit
+    const imgH = boxW * 0.72                              // fixed image area
+    const capH = 9                                        // caption strip
+    const boxH = imgH + capH
+    let col = 0
+    let rowTop = y
+
+    for (const item of toRender) {
+      if (col === 0) { newPageIfNeeded(boxH + 6); rowTop = y }
+      const x = mx + col * (boxW + gap)
+
+      // Card frame
+      doc.setFillColor(...P.offWhite); doc.setDrawColor(...P.silver); doc.setLineWidth(0.3)
+      doc.roundedRect(x, rowTop, boxW, boxH, 2, 2, 'FD')
+
+      let embedded = false
+      const got = await fetchImageDataUrl(item.url)
+      if (got) {
+        try {
+          // Fit preserving aspect ratio inside the image area; centre in box.
+          const availW = boxW - 4, availH = imgH - 4
+          let dW = availW, dH = availH, ox = x + 2, oy = rowTop + 2
+          try {
+            const props = doc.getImageProperties ? doc.getImageProperties(got.dataUrl) : null
+            if (props && props.width && props.height) {
+              const ar = props.width / props.height
+              if (ar > availW / availH) { dW = availW; dH = availW / ar; oy = rowTop + 2 + (availH - dH) / 2 }
+              else { dH = availH; dW = availH * ar; ox = x + 2 + (availW - dW) / 2 }
+            }
+          } catch { /* fall back to box-fill sizing */ }
+          doc.addImage(got.dataUrl, got.fmt, ox, oy, dW, dH, undefined, 'FAST')
+          embedded = true
+        } catch { embedded = false }
+      }
+      if (!embedded) {
+        doc.setFontSize(7); doc.setFont('helvetica', 'normal'); doc.setTextColor(...P.mist)
+        doc.text('image unavailable', x + boxW / 2, rowTop + imgH / 2, { align: 'center' })
+      }
+
+      // Caption strip: field label + submission timestamp
+      doc.setDrawColor(...P.silver); doc.setLineWidth(0.2)
+      doc.line(x + 2, rowTop + imgH, x + boxW - 2, rowTop + imgH)
+      doc.setFontSize(6.5); doc.setFont('helvetica', 'bold'); doc.setTextColor(...P.ink)
+      doc.text(doc.splitTextToSize(String(item.label || '-'), boxW - 4)[0] || '-', x + 2, rowTop + imgH + 4)
+      if (submittedLabel) {
+        doc.setFontSize(5.8); doc.setFont('helvetica', 'normal'); doc.setTextColor(...P.mist)
+        doc.text(doc.splitTextToSize(submittedLabel, boxW - 4)[0] || '', x + 2, rowTop + imgH + 7.4)
+      }
+
+      col++
+      if (col >= cols) { col = 0; y = rowTop + boxH + gap }
+    }
+    if (col !== 0) y = rowTop + boxH + gap  // close a trailing partial row
+
+    if (omitted) {
+      newPageIfNeeded(10)
+      doc.setFontSize(7); doc.setFont('helvetica', 'italic'); doc.setTextColor(...P.mist)
+      doc.text(`${omitted} additional photo(s) omitted to keep the report concise.`, mx, y)
+      y += 6
+    }
+  }
 
   // ── Signature ───────────────────────────────────────────────────────────────
   const sig = submission.signature_data

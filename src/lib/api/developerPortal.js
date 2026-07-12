@@ -2,7 +2,7 @@
  * Developer Portal service — the single seam between the Developer Portal page
  * (/developer-portal) and Supabase for two related entity sets:
  *
- *   • api_keys           (table `api_keys`,          V194)
+ *   • api_keys           (table `developer_api_keys`, V194)
  *   • webhook_endpoints  (table `webhook_endpoints`, V194)
  *
  * Mirrors odometerLogs.js: explicit column lists (least-privilege selects),
@@ -65,17 +65,17 @@ const asTimestamp = (v) => {
  */
 export async function listApiKeys({ country, limit = 500 } = {}) {
   try {
-    let q = supabase.from('api_keys').select(API_KEY_COLS)
+    let q = supabase.from('developer_api_keys').select(API_KEY_COLS)
     q = applyCountry(q, country)
     return unwrap(await q.order('created_at', { ascending: false }).limit(limit)) || []
   } catch (err) {
-    if (isMissingRelation(err, 'api_keys')) return []
+    if (isMissingRelation(err, 'developer_api_keys')) return []
     throw err
   }
 }
 
 export async function getApiKey(id) {
-  return unwrap(await supabase.from('api_keys').select(API_KEY_COLS).eq('id', id).maybeSingle())
+  return unwrap(await supabase.from('developer_api_keys').select(API_KEY_COLS).eq('id', id).maybeSingle())
 }
 
 /**
@@ -107,7 +107,7 @@ export async function createApiKey(values = {}) {
     notes: values.notes ? String(values.notes).slice(0, 8000) : null,
     country: values.country ?? null,
   }
-  return unwrap(await supabase.from('api_keys').insert(payload).select(API_KEY_COLS).single())
+  return unwrap(await supabase.from('developer_api_keys').insert(payload).select(API_KEY_COLS).single())
 }
 
 /**
@@ -141,12 +141,12 @@ export async function updateApiKey(id, patch = {}) {
   if (patch.notes !== undefined) clean.notes = patch.notes ? String(patch.notes).slice(0, 8000) : null
   if (patch.country !== undefined) clean.country = patch.country ?? null
 
-  return unwrap(await supabase.from('api_keys').update(clean).eq('id', id).select(API_KEY_COLS).single())
+  return unwrap(await supabase.from('developer_api_keys').update(clean).eq('id', id).select(API_KEY_COLS).single())
 }
 
 /** Revoke (hard-delete) an API key record. */
 export async function deleteApiKey(id) {
-  return unwrap(await supabase.from('api_keys').delete().eq('id', id))
+  return unwrap(await supabase.from('developer_api_keys').delete().eq('id', id))
 }
 
 // ── Webhook Endpoints ─────────────────────────────────────────────────────────

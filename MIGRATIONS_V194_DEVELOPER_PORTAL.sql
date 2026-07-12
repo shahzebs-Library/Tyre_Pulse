@@ -24,7 +24,7 @@
 -- ============================================================================
 -- (a) api_keys — issued API credential metadata
 -- ============================================================================
-CREATE TABLE IF NOT EXISTS public.api_keys (
+CREATE TABLE IF NOT EXISTS public.developer_api_keys (
   id               uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   organisation_id  uuid DEFAULT public.app_current_org(),
   country          text,
@@ -45,44 +45,44 @@ CREATE TABLE IF NOT EXISTS public.api_keys (
   updated_at       timestamptz NOT NULL DEFAULT now()
 );
 
-CREATE INDEX IF NOT EXISTS idx_api_keys_org    ON public.api_keys (organisation_id);
-CREATE INDEX IF NOT EXISTS idx_api_keys_status ON public.api_keys (status);
+CREATE INDEX IF NOT EXISTS idx_developer_api_keys_org    ON public.developer_api_keys (organisation_id);
+CREATE INDEX IF NOT EXISTS idx_developer_api_keys_status ON public.developer_api_keys (status);
 
-DROP TRIGGER IF EXISTS set_updated_at_api_keys ON public.api_keys;
-CREATE TRIGGER set_updated_at_api_keys BEFORE UPDATE ON public.api_keys
+DROP TRIGGER IF EXISTS set_updated_at_developer_api_keys ON public.developer_api_keys;
+CREATE TRIGGER set_updated_at_developer_api_keys BEFORE UPDATE ON public.developer_api_keys
   FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
 
 -- RLS ------------------------------------------------------------------------
 -- Org isolation is the hard boundary (RESTRICTIVE). Any authenticated member of
 -- the org may read, issue (insert), rotate/edit (update), and revoke (delete)
 -- API key records for their own org.
-ALTER TABLE public.api_keys ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.developer_api_keys ENABLE ROW LEVEL SECURITY;
 
-DROP POLICY IF EXISTS api_keys_org_isolation ON public.api_keys;
-CREATE POLICY api_keys_org_isolation ON public.api_keys
+DROP POLICY IF EXISTS developer_api_keys_org_isolation ON public.developer_api_keys;
+CREATE POLICY developer_api_keys_org_isolation ON public.developer_api_keys
   AS RESTRICTIVE FOR ALL
   USING (organisation_id IS NOT DISTINCT FROM public.app_current_org())
   WITH CHECK (organisation_id IS NOT DISTINCT FROM public.app_current_org());
 
-DROP POLICY IF EXISTS api_keys_read ON public.api_keys;
-CREATE POLICY api_keys_read ON public.api_keys FOR SELECT
+DROP POLICY IF EXISTS developer_api_keys_read ON public.developer_api_keys;
+CREATE POLICY developer_api_keys_read ON public.developer_api_keys FOR SELECT
   USING (auth.uid() IS NOT NULL);
 
-DROP POLICY IF EXISTS api_keys_insert ON public.api_keys;
-CREATE POLICY api_keys_insert ON public.api_keys FOR INSERT
+DROP POLICY IF EXISTS developer_api_keys_insert ON public.developer_api_keys;
+CREATE POLICY developer_api_keys_insert ON public.developer_api_keys FOR INSERT
   WITH CHECK (auth.uid() IS NOT NULL);
 
-DROP POLICY IF EXISTS api_keys_update ON public.api_keys;
-CREATE POLICY api_keys_update ON public.api_keys FOR UPDATE
+DROP POLICY IF EXISTS developer_api_keys_update ON public.developer_api_keys;
+CREATE POLICY developer_api_keys_update ON public.developer_api_keys FOR UPDATE
   USING (auth.uid() IS NOT NULL)
   WITH CHECK (auth.uid() IS NOT NULL);
 
-DROP POLICY IF EXISTS api_keys_delete ON public.api_keys;
-CREATE POLICY api_keys_delete ON public.api_keys FOR DELETE
+DROP POLICY IF EXISTS developer_api_keys_delete ON public.developer_api_keys;
+CREATE POLICY developer_api_keys_delete ON public.developer_api_keys FOR DELETE
   USING (auth.uid() IS NOT NULL);
 
-REVOKE ALL ON public.api_keys FROM anon;
-GRANT SELECT, INSERT, UPDATE, DELETE ON public.api_keys TO authenticated;
+REVOKE ALL ON public.developer_api_keys FROM anon;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.developer_api_keys TO authenticated;
 
 -- ============================================================================
 -- (b) webhook_endpoints — outbound event-delivery targets
@@ -147,5 +147,5 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON public.webhook_endpoints TO authenticate
 -- ============================================================================
 -- Reversible:
 --   DROP TABLE public.webhook_endpoints;
---   DROP TABLE public.api_keys;
+--   DROP TABLE public.developer_api_keys;
 -- ============================================================================

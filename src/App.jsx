@@ -58,6 +58,10 @@ const FitmentValidation      = lazy(() => import('./pages/FitmentValidation'))
 const TechnicianScorecard    = lazy(() => import('./pages/TechnicianScorecard'))
 const TcoCalculator          = lazy(() => import('./pages/TcoCalculator'))
 const TyrePool               = lazy(() => import('./pages/TyrePool'))
+const OpsIntelligence        = lazy(() => import('./pages/OpsIntelligence'))
+const FleetRiskScore         = lazy(() => import('./pages/FleetRiskScore'))
+const RotationOptimizer      = lazy(() => import('./pages/RotationOptimizer'))
+const CostScenarioPlanner    = lazy(() => import('./pages/CostScenarioPlanner'))
 const Analytics              = lazy(() => import('./pages/Analytics'))
 const BrandPerformance       = lazy(() => import('./pages/BrandPerformance'))
 const SiteComparison         = lazy(() => import('./pages/SiteComparison'))
@@ -339,6 +343,10 @@ function MainApp() {
                       <Route path="/technician-scorecard"  element={<Safe><TechnicianScorecard /></Safe>} />
                       <Route path="/tco-calculator"        element={<Safe><TcoCalculator /></Safe>} />
                       <Route path="/tyre-pool"             element={<Safe><TyrePool /></Safe>} />
+                      <Route path="/ops-intelligence"      element={<Safe><OpsIntelligence /></Safe>} />
+                      <Route path="/fleet-risk-score"      element={<Safe><FleetRiskScore /></Safe>} />
+                      <Route path="/rotation-optimizer"    element={<Safe><RotationOptimizer /></Safe>} />
+                      <Route path="/cost-scenario-planner" element={<Safe><CostScenarioPlanner /></Safe>} />
                       <Route path="/scan"        element={<Safe><TyreScan /></Safe>} />
                       <Route path="/qr-labels"   element={<Safe><QrLabels /></Safe>} />
                       {/* ── Platform (roadmap tranche: pages self-gate their roles) ── */}

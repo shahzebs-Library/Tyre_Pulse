@@ -18,7 +18,7 @@ import {
   RotateCcw, AlertCircle, ArrowLeftRight, FileWarning, LayoutGrid, Coffee,
   Recycle, Radio, PackagePlus, CalendarCheck2, BellRing, Brain, BarChart, Download,
   Webhook, CheckSquare, CreditCard, Palette, LifeBuoy,
-  Award, PackageCheck, Calculator,
+  Award, PackageCheck, Calculator, Siren, ShieldAlert, SlidersHorizontal,
 } from 'lucide-react'
 // Branded domain icons (custom Tyre Pulse set) for the clearest fleet/tyre nav
 // items. Same ({ size, strokeWidth }) API as Lucide, so they drop straight in.
@@ -122,6 +122,8 @@ const NAV_GROUPS = [
       { to: '/tyre-specs',             label: 'Tyre Specifications',    icon: PlyRatingIc, adminOnly: A },
       { to: '/tyre-age-compliance',    label: 'Tyre Age Compliance',    icon: ShieldCheck, roles: ANALYTICS_ROLES },
       { to: '/tyre-passport',          label: 'Tyre Passport',          icon: ScanLine },
+      { to: '/fleet-risk-score',       label: 'Fleet Risk Score',       icon: ShieldAlert, roles: ANALYTICS_ROLES },
+      { to: '/rotation-optimizer',     label: 'Rotation Optimizer',     icon: RotateCcw, roles: ANALYTICS_ROLES },
       { to: '/rotation',               label: 'Rotation Schedule',      icon: TyreRotationIc, adminOnly: A },
       { to: '/ai',                     label: 'Smart Analytics',        icon: Sparkles, adminOnly: A },
     ],
@@ -144,6 +146,7 @@ const NAV_GROUPS = [
       { to: '/stock-replenishment', label: 'Stock Replenishment', icon: PackagePlus },
       { to: '/scrap',               label: 'Scrap Management',    icon: ScrapBinIc },
       { to: '/tyre-pool',           label: 'Tyre Pool',           icon: PackageCheck },
+      { to: '/cost-scenario-planner', label: 'Cost Scenario Planner', icon: SlidersHorizontal, roles: ANALYTICS_ROLES },
       { to: '/budgets',             label: 'Budgets & Cost',      icon: DollarSign },
       { to: '/procurement',         label: 'Procurement',         icon: PurchaseOrderIc, adminOnly: A },
       { to: '/suppliers',           label: 'Supplier Management', icon: SupplierTruckIc, adminOnly: A },
@@ -187,6 +190,7 @@ const NAV_GROUPS = [
       { to: '/executive-report',  label: 'Executive Report',  icon: BookOpen, adminOnly: A },
       { to: '/roi-calculator',    label: 'ROI Calculator',    icon: DollarSign, roles: ANALYTICS_ROLES },
       { to: '/tco-calculator',    label: 'TCO Calculator',    icon: Calculator, roles: ANALYTICS_ROLES },
+      { to: '/ops-intelligence',  label: 'Ops Intelligence',  icon: Siren, adminOnly: A },
       { to: '/display',           label: 'TV Display Mode',   icon: Radio, adminOnly: A },
       { to: '/ai-command-center', label: 'AI Command Center', icon: Bot, adminOnly: A },
       { to: '/knowledge-base',    label: 'Knowledge Base',    icon: Brain, adminOnly: A },

@@ -1426,6 +1426,173 @@ export async function exportAccidentCasePdf(acc = {}, opts = {}) {
   doc.save(`Accident_Case_${safe}.pdf`)
 }
 
+/**
+ * exportChecklistSubmissionPdf — a tenant-branded record of one checklist
+ * submission. Renders a header, a title card (title/asset/site/country/status/
+ * submitted), then one section per template `section` divider with each field
+ * rendered as a "Label: value" row via autoTable. Photo fields are summarised as
+ * a count (remote images are never fetched — CORS). A captured signature
+ * data-URL is embedded under a Signature section. Used by the
+ * `/checklists/submissions/:id` page "Download PDF" action.
+ *
+ *   await exportChecklistSubmissionPdf(submission, { company, branding, fields })
+ */
+export async function exportChecklistSubmissionPdf(submission = {}, opts = {}) {
+  await ensurePdf()
+  const doc     = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
+  const pw      = doc.internal.pageSize.width
+  const ph      = doc.internal.pageSize.height
+  const mx      = 14
+  const company = opts.company || ''
+  const brand   = await _pdfBrand(opts.branding)
+  const hdr     = { accent: brand.accent, logoData: brand.logoData }
+  const ftr     = { footerText: brand.footerText }
+  const dash    = (v) => (v == null || v === '' ? '-' : String(v))
+  const fmtDate = (v) => (v ? formatDate(v) : '-')
+
+  const answers = submission.answers && typeof submission.answers === 'object' ? submission.answers : {}
+  const photos  = submission.photos && typeof submission.photos === 'object' ? submission.photos : {}
+
+  // Resolve the ordered field list: opts.fields → submission.fields → derive
+  // from answer/photo keys so a submission always renders something readable.
+  let fields = Array.isArray(opts.fields) ? opts.fields
+    : Array.isArray(submission.fields) ? submission.fields
+      : null
+  if (!fields || !fields.length) {
+    const keys = new Set([...Object.keys(answers), ...Object.keys(photos)])
+    fields = Array.from(keys).map((k) => ({ id: k, type: null, label: k }))
+  }
+
+  const photoCount = (id) => (Array.isArray(photos[id]) ? photos[id].length : 0)
+
+  // Render one field's captured value into a display string. Never throws.
+  const valueOf = (f) => {
+    const id  = f?.id
+    const raw = id != null ? answers[id] : undefined
+    const pc  = photoCount(id)
+    if (f?.type === 'photo') return pc ? `${pc} photo(s) attached` : '-'
+    if (Array.isArray(raw)) return raw.length ? raw.join(', ') : (pc ? `${pc} photo(s) attached` : '-')
+    if (typeof raw === 'boolean') return raw ? 'Yes' : 'No'
+    if (raw === 'true' || raw === 'false') return raw === 'true' ? 'Yes' : 'No'
+    if (f?.type === 'rating') { const n = Number(raw); return Number.isFinite(n) && n > 0 ? `${n}/5` : '-' }
+    let base = raw == null || raw === '' ? '' : String(raw)
+    if (pc) base = base ? `${base}  ·  ${pc} photo(s) attached` : `${pc} photo(s) attached`
+    return base || '-'
+  }
+
+  _pageHeader(doc, 'Checklist Report', dash(submission.template_name), company, hdr)
+  let y = 30
+
+  const newPageIfNeeded = (need) => {
+    if (y > ph - FOOTER_SPACE - need) { doc.addPage(); _pageHeader(doc, 'Checklist Report', dash(submission.template_name), company, hdr); y = 30 }
+  }
+
+  // ── Title card ──────────────────────────────────────────────────────────────
+  const st = String(submission.status || 'submitted').toLowerCase()
+  const stRgb = /reject|fail/.test(st) ? P.crimson
+    : /approve|complete|pass/.test(st) ? P.emerald
+      : /review|pending/.test(st) ? P.ochre : P.indigo
+  const title = dash(submission.title || submission.template_name || 'Checklist submission')
+  doc.setFillColor(...P.offWhite); doc.setDrawColor(...P.silver); doc.setLineWidth(0.4)
+  doc.roundedRect(mx, y, pw - mx * 2, 16, 2, 2, 'FD')
+  doc.setFillColor(...stRgb); doc.roundedRect(mx, y, 4, 16, 2, 0, 'F')
+  doc.setFontSize(11); doc.setFont('helvetica', 'bold'); doc.setTextColor(...P.ink)
+  doc.text(doc.splitTextToSize(`${title}  ·  #${String(submission.id || '').slice(0, 8).toUpperCase()}`, pw - mx * 2 - 46)[0] || title, mx + 8, y + 7)
+  doc.setFontSize(7.5); doc.setFont('helvetica', 'normal'); doc.setTextColor(...P.ghost)
+  const sub = submission.template_version ? `${dash(submission.template_name)}  ·  v${submission.template_version}` : dash(submission.template_name)
+  doc.text(sub, mx + 8, y + 13)
+  doc.setFillColor(...stRgb); doc.roundedRect(pw - mx - 32, y + 4, 30, 8, 2, 2, 'F')
+  doc.setFontSize(7); doc.setFont('helvetica', 'bold'); doc.setTextColor(...P.white)
+  doc.text(String(submission.status || 'submitted').toUpperCase().slice(0, 12), pw - mx - 17, y + 9.5, { align: 'center' })
+  y += 21
+
+  // ── Meta grid (2-col) ───────────────────────────────────────────────────────
+  const metaL = [
+    ['Asset', dash(submission.asset_no)],
+    ['Site', dash(submission.site)],
+    ['Country', dash(submission.country)],
+  ]
+  const metaR = [
+    ['Status', dash(submission.status || 'submitted')],
+    ['Submitted', submission.submitted_at ? new Date(submission.submitted_at).toLocaleString() : fmtDate(submission.submitted_at)],
+    ['Submitted by', dash(submission.printed_name)],
+  ]
+  const half = (pw - mx * 2) / 2
+  metaL.forEach(([lbl, val], i) => {
+    const my = y + i * 10
+    doc.setFontSize(6.5); doc.setFont('helvetica', 'normal'); doc.setTextColor(...P.mist)
+    doc.text(lbl, mx, my)
+    doc.setFontSize(8.5); doc.setFont('helvetica', 'bold'); doc.setTextColor(...P.ink)
+    doc.text(doc.splitTextToSize(String(val), half - 6), mx, my + 5)
+    doc.setDrawColor(...P.silver); doc.setLineWidth(0.2); doc.line(mx, my + 7.5, mx + half - 4, my + 7.5)
+    doc.setFontSize(6.5); doc.setFont('helvetica', 'normal'); doc.setTextColor(...P.mist)
+    doc.text(metaR[i][0], mx + half, my)
+    doc.setFontSize(8.5); doc.setFont('helvetica', 'bold'); doc.setTextColor(...P.ink)
+    doc.text(doc.splitTextToSize(String(metaR[i][1]), half - 6), mx + half, my + 5)
+    doc.line(mx + half, my + 7.5, pw - mx, my + 7.5)
+  })
+  y += 34
+
+  // ── Responses grouped by section divider ────────────────────────────────────
+  const flush = (sectionLabel, rows) => {
+    if (!rows.length) return
+    newPageIfNeeded(30)
+    y = _sectionBar(doc, sectionLabel, y, mx, brand.accent) + 4
+    autoTable(doc, {
+      ..._tableTheme(brand.accent), startY: y,
+      body: rows,
+      margin: { left: mx, right: mx },
+      columnStyles: { 0: { cellWidth: 60, fontStyle: 'bold', textColor: P.ghost }, 1: { cellWidth: 'auto' } },
+      showHead: false,
+    })
+    y = (doc.lastAutoTable?.finalY ?? y) + 8
+  }
+
+  let sectionLabel = 'Responses'
+  let rows = []
+  for (const f of fields) {
+    if (!f) continue
+    if (f.type === 'section') {
+      flush(sectionLabel, rows)
+      sectionLabel = String(f.label || 'Section')
+      rows = []
+      continue
+    }
+    if (f.type === 'signature') continue // rendered separately below
+    rows.push([String(f.label || f.id || '-'), valueOf(f)])
+  }
+  flush(sectionLabel, rows)
+
+  // ── Signature ───────────────────────────────────────────────────────────────
+  const sig = submission.signature_data
+  if (typeof sig === 'string' && /^data:image\//i.test(sig)) {
+    newPageIfNeeded(46)
+    y = _sectionBar(doc, 'Signature', y, mx, brand.accent) + 4
+    const sw = 70, sh = 28
+    doc.setFillColor(...P.white); doc.setDrawColor(...P.silver); doc.setLineWidth(0.3)
+    doc.roundedRect(mx, y, sw, sh, 2, 2, 'FD')
+    try { doc.addImage(sig, 'PNG', mx + 2, y + 2, sw - 4, sh - 4, undefined, 'FAST') } catch { /* ignore malformed data-url */ }
+    y += sh + 4
+    if (submission.printed_name) {
+      doc.setFontSize(8); doc.setFont('helvetica', 'bold'); doc.setTextColor(...P.ink)
+      doc.text(String(submission.printed_name), mx, y)
+      doc.setFontSize(6.5); doc.setFont('helvetica', 'normal'); doc.setTextColor(...P.mist)
+      doc.text('Signed', mx, y + 4.5)
+      y += 8
+    }
+  }
+
+  // ── Footers ─────────────────────────────────────────────────────────────────
+  const totalPages = doc.internal.getNumberOfPages()
+  for (let p = 1; p <= totalPages; p++) {
+    doc.setPage(p)
+    _pageFooter(doc, p, totalPages, company || 'Fleet Operations', ftr)
+  }
+
+  const safe = String(submission.asset_no || submission.id || 'checklist').replace(/[^a-z0-9]/gi, '_').slice(0, 40)
+  doc.save(`Checklist_${safe}.pdf`)
+}
+
 /* ── Public branded-PDF helper API ───────────────────────────────────────────
    Page-local jsPDF generators import these to get a consistent tenant-branded
    header/footer, empty-state and table theme without duplicating design code.

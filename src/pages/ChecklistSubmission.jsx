@@ -2,10 +2,12 @@ import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import {
   ClipboardCheck, ArrowLeft, ChevronRight, AlertTriangle, AlertOctagon,
-  Star, PenLine, RefreshCw, CheckCircle2, XCircle,
+  Star, PenLine, RefreshCw, CheckCircle2, XCircle, Download, Loader2,
 } from 'lucide-react'
 import { getSubmission } from '../lib/api/checklists'
 import { isLayoutField } from '../lib/checklist/fieldTypes'
+import { exportChecklistSubmissionPdf } from '../lib/exportUtils'
+import { useTenant } from '../contexts/TenantContext'
 import EntityApprovalPanel from '../components/workflow/EntityApprovalPanel'
 
 const STATUS_BADGE = {
@@ -51,6 +53,11 @@ export default function ChecklistSubmission() {
   const [sub, setSub] = useState(null)
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState('')
+  const [exporting, setExporting] = useState(false)
+  const [exportError, setExportError] = useState('')
+
+  const { branding } = useTenant()
+  const company = branding?.legal_name || branding?.display_name || 'TyrePulse'
 
   const load = useCallback(async () => {
     setLoading(true); setLoadError('')
@@ -95,6 +102,25 @@ export default function ChecklistSubmission() {
       photos: Array.isArray(photosByField?.[k]) ? photosByField[k] : [],
     }))
   }, [sub, answers, photosByField])
+
+  // Raw template fields (with section dividers) the page carries, if any — these
+  // preserve grouping in the exported PDF; the export derives rows otherwise.
+  const templateFields = useMemo(() => (
+    Array.isArray(sub?.template_fields) ? sub.template_fields
+      : Array.isArray(sub?.fields) ? sub.fields : undefined
+  ), [sub])
+
+  const downloadPdf = useCallback(async () => {
+    if (!sub || exporting) return
+    setExporting(true); setExportError('')
+    try {
+      await exportChecklistSubmissionPdf(sub, { company, branding, fields: templateFields })
+    } catch (err) {
+      setExportError(err?.message || 'Could not generate the PDF.')
+    } finally {
+      setExporting(false)
+    }
+  }, [sub, exporting, company, branding, templateFields])
 
   // ── Loading / error / not-found ──
   if (loading) {
@@ -152,12 +178,26 @@ export default function ChecklistSubmission() {
   return (
     <div className="space-y-4 pb-24">
       {/* Breadcrumb */}
-      <div className="flex items-center gap-2 text-xs text-[var(--text-muted)]">
-        <button onClick={back} className="inline-flex items-center gap-1 hover:text-[var(--text-primary)] transition-colors">
-          <ArrowLeft size={13} /> Checklists
-        </button>
-        <ChevronRight size={12} />
-        <span className="text-[var(--text-dim)] truncate max-w-[50vw]">{label} · #{String(sub.id).slice(0, 8).toUpperCase()}</span>
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div className="flex items-center gap-2 text-xs text-[var(--text-muted)] min-w-0">
+          <button onClick={back} className="inline-flex items-center gap-1 hover:text-[var(--text-primary)] transition-colors">
+            <ArrowLeft size={13} /> Checklists
+          </button>
+          <ChevronRight size={12} />
+          <span className="text-[var(--text-dim)] truncate max-w-[50vw]">{label} · #{String(sub.id).slice(0, 8).toUpperCase()}</span>
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          {exportError && <span className="text-xs text-red-400">{exportError}</span>}
+          <button
+            onClick={downloadPdf}
+            disabled={exporting}
+            className="btn-secondary text-xs inline-flex items-center gap-1.5 disabled:opacity-60"
+            title="Download this submission as a branded PDF"
+          >
+            {exporting ? <Loader2 size={13} className="animate-spin" /> : <Download size={13} />}
+            {exporting ? 'Preparing…' : 'Download PDF'}
+          </button>
+        </div>
       </div>
 
       {/* Header card */}

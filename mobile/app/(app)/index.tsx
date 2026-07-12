@@ -61,6 +61,7 @@ function getQuickActions(role: UserRole | null): QuickAction[] {
     case 'inspector':
       return [
         { icon: 'clipboard-outline',     label: 'New Inspection', sublabel: 'Start a tyre check',  route: '/(app)/inspection/new',       color: '#16a34a', bg: '#f0fdf4' },
+        { icon: 'checkbox-outline',      label: 'Checklists',     sublabel: 'Fill & submit checks', route: '/(app)/checklists/index',     color: '#16a34a', bg: '#f0fdf4' },
         { icon: 'scan-outline',          label: 'Scan Asset',     sublabel: 'Barcode / QR code',   route: '/(app)/scanner',              color: '#0ea5e9', bg: '#f0f9ff' },
         { icon: 'layers-outline',        label: 'Tyre Records',   sublabel: 'Browse all records',  route: '/(app)/records/index',        color: '#3b82f6', bg: '#eff6ff' },
         { icon: 'warning-outline',       label: 'Accident',       sublabel: 'File a report',        route: '/(app)/accident/report',      color: '#dc2626', bg: '#fff5f5' },
@@ -69,6 +70,7 @@ function getQuickActions(role: UserRole | null): QuickAction[] {
       return [
         { icon: 'construct-outline',     label: 'Work Orders',    sublabel: 'Open actions',         route: '/(app)/workorders/index',     color: '#f59e0b', bg: '#fffbeb' },
         { icon: 'clipboard-outline',     label: 'New Inspection', sublabel: 'Start a tyre check',  route: '/(app)/inspection/new',       color: '#16a34a', bg: '#f0fdf4' },
+        { icon: 'checkbox-outline',      label: 'Checklists',     sublabel: 'Fill & submit checks', route: '/(app)/checklists/index',     color: '#16a34a', bg: '#f0fdf4' },
         { icon: 'layers-outline',        label: 'Tyre Records',   sublabel: 'Browse all records',  route: '/(app)/records/index',        color: '#3b82f6', bg: '#eff6ff' },
         { icon: 'scan-outline',          label: 'Scan Asset',     sublabel: 'Barcode / QR code',   route: '/(app)/scanner',              color: '#0ea5e9', bg: '#f0f9ff' },
       ]

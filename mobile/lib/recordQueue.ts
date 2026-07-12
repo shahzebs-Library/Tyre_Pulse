@@ -31,6 +31,8 @@ export type CommandType =
   | 'STOCK_ADJUST'
   | 'WORK_ORDER_STATUS'
   | 'CORRECTIVE_ACTION_STATUS'
+  | 'CHECKLIST_SUBMISSION'
+  | 'CHECKLIST_ASSIGNMENT_STATUS'
 
 /** How a command mutates its table. Defaults to 'insert' to preserve v1 behavior. */
 export type CommandOp = 'insert' | 'update'
@@ -108,6 +110,21 @@ export const COMMANDS: Record<CommandType, CommandSpec> = {
     matchField: 'id',
     fields: ['id', 'status', 'closed_at'],
   },
+  // ---- Checklist submission (insert) + assignment completion (update) ----
+  CHECKLIST_SUBMISSION: {
+    table: 'checklist_submissions',
+    fields: [
+      'id', 'template_id', 'template_name', 'template_version', 'country', 'site',
+      'asset_no', 'title', 'status', 'answers', 'photos', 'signature_data',
+      'printed_name', 'score_pct', 'score_passed',
+    ],
+  },
+  CHECKLIST_ASSIGNMENT_STATUS: {
+    table: 'checklist_assignments',
+    op: 'update',
+    matchField: 'id',
+    fields: ['id', 'status', 'submission_id', 'completed_at'],
+  },
 }
 
 export interface QueuedRecord {
@@ -154,6 +171,8 @@ const TYPE_TO_MODULE: Record<CommandType, string> = {
   STOCK_ADJUST: 'stock-adjust',
   WORK_ORDER_STATUS: 'work-order-status',
   CORRECTIVE_ACTION_STATUS: 'corrective-action-status',
+  CHECKLIST_SUBMISSION: 'checklist',
+  CHECKLIST_ASSIGNMENT_STATUS: 'checklist-assignment',
 }
 
 /** True when a command patches an existing row rather than inserting a new one. */

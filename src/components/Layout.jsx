@@ -21,7 +21,7 @@ import {
   Award, PackageCheck, Calculator, Siren, ShieldAlert, SlidersHorizontal,
   Leaf, BadgeCheck, ScrollText, Navigation,
   Boxes, Combine, Snowflake, BatteryCharging, Router,
-  Wallet, FileCheck,
+  Wallet, FileCheck, Building2,
 } from 'lucide-react'
 // Branded domain icons (custom Tyre Pulse set) for the clearest fleet/tyre nav
 // items. Same ({ size, strokeWidth }) API as Lucide, so they drop straight in.
@@ -166,6 +166,8 @@ const NAV_GROUPS = [
       { to: '/scrap',               label: 'Scrap Management',    icon: ScrapBinIc },
       { to: '/tyre-pool',           label: 'Tyre Pool',           icon: PackageCheck },
       { to: '/parts-catalog',       label: 'Parts Catalog',       icon: Boxes },
+      { to: '/requisitions',        label: 'Requisitions',        icon: ClipboardList },
+      { to: '/goods-receipt',       label: 'Goods Receipt',       icon: PackageCheck },
       { to: '/cost-scenario-planner', label: 'Cost Scenario Planner', icon: SlidersHorizontal, roles: ANALYTICS_ROLES },
       { to: '/contracts',           label: 'Contracts',           icon: FileText },
       { to: '/budgets',             label: 'Budgets & Cost',      icon: DollarSign },
@@ -220,6 +222,7 @@ const NAV_GROUPS = [
       { to: '/scheduled-reports', label: 'Scheduled Reports', icon: CalendarCheck2 },
       { to: '/executive-report',  label: 'Executive Report',  icon: BookOpen, adminOnly: A },
       { to: '/roi-calculator',    label: 'ROI Calculator',    icon: DollarSign, roles: ANALYTICS_ROLES },
+      { to: '/fleet-renewal',     label: 'Fleet Renewal',     icon: Truck, roles: ANALYTICS_ROLES },
       { to: '/tco-calculator',    label: 'TCO Calculator',    icon: Calculator, roles: ANALYTICS_ROLES },
       { to: '/ops-intelligence',  label: 'Ops Intelligence',  icon: Siren, adminOnly: A },
       { to: '/display',           label: 'TV Display Mode',   icon: Radio, adminOnly: A },
@@ -253,6 +256,7 @@ const NAV_GROUPS = [
       { to: '/tenant-health',    label: 'Usage & Adoption',   icon: BarChart, adminOnly: true },
       { to: '/billing',          label: 'Billing & Subscription', icon: CreditCard, adminOnly: true, flag: 'billing' },
       { to: '/brand-assets',     label: 'Brand Assets',       icon: Palette, adminOnly: true },
+      { to: '/customers',        label: 'Customers',          icon: Building2, adminOnly: A },
       { to: '/help',             label: 'Help & Support',     icon: LifeBuoy },
       { to: '/settings',         label: 'Settings',           icon: Settings },
     ],

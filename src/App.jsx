@@ -90,6 +90,10 @@ const DriverExpenses         = lazy(() => import('./pages/DriverExpenses'))
 const SpeedLimiter           = lazy(() => import('./pages/SpeedLimiter'))
 const DriverDocuments        = lazy(() => import('./pages/DriverDocuments'))
 const Dvir                   = lazy(() => import('./pages/Dvir'))
+const Requisitions           = lazy(() => import('./pages/Requisitions'))
+const GoodsReceipt           = lazy(() => import('./pages/GoodsReceipt'))
+const Customers              = lazy(() => import('./pages/Customers'))
+const FleetRenewal           = lazy(() => import('./pages/FleetRenewal'))
 const Analytics              = lazy(() => import('./pages/Analytics'))
 const BrandPerformance       = lazy(() => import('./pages/BrandPerformance'))
 const SiteComparison         = lazy(() => import('./pages/SiteComparison'))
@@ -404,6 +408,10 @@ function MainApp() {
                       <Route path="/speed-limiter"         element={<Safe><SpeedLimiter /></Safe>} />
                       <Route path="/driver-documents"      element={<Safe><DriverDocuments /></Safe>} />
                       <Route path="/dvir"                  element={<Safe><Dvir /></Safe>} />
+                      <Route path="/requisitions"          element={<Safe><Requisitions /></Safe>} />
+                      <Route path="/goods-receipt"         element={<Safe><GoodsReceipt /></Safe>} />
+                      <Route path="/customers"             element={<Safe><Customers /></Safe>} />
+                      <Route path="/fleet-renewal"         element={<Safe><FleetRenewal /></Safe>} />
                       <Route path="/scan"        element={<Safe><TyreScan /></Safe>} />
                       <Route path="/qr-labels"   element={<Safe><QrLabels /></Safe>} />
                       {/* ── Platform (roadmap tranche: pages self-gate their roles) ── */}

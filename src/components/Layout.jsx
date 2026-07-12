@@ -20,7 +20,7 @@ import {
   Webhook, CheckSquare, CreditCard, Palette, LifeBuoy,
   Award, PackageCheck, Calculator, Siren, ShieldAlert, SlidersHorizontal,
   Leaf, BadgeCheck, ScrollText, Navigation,
-  Boxes, Combine, Snowflake, BatteryCharging, Router,
+  Boxes, Combine, Snowflake, BatteryCharging, Router, Video, Receipt,
   Wallet, FileCheck, Building2,
 } from 'lucide-react'
 // Branded domain icons (custom Tyre Pulse set) for the clearest fleet/tyre nav
@@ -115,6 +115,11 @@ const NAV_GROUPS = [
       { to: '/speed-limiter',       label: 'Speed Limiter',      icon: Gauge, adminOnly: A },
       { to: '/engine-hours',        label: 'Engine Hours',       icon: Gauge, adminOnly: A },
       { to: '/odometer-logs',       label: 'Odometer Logs',      icon: Activity, adminOnly: A },
+      { to: '/trips',               label: 'Trip History',       icon: MapPin, adminOnly: A },
+      { to: '/route-optimization',  label: 'Route Optimization', icon: Navigation, adminOnly: A },
+      { to: '/charging-sessions',   label: 'EV Charging',        icon: Zap, adminOnly: A },
+      { to: '/load-planning',       label: 'Load Planning',      icon: Package, adminOnly: A },
+      { to: '/toll-transactions',   label: 'Toll Transactions',  icon: Receipt, adminOnly: A },
     ],
   },
   {
@@ -205,6 +210,8 @@ const NAV_GROUPS = [
       { to: '/alerts',                 label: 'Alerts',              icon: Bell, adminOnly: A },
       { to: '/alert-thresholds',       label: 'Alert Thresholds',    icon: BellRing, adminOnly: A },
       { to: '/driver-management',      label: 'Driver Intelligence', icon: Users, adminOnly: A },
+      { to: '/driver-safety',          label: 'Driver Safety',       icon: ShieldAlert, adminOnly: A },
+      { to: '/video-telematics',       label: 'Video Telematics',    icon: Video, adminOnly: A },
       { to: '/retread',                label: 'Retread Management',  icon: Recycle, adminOnly: A },
     ],
   },

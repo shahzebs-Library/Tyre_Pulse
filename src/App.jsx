@@ -98,6 +98,13 @@ const DtcDiagnostics         = lazy(() => import('./pages/DtcDiagnostics'))
 const EngineHours            = lazy(() => import('./pages/EngineHours'))
 const OdometerLogs           = lazy(() => import('./pages/OdometerLogs'))
 const PmPrograms             = lazy(() => import('./pages/PmPrograms'))
+const Trips                  = lazy(() => import('./pages/Trips'))
+const RouteOptimization      = lazy(() => import('./pages/RouteOptimization'))
+const ChargingSessions       = lazy(() => import('./pages/ChargingSessions'))
+const LoadPlanning           = lazy(() => import('./pages/LoadPlanning'))
+const VideoTelematics        = lazy(() => import('./pages/VideoTelematics'))
+const TollTransactions       = lazy(() => import('./pages/TollTransactions'))
+const DriverSafety           = lazy(() => import('./pages/DriverSafety'))
 const Analytics              = lazy(() => import('./pages/Analytics'))
 const BrandPerformance       = lazy(() => import('./pages/BrandPerformance'))
 const SiteComparison         = lazy(() => import('./pages/SiteComparison'))
@@ -420,6 +427,13 @@ function MainApp() {
                       <Route path="/engine-hours"          element={<Safe><EngineHours /></Safe>} />
                       <Route path="/odometer-logs"         element={<Safe><OdometerLogs /></Safe>} />
                       <Route path="/pm-programs"           element={<Safe><PmPrograms /></Safe>} />
+                      <Route path="/trips"                 element={<Safe><Trips /></Safe>} />
+                      <Route path="/route-optimization"    element={<Safe><RouteOptimization /></Safe>} />
+                      <Route path="/charging-sessions"     element={<Safe><ChargingSessions /></Safe>} />
+                      <Route path="/load-planning"         element={<Safe><LoadPlanning /></Safe>} />
+                      <Route path="/video-telematics"      element={<Safe><VideoTelematics /></Safe>} />
+                      <Route path="/toll-transactions"     element={<Safe><TollTransactions /></Safe>} />
+                      <Route path="/driver-safety"         element={<Safe><DriverSafety /></Safe>} />
                       <Route path="/scan"        element={<Safe><TyreScan /></Safe>} />
                       <Route path="/qr-labels"   element={<Safe><QrLabels /></Safe>} />
                       {/* ── Platform (roadmap tranche: pages self-gate their roles) ── */}

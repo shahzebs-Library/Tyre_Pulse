@@ -45,8 +45,15 @@ describe('importChecklist parser', () => {
     expect(template.fields.find((f) => f.label === 'Date').autoValue).toBe('today')
     expect(template.fields.some((f) => f.label === 'KM meter (km)')).toBe(true)
     expect(template.fields.some((f) => f.label === 'Hour meter (hrs)')).toBe(true)
+    expect(template.fields.some((f) => f.label === 'Job Card No')).toBe(true)
     expect(template.require_signature).toBe(true)
     expect(template.require_approval).toBe(true)
+
+    // A trailing free-text Notes / Observations block (always visible).
+    const notes = template.fields.find((f) => f.label === 'Notes / Observations')
+    expect(notes.type).toBe('textarea')
+    expect(notes.visibleWhen == null).toBe(true)
+    expect(notes.allow_photo).toBe(true)
 
     // The interval selector drives visibility.
     const interval = template.fields.find((f) => f.label === 'Inspection interval')

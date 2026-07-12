@@ -63,6 +63,22 @@ export function emptySite(country = '') {
 
 // ── Persistence ──────────────────────────────────────────────────────────────
 
+/**
+ * Unique site names derived from LIVE operational data (vehicle_fleet,
+ * tyre_records, inspections, accidents, work_orders, corrective_actions,
+ * gate_passes + the sites master) via the org-scoped RPC (V129). Used by the
+ * checklist Site picker so it always offers the sites that actually exist in the
+ * tenant's data — the sites master is frequently near-empty. Sorted; empty on
+ * any RPC error.
+ */
+export async function listDataSiteOptions(country) {
+  const { data, error } = await supabase.rpc('reference_site_options', {
+    p_country: country && country !== 'All' ? country : null,
+  })
+  if (error) throw new ServiceError(error.message, error.code, error)
+  return (Array.isArray(data) ? data : []).map((r) => r?.name).filter(Boolean)
+}
+
 /** All sites for the org, optionally filtered by country / active flag. */
 export async function listSites({ country, activeOnly } = {}) {
   let q = supabase.from('sites')

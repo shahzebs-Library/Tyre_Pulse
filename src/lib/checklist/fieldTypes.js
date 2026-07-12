@@ -30,7 +30,7 @@ export const FIELD_TYPES = [
   { type: 'rating',      label: 'Rating (1-5)',    hasOptions: false, group: 'choice',  desc: 'A 1 to 5 star/score rating.' },
   // Reference fields resolve real data at fill time (no manual options).
   { type: 'asset',       label: 'Asset / Vehicle', hasOptions: false, group: 'reference', source: 'asset', desc: 'Pick a real asset from the fleet.' },
-  { type: 'site',        label: 'Site',            hasOptions: false, group: 'reference', source: 'site',  desc: 'Pick a real site from the Sites master.' },
+  { type: 'site',        label: 'Site',            hasOptions: false, group: 'reference', source: 'site',  desc: 'Pick a real site from your live fleet data.' },
   { type: 'user',        label: 'User / Person',   hasOptions: false, group: 'reference', source: 'user',  desc: 'Pick a real user from your organisation.' },
   { type: 'photo',       label: 'Photo capture',   hasOptions: false, group: 'media',   desc: 'One or more photos.' },
   { type: 'signature',   label: 'Signature',       hasOptions: false, group: 'media',   desc: 'A captured signature.' },
@@ -67,6 +67,7 @@ export const FIELD_LIBRARY = [
     fields: [
       { label: 'Asset / Vehicle', type: 'asset', required: true },
       { label: 'Site', type: 'site', required: true },
+      { label: 'Job Card No', type: 'text' },
       { label: 'Inspector', type: 'user', required: true, autoValue: 'current_user' },
       { label: 'Date of check', type: 'date', required: true, autoValue: 'today' },
       { label: 'KM meter (km)', type: 'number', min: 0 },

@@ -76,8 +76,14 @@ function uniqSorted(values: (string | null | undefined)[]): string[] {
     .sort((a, b) => a.localeCompare(b))
 }
 
-/** Distinct site names (Sites master, with a vehicle_fleet fallback). */
+/** Distinct site names from LIVE operational data (RPC v129), with fallbacks. */
 export async function listSiteOptions(country?: string | null): Promise<string[]> {
+  try {
+    const { data, error } = await supabase.rpc('reference_site_options', {
+      p_country: country && country !== 'All' ? country : null,
+    })
+    if (!error && Array.isArray(data) && data.length) return uniqSorted(data.map((r: any) => r.name))
+  } catch { /* fall through */ }
   try {
     let q = supabase.from('sites').select('name').eq('active', true)
     if (country && country !== 'All') q = q.or(`country.eq.${country},country.is.null`)
@@ -88,8 +94,14 @@ export async function listSiteOptions(country?: string | null): Promise<string[]
   return uniqSorted((data ?? []).map((r: any) => r.site))
 }
 
-/** Distinct asset numbers from the fleet. */
+/** Distinct asset numbers from LIVE operational data (RPC v129), with fallback. */
 export async function listAssetOptions(country?: string | null): Promise<string[]> {
+  try {
+    const { data, error } = await supabase.rpc('reference_asset_options', {
+      p_country: country && country !== 'All' ? country : null,
+    })
+    if (!error && Array.isArray(data) && data.length) return uniqSorted(data.map((r: any) => r.asset_no))
+  } catch { /* fall through */ }
   let q = supabase.from('vehicle_fleet').select('asset_no')
   if (country && country !== 'All') q = q.or(`country.eq.${country},country.is.null`)
   const { data, error } = await q.limit(3000)

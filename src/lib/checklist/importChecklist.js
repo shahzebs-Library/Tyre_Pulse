@@ -189,6 +189,7 @@ export function buildTemplateFromRows(rows, opts = {}) {
   push({ type: 'date', label: 'Date', required: true, autoValue: 'today' })
   push({ type: 'asset', label: 'Asset / Vehicle', required: true })
   push({ type: 'site', label: 'Site' })
+  push({ type: 'text', label: 'Job Card No' })
   push({ type: 'number', label: 'KM meter (km)', min: 0 })
   push({ type: 'number', label: 'Hour meter (hrs)', min: 0 })
 
@@ -247,6 +248,10 @@ export function buildTemplateFromRows(rows, opts = {}) {
       itemCount++
     }
   }
+
+  // Trailing sign-off block — free-text observations always visible at the end.
+  push({ type: 'section', label: 'Notes & Observations' })
+  push({ type: 'textarea', label: 'Notes / Observations', help: 'Record any findings, defects raised, parts required or follow-up actions.', allow_photo: true })
 
   const template = {
     name: opts.name || 'Predictive Maintenance Checklist',

@@ -20,8 +20,8 @@
  */
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import { Truck, MapPin, User, Search, ChevronDown, X, Loader2, Check, AlertTriangle } from 'lucide-react'
-import { listAssets } from '../../lib/api/assets'
-import { listSites, siteOptionsForCountry } from '../../lib/api/sites'
+import { listAssets, listDataAssetOptions } from '../../lib/api/assets'
+import { listSites, siteOptionsForCountry, listDataSiteOptions } from '../../lib/api/sites'
 import { listProfiles } from '../../lib/api/users'
 
 const SOURCE_META = {
@@ -48,10 +48,22 @@ const uniqSorted = (arr) => {
 async function loadOptions(source, country) {
   const scope = country && country !== 'All' ? country : undefined
   if (source === 'asset') {
+    // Prefer live data across the fleet + tyre + inspection tables (RPC); fall
+    // back to the fleet-master list if the RPC is unavailable / returns nothing.
+    try {
+      const opts = await listDataAssetOptions(country)
+      if (opts.length) return uniqSorted(opts)
+    } catch { /* fall through to fleet-master */ }
     const rows = await listAssets({ country: scope, limit: 1000 })
     return uniqSorted((Array.isArray(rows) ? rows : []).map((r) => r?.asset_no))
   }
   if (source === 'site') {
+    // Prefer unique sites from live operational data (RPC); fall back to the
+    // sites master, which is frequently near-empty.
+    try {
+      const opts = await listDataSiteOptions(country)
+      if (opts.length) return uniqSorted(opts)
+    } catch { /* fall through to sites master */ }
     const rows = await listSites({})
     return uniqSorted(siteOptionsForCountry(Array.isArray(rows) ? rows : [], scope || '', { activeOnly: true }))
   }

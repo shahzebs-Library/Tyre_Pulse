@@ -21,6 +21,7 @@ import {
   Award, PackageCheck, Calculator, Siren, ShieldAlert, SlidersHorizontal,
   Leaf, BadgeCheck, ScrollText, Navigation,
   Boxes, Combine, Snowflake, BatteryCharging, Router, Video, Receipt,
+  Satellite, Landmark,
   Wallet, FileCheck, Building2,
 } from 'lucide-react'
 // Branded domain icons (custom Tyre Pulse set) for the clearest fleet/tyre nav
@@ -120,6 +121,7 @@ const NAV_GROUPS = [
       { to: '/charging-sessions',   label: 'EV Charging',        icon: Zap, adminOnly: A },
       { to: '/load-planning',       label: 'Load Planning',      icon: Package, adminOnly: A },
       { to: '/toll-transactions',   label: 'Toll Transactions',  icon: Receipt, adminOnly: A },
+      { to: '/gps-tracking',        label: 'GPS Tracking',       icon: Satellite, adminOnly: A },
     ],
   },
   {
@@ -165,6 +167,7 @@ const NAV_GROUPS = [
       { to: '/equipment',       label: 'Tool & Equipment',   icon: Wrench, adminOnly: A },
       { to: '/downtime',        label: 'Downtime Tracker',   icon: Clock, adminOnly: A },
       { to: '/fuel-efficiency', label: 'Fuel Efficiency',    icon: FuelPumpIc, adminOnly: A },
+      { to: '/service-requests', label: 'Service Requests',   icon: LifeBuoy, adminOnly: A },
     ],
   },
   {
@@ -184,6 +187,7 @@ const NAV_GROUPS = [
       { to: '/suppliers',           label: 'Supplier Management', icon: SupplierTruckIc, adminOnly: A },
       { to: '/vendor-intelligence', label: 'Vendor Intelligence', icon: Trophy, adminOnly: A },
       { to: '/forecasting',         label: 'Forecasting Engine',  icon: ForecastTrendIc, adminOnly: A },
+      { to: '/ifta-reporting',      label: 'IFTA Fuel Tax',       icon: Landmark, adminOnly: A },
     ],
   },
   {
@@ -212,6 +216,7 @@ const NAV_GROUPS = [
       { to: '/driver-management',      label: 'Driver Intelligence', icon: Users, adminOnly: A },
       { to: '/driver-safety',          label: 'Driver Safety',       icon: ShieldAlert, adminOnly: A },
       { to: '/video-telematics',       label: 'Video Telematics',    icon: Video, adminOnly: A },
+      { to: '/hours-of-service',       label: 'Hours of Service',    icon: Clock, adminOnly: A },
       { to: '/retread',                label: 'Retread Management',  icon: Recycle, adminOnly: A },
     ],
   },

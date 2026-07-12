@@ -105,6 +105,10 @@ const LoadPlanning           = lazy(() => import('./pages/LoadPlanning'))
 const VideoTelematics        = lazy(() => import('./pages/VideoTelematics'))
 const TollTransactions       = lazy(() => import('./pages/TollTransactions'))
 const DriverSafety           = lazy(() => import('./pages/DriverSafety'))
+const GpsTracking            = lazy(() => import('./pages/GpsTracking'))
+const HoursOfService         = lazy(() => import('./pages/HoursOfService'))
+const IftaReporting          = lazy(() => import('./pages/IftaReporting'))
+const ServiceRequests        = lazy(() => import('./pages/ServiceRequests'))
 const Analytics              = lazy(() => import('./pages/Analytics'))
 const BrandPerformance       = lazy(() => import('./pages/BrandPerformance'))
 const SiteComparison         = lazy(() => import('./pages/SiteComparison'))
@@ -434,6 +438,10 @@ function MainApp() {
                       <Route path="/video-telematics"      element={<Safe><VideoTelematics /></Safe>} />
                       <Route path="/toll-transactions"     element={<Safe><TollTransactions /></Safe>} />
                       <Route path="/driver-safety"         element={<Safe><DriverSafety /></Safe>} />
+                      <Route path="/gps-tracking"          element={<Safe><GpsTracking /></Safe>} />
+                      <Route path="/hours-of-service"      element={<Safe><HoursOfService /></Safe>} />
+                      <Route path="/ifta-reporting"        element={<Safe><IftaReporting /></Safe>} />
+                      <Route path="/service-requests"      element={<Safe><ServiceRequests /></Safe>} />
                       <Route path="/scan"        element={<Safe><TyreScan /></Safe>} />
                       <Route path="/qr-labels"   element={<Safe><QrLabels /></Safe>} />
                       {/* ── Platform (roadmap tranche: pages self-gate their roles) ── */}

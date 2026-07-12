@@ -1542,38 +1542,41 @@ export async function exportChecklistSubmissionPdf(submission = {}, opts = {}) {
   ]
   const half = (pw - mx * 2) / 2
   metaL.forEach(([lbl, val], i) => {
-    const my = y + i * 10
+    const my = y + i * 8.5
     doc.setFontSize(6.5); doc.setFont('helvetica', 'normal'); doc.setTextColor(...P.mist)
     doc.text(lbl, mx, my)
     doc.setFontSize(8.5); doc.setFont('helvetica', 'bold'); doc.setTextColor(...P.ink)
-    doc.text(doc.splitTextToSize(String(val), half - 6), mx, my + 5)
-    doc.setDrawColor(...P.silver); doc.setLineWidth(0.2); doc.line(mx, my + 7.5, mx + half - 4, my + 7.5)
+    doc.text(doc.splitTextToSize(String(val), half - 6), mx, my + 4.6)
+    doc.setDrawColor(...P.silver); doc.setLineWidth(0.2); doc.line(mx, my + 6.6, mx + half - 4, my + 6.6)
     doc.setFontSize(6.5); doc.setFont('helvetica', 'normal'); doc.setTextColor(...P.mist)
     doc.text(metaR[i][0], mx + half, my)
     doc.setFontSize(8.5); doc.setFont('helvetica', 'bold'); doc.setTextColor(...P.ink)
-    doc.text(doc.splitTextToSize(String(metaR[i][1]), half - 6), mx + half, my + 5)
-    doc.line(mx + half, my + 7.5, pw - mx, my + 7.5)
+    doc.text(doc.splitTextToSize(String(metaR[i][1]), half - 6), mx + half, my + 4.6)
+    doc.line(mx + half, my + 6.6, pw - mx, my + 6.6)
   })
-  y += 34
+  y += 28
 
   // ── Generation timestamp (report runtime — local to the operator) ────────────
   doc.setFontSize(7); doc.setFont('helvetica', 'normal'); doc.setTextColor(...P.mist)
   doc.text(`Generated: ${new Date().toLocaleString()}`, mx, y)
-  y += 7
+  y += 6
 
   // ── Responses grouped by section divider ────────────────────────────────────
   const flush = (sectionLabel, rows) => {
     if (!rows.length) return
-    newPageIfNeeded(30)
-    y = _sectionBar(doc, sectionLabel, y, mx, brand.accent) + 4
+    newPageIfNeeded(22)
+    y = _sectionBar(doc, sectionLabel, y, mx, brand.accent) + 2.5
+    const theme = _tableTheme(brand.accent)
     autoTable(doc, {
-      ..._tableTheme(brand.accent), startY: y,
+      ...theme, startY: y,
+      // Compact styling so many checklist points fit per page.
+      styles: { ...theme.styles, fontSize: 7.5, cellPadding: 1.4 },
       body: rows,
       margin: { left: mx, right: mx },
-      columnStyles: { 0: { cellWidth: 60, fontStyle: 'bold', textColor: P.ghost }, 1: { cellWidth: 'auto' } },
+      columnStyles: { 0: { cellWidth: 68, fontStyle: 'bold', textColor: P.ghost }, 1: { cellWidth: 'auto' } },
       showHead: false,
     })
-    y = (doc.lastAutoTable?.finalY ?? y) + 8
+    y = (doc.lastAutoTable?.finalY ?? y) + 4.5
   }
 
   let sectionLabel = 'Responses'
@@ -1735,20 +1738,26 @@ export async function exportChecklistSubmissionPdf(submission = {}, opts = {}) {
   // ── Signature ───────────────────────────────────────────────────────────────
   const sig = submission.signature_data
   if (typeof sig === 'string' && /^data:image\//i.test(sig)) {
-    newPageIfNeeded(46)
-    y = _sectionBar(doc, 'Signature', y, mx, brand.accent) + 4
-    const sw = 70, sh = 28
+    newPageIfNeeded(42)
+    y = _sectionBar(doc, 'Signature', y, mx, brand.accent) + 3
+    const sw = 62, sh = 24
     doc.setFillColor(...P.white); doc.setDrawColor(...P.silver); doc.setLineWidth(0.3)
     doc.roundedRect(mx, y, sw, sh, 2, 2, 'FD')
     try { doc.addImage(sig, 'PNG', mx + 2, y + 2, sw - 4, sh - 4, undefined, 'FAST') } catch { /* ignore malformed data-url */ }
-    y += sh + 4
+    // Name + signing date/time to the right of the signature box (compact).
+    const tx = mx + sw + 6
+    let ty = y + 5
     if (submission.printed_name) {
-      doc.setFontSize(8); doc.setFont('helvetica', 'bold'); doc.setTextColor(...P.ink)
-      doc.text(String(submission.printed_name), mx, y)
-      doc.setFontSize(6.5); doc.setFont('helvetica', 'normal'); doc.setTextColor(...P.mist)
-      doc.text('Signed', mx, y + 4.5)
-      y += 8
+      doc.setFontSize(8.5); doc.setFont('helvetica', 'bold'); doc.setTextColor(...P.ink)
+      doc.text(String(submission.printed_name), tx, ty); ty += 5
     }
+    doc.setFontSize(6.5); doc.setFont('helvetica', 'normal'); doc.setTextColor(...P.mist)
+    doc.text('Signed', tx, ty); ty += 4
+    if (submittedLabel) {
+      doc.setFontSize(7); doc.setFont('helvetica', 'normal'); doc.setTextColor(...P.iron)
+      doc.text(submittedLabel, tx, ty); ty += 4
+    }
+    y += sh + 5
   }
 
   // ── Footers ─────────────────────────────────────────────────────────────────

@@ -21,6 +21,7 @@ import {
   Award, PackageCheck, Calculator, Siren, ShieldAlert, SlidersHorizontal,
   Leaf, BadgeCheck, ScrollText, Navigation,
   Boxes, Combine, Snowflake, BatteryCharging, Router,
+  Wallet, FileCheck,
 } from 'lucide-react'
 // Branded domain icons (custom Tyre Pulse set) for the clearest fleet/tyre nav
 // items. Same ({ size, strokeWidth }) API as Lucide, so they drop straight in.
@@ -110,6 +111,8 @@ const NAV_GROUPS = [
       { to: '/dispatch',            label: 'Dispatch Planning',  icon: Truck, adminOnly: A },
       { to: '/batteries',           label: 'Battery Lifecycle',  icon: BatteryCharging, adminOnly: A },
       { to: '/telematics-devices',  label: 'Telematics Devices', icon: Router, adminOnly: A },
+      { to: '/shifts',              label: 'Shift Scheduling',   icon: CalendarClock, adminOnly: A },
+      { to: '/speed-limiter',       label: 'Speed Limiter',      icon: Gauge, adminOnly: A },
     ],
   },
   {
@@ -136,6 +139,7 @@ const NAV_GROUPS = [
       { to: '/rotation-optimizer',     label: 'Rotation Optimizer',     icon: RotateCcw, roles: ANALYTICS_ROLES },
       { to: '/carbon-tracker',         label: 'Carbon Tracker',         icon: Leaf, roles: ANALYTICS_ROLES },
       { to: '/digital-twin',           label: 'Digital Twin',           icon: Cpu, roles: ANALYTICS_ROLES },
+      { to: '/tyre-service-events',    label: 'Tyre Service Events',    icon: Activity, roles: ANALYTICS_ROLES },
       { to: '/rotation',               label: 'Rotation Schedule',      icon: TyreRotationIc, adminOnly: A },
       { to: '/ai',                     label: 'Smart Analytics',        icon: Sparkles, adminOnly: A },
     ],
@@ -148,6 +152,8 @@ const NAV_GROUPS = [
       { to: '/workshop',        label: 'Workshop Management', icon: WorkshopIc, adminOnly: A },
       { to: '/technician-scorecard', label: 'Technician Scorecard', icon: Award, adminOnly: A },
       { to: '/fuel-cards',      label: 'Fuel Cards',         icon: CreditCard, adminOnly: A },
+      { to: '/fuel-delivery',   label: 'Fuel Delivery',      icon: Fuel, adminOnly: A },
+      { to: '/equipment',       label: 'Tool & Equipment',   icon: Wrench, adminOnly: A },
       { to: '/downtime',        label: 'Downtime Tracker',   icon: Clock, adminOnly: A },
       { to: '/fuel-efficiency', label: 'Fuel Efficiency',    icon: FuelPumpIc, adminOnly: A },
     ],
@@ -179,6 +185,9 @@ const NAV_GROUPS = [
       { to: '/policies',               label: 'Policy Management',    icon: ScrollText, adminOnly: A },
       { to: '/cold-chain',             label: 'Cold-Chain Monitor',  icon: Snowflake, adminOnly: A },
       { to: '/retread-claims',         label: 'Retread Claims',      icon: Recycle, adminOnly: A },
+      { to: '/driver-documents',       label: 'Driver Documents',    icon: FileCheck, adminOnly: A },
+      { to: '/driver-expenses',        label: 'Driver Expenses',     icon: Wallet, adminOnly: A },
+      { to: '/dvir',                   label: 'DVIR Reports',        icon: ClipboardCheck, adminOnly: A },
       { to: '/checklists',             label: 'Checklists',          icon: ListChecks },
       { to: '/my-checklists',          label: 'My Checklists',       icon: ClipboardList },
       { to: '/checklist-schedules',    label: 'Checklist Schedules', icon: Calendar, adminOnly: A },

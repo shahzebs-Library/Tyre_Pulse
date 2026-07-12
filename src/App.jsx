@@ -82,6 +82,14 @@ const VehicleCheckInOut      = lazy(() => import('./pages/VehicleCheckInOut'))
 const RetreadClaims          = lazy(() => import('./pages/RetreadClaims'))
 const Batteries              = lazy(() => import('./pages/Batteries'))
 const TelematicsDevices      = lazy(() => import('./pages/TelematicsDevices'))
+const FuelDelivery           = lazy(() => import('./pages/FuelDelivery'))
+const ShiftScheduling        = lazy(() => import('./pages/ShiftScheduling'))
+const Equipment              = lazy(() => import('./pages/Equipment'))
+const TyreServiceEvents      = lazy(() => import('./pages/TyreServiceEvents'))
+const DriverExpenses         = lazy(() => import('./pages/DriverExpenses'))
+const SpeedLimiter           = lazy(() => import('./pages/SpeedLimiter'))
+const DriverDocuments        = lazy(() => import('./pages/DriverDocuments'))
+const Dvir                   = lazy(() => import('./pages/Dvir'))
 const Analytics              = lazy(() => import('./pages/Analytics'))
 const BrandPerformance       = lazy(() => import('./pages/BrandPerformance'))
 const SiteComparison         = lazy(() => import('./pages/SiteComparison'))
@@ -388,6 +396,14 @@ function MainApp() {
                       <Route path="/retread-claims"        element={<Safe><RetreadClaims /></Safe>} />
                       <Route path="/batteries"             element={<Safe><Batteries /></Safe>} />
                       <Route path="/telematics-devices"    element={<Safe><TelematicsDevices /></Safe>} />
+                      <Route path="/fuel-delivery"         element={<Safe><FuelDelivery /></Safe>} />
+                      <Route path="/shifts"                element={<Safe><ShiftScheduling /></Safe>} />
+                      <Route path="/equipment"             element={<Safe><Equipment /></Safe>} />
+                      <Route path="/tyre-service-events"   element={<Safe><TyreServiceEvents /></Safe>} />
+                      <Route path="/driver-expenses"       element={<Safe><DriverExpenses /></Safe>} />
+                      <Route path="/speed-limiter"         element={<Safe><SpeedLimiter /></Safe>} />
+                      <Route path="/driver-documents"      element={<Safe><DriverDocuments /></Safe>} />
+                      <Route path="/dvir"                  element={<Safe><Dvir /></Safe>} />
                       <Route path="/scan"        element={<Safe><TyreScan /></Safe>} />
                       <Route path="/qr-labels"   element={<Safe><QrLabels /></Safe>} />
                       {/* ── Platform (roadmap tranche: pages self-gate their roles) ── */}

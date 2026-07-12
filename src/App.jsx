@@ -54,6 +54,10 @@ const HelpCenter             = lazy(() => import('./pages/HelpCenter'))
 const TyreAgeCompliance      = lazy(() => import('./pages/TyreAgeCompliance'))
 const RoiCalculator          = lazy(() => import('./pages/RoiCalculator'))
 const TyrePassport           = lazy(() => import('./pages/TyrePassport'))
+const FitmentValidation      = lazy(() => import('./pages/FitmentValidation'))
+const TechnicianScorecard    = lazy(() => import('./pages/TechnicianScorecard'))
+const TcoCalculator          = lazy(() => import('./pages/TcoCalculator'))
+const TyrePool               = lazy(() => import('./pages/TyrePool'))
 const Analytics              = lazy(() => import('./pages/Analytics'))
 const BrandPerformance       = lazy(() => import('./pages/BrandPerformance'))
 const SiteComparison         = lazy(() => import('./pages/SiteComparison'))
@@ -331,6 +335,10 @@ function MainApp() {
                       <Route path="/roi-calculator"      element={<Safe><RoiCalculator /></Safe>} />
                       <Route path="/tyre-passport"         element={<Safe><TyrePassport /></Safe>} />
                       <Route path="/tyre-passport/:serial" element={<Safe><TyrePassport /></Safe>} />
+                      <Route path="/fitment-validation"    element={<Safe><FitmentValidation /></Safe>} />
+                      <Route path="/technician-scorecard"  element={<Safe><TechnicianScorecard /></Safe>} />
+                      <Route path="/tco-calculator"        element={<Safe><TcoCalculator /></Safe>} />
+                      <Route path="/tyre-pool"             element={<Safe><TyrePool /></Safe>} />
                       <Route path="/scan"        element={<Safe><TyreScan /></Safe>} />
                       <Route path="/qr-labels"   element={<Safe><QrLabels /></Safe>} />
                       {/* ── Platform (roadmap tranche: pages self-gate their roles) ── */}

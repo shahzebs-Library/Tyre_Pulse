@@ -18,6 +18,7 @@ import {
   RotateCcw, AlertCircle, ArrowLeftRight, FileWarning, LayoutGrid, Coffee,
   Recycle, Radio, PackagePlus, CalendarCheck2, BellRing, Brain, BarChart, Download,
   Webhook, CheckSquare, CreditCard, Palette, LifeBuoy,
+  Award, PackageCheck, Calculator,
 } from 'lucide-react'
 // Branded domain icons (custom Tyre Pulse set) for the clearest fleet/tyre nav
 // items. Same ({ size, strokeWidth }) API as Lucide, so they drop straight in.
@@ -131,6 +132,7 @@ const NAV_GROUPS = [
       { to: '/work-orders',     label: 'Work Orders',        icon: WorkOrderIc },
       { to: '/gate-pass',       label: 'Gate Pass',          icon: GatePassIc },
       { to: '/workshop',        label: 'Workshop Management', icon: WorkshopIc, adminOnly: A },
+      { to: '/technician-scorecard', label: 'Technician Scorecard', icon: Award, adminOnly: A },
       { to: '/downtime',        label: 'Downtime Tracker',   icon: Clock, adminOnly: A },
       { to: '/fuel-efficiency', label: 'Fuel Efficiency',    icon: FuelPumpIc, adminOnly: A },
     ],
@@ -141,6 +143,7 @@ const NAV_GROUPS = [
       { to: '/stock',               label: 'Stock',               icon: StockBoxIc },
       { to: '/stock-replenishment', label: 'Stock Replenishment', icon: PackagePlus },
       { to: '/scrap',               label: 'Scrap Management',    icon: ScrapBinIc },
+      { to: '/tyre-pool',           label: 'Tyre Pool',           icon: PackageCheck },
       { to: '/budgets',             label: 'Budgets & Cost',      icon: DollarSign },
       { to: '/procurement',         label: 'Procurement',         icon: PurchaseOrderIc, adminOnly: A },
       { to: '/suppliers',           label: 'Supplier Management', icon: SupplierTruckIc, adminOnly: A },
@@ -152,6 +155,7 @@ const NAV_GROUPS = [
     label: 'Safety & Compliance',
     items: [
       { to: '/inspections',            label: 'Inspections',         icon: ClipboardCheck },
+      { to: '/fitment-validation',     label: 'Fitment Validation',  icon: ShieldCheck, roles: ANALYTICS_ROLES },
       { to: '/checklists',             label: 'Checklists',          icon: ListChecks },
       { to: '/my-checklists',          label: 'My Checklists',       icon: ClipboardList },
       { to: '/checklist-schedules',    label: 'Checklist Schedules', icon: Calendar, adminOnly: A },
@@ -182,6 +186,7 @@ const NAV_GROUPS = [
       { to: '/scheduled-reports', label: 'Scheduled Reports', icon: CalendarCheck2 },
       { to: '/executive-report',  label: 'Executive Report',  icon: BookOpen, adminOnly: A },
       { to: '/roi-calculator',    label: 'ROI Calculator',    icon: DollarSign, roles: ANALYTICS_ROLES },
+      { to: '/tco-calculator',    label: 'TCO Calculator',    icon: Calculator, roles: ANALYTICS_ROLES },
       { to: '/display',           label: 'TV Display Mode',   icon: Radio, adminOnly: A },
       { to: '/ai-command-center', label: 'AI Command Center', icon: Bot, adminOnly: A },
       { to: '/knowledge-base',    label: 'Knowledge Base',    icon: Brain, adminOnly: A },

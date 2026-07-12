@@ -20,6 +20,7 @@ import {
   Webhook, CheckSquare, CreditCard, Palette, LifeBuoy,
   Award, PackageCheck, Calculator, Siren, ShieldAlert, SlidersHorizontal,
   Leaf, BadgeCheck, ScrollText, Navigation,
+  Boxes, Combine, Snowflake, BatteryCharging, Router,
 } from 'lucide-react'
 // Branded domain icons (custom Tyre Pulse set) for the clearest fleet/tyre nav
 // items. Same ({ size, strokeWidth }) API as Lucide, so they drop straight in.
@@ -104,6 +105,11 @@ const NAV_GROUPS = [
       { to: '/rfid',                label: 'RFID Registry',      icon: Radio, adminOnly: A },
       { to: '/geofencing',          label: 'Geofencing',         icon: MapPin, adminOnly: A },
       { to: '/journeys',            label: 'Journey Log',        icon: Navigation, adminOnly: A },
+      { to: '/vehicle-checkinout',  label: 'Vehicle Check In/Out', icon: ArrowLeftRight, adminOnly: A },
+      { to: '/combinations',        label: 'Combinations',       icon: Combine, adminOnly: A },
+      { to: '/dispatch',            label: 'Dispatch Planning',  icon: Truck, adminOnly: A },
+      { to: '/batteries',           label: 'Battery Lifecycle',  icon: BatteryCharging, adminOnly: A },
+      { to: '/telematics-devices',  label: 'Telematics Devices', icon: Router, adminOnly: A },
     ],
   },
   {
@@ -153,6 +159,7 @@ const NAV_GROUPS = [
       { to: '/stock-replenishment', label: 'Stock Replenishment', icon: PackagePlus },
       { to: '/scrap',               label: 'Scrap Management',    icon: ScrapBinIc },
       { to: '/tyre-pool',           label: 'Tyre Pool',           icon: PackageCheck },
+      { to: '/parts-catalog',       label: 'Parts Catalog',       icon: Boxes },
       { to: '/cost-scenario-planner', label: 'Cost Scenario Planner', icon: SlidersHorizontal, roles: ANALYTICS_ROLES },
       { to: '/contracts',           label: 'Contracts',           icon: FileText },
       { to: '/budgets',             label: 'Budgets & Cost',      icon: DollarSign },
@@ -170,6 +177,8 @@ const NAV_GROUPS = [
       { to: '/tpms',                   label: 'TPMS',                icon: Radio, adminOnly: A },
       { to: '/certifications',         label: 'Certifications',      icon: BadgeCheck },
       { to: '/policies',               label: 'Policy Management',    icon: ScrollText, adminOnly: A },
+      { to: '/cold-chain',             label: 'Cold-Chain Monitor',  icon: Snowflake, adminOnly: A },
+      { to: '/retread-claims',         label: 'Retread Claims',      icon: Recycle, adminOnly: A },
       { to: '/checklists',             label: 'Checklists',          icon: ListChecks },
       { to: '/my-checklists',          label: 'My Checklists',       icon: ClipboardList },
       { to: '/checklist-schedules',    label: 'Checklist Schedules', icon: Calendar, adminOnly: A },

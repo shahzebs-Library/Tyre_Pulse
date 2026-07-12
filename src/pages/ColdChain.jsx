@@ -15,7 +15,7 @@ import {
 } from 'chart.js'
 import { Doughnut } from 'react-chartjs-2'
 import {
-  Snowflake, ThermometerSnowflake, AlertTriangle, TriangleAlert, CheckCircle2,
+  Snowflake, ThermometerSnowflake, AlertTriangle, CheckCircle2,
   Boxes, Search, X, Filter, FileSpreadsheet, FileText, Plus, Pencil, Trash2,
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
@@ -144,7 +144,7 @@ export default function ColdChain() {
   // ── KPIs ─────────────────────────────────────────────────────────────────
   const kpis = [
     { label: 'Readings logged', value: summary.total, icon: ThermometerSnowflake, tone: 'text-[var(--text-primary)]' },
-    { label: 'Breaches', value: summary.breaches, icon: TriangleAlert, tone: 'text-red-400' },
+    { label: 'Breaches', value: summary.breaches, icon: AlertTriangle, tone: 'text-red-400' },
     { label: 'Warnings', value: summary.warnings, icon: AlertTriangle, tone: 'text-amber-400' },
     { label: 'Assets monitored', value: summary.assetsMonitored, icon: Boxes, tone: 'text-sky-400' },
   ]

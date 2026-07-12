@@ -74,6 +74,14 @@ const PolicyManagement       = lazy(() => import('./pages/PolicyManagement'))
 const IncidentReports        = lazy(() => import('./pages/IncidentReports'))
 const JourneyLog             = lazy(() => import('./pages/JourneyLog'))
 const DigitalTwin            = lazy(() => import('./pages/DigitalTwin'))
+const PartsCatalog           = lazy(() => import('./pages/PartsCatalog'))
+const Combinations           = lazy(() => import('./pages/Combinations'))
+const Dispatch               = lazy(() => import('./pages/Dispatch'))
+const ColdChain              = lazy(() => import('./pages/ColdChain'))
+const VehicleCheckInOut      = lazy(() => import('./pages/VehicleCheckInOut'))
+const RetreadClaims          = lazy(() => import('./pages/RetreadClaims'))
+const Batteries              = lazy(() => import('./pages/Batteries'))
+const TelematicsDevices      = lazy(() => import('./pages/TelematicsDevices'))
 const Analytics              = lazy(() => import('./pages/Analytics'))
 const BrandPerformance       = lazy(() => import('./pages/BrandPerformance'))
 const SiteComparison         = lazy(() => import('./pages/SiteComparison'))
@@ -372,6 +380,14 @@ function MainApp() {
                       <Route path="/journeys"              element={<Safe><JourneyLog /></Safe>} />
                       <Route path="/digital-twin"          element={<Safe><DigitalTwin /></Safe>} />
                       <Route path="/digital-twin/:assetNo" element={<Safe><DigitalTwin /></Safe>} />
+                      <Route path="/parts-catalog"         element={<Safe><PartsCatalog /></Safe>} />
+                      <Route path="/combinations"          element={<Safe><Combinations /></Safe>} />
+                      <Route path="/dispatch"              element={<Safe><Dispatch /></Safe>} />
+                      <Route path="/cold-chain"            element={<Safe><ColdChain /></Safe>} />
+                      <Route path="/vehicle-checkinout"    element={<Safe><VehicleCheckInOut /></Safe>} />
+                      <Route path="/retread-claims"        element={<Safe><RetreadClaims /></Safe>} />
+                      <Route path="/batteries"             element={<Safe><Batteries /></Safe>} />
+                      <Route path="/telematics-devices"    element={<Safe><TelematicsDevices /></Safe>} />
                       <Route path="/scan"        element={<Safe><TyreScan /></Safe>} />
                       <Route path="/qr-labels"   element={<Safe><QrLabels /></Safe>} />
                       {/* ── Platform (roadmap tranche: pages self-gate their roles) ── */}

@@ -1,11 +1,47 @@
 # TyrePulse - Developer Handoff
-**Last updated:** 11 July 2026 (Session 15)
-**Branch:** `main` (auto-deploys to Vercel). Session 14 shipped the whole brand/design-system pass across many small feature branches, each `--no-ff` merged to `main` and pushed.
-**Web build status:** ✅ Clean - builds with zero errors (`vite build` green); full suite **1694 tests green**, auto-deploys to Vercel. **Session 15 changes are UNCOMMITTED in the working tree** (19 files modified + 7 new page components + 6 new locale files) - review + commit pending.
-**Mobile build status:** ✅ Expo SDK 54 / RN 0.81.5. Session 13 added **Sentry crash/perf monitoring** + reliability fixes; `expo export --platform android` produces a clean Hermes bundle. Build the distribution APK from `main` with the `production-apk` EAS profile.
-**DB migrations applied to live Supabase:** through **V121** (project `jhssdmeruxtrlqnwfksc`). Session 15 applied **V121** (`normalize_country` preserves unknown countries instead of forcing 'KSA' + drops the `tyre_records.country` DEFAULT 'KSA'). Session 14 applied **V120** (brand logo placements).
+**Last updated:** 12 July 2026 (Session 16)
+**Branch:** `main` (auto-deploys to Vercel). Session 16 shipped the accident-detail crash fix, intake diagnostics, the 3 remaining approval modules, and the whole **Checklist system** (builder → runtime → approval → schedules → mobile), all committed + pushed to `main`.
+**Web build status:** ✅ Clean - builds with zero errors (`vite build` green); full suite **1775 tests green**, auto-deploys to Vercel.
+**Mobile build status:** ✅ Expo SDK 54 / RN 0.81.5. Session 16 added **checklist fill + submit** (offline-safe via the typed record queue) and its screens; `tsc --noEmit` clean. Build the distribution APK from `main` with the `production-apk` EAS profile.
+**DB migrations applied to live Supabase:** through **V125** (project `jhssdmeruxtrlqnwfksc`). Session 16 applied **V122** (niche approval chains), **V123** (checklist templates/submissions + chain), **V124/V124b** (checklist schedules/assignments + daily pg_cron + scoring columns), **V125** (checklist_submissions.client_uuid for mobile idempotency) — all verified live.
 **Live URL under test:** tyre-pulse-peach.vercel.app
-**Active branches:** `main` · dev `claude/erp-sync-hub-roles-od8m1k` (holds 2 **table-standardization** commits deliberately kept OFF `main` — see Session 12 → Held) · dev `claude/mobile-app-ui-features-tdfxy0` · frozen `claude/backend-step2-assets` (Go) · frozen `claude/mobile-kotlin-app` (Kotlin). All other feature branches consolidated into `main` (see `docs/BRANCH_CONSOLIDATION_2026-07-04.md`).
+**Active branches:** `main` · dev `claude/multi-agent-work-an6f1h` (Session 16 work; == `main`) · dev `claude/erp-sync-hub-roles-od8m1k` (holds 2 **table-standardization** commits deliberately kept OFF `main` — see Session 12 → Held) · frozen `claude/backend-step2-assets` (Go) · frozen `claude/mobile-kotlin-app` (Kotlin).
+
+---
+
+## Session 16 (12 July 2026) — Accident fix, intake diagnostics, remaining approvals, full Checklist system
+
+**Theme:** A large multi-agent session (7 waves): fixed a reported crash, deepened Data Intake, closed the last approval-engine gaps, and built an entire configurable **Checklist** product (web + mobile) with scheduling, scoring, conditional logic, and live-data reference fields. Every wave committed + pushed to `main`; all migrations applied live via the Supabase connector.
+
+**Gate:** web `vite build` ✅ · **1775 tests green** (was 1694; +81) · mobile `tsc --noEmit` ✅ · migrations **V122→V125 applied + verified live**. Commits `baed34f → bb3e442` on `main`.
+
+### 1. Accident detail — crash fix + deepening (`baed34f`)
+- **Fixed a ReferenceError** (`formatCurrency is not defined`, reported as "currency is not defined"): the Overview/Claim/Parts tabs of `src/components/AccidentDetailModal.jsx` called a bare `formatCurrency` that was only imported under an alias → `/accidents/:id` crashed on open. Threaded the currency-aware `fmtCurrency` through the tabs. Regression test `src/test/accidentDetailPage.test.jsx`.
+- Added **Download Case PDF** (`exportAccidentCasePdf`), a **Site dropdown** + datalist pickers (case stage/damage/status), and editable incident date/site. (Detail was already a full page with a back button — the "popup" was the pre-fix crash fallback.)
+
+### 2. Data Intake diagnostics + force (`947911c`)
+- `src/lib/import/diagnostics.js` (validation/commit/batch-health analysis), `src/lib/api/importDiagnostics.js` (read-back), `src/components/intake/IntakeDiagnosticsPanel.jsx`, wired into the Validate step, commit Result, and a **Diagnose** action per Recent-imports row, with one-click **Force-include / Skip / Reset** + downloadable reports.
+
+### 3. The 3 remaining approval modules (`e52b922`, V122)
+- **Vehicle handover** was already covered by `gate_pass`. Wired **goods_receipt** (Procurement PO drawer), **tyre_return** + **tyre_transfer** (Stock movement/transfer flows). `MIGRATIONS_V122` seeds the org-NULL chains (applied live). Per-module workflow tests.
+
+### 4. Checklist system — core (`c20c329`, V123)
+- **Builder** (`/checklist-builder`, elevated), **Checklists** list (`/checklists`), **Run** (`/checklists/:id/run`), **Submission** (`/checklists/submission/:id`) + approval panel (`checklist_submission`). Engine `src/lib/checklist/fieldTypes.js`, API `src/lib/api/checklists.js`. `MIGRATIONS_V123` = `checklist_templates` + `checklist_submissions` (org/country RLS) + approval chain (applied live). Signature reuses `src/components/SignaturePad.jsx`; photos to the shared media bucket.
+
+### 5. Checklist PDF + Insights (`49ed42e`)
+- `exportChecklistSubmissionPdf` (Download PDF on a submission) + `ChecklistInsights` page (`/checklist-insights`): completion/approval KPIs, submissions-per-week, by-template/site, boolean pass-rates.
+
+### 6. Compliance program — schedules, scoring, conditional logic (`001f82b`, V124/V124b)
+- **Schedules** (`/checklist-schedules`) + **My Checklists** (`/my-checklists`) worklist. `MIGRATIONS_V124` = `checklist_schedules` + `checklist_assignments` + `generate_checklist_assignments()` (**daily pg_cron**, verified). Runtime completes the linked assignment on submit.
+- **Conditional visibility** (`visibleWhen`) + **weighted scoring** (`weight`/`passValues`, template `pass_threshold`, submission `score_pct`/`score_passed` — V124b columns). Builder editors + runtime honour both; submission shows a pass/fail badge.
+
+### 7. Mobile checklists + advanced builder (`aca1f0d` V125, `bb3e442`)
+- **Mobile:** `mobile/lib/checklistFields.ts` (TS port), `mobile/lib/checklists.ts`, `mobile/app/(app)/checklists/{index,[templateId]}.tsx` (fill all field types, conditional visibility, photo, scoring, typed signature; submit online or **offline-queued** via `recordQueue` `CHECKLIST_SUBMISSION`/`CHECKLIST_ASSIGNMENT_STATUS`). `MIGRATIONS_V125` adds `checklist_submissions.client_uuid` (mobile idempotency, applied live). Home-menu entry added.
+- **Advanced builder:** reference field types **asset / site / user** that resolve **real data** at fill time (`ReferencePicker` loads live Sites/Assets/Users), a curated **FIELD_LIBRARY** ("Add from library" one-click suggestions), and production polish (unsaved indicator, richer empty states, preview pickers).
+
+### Notes / follow-ups (owner action)
+- **Mobile reference pickers** (asset/site/user) render as text fallback on mobile for now — a live-picker port is the one deferred checklist item.
+- **Handoff-sweep result:** the two most-cited latent bugs are already fixed — `normalize_country` else-KSA (V121) and `DataCleaning` count-exact (Session 9). Remaining handoff items are **owner-action only**: set notification/RESEND/Twilio secrets, create a dedicated Sentry RN project + swap DSN, delete the ~24 stale remote branches, and import UAE/Egypt/retread data to light up Country Comparison + Retread intelligence.
 
 ---
 

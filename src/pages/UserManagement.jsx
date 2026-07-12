@@ -20,7 +20,7 @@ import SitesMasterPanel from '../components/SitesMasterPanel'
 
 const ROLES = [
   'Admin', 'Manager', 'Inspector', 'Director', 'Reporter', 'Tyre Man', 'Driver',
-  'Integration Admin', 'Data Engineer', 'Automation',
+  'Maintenance Supervisor', 'Integration Admin', 'Data Engineer', 'Automation',
 ]
 
 const ROLE_BADGE = {
@@ -28,6 +28,7 @@ const ROLE_BADGE = {
   Manager:    'bg-orange-900/50 text-orange-300 border border-orange-700/40',
   Inspector:  'bg-purple-900/50 text-purple-300 border border-purple-700/40',
   Director:   'bg-blue-900/50 text-blue-300 border border-blue-700/40',
+  'Maintenance Supervisor': 'bg-teal-900/50 text-teal-300 border border-teal-700/40',
   Reporter:   'bg-[var(--input-bg)] text-[var(--text-muted)] border border-[var(--input-border)]',
   'Tyre Man': 'bg-teal-900/50 text-teal-300 border border-teal-700/40',
   Driver:     'bg-slate-800/60 text-slate-300 border border-slate-600/40',

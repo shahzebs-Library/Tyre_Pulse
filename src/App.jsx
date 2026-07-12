@@ -1,5 +1,6 @@
 import { lazy, Suspense } from 'react'
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
+import { isChecklistOnlyRole, isChecklistPathAllowed, CHECKLIST_AUTHOR_ROLES } from './lib/checklistAccess'
 import { QueryClientProvider } from '@tanstack/react-query'
 import { queryClient } from './lib/queryClient'
 import { AuthProvider } from './contexts/AuthContext'
@@ -164,8 +165,22 @@ function FlagRoute({ flag, children }) {
 function HomeRoute() {
   const { profile, loading } = useAuth()
   if (loading) return <LoadingSpinner />
+  if (isChecklistOnlyRole(profile?.role)) return <Navigate to="/checklists" replace />
   if (profile?.role === 'Tyre Man') return <Navigate to="/inspections" replace />
   return <Dashboard />
+}
+
+// ── Checklist-only access gate ────────────────────────────────────────────────
+// A Maintenance Supervisor may reach ONLY the checklist routes; any other path
+// bounces back to the checklist home. Combined with the reduced sidebar, the
+// rest of the app is out of reach for this role.
+function ChecklistOnlyGate({ children }) {
+  const { profile } = useAuth()
+  const loc = useLocation()
+  if (isChecklistOnlyRole(profile?.role) && !isChecklistPathAllowed(loc.pathname)) {
+    return <Navigate to="/checklists" replace />
+  }
+  return children
 }
 
 // ── Console auth guard (must sit inside ConsoleAuthProvider) ──────────────
@@ -210,6 +225,7 @@ function MainApp() {
               element={
                 <ProtectedRoute>
                   <Layout>
+                    <ChecklistOnlyGate>
                     <Routes>
                       <Route path="/"            element={<Safe><HomeRoute /></Safe>} />
                       <Route path="/tyres"       element={<Safe><ModuleRoute moduleKey="tyre_records"><TyreRecords /></ModuleRoute></Safe>} />
@@ -298,11 +314,11 @@ function MainApp() {
                       <Route path="/checklists" element={<Safe><Checklists /></Safe>} />
                       <Route path="/checklists/:templateId/run" element={<Safe><ChecklistRun /></Safe>} />
                       <Route path="/checklists/submission/:id" element={<Safe><ChecklistSubmission /></Safe>} />
-                      <Route path="/checklist-insights" element={<Safe><RoleRoute allowed={['Admin', 'Manager', 'Director']}><ChecklistInsights /></RoleRoute></Safe>} />
+                      <Route path="/checklist-insights" element={<Safe><RoleRoute allowed={CHECKLIST_AUTHOR_ROLES}><ChecklistInsights /></RoleRoute></Safe>} />
                       <Route path="/my-checklists" element={<Safe><MyChecklists /></Safe>} />
-                      <Route path="/checklist-schedules" element={<Safe><RoleRoute allowed={['Admin', 'Manager', 'Director']}><ChecklistSchedules /></RoleRoute></Safe>} />
-                      <Route path="/checklist-builder" element={<Safe><RoleRoute allowed={['Admin', 'Manager', 'Director']}><ChecklistBuilder /></RoleRoute></Safe>} />
-                      <Route path="/checklist-builder/:id" element={<Safe><RoleRoute allowed={['Admin', 'Manager', 'Director']}><ChecklistBuilder /></RoleRoute></Safe>} />
+                      <Route path="/checklist-schedules" element={<Safe><RoleRoute allowed={CHECKLIST_AUTHOR_ROLES}><ChecklistSchedules /></RoleRoute></Safe>} />
+                      <Route path="/checklist-builder" element={<Safe><RoleRoute allowed={CHECKLIST_AUTHOR_ROLES}><ChecklistBuilder /></RoleRoute></Safe>} />
+                      <Route path="/checklist-builder/:id" element={<Safe><RoleRoute allowed={CHECKLIST_AUTHOR_ROLES}><ChecklistBuilder /></RoleRoute></Safe>} />
                       <Route path="/upload-approvals" element={<Safe><FlagRoute flag="data_intake"><UploadApprovals /></FlagRoute></Safe>} />
                       <Route path="/custom-data" element={<Safe><ModuleRoute moduleKey="custom_data"><CustomData /></ModuleRoute></Safe>} />
                       <Route path="/settings"    element={<Safe><Settings /></Safe>} />
@@ -336,6 +352,7 @@ function MainApp() {
                       <Route path="/automation-rules/builder/:ruleId"  element={<Safe><FlagRoute flag="automation_platform"><RuleBuilder /></FlagRoute></Safe>} />
                       <Route path="*"            element={<NotFound />} />
                     </Routes>
+                    </ChecklistOnlyGate>
                   </Layout>
                 </ProtectedRoute>
               }

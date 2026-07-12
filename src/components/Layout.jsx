@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { NavLink, useNavigate, useLocation } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useAuth } from '../contexts/AuthContext'
+import { isChecklistOnlyRole, isChecklistPathAllowed } from '../lib/checklistAccess'
 import { useSettings, COUNTRIES, COUNTRY_LABEL } from '../contexts/SettingsContext'
 import { useTheme } from '../contexts/ThemeContext'
 import {
@@ -225,6 +226,10 @@ function shouldShowNavItem(item, profile, isFlagEnabled) {
   if (item.flag && isFlagEnabled && !isFlagEnabled(item.flag)) return false
   if (profile?.role === 'Inspector') {
     return item.to === '/inspections' || item.to === '/settings'
+  }
+  // Checklist-only role (Maintenance Supervisor): sidebar shows only checklists.
+  if (isChecklistOnlyRole(profile?.role)) {
+    return isChecklistPathAllowed(item.to)
   }
   if (item.adminOnly) return profile?.role === 'Admin'
   if (item.roles) return item.roles.includes(profile?.role)

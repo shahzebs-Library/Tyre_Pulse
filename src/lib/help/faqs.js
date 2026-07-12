@@ -131,6 +131,29 @@ export const FAQS = [
   },
 ]
 
+// Which FAQ categories each role should see. A user only gets help for the areas
+// their role can actually use — not "anyone sees everything". Roles not listed
+// here fall through to FULL (see visibleFaqsForRole).
+const ROLE_CATEGORIES = {
+  // Checklist-only role: checklists + the essentials.
+  'Maintenance Supervisor': ['Getting Started', 'Checklists', 'Roles & Access', 'Account'],
+  // Field inspector: inspections + checklists + essentials.
+  Inspector: ['Getting Started', 'Inspections', 'Checklists', 'Roles & Access', 'Account'],
+  // Tyre fitter: tyre records + inspections + essentials.
+  'Tyre Man': ['Getting Started', 'Inspections', 'Roles & Access', 'Account'],
+}
+
+/**
+ * FAQs a given role should see. Admin/Manager/Director/etc. see everything;
+ * restricted operational roles see only the categories relevant to their work.
+ */
+export function visibleFaqsForRole(role, faqs = FAQS) {
+  const allowed = ROLE_CATEGORIES[String(role || '').trim()]
+  if (!allowed) return faqs
+  const set = new Set(allowed)
+  return faqs.filter((f) => set.has(f.category))
+}
+
 /** Case-insensitive search across question, answer, category and keywords. */
 export function searchFaqs(query, faqs = FAQS) {
   const q = String(query || '').trim().toLowerCase()

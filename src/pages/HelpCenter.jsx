@@ -23,7 +23,7 @@ import {
   listTickets, createTicket, respondToTicket, updateTicket, summarizeTickets,
   TICKET_CATEGORIES, TICKET_SEVERITIES,
 } from '../lib/api/support'
-import { FAQ_CATEGORIES, searchFaqs, groupFaqsByCategory } from '../lib/help/faqs'
+import { FAQ_CATEGORIES, searchFaqs, groupFaqsByCategory, visibleFaqsForRole } from '../lib/help/faqs'
 
 const CATEGORY_META = {
   bug: { label: 'Bug / Error', icon: Bug, tint: 'text-red-400' },
@@ -80,14 +80,20 @@ function FaqItem({ faq }) {
   )
 }
 
-function FaqPanel({ onAskInstead }) {
+function FaqPanel({ onAskInstead, role }) {
   const [query, setQuery] = useState('')
   const [activeCat, setActiveCat] = useState('All')
+  // Only help for areas this role can actually use.
+  const scoped = useMemo(() => visibleFaqsForRole(role), [role])
+  const categories = useMemo(() => {
+    const present = new Set(scoped.map((f) => f.category))
+    return FAQ_CATEGORIES.filter((c) => present.has(c))
+  }, [scoped])
   const results = useMemo(() => {
-    let list = searchFaqs(query)
+    let list = searchFaqs(query, scoped)
     if (activeCat !== 'All') list = list.filter((f) => f.category === activeCat)
     return groupFaqsByCategory(list)
-  }, [query, activeCat])
+  }, [query, activeCat, scoped])
   const total = results.reduce((n, [, list]) => n + list.length, 0)
 
   return (
@@ -106,7 +112,7 @@ function FaqPanel({ onAskInstead }) {
       </div>
 
       <div className="flex flex-wrap gap-2">
-        {['All', ...FAQ_CATEGORIES].map((c) => (
+        {['All', ...categories].map((c) => (
           <button
             key={c}
             type="button"
@@ -489,7 +495,7 @@ export default function HelpCenter() {
         })}
       </div>
 
-      {tab === 'faqs' && <FaqPanel onAskInstead={() => setTab('report')} />}
+      {tab === 'faqs' && <FaqPanel role={profile?.role} onAskInstead={() => setTab('report')} />}
       {tab === 'report' && <ReportForm onSubmitted={() => setReloadKey((k) => k + 1)} />}
       {tab === 'mine' && (
         <TicketList triage={false} reloadKey={reloadKey} emptyHint="Issues you report will appear here so you can track their status." />

@@ -118,6 +118,23 @@ const FuelTheftAlerts        = lazy(() => import('./pages/FuelTheftAlerts'))
 const VehicleHandover        = lazy(() => import('./pages/VehicleHandover'))
 const DriverTraining         = lazy(() => import('./pages/DriverTraining'))
 const Tachograph             = lazy(() => import('./pages/Tachograph'))
+const BayScheduling          = lazy(() => import('./pages/BayScheduling'))
+const SlaDashboard           = lazy(() => import('./pages/SlaDashboard'))
+const ActionCenter           = lazy(() => import('./pages/ActionCenter'))
+const DriverCoaching         = lazy(() => import('./pages/DriverCoaching'))
+const HeatIntelligence       = lazy(() => import('./pages/HeatIntelligence'))
+const FleetGroups            = lazy(() => import('./pages/FleetGroups'))
+const Materials              = lazy(() => import('./pages/Materials'))
+const TripReplay             = lazy(() => import('./pages/TripReplay'))
+const FleetOptimizer         = lazy(() => import('./pages/FleetOptimizer'))
+const CustomerPortal         = lazy(() => import('./pages/CustomerPortal'))
+const DeveloperPortal        = lazy(() => import('./pages/DeveloperPortal'))
+const Taas                   = lazy(() => import('./pages/Taas'))
+const SupplierMarketplace    = lazy(() => import('./pages/SupplierMarketplace'))
+const OcrScanner             = lazy(() => import('./pages/OcrScanner'))
+const AdvancedSearch         = lazy(() => import('./pages/AdvancedSearch'))
+const OnboardingWizard       = lazy(() => import('./pages/OnboardingWizard'))
+const SsoConfiguration       = lazy(() => import('./pages/SsoConfiguration'))
 const Analytics              = lazy(() => import('./pages/Analytics'))
 const BrandPerformance       = lazy(() => import('./pages/BrandPerformance'))
 const SiteComparison         = lazy(() => import('./pages/SiteComparison'))
@@ -460,6 +477,23 @@ function MainApp() {
                       <Route path="/handovers"             element={<Safe><VehicleHandover /></Safe>} />
                       <Route path="/driver-training"       element={<Safe><DriverTraining /></Safe>} />
                       <Route path="/tachograph"            element={<Safe><Tachograph /></Safe>} />
+                      <Route path="/bay-scheduling"        element={<Safe><BayScheduling /></Safe>} />
+                      <Route path="/sla-dashboard"         element={<Safe><SlaDashboard /></Safe>} />
+                      <Route path="/action-center"         element={<Safe><ActionCenter /></Safe>} />
+                      <Route path="/driver-coaching"       element={<Safe><DriverCoaching /></Safe>} />
+                      <Route path="/heat-intelligence"     element={<Safe><HeatIntelligence /></Safe>} />
+                      <Route path="/fleet-groups"          element={<Safe><FleetGroups /></Safe>} />
+                      <Route path="/materials"             element={<Safe><Materials /></Safe>} />
+                      <Route path="/trip-replay"           element={<Safe><TripReplay /></Safe>} />
+                      <Route path="/fleet-optimizer"       element={<Safe><FleetOptimizer /></Safe>} />
+                      <Route path="/customer-portal"       element={<Safe><CustomerPortal /></Safe>} />
+                      <Route path="/developer-portal"      element={<Safe><DeveloperPortal /></Safe>} />
+                      <Route path="/taas"                  element={<Safe><Taas /></Safe>} />
+                      <Route path="/marketplace"           element={<Safe><SupplierMarketplace /></Safe>} />
+                      <Route path="/ocr-scanner"           element={<Safe><OcrScanner /></Safe>} />
+                      <Route path="/advanced-search"       element={<Safe><AdvancedSearch /></Safe>} />
+                      <Route path="/onboarding-wizard"     element={<Safe><OnboardingWizard /></Safe>} />
+                      <Route path="/sso-configuration"     element={<Safe><SsoConfiguration /></Safe>} />
                       <Route path="/scan"        element={<Safe><TyreScan /></Safe>} />
                       <Route path="/qr-labels"   element={<Safe><QrLabels /></Safe>} />
                       {/* ── Platform (roadmap tranche: pages self-gate their roles) ── */}

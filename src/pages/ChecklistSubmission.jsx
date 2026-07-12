@@ -86,8 +86,18 @@ export default function ChecklistSubmission() {
     const embedded = Array.isArray(sub?.template_fields) ? sub.template_fields
       : Array.isArray(sub?.fields) ? sub.fields : null
     if (embedded && embedded.length) {
+      const hasContent = (f) => {
+        const v = answers?.[f.id]
+        if (Array.isArray(photosByField?.[f.id]) && photosByField[f.id].length) return true
+        if (Array.isArray(v)) return v.length > 0
+        if (typeof v === 'boolean') return true
+        return v != null && String(v).trim() !== ''
+      }
       return embedded
-        .filter((f) => f && !isLayoutField(f.type))
+        // Show only points that were actually answered (or carry photos) — this
+        // drops the long tail of inapplicable "-" rows without ever hiding a
+        // captured answer.
+        .filter((f) => f && !isLayoutField(f.type) && hasContent(f))
         .map((f) => ({
           id: f.id,
           type: f.type,

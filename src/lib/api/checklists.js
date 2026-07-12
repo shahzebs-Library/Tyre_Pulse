@@ -12,7 +12,52 @@ const TEMPLATE_COLS =
 const SUBMISSION_COLS =
   'id,template_id,template_name,template_version,country,site,asset_no,title,status,answers,photos,signature_data,printed_name,score_pct,score_passed,submitted_by,submitted_at,created_at,updated_at'
 
-const PHOTO_BUCKET = 'tyre-photos' // shared public media bucket (as inspections/accidents use)
+const PHOTO_BUCKET = 'tyre-photos' // shared media bucket (private — served via signed URLs)
+const SIGNED_URL_TTL_SECONDS = 60 * 60
+
+// Extract the object path within PHOTO_BUCKET from a stored photo value, which
+// may be a tp-storage ref, a Supabase public/sign URL, or a bare path.
+function checklistPhotoPath(value) {
+  if (typeof value !== 'string' || !value) return null
+  if (value.startsWith('tp-storage://')) {
+    const rest = value.slice('tp-storage://'.length)
+    const i = rest.indexOf('/')
+    if (i <= 0) return null
+    return rest.slice(0, i) === PHOTO_BUCKET ? rest.slice(i + 1) : null
+  }
+  const marker = `/${PHOTO_BUCKET}/`
+  const idx = value.indexOf(marker)
+  if (idx !== -1) return decodeURIComponent(value.slice(idx + marker.length).split('?')[0])
+  if (!/^(https?:|data:|blob:)/.test(value)) return value.replace(/^\/+/, '')
+  return null
+}
+
+/**
+ * Resolve a stored checklist photo value to a short-lived signed URL that
+ * renders in the browser and PDF. The bucket is private, so bare public URLs
+ * 403; this converts them (and legacy/ref forms) into a working signed URL.
+ * Best-effort: returns the original value if signing fails.
+ */
+export async function signChecklistPhotoUrl(value) {
+  if (typeof value !== 'string' || !value) return value
+  if (value.startsWith('data:') || value.startsWith('blob:')) return value
+  const path = checklistPhotoPath(value)
+  if (!path) return value
+  try {
+    const { data } = await supabase.storage.from(PHOTO_BUCKET).createSignedUrl(path, SIGNED_URL_TTL_SECONDS)
+    return data?.signedUrl || value
+  } catch { return value }
+}
+
+/** Sign every URL in a submission's { fieldId: [url, …] } photos map. */
+async function signPhotosMap(photos) {
+  if (!photos || typeof photos !== 'object') return photos
+  const out = {}
+  await Promise.all(Object.entries(photos).map(async ([k, arr]) => {
+    out[k] = Array.isArray(arr) ? await Promise.all(arr.map((u) => signChecklistPhotoUrl(u))) : arr
+  }))
+  return out
+}
 
 // ── Templates ───────────────────────────────────────────────────────────────
 
@@ -94,7 +139,21 @@ export async function listSubmissions({ country, templateId, limit = 200 } = {})
 }
 
 export async function getSubmission(id) {
-  return unwrap(await supabase.from('checklist_submissions').select(SUBMISSION_COLS).eq('id', id).maybeSingle())
+  const row = unwrap(await supabase.from('checklist_submissions').select(SUBMISSION_COLS).eq('id', id).maybeSingle())
+  // Attach the template's field definitions so the detail page / PDF can render
+  // human labels, section grouping, and conditional visibility instead of raw
+  // answer keys. Best-effort: a submission still renders if the template is gone.
+  if (row && row.template_id) {
+    try {
+      const tpl = unwrap(await supabase.from('checklist_templates').select('fields').eq('id', row.template_id).maybeSingle())
+      if (tpl && Array.isArray(tpl.fields)) row.template_fields = tpl.fields
+    } catch { /* template lookup is non-fatal */ }
+  }
+  // Sign photo URLs so the private bucket renders in the page + PDF.
+  if (row && row.photos && typeof row.photos === 'object') {
+    try { row.photos = await signPhotosMap(row.photos) } catch { /* leave as-is */ }
+  }
+  return row
 }
 
 /** Create a submission from a filled template. Returns the new row. */

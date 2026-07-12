@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest'
-import { buildTemplateFromRows, detectColumns, normalizeInterval } from '../lib/checklist/importChecklist'
+import {
+  buildTemplateFromRows, detectColumns, detectVehicleColumns, normalizeInterval, normalizeVehicleCode,
+} from '../lib/checklist/importChecklist'
 import { isFieldVisible } from '../lib/checklist/fieldTypes'
 
 const ROWS = [
@@ -65,5 +67,65 @@ describe('importChecklist parser', () => {
     const { template, stats } = buildTemplateFromRows([['foo', 'bar'], ['1', '2']])
     expect(template).toBeNull()
     expect(stats.error).toMatch(/Category/i)
+  })
+})
+
+// Rows carrying per-vehicle-type columns (MP / TM / BH): a non-empty cell means
+// "this item applies to that vehicle type".
+const VEHICLE_ROWS = [
+  ['Category', 'Sub Category', 'Date Interval', 'MP', 'TM', 'BH', 'Symptoms'],
+  ['CONCRETE PUMP PARTS', 'Wear Ring', 'Semi-anual Inspection', '3000', '', '', 'Clearence'],
+  ['CHASSIS', 'Mixer Control unit', 'Quarterly', '', '1500', '', 'Function'],
+  ['AXLE', 'Rear Axle', '4 Years', '20000', '20000', '20000', 'Oil Sample'],
+]
+
+describe('importChecklist vehicle-type filtering', () => {
+  it('normalizes vehicle codes from codes and words', () => {
+    expect(normalizeVehicleCode('MP123')).toBe('MP')
+    expect(normalizeVehicleCode('concrete pump')).toBe('MP')
+    expect(normalizeVehicleCode('Transit Mixer')).toBe('TM')
+    expect(normalizeVehicleCode('BUS')).toBe('BH')
+    expect(normalizeVehicleCode('pickup')).toBe('LP')
+    expect(normalizeVehicleCode('')).toBeNull()
+  })
+
+  it('detects per-vehicle-type columns in the header', () => {
+    const cols = detectVehicleColumns(VEHICLE_ROWS[0])
+    expect(cols).toEqual({ MP: 3, TM: 4, BH: 5 })
+  })
+
+  it('scopes items to the vehicle types whose cell is filled', () => {
+    const { template, stats } = buildTemplateFromRows(VEHICLE_ROWS)
+    expect(stats.vehicleTypes).toEqual(expect.arrayContaining(['MP', 'TM', 'BH']))
+    expect(stats.vehicleScopedItems).toBe(3)
+
+    const interval = template.fields.find((f) => f.label === 'Inspection interval')
+    const vehicle = template.fields.find((f) => f.label === 'Vehicle type')
+    expect(vehicle).toBeTruthy()
+    expect(vehicle.options).toEqual(expect.arrayContaining([
+      'Concrete Pump (MP)', 'Transit Mixer (TM)', 'Bus / Heavy (BH)',
+    ]))
+
+    const wearRing = template.fields.find((f) => f.label === 'Wear Ring') // MP only, Semi-annual
+    expect(Array.isArray(wearRing.visibleWhen)).toBe(true)
+    expect(wearRing.visibleWhen).toHaveLength(2)
+
+    // Visible only when BOTH the interval and a matching vehicle type are chosen.
+    const mp = { [interval.id]: 'Semi-annual', [vehicle.id]: 'Concrete Pump (MP)' }
+    expect(isFieldVisible(wearRing, mp)).toBe(true)
+    const tm = { [interval.id]: 'Semi-annual', [vehicle.id]: 'Transit Mixer (TM)' }
+    expect(isFieldVisible(wearRing, tm)).toBe(false)
+    // Right vehicle but wrong interval → still hidden.
+    expect(isFieldVisible(wearRing, { [interval.id]: 'Monthly', [vehicle.id]: 'Concrete Pump (MP)' })).toBe(false)
+
+    // An all-vehicles item (every cell filled) shows for any listed vehicle type.
+    const rearAxle = template.fields.find((f) => f.label === 'Rear Axle')
+    expect(isFieldVisible(rearAxle, { [interval.id]: '4-Yearly', [vehicle.id]: 'Bus / Heavy (BH)' })).toBe(true)
+  })
+
+  it('omits the vehicle selector when no vehicle columns exist', () => {
+    const { template, stats } = buildTemplateFromRows(ROWS)
+    expect(stats.vehicleTypes).toEqual([])
+    expect(template.fields.some((f) => f.label === 'Vehicle type')).toBe(false)
   })
 })

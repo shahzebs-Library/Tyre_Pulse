@@ -42,7 +42,7 @@ export interface ChecklistField {
   min?: number | null
   max?: number | null
   default?: any
-  visibleWhen?: VisibleWhen | null
+  visibleWhen?: VisibleWhen | VisibleWhen[] | null
   weight?: number | null
   passValues?: any[]
 }
@@ -66,7 +66,7 @@ export function blankAnswer(field: ChecklistField): any {
   }
 }
 
-const COND_OPS = ['=', '!=', '>', '>=', '<', '<=', 'includes', 'empty', 'not_empty']
+const COND_OPS = ['=', '!=', '>', '>=', '<', '<=', 'includes', 'in', 'empty', 'not_empty']
 
 export function evalCondition(op: string, actual: any, expected: any): boolean {
   const num = (x: any) => (x === '' || x == null ? NaN : Number(x))
@@ -79,17 +79,25 @@ export function evalCondition(op: string, actual: any, expected: any): boolean {
     case '<=': return num(actual) <= num(expected)
     case 'includes':
       return Array.isArray(actual) ? actual.includes(expected) : String(actual ?? '').includes(String(expected ?? ''))
+    case 'in':
+      return Array.isArray(expected) ? expected.map(String).includes(String(actual ?? '')) : String(actual ?? '') === String(expected ?? '')
     case 'empty':     return actual == null || actual === '' || (Array.isArray(actual) && actual.length === 0)
     case 'not_empty': return !(actual == null || actual === '' || (Array.isArray(actual) && actual.length === 0))
     default: return true
   }
 }
 
+function conditionMet(cond: any, answers: Answers): boolean {
+  if (!cond || !cond.field || !cond.op) return true
+  if (!COND_OPS.includes(cond.op)) return true
+  return evalCondition(cond.op, answers?.[cond.field], cond.value)
+}
+
 export function isFieldVisible(field: ChecklistField, answers: Answers = {}): boolean {
-  const c = field?.visibleWhen
-  if (!c || !c.field || !c.op) return true
-  if (!COND_OPS.includes(c.op)) return true
-  return evalCondition(c.op, answers?.[c.field], c.value)
+  const c: any = field?.visibleWhen
+  if (!c) return true
+  if (Array.isArray(c)) return c.every((cond) => conditionMet(cond, answers))
+  return conditionMet(c, answers)
 }
 
 export function validateAnswer(field: ChecklistField, value: any): string | null {

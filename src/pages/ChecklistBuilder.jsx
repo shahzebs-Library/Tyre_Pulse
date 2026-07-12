@@ -79,19 +79,26 @@ const CONDITION_OPS = [
   { op: '<',          label: 'less than',       needsValue: true },
   { op: '<=',         label: 'at most',         needsValue: true },
   { op: 'includes',   label: 'includes',        needsValue: true },
+  { op: 'in',         label: 'is one of',       needsValue: true },
   { op: 'empty',      label: 'is empty',        needsValue: false },
   { op: 'not_empty',  label: 'is answered',     needsValue: false },
 ]
 const CONDITION_OP_SET = new Set(CONDITION_OPS.map((o) => o.op))
 
 // A short human sentence for a rule, used in the summary row + preview badge.
+// Accepts a single clause or an ANDed array of clauses.
 function describeCondition(rule, fields) {
+  if (Array.isArray(rule)) {
+    const parts = rule.map((r) => describeCondition(r, fields)).filter(Boolean)
+    return parts.join(' and ')
+  }
   if (!rule || !rule.field || !rule.op) return ''
   const ref = (Array.isArray(fields) ? fields : []).find((f) => f && f.id === rule.field)
   const name = String(ref?.label || '').trim() || 'a field'
   const meta = CONDITION_OPS.find((o) => o.op === rule.op)
   const verb = meta?.label || rule.op
-  const val = meta?.needsValue ? ` "${String(rule.value ?? '').trim() || '…'}"` : ''
+  const rawVal = Array.isArray(rule.value) ? rule.value.join(', ') : String(rule.value ?? '')
+  const val = meta?.needsValue ? ` "${rawVal.trim() || '…'}"` : ''
   return `${name} ${verb}${val}`
 }
 
@@ -193,7 +200,12 @@ function ConditionEditor({ field, allFields, onChange }) {
   const sources = (Array.isArray(allFields) ? allFields : []).filter(
     (f) => f && f.id !== field.id && isValueField(f.type),
   )
-  const rule = field.visibleWhen && typeof field.visibleWhen === 'object' ? field.visibleWhen : null
+  // An array visibleWhen is an "advanced" rule (multiple ANDed conditions,
+  // e.g. interval + vehicle type) authored by the import pipeline. The
+  // single-condition editor can't represent it, so we surface a read-only
+  // summary with a Clear button rather than corrupting it.
+  const advanced = Array.isArray(field.visibleWhen) ? field.visibleWhen : null
+  const rule = !advanced && field.visibleWhen && typeof field.visibleWhen === 'object' ? field.visibleWhen : null
   const enabled = !!rule
 
   const refField = rule ? sources.find((f) => f.id === rule.field) : null
@@ -207,6 +219,46 @@ function ConditionEditor({ field, allFields, onChange }) {
     onChange({ ...field, visibleWhen: { field: first ? first.id : '', op: '=', value: '' } })
   }
   const clear = () => onChange({ ...field, visibleWhen: null })
+
+  // Human-readable summary of an advanced (multi-condition) rule.
+  const describeCond = (c) => {
+    if (!c || !c.field) return null
+    const src = sources.find((f) => f.id === c.field)
+    const name = String(src?.label || c.field || '').trim() || 'field'
+    const opLabel = (CONDITION_OPS.find((o) => o.op === c.op)?.label || c.op || '').toLowerCase()
+    const val = Array.isArray(c.value) ? c.value.join(', ') : (c.value ?? '')
+    return `${name} ${opLabel}${val !== '' ? ` "${val}"` : ''}`
+  }
+
+  if (advanced) {
+    return (
+      <div className="p-2.5 rounded-lg bg-[var(--surface-1)] border border-[var(--border-dim)]">
+        <div className="flex items-center justify-between gap-2">
+          <span className="flex items-center gap-1.5 text-[11px] font-semibold text-[var(--text-muted)] uppercase tracking-wider">
+            <Filter className="w-3.5 h-3.5" /> Conditional visibility · Advanced
+          </span>
+          <button
+            type="button"
+            onClick={clear}
+            className="text-[11px] font-semibold text-[var(--text-muted)] hover:text-red-400 transition-colors"
+          >
+            Clear
+          </button>
+        </div>
+        <p className="text-[11px] text-[var(--text-muted)] mt-1.5">
+          Shown only when <span className="font-semibold text-[var(--text-secondary)]">all</span> of:
+        </p>
+        <ul className="mt-1 space-y-0.5">
+          {advanced.map((c, i) => (
+            <li key={i} className="text-[11px] text-[var(--text-secondary)] flex items-start gap-1.5">
+              <span className="text-[var(--brand-bright)] mt-px">•</span>
+              <span>{describeCond(c) || 'condition'}</span>
+            </li>
+          ))}
+        </ul>
+      </div>
+    )
+  }
 
   // Value choices when the referenced field constrains its answers.
   let valueChoices = null
@@ -514,7 +566,7 @@ function FieldRow({ field, index, total, expanded, error, allFields, scored, onT
                 • <Link2 className="w-2.5 h-2.5" /> live data
               </span>
             )}
-            {field.visibleWhen && field.visibleWhen.field && (
+            {(Array.isArray(field.visibleWhen) ? field.visibleWhen.length > 0 : field.visibleWhen && field.visibleWhen.field) && (
               <span className="inline-flex items-center gap-1 text-[var(--brand-bright)]">
                 • <Filter className="w-2.5 h-2.5" /> conditional
               </span>
@@ -836,7 +888,9 @@ function FieldLibraryPanel({ onAdd }) {
 // ─── Runtime preview of one field ─────────────────────────────────────────────
 
 function ConditionalBadge({ field, allFields }) {
-  if (!field?.visibleWhen || !field.visibleWhen.field) return null
+  const vw = field?.visibleWhen
+  const hasRule = Array.isArray(vw) ? vw.length > 0 : !!(vw && vw.field)
+  if (!hasRule) return null
   return (
     <span
       className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-medium bg-brand-subtle text-[var(--brand-bright)] max-w-full"
@@ -968,7 +1022,7 @@ function PreviewField({ field, allFields, scored }) {
           <Camera className="w-3 h-3" /> Photo attachment allowed
         </p>
       )}
-      {field.visibleWhen && field.visibleWhen.field && (
+      {(Array.isArray(field.visibleWhen) ? field.visibleWhen.length > 0 : field.visibleWhen && field.visibleWhen.field) && (
         <div className="mt-1.5">
           <ConditionalBadge field={field} allFields={allFields} />
         </div>
@@ -1247,21 +1301,32 @@ export default function ChecklistBuilder() {
   )
 
   // ── Persistence ──
-  // Sanitize a conditional-visibility rule; returns null when incomplete/invalid.
-  const sanitizeVisibleWhen = (f, allFields) => {
-    const c = f?.visibleWhen
-    if (!c || typeof c !== 'object' || !c.field || !c.op) return null
+  // Sanitize a single conditional-visibility clause; null when incomplete/invalid.
+  const sanitizeClause = (c, f, allFields) => {
+    if (!c || typeof c !== 'object' || Array.isArray(c) || !c.field || !c.op) return null
     if (!CONDITION_OP_SET.has(c.op)) return null
     // Guard against self-reference and dangling ids.
     if (c.field === f.id) return null
     const ref = (Array.isArray(allFields) ? allFields : []).find((x) => x && x.id === c.field)
     if (!ref) return null
     const meta = CONDITION_OPS.find((o) => o.op === c.op)
-    return {
-      field: c.field,
-      op: c.op,
-      value: meta && meta.needsValue ? String(c.value ?? '') : '',
+    if (!meta || !meta.needsValue) return { field: c.field, op: c.op, value: '' }
+    // The `in` operator carries an array of accepted values; others a scalar.
+    const value = c.op === 'in'
+      ? (Array.isArray(c.value) ? c.value.map((v) => String(v)) : [String(c.value ?? '')])
+      : String(c.value ?? '')
+    return { field: c.field, op: c.op, value }
+  }
+
+  // Sanitize a field's visibleWhen — a single clause or an ANDed array of them.
+  const sanitizeVisibleWhen = (f, allFields) => {
+    const c = f?.visibleWhen
+    if (Array.isArray(c)) {
+      const clauses = c.map((x) => sanitizeClause(x, f, allFields)).filter(Boolean)
+      if (clauses.length === 0) return null
+      return clauses.length === 1 ? clauses[0] : clauses
     }
+    return sanitizeClause(c, f, allFields)
   }
 
   // ── Load guards (edit mode starts with a null draft until the fetch lands) ──

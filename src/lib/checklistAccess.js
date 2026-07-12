@@ -21,6 +21,7 @@ export const CHECKLIST_PATH_PREFIXES = [
   '/checklist-builder',
   '/checklist-schedules',
   '/checklist-insights',
+  '/help',
   '/profile',
 ]
 

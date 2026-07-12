@@ -16,7 +16,7 @@ describe('checklist-only access rules', () => {
     for (const p of [
       '/checklists', '/checklists/abc/run', '/checklists/submission/x',
       '/my-checklists', '/checklist-builder', '/checklist-builder/t1',
-      '/checklist-schedules', '/checklist-insights', '/profile',
+      '/checklist-schedules', '/checklist-insights', '/help', '/profile',
     ]) expect(isChecklistPathAllowed(p)).toBe(true)
 
     for (const p of ['/', '/tyres', '/analytics', '/accidents', '/stock', '/users', '/checklistX', '/settings']) {

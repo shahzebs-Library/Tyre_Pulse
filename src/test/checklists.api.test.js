@@ -27,7 +27,8 @@ const h = vi.hoisted(() => {
     from() {
       return {
         upload(path, file, opts) { state.storage.upload = { path, file, opts }; return Promise.resolve({ data: { path }, error: null }) },
-        getPublicUrl(path) { state.storage.publicPath = path; return { data: { publicUrl: `https://cdn.test/${path}` } } },
+        getPublicUrl(path) { state.storage.publicPath = path; return { data: { publicUrl: `https://cdn.test/storage/v1/object/public/tyre-photos/${path}` } } },
+        createSignedUrl(path, ttl) { state.storage.signed = { path, ttl }; return Promise.resolve({ data: { signedUrl: `https://cdn.test/signed/${path}?token=abc` }, error: null }) },
       }
     },
   }
@@ -89,10 +90,29 @@ describe('checklists service layer', () => {
     const file = { name: 'shot.JPG', type: 'image/jpeg' }
     const url = await cl.uploadChecklistPhoto(file, { prefix: 'sub1_fieldA' })
     expect(h.state.storage.upload.path).toMatch(/^checklists\/sub1_fieldA\/\d+_[a-z0-9]+\.jpg$/)
-    expect(url).toMatch(/^https:\/\/cdn\.test\/checklists\/sub1_fieldA\//)
+    expect(url).toMatch(/\/tyre-photos\/checklists\/sub1_fieldA\//)
   })
 
   it('uploadChecklistPhoto rejects a missing file', async () => {
     await expect(cl.uploadChecklistPhoto(null, {})).rejects.toThrow(/no file/i)
+  })
+
+  it('getSubmission signs private-bucket photo URLs on read', async () => {
+    h.state.result = {
+      data: {
+        id: 's1', template_id: 't1',
+        photos: { f_10: ['https://cdn.test/storage/v1/object/public/tyre-photos/checklists/s1_f10/1.jpg'] },
+      },
+      error: null,
+    }
+    const out = await cl.getSubmission('s1')
+    expect(out.photos.f_10[0]).toBe('https://cdn.test/signed/checklists/s1_f10/1.jpg?token=abc')
+    expect(h.state.storage.signed.path).toBe('checklists/s1_f10/1.jpg')
+  })
+
+  it('signChecklistPhotoUrl leaves data URLs untouched and signs paths', async () => {
+    expect(await cl.signChecklistPhotoUrl('data:image/png;base64,AAAA')).toBe('data:image/png;base64,AAAA')
+    expect(await cl.signChecklistPhotoUrl('tp-storage://tyre-photos/checklists/a.jpg'))
+      .toBe('https://cdn.test/signed/checklists/a.jpg?token=abc')
   })
 })

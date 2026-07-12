@@ -17,7 +17,7 @@ import {
   Target, ShoppingCart, HeartPulse, RefreshCw, Clock, Gauge, Fuel,
   RotateCcw, AlertCircle, ArrowLeftRight, FileWarning, LayoutGrid, Coffee,
   Recycle, Radio, PackagePlus, CalendarCheck2, BellRing, Brain, BarChart, Download,
-  Webhook, CheckSquare, CreditCard, Palette,
+  Webhook, CheckSquare, CreditCard, Palette, LifeBuoy,
 } from 'lucide-react'
 // Branded domain icons (custom Tyre Pulse set) for the clearest fleet/tyre nav
 // items. Same ({ size, strokeWidth }) API as Lucide, so they drop straight in.
@@ -210,6 +210,7 @@ const NAV_GROUPS = [
       { to: '/tenant-health',    label: 'Usage & Adoption',   icon: BarChart, adminOnly: true },
       { to: '/billing',          label: 'Billing & Subscription', icon: CreditCard, adminOnly: true, flag: 'billing' },
       { to: '/brand-assets',     label: 'Brand Assets',       icon: Palette, adminOnly: true },
+      { to: '/help',             label: 'Help & Support',     icon: LifeBuoy },
       { to: '/settings',         label: 'Settings',           icon: Settings },
     ],
   },

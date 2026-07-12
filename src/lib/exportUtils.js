@@ -1467,6 +1467,18 @@ export async function exportChecklistSubmissionPdf(submission = {}, opts = {}) {
 
   const photoCount = (id) => (Array.isArray(photos[id]) ? photos[id].length : 0)
 
+  // Does this field carry a captured answer (or photos)? Empty optional fields
+  // are omitted so the report shows only what was actually filled — not every
+  // hidden/inapplicable point in a large interval-driven template.
+  const hasContent = (f) => {
+    const id = f?.id
+    if (photoCount(id) > 0) return true
+    const raw = id != null ? answers[id] : undefined
+    if (Array.isArray(raw)) return raw.length > 0
+    if (typeof raw === 'boolean') return true
+    return raw != null && String(raw).trim() !== ''
+  }
+
   // Render one field's captured value into a display string. Never throws.
   const valueOf = (f) => {
     const id  = f?.id
@@ -1508,10 +1520,19 @@ export async function exportChecklistSubmissionPdf(submission = {}, opts = {}) {
   doc.text(String(submission.status || 'submitted').toUpperCase().slice(0, 12), pw - mx - 17, y + 9.5, { align: 'center' })
   y += 21
 
+  // Header context can also live in the answers (asset/site reference fields)
+  // when the submission row didn't denormalise it — fall back to those.
+  const answerByType = (t) => {
+    const f = fields.find((x) => x && x.type === t && answers[x.id] != null && String(answers[x.id]).trim() !== '')
+    return f ? String(answers[f.id]) : ''
+  }
+  const headerAsset = submission.asset_no || answerByType('asset')
+  const headerSite = submission.site || answerByType('site')
+
   // ── Meta grid (2-col) ───────────────────────────────────────────────────────
   const metaL = [
-    ['Asset', dash(submission.asset_no)],
-    ['Site', dash(submission.site)],
+    ['Asset', dash(headerAsset)],
+    ['Site', dash(headerSite)],
     ['Country', dash(submission.country)],
   ]
   const metaR = [
@@ -1557,6 +1578,7 @@ export async function exportChecklistSubmissionPdf(submission = {}, opts = {}) {
 
   let sectionLabel = 'Responses'
   let rows = []
+  let renderedCount = 0
   for (const f of fields) {
     if (!f) continue
     if (f.type === 'section') {
@@ -1566,9 +1588,24 @@ export async function exportChecklistSubmissionPdf(submission = {}, opts = {}) {
       continue
     }
     if (f.type === 'signature') continue // rendered separately below
+    // Show only points that were actually answered (or carry photos). This drops
+    // the 170+ inapplicable "-" rows a large interval/vehicle-driven template
+    // produces, while never hiding a captured answer — even one whose item is now
+    // conditionally hidden. Unanswered but still-visible points are omitted too.
+    if (!hasContent(f)) continue
     rows.push([String(f.label || f.id || '-'), valueOf(f)])
+    renderedCount++
   }
   flush(sectionLabel, rows)
+
+  // If nothing matched (e.g. a legacy submission without template fields), fall
+  // back to listing whatever answers exist so the report is never blank.
+  if (renderedCount === 0) {
+    const fallback = fields
+      .filter((f) => f && f.type !== 'section' && f.type !== 'signature' && hasContent(f))
+      .map((f) => [String(f.label || f.id || '-'), valueOf(f)])
+    flush('Responses', fallback)
+  }
 
   // ── Photos ──────────────────────────────────────────────────────────────────
   // Fetch each captured public image and embed it in a captioned grid. Fully

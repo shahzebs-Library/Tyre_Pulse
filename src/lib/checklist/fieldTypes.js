@@ -165,7 +165,7 @@ export function newField(type = 'text') {
   }
 }
 
-const COND_OPS = ['=', '!=', '>', '>=', '<', '<=', 'includes', 'empty', 'not_empty']
+const COND_OPS = ['=', '!=', '>', '>=', '<', '<=', 'includes', 'in', 'empty', 'not_empty']
 
 /** Compare a value against a condition operator. Pure, null-safe. */
 export function evalCondition(op, actual, expected) {
@@ -179,22 +179,35 @@ export function evalCondition(op, actual, expected) {
     case '<':  return num(a) < num(e)
     case '<=': return num(a) <= num(e)
     case 'includes': return Array.isArray(a) ? a.includes(e) : String(a ?? '').includes(String(e ?? ''))
+    // The answer (a single value) is one of the expected set (array). Used for
+    // "this check applies to vehicle types X/Y/Z".
+    case 'in': return Array.isArray(e) ? e.map(String).includes(String(a ?? '')) : String(a ?? '') === String(e ?? '')
     case 'empty':     return a == null || a === '' || (Array.isArray(a) && a.length === 0)
     case 'not_empty': return !(a == null || a === '' || (Array.isArray(a) && a.length === 0))
     default: return true
   }
 }
 
+// A single {field,op,value} rule. Fails open (visible) if malformed.
+function conditionMet(cond, answers) {
+  if (!cond || !cond.field || !cond.op) return true
+  if (!COND_OPS.includes(cond.op)) return true
+  return evalCondition(cond.op, answers?.[cond.field], cond.value)
+}
+
 /**
- * Is a field currently visible given the answers so far? A field with no
- * `visibleWhen` is always visible. An invalid/incomplete rule fails open
- * (visible) so a misconfigured template never hides everything.
+ * Is a field currently visible given the answers so far? `visibleWhen` may be:
+ *   null                       → always visible
+ *   { field, op, value }       → single condition
+ *   [ {…}, {…}, … ]            → ALL conditions must hold (AND)
+ * A malformed/incomplete rule fails open so a misconfigured template never hides
+ * everything.
  */
 export function isFieldVisible(field, answers = {}) {
   const c = field?.visibleWhen
-  if (!c || !c.field || !c.op) return true
-  if (!COND_OPS.includes(c.op)) return true
-  return evalCondition(c.op, answers?.[c.field], c.value)
+  if (!c) return true
+  if (Array.isArray(c)) return c.every((cond) => conditionMet(cond, answers))
+  return conditionMet(c, answers)
 }
 
 /**

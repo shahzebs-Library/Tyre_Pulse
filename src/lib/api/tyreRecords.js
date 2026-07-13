@@ -64,6 +64,29 @@ export function listAllRecords({ search, siteFilter, brandFilter, riskFilter, co
   })
 }
 
+/**
+ * Tyre records for the Fleet-Actuals TCO engine: the cost + odometer + status
+ * columns needed to derive per-asset actual TCO / cost-per-km, NULL-inclusive
+ * country-scoped, paged (drives `fetchAllPages`). Explicit column list
+ * (least-privilege). vehicle_type is joined page-side from `listTcoFleet()`
+ * rather than via a PostgREST embed, so no FK relationship is assumed.
+ * @param {{country?:string, from:number, to:number}} opts
+ */
+export function listTcoActualRecords({ country, from, to } = {}) {
+  const q = supabase
+    .from('tyre_records')
+    .select('id,asset_no,brand,size,position,status,category,cost_per_tyre,qty,km_at_fitment,km_at_removal,total_km,fitment_date,removal_date,issue_date,site,country')
+    .order('issue_date', { ascending: false })
+    .order('id', { ascending: true })
+    .range(from, to)
+  return applyCountry(q, country)
+}
+
+/** Fleet roster (asset_no → vehicle_type + active state) for the TCO join / active-vehicle count. */
+export function listTcoFleet() {
+  return supabase.from('vehicle_fleet').select('asset_no,vehicle_type,make,model,status,is_active')
+}
+
 /** Update a single tyre record by id. */
 export function updateRecord(id, payload) {
   return supabase.from('tyre_records').update(payload).eq('id', id)

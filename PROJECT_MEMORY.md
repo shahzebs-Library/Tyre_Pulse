@@ -43,6 +43,19 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
 - Security: URL fields go through `src/lib/safeUrl.js` (safeHref/safeImageSrc); user-facing errors
   via `src/lib/safeError.js` (toUserMessage). CSV export sanitized in `exportUtils.js`.
 
+## Claims & scheduled reporting (2026-07-13)
+- **Accident-embedded claims** are the operational claim source (accidents table: claim_amount/
+  claim_approved_amount/deductible/recovered_amount/insurer/policy_no/claim_status + case fields
+  gcc_liability_ratio/fault_status/najm_status/taqdeer_status/expected_release_date/release_date).
+- Single claims engine `src/lib/claimsAnalytics.js` (`analyzeClaims`, `hasClaim`, `isClosed`,
+  `isDelayed`, `claimNet`) powers ALL three claims surfaces — do NOT re-implement the maths:
+  1. `ClaimsSummary.jsx` (/claims-summary) — chart dashboard + PDF/Excel export.
+  2. Accidents page "Claims Summary" one-click PDF/Excel export.
+  3. Scheduled `claims` report type in `scheduledReports.js` → claims-desk email digest in edge fn
+     `send-scheduled-reports` (deployed v10; branches on report_type==='claims', org-scoped manually).
+- `fetchReportRows` honours a per-dataset `orFilter` (claims uses it to fetch claim rows only).
+- Full suite 3384 green. No new migration this session (V213 remains the latest; next free V214).
+
 ## Status (2026-07-13)
 - 88 modules ported from fleet_IQ/tyre_saas (batches 1–19). Migrations V127–V206.
 - Full security remediation applied (V202) + Holding Company (V201) + SSO last-mile (Login signInWithSSO).

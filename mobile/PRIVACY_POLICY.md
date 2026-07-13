@@ -1,15 +1,15 @@
 # Privacy Policy — TyrePulse Inspector
 
-**Last updated: [DATE]**
+**Last updated: 13 July 2026**
 
-This Privacy Policy explains how **[Company Legal Name]** ("we", "us", "the
-Company") collects, uses, and protects information in the **TyrePulse Inspector**
-mobile application ("the App"). TyrePulse Inspector is an internal workforce tool
+This Privacy Policy explains how the **independent developer of TyrePulse
+Inspector** ("we", "us") collects, uses, and protects information in the
+**TyrePulse Inspector** mobile application ("the App"). TyrePulse Inspector is an internal workforce tool
 used by fleet operators to record tyre inspections, meter readings, stock counts,
 and accident reports. Accounts are provisioned by your organization's
 administrator; the App is not intended for the general public or for children.
 
-If you have questions, contact us at **[privacy@yourcompany.com]**.
+If you have questions, contact us at **info@tyrepulse.app**.
 
 ---
 
@@ -91,9 +91,9 @@ law. Diagnostic data is retained for a limited period per our provider's default
 ## 6. Your rights & data deletion
 Because accounts are managed by your organization:
 - To **access or correct** your information, contact your fleet administrator or
-  us at **[privacy@yourcompany.com]**.
+  us at **info@tyrepulse.app**.
 - To **request deletion** of your account and associated personal data, email
-  **[privacy@yourcompany.com]** with your name and organization. We will action
+  **info@tyrepulse.app** with your name and organization. We will action
   the request subject to legal and legitimate business retention requirements.
 
 Depending on your location, you may have additional rights (e.g. under GDPR or
@@ -115,6 +115,5 @@ organization.
 ---
 
 ## 9. Contact
-**[Company Legal Name]**
-[Address, City, Country]
-Email: **[privacy@yourcompany.com]**
+**TyrePulse Inspector** — independent developer
+Email: **info@tyrepulse.app**

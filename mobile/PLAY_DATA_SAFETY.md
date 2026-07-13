@@ -4,7 +4,7 @@ Copy these into **Play Console → App content → Data safety**. Answers are ba
 on what the app actually does (auth, GPS-tagged inspections, photos, push
 notifications, Sentry crash reporting). No ads SDK, no third-party analytics.
 
-> Fill the bracketed placeholders `[…]` with your details before submitting.
+> Contact, demo login, and hosted URLs are already filled in below. Ready to copy.
 
 ---
 
@@ -14,7 +14,7 @@ notifications, Sentry crash reporting). No ads SDK, no third-party analytics.
 |---|---|
 | Does your app collect or share any of the required user data types? | **Yes** |
 | Is all of the user data collected by your app encrypted in transit? | **Yes** (HTTPS/TLS to Supabase, Sentry, Expo) |
-| Do you provide a way for users to request that their data is deleted? | **Yes** — via request (see Privacy Policy "Data deletion"). Accounts are created/removed by the fleet administrator; users can also email `[privacy@yourcompany.com]`. |
+| Do you provide a way for users to request that their data is deleted? | **Yes** — via request (see Privacy Policy "Data deletion"). Accounts are created/removed by the fleet administrator; users can also email `info@tyrepulse.app`. |
 
 **Data collection is required** to use the app (it is an internal, account-based
 fleet tool — there is no anonymous/guest mode).
@@ -77,7 +77,7 @@ Search history · Installed apps · Ads / marketing IDs (no advertising).
 
 ## 3. Security practices (Data safety → Security section)
 - **Data is encrypted in transit:** Yes (TLS 1.2+).
-- **Users can request data deletion:** Yes — admin-managed + `[privacy@yourcompany.com]`.
+- **Users can request data deletion:** Yes — admin-managed + `info@tyrepulse.app`.
 - **Committed to Play Families Policy:** No (not a children's app; workforce tool, 18+).
 - **Independent security review:** optional — leave unless you have one.
 
@@ -88,11 +88,12 @@ This app **requires sign-in** (no public sign-up — accounts are provisioned by
 the fleet administrator). Google's review team needs working credentials:
 
 - **All or some functionality is restricted:** choose "All functionality is restricted."
-- Provide a demo login:
-  - Username **or** Employee ID: `[demo employee id]`
-  - Password: `[demo password]`
-  - Any instructions: "Log in with the demo account; the Home screen exposes New Inspection, Scan, Checklists, Meter Log, etc."
-- Create a dedicated, low-privilege demo account (e.g. an Inspector role) for this.
+- Demo login (already created — a low-privilege Inspector account on live data):
+  - Username **or** Employee ID: `playdemo`  (or `DEMO-001`)
+  - Password: `TyreDemo!2026`
+  - Instructions: "Enter the username and password on the login screen. The Home
+    screen exposes New Inspection, Scan Asset, Checklists, Meter Log, Tyre
+    Records and Accident reporting."
 
 ---
 
@@ -104,7 +105,12 @@ the fleet administrator). Google's review team needs working credentials:
 
 ---
 
-## 6. Privacy policy URL (required)
-Host `PRIVACY_POLICY.md` (in this folder) on a public URL you own and paste it in
-**Store settings → Privacy Policy** and in the Data safety form. It must be
-reachable without login. A GitHub Pages / your-domain page is fine.
+## 6. Privacy policy & data-deletion URLs (required)
+Hosted via GitHub Pages from `/docs` on `main`. Enable once:
+**Settings → Pages → Deploy from a branch → `main` / `/docs`**. Then:
+- Privacy Policy: `https://shahzebs-library.github.io/tyre_pulse/privacy.html`
+- Account & Data Deletion: `https://shahzebs-library.github.io/tyre_pulse/delete-account.html`
+
+Paste the privacy URL into **Store settings → Privacy Policy** and the Data
+safety form; put the deletion URL in Data safety's "data deletion" field. Both
+must be reachable without login.

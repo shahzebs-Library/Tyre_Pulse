@@ -8,6 +8,7 @@
  * alertThresholds.js.
  */
 import { supabase, unwrap } from './_client'
+import { isActiveDelegation } from '../approvalDelegations'
 
 // Definition columns for the admin builder (list + edit form).
 // Omits created_by (write-time scoping only).
@@ -150,6 +151,88 @@ export async function listDefinitionsForEntity(entityType) {
  */
 export async function myPendingApprovals() {
   return unwrap(await supabase.rpc('my_pending_approvals'))
+}
+
+/**
+ * Delegate inbox (enterprise plan §6 — acting approver): pending instances the
+ * current user may act on BECAUSE an active delegation names them as the
+ * delegate of an approver. Returned SEPARATELY from `myPendingApprovals` (that
+ * RPC is an opaque server evaluation — a safe in-query union isn't possible), so
+ * this is strictly additive: the original inbox is untouched and callers opt in.
+ *
+ * Fully defensive: any failure (table `approval_delegations` not provisioned,
+ * RLS blocking a non-admin from reading org-wide pending instances, an auth gap)
+ * degrades to an empty array — never to a thrown error — so existing behaviour
+ * is preserved wherever this is called.
+ *
+ * Matching model: the V95 engine gates each step by `approver_role`, while a
+ * delegation is user→user. So a delegated instance is one whose current step's
+ * `approver_role` equals the ROLE of a delegator who has actively delegated to
+ * me, honouring the delegation's optional `entity_type` scope (null = all types).
+ * Each returned row carries `viaDelegation: true` and the acting-for context.
+ *
+ * @returns {Promise<Array<object>>} pending workflow_instances rows, each tagged
+ *   `{ viaDelegation:true, delegatedFrom:<delegator_id> }`
+ */
+export async function myDelegatedApprovals() {
+  try {
+    const { data: userData } = await supabase.auth.getUser()
+    const uid = userData?.user?.id
+    if (!uid) return []
+
+    // Active delegations naming me as the delegate.
+    const delegations =
+      unwrap(
+        await supabase
+          .from('approval_delegations')
+          .select('id,delegator_id,delegate_id,entity_type,active,starts_at,ends_at')
+          .eq('delegate_id', uid),
+      ) || []
+    const nowMs = Date.now()
+    const active = delegations.filter((d) => isActiveDelegation(d, nowMs))
+    if (!active.length) return []
+
+    // Roles of the delegators — role-based steps are matched by approver_role.
+    const delegatorIds = [...new Set(active.map((d) => d.delegator_id).filter(Boolean))]
+    if (!delegatorIds.length) return []
+    const profiles =
+      unwrap(await supabase.from('profiles').select('id,role').in('id', delegatorIds)) || []
+    const roleById = new Map(
+      profiles.map((p) => [p.id, String(p.role || '').toLowerCase()]),
+    )
+
+    // Pending instances in the org (RLS-scoped). Match each to a delegation whose
+    // delegator holds the approver_role of the instance's current step, within
+    // the delegation's entity_type scope.
+    const pending =
+      unwrap(
+        await supabase
+          .from('workflow_instances')
+          .select(INSTANCE_COLS)
+          .eq('status', 'pending')
+          .order('started_at', { ascending: false })
+          .limit(200),
+      ) || []
+
+    const out = []
+    for (const inst of pending) {
+      const steps = Array.isArray(inst.steps) ? inst.steps : []
+      const idx = Math.min(
+        Math.max(inst.current_step ?? 0, 0),
+        Math.max(steps.length - 1, 0),
+      )
+      const stepRole = String(steps[idx]?.approver_role || '').toLowerCase()
+      if (!stepRole) continue
+      const match = active.find((d) => {
+        if (d.entity_type && d.entity_type !== inst.entity_type) return false
+        return roleById.get(d.delegator_id) === stepRole
+      })
+      if (match) out.push({ ...inst, viaDelegation: true, delegatedFrom: match.delegator_id })
+    }
+    return out
+  } catch {
+    return []
+  }
 }
 
 /**

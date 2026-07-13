@@ -287,6 +287,7 @@ const NAV_GROUPS = [
       { to: '/approvals',         label: 'Approvals',          icon: CheckSquare, roles: ANALYTICS_ROLES, flag: 'automation_platform' },
       { to: '/events',            label: 'Event Stream',       icon: Radio, adminOnly: A, flag: 'automation_platform' },
       { to: '/workflow-settings', label: 'Approval Workflows', icon: GitBranch, adminOnly: A, flag: 'automation_platform' },
+      { to: '/approval-delegations', label: 'Approval Delegations', icon: ArrowLeftRight, flag: 'automation_platform' },
       { to: '/automation-rules',  label: 'Automation Rules',   icon: Zap, adminOnly: A, flag: 'automation_platform' },
       { to: '/integrations',      label: 'API & Webhooks',     icon: Webhook, adminOnly: A, flag: 'automation_platform' },
     ],

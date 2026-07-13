@@ -137,6 +137,7 @@ const OnboardingWizard       = lazy(() => import('./pages/OnboardingWizard'))
 const SsoConfiguration       = lazy(() => import('./pages/SsoConfiguration'))
 const HoldingCompany         = lazy(() => import('./pages/HoldingCompany'))
 const AdminConsole           = lazy(() => import('./pages/AdminConsole'))
+const ApprovalDelegations    = lazy(() => import('./pages/ApprovalDelegations'))
 const Analytics              = lazy(() => import('./pages/Analytics'))
 const BrandPerformance       = lazy(() => import('./pages/BrandPerformance'))
 const SiteComparison         = lazy(() => import('./pages/SiteComparison'))
@@ -517,6 +518,7 @@ function MainApp() {
                       <Route path="/events"              element={<Safe><FlagRoute flag="automation_platform"><EventStream /></FlagRoute></Safe>} />
                       <Route path="/approvals"           element={<Safe><FlagRoute flag="automation_platform"><Approvals /></FlagRoute></Safe>} />
                       <Route path="/workflow-settings"   element={<Safe><FlagRoute flag="automation_platform"><WorkflowSettings /></FlagRoute></Safe>} />
+                      <Route path="/approval-delegations" element={<Safe><FlagRoute flag="automation_platform"><ApprovalDelegations /></FlagRoute></Safe>} />
                       <Route path="/automation-rules"    element={<Safe><FlagRoute flag="automation_platform"><AutomationRules /></FlagRoute></Safe>} />
                       <Route path="/integrations"        element={<Safe><FlagRoute flag="automation_platform"><Integrations /></FlagRoute></Safe>} />
                       {/* ── Detail & builder pages (modal→page conversions, Session 15) ── */}

@@ -262,6 +262,7 @@ const NAV_GROUPS = [
       { to: '/tco-calculator',    label: 'TCO Calculator',    icon: Calculator, roles: ANALYTICS_ROLES },
       { to: '/sla-dashboard',     label: 'SLA Dashboard',     icon: Target, adminOnly: A },
       { to: '/taas',              label: 'Tyre-as-a-Service', icon: Repeat, adminOnly: A },
+      { to: '/holding-company',   label: 'Holding Company',   icon: Building2, adminOnly: A },
       { to: '/ops-intelligence',  label: 'Ops Intelligence',  icon: Siren, adminOnly: A },
       { to: '/display',           label: 'TV Display Mode',   icon: Radio, adminOnly: A },
       { to: '/ai-command-center', label: 'AI Command Center', icon: Bot, adminOnly: A },

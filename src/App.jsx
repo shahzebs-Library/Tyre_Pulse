@@ -135,6 +135,7 @@ const OcrScanner             = lazy(() => import('./pages/OcrScanner'))
 const AdvancedSearch         = lazy(() => import('./pages/AdvancedSearch'))
 const OnboardingWizard       = lazy(() => import('./pages/OnboardingWizard'))
 const SsoConfiguration       = lazy(() => import('./pages/SsoConfiguration'))
+const HoldingCompany         = lazy(() => import('./pages/HoldingCompany'))
 const Analytics              = lazy(() => import('./pages/Analytics'))
 const BrandPerformance       = lazy(() => import('./pages/BrandPerformance'))
 const SiteComparison         = lazy(() => import('./pages/SiteComparison'))
@@ -494,6 +495,7 @@ function MainApp() {
                       <Route path="/advanced-search"       element={<Safe><AdvancedSearch /></Safe>} />
                       <Route path="/onboarding-wizard"     element={<Safe><OnboardingWizard /></Safe>} />
                       <Route path="/sso-configuration"     element={<Safe><SsoConfiguration /></Safe>} />
+                      <Route path="/holding-company"       element={<Safe><RoleRoute allowed={['Admin','Manager','Director']}><HoldingCompany /></RoleRoute></Safe>} />
                       <Route path="/scan"        element={<Safe><TyreScan /></Safe>} />
                       <Route path="/qr-labels"   element={<Safe><QrLabels /></Safe>} />
                       {/* ── Platform (roadmap tranche: pages self-gate their roles) ── */}

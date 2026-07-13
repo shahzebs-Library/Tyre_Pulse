@@ -12,12 +12,16 @@
 import { supabase, applyCountry, fetchAllPages, ServiceError } from './_client'
 
 const TYRE_COLS =
-  'id,serial_no,serial_number,tyre_serial,brand,size,asset_no,site,country,' +
-  'tread_depth,cost_per_tyre,total_km,fitment_date,issue_date,removal_date,' +
-  'reason_for_removal,removal_reason,status'
+  'id,serial_no,serial_number,tyre_serial,brand,size,asset_no,site,position,country,' +
+  'tread_depth,pressure_reading,cost_per_tyre,total_km,km_at_fitment,km_at_removal,' +
+  'fitment_date,issue_date,removal_date,reason_for_removal,removal_reason,status,current_status'
 
 const WO_COLS =
-  'id,work_order_no,asset_no,site,status,priority,created_at,country'
+  'id,work_order_no,asset_no,site,status,priority,created_at,scheduled_date,due_date,completed_date,country'
+
+// Least-privilege reads for the Pulse layer (added additively).
+const INSPECTION_COLS = 'id,asset_no,tyre_serial,inspection_date,scheduled_date,completed_date,country'
+const BUDGET_COLS = 'id,site,monthly_budget,year,month,country'
 
 const isMissingTable = (error) => {
   const msg = (error?.message || '').toLowerCase()
@@ -61,14 +65,77 @@ export async function listWorkOrdersForOps({ country } = {}) {
 }
 
 /**
- * Convenience loader: fetch both datasets concurrently for the page. Returns the
- * raw rows; the page feeds them to `buildExceptions` with a live clock.
- * @returns {Promise<{ tyres: object[], workOrders: object[] }>}
+ * Inspections in scope for the Pulse layer (asset-level recency). Guarded so a
+ * missing `inspections` table degrades to [] rather than failing the page.
+ */
+export async function listInspectionsForOps({ country } = {}) {
+  const { data, error } = await fetchAllPages((from, to) => {
+    const q = supabase
+      .from('inspections')
+      .select(INSPECTION_COLS)
+      .order('inspection_date', { ascending: false, nullsFirst: false })
+      .order('id', { ascending: true })
+      .range(from, to)
+    return applyCountry(q, country)
+  })
+  if (error) {
+    if (isMissingTable(error)) return []
+    throw new ServiceError(error.message, error.code, error)
+  }
+  return data || []
+}
+
+/**
+ * Budget rows for a given year (defaults to current). Guarded: absent `budgets`
+ * table → [] so the Financial panel degrades to an honest empty state.
+ */
+export async function listBudgetsForOps({ country, year = new Date().getFullYear() } = {}) {
+  const { data, error } = await fetchAllPages((from, to) => {
+    const q = supabase
+      .from('budgets')
+      .select(BUDGET_COLS)
+      .eq('year', year)
+      .order('id', { ascending: true })
+      .range(from, to)
+    return applyCountry(q, country)
+  })
+  if (error) {
+    if (isMissingTable(error)) return []
+    throw new ServiceError(error.message, error.code, error)
+  }
+  return data || []
+}
+
+/**
+ * Active-vehicle count (head-only, no rows transferred). Country-scoped where a
+ * real country is active. Degrades to null on a missing table / error so the
+ * Pulse renders "—" rather than a fabricated zero.
+ */
+export async function countActiveVehicles({ country } = {}) {
+  let q = supabase
+    .from('vehicle_fleet')
+    .select('id', { count: 'exact', head: true })
+    .eq('is_active', true)
+  if (country && country !== 'All') q = q.or(`country.eq.${country},country.is.null`)
+  const { count, error } = await q
+  if (error) return null
+  return count ?? null
+}
+
+/**
+ * Convenience loader: fetch every dataset the page needs concurrently. Returns
+ * the raw rows; the page feeds them to `buildExceptions` / `buildFleetPulse` /
+ * `buildAnomalyFeed` / `buildFinancials` with a live clock. Absent optional
+ * sources degrade to empty ([]/null), never to an error.
+ * @returns {Promise<{ tyres, workOrders, inspections, budgets, activeVehicles }>}
  */
 export async function loadOpsData({ country } = {}) {
-  const [tyres, workOrders] = await Promise.all([
+  const [tyres, workOrders, inspections, budgets, activeVehicles] = await Promise.all([
     listTyresForOps({ country }),
     listWorkOrdersForOps({ country }),
+    listInspectionsForOps({ country }),
+    listBudgetsForOps({ country }),
+    countActiveVehicles({ country }),
   ])
-  return { tyres, workOrders }
+  return { tyres, workOrders, inspections, budgets, activeVehicles }
 }

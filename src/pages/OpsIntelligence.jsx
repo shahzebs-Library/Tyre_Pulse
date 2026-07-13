@@ -1,17 +1,21 @@
 /**
- * OpsIntelligence (route /ops-intelligence) — the Exception Command Center. A
- * fleet-wide operational-exception engine: it scans the existing tyre_records
- * and work_orders data and surfaces everything that needs action now — each
- * exception carrying a severity, a category, the affected asset/tyre, a plain
- * detail line, and a deep-link into the module that resolves it.
+ * OpsIntelligence (route /ops-intelligence) — the Operations Intelligence Center.
  *
- * All exceptions are REAL — derived from live data by the pure, unit-tested
- * `src/lib/opsIntelligence.js`. No mock rows: when the fleet is clean the board
- * shows an honest "all clear" empty state. The heavy read lives behind
- * `src/lib/api/opsIntelligence.js`; banding for tyre age is shared with the Tyre
- * Age Compliance module.
+ * Two layers, both driven entirely by REAL data (no mock rows):
+ *  1. Fleet Health Pulse (restored from tyre_saas): a fleet-wide health score,
+ *     a live Pulse KPI grid, a severity-sorted anomaly feed, a partial-but-honest
+ *     financial panel and an executive headline strip.
+ *  2. Exception Command Center: the existing cross-cutting scan of tyre_records +
+ *     work_orders, surfacing every issue that needs action now, ranked by severity.
+ *
+ * All intelligence is derived by the pure, unit-tested `src/lib/opsIntelligence.js`.
+ * Where a source signal is absent in this schema (no alerts table, no axle /
+ * retread / TPMS data, no retread-savings / claims / emergency-premium columns),
+ * the UI says so honestly instead of fabricating a number. The heavy read lives
+ * behind `src/lib/api/opsIntelligence.js`; absent optional tables degrade to
+ * empty. Auto-refreshes every 30s (cleared on unmount) with a manual refresh too.
  */
-import { useState, useEffect, useMemo, useCallback } from 'react'
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   Chart as ChartJS, CategoryScale, LinearScale, BarElement, ArcElement,
@@ -19,18 +23,24 @@ import {
 } from 'chart.js'
 import { Doughnut, Bar } from 'react-chartjs-2'
 import {
-  Siren, AlertTriangle, AlertOctagon, ShieldAlert, Info, Search, X, Filter,
-  FileSpreadsheet, FileText, ArrowUpRight, CheckCircle2, Building2, Layers,
+  Siren, Activity, HeartPulse, Gauge, AlertTriangle, AlertOctagon, ShieldAlert,
+  Info, Search, X, Filter, FileSpreadsheet, FileText, ArrowUpRight, CheckCircle2,
+  Building2, Layers, TrendingUp, DollarSign, Truck, Wrench, ClipboardCheck, Zap,
+  Package, Boxes, Wind,
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
 import { useSettings } from '../contexts/SettingsContext'
 import { loadOpsData } from '../lib/api/opsIntelligence'
 import {
-  buildExceptions, summarizeExceptions, SEVERITY_META, CATEGORY_META, CATEGORIES,
+  buildExceptions, summarizeExceptions, buildFleetPulse, buildAnomalyFeed,
+  summarizeAnomalies, buildFinancials, buildExecutiveSummary,
+  SEVERITY_META, CATEGORY_META, CATEGORIES,
 } from '../lib/opsIntelligence'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Tooltip, Legend)
+
+const REFRESH_MS = 30000
 
 // ── Severity styling (dark-card palette, WCAG-safe) ─────────────────────────────
 const SEVERITY_STYLES = {
@@ -47,14 +57,39 @@ const CATEGORY_COLOR = {
   open_work_order: '#3b82f6',
 }
 
-export default function OpsIntelligence() {
-  const { activeCountry } = useSettings()
-  const navigate = useNavigate()
+// Health status → colour tokens.
+const HEALTH_TONE = {
+  critical: { ring: '#ef4444', text: 'text-red-400', label: 'Critical' },
+  warning: { ring: '#f59e0b', text: 'text-amber-400', label: 'Warning' },
+  good: { ring: '#22c55e', text: 'text-green-400', label: 'Healthy' },
+}
+const RISK_TONE = { high: 'text-red-400', medium: 'text-amber-400', low: 'text-green-400' }
+const BUDGET_TONE = {
+  critical: { bar: 'bg-red-500', text: 'text-red-400' },
+  warning: { bar: 'bg-amber-500', text: 'text-amber-400' },
+  on_track: { bar: 'bg-green-500', text: 'text-green-400' },
+  unknown: { bar: 'bg-slate-500', text: 'text-[var(--text-muted)]' },
+}
+const ANOMALY_LABEL = {
+  low_pressure: 'Low pressure',
+  pressure_imbalance: 'Pressure imbalance',
+  cost_outlier: 'Cost outlier',
+  inspection_gap: 'Inspection gap',
+}
 
-  const [data, setData] = useState(null) // { tyres, workOrders } | null
+const fmtMoney = (n) => (n == null ? '—' : Number(n).toLocaleString(undefined, { maximumFractionDigits: 0 }))
+
+export default function OpsIntelligence() {
+  const { activeCountry, activeCurrency } = useSettings()
+  const navigate = useNavigate()
+  const currency = activeCurrency || 'SAR'
+
+  const [data, setData] = useState(null) // { tyres, workOrders, inspections, budgets, activeVehicles } | null
+  const [now, setNow] = useState(() => Date.now())
   const [error, setError] = useState('')
   const [refreshing, setRefreshing] = useState(false)
   const [updatedAt, setUpdatedAt] = useState(null)
+  const timerRef = useRef(null)
 
   const [severityFilter, setSeverityFilter] = useState('all')
   const [categoryFilter, setCategoryFilter] = useState('all')
@@ -66,10 +101,11 @@ export default function OpsIntelligence() {
     try {
       const res = await loadOpsData({ country: activeCountry })
       setData(res)
+      setNow(Date.now())
       setUpdatedAt(new Date())
     } catch (err) {
       setError(err?.message || 'Could not load fleet data.')
-      setData({ tyres: [], workOrders: [] })
+      setData({ tyres: [], workOrders: [], inspections: [], budgets: [], activeVehicles: null })
     } finally {
       setRefreshing(false)
     }
@@ -77,12 +113,24 @@ export default function OpsIntelligence() {
 
   useEffect(() => { load() }, [load])
 
-  // Build the exception feed against a live clock (the lib stays pure).
-  const exceptions = useMemo(
-    () => (data ? buildExceptions(data, { now: Date.now() }) : []),
-    [data],
-  )
+  // 30s auto-refresh — interval cleared on unmount / country change.
+  useEffect(() => {
+    timerRef.current = setInterval(() => { load() }, REFRESH_MS)
+    return () => { if (timerRef.current) clearInterval(timerRef.current) }
+  }, [load])
+
+  // ── Derived intelligence (pure lib, live clock) ─────────────────────────────
+  const exceptions = useMemo(() => (data ? buildExceptions(data, { now }) : []), [data, now])
   const summary = useMemo(() => summarizeExceptions(exceptions), [exceptions])
+
+  const pulse = useMemo(() => (data ? buildFleetPulse(data, { now }) : null), [data, now])
+  const anomalies = useMemo(() => (data ? buildAnomalyFeed(data, { now }) : []), [data, now])
+  const anomalySummary = useMemo(() => summarizeAnomalies(anomalies), [anomalies])
+  const financials = useMemo(() => (data ? buildFinancials(data, { now }) : null), [data, now])
+  const executive = useMemo(
+    () => (pulse ? buildExecutiveSummary({ pulse, anomalies, financials }, { currency }) : null),
+    [pulse, anomalies, financials, currency],
+  )
 
   const siteOptions = useMemo(
     () => [...new Set(exceptions.map((e) => e.site).filter(Boolean))].sort(),
@@ -152,28 +200,39 @@ export default function OpsIntelligence() {
     detail: e.detail,
   }))
 
-  const kpis = [
-    { label: 'Open exceptions', value: summary.total, icon: Siren, tone: 'text-[var(--text-primary)]' },
-    { label: 'High severity', value: summary.bySeverity.high, icon: AlertOctagon, tone: 'text-red-400' },
-    { label: 'Medium severity', value: summary.bySeverity.medium, icon: AlertTriangle, tone: 'text-amber-400' },
-    { label: 'Assets affected', value: summary.affectedAssets, icon: Building2, tone: 'text-blue-400' },
-  ]
-
   const clearFilters = () => { setSeverityFilter('all'); setCategoryFilter('all'); setSiteFilter(''); setSearch('') }
   const hasFilters = severityFilter !== 'all' || categoryFilter !== 'all' || siteFilter || search
   const loading = data === null
+
+  const tone = HEALTH_TONE[pulse?.status] || HEALTH_TONE.good
+  const c = pulse?.counts || {}
+  const budgetTone = BUDGET_TONE[financials?.budgetStatus] || BUDGET_TONE.unknown
+
+  const pulseKpis = [
+    { label: 'Active vehicles', value: c.activeVehicles, icon: Truck, tone: 'text-blue-400' },
+    { label: 'Installed tyres', value: c.installed, icon: Boxes, tone: 'text-[var(--text-primary)]' },
+    { label: 'In stock', value: c.inStock, icon: Package, tone: 'text-[var(--text-primary)]' },
+    { label: 'Low pressure', value: c.lowPressure, icon: Wind, tone: c.lowPressure > 0 ? 'text-red-400' : 'text-green-400' },
+    { label: 'Low tread', value: c.lowTread, icon: Gauge, tone: c.lowTread > 0 ? 'text-red-400' : 'text-green-400' },
+    { label: 'Overdue inspection', value: c.overdueInspection, icon: ClipboardCheck, tone: c.overdueInspection > 0 ? 'text-amber-400' : 'text-green-400' },
+    { label: 'Urgent WOs', value: c.urgentWorkOrders, icon: Zap, tone: c.urgentWorkOrders > 0 ? 'text-amber-400' : 'text-green-400' },
+    { label: 'Open WOs', value: c.openWorkOrders, icon: Wrench, tone: 'text-[var(--text-primary)]' },
+  ]
 
   return (
     <div className="space-y-6">
       <PageHeader
         title="Ops Intelligence"
-        subtitle="Exception Command Center — a live, cross-cutting scan of the fleet surfacing every tyre and work-order issue that needs action now, ranked by severity."
-        icon={Siren}
+        subtitle="Operations Intelligence Center — a live Fleet Health Pulse, anomaly feed, financial view and executive strip, above a cross-cutting exception scan of every tyre and work-order issue that needs action now."
+        icon={Activity}
         onRefresh={load}
         refreshing={refreshing}
         updatedAt={updatedAt}
         actions={
           <div className="flex items-center gap-2">
+            <span className="hidden md:inline-flex items-center gap-1.5 text-[11px] text-[var(--text-muted)] px-2.5 py-1 rounded-lg bg-gray-800/40 border border-white/5">
+              <Activity size={12} className="opacity-70" /> Auto-refresh 30s
+            </span>
             <button onClick={() => exportToExcel(exportRows, EXPORT_COLS, EXPORT_HEADERS, 'ops_intelligence_exceptions')} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!filtered.length}>
               <FileSpreadsheet size={14} /> Excel
             </button>
@@ -191,9 +250,217 @@ export default function OpsIntelligence() {
         </div>
       )}
 
+      {/* ── Fleet Health Pulse hero ─────────────────────────────────────────── */}
+      <div className="card">
+        <div className="flex flex-col lg:flex-row lg:items-center gap-6">
+          {/* Score ring */}
+          <div className="flex items-center gap-4 shrink-0">
+            <ScoreRing score={pulse?.score} color={tone.ring} loading={loading} />
+            <div>
+              <p className="text-xs uppercase tracking-wider text-[var(--text-muted)] flex items-center gap-1.5">
+                <HeartPulse size={13} className={tone.text} /> Fleet Health
+              </p>
+              <p className={`text-4xl font-bold leading-tight ${tone.text}`}>
+                {loading || pulse == null ? '—' : pulse.score}
+                <span className="text-lg text-[var(--text-muted)] font-medium">/100</span>
+              </p>
+              <span className={`inline-block mt-1 text-[11px] font-semibold px-2 py-0.5 rounded ${SEVERITY_STYLES[pulse?.status === 'critical' ? 'high' : pulse?.status === 'warning' ? 'medium' : 'low']}`}>
+                {tone.label}
+              </span>
+            </div>
+          </div>
+
+          {/* Banner + compliance */}
+          <div className="flex-1 min-w-0 space-y-3">
+            {pulse?.requiresImmediateAction && (
+              <div className="flex items-start gap-2 p-3 rounded-lg bg-red-900/30 border border-red-700/50">
+                <AlertOctagon size={18} className="text-red-400 mt-0.5 shrink-0" />
+                <p className="text-sm font-semibold text-red-300">
+                  Immediate action required — high-severity exceptions or unsafe tread detected.
+                </p>
+              </div>
+            )}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <MiniStat label="High-severity" value={pulse?.openCritical} tone={pulse?.openCritical > 0 ? 'text-red-400' : 'text-green-400'} loading={loading} />
+              <MiniStat label="Low pressure" value={c.lowPressure} tone={c.lowPressure > 0 ? 'text-red-400' : 'text-green-400'} loading={loading} />
+              <MiniStat label="Low tread" value={c.lowTread} tone={c.lowTread > 0 ? 'text-red-400' : 'text-green-400'} loading={loading} />
+              <MiniStat label="Compliance risk" value={pulse ? (pulse.complianceRisk || 'low') : null} tone={RISK_TONE[pulse?.complianceRisk] || 'text-green-400'} loading={loading} capitalize />
+            </div>
+            <p className="text-[11px] text-[var(--text-muted)] flex items-start gap-1.5">
+              <Info size={12} className="mt-0.5 shrink-0" />
+              No standalone alerts table in this schema — the critical-risk term uses the count of HIGH-severity exceptions from the scan below.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* ── Pulse KPI grid ──────────────────────────────────────────────────── */}
+      <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-8 gap-3">
+        {pulseKpis.map((k) => {
+          const Icon = k.icon
+          return (
+            <div key={k.label} className="card !p-3">
+              <div className="flex items-center justify-between">
+                <p className="text-[11px] text-[var(--text-muted)] leading-tight">{k.label}</p>
+                <Icon size={14} className={k.tone} />
+              </div>
+              <p className={`text-2xl font-bold mt-1 ${k.tone}`}>
+                {loading ? '—' : (k.value == null ? '—' : k.value)}
+              </p>
+            </div>
+          )
+        })}
+      </div>
+
+      {/* ── Anomaly feed + Financial panel ──────────────────────────────────── */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {/* Anomaly feed */}
+        <div className="card !p-0 overflow-hidden">
+          <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--input-border)]">
+            <h3 className="text-sm font-semibold text-[var(--text-primary)] flex items-center gap-1.5">
+              <Activity size={15} className="text-amber-400" /> Anomaly feed
+            </h3>
+            <div className="flex items-center gap-2">
+              {anomalySummary.critical > 0 && (
+                <span className="text-[11px] font-semibold px-2 py-0.5 rounded bg-red-900/40 text-red-300 border border-red-700/50">{anomalySummary.critical} critical</span>
+              )}
+              <span className="text-[11px] text-[var(--text-muted)]">{anomalySummary.total} total</span>
+            </div>
+          </div>
+          <div className="max-h-80 overflow-y-auto divide-y divide-[var(--input-border)]/60">
+            {loading ? (
+              [0, 1, 2].map((i) => <div key={i} className="px-4 py-3"><div className="h-4 bg-[var(--input-bg)] rounded animate-pulse" /></div>)
+            ) : anomalies.length === 0 ? (
+              <div className="px-4 py-12 text-center text-[var(--text-muted)] text-sm">
+                <CheckCircle2 size={24} className="mx-auto mb-2 text-green-400 opacity-80" />
+                No anomalies detected — pressure, cost and inspection cadence all within range.
+              </div>
+            ) : (
+              anomalies.slice(0, 40).map((a, i) => (
+                <div key={`${a.type}:${a.asset_no || a.serial || i}`} className={`px-4 py-3 ${a.severity === 'critical' ? 'bg-red-900/15' : ''}`}>
+                  <div className="flex items-start gap-2.5">
+                    <AlertTriangle size={15} className={`mt-0.5 shrink-0 ${a.severity === 'critical' ? 'text-red-400' : 'text-amber-400'}`} />
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <p className="text-sm font-medium text-[var(--text-primary)] truncate">{a.title}</p>
+                        <span className="text-[10px] uppercase tracking-wide text-[var(--text-muted)] shrink-0">{ANOMALY_LABEL[a.type] || a.type}</span>
+                      </div>
+                      <p className="text-xs text-[var(--text-muted)] mt-0.5">{a.detail}</p>
+                      {a.action && <p className="text-xs text-blue-400 mt-0.5">→ {a.action}</p>}
+                    </div>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+          <p className="px-4 py-2 text-[11px] text-[var(--text-muted)] border-t border-[var(--input-border)] flex items-start gap-1.5">
+            <Info size={12} className="mt-0.5 shrink-0" />
+            Retread-on-front, tread-leak and telemetry-gap detectors require axle / retread / TPMS data not captured in this schema.
+          </p>
+        </div>
+
+        {/* Financial panel */}
+        <div className="card">
+          <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-3 flex items-center gap-1.5">
+            <DollarSign size={15} className="text-green-400" /> Financial intelligence
+            {financials && <span className="ml-auto text-[11px] text-[var(--text-muted)] font-normal">FY {financials.year}</span>}
+          </h3>
+          {loading || !financials ? (
+            <div className="space-y-3">{[0, 1, 2, 3].map((i) => <div key={i} className="h-6 bg-[var(--input-bg)] rounded animate-pulse" />)}</div>
+          ) : (
+            <div className="space-y-3">
+              {/* Budget consumption bar */}
+              <div>
+                <div className="flex justify-between text-xs mb-1.5">
+                  <span className="text-[var(--text-secondary)] font-medium">Budget consumption (tyre spend)</span>
+                  <span className={`font-bold ${budgetTone.text}`}>
+                    {financials.budgetConsumptionPct == null ? 'No budget set' : `${financials.budgetConsumptionPct}%`}
+                  </span>
+                </div>
+                <div className="h-2.5 bg-[var(--input-bg)] rounded-full overflow-hidden">
+                  <div className={`h-full rounded-full transition-all ${budgetTone.bar}`} style={{ width: `${Math.min(financials.budgetConsumptionPct || 0, 100)}%` }} />
+                </div>
+              </div>
+              {[
+                ['YTD tyre spend', `${currency} ${fmtMoney(financials.ytdTyreSpend)}`],
+                ['Annual budget', financials.annualBudget > 0 ? `${currency} ${fmtMoney(financials.annualBudget)}` : 'Not set'],
+                ['Remaining', financials.remainingBudget == null ? '—' : `${currency} ${fmtMoney(financials.remainingBudget)}`],
+                ['Avg CPK', financials.avgCpk != null ? `${currency} ${financials.avgCpk}/km` : '—', financials.avgCpk != null ? (financials.cpkmStatus === 'good' ? 'text-green-400' : financials.cpkmStatus === 'average' ? 'text-amber-400' : 'text-red-400') : ''],
+                ['CPK data points', financials.cpkDataPoints],
+              ].map(([l, v, t]) => (
+                <div key={l} className="flex justify-between text-sm py-1.5 border-b border-[var(--input-border)]/60 last:border-0">
+                  <span className="text-[var(--text-muted)]">{l}</span>
+                  <span className={`font-semibold ${t || 'text-[var(--text-primary)]'}`}>{v}</span>
+                </div>
+              ))}
+              <div className="pt-1 space-y-1.5">
+                {['Retread savings', 'Claim recoveries', 'Emergency premium'].map((l) => (
+                  <div key={l} className="flex justify-between text-xs">
+                    <span className="text-[var(--text-muted)]">{l}</span>
+                    <span className="text-[var(--text-muted)] italic">Not captured</span>
+                  </div>
+                ))}
+              </div>
+              <p className="text-[11px] text-[var(--text-muted)] flex items-start gap-1.5 pt-1">
+                <Info size={12} className="mt-0.5 shrink-0" />
+                Retread savings, claim recoveries and emergency-purchase premium have no source column in this schema and are not fabricated.
+              </p>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* ── Executive summary strip ─────────────────────────────────────────── */}
+      {executive && !loading && (
+        <div className="card border border-[var(--input-border)]">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-sm font-semibold text-[var(--text-primary)] flex items-center gap-1.5">
+              <TrendingUp size={15} className="text-blue-400" /> Executive summary
+            </h3>
+            <span className={`text-[11px] font-semibold px-2 py-0.5 rounded ${SEVERITY_STYLES[executive.fleetHealthStatus === 'critical' ? 'high' : executive.fleetHealthStatus === 'warning' ? 'medium' : 'low']}`}>
+              Health {executive.fleetHealthScore ?? '—'}/100
+            </span>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
+            {[
+              ['Safety', executive.headlines.safety, ShieldAlert, 'text-red-400'],
+              ['Operations', executive.headlines.operations, Wrench, 'text-amber-400'],
+              ['Financial', executive.headlines.financial, DollarSign, 'text-green-400'],
+              ['CPK', executive.headlines.cpk, Gauge, 'text-blue-400'],
+            ].map(([l, v, Icon, iconTone]) => (
+              <div key={l} className="rounded-lg bg-[var(--input-bg)]/50 border border-[var(--input-border)] p-3">
+                <p className="text-[11px] uppercase tracking-wider text-[var(--text-muted)] flex items-center gap-1.5">
+                  <Icon size={12} className={iconTone} /> {l}
+                </p>
+                <p className="text-sm font-medium text-[var(--text-secondary)] mt-1">{v}</p>
+              </div>
+            ))}
+          </div>
+          {executive.actionRequired && (
+            <div className="mt-3 p-3 rounded-lg bg-red-900/25 border border-red-700/50">
+              <p className="text-sm font-semibold text-red-300 flex items-center gap-1.5">
+                <AlertOctagon size={15} /> Action required — review critical issues immediately.
+              </p>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── Exception Command Center (existing) ─────────────────────────────── */}
+      <div className="flex items-center gap-2 pt-2">
+        <Siren size={18} className="text-red-400" />
+        <h2 className="text-lg font-bold text-[var(--text-primary)]">Exception Command Center</h2>
+        <span className="text-xs text-[var(--text-muted)]">{summary.total} open</span>
+      </div>
+
       {/* KPI tiles */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        {kpis.map((k) => {
+        {[
+          { label: 'Open exceptions', value: summary.total, icon: Siren, tone: 'text-[var(--text-primary)]' },
+          { label: 'High severity', value: summary.bySeverity.high, icon: AlertOctagon, tone: 'text-red-400' },
+          { label: 'Medium severity', value: summary.bySeverity.medium, icon: AlertTriangle, tone: 'text-amber-400' },
+          { label: 'Assets affected', value: summary.affectedAssets, icon: Building2, tone: 'text-blue-400' },
+        ].map((k) => {
           const Icon = k.icon
           return (
             <div key={k.label} className="card">
@@ -234,7 +501,7 @@ export default function OpsIntelligence() {
           </select>
           <select className="input" value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)} aria-label="Category">
             <option value="all">All categories</option>
-            {CATEGORIES.map((c) => <option key={c} value={c}>{CATEGORY_META[c].label}</option>)}
+            {CATEGORIES.map((cat) => <option key={cat} value={cat}>{CATEGORY_META[cat].label}</option>)}
           </select>
           <select className="input" value={siteFilter} onChange={(e) => setSiteFilter(e.target.value)} aria-label="Site">
             <option value="">All sites</option>
@@ -292,6 +559,40 @@ export default function OpsIntelligence() {
         </div>
         {filtered.length > 500 && <p className="px-4 py-2 text-xs text-[var(--text-muted)] border-t border-[var(--input-border)] flex items-center gap-1.5"><Info size={12} /> Showing first 500 — refine filters or export for the full set.</p>}
       </div>
+    </div>
+  )
+}
+
+// ── Presentational helpers ────────────────────────────────────────────────────
+function ScoreRing({ score, color, loading }) {
+  const pct = loading || score == null ? 0 : Math.max(0, Math.min(100, score))
+  const r = 34
+  const circ = 2 * Math.PI * r
+  const dash = (pct / 100) * circ
+  return (
+    <div className="relative w-[84px] h-[84px] shrink-0">
+      <svg width="84" height="84" viewBox="0 0 84 84" className="-rotate-90">
+        <circle cx="42" cy="42" r={r} fill="none" stroke="rgba(148,163,184,0.18)" strokeWidth="7" />
+        <circle
+          cx="42" cy="42" r={r} fill="none" stroke={color} strokeWidth="7" strokeLinecap="round"
+          strokeDasharray={`${dash} ${circ}`}
+          style={{ transition: 'stroke-dasharray 0.6s ease' }}
+        />
+      </svg>
+      <div className="absolute inset-0 flex items-center justify-center">
+        <span className="text-lg font-bold" style={{ color }}>{loading || score == null ? '—' : score}</span>
+      </div>
+    </div>
+  )
+}
+
+function MiniStat({ label, value, tone, loading, capitalize }) {
+  return (
+    <div className="rounded-lg bg-[var(--input-bg)]/50 border border-[var(--input-border)] px-3 py-2">
+      <p className="text-[11px] text-[var(--text-muted)] leading-tight">{label}</p>
+      <p className={`text-lg font-bold mt-0.5 ${tone} ${capitalize ? 'capitalize' : ''}`}>
+        {loading ? '—' : (value == null ? '—' : value)}
+      </p>
     </div>
   )
 }

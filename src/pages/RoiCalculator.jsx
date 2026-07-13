@@ -52,6 +52,7 @@ export default function RoiCalculator() {
     datasets: [
       { label: 'Cumulative savings', data: r.projection.map((p) => p.savings), backgroundColor: '#22c55e', borderRadius: 4 },
       { label: 'Cumulative cost', data: r.projection.map((p) => p.cost), backgroundColor: '#ef4444', borderRadius: 4 },
+      { label: 'Cumulative net benefit', data: r.projection.map((p) => p.net), backgroundColor: '#38bdf8', borderRadius: 4 },
     ],
   }
   const chartOpts = {

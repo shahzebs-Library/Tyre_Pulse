@@ -4,8 +4,21 @@
  * RLS enforces org isolation; this layer keeps an explicit column list, null-safe
  * country scoping, and validates/normalises input, mirroring support.js.
  */
-import { supabase, unwrap, applyCountry } from './_client'
+import { supabase, unwrap, applyCountry, fetchAllPages } from './_client'
 import { parseTrailerList } from '../combinations'
+
+/** True when a Supabase error is a missing-relation (un-migrated table). */
+function isMissingRelation(err) {
+  const code = err?.code || err?.cause?.code
+  const msg = String(err?.message || '')
+  return code === '42P01' || /relation .* does not exist|could not find the table/i.test(msg)
+}
+
+// Least-privilege column lists for the combined-unit intelligence reads.
+const VEHICLE_COLS = 'asset_no,vehicle_type,make,model,status,is_active,site,country'
+const TYRE_COLS =
+  'id,asset_no,site,country,status,category,brand,size,position,cost_per_tyre,qty,' +
+  'km_at_fitment,km_at_removal,total_km,tread_depth'
 
 const COLS =
   'id,organisation_id,country,name,prime_mover_no,trailer_nos,site,status,notes,' +
@@ -26,11 +39,7 @@ export async function listCombinations({ country, status, limit = 500 } = {}) {
     return unwrap(await q.order('created_at', { ascending: false }).limit(limit)) || []
   } catch (err) {
     // Missing relation (table not migrated) → empty set, not a hard error.
-    const code = err?.code || err?.cause?.code
-    const msg = String(err?.message || '')
-    if (code === '42P01' || /relation .* does not exist|could not find the table/i.test(msg)) {
-      return []
-    }
+    if (isMissingRelation(err)) return []
     throw err
   }
 }
@@ -73,4 +82,90 @@ export async function updateCombination(id, patch = {}) {
 export async function deleteCombination(id) {
   if (!id) throw new Error('A combination id is required.')
   return unwrap(await supabase.from('asset_combinations').delete().eq('id', id))
+}
+
+// ── Combined-unit intelligence reads ─────────────────────────────────────────
+
+/**
+ * Fleet-master rows for a specific set of member asset numbers (prime mover +
+ * trailers), used to resolve a combination's members. Chunked `in()` queries so
+ * a wide combination never overruns URL limits; country-scoped (null-safe).
+ * Un-migrated `vehicle_fleet` → [] rather than a hard error.
+ *
+ * @param {string[]} assetNos
+ * @param {{country?:string}} [opts]
+ */
+export async function listMemberVehicles(assetNos = [], { country } = {}) {
+  const ids = [...new Set((Array.isArray(assetNos) ? assetNos : []).map((a) => String(a || '').trim()).filter(Boolean))]
+  if (!ids.length) return []
+  const CHUNK = 100
+  try {
+    const out = []
+    for (let i = 0; i < ids.length; i += CHUNK) {
+      const slice = ids.slice(i, i + CHUNK)
+      let q = supabase.from('vehicle_fleet').select(VEHICLE_COLS).in('asset_no', slice)
+      q = applyCountry(q, country)
+      const rows = unwrap(await q)
+      if (Array.isArray(rows)) out.push(...rows)
+    }
+    return out
+  } catch (err) {
+    if (isMissingRelation(err)) return []
+    throw err
+  }
+}
+
+/**
+ * Every tyre record for a set of member asset numbers, fully paginated and
+ * country-scoped. Powers the blended combined-unit rollup (spend, CPK, scrap,
+ * position breakdown). Un-migrated `tyre_records` → [].
+ *
+ * @param {string[]} assetNos
+ * @param {{country?:string}} [opts]
+ */
+export async function listMemberTyreRecords(assetNos = [], { country } = {}) {
+  const ids = [...new Set((Array.isArray(assetNos) ? assetNos : []).map((a) => String(a || '').trim()).filter(Boolean))]
+  if (!ids.length) return []
+  const CHUNK = 100
+  try {
+    const out = []
+    for (let i = 0; i < ids.length; i += CHUNK) {
+      const slice = ids.slice(i, i + CHUNK)
+      const rows = await fetchAllPages((from, to) => {
+        const q = supabase.from('tyre_records').select(TYRE_COLS)
+          .in('asset_no', slice)
+          .order('asset_no', { ascending: true, nullsFirst: false })
+          .order('id', { ascending: true })
+          .range(from, to)
+        return applyCountry(q, country)
+      })
+      if (Array.isArray(rows)) out.push(...rows)
+    }
+    return out
+  } catch (err) {
+    if (isMissingRelation(err)) return []
+    throw err
+  }
+}
+
+/**
+ * Convenience loader for the Unit-intelligence tab: given a combination row,
+ * resolve its member asset numbers and fetch both the fleet-master rows and the
+ * tyre records for those members in parallel. The page passes these into the
+ * pure `computeCombinationRollup` for the actual maths.
+ *
+ * @param {{prime_mover_no?:string, trailer_nos?:string|string[]}} combo
+ * @param {{country?:string}} [opts]
+ * @returns {Promise<{vehicles:Array, tyres:Array}>}
+ */
+export async function getCombinationIntelligence(combo, { country } = {}) {
+  const prime = String(combo?.prime_mover_no ?? '').trim()
+  const trailers = parseTrailerList(combo?.trailer_nos)
+  const assetNos = [...(prime ? [prime] : []), ...trailers]
+  if (!assetNos.length) return { vehicles: [], tyres: [] }
+  const [vehicles, tyres] = await Promise.all([
+    listMemberVehicles(assetNos, { country }),
+    listMemberTyreRecords(assetNos, { country }),
+  ])
+  return { vehicles: Array.isArray(vehicles) ? vehicles : [], tyres: Array.isArray(tyres) ? tyres : [] }
 }

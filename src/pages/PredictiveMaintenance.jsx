@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from 'react'
+import { useState, useEffect, useMemo, useCallback, Fragment } from 'react'
 import { supabase } from '../lib/supabase'
 import { fetchAllPages } from '../lib/fetchAll'
 import { useSettings } from '../contexts/SettingsContext'
@@ -10,13 +10,20 @@ import {
   BarElement, LineElement, PointElement,
   ArcElement, Title, Tooltip, Legend, Filler,
 } from 'chart.js'
-import { Line, Bar, Doughnut } from 'react-chartjs-2'
+import { Line, Bar } from 'react-chartjs-2'
 import {
   CalendarClock, Download, FileText, AlertTriangle, CheckCircle,
   Clock, TrendingUp, DollarSign, Truck, ChevronDown, ChevronUp,
-  ChevronLeft, ChevronRight, Info, RefreshCw, Filter,
+  ChevronLeft, ChevronRight, Info, Filter,
+  ShieldAlert, Activity, Gauge, Sigma, Percent, Target, TrendingDown,
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
+import {
+  buildPredictions, buildFailureRiskRows, buildCohortModels, computeFleetStats,
+  LEGAL_MIN_TREAD_MM, REPLACE_TARGET_MM, PRESSURE_TARGET_PSI, MAX_AGE_YEARS,
+  DEFAULT_NEW_TREAD_MM, DEFAULT_AVG_KM_LIFE, DEFAULT_DAILY_KM as LIB_DEFAULT_DAILY_KM,
+  LIMITING_FACTORS,
+} from '../lib/predictiveMaintenance'
 
 ChartJS.register(
   CategoryScale, LinearScale,
@@ -25,9 +32,11 @@ ChartJS.register(
 )
 
 // ── Constants ──────────────────────────────────────────────────────────────────
-const DEFAULT_DAILY_KM   = 200
-const DEFAULT_AVG_KM     = 80_000
-const URGENT_TREAD_MM    = 3
+// Engine constants live in the pure lib (src/lib/predictiveMaintenance.js); the
+// page keeps only presentation-layer values and thin aliases for copy.
+const DEFAULT_DAILY_KM   = LIB_DEFAULT_DAILY_KM
+const DEFAULT_AVG_KM     = DEFAULT_AVG_KM_LIFE
+const URGENT_TREAD_MM    = REPLACE_TARGET_MM
 const SOON_TREAD_MM      = 5
 const URGENT_DAYS        = 30
 const SOON_DAYS          = 90
@@ -39,15 +48,25 @@ const CHART_DARK = {
   grid: 'rgba(255,255,255,0.08)',
 }
 
+const LIMITING_FACTOR_LABEL = {
+  [LIMITING_FACTORS.tread]: 'Tread wear',
+  [LIMITING_FACTORS.km]: 'KM lifecycle',
+  [LIMITING_FACTORS.age]: 'Age (5yr)',
+}
+
+const RISK_BAND_STYLE = {
+  extreme:  'bg-red-900/40 text-red-300 border-red-800/50',
+  high:     'bg-orange-900/40 text-orange-300 border-orange-800/50',
+  elevated: 'bg-amber-900/30 text-amber-300 border-amber-800/50',
+  low:      'bg-green-900/20 text-green-400 border-green-800/40',
+  unknown:  'bg-[var(--input-bg)] text-[var(--text-muted)] border-[var(--input-border)]',
+}
+
 // ── Utility helpers ────────────────────────────────────────────────────────────
 function addMonths(date, n) {
   const d = new Date(date)
   d.setMonth(d.getMonth() + n)
   return d
-}
-
-function startOfMonth(date) {
-  return new Date(date.getFullYear(), date.getMonth(), 1)
 }
 
 function monthKey(date) {
@@ -56,10 +75,6 @@ function monthKey(date) {
 
 function monthLabel(date) {
   return formatMonthYear(date)
-}
-
-function daysBetween(a, b) {
-  return Math.round((b - a) / 86_400_000)
 }
 
 function fmt(n, dec = 0) {
@@ -79,123 +94,9 @@ function fmtDate(date) {
   return formatDate(date)
 }
 
-function urgencyFromTreadAndDays(treadDepth, daysAway) {
-  if (treadDepth != null && treadDepth < URGENT_TREAD_MM) return 'Urgent'
-  if (daysAway <= URGENT_DAYS) return 'Urgent'
-  if (daysAway <= SOON_DAYS) return 'Soon'
-  return 'Monitor'
-}
-
 function mean(arr) {
   if (!arr.length) return null
   return arr.reduce((s, v) => s + v, 0) / arr.length
-}
-
-// ── Prediction engine ──────────────────────────────────────────────────────────
-function buildPredictions(records, fleetMaster, fleetAvgCost, fleetAvgKmLife, fleetAvgDailyKm) {
-  // Group by asset_no
-  const byAsset = {}
-  for (const r of records) {
-    if (!r.asset_no) continue
-    if (!byAsset[r.asset_no]) byAsset[r.asset_no] = []
-    byAsset[r.asset_no].push(r)
-  }
-
-  // Fleet master lookup
-  const masterByAsset = {}
-  for (const fm of fleetMaster) {
-    if (fm.asset_no) masterByAsset[fm.asset_no] = fm
-  }
-
-  const predictions = []
-
-  for (const [assetNo, recs] of Object.entries(byAsset)) {
-    const master = masterByAsset[assetNo] || null
-
-    // Completed records = has km_at_removal
-    const completed = recs.filter(r => r.km_at_removal != null && r.km_at_fitment != null)
-    const completedLifeKms = completed
-      .map(r => r.km_at_removal - r.km_at_fitment)
-      .filter(v => v > 0)
-
-    const avgKmLife = completedLifeKms.length > 0
-      ? mean(completedLifeKms)
-      : (master?.expected_km_per_tyre ?? fleetAvgKmLife ?? DEFAULT_AVG_KM)
-
-    // Compute avg daily km for this asset
-    let avgDailyKm = DEFAULT_DAILY_KM
-    if (completed.length > 0) {
-      const dates = completed
-        .map(r => r.issue_date ? new Date(r.issue_date) : null)
-        .filter(Boolean)
-      if (dates.length >= 2) {
-        const minDate = new Date(Math.min(...dates.map(d => d.getTime())))
-        const maxDate = new Date(Math.max(...dates.map(d => d.getTime())))
-        const totalDays = daysBetween(minDate, maxDate)
-        const lastKmAtRemoval = Math.max(...completed.map(r => r.km_at_removal))
-        const firstKmAtFitment = Math.min(...completed.map(r => r.km_at_fitment))
-        const totalKm = lastKmAtRemoval - firstKmAtFitment
-        if (totalDays > 0 && totalKm > 0) {
-          avgDailyKm = totalKm / totalDays
-        }
-      }
-    }
-    if (!avgDailyKm || avgDailyKm <= 0) avgDailyKm = fleetAvgDailyKm || DEFAULT_DAILY_KM
-
-    // Current km from fleet master or estimate
-    let currentKm = master?.current_km ?? null
-    if (currentKm == null && completed.length > 0) {
-      const lastRemoval = completed.sort((a, b) => (b.km_at_removal ?? 0) - (a.km_at_removal ?? 0))[0]
-      const lastDate = lastRemoval.issue_date ? new Date(lastRemoval.issue_date) : null
-      if (lastDate) {
-        const daysSince = daysBetween(lastDate, TODAY)
-        currentKm = (lastRemoval.km_at_removal ?? 0) + daysSince * avgDailyKm
-      }
-    }
-
-    // Active tyres (no km_at_removal = still fitted)
-    const active = recs.filter(r => r.km_at_removal == null)
-
-    if (active.length === 0) continue
-
-    // Actual costs only: this asset's mean, else the fleet's actual mean, else 0.
-    const assetCosts = recs.map(r => r.cost_per_tyre).filter(v => v > 0)
-    const assetAvgCost = assetCosts.length > 0 ? mean(assetCosts) : (fleetAvgCost || 0)
-
-    for (const tyre of active) {
-      const fitmentKm = tyre.km_at_fitment ?? currentKm ?? 0
-      const tyreRunKm = currentKm != null ? Math.max(0, currentKm - fitmentKm) : 0
-      const remainingKm = Math.max(0, avgKmLife - tyreRunKm)
-      const daysUntilReplacement = avgDailyKm > 0 ? remainingKm / avgDailyKm : 365
-      const replacementDate = new Date(TODAY)
-      replacementDate.setDate(replacementDate.getDate() + Math.round(daysUntilReplacement))
-
-      const daysAway = Math.round(daysUntilReplacement)
-      const urgency = urgencyFromTreadAndDays(tyre.tread_depth, daysAway)
-      const estimatedCost = tyre.cost_per_tyre > 0 ? tyre.cost_per_tyre : assetAvgCost
-
-      predictions.push({
-        id: tyre.id,
-        asset_no: assetNo,
-        site: tyre.site ?? master?.site ?? '-',
-        vehicle_type: master?.vehicle_type ?? '-',
-        position: tyre.position ?? '-',
-        brand: tyre.brand ?? '-',
-        tyre_serial: tyre.tyre_serial ?? '-',
-        tread_depth: tyre.tread_depth ?? null,
-        pressure_reading: tyre.pressure_reading ?? null,
-        km_remaining: Math.round(remainingKm),
-        due_date: replacementDate,
-        urgency,
-        estimated_cost: Math.round(estimatedCost),
-        days_away: daysAway,
-        avg_km_life: Math.round(avgKmLife),
-        avg_daily_km: Math.round(avgDailyKm),
-      })
-    }
-  }
-
-  return predictions.sort((a, b) => a.due_date - b.due_date)
 }
 
 // ── Budget forecast bucketing ──────────────────────────────────────────────────
@@ -277,7 +178,7 @@ function lineOpts(currency) {
   }
 }
 
-function barOpts(currency) {
+function barOpts() {
   return {
     responsive: true,
     maintainAspectRatio: false,
@@ -343,6 +244,317 @@ function UrgencyBadge({ urgency }) {
   return <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-green-900/20 text-green-400 border border-green-800/40"><span className="w-1.5 h-1.5 rounded-full bg-green-500" />Monitor</span>
 }
 
+// ── Risk band badge ──────────────────────────────────────────────────────────
+function RiskBandBadge({ band, score }) {
+  const cls = RISK_BAND_STYLE[band] || RISK_BAND_STYLE.unknown
+  return (
+    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold border ${cls}`}>
+      {score != null ? score : '-'} · {band}
+    </span>
+  )
+}
+
+// ── Confidence pill ──────────────────────────────────────────────────────────
+function ConfidenceBadge({ label, value }) {
+  const map = {
+    high:   'text-green-400 border-green-800/40 bg-green-900/15',
+    medium: 'text-amber-300 border-amber-800/40 bg-amber-900/15',
+    low:    'text-[var(--text-muted)] border-[var(--input-border)] bg-[var(--input-bg)]/40',
+  }
+  const cls = map[label] || map.low
+  return (
+    <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium border ${cls}`} title={value != null ? `confidence ${Math.round(value * 100)}%` : ''}>
+      <Gauge size={10} /> {label}
+    </span>
+  )
+}
+
+// ── Limiting-factor chip ─────────────────────────────────────────────────────
+function LimitingFactorChip({ factor }) {
+  if (!factor) return <span className="text-[var(--text-dim)]">-</span>
+  const icon = factor === LIMITING_FACTORS.tread
+    ? <TrendingDown size={11} />
+    : factor === LIMITING_FACTORS.age
+      ? <Clock size={11} />
+      : <Activity size={11} />
+  return (
+    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium text-blue-300 border border-blue-800/40 bg-blue-900/15">
+      {icon} {LIMITING_FACTOR_LABEL[factor] || factor}
+    </span>
+  )
+}
+
+// ── Failure Risk panel (G3 composite risk + G4 cohort + G5 confidence) ───────
+function FailureRiskPanel({
+  rows, totalRows, kpis, cohortRows, siteFilter, setSiteFilter, uniqueSites,
+  riskBandFilter, setRiskBandFilter, page, setPage, expanded, setExpanded,
+}) {
+  const totalPages = Math.max(1, Math.ceil(rows.length / PAGE_SIZE))
+  const clampedPage = Math.min(page, totalPages)
+  const paged = rows.slice((clampedPage - 1) * PAGE_SIZE, clampedPage * PAGE_SIZE)
+
+  const bandBarData = {
+    labels: ['Extreme (≥70)', 'High (50-69)', 'Elevated (30-49)', 'Low (<30)'],
+    datasets: [{
+      data: [
+        kpis.extreme,
+        kpis.high,
+        kpis.elevated,
+        Math.max(0, kpis.total - kpis.extreme - kpis.high - kpis.elevated),
+      ],
+      backgroundColor: ['rgba(239,68,68,0.7)', 'rgba(249,115,22,0.7)', 'rgba(245,158,11,0.6)', 'rgba(16,185,129,0.5)'],
+      borderColor: ['#ef4444', '#f97316', '#f59e0b', '#10b981'],
+      borderWidth: 1,
+      borderRadius: 4,
+    }],
+  }
+  const bandBarOpts = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: { legend: { display: false }, tooltip: { callbacks: { label: ctx => ` ${ctx.raw} tyres` } } },
+    scales: {
+      x: { grid: { color: CHART_DARK.grid }, ticks: { color: CHART_DARK.color, font: { size: 10 } } },
+      y: { grid: { color: CHART_DARK.grid }, ticks: { color: CHART_DARK.color, font: { size: 10 } }, beginAtZero: true },
+    },
+  }
+
+  return (
+    <div className="space-y-4">
+      {/* Risk KPI strip */}
+      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3">
+        <KpiCard icon={ShieldAlert} label="Extreme risk (≥70)" value={`${fmt(kpis.extreme)} tyres`} sub="immediate action" color="red" />
+        <KpiCard icon={AlertTriangle} label="High risk (50-69)" value={`${fmt(kpis.high)} tyres`} sub="inspect within 7 days" color="amber" />
+        <KpiCard icon={Activity} label="Elevated (30-49)" value={`${fmt(kpis.elevated)} tyres`} sub="monitor closely" color="purple" />
+        <KpiCard icon={Percent} label="Avg failure probability" value={`${fmt(kpis.avgFp, 1)}%`} sub="Weibull, brand-adjusted" color="cyan" />
+        <KpiCard icon={Gauge} label="Avg composite risk" value={fmt(kpis.avgScore, 1)} sub={`${fmt(kpis.total)} assessed`} color="blue" />
+      </div>
+
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
+        {/* Band distribution */}
+        <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-4">
+          <div className="mb-3">
+            <h2 className="text-sm font-semibold text-[var(--text-primary)]">Risk Band Distribution</h2>
+            <p className="text-xs text-[var(--text-muted)]">Active tyres by composite risk score</p>
+          </div>
+          <div style={{ height: 220 }}><Bar data={bandBarData} options={bandBarOpts} /></div>
+        </div>
+
+        {/* Cohort models */}
+        <div className="xl:col-span-2 bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-4">
+          <div className="flex items-center gap-2 mb-3">
+            <Sigma size={15} className="text-blue-400" />
+            <div>
+              <h2 className="text-sm font-semibold text-[var(--text-primary)]">Cohort Weibull Life Models</h2>
+              <p className="text-xs text-[var(--text-muted)]">Method-of-moments fit per brand + size (≥5 completed lives)</p>
+            </div>
+          </div>
+          {cohortRows.length === 0 ? (
+            <div className="text-center py-8">
+              <Target className="text-[var(--text-dim)] mx-auto mb-2" size={24} />
+              <p className="text-[var(--text-muted)] text-xs">No cohort has ≥5 completed lives yet. Cohort survival appears once history accrues.</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="border-b border-[var(--input-border)]">
+                    {['Brand','Size','Samples','η (km)','β shape','Mean life','CV','± CI'].map(h => (
+                      <th key={h} className="text-left text-[var(--text-muted)] font-medium py-2 px-2 whitespace-nowrap">{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {cohortRows.map((c, i) => (
+                    <tr key={`${c.brand}-${c.size}-${i}`} className="border-b border-[var(--input-border)]/40 hover:bg-[var(--input-bg)]/30">
+                      <td className="py-2 px-2 text-[var(--text-secondary)] font-medium">{c.brand}</td>
+                      <td className="py-2 px-2 text-[var(--text-muted)]">{c.size}</td>
+                      <td className="py-2 px-2 text-center text-[var(--text-secondary)]">{c.n}</td>
+                      <td className="py-2 px-2 text-right text-[var(--text-secondary)]">{fmt(c.etaKm)}</td>
+                      <td className="py-2 px-2 text-right text-[var(--text-secondary)]">{c.beta}</td>
+                      <td className="py-2 px-2 text-right text-[var(--text-secondary)]">{fmt(c.meanKm)}</td>
+                      <td className="py-2 px-2 text-right text-[var(--text-muted)]">{c.cv}</td>
+                      <td className="py-2 px-2 text-right text-[var(--text-muted)]">±{c.ciSpread}pp</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Filters */}
+      <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-4">
+        <div className="flex flex-wrap gap-3 items-end">
+          <div className="flex flex-col gap-1">
+            <label className="text-xs text-[var(--text-muted)]">Site</label>
+            <select value={siteFilter} onChange={e => setSiteFilter(e.target.value)}
+              className="bg-[var(--input-bg)] border border-[var(--input-border)] text-[var(--text-secondary)] rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:border-blue-500">
+              {uniqueSites.map(s => <option key={s} value={s}>{s === 'all' ? 'All Sites' : s}</option>)}
+            </select>
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-xs text-[var(--text-muted)]">Risk band</label>
+            <select value={riskBandFilter} onChange={e => setRiskBandFilter(e.target.value)}
+              className="bg-[var(--input-bg)] border border-[var(--input-border)] text-[var(--text-secondary)] rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:border-blue-500">
+              <option value="all">All bands</option>
+              <option value="extreme">Extreme</option>
+              <option value="high">High</option>
+              <option value="elevated">Elevated</option>
+              <option value="low">Low</option>
+            </select>
+          </div>
+          <div className="flex flex-col gap-1 ml-auto justify-end">
+            <p className="text-xs text-[var(--text-muted)] text-right">Showing</p>
+            <p className="text-sm font-semibold text-[var(--text-secondary)] text-right">{fmt(rows.length)} of {fmt(totalRows)} tyres</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Risk table */}
+      <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-4">
+        <div className="mb-3">
+          <h2 className="text-sm font-semibold text-[var(--text-primary)]">Per-Tyre Failure Risk</h2>
+          <p className="text-xs text-[var(--text-muted)]">Sorted by composite risk · click a row for the reasoning breakdown</p>
+        </div>
+        {rows.length === 0 ? (
+          <div className="text-center py-10">
+            <CheckCircle className="text-green-500 mx-auto mb-2" size={28} />
+            <p className="text-[var(--text-muted)] text-sm">No tyres match the selected filters</p>
+          </div>
+        ) : (
+          <>
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="border-b border-[var(--input-border)]">
+                    {['','Asset No','Site','Position','Brand','Size','Tread','Total KM','Failure Prob','Risk','Confidence'].map((h, i) => (
+                      <th key={i} className="text-left text-[var(--text-muted)] font-medium py-2 px-2 whitespace-nowrap">{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {paged.map((r, i) => {
+                    const isOpen = expanded === r.id
+                    return (
+                      <Fragment key={`${r.id}-${i}`}>
+                        <tr
+                          onClick={() => setExpanded(isOpen ? null : r.id)}
+                          className={`border-b border-[var(--input-border)]/50 cursor-pointer transition-colors ${
+                            r.risk_band === 'extreme' ? 'bg-red-900/10 hover:bg-red-900/20'
+                              : r.risk_band === 'high' ? 'bg-orange-900/5 hover:bg-orange-900/15'
+                                : 'hover:bg-[var(--input-bg)]/40'
+                          }`}
+                        >
+                          <td className="py-2 px-2 text-[var(--text-muted)]">{isOpen ? <ChevronUp size={13} /> : <ChevronDown size={13} />}</td>
+                          <td className="py-2 px-2 font-mono font-semibold text-blue-300">{r.asset_no}</td>
+                          <td className="py-2 px-2 text-[var(--text-secondary)]">{r.site}</td>
+                          <td className="py-2 px-2 text-[var(--text-secondary)]">{r.position}</td>
+                          <td className="py-2 px-2 text-[var(--text-secondary)]">{r.brand}</td>
+                          <td className="py-2 px-2 text-[var(--text-muted)]">{r.size}</td>
+                          <td className="py-2 px-2 text-center">
+                            {r.tread_depth != null
+                              ? <span className={`font-semibold ${r.tread_depth < URGENT_TREAD_MM ? 'text-red-400' : r.tread_depth < SOON_TREAD_MM ? 'text-amber-400' : 'text-green-400'}`}>{r.tread_depth}</span>
+                              : <span className="text-[var(--text-dim)]">-</span>}
+                          </td>
+                          <td className="py-2 px-2 text-right text-[var(--text-secondary)]">{fmt(r.total_km)}</td>
+                          <td className="py-2 px-2 text-right text-[var(--text-secondary)]">{fmt(r.failure_prob_pct, 1)}%</td>
+                          <td className="py-2 px-2"><RiskBandBadge band={r.risk_band} score={r.risk_score} /></td>
+                          <td className="py-2 px-2"><ConfidenceBadge label={r.confidence_label} value={r.confidence} /></td>
+                        </tr>
+                        {isOpen && (
+                          <tr className="bg-[var(--input-bg)]/30 border-b border-[var(--input-border)]/50">
+                            <td colSpan={11} className="p-4">
+                              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                {/* Risk factor breakdown */}
+                                <div>
+                                  <p className="text-xs font-semibold text-blue-300 mb-2">Composite risk breakdown (0-100)</p>
+                                  <RiskFactorBar label="Mileage (Weibull ×40)" value={r.factors.mileage} max={40} />
+                                  <RiskFactorBar label="Tread (≤30)" value={r.factors.tread} max={30} />
+                                  <RiskFactorBar label={`Age (≤15)${r.age_has_data ? '' : ' · no data'}`} value={r.factors.age} max={15} muted={!r.age_has_data} />
+                                  <RiskFactorBar label={`Pressure (≤15)${r.pressure_has_data ? '' : ' · no reading'}`} value={r.factors.pressure} max={15} muted={!r.pressure_has_data} />
+                                </div>
+                                {/* Weibull detail */}
+                                <div className="text-xs space-y-1.5">
+                                  <p className="text-xs font-semibold text-blue-300 mb-2">Reliability model</p>
+                                  <DetailRow k="Failure probability" v={`${fmt(r.failure_prob_pct, 1)}%`} />
+                                  <DetailRow k="Characteristic life η" v={`${fmt(r.eta_km)} km`} />
+                                  <DetailRow k="Weibull shape β" v="2.2 (wear-out)" />
+                                  <DetailRow k="In-service age" v={r.age_has_data ? `${fmt(r.age_days)} days` : 'unknown (no fitment date)'} />
+                                  <DetailRow k="Pressure deviation" v={r.pressure_has_data ? `${fmt(r.pressure_dev_pct, 1)}% vs ${PRESSURE_TARGET_PSI} psi` : 'no reading'} />
+                                </div>
+                                {/* Cohort + confidence */}
+                                <div className="text-xs space-y-1.5">
+                                  <p className="text-xs font-semibold text-blue-300 mb-2">Cohort position & confidence</p>
+                                  {r.cohort ? (
+                                    <>
+                                      <DetailRow k="Cohort survival" v={`${fmt(r.cohort.survivalPct, 1)}%`} />
+                                      <DetailRow k="Percentile in cohort" v={`${fmt(r.cohort.percentileInCohort, 1)}%`} />
+                                      <DetailRow k="Expected remaining" v={`${fmt(r.cohort.expectedRemainingKm)} km`} />
+                                      <DetailRow k="Cohort samples" v={`${r.cohort.n} (±${fmt(r.cohort.ciSpread, 1)}pp)`} />
+                                    </>
+                                  ) : (
+                                    <p className="text-[var(--text-muted)]">No fitted cohort (brand+size needs ≥5 completed lives).</p>
+                                  )}
+                                  <DetailRow k="Prediction confidence" v={`${r.confidence_label} (${Math.round((r.confidence ?? 0) * 100)}% · ${r.completed_samples} samples)`} />
+                                </div>
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                      </Fragment>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            {totalPages > 1 && (
+              <div className="flex items-center justify-between mt-4 pt-3 border-t border-[var(--input-border)]">
+                <p className="text-xs text-[var(--text-muted)]">Page {clampedPage} of {totalPages} · {fmt(rows.length)} total</p>
+                <div className="flex gap-1">
+                  <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={clampedPage === 1}
+                    className="p-1.5 rounded bg-[var(--input-bg)] border border-[var(--input-border)] text-[var(--text-muted)] hover:text-[var(--text-primary)] disabled:opacity-40 disabled:cursor-not-allowed">
+                    <ChevronLeft size={14} />
+                  </button>
+                  <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={clampedPage === totalPages}
+                    className="p-1.5 rounded bg-[var(--input-bg)] border border-[var(--input-border)] text-[var(--text-muted)] hover:text-[var(--text-primary)] disabled:opacity-40 disabled:cursor-not-allowed">
+                    <ChevronRight size={14} />
+                  </button>
+                </div>
+              </div>
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function RiskFactorBar({ label, value, max, muted }) {
+  const pct = max > 0 ? Math.min(100, (Math.max(0, value) / max) * 100) : 0
+  return (
+    <div className="mb-1.5">
+      <div className="flex justify-between text-[10px] mb-0.5">
+        <span className={muted ? 'text-[var(--text-dim)]' : 'text-[var(--text-muted)]'}>{label}</span>
+        <span className={muted ? 'text-[var(--text-dim)]' : 'text-[var(--text-secondary)]'}>{fmt(value, 1)}</span>
+      </div>
+      <div className="bg-[var(--input-bg)] rounded-full h-1.5">
+        <div className={`h-1.5 rounded-full ${muted ? 'bg-[var(--text-dim)]/40' : 'bg-blue-500'}`} style={{ width: `${pct}%` }} />
+      </div>
+    </div>
+  )
+}
+
+function DetailRow({ k, v }) {
+  return (
+    <div className="flex justify-between gap-3">
+      <span className="text-[var(--text-muted)]">{k}</span>
+      <span className="text-[var(--text-secondary)] font-medium text-right">{v}</span>
+    </div>
+  )
+}
+
 // ── Main component ─────────────────────────────────────────────────────────────
 export default function PredictiveMaintenance() {
   const { activeCurrency } = useSettings()
@@ -353,11 +565,16 @@ export default function PredictiveMaintenance() {
   const [error, setError]             = useState(null)
   const [fleetMasterAvailable, setFleetMasterAvailable] = useState(true)
 
+  const [activeTab, setActiveTab]       = useState('forecast') // 'forecast' | 'risk'
   const [siteFilter, setSiteFilter]     = useState('all')
   const [urgencyFilter, setUrgencyFilter] = useState('all')
   const [vehicleTypeFilter, setVehicleTypeFilter] = useState('all')
   const [horizonFilter, setHorizonFilter] = useState('90d')
   const [currentPage, setCurrentPage]   = useState(1)
+
+  const [riskBandFilter, setRiskBandFilter] = useState('all')
+  const [riskPage, setRiskPage]         = useState(1)
+  const [expandedRisk, setExpandedRisk] = useState(null)
 
   const [assumptionsOpen, setAssumptionsOpen] = useState(false)
 
@@ -369,7 +586,7 @@ export default function PredictiveMaintenance() {
       // Load tyre_records
       const { data: tyreData, error: tyreErr } = await fetchAllPages((from, to) => supabase
         .from('tyre_records')
-        .select('id,asset_no,site,brand,tyre_serial,position,tread_depth,pressure_reading,km_at_fitment,km_at_removal,cost_per_tyre,issue_date,risk_level,category')
+        .select('id,asset_no,site,brand,size,tyre_serial,position,tread_depth,pressure_reading,total_km,km_at_fitment,km_at_removal,cost_per_tyre,issue_date,fitment_date,removal_date,status,risk_level,category')
         .order('issue_date', { ascending: false })
         .range(from, to))
 
@@ -402,36 +619,36 @@ export default function PredictiveMaintenance() {
 
   useEffect(() => { loadData() }, [loadData])
 
-  // ── Fleet-level computed constants ───────────────────────────────────────────
-  const fleetStats = useMemo(() => {
-    const completed = records.filter(r => r.km_at_removal != null && r.km_at_fitment != null)
-    const lives = completed.map(r => r.km_at_removal - r.km_at_fitment).filter(v => v > 0)
-    const costs = records.map(r => r.cost_per_tyre).filter(v => v > 0)
+  // ── Fleet-level computed constants (canonical lib) ───────────────────────────
+  const fleetStats = useMemo(() => computeFleetStats(records), [records])
 
-    const avgKmLife    = lives.length > 0 ? mean(lives) : DEFAULT_AVG_KM
-    const avgCost      = costs.length > 0 ? mean(costs) : 1200
-    const avgDailyKm   = DEFAULT_DAILY_KM
+  // ── Cohort Weibull models (G4) — shared across engines ───────────────────────
+  const cohortModels = useMemo(() => buildCohortModels(records), [records])
 
-    return { avgKmLife, avgCost, avgDailyKm }
-  }, [records])
-
-  // ── Predictions ───────────────────────────────────────────────────────────────
+  // ── Predictions (deepened engine: G1 wear + G2 min-of-three + G3/G4/G5) ──────
   const allPredictions = useMemo(() => {
     if (!records.length) return []
-    return buildPredictions(
-      records,
-      fleetMaster,
-      fleetStats.avgCost,
-      fleetStats.avgKmLife,
-      fleetStats.avgDailyKm,
-    )
-  }, [records, fleetMaster, fleetStats])
+    return buildPredictions(records, fleetMaster, {
+      fleetAvgCost: fleetStats.avgCost,
+      fleetAvgKmLife: fleetStats.avgKmLife,
+      fleetAvgDailyKm: fleetStats.avgDailyKm,
+      cohortModels,
+      nowMs: TODAY.getTime(),
+    })
+  }, [records, fleetMaster, fleetStats, cohortModels])
+
+  // ── Per-tyre failure-risk rows (G3 composite + G4 cohort + G5 confidence) ─────
+  const failureRiskRows = useMemo(() => {
+    if (!records.length) return []
+    return buildFailureRiskRows(records, { cohortModels, nowMs: TODAY.getTime() })
+  }, [records, cohortModels])
 
   // ── Derived lists ─────────────────────────────────────────────────────────────
   const uniqueSites = useMemo(() => {
     const s = new Set(allPredictions.map(p => p.site).filter(v => v && v !== '-'))
+    for (const r of failureRiskRows) if (r.site && r.site !== '-') s.add(r.site)
     return ['all', ...Array.from(s).sort()]
-  }, [allPredictions])
+  }, [allPredictions, failureRiskRows])
 
   const uniqueVehicleTypes = useMemo(() => {
     const t = new Set(fleetMaster.map(f => f.vehicle_type).filter(Boolean))
@@ -449,6 +666,40 @@ export default function PredictiveMaintenance() {
       return true
     })
   }, [allPredictions, siteFilter, urgencyFilter, vehicleTypeFilter, horizonFilter])
+
+  // ── Failure-risk filtering + KPIs ─────────────────────────────────────────────
+  const filteredRisk = useMemo(() => {
+    return failureRiskRows.filter(r => {
+      if (siteFilter !== 'all' && r.site !== siteFilter) return false
+      if (riskBandFilter !== 'all' && r.risk_band !== riskBandFilter) return false
+      return true
+    })
+  }, [failureRiskRows, siteFilter, riskBandFilter])
+
+  const riskKpis = useMemo(() => {
+    const rows = failureRiskRows
+    const extreme = rows.filter(r => r.risk_band === 'extreme').length
+    const high = rows.filter(r => r.risk_band === 'high').length
+    const elevated = rows.filter(r => r.risk_band === 'elevated').length
+    const avgFp = rows.length ? mean(rows.map(r => r.failure_prob_pct)) : 0
+    const avgScore = rows.length ? mean(rows.map(r => r.risk_score)) : 0
+    return { total: rows.length, extreme, high, elevated, avgFp, avgScore }
+  }, [failureRiskRows])
+
+  const cohortRows = useMemo(() => {
+    return Array.from(cohortModels.values())
+      .map(m => ({
+        brand: m.brand,
+        size: m.size,
+        n: m.n,
+        etaKm: Math.round(m.eta),
+        beta: Math.round(m.beta * 1000) / 1000,
+        meanKm: Math.round(m.mean),
+        cv: Math.round(m.cv * 100) / 100,
+        ciSpread: Math.round(m.ciSpread * 10) / 10,
+      }))
+      .sort((a, b) => b.n - a.n)
+  }, [cohortModels])
 
   // ── KPI summary ───────────────────────────────────────────────────────────────
   const kpis = useMemo(() => {
@@ -530,6 +781,7 @@ export default function PredictiveMaintenance() {
 
   // Reset page when filters change
   useEffect(() => { setCurrentPage(1) }, [siteFilter, urgencyFilter, vehicleTypeFilter, horizonFilter])
+  useEffect(() => { setRiskPage(1) }, [siteFilter, riskBandFilter])
 
   // ── Chart data ────────────────────────────────────────────────────────────────
   const lineChartData = useMemo(() => {
@@ -580,11 +832,12 @@ export default function PredictiveMaintenance() {
       ...p,
       due_date: fmtDate(p.due_date),
       estimated_cost: `${activeCurrency} ${p.estimated_cost}`,
+      limiting_factor: LIMITING_FACTOR_LABEL[p.limiting_factor] || '-',
     }))
     exportToExcel(
       rows,
-      ['asset_no','site','vehicle_type','position','brand','tread_depth','km_remaining','due_date','urgency','estimated_cost','days_away'],
-      ['Asset No','Site','Vehicle Type','Position','Brand','Tread Depth (mm)','KM Remaining','Due Date','Urgency','Estimated Cost','Days Away'],
+      ['asset_no','site','vehicle_type','position','brand','size','tread_depth','km_remaining','due_date','urgency','limiting_factor','confidence_label','risk_score','estimated_cost','days_away'],
+      ['Asset No','Site','Vehicle Type','Position','Brand','Size','Tread Depth (mm)','KM Remaining','Due Date','Urgency','Limiting Factor','Confidence','Risk Score','Estimated Cost','Days Away'],
       `Predictive_Maintenance_${new Date().toISOString().slice(0,10)}`,
       'Upcoming Replacements',
     )
@@ -596,26 +849,44 @@ export default function PredictiveMaintenance() {
       due_date: fmtDate(p.due_date),
       estimated_cost: `${activeCurrency} ${fmt(p.estimated_cost, 0)}`,
       tread_depth: p.tread_depth != null ? `${p.tread_depth} mm` : '-',
+      limiting_factor: LIMITING_FACTOR_LABEL[p.limiting_factor] || '-',
     }))
     exportToPdf(
       rows,
       [
-        { key: 'asset_no',       header: 'Asset No' },
-        { key: 'site',           header: 'Site' },
-        { key: 'position',       header: 'Position' },
-        { key: 'brand',          header: 'Brand' },
-        { key: 'tread_depth',    header: 'Tread' },
-        { key: 'km_remaining',   header: 'KM Remaining' },
-        { key: 'due_date',       header: 'Due Date' },
-        { key: 'urgency',        header: 'Urgency' },
-        { key: 'estimated_cost', header: 'Est. Cost' },
-        { key: 'days_away',      header: 'Days Away' },
+        { key: 'asset_no',        header: 'Asset No' },
+        { key: 'site',            header: 'Site' },
+        { key: 'position',        header: 'Position' },
+        { key: 'brand',           header: 'Brand' },
+        { key: 'tread_depth',     header: 'Tread' },
+        { key: 'km_remaining',    header: 'KM Remaining' },
+        { key: 'due_date',        header: 'Due Date' },
+        { key: 'urgency',         header: 'Urgency' },
+        { key: 'limiting_factor', header: 'Limiting Factor' },
+        { key: 'confidence_label',header: 'Confidence' },
+        { key: 'estimated_cost',  header: 'Est. Cost' },
+        { key: 'days_away',       header: 'Days Away' },
       ],
       'Predictive Maintenance: Upcoming Tyre Replacements',
       `Predictive_Maintenance_${new Date().toISOString().slice(0,10)}`,
       'landscape',
     )
   }, [filteredPredictions, activeCurrency])
+
+  const handleRiskExport = useCallback(() => {
+    const rows = filteredRisk.map(r => ({
+      ...r,
+      failure_prob_pct: `${fmt(r.failure_prob_pct, 1)}%`,
+      cohort_survival: r.cohort ? `${fmt(r.cohort.survivalPct, 1)}%` : '-',
+    }))
+    exportToExcel(
+      rows,
+      ['asset_no','site','position','brand','size','tread_depth','total_km','eta_km','failure_prob_pct','risk_score','risk_band','confidence_label','completed_samples','cohort_survival'],
+      ['Asset No','Site','Position','Brand','Size','Tread (mm)','Total KM','Eta (km)','Failure Prob','Risk Score','Risk Band','Confidence','Samples','Cohort Survival'],
+      `Predictive_Failure_Risk_${new Date().toISOString().slice(0,10)}`,
+      'Failure Risk',
+    )
+  }, [filteredRisk])
 
   // ── Render ────────────────────────────────────────────────────────────────────
   if (loading) {
@@ -644,12 +915,14 @@ export default function PredictiveMaintenance() {
     )
   }
 
+  const hasAnyData = allPredictions.length > 0 || failureRiskRows.length > 0
+
   return (
     <div className="space-y-6">
 
       <PageHeader
         title="Predictive Maintenance Engine"
-        subtitle={`AI-powered tyre replacement forecasting and budget planning · ${fmtDate(TODAY)}`}
+        subtitle={`AI-powered tyre replacement forecasting, failure-risk scoring and budget planning · ${fmtDate(TODAY)}`}
         icon={CalendarClock}
         onRefresh={loadData}
         actions={
@@ -659,18 +932,26 @@ export default function PredictiveMaintenance() {
                 Fleet master unavailable, using tyre records only
               </span>
             )}
-            <button onClick={handleExcelExport} className="btn-secondary flex items-center gap-2 text-xs px-3 py-1.5">
-              <Download size={14} /> Excel
-            </button>
-            <button onClick={handlePdfExport} className="btn-secondary flex items-center gap-2 text-xs px-3 py-1.5">
-              <FileText size={14} /> PDF
-            </button>
+            {activeTab === 'forecast' ? (
+              <>
+                <button onClick={handleExcelExport} className="btn-secondary flex items-center gap-2 text-xs px-3 py-1.5">
+                  <Download size={14} /> Excel
+                </button>
+                <button onClick={handlePdfExport} className="btn-secondary flex items-center gap-2 text-xs px-3 py-1.5">
+                  <FileText size={14} /> PDF
+                </button>
+              </>
+            ) : (
+              <button onClick={handleRiskExport} className="btn-secondary flex items-center gap-2 text-xs px-3 py-1.5">
+                <Download size={14} /> Export Risk
+              </button>
+            )}
           </div>
         }
       />
 
       {/* ── Empty state ─────────────────────────────────────────────────────── */}
-      {allPredictions.length === 0 && (
+      {!hasAnyData && (
         <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-12 text-center">
           <CalendarClock className="text-[var(--text-dim)] mx-auto mb-3" size={40} />
           <p className="text-[var(--text-secondary)] font-semibold">No active tyre records found</p>
@@ -678,7 +959,38 @@ export default function PredictiveMaintenance() {
         </div>
       )}
 
-      {allPredictions.length > 0 && (
+      {/* ── Tab switcher ────────────────────────────────────────────────────── */}
+      {hasAnyData && (
+        <div className="flex items-center gap-1 border-b border-[var(--input-border)]">
+          {[
+            { key: 'forecast', label: 'Replacement Forecast', icon: CalendarClock, count: allPredictions.length },
+            { key: 'risk', label: 'Failure Risk', icon: ShieldAlert, count: failureRiskRows.length },
+          ].map(t => (
+            <button
+              key={t.key}
+              onClick={() => setActiveTab(t.key)}
+              className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors ${
+                activeTab === t.key
+                  ? 'border-blue-500 text-[var(--text-primary)]'
+                  : 'border-transparent text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
+              }`}
+            >
+              <t.icon size={15} /> {t.label}
+              <span className="text-xs px-1.5 py-0.5 rounded-full bg-[var(--input-bg)] text-[var(--text-muted)]">{fmt(t.count)}</span>
+            </button>
+          ))}
+        </div>
+      )}
+
+      {activeTab === 'forecast' && allPredictions.length === 0 && failureRiskRows.length > 0 && (
+        <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-10 text-center">
+          <CalendarClock className="text-[var(--text-dim)] mx-auto mb-3" size={36} />
+          <p className="text-[var(--text-secondary)] font-semibold">No active replacement forecasts</p>
+          <p className="text-[var(--text-muted)] text-sm mt-1">Switch to the Failure Risk tab to review scored tyres.</p>
+        </div>
+      )}
+
+      {activeTab === 'forecast' && allPredictions.length > 0 && (
         <>
           {/* ── KPI Strip ──────────────────────────────────────────────────── */}
           <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
@@ -826,7 +1138,7 @@ export default function PredictiveMaintenance() {
                 <p className="text-xs text-[var(--text-muted)]">Active tyres by urgency horizon</p>
               </div>
               <div style={{ height: 240 }}>
-                <Bar data={urgencyBarData} options={barOpts(activeCurrency)} />
+                <Bar data={urgencyBarData} options={barOpts()} />
               </div>
             </div>
           </div>
@@ -866,7 +1178,7 @@ export default function PredictiveMaintenance() {
                   <table className="w-full text-xs">
                     <thead>
                       <tr className="border-b border-[var(--input-border)]">
-                        {['Asset No','Site','Type','Position','Brand','Tread (mm)','KM Remaining','Due Date','Urgency','Est. Cost','Days Away'].map(h => (
+                        {['Asset No','Site','Type','Position','Brand','Tread (mm)','KM Remaining','Due Date','Urgency','Limiting Factor','Confidence','Est. Cost','Days Away'].map(h => (
                           <th key={h} className="text-left text-[var(--text-muted)] font-medium py-2 px-2 whitespace-nowrap">{h}</th>
                         ))}
                       </tr>
@@ -897,6 +1209,8 @@ export default function PredictiveMaintenance() {
                           <td className="py-2 px-2 text-right text-[var(--text-secondary)]">{fmt(p.km_remaining)}</td>
                           <td className="py-2 px-2 text-[var(--text-secondary)] whitespace-nowrap">{fmtDate(p.due_date)}</td>
                           <td className="py-2 px-2"><UrgencyBadge urgency={p.urgency} /></td>
+                          <td className="py-2 px-2"><LimitingFactorChip factor={p.limiting_factor} /></td>
+                          <td className="py-2 px-2"><ConfidenceBadge label={p.confidence_label} value={p.confidence} /></td>
                           <td className="py-2 px-2 text-right font-semibold text-[var(--text-secondary)]">{fmtCurrency(p.estimated_cost, activeCurrency)}</td>
                           <td className="py-2 px-2 text-right">
                             <span className={`font-semibold ${p.days_away <= 30 ? 'text-red-400' : p.days_away <= 90 ? 'text-amber-400' : 'text-[var(--text-muted)]'}`}>
@@ -981,7 +1295,7 @@ export default function PredictiveMaintenance() {
                     </tr>
                   </thead>
                   <tbody>
-                    {siteBreakdown.map((s, i) => (
+                    {siteBreakdown.map((s) => (
                       <tr key={s.site} className="border-b border-[var(--input-border)]/40 hover:bg-[var(--input-bg)]/30 transition-colors">
                         <td className="py-2 px-3 font-semibold text-[var(--text-secondary)]">{s.site}</td>
                         <td className="py-2 px-3 text-center">
@@ -1076,30 +1390,28 @@ export default function PredictiveMaintenance() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
                   {[
                     {
-                      title: 'Average Tyre Life',
-                      body: `Computed per vehicle from completed tyre records (km_at_removal - km_at_fitment). If insufficient history, falls back to fleet average (${fmt(fleetStats.avgKmLife, 0)} km) or ${fmt(DEFAULT_AVG_KM, 0)} km default.`,
+                      title: 'G1 · Tread Wear Rate',
+                      body: `Wear rate (mm/km) = (nominal new tread − current tread) ÷ lifetime km, clamped to a physical range. Nominal new tread is a documented size-class value (heavy-commercial ${fmt(DEFAULT_NEW_TREAD_MM, 0)}mm, light ~9mm) because this dataset has no per-tyre initial reading or inspection time-series. Days-to-limit projects tread to the ${LEGAL_MIN_TREAD_MM}mm legal minimum.`,
                     },
                     {
-                      title: 'Average Daily KM',
-                      body: `Estimated from each vehicle's odometer span divided by service days. Default fallback: ${fmt(DEFAULT_DAILY_KM, 0)} km/day. Fleet master current_km used when available.`,
+                      title: 'G2 · Min-of-Three Forecast',
+                      body: `Days-to-replace = min(tread-wear, km-lifecycle, age). Km-lifecycle uses avg tyre life (${fmt(fleetStats.avgKmLife, 0)} km fallback) ÷ daily km. Age is measured from fitment_date to the ${MAX_AGE_YEARS}yr GCC guideline — an APPROXIMATION, as pre-fitment shelf age is unknown (no manufacture_date). The limiting-factor column shows which bound wins.`,
                     },
                     {
-                      title: 'Replacement Due Date',
-                      body: 'Predicted as: today + (remaining_km / avg_daily_km). Remaining KM = avg_km_life - km_run_since_fitment.',
+                      title: 'G3 · Weibull Failure Risk',
+                      body: `Reliability R(t)=exp(−(km/η)^2.2) with a brand η table (Michelin 135k … default 110k km). Composite 0–100 risk = failure-prob×40 + tread(≤30) + age(≤15) + pressure(≤15). Pressure uses the single ${PRESSURE_TARGET_PSI} psi deviation only (no TPMS series) and is flagged when absent — never fabricated.`,
                     },
                     {
-                      title: 'Urgency Classification',
-                      body: `Tread depth < ${URGENT_TREAD_MM}mm OR due in ≤${URGENT_DAYS} days → Urgent. Due in ${URGENT_DAYS + 1}-${SOON_DAYS} days → Soon. Otherwise → Monitor.`,
+                      title: 'G4 · Cohort Life Distribution',
+                      body: 'Completed lives (km_at_removal − km_at_fitment) are grouped by brand+size; cohorts with ≥5 samples get a method-of-moments Weibull fit (β from CV, η = mean/Γ(1+1/β)). Gives survival %, cohort percentile and expected remaining km for each active tyre.',
                     },
                     {
-                      title: 'Cost Estimation',
-                      body: `Uses last known cost_per_tyre for the tyre. If unavailable, uses vehicle average cost. Final fallback: fleet average (${fmtCurrency(fleetStats.avgCost, activeCurrency)}).`,
+                      title: 'G5 · Confidence',
+                      body: 'Per-asset confidence = min(1, completed samples ÷ 6). Cohort CI half-width = 30/√n (±3–35pp). Attached to every prediction and risk row so thin-history estimates are labelled, not overstated.',
                     },
                     {
-                      title: 'Fleet Master',
-                      body: fleetMasterAvailable
-                        ? 'vehicle_fleet table loaded successfully. Expected KM per tyre and monthly budget targets used where available.'
-                        : 'vehicle_fleet table not available. Predictions are based on tyre_records history only.',
+                      title: 'Cost & Fleet Master',
+                      body: `${fleetMasterAvailable ? 'vehicle_fleet loaded — expected km/tyre, current_km and budgets used.' : 'vehicle_fleet unavailable — tyre_records history only.'} Cost uses the tyre's cost_per_tyre, else asset mean, else fleet average (${fmtCurrency(fleetStats.avgCost, activeCurrency)}). No fabricated costs.`,
                     },
                   ].map(item => (
                     <div key={item.title} className="bg-[var(--input-bg)]/40 rounded-lg p-3">
@@ -1115,6 +1427,25 @@ export default function PredictiveMaintenance() {
             )}
           </div>
         </>
+      )}
+
+      {/* ── Failure Risk tab ────────────────────────────────────────────────── */}
+      {activeTab === 'risk' && (
+        <FailureRiskPanel
+          rows={filteredRisk}
+          totalRows={failureRiskRows.length}
+          kpis={riskKpis}
+          cohortRows={cohortRows}
+          siteFilter={siteFilter}
+          setSiteFilter={setSiteFilter}
+          uniqueSites={uniqueSites}
+          riskBandFilter={riskBandFilter}
+          setRiskBandFilter={setRiskBandFilter}
+          page={riskPage}
+          setPage={setRiskPage}
+          expanded={expandedRisk}
+          setExpanded={setExpandedRisk}
+        />
       )}
     </div>
   )

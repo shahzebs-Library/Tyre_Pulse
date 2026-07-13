@@ -95,14 +95,26 @@ work is ON HOLD until this is done.
     validations ledger + existing size-audit kept as a tab. src/lib/fitmentValidation.js.
   - ✅ **TyrePool** DONE (commit e981088, V209) — hot-spare pool manager (add/deploy/return,
     utilisation, replenishment) + existing analytics kept as a tab. Transfers stay in TyreExchange.
-- **BATCH 1 COMPLETE** (all 5 modules deep + live). Migrations V207/V208/V209 applied.
-  Next free migration is **V210**.
-- **BATCH 2+ (todo)**: remaining ported modules from fleet_IQ/tyre_saas still on shallow "normal data"
-  need the same treatment. Candidates (verify each against its original first): VendorIntelligence
-  (VendorScorecardPage), BayScheduling/WorkshopCapacity, TCO/ROI calculators, CostIntelligence,
-  ExecutiveAnalytics, PredictiveMaintenance, PositionIntelligence, PressureIntelligence,
-  BrandPerformance, Analytics, plus telematics/EV/carbon cluster (sensor data — may need honest
-  empty states). Use the same gap-analysis→deepen→verify→migrate pipeline; keep existing views as tabs.
+- **BATCH 1 COMPLETE** (5 modules). Migrations V207/V208/V209 applied.
+- **BATCH 2 COMPLETE** (5 modules): FleetRiskScore (per-tyre safety engine, 5956a83),
+  TCO (real Fleet Actuals engine, 64cb027), RoiCalculator (net-series fix, 112b34b),
+  CarbonTracker (lifecycle ESG + V210 carbon_offsets/carbon_initiatives, b085a35),
+  OpsIntelligence (Fleet Health Pulse + anomaly feed + financial, 3d18ccd).
+- **BATCH 3 COMPLETE** (3 modules): Combinations (combined-unit CPK rollup, f8749b8),
+  HeatIntelligence (GCC blowout-risk + Gay-Lussac, 728c89f), DriverSafety (weighted score +
+  driver↔tyre correlation, 5d1a2e0).
+- **Migrations applied through V210.** Next free is **V211**.
+- **13 modules deepened total** (5+5+3). All wired to real data with HONEST degradation.
+  KEY LEARNING: several originals FABRICATE data (driver `_hash_pct` synthetic trends, heat
+  daily-exposure hash, correlation synthesis) — these were deliberately NOT ported; honest empty
+  states used instead (no-mock-data rule). Full suite 3290 green after batch 3.
+- **REMEDIATION ESSENTIALLY COMPLETE**: the remaining ported pages are already LARGER/deeper than
+  their originals (VendorIntelligence 1684, PressureIntelligence 1367, StockReplenishment 1375,
+  WarrantyTracker 1426, RetreadManagement 1640, InspectionIntelligence 1183, PredictiveMaintenance
+  1121, PositionIntelligence 1121, CostCenter 1164, FuelEfficiency 1338, DriverManagement 951) —
+  deepening them would be invention, not restoration. Do NOT manufacture work there. Only revisit a
+  module if the USER points at a specific screen that still feels thin.
+- **§3 P3–P4 location-scoped RLS remains ON HOLD** (user paused it before remediation).
 
 ## Open items needing USER/OPS action
 - Register SAML/OIDC providers in Supabase Auth (Management API) per SSO-config domain.

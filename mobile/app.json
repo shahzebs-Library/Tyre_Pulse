@@ -25,7 +25,6 @@
         "backgroundColor": "#16a34a"
       },
       "package": "com.shahzebrahman.tyrepulseinspector",
-      "versionCode": 2,
       "permissions": [
         "android.permission.CAMERA",
         "android.permission.INTERNET",

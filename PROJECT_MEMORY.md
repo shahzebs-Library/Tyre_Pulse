@@ -57,8 +57,11 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
   they do NOT change runtime AI; edge fns keep authoritative fallbacks. Usage still from
   `ai_token_logs`/`ai_usage_log` (do NOT add a 3rd usage table; converging those two is a later item).
 - **§3 Organization Hierarchy** = `src/pages/OrgHierarchy.jsx` (/org-hierarchy, Admin/Manager/Director).
-  `org_units` (self-FK tree) + `user_org_assignments` (V206). P1 = tables+UI ONLY. Do NOT add
-  `org_unit_id` to operational tables and do NOT make location-scoped RLS until §3 P3 (opt-in, default-open).
+  `org_units` (self-FK tree) + `user_org_assignments` (V206). P1 = tables+tree UI. **P2 (done)** =
+  members/assignments UI in the SAME page (select a unit → assign users, role-at-unit, primary,
+  effective window; counts on tree/table). Assignment CRUD lives in `src/lib/api/orgUnits.js`;
+  active-window logic is `assignmentsActive()` in `src/lib/orgUnits.js`. Do NOT add `org_unit_id`
+  to operational tables and do NOT make location-scoped RLS until §3 P3 (opt-in, default-open).
 
 ## Open items needing USER/OPS action
 - Register SAML/OIDC providers in Supabase Auth (Management API) per SSO-config domain.
@@ -67,7 +70,7 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
 - Nav: 8 orphaned pages surfaced + Engineering KPI/KPI Command surfaced (done). Master Access Control unified (§5 done).
 - Admin Console hub `/admin` = §7 landing (searchable grouped links to existing admin pages; live user/company counts). `src/pages/AdminConsole.jsx`.
 - Remaining enterprise phases (large, do deliberately not silently — touch live data):
-  §3 P2–P4 (unit assignments UI → resolver → opt-in location RLS → wire approvals+notifications),
+  §3 P3–P4 (unit-scope resolver → opt-in location RLS → wire approvals+notifications; P2 assignments UI done),
   §9 Data Intake Centre deepening, generalizing the notification bus to honor `notification_preferences`,
   `ai_permissions` enforcement, converging `ai_token_logs`/`ai_usage_log`.
 - Nav labels render via t(`nav.items.<route>`) with fallback to item.label; add en+ar keys for new items.

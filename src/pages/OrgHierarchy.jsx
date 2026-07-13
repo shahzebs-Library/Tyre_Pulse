@@ -15,13 +15,17 @@ import { useState, useEffect, useMemo, useCallback } from 'react'
 import {
   Network, Building2, Layers, Boxes, Search, X, Filter,
   FileSpreadsheet, FileText, Plus, Pencil, Trash2, AlertTriangle,
-  ChevronRight, ChevronDown, MapPin,
+  ChevronRight, ChevronDown, MapPin, Users, UserPlus, Star, Calendar,
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
 import {
   listUnits, createUnit, updateUnit, deleteUnit, UNIT_TYPES,
+  listAssignments, createAssignment, updateAssignment, deleteAssignment,
 } from '../lib/api/orgUnits'
-import { buildTree, descendantsOf, depthOf, summariseUnits } from '../lib/orgUnits'
+import { listProfiles } from '../lib/api/users'
+import {
+  buildTree, descendantsOf, depthOf, summariseUnits, assignmentsActive,
+} from '../lib/orgUnits'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 
 const EMPTY_FORM = {
@@ -57,21 +61,25 @@ function TypeBadge({ type }) {
   )
 }
 
-/** Recursive tree row. Shows type badge + child count and supports collapse. */
-function TreeNode({ node, depth, onEdit }) {
+/** Recursive tree row. Shows type badge + child/member count, supports collapse
+ *  and selecting the unit to manage its members. */
+function TreeNode({ node, depth, onEdit, onSelect, selectedId, countsByUnit }) {
   const [open, setOpen] = useState(true)
   const u = node.unit
   const hasKids = node.children.length > 0
+  const counts = countsByUnit.get(String(u.id))
+  const isSelected = String(u.id) === String(selectedId)
 
   return (
     <div>
       <div
-        className="flex items-center gap-2 py-2 pr-2 rounded-lg hover:bg-[var(--input-bg)]/50 group"
+        className={`flex items-center gap-2 py-2 pr-2 rounded-lg group cursor-pointer ${isSelected ? 'bg-indigo-500/10 ring-1 ring-inset ring-indigo-500/30' : 'hover:bg-[var(--input-bg)]/50'}`}
         style={{ paddingLeft: `${depth * 20 + 4}px` }}
+        onClick={() => onSelect(u)}
       >
         {hasKids ? (
           <button
-            onClick={() => setOpen((o) => !o)}
+            onClick={(e) => { e.stopPropagation(); setOpen((o) => !o) }}
             className="p-0.5 rounded text-[var(--text-muted)] hover:text-[var(--text-primary)] shrink-0"
             aria-label={open ? 'Collapse' : 'Expand'}
           >
@@ -89,6 +97,11 @@ function TreeNode({ node, depth, onEdit }) {
             <MapPin size={11} className="opacity-60" />{u.country}
           </span>
         )}
+        {counts?.total > 0 && (
+          <span className="text-[11px] text-amber-300/90 inline-flex items-center gap-1 shrink-0" title={`${counts.active} active of ${counts.total} member${counts.total === 1 ? '' : 's'}`}>
+            <Users size={11} className="opacity-70" />{counts.total}
+          </span>
+        )}
         {u.active === false && (
           <span className="text-[10px] uppercase tracking-wide text-[var(--text-muted)] border border-[var(--input-border)] rounded px-1.5 py-0.5 shrink-0">Inactive</span>
         )}
@@ -99,7 +112,7 @@ function TreeNode({ node, depth, onEdit }) {
             </span>
           )}
           <button
-            onClick={() => onEdit(u)}
+            onClick={(e) => { e.stopPropagation(); onEdit(u) }}
             className="p-1 rounded opacity-0 group-hover:opacity-100 hover:bg-[var(--input-bg)] text-[var(--text-muted)] hover:text-[var(--text-primary)]"
             aria-label="Edit unit"
           >
@@ -110,7 +123,10 @@ function TreeNode({ node, depth, onEdit }) {
       {hasKids && open && (
         <div>
           {node.children.map((child) => (
-            <TreeNode key={child.unit.id} node={child} depth={depth + 1} onEdit={onEdit} />
+            <TreeNode
+              key={child.unit.id} node={child} depth={depth + 1}
+              onEdit={onEdit} onSelect={onSelect} selectedId={selectedId} countsByUnit={countsByUnit}
+            />
           ))}
         </div>
       )}
@@ -137,11 +153,32 @@ export default function OrgHierarchy() {
   const [confirmDelete, setConfirmDelete] = useState(null)
   const [deleting, setDeleting] = useState(false)
 
+  // ── Members / assignments (§3 Phase 2) ─────────────────────────────────────
+  const [assignments, setAssignments] = useState([])
+  const [profiles, setProfiles] = useState([])
+  const [selectedUnitId, setSelectedUnitId] = useState(null)
+  const [showAssignModal, setShowAssignModal] = useState(false)
+  const [editingAssignment, setEditingAssignment] = useState(null)
+  const [assignForm, setAssignForm] = useState(null)
+  const [assignSaving, setAssignSaving] = useState(false)
+  const [assignError, setAssignError] = useState('')
+  const [confirmRemove, setConfirmRemove] = useState(null)
+  const [removing, setRemoving] = useState(false)
+
   const load = useCallback(async () => {
     setRefreshing(true); setError(''); setNotProvisioned(false)
     try {
-      const data = await listUnits({})
+      // Units, all assignments (one query → per-unit counts), and org profiles
+      // for the people-picker + name resolution. Assignments/profiles are
+      // best-effort: a failure there must not blank out the hierarchy.
+      const [data, asg, profs] = await Promise.all([
+        listUnits({}),
+        listAssignments({}).catch(() => []),
+        listProfiles().catch(() => []),
+      ])
       setRows(Array.isArray(data) ? data : [])
+      setAssignments(Array.isArray(asg) ? asg : [])
+      setProfiles(Array.isArray(profs) ? profs : [])
       setUpdatedAt(new Date())
     } catch (err) {
       if (isMissingRelation(err)) setNotProvisioned(true)
@@ -172,6 +209,54 @@ export default function OrgHierarchy() {
     return all.filter((o) => !banned.has(o.id))
   }, [rows, editing])
 
+  // Resolve a user_id to a human label from the org profile list.
+  const profileById = useMemo(() => {
+    const m = new Map()
+    for (const p of profiles) m.set(String(p.id), p)
+    return m
+  }, [profiles])
+
+  const userLabel = useCallback((userId) => {
+    const p = profileById.get(String(userId))
+    if (!p) return { name: 'Unknown user', sub: String(userId).slice(0, 8) }
+    return {
+      name: p.full_name || p.username || p.email || 'Unnamed user',
+      sub: p.email || p.username || p.role || '',
+    }
+  }, [profileById])
+
+  // Assignment counts per unit (all + currently-active) for inline badges.
+  const countsByUnit = useMemo(() => {
+    const m = new Map()
+    for (const a of assignments) {
+      const k = String(a.org_unit_id)
+      const cur = m.get(k) || { total: 0, active: 0 }
+      cur.total += 1
+      m.set(k, cur)
+    }
+    for (const a of assignmentsActive(assignments)) {
+      const k = String(a.org_unit_id)
+      const cur = m.get(k) || { total: 0, active: 0 }
+      cur.active += 1
+      m.set(k, cur)
+    }
+    return m
+  }, [assignments])
+
+  const selectedUnit = useMemo(
+    () => (rows || []).find((r) => String(r.id) === String(selectedUnitId)) || null,
+    [rows, selectedUnitId],
+  )
+
+  const unitMembers = useMemo(() => {
+    if (!selectedUnitId) return []
+    const activeIds = new Set(assignmentsActive(assignments).map((a) => a.id))
+    return assignments
+      .filter((a) => String(a.org_unit_id) === String(selectedUnitId))
+      .map((a) => ({ ...a, _active: activeIds.has(a.id) }))
+      .sort((x, y) => (y.is_primary ? 1 : 0) - (x.is_primary ? 1 : 0))
+  }, [assignments, selectedUnitId])
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
     return (rows || []).filter((r) => {
@@ -187,11 +272,13 @@ export default function OrgHierarchy() {
   }, [rows, typeFilter, activeFilter, search])
 
   // ── KPIs ─────────────────────────────────────────────────────────────────
+  const activeAssignmentCount = useMemo(() => assignmentsActive(assignments).length, [assignments])
   const kpis = [
     { label: 'Total units', value: summary.total, icon: Boxes, tone: 'text-[var(--text-primary)]' },
     { label: 'Active units', value: summary.active, icon: Building2, tone: 'text-emerald-400' },
     { label: 'Root units', value: summary.rootCount, icon: Network, tone: 'text-sky-400' },
     { label: 'Max depth', value: summary.maxDepth, icon: Layers, tone: 'text-violet-400' },
+    { label: 'Active members', value: activeAssignmentCount, icon: Users, tone: 'text-amber-400' },
   ]
 
   // ── Export ───────────────────────────────────────────────────────────────
@@ -264,6 +351,86 @@ export default function OrgHierarchy() {
     }
   }, [confirmDelete, load])
 
+  // ── Members / assignments ──────────────────────────────────────────────────
+  const selectUnit = useCallback((u) => setSelectedUnitId(u ? String(u.id) : null), [])
+
+  const openAssignCreate = () => {
+    if (!selectedUnitId) return
+    setEditingAssignment(null)
+    setAssignForm({ user_id: '', role: '', is_primary: false, starts_at: '', ends_at: '' })
+    setAssignError(''); setShowAssignModal(true)
+  }
+  const openAssignEdit = (a) => {
+    setEditingAssignment(a)
+    setAssignForm({
+      user_id: String(a.user_id || ''),
+      role: a.role || '',
+      is_primary: !!a.is_primary,
+      starts_at: a.starts_at ? String(a.starts_at).slice(0, 10) : '',
+      ends_at: a.ends_at ? String(a.ends_at).slice(0, 10) : '',
+    })
+    setAssignError(''); setShowAssignModal(true)
+  }
+  const closeAssignModal = () => { if (!assignSaving) { setShowAssignModal(false); setEditingAssignment(null); setAssignForm(null) } }
+  const setAssign = (k, v) => setAssignForm((f) => ({ ...f, [k]: v }))
+
+  // Users not yet assigned to the selected unit (for the create picker). When
+  // editing, keep the current user selectable.
+  const assignableProfiles = useMemo(() => {
+    const taken = new Set(
+      unitMembers
+        .filter((m) => !editingAssignment || m.id !== editingAssignment.id)
+        .map((m) => String(m.user_id)),
+    )
+    return profiles
+      .filter((p) => !taken.has(String(p.id)))
+      .sort((a, b) => (a.full_name || a.username || a.email || '').localeCompare(b.full_name || b.username || b.email || ''))
+  }, [profiles, unitMembers, editingAssignment])
+
+  const submitAssignment = useCallback(async (e) => {
+    e?.preventDefault?.()
+    setAssignError('')
+    if (!assignForm?.user_id) { setAssignError('Select a user to assign.'); return }
+    setAssignSaving(true)
+    try {
+      const payload = {
+        user_id: assignForm.user_id,
+        org_unit_id: selectedUnitId,
+        role: assignForm.role || null,
+        is_primary: assignForm.is_primary,
+        starts_at: assignForm.starts_at || null,
+        ends_at: assignForm.ends_at || null,
+      }
+      if (editingAssignment) await updateAssignment(editingAssignment.id, payload)
+      else await createAssignment(payload)
+      setShowAssignModal(false); setEditingAssignment(null); setAssignForm(null)
+      await load()
+    } catch (err) {
+      const msg = String(err?.message || '')
+      setAssignError(
+        /duplicate|unique/i.test(msg)
+          ? 'That user is already assigned to this unit.'
+          : msg || 'Could not save the assignment.',
+      )
+    } finally {
+      setAssignSaving(false)
+    }
+  }, [assignForm, selectedUnitId, editingAssignment, load])
+
+  const doRemoveAssignment = useCallback(async () => {
+    if (!confirmRemove) return
+    setRemoving(true)
+    try {
+      await deleteAssignment(confirmRemove.id)
+      setConfirmRemove(null)
+      await load()
+    } catch (err) {
+      setAssignError(err?.message || 'Could not remove the assignment.')
+    } finally {
+      setRemoving(false)
+    }
+  }, [confirmRemove, load])
+
   const clearFilters = () => { setTypeFilter(''); setActiveFilter(''); setSearch('') }
   const hasFilters = typeFilter || activeFilter || search
 
@@ -311,7 +478,7 @@ export default function OrgHierarchy() {
       )}
 
       {/* KPI tiles */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
         {kpis.map((k) => {
           const Icon = k.icon
           return (
@@ -348,11 +515,105 @@ export default function OrgHierarchy() {
         ) : (
           <div className="-mx-1">
             {tree.map((node) => (
-              <TreeNode key={node.unit.id} node={node} depth={0} onEdit={openEdit} />
+              <TreeNode
+                key={node.unit.id} node={node} depth={0}
+                onEdit={openEdit} onSelect={selectUnit}
+                selectedId={selectedUnitId} countsByUnit={countsByUnit}
+              />
             ))}
           </div>
         )}
+        {rows !== null && tree.length > 0 && !selectedUnit && (
+          <p className="text-[11px] text-[var(--text-muted)] mt-3 flex items-center gap-1.5">
+            <Users size={12} className="opacity-60" /> Select a unit to manage its members.
+          </p>
+        )}
       </div>
+
+      {/* Members panel for the selected unit */}
+      {selectedUnit && (
+        <div className="card">
+          <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
+            <div className="min-w-0">
+              <h3 className="text-sm font-semibold text-[var(--text-primary)] flex items-center gap-2">
+                <Users size={15} /> Members of
+                <span className="text-[var(--text-primary)]">{selectedUnit.name}</span>
+                <TypeBadge type={selectedUnit.unit_type} />
+              </h3>
+              <p className="text-xs text-[var(--text-muted)] mt-0.5">
+                {unitMembers.length === 0
+                  ? 'No users assigned to this unit yet.'
+                  : `${unitMembers.filter((m) => m._active).length} active of ${unitMembers.length} assignment${unitMembers.length === 1 ? '' : 's'}.`}
+              </p>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <button onClick={openAssignCreate} className="btn-primary text-sm inline-flex items-center gap-1.5" disabled={notProvisioned}>
+                <UserPlus size={14} /> Assign user
+              </button>
+              <button onClick={() => selectUnit(null)} className="btn-secondary text-sm inline-flex items-center gap-1.5" aria-label="Close members panel">
+                <X size={14} /> Close
+              </button>
+            </div>
+          </div>
+
+          {unitMembers.length === 0 ? (
+            <div className="py-8 text-center text-[var(--text-muted)]">
+              <UserPlus size={22} className="mx-auto mb-2 opacity-60" />
+              <p className="text-sm">Assign a user to give them a place in this unit.</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-[var(--input-border)] text-left text-xs uppercase tracking-wider text-[var(--text-muted)]">
+                    {['User', 'Role at unit', 'Window', 'Status', ''].map((h, i) => <th key={i} className="px-3 py-2.5 font-semibold whitespace-nowrap">{h}</th>)}
+                  </tr>
+                </thead>
+                <tbody>
+                  {unitMembers.map((m) => {
+                    const who = userLabel(m.user_id)
+                    return (
+                      <tr key={m.id} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/40">
+                        <td className="px-3 py-2.5">
+                          <div className="flex items-center gap-2">
+                            <span className="font-medium text-[var(--text-primary)]">{who.name}</span>
+                            {m.is_primary && (
+                              <span className="inline-flex items-center gap-0.5 text-[10px] font-medium text-amber-300 border border-amber-500/30 bg-amber-500/10 rounded px-1.5 py-0.5">
+                                <Star size={9} className="fill-amber-300" /> Primary
+                              </span>
+                            )}
+                          </div>
+                          {who.sub && <span className="text-[11px] text-[var(--text-muted)]">{who.sub}</span>}
+                        </td>
+                        <td className="px-3 py-2.5 text-[var(--text-secondary)]">{m.role || <span className="text-[var(--text-muted)]">—</span>}</td>
+                        <td className="px-3 py-2.5 text-[var(--text-secondary)] whitespace-nowrap">
+                          {(m.starts_at || m.ends_at) ? (
+                            <span className="inline-flex items-center gap-1 text-xs">
+                              <Calendar size={11} className="opacity-60" />
+                              {m.starts_at ? String(m.starts_at).slice(0, 10) : '…'} → {m.ends_at ? String(m.ends_at).slice(0, 10) : '…'}
+                            </span>
+                          ) : <span className="text-[var(--text-muted)] text-xs">Open-ended</span>}
+                        </td>
+                        <td className="px-3 py-2.5">
+                          {m._active
+                            ? <span className="inline-flex items-center rounded-full border border-emerald-500/30 bg-emerald-500/10 text-emerald-300 px-2 py-0.5 text-[11px] font-medium">Active</span>
+                            : <span className="inline-flex items-center rounded-full border border-[var(--input-border)] text-[var(--text-muted)] px-2 py-0.5 text-[11px]">Scheduled / ended</span>}
+                        </td>
+                        <td className="px-3 py-2.5">
+                          <div className="flex items-center justify-end gap-1">
+                            <button onClick={() => openAssignEdit(m)} className="p-1.5 rounded hover:bg-[var(--input-bg)] text-[var(--text-muted)] hover:text-[var(--text-primary)]" aria-label="Edit assignment"><Pencil size={14} /></button>
+                            <button onClick={() => setConfirmRemove(m)} className="p-1.5 rounded hover:bg-red-900/30 text-[var(--text-muted)] hover:text-red-400" aria-label="Remove assignment"><Trash2 size={14} /></button>
+                          </div>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Filters */}
       <div className="card space-y-3">
@@ -381,14 +642,14 @@ export default function OrgHierarchy() {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-[var(--input-border)] text-left text-xs uppercase tracking-wider text-[var(--text-muted)]">
-                {['Unit', 'Type', 'Parent', 'Country', 'Site ref', 'Depth', ''].map((h, i) => <th key={i} className="px-4 py-3 font-semibold whitespace-nowrap">{h}</th>)}
+                {['Unit', 'Type', 'Parent', 'Country', 'Site ref', 'Depth', 'Members', ''].map((h, i) => <th key={i} className="px-4 py-3 font-semibold whitespace-nowrap">{h}</th>)}
               </tr>
             </thead>
             <tbody>
               {rows === null ? (
-                [0, 1, 2, 3, 4].map((i) => <tr key={i} className="border-b border-[var(--input-border)]/50"><td colSpan={7} className="px-4 py-3"><div className="h-4 bg-[var(--input-bg)] rounded animate-pulse" /></td></tr>)
+                [0, 1, 2, 3, 4].map((i) => <tr key={i} className="border-b border-[var(--input-border)]/50"><td colSpan={8} className="px-4 py-3"><div className="h-4 bg-[var(--input-bg)] rounded animate-pulse" /></td></tr>)
               ) : filtered.length === 0 ? (
-                <tr><td colSpan={7} className="px-4 py-12 text-center text-[var(--text-muted)]">
+                <tr><td colSpan={8} className="px-4 py-12 text-center text-[var(--text-muted)]">
                   <Filter size={22} className="mx-auto mb-2 opacity-60" />
                   {rows.length === 0 && !notProvisioned ? 'No units yet — create your first unit.' : 'No units match these filters.'}
                 </td></tr>
@@ -407,6 +668,16 @@ export default function OrgHierarchy() {
                     <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.country ? <span className="inline-flex items-center gap-1"><MapPin size={12} className="opacity-60" />{r.country}</span> : '—'}</td>
                     <td className="px-4 py-2.5 text-[var(--text-secondary)] font-mono text-xs">{r.site_ref || '—'}</td>
                     <td className="px-4 py-2.5 text-[var(--text-secondary)]">{depthOf(rows, r.id) ?? '—'}</td>
+                    <td className="px-4 py-2.5">
+                      <button
+                        onClick={() => selectUnit(r)}
+                        className={`inline-flex items-center gap-1.5 text-xs rounded-lg px-2 py-1 border ${String(r.id) === String(selectedUnitId) ? 'border-indigo-500/40 bg-indigo-500/10 text-indigo-300' : 'border-[var(--input-border)] text-[var(--text-secondary)] hover:bg-[var(--input-bg)]'}`}
+                        title="Manage members"
+                      >
+                        <Users size={12} />
+                        {countsByUnit.get(String(r.id))?.total || 0}
+                      </button>
+                    </td>
                     <td className="px-4 py-2.5">
                       <div className="flex items-center justify-end gap-1">
                         <button onClick={() => openEdit(r)} className="p-1.5 rounded hover:bg-[var(--input-bg)] text-[var(--text-muted)] hover:text-[var(--text-primary)]" aria-label="Edit"><Pencil size={14} /></button>
@@ -495,6 +766,98 @@ export default function OrgHierarchy() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Assign / edit member modal */}
+      {showAssignModal && assignForm && (
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/70 p-4" onClick={closeAssignModal}>
+          <div className="card w-full max-w-lg max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-1">
+              <h3 className="text-lg font-bold text-[var(--text-primary)]">{editingAssignment ? 'Edit assignment' : 'Assign user'}</h3>
+              <button onClick={closeAssignModal} className="text-[var(--text-muted)] hover:text-[var(--text-primary)]"><X size={18} /></button>
+            </div>
+            <p className="text-xs text-[var(--text-muted)] mb-4 inline-flex items-center gap-1.5">
+              <Network size={12} className="opacity-60" /> {selectedUnit?.name}
+            </p>
+            <form onSubmit={submitAssignment} className="space-y-4">
+              <div>
+                <label className="label">User</label>
+                {editingAssignment ? (
+                  <div className="input w-full flex items-center gap-2 !cursor-default">
+                    <span className="font-medium text-[var(--text-primary)]">{userLabel(assignForm.user_id).name}</span>
+                    {userLabel(assignForm.user_id).sub && <span className="text-[11px] text-[var(--text-muted)]">{userLabel(assignForm.user_id).sub}</span>}
+                  </div>
+                ) : (
+                  <select className="input w-full" value={assignForm.user_id} onChange={(e) => setAssign('user_id', e.target.value)}>
+                    <option value="">— Select a user —</option>
+                    {assignableProfiles.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {(p.full_name || p.username || p.email || 'Unnamed user')}{p.email ? ` · ${p.email}` : (p.role ? ` · ${p.role}` : '')}
+                      </option>
+                    ))}
+                  </select>
+                )}
+                {!editingAssignment && assignableProfiles.length === 0 && (
+                  <p className="text-[11px] text-[var(--text-muted)] mt-1">Every known user is already assigned to this unit.</p>
+                )}
+              </div>
+              <div>
+                <label className="label">Role at this unit (optional)</label>
+                <input className="input w-full" placeholder="e.g. Branch Manager" value={assignForm.role} maxLength={80} onChange={(e) => setAssign('role', e.target.value)} />
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="label">Starts (optional)</label>
+                  <input className="input w-full" type="date" value={assignForm.starts_at} onChange={(e) => setAssign('starts_at', e.target.value)} />
+                </div>
+                <div>
+                  <label className="label">Ends (optional)</label>
+                  <input className="input w-full" type="date" value={assignForm.ends_at} onChange={(e) => setAssign('ends_at', e.target.value)} />
+                </div>
+              </div>
+              <label className="flex items-center gap-2 text-sm text-[var(--text-secondary)] cursor-pointer">
+                <input type="checkbox" className="accent-amber-500" checked={assignForm.is_primary} onChange={(e) => setAssign('is_primary', e.target.checked)} />
+                <Star size={13} className="text-amber-400" /> Primary unit for this user
+              </label>
+
+              {assignError && (
+                <div className="flex items-start gap-2 text-sm text-red-300 bg-red-900/20 border border-red-800/50 rounded-lg px-3 py-2">
+                  <AlertTriangle size={15} className="mt-0.5 shrink-0" /> {assignError}
+                </div>
+              )}
+
+              <div className="flex items-center justify-end gap-2 pt-1">
+                <button type="button" onClick={closeAssignModal} className="btn-secondary text-sm" disabled={assignSaving}>Cancel</button>
+                <button type="submit" className="btn-primary text-sm inline-flex items-center gap-1.5 disabled:opacity-60" disabled={assignSaving || (!editingAssignment && !assignForm.user_id)}>
+                  {assignSaving ? 'Saving…' : editingAssignment ? 'Save changes' : 'Assign user'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Remove assignment confirm */}
+      {confirmRemove && (
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/70 p-4" onClick={() => !removing && setConfirmRemove(null)}>
+          <div className="card w-full max-w-sm" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 rounded-full bg-red-900/30 flex items-center justify-center shrink-0"><Trash2 size={18} className="text-red-400" /></div>
+              <div>
+                <h3 className="text-[var(--text-primary)] font-semibold">Remove this assignment?</h3>
+                <p className="text-sm text-[var(--text-muted)] mt-1">
+                  {userLabel(confirmRemove.user_id).name} will no longer be a member of {selectedUnit?.name}. This can’t be undone.
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center justify-end gap-2 mt-5">
+              <button onClick={() => setConfirmRemove(null)} className="btn-secondary text-sm" disabled={removing}>Cancel</button>
+              <button onClick={doRemoveAssignment} className="btn-danger text-sm inline-flex items-center gap-1.5 disabled:opacity-60" disabled={removing}>
+                <Trash2 size={14} /> {removing ? 'Removing…' : 'Remove'}
+              </button>
+            </div>
           </div>
         </div>
       )}

@@ -9,15 +9,14 @@ import { Ionicons } from '@expo/vector-icons'
 import {
   CameraView, useCameraPermissions, type BarcodeScanningResult,
 } from 'expo-camera'
-import { supabase } from '../../lib/supabase'
 import { useLanguage } from '../../contexts/LanguageContext'
-import { VehicleFleet } from '../../lib/types'
-import { lookupTyreBySerial, sanitizeSerial, TyreLookupRecord } from '../../lib/tyreLookup'
+import { lookupTyreBySerial, TyreLookupRecord } from '../../lib/tyreLookup'
+import { lookupAssetByCode, extractScanCode, AssetLookupRecord } from '../../lib/assetLookup'
 
 type ScanState = 'scanning' | 'searching' | 'result'
 
 type Resolved =
-  | { kind: 'vehicle'; code: string; vehicle: VehicleFleet }
+  | { kind: 'vehicle'; code: string; vehicle: AssetLookupRecord }
   | { kind: 'tyre'; code: string; tyre: TyreLookupRecord }
   | { kind: 'none'; code: string }
 
@@ -35,17 +34,14 @@ export default function ScannerScreen() {
   const backIcon = isRTL ? 'arrow-forward' : 'arrow-back'
 
   const resolveCode = useCallback(async (raw: string) => {
-    const code = sanitizeSerial(raw)
+    // Asset codes may arrive wrapped in a URL/JSON label; extract the code.
+    const code = extractScanCode(raw)
     if (!code) { reset(); return }
 
-    // 1) Asset / vehicle match
-    const { data: vehicles } = await supabase
-      .from('vehicle_fleet')
-      .select('id, site, asset_no, vehicle_type, make, model')
-      .eq('asset_no', code)
-      .limit(1)
-    if (vehicles && vehicles.length) {
-      setResolved({ kind: 'vehicle', code, vehicle: vehicles[0] as VehicleFleet })
+    // 1) Asset / vehicle match (forgiving: exact → case-insensitive → fleet_number)
+    const vehicle = await lookupAssetByCode(raw)
+    if (vehicle) {
+      setResolved({ kind: 'vehicle', code: vehicle.asset_no || code, vehicle })
       setState('result')
       return
     }
@@ -67,7 +63,7 @@ export default function ScannerScreen() {
     lockRef.current = true
     setState('searching')
     resolveCode(res.data).catch(() => {
-      setResolved({ kind: 'none', code: sanitizeSerial(res.data) })
+      setResolved({ kind: 'none', code: extractScanCode(res.data) })
       setState('result')
     })
   }, [state, resolveCode])
@@ -78,7 +74,7 @@ export default function ScannerScreen() {
     setState('scanning')
   }
 
-  function startInspectionForVehicle(v: VehicleFleet) {
+  function startInspectionForVehicle(v: AssetLookupRecord) {
     router.replace({
       pathname: '/(app)/inspection/new',
       params: { site: v.site, asset: v.asset_no },

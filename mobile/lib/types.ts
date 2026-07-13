@@ -27,6 +27,29 @@ export function normaliseRole(raw: string | null | undefined): UserRole {
   return valid.includes(key as UserRole) ? (key as UserRole) : 'reporter'
 }
 
+/**
+ * Normalises the DB `profiles.country` value to a single scalar the mobile app
+ * can use for client-side scoping and row stamping.
+ *
+ * IMPORTANT: since V114 (server-side country RLS) `profiles.country` is a
+ * `text[]` ARRAY, not a scalar. Passing that array straight into a PostgREST
+ * filter (`country.eq.${arr}`) or stamping it onto a `text` column silently
+ * breaks: an empty "see-all" array coerces to "" (hiding every country-tagged
+ * row) and a multi-country array coerces to "A,B" (an invalid filter). We
+ * collapse it to:
+ *   • single assigned country            → that country string (client filter ok)
+ *   • empty / null / "All" / multi-country → null  (no client filter; the V114
+ *     RESTRICTIVE RLS already returns exactly the countries the user may see)
+ */
+export function normaliseCountry(raw: unknown): string | null {
+  const arr = Array.isArray(raw) ? raw : raw == null ? [] : [raw]
+  const cleaned = arr
+    .map((v) => (typeof v === 'string' ? v.trim() : ''))
+    .filter(Boolean)
+    .filter((v) => v.toLowerCase() !== 'all')
+  return cleaned.length === 1 ? cleaned[0] : null
+}
+
 /** Returns true for roles that have elevated management access */
 export function isAdminOrAbove(role: UserRole | null | undefined): boolean {
   return role === 'admin' || role === 'manager' || role === 'director'

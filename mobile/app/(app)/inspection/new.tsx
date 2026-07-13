@@ -153,13 +153,21 @@ export default function NewInspectionScreen() {
     if (selectedSite) loadVehicles(selectedSite)
   }, [selectedSite])
 
-  // Preselect the vehicle when arriving from the scanner (asset param).
+  // Preselect the vehicle when arriving from the scanner or asset list (asset
+  // param). Match is trimmed + case-insensitive so a scanned code always lands
+  // on its vehicle; if the asset genuinely isn't in the loaded site fleet, carry
+  // it into manual entry so the inspector never has to retype what they scanned.
   useEffect(() => {
-    if (params.asset && !selectedVehicle && filteredVehicles.length) {
-      const match = filteredVehicles.find(v => v.asset_no === params.asset)
-      if (match) setSelectedVehicle(match)
+    if (!params.asset || selectedVehicle || loadingVehicles) return
+    const want = String(params.asset).trim().toLowerCase()
+    const match = vehicles.find(v => (v.asset_no ?? '').trim().toLowerCase() === want)
+    if (match) {
+      setSelectedVehicle(match)
+    } else if (vehicles.length && !useManualEntry && !manualAsset) {
+      setUseManualEntry(true)
+      setManualAsset(String(params.asset).trim())
     }
-  }, [filteredVehicles, params.asset, selectedVehicle])
+  }, [vehicles, loadingVehicles, params.asset, selectedVehicle])
 
   useEffect(() => {
     const v = selectedVehicle ?? (useManualEntry && manualAsset ? getEffectiveVehicle() : null)

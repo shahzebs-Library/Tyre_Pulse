@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useRef, useState, ReactNode } from 'react'
 import type { User, AuthError, RealtimeChannel } from '@supabase/supabase-js'
 import { supabase } from '../lib/supabase'
-import { Profile, normaliseRole } from '../lib/types'
+import { Profile, normaliseRole, normaliseCountry } from '../lib/types'
 import { syncQueue, clearQueue } from '../lib/offlineQueue'
 import { syncRecordQueue, clearRecordQueue } from '../lib/recordQueue'
 import { clearPushToken, cancelDailyInspectionReminder } from '../lib/notifications'
@@ -52,7 +52,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             supabase.auth.signOut()
             return
           }
-          setProfile({ ...updated, role: normaliseRole(updated.role) } as Profile)
+          setProfile({ ...updated, role: normaliseRole(updated.role), country: normaliseCountry(updated.country) } as Profile)
         }
       )
       .subscribe()
@@ -112,7 +112,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           await supabase.auth.signOut()
           return
         }
-        setProfile({ ...data, role: normaliseRole(data.role) } as Profile)
+        setProfile({ ...data, role: normaliseRole(data.role), country: normaliseCountry(data.country) } as Profile)
         // Tag field crash reports with the operator behind them.
         setSentryUser({ id: data.id, username: data.username })
       } else {

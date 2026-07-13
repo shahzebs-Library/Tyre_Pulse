@@ -294,6 +294,7 @@ const NAV_GROUPS = [
   {
     label: 'Administration & Data',
     items: [
+      { to: '/admin',            label: 'Admin Console',      icon: LayoutGrid, adminOnly: true },
       { to: '/cleaning',         label: 'Data Cleaning',      icon: Wand2, roles: CLEANING_ROLES },
       { to: '/data-intake',      label: 'Data Intake Center', icon: Database },
       { to: '/upload-approvals', label: 'Upload Approvals',   icon: ClipboardList, roles: UPLOAD_ROLES },

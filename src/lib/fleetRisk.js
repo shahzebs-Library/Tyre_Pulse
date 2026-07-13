@@ -1,61 +1,65 @@
 /**
- * Fleet Risk Score — pure, deterministic scoring helpers (no I/O) for the Fleet
- * Risk Score module. Each fleet asset is ranked with a 0–100 composite risk
- * score derived from real tyre/maintenance signals in `tyre_records`, so the
- * fleet team sees which vehicles are most at risk and exactly why.
+ * Fleet Risk Score — pure, deterministic tyre-safety scoring (no I/O).
  *
- * Design contract (mirrors src/lib/tyreAge.js):
+ * PRIMARY engine (ported VERBATIM from tyre_saas backend/routes/risk_score.py):
+ * a composite SAFETY score per tyre on a 0–100 scale where HIGHER = SAFER.
+ * Five weighted factors (sum 100): tread 30, pressure 25, age 20, km 15,
+ * inspection 10. Each factor is a pure sub-score in [0,100]; the composite is
+ * their weighted mean. Tyres are then banded low / medium / high / critical.
+ *
+ * SECONDARY engine: a per-vehicle rollup that groups the SAME per-tyre scores by
+ * asset and reports the worst (lowest-safety) tyre per vehicle — mirroring the
+ * original /risk-score/vehicle endpoint. Both views share ONE scoring source of
+ * truth so a vehicle's band can never disagree with its tyres.
+ *
+ * Design contract (mirrors src/lib/tyrePassport.js):
  *  - PURE: no Date.now(), no network, no randomness. Callers inject the
  *    reference clock (`now`) so results are reproducible and unit-testable.
- *  - Banding/weights live here in ONE auditable place; the page and service
- *    consume these functions rather than re-deriving the maths.
+ *  - Honest degradation: a factor with no source signal returns the original
+ *    engine's documented neutral default (never a fabricated measurement).
  *
- * Signals per asset (grouped by asset_no; in-service = removal_date IS NULL):
- *   aged      — in-service tyres past the GCC/RTA age limit (weight: high)
- *   lowTread  — in-service tyres with tread_depth < LOW_TREAD_MM (weight: high)
- *   failures  — recently removed tyres carrying a removal reason (weight: med)
- *   cpk       — asset avg cost-per-km vs fleet median CPK       (weight: med)
- *   noInsp    — in-service tyres with no tread/pressure reading  (weight: low)
- *
- * Each signal is normalised to 0–1, combined with the documented weights (which
- * sum to 1) into a 0–100 score, then banded Low(<34)/Medium(34–66)/High(>66).
+ * Data caveats specific to this app's flat `tyre_records` (documented in the UI):
+ *  - AGE uses IN-SERVICE age (now − fitment/issue date); the DOT manufacture
+ *    date is not captured, so a tyre stored before fitment reads younger than a
+ *    true manufacture-age model would show.
+ *  - INSPECTION has no per-tyre inspection-date source, so every tyre degrades
+ *    to the engine's "no inspection" default (40) rather than inventing a date.
  */
-import { tyreAgeBand } from './tyreAge'
 
-// ── Tunables (overridable via opts) ─────────────────────────────────────────
-export const LOW_TREAD_MM = 3 // tread depth (mm) below which a tyre is "low"
-export const FAILURE_WINDOW_DAYS = 365 // removals older than this don't count as "recent"
+// ── Scoring weights (sum = 100) — verbatim from risk_score.py ────────────────
+export const W_TREAD = 30 // tread depth vs minimum legal limit
+export const W_PRESSURE = 25 // deviation from optimal PSI
+export const W_AGE = 20 // tyre age vs 5-year GCC guideline
+export const W_KM = 15 // km driven vs expected lifecycle
+export const W_INSPECTION = 10 // overdue-inspection penalty
 
-/**
- * Signal weights — MUST sum to 1 so the weighted combination lands in [0,1] and
- * scales cleanly to 0–100. High-severity signals (aged, low tread) dominate;
- * medium (failures, CPK) are mid; missing-inspection is a low nudge.
- */
-export const DEFAULT_WEIGHTS = Object.freeze({
-  aged: 0.28,
-  lowTread: 0.28,
-  failures: 0.18,
-  cpk: 0.16,
-  noInsp: 0.10,
+export const RISK_WEIGHTS = Object.freeze({
+  tread: W_TREAD, pressure: W_PRESSURE, age: W_AGE, km: W_KM, inspection: W_INSPECTION,
 })
 
-// Band thresholds on the 0–100 score.
-export const RISK_BANDS = ['high', 'medium', 'low']
-export const RISK_BAND_META = {
-  high: { label: 'High', tone: 'red' },
-  medium: { label: 'Medium', tone: 'amber' },
-  low: { label: 'Low', tone: 'green' },
+// ── Thresholds — verbatim from risk_score.py ────────────────────────────────
+export const TREAD_LEGAL_MIN_MM = 1.6
+export const TREAD_REPLACE_MM = 3.0
+export const TREAD_NEW_MM = 10.0
+export const PRESSURE_TOLERANCE_PCT = 0.10 // ±10% = green zone
+export const OPTIMAL_PSI = 95.0
+export const TYRE_MAX_AGE_YEARS = 5.0
+export const KM_MAX_LIFECYCLE = 80_000
+export const INSPECTION_OVERDUE_DAYS = 30
+
+// ── Risk banding (SAFETY score → band + colour) ─────────────────────────────
+export const RISK_LEVELS = ['critical', 'high', 'medium', 'low']
+export const RISK_LEVEL_META = {
+  critical: { label: 'Critical', color: 'red' },
+  high: { label: 'High', color: 'orange' },
+  medium: { label: 'Medium', color: 'amber' },
+  low: { label: 'Low', color: 'green' },
 }
 
 const DAY_MS = 24 * 3600 * 1000
+const YEAR_MS = 365.25 * DAY_MS
 
-/** Band a 0–100 score. Low(<34) / Medium(34–66) / High(>66). */
-export function riskBand(score) {
-  if (score > 66) return 'high'
-  if (score >= 34) return 'medium'
-  return 'low'
-}
-
+// ── Shared numeric / date helpers ───────────────────────────────────────────
 function num(v) {
   if (v == null || v === '') return null
   const n = typeof v === 'number' ? v : parseFloat(String(v).replace(/[^0-9.\-]/g, ''))
@@ -68,14 +72,31 @@ function toMs(v) {
   return Number.isNaN(t) ? null : t
 }
 
-const assetKeyOf = (r) => {
-  const k = (r?.asset_no ?? '').toString().trim()
-  return k || null
+const round1 = (v) => (v == null || !Number.isFinite(v) ? v : Math.round(v * 10) / 10)
+
+function resolveNow(now) {
+  const ms = now instanceof Date ? now.getTime() : Number(now)
+  return Number.isFinite(ms) ? ms : Date.now()
 }
 
-/** In-service = no removal date recorded. */
+export const serialOf = (r) =>
+  (r?.serial_no ?? r?.serial_number ?? r?.tyre_serial ?? '').toString().trim() || null
+
+export const positionOf = (r) =>
+  (r?.position ?? r?.tyre_position ?? '').toString().trim() || null
+
+const assetOf = (r) => (r?.asset_no ?? '').toString().trim() || null
+
+const statusOf = (r) => (r?.status ?? '').toString().trim().toLowerCase()
+
+/** In-service = no removal date recorded and no removal odometer. */
 export function isInService(rec) {
   return !rec?.removal_date && rec?.km_at_removal == null
+}
+
+/** Scrapped/removed tyres are excluded from live safety scoring. */
+export function isScrapped(rec) {
+  return /scrap|dispos/i.test(statusOf(rec))
 }
 
 /** Distance (km) attributable to a tyre — total_km, else fitment→removal delta. */
@@ -96,166 +117,251 @@ export function tyreCpk(rec) {
   return cost / km
 }
 
-const removalReasonOf = (r) => {
-  const v = r?.reason_for_removal ?? r?.removal_reason ?? null
-  const s = v == null ? '' : String(v).trim()
-  return s || null
+/**
+ * In-SERVICE age in years (now − fitment/issue date). Null when no anchor date
+ * exists (→ ageScore neutral). NOTE: not manufacture age — this app does not
+ * capture the DOT week; surfaced as a caveat in the UI.
+ */
+export function inServiceYears(rec, now) {
+  const start = toMs(rec?.fitment_date) ?? toMs(rec?.issue_date)
+  const ref = resolveNow(now)
+  if (start == null) return null
+  const years = (ref - start) / YEAR_MS
+  return years >= 0 ? years : null
 }
 
-function hasNoInspection(rec) {
-  return num(rec?.tread_depth) == null && num(rec?.pressure_reading) == null
+// ── Factor sub-scores (HIGHER = SAFER) — ported VERBATIM ─────────────────────
+
+/** Tread sub-score. null → 50 (unknown, mid-risk); 0 at/below legal; 100 when new. */
+export function treadScore(treadMm) {
+  if (treadMm == null) return 50.0
+  if (treadMm <= TREAD_LEGAL_MIN_MM) return 0.0
+  if (treadMm <= TREAD_REPLACE_MM) {
+    return 50.0 * (treadMm - TREAD_LEGAL_MIN_MM) / (TREAD_REPLACE_MM - TREAD_LEGAL_MIN_MM)
+  }
+  return 50.0 + 50.0 * Math.min(1.0, (treadMm - TREAD_REPLACE_MM) / (TREAD_NEW_MM - TREAD_REPLACE_MM))
 }
 
-function median(nums) {
-  const arr = nums.filter((n) => typeof n === 'number' && Number.isFinite(n)).sort((a, b) => a - b)
-  if (!arr.length) return null
-  const mid = Math.floor(arr.length / 2)
-  return arr.length % 2 ? arr[mid] : (arr[mid - 1] + arr[mid]) / 2
+/** Pressure sub-score. null → 60; 100 within ±tolerance; drops 400/pt past it. */
+export function pressureScore(actualPsi, optimalPsi = OPTIMAL_PSI) {
+  if (actualPsi == null) return 60.0
+  const opt = optimalPsi || OPTIMAL_PSI
+  const deviation = Math.abs(actualPsi - opt) / opt
+  if (deviation <= PRESSURE_TOLERANCE_PCT) return 100.0
+  return Math.max(0.0, 100.0 - (deviation - PRESSURE_TOLERANCE_PCT) * 400)
 }
 
-function clamp01(n) {
-  if (!Number.isFinite(n)) return 0
-  return n < 0 ? 0 : n > 1 ? 1 : n
+/** Age sub-score from age in YEARS. null → 60; 0 at/over 5y; linear otherwise. */
+export function ageScore(years) {
+  if (years == null) return 60.0
+  if (years >= TYRE_MAX_AGE_YEARS) return 0.0
+  return 100.0 * (1.0 - years / TYRE_MAX_AGE_YEARS)
+}
+
+/** Km sub-score. falsy → 80; 0 at lifecycle limit; linear otherwise. */
+export function kmScore(km) {
+  if (!km) return 80.0
+  return Math.max(0.0, 100.0 * (1.0 - km / KM_MAX_LIFECYCLE))
+}
+
+/** Inspection sub-score from days-since-inspection. null → 40 (no data). */
+export function inspectionScore(daysSince) {
+  if (daysSince == null) return 40.0
+  if (daysSince <= 7) return 100.0
+  if (daysSince <= INSPECTION_OVERDUE_DAYS) {
+    return 100.0 - 50.0 * (daysSince - 7) / (INSPECTION_OVERDUE_DAYS - 7)
+  }
+  return Math.max(0.0, 50.0 - (daysSince - INSPECTION_OVERDUE_DAYS) * 1.0)
+}
+
+/** Weighted composite safety score, rounded to 1 dp. */
+export function compositeScore(tread, pressure, age, km, insp) {
+  const raw = (tread * W_TREAD + pressure * W_PRESSURE + age * W_AGE + km * W_KM + insp * W_INSPECTION) / 100.0
+  return Math.round(raw * 10) / 10
+}
+
+/** SAFETY band: >=75 low, >=50 medium, >=25 high, <25 critical. */
+export function riskLevel(score) {
+  if (score == null || !Number.isFinite(score)) return 'unknown'
+  if (score >= 75) return 'low'
+  if (score >= 50) return 'medium'
+  if (score >= 25) return 'high'
+  return 'critical'
+}
+
+/** Colour token matching the safety band. */
+export function riskColor(score) {
+  if (score == null || !Number.isFinite(score)) return 'slate'
+  if (score >= 75) return 'green'
+  if (score >= 50) return 'amber'
+  if (score >= 25) return 'orange'
+  return 'red'
 }
 
 /**
- * Score every asset represented in `tyres` (optionally enriched with
- * `vehicles` master data). Deterministic: pass `opts.now` (ms or Date).
- *
- * @param {{ tyres?: Array, vehicles?: Array }} data
- * @param {{ now?: number|Date, weights?: object, lowTreadMm?: number,
- *   failureWindowDays?: number, ageThresholds?: object }} [opts]
- * @returns {Array<{asset_no, score, band, signals, make, model, vehicle_type,
- *   site, country, status, inServiceCount, totalTyres}>}
+ * Factors dragging a tyre's safety down: tread/km below 50, pressure/age/
+ * inspection below 60. Compared on the RAW sub-scores (as the original engine
+ * does), returned worst-first with a human detail, capped at 3.
+ * @param {{tread,pressure,age,km,inspection:number}} raw  raw sub-scores
+ * @param {object} ctx  { treadMm, actualPsi, optimalPsi, ageYears, km, inspDays }
  */
-export function scoreVehicles({ tyres = [], vehicles = [] } = {}, opts = {}) {
-  const nowMs = opts.now instanceof Date ? opts.now.getTime() : Number(opts.now)
-  const now = Number.isFinite(nowMs) ? nowMs : NaN
-  const weights = { ...DEFAULT_WEIGHTS, ...(opts.weights || {}) }
-  const lowTreadMm = opts.lowTreadMm ?? LOW_TREAD_MM
-  const windowMs = (opts.failureWindowDays ?? FAILURE_WINDOW_DAYS) * DAY_MS
+export function topRiskFactors(raw, ctx = {}) {
+  const factors = []
+  if (raw.tread < 50) {
+    factors.push({ factor: 'tread_depth', score: round1(raw.tread), detail: ctx.treadMm != null ? `${ctx.treadMm}mm tread` : 'Tread depth not recorded' })
+  }
+  if (raw.pressure < 60) {
+    factors.push({ factor: 'pressure', score: round1(raw.pressure), detail: ctx.actualPsi != null ? `${ctx.actualPsi} PSI vs ${ctx.optimalPsi ?? OPTIMAL_PSI} optimal` : 'Pressure not recorded' })
+  }
+  if (raw.age < 60) {
+    factors.push({ factor: 'tyre_age', score: round1(raw.age), detail: ctx.ageYears != null ? `${round1(ctx.ageYears)} yrs in service` : 'Fitment date unknown' })
+  }
+  if (raw.km < 50) {
+    factors.push({ factor: 'km_driven', score: round1(raw.km), detail: ctx.km ? `${Math.round(ctx.km).toLocaleString()} km driven` : 'High mileage' })
+  }
+  if (raw.inspection < 60) {
+    factors.push({ factor: 'inspection', score: round1(raw.inspection), detail: ctx.inspDays != null ? `Last inspection ${ctx.inspDays}d ago` : 'No inspection on record' })
+  }
+  return factors.sort((a, b) => a.score - b.score).slice(0, 3)
+}
 
-  const vehicleByAsset = new Map()
-  for (const v of Array.isArray(vehicles) ? vehicles : []) {
-    const k = assetKeyOf(v)
-    if (k && !vehicleByAsset.has(k)) vehicleByAsset.set(k, v)
+/**
+ * Score a single tyre record into a full safety profile.
+ * @param {object} rec  a tyre_records row
+ * @param {{ now?:number|Date, optimalPsi?:number }} [opts]
+ */
+export function scoreTyre(rec, opts = {}) {
+  const now = resolveNow(opts.now)
+  const optimalPsi = opts.optimalPsi ?? OPTIMAL_PSI
+
+  const treadMm = num(rec?.tread_depth)
+  const actualPsi = num(rec?.pressure_reading)
+  const ageYears = inServiceYears(rec, now)
+  const km = tyreKm(rec)
+  const inspDays = null // no per-tyre inspection-date source in tyre_records
+
+  const sTread = treadScore(treadMm)
+  const sPres = pressureScore(actualPsi, optimalPsi)
+  const sAge = ageScore(ageYears)
+  const sKm = kmScore(km)
+  const sInsp = inspectionScore(inspDays)
+
+  const score = compositeScore(sTread, sPres, sAge, sKm, sInsp)
+  const level = riskLevel(score)
+
+  const component_scores = {
+    tread: round1(sTread), pressure: round1(sPres), age: round1(sAge),
+    km: round1(sKm), inspection: round1(sInsp),
   }
 
-  // ── Pass 1: group tyres by asset and gather raw counts + per-asset CPK. ──
-  const groups = new Map()
-  for (const rec of Array.isArray(tyres) ? tyres : []) {
-    const key = assetKeyOf(rec)
-    if (!key) continue // pool/unassigned stock isn't a vehicle to rank
-    let g = groups.get(key)
-    if (!g) {
-      g = {
-        asset_no: key, totalTyres: 0, inServiceCount: 0, agedCount: 0,
-        lowTreadCount: 0, noInspectionCount: 0, recentFailures: 0,
-        cpkVals: [], site: null, country: null, status: null,
-      }
-      groups.set(key, g)
-    }
-    g.totalTyres += 1
-    if (!g.site && rec.site) g.site = rec.site
-    if (!g.country && rec.country) g.country = rec.country
-
-    const cpk = tyreCpk(rec)
-    if (cpk != null) g.cpkVals.push(cpk)
-
-    if (isInService(rec)) {
-      g.inServiceCount += 1
-      if (tyreAgeBand(rec, now, opts.ageThresholds) === 'non_compliant') g.agedCount += 1
-      const tread = num(rec.tread_depth)
-      if (tread != null && tread < lowTreadMm) g.lowTreadCount += 1
-      if (hasNoInspection(rec)) g.noInspectionCount += 1
-    } else if (removalReasonOf(rec)) {
-      // Recent failure: a removed tyre carrying a removal reason, within window.
-      const remMs = toMs(rec.removal_date)
-      const recent = !Number.isFinite(now) || remMs == null || (now - remMs) <= windowMs
-      if (recent) g.recentFailures += 1
-    }
+  return {
+    id: rec?.id ?? null,
+    serial: serialOf(rec),
+    asset_no: assetOf(rec),
+    position: positionOf(rec),
+    brand: rec?.brand ?? null,
+    size: rec?.size ?? null,
+    site: rec?.site ?? null,
+    country: rec?.country ?? null,
+    status: rec?.status ?? null,
+    risk_score: score,
+    risk_level: level,
+    risk_color: riskColor(score),
+    component_scores,
+    top_risk_factors: topRiskFactors(
+      { tread: sTread, pressure: sPres, age: sAge, km: sKm, inspection: sInsp },
+      { treadMm, actualPsi, optimalPsi, ageYears, km, inspDays },
+    ),
+    tread_depth: treadMm,
+    pressure_reading: actualPsi,
+    age_years: ageYears != null ? round1(ageYears) : null,
+    km,
+    cpk: (() => { const c = tyreCpk(rec); return c == null ? null : Math.round(c * 1000) / 1000 })(),
   }
+}
 
-  // Fleet median CPK from per-asset average CPK (assets with any CPK signal).
-  const assetCpk = new Map()
-  for (const g of groups.values()) {
-    if (g.cpkVals.length) {
-      assetCpk.set(g.asset_no, g.cpkVals.reduce((s, x) => s + x, 0) / g.cpkVals.length)
-    }
-  }
-  const fleetMedianCpk = median([...assetCpk.values()])
-
-  // ── Pass 2: normalise signals → weighted 0–100 score → band. ──
-  const rows = []
-  for (const g of groups.values()) {
-    const denom = g.inServiceCount || g.totalTyres || 1
-    const agedN = clamp01(g.agedCount / denom)
-    const lowTreadN = clamp01(g.lowTreadCount / denom)
-    const noInspN = clamp01(g.noInspectionCount / denom)
-    // Failure rate relative to the asset's own tyre population, capped at 1.
-    const failuresN = clamp01(g.recentFailures / Math.max(g.totalTyres, 1))
-    // CPK: 0 at/below fleet median, 1 at >=2x median. No CPK data → 0.
-    const cpk = assetCpk.get(g.asset_no)
-    const cpkN = (cpk != null && fleetMedianCpk != null && fleetMedianCpk > 0)
-      ? clamp01((cpk / fleetMedianCpk) - 1)
-      : 0
-
-    const weighted = weights.aged * agedN
-      + weights.lowTread * lowTreadN
-      + weights.failures * failuresN
-      + weights.cpk * cpkN
-      + weights.noInsp * noInspN
-    const score = Math.round(clamp01(weighted) * 100)
-
-    const veh = vehicleByAsset.get(g.asset_no) || {}
-    rows.push({
-      asset_no: g.asset_no,
-      score,
-      band: riskBand(score),
-      make: veh.make ?? null,
-      model: veh.model ?? null,
-      vehicle_type: veh.vehicle_type ?? null,
-      site: veh.site ?? g.site ?? null,
-      country: veh.country ?? g.country ?? null,
-      status: veh.status ?? null,
-      inServiceCount: g.inServiceCount,
-      totalTyres: g.totalTyres,
-      signals: {
-        agedCount: g.agedCount,
-        lowTreadCount: g.lowTreadCount,
-        recentFailures: g.recentFailures,
-        noInspectionCount: g.noInspectionCount,
-        cpk: cpk != null ? Math.round(cpk * 1000) / 1000 : null,
-        fleetMedianCpk: fleetMedianCpk != null ? Math.round(fleetMedianCpk * 1000) / 1000 : null,
-        normalized: {
-          aged: Math.round(agedN * 100) / 100,
-          lowTread: Math.round(lowTreadN * 100) / 100,
-          failures: Math.round(failuresN * 100) / 100,
-          cpk: Math.round(cpkN * 100) / 100,
-          noInsp: Math.round(noInspN * 100) / 100,
-        },
-      },
-    })
-  }
-
-  // Highest risk first; stable tiebreaker on asset_no for deterministic order.
-  rows.sort((a, b) => b.score - a.score || String(a.asset_no).localeCompare(String(b.asset_no)))
+/**
+ * Score every LIVE (in-service, non-scrapped) tyre. Deterministic for a fixed
+ * `opts.now`. Ordered worst-first (lowest safety score); serial tiebreaker keeps
+ * order stable.
+ * @param {{ tyres?: Array }} data
+ * @param {{ now?:number|Date, optimalPsi?:number }} [opts]
+ */
+export function scoreTyres({ tyres = [] } = {}, opts = {}) {
+  const now = resolveNow(opts.now)
+  const rows = (Array.isArray(tyres) ? tyres : [])
+    .filter((r) => r && isInService(r) && !isScrapped(r))
+    .map((r) => scoreTyre(r, { ...opts, now }))
+  rows.sort((a, b) => a.risk_score - b.risk_score
+    || String(a.serial || a.asset_no || '').localeCompare(String(b.serial || b.asset_no || '')))
   return rows
 }
 
 /**
- * Aggregate scored rows into fleet-level KPIs + band split.
- * @param {Array} rows  output of scoreVehicles
+ * Fleet-level rollup of scored tyre rows.
+ * @param {Array} rows  output of scoreTyres / scoreTyre[]
+ * @returns {{ fleet_average_score, fleet_risk_level, by_risk_level, total_scored }}
  */
-export function summarizeRisk(rows) {
+export function summarizeTyreRisk(rows) {
   const list = Array.isArray(rows) ? rows : []
-  const counts = { total: list.length, high: 0, medium: 0, low: 0 }
-  let scoreSum = 0
+  const by_risk_level = { critical: 0, high: 0, medium: 0, low: 0 }
+  let sum = 0
   for (const r of list) {
-    counts[r.band] = (counts[r.band] || 0) + 1
-    scoreSum += Number(r.score) || 0
+    if (by_risk_level[r.risk_level] != null) by_risk_level[r.risk_level] += 1
+    sum += Number(r.risk_score) || 0
   }
-  const avgScore = list.length ? Math.round(scoreSum / list.length) : null
-  const topRisk = list.slice(0, 10)
-  return { counts, avgScore, topRisk }
+  const fleet_average_score = list.length ? Math.round((sum / list.length) * 10) / 10 : 0
+  return {
+    fleet_average_score,
+    fleet_risk_level: list.length ? riskLevel(fleet_average_score) : 'unknown',
+    by_risk_level,
+    total_scored: list.length,
+  }
+}
+
+/**
+ * SECONDARY view — per-vehicle rollup derived from the SAME per-tyre scores.
+ * Groups scored tyre rows by asset and reports the worst (lowest-safety) tyre
+ * per vehicle, mirroring the original /risk-score/vehicle endpoint. A vehicle's
+ * band is the band of its worst tyre, so it can never disagree with its tyres.
+ * @param {Array} rows  output of scoreTyres
+ */
+export function rollupVehicles(rows) {
+  const list = Array.isArray(rows) ? rows : []
+  const groups = new Map()
+  for (const r of list) {
+    const key = r.asset_no
+    if (!key) continue // pool/unassigned stock isn't a vehicle
+    let g = groups.get(key)
+    if (!g) {
+      g = { asset_no: key, site: r.site ?? null, country: r.country ?? null, scores: [], worstTyre: null }
+      groups.set(key, g)
+    }
+    if (!g.site && r.site) g.site = r.site
+    if (!g.country && r.country) g.country = r.country
+    g.scores.push(r.risk_score)
+    if (!g.worstTyre || r.risk_score < g.worstTyre.risk_score) g.worstTyre = r
+  }
+
+  const out = []
+  for (const g of groups.values()) {
+    const worst = Math.min(...g.scores)
+    const avg = Math.round((g.scores.reduce((s, x) => s + x, 0) / g.scores.length) * 10) / 10
+    out.push({
+      asset_no: g.asset_no,
+      site: g.site,
+      country: g.country,
+      tyre_count: g.scores.length,
+      worst_score: worst,
+      average_score: avg,
+      vehicle_risk_level: riskLevel(worst),
+      vehicle_risk_color: riskColor(worst),
+      worst_tyre: g.worstTyre
+        ? { serial: g.worstTyre.serial, position: g.worstTyre.position, top_risk_factors: g.worstTyre.top_risk_factors }
+        : null,
+    })
+  }
+  // Worst vehicles first; stable asset_no tiebreaker.
+  out.sort((a, b) => a.worst_score - b.worst_score || String(a.asset_no).localeCompare(String(b.asset_no)))
+  return out
 }

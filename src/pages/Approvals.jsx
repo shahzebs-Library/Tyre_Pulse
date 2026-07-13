@@ -1,18 +1,38 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useNavigate } from 'react-router-dom'
 import {
   CheckSquare, X, Search, Clock, Inbox, Filter, AlertTriangle,
-  ClipboardList, CheckCircle2, XCircle, Undo2, Timer, RefreshCw,
-  ChevronRight, ServerCrash,
+  ClipboardList, CheckCircle2, XCircle, Undo2, RefreshCw,
+  ChevronRight, ServerCrash, Car, ClipboardCheck, Database, Loader2,
+  ExternalLink, GitBranch,
 } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import * as workflows from '../lib/api/workflows'
+import * as queue from '../lib/api/approvalsQueue'
 import { useAuth } from '../contexts/AuthContext'
+import { useSettings } from '../contexts/SettingsContext'
 import { formatDistanceToNow } from 'date-fns'
 import PageHeader from '../components/ui/PageHeader'
 import ApprovalStatusBadge from '../components/workflow/ApprovalStatusBadge'
 import ApprovalAction from '../components/workflow/ApprovalAction'
 import ApprovalTrail from '../components/workflow/ApprovalTrail'
 import { stepRequirements } from '../lib/workflow/stepRequirements'
+
+// ─── Source taxonomy ────────────────────────────────────────────────────────────
+// The unified queue merges the V95 workflow engine with the other real
+// approval-bearing surfaces in the schema. Every item carries a `source`.
+
+const SOURCE = {
+  workflow:         'workflow',
+  accident_closure: 'accident_closure',
+  checklist:        'checklist',
+}
+
+const SOURCE_META = {
+  workflow:         { label: 'Workflow',          short: 'Workflow',  icon: GitBranch,      tone: 'blue' },
+  accident_closure: { label: 'Accident Closure',  short: 'Closure',   icon: Car,            tone: 'red'  },
+  checklist:        { label: 'Checklist Sign-off', short: 'Checklist', icon: ClipboardCheck, tone: 'teal' },
+}
 
 // ─── Bucket + metric definitions ───────────────────────────────────────────────
 
@@ -34,7 +54,15 @@ const TONE_TEXT = {
   orange: 'text-orange-400',
   green:  'text-green-400',
   blue:   'text-blue-400',
+  teal:   'text-teal-400',
   gray:   'text-gray-400',
+}
+
+const TONE_BADGE = {
+  blue:  'bg-blue-500/15 text-blue-300 border-blue-500/30',
+  red:   'bg-red-500/15 text-red-300 border-red-500/30',
+  teal:  'bg-teal-500/15 text-teal-300 border-teal-500/30',
+  amber: 'bg-amber-500/15 text-amber-300 border-amber-500/30',
 }
 
 const TONE_TAB_ACTIVE = {
@@ -86,31 +114,46 @@ function slaState(instance) {
   }
 }
 
-/**
- * Normalise the metrics object into the six headline stats. The RPC shape is
- * server-owned; we defensively read several likely key names so the strip stays
- * populated regardless of minor naming (counts fall back to bucket lengths).
- */
-function deriveMetrics(metrics, buckets) {
-  const m = metrics && typeof metrics === 'object' ? metrics : {}
-  const pick = (...keys) => {
-    for (const k of keys) {
-      const v = m[k]
-      if (v != null && v !== '') return v
-    }
-    return null
-  }
-  const avgRaw = pick('avg_approval_time_hours', 'avg_approval_hours', 'avg_approval_time')
-  const avgLabel = avgRaw == null
-    ? '—'
-    : (typeof avgRaw === 'number' ? `${avgRaw.toFixed(1)}h` : String(avgRaw))
+// ── Normalisers for the non-workflow sources into a shared row shape ──────────────
+
+function toClosureItem(a) {
+  const label = [a.asset_no, a.accident_type].filter(Boolean).join(' · ') || 'Accident'
   return {
-    total_pending:      pick('total_pending', 'pending') ?? buckets.pending.length,
-    overdue:            pick('overdue') ?? buckets.overdue.length,
-    returned:           pick('returned') ?? buckets.returned.length,
-    rejected:           pick('rejected') ?? buckets.rejected.length,
-    recently_approved:  pick('recently_approved', 'approved_recent') ?? buckets.recently_approved.length,
-    avg_approval:       avgLabel,
+    source: SOURCE.accident_closure,
+    id: a.id,
+    title: `Closure request — ${label}`,
+    subtitle: [
+      a.driver_name && `Driver ${a.driver_name}`,
+      a.incident_date && `Incident ${a.incident_date}`,
+      a.severity,
+    ].filter(Boolean).join(' · ') || 'Awaiting closure approval',
+    note: a.close_request_note || null,
+    site: a.site || null,
+    country: a.country || null,
+    created_at: a.close_requested_at || null,
+    status: 'pending',
+    raw: a,
+  }
+}
+
+function toChecklistItem(c) {
+  const title = c.title || c.template_name || 'Checklist submission'
+  return {
+    source: SOURCE.checklist,
+    id: c.id,
+    title,
+    subtitle: [
+      c.template_name && c.template_name !== title ? c.template_name : null,
+      c.asset_no && `Asset ${c.asset_no}`,
+      c.score_pct != null ? `Score ${c.score_pct}%` : null,
+    ].filter(Boolean).join(' · ') || 'Awaiting sign-off',
+    note: null,
+    site: c.site || null,
+    country: c.country || null,
+    created_at: c.submitted_at || null,
+    status: 'pending',
+    raw: c,
+    scorePassed: c.score_passed,
   }
 }
 
@@ -134,12 +177,12 @@ function MetricCard({ icon: Icon, label, value, tone, loading }) {
 
 function MetricStrip({ metrics, loading }) {
   const cards = [
-    { key: 'total_pending',     label: 'Pending',           tone: 'amber',  icon: Clock },
-    { key: 'overdue',           label: 'Overdue',           tone: 'red',    icon: AlertTriangle },
-    { key: 'returned',          label: 'Returned',          tone: 'orange', icon: Undo2 },
-    { key: 'rejected',          label: 'Rejected',          tone: 'red',    icon: XCircle },
-    { key: 'recently_approved', label: 'Recently Approved', tone: 'green',  icon: CheckCircle2 },
-    { key: 'avg_approval',      label: 'Avg Approval Time', tone: 'blue',   icon: Timer },
+    { key: 'total_pending',     label: 'Pending',           tone: 'amber', icon: Clock },
+    { key: 'workflow_pending',  label: 'Workflows',         tone: 'blue',  icon: GitBranch },
+    { key: 'closures_pending',  label: 'Closures',          tone: 'red',   icon: Car },
+    { key: 'checklist_pending', label: 'Checklists',        tone: 'teal',  icon: ClipboardCheck },
+    { key: 'overdue',           label: 'Overdue',           tone: 'red',   icon: AlertTriangle },
+    { key: 'recently_approved', label: 'Recently Approved', tone: 'green', icon: CheckCircle2 },
   ]
   return (
     <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3">
@@ -157,7 +200,19 @@ function MetricStrip({ metrics, loading }) {
   )
 }
 
-// ─── Instance row ───────────────────────────────────────────────────────────────
+// ─── Source badge ────────────────────────────────────────────────────────────────
+
+function SourceBadge({ source }) {
+  const meta = SOURCE_META[source] || SOURCE_META.workflow
+  const Icon = meta.icon
+  return (
+    <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md border text-[10px] font-semibold whitespace-nowrap ${TONE_BADGE[meta.tone] || TONE_BADGE.blue}`}>
+      <Icon className="w-3 h-3" /> {meta.short}
+    </span>
+  )
+}
+
+// ─── Rows ─────────────────────────────────────────────────────────────────────────
 
 function InstanceRow({ instance, bucketKey, onOpen }) {
   const { step, idx, total } = currentStepOf(instance)
@@ -175,7 +230,10 @@ function InstanceRow({ instance, bucketKey, onOpen }) {
       }`}
     >
       <div className="flex-1 min-w-0">
-        <p className="text-white text-sm font-medium truncate">{entityLabelOf(instance)}</p>
+        <div className="flex items-center gap-2">
+          <SourceBadge source={SOURCE.workflow} />
+          <p className="text-white text-sm font-medium truncate">{entityLabelOf(instance)}</p>
+        </div>
         <p className="text-gray-500 text-xs truncate mt-0.5">
           {instance.definition_name || 'Workflow'}
           {instance.entity_type && <span className="text-gray-600"> · {instance.entity_type}</span>}
@@ -198,7 +256,40 @@ function InstanceRow({ instance, bucketKey, onOpen }) {
   )
 }
 
-// ─── Detail drawer ──────────────────────────────────────────────────────────────
+/** Row for a non-workflow approval item (accident closure / checklist). */
+function GenericRow({ item, onOpen }) {
+  const meta = SOURCE_META[item.source] || SOURCE_META.workflow
+  return (
+    <button
+      onClick={() => onOpen(item)}
+      className="w-full text-left flex items-center gap-3 px-4 py-3 rounded-xl border border-gray-800 bg-gray-900/40 transition-all hover:border-gray-600"
+    >
+      <div className={`shrink-0 w-9 h-9 rounded-lg flex items-center justify-center ${TONE_BADGE[meta.tone] || TONE_BADGE.blue}`}>
+        <meta.icon className="w-4 h-4" />
+      </div>
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2">
+          <SourceBadge source={item.source} />
+          <p className="text-white text-sm font-medium truncate">{item.title}</p>
+        </div>
+        <p className="text-gray-500 text-xs truncate mt-0.5">
+          {item.subtitle}
+          {item.site && <span className="text-gray-600"> · {item.site}</span>}
+          {item.country && <span className="text-gray-600"> · {item.country}</span>}
+        </p>
+      </div>
+      <div className="hidden md:flex flex-col items-end gap-1 shrink-0">
+        <span className="text-xs whitespace-nowrap text-gray-500">{relTime(item.created_at) || '—'}</span>
+      </div>
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[11px] font-semibold bg-amber-500/15 text-amber-300 border-amber-500/30">
+        <Clock className="w-3 h-3" /> Pending
+      </span>
+      <ChevronRight className="w-4 h-4 text-gray-600 shrink-0" />
+    </button>
+  )
+}
+
+// ─── Detail drawer (workflow engine) ─────────────────────────────────────────────
 
 function DetailDrawer({ instance, actionable, onClose, onActed }) {
   const [events, setEvents] = useState(null)
@@ -242,6 +333,203 @@ function DetailDrawer({ instance, actionable, onClose, onActed }) {
   }
 
   return (
+    <DrawerShell
+      title={entityLabelOf(instance)}
+      badge={<ApprovalStatusBadge status={instance.status} />}
+      subtitle={
+        <>
+          {instance.definition_name || 'Workflow'}
+          {step && <span> · Step {idx + 1}/{total}: {step.name}</span>}
+        </>
+      }
+      onClose={onClose}
+    >
+      {feedback && <FeedbackBanner feedback={feedback} />}
+
+      {actionable && (
+        <section>
+          <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+            <ClipboardList className="w-3.5 h-3.5" /> Decision
+          </h3>
+          <ApprovalAction requirements={requirements} onAct={handleAct} busy={busy} />
+        </section>
+      )}
+
+      <section>
+        <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3 flex items-center gap-1.5">
+          <Clock className="w-3.5 h-3.5" /> Approval History
+        </h3>
+        {trailErr ? (
+          <div className="flex items-center gap-2.5 p-3 rounded-xl bg-red-500/10 border border-red-500/30">
+            <XCircle className="w-4 h-4 text-red-400 shrink-0" />
+            <p className="text-red-400 text-sm flex-1">{trailErr}</p>
+            <button
+              onClick={loadTrail}
+              className="shrink-0 px-2.5 py-1 text-xs font-semibold text-red-300 bg-red-500/15 hover:bg-red-500/25 rounded-lg border border-red-500/30"
+            >
+              Retry
+            </button>
+          </div>
+        ) : (
+          <ApprovalTrail events={events || []} loading={events == null} />
+        )}
+      </section>
+    </DrawerShell>
+  )
+}
+
+// ─── Simple approval drawer (accident closure / checklist) ───────────────────────
+
+function SimpleApprovalDrawer({ item, canAct, onClose, onActed }) {
+  const meta = SOURCE_META[item.source] || SOURCE_META.workflow
+  const [reason, setReason] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [feedback, setFeedback] = useState(null)
+  const { profile } = useAuth()
+
+  const rejectNeedsReason = item.source === SOURCE.checklist // checklist return requires a note
+
+  async function act(approved) {
+    if (!approved && rejectNeedsReason && !reason.trim()) {
+      setFeedback({ kind: 'error', text: 'A note is required when returning this for correction.' })
+      return
+    }
+    setBusy(true)
+    setFeedback(null)
+    try {
+      if (item.source === SOURCE.accident_closure) {
+        if (approved) await queue.approveAccidentClosure(item.id)
+        else await queue.rejectAccidentClosure(item.id, reason)
+      } else if (item.source === SOURCE.checklist) {
+        await queue.decideChecklist(item.id, {
+          approved,
+          approverName: profile?.full_name || profile?.username || null,
+          approverId: profile?.id || null,
+          reviewNote: reason,
+        })
+      }
+      setFeedback({ kind: 'success', text: approved ? 'Approved successfully.' : 'Returned / rejected successfully.' })
+      onActed?.()
+    } catch (err) {
+      setFeedback({ kind: 'error', text: err?.message || 'Action failed.' })
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const details = item.source === SOURCE.accident_closure
+    ? [
+        ['Asset', item.raw.asset_no],
+        ['Driver', item.raw.driver_name],
+        ['Type', item.raw.accident_type],
+        ['Severity', item.raw.severity],
+        ['Incident date', item.raw.incident_date],
+        ['Est. damage', item.raw.estimated_damage_cost != null ? Number(item.raw.estimated_damage_cost).toLocaleString() : null],
+        ['Site', item.site],
+        ['Country', item.country],
+        ['Requested', relTime(item.created_at)],
+      ]
+    : [
+        ['Template', item.raw.template_name],
+        ['Asset', item.raw.asset_no],
+        ['Score', item.raw.score_pct != null ? `${item.raw.score_pct}%` : null],
+        ['Result', item.scorePassed == null ? null : (item.scorePassed ? 'Passed' : 'Failed')],
+        ['Site', item.site],
+        ['Country', item.country],
+        ['Submitted', relTime(item.created_at)],
+      ]
+
+  return (
+    <DrawerShell
+      title={item.title}
+      badge={<SourceBadge source={item.source} />}
+      subtitle={meta.label}
+      onClose={onClose}
+    >
+      {feedback && <FeedbackBanner feedback={feedback} />}
+
+      <section>
+        <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Details</h3>
+        <dl className="grid grid-cols-2 gap-x-4 gap-y-2">
+          {details.filter(([, v]) => v != null && v !== '').map(([k, v]) => (
+            <div key={k} className="min-w-0">
+              <dt className="text-[10px] uppercase tracking-wider text-gray-500">{k}</dt>
+              <dd className="text-sm text-gray-200 truncate">{String(v)}</dd>
+            </div>
+          ))}
+        </dl>
+        {item.note && (
+          <div className="mt-3 p-3 rounded-lg bg-gray-800/60 border border-gray-700">
+            <p className="text-[10px] uppercase tracking-wider text-gray-500 mb-1">Requester note</p>
+            <p className="text-sm text-gray-300 whitespace-pre-wrap">{item.note}</p>
+          </div>
+        )}
+      </section>
+
+      {canAct ? (
+        <section>
+          <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+            <ClipboardList className="w-3.5 h-3.5" /> Decision
+          </h3>
+          <textarea
+            value={reason}
+            onChange={e => setReason(e.target.value)}
+            rows={3}
+            placeholder={
+              item.source === SOURCE.checklist
+                ? 'Reason (required to return for correction)…'
+                : 'Reason for rejection (optional, sent to requester)…'
+            }
+            className="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2.5 text-white text-sm placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-orange-500 transition-all resize-none"
+          />
+          <div className="flex gap-2 mt-3">
+            <button
+              onClick={() => act(false)}
+              disabled={busy}
+              className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl font-semibold text-sm border border-red-700/50 text-red-300 hover:bg-red-900/20 disabled:opacity-50 transition-all"
+            >
+              {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <XCircle className="w-4 h-4" />}
+              {item.source === SOURCE.checklist ? 'Return' : 'Reject'}
+            </button>
+            <button
+              onClick={() => act(true)}
+              disabled={busy}
+              className="flex-[2] inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl font-semibold text-sm text-white bg-gradient-to-r from-green-600 to-green-700 hover:from-green-500 hover:to-green-600 shadow-lg shadow-green-900/30 disabled:opacity-50 transition-all"
+            >
+              {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
+              Approve
+            </button>
+          </div>
+        </section>
+      ) : (
+        <div className="flex items-center gap-2.5 p-3 rounded-xl bg-gray-800/60 border border-gray-700 text-sm text-gray-400">
+          <AlertTriangle className="w-4 h-4 shrink-0 text-amber-400" />
+          You need an Admin, Manager or Director role to action this item.
+        </div>
+      )}
+    </DrawerShell>
+  )
+}
+
+// ─── Shared drawer chrome ────────────────────────────────────────────────────────
+
+function FeedbackBanner({ feedback }) {
+  return (
+    <div className={`flex items-center gap-2.5 p-3 rounded-xl border text-sm ${
+      feedback.kind === 'success'
+        ? 'bg-green-500/10 border-green-500/30 text-green-300'
+        : 'bg-red-500/10 border-red-500/30 text-red-300'
+    }`}>
+      {feedback.kind === 'success'
+        ? <CheckCircle2 className="w-4 h-4 shrink-0" />
+        : <XCircle className="w-4 h-4 shrink-0" />}
+      <span>{feedback.text}</span>
+    </div>
+  )
+}
+
+function DrawerShell({ title, badge, subtitle, onClose, children }) {
+  return (
     <div className="fixed inset-0 z-50 flex justify-end">
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
       <motion.aside
@@ -254,20 +542,16 @@ function DetailDrawer({ instance, actionable, onClose, onActed }) {
         role="dialog"
         aria-label="Approval detail"
       >
-        {/* Header */}
         <div
           className="sticky top-0 z-10 flex items-start justify-between gap-3 px-5 py-4 border-b bg-gray-900/95 backdrop-blur"
           style={{ borderColor: 'var(--border-dim)' }}
         >
           <div className="min-w-0">
             <div className="flex items-center gap-2 mb-1">
-              <h2 className="text-white font-semibold text-sm truncate">{entityLabelOf(instance)}</h2>
-              <ApprovalStatusBadge status={instance.status} />
+              <h2 className="text-white font-semibold text-sm truncate">{title}</h2>
+              {badge}
             </div>
-            <p className="text-gray-500 text-xs truncate">
-              {instance.definition_name || 'Workflow'}
-              {step && <span> · Step {idx + 1}/{total}: {step.name}</span>}
-            </p>
+            <p className="text-gray-500 text-xs truncate">{subtitle}</p>
           </div>
           <button
             onClick={onClose}
@@ -277,59 +561,38 @@ function DetailDrawer({ instance, actionable, onClose, onActed }) {
             <X className="w-4 h-4" />
           </button>
         </div>
-
-        <div className="p-5 space-y-6">
-          {/* Feedback banner */}
-          {feedback && (
-            <div className={`flex items-center gap-2.5 p-3 rounded-xl border text-sm ${
-              feedback.kind === 'success'
-                ? 'bg-green-500/10 border-green-500/30 text-green-300'
-                : 'bg-red-500/10 border-red-500/30 text-red-300'
-            }`}>
-              {feedback.kind === 'success'
-                ? <CheckCircle2 className="w-4 h-4 shrink-0" />
-                : <XCircle className="w-4 h-4 shrink-0" />}
-              <span>{feedback.text}</span>
-            </div>
-          )}
-
-          {/* Action panel (only when actionable by this user) */}
-          {actionable && (
-            <section>
-              <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2 flex items-center gap-1.5">
-                <ClipboardList className="w-3.5 h-3.5" /> Decision
-              </h3>
-              <ApprovalAction requirements={requirements} onAct={handleAct} busy={busy} />
-            </section>
-          )}
-
-          {/* Trail */}
-          <section>
-            <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3 flex items-center gap-1.5">
-              <Clock className="w-3.5 h-3.5" /> Approval History
-            </h3>
-            {trailErr ? (
-              <div className="flex items-center gap-2.5 p-3 rounded-xl bg-red-500/10 border border-red-500/30">
-                <XCircle className="w-4 h-4 text-red-400 shrink-0" />
-                <p className="text-red-400 text-sm flex-1">{trailErr}</p>
-                <button
-                  onClick={loadTrail}
-                  className="shrink-0 px-2.5 py-1 text-xs font-semibold text-red-300 bg-red-500/15 hover:bg-red-500/25 rounded-lg border border-red-500/30"
-                >
-                  Retry
-                </button>
-              </div>
-            ) : (
-              <ApprovalTrail events={events || []} loading={events == null} />
-            )}
-          </section>
-        </div>
+        <div className="p-5 space-y-6">{children}</div>
       </motion.aside>
     </div>
   )
 }
 
-// ─── Error state (RPC not provisioned) ──────────────────────────────────────────
+// ─── Data-intake deep-link card ──────────────────────────────────────────────────
+
+function DataIntakeCard({ count, onGo }) {
+  if (!count) return null
+  return (
+    <button
+      onClick={onGo}
+      className="w-full flex items-center gap-3 px-4 py-3 rounded-xl border border-purple-800/50 bg-purple-950/20 hover:border-purple-600 transition-all text-left"
+    >
+      <div className="shrink-0 w-9 h-9 rounded-lg bg-purple-500/15 text-purple-300 flex items-center justify-center">
+        <Database className="w-4 h-4" />
+      </div>
+      <div className="flex-1 min-w-0">
+        <p className="text-white text-sm font-medium">
+          {count} data-intake {count === 1 ? 'batch' : 'batches'} awaiting approval
+        </p>
+        <p className="text-gray-500 text-xs mt-0.5">Reviewed on the Data Intake Approvals screen (staged rows + commit)</p>
+      </div>
+      <span className="inline-flex items-center gap-1 text-xs font-semibold text-purple-300 shrink-0">
+        Open <ExternalLink className="w-3.5 h-3.5" />
+      </span>
+    </button>
+  )
+}
+
+// ─── Error state (everything failed) ─────────────────────────────────────────────
 
 function EngineUnavailable({ message, onRetry, retrying }) {
   return (
@@ -338,10 +601,11 @@ function EngineUnavailable({ message, onRetry, retrying }) {
         <ServerCrash className="w-7 h-7 text-amber-400" />
       </div>
       <div>
-        <p className="text-white text-sm font-semibold">Approval engine not yet provisioned</p>
+        <p className="text-white text-sm font-semibold">Approval services unavailable</p>
         <p className="text-gray-500 text-xs mt-1 max-w-md">
-          The approval dashboard service is unavailable. This usually means the workflow
-          engine migrations (V116 to V118) have not been applied to this environment yet.
+          None of the approval sources could be reached. This usually means a
+          connectivity issue or that the workflow engine migrations (V116–V118)
+          have not been applied to this environment yet.
         </p>
         {message && (
           <p className="text-gray-600 text-[11px] mt-2 font-mono break-all max-w-md">{message}</p>
@@ -360,69 +624,138 @@ function EngineUnavailable({ message, onRetry, retrying }) {
 
 // ─── Main page ──────────────────────────────────────────────────────────────────
 
+const MANAGER_ROLES = new Set(['Admin', 'Manager', 'Director'])
+
 export default function Approvals() {
-  // Auth context is consumed for session/role gating; the dashboard is org-scoped
-  // server-side, so no explicit profile field is needed here today.
-  useAuth()
+  const { profile } = useAuth()
+  const { activeCountry } = useSettings()
+  const navigate = useNavigate()
+
+  const canActNonWorkflow = MANAGER_ROLES.has(profile?.role)
 
   const [loading, setLoading]   = useState(true)
-  const [error, setError]       = useState(null)
+  const [fatalError, setFatalError] = useState(null)
+  const [workflowError, setWorkflowError] = useState(null)
   const [metricsRaw, setMetricsRaw] = useState(null)
   const [buckets, setBuckets]   = useState(EMPTY_BUCKETS)
+  const [closures, setClosures] = useState([])
+  const [checklistItems, setChecklistItems] = useState([])
+  const [intakeCount, setIntakeCount] = useState(0)
   const [actionableIds, setActionableIds] = useState(() => new Set())
   const [updatedAt, setUpdatedAt] = useState(null)
 
   const [activeBucket, setActiveBucket] = useState('pending')
   const [search, setSearch] = useState('')
-  const [typeFilter, setTypeFilter] = useState('all')
-  const [selected, setSelected] = useState(null)
+  const [sourceFilter, setSourceFilter] = useState('all')
+  const [siteFilter, setSiteFilter] = useState('all')
+  const [selected, setSelected] = useState(null)               // workflow instance
+  const [selectedGeneric, setSelectedGeneric] = useState(null) // closure / checklist item
 
   const load = useCallback(async () => {
     setLoading(true)
-    setError(null)
-    try {
-      const [dash, mine] = await Promise.all([
-        workflows.getApprovalDashboard(),
-        // My actionable queue — used to decide which rows expose an action panel.
-        // Failure here is non-fatal (dashboard still renders read-only).
-        workflows.myPendingApprovals().catch(() => []),
-      ])
-      const nextBuckets = { ...EMPTY_BUCKETS, ...(dash?.buckets || {}) }
-      setBuckets(nextBuckets)
-      setMetricsRaw(dash?.metrics ?? null)
-      setActionableIds(new Set((mine || []).map(r => r.id)))
-      setUpdatedAt(new Date())
-    } catch (err) {
-      setError(err?.message || 'Failed to load approval dashboard')
-    } finally {
-      setLoading(false)
+    setFatalError(null)
+    setWorkflowError(null)
+    const country = activeCountry
+
+    const [dashR, mineR, closuresR, checklistR, intakeR] = await Promise.allSettled([
+      workflows.getApprovalDashboard(),
+      workflows.myPendingApprovals(),
+      queue.listAccidentClosures({ country }),
+      queue.listChecklistApprovals({ country }),
+      queue.countDataIntakePending({ country }),
+    ])
+
+    // Workflow engine (non-fatal — the other sources still render).
+    if (dashR.status === 'fulfilled') {
+      setBuckets({ ...EMPTY_BUCKETS, ...(dashR.value?.buckets || {}) })
+      setMetricsRaw(dashR.value?.metrics ?? null)
+    } else {
+      setBuckets(EMPTY_BUCKETS)
+      setMetricsRaw(null)
+      setWorkflowError(dashR.reason?.message || 'Workflow engine unavailable')
     }
-  }, [])
+    setActionableIds(new Set(
+      mineR.status === 'fulfilled' ? (mineR.value || []).map(r => r.id) : [],
+    ))
+    setClosures(closuresR.status === 'fulfilled' ? (closuresR.value || []).map(toClosureItem) : [])
+    setChecklistItems(checklistR.status === 'fulfilled' ? (checklistR.value || []).map(toChecklistItem) : [])
+    setIntakeCount(intakeR.status === 'fulfilled' ? (intakeR.value || 0) : 0)
+
+    // Fatal only when EVERY primary source failed.
+    const anyOk = [dashR, closuresR, checklistR].some(r => r.status === 'fulfilled')
+    if (!anyOk) setFatalError(dashR.reason?.message || 'Failed to load approvals')
+
+    setUpdatedAt(new Date())
+    setLoading(false)
+  }, [activeCountry])
 
   useEffect(() => { load() }, [load])
 
-  const metrics = useMemo(() => deriveMetrics(metricsRaw, buckets), [metricsRaw, buckets])
+  // Merged pending queue: workflow pending + closures + checklists.
+  const mergedPending = useMemo(() => {
+    const wf = (buckets.pending || []).map(i => ({ ...i, source: SOURCE.workflow }))
+    return [...wf, ...closures, ...checklistItems]
+  }, [buckets.pending, closures, checklistItems])
 
-  // Entity-type options across every bucket.
-  const entityTypes = useMemo(() => {
+  const counts = useMemo(() => ({
+    workflow_pending:  (buckets.pending || []).length,
+    closures_pending:  closures.length,
+    checklist_pending: checklistItems.length,
+    total_pending:     mergedPending.length,
+    overdue:           (buckets.overdue || []).length,
+    returned:          (buckets.returned || []).length,
+    rejected:          (buckets.rejected || []).length,
+    recently_approved: (buckets.recently_approved || []).length,
+  }), [buckets, closures, checklistItems, mergedPending])
+
+  const metrics = useMemo(() => {
+    const m = metricsRaw && typeof metricsRaw === 'object' ? metricsRaw : {}
+    return {
+      ...counts,
+      overdue:           m.overdue ?? counts.overdue,
+      recently_approved: m.recently_approved ?? m.approved_recent ?? counts.recently_approved,
+    }
+  }, [metricsRaw, counts])
+
+  // Site options across the non-workflow items (workflow instances carry no site).
+  const siteOptions = useMemo(() => {
     const set = new Set()
-    Object.values(buckets).forEach(list => (list || []).forEach(i => i.entity_type && set.add(i.entity_type)))
+    ;[...closures, ...checklistItems].forEach(i => i.site && set.add(i.site))
     return Array.from(set).sort()
-  }, [buckets])
+  }, [closures, checklistItems])
 
   const q = search.trim().toLowerCase()
-  const filterRow = useCallback((i) => {
-    if (typeFilter !== 'all' && i.entity_type !== typeFilter) return false
+
+  const matchGeneric = useCallback((i) => {
+    if (sourceFilter !== 'all' && i.source !== sourceFilter) return false
+    if (siteFilter !== 'all' && i.site !== siteFilter) return false
+    if (!q) return true
+    return (i.title || '').toLowerCase().includes(q)
+      || (i.subtitle || '').toLowerCase().includes(q)
+      || (i.site || '').toLowerCase().includes(q)
+  }, [sourceFilter, siteFilter, q])
+
+  const matchWorkflow = useCallback((i) => {
+    if (sourceFilter !== 'all' && sourceFilter !== SOURCE.workflow) return false
+    if (siteFilter !== 'all') return false // workflow instances have no site dimension
     if (!q) return true
     return (entityLabelOf(i).toLowerCase().includes(q))
       || (i.definition_name || '').toLowerCase().includes(q)
       || (i.entity_type || '').toLowerCase().includes(q)
-  }, [typeFilter, q])
+  }, [sourceFilter, siteFilter, q])
 
-  const activeList = useMemo(
-    () => (buckets[activeBucket] || []).filter(filterRow),
-    [buckets, activeBucket, filterRow],
-  )
+  // The active bucket content. Only "pending" is merged; the workflow lifecycle
+  // buckets (overdue/returned/rejected/recently_approved) stay workflow-native.
+  const activeList = useMemo(() => {
+    if (activeBucket === 'pending') {
+      return mergedPending.filter(i =>
+        i.source === SOURCE.workflow ? matchWorkflow(i) : matchGeneric(i),
+      )
+    }
+    return (buckets[activeBucket] || [])
+      .map(i => ({ ...i, source: SOURCE.workflow }))
+      .filter(matchWorkflow)
+  }, [activeBucket, mergedPending, buckets, matchWorkflow, matchGeneric])
 
   const isActionable = useCallback(
     (instance) => actionableIds.has(instance?.id)
@@ -430,26 +763,49 @@ export default function Approvals() {
     [actionableIds],
   )
 
-  const totalPending = metrics.total_pending
+  const hasFilters = q || sourceFilter !== 'all' || siteFilter !== 'all'
+
+  function openRow(row) {
+    if (row.source === SOURCE.workflow) setSelected(row)
+    else setSelectedGeneric(row)
+  }
 
   return (
     <div className="text-white space-y-6">
       <PageHeader
         title="Approval Dashboard"
-        subtitle="Every workflow awaiting a decision across your organisation"
+        subtitle="Every pending approval across your organisation — workflows, accident closures and checklist sign-offs"
         icon={CheckSquare}
-        badge={loading ? undefined : (totalPending ? `${totalPending} pending` : undefined)}
+        badge={loading ? undefined : (metrics.total_pending ? `${metrics.total_pending} pending` : undefined)}
         onRefresh={load}
         refreshing={loading}
         updatedAt={updatedAt}
       />
 
-      {error ? (
-        <EngineUnavailable message={error} onRetry={load} retrying={loading} />
+      {fatalError ? (
+        <EngineUnavailable message={fatalError} onRetry={load} retrying={loading} />
       ) : (
         <>
-          {/* Metrics */}
           <MetricStrip metrics={metrics} loading={loading} />
+
+          {/* Workflow engine degraded notice (other sources still shown) */}
+          {!loading && workflowError && (
+            <div className="flex items-center gap-2.5 p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-sm text-amber-300">
+              <AlertTriangle className="w-4 h-4 shrink-0" />
+              <span className="flex-1">
+                Workflow engine is unavailable — showing accident closures and checklist approvals only.
+              </span>
+              <button
+                onClick={load}
+                className="shrink-0 px-2.5 py-1 text-xs font-semibold text-amber-200 bg-amber-500/15 hover:bg-amber-500/25 rounded-lg border border-amber-500/30"
+              >
+                Retry
+              </button>
+            </div>
+          )}
+
+          {/* Data-intake deep link (never duplicates the intake commit flow) */}
+          {!loading && <DataIntakeCard count={intakeCount} onGo={() => navigate('/upload-approvals')} />}
 
           {/* Filters */}
           <div className="flex flex-col sm:flex-row gap-3 sm:items-center">
@@ -459,7 +815,7 @@ export default function Approvals() {
                 type="text"
                 value={search}
                 onChange={e => setSearch(e.target.value)}
-                placeholder="Search entity or workflow…"
+                placeholder="Search entity, workflow or checklist…"
                 className="w-full bg-gray-800 border border-gray-700 rounded-xl pl-9 pr-9 py-2.5 text-white text-sm placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-orange-500 transition-all"
               />
               {search && (
@@ -475,21 +831,37 @@ export default function Approvals() {
             <div className="relative">
               <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 pointer-events-none" />
               <select
-                value={typeFilter}
-                onChange={e => setTypeFilter(e.target.value)}
-                aria-label="Filter by entity type"
+                value={sourceFilter}
+                onChange={e => setSourceFilter(e.target.value)}
+                aria-label="Filter by approval type"
                 className="appearance-none bg-gray-800 border border-gray-700 rounded-xl pl-9 pr-8 py-2.5 text-white text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 transition-all"
               >
-                <option value="all">All entity types</option>
-                {entityTypes.map(t => <option key={t} value={t}>{t}</option>)}
+                <option value="all">All approval types</option>
+                <option value={SOURCE.workflow}>Workflow</option>
+                <option value={SOURCE.accident_closure}>Accident closure</option>
+                <option value={SOURCE.checklist}>Checklist sign-off</option>
               </select>
             </div>
+            {siteOptions.length > 0 && (
+              <div className="relative">
+                <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 pointer-events-none" />
+                <select
+                  value={siteFilter}
+                  onChange={e => setSiteFilter(e.target.value)}
+                  aria-label="Filter by site"
+                  className="appearance-none bg-gray-800 border border-gray-700 rounded-xl pl-9 pr-8 py-2.5 text-white text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 transition-all"
+                >
+                  <option value="all">All sites</option>
+                  {siteOptions.map(s => <option key={s} value={s}>{s}</option>)}
+                </select>
+              </div>
+            )}
           </div>
 
           {/* Bucket tabs */}
           <div className="flex flex-wrap gap-2 border-b border-gray-800 pb-3">
             {BUCKETS.map(b => {
-              const count = (buckets[b.key] || []).length
+              const count = b.key === 'pending' ? counts.total_pending : (buckets[b.key] || []).length
               const active = activeBucket === b.key
               const Icon = b.icon
               return (
@@ -528,20 +900,22 @@ export default function Approvals() {
               </div>
               <div>
                 <p className="text-gray-300 text-sm font-medium">
-                  {q || typeFilter !== 'all'
-                    ? 'No workflows match your filters'
+                  {hasFilters
+                    ? 'No approvals match your filters'
                     : `Nothing in ${BUCKETS.find(b => b.key === activeBucket)?.label}`}
                 </p>
                 <p className="text-gray-500 text-xs mt-1">
-                  {q || typeFilter !== 'all'
-                    ? 'Try a different search term or entity type.'
+                  {hasFilters
+                    ? 'Try a different search term, type or site.'
                     : activeBucket === 'overdue'
-                      ? 'No approvals have breached their SLA. Nicely on top of it.'
-                      : 'Workflows will appear here as they move through the engine.'}
+                      ? 'No workflow approvals have breached their SLA. Nicely on top of it.'
+                      : activeBucket === 'pending'
+                        ? 'New approvals appear here as they are raised.'
+                        : 'Workflow items will appear here as they move through the engine.'}
                 </p>
-                {(q || typeFilter !== 'all') && (
+                {hasFilters && (
                   <button
-                    onClick={() => { setSearch(''); setTypeFilter('all') }}
+                    onClick={() => { setSearch(''); setSourceFilter('all'); setSiteFilter('all') }}
                     className="mt-3 text-orange-400 text-xs hover:text-orange-300 inline-flex items-center gap-1"
                   >
                     <Filter className="w-3 h-3" /> Clear filters
@@ -551,13 +925,12 @@ export default function Approvals() {
             </div>
           ) : (
             <div className="space-y-2">
-              {activeList.map(inst => (
-                <InstanceRow
-                  key={inst.id}
-                  instance={inst}
-                  bucketKey={activeBucket}
-                  onOpen={setSelected}
-                />
+              {activeList.map(row => (
+                row.source === SOURCE.workflow ? (
+                  <InstanceRow key={`wf-${row.id}`} instance={row} bucketKey={activeBucket} onOpen={openRow} />
+                ) : (
+                  <GenericRow key={`${row.source}-${row.id}`} item={row} onOpen={openRow} />
+                )
               ))}
             </div>
           )}
@@ -567,11 +940,20 @@ export default function Approvals() {
       <AnimatePresence>
         {selected && (
           <DetailDrawer
-            key={selected.id}
+            key={`wf-${selected.id}`}
             instance={selected}
             actionable={isActionable(selected)}
             onClose={() => setSelected(null)}
             onActed={load}
+          />
+        )}
+        {selectedGeneric && (
+          <SimpleApprovalDrawer
+            key={`${selectedGeneric.source}-${selectedGeneric.id}`}
+            item={selectedGeneric}
+            canAct={canActNonWorkflow}
+            onClose={() => setSelectedGeneric(null)}
+            onActed={() => { setSelectedGeneric(null); load() }}
           />
         )}
       </AnimatePresence>

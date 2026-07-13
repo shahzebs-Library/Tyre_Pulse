@@ -103,6 +103,7 @@ const NAV_GROUPS = [
     items: [
       { to: '/fleet-master',        label: 'Fleet Master',       icon: TruckIc },
       { to: '/assets',              label: 'Asset Management',   icon: LayoutGrid },
+      { to: '/sites',               label: 'Site Management',    icon: MapPin },
       { to: '/actions',             label: 'Corrective Actions', icon: ClipboardList },
       { to: '/rca',                 label: 'Root Cause',         icon: Search },
       { to: '/daily-ops',           label: 'Daily Ops',          icon: Coffee, adminOnly: A },

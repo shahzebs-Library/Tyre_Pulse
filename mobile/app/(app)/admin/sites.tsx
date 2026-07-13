@@ -8,7 +8,7 @@
  * Access: admin · manager
  */
 
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect, useMemo } from 'react'
 import {
   View, Text, ScrollView, TouchableOpacity, TextInput, StyleSheet,
   Alert, ActivityIndicator, StatusBar, Modal, Platform, KeyboardAvoidingView,
@@ -90,6 +90,49 @@ export default function SitesManagementScreen() {
   }, [])
 
   useEffect(() => { if (allowed) load() }, [load, allowed])
+
+  // ── Derived rollups (real asset counts per site) ────────────────────────────
+  const countBySite = useMemo(() => {
+    const m: Record<string, { total: number; active: number }> = {}
+    for (const v of vehicles) {
+      const name = (v.site ?? '').trim()
+      if (!name) continue
+      if (!m[name]) m[name] = { total: 0, active: 0 }
+      m[name].total += 1
+      if (v.is_active !== false) m[name].active += 1
+    }
+    return m
+  }, [vehicles])
+
+  const masterNames = useMemo(
+    () => new Set(sites.map(s => (s.name ?? '').trim().toLowerCase())),
+    [sites],
+  )
+
+  // Sites that exist in the fleet but are NOT in the governed master — the real
+  // operational sites the master is missing. Admins can promote them in one tap.
+  const derivedSites = useMemo(() => {
+    const seen = new Set<string>()
+    const out: { name: string; country: string | null; total: number; active: number }[] = []
+    for (const v of vehicles) {
+      const name = (v.site ?? '').trim()
+      if (!name) continue
+      const k = name.toLowerCase()
+      if (masterNames.has(k) || seen.has(k)) continue
+      seen.add(k)
+      const c = countBySite[name]
+      out.push({ name, country: v.country ?? null, total: c?.total ?? 0, active: c?.active ?? 0 })
+    }
+    return out.sort((a, b) => b.total - a.total)
+  }, [vehicles, masterNames, countBySite])
+
+  function promoteSite(name: string, country: string | null) {
+    setEditingSite(null)
+    setSiteName(name)
+    setSiteCountry(country || 'Saudi Arabia')
+    setSiteRegion(''); setSiteCity('')
+    setSiteModal(true)
+  }
 
   // ── Site CRUD ──────────────────────────────────────────────────────────────
 
@@ -287,6 +330,9 @@ export default function SitesManagementScreen() {
                     {(site.city || site.region) && (
                       <Text style={s.siteMeta}>{[site.city, site.region].filter(Boolean).join(' · ')}</Text>
                     )}
+                    <Text style={s.siteMeta}>
+                      {countBySite[site.name]?.total ?? 0} assets · {countBySite[site.name]?.active ?? 0} active
+                    </Text>
                   </View>
                   {!site.active && <Text style={s.inactiveTag}>Inactive</Text>}
                   <TouchableOpacity style={s.iconBtn} onPress={() => openEditSite(site)}>
@@ -299,6 +345,32 @@ export default function SitesManagementScreen() {
               ))}
             </View>
           ))}
+
+          {/* Sites present in the fleet but not yet in the governed master */}
+          {derivedSites.length > 0 && (
+            <View style={{ marginTop: 8 }}>
+              <View style={s.countryHeader}>
+                <Ionicons name="alert-circle-outline" size={14} color="#ca8a04" />
+                <Text style={[s.countryName, { color: '#ca8a04' }]}>Not in master — from fleet data</Text>
+                <Text style={s.countryCount}>{derivedSites.length} sites</Text>
+              </View>
+              {derivedSites.map(d => (
+                <View key={`derived-${d.name}`} style={s.siteRow}>
+                  <View style={[s.siteIconWrap, { backgroundColor: '#fefce8' }]}>
+                    <Ionicons name="location-outline" size={18} color="#ca8a04" />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={s.siteName}>{d.name}</Text>
+                    <Text style={s.siteMeta}>{[d.country, `${d.total} assets · ${d.active} active`].filter(Boolean).join(' · ')}</Text>
+                  </View>
+                  <TouchableOpacity style={s.promoteBtn} onPress={() => promoteSite(d.name, d.country)}>
+                    <Ionicons name="add" size={14} color="#16a34a" />
+                    <Text style={s.promoteBtnText}>Add</Text>
+                  </TouchableOpacity>
+                </View>
+              ))}
+            </View>
+          )}
         </ScrollView>
 
       ) : (
@@ -492,6 +564,8 @@ const s = StyleSheet.create({
   siteMeta: { fontSize: 12, color: '#64748b', marginTop: 2 },
   inactiveTag: { fontSize: 10, fontWeight: '700', color: '#94a3b8', backgroundColor: '#f1f5f9', paddingHorizontal: 7, paddingVertical: 3, borderRadius: 6 },
   iconBtn:  { padding: 6 },
+  promoteBtn: { flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: '#f0fdf4', borderWidth: 1, borderColor: '#bbf7d0', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6 },
+  promoteBtnText: { fontSize: 12, fontWeight: '700', color: '#16a34a' },
 
   // Vehicle rows
   vehicleRow: {

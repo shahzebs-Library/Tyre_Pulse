@@ -36,10 +36,12 @@ beforeEach(() => {
 })
 
 describe('service layer - assetManagement', () => {
-  it('listFleetMaster selects all and orders by asset_no', async () => {
+  it('listFleetMaster reads vehicle_fleet (the live registry, not the empty fleet_master) ordered by asset_no', async () => {
     await assetApi.listFleetMaster()
-    expect(h.state.last._table).toBe('fleet_master')
-    expect(h.state.last._calls.select).toBe('*')
+    expect(h.state.last._table).toBe('vehicle_fleet')
+    // is_active is surfaced as `active` so the page keeps its field contract.
+    expect(h.state.last._calls.select).toContain('active:is_active')
+    expect(h.state.last._calls.select).toContain('current_km')
     expect(h.state.last._calls.order).toContain('asset_no')
   })
 
@@ -52,7 +54,8 @@ describe('service layer - assetManagement', () => {
   it('listAssetWorkOrders reads the cost/health columns from work_orders', async () => {
     await assetApi.listAssetWorkOrders()
     expect(h.state.last._table).toBe('work_orders')
-    expect(h.state.last._calls.select).toBe('id,asset_no,status,total_cost,created_at,work_type')
+    expect(h.state.last._calls.select).toContain('total_cost')
+    expect(h.state.last._calls.select).toContain('work_type')
   })
 
   it('listAssetTyres scopes tyre_records by asset_no', async () => {
@@ -62,16 +65,23 @@ describe('service layer - assetManagement', () => {
     expect(h.state.last._calls.select).toContain('tread_depth')
   })
 
-  it('updateAsset updates fleet_master and scopes by id', async () => {
+  it('updateAsset updates vehicle_fleet and scopes by id', async () => {
     await assetApi.updateAsset('id1', { site: 'S' })
-    expect(h.state.last._table).toBe('fleet_master')
+    expect(h.state.last._table).toBe('vehicle_fleet')
     expect(h.state.last._calls.update).toEqual({ site: 'S' })
     expect(h.state.last._calls.eq).toContainEqual(['id', 'id1'])
   })
 
-  it('insertAsset inserts a single-element array (matches prior inline call)', async () => {
+  it('updateAsset maps the page `active` field to the table `is_active` (+ mirrors status)', async () => {
+    await assetApi.updateAsset('id1', { active: false })
+    expect(h.state.last._table).toBe('vehicle_fleet')
+    expect(h.state.last._calls.update).toEqual({ is_active: false, status: 'inactive' })
+  })
+
+  it('insertAsset writes vehicle_fleet with is_active + status derived from `active`', async () => {
     await assetApi.insertAsset({ asset_no: 'A2' })
-    expect(h.state.last._calls.insert).toEqual([{ asset_no: 'A2' }])
+    expect(h.state.last._table).toBe('vehicle_fleet')
+    expect(h.state.last._calls.insert).toEqual([{ asset_no: 'A2', is_active: true, status: 'active' }])
   })
 
   it('listFleetMaster pages past the 1000-row cap and surfaces { data, error }', async () => {

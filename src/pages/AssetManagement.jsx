@@ -372,17 +372,20 @@ export default function AssetManagement() {
   const enrichedAssets = useMemo(() => {
     const now = Date.now()
     return assets.map(a => {
-      const o = overviewMap[a.asset_no] || {}
-      const latestDate = o.latest_date ?? null
+      const o = overviewMap[a.asset_no]
+      const hasTyreData = !!o
+      const latestDate = o?.latest_date ?? null
       return {
         ...a,
-        _activeCount: o.active_tyres ?? 0,
-        _totalCount: o.total_tyres ?? 0,
-        _worstRisk: o.worst_risk ?? null,
-        _ytdCost: Number(o.ytd_cost) || 0,
+        _hasTyreData: hasTyreData,
+        _activeCount: o?.active_tyres ?? 0,
+        _totalCount: o?.total_tyres ?? 0,
+        _worstRisk: o?.worst_risk ?? null,
+        _ytdCost: Number(o?.ytd_cost) || 0,
         _latestDate: latestDate,
         _noRecentRecord: !latestDate || (now - new Date(latestDate).getTime()) > 60 * 86_400_000,
-        _healthScore: o.health_score ?? 0,
+        // Numeric for calc/sort; UI treats !_hasTyreData as "no data", not 0/critical.
+        _healthScore: o?.health_score ?? 0,
       }
     })
   }, [assets, overviewMap])
@@ -394,8 +397,11 @@ export default function AssetManagement() {
       const q = search.toLowerCase()
       list = list.filter(a =>
         (a.asset_no ?? '').toLowerCase().includes(q) ||
+        (a.fleet_number ?? '').toLowerCase().includes(q) ||
         (a.make ?? '').toLowerCase().includes(q) ||
-        (a.model ?? '').toLowerCase().includes(q)
+        (a.model ?? '').toLowerCase().includes(q) ||
+        (a.operator_name ?? '').toLowerCase().includes(q) ||
+        (a.registration_no ?? '').toLowerCase().includes(q)
       )
     }
     if (filterSite) list = list.filter(a => a.site === filterSite)
@@ -408,8 +414,8 @@ export default function AssetManagement() {
     list.sort((a, b) => {
       let av = a[sortCol] ?? a[`_${sortCol}`] ?? ''
       let bv = b[sortCol] ?? b[`_${sortCol}`] ?? ''
-      if (sortCol === '_ytdCost' || sortCol === '_healthScore') {
-        av = Number(av); bv = Number(bv)
+      if (sortCol === '_ytdCost' || sortCol === '_healthScore' || sortCol === 'current_km' || sortCol === 'year') {
+        av = Number(av) || 0; bv = Number(bv) || 0
       } else {
         av = String(av).toLowerCase(); bv = String(bv).toLowerCase()
       }
@@ -487,12 +493,15 @@ export default function AssetManagement() {
   function handleExcelExport() {
     const rows = filteredAssets.map(a => ({
       asset_no: a.asset_no,
+      fleet_number: a.fleet_number ?? '',
       vehicle_type: a.vehicle_type ?? '',
       make: a.make ?? '',
       model: a.model ?? '',
       year: a.year ?? '',
       site: a.site ?? '',
       country: a.country ?? '',
+      current_km: a.current_km ?? '',
+      operator_name: a.operator_name ?? '',
       active: a.active ? 'Active' : 'Inactive',
       active_tyres: a._activeCount,
       worst_risk: a._worstRisk ?? '',
@@ -502,8 +511,8 @@ export default function AssetManagement() {
     }))
     exportToExcel(
       rows,
-      ['asset_no','vehicle_type','make','model','year','site','country','active','active_tyres','worst_risk','ytd_cost','last_service','health_score'],
-      ['Asset No','Type','Make','Model','Year','Site','Country','Status','Active Tyres','Worst Risk','YTD Cost','Last Service','Health Score'],
+      ['asset_no','fleet_number','vehicle_type','make','model','year','site','country','current_km','operator_name','active','active_tyres','worst_risk','ytd_cost','last_service','health_score'],
+      ['Asset No','Fleet No','Type','Make','Model','Year','Site','Country','Current KM','Operator','Status','Active Tyres','Worst Risk','YTD Cost','Last Service','Health Score'],
       `asset_register_${new Date().toISOString().slice(0,10)}`,
       'Assets'
     )
@@ -611,7 +620,7 @@ export default function AssetManagement() {
                     <input
                       value={search}
                       onChange={e => { setSearch(e.target.value); setPage(0) }}
-                      placeholder="Search by asset no, make, model..."
+                      placeholder="Search by asset no, fleet no, make, model, operator, reg..."
                       className="w-full bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-lg pl-10 pr-4 py-2.5 text-sm text-[var(--text-primary)] placeholder-gray-600 focus:outline-none focus:border-blue-500"
                     />
                   </div>
@@ -706,6 +715,7 @@ export default function AssetManagement() {
                             { col: 'make', label: 'Make / Model' },
                             { col: 'year', label: 'Year' },
                             { col: 'site', label: 'Site' },
+                            { col: 'current_km', label: 'Current KM' },
                             { col: null, label: 'Active Tyres' },
                             { col: '_worstRisk', label: 'Worst Risk' },
                             { col: '_ytdCost', label: 'YTD Cost' },
@@ -735,6 +745,9 @@ export default function AssetManagement() {
                               </td>
                               <td className="px-4 py-3 text-[var(--text-secondary)]">{a.year ?? '-'}</td>
                               <td className="px-4 py-3 text-[var(--text-secondary)] max-w-[120px] truncate">{a.site ?? '-'}</td>
+                              <td className="px-4 py-3 text-[var(--text-secondary)] whitespace-nowrap">
+                                {a.current_km != null && a.current_km !== '' ? `${fmt(a.current_km)} km` : <span className="text-[var(--text-dim)]">-</span>}
+                              </td>
                               <td className="px-4 py-3 text-center">
                                 <span className="font-semibold text-[var(--text-primary)]">{a._activeCount}</span>
                                 {a._totalCount > a._activeCount && (
@@ -914,18 +927,21 @@ export default function AssetManagement() {
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-2">
                   {[...enrichedAssets]
                     .filter(a => a.active !== false)
-                    .sort((a, b) => a._healthScore - b._healthScore)
+                    // Assets with real tyre data first (sorted worst→best); "no data" assets last.
+                    .sort((a, b) => (Number(b._hasTyreData) - Number(a._hasTyreData)) || (a._healthScore - b._healthScore))
                     .map(a => (
                       <button
                         key={a.id ?? a.asset_no}
                         onClick={() => openAsset(a.asset_no)}
                         className="bg-[var(--surface-2)] rounded-lg p-3 text-left hover:bg-[var(--surface-3)] transition-colors border border-[var(--border-bright)] hover:border-[var(--border-bright)] group"
                       >
-                        <div className={`w-full h-1.5 rounded-full mb-2 ${SCORE_COLOR(a._healthScore)}`} />
+                        <div className={`w-full h-1.5 rounded-full mb-2 ${a._hasTyreData ? SCORE_COLOR(a._healthScore) : 'bg-[var(--surface-3)]'}`} />
                         <p className="text-xs font-mono font-semibold text-[var(--text-primary)] truncate group-hover:text-[var(--text-primary)]">{a.asset_no}</p>
                         <p className="text-xs text-[var(--text-muted)] truncate">{a.vehicle_type ?? '-'}</p>
                         <div className="flex items-center justify-between mt-2">
-                          <span className="text-lg font-bold text-[var(--text-primary)]">{a._healthScore}</span>
+                          {a._hasTyreData
+                            ? <span className="text-lg font-bold text-[var(--text-primary)]">{a._healthScore}</span>
+                            : <span className="text-xs text-[var(--text-dim)]" title="No tyre records yet">No data</span>}
                           {a._worstRisk && (
                             <span className="text-xs" style={{ color: RISK_COLOR[a._worstRisk]?.hex }}>
                               {a._worstRisk?.[0]}
@@ -944,14 +960,14 @@ export default function AssetManagement() {
               </div>
 
               {/* Bottom 10 worst */}
-              {enrichedAssets.filter(a => a.active !== false && a._healthScore < 60).length > 0 && (
+              {enrichedAssets.filter(a => a.active !== false && a._hasTyreData && a._healthScore < 60).length > 0 && (
                 <div className="bg-[var(--surface-1)] rounded-xl border border-red-900/30 p-5">
                   <h3 className="text-sm font-semibold text-red-400 mb-4 flex items-center gap-2">
                     <AlertTriangle className="w-4 h-4" /> Low Health Assets - Immediate Review Required
                   </h3>
                   <div className="space-y-2">
                     {[...enrichedAssets]
-                      .filter(a => a.active !== false && a._healthScore < 60)
+                      .filter(a => a.active !== false && a._hasTyreData && a._healthScore < 60)
                       .sort((a, b) => a._healthScore - b._healthScore)
                       .slice(0, 10)
                       .map(a => (

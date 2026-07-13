@@ -12,7 +12,7 @@ import {
   ArrowLeft, Edit2, X, Save, RefreshCw, AlertTriangle, Activity,
   DollarSign, TrendingUp, MapPin, Zap, Target, Layers, Lock,
   ToggleLeft, ToggleRight, Truck, Wrench, ClipboardCheck, History,
-  Shield,
+  Shield, Gauge, ShieldAlert, User, Hash, Calendar, Building2, Fuel,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import * as assetApi from '../lib/api/assetManagement'
@@ -260,6 +260,9 @@ export default function AssetDetail() {
   const [asset, setAsset] = useState(null)
   const [tyres, setTyres] = useState([])
   const [workOrders, setWorkOrders] = useState([])
+  const [inspections, setInspections] = useState([])
+  const [accidents, setAccidents] = useState([])
+  const [meter, setMeter] = useState({ odometer: null, engineHours: null })
   const [overview, setOverview] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -276,11 +279,19 @@ export default function AssetDetail() {
   const load = useCallback(async () => {
     setLoading(true); setError('')
     try {
-      const [assetRes, tyreRes, woRes, ovRes] = await Promise.allSettled([
-        supabase.from('fleet_master').select('*').eq('asset_no', assetNo).maybeSingle(),
+      const [assetRes, tyreRes, woRes, ovRes, inspRes, accRes, odoRes, ehRes] = await Promise.allSettled([
+        // vehicle_fleet is the fleet registry (fleet_master is empty). Alias
+        // is_active → active so the page keeps its `active` contract.
+        supabase.from('vehicle_fleet')
+          .select('id,asset_no,fleet_number,make,model,vehicle_type,year,department,operator_name,site,country,region,tyre_size,tyre_brand_preferred,monthly_tyre_budget,current_km,registration_no,registration_date,status,notes,custom_data,image_path,active:is_active')
+          .eq('asset_no', assetNo).maybeSingle(),
         assetApi.listAssetTyres(assetNo),
         assetApi.listAssetWorkOrders(),
         assetApi.reportAssetOverview({ country: 'All' }),
+        assetApi.listAssetInspections(assetNo),
+        assetApi.listAssetAccidents(assetNo),
+        assetApi.latestOdometer(assetNo),
+        assetApi.latestEngineHours(assetNo),
       ])
 
       if (assetRes.status === 'rejected') throw new Error(assetRes.reason?.message || String(assetRes.reason))
@@ -289,17 +300,21 @@ export default function AssetDetail() {
       const tyreRows = tyreRes.status === 'fulfilled' ? (tyreRes.value.data ?? []) : []
       const woRows   = woRes.status === 'fulfilled' ? (woRes.value.data ?? []) : []
       const ovRows   = ovRes.status === 'fulfilled' ? (ovRes.value.data ?? []) : []
+      const inspRows = inspRes.status === 'fulfilled' ? (inspRes.value.data ?? []) : []
+      const accRows  = accRes.status === 'fulfilled' ? (accRes.value.data ?? []) : []
+      const odoRow   = odoRes.status === 'fulfilled' ? (odoRes.value.data ?? null) : null
+      const ehRow    = ehRes.status === 'fulfilled' ? (ehRes.value.data ?? null) : null
       const ov       = ovRows.find(o => o.asset_no === assetNo) ?? null
 
-      // Fall back to a synthesized record from the overview when fleet_master has
-      // no row for this asset (asset seen only through tyre/overview data).
+      // Fall back to a synthesized record from the overview when vehicle_fleet
+      // has no row for this asset (asset seen only through tyre/overview data).
       let record = assetRes.value?.data ?? null
       if (!record) {
-        if (!tyreRows.length && !ov) { setAsset(null); setLoading(false); return }
+        if (!tyreRows.length && !ov && !inspRows.length && !accRows.length) { setAsset(null); setLoading(false); return }
         record = {
           id: null, asset_no: assetNo, vehicle_type: null,
           make: null, model: null, year: null,
-          site: ov?.site ?? tyreRows[0]?.site ?? null,
+          site: ov?.site ?? tyreRows[0]?.site ?? inspRows[0]?.site ?? null,
           country: ov?.country ?? tyreRows[0]?.country ?? null,
           active: true,
         }
@@ -308,6 +323,9 @@ export default function AssetDetail() {
       setAsset(record)
       setTyres(tyreRows)
       setWorkOrders(woRows.filter(w => w.asset_no === assetNo))
+      setInspections(inspRows)
+      setAccidents(accRows)
+      setMeter({ odometer: odoRow, engineHours: ehRow })
       setOverview(ov)
     } catch (e) {
       setError(e.message || t('assetmgmt.detail.loadError'))
@@ -327,6 +345,18 @@ export default function AssetDetail() {
   )
   const derivedWorstRisk = useMemo(() => overview?.worst_risk ?? worstRisk(activeTyres), [overview, activeTyres])
   const ytdCost = Number(overview?.ytd_cost) || 0
+  const openWorkOrders = useMemo(
+    () => workOrders.filter(w => !['completed', 'closed', 'cancelled'].includes(String(w.status ?? '').toLowerCase())).length,
+    [workOrders],
+  )
+  // current_km is advanced by the odometer sync trigger; fall back to the latest
+  // logged reading when the denormalised column is empty.
+  const currentKm = useMemo(() => {
+    const fromAsset = asset?.current_km != null && asset.current_km !== '' ? Number(asset.current_km) : null
+    const fromLog = meter.odometer?.odometer_km != null ? Number(meter.odometer.odometer_km) : null
+    return fromAsset ?? fromLog
+  }, [asset, meter])
+  const fmtNum = (n) => (n == null || isNaN(n) ? '-' : Number(n).toLocaleString('en-US'))
 
   const monthlyData = useMemo(() => {
     const now = new Date()
@@ -423,6 +453,8 @@ export default function AssetDetail() {
     { id: 'tyres',      label: t('assetmgmt.detail.tabs.tyres'),      icon: Activity },
     { id: 'costs',      label: t('assetmgmt.detail.tabs.costs'),      icon: DollarSign },
     { id: 'workorders', label: t('assetmgmt.detail.tabs.workOrders'), icon: Zap },
+    { id: 'inspections', label: `Inspections${inspections.length ? ` (${inspections.length})` : ''}`, icon: ClipboardCheck },
+    { id: 'incidents',  label: `Incidents${accidents.length ? ` (${accidents.length})` : ''}`, icon: ShieldAlert },
     { id: 'approvals',  label: t('assetmgmt.detail.tabs.approvals'),  icon: Shield },
   ]
 
@@ -486,6 +518,23 @@ export default function AssetDetail() {
           <QuickLink icon={ClipboardCheck} label={t('assetmgmt.detail.quick.inspections')} onClick={() => navigate(`/inspections?asset=${encodeURIComponent(asset.asset_no)}`)} />
         </div>
 
+        {/* Live stat strip — real counts pulled for this asset */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+          <StatTile icon={Gauge} label="Current KM" value={currentKm != null ? fmtNum(currentKm) : '-'}
+            sub={meter.odometer?.reading_date ? `as of ${fmtDate(meter.odometer.reading_date)}` : null} color="blue" />
+          <StatTile icon={Fuel} label="Engine Hours"
+            value={meter.engineHours?.engine_hours != null ? fmtNum(meter.engineHours.engine_hours) : '-'}
+            sub={meter.engineHours?.reading_date ? fmtDate(meter.engineHours.reading_date) : null} color="teal" />
+          <StatTile icon={Activity} label="Active Tyres" value={activeTyres.length}
+            sub={`${tyres.length} on record`} color="green" />
+          <StatTile icon={Wrench} label="Open Work Orders" value={openWorkOrders}
+            sub={`${workOrders.length} total`} color="yellow" />
+          <StatTile icon={ClipboardCheck} label="Inspections" value={inspections.length}
+            sub={inspections[0]?.inspection_date ? `last ${fmtDate(inspections[0].inspection_date)}` : 'none logged'} color="purple" />
+          <StatTile icon={ShieldAlert} label="Incidents" value={accidents.length}
+            sub={accidents.length ? 'recorded' : 'none recorded'} color={accidents.length ? 'red' : 'green'} />
+        </div>
+
         {/* Tabs */}
         <div className="flex flex-wrap gap-1 bg-[var(--surface-1)] rounded-xl p-1 border border-[var(--border-dim)] w-fit">
           {TABS.map(tb => (
@@ -539,6 +588,33 @@ export default function AssetDetail() {
                     )
                   })}
                 </div>
+              </div>
+
+              {/* Vehicle profile — real registry fields */}
+              <div className="lg:col-span-2 card">
+                <h3 className="text-sm font-semibold text-[var(--text-secondary)] mb-4 flex items-center gap-2">
+                  <Truck className="w-4 h-4 text-blue-400" /> Vehicle Profile
+                </h3>
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-x-6 gap-y-4">
+                  <ProfileField icon={Hash} label="Fleet Number" value={asset.fleet_number} />
+                  <ProfileField icon={Truck} label="Type" value={asset.vehicle_type} />
+                  <ProfileField icon={Layers} label="Make / Model" value={[asset.make, asset.model].filter(Boolean).join(' ')} />
+                  <ProfileField icon={Calendar} label="Year" value={asset.year} />
+                  <ProfileField icon={Building2} label="Department" value={asset.department} />
+                  <ProfileField icon={User} label="Operator" value={asset.operator_name} />
+                  <ProfileField icon={MapPin} label="Site" value={asset.site} />
+                  <ProfileField icon={MapPin} label="Region" value={asset.region} />
+                  <ProfileField icon={Hash} label="Registration No" value={asset.registration_no} />
+                  <ProfileField icon={Calendar} label="Registration Date" value={asset.registration_date ? fmtDate(asset.registration_date) : null} />
+                  <ProfileField icon={Activity} label="Tyre Size" value={asset.tyre_size} />
+                  <ProfileField icon={DollarSign} label="Monthly Tyre Budget"
+                    value={asset.monthly_tyre_budget != null ? fmtCurrency(asset.monthly_tyre_budget, activeCurrency) : null} />
+                </div>
+                {asset.notes && (
+                  <p className="mt-4 pt-4 border-t border-[var(--border-dim)] text-xs text-[var(--text-secondary)] leading-relaxed">
+                    <span className="text-[var(--text-muted)] uppercase tracking-widest mr-2">Notes</span>{asset.notes}
+                  </p>
+                )}
               </div>
 
               {/* Custom fields */}
@@ -674,6 +750,104 @@ export default function AssetDetail() {
             </motion.div>
           )}
 
+          {/* ── Inspections ───────────────────────────────────────────────────── */}
+          {tab === 'inspections' && (
+            <motion.div key="inspections" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+              <div className="bg-[var(--surface-2)] rounded-xl border border-[var(--border-bright)] overflow-hidden">
+                <div className="p-4 border-b border-[var(--border-bright)] flex items-center justify-between">
+                  <h3 className="text-sm font-semibold text-[var(--text-secondary)] flex items-center gap-2">
+                    <ClipboardCheck className="w-4 h-4 text-blue-400" /> Inspection History ({inspections.length})
+                  </h3>
+                  <button onClick={() => navigate(`/inspections?asset=${encodeURIComponent(asset.asset_no)}`)}
+                    className="text-xs text-blue-400 hover:text-blue-300 transition-colors">{t('assetmgmt.detail.viewAll')}</button>
+                </div>
+                {inspections.length ? (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-xs">
+                      <thead>
+                        <tr className="border-b border-[var(--border-bright)]">
+                          {['Date', 'Type', 'Inspector', 'Odometer', 'Severity', 'Status', 'Findings'].map(h => (
+                            <th key={h} className="px-3 py-2 text-left text-[var(--text-muted)] font-medium whitespace-nowrap">{h}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {inspections.map((ins, i) => {
+                          const sev = String(ins.severity ?? '').toLowerCase()
+                          const sevColor = sev === 'critical' || sev === 'high' ? 'text-red-400'
+                            : sev === 'medium' ? 'text-yellow-400' : sev ? 'text-green-400' : 'text-[var(--text-dim)]'
+                          return (
+                            <tr key={ins.id ?? i} className="border-b border-[var(--border-bright)] hover:bg-[var(--surface-3)] transition-colors">
+                              <td className="px-3 py-2 text-[var(--text-secondary)] whitespace-nowrap">{fmtDate(ins.inspection_date ?? ins.completed_date ?? ins.scheduled_date ?? ins.created_at)}</td>
+                              <td className="px-3 py-2 text-[var(--text-secondary)]">{ins.inspection_type ?? ins.title ?? '-'}</td>
+                              <td className="px-3 py-2 text-[var(--text-secondary)]">{ins.inspector ?? '-'}</td>
+                              <td className="px-3 py-2 text-[var(--text-secondary)]">{ins.odometer_km != null ? `${fmtNum(ins.odometer_km)} km` : '-'}</td>
+                              <td className={`px-3 py-2 font-medium ${sevColor}`}>{ins.severity ?? '-'}</td>
+                              <td className="px-3 py-2 text-[var(--text-secondary)]">{ins.approval_status ?? ins.status ?? '-'}</td>
+                              <td className="px-3 py-2 text-[var(--text-secondary)] max-w-[240px] truncate" title={ins.findings ?? ''}>{ins.findings ?? ins.notes ?? '-'}</td>
+                            </tr>
+                          )
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <div className="p-6 text-center text-[var(--text-muted)] text-sm">No inspections recorded for this asset.</div>
+                )}
+              </div>
+            </motion.div>
+          )}
+
+          {/* ── Incidents / Accidents ─────────────────────────────────────────── */}
+          {tab === 'incidents' && (
+            <motion.div key="incidents" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+              <div className="bg-[var(--surface-2)] rounded-xl border border-[var(--border-bright)] overflow-hidden">
+                <div className="p-4 border-b border-[var(--border-bright)] flex items-center justify-between">
+                  <h3 className="text-sm font-semibold text-[var(--text-secondary)] flex items-center gap-2">
+                    <ShieldAlert className="w-4 h-4 text-red-400" /> Incident History ({accidents.length})
+                  </h3>
+                  <button onClick={() => navigate(`/accidents?asset=${encodeURIComponent(asset.asset_no)}`)}
+                    className="text-xs text-blue-400 hover:text-blue-300 transition-colors">{t('assetmgmt.detail.viewAll')}</button>
+                </div>
+                {accidents.length ? (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-xs">
+                      <thead>
+                        <tr className="border-b border-[var(--border-bright)]">
+                          {['Date', 'Type', 'Severity', 'Location', 'Driver', 'Status', 'Claim', 'Est. Damage'].map(h => (
+                            <th key={h} className="px-3 py-2 text-left text-[var(--text-muted)] font-medium whitespace-nowrap">{h}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {accidents.map((ac, i) => {
+                          const sev = String(ac.severity ?? '').toLowerCase()
+                          const sevColor = sev === 'critical' || sev === 'major' || sev === 'high' ? 'text-red-400'
+                            : sev === 'moderate' || sev === 'medium' ? 'text-yellow-400' : sev ? 'text-green-400' : 'text-[var(--text-dim)]'
+                          const cost = (parseFloat(ac.repair_cost) || 0) || (parseFloat(ac.estimated_damage_cost) || 0)
+                          return (
+                            <tr key={ac.id ?? i} className="border-b border-[var(--border-bright)] hover:bg-[var(--surface-3)] transition-colors">
+                              <td className="px-3 py-2 text-[var(--text-secondary)] whitespace-nowrap">{fmtDate(ac.incident_date ?? ac.created_at)}</td>
+                              <td className="px-3 py-2 text-[var(--text-secondary)]">{ac.accident_type ?? '-'}</td>
+                              <td className={`px-3 py-2 font-medium ${sevColor}`}>{ac.severity ?? '-'}</td>
+                              <td className="px-3 py-2 text-[var(--text-secondary)] max-w-[160px] truncate" title={ac.location ?? ''}>{ac.location ?? '-'}</td>
+                              <td className="px-3 py-2 text-[var(--text-secondary)]">{ac.driver_name ?? '-'}</td>
+                              <td className="px-3 py-2 text-[var(--text-secondary)]">{ac.status ?? '-'}</td>
+                              <td className="px-3 py-2 text-[var(--text-secondary)]">{ac.claim_status ?? '-'}</td>
+                              <td className="px-3 py-2 text-[var(--text-secondary)]">{cost > 0 ? fmtCurrency(cost, activeCurrency) : '-'}</td>
+                            </tr>
+                          )
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <div className="p-6 text-center text-[var(--text-muted)] text-sm">No incidents recorded for this asset.</div>
+                )}
+              </div>
+            </motion.div>
+          )}
+
         </AnimatePresence>
 
         {/* ── Approvals ───────────────────────────────────────────────────────
@@ -723,6 +897,39 @@ function BackButton({ onClick, label }) {
       className="inline-flex items-center gap-2 text-sm text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors mb-4">
       <ArrowLeft className="w-4 h-4" /> {label}
     </button>
+  )
+}
+
+const STAT_COLORS = {
+  blue:   'text-blue-400',
+  green:  'text-green-400',
+  yellow: 'text-yellow-400',
+  purple: 'text-purple-400',
+  red:    'text-red-400',
+  teal:   'text-teal-400',
+}
+function StatTile({ icon: Icon, label, value, sub, color = 'blue' }) {
+  return (
+    <div className="bg-[var(--surface-1)] rounded-xl border border-[var(--border-dim)] p-4 flex flex-col gap-1.5">
+      <div className="flex items-center justify-between">
+        <span className="text-[11px] text-[var(--text-muted)] uppercase tracking-widest font-medium">{label}</span>
+        <Icon className={`w-4 h-4 ${STAT_COLORS[color] ?? STAT_COLORS.blue}`} />
+      </div>
+      <p className="text-xl font-bold text-[var(--text-primary)] leading-tight">{value ?? '-'}</p>
+      {sub && <p className="text-[11px] text-[var(--text-muted)] truncate">{sub}</p>}
+    </div>
+  )
+}
+
+function ProfileField({ icon: Icon, label, value }) {
+  const shown = value == null || value === '' ? '-' : value
+  return (
+    <div>
+      <p className="text-[11px] text-[var(--text-muted)] uppercase tracking-wider mb-1 flex items-center gap-1.5">
+        {Icon && <Icon className="w-3 h-3" />}{label}
+      </p>
+      <p className={`text-sm font-medium ${shown === '-' ? 'text-[var(--text-dim)]' : 'text-[var(--text-primary)]'} break-words`}>{shown}</p>
+    </div>
   )
 }
 

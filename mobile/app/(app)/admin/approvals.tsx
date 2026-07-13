@@ -1,13 +1,22 @@
 /**
- * Upload Approvals (mobile, admin-only)
+ * Admin Approvals hub (mobile, admin-only)
  *
- * Reviews the shared `pending_uploads` queue (uploads submitted by non-admins
- * from the web). Approve inserts the staged rows into their target table; reject
- * marks the batch rejected. Mirrors the web Upload Approvals screen.
+ * A unified queue for the approval types an admin can action from the phone:
+ *   • Uploads   — the shared `pending_uploads` queue (approve inserts the staged
+ *                 rows into their target table; reject marks the batch rejected).
+ *   • Closures  — accident closure requests (`accidents.closure_status =
+ *                 'pending_closure'`), decided by the SECURITY DEFINER RPCs
+ *                 `approve_accident_closure` / `reject_accident_closure`, both of
+ *                 which re-check the elevated role server-side (no client trust).
+ * A link to the dedicated Checklist sign-off queue is surfaced too (that screen
+ * owns the signature-review UX — we never duplicate it here).
+ *
+ * Mirrors the web Approval Dashboard. All reads are RLS-scoped; every action is
+ * authorised server-side.
  */
 import { useState, useCallback, useEffect, useMemo } from 'react'
 import {
-  View, Text, ScrollView, TouchableOpacity, StyleSheet,
+  View, Text, ScrollView, TouchableOpacity, StyleSheet, Platform,
   StatusBar, ActivityIndicator, RefreshControl, TextInput, Alert,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
@@ -17,6 +26,7 @@ import { useAuth } from '../../../contexts/AuthContext'
 import { supabase } from '../../../lib/supabase'
 import { useAdminGuard } from '../../../hooks/useRoleGuard'
 import { COUNTRIES } from '../../../lib/types'
+import { canApproveChecklists } from '../../../lib/permissions'
 
 interface PendingUpload {
   id: string
@@ -33,6 +43,22 @@ interface PendingUpload {
   created_at: string
 }
 
+interface PendingClosure {
+  id: string
+  asset_no: string | null
+  driver_name: string | null
+  accident_type: string | null
+  severity: string | null
+  incident_date: string | null
+  site: string | null
+  country: string | null
+  estimated_damage_cost: number | null
+  close_request_note: string | null
+  close_requested_at: string | null
+}
+
+type Section = 'uploads' | 'closures'
+
 const TYPE_META: Record<string, { label: string; icon: string; color: string }> = {
   tyres: { label: 'Tyre Records', icon: 'document-text-outline', color: '#16a34a' },
   stock: { label: 'Stock',        icon: 'cube-outline',          color: '#0891b2' },
@@ -40,25 +66,34 @@ const TYPE_META: Record<string, { label: string; icon: string; color: string }> 
 
 // Security: never write to a table name taken from the DB row. Approval inserts
 // are restricted to this hardcoded allow-list, keyed by the batch `upload_type`.
-// Mirrors the web upload flow (UploadData.jsx submitForApproval targets).
 const APPROVE_TABLE: Record<string, string> = {
   tyres: 'tyre_records',
   stock: 'stock_records',
 }
 
 const BATCH = 500
+const CLOSURE_COLS =
+  'id,asset_no,driver_name,accident_type,severity,incident_date,site,country,' +
+  'estimated_damage_cost,close_request_note,close_requested_at'
 
-export default function UploadApprovalsScreen() {
+export default function AdminApprovalsScreen() {
   const { allowed, loading: guardLoading } = useAdminGuard()
   const { profile } = useAuth()
   const router = useRouter()
 
+  const [section, setSection] = useState<Section>('uploads')
+
+  // ── Uploads ────────────────────────────────────────────────────────────────
   const [items, setItems]     = useState<PendingUpload[]>([])
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [acting, setActing]   = useState<string | null>(null)
   const [search, setSearch]   = useState('')
   const [tab, setTab]         = useState<'pending' | 'history'>('pending')
+
+  // ── Closures ───────────────────────────────────────────────────────────────
+  const [closures, setClosures] = useState<PendingClosure[]>([])
+  const [closuresLoading, setClosuresLoading] = useState(true)
 
   const load = useCallback(async () => {
     const { data } = await supabase
@@ -70,19 +105,38 @@ export default function UploadApprovalsScreen() {
     setLoading(false)
   }, [])
 
-  useEffect(() => { load() }, [load])
+  const loadClosures = useCallback(async () => {
+    const { data } = await supabase
+      .from('accidents')
+      .select(CLOSURE_COLS)
+      .eq('closure_status', 'pending_closure')
+      .order('close_requested_at', { ascending: true })
+      .limit(200)
+    // Cast through unknown: the generated DB types predate the accident closure
+    // columns, so PostgREST's inferred row type does not overlap PendingClosure.
+    setClosures((data ?? []) as unknown as PendingClosure[])
+    setClosuresLoading(false)
+  }, [])
+
+  useEffect(() => { load(); loadClosures() }, [load, loadClosures])
 
   useEffect(() => {
     if (!allowed) return
     const ch = supabase
-      .channel('realtime:pending_uploads_mobile')
+      .channel('realtime:admin_approvals_mobile')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'pending_uploads' }, () => load())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'accidents' }, () => loadClosures())
       .subscribe()
     return () => { supabase.removeChannel(ch) }
-  }, [allowed, load])
+  }, [allowed, load, loadClosures])
 
-  async function onRefresh() { setRefreshing(true); await load(); setRefreshing(false) }
+  async function onRefresh() {
+    setRefreshing(true)
+    await Promise.all([load(), loadClosures()])
+    setRefreshing(false)
+  }
 
+  // ── Upload actions ───────────────────────────────────────────────────────────
   function approve(p: PendingUpload) {
     Alert.alert(
       'Approve Upload',
@@ -165,6 +219,60 @@ export default function UploadApprovalsScreen() {
     )
   }
 
+  // ── Closure actions (RLS-enforced RPCs) ───────────────────────────────────────
+  function approveClosure(c: PendingClosure) {
+    Alert.alert(
+      'Approve Closure',
+      `Close the accident case for ${c.asset_no ?? 'this asset'}? The case is marked Closed and the requester is notified.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Approve',
+          onPress: async () => {
+            setActing(c.id)
+            const { error } = await supabase.rpc('approve_accident_closure', { p_accident_id: c.id })
+            setActing(null)
+            if (error) Alert.alert('Cannot approve', error.message)
+            else setClosures(prev => prev.filter(x => x.id !== c.id))
+          },
+        },
+      ]
+    )
+  }
+
+  async function rpcRejectClosure(id: string, reason: string | null) {
+    setActing(id)
+    const { error } = await supabase.rpc('reject_accident_closure', { p_accident_id: id, p_reason: reason })
+    setActing(null)
+    if (error) Alert.alert('Cannot reject', error.message)
+    else setClosures(prev => prev.filter(x => x.id !== id))
+  }
+
+  function rejectClosure(c: PendingClosure) {
+    // iOS supports a text prompt for the reason; elsewhere confirm and send none.
+    if (Platform.OS === 'ios' && (Alert as any).prompt) {
+      (Alert as any).prompt(
+        'Reject Closure',
+        `Return the ${c.asset_no ?? 'accident'} case to Open. Add a reason (optional):`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Reject', style: 'destructive', onPress: (reason: string) => rpcRejectClosure(c.id, reason?.trim() || null) },
+        ],
+        'plain-text',
+      )
+      return
+    }
+    Alert.alert(
+      'Reject Closure',
+      `Return the ${c.asset_no ?? 'accident'} case to Open?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Reject', style: 'destructive', onPress: () => rpcRejectClosure(c.id, null) },
+      ]
+    )
+  }
+
+  // ── Derived ────────────────────────────────────────────────────────────────
   const pending = items.filter(i => i.status === 'pending')
   const list = tab === 'pending' ? pending : items.filter(i => i.status !== 'pending')
   const q = search.trim().toLowerCase()
@@ -175,7 +283,9 @@ export default function UploadApprovalsScreen() {
         (p.country ?? '').toLowerCase().includes(q))
     : list, [list, q])
 
-  if (guardLoading || !allowed || loading) {
+  const canChecklists = canApproveChecklists(profile?.role)
+
+  if (guardLoading || !allowed || (loading && closuresLoading)) {
     return (
       <SafeAreaView style={styles.safe}>
         <StatusBar barStyle="light-content" backgroundColor="#065f46" />
@@ -183,6 +293,9 @@ export default function UploadApprovalsScreen() {
       </SafeAreaView>
     )
   }
+
+  const uploadsBadge = pending.length
+  const closuresBadge = closures.length
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -193,104 +306,203 @@ export default function UploadApprovalsScreen() {
           <Ionicons name="chevron-back" size={22} color="#fff" />
         </TouchableOpacity>
         <View style={{ flex: 1 }}>
-          <Text style={styles.headerTitle}>Upload Approvals</Text>
-          <Text style={styles.headerSub}>{pending.length} awaiting · {pending.reduce((a, p) => a + (p.row_count || 0), 0).toLocaleString()} rows</Text>
+          <Text style={styles.headerTitle}>Approvals</Text>
+          <Text style={styles.headerSub}>
+            {uploadsBadge} upload{uploadsBadge === 1 ? '' : 's'} · {closuresBadge} closure{closuresBadge === 1 ? '' : 's'} pending
+          </Text>
         </View>
       </View>
 
-      <View style={styles.searchWrap}>
-        <Ionicons name="search-outline" size={16} color="#94a3b8" />
-        <TextInput
-          style={styles.searchInput}
-          placeholder="Search file, uploader, country..."
-          placeholderTextColor="#94a3b8"
-          value={search}
-          onChangeText={setSearch}
-          clearButtonMode="while-editing"
-        />
-      </View>
-
-      <View style={styles.filterRow}>
-        {([['pending', `Pending (${pending.length})`], ['history', 'History']] as const).map(([key, label]) => (
-          <TouchableOpacity key={key} style={[styles.filterTab, tab === key && styles.filterTabActive]} onPress={() => setTab(key)}>
-            <Text style={[styles.filterTabText, tab === key && styles.filterTabTextActive]}>{label}</Text>
+      {/* Section switcher */}
+      <View style={styles.sectionRow}>
+        {([['uploads', 'Uploads', uploadsBadge], ['closures', 'Closures', closuresBadge]] as const).map(([key, label, badge]) => (
+          <TouchableOpacity
+            key={key}
+            style={[styles.sectionTab, section === key && styles.sectionTabActive]}
+            onPress={() => setSection(key as Section)}
+          >
+            <Text style={[styles.sectionTabText, section === key && styles.sectionTabTextActive]}>
+              {label}{badge > 0 ? ` (${badge})` : ''}
+            </Text>
           </TouchableOpacity>
         ))}
       </View>
 
-      <ScrollView
-        style={styles.scroll}
-        contentContainerStyle={styles.content}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#16a34a" />}
-      >
-        {filtered.length === 0 ? (
-          <View style={styles.empty}>
-            <Ionicons name="checkmark-done-outline" size={52} color="#86efac" />
-            <Text style={styles.emptyTitle}>{tab === 'pending' ? 'Nothing to approve' : 'No history yet'}</Text>
-            <Text style={styles.emptyHint}>
-              {tab === 'pending' ? 'Uploads submitted by non-admins appear here.' : 'Approved and rejected uploads will show here.'}
-            </Text>
+      {/* Checklist sign-off deep link (dedicated screen owns the review UX) */}
+      {canChecklists && (
+        <TouchableOpacity
+          style={styles.linkCard}
+          onPress={() => router.push('/(app)/checklists/approvals')}
+          activeOpacity={0.85}
+        >
+          <View style={styles.linkIcon}>
+            <Ionicons name="clipboard-outline" size={16} color="#0891b2" />
           </View>
-        ) : (
-          filtered.map(p => {
-            const meta = TYPE_META[p.upload_type] ?? TYPE_META.tyres
-            const busy = acting === p.id
-            return (
-              <View key={p.id} style={styles.card}>
-                <View style={[styles.typeStrip, { backgroundColor: meta.color }]} />
-                <View style={styles.cardBody}>
-                  <View style={styles.cardTop}>
-                    <View style={[styles.typeIcon, { backgroundColor: meta.color + '1a' }]}>
-                      <Ionicons name={meta.icon as any} size={18} color={meta.color} />
+          <Text style={styles.linkText}>Checklist sign-offs</Text>
+          <Ionicons name="chevron-forward" size={16} color="#94a3b8" />
+        </TouchableOpacity>
+      )}
+
+      {section === 'uploads' ? (
+        <>
+          <View style={styles.searchWrap}>
+            <Ionicons name="search-outline" size={16} color="#94a3b8" />
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Search file, uploader, country..."
+              placeholderTextColor="#94a3b8"
+              value={search}
+              onChangeText={setSearch}
+              clearButtonMode="while-editing"
+            />
+          </View>
+
+          <View style={styles.filterRow}>
+            {([['pending', `Pending (${pending.length})`], ['history', 'History']] as const).map(([key, label]) => (
+              <TouchableOpacity key={key} style={[styles.filterTab, tab === key && styles.filterTabActive]} onPress={() => setTab(key)}>
+                <Text style={[styles.filterTabText, tab === key && styles.filterTabTextActive]}>{label}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+
+          <ScrollView
+            style={styles.scroll}
+            contentContainerStyle={styles.content}
+            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#16a34a" />}
+          >
+            {filtered.length === 0 ? (
+              <View style={styles.empty}>
+                <Ionicons name="checkmark-done-outline" size={52} color="#86efac" />
+                <Text style={styles.emptyTitle}>{tab === 'pending' ? 'Nothing to approve' : 'No history yet'}</Text>
+                <Text style={styles.emptyHint}>
+                  {tab === 'pending' ? 'Uploads submitted by non-admins appear here.' : 'Approved and rejected uploads will show here.'}
+                </Text>
+              </View>
+            ) : (
+              filtered.map(p => {
+                const meta = TYPE_META[p.upload_type] ?? TYPE_META.tyres
+                const busy = acting === p.id
+                return (
+                  <View key={p.id} style={styles.card}>
+                    <View style={[styles.typeStrip, { backgroundColor: meta.color }]} />
+                    <View style={styles.cardBody}>
+                      <View style={styles.cardTop}>
+                        <View style={[styles.typeIcon, { backgroundColor: meta.color + '1a' }]}>
+                          <Ionicons name={meta.icon as any} size={18} color={meta.color} />
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.fileName} numberOfLines={1}>{p.file_name || 'Untitled upload'}</Text>
+                          <Text style={styles.metaLine}>
+                            {(p.row_count || 0).toLocaleString()} rows · {meta.label}
+                          </Text>
+                        </View>
+                        {p.status !== 'pending' && (
+                          <View style={[styles.statusBadge, { backgroundColor: p.status === 'approved' ? '#dcfce7' : '#fee2e2' }]}>
+                            <Text style={[styles.statusText, { color: p.status === 'approved' ? '#16a34a' : '#dc2626' }]}>
+                              {p.status === 'approved' ? 'Approved' : 'Rejected'}
+                            </Text>
+                          </View>
+                        )}
+                      </View>
+
+                      <View style={styles.chips}>
+                        <View style={styles.chip}><Ionicons name="person-outline" size={11} color="#64748b" /><Text style={styles.chipText}>{p.uploader_name || 'Unknown'}</Text></View>
+                        {p.status === 'pending' ? (
+                          <TouchableOpacity style={[styles.chip, styles.chipEditable]} onPress={() => correctCountry(p)} disabled={busy}>
+                            <Ionicons name="earth-outline" size={11} color="#0891b2" />
+                            <Text style={[styles.chipText, { color: '#0891b2', fontWeight: '700' }]}>{p.country || 'Set country'}</Text>
+                            <Ionicons name="chevron-down" size={10} color="#0891b2" />
+                          </TouchableOpacity>
+                        ) : (
+                          <View style={styles.chip}><Ionicons name="earth-outline" size={11} color="#64748b" /><Text style={styles.chipText}>{p.country || '-'}</Text></View>
+                        )}
+                        <View style={styles.chip}><Ionicons name="time-outline" size={11} color="#64748b" /><Text style={styles.chipText}>{new Date(p.created_at).toLocaleDateString()}</Text></View>
+                      </View>
+
+                      {p.status === 'pending' && (
+                        <View style={styles.actionRow}>
+                          <TouchableOpacity style={styles.rejectBtn} onPress={() => reject(p)} disabled={busy}>
+                            {busy ? <ActivityIndicator size="small" color="#dc2626" />
+                              : <><Ionicons name="close-outline" size={16} color="#dc2626" /><Text style={styles.rejectBtnText}>Reject</Text></>}
+                          </TouchableOpacity>
+                          <TouchableOpacity style={styles.approveBtn} onPress={() => approve(p)} disabled={busy}>
+                            {busy ? <ActivityIndicator size="small" color="#fff" />
+                              : <><Ionicons name="checkmark-outline" size={16} color="#fff" /><Text style={styles.approveBtnText}>Approve</Text></>}
+                          </TouchableOpacity>
+                        </View>
+                      )}
                     </View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.fileName} numberOfLines={1}>{p.file_name || 'Untitled upload'}</Text>
-                      <Text style={styles.metaLine}>
-                        {(p.row_count || 0).toLocaleString()} rows · {meta.label}
-                      </Text>
-                    </View>
-                    {p.status !== 'pending' && (
-                      <View style={[styles.statusBadge, { backgroundColor: p.status === 'approved' ? '#dcfce7' : '#fee2e2' }]}>
-                        <Text style={[styles.statusText, { color: p.status === 'approved' ? '#16a34a' : '#dc2626' }]}>
-                          {p.status === 'approved' ? 'Approved' : 'Rejected'}
+                  </View>
+                )
+              })
+            )}
+            <View style={{ height: 32 }} />
+          </ScrollView>
+        </>
+      ) : (
+        <ScrollView
+          style={styles.scroll}
+          contentContainerStyle={styles.content}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#16a34a" />}
+        >
+          {closuresLoading ? (
+            <View style={styles.loaderInline}><ActivityIndicator size="small" color="#16a34a" /></View>
+          ) : closures.length === 0 ? (
+            <View style={styles.empty}>
+              <Ionicons name="lock-closed-outline" size={52} color="#86efac" />
+              <Text style={styles.emptyTitle}>No closures awaiting approval</Text>
+              <Text style={styles.emptyHint}>Accident cases requested for closure appear here for sign-off.</Text>
+            </View>
+          ) : (
+            closures.map(c => {
+              const busy = acting === c.id
+              return (
+                <View key={c.id} style={styles.card}>
+                  <View style={[styles.typeStrip, { backgroundColor: '#b45309' }]} />
+                  <View style={styles.cardBody}>
+                    <View style={styles.cardTop}>
+                      <View style={[styles.typeIcon, { backgroundColor: '#fef3c7' }]}>
+                        <Ionicons name="car-outline" size={18} color="#b45309" />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.fileName} numberOfLines={1}>
+                          {c.asset_no || 'Accident'}{c.accident_type ? ` · ${c.accident_type}` : ''}
+                        </Text>
+                        <Text style={styles.metaLine} numberOfLines={1}>
+                          {[c.driver_name && `Driver ${c.driver_name}`, c.severity, c.incident_date].filter(Boolean).join(' · ') || 'Awaiting closure approval'}
                         </Text>
                       </View>
-                    )}
-                  </View>
+                    </View>
 
-                  <View style={styles.chips}>
-                    <View style={styles.chip}><Ionicons name="person-outline" size={11} color="#64748b" /><Text style={styles.chipText}>{p.uploader_name || 'Unknown'}</Text></View>
-                    {p.status === 'pending' ? (
-                      <TouchableOpacity style={[styles.chip, styles.chipEditable]} onPress={() => correctCountry(p)} disabled={busy}>
-                        <Ionicons name="earth-outline" size={11} color="#0891b2" />
-                        <Text style={[styles.chipText, { color: '#0891b2', fontWeight: '700' }]}>{p.country || 'Set country'}</Text>
-                        <Ionicons name="chevron-down" size={10} color="#0891b2" />
-                      </TouchableOpacity>
-                    ) : (
-                      <View style={styles.chip}><Ionicons name="earth-outline" size={11} color="#64748b" /><Text style={styles.chipText}>{p.country || '-'}</Text></View>
-                    )}
-                    <View style={styles.chip}><Ionicons name="time-outline" size={11} color="#64748b" /><Text style={styles.chipText}>{new Date(p.created_at).toLocaleDateString()}</Text></View>
-                  </View>
+                    <View style={styles.chips}>
+                      {c.site ? <View style={styles.chip}><Ionicons name="business-outline" size={11} color="#64748b" /><Text style={styles.chipText}>{c.site}</Text></View> : null}
+                      {c.country ? <View style={styles.chip}><Ionicons name="earth-outline" size={11} color="#64748b" /><Text style={styles.chipText}>{c.country}</Text></View> : null}
+                      {c.estimated_damage_cost != null ? <View style={styles.chip}><Ionicons name="cash-outline" size={11} color="#64748b" /><Text style={styles.chipText}>{Number(c.estimated_damage_cost).toLocaleString()}</Text></View> : null}
+                      {c.close_requested_at ? <View style={styles.chip}><Ionicons name="time-outline" size={11} color="#64748b" /><Text style={styles.chipText}>{new Date(c.close_requested_at).toLocaleDateString()}</Text></View> : null}
+                    </View>
 
-                  {p.status === 'pending' && (
+                    {c.close_request_note ? (
+                      <Text style={styles.noteLine} numberOfLines={3}>“{c.close_request_note}”</Text>
+                    ) : null}
+
                     <View style={styles.actionRow}>
-                      <TouchableOpacity style={styles.rejectBtn} onPress={() => reject(p)} disabled={busy}>
+                      <TouchableOpacity style={styles.rejectBtn} onPress={() => rejectClosure(c)} disabled={busy}>
                         {busy ? <ActivityIndicator size="small" color="#dc2626" />
                           : <><Ionicons name="close-outline" size={16} color="#dc2626" /><Text style={styles.rejectBtnText}>Reject</Text></>}
                       </TouchableOpacity>
-                      <TouchableOpacity style={styles.approveBtn} onPress={() => approve(p)} disabled={busy}>
+                      <TouchableOpacity style={styles.approveBtn} onPress={() => approveClosure(c)} disabled={busy}>
                         {busy ? <ActivityIndicator size="small" color="#fff" />
                           : <><Ionicons name="checkmark-outline" size={16} color="#fff" /><Text style={styles.approveBtnText}>Approve</Text></>}
                       </TouchableOpacity>
                     </View>
-                  )}
+                  </View>
                 </View>
-              </View>
-            )
-          })
-        )}
-        <View style={{ height: 32 }} />
-      </ScrollView>
+              )
+            })
+          )}
+          <View style={{ height: 32 }} />
+        </ScrollView>
+      )}
     </SafeAreaView>
   )
 }
@@ -298,13 +510,22 @@ export default function UploadApprovalsScreen() {
 const styles = StyleSheet.create({
   safe:   { flex: 1, backgroundColor: '#f0fdf4' },
   loader: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  loaderInline: { paddingVertical: 40, alignItems: 'center' },
   scroll: { flex: 1 },
   content:{ padding: 16, gap: 10, paddingBottom: 40 },
   header: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#065f46', paddingHorizontal: 16, paddingVertical: 12, gap: 10 },
   backBtn:    { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,255,255,0.15)' },
   headerTitle:{ fontSize: 17, fontWeight: '800', color: '#fff' },
   headerSub:  { fontSize: 11, color: 'rgba(255,255,255,0.7)', marginTop: 1 },
-  searchWrap: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#fff', paddingHorizontal: 14, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#f1f5f9' },
+  sectionRow: { flexDirection: 'row', backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#f1f5f9' },
+  sectionTab: { flex: 1, paddingVertical: 12, alignItems: 'center' },
+  sectionTabActive: { borderBottomWidth: 2, borderBottomColor: '#065f46' },
+  sectionTabText: { fontSize: 13, fontWeight: '700', color: '#94a3b8' },
+  sectionTabTextActive: { color: '#065f46', fontWeight: '800' },
+  linkCard: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: '#fff', marginHorizontal: 16, marginTop: 12, paddingHorizontal: 14, paddingVertical: 12, borderRadius: 12, borderWidth: 1, borderColor: '#e2e8f0' },
+  linkIcon: { width: 30, height: 30, borderRadius: 9, backgroundColor: '#ecfeff', alignItems: 'center', justifyContent: 'center' },
+  linkText: { flex: 1, fontSize: 13, fontWeight: '700', color: '#0f172a' },
+  searchWrap: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#fff', paddingHorizontal: 14, paddingVertical: 10, marginTop: 12, borderTopWidth: 1, borderBottomWidth: 1, borderColor: '#f1f5f9' },
   searchInput:{ flex: 1, fontSize: 13, color: '#0f172a', padding: 0 },
   filterRow:  { flexDirection: 'row', backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#f1f5f9' },
   filterTab:  { flex: 1, paddingVertical: 10, alignItems: 'center' },
@@ -318,6 +539,7 @@ const styles = StyleSheet.create({
   typeIcon:  { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
   fileName:  { fontSize: 14, fontWeight: '800', color: '#0f172a' },
   metaLine:  { fontSize: 11, color: '#64748b', marginTop: 1 },
+  noteLine:  { fontSize: 12, color: '#475569', fontStyle: 'italic' },
   statusBadge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 },
   statusText:  { fontSize: 10, fontWeight: '700' },
   chips:  { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },

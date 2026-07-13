@@ -18,7 +18,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import {
   X, Save, Plus, Trash2, Send, Lock, CheckCircle2, XCircle,
   ShieldCheck, Hourglass, FileText, Wrench, MessageSquare, Briefcase, History, User, ClipboardList,
-  ArrowLeft, AlertOctagon, ChevronRight, Download, Loader2,
+  ArrowLeft, AlertOctagon, ChevronRight, Download, Loader2, ShieldAlert, Clock,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
@@ -103,9 +103,53 @@ const CURRENT_STATUS_OPTIONS = [
   'Awaiting Approval', 'Insurance Claim', 'Repair Completed', 'Closed',
 ]
 
+// ── GCC accident case-management vocabularies (V219) ──────────────────────────
+// Ordered case lifecycle used by the Repair & Insurance workflow selectors.
+const WORKFLOW_STAGES = [
+  'Reported', 'Under assessment', 'Waiting insurance approval', 'Insurance approved',
+  'In repair', 'Waiting release', 'Released', 'Closed',
+]
+// Terminal stages — a case at/after these is NOT delayed and needs no next step.
+const TERMINAL_STAGES = ['released', 'closed']
+// A workflow stage that implies a claim_status so the two stay in lockstep on save.
+const STAGE_TO_CLAIM_STATUS = {
+  'waiting insurance approval': 'filed',
+  'insurance approved': 'approved',
+  'closed': 'settled',
+}
+const DAMAGE_CLASS_OPTIONS = ['Major', 'Minor']
+const FAULT_STATUS_OPTIONS = ['Faulty', 'Non-faulty', 'Under review']
+const NAJM_STATUS_OPTIONS = ['Najm report', 'No Najm']
+const NAJM_FAULT_OPTIONS = ['Faulty', 'Non-faulty', 'N/A']
+const TAQDEER_STATUS_OPTIONS = ['Taqdeer report', 'No Taqdeer']
+const LIABILITY_RATIO_OPTIONS = [0, 50, 100]
+const REPAIR_TYPE_OPTIONS = ['Internal', 'External']
+
+// Days a still-open case may sit without a status update before it is "Delayed".
+const DELAY_THRESHOLD_DAYS = 5
+
+// Whole days elapsed since `dateStr` (YYYY-MM-DD / ISO), or null when unparseable.
+function daysSince(dateStr) {
+  if (!dateStr) return null
+  const t = new Date(dateStr).getTime()
+  if (Number.isNaN(t)) return null
+  return Math.floor((Date.now() - t) / 86_400_000)
+}
+
+// A case is delayed when it is still open (not Released/Closed) and the last
+// movement (status_update_date, else incident_date) is older than the threshold.
+function computeDelay(acc, closure) {
+  const stage = String(acc?.current_status || acc?.status || '').toLowerCase()
+  const isTerminal = closure === 'closed' || TERMINAL_STAGES.some(s => stage.includes(s))
+  if (isTerminal) return { delayed: false, days: null }
+  const days = daysSince(acc?.status_update_date || acc?.incident_date)
+  return { delayed: days != null && days > DELAY_THRESHOLD_DAYS, days }
+}
+
 const TABS = [
   { key: 'overview', label: 'Overview', icon: FileText },
   { key: 'tracker',  label: 'Tracker', icon: ClipboardList },
+  { key: 'repair',   label: 'Repair & Insurance', icon: ShieldAlert },
   { key: 'claim',    label: 'Claim & Recovery', icon: Briefcase },
   { key: 'parts',    label: 'Parts & Repairs', icon: Wrench },
   { key: 'log',      label: 'Case Log', icon: MessageSquare },
@@ -176,6 +220,16 @@ function AccidentDetail({ accidentId, onBack, onClose, onChanged, variant = 'pag
   const { options: siteOptions } = useSites(acc?.country)
   const closure = acc?.closure_status ?? 'open'
   const partsTotal = parts.reduce((s, p) => s + (Number(p.total_cost) || 0), 0)
+  const delay = useMemo(() => computeDelay(acc, closure), [acc, closure])
+  const DelayBadge = () =>
+    delay.delayed ? (
+      <span
+        className="badge text-xs bg-red-600 text-white border border-red-500 flex items-center gap-1 animate-pulse"
+        title={`Case still open with no update for ${delay.days} days (threshold ${DELAY_THRESHOLD_DAYS})`}
+      >
+        <Clock size={10} /> Delayed {delay.days}d
+      </span>
+    ) : null
 
   const downloadCase = useCallback(async () => {
     if (!acc) return
@@ -281,6 +335,7 @@ function AccidentDetail({ accidentId, onBack, onClose, onChanged, variant = 'pag
           </div>
         )}
         {tab === 'tracker'   && <TrackerTab acc={acc} elevated={elevated} siteOptions={siteOptions} onSaved={() => { load(); onChanged?.() }} setErr={setErr} />}
+        {tab === 'repair'    && <RepairInsuranceTab acc={acc} elevated={elevated} onSaved={() => { load(); onChanged?.() }} setErr={setErr} fmtCurrency={fmtCurrency} />}
         {tab === 'claim'     && <ClaimTab acc={acc} elevated={elevated} onSaved={() => { load(); onChanged?.() }} setErr={setErr} fmtCurrency={fmtCurrency} />}
         {tab === 'parts'     && <PartsTab acc={acc} parts={parts} partsTotal={partsTotal} elevated={elevated} profile={profile} reload={() => { load(); onChanged?.() }} setErr={setErr} fmtCurrency={fmtCurrency} />}
         {tab === 'log'       && <LogTab acc={acc} remarks={remarks} profile={profile} reload={load} setErr={setErr} />}
@@ -313,6 +368,7 @@ function AccidentDetail({ accidentId, onBack, onClose, onChanged, variant = 'pag
               </div>
             </div>
             <div className="flex items-center gap-2">
+              <DelayBadge />
               <ClosureBadge closure={closure} />
               <button onClick={onClose} className="text-gray-400 hover:text-white"><X size={18} /></button>
             </div>
@@ -365,6 +421,7 @@ function AccidentDetail({ accidentId, onBack, onClose, onChanged, variant = 'pag
                 {severity && <span className={`badge text-xs ${SEVERITY_BADGE[severity] ?? 'bg-gray-800 text-gray-300'}`}>{severity}</span>}
                 {status && <span className="badge text-xs bg-[var(--input-bg)] text-[var(--text-dim)] border border-[var(--input-border)]">{status}</span>}
                 <ClosureBadge closure={closure} />
+                <DelayBadge />
                 {wf.isActive && <span className="badge text-xs bg-purple-900/50 text-purple-300 border border-purple-700/50 flex items-center gap-1"><Lock size={10} /> In approval</span>}
               </div>
             </div>
@@ -550,6 +607,218 @@ function TrackerTab({ acc, elevated, siteOptions = [], onSaved, setErr }) {
       <Inp label="Status update note" value={f.status_update_note} onChange={v => set('status_update_note', v)} placeholder="Optional note for this update" />
       <button onClick={save} disabled={saving} className="btn-primary flex items-center gap-2 disabled:opacity-50">
         <Save size={16} /> {saving ? 'Saving...' : 'Save Tracker'}
+      </button>
+    </div>
+  )
+}
+
+// ── Repair & Insurance — Case Management (V219 GCC fields) ─────────────────────
+// Damage/fault classification, Najm + Taqdeer report state, GCC liability ratio,
+// repair route, the case workflow (current stage → next step, kept in lockstep
+// with claim_status), and workshop financials with an auto-suggested final
+// amount. Persists via a single accidents UPDATE; honest read-only view for
+// non-elevated roles.
+function RepairInsuranceTab({ acc, elevated, onSaved, setErr, fmtCurrency }) {
+  const [f, setF] = useState({
+    damage_class: acc.damage_class ?? '',
+    fault_status: acc.fault_status ?? '',
+    najm_status: acc.najm_status ?? '',
+    najm_fault: acc.najm_fault ?? '',
+    taqdeer_status: acc.taqdeer_status ?? '',
+    gcc_liability_ratio: acc.gcc_liability_ratio ?? '',
+    repair_type: acc.repair_type ?? '',
+    current_status: acc.current_status ?? '',
+    next_step: acc.next_step ?? '',
+    workshop_name: acc.workshop_name ?? '',
+    workshop_quotation: acc.workshop_quotation ?? '',
+    discount_pct: acc.discount_pct ?? '',
+    final_amount: acc.final_amount ?? '',
+    estimated_damage_cost: acc.estimated_damage_cost ?? '',
+    repair_cost: acc.repair_cost ?? '',
+    expected_release_date: acc.expected_release_date ? String(acc.expected_release_date).slice(0, 10) : '',
+    release_date: acc.release_date ? String(acc.release_date).slice(0, 10) : '',
+  })
+  // Once the user hand-edits Final amount, stop auto-deriving it from qt/discount.
+  const [finalTouched, setFinalTouched] = useState(acc.final_amount != null && acc.final_amount !== '')
+  const [saving, setSaving] = useState(false)
+  const set = (k, v) => setF(p => ({ ...p, [k]: v }))
+
+  // Suggested final = quotation − discount%. Null when there is no quotation.
+  const suggestedFinal = useMemo(() => {
+    const q = Number(f.workshop_quotation)
+    if (!f.workshop_quotation || Number.isNaN(q)) return null
+    const d = Number(f.discount_pct) || 0
+    return Math.max(0, Math.round((q * (1 - d / 100)) * 100) / 100)
+  }, [f.workshop_quotation, f.discount_pct])
+
+  // Auto-fill Final amount from the suggestion until the user overrides it.
+  useEffect(() => {
+    if (!finalTouched && suggestedFinal != null) {
+      setF(p => (String(p.final_amount) === String(suggestedFinal) ? p : { ...p, final_amount: suggestedFinal }))
+    }
+  }, [suggestedFinal, finalTouched])
+
+  const numOrNull = (v) => (v === '' || v == null ? null : Number(v))
+  const strOrNull = (v) => (v && String(v).trim() ? v : null)
+
+  async function save() {
+    setSaving(true); setErr('')
+    const patch = {
+      damage_class: strOrNull(f.damage_class),
+      fault_status: strOrNull(f.fault_status),
+      najm_status: strOrNull(f.najm_status),
+      najm_fault: strOrNull(f.najm_fault),
+      taqdeer_status: strOrNull(f.taqdeer_status),
+      gcc_liability_ratio: f.gcc_liability_ratio === '' ? null : Number(f.gcc_liability_ratio),
+      repair_type: strOrNull(f.repair_type),
+      current_status: strOrNull(f.current_status),
+      next_step: strOrNull(f.next_step),
+      workshop_name: strOrNull(f.workshop_name),
+      workshop_quotation: numOrNull(f.workshop_quotation),
+      discount_pct: numOrNull(f.discount_pct),
+      final_amount: numOrNull(f.final_amount),
+      estimated_damage_cost: numOrNull(f.estimated_damage_cost),
+      repair_cost: numOrNull(f.repair_cost),
+      expected_release_date: f.expected_release_date || null,
+      release_date: f.release_date || null,
+    }
+    // Keep the insurance claim lifecycle in lockstep with the workflow stage.
+    const mapped = STAGE_TO_CLAIM_STATUS[String(f.current_status || '').toLowerCase()]
+    if (mapped) patch.claim_status = mapped
+    const { error } = await supabase.from('accidents').update(patch).eq('id', acc.id)
+    setSaving(false)
+    if (error) { setErr(error.message); return }
+    onSaved()
+  }
+
+  if (!elevated) {
+    return (
+      <div className="space-y-4">
+        <div>
+          <p className="text-xs font-semibold text-gray-400 mb-2">Classification & Reports</p>
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+            <KV label="Damage class" value={acc.damage_class} />
+            <KV label="Fault status" value={acc.fault_status} highlight />
+            <KV label="GCC liability" value={acc.gcc_liability_ratio != null ? `${acc.gcc_liability_ratio}%` : '-'} highlight />
+            <KV label="Najm" value={acc.najm_status} />
+            <KV label="Najm fault" value={acc.najm_fault} />
+            <KV label="Taqdeer" value={acc.taqdeer_status} />
+          </div>
+        </div>
+        <div>
+          <p className="text-xs font-semibold text-gray-400 mb-2">Workflow</p>
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+            <KV label="Repair type" value={acc.repair_type} />
+            <KV label="Current status" value={acc.current_status} highlight />
+            <KV label="Next step" value={acc.next_step} />
+          </div>
+        </div>
+        <div>
+          <p className="text-xs font-semibold text-gray-400 mb-2">Workshop & Financials</p>
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+            <KV label="Workshop" value={acc.workshop_name} />
+            <KV label="Quotation" value={acc.workshop_quotation != null ? fmtCurrency(acc.workshop_quotation) : '-'} />
+            <KV label="Discount" value={acc.discount_pct != null ? `${acc.discount_pct}%` : '-'} />
+            <KV label="Final amount" value={acc.final_amount != null ? fmtCurrency(acc.final_amount) : '-'} highlight />
+            <KV label="Estimated damage" value={acc.estimated_damage_cost != null ? fmtCurrency(acc.estimated_damage_cost) : '-'} />
+            <KV label="Repair cost" value={acc.repair_cost != null ? fmtCurrency(acc.repair_cost) : '-'} />
+          </div>
+        </div>
+        <div>
+          <p className="text-xs font-semibold text-gray-400 mb-2">Release</p>
+          <div className="grid grid-cols-2 gap-3">
+            <KV label="Expected release" value={acc.expected_release_date} />
+            <KV label="Actual release" value={acc.release_date} highlight />
+          </div>
+        </div>
+        <p className="text-xs text-gray-600">Only Admin / Manager / Director can edit repair & insurance details.</p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-4">
+      {/* Classification & Reports */}
+      <div>
+        <p className="text-xs font-semibold text-gray-400 mb-2">Classification & Reports</p>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+          <Sel label="Damage class" value={f.damage_class} onChange={v => set('damage_class', v)} options={DAMAGE_CLASS_OPTIONS} />
+          <Sel label="Fault status" value={f.fault_status} onChange={v => set('fault_status', v)} options={FAULT_STATUS_OPTIONS} />
+          <Sel
+            label="GCC liability ratio"
+            value={f.gcc_liability_ratio === '' ? '' : String(f.gcc_liability_ratio)}
+            onChange={v => set('gcc_liability_ratio', v)}
+            options={LIABILITY_RATIO_OPTIONS.map(n => ({ value: String(n), label: `${n}%` }))}
+          />
+          <Sel label="Najm" value={f.najm_status} onChange={v => set('najm_status', v)} options={NAJM_STATUS_OPTIONS} />
+          <Sel label="Najm fault" value={f.najm_fault} onChange={v => set('najm_fault', v)} options={NAJM_FAULT_OPTIONS} />
+          <Sel label="Taqdeer" value={f.taqdeer_status} onChange={v => set('taqdeer_status', v)} options={TAQDEER_STATUS_OPTIONS} />
+        </div>
+      </div>
+
+      {/* Workflow */}
+      <div className="border-t border-gray-800 pt-3">
+        <p className="text-xs font-semibold text-gray-400 mb-2">Workflow</p>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+          <Sel label="Repair type" value={f.repair_type} onChange={v => set('repair_type', v)} options={REPAIR_TYPE_OPTIONS} />
+          <Sel label="Current status" value={f.current_status} onChange={v => set('current_status', v)} options={WORKFLOW_STAGES} />
+          <Sel label="Next step" value={f.next_step} onChange={v => set('next_step', v)} options={WORKFLOW_STAGES} />
+        </div>
+        {STAGE_TO_CLAIM_STATUS[String(f.current_status || '').toLowerCase()] && (
+          <p className="text-[11px] text-gray-500 mt-1.5 flex items-center gap-1">
+            <ShieldCheck size={11} className="text-green-500" />
+            Saving sets the insurance claim status to
+            <span className="text-green-400 font-medium">
+              {' '}{CLAIM_LABELS[STAGE_TO_CLAIM_STATUS[String(f.current_status).toLowerCase()]]}
+            </span>.
+          </p>
+        )}
+      </div>
+
+      {/* Workshop & Financials */}
+      <div className="border-t border-gray-800 pt-3">
+        <p className="text-xs font-semibold text-gray-400 mb-2">Workshop & Financials</p>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+          <Inp label="Workshop name" value={f.workshop_name} onChange={v => set('workshop_name', v)} placeholder="Repairing workshop" />
+          <Inp label="Workshop quotation" type="number" value={f.workshop_quotation} onChange={v => set('workshop_quotation', v)} />
+          <Inp label="Discount %" type="number" value={f.discount_pct} onChange={v => set('discount_pct', v)} placeholder="0" />
+          <div>
+            <label className="label">Final amount</label>
+            <input
+              type="number"
+              className="input"
+              value={f.final_amount}
+              onChange={e => { setFinalTouched(true); set('final_amount', e.target.value) }}
+            />
+            {suggestedFinal != null && String(f.final_amount) !== String(suggestedFinal) && (
+              <button
+                type="button"
+                onClick={() => { setFinalTouched(true); set('final_amount', suggestedFinal) }}
+                className="text-[11px] text-green-400 hover:text-green-300 mt-1"
+              >
+                Use suggested {fmtCurrency(suggestedFinal)}
+              </button>
+            )}
+            {suggestedFinal != null && String(f.final_amount) === String(suggestedFinal) && (
+              <p className="text-[11px] text-gray-500 mt-1">Auto = quotation − discount%. Editable.</p>
+            )}
+          </div>
+          <Inp label="Estimated damage cost" type="number" value={f.estimated_damage_cost} onChange={v => set('estimated_damage_cost', v)} />
+          <Inp label="Repair cost" type="number" value={f.repair_cost} onChange={v => set('repair_cost', v)} />
+        </div>
+      </div>
+
+      {/* Release dates */}
+      <div className="border-t border-gray-800 pt-3">
+        <p className="text-xs font-semibold text-gray-400 mb-2">Release</p>
+        <div className="grid grid-cols-2 gap-3">
+          <Inp label="Expected release date" type="date" value={f.expected_release_date} onChange={v => set('expected_release_date', v)} />
+          <Inp label="Actual release date" type="date" value={f.release_date} onChange={v => set('release_date', v)} />
+        </div>
+      </div>
+
+      <button onClick={save} disabled={saving} className="btn-primary flex items-center gap-2 disabled:opacity-50">
+        <Save size={16} /> {saving ? 'Saving...' : 'Save Repair & Insurance'}
       </button>
     </div>
   )
@@ -979,6 +1248,23 @@ function Inp({ label, value, onChange, type = 'text', placeholder }) {
     <div>
       <label className="label">{label}</label>
       <input type={type} className="input" value={value} placeholder={placeholder} onChange={e => onChange(e.target.value)} />
+    </div>
+  )
+}
+
+// Strict single-select dropdown with a blank "not set" option. `options` accepts
+// either plain strings or { value, label } objects.
+function Sel({ label, value, onChange, options = [], placeholder = '—' }) {
+  return (
+    <div>
+      <label className="label">{label}</label>
+      <select className="input" value={value ?? ''} onChange={e => onChange(e.target.value)}>
+        <option value="">{placeholder}</option>
+        {options.map(o => {
+          const opt = typeof o === 'object' ? o : { value: o, label: o }
+          return <option key={opt.value} value={opt.value}>{opt.label}</option>
+        })}
+      </select>
     </div>
   )
 }

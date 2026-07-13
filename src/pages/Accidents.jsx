@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { AlertOctagon, Plus, Search, X, Save, FileText, Download, BarChart2, Eye, Hourglass, Upload, CheckCircle2, AlertCircle, ChevronDown, Trash2, AlertTriangle, TrendingUp, Users, DollarSign, ShieldAlert, Lightbulb, ChevronRight } from 'lucide-react'
+import { AlertOctagon, Plus, Search, X, Save, FileText, Download, BarChart2, Eye, Hourglass, Upload, CheckCircle2, AlertCircle, ChevronDown, Trash2, AlertTriangle, TrendingUp, Users, DollarSign, ShieldAlert, Lightbulb, ChevronRight, Clock, Wrench } from 'lucide-react'
 import { motion } from 'framer-motion'
 import PageHeader from '../components/ui/PageHeader'
 import EmptyState from '../components/EmptyState'
@@ -109,6 +109,68 @@ const toDbStatus = (s) => {
 }
 const isClosed = (r) => r.closure_status === 'closed' || canonStatus(r.status) === 'Closed'
 
+// ── Case-progress / delay intelligence ──────────────────────────────────────
+// New case-tracking columns rendered by the list. They may or may not be part
+// of the accidents API's PAGE_COLS yet (a parallel change adds them); the page
+// resiliently back-fills any that are missing (see loadRecords) and NEVER
+// fabricates a value — absent fields simply render nothing.
+const CASE_TRACK_COLS = [
+  'damage_class', 'fault_status', 'najm_status', 'najm_fault', 'taqdeer_status',
+  'gcc_liability_ratio', 'repair_type', 'next_step', 'workshop_name',
+  'workshop_quotation', 'discount_pct', 'final_amount', 'release_date',
+]
+
+const DAY_MS = 86400000
+const DELAY_THRESHOLD_DAYS = 5
+
+// A case counts as still OPEN unless it is closed (closure_status/status) or its
+// free-text current_status reads Released/Closed.
+const isReleasedOrClosed = (r) => {
+  if (isClosed(r)) return true
+  const cur = String(r.current_status || '').toLowerCase()
+  return /released|closed/.test(cur)
+}
+
+// Whole days since the last status movement; falls back to the incident date
+// when no status_update_date is recorded. Returns 0 when neither date parses.
+const daysSinceUpdate = (r) => {
+  const base = r.status_update_date || r.incident_date
+  if (!base) return 0
+  const t = new Date(base).getTime()
+  if (Number.isNaN(t)) return 0
+  return Math.max(0, Math.floor((Date.now() - t) / DAY_MS))
+}
+
+// Delayed = still open AND stalled beyond the SLA threshold with no movement.
+const isDelayed = (r) => !isReleasedOrClosed(r) && daysSinceUpdate(r) > DELAY_THRESHOLD_DAYS
+
+// Compact status-chip palettes for the new case-tracking columns.
+const GCC_BADGE = {
+  0:   'bg-green-900/50 text-green-300 border border-green-700/50',
+  50:  'bg-yellow-900/50 text-yellow-300 border border-yellow-700/50',
+  100: 'bg-red-900/50 text-red-300 border border-red-700/50',
+}
+const FAULT_BADGE = {
+  'Faulty':       'bg-red-900/50 text-red-300 border border-red-700/50',
+  'Non-faulty':   'bg-green-900/50 text-green-300 border border-green-700/50',
+  'Under review': 'bg-yellow-900/50 text-yellow-300 border border-yellow-700/50',
+}
+const REPAIR_BADGE = {
+  'Internal': 'bg-blue-900/50 text-blue-300 border border-blue-700/50',
+  'External': 'bg-orange-900/50 text-orange-300 border border-orange-700/50',
+}
+const DAMAGE_CLASS_BADGE = {
+  'Major': 'bg-orange-900/50 text-orange-300 border border-orange-700/50',
+  'Minor': 'bg-[var(--input-bg)] text-[var(--text-dim)] border border-[var(--input-border)]',
+}
+const DIM_CHIP = 'bg-[var(--input-bg)] text-[var(--text-dim)] border border-[var(--input-border)]'
+const FAULT_OPTS  = ['Faulty', 'Non-faulty', 'Under review']
+const REPAIR_OPTS = ['Internal', 'External']
+
+function CaseChip({ cls, title, children }) {
+  return <span title={title} className={`badge text-[10px] whitespace-nowrap ${cls}`}>{children}</span>
+}
+
 const EMPTY_FORM = {
   incident_date: '',
   asset_no: '',
@@ -205,6 +267,10 @@ export default function Accidents() {
   const [filterTo, setFilterTo]                = useState('')
   const [statusFunnel, setStatusFunnel]        = useState('')
   const [onlyPendingClosure, setOnlyPendingClosure] = useState(false)
+  const [filterDelayed, setFilterDelayed]      = useState(false)
+  const [filterStage, setFilterStage]          = useState('')
+  const [filterRepairType, setFilterRepairType] = useState('')
+  const [filterFault, setFilterFault]          = useState('')
 
   // Row → dedicated detail page (`/accidents/:id`). The former inline modal +
   // companion approval panel now live on that route; the approval engine there
@@ -236,11 +302,32 @@ export default function Accidents() {
     setLoading(true)
     // Paginate past the 1000-row cap so the list AND its exports are complete.
     const { data, error: err } = await accidentsApi.listAllAccidentsForPage({ country: activeCountry })
-    if (err) setError(err.message)
+    if (err) { setError(err.message); setLoading(false); return }
+    setError('')
+    let rows = data ?? []
+    // Resilient back-fill: if the accidents API select does not yet expose the
+    // new case-tracking columns (parallel PAGE_COLS change), read only those
+    // columns directly by id and merge. Skipped entirely once PAGE_COLS carries
+    // them (zero extra query). Error-tolerant: if the columns do not exist yet
+    // the merge is a no-op and the list degrades to honest empty chips.
+    if (rows.length && !('gcc_liability_ratio' in rows[0])) {
+      try {
+        const byId = new Map()
+        const ids = rows.map(r => r.id)
+        for (let i = 0; i < ids.length; i += 500) {
+          const { data: ext } = await supabase
+            .from('accidents')
+            .select(`id,${CASE_TRACK_COLS.join(',')}`)
+            .in('id', ids.slice(i, i + 500))
+          ext?.forEach(e => byId.set(e.id, e))
+        }
+        if (byId.size) rows = rows.map(r => ({ ...r, ...(byId.get(r.id) || {}) }))
+      } catch { /* new columns not present yet — honest empty states */ }
+    }
     // Canonicalise the DB's lowercase status/severity to display labels once, so
     // every label-based consumer (status/severity counts, funnel filters, charts,
     // badges) agrees. Save/edit paths convert back via toDb*/canon* helpers.
-    else setRecords((data ?? []).map(r => ({ ...r, status: canonStatus(r.status), severity: canonSeverity(r.severity) })))
+    setRecords(rows.map(r => ({ ...r, status: canonStatus(r.status), severity: canonSeverity(r.severity) })))
     setLoading(false)
   }, [activeCountry])
 
@@ -388,9 +475,17 @@ export default function Accidents() {
 
   const sites = useMemo(() => [...new Set(records.map(r => r.site).filter(Boolean))].sort(), [records])
 
+  // Distinct case stage / current-status values actually present in the data,
+  // for the stage filter (honest — only real values, no placeholder options).
+  const stageOptions = useMemo(
+    () => [...new Set(records.flatMap(r => [r.current_status, r.case_stage]).filter(Boolean))].sort(),
+    [records],
+  )
+
   const stats = useMemo(() => {
     const total  = records.length
     const open   = records.filter(r => !isClosed(r)).length
+    const delayed = records.filter(isDelayed).length
     const insur  = records.filter(r => canonStatus(r.status) === 'Insurance Claim' || (r.claim_status && r.claim_status !== 'none')).length
     const cost   = records.reduce((s, r) => s + (Number(r.repair_cost) || 0) + (Number(r.parts_cost) || 0), 0)
     const closed = records.filter(r => isClosed(r))
@@ -426,7 +521,7 @@ export default function Accidents() {
     const fleetSize = fleetAssets.length
     const per100 = fleetSize > 0 ? Number(((total / fleetSize) * 100).toFixed(1)) : 0
 
-    return { total, open, insur, cost, avgDays, sevMix, atFaultPct, atFaultCount, atFaultDenom: withLiability.length, avgClaim, per100, fleetSize }
+    return { total, open, delayed, insur, cost, avgDays, sevMix, atFaultPct, atFaultCount, atFaultDenom: withLiability.length, avgClaim, per100, fleetSize }
   }, [records, fleetAssets])
 
   // Monthly incidents chart (incidents tab)
@@ -731,8 +826,12 @@ export default function Accidents() {
   const filtered = useMemo(() => {
     let arr = records
     if (onlyPendingClosure) arr = arr.filter(r => r.closure_status === 'pending_closure')
+    if (filterDelayed)  arr = arr.filter(isDelayed)
     if (statusFunnel)   arr = arr.filter(r => r.status === statusFunnel)
     if (filterStatus)   arr = arr.filter(r => r.status === filterStatus)
+    if (filterStage)    arr = arr.filter(r => r.current_status === filterStage || r.case_stage === filterStage)
+    if (filterRepairType) arr = arr.filter(r => r.repair_type === filterRepairType)
+    if (filterFault)    arr = arr.filter(r => r.fault_status === filterFault)
     if (filterSeverity) arr = arr.filter(r => r.severity === filterSeverity)
     if (filterSite)     arr = arr.filter(r => r.site === filterSite)
     if (filterFrom)     arr = arr.filter(r => r.incident_date >= filterFrom)
@@ -745,7 +844,7 @@ export default function Accidents() {
       )
     }
     return arr
-  }, [records, search, filterSite, filterSeverity, filterStatus, filterFrom, filterTo, statusFunnel, onlyPendingClosure])
+  }, [records, search, filterSite, filterSeverity, filterStatus, filterFrom, filterTo, statusFunnel, onlyPendingClosure, filterDelayed, filterStage, filterRepairType, filterFault])
 
   function openAdd() {
     setForm(EMPTY_FORM)
@@ -919,6 +1018,21 @@ export default function Accidents() {
     ['required_action', 'Required Action', r => r.required_action],
     ['status_update_date', 'Status Update', r => r.status_update_date],
     ['expected_release_date', 'Expected Release', r => r.expected_release_date],
+    ['delayed', 'Delayed', r => isDelayed(r) ? 'Yes' : 'No'],
+    ['delayed_days', 'Days Since Update', r => isReleasedOrClosed(r) ? '' : daysSinceUpdate(r)],
+    ['damage_class', 'Damage Class', r => r.damage_class],
+    ['fault_status', 'Fault Status', r => r.fault_status],
+    ['najm_status', 'Najm', r => r.najm_status],
+    ['najm_fault', 'Najm Fault', r => r.najm_fault],
+    ['taqdeer_status', 'Taqdeer', r => r.taqdeer_status],
+    ['gcc_liability_ratio', 'GCC Liability %', r => (r.gcc_liability_ratio ?? '') === '' ? '' : `${Number(r.gcc_liability_ratio)}%`],
+    ['repair_type', 'Repair Type', r => r.repair_type],
+    ['next_step', 'Next Step', r => r.next_step],
+    ['workshop_name', 'Workshop', r => r.workshop_name],
+    ['workshop_quotation', 'Quotation', r => r.workshop_quotation],
+    ['discount_pct', 'Discount %', r => r.discount_pct],
+    ['final_amount', 'Final Amount', r => r.final_amount],
+    ['release_date', 'Release Date', r => r.release_date],
     ['inspector', 'Inspector', r => r.inspector],
     ['reporter_name', 'Reported By', r => r.reporter_name],
   ]
@@ -955,7 +1069,26 @@ export default function Accidents() {
       })
     }
     cols.push(
-      { id: 'incident_date', header: 'Date', accessorFn: r => r.incident_date ? formatDate(r.incident_date, activeCountry) : '-', size: 100 },
+      { id: 'incident_date', header: 'Date', accessorFn: r => r.incident_date || '', size: 120, sortingFn: 'alphanumeric',
+        // Delayed cases get a red left accent on the leading cell + a "Delayed Nd"
+        // badge so a stalled case is spottable at a glance from the row edge.
+        cell: ({ row }) => {
+          const r = row.original
+          const delayed = isDelayed(r)
+          return (
+            <div className={delayed ? 'border-l-2 border-red-500 pl-2 -ml-1' : ''}>
+              <span className={delayed ? 'text-red-300 font-medium' : ''}>
+                {r.incident_date ? formatDate(r.incident_date, activeCountry) : '-'}
+              </span>
+              {delayed && (
+                <span className="mt-1 badge text-[10px] bg-red-900/50 text-red-300 border border-red-700/50 flex items-center gap-1 w-fit">
+                  <Clock size={9} /> Delayed {daysSinceUpdate(r)}d
+                </span>
+              )}
+            </div>
+          )
+        },
+      },
       { id: 'asset_no', header: 'Asset', accessorFn: r => r.asset_no || '-', size: 120,
         cell: ({ getValue }) => <span className="font-medium text-[var(--text-primary)]">{getValue()}</span>,
       },
@@ -966,23 +1099,75 @@ export default function Accidents() {
           return val ? <span className={`badge text-xs ${SEVERITY_BADGE[val] ?? 'bg-[var(--input-bg)] text-[var(--text-dim)]'}`}>{val}</span> : null
         },
       },
-      { id: 'status', header: 'Status', accessorFn: r => canonStatus(r.status), size: 140,
+      { id: 'status', header: 'Status / Stage', accessorFn: r => canonStatus(r.status), size: 170,
         cell: ({ row }) => {
           const r = row.original
+          const stage = r.current_status || r.case_stage
           return (
             <div className="flex flex-col gap-1 items-start">
               {r.status && <span className={`badge text-xs ${STATUS_BADGE[canonStatus(r.status)] ?? 'bg-[var(--input-bg)] text-[var(--text-dim)]'}`}>{canonStatus(r.status)}</span>}
+              {stage && (
+                <span className="text-[11px] text-[var(--text-dim)] truncate max-w-[150px]" title={r.next_step ? `Next: ${r.next_step}` : stage}>
+                  {stage}
+                </span>
+              )}
               {r.closure_status === 'pending_closure' && (
                 <span className="badge text-xs bg-yellow-900/50 text-yellow-300 border border-yellow-700/50 flex items-center gap-1">
                   <Hourglass size={10} /> Pending Closure
+                </span>
+              )}
+              {isDelayed(r) && (
+                <span className="badge text-[10px] bg-red-900/50 text-red-300 border border-red-700/50 flex items-center gap-1">
+                  <Clock size={9} /> Delayed {daysSinceUpdate(r)}d
                 </span>
               )}
             </div>
           )
         },
       },
+      // Compact case-tracking chips (damage class, fault, GCC liability, repair
+      // route, Najm/Taqdeer) — only renders chips whose source value exists.
+      { id: 'case_flags', header: 'Case', accessorFn: r => r.fault_status || '', size: 210, enableSorting: false, meta: { export: false },
+        cell: ({ row }) => {
+          const r = row.original
+          const chips = []
+          if (r.damage_class) chips.push(<CaseChip key="dc" cls={DAMAGE_CLASS_BADGE[r.damage_class] || DIM_CHIP} title="Damage classification">{r.damage_class}</CaseChip>)
+          if (r.fault_status) chips.push(<CaseChip key="fs" cls={FAULT_BADGE[r.fault_status] || DIM_CHIP} title={r.najm_fault ? `Najm fault: ${r.najm_fault}` : 'Fault status'}>{r.fault_status}</CaseChip>)
+          if (r.gcc_liability_ratio !== null && r.gcc_liability_ratio !== undefined && r.gcc_liability_ratio !== '')
+            chips.push(<CaseChip key="gcc" cls={GCC_BADGE[Number(r.gcc_liability_ratio)] || DIM_CHIP} title="GCC liability ratio">GCC {Number(r.gcc_liability_ratio)}%</CaseChip>)
+          if (r.repair_type) chips.push(<CaseChip key="rt" cls={REPAIR_BADGE[r.repair_type] || DIM_CHIP} title="Repair route">{r.repair_type}</CaseChip>)
+          if (r.najm_status) chips.push(<CaseChip key="nj" cls={r.najm_status === 'Najm report' ? 'bg-blue-900/50 text-blue-300 border border-blue-700/50' : DIM_CHIP} title={r.najm_status}>{r.najm_status === 'Najm report' ? 'Najm' : 'No Najm'}</CaseChip>)
+          if (r.taqdeer_status) chips.push(<CaseChip key="tq" cls={r.taqdeer_status === 'Taqdeer report' ? 'bg-purple-900/50 text-purple-300 border border-purple-700/50' : DIM_CHIP} title={r.taqdeer_status}>{r.taqdeer_status === 'Taqdeer report' ? 'Taqdeer' : 'No Taqdeer'}</CaseChip>)
+          return chips.length
+            ? <div className="flex flex-wrap gap-1 max-w-[200px]">{chips}</div>
+            : <span className="text-[var(--text-muted)] text-xs">-</span>
+        },
+      },
       { id: 'repair_cost', header: 'Repair Cost', accessorFn: r => r.repair_cost, size: 100, meta: { align: 'right' },
         cell: ({ getValue }) => <span className="whitespace-nowrap">{fmtCurrency(getValue())}</span>,
+      },
+      // Settlement / release: workshop, quotation, final (with discount) & release date.
+      { id: 'settlement', header: 'Settlement', accessorFn: r => Number(r.final_amount) || Number(r.workshop_quotation) || 0, size: 170,
+        cell: ({ row }) => {
+          const r = row.original
+          const quote = Number(r.workshop_quotation) || 0
+          const final = Number(r.final_amount) || 0
+          const disc  = Number(r.discount_pct) || 0
+          if (!quote && !final && !r.release_date && !r.workshop_name)
+            return <span className="text-[var(--text-muted)] text-xs">-</span>
+          return (
+            <div className="text-[11px] space-y-0.5">
+              {r.workshop_name && (
+                <p className="text-[var(--text-dim)] truncate max-w-[150px] flex items-center gap-1" title={r.workshop_name}>
+                  <Wrench size={9} className="shrink-0 text-[var(--text-muted)]" /> {r.workshop_name}
+                </p>
+              )}
+              {quote > 0 && <p className="text-[var(--text-muted)]">Quote {fmtCurrency(quote)}</p>}
+              {final > 0 && <p className="text-green-400 font-medium">Final {fmtCurrency(final)}{disc > 0 ? ` (-${disc}%)` : ''}</p>}
+              {r.release_date && <p className="text-[var(--text-muted)]">Released {formatDate(r.release_date, activeCountry)}</p>}
+            </div>
+          )
+        },
       },
       { id: 'inspector', header: 'Inspector', accessorFn: r => r.inspector || '-', size: 120 },
       {
@@ -1137,22 +1322,58 @@ export default function Accidents() {
             </button>
           )}
 
+          {/* Delayed / stalled-case highlight — open cases with no movement > SLA */}
+          {stats.delayed > 0 && (
+            <button
+              onClick={() => setFilterDelayed(v => !v)}
+              className={`w-full flex items-center gap-3 rounded-lg border px-4 py-3 text-left transition-colors ${
+                filterDelayed
+                  ? 'bg-red-900/40 border-red-600'
+                  : 'bg-red-900/20 border-red-700/50 hover:bg-red-900/30'
+              }`}
+            >
+              <Clock size={18} className="text-red-400 flex-shrink-0" />
+              <div className="flex-1">
+                <p className="text-sm font-semibold text-red-200">
+                  {stats.delayed} case{stats.delayed > 1 ? 's' : ''} delayed &gt; {DELAY_THRESHOLD_DAYS} days
+                </p>
+                <p className="text-xs text-red-500/80">
+                  Open with no status movement in over {DELAY_THRESHOLD_DAYS} days — tap to {filterDelayed ? 'show all incidents' : 'review stalled cases'}
+                </p>
+              </div>
+              {filterDelayed && <X size={14} className="text-red-400" />}
+            </button>
+          )}
+
           {/* KPI header cards — real aggregates */}
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-3">
             {[
               { v: stats.total, label: 'Total Incidents', cls: 'text-[var(--text-primary)]', sub: stats.fleetSize ? `${stats.per100} / 100 vehicles` : null },
               { v: stats.open, label: 'Open', cls: 'text-orange-400', sub: `${stats.total ? Math.round((stats.open / stats.total) * 100) : 0}% of all` },
+              { v: stats.delayed, label: `Delayed >${DELAY_THRESHOLD_DAYS}d`, cls: 'text-red-400', sub: stats.open ? `${Math.round((stats.delayed / stats.open) * 100)}% of open` : 'none open', onClick: () => setFilterDelayed(v => !v), active: filterDelayed },
               { v: fmtCurrency(stats.cost), label: 'Total Cost (repair+parts)', cls: 'text-green-400', sub: 'gross exposure' },
               { v: fmtCurrency(stats.avgClaim), label: 'Avg Cost / Incident', cls: 'text-emerald-400', sub: 'costed incidents' },
               { v: `${stats.atFaultPct}%`, label: 'At-Fault Rate', cls: 'text-red-400', sub: stats.atFaultDenom ? `${stats.atFaultCount}/${stats.atFaultDenom} tagged` : 'no liability data' },
               { v: stats.insur, label: 'Insurance Claims', cls: 'text-blue-400', sub: opsIntel.leakage > 0 ? `${fmtCurrency(opsIntel.leakage)} unrecovered` : 'all recovered' },
             ].map((k, i) => (
               <motion.div key={k.label} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05, duration: 0.3, ease: [0.22, 1, 0.36, 1] }}>
-                <div className="card text-center">
-                  <p className={`text-2xl font-bold ${k.cls}`}>{k.v}</p>
-                  <p className="text-xs text-[var(--text-muted)] mt-1">{k.label}</p>
-                  {k.sub && <p className="text-[10px] text-[var(--text-muted)]/70 mt-0.5">{k.sub}</p>}
-                </div>
+                {k.onClick ? (
+                  <button
+                    onClick={k.onClick}
+                    className={`card text-center w-full transition-colors ${k.active ? 'ring-1 ring-red-500 bg-red-950/20' : 'hover:bg-[var(--input-bg)]'}`}
+                    title="Toggle delayed-only filter"
+                  >
+                    <p className={`text-2xl font-bold ${k.cls}`}>{k.v}</p>
+                    <p className="text-xs text-[var(--text-muted)] mt-1">{k.label}</p>
+                    {k.sub && <p className="text-[10px] text-[var(--text-muted)]/70 mt-0.5">{k.sub}</p>}
+                  </button>
+                ) : (
+                  <div className="card text-center">
+                    <p className={`text-2xl font-bold ${k.cls}`}>{k.v}</p>
+                    <p className="text-xs text-[var(--text-muted)] mt-1">{k.label}</p>
+                    {k.sub && <p className="text-[10px] text-[var(--text-muted)]/70 mt-0.5">{k.sub}</p>}
+                  </div>
+                )}
               </motion.div>
             ))}
           </div>
@@ -1240,11 +1461,36 @@ export default function Accidents() {
               <option value="">All Statuses</option>
               {STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
             </select>
+            {stageOptions.length > 0 && (
+              <select className="input text-sm w-44" value={filterStage} onChange={e => setFilterStage(e.target.value)} title="Case stage / current status">
+                <option value="">All Stages</option>
+                {stageOptions.map(s => <option key={s} value={s}>{s}</option>)}
+              </select>
+            )}
+            <select className="input text-sm w-36" value={filterRepairType} onChange={e => setFilterRepairType(e.target.value)} title="Repair route">
+              <option value="">All Repairs</option>
+              {REPAIR_OPTS.map(s => <option key={s} value={s}>{s}</option>)}
+            </select>
+            <select className="input text-sm w-40" value={filterFault} onChange={e => setFilterFault(e.target.value)} title="Fault status">
+              <option value="">All Fault</option>
+              {FAULT_OPTS.map(s => <option key={s} value={s}>{s}</option>)}
+            </select>
             <input type="date" className="input text-sm w-36" value={filterFrom} onChange={e => setFilterFrom(e.target.value)} title="From date" />
             <input type="date" className="input text-sm w-36" value={filterTo} onChange={e => setFilterTo(e.target.value)} title="To date" />
-            {(search || filterSite || filterSeverity || filterStatus || filterFrom || filterTo) && (
+            <button
+              onClick={() => setFilterDelayed(v => !v)}
+              className={`px-3 py-1 rounded-lg text-sm font-medium border transition-colors flex items-center gap-1.5 ${
+                filterDelayed
+                  ? 'bg-red-900/40 text-red-300 border-red-600'
+                  : 'bg-[var(--input-bg)] text-[var(--text-muted)] border-[var(--input-border)] hover:text-[var(--text-primary)]'
+              }`}
+              title={`Show only cases delayed over ${DELAY_THRESHOLD_DAYS} days`}
+            >
+              <Clock size={13} /> Delayed only
+            </button>
+            {(search || filterSite || filterSeverity || filterStatus || filterStage || filterRepairType || filterFault || filterFrom || filterTo || filterDelayed) && (
               <button
-                onClick={() => { setSearch(''); setFilterSite(''); setFilterSeverity(''); setFilterStatus(''); setFilterFrom(''); setFilterTo('') }}
+                onClick={() => { setSearch(''); setFilterSite(''); setFilterSeverity(''); setFilterStatus(''); setFilterStage(''); setFilterRepairType(''); setFilterFault(''); setFilterFrom(''); setFilterTo(''); setFilterDelayed(false) }}
                 className="text-xs text-[var(--text-muted)] hover:text-[var(--text-primary)] px-2 flex items-center gap-1"
               >
                 <X size={12} /> Clear filters

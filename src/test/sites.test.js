@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   siteKey, groupSitesByCountry, siteOptionsForCountry, emptySite,
-  SITE_TYPES, SITE_FIELDS,
+  SITE_TYPES, SITE_FIELDS, buildSiteRollup,
 } from '../lib/api/sites'
 
 const rows = [
@@ -40,6 +40,45 @@ describe('siteOptionsForCountry', () => {
   })
   it('empty country returns all active de-duplicated names across countries', () => {
     expect(siteOptionsForCountry(rows, '')).toEqual(['Dubai Hub', 'Jeddah Yard', 'Riyadh Depot'])
+  })
+})
+
+describe('buildSiteRollup', () => {
+  const master = [
+    { id: 's1', name: 'Riyadh Depot', country: 'KSA', region: 'Central', city: 'Riyadh', active: true, site_type: 'depot' },
+    { id: 's2', name: 'Empty Yard', country: 'KSA', region: null, city: null, active: false, site_type: 'yard' },
+  ]
+  const assets = [
+    { id: 'a1', asset_no: 'A1', site: 'Riyadh Depot', country: 'KSA', active: true },
+    { id: 'a2', asset_no: 'A2', site: 'riyadh depot', country: 'KSA', active: false }, // case-insensitive merge
+    { id: 'a3', asset_no: 'A3', site: 'NEOM', country: 'KSA', active: true },           // derived (not in master)
+    { id: 'a4', asset_no: 'A4', site: '', country: 'KSA', active: true },               // no site → skipped
+  ]
+
+  it('merges master + fleet, counts assets, flags governed vs derived', () => {
+    const roll = buildSiteRollup(master, assets)
+    const byName = Object.fromEntries(roll.map(r => [r.name, r]))
+
+    // governed site with fleet assets (case-insensitive match)
+    expect(byName['Riyadh Depot'].governed).toBe(true)
+    expect(byName['Riyadh Depot'].assetCount).toBe(2)
+    expect(byName['Riyadh Depot'].activeAssetCount).toBe(1)
+
+    // governed site with no assets — still listed, honest zero
+    expect(byName['Empty Yard'].governed).toBe(true)
+    expect(byName['Empty Yard'].assetCount).toBe(0)
+
+    // site seen only in fleet data → derived
+    expect(byName['NEOM'].governed).toBe(false)
+    expect(byName['NEOM'].assetCount).toBe(1)
+
+    // blank-site assets never create a phantom site
+    expect(roll.some(r => r.name === '')).toBe(false)
+  })
+
+  it('is pure and safe on empty inputs', () => {
+    expect(buildSiteRollup([], [])).toEqual([])
+    expect(buildSiteRollup(undefined, undefined)).toEqual([])
   })
 })
 

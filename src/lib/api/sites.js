@@ -9,7 +9,7 @@
  * PURE and unit-tested so page dropdowns can consume them without duplicating
  * logic.
  */
-import { supabase, unwrap, ServiceError } from './_client'
+import { supabase, unwrap, ServiceError, fetchAllPages } from './_client'
 
 export const SITE_TYPES = ['depot', 'workshop', 'warehouse', 'camp', 'branch', 'project', 'yard', 'other']
 
@@ -77,6 +77,88 @@ export async function listDataSiteOptions(country) {
   })
   if (error) throw new ServiceError(error.message, error.code, error)
   return (Array.isArray(data) ? data : []).map((r) => r?.name).filter(Boolean)
+}
+
+/**
+ * Fleet assets reduced to the columns the Site Management rollup needs. The
+ * `sites` master is typically near-empty, so the real, authoritative list of
+ * operational sites is the set of distinct `vehicle_fleet.site` values — this
+ * feed lets the page merge governed master sites with derived (data-only) ones
+ * and count assets per site. Paged past the 1000-row cap; org+country RLS
+ * enforced server-side.
+ */
+export async function listSiteAssets({ country } = {}) {
+  const rows = await fetchAllPages((from, to) => {
+    let q = supabase.from('vehicle_fleet')
+      .select('id,asset_no,fleet_number,vehicle_type,site,country,region,status,current_km,active:is_active')
+      .order('site', { nullsFirst: false }).order('asset_no').range(from, to)
+    if (country && country !== 'All') q = q.or(`country.eq.${country},country.is.null`)
+    return q
+  })
+  return rows
+}
+
+/**
+ * Build a per-site rollup by merging the governed sites master with the sites
+ * that actually appear in the fleet. Pure — unit-testable, no I/O. Each row:
+ * { name, country, region, city, active, governed, siteId, siteType, assetCount,
+ *   activeAssetCount, assets: [...] }. `governed` = present in the sites master.
+ */
+export function buildSiteRollup(masterSites = [], fleetAssets = []) {
+  const map = new Map()
+  const keyOf = (name) => norm(name)
+
+  for (const s of masterSites) {
+    const name = String(s.name ?? '').trim()
+    if (!name) continue
+    map.set(keyOf(name), {
+      name,
+      country: s.country ?? null,
+      region: s.region ?? null,
+      city: s.city ?? null,
+      active: s.active !== false,
+      governed: true,
+      siteId: s.id ?? null,
+      siteType: s.site_type ?? null,
+      assetCount: 0,
+      activeAssetCount: 0,
+      assets: [],
+    })
+  }
+
+  for (const a of fleetAssets) {
+    const name = String(a.site ?? '').trim()
+    if (!name) continue
+    const k = keyOf(name)
+    let entry = map.get(k)
+    if (!entry) {
+      entry = {
+        name,
+        country: a.country ?? null,
+        region: a.region ?? null,
+        city: null,
+        active: true,
+        governed: false,
+        siteId: null,
+        siteType: null,
+        assetCount: 0,
+        activeAssetCount: 0,
+        assets: [],
+      }
+      map.set(k, entry)
+    }
+    if (!entry.country && a.country) entry.country = a.country
+    if (!entry.region && a.region) entry.region = a.region
+    entry.assetCount += 1
+    if (a.active !== false) entry.activeAssetCount += 1
+    entry.assets.push(a)
+  }
+
+  return Array.from(map.values()).sort((x, y) => {
+    const c = String(x.country ?? '').localeCompare(String(y.country ?? ''))
+    if (c !== 0) return c
+    return x.name.localeCompare(y.name)
+  })
 }
 
 /** All sites for the org, optionally filtered by country / active flag. */

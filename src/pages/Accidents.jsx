@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { AlertOctagon, Plus, Search, X, Save, FileText, Download, BarChart2, Eye, Hourglass, Upload, CheckCircle2, AlertCircle, ChevronDown, Trash2, AlertTriangle, TrendingUp, Users, DollarSign, ShieldAlert, Lightbulb, ChevronRight, Clock, Wrench } from 'lucide-react'
+import { AlertOctagon, Plus, Search, X, Save, FileText, Download, BarChart2, Eye, Hourglass, Upload, CheckCircle2, AlertCircle, ChevronDown, Trash2, AlertTriangle, TrendingUp, Users, DollarSign, ShieldAlert, Lightbulb, ChevronRight, Clock, Wrench, ShieldCheck } from 'lucide-react'
 import { motion } from 'framer-motion'
 import PageHeader from '../components/ui/PageHeader'
 import EmptyState from '../components/EmptyState'
@@ -1060,6 +1060,46 @@ export default function Accidents() {
     [filtered],
   )
 
+  // ── Claims Summary (daily report) ──────────────────────────────────────────
+  // A focused insurance-claims view: only incidents carrying a claim, with the
+  // details that matter for a claims desk. exportToPdf auto-builds a KPI summary
+  // (open/closed split, claim value, approved, recovered, net exposure) from the
+  // status + amount columns, then the detail table.
+  const CLAIMS_KEYS = [
+    'incident_date', 'asset_no', 'site', 'driver_name', 'case_state', 'status',
+    'claim_status', 'insurer', 'policy_no', 'gcc_liability_ratio', 'fault_status',
+    'claim_amount', 'claim_approved_amount', 'deductible', 'recovered_amount',
+    'net_cost', 'expected_release_date', 'delayed',
+  ]
+  const claimsCols = CLAIMS_KEYS
+    .map(key => { const f = EXPORT_FIELDS.find(x => x[0] === key); return f ? { key, header: f[1] } : null })
+    .filter(Boolean)
+  const hasClaim = (r) =>
+    Number(r.claim_amount) > 0 || Number(r.claim_approved_amount) > 0 ||
+    !!r.claim_status || !!r.insurer || /insurance|claim/i.test(String(r.status || ''))
+  const claimsRows = useMemo(
+    () => filtered.filter(hasClaim).map(r => {
+      const o = {}
+      EXPORT_FIELDS.forEach(([k, , get]) => { o[k] = get(r) ?? '' })
+      return o
+    }),
+    [filtered],
+  )
+
+  const exportClaimsSummary = (kind) => {
+    const stamp = new Date().toISOString().slice(0, 10)
+    const fname = `TyrePulse_ClaimsSummary_${stamp}`
+    const company = appSettings?.company_name || ''
+    if (kind === 'excel') {
+      exportToExcel(claimsRows, CLAIMS_KEYS, claimsCols.map(c => c.header), fname, 'Claims', {
+        title: 'Insurance Claims Summary', currency: activeCurrency, company,
+        meta: { Scope: activeCountry !== 'All' ? activeCountry : 'All countries', Claims: claimsRows.length },
+      })
+    } else {
+      exportToPdf(claimsRows, claimsCols, 'Insurance Claims Summary', fname, 'landscape', company, { currency: activeCurrency })
+    }
+  }
+
   // Main table columns for EnterpriseTable
   const mainColumns = useMemo(() => {
     const cols = []
@@ -1262,6 +1302,13 @@ export default function Accidents() {
             className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-1.5"
           >
             <FileText size={14} /> PDF
+          </button>
+          <button
+            onClick={() => exportClaimsSummary('pdf')}
+            title={`Insurance claims summary — ${claimsRows.length} claim${claimsRows.length === 1 ? '' : 's'}`}
+            className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-1.5"
+          >
+            <ShieldCheck size={14} /> Claims Summary
           </button>
           <button
             onClick={() => navigate('/data-intake?module=accident')}

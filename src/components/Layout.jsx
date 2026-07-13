@@ -3,6 +3,13 @@ import { NavLink, useNavigate, useLocation } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useAuth } from '../contexts/AuthContext'
 import { isChecklistOnlyRole, isChecklistPathAllowed } from '../lib/checklistAccess'
+import { navItemAllowedForCustomRole } from '../lib/navAccess'
+import { ACCESS_ROLES } from '../lib/moduleCatalog'
+
+// Built-in roles have hardcoded sidebar rules below; any other (non-empty) role
+// is an admin-defined CUSTOM role whose sidebar is derived from its module grants.
+const BUILTIN_NAV_ROLES = new Set([...ACCESS_ROLES, 'Maintenance Supervisor', 'Store Keeper'])
+const isCustomNavRole = (role) => !!role && !BUILTIN_NAV_ROLES.has(role)
 import { useSettings, COUNTRIES, COUNTRY_LABEL } from '../contexts/SettingsContext'
 import { useTheme } from '../contexts/ThemeContext'
 import {
@@ -327,7 +334,7 @@ function shouldShowGroup(group, profile) {
   return group.groupRoles.includes(profile?.role)
 }
 
-function shouldShowNavItem(item, profile, isFlagEnabled) {
+function shouldShowNavItem(item, profile, isFlagEnabled, hasPermission) {
   // Feature-flag gate first: a disabled capability is hidden entirely, so its
   // nav item never renders (not just redirected at the route).
   if (item.flag && isFlagEnabled && !isFlagEnabled(item.flag)) return false
@@ -337,6 +344,10 @@ function shouldShowNavItem(item, profile, isFlagEnabled) {
   // Data Monitor Officer — accident monitoring + own settings only.
   if (profile?.role === 'Data Monitor Officer') {
     return item.to === '/accidents' || item.to === '/settings'
+  }
+  // Admin-defined custom roles: sidebar derived from granted module access.
+  if (isCustomNavRole(profile?.role)) {
+    return navItemAllowedForCustomRole(item.to, hasPermission)
   }
   // Checklist-only role (Maintenance Supervisor): sidebar shows only checklists.
   if (isChecklistOnlyRole(profile?.role)) {
@@ -597,7 +608,7 @@ const SIDEBAR_COLLAPSED = 54
 export default function Layout({ children }) {
   useRealtimeSync()
 
-  const { profile, signOut }                = useAuth()
+  const { profile, signOut, hasPermission } = useAuth()
   const { t }                               = useLanguage()
   const { branding }                        = useTenant()
   // Org-assigned app icon (V120); falls back to the built-in mark so an
@@ -898,7 +909,7 @@ export default function Layout({ children }) {
           {NAV_GROUPS.map((group) => {
             const { label, items } = group
             if (!shouldShowGroup(group, profile)) return null
-            const visibleItems = items.filter(item => shouldShowNavItem(item, profile, isFlagEnabled))
+            const visibleItems = items.filter(item => shouldShowNavItem(item, profile, isFlagEnabled, hasPermission))
             if (visibleItems.length === 0) return null
             const isCollapsed = collapsedGroups.has(label)
             return (

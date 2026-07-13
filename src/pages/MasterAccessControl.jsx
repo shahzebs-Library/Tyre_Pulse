@@ -14,10 +14,11 @@
  */
 import { useMemo } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { ShieldCheck, KeyRound, Fingerprint } from 'lucide-react'
+import { ShieldCheck, KeyRound, Fingerprint, UserCog } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import PermissionMatrix from './PermissionMatrix'
 import SecurityCenter from './SecurityCenter'
+import CustomRolesManager from './CustomRolesManager'
 
 const TABS = [
   {
@@ -26,6 +27,13 @@ const TABS = [
     icon: KeyRound,
     desc: 'Role × module × capability grid',
     Component: PermissionMatrix,
+  },
+  {
+    key: 'roles',
+    label: 'Custom Roles',
+    icon: UserCog,
+    desc: 'Create your own roles and grant module access',
+    Component: CustomRolesManager,
   },
   {
     key: 'security',

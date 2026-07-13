@@ -348,6 +348,26 @@ export default function UserManagement() {
   const { t } = useLanguage()
   const { profile: currentProfile } = useAuth()
 
+  // Admin-defined custom roles are assignable alongside the built-in ROLES.
+  const [customRoleNames, setCustomRoleNames] = useState([])
+  useEffect(() => {
+    let cancelled = false
+    import('../lib/api/customRoles')
+      .then((m) => m.listCustomRoles())
+      .then((rows) => { if (!cancelled) setCustomRoleNames((rows || []).filter((r) => r.active !== false).map((r) => r.name)) })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [])
+  const effectiveRoles = useMemo(
+    () => [...ROLES, ...customRoleNames.filter((n) => !ROLES.includes(n))],
+    [customRoleNames],
+  )
+  // Role label with a raw-name fallback for custom roles (no i18n key).
+  const roleLabel = useCallback((r) => {
+    const k = `roles.${r}`; const lbl = t(k)
+    return !lbl || lbl === k ? r : lbl
+  }, [t])
+
   // Data
   const [users, setUsers]               = useState([])
   const [auditLog, setAuditLog]         = useState([])
@@ -803,7 +823,7 @@ export default function UserManagement() {
             </div>
             <div className="flex flex-wrap gap-2 items-center">
               <span className="text-xs text-[var(--text-muted)] mr-1">{t('usermgmt.filters.role')}</span>
-              {['', ...ROLES].map(r => (
+              {['', ...effectiveRoles].map(r => (
                 <button
                   key={r || '__all__'}
                   onClick={() => setRoleFilter(r)}
@@ -813,7 +833,7 @@ export default function UserManagement() {
                       : 'bg-[var(--input-bg)] text-[var(--text-muted)] hover:bg-[var(--input-bg-hover)] hover:text-[var(--text-primary)]'
                   }`}
                 >
-                  {r ? t(`roles.${r}`) : t('usermgmt.filters.all')}
+                  {r ? roleLabel(r) : t('usermgmt.filters.all')}
                 </button>
               ))}
               <span className="text-xs text-[var(--text-muted)] ml-3 mr-1">{t('usermgmt.filters.status')}</span>
@@ -934,7 +954,7 @@ export default function UserManagement() {
                                   disabled={saveState === 'saving'}
                                   className="input text-xs py-1 pr-7 pl-2 w-32 appearance-none cursor-pointer"
                                 >
-                                  {ROLES.map(r => <option key={r} value={r}>{t(`roles.${r}`)}</option>)}
+                                  {effectiveRoles.map(r => <option key={r} value={r}>{roleLabel(r)}</option>)}
                                 </select>
                                 <ChevronDown size={12} className="absolute right-2 top-1/2 -translate-y-1/2 text-[var(--text-muted)] pointer-events-none" />
                               </div>
@@ -1374,7 +1394,7 @@ export default function UserManagement() {
                   onChange={e => setEditForm(f => ({ ...f, role: e.target.value }))}
                   disabled={editTarget.id === currentProfile?.id}
                 >
-                  {ROLES.map(r => <option key={r} value={r}>{t(`roles.${r}`)}</option>)}
+                  {effectiveRoles.map(r => <option key={r} value={r}>{roleLabel(r)}</option>)}
                 </select>
                 {editTarget.id === currentProfile?.id && (
                   <p className="text-xs text-[var(--text-muted)] mt-1">{t('usermgmt.editModal.cannotChangeOwnRole')}</p>

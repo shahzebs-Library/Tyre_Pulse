@@ -85,6 +85,21 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
   `sync_asset_current_km` on odometer_logs that advances `vehicle_fleet.current_km` (monotonic,
   org-scoped) from ANY odometer source. Migrations now through **V213**; next free is **V214**.
 
+## Mobile navigation + roles (2026-07-13, minimal role-first redesign)
+- **Bottom tab bar = max 5, primary-flagged.** `TAB_BAR` in `mobile/lib/permissions.ts` carries a
+  `primary` flag; `_layout.tsx` renders only `primary && visible` tabs (`href: null` otherwise). Primary
+  set: Home, Inspect, Records, Accidents, Profile — plus a **driver-only** Meter Log tab. Everything else
+  (Work Orders, Analytics, Reports, Fleet AI, Admin) is reached from the Home quick-actions hub, NOT the bar.
+  RULE: any screen file under `app/(app)/` that is neither a `primary` tab nor declared `<Tabs.Screen href:null>`
+  LEAKS as a stray/broken auto-tab — always declare new screens `href:null` in `_layout.tsx`.
+- **New `driver` role** (UserRole + `normaliseRole` in `lib/types.ts`): Home, Profile, Meter Log only. Home
+  CTA + scan shortcut are gated to `canInspect` so Driver/Reporter get a clean Home. To assign it, a `driver`
+  role must also be added to the WEB role pickers (follow-up).
+- **Per-role access (permissions.ts)**: Inspector = New Inspection, Scan, Serial Search, Checklists, Stock
+  count, Accidents (file+review). Tyre Man = New Inspection, Scan, Serial Search, Checklists (no accidents/
+  stock). `canReportAccident`/`canCountStock` re-scoped accordingly; manager/director/reporter kept working.
+- **New `serial-search.tsx`** screen — find a tyre by serial (reuses `lookupTyreBySerial`), links into inspection.
+
 ## ACTIVE INITIATIVE (2026-07-13): Module-depth remediation
 User feedback: the modules ported from fleet_IQ/tyre_saas are "normal data only without the deep
 modules" — my Supabase re-implementations flattened the rich logic that lived in the originals'

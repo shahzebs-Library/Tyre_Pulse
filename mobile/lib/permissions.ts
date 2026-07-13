@@ -79,6 +79,16 @@ export function canReviewAccidents(role: UserRole | null | undefined): boolean {
   return isAdminOrAbove(role)
 }
 
+/**
+ * Approve/reject submitted checklists that require sign-off. Mirrors the V212
+ * RLS gate (Admin/Manager/Director/Maintenance Supervisor); Maintenance
+ * Supervisor is not a distinct mobile role, so the mobile subset is
+ * admin/manager/director.
+ */
+export function canApproveChecklists(role: UserRole | null | undefined): boolean {
+  return isAdminOrAbove(role)
+}
+
 /** Tyre records list - all roles with operational access. */
 export function canViewRecords(role: UserRole | null | undefined): boolean {
   return role === 'inspector' || role === 'tyre_man' || role === 'reporter' || isAdminOrAbove(role)

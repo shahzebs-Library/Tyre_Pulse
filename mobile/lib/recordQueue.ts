@@ -33,6 +33,7 @@ export type CommandType =
   | 'CORRECTIVE_ACTION_STATUS'
   | 'CHECKLIST_SUBMISSION'
   | 'CHECKLIST_ASSIGNMENT_STATUS'
+  | 'CHECKLIST_APPROVAL'
 
 /** How a command mutates its table. Defaults to 'insert' to preserve v1 behavior. */
 export type CommandOp = 'insert' | 'update'
@@ -116,7 +117,7 @@ export const COMMANDS: Record<CommandType, CommandSpec> = {
     fields: [
       'id', 'template_id', 'template_name', 'template_version', 'country', 'site',
       'asset_no', 'title', 'status', 'answers', 'photos', 'signature_data',
-      'printed_name', 'score_pct', 'score_passed',
+      'printed_name', 'score_pct', 'score_passed', 'approval_status',
     ],
   },
   CHECKLIST_ASSIGNMENT_STATUS: {
@@ -124,6 +125,16 @@ export const COMMANDS: Record<CommandType, CommandSpec> = {
     op: 'update',
     matchField: 'id',
     fields: ['id', 'status', 'submission_id', 'completed_at'],
+  },
+  // Supervisor approve/reject of a submission (elevated-role RLS, V212).
+  CHECKLIST_APPROVAL: {
+    table: 'checklist_submissions',
+    op: 'update',
+    matchField: 'id',
+    fields: [
+      'id', 'approval_status', 'approver_name', 'approver_signature',
+      'approved_by', 'approved_at', 'review_note', 'locked',
+    ],
   },
 }
 
@@ -173,6 +184,7 @@ const TYPE_TO_MODULE: Record<CommandType, string> = {
   CORRECTIVE_ACTION_STATUS: 'corrective-action-status',
   CHECKLIST_SUBMISSION: 'checklist',
   CHECKLIST_ASSIGNMENT_STATUS: 'checklist-assignment',
+  CHECKLIST_APPROVAL: 'checklist-approval',
 }
 
 /** True when a command patches an existing row rather than inserting a new one. */

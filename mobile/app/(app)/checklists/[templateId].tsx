@@ -19,6 +19,7 @@ import { useAuth } from '../../../contexts/AuthContext'
 import { useLanguage } from '../../../contexts/LanguageContext'
 import PhotoCapture from '../../../components/PhotoCapture'
 import ChecklistReferencePicker from '../../../components/ChecklistReferencePicker'
+import SignaturePad from '../../../components/SignaturePad'
 import { getTemplate, submitChecklist, ChecklistTemplate } from '../../../lib/checklists'
 import {
   ChecklistField, blankAnswer, isValueField, isFieldVisible,
@@ -46,6 +47,7 @@ export default function ChecklistFillScreen() {
   const [answers, setAnswers] = useState<Record<string, any>>({})
   const [photos, setPhotos] = useState<Record<string, string[]>>({})
   const [printedName, setPrintedName] = useState('')
+  const [signatureData, setSignatureData] = useState<string | null>(null)
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [submitting, setSubmitting] = useState(false)
 
@@ -106,9 +108,15 @@ export default function ChecklistFillScreen() {
     setErrors({})
 
     const name = printedName.trim() || (profile?.full_name ?? '')
-    if (template.require_signature && !name) {
-      Alert.alert('Signature required', 'Type your name at the end to sign this checklist.')
-      return
+    if (template.require_signature) {
+      if (!signatureData) {
+        Alert.alert('Signature required', 'Please sign in the signature box to complete this checklist.')
+        return
+      }
+      if (!name) {
+        Alert.alert('Name required', 'Type your name under the signature to confirm who signed.')
+        return
+      }
     }
 
     let score_pct: number | null = null
@@ -126,7 +134,7 @@ export default function ChecklistFillScreen() {
         answers,
         photos,
         printed_name: printedName.trim() || (profile?.full_name ?? null),
-        signature_data: null,
+        signature_data: signatureData,
         site: site.trim() || null,
         asset_no: assetNo.trim() || null,
         title: title.trim() || template.name,
@@ -272,11 +280,13 @@ export default function ChecklistFillScreen() {
               photos={photos[field.id] ?? []}
               error={errors[field.id]}
               printedName={printedName}
+              signatureData={signatureData}
               textAlign={textAlign}
               country={profile?.country ?? null}
               onChange={v => setAnswer(field.id, v)}
               onPhotos={urls => setFieldPhotos(field.id, urls)}
               onPrintedName={setPrintedName}
+              onSignature={setSignatureData}
             />
           ))}
 
@@ -325,19 +335,21 @@ function Field({
 
 // ── Per-type field renderer ───────────────────────────────────────────────────
 function FieldRenderer({
-  field, value, photos, error, printedName, textAlign, country,
-  onChange, onPhotos, onPrintedName,
+  field, value, photos, error, printedName, signatureData, textAlign, country,
+  onChange, onPhotos, onPrintedName, onSignature,
 }: {
   field: ChecklistField
   value: any
   photos: string[]
   error?: string
   printedName: string
+  signatureData: string | null
   textAlign: 'left' | 'right'
   country?: string | null
   onChange: (v: any) => void
   onPhotos: (urls: string[]) => void
   onPrintedName: (v: string) => void
+  onSignature: (v: string | null) => void
 }) {
   // Section: a bold divider heading, no input.
   if (field.type === 'section') {
@@ -360,11 +372,16 @@ function FieldRenderer({
     )
   }
 
-  // Signature: mobile v1 captures a typed printed name (no drawn canvas yet).
+  // Signature: a real finger-drawn signature (captured as SVG) plus the printed
+  // name of who signed. Both are validated at submit when require_signature.
   if (field.type === 'signature') {
     return (
       <View style={styles.card}>
         <Field label={field.label || 'Signature'} required={field.required} error={error} textAlign={textAlign}>
+          <SignaturePad onChange={onSignature} height={180} />
+        </Field>
+        <View style={{ marginTop: 12 }}>
+          <Text style={[styles.fieldLabel, { textAlign }]}>Printed name</Text>
           <TextInput
             style={[styles.input, { textAlign }]}
             value={printedName}
@@ -373,8 +390,10 @@ function FieldRenderer({
             placeholderTextColor="#94a3b8"
             autoCapitalize="words"
           />
-          <Text style={[styles.help, { textAlign }]}>Type your name to sign</Text>
-        </Field>
+          <Text style={[styles.help, { textAlign }]}>
+            {signatureData ? 'Signed — printed name confirms who signed.' : 'Sign above, then print your name.'}
+          </Text>
+        </View>
       </View>
     )
   }

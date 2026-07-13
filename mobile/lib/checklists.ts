@@ -163,6 +163,8 @@ export async function submitChecklist(input: SubmitInput): Promise<{ id: string;
     printed_name: input.printed_name ?? null,
     score_pct: input.score_pct ?? null,
     score_passed: input.score_passed ?? null,
+    // Approval lifecycle (V212): templates flagged require_approval start pending.
+    approval_status: t.require_approval ? 'pending' : 'not_required',
   }, id)
 
   // Link the assignment (update-by-id; idempotent). Best-effort — a failure here
@@ -179,4 +181,77 @@ export async function submitChecklist(input: SubmitInput): Promise<{ id: string;
   }
 
   return { id, offline: !!res.offline }
+}
+
+// ── Approval (V212) ─────────────────────────────────────────────────────────
+
+export interface ChecklistSubmission {
+  id: string
+  template_id: string | null
+  template_name: string | null
+  title: string | null
+  site: string | null
+  asset_no: string | null
+  status: string | null
+  answers: Record<string, any> | null
+  photos: Record<string, string[]> | null
+  signature_data: string | null
+  printed_name: string | null
+  submitted_by: string | null
+  submitted_at: string | null
+  score_pct: number | null
+  score_passed: boolean | null
+  approval_status: 'not_required' | 'pending' | 'approved' | 'rejected'
+  approver_name: string | null
+  approver_signature: string | null
+  approved_at: string | null
+  review_note: string | null
+  locked: boolean | null
+}
+
+const SUBMISSION_COLS =
+  'id,template_id,template_name,title,site,asset_no,status,answers,photos,signature_data,printed_name,' +
+  'submitted_by,submitted_at,score_pct,score_passed,approval_status,approver_name,' +
+  'approver_signature,approved_at,review_note,locked'
+
+/** Submissions awaiting approval (require_approval templates), newest first. */
+export async function listPendingApprovals(country?: string | null): Promise<ChecklistSubmission[]> {
+  let q = supabase.from('checklist_submissions').select(SUBMISSION_COLS).eq('approval_status', 'pending')
+  q = scopeCountry(q, country)
+  const { data, error } = await q.order('submitted_at', { ascending: false, nullsFirst: false }).limit(200)
+  if (error) throw error
+  // Cast through unknown: the generated DB types predate the V212 approval
+  // columns, so the typed client can't infer this row shape yet.
+  return (data ?? []) as unknown as ChecklistSubmission[]
+}
+
+export async function getSubmission(id: string): Promise<ChecklistSubmission | null> {
+  const { data, error } = await supabase.from('checklist_submissions').select(SUBMISSION_COLS).eq('id', id).maybeSingle()
+  if (error) throw error
+  return (data as unknown as ChecklistSubmission) ?? null
+}
+
+/**
+ * Approve or reject a submission (elevated-role RLS enforces who can). Routes
+ * through the typed, offline-safe command queue like every other write.
+ */
+export async function decideApproval(input: {
+  id: string
+  approved: boolean
+  approverName: string
+  approverSignature?: string | null
+  reviewNote?: string | null
+  approverId?: string | null
+}): Promise<{ offline: boolean }> {
+  const res = await saveCommand('CHECKLIST_APPROVAL', {
+    id: input.id,
+    approval_status: input.approved ? 'approved' : 'rejected',
+    approver_name: input.approverName || null,
+    approver_signature: input.approved ? (input.approverSignature ?? null) : null,
+    approved_by: input.approverId ?? null,
+    approved_at: new Date().toISOString(),
+    review_note: input.approved ? null : (input.reviewNote ?? null),
+    locked: input.approved,
+  }, `approve_${input.id}`)
+  return { offline: !!res.offline }
 }

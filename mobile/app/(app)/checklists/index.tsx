@@ -20,10 +20,11 @@ import { Ionicons } from '@expo/vector-icons'
 import { useAuth } from '../../../contexts/AuthContext'
 import { useLanguage } from '../../../contexts/LanguageContext'
 import {
-  listTemplates, listAssignments,
+  listTemplates, listAssignments, listPendingApprovals,
   ChecklistTemplate, ChecklistAssignment,
 } from '../../../lib/checklists'
 import { isValueField } from '../../../lib/checklistFields'
+import { canApproveChecklists } from '../../../lib/permissions'
 
 // Local midnight ISO date (YYYY-MM-DD) — assignment due_date is a plain date.
 function todayStr(): string {
@@ -64,6 +65,7 @@ export default function ChecklistsScreen() {
 
   const [templates, setTemplates] = useState<ChecklistTemplate[]>([])
   const [assignments, setAssignments] = useState<ChecklistAssignment[]>([])
+  const [pendingApprovals, setPendingApprovals] = useState(0)
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -71,6 +73,7 @@ export default function ChecklistsScreen() {
 
   const textAlign = isRTL ? 'right' : 'left'
   const dateLocale = isRTL ? 'ar-SA' : 'en-GB'
+  const canApprove = canApproveChecklists(profile?.role)
 
   const load = useCallback(async () => {
     setError(null)
@@ -89,7 +92,14 @@ export default function ChecklistsScreen() {
     } finally {
       setLoading(false)
     }
-  }, [profile?.country])
+    // Approver badge — best-effort, never blocks the operator's own view.
+    if (canApprove) {
+      try {
+        const pend = await listPendingApprovals(profile?.country)
+        setPendingApprovals(pend.length)
+      } catch { setPendingApprovals(0) }
+    }
+  }, [profile?.country, canApprove])
 
   useEffect(() => { load() }, [load])
 
@@ -179,6 +189,33 @@ export default function ChecklistsScreen() {
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#16a34a" />}
           showsVerticalScrollIndicator={false}
         >
+          {/* ── Approver entry (elevated roles) ──────────────────────────────── */}
+          {canApprove && (
+            <TouchableOpacity
+              style={[styles.approvalsCard, isRTL && styles.rowR]}
+              activeOpacity={0.8}
+              onPress={() => router.push('/(app)/checklists/approvals')}
+            >
+              <View style={styles.approvalsIcon}>
+                <Ionicons name="shield-checkmark-outline" size={20} color="#b45309" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.approvalsTitle, { textAlign }]}>Approvals</Text>
+                <Text style={[styles.approvalsSub, { textAlign }]}>
+                  {pendingApprovals > 0
+                    ? `${pendingApprovals} checklist${pendingApprovals === 1 ? '' : 's'} awaiting sign-off`
+                    : 'Review and sign off submitted checklists'}
+                </Text>
+              </View>
+              {pendingApprovals > 0 && (
+                <View style={styles.approvalsBadge}>
+                  <Text style={styles.approvalsBadgeText}>{pendingApprovals}</Text>
+                </View>
+              )}
+              <Ionicons name={isRTL ? 'chevron-back' : 'chevron-forward'} size={18} color="#cbd5e1" />
+            </TouchableOpacity>
+          )}
+
           {/* ── Section A · Due ──────────────────────────────────────────────── */}
           <View style={styles.sectionHead}>
             <Text style={styles.sectionTitle}>Due</Text>
@@ -341,6 +378,24 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   retryText: { color: '#fff', fontSize: 14, fontWeight: '700' },
+
+  approvalsCard: {
+    flexDirection: 'row', alignItems: 'center', gap: 12,
+    backgroundColor: '#fffbeb', borderRadius: 14, padding: 14,
+    borderWidth: 1, borderColor: 'rgba(245,158,11,0.35)',
+  },
+  approvalsIcon: {
+    width: 40, height: 40, borderRadius: 11,
+    backgroundColor: 'rgba(245,158,11,0.15)',
+    alignItems: 'center', justifyContent: 'center',
+  },
+  approvalsTitle: { fontSize: 14, fontWeight: '800', color: '#0f172a' },
+  approvalsSub: { fontSize: 11.5, color: '#92400e', marginTop: 2 },
+  approvalsBadge: {
+    minWidth: 22, paddingHorizontal: 7, paddingVertical: 2, borderRadius: 10,
+    backgroundColor: '#b45309', alignItems: 'center',
+  },
+  approvalsBadgeText: { fontSize: 11, fontWeight: '800', color: '#fff' },
 
   sectionHead: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   sectionTitle: { fontSize: 15, fontWeight: '800', color: '#0f172a' },

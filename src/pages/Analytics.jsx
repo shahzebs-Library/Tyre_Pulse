@@ -8,13 +8,17 @@ import {
   PointElement, Title, Tooltip, Legend,
 } from 'chart.js'
 import { Bar, Line } from 'react-chartjs-2'
-import { BarChart2, TrendingUp, AlertTriangle, Activity } from 'lucide-react'
+import { BarChart2, TrendingUp, AlertTriangle, Activity, Gauge, Wrench, Ruler, Layers, TrendingDown } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
 import PeriodFilter, { filterByPeriodValue } from '../components/ui/PeriodFilter'
-import { formatCurrencyCompact } from '../lib/formatters'
+import { formatCurrencyCompact, formatCurrency, formatKm } from '../lib/formatters'
 import { fetchAllPages } from '../lib/fetchAll'
 import EnterpriseTable from '../components/ui/EnterpriseTable'
 import { useReportMeta } from '../hooks/useReportMeta'
+import { exportToExcel, exportToPdf } from '../lib/exportUtils'
+import {
+  summariseIntelligence, rootCauseBreakdown, cpkByBrand, positionIntelligence,
+} from '../lib/tyreIntelligence'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, LineElement, PointElement, Title, Tooltip, Legend)
 
@@ -33,7 +37,7 @@ export default function Analytics() {
       const { data, error: e } = await fetchAllPages((from, to) => {
         let q = supabase
           .from('tyre_records')
-          .select('id,issue_date,brand,site,category,risk_level,cost_per_tyre,qty')
+          .select('id,issue_date,brand,site,category,risk_level,cost_per_tyre,qty,km_at_fitment,km_at_removal,total_km,reason_for_removal,removal_reason,tyre_position,position,supplier,status,tread_depth,removal_date,asset_no')
           .order('issue_date')
         if (activeCountry !== 'All') q = q.eq('country', activeCountry)
         return q.range(from, to)
@@ -61,6 +65,67 @@ export default function Analytics() {
 
   const siteMetrics = useMemo(() => computeSiteMetrics(filtered), [filtered])
   const brandMetrics = useMemo(() => computeBrandMetrics(filtered), [filtered])
+
+  // ── Engineering intelligence (pure, from real rows) ──────────────────────────
+  const intel = useMemo(() => summariseIntelligence(filtered), [filtered])
+  const rootCauses = useMemo(() => rootCauseBreakdown(filtered), [filtered])
+  const brandCpk = useMemo(() => cpkByBrand(filtered), [filtered])
+  const positionIntel = useMemo(() => positionIntelligence(filtered), [filtered])
+  const rootCauseMax = rootCauses.length ? rootCauses[0].count : 0
+
+  const fmtCpk = useCallback((v) => (
+    v == null ? '-' : `${formatCurrency(v, activeCurrency, v < 1 ? 3 : 2)}/km`
+  ), [activeCurrency])
+  const fmtLife = useCallback((v) => (v == null ? '-' : formatKm(v)), [])
+
+  const brandCpkColumns = useMemo(() => [
+    { id: 'brand', header: 'Brand', accessorFn: r => r.brand, size: 160 },
+    { id: 'tyres', header: 'Tyres', accessorFn: r => r.tyres, size: 80, meta: { align: 'right' } },
+    {
+      id: 'avgCpk', header: 'Avg CPK', accessorFn: r => r.avgCpk ?? Number.POSITIVE_INFINITY, size: 120, meta: { align: 'right' },
+      cell: ({ row }) => <span className="tabular-nums">{fmtCpk(row.original.avgCpk)}</span>,
+    },
+    {
+      id: 'avgLifeKm', header: 'Avg Life', accessorFn: r => r.avgLifeKm ?? 0, size: 110, meta: { align: 'right' },
+      cell: ({ row }) => <span className="tabular-nums text-gray-400">{fmtLife(row.original.avgLifeKm)}</span>,
+    },
+  ], [fmtCpk, fmtLife])
+
+  const positionColumns = useMemo(() => [
+    { id: 'position', header: 'Position', accessorFn: r => r.position, size: 140 },
+    { id: 'tyres', header: 'Tyres', accessorFn: r => r.tyres, size: 80, meta: { align: 'right' } },
+    {
+      id: 'removalRate', header: 'Removal Rate', accessorFn: r => r.removalRate, size: 120, meta: { align: 'right' },
+      cell: ({ getValue }) => {
+        const val = getValue()
+        return <span className={`text-xs px-2 py-0.5 rounded-full ${val > 30 ? 'bg-red-900/40 text-red-400' : val > 15 ? 'bg-yellow-900/40 text-yellow-400' : 'bg-green-900/40 text-green-400'}`}>{val.toFixed(1)}%</span>
+      },
+    },
+    {
+      id: 'avgLifeKm', header: 'Avg Life', accessorFn: r => r.avgLifeKm ?? 0, size: 110, meta: { align: 'right' },
+      cell: ({ row }) => <span className="tabular-nums text-gray-400">{fmtLife(row.original.avgLifeKm)}</span>,
+    },
+    {
+      id: 'avgCpk', header: 'Avg CPK', accessorFn: r => r.avgCpk ?? Number.POSITIVE_INFINITY, size: 120, meta: { align: 'right' },
+      cell: ({ row }) => <span className="tabular-nums">{fmtCpk(row.original.avgCpk)}</span>,
+    },
+  ], [fmtCpk, fmtLife])
+
+  const exportBrandCpk = useCallback(async (kind) => {
+    const rows = brandCpk.map(r => ({
+      brand: r.brand,
+      tyres: r.tyres,
+      avgCpk: r.avgCpk == null ? '' : Number(r.avgCpk.toFixed(4)),
+      avgLifeKm: r.avgLifeKm == null ? '' : Math.round(r.avgLifeKm),
+    }))
+    const colKeys = ['brand', 'tyres', 'avgCpk', 'avgLifeKm']
+    const headers = ['Brand', 'Tyres', 'Avg CPK', 'Avg Life (km)']
+    if (kind === 'pdf') {
+      await exportToPdf(rows, colKeys.map((k, i) => ({ key: k, header: headers[i] })), 'Brand CPK Ranking', 'brand_cpk', 'landscape')
+    } else {
+      await exportToExcel(rows, colKeys, headers, 'brand_cpk')
+    }
+  }, [brandCpk])
 
   // Monthly trend chart
   const monthlyData = useMemo(() => {
@@ -185,6 +250,137 @@ export default function Analytics() {
             </h3>
             <div style={{ height: 300 }}>
               <Bar data={chartData} options={chartOpts} />
+            </div>
+          </div>
+
+          {/* ── Engineering Intelligence ─────────────────────────────────── */}
+          <div className="space-y-4">
+            <div className="flex items-center gap-2">
+              <Wrench size={15} className="text-amber-400" />
+              <h3 className="text-sm font-semibold text-white">Engineering Intelligence</h3>
+              <span className="text-xs text-gray-600">Derived from real tyre records</span>
+            </div>
+
+            {/* KPI tiles */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div className="card">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs text-gray-500">Fleet CPK</p>
+                  <Gauge size={15} className="text-amber-400" />
+                </div>
+                <p className="text-2xl font-bold text-amber-400 mt-2 tabular-nums">{fmtCpk(intel.fleetAvgCpk)}</p>
+                <p className="text-[11px] text-gray-600 mt-1">Cost per km · fleet weighted</p>
+              </div>
+              <div className="card">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs text-gray-500">Avg Tyre Life</p>
+                  <Ruler size={15} className="text-blue-400" />
+                </div>
+                <p className="text-2xl font-bold text-blue-400 mt-2 tabular-nums">{fmtLife(intel.avgLifeKm)}</p>
+                <p className="text-[11px] text-gray-600 mt-1">Mean service distance</p>
+              </div>
+              <div className="card">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs text-gray-500">Removal / Failure Rate</p>
+                  <TrendingDown size={15} className="text-red-400" />
+                </div>
+                <p className={`text-2xl font-bold mt-2 tabular-nums ${intel.removalRate > 30 ? 'text-red-400' : 'text-emerald-400'}`}>{intel.removalRate.toFixed(1)}%</p>
+                <p className="text-[11px] text-gray-600 mt-1">{intel.removedCount.toLocaleString()} of {intel.totalTyres.toLocaleString()} removed</p>
+              </div>
+              <div className="card">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs text-gray-500">Avg Tread Depth</p>
+                  <Layers size={15} className="text-violet-400" />
+                </div>
+                <p className="text-2xl font-bold text-violet-400 mt-2 tabular-nums">{intel.avgTreadDepth == null ? '-' : `${intel.avgTreadDepth.toFixed(1)} mm`}</p>
+                <p className="text-[11px] text-gray-600 mt-1">{intel.criticalCount.toLocaleString()} high/critical risk</p>
+              </div>
+            </div>
+
+            {/* Root Cause Analysis */}
+            <div className="card">
+              <h3 className="text-sm font-semibold text-white mb-4 flex items-center gap-2">
+                <AlertTriangle size={15} className="text-red-400" /> Root Cause Analysis
+              </h3>
+              {rootCauses.length === 0 ? (
+                <p className="text-sm text-gray-600 py-6 text-center">No removal-reason data for this period.</p>
+              ) : (
+                <div className="space-y-2.5">
+                  {rootCauses.slice(0, 8).map((rc) => (
+                    <div key={rc.reason} className="flex items-center gap-3">
+                      <span className="w-40 shrink-0 truncate text-xs text-gray-400" title={rc.reason}>{rc.reason}</span>
+                      <div className="flex-1 h-2.5 rounded-full bg-gray-800 overflow-hidden">
+                        <div
+                          className="h-full rounded-full bg-gradient-to-r from-amber-500 to-red-500"
+                          style={{ width: `${rootCauseMax > 0 ? (rc.count / rootCauseMax) * 100 : 0}%` }}
+                        />
+                      </div>
+                      <span className="w-24 shrink-0 text-right text-xs text-gray-500 tabular-nums">{rc.count.toLocaleString()} · {rc.pct.toFixed(1)}%</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Brand CPK Ranking */}
+            <div className="card p-0 overflow-hidden">
+              <div className="px-4 py-3 border-b border-[var(--border-dim)] flex items-center justify-between gap-2">
+                <h3 className="text-sm font-semibold text-white flex items-center gap-2">
+                  <Gauge size={14} className="text-amber-400" /> Brand CPK Ranking
+                  <span className="text-xs font-normal text-gray-600">best cost-per-km first</span>
+                </h3>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => exportBrandCpk('excel')}
+                    disabled={brandCpk.length === 0}
+                    className="text-xs px-2.5 py-1 rounded-md bg-gray-800 text-gray-300 hover:bg-gray-700 disabled:opacity-40"
+                  >Excel</button>
+                  <button
+                    type="button"
+                    onClick={() => exportBrandCpk('pdf')}
+                    disabled={brandCpk.length === 0}
+                    className="text-xs px-2.5 py-1 rounded-md bg-gray-800 text-gray-300 hover:bg-gray-700 disabled:opacity-40"
+                  >PDF</button>
+                </div>
+              </div>
+              <EnterpriseTable
+                reportMeta={reportMeta}
+                columns={brandCpkColumns}
+                data={brandCpk}
+                getRowId={(row) => row.brand}
+                enableGlobalFilter={true}
+                searchPlaceholder="Search brands..."
+                enableSorting={true}
+                enableExport={false}
+                initialPageSize={10}
+                pageSizeOptions={[10, 25, 50]}
+                emptyMessage="No CPK data — km_at_fitment / km_at_removal required"
+              />
+            </div>
+
+            {/* Position Intelligence */}
+            <div className="card p-0 overflow-hidden">
+              <div className="px-4 py-3 border-b border-[var(--border-dim)]">
+                <h3 className="text-sm font-semibold text-white flex items-center gap-2">
+                  <Layers size={14} className="text-violet-400" /> Position Intelligence
+                  <span className="text-xs font-normal text-gray-600">highest removal rate first</span>
+                </h3>
+              </div>
+              <EnterpriseTable
+                reportMeta={reportMeta}
+                columns={positionColumns}
+                data={positionIntel}
+                getRowId={(row) => row.position}
+                enableGlobalFilter={true}
+                searchPlaceholder="Search positions..."
+                enableSorting={true}
+                enableExport={true}
+                exportFileName="position_intelligence"
+                initialPageSize={10}
+                pageSizeOptions={[10, 25, 50]}
+                emptyMessage="No position data"
+              />
             </div>
           </div>
 

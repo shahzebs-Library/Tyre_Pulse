@@ -20,6 +20,10 @@ const ROLE_DEFAULTS = {
   'Integration Admin': k => ['dashboard','alerts','erp_sync','data_cleaning','upload_data','custom_data','audit_trail'].includes(k),
   'Data Engineer':     k => ['dashboard','alerts','erp_sync','data_cleaning','upload_data','custom_data','tyre_records','fleet_master','analytics'].includes(k),
   Automation:          k => ['dashboard','alerts','erp_sync','upload_data','custom_data'].includes(k),
+  // Data Monitor Officer (DMO) — scoped to accident monitoring only. Settings is
+  // a universally-accessible route (not a permissioned module), surfaced for DMO
+  // via the sidebar rule in Layout.jsx.
+  'Data Monitor Officer': k => ['accidents'].includes(k),
 }
 
 export function AuthProvider({ children }) {

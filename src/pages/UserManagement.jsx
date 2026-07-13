@@ -21,6 +21,7 @@ import SitesMasterPanel from '../components/SitesMasterPanel'
 const ROLES = [
   'Admin', 'Manager', 'Inspector', 'Director', 'Reporter', 'Tyre Man', 'Driver',
   'Maintenance Supervisor', 'Integration Admin', 'Data Engineer', 'Automation',
+  'Data Monitor Officer',
 ]
 
 const ROLE_BADGE = {

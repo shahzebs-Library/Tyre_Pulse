@@ -258,6 +258,7 @@ function HomeRoute() {
   if (loading) return <LoadingSpinner />
   if (isChecklistOnlyRole(profile?.role)) return <Navigate to="/checklists" replace />
   if (profile?.role === 'Tyre Man') return <Navigate to="/inspections" replace />
+  if (profile?.role === 'Data Monitor Officer') return <Navigate to="/accidents" replace />
   return <Dashboard />
 }
 

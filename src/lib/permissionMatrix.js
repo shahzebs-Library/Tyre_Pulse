@@ -81,6 +81,7 @@ export const ROLE_VIEW_DEFAULTS = {
   'Integration Admin': { type: 'only', keys: ['dashboard', 'alerts', 'erp_sync', 'data_cleaning', 'upload_data', 'custom_data', 'audit_trail'] },
   'Data Engineer':     { type: 'only', keys: ['dashboard', 'alerts', 'erp_sync', 'data_cleaning', 'upload_data', 'custom_data', 'tyre_records', 'fleet_master', 'analytics'] },
   Automation:          { type: 'only', keys: ['dashboard', 'alerts', 'erp_sync', 'upload_data', 'custom_data'] },
+  'Data Monitor Officer': { type: 'only', keys: ['accidents'] },
 }
 
 /** Default view access for a role/module — mirrors AuthContext exactly. Unknown role → false. */

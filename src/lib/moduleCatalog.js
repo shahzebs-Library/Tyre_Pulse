@@ -89,7 +89,7 @@ export const MODULE_GROUPS = [
 /** Roles that appear as columns in the access matrix. Admin is always full. */
 export const ACCESS_ROLES = [
   'Admin', 'Manager', 'Director', 'Reporter', 'Inspector', 'Tyre Man', 'Driver',
-  'Integration Admin', 'Data Engineer', 'Automation',
+  'Integration Admin', 'Data Engineer', 'Automation', 'Data Monitor Officer',
 ]
 
 /** Flat [{key,label,group}] for lookups. */

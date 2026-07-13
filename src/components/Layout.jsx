@@ -334,6 +334,10 @@ function shouldShowNavItem(item, profile, isFlagEnabled) {
   if (profile?.role === 'Inspector') {
     return item.to === '/inspections' || item.to === '/settings'
   }
+  // Data Monitor Officer — accident monitoring + own settings only.
+  if (profile?.role === 'Data Monitor Officer') {
+    return item.to === '/accidents' || item.to === '/settings'
+  }
   // Checklist-only role (Maintenance Supervisor): sidebar shows only checklists.
   if (isChecklistOnlyRole(profile?.role)) {
     return isChecklistPathAllowed(item.to)

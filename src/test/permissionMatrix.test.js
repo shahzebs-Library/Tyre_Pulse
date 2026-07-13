@@ -57,6 +57,7 @@ const AUTH_CONTEXT_ROLE_DEFAULTS = {
   'Integration Admin': (k) => ['dashboard', 'alerts', 'erp_sync', 'data_cleaning', 'upload_data', 'custom_data', 'audit_trail'].includes(k),
   'Data Engineer': (k) => ['dashboard', 'alerts', 'erp_sync', 'data_cleaning', 'upload_data', 'custom_data', 'tyre_records', 'fleet_master', 'analytics'].includes(k),
   Automation: (k) => ['dashboard', 'alerts', 'erp_sync', 'upload_data', 'custom_data'].includes(k),
+  'Data Monitor Officer': (k) => ['accidents'].includes(k),
 }
 
 describe('defaults mirror AuthContext ROLE_DEFAULTS exactly', () => {
@@ -315,12 +316,12 @@ describe('persistence', () => {
 
 // ── Registry sanity ──────────────────────────────────────────────────────────
 describe('registries', () => {
-  it('exposes the 10 real roles with Admin first', () => {
-    expect(ROLES).toHaveLength(10)
+  it('exposes the real roles with Admin first', () => {
+    expect(ROLES).toHaveLength(11)
     expect(ROLES[0]).toBe('Admin')
     expect(ROLES).toEqual(expect.arrayContaining([
       'Admin', 'Manager', 'Director', 'Reporter', 'Tyre Man', 'Inspector', 'Driver',
-      'Integration Admin', 'Data Engineer', 'Automation',
+      'Integration Admin', 'Data Engineer', 'Automation', 'Data Monitor Officer',
     ]))
   })
 

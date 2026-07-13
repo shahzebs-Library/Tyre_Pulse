@@ -154,6 +154,13 @@ export interface TabDescriptor {
   activeTint?: string
   /** Returns true when this tab should be visible for the given role */
   visible: (role: UserRole | null | undefined) => boolean
+  /**
+   * Shown in the bottom tab bar. Only a small set are primary; the rest stay
+   * routable (reached from the Home hub) but are kept OUT of the bar so it never
+   * crowds. A non-primary descriptor is still declared as a screen (href:null)
+   * so expo-router never auto-adds it as a stray tab.
+   */
+  primary?: boolean
 }
 
 export const TAB_BAR: TabDescriptor[] = [
@@ -162,18 +169,21 @@ export const TAB_BAR: TabDescriptor[] = [
     labelKey: 'tabs.home',
     icon: 'home-outline',
     visible: () => true,
+    primary: true,
   },
   {
     name: 'inspection/new',
     labelKey: 'tabs.inspect',
     icon: 'clipboard-outline',
     visible: canInspect,
+    primary: true,
   },
   {
     name: 'records/index',
     labelKey: 'tabs.records',
     icon: 'layers-outline',
     visible: canViewRecords,
+    primary: true,
   },
   {
     name: 'accident/dashboard',
@@ -181,6 +191,7 @@ export const TAB_BAR: TabDescriptor[] = [
     icon: 'warning-outline',
     activeTint: '#dc2626',
     visible: canViewAccidents,
+    primary: true,
   },
   {
     name: 'workorders/index',
@@ -220,5 +231,6 @@ export const TAB_BAR: TabDescriptor[] = [
     labelKey: 'tabs.profile',
     icon: 'person-outline',
     visible: () => true,
+    primary: true,
   },
 ]

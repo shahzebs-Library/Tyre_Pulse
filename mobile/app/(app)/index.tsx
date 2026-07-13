@@ -66,6 +66,7 @@ function getQuickActions(role: UserRole | null): QuickAction[] {
         { icon: 'speedometer-outline',   label: 'Meter Log',      sublabel: 'Daily odometer / hrs', route: '/(app)/meter-logs',           color: '#0369a1', bg: '#f0f9ff' },
         { icon: 'layers-outline',        label: 'Tyre Records',   sublabel: 'Browse all records',  route: '/(app)/records/index',        color: '#3b82f6', bg: '#eff6ff' },
         { icon: 'warning-outline',       label: 'Accident',       sublabel: 'File a report',        route: '/(app)/accident/report',      color: '#dc2626', bg: '#fff5f5' },
+        { icon: 'construct-outline',     label: 'Work Orders',    sublabel: 'Open actions',         route: '/(app)/workorders/index',     color: '#f59e0b', bg: '#fffbeb' },
       ]
     case 'tyre_man':
       return [
@@ -88,15 +89,19 @@ function getQuickActions(role: UserRole | null): QuickAction[] {
       return [
         { icon: 'bar-chart-outline',     label: 'Analytics',      sublabel: 'Fleet KPIs',           route: '/(app)/analytics/index',      color: '#3b82f6', bg: '#eff6ff' },
         { icon: 'construct-outline',     label: 'Work Orders',    sublabel: 'Open actions',         route: '/(app)/workorders/index',     color: '#f59e0b', bg: '#fffbeb' },
+        { icon: 'document-text-outline', label: 'Reports',        sublabel: 'Generate PDF',         route: '/(app)/reports/index',        color: '#8b5cf6', bg: '#f5f3ff' },
+        { icon: 'sparkles-outline',      label: 'Fleet AI',       sublabel: 'Ask anything',         route: '/(app)/ai/index',             color: '#7c3aed', bg: '#f5f3ff' },
         { icon: 'speedometer-outline',   label: 'Meter Log',      sublabel: 'Daily odometer / hrs', route: '/(app)/meter-logs',           color: '#0369a1', bg: '#f0f9ff' },
-        { icon: 'warning-outline',       label: 'Accidents',      sublabel: 'Incident review',      route: '/(app)/accident/dashboard',   color: '#dc2626', bg: '#fff5f5' },
+        { icon: 'shield-outline',        label: 'Admin',          sublabel: 'Console & settings',   route: '/(app)/admin/index',          color: '#7c3aed', bg: '#f5f3ff' },
       ]
     default: // admin
       return [
         { icon: 'sparkles-outline',      label: 'Fleet AI',       sublabel: 'Ask anything',         route: '/(app)/ai/index',             color: '#7c3aed', bg: '#f5f3ff' },
         { icon: 'bar-chart-outline',     label: 'Analytics',      sublabel: 'Fleet KPIs',           route: '/(app)/analytics/index',      color: '#3b82f6', bg: '#eff6ff' },
-        { icon: 'speedometer-outline',   label: 'Meter Log',      sublabel: 'Daily odometer / hrs', route: '/(app)/meter-logs',           color: '#0369a1', bg: '#f0f9ff' },
+        { icon: 'construct-outline',     label: 'Work Orders',    sublabel: 'Open actions',         route: '/(app)/workorders/index',     color: '#f59e0b', bg: '#fffbeb' },
         { icon: 'document-text-outline', label: 'Reports',        sublabel: 'Generate PDF',         route: '/(app)/reports/index',        color: '#16a34a', bg: '#f0fdf4' },
+        { icon: 'speedometer-outline',   label: 'Meter Log',      sublabel: 'Daily odometer / hrs', route: '/(app)/meter-logs',           color: '#0369a1', bg: '#f0f9ff' },
+        { icon: 'shield-outline',        label: 'Admin',          sublabel: 'Console & settings',   route: '/(app)/admin/index',          color: '#7c3aed', bg: '#f5f3ff' },
       ]
   }
 }

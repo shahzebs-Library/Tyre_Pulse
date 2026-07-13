@@ -104,7 +104,9 @@ export default function AppLayout() {
                 : tab.name === 'index' && homeBadge > 0 ? homeBadge
                 : undefined,
               tabBarBadgeStyle: { backgroundColor: '#dc2626', fontSize: 10, fontWeight: '700' },
-              href: allowed ? undefined : null,
+              // Only PRIMARY tabs appear in the bar; secondary destinations stay
+              // declared (no stray auto-tab) but are reached from the Home hub.
+              href: (tab.primary && allowed) ? undefined : null,
             }}
           />
         )
@@ -130,6 +132,12 @@ export default function AppLayout() {
       <Tabs.Screen name="admin/approvals" options={{ href: null }} />
       <Tabs.Screen name="admin/sites"     options={{ href: null }} />
       <Tabs.Screen name="records/[id]"    options={{ href: null }} />
+      <Tabs.Screen name="history"         options={{ href: null }} />
+      <Tabs.Screen name="meter-logs"      options={{ href: null }} />
+      <Tabs.Screen name="checklists/index"                        options={{ href: null }} />
+      <Tabs.Screen name="checklists/[templateId]"                 options={{ href: null }} />
+      <Tabs.Screen name="checklists/approvals/index"              options={{ href: null }} />
+      <Tabs.Screen name="checklists/approvals/[submissionId]"     options={{ href: null }} />
     </Tabs>
   )
 }

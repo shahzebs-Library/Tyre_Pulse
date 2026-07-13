@@ -34,6 +34,8 @@ export type CommandType =
   | 'CHECKLIST_SUBMISSION'
   | 'CHECKLIST_ASSIGNMENT_STATUS'
   | 'CHECKLIST_APPROVAL'
+  | 'ODOMETER_LOG'
+  | 'ENGINE_HOURS_LOG'
 
 /** How a command mutates its table. Defaults to 'insert' to preserve v1 behavior. */
 export type CommandOp = 'insert' | 'update'
@@ -136,6 +138,22 @@ export const COMMANDS: Record<CommandType, CommandSpec> = {
       'approved_by', 'approved_at', 'review_note', 'locked',
     ],
   },
+  // Driver daily meter readings (V162/V161 + V213 photo). Odometer feeds
+  // vehicle_fleet.current_km via a server trigger (V213).
+  ODOMETER_LOG: {
+    table: 'odometer_logs',
+    fields: [
+      'asset_no', 'odometer_km', 'reading_date', 'source', 'site',
+      'country', 'notes', 'photos', 'created_by',
+    ],
+  },
+  ENGINE_HOURS_LOG: {
+    table: 'engine_hours_logs',
+    fields: [
+      'asset_no', 'engine_hours', 'reading_date', 'source', 'site',
+      'country', 'notes', 'photos', 'created_by',
+    ],
+  },
 }
 
 export interface QueuedRecord {
@@ -185,6 +203,8 @@ const TYPE_TO_MODULE: Record<CommandType, string> = {
   CHECKLIST_SUBMISSION: 'checklist',
   CHECKLIST_ASSIGNMENT_STATUS: 'checklist-assignment',
   CHECKLIST_APPROVAL: 'checklist-approval',
+  ODOMETER_LOG: 'meter-log',
+  ENGINE_HOURS_LOG: 'meter-log',
 }
 
 /** True when a command patches an existing row rather than inserting a new one. */

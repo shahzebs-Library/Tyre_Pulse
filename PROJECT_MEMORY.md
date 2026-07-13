@@ -66,6 +66,25 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
   card in the page. NO RLS/DB change yet. Do NOT add `org_unit_id` to operational tables and do NOT
   enforce location-scoped RLS until the remaining §3 P3–P4 opt-in, default-open step.
 
+## Mobile inspector app — recent additions (do NOT duplicate)
+- **Checklist approval + signature** (V212): drawn signatures (`mobile/components/SignaturePad.tsx`
+  emits self-contained SVG; `SignatureView.tsx` renders it) + supervisor approval queue
+  (`app/(app)/checklists/approvals/*`), offline-safe via `CHECKLIST_APPROVAL` queue command; RLS
+  gates UPDATE to Admin/Manager/Director/Maintenance Supervisor.
+- **`profiles.country` is `text[]` (V114), NOT scalar.** Mobile normalises it to a single scalar via
+  `normaliseCountry()` in `lib/types.ts` (applied in AuthContext). NEVER feed the raw array into a
+  PostgREST `country.eq.${...}` filter or stamp it on a text column — empty→"" hid all assets; multi→
+  broken filter. V114 RESTRICTIVE RLS is the authoritative country boundary; client filters are a
+  redundant convenience only.
+- **Forgiving asset scan**: `lib/assetLookup.ts` (`extractScanCode` unwraps URL/JSON/paren payloads;
+  `lookupAssetByCode` = exact→ilike asset_no→fleet_number). Scanner + inspection preselect use it.
+- **Daily Meter Log** (V213) = `app/(app)/meter-logs.tsx` + `lib/meterLogs.ts` + `ODOMETER_LOG`/
+  `ENGINE_HOURS_LOG` queue commands. Drivers photograph the gauge + enter km/hours for no-telematics
+  fleets (Egypt). REUSES existing `odometer_logs` (V162) / `engine_hours_logs` (V161) — do NOT make new
+  tables. V213 added `photos`/`client_uuid` to both + a SECURITY-DEFINER trigger
+  `sync_asset_current_km` on odometer_logs that advances `vehicle_fleet.current_km` (monotonic,
+  org-scoped) from ANY odometer source. Migrations now through **V213**; next free is **V214**.
+
 ## ACTIVE INITIATIVE (2026-07-13): Module-depth remediation
 User feedback: the modules ported from fleet_IQ/tyre_saas are "normal data only without the deep
 modules" — my Supabase re-implementations flattened the rich logic that lived in the originals'

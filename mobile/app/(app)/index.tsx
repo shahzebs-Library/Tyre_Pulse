@@ -63,6 +63,7 @@ function getQuickActions(role: UserRole | null): QuickAction[] {
         { icon: 'clipboard-outline',     label: 'New Inspection', sublabel: 'Start a tyre check',  route: '/(app)/inspection/new',       color: '#16a34a', bg: '#f0fdf4' },
         { icon: 'checkbox-outline',      label: 'Checklists',     sublabel: 'Fill & submit checks', route: '/(app)/checklists/index',     color: '#16a34a', bg: '#f0fdf4' },
         { icon: 'scan-outline',          label: 'Scan Asset',     sublabel: 'Barcode / QR code',   route: '/(app)/scanner',              color: '#0ea5e9', bg: '#f0f9ff' },
+        { icon: 'speedometer-outline',   label: 'Meter Log',      sublabel: 'Daily odometer / hrs', route: '/(app)/meter-logs',           color: '#0369a1', bg: '#f0f9ff' },
         { icon: 'layers-outline',        label: 'Tyre Records',   sublabel: 'Browse all records',  route: '/(app)/records/index',        color: '#3b82f6', bg: '#eff6ff' },
         { icon: 'warning-outline',       label: 'Accident',       sublabel: 'File a report',        route: '/(app)/accident/report',      color: '#dc2626', bg: '#fff5f5' },
       ]
@@ -73,27 +74,28 @@ function getQuickActions(role: UserRole | null): QuickAction[] {
         { icon: 'checkbox-outline',      label: 'Checklists',     sublabel: 'Fill & submit checks', route: '/(app)/checklists/index',     color: '#16a34a', bg: '#f0fdf4' },
         { icon: 'layers-outline',        label: 'Tyre Records',   sublabel: 'Browse all records',  route: '/(app)/records/index',        color: '#3b82f6', bg: '#eff6ff' },
         { icon: 'scan-outline',          label: 'Scan Asset',     sublabel: 'Barcode / QR code',   route: '/(app)/scanner',              color: '#0ea5e9', bg: '#f0f9ff' },
+        { icon: 'speedometer-outline',   label: 'Meter Log',      sublabel: 'Daily odometer / hrs', route: '/(app)/meter-logs',           color: '#0369a1', bg: '#f0f9ff' },
       ]
     case 'reporter':
       return [
+        { icon: 'speedometer-outline',   label: 'Meter Log',      sublabel: 'Daily odometer / hrs', route: '/(app)/meter-logs',           color: '#0369a1', bg: '#f0f9ff' },
         { icon: 'document-text-outline', label: 'Reports',        sublabel: 'Generate PDF',         route: '/(app)/reports/index',        color: '#3b82f6', bg: '#eff6ff' },
         { icon: 'layers-outline',        label: 'Tyre Records',   sublabel: 'Browse all records',  route: '/(app)/records/index',        color: '#6366f1', bg: '#eef2ff' },
         { icon: 'warning-outline',       label: 'Accidents',      sublabel: 'Incident overview',    route: '/(app)/accident/dashboard',   color: '#dc2626', bg: '#fff5f5' },
-        { icon: 'time-outline',          label: 'History',        sublabel: 'Past inspections',     route: '/(app)/history',              color: '#64748b', bg: '#f8fafc' },
       ]
     case 'manager':
     case 'director':
       return [
         { icon: 'bar-chart-outline',     label: 'Analytics',      sublabel: 'Fleet KPIs',           route: '/(app)/analytics/index',      color: '#3b82f6', bg: '#eff6ff' },
         { icon: 'construct-outline',     label: 'Work Orders',    sublabel: 'Open actions',         route: '/(app)/workorders/index',     color: '#f59e0b', bg: '#fffbeb' },
-        { icon: 'document-text-outline', label: 'Reports',        sublabel: 'Generate PDF',         route: '/(app)/reports/index',        color: '#8b5cf6', bg: '#f5f3ff' },
+        { icon: 'speedometer-outline',   label: 'Meter Log',      sublabel: 'Daily odometer / hrs', route: '/(app)/meter-logs',           color: '#0369a1', bg: '#f0f9ff' },
         { icon: 'warning-outline',       label: 'Accidents',      sublabel: 'Incident review',      route: '/(app)/accident/dashboard',   color: '#dc2626', bg: '#fff5f5' },
       ]
     default: // admin
       return [
         { icon: 'sparkles-outline',      label: 'Fleet AI',       sublabel: 'Ask anything',         route: '/(app)/ai/index',             color: '#7c3aed', bg: '#f5f3ff' },
         { icon: 'bar-chart-outline',     label: 'Analytics',      sublabel: 'Fleet KPIs',           route: '/(app)/analytics/index',      color: '#3b82f6', bg: '#eff6ff' },
-        { icon: 'construct-outline',     label: 'Work Orders',    sublabel: 'Open actions',         route: '/(app)/workorders/index',     color: '#f59e0b', bg: '#fffbeb' },
+        { icon: 'speedometer-outline',   label: 'Meter Log',      sublabel: 'Daily odometer / hrs', route: '/(app)/meter-logs',           color: '#0369a1', bg: '#f0f9ff' },
         { icon: 'document-text-outline', label: 'Reports',        sublabel: 'Generate PDF',         route: '/(app)/reports/index',        color: '#16a34a', bg: '#f0fdf4' },
       ]
   }

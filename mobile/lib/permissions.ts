@@ -89,6 +89,15 @@ export function canApproveChecklists(role: UserRole | null | undefined): boolean
   return isAdminOrAbove(role)
 }
 
+/**
+ * Log a daily odometer / engine-hour meter reading. This is routine field data
+ * capture (especially for drivers in markets without telematics), so every
+ * operational role may do it; RLS still enforces the org/country boundary.
+ */
+export function canLogMeter(role: UserRole | null | undefined): boolean {
+  return role === 'inspector' || role === 'tyre_man' || role === 'reporter' || isAdminOrAbove(role)
+}
+
 /** Tyre records list - all roles with operational access. */
 export function canViewRecords(role: UserRole | null | undefined): boolean {
   return role === 'inspector' || role === 'tyre_man' || role === 'reporter' || isAdminOrAbove(role)

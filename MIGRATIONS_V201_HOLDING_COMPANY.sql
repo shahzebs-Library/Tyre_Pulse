@@ -24,6 +24,10 @@
 -- 1. Hierarchy column ---------------------------------------------------------
 ALTER TABLE public.organisations
   ADD COLUMN IF NOT EXISTS parent_organisation_id uuid REFERENCES public.organisations(id) ON DELETE SET NULL;
+-- Consent flag: an org must opt in before any holding company may claim it as a
+-- subsidiary. Prevents a parent Admin from absorbing an unrelated org's KPIs.
+ALTER TABLE public.organisations
+  ADD COLUMN IF NOT EXISTS holding_link_optin boolean NOT NULL DEFAULT false;
 CREATE INDEX IF NOT EXISTS idx_organisations_parent ON public.organisations (parent_organisation_id);
 
 -- 2. Cross-subsidiary transfers ----------------------------------------------
@@ -166,6 +170,10 @@ BEGIN
   IF NOT FOUND THEN RETURN jsonb_build_object('error','not_found'); END IF;
   IF v_child.id = v_parent THEN RETURN jsonb_build_object('error','cannot_link_self'); END IF;
   IF v_child.parent_organisation_id IS NOT NULL THEN RETURN jsonb_build_object('error','already_linked'); END IF;
+  -- Target must have explicitly opted in to being claimed as a subsidiary.
+  IF NOT COALESCE(v_child.holding_link_optin, false) THEN
+    RETURN jsonb_build_object('error','consent_required');
+  END IF;
   -- Cycle guard: the target must not be an ancestor of the caller.
   IF EXISTS (SELECT 1 FROM public.organisations WHERE id = v_parent AND parent_organisation_id = v_child.id) THEN
     RETURN jsonb_build_object('error','would_create_cycle');

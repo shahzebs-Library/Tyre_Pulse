@@ -486,10 +486,10 @@ function MainApp() {
                       <Route path="/materials"             element={<Safe><Materials /></Safe>} />
                       <Route path="/trip-replay"           element={<Safe><TripReplay /></Safe>} />
                       <Route path="/fleet-optimizer"       element={<Safe><FleetOptimizer /></Safe>} />
-                      <Route path="/customer-portal"       element={<Safe><CustomerPortal /></Safe>} />
-                      <Route path="/developer-portal"      element={<Safe><DeveloperPortal /></Safe>} />
-                      <Route path="/taas"                  element={<Safe><Taas /></Safe>} />
-                      <Route path="/marketplace"           element={<Safe><SupplierMarketplace /></Safe>} />
+                      <Route path="/customer-portal"       element={<Safe><RoleRoute allowed={['Admin','Manager','Director']}><CustomerPortal /></RoleRoute></Safe>} />
+                      <Route path="/developer-portal"      element={<Safe><RoleRoute allowed={['Admin','Manager','Director','Integration Admin']}><DeveloperPortal /></RoleRoute></Safe>} />
+                      <Route path="/taas"                  element={<Safe><RoleRoute allowed={['Admin','Manager','Director']}><Taas /></RoleRoute></Safe>} />
+                      <Route path="/marketplace"           element={<Safe><RoleRoute allowed={['Admin','Manager','Director']}><SupplierMarketplace /></RoleRoute></Safe>} />
                       <Route path="/ocr-scanner"           element={<Safe><OcrScanner /></Safe>} />
                       <Route path="/advanced-search"       element={<Safe><AdvancedSearch /></Safe>} />
                       <Route path="/onboarding-wizard"     element={<Safe><OnboardingWizard /></Safe>} />

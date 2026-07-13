@@ -988,6 +988,7 @@ export default function Accidents() {
     ['site', 'Site', r => r.site],
     ['country', 'Country', r => r.country],
     ['severity', 'Severity', r => canonSeverity(r.severity)],
+    ['case_state', 'State', r => isClosed(r) ? 'Closed' : 'Open'],
     ['status', 'Status', r => canonStatus(r.status)],
     ['closure_status', 'Closure', r => r.closure_status],
     ['responsible_party', 'Responsible', r => r.responsible_party],
@@ -1038,7 +1039,18 @@ export default function Accidents() {
   ]
   const exportCols    = EXPORT_FIELDS.map(f => f[0])
   const exportHeaders = EXPORT_FIELDS.map(f => f[1])
-  const exportPdfCols = EXPORT_FIELDS.map(([key, header]) => ({ key, header }))
+  // Excel keeps every column; the PDF uses a focused, readable subset (a 52-column
+  // landscape PDF is unusable) that still covers both OPEN and CLOSED cases with the
+  // key report details: state, status, liability, fault, repair, insurer + costs.
+  const PDF_KEYS = [
+    'incident_date', 'asset_no', 'site', 'severity', 'case_state', 'status',
+    'driver_name', 'fault_status', 'gcc_liability_ratio', 'repair_type',
+    'insurer', 'claim_amount', 'claim_approved_amount', 'net_cost',
+    'expected_release_date', 'release_date', 'delayed',
+  ]
+  const exportPdfCols = PDF_KEYS
+    .map(key => { const f = EXPORT_FIELDS.find(x => x[0] === key); return f ? { key, header: f[1] } : null })
+    .filter(Boolean)
   const exportRows = useMemo(
     () => filtered.map(r => {
       const o = {}

@@ -64,10 +64,11 @@ describe('accidents owner page - service layer', () => {
     expect(b._calls.range).toEqual([0, 999])
   })
 
-  it('reads the fleet vehicle picker from fleet_master ordered by asset_no', async () => {
+  it('reads the fleet vehicle picker from vehicle_fleet ordered by asset_no', async () => {
     h.state.result = { data: [{ asset_no: 'V-1', vehicle_type: 'Truck' }], error: null }
     const rows = await accidents.listAccidentFleet()
-    expect(h.state.last._table).toBe('fleet_master')
+    // vehicle_fleet is the real asset registry (fleet_master is empty)
+    expect(h.state.last._table).toBe('vehicle_fleet')
     expect(rows).toEqual([{ asset_no: 'V-1', vehicle_type: 'Truck' }])
   })
 

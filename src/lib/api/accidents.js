@@ -85,9 +85,11 @@ export function listAllAccidentsForPage({ country, max = 100000 } = {}) {
  * Replicates the page's `fleet_master` read (select/order) exactly.
  */
 export async function listAccidentFleet() {
+  // Assets live in vehicle_fleet (the legacy fleet_master table is empty), so the
+  // accident form's vehicle picker must read from there or it shows nothing.
   return unwrap(
     await supabase
-      .from('fleet_master')
+      .from('vehicle_fleet')
       .select('asset_no, vehicle_type, site, country')
       .order('asset_no'),
   )

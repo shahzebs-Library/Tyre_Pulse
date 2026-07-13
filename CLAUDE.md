@@ -1,5 +1,8 @@
 # CLAUDE.md
 
+> Project memory (canonical module map, single-source calc services, anti-duplication rules): @PROJECT_MEMORY.md
+> Read it before adding or changing any module.
+
 ## Mission
 
 Act as a senior software architect, senior product manager, senior engineer, senior UX designer, senior data analyst, and senior AI engineer simultaneously.

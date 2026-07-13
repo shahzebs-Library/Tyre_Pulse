@@ -11,6 +11,7 @@ import { blankAnswer, validateSubmission, isLayoutField, isFieldVisible, compute
 import { completeAssignment } from '../lib/api/checklistSchedules'
 import SignaturePad from '../components/SignaturePad'
 import ReferencePicker from '../components/checklist/ReferencePicker'
+import { safeHref, safeImageSrc } from '../lib/safeUrl'
 
 function isMissingRelation(err) {
   const m = String(err?.message || '').toLowerCase()
@@ -552,8 +553,8 @@ function PhotoField({ fileRef, photos, uploading, onPickPhoto, onRemovePhoto, co
       <div className="flex flex-wrap items-center gap-2">
         {(photos || []).map((url) => (
           <div key={url} className="relative group">
-            <a href={url} target="_blank" rel="noreferrer">
-              <img src={url} alt="Photo" className="h-16 w-16 object-cover rounded-lg border border-[var(--border-dim)] hover:border-green-500 transition-colors" />
+            <a href={safeHref(url)} target="_blank" rel="noreferrer">
+              <img src={safeImageSrc(url)} alt="Photo" className="h-16 w-16 object-cover rounded-lg border border-[var(--border-dim)] hover:border-green-500 transition-colors" />
             </a>
             <button
               type="button" onClick={() => onRemovePhoto(url)}

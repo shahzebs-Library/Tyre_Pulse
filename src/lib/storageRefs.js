@@ -1,4 +1,5 @@
 import { supabase } from './supabase'
+import { safeImageSrc } from './safeUrl'
 
 const REF_PREFIX = 'tp-storage://'
 const SIGNED_URL_TTL_SECONDS = 60 * 60
@@ -19,10 +20,15 @@ export function parseStorageRef(value) {
 export async function resolveStorageUrl(value) {
   if (!value) return null
   if (typeof value !== 'string') return null
-  if (value.startsWith('http') || value.startsWith('data:') || value.startsWith('blob:')) return value
+  // Direct URLs (http/https/data:image/blob) — pass through the scheme allowlist so
+  // a poisoned value (javascript:, data:text/html, …) can never reach an href/src.
+  if (value.startsWith('http') || value.startsWith('data:') || value.startsWith('blob:')) {
+    return safeImageSrc(value) ?? null
+  }
 
   const ref = parseStorageRef(value)
-  if (!ref) return value
+  // Not a tp-storage ref and not a recognised URL scheme → validate before returning.
+  if (!ref) return safeImageSrc(value) ?? null
 
   const { data, error } = await supabase.storage
     .from(ref.bucket)

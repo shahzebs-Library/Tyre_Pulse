@@ -12,6 +12,7 @@ const REFERENCE_ICON = { asset: Truck, site: MapPin, user: User }
 import { exportChecklistSubmissionPdf } from '../lib/exportUtils'
 import { useTenant } from '../contexts/TenantContext'
 import EntityApprovalPanel from '../components/workflow/EntityApprovalPanel'
+import { safeHref, safeImageSrc } from '../lib/safeUrl'
 
 const STATUS_BADGE = {
   submitted: 'bg-sky-900/40 text-sky-300 border border-sky-700/50',
@@ -301,8 +302,8 @@ export default function ChecklistSubmission() {
                     {r.photos.length > 0 && (
                       <div className="flex flex-wrap gap-2 mt-2">
                         {r.photos.map((url, i) => (
-                          <a key={`${r.id}-${i}`} href={url} target="_blank" rel="noreferrer">
-                            <img src={url} alt={`Photo ${i + 1}`} className="h-16 w-16 object-cover rounded-lg border border-[var(--border-dim)] hover:border-green-500 transition-colors" />
+                          <a key={`${r.id}-${i}`} href={safeHref(url)} target="_blank" rel="noreferrer">
+                            <img src={safeImageSrc(url)} alt={`Photo ${i + 1}`} className="h-16 w-16 object-cover rounded-lg border border-[var(--border-dim)] hover:border-green-500 transition-colors" />
                           </a>
                         ))}
                       </div>

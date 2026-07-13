@@ -39,18 +39,24 @@ export function listSupplierContracts({ country } = {}) {
   )
 }
 
-/** Warranty claims feeding the supplier scorecard, country-scoped. */
+/**
+ * Warranty claims feeding the supplier scorecard, country-scoped.
+ * `created_at` powers the scorecard's period-over-period trend bucketing.
+ */
 export function listScorecardWarrantyClaims({ country } = {}) {
   return applyCountry(
-    supabase.from('warranty_claims').select('id, supplier, brand, claim_status, credit_amount, country'),
+    supabase.from('warranty_claims').select('id, supplier, brand, claim_status, credit_amount, created_at, country'),
     country,
   )
 }
 
-/** Purchase orders feeding the supplier scorecard, country-scoped. */
+/**
+ * Purchase orders feeding the supplier scorecard, country-scoped.
+ * `order_date` powers the scorecard's period-over-period trend bucketing.
+ */
 export function listScorecardPurchaseOrders({ country } = {}) {
   return applyCountry(
-    supabase.from('purchase_orders').select('id, supplier_name, vendor_name, expected_delivery, actual_delivery, country'),
+    supabase.from('purchase_orders').select('id, supplier_name, vendor_name, order_date, expected_delivery, actual_delivery, country'),
     country,
   )
 }

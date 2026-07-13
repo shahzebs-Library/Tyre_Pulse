@@ -21,7 +21,7 @@ import {
   RefreshCw, ChevronDown, X, Plus, Edit3,
   BarChart3, DollarSign, Truck, Package, Target, Zap, ShieldCheck,
   ArrowUpRight, ArrowDownRight, Users, Calendar, FileCheck, Loader2,
-  SlidersHorizontal, Eye, Globe, MapPin, Hash, Upload, Lock,
+  SlidersHorizontal, Eye, Globe, MapPin, Hash, Upload, Lock, Flag, Gauge,
 } from 'lucide-react'
 import { SkeletonCards, SkeletonTable } from '../components/ui/Skeleton'
 import { useNavigate } from 'react-router-dom'
@@ -245,6 +245,57 @@ function CpkBadge({ cpk, currency }) {
   return (
     <span className={`text-xs font-mono font-semibold ${good ? 'text-emerald-400' : 'text-amber-400'}`}>
       {fmtCpk(cpk, currency)}
+    </span>
+  )
+}
+
+// ── Vendor lifecycle band pill (from supplierScorecard.lifecycleBand) ───────────
+const BAND_CONFIG = {
+  preferred:    { color: 'text-emerald-400', bg: 'bg-emerald-900/40', border: 'border-emerald-700', icon: Star,        label: 'Preferred' },
+  approved:     { color: 'text-blue-400',    bg: 'bg-blue-900/40',    border: 'border-blue-700',    icon: CheckCircle,  label: 'Approved' },
+  watch:        { color: 'text-amber-400',   bg: 'bg-amber-900/40',   border: 'border-amber-700',   icon: Eye,          label: 'Watch' },
+  probation:    { color: 'text-orange-400',  bg: 'bg-orange-900/40',  border: 'border-orange-700',  icon: ShieldCheck,  label: 'Probation' },
+  disqualified: { color: 'text-red-400',     bg: 'bg-red-900/40',     border: 'border-red-700',     icon: AlertTriangle,label: 'Disqualified' },
+  unknown:      { color: 'text-[var(--text-muted)]', bg: 'bg-[var(--input-bg)]', border: 'border-[var(--input-border)]', icon: Minus, label: 'Unscored' },
+}
+
+function BandPill({ band }) {
+  const cfg = BAND_CONFIG[band?.band] || BAND_CONFIG.unknown
+  const Icon = cfg.icon
+  return (
+    <span title={band?.label || cfg.label}
+      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium border ${cfg.bg} ${cfg.color} ${cfg.border}`}>
+      <Icon size={10} /> {cfg.label}
+    </span>
+  )
+}
+
+const GRADE_COLOR = {
+  A: 'bg-emerald-900/40 text-emerald-300 border-emerald-700',
+  B: 'bg-blue-900/40 text-blue-300 border-blue-700',
+  C: 'bg-amber-900/40 text-amber-300 border-amber-700',
+  D: 'bg-orange-900/40 text-orange-300 border-orange-700',
+  F: 'bg-red-900/40 text-red-300 border-red-700',
+}
+function GradeBadge({ grade }) {
+  return (
+    <span className={`inline-flex items-center justify-center w-6 h-6 rounded-md text-xs font-bold border ${GRADE_COLOR[grade] || GRADE_COLOR.F}`}>
+      {grade}
+    </span>
+  )
+}
+
+function TrendCell({ trend, delta }) {
+  const cfg = {
+    improving: { color: 'text-emerald-400', Icon: TrendingUp, label: 'Improving' },
+    declining: { color: 'text-red-400', Icon: TrendingDown, label: 'Declining' },
+    stable:    { color: 'text-[var(--text-muted)]', Icon: Minus, label: 'Stable' },
+  }[trend] || { color: 'text-[var(--text-muted)]', Icon: Minus, label: 'Stable' }
+  const { Icon } = cfg
+  return (
+    <span className={`inline-flex items-center gap-1 text-xs font-medium ${cfg.color}`} title={cfg.label}>
+      <Icon size={13} />
+      {delta != null ? `${delta > 0 ? '+' : ''}${delta}` : cfg.label}
     </span>
   )
 }
@@ -1385,36 +1436,96 @@ export default function SupplierManagement() {
                 <div key={l} className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-3"><p className="text-xs text-[var(--text-muted)]">{l}</p><p className="text-xl font-bold text-[var(--text-primary)]">{v}</p></div>
               ))}
             </div>
-            <p className="text-xs text-[var(--text-muted)]">{t('suppliers.scorecard.description')}</p>
+            {/* Band / grade summary (from lifecycleBand + scoreGrade) */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              {[
+                { label: 'Avg Score', value: scorecard.totals.avgScore, icon: Gauge, color: 'text-blue-400' },
+                { label: 'Preferred', value: scorecard.totals.preferredCount, icon: Award, color: 'text-emerald-400' },
+                { label: 'At Risk', value: scorecard.totals.atRiskCount, icon: ShieldCheck, color: 'text-orange-400' },
+                { label: 'Flagged', value: scorecard.totals.flaggedCount, icon: Flag, color: 'text-red-400' },
+              ].map(({ label, value, icon: Icon, color }) => (
+                <div key={label} className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-3">
+                  <div className="flex items-center gap-1.5 mb-0.5"><Icon size={13} className={color} /><p className="text-xs text-[var(--text-muted)]">{label}</p></div>
+                  <p className={`text-xl font-bold ${color}`}>{value}</p>
+                </div>
+              ))}
+            </div>
+            <p className="text-xs text-[var(--text-muted)]">
+              {t('suppliers.scorecard.description')} Grade, lifecycle band, warranty acceptance, price competitiveness and period-over-period trend are derived from actual tyre, warranty and purchase-order data. Invoice accuracy and returns-processing time are omitted (no source data).
+            </p>
             <div className="border border-[var(--input-border)] rounded-xl overflow-x-auto">
               <table className="w-full text-sm">
                 <thead className="bg-[var(--input-bg)]/60 text-[var(--text-muted)] text-xs">
                   <tr>
                     <th className="text-left px-3 py-2">{t('suppliers.scorecard.columns.rank')}</th><th className="text-left px-3 py-2">{t('suppliers.scorecard.columns.supplier')}</th>
+                    <th className="text-center px-3 py-2">Grade</th>
                     <th className="text-right px-3 py-2">{t('suppliers.scorecard.columns.score')}</th><th className="text-right px-3 py-2">{t('suppliers.scorecard.columns.tyres')}</th>
                     <th className="text-right px-3 py-2">{t('suppliers.scorecard.columns.spend')}</th><th className="text-right px-3 py-2">{t('suppliers.scorecard.columns.avgCpk')}</th>
-                    <th className="text-right px-3 py-2">{t('suppliers.scorecard.columns.failurePct')}</th><th className="text-right px-3 py-2">{t('suppliers.scorecard.columns.warrantyRec')}</th>
+                    <th className="text-right px-3 py-2">{t('suppliers.scorecard.columns.failurePct')}</th>
+                    <th className="text-right px-3 py-2">Acceptance</th>
+                    <th className="text-right px-3 py-2"><span className="inline-flex items-center gap-1"><Gauge size={11} /> Price</span></th>
                     <th className="text-right px-3 py-2">{t('suppliers.scorecard.columns.onTimePct')}</th>
+                    <th className="text-center px-3 py-2">Trend</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {scorecard.suppliers.length === 0 && <tr><td colSpan={9} className="px-3 py-6 text-center text-[var(--text-dim)]">{t('suppliers.scorecard.empty')}</td></tr>}
+                  {scorecard.suppliers.length === 0 && <tr><td colSpan={12} className="px-3 py-6 text-center text-[var(--text-dim)]">{t('suppliers.scorecard.empty')}</td></tr>}
                   {scorecard.suppliers.map((s) => (
                     <tr key={s.supplier} className="border-t border-[var(--input-border)]">
                       <td className="px-3 py-2 text-[var(--text-muted)]">{s.rank}</td>
-                      <td className="px-3 py-2 font-medium text-[var(--text-primary)]">{s.supplier}</td>
+                      <td className="px-3 py-2">
+                        <div className="flex flex-col gap-1">
+                          <span className="font-medium text-[var(--text-primary)]">{s.supplier}</span>
+                          <BandPill band={s.band} />
+                        </div>
+                      </td>
+                      <td className="px-3 py-2 text-center"><GradeBadge grade={s.grade} /></td>
                       <td className="px-3 py-2 text-right"><span className={`px-2 py-0.5 rounded font-semibold ${s.score >= 70 ? 'bg-green-900/30 text-green-400' : s.score >= 40 ? 'bg-amber-900/30 text-amber-400' : 'bg-red-900/30 text-red-400'}`}>{s.score}</span></td>
                       <td className="px-3 py-2 text-right text-[var(--text-muted)]">{s.tyreCount}</td>
                       <td className="px-3 py-2 text-right text-[var(--text-secondary)]">{fmtCurrency(s.totalSpend, activeCurrency)}</td>
                       <td className="px-3 py-2 text-right text-[var(--text-secondary)]">{s.avgCpk == null ? '-' : s.avgCpk.toFixed(3)}</td>
                       <td className="px-3 py-2 text-right text-[var(--text-secondary)]">{s.failureRate == null ? '-' : `${(s.failureRate * 100).toFixed(1)}%`}</td>
-                      <td className="px-3 py-2 text-right text-[var(--text-secondary)]">{s.warrantyRecoveryRate == null ? '-' : fmtCurrency(s.warrantyRecoveryRate, activeCurrency)}</td>
+                      <td className={`px-3 py-2 text-right font-medium ${s.warrantyClaims === 0 ? 'text-[var(--text-muted)]' : s.warrantyAcceptanceRate * 100 < 80 ? 'text-red-400' : 'text-emerald-400'}`}>
+                        {s.warrantyClaims === 0 ? '—' : `${(s.warrantyAcceptanceRate * 100).toFixed(0)}%`}
+                      </td>
+                      <td className={`px-3 py-2 text-right font-medium ${s.priceCompetitiveness >= 50 ? 'text-emerald-400' : 'text-amber-400'}`}>{s.priceCompetitiveness}</td>
                       <td className="px-3 py-2 text-right text-[var(--text-secondary)]">{s.onTimeRate == null ? '-' : `${(s.onTimeRate * 100).toFixed(0)}%`}</td>
+                      <td className="px-3 py-2 text-center"><TrendCell trend={s.trend} delta={s.trendDelta} /></td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
+
+            {/* Flagged issues — threshold-driven, actionable */}
+            {scorecard.suppliers.some((s) => s.flags && s.flags.length > 0) && (
+              <div className="bg-[var(--surface-1)] border border-red-800/50 rounded-xl overflow-hidden">
+                <div className="px-4 py-3 border-b border-[var(--input-border)] flex items-center gap-2">
+                  <Flag size={15} className="text-red-400" />
+                  <h4 className="text-sm font-semibold text-[var(--text-primary)]">Flagged Suppliers</h4>
+                  <span className="text-xs text-[var(--text-dim)] ml-auto">
+                    on-time &lt; {80}% · acceptance &lt; {80}% · failures &gt; {5}%
+                  </span>
+                </div>
+                <div className="divide-y divide-[var(--input-border)]/50">
+                  {scorecard.suppliers.filter((s) => s.flags && s.flags.length > 0).map((s) => (
+                    <div key={s.supplier} className="px-4 py-3 flex items-start gap-3">
+                      <BandPill band={s.band} />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-[var(--text-primary)] mb-1">{s.supplier}</p>
+                        <div className="flex flex-wrap gap-1.5">
+                          {s.flags.map((f) => (
+                            <span key={f} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] bg-red-900/20 text-red-300 border border-red-800">
+                              <AlertTriangle size={9} /> {f}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </motion.div>
         )}
       </AnimatePresence>

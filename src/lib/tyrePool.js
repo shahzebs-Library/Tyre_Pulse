@@ -119,3 +119,109 @@ export function summarizePool(records) {
     bySite,
   }
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Hot-spare POOL MANAGER helpers (V209). These operate on managed `tyre_pool`
+// entries (a curated hot-spare/buffer inventory with a tracked lifecycle),
+// NOT on raw `tyre_records`. Formulas ported verbatim from the original
+// tyre_saas Pool Manager so the numbers match one canonical definition and are
+// unit-tested in one place. Kept pure and side-effect free.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** The lifecycle status vocabulary for a managed pool entry (matches the DB CHECK). */
+export const POOL_ENTRY_STATUSES = ['available', 'reserved', 'deployed', 'maintenance', 'retired']
+
+/** The reasons a tyre may be held in a managed pool (matches the DB CHECK). */
+export const POOL_REASONS = [
+  'hot_spare', 'seasonal_rotation', 'buffer_stock', 'warranty_replacement', 'retreat_return',
+]
+
+/** Round to `dp` decimal places, guarding non-finite input. */
+function round(n, dp = 0) {
+  const f = 10 ** dp
+  return Math.round((Number(n) || 0) * f) / f
+}
+
+/**
+ * Headline counts + utilisation for a set of managed pool entries. Utilisation
+ * is the share of the pool currently deployed to vehicles; the UI flags a value
+ * above 80% (pool running thin) in red.
+ *
+ * @param {Array<{status?:string}>} entries
+ * @returns {{ total:number, available:number, deployed:number, maintenance:number,
+ *   reserved:number, retired:number, utilisationPct:number }}
+ */
+export function poolStats(entries) {
+  const list = Array.isArray(entries) ? entries : []
+  const count = (s) => list.filter((e) => nonEmpty(e?.status) === s).length
+  const total = list.length
+  const deployed = count('deployed')
+  return {
+    total,
+    available: count('available'),
+    deployed,
+    maintenance: count('maintenance'),
+    reserved: count('reserved'),
+    retired: count('retired'),
+    utilisationPct: total > 0 ? round((deployed / total) * 100, 1) : 0,
+  }
+}
+
+/**
+ * Available stock grouped by pool location, `[{ location, count }]` sorted by
+ * count desc. Only `available` entries count (they are the deployable spares);
+ * blank locations collapse into 'Unassigned'.
+ *
+ * @param {Array<{status?:string, pool_location?:string}>} entries
+ * @returns {Array<{location:string, count:number}>}
+ */
+export function byLocation(entries) {
+  const list = Array.isArray(entries) ? entries : []
+  const m = new Map()
+  for (const e of list) {
+    if (nonEmpty(e?.status) !== 'available') continue
+    const location = nonEmpty(e?.pool_location) || 'Unassigned'
+    m.set(location, (m.get(location) || 0) + 1)
+  }
+  return [...m.entries()]
+    .map(([location, count]) => ({ location, count }))
+    .sort((a, b) => b.count - a.count || a.location.localeCompare(b.location))
+}
+
+/**
+ * Pool replenishment recommendation. Industry rule-of-thumb: a spare pool of
+ * ~10% of fleet axles (4 axles/vehicle assumed), with a floor of 4 spares.
+ * The `gap` is how many more available spares are needed; the `status` bands
+ * it (adequate / low / critical) and `advice` is a ready-to-render sentence.
+ *
+ * @param {number} activeVehicleCount  count of active vehicles in scope
+ * @param {number} availableCount      count of currently-available pool spares
+ * @returns {{ recommended:number, gap:number, status:'adequate'|'low'|'critical',
+ *   advice:string, current:number }}
+ */
+export function replenishment(activeVehicleCount, availableCount) {
+  const vehicles = Math.max(0, Number(activeVehicleCount) || 0)
+  const available = Math.max(0, Number(availableCount) || 0)
+  const recommended = Math.max(4, round(vehicles * 4 * 0.10))
+  const gap = Math.max(0, recommended - available)
+  const status = gap === 0 ? 'adequate' : gap <= 4 ? 'low' : 'critical'
+  const advice = gap === 0
+    ? 'Pool is adequately stocked.'
+    : `Add ${gap} more ${gap === 1 ? 'tyre' : 'tyres'} to reach the recommended spare level of ${recommended}.`
+  return { recommended, gap, status, advice, current: available }
+}
+
+/**
+ * Map a return-inspection condition to the resulting pool status: a good tyre
+ * goes back to available stock, a worn one to maintenance, anything else
+ * (damaged / unusable) is retired out of the pool.
+ *
+ * @param {string} condition  'good' | 'worn' | anything else
+ * @returns {'available'|'maintenance'|'retired'}
+ */
+export function returnConditionToStatus(condition) {
+  const c = nonEmpty(condition)?.toLowerCase()
+  if (c === 'good') return 'available'
+  if (c === 'worn') return 'maintenance'
+  return 'retired'
+}

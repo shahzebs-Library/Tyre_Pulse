@@ -1,4 +1,4 @@
-export type UserRole = 'admin' | 'manager' | 'director' | 'inspector' | 'tyre_man' | 'reporter'
+export type UserRole = 'admin' | 'manager' | 'director' | 'inspector' | 'tyre_man' | 'reporter' | 'driver'
 
 /** Countries the platform operates in - mirrors the web SettingsContext list.
  *  A user's country drives data isolation and stamps their mobile-created rows. */
@@ -23,7 +23,7 @@ export interface Profile {
  */
 export function normaliseRole(raw: string | null | undefined): UserRole {
   const key = (raw ?? 'reporter').trim().toLowerCase().replace(/\s+/g, '_')
-  const valid: UserRole[] = ['admin', 'manager', 'director', 'inspector', 'tyre_man', 'reporter']
+  const valid: UserRole[] = ['admin', 'manager', 'director', 'inspector', 'tyre_man', 'reporter', 'driver']
   return valid.includes(key as UserRole) ? (key as UserRole) : 'reporter'
 }
 

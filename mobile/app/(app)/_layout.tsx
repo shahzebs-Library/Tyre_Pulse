@@ -133,7 +133,7 @@ export default function AppLayout() {
       <Tabs.Screen name="admin/sites"     options={{ href: null }} />
       <Tabs.Screen name="records/[id]"    options={{ href: null }} />
       <Tabs.Screen name="history"         options={{ href: null }} />
-      <Tabs.Screen name="meter-logs"      options={{ href: null }} />
+      <Tabs.Screen name="serial-search"   options={{ href: null }} />
       <Tabs.Screen name="checklists/index"                        options={{ href: null }} />
       <Tabs.Screen name="checklists/[templateId]"                 options={{ href: null }} />
       <Tabs.Screen name="checklists/approvals/index"              options={{ href: null }} />

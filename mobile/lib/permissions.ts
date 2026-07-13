@@ -24,8 +24,13 @@ export function canInspect(role: UserRole | null | undefined): boolean {
   return role === 'inspector' || role === 'tyre_man' || isAdminOrAbove(role)
 }
 
-/** Field staff may file an accident report. */
+/** File an accident report — Inspector + management (not Tyre Man / Driver). */
 export function canReportAccident(role: UserRole | null | undefined): boolean {
+  return role === 'inspector' || isAdminOrAbove(role)
+}
+
+/** Find a tyre by serial number — Inspector, Tyre Man, management. */
+export function canSearchSerial(role: UserRole | null | undefined): boolean {
   return role === 'inspector' || role === 'tyre_man' || isAdminOrAbove(role)
 }
 
@@ -61,7 +66,7 @@ export function canManageStock(role: UserRole | null | undefined): boolean {
  * unlocked + org boundary regardless.
  */
 export function canCountStock(role: UserRole | null | undefined): boolean {
-  return role === 'tyre_man' || isAdminOrAbove(role)
+  return role === 'inspector' || isAdminOrAbove(role)
 }
 
 /** Fleet KPI overview / reports - management only. */
@@ -105,7 +110,7 @@ export function canApproveChecklists(role: UserRole | null | undefined): boolean
  * operational role may do it; RLS still enforces the org/country boundary.
  */
 export function canLogMeter(role: UserRole | null | undefined): boolean {
-  return role === 'inspector' || role === 'tyre_man' || role === 'reporter' || isAdminOrAbove(role)
+  return role === 'inspector' || role === 'tyre_man' || role === 'reporter' || role === 'driver' || isAdminOrAbove(role)
 }
 
 /** Tyre records list - all roles with operational access. */
@@ -191,6 +196,16 @@ export const TAB_BAR: TabDescriptor[] = [
     icon: 'warning-outline',
     activeTint: '#dc2626',
     visible: canViewAccidents,
+    primary: true,
+  },
+  {
+    // Driver-only primary tab: their whole job is the daily meter log, so it
+    // sits in the bar for them. Everyone else reaches Meter Log from Home.
+    name: 'meter-logs',
+    labelKey: 'tabs.meter',
+    icon: 'speedometer-outline',
+    activeTint: '#0369a1',
+    visible: (role) => role === 'driver',
     primary: true,
   },
   {

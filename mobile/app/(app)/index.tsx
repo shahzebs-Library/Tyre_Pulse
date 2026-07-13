@@ -25,6 +25,7 @@ import { supabase } from '../../lib/supabase'
 import SyncBanner from '../../components/SyncBanner'
 import { SkeletonBox, SkeletonStatRow, SkeletonList } from '../../components/SkeletonLoader'
 import { isAdminOrAbove, UserRole } from '../../lib/types'
+import { canInspect } from '../../lib/permissions'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -60,22 +61,25 @@ function getQuickActions(role: UserRole | null): QuickAction[] {
   switch (role) {
     case 'inspector':
       return [
-        { icon: 'clipboard-outline',     label: 'New Inspection', sublabel: 'Start a tyre check',  route: '/(app)/inspection/new',       color: '#16a34a', bg: '#f0fdf4' },
+        { icon: 'clipboard-outline',     label: 'New Inspection', sublabel: 'Start a tyre check',   route: '/(app)/inspection/new',       color: '#16a34a', bg: '#f0fdf4' },
+        { icon: 'scan-outline',          label: 'Scan Asset',     sublabel: 'Barcode / QR code',    route: '/(app)/scanner',              color: '#0ea5e9', bg: '#f0f9ff' },
+        { icon: 'barcode-outline',       label: 'Serial Search',  sublabel: 'Find tyre by serial',  route: '/(app)/serial-search',        color: '#0ea5e9', bg: '#f0f9ff' },
         { icon: 'checkbox-outline',      label: 'Checklists',     sublabel: 'Fill & submit checks', route: '/(app)/checklists/index',     color: '#16a34a', bg: '#f0fdf4' },
-        { icon: 'scan-outline',          label: 'Scan Asset',     sublabel: 'Barcode / QR code',   route: '/(app)/scanner',              color: '#0ea5e9', bg: '#f0f9ff' },
-        { icon: 'speedometer-outline',   label: 'Meter Log',      sublabel: 'Daily odometer / hrs', route: '/(app)/meter-logs',           color: '#0369a1', bg: '#f0f9ff' },
-        { icon: 'layers-outline',        label: 'Tyre Records',   sublabel: 'Browse all records',  route: '/(app)/records/index',        color: '#3b82f6', bg: '#eff6ff' },
+        { icon: 'cube-outline',          label: 'Stock Count',    sublabel: 'Daily stock-take',     route: '/(app)/stock',                color: '#f59e0b', bg: '#fffbeb' },
         { icon: 'warning-outline',       label: 'Accident',       sublabel: 'File a report',        route: '/(app)/accident/report',      color: '#dc2626', bg: '#fff5f5' },
-        { icon: 'construct-outline',     label: 'Work Orders',    sublabel: 'Open actions',         route: '/(app)/workorders/index',     color: '#f59e0b', bg: '#fffbeb' },
+        { icon: 'speedometer-outline',   label: 'Meter Log',      sublabel: 'Daily odometer / hrs', route: '/(app)/meter-logs',           color: '#0369a1', bg: '#f0f9ff' },
       ]
     case 'tyre_man':
       return [
-        { icon: 'construct-outline',     label: 'Work Orders',    sublabel: 'Open actions',         route: '/(app)/workorders/index',     color: '#f59e0b', bg: '#fffbeb' },
-        { icon: 'clipboard-outline',     label: 'New Inspection', sublabel: 'Start a tyre check',  route: '/(app)/inspection/new',       color: '#16a34a', bg: '#f0fdf4' },
+        { icon: 'clipboard-outline',     label: 'New Inspection', sublabel: 'Start a tyre check',   route: '/(app)/inspection/new',       color: '#16a34a', bg: '#f0fdf4' },
+        { icon: 'scan-outline',          label: 'Scan Asset',     sublabel: 'Barcode / QR code',    route: '/(app)/scanner',              color: '#0ea5e9', bg: '#f0f9ff' },
+        { icon: 'barcode-outline',       label: 'Serial Search',  sublabel: 'Find tyre by serial',  route: '/(app)/serial-search',        color: '#0ea5e9', bg: '#f0f9ff' },
         { icon: 'checkbox-outline',      label: 'Checklists',     sublabel: 'Fill & submit checks', route: '/(app)/checklists/index',     color: '#16a34a', bg: '#f0fdf4' },
-        { icon: 'layers-outline',        label: 'Tyre Records',   sublabel: 'Browse all records',  route: '/(app)/records/index',        color: '#3b82f6', bg: '#eff6ff' },
-        { icon: 'scan-outline',          label: 'Scan Asset',     sublabel: 'Barcode / QR code',   route: '/(app)/scanner',              color: '#0ea5e9', bg: '#f0f9ff' },
         { icon: 'speedometer-outline',   label: 'Meter Log',      sublabel: 'Daily odometer / hrs', route: '/(app)/meter-logs',           color: '#0369a1', bg: '#f0f9ff' },
+      ]
+    case 'driver':
+      return [
+        { icon: 'speedometer-outline',   label: 'Meter Log',      sublabel: "Log today's km / hours", route: '/(app)/meter-logs',         color: '#0369a1', bg: '#f0f9ff' },
       ]
     case 'reporter':
       return [
@@ -281,17 +285,19 @@ export default function HomeScreen() {
           </View>
         )}
 
-        {/* ── Primary CTA ───────────────────────────────────────────────────── */}
-        <TouchableOpacity style={s.ctaButton} onPress={() => router.push('/(app)/inspection/new')} activeOpacity={0.88}>
-          <View style={s.ctaIcon}>
-            <Ionicons name="add-circle" size={28} color="#fff" />
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text style={s.ctaTitle}>{t('home.startInspection')}</Text>
-            <Text style={s.ctaSubtitle}>{t('home.startSubtitle')}</Text>
-          </View>
-          <Ionicons name={isRTL ? 'arrow-back-circle' : 'arrow-forward-circle'} size={28} color="rgba(255,255,255,0.6)" />
-        </TouchableOpacity>
+        {/* ── Primary CTA (inspect-capable roles only) ──────────────────────── */}
+        {canInspect(role) && (
+          <TouchableOpacity style={s.ctaButton} onPress={() => router.push('/(app)/inspection/new')} activeOpacity={0.88}>
+            <View style={s.ctaIcon}>
+              <Ionicons name="add-circle" size={28} color="#fff" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={s.ctaTitle}>{t('home.startInspection')}</Text>
+              <Text style={s.ctaSubtitle}>{t('home.startSubtitle')}</Text>
+            </View>
+            <Ionicons name={isRTL ? 'arrow-back-circle' : 'arrow-forward-circle'} size={28} color="rgba(255,255,255,0.6)" />
+          </TouchableOpacity>
+        )}
 
         {/* ── Quick Actions grid ─────────────────────────────────────────────── */}
         <View style={s.sectionHeader}>
@@ -345,17 +351,19 @@ export default function HomeScreen() {
           </View>
         )}
 
-        {/* ── Scan shortcut ─────────────────────────────────────────────────── */}
-        <TouchableOpacity style={s.scanButton} onPress={() => router.push('/(app)/scanner')} activeOpacity={0.85}>
-          <View style={s.scanIcon}>
-            <Ionicons name="scan" size={22} color="#16a34a" />
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text style={s.scanTitle}>{t('home.scanAsset')}</Text>
-            <Text style={s.scanSubtitle}>{t('home.scanSubtitle')}</Text>
-          </View>
-          <Ionicons name={isRTL ? 'chevron-back' : 'chevron-forward'} size={20} color="#94a3b8" />
-        </TouchableOpacity>
+        {/* ── Scan shortcut (inspect-capable roles only) ────────────────────── */}
+        {canInspect(role) && (
+          <TouchableOpacity style={s.scanButton} onPress={() => router.push('/(app)/scanner')} activeOpacity={0.85}>
+            <View style={s.scanIcon}>
+              <Ionicons name="scan" size={22} color="#16a34a" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={s.scanTitle}>{t('home.scanAsset')}</Text>
+              <Text style={s.scanSubtitle}>{t('home.scanSubtitle')}</Text>
+            </View>
+            <Ionicons name={isRTL ? 'chevron-back' : 'chevron-forward'} size={20} color="#94a3b8" />
+          </TouchableOpacity>
+        )}
 
         {/* ── Recent inspections ────────────────────────────────────────────── */}
         <View>

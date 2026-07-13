@@ -364,21 +364,113 @@ export const STATUS_ICONS: Record<AccidentStatus, string> = {
 }
 
 // ── Tyre position constants ───────────────────────────────────────────────────
+//
+// The REAL `vehicle_fleet.vehicle_type` values are equipment names (Tr-Mixer,
+// Generator, Wheel_Loader …), NOT generic "6-Wheeler" strings. Each real type is
+// mapped to a complete, correct position set below. Position ids keep the
+// L/R + axle-indexed scheme (FL1, RR4, AxleL2, Spare) so both the inspection
+// capture loop and the SVG diagram can reason about side + axle deterministically.
 
 export const TYRE_POSITIONS: Record<string, string[]> = {
+  // ── Real-fleet equipment configurations ────────────────────────────────────
+  // Transit / concrete mixer, 8x4: 4 steer + 8 drive + spare = 12 running tyres.
+  'Tr-Mixer':  ['FL1', 'FR1', 'FL2', 'FR2', 'RL1', 'RL2', 'RL3', 'RL4', 'RR1', 'RR2', 'RR3', 'RR4', 'Spare'],
+  // Heavy 6x4 truck (D Tanker, spider/line pump, placing boom, generic truck/crane):
+  // 2 steer + 8 drive (dual) + spare = 10 running tyres.
+  'Truck6x4':  ['FL', 'FR', 'RL1', 'RL2', 'RL3', 'RL4', 'RR1', 'RR2', 'RR3', 'RR4', 'Spare'],
+  // Bus, 6 running tyres (dual rear) + spare.
+  'Bus6':      ['FL', 'FR', 'RL1', 'RL2', 'RR1', 'RR2', 'Spare'],
+  // Light pickup / SUV, 4 + spare.
+  'Pickup':    ['FL', 'FR', 'RL', 'RR', 'Spare'],
+  // Wheeled plant (wheel/skid loader, forklift, reclaimer, excavator): 4 wheels,
+  // no spare carried.
+  'Loader4':   ['FL', 'FR', 'RL', 'RR'],
+  // Stationary / skid / small trailer-mounted equipment (generator, pumps,
+  // batch plant, chiller, ice plant, water treatment): 2-axle equipment frame.
+  'Equipment': ['AxleL1', 'AxleR1', 'AxleL2', 'AxleR2', 'Spare'],
+
+  // ── Generic N-Wheeler aliases (kept for manual entry + back-compat) ─────────
   '4-Wheeler':  ['FL', 'FR', 'RL', 'RR', 'Spare'],
   '6-Wheeler':  ['FL', 'FR', 'RL1', 'RL2', 'RR1', 'RR2', 'Spare'],
   '8-Wheeler':  ['FL', 'FR', 'RL1', 'RL2', 'RL3', 'RR1', 'RR2', 'RR3', 'Spare'],
   '10-Wheeler': ['FL', 'FR', 'RL1', 'RL2', 'RL3', 'RR1', 'RR2', 'RR3', 'SL', 'SR'],
-  'Trailer':    ['AxleL1', 'AxleL2', 'AxleR1', 'AxleR2', 'Spare'],
+  'Trailer':    ['AxleL1', 'AxleR1', 'AxleL2', 'AxleR2', 'Spare'],
   'Default':    ['FL', 'FR', 'RL1', 'RL2', 'RR1', 'RR2', 'Spare'],
 }
 
-export function getPositionsForVehicle(vehicleType: string): string[] {
-  const key = Object.keys(TYRE_POSITIONS).find(k =>
-    vehicleType?.toLowerCase().includes(k.toLowerCase().replace('-wheeler', ''))
-  )
-  return TYRE_POSITIONS[key ?? 'Default']
+/** Collapse a vehicle-type string to a comparison key: lowercase, no spaces/-/_. */
+function normalizeVehicleType(raw: string | null | undefined): string {
+  return (raw ?? '').toLowerCase().replace(/[\s\-_]+/g, '')
+}
+
+/**
+ * Maps normalized real/manual vehicle-type names → a TYRE_POSITIONS config key.
+ * Keys are already normalized (no spaces/dashes). Matched first by exact
+ * equality, then by longest-substring, so "spiderpump" wins over "pump".
+ */
+const VEHICLE_TYPE_ALIASES: Record<string, string> = {
+  // Transit / concrete mixer → 12-tyre 8x4
+  trmixer: 'Tr-Mixer', mixer: 'Tr-Mixer', transitmixer: 'Tr-Mixer',
+  transit: 'Tr-Mixer', concretemixer: 'Tr-Mixer', tm: 'Tr-Mixer',
+  // Heavy 6x4 trucks & truck-mounted plant → 10-tyre truck
+  dtanker: 'Truck6x4', tanker: 'Truck6x4', watertanker: 'Truck6x4', fueltanker: 'Truck6x4',
+  spiderpump: 'Truck6x4', linepump: 'Truck6x4', placingboom: 'Truck6x4',
+  boom: 'Truck6x4', concretepump: 'Truck6x4', boompump: 'Truck6x4',
+  truck: 'Truck6x4', crane: 'Truck6x4', mixertruck: 'Truck6x4',
+  // Bus
+  bus: 'Bus6', coach: 'Bus6', minibus: 'Bus6',
+  // Light vehicles
+  pickup: 'Pickup', pickuptruck: 'Pickup', suv: 'Pickup', car: 'Pickup', van: 'Pickup',
+  // Wheeled plant → 4 wheels, no spare
+  wheelloader: 'Loader4', skidloader: 'Loader4', skidsteer: 'Loader4', loader: 'Loader4',
+  forklift: 'Loader4', reclaimer: 'Loader4', excavator: 'Loader4', backhoe: 'Loader4',
+  // Stationary / skid / trailer-mounted equipment → 2-axle equipment frame
+  generator: 'Equipment', genset: 'Equipment', pumps: 'Equipment', pump: 'Equipment',
+  stationarypump: 'Equipment', btplant: 'Equipment', batchplant: 'Equipment',
+  batchingplant: 'Equipment', chiller: 'Equipment', iceplant: 'Equipment', icemaker: 'Equipment',
+  watertreatmentplant: 'Equipment', treatmentplant: 'Equipment', waterplant: 'Equipment',
+  compressor: 'Equipment', towerlight: 'Equipment', lighttower: 'Equipment', silo: 'Equipment',
+  // Generic
+  trailer: 'Trailer',
+}
+
+/**
+ * Resolves a fleet vehicle_type to its complete tyre-position set.
+ *
+ * Robust matching order:
+ *   1. exact TYRE_POSITIONS config key (normalized)
+ *   2. exact alias table hit
+ *   3. longest-substring alias hit (handles compound names)
+ *   4. explicit N-Wheeler number in the name
+ *   5. safe Default (only when truly unknown)
+ */
+export function getPositionsForVehicle(vehicleType: string | null | undefined): string[] {
+  const norm = normalizeVehicleType(vehicleType)
+  if (!norm) return TYRE_POSITIONS['Default']
+
+  // 1. exact config key (e.g. "Pickup" → "pickup", "Trailer" → "trailer")
+  for (const key of Object.keys(TYRE_POSITIONS)) {
+    if (normalizeVehicleType(key) === norm) return TYRE_POSITIONS[key]
+  }
+
+  // 2. exact alias
+  const exact = VEHICLE_TYPE_ALIASES[norm]
+  if (exact) return TYRE_POSITIONS[exact]
+
+  // 3. longest-substring alias (so "spiderpumptruck" hits "spiderpump" not "pump")
+  const aliasKeys = Object.keys(VEHICLE_TYPE_ALIASES).sort((a, b) => b.length - a.length)
+  for (const alias of aliasKeys) {
+    if (norm.includes(alias)) return TYRE_POSITIONS[VEHICLE_TYPE_ALIASES[alias]]
+  }
+
+  // 4. explicit wheel count in the name
+  if (norm.includes('10')) return TYRE_POSITIONS['10-Wheeler']
+  if (norm.includes('8'))  return TYRE_POSITIONS['8-Wheeler']
+  if (norm.includes('6'))  return TYRE_POSITIONS['6-Wheeler']
+  if (norm.includes('4'))  return TYRE_POSITIONS['4-Wheeler']
+
+  // 5. safe fallback
+  return TYRE_POSITIONS['Default']
 }
 
 export function emptyTyrePosition(position: string): TyrePositionData {

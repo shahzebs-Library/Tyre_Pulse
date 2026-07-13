@@ -298,6 +298,33 @@ function TrailerBody() {
   )
 }
 
+// ── Generic equipment body (used by the programmatic fallback layout) ──────────
+interface GenericBodyProps { chassisTop: number; chassisBot: number; axleYs: number[] }
+function GenericBody({ chassisTop, chassisBot, axleYs }: GenericBodyProps) {
+  const h = Math.max(0, chassisBot - chassisTop)
+  return (
+    <G>
+      <Ellipse cx={100} cy={chassisBot + 12} rx={54} ry={7} fill="rgba(0,0,0,0.2)" />
+      {/* Axles - drawn first so the chassis overlays their centre span */}
+      {axleYs.map((y, i) => (
+        <Line key={i} x1={36} y1={y} x2={164} y2={y}
+          stroke="#334155" strokeWidth={3} opacity={0.6} strokeLinecap="round" />
+      ))}
+      {/* Cab / front marker */}
+      <Rect x={70} y={chassisTop - 16} width={60} height={18} rx={5}
+        fill="url(#truckCab)" stroke="#1e293b" strokeWidth={0.6} />
+      <Rect x={78} y={chassisTop - 12} width={44} height={7} rx={2} fill="url(#glass)" opacity={0.8} />
+      {/* Chassis / equipment frame */}
+      <Rect x={72} y={chassisTop} width={56} height={h} rx={7}
+        fill="url(#truckCargo)" stroke="#475569" strokeWidth={1} />
+      <Rect x={72} y={chassisTop} width={5} height={h} rx={2} fill="#475569" opacity={0.7} />
+      <Rect x={123} y={chassisTop} width={5} height={h} rx={2} fill="#475569" opacity={0.7} />
+      <Line x1={100} y1={chassisTop + 4} x2={100} y2={chassisBot - 4}
+        stroke="#475569" strokeWidth={1} opacity={0.5} />
+    </G>
+  )
+}
+
 // ── Layout definitions ─────────────────────────────────────────────────────────
 interface TyreLayoutItem {
   id: string; x: number; y: number; w: number; h: number
@@ -306,7 +333,7 @@ interface TyreLayoutItem {
 interface VehicleLayout {
   viewH: number
   Body: React.ComponentType<any>
-  bodyProps?: TruckBodyProps
+  bodyProps?: Record<string, any>
   tyres: TyreLayoutItem[]
 }
 
@@ -382,23 +409,102 @@ const LAYOUTS: Record<string, VehicleLayout> = {
   },
 }
 
-function resolveLayout(vehicleType: string): string {
-  const s = (vehicleType ?? '').toLowerCase()
-  if (s.includes('10'))      return '10w'
-  if (s.includes('8'))       return '8w'
-  if (s.includes('6'))       return '6w'
-  if (s.includes('4'))       return '4w'
-  if (s.includes('trailer')) return 'trailer'
-  return '6w'
+/**
+ * Picks a hand-drawn layout ONLY when its tyre-id set is exactly the positions
+ * we were asked to render (same ids, same count). Anything else — a 12-tyre
+ * mixer, a 10-tyre 6x4, a 4-wheel loader with no spare — falls through to the
+ * generic builder so every position is guaranteed a coordinate.
+ */
+function pickExactHardLayout(positions: string[]): string | null {
+  if (!positions.length) return null
+  const want = new Set(positions)
+  for (const [key, layout] of Object.entries(LAYOUTS)) {
+    if (layout.tyres.length !== want.size) continue
+    if (layout.tyres.every(t => want.has(t.id))) return key
+  }
+  return null
 }
 
-// Stationary / non-wheeled equipment (generator, chiller, ice/batch plant,
-// reclaimer …) has NO tyres — show a clear state instead of a fake layout.
-const NO_TYRE_EQUIPMENT = ['generator', 'genset', 'chiller', 'ice plant', 'ice-plant', 'bt-plant', 'bt plant', 'batch', 'reclaimer', 'compressor', 'tower light', 'light tower']
-export function isTyrelessEquipment(vehicleType?: string | null): boolean {
-  if (!vehicleType) return false
-  const s = String(vehicleType).toLowerCase().trim()
-  return NO_TYRE_EQUIPMENT.some(k => s.includes(k))
+// ── Generic programmatic layout ────────────────────────────────────────────────
+// Any position set without a bespoke layout is laid out here: two vertical wheel
+// columns (left/right) with steer axles at the top and spares along the bottom.
+// The SVG viewBox height grows with the axle count, so 4- and 12-tyre rigs both fit.
+function trailingAxleNum(id: string): number {
+  const m = id.match(/(\d+)\s*$/)
+  return m ? parseInt(m[1], 10) : 0
+}
+function sideOfPosition(id: string): 'left' | 'right' | 'spare' {
+  const u = id.toUpperCase()
+  if (u.includes('SPARE') || u === 'SP') return 'spare'
+  // Strip the "AXLE" token first — it contains an 'L' that would otherwise
+  // mis-classify right-side ids like "AxleR1" as left.
+  const s = u.replace(/AXLE/g, '')
+  // Rear-left ids ("RL2") carry an L; rear-right ("RR2") carry no L → check L first.
+  if (s.includes('L')) return 'left'
+  if (s.includes('R')) return 'right'
+  return 'left'
+}
+// Steer/front axles (ids starting with F) sort above rear axles.
+function axleGroupRank(id: string): number {
+  return /^f/i.test(id) ? 0 : 1
+}
+function shortTyreLabel(id: string): string {
+  if (/spare/i.test(id)) return 'SP'
+  return id.replace(/axle/i, '')
+}
+
+function buildGenericLayout(positions: string[]): VehicleLayout {
+  const left: string[] = []
+  const right: string[] = []
+  const spares: string[] = []
+  positions.forEach(id => {
+    const side = sideOfPosition(id)
+    if (side === 'spare') spares.push(id)
+    else if (side === 'right') right.push(id)
+    else left.push(id)
+  })
+
+  const cmp = (a: string, b: string) =>
+    (axleGroupRank(a) - axleGroupRank(b)) ||
+    (trailingAxleNum(a) - trailingAxleNum(b)) ||
+    a.localeCompare(b)
+  left.sort(cmp)
+  right.sort(cmp)
+
+  const startY = 34
+  const rowGap = 40
+  const tyreW  = 20
+  const tyreH  = 32
+  const leftX  = 26   // tyre centre 36
+  const rightX = 154  // tyre centre 164
+  const maxRows = Math.max(left.length, right.length, 1)
+
+  const tyres: TyreLayoutItem[] = []
+  left.forEach((id, i) => tyres.push({
+    id, x: leftX, y: startY + i * rowGap, w: tyreW, h: tyreH, label: shortTyreLabel(id),
+  }))
+  right.forEach((id, i) => tyres.push({
+    id, x: rightX, y: startY + i * rowGap, w: tyreW, h: tyreH, label: shortTyreLabel(id),
+  }))
+
+  const chassisTop = 20
+  const chassisBot = startY + (maxRows - 1) * rowGap + tyreH
+  const axleYs: number[] = []
+  for (let i = 0; i < maxRows; i++) axleYs.push(startY + i * rowGap + tyreH / 2)
+
+  // Spares laid out horizontally along the bottom, centred on x = 100.
+  const spW = 38, spH = 11, spGap = 6
+  const spareY = chassisBot + 16
+  const totalW = spares.length * spW + Math.max(0, spares.length - 1) * spGap
+  const spStartX = 100 - totalW / 2
+  spares.forEach((id, k) => tyres.push({
+    id, x: spStartX + k * (spW + spGap), y: spareY, w: spW, h: spH,
+    label: shortTyreLabel(id), horizontal: true,
+  }))
+
+  const viewH = spares.length ? spareY + spH + 10 : chassisBot + 14
+
+  return { viewH, Body: GenericBody, bodyProps: { chassisTop, chassisBot, axleYs }, tyres }
 }
 
 // ── Component ──────────────────────────────────────────────────────────────────
@@ -414,8 +520,12 @@ interface Props {
 export default function VehicleTyreDiagram({
   vehicleType, positions, tyreData, selectedPosition, onPositionPress, width = 320,
 }: Props) {
-  const layoutKey = resolveLayout(vehicleType)
-  const layout    = LAYOUTS[layoutKey] ?? LAYOUTS['6w']
+  // Use a bespoke hand-drawn layout only when it exactly matches the positions;
+  // otherwise build one programmatically so every position is guaranteed to render.
+  const layout = useMemo<VehicleLayout>(() => {
+    const hardKey = pickExactHardLayout(positions)
+    return hardKey ? LAYOUTS[hardKey] : buildGenericLayout(positions)
+  }, [positions.join('|')])
   const { viewH, Body, bodyProps, tyres } = layout
 
   // SVG coordinate space is 220 units wide; scale to requested pixel width.
@@ -457,14 +567,14 @@ export default function VehicleTyreDiagram({
     }
   }
 
-  // Equipment without tyres → clear state instead of a fake 6-wheeler.
-  if (isTyrelessEquipment(vehicleType)) {
+  // Nothing to render (no positions supplied) → honest empty state.
+  if (positions.length === 0) {
     return (
       <View style={[styles.container, { paddingVertical: 28, alignItems: 'center' }]}>
-        <Text style={{ fontSize: 30 }}>🏭</Text>
-        <Text style={{ fontSize: 14, fontWeight: '700', color: '#0f172a', marginTop: 6 }}>{vehicleType || 'Equipment'}</Text>
-        <Text style={{ fontSize: 12, color: '#64748b', marginTop: 2, textAlign: 'center' }}>
-          Stationary equipment — no tyres to inspect.
+        <Text style={{ fontSize: 30 }}>🛞</Text>
+        <Text style={{ fontSize: 14, fontWeight: '700', color: '#e2e8f0', marginTop: 6 }}>{vehicleType || 'Vehicle'}</Text>
+        <Text style={{ fontSize: 12, color: '#94a3b8', marginTop: 2, textAlign: 'center' }}>
+          No tyre positions to display.
         </Text>
       </View>
     )

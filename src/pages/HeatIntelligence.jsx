@@ -1,34 +1,51 @@
 /**
- * HeatIntelligence (route /heat-intelligence) — tyre thermal monitoring &
- * overheating detection. Captures timestamped tyre temperature readings per
- * asset/position (manual, telematics, or infrared gun) and turns them into
- * operational intelligence: severity classification, ranked hotspots, and a
- * per-position latest snapshot. Overheating is a leading indicator of bearing
- * failure, dragging brakes, chronic under-inflation, and overload — so every
- * reading is org-isolated and country-scoped.
+ * HeatIntelligence (route /heat-intelligence) — GCC Desert-Heat intelligence.
  *
- * Runs on the new `tyre_temperature_readings` table (V188). Real data, KPI
- * tiles, a hotspots attention panel, a latest-per-position snapshot, filters,
- * search, create/edit modal, delete confirm, Excel/PDF export, and
- * loading/empty/error/not-provisioned states throughout. Classification and
- * roll-ups live in the pure `src/lib/heatIntelligence.js` helpers.
+ * Five tabs, all on real data, no fabrication:
+ *   • Conditions        — per-city climatology: ambient/road hero, severity +
+ *                         advisory, all-city ambient bars, Gay-Lussac pressure
+ *                         rise, and the desert heat-safety protocol.
+ *   • Fleet blowout risk — every installed `tyre_records` tyre scored 0–100 for
+ *                         blowout risk (tread · pressure · heat · age · load),
+ *                         band tiles, fleet risk score, ranked at-risk cards.
+ *   • Pressure calculator — Gay-Lussac hot-pressure projection across four
+ *                         times of day for a cold inflation pressure.
+ *   • Desert routes     — the 10 GCC desert corridors enriched with today's
+ *                         ambient/road and risk-appropriate pre-trip checks.
+ *   • Temperature log   — the manual thermal-reading logger (create/edit/delete,
+ *                         hotspots, latest-per-position, filters, export) on the
+ *                         `tyre_temperature_readings` table.
+ *
+ * All engineering constants and formulas live in the pure, unit-tested
+ * `src/lib/heatIntelligence.js`. Blowout scoring reads the canonical
+ * `tyre_records` table (no new table). Loading / empty / error /
+ * not-provisioned states throughout.
  */
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import {
+  Chart as ChartJS, CategoryScale, LinearScale, BarElement, Tooltip, Legend, Title,
+} from 'chart.js'
+import { Bar } from 'react-chartjs-2'
+import {
   Thermometer, ThermometerSun, Flame, Activity, TrendingUp, Truck,
-  AlertTriangle, ShieldAlert, Search, X, Filter, FileSpreadsheet, FileText,
-  Plus, Pencil, Trash2,
+  AlertTriangle, ShieldAlert, ShieldCheck, Search, X, Filter, FileSpreadsheet,
+  FileText, Plus, Pencil, Trash2, Sun, Wind, MapPin, Gauge, Calculator,
+  Navigation,
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
 import { useSettings } from '../contexts/SettingsContext'
 import {
   listTemperatureReadings, createTemperatureReading,
-  updateTemperatureReading, deleteTemperatureReading,
+  updateTemperatureReading, deleteTemperatureReading, listTyresForHeatRisk,
 } from '../lib/api/heatIntelligence'
 import {
   summariseHeat, latestPerPosition, hotspots, classifyTemp, tempOverAmbient,
+  GCC_CITIES, currentConditions, assessFleetRisk, pressureByTimeOfDay,
+  enrichRoutes, correlationFromReadings,
 } from '../lib/heatIntelligence'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
+
+ChartJS.register(CategoryScale, LinearScale, BarElement, Tooltip, Legend, Title)
 
 const EMPTY_FORM = {
   asset_no: '', tyre_position: '', tyre_serial: '', temperature_c: '', ambient_c: '',
@@ -43,9 +60,36 @@ const STATUS_META = {
   normal: { label: 'Normal', badge: 'bg-emerald-900/30 text-emerald-300 border-emerald-800/50', dot: 'bg-emerald-400', icon: Thermometer },
 }
 
+/** Blowout-risk band styling (5 levels from blowoutRiskScore). */
+const RISK_META = {
+  extreme: { label: 'Extreme', badge: 'bg-red-900/50 text-red-200 border-red-700/60', card: 'border-red-800/60 bg-red-950/30', pill: 'bg-red-600 text-white', tone: 'text-red-400' },
+  high: { label: 'High', badge: 'bg-orange-900/40 text-orange-200 border-orange-700/50', card: 'border-orange-800/50 bg-orange-950/20', pill: 'bg-orange-500 text-white', tone: 'text-orange-400' },
+  elevated: { label: 'Elevated', badge: 'bg-amber-900/30 text-amber-200 border-amber-700/50', card: 'border-amber-800/40 bg-amber-950/10', pill: 'bg-amber-500 text-slate-900', tone: 'text-amber-400' },
+  medium: { label: 'Medium', badge: 'bg-sky-900/30 text-sky-200 border-sky-700/50', card: 'border-sky-800/40', pill: 'bg-sky-500 text-white', tone: 'text-sky-400' },
+  low: { label: 'Low', badge: 'bg-emerald-900/30 text-emerald-200 border-emerald-700/50', card: 'border-emerald-800/40', pill: 'bg-emerald-500 text-white', tone: 'text-emerald-400' },
+}
+
+/** Ambient severity → hero panel styling. */
+const SEVERITY_META = {
+  extreme: { label: 'Extreme', panel: 'border-red-800/60 bg-red-950/30', pill: 'bg-red-600 text-white' },
+  very_high: { label: 'Very high', panel: 'border-orange-800/50 bg-orange-950/20', pill: 'bg-orange-500 text-white' },
+  high: { label: 'High', panel: 'border-amber-800/50 bg-amber-950/10', pill: 'bg-amber-500 text-slate-900' },
+  moderate: { label: 'Moderate', panel: 'border-sky-800/40', pill: 'bg-sky-500 text-white' },
+  low: { label: 'Low', panel: 'border-emerald-800/40', pill: 'bg-emerald-500 text-white' },
+}
+
+const TABS = [
+  ['conditions', 'Conditions', Sun],
+  ['risk', 'Fleet blowout risk', Flame],
+  ['calculator', 'Pressure calculator', Gauge],
+  ['routes', 'Desert routes', Navigation],
+  ['log', 'Temperature log', Thermometer],
+]
+
 const fmtC = (v) => (v == null || v === '' ? '—' : `${Number(v).toLocaleString()} °C`)
 const fmtBar = (v) => (v == null || v === '' ? '—' : `${Number(v).toLocaleString()} bar`)
 const fmtNum = (v, unit) => (v == null || v === '' ? '—' : `${Number(v).toLocaleString()}${unit ? ` ${unit}` : ''}`)
+const barColorFor = (t) => (t >= 45 ? '#dc2626' : t >= 40 ? '#ea580c' : t >= 35 ? '#f59e0b' : t >= 28 ? '#eab308' : '#38bdf8')
 
 function fmtDateTime(v) {
   if (!v) return '—'
@@ -82,11 +126,22 @@ function TempCell({ reading }) {
 
 export default function HeatIntelligence() {
   const { activeCountry } = useSettings()
+
+  const [tab, setTab] = useState('conditions')
+  const [city, setCity] = useState('Dubai')
+  const [coldPsi, setColdPsi] = useState('105')
+
+  // Manual-logger data
   const [rows, setRows] = useState(null)
   const [error, setError] = useState('')
   const [notProvisioned, setNotProvisioned] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
   const [updatedAt, setUpdatedAt] = useState(null)
+
+  // Installed-fleet data (blowout risk)
+  const [tyres, setTyres] = useState(null)
+  const [tyresError, setTyresError] = useState('')
+  const [tyresLoading, setTyresLoading] = useState(false)
 
   const [assetFilter, setAssetFilter] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
@@ -117,8 +172,66 @@ export default function HeatIntelligence() {
     }
   }, [activeCountry])
 
-  useEffect(() => { load() }, [load])
+  const loadTyres = useCallback(async () => {
+    setTyresLoading(true); setTyresError('')
+    try {
+      const data = await listTyresForHeatRisk({ country: activeCountry })
+      setTyres(Array.isArray(data) ? data : [])
+    } catch (err) {
+      setTyresError(err?.message || 'Could not load fleet tyres for risk assessment.')
+      setTyres([])
+    } finally {
+      setTyresLoading(false)
+    }
+  }, [activeCountry])
 
+  useEffect(() => { load() }, [load])
+  useEffect(() => { loadTyres() }, [loadTyres])
+
+  const refreshAll = useCallback(() => { load(); loadTyres() }, [load, loadTyres])
+
+  // ── Derived: climatology, fleet risk, calculator, routes, correlation ──────
+  const conditions = useMemo(() => currentConditions(city), [city])
+  const fleetRisk = useMemo(
+    () => assessFleetRisk(tyres || [], { ambient_c: conditions.ambient_c, road_c: conditions.road_surface_c }),
+    [tyres, conditions],
+  )
+  const calcPoints = useMemo(
+    () => pressureByTimeOfDay(Number(coldPsi) || 0, 25, conditions.ambient_c),
+    [coldPsi, conditions],
+  )
+  const routes = useMemo(() => enrichRoutes(), [])
+  const correlation = useMemo(() => correlationFromReadings(rows || []), [rows])
+
+  const cityBarData = useMemo(() => {
+    const entries = Object.entries(conditions.all_city_temps)
+    return {
+      labels: entries.map(([c]) => c),
+      datasets: [{
+        label: `Ambient °C — ${conditions.month}`,
+        data: entries.map(([, t]) => t),
+        backgroundColor: entries.map(([, t]) => barColorFor(t)),
+        borderRadius: 4,
+        maxBarThickness: 26,
+      }],
+    }
+  }, [conditions])
+
+  const cityBarOptions = useMemo(() => ({
+    indexAxis: 'y',
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: { display: false },
+      tooltip: { callbacks: { label: (c) => `${c.parsed.x} °C` } },
+    },
+    scales: {
+      x: { grid: { color: 'rgba(148,163,184,0.15)' }, ticks: { color: 'var(--text-muted)', callback: (v) => `${v}°` } },
+      y: { grid: { display: false }, ticks: { color: 'var(--text-muted)' } },
+    },
+  }), [])
+
+  // ── Manual-logger roll-ups ─────────────────────────────────────────────────
   const summary = useMemo(() => summariseHeat(rows || []), [rows])
   const latest = useMemo(() => latestPerPosition(rows || []), [rows])
   const hot = useMemo(() => hotspots(rows || []), [rows])
@@ -151,7 +264,6 @@ export default function HeatIntelligence() {
     })
   }, [rows, assetFilter, positionFilter, countryFilter, statusFilter, search])
 
-  // ── KPIs ─────────────────────────────────────────────────────────────────
   const kpis = [
     { label: 'Readings logged', value: summary.totalReadings, icon: Activity, tone: 'text-[var(--text-primary)]' },
     { label: 'Critical', value: summary.criticalCount, icon: Flame, tone: 'text-red-400' },
@@ -161,7 +273,7 @@ export default function HeatIntelligence() {
     { label: 'Avg temperature', value: summary.avgTempC == null ? '—' : fmtC(Math.round(summary.avgTempC * 10) / 10), icon: TrendingUp, tone: 'text-green-400' },
   ]
 
-  // ── Export ───────────────────────────────────────────────────────────────
+  // ── Log export ─────────────────────────────────────────────────────────────
   const EXPORT_COLS = ['asset_no', 'tyre_position', 'tyre_serial', 'temperature_c', 'ambient_c', 'rise_c', 'pressure_bar', 'speed_kmh', 'threshold_c', 'status', 'location', 'recorded_at', 'notes']
   const EXPORT_HEADERS = ['Asset', 'Position', 'Serial', 'Temp (°C)', 'Ambient (°C)', 'Rise (°C)', 'Pressure (bar)', 'Speed (km/h)', 'Threshold (°C)', 'Status', 'Location', 'Recorded', 'Notes']
   const exportRows = filtered.map((r) => ({
@@ -178,6 +290,24 @@ export default function HeatIntelligence() {
     location: r.location || '',
     recorded_at: r.recorded_at || '',
     notes: r.notes || '',
+  }))
+
+  // ── Fleet-risk export ───────────────────────────────────────────────────────
+  const RISK_COLS = ['serial', 'asset_no', 'site', 'position', 'brand', 'size', 'risk_score', 'risk_level', 'road_surface_temp_c', 'target_psi', 'factors', 'action']
+  const RISK_HEADERS = ['Serial', 'Asset', 'Site', 'Position', 'Brand', 'Size', 'Risk score', 'Risk level', 'Road °C', 'Target PSI (ref)', 'Contributing factors', 'Top action']
+  const riskExportRows = (fleetRisk.high_risk_tyres || []).map((t) => ({
+    serial: t.serial || '',
+    asset_no: t.asset_no || '',
+    site: t.site || '',
+    position: t.position || '',
+    brand: t.brand || '',
+    size: t.size || '',
+    risk_score: t.risk_score,
+    risk_level: RISK_META[t.risk_level]?.label || t.risk_level,
+    road_surface_temp_c: t.road_surface_temp_c,
+    target_psi: t.target_psi,
+    factors: (t.contributing_factors || []).map((f) => `${f.factor} (${f.value})`).join('; '),
+    action: t.recommended_actions?.[0] || '',
   }))
 
   // ── Modal ────────────────────────────────────────────────────────────────
@@ -197,7 +327,6 @@ export default function HeatIntelligence() {
   const closeModal = () => { if (!saving) { setShowModal(false); setEditing(null) } }
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }))
 
-  // Live severity preview inside the modal
   const previewBand = useMemo(
     () => classifyTemp({ temperature_c: form.temperature_c, threshold_c: form.threshold_c }),
     [form.temperature_c, form.threshold_c],
@@ -209,7 +338,6 @@ export default function HeatIntelligence() {
     if (!form.asset_no.trim()) { setFormError('An asset number is required.'); return }
     setSaving(true)
     try {
-      // Auto-classify status from temperature when the user leaves it blank.
       const status = form.status || classifyTemp({ temperature_c: form.temperature_c, threshold_c: form.threshold_c })
       const payload = {
         ...form,
@@ -245,18 +373,341 @@ export default function HeatIntelligence() {
   const clearFilters = () => { setAssetFilter(''); setStatusFilter(''); setPositionFilter(''); setCountryFilter(''); setSearch('') }
   const hasFilters = assetFilter || statusFilter || positionFilter || countryFilter || search
 
+  const severityMeta = SEVERITY_META[conditions.heat_severity] || SEVERITY_META.low
+
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Heat Intelligence"
-        subtitle="Monitor tyre thermal readings and detect overheating early — the leading indicator of bearing failure, dragging brakes, chronic under-inflation, and overload."
+        title="Desert Heat Intelligence"
+        subtitle="GCC-exclusive heat analytics — climatology, Gay-Lussac pressure physics, and fleet-wide blowout-risk scoring. Overheating is the leading indicator of blowouts, bearing failure, and chronic under-inflation."
         icon={ThermometerSun}
-        badge={summary.criticalCount > 0 ? `${summary.criticalCount} critical` : undefined}
-        onRefresh={load}
-        refreshing={refreshing}
+        badge={fleetRisk.risk_summary?.extreme ? `${fleetRisk.risk_summary.extreme} extreme risk` : (summary.criticalCount > 0 ? `${summary.criticalCount} critical` : undefined)}
+        onRefresh={refreshAll}
+        refreshing={refreshing || tyresLoading}
         updatedAt={updatedAt}
         actions={
           <div className="flex items-center gap-2">
+            <label className="sr-only" htmlFor="heat-city">City</label>
+            <select id="heat-city" className="input" value={city} onChange={(e) => setCity(e.target.value)}>
+              {GCC_CITIES.map((c) => <option key={c} value={c}>{c}</option>)}
+            </select>
+          </div>
+        }
+      />
+
+      {/* Tab bar */}
+      <div className="flex border-b border-[var(--input-border)] gap-1 overflow-x-auto">
+        {TABS.map(([id, label, Icon]) => (
+          <button
+            key={id}
+            onClick={() => setTab(id)}
+            className={`px-4 py-2.5 text-sm font-semibold inline-flex items-center gap-1.5 border-b-2 -mb-px whitespace-nowrap ${tab === id ? 'border-sky-500 text-sky-400' : 'border-transparent text-[var(--text-muted)] hover:text-[var(--text-primary)]'}`}
+          >
+            <Icon size={14} /> {label}
+          </button>
+        ))}
+      </div>
+
+      {/* ═══════════════ CONDITIONS ═══════════════ */}
+      {tab === 'conditions' && (
+        <div className="space-y-6">
+          {/* Hero */}
+          <div className={`card border ${severityMeta.panel}`}>
+            <div className="flex flex-wrap items-center gap-6">
+              <div className="text-center">
+                <p className="text-5xl font-bold text-[var(--text-primary)]">{conditions.ambient_c}°C</p>
+                <p className="text-xs uppercase tracking-wider text-[var(--text-muted)] mt-1">Ambient</p>
+              </div>
+              <div className="w-px h-14 bg-[var(--input-border)]" />
+              <div className="text-center">
+                <p className="text-5xl font-bold text-red-400">{conditions.road_surface_c}°C</p>
+                <p className="text-xs uppercase tracking-wider text-[var(--text-muted)] mt-1">Road surface</p>
+              </div>
+              <div className="flex-1 min-w-[240px]">
+                <div className="flex items-center gap-2 mb-1.5">
+                  <span className={`text-xs font-bold uppercase px-2.5 py-1 rounded ${severityMeta.pill}`}>{severityMeta.label}</span>
+                  <span className="text-sm font-semibold text-[var(--text-secondary)]">{conditions.city} · {conditions.month}</span>
+                </div>
+                <p className="text-sm text-[var(--text-secondary)]">{conditions.advisory}</p>
+                <p className="text-xs text-[var(--text-muted)] mt-1.5 inline-flex items-center gap-1">
+                  <Sun size={12} className="text-amber-400" /> Peak heat window: <strong className="text-[var(--text-secondary)]">{conditions.peak_hours}</strong>
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* All-city bars + Gay-Lussac + correlation */}
+            <div className="space-y-6">
+              <div className="card">
+                <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-3 flex items-center gap-2">
+                  <Thermometer size={15} className="text-orange-400" /> All GCC cities — {conditions.month} ambient
+                </h3>
+                <div style={{ height: 320 }}><Bar data={cityBarData} options={cityBarOptions} /></div>
+              </div>
+
+              <div className="card">
+                <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-2 flex items-center gap-2">
+                  <Gauge size={15} className="text-sky-400" /> Gay-Lussac pressure effect
+                </h3>
+                <p className="text-sm text-[var(--text-secondary)]">
+                  At {conditions.road_surface_c}°C road surface, a 105 PSI cold tyre reaches approximately{' '}
+                  <strong className="text-[var(--text-primary)]">{Math.round(105 * (conditions.road_surface_c + 273.15) / (25 + 273.15))} PSI</strong>{' '}
+                  — a <strong className="text-orange-400">{conditions.pressure_increase_pct}% expected rise</strong> from ambient heat.
+                </p>
+                <div className="mt-3 rounded-lg border border-red-800/50 bg-red-950/20 px-3 py-2">
+                  <p className="text-xs font-bold uppercase text-red-300 mb-0.5 inline-flex items-center gap-1"><AlertTriangle size={12} /> Critical</p>
+                  <p className="text-sm text-red-200">Always inflate when COLD. Never release pressure from hot tyres — the reading is normal heat expansion.</p>
+                </div>
+              </div>
+
+              <div className="card">
+                <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-2 flex items-center gap-2">
+                  <Activity size={15} className="text-emerald-400" /> Heat–pressure correlation (logged readings)
+                </h3>
+                {correlation.correlation == null ? (
+                  <p className="text-sm text-[var(--text-muted)]">
+                    Need at least 3 logged readings carrying both temperature and pressure to compute a correlation. Currently {correlation.samples} complete pair{correlation.samples === 1 ? '' : 's'}.
+                  </p>
+                ) : (
+                  <p className="text-sm text-[var(--text-secondary)]">
+                    Pearson r = <strong className={`${correlation.correlation > 0.5 ? 'text-orange-400' : 'text-[var(--text-primary)]'}`}>{correlation.correlation}</strong>{' '}
+                    across {correlation.samples} logged reading{correlation.samples === 1 ? '' : 's'} — {correlation.correlation > 0.5 ? 'temperature and pressure rise together as expected under heat.' : correlation.correlation < -0.5 ? 'inverse relationship — investigate sensor placement or bleeding of hot tyres.' : 'weak linear relationship in the current sample.'}
+                  </p>
+                )}
+              </div>
+            </div>
+
+            {/* Safety protocol */}
+            <div className="card">
+              <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-3 flex items-center gap-2">
+                <ShieldCheck size={15} className="text-emerald-400" /> Desert heat-safety protocol
+              </h3>
+              <div className="space-y-4">
+                {[
+                  ['Before departure', Wind, ['Check all tyre pressures when COLD (before 08:00)', 'Inspect for sidewall bulges and cracks', 'Ensure tread depth is ≥3mm for desert routes', 'Verify no damage from the previous trip']],
+                  ['During operation', ThermometerSun, ['Avoid sudden braking on hot roads', 'If a pressure warning sounds — pull over safely', 'Do NOT deflate hot tyres to reduce pressure', 'Allow tyres to cool 30+ mins before inspection']],
+                  ['Post-trip', Thermometer, ['Check for embedded debris', 'Allow full cool-down before storing the vehicle', 'Flag any unusual wear patterns for inspection']],
+                ].map(([heading, Icon, items]) => (
+                  <div key={heading}>
+                    <p className="text-xs font-bold uppercase text-[var(--text-muted)] mb-1.5 inline-flex items-center gap-1.5"><Icon size={13} className="text-sky-400" /> {heading}</p>
+                    <ul className="space-y-1">
+                      {items.map((item) => (
+                        <li key={item} className="text-sm text-[var(--text-secondary)] flex gap-2">
+                          <span className="text-sky-400 shrink-0">•</span>{item}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ═══════════════ FLEET BLOWOUT RISK ═══════════════ */}
+      {tab === 'risk' && (
+        <div className="space-y-5">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="text-sm text-[var(--text-secondary)]">
+                Scored under <strong className="text-[var(--text-primary)]">{conditions.city}</strong> conditions —{' '}
+                {conditions.ambient_c}°C ambient · {conditions.road_surface_c}°C road · {conditions.month}.{' '}
+                {fleetRisk.fleet_size} installed tyre{fleetRisk.fleet_size === 1 ? '' : 's'} assessed.
+              </p>
+              <p className="text-[11px] text-[var(--text-muted)] mt-0.5">
+                Target PSI uses published size references (this dataset carries no measured per-tyre target); load assumed nominal where not captured.
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="text-right mr-2">
+                <p className="text-2xl font-bold text-orange-400 leading-none">{fleetRisk.fleet_risk_score}%</p>
+                <p className="text-[11px] uppercase tracking-wider text-[var(--text-muted)]">Fleet risk score</p>
+              </div>
+              <button onClick={() => exportToExcel(riskExportRows, RISK_COLS, RISK_HEADERS, 'heat_blowout_risk')} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!riskExportRows.length}>
+                <FileSpreadsheet size={14} /> Excel
+              </button>
+              <button onClick={() => exportToPdf(riskExportRows, RISK_COLS.map((k, i) => ({ key: k, header: RISK_HEADERS[i] })), 'Fleet Blowout Risk', 'heat_blowout_risk', 'landscape')} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!riskExportRows.length}>
+                <FileText size={14} /> PDF
+              </button>
+            </div>
+          </div>
+
+          {tyresError && (
+            <div className="card border border-red-800/50 flex items-start gap-3">
+              <AlertTriangle size={18} className="text-red-400 mt-0.5 shrink-0" />
+              <div><p className="text-red-300 font-medium">Couldn’t load fleet tyres.</p><p className="text-[var(--text-muted)] text-sm mt-1">{tyresError}</p></div>
+            </div>
+          )}
+
+          {/* Band tiles */}
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+            {['extreme', 'high', 'elevated', 'medium', 'low'].map((level) => {
+              const meta = RISK_META[level]
+              return (
+                <div key={level} className={`card border ${meta.card}`}>
+                  <div className="flex items-center justify-between">
+                    <p className={`text-xs font-semibold uppercase tracking-wider ${meta.tone}`}>{meta.label}</p>
+                    <Flame size={14} className={meta.tone} />
+                  </div>
+                  <p className="text-2xl font-bold mt-1 text-[var(--text-primary)]">{tyres === null ? '—' : (fleetRisk.risk_summary?.[level] || 0)}</p>
+                </div>
+              )
+            })}
+          </div>
+
+          {/* Ranked cards */}
+          {tyres === null || tyresLoading ? (
+            <div className="space-y-2">{[0, 1, 2, 3].map((i) => <div key={i} className="h-20 card animate-pulse" />)}</div>
+          ) : (tyres || []).length === 0 ? (
+            <div className="card text-center py-12">
+              <Truck size={26} className="mx-auto mb-2 text-[var(--text-muted)] opacity-60" />
+              <p className="text-[var(--text-secondary)] font-medium">No installed tyres to assess.</p>
+              <p className="text-sm text-[var(--text-muted)] mt-1">Blowout risk scores every fitted tyre in <span className="font-mono">tyre_records</span>. Import or fit tyres to populate this view.</p>
+            </div>
+          ) : (fleetRisk.high_risk_tyres || []).length === 0 ? (
+            <div className="card border border-emerald-800/50 text-center py-12">
+              <ShieldCheck size={26} className="mx-auto mb-2 text-emerald-400" />
+              <p className="text-emerald-300 font-medium">No elevated-or-higher blowout risk under {conditions.city} heat.</p>
+              <p className="text-sm text-[var(--text-muted)] mt-1">All {fleetRisk.fleet_size} installed tyres score below 30.</p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {(fleetRisk.high_risk_tyres || []).map((t) => {
+                const meta = RISK_META[t.risk_level] || RISK_META.medium
+                return (
+                  <div key={t.id ?? `${t.asset_no}-${t.position}-${t.serial}`} className={`card border ${meta.card}`}>
+                    <div className="flex items-start gap-3">
+                      <span className={`shrink-0 mt-0.5 text-sm font-bold px-2.5 py-1 rounded ${meta.pill}`}>{Math.round(t.risk_score)}</span>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className={`text-xs font-bold uppercase px-2 py-0.5 rounded-full border ${meta.badge}`}>{meta.label}</span>
+                          <span className="font-mono font-semibold text-sm text-[var(--text-primary)]">{t.serial || '—'}</span>
+                          {t.asset_no && <span className="text-xs text-[var(--text-muted)]">· {t.asset_no}</span>}
+                          {t.position && <span className="text-xs text-[var(--text-muted)]">· {t.position}</span>}
+                          {t.brand && <span className="text-xs text-[var(--text-muted)]">· {t.brand}</span>}
+                          {t.size && <span className="text-xs text-[var(--text-muted)]">· {t.size}</span>}
+                        </div>
+                        {(t.contributing_factors || []).length > 0 && (
+                          <div className="flex gap-x-3 gap-y-1 mt-1.5 flex-wrap">
+                            {t.contributing_factors.map((f, j) => (
+                              <span key={j} className="text-xs text-[var(--text-secondary)] inline-flex items-center gap-1">
+                                <AlertTriangle size={11} className="text-orange-400 shrink-0" /> {f.factor} <span className="text-[var(--text-muted)]">({f.value})</span>
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                        {(t.recommended_actions || []).map((a, j) => (
+                          <p key={j} className="text-xs font-semibold text-[var(--text-primary)] mt-1">→ {a}</p>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                )
+              })}
+              {fleetRisk.high_risk_tyres.length >= 30 && (
+                <p className="text-xs text-[var(--text-muted)] px-1">Showing the 30 highest-risk tyres. Export for the full ranked set.</p>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ═══════════════ PRESSURE CALCULATOR ═══════════════ */}
+      {tab === 'calculator' && (
+        <div className="max-w-2xl space-y-5">
+          <div className="card">
+            <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-3 flex items-center gap-2">
+              <Calculator size={15} className="text-sky-400" /> Gay-Lussac heat pressure calculator
+            </h3>
+            <p className="text-sm text-[var(--text-secondary)] mb-4">
+              Projects hot tyre pressure from a cold inflation figure using P₁/T₁ = P₂/T₂, at {conditions.city}’s {conditions.month} ambient of {conditions.ambient_c}°C.
+            </p>
+            <div className="max-w-xs">
+              <label className="label" htmlFor="cold-psi">Cold inflation pressure (PSI)</label>
+              <input id="cold-psi" className="input w-full" type="number" step="1" min="0" value={coldPsi} onChange={(e) => setColdPsi(e.target.value)} />
+              <p className="text-[11px] text-[var(--text-muted)] mt-1">Inflation temperature assumed 25°C (cold).</p>
+            </div>
+          </div>
+
+          <div className="card">
+            <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-3">Expected pressure by time of day — {conditions.city}, {conditions.month}</h3>
+            {!(Number(coldPsi) > 0) ? (
+              <p className="text-sm text-[var(--text-muted)]">Enter a cold inflation pressure above to project hot pressures.</p>
+            ) : (
+              <>
+                <div className="space-y-2">
+                  {calcPoints.map((c) => {
+                    const cold = Number(coldPsi)
+                    const tone = c.expected_hot_pressure_psi > cold * 1.2 ? 'text-red-400'
+                      : c.expected_hot_pressure_psi > cold * 1.1 ? 'text-orange-400' : 'text-emerald-400'
+                    return (
+                      <div key={c.time_label} className="flex items-center justify-between rounded-lg border border-[var(--input-border)] bg-[var(--input-bg)]/40 px-3 py-2.5">
+                        <div>
+                          <p className="text-sm font-semibold text-[var(--text-primary)]">{c.time_label}</p>
+                          <p className="text-xs text-[var(--text-muted)]">{c.actual_temp_c}°C operating</p>
+                        </div>
+                        <div className="text-right">
+                          <p className={`text-xl font-bold ${tone}`}>{c.expected_hot_pressure_psi} PSI</p>
+                          <p className="text-xs text-[var(--text-muted)]">+{c.pressure_increase_psi} PSI (+{c.pressure_increase_pct}%)</p>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+                {calcPoints.length > 0 && (
+                  <div className="mt-4 rounded-lg border border-red-800/50 bg-red-950/20 px-3 py-2.5">
+                    <p className="text-sm text-red-200">
+                      <strong>At {conditions.road_surface_c}°C road surface, pressure rises to {calcPoints[calcPoints.length - 1].expected_hot_pressure_psi} PSI.</strong>{' '}
+                      NEVER release pressure from hot tyres.
+                    </p>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ═══════════════ DESERT ROUTES ═══════════════ */}
+      {tab === 'routes' && (
+        <div className="space-y-3">
+          <p className="text-sm text-[var(--text-secondary)]">GCC desert corridors enriched with today’s {conditions.month} ambient/road temperatures and risk-appropriate pre-trip checks.</p>
+          {routes.map((route) => {
+            const meta = RISK_META[route.risk] || SEVERITY_META[route.risk] || RISK_META.medium
+            const badge = RISK_META[route.risk]?.badge || 'bg-sky-900/30 text-sky-200 border-sky-700/50'
+            return (
+              <div key={route.name} className={`card border ${RISK_META[route.risk]?.card || ''}`}>
+                <div className="flex items-start justify-between flex-wrap gap-3">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <MapPin size={15} className="text-[var(--text-muted)] shrink-0" />
+                      <p className="font-semibold text-[var(--text-primary)]">{route.name}</p>
+                      <span className={`text-xs font-bold uppercase px-2 py-0.5 rounded-full border ${badge}`}>{route.risk.replace('_', ' ')}</span>
+                      <span className="text-xs text-[var(--text-muted)]">{route.current_ambient_c}°C ambient · {route.road_surface_temp_c}°C road · {route.surface.replace('_', ' ')}</span>
+                    </div>
+                    <div className="mt-2 space-y-0.5">
+                      {route.recommended_checks.slice(0, 4).map((check) => (
+                        <p key={check} className="text-xs text-[var(--text-secondary)] flex gap-1.5"><span className="text-sky-400 shrink-0">•</span>{check}</p>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <p className="text-xs text-[var(--text-muted)]">Desert exposure</p>
+                    <p className={`text-xl font-bold ${meta.tone || 'text-[var(--text-primary)]'}`}>{Math.round(route.desert_exposure * 100)}%</p>
+                  </div>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
+
+      {/* ═══════════════ TEMPERATURE LOG (existing manual logger) ═══════════════ */}
+      {tab === 'log' && (
+        <div className="space-y-6">
+          <div className="flex items-center justify-end gap-2">
             <button onClick={() => exportToExcel(exportRows, EXPORT_COLS, EXPORT_HEADERS, 'heat_intelligence')} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!filtered.length}>
               <FileSpreadsheet size={14} /> Excel
             </button>
@@ -267,200 +718,200 @@ export default function HeatIntelligence() {
               <Plus size={14} /> Log reading
             </button>
           </div>
-        }
-      />
 
-      {notProvisioned && (
-        <div className="card border border-amber-800/50 flex items-start gap-3">
-          <AlertTriangle size={18} className="text-amber-400 mt-0.5 shrink-0" />
-          <div>
-            <p className="text-amber-300 font-medium">Heat Intelligence isn’t enabled on this database yet.</p>
-            <p className="text-[var(--text-muted)] text-sm mt-1">
-              Apply <span className="font-mono text-[var(--text-primary)]">MIGRATIONS_V188_TYRE_TEMPERATURE_READINGS.sql</span>, then reload.
-            </p>
-          </div>
-        </div>
-      )}
-
-      {error && (
-        <div className="card border border-red-800/50 flex items-start gap-3">
-          <AlertTriangle size={18} className="text-red-400 mt-0.5 shrink-0" />
-          <div><p className="text-red-300 font-medium">Couldn’t load temperature readings.</p><p className="text-[var(--text-muted)] text-sm mt-1">{error}</p></div>
-        </div>
-      )}
-
-      {/* KPI tiles */}
-      <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3">
-        {kpis.map((k) => {
-          const Icon = k.icon
-          return (
-            <div key={k.label} className="card">
-              <div className="flex items-center justify-between">
-                <p className="text-xs text-[var(--text-muted)]">{k.label}</p>
-                <Icon size={16} className={k.tone} />
+          {notProvisioned && (
+            <div className="card border border-amber-800/50 flex items-start gap-3">
+              <AlertTriangle size={18} className="text-amber-400 mt-0.5 shrink-0" />
+              <div>
+                <p className="text-amber-300 font-medium">The manual temperature logger isn’t enabled on this database yet.</p>
+                <p className="text-[var(--text-muted)] text-sm mt-1">
+                  Apply <span className="font-mono text-[var(--text-primary)]">MIGRATIONS_V188_TYRE_TEMPERATURE_READINGS.sql</span>, then reload. Conditions, blowout risk, calculator and routes work without it.
+                </p>
               </div>
-              <p className={`text-2xl font-bold mt-1 ${k.tone}`}>{rows === null ? '—' : k.value}</p>
             </div>
-          )
-        })}
-      </div>
+          )}
 
-      {/* Hotspots attention panel */}
-      <div className="card">
-        <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-3 flex items-center gap-2">
-          <ShieldAlert size={15} className="text-red-400" /> Thermal hotspots
-          <span className="text-xs font-normal text-[var(--text-muted)]">(high &amp; critical, hottest first)</span>
-        </h3>
-        {rows === null ? (
-          <div className="h-16 bg-[var(--input-bg)] rounded animate-pulse" />
-        ) : hot.length === 0 ? (
-          <p className="text-sm text-[var(--text-muted)] flex items-center gap-2">
-            <Thermometer size={15} className="text-emerald-400" /> No tyres reading high or critical — fleet is within safe thermal limits.
-          </p>
-        ) : (
-          <div className="flex flex-wrap gap-2">
-            {hot.slice(0, 24).map((h, i) => {
-              const meta = STATUS_META[h.status] || STATUS_META.high
-              const Icon = meta.icon
+          {error && (
+            <div className="card border border-red-800/50 flex items-start gap-3">
+              <AlertTriangle size={18} className="text-red-400 mt-0.5 shrink-0" />
+              <div><p className="text-red-300 font-medium">Couldn’t load temperature readings.</p><p className="text-[var(--text-muted)] text-sm mt-1">{error}</p></div>
+            </div>
+          )}
+
+          {/* KPI tiles */}
+          <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3">
+            {kpis.map((k) => {
+              const Icon = k.icon
               return (
-                <div key={`${h.asset_no}-${h.tyre_position}-${i}`} className={`rounded-lg border px-3 py-2 ${meta.badge}`}>
-                  <div className="flex items-center gap-1.5">
-                    <Icon size={13} />
-                    <span className="text-xs font-semibold">{h.asset_no || '—'}</span>
-                    {h.tyre_position && <span className="text-[11px] opacity-80">· {h.tyre_position}</span>}
+                <div key={k.label} className="card">
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs text-[var(--text-muted)]">{k.label}</p>
+                    <Icon size={16} className={k.tone} />
                   </div>
-                  <p className="text-lg font-bold leading-tight mt-0.5">{fmtC(h.temperature_c)}</p>
+                  <p className={`text-2xl font-bold mt-1 ${k.tone}`}>{rows === null ? '—' : k.value}</p>
                 </div>
               )
             })}
-            {hot.length > 24 && <div className="rounded-lg border border-[var(--input-border)] bg-[var(--input-bg)]/40 px-3 py-2 flex items-center text-xs text-[var(--text-muted)]">+{hot.length - 24} more</div>}
           </div>
-        )}
-      </div>
 
-      {/* Latest-per-position snapshot */}
-      <div className="card overflow-hidden !p-0">
-        <div className="px-4 pt-4 pb-3">
-          <h3 className="text-sm font-semibold text-[var(--text-primary)] flex items-center gap-2">
-            <Thermometer size={15} /> Latest reading per tyre position
-          </h3>
-        </div>
-        {rows === null ? (
-          <div className="px-4 pb-4"><div className="h-16 bg-[var(--input-bg)] rounded animate-pulse" /></div>
-        ) : latest.length === 0 ? (
-          <p className="px-4 pb-4 text-sm text-[var(--text-muted)]">No readings logged yet.</p>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-y border-[var(--input-border)] text-left text-xs uppercase tracking-wider text-[var(--text-muted)]">
-                  {['Asset', 'Position', 'Temp', 'Rise vs ambient', 'Pressure', 'Status', 'Recorded'].map((h, i) => <th key={i} className="px-4 py-2.5 font-semibold whitespace-nowrap">{h}</th>)}
-                </tr>
-              </thead>
-              <tbody>
-                {latest
-                  .slice()
-                  .sort((a, b) => (Number(b.temperature_c) || -Infinity) - (Number(a.temperature_c) || -Infinity))
-                  .slice(0, 40)
-                  .map((r) => {
-                    const rise = tempOverAmbient(r)
-                    return (
-                      <tr key={r.id} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/40">
-                        <td className="px-4 py-2 font-medium text-[var(--text-primary)]">{r.asset_no || '—'}</td>
-                        <td className="px-4 py-2 text-[var(--text-secondary)]">{r.tyre_position || '—'}</td>
-                        <td className="px-4 py-2"><TempCell reading={r} /></td>
-                        <td className="px-4 py-2 text-[var(--text-secondary)]">{rise == null ? '—' : `+${fmtC(rise)}`}</td>
-                        <td className="px-4 py-2 text-[var(--text-secondary)]">{fmtBar(r.pressure_bar)}</td>
-                        <td className="px-4 py-2"><StatusBadge band={classifyTemp(r)} /></td>
-                        <td className="px-4 py-2 text-[var(--text-secondary)] whitespace-nowrap">{fmtDateTime(r.recorded_at)}</td>
-                      </tr>
-                    )
-                  })}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
-
-      {/* Filters */}
-      <div className="card space-y-3">
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="relative flex-1 min-w-[200px]">
-            <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
-            <input className="input pl-9 w-full" placeholder="Search asset, position, serial, location, notes…" value={search} onChange={(e) => setSearch(e.target.value)} />
-          </div>
-          <select className="input" value={assetFilter} onChange={(e) => setAssetFilter(e.target.value)} aria-label="Asset">
-            <option value="">All assets</option>
-            {assetOptions.map((a) => <option key={a} value={a}>{a}</option>)}
-          </select>
-          <select className="input" value={positionFilter} onChange={(e) => setPositionFilter(e.target.value)} aria-label="Position">
-            <option value="">All positions</option>
-            {positionOptions.map((p) => <option key={p} value={p}>{p}</option>)}
-          </select>
-          <select className="input" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} aria-label="Status">
-            <option value="">All statuses</option>
-            <option value="critical">Critical</option>
-            <option value="high">High</option>
-            <option value="elevated">Elevated</option>
-            <option value="normal">Normal</option>
-          </select>
-          {countryOptions.length > 1 && (
-            <select className="input" value={countryFilter} onChange={(e) => setCountryFilter(e.target.value)} aria-label="Country">
-              <option value="">All countries</option>
-              {countryOptions.map((c) => <option key={c} value={c}>{c}</option>)}
-            </select>
-          )}
-          {hasFilters && <button onClick={clearFilters} className="btn-secondary text-sm inline-flex items-center gap-1.5"><X size={14} /> Clear</button>}
-          <span className="text-xs text-[var(--text-muted)] ml-auto">{filtered.length} of {summary.totalReadings}</span>
-        </div>
-      </div>
-
-      {/* Table */}
-      <div className="card overflow-hidden !p-0">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-[var(--input-border)] text-left text-xs uppercase tracking-wider text-[var(--text-muted)]">
-                {['Asset', 'Position', 'Temp', 'Ambient', 'Rise', 'Pressure', 'Speed', 'Status', 'Recorded', ''].map((h, i) => <th key={i} className="px-4 py-3 font-semibold whitespace-nowrap">{h}</th>)}
-              </tr>
-            </thead>
-            <tbody>
-              {rows === null ? (
-                [0, 1, 2, 3, 4].map((i) => <tr key={i} className="border-b border-[var(--input-border)]/50"><td colSpan={10} className="px-4 py-3"><div className="h-4 bg-[var(--input-bg)] rounded animate-pulse" /></td></tr>)
-              ) : filtered.length === 0 ? (
-                <tr><td colSpan={10} className="px-4 py-12 text-center text-[var(--text-muted)]">
-                  <Filter size={22} className="mx-auto mb-2 opacity-60" />
-                  {rows.length === 0 && !notProvisioned ? 'No readings logged yet — log your first thermal reading.' : 'No readings match these filters.'}
-                </td></tr>
-              ) : (
-                filtered.slice(0, 500).map((r) => {
-                  const rise = tempOverAmbient(r)
+          {/* Hotspots attention panel */}
+          <div className="card">
+            <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-3 flex items-center gap-2">
+              <ShieldAlert size={15} className="text-red-400" /> Thermal hotspots
+              <span className="text-xs font-normal text-[var(--text-muted)]">(high &amp; critical, hottest first)</span>
+            </h3>
+            {rows === null ? (
+              <div className="h-16 bg-[var(--input-bg)] rounded animate-pulse" />
+            ) : hot.length === 0 ? (
+              <p className="text-sm text-[var(--text-muted)] flex items-center gap-2">
+                <Thermometer size={15} className="text-emerald-400" /> No tyres reading high or critical — fleet is within safe thermal limits.
+              </p>
+            ) : (
+              <div className="flex flex-wrap gap-2">
+                {hot.slice(0, 24).map((h, i) => {
+                  const meta = STATUS_META[h.status] || STATUS_META.high
+                  const Icon = meta.icon
                   return (
-                    <tr key={r.id} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/40">
-                      <td className="px-4 py-2.5 font-medium text-[var(--text-primary)]">{r.asset_no || '—'}</td>
-                      <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.tyre_position || '—'}</td>
-                      <td className="px-4 py-2.5"><TempCell reading={r} /></td>
-                      <td className="px-4 py-2.5 text-[var(--text-secondary)]">{fmtC(r.ambient_c)}</td>
-                      <td className="px-4 py-2.5 text-[var(--text-secondary)]">{rise == null ? '—' : `+${fmtC(rise)}`}</td>
-                      <td className="px-4 py-2.5 text-[var(--text-secondary)]">{fmtBar(r.pressure_bar)}</td>
-                      <td className="px-4 py-2.5 text-[var(--text-secondary)]">{fmtNum(r.speed_kmh, 'km/h')}</td>
-                      <td className="px-4 py-2.5"><StatusBadge band={classifyTemp(r)} /></td>
-                      <td className="px-4 py-2.5 text-[var(--text-secondary)] whitespace-nowrap">{fmtDateTime(r.recorded_at)}</td>
-                      <td className="px-4 py-2.5">
-                        <div className="flex items-center justify-end gap-1">
-                          <button onClick={() => openEdit(r)} className="p-1.5 rounded hover:bg-[var(--input-bg)] text-[var(--text-muted)] hover:text-[var(--text-primary)]" aria-label="Edit"><Pencil size={14} /></button>
-                          <button onClick={() => setConfirmDelete(r)} className="p-1.5 rounded hover:bg-red-900/30 text-[var(--text-muted)] hover:text-red-400" aria-label="Delete"><Trash2 size={14} /></button>
-                        </div>
-                      </td>
-                    </tr>
+                    <div key={`${h.asset_no}-${h.tyre_position}-${i}`} className={`rounded-lg border px-3 py-2 ${meta.badge}`}>
+                      <div className="flex items-center gap-1.5">
+                        <Icon size={13} />
+                        <span className="text-xs font-semibold">{h.asset_no || '—'}</span>
+                        {h.tyre_position && <span className="text-[11px] opacity-80">· {h.tyre_position}</span>}
+                      </div>
+                      <p className="text-lg font-bold leading-tight mt-0.5">{fmtC(h.temperature_c)}</p>
+                    </div>
                   )
-                })
+                })}
+                {hot.length > 24 && <div className="rounded-lg border border-[var(--input-border)] bg-[var(--input-bg)]/40 px-3 py-2 flex items-center text-xs text-[var(--text-muted)]">+{hot.length - 24} more</div>}
+              </div>
+            )}
+          </div>
+
+          {/* Latest-per-position snapshot */}
+          <div className="card overflow-hidden !p-0">
+            <div className="px-4 pt-4 pb-3">
+              <h3 className="text-sm font-semibold text-[var(--text-primary)] flex items-center gap-2">
+                <Thermometer size={15} /> Latest reading per tyre position
+              </h3>
+            </div>
+            {rows === null ? (
+              <div className="px-4 pb-4"><div className="h-16 bg-[var(--input-bg)] rounded animate-pulse" /></div>
+            ) : latest.length === 0 ? (
+              <p className="px-4 pb-4 text-sm text-[var(--text-muted)]">No readings logged yet.</p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-y border-[var(--input-border)] text-left text-xs uppercase tracking-wider text-[var(--text-muted)]">
+                      {['Asset', 'Position', 'Temp', 'Rise vs ambient', 'Pressure', 'Status', 'Recorded'].map((h, i) => <th key={i} className="px-4 py-2.5 font-semibold whitespace-nowrap">{h}</th>)}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {latest
+                      .slice()
+                      .sort((a, b) => (Number(b.temperature_c) || -Infinity) - (Number(a.temperature_c) || -Infinity))
+                      .slice(0, 40)
+                      .map((r) => {
+                        const rise = tempOverAmbient(r)
+                        return (
+                          <tr key={r.id} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/40">
+                            <td className="px-4 py-2 font-medium text-[var(--text-primary)]">{r.asset_no || '—'}</td>
+                            <td className="px-4 py-2 text-[var(--text-secondary)]">{r.tyre_position || '—'}</td>
+                            <td className="px-4 py-2"><TempCell reading={r} /></td>
+                            <td className="px-4 py-2 text-[var(--text-secondary)]">{rise == null ? '—' : `+${fmtC(rise)}`}</td>
+                            <td className="px-4 py-2 text-[var(--text-secondary)]">{fmtBar(r.pressure_bar)}</td>
+                            <td className="px-4 py-2"><StatusBadge band={classifyTemp(r)} /></td>
+                            <td className="px-4 py-2 text-[var(--text-secondary)] whitespace-nowrap">{fmtDateTime(r.recorded_at)}</td>
+                          </tr>
+                        )
+                      })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+
+          {/* Filters */}
+          <div className="card space-y-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="relative flex-1 min-w-[200px]">
+                <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
+                <input className="input pl-9 w-full" placeholder="Search asset, position, serial, location, notes…" value={search} onChange={(e) => setSearch(e.target.value)} />
+              </div>
+              <select className="input" value={assetFilter} onChange={(e) => setAssetFilter(e.target.value)} aria-label="Asset">
+                <option value="">All assets</option>
+                {assetOptions.map((a) => <option key={a} value={a}>{a}</option>)}
+              </select>
+              <select className="input" value={positionFilter} onChange={(e) => setPositionFilter(e.target.value)} aria-label="Position">
+                <option value="">All positions</option>
+                {positionOptions.map((p) => <option key={p} value={p}>{p}</option>)}
+              </select>
+              <select className="input" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} aria-label="Status">
+                <option value="">All statuses</option>
+                <option value="critical">Critical</option>
+                <option value="high">High</option>
+                <option value="elevated">Elevated</option>
+                <option value="normal">Normal</option>
+              </select>
+              {countryOptions.length > 1 && (
+                <select className="input" value={countryFilter} onChange={(e) => setCountryFilter(e.target.value)} aria-label="Country">
+                  <option value="">All countries</option>
+                  {countryOptions.map((c) => <option key={c} value={c}>{c}</option>)}
+                </select>
               )}
-            </tbody>
-          </table>
+              {hasFilters && <button onClick={clearFilters} className="btn-secondary text-sm inline-flex items-center gap-1.5"><X size={14} /> Clear</button>}
+              <span className="text-xs text-[var(--text-muted)] ml-auto">{filtered.length} of {summary.totalReadings}</span>
+            </div>
+          </div>
+
+          {/* Table */}
+          <div className="card overflow-hidden !p-0">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-[var(--input-border)] text-left text-xs uppercase tracking-wider text-[var(--text-muted)]">
+                    {['Asset', 'Position', 'Temp', 'Ambient', 'Rise', 'Pressure', 'Speed', 'Status', 'Recorded', ''].map((h, i) => <th key={i} className="px-4 py-3 font-semibold whitespace-nowrap">{h}</th>)}
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows === null ? (
+                    [0, 1, 2, 3, 4].map((i) => <tr key={i} className="border-b border-[var(--input-border)]/50"><td colSpan={10} className="px-4 py-3"><div className="h-4 bg-[var(--input-bg)] rounded animate-pulse" /></td></tr>)
+                  ) : filtered.length === 0 ? (
+                    <tr><td colSpan={10} className="px-4 py-12 text-center text-[var(--text-muted)]">
+                      <Filter size={22} className="mx-auto mb-2 opacity-60" />
+                      {rows.length === 0 && !notProvisioned ? 'No readings logged yet — log your first thermal reading.' : 'No readings match these filters.'}
+                    </td></tr>
+                  ) : (
+                    filtered.slice(0, 500).map((r) => {
+                      const rise = tempOverAmbient(r)
+                      return (
+                        <tr key={r.id} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/40">
+                          <td className="px-4 py-2.5 font-medium text-[var(--text-primary)]">{r.asset_no || '—'}</td>
+                          <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.tyre_position || '—'}</td>
+                          <td className="px-4 py-2.5"><TempCell reading={r} /></td>
+                          <td className="px-4 py-2.5 text-[var(--text-secondary)]">{fmtC(r.ambient_c)}</td>
+                          <td className="px-4 py-2.5 text-[var(--text-secondary)]">{rise == null ? '—' : `+${fmtC(rise)}`}</td>
+                          <td className="px-4 py-2.5 text-[var(--text-secondary)]">{fmtBar(r.pressure_bar)}</td>
+                          <td className="px-4 py-2.5 text-[var(--text-secondary)]">{fmtNum(r.speed_kmh, 'km/h')}</td>
+                          <td className="px-4 py-2.5"><StatusBadge band={classifyTemp(r)} /></td>
+                          <td className="px-4 py-2.5 text-[var(--text-secondary)] whitespace-nowrap">{fmtDateTime(r.recorded_at)}</td>
+                          <td className="px-4 py-2.5">
+                            <div className="flex items-center justify-end gap-1">
+                              <button onClick={() => openEdit(r)} className="p-1.5 rounded hover:bg-[var(--input-bg)] text-[var(--text-muted)] hover:text-[var(--text-primary)]" aria-label="Edit"><Pencil size={14} /></button>
+                              <button onClick={() => setConfirmDelete(r)} className="p-1.5 rounded hover:bg-red-900/30 text-[var(--text-muted)] hover:text-red-400" aria-label="Delete"><Trash2 size={14} /></button>
+                            </div>
+                          </td>
+                        </tr>
+                      )
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+            {filtered.length > 500 && <p className="px-4 py-2 text-xs text-[var(--text-muted)] border-t border-[var(--input-border)]">Showing first 500 — refine filters or export for the full set.</p>}
+          </div>
         </div>
-        {filtered.length > 500 && <p className="px-4 py-2 text-xs text-[var(--text-muted)] border-t border-[var(--input-border)]">Showing first 500 — refine filters or export for the full set.</p>}
-      </div>
+      )}
 
       {/* Create / Edit modal */}
       {showModal && (

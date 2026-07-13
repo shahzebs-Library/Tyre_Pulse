@@ -10,7 +10,7 @@
  * listing to an empty array so the page can render its "apply the migration"
  * empty state instead of erroring.
  */
-import { supabase, unwrap, applyCountry } from './_client'
+import { supabase, unwrap, applyCountry, fetchAllPages } from './_client'
 import { toFiniteNumber } from '../heatIntelligence'
 
 export const COLS =
@@ -82,6 +82,46 @@ export async function getTemperatureReading(id) {
   return unwrap(
     await supabase.from('tyre_temperature_readings').select(COLS).eq('id', id).maybeSingle(),
   )
+}
+
+/**
+ * Least-privilege column set for the fleet blowout-risk assessment. Pulled from
+ * the canonical operational table `tyre_records` (same source the Tyre Passport
+ * reads) — the heat engine scores these installed tyres against the current
+ * desert-heat condition. No new table is introduced.
+ */
+export const TYRE_RISK_COLS =
+  'id,serial_no,serial_number,tyre_serial,brand,size,asset_no,asset_number,site,country,' +
+  'position,tyre_position,status,current_status,tread_depth,pressure_reading,cost_per_tyre,' +
+  'total_km,fitment_date,issue_date,removal_date'
+
+/**
+ * Every tyre_records row in scope for the heat risk assessment (paginated,
+ * country-scoped). The installed/active filter + scoring live in the pure lib
+ * (`assessFleetRisk`). A missing `tyre_records` relation degrades to [] so the
+ * page renders an honest empty state instead of erroring.
+ *
+ * @param {{ country?:string }} [opts]
+ */
+export async function listTyresForHeatRisk({ country } = {}) {
+  try {
+    const { data, error } = await fetchAllPages((from, to) => {
+      const q = supabase
+        .from('tyre_records')
+        .select(TYRE_RISK_COLS)
+        .order('id', { ascending: true })
+        .range(from, to)
+      return applyCountry(q, country)
+    })
+    if (error) {
+      if (isMissingRelation(error)) return []
+      throw error
+    }
+    return data || []
+  } catch (err) {
+    if (isMissingRelation(err)) return []
+    throw err
+  }
 }
 
 /**

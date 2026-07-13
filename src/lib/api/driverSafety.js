@@ -9,7 +9,7 @@
  * not run the migration) degrades listing to an empty array so the page can
  * render its "apply the migration" empty state instead of erroring.
  */
-import { supabase, unwrap, applyCountry } from './_client'
+import { supabase, unwrap, applyCountry, fetchAllPages } from './_client'
 import { toFiniteNumber } from '../driverSafety'
 
 export const COLS =
@@ -134,4 +134,59 @@ export async function updateDriverSafetyEvent(id, patch = {}) {
 
 export async function deleteDriverSafetyEvent(id) {
   return unwrap(await supabase.from('driver_safety_events').delete().eq('id', id))
+}
+
+/* ── Cross-table reads for the deepened engine ──────────────────────────────
+ * The Scorecards / Tyre-correlation tabs correlate driver_safety_events with
+ * tyre_records (damage + CPK) and trips (utilisation). Both readers page the
+ * full set, are country-scoped, request only the columns the pure engine needs,
+ * and degrade to [] when the source table has not been provisioned. */
+
+/** Columns tyre_records exposes for driver ↔ tyre-damage correlation. */
+export const TYRE_CORRELATION_COLS =
+  'id,country,driver_name,reason_for_removal,removal_reason,removal_date,' +
+  'km_at_fitment,km_at_removal,cost_per_tyre,total_km'
+
+/** Columns the trips table exposes for driver utilisation. */
+export const TRIP_UTILISATION_COLS =
+  'id,country,driver_name,distance_km,idle_min,max_speed_kmh'
+
+/**
+ * Tyre records that carry a driver_name, for the tyre-correlation engine.
+ * Country-scoped; paged in full. Returns [] when `tyre_records` is absent.
+ * @param {{ country?:string }} [opts]
+ */
+export async function listDriverTyreRecords({ country } = {}) {
+  const { data, error } = await fetchAllPages((from, to) => {
+    const q = supabase.from('tyre_records').select(TYRE_CORRELATION_COLS)
+      .not('driver_name', 'is', null)
+      .order('id', { ascending: true })
+      .range(from, to)
+    return applyCountry(q, country)
+  })
+  if (error) {
+    if (isMissingRelation(error)) return []
+    throw error
+  }
+  return data || []
+}
+
+/**
+ * Trips that carry a driver_name, for utilisation (km) in the composite band.
+ * Country-scoped; paged in full. Returns [] when `trips` is absent.
+ * @param {{ country?:string }} [opts]
+ */
+export async function listDriverTrips({ country } = {}) {
+  const { data, error } = await fetchAllPages((from, to) => {
+    const q = supabase.from('trips').select(TRIP_UTILISATION_COLS)
+      .not('driver_name', 'is', null)
+      .order('id', { ascending: true })
+      .range(from, to)
+    return applyCountry(q, country)
+  })
+  if (error) {
+    if (isMissingRelation(error)) return []
+    throw error
+  }
+  return data || []
 }

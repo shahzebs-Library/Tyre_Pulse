@@ -13,17 +13,70 @@
  */
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import {
+  Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement,
+  BarElement, Title, Tooltip, Legend, Filler,
+} from 'chart.js'
+import { Line } from 'react-chartjs-2'
+import {
   ShieldAlert, ShieldCheck, Users, Gauge, AlertTriangle, Search, X, Filter,
-  FileSpreadsheet, FileText, Plus, Pencil, Trash2,
+  FileSpreadsheet, FileText, Plus, Pencil, Trash2, ListChecks, Award,
+  Wrench, GraduationCap, TrendingUp, Activity,
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
 import { useSettings } from '../contexts/SettingsContext'
 import {
   listDriverSafetyEvents, createDriverSafetyEvent, updateDriverSafetyEvent,
-  deleteDriverSafetyEvent,
+  deleteDriverSafetyEvent, listDriverTyreRecords, listDriverTrips,
 } from '../lib/api/driverSafety'
-import { summariseSafety, driverScorecard, byEventType } from '../lib/driverSafety'
+import {
+  summariseSafety, driverScorecard, byEventType,
+  weightedDriverScorecard, driverTyreCorrelation, computeDriverSafetyBand,
+  coachingQueue, weeklyEventTrend,
+} from '../lib/driverSafety'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
+
+ChartJS.register(
+  CategoryScale, LinearScale, PointElement, LineElement, BarElement,
+  Title, Tooltip, Legend, Filler,
+)
+
+const TABS = [
+  { key: 'events', label: 'Event log', icon: ListChecks },
+  { key: 'scorecards', label: 'Scorecards', icon: Award },
+  { key: 'correlation', label: 'Tyre correlation', icon: Wrench },
+]
+
+const GRADE_TONE = {
+  'A+': 'text-green-400 bg-green-900/20 border-green-800/50',
+  A: 'text-green-400 bg-green-900/20 border-green-800/50',
+  B: 'text-sky-400 bg-sky-900/20 border-sky-800/50',
+  C: 'text-amber-400 bg-amber-900/20 border-amber-800/50',
+  D: 'text-orange-400 bg-orange-900/20 border-orange-800/50',
+  F: 'text-red-400 bg-red-900/20 border-red-800/50',
+}
+const BAND_TONE = {
+  good: 'text-green-400 bg-green-900/20 border-green-800/50',
+  watch: 'text-amber-400 bg-amber-900/20 border-amber-800/50',
+  coach: 'text-red-400 bg-red-900/20 border-red-800/50',
+  top_performer: 'text-green-400 bg-green-900/20 border-green-800/50',
+  steady: 'text-sky-400 bg-sky-900/20 border-sky-800/50',
+  coaching: 'text-amber-400 bg-amber-900/20 border-amber-800/50',
+  risk: 'text-red-400 bg-red-900/20 border-red-800/50',
+  inactive: 'text-[var(--text-muted)] bg-[var(--input-bg)] border-[var(--input-border)]',
+  unknown: 'text-[var(--text-muted)] bg-[var(--input-bg)] border-[var(--input-border)]',
+}
+const BAND_LABEL = {
+  top_performer: 'Top performer', steady: 'Steady', coaching: 'Coaching',
+  risk: 'Safety risk', inactive: 'Inactive', unknown: 'No activity',
+}
+const CATEGORY_LABEL = {
+  harsh_brake: 'Harsh braking', harsh_accel: 'Harsh acceleration',
+  harsh_corner: 'Harsh cornering', speeding: 'Speeding', overspeed: 'Overspeed',
+  idling: 'Excessive idling', fatigue: 'Fatigue', other: 'Other',
+}
+
+const pct = (v) => (v == null ? '—' : `${Math.round(v * 1000) / 10}%`)
+const kmFmt = (v) => (v == null || !Number.isFinite(v) ? '—' : `${Math.round(v).toLocaleString()} km`)
 
 const EMPTY_FORM = {
   asset_no: '', driver_name: '', event_type: '', severity: '', event_at: '',
@@ -72,7 +125,10 @@ function isMissingRelation(err) {
 
 export default function DriverSafety() {
   const { activeCountry } = useSettings()
+  const [tab, setTab] = useState('events')
   const [rows, setRows] = useState(null)
+  const [tyreRecords, setTyreRecords] = useState(null)
+  const [trips, setTrips] = useState(null)
   const [error, setError] = useState('')
   const [notProvisioned, setNotProvisioned] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
@@ -94,13 +150,22 @@ export default function DriverSafety() {
   const load = useCallback(async () => {
     setRefreshing(true); setError(''); setNotProvisioned(false)
     try {
-      const data = await listDriverSafetyEvents({ country: activeCountry })
+      // Events are the primary source; tyre_records + trips enrich the
+      // Scorecards / Tyre-correlation tabs and degrade to [] independently so a
+      // missing side-table never blocks the core event log.
+      const [data, tyres, trps] = await Promise.all([
+        listDriverSafetyEvents({ country: activeCountry }),
+        listDriverTyreRecords({ country: activeCountry }).catch(() => []),
+        listDriverTrips({ country: activeCountry }).catch(() => []),
+      ])
       setRows(Array.isArray(data) ? data : [])
+      setTyreRecords(Array.isArray(tyres) ? tyres : [])
+      setTrips(Array.isArray(trps) ? trps : [])
       setUpdatedAt(new Date())
     } catch (err) {
       if (isMissingRelation(err)) setNotProvisioned(true)
       else setError(err?.message || 'Could not load driver safety events.')
-      setRows([])
+      setRows([]); setTyreRecords([]); setTrips([])
     } finally {
       setRefreshing(false)
     }
@@ -111,6 +176,52 @@ export default function DriverSafety() {
   const summary = useMemo(() => summariseSafety(rows || []), [rows])
   const scorecard = useMemo(() => driverScorecard(rows || []), [rows])
   const eventTypes = useMemo(() => byEventType(rows || []), [rows])
+
+  // ── Deepened engine derivations ──────────────────────────────────────────
+  const weighted = useMemo(() => weightedDriverScorecard(rows || []), [rows])
+  const correlation = useMemo(() => driverTyreCorrelation(tyreRecords || []), [tyreRecords])
+  const trend = useMemo(() => weeklyEventTrend(rows || []), [rows])
+
+  // Per-driver km from trips → utilisation input for the composite band.
+  const tripKmByDriver = useMemo(() => {
+    const m = new Map()
+    for (const t of trips || []) {
+      const d = (t.driver_name || '').trim()
+      if (!d) continue
+      const km = Number(t.distance_km) || 0
+      m.set(d, (m.get(d) || 0) + km)
+    }
+    return m
+  }, [trips])
+  const tripCountByDriver = useMemo(() => {
+    const m = new Map()
+    for (const t of trips || []) {
+      const d = (t.driver_name || '').trim()
+      if (!d) continue
+      m.set(d, (m.get(d) || 0) + 1)
+    }
+    return m
+  }, [trips])
+
+  // Merge weighted score + trips utilisation into the composite band per driver.
+  const bandedScorecard = useMemo(() => {
+    const fleetKm = [...tripKmByDriver.values()].filter((v) => v > 0)
+    const maxKm = fleetKm.length ? Math.max(...fleetKm) : 0
+    return (weighted || []).map((d) => {
+      const km = tripKmByDriver.get(d.driver_name) || 0
+      const tripCount = tripCountByDriver.get(d.driver_name) || 0
+      const harshEvents = ['harsh_brake', 'harsh_accel', 'harsh_corner']
+        .reduce((acc, c) => acc + (d.categoryRisk?.[c] ? 1 : 0), 0)
+      // Utilisation = this driver's km share of the busiest driver (0–100).
+      const utilization = maxKm > 0 && km > 0 ? Math.round((km / maxKm) * 100) : null
+      const composite = computeDriverSafetyBand({
+        behavior: d.score, utilization, km, trips: tripCount, harshEvents,
+      })
+      return { ...d, km, tripCount, composite }
+    })
+  }, [weighted, tripKmByDriver, tripCountByDriver])
+
+  const coaching = useMemo(() => coachingQueue(weighted || []), [weighted])
 
   const countryOptions = useMemo(
     () => [...new Set((rows || []).map((r) => r.country).filter(Boolean))].sort(),
@@ -266,6 +377,42 @@ export default function DriverSafety() {
         })}
       </div>
 
+      {/* Tab bar */}
+      <div className="flex flex-wrap items-center gap-1 border-b border-[var(--input-border)]">
+        {TABS.map((t) => {
+          const Icon = t.icon
+          const active = tab === t.key
+          return (
+            <button
+              key={t.key}
+              onClick={() => setTab(t.key)}
+              className={`inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
+                active
+                  ? 'border-[var(--accent, #6366f1)] text-[var(--text-primary)]'
+                  : 'border-transparent text-[var(--text-muted)] hover:text-[var(--text-primary)]'
+              }`}
+              aria-current={active ? 'page' : undefined}
+            >
+              <Icon size={14} /> {t.label}
+            </button>
+          )
+        })}
+      </div>
+
+      {tab === 'scorecards' && (
+        <ScorecardsTab
+          loading={rows === null}
+          banded={bandedScorecard}
+          coaching={coaching}
+          trend={trend.fleet}
+        />
+      )}
+
+      {tab === 'correlation' && (
+        <CorrelationTab loading={tyreRecords === null} correlation={correlation} />
+      )}
+
+      {tab === 'events' && (<>
       {/* Driver risk scorecard */}
       <div className="card overflow-hidden !p-0">
         <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--input-border)]">
@@ -404,6 +551,7 @@ export default function DriverSafety() {
         </div>
         {filtered.length > 500 && <p className="px-4 py-2 text-xs text-[var(--text-muted)] border-t border-[var(--input-border)]">Showing first 500 — refine filters or export for the full set.</p>}
       </div>
+      </>)}
 
       {/* Create / Edit modal */}
       {showModal && (
@@ -513,6 +661,245 @@ export default function DriverSafety() {
           </div>
         </div>
       )}
+    </div>
+  )
+}
+
+// ── Reusable pills ────────────────────────────────────────────────────────────
+
+function GradePill({ grade }) {
+  return (
+    <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-bold border ${GRADE_TONE[grade] || BAND_TONE.unknown}`}>
+      {grade}
+    </span>
+  )
+}
+
+function BandPill({ band }) {
+  return (
+    <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium border ${BAND_TONE[band] || BAND_TONE.unknown}`}>
+      {BAND_LABEL[band] || band}
+    </span>
+  )
+}
+
+// ── Scorecards tab: weighted score + grade/band + weekly trend + coaching ────
+
+function ScorecardsTab({ loading, banded, coaching, trend }) {
+  const chartData = useMemo(() => ({
+    labels: (trend || []).map((w) => w.week),
+    datasets: [
+      {
+        label: 'Events / week',
+        data: (trend || []).map((w) => w.events),
+        borderColor: '#38bdf8',
+        backgroundColor: 'rgba(56,189,248,0.15)',
+        fill: true,
+        tension: 0.3,
+        yAxisID: 'y',
+      },
+      {
+        label: 'High-severity / week',
+        data: (trend || []).map((w) => w.highSeverity),
+        borderColor: '#f87171',
+        backgroundColor: 'rgba(248,113,113,0.15)',
+        fill: true,
+        tension: 0.3,
+        yAxisID: 'y',
+      },
+    ],
+  }), [trend])
+
+  const chartOpts = useMemo(() => ({
+    responsive: true,
+    maintainAspectRatio: false,
+    interaction: { mode: 'index', intersect: false },
+    plugins: { legend: { labels: { color: '#94a3b8', boxWidth: 12 } } },
+    scales: {
+      x: { ticks: { color: '#94a3b8' }, grid: { color: 'rgba(148,163,184,0.1)' } },
+      y: { beginAtZero: true, ticks: { color: '#94a3b8', precision: 0 }, grid: { color: 'rgba(148,163,184,0.1)' } },
+    },
+  }), [])
+
+  return (
+    <div className="space-y-6">
+      {/* Weekly trend chart */}
+      <div className="card">
+        <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-3 flex items-center gap-2">
+          <TrendingUp size={15} /> Weekly event trend
+        </h3>
+        {loading ? (
+          <div className="h-64 bg-[var(--input-bg)] rounded animate-pulse" />
+        ) : (trend || []).length === 0 ? (
+          <p className="text-sm text-[var(--text-muted)] py-8 text-center">No dated events yet — log events with a timestamp to build the trend.</p>
+        ) : (
+          <div className="h-64"><Line data={chartData} options={chartOpts} /></div>
+        )}
+      </div>
+
+      {/* Weighted scorecard */}
+      <div className="card overflow-hidden !p-0">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--input-border)]">
+          <h3 className="text-sm font-semibold text-[var(--text-primary)] flex items-center gap-2">
+            <Award size={15} /> Weighted driver scorecard
+          </h3>
+          <span className="text-xs text-[var(--text-muted)]">Severity × type weighting, per-category capped · worst first</span>
+        </div>
+        {loading ? (
+          <div className="p-4"><div className="h-16 bg-[var(--input-bg)] rounded animate-pulse" /></div>
+        ) : (banded || []).length === 0 ? (
+          <p className="px-4 py-8 text-sm text-[var(--text-muted)] text-center">No driver events logged yet.</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-[var(--input-border)] text-left text-xs uppercase tracking-wider text-[var(--text-muted)]">
+                  {['Driver', 'Events', 'Risk index', 'Score', 'Grade', 'Band', 'Composite', 'Top issue'].map((h, i) => <th key={i} className="px-4 py-2.5 font-semibold whitespace-nowrap">{h}</th>)}
+                </tr>
+              </thead>
+              <tbody>
+                {banded.map((d) => (
+                  <tr key={d.driver_name} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/40">
+                    <td className="px-4 py-2.5 font-medium text-[var(--text-primary)]">{d.driver_name}</td>
+                    <td className="px-4 py-2.5 text-[var(--text-secondary)]">{d.events}</td>
+                    <td className="px-4 py-2.5 text-[var(--text-secondary)]">{d.riskIndex.toLocaleString(undefined, { maximumFractionDigits: 1 })}</td>
+                    <td className="px-4 py-2.5">
+                      <span className={`font-bold ${d.score >= 85 ? 'text-green-400' : d.score >= 70 ? 'text-amber-400' : 'text-red-400'}`}>{d.score}</span>
+                    </td>
+                    <td className="px-4 py-2.5"><GradePill grade={d.grade} /></td>
+                    <td className="px-4 py-2.5"><BandPill band={d.band} /></td>
+                    <td className="px-4 py-2.5"><BandPill band={d.composite?.band} /></td>
+                    <td className="px-4 py-2.5 text-[var(--text-secondary)] whitespace-nowrap">{CATEGORY_LABEL[d.weakestCategory] || d.weakestCategory || '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {/* Coaching queue */}
+      <div className="card overflow-hidden !p-0">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--input-border)]">
+          <h3 className="text-sm font-semibold text-[var(--text-primary)] flex items-center gap-2">
+            <GraduationCap size={15} /> Coaching queue
+          </h3>
+          <span className="text-xs text-[var(--text-muted)]">{loading ? '' : `${(coaching || []).length} driver(s) below the good band`}</span>
+        </div>
+        {loading ? (
+          <div className="p-4"><div className="h-16 bg-[var(--input-bg)] rounded animate-pulse" /></div>
+        ) : (coaching || []).length === 0 ? (
+          <p className="px-4 py-8 text-sm text-[var(--text-muted)] text-center">Every tracked driver is in the good band — no coaching needed.</p>
+        ) : (
+          <div className="divide-y divide-[var(--input-border)]/50">
+            {coaching.map((c) => (
+              <div key={c.driver_name} className="px-4 py-3 flex items-start gap-3">
+                <div className="shrink-0 flex flex-col items-center gap-1 w-16">
+                  <span className={`text-lg font-bold ${c.score >= 70 ? 'text-amber-400' : 'text-red-400'}`}>{c.score}</span>
+                  <GradePill grade={c.grade} />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-medium text-[var(--text-primary)]">{c.driver_name}</span>
+                    <span className="text-xs text-[var(--text-muted)]">Focus: {CATEGORY_LABEL[c.focus] || c.focus}</span>
+                    <span className="text-xs px-2 py-0.5 rounded-full bg-[var(--input-bg)] border border-[var(--input-border)] text-[var(--text-muted)] inline-flex items-center gap-1">
+                      <Activity size={11} /> {c.suggestedSessionMin} min session
+                    </span>
+                  </div>
+                  <p className="text-sm text-[var(--text-muted)] mt-1">{c.tip}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// ── Tyre correlation tab: the Tyre-Pulse-unique driver ↔ damage intelligence ──
+
+function CorrelationTab({ loading, correlation }) {
+  const drivers = correlation?.drivers || []
+  const median = correlation?.fleetMedianLifeKm
+
+  const EXPORT_COLS = ['driver_name', 'tyres', 'removals', 'driverCausedRemovalRate', 'driverCpk', 'prematureRemovalRate']
+  const EXPORT_HEADERS = ['Driver', 'Tyres', 'Removals', 'Driver-caused removal %', 'Driver CPK', 'Premature removal %']
+  const exportRows = drivers.map((d) => ({
+    driver_name: d.driver_name,
+    tyres: d.tyres,
+    removals: d.removals,
+    driverCausedRemovalRate: d.driverCausedRemovalRate == null ? '' : `${Math.round(d.driverCausedRemovalRate * 1000) / 10}%`,
+    driverCpk: d.driverCpk == null ? '' : d.driverCpk,
+    prematureRemovalRate: d.prematureRemovalRate == null ? '' : `${Math.round(d.prematureRemovalRate * 1000) / 10}%`,
+  }))
+
+  return (
+    <div className="space-y-6">
+      <div className="card border border-sky-900/30 flex items-start gap-3">
+        <Wrench size={18} className="text-sky-400 mt-0.5 shrink-0" />
+        <div>
+          <p className="text-[var(--text-primary)] font-medium">Driver ↔ tyre-damage correlation</p>
+          <p className="text-[var(--text-muted)] text-sm mt-1">
+            Joins each driver's tyre_records to surface driver-attributable damage (impact, cut, kerb, under-inflation, run-flat, overload), their real tyre CPK, and how often their tyres come off below the fleet median life
+            {median != null ? <> (<span className="font-mono text-[var(--text-primary)]">{kmFmt(median)}</span>)</> : null}. Drivers with no tyre history show “—”, never a guessed rate.
+          </p>
+        </div>
+      </div>
+
+      <div className="card overflow-hidden !p-0">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--input-border)]">
+          <h3 className="text-sm font-semibold text-[var(--text-primary)] flex items-center gap-2">
+            <Wrench size={15} /> Per-driver tyre intelligence
+          </h3>
+          <button
+            onClick={() => exportToExcel(exportRows, EXPORT_COLS, EXPORT_HEADERS, 'driver_tyre_correlation')}
+            className="btn-secondary text-xs inline-flex items-center gap-1.5"
+            disabled={!exportRows.length}
+          >
+            <FileSpreadsheet size={13} /> Excel
+          </button>
+        </div>
+        {loading ? (
+          <div className="p-4"><div className="h-16 bg-[var(--input-bg)] rounded animate-pulse" /></div>
+        ) : drivers.length === 0 ? (
+          <p className="px-4 py-8 text-sm text-[var(--text-muted)] text-center">
+            No tyre_records carry a driver name yet — populate driver_name on tyre records to unlock this analysis.
+          </p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-[var(--input-border)] text-left text-xs uppercase tracking-wider text-[var(--text-muted)]">
+                  {['Driver', 'Tyres', 'Removals', 'Driver-caused removals', 'Driver CPK', 'Premature removals'].map((h, i) => <th key={i} className="px-4 py-2.5 font-semibold whitespace-nowrap">{h}</th>)}
+                </tr>
+              </thead>
+              <tbody>
+                {drivers.map((d) => (
+                  <tr key={d.driver_name} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/40">
+                    <td className="px-4 py-2.5 font-medium text-[var(--text-primary)]">{d.driver_name}</td>
+                    <td className="px-4 py-2.5 text-[var(--text-secondary)]">{d.tyres}</td>
+                    <td className="px-4 py-2.5 text-[var(--text-secondary)]">{d.removals}</td>
+                    <td className="px-4 py-2.5">
+                      <span className={d.driverCausedRemovalRate == null ? 'text-[var(--text-muted)]' : d.driverCausedRemovalRate >= 0.3 ? 'text-red-400 font-semibold' : d.driverCausedRemovalRate > 0 ? 'text-amber-400' : 'text-green-400'}>
+                        {pct(d.driverCausedRemovalRate)}
+                      </span>
+                      {d.driverCausedRemovalRate != null && <span className="text-[var(--text-muted)] text-xs ml-1">({d.driverCausedRemovals}/{d.removals})</span>}
+                    </td>
+                    <td className="px-4 py-2.5 text-[var(--text-secondary)]">{d.driverCpk == null ? '—' : d.driverCpk.toLocaleString(undefined, { maximumFractionDigits: 3 })}</td>
+                    <td className="px-4 py-2.5">
+                      <span className={d.prematureRemovalRate == null ? 'text-[var(--text-muted)]' : d.prematureRemovalRate >= 0.5 ? 'text-red-400 font-semibold' : d.prematureRemovalRate > 0 ? 'text-amber-400' : 'text-green-400'}>
+                        {pct(d.prematureRemovalRate)}
+                      </span>
+                      {d.prematureRemovalRate != null && <span className="text-[var(--text-muted)] text-xs ml-1">({d.prematureRemovals}/{d.removals})</span>}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
     </div>
   )
 }

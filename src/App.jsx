@@ -158,6 +158,7 @@ const AuditTrail             = lazy(() => import('./pages/AuditTrail'))
 const ResetPassword          = lazy(() => import('./pages/ResetPassword'))
 const Accidents              = lazy(() => import('./pages/Accidents'))
 const AccidentDetail         = lazy(() => import('./components/AccidentDetailModal'))
+const ClaimsSummary          = lazy(() => import('./pages/ClaimsSummary'))
 const Reports                = lazy(() => import('./pages/Reports'))
 const GatePass               = lazy(() => import('./pages/GatePass'))
 const SerialTracker          = lazy(() => import('./pages/SerialTracker'))
@@ -336,6 +337,7 @@ function MainApp() {
                       <Route path="/actions"     element={<Safe><ModuleRoute moduleKey="corrective_actions"><CorrectiveActions /></ModuleRoute></Safe>} />
                       <Route path="/accidents"   element={<Safe><FlagRoute flag="accidents_module"><Accidents /></FlagRoute></Safe>} />
                       <Route path="/accidents/:id" element={<Safe><FlagRoute flag="accidents_module"><AccidentDetail /></FlagRoute></Safe>} />
+                      <Route path="/claims-summary" element={<Safe><FlagRoute flag="accidents_module"><ClaimsSummary /></FlagRoute></Safe>} />
                       <Route path="/rca"         element={<Safe><ModuleRoute moduleKey="rca"><RcaRecords /></ModuleRoute></Safe>} />
                       <Route path="/inspections" element={<Safe><ModuleRoute moduleKey="inspections"><Inspections /></ModuleRoute></Safe>} />
 <Route path="/alerts"      element={<Safe><ModuleRoute moduleKey="alerts"><Alerts /></ModuleRoute></Safe>} />

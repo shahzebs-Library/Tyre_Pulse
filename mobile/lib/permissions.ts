@@ -54,6 +54,16 @@ export function canManageStock(role: UserRole | null | undefined): boolean {
   return isAdminOrAbove(role)
 }
 
+/**
+ * Count / adjust stock on hand (daily stock-take). Broader than stock master
+ * data management: storekeepers and tyre handlers do the physical counts, so
+ * tyre_man is included alongside management. The DB RPCs enforce approved +
+ * unlocked + org boundary regardless.
+ */
+export function canCountStock(role: UserRole | null | undefined): boolean {
+  return role === 'tyre_man' || isAdminOrAbove(role)
+}
+
 /** Fleet KPI overview / reports - management only. */
 export function canViewOverview(role: UserRole | null | undefined): boolean {
   return isAdminOrAbove(role)

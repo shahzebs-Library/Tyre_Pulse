@@ -377,16 +377,6 @@ export default function AICommandCenter() {
   const listRef = useRef<FlatList>(null)
 
   const role = profile?.role ?? null
-  if (!canUseAI(role)) {
-    return (
-      <SafeAreaView style={ds.safe}>
-        <View style={ds.center}>
-          <Ionicons name="lock-closed-outline" size={48} color="#94a3b8" />
-          <Text style={ds.accessDenied}>AI Command Center is available{'\n'}for Admin, Manager & Director</Text>
-        </View>
-      </SafeAreaView>
-    )
-  }
 
   const send = useCallback(async (text?: string) => {
     const query = (text ?? input).trim()
@@ -468,6 +458,21 @@ export default function AICommandCenter() {
           </View>
         )}
       </View>
+    )
+  }
+
+  // Access gate — declared AFTER every hook so the number of hooks is stable
+  // across renders (profile loads async; role starts null then resolves).
+  // Returning early above any hook triggers "rendered more hooks than during
+  // the previous render" and crashes the screen on first open.
+  if (!canUseAI(role)) {
+    return (
+      <SafeAreaView style={ds.safe}>
+        <View style={ds.center}>
+          <Ionicons name="lock-closed-outline" size={48} color="#94a3b8" />
+          <Text style={ds.accessDenied}>AI Command Center is available{'\n'}for Admin, Manager & Director</Text>
+        </View>
+      </SafeAreaView>
     )
   }
 

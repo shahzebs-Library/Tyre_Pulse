@@ -1,11 +1,17 @@
 # Google Play — Store listing (TyrePulse Inspector)
 
-Assets in this folder are generated from your brand and ready to upload:
+Assets are built from your **real brand library** (`public/brand/library/`).
+Pick the **blue** or **green** version and upload the matching pair:
 
-| Play field | File | Size |
-|---|---|---|
-| App icon | `icon-512.png` | 512×512, no transparency ✓ |
-| Feature graphic | `feature-graphic-1024x500.png` | 1024×500 ✓ |
+| Play field | Blue (recommended) | Green | Size |
+|---|---|---|---|
+| App icon | `icon-512-blue.png` | `icon-512-green.png` | 512×512 |
+| Feature graphic | `feature-graphic-blue-1024x500.png` | `feature-graphic-green-1024x500.png` | 1024×500 |
+
+Blue is the recommended default — it uses your complete brand mark (tyre + **TP**
++ pulse), matching the app's favicon and web PWA icons. Green uses the tyre-pulse
+emblem in your green brand colour. Use one colour consistently across the icon
+and feature graphic.
 
 Copy the text below into **Play Console → Main store listing**.
 

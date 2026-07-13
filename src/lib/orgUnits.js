@@ -246,3 +246,84 @@ export function summariseUnits(rows = []) {
     maxDepth: computeMaxDepth(list),
   }
 }
+
+// ── Scope resolution (Enterprise §3 Phase 3 groundwork) ─────────────────────
+// Pure functions that turn "who is assigned where" into "which units does a
+// user effectively cover". A user assigned to a unit covers that unit AND every
+// unit beneath it (assignments are inherited down the tree). These are the
+// building blocks a later opt-in, default-open location-scoped RLS phase will
+// consume — kept here, deterministic and tested, with NO Supabase/RLS coupling.
+
+/**
+ * The set of unit ids a single user effectively covers: for each of the user's
+ * currently-active assignments, the assigned unit plus all of its descendants.
+ * Only assignments active at `nowMs` count (respecting the [starts_at, ends_at]
+ * window). Returns a Set of id keys (empty when the user has no active cover).
+ *
+ * @param {Array<object>} rows          org_units rows
+ * @param {Array<object>} assignments   user_org_assignments rows
+ * @param {string} userId
+ * @param {number} [nowMs]
+ * @returns {Set<string>}
+ */
+export function effectiveUnitIdsForUser(rows = [], assignments = [], userId, nowMs = Date.now()) {
+  const uid = idKey(userId)
+  const out = new Set()
+  if (!uid) return out
+  const active = assignmentsActive(assignments, nowMs)
+  for (const a of active) {
+    if (idKey(a?.user_id) !== uid) continue
+    const unitId = idKey(a?.org_unit_id)
+    if (!unitId) continue
+    out.add(unitId)
+    for (const d of descendantsOf(rows, unitId)) out.add(d)
+  }
+  return out
+}
+
+/**
+ * Per-user coverage roll-up for the Coverage view. For every user with at least
+ * one active assignment, returns:
+ *   • userId
+ *   • directUnitIds     — ids the user is directly assigned to (active)
+ *   • effectiveUnitIds  — direct ids + all inherited descendants
+ *   • primaryUnitId     — the user's primary unit (is_primary), if any
+ *   • directCount / effectiveCount — convenience counts
+ * Sorted by effectiveCount desc, then userId, for stable display.
+ *
+ * @param {Array<object>} rows
+ * @param {Array<object>} assignments
+ * @param {number} [nowMs]
+ * @returns {Array<object>}
+ */
+export function coverageByUser(rows = [], assignments = [], nowMs = Date.now()) {
+  const active = assignmentsActive(assignments, nowMs)
+  const byUser = new Map()
+  for (const a of active) {
+    const uid = idKey(a?.user_id)
+    const unitId = idKey(a?.org_unit_id)
+    if (!uid || !unitId) continue
+    if (!byUser.has(uid)) byUser.set(uid, { direct: new Set(), primaryUnitId: null })
+    const entry = byUser.get(uid)
+    entry.direct.add(unitId)
+    if (a?.is_primary && !entry.primaryUnitId) entry.primaryUnitId = unitId
+  }
+
+  const out = []
+  for (const [userId, entry] of byUser) {
+    const effective = new Set(entry.direct)
+    for (const unitId of entry.direct) {
+      for (const d of descendantsOf(rows, unitId)) effective.add(d)
+    }
+    out.push({
+      userId,
+      directUnitIds: [...entry.direct],
+      effectiveUnitIds: [...effective],
+      primaryUnitId: entry.primaryUnitId,
+      directCount: entry.direct.size,
+      effectiveCount: effective.size,
+    })
+  }
+  out.sort((a, b) => b.effectiveCount - a.effectiveCount || (a.userId < b.userId ? -1 : a.userId > b.userId ? 1 : 0))
+  return out
+}

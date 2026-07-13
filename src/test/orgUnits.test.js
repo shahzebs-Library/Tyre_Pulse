@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   toFiniteNumber, buildTree, descendantsOf, depthOf, assignmentsActive, summariseUnits,
+  effectiveUnitIdsForUser, coverageByUser,
 } from '../lib/orgUnits'
 
 const u = (id, parent, extra = {}) => ({
@@ -176,5 +177,71 @@ describe('orgUnits — summariseUnits', () => {
   it('handles an empty set', () => {
     const s = summariseUnits([])
     expect(s).toEqual({ total: 0, active: 0, byType: {}, rootCount: 0, maxDepth: 0 })
+  })
+})
+
+describe('orgUnits — effectiveUnitIdsForUser', () => {
+  // company → region → branch; region → branch2
+  const rows = [
+    u('co', null, { unit_type: 'company' }),
+    u('reg', 'co', { unit_type: 'region' }),
+    u('br', 'reg', { unit_type: 'branch' }),
+    u('br2', 'reg', { unit_type: 'branch' }),
+    u('other', null, { unit_type: 'company' }),
+  ]
+  const asg = (user_id, org_unit_id, extra = {}) => ({ id: `${user_id}-${org_unit_id}`, user_id, org_unit_id, ...extra })
+
+  it('covers the assigned unit plus all descendants', () => {
+    const cover = effectiveUnitIdsForUser(rows, [asg('u1', 'reg')], 'u1')
+    expect([...cover].sort()).toEqual(['br', 'br2', 'reg'])
+  })
+
+  it('unions coverage across multiple assignments', () => {
+    const cover = effectiveUnitIdsForUser(rows, [asg('u1', 'br'), asg('u1', 'other')], 'u1')
+    expect([...cover].sort()).toEqual(['br', 'other'])
+  })
+
+  it('ignores assignments outside the active window', () => {
+    const past = asg('u1', 'reg', { ends_at: '2020-01-01T00:00:00Z' })
+    expect(effectiveUnitIdsForUser(rows, [past], 'u1', Date.parse('2026-01-01T00:00:00Z')).size).toBe(0)
+  })
+
+  it('ignores other users and returns empty for missing user', () => {
+    expect(effectiveUnitIdsForUser(rows, [asg('u2', 'reg')], 'u1').size).toBe(0)
+    expect(effectiveUnitIdsForUser(rows, [asg('u1', 'reg')], '').size).toBe(0)
+  })
+})
+
+describe('orgUnits — coverageByUser', () => {
+  const rows = [
+    u('co', null), u('reg', 'co'), u('br', 'reg'),
+  ]
+  it('rolls up direct + effective coverage and primary unit per user', () => {
+    const assignments = [
+      { id: '1', user_id: 'u1', org_unit_id: 'co', is_primary: true },
+      { id: '2', user_id: 'u2', org_unit_id: 'br' },
+    ]
+    const cov = coverageByUser(rows, assignments)
+    expect(cov).toHaveLength(2)
+    const u1 = cov.find((c) => c.userId === 'u1')
+    expect(u1.directCount).toBe(1)
+    expect(u1.effectiveCount).toBe(3) // co + reg + br
+    expect(u1.primaryUnitId).toBe('co')
+    const u2 = cov.find((c) => c.userId === 'u2')
+    expect(u2.effectiveCount).toBe(1)
+    expect(u2.primaryUnitId).toBeNull()
+  })
+
+  it('sorts by effective coverage descending', () => {
+    const assignments = [
+      { id: '1', user_id: 'narrow', org_unit_id: 'br' },
+      { id: '2', user_id: 'wide', org_unit_id: 'co' },
+    ]
+    const cov = coverageByUser(rows, assignments)
+    expect(cov[0].userId).toBe('wide')
+  })
+
+  it('returns [] when there are no active assignments', () => {
+    expect(coverageByUser(rows, [])).toEqual([])
   })
 })

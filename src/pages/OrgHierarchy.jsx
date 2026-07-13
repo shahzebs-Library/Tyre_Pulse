@@ -24,7 +24,7 @@ import {
 } from '../lib/api/orgUnits'
 import { listProfiles } from '../lib/api/users'
 import {
-  buildTree, descendantsOf, depthOf, summariseUnits, assignmentsActive,
+  buildTree, descendantsOf, depthOf, summariseUnits, assignmentsActive, coverageByUser,
 } from '../lib/orgUnits'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 
@@ -256,6 +256,11 @@ export default function OrgHierarchy() {
       .map((a) => ({ ...a, _active: activeIds.has(a.id) }))
       .sort((x, y) => (y.is_primary ? 1 : 0) - (x.is_primary ? 1 : 0))
   }, [assignments, selectedUnitId])
+
+  // Per-user effective coverage (direct assignments + inherited descendants).
+  // Read-only groundwork for §3 P3 opt-in location scoping — surfaced so admins
+  // can see each user's reach before any scoping is enforced.
+  const coverage = useMemo(() => coverageByUser(rows || [], assignments), [rows, assignments])
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
@@ -612,6 +617,59 @@ export default function OrgHierarchy() {
               </table>
             </div>
           )}
+        </div>
+      )}
+
+      {/* User coverage (read-only §3 P3 groundwork) */}
+      {rows !== null && coverage.length > 0 && (
+        <div className="card">
+          <div className="flex flex-wrap items-center justify-between gap-2 mb-1">
+            <h3 className="text-sm font-semibold text-[var(--text-primary)] flex items-center gap-2">
+              <Users size={15} /> User coverage
+            </h3>
+            <span className="text-xs text-[var(--text-muted)]">{coverage.length} user{coverage.length === 1 ? '' : 's'} with active assignments</span>
+          </div>
+          <p className="text-xs text-[var(--text-muted)] mb-3">
+            Effective reach = units a user is assigned to, plus every unit beneath them. This is a preview only — no access is scoped by unit yet.
+          </p>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-[var(--input-border)] text-left text-xs uppercase tracking-wider text-[var(--text-muted)]">
+                  {['User', 'Primary unit', 'Direct', 'Effective reach'].map((h, i) => <th key={i} className="px-3 py-2.5 font-semibold whitespace-nowrap">{h}</th>)}
+                </tr>
+              </thead>
+              <tbody>
+                {coverage.slice(0, 100).map((c) => {
+                  const who = userLabel(c.userId)
+                  return (
+                    <tr key={c.userId} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/40">
+                      <td className="px-3 py-2.5">
+                        <span className="font-medium text-[var(--text-primary)]">{who.name}</span>
+                        {who.sub && <span className="block text-[11px] text-[var(--text-muted)]">{who.sub}</span>}
+                      </td>
+                      <td className="px-3 py-2.5 text-[var(--text-secondary)]">
+                        {c.primaryUnitId
+                          ? <span className="inline-flex items-center gap-1"><Star size={11} className="text-amber-400 fill-amber-400/40" />{nameById.get(String(c.primaryUnitId)) || '—'}</span>
+                          : <span className="text-[var(--text-muted)]">—</span>}
+                      </td>
+                      <td className="px-3 py-2.5 text-[var(--text-secondary)]">{c.directCount}</td>
+                      <td className="px-3 py-2.5">
+                        <span className="inline-flex items-center gap-1.5">
+                          <span className="text-[var(--text-primary)] font-semibold">{c.effectiveCount}</span>
+                          <span className="text-[11px] text-[var(--text-muted)]">unit{c.effectiveCount === 1 ? '' : 's'}</span>
+                          {c.effectiveCount > c.directCount && (
+                            <span className="text-[10px] text-sky-300 border border-sky-500/30 bg-sky-500/10 rounded px-1.5 py-0.5">+{c.effectiveCount - c.directCount} inherited</span>
+                          )}
+                        </span>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+          {coverage.length > 100 && <p className="text-[11px] text-[var(--text-muted)] mt-2">Showing the 100 widest-reaching users.</p>}
         </div>
       )}
 

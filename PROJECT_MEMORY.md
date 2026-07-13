@@ -60,8 +60,11 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
   `org_units` (self-FK tree) + `user_org_assignments` (V206). P1 = tables+tree UI. **P2 (done)** =
   members/assignments UI in the SAME page (select a unit → assign users, role-at-unit, primary,
   effective window; counts on tree/table). Assignment CRUD lives in `src/lib/api/orgUnits.js`;
-  active-window logic is `assignmentsActive()` in `src/lib/orgUnits.js`. Do NOT add `org_unit_id`
-  to operational tables and do NOT make location-scoped RLS until §3 P3 (opt-in, default-open).
+  active-window logic is `assignmentsActive()` in `src/lib/orgUnits.js`. **P3 groundwork (done)** =
+  pure scope resolver `effectiveUnitIdsForUser()` + `coverageByUser()` (assigned unit + all
+  descendants, active-window aware) in `src/lib/orgUnits.js`, surfaced as a read-only "User coverage"
+  card in the page. NO RLS/DB change yet. Do NOT add `org_unit_id` to operational tables and do NOT
+  enforce location-scoped RLS until the remaining §3 P3–P4 opt-in, default-open step.
 
 ## Open items needing USER/OPS action
 - Register SAML/OIDC providers in Supabase Auth (Management API) per SSO-config domain.

@@ -43,10 +43,22 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
   via `src/lib/safeError.js` (toUserMessage). CSV export sanitized in `exportUtils.js`.
 
 ## Status (2026-07-13)
-- 88 modules ported from fleet_IQ/tyre_saas (batches 1–19). Migrations V127–V202.
+- 88 modules ported from fleet_IQ/tyre_saas (batches 1–19). Migrations V127–V206.
 - Full security remediation applied (V202) + Holding Company (V201) + SSO last-mile (Login signInWithSSO).
+- Enterprise phases landed additively: §5 Master Access Control, §6 Approval Delegations (V203),
+  §7 Admin Console `/admin`, §11 Notification Preferences (V204), §12 AI Administration (V205),
+  §3 P1 Organization Hierarchy (V206). All wired + tested; 3018+ tests green.
 - Vercel deploys green (root cause of prior ERROR: a non-schema `_comment` key in `vercel.json` header — never add keys other than key/value to header entries).
 - Branch: `claude/port-fleetiq-tyresaas` → merged to `main` per batch.
+
+### Canonical enterprise-phase surfaces — DO NOT duplicate
+- **§12 AI Administration** = `src/pages/AiAdministration.jsx` (/ai-administration, Admin + `ai_tools` flag).
+  Tables `ai_models`/`ai_prompts`/`ai_budgets`/`ai_feedback` (V205) are admin CONFIG/audit only —
+  they do NOT change runtime AI; edge fns keep authoritative fallbacks. Usage still from
+  `ai_token_logs`/`ai_usage_log` (do NOT add a 3rd usage table; converging those two is a later item).
+- **§3 Organization Hierarchy** = `src/pages/OrgHierarchy.jsx` (/org-hierarchy, Admin/Manager/Director).
+  `org_units` (self-FK tree) + `user_org_assignments` (V206). P1 = tables+UI ONLY. Do NOT add
+  `org_unit_id` to operational tables and do NOT make location-scoped RLS until §3 P3 (opt-in, default-open).
 
 ## Open items needing USER/OPS action
 - Register SAML/OIDC providers in Supabase Auth (Management API) per SSO-config domain.
@@ -54,6 +66,8 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
 - Move mobile publishable key/DSN to EAS secrets. Redeploy remaining edge fns for CORS allowlist.
 - Nav: 8 orphaned pages surfaced + Engineering KPI/KPI Command surfaced (done). Master Access Control unified (§5 done).
 - Admin Console hub `/admin` = §7 landing (searchable grouped links to existing admin pages; live user/company counts). `src/pages/AdminConsole.jsx`.
-- Remaining enterprise phases (large, do deliberately not silently): Approval/Workflow engine (§6),
-  Organization hierarchy Company→…→User (§3), Data Intake Centre (§9), Notification engine (§11), AI admin move (§12).
+- Remaining enterprise phases (large, do deliberately not silently — touch live data):
+  §3 P2–P4 (unit assignments UI → resolver → opt-in location RLS → wire approvals+notifications),
+  §9 Data Intake Centre deepening, generalizing the notification bus to honor `notification_preferences`,
+  `ai_permissions` enforcement, converging `ai_token_logs`/`ai_usage_log`.
 - Nav labels render via t(`nav.items.<route>`) with fallback to item.label; add en+ar keys for new items.

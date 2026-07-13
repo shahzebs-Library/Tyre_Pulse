@@ -24,7 +24,7 @@ import {
   Satellite, Landmark, BookMarked, PhoneCall, Scale,
   Droplet, KeyRound, GraduationCap, FileClock,
   CalendarRange, ListTodo, Thermometer, Network, Play, Code, Repeat, Store, Rocket,
-  Wallet, FileCheck, Building2,
+  Wallet, FileCheck, Building2, Lock,
 } from 'lucide-react'
 // Branded domain icons (custom Tyre Pulse set) for the clearest fleet/tyre nav
 // items. Same ({ size, strokeWidth }) API as Lucide, so they drop straight in.

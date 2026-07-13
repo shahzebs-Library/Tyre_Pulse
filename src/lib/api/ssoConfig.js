@@ -15,6 +15,10 @@
  */
 import { supabase, unwrap, applyCountry } from './_client'
 import { toFiniteNumber } from '../ssoConfig'
+import { safeHref } from '../safeUrl'
+
+/** Scheme-guard a URL on write: safe → the string, anything unsafe/blank → null. */
+const asUrl = (v) => { const s = safeHref(v); return s === undefined ? null : s }
 
 export const COLS =
   'id,organisation_id,country,connection_name,protocol,idp_provider,idp_entity_id,' +
@@ -89,7 +93,7 @@ export async function createSsoConnection(values = {}) {
     protocol: asEnum(values.protocol, PROTOCOLS),
     idp_provider: asText(values.idp_provider, 200),
     idp_entity_id: asText(values.idp_entity_id, 500),
-    sso_url: asText(values.sso_url, 1000),
+    sso_url: asUrl(asText(values.sso_url, 1000)),
     domains: asText(values.domains, 2000),
     default_role: asText(values.default_role, 120),
     enforce_sso: asBool(values.enforce_sso),
@@ -117,7 +121,7 @@ export async function updateSsoConnection(id, patch = {}) {
   if (patch.protocol !== undefined) clean.protocol = asEnum(patch.protocol, PROTOCOLS)
   if (patch.idp_provider !== undefined) clean.idp_provider = asText(patch.idp_provider, 200)
   if (patch.idp_entity_id !== undefined) clean.idp_entity_id = asText(patch.idp_entity_id, 500)
-  if (patch.sso_url !== undefined) clean.sso_url = asText(patch.sso_url, 1000)
+  if (patch.sso_url !== undefined) clean.sso_url = asUrl(asText(patch.sso_url, 1000))
   if (patch.domains !== undefined) clean.domains = asText(patch.domains, 2000)
   if (patch.default_role !== undefined) clean.default_role = asText(patch.default_role, 120)
   if (patch.enforce_sso !== undefined) clean.enforce_sso = asBool(patch.enforce_sso)

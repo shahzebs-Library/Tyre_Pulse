@@ -31,6 +31,7 @@ import {
   summariseScans, byType, byBand, confidenceBand, needsReview,
 } from '../lib/ocrScanner'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
+import { safeHref } from '../lib/safeUrl'
 
 const SCAN_TYPES = [
   { value: 'tyre_sidewall', label: 'Tyre sidewall' },
@@ -500,9 +501,11 @@ export default function OcrScanner() {
                     <td className="px-4 py-2.5"><BandBadge scan={r} /></td>
                     <td className="px-4 py-2.5"><StatusBadge status={r.review_status} /></td>
                     <td className="px-4 py-2.5">
-                      {r.image_url
-                        ? <a href={r.image_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-sky-400 hover:text-sky-300 text-xs"><ImageIcon size={13} /> View</a>
-                        : <span className="text-[var(--text-muted)] text-xs">—</span>}
+                      {safeHref(r.image_url)
+                        ? <a href={safeHref(r.image_url)} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-sky-400 hover:text-sky-300 text-xs"><ImageIcon size={13} /> View</a>
+                        : r.image_url
+                          ? <span className="inline-flex items-center gap-1 text-[var(--text-muted)] text-xs"><ImageIcon size={13} /> View</span>
+                          : <span className="text-[var(--text-muted)] text-xs">—</span>}
                     </td>
                     <td className="px-4 py-2.5 text-[var(--text-secondary)] whitespace-nowrap">{fmtDate(r.created_at)}</td>
                     <td className="px-4 py-2.5">

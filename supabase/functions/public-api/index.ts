@@ -75,6 +75,11 @@ const RESOURCES: Record<string, Resource> = {
 
 const HEADERS = {
   'Content-Type': 'application/json',
+  // NOTE: public-api authenticates with server-to-server API keys (X-API-Key),
+  // NOT user sessions. These keys must NEVER be embedded in a browser / SPA —
+  // doing so would expose the key to any site the browser visits. The '*' CORS
+  // origin is intentional and safe ONLY because this endpoint is designed for
+  // trusted backend-to-backend callers, where CORS does not apply.
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'x-api-key, content-type',
   'Access-Control-Allow-Methods': 'GET, OPTIONS',

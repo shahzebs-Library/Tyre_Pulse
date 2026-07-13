@@ -5,6 +5,7 @@ import {
 } from 'lucide-react'
 import * as imports from '../../lib/api/imports'
 import { useLanguage } from '../../contexts/LanguageContext'
+import { toUserMessage } from '../../lib/safeError'
 
 const TABLE_KEYS = ['tyre_records', 'work_orders', 'inspections', 'corrective_actions', 'accidents']
 
@@ -28,7 +29,7 @@ export default function DataLinkPanel({ isElevated = false }) {
   const load = useCallback(async () => {
     setError('')
     try { setAudit(await imports.linkAudit()) }
-    catch (e) { setError(e?.message || t('intake.panels.dataLink.errorLoad')); setAudit({}) }
+    catch (e) { setError(toUserMessage(e, t('intake.panels.dataLink.errorLoad'))); setAudit({}) }
   }, [t])
   useEffect(() => { load() }, [load])
 
@@ -40,7 +41,7 @@ export default function DataLinkPanel({ isElevated = false }) {
       setRepairMsg(t('intake.panels.dataLink.repairSuccess', { count: res?.created ?? 0 }))
       await load()
     } catch (e) {
-      setError(e?.message || t('intake.panels.dataLink.errorRepair'))
+      setError(toUserMessage(e, t('intake.panels.dataLink.errorRepair')))
     } finally { setRepairing(false) }
   }
 

@@ -12,6 +12,7 @@ import { useSettings } from '../contexts/SettingsContext'
 import { useTenant } from '../contexts/TenantContext'
 import { useLanguage } from '../contexts/LanguageContext'
 import { formatDate } from '../lib/formatters'
+import { safeImageSrc } from '../lib/safeUrl'
 import { exportToPptx, exportToExcel, exportToPdf, exportDailyExecutivePdf } from '../lib/exportUtils'
 import PageHeader from '../components/ui/PageHeader'
 import SectionTabs, { REPORTS_TABS } from '../components/ui/SectionTabs'
@@ -234,8 +235,8 @@ export default function ReportCenter() {
       {/* Branding banner */}
       <div className="card flex flex-col sm:flex-row sm:items-center gap-3 justify-between">
         <div className="flex items-center gap-3">
-          {branding?.logo_url
-            ? <img src={branding.logo_url} alt={t('reportcenter.branding.logoAlt')} className="h-10 w-10 rounded object-contain bg-white/5" onError={(e) => { e.currentTarget.style.display = 'none' }} />
+          {safeImageSrc(branding?.logo_url)
+            ? <img src={safeImageSrc(branding.logo_url)} alt={t('reportcenter.branding.logoAlt')} className="h-10 w-10 rounded object-contain bg-white/5" onError={(e) => { e.currentTarget.style.display = 'none' }} />
             : <div className="h-10 w-10 rounded flex items-center justify-center" style={{ background: branding?.primary_color || '#16A34A' }}><Palette size={16} className="text-white/90" /></div>}
           <div>
             <p className="text-sm font-semibold text-gray-100">{reportCompany}</p>

@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { Gauge, ChevronDown, ChevronRight, RefreshCw, Loader2, AlertCircle } from 'lucide-react'
 import * as imports from '../../lib/api/imports'
 import { useLanguage } from '../../contexts/LanguageContext'
+import { toUserMessage } from '../../lib/safeError'
 
 /**
  * Data Completeness — per-field fill scorecard for the Data Intake Center.
@@ -45,7 +46,7 @@ export default function DataCompletenessPanel() {
   const load = useCallback(async () => {
     setError('')
     try { setStats(await imports.dataCompleteness()) }
-    catch (e) { setError(e?.message || t('intake.panels.completeness.errorLoad')); setStats({}) }
+    catch (e) { setError(toUserMessage(e, t('intake.panels.completeness.errorLoad'))); setStats({}) }
   }, [t])
   useEffect(() => { load() }, [load])
 

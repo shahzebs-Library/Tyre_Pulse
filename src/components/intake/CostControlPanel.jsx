@@ -6,6 +6,7 @@ import {
 import * as imports from '../../lib/api/imports'
 import { useSettings } from '../../contexts/SettingsContext'
 import { useLanguage } from '../../contexts/LanguageContext'
+import { toUserMessage } from '../../lib/safeError'
 
 const SCOPES = ['all', 'country', 'site', 'asset']
 
@@ -35,7 +36,7 @@ export default function CostControlPanel({ isElevated = false }) {
   const load = useCallback(async () => {
     setError('')
     try { setOv(await imports.costBudgetOverview()) }
-    catch (e) { setError(e?.message || t('intake.panels.costControl.errorLoad')); setOv({}) }
+    catch (e) { setError(toUserMessage(e, t('intake.panels.costControl.errorLoad'))); setOv({}) }
   }, [t])
   useEffect(() => { load() }, [load])
 
@@ -49,7 +50,7 @@ export default function CostControlPanel({ isElevated = false }) {
       setMsg(t('intake.panels.costControl.successOverride', { amount: money(amt), count: res?.updated ?? 0 }))
       setAmount('')
       await load()
-    } catch (e) { setError(e?.message || t('intake.panels.costControl.errorOverride')) } finally { setBusy(false) }
+    } catch (e) { setError(toUserMessage(e, t('intake.panels.costControl.errorOverride'))) } finally { setBusy(false) }
   }
 
   async function convertLineTotals() {
@@ -59,7 +60,7 @@ export default function CostControlPanel({ isElevated = false }) {
       const res = await imports.costConvertLineTotals()
       setMsg(t('intake.panels.costControl.successConvert', { count: Number(res?.converted ?? 0).toLocaleString('en-US'), amount: money(res?.total_spend) }))
       await load()
-    } catch (e) { setError(e?.message || t('intake.panels.costControl.errorConvert')) } finally { setBusy(false) }
+    } catch (e) { setError(toUserMessage(e, t('intake.panels.costControl.errorConvert'))) } finally { setBusy(false) }
   }
 
   async function clearFlatRate() {
@@ -71,7 +72,7 @@ export default function CostControlPanel({ isElevated = false }) {
       const res = await imports.costClearValue(fr.value)
       setMsg(t('intake.panels.costControl.successClear', { amount: money(fr.value), count: res?.cleared ?? 0 }))
       await load()
-    } catch (e) { setError(e?.message || t('intake.panels.costControl.errorClear')) } finally { setBusy(false) }
+    } catch (e) { setError(toUserMessage(e, t('intake.panels.costControl.errorClear'))) } finally { setBusy(false) }
   }
 
   async function applyActuals() {
@@ -81,7 +82,7 @@ export default function CostControlPanel({ isElevated = false }) {
       const res = await imports.costApplyActualBudgets()
       setMsg(t('intake.panels.costControl.successApply', { count: res?.updated ?? 0, amount: money(res?.total_monthly) }))
       await load()
-    } catch (e) { setError(e?.message || t('intake.panels.costControl.errorApply')) } finally { setBusy(false) }
+    } catch (e) { setError(toUserMessage(e, t('intake.panels.costControl.errorApply'))) } finally { setBusy(false) }
   }
 
   return (

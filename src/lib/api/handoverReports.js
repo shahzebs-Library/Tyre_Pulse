@@ -12,6 +12,10 @@
  */
 import { supabase, unwrap, applyCountry } from './_client'
 import { toFiniteNumber } from '../handoverReports'
+import { safeHref } from '../safeUrl'
+
+/** Scheme-guard a URL on write: safe → the string, anything unsafe/blank → null. */
+const asUrl = (v) => { const s = safeHref(v); return s === undefined ? null : s }
 
 export const COLS =
   'id,organisation_id,country,report_no,asset_no,handover_type,from_driver,' +
@@ -123,8 +127,8 @@ export async function createHandoverReport(values = {}) {
     damages,
     damage_count: deriveDamageCount(values.damage_count, damages),
     cleanliness: asEnum(values.cleanliness, CLEANLINESS),
-    signature_url: asText(values.signature_url, 2000),
-    photo_url: asText(values.photo_url, 2000),
+    signature_url: asUrl(asText(values.signature_url, 2000)),
+    photo_url: asUrl(asText(values.photo_url, 2000)),
     notes: values.notes ? String(values.notes).slice(0, 8000) : null,
     country: values.country ?? null,
   }
@@ -159,8 +163,8 @@ export async function updateHandoverReport(id, patch = {}) {
     clean.damage_count = deriveDamageCount(patch.damage_count, null)
   }
   if (patch.cleanliness !== undefined) clean.cleanliness = asEnum(patch.cleanliness, CLEANLINESS)
-  if (patch.signature_url !== undefined) clean.signature_url = asText(patch.signature_url, 2000)
-  if (patch.photo_url !== undefined) clean.photo_url = asText(patch.photo_url, 2000)
+  if (patch.signature_url !== undefined) clean.signature_url = asUrl(asText(patch.signature_url, 2000))
+  if (patch.photo_url !== undefined) clean.photo_url = asUrl(asText(patch.photo_url, 2000))
   if (patch.notes !== undefined) clean.notes = patch.notes ? String(patch.notes).slice(0, 8000) : null
   if (patch.country !== undefined) clean.country = patch.country ?? null
 

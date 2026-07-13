@@ -24,6 +24,7 @@ import {
 } from 'lucide-react'
 import { getDisplaySnapshot, shapeSnapshot } from '../lib/api/displayTokens'
 import { formatCompactMoney, formatCountdown, nextBoardIndex } from '../lib/displayBoard'
+import { safeImageSrc } from '../lib/safeUrl'
 
 // Force-dark palette (independent of app theme) — same intent as DisplayDashboard.
 const RISK_COLORS = {
@@ -456,8 +457,8 @@ export default function DisplayShare() {
     >
       <header className="flex items-center justify-between gap-6 px-8 py-5 border-b border-slate-800/70 flex-shrink-0">
         <div className="flex items-center gap-4 min-w-0">
-          {s.branding.logoUrl ? (
-            <img src={s.branding.logoUrl} alt="" className="h-11 w-auto max-w-[180px] object-contain"
+          {safeImageSrc(s.branding.logoUrl) ? (
+            <img src={safeImageSrc(s.branding.logoUrl)} alt="" className="h-11 w-auto max-w-[180px] object-contain"
               onError={(e) => { e.currentTarget.style.display = 'none' }} />
           ) : (
             <div className="h-11 w-11 rounded-xl flex items-center justify-center flex-shrink-0"

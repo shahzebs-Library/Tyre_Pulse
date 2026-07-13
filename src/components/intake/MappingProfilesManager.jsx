@@ -5,6 +5,7 @@ import {
 } from 'lucide-react'
 import * as imports from '../../lib/api/imports'
 import { useLanguage } from '../../contexts/LanguageContext'
+import { toUserMessage } from '../../lib/safeError'
 
 /**
  * Saved Mappings manager — browse, inspect and manage the reusable column-mapping
@@ -30,7 +31,7 @@ export default function MappingProfilesManager({ moduleLabels = {}, onApply }) {
   const load = useCallback(async () => {
     setError('')
     try { setProfiles(await imports.listAllProfiles()) }
-    catch (e) { setError(e?.message || t('intake.panels.profiles.errorLoad')); setProfiles([]) }
+    catch (e) { setError(toUserMessage(e, t('intake.panels.profiles.errorLoad'))); setProfiles([]) }
   }, [t])
   useEffect(() => { load() }, [load])
 
@@ -46,17 +47,17 @@ export default function MappingProfilesManager({ moduleLabels = {}, onApply }) {
     const name = window.prompt(t('intake.panels.profiles.renamePrompt'), p.name)
     if (!name || !name.trim() || name.trim() === p.name) return
     setBusyId(p.id)
-    try { await imports.renameProfile(p.id, name); await load() } catch (e) { setError(e.message) } finally { setBusyId(null) }
+    try { await imports.renameProfile(p.id, name); await load() } catch (e) { setError(toUserMessage(e)) } finally { setBusyId(null) }
   }
   async function toggleActive(p) {
     setBusyId(p.id)
-    try { await imports.setProfileActive(p.id, !p.active); await load() } catch (e) { setError(e.message) } finally { setBusyId(null) }
+    try { await imports.setProfileActive(p.id, !p.active); await load() } catch (e) { setError(toUserMessage(e)) } finally { setBusyId(null) }
   }
   async function remove(p) {
     if (!window.confirm(t('intake.panels.profiles.deleteConfirm', { name: p.name, count: p.rule_count }))) return
     setBusyId(p.id)
     try { await imports.deleteProfile(p.id); if (expanded === p.id) setExpanded(null); await load() }
-    catch (e) { setError(e.message) } finally { setBusyId(null) }
+    catch (e) { setError(toUserMessage(e)) } finally { setBusyId(null) }
   }
 
   const count = profiles?.length ?? 0

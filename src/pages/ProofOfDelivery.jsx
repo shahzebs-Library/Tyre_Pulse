@@ -23,6 +23,7 @@ import {
   listPodRecords, createPodRecord, updatePodRecord, deletePodRecord,
 } from '../lib/api/podRecords'
 import { summarisePods, byStatus, byDriver, POD_STATUSES } from '../lib/podRecords'
+import { safeHref } from '../lib/safeUrl'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 
 const EMPTY_FORM = {
@@ -370,11 +371,15 @@ export default function ProofOfDelivery() {
                     <td className="px-4 py-2.5"><StatusBadge status={r.status} /></td>
                     <td className="px-4 py-2.5">
                       <div className="flex items-center gap-2">
-                        {r.signature_url ? (
-                          <a href={r.signature_url} target="_blank" rel="noopener noreferrer" className="text-[var(--text-muted)] hover:text-sky-400" title="Signature" aria-label="View signature"><PenLine size={15} /></a>
+                        {safeHref(r.signature_url) ? (
+                          <a href={safeHref(r.signature_url)} target="_blank" rel="noopener noreferrer" className="text-[var(--text-muted)] hover:text-sky-400" title="Signature" aria-label="View signature"><PenLine size={15} /></a>
+                        ) : r.signature_url ? (
+                          <span className="text-[var(--text-muted)]" title="Signature (unavailable)" aria-label="Signature unavailable"><PenLine size={15} /></span>
                         ) : null}
-                        {r.photo_url ? (
-                          <a href={r.photo_url} target="_blank" rel="noopener noreferrer" className="text-[var(--text-muted)] hover:text-sky-400" title="Photo" aria-label="View photo"><ImageIcon size={15} /></a>
+                        {safeHref(r.photo_url) ? (
+                          <a href={safeHref(r.photo_url)} target="_blank" rel="noopener noreferrer" className="text-[var(--text-muted)] hover:text-sky-400" title="Photo" aria-label="View photo"><ImageIcon size={15} /></a>
+                        ) : r.photo_url ? (
+                          <span className="text-[var(--text-muted)]" title="Photo (unavailable)" aria-label="Photo unavailable"><ImageIcon size={15} /></span>
                         ) : null}
                         {!r.signature_url && !r.photo_url && <span className="text-[11px] text-[var(--text-muted)]">—</span>}
                         {r.items_count != null && <span className="text-[11px] text-[var(--text-muted)]">· {fmtInt(r.items_count)} items</span>}

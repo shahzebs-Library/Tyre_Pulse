@@ -11,6 +11,10 @@
  */
 import { supabase, unwrap, applyCountry } from './_client'
 import { toFiniteNumber } from '../dashcamEvents'
+import { safeHref } from '../safeUrl'
+
+/** Scheme-guard a URL on write: safe → the string, anything unsafe/blank → null. */
+const asUrl = (v) => { const s = safeHref(v); return s === undefined ? null : s }
 
 export const COLS =
   'id,organisation_id,country,asset_no,driver_name,event_type,severity,event_at,' +
@@ -84,7 +88,7 @@ export async function createDashcamEvent(values = {}) {
     event_at: asDate(values.event_at) || new Date().toISOString(),
     location: asText(values.location, 300),
     speed_kmh,
-    video_url: asText(values.video_url, 2000),
+    video_url: asUrl(asText(values.video_url, 2000)),
     reviewed: values.reviewed === true || values.reviewed === 'true',
     review_notes: values.review_notes ? String(values.review_notes).slice(0, 8000) : null,
     notes: values.notes ? String(values.notes).slice(0, 8000) : null,
@@ -119,7 +123,7 @@ export async function updateDashcamEvent(id, patch = {}) {
       clean.speed_kmh = speed_kmh
     }
   }
-  if (patch.video_url !== undefined) clean.video_url = asText(patch.video_url, 2000)
+  if (patch.video_url !== undefined) clean.video_url = asUrl(asText(patch.video_url, 2000))
   if (patch.reviewed !== undefined) clean.reviewed = patch.reviewed === true || patch.reviewed === 'true'
   if (patch.review_notes !== undefined) clean.review_notes = patch.review_notes ? String(patch.review_notes).slice(0, 8000) : null
   if (patch.notes !== undefined) clean.notes = patch.notes ? String(patch.notes).slice(0, 8000) : null

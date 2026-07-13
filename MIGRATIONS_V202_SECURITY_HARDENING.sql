@@ -209,3 +209,19 @@ DROP POLICY IF EXISTS mkt_listings_delete ON public.marketplace_listings;
 DROP POLICY IF EXISTS mkt_rfqs_insert ON public.marketplace_rfqs;
 DROP POLICY IF EXISTS mkt_rfqs_update ON public.marketplace_rfqs;
 DROP POLICY IF EXISTS mkt_rfqs_delete ON public.marketplace_rfqs;
+
+-- ── ai_token_logs: auto-stamp organisation_id on insert (service-role writers) ─
+-- Edge functions insert via the service role (RLS bypassed, no JWT), so app_current_org()
+-- is null there. This trigger backfills org from the user's profile so rows stay
+-- visible under the new org-isolation policy.
+CREATE OR REPLACE FUNCTION public.ai_token_logs_set_org()
+RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+BEGIN
+  IF NEW.organisation_id IS NULL AND NEW.user_id IS NOT NULL THEN
+    SELECT p.organisation_id INTO NEW.organisation_id FROM public.profiles p WHERE p.id = NEW.user_id;
+  END IF;
+  RETURN NEW;
+END $$;
+DROP TRIGGER IF EXISTS trg_ai_token_logs_set_org ON public.ai_token_logs;
+CREATE TRIGGER trg_ai_token_logs_set_org BEFORE INSERT ON public.ai_token_logs
+  FOR EACH ROW EXECUTE FUNCTION public.ai_token_logs_set_org();

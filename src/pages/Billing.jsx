@@ -132,7 +132,15 @@ export default function Billing() {
       if (paid) {
         try {
           const res = await billing.startCheckout({ planCode: target.code, interval })
-          if (res?.configured && res.url) { window.location.href = res.url; return }
+          if (res?.configured && res.url) {
+            // Only ever redirect the browser to an https checkout endpoint —
+            // never a javascript:/data: or plain-http URL smuggled in the response.
+            if (typeof res.url !== 'string' || !res.url.trim().toLowerCase().startsWith('https://')) {
+              throw new Error('Checkout returned an invalid redirect URL.')
+            }
+            window.location.href = res.url
+            return
+          }
         } catch { /* fall through */ }
       }
       await billing.changePlan({ planCode: target.code, interval })

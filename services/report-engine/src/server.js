@@ -4,28 +4,37 @@
 //   GET  /health          liveness probe
 //   POST /reports/pdf     ReportDefinition JSON → application/pdf
 //
-// Optional hardening via env:
-//   REPORT_API_KEY     when set, requests must send X-Report-Key: <key>
-//   ALLOWED_ORIGIN     CORS allow-list (comma-separated); '*' by default
+// Security hardening via env:
+//   REPORT_API_KEY     required in production; requests must send X-Report-Key.
+//                      If unset in production, all non-/health routes return 503
+//                      (fail closed) rather than serving unauthenticated.
+//   ALLOWED_ORIGIN     CORS allow-list (comma-separated). No wildcard default —
+//                      when unset the service is same-origin only (no
+//                      Access-Control-Allow-Origin header is sent).
 // ─────────────────────────────────────────────────────────────────────────────
 
 import express from 'express'
 import { parseReportDefinition } from './reportSchema.js'
 import { renderPdf } from './renderer.js'
 
+const IS_PRODUCTION = process.env.NODE_ENV === 'production'
+
 export function createServer() {
   const app = express()
   app.use(express.json({ limit: process.env.REPORT_BODY_LIMIT || '12mb' }))
 
-  // CORS
-  const allowed = (process.env.ALLOWED_ORIGIN || '*')
+  // CORS — explicit allow-list only. When ALLOWED_ORIGIN is unset we send no
+  // Access-Control-Allow-Origin header at all (same-origin only); we never fall
+  // back to a '*' wildcard.
+  const allowed = (process.env.ALLOWED_ORIGIN || '')
     .split(',')
     .map((s) => s.trim())
     .filter(Boolean)
   app.use((req, res, next) => {
     const origin = req.headers.origin
-    if (allowed.includes('*')) res.setHeader('Access-Control-Allow-Origin', '*')
-    else if (origin && allowed.includes(origin)) res.setHeader('Access-Control-Allow-Origin', origin)
+    if (origin && allowed.includes(origin)) {
+      res.setHeader('Access-Control-Allow-Origin', origin)
+    }
     res.setHeader('Access-Control-Allow-Methods', 'POST, GET, OPTIONS')
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-Report-Key')
     res.setHeader('Vary', 'Origin')
@@ -33,10 +42,20 @@ export function createServer() {
     next()
   })
 
-  // Optional API-key gate
+  // API-key gate — FAIL CLOSED. /health is always open.
+  //  • Key set   → require a matching X-Report-Key header.
+  //  • Key unset + production → 503 for every non-/health route (never serve
+  //    unauthenticated in production).
+  //  • Key unset + non-production → allow (local development convenience).
   app.use((req, res, next) => {
+    if (req.path === '/health') return next()
     const key = process.env.REPORT_API_KEY
-    if (!key || req.path === '/health') return next()
+    if (!key) {
+      if (IS_PRODUCTION) {
+        return res.status(503).json({ error: 'service unavailable: REPORT_API_KEY not configured' })
+      }
+      return next()
+    }
     if (req.headers['x-report-key'] === key) return next()
     return res.status(401).json({ error: 'unauthorized' })
   })

@@ -24,6 +24,7 @@ import {
   TICKET_CATEGORIES, TICKET_SEVERITIES,
 } from '../lib/api/support'
 import { FAQ_CATEGORIES, searchFaqs, groupFaqsByCategory, visibleFaqsForRole } from '../lib/help/faqs'
+import { toUserMessage } from '../lib/safeError'
 
 const CATEGORY_META = {
   bug: { label: 'Bug / Error', icon: Bug, tint: 'text-red-400' },
@@ -189,7 +190,7 @@ function ReportForm({ onSubmitted }) {
       setForm({ subject: '', category: 'question', severity: 'medium', message: '' })
       onSubmitted?.()
     } catch (err) {
-      setError(err?.message || 'Could not submit your ticket. Please try again.')
+      setError(toUserMessage(err, 'Could not submit your ticket. Please try again.'))
     } finally {
       setBusy(false)
     }
@@ -272,7 +273,7 @@ function TicketCard({ ticket, triage, onChanged }) {
 
   const act = useCallback(async (fn) => {
     setBusy(true); setErr('')
-    try { const row = await fn(); onChanged?.(row) } catch (e) { setErr(e?.message || 'Action failed.') } finally { setBusy(false) }
+    try { const row = await fn(); onChanged?.(row) } catch (e) { setErr(toUserMessage(e, 'Action failed.')) } finally { setBusy(false) }
   }, [onChanged])
 
   return (
@@ -365,7 +366,7 @@ function TicketList({ triage, reloadKey, emptyHint }) {
     try {
       setRows(await listTickets(triage ? {} : { mine: true }))
     } catch (err) {
-      setError(isMissingRelation(err) ? 'missing' : (err?.message || 'Could not load tickets.'))
+      setError(isMissingRelation(err) ? 'missing' : (toUserMessage(err, 'Could not load tickets.')))
       setRows([])
     }
   }, [triage])

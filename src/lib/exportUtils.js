@@ -66,6 +66,36 @@ const nowStr  = () => formatDate(new Date(), 'All')
 
 function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)) }
 
+// ── Spreadsheet formula-injection defence (CSV/Excel) ───────────────────────────
+// A string cell whose first character is one of = + - @ (or a leading tab/CR)
+// is interpreted as a formula by Excel / Google Sheets / LibreOffice when the
+// file is opened, enabling data exfiltration or command execution (e.g.
+// `=HYPERLINK(...)`, `=cmd|'/c calc'!A1`). Prefixing such a value with a single
+// apostrophe forces the spreadsheet app to treat it as literal text while the
+// visible content is unchanged. Non-strings pass through untouched.
+// Exported for unit testing.
+export function sanitizeCell(v) {
+  if (typeof v !== 'string' || v.length === 0) return v
+  const first = v.charCodeAt(0)
+  // = 0x3D, + 0x2B, - 0x2D, @ 0x40, TAB 0x09, CR 0x0D
+  if (first === 0x3D || first === 0x2B || first === 0x2D || first === 0x40 || first === 0x09 || first === 0x0D) {
+    return `'${v}`
+  }
+  return v
+}
+
+/** Sanitize every string value of a plain-object row (returns a new object). */
+function _sanitizeRowObject(row, keys) {
+  const out = {}
+  for (const k of keys) out[k] = sanitizeCell(row[k])
+  return out
+}
+
+/** Sanitize every cell of an array-of-arrays (AOA) sheet. */
+function _sanitizeAoa(aoa) {
+  return aoa.map(row => (Array.isArray(row) ? row.map(sanitizeCell) : row))
+}
+
 // ── Tenant branding helpers ──────────────────────────────────────────────────
 // Reports accept an optional `branding` object (from TenantContext / V68):
 // { primary_color, secondary_color, accent_color, logo_url, footer_text,
@@ -627,14 +657,15 @@ export async function exportToExcel(rows, columns, headers, filename = 'export',
       aoa.push([])
     }
 
-    const wsSum = XLSX.utils.aoa_to_sheet(aoa)
+    const wsSum = XLSX.utils.aoa_to_sheet(_sanitizeAoa(aoa))
     wsSum['!cols'] = [{ wch: 34 }, { wch: 22 }, { wch: 14 }]
     XLSX.utils.book_append_sheet(wb, wsSum, 'Summary')
   }
 
   // ── Sheet 2: Data (frozen header + auto-filter) ──
   const displayRows = rows.map(r => Object.fromEntries(columns.map((col, i) => [headers[i], r[col] ?? ''])))
-  const ws = XLSX.utils.json_to_sheet(displayRows, { header: headers })
+  const safeRows = displayRows.map(r => _sanitizeRowObject(r, headers))
+  const ws = XLSX.utils.json_to_sheet(safeRows, { header: headers })
   ws['!cols'] = headers.map((h) => {
     const maxLen = Math.max(h.length, ...displayRows.map(r => String(r[h] ?? '').length))
     return { wch: Math.min(maxLen + 2, 44) }

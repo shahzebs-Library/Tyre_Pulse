@@ -24,6 +24,7 @@ import {
   summarizeServiceEvents, EVENT_TYPES, EVENT_TYPE_META,
 } from '../lib/tyreServiceEvents'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
+import { toUserMessage } from '../lib/safeError'
 
 ChartJS.register(ArcElement, Tooltip, Legend)
 
@@ -85,7 +86,7 @@ function EventModal({ open, initial, onClose, onSaved }) {
       onSaved?.()
       onClose?.()
     } catch (err) {
-      setError(err?.message || 'Could not save the service event.')
+      setError(toUserMessage(err, 'Could not save the service event.'))
     } finally {
       setBusy(false)
     }
@@ -223,7 +224,7 @@ export default function TyreServiceEvents() {
       setRows(Array.isArray(data) ? data : [])
       setUpdatedAt(new Date())
     } catch (err) {
-      setError(isMissingRelation(err) ? 'missing' : (err?.message || 'Could not load service events.'))
+      setError(isMissingRelation(err) ? 'missing' : (toUserMessage(err, 'Could not load service events.')))
       setRows([])
     } finally {
       setRefreshing(false)
@@ -295,7 +296,7 @@ export default function TyreServiceEvents() {
       setDeleteRow(null)
       await load()
     } catch (err) {
-      setError(err?.message || 'Could not delete the service event.')
+      setError(toUserMessage(err, 'Could not delete the service event.'))
     } finally {
       setDeleting(false)
     }

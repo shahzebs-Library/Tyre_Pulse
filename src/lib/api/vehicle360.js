@@ -7,6 +7,34 @@
 import { supabase, unwrap } from './_client'
 
 const BUCKET = 'vehicle-photos'
+
+/** Allowed image MIME types mapped to their canonical storage extension. */
+const PHOTO_MIME_EXT = Object.freeze({
+  'image/jpeg': 'jpg',
+  'image/png': 'png',
+  'image/webp': 'webp',
+  'image/heic': 'heic',
+})
+const MAX_PHOTO_BYTES = 20 * 1024 * 1024
+
+/**
+ * Validate a user-supplied image before upload. Returns the canonical extension
+ * derived from the (trusted) MIME type — never the raw client filename, so a
+ * spoofed extension can't influence the storage path. Throws on invalid input.
+ */
+export function validatePhotoFile(file) {
+  if (!file || typeof file !== 'object') {
+    throw new Error('No image file was provided.')
+  }
+  const ext = PHOTO_MIME_EXT[file.type]
+  if (!ext) {
+    throw new Error('Only JPEG, PNG, WebP, or HEIC images are allowed.')
+  }
+  if (Number(file.size) > MAX_PHOTO_BYTES) {
+    throw new Error('Image must be 20 MB or smaller.')
+  }
+  return ext
+}
 const V_COLS =
   'id,asset_no,fleet_number,make,model,vehicle_type,year,department,operator_name,' +
   'site,country,region,status,tyre_size,expected_km_per_tyre,monthly_tyre_budget,notes,' +
@@ -43,7 +71,7 @@ export async function vehiclePhotoUrl(path) {
  * records the path on vehicle_fleet, and returns { path, url }.
  */
 export async function uploadVehiclePhoto(assetNo, file) {
-  const ext = (file.name?.split('.').pop() || 'jpg').toLowerCase().replace(/[^a-z0-9]/g, '') || 'jpg'
+  const ext = validatePhotoFile(file)
   const safe = String(assetNo).replace(/[^a-zA-Z0-9_-]/g, '_')
   const path = `${safe}/photo.${ext}`
   const { error: upErr } = await supabase.storage.from(BUCKET).upload(path, file, {

@@ -28,6 +28,7 @@ import {
   PHASE_ORDER, PHASE_LABELS,
 } from '../lib/onboarding'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
+import { safeHref } from '../lib/safeUrl'
 
 const EMPTY_FORM = {
   title: '', phase: 'setup', description: '', sort_order: '', required: true,
@@ -447,8 +448,8 @@ export default function OnboardingWizard() {
                           {t.owner && <span>Owner: <span className="text-[var(--text-secondary)]">{t.owner}</span></span>}
                           {t.due_date && <span>Due {fmtDate(t.due_date)}</span>}
                           {t.completed_at && <span>Completed {fmtDate(t.completed_at)}</span>}
-                          {t.help_url && (
-                            <a href={t.help_url} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} className="inline-flex items-center gap-1 text-sky-400 hover:underline">
+                          {safeHref(t.help_url) && (
+                            <a href={safeHref(t.help_url)} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} className="inline-flex items-center gap-1 text-sky-400 hover:underline">
                               <ExternalLink size={11} /> Help
                             </a>
                           )}

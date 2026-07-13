@@ -64,31 +64,39 @@ export default class AppErrorBoundary extends Component {
           </span>
         </button>
 
-        <details className="mt-6 w-full max-w-md group">
-          <summary
-            className="text-caption cursor-pointer select-none inline-flex items-center gap-1"
-            style={{ color: 'var(--text-muted)' }}
-          >
-            <ChevronDown size={13} className="transition-transform group-open:rotate-180" />
-            Technical details
-          </summary>
-          <pre
-            className="mt-2 rounded-xl p-3 text-left overflow-auto"
-            style={{
-              background: 'var(--input-bg)',
-              border: '1px solid var(--border-dim)',
-              color: 'var(--text-secondary)',
-              fontSize: 11,
-              lineHeight: 1.5,
-              maxHeight: 220,
-              whiteSpace: 'pre-wrap',
-              wordBreak: 'break-word',
-            }}
-          >
-            {message}
-            {stack ? `\n\n${stack.split('\n').slice(0, 10).join('\n')}` : ''}
-          </pre>
-        </details>
+        {/*
+          Technical details (raw error message + React component stack) are a
+          potential information-disclosure vector, so they are shown ONLY in
+          development. Production users see the friendly message above; the
+          error is still captured to monitoring in componentDidCatch.
+        */}
+        {import.meta.env.DEV && (
+          <details className="mt-6 w-full max-w-md group">
+            <summary
+              className="text-caption cursor-pointer select-none inline-flex items-center gap-1"
+              style={{ color: 'var(--text-muted)' }}
+            >
+              <ChevronDown size={13} className="transition-transform group-open:rotate-180" />
+              Technical details
+            </summary>
+            <pre
+              className="mt-2 rounded-xl p-3 text-left overflow-auto"
+              style={{
+                background: 'var(--input-bg)',
+                border: '1px solid var(--border-dim)',
+                color: 'var(--text-secondary)',
+                fontSize: 11,
+                lineHeight: 1.5,
+                maxHeight: 220,
+                whiteSpace: 'pre-wrap',
+                wordBreak: 'break-word',
+              }}
+            >
+              {message}
+              {stack ? `\n\n${stack.split('\n').slice(0, 10).join('\n')}` : ''}
+            </pre>
+          </details>
+        )}
       </div>
     )
   }

@@ -50,14 +50,9 @@
     <meta property="og:image"       content="/icons/icon-512x512.png" />
 
     <!-- ── Theme: apply before render to avoid flash ────────────────────────── -->
-    <script>
-      (function () {
-        try {
-          var t = localStorage.getItem('tyrepulse-theme') || 'dark';
-          document.documentElement.classList.add(t);
-        } catch (e) {}
-      })();
-    </script>
+    <!-- Externalized to /theme-init.js so the CSP script-src stays 'self' with
+         no 'unsafe-inline'. Do NOT inline scripts here. -->
+    <script src="/theme-init.js"></script>
   </head>
   <body>
     <div id="root"></div>

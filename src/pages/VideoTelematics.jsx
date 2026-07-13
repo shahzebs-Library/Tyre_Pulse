@@ -24,6 +24,7 @@ import {
   listDashcamEvents, createDashcamEvent, updateDashcamEvent, deleteDashcamEvent,
 } from '../lib/api/dashcamEvents'
 import { summariseDashcam, byEventType, bySeverity } from '../lib/dashcamEvents'
+import { safeHref } from '../lib/safeUrl'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 
 const EVENT_TYPES = [
@@ -383,9 +384,11 @@ export default function VideoTelematics() {
                         : <span className="inline-flex items-center gap-1 text-amber-400 text-xs"><Eye size={13} /> Pending</span>}
                     </td>
                     <td className="px-4 py-2.5">
-                      {r.video_url
-                        ? <a href={r.video_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-sky-400 hover:text-sky-300 text-xs" aria-label="Open video"><ExternalLink size={13} /> Clip</a>
-                        : <span className="text-[var(--text-muted)]">—</span>}
+                      {safeHref(r.video_url)
+                        ? <a href={safeHref(r.video_url)} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-sky-400 hover:text-sky-300 text-xs" aria-label="Open video"><ExternalLink size={13} /> Clip</a>
+                        : r.video_url
+                          ? <span className="inline-flex items-center gap-1 text-[var(--text-muted)] text-xs"><ExternalLink size={13} /> Clip</span>
+                          : <span className="text-[var(--text-muted)]">—</span>}
                     </td>
                     <td className="px-4 py-2.5">
                       <div className="flex items-center justify-end gap-1">

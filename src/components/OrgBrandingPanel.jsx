@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback } from 'react'
 import { Palette, Save, Loader2, Check, AlertTriangle, RotateCcw, Building2, Image as ImageIcon, Sun, Moon } from 'lucide-react'
 import { listOrganisations } from '../lib/api/users'
 import { getOrgBranding, setOrgBranding, withBrandingDefaults, BRANDING_FIELDS } from '../lib/api/branding'
+import { safeImageSrc } from '../lib/safeUrl'
 import { useTenant } from '../contexts/TenantContext'
 
 /**
@@ -247,9 +248,9 @@ export default function OrgBrandingPanel({ canEdit }) {
               <div style={{ height: 6, background: form.primary_color || '#16A34A' }} />
               <div className="p-4 space-y-3">
                 <div className="flex items-center gap-3">
-                  {form.logo_url ? (
+                  {safeImageSrc(form.logo_url) ? (
                     <img
-                      src={form.logo_url}
+                      src={safeImageSrc(form.logo_url)}
                       alt="logo"
                       className="h-10 w-10 rounded object-contain bg-white/5"
                       onError={(e) => { e.currentTarget.style.display = 'none' }}

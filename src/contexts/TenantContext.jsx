@@ -15,6 +15,7 @@ import { useAuth } from './AuthContext'
 import { getOrgBranding, withBrandingDefaults } from '../lib/api/branding'
 import { listCountryAddresses, resolveAddress } from '../lib/api/countryAddresses'
 import { cacheResolvedLogos, clearCachedLogos, resolveBrandLogo, readCachedLogo } from '../lib/brand/library'
+import { toUserMessage } from '../lib/safeError'
 
 /** Point the browser-tab icon at a resolved favicon href. */
 function applyFaviconHref(href) {
@@ -75,7 +76,7 @@ export function TenantProvider({ children }) {
     } catch (err) {
       // Branding is non-critical chrome — fall back to defaults, never block the app.
       console.warn('[TenantContext] branding load failed:', err?.message || err)
-      setError(err?.message || 'Could not load branding')
+      setError(toUserMessage(err, 'Could not load branding'))
       setBranding(withBrandingDefaults(null))
     } finally {
       setLoading(false)

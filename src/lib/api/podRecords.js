@@ -11,6 +11,10 @@
  */
 import { supabase, unwrap, applyCountry } from './_client'
 import { toFiniteNumber } from '../podRecords'
+import { safeHref } from '../safeUrl'
+
+/** Scheme-guard a URL on write: safe → the string, anything unsafe/blank → null. */
+const asUrl = (v) => { const s = safeHref(v); return s === undefined ? null : s }
 
 export const COLS =
   'id,organisation_id,country,pod_no,asset_no,driver_name,customer_name,' +
@@ -97,8 +101,8 @@ export async function createPodRecord(values = {}) {
     order_ref: asText(values.order_ref, 120),
     delivered_at: asDate(values.delivered_at) || new Date().toISOString(),
     received_by: asText(values.received_by, 200),
-    signature_url: asText(values.signature_url, 2000),
-    photo_url: asText(values.photo_url, 2000),
+    signature_url: asUrl(asText(values.signature_url, 2000)),
+    photo_url: asUrl(asText(values.photo_url, 2000)),
     items_count,
     status: asStatus(values.status),
     failure_reason: values.failure_reason ? String(values.failure_reason).slice(0, 2000) : null,
@@ -137,8 +141,8 @@ export async function updatePodRecord(id, patch = {}) {
   if (patch.order_ref !== undefined) clean.order_ref = asText(patch.order_ref, 120)
   if (patch.delivered_at !== undefined) clean.delivered_at = asDate(patch.delivered_at)
   if (patch.received_by !== undefined) clean.received_by = asText(patch.received_by, 200)
-  if (patch.signature_url !== undefined) clean.signature_url = asText(patch.signature_url, 2000)
-  if (patch.photo_url !== undefined) clean.photo_url = asText(patch.photo_url, 2000)
+  if (patch.signature_url !== undefined) clean.signature_url = asUrl(asText(patch.signature_url, 2000))
+  if (patch.photo_url !== undefined) clean.photo_url = asUrl(asText(patch.photo_url, 2000))
   if (patch.failure_reason !== undefined) clean.failure_reason = patch.failure_reason ? String(patch.failure_reason).slice(0, 2000) : null
   if (patch.notes !== undefined) clean.notes = patch.notes ? String(patch.notes).slice(0, 8000) : null
   if (patch.country !== undefined) clean.country = patch.country ?? null

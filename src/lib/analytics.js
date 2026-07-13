@@ -39,6 +39,10 @@ export function initAnalytics() {
       capture_pageview: true,
       capture_pageleave: true,
       autocapture: true,
+      // Mask text and element attributes so autocapture cannot record PII that
+      // may appear in element text/attributes (names, emails, asset labels…).
+      mask_all_text: true,
+      mask_all_element_attributes: true,
       persistence: 'localStorage+cookie',
       // Strip query strings (possible tokens) from any URL PostHog records.
       sanitize_properties: (props) => {

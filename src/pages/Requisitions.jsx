@@ -24,6 +24,7 @@ import {
 } from '../lib/api/requisitions'
 import { summarizeRequisitions } from '../lib/requisitions'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
+import { toUserMessage } from '../lib/safeError'
 
 const STATUS_META = {
   draft: { label: 'Draft', cls: 'bg-[var(--input-bg)] text-[var(--text-dim)] border border-[var(--input-border)]' },
@@ -87,7 +88,7 @@ function RequisitionModal({ open, initial, onClose, onSaved }) {
       else await createRequisition(form)
       onSaved?.()
     } catch (err) {
-      setError(err?.message || 'Could not save the requisition.')
+      setError(toUserMessage(err, 'Could not save the requisition.'))
     } finally {
       setBusy(false)
     }
@@ -228,7 +229,7 @@ function DeleteDialog({ row, onCancel, onConfirm }) {
   if (!row) return null
   const run = async () => {
     setBusy(true); setError('')
-    try { await onConfirm() } catch (e) { setError(e?.message || 'Could not delete.'); setBusy(false) }
+    try { await onConfirm() } catch (e) { setError(toUserMessage(e, 'Could not delete.')); setBusy(false) }
   }
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60" onClick={onCancel}>
@@ -279,7 +280,7 @@ export default function Requisitions() {
       setUpdatedAt(new Date())
     } catch (err) {
       if (isMissingRelation(err)) { setMissing(true); setRows([]) }
-      else { setError(err?.message || 'Could not load requisitions.'); setRows([]) }
+      else { setError(toUserMessage(err, 'Could not load requisitions.')); setRows([]) }
     } finally {
       setRefreshing(false)
     }

@@ -34,20 +34,17 @@ export function corsHeaders(req: Request): Record<string, string> {
     .filter(Boolean)
   const allowedOrigins = configured?.length ? configured : DEFAULT_ALLOWED_ORIGINS
 
-  // Resolve the Allow-Origin value.
+  // Resolve the Allow-Origin value against a strict allow-list.
   //  - No Origin header (server-to-server / curl) → '*'.
-  //  - Explicitly allow-listed origin (or a *.vercel.app preview) → reflect it.
-  //  - Any other https origin (a custom production/staging domain we don't know
-  //    ahead of time) → STILL reflect it. CORS is deliberately NOT the security
-  //    boundary here: every function enforces a valid, approved-user JWT via
-  //    requireApprovedRole, and the SPA attaches that token explicitly, so a
-  //    third-party page cannot ride the user's session cross-origin. Reflecting
-  //    the origin removes the "OPTIONS 200 but POST blocked" failure that a
-  //    hard allow-list causes whenever the app is served from a new domain.
-  //  - Non-https (and not localhost) → refuse.
+  //  - Explicitly allow-listed origin, a *.vercel.app preview, or localhost
+  //    → reflect it.
+  //  - Anything else (including arbitrary https origins) → refuse ('null').
+  //    The JWT remains the primary security boundary, but CORS is no longer a
+  //    blanket allow: unknown production/staging domains must be added to
+  //    ALLOWED_ORIGINS explicitly.
   let allowOrigin = '*'
   if (origin) {
-    if (isOriginAllowed(origin, allowedOrigins) || /^https:\/\//.test(origin) || origin.startsWith('http://localhost')) {
+    if (isOriginAllowed(origin, allowedOrigins) || origin.startsWith('http://localhost')) {
       allowOrigin = origin
     } else {
       allowOrigin = 'null'

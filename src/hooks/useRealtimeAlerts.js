@@ -8,6 +8,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 import { fetchLatestAlerts, markNotificationRead, countUnread } from '../lib/notifications'
+import { toUserMessage } from '../lib/safeError'
 
 const STORAGE_KEY = 'tp_realtime_notifications'
 const MAX_NOTIFICATIONS = 50
@@ -198,7 +199,7 @@ export function useRealtimeAlerts() {
       setNotifications(prev => mergeDb(prev, latest))
     } catch (err) {
       console.warn('[useRealtimeAlerts] alerts backfill failed:', err?.message || err)
-      setError(err?.message || 'Failed to load notifications')
+      setError(toUserMessage(err, 'Failed to load notifications'))
     } finally {
       setLoading(false)
     }

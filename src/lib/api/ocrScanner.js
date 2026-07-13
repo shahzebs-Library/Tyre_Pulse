@@ -16,6 +16,10 @@
  */
 import { supabase, unwrap, applyCountry } from './_client'
 import { toFiniteNumber } from '../ocrScanner'
+import { safeHref } from '../safeUrl'
+
+/** Scheme-guard a URL on write: safe → the string, anything unsafe/blank → null. */
+const asUrl = (v) => { const s = safeHref(v); return s === undefined ? null : s }
 
 export const COLS =
   'id,organisation_id,country,scan_type,asset_no,image_url,extracted_text,' +
@@ -123,7 +127,7 @@ export async function createOcrScan(values = {}) {
   const payload = {
     scan_type: asScanType(values.scan_type),
     asset_no: asText(values.asset_no, 120),
-    image_url: asText(values.image_url, 2000),
+    image_url: asUrl(asText(values.image_url, 2000)),
     extracted_text: values.extracted_text ? String(values.extracted_text).slice(0, 20000) : null,
     extracted_fields: asFields(values.extracted_fields),
     confidence: asConfidence(values.confidence),
@@ -144,7 +148,7 @@ export async function updateOcrScan(id, patch = {}) {
   const clean = {}
   if (patch.scan_type !== undefined) clean.scan_type = asScanType(patch.scan_type)
   if (patch.asset_no !== undefined) clean.asset_no = asText(patch.asset_no, 120)
-  if (patch.image_url !== undefined) clean.image_url = asText(patch.image_url, 2000)
+  if (patch.image_url !== undefined) clean.image_url = asUrl(asText(patch.image_url, 2000))
   if (patch.extracted_text !== undefined) {
     clean.extracted_text = patch.extracted_text ? String(patch.extracted_text).slice(0, 20000) : null
   }

@@ -86,8 +86,10 @@ serve(async (req) => {
       }
     }
 
-    // ── Response cache (keyed by model + system + messages) ───────────────────
-    const cacheKey = await sha256Hex(`${MODEL}\n${system ?? ''}\n${JSON.stringify(messageArray)}`)
+    // ── Response cache (keyed by tenant + model + system + messages) ──────────
+    // Tenant scope (userId) is folded into the hash so cached completions can
+    // never be served across a user/org boundary.
+    const cacheKey = await sha256Hex(`${userId}\n${MODEL}\n${system ?? ''}\n${JSON.stringify(messageArray)}`)
     if (svc) {
       try {
         const { data: hit } = await svc

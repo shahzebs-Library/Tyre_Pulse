@@ -11,6 +11,10 @@
  */
 import { supabase, unwrap, applyCountry } from './_client'
 import { toFiniteNumber } from '../onboarding'
+import { safeHref } from '../safeUrl'
+
+/** Scheme-guard a URL on write: safe → the string, anything unsafe/blank → null. */
+const asUrl = (v) => { const s = safeHref(v); return s === undefined ? null : s }
 
 export const COLS =
   'id,organisation_id,country,phase,title,description,sort_order,required,status,' +
@@ -112,7 +116,7 @@ export async function createOnboardingTask(values = {}) {
     completed_at: status === 'completed'
       ? (values.completed_at ? new Date(values.completed_at).toISOString() : new Date().toISOString())
       : null,
-    help_url: asText(values.help_url, 1000),
+    help_url: asUrl(asText(values.help_url, 1000)),
     notes: values.notes ? String(values.notes).slice(0, 8000) : null,
     country: values.country ?? null,
   }
@@ -165,7 +169,7 @@ export async function updateOnboardingTask(id, patch = {}) {
   }
   if (patch.owner !== undefined) clean.owner = asText(patch.owner, 200)
   if (patch.due_date !== undefined) clean.due_date = asDate(patch.due_date)
-  if (patch.help_url !== undefined) clean.help_url = asText(patch.help_url, 1000)
+  if (patch.help_url !== undefined) clean.help_url = asUrl(asText(patch.help_url, 1000))
   if (patch.notes !== undefined) clean.notes = patch.notes ? String(patch.notes).slice(0, 8000) : null
   if (patch.country !== undefined) clean.country = patch.country ?? null
 

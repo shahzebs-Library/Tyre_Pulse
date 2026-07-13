@@ -25,6 +25,7 @@ import CostControlPanel from '../components/intake/CostControlPanel'
 import DataCompletenessPanel from '../components/intake/DataCompletenessPanel'
 import ImportTemplatePanel from '../components/intake/ImportTemplatePanel'
 import IntakeDiagnosticsPanel from '../components/intake/IntakeDiagnosticsPanel'
+import { toUserMessage } from '../lib/safeError'
 
 // Trigger a client-side text download (diagnostics report export).
 function downloadText(filename, text) {
@@ -200,7 +201,7 @@ export default function DataIntakeCenter() {
         raw: d,
       })
     } catch (e) {
-      setDiag({ batchId: b.id, loading: false, error: e?.message || 'Could not load diagnostics.', checks: [], meta: null })
+      setDiag({ batchId: b.id, loading: false, error: toUserMessage(e, 'Could not load diagnostics.'), checks: [], meta: null })
     }
   }, [diag])
 
@@ -210,7 +211,7 @@ export default function DataIntakeCenter() {
     if (!window.confirm(t('intake.orphans.deletePrompt', { name: f.original_filename }))) return
     setError('')
     try { await imports.deleteFile(f.id); await loadRecent() }
-    catch (err) { setError(err?.message || t('intake.errors.couldNotDeleteFile')) }
+    catch (err) { setError(toUserMessage(err, t('intake.errors.couldNotDeleteFile'))) }
   }
 
   // Warn before an accidental full-page reload/close while an import is in
@@ -241,7 +242,7 @@ export default function DataIntakeCenter() {
       await loadRecent()
     } catch (err) {
       console.error('[DataIntakeCenter] delete/reverse batch failed:', err)
-      setError(err?.message || t('intake.errors.couldNotRemoveBatch'))
+      setError(toUserMessage(err, t('intake.errors.couldNotRemoveBatch')))
     } finally { setRowBusyId(null) }
   }
 
@@ -259,7 +260,7 @@ export default function DataIntakeCenter() {
       const wb = await parseWorkbook(buf)
       setFile(f); setParsed(wb); setSheetIdx(0)
     } catch (err) {
-      setError(err?.message || t('intake.errors.couldNotReadFile'))
+      setError(toUserMessage(err, t('intake.errors.couldNotReadFile')))
     } finally { setBusy(false) }
   }
 
@@ -335,7 +336,7 @@ export default function DataIntakeCenter() {
       imports.listApprovedRatesMap({ baseCurrency: activeCurrency }).then(setFxRatesMap).catch(() => setFxRatesMap(null))
       setStep(1)
     } catch (err) {
-      setError(err?.message || 'Could not start the import.')
+      setError(toUserMessage(err, 'Could not start the import.'))
     } finally { setBusy(false) }
   }
 
@@ -359,7 +360,7 @@ export default function DataIntakeCenter() {
       }))
       imports.touchProfile(profileId).catch(() => {})
     } catch (err) {
-      setError(err?.message || 'Could not apply the profile.')
+      setError(toUserMessage(err, 'Could not apply the profile.'))
     } finally { setBusy(false) }
   }
 
@@ -380,7 +381,7 @@ export default function DataIntakeCenter() {
       setProfiles(next)
       autoSavedFp.current = sheet ? headerFingerprint(sheet.columns) : null
     } catch (err) {
-      setError(err?.message || 'Could not save the profile.')
+      setError(toUserMessage(err, 'Could not save the profile.'))
     } finally { setBusy(false) }
   }
 
@@ -543,7 +544,7 @@ export default function DataIntakeCenter() {
       await autoSaveProfile() // remember this format for next time (best-effort)
       setStep(3)
     } catch (err) {
-      setError(err?.message || 'Could not stage the rows.')
+      setError(toUserMessage(err, 'Could not stage the rows.'))
     } finally { setBusy(false) }
   }
 
@@ -584,7 +585,7 @@ export default function DataIntakeCenter() {
           recordPayload.push({ file: f, match: matches[i], fileId })
           finalItems.push({ ...base, status: 'uploaded', error: null })
         } catch (err) {
-          finalItems.push({ ...base, status: 'failed', error: err?.message || 'Upload failed.' })
+          finalItems.push({ ...base, status: 'failed', error: toUserMessage(err, 'Upload failed.') })
         }
         setAttachItems([...finalItems]) // progressive UI update
       }
@@ -595,12 +596,12 @@ export default function DataIntakeCenter() {
           const rows = buildMatchRows({ batchId, items: recordPayload, rows: annotated })
           await imports.recordAttachmentMatches(rows)
         } catch (err) {
-          setError(`Files uploaded, but recording matches failed: ${err?.message || 'unknown error'}`)
+          setError(`Files uploaded, but recording matches failed: ${toUserMessage(err, 'unknown error')}`)
         }
       }
       setAttachDone(true)
     } catch (err) {
-      setError(err?.message || 'Could not process the attachment package.')
+      setError(toUserMessage(err, 'Could not process the attachment package.'))
     } finally {
       setAttachBusy(false)
     }
@@ -624,7 +625,7 @@ export default function DataIntakeCenter() {
             onProgress: (p) => setCommitProgress({ phase: 'enrich', ...p }),
           })
           if (enr) res.enriched = enr.enriched ?? 0
-        } catch (e) { res.enrichError = e?.message || 'Enrichment failed' }
+        } catch (e) { res.enrichError = toUserMessage(e, 'Enrichment failed') }
       }
       setResult(res)
       // Value-producing automation (directive §20). Best-effort - must never
@@ -636,7 +637,7 @@ export default function DataIntakeCenter() {
       }
       loadRecent()
     } catch (err) {
-      setError(err?.message || 'Commit failed.')
+      setError(toUserMessage(err, 'Commit failed.'))
     } finally { setBusy(false); setCommitProgress(null) }
   }
 

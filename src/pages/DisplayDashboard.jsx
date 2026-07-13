@@ -25,6 +25,7 @@ import {
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { fetchAllPages } from '../lib/fetchAll'
+import { safeImageSrc } from '../lib/safeUrl'
 import { useTenant } from '../contexts/TenantContext'
 import Gauge from '../components/ui/Gauge'
 import StatTile from '../components/ui/StatTile'
@@ -405,9 +406,9 @@ export default function DisplayDashboard() {
       {/* ── Header: branding | clock | controls ── */}
       <header className="flex items-center justify-between gap-6 px-8 py-5 border-b border-slate-800/70 flex-shrink-0">
         <div className="flex items-center gap-4 min-w-0">
-          {branding?.logo_url ? (
+          {safeImageSrc(branding?.logo_url) ? (
             <img
-              src={branding.logo_url}
+              src={safeImageSrc(branding.logo_url)}
               alt=""
               className="h-11 w-auto max-w-[180px] object-contain"
               onError={e => { e.currentTarget.style.display = 'none' }}

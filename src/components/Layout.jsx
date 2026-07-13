@@ -131,6 +131,7 @@ const NAV_GROUPS = [
       { to: '/action-center',       label: 'Action Center',      icon: ListTodo, adminOnly: A },
       { to: '/fleet-groups',        label: 'Fleet Groups',       icon: Network, adminOnly: A },
       { to: '/trip-replay',         label: 'Trip Replay',        icon: Play, adminOnly: A },
+      { to: '/fleet-health',        label: 'Fleet Health Board', icon: HeartPulse, adminOnly: A },
     ],
   },
   {
@@ -164,6 +165,9 @@ const NAV_GROUPS = [
       { to: '/fleet-optimizer',        label: 'Fleet Optimizer',        icon: SlidersHorizontal, adminOnly: A },
       { to: '/rotation',               label: 'Rotation Schedule',      icon: TyreRotationIc, adminOnly: A },
       { to: '/ai',                     label: 'Smart Analytics',        icon: Sparkles, adminOnly: A },
+      { to: '/advanced-analytics',     label: 'Advanced Analytics',     icon: BarChartBig, roles: ANALYTICS_ROLES },
+      { to: '/fleet-intelligence',     label: 'Fleet Intelligence',     icon: Brain, roles: ANALYTICS_ROLES },
+      { to: '/root-cause',             label: 'Root Cause Engine',      icon: Microscope, roles: ANALYTICS_ROLES },
     ],
   },
   {
@@ -205,6 +209,8 @@ const NAV_GROUPS = [
       { to: '/ifta-reporting',      label: 'IFTA Fuel Tax',       icon: Landmark, adminOnly: A },
       { to: '/materials',           label: 'Materials',           icon: Layers, adminOnly: A },
       { to: '/marketplace',         label: 'Supplier Marketplace', icon: Store, adminOnly: A },
+      { to: '/cost-center',         label: 'Cost Center',         icon: Wallet, roles: ANALYTICS_ROLES },
+      { to: '/budget-planner',      label: 'Budget Planner',      icon: Calculator, roles: ANALYTICS_ROLES },
     ],
   },
   {
@@ -271,6 +277,8 @@ const NAV_GROUPS = [
       { to: '/knowledge-base',    label: 'Knowledge Base',    icon: Brain, adminOnly: A },
       { to: '/ai-cost-monitor',   label: 'AI Cost Monitor',   icon: BarChart, adminOnly: A },
       { to: '/continuous-improvement', label: 'Continuous Improvement', icon: Zap, adminOnly: A },
+      { to: '/executive-analytics', label: 'Executive Analytics', icon: TrendingUp, roles: ANALYTICS_ROLES },
+      { to: '/report-center',     label: 'Report Center',     icon: ScrollText, roles: ANALYTICS_ROLES },
     ],
   },
   {
@@ -291,8 +299,8 @@ const NAV_GROUPS = [
       { to: '/upload-approvals', label: 'Upload Approvals',   icon: ClipboardList, roles: UPLOAD_ROLES },
       { to: '/custom-data',      label: 'Custom Data',        icon: Database },
       { to: '/audit',            label: 'Audit Trail',        icon: ClipboardList, roles: AUDIT_ROLES },
+      { to: '/master-access-control', label: 'Master Access Control', icon: ShieldCheck, adminOnly: true },
       { to: '/security-center',  label: 'Security Center',    icon: ShieldCheck },
-      { to: '/permission-matrix', label: 'Permission Matrix', icon: ShieldCheck, adminOnly: true },
       { to: '/system-health',    label: 'System Health',      icon: HeartPulse, adminOnly: true },
       { to: '/tenant-health',    label: 'Usage & Adoption',   icon: BarChart, adminOnly: true },
       { to: '/billing',          label: 'Billing & Subscription', icon: CreditCard, adminOnly: true, flag: 'billing' },
@@ -915,7 +923,9 @@ export default function Layout({ children }) {
                       style={{ overflow: 'hidden' }}
                     >
                       {visibleItems.map(({ to, label: lbl, icon: Icon, end }) => {
-                        const navLabel = t(`nav.items.${to}`)
+                        const _navKey = `nav.items.${to}`
+                        const _navRaw = t(_navKey)
+                        const navLabel = (!_navRaw || _navRaw === _navKey) ? lbl : _navRaw
                         return (
                         <NavLink
                           key={to}

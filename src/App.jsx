@@ -217,6 +217,7 @@ const DashboardBuilder       = lazy(() => import('./pages/DashboardBuilder'))
 const TenantHealth           = lazy(() => import('./pages/TenantHealth'))
 const ExecutiveAnalytics     = lazy(() => import('./pages/ExecutiveAnalytics'))
 const PermissionMatrix       = lazy(() => import('./pages/PermissionMatrix'))
+const MasterAccessControl    = lazy(() => import('./pages/MasterAccessControl'))
 const DisplayShare           = lazy(() => import('./pages/DisplayShare'))
 const EventStream            = lazy(() => import('./pages/EventStream'))
 const Approvals              = lazy(() => import('./pages/Approvals'))
@@ -506,6 +507,7 @@ function MainApp() {
                       <Route path="/system-health"       element={<Safe><SystemHealth /></Safe>} />
                       <Route path="/tenant-health"       element={<Safe><TenantHealth /></Safe>} />
                       <Route path="/permission-matrix"   element={<Safe><PermissionMatrix /></Safe>} />
+                      <Route path="/master-access-control" element={<Safe><RoleRoute allowed={['Admin']}><MasterAccessControl /></RoleRoute></Safe>} />
                       <Route path="/brand-assets"        element={<Safe><RoleRoute allowed={['Admin']}><BrandAssets /></RoleRoute></Safe>} />
                       {/* ── Commercial: Subscription & Billing (roadmap #6) ── */}
                       <Route path="/billing"             element={<Safe><FlagRoute flag="billing"><Billing /></FlagRoute></Safe>} />

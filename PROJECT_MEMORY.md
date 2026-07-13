@@ -88,16 +88,21 @@ work is ON HOLD until this is done.
   - ✅ **RotationOptimizer** DONE (commit b997bb4) — CV wear-balance score, impact-scored swaps
     (1.5mm gate, size guard, 10000 km/mm benefit), violations (below-1.6mm exact + steer heuristic),
     deterministic narrative, chart.js Bar. Engine + 34 tests in src/lib/rotationOptimizer.js.
-  - ⏳ **TechnicianScorecard** — NEEDS new tables technician_skills + technician_certs (skills matrix,
-    cert-expiry days<0 expired/<60 warning, lifecycle score=(min(done,500)/500)*40+(pass/100)*50+
-    min(certs,5)*2). KEEP existing cost/ranking leaderboard as one tab. SLA breach derivable now.
-  - ⏳ **FitmentValidation** — NEEDS tables fitment_rules, fitment_validations, wheel_positions,
-    vehicle_axles. Port pure validateFitment engine (size/tread/age/retread/lifecycle/pair rules).
-    Keep existing fleet-size-audit as a 2nd tab.
-  - ⏳ **TyrePool** — NEEDS table tyre_pool (add/deploy/return lifecycle, utilisation,
-    replenishment=max(4,round(active_vehicles*4*0.10))). Fold swap/transfer into existing
-    TyreExchange (NO dup). Migrations continue from V206 → next free is V207.
-- Migration numbering: next free is **V207** (V206 was org hierarchy).
+  - ✅ **TechnicianScorecard** DONE (commit 46a2255, V207) — skills matrix + cert-expiry +
+    lifecycle score; existing leaderboard kept as tab 1. Engine in src/lib/technicianScorecard.js.
+  - ✅ **FitmentValidation** DONE (commit 2330e25, V208) — validateFitment engine (size/tread/
+    lifecycle enforced; age/retread/pair honestly "not evaluated" — no source data). Rules CRUD +
+    validations ledger + existing size-audit kept as a tab. src/lib/fitmentValidation.js.
+  - ✅ **TyrePool** DONE (commit e981088, V209) — hot-spare pool manager (add/deploy/return,
+    utilisation, replenishment) + existing analytics kept as a tab. Transfers stay in TyreExchange.
+- **BATCH 1 COMPLETE** (all 5 modules deep + live). Migrations V207/V208/V209 applied.
+  Next free migration is **V210**.
+- **BATCH 2+ (todo)**: remaining ported modules from fleet_IQ/tyre_saas still on shallow "normal data"
+  need the same treatment. Candidates (verify each against its original first): VendorIntelligence
+  (VendorScorecardPage), BayScheduling/WorkshopCapacity, TCO/ROI calculators, CostIntelligence,
+  ExecutiveAnalytics, PredictiveMaintenance, PositionIntelligence, PressureIntelligence,
+  BrandPerformance, Analytics, plus telematics/EV/carbon cluster (sensor data — may need honest
+  empty states). Use the same gap-analysis→deepen→verify→migrate pipeline; keep existing views as tabs.
 
 ## Open items needing USER/OPS action
 - Register SAML/OIDC providers in Supabase Auth (Management API) per SSO-config domain.

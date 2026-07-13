@@ -25,6 +25,7 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
 | KPI scorecards / command center | `src/pages/KpiScorecard.jsx`, `src/pages/KpiCommandCenter.jsx` | |
 | Executive | `src/pages/ExecutiveReport.jsx`, `ExecutiveAnalytics.jsx` | |
 | Holding-company consolidation | `src/pages/HoldingCompany.jsx` + V201 RPCs | multi-subsidiary rollup |
+| Access control (RBAC + security) | `src/pages/MasterAccessControl.jsx` (tabs: PermissionMatrix + SecurityCenter) | §5 unified home; original routes /permission-matrix, /security-center still live |
 
 ## Architecture conventions
 - Central wiring: new module = page + `src/lib/api/<m>.js` + optional pure `src/lib/<m>.js` + test + migration.
@@ -51,4 +52,7 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
 - Register SAML/OIDC providers in Supabase Auth (Management API) per SSO-config domain.
 - Rotate anon key out of historical migrations V61/V98/V119.
 - Move mobile publishable key/DSN to EAS secrets. Redeploy remaining edge fns for CORS allowlist.
-- Nav consolidation per enterprise.md §2 (pending user's specifics on which nested items to surface).
+- Nav: 8 orphaned pages surfaced + Engineering KPI/KPI Command surfaced (done). Master Access Control unified (§5 done).
+- Remaining enterprise phases (large, do deliberately not silently): Approval/Workflow engine (§6), full Admin Console (§7),
+  Organization hierarchy Company→…→User (§3), Data Intake Centre (§9), Notification engine (§11).
+- Nav labels render via t(`nav.items.<route>`) with fallback to item.label; add en+ar keys for new items.

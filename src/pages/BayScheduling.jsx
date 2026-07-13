@@ -16,7 +16,7 @@ import { useState, useEffect, useMemo, useCallback } from 'react'
 import {
   Wrench, CheckCircle2, AlertTriangle, Gauge, Search, X, Filter,
   FileSpreadsheet, FileText, Plus, Pencil, Trash2, PlayCircle, Timer,
-  Layers, Building2,
+  Layers, Building2, CalendarDays, Users, TrendingUp,
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
 import { useSettings } from '../contexts/SettingsContext'
@@ -25,6 +25,7 @@ import {
 } from '../lib/api/bayScheduling'
 import {
   summariseBays, perBayLoad, conflictsForBay, bayUtilization, overrunMinutes,
+  forecastCapacity, perTechnicianLoad, technicianConflicts, WORKING_HOURS_PER_DAY,
 } from '../lib/bayScheduling'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 
@@ -49,6 +50,7 @@ const STATUSES = [
 ]
 const JOB_TYPE_LABEL = Object.fromEntries(JOB_TYPES.map((j) => [j.v, j.l]))
 const MS_DAY = 86_400_000
+const DEFAULT_OVERLOAD_PCT = 90 // mirrors DEFAULT_CAPACITY_CONFIG.overloadThresholdPct
 
 const STATUS_BADGE = {
   scheduled: 'bg-sky-900/30 text-sky-300 border-sky-800/50',
@@ -146,6 +148,11 @@ export default function BayScheduling() {
       utilization: bayUtilization(rows || [], b.bay_name, dayStart, dayEnd),
     }))
   }, [rows, nowMs])
+
+  // Forward 7-day capacity forecast + technician-load roll-up (pure helpers).
+  const forecast = useMemo(() => forecastCapacity(rows || [], nowMs), [rows, nowMs])
+  const techLoad = useMemo(() => perTechnicianLoad(rows || []), [rows])
+  const techConflicts = useMemo(() => technicianConflicts(rows || []), [rows])
 
   const completedToday = useMemo(() => {
     const dayStart = Math.floor(nowMs / MS_DAY) * MS_DAY
@@ -350,7 +357,7 @@ export default function BayScheduling() {
       {/* Per-bay load / utilisation */}
       <div className="card">
         <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-3 flex items-center gap-2">
-          <Gauge size={15} /> Bay load &amp; utilisation <span className="text-[var(--text-muted)] font-normal">(today)</span>
+          <Gauge size={15} /> Bay load &amp; utilisation <span className="text-[var(--text-muted)] font-normal">(today · vs {WORKING_HOURS_PER_DAY}h working day)</span>
         </h3>
         {rows === null ? (
           <div className="h-20 bg-[var(--input-bg)] rounded animate-pulse" />
@@ -382,6 +389,132 @@ export default function BayScheduling() {
             })}
           </div>
         )}
+      </div>
+
+      {/* Technician double-booking strip (across different bays) */}
+      {techConflicts.length > 0 && (
+        <div className="card border border-amber-800/50 bg-amber-950/20">
+          <div className="flex items-start gap-3">
+            <Users size={18} className="text-amber-400 mt-0.5 shrink-0" />
+            <div className="flex-1 min-w-0">
+              <p className="text-amber-300 font-medium">
+                {techConflicts.length} technician double-booking{techConflicts.length === 1 ? '' : 's'} — a technician is assigned to overlapping jobs in different bays.
+              </p>
+              <div className="mt-2 flex flex-col gap-1.5">
+                {techConflicts.slice(0, 5).map((c, i) => (
+                  <div key={i} className="text-sm text-[var(--text-secondary)] flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                    <span className="font-semibold text-[var(--text-primary)]">{c.technician}</span>
+                    <span className="text-[var(--text-muted)]">·</span>
+                    <span>{c.a.bay_name} ({fmtDateTime(c.a.scheduled_start)})</span>
+                    <span className="text-amber-400 font-medium">overlaps</span>
+                    <span>{c.b.bay_name} ({fmtDateTime(c.b.scheduled_start)})</span>
+                  </div>
+                ))}
+                {techConflicts.length > 5 && <p className="text-xs text-[var(--text-muted)]">+ {techConflicts.length - 5} more…</p>}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Capacity forecast (next 7 days) + technician load */}
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
+        {/* Forecast */}
+        <div className="card xl:col-span-2">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-sm font-semibold text-[var(--text-primary)] flex items-center gap-2">
+              <CalendarDays size={15} /> Capacity forecast <span className="text-[var(--text-muted)] font-normal">(next 7 days)</span>
+            </h3>
+            {rows !== null && (
+              <span className="text-[11px] text-[var(--text-muted)] flex items-center gap-1.5">
+                <TrendingUp size={12} /> {forecast.avgDaily}/day avg · {forecast.activeBays} bay{forecast.activeBays === 1 ? '' : 's'} · ~{forecast.slotsPerDay} slots/day
+              </span>
+            )}
+          </div>
+          {rows === null ? (
+            <div className="h-24 bg-[var(--input-bg)] rounded animate-pulse" />
+          ) : forecast.activeBays === 0 ? (
+            <p className="text-sm text-[var(--text-muted)]">No active bays yet — schedule jobs to project capacity.</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-[var(--input-border)] text-left text-xs uppercase tracking-wider text-[var(--text-muted)]">
+                    {['Day', 'Date', 'Scheduled', 'Expected', 'Capacity', 'Utilisation', ''].map((h, i) => (
+                      <th key={i} className="px-3 py-2 font-semibold whitespace-nowrap">{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {forecast.days.map((d) => {
+                    const util = Math.round(d.utilPct)
+                    const bar = d.overloaded ? 'bg-red-500' : util >= 70 ? 'bg-amber-500' : 'bg-green-500'
+                    return (
+                      <tr key={d.date} className={`border-b border-[var(--input-border)]/50 ${d.overloaded ? 'bg-red-950/20' : ''}`}>
+                        <td className="px-3 py-2.5 font-medium text-[var(--text-primary)]">{d.dayName}</td>
+                        <td className="px-3 py-2.5 text-[var(--text-secondary)] whitespace-nowrap">{d.date}</td>
+                        <td className="px-3 py-2.5 text-[var(--text-secondary)]">{d.scheduled}</td>
+                        <td className="px-3 py-2.5 text-[var(--text-secondary)]">{d.expected}</td>
+                        <td className="px-3 py-2.5 text-[var(--text-muted)]">{d.slotsPerDay}</td>
+                        <td className="px-3 py-2.5">
+                          <div className="flex items-center gap-2">
+                            <div className="h-1.5 w-16 rounded-full bg-[var(--input-bg)] overflow-hidden shrink-0">
+                              <div className={`h-full rounded-full ${bar}`} style={{ width: `${Math.min(100, util)}%` }} />
+                            </div>
+                            <span className={`text-xs font-semibold ${d.overloaded ? 'text-red-400' : 'text-[var(--text-secondary)]'}`}>{util}%</span>
+                          </div>
+                        </td>
+                        <td className="px-3 py-2.5">
+                          {d.overloaded && (
+                            <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold border bg-red-900/30 text-red-300 border-red-800/50 whitespace-nowrap">Overloaded</span>
+                          )}
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+              <p className="mt-2 text-[11px] text-[var(--text-muted)]">
+                Capacity = active bays × {WORKING_HOURS_PER_DAY}h working day ÷ avg job length ({forecast.avgJobHours}h). Expected = max(scheduled, 30-day daily average). Days above {DEFAULT_OVERLOAD_PCT}% utilisation are flagged overloaded.
+              </p>
+            </div>
+          )}
+        </div>
+
+        {/* Technician load */}
+        <div className="card">
+          <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-3 flex items-center gap-2">
+            <Users size={15} /> Technician load <span className="text-[var(--text-muted)] font-normal">(vs {WORKING_HOURS_PER_DAY}h day)</span>
+          </h3>
+          {rows === null ? (
+            <div className="h-24 bg-[var(--input-bg)] rounded animate-pulse" />
+          ) : techLoad.length === 0 ? (
+            <p className="text-sm text-[var(--text-muted)]">No technicians assigned yet.</p>
+          ) : (
+            <div className="flex flex-col gap-2.5">
+              {techLoad.slice(0, 10).map((t) => {
+                const util = Math.round(t.utilPct)
+                const bar = util >= 90 ? 'bg-red-500' : util >= 70 ? 'bg-amber-500' : 'bg-green-500'
+                return (
+                  <div key={t.technician} className="rounded-lg border border-[var(--input-border)] bg-[var(--input-bg)]/40 p-2.5">
+                    <div className="flex items-center justify-between">
+                      <p className="text-sm font-medium text-[var(--text-primary)] truncate">{t.technician}</p>
+                      <span className="text-xs font-semibold text-[var(--text-secondary)]">{util}%</span>
+                    </div>
+                    <div className="mt-1.5 h-1.5 w-full rounded-full bg-[var(--input-bg)] overflow-hidden">
+                      <div className={`h-full rounded-full ${bar}`} style={{ width: `${Math.min(100, util)}%` }} />
+                    </div>
+                    <div className="mt-1.5 flex items-center justify-between text-[11px] text-[var(--text-muted)]">
+                      <span>{t.jobs} job{t.jobs === 1 ? '' : 's'}</span>
+                      <span>{fmtMin(t.bookedMin)} booked</span>
+                      <span className="text-green-400">{t.completed} done</span>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Filters */}

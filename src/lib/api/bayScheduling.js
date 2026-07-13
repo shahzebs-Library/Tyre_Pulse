@@ -10,7 +10,7 @@
  * "apply the migration" empty state instead of erroring.
  */
 import { supabase, unwrap, applyCountry } from './_client'
-import { toFiniteNumber } from '../bayScheduling'
+import { toFiniteNumber, bayOverlapConflicts } from '../bayScheduling'
 
 export const COLS =
   'id,organisation_id,country,bay_name,workshop_site,asset_no,job_type,technician,' +
@@ -52,6 +52,56 @@ const asNonNegNumber = (v, field) => {
   if (n == null) throw new Error(`${field} must be a number.`)
   if (n < 0) throw new Error(`${field} cannot be negative.`)
   return n
+}
+
+// Least-privilege projection for the overlap probe (no need for the full COLS).
+const OVERLAP_COLS = 'id,bay_name,scheduled_start,scheduled_end,status,asset_no,work_order_ref,country'
+
+/**
+ * Write-time double-booking guard (G4). Before an insert/update lands, probe the
+ * same bay for a non-cancelled job whose scheduled window overlaps [start,end)
+ * and REJECT with a clear Error — turning the after-the-fact conflict warning
+ * into prevention (parallels the original service's 409). Skips when the row is
+ * cancelled or has no bay/valid window (nothing to collide with). RLS scopes the
+ * probe to the caller's org; country is matched when present to avoid
+ * cross-country false positives on free-text bay names.
+ *
+ * @param {{id?:any, bay_name:string, scheduled_start?:string|null,
+ *   scheduled_end?:string|null, status?:string|null, country?:string|null}} candidate
+ */
+async function assertNoBayOverlap(candidate) {
+  const { bay_name, scheduled_start, scheduled_end, status } = candidate
+  if (status === 'cancelled') return
+  if (!bay_name || !scheduled_start || !scheduled_end) return
+  if (new Date(scheduled_end).getTime() <= new Date(scheduled_start).getTime()) return
+
+  let q = supabase
+    .from('bay_schedules')
+    .select(OVERLAP_COLS)
+    .eq('bay_name', bay_name)
+    .neq('status', 'cancelled')
+    // Half-open overlap on the server side too, so the probe stays cheap.
+    .lt('scheduled_start', scheduled_end)
+    .gt('scheduled_end', scheduled_start)
+  if (candidate.country) q = q.eq('country', candidate.country)
+
+  let existing
+  try {
+    existing = unwrap(await q.limit(50)) || []
+  } catch (err) {
+    if (isMissingRelation(err)) return // pre-migration → nothing to guard
+    throw err
+  }
+  const clashes = bayOverlapConflicts(candidate, existing)
+  if (clashes.length) {
+    const c = clashes[0]
+    const ref = c.asset_no || c.work_order_ref || 'another job'
+    const at = c.scheduled_start ? new Date(c.scheduled_start).toLocaleString() : ''
+    throw new Error(
+      `Bay "${bay_name}" is already booked in this time window (${ref}${at ? ` at ${at}` : ''}). ` +
+      'Choose a different bay or time.',
+    )
+  }
 }
 
 /**
@@ -104,6 +154,13 @@ export async function createBaySchedule(values = {}) {
     notes: values.notes ? String(values.notes).slice(0, 8000) : null,
     country: values.country ?? null,
   }
+  await assertNoBayOverlap({
+    bay_name: payload.bay_name,
+    scheduled_start: payload.scheduled_start,
+    scheduled_end: payload.scheduled_end,
+    status: payload.status,
+    country: payload.country,
+  })
   return unwrap(await supabase.from('bay_schedules').insert(payload).select(COLS).single())
 }
 
@@ -132,6 +189,24 @@ export async function updateBaySchedule(id, patch = {}) {
   if (patch.work_order_ref !== undefined) clean.work_order_ref = asText(patch.work_order_ref, 120)
   if (patch.notes !== undefined) clean.notes = patch.notes ? String(patch.notes).slice(0, 8000) : null
   if (patch.country !== undefined) clean.country = patch.country ?? null
+
+  // G4: if this edit changes the bay, the window, or reactivates the job, guard
+  // against double-booking. Merge the patch onto the stored row so a partial
+  // update is validated against its effective (post-update) shape.
+  const touchesSchedule = ['bay_name', 'scheduled_start', 'scheduled_end', 'status'].some((k) => k in clean)
+  if (touchesSchedule) {
+    const current = await getBaySchedule(id)
+    if (current) {
+      await assertNoBayOverlap({
+        id,
+        bay_name: 'bay_name' in clean ? clean.bay_name : current.bay_name,
+        scheduled_start: 'scheduled_start' in clean ? clean.scheduled_start : current.scheduled_start,
+        scheduled_end: 'scheduled_end' in clean ? clean.scheduled_end : current.scheduled_end,
+        status: 'status' in clean ? clean.status : current.status,
+        country: 'country' in clean ? clean.country : current.country,
+      })
+    }
+  }
 
   return unwrap(await supabase.from('bay_schedules').update(clean).eq('id', id).select(COLS).single())
 }

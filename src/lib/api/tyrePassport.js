@@ -9,7 +9,8 @@ import { sanitizeSearchTerm } from '../searchFilter'
 const COLS =
   'id,serial_no,serial_number,tyre_serial,brand,size,supplier,asset_no,asset_number,site,' +
   'country,position,tyre_position,status,cost_per_tyre,total_km,total_hrs,km_at_fitment,' +
-  'km_at_removal,tread_depth,fitment_date,issue_date,removal_date,reason_for_removal,removal_reason,created_at'
+  'km_at_removal,tread_depth,pressure_reading,fitment_date,issue_date,removal_date,' +
+  'reason_for_removal,removal_reason,findings,remarks,created_at'
 
 /** All records for a given serial (matched across the three serial columns). */
 export async function getPassportRecords(serial, { country } = {}) {

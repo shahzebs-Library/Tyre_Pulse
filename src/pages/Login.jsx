@@ -221,6 +221,7 @@ export default function Login() {
   const [mfaState, setMfaState]       = useState(null) // { factorId } when MFA challenge needed
   const [loginAttempts, setLoginAttempts] = useState(0)
   const [cooldownUntil, setCooldownUntil] = useState(0)
+  const [ssoLoading, setSsoLoading]   = useState(false)
 
   // Track network status
   useEffect(() => {
@@ -302,6 +303,34 @@ export default function Login() {
     setLoginAttempts(0)
     setCooldownUntil(0)
     // on success: useEffect above handles navigation once AuthContext resolves user + profile
+  }
+
+  // Enterprise SSO: resolve the work-email domain to a Supabase-registered SAML/
+  // OIDC provider and hand off to the IdP. The provider is registered in Supabase
+  // Auth (Management API) per the domain configured in SSO Configuration; this
+  // does no app-table read (unauthenticated), it asks GoTrue directly.
+  async function handleSso() {
+    if (!isOnline) { setError(t('auth.login.errNoInternet')); return }
+    const email = identifier.trim()
+    const domain = email.includes('@') ? email.split('@')[1]?.toLowerCase() : ''
+    if (!domain) { setError('Enter your work email above to sign in with SSO.'); return }
+    setError(''); setSsoLoading(true)
+    try {
+      const { data, error: ssoErr } = await supabase.auth.signInWithSSO({ domain })
+      if (ssoErr) {
+        setError(/no sso provider|not found/i.test(ssoErr.message || '')
+          ? 'Single sign-on is not enabled for this email domain.'
+          : (ssoErr.message || 'Single sign-on is unavailable right now.'))
+        setSsoLoading(false)
+        return
+      }
+      if (data?.url) { window.location.href = data.url; return } // IdP redirect
+      setError('Single sign-on is not enabled for this email domain.')
+      setSsoLoading(false)
+    } catch (err) {
+      setError(err?.message || t('auth.login.errUnexpected'))
+      setSsoLoading(false)
+    }
   }
 
   async function handleSignup(e) {
@@ -757,6 +786,24 @@ export default function Login() {
                     {loading ? <Loader2 size={16} className="animate-spin"/> : <Zap size={16}/>}
                     {loading ? 'Signing in...' : !isOnline ? 'No Connection' : 'Sign In'}
                     {!loading && isOnline && <ArrowRight size={15}/>}
+                  </button>
+
+                  {/* Enterprise SSO */}
+                  <div style={{ display:'flex', alignItems:'center', gap:10, margin:'2px 0' }}>
+                    <div style={{ flex:1, height:1, background:'rgba(255,255,255,0.08)' }}/>
+                    <span style={{ fontSize:10, fontWeight:700, color:'rgba(255,255,255,0.28)', letterSpacing:'0.08em' }}>OR</span>
+                    <div style={{ flex:1, height:1, background:'rgba(255,255,255,0.08)' }}/>
+                  </div>
+                  <button type="button" onClick={handleSso} disabled={ssoLoading || !isOnline} style={{
+                    width:'100%', padding:'11px', borderRadius:14,
+                    border:'1.5px solid rgba(74,222,128,0.28)', background:'rgba(22,163,74,0.08)',
+                    color:'#4ade80', fontSize:13, fontWeight:700,
+                    cursor:(ssoLoading || !isOnline) ? 'not-allowed' : 'pointer',
+                    display:'flex', alignItems:'center', justifyContent:'center', gap:8,
+                    transition:'all 0.2s',
+                  }}>
+                    {ssoLoading ? <Loader2 size={15} className="animate-spin"/> : <Shield size={15}/>}
+                    {ssoLoading ? 'Redirecting…' : 'Sign in with SSO'}
                   </button>
                 </motion.form>
               )}

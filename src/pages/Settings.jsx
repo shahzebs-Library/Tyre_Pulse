@@ -8,11 +8,13 @@ import AppearancePanel from '../components/settings/AppearancePanel'
 import FeatureFlagsPanel from '../components/settings/FeatureFlagsPanel'
 import DisplayTokensPanel from '../components/display/DisplayTokensPanel'
 import { useSettings, COUNTRIES } from '../contexts/SettingsContext'
-import { Save, User, Settings2, Bell, Database, Info, Target, Clock, Mail, Calendar, Trash2, Plus, Play, Lock, Shield, ShieldCheck, ShieldOff, AlertTriangle, Sparkles } from 'lucide-react'
+import { Save, User, Settings2, Bell, BellRing, Database, Info, Target, Clock, Mail, Calendar, Trash2, Plus, Play, Lock, Shield, ShieldCheck, ShieldOff, AlertTriangle, Sparkles, Moon } from 'lucide-react'
 import { motion } from 'framer-motion'
 import PageHeader from '../components/ui/PageHeader'
 import { sendReportEmail } from '../lib/emailService'
 import TwoFactorSetup from '../components/TwoFactorSetup'
+import * as notifPrefsApi from '../lib/api/notificationPreferences'
+import { DEFAULT_PREFS, DIGEST_FREQUENCIES, PRIORITY_ORDER, summarisePrefs } from '../lib/notificationPrefs'
 
 const ROLE_BADGE = {
   Admin:   'bg-purple-900/50 text-purple-300 border border-purple-700/50',
@@ -92,6 +94,31 @@ function getScheduleLabel(schedule) {
   return `Monthly · Day ${schedule.dayOfMonth} at ${schedule.time}`
 }
 
+// Per-user notification channels (§11 Notification engine — preferences slice).
+// Each maps to a `channel_<key>` boolean column on notification_preferences.
+const NOTIFICATION_CHANNELS = [
+  { key: 'in_app',   label: 'In-App',   hint: 'Bell + realtime alerts inside TyrePulse' },
+  { key: 'email',    label: 'Email',    hint: 'Delivered to your account email' },
+  { key: 'push',     label: 'Push',     hint: 'Mobile / browser push notifications' },
+  { key: 'whatsapp', label: 'WhatsApp', hint: 'Business WhatsApp messages' },
+  { key: 'sms',      label: 'SMS',      hint: 'Text message to your phone' },
+  { key: 'slack',    label: 'Slack',    hint: 'Direct message in Slack' },
+  { key: 'teams',    label: 'Teams',    hint: 'Microsoft Teams message' },
+]
+
+const PRIORITY_LABELS = {
+  low: 'Low — everything',
+  normal: 'Normal and above',
+  high: 'High and above',
+  critical: 'Critical only',
+}
+
+const DIGEST_LABELS = {
+  none: 'Real-time (no digest)',
+  daily: 'Daily digest',
+  weekly: 'Weekly digest',
+}
+
 function getInitials(name) {
   if (!name) return '?'
   return name.split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase()
@@ -145,6 +172,14 @@ export default function Settings() {
   const [sendingTest, setSendingTest] = useState(null) // schedule id
   const [testMsg, setTestMsg] = useState({}) // { [id]: string }
 
+  // Notification preferences (per-user; §11 Notification engine slice).
+  // Extends existing notification infrastructure — a preferences store only.
+  const [notifPrefs, setNotifPrefs]     = useState(DEFAULT_PREFS)
+  const [loadingNotif, setLoadingNotif] = useState(true)
+  const [savingNotif, setSavingNotif]   = useState(false)
+  const [notifMsg, setNotifMsg]         = useState('')
+  const [notifError, setNotifError]     = useState('')
+
   // Password change (TyreMan)
   const [pwNew, setPwNew]         = useState('')
   const [pwConfirm, setPwConfirm] = useState('')
@@ -157,7 +192,7 @@ export default function Settings() {
   const [mfaMsg, setMfaMsg]                     = useState('')
   const [confirmRemoveMfa, setConfirmRemoveMfa] = useState(false)
 
-  useEffect(() => { loadSettings(); loadUploadHistory(); loadKpiTargets(); loadAlertThresholds(); loadSchedules() }, [])
+  useEffect(() => { loadSettings(); loadUploadHistory(); loadKpiTargets(); loadAlertThresholds(); loadSchedules(); loadNotifPrefs() }, [])
   useEffect(() => { setAppSettings(s => ({ ...s, ...globalSettings })) }, [globalSettings])
   useEffect(() => {
     if (profile) setProfileForm({ full_name: profile.full_name ?? '', username: profile.username ?? '' })
@@ -209,6 +244,53 @@ export default function Settings() {
       } catch {
         // keep defaults
       }
+    }
+  }
+
+  async function loadNotifPrefs() {
+    setLoadingNotif(true)
+    setNotifError('')
+    try {
+      const prefs = await notifPrefsApi.getMyPreferences()
+      setNotifPrefs({ ...DEFAULT_PREFS, ...prefs })
+    } catch (err) {
+      setNotifError(err?.message || 'Could not load your notification preferences.')
+    } finally {
+      setLoadingNotif(false)
+    }
+  }
+
+  function toggleNotifChannel(key) {
+    const col = `channel_${key}`
+    setNotifPrefs(p => ({ ...p, [col]: !p[col] }))
+  }
+
+  async function saveNotifPrefs(e) {
+    e.preventDefault()
+    setSavingNotif(true)
+    setNotifMsg('')
+    setNotifError('')
+    try {
+      const saved = await notifPrefsApi.upsertMyPreferences({
+        channel_in_app:   notifPrefs.channel_in_app,
+        channel_email:    notifPrefs.channel_email,
+        channel_push:     notifPrefs.channel_push,
+        channel_whatsapp: notifPrefs.channel_whatsapp,
+        channel_sms:      notifPrefs.channel_sms,
+        channel_slack:    notifPrefs.channel_slack,
+        channel_teams:    notifPrefs.channel_teams,
+        quiet_start:      notifPrefs.quiet_start || null,
+        quiet_end:        notifPrefs.quiet_end || null,
+        digest_frequency: notifPrefs.digest_frequency,
+        min_priority:     notifPrefs.min_priority,
+      })
+      setNotifPrefs({ ...DEFAULT_PREFS, ...saved })
+      setNotifMsg('Notification preferences saved')
+    } catch (err) {
+      setNotifError(err?.message || 'Could not save your notification preferences.')
+    } finally {
+      setSavingNotif(false)
+      setTimeout(() => setNotifMsg(''), 3000)
     }
   }
 
@@ -860,6 +942,123 @@ export default function Settings() {
             </div>
           )}
         </div>
+      </div>
+
+      {/* Notification Preferences (per-user; §11 Notification engine slice) */}
+      <div className="card space-y-4">
+        <div className="flex items-center justify-between">
+          <h2 className="text-base font-semibold text-[var(--text-primary)] flex items-center gap-2">
+            <BellRing size={16} className="text-emerald-400" /> Notifications
+          </h2>
+          {!loadingNotif && (
+            <span className="text-xs text-[var(--text-muted)]">
+              {summarisePrefs(notifPrefs).channelCount} channel{summarisePrefs(notifPrefs).channelCount === 1 ? '' : 's'} on
+            </span>
+          )}
+        </div>
+        <p className="text-xs text-[var(--text-muted)]">
+          Choose how and when TyrePulse notifies you. These are personal preferences and apply only to your account.
+        </p>
+
+        {notifError && (
+          <p className="text-sm text-red-300 bg-red-900/30 border border-red-700 rounded-lg p-2.5">{notifError}</p>
+        )}
+
+        {loadingNotif ? (
+          <div className="flex items-center gap-3 py-8 justify-center text-[var(--text-muted)] text-sm">
+            <span className="w-4 h-4 border-2 border-[var(--border-bright)] border-t-emerald-400 rounded-full animate-spin inline-block" />
+            Loading your preferences…
+          </div>
+        ) : (
+          <form onSubmit={saveNotifPrefs} className="space-y-5">
+            {/* Channels */}
+            <div>
+              <p className="text-xs text-[var(--text-secondary)] font-medium uppercase tracking-wide mb-2 flex items-center gap-1.5">
+                <Bell size={12} /> Delivery Channels
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
+                {NOTIFICATION_CHANNELS.map(ch => {
+                  const on = notifPrefs[`channel_${ch.key}`] === true
+                  return (
+                    <button
+                      type="button"
+                      key={ch.key}
+                      onClick={() => toggleNotifChannel(ch.key)}
+                      className={`flex items-center justify-between gap-3 rounded-xl border px-3.5 py-2.5 text-left transition-colors ${
+                        on
+                          ? 'bg-emerald-950/30 border-emerald-700/50'
+                          : 'bg-[var(--surface-2)] border-[var(--border-bright)] hover:border-[var(--border-bright)]'
+                      }`}
+                      aria-pressed={on}
+                    >
+                      <span className="min-w-0">
+                        <span className={`block text-sm font-medium ${on ? 'text-emerald-300' : 'text-[var(--text-primary)]'}`}>{ch.label}</span>
+                        <span className="block text-xs text-[var(--text-muted)] truncate">{ch.hint}</span>
+                      </span>
+                      <span
+                        className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors ${on ? 'bg-emerald-600' : 'bg-gray-600'}`}
+                      >
+                        <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform ${on ? 'translate-x-4' : 'translate-x-1'}`} />
+                      </span>
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+
+            {/* Quiet hours + cadence + priority */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div>
+                <label className="label flex items-center gap-1.5"><Moon size={12} /> Quiet Hours Start</label>
+                <input
+                  type="time"
+                  className="input"
+                  value={(notifPrefs.quiet_start || '').slice(0, 5)}
+                  onChange={e => setNotifPrefs(p => ({ ...p, quiet_start: e.target.value || null }))}
+                />
+              </div>
+              <div>
+                <label className="label flex items-center gap-1.5"><Moon size={12} /> Quiet Hours End</label>
+                <input
+                  type="time"
+                  className="input"
+                  value={(notifPrefs.quiet_end || '').slice(0, 5)}
+                  onChange={e => setNotifPrefs(p => ({ ...p, quiet_end: e.target.value || null }))}
+                />
+              </div>
+              <div>
+                <label className="label">Digest Frequency</label>
+                <select
+                  className="input"
+                  value={notifPrefs.digest_frequency || 'none'}
+                  onChange={e => setNotifPrefs(p => ({ ...p, digest_frequency: e.target.value }))}
+                >
+                  {DIGEST_FREQUENCIES.map(f => <option key={f} value={f}>{DIGEST_LABELS[f] || f}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="label">Minimum Priority</label>
+                <select
+                  className="input"
+                  value={notifPrefs.min_priority || 'low'}
+                  onChange={e => setNotifPrefs(p => ({ ...p, min_priority: e.target.value }))}
+                >
+                  {PRIORITY_ORDER.map(pr => <option key={pr} value={pr}>{PRIORITY_LABELS[pr] || pr}</option>)}
+                </select>
+              </div>
+            </div>
+            <p className="text-xs text-[var(--text-muted)] -mt-1">
+              Quiet hours suppress non-critical alerts within the window (wrap-around across midnight supported). Set both to the same value to disable.
+            </p>
+
+            <div className="flex items-center gap-3 pt-1">
+              <button type="submit" disabled={savingNotif} className="btn-primary flex items-center gap-2 disabled:opacity-50 text-sm">
+                <Save size={14} /> {savingNotif ? 'Saving...' : 'Save Notification Preferences'}
+              </button>
+              {notifMsg && <span className="text-green-400 text-sm">{notifMsg}</span>}
+            </div>
+          </form>
+        )}
       </div>
 
       {/* KPI Targets Editor */}

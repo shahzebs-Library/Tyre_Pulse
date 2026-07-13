@@ -10,9 +10,15 @@
  */
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import {
-  RotateCcw, AlertTriangle, Truck, Gauge, Search, X, Filter,
+  RotateCcw, AlertTriangle, Truck, Search, X, Filter,
   FileSpreadsheet, FileText, ChevronRight, ArrowRightLeft, CheckCircle2, Info,
+  ShieldAlert, ShieldCheck, Zap, ArrowRight, Scale, BarChart3,
 } from 'lucide-react'
+import { Bar } from 'react-chartjs-2'
+import {
+  Chart as ChartJS, CategoryScale, LinearScale, BarElement,
+  Title, Tooltip as ChartTooltip, Legend,
+} from 'chart.js'
 import PageHeader from '../components/ui/PageHeader'
 import { useSettings } from '../contexts/SettingsContext'
 import { listInServiceTyres } from '../lib/api/rotationOptimizer'
@@ -21,14 +27,42 @@ import {
 } from '../lib/rotationOptimizer'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 
-const PRIORITY_STYLES = {
-  high: 'bg-red-900/40 text-red-300 border border-red-700/50',
-  medium: 'bg-amber-900/40 text-amber-300 border border-amber-700/50',
-  balanced: 'bg-green-900/40 text-green-300 border border-green-700/50',
+ChartJS.register(CategoryScale, LinearScale, BarElement, Title, ChartTooltip, Legend)
+
+// Overall-status badge styling (from the deepened engine).
+const STATUS_META = {
+  critical: { label: 'Critical', cls: 'bg-red-900/40 text-red-300 border border-red-700/50', bar: '#f87171' },
+  warning: { label: 'Warning', cls: 'bg-orange-900/40 text-orange-300 border border-orange-700/50', bar: '#fb923c' },
+  advisory: { label: 'Advisory', cls: 'bg-amber-900/40 text-amber-300 border border-amber-700/50', bar: '#fbbf24' },
+  good: { label: 'Good', cls: 'bg-green-900/40 text-green-300 border border-green-700/50', bar: '#34d399' },
 }
-const PRIORITY_LABEL = { high: 'High', medium: 'Medium', balanced: 'Balanced' }
+const URGENCY_BAR = { critical: '#f87171', warning: '#fb923c', advisory: '#38bdf8' }
 
 const fmt = (n) => (n == null ? '—' : n)
+const treadTone = (mm) =>
+  mm == null ? 'text-[var(--text-muted)]' : mm < 1.6 ? 'text-red-400' : mm < 4 ? 'text-amber-400' : 'text-emerald-400'
+
+/** Compact wear-balance ring (SVG). */
+function BalanceRing({ score }) {
+  const r = 20
+  const c = 2 * Math.PI * r
+  const pct = score == null ? 0 : Math.max(0, Math.min(100, score))
+  const color = score == null ? '#64748b' : pct >= 75 ? '#34d399' : pct >= 50 ? '#fbbf24' : '#f87171'
+  const dash = (pct / 100) * c
+  return (
+    <div className="relative w-14 h-14 shrink-0" title="Wear-balance score (0–100)">
+      <svg viewBox="0 0 56 56" className="w-full h-full -rotate-90">
+        <circle cx="28" cy="28" r={r} fill="none" stroke="var(--input-border)" strokeWidth="6" />
+        {score != null && (
+          <circle cx="28" cy="28" r={r} fill="none" stroke={color} strokeWidth="6" strokeLinecap="round" strokeDasharray={`${dash} ${c - dash}`} />
+        )}
+      </svg>
+      <div className="absolute inset-0 flex items-center justify-center">
+        <span className="text-sm font-bold text-[var(--text-primary)]">{score == null ? '—' : score}</span>
+      </div>
+    </div>
+  )
+}
 
 export default function RotationOptimizer() {
   const { activeCountry } = useSettings()
@@ -119,25 +153,65 @@ export default function RotationOptimizer() {
   const kpis = [
     { label: 'Assets analysed', value: summary.assetsAnalyzed, icon: Truck, tone: 'text-[var(--text-primary)]' },
     { label: 'Need rotation', value: summary.assetsNeedingRotation, icon: RotateCcw, tone: 'text-amber-400' },
-    { label: 'High priority', value: summary.highPriority, icon: AlertTriangle, tone: 'text-red-400' },
-    { label: 'Avg tread spread', value: summary.avgSpread == null ? '—' : `${summary.avgSpread}mm`, icon: Gauge, tone: 'text-[var(--text-primary)]' },
+    { label: 'Critical (safety)', value: summary.criticalAssets ?? 0, icon: ShieldAlert, tone: 'text-red-400' },
+    { label: 'Avg wear balance', value: summary.avgWearBalance == null ? '—' : `${summary.avgWearBalance}/100`, icon: Scale, tone: 'text-[var(--text-primary)]' },
   ]
 
-  // One export row per recommendation (flattened), respecting current filters.
-  const EXPORT_COLS = ['asset_no', 'site', 'priority', 'spread', 'min', 'max', 'avg', 'recommendation']
-  const EXPORT_HEADERS = ['Asset', 'Site', 'Priority', 'Spread (mm)', 'Min (mm)', 'Max (mm)', 'Avg (mm)', 'Recommendation']
+  // Top imbalanced assets for the fleet chart (highest tread spread first).
+  const chart = useMemo(() => {
+    const top = [...filtered]
+      .filter((a) => a.spread != null)
+      .sort((x, y) => (y.spread ?? 0) - (x.spread ?? 0))
+      .slice(0, 12)
+    if (!top.length) return null
+    return {
+      data: {
+        labels: top.map((a) => String(a.asset_no)),
+        datasets: [{
+          label: 'Tread spread (mm)',
+          data: top.map((a) => a.spread),
+          backgroundColor: top.map((a) => URGENCY_BAR[a.urgency] || '#38bdf8'),
+          borderRadius: 4,
+          maxBarThickness: 34,
+        }],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { display: false }, tooltip: { callbacks: { label: (ctx) => `${ctx.parsed.y}mm spread` } } },
+        scales: {
+          y: { beginAtZero: true, grid: { color: 'rgba(148,163,184,0.12)' }, ticks: { color: '#94a3b8' }, title: { display: true, text: 'mm', color: '#94a3b8' } },
+          x: { grid: { display: false }, ticks: { color: '#94a3b8', maxRotation: 60, minRotation: 0, autoSkip: false } },
+        },
+      },
+    }
+  }, [filtered])
+
+  // One export row per recommended swap (flattened), respecting current filters.
+  // Assets with no swap still emit a summary row so the export is complete.
+  const EXPORT_COLS = ['asset_no', 'site', 'status', 'score', 'spread', 'from', 'to', 'tyre', 'delta', 'benefit_km', 'impact', 'action']
+  const EXPORT_HEADERS = ['Asset', 'Site', 'Status', 'Balance', 'Spread (mm)', 'From', 'To', 'Tyre', 'Δ Tread (mm)', 'Benefit (km)', 'Impact', 'Action / Note']
   const exportRows = filtered.flatMap((a) => {
-    const recs = a.recommendations.length ? a.recommendations : ['No rotation required — wear is balanced.']
-    return recs.map((rec) => ({
+    const base = {
       asset_no: a.asset_no || '',
       site: a.site || '',
-      priority: PRIORITY_LABEL[a.priorityKey],
+      status: (STATUS_META[a.overallStatus] || {}).label || a.overallStatus || '',
+      score: a.wearBalanceScore ?? '',
       spread: a.spread ?? '',
-      min: a.stats.min ?? '',
-      max: a.stats.max ?? '',
-      avg: a.stats.avg ?? '',
-      recommendation: rec,
-    }))
+    }
+    if (a.swaps && a.swaps.length) {
+      return a.swaps.map((s) => ({
+        ...base,
+        from: s.from_position || '',
+        to: s.to_position || '',
+        tyre: s.tyre || '',
+        delta: s.tread_delta_mm ?? '',
+        benefit_km: s.expected_benefit_km ?? '',
+        impact: s.impact_score ?? '',
+        action: s.reason || '',
+      }))
+    }
+    return [{ ...base, from: '', to: '', tyre: '', delta: '', benefit_km: '', impact: '', action: a.narrative || 'No rotation required — wear is balanced.' }]
   })
 
   const clearFilters = () => { setPriorityFilter('all'); setSiteFilter(''); setSearch('') }
@@ -186,6 +260,23 @@ export default function RotationOptimizer() {
           )
         })}
       </div>
+
+      {/* Honest limitation note — axle role is inferred from free-text positions. */}
+      <div className="card border border-[var(--input-border)] flex items-start gap-2.5 py-2.5">
+        <Info size={15} className="text-[var(--text-muted)] mt-0.5 shrink-0" />
+        <p className="text-xs text-[var(--text-muted)] leading-relaxed">
+          Axle roles (steer / drive / trailer) are <span className="text-[var(--text-secondary)]">inferred from each tyre's free-text position label</span> — this dataset has no per-axle, side, or inner/outer wheel data and a single tread value per tyre. Steer-imbalance checks are therefore <span className="text-[var(--text-secondary)]">heuristic</span>; the <span className="text-red-300">below-legal-minimum ({'<'}1.6mm)</span> check is exact. No values are estimated where a signal is missing.
+        </p>
+      </div>
+
+      {/* Fleet imbalance chart */}
+      {rows !== null && chart && (
+        <div className="card">
+          <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-1 flex items-center gap-2"><BarChart3 size={15} /> Most imbalanced assets</h3>
+          <p className="text-xs text-[var(--text-muted)] mb-4">Tread spread (max − min) across each vehicle's fitted tyres. Bar colour reflects urgency.</p>
+          <div className="h-64"><Bar data={chart.data} options={chart.options} /></div>
+        </div>
+      )}
 
       {/* Filters */}
       <div className="card space-y-3">
@@ -238,38 +329,81 @@ export default function RotationOptimizer() {
                   aria-expanded={isOpen}
                 >
                   <ChevronRight size={16} className={`text-[var(--text-muted)] shrink-0 transition-transform ${isOpen ? 'rotate-90' : ''}`} />
-                  <Truck size={16} className="text-[var(--text-muted)] shrink-0" />
+                  <BalanceRing score={a.wearBalanceScore} />
                   <div className="min-w-0">
-                    <p className="font-semibold text-[var(--text-primary)] truncate">{a.asset_no}</p>
-                    <p className="text-xs text-[var(--text-muted)]">{a.site || 'Unassigned site'} · {a.stats.count} tyres</p>
+                    <p className="font-semibold text-[var(--text-primary)] truncate flex items-center gap-1.5"><Truck size={13} className="text-[var(--text-muted)]" /> {a.asset_no}</p>
+                    <p className="text-xs text-[var(--text-muted)]">
+                      {a.site || 'Unassigned site'} · {a.stats.count} tyres
+                      {a.swaps.length > 0 && <span className="text-brand-bright"> · {a.swaps.length} swap{a.swaps.length > 1 ? 's' : ''}</span>}
+                      {a.violations.length > 0 && <span className="text-red-400"> · {a.violations.length} issue{a.violations.length > 1 ? 's' : ''}</span>}
+                    </p>
                   </div>
                   <div className="ml-auto flex items-center gap-4">
                     <div className="text-right hidden sm:block">
                       <p className="text-xs text-[var(--text-muted)]">spread</p>
-                      <p className={`text-sm font-semibold ${a.priority === 'high' ? 'text-red-400' : a.priority === 'medium' ? 'text-amber-400' : 'text-[var(--text-secondary)]'}`}>{fmt(a.spread)}mm</p>
+                      <p className={`text-sm font-semibold ${a.urgency === 'critical' ? 'text-red-400' : a.urgency === 'warning' ? 'text-orange-400' : 'text-[var(--text-secondary)]'}`}>{fmt(a.spread)}mm</p>
                     </div>
                     <div className="text-right hidden md:block">
                       <p className="text-xs text-[var(--text-muted)]">range</p>
                       <p className="text-sm text-[var(--text-secondary)]">{fmt(a.stats.min)}–{fmt(a.stats.max)}mm</p>
                     </div>
-                    <span className={`badge text-[11px] px-2 py-0.5 rounded shrink-0 ${PRIORITY_STYLES[a.priorityKey]}`}>{PRIORITY_LABEL[a.priorityKey]}</span>
+                    <span className={`badge text-[11px] px-2 py-0.5 rounded shrink-0 inline-flex items-center gap-1 ${(STATUS_META[a.overallStatus] || STATUS_META.good).cls}`}>
+                      {a.overallStatus === 'critical' ? <ShieldAlert size={11} /> : a.overallStatus === 'good' ? <ShieldCheck size={11} /> : <AlertTriangle size={11} />}
+                      {(STATUS_META[a.overallStatus] || STATUS_META.good).label}
+                    </span>
                   </div>
                 </button>
 
                 {isOpen && (
                   <div className="border-t border-[var(--input-border)] px-4 py-4 space-y-4">
-                    {/* Recommendations */}
-                    {a.recommendations.length > 0 ? (
+                    {/* Deterministic narrative */}
+                    <div className="flex items-start gap-2 text-sm bg-[var(--input-bg)]/40 border border-[var(--input-border)] rounded-lg px-3 py-2.5">
+                      {a.overallStatus === 'good'
+                        ? <CheckCircle2 size={15} className="text-green-400 mt-0.5 shrink-0" />
+                        : <Info size={15} className="text-brand-bright mt-0.5 shrink-0" />}
+                      <span className="text-[var(--text-secondary)]">{a.narrative}</span>
+                    </div>
+
+                    {/* Violations (safety / compliance) */}
+                    {a.violations.length > 0 && (
                       <div className="space-y-2">
-                        <p className="text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)] flex items-center gap-1.5"><ArrowRightLeft size={13} /> Recommended rotations</p>
-                        {a.recommendations.map((rec, i) => (
-                          <div key={i} className="flex items-start gap-2 text-sm text-[var(--text-secondary)] bg-[var(--input-bg)]/50 border border-[var(--input-border)] rounded-lg px-3 py-2">
-                            <RotateCcw size={14} className="text-brand-bright mt-0.5 shrink-0" />
-                            <span>{rec}</span>
+                        <p className="text-xs font-semibold uppercase tracking-wider text-red-300/90 flex items-center gap-1.5"><ShieldAlert size={13} /> Compliance & safety ({a.violations.length})</p>
+                        {a.violations.map((v, i) => (
+                          <div key={i} className="flex items-start gap-2 text-sm text-red-200 bg-red-900/20 border border-red-800/50 rounded-lg px-3 py-2">
+                            <AlertTriangle size={14} className="text-red-400 mt-0.5 shrink-0" />
+                            <span>
+                              {v.message}
+                              {v.heuristic && <span className="ml-1.5 text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-900/40 text-amber-300 border border-amber-700/50">heuristic</span>}
+                            </span>
                           </div>
                         ))}
                       </div>
-                    ) : (
+                    )}
+
+                    {/* Structured swaps */}
+                    {a.swaps.length > 0 ? (
+                      <div className="space-y-2">
+                        <p className="text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)] flex items-center gap-1.5"><ArrowRightLeft size={13} /> Recommended swaps ({a.swaps.length})</p>
+                        {a.swaps.map((s, i) => (
+                          <div key={i} className="bg-[var(--input-bg)]/50 border border-[var(--input-border)] rounded-lg px-3 py-2.5">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="font-mono text-xs text-[var(--text-primary)] bg-[var(--input-bg)] px-1.5 py-0.5 rounded">{s.tyre || 'unknown'}</span>
+                              <span className="inline-flex items-center gap-1.5 text-sm text-[var(--text-secondary)]">
+                                <span>{s.from_position || 'unknown position'}</span>
+                                <span className={`font-semibold ${treadTone(s.from_tread_mm)}`}>{s.from_tread_mm}mm</span>
+                                <ArrowRight size={14} className="text-brand-bright" />
+                                <span>{s.to_position || 'unknown position'}</span>
+                                <span className={`font-semibold ${treadTone(s.to_tread_mm)}`}>{s.to_tread_mm}mm</span>
+                              </span>
+                              <div className="ml-auto flex items-center gap-1.5">
+                                <span className="text-[11px] px-1.5 py-0.5 rounded bg-emerald-900/30 text-emerald-300 border border-emerald-800/50">+{s.tread_delta_mm}mm · ~{Number(s.expected_benefit_km).toLocaleString()} km</span>
+                                <span className="inline-flex items-center gap-1 text-[11px] px-1.5 py-0.5 rounded bg-indigo-900/30 text-indigo-300 border border-indigo-800/50" title="Impact score (0–100)"><Zap size={11} /> {s.impact_score}</span>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : a.overallStatus !== 'critical' && (
                       <div className="flex items-center gap-2 text-sm text-green-300">
                         <CheckCircle2 size={15} /> {a.reason || 'Wear is balanced — no rotation required.'}
                       </div>

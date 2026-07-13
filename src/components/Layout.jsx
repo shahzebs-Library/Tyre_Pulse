@@ -141,6 +141,8 @@ const NAV_GROUPS = [
       { to: '/site-comp',    label: 'Site Comparison',    icon: Layers,         roles: ANALYTICS_ROLES },
       { to: '/fleet',        label: 'Fleet Analytics',    icon: GitBranch,      roles: ANALYTICS_ROLES },
       { to: '/kpi',          label: 'KPI Center',         icon: ClipboardCheck, roles: ANALYTICS_ROLES },
+      { to: '/kpi-engine',   label: 'Engineering KPI',    icon: Gauge,          roles: ANALYTICS_ROLES },
+      { to: '/kpi-command',  label: 'KPI Command Center', icon: Target,         roles: ANALYTICS_ROLES },
       { to: '/country-comp', label: 'Country Comparison', icon: Globe,          roles: ANALYTICS_ROLES },
       { to: '/comparison',   label: 'Comparison',         icon: GitCompare,     roles: ANALYTICS_ROLES },
       { to: '/position-intelligence',  label: 'Position Intelligence',  icon: MapPin, adminOnly: A },

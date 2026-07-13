@@ -293,6 +293,7 @@ export interface AccidentDraft {
   accident_type: AccidentType
   severity: AccidentSeverity
   description: string
+  driver_name: string
   injuries: boolean
   injury_count: string           // string for TextInput
   third_party_involved: boolean
@@ -314,6 +315,7 @@ export function emptyAccidentDraft(): AccidentDraft {
     accident_type: 'collision',
     severity: 'minor',
     description: '',
+    driver_name: '',
     injuries: false,
     injury_count: '0',
     third_party_involved: false,

@@ -36,6 +36,7 @@ export type CommandType =
   | 'CHECKLIST_APPROVAL'
   | 'ODOMETER_LOG'
   | 'ENGINE_HOURS_LOG'
+  | 'REPORT_ACCIDENT'
 
 /** How a command mutates its table. Defaults to 'insert' to preserve v1 behavior. */
 export type CommandOp = 'insert' | 'update'
@@ -154,6 +155,18 @@ export const COMMANDS: Record<CommandType, CommandSpec> = {
       'country', 'notes', 'photos', 'created_by',
     ],
   },
+  // Field accident report (offline-safe; photos already uploaded as refs). V215
+  // adds accidents.client_uuid so a replayed insert is idempotent.
+  REPORT_ACCIDENT: {
+    table: 'accidents',
+    fields: [
+      'site', 'asset_no', 'vehicle_id', 'reported_by', 'reporter_name',
+      'incident_date', 'incident_time', 'location', 'accident_type', 'severity',
+      'description', 'injuries', 'injury_count', 'third_party_involved',
+      'police_report_no', 'damage_description', 'estimated_damage_cost',
+      'photos', 'notes', 'status', 'country', 'driver_name',
+    ],
+  },
 }
 
 export interface QueuedRecord {
@@ -205,6 +218,7 @@ const TYPE_TO_MODULE: Record<CommandType, string> = {
   CHECKLIST_APPROVAL: 'checklist-approval',
   ODOMETER_LOG: 'meter-log',
   ENGINE_HOURS_LOG: 'meter-log',
+  REPORT_ACCIDENT: 'accident',
 }
 
 /** True when a command patches an existing row rather than inserting a new one. */

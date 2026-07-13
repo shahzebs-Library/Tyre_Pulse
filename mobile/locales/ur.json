@@ -243,6 +243,8 @@
     "severityLabel": "شدت *",
     "descLabel": "تفصیل *",
     "descPlaceholder": "کیا ہوا بیان کریں...",
+    "driverLabel": "متعلقہ ڈرائیور",
+    "driverPlaceholder": "ڈرائیور کا نام",
     "injuriesLabel": "کیا زخمی ہوئے؟",
     "injuryCountLabel": "زخمیوں کی تعداد",
     "injuryCountPlaceholder": "0",

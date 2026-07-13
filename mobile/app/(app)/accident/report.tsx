@@ -18,6 +18,8 @@ import { Ionicons } from '@expo/vector-icons'
 import { useAuth } from '../../../contexts/AuthContext'
 import { useLanguage } from '../../../contexts/LanguageContext'
 import { supabase } from '../../../lib/supabase'
+import { saveCommand } from '../../../lib/recordQueue'
+import { safeUuid } from '../../../lib/ids'
 import { useRoleGuard } from '../../../hooks/useRoleGuard'
 import AccidentPhotoGrid from '../../../components/AccidentPhotoGrid'
 import {
@@ -59,6 +61,7 @@ export default function AccidentReportScreen() {
   const [submitting, setSubmitting]       = useState(false)
   const [manualAsset, setManualAsset]     = useState('')
   const [useManualEntry, setUseManualEntry] = useState(false)
+  const [savedOffline, setSavedOffline]   = useState(false)
 
   const textAlign   = isRTL ? 'right' : 'left'
   const backIcon    = isRTL ? 'arrow-forward' : 'arrow-back'
@@ -180,10 +183,16 @@ export default function AccidentReportScreen() {
         notes:                  draft.notes || null,
         status:                 'reported',
         country:                profile?.country ?? null,
+        driver_name:            draft.driver_name?.trim() || null,
       }
 
-      const { error } = await supabase.from('accidents').insert(payload)
-      if (error) throw error
+      // Offline-safe: route through the typed record queue like every other
+      // write. Inserts immediately when online, queues + auto-syncs when not —
+      // a report filed at a crash scene with no signal is never lost. The stable
+      // client id makes a replayed insert idempotent (V215 accidents.client_uuid).
+      const res = await saveCommand('REPORT_ACCIDENT', payload, safeUuid())
+      if (!res.ok) throw new Error(res.error || 'Please try again.')
+      setSavedOffline(!!res.offline)
       setStep('success')
     } catch (err: any) {
       Alert.alert('Submission Failed', err.message ?? 'Please try again.')
@@ -462,6 +471,19 @@ export default function AccidentReportScreen() {
           />
           <ScrollView style={styles.scroll} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
 
+            {/* Driver involved */}
+            <View style={styles.field}>
+              <Text style={[styles.fieldLabel, { textAlign }]}>{t('accident.driverLabel')}</Text>
+              <TextInput
+                style={[styles.input, { textAlign }]}
+                value={draft.driver_name}
+                onChangeText={v => update({ driver_name: v })}
+                placeholder={t('accident.driverPlaceholder')}
+                placeholderTextColor="#94a3b8"
+                autoCapitalize="words"
+              />
+            </View>
+
             {/* Injuries toggle */}
             <View style={[styles.toggleRow, isRTL && styles.toggleRowRTL]}>
               <View style={{ flex: 1 }}>
@@ -646,6 +668,12 @@ export default function AccidentReportScreen() {
       </View>
       <Text style={styles.successTitle}>{t('accident.submittedTitle')}</Text>
       <Text style={styles.successSubtitle}>{t('accident.submittedSubtitle')}</Text>
+      {savedOffline && (
+        <View style={styles.offlineNote}>
+          <Ionicons name="cloud-offline-outline" size={16} color="#b45309" />
+          <Text style={styles.offlineNoteText}>Saved on device — it will sync automatically when back online.</Text>
+        </View>
+      )}
       <Text style={styles.successMeta}>
         {getEffectiveAssetNo()} · {draft.site}{'\n'}
         {draft.incident_date}
@@ -858,6 +886,12 @@ const styles = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center', marginBottom: 20,
   },
   successTitle: { fontSize: 22, fontWeight: '800', color: '#0f172a', textAlign: 'center' },
+  offlineNote: {
+    flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 16,
+    backgroundColor: 'rgba(245,158,11,0.12)', borderRadius: 12,
+    paddingHorizontal: 14, paddingVertical: 10, maxWidth: 320,
+  },
+  offlineNoteText: { flex: 1, fontSize: 12.5, fontWeight: '700', color: '#b45309', lineHeight: 17 },
   successSubtitle: { fontSize: 14, color: '#64748b', textAlign: 'center', marginTop: 6 },
   successMeta: {
     fontSize: 13, color: '#94a3b8', textAlign: 'center',

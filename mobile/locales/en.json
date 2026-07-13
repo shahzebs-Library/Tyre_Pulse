@@ -216,6 +216,8 @@
     "severityLabel": "Severity *",
     "descLabel": "Description *",
     "descPlaceholder": "Describe what happened...",
+    "driverLabel": "Driver involved",
+    "driverPlaceholder": "Name of the driver",
     "injuriesLabel": "Were there injuries?",
     "injuryCountLabel": "Number of Injuries",
     "injuryCountPlaceholder": "0",

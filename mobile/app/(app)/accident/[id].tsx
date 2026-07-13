@@ -348,6 +348,9 @@ Risk Level: [Critical / High / Medium / Low]
 
         {/* ── Reporter info (admin sees reviewer too) ────────────────────────── */}
         <SectionCard title="Report Info" icon="person-circle-outline">
+          {accident.driver_name ? (
+            <InfoRow label={t('accident.driverLabel')} value={accident.driver_name} />
+          ) : null}
           <InfoRow label="Reported By"  value={accident.reporter_name ?? '-'} />
           <InfoRow label="Submitted"    value={new Date(accident.created_at).toLocaleString()} />
           {accident.updated_at !== accident.created_at && (

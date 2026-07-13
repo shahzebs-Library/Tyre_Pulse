@@ -243,6 +243,8 @@
     "severityLabel": "الخطورة *",
     "descLabel": "الوصف *",
     "descPlaceholder": "صف ما حدث...",
+    "driverLabel": "السائق المعني",
+    "driverPlaceholder": "اسم السائق",
     "injuriesLabel": "هل كانت هناك إصابات؟",
     "injuryCountLabel": "عدد الإصابات",
     "injuryCountPlaceholder": "0",

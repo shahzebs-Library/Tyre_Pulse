@@ -32,6 +32,7 @@ export const REPORT_TYPES = [
   { value: 'cost',       label: 'Cost Analysis' },
   { value: 'inspection', label: 'Inspection Summary' },
   { value: 'accidents',  label: 'Accident & Incident' },
+  { value: 'claims',     label: 'Insurance Claims Summary' },
   { value: 'stock',      label: 'Stock & Receipts' },
   { value: 'vendor',     label: 'Vendor / Procurement' },
 ]
@@ -89,6 +90,17 @@ const DATASETS = {
     table: 'accidents', dateCol: 'incident_date', title: 'Accident & Incident Report',
     cols:    ['incident_date', 'site', 'asset_no', 'accident_type', 'severity', 'status', 'estimated_damage_cost', 'claim_amount'],
     headers: ['Date', 'Site', 'Asset', 'Type', 'Severity', 'Status', 'Est. Damage', 'Claim'],
+  },
+  claims: {
+    table: 'accidents', dateCol: 'incident_date', title: 'Insurance Claims Summary',
+    // Claims-desk projection of the accident record: only incidents carrying an
+    // insurance claim (orFilter below), with the money + liability + release detail
+    // that matters for tracking a claim to closure.
+    cols:    ['incident_date', 'asset_no', 'site', 'driver_name', 'status', 'claim_status', 'insurer', 'policy_no', 'gcc_liability_ratio', 'fault_status', 'claim_amount', 'claim_approved_amount', 'deductible', 'recovered_amount', 'expected_release_date'],
+    headers: ['Date', 'Asset', 'Site', 'Driver', 'Status', 'Claim Status', 'Insurer', 'Policy/Claim No', 'GCC Liab %', 'Fault', 'Claim Amount', 'Approved', 'Deductible', 'Recovered', 'Expected Release'],
+    // Only rows that actually represent a claim (amount/approved > 0, a claim
+    // status, or a named insurer). PostgREST OR over the accidents table.
+    orFilter: 'claim_amount.gt.0,claim_approved_amount.gt.0,claim_status.not.is.null,insurer.not.is.null',
   },
   stock: {
     table: 'goods_receipts', dateCol: 'received_date', title: 'Stock & Goods Receipts',
@@ -203,6 +215,7 @@ export async function fetchReportRows(reportType, { from, to, country } = {}) {
   q = applyCountry(q, country)
   if (from) q = q.gte(ds.dateCol, from)
   if (to)   q = q.lte(ds.dateCol, to)
+  if (ds.orFilter) q = q.or(ds.orFilter)
   q = q.order(ds.dateCol, { ascending: false }).limit(5000)
   const { data, error } = await q
   if (error) throw error

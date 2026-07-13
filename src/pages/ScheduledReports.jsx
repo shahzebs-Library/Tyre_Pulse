@@ -3,7 +3,7 @@ import {
   Calendar, Clock, Mail, Plus, Edit2, Trash2, Eye, EyeOff,
   FileText, BarChart2, Truck, ClipboardList, DollarSign,
   CheckCircle, XCircle, AlertCircle, AlertTriangle, ChevronDown, X, Save, Lock,
-  Package, Building2, Download, Loader2, FileSpreadsheet, CalendarClock,
+  Package, Building2, Download, Loader2, FileSpreadsheet, CalendarClock, ShieldCheck,
 } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { useLanguage } from '../contexts/LanguageContext'
@@ -31,6 +31,7 @@ const ICON_CFG = {
   cost:       { Icon: DollarSign,    color: 'text-orange-400',  bg: 'bg-orange-400/10' },
   inspection: { Icon: ClipboardList, color: 'text-yellow-400',  bg: 'bg-yellow-400/10' },
   accidents:  { Icon: AlertTriangle, color: 'text-red-400',     bg: 'bg-red-400/10'    },
+  claims:     { Icon: ShieldCheck,   color: 'text-indigo-400',  bg: 'bg-indigo-400/10' },
   stock:      { Icon: Package,       color: 'text-emerald-400', bg: 'bg-emerald-400/10' },
   vendor:     { Icon: Building2,     color: 'text-cyan-400',    bg: 'bg-cyan-400/10'   },
 }

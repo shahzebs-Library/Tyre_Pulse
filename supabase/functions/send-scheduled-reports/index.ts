@@ -128,6 +128,10 @@ const TYPE_LABEL: Record<string, string> = {
   fleet: 'Fleet Analytics',
   inspection: 'Inspection Summary',
   cost: 'Cost Analysis',
+  accidents: 'Accident & Incident Report',
+  claims: 'Insurance Claims Summary',
+  stock: 'Stock & Goods Receipts',
+  vendor: 'Vendor / Procurement Report',
 }
 
 /* ── Formatting helpers ─────────────────────────────────────────────────────── */
@@ -395,6 +399,251 @@ function renderHtml(s: Schedule, d: Digest, appUrl: string, currency: string): s
   </div>`
 }
 
+/* ── Insurance Claims Summary (report_type = 'claims') ──────────────────────── */
+// A focused claims-desk digest built directly off the accidents table (service
+// role, manually org-scoped since RLS is bypassed). Only incidents carrying a
+// claim are counted. All figures are live — a dash means "not captured", never
+// an estimate.
+
+type ClaimRow = {
+  incident_date: string | null
+  asset_no: string | null
+  site: string | null
+  driver_name: string | null
+  status: string | null
+  claim_status: string | null
+  insurer: string | null
+  policy_no: string | null
+  gcc_liability_ratio: number | null
+  fault_status: string | null
+  claim_amount: number | null
+  claim_approved_amount: number | null
+  deductible: number | null
+  recovered_amount: number | null
+  repair_cost: number | null
+  estimated_damage_cost: number | null
+  parts_cost: number | null
+  expected_release_date: string | null
+  release_date: string | null
+  closure_status: string | null
+}
+
+type ClaimsDigest = {
+  total: number
+  open: number
+  closed: number
+  delayed: number
+  claim_total: number
+  approved_total: number
+  recovered_total: number
+  deductible_total: number
+  net_exposure: number
+  first_date: string | null
+  last_date: string | null
+  by_insurer: TopItem[]
+  by_status: TopItem[]
+  recent: Array<{
+    date: string; asset: string; insurer: string; status: string
+    claim: number; approved: number; recovered: number; state: 'Open' | 'Closed'; delayed: boolean
+  }>
+}
+
+const n0 = (v: number | null | undefined): number => (Number.isFinite(Number(v)) ? Number(v) : 0)
+
+function claimIsClosed(r: ClaimRow): boolean {
+  if (r.release_date) return true
+  const s = `${r.status ?? ''} ${r.closure_status ?? ''} ${r.claim_status ?? ''}`.toLowerCase()
+  return /clos|settl|paid|recovered|complete|resolved/.test(s)
+}
+
+function claimIsDelayed(r: ClaimRow, today: string): boolean {
+  if (claimIsClosed(r)) return false
+  return !!r.expected_release_date && String(r.expected_release_date).slice(0, 10) < today
+}
+
+// deno-lint-ignore no-explicit-any
+async function buildClaimsDigest(svc: any, orgId: string | null): Promise<ClaimsDigest> {
+  let q = svc
+    .from('accidents')
+    .select(
+      'incident_date,asset_no,site,driver_name,status,claim_status,insurer,policy_no,gcc_liability_ratio,fault_status,claim_amount,claim_approved_amount,deductible,recovered_amount,repair_cost,estimated_damage_cost,parts_cost,expected_release_date,release_date,closure_status',
+    )
+    .or('claim_amount.gt.0,claim_approved_amount.gt.0,claim_status.not.is.null,insurer.not.is.null')
+    .order('incident_date', { ascending: false })
+    .limit(5000)
+  // Service role bypasses RLS, so scope to the schedule's org explicitly.
+  if (orgId) q = q.eq('organisation_id', orgId)
+  const { data, error } = await q
+  if (error) throw new Error(`claims query failed: ${error.message}`)
+  const rows = (data ?? []) as ClaimRow[]
+
+  const today = new Date().toISOString().slice(0, 10)
+  const insurerMap = new Map<string, number>()
+  const statusMap = new Map<string, number>()
+  let open = 0, closed = 0, delayed = 0
+  let claim_total = 0, approved_total = 0, recovered_total = 0, deductible_total = 0, net_exposure = 0
+  let first_date: string | null = null, last_date: string | null = null
+
+  for (const r of rows) {
+    const cl = claimIsClosed(r)
+    if (cl) closed++; else open++
+    if (claimIsDelayed(r, today)) delayed++
+    claim_total += n0(r.claim_amount)
+    approved_total += n0(r.claim_approved_amount)
+    recovered_total += n0(r.recovered_amount)
+    deductible_total += n0(r.deductible)
+    net_exposure += Math.max(0, (n0(r.repair_cost) || n0(r.estimated_damage_cost)) + n0(r.parts_cost) - n0(r.recovered_amount))
+    const ins = (r.insurer || '(no insurer)').trim() || '(no insurer)'
+    insurerMap.set(ins, (insurerMap.get(ins) ?? 0) + n0(r.claim_amount))
+    const st = (r.claim_status || '(unspecified)').trim() || '(unspecified)'
+    statusMap.set(st, (statusMap.get(st) ?? 0) + 1)
+    const d = r.incident_date ? String(r.incident_date).slice(0, 10) : null
+    if (d) {
+      if (!first_date || d < first_date) first_date = d
+      if (!last_date || d > last_date) last_date = d
+    }
+  }
+
+  const by_insurer = [...insurerMap.entries()].map(([label, value]) => ({ label, value }))
+    .sort((a, b) => b.value - a.value).slice(0, 6)
+  const by_status = [...statusMap.entries()].map(([label, value]) => ({ label, value }))
+    .sort((a, b) => b.value - a.value).slice(0, 6)
+  const recent = rows.slice(0, 12).map((r) => ({
+    date: r.incident_date ? String(r.incident_date).slice(0, 10) : '—',
+    asset: r.asset_no || '—',
+    insurer: r.insurer || '—',
+    status: r.claim_status || r.status || '—',
+    claim: n0(r.claim_amount),
+    approved: n0(r.claim_approved_amount),
+    recovered: n0(r.recovered_amount),
+    state: (claimIsClosed(r) ? 'Closed' : 'Open') as 'Open' | 'Closed',
+    delayed: claimIsDelayed(r, today),
+  }))
+
+  return {
+    total: rows.length, open, closed, delayed,
+    claim_total, approved_total, recovered_total, deductible_total, net_exposure,
+    first_date, last_date, by_insurer, by_status, recent,
+  }
+}
+
+function renderClaimsHtml(s: Schedule, d: ClaimsDigest, appUrl: string, currency: string): string {
+  const genAt = new Date().toISOString().slice(0, 16).replace('T', ' ')
+  const coverage = `${dateShort(d.first_date)} → ${dateShort(d.last_date)}`
+  const recoveryRate = d.claim_total > 0 ? Math.round((d.recovered_total / d.claim_total) * 100) : null
+
+  const summary = d.total === 0
+    ? `No incidents carrying an insurance claim were found for this organisation. When a claim is opened on an accident record it will appear here automatically.`
+    : `<b>${num(d.total)}</b> insurance claim(s) on record — <b>${num(d.open)}</b> open, <b>${num(d.closed)}</b> closed` +
+      `${d.delayed ? `, with <b style="color:#b91c1c">${num(d.delayed)}</b> past the expected release date` : ''}. ` +
+      `Total claimed <b>${money(d.claim_total, currency)}</b>, approved <b>${money(d.approved_total, currency)}</b>, ` +
+      `recovered <b>${money(d.recovered_total, currency)}</b>${recoveryRate != null ? ` (<b>${recoveryRate}%</b> recovery rate)` : ''}. ` +
+      `Net exposure after recoveries <b>${money(d.net_exposure, currency)}</b>.`
+
+  const insurerRows = d.by_insurer.length
+    ? d.by_insurer.map((it, i) => `<tr>
+        <td style="padding:6px 0;font-size:12.5px;color:#334155"><span style="display:inline-block;width:18px;color:#94a3b8;font-weight:700">${i + 1}.</span>${it.label}</td>
+        <td style="padding:6px 0;font-size:12.5px;color:#0f172a;font-weight:700;text-align:right">${money(it.value, currency)}</td></tr>`).join('')
+    : `<tr><td style="padding:6px 0;font-size:12px;color:#94a3b8">No data</td></tr>`
+  const statusRows = d.by_status.length
+    ? d.by_status.map((it, i) => `<tr>
+        <td style="padding:6px 0;font-size:12.5px;color:#334155"><span style="display:inline-block;width:18px;color:#94a3b8;font-weight:700">${i + 1}.</span>${it.label}</td>
+        <td style="padding:6px 0;font-size:12.5px;color:#0f172a;font-weight:700;text-align:right">${num(it.value)}</td></tr>`).join('')
+    : `<tr><td style="padding:6px 0;font-size:12px;color:#94a3b8">No data</td></tr>`
+
+  const recentRows = d.recent.length
+    ? d.recent.map((r) => `<tr>
+        <td style="padding:7px 6px;font-size:11.5px;color:#334155;border-bottom:1px solid #eef2f7">${r.date}</td>
+        <td style="padding:7px 6px;font-size:11.5px;color:#0f172a;font-weight:600;border-bottom:1px solid #eef2f7">${r.asset}</td>
+        <td style="padding:7px 6px;font-size:11.5px;color:#334155;border-bottom:1px solid #eef2f7">${r.insurer}</td>
+        <td style="padding:7px 6px;font-size:11.5px;border-bottom:1px solid #eef2f7"><span style="color:${r.state === 'Closed' ? '#047857' : '#b45309'};font-weight:700">${r.state}</span>${r.delayed ? ' <span style="color:#b91c1c;font-weight:700">· delayed</span>' : ''}</td>
+        <td style="padding:7px 6px;font-size:11.5px;color:#0f172a;text-align:right;border-bottom:1px solid #eef2f7">${money(r.claim, currency)}</td>
+        <td style="padding:7px 6px;font-size:11.5px;color:#0f172a;text-align:right;border-bottom:1px solid #eef2f7">${money(r.approved, currency)}</td>
+        <td style="padding:7px 6px;font-size:11.5px;color:#047857;text-align:right;border-bottom:1px solid #eef2f7">${money(r.recovered, currency)}</td></tr>`).join('')
+    : `<tr><td colspan="7" style="padding:10px 6px;font-size:12px;color:#94a3b8">No claims to list.</td></tr>`
+
+  return `
+  <div style="font-family:Segoe UI,Arial,sans-serif;max-width:680px;margin:auto;color:#0f172a;background:#fff">
+    <div style="background:#312e81;border-radius:12px 12px 0 0;padding:22px 26px;color:#fff">
+      <div style="font-size:19px;font-weight:800">TyrePulse — Insurance Claims Summary</div>
+      <div style="font-size:12px;color:#c7d2fe;margin-top:3px">
+        Schedule “${s.name}” · generated ${genAt} UTC · incident coverage ${coverage}
+      </div>
+    </div>
+
+    <div style="border:1px solid #e2e8f0;border-top:0;border-radius:0 0 12px 12px;padding:22px 26px">
+      <div style="background:#eef2ff;border-left:4px solid #4f46e5;border-radius:8px;padding:12px 16px;font-size:13px;color:#334155;line-height:1.6">
+        ${summary}
+      </div>
+
+      <table role="presentation" width="100%" cellspacing="8" style="margin-top:6px">
+        ${sectionTitle('Claims Overview')}
+        <tr>
+          ${tile('Total claims', num(d.total))}
+          ${tile('Open', num(d.open), '', d.open ? '#b45309' : '#047857')}
+          ${tile('Closed', num(d.closed), '', '#047857')}
+        </tr>
+        <tr>
+          ${tile('Delayed', num(d.delayed), 'past expected release', d.delayed ? '#b91c1c' : '#047857')}
+          ${tile('Recovery rate', recoveryRate == null ? '—' : `${recoveryRate}%`)}
+          ${tile('Net exposure', money(d.net_exposure, currency), 'after recoveries', d.net_exposure ? '#b91c1c' : '#0f172a')}
+        </tr>
+
+        ${sectionTitle('Financials')}
+        <tr>
+          ${tile('Total claimed', money(d.claim_total, currency))}
+          ${tile('Approved', money(d.approved_total, currency), '', '#047857')}
+          ${tile('Recovered', money(d.recovered_total, currency), '', '#047857')}
+        </tr>
+        <tr>
+          ${tile('Deductible exposure', money(d.deductible_total, currency))}
+          ${tile('Outstanding vs approved', money(Math.max(0, d.approved_total - d.recovered_total), currency), 'approved not yet recovered', (d.approved_total - d.recovered_total) > 0 ? '#b45309' : '#047857')}
+          ${tile('Avg claim', d.total ? money(Math.round(d.claim_total / d.total), currency) : '—')}
+        </tr>
+
+        ${sectionTitle('Claims by Insurer & Status')}
+        <tr>
+          <td style="vertical-align:top;padding:6px 10px 6px 0">
+            <div style="font-size:11px;font-weight:800;color:#475569;text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px">Top insurers by claim value</div>
+            <table role="presentation" width="100%" cellspacing="0">${insurerRows}</table>
+          </td>
+          <td style="vertical-align:top;padding:6px 10px 6px 0">
+            <div style="font-size:11px;font-weight:800;color:#475569;text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px">Claims by status</div>
+            <table role="presentation" width="100%" cellspacing="0">${statusRows}</table>
+          </td>
+          <td style="vertical-align:top"></td>
+        </tr>
+      </table>
+
+      <div style="margin-top:18px;font-size:13px;font-weight:800;color:#0f172a;text-transform:uppercase;letter-spacing:.6px;border-bottom:2px solid #312e81;padding-bottom:8px">
+        Recent Claims
+      </div>
+      <table role="presentation" width="100%" cellspacing="0" style="margin-top:8px">
+        <tr style="background:#f8fafc">
+          <td style="padding:6px;font-size:10.5px;font-weight:700;color:#64748b;text-transform:uppercase">Date</td>
+          <td style="padding:6px;font-size:10.5px;font-weight:700;color:#64748b;text-transform:uppercase">Asset</td>
+          <td style="padding:6px;font-size:10.5px;font-weight:700;color:#64748b;text-transform:uppercase">Insurer</td>
+          <td style="padding:6px;font-size:10.5px;font-weight:700;color:#64748b;text-transform:uppercase">State</td>
+          <td style="padding:6px;font-size:10.5px;font-weight:700;color:#64748b;text-transform:uppercase;text-align:right">Claim</td>
+          <td style="padding:6px;font-size:10.5px;font-weight:700;color:#64748b;text-transform:uppercase;text-align:right">Approved</td>
+          <td style="padding:6px;font-size:10.5px;font-weight:700;color:#64748b;text-transform:uppercase;text-align:right">Recovered</td>
+        </tr>
+        ${recentRows}
+      </table>
+
+      <p style="font-size:12px;color:#475569;line-height:1.6;margin-top:16px">
+        All figures are live from your accident &amp; claims data — a dash (—) means the value was not captured and is never estimated.
+        “Delayed” flags open claims past their expected release date.
+      </p>
+      <a href="${appUrl}/accidents" style="display:inline-block;background:#4f46e5;color:#fff;font-weight:700;font-size:13px;padding:11px 20px;border-radius:8px;text-decoration:none;margin-top:4px">Open Claims in TyrePulse</a>
+      <p style="font-size:11px;color:#94a3b8;margin-top:18px">
+        You receive this because you are a recipient of the “${s.name}” schedule.
+        Manage recipients &amp; frequency in TyrePulse → Scheduled Reports.
+      </p>
+    </div>
+  </div>`
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok')
 
@@ -441,7 +690,11 @@ serve(async (req) => {
       if (!recipients.length) throw new Error('No valid recipients on the schedule')
       if (!RESEND_API_KEY) throw new Error('RESEND_API_KEY not configured for edge functions')
 
-      const digest = await buildDigest(svc, s.org_id)
+      // Insurance Claims Summary gets its own claims-desk digest; every other
+      // type uses the executive intelligence digest.
+      const html = s.report_type === 'claims'
+        ? renderClaimsHtml(s, await buildClaimsDigest(svc, s.org_id), APP_URL, currency)
+        : renderHtml(s, await buildDigest(svc, s.org_id), APP_URL, currency)
       const res = await fetch('https://api.resend.com/emails', {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
@@ -449,7 +702,7 @@ serve(async (req) => {
           from: FROM_EMAIL,
           to: recipients,
           subject: `TyrePulse ${TYPE_LABEL[s.report_type] ?? 'Report'} — ${s.name}`,
-          html: renderHtml(s, digest, APP_URL, currency),
+          html,
         }),
       })
       if (!res.ok) throw new Error(`Resend ${res.status}: ${(await res.text()).slice(0, 300)}`)

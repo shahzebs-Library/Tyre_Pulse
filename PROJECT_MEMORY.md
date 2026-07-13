@@ -66,6 +66,25 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
   card in the page. NO RLS/DB change yet. Do NOT add `org_unit_id` to operational tables and do NOT
   enforce location-scoped RLS until the remaining §3 P3–P4 opt-in, default-open step.
 
+## ACTIVE INITIATIVE (2026-07-13): Module-depth remediation
+User feedback: the modules ported from fleet_IQ/tyre_saas are "normal data only without the deep
+modules" — my Supabase re-implementations flattened the rich logic that lived in the originals'
+**Python backends** (`tyre_saas/backend/{routes,services}`, `fleet_IQ/backend`). Task: deepen ALL
+ported modules to match their originals, module-by-module, merged in verified batches. §3 P3–P4 RLS
+work is ON HOLD until this is done.
+- **Source of truth (depth reference)** — original apps re-cloned (public) at:
+  `…/scratchpad/fleet_IQ` (frontend/src/pages, 73 pages; Python backend) and
+  `…/scratchpad/tyre_saas` (frontend/src/pages, 102 pages; Python backend). NOTE: different stack
+  (React frontend + Python/FastAPI backend), so depth ≠ line count — the analytics live in backend
+  routes/services. Re-clone from github.com/ws123na-afk/{fleet_IQ,tyre_saas} if the scratchpad is gone.
+- **Process**: per module → gap-analysis (read original page + its backend routes/services + my port)
+  → rebuild port to full depth wired to Tyre Pulse Supabase (HONEST data/empty states, NO fabrication),
+  Tyre Pulse conventions (VERIFY every lucide icon via `node -e` before import — see the Lock outage;
+  correct export signatures; org-RLS; safeHref) → `vite build` + tests → commit → batch-merge to main.
+- **Batch 1 (in progress)**: TyrePassport, FitmentValidation, TyrePool, RotationOptimizer,
+  TechnicianScorecard. (Port line counts vs originals: TyrePassport 205/381, FitmentValidation 266/238,
+  TyrePool 267/280, RotationOptimizer 320/294, TechnicianScorecard 302/551.)
+
 ## Open items needing USER/OPS action
 - Register SAML/OIDC providers in Supabase Auth (Management API) per SSO-config domain.
 - Rotate anon key out of historical migrations V61/V98/V119.

@@ -81,9 +81,23 @@ work is ON HOLD until this is done.
   → rebuild port to full depth wired to Tyre Pulse Supabase (HONEST data/empty states, NO fabrication),
   Tyre Pulse conventions (VERIFY every lucide icon via `node -e` before import — see the Lock outage;
   correct export signatures; org-RLS; safeHref) → `vite build` + tests → commit → batch-merge to main.
-- **Batch 1 (in progress)**: TyrePassport, FitmentValidation, TyrePool, RotationOptimizer,
-  TechnicianScorecard. (Port line counts vs originals: TyrePassport 205/381, FitmentValidation 266/238,
-  TyrePool 267/280, RotationOptimizer 320/294, TechnicianScorecard 302/551.)
+- **Batch 1 status**:
+  - ✅ **TyrePassport** DONE (commit 593bbbd) — health-score engine + wear intelligence + wear curve +
+    positions/km + stats + tabs, on real tyre_records with honest "no data" degradation. Engines +
+    13 tests in src/lib/tyrePassport.js.
+  - ✅ **RotationOptimizer** DONE (commit b997bb4) — CV wear-balance score, impact-scored swaps
+    (1.5mm gate, size guard, 10000 km/mm benefit), violations (below-1.6mm exact + steer heuristic),
+    deterministic narrative, chart.js Bar. Engine + 34 tests in src/lib/rotationOptimizer.js.
+  - ⏳ **TechnicianScorecard** — NEEDS new tables technician_skills + technician_certs (skills matrix,
+    cert-expiry days<0 expired/<60 warning, lifecycle score=(min(done,500)/500)*40+(pass/100)*50+
+    min(certs,5)*2). KEEP existing cost/ranking leaderboard as one tab. SLA breach derivable now.
+  - ⏳ **FitmentValidation** — NEEDS tables fitment_rules, fitment_validations, wheel_positions,
+    vehicle_axles. Port pure validateFitment engine (size/tread/age/retread/lifecycle/pair rules).
+    Keep existing fleet-size-audit as a 2nd tab.
+  - ⏳ **TyrePool** — NEEDS table tyre_pool (add/deploy/return lifecycle, utilisation,
+    replenishment=max(4,round(active_vehicles*4*0.10))). Fold swap/transfer into existing
+    TyreExchange (NO dup). Migrations continue from V206 → next free is V207.
+- Migration numbering: next free is **V207** (V206 was org hierarchy).
 
 ## Open items needing USER/OPS action
 - Register SAML/OIDC providers in Supabase Auth (Management API) per SSO-config domain.

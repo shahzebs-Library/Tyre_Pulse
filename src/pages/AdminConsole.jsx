@@ -24,6 +24,7 @@ import {
   Database, Palette, Sparkles,
   Upload, Plug, Code2, ScanLine, SearchCheck,
   Server, ScrollText, Compass, LifeBuoy,
+  Bot, DollarSign, BookOpen,
 } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { useSettings } from '../contexts/SettingsContext'
@@ -109,6 +110,22 @@ const SECTIONS = [
         desc: 'Extract tyre and document data from images' },
       { label: 'Advanced Search', to: '/advanced-search', Icon: SearchCheck,
         desc: 'Cross-entity search across the whole dataset' },
+    ],
+  },
+  {
+    key: 'ai',
+    title: 'AI & Automation',
+    description: 'AI model configuration, prompts, budgets and usage intelligence',
+    Icon: Sparkles,
+    cards: [
+      { label: 'AI Administration', to: '/ai-administration', Icon: Bot,
+        desc: 'Model catalogue, agent prompts, spend budgets and answer feedback' },
+      { label: 'AI Cost Monitor', to: '/ai-cost-monitor', Icon: DollarSign,
+        desc: 'Token usage, spend tracking and cost analysis across features' },
+      { label: 'Knowledge Base', to: '/knowledge-base', Icon: BookOpen,
+        desc: 'SOPs, manuals and policies powering retrieval-augmented answers' },
+      { label: 'AI Command Center', to: '/ai-command-center', Icon: Sparkles,
+        desc: 'Multi-agent copilot for fleet analysis and engineering diagnosis' },
     ],
   },
   {

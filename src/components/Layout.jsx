@@ -276,6 +276,7 @@ const NAV_GROUPS = [
       { to: '/ai-command-center', label: 'AI Command Center', icon: Bot, adminOnly: A },
       { to: '/knowledge-base',    label: 'Knowledge Base',    icon: Brain, adminOnly: A },
       { to: '/ai-cost-monitor',   label: 'AI Cost Monitor',   icon: BarChart, adminOnly: A },
+      { to: '/ai-administration', label: 'AI Administration', icon: Bot, adminOnly: true },
       { to: '/continuous-improvement', label: 'Continuous Improvement', icon: Zap, adminOnly: A },
       { to: '/executive-analytics', label: 'Executive Analytics', icon: TrendingUp, roles: ANALYTICS_ROLES },
       { to: '/report-center',     label: 'Report Center',     icon: ScrollText, roles: ANALYTICS_ROLES },

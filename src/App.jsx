@@ -211,6 +211,7 @@ const ScheduledReports       = lazy(() => import('./pages/ScheduledReports'))
 const ReportCenter           = lazy(() => import('./pages/ReportCenter'))
 const KnowledgeBase          = lazy(() => import('./pages/KnowledgeBase'))
 const AiCostMonitor          = lazy(() => import('./pages/AiCostMonitor'))
+const AiAdministration       = lazy(() => import('./pages/AiAdministration'))
 const DisplayDashboard       = lazy(() => import('./pages/DisplayDashboard'))
 const ReportBuilder          = lazy(() => import('./pages/ReportBuilder'))
 const SystemHealth           = lazy(() => import('./pages/SystemHealth'))
@@ -343,6 +344,7 @@ function MainApp() {
                       <Route path="/scheduled-reports"   element={<Safe><FlagRoute flag="report_scheduling"><ScheduledReports /></FlagRoute></Safe>} />
                       <Route path="/knowledge-base"       element={<Safe><FlagRoute flag="ai_tools"><KnowledgeBase /></FlagRoute></Safe>} />
                       <Route path="/ai-cost-monitor"      element={<Safe><FlagRoute flag="ai_tools"><AiCostMonitor /></FlagRoute></Safe>} />
+                      <Route path="/ai-administration"    element={<Safe><FlagRoute flag="ai_tools"><RoleRoute allowed={['Admin']}><AiAdministration /></RoleRoute></FlagRoute></Safe>} />
                       <Route path="/gate-pass"            element={<Safe><ModuleRoute moduleKey="gate_pass"><GatePass /></ModuleRoute></Safe>} />
                       <Route path="/serial-tracker"       element={<Safe><SerialTracker /></Safe>} />
                       <Route path="/work-orders"          element={<Safe><ModuleRoute moduleKey="work_orders"><WorkOrders /></ModuleRoute></Safe>} />

@@ -65,6 +65,27 @@ const RISK_LEVELS = ['High', 'Critical']
 const COUNTRIES   = ['Saudi Arabia', 'UAE', 'Bahrain', 'Kuwait', 'Oman', 'Qatar']
 const PAGE_SIZE   = 100
 
+// Persisted per-report column layout (which columns the user keeps visible).
+// Shape: { [reportType]: string[] }. Survives across sessions, independent of
+// whether a report has been run yet.
+const LAYOUT_KEY = 'reports.layout.v1'
+
+function readColumnLayout(type) {
+  try {
+    const all = JSON.parse(localStorage.getItem(LAYOUT_KEY) || '{}')
+    const cols = all?.[type]
+    return Array.isArray(cols) ? cols : null
+  } catch { return null }
+}
+
+function writeColumnLayout(type, cols) {
+  try {
+    const all = JSON.parse(localStorage.getItem(LAYOUT_KEY) || '{}')
+    all[type] = cols
+    localStorage.setItem(LAYOUT_KEY, JSON.stringify(all))
+  } catch { /* storage unavailable: layout stays in-memory only */ }
+}
+
 // Date-shortcut labels double as internal state values compared in
 // applyShortcut(); this map only supplies the translated button text.
 const DATE_SHORTCUT_I18N_KEYS = {
@@ -111,6 +132,7 @@ export default function Reports() {
   const [selectedCols, setSelectedCols] = useState([])
   const [allRows, setAllRows]         = useState([])
   const [loading, setLoading]         = useState(false)
+  const [error, setError]             = useState(null)
   const [siteSuggestions, setSiteSuggestions] = useState([])
   const [previewPage, setPreviewPage] = useState(1)
   const [configRestored, setConfigRestored] = useState(false)
@@ -142,6 +164,15 @@ export default function Reports() {
   function selectType(type) {
     setReportType(type)
     setConfigRestored(false)
+    setError(null)
+
+    const defaults = REPORT_COLUMNS[type] ?? []
+    // Column layout is the user's saved "Customize" choice; prefer it, keeping
+    // only columns that still exist for this report type.
+    const savedLayout = readColumnLayout(type)
+    let cols = Array.isArray(savedLayout)
+      ? defaults.filter(c => savedLayout.includes(c))
+      : defaults
 
     const saved = localStorage.getItem('report_config_' + type)
     if (saved) {
@@ -156,16 +187,13 @@ export default function Reports() {
         if (cfg.filterBrand !== undefined)   setFilterBrand(cfg.filterBrand)
         if (Array.isArray(cfg.filterRiskLevels)) setFilterRiskLevels(cfg.filterRiskLevels)
         if (cfg.filterInspType !== undefined) setFilterInspType(cfg.filterInspType)
-        if (Array.isArray(cfg.selectedCols)) setSelectedCols(cfg.selectedCols)
-        else setSelectedCols(REPORT_COLUMNS[type] ?? [])
+        // Layout wins over the run-config copy so the Customize choice is stable.
+        if (!savedLayout && Array.isArray(cfg.selectedCols)) cols = cfg.selectedCols
         setConfigRestored(true)
-      } catch {
-        setSelectedCols(REPORT_COLUMNS[type] ?? [])
-      }
-    } else {
-      setSelectedCols(REPORT_COLUMNS[type] ?? [])
+      } catch { /* corrupt config: fall back to computed cols */ }
     }
 
+    setSelectedCols(cols.length ? cols : defaults)
     setStep('config')
   }
 
@@ -174,11 +202,22 @@ export default function Reports() {
     setConfigRestored(false)
   }
 
-  function toggleCol(col) {
-    setSelectedCols(prev =>
-      prev.includes(col) ? prev.filter(c => c !== col) : [...prev, col]
-    )
+  function persistCols(cols) {
+    setSelectedCols(cols)
+    if (reportType) writeColumnLayout(reportType, cols)
   }
+
+  function toggleCol(col) {
+    const all = REPORT_COLUMNS[reportType] ?? []
+    const next = selectedCols.includes(col)
+      ? selectedCols.filter(c => c !== col)
+      : all.filter(c => selectedCols.includes(c) || c === col) // keep canonical order
+    persistCols(next)
+  }
+
+  function showAllCols()  { persistCols([...(REPORT_COLUMNS[reportType] ?? [])]) }
+  function hideAllCols()  { persistCols([]) }
+  function resetCols()    { persistCols([...(REPORT_COLUMNS[reportType] ?? [])]) }
 
   function toggleRiskLevel(level) {
     setFilterRiskLevels(prev =>
@@ -194,6 +233,7 @@ export default function Reports() {
     )
 
     setLoading(true)
+    setError(null)
     try {
       let rows = []
 
@@ -287,6 +327,9 @@ export default function Reports() {
       }
 
       setAllRows(rows)
+    } catch (e) {
+      setAllRows([])
+      setError(e?.message || 'Could not load this report. Please try again.')
     } finally {
       setLoading(false)
     }
@@ -514,9 +557,20 @@ export default function Reports() {
             )}
           </div>
 
-          {/* Column picker */}
+          {/* Column picker (Customize) */}
           <div className="card space-y-3">
-            <h2 className="text-base font-semibold text-[var(--text-primary)]">{t('reports.config.columnsTitle')}</h2>
+            <div className="flex items-center gap-3 flex-wrap">
+              <h2 className="text-base font-semibold text-[var(--text-primary)]">{t('reports.config.columnsTitle')}</h2>
+              <span className="text-xs text-gray-500">
+                {selectedCols.length} / {(REPORT_COLUMNS[reportType] ?? []).length}
+              </span>
+              <div className="ml-auto flex items-center gap-3 text-xs">
+                <button onClick={showAllCols} className="text-gray-400 hover:text-white underline underline-offset-2 transition-colors">All</button>
+                <button onClick={hideAllCols} className="text-gray-400 hover:text-white underline underline-offset-2 transition-colors">None</button>
+                <button onClick={resetCols} className="text-gray-400 hover:text-white underline underline-offset-2 transition-colors">Reset</button>
+              </div>
+            </div>
+            <p className="text-xs text-gray-500">Your column choice is saved for this report and applied to the table, Excel and PDF.</p>
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
               {(REPORT_COLUMNS[reportType] ?? []).map(col => (
                 <label key={col} className="flex items-center gap-2 cursor-pointer">
@@ -530,6 +584,9 @@ export default function Reports() {
                 </label>
               ))}
             </div>
+            {selectedCols.length === 0 && (
+              <p className="text-xs text-amber-400/90">Select at least one column to show data in the report.</p>
+            )}
           </div>
 
           <div className="flex gap-3">
@@ -538,7 +595,8 @@ export default function Reports() {
             </button>
             <button
               onClick={() => { runQuery(); setStep('preview') }}
-              className="btn-primary flex items-center gap-2"
+              disabled={selectedCols.length === 0}
+              className="btn-primary flex items-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
             >
               {t('reports.config.runReport')} <ChevronRight size={14} />
             </button>
@@ -553,18 +611,19 @@ export default function Reports() {
             <button onClick={() => setStep('config')} className="btn-secondary flex items-center gap-2">
               <ArrowLeft size={14} /> {t('reports.preview.backToFilters')}
             </button>
-            <button onClick={handleExcel} className="btn-secondary flex items-center gap-1.5">
+            <button onClick={handleExcel} disabled={allRows.length === 0} className="btn-secondary flex items-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed">
               <Download size={14} className="text-green-400" /> {t('reports.preview.exportExcel')}
             </button>
-            <button onClick={handlePdf} className="btn-secondary flex items-center gap-1.5">
+            <button onClick={handlePdf} disabled={allRows.length === 0} className="btn-secondary flex items-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed">
               <Download size={14} className="text-red-400" /> {t('reports.preview.exportPdf')}
             </button>
-            <button onClick={handlePrint} className="btn-secondary flex items-center gap-1.5">
+            <button onClick={handlePrint} disabled={allRows.length === 0} className="btn-secondary flex items-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed">
               <Printer size={14} className="text-blue-400" /> {t('reports.preview.print')}
             </button>
             <button
               onClick={() => setEmailModalOpen(true)}
-              className="btn-secondary"
+              disabled={allRows.length === 0}
+              className="btn-secondary flex items-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed"
             >
               <Mail size={16} />{t('reports.preview.emailReport')}
             </button>
@@ -572,6 +631,11 @@ export default function Reports() {
 
           {loading ? (
             <SkeletonTable rows={8} cols={6} />
+          ) : error ? (
+            <div className="card text-center py-12 space-y-3">
+              <p className="text-red-300 text-sm">{error}</p>
+              <button onClick={runQuery} className="btn-secondary text-sm">{t('reports.config.runReport')}</button>
+            </div>
           ) : (
             <>
               <div className="flex items-center gap-3 flex-wrap">

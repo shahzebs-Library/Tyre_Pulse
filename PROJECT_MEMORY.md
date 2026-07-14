@@ -43,32 +43,58 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
 - Security: URL fields go through `src/lib/safeUrl.js` (safeHref/safeImageSrc); user-facing errors
   via `src/lib/safeError.js` (toUserMessage). CSV export sanitized in `exportUtils.js`.
 
-## Claims & scheduled reporting (2026-07-13)
-- **Accident-embedded claims** are the operational claim source (accidents table: claim_amount/
-  claim_approved_amount/deductible/recovered_amount/insurer/policy_no/claim_status + case fields
-  gcc_liability_ratio/fault_status/najm_status/taqdeer_status/expected_release_date/release_date).
-- Single claims engine `src/lib/claimsAnalytics.js` (`analyzeClaims`, `hasClaim`, `isClosed`,
-  `isDelayed`, `claimNet`) powers ALL three claims surfaces — do NOT re-implement the maths:
-  1. `ClaimsSummary.jsx` (/claims-summary) — chart dashboard + PDF/Excel export.
+## Accidents, Claims & Reporting (2026-07-14)
+
+### Claims data model + single engine (do NOT re-implement the maths)
+- **Accident-embedded claims** are the operational claim source. Claim/case fields live ON the
+  `accidents` table: claim_amount / claim_approved_amount / deductible / recovered_amount / insurer /
+  policy_no / claim_status + GCC case fields gcc_liability_ratio / fault_status / najm_status /
+  taqdeer_status / expected_release_date / release_date / repair_type / workshop_name.
+- Single claims engine **`src/lib/claimsAnalytics.js`** (`analyzeClaims`, `hasClaim`, `isClosed`,
+  `isDelayed`, `claimNet`) powers ALL claims surfaces:
+  1. **`ClaimsSummary.jsx`** (`/claims-summary`, Accident & Insurance nav) — 8-KPI + 9-chart dashboard
+     (doughnuts, dual-axis trend, funnel, ageing, insurer/asset/site bars) + delayed-highlight table +
+     PDF/Excel export. DISTINCT from `/insurance-claims` (InsuranceClaims.jsx = CRUD ledger over the
+     separate `insurance_claims` table) — do NOT merge.
   2. Accidents page "Claims Summary" one-click PDF/Excel export.
   3. Scheduled `claims` report type in `scheduledReports.js` → claims-desk email digest in edge fn
-     `send-scheduled-reports` (deployed v10; branches on report_type==='claims', org-scoped manually).
-- `fetchReportRows` honours a per-dataset `orFilter` (claims uses it to fetch claim rows only).
-- Full suite 3384 green.
-- **Accident Report Builder (V221)** = `src/components/accidents/AccidentReportBuilder.jsx`
-  (a "Report Builder" tab inside `Accidents.jsx`). Block-based custom report designer:
-  header/logo, KPI rows, charts (reuses the accident + `analyzeClaims` datasets),
-  text, detail tables, page breaks — live WYSIWYG white-paper preview, branded PDF
-  export (charts rasterised from live canvases via `toBase64Image`, jspdf lazy-loaded),
-  and named saved layouts persisted to `accident_report_templates` (V221, org-isolated,
-  per-user ownership) via `src/lib/api/accidentReportTemplates.js`, with a localStorage
-  draft fallback. Do NOT duplicate — extend this for more block/chart types.
-- **V220 (applied): accident-delete FK fix.** Deleting an accident cascade-deletes
-  accident_parts; the AFTER DELETE audit trigger `log_accident_part_change()` was
-  inserting a `part_removed` row into `accident_audit_log` referencing the accident
-  being deleted → FK violation. DELETE branch now guarded to only log when the parent
-  accident still exists (a real single-part removal). Latest migration is now **V221**
-  (accident_report_templates); next free is **V222**.
+     `send-scheduled-reports` (deployed **v10**; branches on report_type==='claims', org-scoped
+     manually since service role bypasses RLS). `fetchReportRows` honours a per-dataset `orFilter`
+     (claims uses it to fetch only rows that carry a claim).
+
+### Accidents page (`src/pages/Accidents.jsx`) — enriched
+- **Analytics tab** now mixes chart types: severity/status/GCC-fault **doughnuts**, a 12-month incident
+  **trend line**, plus the existing bars/stacked/claims-recovery. Registered ArcElement/LineElement/
+  PointElement/Filler.
+- **Add/Edit incident form** is a wide, sectioned modal that captures the FULL record at creation time
+  (Incident · Classification · Liability & Case GCC · Insurance & Claim · Repair & Release), with
+  dropdowns matching the AccidentDetailModal V219 vocabulary. `handleSave`/`openEdit` persist &
+  re-hydrate every field. These feed the same claim data the dashboard/export/digest read.
+- **Report Builder tab** — see below.
+
+### Accident Report Builder (V221) — customizable, block-based
+- **`src/components/accidents/AccidentReportBuilder.jsx`** (lazy "Report Builder" tab inside Accidents).
+  Blocks: header/logo, KPI row (12 metrics), chart (12 accident/claims charts, reuses `analyzeClaims`
+  datasets), text, detail table (pick columns + row cap), page break. Add/reorder/duplicate/remove +
+  inline per-block config. Live WYSIWYG white-"paper" preview == the print.
+- **PDF export** via jspdf (lazy) — logo embedded, charts rasterised from the LIVE canvases
+  (`toBase64Image`), KPI cards, autoTable detail tables, page numbers, portrait/landscape.
+- **Saved layouts** persisted to `accident_report_templates` (V221, org-isolated RESTRICTIVE RLS +
+  per-user ownership: members manage own, Admin/Manager/Director manage any) via
+  **`src/lib/api/accidentReportTemplates.js`** (+ barrel), with a localStorage draft fallback.
+  Do NOT duplicate — extend the `CHARTS` / `BLOCK_DEFAULTS` maps for new block/chart types.
+
+### V220 — accident-delete FK fix (applied)
+- Deleting an accident cascade-deletes `accident_parts`; the AFTER DELETE audit trigger
+  `log_accident_part_change()` inserted a `part_removed` row into `accident_audit_log` referencing the
+  accident being deleted → `accident_audit_log_accident_id_fkey` violation (users could not delete).
+  DELETE branch now guarded to only log when the parent accident still exists (a real single-part
+  removal); an accident-level cascade skips the audit insert. Mirrors `log_accident_change()`.
+
+### Migrations & tests
+- Latest migration is **V221** (accident_report_templates); V220 = the delete-trigger fix; next free **V222**.
+- New tests: `claimsAnalytics.test.js` (12), `scheduledReports.api.test.js` (4),
+  `accidentReportTemplates.api.test.js` (5). Full suite green.
 
 ## Status (2026-07-13)
 - 88 modules ported from fleet_IQ/tyre_saas (batches 1–19). Migrations V127–V206.

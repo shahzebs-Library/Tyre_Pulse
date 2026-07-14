@@ -1,5 +1,4 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
-import { useNavigate } from 'react-router-dom'
 import * as gatePassPageApi from '../lib/api/gatePassPage'
 import { useAuth } from '../contexts/AuthContext'
 import { useSettings } from '../contexts/SettingsContext'
@@ -7,7 +6,7 @@ import { exportToPdf, exportToExcel } from '../lib/exportUtils'
 import { formatDate } from '../lib/formatters'
 import {
   ShieldCheck, ShieldClose, CheckCircle, XCircle, Printer, Clock,
-  Download, Search, RefreshCw, Activity, Upload, Lock,
+  Download, Search, RefreshCw, Activity, Lock,
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
 import EmptyState from '../components/EmptyState'
@@ -24,7 +23,6 @@ const STATUS_CONFIG = {
 }
 
 export default function GatePass() {
-  const navigate = useNavigate()
   const { profile } = useAuth()
   const { activeCountry } = useSettings()
 
@@ -276,12 +274,6 @@ export default function GatePass() {
           />
         </div>
         <div className="flex gap-2 flex-wrap">
-          <button
-            onClick={() => navigate('/data-intake?module=gatepass')}
-            className="btn-primary flex items-center gap-2 text-sm"
-          >
-            <Upload size={15} /> Import via Data Intake Center
-          </button>
           <button onClick={() => exportDailyLogExcel(activePassList, activeDateLabel)} className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-1.5">
             <Download size={14} /> Excel
           </button>
@@ -293,9 +285,6 @@ export default function GatePass() {
           </button>
         </div>
       </div>
-      <p className="text-xs text-gray-500 -mt-3">
-        New: controlled, validated, audited gate-pass import with Arabic/English header mapping and asset + date duplicate detection.
-      </p>
 
       {/* Stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">

@@ -2,7 +2,6 @@
 // WorkOrders.jsx - Workshop Job Card Management · /work-orders
 // ─────────────────────────────────────────────────────────────────────────────
 import { useState, useEffect, useMemo, useCallback } from 'react'
-import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Chart as ChartJS,
@@ -16,7 +15,7 @@ import {
   ChevronDown, ChevronUp, X, Edit2, Eye, Printer,
   Package, DollarSign, Calendar, User, Building2,
   AlertOctagon, Loader2, RefreshCw, TrendingUp,
-  FileSpreadsheet, Upload, Trash2, Lock,
+  FileSpreadsheet, Trash2, Lock,
 } from 'lucide-react'
 import { workOrders } from '../lib/api'
 import { logAudit } from '../lib/audit'
@@ -124,7 +123,6 @@ export default function WorkOrders() {
   const fmtCurrency = (v) => _fmtCurrencyBase(v, activeCurrency)
   const { user, profile } = useAuth()
   const { t } = useLanguage()
-  const navigate = useNavigate()
   // Deleting a work order is an Admin-only action (matches the RLS policy).
   const isAdmin = (profile?.role || '').toLowerCase() === 'admin'
   const [deleteTarget, setDeleteTarget] = useState(null)
@@ -553,22 +551,12 @@ export default function WorkOrders() {
             <button onClick={exportExcel} className="btn-secondary flex items-center gap-2 text-xs px-3 py-1.5">
               <FileSpreadsheet size={14} /> {t('workorders.actions.excel')}
             </button>
-            <button
-              onClick={() => navigate('/data-intake?module=workorder')}
-              className="btn-primary flex items-center gap-2 text-sm px-4"
-            >
-              <Upload size={15} /> {t('workorders.actions.import')}
-            </button>
             <button onClick={openNew} className="btn-primary flex items-center gap-2 text-sm px-4">
               <Plus size={15} /> {t('workorders.actions.newWorkOrder')}
             </button>
           </div>
         }
       />
-
-      <p className="text-xs text-[var(--text-muted)] -mt-3">
-        {t('workorders.importHint')}
-      </p>
 
       {error && (
         <div className="bg-red-900/30 border border-red-700 rounded-xl p-4 flex items-center gap-3 text-red-300">

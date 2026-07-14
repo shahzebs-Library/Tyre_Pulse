@@ -22,7 +22,7 @@ import {
   RefreshCw, ChevronDown, X, Plus, Edit3,
   BarChart3, DollarSign, Truck, Package, Target, Zap, ShieldCheck,
   ArrowUpRight, ArrowDownRight, Users, Calendar, FileCheck, Loader2,
-  SlidersHorizontal, Eye, Globe, MapPin, Hash, Upload, Lock, Flag, Gauge,
+  SlidersHorizontal, Eye, Globe, MapPin, Hash, Lock, Flag, Gauge,
 } from 'lucide-react'
 import { SkeletonCards, SkeletonTable } from '../components/ui/Skeleton'
 import { useNavigate } from 'react-router-dom'
@@ -849,9 +849,6 @@ export default function SupplierManagement() {
         icon={Building2}
         actions={
           <div className="flex items-center gap-2 flex-wrap">
-            <button onClick={() => navigate('/data-intake?module=supplier')} className="btn-primary gap-1.5">
-              <Upload size={13} /> {t('suppliers.actions.import')}
-            </button>
             <button onClick={fetchData} className="flex items-center gap-1.5 px-3 py-2 bg-[var(--input-bg)] hover:bg-[var(--input-bg-hover)] border border-[var(--input-border)] text-[var(--text-secondary)] text-sm rounded-lg">
               <RefreshCw size={13} /> {t('suppliers.actions.refresh')}
             </button>

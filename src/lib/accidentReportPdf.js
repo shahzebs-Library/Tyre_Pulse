@@ -14,7 +14,7 @@
  */
 import {
   CHARTS, KPIS, TABLE_COLS, CHART_OPTS, CHART_JS_TYPE,
-  buildReportContext, buildInsights, fmtCell, normalizeConfig,
+  buildReportContext, buildInsights, fmtCell, cellValue, normalizeConfig,
 } from './accidentReport'
 import { formatCurrencyCompact } from './formatters'
 
@@ -171,7 +171,7 @@ export async function renderAccidentReportPdf({
     if (b.type === 'table') {
       const cols = (b.columns || []).filter((c) => TABLE_COLS[c])
       if (!cols.length) continue
-      const rows = records.slice(0, Math.max(1, b.limit || 25)).map((r) => cols.map((c) => fmtCell(c, r[c], money)))
+      const rows = records.slice(0, Math.max(1, b.limit || 25)).map((r) => cols.map((c) => fmtCell(c, cellValue(c, r), money)))
       if (b.title) { ensure(8); doc.setFont('helvetica', 'bold'); doc.setFontSize(12); doc.setTextColor(15, 23, 42); doc.text(b.title, MX, y + 4); y += 6 }
       autoTable(doc, {
         startY: y, margin: { left: MX, right: MX }, theme: 'grid',

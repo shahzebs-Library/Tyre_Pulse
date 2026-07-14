@@ -34,7 +34,7 @@ import {
 import {
   CHARTS, KPIS, TABLE_COLS, BLOCK_TYPES, CHART_OPTS,
   REPORT_LIBRARY, STARTER, makeBlock, buildReportContext, buildInsights,
-  fmtCell, isChartEmpty, normalizeConfig,
+  fmtCell, cellValue, isChartEmpty, normalizeConfig,
 } from '../../lib/accidentReport'
 import { renderAccidentReportPdf } from '../../lib/accidentReportPdf'
 import { listTemplates, createTemplate, updateTemplate, deleteTemplate } from '../../lib/api/accidentReportTemplates'
@@ -565,7 +565,7 @@ function BlockPreview({ block: b, ctx, records, money, company, chartRefs, orien
             <tbody>
               {rows.length === 0 ? <tr><td colSpan={cols.length} className="px-2.5 py-6 text-center text-slate-400">No incidents in range.</td></tr>
                 : rows.map((r, i) => (
-                  <tr key={r.id || i} className={i % 2 ? 'bg-slate-50' : 'bg-white'}>{cols.map((c) => <td key={c} className="px-2.5 py-1.5 text-slate-700 whitespace-nowrap">{fmtCell(c, r[c], money)}</td>)}</tr>
+                  <tr key={r.id || i} className={i % 2 ? 'bg-slate-50' : 'bg-white'}>{cols.map((c) => <td key={c} className="px-2.5 py-1.5 text-slate-700 whitespace-nowrap">{fmtCell(c, cellValue(c, r), money)}</td>)}</tr>
                 ))}
             </tbody>
           </table>

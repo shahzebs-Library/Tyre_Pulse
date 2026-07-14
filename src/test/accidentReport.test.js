@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import {
   CHARTS, KPIS, TABLE_COLS, BLOCK_TYPES, BLOCK_DEFAULTS, CHART_OPTS, CHART_JS_TYPE,
   REPORT_LIBRARY, STARTER, makeBlock, buildReportContext, buildInsights,
-  fmtCell, isChartEmpty, isClosedRow, normalizeConfig,
+  fmtCell, cellValue, caseAgeDays, isChartEmpty, isClosedRow, normalizeConfig,
 } from '../lib/accidentReport'
 
 const money = (v) => `$${Number(v)}`
@@ -70,6 +70,39 @@ describe('accidentReport catalog integrity', () => {
     expect(fmtCell('gcc_liability_ratio', '50', money)).toBe('50%')
     expect(fmtCell('incident_date', '2026-06-01T10:00:00Z', money)).toBe('2026-06-01')
     expect(fmtCell('site', '', money)).toBe('—')
+    expect(fmtCell('days_open', 12, money)).toBe('12d')
+    expect(fmtCell('days_open', null, money)).toBe('—')
+  })
+
+  it('days_open is a virtual table column computed from the record (Days Open link-up)', () => {
+    expect(TABLE_COLS.days_open).toBe('Days Open')
+    const now = new Date('2026-07-14T12:00:00Z').getTime()
+    // open case: incident → now
+    expect(caseAgeDays({ incident_date: '2026-07-04', status: 'Open' }, now)).toBe(10)
+    expect(cellValue('days_open', { incident_date: '2026-07-04', status: 'Open' }, now)).toBe(10)
+    // closed case: incident → release_date
+    expect(caseAgeDays({ incident_date: '2026-06-01', release_date: '2026-06-21' }, now)).toBe(20)
+    // honest null without an incident date; plain columns pass through
+    expect(caseAgeDays({ status: 'Open' }, now)).toBeNull()
+    expect(cellValue('site', { site: 'Riyadh' }, now)).toBe('Riyadh')
+  })
+
+  it('avg days-open KPIs and the caseAge chart derive honestly from records', () => {
+    const now = Date.now()
+    const open = { incident_date: new Date(now - 20 * 86400000).toISOString().slice(0, 10), status: 'Open' }
+    const closed = { incident_date: '2026-06-01', release_date: '2026-06-11', status: 'Closed' }
+    const ctx = buildReportContext([open, closed], 'SAR')
+    expect(KPIS.avgDaysOpen.get(ctx)).toBe('20d')
+    expect(KPIS.avgCaseDuration.get(ctx)).toBe('10d')
+    // empty → honest dashes
+    const emptyCtx = buildReportContext([], 'SAR')
+    expect(KPIS.avgDaysOpen.get(emptyCtx)).toBe('—')
+    expect(KPIS.avgCaseDuration.get(emptyCtx)).toBe('—')
+    // caseAge chart buckets only OPEN cases
+    const data = CHARTS.caseAge.build(ctx)
+    expect(data.labels).toEqual(['0–15d', '16–30d', '31–60d', '60+d'])
+    expect(data.datasets[0].data).toEqual([0, 1, 0, 0])
+    expect(isChartEmpty(CHARTS.caseAge.build(emptyCtx))).toBe(true)
   })
 })
 

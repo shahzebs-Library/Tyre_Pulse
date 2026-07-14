@@ -87,6 +87,20 @@ export const CHARTS = {
   aging: {
     label: 'Open-claim ageing', description: 'Open claims by days outstanding', kind: 'bar', build: ({ claims }) => ({ labels: ['0–30d', '31–60d', '61–90d', '90+d'], datasets: [{ data: [claims.aging['0-30'].count, claims.aging['31-60'].count, claims.aging['61-90'].count, claims.aging['90+'].count], backgroundColor: ['#16a34a', '#ca8a04', '#fb923c', '#dc2626'], borderRadius: 3 }] }),
   },
+  caseAge: {
+    label: 'Open cases by days open', description: 'Open incidents bucketed by days since the accident (Days Open)', kind: 'bar', build: ({ records }) => {
+      const buckets = { '0–15d': 0, '16–30d': 0, '31–60d': 0, '60+d': 0 }
+      records.filter((r) => !isClosedRow(r)).forEach((r) => {
+        const d = caseAgeDays(r)
+        if (d == null) return
+        if (d <= 15) buckets['0–15d']++
+        else if (d <= 30) buckets['16–30d']++
+        else if (d <= 60) buckets['31–60d']++
+        else buckets['60+d']++
+      })
+      return { labels: Object.keys(buckets), datasets: [{ data: Object.values(buckets), backgroundColor: ['#16a34a', '#ca8a04', '#fb923c', '#dc2626'], borderRadius: 3 }] }
+    },
+  },
 }
 
 function byCount(records, keyFn, colorMap) {
@@ -135,11 +149,33 @@ export const KPIS = {
   delayed: { label: 'Delayed claims', get: ({ claims }) => claims.delayed },
   deductible: { label: 'Deductible', money: true, get: ({ claims }) => claims.deductible },
   claimsCount: { label: 'Claims', get: ({ claims }) => claims.total },
+  avgDaysOpen: { label: 'Avg days open', get: ({ records }) => avgDays(records, (r) => !isClosedRow(r)) },
+  avgCaseDuration: { label: 'Avg case duration', get: ({ records }) => avgDays(records, isClosedRow) },
 }
 export function isClosedRow(r) {
   if (r.release_date) return true
   const b = `${r.status || ''} ${r.closure_status || ''} ${r.claim_status || ''}`.toLowerCase()
   return /clos|settl|paid|recovered|complete|resolved/.test(b)
+}
+
+/** Whole days a case has been running: incident_date → release_date when closed,
+ *  otherwise → now. null when incident_date is missing/invalid — never fabricated.
+ *  Same semantics as the Accidents page "Days Open" column. */
+export function caseAgeDays(r, now = Date.now()) {
+  if (!r?.incident_date) return null
+  const start = new Date(r.incident_date)
+  if (isNaN(start)) return null
+  let end = new Date(now)
+  if (isClosedRow(r) && r.release_date) {
+    const rel = new Date(r.release_date)
+    if (!isNaN(rel)) end = rel
+  }
+  return Math.max(0, Math.floor((end - start) / 86400000))
+}
+
+function avgDays(records, filterFn) {
+  const vals = records.filter(filterFn).map((r) => caseAgeDays(r)).filter((v) => v != null)
+  return vals.length ? `${Math.round(vals.reduce((s, v) => s + v, 0) / vals.length)}d` : '—'
 }
 
 // ── Detail-table columns ──────────────────────────────────────────────────────
@@ -148,12 +184,22 @@ export const TABLE_COLS = {
   severity: 'Severity', status: 'Status', fault_status: 'Fault', gcc_liability_ratio: 'GCC %',
   insurer: 'Insurer', claim_amount: 'Claimed', claim_approved_amount: 'Approved',
   recovered_amount: 'Recovered', repair_cost: 'Repair', expected_release_date: 'Expected release',
+  days_open: 'Days Open',
+}
+
+/** Resolve a table cell — supports VIRTUAL computed columns (days_open) on top
+ *  of plain record fields. Table renderers (preview + PDF) must use this
+ *  instead of reading r[col] directly. */
+export function cellValue(col, r, now = Date.now()) {
+  if (col === 'days_open') return caseAgeDays(r, now)
+  return r[col]
 }
 
 export function fmtCell(col, v, money) {
   if (v == null || v === '') return '—'
   if (['claim_amount', 'claim_approved_amount', 'recovered_amount', 'repair_cost'].includes(col)) return money(v)
   if (col === 'gcc_liability_ratio') return `${Number(v)}%`
+  if (col === 'days_open') return `${Number(v)}d`
   if (col === 'incident_date' || col === 'expected_release_date') return String(v).slice(0, 10)
   return String(v)
 }
@@ -231,7 +277,7 @@ export const REPORT_LIBRARY = [
     orientation: 'portrait',
     build: () => [
       makeBlock('header', { title: 'Executive Accident Summary' }),
-      makeBlock('kpis', { items: ['total', 'open', 'closed', 'repairCost', 'netExposure', 'recoveryRate'] }),
+      makeBlock('kpis', { items: ['total', 'open', 'avgDaysOpen', 'repairCost', 'netExposure', 'recoveryRate'] }),
       makeBlock('insights'),
       makeBlock('chart', { chart: 'severity', title: 'Severity distribution' }),
       makeBlock('chart', { chart: 'trend', title: 'Incident trend (12 months)' }),
@@ -274,8 +320,9 @@ export const REPORT_LIBRARY = [
     orientation: 'portrait',
     build: () => [
       makeBlock('header', { title: 'Fleet Safety Review' }),
-      makeBlock('kpis', { items: ['total', 'open', 'closed', 'repairCost'] }),
+      makeBlock('kpis', { items: ['total', 'open', 'avgDaysOpen', 'repairCost'] }),
       makeBlock('insights'),
+      makeBlock('chart', { chart: 'caseAge', title: 'Open cases by days open' }),
       makeBlock('chart', { chart: 'sevMonthly', title: 'Monthly severity mix' }),
       makeBlock('chart', { chart: 'bySite', title: 'Incidents by site' }),
       makeBlock('chart', { chart: 'topAssets', title: 'Top assets by incidents' }),
@@ -296,7 +343,7 @@ export const REPORT_LIBRARY = [
       makeBlock('text', { title: 'Management commentary', body: '' }),
       makeBlock('pagebreak'),
       makeBlock('divider', { label: 'Annex — incident register' }),
-      makeBlock('table', { title: 'Incident detail', columns: ['incident_date', 'asset_no', 'site', 'driver_name', 'severity', 'status', 'claim_amount', 'recovered_amount'], limit: 60 }),
+      makeBlock('table', { title: 'Incident detail', columns: ['incident_date', 'asset_no', 'site', 'driver_name', 'severity', 'status', 'days_open', 'claim_amount', 'recovered_amount'], limit: 60 }),
     ],
   },
   {

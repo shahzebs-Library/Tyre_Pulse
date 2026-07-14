@@ -71,6 +71,47 @@ export function toPaperOptions(opts) {
   return o
 }
 
+// Light-theme "report mode" ink for ON-SCREEN charts. Kept in lock-step with the
+// offscreen paper capture (toPaperOptions) so a chart shown in report view looks
+// identical to its exported PNG.
+const REPORT_INK = '#0f172a'
+const REPORT_TICK = '#334155'
+const REPORT_GRID = '#e5e7eb'
+
+/**
+ * Return a deep clone of the given Chart.js options recoloured for a WHITE
+ * "report view": dark ink legend/title, slate ticks, light grid lines. Function
+ * references (callbacks, formatters) are preserved. `responsive:true` is forced
+ * so the on-screen chart still fits its flex container. Non-mutating: the source
+ * dark options object is untouched.
+ */
+export function paperChartOptions(base) {
+  const clone = (v) => {
+    if (Array.isArray(v)) return v.map(clone)
+    if (v && typeof v === 'object') { const o = {}; for (const k in v) o[k] = clone(v[k]); return o }
+    return v // primitives + functions passed by reference
+  }
+  const o = clone(base || {})
+  o.responsive = true
+  o.plugins = o.plugins || {}
+  if (o.plugins.legend && o.plugins.legend.display !== false) {
+    o.plugins.legend.labels = { ...(o.plugins.legend.labels || {}), color: REPORT_INK }
+  }
+  if (o.plugins.title) o.plugins.title = { ...o.plugins.title, color: REPORT_INK }
+  if (o.scales) {
+    for (const ax of Object.keys(o.scales)) {
+      const s = o.scales[ax]
+      if (!s || typeof s !== 'object') continue
+      s.ticks = { ...(s.ticks || {}), color: REPORT_TICK }
+      s.grid = { ...(s.grid || {}), color: REPORT_GRID }
+      if (s.angleLines) s.angleLines = { ...s.angleLines, color: REPORT_GRID }
+      if (s.pointLabels) s.pointLabels = { ...s.pointLabels, color: REPORT_TICK }
+      if (s.title) s.title = { ...s.title, color: REPORT_INK }
+    }
+  }
+  return o
+}
+
 /**
  * Re-render a live Chart.js instance onto an offscreen white canvas with paper
  * ink and return a PNG data URL, or null on any failure (caller may fall back

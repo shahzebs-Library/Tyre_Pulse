@@ -13,7 +13,7 @@
  * nothing is fabricated; empty data degrades to honest empty states.
  */
 import { analyzeClaims, hasClaim, isClosed } from './claimsAnalytics'
-import { STATUSES, SEVERITIES, FAULT_STATUS_OPTS, canonStatus, canonSeverity } from './accidentVocab'
+import { STATUSES, SEVERITIES, FAULT_STATUS_OPTS, canonStatus, canonSeverity, canonFault } from './accidentVocab'
 
 // ── WYSIWYG paper theme (dark-on-white so on-screen preview == exported PDF) ──
 export const PAPER = { ink: '#0f172a', muted: '#475569', grid: 'rgba(15,23,42,0.08)' }
@@ -133,7 +133,11 @@ export function last12() {
 const mKey = (v) => { if (!v) return null; const d = new Date(v); return isNaN(d) ? null : `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}` }
 const mLabel = (k) => { const [y, m] = k.split('-'); return `${MONTHS[(+m) - 1]} ${y.slice(2)}` }
 const N = (v) => (Number.isFinite(Number(v)) ? Number(v) : 0)
-export const canonSev = (s) => { const v = String(s || '').toLowerCase(); if (v.includes('total')) return 'Total Loss'; if (v.startsWith('maj')) return 'Major'; if (v.startsWith('min')) return 'Minor'; return s || 'Unspecified' }
+/** @deprecated Severity is the ONE Minor/Moderate/Major ladder — prefer canonSeverity
+ *  (accidentVocab). Kept as a thin alias so any older import keeps resolving; it now
+ *  folds legacy 'Total Loss'/'severe'/'fatal' onto Major exactly like every other
+ *  severity surface (was a stale Minor/Major/Total-Loss list that dropped Moderate). */
+export const canonSev = (s) => canonSeverity(s) || 'Unspecified'
 const titleCase = (t) => String(t || '').replace(/[_-]+/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()).trim()
 /** Human-readable label for a CHECK-constrained accident_type token (or a UI label). */
 export const canonType = (t) => { const v = String(t || '').trim(); return v ? titleCase(v) : 'Unspecified' }
@@ -144,12 +148,14 @@ export function buildReportContext(records, currency = 'SAR') {
 
 // ── Chart catalog: key → { label, description, kind, build(ctx) → chartjs data } ──
 export const CHARTS = {
-  severity: { label: 'Severity distribution', description: 'Minor / Major / Total-loss mix', kind: 'doughnut', build: ({ records }) => byCount(records, (r) => canonSev(r.severity), { Minor: '#64748b', Major: '#ea580c', 'Total Loss': '#dc2626' }) },
+  severity: { label: 'Severity distribution', description: 'Minor / Moderate / Major mix', kind: 'doughnut', build: ({ records }) => byCount(records, (r) => canonSeverity(r.severity), { Minor: '#64748b', Moderate: '#ca8a04', Major: '#ea580c' }) },
   status: { label: 'Status distribution', description: 'Incident workflow status mix', kind: 'doughnut', build: ({ records }) => byCount(records, (r) => r.status || 'Reported') },
   fault: {
     label: 'Fault status (GCC)', description: 'Faulty vs non-faulty vs under review', kind: 'doughnut', build: ({ records }) => {
+      // Classify via the ONE vocab fault resolver so this chart, the table
+      // filter and the record screens bucket fault identically (accurate counts).
       const c = { Faulty: 0, 'Non-faulty': 0, 'Under review': 0, Unknown: 0 }
-      records.forEach((r) => { const f = String(r.fault_status || '').toLowerCase(); if (/non[-\s]?fault/.test(f)) c['Non-faulty']++; else if (/review/.test(f)) c['Under review']++; else if (/fault/.test(f)) c.Faulty++; else c.Unknown++ })
+      records.forEach((r) => { const f = canonFault(r.fault_status); if (f) c[f]++; else c.Unknown++ })
       return doughnut(c, { Faulty: '#dc2626', 'Non-faulty': '#16a34a', 'Under review': '#ca8a04', Unknown: '#cbd5e1' })
     },
   },
@@ -170,10 +176,10 @@ export const CHARTS = {
   bySite: { label: 'Incidents by site', description: 'Site / branch comparison', kind: 'bar-h', build: ({ records }) => rank(records, (r) => r.site, 8, '#2563eb') },
   sevMonthly: {
     label: 'Monthly severity (12 mo)', description: 'Stacked severity mix by month', kind: 'bar-stack', build: ({ records }) => {
-      const keys = last12(); const sev = ['Minor', 'Major', 'Total Loss']; const map = {}
+      const keys = last12(); const sev = ['Minor', 'Moderate', 'Major']; const map = {}
       sev.forEach((s) => { map[s] = Object.fromEntries(keys.map((k) => [k, 0])) })
-      records.forEach((r) => { const k = mKey(r.incident_date); const s = canonSev(r.severity); if (k && map[s] && map[s][k] != null) map[s][k]++ })
-      const col = { Minor: '#94a3b8', Major: '#ea580c', 'Total Loss': '#dc2626' }
+      records.forEach((r) => { const k = mKey(r.incident_date); const s = canonSeverity(r.severity); if (k && map[s] && map[s][k] != null) map[s][k]++ })
+      const col = { Minor: '#94a3b8', Moderate: '#ca8a04', Major: '#ea580c' }
       return { labels: keys.map(mLabel), datasets: sev.map((s) => ({ label: s, data: keys.map((k) => map[s][k]), backgroundColor: col[s] })) }
     },
   },
@@ -560,15 +566,11 @@ export function fmtCell(col, v, money) {
 }
 
 // ── Detail-table filtering / sorting (shared: builder UI + PDF + Excel export) ──
-// Canonical fault-status label (accidentVocab has no canonFault helper). Mirrors
-// the fault chart's classification so the filter and the chart always agree.
-export const canonFault = (v) => {
-  const f = String(v || '').toLowerCase()
-  if (/non[-\s]?fault|not.?at.?fault|no.?fault/.test(f)) return 'Non-faulty'
-  if (/review/.test(f)) return 'Under review'
-  if (/fault/.test(f)) return 'Faulty'
-  return ''
-}
+// Fault classification comes from the ONE vocab resolver (canonFault, imported
+// above from accidentVocab and re-exported here for existing importers). The
+// fault chart, the table filter and the record screens therefore bucket
+// "faulty vs non-faulty" identically — no more competing fault classifiers.
+export { canonFault }
 
 /**
  * Option lists the builder UI renders for the detail-table filter controls.
@@ -702,8 +704,8 @@ export function buildInsights(ctx) {
   const out = []
   out.push(`${records.length} incident${records.length === 1 ? '' : 's'} in scope: ${claims.open} open, ${claims.closed} closed.`)
 
-  const serious = records.filter((r) => { const s = canonSev(r.severity); return s === 'Major' || s === 'Total Loss' }).length
-  if (serious > 0) out.push(`${serious} serious incident${serious === 1 ? '' : 's'} (Major / Total Loss), ${Math.round((serious / records.length) * 100)}% of all incidents.`)
+  const serious = records.filter((r) => canonSeverity(r.severity) === 'Major').length
+  if (serious > 0) out.push(`${serious} serious incident${serious === 1 ? '' : 's'} (Major), ${Math.round((serious / records.length) * 100)}% of all incidents.`)
 
   const keys = last12(); const t = Object.fromEntries(keys.map((k) => [k, 0]))
   records.forEach((r) => { const k = mKey(r.incident_date); if (k && t[k] != null) t[k]++ })
@@ -740,7 +742,7 @@ export const uid = () => `b${Date.now().toString(36)}${(_seq++).toString(36)}`
 
 export const BLOCK_TYPES = {
   header: { label: 'Header / Logo', description: 'Report title, subtitle, company logo and generation date.' },
-  kpis: { label: 'KPI row', description: 'A row of headline metrics — pick from 12 accident & claims KPIs.' },
+  kpis: { label: 'KPI row', description: `A row of headline metrics: pick from ${Object.keys(KPIS).length} accident and claims KPIs.` },
   chart: { label: 'Chart', description: `One of ${Object.keys(CHARTS).length} live charts (doughnut, line, bar, Pareto, dual-axis combo, radar, polar, waterfall) at full, half, third or quarter width, with ${PALETTE_KEYS.length} colour palettes (incl. green and gray), border colour + width, data-label colour + size, and legend/grid toggles.` },
   insights: { label: 'Key findings', description: 'Auto-generated bullet summary computed from the live data (peaks, exposure, delays).' },
   text: { label: 'Text section', description: 'Free-form commentary, findings or recommendations with an optional heading.' },

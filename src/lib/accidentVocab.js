@@ -158,7 +158,40 @@ const matchOpt = (value, opts) => {
   if (!v) return ''
   return opts.find((o) => String(o).toLowerCase() === v) ?? value
 }
-export const canonFaultStatus   = (v) => matchOpt(v, FAULT_STATUS_OPTS)
+
+// ── Fault classification (THE single fault resolver) ─────────────────────────
+// Folds every legacy / free-text spelling of the liability outcome onto the ONE
+// canonical FAULT_STATUS_OPTS ladder (Faulty / Non-faulty / Under review). This
+// is what analytics (charts, KPIs, table filters) classify with, so the
+// "faulty vs non-faulty" counts are accurate and consistent everywhere.
+// Returns '' for blank/unknown (honest — an unrecognised value is never
+// force-bucketed as Faulty).
+// Order matters: every "no / non / not ... fault" phrase ALSO contains "fault",
+// so the non-faulty patterns MUST be tested before the faulty catch-all
+// (this is the bug the inline chart classifier had — "No Fault" counted Faulty).
+export const canonFault = (v) => {
+  const f = String(v ?? '').toLowerCase().trim()
+  if (!f) return ''
+  if (/non[-\s]?fault|no[-\s]?fault|not[-\s]?(at[-\s]?)?fault/.test(f)) return 'Non-faulty'
+  if (/review|pending|investigat|assess/.test(f)) return 'Under review'
+  if (/fault|liable|at[-\s]?fault/.test(f)) return 'Faulty'
+  return ''
+}
+
+// Writer: accidents.fault_status stores the display label itself, so the DB
+// value IS the canonical label. An unrecognised non-empty value passes through
+// unchanged (never dropped); blank becomes null.
+export const toDbFault = (v) => {
+  const canon = canonFault(v)
+  if (canon) return canon
+  const raw = String(v ?? '').trim()
+  return raw || null
+}
+
+// canonFaultStatus = the record-screen canonicaliser: fold legacy spellings via
+// canonFault, but keep an honest passthrough for a bespoke value the user typed
+// (custom fault text is never silently discarded on the detail/create screens).
+export const canonFaultStatus   = (v) => canonFault(v) || matchOpt(v, FAULT_STATUS_OPTS)
 export const canonNajmStatus    = (v) => matchOpt(v, NAJM_STATUS_OPTS)
 export const canonNajmFault     = (v) => matchOpt(v, NAJM_FAULT_OPTS)
 export const canonTaqdeerStatus = (v) => matchOpt(v, TAQDEER_STATUS_OPTS)

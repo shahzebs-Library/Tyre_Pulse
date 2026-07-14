@@ -7,6 +7,8 @@ import {
   CASE_STAGE_OPTS, DAMAGE_CONDITION_OPTS, WORKFLOW_STAGE_OPTS, TERMINAL_STAGES,
   STAGE_TO_CLAIM_STATUS, ACCIDENT_TYPE_LABEL,
   canonSeverity, canonStatus, canonAccidentType, toDbSeverity, toDbStatus, toDbAccidentType,
+  accidentSeverityPill, accidentStatusPill,
+  canonFaultStatus, canonNajmStatus, canonRepairType,
 } from '../lib/accidentVocab'
 
 // DB CHECK-constraint vocabularies (accidents.severity/status/accident_type, V222).
@@ -106,5 +108,54 @@ describe('accidentVocab — single source of truth', () => {
     for (const s of CLAIM_STATUS_OPTS) expect(CLAIM_STATUS_LABELS[s], s).toBeTruthy()
     for (const s of RECOVERY_SOURCE_OPTS) expect(RECOVERY_SOURCE_LABELS[s], s).toBeTruthy()
     for (const s of RECOVERY_STATUS_OPTS) expect(RECOVERY_STATUS_LABELS[s], s).toBeTruthy()
+  })
+})
+
+describe('accidentVocab — presentation pills (shared list + detail source)', () => {
+  it('accidentSeverityPill maps damage severity onto consistent colours', () => {
+    const minor = accidentSeverityPill('Minor')
+    expect(minor.label).toBe('Minor')
+    expect(minor.className).toContain('green')
+
+    const major = accidentSeverityPill('Major')
+    expect(major.label).toBe('Major')
+    expect(major.className).toContain('orange')
+
+    const total = accidentSeverityPill('Total Loss')
+    expect(total.label).toBe('Total Loss')
+    expect(total.className).toContain('red')
+  })
+
+  it('accidentSeverityPill canonicalises aliases and yields an empty pill for blanks', () => {
+    expect(accidentSeverityPill('minor').label).toBe('Minor')   // mobile lowercase
+    expect(accidentSeverityPill('severe').label).toBe('Total Loss')
+    expect(accidentSeverityPill('').label).toBe('')
+    expect(accidentSeverityPill(null).className).toBe('')
+  })
+
+  it('accidentStatusPill gives every status a non-empty colour and a fallback for unknowns', () => {
+    for (const s of STATUSES) {
+      const pill = accidentStatusPill(s)
+      expect(pill.label, s).toBe(s)
+      expect(pill.className, s).toBeTruthy()
+    }
+    expect(accidentStatusPill('closed').label).toBe('Closed')      // alias canon
+    expect(accidentStatusPill('Closed').className).toContain('green')
+    // unknown but non-empty -> passes through canonStatus, uses the neutral fallback
+    const unknown = accidentStatusPill('Something Bespoke')
+    expect(unknown.label).toBe('Something Bespoke')
+    expect(unknown.className).toContain('--input-bg')
+    // blank -> empty pill
+    expect(accidentStatusPill('').label).toBe('')
+  })
+
+  it('case-field canon helpers fold stray-case values back onto the option label', () => {
+    expect(canonFaultStatus('faulty')).toBe('Faulty')
+    expect(canonFaultStatus('NON-FAULTY')).toBe('Non-faulty')
+    expect(canonNajmStatus('najm report')).toBe('Najm report')
+    expect(canonRepairType('internal')).toBe('Internal')
+    // unknown passes through unchanged; blank -> ''
+    expect(canonFaultStatus('Bespoke')).toBe('Bespoke')
+    expect(canonRepairType('')).toBe('')
   })
 })

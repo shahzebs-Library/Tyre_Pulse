@@ -44,10 +44,15 @@ export function isDelayed(r, today) {
   return !!exp && exp < today
 }
 
-/** Net exposure after recoveries: repair (or estimate) + parts − recovered. */
+/** Gross cost of an incident: repair (or, when absent, the damage estimate) plus
+ *  parts. THE single definition of "gross" so every surface agrees. */
+export function grossCost(r) {
+  return (N(r.repair_cost) || N(r.estimated_damage_cost)) + N(r.parts_cost)
+}
+
+/** Net exposure after recoveries: gross cost minus recovered (floored at 0). */
 export function claimNet(r) {
-  const gross = (N(r.repair_cost) || N(r.estimated_damage_cost)) + N(r.parts_cost)
-  return Math.max(0, gross - N(r.recovered_amount))
+  return Math.max(0, grossCost(r) - N(r.recovered_amount))
 }
 
 /**

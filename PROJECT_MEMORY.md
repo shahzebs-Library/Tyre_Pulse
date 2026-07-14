@@ -120,9 +120,33 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
   loadRecords + openEdit). RULE: accidents.severity/status/accident_type are CHECK-constrained
   lowercase tokens — NEVER write a UI label straight to these columns; always go through the toDb* maps.
 
+### Accidents UX + case-day intelligence (2026-07-14, 4-agent batch)
+- **Inline incident form**: the New/Edit Incident form is NO LONGER a popup modal — it renders as a
+  full-width in-page `.card` below the tabs (`showForm` state; tab sections gated on `!showForm`,
+  ArrowLeft/X to return, submit via `form="accident-inline-form"`). Presentation-only; handleSave/
+  fields unchanged. Delete-confirm + Bulk Upload remain modals.
+- **Save path PROVEN**: full schema/CHECK audit + two rolled-back live inserts (risky + opposite
+  vocabulary) pass. Extra fix: accidents.accident_type is NOT NULL → payload uses
+  `toDbAccidentType(v) || 'other'` (empty selection used to fail). Only 3 CHECKs exist:
+  accident_type/severity/status — all mapped via toDb* helpers.
+- **Days Open calculated field** (Accidents list): `caseAgeDays(r)` = whole days incident_date →
+  now (open) or → release_date (closed); traffic-light badge (green ≤15d / amber 16–30d / red >30d),
+  numeric sorting, `filterAge` quick filter (open cases), included in EXPORT_FIELDS/PDF_KEYS/CLAIMS_KEYS.
+- **Case timeline (days per step, automatic)**: `accident_audit_log` already logs every status
+  change (`action='status_change'`, old/new JSONB, changed_at) via the existing trigger — NO new
+  table. **V223** added a SELECT policy for authenticated gated by EXISTS on the parent accident
+  (inherits org/country RLS; previously admin-only). Engine `src/lib/accidentTimeline.js`
+  (`buildCaseTimeline` → ordered steps with per-step days, current step live "days so far", honest
+  single-step fallback; 12 tests) + api `src/lib/api/accidentTimeline.js` (`listStatusTransitions`,
+  lean `old_values->>status` projection) + "Case timeline" stepper in AccidentDetailModal Overview.
+  NOTE: `get_accident_audit` RPC is SECURITY DEFINER/LIMIT 100 — do NOT use it as the timeline source.
+- **Builder orientation-true preview**: paper max-w 860px portrait / 1120px landscape (animated),
+  KPI grid 3-per-row portrait / 6-per-row landscape (matches PDF `perRow`), chart preview height
+  ×0.85 in landscape, "A4 · Portrait · 210×297mm" format hint under the orientation select.
+
 ### Migrations & tests
-- Latest migration is **V222** (chk_accident_type widened); V221 = accident_report_templates;
-  V220 = the delete-trigger fix; next free **V223**.
+- Latest migration is **V223** (accident_audit_log member read policy); V222 = chk_accident_type
+  widened; V221 = accident_report_templates; V220 = the delete-trigger fix; next free **V224**.
 - New tests: `claimsAnalytics.test.js` (12), `scheduledReports.api.test.js` (4),
   `accidentReportTemplates.api.test.js` (5). Full suite green.
 

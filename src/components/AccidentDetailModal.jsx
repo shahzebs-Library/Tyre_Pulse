@@ -28,6 +28,8 @@ import { useSites } from '../hooks/useSites'
 import { formatCurrency as _fmtCurrencyBase } from '../lib/formatters'
 import { exportAccidentCasePdf } from '../lib/exportUtils'
 import { describeAuditRow } from '../lib/auditDiff'
+import { buildCaseTimeline } from '../lib/accidentTimeline'
+import { listStatusTransitions } from '../lib/api/accidentTimeline'
 import { resolveStorageUrls } from '../lib/storageRefs'
 import CustomFieldsPanel from './CustomFieldsPanel'
 import CopilotCard from './ai/CopilotCard'
@@ -332,6 +334,7 @@ function AccidentDetail({ accidentId, onBack, onClose, onChanged, variant = 'pag
           <div className="space-y-4">
             <CopilotCard task="summarize_accident" context={{ accident: acc, remarks, parts }} />
             <OverviewTab acc={acc} fmtCurrency={fmtCurrency} />
+            <CaseTimelineSection acc={acc} />
           </div>
         )}
         {tab === 'tracker'   && <TrackerTab acc={acc} elevated={elevated} siteOptions={siteOptions} onSaved={() => { load(); onChanged?.() }} setErr={setErr} />}
@@ -520,6 +523,97 @@ function OverviewTab({ acc, fmtCurrency }) {
         </div>
       )}
       <CustomFieldsPanel data={acc.custom_data} title="Additional imported fields" />
+    </div>
+  )
+}
+
+// ── Case timeline — days spent in each status step ─────────────────────────────
+// Durations are derived from the status transitions the accidents audit trigger
+// already records in accident_audit_log (org-scoped read granted by V223); the
+// pure maths live in src/lib/accidentTimeline.js. HONEST: nothing is fabricated —
+// with no recorded transitions the section shows one step for the current status
+// (incident date → now) and says tracking starts from the next update.
+function CaseTimelineSection({ acc }) {
+  const [rows, setRows] = useState(null) // null = loading
+  const [loadErr, setLoadErr] = useState('')
+
+  useEffect(() => {
+    let cancelled = false
+    setRows(null); setLoadErr('')
+    listStatusTransitions(acc.id)
+      .then(r => { if (!cancelled) setRows(r) })
+      .catch(e => { if (!cancelled) { setLoadErr(e?.message || 'Could not load the case timeline.'); setRows([]) } })
+    return () => { cancelled = true }
+  }, [acc.id])
+
+  const steps = useMemo(() => (rows === null ? [] : buildCaseTimeline(acc, rows)), [acc, rows])
+  const totalDays = useMemo(() => steps.reduce((s, x) => s + x.days, 0), [steps])
+  const fmtDate = (iso) => (iso ? new Date(iso).toLocaleDateString() : '-')
+  const dayBadge = (n) => `${n} day${n === 1 ? '' : 's'}`
+
+  return (
+    <div className="border-t border-gray-800 pt-4">
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-xs font-semibold text-gray-400 flex items-center gap-1.5">
+          <History size={13} /> Case Timeline · days per step
+        </p>
+        {rows !== null && steps.length > 0 && (
+          <span className="text-[11px] text-gray-500 whitespace-nowrap">{dayBadge(totalDays)} total</span>
+        )}
+      </div>
+
+      {rows === null ? (
+        <div className="space-y-2 animate-pulse mt-3">
+          {[0, 1, 2].map(i => <div key={i} className="h-8 bg-gray-800/60 rounded" />)}
+        </div>
+      ) : (
+        <>
+          {loadErr && <p className="text-xs text-red-400 mt-2">{loadErr}</p>}
+          {rows.length === 0 && !loadErr && (
+            <p className="text-xs text-gray-500 mt-2">
+              No status changes recorded yet — durations start tracking from the next update.
+            </p>
+          )}
+          {steps.length > 0 && (
+            <ol className="mt-3">
+              {steps.map((s, i) => (
+                <li key={`${s.step}-${i}`} className="flex gap-3">
+                  <div className="flex flex-col items-center">
+                    <span
+                      className={`mt-1 w-2.5 h-2.5 rounded-full flex-shrink-0 border ${
+                        s.current
+                          ? 'bg-green-500 border-green-400 animate-pulse'
+                          : s.step === 'closed'
+                            ? 'bg-green-700 border-green-600'
+                            : 'bg-gray-600 border-gray-500'
+                      }`}
+                    />
+                    {i < steps.length - 1 && <span className="w-px flex-1 bg-gray-800 my-0.5" />}
+                  </div>
+                  <div className={`flex-1 flex items-start justify-between gap-2 min-w-0 ${i < steps.length - 1 ? 'pb-4' : ''}`}>
+                    <div className="min-w-0">
+                      <p className={`text-sm font-medium ${s.current ? 'text-green-400' : 'text-gray-200'}`}>
+                        {s.label || s.step}
+                        {s.step === 'closed' && !s.current && <CheckCircle2 size={12} className="inline ml-1.5 -mt-0.5 text-green-500" />}
+                      </p>
+                      <p className="text-[11px] text-gray-500">{fmtDate(s.from)} → {s.current ? 'now' : fmtDate(s.to)}</p>
+                    </div>
+                    {s.current ? (
+                      <span className="badge text-xs whitespace-nowrap bg-green-900/50 text-green-300 border border-green-700/50 flex items-center gap-1">
+                        <Clock size={10} /> ongoing · {dayBadge(s.days)} so far
+                      </span>
+                    ) : (
+                      <span className="badge text-xs whitespace-nowrap bg-gray-800 text-gray-300 border border-gray-600">
+                        {dayBadge(s.days)}
+                      </span>
+                    )}
+                  </div>
+                </li>
+              ))}
+            </ol>
+          )}
+        </>
+      )}
     </div>
   )
 }

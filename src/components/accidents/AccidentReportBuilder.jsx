@@ -194,10 +194,15 @@ export default function AccidentReportBuilder({ records = [], company = 'TyrePul
           </div>
 
           <div className="ml-auto flex items-center gap-2">
-            <select value={orientation} onChange={(e) => { setOrientation(e.target.value); setDirty(true) }} className="input text-sm" aria-label="Page orientation">
-              <option value="portrait">Portrait</option>
-              <option value="landscape">Landscape</option>
-            </select>
+            <div className="flex flex-col items-end">
+              <select value={orientation} onChange={(e) => { setOrientation(e.target.value); setDirty(true) }} className="input text-sm" aria-label="Page orientation">
+                <option value="portrait">Portrait</option>
+                <option value="landscape">Landscape</option>
+              </select>
+              <span className="text-[10px] text-[var(--text-muted)] mt-0.5 leading-none">
+                A4 · {orientation === 'landscape' ? 'Landscape · 297×210mm' : 'Portrait · 210×297mm'}
+              </span>
+            </div>
             <button onClick={exportPdf} disabled={exporting || !blocks.length} className="btn-primary text-sm inline-flex items-center gap-1.5 disabled:opacity-50">
               {exporting ? <Loader2 size={15} className="animate-spin" /> : <FileText size={15} />} Export PDF
             </button>
@@ -228,13 +233,13 @@ export default function AccidentReportBuilder({ records = [], company = 'TyrePul
           </div>
         </div>
       ) : (
-        <div className="mx-auto w-full max-w-[860px] bg-white text-slate-800 rounded-xl shadow-2xl border border-black/10">
+        <div className={`mx-auto w-full bg-white text-slate-800 rounded-xl shadow-2xl border border-black/10 transition-[max-width] duration-300 ease-in-out ${orientation === 'landscape' ? 'max-w-[1120px]' : 'max-w-[860px]'}`}>
           <div className="p-6 sm:p-8 space-y-5">
             {blocks.map((b, i) => (
               <BlockEditor
                 key={b.id} block={b} index={i} count={blocks.length}
                 ctx={claimsCtx} records={records} money={money} company={company}
-                chartRefs={chartRefs} highlight={lastAdded === b.id}
+                chartRefs={chartRefs} highlight={lastAdded === b.id} orientation={orientation}
                 onPatch={patchBlock} onRemove={removeBlock} onDup={dupBlock} onMove={move}
               />
             ))}
@@ -379,7 +384,7 @@ function LibraryModal({ templates, onApplyLibrary, onLoad, onDelete, onClose }) 
 }
 
 /* ── Per-block editor + WYSIWYG preview ──────────────────────────────────────── */
-function BlockEditor({ block: b, index, count, ctx, records, money, company, chartRefs, highlight, onPatch, onRemove, onDup, onMove }) {
+function BlockEditor({ block: b, index, count, ctx, records, money, company, chartRefs, highlight, orientation, onPatch, onRemove, onDup, onMove }) {
   const [openCfg, setOpenCfg] = useState(false)
   const meta = BLOCK_TYPES[b.type] || { label: b.type }
   const Icon = BLOCK_ICONS[b.type] || LayoutGrid
@@ -398,7 +403,7 @@ function BlockEditor({ block: b, index, count, ctx, records, money, company, cha
 
       {openCfg && <BlockConfig block={b} onPatch={onPatch} />}
 
-      <BlockPreview block={b} ctx={ctx} records={records} money={money} company={company} chartRefs={chartRefs} />
+      <BlockPreview block={b} ctx={ctx} records={records} money={money} company={company} chartRefs={chartRefs} orientation={orientation} />
     </div>
   )
 }
@@ -476,7 +481,8 @@ function BlockConfig({ block: b, onPatch }) {
   )
 }
 
-function BlockPreview({ block: b, ctx, records, money, company, chartRefs }) {
+function BlockPreview({ block: b, ctx, records, money, company, chartRefs, orientation = 'portrait' }) {
+  const landscape = orientation === 'landscape'
   if (b.type === 'header') {
     const stamp = new Date().toISOString().slice(0, 10)
     return (
@@ -493,7 +499,7 @@ function BlockPreview({ block: b, ctx, records, money, company, chartRefs }) {
     const items = (b.items || []).filter((k) => KPIS[k])
     if (!items.length) return <Placeholder>No KPIs selected — configure this block.</Placeholder>
     return (
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+      <div className={`grid gap-3 ${landscape ? 'grid-cols-3 sm:grid-cols-6' : 'grid-cols-2 sm:grid-cols-3'}`}>
         {items.map((k) => { const def = KPIS[k]; const raw = def.get(ctx); return (
           <div key={k} className="rounded-lg bg-slate-50 border border-slate-200 px-3 py-2.5">
             <p className="text-lg font-bold text-slate-900 leading-tight">{def.money ? money(raw) : String(raw)}</p>
@@ -512,7 +518,7 @@ function BlockPreview({ block: b, ctx, records, money, company, chartRefs }) {
     return (
       <div>
         {(b.title || def.label) && <p className="text-sm font-semibold text-slate-800 mb-2">{b.title || def.label}</p>}
-        <div style={{ height: b.height || 240 }} className="relative">
+        <div style={{ height: Math.round((b.height || 240) * (landscape ? 0.85 : 1)) }} className="relative transition-[height] duration-300">
           {isChartEmpty(data) ? <div className="h-full flex items-center justify-center text-slate-400 text-sm">No data for this chart yet</div>
             : <Comp ref={(el) => { chartRefs.current[b.id] = el }} data={data} options={opts} />}
         </div>

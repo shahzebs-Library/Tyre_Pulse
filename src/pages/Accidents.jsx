@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useMemo, useRef, lazy, Suspense } fro
 import { useNavigate } from 'react-router-dom'
 
 const AccidentReportBuilder = lazy(() => import('../components/accidents/AccidentReportBuilder'))
-import { AlertOctagon, Plus, Search, X, Save, FileText, Download, BarChart2, Eye, Hourglass, Upload, CheckCircle2, AlertCircle, ChevronDown, Trash2, AlertTriangle, TrendingUp, Users, DollarSign, ShieldAlert, Lightbulb, ChevronRight, Clock, Wrench, ShieldCheck } from 'lucide-react'
+import { AlertOctagon, Plus, Search, X, Save, FileText, Download, BarChart2, Eye, Hourglass, Upload, CheckCircle2, AlertCircle, ChevronDown, Trash2, AlertTriangle, TrendingUp, Users, DollarSign, ShieldAlert, Lightbulb, ChevronRight, Clock, Wrench, ShieldCheck, ArrowLeft } from 'lucide-react'
 import { motion } from 'framer-motion'
 import PageHeader from '../components/ui/PageHeader'
 import EmptyState from '../components/EmptyState'
@@ -187,6 +187,32 @@ const daysSinceUpdate = (r) => {
 // Delayed = still open AND stalled beyond the SLA threshold with no movement.
 const isDelayed = (r) => !isReleasedOrClosed(r) && daysSinceUpdate(r) > DELAY_THRESHOLD_DAYS
 
+// ── Case age ("Days open") ──────────────────────────────────────────────────
+// Whole days (>= 0) from the incident date to closure (release_date, when the
+// case is closed and a release date exists) or to now for open cases. Returns
+// null when incident_date is missing/unparseable — callers render "—" then;
+// the value is NEVER fabricated.
+const CASE_AGE_GREEN_DAYS = 15
+const CASE_AGE_AMBER_DAYS = 30
+const caseAgeDays = (r, now = Date.now()) => {
+  if (!r?.incident_date) return null
+  const start = new Date(r.incident_date).getTime()
+  if (Number.isNaN(start)) return null
+  let end = now
+  if (isReleasedOrClosed(r) && r.release_date) {
+    const rel = new Date(r.release_date).getTime()
+    if (!Number.isNaN(rel)) end = rel
+  }
+  return Math.max(0, Math.floor((end - start) / DAY_MS))
+}
+// Traffic-light tone for OPEN cases: green <= 15d, amber 16-30d, red > 30d.
+const caseAgeBadge = (days) =>
+  days <= CASE_AGE_GREEN_DAYS
+    ? 'bg-green-900/50 text-green-300 border border-green-700/50'
+    : days <= CASE_AGE_AMBER_DAYS
+      ? 'bg-yellow-900/50 text-yellow-300 border border-yellow-700/50'
+      : 'bg-red-900/50 text-red-300 border border-red-700/50'
+
 // Compact status-chip palettes for the new case-tracking columns.
 const GCC_BADGE = {
   0:   'bg-green-900/50 text-green-300 border border-green-700/50',
@@ -337,7 +363,7 @@ export default function Accidents() {
   const [records, setRecords]          = useState([])
   const [loading, setLoading]          = useState(true)
   const [error, setError]              = useState('')
-  const [showModal, setShowModal]      = useState(false)
+  const [showForm, setShowForm]      = useState(false)
   const [editId, setEditId]            = useState(null)
   const [saving, setSaving]            = useState(false)
   const [formError, setFormError]      = useState('')
@@ -355,6 +381,7 @@ export default function Accidents() {
   const [filterStage, setFilterStage]          = useState('')
   const [filterRepairType, setFilterRepairType] = useState('')
   const [filterFault, setFilterFault]          = useState('')
+  const [filterAge, setFilterAge]              = useState('') // '' | '0-15' | '16-30' | '30+' — open cases only
 
   // Row → dedicated detail page (`/accidents/:id`). The former inline modal +
   // companion approval panel now live on that route; the approval engine there
@@ -973,6 +1000,16 @@ export default function Accidents() {
     if (filterStage)    arr = arr.filter(r => r.current_status === filterStage || r.case_stage === filterStage)
     if (filterRepairType) arr = arr.filter(r => r.repair_type === filterRepairType)
     if (filterFault)    arr = arr.filter(r => r.fault_status === filterFault)
+    if (filterAge) {
+      arr = arr.filter(r => {
+        if (isReleasedOrClosed(r)) return false
+        const d = caseAgeDays(r)
+        if (d === null) return false
+        if (filterAge === '0-15')  return d <= CASE_AGE_GREEN_DAYS
+        if (filterAge === '16-30') return d > CASE_AGE_GREEN_DAYS && d <= CASE_AGE_AMBER_DAYS
+        return d > CASE_AGE_AMBER_DAYS // '30+'
+      })
+    }
     if (filterSeverity) arr = arr.filter(r => r.severity === filterSeverity)
     if (filterSite)     arr = arr.filter(r => r.site === filterSite)
     if (filterFrom)     arr = arr.filter(r => r.incident_date >= filterFrom)
@@ -985,14 +1022,15 @@ export default function Accidents() {
       )
     }
     return arr
-  }, [records, search, filterSite, filterSeverity, filterStatus, filterFrom, filterTo, statusFunnel, onlyPendingClosure, filterDelayed, filterStage, filterRepairType, filterFault])
+  }, [records, search, filterSite, filterSeverity, filterStatus, filterFrom, filterTo, statusFunnel, onlyPendingClosure, filterDelayed, filterStage, filterRepairType, filterFault, filterAge])
 
   function openAdd() {
     setForm(EMPTY_FORM)
     setEditId(null)
     setFormError('')
     setAssetQuery('')
-    setShowModal(true)
+    setShowForm(true)
+    window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
   function openEdit(row) {
@@ -1032,7 +1070,8 @@ export default function Accidents() {
     })
     setEditId(row.id)
     setFormError('')
-    setShowModal(true)
+    setShowForm(true)
+    window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
   function handlePhotoFiles(e) {
@@ -1064,7 +1103,9 @@ export default function Accidents() {
       location:              form.location || null,
       driver_name:           form.driver_name || null,
       description:           form.description || null,
-      accident_type:         toDbAccidentType(form.accident_type),  // label → chk_accident_type token (V222)
+      // label → chk_accident_type token (V222). Column is NOT NULL, so a blank
+      // selection persists as the vocabulary's 'other' bucket — never null.
+      accident_type:         toDbAccidentType(form.accident_type) || 'other',
       severity:              toDbSeverity(form.severity),
       status:                toDbStatus(form.status),
       damage_class:          form.damage_class || null,
@@ -1096,7 +1137,7 @@ export default function Accidents() {
       ? await accidentsApi.updateAccidentForPage(editId, payload)
       : await accidentsApi.createAccidentForPage(payload)
     if (err) { setFormError(err.message); setSaving(false); return }
-    setShowModal(false)
+    setShowForm(false)
     loadRecords()
     setSaving(false)
   }
@@ -1205,6 +1246,7 @@ export default function Accidents() {
     ['expected_release_date', 'Expected Release', r => r.expected_release_date],
     ['delayed', 'Delayed', r => isDelayed(r) ? 'Yes' : 'No'],
     ['delayed_days', 'Days Since Update', r => isReleasedOrClosed(r) ? '' : daysSinceUpdate(r)],
+    ['days_open', 'Days Open', r => { const d = caseAgeDays(r); return d === null ? '' : d }],
     ['damage_class', 'Damage Class', r => r.damage_class],
     ['fault_status', 'Fault Status', r => r.fault_status],
     ['najm_status', 'Najm', r => r.najm_status],
@@ -1230,7 +1272,7 @@ export default function Accidents() {
     'incident_date', 'asset_no', 'site', 'severity', 'case_state', 'status',
     'driver_name', 'fault_status', 'gcc_liability_ratio', 'repair_type',
     'insurer', 'claim_amount', 'claim_approved_amount', 'net_cost',
-    'expected_release_date', 'release_date', 'delayed',
+    'expected_release_date', 'release_date', 'days_open', 'delayed',
   ]
   const exportPdfCols = PDF_KEYS
     .map(key => { const f = EXPORT_FIELDS.find(x => x[0] === key); return f ? { key, header: f[1] } : null })
@@ -1253,7 +1295,7 @@ export default function Accidents() {
     'incident_date', 'asset_no', 'site', 'driver_name', 'case_state', 'status',
     'claim_status', 'insurer', 'policy_no', 'gcc_liability_ratio', 'fault_status',
     'claim_amount', 'claim_approved_amount', 'deductible', 'recovered_amount',
-    'net_cost', 'expected_release_date', 'delayed',
+    'net_cost', 'expected_release_date', 'days_open', 'delayed',
   ]
   const claimsCols = CLAIMS_KEYS
     .map(key => { const f = EXPORT_FIELDS.find(x => x[0] === key); return f ? { key, header: f[1] } : null })
@@ -1358,6 +1400,37 @@ export default function Accidents() {
                 </span>
               )}
             </div>
+          )
+        },
+      },
+      // How long the case has been running: incident_date → now for OPEN cases
+      // (traffic-light coded), incident_date → release_date for CLOSED ones
+      // (muted "total duration" tone). Sorts numerically; missing dates render
+      // "—" and sort last (accessor -1).
+      { id: 'days_open', header: 'Days Open', accessorFn: r => caseAgeDays(r) ?? -1, size: 110,
+        cell: ({ row }) => {
+          const r = row.original
+          const days = caseAgeDays(r)
+          if (days === null) return <span className="text-[var(--text-muted)] text-xs">—</span>
+          if (isReleasedOrClosed(r)) {
+            return (
+              <span
+                className={`badge text-[10px] whitespace-nowrap ${DIM_CHIP}`}
+                title={r.release_date
+                  ? 'Total case duration — incident date to release date'
+                  : 'Total case duration — incident date to today (closed, no release date recorded)'}
+              >
+                {days}d closed
+              </span>
+            )
+          }
+          return (
+            <span
+              className={`badge text-[10px] whitespace-nowrap flex items-center gap-1 w-fit ${caseAgeBadge(days)}`}
+              title={`Open for ${days} day${days === 1 ? '' : 's'} since the incident date`}
+            >
+              <Clock size={9} /> {days}d open
+            </span>
           )
         },
       },
@@ -1551,8 +1624,8 @@ export default function Accidents() {
         </button>
       </div>
 
-      {/* ===== INCIDENTS TAB ===== */}
-      {tab === 'incidents' && (
+      {/* ===== INCIDENTS TAB (hidden while the inline editor is open) ===== */}
+      {!showForm && tab === 'incidents' && (
         <>
           {/* Closures awaiting approval */}
           {pendingClosures > 0 && (
@@ -1728,6 +1801,12 @@ export default function Accidents() {
               <option value="">All Fault</option>
               {FAULT_OPTS.map(s => <option key={s} value={s}>{s}</option>)}
             </select>
+            <select className="input text-sm w-40" value={filterAge} onChange={e => setFilterAge(e.target.value)} title="How long open cases have been running (days since incident)">
+              <option value="">Any Days Open</option>
+              <option value="0-15">Open &le; {CASE_AGE_GREEN_DAYS}d</option>
+              <option value="16-30">Open {CASE_AGE_GREEN_DAYS + 1}&ndash;{CASE_AGE_AMBER_DAYS}d</option>
+              <option value="30+">Open &gt; {CASE_AGE_AMBER_DAYS}d</option>
+            </select>
             <input type="date" className="input text-sm w-36" value={filterFrom} onChange={e => setFilterFrom(e.target.value)} title="From date" />
             <input type="date" className="input text-sm w-36" value={filterTo} onChange={e => setFilterTo(e.target.value)} title="To date" />
             <button
@@ -1741,9 +1820,9 @@ export default function Accidents() {
             >
               <Clock size={13} /> Delayed only
             </button>
-            {(search || filterSite || filterSeverity || filterStatus || filterStage || filterRepairType || filterFault || filterFrom || filterTo || filterDelayed) && (
+            {(search || filterSite || filterSeverity || filterStatus || filterStage || filterRepairType || filterFault || filterAge || filterFrom || filterTo || filterDelayed) && (
               <button
-                onClick={() => { setSearch(''); setFilterSite(''); setFilterSeverity(''); setFilterStatus(''); setFilterStage(''); setFilterRepairType(''); setFilterFault(''); setFilterFrom(''); setFilterTo(''); setFilterDelayed(false) }}
+                onClick={() => { setSearch(''); setFilterSite(''); setFilterSeverity(''); setFilterStatus(''); setFilterStage(''); setFilterRepairType(''); setFilterFault(''); setFilterAge(''); setFilterFrom(''); setFilterTo(''); setFilterDelayed(false) }}
                 className="text-xs text-[var(--text-muted)] hover:text-[var(--text-primary)] px-2 flex items-center gap-1"
               >
                 <X size={12} /> Clear filters
@@ -1808,8 +1887,8 @@ export default function Accidents() {
         </>
       )}
 
-      {/* ===== ANALYTICS TAB ===== */}
-      {tab === 'analytics' && (
+      {/* ===== ANALYTICS TAB (hidden while the inline editor is open) ===== */}
+      {!showForm && tab === 'analytics' && (
         <div className="space-y-4">
           {/* KPI row */}
           <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
@@ -2116,8 +2195,8 @@ export default function Accidents() {
         </div>
       )}
 
-      {/* ===== REPORT BUILDER TAB ===== */}
-      {tab === 'builder' && (
+      {/* ===== REPORT BUILDER TAB (hidden while the inline editor is open) ===== */}
+      {!showForm && tab === 'builder' && (
         <Suspense fallback={<div className="card text-center py-16 text-[var(--text-muted)] text-sm">Loading report builder…</div>}>
           <AccidentReportBuilder
             records={records}
@@ -2127,30 +2206,41 @@ export default function Accidents() {
         </Suspense>
       )}
 
-      {/* Modal */}
-      {showModal && (
-        <div
-          className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 overflow-y-auto"
-          onClick={() => setShowModal(false)}
-        >
-          <div
-            className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl w-full max-w-3xl p-6 my-4 max-h-[92vh] overflow-y-auto"
-            onClick={e => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-semibold text-[var(--text-primary)]">
-                {editId ? 'Edit Incident' : 'New Incident'}
-              </h2>
-              <button onClick={() => setShowModal(false)} className="text-[var(--text-muted)] hover:text-[var(--text-primary)]">
-                <X size={18} />
-              </button>
+      {/* ── Inline incident editor ─────────────────────────────────────────────
+          Renders as a full-width card in the page flow (below the tabs); the
+          tab content hides while it is open (gated on !showForm above). This
+          replaced the old fixed-overlay modal — presentation change only. */}
+      {showForm && (
+        <div className="card">
+            <div className="flex items-center justify-between gap-3 mb-4 flex-wrap">
+              <div className="flex items-center gap-3 min-w-0">
+                <button
+                  type="button"
+                  onClick={() => setShowForm(false)}
+                  title="Back to incidents"
+                  className="text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"
+                >
+                  <ArrowLeft size={18} />
+                </button>
+                <h2 className="text-lg font-semibold text-[var(--text-primary)] truncate">
+                  {editId ? `Edit Incident${form.asset_no ? ` — ${form.asset_no}` : ''}` : 'New Incident'}
+                </h2>
+              </div>
+              <div className="flex items-center gap-2">
+                <button type="submit" form="accident-inline-form" disabled={saving} className="btn-primary flex items-center gap-2 text-sm disabled:opacity-50">
+                  <Save size={15} /> {saving ? 'Saving...' : 'Save'}
+                </button>
+                <button type="button" onClick={() => setShowForm(false)} title="Cancel" className="text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors">
+                  <X size={18} />
+                </button>
+              </div>
             </div>
 
             {formError && (
               <div className="bg-red-900/30 border border-red-700 text-red-300 rounded-lg px-4 py-2 mb-4 text-sm">{formError}</div>
             )}
 
-            <form onSubmit={handleSave} className="space-y-3">
+            <form id="accident-inline-form" onSubmit={handleSave} className="space-y-3">
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="label">Incident Date *</label>
@@ -2411,10 +2501,9 @@ export default function Accidents() {
                 <button type="submit" disabled={saving} className="btn-primary flex items-center gap-2 disabled:opacity-50">
                   <Save size={16} /> {saving ? 'Saving...' : 'Save'}
                 </button>
-                <button type="button" onClick={() => setShowModal(false)} className="btn-secondary">Cancel</button>
+                <button type="button" onClick={() => setShowForm(false)} className="btn-secondary">Cancel</button>
               </div>
             </form>
-          </div>
         </div>
       )}
 

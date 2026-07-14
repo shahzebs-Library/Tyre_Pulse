@@ -4,6 +4,7 @@ import {
   REPORT_LIBRARY, STARTER, makeBlock, buildReportContext, buildInsights,
   fmtCell, cellValue, caseAgeDays, isChartEmpty, isClosedRow, normalizeConfig,
   VALUE_LABELS_PLUGIN, makeValueLabelsPlugin, summarizeChartData,
+  PALETTES, PALETTE, styleChartData, chartWidthFraction, packChartRows,
 } from '../lib/accidentReport'
 
 const money = (v) => `$${Number(v)}`
@@ -297,6 +298,110 @@ describe('starter + library layouts', () => {
         if (b.type === 'table') b.columns.forEach((c) => expect(TABLE_COLS[c], `${pack.key} col ${c}`).toBeTruthy())
       }
     }
+  })
+})
+
+describe('per-chart formatting: palettes, styleChartData and label toggle', () => {
+  it('every palette has at least 6 valid dark-on-white hex colours; default reuses PALETTE', () => {
+    const keys = ['default', 'cool', 'warm', 'mono', 'contrast', 'pastel']
+    for (const k of keys) {
+      expect(Array.isArray(PALETTES[k]), k).toBe(true)
+      expect(PALETTES[k].length, k).toBeGreaterThanOrEqual(6)
+      PALETTES[k].forEach((c) => expect(c, `${k}:${c}`).toMatch(/^#[0-9a-f]{6}$/i))
+    }
+    expect(PALETTES.default).toBe(PALETTE)
+  })
+
+  it('chart block defaults carry the new formatting fields', () => {
+    const d = BLOCK_DEFAULTS.chart()
+    expect(d.width).toBe('full')
+    expect(d.showLabels).toBe(true)
+    expect(d.showBorders).toBe(false)
+    expect(d.palette).toBe('default')
+  })
+
+  it('styleChartData recolours per-dataset for bars and never mutates the input', () => {
+    const data = { labels: ['A', 'B', 'C'], datasets: [{ label: 'Incidents', data: [3, 2, 1], backgroundColor: '#ea580c', borderWidth: 3 }] }
+    const before = JSON.parse(JSON.stringify(data))
+    const styled = styleChartData(data, { chart: 'topAssets', palette: 'cool', showBorders: false })
+    // input untouched
+    expect(data).toEqual(before)
+    // output is a fresh object with the cool palette applied and no border
+    expect(styled).not.toBe(data)
+    expect(styled.datasets[0].backgroundColor).toBe(PALETTES.cool[0])
+    expect(styled.datasets[0].borderWidth).toBe(0)
+    // borders on -> 1.5
+    const bordered = styleChartData(data, { chart: 'topAssets', palette: 'cool', showBorders: true })
+    expect(bordered.datasets[0].borderWidth).toBe(1.5)
+  })
+
+  it('styleChartData recolours per-slice for doughnut/polar kinds', () => {
+    const data = { labels: ['X', 'Y', 'Z'], datasets: [{ data: [5, 3, 2], backgroundColor: ['#111', '#222', '#333'], borderWidth: 0 }] }
+    const styled = styleChartData(data, { chart: 'severity', palette: 'warm' })
+    expect(Array.isArray(styled.datasets[0].backgroundColor)).toBe(true)
+    expect(styled.datasets[0].backgroundColor).toEqual([PALETTES.warm[0], PALETTES.warm[1], PALETTES.warm[2]])
+  })
+
+  it('styleChartData keeps a line chart stroke and only outlines points on the border toggle', () => {
+    const data = { labels: ['Jan', 'Feb'], datasets: [{ label: 'Incidents', data: [1, 4], borderColor: '#ea580c', fill: true }] }
+    const styled = styleChartData(data, { chart: 'trend', palette: 'mono', showBorders: false })
+    // the line still has a visible stroke (borderWidth stays > 0)
+    expect(styled.datasets[0].borderWidth).toBeGreaterThan(0)
+    expect(styled.datasets[0].borderColor).toBe(PALETTES.mono[0])
+    // filled area uses an rgba tint of the palette colour
+    expect(String(styled.datasets[0].backgroundColor)).toMatch(/^rgba\(/)
+  })
+
+  it('styleChartData returns malformed/empty data unchanged', () => {
+    expect(styleChartData(null, {})).toBeNull()
+    const empty = { labels: [], datasets: [] }
+    expect(styleChartData(empty, { palette: 'warm' })).toBe(empty)
+    const noDs = { labels: ['A'], datasets: [] }
+    expect(styleChartData(noDs, {})).toBe(noDs)
+  })
+
+  it('value-labels plugin skips drawing when options.plugins.valueLabels.enabled === false', () => {
+    const calls = []
+    const ctx = { save() {}, restore() {}, fillText: (t) => calls.push(t), fillStyle: '', font: '' }
+    const chartOff = {
+      config: { type: 'bar', options: { plugins: { valueLabels: { enabled: false } } } },
+      ctx, options: {}, data: { labels: ['A'], datasets: [{ data: [3] }] },
+      isDatasetVisible: () => true, getDatasetMeta: () => ({ data: [{ x: 10, y: 10 }] }),
+    }
+    VALUE_LABELS_PLUGIN.afterDatasetsDraw(chartOff)
+    expect(calls).toHaveLength(0)
+    // enabled true (or absent) still draws
+    const chartOn = { ...chartOff, config: { type: 'bar', options: { plugins: { valueLabels: { enabled: true } } } } }
+    VALUE_LABELS_PLUGIN.afterDatasetsDraw(chartOn)
+    expect(calls).toContain('3')
+  })
+})
+
+describe('chart width fractions + row packing (full/half/third/quarter)', () => {
+  it('chartWidthFraction maps every supported width', () => {
+    expect(chartWidthFraction('full')).toBe(1)
+    expect(chartWidthFraction('half')).toBe(0.5)
+    expect(chartWidthFraction('third')).toBeCloseTo(1 / 3, 6)
+    expect(chartWidthFraction('quarter')).toBe(0.25)
+    expect(chartWidthFraction(undefined)).toBe(1) // default -> full
+  })
+
+  it('packChartRows fits 4 quarters per row and opens a new row past a full width', () => {
+    const q = (n) => Array.from({ length: n }, () => ({ width: 'quarter' }))
+    // four quarters == one full row
+    expect(packChartRows(q(4))).toHaveLength(1)
+    // five quarters -> 4 + 1
+    const five = packChartRows(q(5))
+    expect(five).toHaveLength(2)
+    expect(five[0]).toHaveLength(4)
+    expect(five[1]).toHaveLength(1)
+    // mixed: half + quarter + quarter = 1.0 (single row), next quarter starts a new row
+    const mixed = packChartRows([{ width: 'half' }, { width: 'quarter' }, { width: 'quarter' }, { width: 'quarter' }])
+    expect(mixed).toHaveLength(2)
+    expect(mixed[0]).toHaveLength(3)
+    expect(mixed[1]).toHaveLength(1)
+    // thirds still pack three-up
+    expect(packChartRows([{ width: 'third' }, { width: 'third' }, { width: 'third' }])).toHaveLength(1)
   })
 })
 

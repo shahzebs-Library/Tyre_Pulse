@@ -30,13 +30,19 @@ import {
   Plus, Image as ImageIcon, BarChart3, Type, Table2, SeparatorHorizontal,
   Trash2, ChevronUp, ChevronDown, Copy, FileText, Save, FolderOpen, X,
   LayoutGrid, Loader2, Sparkles, Settings2, Lightbulb, Minus, Search,
-  LayoutTemplate, CalendarClock, CheckCircle, AlertCircle, Info,
+  LayoutTemplate, CalendarClock, CheckCircle, AlertCircle, Info, Palette, Scissors,
 } from 'lucide-react'
 import {
   CHARTS, KPIS, TABLE_COLS, BLOCK_TYPES, CHART_OPTS,
   REPORT_LIBRARY, STARTER, makeBlock, buildReportContext, buildInsights,
   fmtCell, cellValue, isChartEmpty, normalizeConfig, VALUE_LABELS_PLUGIN,
 } from '../../lib/accidentReport'
+// Palette catalog + styling helper live in the shared engine (accidentReport.js,
+// authored alongside this file). Imported via namespace with safe fallbacks so a
+// preview render never breaks if the engine build lands a moment later; once the
+// engine exports are present they are always used verbatim (single source).
+import * as AccidentReportLib from '../../lib/accidentReport'
+import { useAuth } from '../../contexts/AuthContext'
 import { renderAccidentReportPdf } from '../../lib/accidentReportPdf'
 import { listTemplates, createTemplate, updateTemplate, deleteTemplate } from '../../lib/api/accidentReportTemplates'
 import { formatCurrencyCompact } from '../../lib/formatters'
@@ -52,16 +58,36 @@ const CHART_COMPONENT = {
   radar: Radar, polar: PolarArea, pareto: Bar, combo: Bar, waterfall: Bar,
 }
 
+// Palette catalog + chart-data styler resolved from the shared engine, with
+// conservative fallbacks (identity styler, single default palette) that keep the
+// preview alive if the engine export lands a moment after this component.
+const PALETTES = AccidentReportLib.PALETTES || {
+  default: ['#f97316', '#3b82f6', '#10b981', '#ef4444', '#8b5cf6', '#f59e0b'],
+}
+const styleChartData = typeof AccidentReportLib.styleChartData === 'function'
+  ? AccidentReportLib.styleChartData
+  : (data) => data
+
+const PALETTE_LABELS = {
+  default: 'Default', cool: 'Cool', warm: 'Warm', mono: 'Mono', contrast: 'Contrast', pastel: 'Pastel',
+}
+
 // Preview column width per chart-block width setting; non-chart + full charts take a whole row.
 const BLOCK_GUTTER = 16 // px, matches the flex gap between blocks
 const chartWidthStyle = (w) => {
   if (w === 'half') return { flexBasis: `calc(50% - ${BLOCK_GUTTER / 2}px)`, maxWidth: `calc(50% - ${BLOCK_GUTTER / 2}px)` }
   if (w === 'third') return { flexBasis: `calc(33.333% - ${(BLOCK_GUTTER * 2) / 3}px)`, maxWidth: `calc(33.333% - ${(BLOCK_GUTTER * 2) / 3}px)` }
+  if (w === 'quarter') return { flexBasis: `calc(25% - ${(BLOCK_GUTTER * 3) / 4}px)`, maxWidth: `calc(25% - ${(BLOCK_GUTTER * 3) / 4}px)` }
   return { flexBasis: '100%', maxWidth: '100%' }
 }
-const CHART_WIDTHS = [['full', 'Full'], ['half', 'Half'], ['third', 'Third']]
-// Compact preview heights so half/third charts read cleanly side by side.
-const CHART_PREVIEW_HEIGHT = { full: 240, half: 200, third: 168 }
+const CHART_WIDTHS = [['full', 'Full'], ['half', 'Half'], ['third', 'Third'], ['quarter', 'Quarter']]
+// Compact preview heights so half/third/quarter charts read cleanly side by side.
+const CHART_PREVIEW_HEIGHT = { full: 240, half: 200, third: 168, quarter: 150 }
+
+// A4 page geometry (mm). The preview sheet is scaled to its rendered width, so one
+// page's pixel height = (renderedWidthPx / pageWidthMm) * pageHeightMm — this makes
+// the page-end guides self-adjust to any responsive width.
+const A4 = { portrait: { w: 210, h: 297 }, landscape: { w: 297, h: 210 } }
 
 const BLOCK_ICONS = {
   header: ImageIcon, kpis: LayoutGrid, chart: BarChart3, insights: Lightbulb,
@@ -72,6 +98,10 @@ const LS_KEY = 'accidentReportBuilder.local.v1'
 
 export default function AccidentReportBuilder({ records = [], company = 'TyrePulse', currency = 'SAR' }) {
   const navigate = useNavigate()
+  const { profile } = useAuth() || {}
+  // Advanced chart formatting (data labels / borders / palettes) is an Admin and
+  // Super Admin capability only; everyone else still sees the styled charts.
+  const canFormat = profile?.is_super_admin === true || profile?.role === 'Admin'
   const claimsCtx = useMemo(() => buildReportContext(records, currency), [records, currency])
   const money = useCallback((v) => (v == null || v === '' ? 'N/A' : formatCurrencyCompact(v, currency)), [currency])
 
@@ -99,6 +129,10 @@ export default function AccidentReportBuilder({ records = [], company = 'TyrePul
 
   const chartRefs = useRef({})
   const endRef = useRef(null)
+  const paperRef = useRef(null)
+  // Estimated A4 page-break positions (px from the sheet top) drawn as guides so a
+  // designer can see where "one page ends and another begins" before exporting.
+  const [pageMarks, setPageMarks] = useState([])
 
   // Persist working draft locally so a refresh never loses layout work.
   useEffect(() => {
@@ -108,6 +142,29 @@ export default function AccidentReportBuilder({ records = [], company = 'TyrePul
   useEffect(() => { listTemplates().then(setTemplates).catch(() => setTemplates([])) }, [])
   useEffect(() => { if (!toast) return undefined; const t = setTimeout(() => setToast(null), 4000); return () => clearTimeout(t) }, [toast])
   useEffect(() => { if (!lastAdded) return undefined; const t = setTimeout(() => setLastAdded(null), 1800); return () => clearTimeout(t) }, [lastAdded])
+
+  // Measure the rendered sheet and derive page-end guide positions. Re-runs on any
+  // layout/size change (blocks, orientation, chart async paint, responsive width).
+  useEffect(() => {
+    const el = paperRef.current
+    if (!el || !blocks.length) { setPageMarks([]); return undefined }
+    const measure = () => {
+      const width = el.clientWidth
+      if (!width) return
+      const geo = A4[orientation === 'landscape' ? 'landscape' : 'portrait']
+      const pageH = (width / geo.w) * geo.h
+      const total = el.scrollHeight
+      if (!(pageH > 0) || total <= pageH) { setPageMarks([]); return }
+      const marks = []
+      for (let n = 1, y = pageH; y < total - 8 && n < 60; n += 1, y += pageH) marks.push({ n, y })
+      setPageMarks(marks)
+    }
+    measure()
+    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(measure) : null
+    ro?.observe(el)
+    window.addEventListener('resize', measure)
+    return () => { ro?.disconnect(); window.removeEventListener('resize', measure) }
+  }, [blocks, orientation])
 
   // ── Block ops ───────────────────────────────────────────────────────────────
   const addBlock = (type) => {
@@ -254,13 +311,13 @@ export default function AccidentReportBuilder({ records = [], company = 'TyrePul
         </div>
       ) : (
         <div className={`mx-auto w-full bg-white text-slate-800 rounded-xl shadow-2xl border border-black/10 transition-[max-width] duration-300 ease-in-out ${orientation === 'landscape' ? 'max-w-[1120px]' : 'max-w-[860px]'}`}>
-          <div className="p-6 sm:p-8 flex flex-wrap items-stretch" style={{ gap: BLOCK_GUTTER }}>
+          <div ref={paperRef} className="relative p-6 sm:p-8 flex flex-wrap items-stretch" style={{ gap: BLOCK_GUTTER }}>
             {blocks.map((b, i) => {
               const w = b.type === 'chart' ? (b.width || 'full') : 'full'
               return (
                 <div key={b.id} style={{ ...chartWidthStyle(w), minWidth: 0 }}>
                   <BlockEditor
-                    block={b} index={i} count={blocks.length}
+                    block={b} index={i} count={blocks.length} canFormat={canFormat}
                     ctx={claimsCtx} records={records} money={money} company={company}
                     chartRefs={chartRefs} highlight={lastAdded === b.id} orientation={orientation}
                     onPatch={patchBlock} onRemove={removeBlock} onDup={dupBlock} onMove={move}
@@ -269,6 +326,17 @@ export default function AccidentReportBuilder({ records = [], company = 'TyrePul
               )
             })}
             <div ref={endRef} style={{ flexBasis: '100%' }} />
+
+            {/* Page-end guides — approximate A4 boundaries, non-interactive overlay */}
+            {pageMarks.map((m) => (
+              <div key={m.n} className="pointer-events-none absolute left-0 right-0 z-20 flex items-center gap-2 px-6 sm:px-8 -translate-y-1/2" style={{ top: m.y }}>
+                <div className="flex-1 border-t-2 border-dashed border-rose-400/70" />
+                <span className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider text-rose-600 bg-white px-2 py-0.5 rounded-full border border-rose-200 whitespace-nowrap shadow-sm">
+                  <Scissors size={11} /> Page {m.n} ends | Page {m.n + 1}
+                </span>
+                <div className="flex-1 border-t-2 border-dashed border-rose-400/70" />
+              </div>
+            ))}
           </div>
         </div>
       )}
@@ -409,7 +477,7 @@ function LibraryModal({ templates, onApplyLibrary, onLoad, onDelete, onClose }) 
 }
 
 /* ── Per-block editor + WYSIWYG preview ──────────────────────────────────────── */
-function BlockEditor({ block: b, index, count, ctx, records, money, company, chartRefs, highlight, orientation, onPatch, onRemove, onDup, onMove }) {
+function BlockEditor({ block: b, index, count, ctx, records, money, company, chartRefs, highlight, orientation, canFormat, onPatch, onRemove, onDup, onMove }) {
   const [openCfg, setOpenCfg] = useState(false)
   const meta = BLOCK_TYPES[b.type] || { label: b.type }
   const Icon = BLOCK_ICONS[b.type] || LayoutGrid
@@ -426,7 +494,7 @@ function BlockEditor({ block: b, index, count, ctx, records, money, company, cha
         <IconBtn title="Remove" danger onClick={() => onRemove(b.id)}><Trash2 size={13} /></IconBtn>
       </div>
 
-      {openCfg && <BlockConfig block={b} onPatch={onPatch} />}
+      {openCfg && <BlockConfig block={b} onPatch={onPatch} canFormat={canFormat} />}
 
       <BlockPreview block={b} ctx={ctx} records={records} money={money} company={company} chartRefs={chartRefs} orientation={orientation} />
     </div>
@@ -444,7 +512,7 @@ function IconBtn({ children, onClick, title, danger, disabled, active }) {
 function Field({ label, children }) { return <label className="block"><span className="block text-[11px] font-medium text-slate-500 mb-1">{label}</span>{children}</label> }
 const INP = 'w-full rounded-md border border-slate-300 bg-white text-slate-800 text-sm px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-orange-400/40 focus:border-orange-400'
 
-function BlockConfig({ block: b, onPatch }) {
+function BlockConfig({ block: b, onPatch, canFormat }) {
   const set = (patch) => onPatch(b.id, patch)
   return (
     <div className="mb-3 p-3 rounded-lg bg-slate-50 border border-slate-200 space-y-3">
@@ -479,9 +547,46 @@ function BlockConfig({ block: b, onPatch }) {
                 >{label}</button>
               ) })}
             </div>
-            <span className="block text-[11px] text-slate-400 mt-1">Half and third widths pack multiple charts side by side per row.</span>
+            <span className="block text-[11px] text-slate-400 mt-1">Half, third and quarter widths pack 2, 3 or 4 charts side by side per row.</span>
           </Field>
           {CHARTS[b.chart]?.description && <p className="text-[11px] text-slate-400 sm:col-span-2">{CHARTS[b.chart].description}</p>}
+
+          {canFormat && (
+            <div className="sm:col-span-2 mt-1 pt-3 border-t border-slate-200 space-y-3">
+              <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                <Palette size={13} className="text-orange-500" /> Formatting (Admin only)
+              </p>
+              <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
+                <label className="flex items-center gap-2 text-sm text-slate-600">
+                  <input type="checkbox" checked={b.showLabels !== false} onChange={(e) => set({ showLabels: e.target.checked })} /> Data labels
+                </label>
+                <label className="flex items-center gap-2 text-sm text-slate-600">
+                  <input type="checkbox" checked={!!b.showBorders} onChange={(e) => set({ showBorders: e.target.checked })} /> Borders
+                </label>
+              </div>
+              <div>
+                <p className="text-[11px] font-medium text-slate-500 mb-1.5">Colour palette</p>
+                <div className="grid grid-cols-2 gap-1.5">
+                  {Object.entries(PALETTES).map(([key, colors]) => {
+                    const on = (b.palette || 'default') === key
+                    return (
+                      <button
+                        key={key} type="button" onClick={() => set({ palette: key })}
+                        className={`flex items-center gap-2 px-2 py-1.5 rounded-md border text-left transition-colors ${on ? 'border-orange-400 bg-orange-50 ring-1 ring-orange-300' : 'border-slate-300 bg-white hover:border-slate-400'}`}
+                      >
+                        <span className="flex items-center gap-0.5">
+                          {(Array.isArray(colors) ? colors : []).slice(0, 6).map((c, i) => (
+                            <span key={i} className="w-3 h-3 rounded-sm border border-black/10" style={{ background: c }} />
+                          ))}
+                        </span>
+                        <span className={`text-xs font-medium ${on ? 'text-orange-700' : 'text-slate-600'}`}>{PALETTE_LABELS[key] || key}</span>
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
       {b.type === 'insights' && (
@@ -548,9 +653,12 @@ function BlockPreview({ block: b, ctx, records, money, company, chartRefs, orien
   if (b.type === 'chart') {
     const def = CHARTS[b.chart]
     if (!def) return <Placeholder>Unknown chart.</Placeholder>
-    const data = def.build(ctx)
+    // Style the data by the block's palette + border choice, and honor the
+    // data-labels toggle — identical to the exported PDF so preview matches print.
+    const data = styleChartData(def.build(ctx), b)
     const Comp = CHART_COMPONENT[def.kind]
-    const opts = CHART_OPTS[def.kind]
+    const baseOpts = CHART_OPTS[def.kind] || {}
+    const opts = { ...baseOpts, plugins: { ...(baseOpts.plugins || {}), valueLabels: { enabled: b.showLabels !== false } } }
     const width = b.width || 'full'
     const baseH = b.height || CHART_PREVIEW_HEIGHT[width] || 240
     return (
@@ -620,7 +728,15 @@ function BlockPreview({ block: b, ctx, records, money, company, chartRefs, orien
       </div>
     )
   }
-  if (b.type === 'pagebreak') return <div className="flex items-center gap-2 text-slate-300"><div className="flex-1 border-t border-dashed border-slate-300" /><span className="text-[10px] uppercase tracking-wider">Page break</span><div className="flex-1 border-t border-dashed border-slate-300" /></div>
+  if (b.type === 'pagebreak') return (
+    <div className="flex items-center gap-2 py-1 text-amber-600">
+      <div className="flex-1 border-t-2 border-dashed border-amber-400" />
+      <span className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider bg-amber-50 border border-amber-300 rounded-full px-2 py-0.5 whitespace-nowrap">
+        <SeparatorHorizontal size={11} /> Manual page break | new page starts here
+      </span>
+      <div className="flex-1 border-t-2 border-dashed border-amber-400" />
+    </div>
+  )
   return null
 }
 

@@ -30,6 +30,7 @@ import {
   canonSeverity, canonStatus, canonAccidentType, toDbSeverity, toDbStatus, toDbAccidentType,
 } from '../lib/accidentVocab'
 import { makeValueLabelsPlugin, doughnutLegendCounts, summarizeChartData } from '../lib/accidentReport'
+import { captureChartOnPaper } from '../lib/chartCapture'
 
 ChartJS.register(
   CategoryScale, LinearScale, BarElement,
@@ -1054,18 +1055,19 @@ export default function Accidents() {
       const drawChartCell = (c, x, y, cw, ch) => {
         doc.setFont('helvetica', 'bold'); doc.setFontSize(8.5); doc.setTextColor(...INK)
         doc.text(c.title, x, y + 3.2, { maxWidth: cw })
-        // Dark panel behind the capture: the live canvases use the dark UI
-        // theme (light ticks/labels), which would vanish on white paper.
+        // White card behind the capture: charts are re-rendered on a paper theme
+        // (dark ink on white) so they print cleanly — no black background.
         const imgY = y + 5.2
         const imgH = ch - 11
-        doc.setFillColor(17, 24, 39)
-        doc.roundedRect(x, imgY, cw, imgH, 1.5, 1.5, 'F')
+        doc.setDrawColor(226, 232, 240); doc.setFillColor(255, 255, 255)
+        doc.roundedRect(x, imgY, cw, imgH, 1.5, 1.5, 'FD')
+        const img = captureChartOnPaper(c.chart) || c.chart.toBase64Image('image/png', 1)
         const iw0 = c.chart.width || c.chart.canvas.width
         const ih0 = c.chart.height || c.chart.canvas.height
-        const scale = Math.min((cw - 3) / iw0, (imgH - 3) / ih0)
+        const scale = Math.min((cw - 4) / iw0, (imgH - 4) / ih0)
         const iw = iw0 * scale
         const ih = ih0 * scale
-        doc.addImage(c.chart.toBase64Image('image/png', 1), 'PNG', x + (cw - iw) / 2, imgY + (imgH - ih) / 2, iw, ih)
+        doc.addImage(img, 'PNG', x + (cw - iw) / 2, imgY + (imgH - ih) / 2, iw, ih)
         const digest = summarizeChartData(c.data)
         doc.setFont('helvetica', 'normal'); doc.setFontSize(7.2); doc.setTextColor(...MUTED)
         doc.text(digest || 'No data in scope', x, y + ch - 1.6, { maxWidth: cw })

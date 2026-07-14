@@ -1,5 +1,6 @@
 import { X, Download } from 'lucide-react'
 import { AnimatePresence, motion } from 'framer-motion'
+import { downloadChartPng } from '../lib/chartCapture'
 
 const GRANULARITY_OPTIONS = ['Daily', 'Weekly', 'Monthly', 'Yearly']
 const MONTHS = [
@@ -54,13 +55,11 @@ export function ChartModal({
       : showGranularity && (granularity === 'Daily' || granularity === 'Monthly')
 
   function handleDownloadPng() {
+    // Re-renders the live chart on a white "paper" theme so the PNG never has a
+    // black/transparent background (see src/lib/chartCapture.js).
     if (!chartRef?.current) return
     try {
-      const url = chartRef.current.toBase64Image('image/png', 1.0)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = `${title || 'chart'}.png`
-      a.click()
+      downloadChartPng(chartRef.current, title || 'chart')
     } catch {
       // silently ignore if chart ref not ready
     }

@@ -15,6 +15,7 @@
 import {
   CHARTS, KPIS, TABLE_COLS, CHART_OPTS, CHART_JS_TYPE, VALUE_LABELS_PLUGIN,
   buildReportContext, buildInsights, fmtCell, cellValue, normalizeConfig, summarizeChartData,
+  styleChartData, chartWidthFraction,
 } from './accidentReport'
 import { formatCurrencyCompact } from './formatters'
 import { reportFileName, reportDateLabel } from './exportUtils'
@@ -23,7 +24,10 @@ import { reportFileName, reportDateLabel } from './exportUtils'
 async function renderOffscreenChart(block, ctx) {
   const def = CHARTS[block.chart]
   if (!def) return null
-  const data = def.build(ctx)
+  // Per-chart formatting: re-colour from the chosen palette + border toggle, and
+  // honour the data-label toggle via options.plugins.valueLabels.enabled (read by
+  // VALUE_LABELS_PLUGIN). Paper-theme option set is preserved by shallow merge.
+  const data = styleChartData(def.build(ctx), block)
   if (!data?.labels?.length) return null
   try {
     const { Chart, registerables } = await import('chart.js')
@@ -31,10 +35,16 @@ async function renderOffscreenChart(block, ctx) {
     const canvas = document.createElement('canvas')
     canvas.width = 900
     canvas.height = Math.max(240, Math.min(420, (block.height || 240) * 1.3))
+    const base = CHART_OPTS[def.kind]
+    const options = {
+      ...base,
+      responsive: false, animation: false, devicePixelRatio: 2,
+      plugins: { ...(base.plugins || {}), valueLabels: { enabled: block.showLabels !== false } },
+    }
     const chart = new Chart(canvas.getContext('2d'), {
       type: CHART_JS_TYPE[def.kind],
       data,
-      options: { ...CHART_OPTS[def.kind], responsive: false, animation: false, devicePixelRatio: 2 },
+      options,
       plugins: [VALUE_LABELS_PLUGIN],
     })
     const img = canvas.toDataURL('image/png')
@@ -78,8 +88,41 @@ export async function renderAccidentReportPdf({
   // Resolve one chart block to its rasterised image (live canvas override first,
   // else headless offscreen render). Returns null when the chart has no data.
   const imageForChart = async (b) => (chartImageFor && chartImageFor(b)) || await renderOffscreenChart(b, ctx)
-  const chartWidthFrac = (b) => (b.width === 'third' ? 1 / 3 : b.width === 'half' ? 0.5 : 1)
+  const chartWidthFrac = (b) => chartWidthFraction(b.width)
+  const isShrinkable = (b) => b && b.type === 'chart' && (b.width === 'half' || b.width === 'third' || b.width === 'quarter')
   const fullChartH = orientation === 'landscape' ? 95 : 80
+  const BOTTOM = PH - 14 // usable bottom edge (above the footer)
+
+  /**
+   * AUTO-FILL heuristic (deterministic, margin-safe): a chart / chart-row that is
+   * the LAST thing to fit on its page should grow to consume the otherwise-blank
+   * space so pages read full instead of top-loaded. `nextBlk` is the block that
+   * would follow; we treat this chart as "last on page" when there is no next
+   * block, the next block is a page break, or the next block's estimated height
+   * would not fit under `nextY`. Only then, and only when >40mm of blank remains,
+   * do we add (blank - 8mm) of height, clamped to a readable maximum so a chart
+   * never overflows the page or balloons absurdly.
+   */
+  const estimateBlockHeight = (blk) => {
+    if (!blk) return 0
+    switch (blk.type) {
+      case 'pagebreak': return PH
+      case 'header': return 34
+      case 'kpis': { const n = (blk.items || []).filter((k) => KPIS[k]).length; const perRow = orientation === 'landscape' ? 6 : 3; return Math.ceil(n / Math.max(1, perRow)) * 23 + 4 }
+      case 'chart': return isShrinkable(blk) ? 52 : fullChartH + 16
+      case 'insights': return 42
+      case 'text': return 24
+      case 'divider': return 9
+      case 'table': return 60
+      default: return 20
+    }
+  }
+  const grownHeight = (nextY, nextBlk, baseH, cap) => {
+    const lastOnPage = !nextBlk || nextBlk.type === 'pagebreak' || (nextY + estimateBlockHeight(nextBlk) > BOTTOM)
+    const blank = BOTTOM - nextY
+    if (lastOnPage && blank > 40) return Math.min(cap, baseH + (blank - 8))
+    return baseH
+  }
 
   /**
    * Draw a row of side-by-side charts that share a page row. `row` is 1..3 chart
@@ -88,7 +131,7 @@ export async function renderAccidentReportPdf({
    * so packed charts never overflow the page margins. Each keeps its title and the
    * numeric digest underneath. The whole row page-breaks together via `ensure`.
    */
-  const drawChartRow = async (row) => {
+  const drawChartRow = async (row, nextBlk) => {
     const avail = PW - MX * 2
     const gap = 4
     const n = row.length
@@ -99,8 +142,8 @@ export async function renderAccidentReportPdf({
     const widths = fracs.map((f) => (usable * f) / sumF)
     // Proportional height: preserve the full chart's aspect ratio (fullChartH/avail)
     // against the narrowest column so every chart in the row shares one aspect-true,
-    // readable height. Floored so thirds never collapse to an unreadable strip.
-    const rowH = Math.max(34, Math.round((Math.min(...widths)) * (fullChartH / avail)))
+    // readable height. Floored so thirds/quarters never collapse to an unreadable strip.
+    const baseRowH = Math.max(34, Math.round((Math.min(...widths)) * (fullChartH / avail)))
     const hasTitle = row.some((b) => (b.title || CHARTS[b.chart]?.label))
     const titleH = hasTitle ? 6 : 0
     // Pre-render every image so a page-break decision covers the whole row.
@@ -108,8 +151,12 @@ export async function renderAccidentReportPdf({
     const digests = row.map((b) => (CHARTS[b.chart] ? summarizeChartData(CHARTS[b.chart].build(ctx)) : ''))
     const anyDigest = digests.some((d, i) => imgs[i] && d)
     const digestH = anyDigest ? 5 : 0
-    ensure(titleH + rowH + 2 + digestH + 4)
+    ensure(titleH + baseRowH + 2 + digestH + 4)
     const rowY = y
+    // Auto-fill: grow the row when it is the last thing on this page (see grownHeight).
+    const nextY = rowY + titleH + baseRowH + 2 + digestH + 4
+    const rowCap = orientation === 'landscape' ? 150 : 135
+    const rowH = grownHeight(nextY, nextBlk, baseRowH, rowCap)
     let x = MX
     row.forEach((b, i) => {
       const cw = widths[i]
@@ -171,31 +218,38 @@ export async function renderAccidentReportPdf({
       // Half/third-width charts pack side by side: gather the run of consecutive
       // shrinkable chart blocks and lay them out in aspect-true rows. A full-width
       // chart (or any non-chart block) flushes the run and renders on its own line.
-      if (b.width === 'half' || b.width === 'third') {
+      if (isShrinkable(b)) {
         let row = []
         let acc = 0
-        while (bi < blocks.length && blocks[bi].type === 'chart' && (blocks[bi].width === 'half' || blocks[bi].width === 'third')) {
+        while (bi < blocks.length && isShrinkable(blocks[bi])) {
           const f = chartWidthFrac(blocks[bi])
-          if (row.length && acc + f > 1.0001) { await drawChartRow(row); row = []; acc = 0 }
+          // Opening a new row: the block that broke it (blocks[bi]) is this row's "next".
+          if (row.length && acc + f > 1.0001) { await drawChartRow(row, blocks[bi]); row = []; acc = 0 }
           row.push(blocks[bi]); acc += f
           bi++
         }
         bi-- // step back: outer loop will bi++ past the last consumed block
-        if (row.length) await drawChartRow(row)
+        if (row.length) await drawChartRow(row, blocks[bi + 1])
         continue
       }
 
       const img = await imageForChart(b)
       const cw = PW - MX * 2
-      const ch = Math.min(fullChartH, (b.height || 240) * 0.32)
-      ensure(ch + 10)
+      const baseCh = Math.min(fullChartH, (b.height || 240) * 0.32)
       const title = b.title || CHARTS[b.chart]?.label
+      const titleH = title ? 6 : 0
+      const digest = summarizeChartData(CHARTS[b.chart] ? CHARTS[b.chart].build(ctx) : null)
+      const digestH = (img && digest) ? 5 : 0
+      ensure(titleH + baseCh + 2 + digestH + 4)
+      // Auto-fill: grow a full-width chart that is the last block on its page so the
+      // page reads full rather than leaving a large blank strip below (see grownHeight).
+      const nextY = y + titleH + baseCh + 2 + digestH + 4
+      const ch = grownHeight(nextY, blocks[bi + 1], baseCh, fullChartH + 70)
       if (title) { doc.setFont('helvetica', 'bold'); doc.setFontSize(11); doc.setTextColor(15, 23, 42); doc.text(title, MX, y + 4); y += 6 }
       if (img) { try { doc.addImage(img, 'PNG', MX, y, cw, ch, undefined, 'FAST') } catch { /* ignore */ } }
       else { doc.setFontSize(9); doc.setTextColor(148, 163, 184); doc.text('No data for this chart in the covered period.', MX, y + 6) }
       y += ch + 2
       // Numeric digest under the chart so figures survive print/greyscale.
-      const digest = summarizeChartData(CHARTS[b.chart] ? CHARTS[b.chart].build(ctx) : null)
       if (img && digest) { doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); doc.setTextColor(100, 116, 139); doc.text(digest, MX, y + 3); y += 5 }
       y += 4
       continue

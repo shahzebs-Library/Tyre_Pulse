@@ -18,6 +18,91 @@ import { analyzeClaims, hasClaim } from './claimsAnalytics'
 export const PAPER = { ink: '#0f172a', muted: '#475569', grid: 'rgba(15,23,42,0.08)' }
 export const PALETTE = ['#ea580c', '#2563eb', '#16a34a', '#9333ea', '#dc2626', '#ca8a04', '#0891b2', '#64748b', '#db2777', '#4f46e5']
 
+// ── Per-chart colour palettes (all readable dark-on-white paper). Selected by a
+// chart block's `palette` key; 'default' re-uses the canonical PALETTE so every
+// existing chart is unchanged unless the user picks another combination. ──
+export const PALETTES = {
+  default: PALETTE,
+  cool: ['#2563eb', '#0891b2', '#0d9488', '#16a34a', '#4f46e5', '#7c3aed', '#0369a1', '#0f766e', '#1d4ed8', '#155e75'],
+  warm: ['#ea580c', '#dc2626', '#d97706', '#ca8a04', '#e11d48', '#f97316', '#b45309', '#9f1239', '#c2410c', '#a16207'],
+  mono: ['#0f172a', '#334155', '#475569', '#64748b', '#94a3b8', '#1e293b', '#0b1220', '#7c8ca3', '#52627a', '#293548'],
+  contrast: ['#dc2626', '#2563eb', '#16a34a', '#ca8a04', '#9333ea', '#0891b2', '#db2777', '#0f172a', '#ea580c', '#4f46e5'],
+  pastel: ['#f97316', '#60a5fa', '#34d399', '#a78bfa', '#f472b6', '#fbbf24', '#22d3ee', '#94a3b8', '#fb7185', '#818cf8'],
+}
+
+/** Convert a #rrggbb hex to an rgba() string (used for line-chart fills). */
+function hexToRgba(hex, alpha = 1) {
+  const m = /^#?([0-9a-f]{6})$/i.exec(String(hex || ''))
+  if (!m) return hex
+  const int = parseInt(m[1], 16)
+  return `rgba(${(int >> 16) & 255}, ${(int >> 8) & 255}, ${int & 255}, ${alpha})`
+}
+
+/**
+ * Pure re-styler: return a SHALLOW-CLONED chart.js data object with dataset
+ * colours re-mapped from the block's chosen palette + border toggle. Never
+ * mutates the input; malformed/empty data is returned unchanged.
+ *   doughnut / polar → one colour per slice (backgroundColor is an array)
+ *   bar              → one colour per dataset; borders = bar outline (0 or 1.5)
+ *   line             → keeps a visible line; borders toggle the point outlines
+ * Mixed charts (pareto/combo) resolve each dataset by its own `type`.
+ */
+export function styleChartData(data, block = {}) {
+  if (!data || !Array.isArray(data.labels) || !Array.isArray(data.datasets) || !data.datasets.length) return data
+  const palette = PALETTES[block.palette] || PALETTES.default
+  const borderW = block.showBorders ? 1.5 : 0
+  const kind = CHARTS[block.chart]?.kind
+  const perSlice = kind === 'doughnut' || kind === 'polar'
+  const datasets = data.datasets.map((ds, di) => {
+    const next = { ...ds }
+    if (perSlice) {
+      next.backgroundColor = data.labels.map((_, i) => palette[i % palette.length])
+      next.borderColor = '#ffffff'
+      next.borderWidth = block.showBorders ? 1.5 : (kind === 'polar' ? 1 : 0)
+      return next
+    }
+    const color = palette[di % palette.length]
+    const isLine = ds.type === 'line' || (!ds.type && kind === 'line')
+    if (isLine) {
+      // Lines always keep their stroke; the border toggle only outlines points.
+      next.borderColor = color
+      next.backgroundColor = ds.fill ? hexToRgba(color, 0.18) : color
+      next.borderWidth = ds.borderWidth != null ? ds.borderWidth : 2
+      next.pointBackgroundColor = color
+      next.pointBorderColor = block.showBorders ? '#ffffff' : color
+      next.pointBorderWidth = borderW
+    } else {
+      next.backgroundColor = color
+      next.borderColor = color
+      next.borderWidth = borderW
+    }
+    return next
+  })
+  return { ...data, datasets }
+}
+
+/** Width fraction of a chart block: full=1, half=1/2, third=1/3, quarter=1/4. */
+export const chartWidthFraction = (width) => (width === 'quarter' ? 0.25 : width === 'third' ? 1 / 3 : width === 'half' ? 0.5 : 1)
+
+/**
+ * Greedy row-packer for shrinkable chart blocks: accumulate consecutive blocks
+ * into rows whose width fractions sum to <= 1, opening a new row when the next
+ * block would push the accumulated fraction past a full row. Pure + deterministic
+ * so it is unit-tested and shared with the PDF renderer's inline layout.
+ */
+export function packChartRows(blocks) {
+  const rows = []
+  let row = []
+  let acc = 0
+  for (const b of blocks) {
+    const f = chartWidthFraction(b.width)
+    if (row.length && acc + f > 1.0001) { rows.push(row); row = []; acc = 0 }
+    row.push(b); acc += f
+  }
+  if (row.length) rows.push(row)
+  return rows
+}
+
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 export function last12() {
   const out = []
@@ -201,6 +286,9 @@ const fmtLabelNum = (v) => (Math.abs(v) >= 1000 ? Math.round(v).toLocaleString('
 export const makeValueLabelsPlugin = (color = PAPER.ink) => ({
   id: 'valueLabels',
   afterDatasetsDraw(chart) {
+    // Per-chart opt-out: preview + PDF set options.plugins.valueLabels.enabled
+    // from the block's showLabels toggle. Absent flag → draw (backwards compatible).
+    if (chart.config?.options?.plugins?.valueLabels?.enabled === false) return
     const type = chart.config?.type
     if (type !== 'bar' && type !== 'line' && type !== 'radar') return
     const { ctx } = chart
@@ -458,7 +546,7 @@ export const uid = () => `b${Date.now().toString(36)}${(_seq++).toString(36)}`
 export const BLOCK_TYPES = {
   header: { label: 'Header / Logo', description: 'Report title, subtitle, company logo and generation date.' },
   kpis: { label: 'KPI row', description: 'A row of headline metrics — pick from 12 accident & claims KPIs.' },
-  chart: { label: 'Chart', description: `One of ${Object.keys(CHARTS).length} live charts (doughnut, line, bar, Pareto, dual-axis combo, radar, polar, waterfall) at full, half or third width.` },
+  chart: { label: 'Chart', description: `One of ${Object.keys(CHARTS).length} live charts (doughnut, line, bar, Pareto, dual-axis combo, radar, polar, waterfall) at full, half, third or quarter width, with per-chart palette, data-label and border options.` },
   insights: { label: 'Key findings', description: 'Auto-generated bullet summary computed from the live data (peaks, exposure, delays).' },
   text: { label: 'Text section', description: 'Free-form commentary, findings or recommendations with an optional heading.' },
   table: { label: 'Detail table', description: 'Incident register — choose columns and a row cap.' },
@@ -469,7 +557,7 @@ export const BLOCK_TYPES = {
 export const BLOCK_DEFAULTS = {
   header: () => ({ logo: '', title: 'Accident & Claims Report', subtitle: '', showDate: true }),
   kpis: () => ({ items: ['total', 'open', 'repairCost', 'claimed', 'recovered', 'netExposure'] }),
-  chart: () => ({ chart: 'severity', title: '', height: 240, width: 'full' }),
+  chart: () => ({ chart: 'severity', title: '', height: 240, width: 'full', showLabels: true, showBorders: false, palette: 'default' }),
   insights: () => ({ title: 'Key findings' }),
   text: () => ({ title: '', body: '' }),
   table: () => ({ title: 'Incident detail', columns: ['incident_date', 'asset_no', 'site', 'severity', 'status', 'claim_amount'], limit: 25 }),

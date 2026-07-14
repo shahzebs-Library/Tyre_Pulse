@@ -273,7 +273,10 @@ export default function ExecutiveReport() {
   const [period,      setPeriod]      = useState({ mode: 'all' })
   const [exporting,   setExporting]   = useState(false)
   const [emailModalOpen, setEmailModalOpen] = useState(false)
-  const [reportMode,  setReportMode]  = useState(false)
+  // Executive reports open as a clean WHITE printed-document view by default
+  // (non-technical users expect white paper, not the dark dashboard). The
+  // header toggle still lets power users flip back to the dark dashboard.
+  const [reportMode,  setReportMode]  = useState(true)
 
   // Live chart -> white-paper PNG (falls back to the raw canvas), null-guarded for
   // pre-mount refs so export never throws before charts render.
@@ -1169,6 +1172,14 @@ export default function ExecutiveReport() {
           --text-primary:#0f172a; --text-secondary:#334155; --text-muted:#64748b; --text-dim:#94a3b8;
           background:#ffffff;
         }
+        /* Darken accent text so status colours stay legible on white paper
+           (the 400-weight tints are tuned for dark backgrounds). */
+        .tp-report-paper .text-emerald-400 { color:#047857 !important; }
+        .tp-report-paper .text-emerald-500 { color:#059669 !important; }
+        .tp-report-paper .text-amber-400   { color:#b45309 !important; }
+        .tp-report-paper .text-red-400     { color:#dc2626 !important; }
+        .tp-report-paper .text-orange-400  { color:#ea580c !important; }
+        .tp-report-paper .text-blue-400    { color:#2563eb !important; }
         @media print {
           .no-print { display: none !important; }
           .print-break { page-break-before: always; }

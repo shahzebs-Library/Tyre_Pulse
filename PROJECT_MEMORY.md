@@ -155,6 +155,41 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
   `accidentReportTemplates.api.test.js` (5), `accessGrants.test.js` (5), `accessEnforcement.test.js`
   (6). Full suite green (3477 at V225 merge).
 
+## Console-centralized administration (2026-07-14) — ALL admin/RBAC lives behind `/console`
+- **`/console` (src/console/*, isolated ConsoleAuthProvider + 2FA, super-admin only) is now THE home
+  for administration + access control.** Main-app admin routes REDIRECT into it: /master-access-control
+  ->/console/access, /users->/console/users, /admin->/console, /ai-administration->/console/ai-admin,
+  /org-hierarchy + /holding-company->/console/organisations, /sso-configuration->/console/security,
+  /permission-matrix->/console/access?tab=roles, /security-center->?tab=security. Those nav items were
+  REMOVED from `src/components/Layout.jsx` (single super-admin "System Console" link added). Do NOT
+  re-add admin pages to the main-app nav.
+- **`src/console/ConsoleAuthBridge.jsx`** renders the main-app `AuthContext.Provider` with a super-admin
+  value derived from `useConsoleAuth().admin`, so existing admin pages (PermissionMatrix, AccessGrantsManager,
+  CustomRolesManager, SecurityCenter, UserManagement, AiAdministration, SsoConfiguration) render VERBATIM
+  inside the console. `AuthContext` is now exported for this. New console routes are bridge-wrapped.
+- **Access Control hub = `src/console/pages/ConsoleAccessControl.jsx`** (/console/access, `?tab=`):
+  roles(PermissionMatrix) · custom(CustomRolesManager) · grants(AccessGrantsManager) · **effective** ·
+  **country** · **bulk** · **audit** · security(SecurityCenter). The 4 NEW viewers live in
+  `src/console/pages/access/` (EffectivePermissions/CountryScope/BulkOperations/AccessAudit). Do NOT
+  build a second access-control surface. ConsolePermissions.jsx is retired -> redirects to ?tab=roles
+  (single canonical role x module matrix).
+- **Advanced access model (V228-V231, applied live):**
+  - **V228 access_audit** = immutable trail; AFTER definer triggers on user_access_grants/module_permissions/
+    custom_roles/profiles(role,country,locked,approved,is_super_admin). Super-admin SELECT only; trigger-only writes.
+  - **V229 capability enforcement** = 3-arg `user_has_capability(uid,key,cap)` + `get_my_capabilities()`
+    + `app_user_can(key,cap)` (server resolver: Admin/super>revoke>role>grant>deny). Client side:
+    AuthContext loads get_my_capabilities + exposes `hasCapability(moduleKey,cap)`; pure
+    `resolveCapability` in permissionMatrix.js; `useCapability()` hook. RULE: capability gating is
+    VIEW-enforced server-side; create/edit/delete/export/approve are CLIENT-UI gates only until RLS
+    consumes app_user_can on pilot tables (backlog). Keep the honest "(stored only)" labels.
+  - **V230 admin RPCs** (super-admin gated, service `src/lib/api/adminAccess.js`): admin_get_effective_access,
+    admin_set_user_country, admin_bulk_set_grant, admin_bulk_set_role (LAST-super-admin lockout guard;
+    never demotes a super via role change), admin_clone_role, admin_list_access_audit.
+  - **V231** revokes default PUBLIC execute on all the above definer fns (authenticated keeps it; self-gates
+    are the real boundary). Next free migration **V232**.
+- ConsoleUsers.jsx gained: full role set (ACCESS_ROLES + live custom_roles), per-user country editor,
+  bulk role/grant, "Manage grants" link. Tests: capability.test.js (7). Full suite 3513 green at merge.
+
 ## Super-Admin Access Control + Per-User Grants (2026-07-14) — RBAC per-user overrides
 - **Canonical RBAC home = `src/pages/MasterAccessControl.jsx`, guarded by `SuperAdminRoute` (super
   admin ONLY).** Do NOT add a second access-control page. Tabs reuse existing components verbatim:

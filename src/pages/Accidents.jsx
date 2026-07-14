@@ -1,5 +1,7 @@
-import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef, lazy, Suspense } from 'react'
 import { useNavigate } from 'react-router-dom'
+
+const AccidentReportBuilder = lazy(() => import('../components/accidents/AccidentReportBuilder'))
 import { AlertOctagon, Plus, Search, X, Save, FileText, Download, BarChart2, Eye, Hourglass, Upload, CheckCircle2, AlertCircle, ChevronDown, Trash2, AlertTriangle, TrendingUp, Users, DollarSign, ShieldAlert, Lightbulb, ChevronRight, Clock, Wrench, ShieldCheck } from 'lucide-react'
 import { motion } from 'framer-motion'
 import PageHeader from '../components/ui/PageHeader'
@@ -1521,6 +1523,16 @@ export default function Accidents() {
         >
           <BarChart2 size={14} /> Analytics
         </button>
+        <button
+          onClick={() => setTab('builder')}
+          className={`px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-px flex items-center gap-1.5 ${
+            tab === 'builder'
+              ? 'border-green-500 text-green-400'
+              : 'border-transparent text-[var(--text-muted)] hover:text-[var(--text-primary)]'
+          }`}
+        >
+          <FileText size={14} /> Report Builder
+        </button>
       </div>
 
       {/* ===== INCIDENTS TAB ===== */}
@@ -2086,6 +2098,17 @@ export default function Accidents() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* ===== REPORT BUILDER TAB ===== */}
+      {tab === 'builder' && (
+        <Suspense fallback={<div className="card text-center py-16 text-[var(--text-muted)] text-sm">Loading report builder…</div>}>
+          <AccidentReportBuilder
+            records={records}
+            company={appSettings?.company_name || 'TyrePulse'}
+            currency={activeCurrency}
+          />
+        </Suspense>
       )}
 
       {/* Modal */}

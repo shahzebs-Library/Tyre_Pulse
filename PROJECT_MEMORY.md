@@ -55,12 +55,20 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
      `send-scheduled-reports` (deployed v10; branches on report_type==='claims', org-scoped manually).
 - `fetchReportRows` honours a per-dataset `orFilter` (claims uses it to fetch claim rows only).
 - Full suite 3384 green.
+- **Accident Report Builder (V221)** = `src/components/accidents/AccidentReportBuilder.jsx`
+  (a "Report Builder" tab inside `Accidents.jsx`). Block-based custom report designer:
+  header/logo, KPI rows, charts (reuses the accident + `analyzeClaims` datasets),
+  text, detail tables, page breaks — live WYSIWYG white-paper preview, branded PDF
+  export (charts rasterised from live canvases via `toBase64Image`, jspdf lazy-loaded),
+  and named saved layouts persisted to `accident_report_templates` (V221, org-isolated,
+  per-user ownership) via `src/lib/api/accidentReportTemplates.js`, with a localStorage
+  draft fallback. Do NOT duplicate — extend this for more block/chart types.
 - **V220 (applied): accident-delete FK fix.** Deleting an accident cascade-deletes
   accident_parts; the AFTER DELETE audit trigger `log_accident_part_change()` was
   inserting a `part_removed` row into `accident_audit_log` referencing the accident
   being deleted → FK violation. DELETE branch now guarded to only log when the parent
-  accident still exists (a real single-part removal). Latest migration is now **V220**;
-  next free is **V221**.
+  accident still exists (a real single-part removal). Latest migration is now **V221**
+  (accident_report_templates); next free is **V222**.
 
 ## Status (2026-07-13)
 - 88 modules ported from fleet_IQ/tyre_saas (batches 1–19). Migrations V127–V206.

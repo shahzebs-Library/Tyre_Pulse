@@ -13,9 +13,13 @@ const NAV = [
   { to: '/console/organisations', label: 'Organisations',  icon: Building2 },
   { to: '/console/users',        label: 'Users',          icon: Users },
   { to: '/console/permissions',  label: 'Permissions',    icon: Layers },
+  { to: '/console/access',       label: 'Access Control', icon: Lock },
   { to: '/console/ai-usage',     label: 'AI Usage',       icon: Zap },
+  { to: '/console/ai-admin',     label: 'AI Admin',       icon: Zap },
   { to: '/console/audit',        label: 'Audit Log',      icon: ClipboardList },
   { to: '/console/announcements',label: 'Announcements',  icon: Megaphone },
+  { to: '/console/security',     label: 'Security',       icon: AlertTriangle },
+  { to: '/console/system',       label: 'System',         icon: Settings2 },
   { to: '/console/config',       label: 'System Config',  icon: Settings2 },
 ]
 

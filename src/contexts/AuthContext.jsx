@@ -5,7 +5,9 @@ import { setMonitoringUser, clearMonitoringUser } from '../lib/monitoring'
 import { identifyUser, resetAnalyticsUser } from '../lib/analytics'
 import { audit } from '../lib/auditLogger'
 
-const AuthContext = createContext(null)
+// Exported so the isolated System Console can supply its own Provider value via
+// ConsoleAuthBridge, letting main-app admin pages render verbatim inside /console.
+export const AuthContext = createContext(null)
 
 /**
  * Pure permission-merge resolver — the single source of truth for how a role's

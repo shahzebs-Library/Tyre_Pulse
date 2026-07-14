@@ -279,14 +279,11 @@ const NAV_GROUPS = [
       { to: '/tco-calculator',    label: 'TCO Calculator',    icon: Calculator, roles: ANALYTICS_ROLES },
       { to: '/sla-dashboard',     label: 'SLA Dashboard',     icon: Target, adminOnly: A },
       { to: '/taas',              label: 'Tyre-as-a-Service', icon: Repeat, adminOnly: A },
-      { to: '/holding-company',   label: 'Holding Company',   icon: Building2, adminOnly: A },
-      { to: '/org-hierarchy',     label: 'Organization Hierarchy', icon: Network, adminOnly: true },
       { to: '/ops-intelligence',  label: 'Ops Intelligence',  icon: Siren, adminOnly: A },
       { to: '/display',           label: 'TV Display Mode',   icon: Radio, adminOnly: A },
       { to: '/ai-command-center', label: 'AI Command Center', icon: Bot, adminOnly: A },
       { to: '/knowledge-base',    label: 'Knowledge Base',    icon: Brain, adminOnly: A },
       { to: '/ai-cost-monitor',   label: 'AI Cost Monitor',   icon: BarChart, adminOnly: A },
-      { to: '/ai-administration', label: 'AI Administration', icon: Bot, adminOnly: true },
       { to: '/continuous-improvement', label: 'Continuous Improvement', icon: Zap, adminOnly: A },
       { to: '/executive-analytics', label: 'Executive Analytics', icon: TrendingUp, roles: ANALYTICS_ROLES },
       { to: '/report-center',     label: 'Report Center',     icon: ScrollText, roles: ANALYTICS_ROLES },
@@ -306,14 +303,11 @@ const NAV_GROUPS = [
   {
     label: 'Administration & Data',
     items: [
-      { to: '/admin',            label: 'Admin Console',      icon: LayoutGrid, adminOnly: true },
       { to: '/cleaning',         label: 'Data Cleaning',      icon: Wand2, roles: CLEANING_ROLES },
       { to: '/data-intake',      label: 'Data Intake Center', icon: Database },
       { to: '/upload-approvals', label: 'Upload Approvals',   icon: ClipboardList, roles: UPLOAD_ROLES },
       { to: '/custom-data',      label: 'Custom Data',        icon: Database },
       { to: '/audit',            label: 'Audit Trail',        icon: ClipboardList, roles: AUDIT_ROLES },
-      { to: '/master-access-control', label: 'Master Access Control', icon: ShieldCheck, adminOnly: true },
-      { to: '/security-center',  label: 'Security Center',    icon: ShieldCheck },
       { to: '/system-health',    label: 'System Health',      icon: HeartPulse, adminOnly: true },
       { to: '/tenant-health',    label: 'Usage & Adoption',   icon: BarChart, adminOnly: true },
       { to: '/billing',          label: 'Billing & Subscription', icon: CreditCard, adminOnly: true, flag: 'billing' },
@@ -324,7 +318,6 @@ const NAV_GROUPS = [
       { to: '/ocr-scanner',      label: 'OCR Scanner',        icon: ScanLine, adminOnly: A },
       { to: '/onboarding-wizard', label: 'Onboarding Wizard', icon: Rocket, adminOnly: true },
       { to: '/developer-portal', label: 'Developer Portal',   icon: Code, adminOnly: true },
-      { to: '/sso-configuration', label: 'SSO Configuration', icon: Lock, adminOnly: true },
       { to: '/help',             label: 'Help & Support',     icon: LifeBuoy },
       { to: '/settings',         label: 'Settings',           icon: Settings },
     ],
@@ -1024,8 +1017,9 @@ export default function Layout({ children }) {
             )
           })}
 
-          {/* Admin group */}
-          {profile?.role === 'Admin' && (() => {
+          {/* System Console entry (super-admins only) - single doorway to the
+              isolated /console admin + access-control surface. */}
+          {isSuperAdmin === true && (() => {
             const adminCollapsed = collapsedGroups.has('Admin')
             return (
               <div className="mb-0.5">
@@ -1053,8 +1047,8 @@ export default function Layout({ children }) {
                       style={{ overflow: 'hidden' }}
                     >
                       <NavLink
-                        to="/users"
-                        title={!sidebarOpen ? t('nav.items./users') : undefined}
+                        to="/console"
+                        title={!sidebarOpen ? 'System Console' : undefined}
                         className={({ isActive }) =>
                           `relative flex items-center gap-2.5 px-2.5 py-[6.5px] rounded-xl text-[12.5px] font-medium
                            transition-all duration-150 mb-px group
@@ -1073,9 +1067,9 @@ export default function Layout({ children }) {
                               <span className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-[52%] rounded-r-full"
                                 style={{ background: 'linear-gradient(180deg,#86efac,#22c55e)', boxShadow: '0 0 10px rgba(74,222,128,0.8)' }} />
                             )}
-                            <Users size={13.5} strokeWidth={isActive ? 2.2 : 1.8}
+                            <Shield size={13.5} strokeWidth={isActive ? 2.2 : 1.8}
                               className={`flex-shrink-0 ${isActive ? 'text-green-400' : 'text-gray-600 group-hover:text-gray-300'}`} />
-                            {sidebarOpen && <span className="truncate">{t('nav.items./users')}</span>}
+                            {sidebarOpen && <span className="truncate">System Console</span>}
                           </>
                         )}
                       </NavLink>

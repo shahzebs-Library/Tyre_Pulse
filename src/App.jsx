@@ -27,6 +27,27 @@ import ConsoleAIUsage from './console/pages/ConsoleAIUsage'
 import ConsoleAuditLog from './console/pages/ConsoleAuditLog'
 import ConsoleAnnouncements from './console/pages/ConsoleAnnouncements'
 import ConsoleSystemConfig from './console/pages/ConsoleSystemConfig'
+import ConsoleAuthBridge from './console/ConsoleAuthBridge'
+
+// Console admin pages built in parallel by other agents. Resolved via
+// import.meta.glob so this build succeeds whether or not the files exist yet: a
+// missing file is simply absent from the map and renders a placeholder; once
+// present it is code-split and bundled normally.
+const consolePageModules = import.meta.glob('./console/pages/*.jsx')
+function ConsoleModulePlaceholder({ label }) {
+  return <div className="p-8 text-sm text-gray-400">Loading {label} module</div>
+}
+function lazyConsolePage(name, label) {
+  return lazy(() => {
+    const importer = consolePageModules[`./console/pages/${name}.jsx`]
+    return importer
+      ? importer()
+      : Promise.resolve({ default: () => <ConsoleModulePlaceholder label={label} /> })
+  })
+}
+const ConsoleAccessControl = lazyConsolePage('ConsoleAccessControl', 'Access Control')
+const ConsoleSecurity      = lazyConsolePage('ConsoleSecurity', 'Security')
+const ConsoleSystem        = lazyConsolePage('ConsoleSystem', 'System')
 
 // ── Lazy page imports ─────────────────────────────────────────────────────
 const Login                  = lazy(() => import('./pages/Login'))
@@ -349,7 +370,7 @@ function MainApp() {
                       <Route path="/scheduled-reports"   element={<Safe><FlagRoute flag="report_scheduling"><ScheduledReports /></FlagRoute></Safe>} />
                       <Route path="/knowledge-base"       element={<Safe><FlagRoute flag="ai_tools"><KnowledgeBase /></FlagRoute></Safe>} />
                       <Route path="/ai-cost-monitor"      element={<Safe><FlagRoute flag="ai_tools"><AiCostMonitor /></FlagRoute></Safe>} />
-                      <Route path="/ai-administration"    element={<Safe><FlagRoute flag="ai_tools"><RoleRoute allowed={['Admin']}><AiAdministration /></RoleRoute></FlagRoute></Safe>} />
+                      <Route path="/ai-administration"    element={<Navigate to="/console/ai-admin" replace />} />
                       <Route path="/gate-pass"            element={<Safe><ModuleRoute moduleKey="gate_pass"><GatePass /></ModuleRoute></Safe>} />
                       <Route path="/serial-tracker"       element={<Safe><SerialTracker /></Safe>} />
                       <Route path="/work-orders"          element={<Safe><ModuleRoute moduleKey="work_orders"><WorkOrders /></ModuleRoute></Safe>} />
@@ -403,7 +424,7 @@ function MainApp() {
                       {/* ── Data ── */}
                       <Route path="/cleaning"    element={<Safe><ModuleRoute moduleKey="data_cleaning"><DataCleaning /></ModuleRoute></Safe>} />
                       <Route path="/audit"       element={<Safe><ModuleRoute moduleKey="audit_trail"><AuditTrail /></ModuleRoute></Safe>} />
-                      <Route path="/users"       element={<Safe><ModuleRoute moduleKey="user_management"><UserManagement /></ModuleRoute></Safe>} />
+                      <Route path="/users"       element={<Navigate to="/console/users" replace />} />
                       {/* ── Universal ── */}
                       <Route path="/upload"      element={<Safe><FlagRoute flag="data_intake"><UploadData /></FlagRoute></Safe>} />
                       <Route path="/data-intake" element={<Safe><FlagRoute flag="data_intake"><DataIntakeCenter /></FlagRoute></Safe>} />
@@ -505,21 +526,21 @@ function MainApp() {
                       <Route path="/ocr-scanner"           element={<Safe><OcrScanner /></Safe>} />
                       <Route path="/advanced-search"       element={<Safe><AdvancedSearch /></Safe>} />
                       <Route path="/onboarding-wizard"     element={<Safe><OnboardingWizard /></Safe>} />
-                      <Route path="/sso-configuration"     element={<Safe><SsoConfiguration /></Safe>} />
-                      <Route path="/admin"                 element={<Safe><RoleRoute allowed={['Admin']}><AdminConsole /></RoleRoute></Safe>} />
-                      <Route path="/holding-company"       element={<Safe><RoleRoute allowed={['Admin','Manager','Director']}><HoldingCompany /></RoleRoute></Safe>} />
-                      <Route path="/org-hierarchy"         element={<Safe><RoleRoute allowed={['Admin','Manager','Director']}><OrgHierarchy /></RoleRoute></Safe>} />
+                      <Route path="/sso-configuration"     element={<Navigate to="/console/security" replace />} />
+                      <Route path="/admin"                 element={<Navigate to="/console" replace />} />
+                      <Route path="/holding-company"       element={<Navigate to="/console/organisations" replace />} />
+                      <Route path="/org-hierarchy"         element={<Navigate to="/console/organisations" replace />} />
                       <Route path="/scan"        element={<Safe><TyreScan /></Safe>} />
                       <Route path="/qr-labels"   element={<Safe><QrLabels /></Safe>} />
                       {/* ── Platform (roadmap tranche: pages self-gate their roles) ── */}
                       <Route path="/report-builder"      element={<Safe><ReportBuilder /></Safe>} />
                       <Route path="/dashboard-builder"   element={<Safe><DashboardBuilder /></Safe>} />
                       <Route path="/executive-analytics" element={<Safe><ExecutiveAnalytics /></Safe>} />
-                      <Route path="/security-center"     element={<Navigate to="/master-access-control?tab=security" replace />} />
+                      <Route path="/security-center"     element={<Navigate to="/console/access?tab=security" replace />} />
                       <Route path="/system-health"       element={<Safe><SystemHealth /></Safe>} />
                       <Route path="/tenant-health"       element={<Safe><TenantHealth /></Safe>} />
-                      <Route path="/permission-matrix"   element={<Navigate to="/master-access-control?tab=permissions" replace />} />
-                      <Route path="/master-access-control" element={<Safe><SuperAdminRoute><MasterAccessControl /></SuperAdminRoute></Safe>} />
+                      <Route path="/permission-matrix"   element={<Navigate to="/console/access?tab=roles" replace />} />
+                      <Route path="/master-access-control" element={<Navigate to="/console/access" replace />} />
                       <Route path="/brand-assets"        element={<Safe><RoleRoute allowed={['Admin']}><BrandAssets /></RoleRoute></Safe>} />
                       {/* ── Commercial: Subscription & Billing (roadmap #6) ── */}
                       <Route path="/billing"             element={<Safe><FlagRoute flag="billing"><Billing /></FlagRoute></Safe>} />
@@ -582,6 +603,11 @@ export default function App() {
           <Route path="audit"         element={<ConsoleAuditLog />} />
           <Route path="announcements" element={<ConsoleAnnouncements />} />
           <Route path="config"        element={<ConsoleSystemConfig />} />
+          {/* Unified admin + access control hosted from the main app via ConsoleAuthBridge */}
+          <Route path="access"        element={<ConsoleAuthBridge><Suspense fallback={<ConsoleModulePlaceholder label="Access Control" />}><ConsoleAccessControl /></Suspense></ConsoleAuthBridge>} />
+          <Route path="ai-admin"      element={<ConsoleAuthBridge><Suspense fallback={<ConsoleModulePlaceholder label="AI Administration" />}><AiAdministration /></Suspense></ConsoleAuthBridge>} />
+          <Route path="security"      element={<ConsoleAuthBridge><Suspense fallback={<ConsoleModulePlaceholder label="Security" />}><ConsoleSecurity /></Suspense></ConsoleAuthBridge>} />
+          <Route path="system"        element={<ConsoleAuthBridge><Suspense fallback={<ConsoleModulePlaceholder label="System" />}><ConsoleSystem /></Suspense></ConsoleAuthBridge>} />
           <Route path="*"             element={<Navigate to="/console" replace />} />
         </Route>
 

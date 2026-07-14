@@ -73,7 +73,7 @@ const STATUSES = [
 const SEVERITIES = ['Minor', 'Major', 'Total Loss']
 
 // ── GCC accident case-management vocabularies (mirror AccidentDetailModal V219) ─
-const ACCIDENT_TYPE_OPTS   = ['Collision', 'Rollover', 'Rear-end', 'Side-swipe', 'Reversing', 'Fire', 'Vandalism', 'Weather', 'Other']
+const ACCIDENT_TYPE_OPTS   = ['Collision', 'Rollover', 'Rear-end', 'Side-swipe', 'Reversing', 'Fire', 'Vandalism', 'Weather', 'Tyre failure', 'Mechanical', 'Near miss', 'Property damage', 'Other']
 const DAMAGE_CLASS_OPTS    = ['Major', 'Minor']
 const FAULT_STATUS_OPTS    = ['Faulty', 'Non-faulty', 'Under review']
 const NAJM_STATUS_OPTS     = ['Najm report', 'No Najm']
@@ -133,6 +133,22 @@ const toDbStatus = (s) => {
     repair_in_progress: 'repair_in_progress', awaiting_parts: 'awaiting_parts',
     awaiting_approval: 'awaiting_approval', insurance_claim: 'insurance_claim', closed: 'closed',
   })[v] || 'reported'
+}
+// accidents.chk_accident_type (V222) stores lowercase snake_case tokens; the
+// form shows friendly labels. Map both directions like severity/status above —
+// saving a label verbatim ('Collision', 'Rear-end') violates the DB CHECK.
+const ACCIDENT_TYPE_LABEL = {
+  collision: 'Collision', rollover: 'Rollover', rear_end: 'Rear-end', side_swipe: 'Side-swipe',
+  reversing: 'Reversing', fire: 'Fire', vandalism: 'Vandalism', weather: 'Weather',
+  tyre_failure: 'Tyre failure', mechanical: 'Mechanical', near_miss: 'Near miss',
+  property_damage: 'Property damage', other: 'Other',
+}
+const accTypeKey = (s) => String(s || '').toLowerCase().trim().replace(/[\s-]+/g, '_')
+const canonAccidentType = (s) => ACCIDENT_TYPE_LABEL[accTypeKey(s)] || s || ''
+const toDbAccidentType = (s) => {
+  if (!s) return null
+  const k = accTypeKey(s)
+  return ACCIDENT_TYPE_LABEL[k] ? k : 'other'
 }
 const isClosed = (r) => r.closure_status === 'closed' || canonStatus(r.status) === 'Closed'
 
@@ -395,7 +411,7 @@ export default function Accidents() {
     // Canonicalise the DB's lowercase status/severity to display labels once, so
     // every label-based consumer (status/severity counts, funnel filters, charts,
     // badges) agrees. Save/edit paths convert back via toDb*/canon* helpers.
-    setRecords(rows.map(r => ({ ...r, status: canonStatus(r.status), severity: canonSeverity(r.severity) })))
+    setRecords(rows.map(r => ({ ...r, status: canonStatus(r.status), severity: canonSeverity(r.severity), accident_type: canonAccidentType(r.accident_type) })))
     setLoading(false)
   }, [activeCountry])
 
@@ -990,7 +1006,7 @@ export default function Accidents() {
       location:              row.location ?? '',
       driver_name:           row.driver_name ?? '',
       description:           row.description ?? '',
-      accident_type:         row.accident_type ?? '',
+      accident_type:         canonAccidentType(row.accident_type),
       severity:              canonSeverity(row.severity) || 'Minor',
       status:                canonStatus(row.status) || 'Reported',
       damage_class:          row.damage_class ?? '',
@@ -1048,7 +1064,7 @@ export default function Accidents() {
       location:              form.location || null,
       driver_name:           form.driver_name || null,
       description:           form.description || null,
-      accident_type:         form.accident_type || null,
+      accident_type:         toDbAccidentType(form.accident_type),  // label → chk_accident_type token (V222)
       severity:              toDbSeverity(form.severity),
       status:                toDbStatus(form.status),
       damage_class:          form.damage_class || null,

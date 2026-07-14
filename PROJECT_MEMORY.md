@@ -110,8 +110,19 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
   DELETE branch now guarded to only log when the parent accident still exists (a real single-part
   removal); an accident-level cascade skips the audit insert. Mirrors `log_accident_change()`.
 
+### V222 — chk_accident_type widened (applied 2026-07-14)
+- `accidents.chk_accident_type` originally allowed only collision/rollover/tyre_failure/
+  mechanical/near_miss/property_damage/other (lowercase), but the web form sent display labels
+  ('Collision', 'Rear-end', 'Fire'…) → EVERY non-empty accident type failed the CHECK and the
+  incident could not be saved. V222 widened the constraint to the union vocabulary (adds
+  rear_end/side_swipe/reversing/fire/vandalism/weather) and Accidents.jsx now maps label ↔ token
+  via `toDbAccidentType`/`canonAccidentType` (mirrors toDbSeverity/toDbStatus; canonicalised in
+  loadRecords + openEdit). RULE: accidents.severity/status/accident_type are CHECK-constrained
+  lowercase tokens — NEVER write a UI label straight to these columns; always go through the toDb* maps.
+
 ### Migrations & tests
-- Latest migration is **V221** (accident_report_templates); V220 = the delete-trigger fix; next free **V222**.
+- Latest migration is **V222** (chk_accident_type widened); V221 = accident_report_templates;
+  V220 = the delete-trigger fix; next free **V223**.
 - New tests: `claimsAnalytics.test.js` (12), `scheduledReports.api.test.js` (4),
   `accidentReportTemplates.api.test.js` (5). Full suite green.
 

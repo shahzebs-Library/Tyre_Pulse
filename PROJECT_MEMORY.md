@@ -25,7 +25,7 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
 | KPI scorecards / command center | `src/pages/KpiScorecard.jsx`, `src/pages/KpiCommandCenter.jsx` | |
 | Executive | `src/pages/ExecutiveReport.jsx`, `ExecutiveAnalytics.jsx` | |
 | Holding-company consolidation | `src/pages/HoldingCompany.jsx` + V201 RPCs | multi-subsidiary rollup |
-| Access control (RBAC + security) | `src/pages/MasterAccessControl.jsx` (tabs: PermissionMatrix + SecurityCenter) | §5 unified home; original routes /permission-matrix, /security-center still live |
+| Access control (RBAC + security) | `src/pages/MasterAccessControl.jsx` (tabs: Role Permissions=PermissionMatrix + Custom Roles + **Per-User Grants=AccessGrantsManager** + Security=SecurityCenter) | §5 unified home, now **SuperAdminRoute (super-admin only)**. `/permission-matrix` + `/security-center` now REDIRECT into this hub (`?tab=permissions` / `?tab=security`); their components live on only as tabs. Per-user grants = V225 (see below). |
 | Claims analytics (over accident-embedded claims) | **`src/pages/ClaimsSummary.jsx`** (/claims-summary) + engine **`src/lib/claimsAnalytics.js`** | Chart-rich dashboard over the `accidents` table's claim fields (claim/approved/deductible/recovered, insurer, gcc_liability_ratio, fault, Najm/Taqdeer, expected/actual release). `analyzeClaims()` is THE claims KPI source — reused by the page, its PDF/Excel export, and the scheduled `claims` report. DISTINCT from `/insurance-claims` (InsuranceClaims.jsx = manual CRUD ledger over the separate `insurance_claims` table). Do NOT merge or duplicate the two. |
 
 ## Architecture conventions
@@ -147,10 +147,74 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
   ×0.85 in landscape, "A4 · Portrait · 210×297mm" format hint under the orientation select.
 
 ### Migrations & tests
-- Latest migration is **V223** (accident_audit_log member read policy); V222 = chk_accident_type
-  widened; V221 = accident_report_templates; V220 = the delete-trigger fix; next free **V224**.
+- Latest migration is **V225** (user_access_grants + per-user capability helpers); V224 =
+  report_schedules super-admin/dedupe/org-scoped policies; V223 = accident_audit_log member read
+  policy; V222 = chk_accident_type widened; V221 = accident_report_templates; V220 = delete-trigger
+  fix; next free **V226**.
 - New tests: `claimsAnalytics.test.js` (12), `scheduledReports.api.test.js` (4),
-  `accidentReportTemplates.api.test.js` (5). Full suite green.
+  `accidentReportTemplates.api.test.js` (5), `accessGrants.test.js` (5), `accessEnforcement.test.js`
+  (6). Full suite green (3477 at V225 merge).
+
+## Super-Admin Access Control + Per-User Grants (2026-07-14) — RBAC per-user overrides
+- **Canonical RBAC home = `src/pages/MasterAccessControl.jsx`, guarded by `SuperAdminRoute` (super
+  admin ONLY).** Do NOT add a second access-control page. Tabs reuse existing components verbatim:
+  Role Permissions (PermissionMatrix), Custom Roles (CustomRolesManager), **Per-User Grants
+  (AccessGrantsManager, NEW)**, Security (SecurityCenter). `/permission-matrix` + `/security-center`
+  routes now `<Navigate replace>` into the hub tabs (components retained only as tabs).
+- **Per-user grant primitive (the "give ONE user more/less than their role" feature) — V225:**
+  table `user_access_grants` (user_id, module_key, capability default 'view', effect grant|revoke,
+  expires_at, note, granted_by, org_id). RESTRICTIVE org-isolation + super-admin-only writes.
+  SECURITY DEFINER helpers (do NOT re-implement the maths): `user_has_capability(uid,key)` reads ONLY
+  the grants table (no profiles ref -> no RLS recursion); `get_my_access_grants()` -> jsonb
+  `{module_key: 'grant'|'revoke'}` (revoke wins, expiry-aware); `set_user_access_grant(...)` /
+  `revoke_user_access_grant(id)` super-admin-only writers. Service = `src/lib/api/accessGrants.js`
+  (listUserGrants/getMyAccessGrants/setUserAccessGrant/revokeUserAccessGrant) + barrel.
+- **Enforcement is BOTH layers.** App: `AuthContext` selects `is_super_admin`, loads
+  `get_my_access_grants` (FAIL-CLOSED to `{}`, never blocks login), exposes
+  `isSuperAdmin`/`grantOverrides`/`grantedModules`, and resolves module access via pure exported
+  `resolvePermission({role,isSuperAdmin,roleAllows,override})` used inside `hasPermission` — precedence
+  **Admin/super > revoke > roleAllows > grant > deny**. `ModuleRoute`/nav inherit it; `Layout`
+  `shouldShowNavItem` shows a nav item when its `NAV_MODULE_KEY` is in `grantedModules` (additive,
+  before the adminOnly reject) and treats super-admins like Admin. `useCapabilities()` hook =
+  ergonomic reader. DB: RLS is the real boundary. RULE: capability enforcement today is VIEW-only
+  (module reach); create/edit/delete/export are STORED and honestly labelled "(stored only)" in the
+  UI — do NOT pretend they gate anything until per-table RLS consumes `user_has_capability`.
+- **Lockout guard**: only ONE Admin exists and it IS the super-admin, so the super-admin-only flip
+  locked out nobody. Never inline `select is_super_admin from profiles` in a grants policy (recursion);
+  always use the existing SECURITY DEFINER `is_super_admin()`/`app_current_org()`. `/console/*` is the
+  independent break-glass.
+
+## Scheduled Reports super-admin fix (2026-07-14) — V224
+- BUG "super admin cannot create/see scheduled reports": `report_schedules` write policies allowed only
+  role IN (Admin,Manager,Director) with a TAUTOLOGICAL org check and ignored `is_super_admin()`; two
+  overlapping policy sets existed (report_schedules_* AND rs_*). V224 consolidates to ONE clean set:
+  super-admin can always manage; else Admin/Manager/Director scoped to their OWN org (real org scope);
+  SELECT also lets super-admin see every org. Flag `report_scheduling` was already ON; the pipeline
+  (pg_cron + edge fn v13) was healthy — this was purely the RLS gap.
+
+## Report Builder auto-layout + per-chart formatting (2026-07-14)
+- **Chart styling model (shared engine, do NOT re-implement)**: `src/lib/accidentReport.js` exports
+  `PALETTES` (default/cool/warm/mono/contrast/pastel) + pure `styleChartData(data, block)` (applies
+  palette + border toggle per chart, non-mutating, empty->unchanged). `BLOCK_DEFAULTS.chart` gained
+  `showLabels`/`showBorders`/`palette`. VALUE_LABELS_PLUGIN skips when
+  `chart.config.options.plugins.valueLabels.enabled === false`. Both preview (AccidentReportBuilder)
+  and PDF (accidentReportPdf renderOffscreenChart) call styleChartData + set that enabled flag, so
+  preview == export.
+- **Quarter width + packing**: chart `width` now 'full'|'half'|'third'|'quarter'. `chartWidthFraction`
+  (1/0.5/1/3/0.25) + pure `packChartRows` (greedy, new row when accumulated fraction > 1.0) drive the
+  PDF row-packer (quarters = 4-up).
+- **Auto-fill (no empty PDF space)**: `grownHeight()` in accidentReportPdf.js grows a chart/row that is
+  LAST on its page to consume trailing blank (>40mm), clamped margin-safe, so pages read full not
+  top-loaded.
+- **Formatting panel is Admin/Super-Admin only**: AccidentReportBuilder derives
+  `canFormat = profile?.is_super_admin === true || profile?.role === 'Admin'` and only then renders the
+  Data labels / Borders / Palette-swatch controls; everyone still SEES the styled charts. Preview also
+  draws **page-end guide lines** (A4 geometry self-scaled to rendered width/orientation) + a distinct
+  manual page-break banner.
+- **Readable chart downloads**: NEW `src/lib/chartCapture.js` `captureChartOnPaper` re-renders
+  dark-theme charts on a white paper canvas so exported PNG/PDF charts are never black/transparent;
+  used by ChartModal "Download PNG" and the Accidents analytics PDF.
+- Tests: `accidentReport.test.js` now 36 (PALETTES/styleChartData/label-flag/quarter packing).
 
 ## Report Builder charts + Accidents form unification (2026-07-14)
 - **Advanced charts**: `src/lib/accidentReport.js` CHARTS now includes paretoAssets (kind 'pareto'),

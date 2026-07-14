@@ -23,6 +23,7 @@ import { useAuth } from '../contexts/AuthContext'
 import PageHeader from '../components/ui/PageHeader'
 import SectionTabs, { FLEET_TABS } from '../components/ui/SectionTabs'
 import { useLanguage } from '../contexts/LanguageContext'
+import { severityRank } from '../lib/severity'
 
 ChartJS.register(
   CategoryScale, LinearScale,
@@ -31,8 +32,6 @@ ChartJS.register(
 )
 
 // ── Risk helpers ──────────────────────────────────────────────────────────────
-const RISK_ORDER = { Critical: 0, High: 1, Medium: 2, Low: 3 }
-
 function riskColor(level) {
   return {
     Critical: '#dc2626',
@@ -53,11 +52,9 @@ function riskBgClass(level) {
 
 function worstRisk(tyres) {
   if (!tyres?.length) return null
-  return tyres.reduce((worst, t) => {
-    const a = RISK_ORDER[worst] ?? 99
-    const b = RISK_ORDER[t.risk_level] ?? 99
-    return b < a ? t.risk_level : worst
-  }, tyres[0].risk_level)
+  return tyres.reduce((worst, t) => (
+    severityRank(t.risk_level) > severityRank(worst) ? t.risk_level : worst
+  ), tyres[0].risk_level)
 }
 
 // ── Vehicle health score ──────────────────────────────────────────────────────

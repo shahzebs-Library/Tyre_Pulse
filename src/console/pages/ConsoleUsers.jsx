@@ -1,17 +1,36 @@
 import { useEffect, useState, useCallback } from 'react'
+import { useNavigate } from 'react-router-dom'
 import {
-  Users, Search, Filter, Lock, Unlock, CheckCircle, XCircle,
-  RefreshCw, Edit2, Key, AlertTriangle, ChevronDown, ChevronUp,
-  Mail, Shield, Building2, Calendar, MoreVertical, UserCheck, UserX,
+  Users, Search, Lock, Unlock, CheckCircle,
+  RefreshCw, Edit2, Key, AlertTriangle,
+  Shield, MoreVertical, UserCheck, UserX,
+  Globe, CheckSquare, Square, UserCog, ShieldCheck, X as XClose,
 } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { sanitizeSearchTerm } from '../../lib/searchFilter'
 import { useConsoleAuth } from '../ConsoleAuthContext'
+import { ACCESS_ROLES, ALL_MODULES } from '../../lib/moduleCatalog'
+import { listCustomRoles } from '../../lib/api/customRoles'
+import { setUserCountry, bulkSetRole, bulkSetGrant } from '../../lib/api/adminAccess'
 
-const ROLES = ['Admin', 'Manager', 'Director', 'Inspector', 'Tyre Man', 'Reporter', 'Driver', 'Integration Admin', 'Data Engineer', 'Automation']
+// Country scope vocabulary (GCC + Egypt). Any country already stored on a user
+// that is not in this list is still shown and preserved as an existing chip.
+const COUNTRIES = ['KSA', 'UAE', 'Egypt', 'Oman', 'Qatar', 'Bahrain', 'Kuwait']
+
+// Capability dimensions honoured by admin_bulk_set_grant. Only "view" is
+// enforced today; the rest are stored (labelled below).
+const CAPABILITIES = [
+  { key: 'view',    label: 'View (enforced)' },
+  { key: 'create',  label: 'Create (stored)' },
+  { key: 'edit',    label: 'Edit (stored)' },
+  { key: 'delete',  label: 'Delete (stored)' },
+  { key: 'export',  label: 'Export (stored)' },
+  { key: 'approve', label: 'Approve (stored)' },
+]
 
 export default function ConsoleUsers() {
   const { logAction, activeOrg } = useConsoleAuth()
+  const navigate = useNavigate()
   const [users, setUsers]     = useState([])
   const [total, setTotal]     = useState(0)
   const [loading, setLoading] = useState(true)
@@ -20,8 +39,8 @@ export default function ConsoleUsers() {
   const [filterStatus, setFilterStatus] = useState('')
   const [filterOrg, setFilterOrg]       = useState('')
   const [orgs, setOrgs]       = useState([])
+  const [roles, setRoles]     = useState(ACCESS_ROLES)
   const [page, setPage]       = useState(0)
-  const [expanded, setExpanded] = useState(null)
   const [actionMenu, setActionMenu] = useState(null)
   const [editModal, setEditModal] = useState(null)
   const [resetModal, setResetModal] = useState(null)
@@ -29,13 +48,26 @@ export default function ConsoleUsers() {
   const [saving, setSaving]   = useState(false)
   const [error, setError]     = useState(null)
   const [resetSent, setResetSent] = useState(false)
+
+  // Bulk selection + actions
+  const [selected, setSelected]   = useState(() => new Set())
+  const [bulkModal, setBulkModal] = useState(null)   // 'role' | 'grant' | null
+  const [bulkRole, setBulkRole]   = useState('')
+  const [bulkModule, setBulkModule] = useState(ALL_MODULES[0]?.key ?? '')
+  const [bulkCapability, setBulkCapability] = useState('view')
+  const [bulkEffect, setBulkEffect] = useState('grant')
+  const [bulkExpiry, setBulkExpiry] = useState('')
+  const [bulkBusy, setBulkBusy]     = useState(false)
+  const [bulkError, setBulkError]   = useState(null)
+  const [toast, setToast]           = useState(null)
+
   const PAGE_SIZE = 20
 
   const load = useCallback(async () => {
     setLoading(true)
     let q = supabase
       .from('profiles')
-      .select('id, full_name, email, role, site, approved, locked, created_at, organisation_id, is_super_admin', { count: 'exact' })
+      .select('id, full_name, email, role, site, country, approved, locked, created_at, organisation_id, is_super_admin', { count: 'exact' })
       .order('created_at', { ascending: false })
       .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1)
 
@@ -51,6 +83,7 @@ export default function ConsoleUsers() {
     const { data, count } = await q
     setUsers(data ?? [])
     setTotal(count ?? 0)
+    setSelected(new Set())
     setLoading(false)
   }, [activeOrg, filterOrg, filterRole, filterStatus, search, page])
 
@@ -60,6 +93,21 @@ export default function ConsoleUsers() {
     supabase.from('organisations').select('id, name').order('name')
       .then(({ data }) => setOrgs(data ?? []))
   }, [])
+
+  // Merge built-in roles with any custom roles so every assignable role appears.
+  useEffect(() => {
+    listCustomRoles()
+      .then(rows => {
+        const names = (rows ?? []).map(r => r.name).filter(Boolean)
+        setRoles([...ACCESS_ROLES, ...names.filter(n => !ACCESS_ROLES.includes(n))])
+      })
+      .catch(() => setRoles(ACCESS_ROLES))
+  }, [])
+
+  function flashToast(msg) {
+    setToast(msg)
+    setTimeout(() => setToast(null), 4000)
+  }
 
   async function toggleApprove(user) {
     const approved = !user.approved
@@ -75,14 +123,44 @@ export default function ConsoleUsers() {
     load()
   }
 
+  function openEdit(user) {
+    setError(null)
+    setEditForm({
+      full_name: user.full_name ?? '',
+      role: user.role ?? '',
+      site: user.site ?? '',
+      countries: Array.isArray(user.country) ? [...user.country] : (user.country ? [user.country] : []),
+    })
+    setEditModal(user)
+    setActionMenu(null)
+  }
+
+  function toggleEditCountry(c) {
+    setEditForm(f => {
+      const has = f.countries.includes(c)
+      return { ...f, countries: has ? f.countries.filter(x => x !== c) : [...f.countries, c] }
+    })
+  }
+
   async function handleEditSave() {
     setSaving(true); setError(null)
-    const { error: err } = await supabase.from('profiles')
-      .update({ role: editForm.role, site: editForm.site, full_name: editForm.full_name })
-      .eq('id', editModal.id)
-    if (err) { setError(err.message); setSaving(false); return }
-    await logAction('update_user', editModal.id, 'user', { role: editForm.role, email: editModal.email })
-    setSaving(false); setEditModal(null); load()
+    try {
+      const { error: err } = await supabase.from('profiles')
+        .update({ role: editForm.role, site: editForm.site, full_name: editForm.full_name })
+        .eq('id', editModal.id)
+      if (err) throw new Error(err.message)
+
+      // Country scope is a text[] behind super-admin RLS -> dedicated RPC.
+      await setUserCountry(editModal.id, editForm.countries)
+
+      await logAction('update_user', editModal.id, 'user', {
+        role: editForm.role, email: editModal.email, countries: editForm.countries,
+      })
+      setSaving(false); setEditModal(null); load()
+    } catch (e) {
+      setError(e?.message || 'Could not save user.')
+      setSaving(false)
+    }
   }
 
   async function sendPasswordReset(user) {
@@ -96,8 +174,75 @@ export default function ConsoleUsers() {
     }
   }
 
+  // ── Selection helpers ──────────────────────────────────────────────────────
+  function toggleSelect(id) {
+    setSelected(prev => {
+      const next = new Set(prev)
+      next.has(id) ? next.delete(id) : next.add(id)
+      return next
+    })
+  }
+  const allOnPageSelected = users.length > 0 && users.every(u => selected.has(u.id))
+  function toggleSelectAll() {
+    setSelected(prev => {
+      if (users.every(u => prev.has(u.id))) {
+        const next = new Set(prev)
+        users.forEach(u => next.delete(u.id))
+        return next
+      }
+      const next = new Set(prev)
+      users.forEach(u => next.add(u.id))
+      return next
+    })
+  }
+
+  function openBulk(type) {
+    setBulkError(null)
+    if (type === 'role') setBulkRole(roles[0] ?? '')
+    setBulkModal(type)
+  }
+
+  async function runBulkRole() {
+    if (!bulkRole) { setBulkError('Choose a role.'); return }
+    setBulkBusy(true); setBulkError(null)
+    try {
+      const ids = [...selected]
+      const n = await bulkSetRole(ids, bulkRole)
+      await logAction('bulk_set_role', null, 'user', { role: bulkRole, requested: ids.length, updated: n })
+      setBulkModal(null); setBulkBusy(false)
+      flashToast(`${n} updated to role "${bulkRole}"`)
+      load()
+    } catch (e) {
+      setBulkError(e?.message || 'Bulk role change failed.'); setBulkBusy(false)
+    }
+  }
+
+  async function runBulkGrant() {
+    if (!bulkModule) { setBulkError('Choose a module.'); return }
+    setBulkBusy(true); setBulkError(null)
+    try {
+      const ids = [...selected]
+      const n = await bulkSetGrant({
+        userIds: ids,
+        moduleKey: bulkModule,
+        capability: bulkCapability,
+        effect: bulkEffect,
+        expiresAt: bulkExpiry ? new Date(bulkExpiry).toISOString() : null,
+      })
+      await logAction('bulk_set_grant', null, 'user', {
+        module: bulkModule, capability: bulkCapability, effect: bulkEffect, updated: n,
+      })
+      setBulkModal(null); setBulkBusy(false)
+      flashToast(`${n} updated : ${bulkEffect} ${bulkCapability} on ${bulkModule}`)
+      load()
+    } catch (e) {
+      setBulkError(e?.message || 'Bulk grant failed.'); setBulkBusy(false)
+    }
+  }
+
   const pendingCount  = users.filter(u => !u.approved && !u.locked).length
   const lockedCount   = users.filter(u => u.locked).length
+  const moduleLabel = (k) => ALL_MODULES.find(m => m.key === k)?.label ?? k
 
   return (
     <div className="space-y-5 max-w-7xl" onClick={() => setActionMenu(null)}>
@@ -106,7 +251,7 @@ export default function ConsoleUsers() {
         <div>
           <h1 className="text-xl font-bold text-white">Users</h1>
           <p className="text-sm text-gray-500 mt-0.5">
-            {total} users · {pendingCount} pending · {lockedCount} locked
+            {total} users : {pendingCount} pending : {lockedCount} locked
           </p>
         </div>
         <button onClick={load} disabled={loading}
@@ -144,7 +289,7 @@ export default function ConsoleUsers() {
         <select value={filterRole} onChange={e => { setFilterRole(e.target.value); setPage(0) }}
           className="h-9 bg-gray-800 border border-gray-700 rounded-lg px-3 text-xs text-gray-300 focus:outline-none focus:border-orange-500">
           <option value="">All Roles</option>
-          {ROLES.map(r => <option key={r} value={r}>{r}</option>)}
+          {roles.map(r => <option key={r} value={r}>{r}</option>)}
         </select>
         <select value={filterStatus} onChange={e => { setFilterStatus(e.target.value); setPage(0) }}
           className="h-9 bg-gray-800 border border-gray-700 rounded-lg px-3 text-xs text-gray-300 focus:outline-none focus:border-orange-500">
@@ -168,6 +313,23 @@ export default function ConsoleUsers() {
         )}
       </div>
 
+      {/* Bulk action bar */}
+      {selected.size > 0 && (
+        <div className="flex flex-wrap items-center gap-3 px-4 py-3 rounded-xl bg-orange-950/30 border border-orange-700/40">
+          <span className="text-xs text-orange-300 font-semibold">{selected.size} selected</span>
+          <button onClick={() => openBulk('role')}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gray-800 border border-gray-700 text-xs text-gray-200 hover:text-white transition-colors">
+            <UserCog size={12} /> Set Role
+          </button>
+          <button onClick={() => openBulk('grant')}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gray-800 border border-gray-700 text-xs text-gray-200 hover:text-white transition-colors">
+            <ShieldCheck size={12} /> Grant / Revoke Module
+          </button>
+          <button onClick={() => setSelected(new Set())}
+            className="ml-auto text-xs text-gray-400 hover:text-white transition-colors">Clear selection</button>
+        </div>
+      )}
+
       {/* Table */}
       {loading ? (
         <div className="flex items-center justify-center h-48">
@@ -183,8 +345,15 @@ export default function ConsoleUsers() {
           <table className="w-full text-xs">
             <thead>
               <tr className="border-b border-gray-800 bg-gray-900/60">
+                <th className="px-4 py-3 w-10">
+                  <button onClick={toggleSelectAll} className="text-gray-500 hover:text-orange-400 transition-colors"
+                    title={allOnPageSelected ? 'Clear page' : 'Select page'}>
+                    {allOnPageSelected ? <CheckSquare size={15} className="text-orange-400" /> : <Square size={15} />}
+                  </button>
+                </th>
                 <th className="text-left px-4 py-3 text-gray-500 font-semibold uppercase tracking-wider">User</th>
                 <th className="text-left px-4 py-3 text-gray-500 font-semibold uppercase tracking-wider">Role</th>
+                <th className="text-left px-4 py-3 text-gray-500 font-semibold uppercase tracking-wider">Countries</th>
                 <th className="text-left px-4 py-3 text-gray-500 font-semibold uppercase tracking-wider">Site</th>
                 <th className="text-left px-4 py-3 text-gray-500 font-semibold uppercase tracking-wider">Status</th>
                 <th className="text-left px-4 py-3 text-gray-500 font-semibold uppercase tracking-wider">Joined</th>
@@ -192,13 +361,22 @@ export default function ConsoleUsers() {
               </tr>
             </thead>
             <tbody>
-              {users.map(user => (
-                <>
+              {users.map(user => {
+                const isSel = selected.has(user.id)
+                const countries = Array.isArray(user.country) ? user.country : (user.country ? [user.country] : [])
+                return (
                   <tr key={user.id}
                     className={`border-b border-gray-800/60 hover:bg-gray-800/30 transition-colors ${
+                      isSel ? 'bg-orange-950/20' :
                       !user.approved && !user.locked ? 'bg-yellow-950/10' :
                       user.locked ? 'bg-red-950/10' : ''
                     }`}>
+                    <td className="px-4 py-3">
+                      <button onClick={() => toggleSelect(user.id)}
+                        className="text-gray-500 hover:text-orange-400 transition-colors">
+                        {isSel ? <CheckSquare size={15} className="text-orange-400" /> : <Square size={15} />}
+                      </button>
+                    </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2.5">
                         <div className="w-8 h-8 rounded-full bg-gray-700 flex items-center justify-center text-xs font-bold text-gray-300 flex-shrink-0">
@@ -206,17 +384,28 @@ export default function ConsoleUsers() {
                         </div>
                         <div className="min-w-0">
                           <div className="flex items-center gap-1.5">
-                            <p className="font-semibold text-white truncate">{user.full_name ?? '-'}</p>
+                            <p className="font-semibold text-white truncate">{user.full_name ?? 'N/A'}</p>
                             {user.is_super_admin && <Shield size={10} className="text-orange-400 flex-shrink-0" />}
                           </div>
-                          <p className="text-gray-500 truncate">{user.email ?? '-'}</p>
+                          <p className="text-gray-500 truncate">{user.email ?? 'N/A'}</p>
                         </div>
                       </div>
                     </td>
                     <td className="px-4 py-3">
                       <RoleBadge role={user.role} />
                     </td>
-                    <td className="px-4 py-3 text-gray-400">{user.site ?? '-'}</td>
+                    <td className="px-4 py-3">
+                      {countries.length === 0
+                        ? <span className="text-gray-600">All</span>
+                        : (
+                          <div className="flex flex-wrap gap-1">
+                            {countries.map(c => (
+                              <span key={c} className="text-[10px] px-1.5 py-0.5 rounded bg-gray-800 border border-gray-700 text-gray-300">{c}</span>
+                            ))}
+                          </div>
+                        )}
+                    </td>
+                    <td className="px-4 py-3 text-gray-400">{user.site ?? 'N/A'}</td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-1.5 flex-wrap">
                         {user.locked
@@ -228,29 +417,23 @@ export default function ConsoleUsers() {
                       </div>
                     </td>
                     <td className="px-4 py-3 text-gray-500">
-                      {user.created_at ? new Date(user.created_at).toLocaleDateString() : '-'}
+                      {user.created_at ? new Date(user.created_at).toLocaleDateString() : 'N/A'}
                     </td>
                     <td className="px-4 py-3">
                       <div className="relative flex items-center justify-end gap-1" onClick={e => e.stopPropagation()}>
-                        {/* Quick actions */}
                         {!user.approved && !user.locked && (
                           <button onClick={() => toggleApprove(user)}
                             className="flex items-center gap-1 px-2 py-1 rounded bg-green-900/40 text-green-400 hover:bg-green-900/60 text-[10px] font-semibold transition-colors border border-green-700/40">
                             <UserCheck size={10} /> Approve
                           </button>
                         )}
-                        <button onClick={() => {
-                          setActionMenu(actionMenu === user.id ? null : user.id)
-                        }}
+                        <button onClick={() => setActionMenu(actionMenu === user.id ? null : user.id)}
                           className="p-1.5 rounded hover:bg-gray-700 text-gray-500 hover:text-gray-300 transition-colors">
                           <MoreVertical size={14} />
                         </button>
                         {actionMenu === user.id && (
-                          <div className="absolute right-0 top-full mt-1 w-44 bg-gray-800 border border-gray-700 rounded-xl shadow-2xl z-20 py-1">
-                            <MenuItem icon={Edit2} label="Edit User" onClick={() => {
-                              setEditForm({ full_name: user.full_name ?? '', role: user.role ?? '', site: user.site ?? '' })
-                              setEditModal(user); setActionMenu(null)
-                            }} />
+                          <div className="absolute right-0 top-full mt-1 w-48 bg-gray-800 border border-gray-700 rounded-xl shadow-2xl z-20 py-1">
+                            <MenuItem icon={Edit2} label="Edit User" onClick={() => openEdit(user)} />
                             <MenuItem icon={user.approved ? UserX : UserCheck}
                               label={user.approved ? 'Revoke Approval' : 'Approve User'}
                               onClick={() => { toggleApprove(user); setActionMenu(null) }} />
@@ -260,29 +443,31 @@ export default function ConsoleUsers() {
                               danger={!user.locked} />
                             <MenuItem icon={Key} label="Reset Password"
                               onClick={() => { setResetModal(user); setResetSent(false); setActionMenu(null) }} />
+                            <MenuItem icon={ShieldCheck} label="Manage grants"
+                              onClick={() => { setActionMenu(null); navigate('/console/access?tab=grants') }} />
                           </div>
                         )}
                       </div>
                     </td>
                   </tr>
-                </>
-              ))}
+                )
+              })}
             </tbody>
           </table>
           {/* Pagination */}
           {total > PAGE_SIZE && (
             <div className="flex items-center justify-between px-4 py-3 border-t border-gray-800 bg-gray-900/30">
               <p className="text-xs text-gray-500">
-                Showing {page * PAGE_SIZE + 1}-{Math.min((page + 1) * PAGE_SIZE, total)} of {total}
+                Showing {page * PAGE_SIZE + 1} to {Math.min((page + 1) * PAGE_SIZE, total)} of {total}
               </p>
               <div className="flex gap-2">
                 <button onClick={() => setPage(p => Math.max(0, p - 1))} disabled={page === 0}
                   className="px-3 py-1 rounded-lg text-xs bg-gray-800 text-gray-400 hover:text-white disabled:opacity-40 transition-colors border border-gray-700">
-                  ← Prev
+                  Prev
                 </button>
                 <button onClick={() => setPage(p => p + 1)} disabled={(page + 1) * PAGE_SIZE >= total}
                   className="px-3 py-1 rounded-lg text-xs bg-gray-800 text-gray-400 hover:text-white disabled:opacity-40 transition-colors border border-gray-700">
-                  Next →
+                  Next
                 </button>
               </div>
             </div>
@@ -293,26 +478,44 @@ export default function ConsoleUsers() {
       {/* Edit user modal */}
       {editModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
-          <div className="w-full max-w-md bg-gray-900 border border-gray-700 rounded-2xl shadow-2xl">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-800">
+          <div className="w-full max-w-md bg-gray-900 border border-gray-700 rounded-2xl shadow-2xl max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-800 sticky top-0 bg-gray-900">
               <h2 className="text-sm font-bold text-white">Edit User</h2>
-              <button onClick={() => setEditModal(null)} className="text-gray-500 hover:text-gray-300"><XIcon /></button>
+              <button onClick={() => setEditModal(null)} className="text-gray-500 hover:text-gray-300"><XClose size={16} /></button>
             </div>
             <div className="px-6 py-5 space-y-4">
               {error && <ErrBox msg={error} />}
               <Field label="Full Name">
                 <input value={editForm.full_name} onChange={e => setEditForm(f => ({ ...f, full_name: e.target.value }))}
-                  className="input-dark" />
+                  className="input-dark w-full h-9 bg-gray-800 border border-gray-700 rounded-lg px-3 text-xs text-white focus:outline-none focus:border-orange-500" />
               </Field>
               <Field label="Role">
                 <select value={editForm.role} onChange={e => setEditForm(f => ({ ...f, role: e.target.value }))}
-                  className="input-dark">
-                  {ROLES.map(r => <option key={r} value={r}>{r}</option>)}
+                  className="input-dark w-full h-9 bg-gray-800 border border-gray-700 rounded-lg px-3 text-xs text-white focus:outline-none focus:border-orange-500">
+                  <option value="">N/A</option>
+                  {roles.map(r => <option key={r} value={r}>{r}</option>)}
                 </select>
               </Field>
               <Field label="Site / Location">
                 <input value={editForm.site} onChange={e => setEditForm(f => ({ ...f, site: e.target.value }))}
-                  className="input-dark" placeholder="e.g. Depot A" />
+                  className="input-dark w-full h-9 bg-gray-800 border border-gray-700 rounded-lg px-3 text-xs text-white focus:outline-none focus:border-orange-500" placeholder="e.g. Depot A" />
+              </Field>
+              <Field label={<span className="flex items-center gap-1.5"><Globe size={11} /> Country Scope</span>}>
+                <div className="flex flex-wrap gap-1.5">
+                  {[...new Set([...COUNTRIES, ...editForm.countries])].map(c => {
+                    const on = editForm.countries.includes(c)
+                    return (
+                      <button key={c} type="button" onClick={() => toggleEditCountry(c)}
+                        className={`text-[11px] px-2.5 py-1 rounded-full border transition-colors ${
+                          on ? 'bg-orange-500/20 border-orange-500/50 text-orange-200'
+                             : 'bg-gray-800 border-gray-700 text-gray-400 hover:text-white'
+                        }`}>
+                        {c}
+                      </button>
+                    )
+                  })}
+                </div>
+                <p className="text-[10px] text-gray-600 mt-1.5">No selection = access to all countries.</p>
               </Field>
             </div>
             <div className="flex gap-2 px-6 pb-5">
@@ -322,6 +525,87 @@ export default function ConsoleUsers() {
                 className="flex-1 py-2 rounded-lg text-xs font-semibold text-white disabled:opacity-50"
                 style={{ background: 'linear-gradient(135deg,#ea580c,#f97316)' }}>
                 {saving ? 'Saving...' : 'Save Changes'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Bulk role modal */}
+      {bulkModal === 'role' && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+          <div className="w-full max-w-sm bg-gray-900 border border-gray-700 rounded-2xl shadow-2xl p-6">
+            <div className="flex items-center gap-2 mb-4">
+              <UserCog size={16} className="text-orange-400" />
+              <h2 className="text-sm font-bold text-white">Set Role : {selected.size} users</h2>
+            </div>
+            {bulkError && <div className="mb-3"><ErrBox msg={bulkError} /></div>}
+            <Field label="New Role">
+              <select value={bulkRole} onChange={e => setBulkRole(e.target.value)}
+                className="w-full h-9 bg-gray-800 border border-gray-700 rounded-lg px-3 text-xs text-white focus:outline-none focus:border-orange-500">
+                {roles.map(r => <option key={r} value={r}>{r}</option>)}
+              </select>
+            </Field>
+            <p className="text-[10px] text-gray-600 mt-2">Super admins are never demoted and the last admin is protected, so the applied count may be lower than selected.</p>
+            <div className="flex gap-2 mt-5">
+              <button onClick={() => setBulkModal(null)} disabled={bulkBusy}
+                className="flex-1 py-2 rounded-lg text-xs text-gray-400 bg-gray-800 hover:bg-gray-700 transition-colors">Cancel</button>
+              <button onClick={runBulkRole} disabled={bulkBusy}
+                className="flex-1 py-2 rounded-lg text-xs font-semibold text-white disabled:opacity-50"
+                style={{ background: 'linear-gradient(135deg,#ea580c,#f97316)' }}>
+                {bulkBusy ? 'Applying...' : 'Apply'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Bulk grant modal */}
+      {bulkModal === 'grant' && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+          <div className="w-full max-w-sm bg-gray-900 border border-gray-700 rounded-2xl shadow-2xl p-6">
+            <div className="flex items-center gap-2 mb-4">
+              <ShieldCheck size={16} className="text-orange-400" />
+              <h2 className="text-sm font-bold text-white">Grant / Revoke : {selected.size} users</h2>
+            </div>
+            {bulkError && <div className="mb-3"><ErrBox msg={bulkError} /></div>}
+            <div className="space-y-3">
+              <Field label="Module">
+                <select value={bulkModule} onChange={e => setBulkModule(e.target.value)}
+                  className="w-full h-9 bg-gray-800 border border-gray-700 rounded-lg px-3 text-xs text-white focus:outline-none focus:border-orange-500">
+                  {ALL_MODULES.map(m => <option key={m.key} value={m.key}>{m.label}</option>)}
+                </select>
+              </Field>
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="Capability">
+                  <select value={bulkCapability} onChange={e => setBulkCapability(e.target.value)}
+                    className="w-full h-9 bg-gray-800 border border-gray-700 rounded-lg px-2 text-xs text-white focus:outline-none focus:border-orange-500">
+                    {CAPABILITIES.map(c => <option key={c.key} value={c.key}>{c.label}</option>)}
+                  </select>
+                </Field>
+                <Field label="Effect">
+                  <select value={bulkEffect} onChange={e => setBulkEffect(e.target.value)}
+                    className="w-full h-9 bg-gray-800 border border-gray-700 rounded-lg px-2 text-xs text-white focus:outline-none focus:border-orange-500">
+                    <option value="grant">Grant</option>
+                    <option value="revoke">Revoke</option>
+                  </select>
+                </Field>
+              </div>
+              <Field label="Expiry (optional)">
+                <input type="date" value={bulkExpiry} onChange={e => setBulkExpiry(e.target.value)}
+                  className="w-full h-9 bg-gray-800 border border-gray-700 rounded-lg px-3 text-xs text-white focus:outline-none focus:border-orange-500" />
+              </Field>
+            </div>
+            <p className="text-[10px] text-gray-600 mt-2">
+              {bulkEffect === 'grant' ? 'Grant' : 'Revoke'} "{bulkCapability}" on "{moduleLabel(bulkModule)}" for {selected.size} users. Only "view" is enforced today; other capabilities are stored.
+            </p>
+            <div className="flex gap-2 mt-5">
+              <button onClick={() => setBulkModal(null)} disabled={bulkBusy}
+                className="flex-1 py-2 rounded-lg text-xs text-gray-400 bg-gray-800 hover:bg-gray-700 transition-colors">Cancel</button>
+              <button onClick={runBulkGrant} disabled={bulkBusy}
+                className="flex-1 py-2 rounded-lg text-xs font-semibold text-white disabled:opacity-50"
+                style={{ background: 'linear-gradient(135deg,#ea580c,#f97316)' }}>
+                {bulkBusy ? 'Applying...' : 'Apply'}
               </button>
             </div>
           </div>
@@ -367,6 +651,14 @@ export default function ConsoleUsers() {
           </div>
         </div>
       )}
+
+      {/* Success toast */}
+      {toast && (
+        <div className="fixed bottom-6 right-6 z-[60] flex items-center gap-2 px-4 py-3 rounded-xl bg-green-900/90 border border-green-600/50 shadow-2xl">
+          <CheckCircle size={15} className="text-green-300" />
+          <p className="text-xs text-green-100 font-medium">{toast}</p>
+        </div>
+      )}
     </div>
   )
 }
@@ -393,13 +685,13 @@ function RoleBadge({ role }) {
     'Integration Admin': 'text-emerald-300 bg-emerald-900/30',
     'Data Engineer': 'text-cyan-300 bg-cyan-900/30',
     Automation: 'text-indigo-300 bg-indigo-900/30',
+    'Data Monitor Officer': 'text-pink-300 bg-pink-900/30',
   }
   return (
-    <span className={`text-[10px] px-1.5 py-0.5 rounded font-semibold ${c[role] ?? 'text-gray-400 bg-gray-800'}`}>{role ?? '-'}</span>
+    <span className={`text-[10px] px-1.5 py-0.5 rounded font-semibold ${c[role] ?? 'text-gray-400 bg-gray-800'}`}>{role ?? 'N/A'}</span>
   )
 }
 
-function XIcon() { return <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg> }
 function Field({ label, children }) {
   return <div><label className="block text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-1">{label}</label>{children}</div>
 }

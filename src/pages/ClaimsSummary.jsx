@@ -362,6 +362,9 @@ export default function ClaimsSummary() {
             <ChartCard title="Open-claim ageing" subtitle="Open claims by days since incident"><Bar data={agingChart} options={NO_LEGEND} /></ChartCard>
           </div>
 
+          {/* Delay intelligence */}
+          <DelayIntelligence detail={a.delayedDetail} money={money} />
+
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             <ChartCard title="Highest-cost assets" subtitle="Top vehicles by claim value"><Bar data={assetChart} options={HORIZONTAL} /></ChartCard>
             <ChartCard title="Claim value by site" subtitle="Branch / site exposure"><Bar data={siteChart} options={HORIZONTAL} /></ChartCard>
@@ -371,6 +374,136 @@ export default function ClaimsSummary() {
           <ClaimsTable claims={a.claims} money={money} ccy={ccy} />
         </>
       )}
+    </div>
+  )
+}
+
+/**
+ * Delay intelligence — deep view over delayed (open, past expected release)
+ * claims: overdue-day statistics, value at risk, severity buckets, per-insurer
+ * ranking and the worst offenders. All figures come from
+ * analyzeClaims().delayedDetail (single engine, no local maths).
+ */
+function DelayIntelligence({ detail, money }) {
+  const d = detail || { count: 0, valueAtRisk: 0, buckets: {}, byInsurer: [], worst: [] }
+
+  if (!d.count) {
+    return (
+      <div className="card">
+        <div className="mb-1 flex items-center gap-2">
+          <Clock size={15} className="text-[var(--text-muted)]" />
+          <h3 className="text-sm font-semibold text-[var(--text-primary)]">Delay intelligence</h3>
+        </div>
+        <div className="text-center py-8">
+          <ShieldCheck size={30} className="mx-auto mb-2 text-emerald-400 opacity-80" />
+          <p className="text-[var(--text-primary)] font-medium">No delayed claims: all open claims are within their expected release dates.</p>
+          <p className="text-[var(--text-muted)] text-sm mt-1">A claim counts as delayed when it is still open after its expected release date.</p>
+        </div>
+      </div>
+    )
+  }
+
+  const buckets = d.buckets || {}
+  const b = (k) => buckets[k] || { count: 0, value: 0 }
+  const bucketChart = {
+    labels: ['1 to 7 days', '8 to 30 days', '31+ days'],
+    datasets: [{
+      label: 'Delayed claims',
+      data: [b('1-7').count, b('8-30').count, b('31+').count],
+      backgroundColor: [C.emerald, C.amber, C.red], borderRadius: 4,
+    }],
+  }
+
+  const dayBadge = (od) => {
+    const cls = od <= 7
+      ? 'bg-emerald-900/40 text-emerald-300 border-emerald-700/50'
+      : od <= 30
+        ? 'bg-amber-900/40 text-amber-300 border-amber-700/50'
+        : 'bg-red-900/40 text-red-300 border-red-700/50'
+    return <span className={`badge text-[11px] px-2 py-0.5 rounded border ${cls}`}>{od} d overdue</span>
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-2">
+        <Clock size={15} className="text-red-400" />
+        <h3 className="text-sm font-semibold text-[var(--text-primary)]">Delay intelligence</h3>
+        <span className="text-xs text-[var(--text-muted)]">open claims past their expected release date</span>
+      </div>
+
+      {/* Delay KPI tiles */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <Kpi label="Delayed claims" value={d.count} sub="open and past expected release" icon={Clock} tone="text-red-400" accent="text-red-400" />
+        <Kpi label="Avg days overdue" value={d.avgOverdueDays == null ? 'N/A' : `${d.avgOverdueDays} d`} sub="across delayed claims" icon={Gauge} tone="text-amber-300" accent="text-amber-400" />
+        <Kpi label="Max days overdue" value={d.maxOverdueDays == null ? 'N/A' : `${d.maxOverdueDays} d`} sub="worst single claim" icon={AlertTriangle} tone="text-red-400" accent="text-red-400" />
+        <Kpi label="Value at risk" value={money(d.valueAtRisk)} sub="outstanding on delayed claims" icon={Wallet} tone={d.valueAtRisk ? 'text-red-400' : 'text-emerald-400'} accent="text-red-400" />
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <ChartCard title="Delay severity buckets" subtitle="Delayed claims by days overdue" height={220}>
+          <Bar data={bucketChart} options={NO_LEGEND} />
+        </ChartCard>
+
+        {/* Delayed by insurer */}
+        <div className="card">
+          <div className="mb-3">
+            <h3 className="text-sm font-semibold text-[var(--text-primary)]">Delayed claims by insurer</h3>
+            <p className="text-[11px] text-[var(--text-muted)] mt-0.5">Ranked by delayed count, then value at risk</p>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-[var(--input-border)] text-left text-xs uppercase tracking-wider text-[var(--text-muted)]">
+                  <th className="px-2 py-2 font-semibold">Insurer</th>
+                  <th className="px-2 py-2 font-semibold text-right">Delayed</th>
+                  <th className="px-2 py-2 font-semibold text-right">Value at risk</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(d.byInsurer || []).map((x) => (
+                  <tr key={x.label} className="border-b border-[var(--input-border)]/50">
+                    <td className="px-2 py-2 text-[var(--text-primary)] whitespace-nowrap">{x.label}</td>
+                    <td className="px-2 py-2 text-right text-red-300 font-medium">{x.count}</td>
+                    <td className="px-2 py-2 text-right text-[var(--text-secondary)]">{money(x.value)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      {/* Worst delayed claims */}
+      <div className="card overflow-hidden !p-0">
+        <div className="px-4 py-3 border-b border-[var(--input-border)] flex items-center gap-2">
+          <AlertTriangle size={15} className="text-red-400" />
+          <h3 className="text-sm font-semibold text-[var(--text-primary)]">Worst delayed claims</h3>
+          <span className="text-xs text-[var(--text-muted)] ml-auto">top {(d.worst || []).length} by days overdue</span>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-[var(--input-border)] text-left text-xs uppercase tracking-wider text-[var(--text-muted)]">
+                {['Incident date', 'Asset', 'Insurer', 'Expected release', 'Days overdue', 'Outstanding'].map((h) => (
+                  <th key={h} className="px-3 py-2.5 font-semibold whitespace-nowrap">{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {(d.worst || []).map((w, i) => (
+                <tr key={`${w.asset_no || 'na'}-${w.expected_release_date || 'na'}-${i}`} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/40 bg-red-950/10">
+                  <td className="px-3 py-2 text-[var(--text-secondary)] whitespace-nowrap">{w.incident_date || 'N/A'}</td>
+                  <td className="px-3 py-2 text-[var(--text-primary)] whitespace-nowrap">{w.asset_no || 'N/A'}</td>
+                  <td className="px-3 py-2 text-[var(--text-secondary)] whitespace-nowrap">{w.insurer || 'N/A'}</td>
+                  <td className="px-3 py-2 text-red-300 font-medium whitespace-nowrap">{w.expected_release_date || 'N/A'}</td>
+                  <td className="px-3 py-2 whitespace-nowrap">{dayBadge(w.overdue_days)}</td>
+                  <td className="px-3 py-2 font-medium text-[var(--text-primary)] whitespace-nowrap">{money(w.outstanding)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
     </div>
   )
 }

@@ -50,6 +50,18 @@ export function claimNet(r) {
   return Math.max(0, gross - N(r.recovered_amount))
 }
 
+/**
+ * Whole days an open claim is past its expected release date.
+ * Returns 0 for closed claims, claims without an expected release date, and
+ * claims that are still within their expected window (i.e. not delayed).
+ */
+export function overdueDays(r, today) {
+  const t = s(today).slice(0, 10) || new Date().toISOString().slice(0, 10)
+  if (!isDelayed(r, t)) return 0
+  const d = daysBetween(s(r.expected_release_date).slice(0, 10), t)
+  return d != null && d > 0 ? d : 0
+}
+
 /** Days between two date-ish values (b − a) in whole days, or null. */
 function daysBetween(a, b) {
   const da = a ? new Date(a) : null
@@ -99,6 +111,7 @@ export function analyzeClaims(rows, { now } = {}) {
   let claimed = 0, approved = 0, recovered = 0, deductible = 0, net = 0, openValue = 0
   let closedDaysSum = 0, closedDaysCount = 0
   let firstDate = null, lastDate = null
+  const delayedItems = []
 
   for (const r of claims) {
     const cAmt = N(r.claim_amount)
@@ -108,7 +121,10 @@ export function analyzeClaims(rows, { now } = {}) {
     const delayedFlag = isDelayed(r, today)
 
     if (closedFlag) closed++; else { open++; openValue += cAmt }
-    if (delayedFlag) delayed++
+    if (delayedFlag) {
+      delayed++
+      delayedItems.push({ r, od: overdueDays(r, today), outstanding: Math.max(0, cAmt - rAmt) })
+    }
     claimed += cAmt
     approved += aAmt
     recovered += rAmt
@@ -202,7 +218,59 @@ export function analyzeClaims(rows, { now } = {}) {
     najm,
     taqdeer,
     aging,
+    delayedDetail: buildDelayedDetail(delayedItems),
     claims,
+  }
+}
+
+/**
+ * Deep delayed-claims intelligence, derived purely from real fields:
+ * outstanding value at risk (claim − recovered, floored at 0), overdue-day
+ * statistics, severity buckets, per-insurer ranking and the worst offenders.
+ * Empty input yields honest zeros / empty lists (avg/max stay null).
+ */
+function buildDelayedDetail(items) {
+  const buckets = { '1-7': mk(), '8-30': mk(), '31+': mk() }
+  const insurerMap = new Map()
+  let sumDays = 0, maxDays = 0, valueAtRisk = 0
+
+  for (const { r, od, outstanding } of items) {
+    sumDays += od
+    if (od > maxDays) maxDays = od
+    valueAtRisk += outstanding
+    const b = od <= 7 ? buckets['1-7'] : od <= 30 ? buckets['8-30'] : buckets['31+']
+    b.count++; b.value += outstanding
+    const key = s(r.insurer) || '(no insurer)'
+    const cur = insurerMap.get(key) || { count: 0, value: 0 }
+    cur.count++; cur.value += outstanding
+    insurerMap.set(key, cur)
+  }
+
+  const byInsurer = [...insurerMap.entries()]
+    .map(([label, v]) => ({ label, ...v }))
+    .sort((a, b) => b.count - a.count || b.value - a.value)
+    .slice(0, 8)
+
+  const worst = [...items]
+    .sort((a, b) => b.od - a.od || b.outstanding - a.outstanding)
+    .slice(0, 10)
+    .map(({ r, od, outstanding }) => ({
+      incident_date: s(r.incident_date).slice(0, 10) || null,
+      asset_no: s(r.asset_no) || null,
+      insurer: s(r.insurer) || null,
+      expected_release_date: s(r.expected_release_date).slice(0, 10) || null,
+      overdue_days: od,
+      outstanding,
+    }))
+
+  return {
+    count: items.length,
+    valueAtRisk,
+    avgOverdueDays: items.length ? Math.round(sumDays / items.length) : null,
+    maxOverdueDays: items.length ? maxDays : null,
+    buckets,
+    byInsurer,
+    worst,
   }
 }
 

@@ -13,8 +13,8 @@
  * the bundle cost until an export actually runs.
  */
 import {
-  CHARTS, KPIS, TABLE_COLS, CHART_OPTS, CHART_JS_TYPE,
-  buildReportContext, buildInsights, fmtCell, cellValue, normalizeConfig,
+  CHARTS, KPIS, TABLE_COLS, CHART_OPTS, CHART_JS_TYPE, VALUE_LABELS_PLUGIN,
+  buildReportContext, buildInsights, fmtCell, cellValue, normalizeConfig, summarizeChartData,
 } from './accidentReport'
 import { formatCurrencyCompact } from './formatters'
 
@@ -34,6 +34,7 @@ async function renderOffscreenChart(block, ctx) {
       type: CHART_JS_TYPE[def.kind],
       data,
       options: { ...CHART_OPTS[def.kind], responsive: false, animation: false, devicePixelRatio: 2 },
+      plugins: [VALUE_LABELS_PLUGIN],
     })
     const img = canvas.toDataURL('image/png')
     chart.destroy()
@@ -121,7 +122,11 @@ export async function renderAccidentReportPdf({
       if (title) { doc.setFont('helvetica', 'bold'); doc.setFontSize(11); doc.setTextColor(15, 23, 42); doc.text(title, MX, y + 4); y += 6 }
       if (img) { try { doc.addImage(img, 'PNG', MX, y, cw, ch, undefined, 'FAST') } catch { /* ignore */ } }
       else { doc.setFontSize(9); doc.setTextColor(148, 163, 184); doc.text('No data for this chart in the covered period.', MX, y + 6) }
-      y += ch + 6
+      y += ch + 2
+      // Numeric digest under the chart so figures survive print/greyscale.
+      const digest = summarizeChartData(CHARTS[b.chart] ? CHARTS[b.chart].build(ctx) : null)
+      if (img && digest) { doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); doc.setTextColor(100, 116, 139); doc.text(digest, MX, y + 3); y += 5 }
+      y += 4
       continue
     }
 

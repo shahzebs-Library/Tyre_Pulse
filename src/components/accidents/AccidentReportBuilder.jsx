@@ -34,7 +34,7 @@ import {
 import {
   CHARTS, KPIS, TABLE_COLS, BLOCK_TYPES, CHART_OPTS,
   REPORT_LIBRARY, STARTER, makeBlock, buildReportContext, buildInsights,
-  fmtCell, cellValue, isChartEmpty, normalizeConfig,
+  fmtCell, cellValue, isChartEmpty, normalizeConfig, VALUE_LABELS_PLUGIN,
 } from '../../lib/accidentReport'
 import { renderAccidentReportPdf } from '../../lib/accidentReportPdf'
 import { listTemplates, createTemplate, updateTemplate, deleteTemplate } from '../../lib/api/accidentReportTemplates'
@@ -520,7 +520,7 @@ function BlockPreview({ block: b, ctx, records, money, company, chartRefs, orien
         {(b.title || def.label) && <p className="text-sm font-semibold text-slate-800 mb-2">{b.title || def.label}</p>}
         <div style={{ height: Math.round((b.height || 240) * (landscape ? 0.85 : 1)) }} className="relative transition-[height] duration-300">
           {isChartEmpty(data) ? <div className="h-full flex items-center justify-center text-slate-400 text-sm">No data for this chart yet</div>
-            : <Comp ref={(el) => { chartRefs.current[b.id] = el }} data={data} options={opts} />}
+            : <Comp ref={(el) => { chartRefs.current[b.id] = el }} data={data} options={opts} plugins={[VALUE_LABELS_PLUGIN]} />}
         </div>
       </div>
     )

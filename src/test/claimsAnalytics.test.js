@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import {
-  analyzeClaims, hasClaim, isClosed, isDelayed, claimNet,
+  analyzeClaims, hasClaim, isClosed, isDelayed, claimNet, overdueDays,
 } from '../lib/claimsAnalytics'
 
 const NOW = '2026-07-13'
@@ -103,5 +103,42 @@ describe('analyzeClaims', () => {
     expect(e.total).toBe(0)
     expect(e.recoveryRate).toBeNull()
     expect(e.byInsurer).toEqual([])
+  })
+})
+
+
+describe('delayed intelligence (overdueDays + delayedDetail)', () => {
+  const T = '2026-07-13'
+  it('overdueDays counts whole days past expected release for open claims only', () => {
+    expect(overdueDays({ claim_amount: 100, expected_release_date: '2026-07-03' }, T)).toBe(10)
+    expect(overdueDays({ claim_amount: 100, expected_release_date: '2026-08-01' }, T)).toBe(0)
+    expect(overdueDays({ claim_amount: 100, expected_release_date: '2026-07-03', release_date: '2026-07-05' }, T)).toBe(0)
+    expect(overdueDays({ claim_amount: 100 }, T)).toBe(0)
+  })
+  it('delayedDetail buckets, value at risk, avg/max and worst ordering', () => {
+    const rows = [
+      { claim_amount: 1000, recovered_amount: 200, insurer: 'A', asset_no: 'T1', incident_date: '2026-06-01', expected_release_date: '2026-07-10' }, // 3d, 800
+      { claim_amount: 5000, insurer: 'B', asset_no: 'T2', incident_date: '2026-05-01', expected_release_date: '2026-06-23' },                        // 20d, 5000
+      { claim_amount: 2000, insurer: 'A', asset_no: 'T3', incident_date: '2026-03-01', expected_release_date: '2026-05-01' },                        // 73d, 2000
+    ]
+    const d = analyzeClaims(rows, { now: T }).delayedDetail
+    expect(d.count).toBe(3)
+    expect(d.valueAtRisk).toBe(7800)
+    expect(d.buckets['1-7'].count).toBe(1)
+    expect(d.buckets['8-30'].count).toBe(1)
+    expect(d.buckets['31+'].count).toBe(1)
+    expect(d.maxOverdueDays).toBe(73)
+    expect(d.avgOverdueDays).toBe(32)
+    expect(d.worst[0].asset_no).toBe('T3')
+    expect(d.worst[0].overdue_days).toBe(73)
+    expect(d.byInsurer[0].label).toBe('A')
+  })
+  it('is honest on empty input', () => {
+    const d = analyzeClaims([], { now: T }).delayedDetail
+    expect(d.count).toBe(0)
+    expect(d.valueAtRisk).toBe(0)
+    expect(d.avgOverdueDays).toBeNull()
+    expect(d.maxOverdueDays).toBeNull()
+    expect(d.worst).toEqual([])
   })
 })

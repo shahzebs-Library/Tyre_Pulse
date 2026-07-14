@@ -3,6 +3,7 @@ import {
   CHARTS, KPIS, TABLE_COLS, BLOCK_TYPES, BLOCK_DEFAULTS, CHART_OPTS, CHART_JS_TYPE,
   REPORT_LIBRARY, STARTER, makeBlock, buildReportContext, buildInsights,
   fmtCell, cellValue, caseAgeDays, isChartEmpty, isClosedRow, normalizeConfig,
+  VALUE_LABELS_PLUGIN, summarizeChartData,
 } from '../lib/accidentReport'
 
 const money = (v) => `$${Number(v)}`
@@ -103,6 +104,40 @@ describe('accidentReport catalog integrity', () => {
     expect(data.labels).toEqual(['0 to 15d', '16 to 30d', '31 to 60d', '60+d'])
     expect(data.datasets[0].data).toEqual([0, 1, 0, 0])
     expect(isChartEmpty(CHARTS.caseAge.build(emptyCtx))).toBe(true)
+  })
+})
+
+describe('value labels + chart digests (report numbers)', () => {
+  it('exposes an inline chart.js value-labels plugin', () => {
+    expect(VALUE_LABELS_PLUGIN.id).toBe('valueLabels')
+    expect(VALUE_LABELS_PLUGIN.afterDatasetsDraw).toBeTypeOf('function')
+  })
+  it('summarizeChartData reports total and top label, empty stays empty', () => {
+    const data = { labels: ['Riyadh', 'Jeddah'], datasets: [{ data: [18, 6] }, { data: [0, 2] }] }
+    expect(summarizeChartData(data)).toBe('Total: 26 | Top: Riyadh (18)')
+    expect(summarizeChartData({ labels: [], datasets: [] })).toBe('')
+    expect(summarizeChartData(null)).toBe('')
+  })
+  it('pendingActions KPI counts open cases missing release date or insurer on a claim', () => {
+    const rows = [
+      { incident_date: '2026-07-01', status: 'Open' },                                        // no expected release -> pending
+      { incident_date: '2026-07-02', status: 'Open', expected_release_date: '2026-08-01', claim_amount: 500 }, // claim, no insurer -> pending
+      { incident_date: '2026-07-03', status: 'Open', expected_release_date: '2026-08-01' },   // complete open -> not pending
+      { incident_date: '2026-06-01', status: 'Closed', release_date: '2026-06-10' },          // closed -> ignored
+    ]
+    expect(KPIS.pendingActions.get(buildReportContext(rows, 'SAR'))).toBe(2)
+    expect(KPIS.pendingActions.get(buildReportContext([], 'SAR'))).toBe(0)
+  })
+  it('insights include needs-attention completeness lines only when applicable', () => {
+    const rows = [
+      { incident_date: '2026-07-01', status: 'Open', claim_status: 'filed' }, // no amount, no driver, no release
+    ]
+    const lines = buildInsights(buildReportContext(rows, 'SAR')).join(' | ')
+    expect(lines).toMatch(/without an expected release date/)
+    expect(lines).toMatch(/claim status but no claim amount/)
+    expect(lines).toMatch(/missing the driver name/)
+    const complete = [{ incident_date: '2026-07-01', status: 'Open', expected_release_date: '2026-08-01', driver_name: 'Ali' }]
+    expect(buildInsights(buildReportContext(complete, 'SAR')).join(' | ')).not.toMatch(/Needs attention/)
   })
 })
 

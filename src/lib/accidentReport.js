@@ -12,7 +12,7 @@
  * All chart/KPI/insight values are computed from the live accident record set —
  * nothing is fabricated; empty data degrades to honest empty states.
  */
-import { analyzeClaims } from './claimsAnalytics'
+import { analyzeClaims, hasClaim } from './claimsAnalytics'
 
 // ── WYSIWYG paper theme (dark-on-white so on-screen preview == exported PDF) ──
 export const PAPER = { ink: '#0f172a', muted: '#475569', grid: 'rgba(15,23,42,0.08)' }
@@ -117,22 +117,122 @@ function rank(records, keyFn, n, color) {
   return { labels: sorted.map(([k]) => k), datasets: [{ label: 'Incidents', data: sorted.map(([, v]) => v), backgroundColor: color, borderRadius: 3 }] }
 }
 
+// ── Value labels: an inline chart.js plugin (no npm dependency) that draws the
+// actual data number on every mark so exported/rasterised charts carry real
+// figures, not just shapes. Registered per-chart via `plugins: [...]` on BOTH
+// the live react-chartjs-2 preview and the offscreen PDF renderer (WYSIWYG).
+//   bar (vertical)   → value above each bar
+//   bar-h            → value at the end of each bar
+//   bar-stack        → the stack TOTAL above each stack (segments stay clean)
+//   line             → value above each point (zeros skipped to avoid clutter)
+//   doughnut         → slice counts appended in the legend (see CHART_OPTS)
+const fmtLabelNum = (v) => (Math.abs(v) >= 1000 ? Math.round(v).toLocaleString('en-US') : String(Math.round(v * 10) / 10))
+export const VALUE_LABELS_PLUGIN = {
+  id: 'valueLabels',
+  afterDatasetsDraw(chart) {
+    const type = chart.config?.type
+    if (type !== 'bar' && type !== 'line') return
+    const { ctx } = chart
+    if (!ctx) return
+    const horizontal = chart.options?.indexAxis === 'y'
+    const stacked = !!(chart.options?.scales?.x?.stacked && chart.options?.scales?.y?.stacked)
+    ctx.save()
+    ctx.fillStyle = PAPER.ink
+    ctx.font = 'bold 10px helvetica, arial, sans-serif'
+    if (type === 'bar' && stacked) {
+      // Stacked bars: label only the total on top of each stack.
+      const n = chart.data?.labels?.length || 0
+      for (let i = 0; i < n; i++) {
+        let total = 0
+        let topEl = null
+        chart.data.datasets.forEach((ds, di) => {
+          if (chart.isDatasetVisible && !chart.isDatasetVisible(di)) return
+          const v = Number(ds.data?.[i])
+          if (!Number.isFinite(v) || v === 0) return
+          total += v
+          const el = chart.getDatasetMeta(di)?.data?.[i]
+          if (el && (topEl == null || el.y < topEl.y)) topEl = el
+        })
+        if (!total || !topEl) continue
+        ctx.textAlign = 'center'
+        ctx.textBaseline = 'bottom'
+        ctx.fillText(fmtLabelNum(total), topEl.x, topEl.y - 2)
+      }
+    } else {
+      chart.data.datasets.forEach((ds, di) => {
+        if (chart.isDatasetVisible && !chart.isDatasetVisible(di)) return
+        const meta = chart.getDatasetMeta(di)
+        ;(meta?.data || []).forEach((el, i) => {
+          const v = Number(ds.data?.[i])
+          if (!Number.isFinite(v) || v === 0 || !el) return
+          if (horizontal) {
+            ctx.textAlign = 'left'
+            ctx.textBaseline = 'middle'
+            ctx.fillText(fmtLabelNum(v), el.x + 4, el.y)
+          } else {
+            ctx.textAlign = 'center'
+            ctx.textBaseline = 'bottom'
+            ctx.fillText(fmtLabelNum(v), el.x, el.y - 3)
+          }
+        })
+      })
+    }
+    ctx.restore()
+  },
+}
+
+/** Doughnut legend labels with the slice count appended, e.g. "Major (4)" —
+ *  makes slice values visible without cluttering the arcs. */
+export function doughnutLegendCounts(chart) {
+  const data = chart?.data
+  if (!data?.labels?.length || !data.datasets?.length) return []
+  const ds = data.datasets[0]
+  return data.labels.map((label, i) => {
+    const v = Number(ds.data?.[i]) || 0
+    const bg = Array.isArray(ds.backgroundColor) ? ds.backgroundColor[i] : ds.backgroundColor
+    return {
+      text: `${label} (${fmtLabelNum(v)})`,
+      fillStyle: bg,
+      strokeStyle: 'transparent',
+      lineWidth: 0,
+      hidden: chart.getDataVisibility ? !chart.getDataVisibility(i) : false,
+      index: i,
+    }
+  })
+}
+
 // Chart.js option sets per chart kind (paper theme) — shared by the live
 // preview (react-chartjs-2) and the headless offscreen renderer so the export
-// always matches the screen.
+// always matches the screen. Layout padding leaves room for the value labels
+// drawn by VALUE_LABELS_PLUGIN (top for vertical marks, right for bar-h).
 const AXIS = { ticks: { color: PAPER.muted, font: { size: 11 } }, grid: { color: PAPER.grid } }
-const OPT_BASE = { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: { enabled: false } }, scales: { x: AXIS, y: { ...AXIS, beginAtZero: true } } }
+const OPT_BASE = { responsive: true, maintainAspectRatio: false, layout: { padding: { top: 14 } }, plugins: { legend: { display: false }, tooltip: { enabled: false } }, scales: { x: AXIS, y: { ...AXIS, beginAtZero: true } } }
 export const CHART_OPTS = {
   bar: OPT_BASE,
-  'bar-h': { ...OPT_BASE, indexAxis: 'y' },
+  'bar-h': { ...OPT_BASE, indexAxis: 'y', layout: { padding: { top: 6, right: 30 } } },
   'bar-stack': { ...OPT_BASE, plugins: { legend: { display: true, labels: { color: PAPER.muted, font: { size: 10 } } }, tooltip: { enabled: false } }, scales: { x: { ...AXIS, stacked: true }, y: { ...AXIS, stacked: true } } },
-  doughnut: { responsive: true, maintainAspectRatio: false, cutout: '58%', plugins: { legend: { position: 'right', labels: { color: PAPER.ink, boxWidth: 12, padding: 10, font: { size: 11 } } }, tooltip: { enabled: false } } },
+  doughnut: { responsive: true, maintainAspectRatio: false, cutout: '58%', plugins: { legend: { position: 'right', labels: { color: PAPER.ink, boxWidth: 12, padding: 10, font: { size: 11 }, generateLabels: doughnutLegendCounts } }, tooltip: { enabled: false } } },
   line: { ...OPT_BASE, elements: { line: { tension: 0.35 }, point: { radius: 2 } } },
 }
 export const CHART_JS_TYPE = { doughnut: 'doughnut', line: 'line', bar: 'bar', 'bar-h': 'bar', 'bar-stack': 'bar' }
 
 export function isChartEmpty(data) {
   return !data?.labels?.length || (data.datasets || []).every((ds) => (ds.data || []).every((v) => !v))
+}
+
+/** One-line numeric digest of a chart's data for the PDF (rendered under the
+ *  chart image so the report carries real figures even in print/greyscale).
+ *  Generic: sums every dataset per label, reports the total and the top label.
+ *  Returns '' when the chart is empty — honest, never fabricated. */
+export function summarizeChartData(data) {
+  if (isChartEmpty(data)) return ''
+  const labels = data.labels || []
+  const perLabel = labels.map((_, i) => (data.datasets || []).reduce((s, ds) => s + (Number(ds.data?.[i]) || 0), 0))
+  const total = perLabel.reduce((s, v) => s + v, 0)
+  if (!total) return ''
+  let maxI = 0
+  perLabel.forEach((v, i) => { if (v > perLabel[maxI]) maxI = i })
+  return `Total: ${fmtLabelNum(total)} | Top: ${labels[maxI]} (${fmtLabelNum(perLabel[maxI])})`
 }
 
 // ── KPI catalog ───────────────────────────────────────────────────────────────
@@ -151,6 +251,7 @@ export const KPIS = {
   claimsCount: { label: 'Claims', get: ({ claims }) => claims.total },
   avgDaysOpen: { label: 'Avg days open', get: ({ records }) => avgDays(records, (r) => !isClosedRow(r)) },
   avgCaseDuration: { label: 'Avg case duration', get: ({ records }) => avgDays(records, isClosedRow) },
+  pendingActions: { label: 'Pending actions', get: ({ records }) => records.filter((r) => !isClosedRow(r) && (!r.expected_release_date || (hasClaim(r) && !r.insurer))).length },
 }
 export function isClosedRow(r) {
   if (r.release_date) return true
@@ -229,6 +330,17 @@ export function buildInsights(ctx) {
   if (claims.delayed > 0) out.push(`${claims.delayed} claim${claims.delayed === 1 ? '' : 's'} past the expected release date, follow up with the insurer.`)
   const stale = claims.aging?.['90+']?.count || 0
   if (stale > 0) out.push(`${stale} open claim${stale === 1 ? '' : 's'} older than 90 days.`)
+
+  // Data completeness: what still NEEDS TO BE ADDED on open/claimed cases.
+  const openRows = records.filter((r) => !isClosedRow(r))
+  const noRelease = openRows.filter((r) => !r.expected_release_date).length
+  if (noRelease > 0) out.push(`Needs attention: ${noRelease} open case${noRelease === 1 ? '' : 's'} without an expected release date.`)
+  const noInsurer = records.filter((r) => hasClaim(r) && !r.insurer).length
+  if (noInsurer > 0) out.push(`Needs attention: ${noInsurer} claim${noInsurer === 1 ? '' : 's'} with no insurer recorded.`)
+  const noAmount = records.filter((r) => r.claim_status && r.claim_status !== 'none' && !(Number(r.claim_amount) > 0)).length
+  if (noAmount > 0) out.push(`Needs attention: ${noAmount} claim${noAmount === 1 ? '' : 's'} with a claim status but no claim amount.`)
+  const noDriver = records.filter((r) => !r.driver_name).length
+  if (noDriver > 0) out.push(`Needs attention: ${noDriver} incident${noDriver === 1 ? '' : 's'} missing the driver name.`)
   return out
 }
 

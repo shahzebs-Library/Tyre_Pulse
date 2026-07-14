@@ -4,6 +4,8 @@ import {
   ChevronDown, RefreshCw,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
+import { aiOps } from '../lib/api'
+import { toUserMessage } from '../lib/safeError'
 import { useAuth } from '../contexts/AuthContext'
 import PageHeader from '../components/ui/PageHeader'
 import EnterpriseTable from '../components/ui/EnterpriseTable'
@@ -11,14 +13,15 @@ import { useReportMeta } from '../hooks/useReportMeta'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
-// Approximate costs per 1K tokens (USD) - update when OpenAI / Anthropic change pricing
-const TOKEN_COSTS = {
-  'claude-opus-4-8':    { input: 0.015,   output: 0.075   },
-  'claude-sonnet-4-6':  { input: 0.003,   output: 0.015   },
-  'claude-haiku-4-5':   { input: 0.00025, output: 0.00125 },
-  'text-embedding-3-small': { input: 0.00002, output: 0 },
-  'text-embedding-3-large': { input: 0.00013, output: 0 },
-  default:              { input: 0.003,   output: 0.015   },
+// Fallback pricing (USD per 1M tokens) used only until the ai_models catalogue
+// loads. The single source of truth is the ai_models table (seeded in V236);
+// live pricing is fetched via aiOps.getModelPricing and passed to estimateCost.
+const FALLBACK_PRICING = {
+  'claude-opus-4-8':        { input: 15,  output: 75 },
+  'claude-sonnet-5':        { input: 3,   output: 15 },
+  'claude-haiku-4-5':       { input: 1,   output: 5 },
+  'text-embedding-3-small': { input: 0.02, output: 0 },
+  'text-embedding-3-large': { input: 0.13, output: 0 },
 }
 
 const DATE_RANGES = [
@@ -36,10 +39,14 @@ const FEATURE_COLORS = {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
+// Live per-1M pricing from ai_models (the single source), set when the catalogue
+// loads. Falls back to FALLBACK_PRICING until then.
+let LIVE_PRICING = { ...FALLBACK_PRICING }
+
 function estimateCost(row) {
-  if (row.cost_usd != null) return Number(row.cost_usd)
-  const rates = TOKEN_COSTS[row.model] ?? TOKEN_COSTS.default
-  return ((row.prompt_tokens * rates.input) + (row.completion_tokens * rates.output)) / 1000
+  if (row.cost_usd != null && row.cost_usd !== '') return Number(row.cost_usd)
+  const rates = LIVE_PRICING[row.model] ?? FALLBACK_PRICING[row.model] ?? { input: 3, output: 15 }
+  return ((row.prompt_tokens * rates.input) + (row.completion_tokens * rates.output)) / 1_000_000
 }
 
 function formatUSD(n) {
@@ -73,6 +80,18 @@ function groupByFeature(logs) {
     map[f].tokens += (log.prompt_tokens ?? 0) + (log.completion_tokens ?? 0)
     map[f].cost   += estimateCost(log)
     map[f].calls  += 1
+  }
+  return Object.values(map).sort((a, b) => b.cost - a.cost)
+}
+
+function groupByModel(logs) {
+  const map = {}
+  for (const log of logs) {
+    const m = log.model ?? 'unknown'
+    if (!map[m]) map[m] = { model: m, tokens: 0, cost: 0, calls: 0 }
+    map[m].tokens += (log.prompt_tokens ?? 0) + (log.completion_tokens ?? 0)
+    map[m].cost   += estimateCost(log)
+    map[m].calls  += 1
   }
   return Object.values(map).sort((a, b) => b.cost - a.cost)
 }
@@ -122,6 +141,16 @@ export default function AiCostMonitor() {
   const [filterFeature, setFilterFeature] = useState('all')
   const [filterModel, setFilterModel] = useState('all')
 
+  // Load the single-source pricing catalogue once so cost estimates match the
+  // admin-managed ai_models table rather than a hardcoded rate card.
+  useEffect(() => {
+    let alive = true
+    aiOps.getModelPricing().then((p) => {
+      if (alive && p && Object.keys(p).length) LIVE_PRICING = { ...FALLBACK_PRICING, ...p }
+    }).catch(() => { /* keep fallback pricing */ })
+    return () => { alive = false }
+  }, [])
+
   const fetchLogs = useCallback(async () => {
     setLoading(true)
     setError(null)
@@ -141,7 +170,7 @@ export default function AiCostMonitor() {
       if (err) throw err
       setLogs(data ?? [])
     } catch (e) {
-      setError(e.message)
+      setError(toUserMessage(e))
     } finally {
       setLoading(false)
     }
@@ -157,6 +186,7 @@ export default function AiCostMonitor() {
 
   const dailyData   = groupByDay(logs)
   const featureData = groupByFeature(logs)
+  const modelData   = groupByModel(logs)
 
   const allModels   = [...new Set(logs.map(l => l.model).filter(Boolean))]
   const allFeatures = [...new Set(logs.map(l => l.feature).filter(Boolean))]
@@ -326,6 +356,33 @@ export default function AiCostMonitor() {
               <div className="flex justify-between text-[var(--text-muted)] text-xs mt-1 px-0.5">
                 {dailyData.filter((_, i) => i === 0 || i === Math.floor(dailyData.length / 2) || i === dailyData.length - 1)
                   .map(d => <span key={d.date}>{d.date.slice(5)}</span>)}
+              </div>
+            </div>
+          )}
+
+          {/* Cost by model */}
+          {modelData.length > 0 && (
+            <div className="bg-[var(--surface-2)] border border-[var(--border-dim)] rounded-2xl p-5">
+              <h3 className="text-[var(--text-primary)] font-semibold mb-4">Cost by Model</h3>
+              <div className="space-y-3">
+                {modelData.map(m => {
+                  const pct = totalCost > 0 ? (m.cost / totalCost) * 100 : 0
+                  return (
+                    <div key={m.model}>
+                      <div className="flex items-center justify-between text-sm mb-1.5">
+                        <span className="text-[var(--text-secondary)] font-medium">{m.model}</span>
+                        <div className="flex items-center gap-3 text-[var(--text-muted)] text-xs">
+                          <span>{m.calls} calls</span>
+                          <span>{formatTokens(m.tokens)} tokens</span>
+                          <span className="font-semibold text-[var(--text-primary)]">{formatUSD(m.cost)}</span>
+                        </div>
+                      </div>
+                      <div className="w-full bg-[var(--input-bg)] rounded-full h-2">
+                        <div className="h-2 rounded-full bg-purple-500 transition-all" style={{ width: `${pct.toFixed(1)}%` }} />
+                      </div>
+                    </div>
+                  )
+                })}
               </div>
             </div>
           )}

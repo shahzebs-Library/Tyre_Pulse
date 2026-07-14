@@ -39,15 +39,44 @@ function costUsd(model: string, inputTokens: number, outputTokens: number): numb
   return Math.round(cost * 1_000_000) / 1_000_000 // 6dp
 }
 
+// Best-effort failure log so the Admin Console can surface failed AI requests.
+// Never throws; a logging failure must not affect the user-facing response.
+function logAiFailure(
+  svc: ReturnType<typeof serviceClient>,
+  opts: { userId?: string | null; status: string; httpStatus: number; error: string },
+): void {
+  if (!svc) return
+  try {
+    svc.from('ai_token_logs').insert({
+      user_id: opts.userId ?? null,
+      model: MODEL_BASE,
+      feature: 'chat',
+      prompt_tokens: 0,
+      completion_tokens: 0,
+      cost_usd: 0,
+      status: opts.status,
+      http_status: opts.httpStatus,
+      error: String(opts.error ?? '').slice(0, 500),
+      created_at: new Date().toISOString(),
+    }).then(({ error }: { error: { message: string } | null }) => {
+      if (error) console.error('[chat-ai] failure log insert failed:', error.message)
+    })
+  } catch (e) {
+    console.error('[chat-ai] failure log threw (ignored):', e)
+  }
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders(req) })
   }
 
+  let _uid: string | null = null
   try {
     const auth = await requireApprovedRole(req, ['admin', 'manager', 'director'])
     if (auth instanceof Response) return auth
     const userId = auth.profile.id
+    _uid = userId
 
     const body = await req.json()
     const { system, user, messages, max_tokens = 2000 } = body
@@ -79,6 +108,7 @@ serve(async (req) => {
           svc.from('ai_usage_log').select('id', { count: 'exact', head: true }).eq('user_id', userId).gte('created_at', sinceDay),
         ])
         if ((perMin ?? 0) >= RL_PER_MIN || (perDay ?? 0) >= RL_PER_DAY) {
+          logAiFailure(svc, { userId, status: 'rate_limited', httpStatus: 429, error: 'Rate limit exceeded' })
           return jsonResponse(req, { error: 'Rate limit exceeded. Please wait before sending more AI requests.' }, 429)
         }
       } catch (e) {
@@ -109,6 +139,7 @@ serve(async (req) => {
     const ANTHROPIC_API_KEY = Deno.env.get('ANTHROPIC_API_KEY')
     if (!ANTHROPIC_API_KEY) {
       console.error('[chat-ai] ANTHROPIC_API_KEY not configured')
+      logAiFailure(svc, { userId, status: 'error', httpStatus: 500, error: 'ANTHROPIC_API_KEY not configured' })
       return jsonResponse(req, { error: 'AI service temporarily unavailable' }, 500)
     }
 
@@ -130,6 +161,7 @@ serve(async (req) => {
     if (!response.ok) {
       const errText = await response.text()
       console.error(`[chat-ai] Upstream API error ${response.status}:`, errText)
+      logAiFailure(svc, { userId, status: 'error', httpStatus: 502, error: `Upstream ${response.status}: ${errText.slice(0, 200)}` })
       return jsonResponse(req, { error: 'AI service temporarily unavailable' }, 502)
     }
 
@@ -194,6 +226,7 @@ serve(async (req) => {
     return jsonResponse(req, { content })
   } catch (err) {
     console.error('[chat-ai] Unhandled error:', err)
+    logAiFailure(serviceClient(), { userId: _uid, status: 'error', httpStatus: 500, error: err instanceof Error ? err.message : String(err) })
     return jsonResponse(req, { error: 'AI service temporarily unavailable' }, 500)
   }
 })

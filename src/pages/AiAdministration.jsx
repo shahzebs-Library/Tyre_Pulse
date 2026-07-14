@@ -22,8 +22,9 @@ import { useState, useEffect, useMemo, useCallback } from 'react'
 import {
   Sparkles, Cpu, BookOpen, Wallet, Star, Search, X, Filter, AlertTriangle,
   FileSpreadsheet, FileText, Plus, Pencil, Trash2, ShieldAlert, CheckCircle2,
-  Coins, ThumbsUp,
+  Coins, ThumbsUp, Activity, Send,
 } from 'lucide-react'
+import { AiOperationsTab, AiDeliveryJobsTab } from '../components/ai/AiOpsTabs'
 import PageHeader from '../components/ui/PageHeader'
 import { useAuth } from '../contexts/AuthContext'
 import { useSettings } from '../contexts/SettingsContext'
@@ -46,6 +47,8 @@ import {
 const ADMIN_ROLES = new Set(['Admin'])
 
 const TABS = [
+  { key: 'operations', label: 'Operations', Icon: Activity },
+  { key: 'jobs', label: 'Delivery & Jobs', Icon: Send },
   { key: 'models', label: 'Models', Icon: Cpu },
   { key: 'prompts', label: 'Prompts', Icon: BookOpen },
   { key: 'budgets', label: 'Budgets', Icon: Wallet },
@@ -868,7 +871,7 @@ export default function AiAdministration() {
   const { profile, loading: authLoading } = useAuth()
   const { activeCountry } = useSettings()
   const isAdmin = ADMIN_ROLES.has(profile?.role)
-  const [tab, setTab] = useState('models')
+  const [tab, setTab] = useState('operations')
 
   if (authLoading) {
     return (
@@ -887,7 +890,7 @@ export default function AiAdministration() {
     <div className="space-y-6">
       <PageHeader
         title="AI & Automation Administration"
-        subtitle="Configure the AI model catalogue, agent prompts, spend budgets and answer feedback. Configuration and audit only — runtime AI behaviour is unchanged."
+        subtitle="Monitor live AI usage, spend, failed requests and report delivery, and manage the model catalogue, prompts, budgets and feedback."
         icon={Sparkles}
         badge="Admin"
       />
@@ -909,6 +912,8 @@ export default function AiAdministration() {
         ))}
       </div>
 
+      {tab === 'operations' && <AiOperationsTab country={activeCountry} />}
+      {tab === 'jobs' && <AiDeliveryJobsTab />}
       {tab === 'models' && <ModelsTab country={activeCountry} />}
       {tab === 'prompts' && <PromptsTab country={activeCountry} />}
       {tab === 'budgets' && <BudgetsTab country={activeCountry} />}

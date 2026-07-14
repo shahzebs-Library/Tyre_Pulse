@@ -119,12 +119,15 @@ export function isMonitoringActive() {
 /**
  * Report an error with optional structured context.
  * Safe to call anywhere — no-ops (never throws) when Sentry is not active.
+ * Returns the Sentry event id when the event was captured, otherwise null.
  */
 export function captureError(error, context = undefined) {
-  if (!initialized) return
+  if (!initialized) return null
   try {
-    Sentry.captureException(error, context ? { extra: context } : undefined)
+    const eventId = Sentry.captureException(error, context ? { extra: context } : undefined)
+    return eventId || null
   } catch { /* no-op — monitoring must never throw */ }
+  return null
 }
 
 /**

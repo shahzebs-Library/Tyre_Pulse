@@ -97,8 +97,8 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
   `datasetFor('builder:*')` → full accidents projection. ScheduledReports.jsx shows custom layouts
   in an optgroup; "Generate now" on a builder schedule renders the template's EXACT block PDF via
   the shared headless renderer (Excel = tabular accidents projection). Edge fn
-  `send-scheduled-reports` source updated (builder:* → claims-desk digest + "Custom Accident
-  Report" subject) — **needs redeploy to v11** (Supabase MCP was unauthenticated this session).
+  `send-scheduled-reports` updated (builder:* → claims-desk digest + "Custom Accident
+  Report" subject) and **deployed v11 (ACTIVE, 2026-07-14)** via Supabase MCP.
   Tests: `accidentReport.test.js` (13), `scheduledReportsBuilder.test.js` (4).
 - **Shipped 2026-07-14**: merged to main (`e9408ab`, branch `claude/accident-builder-report-ui-2bkwb5`);
   Vercel production deploy VERIFIED READY on that exact commit (build clean). Full suite 3406 green at merge.

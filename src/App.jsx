@@ -18,16 +18,18 @@ import { useFeatureGate } from './hooks/useFeatureFlags'
 // Console (completely isolated auth context)
 import { ConsoleAuthProvider, useConsoleAuth } from './console/ConsoleAuthContext'
 import ConsoleLayout from './console/components/ConsoleLayout'
-import ConsoleLogin from './console/pages/ConsoleLogin'
-import ConsoleDashboard from './console/pages/ConsoleDashboard'
-import ConsoleOrganisations from './console/pages/ConsoleOrganisations'
-import ConsoleUsers from './console/pages/ConsoleUsers'
-import ConsolePermissions from './console/pages/ConsolePermissions'
-import ConsoleAIUsage from './console/pages/ConsoleAIUsage'
-import ConsoleAuditLog from './console/pages/ConsoleAuditLog'
-import ConsoleAnnouncements from './console/pages/ConsoleAnnouncements'
-import ConsoleSystemConfig from './console/pages/ConsoleSystemConfig'
 import ConsoleAuthBridge from './console/ConsoleAuthBridge'
+// Console pages are admin/super-admin only and rarely loaded; lazy-load them so
+// their code stays out of the main entry chunk for the typical user.
+const ConsoleLogin         = lazy(() => import('./console/pages/ConsoleLogin'))
+const ConsoleDashboard     = lazy(() => import('./console/pages/ConsoleDashboard'))
+const ConsoleOrganisations = lazy(() => import('./console/pages/ConsoleOrganisations'))
+const ConsoleUsers         = lazy(() => import('./console/pages/ConsoleUsers'))
+const ConsolePermissions   = lazy(() => import('./console/pages/ConsolePermissions'))
+const ConsoleAIUsage       = lazy(() => import('./console/pages/ConsoleAIUsage'))
+const ConsoleAuditLog      = lazy(() => import('./console/pages/ConsoleAuditLog'))
+const ConsoleAnnouncements = lazy(() => import('./console/pages/ConsoleAnnouncements'))
+const ConsoleSystemConfig  = lazy(() => import('./console/pages/ConsoleSystemConfig'))
 
 // Console admin pages built in parallel by other agents. Resolved via
 // import.meta.glob so this build succeeds whether or not the files exist yet: a
@@ -587,7 +589,9 @@ export default function App() {
         {/* ── System Console - completely isolated from main app ── */}
         <Route path="/console/login" element={
           <ConsoleAuthProvider>
-            <ConsoleLogin />
+            <Suspense fallback={<LoadingSpinner />}>
+              <ConsoleLogin />
+            </Suspense>
           </ConsoleAuthProvider>
         } />
         <Route path="/console/*" element={

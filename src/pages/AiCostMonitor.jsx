@@ -63,7 +63,10 @@ function formatTokens(n) {
 function groupByDay(logs) {
   const map = {}
   for (const log of logs) {
-    const day = log.created_at.slice(0, 10)
+    // Defensive: created_at should always be present, but never let a bad row
+    // crash the whole page (a thrown render error blanks the screen).
+    const day = typeof log.created_at === 'string' ? log.created_at.slice(0, 10) : ''
+    if (!day) continue
     if (!map[day]) map[day] = { date: day, tokens: 0, cost: 0, calls: 0 }
     map[day].tokens += (log.prompt_tokens ?? 0) + (log.completion_tokens ?? 0)
     map[day].cost   += estimateCost(log)
@@ -334,11 +337,28 @@ export default function AiCostMonitor() {
         <StatCard label="Active Features" value={allFeatures.length || 0} sub={allFeatures.join(', ') || '-'} icon={BarChart2} color="text-yellow-400" bg="bg-yellow-400/10" />
       </div>
 
-      {totalCalls === 0 && !loading ? (
+      {totalCalls === 0 && !loading && !error ? (
         <div className="text-center py-16 text-[var(--text-muted)] bg-[var(--surface-2)] border border-[var(--border-dim)] rounded-2xl">
           <DollarSign className="w-10 h-10 mx-auto mb-3 opacity-30" />
-          <p className="font-medium text-[var(--text-secondary)]">No AI usage data yet</p>
-          <p className="text-sm mt-1">Token logs will appear here once the chat-ai edge function is updated to write to ai_token_logs.</p>
+          <p className="font-medium text-[var(--text-secondary)]">No AI usage recorded yet</p>
+          <p className="text-sm mt-1 max-w-md mx-auto">
+            No AI calls were logged in the selected period. Usage appears here automatically as AI
+            features (chat, insights, reports) are used. Try widening the date range or clearing the
+            filters above.
+          </p>
+          <p className="text-xs mt-2 opacity-80">Only Admin, Manager and Director roles can view AI usage.</p>
+        </div>
+      ) : totalCalls === 0 && !loading && error ? (
+        <div className="text-center py-16 text-[var(--text-muted)] bg-[var(--surface-2)] border border-[var(--border-dim)] rounded-2xl">
+          <AlertCircle className="w-10 h-10 mx-auto mb-3 opacity-30 text-red-400" />
+          <p className="font-medium text-[var(--text-secondary)]">AI usage could not be loaded</p>
+          <p className="text-sm mt-1 max-w-md mx-auto">{error}</p>
+          <button
+            onClick={fetchLogs}
+            className="mt-3 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium bg-[var(--surface-1)] border border-[var(--border-dim)] text-[var(--text-secondary)] hover:border-[var(--accent)] hover:text-[var(--text-primary)] transition-colors"
+          >
+            <RefreshCw className="w-3.5 h-3.5" /> Retry
+          </button>
         </div>
       ) : (
         <>
@@ -348,7 +368,7 @@ export default function AiCostMonitor() {
               <div className="flex items-center justify-between mb-3">
                 <h3 className="text-[var(--text-primary)] font-semibold">Daily Token Usage</h3>
                 <div className="flex items-center gap-4 text-xs text-[var(--text-muted)]">
-                  <span>{dailyData[0]?.date?.slice(5)} → {dailyData[dailyData.length - 1]?.date?.slice(5)}</span>
+                  <span>{dailyData[0]?.date?.slice(5)} to {dailyData[dailyData.length - 1]?.date?.slice(5)}</span>
                   <span className="text-green-400 font-medium">{formatTokens(totalTokens)} total</span>
                 </div>
               </div>
@@ -452,7 +472,7 @@ export default function AiCostMonitor() {
               error={error}
               onRetry={fetchLogs}
               enableGlobalFilter={true}
-              searchPlaceholder="Search logs…"
+              searchPlaceholder="Search logs"
               enableColumnFilters={true}
               enableSorting={true}
               enableExport={true}

@@ -22,17 +22,22 @@ import {
   AlertTriangle, ShieldCheck, Inbox, Maximize2, Minimize2,
   RefreshCw, Play, Pause, Radio, Gauge as GaugeIcon,
   LayoutGrid, LogOut, Check, X as XIcon,
+  Wrench, Repeat, Car, Stamp, Clock, Timer, FileCheck2,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { fetchAllPages } from '../lib/fetchAll'
 import { safeImageSrc } from '../lib/safeUrl'
 import { useTenant } from '../contexts/TenantContext'
+import { severityColor, normalizeSeverity } from '../lib/severity'
+import { canonSeverity, canonStatus } from '../lib/accidentVocab'
 import Gauge from '../components/ui/Gauge'
 import StatTile from '../components/ui/StatTile'
 import {
   computeFleetAvailability, groupVehiclesBySite, computeTyreAttention,
   computeMonthlyTyreCost, computePressureCompliancePct, countTodaysInspections,
   summariseAlerts, nextBoardIndex, formatCountdown, formatCompactMoney,
+  computeWorkOrderBoard, computeReplacementBoard, computeAccidentBoard,
+  computeApprovalsBoard, daysBetween,
 } from '../lib/displayBoard'
 
 const REFRESH_SECS = 60
@@ -40,9 +45,13 @@ const ROTATE_SECS  = 30
 const CURSOR_HIDE_MS = 5000
 
 const BOARDS = [
-  { key: 'fleet',  label: 'Fleet Overview' },
-  { key: 'tyre',   label: 'Tyre & Maintenance' },
-  { key: 'alerts', label: 'Alerts & Compliance' },
+  { key: 'fleet',        label: 'Fleet Overview' },
+  { key: 'tyre',         label: 'Tyre & Maintenance' },
+  { key: 'jobcards',     label: 'Open Job Cards' },
+  { key: 'replacements', label: 'Tyre Replacements' },
+  { key: 'accidents',    label: 'Accidents' },
+  { key: 'approvals',    label: 'Approvals Queue' },
+  { key: 'alerts',       label: 'Alerts & Compliance' },
 ]
 
 // Which boards are shown / rotated, persisted so a given TV keeps its selection.
@@ -128,6 +137,50 @@ function BigStat({ label, value, sub, color = '#f8fafc', icon: Icon }) {
   )
 }
 
+// Full-height honest empty state for a board list panel.
+function BoardEmpty({ icon: Icon = ShieldCheck, label }) {
+  return (
+    <div className="h-full min-h-[160px] flex flex-col items-center justify-center gap-3">
+      <Icon size={44} className="text-emerald-500/70" />
+      <p className="text-slate-300 text-xl font-semibold">{label}</p>
+    </div>
+  )
+}
+
+// Severity / priority pill coloured via the canonical severity ladder.
+function SevPill({ value, label }) {
+  const text = label ?? (value || 'N/A')
+  const norm = normalizeSeverity(value, null)
+  const color = norm ? severityColor(norm) : '#64748b'
+  return (
+    <span
+      className="text-xs font-bold uppercase tracking-wider px-2.5 py-1 rounded-md flex-shrink-0"
+      style={{ color, backgroundColor: `${color}1f` }}
+    >
+      {text}
+    </span>
+  )
+}
+
+// Neutral status chip (non-severity vocab such as work-order / accident status).
+function StatusChip({ value }) {
+  if (!value) return null
+  return (
+    <span className="text-xs font-semibold px-2.5 py-1 rounded-md flex-shrink-0 bg-slate-800/80 text-slate-300 border border-slate-700/60">
+      {value}
+    </span>
+  )
+}
+
+// Compact "N days ago" label for TV distance reading. Null-safe.
+function agoLabel(when, ref) {
+  const d = daysBetween(when, ref)
+  if (d == null) return ''
+  if (d === 0) return 'today'
+  if (d === 1) return '1 day'
+  return `${d} days`
+}
+
 function SiteBars({ sites, total }) {
   if (!sites.length) return <p className="text-slate-600 text-sm py-4 text-center">No vehicles recorded</p>
   const max = Math.max(...sites.map(s => s.count), 1)
@@ -169,6 +222,10 @@ export default function DisplayDashboard() {
   const [inspections,  setInspections]  = useState(EMPTY_SLICE)
   const [alerts,       setAlerts]       = useState(EMPTY_SLICE)
   const [pending,      setPending]      = useState(EMPTY_SLICE)
+  const [workOrders,   setWorkOrders]   = useState(EMPTY_SLICE)
+  const [replacements, setReplacements] = useState(EMPTY_SLICE)
+  const [incidents,    setIncidents]    = useState(EMPTY_SLICE)
+  const [approvals,    setApprovals]    = useState(EMPTY_SLICE)
 
   const [now,          setNow]          = useState(() => new Date())
   const [countdown,    setCountdown]    = useState(REFRESH_SECS)
@@ -294,6 +351,106 @@ export default function DisplayDashboard() {
           return data ?? []
         },
       },
+      {
+        set: setWorkOrders,
+        run: async () => {
+          const { data, error } = await fetchAllPages((from, to) => supabase
+            .from('work_orders')
+            .select('id,work_order_no,asset_no,status,priority,work_type,technician_name,site,opened_at,target_completion')
+            .not('status', 'in', '("Completed","Closed","Cancelled")')
+            .order('opened_at', { ascending: false })
+            .range(from, to), { max: 5000 })
+          if (error) throw error
+          return data ?? []
+        },
+      },
+      {
+        set: setReplacements,
+        run: async () => {
+          const { data, error } = await fetchAllPages((from, to) => supabase
+            .from('tyre_changes')
+            .select('asset_no,tyre_serial,brand,position,removal_reason,removal_date,site,category')
+            .not('removal_date', 'is', null)
+            .gte('removal_date', windowStart)
+            .order('removal_date', { ascending: false })
+            .range(from, to), { max: 5000 })
+          if (error) throw error
+          return data ?? []
+        },
+      },
+      {
+        set: setIncidents,
+        run: async () => {
+          const { data, error } = await fetchAllPages((from, to) => supabase
+            .from('accidents')
+            .select('id,asset_no,site,incident_date,severity,status,accident_type,driver_name')
+            .gte('incident_date', windowStart)
+            .order('incident_date', { ascending: false })
+            .range(from, to), { max: 5000 })
+          if (error) throw error
+          return data ?? []
+        },
+      },
+      {
+        set: setApprovals,
+        run: async () => {
+          // Aggregate every pending-approval surface into one unified list. Each
+          // source is independently guarded so a missing relation degrades to an
+          // honest zero for that kind rather than blanking the board.
+          const items = []
+          const safe = async (fn) => { try { await fn() } catch { /* honest skip */ } }
+
+          await safe(async () => {
+            const { data } = await supabase
+              .from('workflow_instances')
+              .select('id,entity_type,entity_label,step_started_at,started_at')
+              .eq('status', 'pending')
+              .order('started_at', { ascending: false })
+              .limit(200)
+            for (const w of data ?? []) items.push({
+              kind: 'Workflow', label: w.entity_label || w.entity_type || 'Approval',
+              sub: w.entity_type || '', when: w.step_started_at || w.started_at,
+            })
+          })
+          await safe(async () => {
+            const { data } = await supabase
+              .from('accidents')
+              .select('id,asset_no,site,severity,close_requested_at')
+              .eq('closure_status', 'pending_closure')
+              .order('close_requested_at', { ascending: true, nullsFirst: false })
+              .limit(200)
+            for (const a of data ?? []) items.push({
+              kind: 'Accident closure', label: a.asset_no || 'Incident',
+              sub: a.site || '', when: a.close_requested_at, severity: a.severity,
+            })
+          })
+          await safe(async () => {
+            const { data } = await supabase
+              .from('checklist_submissions')
+              .select('id,title,template_name,asset_no,site,submitted_at')
+              .eq('approval_status', 'pending')
+              .order('submitted_at', { ascending: true })
+              .limit(200)
+            for (const c of data ?? []) items.push({
+              kind: 'Checklist', label: c.title || c.template_name || 'Checklist',
+              sub: c.asset_no || c.site || '', when: c.submitted_at,
+            })
+          })
+          await safe(async () => {
+            const { data } = await supabase
+              .from('import_batches')
+              .select('id,module,total_rows,created_at')
+              .eq('approval_status', 'pending_approval')
+              .order('created_at', { ascending: false })
+              .limit(200)
+            for (const b of data ?? []) items.push({
+              kind: 'Data import', label: b.module || 'Import',
+              sub: `${(b.total_rows ?? 0).toLocaleString()} rows`, when: b.created_at,
+            })
+          })
+          return items
+        },
+      },
     ]
 
     await Promise.allSettled(tasks.map(async t => {
@@ -383,6 +540,11 @@ export default function DisplayDashboard() {
   const compliance   = useMemo(() => computePressureCompliancePct(inspections.rows), [inspections.rows])
   const todayInsp    = useMemo(() => countTodaysInspections(inspections.rows, todayStr), [inspections.rows, todayStr])
   const alertSummary = useMemo(() => summariseAlerts(alerts.rows), [alerts.rows])
+  const dayRef       = useMemo(() => new Date(`${todayStr}T12:00:00`), [todayStr])
+  const woBoard      = useMemo(() => computeWorkOrderBoard(workOrders.rows, dayRef), [workOrders.rows, dayRef])
+  const replBoard    = useMemo(() => computeReplacementBoard(replacements.rows, dayRef), [replacements.rows, dayRef])
+  const accBoard     = useMemo(() => computeAccidentBoard(incidents.rows, dayRef), [incidents.rows, dayRef])
+  const apprBoard    = useMemo(() => computeApprovalsBoard(approvals.rows), [approvals.rows])
 
   const board = visibleBoards[safeIndex] ?? BOARDS[0]
 
@@ -648,7 +810,224 @@ export default function DisplayDashboard() {
           </div>
         )}
 
-        {/* ── (c) Alerts & Compliance ── */}
+        {/* ── (c) Open Job Cards / Work Orders ── */}
+        {board.key === 'jobcards' && (
+          <div className="grid grid-cols-12 gap-6 h-full">
+            <div className="col-span-12 grid grid-cols-2 xl:grid-cols-4 gap-6">
+              <SliceGuard slice={workOrders} lines={2}>
+                <BigStat label="Open Job Cards" value={woBoard.total}
+                  color={woBoard.total > 0 ? '#38bdf8' : '#22c55e'} icon={Wrench} sub="Active workshop jobs" />
+              </SliceGuard>
+              <SliceGuard slice={workOrders} lines={2}>
+                <BigStat label="In Progress" value={woBoard.inProgress} icon={Play} color="#eab308" sub="Currently being worked" />
+              </SliceGuard>
+              <SliceGuard slice={workOrders} lines={2}>
+                <BigStat label="Awaiting Parts" value={woBoard.awaitingParts} icon={Clock} color="#f97316" sub="Blocked on parts" />
+              </SliceGuard>
+              <SliceGuard slice={workOrders} lines={2}>
+                <BigStat label="Overdue" value={woBoard.overdue}
+                  color={woBoard.overdue > 0 ? '#ef4444' : '#22c55e'} icon={Timer} sub="Past target completion" />
+              </SliceGuard>
+            </div>
+
+            <div className="col-span-12">
+              <Panel title="Open Job Cards" icon={Wrench} className="h-full">
+                <SliceGuard slice={workOrders} lines={6}>
+                  {woBoard.list.length === 0 ? (
+                    <BoardEmpty icon={Wrench} label="No open job cards" />
+                  ) : (
+                    <div className="space-y-2.5">
+                      {woBoard.list.slice(0, 8).map((o) => (
+                        <div key={o.id} className="flex items-center gap-4 bg-slate-900/60 border border-slate-800/60 rounded-xl px-4 py-3">
+                          <SevPill value={o.priority} />
+                          <div className="min-w-0 flex-1">
+                            <p className="text-slate-100 text-lg font-semibold truncate">
+                              {o.asset_no || 'Unassigned asset'}
+                              <span className="text-slate-500 text-base font-normal ml-2">{o.work_type || 'Job'}</span>
+                            </p>
+                            <p className="text-slate-500 text-sm font-mono truncate">
+                              {o.work_order_no || ''}{o.work_order_no && o.technician_name ? ' · ' : ''}{o.technician_name || ''}
+                            </p>
+                          </div>
+                          <StatusChip value={o.status} />
+                          <div className="text-right flex-shrink-0 w-24">
+                            <p className="text-slate-300 text-base font-bold tabular-nums">{agoLabel(o.opened_at, dayRef) || 'N/A'}</p>
+                            <p className="text-slate-600 text-xs">open</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </SliceGuard>
+              </Panel>
+            </div>
+          </div>
+        )}
+
+        {/* ── (d) Tyre Replacements ── */}
+        {board.key === 'replacements' && (
+          <div className="grid grid-cols-12 gap-6 h-full">
+            <div className="col-span-12 xl:col-span-4 grid grid-rows-2 gap-6">
+              <SliceGuard slice={replacements} lines={2}>
+                <BigStat label="Replaced (30 days)" value={replBoard.recent}
+                  color={replBoard.recent > 0 ? '#f97316' : '#22c55e'} icon={Repeat} sub="Tyres removed this period" />
+              </SliceGuard>
+              <SliceGuard slice={replacements} lines={2}>
+                <BigStat label="Recent Removals" value={replBoard.total} icon={CircleDot} sub="Within the last 90 days" />
+              </SliceGuard>
+            </div>
+
+            <div className="col-span-12 xl:col-span-8">
+              <Panel title="Latest Tyre Replacements" icon={Repeat} className="h-full">
+                <SliceGuard slice={replacements} lines={6}>
+                  {replBoard.list.length === 0 ? (
+                    <BoardEmpty icon={Repeat} label="No tyre replacements recorded" />
+                  ) : (
+                    <div className="space-y-2.5">
+                      {replBoard.list.slice(0, 9).map((c, i) => (
+                        <div key={`${c.tyre_serial ?? i}-${i}`} className="flex items-center gap-4 bg-slate-900/60 border border-slate-800/60 rounded-xl px-4 py-3">
+                          <div className="w-16 flex-shrink-0 text-center">
+                            <p className="text-slate-200 text-base font-bold">{c.position || 'N/A'}</p>
+                            <p className="text-slate-600 text-xs uppercase tracking-wider">pos</p>
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p className="text-slate-100 text-lg font-semibold truncate">
+                              {c.asset_no || 'Unassigned asset'}
+                              <span className="text-slate-500 text-base font-normal ml-2">{c.brand || ''}</span>
+                            </p>
+                            <p className="text-slate-500 text-sm truncate">
+                              {c.removal_reason || 'Reason not recorded'}
+                              {c.site ? ` · ${c.site}` : ''}
+                            </p>
+                          </div>
+                          <div className="text-right flex-shrink-0 w-28">
+                            <p className="text-slate-300 text-base font-bold tabular-nums">
+                              {c.removal_date ? new Date(c.removal_date).toLocaleDateString([], { day: '2-digit', month: 'short' }) : 'N/A'}
+                            </p>
+                            <p className="text-slate-600 text-xs">{agoLabel(c.removal_date, dayRef)}</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </SliceGuard>
+              </Panel>
+            </div>
+          </div>
+        )}
+
+        {/* ── (e) Accidents ── */}
+        {board.key === 'accidents' && (
+          <div className="grid grid-cols-12 gap-6 h-full">
+            <div className="col-span-12 grid grid-cols-2 xl:grid-cols-4 gap-6">
+              <SliceGuard slice={incidents} lines={2}>
+                <BigStat label="Open Incidents" value={accBoard.open}
+                  color={accBoard.open > 0 ? '#f97316' : '#22c55e'} icon={Car} sub="Cases not yet closed" />
+              </SliceGuard>
+              <SliceGuard slice={incidents} lines={2}>
+                <BigStat label="Last 30 Days" value={accBoard.recent} icon={AlertTriangle}
+                  color={accBoard.recent > 0 ? '#eab308' : '#22c55e'} sub="Reported incidents" />
+              </SliceGuard>
+              <SliceGuard slice={incidents} lines={2}>
+                <BigStat label="Recorded (90 days)" value={accBoard.total} icon={ClipboardList} sub="Total incidents on file" />
+              </SliceGuard>
+              <SliceGuard slice={incidents} lines={2}>
+                <BigStat label="Closed" value={Math.max(0, accBoard.total - accBoard.open)}
+                  color="#22c55e" icon={ShieldCheck} sub="Cases resolved" />
+              </SliceGuard>
+            </div>
+
+            <div className="col-span-12">
+              <Panel title="Latest Incidents" icon={Car} className="h-full">
+                <SliceGuard slice={incidents} lines={6}>
+                  {accBoard.list.length === 0 ? (
+                    <BoardEmpty icon={Car} label="No incidents recorded" />
+                  ) : (
+                    <div className="space-y-2.5">
+                      {accBoard.list.slice(0, 8).map((a) => (
+                        <div key={a.id} className="flex items-center gap-4 bg-slate-900/60 border border-slate-800/60 rounded-xl px-4 py-3">
+                          <SevPill value={a.severity} label={canonSeverity(a.severity) || undefined} />
+                          <div className="min-w-0 flex-1">
+                            <p className="text-slate-100 text-lg font-semibold truncate">
+                              {a.asset_no || 'Unassigned asset'}
+                              <span className="text-slate-500 text-base font-normal ml-2">{a.accident_type || 'Incident'}</span>
+                            </p>
+                            <p className="text-slate-500 text-sm truncate">
+                              {a.driver_name || 'Driver not recorded'}{a.site ? ` · ${a.site}` : ''}
+                            </p>
+                          </div>
+                          <StatusChip value={canonStatus(a.status) || a.status} />
+                          <div className="text-right flex-shrink-0 w-28">
+                            <p className="text-slate-300 text-base font-bold tabular-nums">
+                              {a.incident_date ? new Date(a.incident_date).toLocaleDateString([], { day: '2-digit', month: 'short' }) : 'N/A'}
+                            </p>
+                            <p className="text-slate-600 text-xs">{agoLabel(a.incident_date, dayRef)}</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </SliceGuard>
+              </Panel>
+            </div>
+          </div>
+        )}
+
+        {/* ── (f) Approvals Queue ── */}
+        {board.key === 'approvals' && (
+          <div className="grid grid-cols-12 gap-6 h-full">
+            <div className="col-span-12 grid grid-cols-2 xl:grid-cols-5 gap-6">
+              <SliceGuard slice={approvals} lines={2}>
+                <BigStat label="Pending Approvals" value={apprBoard.total}
+                  color={apprBoard.total > 0 ? '#eab308' : '#22c55e'} icon={Stamp} sub="Awaiting a decision" />
+              </SliceGuard>
+              {[
+                { kind: 'Workflow',         icon: FileCheck2 },
+                { kind: 'Accident closure', icon: Car },
+                { kind: 'Checklist',        icon: ClipboardList },
+                { kind: 'Data import',      icon: Inbox },
+              ].map(({ kind, icon }) => (
+                <SliceGuard key={kind} slice={approvals} lines={2}>
+                  <BigStat label={kind} value={apprBoard.byKind[kind] || 0}
+                    color={(apprBoard.byKind[kind] || 0) > 0 ? '#38bdf8' : '#334155'} icon={icon} />
+                </SliceGuard>
+              ))}
+            </div>
+
+            <div className="col-span-12">
+              <Panel title="Pending Approvals Queue" icon={Stamp} className="h-full">
+                <SliceGuard slice={approvals} lines={6}>
+                  {apprBoard.list.length === 0 ? (
+                    <BoardEmpty icon={ShieldCheck} label="Approvals queue is clear" />
+                  ) : (
+                    <div className="space-y-2.5">
+                      {apprBoard.list.slice(0, 8).map((it, i) => (
+                        <div key={i} className="flex items-center gap-4 bg-slate-900/60 border border-slate-800/60 rounded-xl px-4 py-3">
+                          {it.severity
+                            ? <SevPill value={it.severity} label={canonSeverity(it.severity) || undefined} />
+                            : <StatusChip value={it.kind} />}
+                          <div className="min-w-0 flex-1">
+                            <p className="text-slate-100 text-lg font-semibold truncate">
+                              {it.label}
+                              {it.severity ? <span className="text-slate-500 text-base font-normal ml-2">{it.kind}</span> : null}
+                            </p>
+                            {it.sub ? <p className="text-slate-500 text-sm truncate">{it.sub}</p> : null}
+                          </div>
+                          <div className="text-right flex-shrink-0 w-28">
+                            <p className="text-slate-300 text-base font-bold tabular-nums">{agoLabel(it.when, dayRef) || 'N/A'}</p>
+                            <p className="text-slate-600 text-xs">waiting</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </SliceGuard>
+              </Panel>
+            </div>
+          </div>
+        )}
+
+        {/* ── (g) Alerts & Compliance ── */}
         {board.key === 'alerts' && (
           <div className="grid grid-cols-12 gap-6 h-full">
             <div className="col-span-12 grid grid-cols-2 xl:grid-cols-5 gap-6">

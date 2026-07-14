@@ -3,6 +3,8 @@ import {
   computeFleetAvailability, groupVehiclesBySite, computeTyreAttention,
   computeMonthlyTyreCost, computePressureCompliancePct, countTodaysInspections,
   summariseAlerts, nextBoardIndex, formatCountdown, formatCompactMoney,
+  daysBetween, computeWorkOrderBoard, computeReplacementBoard,
+  computeAccidentBoard, computeApprovalsBoard,
 } from '../lib/displayBoard'
 
 describe('computeFleetAvailability', () => {
@@ -144,5 +146,87 @@ describe('formatCompactMoney', () => {
     expect(formatCompactMoney(12400)).toBe('12.4K')
     expect(formatCompactMoney(1_250_000)).toBe('1.3M')
     expect(formatCompactMoney('junk')).toBe('0')
+  })
+})
+
+const NOW = new Date('2026-07-14T12:00:00Z')
+
+describe('daysBetween', () => {
+  it('counts whole days, null-safe', () => {
+    expect(daysBetween('2026-07-04T12:00:00Z', NOW)).toBe(10)
+    expect(daysBetween(null, NOW)).toBeNull()
+    expect(daysBetween('not-a-date', NOW)).toBeNull()
+  })
+  it('never returns negative', () => {
+    expect(daysBetween('2026-07-20T12:00:00Z', NOW)).toBe(0)
+  })
+})
+
+describe('computeWorkOrderBoard', () => {
+  const rows = [
+    { id: 1, status: 'Open',           priority: 'Low',      opened_at: '2026-07-10T00:00:00Z' },
+    { id: 2, status: 'In Progress',    priority: 'Critical', opened_at: '2026-07-01T00:00:00Z' },
+    { id: 3, status: 'Awaiting Parts', priority: 'High',     opened_at: '2026-07-05T00:00:00Z', target_completion: '2026-07-08T00:00:00Z' },
+    { id: 4, status: 'Completed',      priority: 'High',     opened_at: '2026-06-01T00:00:00Z' },
+    { id: 5, status: 'Cancelled',      priority: 'High',     opened_at: '2026-06-01T00:00:00Z' },
+  ]
+  it('counts only open (non-terminal) job cards', () => {
+    const b = computeWorkOrderBoard(rows, NOW)
+    expect(b.total).toBe(3)
+    expect(b.inProgress).toBe(1)
+    expect(b.awaitingParts).toBe(1)
+    expect(b.overdue).toBe(1)
+  })
+  it('sorts worst priority first via the severity ladder', () => {
+    const b = computeWorkOrderBoard(rows, NOW)
+    expect(b.list[0].id).toBe(2) // Critical
+  })
+  it('honest empty', () => {
+    expect(computeWorkOrderBoard([], NOW)).toEqual({ total: 0, inProgress: 0, awaitingParts: 0, overdue: 0, list: [] })
+  })
+})
+
+describe('computeReplacementBoard', () => {
+  const rows = [
+    { tyre_serial: 'A', removal_date: '2026-07-10T00:00:00Z' },
+    { tyre_serial: 'B', removal_date: '2026-05-01T00:00:00Z' },
+    { tyre_serial: 'C', removal_date: null },
+  ]
+  it('counts removals with recent window', () => {
+    const b = computeReplacementBoard(rows, NOW, 30)
+    expect(b.total).toBe(2)
+    expect(b.recent).toBe(1)
+    expect(b.list[0].tyre_serial).toBe('A') // newest first
+  })
+})
+
+describe('computeAccidentBoard', () => {
+  const rows = [
+    { id: 1, status: 'reported', incident_date: '2026-07-12T00:00:00Z' },
+    { id: 2, status: 'closed',   incident_date: '2026-07-01T00:00:00Z' },
+    { id: 3, status: 'Closed',   incident_date: '2026-02-01T00:00:00Z' },
+  ]
+  it('open excludes closed cases (any case), recent within window', () => {
+    const b = computeAccidentBoard(rows, NOW, 30)
+    expect(b.total).toBe(3)
+    expect(b.open).toBe(1)
+    expect(b.recent).toBe(2)
+    expect(b.list[0].id).toBe(1)
+  })
+})
+
+describe('computeApprovalsBoard', () => {
+  it('buckets by kind and sorts newest waiting first', () => {
+    const b = computeApprovalsBoard([
+      { kind: 'Workflow',  when: '2026-07-10T00:00:00Z' },
+      { kind: 'Workflow',  when: '2026-07-13T00:00:00Z' },
+      { kind: 'Checklist', when: '2026-07-11T00:00:00Z' },
+    ])
+    expect(b.total).toBe(3)
+    expect(b.byKind).toEqual({ Workflow: 2, Checklist: 1 })
+    expect(b.list[0].when).toBe('2026-07-13T00:00:00Z')
+  })
+  it('honest empty', () => {
+    expect(computeApprovalsBoard([])).toEqual({ total: 0, byKind: {}, list: [] })
   })
 })

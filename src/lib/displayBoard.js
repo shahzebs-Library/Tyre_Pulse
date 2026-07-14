@@ -10,7 +10,19 @@
  *   import_batches: approval_status
  */
 
+import { severityRank } from './severity'
+
 const num = (v) => (Number.isFinite(Number(v)) ? Number(v) : 0)
+
+/** Whole days between `from` and `to` (later). Null-safe / invalid → null. */
+export function daysBetween(from, to = new Date()) {
+  if (!from) return null
+  const a = new Date(from)
+  if (Number.isNaN(a.getTime())) return null
+  const b = to instanceof Date ? to : new Date(to)
+  if (Number.isNaN(b.getTime())) return null
+  return Math.max(0, Math.floor((b.getTime() - a.getTime()) / 86400000))
+}
 
 /**
  * Fleet availability from fleet_master rows.
@@ -117,6 +129,97 @@ export function summariseAlerts(alerts = []) {
     bySeverity[key] += 1
   })
   return { total: alerts.length, bySeverity }
+}
+
+/* ── New TV boards: work orders, tyre replacements, accidents, approvals ─────── */
+
+// Job cards still needing work (WorkOrders.jsx STATUS_CONFIG terminal set is
+// Completed/Closed/Cancelled; everything else is "open").
+const OPEN_WO_STATUSES = new Set(['Open', 'In Progress', 'Awaiting Parts'])
+
+/**
+ * Open job-card board from work_orders rows. Open = non-terminal status;
+ * overdue = past target_completion and still open. List worst-first
+ * (priority via the canonical severity ladder, then oldest opened first).
+ * @returns {{ total:number, inProgress:number, awaitingParts:number,
+ *   overdue:number, list:Array<object> }}
+ */
+export function computeWorkOrderBoard(orders = [], now = new Date()) {
+  const open = orders.filter((o) => OPEN_WO_STATUSES.has(o.status))
+  const inProgress = open.filter((o) => o.status === 'In Progress').length
+  const awaitingParts = open.filter((o) => o.status === 'Awaiting Parts').length
+  const overdue = open.filter(
+    (o) => o.target_completion && new Date(o.target_completion).getTime() < now.getTime(),
+  ).length
+  const list = [...open].sort((a, b) => {
+    const pr = severityRank(b.priority) - severityRank(a.priority)
+    if (pr) return pr
+    return (daysBetween(b.opened_at, now) ?? 0) - (daysBetween(a.opened_at, now) ?? 0)
+  })
+  return { total: open.length, inProgress, awaitingParts, overdue, list }
+}
+
+/**
+ * Tyre-replacement board from tyre_changes rows. A replacement = a row with a
+ * removal_date; `recent` counts those removed inside the trailing window. List
+ * is newest removal first.
+ * @returns {{ total:number, recent:number, windowDays:number, list:Array<object> }}
+ */
+export function computeReplacementBoard(changes = [], now = new Date(), windowDays = 30) {
+  const removed = changes.filter((c) => c.removal_date)
+  const cutoff = now.getTime() - windowDays * 86400000
+  const recent = removed.filter((c) => {
+    const d = new Date(c.removal_date)
+    return !Number.isNaN(d.getTime()) && d.getTime() >= cutoff
+  }).length
+  const list = [...removed].sort(
+    (a, b) => new Date(b.removal_date).getTime() - new Date(a.removal_date).getTime(),
+  )
+  return { total: removed.length, recent, windowDays, list }
+}
+
+/** True when an accident status token means the case is closed. */
+function accidentClosed(status) {
+  return String(status || '').toLowerCase().replace(/\s+/g, '_') === 'closed'
+}
+
+/**
+ * Accident board from accidents rows. `open` = not closed; `recent` = incidents
+ * inside the trailing window. List newest incident first.
+ * @returns {{ total:number, open:number, recent:number, windowDays:number,
+ *   list:Array<object> }}
+ */
+export function computeAccidentBoard(rows = [], now = new Date(), windowDays = 30) {
+  const open = rows.filter((r) => !accidentClosed(r.status)).length
+  const cutoff = now.getTime() - windowDays * 86400000
+  const recent = rows.filter((r) => {
+    const d = new Date(r.incident_date)
+    return !Number.isNaN(d.getTime()) && d.getTime() >= cutoff
+  }).length
+  const list = [...rows].sort(
+    (a, b) => new Date(b.incident_date).getTime() - new Date(a.incident_date).getTime(),
+  )
+  return { total: rows.length, open, recent, windowDays, list }
+}
+
+/**
+ * Approvals board: fold the heterogeneous pending-approval sources into one
+ * unified, count-by-kind + newest-first list. Each input item already carries
+ * `{ kind, label, sub, when, severity? }`.
+ * @returns {{ total:number, byKind:Object<string,number>, list:Array<object> }}
+ */
+export function computeApprovalsBoard(items = []) {
+  const byKind = {}
+  items.forEach((i) => {
+    const k = i.kind || 'Other'
+    byKind[k] = (byKind[k] || 0) + 1
+  })
+  const list = [...items].sort((a, b) => {
+    const ta = a.when ? new Date(a.when).getTime() : 0
+    const tb = b.when ? new Date(b.when).getTime() : 0
+    return tb - ta
+  })
+  return { total: items.length, byKind, list }
 }
 
 /** Cyclic next index for board rotation. Safe for length 0 (returns 0). */

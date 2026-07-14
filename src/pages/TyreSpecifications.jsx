@@ -1,5 +1,4 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
-import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Chart as ChartJS,
@@ -7,7 +6,7 @@ import {
 } from 'chart.js'
 import { Doughnut } from 'react-chartjs-2'
 import {
-  ClipboardList, Plus, Search, Upload,
+  ClipboardList, Plus, Search,
   FileText, FileSpreadsheet, Edit2, Trash2, X, Save,
   CheckCircle, AlertTriangle, AlertOctagon, HelpCircle,
   ChevronLeft, ChevronRight, Tag, Shield,
@@ -610,7 +609,6 @@ function RaiseWorkOrderModal({ asset, violations, country, createdBy, onClose })
 // ── Main Component ─────────────────────────────────────────────────────────────
 
 export default function TyreSpecifications() {
-  const navigate = useNavigate()
   const { profile, user } = useAuth()
   const { appSettings, activeCountry } = useSettings()
   const { branding } = useTenant()
@@ -999,12 +997,6 @@ export default function TyreSpecifications() {
               className="btn-primary gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
             >
               <Plus size={15} /> Add Specification
-            </button>
-            <button
-              onClick={() => navigate('/data-intake')}
-              className="flex items-center gap-2 bg-[var(--input-bg)] hover:bg-gray-700 text-[var(--text-secondary)] text-sm px-3 py-2 rounded-lg border border-[var(--input-border)] transition-colors"
-            >
-              <Upload size={14} /> Import via Data Intake Center
             </button>
             <button
               onClick={exportSpecsExcel}

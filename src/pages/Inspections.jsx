@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
-import { useSearchParams, useNavigate } from 'react-router-dom'
+import { useSearchParams } from 'react-router-dom'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { supabase } from '../lib/supabase'
 import { fetchAllPages } from '../lib/fetchAll'
@@ -10,7 +10,7 @@ import { useSettings } from '../contexts/SettingsContext'
 import { useLanguage } from '../contexts/LanguageContext'
 import { exportToExcel, exportToPdf, exportInspectionDetailPdf, resolvePdfBrand, pdfHeader, pdfFooter, pdfEmptyState, pdfTableTheme } from '../lib/exportUtils'
 import { useTenant } from '../contexts/TenantContext'
-import { Download, FileText, Camera, ClipboardList, Eye, GraduationCap, CheckSquare, X, Share2, WifiOff, PenLine, Image as ImageIcon, Gauge, Clock, Send, CheckCircle2, ExternalLink, ChevronLeft, ChevronRight, Upload, Trash2, AlertTriangle } from 'lucide-react'
+import { Download, FileText, Camera, ClipboardList, Eye, GraduationCap, CheckSquare, X, Share2, WifiOff, PenLine, Image as ImageIcon, Gauge, Clock, Send, CheckCircle2, ExternalLink, ChevronLeft, ChevronRight, Trash2, AlertTriangle } from 'lucide-react'
 import SignaturePad from '../components/SignaturePad'
 import StatusBadge from '../components/ui/StatusBadge'
 import CustomFieldsPanel from '../components/CustomFieldsPanel'
@@ -248,7 +248,6 @@ export default function Inspections() {
   const company = branding?.legal_name || branding?.display_name || appSettings?.company_name || 'TyrePulse'
   const { t } = useLanguage()
   const [searchParams, setSearchParams] = useSearchParams()
-  const navigate = useNavigate()
   const isTyreMan = profile?.role === 'Tyre Man'
   const isAdmin = (profile?.role || '').toLowerCase() === 'admin'
   const [rows, setRows]         = useState([])
@@ -1014,12 +1013,6 @@ export default function Inspections() {
               <FileText size={14}/> {t('inspections.actions.pdf')}
             </button>
             <button
-              onClick={() => navigate('/data-intake?module=inspection')}
-              className="btn-primary flex items-center gap-2 text-sm"
-            >
-              <Upload size={15} /> {t('inspections.actions.import')}
-            </button>
-            <button
               className="btn-primary text-sm"
               onClick={() => setForm({ ...EMPTY_FORM, inspection_type: defaultType })}
             >
@@ -1028,12 +1021,6 @@ export default function Inspections() {
           </div>
         )}
       />
-
-      {!isTyreMan && (
-        <p className="text-xs text-[var(--text-muted)] -mt-3">
-          {t('inspections.importHint')}
-        </p>
-      )}
 
       {/* Tabs - hidden for TyreMan (locked to checklist) */}
       {!isTyreMan && <div className="flex gap-1 p-1 bg-[var(--surface-2)] rounded-lg w-fit flex-wrap">

@@ -12,7 +12,8 @@
  * All chart/KPI/insight values are computed from the live accident record set —
  * nothing is fabricated; empty data degrades to honest empty states.
  */
-import { analyzeClaims, hasClaim } from './claimsAnalytics'
+import { analyzeClaims, hasClaim, isClosed } from './claimsAnalytics'
+import { STATUSES, SEVERITIES, FAULT_STATUS_OPTS, canonStatus, canonSeverity } from './accidentVocab'
 
 // ── WYSIWYG paper theme (dark-on-white so on-screen preview == exported PDF) ──
 export const PAPER = { ink: '#0f172a', muted: '#475569', grid: 'rgba(15,23,42,0.08)' }
@@ -558,6 +559,142 @@ export function fmtCell(col, v, money) {
   return String(v)
 }
 
+// ── Detail-table filtering / sorting (shared: builder UI + PDF + Excel export) ──
+// Canonical fault-status label (accidentVocab has no canonFault helper). Mirrors
+// the fault chart's classification so the filter and the chart always agree.
+export const canonFault = (v) => {
+  const f = String(v || '').toLowerCase()
+  if (/non[-\s]?fault|not.?at.?fault|no.?fault/.test(f)) return 'Non-faulty'
+  if (/review/.test(f)) return 'Under review'
+  if (/fault/.test(f)) return 'Faulty'
+  return ''
+}
+
+/**
+ * Option lists the builder UI renders for the detail-table filter controls.
+ * `claims` carries [value, label] pairs (the value is stored on block.filter);
+ * status / severity / fault are the canonical display labels sourced from the
+ * single accident vocabulary, so a chosen value always matches the row's
+ * canonicalised value in `tableRows`. ASCII only.
+ */
+export const TABLE_FILTER_OPTS = {
+  claims: [['all', 'All'], ['open', 'Open claims only'], ['closed', 'Closed/settled'], ['none', 'No claim']],
+  status: STATUSES,
+  severity: SEVERITIES,
+  fault: FAULT_STATUS_OPTS,
+}
+
+// Columns compared numerically when sorting (everything else compares as text;
+// dates as YYYY-MM-DD strings sort chronologically).
+const NUMERIC_SORT_COLS = new Set([
+  'claim_amount', 'claim_approved_amount', 'recovered_amount', 'repair_cost',
+  'gcc_liability_ratio', 'days_open',
+])
+
+/** Compare two records by one table column via cellValue (numeric-aware). */
+function compareByCol(col, a, b, now) {
+  const va = cellValue(col, a, now)
+  const vb = cellValue(col, b, now)
+  if (NUMERIC_SORT_COLS.has(col)) {
+    const na = Number.isFinite(Number(va)) ? Number(va) : -Infinity
+    const nb = Number.isFinite(Number(vb)) ? Number(vb) : -Infinity
+    return na - nb
+  }
+  const sa = va == null ? '' : String(va)
+  const sb = vb == null ? '' : String(vb)
+  return sa < sb ? -1 : sa > sb ? 1 : 0
+}
+
+/**
+ * FILTERED + SORTED + capped detail-table rows (record objects, not strings).
+ * The single source the builder preview, the PDF renderer and the Excel export
+ * all consume, so every surface shows exactly the same rows.
+ *   - claims filter reuses the claims engine (hasClaim / isClosed):
+ *       open   -> hasClaim && !isClosed
+ *       closed -> hasClaim &&  isClosed
+ *       none   -> !hasClaim
+ *       all    -> no claim filter
+ *   - status / severity / fault -> case-insensitive match on the canonical value.
+ *   - dateFrom / dateTo -> incident_date within the inclusive range when set.
+ *   - sort -> by cellValue(col) (numeric for numbers/days_open, else string/date),
+ *     dir asc|desc, STABLE (original order breaks ties).
+ * Non-mutating; empty / invalid inputs degrade safely.
+ */
+export function tableRows(records, block = {}, now = Date.now()) {
+  const rows = Array.isArray(records) ? records : []
+  const f = (block && block.filter) || {}
+  const claimsF = f.claims || 'all'
+  const statusF = String(f.status || '').trim().toLowerCase()
+  const sevF = String(f.severity || '').trim().toLowerCase()
+  const faultF = String(f.fault || '').trim().toLowerCase()
+  const from = String(f.dateFrom || '').slice(0, 10)
+  const to = String(f.dateTo || '').slice(0, 10)
+
+  let out = rows.filter((r) => {
+    if (!r) return false
+    if (claimsF === 'open' && !(hasClaim(r) && !isClosed(r))) return false
+    if (claimsF === 'closed' && !(hasClaim(r) && isClosed(r))) return false
+    if (claimsF === 'none' && hasClaim(r)) return false
+    if (statusF && String(canonStatus(r.status)).toLowerCase() !== statusF) return false
+    if (sevF && String(canonSeverity(r.severity)).toLowerCase() !== sevF) return false
+    if (faultF && canonFault(r.fault_status).toLowerCase() !== faultF) return false
+    if (from || to) {
+      const d = String(r.incident_date || '').slice(0, 10)
+      if (!d) return false
+      if (from && d < from) return false
+      if (to && d > to) return false
+    }
+    return true
+  })
+
+  const sort = (block && block.sort) || {}
+  if (sort.col && TABLE_COLS[sort.col]) {
+    const dir = sort.dir === 'asc' ? 1 : -1
+    out = out
+      .map((r, i) => [r, i])
+      .sort((a, b) => {
+        const cmp = compareByCol(sort.col, a[0], b[0], now)
+        return cmp !== 0 ? cmp * dir : a[1] - b[1]
+      })
+      .map((x) => x[0])
+  }
+
+  const rawLim = Number(block.limit)
+  return out.slice(0, Number.isFinite(rawLim) ? Math.max(1, rawLim) : 25)
+}
+
+/** Human-readable ASCII summary of a table block's ACTIVE filters (''=none). */
+export function tableFilterLabel(block = {}) {
+  const f = (block && block.filter) || {}
+  const parts = []
+  if (f.claims && f.claims !== 'all') {
+    const opt = TABLE_FILTER_OPTS.claims.find(([v]) => v === f.claims)
+    parts.push(opt ? opt[1].toLowerCase() : String(f.claims))
+  }
+  if (f.status) parts.push(`status: ${f.status}`)
+  if (f.severity) parts.push(`severity: ${f.severity}`)
+  if (f.fault) parts.push(`fault: ${f.fault}`)
+  if (f.dateFrom || f.dateTo) parts.push(`date: ${f.dateFrom || 'start'} to ${f.dateTo || 'now'}`)
+  return parts.join(', ')
+}
+
+/**
+ * Build the exact filtered/sorted table as a tabular matrix for Excel export, so
+ * the spreadsheet mirrors the on-screen / PDF table. TABLE_COLS supplies headers.
+ * @returns {{ headers: string[], colKeys: string[], rows: string[][] }}
+ */
+export function tableExportMatrix(records, block = {}, money = (v) => String(v)) {
+  const cols = ((block && block.columns) || []).filter((c) => TABLE_COLS[c])
+  // rows are objects keyed by colKey (not positional arrays) so they feed
+  // exportToExcel(rows, colKeys, headers, ...) directly, which reads row[colKey].
+  const rows = tableRows(records, block).map((r) => {
+    const o = {}
+    for (const c of cols) o[c] = fmtCell(c, cellValue(c, r), money)
+    return o
+  })
+  return { headers: cols.map((c) => TABLE_COLS[c]), colKeys: cols.slice(), rows }
+}
+
 // ── Auto insights (honest — derived only from the live record set; [] when empty) ──
 export function buildInsights(ctx) {
   const { records, claims } = ctx
@@ -607,7 +744,7 @@ export const BLOCK_TYPES = {
   chart: { label: 'Chart', description: `One of ${Object.keys(CHARTS).length} live charts (doughnut, line, bar, Pareto, dual-axis combo, radar, polar, waterfall) at full, half, third or quarter width, with ${PALETTE_KEYS.length} colour palettes (incl. green and gray), border colour + width, data-label colour + size, and legend/grid toggles.` },
   insights: { label: 'Key findings', description: 'Auto-generated bullet summary computed from the live data (peaks, exposure, delays).' },
   text: { label: 'Text section', description: 'Free-form commentary, findings or recommendations with an optional heading.' },
-  table: { label: 'Detail table', description: 'Incident register — choose columns and a row cap.' },
+  table: { label: 'Detail table', description: 'Incident register: choose columns, filter (open/closed claims, status, severity, fault, date range), sort a column and set density + a row cap.' },
   divider: { label: 'Section divider', description: 'A labelled rule to separate report sections.' },
   pagebreak: { label: 'Page break', description: 'Forces the following blocks onto a new PDF page.' },
 }
@@ -624,7 +761,17 @@ export const BLOCK_DEFAULTS = {
   }),
   insights: () => ({ title: 'Key findings' }),
   text: () => ({ title: '', body: '' }),
-  table: () => ({ title: 'Incident detail', columns: ['incident_date', 'asset_no', 'site', 'severity', 'status', 'claim_amount'], limit: 25 }),
+  table: () => ({
+    title: 'Incident detail',
+    columns: ['incident_date', 'asset_no', 'site', 'severity', 'status', 'claim_amount'],
+    limit: 25,
+    // Filtering / sorting / density (backward-compatible defaults: old saved
+    // layouts without these fields behave exactly as before — no filter, no sort,
+    // normal density). Consumed by tableRows()/tableExportMatrix() + the PDF.
+    filter: { claims: 'all', status: '', severity: '', fault: '', dateFrom: '', dateTo: '' },
+    sort: { col: '', dir: 'desc' },
+    density: 'normal',
+  }),
   divider: () => ({ label: '' }),
   pagebreak: () => ({}),
 }

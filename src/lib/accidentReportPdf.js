@@ -15,7 +15,7 @@
 import {
   CHARTS, KPIS, TABLE_COLS, CHART_OPTS, CHART_JS_TYPE, VALUE_LABELS_PLUGIN,
   buildReportContext, buildInsights, fmtCell, cellValue, normalizeConfig, summarizeChartData,
-  styleChartData, chartWidthFraction, chartOptionsFor,
+  styleChartData, chartWidthFraction, chartOptionsFor, tableRows, tableFilterLabel,
 } from './accidentReport'
 import { formatCurrencyCompact } from './formatters'
 import { reportFileName, reportDateLabel } from './exportUtils'
@@ -141,7 +141,15 @@ export async function renderAccidentReportPdf({
       case 'insights': return 42
       case 'text': return 24
       case 'divider': return 9
-      case 'table': return 60
+      case 'table': {
+        const cols = (blk.columns || []).filter((c) => TABLE_COLS[c])
+        if (!cols.length) return 0
+        const n = tableRows(records, blk).length || 1
+        const rowH = blk.density === 'compact' ? 4.6 : 6
+        const titleH = blk.title ? 6 : 0
+        // title + header row + body rows + caption + trailing gap
+        return titleH + 7 + n * rowH + 5 + 4
+      }
       default: return 20
     }
   }
@@ -338,17 +346,38 @@ export async function renderAccidentReportPdf({
     if (b.type === 'table') {
       const cols = (b.columns || []).filter((c) => TABLE_COLS[c])
       if (!cols.length) continue
-      const rows = records.slice(0, Math.max(1, b.limit || 25)).map((r) => cols.map((c) => fmtCell(c, cellValue(c, r), money)))
+      // FILTERED + SORTED + capped rows from the single engine (open/closed claims,
+      // status, severity, fault, date range, sort, limit) — the same set the
+      // builder preview and the Excel export show.
+      const filtered = tableRows(records, b)
+      const rows = filtered.map((r) => cols.map((c) => fmtCell(c, cellValue(c, r), money)))
       if (b.title) { ensure(8); doc.setFont('helvetica', 'bold'); doc.setFontSize(12); doc.setTextColor(15, 23, 42); doc.text(b.title, MX, y + 4); y += 6 }
+      // Density-driven fit: compact packs more rows so a table that spilled just
+      // past 2 pages fits. linebreak + auto width keep long cells inside the page.
+      const compact = b.density === 'compact'
+      const cellFont = compact ? 7 : 8
       autoTable(doc, {
         startY: y, margin: { left: MX, right: MX }, theme: 'grid',
+        tableWidth: 'auto', showHead: 'everyPage',
         head: [cols.map((c) => TABLE_COLS[c])],
         body: rows.length ? rows : [cols.map(() => 'N/A')],
-        styles: { font: 'helvetica', fontSize: 8, cellPadding: 2, textColor: [51, 65, 85], lineColor: [226, 232, 240], lineWidth: 0.1 },
-        headStyles: { fillColor: [30, 41, 59], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 8 },
+        styles: { font: 'helvetica', fontSize: cellFont, cellPadding: compact ? 1.2 : 2, overflow: 'linebreak', textColor: [51, 65, 85], lineColor: [226, 232, 240], lineWidth: 0.1 },
+        headStyles: { fillColor: [30, 41, 59], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: cellFont },
         alternateRowStyles: { fillColor: [248, 250, 252] },
       })
-      y = doc.lastAutoTable.finalY + 6
+      y = doc.lastAutoTable.finalY + 4
+      // Caption when rows were filtered out or capped, so the reader knows the
+      // table is a subset (ASCII, no dash punctuation).
+      const total = records.length
+      const shown = rows.length
+      const flabel = tableFilterLabel(b)
+      if (flabel || shown < total) {
+        const cap = `Showing ${shown} of ${total} incidents${flabel ? ` | filter: ${flabel}` : ''}`
+        ensure(6)
+        doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(100, 116, 139)
+        doc.text(cap, MX, y + 3); y += 5
+      }
+      y += 2
       continue
     }
   }

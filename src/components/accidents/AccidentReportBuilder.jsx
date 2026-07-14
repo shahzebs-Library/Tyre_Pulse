@@ -31,6 +31,7 @@ import {
   Trash2, ChevronUp, ChevronDown, Copy, FileText, Save, FolderOpen, X,
   LayoutGrid, Loader2, Sparkles, Settings2, Lightbulb, Minus, Search,
   LayoutTemplate, CalendarClock, CheckCircle, AlertCircle, Info, Palette, Scissors,
+  FileSpreadsheet, Filter, ArrowUpDown, RotateCcw,
 } from 'lucide-react'
 import {
   CHARTS, KPIS, TABLE_COLS, BLOCK_TYPES, CHART_OPTS,
@@ -46,7 +47,7 @@ import { useAuth } from '../../contexts/AuthContext'
 import { renderAccidentReportPdf } from '../../lib/accidentReportPdf'
 import { listTemplates, createTemplate, updateTemplate, deleteTemplate } from '../../lib/api/accidentReportTemplates'
 import { formatCurrencyCompact } from '../../lib/formatters'
-import { reportFileName, reportDateLabel } from '../../lib/exportUtils'
+import { reportFileName, reportDateLabel, exportToExcel } from '../../lib/exportUtils'
 
 ChartJS.register(
   CategoryScale, LinearScale, BarElement, ArcElement, LineElement, PointElement, Filler,
@@ -124,6 +125,36 @@ const CHART_PREVIEW_HEIGHT = { full: 240, half: 200, third: 168, quarter: 150 }
 // page's pixel height = (renderedWidthPx / pageWidthMm) * pageHeightMm — this makes
 // the page-end guides self-adjust to any responsive width.
 const A4 = { portrait: { w: 210, h: 297 }, landscape: { w: 297, h: 210 } }
+
+// ── Detail-table advanced controls (filter / sort / density / Excel export) ──
+// The select option catalog (TABLE_FILTER_OPTS), the filtered+sorted+capped row
+// engine (tableRows) and the Excel matrix builder (tableExportMatrix) live in the
+// shared engine (accidentReport.js). Resolve them from the namespace import with
+// safe fallbacks so a mid-race build still previews and exports honestly.
+const TABLE_FILTER_OPTS = AccidentReportLib.TABLE_FILTER_OPTS || { claims: [], status: [], severity: [], fault: [] }
+const tableRowsFor = typeof AccidentReportLib.tableRows === 'function'
+  ? AccidentReportLib.tableRows
+  : (recs, block) => (Array.isArray(recs) ? recs : []).slice(0, Math.max(1, (block && block.limit) || 25))
+const tableExportMatrixFor = typeof AccidentReportLib.tableExportMatrix === 'function'
+  ? AccidentReportLib.tableExportMatrix
+  : null
+const FILTER_GROUPS = [['claims', 'Claims'], ['status', 'Status'], ['severity', 'Severity'], ['fault', 'Fault']]
+// A filter value counts as active (worth showing in the caption) when it is set and
+// is not one of the "show everything" sentinels the engine uses for its first option.
+const isActiveFilterVal = (v) => v != null && v !== '' && v !== 'all' && v !== 'any'
+const firstFilterOpt = (group) => (TABLE_FILTER_OPTS[group]?.[0]?.[0]) ?? ''
+// Human-readable, ASCII summary of the active table filter for the preview caption.
+const tableFilterLabel = (block) => {
+  const f = (block && block.filter) || {}
+  const parts = []
+  for (const [group] of FILTER_GROUPS) {
+    if (!isActiveFilterVal(f[group])) continue
+    const opt = (TABLE_FILTER_OPTS[group] || []).find(([v]) => v === f[group])
+    if (opt) parts.push(opt[1])
+  }
+  if (f.dateFrom || f.dateTo) parts.push(`${f.dateFrom || 'start'} to ${f.dateTo || 'now'}`)
+  return parts.join(' | ')
+}
 
 const BLOCK_ICONS = {
   header: ImageIcon, kpis: LayoutGrid, chart: BarChart3, insights: Lightbulb,
@@ -530,7 +561,7 @@ function BlockEditor({ block: b, index, count, ctx, records, money, company, cha
         <IconBtn title="Remove" danger onClick={() => onRemove(b.id)}><Trash2 size={13} /></IconBtn>
       </div>
 
-      {openCfg && <BlockConfig block={b} onPatch={onPatch} canFormat={canFormat} />}
+      {openCfg && <BlockConfig block={b} onPatch={onPatch} canFormat={canFormat} records={records} money={money} />}
 
       <BlockPreview block={b} ctx={ctx} records={records} money={money} company={company} chartRefs={chartRefs} orientation={orientation} />
     </div>
@@ -564,7 +595,7 @@ function ColorField({ value, fallback, onChange, resetLabel = 'Auto' }) {
   )
 }
 
-function BlockConfig({ block: b, onPatch, canFormat }) {
+function BlockConfig({ block: b, onPatch, canFormat, records = [], money }) {
   const set = (patch) => onPatch(b.id, patch)
   const [advOpen, setAdvOpen] = useState(false)
   return (
@@ -701,25 +732,142 @@ function BlockConfig({ block: b, onPatch, canFormat }) {
         </div>
       )}
       {b.type === 'table' && (
-        <div className="space-y-2">
-          <div className="grid sm:grid-cols-2 gap-3">
-            <Field label="Title"><input className={INP} value={b.title} onChange={(e) => set({ title: e.target.value })} /></Field>
-            <Field label="Max rows"><input type="number" min="1" max="200" className={INP} value={b.limit} onChange={(e) => set({ limit: Math.max(1, Math.min(200, +e.target.value || 25)) })} /></Field>
-          </div>
-          <div>
-            <p className="text-[11px] font-medium text-slate-500 mb-2">Columns</p>
-            <div className="flex flex-wrap gap-1.5">
-              {Object.entries(TABLE_COLS).map(([k, label]) => { const on = (b.columns || []).includes(k); return (
-                <button key={k} onClick={() => set({ columns: on ? b.columns.filter((x) => x !== k) : [...(b.columns || []), k] })} className={`text-xs px-2 py-1 rounded-full border ${on ? 'bg-blue-600 border-blue-600 text-white' : 'bg-white border-slate-300 text-slate-600 hover:border-slate-400'}`}>{label}</button>
-              ) })}
-            </div>
-          </div>
-        </div>
+        <TableBlockConfig b={b} set={set} records={records} money={money} />
       )}
       {b.type === 'divider' && (
         <Field label="Section label (optional)"><input className={INP} value={b.label} onChange={(e) => set({ label: e.target.value })} placeholder="e.g. Claims performance" /></Field>
       )}
       {b.type === 'pagebreak' && <p className="text-xs text-slate-500">Forces the following blocks onto a new PDF page.</p>}
+    </div>
+  )
+}
+
+/* ── Detail-table config: columns + max rows + filters + sort + density + Excel ── */
+function TableBlockConfig({ b, set, records = [], money }) {
+  const chosenCols = (b.columns || []).filter((c) => TABLE_COLS[c])
+  const filter = b.filter || {}
+  const sort = b.sort || {}
+
+  const setFilter = (key, val) => set({ filter: { ...filter, [key]: val } })
+  const resetFilters = () => set({
+    filter: {
+      claims: firstFilterOpt('claims'), status: firstFilterOpt('status'),
+      severity: firstFilterOpt('severity'), fault: firstFilterOpt('fault'),
+      dateFrom: '', dateTo: '',
+    },
+  })
+  const filtersActive = FILTER_GROUPS.some(([g]) => isActiveFilterVal(filter[g])) || filter.dateFrom || filter.dateTo
+
+  // Export the CURRENTLY FILTERED/SORTED/CAPPED rows to Excel. Prefer the shared
+  // engine matrix builder; fall back to the chosen columns over the filtered rows
+  // so an export still works honestly if the engine export lands a moment later.
+  const exportExcel = () => {
+    if (!chosenCols.length) return
+    let matrix
+    if (tableExportMatrixFor) {
+      matrix = tableExportMatrixFor(records, b, money)
+    } else {
+      const rows = tableRowsFor(records, b).map((r) => {
+        const o = {}
+        chosenCols.forEach((c) => { o[c] = fmtCell(c, cellValue(c, r), money) })
+        return o
+      })
+      matrix = { headers: chosenCols.map((c) => TABLE_COLS[c]), colKeys: chosenCols, rows }
+    }
+    if (!matrix?.rows?.length || !matrix?.colKeys?.length) return
+    const fname = reportFileName('TyrePulse', b.title || 'Detail table', reportDateLabel())
+    exportToExcel(matrix.rows, matrix.colKeys, matrix.headers, fname)
+  }
+
+  const previewCount = tableRowsFor(records, b).length
+
+  return (
+    <div className="space-y-3">
+      <div className="grid sm:grid-cols-2 gap-3">
+        <Field label="Title"><input className={INP} value={b.title} onChange={(e) => set({ title: e.target.value })} /></Field>
+        <Field label="Max rows"><input type="number" min="1" max="200" className={INP} value={b.limit} onChange={(e) => set({ limit: Math.max(1, Math.min(200, +e.target.value || 25)) })} /></Field>
+      </div>
+
+      <div>
+        <p className="text-[11px] font-medium text-slate-500 mb-2">Columns</p>
+        <div className="flex flex-wrap gap-1.5">
+          {Object.entries(TABLE_COLS).map(([k, label]) => { const on = (b.columns || []).includes(k); return (
+            <button key={k} onClick={() => set({ columns: on ? b.columns.filter((x) => x !== k) : [...(b.columns || []), k] })} className={`text-xs px-2 py-1 rounded-full border ${on ? 'bg-blue-600 border-blue-600 text-white' : 'bg-white border-slate-300 text-slate-600 hover:border-slate-400'}`}>{label}</button>
+          ) })}
+        </div>
+      </div>
+
+      {/* Filters — narrow the printed rows (e.g. only open cases / open claims) */}
+      <div className="pt-3 border-t border-slate-200">
+        <div className="flex items-center justify-between mb-2">
+          <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-500"><Filter size={13} className="text-blue-500" /> Filters</span>
+          {filtersActive && (
+            <button type="button" onClick={resetFilters} className="inline-flex items-center gap-1 text-[11px] text-slate-500 hover:text-slate-800">
+              <RotateCcw size={12} /> Reset
+            </button>
+          )}
+        </div>
+        <div className="grid sm:grid-cols-2 gap-3">
+          {FILTER_GROUPS.map(([group, label]) => {
+            const opts = TABLE_FILTER_OPTS[group] || []
+            if (!opts.length) return null
+            return (
+              <Field key={group} label={label}>
+                <select className={INP} value={filter[group] ?? firstFilterOpt(group)} onChange={(e) => setFilter(group, e.target.value)}>
+                  {opts.map(([val, lbl]) => <option key={val} value={val}>{lbl}</option>)}
+                </select>
+              </Field>
+            )
+          })}
+          <Field label="Date from"><input type="date" className={INP} value={filter.dateFrom || ''} onChange={(e) => setFilter('dateFrom', e.target.value)} /></Field>
+          <Field label="Date to"><input type="date" className={INP} value={filter.dateTo || ''} onChange={(e) => setFilter('dateTo', e.target.value)} /></Field>
+        </div>
+      </div>
+
+      {/* Sort — order the printed rows by any chosen column */}
+      <div className="pt-3 border-t border-slate-200">
+        <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-500 mb-2"><ArrowUpDown size={13} className="text-blue-500" /> Sort</span>
+        <div className="grid sm:grid-cols-2 gap-3 items-end">
+          <Field label="Sort by column">
+            <select className={INP} value={sort.col || ''} onChange={(e) => set({ sort: { ...sort, col: e.target.value } })}>
+              <option value="">Default order</option>
+              {chosenCols.map((c) => <option key={c} value={c}>{TABLE_COLS[c]}</option>)}
+            </select>
+          </Field>
+          <div className="flex rounded-md border border-slate-300 overflow-hidden">
+            {[['asc', 'Ascending'], ['desc', 'Descending']].map(([val, lbl]) => { const on = (sort.dir || 'asc') === val; return (
+              <button
+                key={val} type="button" disabled={!sort.col} onClick={() => set({ sort: { ...sort, dir: val } })}
+                className={`flex-1 text-xs py-1.5 font-medium transition-colors disabled:opacity-40 ${on ? 'bg-blue-600 text-white' : 'bg-white text-slate-600 hover:bg-slate-50'} ${val !== 'asc' ? 'border-l border-slate-300' : ''}`}
+              >{lbl}</button>
+            ) })}
+          </div>
+        </div>
+      </div>
+
+      {/* Density — printed row height */}
+      <div className="pt-3 border-t border-slate-200">
+        <span className="block text-[11px] font-semibold uppercase tracking-wide text-slate-500 mb-2">Density</span>
+        <div className="flex rounded-md border border-slate-300 overflow-hidden max-w-xs">
+          {[['normal', 'Normal'], ['compact', 'Compact']].map(([val, lbl]) => { const on = (b.density || 'normal') === val; return (
+            <button
+              key={val} type="button" onClick={() => set({ density: val })}
+              className={`flex-1 text-xs py-1.5 font-medium transition-colors ${on ? 'bg-blue-600 text-white' : 'bg-white text-slate-600 hover:bg-slate-50'} ${val !== 'normal' ? 'border-l border-slate-300' : ''}`}
+            >{lbl}</button>
+          ) })}
+        </div>
+      </div>
+
+      {/* Excel export of exactly the filtered/sorted rows shown in the preview */}
+      <div className="pt-3 border-t border-slate-200 flex flex-wrap items-center gap-2">
+        <button
+          type="button" onClick={exportExcel} disabled={!chosenCols.length || !previewCount}
+          className="inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-md bg-emerald-600 text-white hover:bg-emerald-500 disabled:opacity-40"
+        >
+          <FileSpreadsheet size={14} /> Export Excel
+        </button>
+        <span className="text-[11px] text-slate-500">Downloads the {previewCount} filtered row{previewCount === 1 ? '' : 's'} shown below.</span>
+      </div>
     </div>
   )
 }
@@ -805,22 +953,30 @@ function BlockPreview({ block: b, ctx, records, money, company, chartRefs, orien
   if (b.type === 'table') {
     const cols = (b.columns || []).filter((c) => TABLE_COLS[c])
     if (!cols.length) return <Placeholder>No columns selected.</Placeholder>
-    const rows = records.slice(0, Math.max(1, b.limit || 25))
+    // Filtered + sorted + capped rows from the shared engine (same set the PDF and
+    // Excel export use), so the preview shows exactly what will be printed/downloaded.
+    const rows = tableRowsFor(records, b)
+    const compact = b.density === 'compact'
+    const thPad = compact ? 'px-2 py-1' : 'px-2.5 py-2'
+    const tdPad = compact ? 'px-2 py-0.5' : 'px-2.5 py-1.5'
+    const total = records.length
+    const filterLabel = tableFilterLabel(b)
+    const showCaption = rows.length < total || !!filterLabel
     return (
       <div>
         {b.title && <p className="text-sm font-semibold text-slate-800 mb-2">{b.title}</p>}
         <div className="overflow-x-auto rounded border border-slate-200">
           <table className="w-full text-xs">
-            <thead><tr className="bg-slate-800 text-white">{cols.map((c) => <th key={c} className="text-left font-semibold px-2.5 py-2 whitespace-nowrap">{TABLE_COLS[c]}</th>)}</tr></thead>
+            <thead><tr className="bg-slate-800 text-white">{cols.map((c) => <th key={c} className={`text-left font-semibold whitespace-nowrap ${thPad}`}>{TABLE_COLS[c]}</th>)}</tr></thead>
             <tbody>
-              {rows.length === 0 ? <tr><td colSpan={cols.length} className="px-2.5 py-6 text-center text-slate-400">No incidents in range.</td></tr>
+              {rows.length === 0 ? <tr><td colSpan={cols.length} className="px-2.5 py-6 text-center text-slate-400">No incidents match the current filter.</td></tr>
                 : rows.map((r, i) => (
-                  <tr key={r.id || i} className={i % 2 ? 'bg-slate-50' : 'bg-white'}>{cols.map((c) => <td key={c} className="px-2.5 py-1.5 text-slate-700 whitespace-nowrap">{fmtCell(c, cellValue(c, r), money)}</td>)}</tr>
+                  <tr key={r.id || i} className={i % 2 ? 'bg-slate-50' : 'bg-white'}>{cols.map((c) => <td key={c} className={`text-slate-700 whitespace-nowrap ${tdPad}`}>{fmtCell(c, cellValue(c, r), money)}</td>)}</tr>
                 ))}
             </tbody>
           </table>
         </div>
-        {records.length > (b.limit || 25) && <p className="text-[11px] text-slate-400 mt-1">Showing {b.limit || 25} of {records.length} incidents.</p>}
+        {showCaption && <p className="text-[11px] text-slate-400 mt-1">Showing {rows.length} of {total} incidents{filterLabel ? ` | ${filterLabel}` : ''}</p>}
       </div>
     )
   }

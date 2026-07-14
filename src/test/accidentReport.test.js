@@ -5,7 +5,7 @@ import {
   fmtCell, cellValue, caseAgeDays, isChartEmpty, isClosedRow, normalizeConfig,
   VALUE_LABELS_PLUGIN, makeValueLabelsPlugin, summarizeChartData,
   PALETTES, PALETTE, PALETTE_KEYS, styleChartData, chartWidthFraction, packChartRows,
-  chartOptionsFor,
+  chartOptionsFor, tableRows, tableExportMatrix, tableFilterLabel, TABLE_FILTER_OPTS, canonFault,
 } from '../lib/accidentReport'
 import { distributeFill } from '../lib/accidentReportPdf'
 
@@ -404,6 +404,114 @@ describe('chart width fractions + row packing (full/half/third/quarter)', () => 
     expect(mixed[1]).toHaveLength(1)
     // thirds still pack three-up
     expect(packChartRows([{ width: 'third' }, { width: 'third' }, { width: 'third' }])).toHaveLength(1)
+  })
+})
+
+describe('detail table filtering / sorting / density (tableRows + export)', () => {
+  const ROWS = [
+    { id: 1, incident_date: '2026-06-01', asset_no: 'TRK-2', site: 'Riyadh', severity: 'Major', status: 'Open', fault_status: 'Faulty', claim_amount: 10000, insurer: 'Tawuniya' },        // open claim
+    { id: 2, incident_date: '2026-06-15', asset_no: 'TRK-1', site: 'Jeddah', severity: 'Minor', status: 'Closed', release_date: '2026-06-30', fault_status: 'Non-Fault', claim_amount: 2000, insurer: 'Tawuniya' }, // closed claim
+    { id: 3, incident_date: '2026-07-01', asset_no: 'TRK-1', site: 'Riyadh', severity: 'total loss', status: 'Reported', claim_amount: 50000 },   // open claim
+    { id: 4, incident_date: '2026-07-05', asset_no: 'TRK-3', site: 'Dammam', severity: 'Minor', status: 'Reported' },                              // no claim
+  ]
+
+  it('table block defaults carry backward-compatible filter/sort/density fields', () => {
+    const d = BLOCK_DEFAULTS.table()
+    expect(d.filter).toEqual({ claims: 'all', status: '', severity: '', fault: '', dateFrom: '', dateTo: '' })
+    expect(d.sort).toEqual({ col: '', dir: 'desc' })
+    expect(d.density).toBe('normal')
+    // existing fields intact
+    expect(d.limit).toBe(25)
+    expect(d.columns.length).toBeGreaterThan(0)
+  })
+
+  it('TABLE_FILTER_OPTS exposes claims pairs + vocab-sourced status/severity/fault labels', () => {
+    expect(TABLE_FILTER_OPTS.claims).toEqual([['all', 'All'], ['open', 'Open claims only'], ['closed', 'Closed/settled'], ['none', 'No claim']])
+    expect(TABLE_FILTER_OPTS.status).toContain('Reported')
+    expect(TABLE_FILTER_OPTS.severity).toEqual(['Minor', 'Major', 'Total Loss'])
+    expect(TABLE_FILTER_OPTS.fault).toEqual(['Faulty', 'Non-faulty', 'Under review'])
+  })
+
+  it('claims filter reuses the claims engine (open / closed / none / all)', () => {
+    const ids = (block) => tableRows(ROWS, block).map((r) => r.id)
+    expect(ids({ filter: { claims: 'open' }, limit: 50 })).toEqual([1, 3])
+    expect(ids({ filter: { claims: 'closed' }, limit: 50 })).toEqual([2])
+    expect(ids({ filter: { claims: 'none' }, limit: 50 })).toEqual([4])
+    expect(ids({ filter: { claims: 'all' }, limit: 50 })).toEqual([1, 2, 3, 4])
+    // no filter object -> all rows (backward compatible)
+    expect(ids({ limit: 50 })).toEqual([1, 2, 3, 4])
+  })
+
+  it('status / severity / fault filter on the canonical value (case-insensitive)', () => {
+    const ids = (block) => tableRows(ROWS, block).map((r) => r.id)
+    expect(ids({ filter: { status: 'Reported' }, limit: 50 })).toEqual([3, 4])
+    expect(ids({ filter: { severity: 'Total Loss' }, limit: 50 })).toEqual([3])
+    expect(ids({ filter: { severity: 'minor' }, limit: 50 })).toEqual([2, 4]) // case-insensitive
+    // fault: id2's 'Non-Fault' canonicalises to 'Non-faulty'
+    expect(ids({ filter: { fault: 'Non-faulty' }, limit: 50 })).toEqual([2])
+    expect(ids({ filter: { fault: 'Faulty' }, limit: 50 })).toEqual([1])
+  })
+
+  it('date range filters incident_date inclusively', () => {
+    const ids = (block) => tableRows(ROWS, block).map((r) => r.id)
+    expect(ids({ filter: { dateFrom: '2026-07-01' }, limit: 50 })).toEqual([3, 4])
+    expect(ids({ filter: { dateTo: '2026-06-15' }, limit: 50 })).toEqual([1, 2])
+    expect(ids({ filter: { dateFrom: '2026-06-10', dateTo: '2026-07-02' }, limit: 50 })).toEqual([2, 3])
+  })
+
+  it('sorts numerically (claim_amount, days_open) and textually (asset_no), asc + desc, stable', () => {
+    const ids = (block) => tableRows(ROWS, block).map((r) => r.id)
+    // numeric desc / asc on claim_amount (missing claim = -Infinity -> last on desc)
+    expect(ids({ sort: { col: 'claim_amount', dir: 'desc' }, limit: 50 })).toEqual([3, 1, 2, 4])
+    expect(ids({ sort: { col: 'claim_amount', dir: 'asc' }, limit: 50 })).toEqual([4, 2, 1, 3])
+    // text asc on asset_no is stable (the two TRK-1 keep source order: id2 then id3)
+    expect(ids({ sort: { col: 'asset_no', dir: 'asc' }, limit: 50 })).toEqual([2, 3, 1, 4])
+    // numeric sort on the virtual days_open column works
+    const now = new Date('2026-07-14T00:00:00Z').getTime()
+    const byAge = tableRows(ROWS, { sort: { col: 'days_open', dir: 'asc' }, limit: 50 }, now).map((r) => r.id)
+    expect(byAge[0]).toBe(4) // newest incident = fewest days open
+  })
+
+  it('caps to max(1, limit) after filtering + sorting, and never mutates input', () => {
+    const before = JSON.parse(JSON.stringify(ROWS))
+    const out = tableRows(ROWS, { sort: { col: 'claim_amount', dir: 'desc' }, limit: 2 })
+    expect(out.map((r) => r.id)).toEqual([3, 1])
+    expect(tableRows(ROWS, { limit: 0 }).length).toBe(1) // floor of 1
+    expect(ROWS).toEqual(before) // input untouched
+    // safe on empty / invalid
+    expect(tableRows([], {})).toEqual([])
+    expect(tableRows(null, {})).toEqual([])
+  })
+
+  it('canonFault classifies fault text like the fault chart', () => {
+    expect(canonFault('Non-Fault')).toBe('Non-faulty')
+    expect(canonFault('at fault')).toBe('Faulty')
+    expect(canonFault('under review')).toBe('Under review')
+    expect(canonFault('')).toBe('')
+  })
+
+  it('tableFilterLabel describes active filters (empty when none), ASCII only', () => {
+    expect(tableFilterLabel({ filter: { claims: 'all' } })).toBe('')
+    expect(tableFilterLabel({})).toBe('')
+    const lbl = tableFilterLabel({ filter: { claims: 'open', status: 'Reported', severity: 'Major', fault: 'Faulty', dateFrom: '2026-06-01', dateTo: '2026-07-01' } })
+    expect(lbl).toContain('open claims only')
+    expect(lbl).toContain('status: Reported')
+    expect(lbl).toMatch(/^[\x00-\x7F]*$/) // ASCII
+  })
+
+  it('tableExportMatrix returns filtered/sorted headers + colKeys + keyed rows', () => {
+    const block = { columns: ['incident_date', 'asset_no', 'claim_amount'], filter: { claims: 'open' }, sort: { col: 'claim_amount', dir: 'desc' }, limit: 50 }
+    const m = tableExportMatrix(ROWS, block, (v) => `$${Number(v)}`)
+    expect(m.headers).toEqual(['Date', 'Asset', 'Claimed'])
+    expect(m.colKeys).toEqual(['incident_date', 'asset_no', 'claim_amount'])
+    // open claims only (id1, id3), sorted desc by claim (id3=50000, id1=10000);
+    // rows are objects keyed by colKey so they feed exportToExcel directly.
+    expect(m.rows).toEqual([
+      { incident_date: '2026-07-01', asset_no: 'TRK-1', claim_amount: '$50000' },
+      { incident_date: '2026-06-01', asset_no: 'TRK-2', claim_amount: '$10000' },
+    ])
+    // drops unknown columns, tolerates empty
+    expect(tableExportMatrix(ROWS, { columns: ['bogus'], limit: 5 }).headers).toEqual([])
   })
 })
 

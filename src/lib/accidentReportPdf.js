@@ -15,10 +15,37 @@
 import {
   CHARTS, KPIS, TABLE_COLS, CHART_OPTS, CHART_JS_TYPE, VALUE_LABELS_PLUGIN,
   buildReportContext, buildInsights, fmtCell, cellValue, normalizeConfig, summarizeChartData,
-  styleChartData, chartWidthFraction,
+  styleChartData, chartWidthFraction, chartOptionsFor,
 } from './accidentReport'
 import { formatCurrencyCompact } from './formatters'
 import { reportFileName, reportDateLabel } from './exportUtils'
+
+/**
+ * BLANK-SPACE FILL tuning + math (pure, deterministic, margin-safe).
+ *
+ * The top user complaint was half-empty PDF pages. The renderer fills a page when
+ * a real vertical gap opens up — i.e. the current block is the LAST that fits before
+ * a page break (or the whole report ends) — by growing that block toward a clamped
+ * cap so the page reads full instead of top-loaded.
+ *
+ * `distributeFill(blankMm, blockType)` returns the EXTRA mm to add to a block's
+ * height given `blankMm` of usable blank space below it. It never fills a small gap
+ * (per-type `threshold`), always leaves a `pad` breathing gap at the page bottom,
+ * clamps growth to a per-type `cap`, and never returns a negative number. Tables are
+ * intentionally NOT stretched here (autotable is content/row driven — a height number
+ * would not add rows), so callers grow charts, chart-rows and KPI cards.
+ */
+const FILL_TUNING = {
+  chart: { threshold: 30, pad: 8, cap: 90 },
+  row: { threshold: 30, pad: 8, cap: 90 },
+  kpis: { threshold: 30, pad: 6, cap: 44 },
+  default: { threshold: 30, pad: 8, cap: 60 },
+}
+export function distributeFill(blankMm, blockType = 'default') {
+  const t = FILL_TUNING[blockType] || FILL_TUNING.default
+  if (!Number.isFinite(blankMm) || blankMm <= t.threshold) return 0
+  return Math.max(0, Math.min(t.cap, blankMm - t.pad))
+}
 
 /** Render one chart block offscreen and return a PNG data URL (null on failure). */
 async function renderOffscreenChart(block, ctx) {
@@ -35,11 +62,12 @@ async function renderOffscreenChart(block, ctx) {
     const canvas = document.createElement('canvas')
     canvas.width = 900
     canvas.height = Math.max(240, Math.min(420, (block.height || 240) * 1.3))
-    const base = CHART_OPTS[def.kind]
+    // chartOptionsFor merges the kind's paper-theme base with the block's per-chart
+    // toggles (legend, grid, data-label colour/size) so borders/labels/legend/grid
+    // all render in the PDF exactly as the on-screen preview shows them.
     const options = {
-      ...base,
+      ...chartOptionsFor(block, CHART_OPTS[def.kind]),
       responsive: false, animation: false, devicePixelRatio: 2,
-      plugins: { ...(base.plugins || {}), valueLabels: { enabled: block.showLabels !== false } },
     }
     const chart = new Chart(canvas.getContext('2d'), {
       type: CHART_JS_TYPE[def.kind],
@@ -94,14 +122,14 @@ export async function renderAccidentReportPdf({
   const BOTTOM = PH - 14 // usable bottom edge (above the footer)
 
   /**
-   * AUTO-FILL heuristic (deterministic, margin-safe): a chart / chart-row that is
-   * the LAST thing to fit on its page should grow to consume the otherwise-blank
-   * space so pages read full instead of top-loaded. `nextBlk` is the block that
-   * would follow; we treat this chart as "last on page" when there is no next
-   * block, the next block is a page break, or the next block's estimated height
-   * would not fit under `nextY`. Only then, and only when >40mm of blank remains,
-   * do we add (blank - 8mm) of height, clamped to a readable maximum so a chart
-   * never overflows the page or balloons absurdly.
+   * AUTO-FILL heuristic (deterministic, margin-safe). A block is treated as the
+   * LAST thing on its page when there is no next block, the next block is a page
+   * break, or the next block's estimated height would not fit under `nextY`. Such
+   * a block grows to consume the otherwise-blank space so pages read full instead
+   * of top-loaded (this now covers the FINAL page's last block AND any block right
+   * before a mid-report page break — not only charts). The growth amount comes from
+   * the pure `distributeFill` helper (per-type threshold/pad/cap), so it is unit
+   * tested and can never overflow the page or go negative.
    */
   const estimateBlockHeight = (blk) => {
     if (!blk) return 0
@@ -117,12 +145,11 @@ export async function renderAccidentReportPdf({
       default: return 20
     }
   }
-  const grownHeight = (nextY, nextBlk, baseH, cap) => {
-    const lastOnPage = !nextBlk || nextBlk.type === 'pagebreak' || (nextY + estimateBlockHeight(nextBlk) > BOTTOM)
-    const blank = BOTTOM - nextY
-    if (lastOnPage && blank > 40) return Math.min(cap, baseH + (blank - 8))
-    return baseH
-  }
+  const isLastOnPage = (nextY, nextBlk) =>
+    !nextBlk || nextBlk.type === 'pagebreak' || (nextY + estimateBlockHeight(nextBlk) > BOTTOM)
+  // Extra mm to add to a block that is last on its page (0 otherwise / small gaps).
+  const fillExtra = (nextY, nextBlk, blockType) =>
+    isLastOnPage(nextY, nextBlk) ? distributeFill(BOTTOM - nextY, blockType) : 0
 
   /**
    * Draw a row of side-by-side charts that share a page row. `row` is 1..3 chart
@@ -153,10 +180,9 @@ export async function renderAccidentReportPdf({
     const digestH = anyDigest ? 5 : 0
     ensure(titleH + baseRowH + 2 + digestH + 4)
     const rowY = y
-    // Auto-fill: grow the row when it is the last thing on this page (see grownHeight).
+    // Auto-fill: grow the row when it is the last thing on this page (see distributeFill).
     const nextY = rowY + titleH + baseRowH + 2 + digestH + 4
-    const rowCap = orientation === 'landscape' ? 150 : 135
-    const rowH = grownHeight(nextY, nextBlk, baseRowH, rowCap)
+    const rowH = baseRowH + fillExtra(nextY, nextBlk, 'row')
     let x = MX
     row.forEach((b, i) => {
       const cw = widths[i]
@@ -195,7 +221,16 @@ export async function renderAccidentReportPdf({
       const items = (b.items || []).filter((k) => KPIS[k])
       if (!items.length) continue
       const perRow = orientation === 'landscape' ? 6 : 3
-      const gap = 3, cw = (PW - MX * 2 - gap * (perRow - 1)) / perRow, ch = 20
+      const gap = 3, cw = (PW - MX * 2 - gap * (perRow - 1)) / perRow
+      const rows = Math.ceil(items.length / perRow)
+      // Auto-fill: when the whole KPI block fits on the current page AND is the last
+      // block on it, grow the card height so the row is not stranded above blank space.
+      let ch = 20
+      const blockH = rows * (ch + gap)
+      if (y + blockH <= BOTTOM) {
+        const extra = fillExtra(y + blockH + 2, blocks[bi + 1], 'kpis')
+        ch += Math.floor(extra / rows)
+      }
       items.forEach((k, i) => {
         const col = i % perRow
         if (col === 0) ensure(ch + gap)
@@ -205,9 +240,11 @@ export async function renderAccidentReportPdf({
         doc.setFillColor(248, 250, 252); doc.setDrawColor(226, 232, 240); doc.setLineWidth(0.3)
         doc.roundedRect(x, cy, cw, ch, 1.5, 1.5, 'FD')
         doc.setTextColor(15, 23, 42); doc.setFont('helvetica', 'bold'); doc.setFontSize(13)
-        doc.text(val, x + 3, cy + 9)
+        // Proportional text placement keeps the standard 20mm card identical (0.45*20=9)
+        // and stays readable when the card grows to fill trailing blank space.
+        doc.text(val, x + 3, cy + ch * 0.45)
         doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5); doc.setTextColor(100, 116, 139)
-        doc.text(def.label.toUpperCase(), x + 3, cy + 15)
+        doc.text(def.label.toUpperCase(), x + 3, cy + ch * 0.45 + 6)
         if (col === perRow - 1 || i === items.length - 1) y += ch + gap
       })
       y += 2
@@ -242,16 +279,16 @@ export async function renderAccidentReportPdf({
       const digestH = (img && digest) ? 5 : 0
       ensure(titleH + baseCh + 2 + digestH + 4)
       // Auto-fill: grow a full-width chart that is the last block on its page so the
-      // page reads full rather than leaving a large blank strip below (see grownHeight).
+      // page reads full rather than leaving a large blank strip below (distributeFill).
       const nextY = y + titleH + baseCh + 2 + digestH + 4
-      const ch = grownHeight(nextY, blocks[bi + 1], baseCh, fullChartH + 70)
+      const ch = baseCh + fillExtra(nextY, blocks[bi + 1], 'chart')
       if (title) { doc.setFont('helvetica', 'bold'); doc.setFontSize(11); doc.setTextColor(15, 23, 42); doc.text(title, MX, y + 4); y += 6 }
       if (img) { try { doc.addImage(img, 'PNG', MX, y, cw, ch, undefined, 'FAST') } catch { /* ignore */ } }
       else { doc.setFontSize(9); doc.setTextColor(148, 163, 184); doc.text('No data for this chart in the covered period.', MX, y + 6) }
       y += ch + 2
       // Numeric digest under the chart so figures survive print/greyscale.
       if (img && digest) { doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); doc.setTextColor(100, 116, 139); doc.text(digest, MX, y + 3); y += 5 }
-      y += 4
+      y += 3
       continue
     }
 

@@ -81,6 +81,13 @@ function isElevated(role) {
   return ['admin', 'manager', 'director'].includes(String(role || '').toLowerCase().replace(/\s+/g, '_'))
 }
 
+// Coerce any thrown value / PostgREST error object into a plain user string.
+function loadErrMsg(e) {
+  if (!e) return ''
+  if (typeof e === 'string') return e
+  return e.message || e.error_description || e.details || ''
+}
+
 // Days a still-open case may sit without a status update before it is "Delayed".
 const DELAY_THRESHOLD_DAYS = 5
 
@@ -160,16 +167,35 @@ function AccidentDetail({ accidentId, onBack, onClose, onChanged, variant = 'pag
   }, [])
 
   const load = useCallback(async () => {
-    const [a, r, p] = await Promise.all([
-      supabase.from('accidents').select('*').eq('id', accidentId).single(),
-      supabase.from('accident_remarks').select('*').eq('accident_id', accidentId).order('created_at', { ascending: false }),
-      supabase.from('accident_parts').select('*').eq('accident_id', accidentId).order('created_at', { ascending: true }),
-    ])
-    if (a.error) { setErr(a.error.message); setLoading(false); return }
-    setAcc(a.data)
-    setRemarks(r.data ?? [])
-    setParts(p.data ?? [])
-    setLoading(false)
+    if (!accidentId) { setErr('No accident record specified.'); setLoading(false); return }
+    try {
+      // Settle each query INDEPENDENTLY. The accident itself must always open;
+      // an auxiliary table that errors or REJECTS (accident_remarks /
+      // accident_parts missing, RLS/permission edge, transient network) must
+      // never wedge the whole loader on an unhandled rejection and leave the
+      // page stuck on an infinite skeleton ("cannot open the record"). Loading
+      // is ALWAYS cleared; failures surface as a clean message, never a hang.
+      const [aR, rR, pR] = await Promise.allSettled([
+        supabase.from('accidents').select('*').eq('id', accidentId).single(),
+        supabase.from('accident_remarks').select('*').eq('accident_id', accidentId).order('created_at', { ascending: false }),
+        supabase.from('accident_parts').select('*').eq('accident_id', accidentId).order('created_at', { ascending: true }),
+      ])
+      const a = aR.status === 'fulfilled' ? aR.value : { data: null, error: aR.reason }
+      if (a.error || !a.data) { setErr(loadErrMsg(a.error) || 'Accident record not found.'); setLoading(false); return }
+      setAcc(a.data)
+      // Auxiliary data is best-effort: an error/rejection degrades to empty, the
+      // record still renders. A partial-load hint is surfaced non-fatally.
+      const rOk = rR.status === 'fulfilled' && !rR.value?.error
+      const pOk = pR.status === 'fulfilled' && !pR.value?.error
+      setRemarks(rOk ? (rR.value.data ?? []) : [])
+      setParts(pOk ? (pR.value.data ?? []) : [])
+      setErr((!rOk || !pOk) ? 'Some case details (log / parts) could not be loaded. Showing the incident record only.' : '')
+      setLoading(false)
+    } catch (e) {
+      // Belt-and-braces: even a synchronous throw clears the loader.
+      setErr(loadErrMsg(e) || 'Could not load this accident record.')
+      setLoading(false)
+    }
   }, [accidentId])
 
   useEffect(() => { setLoading(true); setErr(''); load() }, [load])

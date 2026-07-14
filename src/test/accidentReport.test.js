@@ -4,8 +4,10 @@ import {
   REPORT_LIBRARY, STARTER, makeBlock, buildReportContext, buildInsights,
   fmtCell, cellValue, caseAgeDays, isChartEmpty, isClosedRow, normalizeConfig,
   VALUE_LABELS_PLUGIN, makeValueLabelsPlugin, summarizeChartData,
-  PALETTES, PALETTE, styleChartData, chartWidthFraction, packChartRows,
+  PALETTES, PALETTE, PALETTE_KEYS, styleChartData, chartWidthFraction, packChartRows,
+  chartOptionsFor,
 } from '../lib/accidentReport'
+import { distributeFill } from '../lib/accidentReportPdf'
 
 const money = (v) => `$${Number(v)}`
 
@@ -424,5 +426,133 @@ describe('normalizeConfig', () => {
     const b = makeBlock('kpis')
     expect(b.id).toBeTruthy()
     expect(b.items.length).toBeGreaterThan(0)
+  })
+})
+
+describe('extended palettes (more colour combinations incl. green + gray)', () => {
+  it('PALETTE_KEYS enumerates every palette in a stable order, keeping the original 6 first', () => {
+    // ordering: the original set leads, new packs follow
+    expect(PALETTE_KEYS.slice(0, 6)).toEqual(['default', 'cool', 'warm', 'mono', 'contrast', 'pastel'])
+    expect(PALETTE_KEYS).toContain('forest')
+    expect(PALETTE_KEYS).toContain('slate')
+    // no orphans in either direction
+    expect(new Set(PALETTE_KEYS).size).toBe(PALETTE_KEYS.length)
+    expect(Object.keys(PALETTES).sort()).toEqual([...PALETTE_KEYS].sort())
+  })
+  it('adds green- and gray-forward packs plus ocean/sunset/earth/vibrant, each >= 8 readable hex', () => {
+    const added = ['forest', 'slate', 'ocean', 'sunset', 'earth', 'vibrant']
+    for (const k of added) {
+      expect(Array.isArray(PALETTES[k]), k).toBe(true)
+      expect(PALETTES[k].length, k).toBeGreaterThanOrEqual(8)
+      PALETTES[k].forEach((c) => expect(c, `${k}:${c}`).toMatch(/^#[0-9a-f]{6}$/i))
+    }
+    // forest is green-forward, slate is neutral/gray-forward
+    expect(PALETTES.forest[0]).toBe('#166534')
+    expect(PALETTES.slate).toContain('#64748b')
+  })
+})
+
+describe('per-chart border colour + width, data-label colour/size, legend + grid', () => {
+  it('chart block defaults carry every new formatting field (backward-compatible)', () => {
+    const d = BLOCK_DEFAULTS.chart()
+    expect(d.borderColor).toBeNull()
+    expect(d.borderWidth).toBe(1.5)
+    expect(d.labelColor).toBe('#0f172a')
+    expect(d.labelSize).toBe(11)
+    expect(d.showLegend).toBe(true)
+    expect(d.showGrid).toBe(true)
+  })
+
+  it('styleChartData applies an explicit borderColor at borderWidth on bar outlines', () => {
+    const data = { labels: ['A', 'B'], datasets: [{ label: 'Incidents', data: [3, 2] }] }
+    const styled = styleChartData(data, { chart: 'topAssets', palette: 'forest', showBorders: true, borderColor: '#111827', borderWidth: 3 })
+    expect(styled.datasets[0].backgroundColor).toBe(PALETTES.forest[0])
+    expect(styled.datasets[0].borderColor).toBe('#111827')
+    expect(styled.datasets[0].borderWidth).toBe(3)
+  })
+
+  it('styleChartData border falls back to the palette colour when borderColor is null', () => {
+    const data = { labels: ['A', 'B'], datasets: [{ data: [3, 2] }] }
+    const styled = styleChartData(data, { chart: 'topAssets', palette: 'slate', showBorders: true, borderColor: null })
+    expect(styled.datasets[0].borderColor).toBe(PALETTES.slate[0])
+    expect(styled.datasets[0].borderWidth).toBe(1.5) // default width when borders on
+  })
+
+  it('styleChartData applies borderColor to doughnut/polar slice outlines only when borders on', () => {
+    const data = { labels: ['X', 'Y'], datasets: [{ data: [5, 3], backgroundColor: ['#111', '#222'] }] }
+    const on = styleChartData(data, { chart: 'severity', palette: 'ocean', showBorders: true, borderColor: '#0f172a', borderWidth: 2 })
+    expect(on.datasets[0].borderColor).toBe('#0f172a')
+    expect(on.datasets[0].borderWidth).toBe(2)
+    // borders off keeps the white slice separator (unchanged behaviour)
+    const off = styleChartData(data, { chart: 'severity', palette: 'ocean', showBorders: false, borderColor: '#0f172a' })
+    expect(off.datasets[0].borderColor).toBe('#ffffff')
+  })
+
+  it('chartOptionsFor wires legend/grid/data-label options non-mutatingly', () => {
+    const base = CHART_OPTS.bar
+    const beforeLegend = base.plugins.legend.display
+    const opts = chartOptionsFor({ chart: 'topAssets', showLegend: false, showGrid: false, showLabels: false, labelColor: '#334155', labelSize: 14 }, base)
+    // legend + grid toggled off
+    expect(opts.plugins.legend.display).toBe(false)
+    expect(opts.scales.x.grid.display).toBe(false)
+    expect(opts.scales.y.grid.display).toBe(false)
+    // value-label wiring carries the enabled flag + colour + size
+    expect(opts.plugins.valueLabels).toEqual({ enabled: false, color: '#334155', size: 14 })
+    // input base object was not mutated
+    expect(base.plugins.legend.display).toBe(beforeLegend)
+    expect(base.scales.x.grid.display).toBeUndefined()
+  })
+
+  it('chartOptionsFor defaults show legend + grid + labels ON and tolerates scale-less charts', () => {
+    const opts = chartOptionsFor({ chart: 'topAssets' }, CHART_OPTS.bar)
+    expect(opts.plugins.legend.display).toBe(true)
+    expect(opts.scales.y.grid.display).toBe(true)
+    expect(opts.plugins.valueLabels.enabled).toBe(true)
+    // doughnut has no scales — must not throw and must not invent a scales object
+    const dough = chartOptionsFor({ chart: 'severity' }, CHART_OPTS.doughnut)
+    expect(dough.scales).toBeUndefined()
+    expect(dough.plugins.legend.display).toBe(true)
+  })
+
+  it('value-labels plugin honours colour + size from options.plugins.valueLabels', () => {
+    const ctx = { save() {}, restore() {}, fillText() {}, fillStyle: '', font: '' }
+    const chart = {
+      config: { type: 'bar', options: { plugins: { valueLabels: { enabled: true, color: '#123456', size: 16 } } } },
+      ctx, options: {}, data: { labels: ['A'], datasets: [{ data: [3] }] },
+      isDatasetVisible: () => true, getDatasetMeta: () => ({ data: [{ x: 10, y: 10 }] }),
+    }
+    VALUE_LABELS_PLUGIN.afterDatasetsDraw(chart)
+    expect(ctx.fillStyle).toBe('#123456')
+    expect(ctx.font).toContain('16px')
+    // absent colour/size falls back to the plugin's default ink + 10px
+    const bare = { ...chart, config: { type: 'bar', options: {} } }
+    VALUE_LABELS_PLUGIN.afterDatasetsDraw(bare)
+    expect(ctx.fillStyle).toBe('#0f172a')
+    expect(ctx.font).toContain('10px')
+  })
+})
+
+describe('PDF blank-space fill (distributeFill)', () => {
+  it('never fills a small gap (<= per-type threshold) and never goes negative', () => {
+    expect(distributeFill(0, 'chart')).toBe(0)
+    expect(distributeFill(30, 'chart')).toBe(0)   // exactly at threshold -> no fill
+    expect(distributeFill(-50, 'chart')).toBe(0)
+    expect(distributeFill(NaN, 'chart')).toBe(0)
+    expect(distributeFill(undefined, 'row')).toBe(0)
+  })
+  it('grows by (blank - pad) once past the threshold, clamped to the per-type cap', () => {
+    // chart: pad 8, cap 90
+    expect(distributeFill(50, 'chart')).toBe(42)        // 50 - 8
+    expect(distributeFill(1000, 'chart')).toBe(90)      // clamped to cap
+    // kpis: pad 6, cap 44
+    expect(distributeFill(40, 'kpis')).toBe(34)         // 40 - 6
+    expect(distributeFill(1000, 'kpis')).toBe(44)
+    // unknown block type falls back to the default tuning (pad 8, cap 60)
+    expect(distributeFill(50, 'mystery')).toBe(42)
+    expect(distributeFill(1000, 'mystery')).toBe(60)
+  })
+  it('is monotonic in the blank amount up to the cap', () => {
+    expect(distributeFill(60, 'chart')).toBeGreaterThan(distributeFill(50, 'chart'))
+    expect(distributeFill(200, 'chart')).toBe(distributeFill(300, 'chart')) // both capped
   })
 })

@@ -70,7 +70,43 @@ const styleChartData = typeof AccidentReportLib.styleChartData === 'function'
 
 const PALETTE_LABELS = {
   default: 'Default', cool: 'Cool', warm: 'Warm', mono: 'Mono', contrast: 'Contrast', pastel: 'Pastel',
+  forest: 'Forest (green)', slate: 'Slate (gray)', ocean: 'Ocean', sunset: 'Sunset', earth: 'Earth', vibrant: 'Vibrant',
 }
+// Ordered palette keys from the engine (all palettes, incl. the new green/gray sets);
+// fall back to whatever PALETTES exposes so the picker still enumerates mid-race.
+const PALETTE_KEYS = Array.isArray(AccidentReportLib.PALETTE_KEYS) && AccidentReportLib.PALETTE_KEYS.length
+  ? AccidentReportLib.PALETTE_KEYS
+  : Object.keys(PALETTES)
+const titleCase = (k) => String(k || '').replace(/[-_]/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
+const paletteLabel = (k) => PALETTE_LABELS[k] || titleCase(k)
+
+// Border-width and data-label-size choices surfaced in the Advanced formatting panel.
+const BORDER_WIDTHS = [1, 1.5, 2, 3]
+const LABEL_SIZES = [9, 10, 11, 12, 14, 16]
+
+// Merge chart.js options honoring the block's legend / gridline / data-label
+// (colour+size) / border choices. Prefer the shared engine builder so preview ==
+// PDF exactly; fall back to a faithful inline merge if the export lands late.
+const chartOptionsFor = typeof AccidentReportLib.chartOptionsFor === 'function'
+  ? AccidentReportLib.chartOptionsFor
+  : (block = {}, baseOpts = {}) => {
+      const plugins = { ...(baseOpts.plugins || {}) }
+      plugins.valueLabels = {
+        ...(plugins.valueLabels || {}),
+        enabled: block.showLabels !== false,
+        ...(block.labelColor ? { color: block.labelColor } : {}),
+        ...(block.labelSize ? { size: block.labelSize } : {}),
+      }
+      plugins.legend = { ...(plugins.legend || {}), display: block.showLegend !== false }
+      const opts = { ...baseOpts, plugins }
+      if (baseOpts.scales && block.showGrid === false) {
+        opts.scales = {}
+        for (const [axis, cfg] of Object.entries(baseOpts.scales)) {
+          opts.scales[axis] = { ...(cfg || {}), grid: { ...((cfg && cfg.grid) || {}), display: false } }
+        }
+      }
+      return opts
+    }
 
 // Preview column width per chart-block width setting; non-chart + full charts take a whole row.
 const BLOCK_GUTTER = 16 // px, matches the flex gap between blocks
@@ -512,8 +548,25 @@ function IconBtn({ children, onClick, title, danger, disabled, active }) {
 function Field({ label, children }) { return <label className="block"><span className="block text-[11px] font-medium text-slate-500 mb-1">{label}</span>{children}</label> }
 const INP = 'w-full rounded-md border border-slate-300 bg-white text-slate-800 text-sm px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-orange-400/40 focus:border-orange-400'
 
+function ColorField({ value, fallback, onChange, resetLabel = 'Auto' }) {
+  const isDefault = value == null || value === ''
+  return (
+    <div className="flex items-center gap-2">
+      <input
+        type="color" value={value || fallback} onChange={(e) => onChange(e.target.value)}
+        className="h-8 w-10 rounded border border-slate-300 bg-white p-0.5 cursor-pointer"
+      />
+      <button
+        type="button" onClick={() => onChange(null)}
+        className={`text-xs px-2 py-1 rounded border ${isDefault ? 'bg-orange-500 border-orange-500 text-white' : 'bg-white border-slate-300 text-slate-600 hover:border-slate-400'}`}
+      >{resetLabel}</button>
+    </div>
+  )
+}
+
 function BlockConfig({ block: b, onPatch, canFormat }) {
   const set = (patch) => onPatch(b.id, patch)
+  const [advOpen, setAdvOpen] = useState(false)
   return (
     <div className="mb-3 p-3 rounded-lg bg-slate-50 border border-slate-200 space-y-3">
       {b.type === 'header' && (
@@ -552,39 +605,88 @@ function BlockConfig({ block: b, onPatch, canFormat }) {
           {CHARTS[b.chart]?.description && <p className="text-[11px] text-slate-400 sm:col-span-2">{CHARTS[b.chart].description}</p>}
 
           {canFormat && (
-            <div className="sm:col-span-2 mt-1 pt-3 border-t border-slate-200 space-y-3">
-              <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-                <Palette size={13} className="text-orange-500" /> Formatting (Admin only)
-              </p>
-              <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
-                <label className="flex items-center gap-2 text-sm text-slate-600">
-                  <input type="checkbox" checked={b.showLabels !== false} onChange={(e) => set({ showLabels: e.target.checked })} /> Data labels
-                </label>
-                <label className="flex items-center gap-2 text-sm text-slate-600">
-                  <input type="checkbox" checked={!!b.showBorders} onChange={(e) => set({ showBorders: e.target.checked })} /> Borders
-                </label>
-              </div>
-              <div>
-                <p className="text-[11px] font-medium text-slate-500 mb-1.5">Colour palette</p>
-                <div className="grid grid-cols-2 gap-1.5">
-                  {Object.entries(PALETTES).map(([key, colors]) => {
-                    const on = (b.palette || 'default') === key
-                    return (
-                      <button
-                        key={key} type="button" onClick={() => set({ palette: key })}
-                        className={`flex items-center gap-2 px-2 py-1.5 rounded-md border text-left transition-colors ${on ? 'border-orange-400 bg-orange-50 ring-1 ring-orange-300' : 'border-slate-300 bg-white hover:border-slate-400'}`}
-                      >
-                        <span className="flex items-center gap-0.5">
-                          {(Array.isArray(colors) ? colors : []).slice(0, 6).map((c, i) => (
-                            <span key={i} className="w-3 h-3 rounded-sm border border-black/10" style={{ background: c }} />
-                          ))}
-                        </span>
-                        <span className={`text-xs font-medium ${on ? 'text-orange-700' : 'text-slate-600'}`}>{PALETTE_LABELS[key] || key}</span>
-                      </button>
-                    )
-                  })}
+            <div className="sm:col-span-2 mt-1 pt-3 border-t border-slate-200">
+              <button
+                type="button" onClick={() => setAdvOpen((v) => !v)}
+                className="flex w-full items-center gap-1.5 text-left"
+                aria-expanded={advOpen}
+              >
+                <Palette size={13} className="text-orange-500" />
+                <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Advanced formatting (Admin only)</span>
+                {advOpen ? <ChevronUp size={14} className="ml-auto text-slate-400" /> : <ChevronDown size={14} className="ml-auto text-slate-400" />}
+              </button>
+
+              {advOpen && (
+                <div className="mt-3 space-y-4">
+                  {/* Toggles: data labels, borders, legend, gridlines */}
+                  <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
+                    <label className="flex items-center gap-2 text-sm text-slate-600">
+                      <input type="checkbox" checked={b.showLabels !== false} onChange={(e) => set({ showLabels: e.target.checked })} /> Data labels
+                    </label>
+                    <label className="flex items-center gap-2 text-sm text-slate-600">
+                      <input type="checkbox" checked={!!b.showBorders} onChange={(e) => set({ showBorders: e.target.checked })} /> Borders
+                    </label>
+                    <label className="flex items-center gap-2 text-sm text-slate-600">
+                      <input type="checkbox" checked={b.showLegend !== false} onChange={(e) => set({ showLegend: e.target.checked })} /> Legend
+                    </label>
+                    <label className="flex items-center gap-2 text-sm text-slate-600">
+                      <input type="checkbox" checked={b.showGrid !== false} onChange={(e) => set({ showGrid: e.target.checked })} /> Gridlines
+                    </label>
+                  </div>
+
+                  {/* Data-label colour + size (only when labels are on) */}
+                  {b.showLabels !== false && (
+                    <div className="grid sm:grid-cols-2 gap-3">
+                      <Field label="Label colour">
+                        <ColorField value={b.labelColor} fallback="#334155" onChange={(v) => set({ labelColor: v })} />
+                      </Field>
+                      <Field label="Label size">
+                        <select className={INP} value={b.labelSize || 11} onChange={(e) => set({ labelSize: +e.target.value })}>
+                          {LABEL_SIZES.map((s) => <option key={s} value={s}>{s} px</option>)}
+                        </select>
+                      </Field>
+                    </div>
+                  )}
+
+                  {/* Border colour + width (only when borders are on) */}
+                  {b.showBorders && (
+                    <div className="grid sm:grid-cols-2 gap-3">
+                      <Field label="Border colour">
+                        <ColorField value={b.borderColor} fallback="#334155" onChange={(v) => set({ borderColor: v })} resetLabel="Palette default" />
+                      </Field>
+                      <Field label="Border width">
+                        <select className={INP} value={b.borderWidth || 1.5} onChange={(e) => set({ borderWidth: +e.target.value })}>
+                          {BORDER_WIDTHS.map((w) => <option key={w} value={w}>{w} px</option>)}
+                        </select>
+                      </Field>
+                    </div>
+                  )}
+
+                  {/* Palette picker — every engine palette (incl. green Forest / gray Slate) */}
+                  <div>
+                    <p className="text-[11px] font-medium text-slate-500 mb-1.5">Colour palette</p>
+                    <div className="grid grid-cols-2 gap-1.5">
+                      {PALETTE_KEYS.map((key) => {
+                        const colors = PALETTES[key] || []
+                        const on = (b.palette || 'default') === key
+                        return (
+                          <button
+                            key={key} type="button" onClick={() => set({ palette: key })}
+                            className={`flex items-center gap-2 px-2 py-1.5 rounded-md border text-left transition-colors ${on ? 'border-orange-400 bg-orange-50 ring-1 ring-orange-300' : 'border-slate-300 bg-white hover:border-slate-400'}`}
+                          >
+                            <span className="flex items-center gap-0.5">
+                              {(Array.isArray(colors) ? colors : []).slice(0, 6).map((c, i) => (
+                                <span key={i} className="w-3 h-3 rounded-sm border border-black/10" style={{ background: c }} />
+                              ))}
+                            </span>
+                            <span className={`text-xs font-medium ${on ? 'text-orange-700' : 'text-slate-600'}`}>{paletteLabel(key)}</span>
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
           )}
         </div>
@@ -658,7 +760,9 @@ function BlockPreview({ block: b, ctx, records, money, company, chartRefs, orien
     const data = styleChartData(def.build(ctx), b)
     const Comp = CHART_COMPONENT[def.kind]
     const baseOpts = CHART_OPTS[def.kind] || {}
-    const opts = { ...baseOpts, plugins: { ...(baseOpts.plugins || {}), valueLabels: { enabled: b.showLabels !== false } } }
+    // Options come from the shared builder so legend / gridlines / data-label
+    // colour+size / borders render in the preview exactly as the PDF prints them.
+    const opts = chartOptionsFor(b, baseOpts)
     const width = b.width || 'full'
     const baseH = b.height || CHART_PREVIEW_HEIGHT[width] || 240
     return (

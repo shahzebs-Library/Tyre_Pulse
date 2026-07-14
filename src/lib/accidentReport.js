@@ -20,7 +20,9 @@ export const PALETTE = ['#ea580c', '#2563eb', '#16a34a', '#9333ea', '#dc2626', '
 
 // ── Per-chart colour palettes (all readable dark-on-white paper). Selected by a
 // chart block's `palette` key; 'default' re-uses the canonical PALETTE so every
-// existing chart is unchanged unless the user picks another combination. ──
+// existing chart is unchanged unless the user picks another combination. Every
+// array is >= 8 colours so charts with many categories never run out of hues.
+// PALETTE_KEYS is the ordered enumeration the builder UI reads (no hardcoding). ──
 export const PALETTES = {
   default: PALETTE,
   cool: ['#2563eb', '#0891b2', '#0d9488', '#16a34a', '#4f46e5', '#7c3aed', '#0369a1', '#0f766e', '#1d4ed8', '#155e75'],
@@ -28,7 +30,18 @@ export const PALETTES = {
   mono: ['#0f172a', '#334155', '#475569', '#64748b', '#94a3b8', '#1e293b', '#0b1220', '#7c8ca3', '#52627a', '#293548'],
   contrast: ['#dc2626', '#2563eb', '#16a34a', '#ca8a04', '#9333ea', '#0891b2', '#db2777', '#0f172a', '#ea580c', '#4f46e5'],
   pastel: ['#f97316', '#60a5fa', '#34d399', '#a78bfa', '#f472b6', '#fbbf24', '#22d3ee', '#94a3b8', '#fb7185', '#818cf8'],
+  // Green-forward (explicitly requested): forests, olives and teals.
+  forest: ['#166534', '#15803d', '#16a34a', '#22c55e', '#4d7c0f', '#65a30d', '#059669', '#0d9488', '#347433', '#3f6212'],
+  // Gray / neutral-forward (explicitly requested): slate + stone neutrals.
+  slate: ['#0f172a', '#1e293b', '#334155', '#475569', '#64748b', '#94a3b8', '#57534e', '#78716c', '#44403c', '#525252'],
+  ocean: ['#0c4a6e', '#0369a1', '#0284c7', '#0891b2', '#0e7490', '#155e75', '#1e40af', '#2563eb', '#0d9488', '#0f766e'],
+  sunset: ['#7c2d12', '#9a3412', '#c2410c', '#ea580c', '#f97316', '#b91c1c', '#dc2626', '#e11d48', '#be123c', '#a16207'],
+  earth: ['#78350f', '#92400e', '#b45309', '#a16207', '#ca8a04', '#854d0e', '#3f6212', '#4d7c0f', '#57534e', '#5c4033'],
+  vibrant: ['#dc2626', '#ea580c', '#ca8a04', '#16a34a', '#0891b2', '#2563eb', '#7c3aed', '#db2777', '#0d9488', '#9333ea'],
 }
+/** Ordered list of every palette key — the builder UI enumerates this instead of
+ *  hardcoding palette names, so adding a palette above surfaces it automatically. */
+export const PALETTE_KEYS = ['default', 'cool', 'warm', 'mono', 'contrast', 'pastel', 'forest', 'slate', 'ocean', 'sunset', 'earth', 'vibrant']
 
 /** Convert a #rrggbb hex to an rgba() string (used for line-chart fills). */
 function hexToRgba(hex, alpha = 1) {
@@ -50,18 +63,24 @@ function hexToRgba(hex, alpha = 1) {
 export function styleChartData(data, block = {}) {
   if (!data || !Array.isArray(data.labels) || !Array.isArray(data.datasets) || !data.datasets.length) return data
   const palette = PALETTES[block.palette] || PALETTES.default
-  const borderW = block.showBorders ? 1.5 : 0
+  const borderOn = !!block.showBorders
+  // Chosen border WIDTH (default 1.5 when borders are on) and an OPTIONAL explicit
+  // border COLOUR (block.borderColor); when unset the border derives from the
+  // palette so the outline stays coordinated with the fill.
+  const borderW = borderOn ? (block.borderWidth != null ? Number(block.borderWidth) : 1.5) : 0
   const kind = CHARTS[block.chart]?.kind
   const perSlice = kind === 'doughnut' || kind === 'polar'
   const datasets = data.datasets.map((ds, di) => {
     const next = { ...ds }
     if (perSlice) {
       next.backgroundColor = data.labels.map((_, i) => palette[i % palette.length])
-      next.borderColor = '#ffffff'
-      next.borderWidth = block.showBorders ? 1.5 : (kind === 'polar' ? 1 : 0)
+      // Slice outline: user colour when borders are on, else the white separator.
+      next.borderColor = borderOn ? (block.borderColor || '#ffffff') : '#ffffff'
+      next.borderWidth = borderOn ? borderW : (kind === 'polar' ? 1 : 0)
       return next
     }
     const color = palette[di % palette.length]
+    const border = borderOn ? (block.borderColor || color) : color
     const isLine = ds.type === 'line' || (!ds.type && kind === 'line')
     if (isLine) {
       // Lines always keep their stroke; the border toggle only outlines points.
@@ -69,11 +88,11 @@ export function styleChartData(data, block = {}) {
       next.backgroundColor = ds.fill ? hexToRgba(color, 0.18) : color
       next.borderWidth = ds.borderWidth != null ? ds.borderWidth : 2
       next.pointBackgroundColor = color
-      next.pointBorderColor = block.showBorders ? '#ffffff' : color
+      next.pointBorderColor = border
       next.pointBorderWidth = borderW
     } else {
       next.backgroundColor = color
-      next.borderColor = color
+      next.borderColor = border
       next.borderWidth = borderW
     }
     return next
@@ -286,18 +305,22 @@ const fmtLabelNum = (v) => (Math.abs(v) >= 1000 ? Math.round(v).toLocaleString('
 export const makeValueLabelsPlugin = (color = PAPER.ink) => ({
   id: 'valueLabels',
   afterDatasetsDraw(chart) {
-    // Per-chart opt-out: preview + PDF set options.plugins.valueLabels.enabled
-    // from the block's showLabels toggle. Absent flag → draw (backwards compatible).
-    if (chart.config?.options?.plugins?.valueLabels?.enabled === false) return
+    // Per-chart opt-out + styling: preview + PDF set options.plugins.valueLabels =
+    // { enabled, color, size } from the chart block. enabled===false → skip (absent
+    // flag draws, backwards compatible); color/size override the defaults below.
+    const vl = chart.config?.options?.plugins?.valueLabels
+    if (vl?.enabled === false) return
     const type = chart.config?.type
     if (type !== 'bar' && type !== 'line' && type !== 'radar') return
     const { ctx } = chart
     if (!ctx) return
+    const drawColor = (vl && vl.color) || color
+    const drawSize = Number(vl?.size) > 0 ? Number(vl.size) : 10
     const horizontal = chart.options?.indexAxis === 'y'
     const stacked = !!(chart.options?.scales?.x?.stacked && chart.options?.scales?.y?.stacked)
     ctx.save()
-    ctx.fillStyle = color
-    ctx.font = 'bold 10px helvetica, arial, sans-serif'
+    ctx.fillStyle = drawColor
+    ctx.font = `bold ${drawSize}px helvetica, arial, sans-serif`
     if (type === 'radar') {
       // Radar: draw each point's raw count just above the vertex.
       chart.data.datasets.forEach((ds, di) => {
@@ -406,6 +429,41 @@ export const CHART_OPTS = {
   waterfall: { ...OPT_BASE, layout: { padding: { top: 16 } } },
 }
 export const CHART_JS_TYPE = { doughnut: 'doughnut', line: 'line', bar: 'bar', 'bar-h': 'bar', 'bar-stack': 'bar', pareto: 'bar', combo: 'bar', radar: 'radar', polar: 'polarArea', waterfall: 'bar' }
+
+/**
+ * Per-block chart.js options: return a NON-MUTATING merge of a chart kind's base
+ * option set with the block's per-chart toggles, so the SAME resolver drives the
+ * live preview and the headless PDF (borders/labels/legend/grid all honoured).
+ *   - plugins.legend.display  ← block.showLegend !== false
+ *   - every scale's grid.display ← block.showGrid !== false (radial 'r' + cartesian
+ *     axes both carry a `grid`; doughnut has no scales so it is left untouched)
+ *   - plugins.valueLabels = { enabled: block.showLabels !== false, color, size }
+ *     read by VALUE_LABELS_PLUGIN for the data-label colour/size.
+ * Unknown/empty base returns a valid standalone options object.
+ */
+export function chartOptionsFor(block = {}, baseOpts = {}) {
+  const base = baseOpts || {}
+  const showLegend = block.showLegend !== false
+  const showGrid = block.showGrid !== false
+  const basePlugins = base.plugins || {}
+  const next = {
+    ...base,
+    plugins: {
+      ...basePlugins,
+      legend: { ...(basePlugins.legend || {}), display: showLegend },
+      valueLabels: { enabled: block.showLabels !== false, color: block.labelColor, size: block.labelSize },
+    },
+  }
+  if (base.scales && typeof base.scales === 'object') {
+    next.scales = {}
+    for (const [key, axis] of Object.entries(base.scales)) {
+      next.scales[key] = axis && typeof axis === 'object'
+        ? { ...axis, grid: { ...(axis.grid || {}), display: showGrid } }
+        : axis
+    }
+  }
+  return next
+}
 
 /** Resolve a chart data cell to a number: floating bars carry [start, end] pairs;
  *  their magnitude is |end - start| (the step size). Plain values pass through. */
@@ -546,7 +604,7 @@ export const uid = () => `b${Date.now().toString(36)}${(_seq++).toString(36)}`
 export const BLOCK_TYPES = {
   header: { label: 'Header / Logo', description: 'Report title, subtitle, company logo and generation date.' },
   kpis: { label: 'KPI row', description: 'A row of headline metrics — pick from 12 accident & claims KPIs.' },
-  chart: { label: 'Chart', description: `One of ${Object.keys(CHARTS).length} live charts (doughnut, line, bar, Pareto, dual-axis combo, radar, polar, waterfall) at full, half, third or quarter width, with per-chart palette, data-label and border options.` },
+  chart: { label: 'Chart', description: `One of ${Object.keys(CHARTS).length} live charts (doughnut, line, bar, Pareto, dual-axis combo, radar, polar, waterfall) at full, half, third or quarter width, with ${PALETTE_KEYS.length} colour palettes (incl. green and gray), border colour + width, data-label colour + size, and legend/grid toggles.` },
   insights: { label: 'Key findings', description: 'Auto-generated bullet summary computed from the live data (peaks, exposure, delays).' },
   text: { label: 'Text section', description: 'Free-form commentary, findings or recommendations with an optional heading.' },
   table: { label: 'Detail table', description: 'Incident register — choose columns and a row cap.' },
@@ -557,7 +615,13 @@ export const BLOCK_TYPES = {
 export const BLOCK_DEFAULTS = {
   header: () => ({ logo: '', title: 'Accident & Claims Report', subtitle: '', showDate: true }),
   kpis: () => ({ items: ['total', 'open', 'repairCost', 'claimed', 'recovered', 'netExposure'] }),
-  chart: () => ({ chart: 'severity', title: '', height: 240, width: 'full', showLabels: true, showBorders: false, palette: 'default' }),
+  chart: () => ({
+    chart: 'severity', title: '', height: 240, width: 'full',
+    // Per-chart formatting (all optional, backward-compatible defaults):
+    showLabels: true, labelColor: '#0f172a', labelSize: 11,
+    showBorders: false, borderColor: null, borderWidth: 1.5,
+    showLegend: true, showGrid: true, palette: 'default',
+  }),
   insights: () => ({ title: 'Key findings' }),
   text: () => ({ title: '', body: '' }),
   table: () => ({ title: 'Incident detail', columns: ['incident_date', 'asset_no', 'site', 'severity', 'status', 'claim_amount'], limit: 25 }),

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef, lazy, Suspense } from 'react'
-import { useNavigate, useLocation } from 'react-router-dom'
+import { useNavigate, useLocation, useSearchParams } from 'react-router-dom'
 
 const AccidentReportBuilder = lazy(() => import('../components/accidents/AccidentReportBuilder'))
 import { AlertOctagon, Plus, Search, X, Save, FileText, Download, BarChart2, Eye, Hourglass, Upload, CheckCircle2, AlertCircle, ChevronDown, Trash2, AlertTriangle, TrendingUp, Users, DollarSign, ShieldAlert, Lightbulb, ChevronRight, Clock, Wrench, ShieldCheck, ArrowLeft } from 'lucide-react'
@@ -30,6 +30,7 @@ import {
   canonSeverity, canonStatus, canonAccidentType, toDbSeverity, toDbStatus, toDbAccidentType,
 } from '../lib/accidentVocab'
 import { makeValueLabelsPlugin, doughnutLegendCounts, summarizeChartData } from '../lib/accidentReport'
+import { hasClaim, isClosed as isClaimClosed } from '../lib/claimsAnalytics'
 import { captureChartOnPaper } from '../lib/chartCapture'
 
 ChartJS.register(
@@ -135,6 +136,12 @@ const daysSinceUpdate = (r) => {
 
 // Delayed = still open AND stalled beyond the SLA threshold with no movement.
 const isDelayed = (r) => !isReleasedOrClosed(r) && daysSinceUpdate(r) > DELAY_THRESHOLD_DAYS
+
+// Open claim = the incident carries an insurance claim (money / claim status /
+// insurer / claim-flavoured status) that has NOT reached a terminal state
+// (closed / settled / paid / recovered / rejected / released). Reuses the single
+// claims engine helpers so this matches the Claims Summary dashboard exactly.
+const isOpenClaim = (r) => hasClaim(r) && !isClaimClosed(r)
 
 // ── Case age ("Days open") ──────────────────────────────────────────────────
 // Whole days (>= 0) from the incident date to closure (release_date, when the
@@ -344,6 +351,19 @@ export default function Accidents() {
   const fmtCurrency = (val) => _fmtCurrencyBase(val, activeCurrency, 0)
   const navigate = useNavigate()
   const location = useLocation()
+  // URL is the single source of truth for the shareable "open claims" filter,
+  // so a saved/shared link (`/accidents?claims=open`) opens the register already
+  // filtered. Deriving straight from the param (no mirrored state) keeps the
+  // toggle, the URL and a pasted link perfectly in sync.
+  const [searchParams, setSearchParams] = useSearchParams()
+  const filterOpenClaims = searchParams.get('claims') === 'open'
+  const setOpenClaims = useCallback((on) => {
+    setSearchParams(prev => {
+      const p = new URLSearchParams(prev)
+      if (on) p.set('claims', 'open'); else p.delete('claims')
+      return p
+    }, { replace: true })
+  }, [setSearchParams])
 
   const [tab, setTab]                  = useState('incidents')
   const [records, setRecords]          = useState([])
@@ -597,6 +617,7 @@ export default function Accidents() {
     const open   = records.filter(r => !isClosed(r)).length
     const delayed = records.filter(isDelayed).length
     const insur  = records.filter(r => canonStatus(r.status) === 'Insurance Claim' || (r.claim_status && r.claim_status !== 'none')).length
+    const openClaims = records.filter(isOpenClaim).length
     const cost   = records.reduce((s, r) => s + (Number(r.repair_cost) || 0) + (Number(r.parts_cost) || 0), 0)
     const closed = records.filter(r => isClosed(r))
     let avgDays  = 0
@@ -631,7 +652,7 @@ export default function Accidents() {
     const fleetSize = fleetAssets.length
     const per100 = fleetSize > 0 ? Number(((total / fleetSize) * 100).toFixed(1)) : 0
 
-    return { total, open, delayed, insur, cost, avgDays, sevMix, atFaultPct, atFaultCount, atFaultDenom: withLiability.length, avgClaim, per100, fleetSize }
+    return { total, open, delayed, insur, openClaims, cost, avgDays, sevMix, atFaultPct, atFaultCount, atFaultDenom: withLiability.length, avgClaim, per100, fleetSize }
   }, [records, fleetAssets])
 
   // Monthly incidents chart (incidents tab)
@@ -1103,6 +1124,7 @@ export default function Accidents() {
   const filtered = useMemo(() => {
     let arr = records
     if (onlyPendingClosure) arr = arr.filter(r => r.closure_status === 'pending_closure')
+    if (filterOpenClaims) arr = arr.filter(isOpenClaim)
     if (filterDelayed)  arr = arr.filter(isDelayed)
     if (statusFunnel)   arr = arr.filter(r => r.status === statusFunnel)
     if (filterStatus)   arr = arr.filter(r => r.status === filterStatus)
@@ -1131,7 +1153,7 @@ export default function Accidents() {
       )
     }
     return arr
-  }, [records, search, filterSite, filterSeverity, filterStatus, filterFrom, filterTo, statusFunnel, onlyPendingClosure, filterDelayed, filterStage, filterRepairType, filterFault, filterAge])
+  }, [records, search, filterSite, filterSeverity, filterStatus, filterFrom, filterTo, statusFunnel, onlyPendingClosure, filterDelayed, filterStage, filterRepairType, filterFault, filterAge, filterOpenClaims])
 
   // Suggested final amount = workshop quotation minus discount% (former Repair
   // & Insurance tab helper). Null when there is no quotation — never fabricated.
@@ -1728,8 +1750,19 @@ export default function Accidents() {
             <FileText size={14} /> PDF
           </button>
           <button
+            onClick={() => { setTab('incidents'); setOpenClaims(true) }}
+            title="Filter the register to insurance claims that are still open (shareable link: ?claims=open)"
+            className={`flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-lg border transition-colors ${
+              filterOpenClaims
+                ? 'bg-blue-900/40 text-blue-200 border-blue-600'
+                : 'btn-secondary'
+            }`}
+          >
+            <ShieldAlert size={14} /> Open claims{stats.openClaims ? ` (${stats.openClaims})` : ''}
+          </button>
+          <button
             onClick={() => exportClaimsSummary('pdf')}
-            title={`Insurance claims summary — ${claimsRows.length} claim${claimsRows.length === 1 ? '' : 's'}`}
+            title={`Insurance claims summary: ${claimsRows.length} claim${claimsRows.length === 1 ? '' : 's'}`}
             className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-1.5"
           >
             <ShieldCheck size={14} /> Claims Summary
@@ -1987,14 +2020,29 @@ export default function Accidents() {
             >
               <Clock size={13} /> Delayed only
             </button>
-            {(search || filterSite || filterSeverity || filterStatus || filterStage || filterRepairType || filterFault || filterAge || filterFrom || filterTo || filterDelayed) && (
+            <button
+              onClick={() => setOpenClaims(!filterOpenClaims)}
+              aria-pressed={filterOpenClaims}
+              className={`px-3 py-1 rounded-lg text-sm font-medium border transition-colors flex items-center gap-1.5 ${
+                filterOpenClaims
+                  ? 'bg-blue-900/40 text-blue-300 border-blue-600'
+                  : 'bg-[var(--input-bg)] text-[var(--text-muted)] border-[var(--input-border)] hover:text-[var(--text-primary)]'
+              }`}
+              title="Show only incidents whose insurance claim is still open (not closed / settled / rejected). Linkable as ?claims=open"
+            >
+              <ShieldAlert size={13} /> Open claims only{stats.openClaims ? ` (${stats.openClaims})` : ''}
+            </button>
+            {(search || filterSite || filterSeverity || filterStatus || filterStage || filterRepairType || filterFault || filterAge || filterFrom || filterTo || filterDelayed || filterOpenClaims) && (
               <button
-                onClick={() => { setSearch(''); setFilterSite(''); setFilterSeverity(''); setFilterStatus(''); setFilterStage(''); setFilterRepairType(''); setFilterFault(''); setFilterAge(''); setFilterFrom(''); setFilterTo(''); setFilterDelayed(false) }}
+                onClick={() => { setSearch(''); setFilterSite(''); setFilterSeverity(''); setFilterStatus(''); setFilterStage(''); setFilterRepairType(''); setFilterFault(''); setFilterAge(''); setFilterFrom(''); setFilterTo(''); setFilterDelayed(false); setOpenClaims(false) }}
                 className="text-xs text-[var(--text-muted)] hover:text-[var(--text-primary)] px-2 flex items-center gap-1"
               >
                 <X size={12} /> Clear filters
               </button>
             )}
+            <span className="text-xs text-[var(--text-muted)] ml-auto self-center whitespace-nowrap">
+              {filtered.length}{filtered.length !== records.length ? ` of ${records.length}` : ''} shown
+            </span>
           </div>
 
           {/* Bulk selection bar (Admin only) */}

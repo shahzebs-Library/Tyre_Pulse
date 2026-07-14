@@ -31,7 +31,7 @@ import {
   Trash2, ChevronUp, ChevronDown, Copy, FileText, Save, FolderOpen, X,
   LayoutGrid, Loader2, Sparkles, Settings2, Lightbulb, Minus, Search,
   LayoutTemplate, CalendarClock, CheckCircle, AlertCircle, Info, Palette, Scissors,
-  FileSpreadsheet, Filter, ArrowUpDown, RotateCcw,
+  FileSpreadsheet, Filter, ArrowUpDown, RotateCcw, Presentation,
 } from 'lucide-react'
 import {
   CHARTS, KPIS, TABLE_COLS, BLOCK_TYPES, CHART_OPTS,
@@ -308,6 +308,22 @@ export default function AccidentReportBuilder({ records = [], company = 'TyrePul
     } finally { setExporting(false) }
   }, [config, records, company, currency])
 
+  // ── PPTX export (shared renderer; same live-canvas charts as the PDF path) ───
+  const exportPptx = useCallback(async () => {
+    setExporting(true)
+    try {
+      const { renderAccidentReportPptx } = await import('../../lib/accidentReportPptx')
+      await renderAccidentReportPptx({
+        config, records, company, currency,
+        filename: reportFileName(company, 'Accident Report', reportDateLabel()),
+        chartImageFor: (b) => chartRefs.current[b.id]?.toBase64Image?.('image/png', 1) || null,
+      })
+      setToast({ t: 'ok', m: 'PowerPoint exported.' })
+    } catch (e) {
+      setToast({ t: 'err', m: e?.message || 'Export failed.' })
+    } finally { setExporting(false) }
+  }, [config, records, company, currency])
+
   // ── Render ────────────────────────────────────────────────────────────────
   return (
     <div className="space-y-4">
@@ -349,6 +365,9 @@ export default function AccidentReportBuilder({ records = [], company = 'TyrePul
             </div>
             <button onClick={exportPdf} disabled={exporting || !blocks.length} className="btn-primary text-sm inline-flex items-center gap-1.5 disabled:opacity-50">
               {exporting ? <Loader2 size={15} className="animate-spin" /> : <FileText size={15} />} Export PDF
+            </button>
+            <button onClick={exportPptx} disabled={exporting || !blocks.length} className="btn-secondary text-sm inline-flex items-center gap-1.5 disabled:opacity-50">
+              {exporting ? <Loader2 size={15} className="animate-spin" /> : <Presentation size={15} />} Export PPTX
             </button>
           </div>
         </div>

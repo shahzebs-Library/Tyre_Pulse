@@ -24,6 +24,7 @@ import {
 } from 'chart.js'
 import { supabase } from '../../lib/supabase'
 import { fetchAllPages } from '../../lib/fetchAll'
+import { applyCountry } from '../../lib/countryFilter'
 import StatTile from '../ui/StatTile'
 import Gauge from '../ui/Gauge'
 import {
@@ -61,63 +62,87 @@ const SEVERITY_COLORS = {
 const STATUS_PALETTE = ['#3b82f6', '#f59e0b', '#22c55e', '#8b5cf6', '#06b6d4', '#ef4444', '#ec4899', '#64748b']
 
 // ── Data loading ──────────────────────────────────────────────────────────────
+// Global dashboard filters (resolveDashboardFilters output) are threaded into
+// every fetcher: `site`/`country` are applied only to tables that carry those
+// columns (vehicle_fleet, tyre_records, inspections), and the date window is
+// applied only to genuinely time-bounded reads (alerts / work_orders on
+// created_at). Snapshot widgets (tyres in service, this-month cost, 6-month
+// trend, today's inspections, pending imports) keep their intrinsic window and
+// simply ignore an incompatible filter — no crash, no error tile.
+
+/** Apply an equality site filter when a specific site is selected. */
+const withSite = (q, site) => (site ? q.eq('site', site) : q)
+
+/** Apply a created_at date window (inclusive) when bounds are present. */
+const withCreatedRange = (q, from, to) => {
+  let out = q
+  if (from) out = out.gte('created_at', from)
+  if (to) out = out.lte('created_at', `${to}T23:59:59.999Z`)
+  return out
+}
+
 /** Raw source fetchers keyed by WIDGET_CATALOG data.source. */
 const SOURCE_FETCHERS = {
-  fleet: async () => {
-    const { data, error } = await supabase
-      .from('vehicle_fleet')
-      .select('asset_no,site,status')
+  fleet: async ({ site, country } = {}) => {
+    let q = supabase.from('vehicle_fleet').select('asset_no,site,status')
+    q = withSite(q, site)
+    q = applyCountry(q, country)
+    const { data, error } = await q
     if (error) throw error
     return data ?? []
   },
-  tyresActive: async () => {
-    const { data, error } = await fetchAllPages((from, to) => supabase
-      .from('tyre_records')
-      .select('asset_no,risk_level')
-      .is('removal_date', null)
-      .range(from, to), { max: 20000 })
+  tyresActive: async ({ site, country } = {}) => {
+    const { data, error } = await fetchAllPages((lo, hi) => {
+      let q = supabase.from('tyre_records').select('asset_no,risk_level').is('removal_date', null)
+      q = withSite(q, site)
+      q = applyCountry(q, country)
+      return q.range(lo, hi)
+    }, { max: 20000 })
     if (error) throw error
     return data ?? []
   },
-  monthTyres: async () => {
+  monthTyres: async ({ site, country } = {}) => {
     const monthStart = new Date()
     monthStart.setDate(1)
-    const { data, error } = await fetchAllPages((from, to) => supabase
-      .from('tyre_records')
-      .select('cost_per_tyre,qty,issue_date')
-      .gte('issue_date', monthStart.toISOString().slice(0, 10))
-      .range(from, to), { max: 20000 })
+    const { data, error } = await fetchAllPages((lo, hi) => {
+      let q = supabase.from('tyre_records').select('cost_per_tyre,qty,issue_date')
+        .gte('issue_date', monthStart.toISOString().slice(0, 10))
+      q = withSite(q, site)
+      q = applyCountry(q, country)
+      return q.range(lo, hi)
+    }, { max: 20000 })
     if (error) throw error
     return data ?? []
   },
-  costTrend: async () => {
+  costTrend: async ({ site, country } = {}) => {
     const now = new Date()
     const start = new Date(now.getFullYear(), now.getMonth() - 5, 1)
-    const { data, error } = await fetchAllPages((from, to) => supabase
-      .from('tyre_records')
-      .select('cost_per_tyre,qty,issue_date')
-      .gte('issue_date', start.toISOString().slice(0, 10))
-      .range(from, to), { max: 20000 })
+    const { data, error } = await fetchAllPages((lo, hi) => {
+      let q = supabase.from('tyre_records').select('cost_per_tyre,qty,issue_date')
+        .gte('issue_date', start.toISOString().slice(0, 10))
+      q = withSite(q, site)
+      q = applyCountry(q, country)
+      return q.range(lo, hi)
+    }, { max: 20000 })
     if (error) throw error
     return data ?? []
   },
-  inspections: async () => {
+  inspections: async ({ site, country } = {}) => {
     const todayStr = new Date().toISOString().slice(0, 10)
-    const { data, error } = await supabase
-      .from('inspections')
-      .select('scheduled_date,status')
+    let q = supabase.from('inspections').select('scheduled_date,status')
       .gte('scheduled_date', todayStr)
-      .limit(2000)
+    q = withSite(q, site)
+    q = applyCountry(q, country)
+    const { data, error } = await q.limit(2000)
     if (error) throw error
     return data ?? []
   },
-  alerts: async () => {
-    const { data, error } = await supabase
-      .from('alerts')
+  alerts: async ({ from, to } = {}) => {
+    let q = supabase.from('alerts')
       .select('severity,message,asset_no,created_at,is_active')
       .eq('is_active', true)
-      .order('created_at', { ascending: false })
-      .limit(500)
+    q = withCreatedRange(q, from, to)
+    const { data, error } = await q.order('created_at', { ascending: false }).limit(500)
     if (error) throw error
     return data ?? []
   },
@@ -130,11 +155,12 @@ const SOURCE_FETCHERS = {
     if (error) throw error
     return data ?? []
   },
-  workOrders: async () => {
-    const { data, error } = await fetchAllPages((from, to) => supabase
-      .from('work_orders')
-      .select('id,status')
-      .range(from, to), { max: 10000 })
+  workOrders: async ({ from, to } = {}) => {
+    const { data, error } = await fetchAllPages((lo, hi) => {
+      let q = supabase.from('work_orders').select('id,status')
+      q = withCreatedRange(q, from, to)
+      return q.range(lo, hi)
+    }, { max: 10000 })
     if (error) throw error
     return data ?? []
   },
@@ -144,8 +170,10 @@ const SOURCE_FETCHERS = {
  * Build a per-batch loader. loadWidgetData(widgetId) → Promise<rows>.
  * Sources are memoised for the lifetime of the loader, so widgets that share
  * a source (e.g. three fleet widgets) trigger exactly one query per refresh.
+ * @param {{from?:string|null, to?:string|null, site?:string|null, country?:string|null}} [params]
+ *        resolved global dashboard filters (see resolveDashboardFilters).
  */
-export function createWidgetDataLoader() {
+export function createWidgetDataLoader(params = {}) {
   const cache = new Map()
   return function loadWidgetData(widgetId) {
     const def = WIDGET_BY_ID[widgetId]
@@ -154,7 +182,7 @@ export function createWidgetDataLoader() {
     if (!cache.has(source)) {
       const fetcher = SOURCE_FETCHERS[source]
       if (!fetcher) return Promise.reject(new Error(`Unknown data source: ${source}`))
-      cache.set(source, fetcher())
+      cache.set(source, fetcher(params))
     }
     return cache.get(source)
   }

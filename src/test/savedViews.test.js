@@ -241,7 +241,9 @@ describe('saveDashboard / deleteDashboard write routing', () => {
     const call = lastCallTo('user_dashboards')
     expect(call.op).toBe('upsert')
     expect(call.payload).toMatchObject({ id: 'd5', user_id: 'user-1' })
-    expect(call.payload.layout).toEqual({ widgets: [] })
+    // layout carries widgets plus the additive default-filters block.
+    expect(call.payload.layout.widgets).toEqual([])
+    expect(call.payload.layout.filters).toMatchObject({ range: 'all', site: 'All', country: 'All' })
   })
 
   it('falls back to app_settings when the table is missing', async () => {

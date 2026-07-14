@@ -18,16 +18,19 @@ import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import {
   LayoutDashboard, Plus, Pencil, Check, X, Trash2, Save, Copy,
   ChevronLeft, ChevronRight, GripVertical, Star, Globe, RefreshCw,
-  AlertTriangle, ChevronDown, Eye,
+  AlertTriangle, ChevronDown, Eye, SlidersHorizontal, Calendar, MapPin, RotateCcw,
 } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
-import { useSettings } from '../contexts/SettingsContext'
+import { useSettings, COUNTRIES } from '../contexts/SettingsContext'
+import { useSites } from '../hooks/useSites'
 import WidgetRenderer, { createWidgetDataLoader } from '../components/dashboard/WidgetRenderer'
 import {
   WIDGET_CATALOG, WIDGET_BY_ID, WIDGET_CATEGORIES, SIZE_PRESETS,
   MIN_W, MAX_W, DEFAULT_LAYOUT, MAX_LAYOUTS,
   addWidget, removeWidget, moveWidget, resizeWidget, validateLayout,
   makeLayout, visibleLayouts, pickInitialLayout,
+  DASHBOARD_RANGE_PRESETS, DEFAULT_DASHBOARD_FILTERS,
+  normalizeFilters, resolveDashboardFilters,
 } from '../lib/dashboardBuilder'
 import {
   listDashboards, saveDashboard, deleteDashboard,
@@ -160,15 +163,88 @@ function CatalogDrawer({ open, onAdd, onClose, placedIds }) {
   )
 }
 
+/* ── Global filter bar (drives every widget's data fetch) ───────────────────── */
+function FilterBar({ filters, siteOptions, sitesLoading, onChange, onReset, editMode }) {
+  const norm = normalizeFilters(filters)
+  const isDefault = norm.range === 'all' && norm.site === 'All' && norm.country === 'All'
+  // A stored site may be absent from the current (country-scoped) option list;
+  // keep it selectable so the control never renders a blank value.
+  const siteChoices = filters.site !== 'All' && !siteOptions.includes(filters.site)
+    ? [filters.site, ...siteOptions]
+    : siteOptions
+  const selCls = 'text-xs rounded-lg px-2.5 py-1.5 bg-transparent text-[var(--text-primary)] outline-none focus:border-green-600 cursor-pointer'
+  const selStyle = { border: '1px solid var(--hairline, rgba(148,163,184,0.25))' }
+  return (
+    <div className="card !p-3 flex flex-wrap items-center gap-2.5">
+      <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-[var(--text-muted)] mr-1">
+        <SlidersHorizontal size={13} /> Filters
+      </span>
+
+      {/* Date range */}
+      <label className="inline-flex items-center gap-1.5" title="Date range">
+        <Calendar size={13} className="text-[var(--text-muted)] flex-shrink-0" />
+        <select aria-label="Date range" className={selCls} style={selStyle}
+          value={filters.range} onChange={e => onChange({ range: e.target.value })}>
+          {DASHBOARD_RANGE_PRESETS.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
+        </select>
+      </label>
+
+      {filters.range === 'custom' && (
+        <span className="inline-flex items-center gap-1.5">
+          <input type="date" aria-label="From date" className={selCls} style={selStyle}
+            value={filters.from || ''} max={filters.to || undefined}
+            onChange={e => onChange({ from: e.target.value || null })} />
+          <span className="text-[11px] text-[var(--text-muted)]">to</span>
+          <input type="date" aria-label="To date" className={selCls} style={selStyle}
+            value={filters.to || ''} min={filters.from || undefined}
+            onChange={e => onChange({ to: e.target.value || null })} />
+        </span>
+      )}
+
+      {/* Site */}
+      <label className="inline-flex items-center gap-1.5" title="Site">
+        <MapPin size={13} className="text-[var(--text-muted)] flex-shrink-0" />
+        <select aria-label="Site" className={selCls} style={selStyle}
+          value={filters.site} onChange={e => onChange({ site: e.target.value })}>
+          <option value="All">{sitesLoading ? 'Loading sites...' : 'All sites'}</option>
+          {siteChoices.map(s => <option key={s} value={s}>{s}</option>)}
+        </select>
+      </label>
+
+      {/* Country */}
+      <label className="inline-flex items-center gap-1.5" title="Country">
+        <Globe size={13} className="text-[var(--text-muted)] flex-shrink-0" />
+        <select aria-label="Country" className={selCls} style={selStyle}
+          value={filters.country} onChange={e => onChange({ country: e.target.value })}>
+          <option value="All">All countries</option>
+          {COUNTRIES.map(c => <option key={c} value={c}>{c}</option>)}
+        </select>
+      </label>
+
+      {!isDefault && (
+        <button type="button" onClick={onReset}
+          className="btn-secondary text-xs gap-1.5 py-1.5 px-2.5" title="Clear all filters">
+          <RotateCcw size={12} /> Reset
+        </button>
+      )}
+
+      <span className="ml-auto text-[11px] text-[var(--text-muted)]">
+        {editMode ? 'Saved as this layout default' : 'Applied to every widget'}
+      </span>
+    </div>
+  )
+}
+
 /* ─────────────────────────────────────────────────────────────────────────── */
 export default function DashboardBuilder() {
   const { profile } = useAuth()
-  const { activeCurrency } = useSettings()
+  const { activeCurrency, activeCountry } = useSettings()
   const userId = profile?.id || null
   const isAdmin = profile?.role === 'Admin'
 
   const [layouts, setLayouts]     = useState([])
   const [draft, setDraft]         = useState(null)   // working copy of the active layout
+  const [filters, setFilters]     = useState(DEFAULT_DASHBOARD_FILTERS) // active global filters
   const [dirty, setDirty]         = useState(false)
   const [editMode, setEditMode]   = useState(false)
   const [loading, setLoading]     = useState(true)
@@ -181,6 +257,21 @@ export default function DashboardBuilder() {
   const [modal, setModal]         = useState(null)   // { mode: 'new'|'rename'|'saveAs' }
   const dragIndexRef = useRef(null)
   const loadingDataRef = useRef(false)
+  const paramsKeyRef = useRef(null)
+
+  // The dashboard honours the global country switcher as its baseline; the
+  // board's own Country filter narrows further. Site options follow the
+  // effective country so the picker only lists relevant sites.
+  const effectiveCountry = (filters.country && filters.country !== 'All')
+    ? filters.country
+    : activeCountry
+  const { options: siteOptions, loading: sitesLoading } = useSites(effectiveCountry)
+
+  // Pure filters -> query params. Stable identity unless a filter truly changes.
+  const queryParams = useMemo(
+    () => resolveDashboardFilters({ ...filters, country: effectiveCountry }),
+    [filters, effectiveCountry],
+  )
 
   const visible = useMemo(() => visibleLayouts(layouts, userId), [layouts, userId])
   const canSaveInPlace = draft && draft.id !== DEFAULT_LAYOUT.id &&
@@ -224,7 +315,7 @@ export default function DashboardBuilder() {
   const loadData = useCallback(async (ids) => {
     if (!ids.length || loadingDataRef.current) return
     loadingDataRef.current = true
-    const loader = createWidgetDataLoader()
+    const loader = createWidgetDataLoader(queryParams)
     await Promise.allSettled(ids.map(async id => {
       try {
         const rows = await loader(id)
@@ -237,9 +328,35 @@ export default function DashboardBuilder() {
       }
     }))
     loadingDataRef.current = false
-  }, [])
+  }, [queryParams])
 
-  // Fetch data for widgets that don't have a slice yet (add-widget case).
+  // Adopt a layout's stored default filters when the active layout changes
+  // (initial load / switch). Draft mutations keep the same id, so editing
+  // widgets never resets the filter bar.
+  useEffect(() => {
+    setFilters(draft?.filters ? normalizeFilters(draft.filters) : DEFAULT_DASHBOARD_FILTERS)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draft?.id])
+
+  // In edit mode, filter changes become the layout's saved default (marks dirty).
+  useEffect(() => {
+    if (!editMode || !draft) return
+    const same = JSON.stringify(normalizeFilters(draft.filters)) === JSON.stringify(filters)
+    if (same) return
+    mutate(l => (l ? { ...l, filters, updated_at: new Date().toISOString() } : l))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filters, editMode])
+
+  // Refetch the whole board when the resolved query params actually change.
+  useEffect(() => {
+    const key = JSON.stringify(queryParams)
+    if (paramsKeyRef.current === null) { paramsKeyRef.current = key; return }
+    if (paramsKeyRef.current === key) return
+    paramsKeyRef.current = key
+    setSlices({})
+  }, [queryParams])
+
+  // Fetch data for widgets that don't have a slice yet (add-widget / refilter).
   useEffect(() => {
     const missing = widgetIds.filter(id => !slices[id])
     if (missing.length) loadData(missing)
@@ -264,6 +381,14 @@ export default function DashboardBuilder() {
   const handleMove    = (i, delta) => mutate(l => moveWidget(l, i, i + delta))
   const handleWidth   = (i, w) => mutate(l => resizeWidget(l, i, { w }))
   const handlePreset  = (i, key) => mutate(l => resizeWidget(l, i, SIZE_PRESETS[key]))
+
+  /* ── Global filters ──────────────────────────────────────────────────── */
+  const handleFilterChange = useCallback((patch) => {
+    setFilters(prev => normalizeFilters({ ...prev, ...patch }))
+  }, [])
+  const handleFilterReset = useCallback(() => {
+    setFilters(DEFAULT_DASHBOARD_FILTERS)
+  }, [])
 
   /* ── Persistence actions ─────────────────────────────────────────────── */
   /**
@@ -529,6 +654,18 @@ export default function DashboardBuilder() {
           )}
         </div>
       </div>
+
+      {/* ── Global filter bar ── */}
+      {draft && (
+        <FilterBar
+          filters={filters}
+          siteOptions={siteOptions}
+          sitesLoading={sitesLoading}
+          onChange={handleFilterChange}
+          onReset={handleFilterReset}
+          editMode={editMode}
+        />
+      )}
 
       {/* ── Empty layout state ── */}
       {draft && draft.widgets.length === 0 && (

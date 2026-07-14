@@ -1,8 +1,14 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
-  ArrowDown, ArrowUp, BookMarked, Check, Database, FileSpreadsheet, FileText,
-  FolderOpen, Layers, Pencil, Play, Plus, Save, SlidersHorizontal, Trash2, X,
+  ArrowDown, ArrowUp, BarChart3, BookMarked, Check, Database, FileSpreadsheet,
+  FileText, FolderOpen, Layers, Pencil, Play, Plus, Save, SlidersHorizontal,
+  Trash2, X,
 } from 'lucide-react'
+import {
+  Chart as ChartJS, CategoryScale, LinearScale, BarElement,
+  LineElement, PointElement, ArcElement, Title, Tooltip, Legend, Filler,
+} from 'chart.js'
+import { Bar, Line, Doughnut } from 'react-chartjs-2'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import PageHeader from '../components/ui/PageHeader'
@@ -10,11 +16,56 @@ import SectionTabs, { REPORTS_TABS } from '../components/ui/SectionTabs'
 import EnterpriseTable from '../components/ui/EnterpriseTable'
 import { useReportMeta } from '../hooks/useReportMeta'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
+import { captureChartOnPaper } from '../lib/chartCapture'
 import {
-  AGG_FNS, DATASETS, DATASET_LIST, DEFAULT_LIMIT, LIST_OPS, MAX_LIMIT,
+  AGG_FNS, CHART_TYPES, DATASETS, DATASET_LIST, DEFAULT_LIMIT, LIST_OPS, MAX_LIMIT,
   OPERATORS, OPERATOR_LABELS, RANGE_OPS, VALUELESS_OPS,
-  applyAggregations, buildQuery, makeSavedReport, validateConfig,
+  applyAggregations, buildQuery, buildReportChartData, chartMetricOptions,
+  makeSavedReport, validateConfig,
 } from '../lib/reportBuilder'
+
+ChartJS.register(
+  CategoryScale, LinearScale, BarElement,
+  LineElement, PointElement, ArcElement, Title, Tooltip, Legend, Filler,
+)
+
+// Dark-theme chart options (light ticks/labels) so the on-screen chart stays
+// legible; the PDF capture flips these to paper ink via captureChartOnPaper.
+const CHART_DARK_BASE = {
+  responsive: true,
+  maintainAspectRatio: false,
+  plugins: {
+    legend: { labels: { color: '#9ca3af', boxWidth: 12, font: { size: 11 } } },
+    tooltip: {
+      backgroundColor: 'var(--panel)', borderColor: 'var(--hairline)', borderWidth: 1,
+      titleColor: '#f9fafb', bodyColor: '#d1d5db',
+    },
+  },
+  scales: {
+    x: { ticks: { color: '#9ca3af', font: { size: 11 } }, grid: { color: '#1f2937' } },
+    y: { ticks: { color: '#9ca3af', font: { size: 11 } }, grid: { color: '#1f2937' } },
+  },
+}
+
+/** Resolve Chart.js options for a report chart type (dark on-screen theme). */
+function chartOptionsFor(type) {
+  if (type === 'pie') {
+    return {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { position: 'right', labels: { color: '#9ca3af', boxWidth: 12, font: { size: 11 } } } },
+    }
+  }
+  if (type === 'hbar') {
+    return {
+      ...CHART_DARK_BASE, indexAxis: 'y',
+      plugins: { ...CHART_DARK_BASE.plugins, legend: { display: false } },
+    }
+  }
+  if (type === 'bar') {
+    return { ...CHART_DARK_BASE, plugins: { ...CHART_DARK_BASE.plugins, legend: { display: false } } }
+  }
+  return CHART_DARK_BASE // line
+}
 import {
   listReports, saveReport, deleteReport as deleteSavedReport,
   renameReport as renameSavedReport, reportSaveTarget,
@@ -78,6 +129,9 @@ export default function ReportBuilder() {
   const [limit, setLimit] = useState(DEFAULT_LIMIT)
   const [groupBy, setGroupBy] = useState('')
   const [metrics, setMetrics] = useState([]) // [{ col, fn }]
+  const [chartType, setChartType] = useState('') // '' = table only
+  const [chartMetric, setChartMetric] = useState('count')
+  const chartRef = useRef(null)
 
   // ── results state ───────────────────────────────────────────────────────
   const [rows, setRows] = useState([])
@@ -112,7 +166,8 @@ export default function ReportBuilder() {
     sort: sortCol ? { col: sortCol, dir: sortDir } : null,
     limit,
     group: groupBy ? { by: groupBy, metrics } : null,
-  }), [datasetKey, selectedCols, filters, sortCol, sortDir, limit, groupBy, metrics])
+    chart: groupBy && chartType ? { type: chartType, metric: chartMetric } : null,
+  }), [datasetKey, selectedCols, filters, sortCol, sortDir, limit, groupBy, metrics, chartType, chartMetric])
 
   // ── load saved reports ──────────────────────────────────────────────────
   const loadSaved = useCallback(async () => {
@@ -137,6 +192,8 @@ export default function ReportBuilder() {
     setSortDir('desc')
     setGroupBy('')
     setMetrics([])
+    setChartType('')
+    setChartMetric('count')
     setRows([])
     setHasRun(false)
     setRunError(null)
@@ -193,6 +250,19 @@ export default function ReportBuilder() {
   }, [aggregated, selectedCols, dataset])
   const resultRows = aggregated ? aggregated.rows : rows
 
+  // ── chart data (grouped rows -> Chart.js data) ──────────────────────────────
+  const metricOptions = useMemo(() => chartMetricOptions(aggregated), [aggregated])
+  // Keep the selected chart metric valid as aggregates change.
+  useEffect(() => {
+    if (!metricOptions.length) return
+    if (!metricOptions.some(o => o.key === chartMetric)) setChartMetric(metricOptions[0].key)
+  }, [metricOptions, chartMetric])
+  const chartData = useMemo(
+    () => (chartType && aggregated ? buildReportChartData(aggregated, { type: chartType, metric: chartMetric }) : null),
+    [chartType, aggregated, chartMetric],
+  )
+  const chartOptions = useMemo(() => chartOptionsFor(chartType), [chartType])
+
   const tableColumns = useMemo(() => resultColumns.map(c => ({
     accessorKey: c.key,
     header: c.label,
@@ -230,6 +300,9 @@ export default function ReportBuilder() {
     if (!resultRows.length || exporting) return
     setExporting(true)
     try {
+      // Reuse the live report chart (rendered on white paper) above the table.
+      const leadImage = chartData && chartRef.current ? captureChartOnPaper(chartRef.current) : null
+      const chartTypeLabel = CHART_TYPES.find(t => t.key === chartType)?.label
       await exportToPdf(
         resultRows,
         resultColumns.map(c => ({ key: c.key, header: c.label })),
@@ -237,6 +310,9 @@ export default function ReportBuilder() {
         exportFile,
         'landscape',
         profile?.company_name || '',
+        leadImage
+          ? { leadImage, leadImageCaption: `${chartData.seriesLabel} by ${chartData.groupLabel} (${chartTypeLabel})` }
+          : {},
       )
     } catch (e) {
       setRunError(e.message)
@@ -287,6 +363,8 @@ export default function ReportBuilder() {
     setLimit(cfg.limit || DEFAULT_LIMIT)
     setGroupBy(cfg.group?.by || '')
     setMetrics(Array.isArray(cfg.group?.metrics) ? cfg.group.metrics : [])
+    setChartType(cfg.group?.by && cfg.chart?.type ? cfg.chart.type : '')
+    setChartMetric(cfg.chart?.metric || 'count')
     setRows([])
     setHasRun(false)
     setRunError(null)
@@ -684,7 +762,52 @@ export default function ReportBuilder() {
                   </div>
                 ))}
               </div>
+
+              {/* Chart visualization picker */}
+              <div className="mt-3 pt-3 border-t border-[var(--border-dim)]">
+                <div className="flex items-center gap-2 mb-2">
+                  <BarChart3 size={14} className="text-[var(--accent)]" />
+                  <p className="text-xs text-muted">Chart (optional): plots the grouped rows</p>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs text-muted mb-1" htmlFor="rb-chart-type">Chart type</label>
+                    <select
+                      id="rb-chart-type"
+                      className="input w-full py-1.5 px-2 text-xs"
+                      value={chartType}
+                      onChange={e => setChartType(e.target.value)}
+                    >
+                      <option value="">Table only (no chart)</option>
+                      {CHART_TYPES.map(t => <option key={t.key} value={t.key}>{t.label}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs text-muted mb-1" htmlFor="rb-chart-metric">Series</label>
+                    <select
+                      id="rb-chart-metric"
+                      className="input w-full py-1.5 px-2 text-xs disabled:opacity-40"
+                      value={chartMetric}
+                      onChange={e => setChartMetric(e.target.value)}
+                      disabled={!chartType || metricOptions.length === 0}
+                    >
+                      {(metricOptions.length ? metricOptions : [{ key: 'count', label: 'Count' }]).map(o => (
+                        <option key={o.key} value={o.key}>{o.label}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+                {chartType && !hasRun && (
+                  <p className="text-[11px] text-muted mt-2">Run the report to render the chart.</p>
+                )}
+              </div>
             </div>
+          )}
+
+          {!groupBy && (
+            <p className="text-[11px] text-muted mt-3 pt-3 border-t border-[var(--border-dim)] flex items-center gap-1.5">
+              <BarChart3 size={13} /> Charts need a group by. Pick a Group by column to visualize aggregated results.
+            </p>
           )}
 
           {validationErrors.length > 0 && (
@@ -725,6 +848,36 @@ export default function ReportBuilder() {
             </button>
           </div>
         </div>
+
+        {/* Chart visualization (grouped + aggregated reports only) */}
+        {hasRun && !running && !runError && chartType && (
+          <div className="card">
+            <div className="flex items-center gap-2 mb-3">
+              <BarChart3 size={15} className="text-[var(--accent)]" />
+              <h3 className="text-sm font-semibold text-[var(--text-primary)]">
+                {chartData ? `${chartData.seriesLabel} by ${chartData.groupLabel}` : 'Chart'}
+              </h3>
+            </div>
+            {chartData ? (
+              <div className="h-72">
+                {chartType === 'line' ? (
+                  <Line ref={chartRef} data={chartData.data} options={chartOptions} />
+                ) : chartType === 'pie' ? (
+                  <Doughnut ref={chartRef} data={chartData.data} options={chartOptions} />
+                ) : (
+                  <Bar ref={chartRef} data={chartData.data} options={chartOptions} />
+                )}
+              </div>
+            ) : (
+              <p className="text-sm text-muted py-8 text-center">
+                No chart data. Run a report with a group by and at least one numeric aggregate.
+              </p>
+            )}
+            {chartData && resultRows.length > 30 && (
+              <p className="text-[11px] text-muted mt-2">Showing the top 30 groups. The full set is in the table below.</p>
+            )}
+          </div>
+        )}
 
         {!hasRun && !running ? (
           <div className="card flex flex-col items-center gap-3 py-14 text-center">

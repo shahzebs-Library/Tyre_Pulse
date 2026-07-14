@@ -306,6 +306,7 @@ function rowToLayout(row) {
     id: row.id,
     name: row.name,
     widgets,
+    filters: row?.layout?.filters, // validateLayout normalises (missing = default)
     created_by: row.user_id || null,
     shared: !!row.shared,
     is_default: !!row.is_default,
@@ -320,8 +321,9 @@ function layoutToRow(layout, userId) {
   return {
     id: v.id,
     user_id: userId,
+    // CHECK: <= 40 widgets. `filters` is additive; older readers ignore it.
+    layout: { widgets: v.widgets.slice(0, 40), filters: v.filters },
     name: v.name,
-    layout: { widgets: v.widgets.slice(0, 40) }, // CHECK: <= 40 widgets
     is_default: !!v.is_default,
     shared: !!v.shared,
     updated_at: new Date().toISOString(),

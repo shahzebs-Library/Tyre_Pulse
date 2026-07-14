@@ -13,13 +13,18 @@ import { useSettings } from '../contexts/SettingsContext'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import { formatCurrency as _fmtCurrencyBase, formatDate, formatMonthYear } from '../lib/formatters'
 import { resolveStorageUrl } from '../lib/storageRefs'
-import { Bar } from 'react-chartjs-2'
+import { Bar, Doughnut, Line } from 'react-chartjs-2'
 import {
   Chart as ChartJS, CategoryScale, LinearScale, BarElement,
+  ArcElement, LineElement, PointElement, Filler,
   Title, Tooltip as ChartTooltip, Legend,
 } from 'chart.js'
 
-ChartJS.register(CategoryScale, LinearScale, BarElement, Title, ChartTooltip, Legend)
+ChartJS.register(
+  CategoryScale, LinearScale, BarElement,
+  ArcElement, LineElement, PointElement, Filler,
+  Title, ChartTooltip, Legend,
+)
 
 const BULK_TEMPLATE_COLS = [
   'incident_date',
@@ -64,6 +69,26 @@ const STATUSES = [
 ]
 
 const SEVERITIES = ['Minor', 'Major', 'Total Loss']
+
+// ── GCC accident case-management vocabularies (mirror AccidentDetailModal V219) ─
+const ACCIDENT_TYPE_OPTS   = ['Collision', 'Rollover', 'Rear-end', 'Side-swipe', 'Reversing', 'Fire', 'Vandalism', 'Weather', 'Other']
+const DAMAGE_CLASS_OPTS    = ['Major', 'Minor']
+const FAULT_STATUS_OPTS    = ['Faulty', 'Non-faulty', 'Under review']
+const NAJM_STATUS_OPTS     = ['Najm report', 'No Najm']
+const TAQDEER_STATUS_OPTS  = ['Taqdeer report', 'No Taqdeer']
+const LIABILITY_RATIO_OPTS = [0, 50, 100]
+const REPAIR_TYPE_OPTS     = ['Internal', 'External']
+const CLAIM_STATUS_OPTS    = ['none', 'filed', 'approved', 'rejected', 'settled']
+
+// Section divider for the sectioned incident form.
+function FormSection({ title, children }) {
+  return (
+    <div className="pt-1">
+      <p className="text-[11px] font-semibold uppercase tracking-wider text-[var(--text-muted)] border-b border-[var(--input-border)] pb-1.5 mb-3">{title}</p>
+      {children}
+    </div>
+  )
+}
 
 const SEVERITY_BADGE = {
   Minor:        'bg-[var(--input-bg)] text-[var(--text-dim)] border border-[var(--input-border)]',
@@ -176,11 +201,33 @@ const EMPTY_FORM = {
   asset_no: '',
   site: '',
   country: '',
+  location: '',
+  driver_name: '',
   description: '',
+  accident_type: '',
   severity: 'Minor',
   status: 'Reported',
-  repair_cost: '',
+  damage_class: '',
+  // Claim & insurance
+  insurer: '',
+  policy_no: '',
   insurance_claim_no: '',
+  claim_status: '',
+  claim_amount: '',
+  claim_approved_amount: '',
+  deductible: '',
+  recovered_amount: '',
+  // GCC case / liability
+  fault_status: '',
+  gcc_liability_ratio: '',
+  najm_status: '',
+  taqdeer_status: '',
+  // Repair
+  repair_type: '',
+  workshop_name: '',
+  repair_cost: '',
+  expected_release_date: '',
+  release_date: '',
   inspector: '',
   photos: [],
 }
@@ -218,6 +265,25 @@ const CHART_OPTS_STACKED = {
     y: { ...CHART_OPTS_BASE.scales.y, stacked: true },
   },
 }
+
+const CHART_OPTS_DOUGHNUT = {
+  responsive: true,
+  maintainAspectRatio: false,
+  cutout: '62%',
+  plugins: {
+    legend: { position: 'bottom', labels: { color: '#9ca3af', boxWidth: 12, padding: 12, font: { size: 11 } } },
+    tooltip: CHART_OPTS_BASE.plugins.tooltip,
+  },
+}
+
+const CHART_OPTS_LINE = {
+  ...CHART_OPTS_BASE,
+  plugins: { ...CHART_OPTS_BASE.plugins, legend: { display: false } },
+  elements: { line: { tension: 0.35 }, point: { radius: 3, hoverRadius: 5 } },
+}
+
+// Shared categorical palette for doughnut segments.
+const PIE_COLORS = ['#ea580c', '#3b82f6', '#16a34a', '#9333ea', '#dc2626', '#ca8a04', '#0891b2', '#64748b']
 
 function monthKey(dateStr) {
   if (!dateStr) return null
@@ -723,6 +789,63 @@ export default function Accidents() {
     [records],
   )
 
+  // ── Richer visual charts (doughnuts + trend line) ───────────────────────────
+  const severityDoughnut = useMemo(() => {
+    const counts = {}
+    records.forEach(r => { const k = canonSeverity(r.severity) || 'Unspecified'; counts[k] = (counts[k] ?? 0) + 1 })
+    const entries = Object.entries(counts)
+    const color = { Minor: '#64748b', Major: '#ea580c', 'Total Loss': '#dc2626', Unspecified: '#334155' }
+    return {
+      labels: entries.map(([k]) => k),
+      datasets: [{ data: entries.map(([, v]) => v), backgroundColor: entries.map(([k], i) => color[k] || PIE_COLORS[i % PIE_COLORS.length]), borderWidth: 0 }],
+    }
+  }, [records])
+
+  const statusDoughnut = useMemo(() => {
+    const counts = {}
+    records.forEach(r => { const k = canonStatus(r.status) || 'Reported'; counts[k] = (counts[k] ?? 0) + 1 })
+    const entries = Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 8)
+    return {
+      labels: entries.map(([k]) => k),
+      datasets: [{ data: entries.map(([, v]) => v), backgroundColor: entries.map((_, i) => PIE_COLORS[i % PIE_COLORS.length]), borderWidth: 0 }],
+    }
+  }, [records])
+
+  // Open vs closed monthly trend (last 12 months) — an area line.
+  const monthlyTrendLine = useMemo(() => {
+    const keys = last12MonthKeys()
+    const totals = Object.fromEntries(keys.map(k => [k, 0]))
+    records.forEach(r => { const k = monthKey(r.incident_date); if (k && totals[k] !== undefined) totals[k]++ })
+    return {
+      labels: keys.map(k => monthLabel(k)),
+      datasets: [{
+        label: 'Incidents',
+        data: keys.map(k => totals[k]),
+        borderColor: '#ea580c',
+        backgroundColor: 'rgba(234,88,12,0.18)',
+        fill: true,
+      }],
+    }
+  }, [records])
+
+  // Fault / liability split from the GCC case fields (honest — Unknown when unset).
+  const faultDoughnut = useMemo(() => {
+    const c = { Faulty: 0, 'Non-faulty': 0, 'Under review': 0, Unknown: 0 }
+    records.forEach(r => {
+      const f = String(r.fault_status || '').toLowerCase()
+      if (/non[-\s]?fault/.test(f)) c['Non-faulty']++
+      else if (/review/.test(f)) c['Under review']++
+      else if (/fault/.test(f)) c.Faulty++
+      else c.Unknown++
+    })
+    const entries = Object.entries(c).filter(([, v]) => v > 0)
+    const color = { Faulty: '#dc2626', 'Non-faulty': '#16a34a', 'Under review': '#ca8a04', Unknown: '#334155' }
+    return {
+      labels: entries.map(([k]) => k),
+      datasets: [{ data: entries.map(([, v]) => v), backgroundColor: entries.map(([k]) => color[k]), borderWidth: 0 }],
+    }
+  }, [records])
+
   // ── Engineering / Ops Intelligence (V-accident intelligence layer) ──────────
   // Derives repeat-offender assets & drivers, cost hotspots by site, root-cause
   // groupings, and prioritised recommendations — all from the live record set.
@@ -856,18 +979,38 @@ export default function Accidents() {
 
   function openEdit(row) {
     setAssetQuery(row.asset_no ?? '')
+    const d = (v) => (v ? String(v).split('T')[0] : '')
     setForm({
-      incident_date:      row.incident_date ? row.incident_date.split('T')[0] : '',
-      asset_no:           row.asset_no ?? '',
-      site:               row.site ?? '',
-      country:            row.country ?? '',
-      description:        row.description ?? '',
-      severity:           canonSeverity(row.severity) || 'Minor',
-      status:             canonStatus(row.status) || 'Reported',
-      repair_cost:        row.repair_cost ?? '',
-      insurance_claim_no: row.insurance_claim_no ?? '',
-      inspector:          row.inspector ?? '',
-      photos:             row.photos ?? [],
+      incident_date:         d(row.incident_date),
+      asset_no:              row.asset_no ?? '',
+      site:                  row.site ?? '',
+      country:               row.country ?? '',
+      location:              row.location ?? '',
+      driver_name:           row.driver_name ?? '',
+      description:           row.description ?? '',
+      accident_type:         row.accident_type ?? '',
+      severity:              canonSeverity(row.severity) || 'Minor',
+      status:                canonStatus(row.status) || 'Reported',
+      damage_class:          row.damage_class ?? '',
+      insurer:               row.insurer ?? '',
+      policy_no:             row.policy_no ?? '',
+      insurance_claim_no:    row.insurance_claim_no ?? '',
+      claim_status:          row.claim_status ?? '',
+      claim_amount:          row.claim_amount ?? '',
+      claim_approved_amount: row.claim_approved_amount ?? '',
+      deductible:            row.deductible ?? '',
+      recovered_amount:      row.recovered_amount ?? '',
+      fault_status:          row.fault_status ?? '',
+      gcc_liability_ratio:   row.gcc_liability_ratio ?? '',
+      najm_status:           row.najm_status ?? '',
+      taqdeer_status:        row.taqdeer_status ?? '',
+      repair_type:           row.repair_type ?? '',
+      workshop_name:         row.workshop_name ?? '',
+      repair_cost:           row.repair_cost ?? '',
+      expected_release_date: d(row.expected_release_date),
+      release_date:          d(row.release_date),
+      inspector:             row.inspector ?? '',
+      photos:                row.photos ?? [],
     })
     setEditId(row.id)
     setFormError('')
@@ -894,18 +1037,41 @@ export default function Accidents() {
     e.preventDefault()
     setSaving(true)
     setFormError('')
+    const num = (v) => (v !== '' && v != null ? Number(v) : null)
     const payload = {
-      incident_date:      form.incident_date || null,
-      asset_no:           form.asset_no,
-      site:               form.site || 'Unassigned',   // site is NOT NULL (DB default 'Unassigned') — never send null
-      country:            form.country || null,
-      description:        form.description || null,
-      severity:           toDbSeverity(form.severity),
-      status:             toDbStatus(form.status),
-      repair_cost:        form.repair_cost !== '' ? Number(form.repair_cost) : null,
-      insurance_claim_no: form.insurance_claim_no || null,
-      inspector:          form.inspector || null,
-      photos:             form.photos.length ? form.photos : [],  // photos is NOT NULL (DB default '[]') — never send null
+      incident_date:         form.incident_date || null,
+      asset_no:              form.asset_no,
+      site:                  form.site || 'Unassigned',   // site is NOT NULL (DB default 'Unassigned') — never send null
+      country:               form.country || null,
+      location:              form.location || null,
+      driver_name:           form.driver_name || null,
+      description:           form.description || null,
+      accident_type:         form.accident_type || null,
+      severity:              toDbSeverity(form.severity),
+      status:                toDbStatus(form.status),
+      damage_class:          form.damage_class || null,
+      // Claim & insurance
+      insurer:               form.insurer || null,
+      policy_no:             form.policy_no || null,
+      insurance_claim_no:    form.insurance_claim_no || null,
+      claim_status:          form.claim_status || null,
+      claim_amount:          num(form.claim_amount),
+      claim_approved_amount: num(form.claim_approved_amount),
+      deductible:            num(form.deductible),
+      recovered_amount:      num(form.recovered_amount),
+      // GCC case / liability
+      fault_status:          form.fault_status || null,
+      gcc_liability_ratio:   num(form.gcc_liability_ratio),
+      najm_status:           form.najm_status || null,
+      taqdeer_status:        form.taqdeer_status || null,
+      // Repair
+      repair_type:           form.repair_type || null,
+      workshop_name:         form.workshop_name || null,
+      repair_cost:           num(form.repair_cost),
+      expected_release_date: form.expected_release_date || null,
+      release_date:          form.release_date || null,
+      inspector:             form.inspector || null,
+      photos:                form.photos.length ? form.photos : [],  // photos is NOT NULL (DB default '[]') — never send null
     }
     if (!editId) payload.reported_by = profile?.id  // accidents has `reported_by`, not `created_by`
     const { error: err } = editId
@@ -1641,6 +1807,34 @@ export default function Accidents() {
             </div>
           </div>
 
+          {/* Distribution doughnuts */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="card">
+              <p className="text-sm font-semibold text-[var(--text-dim)] mb-3">Severity Distribution</p>
+              {stats.total === 0
+                ? <p className="text-[var(--text-muted)] text-sm text-center py-8">No data</p>
+                : <div style={{ height: 220 }}><Doughnut data={severityDoughnut} options={CHART_OPTS_DOUGHNUT} /></div>}
+            </div>
+            <div className="card">
+              <p className="text-sm font-semibold text-[var(--text-dim)] mb-3">Status Distribution</p>
+              {stats.total === 0
+                ? <p className="text-[var(--text-muted)] text-sm text-center py-8">No data</p>
+                : <div style={{ height: 220 }}><Doughnut data={statusDoughnut} options={CHART_OPTS_DOUGHNUT} /></div>}
+            </div>
+            <div className="card">
+              <p className="text-sm font-semibold text-[var(--text-dim)] mb-3">Fault Status (GCC)</p>
+              {stats.total === 0
+                ? <p className="text-[var(--text-muted)] text-sm text-center py-8">No data</p>
+                : <div style={{ height: 220 }}><Doughnut data={faultDoughnut} options={CHART_OPTS_DOUGHNUT} /></div>}
+            </div>
+          </div>
+
+          {/* Incident trend line */}
+          <div className="card">
+            <p className="text-sm font-semibold text-[var(--text-dim)] mb-3">Incident Trend (last 12 months)</p>
+            <div style={{ height: 220 }}><Line data={monthlyTrendLine} options={CHART_OPTS_LINE} /></div>
+          </div>
+
           {/* Top 5 assets + by site */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="card">
@@ -1901,7 +2095,7 @@ export default function Accidents() {
           onClick={() => setShowModal(false)}
         >
           <div
-            className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl w-full max-w-2xl p-6 my-4"
+            className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl w-full max-w-3xl p-6 my-4 max-h-[92vh] overflow-y-auto"
             onClick={e => e.stopPropagation()}
           >
             <div className="flex items-center justify-between mb-4">
@@ -1962,7 +2156,7 @@ export default function Accidents() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                 <div>
                   <label className="label">Site</label>
                   <input
@@ -1971,6 +2165,14 @@ export default function Accidents() {
                     onChange={e => setForm(f => ({ ...f, site: e.target.value }))}
                   />
                   <datalist id="acc-sites">{sites.map(s => <option key={s} value={s} />)}</datalist>
+                </div>
+                <div>
+                  <label className="label">Location</label>
+                  <input
+                    className="input" placeholder="e.g. GCC Plant, gate 3"
+                    value={form.location}
+                    onChange={e => setForm(f => ({ ...f, location: e.target.value }))}
+                  />
                 </div>
                 <div>
                   <label className="label">Country</label>
@@ -1982,65 +2184,165 @@ export default function Accidents() {
                 </div>
               </div>
 
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="label">Driver</label>
+                  <input
+                    className="input" placeholder="Driver name"
+                    value={form.driver_name}
+                    onChange={e => setForm(f => ({ ...f, driver_name: e.target.value }))}
+                  />
+                </div>
+                <div>
+                  <label className="label">Accident Type</label>
+                  <select className="input" value={form.accident_type} onChange={e => setForm(f => ({ ...f, accident_type: e.target.value }))}>
+                    <option value="">—</option>
+                    {ACCIDENT_TYPE_OPTS.map(s => <option key={s} value={s}>{s}</option>)}
+                  </select>
+                </div>
+              </div>
+
               <div>
                 <label className="label">Description</label>
                 <textarea
-                  className="input" rows={3}
+                  className="input" rows={3} placeholder="What happened — sequence, damage, injuries…"
                   value={form.description}
                   onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="label">Severity</label>
-                  <select
-                    className="input"
-                    value={form.severity}
-                    onChange={e => setForm(f => ({ ...f, severity: e.target.value }))}
-                  >
-                    {SEVERITIES.map(s => <option key={s} value={s}>{s}</option>)}
-                  </select>
+              {/* Classification */}
+              <FormSection title="Classification">
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                  <div>
+                    <label className="label">Severity</label>
+                    <select className="input" value={form.severity} onChange={e => setForm(f => ({ ...f, severity: e.target.value }))}>
+                      {SEVERITIES.map(s => <option key={s} value={s}>{s}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="label">Status</label>
+                    <select className="input" value={form.status} onChange={e => setForm(f => ({ ...f, status: e.target.value }))}>
+                      {STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="label">Damage Class</label>
+                    <select className="input" value={form.damage_class} onChange={e => setForm(f => ({ ...f, damage_class: e.target.value }))}>
+                      <option value="">—</option>
+                      {DAMAGE_CLASS_OPTS.map(s => <option key={s} value={s}>{s}</option>)}
+                    </select>
+                  </div>
                 </div>
-                <div>
-                  <label className="label">Status</label>
-                  <select
-                    className="input"
-                    value={form.status}
-                    onChange={e => setForm(f => ({ ...f, status: e.target.value }))}
-                  >
-                    {STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
-                  </select>
-                </div>
-              </div>
+              </FormSection>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="label">Repair Cost</label>
-                  <input
-                    type="number" min="0" step="0.01" className="input"
-                    value={form.repair_cost}
-                    onChange={e => setForm(f => ({ ...f, repair_cost: e.target.value }))}
-                  />
+              {/* GCC case & liability */}
+              <FormSection title="Liability & Case (GCC)">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  <div>
+                    <label className="label">Fault Status</label>
+                    <select className="input" value={form.fault_status} onChange={e => setForm(f => ({ ...f, fault_status: e.target.value }))}>
+                      <option value="">—</option>
+                      {FAULT_STATUS_OPTS.map(s => <option key={s} value={s}>{s}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="label">GCC Liability</label>
+                    <select className="input" value={form.gcc_liability_ratio} onChange={e => setForm(f => ({ ...f, gcc_liability_ratio: e.target.value }))}>
+                      <option value="">—</option>
+                      {LIABILITY_RATIO_OPTS.map(n => <option key={n} value={n}>{n}%</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="label">Najm</label>
+                    <select className="input" value={form.najm_status} onChange={e => setForm(f => ({ ...f, najm_status: e.target.value }))}>
+                      <option value="">—</option>
+                      {NAJM_STATUS_OPTS.map(s => <option key={s} value={s}>{s}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="label">Taqdeer</label>
+                    <select className="input" value={form.taqdeer_status} onChange={e => setForm(f => ({ ...f, taqdeer_status: e.target.value }))}>
+                      <option value="">—</option>
+                      {TAQDEER_STATUS_OPTS.map(s => <option key={s} value={s}>{s}</option>)}
+                    </select>
+                  </div>
                 </div>
-                <div>
-                  <label className="label">Insurance Claim No</label>
-                  <input
-                    className="input"
-                    value={form.insurance_claim_no}
-                    onChange={e => setForm(f => ({ ...f, insurance_claim_no: e.target.value }))}
-                  />
-                </div>
-              </div>
+              </FormSection>
 
-              <div>
-                <label className="label">Inspector</label>
-                <input
-                  className="input"
-                  value={form.inspector}
-                  onChange={e => setForm(f => ({ ...f, inspector: e.target.value }))}
-                />
-              </div>
+              {/* Insurance & claim */}
+              <FormSection title="Insurance & Claim">
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                  <div>
+                    <label className="label">Insurer</label>
+                    <input className="input" placeholder="e.g. Tawuniya" value={form.insurer} onChange={e => setForm(f => ({ ...f, insurer: e.target.value }))} />
+                  </div>
+                  <div>
+                    <label className="label">Policy No</label>
+                    <input className="input" value={form.policy_no} onChange={e => setForm(f => ({ ...f, policy_no: e.target.value }))} />
+                  </div>
+                  <div>
+                    <label className="label">Claim No</label>
+                    <input className="input" value={form.insurance_claim_no} onChange={e => setForm(f => ({ ...f, insurance_claim_no: e.target.value }))} />
+                  </div>
+                  <div>
+                    <label className="label">Claim Status</label>
+                    <select className="input" value={form.claim_status} onChange={e => setForm(f => ({ ...f, claim_status: e.target.value }))}>
+                      <option value="">—</option>
+                      {CLAIM_STATUS_OPTS.map(s => <option key={s} value={s}>{s}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="label">Claim Amount</label>
+                    <input type="number" min="0" step="0.01" className="input" value={form.claim_amount} onChange={e => setForm(f => ({ ...f, claim_amount: e.target.value }))} />
+                  </div>
+                  <div>
+                    <label className="label">Approved</label>
+                    <input type="number" min="0" step="0.01" className="input" value={form.claim_approved_amount} onChange={e => setForm(f => ({ ...f, claim_approved_amount: e.target.value }))} />
+                  </div>
+                  <div>
+                    <label className="label">Deductible</label>
+                    <input type="number" min="0" step="0.01" className="input" value={form.deductible} onChange={e => setForm(f => ({ ...f, deductible: e.target.value }))} />
+                  </div>
+                  <div>
+                    <label className="label">Recovered</label>
+                    <input type="number" min="0" step="0.01" className="input" value={form.recovered_amount} onChange={e => setForm(f => ({ ...f, recovered_amount: e.target.value }))} />
+                  </div>
+                </div>
+              </FormSection>
+
+              {/* Repair & release */}
+              <FormSection title="Repair & Release">
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                  <div>
+                    <label className="label">Repair Type</label>
+                    <select className="input" value={form.repair_type} onChange={e => setForm(f => ({ ...f, repair_type: e.target.value }))}>
+                      <option value="">—</option>
+                      {REPAIR_TYPE_OPTS.map(s => <option key={s} value={s}>{s}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="label">Workshop</label>
+                    <input className="input" value={form.workshop_name} onChange={e => setForm(f => ({ ...f, workshop_name: e.target.value }))} />
+                  </div>
+                  <div>
+                    <label className="label">Repair Cost</label>
+                    <input type="number" min="0" step="0.01" className="input" value={form.repair_cost} onChange={e => setForm(f => ({ ...f, repair_cost: e.target.value }))} />
+                  </div>
+                  <div>
+                    <label className="label">Expected Release</label>
+                    <input type="date" className="input" value={form.expected_release_date} onChange={e => setForm(f => ({ ...f, expected_release_date: e.target.value }))} />
+                  </div>
+                  <div>
+                    <label className="label">Release Date</label>
+                    <input type="date" className="input" value={form.release_date} onChange={e => setForm(f => ({ ...f, release_date: e.target.value }))} />
+                  </div>
+                  <div>
+                    <label className="label">Inspector</label>
+                    <input className="input" value={form.inspector} onChange={e => setForm(f => ({ ...f, inspector: e.target.value }))} />
+                  </div>
+                </div>
+              </FormSection>
 
               <div>
                 <label className="label">Photos</label>

@@ -20,10 +20,11 @@
  */
 import { useState, useMemo, useRef, useCallback, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Bar, Doughnut, Line } from 'react-chartjs-2'
+import { Bar, Doughnut, Line, Radar, PolarArea } from 'react-chartjs-2'
 import {
   Chart as ChartJS, CategoryScale, LinearScale, BarElement,
   ArcElement, LineElement, PointElement, Filler, Title, Tooltip, Legend,
+  RadialLinearScale, RadarController, PolarAreaController,
 } from 'chart.js'
 import {
   Plus, Image as ImageIcon, BarChart3, Type, Table2, SeparatorHorizontal,
@@ -41,9 +42,26 @@ import { listTemplates, createTemplate, updateTemplate, deleteTemplate } from '.
 import { formatCurrencyCompact } from '../../lib/formatters'
 import { reportFileName, reportDateLabel } from '../../lib/exportUtils'
 
-ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, LineElement, PointElement, Filler, Title, Tooltip, Legend)
+ChartJS.register(
+  CategoryScale, LinearScale, BarElement, ArcElement, LineElement, PointElement, Filler,
+  RadialLinearScale, RadarController, PolarAreaController, Title, Tooltip, Legend,
+)
 
-const CHART_COMPONENT = { doughnut: Doughnut, line: Line, bar: Bar, 'bar-h': Bar, 'bar-stack': Bar }
+const CHART_COMPONENT = {
+  doughnut: Doughnut, line: Line, bar: Bar, 'bar-h': Bar, 'bar-stack': Bar,
+  radar: Radar, polar: PolarArea, pareto: Bar, combo: Bar, waterfall: Bar,
+}
+
+// Preview column width per chart-block width setting; non-chart + full charts take a whole row.
+const BLOCK_GUTTER = 16 // px, matches the flex gap between blocks
+const chartWidthStyle = (w) => {
+  if (w === 'half') return { flexBasis: `calc(50% - ${BLOCK_GUTTER / 2}px)`, maxWidth: `calc(50% - ${BLOCK_GUTTER / 2}px)` }
+  if (w === 'third') return { flexBasis: `calc(33.333% - ${(BLOCK_GUTTER * 2) / 3}px)`, maxWidth: `calc(33.333% - ${(BLOCK_GUTTER * 2) / 3}px)` }
+  return { flexBasis: '100%', maxWidth: '100%' }
+}
+const CHART_WIDTHS = [['full', 'Full'], ['half', 'Half'], ['third', 'Third']]
+// Compact preview heights so half/third charts read cleanly side by side.
+const CHART_PREVIEW_HEIGHT = { full: 240, half: 200, third: 168 }
 
 const BLOCK_ICONS = {
   header: ImageIcon, kpis: LayoutGrid, chart: BarChart3, insights: Lightbulb,
@@ -236,16 +254,21 @@ export default function AccidentReportBuilder({ records = [], company = 'TyrePul
         </div>
       ) : (
         <div className={`mx-auto w-full bg-white text-slate-800 rounded-xl shadow-2xl border border-black/10 transition-[max-width] duration-300 ease-in-out ${orientation === 'landscape' ? 'max-w-[1120px]' : 'max-w-[860px]'}`}>
-          <div className="p-6 sm:p-8 space-y-5">
-            {blocks.map((b, i) => (
-              <BlockEditor
-                key={b.id} block={b} index={i} count={blocks.length}
-                ctx={claimsCtx} records={records} money={money} company={company}
-                chartRefs={chartRefs} highlight={lastAdded === b.id} orientation={orientation}
-                onPatch={patchBlock} onRemove={removeBlock} onDup={dupBlock} onMove={move}
-              />
-            ))}
-            <div ref={endRef} />
+          <div className="p-6 sm:p-8 flex flex-wrap items-stretch" style={{ gap: BLOCK_GUTTER }}>
+            {blocks.map((b, i) => {
+              const w = b.type === 'chart' ? (b.width || 'full') : 'full'
+              return (
+                <div key={b.id} style={{ ...chartWidthStyle(w), minWidth: 0 }}>
+                  <BlockEditor
+                    block={b} index={i} count={blocks.length}
+                    ctx={claimsCtx} records={records} money={money} company={company}
+                    chartRefs={chartRefs} highlight={lastAdded === b.id} orientation={orientation}
+                    onPatch={patchBlock} onRemove={removeBlock} onDup={dupBlock} onMove={move}
+                  />
+                </div>
+              )
+            })}
+            <div ref={endRef} style={{ flexBasis: '100%' }} />
           </div>
         </div>
       )}
@@ -447,6 +470,17 @@ function BlockConfig({ block: b, onPatch }) {
         <div className="grid sm:grid-cols-2 gap-3">
           <Field label="Chart"><select className={INP} value={b.chart} onChange={(e) => set({ chart: e.target.value })}>{Object.entries(CHARTS).map(([k, def]) => <option key={k} value={k}>{def.label}</option>)}</select></Field>
           <Field label="Title (optional)"><input className={INP} value={b.title} onChange={(e) => set({ title: e.target.value })} placeholder={CHARTS[b.chart]?.label} /></Field>
+          <Field label="Width">
+            <div className="flex rounded-md border border-slate-300 overflow-hidden">
+              {CHART_WIDTHS.map(([val, label]) => { const on = (b.width || 'full') === val; return (
+                <button
+                  key={val} type="button" onClick={() => set({ width: val })}
+                  className={`flex-1 text-xs py-1.5 font-medium transition-colors ${on ? 'bg-orange-500 text-white' : 'bg-white text-slate-600 hover:bg-slate-50'} ${val !== 'full' ? 'border-l border-slate-300' : ''}`}
+                >{label}</button>
+              ) })}
+            </div>
+            <span className="block text-[11px] text-slate-400 mt-1">Half and third widths pack multiple charts side by side per row.</span>
+          </Field>
           {CHARTS[b.chart]?.description && <p className="text-[11px] text-slate-400 sm:col-span-2">{CHARTS[b.chart].description}</p>}
         </div>
       )}
@@ -517,10 +551,12 @@ function BlockPreview({ block: b, ctx, records, money, company, chartRefs, orien
     const data = def.build(ctx)
     const Comp = CHART_COMPONENT[def.kind]
     const opts = CHART_OPTS[def.kind]
+    const width = b.width || 'full'
+    const baseH = b.height || CHART_PREVIEW_HEIGHT[width] || 240
     return (
       <div>
         {(b.title || def.label) && <p className="text-sm font-semibold text-slate-800 mb-2">{b.title || def.label}</p>}
-        <div style={{ height: Math.round((b.height || 240) * (landscape ? 0.85 : 1)) }} className="relative transition-[height] duration-300">
+        <div style={{ height: Math.round(baseH * (landscape ? 0.85 : 1)) }} className="relative transition-[height] duration-300">
           {isChartEmpty(data) ? <div className="h-full flex items-center justify-center text-slate-400 text-sm">No data for this chart yet</div>
             : <Comp ref={(el) => { chartRefs.current[b.id] = el }} data={data} options={opts} plugins={[VALUE_LABELS_PLUGIN]} />}
         </div>

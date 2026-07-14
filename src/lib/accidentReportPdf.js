@@ -75,7 +75,60 @@ export async function renderAccidentReportPdf({
   const ensure = (h) => { if (y + h > PH - 14) { doc.addPage(); y = 16 } }
   const stamp = new Date().toISOString().slice(0, 10)
 
-  for (const b of blocks) {
+  // Resolve one chart block to its rasterised image (live canvas override first,
+  // else headless offscreen render). Returns null when the chart has no data.
+  const imageForChart = async (b) => (chartImageFor && chartImageFor(b)) || await renderOffscreenChart(b, ctx)
+  const chartWidthFrac = (b) => (b.width === 'third' ? 1 / 3 : b.width === 'half' ? 0.5 : 1)
+  const fullChartH = orientation === 'landscape' ? 95 : 80
+
+  /**
+   * Draw a row of side-by-side charts that share a page row. `row` is 1..3 chart
+   * blocks whose width fractions sum to <= 1. Column width is proportional to the
+   * fraction; height is proportionally reduced (aspect preserved vs a full chart)
+   * so packed charts never overflow the page margins. Each keeps its title and the
+   * numeric digest underneath. The whole row page-breaks together via `ensure`.
+   */
+  const drawChartRow = async (row) => {
+    const avail = PW - MX * 2
+    const gap = 4
+    const n = row.length
+    const fracs = row.map(chartWidthFrac)
+    const sumF = fracs.reduce((s, f) => s + f, 0)
+    // Column widths proportional to each chart's fraction, gaps deducted evenly.
+    const usable = avail - gap * (n - 1)
+    const widths = fracs.map((f) => (usable * f) / sumF)
+    // Proportional height: preserve the full chart's aspect ratio (fullChartH/avail)
+    // against the narrowest column so every chart in the row shares one aspect-true,
+    // readable height. Floored so thirds never collapse to an unreadable strip.
+    const rowH = Math.max(34, Math.round((Math.min(...widths)) * (fullChartH / avail)))
+    const hasTitle = row.some((b) => (b.title || CHARTS[b.chart]?.label))
+    const titleH = hasTitle ? 6 : 0
+    // Pre-render every image so a page-break decision covers the whole row.
+    const imgs = await Promise.all(row.map((b) => imageForChart(b)))
+    const digests = row.map((b) => (CHARTS[b.chart] ? summarizeChartData(CHARTS[b.chart].build(ctx)) : ''))
+    const anyDigest = digests.some((d, i) => imgs[i] && d)
+    const digestH = anyDigest ? 5 : 0
+    ensure(titleH + rowH + 2 + digestH + 4)
+    const rowY = y
+    let x = MX
+    row.forEach((b, i) => {
+      const cw = widths[i]
+      const title = b.title || CHARTS[b.chart]?.label
+      if (title) {
+        doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.setTextColor(15, 23, 42)
+        doc.text(doc.splitTextToSize(String(title), cw)[0], x, rowY + 4)
+      }
+      const imgY = rowY + titleH
+      if (imgs[i]) { try { doc.addImage(imgs[i], 'PNG', x, imgY, cw, rowH, undefined, 'FAST') } catch { /* ignore */ } }
+      else { doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(148, 163, 184); doc.text(doc.splitTextToSize('No data for this chart in the covered period.', cw)[0], x, imgY + 6) }
+      if (digestH && imgs[i] && digests[i]) { doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5); doc.setTextColor(100, 116, 139); doc.text(doc.splitTextToSize(digests[i], cw)[0], x, imgY + rowH + 4) }
+      x += cw + gap
+    })
+    y = rowY + titleH + rowH + 2 + digestH + 4
+  }
+
+  for (let bi = 0; bi < blocks.length; bi++) {
+    const b = blocks[bi]
     if (b.type === 'pagebreak') { doc.addPage(); y = 16; continue }
 
     if (b.type === 'header') {
@@ -115,9 +168,26 @@ export async function renderAccidentReportPdf({
     }
 
     if (b.type === 'chart') {
-      const img = (chartImageFor && chartImageFor(b)) || await renderOffscreenChart(b, ctx)
+      // Half/third-width charts pack side by side: gather the run of consecutive
+      // shrinkable chart blocks and lay them out in aspect-true rows. A full-width
+      // chart (or any non-chart block) flushes the run and renders on its own line.
+      if (b.width === 'half' || b.width === 'third') {
+        let row = []
+        let acc = 0
+        while (bi < blocks.length && blocks[bi].type === 'chart' && (blocks[bi].width === 'half' || blocks[bi].width === 'third')) {
+          const f = chartWidthFrac(blocks[bi])
+          if (row.length && acc + f > 1.0001) { await drawChartRow(row); row = []; acc = 0 }
+          row.push(blocks[bi]); acc += f
+          bi++
+        }
+        bi-- // step back: outer loop will bi++ past the last consumed block
+        if (row.length) await drawChartRow(row)
+        continue
+      }
+
+      const img = await imageForChart(b)
       const cw = PW - MX * 2
-      const ch = Math.min(orientation === 'landscape' ? 95 : 80, (b.height || 240) * 0.32)
+      const ch = Math.min(fullChartH, (b.height || 240) * 0.32)
       ensure(ch + 10)
       const title = b.title || CHARTS[b.chart]?.label
       if (title) { doc.setFont('helvetica', 'bold'); doc.setFontSize(11); doc.setTextColor(15, 23, 42); doc.text(title, MX, y + 4); y += 6 }

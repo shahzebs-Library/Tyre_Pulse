@@ -161,6 +161,110 @@ describe('value labels + chart digests (report numbers)', () => {
   })
 })
 
+describe('advanced chart kinds (pareto / combo / radar / polar / waterfall)', () => {
+  const ADV = ['paretoAssets', 'costTrend', 'typeRadar', 'statusPolar', 'recoveryWaterfall']
+  const ADV_KINDS = ['pareto', 'combo', 'radar', 'polar', 'waterfall']
+  const AT = [
+    { id: 1, incident_date: '2026-06-01', asset_no: 'TRK-1', status: 'Open', accident_type: 'collision', severity: 'Major', claim_amount: 10000, claim_approved_amount: 8000, recovered_amount: 4000, deductible: 500, repair_cost: 1200, parts_cost: 300, insurer: 'Tawuniya' },
+    { id: 2, incident_date: '2026-06-15', asset_no: 'TRK-1', status: 'Closed', release_date: '2026-06-30', accident_type: 'tyre_failure', severity: 'Minor', claim_amount: 2000, recovered_amount: 2000, repair_cost: 400 },
+    { id: 3, incident_date: '2026-07-01', asset_no: 'TRK-2', status: 'Reported', accident_type: 'collision', severity: 'total loss', claim_amount: 50000, deductible: 1000 },
+  ]
+
+  it('each advanced builder returns chart.js data on live records and stays honest on empty', () => {
+    const full = buildReportContext(AT, 'SAR')
+    const empty = buildReportContext([], 'SAR')
+    for (const key of ADV) {
+      const d = CHARTS[key].build(full)
+      expect(Array.isArray(d.labels), key).toBe(true)
+      expect(Array.isArray(d.datasets), key).toBe(true)
+      expect(d.datasets.length, key).toBeGreaterThan(0)
+      expect(() => CHARTS[key].build(empty), key).not.toThrow()
+    }
+  })
+
+  it('advanced kinds are wired into CHART_OPTS and CHART_JS_TYPE', () => {
+    for (const kind of ADV_KINDS) {
+      expect(CHART_OPTS[kind], kind).toBeTruthy()
+      expect(CHART_JS_TYPE[kind], kind).toBeTruthy()
+    }
+    expect(CHART_JS_TYPE.pareto).toBe('bar')
+    expect(CHART_JS_TYPE.combo).toBe('bar')
+    expect(CHART_JS_TYPE.radar).toBe('radar')
+    expect(CHART_JS_TYPE.polar).toBe('polarArea')
+    expect(CHART_JS_TYPE.waterfall).toBe('bar')
+  })
+
+  it('pareto is a mixed bar+line with a non-decreasing cumulative % ending at 100', () => {
+    const p = CHARTS.paretoAssets.build(buildReportContext(AT, 'SAR'))
+    expect(p.datasets.some((d) => d.type === 'bar')).toBe(true)
+    const line = p.datasets.find((d) => d.type === 'line')
+    expect(line).toBeTruthy()
+    expect(line.yAxisID).toBe('y1')
+    for (let i = 1; i < line.data.length; i++) expect(line.data[i]).toBeGreaterThanOrEqual(line.data[i - 1])
+    expect(line.data[line.data.length - 1]).toBe(100)
+  })
+
+  it('combo puts the incident-count line on the second (y1) axis', () => {
+    const c = CHARTS.costTrend.build(buildReportContext(AT, 'SAR'))
+    expect(c.labels.length).toBe(12)
+    const line = c.datasets.find((d) => d.type === 'line')
+    expect(line.yAxisID).toBe('y1')
+    expect(c.datasets.find((d) => d.type === 'bar')).toBeTruthy()
+  })
+
+  it('radar/polar collapse counts to a single dataset and stay empty when no records', () => {
+    const r = CHARTS.typeRadar.build(buildReportContext(AT, 'SAR'))
+    expect(r.datasets).toHaveLength(1)
+    expect(r.labels).toContain('Collision')
+    expect(isChartEmpty(CHARTS.typeRadar.build(buildReportContext([], 'SAR')))).toBe(true)
+    const p = CHARTS.statusPolar.build(buildReportContext(AT, 'SAR'))
+    expect(p.datasets).toHaveLength(1)
+    expect(isChartEmpty(CHARTS.statusPolar.build(buildReportContext([], 'SAR')))).toBe(true)
+  })
+
+  it('recovery waterfall uses floating [start,end] bars chaining claimed to recovered', () => {
+    const w = CHARTS.recoveryWaterfall.build(buildReportContext(AT, 'SAR'))
+    expect(w.labels).toEqual(['Claimed', 'Deductible', 'Outstanding', 'Recovered'])
+    const seg = w.datasets[0].data
+    expect(seg.every((s) => Array.isArray(s) && s.length === 2)).toBe(true)
+    expect(seg[0][0]).toBe(0)              // Claimed rises from 0
+    expect(seg[3][0]).toBe(0)              // Recovered rises from 0
+    const claimed = seg[0][1]
+    const deductibleStep = seg[1][1] - seg[1][0]
+    const outstandingStep = seg[2][1] - seg[2][0]
+    const recovered = seg[3][1]
+    // Claimed = Deductible + Outstanding + Recovered (non-negative decomposition)
+    expect(deductibleStep).toBeGreaterThanOrEqual(0)
+    expect(outstandingStep).toBeGreaterThanOrEqual(0)
+    expect(deductibleStep + outstandingStep + recovered).toBe(claimed)
+    // empty stays honest
+    expect(isChartEmpty(CHARTS.recoveryWaterfall.build(buildReportContext([], 'SAR')))).toBe(true)
+  })
+
+  it('chart block defaults to full width; value labels cover radar points and floating bars', () => {
+    expect(BLOCK_DEFAULTS.chart().width).toBe('full')
+    // radar points labeled
+    const calls = []
+    const rctx = { save() {}, restore() {}, fillText: (t) => calls.push(t), fillStyle: '', font: '' }
+    VALUE_LABELS_PLUGIN.afterDatasetsDraw({
+      config: { type: 'radar' }, ctx: rctx, options: {},
+      data: { labels: ['A', 'B'], datasets: [{ data: [2, 3] }] },
+      isDatasetVisible: () => true, getDatasetMeta: () => ({ data: [{ x: 1, y: 1 }, { x: 2, y: 2 }] }),
+    })
+    expect(calls).toContain('2')
+    expect(calls).toContain('3')
+    // floating bar labeled with its step magnitude (|end - start|)
+    const calls2 = []
+    const bctx = { save() {}, restore() {}, fillText: (t) => calls2.push(t), fillStyle: '', font: '' }
+    VALUE_LABELS_PLUGIN.afterDatasetsDraw({
+      config: { type: 'bar' }, ctx: bctx, options: {},
+      data: { labels: ['X'], datasets: [{ data: [[100, 300]] }] },
+      isDatasetVisible: () => true, getDatasetMeta: () => ({ data: [{ x: 5, y: 5 }] }),
+    })
+    expect(calls2).toContain('200')
+  })
+})
+
 describe('auto insights (honest derivation)', () => {
   it('returns [] with no records — never fabricates', () => {
     expect(buildInsights(buildReportContext([], 'SAR'))).toEqual([])

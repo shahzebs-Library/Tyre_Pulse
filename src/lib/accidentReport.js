@@ -29,6 +29,9 @@ const mKey = (v) => { if (!v) return null; const d = new Date(v); return isNaN(d
 const mLabel = (k) => { const [y, m] = k.split('-'); return `${MONTHS[(+m) - 1]} ${y.slice(2)}` }
 const N = (v) => (Number.isFinite(Number(v)) ? Number(v) : 0)
 export const canonSev = (s) => { const v = String(s || '').toLowerCase(); if (v.includes('total')) return 'Total Loss'; if (v.startsWith('maj')) return 'Major'; if (v.startsWith('min')) return 'Minor'; return s || 'Unspecified' }
+const titleCase = (t) => String(t || '').replace(/[_-]+/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()).trim()
+/** Human-readable label for a CHECK-constrained accident_type token (or a UI label). */
+export const canonType = (t) => { const v = String(t || '').trim(); return v ? titleCase(v) : 'Unspecified' }
 
 export function buildReportContext(records, currency = 'SAR') {
   return { records: records || [], claims: analyzeClaims(records || []), currency }
@@ -101,6 +104,71 @@ export const CHARTS = {
       return { labels: Object.keys(buckets), datasets: [{ data: Object.values(buckets), backgroundColor: ['#16a34a', '#ca8a04', '#fb923c', '#dc2626'], borderRadius: 3 }] }
     },
   },
+  // ── Advanced (mixed / radial / floating) chart types ───────────────────────
+  paretoAssets: {
+    label: 'Asset incident Pareto', description: 'Top assets by incidents with a cumulative % line', kind: 'pareto', build: ({ records }) => {
+      const c = {}; records.forEach((r) => { const k = r.asset_no; if (k) c[k] = (c[k] || 0) + 1 })
+      const sorted = Object.entries(c).sort((a, b) => b[1] - a[1]).slice(0, 8)
+      const total = sorted.reduce((s, [, v]) => s + v, 0)
+      let run = 0
+      const cum = sorted.map(([, v]) => { run += v; return total ? Math.round((run / total) * 100) : 0 })
+      return {
+        labels: sorted.map(([k]) => k),
+        datasets: [
+          { type: 'bar', label: 'Incidents', data: sorted.map(([, v]) => v), backgroundColor: '#ea580c', borderRadius: 3, order: 2 },
+          { type: 'line', label: 'Cumulative %', data: cum, borderColor: '#2563eb', backgroundColor: 'rgba(37,99,235,0.15)', yAxisID: 'y1', tension: 0.3, order: 1 },
+        ],
+      }
+    },
+  },
+  costTrend: {
+    label: 'Cost vs incidents (12 mo)', description: 'Monthly repair + parts cost with the incident count (dual axis)', kind: 'combo', build: ({ records, currency }) => {
+      const keys = last12()
+      const cost = Object.fromEntries(keys.map((k) => [k, 0]))
+      const cnt = Object.fromEntries(keys.map((k) => [k, 0]))
+      records.forEach((r) => { const k = mKey(r.incident_date); if (k && cost[k] != null) { cost[k] += N(r.repair_cost) + N(r.parts_cost); cnt[k]++ } })
+      return {
+        labels: keys.map(mLabel),
+        datasets: [
+          { type: 'bar', label: `Cost (${currency})`, data: keys.map((k) => Math.round(cost[k])), backgroundColor: '#2563eb', borderRadius: 3, order: 2 },
+          { type: 'line', label: 'Incidents', data: keys.map((k) => cnt[k]), borderColor: '#ea580c', backgroundColor: 'rgba(234,88,12,0.15)', yAxisID: 'y1', tension: 0.3, order: 1 },
+        ],
+      }
+    },
+  },
+  typeRadar: {
+    label: 'Accident type profile', description: 'Incident count across accident types', kind: 'radar', build: ({ records }) => {
+      const c = {}; records.forEach((r) => { const k = canonType(r.accident_type); c[k] = (c[k] || 0) + 1 })
+      const entries = Object.entries(c).filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1]).slice(0, 8)
+      return { labels: entries.map(([k]) => k), datasets: [{ label: 'Incidents', data: entries.map(([, v]) => v), backgroundColor: 'rgba(234,88,12,0.18)', borderColor: '#ea580c', pointBackgroundColor: '#ea580c', borderWidth: 2 }] }
+    },
+  },
+  statusPolar: {
+    label: 'Status distribution (polar)', description: 'Incident workflow status as a polar-area chart', kind: 'polar', build: ({ records }) => {
+      const c = {}; records.forEach((r) => { const k = r.status || 'Reported'; c[k] = (c[k] || 0) + 1 })
+      const entries = Object.entries(c).filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1])
+      return { labels: entries.map(([k]) => k), datasets: [{ data: entries.map(([, v]) => v), backgroundColor: entries.map((_, i) => PALETTE[i % PALETTE.length]), borderWidth: 1, borderColor: '#ffffff' }] }
+    },
+  },
+  recoveryWaterfall: {
+    label: 'Recovery waterfall', description: 'Claimed less deductible and outstanding, to recovered (floating bars)', kind: 'waterfall', build: ({ claims }) => {
+      const claimed = Math.round(claims.claimed)
+      const deductible = Math.min(Math.max(0, Math.round(claims.deductible)), claimed)
+      const recovered = Math.max(0, Math.round(claims.recovered))
+      const afterDed = claimed - deductible
+      const outstanding = Math.max(0, afterDed - recovered)
+      const landed = afterDed - outstanding // = min(recovered, afterDed); chain end
+      return {
+        labels: ['Claimed', 'Deductible', 'Outstanding', 'Recovered'],
+        datasets: [{
+          label: `Amount`,
+          data: [[0, claimed], [afterDed, claimed], [landed, afterDed], [0, landed]],
+          backgroundColor: ['#2563eb', '#ca8a04', '#dc2626', '#16a34a'],
+          borderRadius: 2,
+        }],
+      }
+    },
+  },
 }
 
 function byCount(records, keyFn, colorMap) {
@@ -134,7 +202,7 @@ export const makeValueLabelsPlugin = (color = PAPER.ink) => ({
   id: 'valueLabels',
   afterDatasetsDraw(chart) {
     const type = chart.config?.type
-    if (type !== 'bar' && type !== 'line') return
+    if (type !== 'bar' && type !== 'line' && type !== 'radar') return
     const { ctx } = chart
     if (!ctx) return
     const horizontal = chart.options?.indexAxis === 'y'
@@ -142,6 +210,22 @@ export const makeValueLabelsPlugin = (color = PAPER.ink) => ({
     ctx.save()
     ctx.fillStyle = color
     ctx.font = 'bold 10px helvetica, arial, sans-serif'
+    if (type === 'radar') {
+      // Radar: draw each point's raw count just above the vertex.
+      chart.data.datasets.forEach((ds, di) => {
+        if (chart.isDatasetVisible && !chart.isDatasetVisible(di)) return
+        const meta = chart.getDatasetMeta(di)
+        ;(meta?.data || []).forEach((el, i) => {
+          const v = Number(ds.data?.[i])
+          if (!Number.isFinite(v) || v === 0 || !el) return
+          ctx.textAlign = 'center'
+          ctx.textBaseline = 'bottom'
+          ctx.fillText(fmtLabelNum(v), el.x, el.y - 3)
+        })
+      })
+      ctx.restore()
+      return
+    }
     if (type === 'bar' && stacked) {
       // Stacked bars: label only the total on top of each stack.
       const n = chart.data?.labels?.length || 0
@@ -166,16 +250,19 @@ export const makeValueLabelsPlugin = (color = PAPER.ink) => ({
         if (chart.isDatasetVisible && !chart.isDatasetVisible(di)) return
         const meta = chart.getDatasetMeta(di)
         ;(meta?.data || []).forEach((el, i) => {
-          const v = Number(ds.data?.[i])
+          const raw = ds.data?.[i]
+          // Floating bars carry a [start, end] pair — label the step magnitude.
+          const v = Array.isArray(raw) ? (N(raw[1]) - N(raw[0])) : Number(raw)
           if (!Number.isFinite(v) || v === 0 || !el) return
+          const text = fmtLabelNum(Math.abs(v))
           if (horizontal) {
             ctx.textAlign = 'left'
             ctx.textBaseline = 'middle'
-            ctx.fillText(fmtLabelNum(v), el.x + 4, el.y)
+            ctx.fillText(text, el.x + 4, el.y)
           } else {
             ctx.textAlign = 'center'
             ctx.textBaseline = 'bottom'
-            ctx.fillText(fmtLabelNum(v), el.x, el.y - 3)
+            ctx.fillText(text, el.x, el.y - 3)
           }
         })
       })
@@ -211,17 +298,33 @@ export function doughnutLegendCounts(chart) {
 // drawn by VALUE_LABELS_PLUGIN (top for vertical marks, right for bar-h).
 const AXIS = { ticks: { color: PAPER.muted, font: { size: 11 } }, grid: { color: PAPER.grid } }
 const OPT_BASE = { responsive: true, maintainAspectRatio: false, layout: { padding: { top: 14 } }, plugins: { legend: { display: false }, tooltip: { enabled: false } }, scales: { x: AXIS, y: { ...AXIS, beginAtZero: true } } }
+// Secondary (right) axis for the dual-axis mixed charts. drawOnChartArea:false so
+// the two axes' gridlines never fight for the same space.
+const AXIS_RIGHT = { position: 'right', beginAtZero: true, grid: { drawOnChartArea: false }, ticks: { color: PAPER.muted, font: { size: 11 } } }
+const MIXED_LEGEND = { plugins: { legend: { display: true, labels: { color: PAPER.muted, font: { size: 10 } } }, tooltip: { enabled: false } } }
+const RADIAL_TICKS = { color: PAPER.muted, backdropColor: 'transparent', font: { size: 9 } }
 export const CHART_OPTS = {
   bar: OPT_BASE,
   'bar-h': { ...OPT_BASE, indexAxis: 'y', layout: { padding: { top: 6, right: 30 } } },
   'bar-stack': { ...OPT_BASE, plugins: { legend: { display: true, labels: { color: PAPER.muted, font: { size: 10 } } }, tooltip: { enabled: false } }, scales: { x: { ...AXIS, stacked: true }, y: { ...AXIS, stacked: true } } },
   doughnut: { responsive: true, maintainAspectRatio: false, cutout: '58%', plugins: { legend: { position: 'right', labels: { color: PAPER.ink, boxWidth: 12, padding: 10, font: { size: 11 }, generateLabels: doughnutLegendCounts } }, tooltip: { enabled: false } } },
   line: { ...OPT_BASE, elements: { line: { tension: 0.35 }, point: { radius: 2 } } },
+  // Pareto: incident bars (left axis) + cumulative % line (right axis, 0 to 100).
+  pareto: { responsive: true, maintainAspectRatio: false, layout: { padding: { top: 14 } }, ...MIXED_LEGEND, scales: { x: AXIS, y: { ...AXIS, beginAtZero: true }, y1: { ...AXIS_RIGHT, max: 100, ticks: { ...AXIS_RIGHT.ticks, callback: (v) => `${v}%` } } } },
+  // Combo: cost bars (left axis) + incident-count line (right axis).
+  combo: { responsive: true, maintainAspectRatio: false, layout: { padding: { top: 14 } }, ...MIXED_LEGEND, elements: { line: { tension: 0.3 }, point: { radius: 2 } }, scales: { x: AXIS, y: { ...AXIS, beginAtZero: true }, y1: AXIS_RIGHT } },
+  radar: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: { enabled: false } }, scales: { r: { beginAtZero: true, angleLines: { color: PAPER.grid }, grid: { color: PAPER.grid }, pointLabels: { color: PAPER.ink, font: { size: 11 } }, ticks: RADIAL_TICKS } } },
+  polar: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right', labels: { color: PAPER.ink, boxWidth: 12, padding: 10, font: { size: 11 }, generateLabels: doughnutLegendCounts } }, tooltip: { enabled: false } }, scales: { r: { beginAtZero: true, grid: { color: PAPER.grid }, angleLines: { color: PAPER.grid }, ticks: RADIAL_TICKS } } },
+  waterfall: { ...OPT_BASE, layout: { padding: { top: 16 } } },
 }
-export const CHART_JS_TYPE = { doughnut: 'doughnut', line: 'line', bar: 'bar', 'bar-h': 'bar', 'bar-stack': 'bar' }
+export const CHART_JS_TYPE = { doughnut: 'doughnut', line: 'line', bar: 'bar', 'bar-h': 'bar', 'bar-stack': 'bar', pareto: 'bar', combo: 'bar', radar: 'radar', polar: 'polarArea', waterfall: 'bar' }
+
+/** Resolve a chart data cell to a number: floating bars carry [start, end] pairs;
+ *  their magnitude is |end - start| (the step size). Plain values pass through. */
+const chartCellNum = (v) => (Array.isArray(v) ? Math.abs(N(v[1]) - N(v[0])) : (Number.isFinite(Number(v)) ? Number(v) : 0))
 
 export function isChartEmpty(data) {
-  return !data?.labels?.length || (data.datasets || []).every((ds) => (ds.data || []).every((v) => !v))
+  return !data?.labels?.length || (data.datasets || []).every((ds) => (ds.data || []).every((v) => !chartCellNum(v)))
 }
 
 /** One-line numeric digest of a chart's data for the PDF (rendered under the
@@ -231,7 +334,7 @@ export function isChartEmpty(data) {
 export function summarizeChartData(data) {
   if (isChartEmpty(data)) return ''
   const labels = data.labels || []
-  const perLabel = labels.map((_, i) => (data.datasets || []).reduce((s, ds) => s + (Number(ds.data?.[i]) || 0), 0))
+  const perLabel = labels.map((_, i) => (data.datasets || []).reduce((s, ds) => s + chartCellNum(ds.data?.[i]), 0))
   const total = perLabel.reduce((s, v) => s + v, 0)
   if (!total) return ''
   let maxI = 0
@@ -355,7 +458,7 @@ export const uid = () => `b${Date.now().toString(36)}${(_seq++).toString(36)}`
 export const BLOCK_TYPES = {
   header: { label: 'Header / Logo', description: 'Report title, subtitle, company logo and generation date.' },
   kpis: { label: 'KPI row', description: 'A row of headline metrics — pick from 12 accident & claims KPIs.' },
-  chart: { label: 'Chart', description: `One of ${Object.keys(CHARTS).length} live charts: severity, trend, fault, liability, claims, ageing…` },
+  chart: { label: 'Chart', description: `One of ${Object.keys(CHARTS).length} live charts (doughnut, line, bar, Pareto, dual-axis combo, radar, polar, waterfall) at full, half or third width.` },
   insights: { label: 'Key findings', description: 'Auto-generated bullet summary computed from the live data (peaks, exposure, delays).' },
   text: { label: 'Text section', description: 'Free-form commentary, findings or recommendations with an optional heading.' },
   table: { label: 'Detail table', description: 'Incident register — choose columns and a row cap.' },
@@ -366,7 +469,7 @@ export const BLOCK_TYPES = {
 export const BLOCK_DEFAULTS = {
   header: () => ({ logo: '', title: 'Accident & Claims Report', subtitle: '', showDate: true }),
   kpis: () => ({ items: ['total', 'open', 'repairCost', 'claimed', 'recovered', 'netExposure'] }),
-  chart: () => ({ chart: 'severity', title: '', height: 240 }),
+  chart: () => ({ chart: 'severity', title: '', height: 240, width: 'full' }),
   insights: () => ({ title: 'Key findings' }),
   text: () => ({ title: '', body: '' }),
   table: () => ({ title: 'Incident detail', columns: ['incident_date', 'asset_no', 'site', 'severity', 'status', 'claim_amount'], limit: 25 }),
@@ -438,10 +541,12 @@ export const REPORT_LIBRARY = [
       makeBlock('header', { title: 'Fleet Safety Review' }),
       makeBlock('kpis', { items: ['total', 'open', 'avgDaysOpen', 'repairCost'] }),
       makeBlock('insights'),
-      makeBlock('chart', { chart: 'caseAge', title: 'Open cases by days open' }),
+      makeBlock('chart', { chart: 'typeRadar', title: 'Accident type profile', width: 'half' }),
+      makeBlock('chart', { chart: 'statusPolar', title: 'Status distribution', width: 'half' }),
+      makeBlock('chart', { chart: 'paretoAssets', title: 'Asset incident Pareto' }),
       makeBlock('chart', { chart: 'sevMonthly', title: 'Monthly severity mix' }),
-      makeBlock('chart', { chart: 'bySite', title: 'Incidents by site' }),
-      makeBlock('chart', { chart: 'topAssets', title: 'Top assets by incidents' }),
+      makeBlock('chart', { chart: 'caseAge', title: 'Open cases by days open', width: 'half' }),
+      makeBlock('chart', { chart: 'bySite', title: 'Incidents by site', width: 'half' }),
     ],
   },
   {
@@ -455,7 +560,8 @@ export const REPORT_LIBRARY = [
       makeBlock('insights'),
       makeBlock('divider', { label: 'Performance' }),
       makeBlock('chart', { chart: 'trend', title: 'Incident trend (12 months)' }),
-      makeBlock('chart', { chart: 'recovery', title: 'Claims recovery funnel' }),
+      makeBlock('chart', { chart: 'costTrend', title: 'Cost vs incidents', width: 'half' }),
+      makeBlock('chart', { chart: 'recoveryWaterfall', title: 'Recovery waterfall', width: 'half' }),
       makeBlock('text', { title: 'Management commentary', body: '' }),
       makeBlock('pagebreak'),
       makeBlock('divider', { label: 'Annex: incident register' }),

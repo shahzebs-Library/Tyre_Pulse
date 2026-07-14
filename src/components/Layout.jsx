@@ -3,7 +3,7 @@ import { NavLink, useNavigate, useLocation } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useAuth } from '../contexts/AuthContext'
 import { isChecklistOnlyRole, isChecklistPathAllowed } from '../lib/checklistAccess'
-import { navItemAllowedForCustomRole } from '../lib/navAccess'
+import { navItemAllowedForCustomRole, NAV_MODULE_KEY } from '../lib/navAccess'
 import { ACCESS_ROLES } from '../lib/moduleCatalog'
 
 // Built-in roles have hardcoded sidebar rules below; any other (non-empty) role
@@ -336,10 +336,16 @@ function shouldShowGroup(group, profile) {
   return group.groupRoles.includes(profile?.role)
 }
 
-function shouldShowNavItem(item, profile, isFlagEnabled, hasPermission) {
+function shouldShowNavItem(item, profile, isFlagEnabled, hasPermission, grantedModules, isSuperAdmin) {
   // Feature-flag gate first: a disabled capability is hidden entirely, so its
   // nav item never renders (not just redirected at the route).
   if (item.flag && isFlagEnabled && !isFlagEnabled(item.flag)) return false
+  // Additive per-user grant override: a built-in-role user explicitly GRANTED
+  // this module's access sees the nav item even if the role rules below would
+  // reject it. (Revoke is enforced by hasPermission/route guards; this only
+  // opens visibility, so we do not hide here.)
+  const grantKey = NAV_MODULE_KEY[item.to]
+  if (grantKey && grantedModules && grantedModules.has(grantKey)) return true
   if (profile?.role === 'Inspector') {
     return item.to === '/inspections' || item.to === '/settings'
   }
@@ -355,7 +361,7 @@ function shouldShowNavItem(item, profile, isFlagEnabled, hasPermission) {
   if (isChecklistOnlyRole(profile?.role)) {
     return isChecklistPathAllowed(item.to)
   }
-  if (item.adminOnly) return profile?.role === 'Admin'
+  if (item.adminOnly) return profile?.role === 'Admin' || isSuperAdmin === true
   if (item.roles) return item.roles.includes(profile?.role)
   return true
 }
@@ -610,7 +616,7 @@ const SIDEBAR_COLLAPSED = 54
 export default function Layout({ children }) {
   useRealtimeSync()
 
-  const { profile, signOut, hasPermission } = useAuth()
+  const { profile, signOut, hasPermission, grantedModules, isSuperAdmin } = useAuth()
   const { t }                               = useLanguage()
   const { branding }                        = useTenant()
   // Org-assigned app icon (V120); falls back to the built-in mark so an
@@ -911,7 +917,7 @@ export default function Layout({ children }) {
           {NAV_GROUPS.map((group) => {
             const { label, items } = group
             if (!shouldShowGroup(group, profile)) return null
-            const visibleItems = items.filter(item => shouldShowNavItem(item, profile, isFlagEnabled, hasPermission))
+            const visibleItems = items.filter(item => shouldShowNavItem(item, profile, isFlagEnabled, hasPermission, grantedModules, isSuperAdmin))
             if (visibleItems.length === 0) return null
             const isCollapsed = collapsedGroups.has(label)
             return (

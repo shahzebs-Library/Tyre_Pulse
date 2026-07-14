@@ -80,6 +80,18 @@ export function ModuleRoute({ moduleKey, children }) {
   return children
 }
 
+// Gates a route to Super Admins only (profiles.is_super_admin). Renders the same
+// AccessDenied UI as the sibling guards (no redirect, to avoid guard loops).
+export function SuperAdminRoute({ children }) {
+  const { profile, isSuperAdmin, loading } = useAuth()
+  if (loading) return <RouteLoading />
+
+  if (!isSuperAdmin) {
+    return <AccessDenied role={profile?.role} />
+  }
+  return children
+}
+
 function RouteLoading() {
   const { t } = useLanguage()
   return (

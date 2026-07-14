@@ -7,6 +7,32 @@ import { audit } from '../lib/auditLogger'
 
 const AuthContext = createContext(null)
 
+/**
+ * Pure permission-merge resolver — the single source of truth for how a role's
+ * base access combines with a Super Admin's per-user grant overrides.
+ *
+ * Precedence (highest first):
+ *   1. Admin role or Super Admin      -> always true (cannot be revoked here)
+ *   2. explicit 'revoke' override      -> false (beats the role)
+ *   3. role/DB logic already allows it -> true
+ *   4. explicit 'grant' override       -> true (adds on top of the role)
+ *   5. otherwise                       -> false
+ *
+ * @param {object}  p
+ * @param {string}  p.role          the user's role
+ * @param {boolean} p.isSuperAdmin  profiles.is_super_admin === true
+ * @param {boolean} p.roleAllows    whether the existing role/DB logic grants it
+ * @param {('grant'|'revoke'|undefined)} p.override  per-user grant override
+ * @returns {boolean}
+ */
+export function resolvePermission({ role, isSuperAdmin, roleAllows, override }) {
+  if (role === 'Admin' || isSuperAdmin === true) return true
+  if (override === 'revoke') return false
+  if (roleAllows === true) return true
+  if (override === 'grant') return true
+  return false
+}
+
 // Role-based defaults used when no DB permissions have been configured yet
 const ROLE_DEFAULTS = {
   Admin:    () => true,
@@ -39,6 +65,9 @@ export function AuthProvider({ children }) {
   const manualSignInRef    = useRef(false)
   const [modulePerms, setModulePerms] = useState(null)
   const [mfaEnabled, setMfaEnabled] = useState(false)
+  // Per-user access grants (Super Admin can give one user more/less than their
+  // role). Shape: { module_key: 'grant' | 'revoke' }. Fail-closed to {}.
+  const [grantOverrides, setGrantOverrides] = useState({})
 
   // Idle timeout - sign out after 30 minutes of inactivity.
   // Uses an in-memory ref instead of localStorage so the timer cannot be
@@ -119,6 +148,7 @@ export function AuthProvider({ children }) {
       currentUserIdRef.current = null
       setProfile(null)
       setModulePerms(null)
+      setGrantOverrides({})
       unsubscribeFromProfile()
       setMfaEnabled(false)
       clearMonitoringUser()
@@ -154,10 +184,13 @@ export function AuthProvider({ children }) {
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   async function fetchProfile(userId) {
-    const [profileRes, permsRes, factorsRes] = await Promise.all([
-      supabase.from('profiles').select('id,full_name,username,role,email,employee_id,site,country,approved,locked,created_at').eq('id', userId).single(),
+    const [profileRes, permsRes, factorsRes, grantsRes] = await Promise.all([
+      supabase.from('profiles').select('id,full_name,username,role,email,employee_id,site,country,approved,locked,is_super_admin,created_at').eq('id', userId).single(),
       supabase.rpc('get_user_module_permissions'),
       supabase.auth.mfa.listFactors(),
+      // Per-user access grants. Fail-closed: on any error keep {} — never throw
+      // and never block login on this optional overlay.
+      supabase.rpc('get_my_access_grants').then(r => r, () => ({ data: null, error: true })),
     ])
 
     const p = profileRes.data
@@ -169,6 +202,7 @@ export function AuthProvider({ children }) {
       if (manualSignInRef.current) {
         setProfile(null)
         setModulePerms({})
+        setGrantOverrides({})
         setLoading(false)
         return
       }
@@ -178,6 +212,7 @@ export function AuthProvider({ children }) {
       localStorage.setItem(p.locked === true ? 'tp_access_revoked' : 'tp_pending_approval', '1')
       setProfile(null)
       setModulePerms({})
+      setGrantOverrides({})
       setLoading(false)
       return
     }
@@ -193,20 +228,40 @@ export function AuthProvider({ children }) {
       identifyUser({ id: p.id, role: p.role, site: p.site })
     }
     setModulePerms(permsRes.data ?? {})
+    // Grant overrides overlay — plain object { module_key: 'grant' | 'revoke' }.
+    // Any non-object (error, null) collapses to {} (fail-closed, no overrides).
+    const g = grantsRes?.data
+    setGrantOverrides(g && typeof g === 'object' && !Array.isArray(g) ? g : {})
     setMfaEnabled((factorsRes.data?.totp?.length ?? 0) > 0)
     setLoading(false)
   }
 
+  const isSuperAdmin = profile?.is_super_admin === true
+
+  // Set of module keys the user was explicitly GRANTED beyond their role.
+  const grantedModules = useMemo(
+    () => new Set(Object.keys(grantOverrides).filter(k => grantOverrides[k] === 'grant')),
+    [grantOverrides],
+  )
+
   const hasPermission = useCallback((moduleKey) => {
     if (!profile) return false
-    if (profile.role === 'Admin') return true
-    // If DB permissions loaded and non-empty, use them
+    // Base (role/DB) verdict — the middle branch fed into resolvePermission.
+    let roleAllows
     if (modulePerms && Object.keys(modulePerms).length > 0) {
-      return modulePerms[moduleKey] === true
+      // If DB permissions loaded and non-empty, use them
+      roleAllows = modulePerms[moduleKey] === true
+    } else {
+      // Fall back to hardcoded role defaults
+      roleAllows = (ROLE_DEFAULTS[profile.role] ?? (() => false))(moduleKey)
     }
-    // Fall back to hardcoded role defaults
-    return (ROLE_DEFAULTS[profile.role] ?? (() => false))(moduleKey)
-  }, [profile, modulePerms])
+    return resolvePermission({
+      role: profile.role,
+      isSuperAdmin,
+      roleAllows,
+      override: grantOverrides[moduleKey],
+    })
+  }, [profile, modulePerms, isSuperAdmin, grantOverrides])
 
   const signIn = useCallback(async (identifier, password) => {
     let email = identifier.trim()
@@ -280,8 +335,8 @@ export function AuthProvider({ children }) {
   }, [])
 
   const value = useMemo(
-    () => ({ user, profile, loading, modulePerms, hasPermission, signIn, signOut, mfaEnabled, setMfaEnabled }),
-    [user, profile, loading, modulePerms, mfaEnabled, hasPermission, signIn, signOut, setMfaEnabled],
+    () => ({ user, profile, loading, modulePerms, hasPermission, signIn, signOut, mfaEnabled, setMfaEnabled, isSuperAdmin, grantOverrides, grantedModules }),
+    [user, profile, loading, modulePerms, mfaEnabled, hasPermission, signIn, signOut, setMfaEnabled, isSuperAdmin, grantOverrides, grantedModules],
   )
 
   return (

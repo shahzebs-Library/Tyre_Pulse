@@ -6,7 +6,6 @@ import {
 import { supabase } from '../lib/supabase'
 import { fetchAllPages } from '../lib/fetchAll'
 import { useAuth } from '../contexts/AuthContext'
-import { useTheme } from '../contexts/ThemeContext'
 import { useSettings, COUNTRIES } from '../contexts/SettingsContext'
 import PageHeader from '../components/ui/PageHeader'
 import SectionTabs, { ANALYTICS_TABS } from '../components/ui/SectionTabs'
@@ -51,7 +50,6 @@ const EMPTY_SLICE = { data: [], error: null }
 
 export default function ExecutiveAnalytics() {
   const { profile } = useAuth()
-  const { isDark } = useTheme()
   const { activeCountry, activeCurrency } = useSettings()
 
   const initial = defaultRange()
@@ -68,7 +66,24 @@ export default function ExecutiveAnalytics() {
   const reqIdRef = useRef(0)
   const chartsRef = useRef({}) // chartKey -> echarts instance
 
-  const palette = useMemo(() => getEchartsTheme(isDark), [isDark])
+  // Executive Analytics always renders as a clean WHITE boardroom report,
+  // regardless of the app's dark/light theme. getEchartsTheme() resolves colours
+  // from the live <html> vars (dark in dark mode), so we pin the readable-on-white
+  // literals here to guarantee dark text + light gridlines on every canvas.
+  const palette = useMemo(() => ({
+    ...getEchartsTheme(false),
+    text:          '#0f172a',
+    subText:       '#334155',
+    muted:         '#64748b',
+    axisLine:      'rgba(16,24,40,0.16)',
+    splitLine:     'rgba(16,24,40,0.07)',
+    border:        '#e5e7eb',
+    tooltipBg:     '#ffffff',
+    tooltipBorder: 'rgba(16,24,40,0.12)',
+    tooltipText:   '#0f172a',
+    exportBg:      '#ffffff',
+    heatRamp:      ['#ecfdf5', '#86efac', '#22c55e', '#f59e0b', '#dc2626'],
+  }), [])
   const canView = VIEW_ROLES.includes(profile?.role)
 
   // ── Data load: parallel, allSettled, per-slice isolation ────────────────────
@@ -233,14 +248,14 @@ export default function ExecutiveAnalytics() {
         data: sankeyData.nodes.map((n) => ({ name: n.name, depth: n.depth })),
         links: sankeyData.links,
         emphasis: { focus: 'adjacency' },
-        lineStyle: { color: 'gradient', opacity: isDark ? 0.35 : 0.3, curveness: 0.5 },
+        lineStyle: { color: 'gradient', opacity: 0.3, curveness: 0.5 },
         label: { color: palette.subText, fontSize: 11, formatter: (p) => labelOf.get(p.name) ?? p.name },
         itemStyle: { borderWidth: 0 },
         color: palette.series,
         nodeGap: 10,
       }],
     }
-  }, [sankeyData, palette, baseTooltip, isDark])
+  }, [sankeyData, palette, baseTooltip])
 
   const comboOption = useMemo(() => ({
     tooltip: {
@@ -423,7 +438,22 @@ export default function ExecutiveAnalytics() {
   const heatH = Math.max(280, 130 + heatData.sites.length * 28)
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 tp-exec-paper">
+      {/* Force a clean WHITE boardroom-report surface regardless of the app's
+          dark/light theme: flip the card + text + input CSS vars to light so
+          every .card, chart shell and control renders as printed white paper. */}
+      <style>{`
+        .tp-exec-paper {
+          --card-from:#ffffff; --card-to:#ffffff; --card-text:#0f172a; --border-brand:#e6e9ee;
+          --surface-0:#ffffff; --surface-1:#ffffff; --surface-2:#f1f5f9; --surface-3:#e2e8f0;
+          --border-dim:#e5e7eb; --border-bright:#cbd5e1;
+          --text-primary:#0f172a; --text-secondary:#334155; --text-muted:#64748b; --text-dim:#94a3b8;
+          --input-bg:#f8fafc; --input-border:#cbd5e1; --input-text:#0f172a;
+          background:#ffffff; color:#0f172a;
+          border-radius:16px; padding:16px;
+        }
+        .tp-exec-paper .card::before { background:transparent !important; }
+      `}</style>
       <SectionTabs tabs={ANALYTICS_TABS} />
       <PageHeader
         title="Executive Analytics"

@@ -100,6 +100,8 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
   `send-scheduled-reports` source updated (builder:* → claims-desk digest + "Custom Accident
   Report" subject) — **needs redeploy to v11** (Supabase MCP was unauthenticated this session).
   Tests: `accidentReport.test.js` (13), `scheduledReportsBuilder.test.js` (4).
+- **Shipped 2026-07-14**: merged to main (`e9408ab`, branch `claude/accident-builder-report-ui-2bkwb5`);
+  Vercel production deploy VERIFIED READY on that exact commit (build clean). Full suite 3406 green at merge.
 
 ### V220 — accident-delete FK fix (applied)
 - Deleting an accident cascade-deletes `accident_parts`; the AFTER DELETE audit trigger

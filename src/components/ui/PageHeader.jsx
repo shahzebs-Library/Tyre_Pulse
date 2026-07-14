@@ -1,5 +1,6 @@
 import { motion } from 'framer-motion'
-import { RefreshCw, Clock } from 'lucide-react'
+import { RefreshCw, Clock, ArrowLeft } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
 import { cn } from '../../lib/cn'
 import { useLanguage } from '../../contexts/LanguageContext'
 
@@ -23,6 +24,8 @@ function relativeTime(ts) {
  * @param {ReactNode} icon       - optional Lucide icon component
  * @param {ReactNode} actions    - right-side action buttons
  * @param {string}   className
+ * @param {boolean}  showBack   - show the "Back" control (default true)
+ * @param {Function} onBack     - optional override; called instead of navigate(-1)
  */
 export default function PageHeader({
   title,
@@ -34,9 +37,20 @@ export default function PageHeader({
   refreshing = false,
   updatedAt,
   className,
+  showBack = true,
+  onBack,
 }) {
   const { t } = useLanguage()
+  const navigate = useNavigate()
   const rel = relativeTime(updatedAt)
+  // Only offer "back" when there is somewhere to go (deep link / first page has no history).
+  const canGoBack =
+    typeof window !== 'undefined' && window.history && window.history.length > 1
+  const renderBack = showBack && (canGoBack || typeof onBack === 'function')
+  const handleBack = () => {
+    if (typeof onBack === 'function') onBack()
+    else navigate(-1)
+  }
   return (
     <motion.div
       initial={{ opacity: 0, y: -8 }}
@@ -46,6 +60,18 @@ export default function PageHeader({
     >
       {/* Left */}
       <div className="flex items-center gap-3">
+        {renderBack && (
+          <button
+            type="button"
+            onClick={handleBack}
+            aria-label="Back to previous page"
+            title="Back to previous page"
+            className="btn-secondary text-xs px-2.5 sm:px-3 py-1.5 flex items-center gap-1.5 shrink-0"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            <span className="hidden sm:inline">Back</span>
+          </button>
+        )}
         {Icon && (
           <div className="w-10 h-10 rounded-xl bg-brand-subtle border border-[rgba(22,163,74,0.2)] flex items-center justify-center shrink-0">
             <Icon className="w-5 h-5 text-brand-bright" />

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, Suspense } from 'react'
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import {
   Shield, LayoutDashboard, Building2, Users, Settings2,
@@ -150,7 +150,9 @@ export default function ConsoleLayout() {
 
         {/* Page content */}
         <main className="flex-1 overflow-y-auto p-6">
-          <Outlet />
+          <Suspense fallback={<div className="p-8 text-sm text-gray-400">Loading</div>}>
+            <Outlet />
+          </Suspense>
         </main>
       </div>
     </div>

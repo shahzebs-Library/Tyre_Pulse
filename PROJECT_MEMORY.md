@@ -186,7 +186,28 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
     admin_set_user_country, admin_bulk_set_grant, admin_bulk_set_role (LAST-super-admin lockout guard;
     never demotes a super via role change), admin_clone_role, admin_list_access_audit.
   - **V231** revokes default PUBLIC execute on all the above definer fns (authenticated keeps it; self-gates
-    are the real boundary). **Latest applied migration is now V235; next free V236** (see late-session block below).
+    are the real boundary). Next free migration **V237**.
+
+## Performance + Data Reconciliation (2026-07-14)
+- **App-slowness root cause = RLS re-running helper fns PER ROW**, not data volume (tiny: 1419 tyres/604
+  fleet). **V233** = 7 covering FK indexes + drop 1 duplicate index. **V234** (20 hot tables) + **V236**
+  (all remaining base tables) wrap the zero-arg STABLE helpers (is_super_admin/app_current_org/get_my_role/
+  app_role/app_is_active/app_is_org_admin/app_is_elevated) in `(select ...)` so the EXPENSIVE ones (each does
+  a profiles lookup) run ONCE per query, not per row. Access verified unchanged via impersonation.
+  CAVEATS: (a) `app_can_see_country(country)` is row-dependent and intentionally NOT wrapped (still per-row;
+  optimizing it needs a policy rewrite, not a wrap - backlog). (b) the `auth_rls_initplan` advisor lint stays
+  ~273 because it counts cheap `auth.uid()/auth.role()` calls, NOT our custom helpers - the meaningful win is
+  still real. (c) V236's guard uses `ILIKE '%( select %'` (pg_get_expr renders `( SELECT `); the 20 V234
+  tables got double-wrapped `( SELECT ( SELECT fn()))` - harmless, still an initplan. Do NOT re-run a bare
+  wrap pass without a correct already-wrapped guard. `multiple_permissive_policies` (~199) still open (backlog).
+- **Data Reconciliation** = `src/pages/DataReconciliation.jsx` (/data-reconciliation, Admin/Manager/Director,
+  nav under Administration & Data) + engine RPCs **V232/V235** (`recon_*`, app_is_elevated + org-scoped, in
+  `src/lib/api/dataReconciliation.js`). RULE: a DUPLICATE = every column identical (except id/created_at/
+  updated_at) - `recon_duplicate_tyres` (strict) + `recon_merge_duplicate` (byte-identical guard, refuses
+  otherwise). Same serial on a DIFFERENT vehicle = legitimate tyre MOVEMENT, surfaced read-only by
+  `recon_serial_conflicts`, NEVER removed. Orphan assets (tyres whose asset is missing from vehicle_fleet) =
+  the real gap - `recon_orphan_assets` + `recon_backfill_asset`/`recon_backfill_all_orphan_assets`. Live
+  findings at build: 0 true duplicates, 80 orphan assets. All fixes are user-approved (no silent add/delete).
 - ConsoleUsers.jsx gained: full role set (ACCESS_ROLES + live custom_roles), per-user country editor,
   bulk role/grant, "Manage grants" link. Tests: capability.test.js (7). Full suite 3513 green at merge.
 

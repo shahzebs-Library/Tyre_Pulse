@@ -58,6 +58,7 @@ const Budgets                = lazy(() => import('./pages/Budgets'))
 const CorrectiveActions      = lazy(() => import('./pages/CorrectiveActions'))
 const RcaRecords             = lazy(() => import('./pages/RcaRecords'))
 const DataCleaning           = lazy(() => import('./pages/DataCleaning'))
+const DataReconciliation     = lazy(() => import('./pages/DataReconciliation'))
 const UploadData             = lazy(() => import('./pages/UploadData'))
 const DataIntakeCenter       = lazy(() => import('./pages/DataIntakeCenter'))
 const NotFound               = lazy(() => import('./pages/NotFound'))
@@ -423,6 +424,7 @@ function MainApp() {
                       <Route path="/ai"                      element={<Safe><FlagRoute flag="ai_tools"><ModuleRoute moduleKey="ai_analytics"><AiAnalytics /></ModuleRoute></FlagRoute></Safe>} />
                       {/* ── Data ── */}
                       <Route path="/cleaning"    element={<Safe><ModuleRoute moduleKey="data_cleaning"><DataCleaning /></ModuleRoute></Safe>} />
+                      <Route path="/data-reconciliation" element={<Safe><RoleRoute allowed={['Admin','Manager','Director']}><DataReconciliation /></RoleRoute></Safe>} />
                       <Route path="/audit"       element={<Safe><ModuleRoute moduleKey="audit_trail"><AuditTrail /></ModuleRoute></Safe>} />
                       <Route path="/users"       element={<Navigate to="/console/users" replace />} />
                       {/* ── Universal ── */}

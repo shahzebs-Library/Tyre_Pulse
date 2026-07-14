@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useMemo, useRef, lazy, Suspense } fro
 import { useNavigate, useLocation, useSearchParams } from 'react-router-dom'
 
 const AccidentReportBuilder = lazy(() => import('../components/accidents/AccidentReportBuilder'))
-import { AlertOctagon, Plus, Search, X, Save, FileText, Download, BarChart2, Eye, Hourglass, Upload, CheckCircle2, AlertCircle, ChevronDown, Trash2, AlertTriangle, TrendingUp, Users, DollarSign, ShieldAlert, Lightbulb, ChevronRight, Clock, Wrench, ShieldCheck, ArrowLeft } from 'lucide-react'
+import { AlertOctagon, Plus, Search, X, Save, FileText, Download, BarChart2, Eye, Hourglass, Upload, ChevronDown, Trash2, AlertTriangle, TrendingUp, Users, DollarSign, ShieldAlert, Lightbulb, ChevronRight, Clock, Wrench, ShieldCheck, ArrowLeft } from 'lucide-react'
 import { motion } from 'framer-motion'
 import PageHeader from '../components/ui/PageHeader'
 import EmptyState from '../components/EmptyState'
@@ -38,38 +38,6 @@ ChartJS.register(
   ArcElement, LineElement, PointElement, Filler,
   Title, ChartTooltip, Legend,
 )
-
-const BULK_TEMPLATE_COLS = [
-  'incident_date',
-  'asset_no',
-  'site',
-  'country',
-  'location',
-  'liability',
-  'case_stage',
-  'damage_condition',
-  'current_status',
-  'action_to_be_taken',
-  'responsible_owner',
-  'required_action',
-  'status_update_date',
-  'expected_release_date',
-  'description',
-  'severity',
-  'status',
-  'repair_cost',
-  'insurance_claim_no',
-  'inspector',
-]
-
-const BULK_TEMPLATE_EXAMPLE = [
-  '2026-06-01', 'TM-001', 'Riyadh', 'KSA', 'GCC Plant',
-  '100% Third Party Liability', 'Internal Report Preparation', 'Major Repair',
-  'Under Repair', 'Awaiting insurance approval', 'Ms. Fatima',
-  'Submit repair invoice', '2026-06-10', '2026-06-20',
-  'Rear collision at depot', 'Minor', 'Reported',
-  '5000', 'CLM-2026-001', 'John Doe',
-]
 
 // Option vocabularies + canon/toDb helpers now come from the single shared
 // source `src/lib/accidentVocab.js` (imported above) — do NOT re-declare here.
@@ -407,14 +375,6 @@ export default function Accidents() {
   const [showAssetDrop, setShowAssetDrop]      = useState(false)
   const assetDropRef                           = useRef(null)
 
-  // Bulk upload
-  const [showBulk, setShowBulk]               = useState(false)
-  const [bulkRows, setBulkRows]               = useState([])
-  const [bulkFile, setBulkFile]               = useState(null)
-  const [bulkImporting, setBulkImporting]     = useState(false)
-  const [bulkResult, setBulkResult]           = useState(null) // { added, skipped, errors[] }
-  const bulkInputRef                          = useRef(null)
-
   const loadRecords = useCallback(async () => {
     setLoading(true)
     // Paginate past the 1000-row cap so the list AND its exports are complete.
@@ -498,109 +458,6 @@ export default function Accidents() {
     }))
     setAssetQuery(asset.asset_no)
     setShowAssetDrop(false)
-  }
-
-  async function downloadTemplate() {
-    const XLSX = await import('xlsx')
-    const ws = XLSX.utils.aoa_to_sheet([BULK_TEMPLATE_COLS, BULK_TEMPLATE_EXAMPLE])
-    // Column widths
-    ws['!cols'] = BULK_TEMPLATE_COLS.map(() => ({ wch: 22 }))
-    const wb = XLSX.utils.book_new()
-    XLSX.utils.book_append_sheet(wb, ws, 'Accidents Template')
-    XLSX.writeFile(wb, 'TyrePulse_Accidents_Template.xlsx')
-  }
-
-  function parseBulkFile(file) {
-    setBulkFile(file)
-    setBulkResult(null)
-    const reader = new FileReader()
-    reader.onload = async e => {
-      const XLSX = await import('xlsx')
-      try {
-        const wb = XLSX.read(e.target.result, { type: 'binary', cellDates: true })
-        const ws = wb.Sheets[wb.SheetNames[0]]
-        const raw = XLSX.utils.sheet_to_json(ws, { defval: '' })
-
-        const toISO = (val) => {
-          if (val === '' || val === null || val === undefined) return ''
-          if (val instanceof Date) return val.toISOString().split('T')[0]
-          if (typeof val === 'number') {
-            const d = XLSX.SSF.parse_date_code(val)
-            return d ? `${d.y}-${String(d.m).padStart(2, '0')}-${String(d.d).padStart(2, '0')}` : ''
-          }
-          return String(val).trim()
-        }
-        const txt = (v) => { const s = String(v ?? '').trim(); return s || null }
-
-        const rows = raw.map((r, i) => {
-          // Normalise headers: lowercase, collapse any non-alphanumeric to '_'
-          const norm = {}
-          Object.entries(r).forEach(([k, v]) => {
-            const key = String(k).trim().toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '')
-            if (key) norm[key] = v
-          })
-          const pick = (...keys) => { for (const k of keys) { if (norm[k] !== undefined && norm[k] !== '') return norm[k] } return '' }
-
-          const incident_date = toISO(pick('incident_date', 'accident_date', 'date'))
-          const asset_no = String(pick('asset_no', 'assets_no', 'asset', 'asset_number', 'vehicle', 'vehicle_no', 'plate') || '').trim()
-
-          return {
-            _row: i + 2,
-            _valid: !!(incident_date && asset_no),
-            incident_date,
-            asset_no,
-            site:                 txt(pick('site', 'branch', 'plant')),
-            country:              txt(pick('country')),
-            location:             txt(pick('location')),
-            description:          txt(pick('description', 'remarks')),
-            severity:             pick('severity') || 'Minor',
-            status:               pick('status') || 'Reported',
-            repair_cost:          pick('repair_cost') !== '' ? (Number(pick('repair_cost')) || null) : null,
-            estimated_damage_cost: pick('estimated_damage_cost', 'estimated_cost') !== '' ? (Number(pick('estimated_damage_cost', 'estimated_cost')) || null) : null,
-            liable_party:         txt(pick('liable_party', 'liability', 'liable')),
-            insurer:              txt(pick('insurer')),
-            policy_no:            txt(pick('policy_no', 'insurance_claim_no', 'claim_no')),
-            inspector:            txt(pick('inspector')),
-            // ── Claims tracker fields ──
-            case_stage:           txt(pick('case_stage', 'current_case_stage', 'stage')),
-            damage_condition:     txt(pick('damage_condition')),
-            current_status:       txt(pick('current_status')),
-            action_to_be_taken:   txt(pick('action_to_be_taken', 'action')),
-            responsible_owner:    txt(pick('responsible_owner', 'owner', 'responsible')),
-            required_action:      txt(pick('required_action')),
-            status_update_date:   toISO(pick('status_update_date', 'status_update')) || null,
-            expected_release_date: toISO(pick('expected_release_date', 'expected_release')) || null,
-          }
-        })
-        setBulkRows(rows)
-      } catch (err) {
-        setBulkResult({ added: 0, skipped: 0, errors: [`Parse error: ${err.message}`] })
-      }
-    }
-    reader.readAsBinaryString(file)
-  }
-
-  async function importBulk() {
-    const valid = bulkRows.filter(r => r._valid)
-    if (!valid.length) return
-    setBulkImporting(true)
-    setBulkResult(null)
-    const payload = valid.map(({ _row, _valid, ...r }) => ({
-      ...r,
-      site:        r.site || 'Unassigned',            // NOT NULL in DB
-      severity:    toDbSeverity(r.severity),           // map label → DB canonical
-      status:      toDbStatus(r.status),               // map label → DB canonical
-      reported_by: profile?.id,
-    }))
-    const { error: err } = await accidentsApi.createAccidentForPage(payload)
-    const skipped = bulkRows.filter(r => !r._valid).length
-    if (err) {
-      setBulkResult({ added: 0, skipped, errors: [err.message] })
-    } else {
-      setBulkResult({ added: valid.length, skipped, errors: [] })
-      loadRecords()
-    }
-    setBulkImporting(false)
   }
 
   const sites = useMemo(() => [...new Set(records.map(r => r.site).filter(Boolean))].sort(), [records])
@@ -1703,24 +1560,6 @@ export default function Accidents() {
     return cols
   }, [isAdmin, allPageSelected, selectedIds, activeCountry, fmtCurrency, openDetail])
 
-  // Bulk preview columns for EnterpriseTable
-  const bulkColumns = useMemo(() => [
-    { id: '_row', header: 'Row', accessorFn: r => r._row, size: 60 },
-    { id: 'incident_date', header: 'Date', accessorFn: r => r.incident_date || '-', size: 100 },
-    { id: 'asset_no', header: 'Asset', accessorFn: r => r.asset_no || '-', size: 120,
-      cell: ({ getValue }) => <span className="text-[var(--text-primary)] font-medium">{getValue()}</span>,
-    },
-    { id: 'site', header: 'Site', accessorFn: r => r.site || '-', size: 100 },
-    { id: 'severity', header: 'Severity', accessorFn: r => r.severity, size: 80 },
-    { id: 'status', header: 'Status', accessorFn: r => r.status, size: 100 },
-    { id: 'repair_cost', header: 'Cost', accessorFn: r => r.repair_cost ?? '-', size: 80, meta: { align: 'right' } },
-    { id: '_valid', header: 'Valid', accessorFn: r => r._valid, size: 60, enableSorting: false,
-      cell: ({ getValue }) => getValue()
-        ? <CheckCircle2 size={13} className="text-green-400 mx-auto" />
-        : <AlertCircle size={13} className="text-red-400 mx-auto" />,
-    },
-  ], [])
-
   return (
     <div className="space-y-4">
       {/* Page header */}
@@ -1772,12 +1611,6 @@ export default function Accidents() {
             className="btn-primary flex items-center gap-2 text-sm"
           >
             <Upload size={15} /> Import via Data Intake Center
-          </button>
-          <button
-            onClick={() => { setShowBulk(true); setBulkRows([]); setBulkFile(null); setBulkResult(null) }}
-            className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-1.5"
-          >
-            <Upload size={14} /> Bulk Upload
           </button>
           <button onClick={openAdd} className="btn-primary flex items-center gap-2 text-sm">
             <Plus size={16} /> New Incident
@@ -2891,136 +2724,6 @@ export default function Accidents() {
         </div>
       )}
 
-      {/* ── Bulk Upload Modal ───────────────────────────────────────────────── */}
-      {showBulk && (
-        <div
-          className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 overflow-y-auto"
-          onClick={() => setShowBulk(false)}
-        >
-          <div
-            className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl w-full max-w-3xl p-6 my-4 space-y-5"
-            onClick={e => e.stopPropagation()}
-          >
-            {/* Header */}
-            <div className="flex items-center justify-between">
-              <div>
-                <h2 className="text-lg font-semibold text-[var(--text-primary)] flex items-center gap-2">
-                  <Upload size={18} className="text-green-400" /> Bulk Upload Incidents
-                </h2>
-                <p className="text-xs text-[var(--text-muted)] mt-1">Upload an Excel or CSV file to import multiple incidents at once.</p>
-              </div>
-              <button onClick={() => setShowBulk(false)} className="text-[var(--text-muted)] hover:text-[var(--text-primary)]"><X size={18} /></button>
-            </div>
-
-            {/* Step 1 - download template */}
-            <div className="bg-[var(--input-bg)] border border-[var(--input-border)] rounded-xl p-4 space-y-3">
-              <p className="text-sm font-semibold text-[var(--text-secondary)]">Step 1: Download Template</p>
-              <p className="text-xs text-[var(--text-muted)] leading-relaxed">
-                Use the official template to ensure correct column mapping. Required columns:
-                <span className="text-[var(--text-dim)] font-mono"> incident_date</span>,
-                <span className="text-[var(--text-dim)] font-mono"> asset_no</span>.
-                All other columns are optional.
-              </p>
-              <div className="flex flex-wrap gap-2">
-                {BULK_TEMPLATE_COLS.map(c => (
-                  <span key={c} className="text-[11px] font-mono px-2 py-0.5 rounded bg-gray-700 text-gray-300 border border-gray-600">{c}</span>
-                ))}
-              </div>
-              <button
-                type="button"
-                onClick={downloadTemplate}
-                className="inline-flex items-center gap-2 text-sm px-4 py-2 rounded-lg bg-green-700 hover:bg-green-600 text-white font-medium transition-colors"
-              >
-                <Download size={14} /> Download Template (.xlsx)
-              </button>
-            </div>
-
-            {/* Step 2 - upload file */}
-            <div className="bg-[var(--input-bg)] border border-[var(--input-border)] rounded-xl p-4 space-y-3">
-              <p className="text-sm font-semibold text-[var(--text-secondary)]">Step 2: Upload Your File</p>
-              <input
-                ref={bulkInputRef}
-                type="file"
-                accept=".xlsx,.xls,.csv"
-                className="hidden"
-                onChange={e => { if (e.target.files?.[0]) parseBulkFile(e.target.files[0]) }}
-              />
-              <button
-                type="button"
-                onClick={() => bulkInputRef.current?.click()}
-                className="inline-flex items-center gap-2 text-sm px-4 py-2 rounded-lg bg-gray-700 hover:bg-gray-600 border border-gray-600 text-gray-200 font-medium transition-colors"
-              >
-                <Upload size={14} /> {bulkFile ? bulkFile.name : 'Choose Excel / CSV file'}
-              </button>
-              {bulkFile && (
-                <p className="text-xs text-[var(--text-muted)]">
-                  {bulkRows.length} row{bulkRows.length !== 1 ? 's' : ''} parsed ·{' '}
-                  <span className="text-green-400">{bulkRows.filter(r => r._valid).length} valid</span>
-                  {bulkRows.filter(r => !r._valid).length > 0 && (
-                    <> · <span className="text-red-400">{bulkRows.filter(r => !r._valid).length} invalid (missing date or asset_no)</span></>
-                  )}
-                </p>
-              )}
-            </div>
-
-            {/* Preview table - EnterpriseTable */}
-            {bulkRows.length > 0 && (
-              <div className="rounded-xl border border-[var(--input-border)] overflow-hidden">
-                <EnterpriseTable
-                  reportMeta={reportMeta}
-                  columns={bulkColumns}
-                  data={bulkRows.slice(0, 50)}
-                  getRowId={(row) => String(row._row)}
-                  enableGlobalFilter={false}
-                  enableSorting={false}
-                  enableExport={false}
-                  enableColumnVisibility={false}
-                  enableColumnFilters={false}
-                  initialPageSize={50}
-                  pageSizeOptions={[50]}
-                  emptyMessage="No rows parsed"
-                />
-                {bulkRows.length > 50 && (
-                  <p className="text-xs text-[var(--text-muted)] text-center py-2">Showing first 50 of {bulkRows.length} rows</p>
-                )}
-              </div>
-            )}
-
-            {/* Result banner */}
-            {bulkResult && (
-              <div className={`flex items-start gap-3 rounded-xl px-4 py-3 border text-sm ${
-                bulkResult.errors.length
-                  ? 'bg-red-950/30 border-red-700/50 text-red-300'
-                  : 'bg-green-950/30 border-green-700/50 text-green-300'
-              }`}>
-                {bulkResult.errors.length
-                  ? <AlertCircle size={16} className="shrink-0 mt-0.5" />
-                  : <CheckCircle2 size={16} className="shrink-0 mt-0.5" />}
-                <div>
-                  {bulkResult.added > 0 && <p>{bulkResult.added} incident{bulkResult.added !== 1 ? 's' : ''} imported successfully.</p>}
-                  {bulkResult.skipped > 0 && <p className="text-yellow-400">{bulkResult.skipped} row{bulkResult.skipped !== 1 ? 's' : ''} skipped (missing required fields).</p>}
-                  {bulkResult.errors.map((e, i) => <p key={i} className="text-red-300">{e}</p>)}
-                </div>
-              </div>
-            )}
-
-            {/* Action row */}
-            <div className="flex items-center gap-3 pt-1">
-              <button
-                type="button"
-                onClick={importBulk}
-                disabled={bulkImporting || bulkRows.filter(r => r._valid).length === 0}
-                className="btn-primary flex items-center gap-2 text-sm disabled:opacity-40"
-              >
-                {bulkImporting
-                  ? <><span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin inline-block" /> Importing...</>
-                  : <><CheckCircle2 size={14} /> Import {bulkRows.filter(r => r._valid).length} Valid Rows</>}
-              </button>
-              <button type="button" onClick={() => setShowBulk(false)} className="btn-secondary text-sm">Close</button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   )
 }

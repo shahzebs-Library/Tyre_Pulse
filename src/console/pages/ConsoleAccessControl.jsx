@@ -19,7 +19,7 @@ import { Suspense, lazy, useMemo } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import {
   ShieldCheck, KeyRound, UserCog, UserCheck, Eye, Globe,
-  Layers, ScrollText, Fingerprint, Loader2,
+  Layers, ScrollText, Fingerprint, Loader2, Wand2,
 } from 'lucide-react'
 
 import PermissionMatrix from '../../pages/PermissionMatrix'
@@ -28,12 +28,14 @@ import AccessGrantsManager from '../../pages/AccessGrantsManager'
 import SecurityCenter from '../../pages/SecurityCenter'
 
 // New console-only viewers are code-split so a heavy tab never blocks the host.
+const AccessManager = lazy(() => import('./access/AccessManager'))
 const EffectivePermissions = lazy(() => import('./access/EffectivePermissions'))
 const CountryScope = lazy(() => import('./access/CountryScope'))
 const BulkOperations = lazy(() => import('./access/BulkOperations'))
 const AccessAudit = lazy(() => import('./access/AccessAudit'))
 
 const TABS = [
+  { key: 'manager',   label: 'Access Manager',   icon: Wand2,       desc: 'Easy on/off editor for every module and tab, per role or user', Component: AccessManager, lazy: true },
   { key: 'roles',     label: 'Role Permissions', icon: KeyRound,    desc: 'Role by module by capability grid',       Component: PermissionMatrix,     lazy: false },
   { key: 'custom',    label: 'Custom Roles',     icon: UserCog,     desc: 'Create your own roles and grant access',  Component: CustomRolesManager,   lazy: false },
   { key: 'grants',    label: 'Per-User Grants',  icon: UserCheck,   desc: 'Give one user more or less than a role',  Component: AccessGrantsManager,  lazy: false },
@@ -44,7 +46,7 @@ const TABS = [
   { key: 'security',  label: 'Security',         icon: Fingerprint, desc: 'Sessions, login history, security events', Component: SecurityCenter,       lazy: false },
 ]
 
-const DEFAULT_TAB = 'effective'
+const DEFAULT_TAB = 'manager'
 
 function TabFallback() {
   return (

@@ -236,6 +236,42 @@ export function AuthProvider({ children }) {
     setLoading(false)
   }
 
+  // ── Live access refresh (no re-login) ──────────────────────────────────────
+  // Re-pull the enforced module map + per-user grant overlay. Both RPCs are
+  // SECURITY DEFINER and fail-safe, so a transient error never wipes access.
+  const refreshAccess = useCallback(async () => {
+    try {
+      const [permsRes, grantsRes] = await Promise.all([
+        supabase.rpc('get_user_module_permissions'),
+        supabase.rpc('get_my_access_grants').then(r => r, () => ({ data: null, error: true })),
+      ])
+      if (!permsRes.error) setModulePerms(permsRes.data ?? {})
+      if (!grantsRes?.error) {
+        const g = grantsRes?.data
+        setGrantOverrides(g && typeof g === 'object' && !Array.isArray(g) ? g : {})
+      }
+    } catch { /* keep current access on a transient failure */ }
+  }, [])
+
+  // A change an admin makes in Master Access Control should reach an affected
+  // user's OPEN session without a re-login: refresh on tab refocus, and live via
+  // realtime on this user's own grant rows (uag_select already scopes to self)
+  // and on the role permission matrix.
+  useEffect(() => {
+    if (!user?.id) return undefined
+    const onVisible = () => { if (document.visibilityState === 'visible') refreshAccess() }
+    document.addEventListener('visibilitychange', onVisible)
+    const ch = supabase
+      .channel(`access-${user.id}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'user_access_grants', filter: `user_id=eq.${user.id}` }, () => refreshAccess())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'module_permissions' }, () => refreshAccess())
+      .subscribe()
+    return () => {
+      document.removeEventListener('visibilitychange', onVisible)
+      supabase.removeChannel(ch)
+    }
+  }, [user?.id, refreshAccess])
+
   const isSuperAdmin = profile?.is_super_admin === true
 
   // Set of module keys the user was explicitly GRANTED beyond their role.
@@ -335,8 +371,8 @@ export function AuthProvider({ children }) {
   }, [])
 
   const value = useMemo(
-    () => ({ user, profile, loading, modulePerms, hasPermission, signIn, signOut, mfaEnabled, setMfaEnabled, isSuperAdmin, grantOverrides, grantedModules }),
-    [user, profile, loading, modulePerms, mfaEnabled, hasPermission, signIn, signOut, setMfaEnabled, isSuperAdmin, grantOverrides, grantedModules],
+    () => ({ user, profile, loading, modulePerms, hasPermission, signIn, signOut, mfaEnabled, setMfaEnabled, isSuperAdmin, grantOverrides, grantedModules, refreshAccess }),
+    [user, profile, loading, modulePerms, mfaEnabled, hasPermission, signIn, signOut, setMfaEnabled, isSuperAdmin, grantOverrides, grantedModules, refreshAccess],
   )
 
   return (

@@ -31,6 +31,17 @@ export async function listTemplates() {
   return data ?? []
 }
 
+/** Fetch one layout by id (used by Scheduled Reports to render a saved layout). */
+export async function getTemplate(id) {
+  return unwrap(
+    await supabase
+      .from('accident_report_templates')
+      .select(COLS)
+      .eq('id', id)
+      .single(),
+  )
+}
+
 /** Create a layout. `config` is the builder state object. Returns the new row. */
 export async function createTemplate({ name, description = null, config }) {
   return unwrap(

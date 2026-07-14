@@ -1,12 +1,14 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import {
   Calendar, Clock, Mail, Plus, Edit2, Trash2, Eye, EyeOff,
   FileText, BarChart2, Truck, ClipboardList, DollarSign,
   CheckCircle, XCircle, AlertCircle, AlertTriangle, ChevronDown, X, Save, Lock,
   Package, Building2, Download, Loader2, FileSpreadsheet, CalendarClock, ShieldCheck,
-  LayoutTemplate, Send,
+  LayoutTemplate, Send, History, RefreshCw,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
+import { aiOps } from '../lib/api'
+import { toUserMessage } from '../lib/safeError'
 import { useAuth } from '../contexts/AuthContext'
 import { useLanguage } from '../contexts/LanguageContext'
 import { useSettings } from '../contexts/SettingsContext'
@@ -101,6 +103,28 @@ function formatLastSent(ts, td) {
   })
 }
 
+/** Short, absolute run timestamp for delivery rows: "14 Jul, 07:00". */
+function formatRunStamp(ts) {
+  if (!ts) return ''
+  const d = new Date(ts)
+  if (Number.isNaN(d.getTime())) return ''
+  return `${d.toLocaleDateString([], { day: 'numeric', month: 'short' })}, ${d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
+}
+
+/** Recipient count for a report_send_log row (recipients stored as jsonb array). */
+function recipientCountOf(row) {
+  const r = row?.recipients
+  if (Array.isArray(r)) return r.length
+  return 0
+}
+
+/** Trim an internal delivery error to a short, admin-safe reason. */
+function shortReason(text) {
+  const s = String(text || '').replace(/\s+/g, ' ').trim()
+  if (!s) return ''
+  return s.length > 120 ? `${s.slice(0, 117)}...` : s
+}
+
 function validateEmails(raw) {
   const lines = raw.split('\n').map(l => l.trim()).filter(Boolean)
   const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
@@ -144,7 +168,51 @@ function FormatBadge({ fmt }) {
   )
 }
 
-function ScheduleCard({ schedule, onEdit, onDelete, onToggle, onGenerate, generating, onSendNow, sendingNow, td, typeLabelFor }) {
+/** Latest delivery outcome for one schedule, derived from summarizeJobs().bySchedule. */
+function DeliveryStatusBadge({ health, td }) {
+  const delivered = health && health.total > 0 && health.lastStatus === 'sent'
+  const failed = health && health.total > 0 && health.lastStatus !== 'sent'
+  const stamp = health?.lastRun ? formatRunStamp(health.lastRun) : ''
+
+  if (delivered) {
+    return (
+      <div className="flex items-center gap-1.5 text-xs text-green-400 min-w-0">
+        <CheckCircle className="w-3.5 h-3.5 flex-shrink-0" />
+        <span className="truncate">
+          {stamp
+            ? td('schedreports.delivery.deliveredAt', 'Delivered {when}', { when: stamp })
+            : td('schedreports.delivery.delivered', 'Delivered')}
+        </span>
+      </div>
+    )
+  }
+  if (failed) {
+    const reason = shortReason(health.lastError)
+    return (
+      <div className="flex flex-col gap-0.5 min-w-0" title={health.lastError || undefined}>
+        <div className="flex items-center gap-1.5 text-xs text-red-400 min-w-0">
+          <XCircle className="w-3.5 h-3.5 flex-shrink-0" />
+          <span className="truncate">
+            {stamp
+              ? td('schedreports.delivery.failedAt', 'Delivery failed {when}', { when: stamp })
+              : td('schedreports.delivery.failed', 'Delivery failed')}
+          </span>
+        </div>
+        {reason && (
+          <span className="text-[11px] text-[var(--text-muted)] truncate pl-5">{reason}</span>
+        )}
+      </div>
+    )
+  }
+  return (
+    <div className="flex items-center gap-1.5 text-xs text-[var(--text-muted)] min-w-0">
+      <History className="w-3.5 h-3.5 flex-shrink-0" />
+      <span className="truncate">{td('schedreports.delivery.never', 'Never sent')}</span>
+    </div>
+  )
+}
+
+function ScheduleCard({ schedule, health, onEdit, onDelete, onToggle, onGenerate, generating, onSendNow, sendingNow, td, typeLabelFor }) {
   const typeLabel = typeLabelFor(schedule.report_type)
   const cfg = iconCfgFor(schedule.report_type)
   const recipientCount = (schedule.recipients ?? []).length
@@ -217,6 +285,11 @@ function ScheduleCard({ schedule, onEdit, onDelete, onToggle, onGenerate, genera
           {td('schedreports.card.covers', 'Covers')} {coverageLabel(schedule, td)}
         </span>
         <span className="flex items-center gap-1">{formats.map(f => <FormatBadge key={f} fmt={f} />)}</span>
+      </div>
+
+      {/* Delivery status (latest report_send_log outcome for this schedule) */}
+      <div className="flex items-center gap-2 min-w-0">
+        <DeliveryStatusBadge health={health} td={td} />
       </div>
 
       {/* Footer */}
@@ -541,6 +614,108 @@ function DeleteConfirmModal({ schedule, onCancel, onConfirm, deleting, td }) {
   )
 }
 
+function DeliveryStatusPill({ status, td }) {
+  const ok = status === 'sent'
+  return (
+    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium ${
+      ok ? 'bg-green-500/15 text-green-300' : 'bg-red-500/15 text-red-300'}`}>
+      {ok ? <CheckCircle className="w-3 h-3" /> : <XCircle className="w-3 h-3" />}
+      {ok ? td('schedreports.delivery.sent', 'Sent') : td('schedreports.delivery.failedShort', 'Failed')}
+    </span>
+  )
+}
+
+/** Expandable delivery-history panel: recent report_send_log runs in a table. */
+function DeliveryHistory({ runs, summary, loading, error, open, onToggle, onRefresh, td }) {
+  return (
+    <div className="bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-xl overflow-hidden">
+      <div className="flex items-center justify-between px-5 py-4">
+        <button onClick={onToggle} className="flex items-center gap-3 min-w-0 text-left">
+          <div className="w-9 h-9 rounded-xl bg-blue-400/10 flex items-center justify-center flex-shrink-0">
+            <History className="w-4 h-4 text-blue-400" />
+          </div>
+          <div className="min-w-0">
+            <p className="text-[var(--text-primary)] font-semibold flex items-center gap-2">
+              {td('schedreports.history.title', 'Delivery history')}
+              <ChevronDown className={`w-4 h-4 text-[var(--text-secondary)] transition-transform ${open ? 'rotate-180' : ''}`} />
+            </p>
+            <p className="text-[var(--text-secondary)] text-xs mt-0.5">
+              {summary && summary.total > 0
+                ? td('schedreports.history.summary', '{total} runs · {sent} sent · {failed} failed (last 60 days)', {
+                  total: summary.total, sent: summary.sent, failed: summary.failed,
+                })
+                : td('schedreports.history.subtitle', 'Recent scheduled report deliveries (last 60 days)')}
+            </p>
+          </div>
+        </button>
+        <button
+          onClick={onRefresh}
+          disabled={loading}
+          title={td('schedreports.history.refresh', 'Refresh delivery history')}
+          className="p-2 rounded-lg hover:bg-[var(--surface-3)] transition-colors disabled:opacity-50 flex-shrink-0"
+        >
+          <RefreshCw className={`w-4 h-4 text-[var(--text-secondary)] ${loading ? 'animate-spin' : ''}`} />
+        </button>
+      </div>
+
+      {open && (
+        <div className="border-t border-[var(--border-bright)]">
+          {error ? (
+            <div className="px-5 py-4 flex items-center gap-2 text-sm text-red-400">
+              <AlertCircle className="w-4 h-4 flex-shrink-0" />{error}
+            </div>
+          ) : loading ? (
+            <div className="px-5 py-8 flex items-center justify-center gap-2 text-sm text-[var(--text-secondary)]">
+              <Loader2 className="w-4 h-4 animate-spin" />{td('schedreports.history.loading', 'Loading delivery history...')}
+            </div>
+          ) : runs.length === 0 ? (
+            <div className="px-5 py-10 flex flex-col items-center justify-center text-center">
+              <div className="w-12 h-12 rounded-xl bg-[var(--surface-3)] flex items-center justify-center mb-3">
+                <History className="w-6 h-6 text-[var(--text-dim)]" />
+              </div>
+              <p className="text-[var(--text-primary)] font-medium text-sm">{td('schedreports.history.emptyTitle', 'No deliveries yet')}</p>
+              <p className="text-[var(--text-secondary)] text-xs mt-1 max-w-sm">
+                {td('schedreports.history.emptyDesc', 'Once a scheduled report runs or you use Send now, each delivery attempt appears here.')}
+              </p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-left text-xs text-[var(--text-muted)] border-b border-[var(--border-bright)]">
+                    <th className="px-5 py-2.5 font-medium">{td('schedreports.history.colSchedule', 'Schedule')}</th>
+                    <th className="px-5 py-2.5 font-medium">{td('schedreports.history.colWhen', 'When')}</th>
+                    <th className="px-5 py-2.5 font-medium">{td('schedreports.history.colStatus', 'Status')}</th>
+                    <th className="px-5 py-2.5 font-medium text-right">{td('schedreports.history.colRecipients', 'Recipients')}</th>
+                    <th className="px-5 py-2.5 font-medium">{td('schedreports.history.colReason', 'Reason')}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {runs.map((r) => (
+                    <tr key={r.id} className="border-b border-[var(--border-bright)] last:border-0 hover:bg-[var(--surface-3)]/40">
+                      <td className="px-5 py-2.5 text-[var(--text-primary)] max-w-[16rem] truncate">
+                        {r.schedule_name || td('schedreports.history.unnamed', 'Unnamed schedule')}
+                      </td>
+                      <td className="px-5 py-2.5 text-[var(--text-secondary)] whitespace-nowrap">{formatRunStamp(r.sent_at) || 'N/A'}</td>
+                      <td className="px-5 py-2.5"><DeliveryStatusPill status={r.status} td={td} /></td>
+                      <td className="px-5 py-2.5 text-[var(--text-secondary)] text-right">{recipientCountOf(r)}</td>
+                      <td className="px-5 py-2.5 text-[var(--text-muted)] text-xs max-w-[20rem]">
+                        {r.status === 'sent'
+                          ? <span className="text-[var(--text-dim)]">N/A</span>
+                          : <span className="truncate block" title={r.error || undefined}>{shortReason(r.error) || td('schedreports.history.noReason', 'No reason recorded')}</span>}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ── Main Page ─────────────────────────────────────────────────────────────────
 
 export default function ScheduledReports() {
@@ -556,6 +731,13 @@ export default function ScheduledReports() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [toast, setToast] = useState(null)
+
+  // Delivery history (report_send_log) — read-only, reuses the aiOps job reader.
+  const [jobRuns, setJobRuns] = useState([])
+  const [jobSummary, setJobSummary] = useState(null)
+  const [jobsLoading, setJobsLoading] = useState(true)
+  const [jobsError, setJobsError] = useState(null)
+  const [historyOpen, setHistoryOpen] = useState(false)
 
   const [modalOpen, setModalOpen] = useState(false)
   const [editTarget, setEditTarget] = useState(null)
@@ -587,9 +769,34 @@ export default function ScheduledReports() {
     }
   }, [])
 
+  // Delivery history / last-status: one read of report_send_log via aiOps.
+  const fetchJobRuns = useCallback(async () => {
+    setJobsLoading(true)
+    setJobsError(null)
+    try {
+      const rows = await aiOps.listJobRuns({ days: 60, limit: 500 })
+      setJobRuns(rows)
+      setJobSummary(aiOps.summarizeJobs(rows))
+    } catch (e) {
+      setJobsError(toUserMessage(e))
+    } finally {
+      setJobsLoading(false)
+    }
+  }, [])
+
   useEffect(() => { fetchSchedules() }, [fetchSchedules])
+  useEffect(() => { fetchJobRuns() }, [fetchJobRuns])
   // Saved Report Builder layouts are schedulable like any built-in type.
   useEffect(() => { listSchedulableLayouts().then(setLayouts).catch(() => setLayouts([])) }, [])
+
+  // Match each schedule to its delivery health by schedule id.
+  const healthById = useMemo(() => {
+    const m = new Map()
+    for (const h of jobSummary?.bySchedule ?? []) {
+      if (h.schedule_id) m.set(h.schedule_id, h)
+    }
+    return m
+  }, [jobSummary])
   useEffect(() => { setWfLocked(false) }, [editTarget?.id])
 
   // Human label for any report type, including builder:<template-id> schedules.
@@ -801,6 +1008,7 @@ export default function ScheduledReports() {
       if (data?.error) throw new Error(data.error)
       const stamp = new Date().toISOString()
       setSchedules(prev => prev.map(x => (x.id === s.id ? { ...x, last_sent_at: stamp } : x)))
+      fetchJobRuns() // the edge fn logs this delivery to report_send_log
       setToast({
         type: 'ok',
         text: td('schedreports.toast.sentNow', 'Report emailed to {n} recipient(s)', { n: data?.recipients ?? (s.recipients ?? []).length }),
@@ -997,6 +1205,7 @@ export default function ScheduledReports() {
             <ScheduleCard
               key={s.id}
               schedule={s}
+              health={healthById.get(s.id)}
               onEdit={openEdit}
               onDelete={setDeleteTarget}
               onToggle={handleToggle}
@@ -1009,6 +1218,20 @@ export default function ScheduledReports() {
             />
           ))}
         </div>
+      )}
+
+      {/* Delivery history (report_send_log) */}
+      {!loading && (
+        <DeliveryHistory
+          runs={jobRuns}
+          summary={jobSummary}
+          loading={jobsLoading}
+          error={jobsError}
+          open={historyOpen}
+          onToggle={() => setHistoryOpen(o => !o)}
+          onRefresh={fetchJobRuns}
+          td={td}
+        />
       )}
 
       {/* Create / Edit Modal */}

@@ -281,6 +281,38 @@ function sanitizeOverrides(overrides) {
   return out
 }
 
+/**
+ * Pure per-capability resolver — mirrors AuthContext.resolvePermission's
+ * precedence for a SINGLE capability (view/create/edit/delete/export/approve).
+ *
+ * Precedence (highest first):
+ *   1. Admin role or Super Admin      -> always true
+ *   2. explicit 'revoke' override      -> false (beats roleAllows)
+ *   3. roleAllows === true             -> true
+ *   4. explicit 'grant' override       -> true (adds on top of the role)
+ *   5. otherwise                       -> false
+ *
+ * IMPORTANT: only the `view` capability is enforced by the server today (see
+ * CAPABILITIES[].enforced). For create/edit/delete/export/approve this resolver
+ * is a CLIENT-SIDE UI gate only; the authoritative boundary is the server
+ * (app_user_can / RLS). Do NOT treat a `true` here as a security guarantee for
+ * non-view capabilities.
+ *
+ * @param {object}  p
+ * @param {string}  p.role          the user's role
+ * @param {boolean} p.isSuperAdmin  profiles.is_super_admin === true
+ * @param {boolean} p.roleAllows    whether the existing role/DB logic grants it
+ * @param {('grant'|'revoke'|undefined)} p.override  per-user capability override
+ * @returns {boolean}
+ */
+export function resolveCapability({ role, isSuperAdmin, roleAllows, override }) {
+  if (role === 'Admin' || isSuperAdmin === true) return true
+  if (override === 'revoke') return false
+  if (roleAllows === true) return true
+  if (override === 'grant') return true
+  return false
+}
+
 // ── Resolution (the hook AuthContext can consume later) ──────────────────────
 
 /**

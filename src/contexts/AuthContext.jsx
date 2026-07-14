@@ -4,6 +4,7 @@ import { queryClient } from '../lib/queryClient'
 import { setMonitoringUser, clearMonitoringUser } from '../lib/monitoring'
 import { identifyUser, resetAnalyticsUser } from '../lib/analytics'
 import { audit } from '../lib/auditLogger'
+import { resolveCapability } from '../lib/permissionMatrix'
 
 // Exported so the isolated System Console can supply its own Provider value via
 // ConsoleAuthBridge, letting main-app admin pages render verbatim inside /console.
@@ -70,6 +71,11 @@ export function AuthProvider({ children }) {
   // Per-user access grants (Super Admin can give one user more/less than their
   // role). Shape: { module_key: 'grant' | 'revoke' }. Fail-closed to {}.
   const [grantOverrides, setGrantOverrides] = useState({})
+  // Per-user, per-capability overrides beyond module reach (create/edit/delete/
+  // export/approve). Shape: { module_key: { capability: 'grant' | 'revoke' } }.
+  // Fail-closed to {}. UI-gating only — the server (app_user_can / RLS) is the
+  // real boundary; only `view` is server-enforced today.
+  const [capabilities, setCapabilities] = useState({})
 
   // Idle timeout - sign out after 30 minutes of inactivity.
   // Uses an in-memory ref instead of localStorage so the timer cannot be
@@ -151,6 +157,7 @@ export function AuthProvider({ children }) {
       setProfile(null)
       setModulePerms(null)
       setGrantOverrides({})
+      setCapabilities({})
       unsubscribeFromProfile()
       setMfaEnabled(false)
       clearMonitoringUser()
@@ -186,13 +193,16 @@ export function AuthProvider({ children }) {
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   async function fetchProfile(userId) {
-    const [profileRes, permsRes, factorsRes, grantsRes] = await Promise.all([
+    const [profileRes, permsRes, factorsRes, grantsRes, capsRes] = await Promise.all([
       supabase.from('profiles').select('id,full_name,username,role,email,employee_id,site,country,approved,locked,is_super_admin,created_at').eq('id', userId).single(),
       supabase.rpc('get_user_module_permissions'),
       supabase.auth.mfa.listFactors(),
       // Per-user access grants. Fail-closed: on any error keep {} — never throw
       // and never block login on this optional overlay.
       supabase.rpc('get_my_access_grants').then(r => r, () => ({ data: null, error: true })),
+      // Per-user capability overrides. Same fail-closed contract: any error keeps
+      // {} and never blocks login. UI-gating only (server is the real boundary).
+      supabase.rpc('get_my_capabilities').then(r => r, () => ({ data: null, error: true })),
     ])
 
     const p = profileRes.data
@@ -205,6 +215,7 @@ export function AuthProvider({ children }) {
         setProfile(null)
         setModulePerms({})
         setGrantOverrides({})
+        setCapabilities({})
         setLoading(false)
         return
       }
@@ -215,6 +226,7 @@ export function AuthProvider({ children }) {
       setProfile(null)
       setModulePerms({})
       setGrantOverrides({})
+      setCapabilities({})
       setLoading(false)
       return
     }
@@ -234,6 +246,10 @@ export function AuthProvider({ children }) {
     // Any non-object (error, null) collapses to {} (fail-closed, no overrides).
     const g = grantsRes?.data
     setGrantOverrides(g && typeof g === 'object' && !Array.isArray(g) ? g : {})
+    // Per-capability overrides overlay — { module_key: { capability: 'grant'|'revoke' } }.
+    // Any non-object (error, null, array) collapses to {} (fail-closed).
+    const caps = capsRes?.data
+    setCapabilities(caps && typeof caps === 'object' && !Array.isArray(caps) ? caps : {})
     setMfaEnabled((factorsRes.data?.totp?.length ?? 0) > 0)
     setLoading(false)
   }
@@ -243,14 +259,19 @@ export function AuthProvider({ children }) {
   // SECURITY DEFINER and fail-safe, so a transient error never wipes access.
   const refreshAccess = useCallback(async () => {
     try {
-      const [permsRes, grantsRes] = await Promise.all([
+      const [permsRes, grantsRes, capsRes] = await Promise.all([
         supabase.rpc('get_user_module_permissions'),
         supabase.rpc('get_my_access_grants').then(r => r, () => ({ data: null, error: true })),
+        supabase.rpc('get_my_capabilities').then(r => r, () => ({ data: null, error: true })),
       ])
       if (!permsRes.error) setModulePerms(permsRes.data ?? {})
       if (!grantsRes?.error) {
         const g = grantsRes?.data
         setGrantOverrides(g && typeof g === 'object' && !Array.isArray(g) ? g : {})
+      }
+      if (!capsRes?.error) {
+        const caps = capsRes?.data
+        setCapabilities(caps && typeof caps === 'object' && !Array.isArray(caps) ? caps : {})
       }
     } catch { /* keep current access on a transient failure */ }
   }, [])
@@ -300,6 +321,29 @@ export function AuthProvider({ children }) {
       override: grantOverrides[moduleKey],
     })
   }, [profile, modulePerms, isSuperAdmin, grantOverrides])
+
+  // Per-capability UI gate. For `view` (or no cap given) this delegates to the
+  // server-enforced hasPermission (module reach). For create/edit/delete/export/
+  // approve it is a CLIENT-SIDE gate ONLY, used to disable/hide action buttons —
+  // the authoritative boundary is the server (app_user_can / RLS). There is no
+  // client role-default source for non-view capabilities today, so roleAllows is
+  // false: a non-view capability is allowed only when the module is reachable AND
+  // it is explicitly granted (override 'grant'), and is blocked on 'revoke'.
+  // Admin / Super Admin always pass. Callers must NOT treat a true result for a
+  // non-view capability as a security guarantee.
+  const hasCapability = useCallback((moduleKey, cap) => {
+    if (!profile) return false
+    if (!cap || cap === 'view') return hasPermission(moduleKey)
+    // A non-view action is meaningless if the module itself is not reachable.
+    if (!hasPermission(moduleKey)) return false
+    const override = capabilities?.[moduleKey]?.[cap]
+    return resolveCapability({
+      role: profile.role,
+      isSuperAdmin,
+      roleAllows: false,
+      override,
+    })
+  }, [profile, hasPermission, capabilities, isSuperAdmin])
 
   const signIn = useCallback(async (identifier, password) => {
     let email = identifier.trim()
@@ -373,8 +417,8 @@ export function AuthProvider({ children }) {
   }, [])
 
   const value = useMemo(
-    () => ({ user, profile, loading, modulePerms, hasPermission, signIn, signOut, mfaEnabled, setMfaEnabled, isSuperAdmin, grantOverrides, grantedModules, refreshAccess }),
-    [user, profile, loading, modulePerms, mfaEnabled, hasPermission, signIn, signOut, setMfaEnabled, isSuperAdmin, grantOverrides, grantedModules, refreshAccess],
+    () => ({ user, profile, loading, modulePerms, hasPermission, signIn, signOut, mfaEnabled, setMfaEnabled, isSuperAdmin, grantOverrides, grantedModules, refreshAccess, capabilities, hasCapability }),
+    [user, profile, loading, modulePerms, mfaEnabled, hasPermission, signIn, signOut, setMfaEnabled, isSuperAdmin, grantOverrides, grantedModules, refreshAccess, capabilities, hasCapability],
   )
 
   return (

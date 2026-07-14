@@ -134,6 +134,12 @@ const TYPE_LABEL: Record<string, string> = {
   vendor: 'Vendor / Procurement Report',
 }
 
+/** Friendly label for any report_type, incl. custom 'builder:<template-id>' layouts. */
+function typeLabel(reportType: string): string {
+  if ((reportType ?? '').startsWith('builder:')) return 'Custom Accident Report'
+  return TYPE_LABEL[reportType] ?? reportType
+}
+
 /* ── Formatting helpers ─────────────────────────────────────────────────────── */
 
 function num(n: number | null | undefined): string {
@@ -278,7 +284,7 @@ function renderHtml(s: Schedule, d: Digest, appUrl: string, currency: string): s
   return `
   <div style="font-family:Segoe UI,Arial,sans-serif;max-width:680px;margin:auto;color:#0f172a;background:#fff">
     <div style="background:#0f172a;border-radius:12px 12px 0 0;padding:22px 26px;color:#fff">
-      <div style="font-size:19px;font-weight:800">TyrePulse — ${TYPE_LABEL[s.report_type] ?? s.report_type}</div>
+      <div style="font-size:19px;font-weight:800">TyrePulse — ${typeLabel(s.report_type)}</div>
       <div style="font-size:12px;color:#94a3b8;margin-top:3px">
         Schedule “${s.name}” · generated ${genAt} UTC · data coverage ${coverage}
       </div>
@@ -690,9 +696,13 @@ serve(async (req) => {
       if (!recipients.length) throw new Error('No valid recipients on the schedule')
       if (!RESEND_API_KEY) throw new Error('RESEND_API_KEY not configured for edge functions')
 
-      // Insurance Claims Summary gets its own claims-desk digest; every other
-      // type uses the executive intelligence digest.
-      const html = s.report_type === 'claims'
+      // Insurance Claims Summary gets its own claims-desk digest; custom Report
+      // Builder layouts (report_type 'builder:<template-id>') are accident-domain
+      // reports, so they get the same claims-desk digest as their email summary —
+      // the pixel-faithful block PDF is generated on demand in the app. Every
+      // other type uses the executive intelligence digest.
+      const isBuilder = (s.report_type ?? '').startsWith('builder:')
+      const html = (s.report_type === 'claims' || isBuilder)
         ? renderClaimsHtml(s, await buildClaimsDigest(svc, s.org_id), APP_URL, currency)
         : renderHtml(s, await buildDigest(svc, s.org_id), APP_URL, currency)
       const res = await fetch('https://api.resend.com/emails', {
@@ -701,7 +711,7 @@ serve(async (req) => {
         body: JSON.stringify({
           from: FROM_EMAIL,
           to: recipients,
-          subject: `TyrePulse ${TYPE_LABEL[s.report_type] ?? 'Report'} — ${s.name}`,
+          subject: `TyrePulse ${typeLabel(s.report_type) || 'Report'} — ${s.name}`,
           html,
         }),
       })

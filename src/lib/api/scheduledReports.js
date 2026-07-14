@@ -16,6 +16,7 @@
  */
 import { supabase } from '../supabase'
 import { applyCountry } from '../countryFilter'
+import { listTemplates as listAccidentReportTemplates } from './accidentReportTemplates'
 
 // Select every column so the page keeps listing schedules even before V218 is
 // applied (the new fields simply read back undefined until the migration lands).
@@ -114,7 +115,60 @@ const DATASETS = {
   },
 }
 
+/* ── Custom report layouts (Accident Report Builder) ─────────────────────────
+ *
+ * Any layout saved in the Accident Report Builder (accident_report_templates,
+ * V221) is schedulable app-wide. Builder schedules are stored in the SAME
+ * report_schedules table with report_type = 'builder:<template-id>' — no schema
+ * change needed, and the edge-fn digest treats the prefix as the claims-desk
+ * accident digest. On-demand generation renders the template's exact block
+ * layout via src/lib/accidentReportPdf.js.
+ */
+export const BUILDER_TYPE_PREFIX = 'builder:'
+
+export const isBuilderType = (reportType) =>
+  typeof reportType === 'string' && reportType.startsWith(BUILDER_TYPE_PREFIX)
+
+export const builderReportType = (templateId) => `${BUILDER_TYPE_PREFIX}${templateId}`
+
+export const builderTemplateId = (reportType) =>
+  (isBuilderType(reportType) ? reportType.slice(BUILDER_TYPE_PREFIX.length) : null)
+
+/** Saved builder layouts, as schedulable report-type options. Missing table → []. */
+export async function listSchedulableLayouts() {
+  const rows = await listAccidentReportTemplates()
+  return rows.map((r) => ({
+    value: builderReportType(r.id),
+    label: r.name,
+    templateId: r.id,
+    config: r.config,
+    updated_at: r.updated_at,
+  }))
+}
+
+// Full accident projection a builder layout may reference (KPIs, charts and
+// every TABLE_COLS column). Used for the tabular fallback (Excel / digest) and
+// as the row source for the block-based PDF.
+const BUILDER_DATASET = {
+  table: 'accidents', dateCol: 'incident_date', title: 'Custom Accident Report',
+  cols: [
+    'id', 'incident_date', 'asset_no', 'site', 'driver_name', 'severity', 'status',
+    'accident_type', 'fault_status', 'gcc_liability_ratio', 'insurer', 'policy_no',
+    'claim_status', 'closure_status', 'claim_amount', 'claim_approved_amount',
+    'deductible', 'recovered_amount', 'repair_cost', 'parts_cost',
+    'expected_release_date', 'release_date',
+  ],
+  headers: [
+    'ID', 'Date', 'Asset', 'Site', 'Driver', 'Severity', 'Status',
+    'Type', 'Fault', 'GCC Liab %', 'Insurer', 'Policy/Claim No',
+    'Claim Status', 'Closure', 'Claim Amount', 'Approved',
+    'Deductible', 'Recovered', 'Repair Cost', 'Parts Cost',
+    'Expected Release', 'Release Date',
+  ],
+}
+
 export function datasetFor(reportType) {
+  if (isBuilderType(reportType)) return BUILDER_DATASET
   return DATASETS[reportType] || DATASETS.executive
 }
 

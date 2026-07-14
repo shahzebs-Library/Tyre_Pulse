@@ -72,17 +72,34 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
   re-hydrate every field. These feed the same claim data the dashboard/export/digest read.
 - **Report Builder tab** — see below.
 
-### Accident Report Builder (V221) — customizable, block-based
-- **`src/components/accidents/AccidentReportBuilder.jsx`** (lazy "Report Builder" tab inside Accidents).
-  Blocks: header/logo, KPI row (12 metrics), chart (12 accident/claims charts, reuses `analyzeClaims`
-  datasets), text, detail table (pick columns + row cap), page break. Add/reorder/duplicate/remove +
-  inline per-block config. Live WYSIWYG white-"paper" preview == the print.
-- **PDF export** via jspdf (lazy) — logo embedded, charts rasterised from the LIVE canvases
-  (`toBase64Image`), KPI cards, autoTable detail tables, page numbers, portrait/landscape.
+### Accident Report Builder (V221, deepened 2026-07-14) — customizable, block-based
+- **Catalog + renderer are SHARED LIBS (do NOT re-implement in components):**
+  **`src/lib/accidentReport.js`** = single source for CHARTS (12), KPIS (12), TABLE_COLS,
+  BLOCK_TYPES/BLOCK_DEFAULTS (8 block types: header, kpis, chart, insights [auto key-findings,
+  honest — [] when no data], text, table, divider, pagebreak), CHART_OPTS paper theme,
+  STARTER, REPORT_LIBRARY (6 pre-built packs: Executive / Claims Desk / Insurer Submission /
+  Safety Review / Monthly Board / Full Register), buildInsights, normalizeConfig.
+  **`src/lib/accidentReportPdf.js`** = the ONE PDF renderer (`renderAccidentReportPdf`): builder
+  passes `chartImageFor` (live canvases); headless callers (Scheduled Reports) get offscreen
+  chart.js rendering with the same data+options. Extend these maps for new block/chart types.
+- **`src/components/accidents/AccidentReportBuilder.jsx`** (lazy "Report Builder" tab inside
+  Accidents) is UI only: WYSIWYG paper preview, block hover toolbar, localStorage draft.
+  LESSON: the global `.card` style has `overflow:hidden` — NEVER render dropdown menus inside a
+  card (they get clipped/invisible). All pickers are fixed-overlay MODALS: rich "Add block"
+  grid (icon+description per block) and a "Library" modal (pre-built packs tab + searchable
+  saved-layouts tab with load/delete).
 - **Saved layouts** persisted to `accident_report_templates` (V221, org-isolated RESTRICTIVE RLS +
-  per-user ownership: members manage own, Admin/Manager/Director manage any) via
-  **`src/lib/api/accidentReportTemplates.js`** (+ barrel), with a localStorage draft fallback.
-  Do NOT duplicate — extend the `CHARTS` / `BLOCK_DEFAULTS` maps for new block/chart types.
+  per-user ownership) via **`src/lib/api/accidentReportTemplates.js`** (list/get/create/update/delete,
+  + barrel), with a localStorage draft fallback.
+- **Saved layouts are schedulable app-wide**: `report_schedules.report_type = 'builder:<template-id>'`
+  (NO schema change). `src/lib/api/scheduledReports.js` exports BUILDER_TYPE_PREFIX,
+  isBuilderType/builderReportType/builderTemplateId, `listSchedulableLayouts()`, and
+  `datasetFor('builder:*')` → full accidents projection. ScheduledReports.jsx shows custom layouts
+  in an optgroup; "Generate now" on a builder schedule renders the template's EXACT block PDF via
+  the shared headless renderer (Excel = tabular accidents projection). Edge fn
+  `send-scheduled-reports` source updated (builder:* → claims-desk digest + "Custom Accident
+  Report" subject) — **needs redeploy to v11** (Supabase MCP was unauthenticated this session).
+  Tests: `accidentReport.test.js` (13), `scheduledReportsBuilder.test.js` (4).
 
 ### V220 — accident-delete FK fix (applied)
 - Deleting an accident cascade-deletes `accident_parts`; the AFTER DELETE audit trigger

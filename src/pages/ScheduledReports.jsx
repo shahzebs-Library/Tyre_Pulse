@@ -4,6 +4,7 @@ import {
   FileText, BarChart2, Truck, ClipboardList, DollarSign,
   CheckCircle, XCircle, AlertCircle, AlertTriangle, ChevronDown, X, Save, Lock,
   Package, Building2, Download, Loader2, FileSpreadsheet, CalendarClock, ShieldCheck,
+  LayoutTemplate,
 } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { useLanguage } from '../contexts/LanguageContext'
@@ -16,7 +17,9 @@ import {
   REPORT_TYPES, FREQUENCIES, PERIODS, OUTPUT_FORMATS,
   listSchedules, createSchedule, updateSchedule, deleteSchedule,
   computeNextRun, resolvePeriod, fetchReportRows,
+  listSchedulableLayouts, isBuilderType, builderTemplateId,
 } from '../lib/api/scheduledReports'
+import { getTemplate } from '../lib/api/accidentReportTemplates'
 
 // ── Registry-derived lookups (labels come from the service; icons/colours here) ─
 
@@ -34,7 +37,10 @@ const ICON_CFG = {
   claims:     { Icon: ShieldCheck,   color: 'text-indigo-400',  bg: 'bg-indigo-400/10' },
   stock:      { Icon: Package,       color: 'text-emerald-400', bg: 'bg-emerald-400/10' },
   vendor:     { Icon: Building2,     color: 'text-cyan-400',    bg: 'bg-cyan-400/10'   },
+  builder:    { Icon: LayoutTemplate, color: 'text-pink-400',   bg: 'bg-pink-400/10'   },
 }
+
+const iconCfgFor = (type) => (isBuilderType(type) ? ICON_CFG.builder : (ICON_CFG[type] || ICON_CFG.executive))
 
 const FREQ_DOT = { once: 'bg-orange-400', daily: 'bg-green-400', weekly: 'bg-blue-400', monthly: 'bg-purple-400' }
 
@@ -118,7 +124,7 @@ function FrequencyBadge({ frequency, td }) {
 }
 
 function ReportTypeIcon({ type, size = 'md' }) {
-  const { Icon, color, bg } = ICON_CFG[type] || ICON_CFG.executive
+  const { Icon, color, bg } = iconCfgFor(type)
   const sz = size === 'sm' ? 'w-8 h-8' : 'w-10 h-10'
   const ic = size === 'sm' ? 'w-4 h-4' : 'w-5 h-5'
   return (
@@ -137,9 +143,9 @@ function FormatBadge({ fmt }) {
   )
 }
 
-function ScheduleCard({ schedule, onEdit, onDelete, onToggle, onGenerate, generating, td }) {
-  const typeLabel = td(`schedreports.reportTypes.${schedule.report_type}`, REPORT_LABEL[schedule.report_type] || schedule.report_type)
-  const cfg = ICON_CFG[schedule.report_type] || ICON_CFG.executive
+function ScheduleCard({ schedule, onEdit, onDelete, onToggle, onGenerate, generating, td, typeLabelFor }) {
+  const typeLabel = typeLabelFor(schedule.report_type)
+  const cfg = iconCfgFor(schedule.report_type)
   const recipientCount = (schedule.recipients ?? []).length
   const formats = schedule.output_formats?.length ? schedule.output_formats : ['pdf']
   const busy = generating === schedule.id
@@ -235,7 +241,7 @@ function SelectField({ value, onChange, children }) {
   )
 }
 
-function Modal({ title, onClose, onSave, saving, form, setForm, formError, setFormError, onGenerate, generating, record, wfLocked, onWfStateChange, td }) {
+function Modal({ title, onClose, onSave, saving, form, setForm, formError, setFormError, onGenerate, generating, record, wfLocked, onWfStateChange, td, layouts = [] }) {
   const toggleFormat = (fmt) => setForm(f => {
     const has = f.output_formats.includes(fmt)
     const next = has ? f.output_formats.filter(x => x !== fmt) : [...f.output_formats, fmt]
@@ -272,10 +278,25 @@ function Modal({ title, onClose, onSave, saving, form, setForm, formError, setFo
           <div>
             <FieldLabel required>{td('schedreports.modal.reportType', 'Report Type')}</FieldLabel>
             <SelectField value={form.report_type} onChange={v => setForm(f => ({ ...f, report_type: v }))}>
-              {REPORT_TYPES.map(r => (
-                <option key={r.value} value={r.value}>{td(`schedreports.reportTypes.${r.value}`, r.label)}</option>
-              ))}
+              <optgroup label={td('schedreports.modal.standardReports', 'Standard reports')}>
+                {REPORT_TYPES.map(r => (
+                  <option key={r.value} value={r.value}>{td(`schedreports.reportTypes.${r.value}`, r.label)}</option>
+                ))}
+              </optgroup>
+              {layouts.length > 0 && (
+                <optgroup label={td('schedreports.modal.customLayouts', 'Custom layouts (Report Builder)')}>
+                  {layouts.map(l => (
+                    <option key={l.value} value={l.value}>{l.label}</option>
+                  ))}
+                </optgroup>
+              )}
             </SelectField>
+            {isBuilderType(form.report_type) && (
+              <p className="text-xs text-[var(--text-muted)] mt-1.5 flex items-start gap-1.5">
+                <LayoutTemplate className="w-3.5 h-3.5 mt-0.5 flex-shrink-0 text-pink-400" />
+                {td('schedreports.modal.builderHint', 'A saved Accident Report Builder layout — “Generate now” renders its exact block design over the covered period. Manage layouts in Accidents → Report Builder.')}
+              </p>
+            )}
           </div>
 
           {/* Frequency */}
@@ -521,6 +542,7 @@ export default function ScheduledReports() {
   const reportCompany = branding?.legal_name || branding?.display_name || appSettings?.company_name || orgName || 'TyrePulse'
 
   const [schedules, setSchedules] = useState([])
+  const [layouts, setLayouts] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [toast, setToast] = useState(null)
@@ -555,7 +577,18 @@ export default function ScheduledReports() {
   }, [])
 
   useEffect(() => { fetchSchedules() }, [fetchSchedules])
+  // Saved Report Builder layouts are schedulable like any built-in type.
+  useEffect(() => { listSchedulableLayouts().then(setLayouts).catch(() => setLayouts([])) }, [])
   useEffect(() => { setWfLocked(false) }, [editTarget?.id])
+
+  // Human label for any report type, including builder:<template-id> schedules.
+  const typeLabelFor = useCallback((type) => {
+    if (isBuilderType(type)) {
+      const l = layouts.find(x => x.value === type)
+      return l ? l.label : td('schedreports.reportTypes.builder', 'Custom layout')
+    }
+    return td(`schedreports.reportTypes.${type}`, REPORT_LABEL[type] || type)
+  }, [layouts, td])
   useEffect(() => { if (!toast) return undefined; const id = setTimeout(() => setToast(null), 4500); return () => clearTimeout(id) }, [toast])
 
   // ── Modal helpers ───────────────────────────────────────────────────────────
@@ -682,12 +715,25 @@ export default function ScheduledReports() {
     try {
       const { from, to, label } = resolvePeriod(cfg.period, cfg.period_from, cfg.period_to)
       const { rows, dataset } = await fetchReportRows(cfg.report_type, { from, to, country: activeCountry })
-      const typeLabel = td(`schedreports.reportTypes.${cfg.report_type}`, REPORT_LABEL[cfg.report_type] || cfg.report_type)
+      const typeLabel = typeLabelFor(cfg.report_type)
       const stamp = new Date().toISOString().slice(0, 10)
       const base = `${reportCompany.replace(/[^\w]+/g, '_')}_${dataset.title.replace(/[^\w]+/g, '_')}_${stamp}`
       const formats = cfg.output_formats?.length ? cfg.output_formats : ['pdf']
 
-      if (formats.includes('pdf')) {
+      if (formats.includes('pdf') && isBuilderType(cfg.report_type)) {
+        // Saved Report Builder layout: render the template's exact block design
+        // (header/KPIs/charts/insights/tables) over the covered accident rows.
+        const template = await getTemplate(builderTemplateId(cfg.report_type))
+        const { renderAccidentReportPdf } = await import('../lib/accidentReportPdf')
+        await renderAccidentReportPdf({
+          config: template.config,
+          records: rows,
+          company: reportCompany,
+          currency: activeCurrency,
+          subtitle: label,
+          filename: `${reportCompany.replace(/[^\w]+/g, '_')}_${(template.name || 'Custom_Report').replace(/[^\w]+/g, '_')}_${stamp}`,
+        })
+      } else if (formats.includes('pdf')) {
         await exportToPdf(
           rows,
           dataset.cols.map((k, i) => ({ key: k, header: dataset.headers[i] })),
@@ -835,6 +881,15 @@ export default function ScheduledReports() {
               </div>
             )
           })}
+          {schedules.some(s => isBuilderType(s.report_type)) && (
+            <div className="bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-xl px-4 py-3 flex items-center gap-3">
+              <ReportTypeIcon type="builder:stat" size="sm" />
+              <div className="min-w-0">
+                <p className="text-[var(--text-primary)] font-bold text-lg leading-none">{schedules.filter(s => isBuilderType(s.report_type)).length}</p>
+                <p className="text-[var(--text-secondary)] text-xs mt-0.5 truncate">{td('schedreports.reportTypes.builderGroup', 'Custom layouts')}</p>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -910,6 +965,7 @@ export default function ScheduledReports() {
               onGenerate={handleGenerate}
               generating={generating}
               td={td}
+              typeLabelFor={typeLabelFor}
             />
           ))}
         </div>
@@ -932,6 +988,7 @@ export default function ScheduledReports() {
           wfLocked={wfLocked}
           onWfStateChange={({ isActive, isLocked }) => setWfLocked(!!(isActive || isLocked))}
           td={td}
+          layouts={layouts}
         />
       )}
 

@@ -13,19 +13,22 @@
  * backward compatibility but is no longer used by the Accidents page.
  */
 
-import { useState, useEffect, useCallback, useMemo, useId } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import {
-  X, Save, Plus, Trash2, Send, Lock, CheckCircle2, XCircle,
+  X, Plus, Trash2, Send, Lock, CheckCircle2, XCircle,
   ShieldCheck, Hourglass, FileText, Wrench, MessageSquare, Briefcase, History, User, ClipboardList,
-  ArrowLeft, AlertOctagon, ChevronRight, Download, Loader2, ShieldAlert, Clock,
+  ArrowLeft, AlertOctagon, ChevronRight, Download, Loader2, ShieldAlert, Clock, Pencil,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { useSettings } from '../contexts/SettingsContext'
 import { useTenant } from '../contexts/TenantContext'
-import { useSites } from '../hooks/useSites'
 import { formatCurrency as _fmtCurrencyBase } from '../lib/formatters'
+import {
+  canonSeverity, canonStatus, TERMINAL_STAGES,
+  CLAIM_STATUS_LABELS, RECOVERY_SOURCE_LABELS, RECOVERY_STATUS_LABELS,
+} from '../lib/accidentVocab'
 import { exportAccidentCasePdf } from '../lib/exportUtils'
 import { describeAuditRow } from '../lib/auditDiff'
 import { buildCaseTimeline } from '../lib/accidentTimeline'
@@ -35,16 +38,8 @@ import CustomFieldsPanel from './CustomFieldsPanel'
 import CopilotCard from './ai/CopilotCard'
 import EntityApprovalPanel from './workflow/EntityApprovalPanel'
 
-// Display canonicalisation — mirrors Accidents.jsx so the DB's lowercase
-// severity/status render as human labels in the detail view too.
-const SEVERITY_ALIAS = { minor: 'Minor', moderate: 'Major', major: 'Major', severe: 'Total Loss', fatal: 'Total Loss', 'total loss': 'Total Loss' }
-const STATUS_ALIAS = {
-  reported: 'Reported', under_review: 'Under Investigation', under_investigation: 'Under Investigation',
-  repair_in_progress: 'Repair In Progress', awaiting_parts: 'Awaiting Parts',
-  awaiting_approval: 'Awaiting Approval', insurance_claim: 'Insurance Claim', closed: 'Closed',
-}
-const canonSeverity = (s) => SEVERITY_ALIAS[String(s || '').toLowerCase()] || s || ''
-const canonStatus = (s) => STATUS_ALIAS[String(s || '').toLowerCase().replace(/\s+/g, '_')] || s || ''
+// Vocabularies + canonicalisation come from the single shared source
+// `src/lib/accidentVocab.js` (imported above) — do NOT re-declare them here.
 
 const SEVERITY_BADGE = {
   Minor:        'bg-[var(--input-bg)] text-[var(--text-dim)] border border-[var(--input-border)]',
@@ -52,10 +47,6 @@ const SEVERITY_BADGE = {
   'Total Loss': 'bg-red-900/50 text-red-300 border border-red-700/50',
 }
 
-const RECOVERY_SOURCES = ['none', 'insurer', 'third_party', 'driver', 'warranty']
-const RECOVERY_SOURCE_LABELS = { none: 'None', insurer: 'Insurer', third_party: 'Third Party', driver: 'Driver', warranty: 'Warranty' }
-const RECOVERY_STATUSES = ['pending', 'partial', 'recovered', 'written_off']
-const RECOVERY_STATUS_LABELS = { pending: 'Pending', partial: 'Partial', recovered: 'Recovered', written_off: 'Written Off' }
 const RECOVERY_BADGE = {
   pending:     'bg-yellow-900/50 text-yellow-300 border border-yellow-700/50',
   partial:     'bg-blue-900/50 text-blue-300 border border-blue-700/50',
@@ -63,8 +54,6 @@ const RECOVERY_BADGE = {
   written_off: 'bg-red-900/50 text-red-300 border border-red-700/50',
 }
 
-const CLAIM_STATUSES = ['none', 'filed', 'approved', 'rejected', 'settled']
-const CLAIM_LABELS = { none: 'No Claim', filed: 'Filed', approved: 'Approved', rejected: 'Rejected', settled: 'Settled' }
 const CLAIM_BADGE = {
   none:     'bg-gray-800 text-gray-300 border border-gray-600',
   filed:    'bg-blue-900/50 text-blue-300 border border-blue-700/50',
@@ -91,41 +80,6 @@ const REMARK_DOT = {
 function isElevated(role) {
   return ['admin', 'manager', 'director'].includes(String(role || '').toLowerCase().replace(/\s+/g, '_'))
 }
-
-// Suggested vocabularies for the case tracker. Rendered as datalist dropdowns —
-// operators pick a common value fast but can still type a bespoke one.
-const CASE_STAGE_OPTIONS = [
-  'Reported', 'Internal Report Preparation', 'Under Investigation', 'Insurance Filed',
-  'Awaiting Assessment', 'Under Repair', 'Awaiting Parts', 'Repair Completed',
-  'Claim Settlement', 'Closed',
-]
-const DAMAGE_CONDITION_OPTIONS = ['Minor', 'Moderate', 'Major Repair', 'Total Loss', 'Cosmetic', 'Structural']
-const CURRENT_STATUS_OPTIONS = [
-  'Reported', 'Under Investigation', 'Under Repair', 'Awaiting Parts',
-  'Awaiting Approval', 'Insurance Claim', 'Repair Completed', 'Closed',
-]
-
-// ── GCC accident case-management vocabularies (V219) ──────────────────────────
-// Ordered case lifecycle used by the Repair & Insurance workflow selectors.
-const WORKFLOW_STAGES = [
-  'Reported', 'Under assessment', 'Waiting insurance approval', 'Insurance approved',
-  'In repair', 'Waiting release', 'Released', 'Closed',
-]
-// Terminal stages — a case at/after these is NOT delayed and needs no next step.
-const TERMINAL_STAGES = ['released', 'closed']
-// A workflow stage that implies a claim_status so the two stay in lockstep on save.
-const STAGE_TO_CLAIM_STATUS = {
-  'waiting insurance approval': 'filed',
-  'insurance approved': 'approved',
-  'closed': 'settled',
-}
-const DAMAGE_CLASS_OPTIONS = ['Major', 'Minor']
-const FAULT_STATUS_OPTIONS = ['Faulty', 'Non-faulty', 'Under review']
-const NAJM_STATUS_OPTIONS = ['Najm report', 'No Najm']
-const NAJM_FAULT_OPTIONS = ['Faulty', 'Non-faulty', 'N/A']
-const TAQDEER_STATUS_OPTIONS = ['Taqdeer report', 'No Taqdeer']
-const LIABILITY_RATIO_OPTIONS = [0, 50, 100]
-const REPAIR_TYPE_OPTIONS = ['Internal', 'External']
 
 // Days a still-open case may sit without a status update before it is "Delayed".
 const DELAY_THRESHOLD_DAYS = 5
@@ -183,6 +137,7 @@ function AccidentDetail({ accidentId, onBack, onClose, onChanged, variant = 'pag
   const { profile } = useAuth()
   const { activeCurrency } = useSettings()
   const { branding } = useTenant()
+  const navigate = useNavigate()
   const company = branding?.legal_name || branding?.display_name || 'TyrePulse'
   const elevated = isElevated(profile?.role)
   const fmtCurrency = (v) => _fmtCurrencyBase(v, activeCurrency, 0)
@@ -219,7 +174,15 @@ function AccidentDetail({ accidentId, onBack, onClose, onChanged, variant = 'pag
 
   useEffect(() => { setLoading(true); setErr(''); load() }, [load])
 
-  const { options: siteOptions } = useSites(acc?.country)
+  // "Edit Incident" routes to THE one unified create/edit form on the Accidents
+  // page (openEdit via router state) — the detail view stays read-only for the
+  // record's own columns; there is no second update form here any more.
+  const editLocked = wf.isActive || wf.isLocked
+  const editIncident = useCallback(() => {
+    onClose?.()
+    navigate('/accidents', { state: { editId: accidentId } })
+  }, [navigate, onClose, accidentId])
+
   const closure = acc?.closure_status ?? 'open'
   const partsTotal = parts.reduce((s, p) => s + (Number(p.total_cost) || 0), 0)
   const delay = useMemo(() => computeDelay(acc, closure), [acc, closure])
@@ -337,9 +300,9 @@ function AccidentDetail({ accidentId, onBack, onClose, onChanged, variant = 'pag
             <CaseTimelineSection acc={acc} />
           </div>
         )}
-        {tab === 'tracker'   && <TrackerTab acc={acc} elevated={elevated} siteOptions={siteOptions} onSaved={() => { load(); onChanged?.() }} setErr={setErr} />}
-        {tab === 'repair'    && <RepairInsuranceTab acc={acc} elevated={elevated} onSaved={() => { load(); onChanged?.() }} setErr={setErr} fmtCurrency={fmtCurrency} />}
-        {tab === 'claim'     && <ClaimTab acc={acc} elevated={elevated} onSaved={() => { load(); onChanged?.() }} setErr={setErr} fmtCurrency={fmtCurrency} />}
+        {tab === 'tracker'   && <TrackerTab acc={acc} elevated={elevated} onEditIncident={editIncident} editLocked={editLocked} />}
+        {tab === 'repair'    && <RepairInsuranceTab acc={acc} elevated={elevated} fmtCurrency={fmtCurrency} onEditIncident={editIncident} editLocked={editLocked} />}
+        {tab === 'claim'     && <ClaimTab acc={acc} elevated={elevated} fmtCurrency={fmtCurrency} onEditIncident={editIncident} editLocked={editLocked} />}
         {tab === 'parts'     && <PartsTab acc={acc} parts={parts} partsTotal={partsTotal} elevated={elevated} profile={profile} reload={() => { load(); onChanged?.() }} setErr={setErr} fmtCurrency={fmtCurrency} />}
         {tab === 'log'       && <LogTab acc={acc} remarks={remarks} profile={profile} reload={load} setErr={setErr} />}
         {tab === 'activity'  && <ActivityTab accidentId={acc.id} />}
@@ -396,15 +359,27 @@ function AccidentDetail({ accidentId, onBack, onClose, onChanged, variant = 'pag
           <ChevronRight size={12} />
           <span className="text-[var(--text-dim)]">{acc.asset_no || 'Incident'} · #{String(acc.id).slice(0, 8).toUpperCase()}</span>
         </div>
-        <button
-          onClick={downloadCase}
-          disabled={downloading}
-          className="btn-secondary text-xs inline-flex items-center gap-1.5 disabled:opacity-60"
-          title="Download the full case as a branded PDF"
-        >
-          {downloading ? <Loader2 size={13} className="animate-spin" /> : <Download size={13} />}
-          {downloading ? 'Preparing…' : 'Download Case'}
-        </button>
+        <div className="flex items-center gap-2">
+          {elevated && (
+            <button
+              onClick={editIncident}
+              disabled={editLocked}
+              className="btn-secondary text-xs inline-flex items-center gap-1.5 disabled:opacity-60"
+              title={editLocked ? 'Locked while an approval workflow is active' : 'Update every incident, claim and case field in the unified incident form'}
+            >
+              <Pencil size={13} /> Edit Incident
+            </button>
+          )}
+          <button
+            onClick={downloadCase}
+            disabled={downloading}
+            className="btn-secondary text-xs inline-flex items-center gap-1.5 disabled:opacity-60"
+            title="Download the full case as a branded PDF"
+          >
+            {downloading ? <Loader2 size={13} className="animate-spin" /> : <Download size={13} />}
+            {downloading ? 'Preparing…' : 'Download Case'}
+          </button>
+        </div>
       </div>
 
       {/* Header card + financial rail */}
@@ -618,438 +593,122 @@ function CaseTimelineSection({ acc }) {
   )
 }
 
-function TrackerTab({ acc, elevated, siteOptions = [], onSaved, setErr }) {
-  const [f, setF] = useState({
-    site: acc.site ?? '',
-    location: acc.location ?? '',
-    incident_date: acc.incident_date ? String(acc.incident_date).slice(0, 10) : '',
-    liable_party: acc.liable_party ?? '',
-    case_stage: acc.case_stage ?? '',
-    damage_condition: acc.damage_condition ?? '',
-    current_status: acc.current_status ?? '',
-    action_to_be_taken: acc.action_to_be_taken ?? '',
-    responsible_owner: acc.responsible_owner ?? '',
-    required_action: acc.required_action ?? '',
-    status_update_date: acc.status_update_date ?? '',
-    status_update_note: acc.status_update_note ?? '',
-    expected_release_date: acc.expected_release_date ?? '',
-  })
-  const [saving, setSaving] = useState(false)
-  const set = (k, v) => setF(p => ({ ...p, [k]: v }))
-
-  async function save() {
-    setSaving(true); setErr('')
-    const { error } = await supabase.from('accidents').update({
-      site: f.site || null,
-      location: f.location || null,
-      incident_date: f.incident_date || null,
-      liable_party: f.liable_party || null,
-      case_stage: f.case_stage || null,
-      damage_condition: f.damage_condition || null,
-      current_status: f.current_status || null,
-      action_to_be_taken: f.action_to_be_taken || null,
-      responsible_owner: f.responsible_owner || null,
-      required_action: f.required_action || null,
-      status_update_date: f.status_update_date || null,
-      status_update_note: f.status_update_note || null,
-      expected_release_date: f.expected_release_date || null,
-    }).eq('id', acc.id)
-    setSaving(false)
-    if (error) { setErr(error.message); return }
-    onSaved()
-  }
-
-  if (!elevated) {
-    return (
-      <div className="space-y-3">
-        <div className="grid grid-cols-2 gap-3">
-          <KV label="Site" value={acc.site} />
-          <KV label="Location" value={acc.location} />
-          <KV label="Liability" value={acc.liable_party} highlight />
-          <KV label="Case stage" value={acc.case_stage} />
-          <KV label="Damage condition" value={acc.damage_condition} />
-          <KV label="Current status" value={acc.current_status} highlight />
-          <KV label="Action to be taken" value={acc.action_to_be_taken} />
-          <KV label="Responsible owner" value={acc.responsible_owner} />
-          <KV label="Required action" value={acc.required_action} />
-          <KV label="Expected release" value={acc.expected_release_date} />
-        </div>
-        {acc.status_update_note && <KV label="Status update note" value={acc.status_update_note} />}
-        <p className="text-xs text-gray-600">Only Admin / Manager / Director can edit tracker details.</p>
-      </div>
-    )
-  }
-
+// Read-only case tracker view. Updates happen exclusively through the ONE
+// unified incident form on the Accidents page (Edit Incident action) — this
+// tab's former inline edit form was removed to eliminate the duplicate
+// update path.
+function TrackerTab({ acc, elevated, onEditIncident, editLocked }) {
   return (
     <div className="space-y-3">
       <div className="grid grid-cols-2 gap-3">
-        <Picker label="Site" value={f.site} onChange={v => set('site', v)} options={siteOptions} placeholder="Select or type a site" />
-        <Inp label="Incident date" type="date" value={f.incident_date} onChange={v => set('incident_date', v)} />
-        <Picker label="Location" value={f.location} onChange={v => set('location', v)} options={siteOptions} placeholder="e.g. GCC Plant" />
-        <Inp label="Liability" value={f.liable_party} onChange={v => set('liable_party', v)} placeholder="e.g. 100% Third Party Liability" />
-        <Picker label="Case stage" value={f.case_stage} onChange={v => set('case_stage', v)} options={CASE_STAGE_OPTIONS} placeholder="e.g. Under Investigation" />
-        <Picker label="Damage condition" value={f.damage_condition} onChange={v => set('damage_condition', v)} options={DAMAGE_CONDITION_OPTIONS} placeholder="Minor / Major Repair" />
-        <Picker label="Current status" value={f.current_status} onChange={v => set('current_status', v)} options={CURRENT_STATUS_OPTIONS} placeholder="e.g. Under Repair" />
-        <Inp label="Responsible owner" value={f.responsible_owner} onChange={v => set('responsible_owner', v)} placeholder="Accountable person" />
+        <KV label="Site" value={acc.site} />
+        <KV label="Location" value={acc.location} />
+        <KV label="Liability" value={acc.liable_party} highlight />
+        <KV label="Case stage" value={acc.case_stage} />
+        <KV label="Damage condition" value={acc.damage_condition} />
+        <KV label="Current status" value={acc.current_status} highlight />
+        <KV label="Action to be taken" value={acc.action_to_be_taken} />
+        <KV label="Responsible owner" value={acc.responsible_owner} />
+        <KV label="Required action" value={acc.required_action} />
+        <KV label="Status update date" value={acc.status_update_date} />
+        <KV label="Expected release" value={acc.expected_release_date} />
       </div>
-      <Inp label="Action to be taken" value={f.action_to_be_taken} onChange={v => set('action_to_be_taken', v)} placeholder="Next step" />
-      <Inp label="Required action / progress" value={f.required_action} onChange={v => set('required_action', v)} placeholder="Latest progress note" />
-      <div className="grid grid-cols-2 gap-3">
-        <Inp label="Status update date" type="date" value={f.status_update_date} onChange={v => set('status_update_date', v)} />
-        <Inp label="Expected release date" type="date" value={f.expected_release_date} onChange={v => set('expected_release_date', v)} />
-      </div>
-      <Inp label="Status update note" value={f.status_update_note} onChange={v => set('status_update_note', v)} placeholder="Optional note for this update" />
-      <button onClick={save} disabled={saving} className="btn-primary flex items-center gap-2 disabled:opacity-50">
-        <Save size={16} /> {saving ? 'Saving...' : 'Save Tracker'}
-      </button>
+      {acc.status_update_note && <KV label="Status update note" value={acc.status_update_note} />}
+      <EditIncidentHint elevated={elevated} onEdit={onEditIncident} locked={editLocked} />
     </div>
   )
 }
 
 // ── Repair & Insurance — Case Management (V219 GCC fields) ─────────────────────
-// Damage/fault classification, Najm + Taqdeer report state, GCC liability ratio,
-// repair route, the case workflow (current stage → next step, kept in lockstep
-// with claim_status), and workshop financials with an auto-suggested final
-// amount. Persists via a single accidents UPDATE; honest read-only view for
-// non-elevated roles.
-function RepairInsuranceTab({ acc, elevated, onSaved, setErr, fmtCurrency }) {
-  const [f, setF] = useState({
-    damage_class: acc.damage_class ?? '',
-    fault_status: acc.fault_status ?? '',
-    najm_status: acc.najm_status ?? '',
-    najm_fault: acc.najm_fault ?? '',
-    taqdeer_status: acc.taqdeer_status ?? '',
-    gcc_liability_ratio: acc.gcc_liability_ratio ?? '',
-    repair_type: acc.repair_type ?? '',
-    current_status: acc.current_status ?? '',
-    next_step: acc.next_step ?? '',
-    workshop_name: acc.workshop_name ?? '',
-    workshop_quotation: acc.workshop_quotation ?? '',
-    discount_pct: acc.discount_pct ?? '',
-    final_amount: acc.final_amount ?? '',
-    estimated_damage_cost: acc.estimated_damage_cost ?? '',
-    repair_cost: acc.repair_cost ?? '',
-    expected_release_date: acc.expected_release_date ? String(acc.expected_release_date).slice(0, 10) : '',
-    release_date: acc.release_date ? String(acc.release_date).slice(0, 10) : '',
-  })
-  // Once the user hand-edits Final amount, stop auto-deriving it from qt/discount.
-  const [finalTouched, setFinalTouched] = useState(acc.final_amount != null && acc.final_amount !== '')
-  const [saving, setSaving] = useState(false)
-  const set = (k, v) => setF(p => ({ ...p, [k]: v }))
-
-  // Suggested final = quotation − discount%. Null when there is no quotation.
-  const suggestedFinal = useMemo(() => {
-    const q = Number(f.workshop_quotation)
-    if (!f.workshop_quotation || Number.isNaN(q)) return null
-    const d = Number(f.discount_pct) || 0
-    return Math.max(0, Math.round((q * (1 - d / 100)) * 100) / 100)
-  }, [f.workshop_quotation, f.discount_pct])
-
-  // Auto-fill Final amount from the suggestion until the user overrides it.
-  useEffect(() => {
-    if (!finalTouched && suggestedFinal != null) {
-      setF(p => (String(p.final_amount) === String(suggestedFinal) ? p : { ...p, final_amount: suggestedFinal }))
-    }
-  }, [suggestedFinal, finalTouched])
-
-  const numOrNull = (v) => (v === '' || v == null ? null : Number(v))
-  const strOrNull = (v) => (v && String(v).trim() ? v : null)
-
-  async function save() {
-    setSaving(true); setErr('')
-    const patch = {
-      damage_class: strOrNull(f.damage_class),
-      fault_status: strOrNull(f.fault_status),
-      najm_status: strOrNull(f.najm_status),
-      najm_fault: strOrNull(f.najm_fault),
-      taqdeer_status: strOrNull(f.taqdeer_status),
-      gcc_liability_ratio: f.gcc_liability_ratio === '' ? null : Number(f.gcc_liability_ratio),
-      repair_type: strOrNull(f.repair_type),
-      current_status: strOrNull(f.current_status),
-      next_step: strOrNull(f.next_step),
-      workshop_name: strOrNull(f.workshop_name),
-      workshop_quotation: numOrNull(f.workshop_quotation),
-      discount_pct: numOrNull(f.discount_pct),
-      final_amount: numOrNull(f.final_amount),
-      estimated_damage_cost: numOrNull(f.estimated_damage_cost),
-      repair_cost: numOrNull(f.repair_cost),
-      expected_release_date: f.expected_release_date || null,
-      release_date: f.release_date || null,
-    }
-    // Keep the insurance claim lifecycle in lockstep with the workflow stage.
-    const mapped = STAGE_TO_CLAIM_STATUS[String(f.current_status || '').toLowerCase()]
-    if (mapped) patch.claim_status = mapped
-    const { error } = await supabase.from('accidents').update(patch).eq('id', acc.id)
-    setSaving(false)
-    if (error) { setErr(error.message); return }
-    onSaved()
-  }
-
-  if (!elevated) {
-    return (
-      <div className="space-y-4">
-        <div>
-          <p className="text-xs font-semibold text-gray-400 mb-2">Classification & Reports</p>
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-            <KV label="Damage class" value={acc.damage_class} />
-            <KV label="Fault status" value={acc.fault_status} highlight />
-            <KV label="GCC liability" value={acc.gcc_liability_ratio != null ? `${acc.gcc_liability_ratio}%` : '-'} highlight />
-            <KV label="Najm" value={acc.najm_status} />
-            <KV label="Najm fault" value={acc.najm_fault} />
-            <KV label="Taqdeer" value={acc.taqdeer_status} />
-          </div>
-        </div>
-        <div>
-          <p className="text-xs font-semibold text-gray-400 mb-2">Workflow</p>
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-            <KV label="Repair type" value={acc.repair_type} />
-            <KV label="Current status" value={acc.current_status} highlight />
-            <KV label="Next step" value={acc.next_step} />
-          </div>
-        </div>
-        <div>
-          <p className="text-xs font-semibold text-gray-400 mb-2">Workshop & Financials</p>
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-            <KV label="Workshop" value={acc.workshop_name} />
-            <KV label="Quotation" value={acc.workshop_quotation != null ? fmtCurrency(acc.workshop_quotation) : '-'} />
-            <KV label="Discount" value={acc.discount_pct != null ? `${acc.discount_pct}%` : '-'} />
-            <KV label="Final amount" value={acc.final_amount != null ? fmtCurrency(acc.final_amount) : '-'} highlight />
-            <KV label="Estimated damage" value={acc.estimated_damage_cost != null ? fmtCurrency(acc.estimated_damage_cost) : '-'} />
-            <KV label="Repair cost" value={acc.repair_cost != null ? fmtCurrency(acc.repair_cost) : '-'} />
-          </div>
-        </div>
-        <div>
-          <p className="text-xs font-semibold text-gray-400 mb-2">Release</p>
-          <div className="grid grid-cols-2 gap-3">
-            <KV label="Expected release" value={acc.expected_release_date} />
-            <KV label="Actual release" value={acc.release_date} highlight />
-          </div>
-        </div>
-        <p className="text-xs text-gray-600">Only Admin / Manager / Director can edit repair & insurance details.</p>
-      </div>
-    )
-  }
-
+// Read-only view of damage/fault classification, Najm + Taqdeer report state,
+// GCC liability ratio, repair route, case workflow and workshop financials.
+// Updates happen exclusively through the ONE unified incident form on the
+// Accidents page (Edit Incident) — the former per-tab edit form was removed.
+function RepairInsuranceTab({ acc, elevated, fmtCurrency, onEditIncident, editLocked }) {
   return (
     <div className="space-y-4">
-      {/* Classification & Reports */}
       <div>
         <p className="text-xs font-semibold text-gray-400 mb-2">Classification & Reports</p>
         <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-          <Sel label="Damage class" value={f.damage_class} onChange={v => set('damage_class', v)} options={DAMAGE_CLASS_OPTIONS} />
-          <Sel label="Fault status" value={f.fault_status} onChange={v => set('fault_status', v)} options={FAULT_STATUS_OPTIONS} />
-          <Sel
-            label="GCC liability ratio"
-            value={f.gcc_liability_ratio === '' ? '' : String(f.gcc_liability_ratio)}
-            onChange={v => set('gcc_liability_ratio', v)}
-            options={LIABILITY_RATIO_OPTIONS.map(n => ({ value: String(n), label: `${n}%` }))}
-          />
-          <Sel label="Najm" value={f.najm_status} onChange={v => set('najm_status', v)} options={NAJM_STATUS_OPTIONS} />
-          <Sel label="Najm fault" value={f.najm_fault} onChange={v => set('najm_fault', v)} options={NAJM_FAULT_OPTIONS} />
-          <Sel label="Taqdeer" value={f.taqdeer_status} onChange={v => set('taqdeer_status', v)} options={TAQDEER_STATUS_OPTIONS} />
+          <KV label="Damage class" value={acc.damage_class} />
+          <KV label="Fault status" value={acc.fault_status} highlight />
+          <KV label="GCC liability" value={acc.gcc_liability_ratio != null ? `${acc.gcc_liability_ratio}%` : '-'} highlight />
+          <KV label="Najm" value={acc.najm_status} />
+          <KV label="Najm fault" value={acc.najm_fault} />
+          <KV label="Taqdeer" value={acc.taqdeer_status} />
         </div>
       </div>
-
-      {/* Workflow */}
-      <div className="border-t border-gray-800 pt-3">
+      <div>
         <p className="text-xs font-semibold text-gray-400 mb-2">Workflow</p>
         <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-          <Sel label="Repair type" value={f.repair_type} onChange={v => set('repair_type', v)} options={REPAIR_TYPE_OPTIONS} />
-          <Sel label="Current status" value={f.current_status} onChange={v => set('current_status', v)} options={WORKFLOW_STAGES} />
-          <Sel label="Next step" value={f.next_step} onChange={v => set('next_step', v)} options={WORKFLOW_STAGES} />
+          <KV label="Repair type" value={acc.repair_type} />
+          <KV label="Current status" value={acc.current_status} highlight />
+          <KV label="Next step" value={acc.next_step} />
         </div>
-        {STAGE_TO_CLAIM_STATUS[String(f.current_status || '').toLowerCase()] && (
-          <p className="text-[11px] text-gray-500 mt-1.5 flex items-center gap-1">
-            <ShieldCheck size={11} className="text-green-500" />
-            Saving sets the insurance claim status to
-            <span className="text-green-400 font-medium">
-              {' '}{CLAIM_LABELS[STAGE_TO_CLAIM_STATUS[String(f.current_status).toLowerCase()]]}
-            </span>.
-          </p>
-        )}
       </div>
-
-      {/* Workshop & Financials */}
-      <div className="border-t border-gray-800 pt-3">
+      <div>
         <p className="text-xs font-semibold text-gray-400 mb-2">Workshop & Financials</p>
         <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-          <Inp label="Workshop name" value={f.workshop_name} onChange={v => set('workshop_name', v)} placeholder="Repairing workshop" />
-          <Inp label="Workshop quotation" type="number" value={f.workshop_quotation} onChange={v => set('workshop_quotation', v)} />
-          <Inp label="Discount %" type="number" value={f.discount_pct} onChange={v => set('discount_pct', v)} placeholder="0" />
-          <div>
-            <label className="label">Final amount</label>
-            <input
-              type="number"
-              className="input"
-              value={f.final_amount}
-              onChange={e => { setFinalTouched(true); set('final_amount', e.target.value) }}
-            />
-            {suggestedFinal != null && String(f.final_amount) !== String(suggestedFinal) && (
-              <button
-                type="button"
-                onClick={() => { setFinalTouched(true); set('final_amount', suggestedFinal) }}
-                className="text-[11px] text-green-400 hover:text-green-300 mt-1"
-              >
-                Use suggested {fmtCurrency(suggestedFinal)}
-              </button>
-            )}
-            {suggestedFinal != null && String(f.final_amount) === String(suggestedFinal) && (
-              <p className="text-[11px] text-gray-500 mt-1">Auto = quotation − discount%. Editable.</p>
-            )}
-          </div>
-          <Inp label="Estimated damage cost" type="number" value={f.estimated_damage_cost} onChange={v => set('estimated_damage_cost', v)} />
-          <Inp label="Repair cost" type="number" value={f.repair_cost} onChange={v => set('repair_cost', v)} />
+          <KV label="Workshop" value={acc.workshop_name} />
+          <KV label="Quotation" value={acc.workshop_quotation != null ? fmtCurrency(acc.workshop_quotation) : '-'} />
+          <KV label="Discount" value={acc.discount_pct != null ? `${acc.discount_pct}%` : '-'} />
+          <KV label="Final amount" value={acc.final_amount != null ? fmtCurrency(acc.final_amount) : '-'} highlight />
+          <KV label="Estimated damage" value={acc.estimated_damage_cost != null ? fmtCurrency(acc.estimated_damage_cost) : '-'} />
+          <KV label="Repair cost" value={acc.repair_cost != null ? fmtCurrency(acc.repair_cost) : '-'} />
         </div>
       </div>
-
-      {/* Release dates */}
-      <div className="border-t border-gray-800 pt-3">
+      <div>
         <p className="text-xs font-semibold text-gray-400 mb-2">Release</p>
         <div className="grid grid-cols-2 gap-3">
-          <Inp label="Expected release date" type="date" value={f.expected_release_date} onChange={v => set('expected_release_date', v)} />
-          <Inp label="Actual release date" type="date" value={f.release_date} onChange={v => set('release_date', v)} />
+          <KV label="Expected release" value={acc.expected_release_date} />
+          <KV label="Actual release" value={acc.release_date} highlight />
         </div>
       </div>
-
-      <button onClick={save} disabled={saving} className="btn-primary flex items-center gap-2 disabled:opacity-50">
-        <Save size={16} /> {saving ? 'Saving...' : 'Save Repair & Insurance'}
-      </button>
+      <EditIncidentHint elevated={elevated} onEdit={onEditIncident} locked={editLocked} />
     </div>
   )
 }
 
-function ClaimTab({ acc, elevated, onSaved, setErr, fmtCurrency }) {
-  const [f, setF] = useState({
-    responsible_party: acc.responsible_party ?? '',
-    liable_party: acc.liable_party ?? '',
-    payer: acc.payer ?? '',
-    driver_name: acc.driver_name ?? '',
-    insurer: acc.insurer ?? '',
-    policy_no: acc.policy_no ?? '',
-    claim_status: acc.claim_status ?? 'none',
-    claim_amount: acc.claim_amount ?? '',
-    claim_approved_amount: acc.claim_approved_amount ?? '',
-    deductible: acc.deductible ?? '',
-    recovered_amount: acc.recovered_amount ?? '',
-    recovery_date: acc.recovery_date ?? '',
-    recovery_source: acc.recovery_source ?? 'none',
-    recovery_status: acc.recovery_status ?? 'pending',
-    recovery_reference: acc.recovery_reference ?? '',
-  })
-  const [saving, setSaving] = useState(false)
-  const set = (k, v) => setF(p => ({ ...p, [k]: v }))
-
+// Read-only claim & recovery view. Updates happen exclusively through the ONE
+// unified incident form on the Accidents page (Edit Incident) — the former
+// per-tab edit form was removed to eliminate the duplicate update path.
+function ClaimTab({ acc, elevated, fmtCurrency, onEditIncident, editLocked }) {
   const grossCost = (Number(acc.repair_cost) || 0) + (Number(acc.parts_cost) || 0)
   const netCost = Math.max(0, grossCost - (Number(acc.recovered_amount) || 0))
 
-  async function save() {
-    setSaving(true); setErr('')
-    const { error } = await supabase.from('accidents').update({
-      responsible_party: f.responsible_party || null,
-      liable_party: f.liable_party || null,
-      payer: f.payer || null,
-      driver_name: f.driver_name || null,
-      insurer: f.insurer || null,
-      policy_no: f.policy_no || null,
-      claim_status: f.claim_status,
-      claim_amount: f.claim_amount !== '' ? Number(f.claim_amount) : null,
-      claim_approved_amount: f.claim_approved_amount !== '' ? Number(f.claim_approved_amount) : null,
-      deductible: f.deductible !== '' ? Number(f.deductible) : null,
-      recovered_amount: f.recovered_amount !== '' ? Number(f.recovered_amount) : null,
-      recovery_date: f.recovery_date || null,
-      recovery_source: f.recovery_source,
-      recovery_status: f.recovery_status,
-      recovery_reference: f.recovery_reference || null,
-    }).eq('id', acc.id)
-    setSaving(false)
-    if (error) { setErr(error.message); return }
-    onSaved()
-  }
-
-  const NetCostCard = () => (
-    <div className="grid grid-cols-3 gap-3 rounded-lg border border-gray-700 bg-gray-800/40 p-3">
-      <div><p className="text-[11px] uppercase tracking-wide text-gray-500">Gross cost</p><p className="text-sm font-semibold text-gray-200">{fmtCurrency(grossCost)}</p></div>
-      <div><p className="text-[11px] uppercase tracking-wide text-gray-500">Recovered</p><p className="text-sm font-semibold text-green-400">{fmtCurrency(Number(acc.recovered_amount) || 0)}</p></div>
-      <div><p className="text-[11px] uppercase tracking-wide text-gray-500">Net cost</p><p className="text-sm font-semibold text-orange-400">{fmtCurrency(netCost)}</p></div>
-    </div>
-  )
-
-  if (!elevated) {
-    return (
-      <div className="space-y-3">
-        <div className="flex gap-2">
-          <span className={`badge text-xs ${CLAIM_BADGE[acc.claim_status ?? 'none']}`}>{CLAIM_LABELS[acc.claim_status ?? 'none']}</span>
-          <span className={`badge text-xs ${RECOVERY_BADGE[acc.recovery_status ?? 'pending']}`}>Recovery: {RECOVERY_STATUS_LABELS[acc.recovery_status ?? 'pending']}</span>
-        </div>
-        <div className="grid grid-cols-2 gap-3">
-          <KV label="Responsible party" value={acc.responsible_party} />
-          <KV label="Liable party" value={acc.liable_party} />
-          <KV label="Who pays" value={acc.payer} highlight />
-          <KV label="Driver" value={acc.driver_name} />
-          <KV label="Insurer" value={acc.insurer} />
-          <KV label="Policy / Claim no" value={acc.policy_no} />
-          <KV label="Claim amount" value={acc.claim_amount != null ? fmtCurrency(acc.claim_amount) : '-'} />
-          <KV label="Approved" value={acc.claim_approved_amount != null ? fmtCurrency(acc.claim_approved_amount) : '-'} />
+  return (
+    <div className="space-y-4">
+      <div className="flex gap-2">
+        <span className={`badge text-xs ${CLAIM_BADGE[acc.claim_status ?? 'none']}`}>{CLAIM_STATUS_LABELS[acc.claim_status ?? 'none']}</span>
+        <span className={`badge text-xs ${RECOVERY_BADGE[acc.recovery_status ?? 'pending']}`}>Recovery: {RECOVERY_STATUS_LABELS[acc.recovery_status ?? 'pending']}</span>
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <KV label="Responsible party" value={acc.responsible_party} />
+        <KV label="Liable party" value={acc.liable_party} />
+        <KV label="Who pays" value={acc.payer} highlight />
+        <KV label="Driver" value={acc.driver_name} />
+        <KV label="Insurer" value={acc.insurer} />
+        <KV label="Policy / Claim no" value={acc.policy_no} />
+        <KV label="Claim amount" value={acc.claim_amount != null ? fmtCurrency(acc.claim_amount) : '-'} />
+        <KV label="Approved" value={acc.claim_approved_amount != null ? fmtCurrency(acc.claim_approved_amount) : '-'} />
+      </div>
+      <div>
+        <p className="text-xs font-semibold text-gray-400 mb-2">Cost Recovery</p>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
           <KV label="Deductible" value={acc.deductible != null ? fmtCurrency(acc.deductible) : '-'} />
           <KV label="Recovered amount" value={acc.recovered_amount != null ? fmtCurrency(acc.recovered_amount) : '-'} highlight />
+          <KV label="Recovery status" value={RECOVERY_STATUS_LABELS[acc.recovery_status ?? 'pending']} />
           <KV label="Recovery source" value={RECOVERY_SOURCE_LABELS[acc.recovery_source ?? 'none']} />
           <KV label="Recovery date" value={acc.recovery_date} />
-        </div>
-        <NetCostCard />
-        <p className="text-xs text-gray-600">Only Admin / Manager / Director can edit claim & recovery details.</p>
-      </div>
-    )
-  }
-
-  return (
-    <div className="space-y-3">
-      <div className="grid grid-cols-2 gap-3">
-        <Inp label="Responsible party" value={f.responsible_party} onChange={v => set('responsible_party', v)} placeholder="Who is at fault" />
-        <Inp label="Liable party" value={f.liable_party} onChange={v => set('liable_party', v)} />
-        <Inp label="Who pays" value={f.payer} onChange={v => set('payer', v)} placeholder="Payer" />
-        <Inp label="Driver" value={f.driver_name} onChange={v => set('driver_name', v)} />
-        <Inp label="Insurer" value={f.insurer} onChange={v => set('insurer', v)} />
-        <Inp label="Policy / Claim no" value={f.policy_no} onChange={v => set('policy_no', v)} />
-      </div>
-      <div className="grid grid-cols-3 gap-3">
-        <div>
-          <label className="label">Claim status</label>
-          <select className="input" value={f.claim_status} onChange={e => set('claim_status', e.target.value)}>
-            {CLAIM_STATUSES.map(s => <option key={s} value={s}>{CLAIM_LABELS[s]}</option>)}
-          </select>
-        </div>
-        <Inp label="Claim amount" type="number" value={f.claim_amount} onChange={v => set('claim_amount', v)} />
-        <Inp label="Approved amount" type="number" value={f.claim_approved_amount} onChange={v => set('claim_approved_amount', v)} />
-      </div>
-
-      <div className="border-t border-gray-800 pt-3">
-        <p className="text-xs font-semibold text-gray-400 mb-2">Cost Recovery</p>
-        <div className="grid grid-cols-3 gap-3">
-          <Inp label="Deductible" type="number" value={f.deductible} onChange={v => set('deductible', v)} />
-          <Inp label="Recovered amount" type="number" value={f.recovered_amount} onChange={v => set('recovered_amount', v)} />
-          <Inp label="Recovery date" type="date" value={f.recovery_date} onChange={v => set('recovery_date', v)} />
-        </div>
-        <div className="grid grid-cols-3 gap-3 mt-3">
-          <div>
-            <label className="label">Recovery source</label>
-            <select className="input" value={f.recovery_source} onChange={e => set('recovery_source', e.target.value)}>
-              {RECOVERY_SOURCES.map(s => <option key={s} value={s}>{RECOVERY_SOURCE_LABELS[s]}</option>)}
-            </select>
-          </div>
-          <div>
-            <label className="label">Recovery status</label>
-            <select className="input" value={f.recovery_status} onChange={e => set('recovery_status', e.target.value)}>
-              {RECOVERY_STATUSES.map(s => <option key={s} value={s}>{RECOVERY_STATUS_LABELS[s]}</option>)}
-            </select>
-          </div>
-          <Inp label="Recovery reference" value={f.recovery_reference} onChange={v => set('recovery_reference', v)} />
+          <KV label="Recovery reference" value={acc.recovery_reference} />
         </div>
       </div>
-
-      <NetCostCard />
-      <button onClick={save} disabled={saving} className="btn-primary flex items-center gap-2 disabled:opacity-50">
-        <Save size={16} /> {saving ? 'Saving...' : 'Save Claim & Recovery'}
-      </button>
+      <div className="grid grid-cols-3 gap-3 rounded-lg border border-gray-700 bg-gray-800/40 p-3">
+        <div><p className="text-[11px] uppercase tracking-wide text-gray-500">Gross cost</p><p className="text-sm font-semibold text-gray-200">{fmtCurrency(grossCost)}</p></div>
+        <div><p className="text-[11px] uppercase tracking-wide text-gray-500">Recovered</p><p className="text-sm font-semibold text-green-400">{fmtCurrency(Number(acc.recovered_amount) || 0)}</p></div>
+        <div><p className="text-[11px] uppercase tracking-wide text-gray-500">Net cost</p><p className="text-sm font-semibold text-orange-400">{fmtCurrency(netCost)}</p></div>
+      </div>
+      <EditIncidentHint elevated={elevated} onEdit={onEditIncident} locked={editLocked} />
     </div>
   )
 }
@@ -1346,40 +1005,25 @@ function Inp({ label, value, onChange, type = 'text', placeholder }) {
   )
 }
 
-// Strict single-select dropdown with a blank "not set" option. `options` accepts
-// either plain strings or { value, label } objects.
-function Sel({ label, value, onChange, options = [], placeholder = '—' }) {
+// "Edit Incident" affordance rendered at the foot of the read-only record tabs.
+// Elevated roles jump to THE one unified create/edit form on the Accidents
+// page; everyone else sees the honest permission note.
+function EditIncidentHint({ elevated, onEdit, locked }) {
+  if (!elevated) {
+    return <p className="text-xs text-gray-600">Only Admin / Manager / Director can update these details.</p>
+  }
   return (
-    <div>
-      <label className="label">{label}</label>
-      <select className="input" value={value ?? ''} onChange={e => onChange(e.target.value)}>
-        <option value="">{placeholder}</option>
-        {options.map(o => {
-          const opt = typeof o === 'object' ? o : { value: o, label: o }
-          return <option key={opt.value} value={opt.value}>{opt.label}</option>
-        })}
-      </select>
-    </div>
-  )
-}
-
-// Datalist-backed field: dropdown suggestions with free-text fallback, so a
-// common value is one click away but bespoke entries are still allowed.
-function Picker({ label, value, onChange, options = [], placeholder }) {
-  const listId = useId()
-  return (
-    <div>
-      <label className="label">{label}</label>
-      <input
-        className="input"
-        list={listId}
-        value={value}
-        placeholder={placeholder}
-        onChange={e => onChange(e.target.value)}
-      />
-      <datalist id={listId}>
-        {options.filter(Boolean).map(o => <option key={o} value={o} />)}
-      </datalist>
+    <div className="flex items-center gap-3 flex-wrap pt-1">
+      <button
+        type="button"
+        onClick={onEdit}
+        disabled={locked}
+        title={locked ? 'Locked while an approval workflow is active' : 'Open this record in the unified incident form'}
+        className="btn-secondary text-xs inline-flex items-center gap-1.5 disabled:opacity-50"
+      >
+        <Pencil size={12} /> Edit Incident
+      </button>
+      <p className="text-xs text-gray-600">All incident, claim and case fields are updated in the one unified incident form.</p>
     </div>
   )
 }

@@ -24,6 +24,36 @@ async function ensurePptx() {
   return pptxgen
 }
 
+// ── Report naming helpers ──────────────────────────────────────────────────────
+// Download filenames and visible report labels must be clean, human readable and
+// ASCII only: NO underscores, hyphens or em/en dashes. Both helpers below are the
+// single source used by every PDF/Excel saver so names stay consistent.
+const _MONTHS_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+
+/** Hyphen-free date label, e.g. "14 Jul 2026" (ASCII, no separators). */
+export function reportDateLabel(d = new Date()) {
+  const dt = d instanceof Date ? d : new Date(d)
+  if (Number.isNaN(dt.getTime())) return ''
+  return `${dt.getDate()} ${_MONTHS_SHORT[dt.getMonth()]} ${dt.getFullYear()}`
+}
+
+/**
+ * Build a clean download base name (no extension) from parts. Non-empty parts are
+ * joined with single spaces, then every character outside [A-Za-z0-9 ()] (including
+ * underscores, hyphens, en/em dashes, slashes and colons) is turned into a space,
+ * runs of whitespace collapse to one, and the result is trimmed. The output is
+ * guaranteed to match /^[A-Za-z0-9 ()]*$/ (non-empty when any part had content).
+ */
+export function reportFileName(...parts) {
+  return parts
+    .filter((p) => p != null && String(p).trim() !== '')
+    .map((p) => String(p))
+    .join(' ')
+    .replace(/[^A-Za-z0-9 ()]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
 // ── Brand palette - deep slate + indigo + gold (no green/AI references) ────────
 const P = {
   // Darks
@@ -1249,8 +1279,8 @@ export async function exportInspectionDetailPdf(row, opts = {}) {
     _pageFooter(doc, p, totalPages, company || 'Fleet Operations', ftr)
   }
 
-  const safe = (row.title || 'inspection').replace(/[^a-z0-9]/gi, '_').slice(0, 40)
-  doc.save(`Inspection_${safe}.pdf`)
+  const safe = (row.title || 'inspection').replace(/[^a-z0-9]/gi, ' ').slice(0, 40)
+  doc.save(`${reportFileName('Inspection', safe)}.pdf`)
 }
 
 /**
@@ -1453,8 +1483,8 @@ export async function exportAccidentCasePdf(acc = {}, opts = {}) {
     _pageFooter(doc, p, totalPages, company || 'Fleet Operations', ftr)
   }
 
-  const safe = String(acc.asset_no || acc.id || 'case').replace(/[^a-z0-9]/gi, '_').slice(0, 40)
-  doc.save(`Accident_Case_${safe}.pdf`)
+  const safe = String(acc.asset_no || acc.id || 'case').replace(/[^a-z0-9]/gi, ' ').slice(0, 40)
+  doc.save(`${reportFileName('Accident Case', safe)}.pdf`)
 }
 
 /**
@@ -1798,8 +1828,8 @@ export async function exportChecklistSubmissionPdf(submission = {}, opts = {}) {
     _pageFooter(doc, p, totalPages, company || 'Fleet Operations', ftr)
   }
 
-  const safe = String(submission.asset_no || submission.id || 'checklist').replace(/[^a-z0-9]/gi, '_').slice(0, 40)
-  doc.save(`Checklist_${safe}.pdf`)
+  const safe = String(submission.asset_no || submission.id || 'checklist').replace(/[^a-z0-9]/gi, ' ').slice(0, 40)
+  doc.save(`${reportFileName('Checklist', safe)}.pdf`)
 }
 
 /* ── Public branded-PDF helper API ───────────────────────────────────────────

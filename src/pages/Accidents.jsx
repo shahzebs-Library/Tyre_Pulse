@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef, lazy, Suspense } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useLocation } from 'react-router-dom'
 
 const AccidentReportBuilder = lazy(() => import('../components/accidents/AccidentReportBuilder'))
 import { AlertOctagon, Plus, Search, X, Save, FileText, Download, BarChart2, Eye, Hourglass, Upload, CheckCircle2, AlertCircle, ChevronDown, Trash2, AlertTriangle, TrendingUp, Users, DollarSign, ShieldAlert, Lightbulb, ChevronRight, Clock, Wrench, ShieldCheck, ArrowLeft } from 'lucide-react'
@@ -12,7 +12,7 @@ import { useReportMeta } from '../hooks/useReportMeta'
 import * as accidentsApi from '../lib/api/accidents'
 import { useAuth } from '../contexts/AuthContext'
 import { useSettings } from '../contexts/SettingsContext'
-import { exportToExcel, exportToPdf } from '../lib/exportUtils'
+import { exportToExcel, exportToPdf, reportFileName, reportDateLabel } from '../lib/exportUtils'
 import { formatCurrency as _fmtCurrencyBase, formatDate, formatMonthYear } from '../lib/formatters'
 import { resolveStorageUrl } from '../lib/storageRefs'
 import { Bar, Doughnut, Line } from 'react-chartjs-2'
@@ -21,6 +21,15 @@ import {
   ArcElement, LineElement, PointElement, Filler,
   Title, Tooltip as ChartTooltip, Legend,
 } from 'chart.js'
+import {
+  STATUSES, SEVERITIES, ACCIDENT_TYPE_OPTS, DAMAGE_CLASS_OPTS, FAULT_STATUS_OPTS,
+  NAJM_STATUS_OPTS, NAJM_FAULT_OPTS, TAQDEER_STATUS_OPTS, LIABILITY_RATIO_OPTS,
+  REPAIR_TYPE_OPTS, CLAIM_STATUS_OPTS, CLAIM_STATUS_LABELS,
+  RECOVERY_SOURCE_OPTS, RECOVERY_SOURCE_LABELS, RECOVERY_STATUS_OPTS, RECOVERY_STATUS_LABELS,
+  CASE_STAGE_OPTS, DAMAGE_CONDITION_OPTS, WORKFLOW_STAGE_OPTS, STAGE_TO_CLAIM_STATUS,
+  canonSeverity, canonStatus, canonAccidentType, toDbSeverity, toDbStatus, toDbAccidentType,
+} from '../lib/accidentVocab'
+import { makeValueLabelsPlugin, doughnutLegendCounts, summarizeChartData } from '../lib/accidentReport'
 
 ChartJS.register(
   CategoryScale, LinearScale, BarElement,
@@ -60,27 +69,8 @@ const BULK_TEMPLATE_EXAMPLE = [
   '5000', 'CLM-2026-001', 'John Doe',
 ]
 
-const STATUSES = [
-  'Reported',
-  'Under Investigation',
-  'Repair In Progress',
-  'Awaiting Parts',
-  'Awaiting Approval',
-  'Insurance Claim',
-  'Closed',
-]
-
-const SEVERITIES = ['Minor', 'Major', 'Total Loss']
-
-// ── GCC accident case-management vocabularies (mirror AccidentDetailModal V219) ─
-const ACCIDENT_TYPE_OPTS   = ['Collision', 'Rollover', 'Rear-end', 'Side-swipe', 'Reversing', 'Fire', 'Vandalism', 'Weather', 'Tyre failure', 'Mechanical', 'Near miss', 'Property damage', 'Other']
-const DAMAGE_CLASS_OPTS    = ['Major', 'Minor']
-const FAULT_STATUS_OPTS    = ['Faulty', 'Non-faulty', 'Under review']
-const NAJM_STATUS_OPTS     = ['Najm report', 'No Najm']
-const TAQDEER_STATUS_OPTS  = ['Taqdeer report', 'No Taqdeer']
-const LIABILITY_RATIO_OPTS = [0, 50, 100]
-const REPAIR_TYPE_OPTS     = ['Internal', 'External']
-const CLAIM_STATUS_OPTS    = ['none', 'filed', 'approved', 'rejected', 'settled']
+// Option vocabularies + canon/toDb helpers now come from the single shared
+// source `src/lib/accidentVocab.js` (imported above) — do NOT re-declare here.
 
 // Section divider for the sectioned incident form.
 function FormSection({ title, children }) {
@@ -108,48 +98,6 @@ const STATUS_BADGE = {
   'Closed':                'bg-green-900/50 text-green-300 border border-green-700/50',
 }
 
-// Mobile writes lowercase values (minor/severe, reported/closed); the web form
-// writes title-case. Canonicalise both vocabularies so badges & stats are correct.
-const SEVERITY_ALIAS = { minor: 'Minor', moderate: 'Major', major: 'Major', severe: 'Total Loss', fatal: 'Total Loss', 'total loss': 'Total Loss' }
-const STATUS_ALIAS = {
-  reported: 'Reported', under_review: 'Under Investigation', under_investigation: 'Under Investigation',
-  repair_in_progress: 'Repair In Progress', awaiting_parts: 'Awaiting Parts',
-  awaiting_approval: 'Awaiting Approval', insurance_claim: 'Insurance Claim', closed: 'Closed',
-}
-const canonSeverity = (s) => SEVERITY_ALIAS[String(s || '').toLowerCase()] || s || ''
-const canonStatus = (s) => STATUS_ALIAS[String(s || '').toLowerCase().replace(/\s+/g, '_')] || s || ''
-
-// Write-side reverse maps: the DB CHECK constraints store lowercase canonical
-// values. Accept either a UI label ('Minor'/'Reported') or an already-canonical
-// value (mobile/imports) and normalise to the DB vocabulary.
-const toDbSeverity = (s) => {
-  const v = String(s || '').toLowerCase().trim()
-  return ({ minor: 'minor', major: 'moderate', moderate: 'moderate', 'total loss': 'severe', severe: 'severe', fatal: 'fatal' })[v] || 'minor'
-}
-const toDbStatus = (s) => {
-  const v = String(s || '').toLowerCase().trim().replace(/\s+/g, '_')
-  return ({
-    reported: 'reported', under_investigation: 'under_review', under_review: 'under_review',
-    repair_in_progress: 'repair_in_progress', awaiting_parts: 'awaiting_parts',
-    awaiting_approval: 'awaiting_approval', insurance_claim: 'insurance_claim', closed: 'closed',
-  })[v] || 'reported'
-}
-// accidents.chk_accident_type (V222) stores lowercase snake_case tokens; the
-// form shows friendly labels. Map both directions like severity/status above —
-// saving a label verbatim ('Collision', 'Rear-end') violates the DB CHECK.
-const ACCIDENT_TYPE_LABEL = {
-  collision: 'Collision', rollover: 'Rollover', rear_end: 'Rear-end', side_swipe: 'Side-swipe',
-  reversing: 'Reversing', fire: 'Fire', vandalism: 'Vandalism', weather: 'Weather',
-  tyre_failure: 'Tyre failure', mechanical: 'Mechanical', near_miss: 'Near miss',
-  property_damage: 'Property damage', other: 'Other',
-}
-const accTypeKey = (s) => String(s || '').toLowerCase().trim().replace(/[\s-]+/g, '_')
-const canonAccidentType = (s) => ACCIDENT_TYPE_LABEL[accTypeKey(s)] || s || ''
-const toDbAccidentType = (s) => {
-  if (!s) return null
-  const k = accTypeKey(s)
-  return ACCIDENT_TYPE_LABEL[k] ? k : 'other'
-}
 const isClosed = (r) => r.closure_status === 'closed' || canonStatus(r.status) === 'Closed'
 
 // ── Case-progress / delay intelligence ──────────────────────────────────────
@@ -233,13 +181,15 @@ const DAMAGE_CLASS_BADGE = {
   'Minor': 'bg-[var(--input-bg)] text-[var(--text-dim)] border border-[var(--input-border)]',
 }
 const DIM_CHIP = 'bg-[var(--input-bg)] text-[var(--text-dim)] border border-[var(--input-border)]'
-const FAULT_OPTS  = ['Faulty', 'Non-faulty', 'Under review']
-const REPAIR_OPTS = ['Internal', 'External']
 
 function CaseChip({ cls, title, children }) {
   return <span title={title} className={`badge text-[10px] whitespace-nowrap ${cls}`}>{children}</span>
 }
 
+// THE one create/edit form model. This is the ONLY create/update surface for
+// an accident record app-wide — the detail page's former per-tab edit forms
+// (Tracker / Repair & Insurance / Claim & Recovery) were consolidated in here,
+// so every incident + claim + case field is captured the same way in both modes.
 const EMPTY_FORM = {
   incident_date: '',
   asset_no: '',
@@ -261,14 +211,38 @@ const EMPTY_FORM = {
   claim_approved_amount: '',
   deductible: '',
   recovered_amount: '',
+  // Cost recovery (former Claim & Recovery tab)
+  recovery_status: '',
+  recovery_source: '',
+  recovery_date: '',
+  recovery_reference: '',
+  // Parties & liability (former Claim tab)
+  responsible_party: '',
+  liable_party: '',
+  payer: '',
   // GCC case / liability
   fault_status: '',
   gcc_liability_ratio: '',
   najm_status: '',
+  najm_fault: '',
   taqdeer_status: '',
+  // Case tracking & workflow (former Tracker / Repair & Insurance tabs)
+  case_stage: '',
+  damage_condition: '',
+  current_status: '',
+  next_step: '',
+  action_to_be_taken: '',
+  responsible_owner: '',
+  required_action: '',
+  status_update_date: '',
+  status_update_note: '',
   // Repair
   repair_type: '',
   workshop_name: '',
+  workshop_quotation: '',
+  discount_pct: '',
+  final_amount: '',
+  estimated_damage_cost: '',
   repair_cost: '',
   expected_release_date: '',
   release_date: '',
@@ -276,9 +250,15 @@ const EMPTY_FORM = {
   photos: [],
 }
 
+// On-screen value labels: light ink readable on the dark UI theme (the report
+// builder's paper renderer uses the default dark-ink variant of the same plugin).
+const LIGHT_VALUE_LABELS = makeValueLabelsPlugin('#e2e8f0')
+
 const CHART_OPTS_BASE = {
   responsive: true,
   maintainAspectRatio: false,
+  // Headroom so the value labels drawn above bars/points never clip.
+  layout: { padding: { top: 14 } },
   plugins: {
     legend: { display: false },
     tooltip: { backgroundColor: 'var(--panel-2)', titleColor:'var(--panel-ink)', bodyColor: '#9ca3af', borderColor: 'var(--hairline)', borderWidth: 1 },
@@ -292,6 +272,8 @@ const CHART_OPTS_BASE = {
 const CHART_OPTS_H = {
   ...CHART_OPTS_BASE,
   indexAxis: 'y',
+  // Right-side headroom for the value printed at the end of each horizontal bar.
+  layout: { padding: { top: 6, right: 30 } },
   plugins: {
     ...CHART_OPTS_BASE.plugins,
     legend: { display: false },
@@ -315,7 +297,9 @@ const CHART_OPTS_DOUGHNUT = {
   maintainAspectRatio: false,
   cutout: '62%',
   plugins: {
-    legend: { position: 'bottom', labels: { color: '#9ca3af', boxWidth: 12, padding: 12, font: { size: 11 } } },
+    // Slice counts appended to each legend entry (e.g. "Major (4)") so the
+    // doughnuts carry real numbers on screen and in the analytics PDF capture.
+    legend: { position: 'bottom', labels: { color: '#9ca3af', boxWidth: 12, padding: 12, font: { size: 11 }, generateLabels: doughnutLegendCounts } },
     tooltip: CHART_OPTS_BASE.plugins.tooltip,
   },
 }
@@ -358,6 +342,7 @@ export default function Accidents() {
   const { activeCountry, activeCurrency, appSettings } = useSettings()
   const fmtCurrency = (val) => _fmtCurrencyBase(val, activeCurrency, 0)
   const navigate = useNavigate()
+  const location = useLocation()
 
   const [tab, setTab]                  = useState('incidents')
   const [records, setRecords]          = useState([])
@@ -443,6 +428,19 @@ export default function Accidents() {
   }, [activeCountry])
 
   useEffect(() => { loadRecords() }, [loadRecords])
+
+  // Deep-link into the ONE unified editor: the detail page's "Edit Incident"
+  // action navigates here with { state: { editId } }. Once records are loaded,
+  // open that record in the inline form and clear the state so refresh/back
+  // does not re-open it.
+  useEffect(() => {
+    const editId = location.state?.editId
+    if (!editId || loading) return
+    const row = records.find(r => String(r.id) === String(editId))
+    navigate('/accidents', { replace: true, state: null })
+    if (row) openEdit(row)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.state, loading, records])
 
   // Load fleet assets for search combobox
   useEffect(() => {
@@ -656,19 +654,6 @@ export default function Accidents() {
       }],
     }
   }, [records])
-
-  const chartOpts = {
-    responsive: true,
-    maintainAspectRatio: false,
-    plugins: {
-      legend: { display: false },
-      tooltip: { backgroundColor: 'var(--panel-2)', titleColor:'var(--panel-ink)', bodyColor: '#9ca3af', borderColor: 'var(--hairline)', borderWidth: 1 },
-    },
-    scales: {
-      x: { ticks: { color: '#6b7280', font: { size: 11 } }, grid: { color: '#1f2937' } },
-      y: { ticks: { color: '#6b7280', font: { size: 11 } }, grid: { color: '#374151' }, beginAtZero: true },
-    },
-  }
 
   const statusCounts = useMemo(() => {
     const c = {}
@@ -990,6 +975,128 @@ export default function Accidents() {
     }
   }, [records, fmtCurrency, stats, pendingClosures])
 
+  // ── Analytics tab: live-canvas capture + compact PDF download ──────────────
+  // Refs hold the chart.js instances (react-chartjs-2 v5 forwards the instance)
+  // so the download captures EXACTLY what is on screen via toBase64Image().
+  const chartRefs = useRef({})
+  const setChartRef = (key) => (el) => { chartRefs.current[key] = el }
+  const [dlAnalytics, setDlAnalytics] = useState({ busy: false, msg: '', ok: true })
+  const dlTimerRef = useRef(null)
+  useEffect(() => () => clearTimeout(dlTimerRef.current), [])
+  const flashDl = (msg, ok) => {
+    setDlAnalytics({ busy: false, msg, ok })
+    clearTimeout(dlTimerRef.current)
+    dlTimerRef.current = setTimeout(() => setDlAnalytics(s => ({ ...s, msg: '' })), 5000)
+  }
+
+  async function downloadAnalyticsPdf() {
+    setDlAnalytics({ busy: true, msg: '', ok: true })
+    try {
+      // Charts in on-screen order; refs are null for charts hidden by their
+      // honest "No data" empty state, so those drop out automatically.
+      const chartList = [
+        { key: 'severity',    title: 'Severity Distribution',                data: severityDoughnut },
+        { key: 'status',      title: 'Status Distribution',                  data: statusDoughnut },
+        { key: 'fault',       title: 'Fault Status (GCC)',                   data: faultDoughnut },
+        { key: 'trend',       title: 'Incident Trend (last 12 months)',      data: monthlyTrendLine },
+        { key: 'topAssets',   title: 'Top 5 Assets by Incidents',            data: topAssetsChart },
+        { key: 'bySite',      title: 'Incidents by Site',                    data: bySiteChart },
+        { key: 'sevMonthly',  title: 'Monthly Severity Breakdown',           data: severityMonthlyChart },
+        { key: 'claimStatus', title: 'Claim Status Breakdown',               data: claimStatusChart },
+        { key: 'payerCost',   title: 'Cost by Responsible Payer',            data: payerCostChart },
+      ]
+        .map(c => ({ ...c, chart: chartRefs.current[c.key] }))
+        .filter(c => c.chart && c.chart.canvas)
+        .slice(0, 12) // HARD CAP: 6 per page x max 2 pages
+
+      const { default: jsPDF } = await import('jspdf')
+      const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
+      const W = doc.internal.pageSize.getWidth()
+      const H = doc.internal.pageSize.getHeight()
+      const M = 10
+      const company = appSettings?.company_name || 'TyrePulse'
+      const stamp = new Date().toISOString().slice(0, 10)
+      const scope = activeCountry && activeCountry !== 'All' ? activeCountry : 'All countries'
+      const INK = [15, 23, 42]
+      const MUTED = [100, 116, 139]
+
+      // ── Page 1 header ──
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(15); doc.setTextColor(...INK)
+      doc.text('Accident Analytics Summary', M, 14)
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(...MUTED)
+      doc.text(`${company} | Generated ${stamp} | ${records.length} incidents | Scope: ${scope}`, M, 20)
+
+      // ── KPI number strip (live page aggregates) ──
+      const pendingRelease = records.filter(r => !isClosed(r) && !r.expected_release_date).length
+      const kpis = [
+        ['Total incidents', String(stats.total)],
+        ['Open', String(stats.open)],
+        ['Closed', String(stats.total - stats.open)],
+        [`Delayed > ${DELAY_THRESHOLD_DAYS}d`, String(stats.delayed)],
+        ['Pending release', String(pendingRelease)],
+        ['Repair cost', String(fmtCurrency(stats.cost))],
+        ['Claimed', String(fmtCurrency(claimAnalytics.totalClaim))],
+        ['Recovered', String(fmtCurrency(claimAnalytics.totalRecovered))],
+      ]
+      const stripY = 24
+      const kw = (W - 2 * M) / kpis.length
+      kpis.forEach(([label, value], i) => {
+        const x = M + i * kw
+        doc.setDrawColor(226, 232, 240); doc.setFillColor(248, 250, 252)
+        doc.roundedRect(x + 0.8, stripY, kw - 1.6, 14, 1.5, 1.5, 'FD')
+        doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.setTextColor(...INK)
+        doc.text(value, x + kw / 2, stripY + 6.4, { align: 'center' })
+        doc.setFont('helvetica', 'normal'); doc.setFontSize(6.3); doc.setTextColor(...MUTED)
+        doc.text(label.toUpperCase(), x + kw / 2, stripY + 11.2, { align: 'center' })
+      })
+
+      // ── Chart grid: 3 x 2 per page, at most 2 pages, never a 3rd ──
+      const drawChartCell = (c, x, y, cw, ch) => {
+        doc.setFont('helvetica', 'bold'); doc.setFontSize(8.5); doc.setTextColor(...INK)
+        doc.text(c.title, x, y + 3.2, { maxWidth: cw })
+        // Dark panel behind the capture: the live canvases use the dark UI
+        // theme (light ticks/labels), which would vanish on white paper.
+        const imgY = y + 5.2
+        const imgH = ch - 11
+        doc.setFillColor(17, 24, 39)
+        doc.roundedRect(x, imgY, cw, imgH, 1.5, 1.5, 'F')
+        const iw0 = c.chart.width || c.chart.canvas.width
+        const ih0 = c.chart.height || c.chart.canvas.height
+        const scale = Math.min((cw - 3) / iw0, (imgH - 3) / ih0)
+        const iw = iw0 * scale
+        const ih = ih0 * scale
+        doc.addImage(c.chart.toBase64Image('image/png', 1), 'PNG', x + (cw - iw) / 2, imgY + (imgH - ih) / 2, iw, ih)
+        const digest = summarizeChartData(c.data)
+        doc.setFont('helvetica', 'normal'); doc.setFontSize(7.2); doc.setTextColor(...MUTED)
+        doc.text(digest || 'No data in scope', x, y + ch - 1.6, { maxWidth: cw })
+      }
+      const drawGrid = (charts, y0) => {
+        const gap = 5
+        const cw = (W - 2 * M - 2 * gap) / 3
+        const ch = (H - y0 - M - gap) / 2
+        charts.forEach((c, i) => {
+          const col = i % 3
+          const row = Math.floor(i / 3)
+          drawChartCell(c, M + col * (cw + gap), y0 + row * (ch + gap), cw, ch)
+        })
+      }
+      drawGrid(chartList.slice(0, 6), 43)
+      if (chartList.length > 6) {
+        doc.addPage()
+        doc.setFont('helvetica', 'bold'); doc.setFontSize(11); doc.setTextColor(...INK)
+        doc.text('Accident Analytics Summary (continued)', M, 12)
+        doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(...MUTED)
+        doc.text(`${company} | ${stamp} | page 2 of 2`, W - M, 12, { align: 'right' })
+        drawGrid(chartList.slice(6, 12), 16)
+      }
+
+      doc.save(`${reportFileName(company, 'Accident Analytics', reportDateLabel())}.pdf`)
+      flashDl(`Analytics PDF downloaded (${chartList.length} charts, ${chartList.length > 6 ? 2 : 1} page${chartList.length > 6 ? 's' : ''}).`, true)
+    } catch (e) {
+      flashDl(`Download failed: ${e?.message || 'unexpected error'}`, false)
+    }
+  }
+
   // ---- Incidents tab filtered data ----
   const filtered = useMemo(() => {
     let arr = records
@@ -1024,6 +1131,15 @@ export default function Accidents() {
     return arr
   }, [records, search, filterSite, filterSeverity, filterStatus, filterFrom, filterTo, statusFunnel, onlyPendingClosure, filterDelayed, filterStage, filterRepairType, filterFault, filterAge])
 
+  // Suggested final amount = workshop quotation minus discount% (former Repair
+  // & Insurance tab helper). Null when there is no quotation — never fabricated.
+  const suggestedFinal = useMemo(() => {
+    const q = Number(form.workshop_quotation)
+    if (form.workshop_quotation === '' || Number.isNaN(q)) return null
+    const d = Number(form.discount_pct) || 0
+    return Math.max(0, Math.round((q * (1 - d / 100)) * 100) / 100)
+  }, [form.workshop_quotation, form.discount_pct])
+
   function openAdd() {
     setForm(EMPTY_FORM)
     setEditId(null)
@@ -1056,12 +1172,33 @@ export default function Accidents() {
       claim_approved_amount: row.claim_approved_amount ?? '',
       deductible:            row.deductible ?? '',
       recovered_amount:      row.recovered_amount ?? '',
+      recovery_status:       row.recovery_status ?? '',
+      recovery_source:       row.recovery_source ?? '',
+      recovery_date:         d(row.recovery_date),
+      recovery_reference:    row.recovery_reference ?? '',
+      responsible_party:     row.responsible_party ?? '',
+      liable_party:          row.liable_party ?? '',
+      payer:                 row.payer ?? '',
       fault_status:          row.fault_status ?? '',
       gcc_liability_ratio:   row.gcc_liability_ratio ?? '',
       najm_status:           row.najm_status ?? '',
+      najm_fault:            row.najm_fault ?? '',
       taqdeer_status:        row.taqdeer_status ?? '',
+      case_stage:            row.case_stage ?? '',
+      damage_condition:      row.damage_condition ?? '',
+      current_status:        row.current_status ?? '',
+      next_step:             row.next_step ?? '',
+      action_to_be_taken:    row.action_to_be_taken ?? '',
+      responsible_owner:     row.responsible_owner ?? '',
+      required_action:       row.required_action ?? '',
+      status_update_date:    d(row.status_update_date),
+      status_update_note:    row.status_update_note ?? '',
       repair_type:           row.repair_type ?? '',
       workshop_name:         row.workshop_name ?? '',
+      workshop_quotation:    row.workshop_quotation ?? '',
+      discount_pct:          row.discount_pct ?? '',
+      final_amount:          row.final_amount ?? '',
+      estimated_damage_cost: row.estimated_damage_cost ?? '',
       repair_cost:           row.repair_cost ?? '',
       expected_release_date: d(row.expected_release_date),
       release_date:          d(row.release_date),
@@ -1095,6 +1232,10 @@ export default function Accidents() {
     setSaving(true)
     setFormError('')
     const num = (v) => (v !== '' && v != null ? Number(v) : null)
+    // Keep the insurance claim lifecycle in lockstep with the workflow stage
+    // (former Repair & Insurance tab behaviour): a mapped stage fills the claim
+    // status when the user has not picked one explicitly.
+    const mappedClaimStatus = STAGE_TO_CLAIM_STATUS[String(form.current_status || '').toLowerCase()] || null
     const payload = {
       incident_date:         form.incident_date || null,
       asset_no:              form.asset_no,
@@ -1113,19 +1254,43 @@ export default function Accidents() {
       insurer:               form.insurer || null,
       policy_no:             form.policy_no || null,
       insurance_claim_no:    form.insurance_claim_no || null,
-      claim_status:          form.claim_status || null,
+      claim_status:          form.claim_status || mappedClaimStatus,
       claim_amount:          num(form.claim_amount),
       claim_approved_amount: num(form.claim_approved_amount),
       deductible:            num(form.deductible),
       recovered_amount:      num(form.recovered_amount),
+      // Cost recovery (DB defaults: recovery_status 'pending', recovery_source 'none')
+      recovery_status:       form.recovery_status || 'pending',
+      recovery_source:       form.recovery_source || 'none',
+      recovery_date:         form.recovery_date || null,
+      recovery_reference:    form.recovery_reference || null,
+      // Parties & liability
+      responsible_party:     form.responsible_party || null,
+      liable_party:          form.liable_party || null,
+      payer:                 form.payer || null,
       // GCC case / liability
       fault_status:          form.fault_status || null,
       gcc_liability_ratio:   num(form.gcc_liability_ratio),
       najm_status:           form.najm_status || null,
+      najm_fault:            form.najm_fault || null,
       taqdeer_status:        form.taqdeer_status || null,
+      // Case tracking & workflow
+      case_stage:            form.case_stage || null,
+      damage_condition:      form.damage_condition || null,
+      current_status:        form.current_status || null,
+      next_step:             form.next_step || null,
+      action_to_be_taken:    form.action_to_be_taken || null,
+      responsible_owner:     form.responsible_owner || null,
+      required_action:       form.required_action || null,
+      status_update_date:    form.status_update_date || null,
+      status_update_note:    form.status_update_note || null,
       // Repair
       repair_type:           form.repair_type || null,
       workshop_name:         form.workshop_name || null,
+      workshop_quotation:    num(form.workshop_quotation),
+      discount_pct:          num(form.discount_pct),
+      final_amount:          num(form.final_amount),
+      estimated_damage_cost: num(form.estimated_damage_cost),
       repair_cost:           num(form.repair_cost),
       expected_release_date: form.expected_release_date || null,
       release_date:          form.release_date || null,
@@ -1738,7 +1903,7 @@ export default function Accidents() {
           <div className="card">
             <p className="text-sm font-semibold text-[var(--text-dim)] mb-3">Incidents per Month (last 12 months)</p>
             <div style={{ height: 160 }}>
-              <Bar data={chartData} options={chartOpts} />
+              <Bar data={chartData} options={CHART_OPTS_BASE} plugins={[LIGHT_VALUE_LABELS]} />
             </div>
           </div>
 
@@ -1795,11 +1960,11 @@ export default function Accidents() {
             )}
             <select className="input text-sm w-36" value={filterRepairType} onChange={e => setFilterRepairType(e.target.value)} title="Repair route">
               <option value="">All Repairs</option>
-              {REPAIR_OPTS.map(s => <option key={s} value={s}>{s}</option>)}
+              {REPAIR_TYPE_OPTS.map(s => <option key={s} value={s}>{s}</option>)}
             </select>
             <select className="input text-sm w-40" value={filterFault} onChange={e => setFilterFault(e.target.value)} title="Fault status">
               <option value="">All Fault</option>
-              {FAULT_OPTS.map(s => <option key={s} value={s}>{s}</option>)}
+              {FAULT_STATUS_OPTS.map(s => <option key={s} value={s}>{s}</option>)}
             </select>
             <select className="input text-sm w-40" value={filterAge} onChange={e => setFilterAge(e.target.value)} title="How long open cases have been running (days since incident)">
               <option value="">Any Days Open</option>
@@ -1890,6 +2055,23 @@ export default function Accidents() {
       {/* ===== ANALYTICS TAB (hidden while the inline editor is open) ===== */}
       {!showForm && tab === 'analytics' && (
         <div className="space-y-4">
+          {/* Download the on-screen analytics as a compact 1-2 page PDF with numbers */}
+          <div className="flex items-center justify-end gap-3 flex-wrap">
+            {dlAnalytics.msg && (
+              <span className={`text-xs ${dlAnalytics.ok ? 'text-green-400' : 'text-red-400'}`}>{dlAnalytics.msg}</span>
+            )}
+            <button
+              onClick={downloadAnalyticsPdf}
+              disabled={dlAnalytics.busy || records.length === 0}
+              title={records.length === 0 ? 'No incident data to export' : 'Download these charts and KPIs as a compact PDF (max 2 pages)'}
+              className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-1.5 disabled:opacity-50"
+            >
+              {dlAnalytics.busy
+                ? <><span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin inline-block" /> Preparing PDF...</>
+                : <><Download size={14} /> Download Analytics PDF</>}
+            </button>
+          </div>
+
           {/* KPI row */}
           <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
             <div className="card text-center">
@@ -1920,26 +2102,26 @@ export default function Accidents() {
               <p className="text-sm font-semibold text-[var(--text-dim)] mb-3">Severity Distribution</p>
               {stats.total === 0
                 ? <p className="text-[var(--text-muted)] text-sm text-center py-8">No data</p>
-                : <div style={{ height: 220 }}><Doughnut data={severityDoughnut} options={CHART_OPTS_DOUGHNUT} /></div>}
+                : <div style={{ height: 220 }}><Doughnut ref={setChartRef('severity')} data={severityDoughnut} options={CHART_OPTS_DOUGHNUT} /></div>}
             </div>
             <div className="card">
               <p className="text-sm font-semibold text-[var(--text-dim)] mb-3">Status Distribution</p>
               {stats.total === 0
                 ? <p className="text-[var(--text-muted)] text-sm text-center py-8">No data</p>
-                : <div style={{ height: 220 }}><Doughnut data={statusDoughnut} options={CHART_OPTS_DOUGHNUT} /></div>}
+                : <div style={{ height: 220 }}><Doughnut ref={setChartRef('status')} data={statusDoughnut} options={CHART_OPTS_DOUGHNUT} /></div>}
             </div>
             <div className="card">
               <p className="text-sm font-semibold text-[var(--text-dim)] mb-3">Fault Status (GCC)</p>
               {stats.total === 0
                 ? <p className="text-[var(--text-muted)] text-sm text-center py-8">No data</p>
-                : <div style={{ height: 220 }}><Doughnut data={faultDoughnut} options={CHART_OPTS_DOUGHNUT} /></div>}
+                : <div style={{ height: 220 }}><Doughnut ref={setChartRef('fault')} data={faultDoughnut} options={CHART_OPTS_DOUGHNUT} /></div>}
             </div>
           </div>
 
           {/* Incident trend line */}
           <div className="card">
             <p className="text-sm font-semibold text-[var(--text-dim)] mb-3">Incident Trend (last 12 months)</p>
-            <div style={{ height: 220 }}><Line data={monthlyTrendLine} options={CHART_OPTS_LINE} /></div>
+            <div style={{ height: 220 }}><Line ref={setChartRef('trend')} data={monthlyTrendLine} options={CHART_OPTS_LINE} plugins={[LIGHT_VALUE_LABELS]} /></div>
           </div>
 
           {/* Top 5 assets + by site */}
@@ -1950,7 +2132,7 @@ export default function Accidents() {
                 <p className="text-[var(--text-muted)] text-sm text-center py-6">No data</p>
               ) : (
                 <div style={{ height: 200 }}>
-                  <Bar data={topAssetsChart} options={CHART_OPTS_H} />
+                  <Bar ref={setChartRef('topAssets')} data={topAssetsChart} options={CHART_OPTS_H} plugins={[LIGHT_VALUE_LABELS]} />
                 </div>
               )}
             </div>
@@ -1960,7 +2142,7 @@ export default function Accidents() {
                 <p className="text-[var(--text-muted)] text-sm text-center py-6">No data</p>
               ) : (
                 <div style={{ height: 200 }}>
-                  <Bar data={bySiteChart} options={CHART_OPTS_H} />
+                  <Bar ref={setChartRef('bySite')} data={bySiteChart} options={CHART_OPTS_H} plugins={[LIGHT_VALUE_LABELS]} />
                 </div>
               )}
             </div>
@@ -1970,7 +2152,7 @@ export default function Accidents() {
           <div className="card">
             <p className="text-sm font-semibold text-[var(--text-dim)] mb-3">Monthly Severity Breakdown (last 12 months)</p>
             <div style={{ height: 220 }}>
-              <Bar data={severityMonthlyChart} options={CHART_OPTS_STACKED} />
+              <Bar ref={setChartRef('sevMonthly')} data={severityMonthlyChart} options={CHART_OPTS_STACKED} plugins={[LIGHT_VALUE_LABELS]} />
             </div>
           </div>
 
@@ -2024,13 +2206,13 @@ export default function Accidents() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <p className="text-xs font-medium text-[var(--text-muted)] mb-2">Claim Status Breakdown</p>
-                <div style={{ height: 180 }}><Bar data={claimStatusChart} options={chartOpts} /></div>
+                <div style={{ height: 180 }}><Bar ref={setChartRef('claimStatus')} data={claimStatusChart} options={CHART_OPTS_BASE} plugins={[LIGHT_VALUE_LABELS]} /></div>
               </div>
               <div>
                 <p className="text-xs font-medium text-[var(--text-muted)] mb-2">Cost by Responsible Payer</p>
                 {payerCostChart.labels.length === 0
                   ? <p className="text-[var(--text-muted)] text-sm text-center py-12">No payer cost data</p>
-                  : <div style={{ height: 180 }}><Bar data={payerCostChart} options={CHART_OPTS_H} /></div>}
+                  : <div style={{ height: 180 }}><Bar ref={setChartRef('payerCost')} data={payerCostChart} options={CHART_OPTS_H} plugins={[LIGHT_VALUE_LABELS]} /></div>}
               </div>
             </div>
           </div>
@@ -2367,7 +2549,7 @@ export default function Accidents() {
 
               {/* GCC case & liability */}
               <FormSection title="Liability & Case (GCC)">
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
                   <div>
                     <label className="label">Fault Status</label>
                     <select className="input" value={form.fault_status} onChange={e => setForm(f => ({ ...f, fault_status: e.target.value }))}>
@@ -2390,11 +2572,84 @@ export default function Accidents() {
                     </select>
                   </div>
                   <div>
+                    <label className="label">Najm Fault</label>
+                    <select className="input" value={form.najm_fault} onChange={e => setForm(f => ({ ...f, najm_fault: e.target.value }))}>
+                      <option value="">—</option>
+                      {NAJM_FAULT_OPTS.map(s => <option key={s} value={s}>{s}</option>)}
+                    </select>
+                  </div>
+                  <div>
                     <label className="label">Taqdeer</label>
                     <select className="input" value={form.taqdeer_status} onChange={e => setForm(f => ({ ...f, taqdeer_status: e.target.value }))}>
                       <option value="">—</option>
                       {TAQDEER_STATUS_OPTS.map(s => <option key={s} value={s}>{s}</option>)}
                     </select>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mt-3">
+                  <div>
+                    <label className="label">Liable Party</label>
+                    <input className="input" placeholder="e.g. 100% Third Party Liability" value={form.liable_party} onChange={e => setForm(f => ({ ...f, liable_party: e.target.value }))} />
+                  </div>
+                  <div>
+                    <label className="label">Responsible Party</label>
+                    <input className="input" placeholder="Who is at fault" value={form.responsible_party} onChange={e => setForm(f => ({ ...f, responsible_party: e.target.value }))} />
+                  </div>
+                  <div>
+                    <label className="label">Who Pays</label>
+                    <input className="input" placeholder="Payer" value={form.payer} onChange={e => setForm(f => ({ ...f, payer: e.target.value }))} />
+                  </div>
+                </div>
+              </FormSection>
+
+              {/* Case tracking & workflow (consolidated from the detail page's Tracker tab) */}
+              <FormSection title="Case Tracking & Workflow">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  <div>
+                    <label className="label">Case Stage</label>
+                    <input className="input" list="acc-case-stages" placeholder="e.g. Under Investigation" value={form.case_stage} onChange={e => setForm(f => ({ ...f, case_stage: e.target.value }))} />
+                    <datalist id="acc-case-stages">{CASE_STAGE_OPTS.map(s => <option key={s} value={s} />)}</datalist>
+                  </div>
+                  <div>
+                    <label className="label">Damage Condition</label>
+                    <input className="input" list="acc-damage-conditions" placeholder="Minor / Major Repair" value={form.damage_condition} onChange={e => setForm(f => ({ ...f, damage_condition: e.target.value }))} />
+                    <datalist id="acc-damage-conditions">{DAMAGE_CONDITION_OPTS.map(s => <option key={s} value={s} />)}</datalist>
+                  </div>
+                  <div>
+                    <label className="label">Current Workflow Stage</label>
+                    <input className="input" list="acc-workflow-stages" placeholder="e.g. Under Repair" value={form.current_status} onChange={e => setForm(f => ({ ...f, current_status: e.target.value }))} />
+                  </div>
+                  <div>
+                    <label className="label">Next Step</label>
+                    <input className="input" list="acc-workflow-stages" placeholder="e.g. Waiting release" value={form.next_step} onChange={e => setForm(f => ({ ...f, next_step: e.target.value }))} />
+                    <datalist id="acc-workflow-stages">{WORKFLOW_STAGE_OPTS.map(s => <option key={s} value={s} />)}</datalist>
+                  </div>
+                </div>
+                {STAGE_TO_CLAIM_STATUS[String(form.current_status || '').toLowerCase()] && !form.claim_status && (
+                  <p className="text-[11px] text-[var(--text-muted)] mt-2">
+                    Saving this stage sets the claim status to "{CLAIM_STATUS_LABELS[STAGE_TO_CLAIM_STATUS[String(form.current_status).toLowerCase()]]}" (pick a Claim Status below to override).
+                  </p>
+                )}
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mt-3">
+                  <div>
+                    <label className="label">Responsible Owner</label>
+                    <input className="input" placeholder="Accountable person" value={form.responsible_owner} onChange={e => setForm(f => ({ ...f, responsible_owner: e.target.value }))} />
+                  </div>
+                  <div>
+                    <label className="label">Action To Be Taken</label>
+                    <input className="input" placeholder="Next step" value={form.action_to_be_taken} onChange={e => setForm(f => ({ ...f, action_to_be_taken: e.target.value }))} />
+                  </div>
+                  <div>
+                    <label className="label">Required Action / Progress</label>
+                    <input className="input" placeholder="Latest progress note" value={form.required_action} onChange={e => setForm(f => ({ ...f, required_action: e.target.value }))} />
+                  </div>
+                  <div>
+                    <label className="label">Status Update Date</label>
+                    <input type="date" className="input" value={form.status_update_date} onChange={e => setForm(f => ({ ...f, status_update_date: e.target.value }))} />
+                  </div>
+                  <div className="md:col-span-2">
+                    <label className="label">Status Update Note</label>
+                    <input className="input" placeholder="Optional note for this update" value={form.status_update_note} onChange={e => setForm(f => ({ ...f, status_update_note: e.target.value }))} />
                   </div>
                 </div>
               </FormSection>
@@ -2418,7 +2673,7 @@ export default function Accidents() {
                     <label className="label">Claim Status</label>
                     <select className="input" value={form.claim_status} onChange={e => setForm(f => ({ ...f, claim_status: e.target.value }))}>
                       <option value="">—</option>
-                      {CLAIM_STATUS_OPTS.map(s => <option key={s} value={s}>{s}</option>)}
+                      {CLAIM_STATUS_OPTS.map(s => <option key={s} value={s}>{CLAIM_STATUS_LABELS[s]}</option>)}
                     </select>
                   </div>
                   <div>
@@ -2440,6 +2695,34 @@ export default function Accidents() {
                 </div>
               </FormSection>
 
+              {/* Cost recovery (consolidated from the detail page's Claim & Recovery tab) */}
+              <FormSection title="Cost Recovery">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  <div>
+                    <label className="label">Recovery Status</label>
+                    <select className="input" value={form.recovery_status} onChange={e => setForm(f => ({ ...f, recovery_status: e.target.value }))}>
+                      <option value="">—</option>
+                      {RECOVERY_STATUS_OPTS.map(s => <option key={s} value={s}>{RECOVERY_STATUS_LABELS[s]}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="label">Recovery Source</label>
+                    <select className="input" value={form.recovery_source} onChange={e => setForm(f => ({ ...f, recovery_source: e.target.value }))}>
+                      <option value="">—</option>
+                      {RECOVERY_SOURCE_OPTS.map(s => <option key={s} value={s}>{RECOVERY_SOURCE_LABELS[s]}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="label">Recovery Date</label>
+                    <input type="date" className="input" value={form.recovery_date} onChange={e => setForm(f => ({ ...f, recovery_date: e.target.value }))} />
+                  </div>
+                  <div>
+                    <label className="label">Recovery Reference</label>
+                    <input className="input" placeholder="Payment / case ref" value={form.recovery_reference} onChange={e => setForm(f => ({ ...f, recovery_reference: e.target.value }))} />
+                  </div>
+                </div>
+              </FormSection>
+
               {/* Repair & release */}
               <FormSection title="Repair & Release">
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
@@ -2453,6 +2736,31 @@ export default function Accidents() {
                   <div>
                     <label className="label">Workshop</label>
                     <input className="input" value={form.workshop_name} onChange={e => setForm(f => ({ ...f, workshop_name: e.target.value }))} />
+                  </div>
+                  <div>
+                    <label className="label">Workshop Quotation</label>
+                    <input type="number" min="0" step="0.01" className="input" value={form.workshop_quotation} onChange={e => setForm(f => ({ ...f, workshop_quotation: e.target.value }))} />
+                  </div>
+                  <div>
+                    <label className="label">Discount %</label>
+                    <input type="number" min="0" max="100" step="0.01" className="input" placeholder="0" value={form.discount_pct} onChange={e => setForm(f => ({ ...f, discount_pct: e.target.value }))} />
+                  </div>
+                  <div>
+                    <label className="label">Final Amount</label>
+                    <input type="number" min="0" step="0.01" className="input" value={form.final_amount} onChange={e => setForm(f => ({ ...f, final_amount: e.target.value }))} />
+                    {suggestedFinal != null && String(form.final_amount) !== String(suggestedFinal) && (
+                      <button
+                        type="button"
+                        onClick={() => setForm(f => ({ ...f, final_amount: suggestedFinal }))}
+                        className="text-[11px] text-green-400 hover:text-green-300 mt-1"
+                      >
+                        Use suggested {fmtCurrency(suggestedFinal)} (quotation minus discount)
+                      </button>
+                    )}
+                  </div>
+                  <div>
+                    <label className="label">Estimated Damage Cost</label>
+                    <input type="number" min="0" step="0.01" className="input" value={form.estimated_damage_cost} onChange={e => setForm(f => ({ ...f, estimated_damage_cost: e.target.value }))} />
                   </div>
                   <div>
                     <label className="label">Repair Cost</label>

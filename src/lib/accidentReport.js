@@ -127,7 +127,10 @@ function rank(records, keyFn, n, color) {
 //   line             → value above each point (zeros skipped to avoid clutter)
 //   doughnut         → slice counts appended in the legend (see CHART_OPTS)
 const fmtLabelNum = (v) => (Math.abs(v) >= 1000 ? Math.round(v).toLocaleString('en-US') : String(Math.round(v * 10) / 10))
-export const VALUE_LABELS_PLUGIN = {
+/** Factory: the same value-labels plugin with a custom label colour, so dark-UI
+ *  screens (light ink) and the white-paper report renderer (dark ink) share ONE
+ *  implementation. Default keeps the paper-theme ink. */
+export const makeValueLabelsPlugin = (color = PAPER.ink) => ({
   id: 'valueLabels',
   afterDatasetsDraw(chart) {
     const type = chart.config?.type
@@ -137,7 +140,7 @@ export const VALUE_LABELS_PLUGIN = {
     const horizontal = chart.options?.indexAxis === 'y'
     const stacked = !!(chart.options?.scales?.x?.stacked && chart.options?.scales?.y?.stacked)
     ctx.save()
-    ctx.fillStyle = PAPER.ink
+    ctx.fillStyle = color
     ctx.font = 'bold 10px helvetica, arial, sans-serif'
     if (type === 'bar' && stacked) {
       // Stacked bars: label only the total on top of each stack.
@@ -179,7 +182,8 @@ export const VALUE_LABELS_PLUGIN = {
     }
     ctx.restore()
   },
-}
+})
+export const VALUE_LABELS_PLUGIN = makeValueLabelsPlugin(PAPER.ink)
 
 /** Doughnut legend labels with the slice count appended, e.g. "Major (4)" —
  *  makes slice values visible without cluttering the arcs. */

@@ -17,6 +17,7 @@ import {
   buildReportContext, buildInsights, fmtCell, cellValue, normalizeConfig, summarizeChartData,
 } from './accidentReport'
 import { formatCurrencyCompact } from './formatters'
+import { reportFileName, reportDateLabel } from './exportUtils'
 
 /** Render one chart block offscreen and return a PNG data URL (null on failure). */
 async function renderOffscreenChart(block, ctx) {
@@ -199,7 +200,10 @@ export async function renderAccidentReportPdf({
     doc.text(`Page ${p} / ${pages}`, PW - MX, PH - 8, { align: 'right' })
   }
 
-  const fname = `${filename || `Accident_Report_${stamp}`}.pdf`
+  const cleanBase = filename
+    ? reportFileName(filename)
+    : reportFileName('TyrePulse Accident Report', reportDateLabel())
+  const fname = `${cleanBase}.pdf`
   if (save) doc.save(fname)
   return { doc, pages, filename: fname }
 }

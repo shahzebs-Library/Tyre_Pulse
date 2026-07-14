@@ -41,9 +41,10 @@ vi.mock('../lib/supabase', () => ({
     rpc: () => Promise.resolve({ data: [], error: null }),
   },
 }))
+const { navSpy } = vi.hoisted(() => ({ navSpy: vi.fn() }))
 vi.mock('react-router-dom', () => ({
   useParams: () => ({ id: 'acc-1' }),
-  useNavigate: () => vi.fn(),
+  useNavigate: () => navSpy,
 }))
 vi.mock('../contexts/AuthContext', () => ({ useAuth: () => ({ profile: { id: 'u1', role: 'Admin' } }) }))
 vi.mock('../contexts/SettingsContext', () => ({ useSettings: () => ({ activeCurrency: 'SAR' }) }))
@@ -59,7 +60,7 @@ vi.mock('../lib/exportUtils', () => ({ exportAccidentCasePdf: (...a) => exportSp
 import AccidentDetailPage from '../components/AccidentDetailModal'
 
 describe('AccidentDetailPage (/accidents/:id)', () => {
-  beforeEach(() => { exportSpy.mockClear() })
+  beforeEach(() => { exportSpy.mockClear(); navSpy.mockClear() })
 
   it('renders the Overview tab with currency, no ReferenceError', async () => {
     render(<AccidentDetailPage />)
@@ -78,6 +79,26 @@ describe('AccidentDetailPage (/accidents/:id)', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /Parts & Repairs/i }))
     await waitFor(() => expect(screen.getByText('Bumper')).toBeInTheDocument())
+  })
+
+  it('routes Edit Incident to the ONE unified form on the Accidents page (no per-tab edit forms)', async () => {
+    render(<AccidentDetailPage />)
+    await screen.findByRole('button', { name: /Download Case/i })
+
+    // The record tabs are read-only now: no per-tab save buttons remain.
+    fireEvent.click(screen.getByRole('button', { name: /Claim & Recovery/i }))
+    await waitFor(() => expect(screen.getByText(/Cost Recovery/i)).toBeInTheDocument())
+    expect(screen.queryByRole('button', { name: /Save Claim & Recovery/i })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: /Repair & Insurance/i }))
+    await waitFor(() => expect(screen.getByText(/Workshop & Financials/i)).toBeInTheDocument())
+    expect(screen.queryByRole('button', { name: /Save Repair & Insurance/i })).toBeNull()
+
+    // Edit Incident (header action, elevated role) deep-links into the unified
+    // inline form on /accidents via router state.
+    const editBtns = screen.getAllByRole('button', { name: /Edit Incident/i })
+    expect(editBtns.length).toBeGreaterThan(0)
+    fireEvent.click(editBtns[0])
+    expect(navSpy).toHaveBeenCalledWith('/accidents', { state: { editId: 'acc-1' } })
   })
 
   it('invokes the case PDF export from the Download Case action', async () => {

@@ -39,6 +39,7 @@ import {
 import { renderAccidentReportPdf } from '../../lib/accidentReportPdf'
 import { listTemplates, createTemplate, updateTemplate, deleteTemplate } from '../../lib/api/accidentReportTemplates'
 import { formatCurrencyCompact } from '../../lib/formatters'
+import { reportFileName, reportDateLabel } from '../../lib/exportUtils'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, LineElement, PointElement, Filler, Title, Tooltip, Legend)
 
@@ -156,6 +157,7 @@ export default function AccidentReportBuilder({ records = [], company = 'TyrePul
     try {
       await renderAccidentReportPdf({
         config, records, company, currency,
+        filename: reportFileName(company, 'Accident Report', reportDateLabel()),
         chartImageFor: (b) => chartRefs.current[b.id]?.toBase64Image?.('image/png', 1) || null,
       })
       setToast({ t: 'ok', m: 'PDF exported.' })

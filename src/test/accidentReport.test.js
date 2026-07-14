@@ -3,7 +3,7 @@ import {
   CHARTS, KPIS, TABLE_COLS, BLOCK_TYPES, BLOCK_DEFAULTS, CHART_OPTS, CHART_JS_TYPE,
   REPORT_LIBRARY, STARTER, makeBlock, buildReportContext, buildInsights,
   fmtCell, cellValue, caseAgeDays, isChartEmpty, isClosedRow, normalizeConfig,
-  VALUE_LABELS_PLUGIN, summarizeChartData,
+  VALUE_LABELS_PLUGIN, makeValueLabelsPlugin, summarizeChartData,
 } from '../lib/accidentReport'
 
 const money = (v) => `$${Number(v)}`
@@ -111,6 +111,26 @@ describe('value labels + chart digests (report numbers)', () => {
   it('exposes an inline chart.js value-labels plugin', () => {
     expect(VALUE_LABELS_PLUGIN.id).toBe('valueLabels')
     expect(VALUE_LABELS_PLUGIN.afterDatasetsDraw).toBeTypeOf('function')
+  })
+  it('makeValueLabelsPlugin builds the same plugin with a custom label colour', () => {
+    const light = makeValueLabelsPlugin('#e2e8f0')
+    expect(light.id).toBe('valueLabels')
+    expect(light.afterDatasetsDraw).toBeTypeOf('function')
+    // the colour is applied to the canvas fillStyle when drawing a bar chart
+    const ctx = { save: () => {}, restore: () => {}, fillText: () => {}, fillStyle: '', font: '' }
+    const chart = {
+      config: { type: 'bar' },
+      ctx,
+      options: {},
+      data: { labels: ['A'], datasets: [{ data: [3] }] },
+      isDatasetVisible: () => true,
+      getDatasetMeta: () => ({ data: [{ x: 10, y: 10 }] }),
+    }
+    light.afterDatasetsDraw(chart)
+    expect(ctx.fillStyle).toBe('#e2e8f0')
+    // and the default export still draws in the paper ink
+    VALUE_LABELS_PLUGIN.afterDatasetsDraw(chart)
+    expect(ctx.fillStyle).toBe('#0f172a')
   })
   it('summarizeChartData reports total and top label, empty stays empty', () => {
     const data = { labels: ['Riyadh', 'Jeddah'], datasets: [{ data: [18, 6] }, { data: [0, 2] }] }

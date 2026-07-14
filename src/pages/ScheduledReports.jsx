@@ -13,7 +13,7 @@ import { useSettings } from '../contexts/SettingsContext'
 import { useTenant } from '../contexts/TenantContext'
 import SegmentedControl from '../components/ui/SegmentedControl'
 import EntityApprovalPanel from '../components/workflow/EntityApprovalPanel'
-import { exportToPdf, exportToExcel } from '../lib/exportUtils'
+import { exportToPdf, exportToExcel, reportFileName, reportDateLabel } from '../lib/exportUtils'
 import {
   REPORT_TYPES, FREQUENCIES, PERIODS, OUTPUT_FORMATS,
   listSchedules, createSchedule, updateSchedule, deleteSchedule,
@@ -727,8 +727,7 @@ export default function ScheduledReports() {
       const { from, to, label } = resolvePeriod(cfg.period, cfg.period_from, cfg.period_to)
       const { rows, dataset } = await fetchReportRows(cfg.report_type, { from, to, country: activeCountry })
       const typeLabel = typeLabelFor(cfg.report_type)
-      const stamp = new Date().toISOString().slice(0, 10)
-      const base = `${reportCompany.replace(/[^\w]+/g, '_')}_${dataset.title.replace(/[^\w]+/g, '_')}_${stamp}`
+      const base = reportFileName(reportCompany, dataset.title, reportDateLabel())
       const formats = cfg.output_formats?.length ? cfg.output_formats : ['pdf']
 
       if (formats.includes('pdf') && isBuilderType(cfg.report_type)) {
@@ -742,7 +741,7 @@ export default function ScheduledReports() {
           company: reportCompany,
           currency: activeCurrency,
           subtitle: label,
-          filename: `${reportCompany.replace(/[^\w]+/g, '_')}_${(template.name || 'Custom_Report').replace(/[^\w]+/g, '_')}_${stamp}`,
+          filename: reportFileName(reportCompany, template.name || 'Custom Report', reportDateLabel()),
         })
       } else if (formats.includes('pdf')) {
         await exportToPdf(

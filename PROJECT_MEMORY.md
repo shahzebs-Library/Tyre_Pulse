@@ -79,6 +79,8 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
   honest — [] when no data], text, table, divider, pagebreak), CHART_OPTS paper theme,
   STARTER, REPORT_LIBRARY (6 pre-built packs: Executive / Claims Desk / Insurer Submission /
   Safety Review / Monthly Board / Full Register), buildInsights, normalizeConfig.
+  Days-Open link-up: caseAgeDays()/cellValue() virtual `days_open` table column, avgDaysOpen/
+  avgCaseDuration KPIs, caseAge chart — table renderers MUST read cells via cellValue(), not r[col].
   **`src/lib/accidentReportPdf.js`** = the ONE PDF renderer (`renderAccidentReportPdf`): builder
   passes `chartImageFor` (live canvases); headless callers (Scheduled Reports) get offscreen
   chart.js rendering with the same data+options. Extend these maps for new block/chart types.

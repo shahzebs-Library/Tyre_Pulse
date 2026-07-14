@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase'
 import { fetchAllPages } from '../lib/fetchAll'
 import { useSettings } from '../contexts/SettingsContext'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
+import { toUserMessage } from '../lib/safeError'
 import PageHeader from '../components/ui/PageHeader'
 import EmptyState from '../components/EmptyState'
 import {
@@ -316,7 +317,7 @@ export default function DriverManagement() {
       if (err) throw err
       setRecords(data || [])
     } catch (e) {
-      if (myReq === reqIdRef.current) setError(e.message || 'Failed to load driver data')
+      if (myReq === reqIdRef.current) setError(toUserMessage(e, 'Failed to load driver data'))
     } finally {
       if (myReq === reqIdRef.current) setLoading(false)
     }

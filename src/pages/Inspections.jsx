@@ -22,6 +22,7 @@ import { legacyPositionCode } from '../lib/tyrePositions'
 import { useWakeLock, vibrate, shareOrCopy } from '../hooks/useWakeLock'
 import { enqueueInspection, syncPendingInspections, getPendingCount } from '../lib/offlineQueue'
 import { formatDate } from '../lib/formatters'
+import { toUserMessage } from '../lib/safeError'
 
 const STATUS_CONFIG = {
   Scheduled:    { color: 'text-blue-400',   bg: 'bg-blue-900/30',   border: 'border-blue-700/50' },
@@ -538,7 +539,7 @@ export default function Inspections() {
       setForm(null)
       await load()
     } catch (error) {
-      setSaveError(error?.message || 'Save failed. If this persists, run MIGRATIONS_SAFE.sql to update the inspections table schema.')
+      setSaveError(toUserMessage(error, 'Save failed. If this persists, run MIGRATIONS_SAFE.sql to update the inspections table schema.'))
     }
     setSaving(false)
   }
@@ -601,7 +602,7 @@ export default function Inspections() {
       setSelectedIds(new Set())
       await load()
     } catch (e) {
-      setBulkError(e.message || 'Bulk delete failed. Please try again.')
+      setBulkError(toUserMessage(e, 'Bulk delete failed. Please try again.'))
     } finally {
       setBulkBusy(false)
     }
@@ -698,7 +699,7 @@ export default function Inspections() {
           setClError('Failed to queue offline. Please try again.')
         }
       } else {
-        setClError(error?.message || 'Save failed. Please try again.')
+        setClError(toUserMessage(error, 'Save failed. Please try again.'))
         vibrate(300)
       }
     }

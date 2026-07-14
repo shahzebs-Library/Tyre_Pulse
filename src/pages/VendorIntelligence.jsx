@@ -14,6 +14,7 @@ import {
   computeFailureRate,
 } from '../lib/kpiEngine'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
+import { toUserMessage } from '../lib/safeError'
 import {
   Trophy, Download, FileText, AlertTriangle, CheckCircle,
   TrendingUp, TrendingDown, RefreshCw, Building2, Package,
@@ -222,7 +223,7 @@ export default function VendorIntelligence() {
       setRecords(recRes.data || [])
       setActions(actRes.data || [])
     } catch (e) {
-      setError(e.message || t('vendorintel.errors.loadFailed'))
+      setError(toUserMessage(e, t('vendorintel.errors.loadFailed')))
     } finally {
       setLoading(false)
     }

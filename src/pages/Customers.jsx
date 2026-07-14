@@ -23,6 +23,7 @@ import {
 } from '../lib/api/customers'
 import { summarizeCustomers, isValidEmail } from '../lib/customers'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
+import { toUserMessage } from '../lib/safeError'
 
 const STATUS_META = {
   active: { label: 'Active', cls: 'bg-green-900/40 text-green-300 border border-green-700/50' },
@@ -72,7 +73,7 @@ function CustomerModal({ open, initial, onClose, onSaved, country }) {
       }
       onClose?.()
     } catch (err) {
-      setError(err?.message || 'Could not save the customer. Please try again.')
+      setError(toUserMessage(err, 'Could not save the customer. Please try again.'))
     } finally {
       setBusy(false)
     }
@@ -171,7 +172,7 @@ function DeleteConfirm({ customer, onCancel, onConfirm }) {
   const run = async () => {
     setBusy(true); setError('')
     try { await deleteCustomer(customer.id); onConfirm?.(customer.id) }
-    catch (err) { setError(err?.message || 'Could not delete this customer.'); setBusy(false) }
+    catch (err) { setError(toUserMessage(err, 'Could not delete this customer.')); setBusy(false) }
   }
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={onCancel}>
@@ -225,7 +226,7 @@ export default function Customers() {
       setUpdatedAt(new Date())
     } catch (err) {
       if (isMissingRelation(err)) { setMissing(true); setRows([]) }
-      else { setError(err?.message || 'Could not load customers.'); setRows([]) }
+      else { setError(toUserMessage(err, 'Could not load customers.')); setRows([]) }
     } finally {
       setRefreshing(false)
     }

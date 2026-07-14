@@ -8,6 +8,7 @@ import { useTenant } from '../contexts/TenantContext'
 import { useLanguage } from '../contexts/LanguageContext'
 import { exportToPptx, exportToExcel, exportToPdf, exportDailyExecutivePdf } from '../lib/exportUtils'
 import { formatDate } from '../lib/formatters'
+import { toUserMessage } from '../lib/safeError'
 import {
   recordCost, computeFleetHealthScore, computeSeasonalTrends, computeTyreLifeAnalysis,
 } from '../lib/analyticsEngine'
@@ -243,7 +244,7 @@ export default function Dashboard() {
       setRecentRecords(recentRes.data ?? [])
       setOpenActions(openActRes.data ?? [])
     } catch (e) {
-      setError(e.message || t('dashboard.states.errorDefault'))
+      setError(toUserMessage(e, t('dashboard.states.errorDefault')))
     } finally {
       setLoading(false)
     }
@@ -525,7 +526,7 @@ export default function Dashboard() {
       setExportMsg({ text: 'Report downloaded successfully.', type: 'ok' })
     } catch (err) {
       console.error(`[Dashboard] ${key} export failed:`, err)
-      setExportMsg({ text: `Export failed: ${err?.message || 'Could not generate the file. Please retry.'}`, type: 'err' })
+      setExportMsg({ text: `Export failed: ${toUserMessage(err, 'Could not generate the file. Please retry.')}`, type: 'err' })
     } finally {
       setExporting(null)
     }

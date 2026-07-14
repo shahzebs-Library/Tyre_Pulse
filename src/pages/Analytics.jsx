@@ -15,6 +15,7 @@ import { formatCurrencyCompact } from '../lib/formatters'
 import { fetchAllPages } from '../lib/fetchAll'
 import EnterpriseTable from '../components/ui/EnterpriseTable'
 import { useReportMeta } from '../hooks/useReportMeta'
+import { toUserMessage } from '../lib/safeError'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, LineElement, PointElement, Title, Tooltip, Legend)
 
@@ -41,7 +42,7 @@ export default function Analytics() {
       if (e) throw new Error(e.message || e)
       setRecords(data || [])
     } catch (err) {
-      setError(err.message || 'Failed to load data.')
+      setError(toUserMessage(err, 'Failed to load data.'))
       setRecords([])
     } finally {
       setLoading(false)

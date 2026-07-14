@@ -22,6 +22,7 @@ import { useSettings } from '../contexts/SettingsContext'
 import { useAuth } from '../contexts/AuthContext'
 import { formatCurrency as _fmtCurrencyBase, formatDate, formatMonthYear, formatMonth } from '../lib/formatters'
 import { resolvePdfBrand, pdfHeader, pdfFooter, pdfTableTheme } from '../lib/exportUtils'
+import { toUserMessage } from '../lib/safeError'
 import { useTenant } from '../contexts/TenantContext'
 import { useLanguage } from '../contexts/LanguageContext'
 import PageHeader from '../components/ui/PageHeader'
@@ -196,7 +197,7 @@ export default function Procurement() {
       if (err) throw err
       setOrders(data || [])
     } catch (e) {
-      setError(e.message)
+      setError(toUserMessage(e))
     } finally {
       setLoading(false)
     }

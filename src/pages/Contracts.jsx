@@ -23,6 +23,7 @@ import {
 import { contractStatus, summarizeContracts, daysUntilEnd } from '../lib/contracts'
 import { formatCurrencyCompact } from '../lib/formatters'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
+import { toUserMessage } from '../lib/safeError'
 
 const STATUS_META = {
   active: { label: 'Active', cls: 'bg-green-900/40 text-green-300 border border-green-700/50', icon: CheckCircle2 },
@@ -82,7 +83,7 @@ function ContractModal({ open, initial, currency, onClose, onSaved }) {
       else await createContract({ ...form, currency })
       onSaved?.()
     } catch (err) {
-      setError(err?.message || 'Could not save the contract.')
+      setError(toUserMessage(err, 'Could not save the contract.'))
     } finally {
       setBusy(false)
     }
@@ -193,7 +194,7 @@ export default function Contracts() {
       setRows(Array.isArray(data) ? data : [])
       setUpdatedAt(new Date())
     } catch (err) {
-      setError(err?.message || 'Could not load contracts.')
+      setError(toUserMessage(err, 'Could not load contracts.'))
       setRows([])
     } finally {
       setRefreshing(false)
@@ -239,7 +240,7 @@ export default function Contracts() {
       await deleteContract(id)
       setRows((prev) => (prev || []).filter((r) => r.id !== id))
     } catch (err) {
-      setError(err?.message || 'Could not delete the contract.')
+      setError(toUserMessage(err, 'Could not delete the contract.'))
     } finally {
       setDeletingId(null)
     }

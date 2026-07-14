@@ -8,6 +8,7 @@ import { Plus, Save, X, Search, Download, FileText, Camera, GitBranch } from 'lu
 import PageHeader from '../components/ui/PageHeader'
 import SectionTabs, { RCA_TABS } from '../components/ui/SectionTabs'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
+import { toUserMessage } from '../lib/safeError'
 
 const CONTRIBUTING_FACTOR_OPTIONS = [
   'Overloading',
@@ -137,7 +138,7 @@ export default function RcaRecords() {
     try {
       if (editId) await rca.updateRcaRecord(editId, payload)
       else        await rca.createRcaRecord(payload)
-    } catch (err) { setError(err.message); setSaving(false); return }
+    } catch (err) { setError(toUserMessage(err)); setSaving(false); return }
     setShowForm(false)
     load()
     setSaving(false)

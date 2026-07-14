@@ -8,6 +8,7 @@ import PageHeader from '../components/ui/PageHeader'
 import BudgetTabs from '../components/budgets/BudgetTabs'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import { formatCurrencyCompact } from '../lib/formatters'
+import { toUserMessage } from '../lib/safeError'
 import * as budgetsApi from '../lib/api/budgets'
 import {
   Chart as ChartJS, CategoryScale, LinearScale, LineElement, PointElement,
@@ -124,7 +125,7 @@ export default function Budgets() {
       region:     profile?.region ?? 'KSA',
       created_by: profile?.id,
     })
-    if (err) { setError(err.message); setSaving(false); return }
+    if (err) { setError(toUserMessage(err)); setSaving(false); return }
     setShowForm(false)
     load()
     setSaving(false)

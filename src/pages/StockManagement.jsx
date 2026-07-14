@@ -11,6 +11,7 @@ import { motion } from 'framer-motion'
 import PageHeader from '../components/ui/PageHeader'
 import { exportToExcel, exportToPdf, resolvePdfBrand, pdfHeader, pdfFooter, pdfTableTheme } from '../lib/exportUtils'
 import { formatDate } from '../lib/formatters'
+import { toUserMessage } from '../lib/safeError'
 import { useLanguage } from '../contexts/LanguageContext'
 import {
   Chart as ChartJS, CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend,
@@ -131,7 +132,7 @@ export default function StockManagement() {
       setVelocityMap(vMap)
     } catch (err) {
       // A thrown fetch previously left the spinner stuck forever with no message.
-      setError(err?.message || t('stock.errors.loadFailed'))
+      setError(toUserMessage(err, t('stock.errors.loadFailed')))
     } finally {
       setLoading(false)
     }
@@ -181,7 +182,7 @@ export default function StockManagement() {
         const ins = await stock.insertStockRecord(payload)
         stockId = ins.id
       }
-    } catch (err) { setError(err.message); setSaving(false); return }
+    } catch (err) { setError(toUserMessage(err)); setSaving(false); return }
 
     const qtyChange = editId ? newQty - prevQty : newQty
     if (qtyChange !== 0 || !editId) {

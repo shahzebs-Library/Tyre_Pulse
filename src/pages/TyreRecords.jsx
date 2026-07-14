@@ -24,6 +24,7 @@ import {
 import PageHeader from '../components/ui/PageHeader'
 import FilterBar from '../components/ui/FilterBar'
 import { cn } from '../lib/cn'
+import { toUserMessage } from '../lib/safeError'
 
 const PAGE_SIZE = 25
 
@@ -188,7 +189,7 @@ export default function TyreRecords() {
       ? await tyreRecordsApi.updateRecord(editRecord.id, payload)
       : await tyreRecordsApi.insertRecord(payload)
 
-    if (error) { setFormError(error.message); setSaving(false); return }
+    if (error) { setFormError(toUserMessage(error)); setSaving(false); return }
     setEditRecord(null)
     loadRecords()
     loadFilters()
@@ -248,7 +249,7 @@ export default function TyreRecords() {
       loadRecords()
       loadFilters()
     } catch (e) {
-      setDeleteError(e.message || t('records.delete.errFailed'))
+      setDeleteError(toUserMessage(e, t('records.delete.errFailed')))
     } finally {
       setSaving(false)
     }

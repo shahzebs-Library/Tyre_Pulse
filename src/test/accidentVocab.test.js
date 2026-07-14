@@ -121,14 +121,15 @@ describe('accidentVocab — presentation pills (shared list + detail source)', (
     expect(major.label).toBe('Major')
     expect(major.className).toContain('orange')
 
+    // legacy 'Total Loss' now folds onto the top Major band
     const total = accidentSeverityPill('Total Loss')
-    expect(total.label).toBe('Total Loss')
-    expect(total.className).toContain('red')
+    expect(total.label).toBe('Major')
+    expect(total.className).toContain('orange')
   })
 
   it('accidentSeverityPill canonicalises aliases and yields an empty pill for blanks', () => {
     expect(accidentSeverityPill('minor').label).toBe('Minor')   // mobile lowercase
-    expect(accidentSeverityPill('severe').label).toBe('Total Loss')
+    expect(accidentSeverityPill('severe').label).toBe('Major')
     expect(accidentSeverityPill('').label).toBe('')
     expect(accidentSeverityPill(null).className).toBe('')
   })

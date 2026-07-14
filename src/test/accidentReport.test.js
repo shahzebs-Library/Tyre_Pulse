@@ -428,7 +428,7 @@ describe('detail table filtering / sorting / density (tableRows + export)', () =
   it('TABLE_FILTER_OPTS exposes claims pairs + vocab-sourced status/severity/fault labels', () => {
     expect(TABLE_FILTER_OPTS.claims).toEqual([['all', 'All'], ['open', 'Open claims only'], ['closed', 'Closed/settled'], ['none', 'No claim']])
     expect(TABLE_FILTER_OPTS.status).toContain('Reported')
-    expect(TABLE_FILTER_OPTS.severity).toEqual(['Minor', 'Major', 'Total Loss'])
+    expect(TABLE_FILTER_OPTS.severity).toEqual(['Minor', 'Moderate', 'Major'])
     expect(TABLE_FILTER_OPTS.fault).toEqual(['Faulty', 'Non-faulty', 'Under review'])
   })
 
@@ -445,7 +445,8 @@ describe('detail table filtering / sorting / density (tableRows + export)', () =
   it('status / severity / fault filter on the canonical value (case-insensitive)', () => {
     const ids = (block) => tableRows(ROWS, block).map((r) => r.id)
     expect(ids({ filter: { status: 'Reported' }, limit: 50 })).toEqual([3, 4])
-    expect(ids({ filter: { severity: 'Total Loss' }, limit: 50 })).toEqual([3])
+    // 'total loss' (id3) now folds onto Major, alongside id1's 'Major'
+    expect(ids({ filter: { severity: 'Major' }, limit: 50 })).toEqual([1, 3])
     expect(ids({ filter: { severity: 'minor' }, limit: 50 })).toEqual([2, 4]) // case-insensitive
     // fault: id2's 'Non-Fault' canonicalises to 'Non-faulty'
     expect(ids({ filter: { fault: 'Non-faulty' }, limit: 50 })).toEqual([2])

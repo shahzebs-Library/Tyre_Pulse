@@ -16,7 +16,10 @@
 import { severityFromAccidentDamage, SEVERITY_META } from './severity'
 
 // ── Core display option lists (UI labels) ────────────────────────────────────
-export const SEVERITIES = ['Minor', 'Major', 'Total Loss']
+// Severity is ONE canonical three-step ladder. Minor / Moderate / Major map to
+// the DB CHECK tokens minor / moderate / severe (see toDbSeverity); legacy
+// values (Total Loss, severe, fatal) fold onto Major via canonSeverity.
+export const SEVERITIES = ['Minor', 'Moderate', 'Major']
 
 export const STATUSES = [
   'Reported',
@@ -59,44 +62,38 @@ export const RECOVERY_STATUS_LABELS = {
   pending: 'Pending', partial: 'Partial', recovered: 'Recovered', written_off: 'Written Off',
 }
 
-// ── Case tracker vocabularies ─────────────────────────────────────────────────
-// Suggested values for free-text tracker fields (rendered as datalists so a
-// common value is one click away but bespoke entries are still allowed).
-export const CASE_STAGE_OPTS = [
-  'Reported', 'Internal Report Preparation', 'Under Investigation', 'Insurance Filed',
-  'Awaiting Assessment', 'Under Repair', 'Awaiting Parts', 'Repair Completed',
-  'Claim Settlement', 'Closed',
-]
-export const DAMAGE_CONDITION_OPTS = ['Minor', 'Moderate', 'Major Repair', 'Total Loss', 'Cosmetic', 'Structural']
-
-// The ONE canonical workflow-stage list for accidents.current_status. This is
-// the reconciled union of the two lists that used to live in the detail view
-// (Tracker's CURRENT_STATUS_OPTIONS and Repair & Insurance's WORKFLOW_STAGES),
-// ordered by case lifecycle; the synonym 'In repair' was merged into
-// 'Under Repair'.
-export const WORKFLOW_STAGE_OPTS = [
-  'Reported',
-  'Under Investigation',
-  'Under assessment',
-  'Waiting insurance approval',
-  'Insurance approved',
+// ── Case condition / workflow vocabulary ─────────────────────────────────────
+// ONE canonical "current condition" list for the accident case lifecycle.
+// Previously THREE competing lists described this same axis with drifting values
+// (a 13-item workflow-stage list on accidents.current_status, a separate 10-item
+// case-stage list, plus overlapping status labels). They are consolidated into
+// this single clean set so every dropdown shows the same options.
+export const CURRENT_CONDITION_OPTS = [
+  'Running',
+  'Waiting for approval',
   'Under Repair',
-  'Awaiting Parts',
-  'Awaiting Approval',
-  'Insurance Claim',
   'Repair Completed',
-  'Waiting release',
   'Released',
   'Closed',
 ]
 
+// Backward-compatible aliases — existing import names keep working. The
+// workflow-stage and case-stage vocabularies were near-duplicates of the
+// lifecycle above, so they now resolve to the ONE canonical list.
+export const WORKFLOW_STAGE_OPTS = CURRENT_CONDITION_OPTS
+export const CASE_STAGE_OPTS = CURRENT_CONDITION_OPTS
+
+// Damage condition is a DISTINCT axis (how bad the body damage is), not a
+// lifecycle stage — kept separate on purpose (datalist of suggested values).
+export const DAMAGE_CONDITION_OPTS = ['Minor', 'Moderate', 'Major Repair', 'Total Loss', 'Cosmetic', 'Structural']
+
 // Terminal stages — a case at/after these is NOT delayed and needs no next step.
 export const TERMINAL_STAGES = ['released', 'closed']
 
-// A workflow stage that implies a claim_status so the two stay in lockstep on save.
+// A condition that implies a claim_status so the two stay in lockstep on save.
+// Keys MUST be lowercase members of CURRENT_CONDITION_OPTS; values are claim_status tokens.
 export const STAGE_TO_CLAIM_STATUS = {
-  'waiting insurance approval': 'filed',
-  'insurance approved': 'approved',
+  'waiting for approval': 'filed',
   'closed': 'settled',
 }
 
@@ -104,8 +101,9 @@ export const STAGE_TO_CLAIM_STATUS = {
 // Mobile writes lowercase values (minor/severe, reported/closed); the web form
 // writes title-case. Canonicalise both vocabularies so badges & stats agree.
 export const SEVERITY_ALIAS = {
-  minor: 'Minor', moderate: 'Major', major: 'Major',
-  severe: 'Total Loss', fatal: 'Total Loss', 'total loss': 'Total Loss',
+  minor: 'Minor', moderate: 'Moderate', major: 'Major',
+  // Legacy values fold onto the top of the three-step ladder.
+  severe: 'Major', fatal: 'Major', 'total loss': 'Major',
 }
 export const STATUS_ALIAS = {
   reported: 'Reported', under_review: 'Under Investigation', under_investigation: 'Under Investigation',
@@ -118,7 +116,11 @@ export const canonStatus = (s) => STATUS_ALIAS[String(s || '').toLowerCase().rep
 // ── Write-side reverse maps (DB CHECK-constraint tokens) ─────────────────────
 export const toDbSeverity = (s) => {
   const v = String(s || '').toLowerCase().trim()
-  return ({ minor: 'minor', major: 'moderate', moderate: 'moderate', 'total loss': 'severe', severe: 'severe', fatal: 'fatal' })[v] || 'minor'
+  return ({
+    minor: 'minor', moderate: 'moderate', major: 'severe',
+    // Legacy inputs still resolve to a valid chk_severity token.
+    severe: 'severe', 'total loss': 'severe', fatal: 'fatal',
+  })[v] || 'minor'
 }
 export const toDbStatus = (s) => {
   const v = String(s || '').toLowerCase().trim().replace(/\s+/g, '_')

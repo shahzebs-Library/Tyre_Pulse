@@ -10,7 +10,7 @@ import { sanitizeSearchTerm } from '../lib/searchFilter'
 import { canAddResource } from '../lib/api/billing'
 import {
   Search, Plus, Edit2, Trash2, Save, X, AlertTriangle,
-  FileSpreadsheet, Upload, Truck, ClipboardCheck
+  FileSpreadsheet, Truck, ClipboardCheck
 } from 'lucide-react'
 import EnterpriseTable from '../components/ui/EnterpriseTable'
 import { Illustration } from '../components/illustrations'
@@ -465,12 +465,6 @@ export default function FleetMaster() {
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div />
         <div className="flex gap-2 flex-wrap">
-          <button
-            onClick={() => navigate('/data-intake?module=fleet')}
-            className="btn-primary flex items-center gap-2 text-sm"
-          >
-            <Upload size={15} /> {t('fleetmaster.actions.importDataIntake')}
-          </button>
           <button onClick={openAdd} className="btn-secondary flex items-center gap-2 text-sm">
             <Plus size={15} /> {t('fleetmaster.actions.addVehicle')}
           </button>

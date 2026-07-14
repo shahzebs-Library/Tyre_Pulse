@@ -1,10 +1,9 @@
 import { useEffect, useState, useMemo } from 'react'
-import { useNavigate } from 'react-router-dom'
 import { stock } from '../lib/api'
 import { useAuth } from '../contexts/AuthContext'
 import { useSettings } from '../contexts/SettingsContext'
 import { useTenant } from '../contexts/TenantContext'
-import { Plus, Save, X, History, FileText, Download, ArrowLeftRight, Package, Upload, Lock } from 'lucide-react'
+import { Plus, Save, X, History, FileText, Download, ArrowLeftRight, Package, Lock } from 'lucide-react'
 import Skeleton from '../components/ui/Skeleton'
 import EntityApprovalPanel from '../components/workflow/EntityApprovalPanel'
 import { motion } from 'framer-motion'
@@ -49,7 +48,6 @@ function firstOfMonth() {
 
 export default function StockManagement() {
   const { t } = useLanguage()
-  const navigate = useNavigate()
   const { profile } = useAuth()
   const { appSettings, activeCountry } = useSettings()
   const { branding } = useTenant()
@@ -420,12 +418,6 @@ export default function StockManagement() {
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div />
         <div className="flex gap-2 flex-wrap">
-          <button
-            onClick={() => navigate('/data-intake?module=stock')}
-            className="btn-primary flex items-center gap-2 text-sm"
-          >
-            <Upload size={15} /> {t('stock.actions.import')}
-          </button>
           <button onClick={exportExcel} className="btn-secondary text-xs flex items-center gap-1.5">
             <Download size={14} /> {t('stock.actions.excel')}
           </button>
@@ -437,17 +429,6 @@ export default function StockManagement() {
           </button>
         </div>
       </div>
-      <p className="text-xs text-[var(--text-muted)] -mt-1">
-        {t('stock.intakeNote.prefix')}{' '}
-        <button
-          type="button"
-          onClick={() => navigate('/data-intake?module=stock')}
-          className="text-green-400 hover:text-green-300 underline underline-offset-2"
-        >
-          {t('stock.intakeNote.linkText')}
-        </button>{' '}
-        {t('stock.intakeNote.suffix')}
-      </p>
 
       {/* Tabs */}
       <div className="flex gap-2">

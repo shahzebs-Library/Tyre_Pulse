@@ -185,6 +185,7 @@ export default function Dashboard() {
   const [dateFrom, setDateFrom]       = useState('')
   const [dateTo, setDateTo]           = useState('')
   const [search, setSearch]           = useState('')
+  const [siteFilter, setSiteFilter]   = useState('')
   const [loading, setLoading]         = useState(true)
   const [error, setError]             = useState(null)
   const [dateShortcut, setDateShortcut] = useState('This Month')
@@ -250,21 +251,43 @@ export default function Dashboard() {
     }
   }
 
+  // Distinct sites for the site filter dropdown (real values from loaded data).
+  const siteOptions = useMemo(() => {
+    const s = new Set()
+    for (const r of rawTyres) if (r.site) s.add(r.site)
+    return [...s].sort((a, b) => a.localeCompare(b))
+  }, [rawTyres])
+
+  // Reset a stale site selection if the loaded data no longer contains it
+  // (e.g. after changing country or date window) so the view never filters to
+  // a site that isn't present.
+  useEffect(() => {
+    if (siteFilter && !siteOptions.includes(siteFilter)) setSiteFilter('')
+  }, [siteOptions, siteFilter])
+
   const tyres = useMemo(() => {
-    if (!search) return rawTyres
-    const q = search.toLowerCase()
-    return rawTyres.filter(t =>
-      t.asset_no?.toLowerCase().includes(q) ||
-      t.brand?.toLowerCase().includes(q) ||
-      t.site?.toLowerCase().includes(q) ||
-      t.category?.toLowerCase().includes(q)
-    )
-  }, [rawTyres, search])
+    const q = search.trim().toLowerCase()
+    if (!q && !siteFilter) return rawTyres
+    return rawTyres.filter(t => {
+      if (siteFilter && t.site !== siteFilter) return false
+      if (!q) return true
+      return (
+        t.asset_no?.toLowerCase().includes(q) ||
+        t.brand?.toLowerCase().includes(q) ||
+        t.site?.toLowerCase().includes(q) ||
+        t.category?.toLowerCase().includes(q)
+      )
+    })
+  }, [rawTyres, search, siteFilter])
+
+  // Any client-side narrowing (text search or site) means the server summary no
+  // longer matches the visible slice: derive KPIs from the filtered rows instead.
+  const isFiltered = Boolean(search.trim()) || Boolean(siteFilter)
 
   const stats = useMemo(() => {
     const open = (rawActions ?? []).filter(a => a.status === 'Open').length
-    // Use accurate server-side aggregates unless a text search narrows the view.
-    if (summary && !search) {
+    // Use accurate server-side aggregates unless a client-side filter narrows the view.
+    if (summary && !isFiltered) {
       return {
         tyres: Number(summary.total_records) || 0,
         stock: rawStock.length,
@@ -277,7 +300,7 @@ export default function Dashboard() {
     const cost = tyres.reduce((s, t) => s + recordCost(t), 0)
     const crit = tyres.filter(isHigh).length
     return { tyres: tyres.length, stock: rawStock.length, actions: open, critical: crit, cost, vehicles: new Set(tyres.map(t => t.asset_no).filter(Boolean)).size }
-  }, [tyres, rawActions, rawStock, summary, search])
+  }, [tyres, rawActions, rawStock, summary, isFiltered])
 
   // "Needs attention" — the highest-cost critical tyres, surfaced so the thing
   // that needs action reads at a glance. Real data only; empty when clean.
@@ -342,6 +365,36 @@ export default function Dashboard() {
     const lastHigh = tyres.filter(t => inMonth(t, lastM.y, lastM.m) && isHigh(t)).length
     return { delta: thisHigh - lastHigh, lastHigh }
   }, [tyres, dataAnchor])
+
+  // Priority recommendations: a short, number-led list of the real issues in the
+  // current (filtered) view. Every item is derived from loaded data; nothing is
+  // shown when the fleet is clean (honest "all clear" empty state). Structured
+  // here (key/fallback/vars) so the render layer translates via `tf`.
+  const recommendations = useMemo(() => {
+    const recs = []
+    const crit = tyres.filter(t => t.risk_level === 'Critical').length
+    const high = tyres.filter(t => t.risk_level === 'High').length
+    const unclassified = tyres.filter(t => !t.risk_level).length
+    const openCount = stats.actions
+    const highPriOpen = (openActions ?? []).filter(a => a.priority === 'High').length
+    const delta = riskTrend?.delta || 0
+
+    if (crit > 0) recs.push({ id: 'crit', severity: 'Critical', color: '#dc2626', to: '/anomalies',
+      key: 'dashboard.recs.critical', fallback: '{n} critical tyres need immediate replacement', vars: { n: crit } })
+    if (high > 0) recs.push({ id: 'high', severity: 'High', color: '#ea580c', to: '/anomalies',
+      key: 'dashboard.recs.high', fallback: '{n} high-risk tyres to inspect within 7 days', vars: { n: high } })
+    if (delta > 0) recs.push({ id: 'trend', severity: 'High', color: '#ea580c', to: '/analytics',
+      key: 'dashboard.recs.trendUp', fallback: 'High-risk volume up {n} vs last month: review root cause', vars: { n: delta } })
+    if (highPriOpen > 0) recs.push({ id: 'hipri', severity: 'High', color: '#ea580c', to: '/actions',
+      key: 'dashboard.recs.highPriorityActions', fallback: '{n} high-priority corrective actions still open', vars: { n: highPriOpen } })
+    if (openCount > 0) recs.push({ id: 'open', severity: 'Medium', color: '#ca8a04', to: '/actions',
+      key: 'dashboard.recs.openActions', fallback: '{n} open corrective actions to resolve', vars: { n: openCount } })
+    if (unclassified > 0) recs.push({ id: 'unclassified', severity: 'Low', color: '#0284c7', to: '/tyres',
+      key: 'dashboard.recs.unclassified', fallback: '{n} tyre records missing risk classification', vars: { n: unclassified } })
+
+    const order = { Critical: 0, High: 1, Medium: 2, Low: 3 }
+    return recs.sort((a, b) => order[a.severity] - order[b.severity]).slice(0, 6)
+  }, [tyres, stats.actions, openActions, riskTrend])
 
   const periodChartData = useMemo(() => {
     const now = dataAnchor
@@ -832,22 +885,64 @@ export default function Dashboard() {
       </div>
 
       {/* ── KPI METRICS (console stat-tiles) ─────────────────────────────── */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-3">
-        <StatTile index={0} to="/tyres" icon={CircleDot} tone="info"
+      <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3">
+        <StatTile index={0} to="/fleet" icon={CircleDot} tone="accent"
+          label={tf('dashboard.kpi.fleetVehicles', 'Fleet Vehicles')} value={Number(stats.vehicles || 0).toLocaleString()}
+          sub={tf('dashboard.kpi.fleetVehiclesSub', 'assets with tyre records')} />
+        <StatTile index={1} to="/tyres" icon={CircleDot} tone="info"
           label={t('dashboard.kpi.tyreRecords')} value={Number(stats.tyres || 0).toLocaleString()}
           sub={t('dashboard.kpi.recordsSub', { count: stats.vehicles || 0 })} spark={sparkSeries.tyres} />
-        <StatTile index={1} to="/stock" icon={Package} tone="accent"
+        <StatTile index={2} to="/stock" icon={Package} tone="accent"
           label={t('dashboard.kpi.stockSites')} value={Number(stats.stock || 0).toLocaleString()} />
-        <StatTile index={2} to="/actions" icon={ClipboardList} tone="warn"
+        <StatTile index={3} to="/actions" icon={ClipboardList} tone="warn"
           label={t('dashboard.kpi.openActions')} value={Number(stats.actions || 0).toLocaleString()} />
-        <StatTile index={3} to="/anomalies" icon={AlertTriangle} tone="crit"
+        <StatTile index={4} to="/anomalies" icon={AlertTriangle} tone="crit"
           label={t('dashboard.kpi.highRisk')} value={Number(stats.critical || 0).toLocaleString()}
           unit={stats.tyres ? `(${((stats.critical / stats.tyres) * 100).toFixed(1)}%)` : ''}
           delta={riskTrend?.delta} deltaSuffix="" deltaGood={(riskTrend?.delta ?? 0) <= 0}
           spark={sparkSeries.risk} />
-        <StatTile index={4} to="/analytics" icon={DollarSign} tone="accent"
+        <StatTile index={5} to="/analytics" icon={DollarSign} tone="accent"
           label={t('dashboard.kpi.totalCost')} value={`${(stats.cost / 1000).toFixed(0)}K`}
           unit={activeCurrency} spark={sparkSeries.cost} />
+      </div>
+
+      {/* ── PRIORITY RECOMMENDATIONS (concise, number-led, real data only) ─── */}
+      <div className="card">
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2">
+            <div className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0"
+              style={{ background: 'rgba(234,88,12,0.1)', border: '1px solid rgba(234,88,12,0.2)' }}>
+              <Zap size={13} className="text-orange-400" />
+            </div>
+            <h3 className="text-sm font-semibold text-[var(--text-primary)]">
+              {tf('dashboard.recs.title', 'Priority Recommendations')}
+            </h3>
+          </div>
+          <span className="text-[11px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">
+            {tf('dashboard.recs.count', '{count} to act on', { count: recommendations.length })}
+          </span>
+        </div>
+        {recommendations.length === 0 ? (
+          <div className="flex items-center gap-2 py-3 text-sm text-[var(--text-muted)]">
+            <ShieldCheck size={15} className="text-[var(--accent)]" />
+            {tf('dashboard.recs.allClear', 'All clear: no critical issues in the current view.')}
+          </div>
+        ) : (
+          <ul className="grid grid-cols-1 lg:grid-cols-2 gap-x-6 gap-y-1">
+            {recommendations.map(rec => (
+              <li key={rec.id}>
+                <Link to={rec.to}
+                  className="flex items-center gap-2.5 py-1.5 rounded-lg hover:bg-[var(--input-bg,rgba(255,255,255,0.03))] transition-colors group">
+                  <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: rec.color }} />
+                  <span className="text-[13px] text-[var(--text-secondary)] leading-snug flex-1 min-w-0">
+                    {tf(rec.key, rec.fallback, rec.vars)}
+                  </span>
+                  <ChevronRight size={13} className="text-[var(--text-dim)] opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0" />
+                </Link>
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
 
       {/* ── FLEET GAUGES + NEEDS ATTENTION (instrument row) ──────────────── */}
@@ -918,6 +1013,21 @@ export default function Dashboard() {
             )}
           </div>
 
+          {/* Site filter (real distinct sites from loaded data) */}
+          {siteOptions.length > 0 && (
+            <div className="relative">
+              <select
+                aria-label={tf('dashboard.filters.site', 'Site')}
+                className="input py-1.5 pr-8 text-xs min-w-40"
+                value={siteFilter}
+                onChange={e => setSiteFilter(e.target.value)}
+              >
+                <option value="">{tf('dashboard.filters.allSites', 'All sites')}</option>
+                {siteOptions.map(s => <option key={s} value={s}>{s}</option>)}
+              </select>
+            </div>
+          )}
+
           {/* Granularity segmented */}
           <SegmentedControl
             ariaLabel="granularity"
@@ -947,7 +1057,15 @@ export default function Dashboard() {
               </button>
             ))}
           </div>
-          {search && <span className="text-[10px] text-green-600 ml-auto font-medium">{t('dashboard.filters.recordsOfTotal', { count: tyres.length.toLocaleString(), total: rawTyres.length.toLocaleString() })}</span>}
+          {isFiltered && (
+            <div className="ml-auto flex items-center gap-2">
+              <span className="text-[10px] text-green-600 font-medium">{t('dashboard.filters.recordsOfTotal', { count: tyres.length.toLocaleString(), total: rawTyres.length.toLocaleString() })}</span>
+              <button onClick={() => { setSearch(''); setSiteFilter('') }}
+                className="inline-flex items-center gap-1 text-[10px] font-semibold text-gray-500 hover:text-gray-300 transition-colors">
+                <X size={11} /> {tf('dashboard.filters.clear', 'Clear')}
+              </button>
+            </div>
+          )}
         </div>
 
         <AnimatePresence>

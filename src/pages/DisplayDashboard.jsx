@@ -23,6 +23,7 @@ import {
   RefreshCw, Play, Pause, Radio, Gauge as GaugeIcon,
   LayoutGrid, LogOut, Check, X as XIcon,
   Wrench, Repeat, Car, Stamp, Clock, Timer, FileCheck2,
+  CalendarDays, Activity,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { fetchAllPages } from '../lib/fetchAll'
@@ -45,6 +46,7 @@ const ROTATE_SECS  = 30
 const CURSOR_HIDE_MS = 5000
 
 const BOARDS = [
+  { key: 'today',        label: 'Today at a Glance' },
   { key: 'fleet',        label: 'Fleet Overview' },
   { key: 'tyre',         label: 'Tyre & Maintenance' },
   { key: 'jobcards',     label: 'Open Job Cards' },
@@ -546,6 +548,33 @@ export default function DisplayDashboard() {
   const accBoard     = useMemo(() => computeAccidentBoard(incidents.rows, dayRef), [incidents.rows, dayRef])
   const apprBoard    = useMemo(() => computeApprovalsBoard(approvals.rows), [approvals.rows])
 
+  // ── "Today" live executive tiles (honest date-scoped counts from the same
+  //    slices the other boards use, so they share the board's auto-refresh). All
+  //    date comparisons mirror countTodaysInspections: slice(0,10) === todayStr.
+  const isToday = useCallback((v) => !!v && String(v).slice(0, 10) === todayStr, [todayStr])
+
+  // Open job cards opened today + live status split. The work_orders slice is
+  // already filtered to non-terminal (open) statuses, so this is an honest
+  // "open job cards raised today" figure.
+  const jobCardsToday = useMemo(() => {
+    const rows = workOrders.rows.filter(o => isToday(o.opened_at))
+    const byStatus = { 'Open': 0, 'In Progress': 0, 'Awaiting Parts': 0 }
+    rows.forEach(o => { if (byStatus[o.status] != null) byStatus[o.status] += 1 })
+    return { total: rows.length, byStatus }
+  }, [workOrders.rows, isToday])
+
+  // Tyres replaced today (tyre_changes rows carrying a removal_date of today).
+  const tyresReplacedToday = useMemo(
+    () => replacements.rows.filter(c => isToday(c.removal_date)).length,
+    [replacements.rows, isToday],
+  )
+
+  // Accidents / incidents reported today.
+  const accidentsToday = useMemo(
+    () => incidents.rows.filter(a => isToday(a.incident_date)).length,
+    [incidents.rows, isToday],
+  )
+
   const board = visibleBoards[safeIndex] ?? BOARDS[0]
 
   // ── Render ──────────────────────────────────────────────────────────────────
@@ -687,6 +716,112 @@ export default function DisplayDashboard() {
 
       {/* ── Board content ── */}
       <main className="flex-1 p-8 min-h-0">
+
+        {/* ── (0) Today at a Glance — daily executive live tiles ── */}
+        {board.key === 'today' && (
+          <div className="grid grid-cols-12 gap-6 h-full content-start">
+            {/* Primary daily counters */}
+            <div className="col-span-12 grid grid-cols-2 xl:grid-cols-3 gap-6">
+              {/* Open Job Cards Today — big number + live status split */}
+              <SliceGuard slice={workOrders} lines={3}>
+                <div className="bg-[#0d1420] border border-slate-800/70 rounded-2xl p-6 flex flex-col justify-between">
+                  <div className="flex items-start justify-between">
+                    <div className="min-w-0">
+                      <p className="text-[13px] font-bold uppercase tracking-[0.16em] text-slate-500">Open Job Cards Today</p>
+                      <p className="text-6xl xl:text-7xl font-bold tabular-nums tracking-tight mt-3"
+                         style={{ color: jobCardsToday.total > 0 ? '#38bdf8' : '#22c55e' }}>
+                        {jobCardsToday.total}
+                      </p>
+                    </div>
+                    <Wrench size={26} className="text-slate-600 flex-shrink-0 mt-1" />
+                  </div>
+                  <div className="grid grid-cols-3 gap-3 mt-5">
+                    {[
+                      { label: 'Open',    value: jobCardsToday.byStatus['Open'],           color: '#38bdf8' },
+                      { label: 'Progress',value: jobCardsToday.byStatus['In Progress'],    color: '#eab308' },
+                      { label: 'Parts',   value: jobCardsToday.byStatus['Awaiting Parts'], color: '#f97316' },
+                    ].map(s => (
+                      <div key={s.label} className="bg-slate-900/60 border border-slate-800/60 rounded-xl py-3 text-center">
+                        <p className="text-2xl font-bold tabular-nums" style={{ color: s.color }}>{s.value}</p>
+                        <p className="text-slate-500 text-xs font-semibold uppercase tracking-wider mt-1">{s.label}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </SliceGuard>
+
+              {/* Tyre Replacements Today */}
+              <SliceGuard slice={replacements} lines={3}>
+                <BigStat label="Tyre Replacements Today" value={tyresReplacedToday}
+                  color={tyresReplacedToday > 0 ? '#f97316' : '#22c55e'} icon={Repeat}
+                  sub="Tyres removed / changed today" />
+              </SliceGuard>
+
+              {/* Inspections Today */}
+              <SliceGuard slice={inspections} lines={3}>
+                <BigStat label="Inspections Today" value={todayInsp.total} icon={ClipboardList}
+                  color={todayInsp.total > 0 ? '#38bdf8' : '#22c55e'}
+                  sub={`${todayInsp.done} done : ${todayInsp.pending} pending : ${todayInsp.overdue} overdue`} />
+              </SliceGuard>
+            </div>
+
+            {/* Secondary daily counters */}
+            <div className="col-span-12 grid grid-cols-2 xl:grid-cols-4 gap-6">
+              <SliceGuard slice={incidents} lines={2}>
+                <BigStat label="Accidents Today" value={accidentsToday}
+                  color={accidentsToday > 0 ? '#ef4444' : '#22c55e'} icon={Car}
+                  sub={accidentsToday > 0 ? 'Incidents reported today' : 'No incidents today'} />
+              </SliceGuard>
+              <SliceGuard slice={alerts} lines={2}>
+                <BigStat label="Critical Alerts" value={alertSummary.bySeverity.Critical}
+                  color={alertSummary.bySeverity.Critical > 0 ? '#ef4444' : '#22c55e'} icon={AlertTriangle}
+                  sub="Active, needs attention" />
+              </SliceGuard>
+              <SliceGuard slice={tyres} lines={2}>
+                <BigStat label="Tyres Needing Attention" value={attention.attention}
+                  color={attention.attention > 0 ? '#f97316' : '#22c55e'} icon={CircleDot}
+                  sub={`${attention.critical} critical : ${attention.high} high risk`} />
+              </SliceGuard>
+              <SliceGuard slice={fleet} lines={2}>
+                <BigStat label="Fleet Availability" value={`${availability.pct}%`}
+                  color={availability.pct >= 90 ? '#22c55e' : availability.pct >= 70 ? '#eab308' : '#ef4444'}
+                  icon={Activity}
+                  sub={`${availability.available} of ${availability.total} in service`} />
+              </SliceGuard>
+            </div>
+
+            {/* Today's job cards detail list */}
+            <div className="col-span-12">
+              <Panel title="Job Cards Opened Today" icon={CalendarDays} className="h-full">
+                <SliceGuard slice={workOrders} lines={5}>
+                  {(() => {
+                    const todaysList = woBoard.list.filter(o => isToday(o.opened_at))
+                    if (todaysList.length === 0) return <BoardEmpty icon={Wrench} label="No job cards opened today" />
+                    return (
+                      <div className="space-y-2.5">
+                        {todaysList.slice(0, 6).map((o) => (
+                          <div key={o.id} className="flex items-center gap-4 bg-slate-900/60 border border-slate-800/60 rounded-xl px-4 py-3">
+                            <SevPill value={o.priority} />
+                            <div className="min-w-0 flex-1">
+                              <p className="text-slate-100 text-lg font-semibold truncate">
+                                {o.asset_no || 'Unassigned asset'}
+                                <span className="text-slate-500 text-base font-normal ml-2">{o.work_type || 'Job'}</span>
+                              </p>
+                              <p className="text-slate-500 text-sm font-mono truncate">
+                                {o.work_order_no || ''}{o.work_order_no && o.technician_name ? ' : ' : ''}{o.technician_name || ''}
+                              </p>
+                            </div>
+                            <StatusChip value={o.status} />
+                          </div>
+                        ))}
+                      </div>
+                    )
+                  })()}
+                </SliceGuard>
+              </Panel>
+            </div>
+          </div>
+        )}
 
         {/* ── (a) Fleet Overview ── */}
         {board.key === 'fleet' && (

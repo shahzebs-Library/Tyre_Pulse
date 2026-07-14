@@ -10,6 +10,7 @@ import { supabase } from '../lib/supabase'
 import EnterpriseTable from '../components/ui/EnterpriseTable'
 import { useReportMeta } from '../hooks/useReportMeta'
 import * as accidentsApi from '../lib/api/accidents'
+import { getAssetByNo } from '../lib/api/assets'
 import { useAuth } from '../contexts/AuthContext'
 import { useSettings } from '../contexts/SettingsContext'
 import { exportToExcel, exportToPdf, reportFileName, reportDateLabel } from '../lib/exportUtils'
@@ -355,6 +356,9 @@ export default function Accidents() {
   const [assetQuery, setAssetQuery]            = useState('')
   const [showAssetDrop, setShowAssetDrop]      = useState(false)
   const assetDropRef                           = useRef(null)
+  // Matched vehicle-master row for the currently entered asset (read-only
+  // context shown under the Asset field). Auto-populate reads from here.
+  const [assetInfo, setAssetInfo]              = useState(null)
 
   const loadRecords = useCallback(async () => {
     setLoading(true)
@@ -430,16 +434,44 @@ export default function Accidents() {
     ).slice(0, 10)
   }, [assetQuery, fleetAssets])
 
-  function selectAsset(asset) {
+  // Auto-populate related fields from the vehicle master (vehicle_fleet). Only
+  // real accidents columns are written (site, country) and ONLY when the user
+  // has not already filled them — a typed value is never overwritten. The full
+  // master row is kept in `assetInfo` for read-only context (type/make/model).
+  const applyAssetMaster = useCallback((asset) => {
+    if (!asset) { setAssetInfo(null); return }
+    setAssetInfo(asset)
     setForm(f => ({
       ...f,
-      asset_no: asset.asset_no,
-      site:     asset.site     || f.site,
-      country:  asset.country  || f.country,
+      site:    f.site    || asset.site    || f.site,
+      country: f.country || asset.country || f.country,
     }))
+  }, [])
+
+  function selectAsset(asset) {
+    setForm(f => ({ ...f, asset_no: asset.asset_no }))
     setAssetQuery(asset.asset_no)
     setShowAssetDrop(false)
+    applyAssetMaster(asset)
   }
+
+  // Debounced lookup: whenever the asset number changes (typed or picked),
+  // resolve it against the fleet master and auto-fill site/country. Matches the
+  // already-loaded fleet list first (instant), then falls back to a direct
+  // org-scoped vehicle_fleet query. Fails silently when there is no match.
+  useEffect(() => {
+    const no = (form.asset_no || '').trim()
+    if (!no) { setAssetInfo(null); return }
+    const t = setTimeout(async () => {
+      let asset = fleetAssets.find(a => (a.asset_no || '').toLowerCase() === no.toLowerCase())
+      if (!asset) {
+        try { asset = await getAssetByNo(no) } catch { asset = null }
+      }
+      if (asset && (asset.asset_no || '').toLowerCase() === no.toLowerCase()) applyAssetMaster(asset)
+      else setAssetInfo(null)
+    }, 350)
+    return () => clearTimeout(t)
+  }, [form.asset_no, fleetAssets, applyAssetMaster])
 
   const sites = useMemo(() => [...new Set(records.map(r => r.site).filter(Boolean))].sort(), [records])
 
@@ -2304,6 +2336,15 @@ export default function Accidents() {
                         </button>
                       ))}
                     </div>
+                  )}
+                  {assetInfo && (assetInfo.vehicle_type || assetInfo.make || assetInfo.model || assetInfo.fleet_number) && (
+                    <p className="text-[11px] text-[var(--text-muted)] mt-1 truncate">
+                      Master: {[
+                        assetInfo.vehicle_type,
+                        [assetInfo.make, assetInfo.model].filter(Boolean).join(' '),
+                        assetInfo.fleet_number ? `Fleet ${assetInfo.fleet_number}` : '',
+                      ].filter(Boolean).join(' | ') || 'N/A'}
+                    </p>
                   )}
                 </div>
               </div>

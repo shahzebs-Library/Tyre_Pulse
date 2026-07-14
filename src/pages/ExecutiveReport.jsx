@@ -20,6 +20,8 @@ import {
   Building2, Wrench, Star, AlertOctagon,
   ChevronRight, Award, Package, Users, Mail,
   ScrollText, Presentation,
+  Settings2, Plus, Eye, EyeOff, X, ArrowUp, ArrowDown,
+  Trash2, GripVertical, RotateCcw, StickyNote, SeparatorHorizontal,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import EmailReportModal from '../components/EmailReportModal'
@@ -253,6 +255,110 @@ function SectionHeader({ icon: Icon, title, subtitle, badge }) {
   )
 }
 
+// Shell for an added palette widget: titled Card with a hover "remove" control.
+function WidgetShell({ onRemove, icon: Icon, title, subtitle, children }) {
+  return (
+    <div className="relative group">
+      <button
+        onClick={onRemove}
+        title="Remove this block"
+        className="no-print absolute top-3 right-3 z-10 p-1.5 rounded-lg bg-[var(--surface-2)] hover:bg-red-500/15 text-[var(--text-muted)] hover:text-red-400 border border-[var(--border-dim)] opacity-0 group-hover:opacity-100 transition-opacity"
+      >
+        <Trash2 className="w-3.5 h-3.5" />
+      </button>
+      <Card>
+        {(title || Icon) && (
+          <div className="flex items-center gap-3 mb-4">
+            {Icon && (
+              <div className="p-2 bg-blue-500/10 rounded-lg border border-blue-500/20">
+                <Icon className="w-5 h-5 text-blue-400" />
+              </div>
+            )}
+            <div>
+              {title && <h2 className="text-base font-semibold text-[var(--text-primary)]">{title}</h2>}
+              {subtitle && <p className="text-xs text-[var(--text-secondary)] mt-0.5">{subtitle}</p>}
+            </div>
+          </div>
+        )}
+        {children}
+      </Card>
+    </div>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Customizable layout model
+// The report is a persisted, ordered list of blocks. Seven built-in sections
+// (always present, can be hidden + reordered) plus any number of user-added
+// widgets (charts / tables / notes / dividers) drawn from the block palette.
+// Persisted to localStorage so a user's tailored layout survives reloads.
+// ─────────────────────────────────────────────────────────────────────────────
+const LAYOUT_STORAGE_KEY = 'executiveReport.layout.v1'
+
+const BUILTIN_DEFS = [
+  { key: 'summary',         label: 'Executive Summary' },
+  { key: 'kpis',            label: 'KPI Dashboard' },
+  { key: 'rootcause',       label: 'Root Cause Analysis' },
+  { key: 'financial',       label: 'Financial Impact' },
+  { key: 'risk',            label: 'Risk Assessment' },
+  { key: 'recommendations', label: 'Recommendations' },
+  { key: 'actionplan',      label: 'Action Plan' },
+]
+const BUILTIN_KEYS = BUILTIN_DEFS.map(b => b.key)
+
+// Addable widgets - every one is bound to data already loaded on the page.
+const WIDGET_DEFS = [
+  { key: 'w:note',            label: 'Free Text Note',       icon: StickyNote,          desc: 'A written commentary or note block.' },
+  { key: 'w:divider',         label: 'Divider',              icon: SeparatorHorizontal, desc: 'A horizontal separator line.' },
+  { key: 'w:chartCostTrend',  label: 'Monthly Spend Trend',  icon: BarChart2,           desc: 'Bar chart of tyre spend by month.' },
+  { key: 'w:chartRootCause',  label: 'Root Cause Breakdown', icon: AlertTriangle,       desc: 'Bar chart of failure drivers.' },
+  { key: 'w:chartCostSite',   label: 'Cost by Site',         icon: Building2,           desc: 'Cost distribution across sites.' },
+  { key: 'w:chartCostBrand',  label: 'Cost by Brand',        icon: Package,             desc: 'Cost distribution across brands.' },
+  { key: 'w:chartRiskTrend',  label: 'Risk Score Trend',     icon: ShieldAlert,         desc: 'Six-month fleet risk score line.' },
+  { key: 'w:tableTopVehicles',label: 'Top Cost Vehicles',    icon: Users,               desc: 'Table of the highest-cost vehicles.' },
+  { key: 'w:insights',        label: 'Key Wins & Concerns',  icon: Award,               desc: 'Best brand and worst site highlight cards.' },
+]
+const WIDGET_LABELS = Object.fromEntries(WIDGET_DEFS.map(w => [w.key, w.label]))
+
+function defaultLayout() {
+  return BUILTIN_DEFS.map(b => ({ id: b.key, key: b.key, builtin: true, visible: true }))
+}
+
+// Merge a persisted layout with the current block catalog: keep the user's
+// order/visibility, drop unknown keys, guarantee every built-in is present.
+function normalizeLayout(raw) {
+  if (!Array.isArray(raw)) return defaultLayout()
+  const seen = new Set()
+  const out = []
+  for (const it of raw) {
+    if (!it || typeof it.key !== 'string') continue
+    const builtin = BUILTIN_KEYS.includes(it.key)
+    const isWidget = WIDGET_LABELS[it.key] !== undefined
+    if (!builtin && !isWidget) continue
+    const id = typeof it.id === 'string' && it.id ? it.id : it.key
+    if (seen.has(id)) continue
+    seen.add(id)
+    out.push({
+      id,
+      key: it.key,
+      builtin,
+      visible: it.visible !== false,
+      ...(typeof it.text === 'string' ? { text: it.text } : {}),
+    })
+  }
+  for (const b of BUILTIN_DEFS) {
+    if (!out.some(o => o.builtin && o.key === b.key)) {
+      out.push({ id: b.key, key: b.key, builtin: true, visible: true })
+    }
+  }
+  return out
+}
+
+function blockLabel(item) {
+  if (item.builtin) return BUILTIN_DEFS.find(b => b.key === item.key)?.label || item.key
+  return WIDGET_LABELS[item.key] || 'Block'
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Main Component
 // ─────────────────────────────────────────────────────────────────────────────
@@ -277,6 +383,61 @@ export default function ExecutiveReport() {
   // (non-technical users expect white paper, not the dark dashboard). The
   // header toggle still lets power users flip back to the dark dashboard.
   const [reportMode,  setReportMode]  = useState(true)
+
+  // ── Customizable layout (persisted) ────────────────────────────────────────
+  const [layout, setLayout] = useState(() => {
+    try { return normalizeLayout(JSON.parse(localStorage.getItem(LAYOUT_STORAGE_KEY) || 'null')) }
+    catch { return defaultLayout() }
+  })
+  const [customizeOpen, setCustomizeOpen] = useState(false)
+  useEffect(() => {
+    try { localStorage.setItem(LAYOUT_STORAGE_KEY, JSON.stringify(layout)) } catch { /* private mode / quota */ }
+  }, [layout])
+
+  const orderOf = useCallback((id) => {
+    const i = layout.findIndex(x => x.id === id)
+    return i < 0 ? 999 : i
+  }, [layout])
+  const builtinVisible = useCallback((key) => {
+    const it = layout.find(x => x.builtin && x.key === key)
+    return it ? it.visible !== false : true
+  }, [layout])
+  const blockStyle = useCallback((key) => ({
+    order: orderOf(key),
+    display: builtinVisible(key) ? undefined : 'none',
+  }), [orderOf, builtinVisible])
+  const visibleBuiltinKeys = useMemo(
+    () => layout.filter(x => x.builtin && x.visible !== false).map(x => x.key),
+    [layout],
+  )
+  const addedBlocks = useMemo(
+    () => layout.filter(x => !x.builtin && x.visible !== false),
+    [layout],
+  )
+
+  const toggleVisible = useCallback((id) => setLayout(l => l.map(x => (
+    x.id === id ? { ...x, visible: !(x.visible !== false) } : x
+  ))), [])
+  const moveBlock = useCallback((id, dir) => setLayout(l => {
+    const i = l.findIndex(x => x.id === id)
+    if (i < 0) return l
+    const j = i + dir
+    if (j < 0 || j >= l.length) return l
+    const copy = l.slice()
+    const [m] = copy.splice(i, 1)
+    copy.splice(j, 0, m)
+    return copy
+  }), [])
+  const removeBlock = useCallback((id) => setLayout(l => l.filter(x => x.id !== id)), [])
+  const addWidget = useCallback((key) => setLayout(l => [...l, {
+    id: `${key}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
+    key, builtin: false, visible: true,
+    ...(key === 'w:note' ? { text: '' } : {}),
+  }]), [])
+  const updateBlockText = useCallback((id, text) => setLayout(l => l.map(x => (
+    x.id === id ? { ...x, text } : x
+  ))), [])
+  const resetLayout = useCallback(() => setLayout(defaultLayout()), [])
 
   // Live chart -> white-paper PNG (falls back to the raw canvas), null-guarded for
   // pre-mount refs so export never throws before charts render.
@@ -875,72 +1036,87 @@ export default function ExecutiveReport() {
         doc.addImage(img, 'PNG', x + (cw - iw) / 2, y + (ch - ih) / 2, iw, ih)
       }
 
-      // ── Page 1: KPI dashboard as labelled cards ──
-      pdfHeader(doc, 'Executive Intelligence Report', `KPI Dashboard | ${periodLabel}`, company, brand)
-      const perRow = 6
-      const gridY = 32
-      const cardW = (W - 2 * M - (perRow - 1) * GAP) / perRow
-      const cardH = 27
-      kpiCards.forEach((c, i) => {
-        const col = i % perRow, row = Math.floor(i / perRow)
-        const x = M + col * (cardW + GAP)
-        const y = gridY + row * (cardH + GAP)
-        doc.setDrawColor(226, 232, 240); doc.setFillColor(248, 250, 252)
-        doc.roundedRect(x, y, cardW, cardH, 2, 2, 'FD')
-        doc.setFont('helvetica', 'bold'); doc.setFontSize(11); doc.setTextColor(...INK)
-        doc.text(String(c.value), x + cardW / 2, y + 9, { align: 'center', maxWidth: cardW - 3 })
-        doc.setFont('helvetica', 'normal'); doc.setFontSize(6.4); doc.setTextColor(...MUTED)
-        doc.text(String(c.label).toUpperCase(), x + cardW / 2, y + 15.5, { align: 'center', maxWidth: cardW - 3 })
-        doc.setFontSize(6); doc.setTextColor(148, 163, 184)
-        doc.text(`Target: ${String(c.target)}`, x + cardW / 2, y + 22, { align: 'center', maxWidth: cardW - 3 })
-      })
-
-      // ── Page 2: Root Cause (chart beside table) ──
-      doc.addPage()
-      pdfHeader(doc, 'Root Cause Analysis', periodLabel, company, brand)
+      // Each built-in section maps to one PDF page renderer. Pages are emitted
+      // in the user's customized order and hidden sections are skipped, so the
+      // export mirrors the on-screen tailored layout.
       const halfW = (W - 2 * M - GAP) / 2
-      drawChart(rootCauseRef, M, 34, halfW, 92, 'Failure Driver Classification')
-      autoTable(doc, {
-        ...pdfTableTheme(brand.accent),
-        startY: 30,
-        margin: { left: M + halfW + GAP },
-        tableWidth: halfW,
-        head: [['Root Cause', 'Count', '%', 'Cost Impact']],
-        body: rootCauses.map(c => [c.label, c.count, fmtPct(c.pct), fmtCurrency(c.cost, currency)]),
-      })
-
-      // ── Page 3: Financial Impact (three charts) ──
-      doc.addPage()
-      pdfHeader(doc, 'Financial Impact', periodLabel, company, brand)
-      drawChart(costTrendRef, M, 34, W - 2 * M, 68, 'Monthly Spend Trend')
-      const finBottomY = 108
-      const finH = H - finBottomY - M
-      drawChart(costBySiteRef, M, finBottomY, halfW, finH, 'Cost by Site')
-      drawChart(costByBrandRef, M + halfW + GAP, finBottomY, halfW, finH, 'Cost by Brand')
-
-      // ── Page 4: Risk Assessment (chart + matrix table) ──
-      doc.addPage()
-      pdfHeader(doc, 'Risk Assessment', periodLabel, company, brand)
-      drawChart(riskTrendRef, M, 34, halfW, 92, '6-Month Risk Score Trend')
-      autoTable(doc, {
-        ...pdfTableTheme(brand.accent),
-        startY: 30,
-        margin: { left: M + halfW + GAP },
-        tableWidth: halfW,
-        head: [['Site', 'Crit', 'High', 'Med', 'Low', 'Total', 'Score']],
-        body: riskMatrix.map(r => [r.site, r.Critical, r.High, r.Medium, r.Low, r.total, r.score.toFixed(2)]),
-      })
-
-      // ── Page 5: Action Plan (full-width table) ──
-      doc.addPage()
-      pdfHeader(doc, 'Action Plan', periodLabel, company, brand)
-      autoTable(doc, {
-        ...pdfTableTheme(brand.accent),
-        startY: 30,
-        head: [['Action', 'Priority', 'Timeline', 'Owner', 'Est. Saving', 'Status']],
-        body: actionPlan.map(a => [a.action, a.priority, a.timeline, a.owner, a.saving, a.status]),
-        columnStyles: { 0: { cellWidth: 120 } },
-      })
+      const pdfPageRenderers = {
+        kpis: () => {
+          pdfHeader(doc, 'Executive Intelligence Report', `KPI Dashboard | ${periodLabel}`, company, brand)
+          const perRow = 6
+          const gridY = 32
+          const cardW = (W - 2 * M - (perRow - 1) * GAP) / perRow
+          const cardH = 27
+          kpiCards.forEach((c, i) => {
+            const col = i % perRow, row = Math.floor(i / perRow)
+            const x = M + col * (cardW + GAP)
+            const y = gridY + row * (cardH + GAP)
+            doc.setDrawColor(226, 232, 240); doc.setFillColor(248, 250, 252)
+            doc.roundedRect(x, y, cardW, cardH, 2, 2, 'FD')
+            doc.setFont('helvetica', 'bold'); doc.setFontSize(11); doc.setTextColor(...INK)
+            doc.text(String(c.value), x + cardW / 2, y + 9, { align: 'center', maxWidth: cardW - 3 })
+            doc.setFont('helvetica', 'normal'); doc.setFontSize(6.4); doc.setTextColor(...MUTED)
+            doc.text(String(c.label).toUpperCase(), x + cardW / 2, y + 15.5, { align: 'center', maxWidth: cardW - 3 })
+            doc.setFontSize(6); doc.setTextColor(148, 163, 184)
+            doc.text(`Target: ${String(c.target)}`, x + cardW / 2, y + 22, { align: 'center', maxWidth: cardW - 3 })
+          })
+        },
+        rootcause: () => {
+          pdfHeader(doc, 'Root Cause Analysis', periodLabel, company, brand)
+          drawChart(rootCauseRef, M, 34, halfW, 92, 'Failure Driver Classification')
+          autoTable(doc, {
+            ...pdfTableTheme(brand.accent),
+            startY: 30,
+            margin: { left: M + halfW + GAP },
+            tableWidth: halfW,
+            head: [['Root Cause', 'Count', '%', 'Cost Impact']],
+            body: rootCauses.map(c => [c.label, c.count, fmtPct(c.pct), fmtCurrency(c.cost, currency)]),
+          })
+        },
+        financial: () => {
+          pdfHeader(doc, 'Financial Impact', periodLabel, company, brand)
+          drawChart(costTrendRef, M, 34, W - 2 * M, 68, 'Monthly Spend Trend')
+          const finBottomY = 108
+          const finH = H - finBottomY - M
+          drawChart(costBySiteRef, M, finBottomY, halfW, finH, 'Cost by Site')
+          drawChart(costByBrandRef, M + halfW + GAP, finBottomY, halfW, finH, 'Cost by Brand')
+        },
+        risk: () => {
+          pdfHeader(doc, 'Risk Assessment', periodLabel, company, brand)
+          drawChart(riskTrendRef, M, 34, halfW, 92, '6-Month Risk Score Trend')
+          autoTable(doc, {
+            ...pdfTableTheme(brand.accent),
+            startY: 30,
+            margin: { left: M + halfW + GAP },
+            tableWidth: halfW,
+            head: [['Site', 'Crit', 'High', 'Med', 'Low', 'Total', 'Score']],
+            body: riskMatrix.map(r => [r.site, r.Critical, r.High, r.Medium, r.Low, r.total, r.score.toFixed(2)]),
+          })
+        },
+        recommendations: () => {
+          pdfHeader(doc, 'Recommendations', periodLabel, company, brand)
+          autoTable(doc, {
+            ...pdfTableTheme(brand.accent),
+            startY: 30,
+            head: [['Priority', 'Recommendation', 'Owner', 'Expected Impact']],
+            body: recommendations.map(r => [r.priority, r.title, r.owner, r.impact]),
+            columnStyles: { 1: { cellWidth: 110 }, 3: { cellWidth: 70 } },
+          })
+        },
+        actionplan: () => {
+          pdfHeader(doc, 'Action Plan', periodLabel, company, brand)
+          autoTable(doc, {
+            ...pdfTableTheme(brand.accent),
+            startY: 30,
+            head: [['Action', 'Priority', 'Timeline', 'Owner', 'Est. Saving', 'Status']],
+            body: actionPlan.map(a => [a.action, a.priority, a.timeline, a.owner, a.saving, a.status]),
+            columnStyles: { 0: { cellWidth: 120 } },
+          })
+        },
+      }
+      const pdfSeq = visibleBuiltinKeys.filter(k => pdfPageRenderers[k])
+      const finalPdfSeq = pdfSeq.length ? pdfSeq : ['kpis']
+      finalPdfSeq.forEach((k, i) => { if (i > 0) doc.addPage(); pdfPageRenderers[k]() })
 
       const totalPages = doc.internal.getNumberOfPages()
       for (let p = 1; p <= totalPages; p++) { doc.setPage(p); pdfFooter(doc, p, totalPages, company, brand) }
@@ -951,7 +1127,7 @@ export default function ExecutiveReport() {
     } finally {
       setExporting(false)
     }
-  }, [period, kpis, rootCauses, riskMatrix, actionPlan, kpiCards, totalSpend, projectedAnnual, costTrend, currency, company, branding, savingsOpportunity, chartImg])
+  }, [period, kpis, rootCauses, riskMatrix, actionPlan, recommendations, kpiCards, totalSpend, projectedAnnual, costTrend, currency, company, branding, savingsOpportunity, chartImg, visibleBuiltinKeys])
 
   // ── PowerPoint Export (WYSIWYG white deck: title + KPI + chart + table slides) ─
   const exportPPTX = useCallback(async () => {
@@ -973,17 +1149,19 @@ export default function ExecutiveReport() {
       s.addText(`Generated ${reportDateLabel()}  |  CONFIDENTIAL`, { x: 0.6, y: 4.2, w: 12.1, h: 0.5, fontSize: 12, color: MUTED })
 
       // KPI dashboard slide (labelled cards)
-      s = pptx.addSlide(); s.background = { color: BG }
-      s.addText('KPI Dashboard', { x: 0.5, y: 0.3, w: 12.3, h: 0.6, fontSize: 22, bold: true, color: INK })
-      const perRow = 4, cardW = 2.98, cardH = 1.28, gx = 0.13, gy = 0.22, ox = 0.5, oy = 1.15
-      kpiCards.forEach((c, i) => {
-        const col = i % perRow, row = Math.floor(i / perRow)
-        const x = ox + col * (cardW + gx), y = oy + row * (cardH + gy)
-        s.addShape(pptx.ShapeType.roundRect, { x, y, w: cardW, h: cardH, rectRadius: 0.06, fill: { color: CARD }, line: { color: BORDER, width: 1 } })
-        s.addText(String(c.value), { x: x + 0.12, y: y + 0.12, w: cardW - 0.24, h: 0.5, fontSize: 17, bold: true, color: INK })
-        s.addText(String(c.label), { x: x + 0.12, y: y + 0.62, w: cardW - 0.24, h: 0.34, fontSize: 9, color: SUBTLE })
-        s.addText(`Target: ${String(c.target)}`, { x: x + 0.12, y: y + 0.94, w: cardW - 0.24, h: 0.28, fontSize: 8, color: MUTED })
-      })
+      const kpiSlide = () => {
+        const sl = pptx.addSlide(); sl.background = { color: BG }
+        sl.addText('KPI Dashboard', { x: 0.5, y: 0.3, w: 12.3, h: 0.6, fontSize: 22, bold: true, color: INK })
+        const perRow = 4, cardW = 2.98, cardH = 1.28, gx = 0.13, gy = 0.22, ox = 0.5, oy = 1.15
+        kpiCards.forEach((c, i) => {
+          const col = i % perRow, row = Math.floor(i / perRow)
+          const x = ox + col * (cardW + gx), y = oy + row * (cardH + gy)
+          sl.addShape(pptx.ShapeType.roundRect, { x, y, w: cardW, h: cardH, rectRadius: 0.06, fill: { color: CARD }, line: { color: BORDER, width: 1 } })
+          sl.addText(String(c.value), { x: x + 0.12, y: y + 0.12, w: cardW - 0.24, h: 0.5, fontSize: 17, bold: true, color: INK })
+          sl.addText(String(c.label), { x: x + 0.12, y: y + 0.62, w: cardW - 0.24, h: 0.34, fontSize: 9, color: SUBTLE })
+          sl.addText(`Target: ${String(c.target)}`, { x: x + 0.12, y: y + 0.94, w: cardW - 0.24, h: 0.28, fontSize: 8, color: MUTED })
+        })
+      }
 
       // One slide per chart (WYSIWYG capture)
       const chartSlide = (ref, title) => {
@@ -993,11 +1171,6 @@ export default function ExecutiveReport() {
         if (img) sl.addImage({ data: img, x: 1.4, y: 1.1, w: 10.5, h: 5.9, sizing: { type: 'contain', w: 10.5, h: 5.9 } })
         else sl.addText('No chart data', { x: 0.5, y: 3.2, w: 12.3, h: 0.6, fontSize: 14, color: SUBTLE, align: 'center' })
       }
-      chartSlide(rootCauseRef, 'Root Cause Analysis')
-      chartSlide(costTrendRef, 'Monthly Spend Trend')
-      chartSlide(costBySiteRef, 'Cost by Site')
-      chartSlide(costByBrandRef, 'Cost by Brand')
-      chartSlide(riskTrendRef, '6-Month Risk Score Trend')
 
       // Table slides
       const tableSlide = (title, head, rows) => {
@@ -1014,12 +1187,36 @@ export default function ExecutiveReport() {
           fill: { color: BG },
         })
       }
-      tableSlide('Root Cause Analysis', ['Root Cause', 'Count', '%', 'Cost Impact'],
-        rootCauses.map(c => [c.label, c.count, fmtPct(c.pct), fmtCurrency(c.cost, currency)]))
-      tableSlide('Risk Matrix', ['Site', 'Critical', 'High', 'Medium', 'Low', 'Total', 'Risk Score'],
-        riskMatrix.map(r => [r.site, r.Critical, r.High, r.Medium, r.Low, r.total, r.score.toFixed(2)]))
-      tableSlide('Action Plan', ['Action', 'Priority', 'Timeline', 'Owner', 'Est. Saving', 'Status'],
-        actionPlan.map(a => [a.action, a.priority, a.timeline, a.owner, a.saving, a.status]))
+
+      // Slides are emitted per visible built-in section, in the customized order.
+      const pptxRenderers = {
+        kpis: () => kpiSlide(),
+        rootcause: () => {
+          chartSlide(rootCauseRef, 'Root Cause Analysis')
+          tableSlide('Root Cause Analysis', ['Root Cause', 'Count', '%', 'Cost Impact'],
+            rootCauses.map(c => [c.label, c.count, fmtPct(c.pct), fmtCurrency(c.cost, currency)]))
+        },
+        financial: () => {
+          chartSlide(costTrendRef, 'Monthly Spend Trend')
+          chartSlide(costBySiteRef, 'Cost by Site')
+          chartSlide(costByBrandRef, 'Cost by Brand')
+        },
+        risk: () => {
+          chartSlide(riskTrendRef, '6-Month Risk Score Trend')
+          tableSlide('Risk Matrix', ['Site', 'Critical', 'High', 'Medium', 'Low', 'Total', 'Risk Score'],
+            riskMatrix.map(r => [r.site, r.Critical, r.High, r.Medium, r.Low, r.total, r.score.toFixed(2)]))
+        },
+        recommendations: () => {
+          tableSlide('Recommendations', ['Priority', 'Recommendation', 'Owner', 'Expected Impact'],
+            recommendations.map(r => [r.priority, r.title, r.owner, r.impact]))
+        },
+        actionplan: () => {
+          tableSlide('Action Plan', ['Action', 'Priority', 'Timeline', 'Owner', 'Est. Saving', 'Status'],
+            actionPlan.map(a => [a.action, a.priority, a.timeline, a.owner, a.saving, a.status]))
+        },
+      }
+      const pptxSeq = visibleBuiltinKeys.filter(k => pptxRenderers[k])
+      ;(pptxSeq.length ? pptxSeq : ['kpis']).forEach(k => pptxRenderers[k]())
 
       await pptx.writeFile({ fileName: `${reportFileName('TyrePulse Executive Report', periodLabel, reportDateLabel())}.pptx` })
     } catch (e) {
@@ -1027,7 +1224,7 @@ export default function ExecutiveReport() {
     } finally {
       setExporting(false)
     }
-  }, [period, kpiCards, rootCauses, riskMatrix, actionPlan, currency, company, chartImg])
+  }, [period, kpiCards, rootCauses, riskMatrix, actionPlan, recommendations, currency, company, chartImg, visibleBuiltinKeys])
 
   // ── Excel Export ──────────────────────────────────────────────────────────
   const exportExcel = useCallback(async () => {
@@ -1047,36 +1244,36 @@ export default function ExecutiveReport() {
       { KPI: 'Total Spend', Value: Math.round(totalSpend), Unit: currency },
       { KPI: 'Projected Annual Spend', Value: Math.round(projectedAnnual), Unit: currency },
     ]
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(kpiRows), 'KPI Dashboard')
+    const addSheet = (rows, name) => XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows.length ? rows : [{}]), name)
 
-    const rcRows = rootCauses.map(c => ({
-      'Root Cause': c.label, Count: c.count, 'Pct of Total': c.pct.toFixed(1) + '%',
-      'Est Cost Impact': Math.round(c.cost), Prevention: c.prevention,
-    }))
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rcRows), 'Root Cause Analysis')
-
-    const riskRows = riskMatrix.map(r => ({
-      Site: r.site, Critical: r.Critical, High: r.High, Medium: r.Medium,
-      Low: r.Low, Total: r.total, 'Risk Score': r.score.toFixed(2),
-    }))
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(riskRows), 'Risk Matrix')
-
-    const apRows = actionPlan.map(a => ({
-      Action: a.action, Priority: a.priority, Timeline: a.timeline,
-      Owner: a.owner, 'Est Saving': a.saving, Status: a.status,
-    }))
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(apRows), 'Action Plan')
-
-    const costRows = costTrend.byMonth.map(m => ({
-      Month: m.month, 'Total Cost': Math.round(m.totalCost), Count: m.count,
-    }))
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(costRows), 'Cost Trend')
-
-    const siteRows = costBySite.map(s => ({ Site: s.site, 'Total Cost': Math.round(s.cost) }))
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(siteRows), 'Cost by Site')
+    // Sheets are appended per visible built-in section, in the customized order.
+    const excelRenderers = {
+      kpis: () => addSheet(kpiRows, 'KPI Dashboard'),
+      rootcause: () => addSheet(rootCauses.map(c => ({
+        'Root Cause': c.label, Count: c.count, 'Pct of Total': c.pct.toFixed(1) + '%',
+        'Est Cost Impact': Math.round(c.cost), Prevention: c.prevention,
+      })), 'Root Cause Analysis'),
+      financial: () => {
+        addSheet(costTrend.byMonth.map(m => ({ Month: m.month, 'Total Cost': Math.round(m.totalCost), Count: m.count })), 'Cost Trend')
+        addSheet(costBySite.map(s => ({ Site: s.site, 'Total Cost': Math.round(s.cost) })), 'Cost by Site')
+      },
+      risk: () => addSheet(riskMatrix.map(r => ({
+        Site: r.site, Critical: r.Critical, High: r.High, Medium: r.Medium,
+        Low: r.Low, Total: r.total, 'Risk Score': r.score.toFixed(2),
+      })), 'Risk Matrix'),
+      recommendations: () => addSheet(recommendations.map(r => ({
+        Priority: r.priority, Recommendation: r.title, Owner: r.owner, 'Expected Impact': r.impact,
+      })), 'Recommendations'),
+      actionplan: () => addSheet(actionPlan.map(a => ({
+        Action: a.action, Priority: a.priority, Timeline: a.timeline,
+        Owner: a.owner, 'Est Saving': a.saving, Status: a.status,
+      })), 'Action Plan'),
+    }
+    const excelSeq = visibleBuiltinKeys.filter(k => excelRenderers[k])
+    ;(excelSeq.length ? excelSeq : ['kpis']).forEach(k => excelRenderers[k]())
 
     XLSX.writeFile(wb, `TyrePulse_Executive_Report_${periodValueLabel(period).replace(/[^\w-]+/g, '_')}_${new Date().toISOString().slice(0, 10)}.xlsx`)
-  }, [kpis, rootCauses, riskMatrix, actionPlan, costTrend, costBySite, totalSpend, projectedAnnual, currency, period])
+  }, [kpis, rootCauses, riskMatrix, actionPlan, recommendations, costTrend, costBySite, totalSpend, projectedAnnual, currency, period, visibleBuiltinKeys])
 
   const exportActionPlanPDF = useCallback(async () => {
     const { default: jsPDF } = await import('jspdf')
@@ -1159,6 +1356,162 @@ export default function ExecutiveReport() {
   }
   const rcaOpts = reportMode ? paperChartOptions(rcaBase) : rcaBase
 
+  // ── Added-widget renderer (palette blocks) ─────────────────────────────────
+  // Every widget is bound to data already computed above - honest empty states,
+  // never fabricated. A hover "remove" control mirrors the Customize panel.
+  const emptyState = (label) => (
+    <div className="h-full min-h-[10rem] flex items-center justify-center text-[var(--text-dim)] text-sm">{label}</div>
+  )
+
+  function renderWidget(item) {
+    switch (item.key) {
+      case 'w:note':
+        return (
+          <div className="relative group">
+            <button
+              onClick={() => removeBlock(item.id)}
+              title="Remove this block"
+              className="no-print absolute top-3 right-3 z-10 p-1.5 rounded-lg bg-[var(--surface-2)] hover:bg-red-500/15 text-[var(--text-muted)] hover:text-red-400 border border-[var(--border-dim)] opacity-0 group-hover:opacity-100 transition-opacity"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
+            <Card>
+              <div className="flex items-center gap-2 mb-2">
+                <StickyNote className="w-4 h-4 text-amber-400" />
+                <span className="text-xs font-semibold uppercase tracking-wide text-[var(--text-secondary)]">Note</span>
+              </div>
+              <textarea
+                value={item.text || ''}
+                onChange={(e) => updateBlockText(item.id, e.target.value)}
+                placeholder="Type a note, commentary, or context for this report..."
+                rows={3}
+                className="w-full resize-y bg-[var(--surface-1)] border border-[var(--border-dim)] rounded-lg p-3 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-dim)] focus:outline-none focus:border-blue-400"
+              />
+            </Card>
+          </div>
+        )
+      case 'w:divider':
+        return (
+          <div className="relative group py-1">
+            <button
+              onClick={() => removeBlock(item.id)}
+              title="Remove this block"
+              className="no-print absolute top-0 right-0 z-10 p-1.5 rounded-lg bg-[var(--surface-2)] hover:bg-red-500/15 text-[var(--text-muted)] hover:text-red-400 border border-[var(--border-dim)] opacity-0 group-hover:opacity-100 transition-opacity"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
+            <hr className="border-t border-[var(--border-bright)]" />
+          </div>
+        )
+      case 'w:chartCostTrend':
+        return (
+          <WidgetShell onRemove={() => removeBlock(item.id)} icon={BarChart2} title="Monthly Spend Trend" subtitle="Tyre spend by month">
+            <div className="h-64">
+              {costTrend.byMonth.length > 0 ? <Bar data={costTrendChart} options={barOpts} /> : emptyState('No trend data')}
+            </div>
+          </WidgetShell>
+        )
+      case 'w:chartRootCause':
+        return (
+          <WidgetShell onRemove={() => removeBlock(item.id)} icon={AlertTriangle} title="Root Cause Breakdown" subtitle="Failure driver classification">
+            <div className="h-64">
+              {rootCauses.length > 0 ? <Bar data={rcaChart} options={rcaOpts} /> : emptyState('No root cause data')}
+            </div>
+          </WidgetShell>
+        )
+      case 'w:chartCostSite':
+        return (
+          <WidgetShell onRemove={() => removeBlock(item.id)} icon={Building2} title="Cost by Site" subtitle="Cost distribution across sites">
+            <div className="h-64">
+              {costBySite.length > 0 ? <Bar data={costBySiteChart} options={horizOpts} /> : emptyState('No site data')}
+            </div>
+          </WidgetShell>
+        )
+      case 'w:chartCostBrand':
+        return (
+          <WidgetShell onRemove={() => removeBlock(item.id)} icon={Package} title="Cost by Brand" subtitle="Cost distribution across brands">
+            <div className="h-64">
+              {costByBrand.length > 0 ? <Bar data={costByBrandChart} options={horizOpts} /> : emptyState('No brand data')}
+            </div>
+          </WidgetShell>
+        )
+      case 'w:chartRiskTrend':
+        return (
+          <WidgetShell onRemove={() => removeBlock(item.id)} icon={ShieldAlert} title="Risk Score Trend" subtitle="Six-month fleet risk score">
+            <div className="h-64">
+              {riskTrend6m.length > 0 ? <Line data={riskTrendChart} options={lineOpts} /> : emptyState('No risk trend data')}
+            </div>
+          </WidgetShell>
+        )
+      case 'w:tableTopVehicles':
+        return (
+          <WidgetShell onRemove={() => removeBlock(item.id)} icon={Users} title="Top Cost Vehicles" subtitle="Highest-cost vehicles in the period">
+            {topCostVehicles.length > 0 ? (
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="border-b border-[var(--border-dim)]">
+                      <th className="text-left py-2 px-3 text-[var(--text-secondary)] font-medium">#</th>
+                      <th className="text-left py-2 px-3 text-[var(--text-secondary)] font-medium">Asset No</th>
+                      <th className="text-left py-2 px-3 text-[var(--text-secondary)] font-medium">Site</th>
+                      <th className="text-right py-2 px-3 text-[var(--text-secondary)] font-medium">Tyres</th>
+                      <th className="text-right py-2 px-3 text-[var(--text-secondary)] font-medium">Cost</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {topCostVehicles.map((v, i) => (
+                      <tr key={v.asset_no} className="border-b border-[var(--border-dim)] hover:bg-[var(--surface-2)] transition-colors">
+                        <td className="py-2 px-3 text-[var(--text-muted)]">{i + 1}</td>
+                        <td className="py-2 px-3 text-[var(--text-primary)] font-medium">{v.asset_no}</td>
+                        <td className="py-2 px-3 text-[var(--text-secondary)]">{v.site || '-'}</td>
+                        <td className="py-2 px-3 text-right text-[var(--text-secondary)]">{v.count}</td>
+                        <td className="py-2 px-3 text-right text-amber-400 font-bold">{fmtCurrency(v.cost, currency)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : emptyState('No vehicle cost data')}
+          </WidgetShell>
+        )
+      case 'w:insights':
+        return (
+          <WidgetShell onRemove={() => removeBlock(item.id)} icon={Award} title="Key Wins & Concerns" subtitle="Best-performing brand and highest-risk site">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {bestBrandByScore ? (
+                <div className="bg-emerald-500/5 border border-emerald-500/20 rounded-lg p-3">
+                  <div className="flex items-center gap-2 mb-1">
+                    <Award className="w-4 h-4 text-emerald-400" />
+                    <span className="text-xs font-semibold text-emerald-400 uppercase tracking-wide">Key Win</span>
+                  </div>
+                  <p className="text-sm text-[var(--text-primary)]">
+                    {bestBrandByScore.brand} leads on cost efficiency at {fmtCpk(bestBrandByScore.avgCpk, currency)}/km with a {fmtPct(bestBrandByScore.failureRate * 100)} failure rate.
+                  </p>
+                </div>
+              ) : (
+                <div className="bg-[var(--surface-1)] border border-[var(--border-dim)] rounded-lg p-3 text-sm text-[var(--text-dim)]">No brand benchmark yet.</div>
+              )}
+              {worstSiteByFailure ? (
+                <div className="bg-red-500/5 border border-red-500/20 rounded-lg p-3">
+                  <div className="flex items-center gap-2 mb-1">
+                    <AlertOctagon className="w-4 h-4 text-red-400" />
+                    <span className="text-xs font-semibold text-red-400 uppercase tracking-wide">Key Concern</span>
+                  </div>
+                  <p className="text-sm text-[var(--text-primary)]">
+                    {worstSiteByFailure.site} shows the highest failure rate at {fmtPct(worstSiteByFailure.rate * 100)} and needs an operations review.
+                  </p>
+                </div>
+              ) : (
+                <div className="bg-[var(--surface-1)] border border-[var(--border-dim)] rounded-lg p-3 text-sm text-[var(--text-dim)]">No site risk outlier yet.</div>
+              )}
+            </div>
+          </WidgetShell>
+        )
+      default:
+        return null
+    }
+  }
+
   return (
     <div className={`text-[var(--text-primary)] print:bg-white print:text-black space-y-6${reportMode ? ' tp-report-paper' : ''}`}>
 
@@ -1200,6 +1553,19 @@ export default function ExecutiveReport() {
             icon={FileText}
             actions={<>
               <PeriodFilter records={records} value={period} onChange={setPeriod} />
+              <button
+                onClick={() => setCustomizeOpen(o => !o)}
+                aria-pressed={customizeOpen}
+                title="Customize which sections show, reorder them, and add blocks"
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all border ${
+                  customizeOpen
+                    ? 'bg-blue-600 hover:bg-blue-500 text-white border-blue-500'
+                    : 'bg-[var(--surface-2)] hover:bg-[var(--surface-3)] text-[var(--text-primary)] border-[var(--border-bright)]'
+                }`}
+              >
+                <Settings2 className="w-3.5 h-3.5" />
+                Customize
+              </button>
               <button
                 onClick={() => setReportMode(m => !m)}
                 aria-pressed={reportMode}
@@ -1258,12 +1624,19 @@ export default function ExecutiveReport() {
         </div>
       </div>
 
-      <div className="max-w-[1800px] mx-auto px-4 py-6 space-y-8">
+      <div className="max-w-[1800px] mx-auto px-4 py-6 flex flex-col gap-8">
+
+        {/* User-added palette widgets, positioned by the shared flex order. */}
+        {addedBlocks.map((item) => (
+          <div key={item.id} style={{ order: orderOf(item.id) }}>
+            {renderWidget(item)}
+          </div>
+        ))}
 
         {/* ═══════════════════════════════════════════════════════════════
             SECTION 1 - EXECUTIVE SUMMARY
         ═══════════════════════════════════════════════════════════════ */}
-        <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }}>
+        <motion.div style={blockStyle('summary')} initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }}>
           <Card className="border-emerald-800/40">
             {/* Confidential badge */}
             <div className="flex items-center justify-between mb-5">
@@ -1398,7 +1771,7 @@ export default function ExecutiveReport() {
         {/* ═══════════════════════════════════════════════════════════════
             SECTION 2 - KPI DASHBOARD
         ═══════════════════════════════════════════════════════════════ */}
-        <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, delay: 0.05 }}>
+        <motion.div style={blockStyle('kpis')} initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, delay: 0.05 }}>
           <Card>
             <SectionHeader
               icon={BarChart2}
@@ -1434,7 +1807,7 @@ export default function ExecutiveReport() {
         {/* ═══════════════════════════════════════════════════════════════
             SECTION 3 - ROOT CAUSE ANALYSIS
         ═══════════════════════════════════════════════════════════════ */}
-        <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, delay: 0.1 }}>
+        <motion.div style={blockStyle('rootcause')} initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, delay: 0.1 }}>
           <Card>
             <SectionHeader
               icon={AlertTriangle}
@@ -1507,7 +1880,7 @@ export default function ExecutiveReport() {
         {/* ═══════════════════════════════════════════════════════════════
             SECTION 4 - FINANCIAL IMPACT
         ═══════════════════════════════════════════════════════════════ */}
-        <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, delay: 0.15 }}>
+        <motion.div style={blockStyle('financial')} initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, delay: 0.15 }}>
           <Card>
             <SectionHeader
               icon={DollarSign}
@@ -1594,7 +1967,7 @@ export default function ExecutiveReport() {
         {/* ═══════════════════════════════════════════════════════════════
             SECTION 5 - RISK ASSESSMENT
         ═══════════════════════════════════════════════════════════════ */}
-        <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, delay: 0.2 }}>
+        <motion.div style={blockStyle('risk')} initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, delay: 0.2 }}>
           <Card>
             <SectionHeader
               icon={ShieldAlert}
@@ -1773,7 +2146,7 @@ export default function ExecutiveReport() {
         {/* ═══════════════════════════════════════════════════════════════
             SECTION 6 - RECOMMENDATIONS
         ═══════════════════════════════════════════════════════════════ */}
-        <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, delay: 0.25 }}>
+        <motion.div style={blockStyle('recommendations')} initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, delay: 0.25 }}>
           <Card>
             <SectionHeader
               icon={Target}
@@ -1814,7 +2187,7 @@ export default function ExecutiveReport() {
         {/* ═══════════════════════════════════════════════════════════════
             SECTION 7 - ACTION PLAN
         ═══════════════════════════════════════════════════════════════ */}
-        <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, delay: 0.3 }}>
+        <motion.div style={blockStyle('actionplan')} initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, delay: 0.3 }}>
           <Card>
             <div className="flex items-start justify-between mb-6">
               <div className="flex items-center gap-3">
@@ -1909,6 +2282,144 @@ export default function ExecutiveReport() {
         </motion.div>
 
       </div>
+
+      {/* ── Customize drawer ─────────────────────────────────────────────
+          Show/hide, reorder, remove, and add report blocks. Persisted to
+          localStorage. Var-driven surfaces keep it readable on white paper. */}
+      {customizeOpen && (
+        <div className="no-print fixed inset-0 z-50 flex justify-end">
+          <div
+            className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+            onClick={() => setCustomizeOpen(false)}
+          />
+          <div className="relative w-full max-w-md h-full bg-[var(--surface-0)] border-l border-[var(--border-bright)] shadow-2xl flex flex-col">
+            {/* Header */}
+            <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--border-dim)]">
+              <div className="flex items-center gap-2.5">
+                <div className="p-1.5 bg-blue-500/10 rounded-lg border border-blue-500/20">
+                  <Settings2 className="w-4 h-4 text-blue-400" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-semibold text-[var(--text-primary)]">Customize Report</h3>
+                  <p className="text-xs text-[var(--text-secondary)]">Show, hide, reorder and add blocks</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setCustomizeOpen(false)}
+                className="p-1.5 rounded-lg hover:bg-[var(--surface-2)] text-[var(--text-muted)]"
+                title="Close"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto px-5 py-4 space-y-6">
+              {/* Layout list */}
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-[var(--text-secondary)] flex items-center gap-1.5">
+                    <LayoutList className="w-3.5 h-3.5" /> Report blocks
+                  </p>
+                  <button
+                    onClick={resetLayout}
+                    className="flex items-center gap-1 text-xs text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"
+                    title="Reset to the default layout"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5" /> Reset
+                  </button>
+                </div>
+                <div className="space-y-1.5">
+                  {layout.map((item, i) => {
+                    const vis = item.visible !== false
+                    return (
+                      <div
+                        key={item.id}
+                        className={`flex items-center gap-2 px-2.5 py-2 rounded-lg border transition-colors ${
+                          vis
+                            ? 'bg-[var(--surface-1)] border-[var(--border-dim)]'
+                            : 'bg-[var(--surface-1)]/40 border-[var(--border-dim)] opacity-60'
+                        }`}
+                      >
+                        <GripVertical className="w-3.5 h-3.5 text-[var(--text-dim)] flex-shrink-0" />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-medium text-[var(--text-primary)] truncate">{blockLabel(item)}</p>
+                          <p className="text-[10px] text-[var(--text-muted)] uppercase tracking-wide">{item.builtin ? 'Section' : 'Added block'}</p>
+                        </div>
+                        <div className="flex items-center gap-0.5 flex-shrink-0">
+                          <button
+                            onClick={() => moveBlock(item.id, -1)}
+                            disabled={i === 0}
+                            className="p-1 rounded hover:bg-[var(--surface-3)] text-[var(--text-muted)] disabled:opacity-30 disabled:cursor-not-allowed"
+                            title="Move up"
+                          >
+                            <ArrowUp className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={() => moveBlock(item.id, 1)}
+                            disabled={i === layout.length - 1}
+                            className="p-1 rounded hover:bg-[var(--surface-3)] text-[var(--text-muted)] disabled:opacity-30 disabled:cursor-not-allowed"
+                            title="Move down"
+                          >
+                            <ArrowDown className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={() => toggleVisible(item.id)}
+                            className={`p-1 rounded hover:bg-[var(--surface-3)] ${vis ? 'text-emerald-400' : 'text-[var(--text-dim)]'}`}
+                            title={vis ? 'Hide block' : 'Show block'}
+                          >
+                            {vis ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
+                          </button>
+                          {!item.builtin && (
+                            <button
+                              onClick={() => removeBlock(item.id)}
+                              className="p-1 rounded hover:bg-red-500/15 text-[var(--text-muted)] hover:text-red-400"
+                              title="Remove block"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+
+              {/* Add block palette */}
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wide text-[var(--text-secondary)] flex items-center gap-1.5 mb-2">
+                  <Plus className="w-3.5 h-3.5" /> Add a block
+                </p>
+                <div className="grid grid-cols-1 gap-1.5">
+                  {WIDGET_DEFS.map((w) => {
+                    const Icon = w.icon
+                    return (
+                      <button
+                        key={w.key}
+                        onClick={() => addWidget(w.key)}
+                        className="flex items-start gap-2.5 px-3 py-2.5 rounded-lg bg-[var(--surface-1)] border border-[var(--border-dim)] hover:border-blue-400/50 hover:bg-[var(--surface-2)] text-left transition-colors"
+                      >
+                        <div className="p-1.5 bg-blue-500/10 rounded-lg border border-blue-500/20 flex-shrink-0">
+                          <Icon className="w-4 h-4 text-blue-400" />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-xs font-medium text-[var(--text-primary)]">{w.label}</p>
+                          <p className="text-[11px] text-[var(--text-muted)] leading-snug">{w.desc}</p>
+                        </div>
+                        <Plus className="w-3.5 h-3.5 text-[var(--text-dim)] ml-auto flex-shrink-0 self-center" />
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+            </div>
+
+            <div className="px-5 py-3 border-t border-[var(--border-dim)] text-[11px] text-[var(--text-muted)]">
+              Your layout is saved automatically and applies to the on-screen report and PDF, PowerPoint and Excel exports.
+            </div>
+          </div>
+        </div>
+      )}
 
       <EmailReportModal
         isOpen={emailModalOpen}

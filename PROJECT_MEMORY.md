@@ -218,6 +218,33 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
   (5) TV/executive shareable public links + live tiles (daily open job cards, daily tyre replacement).
   The accident detail-table filter (Open/Closed claims + status/severity/fault) ALREADY exists (ffbef29).
 
+## Advanced batch 2 (2026-07-14) — exec builder, TV tiles, dashboard, accident data
+- **Executive report is now a CUSTOMIZABLE builder** (`ExecutiveReport.jsx`): Customize drawer to
+  show/hide + reorder the 7 built-in sections, ADD 9 data-bound blocks (trend/RCA/site/brand/risk charts,
+  top-cost table, wins/concerns, free text, divider), localStorage `executiveReport.layout.v1`. PDF/PPTX/
+  Excel exports honour the visible+ordered built-in sections (added blocks/notes are on-screen/print only).
+  White document theme. Do NOT import the accident report engine here (self-contained).
+- **TV wallboard** (`DisplayDashboard.jsx`): new "Today at a Glance" board (default, in BOARDS + rotation)
+  with live tiles - open job cards today, tyre replacements today (tyre_changes removal_date), inspections/
+  accidents today, critical alerts, tyres needing attention, fleet availability. Uses only data load()
+  already fetches; `isToday` = String(v).slice(0,10)===todayStr. DisplayShare.jsx (snapshot share) untouched.
+- **Main dashboard** (`Dashboard.jsx`): 6-KPI row (adds Fleet Vehicles), a Site filter that flows through
+  the central `tyres` memo to every surface, and a concise number-led "Priority Recommendations" panel
+  (derived only from loaded data; "All clear" empty). CPK/accidents/WO KPIs omitted (not in dashboard.js
+  service) rather than fabricated.
+- **Accidents severity vocab STANDARDIZED (single source `accidentVocab.js`)**: `SEVERITIES =
+  ['Minor','Moderate','Major']`; `toDbSeverity` Minor/Moderate/Major -> minor/moderate/severe (chk_severity
+  allows minor/moderate/severe/fatal); legacy 'Total Loss'/'severe'/'fatal' fold onto **Major** via
+  SEVERITY_ALIAS/canonSeverity. Three competing lifecycle lists merged into ONE `CURRENT_CONDITION_OPTS`
+  (Running/Waiting for approval/Under Repair/Repair Completed/Released/Closed); `WORKFLOW_STAGE_OPTS`/
+  `CASE_STAGE_OPTS` retained as ALIASES (backward-compatible imports). RULE: 'Total Loss' is retired as a
+  severity label - do NOT reintroduce it; use the 3-band ladder. accidentReport/accidentVocab tests updated.
+- **Accident form asset auto-fill** (`Accidents.jsx`): debounced asset_no lookup (loaded fleet list, then
+  `getAssetByNo` from api/assets.js) auto-fills site/country ONLY when empty (never overwrites typed values)
+  + a read-only "Master:" context line (vehicle_type/make/model/fleet_number). NOTE: vehicle_fleet has NO
+  plate_number column and accidents has no vehicle_type/plate column - nothing fabricated/persisted to
+  non-existent columns. If a plate/asset-type field is ever wanted on accidents, add the columns first.
+
 ## Performance + Data Reconciliation (2026-07-14)
 - **App-slowness root cause = RLS re-running helper fns PER ROW**, not data volume (tiny: 1419 tyres/604
   fleet). **V233** = 7 covering FK indexes + drop 1 duplicate index. **V234** (20 hot tables) + **V236**

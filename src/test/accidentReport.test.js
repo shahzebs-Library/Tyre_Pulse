@@ -69,9 +69,9 @@ describe('accidentReport catalog integrity', () => {
     expect(fmtCell('claim_amount', 100, money)).toBe('$100')
     expect(fmtCell('gcc_liability_ratio', '50', money)).toBe('50%')
     expect(fmtCell('incident_date', '2026-06-01T10:00:00Z', money)).toBe('2026-06-01')
-    expect(fmtCell('site', '', money)).toBe('—')
+    expect(fmtCell('site', '', money)).toBe('N/A')
     expect(fmtCell('days_open', 12, money)).toBe('12d')
-    expect(fmtCell('days_open', null, money)).toBe('—')
+    expect(fmtCell('days_open', null, money)).toBe('N/A')
   })
 
   it('days_open is a virtual table column computed from the record (Days Open link-up)', () => {
@@ -96,11 +96,11 @@ describe('accidentReport catalog integrity', () => {
     expect(KPIS.avgCaseDuration.get(ctx)).toBe('10d')
     // empty → honest dashes
     const emptyCtx = buildReportContext([], 'SAR')
-    expect(KPIS.avgDaysOpen.get(emptyCtx)).toBe('—')
-    expect(KPIS.avgCaseDuration.get(emptyCtx)).toBe('—')
+    expect(KPIS.avgDaysOpen.get(emptyCtx)).toBe('N/A')
+    expect(KPIS.avgCaseDuration.get(emptyCtx)).toBe('N/A')
     // caseAge chart buckets only OPEN cases
     const data = CHARTS.caseAge.build(ctx)
-    expect(data.labels).toEqual(['0–15d', '16–30d', '31–60d', '60+d'])
+    expect(data.labels).toEqual(['0 to 15d', '16 to 30d', '31 to 60d', '60+d'])
     expect(data.datasets[0].data).toEqual([0, 1, 0, 0])
     expect(isChartEmpty(CHARTS.caseAge.build(emptyCtx))).toBe(true)
   })

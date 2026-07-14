@@ -85,17 +85,17 @@ export const CHARTS = {
     label: 'Recovery funnel', description: 'Claimed → approved → recovered', kind: 'bar', build: ({ claims }) => ({ labels: ['Claimed', 'Approved', 'Recovered'], datasets: [{ data: [Math.round(claims.claimed), Math.round(claims.approved), Math.round(claims.recovered)], backgroundColor: ['#2563eb', '#9333ea', '#16a34a'], borderRadius: 3 }] }),
   },
   aging: {
-    label: 'Open-claim ageing', description: 'Open claims by days outstanding', kind: 'bar', build: ({ claims }) => ({ labels: ['0–30d', '31–60d', '61–90d', '90+d'], datasets: [{ data: [claims.aging['0-30'].count, claims.aging['31-60'].count, claims.aging['61-90'].count, claims.aging['90+'].count], backgroundColor: ['#16a34a', '#ca8a04', '#fb923c', '#dc2626'], borderRadius: 3 }] }),
+    label: 'Open-claim ageing', description: 'Open claims by days outstanding', kind: 'bar', build: ({ claims }) => ({ labels: ['0 to 30d', '31 to 60d', '61 to 90d', '90+d'], datasets: [{ data: [claims.aging['0-30'].count, claims.aging['31-60'].count, claims.aging['61-90'].count, claims.aging['90+'].count], backgroundColor: ['#16a34a', '#ca8a04', '#fb923c', '#dc2626'], borderRadius: 3 }] }),
   },
   caseAge: {
     label: 'Open cases by days open', description: 'Open incidents bucketed by days since the accident (Days Open)', kind: 'bar', build: ({ records }) => {
-      const buckets = { '0–15d': 0, '16–30d': 0, '31–60d': 0, '60+d': 0 }
+      const buckets = { '0 to 15d': 0, '16 to 30d': 0, '31 to 60d': 0, '60+d': 0 }
       records.filter((r) => !isClosedRow(r)).forEach((r) => {
         const d = caseAgeDays(r)
         if (d == null) return
-        if (d <= 15) buckets['0–15d']++
-        else if (d <= 30) buckets['16–30d']++
-        else if (d <= 60) buckets['31–60d']++
+        if (d <= 15) buckets['0 to 15d']++
+        else if (d <= 30) buckets['16 to 30d']++
+        else if (d <= 60) buckets['31 to 60d']++
         else buckets['60+d']++
       })
       return { labels: Object.keys(buckets), datasets: [{ data: Object.values(buckets), backgroundColor: ['#16a34a', '#ca8a04', '#fb923c', '#dc2626'], borderRadius: 3 }] }
@@ -145,7 +145,7 @@ export const KPIS = {
   approved: { label: 'Approved', money: true, get: ({ claims }) => claims.approved },
   recovered: { label: 'Recovered', money: true, get: ({ claims }) => claims.recovered },
   netExposure: { label: 'Net exposure', money: true, get: ({ claims }) => claims.netExposure },
-  recoveryRate: { label: 'Recovery rate', get: ({ claims }) => (claims.recoveryRate == null ? '—' : `${claims.recoveryRate}%`) },
+  recoveryRate: { label: 'Recovery rate', get: ({ claims }) => (claims.recoveryRate == null ? 'N/A' : `${claims.recoveryRate}%`) },
   delayed: { label: 'Delayed claims', get: ({ claims }) => claims.delayed },
   deductible: { label: 'Deductible', money: true, get: ({ claims }) => claims.deductible },
   claimsCount: { label: 'Claims', get: ({ claims }) => claims.total },
@@ -175,7 +175,7 @@ export function caseAgeDays(r, now = Date.now()) {
 
 function avgDays(records, filterFn) {
   const vals = records.filter(filterFn).map((r) => caseAgeDays(r)).filter((v) => v != null)
-  return vals.length ? `${Math.round(vals.reduce((s, v) => s + v, 0) / vals.length)}d` : '—'
+  return vals.length ? `${Math.round(vals.reduce((s, v) => s + v, 0) / vals.length)}d` : 'N/A'
 }
 
 // ── Detail-table columns ──────────────────────────────────────────────────────
@@ -196,7 +196,7 @@ export function cellValue(col, r, now = Date.now()) {
 }
 
 export function fmtCell(col, v, money) {
-  if (v == null || v === '') return '—'
+  if (v == null || v === '') return 'N/A'
   if (['claim_amount', 'claim_approved_amount', 'recovered_amount', 'repair_cost'].includes(col)) return money(v)
   if (col === 'gcc_liability_ratio') return `${Number(v)}%`
   if (col === 'days_open') return `${Number(v)}d`
@@ -209,10 +209,10 @@ export function buildInsights(ctx) {
   const { records, claims } = ctx
   if (!records.length) return []
   const out = []
-  out.push(`${records.length} incident${records.length === 1 ? '' : 's'} in scope — ${claims.open} open, ${claims.closed} closed.`)
+  out.push(`${records.length} incident${records.length === 1 ? '' : 's'} in scope: ${claims.open} open, ${claims.closed} closed.`)
 
   const serious = records.filter((r) => { const s = canonSev(r.severity); return s === 'Major' || s === 'Total Loss' }).length
-  if (serious > 0) out.push(`${serious} serious incident${serious === 1 ? '' : 's'} (Major / Total Loss) — ${Math.round((serious / records.length) * 100)}% of all incidents.`)
+  if (serious > 0) out.push(`${serious} serious incident${serious === 1 ? '' : 's'} (Major / Total Loss), ${Math.round((serious / records.length) * 100)}% of all incidents.`)
 
   const keys = last12(); const t = Object.fromEntries(keys.map((k) => [k, 0]))
   records.forEach((r) => { const k = mKey(r.incident_date); if (k && t[k] != null) t[k]++ })
@@ -226,7 +226,7 @@ export function buildInsights(ctx) {
   if (claims.claimed > 0) {
     out.push(`Claims position: ${Math.round(claims.claimed).toLocaleString()} claimed, ${Math.round(claims.recovered).toLocaleString()} recovered${claims.recoveryRate != null ? ` (${claims.recoveryRate}% recovery rate)` : ''}.`)
   }
-  if (claims.delayed > 0) out.push(`${claims.delayed} claim${claims.delayed === 1 ? '' : 's'} past the expected release date — follow up with the insurer.`)
+  if (claims.delayed > 0) out.push(`${claims.delayed} claim${claims.delayed === 1 ? '' : 's'} past the expected release date, follow up with the insurer.`)
   const stale = claims.aging?.['90+']?.count || 0
   if (stale > 0) out.push(`${stale} open claim${stale === 1 ? '' : 's'} older than 90 days.`)
   return out
@@ -342,7 +342,7 @@ export const REPORT_LIBRARY = [
       makeBlock('chart', { chart: 'recovery', title: 'Claims recovery funnel' }),
       makeBlock('text', { title: 'Management commentary', body: '' }),
       makeBlock('pagebreak'),
-      makeBlock('divider', { label: 'Annex — incident register' }),
+      makeBlock('divider', { label: 'Annex: incident register' }),
       makeBlock('table', { title: 'Incident detail', columns: ['incident_date', 'asset_no', 'site', 'driver_name', 'severity', 'status', 'days_open', 'claim_amount', 'recovered_amount'], limit: 60 }),
     ],
   },
@@ -352,7 +352,7 @@ export const REPORT_LIBRARY = [
     description: 'Everything on record: landscape register with the widest column set for audits and hand-overs.',
     orientation: 'landscape',
     build: () => [
-      makeBlock('header', { title: 'Accident Register — Full Detail' }),
+      makeBlock('header', { title: 'Accident Register: Full Detail' }),
       makeBlock('kpis', { items: ['total', 'open', 'closed', 'claimsCount'] }),
       makeBlock('table', { title: 'Incident register', columns: Object.keys(TABLE_COLS), limit: 200 }),
     ],

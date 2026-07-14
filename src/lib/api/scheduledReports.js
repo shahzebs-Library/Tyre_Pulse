@@ -249,12 +249,12 @@ export function resolvePeriod(period, customFrom, customTo) {
       return {
         from: customFrom || null,
         to: customTo || null,
-        label: `${customFrom || '…'} → ${customTo || '…'}`,
+        label: `${customFrom || '...'} to ${customTo || '...'}`,
       }
     case 'last_30':
     default:        from.setDate(to.getDate() - 30); break
   }
-  return { from: iso(from), to: iso(to), label: `${iso(from)} → ${iso(to)}` }
+  return { from: iso(from), to: iso(to), label: `${iso(from)} to ${iso(to)}` }
 }
 
 /* ── Live report data (honest empty states, never fabricated) ─────────────── */

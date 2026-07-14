@@ -152,6 +152,22 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
 - New tests: `claimsAnalytics.test.js` (12), `scheduledReports.api.test.js` (4),
   `accidentReportTemplates.api.test.js` (5). Full suite green.
 
+## Scheduled report e-mails + Send Now (2026-07-14)
+- **Why e-mails "stopped"**: pipeline was healthy (pg_cron job 1 every 15 min, Resend fine) - all 5
+  schedules were simply PAUSED (active=false) since 07-11. Reactivated via SQL (next_run_at NULL =>
+  sends on next tick). One historical Resend 429 (2 req/s limit) => cron loop now paces sends 650ms.
+- **Edge fn `send-scheduled-reports` v13 (ACTIVE)**: dual-mode - (a) cron via x-cron-secret as before;
+  (b) on-demand "Send now": authenticated POST {schedule_id}, role gate Admin/Manager/Director,
+  schedule fetched via the CALLER's RLS client (org/country isolation inherited), sends e-mail,
+  bumps last_sent_at only (never next_run_at/active), logs `<name> (send now)` to report_send_log.
+  CORS helpers inlined from _shared/auth.ts (single-file MCP deploy). Frontend: Send icon button on
+  every ScheduleCard -> supabase.functions.invoke('send-scheduled-reports', {body:{schedule_id}}).
+- **RULE - NO dash punctuation in report output** (user preference): em/en dashes, middle dots,
+  arrows and curly quotes are banned from e-mails/PDF/Excel. Empty values render "N/A" (not a dash),
+  ranges use "0 to 30d", separators ":" or "|". Edge fn sanitizes subject+html via asciiSafe();
+  frontend cleaned in accidentReport(.Pdf).js, exportUtils.js, scheduledReports.js, ScheduledReports.jsx,
+  AccidentReportBuilder.jsx. Keep new report strings ASCII-only.
+
 ## Status (2026-07-13)
 - 88 modules ported from fleet_IQ/tyre_saas (batches 1–19). Migrations V127–V206.
 - Full security remediation applied (V202) + Holding Company (V201) + SSO last-mile (Login signInWithSSO).

@@ -61,7 +61,7 @@ export async function renderAccidentReportPdf({
 }) {
   const { blocks, orientation } = normalizeConfig(config)
   const ctx = buildReportContext(records, currency)
-  const money = (v) => (v == null || v === '' ? '—' : formatCurrencyCompact(v, currency))
+  const money = (v) => (v == null || v === '' ? 'N/A' : formatCurrencyCompact(v, currency))
 
   const [{ default: JsPDF }, auto] = await Promise.all([import('jspdf'), import('jspdf-autotable')])
   const autoTable = auto.default
@@ -82,7 +82,7 @@ export async function renderAccidentReportPdf({
       doc.setTextColor(15, 23, 42); doc.setFont('helvetica', 'bold'); doc.setFontSize(18)
       doc.text(b.title || 'Report', tx, y + 8)
       doc.setFont('helvetica', 'normal'); doc.setFontSize(10); doc.setTextColor(71, 85, 105)
-      const sub = [b.subtitle, subtitle, company, b.showDate ? `Generated ${stamp}` : ''].filter(Boolean).join('  ·  ')
+      const sub = [b.subtitle, subtitle, company, b.showDate ? `Generated ${stamp}` : ''].filter(Boolean).join('  |  ')
       if (sub) doc.text(sub, tx, y + 15)
       y += 26
       doc.setDrawColor(226, 232, 240); doc.setLineWidth(0.4); doc.line(MX, y, PW - MX, y); y += 6
@@ -131,7 +131,7 @@ export async function renderAccidentReportPdf({
       doc.setFont('helvetica', 'bold'); doc.setFontSize(12); doc.setTextColor(15, 23, 42)
       doc.text(b.title || 'Key findings', MX, y + 4); y += 7
       doc.setFont('helvetica', 'normal'); doc.setFontSize(10); doc.setTextColor(51, 65, 85)
-      if (!lines.length) { ensure(6); doc.setTextColor(148, 163, 184); doc.text('No incidents in the covered period — nothing to report.', MX, y + 4); y += 8; continue }
+      if (!lines.length) { ensure(6); doc.setTextColor(148, 163, 184); doc.text('No incidents in the covered period. Nothing to report.', MX, y + 4); y += 8; continue }
       for (const ln of lines) {
         const wrapped = doc.splitTextToSize(ln, PW - MX * 2 - 5)
         ensure(wrapped.length * 5.2 + 2)
@@ -176,7 +176,7 @@ export async function renderAccidentReportPdf({
       autoTable(doc, {
         startY: y, margin: { left: MX, right: MX }, theme: 'grid',
         head: [cols.map((c) => TABLE_COLS[c])],
-        body: rows.length ? rows : [cols.map(() => '—')],
+        body: rows.length ? rows : [cols.map(() => 'N/A')],
         styles: { font: 'helvetica', fontSize: 8, cellPadding: 2, textColor: [51, 65, 85], lineColor: [226, 232, 240], lineWidth: 0.1 },
         headStyles: { fillColor: [30, 41, 59], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 8 },
         alternateRowStyles: { fillColor: [248, 250, 252] },
@@ -190,7 +190,7 @@ export async function renderAccidentReportPdf({
   const pages = doc.internal.getNumberOfPages()
   for (let p = 1; p <= pages; p++) {
     doc.setPage(p); doc.setFontSize(8); doc.setTextColor(148, 163, 184)
-    doc.text(`${company}  ·  Accident Report`, MX, PH - 8)
+    doc.text(`${company}  |  Accident Report`, MX, PH - 8)
     doc.text(`Page ${p} / ${pages}`, PW - MX, PH - 8, { align: 'right' })
   }
 

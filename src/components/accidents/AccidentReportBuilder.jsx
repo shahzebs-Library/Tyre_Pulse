@@ -54,7 +54,7 @@ const LS_KEY = 'accidentReportBuilder.local.v1'
 export default function AccidentReportBuilder({ records = [], company = 'TyrePulse', currency = 'SAR' }) {
   const navigate = useNavigate()
   const claimsCtx = useMemo(() => buildReportContext(records, currency), [records, currency])
-  const money = useCallback((v) => (v == null || v === '' ? '—' : formatCurrencyCompact(v, currency)), [currency])
+  const money = useCallback((v) => (v == null || v === '' ? 'N/A' : formatCurrencyCompact(v, currency)), [currency])
 
   const [blocks, setBlocks] = useState(() => {
     try {
@@ -490,7 +490,7 @@ function BlockPreview({ block: b, ctx, records, money, company, chartRefs, orien
         {b.logo ? <img src={b.logo} alt="logo" className="h-14 w-auto object-contain" /> : <div className="h-14 w-14 rounded bg-slate-100 border border-dashed border-slate-300 flex items-center justify-center text-slate-300"><ImageIcon size={20} /></div>}
         <div>
           <h1 className="text-2xl font-bold text-slate-900">{b.title || 'Report'}</h1>
-          <p className="text-sm text-slate-500 mt-0.5">{[b.subtitle, company, b.showDate ? `Generated ${stamp}` : ''].filter(Boolean).join('  ·  ') || 'Accident & claims report'}</p>
+          <p className="text-sm text-slate-500 mt-0.5">{[b.subtitle, company, b.showDate ? `Generated ${stamp}` : ''].filter(Boolean).join('  |  ') || 'Accident & claims report'}</p>
         </div>
       </div>
     )

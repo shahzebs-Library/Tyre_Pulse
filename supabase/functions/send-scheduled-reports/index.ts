@@ -18,6 +18,58 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
 const RIYADH_OFFSET_MIN = 3 * 60 // Gulf standard time, no DST
 
+/* ── CORS + auth (inlined from _shared/auth.ts so the function deploys as a
+      single file via MCP; keep in sync with that helper) ─────────────────── */
+
+const DEFAULT_ALLOWED_ORIGINS = [
+  'https://tyrepulse.app',
+  'https://www.tyrepulse.app',
+  'http://localhost:5173',
+  'http://localhost:5174',
+]
+const VERCEL_ORIGIN = /^https:\/\/[a-z0-9-]+\.vercel\.app$/
+
+function corsHeaders(req: Request): Record<string, string> {
+  const origin = req.headers.get('origin')
+  const configured = Deno.env.get('ALLOWED_ORIGINS')?.split(',').map((v) => v.trim()).filter(Boolean)
+  const allowedOrigins = configured?.length ? configured : DEFAULT_ALLOWED_ORIGINS
+  let allowOrigin = '*'
+  if (origin) {
+    allowOrigin = (allowedOrigins.includes(origin) || VERCEL_ORIGIN.test(origin) || origin.startsWith('http://localhost'))
+      ? origin
+      : 'null'
+  }
+  const requestedHeaders = req.headers.get('access-control-request-headers')
+  return {
+    'Access-Control-Allow-Origin': allowOrigin,
+    'Access-Control-Allow-Headers': requestedHeaders || 'authorization, x-client-info, apikey, content-type, x-app-name',
+    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+    'Vary': 'Origin, Access-Control-Request-Headers',
+  }
+}
+
+function jsonResponse(req: Request, body: unknown, status = 200): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
+  })
+}
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
+
+/** User preference: no em/en dashes or fancy unicode punctuation anywhere in
+ *  report output. Applied to every subject + html right before sending. */
+function asciiSafe(t: string): string {
+  return t
+    .replace(/(\d)\s*[–—]\s*(\d)/g, '$1 to $2') // 0–30 → 0 to 30
+    .replace(/\s+[–—]\s+/g, ' | ')              // " — " separators
+    .replace(/[–—]/g, ' ')                      // any leftover dash
+    .replace(/·/g, '|')                              // middle dot
+    .replace(/→/g, 'to')                             // →
+    .replace(/[“”]/g, '"')
+    .replace(/[‘’]/g, "'")
+}
+
 type Schedule = {
   id: string
   name: string
@@ -143,15 +195,15 @@ function typeLabel(reportType: string): string {
 /* ── Formatting helpers ─────────────────────────────────────────────────────── */
 
 function num(n: number | null | undefined): string {
-  return n == null || !Number.isFinite(Number(n)) ? '—' : Number(n).toLocaleString('en-US')
+  return n == null || !Number.isFinite(Number(n)) ? 'N/A' : Number(n).toLocaleString('en-US')
 }
 function money(n: number | null | undefined, currency: string): string {
-  if (n == null || !Number.isFinite(Number(n))) return '—'
+  if (n == null || !Number.isFinite(Number(n))) return 'N/A'
   const v = Number(n).toLocaleString('en-US', { maximumFractionDigits: 0 })
   return currency ? `${currency} ${v}` : v
 }
 function dateShort(s: string | null | undefined): string {
-  return s ? String(s).slice(0, 10) : '—'
+  return s ? String(s).slice(0, 10) : 'N/A'
 }
 
 /** Trend badge vs the prior window. `higherIsWorse` colours cost/risk rises red. */
@@ -229,7 +281,7 @@ function brandReliabilityList(items: Array<{ label: string; value: number; risk_
         const color = pct == null ? '#94a3b8' : pct >= 40 ? '#b91c1c' : pct >= 15 ? '#b45309' : '#047857'
         return `<tr>
           <td style="padding:6px 0;font-size:12.5px;color:#334155">${it.label} <span style="color:#94a3b8;font-size:11px">(${num(it.value)} tyres)</span></td>
-          <td style="padding:6px 0;font-size:12.5px;font-weight:700;text-align:right;color:${color}">${pct == null ? '—' : pct + '% risk'}</td>
+          <td style="padding:6px 0;font-size:12.5px;font-weight:700;text-align:right;color:${color}">${pct == null ? 'N/A' : pct + '% risk'}</td>
         </tr>`
       }).join('')
     : `<tr><td style="padding:6px 0;font-size:12px;color:#94a3b8">Not enough records per brand yet</td></tr>`
@@ -303,7 +355,7 @@ function renderHtml(s: Schedule, d: Digest, appUrl: string, currency: string): s
         <tr>
           ${tile('Tyre transactions', num(d.all.tyres))}
           ${tile('Total tyre spend', money(d.all.spend, currency))}
-          ${tile('Avg cost / km', d.all.cpk == null ? '—' : money(d.all.cpk, currency))}
+          ${tile('Avg cost / km', d.all.cpk == null ? 'N/A' : money(d.all.cpk, currency))}
         </tr>
         <tr>
           ${tile('High / Critical risk', num(d.all.high_risk), '', riskColor)}
@@ -350,12 +402,12 @@ function renderHtml(s: Schedule, d: Digest, appUrl: string, currency: string): s
         ${sectionTitle('Cost Trend & Forecast · last 6 months')}
         <tr><td colspan="3" style="padding-top:4px">${monthlyTrendBars(d.monthly_trend, currency)}</td></tr>
         <tr>
-          ${tile('Projected annual spend', d.projected_annual_spend == null ? '—' : money(d.projected_annual_spend, currency), 'run-rate to date')}
-          ${tile('Annual budget (12× monthly)', d.monthly_budget ? money(d.monthly_budget * 12, currency) : '—')}
+          ${tile('Projected annual spend', d.projected_annual_spend == null ? 'N/A' : money(d.projected_annual_spend, currency), 'run-rate to date')}
+          ${tile('Annual budget (12× monthly)', d.monthly_budget ? money(d.monthly_budget * 12, currency) : 'N/A')}
           ${(() => {
             const proj = d.projected_annual_spend
             const bud = d.monthly_budget ? d.monthly_budget * 12 : null
-            if (proj == null || bud == null || bud === 0) return tile('Budget outlook', '—', 'set a fleet budget')
+            if (proj == null || bud == null || bud === 0) return tile('Budget outlook', 'N/A', 'set a fleet budget')
             const over = proj > bud
             const pct = Math.round(Math.abs((proj - bud) / bud) * 100)
             return tile('Budget outlook', `${over ? 'Over' : 'Under'} by ${pct}%`, over ? 'projected spend exceeds budget' : 'within budget', over ? '#b91c1c' : '#047857')
@@ -393,7 +445,7 @@ function renderHtml(s: Schedule, d: Digest, appUrl: string, currency: string): s
       </ol>
 
       <p style="font-size:12px;color:#475569;line-height:1.6;margin-top:16px">
-        All figures are live from your fleet data — a dash (—) means the metric could not be computed and
+        All figures are live from your fleet data. N/A means the metric could not be computed and
         is never estimated. Trend arrows compare the last ${d.period_days} days to the prior ${d.period_days} days.
       </p>
       <a href="${appUrl}" style="display:inline-block;background:#16a34a;color:#fff;font-weight:700;font-size:13px;padding:11px 20px;border-radius:8px;text-decoration:none;margin-top:4px">Open TyrePulse Dashboard</a>
@@ -515,10 +567,10 @@ async function buildClaimsDigest(svc: any, orgId: string | null): Promise<Claims
   const by_status = [...statusMap.entries()].map(([label, value]) => ({ label, value }))
     .sort((a, b) => b.value - a.value).slice(0, 6)
   const recent = rows.slice(0, 12).map((r) => ({
-    date: r.incident_date ? String(r.incident_date).slice(0, 10) : '—',
-    asset: r.asset_no || '—',
-    insurer: r.insurer || '—',
-    status: r.claim_status || r.status || '—',
+    date: r.incident_date ? String(r.incident_date).slice(0, 10) : 'N/A',
+    asset: r.asset_no || 'N/A',
+    insurer: r.insurer || 'N/A',
+    status: r.claim_status || r.status || 'N/A',
     claim: n0(r.claim_amount),
     approved: n0(r.claim_approved_amount),
     recovered: n0(r.recovered_amount),
@@ -591,7 +643,7 @@ function renderClaimsHtml(s: Schedule, d: ClaimsDigest, appUrl: string, currency
         </tr>
         <tr>
           ${tile('Delayed', num(d.delayed), 'past expected release', d.delayed ? '#b91c1c' : '#047857')}
-          ${tile('Recovery rate', recoveryRate == null ? '—' : `${recoveryRate}%`)}
+          ${tile('Recovery rate', recoveryRate == null ? 'N/A' : `${recoveryRate}%`)}
           ${tile('Net exposure', money(d.net_exposure, currency), 'after recoveries', d.net_exposure ? '#b91c1c' : '#0f172a')}
         </tr>
 
@@ -604,7 +656,7 @@ function renderClaimsHtml(s: Schedule, d: ClaimsDigest, appUrl: string, currency
         <tr>
           ${tile('Deductible exposure', money(d.deductible_total, currency))}
           ${tile('Outstanding vs approved', money(Math.max(0, d.approved_total - d.recovered_total), currency), 'approved not yet recovered', (d.approved_total - d.recovered_total) > 0 ? '#b45309' : '#047857')}
-          ${tile('Avg claim', d.total ? money(Math.round(d.claim_total / d.total), currency) : '—')}
+          ${tile('Avg claim', d.total ? money(Math.round(d.claim_total / d.total), currency) : 'N/A')}
         </tr>
 
         ${sectionTitle('Claims by Insurer & Status')}
@@ -638,8 +690,8 @@ function renderClaimsHtml(s: Schedule, d: ClaimsDigest, appUrl: string, currency
       </table>
 
       <p style="font-size:12px;color:#475569;line-height:1.6;margin-top:16px">
-        All figures are live from your accident &amp; claims data — a dash (—) means the value was not captured and is never estimated.
-        “Delayed” flags open claims past their expected release date.
+        All figures are live from your accident &amp; claims data. N/A means the value was not captured and is never estimated.
+        "Delayed" flags open claims past their expected release date.
       </p>
       <a href="${appUrl}/accidents" style="display:inline-block;background:#4f46e5;color:#fff;font-weight:700;font-size:13px;padding:11px 20px;border-radius:8px;text-decoration:none;margin-top:4px">Open Claims in TyrePulse</a>
       <p style="font-size:11px;color:#94a3b8;margin-top:18px">
@@ -650,25 +702,124 @@ function renderClaimsHtml(s: Schedule, d: ClaimsDigest, appUrl: string, currency
   </div>`
 }
 
+/** Render the correct digest e-mail (claims / builder / executive) for one schedule. */
+// deno-lint-ignore no-explicit-any
+async function renderForSchedule(svc: any, s: Schedule, appUrl: string, currency: string): Promise<{ subject: string; html: string }> {
+  const isBuilder = (s.report_type ?? '').startsWith('builder:')
+  const html = (s.report_type === 'claims' || isBuilder)
+    ? renderClaimsHtml(s, await buildClaimsDigest(svc, s.org_id), appUrl, currency)
+    : renderHtml(s, await buildDigest(svc, s.org_id), appUrl, currency)
+  // No dash punctuation in report output (user preference) - sanitize both.
+  return { subject: asciiSafe(`TyrePulse ${typeLabel(s.report_type) || 'Report'}: ${s.name}`), html: asciiSafe(html) }
+}
+
+// deno-lint-ignore no-explicit-any
+async function systemCurrency(svc: any): Promise<string> {
+  try {
+    const { data: cur } = await svc.from('system_config').select('value').eq('key', 'default_currency').maybeSingle()
+    return (cur?.value ?? '').toString().replace(/^"|"$/g, '').trim()
+  } catch { return '' }
+}
+
+const SCHEDULE_COLS = 'id,name,report_type,frequency,day_of_week,day_of_month,time_of_day,recipients,last_sent_at,next_run_at,org_id'
+
+/**
+ * On-demand "Send now": an authenticated Admin/Manager/Director posts
+ * { schedule_id } and the report is e-mailed to its recipients immediately.
+ * The schedule row is fetched through the CALLER's own RLS client, so org and
+ * country isolation are enforced by the database — a user can only send
+ * schedules they can already see. Does NOT advance next_run_at or touch the
+ * active flag; only last_sent_at + a report_send_log row.
+ */
+// deno-lint-ignore no-explicit-any
+async function handleSendNow(req: Request, svc: any): Promise<Response> {
+  if (req.method !== 'POST') return jsonResponse(req, { error: 'unauthorised' }, 401)
+
+  let scheduleId = ''
+  try { scheduleId = String((await req.json())?.schedule_id ?? '') } catch { /* fallthrough */ }
+  if (!scheduleId) return jsonResponse(req, { error: 'schedule_id is required' }, 400)
+
+  const token = (req.headers.get('authorization') ?? '').replace(/^Bearer\s+/i, '')
+  if (!token) return jsonResponse(req, { error: 'Missing bearer token' }, 401)
+  const userClient = createClient(
+    Deno.env.get('SUPABASE_URL')!,
+    Deno.env.get('SUPABASE_ANON_KEY')!,
+    { global: { headers: { Authorization: `Bearer ${token}` } } },
+  )
+  const { data: userData, error: userError } = await userClient.auth.getUser(token)
+  if (userError || !userData?.user) return jsonResponse(req, { error: 'Invalid session' }, 401)
+  const { data: profile } = await userClient
+    .from('profiles').select('id, role, approved, locked').eq('id', userData.user.id).maybeSingle()
+  if (!profile || profile.approved === false || profile.locked === true) {
+    return jsonResponse(req, { error: 'Account is not approved for this action' }, 403)
+  }
+  const role = String(profile.role ?? '').trim().toLowerCase().replace(/\s+/g, '_')
+  if (!['admin', 'manager', 'director'].includes(role)) {
+    return jsonResponse(req, { error: 'Insufficient role for this action' }, 403)
+  }
+
+  // RLS-scoped read: invisible schedules 404 rather than leak.
+  const { data: s, error: schedErr } = await userClient
+    .from('report_schedules').select(SCHEDULE_COLS).eq('id', scheduleId).maybeSingle()
+  if (schedErr) return jsonResponse(req, { error: schedErr.message }, 500)
+  if (!s) return jsonResponse(req, { error: 'Schedule not found' }, 404)
+
+  const recipients = ((s.recipients ?? []) as string[]).filter((r) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(r))
+  if (!recipients.length) return jsonResponse(req, { error: 'No valid recipients on the schedule' }, 400)
+  const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY')
+  if (!RESEND_API_KEY) return jsonResponse(req, { error: 'E-mail provider is not configured' }, 500)
+  const APP_URL = Deno.env.get('APP_URL') || 'https://tyrepulse.app'
+  const FROM_EMAIL = Deno.env.get('FROM_EMAIL') || 'reports@tyrepulse.app'
+
+  const now = new Date()
+  try {
+    const { subject, html } = await renderForSchedule(svc, s as Schedule, APP_URL, await systemCurrency(svc))
+    const res = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ from: FROM_EMAIL, to: recipients, subject, html }),
+    })
+    if (!res.ok) throw new Error(`Resend ${res.status}: ${(await res.text()).slice(0, 300)}`)
+
+    await svc.from('report_schedules')
+      .update({ last_sent_at: now.toISOString(), updated_at: now.toISOString() })
+      .eq('id', s.id)
+    await svc.from('report_send_log').insert({
+      schedule_id: s.id, schedule_name: `${s.name} (send now)`, report_type: s.report_type,
+      recipients, status: 'sent',
+    })
+    return jsonResponse(req, { sent: true, recipients: recipients.length })
+  } catch (e) {
+    const msg = String((e as Error)?.message ?? e).slice(0, 300)
+    await svc.from('report_send_log').insert({
+      schedule_id: s.id, schedule_name: `${s.name} (send now)`, report_type: s.report_type,
+      recipients, status: 'failed', error: msg,
+    })
+    return jsonResponse(req, { error: msg }, 502)
+  }
+}
+
 serve(async (req) => {
-  if (req.method === 'OPTIONS') return new Response('ok')
+  if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders(req) })
 
   const svc = createClient(
     Deno.env.get('SUPABASE_URL')!,
     Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
   )
 
-  // Gate: only the DB cron job knows the secret.
+  // Two entry modes: the pg_cron job authenticates with x-cron-secret and
+  // processes every due schedule; anything else must be an authenticated
+  // on-demand "Send now" request for a single schedule.
   const given = req.headers.get('x-cron-secret') ?? ''
   const { data: cfg } = await svc.from('cron_config').select('value').eq('name', 'cron_secret').maybeSingle()
   if (!cfg?.value || given !== cfg.value) {
-    return new Response(JSON.stringify({ error: 'unauthorised' }), { status: 401, headers: { 'Content-Type': 'application/json' } })
+    return await handleSendNow(req, svc)
   }
 
   const now = new Date()
   const { data: due, error: dueErr } = await svc
     .from('report_schedules')
-    .select('id,name,report_type,frequency,day_of_week,day_of_month,time_of_day,recipients,last_sent_at,next_run_at,org_id')
+    .select(SCHEDULE_COLS)
     .eq('active', true)
     .or(`next_run_at.is.null,next_run_at.lte.${now.toISOString()}`)
     .limit(25)
@@ -681,14 +832,11 @@ serve(async (req) => {
   const APP_URL = Deno.env.get('APP_URL') || 'https://tyrepulse.app'
 
   // System currency (best-effort; blank if unset - never blocks a send).
-  let currency = ''
-  try {
-    const { data: cur } = await svc.from('system_config').select('value').eq('key', 'default_currency').maybeSingle()
-    currency = (cur?.value ?? '').toString().replace(/^"|"$/g, '').trim()
-  } catch { /* ignore */ }
+  const currency = await systemCurrency(svc)
 
   let sent = 0
   let failed = 0
+  let first = true
 
   for (const s of (due ?? []) as Schedule[]) {
     const recipients = (s.recipients ?? []).filter((r) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(r))
@@ -696,24 +844,18 @@ serve(async (req) => {
       if (!recipients.length) throw new Error('No valid recipients on the schedule')
       if (!RESEND_API_KEY) throw new Error('RESEND_API_KEY not configured for edge functions')
 
-      // Insurance Claims Summary gets its own claims-desk digest; custom Report
-      // Builder layouts (report_type 'builder:<template-id>') are accident-domain
-      // reports, so they get the same claims-desk digest as their email summary —
-      // the pixel-faithful block PDF is generated on demand in the app. Every
-      // other type uses the executive intelligence digest.
-      const isBuilder = (s.report_type ?? '').startsWith('builder:')
-      const html = (s.report_type === 'claims' || isBuilder)
-        ? renderClaimsHtml(s, await buildClaimsDigest(svc, s.org_id), APP_URL, currency)
-        : renderHtml(s, await buildDigest(svc, s.org_id), APP_URL, currency)
+      // Resend allows 2 requests/second — pace consecutive sends so a batch of
+      // due schedules never trips the 429 rate limit (observed 2026-07-11).
+      if (!first) await sleep(650)
+      first = false
+
+      // Insurance Claims Summary + custom Report Builder layouts get the
+      // claims-desk digest; every other type the executive digest.
+      const { subject, html } = await renderForSchedule(svc, s, APP_URL, currency)
       const res = await fetch('https://api.resend.com/emails', {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          from: FROM_EMAIL,
-          to: recipients,
-          subject: `TyrePulse ${typeLabel(s.report_type) || 'Report'} — ${s.name}`,
-          html,
-        }),
+        body: JSON.stringify({ from: FROM_EMAIL, to: recipients, subject, html }),
       })
       if (!res.ok) throw new Error(`Resend ${res.status}: ${(await res.text()).slice(0, 300)}`)
 

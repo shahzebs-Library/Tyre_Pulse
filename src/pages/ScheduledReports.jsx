@@ -4,8 +4,9 @@ import {
   FileText, BarChart2, Truck, ClipboardList, DollarSign,
   CheckCircle, XCircle, AlertCircle, AlertTriangle, ChevronDown, X, Save, Lock,
   Package, Building2, Download, Loader2, FileSpreadsheet, CalendarClock, ShieldCheck,
-  LayoutTemplate,
+  LayoutTemplate, Send,
 } from 'lucide-react'
+import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { useLanguage } from '../contexts/LanguageContext'
 import { useSettings } from '../contexts/SettingsContext'
@@ -108,7 +109,7 @@ function validateEmails(raw) {
 }
 
 function coverageLabel(s, td) {
-  if (s.period === 'custom') return `${s.period_from || '…'} → ${s.period_to || '…'}`
+  if (s.period === 'custom') return `${s.period_from || '...'} to ${s.period_to || '...'}`
   return td(`schedreports.periods.${s.period}`, PERIOD_LABEL[s.period] || 'Last 30 days')
 }
 
@@ -143,12 +144,13 @@ function FormatBadge({ fmt }) {
   )
 }
 
-function ScheduleCard({ schedule, onEdit, onDelete, onToggle, onGenerate, generating, td, typeLabelFor }) {
+function ScheduleCard({ schedule, onEdit, onDelete, onToggle, onGenerate, generating, onSendNow, sendingNow, td, typeLabelFor }) {
   const typeLabel = typeLabelFor(schedule.report_type)
   const cfg = iconCfgFor(schedule.report_type)
   const recipientCount = (schedule.recipients ?? []).length
   const formats = schedule.output_formats?.length ? schedule.output_formats : ['pdf']
   const busy = generating === schedule.id
+  const sending = sendingNow === schedule.id
 
   return (
     <div className={`bg-[var(--surface-2)] border rounded-xl p-5 flex flex-col gap-4 transition-all duration-200 hover:border-[var(--border-bright)] border-[var(--border-bright)] ${schedule.active ? '' : 'opacity-70'}`}>
@@ -162,6 +164,14 @@ function ScheduleCard({ schedule, onEdit, onDelete, onToggle, onGenerate, genera
           </div>
         </div>
         <div className="flex items-center gap-1 flex-shrink-0">
+          <button
+            onClick={() => onSendNow(schedule)}
+            disabled={sending}
+            title={td('schedreports.card.sendNow', 'Send now: email this report to its recipients immediately')}
+            className="p-1.5 rounded-lg hover:bg-[var(--surface-3)] transition-colors disabled:opacity-50"
+          >
+            {sending ? <Loader2 className="w-4 h-4 text-green-400 animate-spin" /> : <Send className="w-4 h-4 text-[var(--text-secondary)] hover:text-green-400" />}
+          </button>
           <button
             onClick={() => onGenerate(schedule)}
             disabled={busy}
@@ -553,6 +563,7 @@ export default function ScheduledReports() {
   const [formError, setFormError] = useState('')
   const [saving, setSaving] = useState(false)
   const [generating, setGenerating] = useState(null) // schedule id | 'form' | null
+  const [sendingNow, setSendingNow] = useState(null) // schedule id | null
 
   const [deleteTarget, setDeleteTarget] = useState(null)
   const [deleting, setDeleting] = useState(false)
@@ -737,7 +748,7 @@ export default function ScheduledReports() {
         await exportToPdf(
           rows,
           dataset.cols.map((k, i) => ({ key: k, header: dataset.headers[i] })),
-          `${dataset.title} · ${label}`,
+          `${dataset.title} | ${label}`,
           base, 'landscape', reportCompany,
           {
             currency: activeCurrency, branding, dateRange: label,
@@ -771,6 +782,34 @@ export default function ScheduledReports() {
       setToast({ type: 'err', text: e.message || td('schedreports.toast.genFailed', 'Report generation failed') })
     } finally {
       setGenerating(null)
+    }
+  }
+
+  // ── Send now (email the report to its recipients immediately) ─────────────
+  const handleSendNow = async (s) => {
+    setSendingNow(s.id)
+    setToast(null)
+    try {
+      const { data, error: fnError } = await supabase.functions.invoke('send-scheduled-reports', {
+        body: { schedule_id: s.id },
+      })
+      if (fnError) {
+        // FunctionsHttpError carries the response; surface the server's reason.
+        let msg = fnError.message
+        try { const body = await fnError.context?.json?.(); if (body?.error) msg = body.error } catch { /* keep generic */ }
+        throw new Error(msg || 'Send failed')
+      }
+      if (data?.error) throw new Error(data.error)
+      const stamp = new Date().toISOString()
+      setSchedules(prev => prev.map(x => (x.id === s.id ? { ...x, last_sent_at: stamp } : x)))
+      setToast({
+        type: 'ok',
+        text: td('schedreports.toast.sentNow', 'Report emailed to {n} recipient(s)', { n: data?.recipients ?? (s.recipients ?? []).length }),
+      })
+    } catch (e) {
+      setToast({ type: 'err', text: e.message || td('schedreports.toast.sendFailed', 'Send failed') })
+    } finally {
+      setSendingNow(null)
     }
   }
 
@@ -964,6 +1003,8 @@ export default function ScheduledReports() {
               onToggle={handleToggle}
               onGenerate={handleGenerate}
               generating={generating}
+              onSendNow={handleSendNow}
+              sendingNow={sendingNow}
               td={td}
               typeLabelFor={typeLabelFor}
             />

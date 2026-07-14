@@ -191,7 +191,7 @@ function _deriveBusinessInsights(data) {
   if (sites.length) {
     const worst = [...sites].sort((a, b) => (b.alerts || 0) - (a.alerts || 0))[0]
     if (worst && (worst.alerts || 0) > 0)
-      out.push({ label: 'Highest-Risk Site', value: worst.name, sub: `${worst.alerts} alerts · ${worst.compliance ?? 0}% compliant`, tone: 'crit' })
+      out.push({ label: 'Highest-Risk Site', value: worst.name, sub: `${worst.alerts} alerts | ${worst.compliance ?? 0}% compliant`, tone: 'crit' })
     const best = [...sites].filter(s => s.compliance != null).sort((a, b) => (b.compliance || 0) - (a.compliance || 0))[0]
     if (best) out.push({ label: 'Most Reliable Site', value: best.name, sub: `${best.compliance}% compliance`, tone: 'good' })
   }
@@ -328,7 +328,7 @@ function _pageFooter(doc, page, total, company = '', opts = {}) {
   doc.setFontSize(6.8)
   doc.setFont('helvetica', 'normal')
   doc.setTextColor(...P.ghost)
-  const left = opts.footerText || `${company || 'Fleet Operations Report'}  ·  Confidential — for internal distribution only`
+  const left = opts.footerText || `${company || 'Fleet Operations Report'}  |  Confidential, for internal distribution only`
   doc.text(left, MX, ph - 5.5)
   doc.text(total ? `Page ${page} of ${total}` : `Page ${page}`, pw - MX, ph - 5.5, { align: 'right' })
 }
@@ -756,7 +756,7 @@ export async function exportToPdf(rows, columns, title, filename = 'report', ori
 
   // ── EMPTY STATE: never emit a bare table ──
   if (rows.length === 0) {
-    _pageHeader(doc, title, `0 records · ${nowStr()}`, company, hdrOpts)
+    _pageHeader(doc, title, `0 records | ${nowStr()}`, company, hdrOpts)
     _emptyStatePanel(doc, 'No records for the selected filters',
       opts.emptyHint || 'Adjust the date range or country filter and export again.')
     _pageFooter(doc, 1, 1, company, ftrOpts)
@@ -780,7 +780,7 @@ export async function exportToPdf(rows, columns, title, filename = 'report', ori
 
   // ── PAGE 1: ANALYTICAL SUMMARY ──
   if (showSummary) {
-    _pageHeader(doc, title, `${rows.length.toLocaleString()} records · ${nowStr()}`, company, hdrOpts)
+    _pageHeader(doc, title, `${rows.length.toLocaleString()} records | ${nowStr()}`, company, hdrOpts)
     let y = 30
 
     // KPI cards
@@ -903,7 +903,7 @@ export async function exportToPdf(rows, columns, title, filename = 'report', ori
       else if (v === 'low') { data.cell.styles.fillColor = P.eCream; data.cell.styles.textColor = P.emerald }
     } : undefined,
     didDrawPage: () => {
-      _pageHeader(doc, title, `${rows.length.toLocaleString()} records · ${nowStr()}`, company, hdrOpts)
+      _pageHeader(doc, title, `${rows.length.toLocaleString()} records | ${nowStr()}`, company, hdrOpts)
       _pageFooter(doc, doc.internal.getNumberOfPages(), null, company, ftrOpts)
     },
   })
@@ -949,7 +949,7 @@ export async function exportInspectionDetailPdf(row, opts = {}) {
   doc.setFontSize(7.5)
   doc.setFont('helvetica', 'normal')
   doc.setTextColor(...P.ghost)
-  doc.text(`${row.inspection_type || '-'}  ·  ${row.status || '-'}`, mx + 8, y + 13)
+  doc.text(`${row.inspection_type || '-'}  |  ${row.status || '-'}`, mx + 8, y + 13)
   // Severity badge
   doc.setFillColor(...sevRgb)
   doc.roundedRect(pw - mx - 32, y + 4, 30, 8, 2, 2, 'F')
@@ -1279,7 +1279,7 @@ export async function exportAccidentCasePdf(acc = {}, opts = {}) {
   const brand   = await _pdfBrand(opts.branding)
   const hdr     = { accent: brand.accent, logoData: brand.logoData }
   const ftr     = { footerText: brand.footerText }
-  const dash    = (v) => (v == null || v === '' ? '-' : String(v))
+  const dash    = (v) => (v == null || v === '' ? 'N/A' : String(v))
   const fmtDate = (v) => (v ? formatDate(v) : '-')
 
   const newPageIfNeeded = (need, title = 'Accident Case Report') => {
@@ -1297,9 +1297,9 @@ export async function exportAccidentCasePdf(acc = {}, opts = {}) {
   doc.roundedRect(mx, y, pw - mx * 2, 16, 2, 2, 'FD')
   doc.setFillColor(...sevRgb); doc.roundedRect(mx, y, 4, 16, 2, 0, 'F')
   doc.setFontSize(11); doc.setFont('helvetica', 'bold'); doc.setTextColor(...P.ink)
-  doc.text(`${dash(acc.asset_no)}  ·  Case #${String(acc.id || '').slice(0, 8).toUpperCase()}`, mx + 8, y + 7)
+  doc.text(`${dash(acc.asset_no)}  |  Case #${String(acc.id || '').slice(0, 8).toUpperCase()}`, mx + 8, y + 7)
   doc.setFontSize(7.5); doc.setFont('helvetica', 'normal'); doc.setTextColor(...P.ghost)
-  doc.text(`${dash(acc.severity)}  ·  ${dash(acc.status)}  ·  ${dash(acc.closure_status || 'open')}`, mx + 8, y + 13)
+  doc.text(`${dash(acc.severity)}  |  ${dash(acc.status)}  |  ${dash(acc.closure_status || 'open')}`, mx + 8, y + 13)
   doc.setFillColor(...sevRgb); doc.roundedRect(pw - mx - 32, y + 4, 30, 8, 2, 2, 'F')
   doc.setFontSize(7); doc.setFont('helvetica', 'bold'); doc.setTextColor(...P.white)
   doc.text(String(acc.severity || 'N/A').toUpperCase().slice(0, 12), pw - mx - 17, y + 9.5, { align: 'center' })
@@ -1480,7 +1480,7 @@ export async function exportChecklistSubmissionPdf(submission = {}, opts = {}) {
   const brand   = await _pdfBrand(opts.branding)
   const hdr     = { accent: brand.accent, logoData: brand.logoData }
   const ftr     = { footerText: brand.footerText }
-  const dash    = (v) => (v == null || v === '' ? '-' : String(v))
+  const dash    = (v) => (v == null || v === '' ? 'N/A' : String(v))
   const fmtDate = (v) => (v ? formatDate(v) : '-')
 
   const answers = submission.answers && typeof submission.answers === 'object' ? submission.answers : {}
@@ -1521,7 +1521,7 @@ export async function exportChecklistSubmissionPdf(submission = {}, opts = {}) {
     if (raw === 'true' || raw === 'false') return raw === 'true' ? 'Yes' : 'No'
     if (f?.type === 'rating') { const n = Number(raw); return Number.isFinite(n) && n > 0 ? `${n}/5` : '-' }
     let base = raw == null || raw === '' ? '' : String(raw)
-    if (pc) base = base ? `${base}  ·  ${pc} photo(s) attached` : `${pc} photo(s) attached`
+    if (pc) base = base ? `${base}  |  ${pc} photo(s) attached` : `${pc} photo(s) attached`
     return base || '-'
   }
 
@@ -1542,9 +1542,9 @@ export async function exportChecklistSubmissionPdf(submission = {}, opts = {}) {
   doc.roundedRect(mx, y, pw - mx * 2, 16, 2, 2, 'FD')
   doc.setFillColor(...stRgb); doc.roundedRect(mx, y, 4, 16, 2, 0, 'F')
   doc.setFontSize(11); doc.setFont('helvetica', 'bold'); doc.setTextColor(...P.ink)
-  doc.text(doc.splitTextToSize(`${title}  ·  #${String(submission.id || '').slice(0, 8).toUpperCase()}`, pw - mx * 2 - 46)[0] || title, mx + 8, y + 7)
+  doc.text(doc.splitTextToSize(`${title}  |  #${String(submission.id || '').slice(0, 8).toUpperCase()}`, pw - mx * 2 - 46)[0] || title, mx + 8, y + 7)
   doc.setFontSize(7.5); doc.setFont('helvetica', 'normal'); doc.setTextColor(...P.ghost)
-  const sub = submission.template_version ? `${dash(submission.template_name)}  ·  v${submission.template_version}` : dash(submission.template_name)
+  const sub = submission.template_version ? `${dash(submission.template_name)}  |  v${submission.template_version}` : dash(submission.template_name)
   doc.text(sub, mx + 8, y + 13)
   doc.setFillColor(...stRgb); doc.roundedRect(pw - mx - 32, y + 4, 30, 8, 2, 2, 'F')
   doc.setFontSize(7); doc.setFont('helvetica', 'bold'); doc.setTextColor(...P.white)
@@ -1981,7 +1981,7 @@ export async function exportDailyExecutivePdf(data, filename) {
   const brand    = data.branding || {}
   const ACCENT   = hexToRgb(brand.primary_color, P.indigo)
   const logoData = await fetchImageDataUri(brand.logo_url)
-  const footerLeft = brand.footer_text || `${company}  ·  Fleet Operations Report  ·  Confidential`
+  const footerLeft = brand.footer_text || `${company}  |  Fleet Operations Report  |  Confidential`
 
   // landscape header/footer helpers - clean corporate band matching _pageHeader
   function lsHeader(title, accentRgb = ACCENT) {
@@ -1998,7 +1998,7 @@ export async function exportDailyExecutivePdf(data, filename) {
     doc.setFontSize(15); doc.setFont('helvetica','bold'); doc.setTextColor(...P.ink)
     doc.text(title, MX, 17)
     doc.setFontSize(8); doc.setFont('helvetica','normal'); doc.setTextColor(...P.iron)
-    doc.text(`${date}  ·  ${period}  ·  ${siteLabel}`, PW - MX - (logoData ? 18 : 0), 12, { align: 'right' })
+    doc.text(`${date}  |  ${period}  |  ${siteLabel}`, PW - MX - (logoData ? 18 : 0), 12, { align: 'right' })
     doc.setDrawColor(...accentRgb); doc.setLineWidth(0.9)
     doc.line(MX, 20.2, MX + 26, 20.2)
     doc.setDrawColor(...P.silver); doc.setLineWidth(0.25)
@@ -2035,7 +2035,7 @@ export async function exportDailyExecutivePdf(data, filename) {
     // Company + title
     doc.setFontSize(9); doc.setFont('helvetica','bold')
     doc.setTextColor(...P.mist)
-    doc.text(company.toUpperCase() + '  ·  FLEET OPERATIONS', 28, 48, { charSpace: 0.8 })
+    doc.text(company.toUpperCase() + '  |  FLEET OPERATIONS', 28, 48, { charSpace: 0.8 })
     doc.setFontSize(34); doc.setFont('helvetica','bold'); doc.setTextColor(...P.white)
     doc.text('Operations Report', 28, 74)
     // Accent underline beneath the title
@@ -2044,10 +2044,10 @@ export async function exportDailyExecutivePdf(data, filename) {
     doc.setFontSize(14); doc.setFont('helvetica','normal'); doc.setTextColor(...P.mist)
     doc.text(`${period} Intelligence Summary`, 28, 93)
     doc.setFontSize(10); doc.setTextColor(...P.ghost)
-    doc.text(date + (data.generatedBy ? `  ·  Prepared by: ${data.generatedBy}` : ''), 28, 103)
+    doc.text(date + (data.generatedBy ? `  |  Prepared by: ${data.generatedBy}` : ''), 28, 103)
     // Footer meta line on the cover
     doc.setFontSize(7.5); doc.setFont('helvetica','normal'); doc.setTextColor(...P.ghost)
-    doc.text(`${siteLabel}  ·  Confidential — for internal distribution only`, 28, PH - 16)
+    doc.text(`${siteLabel}  |  Confidential — for internal distribution only`, 28, PH - 16)
 
     // Right-side KPI tiles
     const kpis = [
@@ -2468,9 +2468,9 @@ export async function buildPptxDeck(data) {
     slide.addText(company.toUpperCase(), { x: 0.4, y: 0.14, w: 9, h: 0.3, fontSize: 9, bold: true, color: accent, charSpacing: 2 })
     slide.addText(title, { x: 0.4, y: 0.4, w: 9.5, h: 0.55, fontSize: 21, bold: true, color: INK })
     if (subtitle) slide.addText(subtitle, { x: 10.0, y: 0.2, w: 2.9, h: 0.3, fontSize: 8.5, color: MUTED, align: 'right' })
-    slide.addText(`${period}  ·  ${nowStr()}`, { x: 10.0, y: 0.5, w: 2.9, h: 0.4, fontSize: 8.5, color: MUTED, align: 'right' })
+    slide.addText(`${period}  |  ${nowStr()}`, { x: 10.0, y: 0.5, w: 2.9, h: 0.4, fontSize: 8.5, color: MUTED, align: 'right' })
   }
-  const footerText = brand.footer_text || `${company}  ·  Fleet Operations Report  ·  Confidential`
+  const footerText = brand.footer_text || `${company}  |  Fleet Operations Report  |  Confidential`
   function footer(slide, idx) {
     slide.addText(footerText, { x: 0.4, y: 7.15, w: 11.8, h: 0.3, fontSize: 7.5, color: MUTED })
     slide.addText(String(idx), { x: 12.4, y: 7.15, w: 0.6, h: 0.3, fontSize: 7.5, color: MUTED, align: 'right' })
@@ -2558,7 +2558,7 @@ export async function buildPptxDeck(data) {
   s1.addText('Fleet Operations Report', { x: 0.58, y: 2.1, w: 9, h: 1.6, fontSize: 42, bold: true, color: INK })
   s1.addText(period, { x: 0.6, y: 3.75, w: 8.5, h: 0.6, fontSize: 18, color: SLATE })
   s1.addShape(rect, { x: 0.62, y: 4.5, w: 1.6, h: 0.06, fill: { color: GOLD } })
-  s1.addText(`Generated ${nowStr()}${data.generatedBy ? `   ·   Prepared by ${data.generatedBy}` : ''}`, { x: 0.6, y: 4.7, w: 8.5, h: 0.4, fontSize: 11, color: MUTED })
+  s1.addText(`Generated ${nowStr()}${data.generatedBy ? `   |   Prepared by ${data.generatedBy}` : ''}`, { x: 0.6, y: 4.7, w: 8.5, h: 0.4, fontSize: 11, color: MUTED })
   s1.addText('CONFIDENTIAL - FOR MANAGEMENT REVIEW', { x: 0.6, y: 6.7, w: 8, h: 0.3, fontSize: 9, bold: true, color: MUTED, charSpacing: 1 })
   if (brand.disclaimer) s1.addText(String(brand.disclaimer).slice(0, 220), { x: 0.6, y: 7.0, w: 3.7, h: 0.45, fontSize: 6.5, color: MUTED, italic: true })
   const coverKpis = [

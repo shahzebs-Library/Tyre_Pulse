@@ -152,6 +152,34 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
 - New tests: `claimsAnalytics.test.js` (12), `scheduledReports.api.test.js` (4),
   `accidentReportTemplates.api.test.js` (5). Full suite green.
 
+## Report Builder charts + Accidents form unification (2026-07-14)
+- **Advanced charts**: `src/lib/accidentReport.js` CHARTS now includes paretoAssets (kind 'pareto'),
+  costTrend ('combo', dual axis), typeRadar ('radar'), statusPolar ('polar'), recoveryWaterfall
+  ('waterfall', floating bars). CHART_OPTS/CHART_JS_TYPE carry every kind (catalog-integrity test
+  enforces it). Value labels: makeValueLabelsPlugin handles radar vertices + floating-bar step
+  magnitude; polar/doughnut use doughnutLegendCounts. AccidentReportBuilder registers
+  RadialLinearScale/RadarController/PolarAreaController + Radar/PolarArea and maps them in
+  CHART_COMPONENT.
+- **Shrink-to-grid**: chart block gains `width` 'full'|'half'|'third' (BLOCK_DEFAULTS.chart). Preview
+  uses flex-wrap (half 2-up, third 3-up, compact heights); accidentReportPdf.js row-packs consecutive
+  shrinkable chart blocks side by side (full charts + non-chart blocks break the row).
+- **Report numbers**: VALUE_LABELS_PLUGIN draws values on every mark (baked into the rasterized PDF);
+  summarizeChartData prints a "Total: N | Top: X (n)" line under each PDF chart; buildInsights adds
+  needs-attention completeness lines; KPIS.pendingActions. Days-Open link-up (caseAgeDays/cellValue
+  virtual days_open column, avgDaysOpen/avgCaseDuration KPIs, caseAge chart).
+- **One create/edit form**: AccidentDetailModal's three hidden update paths removed; an Edit Incident
+  action routes (navigate('/accidents',{state:{editId}})) into the SINGLE inline form in Accidents.jsx
+  which carries every field. All option vocabularies consolidated into `src/lib/accidentVocab.js`
+  (canon*/toDb* + all *_OPTS; two competing current_status lists merged into WORKFLOW_STAGE_OPTS).
+- **Clean filenames**: `reportFileName(...parts)`/`reportDateLabel()` in exportUtils.js (regex
+  /[^A-Za-z0-9 ()]+/g -> space) produce space-joined names with NO _ - -- ('TyrePulse Accident Report
+  14 Jul 2026.pdf'); used by accidentReportPdf, ScheduledReports, AccidentReportBuilder, Accidents
+  analytics PDF, and the internal exportUtils savers.
+- **claimsAnalytics delayedDetail**: overdueDays() + analyzeClaims().delayedDetail (valueAtRisk,
+  avg/max overdue, 1-7/8-30/31+ buckets, byInsurer, worst-10); ClaimsSummary Delay Intelligence section.
+- Edge fn `send-scheduled-reports` **v13**: Send Now + asciiSafe (dash-free e-mails). Analytics tab has
+  a Download Analytics PDF (<=2 pages, KPI strip + chart digests).
+
 ## Scheduled report e-mails + Send Now (2026-07-14)
 - **Why e-mails "stopped"**: pipeline was healthy (pg_cron job 1 every 15 min, Resend fine) - all 5
   schedules were simply PAUSED (active=false) since 07-11. Reactivated via SQL (next_run_at NULL =>

@@ -156,6 +156,29 @@ export const LIST_OPS = Object.freeze(['in'])
 
 export const AGG_FNS = Object.freeze(['sum', 'avg', 'min', 'max'])
 
+// ── Chart visualization ────────────────────────────────────────────────────────
+/**
+ * Chart types offered for a grouped + aggregated report. Each plots the grouped
+ * rows: the group value on the category axis, one chosen metric as the series.
+ * `pie` maps to a doughnut/pie in the UI; `hbar` is a horizontal bar.
+ */
+export const CHART_TYPES = Object.freeze([
+  { key: 'bar', label: 'Bar' },
+  { key: 'line', label: 'Line' },
+  { key: 'pie', label: 'Pie / Doughnut' },
+  { key: 'hbar', label: 'Horizontal Bar' },
+])
+export const CHART_TYPE_KEYS = Object.freeze(CHART_TYPES.map(c => c.key))
+
+/** Cap plotted points so a chart stays legible (rows are pre-sorted by count). */
+export const MAX_CHART_POINTS = 30
+
+/** Fixed, theme-independent categorical palette (legible on dark and white). */
+export const CHART_PALETTE = Object.freeze([
+  '#6366f1', '#22c55e', '#f59e0b', '#ef4444', '#06b6d4', '#a855f7',
+  '#ec4899', '#14b8a6', '#eab308', '#3b82f6', '#f97316', '#84cc16',
+])
+
 // ── Value helpers ─────────────────────────────────────────────────────────────
 /** Escape PostgREST/SQL LIKE wildcards in a user-supplied search term. */
 export function escapeLike(s) {
@@ -286,8 +309,22 @@ export function validateConfig(config) {
     }
   }
 
+  // Chart (optional visualization of the grouped rows). Default null = table only.
+  let chart = null
+  if (config.chart && config.chart.type != null && config.chart.type !== '') {
+    if (!group) {
+      errors.push('A chart requires a group-by column.')
+    } else if (!CHART_TYPE_KEYS.includes(config.chart.type)) {
+      errors.push(`Unknown chart type "${String(config.chart.type)}".`)
+    } else {
+      const validMetrics = new Set(['count', ...group.metrics.map(m => `${m.fn}_${m.col}`)])
+      const metric = validMetrics.has(config.chart.metric) ? config.chart.metric : 'count'
+      chart = { type: config.chart.type, metric }
+    }
+  }
+
   if (errors.length) return { valid: false, errors, config: null }
-  return { valid: true, errors: [], config: { dataset: ds.key, columns, filters, sort, limit, group } }
+  return { valid: true, errors: [], config: { dataset: ds.key, columns, filters, sort, limit, group, chart } }
 }
 
 // ── buildQuery ────────────────────────────────────────────────────────────────
@@ -406,6 +443,97 @@ export function applyAggregations(rows, config) {
     }),
   ]
   return { rows: outRows, columns }
+}
+
+// ── Chart data shaping ──────────────────────────────────────────────────────────
+/**
+ * The metric series a chart can plot for a given aggregation result: always the
+ * Count column plus every numeric aggregate produced by applyAggregations.
+ *
+ * @param {{ rows:Object[], columns:{key:string,label:string,type:ColumnType}[] }|null} aggregated
+ * @returns {{ key:string, label:string }[]}
+ */
+export function chartMetricOptions(aggregated) {
+  if (!aggregated || !Array.isArray(aggregated.columns)) return []
+  return aggregated.columns
+    .filter(c => c.type === 'number')
+    .map(c => ({ key: c.key, label: c.label }))
+}
+
+/**
+ * Turn an aggregation result (from applyAggregations) into a Chart.js data
+ * object for the chosen chart type + metric series. Pure and side-effect free so
+ * it can be unit tested without a DOM. Returns null when there is nothing to
+ * plot (no aggregation, no rows, or no numeric series).
+ *
+ * The category axis is the group-by value (always the first aggregated column);
+ * the series is the requested metric ('count' or a `${fn}_${col}` key), falling
+ * back to 'count' when the requested metric is unavailable. Rows are already
+ * sorted by count desc; only the first MAX_CHART_POINTS are plotted.
+ *
+ * @param {{ rows:Object[], columns:{key:string,label:string,type:ColumnType}[] }|null} aggregated
+ * @param {{ type?:string, metric?:string }|null} chart
+ * @returns {{ type:string, metricKey:string, seriesLabel:string, groupLabel:string, data:{ labels:string[], datasets:Object[] } }|null}
+ */
+export function buildReportChartData(aggregated, chart) {
+  if (!aggregated || !Array.isArray(aggregated.rows) || aggregated.rows.length === 0) return null
+  const numericCols = (aggregated.columns || []).filter(c => c.type === 'number')
+  if (numericCols.length === 0) return null
+  const groupCol = aggregated.columns[0]
+  if (!groupCol) return null
+
+  const type = CHART_TYPE_KEYS.includes(chart?.type) ? chart.type : 'bar'
+  const metricCol = numericCols.find(c => c.key === chart?.metric) || numericCols[0]
+
+  const plotted = aggregated.rows.slice(0, MAX_CHART_POINTS)
+  const labels = plotted.map(r => {
+    const v = r[groupCol.key]
+    return v == null || String(v).trim() === '' ? '(blank)' : String(v)
+  })
+  const values = plotted.map(r => {
+    const n = Number(r[metricCol.key])
+    return Number.isFinite(n) ? n : 0
+  })
+
+  let dataset
+  if (type === 'pie') {
+    dataset = {
+      label: metricCol.label,
+      data: values,
+      backgroundColor: labels.map((_, i) => CHART_PALETTE[i % CHART_PALETTE.length]),
+      borderColor: '#ffffff',
+      borderWidth: 1,
+    }
+  } else if (type === 'line') {
+    dataset = {
+      label: metricCol.label,
+      data: values,
+      backgroundColor: 'rgba(99,102,241,0.20)',
+      borderColor: CHART_PALETTE[0],
+      borderWidth: 2,
+      fill: true,
+      tension: 0.3,
+      pointRadius: 3,
+    }
+  } else {
+    // bar + hbar share one styled dataset (orientation handled by chart options).
+    dataset = {
+      label: metricCol.label,
+      data: values,
+      backgroundColor: CHART_PALETTE[0],
+      borderColor: CHART_PALETTE[0],
+      borderWidth: 1,
+      borderRadius: 4,
+    }
+  }
+
+  return {
+    type,
+    metricKey: metricCol.key,
+    seriesLabel: metricCol.label,
+    groupLabel: groupCol.label,
+    data: { labels, datasets: [dataset] },
+  }
 }
 
 // ── Saved reports persistence ────────────────────────────────────────────────

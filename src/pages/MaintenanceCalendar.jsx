@@ -11,6 +11,7 @@ import {
   AlertOctagon, Loader2, Eye, ChevronDown, Lock,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
+import { toUserMessage } from '../lib/safeError'
 import { useSettings } from '../contexts/SettingsContext'
 import PageHeader from '../components/ui/PageHeader'
 import EntityApprovalPanel from '../components/workflow/EntityApprovalPanel'
@@ -210,7 +211,7 @@ export default function MaintenanceCalendar() {
       setTyreRecords(tyreRes.data || [])
       setLastRefresh(new Date())
     } catch (e) {
-      setError(e.message)
+      setError(toUserMessage(e))
     } finally {
       setLoading(false)
     }

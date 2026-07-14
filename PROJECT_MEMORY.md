@@ -491,3 +491,78 @@ work is ON HOLD until this is done.
   §9 Data Intake Centre deepening, generalizing the notification bus to honor `notification_preferences`,
   `ai_permissions` enforcement, converging `ai_token_logs`/`ai_usage_log`.
 - Nav labels render via t(`nav.items.<route>`) with fallback to item.label; add en+ar keys for new items.
+
+## Admin-control + reporting + accident batch (2026-07-14, this session)
+Branch `claude/accident-builder-report-ui-2bkwb5`. All build-clean; new tests green.
+
+### AI operations visibility + error safety (Migrations V236, V237)
+- **V236**: `ai_token_logs` gains `status`/`error`/`http_status`/`latency_ms` (CHECK status in
+  success/error/rate_limited/blocked) so FAILED AI requests are real; seeds `ai_models` pricing
+  (USD per 1M) for all 4 orgs as the SINGLE pricing source (haiku default). **V237**: admin-scoped
+  SELECT policy on `report_send_log`.
+- Edge fns `chat-ai` + `ai-orchestrator` now log failures (rate-limit/missing-key/upstream/fatal)
+  best-effort into ai_token_logs; both REDEPLOYED (chat-ai v16, ai-orchestrator v3). Files deploy as
+  `_shared/auth.ts` + `source/index.ts`.
+- **Single reader `src/lib/api/aiOps.js`** (getUsageOverview/summarizeUsage/listJobRuns/summarizeJobs/
+  getModelPricing/estimateRowCost) powers: AiAdministration NEW tabs **Operations** (usage/spend/model+
+  feature breakdown/failed requests) and **Delivery & Jobs** (report_send_log history+failures), the
+  ScheduledReports per-schedule delivery-status + history panel, and AiCostMonitor (now reads ai_models
+  pricing, added Cost-by-Model). Do NOT re-query these tables elsewhere — reuse aiOps.
+- **ErrorBoundary** no longer leaks message/stack to users (dev-only) and shows a copyable reference ID;
+  `captureError` returns the Sentry event id. 18 pages routed through `safeError.toUserMessage`.
+
+### Severity/fault/defect/VOR single source — `src/lib/severity.js`
+- Canonical operational ladder Critical>High>Medium>Low(+Info); `normalizeSeverity` folds all ~25
+  variants (case/synonyms/1-5/Minor-Major-Total Loss); rank/sort/badge/colour helpers;
+  `severityFromAccidentDamage` bridge; first-class **VOR** (isVehicleOffRoad, honest — never inferred
+  from severity). Adopted in InspectionPlanner/FleetHealthBoard/AssetDetail ranking. `notifications.js`
+  keeps its inverted display-order helper intentionally. Display palettes adopt incrementally.
+
+### Reports / dashboards / TV
+- **ExecutiveReport**: white "Report view" toggle (class-scoped var overrides, dark stays default) +
+  WYSIWYG PDF and NEW PPTX embedding on-screen KPI cards + charts (chartCapture.paperChartOptions keeps
+  screen==export). accidentReportPptx untouched.
+- **ReportBuilder**: chart output (Bar/Line/Pie/HBar) of grouped aggregates, persisted in saved-report
+  config, embedded in PDF (exportToPdf gained optional leadImage). Pure `buildReportChartData`.
+- **DashboardBuilder**: global date/site/country filters drive all widgets (per-table application,
+  widgets ignore unsupported filters), persisted per layout. Pure `resolveDashboardFilters`.
+- **DisplayDashboard** (TV/kiosk): 4 new boards (Open Job Cards, Tyre Replacements, Accidents,
+  Approvals) via pure `displayBoard.js` shapers; real RLS-scoped data, honest empty states.
+
+### Navigation + data intake
+- `src/components/ui/Breadcrumbs.jsx` + global Back button in Layout shell (derived from NAV_GROUPS).
+- Bulk/CSV upload REMOVED from Accidents/FleetMaster/TyreSpecifications inline; each now redirects to
+  the Data Intake Center (single home). SerialTracker lookup + ChecklistBuilder template import kept.
+
+### Easy Access Manager (every module + sub-module) — NO schema change
+- `moduleCatalog.js` gains `SUBMODULES` + `FULL_REGISTRY` (composite `parent:child` keys for the tabs
+  of accidents/ai/user-management/reports/fleet-master/analytics/work-orders). New
+  **`src/console/pages/access/AccessManager.jsx`** = the easy one-screen editor (FIRST tab in
+  ConsoleAccessControl): pick role OR user, searchable tree group>module>sub-module, big View ON/OFF +
+  Advanced caps disclosure, presets (No/Viewer/Editor/Manager/Full), per-group bulk, per-user
+  reset-to-role-default, live Effective preview. Role view -> set_module_permissions(+overrides);
+  per-user -> user_access_grants (composite keys, module_key is free text). HONEST: only base-module
+  View is server-enforced; sub-modules + non-view caps are STORED for progressive enforcement (labeled).
+
+### Accidents cleanup (no schema change)
+- Register table trimmed to Date/Asset/Site/Severity/Status/Days Open/Cost/Actions (extras live on the
+  `/accidents/:id` detail page); duplicate Delayed badge removed; empty=N/A; one date formatter. Pills
+  unified into `accidentVocab.accidentSeverityPill/accidentStatusPill` (via severity.js); duplicated
+  SEVERITY_BADGE/STATUS_BADGE deleted in Accidents.jsx + AccidentDetailModal (fixes list-vs-detail
+  colour drift). Form: Incident section header, 3-up grids, merged duplicate action fields, controlled
+  selects (existing values preserved). Correctness: export net cost via single claimsAnalytics engine;
+  Avg Days to Close = incident_date to release_date over closed cases; closed-no-release stops growing
+  (N/A); shadowed hasClaim removed; GCC/fault/najm/repair/damage canonicalized on save.
+
+### AI data access rule (user question, 2026-07-14)
+- The copilot uses DIRECT DB tools (count_records/get_exec_digest/list_recent_events) for operational
+  data (vehicles/tyres/accidents/KPIs) — NOT RAG. RAG (`search_knowledge_base` embeddings) is used ONLY
+  for free-text documents (SOPs/manuals/policies/PDFs) with no structured table. Structured-first,
+  RAG-for-documents. Keep this split.
+
+### Next free migration = V238. Still open (need migrations, do deliberately)
+- Single accident WORKFLOW pipeline (report>repair>insurance>release>closure) unifying the two status
+  columns; Asset Master merge FleetMaster+AssetManagement + enrich (plate/asset code/type/category/VIN/
+  site/dept/odometer+hour meter/tyre setup/maintenance plan/conditional-by-type); full KPI-formula
+  centralization through kpiEngine (~30 inline sites); secure share-links for saved reports/dashboards;
+  duplicate-module consolidation (claims/incidents/RCA/KPI clusters).

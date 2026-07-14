@@ -31,7 +31,7 @@ import {
   Satellite, Landmark, BookMarked, PhoneCall, Scale,
   Droplet, KeyRound, GraduationCap, FileClock,
   CalendarRange, ListTodo, Thermometer, Network, Play, Code, Repeat, Store, Rocket,
-  Wallet, FileCheck, Building2, Lock,
+  Wallet, FileCheck, Building2, Lock, ArrowLeft,
 } from 'lucide-react'
 // Branded domain icons (custom Tyre Pulse set) for the clearest fleet/tyre nav
 // items. Same ({ size, strokeWidth }) API as Lucide, so they drop straight in.
@@ -72,6 +72,7 @@ import LanguageSwitcher from './LanguageSwitcher'
 import { useLanguage } from '../contexts/LanguageContext'
 import OnboardingWizard from './OnboardingWizard'
 import CommandPalette from './CommandPalette'
+import Breadcrumbs from './ui/Breadcrumbs'
 import { useCommandPalette } from '../contexts/CommandPaletteContext'
 
 // Roles that see the analytics/intelligence items. Item-level gating (adminOnly /
@@ -1215,6 +1216,28 @@ export default function Layout({ children }) {
           paddingBottom: isMobile ? 'calc(54px + env(safe-area-inset-bottom))' : 0,
         }}
       >
+        {/* ── Wayfinding bar: global Back + breadcrumbs (hidden on Home) ─────── */}
+        {location.pathname !== '/' && (
+          <div className="w-full max-w-[1800px] mx-auto px-4 pt-4 sm:px-6 xl:px-8 2xl:px-10">
+            <div className="flex items-center gap-2 min-w-0">
+              <button
+                onClick={() => navigate(-1)}
+                title="Go back"
+                aria-label="Go back"
+                className="flex-shrink-0 inline-flex items-center gap-1.5 h-7 px-2 rounded-lg text-[12px] font-medium transition-colors hover:text-green-400"
+                style={{
+                  color: 'var(--text-muted)',
+                  background: 'rgba(22,163,74,0.05)',
+                  border: '1px solid rgba(22,163,74,0.12)',
+                }}
+              >
+                <ArrowLeft size={13} className="flex-shrink-0" />
+                <span className="hidden sm:inline">Back</span>
+              </button>
+              <Breadcrumbs navGroups={NAV_GROUPS} t={t} className="min-w-0 flex-1" />
+            </div>
+          </div>
+        )}
         <motion.div
           key={location.pathname}
           initial={{ opacity: 1, y: 6 }}

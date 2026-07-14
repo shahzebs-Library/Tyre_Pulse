@@ -10,6 +10,7 @@ import { fetchAllPages } from '../lib/fetchAll'
 import { useSettings } from '../contexts/SettingsContext'
 import { useAuth } from '../contexts/AuthContext'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
+import { toUserMessage } from '../lib/safeError'
 import { computeSupplierScorecard } from '../lib/analytics/supplierScorecard'
 import { useLanguage } from '../contexts/LanguageContext'
 import PageHeader from '../components/ui/PageHeader'
@@ -480,7 +481,7 @@ export default function SupplierManagement() {
     setError(null)
     const { data, error: err } = await fetchAllPages((from, to) =>
       supplierApi.listSupplierTyres({ from, to, country: activeCountry }))
-    if (err) { setError(err.message); setLoading(false); return }
+    if (err) { setError(toUserMessage(err)); setLoading(false); return }
     setRecords(data || [])
     setLoading(false)
   }, [activeCountry])

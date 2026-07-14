@@ -14,6 +14,7 @@ import {
 import { Bar } from 'react-chartjs-2'
 import { supabase } from '../lib/supabase'
 import { formatDate } from '../lib/formatters'
+import { severityRank } from '../lib/severity'
 import { useSettings } from '../contexts/SettingsContext'
 import { useAuth } from '../contexts/AuthContext'
 import { useTenant } from '../contexts/TenantContext'
@@ -612,11 +613,10 @@ export default function InspectionPlanner() {
   // Risk level per asset from tyre_records
   const riskByAsset = useMemo(() => {
     const map = new Map()
-    const order = { Critical: 4, High: 3, Medium: 2, Low: 1 }
     tyreRecords.forEach(r => {
       if (!r.asset_no) return
       const cur = map.get(r.asset_no)
-      if (!cur || (order[r.risk_level] || 0) > (order[cur] || 0)) map.set(r.asset_no, r.risk_level)
+      if (!cur || severityRank(r.risk_level) > severityRank(cur)) map.set(r.asset_no, r.risk_level)
     })
     return map
   }, [tyreRecords])

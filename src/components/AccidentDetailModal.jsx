@@ -28,6 +28,7 @@ import { formatCurrency as _fmtCurrencyBase } from '../lib/formatters'
 import {
   canonSeverity, canonStatus, TERMINAL_STAGES,
   CLAIM_STATUS_LABELS, RECOVERY_SOURCE_LABELS, RECOVERY_STATUS_LABELS,
+  accidentSeverityPill, accidentStatusPill,
 } from '../lib/accidentVocab'
 import { exportAccidentCasePdf } from '../lib/exportUtils'
 import { describeAuditRow } from '../lib/auditDiff'
@@ -41,11 +42,9 @@ import EntityApprovalPanel from './workflow/EntityApprovalPanel'
 // Vocabularies + canonicalisation come from the single shared source
 // `src/lib/accidentVocab.js` (imported above) — do NOT re-declare them here.
 
-const SEVERITY_BADGE = {
-  Minor:        'bg-[var(--input-bg)] text-[var(--text-dim)] border border-[var(--input-border)]',
-  Major:        'bg-orange-900/50 text-orange-300 border border-orange-700/50',
-  'Total Loss': 'bg-red-900/50 text-red-300 border border-red-700/50',
-}
+// Severity / status pills come from the shared accidentVocab helpers
+// (accidentSeverityPill / accidentStatusPill) so this detail page and the
+// register table render identical colours — no per-file badge map here.
 
 const RECOVERY_BADGE = {
   pending:     'bg-yellow-900/50 text-yellow-300 border border-yellow-700/50',
@@ -374,6 +373,8 @@ function AccidentDetail({ accidentId, onBack, onClose, onChanged, variant = 'pag
   // ── Full-page presentation ──
   const severity = canonSeverity(acc.severity)
   const status = canonStatus(acc.status)
+  const severityPill = accidentSeverityPill(acc.severity)
+  const statusPill = accidentStatusPill(acc.status)
   return (
     <div className="space-y-4 pb-24">
       {/* Breadcrumb + back + case actions */}
@@ -422,8 +423,8 @@ function AccidentDetail({ accidentId, onBack, onClose, onChanged, variant = 'pag
                 {acc.site || '-'}{acc.country ? ` · ${acc.country}` : ''} · {acc.incident_date ? new Date(acc.incident_date).toLocaleDateString() : '-'}
               </p>
               <div className="flex items-center gap-2 mt-2 flex-wrap">
-                {severity && <span className={`badge text-xs ${SEVERITY_BADGE[severity] ?? 'bg-gray-800 text-gray-300'}`}>{severity}</span>}
-                {status && <span className="badge text-xs bg-[var(--input-bg)] text-[var(--text-dim)] border border-[var(--input-border)]">{status}</span>}
+                {severityPill.label && <span className={`badge text-xs ${severityPill.className}`}>{severityPill.label}</span>}
+                {statusPill.label && <span className={`badge text-xs ${statusPill.className}`}>{statusPill.label}</span>}
                 <ClosureBadge closure={closure} />
                 <DelayBadge />
                 {wf.isActive && <span className="badge text-xs bg-purple-900/50 text-purple-300 border border-purple-700/50 flex items-center gap-1"><Lock size={10} /> In approval</span>}

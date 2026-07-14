@@ -13,6 +13,8 @@
  * columns — always convert through toDbSeverity / toDbStatus / toDbAccidentType.
  */
 
+import { severityFromAccidentDamage, SEVERITY_META } from './severity'
+
 // ── Core display option lists (UI labels) ────────────────────────────────────
 export const SEVERITIES = ['Minor', 'Major', 'Total Loss']
 
@@ -142,4 +144,55 @@ export const toDbAccidentType = (s) => {
   if (!s) return null
   const k = accTypeKey(s)
   return ACCIDENT_TYPE_LABEL[k] ? k : 'other'
+}
+
+// ── Case-field canonicalisation ──────────────────────────────────────────────
+// The GCC / fault / repair fields are stored as free-form display strings but
+// the list badges + filters key off the exact option label. Fold a stray-case
+// value ('faulty', 'NAJM REPORT') back onto its canonical option so it still
+// matches; an unknown value passes through unchanged (honest, never dropped).
+const matchOpt = (value, opts) => {
+  const v = String(value ?? '').trim().toLowerCase()
+  if (!v) return ''
+  return opts.find((o) => String(o).toLowerCase() === v) ?? value
+}
+export const canonFaultStatus   = (v) => matchOpt(v, FAULT_STATUS_OPTS)
+export const canonNajmStatus    = (v) => matchOpt(v, NAJM_STATUS_OPTS)
+export const canonNajmFault     = (v) => matchOpt(v, NAJM_FAULT_OPTS)
+export const canonTaqdeerStatus = (v) => matchOpt(v, TAQDEER_STATUS_OPTS)
+export const canonRepairType    = (v) => matchOpt(v, REPAIR_TYPE_OPTS)
+export const canonDamageClass   = (v) => matchOpt(v, DAMAGE_CLASS_OPTS)
+
+// ── Presentation pills (THE single source for accident list + detail badges) ──
+// One helper per axis so the register table and the /accidents/:id detail page
+// render identical colours (no more drifting per-file SEVERITY_BADGE/STATUS_BADGE
+// maps). Each returns { label, className }; an empty/unknown value yields an
+// empty label so callers can render the 'N/A' token themselves.
+
+// Consistent status palette (theme-friendly, mirrors severity.js badge style).
+export const STATUS_PILL_CLASS = {
+  'Reported':              'bg-yellow-500/15 text-yellow-400 border border-yellow-500/30',
+  'Under Investigation':   'bg-blue-500/15 text-blue-400 border border-blue-500/30',
+  'Repair In Progress':    'bg-orange-500/15 text-orange-400 border border-orange-500/30',
+  'Awaiting Parts':        'bg-purple-500/15 text-purple-400 border border-purple-500/30',
+  'Awaiting Approval':     'bg-amber-500/15 text-amber-400 border border-amber-500/30',
+  'Insurance Claim':       'bg-red-500/15 text-red-400 border border-red-500/30',
+  'Closed':                'bg-green-500/15 text-green-400 border border-green-500/30',
+}
+const PILL_FALLBACK = 'bg-[var(--input-bg)] text-[var(--text-dim)] border border-[var(--input-border)]'
+
+/** Severity pill — folds accident damage (Minor/Major/Total Loss) onto the
+ *  operational ladder so colours match every other severity surface. */
+export function accidentSeverityPill(value) {
+  const label = canonSeverity(value)
+  if (!label) return { label: '', className: '' }
+  const op = severityFromAccidentDamage(label, 'Medium')
+  return { label, className: SEVERITY_META[op]?.badge ?? SEVERITY_META.Medium.badge }
+}
+
+/** Status pill — consistent colour per workflow status. */
+export function accidentStatusPill(value) {
+  const label = canonStatus(value)
+  if (!label) return { label: '', className: '' }
+  return { label, className: STATUS_PILL_CLASS[label] ?? PILL_FALLBACK }
 }

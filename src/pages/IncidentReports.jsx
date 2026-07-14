@@ -26,6 +26,7 @@ import {
 } from '../lib/api/incidents'
 import { summarizeIncidents, incidentAgeDays } from '../lib/incidents'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
+import { toUserMessage } from '../lib/safeError'
 
 ChartJS.register(ArcElement, Tooltip, Legend)
 
@@ -105,7 +106,7 @@ export default function IncidentReports() {
       setUpdatedAt(new Date())
     } catch (err) {
       if (isMissingRelation(err)) setMissing(true)
-      else setError(err?.message || 'Could not load incident reports.')
+      else setError(toUserMessage(err, 'Could not load incident reports.'))
       setRows([])
     } finally {
       setRefreshing(false)
@@ -218,7 +219,7 @@ export default function IncidentReports() {
       setModalOpen(false)
       setUpdatedAt(new Date())
     } catch (err) {
-      setFormError(err?.message || 'Could not save the incident. Please try again.')
+      setFormError(toUserMessage(err, 'Could not save the incident. Please try again.'))
     } finally {
       setSaving(false)
     }
@@ -232,7 +233,7 @@ export default function IncidentReports() {
       setRows((prev) => (prev || []).filter((r) => r.id !== confirmDelete.id))
       setConfirmDelete(null)
     } catch (err) {
-      setError(err?.message || 'Could not delete the incident.')
+      setError(toUserMessage(err, 'Could not delete the incident.'))
     } finally {
       setDeleting(false)
     }

@@ -890,6 +890,31 @@ export async function exportToPdf(rows, columns, title, filename = 'report', ori
     doc.addPage()
   }
 
+  // ── OPTIONAL LEAD CHART IMAGE (e.g. Report Builder visualization) ──
+  // A PNG data URL rendered on white paper (via captureChartOnPaper) placed on
+  // its own page above the data table. Purely additive: callers that omit
+  // opts.leadImage are unaffected.
+  if (opts.leadImage) {
+    _pageHeader(doc, title, `Visualization | ${nowStr()}`, company, hdrOpts)
+    try {
+      const props = doc.getImageProperties(opts.leadImage)
+      const maxW = PW - 28
+      const maxH = 150
+      const scale = Math.min(maxW / props.width, maxH / props.height)
+      const iw = props.width * scale
+      const ih = props.height * scale
+      doc.setDrawColor(226, 232, 240); doc.setFillColor(255, 255, 255)
+      doc.roundedRect((PW - iw) / 2 - 3, 30, iw + 6, ih + 6, 2, 2, 'FD')
+      doc.addImage(opts.leadImage, 'PNG', (PW - iw) / 2, 33, iw, ih, undefined, 'FAST')
+      if (opts.leadImageCaption) {
+        doc.setFontSize(8); doc.setFont('helvetica', 'normal'); doc.setTextColor(...P.steel)
+        doc.text(String(opts.leadImageCaption), PW / 2, 33 + ih + 9, { align: 'center', maxWidth: maxW })
+      }
+    } catch { /* bad image data - skip the visualization page gracefully */ }
+    _pageFooter(doc, doc.internal.getNumberOfPages(), null, company, ftrOpts)
+    doc.addPage()
+  }
+
   // ── DATA TABLE (operational detail) ──
   const usableW = orientation === 'landscape' ? 269 : 182
   const colW = columns.map(c => {

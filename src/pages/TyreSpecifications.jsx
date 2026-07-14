@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Chart as ChartJS,
@@ -609,6 +610,7 @@ function RaiseWorkOrderModal({ asset, violations, country, createdBy, onClose })
 // ── Main Component ─────────────────────────────────────────────────────────────
 
 export default function TyreSpecifications() {
+  const navigate = useNavigate()
   const { profile, user } = useAuth()
   const { appSettings, activeCountry } = useSettings()
   const { branding } = useTenant()
@@ -643,8 +645,6 @@ export default function TyreSpecifications() {
   const [editingSpec, setEditingSpec] = useState(null)
   const [deletingSpec, setDeletingSpec] = useState(null)
   const [workOrderAsset, setWorkOrderAsset] = useState(null)
-  const [importError, setImportError] = useState('')
-  const importRef = useRef()
 
   // ── In-session audit log (DB does not persist spec history) ──────────────────
 
@@ -900,51 +900,6 @@ export default function TyreSpecifications() {
     }
   }
 
-  // ── Import from Excel ─────────────────────────────────────────────────────────
-
-  function handleImportFile(e) {
-    const file = e.target.files?.[0]
-    if (!file) return
-    setImportError('')
-    const reader = new FileReader()
-    reader.onload = async ev => {
-      try {
-        const XLSX = await import('xlsx')
-        const wb = XLSX.read(ev.target.result, { type: 'binary' })
-        const ws = wb.Sheets[wb.SheetNames[0]]
-        const rows = XLSX.utils.sheet_to_json(ws)
-        const imported = []
-        rows.forEach(row => {
-          const vt = row['Vehicle Type'] || row['vehicle_type']
-          const pos = row['Position'] || row['position']
-          if (!vt || !pos) return
-          const sizes = String(row['Approved Sizes'] || row['approved_sizes'] || '').split(',').map(s => s.trim()).filter(Boolean)
-          const brands = String(row['Approved Brands'] || row['approved_brands'] || '').split(',').map(s => s.trim()).filter(Boolean)
-          imported.push(specToRow({
-            vehicle_type: String(vt).trim(),
-            position: String(pos).trim(),
-            approved_sizes: sizes,
-            approved_brands: brands,
-            min_load_index: row['Min Load Index'] || row['min_load_index'] || '',
-            min_speed_index: String(row['Min Speed Index'] || row['min_speed_index'] || ''),
-            recommended_pressure: row['Recommended Pressure'] || row['recommended_pressure'] || '',
-            min_tread_depth: row['Min Tread Depth'] || row['min_tread_depth'] || '',
-            notes: String(row['Notes'] || row['notes'] || ''),
-          }, { country, createdBy: user?.id }))
-        })
-        if (imported.length === 0) { setImportError('No valid rows found. Check column headers.'); return }
-        const { error } = await tyreSpecsApi.insertSpec(imported)
-        if (error) throw error
-        logHistory('Import', { vehicle_type: `${imported.length} specs`, position: 'Bulk Import' })
-        await fetchSpecs()
-      } catch (err) {
-        setImportError(err.message || 'Failed to parse file. Ensure it is a valid .xlsx file.')
-      }
-    }
-    reader.readAsBinaryString(file)
-    e.target.value = ''
-  }
-
   // ── Export specs to Excel ─────────────────────────────────────────────────────
 
   async function exportSpecsExcel() {
@@ -1046,14 +1001,11 @@ export default function TyreSpecifications() {
               <Plus size={15} /> Add Specification
             </button>
             <button
-              onClick={() => importRef.current?.click()}
-              disabled={!isAdmin}
-              title={!isAdmin ? 'Admin access required' : ''}
-              className="flex items-center gap-2 bg-[var(--input-bg)] hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed text-[var(--text-secondary)] text-sm px-3 py-2 rounded-lg border border-[var(--input-border)] transition-colors"
+              onClick={() => navigate('/data-intake')}
+              className="flex items-center gap-2 bg-[var(--input-bg)] hover:bg-gray-700 text-[var(--text-secondary)] text-sm px-3 py-2 rounded-lg border border-[var(--input-border)] transition-colors"
             >
-              <Upload size={14} /> Import
+              <Upload size={14} /> Import via Data Intake Center
             </button>
-            <input ref={importRef} type="file" accept=".xlsx,.xls" onChange={handleImportFile} className="hidden" />
             <button
               onClick={exportSpecsExcel}
               className="flex items-center gap-2 bg-[var(--input-bg)] hover:bg-gray-700 text-[var(--text-secondary)] text-sm px-3 py-2 rounded-lg border border-[var(--input-border)] transition-colors"
@@ -1076,13 +1028,6 @@ export default function TyreSpecifications() {
           </div>
         }
       />
-
-      {importError && (
-        <div className="bg-red-900/30 border border-red-700 text-red-300 text-sm px-4 py-2.5 rounded-lg flex items-center gap-2">
-          <AlertTriangle size={14} /> {importError}
-          <button onClick={() => setImportError('')} className="ml-auto"><X size={14} /></button>
-        </div>
-      )}
 
       {specsError && !loadingSpecs && (
         <div className="bg-red-900/30 border border-red-700 text-red-300 text-sm px-4 py-2.5 rounded-lg flex items-center gap-2">

@@ -27,6 +27,7 @@
  *
  * @module dashboardBuilder
  */
+import { resolvePeriod } from './api/scheduledReports'
 
 // ── Limits & size domains ─────────────────────────────────────────────────────
 export const MIN_W = 1
@@ -156,6 +157,98 @@ export const WIDGET_CATEGORIES = Object.freeze(
   [...new Set(WIDGET_CATALOG.map(w => w.category))],
 )
 
+// ── Global dashboard filters (drive every widget's fetch) ─────────────────────
+/**
+ * Date-range presets for the dashboard filter bar. Values mirror the scheduled
+ * reports vocabulary so the same `resolvePeriod()` engine resolves them — one
+ * source of truth for "Last N days / MTD / YTD / Custom". `all` = no date bound
+ * (the historical default, so a filter-free board behaves exactly as before).
+ * @type {ReadonlyArray<{value:string,label:string}>}
+ */
+export const DASHBOARD_RANGE_PRESETS = Object.freeze([
+  { value: 'all',     label: 'All time' },
+  { value: 'last_7',  label: 'Last 7 days' },
+  { value: 'last_30', label: 'Last 30 days' },
+  { value: 'last_90', label: 'Last 90 days' },
+  { value: 'mtd',     label: 'Month to date' },
+  { value: 'ytd',     label: 'Year to date' },
+  { value: 'custom',  label: 'Custom range' },
+])
+
+const RANGE_VALUES = new Set(DASHBOARD_RANGE_PRESETS.map(p => p.value))
+
+/**
+ * Neutral default: no date bound, all sites, all countries. Persisted layouts
+ * that predate the filter feature have no `filters` key, so this default is what
+ * `normalizeFilters(undefined)` yields — i.e. the exact pre-filter behaviour.
+ * @typedef {{range:string, from:string|null, to:string|null, site:string, country:string}} DashboardFilters
+ * @type {Readonly<DashboardFilters>}
+ */
+export const DEFAULT_DASHBOARD_FILTERS = Object.freeze({
+  range: 'all', from: null, to: null, site: 'All', country: 'All',
+})
+
+const cleanDate = v => {
+  if (typeof v !== 'string') return null
+  const s = v.trim()
+  return /^\d{4}-\d{2}-\d{2}$/.test(s) ? s : null
+}
+
+/** Trim a site/country scope; empty or "all" (any case) collapses to 'All'. */
+const cleanScope = v => {
+  const s = (v == null ? '' : String(v)).trim()
+  return s && s.toLowerCase() !== 'all' ? s : 'All'
+}
+
+/**
+ * Sanitise a raw filter object into a stable, storable DashboardFilters record.
+ * Never throws; unknown ranges fall back to 'all'; custom dates are only kept
+ * for the custom range and must be YYYY-MM-DD.
+ * @param {*} raw
+ * @returns {DashboardFilters}
+ */
+export function normalizeFilters(raw) {
+  const f = raw && typeof raw === 'object' ? raw : {}
+  const range = RANGE_VALUES.has(f.range) ? f.range : 'all'
+  return {
+    range,
+    from: range === 'custom' ? cleanDate(f.from) : null,
+    to:   range === 'custom' ? cleanDate(f.to)   : null,
+    site: cleanScope(f.site),
+    country: cleanScope(f.country),
+  }
+}
+
+/**
+ * Resolve UI filters into concrete query parameters consumed by the widget data
+ * loaders. Pure and tested. Date maths are delegated to the shared
+ * `resolvePeriod()` helper (scheduled reports), so ranges stay consistent across
+ * the app. Returns null for site/country/date bounds that mean "no constraint",
+ * so a fetcher can apply them unconditionally without special-casing 'All'.
+ * @param {*} filters
+ * @returns {{range:string, from:string|null, to:string|null, label:string, site:string|null, country:string|null}}
+ */
+export function resolveDashboardFilters(filters) {
+  const f = normalizeFilters(filters)
+  let from = null
+  let to = null
+  let label = 'All time'
+  if (f.range !== 'all') {
+    const r = resolvePeriod(f.range, f.from, f.to)
+    from = r.from || null
+    to = r.to || null
+    label = r.label
+  }
+  return {
+    range: f.range,
+    from,
+    to,
+    label,
+    site: f.site !== 'All' ? f.site : null,
+    country: f.country !== 'All' ? f.country : null,
+  }
+}
+
 // ── Layout model ──────────────────────────────────────────────────────────────
 /**
  * @typedef {{ widgetId:string, w:number, h:'sm'|'md'|'lg' }} PlacedWidget
@@ -163,6 +256,7 @@ export const WIDGET_CATEGORIES = Object.freeze(
  * @property {string} id
  * @property {string} name
  * @property {PlacedWidget[]} widgets   order = render order
+ * @property {DashboardFilters} filters default global filters for the board
  * @property {string|null} created_by  profiles.id of the owner
  * @property {boolean} shared          admins may publish to everyone
  * @property {boolean} is_default      owner's preferred layout
@@ -197,12 +291,13 @@ export function placeWidget(widgetId, overrides = {}) {
  * @param {{ name:string, widgets?:PlacedWidget[], createdBy?:string|null, shared?:boolean }} input
  * @returns {DashboardLayout}
  */
-export function makeLayout({ name, widgets = [], createdBy = null, shared = false } = {}) {
+export function makeLayout({ name, widgets = [], createdBy = null, shared = false, filters } = {}) {
   const now = new Date().toISOString()
   return validateLayout({
     id: newId(),
     name: String(name || 'My Dashboard').trim().slice(0, MAX_LAYOUT_NAME) || 'My Dashboard',
     widgets,
+    filters,
     created_by: createdBy,
     shared: !!shared,
     is_default: false,
@@ -227,6 +322,7 @@ export function validateLayout(layout) {
     id: typeof src.id === 'string' && src.id ? src.id : newId(),
     name: (typeof src.name === 'string' ? src.name.trim().slice(0, MAX_LAYOUT_NAME) : '') || 'Untitled',
     widgets,
+    filters: normalizeFilters(src.filters),
     created_by: typeof src.created_by === 'string' ? src.created_by : null,
     shared: !!src.shared,
     is_default: !!src.is_default,

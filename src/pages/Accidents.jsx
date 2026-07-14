@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useMemo, useRef, lazy, Suspense } fro
 import { useNavigate, useLocation, useSearchParams } from 'react-router-dom'
 
 const AccidentReportBuilder = lazy(() => import('../components/accidents/AccidentReportBuilder'))
-import { AlertOctagon, Plus, Search, X, Save, FileText, Download, BarChart2, Eye, Hourglass, Upload, CheckCircle2, AlertCircle, ChevronDown, Trash2, AlertTriangle, TrendingUp, Users, DollarSign, ShieldAlert, Lightbulb, ChevronRight, Clock, Wrench, ShieldCheck, ArrowLeft } from 'lucide-react'
+import { AlertOctagon, Plus, Search, X, Save, FileText, Download, BarChart2, Eye, Hourglass, Upload, ChevronDown, Trash2, AlertTriangle, TrendingUp, Users, DollarSign, ShieldAlert, Lightbulb, ChevronRight, Clock, ShieldCheck, ArrowLeft } from 'lucide-react'
 import { motion } from 'framer-motion'
 import PageHeader from '../components/ui/PageHeader'
 import EmptyState from '../components/EmptyState'
@@ -28,9 +28,11 @@ import {
   RECOVERY_SOURCE_OPTS, RECOVERY_SOURCE_LABELS, RECOVERY_STATUS_OPTS, RECOVERY_STATUS_LABELS,
   CASE_STAGE_OPTS, DAMAGE_CONDITION_OPTS, WORKFLOW_STAGE_OPTS, STAGE_TO_CLAIM_STATUS,
   canonSeverity, canonStatus, canonAccidentType, toDbSeverity, toDbStatus, toDbAccidentType,
+  canonFaultStatus, canonNajmStatus, canonNajmFault, canonTaqdeerStatus, canonRepairType, canonDamageClass,
+  accidentSeverityPill, accidentStatusPill,
 } from '../lib/accidentVocab'
 import { makeValueLabelsPlugin, doughnutLegendCounts, summarizeChartData } from '../lib/accidentReport'
-import { hasClaim, isClosed as isClaimClosed } from '../lib/claimsAnalytics'
+import { hasClaim, isClosed as isClaimClosed, claimNet } from '../lib/claimsAnalytics'
 import { captureChartOnPaper } from '../lib/chartCapture'
 
 ChartJS.register(
@@ -38,38 +40,6 @@ ChartJS.register(
   ArcElement, LineElement, PointElement, Filler,
   Title, ChartTooltip, Legend,
 )
-
-const BULK_TEMPLATE_COLS = [
-  'incident_date',
-  'asset_no',
-  'site',
-  'country',
-  'location',
-  'liability',
-  'case_stage',
-  'damage_condition',
-  'current_status',
-  'action_to_be_taken',
-  'responsible_owner',
-  'required_action',
-  'status_update_date',
-  'expected_release_date',
-  'description',
-  'severity',
-  'status',
-  'repair_cost',
-  'insurance_claim_no',
-  'inspector',
-]
-
-const BULK_TEMPLATE_EXAMPLE = [
-  '2026-06-01', 'TM-001', 'Riyadh', 'KSA', 'GCC Plant',
-  '100% Third Party Liability', 'Internal Report Preparation', 'Major Repair',
-  'Under Repair', 'Awaiting insurance approval', 'Ms. Fatima',
-  'Submit repair invoice', '2026-06-10', '2026-06-20',
-  'Rear collision at depot', 'Minor', 'Reported',
-  '5000', 'CLM-2026-001', 'John Doe',
-]
 
 // Option vocabularies + canon/toDb helpers now come from the single shared
 // source `src/lib/accidentVocab.js` (imported above) — do NOT re-declare here.
@@ -84,21 +54,16 @@ function FormSection({ title, children }) {
   )
 }
 
-const SEVERITY_BADGE = {
-  Minor:        'bg-[var(--input-bg)] text-[var(--text-dim)] border border-[var(--input-border)]',
-  Major:        'bg-orange-900/50 text-orange-300 border border-orange-700/50',
-  'Total Loss': 'bg-red-900/50 text-red-300 border border-red-700/50',
-}
+// Options for a controlled <select>, prepending the record's stored value when
+// it is not one of the canonical options — so converting a free-text field to a
+// dropdown never drops an existing (legacy / bespoke) value from a saved record.
+const withValueOption = (opts, value) =>
+  value && !opts.some(o => String(o) === String(value)) ? [value, ...opts] : opts
 
-const STATUS_BADGE = {
-  'Reported':              'bg-yellow-900/50 text-yellow-300 border border-yellow-700/50',
-  'Under Investigation':   'bg-blue-900/50 text-blue-300 border border-blue-700/50',
-  'Repair In Progress':    'bg-orange-900/50 text-orange-300 border border-orange-700/50',
-  'Awaiting Parts':        'bg-purple-900/50 text-purple-300 border border-purple-700/50',
-  'Awaiting Approval':     'bg-purple-900/50 text-purple-300 border border-purple-700/50',
-  'Insurance Claim':       'bg-red-900/50 text-red-300 border border-red-700/50',
-  'Closed':                'bg-green-900/50 text-green-300 border border-green-700/50',
-}
+// Severity / status list pills now come from the shared accidentVocab helpers
+// (accidentSeverityPill / accidentStatusPill) so the register table and the
+// /accidents/:id detail page render identical colours — do NOT re-declare
+// per-file badge maps here.
 
 const isClosed = (r) => r.closure_status === 'closed' || canonStatus(r.status) === 'Closed'
 
@@ -154,12 +119,17 @@ const caseAgeDays = (r, now = Date.now()) => {
   if (!r?.incident_date) return null
   const start = new Date(r.incident_date).getTime()
   if (Number.isNaN(start)) return null
-  let end = now
-  if (isReleasedOrClosed(r) && r.release_date) {
+  // Closed cases are measured incident date -> release date. A CLOSED case with
+  // no release date has no honest duration: do NOT let it grow forever to "now"
+  // (that produced ever-increasing "days" on settled cases) -> return null so
+  // the cell renders 'N/A'. Open cases run incident date -> now.
+  if (isReleasedOrClosed(r)) {
+    if (!r.release_date) return null
     const rel = new Date(r.release_date).getTime()
-    if (!Number.isNaN(rel)) end = rel
+    if (Number.isNaN(rel)) return null
+    return Math.max(0, Math.floor((rel - start) / DAY_MS))
   }
-  return Math.max(0, Math.floor((end - start) / DAY_MS))
+  return Math.max(0, Math.floor((now - start) / DAY_MS))
 }
 // Traffic-light tone for OPEN cases: green <= 15d, amber 16-30d, red > 30d.
 const caseAgeBadge = (days) =>
@@ -169,30 +139,8 @@ const caseAgeBadge = (days) =>
       ? 'bg-yellow-900/50 text-yellow-300 border border-yellow-700/50'
       : 'bg-red-900/50 text-red-300 border border-red-700/50'
 
-// Compact status-chip palettes for the new case-tracking columns.
-const GCC_BADGE = {
-  0:   'bg-green-900/50 text-green-300 border border-green-700/50',
-  50:  'bg-yellow-900/50 text-yellow-300 border border-yellow-700/50',
-  100: 'bg-red-900/50 text-red-300 border border-red-700/50',
-}
-const FAULT_BADGE = {
-  'Faulty':       'bg-red-900/50 text-red-300 border border-red-700/50',
-  'Non-faulty':   'bg-green-900/50 text-green-300 border border-green-700/50',
-  'Under review': 'bg-yellow-900/50 text-yellow-300 border border-yellow-700/50',
-}
-const REPAIR_BADGE = {
-  'Internal': 'bg-blue-900/50 text-blue-300 border border-blue-700/50',
-  'External': 'bg-orange-900/50 text-orange-300 border border-orange-700/50',
-}
-const DAMAGE_CLASS_BADGE = {
-  'Major': 'bg-orange-900/50 text-orange-300 border border-orange-700/50',
-  'Minor': 'bg-[var(--input-bg)] text-[var(--text-dim)] border border-[var(--input-border)]',
-}
+// Muted chip used by the Days Open cell for closed-case total-duration.
 const DIM_CHIP = 'bg-[var(--input-bg)] text-[var(--text-dim)] border border-[var(--input-border)]'
-
-function CaseChip({ cls, title, children }) {
-  return <span title={title} className={`badge text-[10px] whitespace-nowrap ${cls}`}>{children}</span>
-}
 
 // THE one create/edit form model. This is the ONLY create/update surface for
 // an accident record app-wide — the detail page's former per-tab edit forms
@@ -239,8 +187,9 @@ const EMPTY_FORM = {
   damage_condition: '',
   current_status: '',
   next_step: '',
-  action_to_be_taken: '',
   responsible_owner: '',
+  // "Action / Progress" (single merged field) — persisted to BOTH the
+  // required_action and action_to_be_taken columns on save.
   required_action: '',
   status_update_date: '',
   status_update_note: '',
@@ -407,14 +356,6 @@ export default function Accidents() {
   const [showAssetDrop, setShowAssetDrop]      = useState(false)
   const assetDropRef                           = useRef(null)
 
-  // Bulk upload
-  const [showBulk, setShowBulk]               = useState(false)
-  const [bulkRows, setBulkRows]               = useState([])
-  const [bulkFile, setBulkFile]               = useState(null)
-  const [bulkImporting, setBulkImporting]     = useState(false)
-  const [bulkResult, setBulkResult]           = useState(null) // { added, skipped, errors[] }
-  const bulkInputRef                          = useRef(null)
-
   const loadRecords = useCallback(async () => {
     setLoading(true)
     // Paginate past the 1000-row cap so the list AND its exports are complete.
@@ -500,109 +441,6 @@ export default function Accidents() {
     setShowAssetDrop(false)
   }
 
-  async function downloadTemplate() {
-    const XLSX = await import('xlsx')
-    const ws = XLSX.utils.aoa_to_sheet([BULK_TEMPLATE_COLS, BULK_TEMPLATE_EXAMPLE])
-    // Column widths
-    ws['!cols'] = BULK_TEMPLATE_COLS.map(() => ({ wch: 22 }))
-    const wb = XLSX.utils.book_new()
-    XLSX.utils.book_append_sheet(wb, ws, 'Accidents Template')
-    XLSX.writeFile(wb, 'TyrePulse_Accidents_Template.xlsx')
-  }
-
-  function parseBulkFile(file) {
-    setBulkFile(file)
-    setBulkResult(null)
-    const reader = new FileReader()
-    reader.onload = async e => {
-      const XLSX = await import('xlsx')
-      try {
-        const wb = XLSX.read(e.target.result, { type: 'binary', cellDates: true })
-        const ws = wb.Sheets[wb.SheetNames[0]]
-        const raw = XLSX.utils.sheet_to_json(ws, { defval: '' })
-
-        const toISO = (val) => {
-          if (val === '' || val === null || val === undefined) return ''
-          if (val instanceof Date) return val.toISOString().split('T')[0]
-          if (typeof val === 'number') {
-            const d = XLSX.SSF.parse_date_code(val)
-            return d ? `${d.y}-${String(d.m).padStart(2, '0')}-${String(d.d).padStart(2, '0')}` : ''
-          }
-          return String(val).trim()
-        }
-        const txt = (v) => { const s = String(v ?? '').trim(); return s || null }
-
-        const rows = raw.map((r, i) => {
-          // Normalise headers: lowercase, collapse any non-alphanumeric to '_'
-          const norm = {}
-          Object.entries(r).forEach(([k, v]) => {
-            const key = String(k).trim().toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '')
-            if (key) norm[key] = v
-          })
-          const pick = (...keys) => { for (const k of keys) { if (norm[k] !== undefined && norm[k] !== '') return norm[k] } return '' }
-
-          const incident_date = toISO(pick('incident_date', 'accident_date', 'date'))
-          const asset_no = String(pick('asset_no', 'assets_no', 'asset', 'asset_number', 'vehicle', 'vehicle_no', 'plate') || '').trim()
-
-          return {
-            _row: i + 2,
-            _valid: !!(incident_date && asset_no),
-            incident_date,
-            asset_no,
-            site:                 txt(pick('site', 'branch', 'plant')),
-            country:              txt(pick('country')),
-            location:             txt(pick('location')),
-            description:          txt(pick('description', 'remarks')),
-            severity:             pick('severity') || 'Minor',
-            status:               pick('status') || 'Reported',
-            repair_cost:          pick('repair_cost') !== '' ? (Number(pick('repair_cost')) || null) : null,
-            estimated_damage_cost: pick('estimated_damage_cost', 'estimated_cost') !== '' ? (Number(pick('estimated_damage_cost', 'estimated_cost')) || null) : null,
-            liable_party:         txt(pick('liable_party', 'liability', 'liable')),
-            insurer:              txt(pick('insurer')),
-            policy_no:            txt(pick('policy_no', 'insurance_claim_no', 'claim_no')),
-            inspector:            txt(pick('inspector')),
-            // ── Claims tracker fields ──
-            case_stage:           txt(pick('case_stage', 'current_case_stage', 'stage')),
-            damage_condition:     txt(pick('damage_condition')),
-            current_status:       txt(pick('current_status')),
-            action_to_be_taken:   txt(pick('action_to_be_taken', 'action')),
-            responsible_owner:    txt(pick('responsible_owner', 'owner', 'responsible')),
-            required_action:      txt(pick('required_action')),
-            status_update_date:   toISO(pick('status_update_date', 'status_update')) || null,
-            expected_release_date: toISO(pick('expected_release_date', 'expected_release')) || null,
-          }
-        })
-        setBulkRows(rows)
-      } catch (err) {
-        setBulkResult({ added: 0, skipped: 0, errors: [`Parse error: ${err.message}`] })
-      }
-    }
-    reader.readAsBinaryString(file)
-  }
-
-  async function importBulk() {
-    const valid = bulkRows.filter(r => r._valid)
-    if (!valid.length) return
-    setBulkImporting(true)
-    setBulkResult(null)
-    const payload = valid.map(({ _row, _valid, ...r }) => ({
-      ...r,
-      site:        r.site || 'Unassigned',            // NOT NULL in DB
-      severity:    toDbSeverity(r.severity),           // map label → DB canonical
-      status:      toDbStatus(r.status),               // map label → DB canonical
-      reported_by: profile?.id,
-    }))
-    const { error: err } = await accidentsApi.createAccidentForPage(payload)
-    const skipped = bulkRows.filter(r => !r._valid).length
-    if (err) {
-      setBulkResult({ added: 0, skipped, errors: [err.message] })
-    } else {
-      setBulkResult({ added: valid.length, skipped, errors: [] })
-      loadRecords()
-    }
-    setBulkImporting(false)
-  }
-
   const sites = useMemo(() => [...new Set(records.map(r => r.site).filter(Boolean))].sort(), [records])
 
   // Distinct case stage / current-status values actually present in the data,
@@ -620,15 +458,22 @@ export default function Accidents() {
     const openClaims = records.filter(isOpenClaim).length
     const cost   = records.reduce((s, r) => s + (Number(r.repair_cost) || 0) + (Number(r.parts_cost) || 0), 0)
     const closed = records.filter(r => isClosed(r))
-    let avgDays  = 0
+    // Avg days to CLOSE: incident date -> release date, over closed cases that
+    // actually recorded a release date (an honest case-cycle time). The old calc
+    // used updated_at - created_at (system row lifetime), which measured DB churn
+    // not case duration. avgDaysDenom exposes how many cases fed the average so
+    // the label can stay honest when release dates are missing.
+    let avgDays = 0
+    let avgDaysDenom = 0
     if (closed.length > 0) {
-      const total_days = closed.reduce((sum, r) => {
-        if (r.created_at && r.updated_at) {
-          return sum + Math.max(0, (new Date(r.updated_at) - new Date(r.created_at)) / 86400000)
+      let totalDays = 0
+      closed.forEach(r => {
+        if (r.incident_date && r.release_date) {
+          const d = (new Date(r.release_date) - new Date(r.incident_date)) / 86400000
+          if (Number.isFinite(d) && d >= 0) { totalDays += d; avgDaysDenom++ }
         }
-        return sum
-      }, 0)
-      avgDays = Math.round(total_days / closed.length)
+      })
+      avgDays = avgDaysDenom > 0 ? Math.round(totalDays / avgDaysDenom) : 0
     }
 
     // Severity mix
@@ -652,7 +497,7 @@ export default function Accidents() {
     const fleetSize = fleetAssets.length
     const per100 = fleetSize > 0 ? Number(((total / fleetSize) * 100).toFixed(1)) : 0
 
-    return { total, open, delayed, insur, openClaims, cost, avgDays, sevMix, atFaultPct, atFaultCount, atFaultDenom: withLiability.length, avgClaim, per100, fleetSize }
+    return { total, open, delayed, insur, openClaims, cost, avgDays, avgDaysDenom, sevMix, atFaultPct, atFaultCount, atFaultDenom: withLiability.length, avgClaim, per100, fleetSize }
   }, [records, fleetAssets])
 
   // Monthly incidents chart (incidents tab)
@@ -1187,7 +1032,7 @@ export default function Accidents() {
       accident_type:         canonAccidentType(row.accident_type),
       severity:              canonSeverity(row.severity) || 'Minor',
       status:                canonStatus(row.status) || 'Reported',
-      damage_class:          row.damage_class ?? '',
+      damage_class:          canonDamageClass(row.damage_class),
       insurer:               row.insurer ?? '',
       policy_no:             row.policy_no ?? '',
       insurance_claim_no:    row.insurance_claim_no ?? '',
@@ -1203,21 +1048,23 @@ export default function Accidents() {
       responsible_party:     row.responsible_party ?? '',
       liable_party:          row.liable_party ?? '',
       payer:                 row.payer ?? '',
-      fault_status:          row.fault_status ?? '',
+      fault_status:          canonFaultStatus(row.fault_status),
       gcc_liability_ratio:   row.gcc_liability_ratio ?? '',
-      najm_status:           row.najm_status ?? '',
-      najm_fault:            row.najm_fault ?? '',
-      taqdeer_status:        row.taqdeer_status ?? '',
+      najm_status:           canonNajmStatus(row.najm_status),
+      najm_fault:            canonNajmFault(row.najm_fault),
+      taqdeer_status:        canonTaqdeerStatus(row.taqdeer_status),
       case_stage:            row.case_stage ?? '',
       damage_condition:      row.damage_condition ?? '',
       current_status:        row.current_status ?? '',
       next_step:             row.next_step ?? '',
-      action_to_be_taken:    row.action_to_be_taken ?? '',
       responsible_owner:     row.responsible_owner ?? '',
-      required_action:       row.required_action ?? '',
+      // action_to_be_taken + required_action were merged into ONE "Action /
+      // Progress" field — seed it from whichever column carries data so a legacy
+      // value is never lost, then handleSave writes both columns in lockstep.
+      required_action:       row.required_action ?? row.action_to_be_taken ?? '',
       status_update_date:    d(row.status_update_date),
       status_update_note:    row.status_update_note ?? '',
-      repair_type:           row.repair_type ?? '',
+      repair_type:           canonRepairType(row.repair_type),
       workshop_name:         row.workshop_name ?? '',
       workshop_quotation:    row.workshop_quotation ?? '',
       discount_pct:          row.discount_pct ?? '',
@@ -1273,7 +1120,7 @@ export default function Accidents() {
       accident_type:         toDbAccidentType(form.accident_type) || 'other',
       severity:              toDbSeverity(form.severity),
       status:                toDbStatus(form.status),
-      damage_class:          form.damage_class || null,
+      damage_class:          canonDamageClass(form.damage_class) || null,
       // Claim & insurance
       insurer:               form.insurer || null,
       policy_no:             form.policy_no || null,
@@ -1292,24 +1139,28 @@ export default function Accidents() {
       responsible_party:     form.responsible_party || null,
       liable_party:          form.liable_party || null,
       payer:                 form.payer || null,
-      // GCC case / liability
-      fault_status:          form.fault_status || null,
+      // GCC case / liability — canonicalised so a stray-case value still matches
+      // the list badges + filters (which key off the exact option label).
+      fault_status:          canonFaultStatus(form.fault_status) || null,
       gcc_liability_ratio:   num(form.gcc_liability_ratio),
-      najm_status:           form.najm_status || null,
-      najm_fault:            form.najm_fault || null,
-      taqdeer_status:        form.taqdeer_status || null,
+      najm_status:           canonNajmStatus(form.najm_status) || null,
+      najm_fault:            canonNajmFault(form.najm_fault) || null,
+      taqdeer_status:        canonTaqdeerStatus(form.taqdeer_status) || null,
       // Case tracking & workflow
       case_stage:            form.case_stage || null,
       damage_condition:      form.damage_condition || null,
       current_status:        form.current_status || null,
       next_step:             form.next_step || null,
-      action_to_be_taken:    form.action_to_be_taken || null,
+      // The merged "Action / Progress" field feeds BOTH legacy columns so every
+      // downstream reader (detail page, AI copilot, exports) stays consistent and
+      // no previously-saved value is orphaned.
+      action_to_be_taken:    form.required_action || null,
       responsible_owner:     form.responsible_owner || null,
       required_action:       form.required_action || null,
       status_update_date:    form.status_update_date || null,
       status_update_note:    form.status_update_note || null,
       // Repair
-      repair_type:           form.repair_type || null,
+      repair_type:           canonRepairType(form.repair_type) || null,
       workshop_name:         form.workshop_name || null,
       workshop_quotation:    num(form.workshop_quotation),
       discount_pct:          num(form.discount_pct),
@@ -1423,7 +1274,9 @@ export default function Accidents() {
     ['repair_cost', 'Repair Cost', r => r.repair_cost],
     ['estimated_damage_cost', 'Est. Damage', r => r.estimated_damage_cost],
     ['parts_cost', 'Parts Cost', r => r.parts_cost],
-    ['net_cost', 'Net Cost', r => Math.max(0, (Number(r.repair_cost) || Number(r.estimated_damage_cost) || 0) + (Number(r.parts_cost) || 0) - (Number(r.recovered_amount) || 0))],
+    // Net = gross (repair or estimate, + parts) minus recovered, from the SINGLE
+    // claims engine so "net" means the same thing here as on the Claims dashboard.
+    ['net_cost', 'Net Cost', r => claimNet(r)],
     ['location', 'Location', r => r.location],
     ['case_stage', 'Case Stage', r => r.case_stage],
     ['damage_condition', 'Damage Condition', r => r.damage_condition],
@@ -1489,9 +1342,8 @@ export default function Accidents() {
   const claimsCols = CLAIMS_KEYS
     .map(key => { const f = EXPORT_FIELDS.find(x => x[0] === key); return f ? { key, header: f[1] } : null })
     .filter(Boolean)
-  const hasClaim = (r) =>
-    Number(r.claim_amount) > 0 || Number(r.claim_approved_amount) > 0 ||
-    !!r.claim_status || !!r.insurer || /insurance|claim/i.test(String(r.status || ''))
+  // hasClaim is imported from the single claims engine (claimsAnalytics) — the
+  // former local copy that shadowed it was removed so both stay identical.
   const claimsRows = useMemo(
     () => filtered.filter(hasClaim).map(r => {
       const o = {}
@@ -1537,42 +1389,41 @@ export default function Accidents() {
     }
     cols.push(
       { id: 'incident_date', header: 'Date', accessorFn: r => r.incident_date || '', size: 120, sortingFn: 'alphanumeric',
-        // Delayed cases get a red left accent on the leading cell + a "Delayed Nd"
-        // badge so a stalled case is spottable at a glance from the row edge.
+        // Delayed cases keep a red left accent + red text so a stalled case is
+        // spottable from the row edge; the "Delayed Nd" badge lives ONLY in the
+        // Status cell now (it used to be duplicated here).
         cell: ({ row }) => {
           const r = row.original
           const delayed = isDelayed(r)
           return (
             <div className={delayed ? 'border-l-2 border-red-500 pl-2 -ml-1' : ''}>
               <span className={delayed ? 'text-red-300 font-medium' : ''}>
-                {r.incident_date ? formatDate(r.incident_date, activeCountry) : '-'}
+                {r.incident_date ? formatDate(r.incident_date, activeCountry) : 'N/A'}
               </span>
-              {delayed && (
-                <span className="mt-1 badge text-[10px] bg-red-900/50 text-red-300 border border-red-700/50 flex items-center gap-1 w-fit">
-                  <Clock size={9} /> Delayed {daysSinceUpdate(r)}d
-                </span>
-              )}
             </div>
           )
         },
       },
-      { id: 'asset_no', header: 'Asset', accessorFn: r => r.asset_no || '-', size: 120,
+      { id: 'asset_no', header: 'Asset', accessorFn: r => r.asset_no || 'N/A', size: 120,
         cell: ({ getValue }) => <span className="font-medium text-[var(--text-primary)]">{getValue()}</span>,
       },
-      { id: 'site', header: 'Site', accessorFn: r => r.site || '-', size: 120 },
+      { id: 'site', header: 'Site', accessorFn: r => r.site || 'N/A', size: 120 },
       { id: 'severity', header: 'Severity', accessorFn: r => canonSeverity(r.severity), size: 100,
         cell: ({ getValue }) => {
-          const val = getValue()
-          return val ? <span className={`badge text-xs ${SEVERITY_BADGE[val] ?? 'bg-[var(--input-bg)] text-[var(--text-dim)]'}`}>{val}</span> : null
+          const { label, className } = accidentSeverityPill(getValue())
+          return label
+            ? <span className={`badge text-xs ${className}`}>{label}</span>
+            : <span className="text-[var(--text-muted)] text-xs">N/A</span>
         },
       },
       { id: 'status', header: 'Status / Stage', accessorFn: r => canonStatus(r.status), size: 170,
         cell: ({ row }) => {
           const r = row.original
           const stage = r.current_status || r.case_stage
+          const { label: statusLabel, className: statusClass } = accidentStatusPill(r.status)
           return (
             <div className="flex flex-col gap-1 items-start">
-              {r.status && <span className={`badge text-xs ${STATUS_BADGE[canonStatus(r.status)] ?? 'bg-[var(--input-bg)] text-[var(--text-dim)]'}`}>{canonStatus(r.status)}</span>}
+              {statusLabel && <span className={`badge text-xs ${statusClass}`}>{statusLabel}</span>}
               {stage && (
                 <span className="text-[11px] text-[var(--text-dim)] truncate max-w-[150px]" title={r.next_step ? `Next: ${r.next_step}` : stage}>
                   {stage}
@@ -1600,14 +1451,12 @@ export default function Accidents() {
         cell: ({ row }) => {
           const r = row.original
           const days = caseAgeDays(r)
-          if (days === null) return <span className="text-[var(--text-muted)] text-xs">—</span>
+          if (days === null) return <span className="text-[var(--text-muted)] text-xs">N/A</span>
           if (isReleasedOrClosed(r)) {
             return (
               <span
                 className={`badge text-[10px] whitespace-nowrap ${DIM_CHIP}`}
-                title={r.release_date
-                  ? 'Total case duration — incident date to release date'
-                  : 'Total case duration — incident date to today (closed, no release date recorded)'}
+                title="Total case duration: incident date to release date"
               >
                 {days}d closed
               </span>
@@ -1623,51 +1472,12 @@ export default function Accidents() {
           )
         },
       },
-      // Compact case-tracking chips (damage class, fault, GCC liability, repair
-      // route, Najm/Taqdeer) — only renders chips whose source value exists.
-      { id: 'case_flags', header: 'Case', accessorFn: r => r.fault_status || '', size: 210, enableSorting: false, meta: { export: false },
-        cell: ({ row }) => {
-          const r = row.original
-          const chips = []
-          if (r.damage_class) chips.push(<CaseChip key="dc" cls={DAMAGE_CLASS_BADGE[r.damage_class] || DIM_CHIP} title="Damage classification">{r.damage_class}</CaseChip>)
-          if (r.fault_status) chips.push(<CaseChip key="fs" cls={FAULT_BADGE[r.fault_status] || DIM_CHIP} title={r.najm_fault ? `Najm fault: ${r.najm_fault}` : 'Fault status'}>{r.fault_status}</CaseChip>)
-          if (r.gcc_liability_ratio !== null && r.gcc_liability_ratio !== undefined && r.gcc_liability_ratio !== '')
-            chips.push(<CaseChip key="gcc" cls={GCC_BADGE[Number(r.gcc_liability_ratio)] || DIM_CHIP} title="GCC liability ratio">GCC {Number(r.gcc_liability_ratio)}%</CaseChip>)
-          if (r.repair_type) chips.push(<CaseChip key="rt" cls={REPAIR_BADGE[r.repair_type] || DIM_CHIP} title="Repair route">{r.repair_type}</CaseChip>)
-          if (r.najm_status) chips.push(<CaseChip key="nj" cls={r.najm_status === 'Najm report' ? 'bg-blue-900/50 text-blue-300 border border-blue-700/50' : DIM_CHIP} title={r.najm_status}>{r.najm_status === 'Najm report' ? 'Najm' : 'No Najm'}</CaseChip>)
-          if (r.taqdeer_status) chips.push(<CaseChip key="tq" cls={r.taqdeer_status === 'Taqdeer report' ? 'bg-purple-900/50 text-purple-300 border border-purple-700/50' : DIM_CHIP} title={r.taqdeer_status}>{r.taqdeer_status === 'Taqdeer report' ? 'Taqdeer' : 'No Taqdeer'}</CaseChip>)
-          return chips.length
-            ? <div className="flex flex-wrap gap-1 max-w-[200px]">{chips}</div>
-            : <span className="text-[var(--text-muted)] text-xs">-</span>
-        },
-      },
-      { id: 'repair_cost', header: 'Repair Cost', accessorFn: r => r.repair_cost, size: 100, meta: { align: 'right' },
+      // Case flags (damage class, fault, GCC liability, Najm/Taqdeer), settlement
+      // and inspector are intentionally NOT crammed into the row — they live on
+      // the /accidents/:id detail page (Open). Keeping the register lean.
+      { id: 'repair_cost', header: 'Cost', accessorFn: r => r.repair_cost, size: 100, meta: { align: 'right' },
         cell: ({ getValue }) => <span className="whitespace-nowrap">{fmtCurrency(getValue())}</span>,
       },
-      // Settlement / release: workshop, quotation, final (with discount) & release date.
-      { id: 'settlement', header: 'Settlement', accessorFn: r => Number(r.final_amount) || Number(r.workshop_quotation) || 0, size: 170,
-        cell: ({ row }) => {
-          const r = row.original
-          const quote = Number(r.workshop_quotation) || 0
-          const final = Number(r.final_amount) || 0
-          const disc  = Number(r.discount_pct) || 0
-          if (!quote && !final && !r.release_date && !r.workshop_name)
-            return <span className="text-[var(--text-muted)] text-xs">-</span>
-          return (
-            <div className="text-[11px] space-y-0.5">
-              {r.workshop_name && (
-                <p className="text-[var(--text-dim)] truncate max-w-[150px] flex items-center gap-1" title={r.workshop_name}>
-                  <Wrench size={9} className="shrink-0 text-[var(--text-muted)]" /> {r.workshop_name}
-                </p>
-              )}
-              {quote > 0 && <p className="text-[var(--text-muted)]">Quote {fmtCurrency(quote)}</p>}
-              {final > 0 && <p className="text-green-400 font-medium">Final {fmtCurrency(final)}{disc > 0 ? ` (-${disc}%)` : ''}</p>}
-              {r.release_date && <p className="text-[var(--text-muted)]">Released {formatDate(r.release_date, activeCountry)}</p>}
-            </div>
-          )
-        },
-      },
-      { id: 'inspector', header: 'Inspector', accessorFn: r => r.inspector || '-', size: 120 },
       {
         id: 'actions', header: 'Actions', accessorFn: r => r.id, size: 190, enableSorting: false, meta: { export: false },
         cell: ({ row }) => {
@@ -1702,24 +1512,6 @@ export default function Accidents() {
     )
     return cols
   }, [isAdmin, allPageSelected, selectedIds, activeCountry, fmtCurrency, openDetail])
-
-  // Bulk preview columns for EnterpriseTable
-  const bulkColumns = useMemo(() => [
-    { id: '_row', header: 'Row', accessorFn: r => r._row, size: 60 },
-    { id: 'incident_date', header: 'Date', accessorFn: r => r.incident_date || '-', size: 100 },
-    { id: 'asset_no', header: 'Asset', accessorFn: r => r.asset_no || '-', size: 120,
-      cell: ({ getValue }) => <span className="text-[var(--text-primary)] font-medium">{getValue()}</span>,
-    },
-    { id: 'site', header: 'Site', accessorFn: r => r.site || '-', size: 100 },
-    { id: 'severity', header: 'Severity', accessorFn: r => r.severity, size: 80 },
-    { id: 'status', header: 'Status', accessorFn: r => r.status, size: 100 },
-    { id: 'repair_cost', header: 'Cost', accessorFn: r => r.repair_cost ?? '-', size: 80, meta: { align: 'right' } },
-    { id: '_valid', header: 'Valid', accessorFn: r => r._valid, size: 60, enableSorting: false,
-      cell: ({ getValue }) => getValue()
-        ? <CheckCircle2 size={13} className="text-green-400 mx-auto" />
-        : <AlertCircle size={13} className="text-red-400 mx-auto" />,
-    },
-  ], [])
 
   return (
     <div className="space-y-4">
@@ -1772,12 +1564,6 @@ export default function Accidents() {
             className="btn-primary flex items-center gap-2 text-sm"
           >
             <Upload size={15} /> Import via Data Intake Center
-          </button>
-          <button
-            onClick={() => { setShowBulk(true); setBulkRows([]); setBulkFile(null); setBulkResult(null) }}
-            className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-1.5"
-          >
-            <Upload size={14} /> Bulk Upload
           </button>
           <button onClick={openAdd} className="btn-primary flex items-center gap-2 text-sm">
             <Plus size={16} /> New Incident
@@ -1950,7 +1736,7 @@ export default function Accidents() {
                 onClick={() => setStatusFunnel(statusFunnel === s ? '' : s)}
                 className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${
                   statusFunnel === s
-                    ? STATUS_BADGE[s] + ' ring-1 ring-white/20'
+                    ? accidentStatusPill(s).className + ' ring-1 ring-white/20'
                     : 'bg-[var(--input-bg)] text-[var(--text-muted)] border-[var(--input-border)] hover:text-[var(--text-primary)]'
                 }`}
               >
@@ -2133,8 +1919,12 @@ export default function Accidents() {
               <p className="text-xs text-[var(--text-muted)] mt-1">Open</p>
             </div>
             <div className="card text-center">
-              <p className="text-2xl font-bold text-blue-400">{stats.avgDays}</p>
-              <p className="text-xs text-[var(--text-muted)] mt-1">Avg Days to Close</p>
+              <p className="text-2xl font-bold text-blue-400">{stats.avgDaysDenom > 0 ? stats.avgDays : 'N/A'}</p>
+              <p className="text-xs text-[var(--text-muted)] mt-1">
+                {stats.avgDaysDenom > 0
+                  ? `Avg Days to Close (${stats.avgDaysDenom} closed)`
+                  : 'Avg Days to Close (no release dates)'}
+              </p>
             </div>
             <div className="card text-center">
               <p className="text-xl font-bold text-green-400">{fmtCurrency(stats.cost)}</p>
@@ -2404,7 +2194,7 @@ export default function Accidents() {
               {funnelData.map(({ status, count, pct }) => (
                 <div key={status}>
                   <div className="flex items-center justify-between mb-1">
-                    <span className={`badge text-xs ${STATUS_BADGE[status] ?? 'bg-[var(--input-bg)] text-[var(--text-dim)]'}`}>{status}</span>
+                    <span className={`badge text-xs ${accidentStatusPill(status).className}`}>{status}</span>
                     <span className="text-sm text-[var(--text-dim)]">{count} <span className="text-[var(--text-muted)] text-xs">({pct}%)</span></span>
                   </div>
                   <div className="w-full bg-[var(--input-border)] rounded-full h-2">
@@ -2473,7 +2263,8 @@ export default function Accidents() {
             )}
 
             <form id="accident-inline-form" onSubmit={handleSave} className="space-y-3">
-              <div className="grid grid-cols-2 gap-3">
+              <FormSection title="Incident">
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                 <div>
                   <label className="label">Incident Date *</label>
                   <input
@@ -2545,7 +2336,7 @@ export default function Accidents() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                 <div>
                   <label className="label">Driver</label>
                   <input
@@ -2557,7 +2348,7 @@ export default function Accidents() {
                 <div>
                   <label className="label">Accident Type</label>
                   <select className="input" value={form.accident_type} onChange={e => setForm(f => ({ ...f, accident_type: e.target.value }))}>
-                    <option value="">—</option>
+                    <option value="">N/A</option>
                     {ACCIDENT_TYPE_OPTS.map(s => <option key={s} value={s}>{s}</option>)}
                   </select>
                 </div>
@@ -2566,11 +2357,12 @@ export default function Accidents() {
               <div>
                 <label className="label">Description</label>
                 <textarea
-                  className="input" rows={3} placeholder="What happened — sequence, damage, injuries…"
+                  className="input" rows={3} placeholder="What happened: sequence, damage, injuries"
                   value={form.description}
                   onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
                 />
               </div>
+              </FormSection>
 
               {/* Classification */}
               <FormSection title="Classification">
@@ -2590,7 +2382,7 @@ export default function Accidents() {
                   <div>
                     <label className="label">Damage Class</label>
                     <select className="input" value={form.damage_class} onChange={e => setForm(f => ({ ...f, damage_class: e.target.value }))}>
-                      <option value="">—</option>
+                      <option value="">N/A</option>
                       {DAMAGE_CLASS_OPTS.map(s => <option key={s} value={s}>{s}</option>)}
                     </select>
                   </div>
@@ -2599,39 +2391,39 @@ export default function Accidents() {
 
               {/* GCC case & liability */}
               <FormSection title="Liability & Case (GCC)">
-                <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                   <div>
                     <label className="label">Fault Status</label>
                     <select className="input" value={form.fault_status} onChange={e => setForm(f => ({ ...f, fault_status: e.target.value }))}>
-                      <option value="">—</option>
+                      <option value="">N/A</option>
                       {FAULT_STATUS_OPTS.map(s => <option key={s} value={s}>{s}</option>)}
                     </select>
                   </div>
                   <div>
                     <label className="label">GCC Liability</label>
                     <select className="input" value={form.gcc_liability_ratio} onChange={e => setForm(f => ({ ...f, gcc_liability_ratio: e.target.value }))}>
-                      <option value="">—</option>
+                      <option value="">N/A</option>
                       {LIABILITY_RATIO_OPTS.map(n => <option key={n} value={n}>{n}%</option>)}
                     </select>
                   </div>
                   <div>
                     <label className="label">Najm</label>
                     <select className="input" value={form.najm_status} onChange={e => setForm(f => ({ ...f, najm_status: e.target.value }))}>
-                      <option value="">—</option>
+                      <option value="">N/A</option>
                       {NAJM_STATUS_OPTS.map(s => <option key={s} value={s}>{s}</option>)}
                     </select>
                   </div>
                   <div>
                     <label className="label">Najm Fault</label>
                     <select className="input" value={form.najm_fault} onChange={e => setForm(f => ({ ...f, najm_fault: e.target.value }))}>
-                      <option value="">—</option>
+                      <option value="">N/A</option>
                       {NAJM_FAULT_OPTS.map(s => <option key={s} value={s}>{s}</option>)}
                     </select>
                   </div>
                   <div>
                     <label className="label">Taqdeer</label>
                     <select className="input" value={form.taqdeer_status} onChange={e => setForm(f => ({ ...f, taqdeer_status: e.target.value }))}>
-                      <option value="">—</option>
+                      <option value="">N/A</option>
                       {TAQDEER_STATUS_OPTS.map(s => <option key={s} value={s}>{s}</option>)}
                     </select>
                   </div>
@@ -2654,11 +2446,13 @@ export default function Accidents() {
 
               {/* Case tracking & workflow (consolidated from the detail page's Tracker tab) */}
               <FormSection title="Case Tracking & Workflow">
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                   <div>
                     <label className="label">Case Stage</label>
-                    <input className="input" list="acc-case-stages" placeholder="e.g. Under Investigation" value={form.case_stage} onChange={e => setForm(f => ({ ...f, case_stage: e.target.value }))} />
-                    <datalist id="acc-case-stages">{CASE_STAGE_OPTS.map(s => <option key={s} value={s} />)}</datalist>
+                    <select className="input" value={form.case_stage} onChange={e => setForm(f => ({ ...f, case_stage: e.target.value }))}>
+                      <option value="">N/A</option>
+                      {withValueOption(CASE_STAGE_OPTS, form.case_stage).map(s => <option key={s} value={s}>{s}</option>)}
+                    </select>
                   </div>
                   <div>
                     <label className="label">Damage Condition</label>
@@ -2667,12 +2461,21 @@ export default function Accidents() {
                   </div>
                   <div>
                     <label className="label">Current Workflow Stage</label>
-                    <input className="input" list="acc-workflow-stages" placeholder="e.g. Under Repair" value={form.current_status} onChange={e => setForm(f => ({ ...f, current_status: e.target.value }))} />
+                    <select className="input" value={form.current_status} onChange={e => setForm(f => ({ ...f, current_status: e.target.value }))}>
+                      <option value="">N/A</option>
+                      {withValueOption(WORKFLOW_STAGE_OPTS, form.current_status).map(s => <option key={s} value={s}>{s}</option>)}
+                    </select>
                   </div>
                   <div>
                     <label className="label">Next Step</label>
-                    <input className="input" list="acc-workflow-stages" placeholder="e.g. Waiting release" value={form.next_step} onChange={e => setForm(f => ({ ...f, next_step: e.target.value }))} />
-                    <datalist id="acc-workflow-stages">{WORKFLOW_STAGE_OPTS.map(s => <option key={s} value={s} />)}</datalist>
+                    <select className="input" value={form.next_step} onChange={e => setForm(f => ({ ...f, next_step: e.target.value }))}>
+                      <option value="">N/A</option>
+                      {withValueOption(WORKFLOW_STAGE_OPTS, form.next_step).map(s => <option key={s} value={s}>{s}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="label">Responsible Owner</label>
+                    <input className="input" placeholder="Accountable person" value={form.responsible_owner} onChange={e => setForm(f => ({ ...f, responsible_owner: e.target.value }))} />
                   </div>
                 </div>
                 {STAGE_TO_CLAIM_STATUS[String(form.current_status || '').toLowerCase()] && !form.claim_status && (
@@ -2681,23 +2484,15 @@ export default function Accidents() {
                   </p>
                 )}
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mt-3">
-                  <div>
-                    <label className="label">Responsible Owner</label>
-                    <input className="input" placeholder="Accountable person" value={form.responsible_owner} onChange={e => setForm(f => ({ ...f, responsible_owner: e.target.value }))} />
-                  </div>
-                  <div>
-                    <label className="label">Action To Be Taken</label>
-                    <input className="input" placeholder="Next step" value={form.action_to_be_taken} onChange={e => setForm(f => ({ ...f, action_to_be_taken: e.target.value }))} />
-                  </div>
-                  <div>
-                    <label className="label">Required Action / Progress</label>
-                    <input className="input" placeholder="Latest progress note" value={form.required_action} onChange={e => setForm(f => ({ ...f, required_action: e.target.value }))} />
+                  <div className="md:col-span-2">
+                    <label className="label">Action / Progress</label>
+                    <input className="input" placeholder="Latest action or progress note" value={form.required_action} onChange={e => setForm(f => ({ ...f, required_action: e.target.value }))} />
                   </div>
                   <div>
                     <label className="label">Status Update Date</label>
                     <input type="date" className="input" value={form.status_update_date} onChange={e => setForm(f => ({ ...f, status_update_date: e.target.value }))} />
                   </div>
-                  <div className="md:col-span-2">
+                  <div className="md:col-span-3">
                     <label className="label">Status Update Note</label>
                     <input className="input" placeholder="Optional note for this update" value={form.status_update_note} onChange={e => setForm(f => ({ ...f, status_update_note: e.target.value }))} />
                   </div>
@@ -2722,7 +2517,7 @@ export default function Accidents() {
                   <div>
                     <label className="label">Claim Status</label>
                     <select className="input" value={form.claim_status} onChange={e => setForm(f => ({ ...f, claim_status: e.target.value }))}>
-                      <option value="">—</option>
+                      <option value="">N/A</option>
                       {CLAIM_STATUS_OPTS.map(s => <option key={s} value={s}>{CLAIM_STATUS_LABELS[s]}</option>)}
                     </select>
                   </div>
@@ -2747,18 +2542,18 @@ export default function Accidents() {
 
               {/* Cost recovery (consolidated from the detail page's Claim & Recovery tab) */}
               <FormSection title="Cost Recovery">
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                   <div>
                     <label className="label">Recovery Status</label>
                     <select className="input" value={form.recovery_status} onChange={e => setForm(f => ({ ...f, recovery_status: e.target.value }))}>
-                      <option value="">—</option>
+                      <option value="">N/A</option>
                       {RECOVERY_STATUS_OPTS.map(s => <option key={s} value={s}>{RECOVERY_STATUS_LABELS[s]}</option>)}
                     </select>
                   </div>
                   <div>
                     <label className="label">Recovery Source</label>
                     <select className="input" value={form.recovery_source} onChange={e => setForm(f => ({ ...f, recovery_source: e.target.value }))}>
-                      <option value="">—</option>
+                      <option value="">N/A</option>
                       {RECOVERY_SOURCE_OPTS.map(s => <option key={s} value={s}>{RECOVERY_SOURCE_LABELS[s]}</option>)}
                     </select>
                   </div>
@@ -2779,8 +2574,8 @@ export default function Accidents() {
                   <div>
                     <label className="label">Repair Type</label>
                     <select className="input" value={form.repair_type} onChange={e => setForm(f => ({ ...f, repair_type: e.target.value }))}>
-                      <option value="">—</option>
-                      {REPAIR_TYPE_OPTS.map(s => <option key={s} value={s}>{s}</option>)}
+                      <option value="">N/A</option>
+                      {withValueOption(REPAIR_TYPE_OPTS, form.repair_type).map(s => <option key={s} value={s}>{s}</option>)}
                     </select>
                   </div>
                   <div>
@@ -2891,136 +2686,6 @@ export default function Accidents() {
         </div>
       )}
 
-      {/* ── Bulk Upload Modal ───────────────────────────────────────────────── */}
-      {showBulk && (
-        <div
-          className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 overflow-y-auto"
-          onClick={() => setShowBulk(false)}
-        >
-          <div
-            className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl w-full max-w-3xl p-6 my-4 space-y-5"
-            onClick={e => e.stopPropagation()}
-          >
-            {/* Header */}
-            <div className="flex items-center justify-between">
-              <div>
-                <h2 className="text-lg font-semibold text-[var(--text-primary)] flex items-center gap-2">
-                  <Upload size={18} className="text-green-400" /> Bulk Upload Incidents
-                </h2>
-                <p className="text-xs text-[var(--text-muted)] mt-1">Upload an Excel or CSV file to import multiple incidents at once.</p>
-              </div>
-              <button onClick={() => setShowBulk(false)} className="text-[var(--text-muted)] hover:text-[var(--text-primary)]"><X size={18} /></button>
-            </div>
-
-            {/* Step 1 - download template */}
-            <div className="bg-[var(--input-bg)] border border-[var(--input-border)] rounded-xl p-4 space-y-3">
-              <p className="text-sm font-semibold text-[var(--text-secondary)]">Step 1: Download Template</p>
-              <p className="text-xs text-[var(--text-muted)] leading-relaxed">
-                Use the official template to ensure correct column mapping. Required columns:
-                <span className="text-[var(--text-dim)] font-mono"> incident_date</span>,
-                <span className="text-[var(--text-dim)] font-mono"> asset_no</span>.
-                All other columns are optional.
-              </p>
-              <div className="flex flex-wrap gap-2">
-                {BULK_TEMPLATE_COLS.map(c => (
-                  <span key={c} className="text-[11px] font-mono px-2 py-0.5 rounded bg-gray-700 text-gray-300 border border-gray-600">{c}</span>
-                ))}
-              </div>
-              <button
-                type="button"
-                onClick={downloadTemplate}
-                className="inline-flex items-center gap-2 text-sm px-4 py-2 rounded-lg bg-green-700 hover:bg-green-600 text-white font-medium transition-colors"
-              >
-                <Download size={14} /> Download Template (.xlsx)
-              </button>
-            </div>
-
-            {/* Step 2 - upload file */}
-            <div className="bg-[var(--input-bg)] border border-[var(--input-border)] rounded-xl p-4 space-y-3">
-              <p className="text-sm font-semibold text-[var(--text-secondary)]">Step 2: Upload Your File</p>
-              <input
-                ref={bulkInputRef}
-                type="file"
-                accept=".xlsx,.xls,.csv"
-                className="hidden"
-                onChange={e => { if (e.target.files?.[0]) parseBulkFile(e.target.files[0]) }}
-              />
-              <button
-                type="button"
-                onClick={() => bulkInputRef.current?.click()}
-                className="inline-flex items-center gap-2 text-sm px-4 py-2 rounded-lg bg-gray-700 hover:bg-gray-600 border border-gray-600 text-gray-200 font-medium transition-colors"
-              >
-                <Upload size={14} /> {bulkFile ? bulkFile.name : 'Choose Excel / CSV file'}
-              </button>
-              {bulkFile && (
-                <p className="text-xs text-[var(--text-muted)]">
-                  {bulkRows.length} row{bulkRows.length !== 1 ? 's' : ''} parsed ·{' '}
-                  <span className="text-green-400">{bulkRows.filter(r => r._valid).length} valid</span>
-                  {bulkRows.filter(r => !r._valid).length > 0 && (
-                    <> · <span className="text-red-400">{bulkRows.filter(r => !r._valid).length} invalid (missing date or asset_no)</span></>
-                  )}
-                </p>
-              )}
-            </div>
-
-            {/* Preview table - EnterpriseTable */}
-            {bulkRows.length > 0 && (
-              <div className="rounded-xl border border-[var(--input-border)] overflow-hidden">
-                <EnterpriseTable
-                  reportMeta={reportMeta}
-                  columns={bulkColumns}
-                  data={bulkRows.slice(0, 50)}
-                  getRowId={(row) => String(row._row)}
-                  enableGlobalFilter={false}
-                  enableSorting={false}
-                  enableExport={false}
-                  enableColumnVisibility={false}
-                  enableColumnFilters={false}
-                  initialPageSize={50}
-                  pageSizeOptions={[50]}
-                  emptyMessage="No rows parsed"
-                />
-                {bulkRows.length > 50 && (
-                  <p className="text-xs text-[var(--text-muted)] text-center py-2">Showing first 50 of {bulkRows.length} rows</p>
-                )}
-              </div>
-            )}
-
-            {/* Result banner */}
-            {bulkResult && (
-              <div className={`flex items-start gap-3 rounded-xl px-4 py-3 border text-sm ${
-                bulkResult.errors.length
-                  ? 'bg-red-950/30 border-red-700/50 text-red-300'
-                  : 'bg-green-950/30 border-green-700/50 text-green-300'
-              }`}>
-                {bulkResult.errors.length
-                  ? <AlertCircle size={16} className="shrink-0 mt-0.5" />
-                  : <CheckCircle2 size={16} className="shrink-0 mt-0.5" />}
-                <div>
-                  {bulkResult.added > 0 && <p>{bulkResult.added} incident{bulkResult.added !== 1 ? 's' : ''} imported successfully.</p>}
-                  {bulkResult.skipped > 0 && <p className="text-yellow-400">{bulkResult.skipped} row{bulkResult.skipped !== 1 ? 's' : ''} skipped (missing required fields).</p>}
-                  {bulkResult.errors.map((e, i) => <p key={i} className="text-red-300">{e}</p>)}
-                </div>
-              </div>
-            )}
-
-            {/* Action row */}
-            <div className="flex items-center gap-3 pt-1">
-              <button
-                type="button"
-                onClick={importBulk}
-                disabled={bulkImporting || bulkRows.filter(r => r._valid).length === 0}
-                className="btn-primary flex items-center gap-2 text-sm disabled:opacity-40"
-              >
-                {bulkImporting
-                  ? <><span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin inline-block" /> Importing...</>
-                  : <><CheckCircle2 size={14} /> Import {bulkRows.filter(r => r._valid).length} Valid Rows</>}
-              </button>
-              <button type="button" onClick={() => setShowBulk(false)} className="btn-secondary text-sm">Close</button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   )
 }

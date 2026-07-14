@@ -19,6 +19,7 @@ import {
   Zap, CheckCircle, XCircle, Clock, Activity,
   Building2, Wrench, Star, AlertOctagon,
   ChevronRight, Award, Package, Users, Mail,
+  ScrollText, Presentation,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import EmailReportModal from '../components/EmailReportModal'
@@ -33,7 +34,8 @@ import { applyCountry } from '../lib/countryFilter'
 import { formatDate } from '../lib/formatters'
 import { fetchAllPages } from '../lib/fetchAll'
 import { recordCost } from '../lib/analyticsEngine'
-import { resolvePdfBrand, pdfHeader, pdfFooter, pdfTableTheme } from '../lib/exportUtils'
+import { resolvePdfBrand, pdfHeader, pdfFooter, pdfTableTheme, reportFileName, reportDateLabel } from '../lib/exportUtils'
+import { captureChartOnPaper, paperChartOptions } from '../lib/chartCapture'
 import { useTenant } from '../contexts/TenantContext'
 import { useLanguage } from '../contexts/LanguageContext'
 import PageHeader from '../components/ui/PageHeader'
@@ -271,6 +273,14 @@ export default function ExecutiveReport() {
   const [period,      setPeriod]      = useState({ mode: 'all' })
   const [exporting,   setExporting]   = useState(false)
   const [emailModalOpen, setEmailModalOpen] = useState(false)
+  const [reportMode,  setReportMode]  = useState(false)
+
+  // Live chart -> white-paper PNG (falls back to the raw canvas), null-guarded for
+  // pre-mount refs so export never throws before charts render.
+  const chartImg = useCallback(
+    (ref) => captureChartOnPaper(ref?.current) || ref?.current?.toBase64Image?.('image/png', 1) || null,
+    [],
+  )
 
   // Chart refs for PDF export
   const costTrendRef    = useRef(null)
@@ -673,6 +683,94 @@ export default function ExecutiveReport() {
     return [...actions30, ...actions60, ...actions90]
   }, [periodRecords, kpis, totalSpend, savingsOpportunity, topRootCause, currency, t])
 
+  // ── KPI cards (single source: on-screen grid + PDF/PPTX exports) ───────────
+  const kpiCards = useMemo(() => [
+    {
+      label: t('execreport.kpi.fleetAvgCpk'),
+      value: fmtCpk(kpis.cpk.fleetAvgCpk, currency),
+      status: cpkStatus(kpis.cpk.fleetAvgCpk),
+      target: '< 0.012',
+      icon: DollarSign,
+    },
+    {
+      label: t('execreport.kpi.medianCpk'),
+      value: fmtCpk(kpis.cpk.medianCpk, currency),
+      status: cpkStatus(kpis.cpk.medianCpk),
+      target: '< 0.012',
+      icon: BarChart2,
+    },
+    {
+      label: t('execreport.kpi.fleetAvgTyreLife'),
+      value: `${fmtNum(kpis.avgTyreLife.avgKm)} km`,
+      status: kpis.avgTyreLife.avgKm >= 60000 ? 'green' : kpis.avgTyreLife.avgKm >= 40000 ? 'amber' : 'red',
+      target: '>= 60,000 km',
+      icon: Activity,
+    },
+    {
+      label: t('execreport.kpi.inspectionCompliance'),
+      value: fmtPct(kpis.inspectionCompliance.compliancePct),
+      status: pctStatus(kpis.inspectionCompliance.compliancePct),
+      target: '>= 85%',
+      icon: CheckCircle,
+    },
+    {
+      label: t('execreport.kpi.pressureCompliance'),
+      value: fmtPct(kpis.pressureCompliance.compliancePct),
+      status: pctStatus(kpis.pressureCompliance.compliancePct),
+      target: '>= 90%',
+      icon: Target,
+    },
+    {
+      label: t('execreport.kpi.failureRate'),
+      value: fmtPct(kpis.failureRate.failureRate * 100),
+      status: failStatus(kpis.failureRate.failureRate),
+      target: '< 10%',
+      icon: AlertTriangle,
+    },
+    {
+      label: t('execreport.kpi.criticalRate'),
+      value: fmtPct(kpis.failureRate.criticalRate * 100),
+      status: kpis.failureRate.criticalRate <= 0.05 ? 'green' : kpis.failureRate.criticalRate <= 0.15 ? 'amber' : 'red',
+      target: '< 5%',
+      icon: ShieldAlert,
+    },
+    {
+      label: t('execreport.kpi.scrapRate'),
+      value: fmtPct(kpis.scrapRate.scrapRate * 100),
+      status: kpis.scrapRate.scrapRate <= 0.15 ? 'green' : kpis.scrapRate.scrapRate <= 0.25 ? 'amber' : 'red',
+      target: '< 15%',
+      icon: Package,
+    },
+    {
+      label: t('execreport.kpi.replacementRate'),
+      value: `${fmtNum(kpis.replacementRate.avgPerVehiclePerMonth, 2)}/veh/mo`,
+      status: 'amber',
+      target: '< 1.0',
+      icon: Wrench,
+    },
+    {
+      label: t('execreport.kpi.totalDowntimeHours'),
+      value: `${fmtNum(kpis.downtimeImpact.totalDowntimeHours)} hrs`,
+      status: kpis.downtimeImpact.totalDowntimeHours <= 100 ? 'green' : kpis.downtimeImpact.totalDowntimeHours <= 300 ? 'amber' : 'red',
+      target: '< 100 hrs',
+      icon: Clock,
+    },
+    {
+      label: t('execreport.kpi.fleetAvailability'),
+      value: fmtPct(kpis.fleetAvailability.availabilityPct),
+      status: pctStatus(kpis.fleetAvailability.availabilityPct, 95),
+      target: '>= 95%',
+      icon: Zap,
+    },
+    {
+      label: t('execreport.kpi.costTrend'),
+      value: t(`execreport.trend.${costTrend.trend}`),
+      status: costTrend.trend === 'improving' ? 'green' : costTrend.trend === 'stable' ? 'amber' : 'red',
+      target: t('execreport.kpi.improvingTarget'),
+      icon: TrendingUp,
+    },
+  ], [kpis, costTrend, currency, t])
+
   // ── Chart datasets ────────────────────────────────────────────────────────
   const costTrendChart = useMemo(() => ({
     labels: costTrend.byMonth.slice(-12).map(m => m.month),
@@ -735,83 +833,198 @@ export default function ExecutiveReport() {
     }],
   }), [riskTrend6m])
 
-  // ── PDF Export ────────────────────────────────────────────────────────────
+  // ── PDF Export (WYSIWYG: KPI cards + charts + tables, matches report view) ──
   const exportPDF = useCallback(async () => {
     const { default: jsPDF } = await import('jspdf')
     const { default: autoTable } = await import('jspdf-autotable')
     setExporting(true)
     try {
-      const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
+      const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
       const brand = await resolvePdfBrand(branding)
       const periodLabel = periodValueLabel(period)
+      const W = doc.internal.pageSize.getWidth()
+      const H = doc.internal.pageSize.getHeight()
+      const M = 14
+      const GAP = 4
+      const INK = [15, 23, 42]
+      const MUTED = [100, 116, 139]
 
-      // KPI Dashboard
-      pdfHeader(doc, 'Executive Intelligence Report', `KPI Dashboard · ${periodLabel}`, company, brand)
-      autoTable(doc, {
-        ...pdfTableTheme(brand.accent),
-        startY: 28,
-        head: [['KPI', 'Value', 'Status', 'Target']],
-        body: [
-          ['Fleet Avg CPK', fmtCpk(kpis.cpk.fleetAvgCpk, currency), cpkStatus(kpis.cpk.fleetAvgCpk) === 'green' ? 'Good' : cpkStatus(kpis.cpk.fleetAvgCpk) === 'amber' ? 'Warning' : 'Critical', '< 0.012'],
-          ['Median CPK', fmtCpk(kpis.cpk.medianCpk, currency), '-', '-'],
-          ['Fleet Avg Tyre Life', `${fmtNum(kpis.avgTyreLife.avgKm)} km`, '-', '> 60,000 km'],
-          ['Inspection Compliance', fmtPct(kpis.inspectionCompliance.compliancePct), kpis.inspectionCompliance.compliancePct >= 85 ? 'Good' : 'Warning', '≥ 85%'],
-          ['Failure Rate', fmtPct(kpis.failureRate.failureRate * 100), kpis.failureRate.failureRate <= 0.1 ? 'Good' : 'Warning', '< 10%'],
-          ['Critical Rate', fmtPct(kpis.failureRate.criticalRate * 100), kpis.failureRate.criticalRate <= 0.05 ? 'Good' : 'Critical', '< 5%'],
-          ['Scrap Rate', fmtPct(kpis.scrapRate.scrapRate * 100), kpis.scrapRate.scrapRate <= 0.15 ? 'Good' : 'Warning', '< 15%'],
-          ['Fleet Availability', fmtPct(kpis.fleetAvailability.availabilityPct), kpis.fleetAvailability.availabilityPct >= 95 ? 'Good' : 'Warning', '≥ 95%'],
-          ['Total Downtime Hours', `${fmtNum(kpis.downtimeImpact.totalDowntimeHours)} hrs`, '-', '-'],
-          ['Total Spend (Period)', fmtCurrency(totalSpend, currency), '-', '-'],
-          ['Projected Annual Spend', fmtCurrency(projectedAnnual, currency), '-', '-'],
-          ['Cost Trend', costTrend.trend.charAt(0).toUpperCase() + costTrend.trend.slice(1), costTrend.trend === 'improving' ? 'Good' : costTrend.trend === 'stable' ? 'Neutral' : 'Warning', 'Improving'],
-        ],
+      // Draw a captured live chart into a white card, aspect-preserving. Honest
+      // "no chart data" placeholder when the ref is unmounted / empty.
+      const drawChart = (ref, x, y, cw, ch, title) => {
+        if (title) {
+          doc.setFont('helvetica', 'bold'); doc.setFontSize(8.5); doc.setTextColor(...INK)
+          doc.text(String(title), x, y - 1.6, { maxWidth: cw })
+        }
+        doc.setDrawColor(226, 232, 240); doc.setFillColor(255, 255, 255)
+        doc.roundedRect(x, y, cw, ch, 1.5, 1.5, 'FD')
+        const live = ref?.current
+        const img = chartImg(ref)
+        if (!img || !live) {
+          doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(...MUTED)
+          doc.text('No chart data', x + cw / 2, y + ch / 2, { align: 'center' })
+          return
+        }
+        const iw0 = live.width || live.canvas?.width || cw
+        const ih0 = live.height || live.canvas?.height || ch
+        const scale = Math.min((cw - 4) / iw0, (ch - 4) / ih0)
+        const iw = iw0 * scale, ih = ih0 * scale
+        doc.addImage(img, 'PNG', x + (cw - iw) / 2, y + (ch - ih) / 2, iw, ih)
+      }
+
+      // ── Page 1: KPI dashboard as labelled cards ──
+      pdfHeader(doc, 'Executive Intelligence Report', `KPI Dashboard | ${periodLabel}`, company, brand)
+      const perRow = 6
+      const gridY = 32
+      const cardW = (W - 2 * M - (perRow - 1) * GAP) / perRow
+      const cardH = 27
+      kpiCards.forEach((c, i) => {
+        const col = i % perRow, row = Math.floor(i / perRow)
+        const x = M + col * (cardW + GAP)
+        const y = gridY + row * (cardH + GAP)
+        doc.setDrawColor(226, 232, 240); doc.setFillColor(248, 250, 252)
+        doc.roundedRect(x, y, cardW, cardH, 2, 2, 'FD')
+        doc.setFont('helvetica', 'bold'); doc.setFontSize(11); doc.setTextColor(...INK)
+        doc.text(String(c.value), x + cardW / 2, y + 9, { align: 'center', maxWidth: cardW - 3 })
+        doc.setFont('helvetica', 'normal'); doc.setFontSize(6.4); doc.setTextColor(...MUTED)
+        doc.text(String(c.label).toUpperCase(), x + cardW / 2, y + 15.5, { align: 'center', maxWidth: cardW - 3 })
+        doc.setFontSize(6); doc.setTextColor(148, 163, 184)
+        doc.text(`Target: ${String(c.target)}`, x + cardW / 2, y + 22, { align: 'center', maxWidth: cardW - 3 })
       })
 
+      // ── Page 2: Root Cause (chart beside table) ──
       doc.addPage()
       pdfHeader(doc, 'Root Cause Analysis', periodLabel, company, brand)
+      const halfW = (W - 2 * M - GAP) / 2
+      drawChart(rootCauseRef, M, 34, halfW, 92, 'Failure Driver Classification')
       autoTable(doc, {
         ...pdfTableTheme(brand.accent),
-        startY: 28,
-        head: [['Root Cause', 'Count', '% of Total', 'Est. Cost Impact', 'Prevention Summary']],
-        body: rootCauses.map(c => [
-          c.label, c.count, fmtPct(c.pct),
-          fmtCurrency(c.cost, currency),
-          c.prevention.slice(0, 80) + '...',
-        ]),
-        columnStyles: { 4: { cellWidth: 70 } },
+        startY: 30,
+        margin: { left: M + halfW + GAP },
+        tableWidth: halfW,
+        head: [['Root Cause', 'Count', '%', 'Cost Impact']],
+        body: rootCauses.map(c => [c.label, c.count, fmtPct(c.pct), fmtCurrency(c.cost, currency)]),
       })
 
+      // ── Page 3: Financial Impact (three charts) ──
+      doc.addPage()
+      pdfHeader(doc, 'Financial Impact', periodLabel, company, brand)
+      drawChart(costTrendRef, M, 34, W - 2 * M, 68, 'Monthly Spend Trend')
+      const finBottomY = 108
+      const finH = H - finBottomY - M
+      drawChart(costBySiteRef, M, finBottomY, halfW, finH, 'Cost by Site')
+      drawChart(costByBrandRef, M + halfW + GAP, finBottomY, halfW, finH, 'Cost by Brand')
+
+      // ── Page 4: Risk Assessment (chart + matrix table) ──
       doc.addPage()
       pdfHeader(doc, 'Risk Assessment', periodLabel, company, brand)
+      drawChart(riskTrendRef, M, 34, halfW, 92, '6-Month Risk Score Trend')
       autoTable(doc, {
         ...pdfTableTheme(brand.accent),
-        startY: 28,
-        head: [['Site', 'Critical', 'High', 'Medium', 'Low', 'Total', 'Risk Score']],
-        body: riskMatrix.map(r => [
-          r.site, r.Critical, r.High, r.Medium, r.Low, r.total, r.score.toFixed(2),
-        ]),
+        startY: 30,
+        margin: { left: M + halfW + GAP },
+        tableWidth: halfW,
+        head: [['Site', 'Crit', 'High', 'Med', 'Low', 'Total', 'Score']],
+        body: riskMatrix.map(r => [r.site, r.Critical, r.High, r.Medium, r.Low, r.total, r.score.toFixed(2)]),
       })
 
+      // ── Page 5: Action Plan (full-width table) ──
       doc.addPage()
       pdfHeader(doc, 'Action Plan', periodLabel, company, brand)
       autoTable(doc, {
         ...pdfTableTheme(brand.accent),
-        startY: 28,
+        startY: 30,
         head: [['Action', 'Priority', 'Timeline', 'Owner', 'Est. Saving', 'Status']],
-        body: actionPlan.map(a => [a.action.slice(0, 70), a.priority, a.timeline, a.owner, a.saving, a.status]),
-        columnStyles: { 0: { cellWidth: 75 } },
+        body: actionPlan.map(a => [a.action, a.priority, a.timeline, a.owner, a.saving, a.status]),
+        columnStyles: { 0: { cellWidth: 120 } },
       })
 
       const totalPages = doc.internal.getNumberOfPages()
       for (let p = 1; p <= totalPages; p++) { doc.setPage(p); pdfFooter(doc, p, totalPages, company, brand) }
 
-      doc.save(`TyrePulse_Executive_Report_${periodValueLabel(period).replace(/[^\w-]+/g, '_')}_${new Date().toISOString().slice(0, 10)}.pdf`)
+      doc.save(`${reportFileName('TyrePulse Executive Report', periodLabel, reportDateLabel())}.pdf`)
     } catch (e) {
       console.error('PDF export failed', e)
     } finally {
       setExporting(false)
     }
-  }, [period, kpis, rootCauses, riskMatrix, actionPlan, totalSpend, projectedAnnual, costTrend, currency, company, branding, savingsOpportunity])
+  }, [period, kpis, rootCauses, riskMatrix, actionPlan, kpiCards, totalSpend, projectedAnnual, costTrend, currency, company, branding, savingsOpportunity, chartImg])
+
+  // ── PowerPoint Export (WYSIWYG white deck: title + KPI + chart + table slides) ─
+  const exportPPTX = useCallback(async () => {
+    const PptxGen = (await import('pptxgenjs')).default
+    setExporting(true)
+    try {
+      const pptx = new PptxGen()
+      pptx.defineLayout({ name: 'TP16x9', width: 13.33, height: 7.5 })
+      pptx.layout = 'TP16x9'
+      const periodLabel = periodValueLabel(period)
+      const BG = 'FFFFFF', INK = '0F172A', SUBTLE = '475569', MUTED = '94A3B8'
+      const CARD = 'F8FAFC', BORDER = 'E2E8F0', HEAD = '1E293B'
+
+      // Title slide
+      let s = pptx.addSlide(); s.background = { color: BG }
+      s.addShape(pptx.ShapeType.rect, { x: 0, y: 3.4, w: 13.33, h: 0.06, fill: { color: '10B981' } })
+      s.addText('Executive Intelligence Report', { x: 0.6, y: 2.3, w: 12.1, h: 1, fontSize: 34, bold: true, color: INK })
+      s.addText(`${company}  |  ${periodLabel}`, { x: 0.6, y: 3.6, w: 12.1, h: 0.6, fontSize: 16, color: SUBTLE })
+      s.addText(`Generated ${reportDateLabel()}  |  CONFIDENTIAL`, { x: 0.6, y: 4.2, w: 12.1, h: 0.5, fontSize: 12, color: MUTED })
+
+      // KPI dashboard slide (labelled cards)
+      s = pptx.addSlide(); s.background = { color: BG }
+      s.addText('KPI Dashboard', { x: 0.5, y: 0.3, w: 12.3, h: 0.6, fontSize: 22, bold: true, color: INK })
+      const perRow = 4, cardW = 2.98, cardH = 1.28, gx = 0.13, gy = 0.22, ox = 0.5, oy = 1.15
+      kpiCards.forEach((c, i) => {
+        const col = i % perRow, row = Math.floor(i / perRow)
+        const x = ox + col * (cardW + gx), y = oy + row * (cardH + gy)
+        s.addShape(pptx.ShapeType.roundRect, { x, y, w: cardW, h: cardH, rectRadius: 0.06, fill: { color: CARD }, line: { color: BORDER, width: 1 } })
+        s.addText(String(c.value), { x: x + 0.12, y: y + 0.12, w: cardW - 0.24, h: 0.5, fontSize: 17, bold: true, color: INK })
+        s.addText(String(c.label), { x: x + 0.12, y: y + 0.62, w: cardW - 0.24, h: 0.34, fontSize: 9, color: SUBTLE })
+        s.addText(`Target: ${String(c.target)}`, { x: x + 0.12, y: y + 0.94, w: cardW - 0.24, h: 0.28, fontSize: 8, color: MUTED })
+      })
+
+      // One slide per chart (WYSIWYG capture)
+      const chartSlide = (ref, title) => {
+        const sl = pptx.addSlide(); sl.background = { color: BG }
+        sl.addText(title, { x: 0.5, y: 0.3, w: 12.3, h: 0.6, fontSize: 22, bold: true, color: INK })
+        const img = chartImg(ref)
+        if (img) sl.addImage({ data: img, x: 1.4, y: 1.1, w: 10.5, h: 5.9, sizing: { type: 'contain', w: 10.5, h: 5.9 } })
+        else sl.addText('No chart data', { x: 0.5, y: 3.2, w: 12.3, h: 0.6, fontSize: 14, color: SUBTLE, align: 'center' })
+      }
+      chartSlide(rootCauseRef, 'Root Cause Analysis')
+      chartSlide(costTrendRef, 'Monthly Spend Trend')
+      chartSlide(costBySiteRef, 'Cost by Site')
+      chartSlide(costByBrandRef, 'Cost by Brand')
+      chartSlide(riskTrendRef, '6-Month Risk Score Trend')
+
+      // Table slides
+      const tableSlide = (title, head, rows) => {
+        const sl = pptx.addSlide(); sl.background = { color: BG }
+        sl.addText(title, { x: 0.5, y: 0.3, w: 12.3, h: 0.6, fontSize: 22, bold: true, color: INK })
+        const body = rows.length ? rows : [head.map(() => 'N/A')]
+        const tbl = [
+          head.map(h => ({ text: String(h), options: { bold: true, color: 'FFFFFF', fill: { color: HEAD } } })),
+          ...body.map(r => r.map(c => ({ text: String(c), options: { color: INK } }))),
+        ]
+        sl.addTable(tbl, {
+          x: 0.5, y: 1.05, w: 12.3, border: { type: 'solid', color: BORDER, pt: 0.5 },
+          fontSize: 10, valign: 'middle', autoPage: true, autoPageRepeatHeader: true,
+          fill: { color: BG },
+        })
+      }
+      tableSlide('Root Cause Analysis', ['Root Cause', 'Count', '%', 'Cost Impact'],
+        rootCauses.map(c => [c.label, c.count, fmtPct(c.pct), fmtCurrency(c.cost, currency)]))
+      tableSlide('Risk Matrix', ['Site', 'Critical', 'High', 'Medium', 'Low', 'Total', 'Risk Score'],
+        riskMatrix.map(r => [r.site, r.Critical, r.High, r.Medium, r.Low, r.total, r.score.toFixed(2)]))
+      tableSlide('Action Plan', ['Action', 'Priority', 'Timeline', 'Owner', 'Est. Saving', 'Status'],
+        actionPlan.map(a => [a.action, a.priority, a.timeline, a.owner, a.saving, a.status]))
+
+      await pptx.writeFile({ fileName: `${reportFileName('TyrePulse Executive Report', periodLabel, reportDateLabel())}.pptx` })
+    } catch (e) {
+      console.error('PPTX export failed', e)
+    } finally {
+      setExporting(false)
+    }
+  }, [period, kpiCards, rootCauses, riskMatrix, actionPlan, currency, company, chartImg])
 
   // ── Excel Export ──────────────────────────────────────────────────────────
   const exportExcel = useCallback(async () => {
@@ -923,98 +1136,39 @@ export default function ExecutiveReport() {
       ? <TrendingUp className="w-4 h-4 text-red-400" />
       : <Minus className="w-4 h-4 text-amber-400" />
 
-  const kpiCards = [
-    {
-      label: t('execreport.kpi.fleetAvgCpk'),
-      value: fmtCpk(kpis.cpk.fleetAvgCpk, currency),
-      status: cpkStatus(kpis.cpk.fleetAvgCpk),
-      target: '< 0.012',
-      icon: DollarSign,
+  // ── Chart options: light "report view" theme when reportMode is on, so the
+  // on-screen charts match the white-paper PNG captured for PDF/PPTX exports. ──
+  const barOpts   = reportMode ? paperChartOptions(CHART_DARK_NO_LEGEND) : CHART_DARK_NO_LEGEND
+  const horizOpts = reportMode ? paperChartOptions(CHART_HORIZONTAL)     : CHART_HORIZONTAL
+  const lineBase  = { ...CHART_DARK, plugins: { ...CHART_DARK.plugins, legend: { display: false } } }
+  const lineOpts  = reportMode ? paperChartOptions(lineBase) : lineBase
+  const rcaBase   = {
+    ...CHART_DARK_NO_LEGEND,
+    plugins: {
+      ...CHART_DARK_NO_LEGEND.plugins,
+      tooltip: {
+        ...CHART_DARK.plugins.tooltip,
+        callbacks: {
+          label: ctx => `${ctx.raw} events (${((ctx.raw / Math.max(periodRecords.length, 1)) * 100).toFixed(1)}%)`,
+        },
+      },
     },
-    {
-      label: t('execreport.kpi.medianCpk'),
-      value: fmtCpk(kpis.cpk.medianCpk, currency),
-      status: cpkStatus(kpis.cpk.medianCpk),
-      target: '< 0.012',
-      icon: BarChart2,
-    },
-    {
-      label: t('execreport.kpi.fleetAvgTyreLife'),
-      value: `${fmtNum(kpis.avgTyreLife.avgKm)} km`,
-      status: kpis.avgTyreLife.avgKm >= 60000 ? 'green' : kpis.avgTyreLife.avgKm >= 40000 ? 'amber' : 'red',
-      target: '≥ 60,000 km',
-      icon: Activity,
-    },
-    {
-      label: t('execreport.kpi.inspectionCompliance'),
-      value: fmtPct(kpis.inspectionCompliance.compliancePct),
-      status: pctStatus(kpis.inspectionCompliance.compliancePct),
-      target: '≥ 85%',
-      icon: CheckCircle,
-    },
-    {
-      label: t('execreport.kpi.pressureCompliance'),
-      value: fmtPct(kpis.pressureCompliance.compliancePct),
-      status: pctStatus(kpis.pressureCompliance.compliancePct),
-      target: '≥ 90%',
-      icon: Target,
-    },
-    {
-      label: t('execreport.kpi.failureRate'),
-      value: fmtPct(kpis.failureRate.failureRate * 100),
-      status: failStatus(kpis.failureRate.failureRate),
-      target: '< 10%',
-      icon: AlertTriangle,
-    },
-    {
-      label: t('execreport.kpi.criticalRate'),
-      value: fmtPct(kpis.failureRate.criticalRate * 100),
-      status: kpis.failureRate.criticalRate <= 0.05 ? 'green' : kpis.failureRate.criticalRate <= 0.15 ? 'amber' : 'red',
-      target: '< 5%',
-      icon: ShieldAlert,
-    },
-    {
-      label: t('execreport.kpi.scrapRate'),
-      value: fmtPct(kpis.scrapRate.scrapRate * 100),
-      status: kpis.scrapRate.scrapRate <= 0.15 ? 'green' : kpis.scrapRate.scrapRate <= 0.25 ? 'amber' : 'red',
-      target: '< 15%',
-      icon: Package,
-    },
-    {
-      label: t('execreport.kpi.replacementRate'),
-      value: `${fmtNum(kpis.replacementRate.avgPerVehiclePerMonth, 2)}/veh/mo`,
-      status: 'amber',
-      target: '< 1.0',
-      icon: Wrench,
-    },
-    {
-      label: t('execreport.kpi.totalDowntimeHours'),
-      value: `${fmtNum(kpis.downtimeImpact.totalDowntimeHours)} hrs`,
-      status: kpis.downtimeImpact.totalDowntimeHours <= 100 ? 'green' : kpis.downtimeImpact.totalDowntimeHours <= 300 ? 'amber' : 'red',
-      target: '< 100 hrs',
-      icon: Clock,
-    },
-    {
-      label: t('execreport.kpi.fleetAvailability'),
-      value: fmtPct(kpis.fleetAvailability.availabilityPct),
-      status: pctStatus(kpis.fleetAvailability.availabilityPct, 95),
-      target: '≥ 95%',
-      icon: Zap,
-    },
-    {
-      label: t('execreport.kpi.costTrend'),
-      value: t(`execreport.trend.${costTrend.trend}`),
-      status: costTrend.trend === 'improving' ? 'green' : costTrend.trend === 'stable' ? 'amber' : 'red',
-      target: t('execreport.kpi.improvingTarget'),
-      icon: TrendingUp,
-    },
-  ]
+  }
+  const rcaOpts = reportMode ? paperChartOptions(rcaBase) : rcaBase
 
   return (
-    <div className="text-[var(--text-primary)] print:bg-white print:text-black space-y-6">
+    <div className={`text-[var(--text-primary)] print:bg-white print:text-black space-y-6${reportMode ? ' tp-report-paper' : ''}`}>
 
-      {/* ── Print Styles ────────────────────────────────────────────────── */}
+      {/* ── Print + Report-view Styles ─────────────────────────────────────
+          .tp-report-paper flips every var-driven surface to a white "paper"
+          theme with zero JSX churn, so the on-screen report matches the PDF. */}
       <style>{`
+        .tp-report-paper {
+          --surface-0:#ffffff; --surface-1:#f8fafc; --surface-2:#f1f5f9; --surface-3:#e2e8f0;
+          --border-dim:#e5e7eb; --border-bright:#cbd5e1;
+          --text-primary:#0f172a; --text-secondary:#334155; --text-muted:#64748b; --text-dim:#94a3b8;
+          background:#ffffff;
+        }
         @media print {
           .no-print { display: none !important; }
           .print-break { page-break-before: always; }
@@ -1035,6 +1189,19 @@ export default function ExecutiveReport() {
             icon={FileText}
             actions={<>
               <PeriodFilter records={records} value={period} onChange={setPeriod} />
+              <button
+                onClick={() => setReportMode(m => !m)}
+                aria-pressed={reportMode}
+                title={reportMode ? 'Switch back to dark dashboard' : 'Switch to white report view'}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all border ${
+                  reportMode
+                    ? 'bg-emerald-600 hover:bg-emerald-500 text-white border-emerald-500'
+                    : 'bg-[var(--surface-2)] hover:bg-[var(--surface-3)] text-[var(--text-primary)] border-[var(--border-bright)]'
+                }`}
+              >
+                <ScrollText className="w-3.5 h-3.5" />
+                {reportMode ? 'Dashboard view' : 'Report view'}
+              </button>
               <button
                 onClick={exportExcel}
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[var(--surface-2)] hover:bg-[var(--surface-3)] text-[var(--text-primary)] text-xs font-medium transition-all border border-[var(--border-bright)]"
@@ -1059,6 +1226,15 @@ export default function ExecutiveReport() {
                   : <Download className="w-3.5 h-3.5" />
                 }
                 {t('execreport.header.exportPdf')}
+              </button>
+              <button
+                onClick={exportPPTX}
+                disabled={exporting}
+                title="Export a white 16:9 PowerPoint deck"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-orange-600 hover:bg-orange-500 text-white text-xs font-medium transition-all disabled:opacity-50"
+              >
+                <Presentation className="w-3.5 h-3.5" />
+                Export PPTX
               </button>
               <button
                 onClick={() => setEmailModalOpen(true)}
@@ -1262,18 +1438,7 @@ export default function ExecutiveReport() {
                   <Bar
                     ref={rootCauseRef}
                     data={rcaChart}
-                    options={{
-                      ...CHART_DARK_NO_LEGEND,
-                      plugins: {
-                        ...CHART_DARK_NO_LEGEND.plugins,
-                        tooltip: {
-                          ...CHART_DARK.plugins.tooltip,
-                          callbacks: {
-                            label: ctx => `${ctx.raw} events (${((ctx.raw / periodRecords.length) * 100).toFixed(1)}%)`,
-                          },
-                        },
-                      },
-                    }}
+                    options={rcaOpts}
                   />
                 ) : (
                   <div className="h-full flex items-center justify-center text-[var(--text-dim)] text-sm">No root cause data</div>
@@ -1361,7 +1526,7 @@ export default function ExecutiveReport() {
                 <p className="text-xs text-[var(--text-secondary)] font-medium mb-2 uppercase tracking-wide">Monthly Spend Trend</p>
                 <div className="h-52">
                   {costTrend.byMonth.length > 0 ? (
-                    <Bar ref={costTrendRef} data={costTrendChart} options={CHART_DARK_NO_LEGEND} />
+                    <Bar ref={costTrendRef} data={costTrendChart} options={barOpts} />
                   ) : (
                     <div className="h-full flex items-center justify-center text-[var(--text-dim)] text-sm">No trend data</div>
                   )}
@@ -1371,7 +1536,7 @@ export default function ExecutiveReport() {
                 <p className="text-xs text-[var(--text-secondary)] font-medium mb-2 uppercase tracking-wide">Cost by Site</p>
                 <div className="h-52">
                   {costBySite.length > 0 ? (
-                    <Bar ref={costBySiteRef} data={costBySiteChart} options={CHART_HORIZONTAL} />
+                    <Bar ref={costBySiteRef} data={costBySiteChart} options={horizOpts} />
                   ) : (
                     <div className="h-full flex items-center justify-center text-[var(--text-dim)] text-sm">No site data</div>
                   )}
@@ -1385,7 +1550,7 @@ export default function ExecutiveReport() {
                 <p className="text-xs text-[var(--text-secondary)] font-medium mb-2 uppercase tracking-wide">Cost by Brand</p>
                 <div className="h-44">
                   {costByBrand.length > 0 ? (
-                    <Bar ref={costByBrandRef} data={costByBrandChart} options={CHART_HORIZONTAL} />
+                    <Bar ref={costByBrandRef} data={costByBrandChart} options={horizOpts} />
                   ) : (
                     <div className="h-full flex items-center justify-center text-[var(--text-dim)] text-sm">No brand data</div>
                   )}
@@ -1469,10 +1634,7 @@ export default function ExecutiveReport() {
               <div>
                 <p className="text-xs text-[var(--text-secondary)] font-medium mb-2 uppercase tracking-wide">6-Month Risk Score Trend</p>
                 <div className="h-56">
-                  <Line ref={riskTrendRef} data={riskTrendChart} options={{
-                    ...CHART_DARK,
-                    plugins: { ...CHART_DARK.plugins, legend: { display: false } },
-                  }} />
+                  <Line ref={riskTrendRef} data={riskTrendChart} options={lineOpts} />
                 </div>
               </div>
 

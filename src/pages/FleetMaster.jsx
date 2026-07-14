@@ -10,7 +10,7 @@ import { sanitizeSearchTerm } from '../lib/searchFilter'
 import { canAddResource } from '../lib/api/billing'
 import {
   Search, Plus, Edit2, Trash2, Save, X, AlertTriangle,
-  FileSpreadsheet, Download, Upload, Truck, ClipboardCheck
+  FileSpreadsheet, Upload, Truck, ClipboardCheck
 } from 'lucide-react'
 import EnterpriseTable from '../components/ui/EnterpriseTable'
 import { Illustration } from '../components/illustrations'
@@ -44,26 +44,6 @@ const EMPTY_FORM = (country = 'KSA') => ({
   notes: '',
 })
 
-const UPLOAD_COL_MAP = {
-  'Asset No':              'asset_no',
-  'Fleet Number':          'fleet_number',
-  'Fleet No':              'fleet_number',
-  'Make':                  'make',
-  'Model':                 'model',
-  'Vehicle Type':          'vehicle_type',
-  'Year':                  'year',
-  'Operator':              'operator_name',
-  'Site':                  'site',
-  'Country':               'country',
-  'Department':            'department',
-  'Expected KM/Tyre':      'expected_km_per_tyre',
-  'Min Days':              'min_days_between_changes',
-  'Tyre Size':             'tyre_size',
-  'Status':                'status',
-}
-
-const TEMPLATE_HEADERS = Object.keys(UPLOAD_COL_MAP)
-
 const EXPORT_COLS = [
   { key: 'asset_no',                header: 'Asset No',          width: 24 },
   { key: 'fleet_number',            header: 'Fleet No',          width: 20 },
@@ -87,9 +67,6 @@ const STATUS_BADGE = {
   Retired:     'bg-red-900/50 text-red-300',
   Transferred: 'bg-yellow-900/50 text-yellow-300',
 }
-
-// ── Tabs ─────────────────────────────────────────────────────────────────────
-const TABS = ['records', 'bulkUpload']
 
 export default function FleetMaster() {
   const reportMeta = useReportMeta('Fleet Master')
@@ -137,17 +114,6 @@ export default function FleetMaster() {
   const [bulkBusy, setBulkBusy]               = useState(false)
 
   // ── tab ──────────────────────────────────────────────────────────────────────
-  const [activeTab, setActiveTab] = useState(0)
-
-  // ── bulk upload state ─────────────────────────────────────────────────────────
-  const fileRef           = useRef(null)
-  const [uploadStep, setUploadStep]       = useState('idle')  // idle|preview|uploading|done
-  const [uploadFileName, setUploadFileName] = useState('')
-  const [uploadPreview, setUploadPreview] = useState([])
-  const [uploadRows, setUploadRows]       = useState([])
-  const [uploadResult, setUploadResult]   = useState(null)
-  const [uploadError, setUploadError]     = useState('')
-
   // ── load ─────────────────────────────────────────────────────────────────────
   useEffect(() => { loadSites() }, [])
   // Debounce the search box: reset to page 0 and reload 300ms after typing stops.
@@ -364,97 +330,6 @@ export default function FleetMaster() {
     })
   }
 
-  // ── download template ─────────────────────────────────────────────────────────
-  async function downloadTemplate() {
-    const XLSX = await import('xlsx')
-    const ws = XLSX.utils.aoa_to_sheet([TEMPLATE_HEADERS])
-    ws['!cols'] = TEMPLATE_HEADERS.map(h => ({ wch: Math.max(h.length + 4, 18) }))
-    const wb = XLSX.utils.book_new()
-    XLSX.utils.book_append_sheet(wb, ws, 'Fleet Master Template')
-    XLSX.writeFile(wb, 'FleetMaster_Template.xlsx')
-  }
-
-  // ── bulk upload handlers ──────────────────────────────────────────────────────
-  async function handleUploadFile(e) {
-    const XLSX = await import('xlsx')
-    const file = e.target.files?.[0]
-    if (!file) return
-    setUploadFileName(file.name)
-    setUploadError('')
-    const reader = new FileReader()
-    reader.onload = (ev) => {
-      try {
-        const wb = XLSX.read(ev.target.result, { type: 'binary', cellDates: true })
-        const ws = wb.Sheets[wb.SheetNames[0]]
-        const data = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' })
-        if (data.length < 2) { setUploadError(t('fleetmaster.upload.errEmpty')); return }
-        const headers = data[0].map(String)
-        const dataRows = data.slice(1).filter(r => r.some(c => c !== ''))
-
-        // Map rows using UPLOAD_COL_MAP
-        const mapped = dataRows.map(row => {
-          const obj = {}
-          headers.forEach((h, i) => {
-            const field = UPLOAD_COL_MAP[h]
-            if (field) {
-              let val = row[i]
-              if (val === '' || val === null || val === undefined) {
-                obj[field] = null
-              } else if (['year', 'expected_km_per_tyre', 'min_days_between_changes'].includes(field)) {
-                obj[field] = +val || null
-              } else {
-                obj[field] = String(val).trim()
-              }
-            }
-          })
-          return obj
-        }).filter(r => r.asset_no)
-
-        setUploadRows(mapped)
-        setUploadPreview(mapped.slice(0, 5))
-        setUploadStep('preview')
-      } catch (err) {
-        setUploadError(t('fleetmaster.upload.errParseFailed', { message: err.message }))
-      }
-    }
-    reader.readAsBinaryString(file)
-  }
-
-  async function runBulkUpload() {
-    setUploadStep('uploading')
-    const BATCH = 200
-    let upserted = 0, failed = 0
-    for (let i = 0; i < uploadRows.length; i += BATCH) {
-      const batch = uploadRows.slice(i, i + BATCH).map(r => ({
-        ...r,
-        status: r.status || 'Active',
-        country: r.country || (activeCountry !== 'All' ? activeCountry : 'KSA'),
-        created_by: profile?.id,
-        updated_at: new Date().toISOString(),
-      }))
-      const { error } = await supabase
-        .from('vehicle_fleet')
-        .upsert(batch, { onConflict: 'asset_no' })
-      if (error) failed += batch.length
-      else upserted += batch.length
-    }
-    setUploadResult({ upserted, failed })
-    setUploadStep('done')
-    setPage(0)
-    loadRecords()
-    loadSites()
-  }
-
-  function resetUpload() {
-    setUploadStep('idle')
-    setUploadFileName('')
-    setUploadPreview([])
-    setUploadRows([])
-    setUploadResult(null)
-    setUploadError('')
-    if (fileRef.current) fileRef.current.value = ''
-  }
-
   function F(field) { return e => setForm(f => ({ ...f, [field]: e.target.value })) }
 
   const canDelete = profile?.role === 'Admin' || profile?.role === 'Manager'
@@ -602,9 +477,6 @@ export default function FleetMaster() {
           <button onClick={handleExport} className="btn-secondary flex items-center gap-2 text-sm">
             <FileSpreadsheet size={15} className="text-green-400" /> {t('fleetmaster.actions.exportExcel')}
           </button>
-          <button onClick={downloadTemplate} className="btn-secondary flex items-center gap-2 text-sm">
-            <Download size={15} className="text-blue-400" /> {t('fleetmaster.actions.template')}
-          </button>
         </div>
       </div>
 
@@ -623,26 +495,8 @@ export default function FleetMaster() {
         ))}
       </div>
 
-      {/* Tabs */}
-      <div className="flex border-b border-gray-800 gap-1">
-        {TABS.map((tabKey, i) => (
-          <button
-            key={tabKey}
-            onClick={() => setActiveTab(i)}
-            className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
-              activeTab === i
-                ? 'border-green-500 text-green-400'
-                : 'border-transparent text-gray-400 hover:text-white'
-            }`}
-          >
-            {t(`fleetmaster.tabs.${tabKey}`)}
-          </button>
-        ))}
-      </div>
-
-      {/* ── Tab: Records ──────────────────────────────────────────────────── */}
-      {activeTab === 0 && (
-        <>
+      {/* ── Records ──────────────────────────────────────────────────────── */}
+      <>
           {/* Filters */}
           <div className="card">
             <div className="flex flex-wrap gap-3">
@@ -704,122 +558,7 @@ export default function FleetMaster() {
               t('fleetmaster.pagination.showing', { from, to, total: totalCount.toLocaleString() })}
             exportFileName={`TyrePulse_FleetMaster_${new Date().toISOString().slice(0, 10)}`}
           />
-        </>
-      )}
-
-      {/* ── Tab: Bulk Upload ──────────────────────────────────────────────── */}
-      {activeTab === 1 && (
-        <div className="space-y-4 max-w-4xl">
-          <div className="card">
-            <h2 className="text-base font-semibold text-white mb-1">{t('fleetmaster.upload.heading')}</h2>
-            <p className="text-xs text-gray-400 mb-4">
-              {t('fleetmaster.upload.description')}
-            </p>
-            <p className="text-xs text-gray-500 mb-4">
-              {t('fleetmaster.upload.intakeCenterPrefix')}{' '}
-              <button
-                type="button"
-                onClick={() => navigate('/data-intake?module=fleet')}
-                className="text-green-400 hover:text-green-300 underline underline-offset-2"
-              >
-                {t('fleetmaster.upload.intakeCenterLink')}
-              </button>{' '}
-              {t('fleetmaster.upload.intakeCenterSuffix')}
-            </p>
-
-            {uploadStep === 'idle' && (
-              <div>
-                <div
-                  className="border-2 border-dashed border-gray-700 hover:border-blue-600 transition-colors cursor-pointer text-center py-12 rounded-xl"
-                  onClick={() => fileRef.current?.click()}
-                >
-                  <Upload size={36} className="text-gray-500 mx-auto mb-3" />
-                  <p className="text-white font-medium mb-1">{t('fleetmaster.upload.dropHere')}</p>
-                  <p className="text-sm text-gray-400">{t('fleetmaster.upload.orBrowse')}</p>
-                  <input ref={fileRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={handleUploadFile} />
-                </div>
-                {uploadError && <p className="text-red-400 text-sm mt-3">{uploadError}</p>}
-                <div className="mt-4">
-                  <p className="text-xs text-gray-500 mb-2">{t('fleetmaster.upload.expectedColumns')}</p>
-                  <div className="flex flex-wrap gap-2">
-                    {TEMPLATE_HEADERS.map(h => (
-                      <span key={h} className="text-xs px-2 py-0.5 rounded bg-gray-800 text-gray-400 border border-gray-700">{h}</span>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {uploadStep === 'preview' && (
-              <div className="space-y-4">
-                <div className="flex items-center gap-3 text-sm text-gray-400">
-                  <FileSpreadsheet size={16} className="text-blue-400" />
-                  <span>{uploadFileName}</span>
-                  <span>· {t('fleetmaster.upload.rowsToUpsert', { count: uploadRows.length.toLocaleString() })}</span>
-                </div>
-                <div>
-                  <h3 className="text-sm font-medium text-white mb-2">{t('fleetmaster.upload.previewTitle')}</h3>
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-xs">
-                      <thead>
-                        <tr>
-                          {['asset_no', 'fleet_number', 'make', 'model', 'vehicle_type', 'year', 'site', 'status'].map(f => (
-                            <th key={f} className="table-header capitalize">{t(`fleetmaster.upload.previewCols.${f}`)}</th>
-                          ))}
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {uploadPreview.map((row, i) => (
-                          <tr key={i}>
-                            {['asset_no', 'fleet_number', 'make', 'model', 'vehicle_type', 'year', 'site', 'status'].map(f => (
-                              <td key={f} className="table-cell">{String(row[f] ?? '-')}</td>
-                            ))}
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-                <div className="flex gap-3">
-                  <button onClick={runBulkUpload} className="btn-primary flex items-center gap-2">
-                    <Upload size={15} /> {t('fleetmaster.upload.upsertVehicles', { count: uploadRows.length.toLocaleString() })}
-                  </button>
-                  <button onClick={resetUpload} className="btn-secondary">{t('fleetmaster.upload.cancel')}</button>
-                </div>
-              </div>
-            )}
-
-            {uploadStep === 'uploading' && (
-              <div className="text-center py-12">
-                <div className="animate-spin h-10 w-10 rounded-full border-2 border-gray-700 border-t-blue-500 mx-auto mb-4" />
-                <p className="text-white font-medium">{t('fleetmaster.upload.uploading')}</p>
-              </div>
-            )}
-
-            {uploadStep === 'done' && uploadResult && (
-              <div>
-                <div className="flex items-center gap-3 mb-4">
-                  <div className="w-8 h-8 rounded-full bg-green-900/50 flex items-center justify-center">
-                    <FileSpreadsheet size={16} className="text-green-400" />
-                  </div>
-                  <h3 className="text-white font-semibold">{t('fleetmaster.upload.complete')}</h3>
-                </div>
-                <div className="grid grid-cols-2 gap-3 mb-4">
-                  <div className="rounded-lg p-3 border border-green-800 bg-green-900/20">
-                    <p className="text-2xl font-bold text-green-400">{uploadResult.upserted}</p>
-                    <p className="text-xs text-green-300 mt-0.5">{t('fleetmaster.upload.recordsUpserted')}</p>
-                  </div>
-                  <div className="rounded-lg p-3 border border-red-800 bg-red-900/20">
-                    <p className="text-2xl font-bold text-red-400">{uploadResult.failed}</p>
-                    <p className="text-xs text-red-300 mt-0.5">{t('fleetmaster.upload.failed')}</p>
-                  </div>
-                </div>
-                <button onClick={resetUpload} className="btn-secondary">{t('fleetmaster.upload.uploadAnother')}</button>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
+      </>
 
       {/* ── Add / Edit Modal ──────────────────────────────────────────────── */}
       {editRecord !== null && (

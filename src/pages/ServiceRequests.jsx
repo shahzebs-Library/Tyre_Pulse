@@ -24,6 +24,7 @@ import {
 } from '../lib/api/serviceRequests'
 import { summariseRequests, byStatus, byCategory } from '../lib/serviceRequests'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
+import { toUserMessage } from '../lib/safeError'
 
 const CATEGORY_OPTIONS = ['tyre', 'mechanical', 'electrical', 'bodywork', 'inspection', 'breakdown', 'other']
 const PRIORITY_OPTIONS = ['low', 'medium', 'high', 'urgent']
@@ -116,7 +117,7 @@ export default function ServiceRequests() {
       setUpdatedAt(new Date())
     } catch (err) {
       if (isMissingRelation(err)) setNotProvisioned(true)
-      else setError(err?.message || 'Could not load service requests.')
+      else setError(toUserMessage(err, 'Could not load service requests.'))
       setRows([])
     } finally {
       setRefreshing(false)
@@ -198,7 +199,7 @@ export default function ServiceRequests() {
       setShowModal(false); setEditing(null)
       await load()
     } catch (err) {
-      setFormError(err?.message || 'Could not save the request.')
+      setFormError(toUserMessage(err, 'Could not save the request.'))
     } finally {
       setSaving(false)
     }
@@ -212,7 +213,7 @@ export default function ServiceRequests() {
       setConfirmDelete(null)
       await load()
     } catch (err) {
-      setError(err?.message || 'Could not delete the request.')
+      setError(toUserMessage(err, 'Could not delete the request.'))
     } finally {
       setDeleting(false)
     }

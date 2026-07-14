@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import {
-  analyzeClaims, hasClaim, isClosed, isDelayed, claimNet, overdueDays,
+  analyzeClaims, hasClaim, isClosed, isDelayed, claimNet, grossCost, overdueDays,
 } from '../lib/claimsAnalytics'
 
 const NOW = '2026-07-13'
@@ -54,6 +54,14 @@ describe('claimsAnalytics helpers', () => {
     expect(claimNet(rows[0])).toBe(13000) // 12000 + 1000 - 0
     expect(claimNet(rows[1])).toBe(0)     // 6000 - 6000
     expect(claimNet(rows[2])).toBe(3000)  // 4000 (est) - 1000
+  })
+  it('grossCost is repair (or estimate) + parts, and claimNet == gross - recovered', () => {
+    expect(grossCost(rows[0])).toBe(13000)                 // 12000 repair + 1000 parts
+    expect(grossCost(rows[2])).toBe(4000)                  // estimate used when no repair_cost
+    for (const r of rows) {
+      const recovered = Number(r.recovered_amount) || 0
+      expect(claimNet(r)).toBe(Math.max(0, grossCost(r) - recovered))
+    }
   })
 })
 

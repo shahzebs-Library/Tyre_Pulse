@@ -31,6 +31,7 @@ import { useTenant } from '../contexts/TenantContext'
 import { resolvePdfBrand, pdfHeader, pdfFooter, pdfTableTheme } from '../lib/exportUtils'
 import { useLanguage } from '../contexts/LanguageContext'
 import { formatCurrency as _fmtCurrencyBase, formatDate, formatDateTime } from '../lib/formatters'
+import { toUserMessage } from '../lib/safeError'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Title, Tooltip, Legend)
 
@@ -167,7 +168,7 @@ export default function WorkOrders() {
       const data = await workOrders.listWorkOrdersForPage({ country: activeCountry })
       setOrders(data || [])
     } catch (e) {
-      setError(e.message)
+      setError(toUserMessage(e))
     } finally {
       setLoading(false)
     }
@@ -285,7 +286,7 @@ export default function WorkOrders() {
       if (viewOrder?.id === deleteTarget.id) setViewOrder(null)
       await load()
     } catch (e) {
-      setDeleteError(e.message || t('workorders.delete.failed'))
+      setDeleteError(toUserMessage(e, t('workorders.delete.failed')))
     } finally {
       setSaving(false)
     }
@@ -324,7 +325,7 @@ export default function WorkOrders() {
       await load()
       return n
     } catch (e) {
-      setDeleteError(e.message || t('workorders.bulkDelete.failed'))
+      setDeleteError(toUserMessage(e, t('workorders.bulkDelete.failed')))
     } finally {
       setSaving(false)
     }
@@ -405,7 +406,7 @@ export default function WorkOrders() {
       await load()
       setShowForm(false)
     } catch (e) {
-      alert(t('workorders.form.saveFailed', { msg: e.message }))
+      alert(t('workorders.form.saveFailed', { msg: toUserMessage(e) }))
     } finally {
       setSaving(false)
     }
@@ -422,7 +423,7 @@ export default function WorkOrders() {
       await workOrders.updateWorkOrderById(order.id, patch)
       logAudit({ action: 'UPDATE', entity: 'work_orders', entityId: order.id, before: order, after: patch })
       publish('workorder.status_changed', { id: order.id, work_order_no: order.work_order_no, from_status: order.status, to_status: newStatus })
-    } catch (err) { alert(t('workorders.form.updateFailed', { msg: err.message })); return }
+    } catch (err) { alert(t('workorders.form.updateFailed', { msg: toUserMessage(err) })); return }
     await load()
     if (viewOrder?.id === order.id) setViewOrder(o => ({ ...o, ...patch }))
   }

@@ -26,6 +26,7 @@ import {
   summarizeClaims, claimAgeDays, CLAIM_STATUSES, CLAIM_STATUS_META,
 } from '../lib/insuranceClaims'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
+import { toUserMessage } from '../lib/safeError'
 
 const STATUS_STYLES = {
   open:         'bg-sky-900/40 text-sky-300 border border-sky-700/50',
@@ -84,7 +85,7 @@ export default function InsuranceClaims() {
       setUpdatedAt(new Date())
     } catch (err) {
       if (isMissingRelation(err)) { setMissing(true); setRows([]) }
-      else { setError(err?.message || 'Could not load insurance claims.'); setRows([]) }
+      else { setError(toUserMessage(err, 'Could not load insurance claims.')); setRows([]) }
     } finally {
       setRefreshing(false)
     }
@@ -145,7 +146,7 @@ export default function InsuranceClaims() {
       setModalOpen(false)
       await load()
     } catch (err) {
-      setFormError(err?.message || 'Could not save the claim.')
+      setFormError(toUserMessage(err, 'Could not save the claim.'))
     } finally {
       setSaving(false)
     }
@@ -158,7 +159,7 @@ export default function InsuranceClaims() {
       setDeleting(null)
       await load()
     } catch (err) {
-      setError(err?.message || 'Could not delete the claim.')
+      setError(toUserMessage(err, 'Could not delete the claim.'))
       setDeleting(null)
     }
   }, [deleting, load])

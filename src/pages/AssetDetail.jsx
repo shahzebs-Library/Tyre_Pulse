@@ -26,6 +26,7 @@ import CustomFieldsPanel from '../components/CustomFieldsPanel'
 import EntityApprovalPanel from '../components/workflow/EntityApprovalPanel'
 import { Illustration } from '../components/illustrations'
 import { vehicleArt } from '../lib/brand/vehicleArt'
+import { severityRank } from '../lib/severity'
 
 ChartJS.register(
   CategoryScale, LinearScale,
@@ -34,7 +35,6 @@ ChartJS.register(
 )
 
 // ── Constants (mirrored from AssetManagement for visual parity) ─────────────────
-const RISK_ORDER = { Critical: 0, High: 1, Medium: 2, Low: 3 }
 const RISK_COLOR = {
   Critical: { bg: 'bg-red-900/50',    text: 'text-red-300',    hex: '#dc2626' },
   High:     { bg: 'bg-orange-900/50', text: 'text-orange-300', hex: '#ea580c' },
@@ -73,7 +73,7 @@ function daysSince(d) {
 function worstRisk(tyres) {
   if (!tyres?.length) return null
   return tyres.reduce((best, t) => {
-    if (t.risk_level && (best === null || (RISK_ORDER[t.risk_level] ?? 99) < (RISK_ORDER[best] ?? 99))) return t.risk_level
+    if (t.risk_level && (best === null || severityRank(t.risk_level) > severityRank(best))) return t.risk_level
     return best
   }, null)
 }

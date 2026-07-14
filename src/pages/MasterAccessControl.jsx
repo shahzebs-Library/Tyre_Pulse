@@ -14,18 +14,19 @@
  */
 import { useMemo } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { ShieldCheck, KeyRound, Fingerprint, UserCog } from 'lucide-react'
+import { ShieldCheck, KeyRound, Fingerprint, UserCog, UserCheck } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import PermissionMatrix from './PermissionMatrix'
 import SecurityCenter from './SecurityCenter'
 import CustomRolesManager from './CustomRolesManager'
+import AccessGrantsManager from './AccessGrantsManager'
 
 const TABS = [
   {
     key: 'permissions',
     label: 'Role Permissions',
     icon: KeyRound,
-    desc: 'Role × module × capability grid',
+    desc: 'Role by module by capability grid',
     Component: PermissionMatrix,
   },
   {
@@ -34,6 +35,13 @@ const TABS = [
     icon: UserCog,
     desc: 'Create your own roles and grant module access',
     Component: CustomRolesManager,
+  },
+  {
+    key: 'grants',
+    label: 'Per-User Grants',
+    icon: UserCheck,
+    desc: 'Give one user more or less access than their role',
+    Component: AccessGrantsManager,
   },
   {
     key: 'security',
@@ -47,8 +55,7 @@ const TABS = [
 const DEFAULT_TAB = 'permissions'
 
 export default function MasterAccessControl() {
-  const { profile } = useAuth()
-  const isAdmin = profile?.role === 'Admin'
+  const { isSuperAdmin } = useAuth()
   const [params, setParams] = useSearchParams()
 
   const requested = params.get('tab')
@@ -75,8 +82,8 @@ export default function MasterAccessControl() {
         <div>
           <h1 className="text-h2">Master Access Control</h1>
           <p className="text-xs text-muted">
-            One home for role permissions and account security.
-            {isAdmin ? ' Admin controls apply org-wide.' : ' Your session and security posture.'}
+            One home for role permissions, custom roles, per-user grants and account security.
+            {isSuperAdmin ? ' Super Admin controls apply org-wide.' : ' Your session and security posture.'}
           </p>
         </div>
       </div>

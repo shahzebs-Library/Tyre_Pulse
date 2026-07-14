@@ -8,7 +8,7 @@ import { LanguageProvider } from './contexts/LanguageContext'
 import { SettingsProvider } from './contexts/SettingsContext'
 import { TenantProvider } from './contexts/TenantContext'
 import { CommandPaletteProvider } from './contexts/CommandPaletteContext'
-import ProtectedRoute, { RoleRoute, ModuleRoute } from './components/ProtectedRoute'
+import ProtectedRoute, { RoleRoute, ModuleRoute, SuperAdminRoute } from './components/ProtectedRoute'
 import { useAuth } from './contexts/AuthContext'
 import Layout from './components/Layout'
 import LoadingSpinner from './components/LoadingSpinner'
@@ -515,11 +515,11 @@ function MainApp() {
                       <Route path="/report-builder"      element={<Safe><ReportBuilder /></Safe>} />
                       <Route path="/dashboard-builder"   element={<Safe><DashboardBuilder /></Safe>} />
                       <Route path="/executive-analytics" element={<Safe><ExecutiveAnalytics /></Safe>} />
-                      <Route path="/security-center"     element={<Safe><SecurityCenter /></Safe>} />
+                      <Route path="/security-center"     element={<Navigate to="/master-access-control?tab=security" replace />} />
                       <Route path="/system-health"       element={<Safe><SystemHealth /></Safe>} />
                       <Route path="/tenant-health"       element={<Safe><TenantHealth /></Safe>} />
-                      <Route path="/permission-matrix"   element={<Safe><PermissionMatrix /></Safe>} />
-                      <Route path="/master-access-control" element={<Safe><RoleRoute allowed={['Admin']}><MasterAccessControl /></RoleRoute></Safe>} />
+                      <Route path="/permission-matrix"   element={<Navigate to="/master-access-control?tab=permissions" replace />} />
+                      <Route path="/master-access-control" element={<Safe><SuperAdminRoute><MasterAccessControl /></SuperAdminRoute></Safe>} />
                       <Route path="/brand-assets"        element={<Safe><RoleRoute allowed={['Admin']}><BrandAssets /></RoleRoute></Safe>} />
                       {/* ── Commercial: Subscription & Billing (roadmap #6) ── */}
                       <Route path="/billing"             element={<Safe><FlagRoute flag="billing"><Billing /></FlagRoute></Safe>} />

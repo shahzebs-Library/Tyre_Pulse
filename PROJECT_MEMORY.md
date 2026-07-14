@@ -245,6 +245,28 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
   plate_number column and accidents has no vehicle_type/plate column - nothing fabricated/persisted to
   non-existent columns. If a plate/asset-type field is ever wanted on accidents, add the columns first.
 
+## Advanced batch 3 (2026-07-14) — reports customization + accident fault/severity accuracy
+- **Reports.jsx** (3-step report wizard, 5 report types over tyre_records/inspections) gained persisted
+  customizable columns (`reports.layout.v1`, per report type) + All/None/Reset + a real error/Retry state +
+  disabled empty exports. It is a REAL report page, not a shell. (General ReportBuilder.jsx already exists;
+  do NOT duplicate the block builder here.)
+- **Accident fault/severity accuracy (single source, `accidentVocab.js`)**: fault classification was
+  TRIPLICATED and mis-bucketed 'No Fault'/'not at fault' as FAULTY (string contains "fault"). `canonFault`
+  is now THE one resolver (non-faulty patterns tested BEFORE the faulty catch-all; folds Fault/No Fault/
+  Non-Fault/at fault/under review); the fault chart + KPI classify through it, so faulty/non-faulty counts
+  are correct. Added `toDbFault`. `FAULT_STATUS_OPTS = ['Faulty','Non-faulty','Under review']` (single).
+  Removed a stale parallel `canonSev` in accidentReport.js (Minor/Major/Total Loss) - now an alias of
+  `canonSeverity` (Minor/Moderate/Major); severity chart/sevMonthly/insights all classify through the one
+  resolver. NO other genuine catalog duplicates (status doughnut vs statusPolar, topAssets vs paretoAssets,
+  recovery funnel vs waterfall, aging vs caseAge are DISTINCT - deliberately kept).
+- **Already-optimized (do NOT redo)**: front-end bundle (vite.config manualChunks + heavy libs jspdf/xlsx/
+  pptxgenjs are dynamic-imported; only test files import them statically); general ReportBuilder.jsx exists.
+- **Still open (user backlog)**: PUBLIC shareable links for reports/executive (TV token-share infra exists =
+  V103 `/display/:token` + getDisplaySnapshot; extend to reports needs a small DB build - NOT yet done).
+  AI concise output tuning (CopilotCard DISPLAY fixed; the edge-fn prompt could be tuned for KPI+root-cause+
+  recommendation brevity - backend deploy, not done). Executive/all-reports as full block builders beyond
+  Executive+Accident. Capability enforcement Phase 2 (RLS consumes app_user_can). multiple_permissive_policies.
+
 ## Performance + Data Reconciliation (2026-07-14)
 - **App-slowness root cause = RLS re-running helper fns PER ROW**, not data volume (tiny: 1419 tyres/604
   fleet). **V233** = 7 covering FK indexes + drop 1 duplicate index. **V234** (20 hot tables) + **V236**

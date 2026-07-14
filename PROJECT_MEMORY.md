@@ -186,9 +186,86 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
     admin_set_user_country, admin_bulk_set_grant, admin_bulk_set_role (LAST-super-admin lockout guard;
     never demotes a super via role change), admin_clone_role, admin_list_access_audit.
   - **V231** revokes default PUBLIC execute on all the above definer fns (authenticated keeps it; self-gates
-    are the real boundary). Next free migration **V232**.
+    are the real boundary). **Latest applied migration is now V235; next free V236** (see late-session block below).
 - ConsoleUsers.jsx gained: full role set (ACCESS_ROLES + live custom_roles), per-user country editor,
   bulk role/grant, "Manage grants" link. Tests: capability.test.js (7). Full suite 3513 green at merge.
+
+## Late-session batch (2026-07-14) — Report Builder PPTX/tables, country RLS, live access, perf, reconciliation
+**Migration pointer: latest applied = V235, next free = V236.** V226 country visibility; V227 live access
+refresh; V228-V231 console access model (above); V232+V235 data reconciliation; V233 FK indexes + dup index;
+V234 RLS initplan perf fix.
+
+### Report Builder — advanced formatting + tables + PowerPoint (code only, no migration)
+- **Single engine drives PDF + PPTX + Excel — do NOT duplicate.** Shared catalog `src/lib/accidentReport.js`
+  now exports 12 palettes (`PALETTES` + ordered `PALETTE_KEYS`: default/cool/warm/mono/contrast/pastel +
+  forest[green]/slate[gray]/ocean/sunset/earth/vibrant), pure `styleChartData(data,block)` (palette + border
+  colour/width), `chartOptionsFor(block,baseOpts)` (legend/grid/label colour+size/valueLabels-enabled), and
+  table helpers `tableRows(records,block)` (filter claims/status/severity/fault/date + sort + density),
+  `tableExportMatrix` (Excel rows keyed by colKey), `tableFilterLabel`, `TABLE_FILTER_OPTS`. BLOCK_DEFAULTS.chart
+  gained borderColor/borderWidth/labelColor/labelSize/showLegend/showGrid; chart `width` includes 'quarter'.
+- **PDF** `src/lib/accidentReportPdf.js`: `distributeFill(blankMm,blockType)` grows charts/rows/KPIs to fill
+  pages (no empty space); density-keyed table font; renders `tableRows`.
+- **PowerPoint** NEW `src/lib/accidentReportPptx.js` (`renderAccidentReportPptx({config,records,company,currency,
+  chartImageFor,filename,subtitle,save})`) mirrors the PDF renderer, reuses the same engine, WYSIWYG charts via
+  live-canvas `chartImageFor` (native pptx-chart fallback), KPI/insights/text/filtered-table slides (paginated),
+  16:9, pptxgenjs stays lazy. AccidentReportBuilder has an "Export PPTX" button beside Export PDF.
+- Advanced chart-formatting controls are Admin/Super-Admin only (`canFormat`); page-end guides in the preview.
+- `src/lib/chartCapture.js` `captureChartOnPaper` re-renders dark charts on white so PNG/PDF exports are legible.
+- Tests: accidentReport.test.js (58), accidentReportPptx.test.js (12).
+
+### Accidents — claim open/edit + open-claims register filter
+- **Fixed "admin cannot open/edit a claim"**: `AccidentDetailModal` `load()` used `Promise.all` over
+  accidents+remarks+parts, so any aux-query rejection hung the loader forever. Now `Promise.allSettled` +
+  try/catch: accidents query is authoritative, aux queries best-effort ([] + non-fatal banner), loading always
+  clears. Test accidentDetailResilientLoad.
+- **Open-claims filter**: URL-linkable `?claims=open` chip + header link in the Accidents register (reuses
+  claimsAnalytics `hasClaim`/`isClosed`); composes with country/status/search.
+
+### V226 — country visibility (audit + close gaps)
+- Goal: anyone WITH access sees their own country's data. `accidents.active_select_accidents` was the ONLY
+  role-gated PERMISSIVE SELECT blocking same-country users (was Admin/Manager/Director/Inspector) -> widened to
+  `app_is_active()`; RESTRICTIVE accidents_country_isolation + org_isolation still scope reads. Added RESTRICTIVE
+  `<t>_country_isolation = app_can_see_country(country)` to 16 fleet BASE tables (insurance_claims, incident_reports,
+  retread_claims, drivers, tyre_service_events, tyre_pool, checklist_submissions, dvir_reports, handover_reports,
+  breakdown_callouts, service_requests, odometer_logs, engine_hours_logs, fitment_validations, goods_receipts,
+  requisitions). `app_can_see_country` is null-safe (null row country = visible to all; empty user country = sees
+  all; admins/super see all). RULE: to share a table by country, ensure a permissive SELECT reaches the user
+  (widen role gates to app_is_active()) and let the RESTRICTIVE country+org policies scope; NEVER country-isolate
+  a view (tyre_changes is a VIEW), profiles, or shared reference tables (suppliers/customers/sites).
+
+### V227 — live access refresh (no re-login) + V229 capability client wiring
+- `AuthContext.refreshAccess()` re-pulls module perms + grants; fires on tab refocus + realtime on
+  `user_access_grants`(self) and `module_permissions`; both added to realtime publication; `module_permissions`
+  got an authenticated SELECT policy (capability flags not sensitive). So Master Access Control / Console changes
+  reach an affected user's OPEN session without re-login (access previously loaded only at login). Client
+  capability layer: `resolveCapability` (permissionMatrix.js), AuthContext `hasCapability(moduleKey,cap)` +
+  `capabilities`, `useCapability()` hook. Enforcement note (unchanged): VIEW is server-enforced; create/edit/
+  delete/export are UI gates until RLS consumes `app_user_can` on pilot tables (backlog).
+
+### Performance — RLS initplan fix (the app-slowness root cause)
+- Slowness was NOT data volume (tiny) but RLS re-evaluating auth/org helper functions PER ROW. Performance
+  advisor: 273 auth_rls_initplan + 198 multiple_permissive_policies + 7 unindexed_foreign_keys + 1 duplicate_index.
+- **V233**: 7 covering FK indexes + drop duplicate index `report_schedules_next_run_idx`.
+- **V234**: on 20 HOT operational tables (tyre_records, vehicle_fleet, accidents, inspections, work_orders,
+  stock_records, alerts, warranty_claims, corrective_actions, budgets, purchase_orders, rca_records,
+  tyre_rotations, gate_passes, recalls, insurance_claims, drivers, incident_reports, tyre_specifications,
+  tyre_status_marks) wrap zero-arg STABLE RLS helpers (is_super_admin/app_current_org/get_my_role/app_role/
+  app_is_active/app_is_org_admin/app_is_elevated) in `(select ...)` so they evaluate ONCE per query. Access
+  verified unchanged by impersonation. RULE: NEVER wrap `app_can_see_country(country)` (row-dependent). Backlog:
+  same initplan/multiple-permissive on the ~48 non-hot tables + 434 unused_index (low priority).
+
+### V232/V235 — Data Reconciliation (canonical surface, do NOT duplicate)
+- Page `src/pages/DataReconciliation.jsx` (/data-reconciliation, Admin/Manager/Director, nav under
+  "Administration & Data") + service `src/lib/api/dataReconciliation.js` + RPCs (app_is_elevated + org-scoped):
+  recon_orphan_assets, recon_duplicate_tyres, recon_serial_conflicts, recon_backfill_asset,
+  recon_backfill_all_orphan_assets, recon_merge_duplicate.
+- **RULES (user-confirmed data semantics)**: a DUPLICATE = EVERY column identical (except id/created_at/updated_at)
+  -> V235 strict definition; `recon_merge_duplicate` refuses to delete unless byte-identical. Same serial on a
+  DIFFERENT asset = a tyre that MOVED between vehicles = legitimate history, shown read-only, NEVER removed.
+  Live findings: 0 true duplicates, 80 orphan assets (tyres whose asset is missing from vehicle_fleet -> the real
+  "data not entered everywhere" gap; one-click backfill). tyre_records has dead legacy columns
+  (serial_number/tyre_serial/asset_number, all empty) - canonical are serial_no/asset_no. Tests:
+  dataReconciliation.test.js (6). Full suite 3531 green at merge.
 
 ## Super-Admin Access Control + Per-User Grants (2026-07-14) — RBAC per-user overrides
 - **Canonical RBAC home = `src/pages/MasterAccessControl.jsx`, guarded by `SuperAdminRoute` (super

@@ -54,7 +54,13 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
   3. Scheduled `claims` report type in `scheduledReports.js` → claims-desk email digest in edge fn
      `send-scheduled-reports` (deployed v10; branches on report_type==='claims', org-scoped manually).
 - `fetchReportRows` honours a per-dataset `orFilter` (claims uses it to fetch claim rows only).
-- Full suite 3384 green. No new migration this session (V213 remains the latest; next free V214).
+- Full suite 3384 green.
+- **V220 (applied): accident-delete FK fix.** Deleting an accident cascade-deletes
+  accident_parts; the AFTER DELETE audit trigger `log_accident_part_change()` was
+  inserting a `part_removed` row into `accident_audit_log` referencing the accident
+  being deleted → FK violation. DELETE branch now guarded to only log when the parent
+  accident still exists (a real single-part removal). Latest migration is now **V220**;
+  next free is **V221**.
 
 ## Status (2026-07-13)
 - 88 modules ported from fleet_IQ/tyre_saas (batches 1–19). Migrations V127–V206.

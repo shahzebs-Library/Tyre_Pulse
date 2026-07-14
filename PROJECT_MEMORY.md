@@ -188,6 +188,36 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
   - **V231** revokes default PUBLIC execute on all the above definer fns (authenticated keeps it; self-gates
     are the real boundary). Next free migration **V237**.
 
+## UX cleanup batch (2026-07-14)
+- **Universal Back button**: `src/components/ui/PageHeader.jsx` now renders a history-aware "Back"
+  control by default (props `showBack` default true, `onBack` override) - every page using PageHeader
+  gets it, no per-page change. `navigate(-1)`.
+- **Executive reports default to WHITE** (user: "they are black"): `ExecutiveReport.jsx` reportMode
+  defaults ON (white printed-document view + paper chart options); `ExecutiveAnalytics.jsx` wrapped in
+  `.tp-exec-paper` (flips card/surface/text CSS vars light) + forced-light ECharts palette. App chrome
+  unchanged. NOTE: user also wants Executive to become an ADVANCED CUSTOMIZABLE builder (real charts,
+  add blocks) - BACKLOG (bigger than theming).
+- **AI panel/token fixes**: `AiCostMonitor.jsx` guarded groupByDay null-date crash + split honest
+  empty vs error+Retry states (ai_token_logs + chat-ai edge fn were already correct; the page just
+  looked broken). `CopilotCard.jsx` AI answer now renders on a WHITE panel with dark text, parsed into
+  concise Observation/Root cause/Risk/Actions sections + loading/error/placeholder. (User later clarified
+  the "black" complaint was the Executive report, not this - both fixed regardless.)
+- **Data Intake decluttered**: removed the per-module navigate-to-`/data-intake` "Import" buttons (+ import
+  hint paragraphs, dead navigate/Upload imports) from FleetMaster, Inspections, StockManagement,
+  TyreSpecifications, WarrantyTracker, WorkOrders, DriverManagement, SupplierManagement, GatePass. Bulk
+  upload now lives ONLY in the central Data Intake Center; Excel/PDF DOWNLOADS kept everywhere. RULE:
+  do NOT re-add per-module bulk-import entry points; uploads go through /data-intake only. (Accidents
+  bulk-upload intentionally left for now - parallel session actively editing accident files.)
+- **Multi-session note**: a parallel Claude session works this same branch (PR #27 accident cleanup,
+  Access Manager, TV boards). Reconcile via fetch+rebase / --no-ff merge; keep waves small; do accident/
+  accidentVocab changes ON TOP of their latest to avoid clobbering.
+- **BACKLOG from user (2026-07-14)**: (1) Executive = advanced customizable report builder; (2) accident
+  creation form: picking an asset_no auto-populates plate_number/asset_type from vehicle_fleet master;
+  (3) standardize + de-duplicate severity (Minor/Moderate/Major) + current-condition (Running/Waiting for
+  approval/Repair started...) dropdowns in accidentVocab; (4) all reports customizable like the builder;
+  (5) TV/executive shareable public links + live tiles (daily open job cards, daily tyre replacement).
+  The accident detail-table filter (Open/Closed claims + status/severity/fault) ALREADY exists (ffbef29).
+
 ## Performance + Data Reconciliation (2026-07-14)
 - **App-slowness root cause = RLS re-running helper fns PER ROW**, not data volume (tiny: 1419 tyres/604
   fleet). **V233** = 7 covering FK indexes + drop 1 duplicate index. **V234** (20 hot tables) + **V236**

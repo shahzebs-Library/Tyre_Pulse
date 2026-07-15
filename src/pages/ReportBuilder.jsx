@@ -18,10 +18,11 @@ import { useReportMeta } from '../hooks/useReportMeta'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import { captureChartOnPaper } from '../lib/chartCapture'
 import {
-  AGG_FNS, CHART_TYPES, DATASETS, DATASET_LIST, DEFAULT_LIMIT, LIST_OPS, MAX_LIMIT,
+  AGG_FNS, CHART_TYPES, DATASETS, DATASET_LIST, DEFAULT_LIMIT, KPI_FNS, KPI_FN_LABELS,
+  LIST_OPS, MAX_CHART_BLOCKS, MAX_KPI_TILES, MAX_LIMIT,
   OPERATORS, OPERATOR_LABELS, RANGE_OPS, VALUELESS_OPS,
   applyAggregations, buildQuery, buildReportChartData, chartMetricOptions,
-  makeSavedReport, validateConfig,
+  computeKpiTiles, makeChartBlock, makeKpiTile, makeSavedReport, validateConfig,
 } from '../lib/reportBuilder'
 
 ChartJS.register(
@@ -87,6 +88,123 @@ const LIMIT_OPTIONS = [100, 250, 500, 1000, 2500, MAX_LIMIT]
 
 const EMPTY_FILTER = () => ({ col: '', op: '', value: '', value2: '' })
 
+/** Human number formatting for a KPI tile value; honest N/A for null. */
+function fmtKpi(v) {
+  if (v == null || !Number.isFinite(Number(v))) return 'N/A'
+  return Number(v).toLocaleString(undefined, { maximumFractionDigits: 2 })
+}
+
+/** Derive a heading for a chart block (explicit title wins). */
+function chartHeading(block, data) {
+  if (block.title) return block.title
+  return data ? `${data.seriesLabel} by ${data.groupLabel}` : 'Chart'
+}
+
+/** Load a data-URL image (for compositing chart PNGs into the PDF lead page). */
+function loadImage(src) {
+  return new Promise((resolve, reject) => {
+    const im = new Image()
+    im.onload = () => resolve(im)
+    im.onerror = () => reject(new Error('image load failed'))
+    im.src = src
+  })
+}
+
+/** Rounded-rect path with a graceful fallback when ctx.roundRect is missing. */
+function paperRoundRect(ctx, x, y, w, h, r) {
+  if (typeof ctx.roundRect === 'function') { ctx.beginPath(); ctx.roundRect(x, y, w, h, r); return }
+  ctx.beginPath()
+  ctx.moveTo(x + r, y)
+  ctx.arcTo(x + w, y, x + w, y + h, r)
+  ctx.arcTo(x + w, y + h, x, y + h, r)
+  ctx.arcTo(x, y + h, x, y, r)
+  ctx.arcTo(x, y, x + w, y, r)
+  ctx.closePath()
+}
+
+/**
+ * Compose the KPI tiles + every captured chart (already rendered on white paper)
+ * into a single tall PNG that the shared exportToPdf path drops onto a lead page
+ * above the data table. Returns null when there is nothing visual to include.
+ * Pure canvas work; charts arrive as { block, data, img } with print-ready PNGs.
+ */
+async function buildReportVisualImage(kpiTiles, chartEntries) {
+  const tiles = Array.isArray(kpiTiles) ? kpiTiles : []
+  const charts = Array.isArray(chartEntries) ? chartEntries : []
+  if (!tiles.length && !charts.length) return null
+
+  const W = 1600
+  const PAD = 44
+  const GAP = 24
+
+  const tileCols = tiles.length ? Math.min(4, tiles.length) : 0
+  const tileRows = tiles.length ? Math.ceil(tiles.length / tileCols) : 0
+  const tileH = 128
+  const tilesH = tileRows ? tileRows * tileH + (tileRows - 1) * GAP : 0
+
+  const chartCols = charts.length > 1 ? 2 : (charts.length ? 1 : 0)
+  const chartRowsN = charts.length ? Math.ceil(charts.length / chartCols) : 0
+  const cellW = chartCols ? (W - 2 * PAD - (chartCols - 1) * GAP) / chartCols : 0
+  const titleH = 40
+  const cellH = chartCols ? Math.round(cellW * 0.6) + titleH : 0
+  const chartsH = chartRowsN ? chartRowsN * cellH + (chartRowsN - 1) * GAP : 0
+
+  const midGap = (tilesH && chartsH) ? GAP : 0
+  const H = PAD * 2 + tilesH + midGap + chartsH
+
+  const canvas = document.createElement('canvas')
+  canvas.width = W
+  canvas.height = H
+  const ctx = canvas.getContext('2d')
+  ctx.fillStyle = '#ffffff'
+  ctx.fillRect(0, 0, W, H)
+  ctx.textBaseline = 'alphabetic'
+
+  // KPI tiles
+  if (tiles.length) {
+    const tw = (W - 2 * PAD - (tileCols - 1) * GAP) / tileCols
+    tiles.forEach((t, i) => {
+      const c = i % tileCols
+      const r = Math.floor(i / tileCols)
+      const x = PAD + c * (tw + GAP)
+      const y = PAD + r * (tileH + GAP)
+      ctx.fillStyle = '#f8fafc'
+      ctx.strokeStyle = '#e2e8f0'
+      ctx.lineWidth = 1.5
+      paperRoundRect(ctx, x, y, tw, tileH, 12)
+      ctx.fill()
+      ctx.stroke()
+      ctx.fillStyle = '#0f172a'
+      ctx.font = 'bold 42px Helvetica, Arial, sans-serif'
+      ctx.fillText(fmtKpi(t.value), x + 22, y + 66, tw - 44)
+      ctx.fillStyle = '#64748b'
+      ctx.font = '22px Helvetica, Arial, sans-serif'
+      ctx.fillText(String(t.label || ''), x + 22, y + 100, tw - 44)
+    })
+  }
+
+  // Charts
+  const chartsTop = PAD + tilesH + midGap
+  charts.forEach((entry, i) => {
+    const c = i % chartCols
+    const r = Math.floor(i / chartCols)
+    const x = PAD + c * (cellW + GAP)
+    const y = chartsTop + r * (cellH + GAP)
+    ctx.fillStyle = '#0f172a'
+    ctx.font = 'bold 24px Helvetica, Arial, sans-serif'
+    ctx.fillText(chartHeading(entry.block, entry.data), x, y + 26, cellW)
+    const areaY = y + titleH
+    const areaH = cellH - titleH
+    const img = entry.img
+    const scale = Math.min(cellW / img.width, areaH / img.height)
+    const iw = img.width * scale
+    const ih = img.height * scale
+    ctx.drawImage(img, x + (cellW - iw) / 2, areaY + (areaH - ih) / 2, iw, ih)
+  })
+
+  return canvas.toDataURL('image/png')
+}
+
 function defaultColumnsFor(datasetKey) {
   const ds = DATASETS[datasetKey]
   return ds ? ds.columns.slice(0, 6).map(c => c.key) : []
@@ -129,9 +247,9 @@ export default function ReportBuilder() {
   const [limit, setLimit] = useState(DEFAULT_LIMIT)
   const [groupBy, setGroupBy] = useState('')
   const [metrics, setMetrics] = useState([]) // [{ col, fn }]
-  const [chartType, setChartType] = useState('') // '' = table only
-  const [chartMetric, setChartMetric] = useState('count')
-  const chartRef = useRef(null)
+  const [charts, setCharts] = useState([]) // [{ id, type, metric, title }] — empty = table only
+  const [kpis, setKpis] = useState([]) // [{ id, fn, col }] — KPI summary tiles
+  const chartRefs = useRef({}) // id -> live Chart.js instance (for PDF capture)
 
   // ── results state ───────────────────────────────────────────────────────
   const [rows, setRows] = useState([])
@@ -166,8 +284,9 @@ export default function ReportBuilder() {
     sort: sortCol ? { col: sortCol, dir: sortDir } : null,
     limit,
     group: groupBy ? { by: groupBy, metrics } : null,
-    chart: groupBy && chartType ? { type: chartType, metric: chartMetric } : null,
-  }), [datasetKey, selectedCols, filters, sortCol, sortDir, limit, groupBy, metrics, chartType, chartMetric])
+    charts: groupBy ? charts : [],
+    kpis,
+  }), [datasetKey, selectedCols, filters, sortCol, sortDir, limit, groupBy, metrics, charts, kpis])
 
   // ── load saved reports ──────────────────────────────────────────────────
   const loadSaved = useCallback(async () => {
@@ -192,8 +311,8 @@ export default function ReportBuilder() {
     setSortDir('desc')
     setGroupBy('')
     setMetrics([])
-    setChartType('')
-    setChartMetric('count')
+    setCharts([])
+    setKpis([])
     setRows([])
     setHasRun(false)
     setRunError(null)
@@ -250,18 +369,32 @@ export default function ReportBuilder() {
   }, [aggregated, selectedCols, dataset])
   const resultRows = aggregated ? aggregated.rows : rows
 
-  // ── chart data (grouped rows -> Chart.js data) ──────────────────────────────
+  // ── chart data (grouped rows -> Chart.js data), one per chart block ─────────
   const metricOptions = useMemo(() => chartMetricOptions(aggregated), [aggregated])
-  // Keep the selected chart metric valid as aggregates change.
+  // Keep every chart block's metric valid as the available aggregates change.
   useEffect(() => {
     if (!metricOptions.length) return
-    if (!metricOptions.some(o => o.key === chartMetric)) setChartMetric(metricOptions[0].key)
-  }, [metricOptions, chartMetric])
-  const chartData = useMemo(
-    () => (chartType && aggregated ? buildReportChartData(aggregated, { type: chartType, metric: chartMetric }) : null),
-    [chartType, aggregated, chartMetric],
+    setCharts(prev => {
+      let changed = false
+      const next = prev.map(c => {
+        if (metricOptions.some(o => o.key === c.metric)) return c
+        changed = true
+        return { ...c, metric: metricOptions[0].key }
+      })
+      return changed ? next : prev
+    })
+  }, [metricOptions])
+  // Per-block chart data derived from the SAME aggregation. null data = no plot.
+  const chartDatas = useMemo(
+    () => (aggregated ? charts.map(block => ({
+      block,
+      data: buildReportChartData(aggregated, { type: block.type, metric: block.metric }),
+    })) : []),
+    [aggregated, charts],
   )
-  const chartOptions = useMemo(() => chartOptionsFor(chartType), [chartType])
+
+  // ── KPI summary tiles (over the raw queried rows) ───────────────────────────
+  const kpiTiles = useMemo(() => computeKpiTiles(rows, config), [rows, config])
 
   const tableColumns = useMemo(() => resultColumns.map(c => ({
     accessorKey: c.key,
@@ -300,9 +433,21 @@ export default function ReportBuilder() {
     if (!resultRows.length || exporting) return
     setExporting(true)
     try {
-      // Reuse the live report chart (rendered on white paper) above the table.
-      const leadImage = chartData && chartRef.current ? captureChartOnPaper(chartRef.current) : null
-      const chartTypeLabel = CHART_TYPES.find(t => t.key === chartType)?.label
+      // Capture every live chart on white paper, then composite them with the
+      // KPI tiles into one lead image the shared PDF path renders above the table.
+      const captured = []
+      for (const cd of chartDatas) {
+        if (!cd.data) continue
+        const live = chartRefs.current[cd.block.id]
+        if (!live) continue
+        const url = captureChartOnPaper(live)
+        if (!url) continue
+        try { captured.push({ block: cd.block, data: cd.data, img: await loadImage(url) }) } catch { /* skip bad capture */ }
+      }
+      const leadImage = await buildReportVisualImage(kpiTiles, captured)
+      const parts = []
+      if (kpiTiles.length) parts.push(`${kpiTiles.length} KPI ${kpiTiles.length === 1 ? 'tile' : 'tiles'}`)
+      if (captured.length) parts.push(`${captured.length} ${captured.length === 1 ? 'chart' : 'charts'}`)
       await exportToPdf(
         resultRows,
         resultColumns.map(c => ({ key: c.key, header: c.label })),
@@ -310,9 +455,7 @@ export default function ReportBuilder() {
         exportFile,
         'landscape',
         profile?.company_name || '',
-        leadImage
-          ? { leadImage, leadImageCaption: `${chartData.seriesLabel} by ${chartData.groupLabel} (${chartTypeLabel})` }
-          : {},
+        leadImage ? { leadImage, leadImageCaption: parts.join(' | ') } : {},
       )
     } catch (e) {
       setRunError(e.message)
@@ -363,8 +506,13 @@ export default function ReportBuilder() {
     setLimit(cfg.limit || DEFAULT_LIMIT)
     setGroupBy(cfg.group?.by || '')
     setMetrics(Array.isArray(cfg.group?.metrics) ? cfg.group.metrics : [])
-    setChartType(cfg.group?.by && cfg.chart?.type ? cfg.chart.type : '')
-    setChartMetric(cfg.chart?.metric || 'count')
+    // Charts: prefer the new `charts` array; fall back to a legacy single `chart`
+    // so pre-existing saved reports keep their visualization. Guaranteed array.
+    const loadedCharts = Array.isArray(cfg.charts) && cfg.charts.length
+      ? cfg.charts.map(c => makeChartBlock(c))
+      : (cfg.group?.by && cfg.chart?.type ? [makeChartBlock({ type: cfg.chart.type, metric: cfg.chart.metric })] : [])
+    setCharts(cfg.group?.by ? loadedCharts : [])
+    setKpis(Array.isArray(cfg.kpis) ? cfg.kpis.map(t => makeKpiTile(t)) : [])
     setRows([])
     setHasRun(false)
     setRunError(null)
@@ -763,50 +911,174 @@ export default function ReportBuilder() {
                 ))}
               </div>
 
-              {/* Chart visualization picker */}
+              {/* Chart blocks — add as many as you need; all share this grouping */}
               <div className="mt-3 pt-3 border-t border-[var(--border-dim)]">
-                <div className="flex items-center gap-2 mb-2">
-                  <BarChart3 size={14} className="text-[var(--accent)]" />
-                  <p className="text-xs text-muted">Chart (optional): plots the grouped rows</p>
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs text-muted mb-1" htmlFor="rb-chart-type">Chart type</label>
-                    <select
-                      id="rb-chart-type"
-                      className="input w-full py-1.5 px-2 text-xs"
-                      value={chartType}
-                      onChange={e => setChartType(e.target.value)}
-                    >
-                      <option value="">Table only (no chart)</option>
-                      {CHART_TYPES.map(t => <option key={t.key} value={t.key}>{t.label}</option>)}
-                    </select>
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                    <BarChart3 size={14} className="text-[var(--accent)]" />
+                    <p className="text-xs text-muted">
+                      Charts ({charts.length}/{MAX_CHART_BLOCKS}): each plots the grouped rows
+                    </p>
                   </div>
-                  <div>
-                    <label className="block text-xs text-muted mb-1" htmlFor="rb-chart-metric">Series</label>
-                    <select
-                      id="rb-chart-metric"
-                      className="input w-full py-1.5 px-2 text-xs disabled:opacity-40"
-                      value={chartMetric}
-                      onChange={e => setChartMetric(e.target.value)}
-                      disabled={!chartType || metricOptions.length === 0}
-                    >
-                      {(metricOptions.length ? metricOptions : [{ key: 'count', label: 'Count' }]).map(o => (
-                        <option key={o.key} value={o.key}>{o.label}</option>
-                      ))}
-                    </select>
-                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setCharts(prev => prev.length >= MAX_CHART_BLOCKS ? prev : [
+                      ...prev,
+                      makeChartBlock({ metric: metricOptions[0]?.key || 'count' }),
+                    ])}
+                    disabled={charts.length >= MAX_CHART_BLOCKS}
+                    className="btn-secondary py-1 px-2.5 text-xs flex items-center gap-1 disabled:opacity-40"
+                  >
+                    <Plus size={13} /> Add chart
+                  </button>
                 </div>
-                {chartType && !hasRun && (
-                  <p className="text-[11px] text-muted mt-2">Run the report to render the chart.</p>
+                {charts.length === 0 ? (
+                  <p className="text-[11px] text-muted">No charts. Add one to visualize the grouped result.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {charts.map((block, i) => (
+                      <div key={block.id} className="rounded-lg bg-surface-2 border border-[var(--border-dim)] p-2 space-y-2">
+                        <div className="flex items-center gap-2">
+                          <span className="text-[10px] uppercase text-muted w-10">#{i + 1}</span>
+                          <input
+                            className="input py-1.5 px-2 text-xs flex-1"
+                            value={block.title}
+                            placeholder="Chart title (optional)"
+                            maxLength={120}
+                            onChange={e => setCharts(prev => prev.map((x, j) => j === i ? { ...x, title: e.target.value } : x))}
+                            aria-label={`Chart ${i + 1} title`}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setCharts(prev => { const n = [...prev]; if (i > 0) [n[i - 1], n[i]] = [n[i], n[i - 1]]; return n })}
+                            disabled={i === 0}
+                            className="text-muted hover:text-[var(--text-primary)] disabled:opacity-25"
+                            aria-label={`Move chart ${i + 1} up`}
+                          >
+                            <ArrowUp size={13} />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setCharts(prev => { const n = [...prev]; if (i < n.length - 1) [n[i + 1], n[i]] = [n[i], n[i + 1]]; return n })}
+                            disabled={i === charts.length - 1}
+                            className="text-muted hover:text-[var(--text-primary)] disabled:opacity-25"
+                            aria-label={`Move chart ${i + 1} down`}
+                          >
+                            <ArrowDown size={13} />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setCharts(prev => prev.filter((_, j) => j !== i))}
+                            className="text-muted hover:text-red-400"
+                            aria-label={`Remove chart ${i + 1}`}
+                          >
+                            <X size={15} />
+                          </button>
+                        </div>
+                        <div className="grid grid-cols-2 gap-2">
+                          <select
+                            className="input py-1.5 px-2 text-xs"
+                            value={block.type}
+                            onChange={e => setCharts(prev => prev.map((x, j) => j === i ? { ...x, type: e.target.value } : x))}
+                            aria-label={`Chart ${i + 1} type`}
+                          >
+                            {CHART_TYPES.map(t => <option key={t.key} value={t.key}>{t.label}</option>)}
+                          </select>
+                          <select
+                            className="input py-1.5 px-2 text-xs disabled:opacity-40"
+                            value={block.metric}
+                            onChange={e => setCharts(prev => prev.map((x, j) => j === i ? { ...x, metric: e.target.value } : x))}
+                            disabled={metricOptions.length === 0}
+                            aria-label={`Chart ${i + 1} series`}
+                          >
+                            {(metricOptions.length ? metricOptions : [{ key: 'count', label: 'Count' }]).map(o => (
+                              <option key={o.key} value={o.key}>{o.label}</option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {charts.length > 0 && !hasRun && (
+                  <p className="text-[11px] text-muted mt-2">Run the report to render the charts.</p>
+                )}
+                {charts.length > 0 && hasRun && metricOptions.length === 0 && (
+                  <p className="text-[11px] text-muted mt-2">Add a numeric aggregate above to plot a series other than Count.</p>
                 )}
               </div>
             </div>
           )}
 
+          {/* KPI summary tiles — computed over the queried rows (no grouping needed) */}
+          <div className="mt-3 pt-3 border-t border-[var(--border-dim)]">
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2">
+                <Layers size={14} className="text-[var(--accent)]" />
+                <p className="text-xs text-muted">Summary tiles ({kpis.length}/{MAX_KPI_TILES})</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setKpis(prev => prev.length >= MAX_KPI_TILES ? prev : [
+                  ...prev,
+                  prev.some(t => t.fn === 'count') && numericCols.length
+                    ? makeKpiTile({ fn: 'sum', col: numericCols[0].key })
+                    : makeKpiTile({ fn: 'count' }),
+                ])}
+                disabled={kpis.length >= MAX_KPI_TILES}
+                className="btn-secondary py-1 px-2.5 text-xs flex items-center gap-1 disabled:opacity-40"
+              >
+                <Plus size={13} /> Add tile
+              </button>
+            </div>
+            {kpis.length === 0 ? (
+              <p className="text-[11px] text-muted">No tiles. Add a row count or a numeric sum/average to headline the report.</p>
+            ) : (
+              <div className="space-y-2">
+                {kpis.map((tile, i) => (
+                  <div key={tile.id} className="flex items-center gap-2">
+                    <select
+                      className="input py-1.5 px-2 text-xs w-32"
+                      value={tile.fn}
+                      onChange={e => setKpis(prev => prev.map((x, j) => {
+                        if (j !== i) return x
+                        const fn = e.target.value
+                        return { ...x, fn, col: fn === 'count' ? null : (x.col || numericCols[0]?.key || null) }
+                      }))}
+                      aria-label={`Tile ${i + 1} function`}
+                    >
+                      {KPI_FNS.map(fn => <option key={fn} value={fn}>{KPI_FN_LABELS[fn]}</option>)}
+                    </select>
+                    <select
+                      className="input py-1.5 px-2 text-xs flex-1 disabled:opacity-40"
+                      value={tile.col || ''}
+                      onChange={e => setKpis(prev => prev.map((x, j) => j === i ? { ...x, col: e.target.value } : x))}
+                      disabled={tile.fn === 'count' || numericCols.length === 0}
+                      aria-label={`Tile ${i + 1} column`}
+                    >
+                      {tile.fn === 'count'
+                        ? <option value="">Row count</option>
+                        : numericCols.length === 0
+                          ? <option value="">No numeric columns</option>
+                          : numericCols.map(c => <option key={c.key} value={c.key}>{c.label}</option>)}
+                    </select>
+                    <button
+                      type="button"
+                      onClick={() => setKpis(prev => prev.filter((_, j) => j !== i))}
+                      className="text-muted hover:text-red-400"
+                      aria-label={`Remove tile ${i + 1}`}
+                    >
+                      <X size={15} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
           {!groupBy && (
             <p className="text-[11px] text-muted mt-3 pt-3 border-t border-[var(--border-dim)] flex items-center gap-1.5">
-              <BarChart3 size={13} /> Charts need a group by. Pick a Group by column to visualize aggregated results.
+              <BarChart3 size={13} /> Charts need a group by. Pick a Group by column to add and visualize charts.
             </p>
           )}
 
@@ -849,33 +1121,53 @@ export default function ReportBuilder() {
           </div>
         </div>
 
-        {/* Chart visualization (grouped + aggregated reports only) */}
-        {hasRun && !running && !runError && chartType && (
-          <div className="card">
-            <div className="flex items-center gap-2 mb-3">
-              <BarChart3 size={15} className="text-[var(--accent)]" />
-              <h3 className="text-sm font-semibold text-[var(--text-primary)]">
-                {chartData ? `${chartData.seriesLabel} by ${chartData.groupLabel}` : 'Chart'}
-              </h3>
-            </div>
-            {chartData ? (
-              <div className="h-72">
-                {chartType === 'line' ? (
-                  <Line ref={chartRef} data={chartData.data} options={chartOptions} />
-                ) : chartType === 'pie' ? (
-                  <Doughnut ref={chartRef} data={chartData.data} options={chartOptions} />
+        {/* KPI summary tiles (over the queried rows) */}
+        {hasRun && !running && !runError && kpiTiles.length > 0 && (
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {kpiTiles.map(t => (
+              <div key={t.id} className="card py-3 px-4">
+                <p className="text-lg font-semibold text-[var(--text-primary)] tabular-nums truncate" title={fmtKpi(t.value)}>
+                  {fmtKpi(t.value)}
+                </p>
+                <p className="text-xs text-muted truncate" title={t.label}>{t.label}</p>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Chart visualizations — one card per block, responsive grid */}
+        {hasRun && !running && !runError && charts.length > 0 && (
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
+            {chartDatas.map(({ block, data }) => (
+              <div key={block.id} className="card">
+                <div className="flex items-center gap-2 mb-3">
+                  <BarChart3 size={15} className="text-[var(--accent)]" />
+                  <h3 className="text-sm font-semibold text-[var(--text-primary)] truncate">
+                    {chartHeading(block, data)}
+                  </h3>
+                </div>
+                {data ? (
+                  <>
+                    <div className="h-64">
+                      {block.type === 'line' ? (
+                        <Line ref={inst => { if (inst) chartRefs.current[block.id] = inst; else delete chartRefs.current[block.id] }} data={data.data} options={chartOptionsFor(block.type)} />
+                      ) : block.type === 'pie' ? (
+                        <Doughnut ref={inst => { if (inst) chartRefs.current[block.id] = inst; else delete chartRefs.current[block.id] }} data={data.data} options={chartOptionsFor(block.type)} />
+                      ) : (
+                        <Bar ref={inst => { if (inst) chartRefs.current[block.id] = inst; else delete chartRefs.current[block.id] }} data={data.data} options={chartOptionsFor(block.type)} />
+                      )}
+                    </div>
+                    {resultRows.length > 30 && (
+                      <p className="text-[11px] text-muted mt-2">Showing the top 30 groups. The full set is in the table below.</p>
+                    )}
+                  </>
                 ) : (
-                  <Bar ref={chartRef} data={chartData.data} options={chartOptions} />
+                  <p className="text-sm text-muted py-8 text-center">
+                    No chart data. Group by a column and add at least one numeric aggregate.
+                  </p>
                 )}
               </div>
-            ) : (
-              <p className="text-sm text-muted py-8 text-center">
-                No chart data. Run a report with a group by and at least one numeric aggregate.
-              </p>
-            )}
-            {chartData && resultRows.length > 30 && (
-              <p className="text-[11px] text-muted mt-2">Showing the top 30 groups. The full set is in the table below.</p>
-            )}
+            ))}
           </div>
         )}
 

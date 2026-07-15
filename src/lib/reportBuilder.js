@@ -173,6 +173,16 @@ export const CHART_TYPE_KEYS = Object.freeze(CHART_TYPES.map(c => c.key))
 /** Cap plotted points so a chart stays legible (rows are pre-sorted by count). */
 export const MAX_CHART_POINTS = 30
 
+/** Multi-block builder limits. */
+export const MAX_CHART_BLOCKS = 6
+export const MAX_KPI_TILES = 8
+
+/** Aggregate functions offered for a KPI summary tile ('count' needs no column). */
+export const KPI_FNS = Object.freeze(['count', 'sum', 'avg', 'min', 'max'])
+export const KPI_FN_LABELS = Object.freeze({
+  count: 'Count', sum: 'Sum', avg: 'Average', min: 'Minimum', max: 'Maximum',
+})
+
 /** Fixed, theme-independent categorical palette (legible on dark and white). */
 export const CHART_PALETTE = Object.freeze([
   '#6366f1', '#22c55e', '#f59e0b', '#ef4444', '#06b6d4', '#a855f7',
@@ -323,8 +333,22 @@ export function validateConfig(config) {
     }
   }
 
+  // Multiple chart blocks (new). Backward-compatible with the single `chart`
+  // above: when no `charts` array is supplied a legacy single chart folds into
+  // the array so old saved reports keep rendering. Charts need a group-by.
+  let charts = []
+  if (group) {
+    charts = normalizeChartBlocks(config.charts, group)
+    if (charts.length === 0 && chart) charts = [makeChartBlock({ type: chart.type, metric: chart.metric })]
+  } else if (Array.isArray(config.charts) && config.charts.length) {
+    errors.push('Charts require a group-by column.')
+  }
+
+  // KPI summary tiles (independent of grouping — computed over the queried rows).
+  const kpis = normalizeKpiTiles(config.kpis, ds.key)
+
   if (errors.length) return { valid: false, errors, config: null }
-  return { valid: true, errors: [], config: { dataset: ds.key, columns, filters, sort, limit, group, chart } }
+  return { valid: true, errors: [], config: { dataset: ds.key, columns, filters, sort, limit, group, chart, charts, kpis } }
 }
 
 // ── buildQuery ────────────────────────────────────────────────────────────────
@@ -348,6 +372,11 @@ export function buildQuery(supabase, config) {
     for (const extra of [cfg.group.by, ...cfg.group.metrics.map(m => m.col)]) {
       if (!selectCols.includes(extra)) selectCols.push(extra)
     }
+  }
+  // KPI tiles are computed over the raw rows, so their columns must be fetched
+  // even when the user did not add them to the displayed column set.
+  for (const t of cfg.kpis || []) {
+    if (t.col && !selectCols.includes(t.col)) selectCols.push(t.col)
   }
 
   let q = supabase.from(ds.table).select(selectCols.join(','))
@@ -534,6 +563,136 @@ export function buildReportChartData(aggregated, chart) {
     groupLabel: groupCol.label,
     data: { labels, datasets: [dataset] },
   }
+}
+
+// ── Multi-block builder: chart blocks + KPI tiles ───────────────────────────────
+/** Stable id generator shared by chart blocks / KPI tiles / saved reports. */
+function newId(prefix) {
+  return globalThis.crypto?.randomUUID?.() || `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
+}
+
+/**
+ * Build a normalised chart block. A report can hold up to MAX_CHART_BLOCKS of
+ * these, each derived from the SAME aggregation via buildReportChartData().
+ * @param {{ id?:string, type?:string, metric?:string, title?:string }} [overrides]
+ * @returns {{ id:string, type:string, metric:string, title:string }}
+ */
+export function makeChartBlock(overrides = {}) {
+  return {
+    id: overrides.id || newId('chart'),
+    type: CHART_TYPE_KEYS.includes(overrides.type) ? overrides.type : 'bar',
+    metric: typeof overrides.metric === 'string' && overrides.metric ? overrides.metric : 'count',
+    title: String(overrides.title || '').slice(0, 120),
+  }
+}
+
+/**
+ * Build a normalised KPI tile. 'count' tiles have no column; every other
+ * function requires a numeric column key (validated by normalizeKpiTiles).
+ * @param {{ id?:string, fn?:string, col?:string|null }} [overrides]
+ * @returns {{ id:string, fn:string, col:string|null }}
+ */
+export function makeKpiTile(overrides = {}) {
+  const fn = KPI_FNS.includes(overrides.fn) ? overrides.fn : 'count'
+  return {
+    id: overrides.id || newId('kpi'),
+    fn,
+    col: fn === 'count' ? null : (overrides.col || null),
+  }
+}
+
+/**
+ * Strict, order-preserving normalisation of a chart-block array. Unknown keys
+ * are dropped, invalid chart types are skipped and each block's metric is
+ * clamped to a metric actually produced by the group (count + `${fn}_${col}`).
+ * Returns [] when there is no group (charts require grouped/aggregated rows).
+ * @param {any[]} rawCharts
+ * @param {{ by:string, metrics?:ReportMetric[] }|null} group
+ * @returns {{ id:string, type:string, metric:string, title:string }[]}
+ */
+export function normalizeChartBlocks(rawCharts, group) {
+  if (!group || !group.by) return []
+  const validMetrics = new Set(['count', ...(group.metrics || []).map(m => `${m.fn}_${m.col}`)])
+  const out = []
+  for (const ch of Array.isArray(rawCharts) ? rawCharts : []) {
+    if (!ch || typeof ch !== 'object') continue
+    if (!CHART_TYPE_KEYS.includes(ch.type)) continue
+    out.push(makeChartBlock({
+      id: ch.id,
+      type: ch.type,
+      metric: validMetrics.has(ch.metric) ? ch.metric : 'count',
+      title: ch.title,
+    }))
+    if (out.length >= MAX_CHART_BLOCKS) break
+  }
+  return out
+}
+
+/**
+ * Strict, order-preserving normalisation of a KPI-tile array. A single 'count'
+ * tile is kept; aggregate tiles must reference a real numeric column of the
+ * dataset. Duplicates (same fn+col) collapse. Capped at MAX_KPI_TILES.
+ * @param {any[]} rawKpis
+ * @param {string} datasetKey
+ * @returns {{ id:string, fn:string, col:string|null }[]}
+ */
+export function normalizeKpiTiles(rawKpis, datasetKey) {
+  const ds = DATASETS[datasetKey]
+  if (!ds) return []
+  const numericKeys = new Set(ds.columns.filter(c => c.type === 'number').map(c => c.key))
+  const seen = new Set()
+  const out = []
+  for (const t of Array.isArray(rawKpis) ? rawKpis : []) {
+    if (!t || typeof t !== 'object') continue
+    const fn = KPI_FNS.includes(t.fn) ? t.fn : null
+    if (!fn) continue
+    if (fn === 'count') {
+      if (seen.has('count')) continue
+      seen.add('count')
+      out.push(makeKpiTile({ id: t.id, fn: 'count' }))
+    } else {
+      if (!numericKeys.has(t.col)) continue
+      const key = `${fn}:${t.col}`
+      if (seen.has(key)) continue
+      seen.add(key)
+      out.push(makeKpiTile({ id: t.id, fn, col: t.col }))
+    }
+    if (out.length >= MAX_KPI_TILES) break
+  }
+  return out
+}
+
+/**
+ * Compute KPI summary tiles over the RAW queried rows (not the aggregated
+ * result), so tiles are meaningful for grouped and ungrouped reports alike.
+ * Honest null value (rendered "N/A") when there are no rows or no numeric
+ * values in the referenced column.
+ *
+ * @param {Object[]} rows
+ * @param {{ dataset?:string, kpis?:any[] }} config
+ * @returns {{ id:string, key:string, label:string, value:number|null, fn:string, col:string|null }[]}
+ */
+export function computeKpiTiles(rows, config) {
+  const ds = DATASETS[config?.dataset]
+  if (!ds) return []
+  const tiles = normalizeKpiTiles(config?.kpis, config.dataset)
+  const data = Array.isArray(rows) ? rows : []
+  const round2 = n => Math.round(n * 100) / 100
+  const labelFor = key => ds.columns.find(c => c.key === key)?.label || key
+  return tiles.map(t => {
+    if (t.fn === 'count') {
+      return { id: t.id, key: 'count', label: 'Total rows', value: data.length, fn: 'count', col: null }
+    }
+    const nums = data.map(r => toNumber(r?.[t.col])).filter(v => v != null)
+    let value = null
+    if (nums.length) {
+      if (t.fn === 'sum') value = round2(nums.reduce((s, v) => s + v, 0))
+      else if (t.fn === 'avg') value = round2(nums.reduce((s, v) => s + v, 0) / nums.length)
+      else if (t.fn === 'min') value = Math.min(...nums)
+      else if (t.fn === 'max') value = Math.max(...nums)
+    }
+    return { id: t.id, key: `${t.fn}_${t.col}`, label: `${KPI_FN_LABELS[t.fn]} ${labelFor(t.col)}`, value, fn: t.fn, col: t.col }
+  })
 }
 
 // ── Saved reports persistence ────────────────────────────────────────────────

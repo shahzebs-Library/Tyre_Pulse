@@ -245,6 +245,23 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
   plate_number column and accidents has no vehicle_type/plate column - nothing fabricated/persisted to
   non-existent columns. If a plate/asset-type field is ever wanted on accidents, add the columns first.
 
+## Capability enforcement Phase 2 (pilot) + general Report Builder blocks (2026-07-14)
+- **V238 capability enforcement PILOT (additive/SAFE)**: PERMISSIVE write policies consuming
+  `app_user_can(module, cap)` added to tyre_records / inspections / work_orders for create/edit/delete.
+  Per-user create/edit/delete GRANTS are now SERVER-ENFORCED on these 3 tables (verified live: a
+  Reporter's app_user_can('tyre_records','edit') flips false->true on grant). PERMISSIVE => ORs with the
+  existing role policies, so it ONLY adds access to granted/admin users; existing writers unaffected;
+  org/country RESTRICTIVE isolation still scopes a granted user. NOT yet done: revoke of a role-inherent
+  capability (needs a RESTRICTIVE policy) + the other ~45 tables + export/approve (export is a client
+  download, not a DB write). CAPABILITIES.enforced flags in permissionMatrix.js still say false globally
+  (honest for the majority); the 3 pilot tables are the exception. Next free migration **V239**.
+- **General Report Builder is now MULTI-BLOCK** (`src/pages/ReportBuilder.jsx` + `src/lib/reportBuilder.js`,
+  DISTINCT from the Accident/Executive block builders - do NOT merge). Config carries `charts:[{id,type,
+  metric,title}]` (<=6) + `kpis:[{id,fn,col}]` (<=8) over any DATASETS entry (tyres/fleet/...); add/reorder/
+  remove; legacy single `chart` folds into a one-element array (backward-compatible, validateConfig still
+  emits `chart`). KPI tiles compute over raw queried rows; PDF composites tiles + all charts on white paper
+  via exportToPdf opts.leadImage (no exportUtils change). Engine tests: reportBuilder(33)+reportBuilderChart(16).
+
 ## Country data visibility - the ORG boundary sits ABOVE country (2026-07-14)
 - **CRITICAL model fact**: RLS = org isolation (outer wall) AND country isolation (inner). `app_can_see_country`
   only shares WITHIN the same organisation. `app_current_org()` = `profiles.org_id` (NOT organisation_id);

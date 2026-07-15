@@ -717,3 +717,15 @@ Branch `claude/accident-builder-report-ui-2bkwb5`. All build-clean; new tests gr
   site/dept/odometer+hour meter/tyre setup/maintenance plan/conditional-by-type); full KPI-formula
   centralization through kpiEngine (~30 inline sites); secure share-links for saved reports/dashboards;
   duplicate-module consolidation (claims/incidents/RCA/KPI clusters).
+
+## Super-Admin control center - rules enforced + preview/override (2026-07-14)
+- **V241** extends capability enforcement (permissive app_user_can create/edit/delete) from the 3-table
+  V238 pilot to 8 more core tables: accidents(accidents), vehicle_fleet(fleet_master), stock_records(stock),
+  gate_passes(gate_pass), budgets(budgets), corrective_actions(corrective_actions), alerts(alerts),
+  rca_records(rca). So per-role/per-user create/edit/delete RULES now govern 11 tables (additive/safe).
+- **V242** status-change governance: `app_cap_revoked(key,cap)` (false for admin/super) + BEFORE UPDATE
+  trigger `enforce_status_change_capability(module_key)` on accidents + work_orders blocks a STATUS change
+  only when the user is explicitly REVOKED 'approve' for that module. Nobody blocked by default (safe).
+- **Preview & Override** = `src/console/pages/access/AccessPreviewOverride.jsx` (/console/access?tab=preview):
+  pick a role OR user, see their module access + reason, and Allow/Deny/Clear each module inline (user ->
+  setUserAccessGrant grant/revoke; role -> saveModulePermissions). Admin/super locked. Next free **V243**.

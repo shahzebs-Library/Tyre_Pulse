@@ -5,7 +5,7 @@
 import { supabase, unwrap, applyCountry, ServiceError } from './_client'
 
 const COLS =
-  'id,asset_no,fleet_number,make,model,vehicle_type,site,country,status,is_active,current_km,tyre_size,created_at'
+  'id,asset_no,fleet_number,make,model,vehicle_type,registration_no,site,country,status,is_active,current_km,tyre_size,created_at'
 
 /**
  * List fleet assets, newest first. Country-scoped (null-safe) and optionally

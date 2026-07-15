@@ -870,6 +870,28 @@ export const REPORT_LIBRARY = [
     ],
   },
   {
+    // Mirrors the Accidents page "Analytics" tab so the on-screen dashboard can
+    // be auto-emailed on a schedule (Accidents -> Analytics -> Auto-email). Chart
+    // set + order match downloadAnalyticsPdf()'s chartList (payer-cost has no
+    // catalog chart, so it is the one intentional omission).
+    key: 'analytics',
+    name: 'Accidents Analytics',
+    description: 'The Accidents Analytics dashboard as a scheduled e-mail: headline KPIs, severity/status/fault mix, 12-month trend, hotspot assets and sites, monthly severity and claim status.',
+    orientation: 'landscape',
+    build: () => [
+      makeBlock('header', { title: 'Accidents Analytics' }),
+      makeBlock('kpis', { items: ['total', 'open', 'avgDaysOpen', 'repairCost', 'claimed', 'recovered'] }),
+      makeBlock('chart', { chart: 'severity', title: 'Severity distribution', width: 'third' }),
+      makeBlock('chart', { chart: 'status', title: 'Status distribution', width: 'third' }),
+      makeBlock('chart', { chart: 'fault', title: 'Fault status (GCC)', width: 'third' }),
+      makeBlock('chart', { chart: 'trend', title: 'Incident trend (12 months)' }),
+      makeBlock('chart', { chart: 'paretoAssets', title: 'Top assets by incidents', width: 'half' }),
+      makeBlock('chart', { chart: 'bySite', title: 'Incidents by site', width: 'half' }),
+      makeBlock('chart', { chart: 'sevMonthly', title: 'Monthly severity breakdown', width: 'half' }),
+      makeBlock('chart', { chart: 'claimStatus', title: 'Claim status breakdown', width: 'half' }),
+    ],
+  },
+  {
     key: 'register',
     name: 'Full Detail Register',
     description: 'Everything on record: landscape register with the widest column set for audits and hand-overs.',

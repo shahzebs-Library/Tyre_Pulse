@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useMemo, useRef, lazy, Suspense } fro
 import { useNavigate, useLocation, useSearchParams } from 'react-router-dom'
 
 const AccidentReportBuilder = lazy(() => import('../components/accidents/AccidentReportBuilder'))
-import { AlertOctagon, Plus, Search, X, Save, FileText, Download, BarChart2, Eye, Hourglass, ChevronDown, Trash2, AlertTriangle, TrendingUp, Users, DollarSign, ShieldAlert, Lightbulb, ChevronRight, Clock, ShieldCheck, ArrowLeft } from 'lucide-react'
+import { AlertOctagon, Plus, Search, X, Save, FileText, Download, BarChart2, Eye, Hourglass, ChevronDown, Trash2, AlertTriangle, TrendingUp, Users, DollarSign, ShieldAlert, Lightbulb, ChevronRight, Clock, ShieldCheck, ArrowLeft, Mail } from 'lucide-react'
 import { motion } from 'framer-motion'
 import PageHeader from '../components/ui/PageHeader'
 import EmptyState from '../components/EmptyState'
@@ -32,7 +32,10 @@ import {
   canonFaultStatus, canonNajmStatus, canonNajmFault, canonTaqdeerStatus, canonRepairType, canonDamageClass,
   accidentSeverityPill, accidentStatusPill,
 } from '../lib/accidentVocab'
-import { makeValueLabelsPlugin, doughnutLegendCounts, summarizeChartData } from '../lib/accidentReport'
+import { makeValueLabelsPlugin, doughnutLegendCounts, summarizeChartData, REPORT_LIBRARY, normalizeConfig } from '../lib/accidentReport'
+import { listTemplates as listReportTemplates, createTemplate as createReportTemplate } from '../lib/api/accidentReportTemplates'
+import { builderReportType } from '../lib/api/scheduledReports'
+import { toUserMessage } from '../lib/safeError'
 import { hasClaim, isClosed as isClaimClosed, claimNet } from '../lib/claimsAnalytics'
 import { captureChartOnPaper } from '../lib/chartCapture'
 
@@ -150,6 +153,8 @@ const DIM_CHIP = 'bg-[var(--input-bg)] text-[var(--text-dim)] border border-[var
 const EMPTY_FORM = {
   incident_date: '',
   asset_no: '',
+  plate_number: '',
+  vehicle_type: '',
   site: '',
   country: '',
   location: '',
@@ -435,16 +440,19 @@ export default function Accidents() {
   }, [assetQuery, fleetAssets])
 
   // Auto-populate related fields from the vehicle master (vehicle_fleet). Only
-  // real accidents columns are written (site, country) and ONLY when the user
-  // has not already filled them — a typed value is never overwritten. The full
-  // master row is kept in `assetInfo` for read-only context (type/make/model).
+  // real accidents columns are written (plate_number, vehicle_type, site,
+  // country) and ONLY when the user has not already filled them — a typed value
+  // is never overwritten. Plate comes from the master's registration_no. The
+  // full master row is kept in `assetInfo` for read-only context (make/model).
   const applyAssetMaster = useCallback((asset) => {
     if (!asset) { setAssetInfo(null); return }
     setAssetInfo(asset)
     setForm(f => ({
       ...f,
-      site:    f.site    || asset.site    || f.site,
-      country: f.country || asset.country || f.country,
+      plate_number: f.plate_number || asset.registration_no || f.plate_number,
+      vehicle_type: f.vehicle_type || asset.vehicle_type    || f.vehicle_type,
+      site:         f.site         || asset.site            || f.site,
+      country:      f.country      || asset.country         || f.country,
     }))
   }, [])
 
@@ -997,6 +1005,37 @@ export default function Accidents() {
     }
   }
 
+  // Turn the on-screen Analytics into a recurring auto-emailed report. Reuses the
+  // existing Accident Report Builder + Scheduled Reports pipeline (no duplication):
+  // ensure a saved layout that mirrors this dashboard exists (create once, reuse
+  // thereafter), then hand off to Scheduled Reports with it pre-selected so the
+  // user only picks cadence + recipients. The cron edge fn renders + e-mails the
+  // exact layout on schedule.
+  const ANALYTICS_LAYOUT_NAME = 'Accidents Analytics'
+  const [schedBusy, setSchedBusy] = useState(false)
+  async function scheduleAnalytics() {
+    setSchedBusy(true)
+    try {
+      const templates = await listReportTemplates()
+      let tpl = templates.find(t => (t.name || '').trim().toLowerCase() === ANALYTICS_LAYOUT_NAME.toLowerCase())
+      if (!tpl) {
+        const pack = REPORT_LIBRARY.find(p => p.key === 'analytics')
+        const config = normalizeConfig({ blocks: pack.build(), orientation: pack.orientation })
+        tpl = await createReportTemplate({
+          name: ANALYTICS_LAYOUT_NAME,
+          description: 'Auto-email version of the Accidents Analytics dashboard.',
+          config,
+        })
+      }
+      navigate('/scheduled-reports', {
+        state: { presetReportType: builderReportType(tpl.id), presetName: `${ANALYTICS_LAYOUT_NAME} (weekly)` },
+      })
+    } catch (e) {
+      flashDl(`Could not set up auto-email: ${toUserMessage(e)}`, false)
+      setSchedBusy(false)
+    }
+  }
+
   // ---- Incidents tab filtered data ----
   const filtered = useMemo(() => {
     let arr = records
@@ -1056,6 +1095,8 @@ export default function Accidents() {
     setForm({
       incident_date:         d(row.incident_date),
       asset_no:              row.asset_no ?? '',
+      plate_number:          row.plate_number ?? '',
+      vehicle_type:          row.vehicle_type ?? '',
       site:                  row.site ?? '',
       country:               row.country ?? '',
       location:              row.location ?? '',
@@ -1142,6 +1183,8 @@ export default function Accidents() {
     const payload = {
       incident_date:         form.incident_date || null,
       asset_no:              form.asset_no,
+      plate_number:          form.plate_number || null,
+      vehicle_type:          form.vehicle_type || null,
       site:                  form.site || 'Unassigned',   // site is NOT NULL (DB default 'Unassigned') — never send null
       country:               form.country || null,
       location:              form.location || null,
@@ -1282,6 +1325,8 @@ export default function Accidents() {
   const EXPORT_FIELDS = [
     ['incident_date', 'Date', r => r.incident_date],
     ['asset_no', 'Asset', r => r.asset_no],
+    ['plate_number', 'Plate No', r => r.plate_number],
+    ['vehicle_type', 'Vehicle Type', r => r.vehicle_type],
     ['site', 'Site', r => r.site],
     ['country', 'Country', r => r.country],
     ['severity', 'Severity', r => canonSeverity(r.severity)],
@@ -1920,6 +1965,16 @@ export default function Accidents() {
               <span className={`text-xs ${dlAnalytics.ok ? 'text-green-400' : 'text-red-400'}`}>{dlAnalytics.msg}</span>
             )}
             <button
+              onClick={scheduleAnalytics}
+              disabled={schedBusy}
+              title="Auto-email this analytics dashboard on a schedule (daily, weekly or monthly) to chosen recipients"
+              className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-1.5 disabled:opacity-50"
+            >
+              {schedBusy
+                ? <><span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin inline-block" /> Opening scheduler...</>
+                : <><Mail size={14} /> Auto-email</>}
+            </button>
+            <button
               onClick={downloadAnalyticsPdf}
               disabled={dlAnalytics.busy || records.length === 0}
               title={records.length === 0 ? 'No incident data to export' : 'Download these charts and KPIs as a compact PDF (max 2 pages)'}
@@ -2337,6 +2392,22 @@ export default function Accidents() {
                       ].filter(Boolean).join(' | ') || 'N/A'}
                     </p>
                   )}
+                </div>
+                <div>
+                  <label className="label">Plate Number</label>
+                  <input
+                    className="input" placeholder="Auto-filled from asset"
+                    value={form.plate_number}
+                    onChange={e => setForm(f => ({ ...f, plate_number: e.target.value }))}
+                  />
+                </div>
+                <div>
+                  <label className="label">Vehicle Type</label>
+                  <input
+                    className="input" placeholder="Auto-filled from asset"
+                    value={form.vehicle_type}
+                    onChange={e => setForm(f => ({ ...f, vehicle_type: e.target.value }))}
+                  />
                 </div>
               </div>
 

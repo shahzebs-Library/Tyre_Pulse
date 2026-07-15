@@ -497,6 +497,8 @@ function OverviewTab({ acc, fmtCurrency }) {
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+        <KV label="Plate no" value={acc.plate_number} />
+        <KV label="Vehicle type" value={acc.vehicle_type} />
         <KV label="Severity" value={acc.severity} />
         <KV label="Status" value={acc.status} />
         <KV label="Country" value={acc.country} />

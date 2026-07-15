@@ -150,6 +150,8 @@ const DIM_CHIP = 'bg-[var(--input-bg)] text-[var(--text-dim)] border border-[var
 const EMPTY_FORM = {
   incident_date: '',
   asset_no: '',
+  plate_number: '',
+  vehicle_type: '',
   site: '',
   country: '',
   location: '',
@@ -435,16 +437,19 @@ export default function Accidents() {
   }, [assetQuery, fleetAssets])
 
   // Auto-populate related fields from the vehicle master (vehicle_fleet). Only
-  // real accidents columns are written (site, country) and ONLY when the user
-  // has not already filled them — a typed value is never overwritten. The full
-  // master row is kept in `assetInfo` for read-only context (type/make/model).
+  // real accidents columns are written (plate_number, vehicle_type, site,
+  // country) and ONLY when the user has not already filled them — a typed value
+  // is never overwritten. Plate comes from the master's registration_no. The
+  // full master row is kept in `assetInfo` for read-only context (make/model).
   const applyAssetMaster = useCallback((asset) => {
     if (!asset) { setAssetInfo(null); return }
     setAssetInfo(asset)
     setForm(f => ({
       ...f,
-      site:    f.site    || asset.site    || f.site,
-      country: f.country || asset.country || f.country,
+      plate_number: f.plate_number || asset.registration_no || f.plate_number,
+      vehicle_type: f.vehicle_type || asset.vehicle_type    || f.vehicle_type,
+      site:         f.site         || asset.site            || f.site,
+      country:      f.country      || asset.country         || f.country,
     }))
   }, [])
 
@@ -1056,6 +1061,8 @@ export default function Accidents() {
     setForm({
       incident_date:         d(row.incident_date),
       asset_no:              row.asset_no ?? '',
+      plate_number:          row.plate_number ?? '',
+      vehicle_type:          row.vehicle_type ?? '',
       site:                  row.site ?? '',
       country:               row.country ?? '',
       location:              row.location ?? '',
@@ -1142,6 +1149,8 @@ export default function Accidents() {
     const payload = {
       incident_date:         form.incident_date || null,
       asset_no:              form.asset_no,
+      plate_number:          form.plate_number || null,
+      vehicle_type:          form.vehicle_type || null,
       site:                  form.site || 'Unassigned',   // site is NOT NULL (DB default 'Unassigned') — never send null
       country:               form.country || null,
       location:              form.location || null,
@@ -1282,6 +1291,8 @@ export default function Accidents() {
   const EXPORT_FIELDS = [
     ['incident_date', 'Date', r => r.incident_date],
     ['asset_no', 'Asset', r => r.asset_no],
+    ['plate_number', 'Plate No', r => r.plate_number],
+    ['vehicle_type', 'Vehicle Type', r => r.vehicle_type],
     ['site', 'Site', r => r.site],
     ['country', 'Country', r => r.country],
     ['severity', 'Severity', r => canonSeverity(r.severity)],
@@ -2337,6 +2348,22 @@ export default function Accidents() {
                       ].filter(Boolean).join(' | ') || 'N/A'}
                     </p>
                   )}
+                </div>
+                <div>
+                  <label className="label">Plate Number</label>
+                  <input
+                    className="input" placeholder="Auto-filled from asset"
+                    value={form.plate_number}
+                    onChange={e => setForm(f => ({ ...f, plate_number: e.target.value }))}
+                  />
+                </div>
+                <div>
+                  <label className="label">Vehicle Type</label>
+                  <input
+                    className="input" placeholder="Auto-filled from asset"
+                    value={form.vehicle_type}
+                    onChange={e => setForm(f => ({ ...f, vehicle_type: e.target.value }))}
+                  />
                 </div>
               </div>
 

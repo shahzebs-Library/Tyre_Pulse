@@ -7,10 +7,10 @@ import {
   ChevronRight, ChevronDown, Download, Upload,
   BarChart3, Clock, Shield, Wrench, Loader2, History,
 } from 'lucide-react'
-import { supabase } from '../../lib/supabase'
-import { useAuth } from '../../contexts/AuthContext'
-import PageHeader from '../ui/PageHeader'
-import RfidScanner from '../RfidScanner'
+import { supabase } from '../lib/supabase'
+import { useAuth } from '../contexts/AuthContext'
+import PageHeader from '../components/ui/PageHeader'
+import RfidScanner from '../components/RfidScanner'
 
 const STATUS_COLORS = {
   available: 'text-blue-400 bg-blue-400/15 border-blue-400/30',

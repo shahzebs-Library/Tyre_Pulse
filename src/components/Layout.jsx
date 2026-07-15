@@ -356,6 +356,11 @@ function shouldShowNavItem(item, profile, isFlagEnabled, hasPermission, grantedM
   if (isChecklistOnlyRole(profile?.role)) {
     return isChecklistPathAllowed(item.to)
   }
+  // If this nav item maps to a module, its visibility follows the access matrix +
+  // per-user grants/revokes via hasPermission - so an admin turning a module OFF for
+  // a role (or revoking a user) actually HIDES it from the sidebar, and turning it
+  // on / granting shows it. Admin + Super Admin always resolve true inside hasPermission.
+  if (grantKey) return hasPermission(grantKey)
   if (item.adminOnly) return profile?.role === 'Admin' || isSuperAdmin === true
   if (item.roles) return item.roles.includes(profile?.role)
   return true

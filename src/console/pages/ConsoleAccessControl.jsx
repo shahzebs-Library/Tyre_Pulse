@@ -19,7 +19,7 @@ import { Suspense, lazy, useMemo } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import {
   ShieldCheck, KeyRound, UserCog, UserCheck, Eye, Globe,
-  Layers, ScrollText, Fingerprint, Loader2, Wand2,
+  Layers, ScrollText, Fingerprint, Loader2, Wand2, SlidersHorizontal,
 } from 'lucide-react'
 
 import PermissionMatrix from '../../pages/PermissionMatrix'
@@ -30,6 +30,7 @@ import SecurityCenter from '../../pages/SecurityCenter'
 // New console-only viewers are code-split so a heavy tab never blocks the host.
 const AccessManager = lazy(() => import('./access/AccessManager'))
 const EffectivePermissions = lazy(() => import('./access/EffectivePermissions'))
+const AccessPreviewOverride = lazy(() => import('./access/AccessPreviewOverride'))
 const CountryScope = lazy(() => import('./access/CountryScope'))
 const BulkOperations = lazy(() => import('./access/BulkOperations'))
 const AccessAudit = lazy(() => import('./access/AccessAudit'))
@@ -40,6 +41,7 @@ const TABS = [
   { key: 'custom',    label: 'Custom Roles',     icon: UserCog,     desc: 'Create your own roles and grant access',  Component: CustomRolesManager,   lazy: false },
   { key: 'grants',    label: 'Per-User Grants',  icon: UserCheck,   desc: 'Give one user more or less than a role',  Component: AccessGrantsManager,  lazy: false },
   { key: 'effective', label: 'Effective Access', icon: Eye,         desc: 'What a user can actually do, and why',    Component: EffectivePermissions, lazy: true  },
+  { key: 'preview',   label: 'Preview & Override', icon: SlidersHorizontal, desc: 'Preview a role or user, then allow or deny any module', Component: AccessPreviewOverride, lazy: true },
   { key: 'country',   label: 'Country Scope',    icon: Globe,       desc: 'Which countries a user can see',          Component: CountryScope,         lazy: true  },
   { key: 'bulk',      label: 'Bulk Operations',  icon: Layers,      desc: 'Change role or capability for many users', Component: BulkOperations,       lazy: true  },
   { key: 'audit',     label: 'Access Audit',     icon: ScrollText,  desc: 'Immutable trail of every access change',  Component: AccessAudit,          lazy: true  },

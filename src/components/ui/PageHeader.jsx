@@ -24,7 +24,10 @@ function relativeTime(ts) {
  * @param {ReactNode} icon       - optional Lucide icon component
  * @param {ReactNode} actions    - right-side action buttons
  * @param {string}   className
- * @param {boolean}  showBack   - show the "Back" control (default true)
+ * @param {boolean}  showBack   - opt-in local "Back" control (default false).
+ *   The app shell (Layout) renders the single global "Back to previous page"
+ *   control for every page, so PageHeader no longer shows its own by default;
+ *   this avoids two back buttons. Kept as an opt-in for backward compatibility.
  * @param {Function} onBack     - optional override; called instead of navigate(-1)
  */
 export default function PageHeader({
@@ -37,7 +40,7 @@ export default function PageHeader({
   refreshing = false,
   updatedAt,
   className,
-  showBack = true,
+  showBack = false,
   onBack,
 }) {
   const { t } = useLanguage()

@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useMemo, useRef, lazy, Suspense } fro
 import { useNavigate, useLocation, useSearchParams } from 'react-router-dom'
 
 const AccidentReportBuilder = lazy(() => import('../components/accidents/AccidentReportBuilder'))
-import { AlertOctagon, Plus, Search, X, Save, FileText, Download, BarChart2, Eye, Hourglass, Upload, ChevronDown, Trash2, AlertTriangle, TrendingUp, Users, DollarSign, ShieldAlert, Lightbulb, ChevronRight, Clock, ShieldCheck, ArrowLeft } from 'lucide-react'
+import { AlertOctagon, Plus, Search, X, Save, FileText, Download, BarChart2, Eye, Hourglass, ChevronDown, Trash2, AlertTriangle, TrendingUp, Users, DollarSign, ShieldAlert, Lightbulb, ChevronRight, Clock, ShieldCheck, ArrowLeft } from 'lucide-react'
 import { motion } from 'framer-motion'
 import PageHeader from '../components/ui/PageHeader'
 import EmptyState from '../components/EmptyState'
@@ -1591,20 +1591,11 @@ export default function Accidents() {
           >
             <ShieldCheck size={14} /> Claims Summary
           </button>
-          <button
-            onClick={() => navigate('/data-intake?module=accident')}
-            className="btn-primary flex items-center gap-2 text-sm"
-          >
-            <Upload size={15} /> Import via Data Intake Center
-          </button>
           <button onClick={openAdd} className="btn-primary flex items-center gap-2 text-sm">
             <Plus size={16} /> New Incident
           </button>
         </div>
       </div>
-      <p className="text-xs text-[var(--text-muted)] -mt-1">
-        New: controlled, validated, audited accident &amp; insurance import with private evidence attachments and duplicate detection.
-      </p>
 
       {/* Load errors surface inline in the Incidents table area (with a retry). */}
 

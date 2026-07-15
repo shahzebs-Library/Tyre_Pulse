@@ -245,6 +245,23 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
   plate_number column and accidents has no vehicle_type/plate column - nothing fabricated/persisted to
   non-existent columns. If a plate/asset-type field is ever wanted on accidents, add the columns first.
 
+## Access matrix now ENFORCED in nav + module_permissions integrity (2026-07-14)
+- **Root cause of "I change access and it goes back"**: `module_permissions` held 518 DUPLICATE/
+  conflicting global rows per (role, module_key) (e.g. Tyre Man dashboard true AND false). The reader
+  `get_user_module_permissions` overwrites per row -> last-row-wins -> nondeterministic. **V239** dedupes
+  to ONE row per (role, module_key, coalesce(org_id, zero-uuid)) keeping the most-recent, + a UNIQUE INDEX
+  `module_permissions_role_module_org_uidx` so toggles now STICK. **V240** reseeds the standard roles to the
+  app's canonical ROLE_DEFAULTS (dedup exposed unreliable survivors); custom roles left as-is. Next free **V241**.
+- **hasPermission is now PER-KEY** (`src/contexts/AuthContext.jsx`): a module explicitly present in the DB
+  matrix uses that value (enabled=false -> denied/hidden); a module NOT configured falls back to ROLE_DEFAULTS
+  (so a sparse matrix never mass-hides). Precedence still Admin/super > revoke > matrix/role > grant > deny.
+- **Nav now enforces the matrix for ALL built-in roles** (`src/components/Layout.jsx` shouldShowNavItem): any
+  keyed nav item (NAV_MODULE_KEY) is gated by `hasPermission` - a module turned OFF for a role, or revoked for
+  a user, is HIDDEN from the sidebar (previously only custom roles consulted the matrix; built-in roles
+  defaulted to show). Inspector/DMO/checklist special nav rules unchanged; Admin/super always see all.
+  RULE: to give a role a module, enable it in Console > Access Control > Role Permissions (it sticks now);
+  changes reach an affected user on refresh/refocus (V227), NOT the admin's own account (admins see all).
+
 ## Capability enforcement Phase 2 (pilot) + general Report Builder blocks (2026-07-14)
 - **V238 capability enforcement PILOT (additive/SAFE)**: PERMISSIVE write policies consuming
   `app_user_can(module, cap)` added to tyre_records / inspections / work_orders for create/edit/delete.

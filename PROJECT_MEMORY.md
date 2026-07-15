@@ -261,6 +261,15 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
   by the ALREADY-deployed `send-scheduled-reports` edge fn — NO edge redeploy, NO new report_type. The user
   just picks cadence + recipients. (If they want the analytics CUSTOMIZED, that is already the Report Builder.)
 
+### Shipped status (2026-07-15 follow-up batch)
+- **In main (merged):** super-admin control center V241/V242 + Preview & Override (main HEAD `1d87c93`).
+- **On branch `claude/accident-builder-report-ui-2bkwb5`, NOT yet in main (as of 2026-07-15):** the four
+  follow-up commits — accidents plate/vehicle-type auto-fill + **V243 migration (already applied LIVE to the
+  DB)**, the super-admin swap + privileged-edit playbook doc, and the Accidents Analytics auto-email. The
+  branch's original PR was ALREADY merged (it became `1d87c93`), so per the merged-PR rule this follow-up must
+  ship via a FRESH PR — do NOT reuse the merged PR. The V243 schema change is live regardless; only the
+  frontend for these two features awaits a new merge to reach production. Next free migration still **V244**.
+
 ## Access matrix now ENFORCED in nav + module_permissions integrity (2026-07-14)
 - **Root cause of "I change access and it goes back"**: `module_permissions` held 518 DUPLICATE/
   conflicting global rows per (role, module_key) (e.g. Tyre Man dashboard true AND false). The reader

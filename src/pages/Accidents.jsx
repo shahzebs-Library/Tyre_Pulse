@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useMemo, useRef, lazy, Suspense } fro
 import { useNavigate, useLocation, useSearchParams } from 'react-router-dom'
 
 const AccidentReportBuilder = lazy(() => import('../components/accidents/AccidentReportBuilder'))
-import { AlertOctagon, Plus, Search, X, Save, FileText, Download, BarChart2, Eye, Hourglass, ChevronDown, Trash2, AlertTriangle, TrendingUp, Users, DollarSign, ShieldAlert, Lightbulb, ChevronRight, Clock, ShieldCheck, ArrowLeft } from 'lucide-react'
+import { AlertOctagon, Plus, Search, X, Save, FileText, Download, BarChart2, Eye, Hourglass, ChevronDown, Trash2, AlertTriangle, TrendingUp, Users, DollarSign, ShieldAlert, Lightbulb, ChevronRight, Clock, ShieldCheck, ArrowLeft, Mail } from 'lucide-react'
 import { motion } from 'framer-motion'
 import PageHeader from '../components/ui/PageHeader'
 import EmptyState from '../components/EmptyState'
@@ -32,7 +32,10 @@ import {
   canonFaultStatus, canonNajmStatus, canonNajmFault, canonTaqdeerStatus, canonRepairType, canonDamageClass,
   accidentSeverityPill, accidentStatusPill,
 } from '../lib/accidentVocab'
-import { makeValueLabelsPlugin, doughnutLegendCounts, summarizeChartData } from '../lib/accidentReport'
+import { makeValueLabelsPlugin, doughnutLegendCounts, summarizeChartData, REPORT_LIBRARY, normalizeConfig } from '../lib/accidentReport'
+import { listTemplates as listReportTemplates, createTemplate as createReportTemplate } from '../lib/api/accidentReportTemplates'
+import { builderReportType } from '../lib/api/scheduledReports'
+import { toUserMessage } from '../lib/safeError'
 import { hasClaim, isClosed as isClaimClosed, claimNet } from '../lib/claimsAnalytics'
 import { captureChartOnPaper } from '../lib/chartCapture'
 
@@ -1002,6 +1005,37 @@ export default function Accidents() {
     }
   }
 
+  // Turn the on-screen Analytics into a recurring auto-emailed report. Reuses the
+  // existing Accident Report Builder + Scheduled Reports pipeline (no duplication):
+  // ensure a saved layout that mirrors this dashboard exists (create once, reuse
+  // thereafter), then hand off to Scheduled Reports with it pre-selected so the
+  // user only picks cadence + recipients. The cron edge fn renders + e-mails the
+  // exact layout on schedule.
+  const ANALYTICS_LAYOUT_NAME = 'Accidents Analytics'
+  const [schedBusy, setSchedBusy] = useState(false)
+  async function scheduleAnalytics() {
+    setSchedBusy(true)
+    try {
+      const templates = await listReportTemplates()
+      let tpl = templates.find(t => (t.name || '').trim().toLowerCase() === ANALYTICS_LAYOUT_NAME.toLowerCase())
+      if (!tpl) {
+        const pack = REPORT_LIBRARY.find(p => p.key === 'analytics')
+        const config = normalizeConfig({ blocks: pack.build(), orientation: pack.orientation })
+        tpl = await createReportTemplate({
+          name: ANALYTICS_LAYOUT_NAME,
+          description: 'Auto-email version of the Accidents Analytics dashboard.',
+          config,
+        })
+      }
+      navigate('/scheduled-reports', {
+        state: { presetReportType: builderReportType(tpl.id), presetName: `${ANALYTICS_LAYOUT_NAME} (weekly)` },
+      })
+    } catch (e) {
+      flashDl(`Could not set up auto-email: ${toUserMessage(e)}`, false)
+      setSchedBusy(false)
+    }
+  }
+
   // ---- Incidents tab filtered data ----
   const filtered = useMemo(() => {
     let arr = records
@@ -1930,6 +1964,16 @@ export default function Accidents() {
             {dlAnalytics.msg && (
               <span className={`text-xs ${dlAnalytics.ok ? 'text-green-400' : 'text-red-400'}`}>{dlAnalytics.msg}</span>
             )}
+            <button
+              onClick={scheduleAnalytics}
+              disabled={schedBusy}
+              title="Auto-email this analytics dashboard on a schedule (daily, weekly or monthly) to chosen recipients"
+              className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-1.5 disabled:opacity-50"
+            >
+              {schedBusy
+                ? <><span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin inline-block" /> Opening scheduler...</>
+                : <><Mail size={14} /> Auto-email</>}
+            </button>
             <button
               onClick={downloadAnalyticsPdf}
               disabled={dlAnalytics.busy || records.length === 0}

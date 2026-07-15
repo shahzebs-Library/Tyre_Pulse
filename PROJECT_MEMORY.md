@@ -248,6 +248,18 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
   assets service COLS now returns `registration_no`; accidents PAGE_COLS returns the two new columns; both
   are editable form fields, persisted on save (`|| null`), re-hydrated in openEdit, shown in
   AccidentDetailModal Overview (`select('*')`), and included in EXPORT_FIELDS. Next free migration **V244**.
+- **Accidents Analytics -> Auto-email (2026-07-15)**: the Analytics tab gained an "Auto-email" button beside
+  "Download Analytics PDF". RULE: do NOT build a second block-builder or a new scheduled report_type for this
+  — it REUSES the existing Accident Report Builder + Scheduled Reports pipeline. A new REPORT_LIBRARY pack
+  `analytics` ("Accidents Analytics", `src/lib/accidentReport.js`) mirrors the on-screen dashboard's charts
+  (severity/status/fault/trend/paretoAssets/bySite/sevMonthly/claimStatus + 6 KPIs; payer-cost has no catalog
+  chart = the one omission). `scheduleAnalytics()` in Accidents.jsx create-or-reuses a saved template named
+  "Accidents Analytics" in `accident_report_templates` (config = normalizeConfig({blocks:pack.build(),
+  orientation})), then navigates to `/scheduled-reports` with `state.presetReportType = builder:<id>`.
+  ScheduledReports.jsx has a preselect effect (useLocation) that opens the create modal prefilled on that
+  builder type once layouts load, then clears history state. So auto-email = a `builder:<id>` schedule handled
+  by the ALREADY-deployed `send-scheduled-reports` edge fn — NO edge redeploy, NO new report_type. The user
+  just picks cadence + recipients. (If they want the analytics CUSTOMIZED, that is already the Report Builder.)
 
 ## Access matrix now ENFORCED in nav + module_permissions integrity (2026-07-14)
 - **Root cause of "I change access and it goes back"**: `module_permissions` held 518 DUPLICATE/

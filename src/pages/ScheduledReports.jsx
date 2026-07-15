@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useLocation, useNavigate } from 'react-router-dom'
 import {
   Calendar, Clock, Mail, Plus, Edit2, Trash2, Eye, EyeOff,
   FileText, BarChart2, Truck, ClipboardList, DollarSign,
@@ -726,6 +727,9 @@ export default function ScheduledReports() {
 
   const reportCompany = branding?.legal_name || branding?.display_name || appSettings?.company_name || orgName || 'TyrePulse'
 
+  const location = useLocation()
+  const navigate = useNavigate()
+  const [presetApplied, setPresetApplied] = useState(false)
   const [schedules, setSchedules] = useState([])
   const [layouts, setLayouts] = useState([])
   const [loading, setLoading] = useState(true)
@@ -836,6 +840,23 @@ export default function ScheduledReports() {
   }
 
   const closeModal = () => { setModalOpen(false); setEditTarget(null); setFormError('') }
+
+  // Deep-link entry (e.g. Accidents -> Analytics -> "Auto-email"): open the
+  // create modal pre-selected on the passed report type so the user only sets
+  // cadence + recipients. For builder layouts, wait until the layout list has
+  // loaded so the option resolves. The preset is consumed once (history state
+  // cleared) so a refresh does not reopen the modal.
+  useEffect(() => {
+    const preset = location.state?.presetReportType
+    if (!preset || presetApplied) return
+    if (isBuilderType(preset) && layouts.length === 0) return
+    setEditTarget(null)
+    setForm({ ...BLANK_FORM, report_type: preset, name: location.state?.presetName || '' })
+    setFormError('')
+    setModalOpen(true)
+    setPresetApplied(true)
+    navigate(location.pathname, { replace: true, state: null })
+  }, [location, layouts, presetApplied, navigate])
 
   // ── Validation ───────────────────────────────────────────────────────────────
   function validateForm(f) {

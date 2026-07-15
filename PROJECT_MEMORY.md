@@ -245,6 +245,23 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
   plate_number column and accidents has no vehicle_type/plate column - nothing fabricated/persisted to
   non-existent columns. If a plate/asset-type field is ever wanted on accidents, add the columns first.
 
+## Country data visibility - the ORG boundary sits ABOVE country (2026-07-14)
+- **CRITICAL model fact**: RLS = org isolation (outer wall) AND country isolation (inner). `app_can_see_country`
+  only shares WITHIN the same organisation. `app_current_org()` = `profiles.org_id` (NOT organisation_id);
+  data rows are scoped by their `organisation_id`. Two same-country users in DIFFERENT orgs do NOT see each
+  other's data - country never even comes into play.
+- **Live fix applied (data, not code)**: all fleet data (1419 tyres/15 accidents/604 fleet) lives in org
+  `00000000-0000-0000-0000-000000000001` (Company A), but 9 approved KSA users were in a different org
+  (b4a4ba35). They saw ZERO. Moved those 9 (+ any org-null) into Company A (set BOTH org_id AND
+  organisation_id) so every approved KSA user now sees all KSA data (verified: a KSA Manager went 0 -> 1419).
+  Egypt users (org e340fa7a) intentionally left isolated.
+- **V237 new-user default**: `handle_new_user()` now stamps org_id + organisation_id = Company A and
+  country = [region] (KSA default), approved=false. So a NEW signup is pre-scoped to the data's company +
+  their country and only sees data once an admin APPROVES them. (org_id column default was already Company A;
+  organisation_id + country were NULL, which would have made a newly-approved user see ALL countries.)
+- RULE: to make same-country users share data, they must be in the SAME org. Create new staff inside
+  Company A (console user editor sets company/country/approval). Next free migration **V238**.
+
 ## Advanced batch 3 (2026-07-14) — reports customization + accident fault/severity accuracy
 - **Reports.jsx** (3-step report wizard, 5 report types over tyre_records/inspections) gained persisted
   customizable columns (`reports.layout.v1`, per report type) + All/None/Reset + a real error/Retry state +

@@ -268,7 +268,21 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
   DB)**, the super-admin swap + privileged-edit playbook doc, and the Accidents Analytics auto-email. The
   branch's original PR was ALREADY merged (it became `1d87c93`), so per the merged-PR rule this follow-up must
   ship via a FRESH PR — do NOT reuse the merged PR. The V243 schema change is live regardless; only the
-  frontend for these two features awaits a new merge to reach production. Next free migration still **V244**.
+  frontend for these two features awaits a new merge to reach production.
+
+### V244 — report_schedules CHECK fix (applied LIVE 2026-07-15): "cannot save any scheduled report"
+- ROOT CAUSE: `report_schedules_report_type_check` only allowed
+  `['executive','kpi','fleet','inspection','cost']`, but the app's single source
+  (`scheduledReports.js` REPORT_TYPES) also offers **accidents/claims/stock/vendor** and every saved
+  Report Builder layout scheduled as **`builder:<template-id>`** (BUILDER_TYPE_PREFIX). All of those
+  violated the CHECK -> the insert failed for those types (incl. the new Accidents Analytics auto-email).
+  Also a DUPLICATE frequency constraint existed: `report_schedules_frequency_chk` (once/daily/weekly/
+  monthly) AND the stricter `report_schedules_frequency_check` (daily/weekly/monthly) which BLOCKED 'once'.
+- FIX (V244): report_type CHECK is now `IN (executive,kpi,fleet,inspection,cost,accidents,claims,stock,
+  vendor) OR report_type LIKE 'builder:%'`; dropped the stale `report_schedules_frequency_check` (kept the
+  correct `_chk`). Verified live via rolled-back inserts of builder:*/accidents/claims/vendor/stock + a
+  'once' schedule. RULE: whenever a new base report type is added to REPORT_TYPES, widen this CHECK too
+  (the `builder:%` family is already covered). Next free migration **V245**.
 
 ## Access matrix now ENFORCED in nav + module_permissions integrity (2026-07-14)
 - **Root cause of "I change access and it goes back"**: `module_permissions` held 518 DUPLICATE/

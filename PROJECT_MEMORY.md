@@ -270,6 +270,21 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
   ship via a FRESH PR — do NOT reuse the merged PR. The V243 schema change is live regardless; only the
   frontend for these two features awaits a new merge to reach production.
 
+### send-scheduled-reports v14 (deployed LIVE 2026-07-15): every report type emailed IDENTICAL data
+- ROOT CAUSE: `renderForSchedule` in the edge fn collapsed EVERY non-claims report_type into the single
+  executive digest (`buildDigest`/`report_exec_digest`). So executive/kpi/fleet/cost/inspection/accidents/
+  stock/vendor all emailed the SAME all-fleet numbers - only the title differed. (The in-app "Generate now"
+  PDF/Excel were already correct per type via `fetchReportRows`; only the scheduled EMAIL was wrong.)
+- FIX (v14): added a per-type `DATASET_DIGEST` config (table + dateCol + money + group dims + recent cols,
+  mirroring scheduledReports.js DATASETS) + `buildDatasetDigest` (org-scoped, honest empty states) +
+  `renderDatasetHtml`. Routing now: claims->claims desk; executive->exec intel; kpi/fleet/cost/inspection/
+  accidents/stock/vendor->their OWN dataset digest; `builder:<id>`->accident dataset digest. Executive +
+  claims renderers unchanged. RULE: when adding a base report type, add its DATASET_DIGEST entry too, or it
+  falls back to the executive digest. NOTE: kpi vs cost both read tyre_records+cost, so they only diverge by
+  their group dimensions - and brand/category/supplier/risk_level are largely UNPOPULATED in the live data,
+  so those two still look similar until those columns are filled (data gap, not code). fleet (composition,
+  no money), inspection, accidents, claims, executive are all clearly distinct.
+
 ### V244 — report_schedules CHECK fix (applied LIVE 2026-07-15): "cannot save any scheduled report"
 - ROOT CAUSE: `report_schedules_report_type_check` only allowed
   `['executive','kpi','fleet','inspection','cost']`, but the app's single source

@@ -186,6 +186,7 @@ const ClaimsSummary          = lazy(() => import('./pages/ClaimsSummary'))
 const Reports                = lazy(() => import('./pages/Reports'))
 const GatePass               = lazy(() => import('./pages/GatePass'))
 const SerialTracker          = lazy(() => import('./pages/SerialTracker'))
+const RfidRegistry           = lazy(() => import('./pages/RfidRegistry'))
 const Comparison             = lazy(() => import('./pages/Comparison'))
 const EngineeringKpi         = lazy(() => import('./pages/EngineeringKpi'))
 const PositionIntelligence   = lazy(() => import('./pages/PositionIntelligence'))
@@ -535,8 +536,8 @@ function MainApp() {
                       <Route path="/holding-company"       element={<Navigate to="/console/organisations" replace />} />
                       <Route path="/org-hierarchy"         element={<Navigate to="/console/organisations" replace />} />
                       <Route path="/scan"        element={<Safe><TyreScan /></Safe>} />
-                      <Route path="/qr-labels"   element={<Safe><QrLabels /></Safe>} />
-                      {/* ── Platform (roadmap tranche: pages self-gate their roles) ── */}
+<Route path="/qr-labels"   element={<Safe><QrLabels /></Safe>} />
+                      <Route path="/rfid-registry" element={<Safe><ModuleRoute moduleKey="tyre_records"><RfidRegistry /></ModuleRoute></Safe>} />
                       <Route path="/report-builder"      element={<Safe><ReportBuilder /></Safe>} />
                       <Route path="/dashboard-builder"   element={<Safe><DashboardBuilder /></Safe>} />
                       <Route path="/executive-analytics" element={<Safe><ExecutiveAnalytics /></Safe>} />

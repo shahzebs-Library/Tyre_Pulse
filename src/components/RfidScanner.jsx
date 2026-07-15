@@ -6,8 +6,8 @@ import {
   RefreshCw, MapPin, Clock, Battery, Signal, Tag, Package,
   Truck, ClipboardCheck, Navigation, History,
 } from 'lucide-react'
-import { supabase } from '../../lib/supabase'
-import { sanitizeSearchTerm } from '../../lib/searchFilter'
+import { supabase } from '../lib/supabase'
+import { sanitizeSearchTerm } from '../lib/searchFilter'
 
 function barcodeDetectorSupported() {
   return typeof window !== 'undefined' && 'BarcodeDetector' in window

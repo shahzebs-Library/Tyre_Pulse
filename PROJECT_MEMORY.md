@@ -262,13 +262,15 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
   just picks cadence + recipients. (If they want the analytics CUSTOMIZED, that is already the Report Builder.)
 
 ### Shipped status (2026-07-15 follow-up batch)
-- **In main (merged):** super-admin control center V241/V242 + Preview & Override (main HEAD `1d87c93`).
-- **On branch `claude/accident-builder-report-ui-2bkwb5`, NOT yet in main (as of 2026-07-15):** the four
-  follow-up commits — accidents plate/vehicle-type auto-fill + **V243 migration (already applied LIVE to the
-  DB)**, the super-admin swap + privileged-edit playbook doc, and the Accidents Analytics auto-email. The
-  branch's original PR was ALREADY merged (it became `1d87c93`), so per the merged-PR rule this follow-up must
-  ship via a FRESH PR — do NOT reuse the merged PR. The V243 schema change is live regardless; only the
-  frontend for these two features awaits a new merge to reach production.
+- **In main:** super-admin control center V241/V242 + Preview & Override (`1d87c93`); THEN **PR #28 MERGED**
+  (merge `eb36825`) carrying accidents plate/vehicle-type auto-fill + **V243**, the super-admin swap +
+  privileged-edit playbook doc, the Accidents Analytics auto-email, and the **V244** report_schedules CHECK fix.
+- **On branch `claude/accident-builder-report-ui-2bkwb5`, NOT yet in main (as of 2026-07-15, post-#28):** the
+  **send-scheduled-reports v14** per-type-digest fix (edge fn already DEPLOYED LIVE, so it works regardless of
+  merge — the branch commits just keep `supabase/functions/send-scheduled-reports/index.ts` in sync) + its
+  memory doc. Per the merged-PR rule, if these need to reach main they go via a NEW PR (do NOT reuse #28).
+- RULE reminder: every merged PR is terminal — never stack new commits expecting the old PR to carry them;
+  open a fresh PR. Both V243 and V244 schema changes are LIVE on the DB independent of any merge.
 
 ### send-scheduled-reports v14 (deployed LIVE 2026-07-15): every report type emailed IDENTICAL data
 - ROOT CAUSE: `renderForSchedule` in the edge fn collapsed EVERY non-claims report_type into the single

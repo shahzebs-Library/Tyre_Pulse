@@ -306,12 +306,15 @@ export function AuthProvider({ children }) {
   const hasPermission = useCallback((moduleKey) => {
     if (!profile) return false
     // Base (role/DB) verdict — the middle branch fed into resolvePermission.
+    // PER-KEY precedence: if THIS module is explicitly configured in the DB matrix
+    // (present in modulePerms) use that value — so an admin toggling a module OFF
+    // for a role (enabled=false) actually hides/blocks it. A module NOT configured
+    // for the role falls back to the hardcoded ROLE_DEFAULTS, so a sparse matrix
+    // never mass-hides modules the role should keep.
     let roleAllows
-    if (modulePerms && Object.keys(modulePerms).length > 0) {
-      // If DB permissions loaded and non-empty, use them
+    if (modulePerms && Object.prototype.hasOwnProperty.call(modulePerms, moduleKey)) {
       roleAllows = modulePerms[moduleKey] === true
     } else {
-      // Fall back to hardcoded role defaults
       roleAllows = (ROLE_DEFAULTS[profile.role] ?? (() => false))(moduleKey)
     }
     return resolvePermission({

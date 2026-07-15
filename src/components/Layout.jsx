@@ -1216,24 +1216,31 @@ export default function Layout({ children }) {
           paddingBottom: isMobile ? 'calc(54px + env(safe-area-inset-bottom))' : 0,
         }}
       >
-        {/* ── Wayfinding bar: global Back + breadcrumbs (hidden on Home) ─────── */}
-        {location.pathname !== '/' && (
+        {/* ── Wayfinding bar: single global Back + breadcrumbs ────────────────
+            The ONE canonical "Back to previous page" control for the whole app
+            shell, so every routed page (including the many that do not use
+            PageHeader) gets exactly one, consistently placed. Hidden on the
+            top-level home/dashboard; the Back button itself is also hidden when
+            there is no history to go back to (deep link / first page). */}
+        {location.pathname !== '/' && location.pathname !== '/dashboard' && (
           <div className="w-full max-w-[1800px] mx-auto px-4 pt-4 sm:px-6 xl:px-8 2xl:px-10">
             <div className="flex items-center gap-2 min-w-0">
-              <button
-                onClick={() => navigate(-1)}
-                title="Go back"
-                aria-label="Go back"
-                className="flex-shrink-0 inline-flex items-center gap-1.5 h-7 px-2 rounded-lg text-[12px] font-medium transition-colors hover:text-green-400"
-                style={{
-                  color: 'var(--text-muted)',
-                  background: 'rgba(22,163,74,0.05)',
-                  border: '1px solid rgba(22,163,74,0.12)',
-                }}
-              >
-                <ArrowLeft size={13} className="flex-shrink-0" />
-                <span className="hidden sm:inline">Back</span>
-              </button>
+              {typeof window !== 'undefined' && window.history.length > 1 && (
+                <button
+                  onClick={() => navigate(-1)}
+                  title="Back to previous page"
+                  aria-label="Back to previous page"
+                  className="flex-shrink-0 inline-flex items-center gap-1.5 h-7 px-2 rounded-lg text-[12px] font-medium transition-colors hover:text-green-400"
+                  style={{
+                    color: 'var(--text-muted)',
+                    background: 'rgba(22,163,74,0.05)',
+                    border: '1px solid rgba(22,163,74,0.12)',
+                  }}
+                >
+                  <ArrowLeft size={13} className="flex-shrink-0" />
+                  <span className="hidden sm:inline">Back</span>
+                </button>
+              )}
               <Breadcrumbs navGroups={NAV_GROUPS} t={t} className="min-w-0 flex-1" />
             </div>
           </div>

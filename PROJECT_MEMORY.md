@@ -433,6 +433,62 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
 - Tests: `heatWeather.test.js` (11). Research + adversarial-review agents used; the one nit found (present-but-
   non-numeric apparent/wind rendering 0 not N/A) is fixed + regression-tested. No DB/schema change.
 
+### Preventive Maintenance module (V253, 2026-07-16) — complete PM for all asset types
+- DEEPENED the thin PM module (do NOT add a parallel one). Covers vehicles, generators, plant, machinery,
+  equipment via `pm_programs.asset_category` (vocab vehicle/generator/plant/machinery/equipment/other).
+- **V253 (applied live + stub `MIGRATIONS_V253_PM_MODULE.sql`):** ALTER `pm_programs` (+asset_category,
+  meter_source odometer/engine_hours/none, meter_interval, last_done_meter, next_due_meter, assigned_to,
+  priority low/medium/high/critical, estimated_cost, task_list jsonb); NEW child table `pm_service_records`
+  (execution/"fixed it" history, org-isolated RESTRICTIVE + elevated writes, generated total_cost); RPC
+  **`record_pm_service(...)`** SECURITY DEFINER = atomic insert-and-advance (SELECT ... FOR UPDATE, re-checks
+  org+role in-body, recomputes next_due via make_interval days/months + next_due_meter = reading+meter_interval
+  with a monotonic guard). Widened `work_orders.work_type` CHECK to add 'Service' + 'Preventive Maintenance'.
+  Verified live via rolled-back RPC test (6mo -> next_due advanced, meter 1005+250 -> 1255).
+- **Two due axes:** TIME (interval_type days/months drives next_due) AND METER (km via vehicle_fleet.current_km
+  which is odometer-synced; engine-hours read latest from engine_hours_logs in bulk - there is NO
+  current_hours column and I did NOT add one). Legacy km/hours interval rows map to the meter axis in the pure
+  engine. No destructive backfill.
+- **Pure engines (single source, do NOT rebuild the maths):** `src/lib/pmVocab.js` (categories/priorities/
+  outcomes/meter sources + toDb/canon), `src/lib/pmSchedule.js` (addTimeInterval MUST byte-match SQL
+  make_interval; meterToDue/meterDueStatus with METER_DUE_SOON {odometer:500, engine_hours:25};
+  pmAssetDueStatus worst-of date+meter; advanceSchedule mirrors the RPC EXACTLY so the modal preview == server;
+  summarizePmCompliance). Reuses daysToDue/pmDueStatus/DUE_SOON_DAYS from `src/lib/pmPrograms.js`.
+- **Service `src/lib/api/pmPrograms.js`** extended: recordPmService (RPC), listPmServiceRecords,
+  loadPmDashboard ({plans, kmByAsset, hoursByAsset} bulk). Barrel unchanged.
+- **Page `src/pages/PmPrograms.jsx`** = 3 tabs (Dashboard/Plans/Service History) + Record-service modal with
+  live next-due preview + optional linked Work Order (reuses workOrders API, work_type 'Preventive
+  Maintenance'). Nav relabelled "PM Programs" -> "Preventive Maintenance" (route /pm-programs unchanged).
+- **One-click Tyres vs Maintenance cost SWITCH (user standing ask):** pure `src/lib/costSources.js`
+  (COST_MODES combined/tyres/maintenance + pickCost/pickMonthly/splitTotals) + service
+  `src/lib/api/costSummary.js` `loadCostSplit` (tyre = tyre_records cost_per_tyre*qty by issue_date;
+  maintenance = pm_service_records.total_cost + work_orders labour+parts+lubricant+outside_repair EXCLUDING
+  tyre_cost to avoid double count; 12-month byMonth; each source degrades to 0). Surfaced as a segmented
+  Cost view control on the PM Dashboard. RULE going forward: reuse these helpers to add a tyre/maintenance
+  cost toggle to OTHER cost surfaces (Analytics/CostCenter/Board Overview) - do NOT re-derive the split.
+- Tests: pmVocab(12), pmSchedule(19), costSources(9), pmPrograms.api(8), costSummary(5) = 53 green.
+
+### BACKLOG (user parked 2026-07-16, "do it later when I ask") — Advanced Admin Control & Self-Healing
+- A big SUPER-ADMIN-ONLY module the user specced for LATER (explicitly "put this for later, I will ask you to
+  do it all"). Do NOT start until the user asks. Belongs under `/console` (super-admin), NOT the main nav.
+  8 modules: (1) System Health Dashboard + 0-100 Fleet Health Score + system_logs error table + realtime;
+  (2) Self-Healing engine (pg_cron edge fns: orphan scan flag-only, duplicate auto-merge only if 100% identical,
+  Excel import pre-validation, failed AI photo retry 3x, stale-branch 7d detector, PREDICTIVE anomaly flagging
+  off the existing local analytics engine); (3) No-code DB control panel + "Ask your data" plain-English search
+  (AI parses question -> Supabase filter ONLY, never computes data - keep local-first); (4) Automated nightly
+  backups to a backups schema, 30d retain, one-click restore w/ diff + pre-restore safety check; (5) No-code
+  alert rule builder + severity routing (critical immediate, warnings daily digest) via Gmail connector;
+  (6) Audit trail admin_audit_log + role-scoped visibility; (7) Role-based access admin_users
+  (super_admin/regional_admin/viewer) via RLS; (8) Module Registry & Maintenance Control (`modules` table,
+  Live/Maintenance/Off toggle per feature, dependency warnings, per-module health dot from system_logs,
+  app-wide error boundary that logs to system_logs with module_id + "Report this to me" button).
+  Phased delivery, start Modules 1+4+7. Cross-cutting: reuse existing 24-fn local analytics engine, Chart.js,
+  SheetJS, jsPDF, pptxgenjs; RLS on every new table; no raw SQL shown; plain-English tooltips; match dark navy
+  theme; and REPORT every incidental change to existing code (file/what-was-wrong/what-changed) - do not
+  silently improve.
+- **UI/UX standing ask (also parked):** a REAL light/dark theme TOGGLE (genuine theme switch, not just a
+  background swap) - must flip the full palette (surfaces/text/borders/charts), super-admin/admin surfaced.
+  Tie into the existing CSS-var theming (`.tp-report-paper` light technique + SettingsContext). Not started.
+
 ### Shipped (2026-07-15/16) — all merged to main, nothing pending
 - Everything below is LIVE on the DB/deploy and merged to main (PRs #28/#29/#30, all terminal).
   V243 accidents plate/vehicle_type + auto-fill; super-admin swap + privileged-edit playbook; Accidents

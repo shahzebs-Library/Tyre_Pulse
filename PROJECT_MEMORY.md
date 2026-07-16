@@ -695,6 +695,16 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
   without interrupting anyone or stranding them on a stale build. RULE: keep skipWaiting:false so open tabs are
   never yanked; the toast + hidden-apply are the two controlled activation paths. **Next free migration V265.**
 
+### Vercel deploy hygiene (2026-07-16) — one production deploy per change
+- User asked why every change caused ~2 Vercel deploys. Cause: (1) a PREVIEW build on every feature-branch push
+  + (2) a PRODUCTION build on merge to main = the normal 2; PLUS an avoidable 3rd from pushing a docs-only
+  PROJECT_MEMORY commit back to the branch AFTER merge (re-triggered a preview). Fixes: (a) `vercel.json` now has
+  `git.deploymentEnabled: { "claude/accident-builder-report-ui-2bkwb5": false }` so pushes to the bot branch do
+  NOT create preview deploys (main still deploys production); (b) WORKFLOW RULE going forward: fold the
+  PROJECT_MEMORY update INTO the feature PR before merge, and do NOT push a separate post-merge docs commit to
+  the branch (after merge just `git checkout -B <branch> origin/main` locally, no push). Net: one production
+  deploy per merged change. NOTE: if branch previews are wanted again, remove the deploymentEnabled entry.
+
 ### SESSION CLOSED CLEAN (2026-07-16) — everything merged, nothing pending
 - All work through the custom TV/report board builder is MERGED to main and LIVE. Latest merges on branch
   `claude/accident-builder-report-ui-2bkwb5`: **PR #54** (V262 TV wallboard: site/country filters, logo,

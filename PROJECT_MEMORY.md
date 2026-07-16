@@ -674,6 +674,37 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
   background swap) - must flip the full palette (surfaces/text/borders/charts), super-admin/admin surfaced.
   Tie into the existing CSS-var theming (`.tp-report-paper` light technique + SettingsContext). Not started.
 
+### Report Sharing page + PWA update behavior (2026-07-16, PR #56 squash 5a83240)
+- **Report Sharing is now a full nav PAGE** `src/pages/ReportSharing.jsx` (/report-sharing, RoleRoute
+  Admin/Manager/Director, nav "Reports & Executive" > "Report Sharing", icon Share2). Moved OUT of Settings
+  (removed `<ReportSharesPanel/>` + import from Settings.jsx). The page = overview stat strip (active links /
+  total views / rotating boards incl. custom count / active report palette via activePaletteName+PRESET_LABELS)
+  + report-colour theme link (super-admin -> /console/appearance; charts on every shared board follow the
+  reportColors active palette) + how-it-works strip + "Open TV Display Mode" (/display) + the embedded
+  `ReportSharesPanel` (manager + create/edit + ReportShareBuilder). `boardCount(row)` = custom boards
+  (hasCustomLayout/normalizeLayout) else pages.length. RULE: report sharing lives at /report-sharing now, NOT
+  Settings; do not re-add the panel to Settings.
+- **PWA updates no longer reload mid-work** (vite.config.js + PwaUpdatePrompt.jsx): was `registerType:
+  'autoUpdate'` + `skipWaiting:true` + `clientsClaim:true`, which force-reloaded an open tab the moment the
+  15-min poll / refocus found a new Vercel deploy (and bypassed the existing update toast). Now `registerType:
+  'prompt'` + `skipWaiting:false` (clientsClaim kept): a new deploy is DETECTED (PwaUpdatePrompt polls every
+  15 min + on refocus via registration.update()) but the running tab keeps its build + its already-loaded lazy
+  chunks (old precache retained until activate) until the user clicks Reload in the "New version available"
+  toast (needRefresh now actually fires). PwaUpdatePrompt ALSO auto-applies a WAITING update quietly on
+  `visibilitychange` -> hidden (updateServiceWorker(true) while the tab is hidden), so kiosks/TVs self-heal
+  without interrupting anyone or stranding them on a stale build. RULE: keep skipWaiting:false so open tabs are
+  never yanked; the toast + hidden-apply are the two controlled activation paths. **Next free migration V265.**
+
+### Vercel deploy hygiene (2026-07-16) — one production deploy per change
+- User asked why every change caused ~2 Vercel deploys. Cause: (1) a PREVIEW build on every feature-branch push
+  + (2) a PRODUCTION build on merge to main = the normal 2; PLUS an avoidable 3rd from pushing a docs-only
+  PROJECT_MEMORY commit back to the branch AFTER merge (re-triggered a preview). Fixes: (a) `vercel.json` now has
+  `git.deploymentEnabled: { "claude/accident-builder-report-ui-2bkwb5": false }` so pushes to the bot branch do
+  NOT create preview deploys (main still deploys production); (b) WORKFLOW RULE going forward: fold the
+  PROJECT_MEMORY update INTO the feature PR before merge, and do NOT push a separate post-merge docs commit to
+  the branch (after merge just `git checkout -B <branch> origin/main` locally, no push). Net: one production
+  deploy per merged change. NOTE: if branch previews are wanted again, remove the deploymentEnabled entry.
+
 ### SESSION CLOSED CLEAN (2026-07-16) — everything merged, nothing pending
 - All work through the custom TV/report board builder is MERGED to main and LIVE. Latest merges on branch
   `claude/accident-builder-report-ui-2bkwb5`: **PR #54** (V262 TV wallboard: site/country filters, logo,

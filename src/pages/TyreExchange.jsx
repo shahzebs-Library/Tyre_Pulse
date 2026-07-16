@@ -25,7 +25,7 @@ import { formatDate } from '../lib/formatters'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Title, Tooltip, Legend)
 
-const GRID = { color: '#1f2937' }
+const GRID = { color: 'var(--panel-2)' }
 const TICK = { color: '#9ca3af' }
 const PAGE_SIZE = 25
 

@@ -265,8 +265,8 @@ export default function KpiScorecard() {
       title: { display: false },
     },
     scales: {
-      x: { grid: { color: '#1f2937' }, ticks: { color: '#9ca3af', font: { size: 10 } } },
-      y: { grid: { color: '#1f2937' }, ticks: { color: '#9ca3af' } },
+      x: { grid: { color: 'var(--panel-2)' }, ticks: { color: '#9ca3af', font: { size: 10 } } },
+      y: { grid: { color: 'var(--panel-2)' }, ticks: { color: '#9ca3af' } },
     },
   })
 

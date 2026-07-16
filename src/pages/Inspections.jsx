@@ -1614,8 +1614,8 @@ export default function Inspections() {
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
               <div>
                 <div style={{ fontSize: 16, fontWeight: 700, color:'var(--panel-ink)' }}>{t('inspections.approve.title')}</div>
-                <div style={{ fontSize: 12, color: '#9ca3af', marginTop: 2 }}>
-                  {t('inspections.approve.asset')} <strong style={{ color: '#d1d5db' }}>{approveTarget.asset_no}</strong>
+                <div style={{ fontSize: 12, color: 'var(--panel-ink-3)', marginTop: 2 }}>
+                  {t('inspections.approve.asset')} <strong style={{ color: 'var(--panel-ink-2)' }}>{approveTarget.asset_no}</strong>
                   {approveTarget.site ? ` · ${approveTarget.site}` : ''}
                   {' · '}{approveTarget.inspection_date || approveTarget.scheduled_date}
                 </div>
@@ -1626,7 +1626,7 @@ export default function Inspections() {
                 )}
               </div>
               <button onClick={() => { setShowApproveModal(false); setSearchParams({}) }}
-                style={{ background: 'none', border: 'none', color: '#9ca3af', cursor: 'pointer' }}>
+                style={{ background: 'none', border: 'none', color: 'var(--panel-ink-3)', cursor: 'pointer' }}>
                 <X size={20} />
               </button>
             </div>
@@ -1641,8 +1641,8 @@ export default function Inspections() {
                 [t('inspections.approve.fields.notes'), approveTarget.notes],
               ].filter(([, v]) => v).map(([k, v]) => (
                 <div key={k} style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
-                  <span style={{ color: '#6b7280', minWidth: 100 }}>{k}</span>
-                  <span style={{ color: '#d1d5db', fontWeight: 600 }}>{v}</span>
+                  <span style={{ color: 'var(--panel-ink-4)', minWidth: 100 }}>{k}</span>
+                  <span style={{ color: 'var(--panel-ink-2)', fontWeight: 600 }}>{v}</span>
                 </div>
               ))}
             </div>
@@ -1655,7 +1655,7 @@ export default function Inspections() {
             {/* Inspector signature preview */}
             {approveTarget.inspector_signature && (
               <div style={{ marginBottom: 16 }}>
-                <div style={{ fontSize: 11, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', marginBottom: 6 }}>{t('inspections.form.inspectorSignature')}</div>
+                <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--panel-ink-4)', textTransform: 'uppercase', marginBottom: 6 }}>{t('inspections.form.inspectorSignature')}</div>
                 <img src={approveTarget.inspector_signature} alt="Inspector signature"
                   style={{ maxWidth: 200, border: '1px solid var(--hairline)', borderRadius: 8 }} />
               </div>
@@ -1663,13 +1663,13 @@ export default function Inspections() {
 
             {/* Approver signature */}
             <div style={{ marginBottom: 16 }}>
-              <div style={{ fontSize: 11, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', marginBottom: 8 }}>{t('inspections.approve.yourSignature')}</div>
+              <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--panel-ink-4)', textTransform: 'uppercase', marginBottom: 8 }}>{t('inspections.approve.yourSignature')}</div>
               {approverSig ? (
                 <div>
                   <img src={approverSig} alt="Approver signature"
                     style={{ maxWidth: 200, border: '1px solid var(--hairline)', borderRadius: 8 }} />
                   <button onClick={() => setApproverSig(null)}
-                    style={{ display: 'block', marginTop: 6, fontSize: 11, color: '#9ca3af', background: 'none', border: 'none', cursor: 'pointer' }}>
+                    style={{ display: 'block', marginTop: 6, fontSize: 11, color: 'var(--panel-ink-3)', background: 'none', border: 'none', cursor: 'pointer' }}>
                     {t('inspections.approve.clearResign')}
                   </button>
                 </div>
@@ -1679,7 +1679,7 @@ export default function Inspections() {
                   style={{
                     width: '100%', padding: '14px', borderRadius: 12,
                     border: '2px dashed var(--hairline)', background: 'var(--panel-2)',
-                    color: '#9ca3af', fontSize: 13, cursor: 'pointer',
+                    color: 'var(--panel-ink-3)', fontSize: 13, cursor: 'pointer',
                     display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
                   }}
                 >
@@ -1744,7 +1744,7 @@ export default function Inspections() {
                   disabled={approveSubmitting || !approverSig}
                   style={{
                     flex: 2, padding: '11px', borderRadius: 10, border: 'none',
-                    background: approverSig ? '#16a34a' : '#374151',
+                    background: approverSig ? '#16a34a' : 'var(--hairline)',
                     color:'var(--panel-ink)', fontSize: 13, fontWeight: 700, cursor: approverSig ? 'pointer' : 'not-allowed',
                   }}
                 >

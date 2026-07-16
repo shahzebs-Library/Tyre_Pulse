@@ -40,8 +40,8 @@ const CHART_OPTS = {
     tooltip: { backgroundColor: 'var(--panel)', borderColor: 'var(--hairline)', borderWidth: 1, titleColor: '#f9fafb', bodyColor: '#d1d5db' },
   },
   scales: {
-    x: { ticks: { color: '#9ca3af', font: { size: 11 } }, grid: { color: '#1f2937' } },
-    y: { ticks: { color: '#9ca3af', font: { size: 11 } }, grid: { color: '#1f2937' } },
+    x: { ticks: { color: '#9ca3af', font: { size: 11 } }, grid: { color: 'var(--panel-2)' } },
+    y: { ticks: { color: '#9ca3af', font: { size: 11 } }, grid: { color: 'var(--panel-2)' } },
   },
 }
 
@@ -464,7 +464,7 @@ export default function SafetyCompliance() {
                   {radarData && <Radar data={radarData} options={{
                     responsive: true, maintainAspectRatio: false,
                     plugins: { legend: { display: false }, tooltip: CHART_OPTS.plugins.tooltip },
-                    scales: { r: { ticks: { color: '#6b7280', backdropColor: 'transparent', font: { size: 10 } }, grid: { color: '#1f2937' }, pointLabels: { color: '#9ca3af', font: { size: 11 } }, suggestedMin: 0, suggestedMax: 100 } },
+                    scales: { r: { ticks: { color: '#6b7280', backdropColor: 'transparent', font: { size: 10 } }, grid: { color: 'var(--panel-2)' }, pointLabels: { color: '#9ca3af', font: { size: 11 } }, suggestedMin: 0, suggestedMax: 100 } },
                   }} />}
                 </div>
               </div>

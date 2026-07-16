@@ -60,7 +60,7 @@ export default class ErrorBoundary extends Component {
           flexDirection: 'column',
           alignItems: 'center',
           justifyContent: 'center',
-          background: '#020704',
+          background: 'var(--bg-base)',
           padding: '24px 20px',
           fontFamily: 'system-ui, -apple-system, sans-serif',
         }}

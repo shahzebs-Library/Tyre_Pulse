@@ -1031,8 +1031,8 @@ export default function InspectionPlanner() {
       tooltip: { backgroundColor: 'var(--panel-2)', titleColor: '#f9fafb', bodyColor: '#d1d5db' },
     },
     scales: {
-      x: { ticks: { color: '#6b7280' }, grid: { color: '#1f2937' } },
-      y: { ticks: { color: '#6b7280' }, grid: { color: '#1f2937' }, beginAtZero: true },
+      x: { ticks: { color: '#6b7280' }, grid: { color: 'var(--panel-2)' } },
+      y: { ticks: { color: '#6b7280' }, grid: { color: 'var(--panel-2)' }, beginAtZero: true },
     },
   }
 

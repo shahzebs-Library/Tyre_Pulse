@@ -153,6 +153,11 @@ export default defineConfig({
   build: {
     outDir: 'dist',
     sourcemap: false,
+    // Raised from the 500 kB default only AFTER splitting the heavy vendor
+    // groups (react / echarts / chart.js / supabase / motion / table) into
+    // their own cacheable chunks. This is not the primary fix — the splitting
+    // is — it just silences the warning for the remaining app-shell chunk.
+    chunkSizeWarningLimit: 900,
     rollupOptions: {
       output: {
         // Chunk vendor libs for better caching.
@@ -171,7 +176,12 @@ export default defineConfig({
             id.includes('/object-assign/') ||
             id.includes('/use-sync-external-store/')
           ) return 'vendor-react'
-          if (id.includes('/chart.js/') || id.includes('/react-chartjs')) return 'vendor-charts'
+          // chart.js + react-chartjs-2 wrapper.
+          if (id.includes('/chart.js/') || id.includes('/react-chartjs')) return 'vendor-chartjs'
+          // echarts is the heaviest single vendor (~1 MB) and was previously
+          // buried inside the main index chunk. Split it out so it is cached
+          // independently and only re-downloaded when echarts itself changes.
+          if (id.includes('/echarts/') || id.includes('/echarts-for-react/') || id.includes('/zrender/')) return 'vendor-echarts'
           if (id.includes('/framer-motion/')) return 'vendor-motion'
           // NOTE: xlsx / jspdf / pptxgenjs are intentionally NOT pinned here.
           // They are only ever loaded via dynamic import(), so Rollup gives each
@@ -182,6 +192,8 @@ export default defineConfig({
           if (id.includes('/@supabase/')) return 'vendor-supabase'
           if (id.includes('/@anthropic-ai/')) return 'vendor-ai'
           if (id.includes('/lucide-react/')) return 'vendor-icons'
+          // TanStack (table/query/virtual) — shared across data-grid pages.
+          if (id.includes('/@tanstack/')) return 'vendor-table'
           // Remaining packages: Rollup assigns them automatically, no forced grouping
         },
       },

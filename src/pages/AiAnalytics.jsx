@@ -33,7 +33,7 @@ const CHART_PALETTE = [
 const CHART_OPTS = {
   responsive: true, maintainAspectRatio: false,
   plugins: { legend: { labels: { color: '#9ca3af', font: { size: 11 } } } },
-  scales: { x: { grid: { color: '#1f2937' }, ticks: { color: '#9ca3af' } }, y: { grid: { color: '#1f2937' }, ticks: { color: '#9ca3af' } } },
+  scales: { x: { grid: { color: 'var(--panel-2)' }, ticks: { color: '#9ca3af' } }, y: { grid: { color: 'var(--panel-2)' }, ticks: { color: '#9ca3af' } } },
 }
 const DOUGHNUT_OPTS = {
   responsive: true, maintainAspectRatio: false,

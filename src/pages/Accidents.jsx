@@ -446,19 +446,20 @@ export default function Accidents() {
   }, [assetQuery, fleetAssets])
 
   // Auto-populate related fields from the vehicle master (vehicle_fleet). Only
-  // real accidents columns are written (plate_number, vehicle_type, site,
-  // country) and ONLY when the user has not already filled them — a typed value
-  // is never overwritten. Plate comes from the master's registration_no. The
-  // full master row is kept in `assetInfo` for read-only context (make/model).
+  // real accidents columns are written (plate_number [shown as Fleet No],
+  // vehicle_type, site, country) and ONLY when the user has not already filled
+  // them - a typed value is never overwritten. The Fleet No comes from the
+  // master's fleet_number (falling back to registration_no, which holds the same
+  // value in this fleet). The full master row is kept in `assetInfo` for context.
   const applyAssetMaster = useCallback((asset) => {
     if (!asset) { setAssetInfo(null); return }
     setAssetInfo(asset)
     setForm(f => ({
       ...f,
-      plate_number: f.plate_number || asset.registration_no || f.plate_number,
-      vehicle_type: f.vehicle_type || asset.vehicle_type    || f.vehicle_type,
-      site:         f.site         || asset.site            || f.site,
-      country:      f.country      || asset.country         || f.country,
+      plate_number: f.plate_number || asset.fleet_number || asset.registration_no || f.plate_number,
+      vehicle_type: f.vehicle_type || asset.vehicle_type  || f.vehicle_type,
+      site:         f.site         || asset.site          || f.site,
+      country:      f.country      || asset.country       || f.country,
     }))
   }, [])
 
@@ -1352,7 +1353,7 @@ export default function Accidents() {
   const EXPORT_FIELDS = [
     ['incident_date', 'Date', r => r.incident_date],
     ['asset_no', 'Asset', r => r.asset_no],
-    ['plate_number', 'Plate No', r => r.plate_number],
+    ['plate_number', 'Fleet No', r => r.plate_number],
     ['vehicle_type', 'Vehicle Type', r => r.vehicle_type],
     ['site', 'Site', r => r.site],
     ['country', 'Country', r => r.country],
@@ -2421,7 +2422,7 @@ export default function Accidents() {
                   )}
                 </div>
                 <div>
-                  <label className="label">Plate Number</label>
+                  <label className="label">Fleet No</label>
                   <input
                     className="input" placeholder="Auto-filled from asset"
                     value={form.plate_number}

@@ -14,7 +14,7 @@ import { supabase, applyCountry, fetchAllPages, ServiceError } from './_client'
 const TYRE_COLS =
   'id,serial_no,serial_number,tyre_serial,brand,size,asset_no,site,position,country,' +
   'tread_depth,pressure_reading,cost_per_tyre,total_km,km_at_fitment,km_at_removal,' +
-  'fitment_date,issue_date,removal_date,reason_for_removal,removal_reason,status,current_status'
+  'fitment_date,issue_date,removal_date,reason_for_removal,removal_reason,status'
 
 const WO_COLS =
   'id,work_order_no,asset_no,site,status,priority,created_at,scheduled_date,due_date,completed_date,country'

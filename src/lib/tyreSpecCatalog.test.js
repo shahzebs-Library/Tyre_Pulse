@@ -13,6 +13,9 @@ import {
   REFERENCE_BRANDS,
   SMART_DEFAULTS,
   defaultsForVehicleType,
+  BRAND_META,
+  brandMeta,
+  BRAND_TIERS,
 } from './tyreSpecCatalog'
 
 // Characters banned from report/UI strings (em/en dash, arrows, curly quotes, middle dot).
@@ -158,6 +161,56 @@ describe('SMART_DEFAULTS', () => {
   it('has no banned punctuation in notes (no em dash or arrow)', () => {
     for (const d of SMART_DEFAULTS) {
       expect(BANNED.test(d.notes)).toBe(false)
+    }
+  })
+})
+
+describe('BRAND_META / brandMeta', () => {
+  it('exposes the tier ordering helper', () => {
+    expect(BRAND_TIERS).toEqual(['premium', 'mid', 'value'])
+  })
+  it('covers every approved brand with a valid tier', () => {
+    for (const b of APPROVED_BRANDS) {
+      const meta = BRAND_META[b]
+      expect(meta, `missing BRAND_META for ${b}`).toBeDefined()
+      expect(BRAND_TIERS).toContain(meta.tier)
+      expect(typeof meta.origin).toBe('string')
+      expect(typeof meta.retreadable).toBe('boolean')
+      expect(['excellent', 'good', 'fair']).toContain(meta.casing)
+      expect(typeof meta.priceIndex).toBe('number')
+      expect(typeof meta.durabilityIndex).toBe('number')
+      expect(Array.isArray(meta.application)).toBe(true)
+      expect(meta.application.length).toBeGreaterThan(0)
+      expect(typeof meta.note).toBe('string')
+    }
+  })
+  it('classifies Double Coin as a retreadable value casing', () => {
+    expect(BRAND_META['Double Coin'].tier).toBe('value')
+    expect(BRAND_META['Double Coin'].retreadable).toBe(true)
+  })
+  it('prices premium brands above value brands on average', () => {
+    const meanFor = (tier) => {
+      const vals = APPROVED_BRANDS
+        .map((b) => BRAND_META[b])
+        .filter((m) => m.tier === tier)
+        .map((m) => m.priceIndex)
+      return vals.reduce((s, v) => s + v, 0) / vals.length
+    }
+    expect(meanFor('premium')).toBeGreaterThan(meanFor('value'))
+  })
+  it('resolves case-insensitively', () => {
+    expect(brandMeta('double coin')).toBe(BRAND_META['Double Coin'])
+    expect(brandMeta('MICHELIN')).toBe(BRAND_META.Michelin)
+  })
+  it('returns a safe honest default for unknown brands', () => {
+    expect(brandMeta('NoSuchBrand').tier).toBe('unknown')
+    expect(brandMeta(null).tier).toBe('unknown')
+    expect(brandMeta('NoSuchBrand').priceIndex).toBeNull()
+    expect(brandMeta('NoSuchBrand').application).toEqual([])
+  })
+  it('has no banned punctuation in any note', () => {
+    for (const b of APPROVED_BRANDS) {
+      expect(BANNED.test(BRAND_META[b].note)).toBe(false)
     }
   })
 })

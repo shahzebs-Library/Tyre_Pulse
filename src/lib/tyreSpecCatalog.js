@@ -187,6 +187,211 @@ export const REFERENCE_BRANDS = [
 
 export const APPROVED_BRANDS = [...CHINESE_BRANDS, ...REFERENCE_BRANDS]
 
+// -- Brand economics reference (Value Advisor guidance) ---------------------------
+// Engineering GUIDANCE, not fleet data. When no supplier quotes have been entered,
+// the Value Advisor uses these relative indices to rank approved brands by likely
+// lifecycle value. Baselines: premium tier is pinned at priceIndex 100 and
+// durabilityIndex 100; every other brand is expressed relative to that baseline.
+// priceIndex = relative acquisition cost, durabilityIndex = relative expected life.
+// Values are defensible industry positioning, clearly labeled, ASCII-only.
+export const BRAND_TIERS = ['premium', 'mid', 'value']
+
+export const BRAND_META = {
+  // Value radials (China) - primary approved brands
+  'Double Coin': {
+    tier: 'value',
+    origin: 'China',
+    retreadable: true,
+    casing: 'good',
+    priceIndex: 60,
+    durabilityIndex: 82,
+    application: ['OTR', 'Mixer', 'Regional'],
+    note: 'Proven value casing suited to GCC site work: strong OTR and mixer economics with retread upside',
+  },
+  Triangle: {
+    tier: 'value',
+    origin: 'China',
+    retreadable: true,
+    casing: 'good',
+    priceIndex: 58,
+    durabilityIndex: 80,
+    application: ['Regional', 'OTR', 'Mixer'],
+    note: 'Broad radial range with reliable casing for one retread cycle on regional and site duty',
+  },
+  Aeolus: {
+    tier: 'value',
+    origin: 'China',
+    retreadable: true,
+    casing: 'good',
+    priceIndex: 62,
+    durabilityIndex: 83,
+    application: ['Long-haul', 'Regional', 'Trailer'],
+    note: 'Upper-value radial with sound casing quality: good long-haul and trailer value',
+  },
+  Linglong: {
+    tier: 'value',
+    origin: 'China',
+    retreadable: true,
+    casing: 'fair',
+    priceIndex: 55,
+    durabilityIndex: 76,
+    application: ['Regional', 'Urban', 'Drive'],
+    note: 'Budget radial for regional and urban drive positions: retread once from sound casings only',
+  },
+  Sailun: {
+    tier: 'value',
+    origin: 'China',
+    retreadable: true,
+    casing: 'good',
+    priceIndex: 60,
+    durabilityIndex: 79,
+    application: ['Long-haul', 'Regional', 'Drive'],
+    note: 'Value radial with improving casing consistency for long-haul and regional fleets',
+  },
+  Goodride: {
+    tier: 'value',
+    origin: 'China',
+    retreadable: false,
+    casing: 'fair',
+    priceIndex: 52,
+    durabilityIndex: 73,
+    application: ['Urban', 'Regional'],
+    note: 'Low first cost for urban and regional duty: treat as single-life, casing not preferred for retread',
+  },
+  Westlake: {
+    tier: 'value',
+    origin: 'China',
+    retreadable: false,
+    casing: 'fair',
+    priceIndex: 53,
+    durabilityIndex: 74,
+    application: ['Urban', 'Regional', 'Forklift'],
+    note: 'Economy radial and industrial fitments for urban and yard duty: single-life planning',
+  },
+  Wanli: {
+    tier: 'value',
+    origin: 'China',
+    retreadable: false,
+    casing: 'fair',
+    priceIndex: 50,
+    durabilityIndex: 70,
+    application: ['Urban', 'Regional'],
+    note: 'Cheapest approved radial: lowest acquisition cost, plan as single-life urban tyre',
+  },
+  Annaite: {
+    tier: 'value',
+    origin: 'China',
+    retreadable: false,
+    casing: 'fair',
+    priceIndex: 51,
+    durabilityIndex: 72,
+    application: ['Regional', 'Trailer'],
+    note: 'Value trailer and regional radial: low cost, casing not recommended for retreading',
+  },
+  Fullrun: {
+    tier: 'value',
+    origin: 'China',
+    retreadable: false,
+    casing: 'fair',
+    priceIndex: 50,
+    durabilityIndex: 71,
+    application: ['Urban', 'Trailer'],
+    note: 'Entry price trailer and urban radial: single-life, verify load and speed ratings on fitment',
+  },
+  // Upper-value / OTR specialists
+  Techking: {
+    tier: 'mid',
+    origin: 'China',
+    retreadable: true,
+    casing: 'good',
+    priceIndex: 72,
+    durabilityIndex: 88,
+    application: ['OTR', 'Mixer', 'Regional'],
+    note: 'OTR and severe-service specialist: cut and heat resistant compounds for loaders and haul duty',
+  },
+  Advance: {
+    tier: 'mid',
+    origin: 'China',
+    retreadable: true,
+    casing: 'good',
+    priceIndex: 68,
+    durabilityIndex: 84,
+    application: ['OTR', 'Mixer'],
+    note: 'Value OTR range for loaders, graders and reach stackers: strong cost per hour on site',
+  },
+  BKT: {
+    tier: 'mid',
+    origin: 'India',
+    retreadable: true,
+    casing: 'good',
+    priceIndex: 75,
+    durabilityIndex: 86,
+    application: ['OTR', 'Mixer', 'Regional'],
+    note: 'Established OTR and off-highway specialist: wide size range with dependable casing life',
+  },
+  // Premium references (baseline = 100)
+  Michelin: {
+    tier: 'premium',
+    origin: 'France',
+    retreadable: true,
+    casing: 'excellent',
+    priceIndex: 105,
+    durabilityIndex: 105,
+    application: ['Long-haul', 'Regional', 'Urban'],
+    note: 'Premium benchmark: highest casing quality and multi-retread life, best cost per km on long-haul',
+  },
+  Bridgestone: {
+    tier: 'premium',
+    origin: 'Japan',
+    retreadable: true,
+    casing: 'excellent',
+    priceIndex: 103,
+    durabilityIndex: 103,
+    application: ['Long-haul', 'Regional', 'Mixer'],
+    note: 'Premium casing with Bandag retread program: excellent multi-life value for high-mileage fleets',
+  },
+  Continental: {
+    tier: 'premium',
+    origin: 'Germany',
+    retreadable: true,
+    casing: 'excellent',
+    priceIndex: 101,
+    durabilityIndex: 101,
+    application: ['Long-haul', 'Regional', 'Urban'],
+    note: 'Premium radial with ContiLifeCycle retread: strong casing durability and fuel efficiency',
+  },
+  Goodyear: {
+    tier: 'premium',
+    origin: 'United States',
+    retreadable: true,
+    casing: 'excellent',
+    priceIndex: 100,
+    durabilityIndex: 100,
+    application: ['Long-haul', 'Regional', 'Mixer'],
+    note: 'Premium baseline: excellent casing with UniCircle retread for dependable multi-life economics',
+  },
+}
+
+// Case-insensitive brand-economics lookup. Returns the meta for an approved brand,
+// or a safe honest default for any unknown brand.
+export function brandMeta(name) {
+  const fallback = {
+    tier: 'unknown',
+    origin: '',
+    retreadable: false,
+    casing: 'unknown',
+    priceIndex: null,
+    durabilityIndex: null,
+    application: [],
+    note: '',
+  }
+  if (name == null) return fallback
+  const key = String(name).trim().toLowerCase()
+  if (!key) return fallback
+  const hit = Object.keys(BRAND_META).find((b) => b.toLowerCase() === key)
+  return hit ? BRAND_META[hit] : fallback
+}
+
 // -- Smart defaults (industry-standard fitment profiles) --------------------------
 // Shape: { vehicle_type, position, approved_sizes[], approved_brands[],
 //          min_load_index, min_speed_index, ply_rating, recommended_pressure,

@@ -12,6 +12,7 @@ import {
   ChevronLeft, ChevronRight, Tag, Shield,
   RefreshCw, History, Zap, Truck, Info, BarChart3,
   ClipboardCheck, Wrench, BookOpen,
+  Scale, DollarSign, TrendingDown, Award, Gauge, Package,
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
 import EmptyState from '../components/EmptyState'
@@ -19,9 +20,14 @@ const uuidv4 = () => crypto.randomUUID()
 import * as tyreSpecsApi from '../lib/api/tyreSpecs'
 import {
   VEHICLE_TYPES, POSITIONS, SPEED_INDICES, PLY_RATINGS, APPROVED_BRANDS, SMART_DEFAULTS,
+  BRAND_META, brandMeta,
 } from '../lib/tyreSpecCatalog'
 import { buildPolicySections, renderTyreSpecPolicyPdf } from '../lib/tyreSpecPolicy'
 import { normalizePosition } from '../lib/tyrePositions'
+import * as procurementApi from '../lib/api/tyreProcurement'
+import { recommend, LIFECYCLE_DEFAULTS } from '../lib/tyreValueAdvisor'
+import * as engKpiApi from '../lib/api/engineeringKpi'
+import { computeCpkByBrand, computeAvgTyreLife } from '../lib/kpiEngine'
 import { useAuth } from '../contexts/AuthContext'
 import { useSettings } from '../contexts/SettingsContext'
 import { useTenant } from '../contexts/TenantContext'
@@ -564,6 +570,343 @@ function RaiseWorkOrderModal({ asset, violations, country, createdBy, onClose })
   )
 }
 
+// ── Value Advisor helpers ──────────────────────────────────────────────────────
+
+// Currency-aware money formatter. Null / blank -> "N/A" (never a dash).
+function fmtMoney(v, currency = 'SAR') {
+  if (v === null || v === undefined || v === '' || Number.isNaN(Number(v))) return 'N/A'
+  return `${Number(v).toLocaleString('en-US', { maximumFractionDigits: 2 })} ${currency}`
+}
+
+// Plain value or "N/A".
+function fmtVal(v, suffix = '') {
+  if (v === null || v === undefined || v === '' || (typeof v === 'number' && Number.isNaN(v))) return 'N/A'
+  return `${v}${suffix}`
+}
+
+// Whitelisted DB row from the quote form (numbers coerced, blanks -> null).
+function quoteToRow(form, { country = null, createdBy = null } = {}) {
+  const toNum = v => {
+    if (v === '' || v == null) return null
+    const n = Number(v)
+    return Number.isFinite(n) ? n : null
+  }
+  const row = {
+    vehicle_type: String(form.vehicle_type ?? '').trim(),
+    position: form.position || 'All Positions',
+    brand: String(form.brand ?? '').trim(),
+    size: form.size?.trim() ? form.size.trim() : null,
+    ply_rating: form.ply_rating?.trim() ? form.ply_rating.trim() : null,
+    supplier: form.supplier?.trim() ? form.supplier.trim() : null,
+    unit_price: toNum(form.unit_price),
+    currency: (form.currency?.trim() || 'SAR'),
+    expected_life_km: toNum(form.expected_life_km),
+    retreadable: !!form.retreadable,
+    retread_count: toNum(form.retread_count),
+    retread_cost_pct: toNum(form.retread_cost_pct),
+    warranty_km: toNum(form.warranty_km),
+    casing_value: toNum(form.casing_value),
+    notes: form.notes?.trim() ? form.notes.trim() : null,
+  }
+  if (country != null) row.country = country
+  if (createdBy != null) row.created_by = createdBy
+  return row
+}
+
+const CONFIDENCE_META = {
+  high:     { label: 'High',     color: 'text-green-400',  bg: 'bg-green-900/20 border-green-800' },
+  moderate: { label: 'Moderate', color: 'text-yellow-400', bg: 'bg-yellow-900/20 border-yellow-800' },
+  guidance: { label: 'Guidance', color: 'text-[var(--text-muted)]', bg: 'bg-[var(--input-bg)] border-[var(--input-border)]' },
+}
+
+// Row badges derived from the engine flags on each ranked econ item.
+function EconBadges({ e }) {
+  const pills = []
+  if (e.bestValue)   pills.push({ key: 'bv', label: 'Best Value',   icon: Award,        cls: 'text-green-300 bg-green-900/30 border-green-800' })
+  if (e.bestDeal)    pills.push({ key: 'bd', label: 'Best Deal',    icon: DollarSign,   cls: 'text-blue-300 bg-blue-900/30 border-blue-800' })
+  if (e.lowestCpk)   pills.push({ key: 'lc', label: 'Lowest CPK',   icon: TrendingDown, cls: 'text-emerald-300 bg-emerald-900/30 border-emerald-800' })
+  if (e.longestLife) pills.push({ key: 'll', label: 'Longest Life', icon: Gauge,        cls: 'text-purple-300 bg-purple-900/30 border-purple-800' })
+  if (pills.length === 0) return <span className="text-[var(--text-dim)] text-xs">-</span>
+  return (
+    <div className="flex flex-wrap gap-1">
+      {pills.map(p => (
+        <span key={p.key} className={`inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full border ${p.cls}`}>
+          <p.icon size={9} /> {p.label}
+        </span>
+      ))}
+    </div>
+  )
+}
+
+// Honest brand-economics guidance when there is not enough quote data to rank.
+function BrandGuidancePanel({ brands = [] }) {
+  const list = Array.isArray(brands) ? brands.filter(Boolean) : []
+  if (list.length === 0) {
+    return (
+      <p className="text-[var(--text-dim)] text-sm">
+        No approved brands recorded for this fitment. Define the approved brands in the Specification
+        Library to unlock brand-economics guidance.
+      </p>
+    )
+  }
+  return (
+    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+      {list.map(b => {
+        const m = brandMeta(b)
+        return (
+          <div key={b} className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-3">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-[var(--text-primary)] font-medium text-sm flex items-center gap-1.5">
+                <Package size={12} className="text-purple-400" /> {b}
+              </span>
+              <span className="text-[10px] uppercase tracking-wide text-[var(--text-muted)] bg-[var(--input-bg)] px-2 py-0.5 rounded-full">
+                {m.tier || 'unknown'}
+              </span>
+            </div>
+            <div className="grid grid-cols-2 gap-2 text-xs">
+              <div><span className="text-[var(--text-muted)]">Origin: </span><span className="text-[var(--text-secondary)]">{fmtVal(m.origin || null)}</span></div>
+              <div><span className="text-[var(--text-muted)]">Retreadable: </span><span className="text-[var(--text-secondary)]">{m.retreadable ? 'Yes' : 'No'}</span></div>
+              <div><span className="text-[var(--text-muted)]">Casing: </span><span className="text-[var(--text-secondary)]">{fmtVal(m.casing || null)}</span></div>
+              <div><span className="text-[var(--text-muted)]">Price idx: </span><span className="text-[var(--text-secondary)]">{fmtVal(m.priceIndex)}</span></div>
+              <div><span className="text-[var(--text-muted)]">Durability idx: </span><span className="text-[var(--text-secondary)]">{fmtVal(m.durabilityIndex)}</span></div>
+              <div className="col-span-2">
+                <span className="text-[var(--text-muted)]">Application: </span>
+                <span className="text-[var(--text-secondary)]">{m.application?.length ? m.application.join(', ') : 'N/A'}</span>
+              </div>
+            </div>
+            {m.note && <p className="text-[var(--text-dim)] text-xs mt-2 leading-snug">{m.note}</p>}
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+// ── Quote Form Modal ───────────────────────────────────────────────────────────
+
+function QuoteFormModal({ quote, onClose, onSave, saving }) {
+  const [form, setForm] = useState(quote ? {
+    vehicle_type: quote.vehicle_type ?? '',
+    position: quote.position ?? 'All Positions',
+    brand: quote.brand ?? '',
+    size: quote.size ?? '',
+    ply_rating: quote.ply_rating ?? '',
+    supplier: quote.supplier ?? '',
+    unit_price: quote.unit_price ?? '',
+    currency: quote.currency ?? 'SAR',
+    expected_life_km: quote.expected_life_km ?? '',
+    retreadable: !!quote.retreadable,
+    retread_count: quote.retread_count ?? '',
+    retread_cost_pct: quote.retread_cost_pct ?? 0.4,
+    warranty_km: quote.warranty_km ?? '',
+    casing_value: quote.casing_value ?? '',
+    notes: quote.notes ?? '',
+  } : {
+    vehicle_type: '',
+    position: 'All Positions',
+    brand: '',
+    size: '',
+    ply_rating: '',
+    supplier: '',
+    unit_price: '',
+    currency: 'SAR',
+    expected_life_km: '',
+    retreadable: false,
+    retread_count: '',
+    retread_cost_pct: 0.4,
+    warranty_km: '',
+    casing_value: '',
+    notes: '',
+  })
+  const [error, setError] = useState('')
+
+  function set(field, val) { setForm(prev => ({ ...prev, [field]: val })) }
+
+  function validate() {
+    if (!form.vehicle_type.trim()) return 'Vehicle Type is required'
+    if (!form.position) return 'Position is required'
+    if (!form.brand.trim()) return 'Brand is required'
+    if (!form.supplier.trim()) return 'Supplier is required'
+    if (form.unit_price === '' || !(Number(form.unit_price) > 0)) return 'Unit Price must be a positive number'
+    if (form.expected_life_km === '' || !(Number(form.expected_life_km) > 0)) return 'Expected Life (km) must be a positive number'
+    return null
+  }
+
+  function submit(e) {
+    e.preventDefault()
+    const err = validate()
+    if (err) { setError(err); return }
+    onSave(form)
+  }
+
+  const inputCls = 'w-full bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg px-3 py-2 text-[var(--text-primary)] text-sm focus:border-blue-500 outline-none'
+  const labelCls = 'text-[var(--text-muted)] text-xs mb-1.5 block'
+
+  return (
+    <AnimatePresence>
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4"
+        onClick={e => { if (e.target === e.currentTarget) onClose() }}
+      >
+        <motion.div
+          initial={{ scale: 0.95, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          exit={{ scale: 0.95, opacity: 0 }}
+          className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto"
+        >
+          <div className="flex items-center justify-between p-6 border-b border-[var(--input-border)]">
+            <h3 className="text-[var(--text-primary)] font-semibold text-lg">
+              {quote?.id ? 'Edit Supplier Quote' : 'Add Supplier Quote'}
+            </h3>
+            <button onClick={onClose} className="text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors">
+              <X size={20} />
+            </button>
+          </div>
+
+          <form onSubmit={submit} className="p-6 space-y-5">
+            {error && (
+              <div className="bg-red-900/30 border border-red-700 text-red-300 text-sm px-4 py-2.5 rounded-lg flex items-center gap-2">
+                <AlertTriangle size={14} /> {error}
+              </div>
+            )}
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className={labelCls}>Vehicle Type *</label>
+                <input list="advisor-vehicle-types" value={form.vehicle_type} onChange={e => set('vehicle_type', e.target.value)} placeholder="e.g. Rigid Truck" className={inputCls} />
+                <datalist id="advisor-vehicle-types">{VEHICLE_TYPES.map(v => <option key={v} value={v} />)}</datalist>
+              </div>
+              <div>
+                <label className={labelCls}>Position *</label>
+                <select value={form.position} onChange={e => set('position', e.target.value)} className={inputCls}>
+                  {POSITIONS.map(p => <option key={p} value={p}>{p}</option>)}
+                </select>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className={labelCls}>Brand *</label>
+                <input list="advisor-brands" value={form.brand} onChange={e => set('brand', e.target.value)} placeholder="e.g. Double Coin" className={inputCls} />
+                <datalist id="advisor-brands">{APPROVED_BRANDS.map(b => <option key={b} value={b} />)}</datalist>
+              </div>
+              <div>
+                <label className={labelCls}>Supplier *</label>
+                <input value={form.supplier} onChange={e => set('supplier', e.target.value)} placeholder="e.g. Al Jazira Tyres" className={inputCls} />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className={labelCls}>Size</label>
+                <input value={form.size} onChange={e => set('size', e.target.value)} placeholder="e.g. 315/80R22.5" className={inputCls} />
+              </div>
+              <div>
+                <label className={labelCls}>Ply / Star Rating</label>
+                <input list="advisor-ply" value={form.ply_rating} onChange={e => set('ply_rating', e.target.value)} placeholder="e.g. 18PR" className={inputCls} />
+                <datalist id="advisor-ply">{PLY_RATINGS.map(p => <option key={p} value={p} />)}</datalist>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+              <div>
+                <label className={labelCls}>Unit Price *</label>
+                <input type="number" step="0.01" value={form.unit_price} onChange={e => set('unit_price', e.target.value)} placeholder="e.g. 1450" className={inputCls} />
+              </div>
+              <div>
+                <label className={labelCls}>Currency</label>
+                <input value={form.currency} onChange={e => set('currency', e.target.value)} placeholder="SAR" className={inputCls} />
+              </div>
+              <div>
+                <label className={labelCls}>Expected Life (km) *</label>
+                <input type="number" value={form.expected_life_km} onChange={e => set('expected_life_km', e.target.value)} placeholder="e.g. 120000" className={inputCls} />
+              </div>
+              <div>
+                <label className={labelCls}>Warranty (km)</label>
+                <input type="number" value={form.warranty_km} onChange={e => set('warranty_km', e.target.value)} placeholder="e.g. 60000" className={inputCls} />
+              </div>
+              <div>
+                <label className={labelCls}>Casing Value</label>
+                <input type="number" step="0.01" value={form.casing_value} onChange={e => set('casing_value', e.target.value)} placeholder="e.g. 200" className={inputCls} />
+              </div>
+              <div>
+                <label className={labelCls}>Retread Cost (fraction of new)</label>
+                <input type="number" step="0.05" value={form.retread_cost_pct} onChange={e => set('retread_cost_pct', e.target.value)} placeholder="0.4" className={inputCls} />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4 items-end">
+              <label className="flex items-center gap-2 text-sm text-[var(--text-secondary)] cursor-pointer select-none pt-5">
+                <input type="checkbox" checked={form.retreadable} onChange={e => set('retreadable', e.target.checked)} className="w-4 h-4 accent-blue-600" />
+                Retreadable casing
+              </label>
+              <div>
+                <label className={labelCls}>Planned Retread Count</label>
+                <input type="number" value={form.retread_count} onChange={e => set('retread_count', e.target.value)} placeholder="e.g. 1" disabled={!form.retreadable} className={`${inputCls} disabled:opacity-40`} />
+              </div>
+            </div>
+
+            <div>
+              <label className={labelCls}>Notes</label>
+              <textarea value={form.notes} onChange={e => set('notes', e.target.value)} rows={2} placeholder="Lead time, payment terms, delivery..." className={`${inputCls} resize-none`} />
+            </div>
+
+            <div className="flex justify-end gap-3 pt-2">
+              <button type="button" onClick={onClose} disabled={saving} className="px-4 py-2 text-[var(--text-muted)] hover:text-[var(--text-primary)] disabled:opacity-50 text-sm transition-colors">Cancel</button>
+              <button type="submit" disabled={saving} className="btn-primary gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
+                {saving ? <RefreshCw size={14} className="animate-spin" /> : <Save size={14} />}
+                {saving ? 'Saving...' : quote?.id ? 'Update Quote' : 'Save Quote'}
+              </button>
+            </div>
+          </form>
+        </motion.div>
+      </motion.div>
+    </AnimatePresence>
+  )
+}
+
+// ── Delete Quote Confirm Modal ─────────────────────────────────────────────────
+
+function DeleteQuoteConfirmModal({ quote, onClose, onConfirm }) {
+  return (
+    <AnimatePresence>
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4"
+        onClick={e => { if (e.target === e.currentTarget) onClose() }}
+      >
+        <motion.div
+          initial={{ scale: 0.95, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          exit={{ scale: 0.95, opacity: 0 }}
+          className="bg-[var(--surface-1)] border border-red-800 rounded-2xl w-full max-w-md p-6"
+        >
+          <div className="flex items-center gap-3 mb-4">
+            <div className="p-2 bg-red-900/30 rounded-lg"><Trash2 size={18} className="text-red-400" /></div>
+            <h3 className="text-[var(--text-primary)] font-semibold">Delete Supplier Quote</h3>
+          </div>
+          <p className="text-[var(--text-muted)] text-sm mb-2">
+            Delete the quote for <span className="text-[var(--text-primary)] font-medium">{quote?.brand || 'this brand'}</span>
+            {quote?.supplier ? <> from <span className="text-[var(--text-primary)] font-medium">{quote.supplier}</span></> : null}?
+          </p>
+          <p className="text-[var(--text-muted)] text-xs mb-6">This removes it from the value ranking. This action cannot be undone.</p>
+          <div className="flex justify-end gap-3">
+            <button onClick={onClose} className="px-4 py-2 text-[var(--text-muted)] hover:text-[var(--text-primary)] text-sm transition-colors">Cancel</button>
+            <button onClick={onConfirm} className="flex items-center gap-2 bg-red-700 hover:bg-red-600 text-white text-sm px-4 py-2 rounded-lg transition-colors">
+              <Trash2 size={14} /> Delete
+            </button>
+          </div>
+        </motion.div>
+      </motion.div>
+    </AnimatePresence>
+  )
+}
+
 // ── Main Component ─────────────────────────────────────────────────────────────
 
 export default function TyreSpecifications() {
@@ -572,6 +915,8 @@ export default function TyreSpecifications() {
   const { branding } = useTenant()
   const company = branding?.legal_name || branding?.display_name || appSettings?.company_name || 'TyrePulse'
   const isAdmin = profile?.role === 'Admin'
+  // Procurement is an elevated action; RLS also enforces this server-side.
+  const canManageQuotes = ['Admin', 'Manager', 'Director'].includes(profile?.role)
   const country = activeCountry && activeCountry !== 'All' ? activeCountry : null
 
   const [activeTab, setActiveTab] = useState('library')
@@ -583,6 +928,16 @@ export default function TyreSpecifications() {
   const [fleetMaster, setFleetMaster] = useState([])
   const [loadingRecords, setLoadingRecords] = useState(true)
   const [history, setHistory] = useState([])
+
+  // Value Advisor: supplier quotes + realized fleet performance
+  const [procurementOptions, setProcurementOptions] = useState([])
+  const [loadingOptions, setLoadingOptions] = useState(true)
+  const [optionsError, setOptionsError] = useState('')
+  const [kpiRecords, setKpiRecords] = useState([])
+  const [showQuoteModal, setShowQuoteModal] = useState(false)
+  const [editingQuote, setEditingQuote] = useState(null)
+  const [savingQuote, setSavingQuote] = useState(false)
+  const [deletingQuote, setDeletingQuote] = useState(null)
 
   // library filters
   const [libSearch, setLibSearch] = useState('')
@@ -644,6 +999,7 @@ export default function TyreSpecifications() {
   useEffect(() => {
     fetchSpecs()
     fetchLiveData()
+    fetchAdvisorData()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeCountry])
 
@@ -659,6 +1015,31 @@ export default function TyreSpecifications() {
       setTyreRecords([])
     } finally {
       setLoadingRecords(false)
+    }
+  }
+
+  // ── Value Advisor data: supplier quotes + realized fleet CPK grounding ────────
+
+  async function fetchAdvisorData() {
+    setLoadingOptions(true)
+    setOptionsError('')
+    try {
+      const { data: opts, error: optErr } = await procurementApi.listOptions({ country })
+      if (optErr) throw optErr
+      setProcurementOptions(opts ?? [])
+    } catch (e) {
+      setOptionsError(e.message || 'Failed to load supplier quotes')
+      setProcurementOptions([])
+    } finally {
+      setLoadingOptions(false)
+    }
+    // Realized fleet performance is a best-effort grounding aid; the advisor still
+    // ranks on spec-sheet economics when no history exists (honest "guidance").
+    try {
+      const { data: recs } = await engKpiApi.listKpiTyreRecords({ country, from: 0, to: 99999 })
+      setKpiRecords(recs ?? [])
+    } catch {
+      setKpiRecords([])
     }
   }
 
@@ -802,6 +1183,56 @@ export default function TyreSpecifications() {
   const typeOptions = useMemo(() => [...new Set(specs.map(s => s.vehicle_type).filter(Boolean))].sort(), [specs])
   const libTypeOptions = useMemo(() => [...new Set(specs.map(s => s.vehicle_type).filter(Boolean))].sort(), [specs])
 
+  // ── Value Advisor derivations ───────────────────────────────────────────────
+
+  // Realized (historically achieved) CPK + tyre life per brand, from the canonical
+  // engineering-KPI engines. Keyed by brand.toLowerCase() -> { avgCpk, avgLifeKm, count }.
+  const realizedByBrand = useMemo(() => {
+    const cpk = computeCpkByBrand(kpiRecords)                 // [{ brand, avgCpk, count }]
+    const life = computeAvgTyreLife(kpiRecords).byBrand || [] // [{ brand, avgKm, count }]
+    const map = {}
+    cpk.forEach(c => {
+      const key = String(c.brand || '').toLowerCase()
+      if (!key || key === 'unknown') return
+      map[key] = { avgCpk: c.avgCpk ?? null, avgLifeKm: null, count: c.count ?? 0 }
+    })
+    life.forEach(l => {
+      const key = String(l.brand || '').toLowerCase()
+      if (!key || key === 'unknown') return
+      if (!map[key]) map[key] = { avgCpk: null, avgLifeKm: null, count: 0 }
+      map[key].avgLifeKm = l.avgKm ?? null
+      map[key].count = Math.max(map[key].count || 0, l.count ?? 0)
+    })
+    return map
+  }, [kpiRecords])
+
+  // Group quotes by approved fitment (vehicle_type | position).
+  const advisorGroups = useMemo(() => {
+    const map = {}
+    procurementOptions.forEach(o => {
+      const vt = o.vehicle_type || 'Unspecified'
+      const pos = o.position || 'All Positions'
+      const key = `${vt} | ${pos}`
+      if (!map[key]) map[key] = { key, vehicle_type: vt, position: pos, options: [] }
+      map[key].options.push(o)
+    })
+    return Object.values(map).sort((a, b) => a.key.localeCompare(b.key))
+  }, [procurementOptions])
+
+  // Run the value-advisor engine per fitment (lifecycle CPK ranking + rationale).
+  const advisorRecs = useMemo(() => {
+    const targetKm = LIFECYCLE_DEFAULTS.targetKm
+    return advisorGroups.map(g => ({ ...g, rec: recommend(g.options, { realizedByBrand, targetKm }) }))
+  }, [advisorGroups, realizedByBrand])
+
+  // Approved brands for a fitment, from the matching spec (fallback to the brand
+  // catalog when no spec restricts the fitment).
+  const approvedBrandsFor = useCallback((vehicleType, position) => {
+    const spec = specs.find(s => s.vehicle_type === vehicleType && (s.position === position || s.position === 'All Positions'))
+    if (spec && spec.approved_brands?.length) return spec.approved_brands
+    return Object.keys(BRAND_META)
+  }, [specs])
+
   // ── CRUD operations ───────────────────────────────────────────────────────────
 
   async function handleSaveSpec(form) {
@@ -858,6 +1289,81 @@ export default function TyreSpecifications() {
     } catch (e) {
       setSpecsError(e.message || 'Failed to import default')
     }
+  }
+
+  // ── Value Advisor: quote CRUD ─────────────────────────────────────────────────
+
+  async function handleSaveQuote(form) {
+    setSavingQuote(true)
+    setOptionsError('')
+    try {
+      if (editingQuote?.id) {
+        const row = { ...quoteToRow(form, { country }), updated_at: new Date().toISOString() }
+        const { error } = await procurementApi.updateOption(editingQuote.id, row)
+        if (error) throw error
+      } else {
+        const row = quoteToRow(form, { country, createdBy: user?.id })
+        const { error } = await procurementApi.insertOption(row)
+        if (error) throw error
+      }
+      await fetchAdvisorData()
+      setShowQuoteModal(false)
+      setEditingQuote(null)
+    } catch (e) {
+      setOptionsError(e.message || 'Failed to save quote')
+    } finally {
+      setSavingQuote(false)
+    }
+  }
+
+  async function handleDeleteQuote() {
+    const target = deletingQuote
+    setOptionsError('')
+    try {
+      const { error } = await procurementApi.deleteOption(target.id)
+      if (error) throw error
+      await fetchAdvisorData()
+    } catch (e) {
+      setOptionsError(e.message || 'Failed to delete quote')
+    } finally {
+      setDeletingQuote(null)
+    }
+  }
+
+  // ── Export the Value Advisor (quotes + computed econ) to Excel ────────────────
+
+  async function exportAdvisorExcel() {
+    const rows = []
+    advisorRecs.forEach(g => {
+      g.rec.ranked.forEach(e => {
+        rows.push({
+          'Fitment': g.key,
+          'Brand': e.brand || '',
+          'Supplier': e.supplier || '',
+          'Size': e.size || '',
+          'Unit Price': e.unit_price ?? '',
+          'Currency': e.currency || g.rec.currency,
+          'Expected Life (km)': e.expected_life_km ?? '',
+          'Lifecycle km': e.lifecycleKm ?? '',
+          'New CPK': e.newCpk ?? '',
+          'Lifecycle CPK': e.lifecycleCpk ?? '',
+          'Cost per 1000km': e.costPer1000Km ?? '',
+          'Warranty %': e.warrantyCoverPct ?? '',
+          'Realized CPK': e.realizedCpk ?? '',
+          'Confidence': e.confidence || '',
+          'Best Value': e.bestValue ? 'Yes' : '',
+          'Best Deal': e.bestDeal ? 'Yes' : '',
+          'Lowest CPK': e.lowestCpk ? 'Yes' : '',
+          'Longest Life': e.longestLife ? 'Yes' : '',
+        })
+      })
+    })
+    if (rows.length === 0) return
+    const XLSX = await import('xlsx')
+    const ws = XLSX.utils.json_to_sheet(rows)
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, 'Value Advisor')
+    XLSX.writeFile(wb, 'TyrePulse_Value_Advisor.xlsx')
   }
 
   // ── Export specs to Excel ─────────────────────────────────────────────────────
@@ -975,6 +1481,7 @@ export default function TyreSpecifications() {
     { id: 'violations',  label: 'Non-Conformance',       icon: AlertOctagon },
     { id: 'defaults',    label: 'Quick Setup',           icon: Zap },
     { id: 'policy',      label: 'Fitment Policy',        icon: FileText },
+    { id: 'advisor',     label: 'Value Advisor',         icon: Scale },
     { id: 'history',     label: 'Audit Trail',           icon: History },
   ]
 
@@ -1639,6 +2146,208 @@ export default function TyreSpecifications() {
           </motion.div>
         )}
 
+        {/* ── Tab: Value Advisor ──────────────────────────────────────────────── */}
+        {activeTab === 'advisor' && (
+          <motion.div key="advisor" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-4">
+
+            {/* Intro / method card */}
+            <div className="card flex flex-col lg:flex-row lg:items-center gap-4">
+              <div className="p-2.5 rounded-lg bg-[var(--input-bg)] text-emerald-400 shrink-0">
+                <Scale size={20} />
+              </div>
+              <div className="flex-1">
+                <p className="text-[var(--text-primary)] font-medium text-sm mb-1">Best-Value Procurement Advisor</p>
+                <p className="text-[var(--text-muted)] text-sm">
+                  Recommendations rank options by lifecycle cost-per-km (price adjusted for expected life,
+                  retreads and casing value), grounded in your fleet realized CPK where available. Add supplier
+                  quotes to compare deals per approved fitment. Where no quotes exist yet, brand-economics
+                  guidance is shown instead.
+                </p>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  onClick={exportAdvisorExcel}
+                  disabled={advisorRecs.length === 0}
+                  className="flex items-center gap-2 bg-[var(--input-bg)] hover:bg-gray-700 text-[var(--text-secondary)] text-sm px-3 py-2 rounded-lg border border-[var(--input-border)] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  <FileSpreadsheet size={14} /> Export
+                </button>
+                <button
+                  onClick={() => { setEditingQuote(null); setShowQuoteModal(true) }}
+                  disabled={!canManageQuotes}
+                  title={!canManageQuotes ? 'Manager access or above required' : ''}
+                  className="btn-primary gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  <Plus size={15} /> Add Quote
+                </button>
+              </div>
+            </div>
+
+            {optionsError && (
+              <div className="bg-red-900/30 border border-red-700 text-red-300 text-sm px-4 py-2.5 rounded-lg flex items-center gap-2">
+                <AlertTriangle size={14} /> {optionsError}
+                <button onClick={fetchAdvisorData} className="ml-auto flex items-center gap-1 text-red-200 hover:text-[var(--text-primary)]"><RefreshCw size={13} /> Retry</button>
+                <button onClick={() => setOptionsError('')}><X size={14} /></button>
+              </div>
+            )}
+
+            {loadingOptions ? (
+              <div className="card py-16 text-center">
+                <RefreshCw size={28} className="animate-spin text-[var(--text-dim)] mx-auto mb-3" />
+                <p className="text-[var(--text-muted)] text-sm">Loading supplier quotes...</p>
+              </div>
+            ) : advisorRecs.length === 0 ? (
+              // Honest empty state: no quotes anywhere. Still useful via brand guidance.
+              <div className="space-y-4">
+                <div className="card py-10 text-center">
+                  <DollarSign size={40} className="text-[var(--text-dim)] mx-auto mb-3" />
+                  <p className="text-[var(--text-muted)] font-medium mb-1">No Supplier Quotes Yet</p>
+                  <p className="text-[var(--text-dim)] text-sm mb-4 max-w-md mx-auto">
+                    Add supplier quotes to rank options by lifecycle cost-per-km and surface the best deals.
+                    Until then, the brand-economics guidance below applies to your approved fitments.
+                  </p>
+                  {canManageQuotes && (
+                    <button onClick={() => { setEditingQuote(null); setShowQuoteModal(true) }} className="btn-primary gap-2 mx-auto">
+                      <Plus size={15} /> Add First Quote
+                    </button>
+                  )}
+                </div>
+
+                {specs.length > 0 && (
+                  <div className="space-y-4">
+                    {specs.map(spec => (
+                      <div key={spec.id} className="card space-y-3">
+                        <div className="flex items-center gap-2">
+                          <Truck size={14} className="text-blue-400" />
+                          <span className="text-[var(--text-primary)] font-medium text-sm">{spec.vehicle_type}</span>
+                          <span className="text-xs text-[var(--text-muted)] bg-[var(--input-bg)] px-2 py-0.5 rounded-full">{spec.position}</span>
+                          <span className="ml-auto text-[var(--text-dim)] text-xs flex items-center gap-1"><Info size={11} /> Brand-economics guidance</span>
+                        </div>
+                        <BrandGuidancePanel brands={spec.approved_brands} />
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {advisorRecs.map(g => {
+                  const { rec } = g
+                  const cur = rec.currency
+                  const valids = rec.ranked.filter(e => e.valid && e.lifecycleCpk != null)
+                  return (
+                    <div key={g.key} className="card space-y-4">
+
+                      {/* Header + headline */}
+                      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 border-b border-[var(--input-border)] pb-3">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-1">
+                            <Truck size={14} className="text-blue-400" />
+                            <span className="text-[var(--text-primary)] font-semibold text-sm">{g.vehicle_type}</span>
+                            <span className="text-xs text-[var(--text-muted)] bg-[var(--input-bg)] px-2 py-0.5 rounded-full">{g.position}</span>
+                            <span className="text-xs text-[var(--text-dim)]">{g.options.length} quote{g.options.length === 1 ? '' : 's'}</span>
+                          </div>
+                          <p className={`text-sm flex items-start gap-1.5 ${rec.hasEnoughData ? 'text-emerald-300' : 'text-[var(--text-muted)]'}`}>
+                            <Award size={14} className="mt-0.5 shrink-0" /> {rec.headline}
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Engineer rationale */}
+                      {rec.rationale?.length > 0 && (
+                        <div className="bg-[var(--input-bg)] rounded-lg p-3">
+                          <p className="text-[var(--text-muted)] text-xs font-medium mb-1.5 flex items-center gap-1"><Info size={11} /> Engineering rationale</p>
+                          <ul className="space-y-1">
+                            {rec.rationale.map((r, i) => (
+                              <li key={i} className="text-[var(--text-secondary)] text-xs flex items-start gap-1.5">
+                                <span className="text-emerald-400 mt-0.5">-</span> {r}
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+
+                      {/* Ranked comparison table */}
+                      {valids.length > 0 ? (
+                        <div className="overflow-x-auto border border-[var(--input-border)] rounded-lg">
+                          <table className="w-full">
+                            <thead>
+                              <tr className="border-b border-[var(--input-border)]">
+                                {['Brand', 'Supplier', 'Price', 'Exp Life (km)', 'Lifecycle CPK', 'Cost/1000km', 'Warranty %', 'Realized CPK', 'Confidence', 'Badges'].map(h => (
+                                  <th key={h} className="px-3 py-2 text-left text-xs text-[var(--text-muted)] font-medium whitespace-nowrap">{h}</th>
+                                ))}
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {rec.ranked.map((e, i) => {
+                                const cm = CONFIDENCE_META[e.confidence] || CONFIDENCE_META.guidance
+                                const isPick = e === rec.pick
+                                return (
+                                  <tr key={e.id ?? `${e.brand}-${i}`} className={`border-b border-[var(--input-border)] last:border-0 transition-colors ${isPick ? 'bg-emerald-900/10' : 'hover:bg-gray-800/30'}`}>
+                                    <td className="px-3 py-2 text-[var(--text-primary)] text-sm font-medium whitespace-nowrap">
+                                      <span className="flex items-center gap-1.5">
+                                        {isPick && <CheckCircle size={12} className="text-emerald-400 shrink-0" />}
+                                        {e.brand || 'N/A'}
+                                      </span>
+                                      {!e.valid && <span className="block text-[10px] text-amber-400">incomplete (needs price + life)</span>}
+                                    </td>
+                                    <td className="px-3 py-2 text-[var(--text-secondary)] text-sm whitespace-nowrap">{e.supplier || 'N/A'}</td>
+                                    <td className="px-3 py-2 text-[var(--text-secondary)] text-sm whitespace-nowrap">{fmtMoney(e.unit_price, cur)}</td>
+                                    <td className="px-3 py-2 text-[var(--text-secondary)] text-sm whitespace-nowrap">{fmtVal(e.expected_life_km != null ? Number(e.expected_life_km).toLocaleString('en-US') : null)}</td>
+                                    <td className="px-3 py-2 text-sm whitespace-nowrap font-semibold text-[var(--text-primary)]">{fmtVal(e.lifecycleCpk)}</td>
+                                    <td className="px-3 py-2 text-[var(--text-secondary)] text-sm whitespace-nowrap">{fmtVal(e.costPer1000Km)}</td>
+                                    <td className="px-3 py-2 text-[var(--text-secondary)] text-sm whitespace-nowrap">{fmtVal(e.warrantyCoverPct, '%')}</td>
+                                    <td className="px-3 py-2 text-[var(--text-secondary)] text-sm whitespace-nowrap">{fmtVal(e.realizedCpk)}</td>
+                                    <td className="px-3 py-2 whitespace-nowrap">
+                                      <span className={`inline-flex items-center text-[10px] px-1.5 py-0.5 rounded-full border ${cm.bg} ${cm.color}`}>{cm.label}</span>
+                                    </td>
+                                    <td className="px-3 py-2"><EconBadges e={e} /></td>
+                                  </tr>
+                                )
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                      ) : (
+                        <p className="text-[var(--text-dim)] text-sm">No quote in this fitment has both a unit price and an expected life yet.</p>
+                      )}
+
+                      {/* Savings line */}
+                      {rec.hasEnoughData && rec.savingsVsPremiumPct ? (
+                        <p className="text-emerald-300 text-xs flex items-center gap-1.5">
+                          <TrendingDown size={13} /> The pick is {rec.savingsVsPremiumPct}% cheaper per km than the most expensive option in this set.
+                          {rec.savingsVsBudgetNote ? <span className="text-[var(--text-muted)]"> {rec.savingsVsBudgetNote}</span> : null}
+                        </p>
+                      ) : null}
+
+                      {/* Brand guidance fallback when not enough data to rank confidently */}
+                      {!rec.hasEnoughData && (
+                        <div className="pt-1">
+                          <p className="text-[var(--text-muted)] text-xs font-medium mb-2 flex items-center gap-1"><Package size={11} /> Approved-brand economics for this fitment</p>
+                          <BrandGuidancePanel brands={approvedBrandsFor(g.vehicle_type, g.position)} />
+                        </div>
+                      )}
+
+                      {/* Per-quote manage row */}
+                      {canManageQuotes && (
+                        <div className="flex flex-wrap gap-2 pt-1 border-t border-[var(--input-border)]">
+                          {g.options.map(o => (
+                            <span key={o.id} className="inline-flex items-center gap-1.5 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-full pl-3 pr-1.5 py-1 text-xs text-[var(--text-secondary)]">
+                              {o.brand || 'Quote'}{o.supplier ? ` / ${o.supplier}` : ''}
+                              <button onClick={() => { setEditingQuote(o); setShowQuoteModal(true) }} className="p-1 text-[var(--text-muted)] hover:text-blue-400 rounded transition-colors"><Edit2 size={11} /></button>
+                              <button onClick={() => setDeletingQuote(o)} className="p-1 text-[var(--text-muted)] hover:text-red-400 rounded transition-colors"><Trash2 size={11} /></button>
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </motion.div>
+        )}
+
         {/* ── Tab: Audit Trail ────────────────────────────────────────────────── */}
         {activeTab === 'history' && (
           <motion.div key="history" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-4">
@@ -1721,6 +2430,23 @@ export default function TyreSpecifications() {
           country={country}
           createdBy={user?.id}
           onClose={() => setWorkOrderAsset(null)}
+        />
+      )}
+
+      {showQuoteModal && canManageQuotes && (
+        <QuoteFormModal
+          quote={editingQuote}
+          onClose={() => { setShowQuoteModal(false); setEditingQuote(null) }}
+          onSave={handleSaveQuote}
+          saving={savingQuote}
+        />
+      )}
+
+      {deletingQuote && (
+        <DeleteQuoteConfirmModal
+          quote={deletingQuote}
+          onClose={() => setDeletingQuote(null)}
+          onConfirm={handleDeleteQuote}
         />
       )}
     </div>

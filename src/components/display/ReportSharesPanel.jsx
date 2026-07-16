@@ -1,7 +1,8 @@
 /**
  * ReportSharesPanel - elevated-user manager for shareable PUBLIC report links.
  *
- * Mirrors DisplayTokensPanel: Admin / Manager / Director / super-admin mint,
+ * The SINGLE surface for public report / TV share links (it replaced the old
+ * executive display-token panel). Admin / Manager / Director / super-admin mint,
  * list, copy, and revoke read-only report share tokens that render live board
  * reports at /report/<token> on a TV or a shared link (no login required).
  *
@@ -18,7 +19,7 @@ import {
 } from 'lucide-react'
 import { useAuth } from '../../contexts/AuthContext'
 import {
-  REPORT_PAGES, DEFAULT_PAGES,
+  REPORT_PAGES, PAGE_GROUPS, DEFAULT_PAGES,
   listReportShares, createReportShare, revokeReportShare, buildShareUrl,
 } from '../../lib/api/reportShares'
 import { toUserMessage } from '../../lib/safeError'
@@ -26,6 +27,10 @@ import { toUserMessage } from '../../lib/safeError'
 const ELEVATED_ROLES = new Set(['Admin', 'Manager', 'Director'])
 
 const PAGE_LABEL = REPORT_PAGES.reduce((m, p) => { m[p.key] = p.label; return m }, {})
+const PAGES_IN_GROUP = PAGE_GROUPS.reduce((m, g) => {
+  m[g] = REPORT_PAGES.filter((p) => p.group === g).map((p) => p.key)
+  return m
+}, {})
 
 const ROTATE_MIN = 5
 const ROTATE_MAX = 600
@@ -96,12 +101,22 @@ export default function ReportSharesPanel() {
 
   const setF = (k, v) => setForm((f) => ({ ...f, [k]: v }))
 
+  // Keep the chosen set in canonical order so the rotation is stable.
+  const setPages = (keys) => setForm((f) => ({ ...f, pages: DEFAULT_PAGES.filter((k) => keys.includes(k)) }))
+
   const togglePage = (key) => setForm((f) => {
     const has = f.pages.includes(key)
-    let next = has ? f.pages.filter((p) => p !== key) : [...f.pages, key]
-    // Preserve canonical order for a stable rotation.
-    next = DEFAULT_PAGES.filter((k2) => next.includes(k2))
-    return { ...f, pages: next }
+    const next = has ? f.pages.filter((p) => p !== key) : [...f.pages, key]
+    return { ...f, pages: DEFAULT_PAGES.filter((k2) => next.includes(k2)) }
+  })
+
+  const toggleGroup = (group) => setForm((f) => {
+    const groupKeys = PAGES_IN_GROUP[group] || []
+    const allOn = groupKeys.every((k) => f.pages.includes(k))
+    const next = allOn
+      ? f.pages.filter((k) => !groupKeys.includes(k))
+      : [...new Set([...f.pages, ...groupKeys])]
+    return { ...f, pages: DEFAULT_PAGES.filter((k2) => next.includes(k2)) }
   })
 
   function copy(text, key) {
@@ -168,7 +183,7 @@ export default function ReportSharesPanel() {
     <div className="card space-y-4">
       <div className="flex items-center justify-between gap-3">
         <h2 className="text-sm font-semibold text-[var(--text-primary)] flex items-center gap-2">
-          <Share2 size={15} className="text-[var(--accent)]" /> Shared report links
+          <Tv size={15} className="text-[var(--accent)]" /> Shared report and TV links
         </h2>
         <button type="button"
           onClick={() => { setShowForm((v) => !v); setMsg(null); setCreated(null) }}
@@ -179,8 +194,9 @@ export default function ReportSharesPanel() {
       </div>
 
       <p className="text-xs text-[var(--text-secondary)] leading-relaxed">
-        Share a secure, read-only report for a TV or a public link, no login required. The link shows only
-        aggregate report pages (never raw records) and rotates through the pages you choose. Reports render at{' '}
+        One place to share any report on a control-room TV or a public link, no login required. Pick the report
+        pages, set how fast they rotate, and the link auto-refreshes the live numbers on its own. It shows only
+        aggregate report pages (never raw records) on a clean light-theme board. Reports render at{' '}
         <span className="font-mono text-[var(--text-primary)]">/report/&lt;token&gt;</span>.
       </p>
 
@@ -221,20 +237,53 @@ export default function ReportSharesPanel() {
           </div>
 
           <div>
-            <label className="text-xs font-semibold text-[var(--text-secondary)] block mb-1.5">Report pages to rotate</label>
-            <div className="space-y-1.5">
-              {REPORT_PAGES.map((p) => {
-                const on = form.pages.includes(p.key)
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="text-xs font-semibold text-[var(--text-secondary)]">
+                Report pages to rotate <span className="text-[var(--text-muted)] font-normal">({form.pages.length} of {REPORT_PAGES.length})</span>
+              </label>
+              <div className="flex items-center gap-1.5">
+                <button type="button" onClick={() => setPages(DEFAULT_PAGES)}
+                  className="text-[11px] font-semibold px-2 py-1 rounded-md bg-[var(--card-bg)] border border-[var(--input-border)] text-[var(--text-secondary)] hover:border-[var(--accent)]">
+                  Select all
+                </button>
+                <button type="button" onClick={() => setPages([])}
+                  className="text-[11px] font-semibold px-2 py-1 rounded-md bg-[var(--card-bg)] border border-[var(--input-border)] text-[var(--text-secondary)] hover:border-[var(--accent)]">
+                  Clear
+                </button>
+              </div>
+            </div>
+            <div className="space-y-2.5">
+              {PAGE_GROUPS.map((group) => {
+                const groupKeys = PAGES_IN_GROUP[group] || []
+                const onCount = groupKeys.filter((k) => form.pages.includes(k)).length
+                const allOn = onCount === groupKeys.length
                 return (
-                  <label key={p.key}
-                    className={`flex items-start gap-2.5 px-2.5 py-2 rounded-md border cursor-pointer transition-colors ${on ? 'bg-[var(--card-bg)] border-[var(--accent)]' : 'bg-[var(--card-bg)] border-[var(--input-border)]'}`}>
-                    <input type="checkbox" checked={on} onChange={() => togglePage(p.key)}
-                      className="mt-0.5 accent-[var(--accent)]" />
-                    <span className="min-w-0">
-                      <span className="block text-sm font-semibold text-[var(--text-primary)]">{p.label}</span>
-                      <span className="block text-[11px] text-[var(--text-muted)]">{p.desc}</span>
-                    </span>
-                  </label>
+                  <div key={group} className="rounded-md border border-[var(--input-border)] overflow-hidden">
+                    <button type="button" onClick={() => toggleGroup(group)}
+                      className="w-full flex items-center justify-between gap-2 px-2.5 py-1.5 bg-[var(--card-bg)] text-left hover:bg-[var(--input-bg)] transition-colors">
+                      <span className="text-[11px] font-bold uppercase tracking-wider text-[var(--text-secondary)]">{group}</span>
+                      <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded text-[var(--text-muted)]">
+                        {allOn ? 'All on' : `${onCount} of ${groupKeys.length}`}
+                      </span>
+                    </button>
+                    <div className="p-1.5 space-y-1.5">
+                      {groupKeys.map((key) => {
+                        const p = REPORT_PAGES.find((rp) => rp.key === key)
+                        const on = form.pages.includes(key)
+                        return (
+                          <label key={key}
+                            className={`flex items-start gap-2.5 px-2.5 py-2 rounded-md border cursor-pointer transition-colors ${on ? 'bg-[var(--card-bg)] border-[var(--accent)]' : 'bg-[var(--card-bg)] border-[var(--input-border)]'}`}>
+                            <input type="checkbox" checked={on} onChange={() => togglePage(key)}
+                              className="mt-0.5 accent-[var(--accent)]" />
+                            <span className="min-w-0">
+                              <span className="block text-sm font-semibold text-[var(--text-primary)]">{p.label}</span>
+                              <span className="block text-[11px] text-[var(--text-muted)]">{p.desc}</span>
+                            </span>
+                          </label>
+                        )
+                      })}
+                    </div>
+                  </div>
                 )
               })}
             </div>

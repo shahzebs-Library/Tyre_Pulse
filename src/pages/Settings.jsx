@@ -6,7 +6,6 @@ import { useLanguage } from '../contexts/LanguageContext'
 import LanguageSwitcher from '../components/LanguageSwitcher'
 import AppearancePanel from '../components/settings/AppearancePanel'
 import FeatureFlagsPanel from '../components/settings/FeatureFlagsPanel'
-import DisplayTokensPanel from '../components/display/DisplayTokensPanel'
 import ReportSharesPanel from '../components/display/ReportSharesPanel'
 import { useSettings, COUNTRIES } from '../contexts/SettingsContext'
 import { Save, User, Settings2, Bell, BellRing, Database, Info, Target, Clock, Mail, Calendar, Trash2, Plus, Play, Lock, Shield, ShieldCheck, ShieldOff, AlertTriangle, Sparkles, Moon } from 'lucide-react'
@@ -745,13 +744,9 @@ export default function Settings() {
         {/* Feature Flags (org-wide, admin only — same gate as other admin sections) */}
         {isAdmin && <FeatureFlagsPanel />}
 
-        {/* Executive TV Display share tokens (elevated; panel self-gates on role
-            and shows an "apply V103" state until the backend is live) */}
-        <DisplayTokensPanel />
-
-        {/* Shareable public report links (light-theme TV/kiosk viewer, auto-rotating).
-            Panel self-gates on elevated role and shows an "apply migration" state
-            until report_shares is live. */}
+        {/* Single home for shareable report / TV links: light-theme, auto-rotating,
+            no-login public board viewer. Replaces the old Executive display tokens.
+            Panel self-gates on elevated role. */}
         <ReportSharesPanel />
 
         {/* App Preferences */}

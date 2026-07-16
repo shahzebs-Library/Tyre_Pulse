@@ -261,11 +261,32 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
   by the ALREADY-deployed `send-scheduled-reports` edge fn — NO edge redeploy, NO new report_type. The user
   just picks cadence + recipients. (If they want the analytics CUSTOMIZED, that is already the Report Builder.)
 
+### Tyre Specification depth + Value Advisor (2026-07-16) — merged to main (commit ffc092f)
+- **Ply rating + OTR/Chinese-brand catalog + downloadable fitment policy.** V248 adds
+  `tyre_specifications.ply_rating` (text; load/speed indices already existed as min_load_index/
+  min_speed_index). Single vocab source **`src/lib/tyreSpecCatalog.js`** (VEHICLE_TYPES incl. Concrete
+  Pump/Boom Pump Truck/Wheel Loader/Motor Grader/Rigid Dump Truck/Forklift/Reach Stacker + on-road;
+  POSITIONS incl. Front/Rear OTR; SPEED_INDEX_KMH; LOAD_INDEX_KG; PLY_RATINGS; APPROVED_BRANDS Double
+  Coin-first + CHINESE_BRANDS; 19 SMART_DEFAULTS with ply_rating; **BRAND_META**+brandMeta = tier/origin/
+  retreadable/casing/price+durability index/application for all 17 brands). Replaces the old inline consts
+  in TyreSpecifications.jsx. Standard policy doc **`src/lib/tyreSpecPolicy.js`** (buildPolicySections +
+  renderTyreSpecPolicyPdf) = controlled, company-logo-branded 10-section Tyre Fitment & Specification
+  Policy PDF, surfaced as a "Fitment Policy" tab.
+- **Value Advisor** (procurement decision support; DISTINCT from EngineeringKpi realized-CPK and
+  BrandPerformance). V249 `tyre_procurement_options` table (supplier quotes = "the deals"; org+country RLS,
+  elevated-role writes) via **`src/lib/api/tyreProcurement.js`**. Pure engine **`src/lib/tyreValueAdvisor.js`**
+  (optionEconomics/rankOptions/recommend) ranks quotes by **lifecycle CPK** = (unit_price + retreads*retread
+  cost - casing residual) / (expected_life_km * (1+retreads*retreadYield)), flags Best Value/Best Deal/Lowest
+  CPK/Longest Life, and grounds against realized fleet CPK by **REUSING kpiEngine.computeCpkByBrand /
+  computeAvgTyreLife (do NOT rebuild CPK)**. New "Value Advisor" tab in TyreSpecifications.jsx: quote CRUD,
+  per-fitment ranked comparison + engineer rationale + savings + realized-CPK column, brand-guidance fallback
+  when no quotes. Tests: tyreSpecCatalog(29), tyreSpecPolicy(7), tyreValueAdvisor(17). **Next free migration V250.**
+
 ### Shipped (2026-07-15/16) — all merged to main, nothing pending
 - Everything below is LIVE on the DB/deploy and merged to main (PRs #28/#29/#30, all terminal).
   V243 accidents plate/vehicle_type + auto-fill; super-admin swap + privileged-edit playbook; Accidents
   Analytics auto-email; V244 report_schedules CHECK fix; send-scheduled-reports **v14** per-type digests;
-  V245 vehicle_type casing; V246 site casing; V247 site_aliases canonical merge. Next free migration **V248**.
+  V245 vehicle_type casing; V246 site casing; V247 site_aliases canonical merge. (Superseded: next free is **V250**.)
 - Branch `claude/accident-builder-report-ui-2bkwb5` == main. For NEW work, restart it from latest main
   (`git fetch origin main && git checkout -B claude/accident-builder-report-ui-2bkwb5 origin/main`) and open
   a FRESH PR — merged PRs are terminal, never stack onto them.

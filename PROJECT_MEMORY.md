@@ -531,8 +531,23 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
 
 ### Admin Control & Self-Healing — Module 1 System Health (V255, 2026-07-16) — SHIPPED, phased
 - User un-parked the Admin Control module (super-admin, under `/console`). Delivering PHASED: after each
-  module STOP + report + await confirmation. Modules 1 (System Health), 4 (Backups), 7 (Admin Roles) DONE.
-  Do NOT build 2/3/5/6/8 without ask. Next free migration **V258**.
+  module STOP + report + await confirmation. Modules 1 (System Health), 4 (Backups), 7 (Admin Roles),
+  5 (Alert Rules), 6 (Audit Trail), 8 (Module Control) DONE. Only Modules 2 (self-healing) + 3 (Ask-your-data)
+  remain parked. Next free migration **V260**.
+- **Module 5 Alert Rules** (`/console/alert-rules`): alertRules.js + ConsoleAlertRules.jsx = no-code
+  "if [metric][operator][value] notify [in-app/email]" builder over the EXISTING `alert_thresholds` table
+  (evaluated hourly by existing cron) - NO new table. 6 tests.
+- **Module 6 Audit Trail** (`/console/audit-trail`): auditTrail.js (normalizeRow across audit_log_v2 /
+  access_audit / console_sessions) + ConsoleAuditTrail.jsx = unified read-only searchable viewer + before/after
+  diff + Excel export. NO new table. 15 tests.
+- **Module 8 Module Control** (`/console/module-control`, V258 `modules` table): modulesRegistry.js
+  (list/upsert/setStatus/bulkSetStatus/seedFromCatalog + pure dependencyWarnings) + ConsoleModuleControl.jsx =
+  Live/Maintenance/Off per-module toggle + bulk + dependency-warning confirm. HONEST GAP: status STORED only;
+  app-wide hiding of a module from users is a flagged follow-up. 4 tests.
+- **BUG FIX (V259, applied live) "cannot create a shared link for TV":** `create_report_share` (V251) ran
+  `search_path='public'` but pgcrypto (gen_random_bytes/gen_salt/crypt) lives in `extensions`, so token minting
+  threw on EVERY call. Fixed to `search_path='public','extensions'` (matches create_api_key/create_display_token).
+  Client had NO bug. RULE: token-minting DEFINER fns MUST include 'extensions' in search_path.
 - **Module 7 (V256) admin_users**: table (user_id UNIQUE, admin_role super_admin/regional_admin/viewer,
   regions text[], active), RLS super-admin-manage + self-read; `my_admin_role()` DEFINER; `admin_set_admin_user`
   upsert RPC. Pure `src/lib/adminRoles.js` (ADMIN_ROLE_META + ADMIN_CAPABILITIES rank matrix + adminCan/canon,

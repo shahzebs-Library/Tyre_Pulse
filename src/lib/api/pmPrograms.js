@@ -163,7 +163,7 @@ export async function deletePmProgram(id) {
  * @returns {Promise<{ record:object, program:object }>}
  */
 export async function recordPmService(programId, values = {}) {
-  return unwrap(
+  const result = unwrap(
     await supabase.rpc('record_pm_service', {
       p_program_id: programId,
       p_service_date: values.service_date || null,
@@ -181,6 +181,52 @@ export async function recordPmService(programId, values = {}) {
       p_notes: values.notes || null,
     }),
   )
+
+  // Best-effort: capture the reading into the asset's meter log so the fleet
+  // meter stays fresh (odometer_logs has a trigger that advances
+  // vehicle_fleet.current_km). This must NEVER fail or reject the service:
+  // the service record + program advance already succeeded in the RPC above.
+  await captureMeterReading(result, values)
+
+  return result
+}
+
+/**
+ * Push a completed PM service's meter reading into the matching meter-log table
+ * (odometer_logs for 'odometer', engine_hours_logs for 'engine_hours'). Purely
+ * additive and fully swallowed on error so it can never break recordPmService.
+ * @param {{ record?:{ meter_type?:string, meter_reading?:number, asset_no?:string,
+ *   service_date?:string, country?:string } }} result
+ * @param {{ site?:string }} values
+ */
+async function captureMeterReading(result, values = {}) {
+  try {
+    const record = result && result.record
+    if (!record) return
+    const meterType = record.meter_type
+    const reading = Number(record.meter_reading)
+    const assetNo = record.asset_no
+    if (meterType !== 'odometer' && meterType !== 'engine_hours') return
+    if (!Number.isFinite(reading)) return
+    if (assetNo == null || assetNo === '') return
+
+    const base = {
+      asset_no: assetNo,
+      reading_date: record.service_date || null,
+      source: 'PM service',
+      site: values.site || null,
+      country: record.country || null,
+    }
+
+    if (meterType === 'odometer') {
+      await supabase.from('odometer_logs').insert({ ...base, odometer_km: reading })
+    } else {
+      await supabase.from('engine_hours_logs').insert({ ...base, engine_hours: reading })
+    }
+  } catch {
+    // Swallow: the meter-log write is a convenience side effect. The service
+    // record and meter advance already succeeded, so a log failure is non-fatal.
+  }
 }
 
 /**

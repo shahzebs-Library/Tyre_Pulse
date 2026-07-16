@@ -466,6 +466,16 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
   Cost view control on the PM Dashboard. RULE going forward: reuse these helpers to add a tyre/maintenance
   cost toggle to OTHER cost surfaces (Analytics/CostCenter/Board Overview) - do NOT re-derive the split.
 - Tests: pmVocab(12), pmSchedule(19), costSources(9), pmPrograms.api(8), costSummary(5) = 53 green.
+- **PMV enhancements (2026-07-16, 6-agent batch):** (a) `src/lib/pmTemplates.js` (12 OEM-style service templates
+  per asset category + templatesFor/applyTemplate) wired as an "apply template" picker in the plan create modal;
+  (b) `src/lib/pmAnalytics.js` (costByAsset/costByCategory/monthlyServiceCost/meanIntervalBetweenServices/
+  outcomeBreakdown/complianceTrend/topOverdue/pmSummary) surfaced as a Service-analytics section on the PM
+  Dashboard; (c) `MaintenanceCalendar.jsx` now plots active PM plan next_due dates (indigo, overdue red) via
+  listPmPrograms; (d) `CostCenter.jsx` gained the Tyres-vs-Maintenance cost switch (costSources+costSummary);
+  (e) `recordPmService` now best-effort auto-logs the meter reading into odometer_logs/engine_hours_logs
+  (source 'PM service') so the fleet meter stays fresh (odometer trigger advances current_km). Tests:
+  pmTemplates(15), pmAnalytics(21), pmPrograms.api now 12. RULE: reuse costSources/costSummary for any further
+  tyre-vs-maintenance toggle; reuse pmAnalytics/pmTemplates - do not rebuild.
 
 ### BACKLOG (user parked 2026-07-16, "do it later when I ask") — Advanced Admin Control & Self-Healing
 - A big SUPER-ADMIN-ONLY module the user specced for LATER (explicitly "put this for later, I will ask you to

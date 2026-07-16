@@ -5,12 +5,14 @@ import { fetchAllPages } from '../lib/fetchAll'
 import { useSettings } from '../contexts/SettingsContext'
 import { useLanguage } from '../contexts/LanguageContext'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
+import { COST_MODES, pickCost, costModeLabel, pickMonthly, splitTotals } from '../lib/costSources'
+import { loadCostSplit } from '../lib/api/costSummary'
 import PageHeader from '../components/ui/PageHeader'
 import BudgetTabs from '../components/budgets/BudgetTabs'
 import {
   DollarSign, TrendingUp, TrendingDown, BarChart2, PieChart, Target,
   AlertTriangle, Award, ArrowUpRight, ArrowDownRight, Minus, Download,
-  RefreshCw, Loader2, FileSpreadsheet, FileText, Zap,
+  RefreshCw, Loader2, FileSpreadsheet, FileText, Zap, SlidersHorizontal, Wrench,
 } from 'lucide-react'
 import { SkeletonCards, SkeletonTable } from '../components/ui/Skeleton'
 import {
@@ -138,6 +140,23 @@ export default function CostCenter() {
   const [dateTo, setDateTo]             = useState(new Date().toISOString().slice(0, 10))
   const [roiSlider, setRoiSlider]       = useState(10)   // % improvement
   const [exporting, setExporting]       = useState(false)
+
+  // ── Tyres vs Maintenance cost switch (independent load, country scoped) ────────
+  const [costMode, setCostMode]         = useState('combined')
+  const [split, setSplit]               = useState(null)
+  const [splitLoading, setSplitLoading] = useState(true)
+  const [splitError, setSplitError]     = useState(null)
+
+  useEffect(() => {
+    let cancelled = false
+    setSplitLoading(true)
+    setSplitError(null)
+    loadCostSplit({ country: activeCountry })
+      .then(res => { if (!cancelled) setSplit(res) })
+      .catch(e => { if (!cancelled) setSplitError(e?.message ?? 'Failed to load cost split') })
+      .finally(() => { if (!cancelled) setSplitLoading(false) })
+    return () => { cancelled = true }
+  }, [activeCountry])
 
   // ── Data Fetch ────────────────────────────────────────────────────────────────
   const fetchData = useCallback(async () => {
@@ -372,6 +391,32 @@ export default function CostCenter() {
     const paybackMonths   = investmentProxy > 0 ? investmentProxy / monthlySavings : null
     return { monthlySavings, annualSavings, paybackMonths }
   }, [roiSlider, kpis])
+
+  // ── Tyres vs Maintenance derived values ───────────────────────────────────────
+  const MODE_COLOR = { combined: '#3b82f6', tyres: '#10b981', maintenance: '#f59e0b' }
+  const MODE_FILL  = { combined: 'rgba(59,130,246,0.7)', tyres: 'rgba(16,185,129,0.7)', maintenance: 'rgba(245,158,11,0.7)' }
+
+  const splitByMonth = split?.byMonth ?? []
+
+  const splitAgg = useMemo(() => splitTotals(splitByMonth), [split])
+
+  const splitHeadline = pickCost(costMode, splitAgg)
+
+  const splitSeries = useMemo(() => pickMonthly(costMode, splitByMonth), [costMode, split])
+
+  const splitChartData = useMemo(() => ({
+    labels: splitSeries.map(m => monthLabel(m.month)),
+    datasets: [{
+      label: `${costModeLabel(costMode)} spend`,
+      data: splitSeries.map(m => m.value),
+      backgroundColor: MODE_FILL[costMode] ?? MODE_FILL.combined,
+      borderColor: MODE_COLOR[costMode] ?? MODE_COLOR.combined,
+      borderWidth: 1,
+      borderRadius: 4,
+    }],
+  }), [splitSeries, costMode])
+
+  const splitHasData = splitAgg.combined > 0
 
   // ── Period preset handler ─────────────────────────────────────────────────────
   function applyPreset(p) {
@@ -666,6 +711,106 @@ export default function CostCenter() {
               sub={kpis.savingsOppty > 0 ? t('costcenter.kpi.savings.subOpportunity') : t('costcenter.kpi.savings.subOnTarget')}
               accent={kpis.savingsOppty > 0 ? 'yellow' : 'green'}
             />
+          </div>
+
+          {/* ── 1b. Tyres vs Maintenance switch ──────────────────────────────── */}
+          <div className="rounded-xl border border-gray-800 p-5" style={{ background: 'var(--panel-deep)' }}>
+            <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 mb-5">
+              <div>
+                <h3 className="text-sm font-semibold text-gray-200 flex items-center gap-2">
+                  <SlidersHorizontal size={15} className="text-green-400" />
+                  Tyres vs Maintenance
+                </h3>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  One click separates tyre spend from maintenance spend (pm services plus work order repairs) over the last 12 months.
+                </p>
+              </div>
+              {/* Segmented control */}
+              <div className="flex items-center gap-1 p-1 rounded-lg bg-gray-900 border border-gray-800 w-fit">
+                {COST_MODES.map(m => (
+                  <button
+                    key={m.key}
+                    onClick={() => setCostMode(m.key)}
+                    className={`px-4 py-1.5 text-xs rounded-md font-medium transition-all ${
+                      costMode === m.key
+                        ? 'bg-green-700 text-white'
+                        : 'text-gray-500 hover:text-gray-300'
+                    }`}
+                  >
+                    {m.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {splitError ? (
+              <div className="flex items-center gap-2 p-3 rounded-lg bg-red-900/30 border border-red-800/60 text-red-300 text-sm">
+                <AlertTriangle size={16} />
+                {splitError}
+              </div>
+            ) : splitLoading ? (
+              <div className="flex items-center justify-center py-16 text-gray-500 text-sm gap-2">
+                <Loader2 size={16} className="animate-spin" />
+                Loading cost split
+              </div>
+            ) : !splitHasData ? (
+              <div className="flex flex-col items-center justify-center py-16 gap-2">
+                <Wrench size={32} className="text-gray-700" />
+                <p className="text-gray-500 text-sm font-medium">No tyre or maintenance spend recorded</p>
+                <p className="text-gray-600 text-xs">Costs will appear here once tyre or maintenance records exist for this period.</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+                {/* Headline + breakdown tiles */}
+                <div className="space-y-3">
+                  <div
+                    className="p-4 rounded-xl border"
+                    style={{ borderColor: `${MODE_COLOR[costMode]}55`, background: `linear-gradient(135deg, ${MODE_COLOR[costMode]}12 0%, rgba(8,15,10,0.9) 100%)` }}
+                  >
+                    <p className="text-xs text-gray-500 font-medium">{costModeLabel(costMode)} spend (12 months)</p>
+                    <p className="text-2xl font-bold mt-1" style={{ color: MODE_COLOR[costMode] }}>
+                      {fmtCurrency(splitHeadline, activeCurrency)}
+                    </p>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <button
+                      onClick={() => setCostMode('tyres')}
+                      className={`p-3 rounded-lg border text-left transition-colors ${costMode === 'tyres' ? 'border-green-700' : 'border-gray-700 hover:border-gray-600'}`}
+                    >
+                      <p className="text-[11px] text-gray-500">Tyres</p>
+                      <p className="text-sm font-bold text-green-400 mt-0.5">{fmtCurrency(splitAgg.tyre, activeCurrency)}</p>
+                    </button>
+                    <button
+                      onClick={() => setCostMode('maintenance')}
+                      className={`p-3 rounded-lg border text-left transition-colors ${costMode === 'maintenance' ? 'border-orange-700' : 'border-gray-700 hover:border-gray-600'}`}
+                    >
+                      <p className="text-[11px] text-gray-500">Maintenance</p>
+                      <p className="text-sm font-bold text-orange-400 mt-0.5">{fmtCurrency(splitAgg.maintenance, activeCurrency)}</p>
+                    </button>
+                  </div>
+                  <div className="p-3 rounded-lg bg-gray-800/50 border border-gray-700">
+                    <p className="text-[11px] text-gray-500">
+                      Tyres are {fmtPct(splitAgg.combined > 0 ? (splitAgg.tyre / splitAgg.combined) * 100 : 0)} of total spend, maintenance {fmtPct(splitAgg.combined > 0 ? (splitAgg.maintenance / splitAgg.combined) * 100 : 0)}.
+                    </p>
+                  </div>
+                </div>
+
+                {/* 12-month bar chart for the selected mode */}
+                <div className="lg:col-span-2 h-64">
+                  <Bar
+                    data={splitChartData}
+                    options={{
+                      ...CHART_DEFAULTS,
+                      plugins: { ...CHART_DEFAULTS.plugins, legend: { display: false } },
+                      scales: {
+                        ...CHART_DEFAULTS.scales,
+                        y: { ...CHART_DEFAULTS.scales.y, ticks: { ...CHART_DEFAULTS.scales.y.ticks, callback: v => `${activeCurrency} ${(v/1000).toFixed(0)}K` } },
+                      },
+                    }}
+                  />
+                </div>
+              </div>
+            )}
           </div>
 
           {/* ── 2. Dimension Tabs ────────────────────────────────────────────── */}

@@ -8,10 +8,12 @@ import { motion, AnimatePresence } from 'framer-motion'
 import {
   Calendar, ChevronLeft, ChevronRight, Clock, AlertTriangle,
   Wrench, CircleDot, Filter, RefreshCw, X, CheckCircle,
-  AlertOctagon, Loader2, Eye, ChevronDown, Lock,
+  AlertOctagon, Loader2, Eye, ChevronDown, Lock, ClipboardCheck,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { toUserMessage } from '../lib/safeError'
+import { listPmPrograms } from '../lib/api/pmPrograms'
+import { pmDueStatus } from '../lib/pmPrograms'
 import { useSettings } from '../contexts/SettingsContext'
 import PageHeader from '../components/ui/PageHeader'
 import EntityApprovalPanel from '../components/workflow/EntityApprovalPanel'
@@ -28,6 +30,8 @@ const EVENT_COLORS = {
   critical_tyre:       { dot: 'bg-red-500',    chip: 'bg-red-900/60 border-red-700 text-red-300',       label: 'Critical Tyre' },
   high_risk_tyre:      { dot: 'bg-orange-500', chip: 'bg-orange-900/60 border-orange-700 text-orange-300', label: 'High Risk Tyre' },
   scheduled_maint:     { dot: 'bg-green-500',  chip: 'bg-green-900/60 border-green-700 text-green-300', label: 'Scheduled Maint.' },
+  pm_plan:             { dot: 'bg-indigo-500', chip: 'bg-indigo-900/60 border-indigo-700 text-indigo-300', label: 'PM Plan' },
+  overdue_pm:          { dot: 'bg-red-600',    chip: 'bg-red-950/70 border-red-600 text-red-200',       label: 'Overdue PM' },
   overdue_work_order:  { dot: 'bg-red-600',    chip: 'bg-red-950/70 border-red-600 text-red-200',       label: 'Overdue' },
 }
 
@@ -140,6 +144,37 @@ function buildTyreEvents(tyres, todayStr) {
     .filter(e => e.date !== null)
 }
 
+// Preventive Maintenance plans: one event per active plan carrying a next_due
+// date. Overdue plans (pmDueStatus === 'overdue') render red; the rest indigo.
+function buildPmEvents(programs, todayStr, now) {
+  return programs
+    .filter(p => p.status === 'active' && p.next_due)
+    .map(p => {
+      const dateStr = toDateStr(p.next_due)
+      if (!dateStr) return null
+      const overdue = pmDueStatus(p, now) === 'overdue'
+      const asset = p.asset_no || p.asset_type || '-'
+      const interval = p.interval_value != null && p.interval_type
+        ? `Every ${p.interval_value} ${p.interval_type}`
+        : (p.interval_type || 'Preventive maintenance')
+      return {
+        id:          `pm-${p.id}`,
+        date:        dateStr,
+        type:        overdue ? 'overdue_pm' : 'pm_plan',
+        priority:    overdue ? 'Critical' : 'Medium',
+        title:       p.name || 'PM Plan',
+        subtitle:    `${asset} · ${interval}`,
+        asset,
+        description: p.notes || interval,
+        status:      overdue ? 'Overdue' : 'Scheduled',
+        isOverdue:   overdue,
+        raw:         p,
+        source:      'pm_plan',
+      }
+    })
+    .filter(Boolean)
+}
+
 // ── Main component ────────────────────────────────────────────────────────────
 export default function MaintenanceCalendar() {
   const { activeCountry } = useSettings()
@@ -147,6 +182,7 @@ export default function MaintenanceCalendar() {
   // Data
   const [workOrders, setWorkOrders] = useState([])
   const [tyreRecords, setTyreRecords] = useState([])
+  const [pmPrograms, setPmPrograms] = useState([])
   const [loading, setLoading]       = useState(true)
   const [error, setError]           = useState(null)
   const [lastRefresh, setLastRefresh] = useState(null)
@@ -183,7 +219,7 @@ export default function MaintenanceCalendar() {
     setLoading(true)
     setError(null)
     try {
-      const [woRes, tyreRes] = await Promise.all([
+      const [woRes, tyreRes, pmRes] = await Promise.all([
         (() => {
           let q = supabase
             .from('work_orders')
@@ -202,6 +238,10 @@ export default function MaintenanceCalendar() {
           if (activeCountry && activeCountry !== 'All') q = q.eq('country', activeCountry)
           return q.limit(500)
         })(),
+        // Preventive Maintenance plans (country-scoped). listPmPrograms degrades
+        // to [] when the pm_programs table is not provisioned, so this never sinks
+        // the work-order / tyre loads.
+        listPmPrograms({ country: activeCountry }),
       ])
 
       if (woRes.error) throw woRes.error
@@ -209,6 +249,7 @@ export default function MaintenanceCalendar() {
 
       setWorkOrders(woRes.data || [])
       setTyreRecords(tyreRes.data || [])
+      setPmPrograms(Array.isArray(pmRes) ? pmRes : [])
       setLastRefresh(new Date())
     } catch (e) {
       setError(toUserMessage(e))
@@ -227,14 +268,16 @@ export default function MaintenanceCalendar() {
   const allEvents = useMemo(() => {
     const woEvents   = buildWorkOrderEvents(workOrders, todayStr)
     const tyreEvents = buildTyreEvents(tyreRecords, todayStr)
-    return [...woEvents, ...tyreEvents]
-  }, [workOrders, tyreRecords, todayStr])
+    const pmEvents   = buildPmEvents(pmPrograms, todayStr, today)
+    return [...woEvents, ...tyreEvents, ...pmEvents]
+  }, [workOrders, tyreRecords, pmPrograms, todayStr, today])
 
   // Apply filters
   const filteredEvents = useMemo(() => {
     let ev = allEvents
     if (typeFilter === 'Work Orders') ev = ev.filter(e => e.source === 'work_order')
     if (typeFilter === 'Tyre Alerts') ev = ev.filter(e => e.source === 'tyre')
+    if (typeFilter === 'PM Plans') ev = ev.filter(e => e.source === 'pm_plan')
     if (priorityFilter !== 'All') ev = ev.filter(e => e.priority === priorityFilter)
     return ev
   }, [allEvents, typeFilter, priorityFilter])
@@ -415,7 +458,7 @@ export default function MaintenanceCalendar() {
       {/* ── Header ─────────────────────────────────────────────────────────── */}
       <PageHeader
         title="Maintenance Calendar"
-        subtitle={`Unified view of work orders and tyre alerts · ${filteredEvents.length} events${lastRefresh ? ` · Updated ${lastRefresh.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}` : ''}`}
+        subtitle={`Unified view of work orders, tyre alerts and PM plans · ${filteredEvents.length} events${lastRefresh ? ` · Updated ${lastRefresh.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}` : ''}`}
         icon={Calendar}
         actions={<>
           <button
@@ -461,7 +504,7 @@ export default function MaintenanceCalendar() {
             <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-4 flex flex-wrap gap-3 items-center">
               <div className="flex items-center gap-2">
                 <span className="text-[var(--text-muted)] text-xs font-medium">Type:</span>
-                {['All', 'Work Orders', 'Tyre Alerts'].map(opt => (
+                {['All', 'Work Orders', 'Tyre Alerts', 'PM Plans'].map(opt => (
                   <button
                     key={opt}
                     onClick={() => setTypeFilter(opt)}
@@ -949,6 +992,18 @@ export default function MaintenanceCalendar() {
                     selectedEvent.source === 'tyre' && selectedEvent.raw?.tread_depth != null
                       ? ['Tread Depth', `${selectedEvent.raw.tread_depth} mm`]
                       : null,
+                    selectedEvent.source === 'pm_plan' && selectedEvent.raw?.interval_value != null && selectedEvent.raw?.interval_type
+                      ? ['Interval', `Every ${selectedEvent.raw.interval_value} ${selectedEvent.raw.interval_type}`]
+                      : null,
+                    selectedEvent.source === 'pm_plan' && selectedEvent.raw?.next_due
+                      ? ['Next Due', fmtDisplay(toDateStr(selectedEvent.raw.next_due))]
+                      : null,
+                    selectedEvent.source === 'pm_plan' && selectedEvent.raw?.last_done
+                      ? ['Last Done', fmtDisplay(toDateStr(selectedEvent.raw.last_done))]
+                      : null,
+                    selectedEvent.source === 'pm_plan' && selectedEvent.raw?.assigned_to
+                      ? ['Assigned To', selectedEvent.raw.assigned_to]
+                      : null,
                     selectedEvent.raw?.site
                       ? ['Site', selectedEvent.raw.site]
                       : null,
@@ -1022,6 +1077,26 @@ export default function MaintenanceCalendar() {
                         onClick={() => setSelectedEvent(null)}
                       >
                         <CircleDot size={15} /> View Tyre Record
+                      </a>
+                    )
+                  )}
+                  {selectedEvent.source === 'pm_plan' && (
+                    wfLocked ? (
+                      <button
+                        type="button"
+                        disabled
+                        title="Locked, in approval"
+                        className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-indigo-700 text-white text-sm font-medium rounded-xl opacity-40 cursor-not-allowed"
+                      >
+                        <Lock size={15} /> View PM Plan
+                      </button>
+                    ) : (
+                      <a
+                        href="/pm-programs"
+                        className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-indigo-700 hover:bg-indigo-600 text-white text-sm font-medium rounded-xl transition-colors"
+                        onClick={() => setSelectedEvent(null)}
+                      >
+                        <ClipboardCheck size={15} /> View PM Plan
                       </a>
                     )
                   )}

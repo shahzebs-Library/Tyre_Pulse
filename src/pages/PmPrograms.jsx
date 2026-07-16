@@ -23,14 +23,14 @@
  */
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import {
-  Chart as ChartJS, CategoryScale, LinearScale, BarElement, Tooltip, Legend,
+  Chart as ChartJS, CategoryScale, LinearScale, BarElement, ArcElement, Tooltip, Legend,
 } from 'chart.js'
-import { Bar } from 'react-chartjs-2'
+import { Bar, Doughnut } from 'react-chartjs-2'
 import {
   CalendarClock, Wrench, Calendar, AlertTriangle, CheckCircle2, Search, X,
   Filter, Plus, Pencil, Trash2, FileSpreadsheet, FileText, Loader2, Save,
   LayoutDashboard, ClipboardList, History, Gauge, Wallet, TrendingUp,
-  ListChecks, ClipboardCheck, Timer, Layers,
+  ListChecks, ClipboardCheck, Timer, Layers, LayoutTemplate, BarChart3, PieChart, Trophy,
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
 import { useSettings } from '../contexts/SettingsContext'
@@ -51,6 +51,11 @@ import {
 import {
   PM_STATUS_META, PM_DUE_META, PM_STATUSES,
 } from '../lib/pmPrograms'
+import { templatesFor, applyTemplate } from '../lib/pmTemplates'
+import {
+  costByAsset, costByCategory, monthlyServiceCost, outcomeBreakdown, pmSummary,
+} from '../lib/pmAnalytics'
+import { colorAt, categorical, withAlpha } from '../lib/reportColors'
 import {
   COST_MODES, pickCost, costModeLabel, pickMonthly, splitTotals,
 } from '../lib/costSources'
@@ -60,7 +65,7 @@ import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import { formatCurrencyCompact } from '../lib/formatters'
 import { toUserMessage } from '../lib/safeError'
 
-ChartJS.register(CategoryScale, LinearScale, BarElement, Tooltip, Legend)
+ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Tooltip, Legend)
 
 // ── Presentation maps ─────────────────────────────────────────────────────────
 const TONE_CLS = {
@@ -177,6 +182,7 @@ export default function PmPrograms() {
   const [taskDraft, setTaskDraft] = useState('')
   const [saving, setSaving] = useState(false)
   const [formError, setFormError] = useState('')
+  const [templateId, setTemplateId] = useState('') // create-mode "start from template" selection
 
   // Delete confirmation
   const [confirmDelete, setConfirmDelete] = useState(null)
@@ -311,12 +317,94 @@ export default function PmPrograms() {
     },
   }), [costMode, activeCurrency])
 
+  // ── PM analytics (over loaded plans + the fetched service records) ────────────
+  const records = history || []
+  const hasServiceData = records.length > 0
+  const pmCatCost = useMemo(() => costByCategory(plans, records), [plans, records])
+  const pmMonthlyCost = useMemo(() => monthlyServiceCost(records, { now: nowTs, months: 12 }), [records, nowTs])
+  const pmOutcomes = useMemo(() => outcomeBreakdown(records), [records])
+  const pmTopAssets = useMemo(() => costByAsset(records).slice(0, 5), [records])
+  const pmStats = useMemo(() => pmSummary(plans, records, { now: nowTs, kmByAsset, hoursByAsset }), [plans, records, nowTs, kmByAsset, hoursByAsset])
+
+  const catCostChart = useMemo(() => {
+    const rows = pmCatCost.filter((c) => c.total > 0)
+    const colors = categorical(rows.length)
+    return {
+      hasData: rows.length > 0,
+      data: {
+        labels: rows.map((c) => ASSET_CATEGORY_LABELS[c.category] || c.category),
+        datasets: [{
+          label: 'Service cost',
+          data: rows.map((c) => Math.round(c.total)),
+          backgroundColor: rows.map((_, i) => colors[i]),
+          borderRadius: 4,
+          maxBarThickness: 40,
+        }],
+      },
+    }
+  }, [pmCatCost])
+
+  const monthlyCostChart = useMemo(() => ({
+    labels: pmMonthlyCost.map((m) => monthLabel(m.month)),
+    datasets: [{
+      label: 'Service cost',
+      data: pmMonthlyCost.map((m) => Math.round(m.total)),
+      backgroundColor: withAlpha(colorAt(4), 0.85),
+      borderRadius: 4,
+      maxBarThickness: 30,
+    }],
+  }), [pmMonthlyCost])
+
+  const outcomeChart = useMemo(() => {
+    const rows = pmOutcomes.filter((o) => o.count > 0)
+    const colors = categorical(rows.length)
+    return {
+      hasData: rows.length > 0,
+      data: {
+        labels: rows.map((o) => PM_OUTCOME_META[o.outcome]?.label || o.outcome),
+        datasets: [{
+          data: rows.map((o) => o.count),
+          backgroundColor: rows.map((_, i) => colors[i]),
+          borderWidth: 0,
+        }],
+      },
+    }
+  }, [pmOutcomes])
+
+  const barCostOpts = useMemo(() => ({
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: { display: false },
+      tooltip: { callbacks: { label: (ctx) => formatCurrencyCompact(ctx.parsed.y, activeCurrency) } },
+    },
+    scales: {
+      x: { grid: { display: false }, ticks: { color: 'rgba(148,163,184,0.9)', font: { size: 10 } } },
+      y: {
+        grid: { color: 'rgba(148,163,184,0.12)' },
+        ticks: { color: 'rgba(148,163,184,0.9)', font: { size: 10 }, callback: (v) => formatCurrencyCompact(v, activeCurrency) },
+      },
+    },
+  }), [activeCurrency])
+
+  const outcomeOpts = useMemo(() => ({
+    responsive: true,
+    maintainAspectRatio: false,
+    cutout: '62%',
+    plugins: {
+      legend: { position: 'bottom', labels: { color: 'rgba(148,163,184,0.9)', font: { size: 11 }, boxWidth: 10, padding: 12 } },
+      tooltip: { callbacks: { label: (ctx) => `${ctx.label}: ${ctx.parsed}` } },
+    },
+  }), [])
+
+  const pmMonthlyTotal = useMemo(() => pmMonthlyCost.reduce((s, m) => s + (m.total || 0), 0), [pmMonthlyCost])
+
   // ── Create / edit ───────────────────────────────────────────────────────────
   const openCreate = () => {
-    setEditing(null); setForm(EMPTY_FORM); setTaskDraft(''); setFormError(''); setModalOpen(true)
+    setEditing(null); setForm(EMPTY_FORM); setTaskDraft(''); setFormError(''); setTemplateId(''); setModalOpen(true)
   }
   const openEdit = (p) => {
-    setEditing(p)
+    setEditing(p); setTemplateId('')
     setForm({
       name: p.name || '',
       asset_no: p.asset_no || '',
@@ -347,6 +435,34 @@ export default function PmPrograms() {
     setTaskDraft('')
   }
   const removeTask = (i) => setForm((f) => ({ ...f, task_list: f.task_list.filter((_, idx) => idx !== i) }))
+
+  // "Start from a template" (create mode only). Templates are editable starting
+  // points drawn from common OEM service practice, NOT live data.
+  const availableTemplates = useMemo(
+    () => templatesFor(canonAssetCategory(form.asset_category) || null),
+    [form.asset_category],
+  )
+  const applyTpl = (id) => {
+    setTemplateId(id)
+    if (!id) return
+    const t = availableTemplates.find((x) => x.id === id)
+    if (!t) return
+    const a = applyTemplate(t)
+    setForm((f) => ({
+      ...f,
+      // Prefill every field the template covers; keep a name / notes the user
+      // has already typed, and never touch asset / site / assignee / dates.
+      name: f.name.trim() ? f.name : (a.name || ''),
+      asset_category: a.asset_category || f.asset_category,
+      priority: a.priority || f.priority,
+      interval_type: (a.interval_type === 'days' || a.interval_type === 'months') ? a.interval_type : f.interval_type,
+      interval_value: a.interval_value != null ? String(a.interval_value) : f.interval_value,
+      meter_source: a.meter_source || f.meter_source,
+      meter_interval: (a.meter_source && a.meter_source !== 'none' && a.meter_interval != null) ? String(a.meter_interval) : f.meter_interval,
+      task_list: Array.isArray(a.task_list) ? [...a.task_list] : f.task_list,
+      notes: f.notes.trim() ? f.notes : (a.notes || ''),
+    }))
+  }
 
   const submit = useCallback(async (e) => {
     e?.preventDefault?.()
@@ -767,6 +883,111 @@ export default function PmPrograms() {
               </div>
             </div>
           </div>
+
+          {/* Service analytics (over recorded services) */}
+          <div className="card">
+            <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+              <div className="flex items-center gap-2">
+                <BarChart3 size={16} className="text-[var(--text-secondary)]" />
+                <h3 className="font-semibold text-[var(--text-primary)]">Service analytics</h3>
+                <span className="text-[11px] text-[var(--text-muted)]">from recorded services</span>
+              </div>
+              {hasServiceData && (
+                <div className="flex flex-wrap items-center gap-4 text-[11px] text-[var(--text-muted)]">
+                  <span>Services: <span className="text-[var(--text-secondary)] font-medium">{fmtNum(pmStats.servicesCount)}</span></span>
+                  <span>Total cost: <span className="text-[var(--text-secondary)] font-medium">{formatCurrencyCompact(pmStats.totalServiceCost, activeCurrency)}</span></span>
+                  <span>Avg / service: <span className="text-[var(--text-secondary)] font-medium">{pmStats.avgCostPerService == null ? 'N/A' : formatCurrencyCompact(pmStats.avgCostPerService, activeCurrency)}</span></span>
+                </div>
+              )}
+            </div>
+
+            {notLoaded || history === null ? (
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                {[0, 1].map((i) => <div key={i} className="h-[220px] bg-[var(--input-bg)] rounded animate-pulse" />)}
+              </div>
+            ) : !hasServiceData ? (
+              <div className="flex flex-col items-center justify-center py-10 text-center">
+                <BarChart3 size={24} className="text-[var(--text-muted)] opacity-60 mb-2" />
+                <p className="text-sm text-[var(--text-muted)]">No services recorded yet. Record a service from the Plans tab to build cost and outcome analytics.</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                {/* Cost by category */}
+                <div className="rounded-xl bg-[var(--input-bg)] border border-[var(--input-border)] p-4">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Layers size={14} className="text-[var(--text-muted)]" />
+                    <p className="text-xs text-[var(--text-muted)]">Service cost by category</p>
+                  </div>
+                  <div className="h-[220px]">
+                    {catCostChart.hasData ? (
+                      <Bar data={catCostChart.data} options={barCostOpts} />
+                    ) : (
+                      <div className="h-full flex items-center justify-center text-sm text-[var(--text-muted)]">No categorised service cost yet.</div>
+                    )}
+                  </div>
+                </div>
+
+                {/* 12-month service cost */}
+                <div className="rounded-xl bg-[var(--input-bg)] border border-[var(--input-border)] p-4">
+                  <div className="flex items-center gap-2 mb-2">
+                    <TrendingUp size={14} className="text-[var(--text-muted)]" />
+                    <p className="text-xs text-[var(--text-muted)]">Last 12 months : service cost</p>
+                  </div>
+                  <div className="h-[220px]">
+                    {pmMonthlyTotal > 0 ? (
+                      <Bar data={monthlyCostChart} options={barCostOpts} />
+                    ) : (
+                      <div className="h-full flex items-center justify-center text-sm text-[var(--text-muted)]">No service cost in the last 12 months.</div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Outcome breakdown */}
+                <div className="rounded-xl bg-[var(--input-bg)] border border-[var(--input-border)] p-4">
+                  <div className="flex items-center gap-2 mb-2">
+                    <PieChart size={14} className="text-[var(--text-muted)]" />
+                    <p className="text-xs text-[var(--text-muted)]">Outcome breakdown</p>
+                  </div>
+                  <div className="h-[220px]">
+                    {outcomeChart.hasData ? (
+                      <Doughnut data={outcomeChart.data} options={outcomeOpts} />
+                    ) : (
+                      <div className="h-full flex items-center justify-center text-sm text-[var(--text-muted)]">No recorded outcomes yet.</div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Top cost assets */}
+                <div className="rounded-xl bg-[var(--input-bg)] border border-[var(--input-border)] p-4">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Trophy size={14} className="text-[var(--text-muted)]" />
+                    <p className="text-xs text-[var(--text-muted)]">Top cost assets</p>
+                  </div>
+                  {pmTopAssets.length === 0 ? (
+                    <div className="h-[220px] flex items-center justify-center text-sm text-[var(--text-muted)]">No asset level service cost yet.</div>
+                  ) : (
+                    <ul className="space-y-2">
+                      {pmTopAssets.map((a, i) => {
+                        const max = pmTopAssets[0]?.total || 0
+                        const pctW = max > 0 ? Math.round((a.total / max) * 100) : 0
+                        return (
+                          <li key={a.asset_no} className="flex items-center gap-3">
+                            <span className="w-5 text-xs text-[var(--text-muted)] shrink-0">{i + 1}</span>
+                            <span className="w-28 text-sm text-[var(--text-secondary)] truncate shrink-0" title={a.asset_no}>{a.asset_no}</span>
+                            <div className="flex-1 h-2.5 rounded-full bg-[var(--surface)] overflow-hidden">
+                              <div className="h-full rounded-full" style={{ width: `${pctW}%`, backgroundColor: colorAt(i) }} />
+                            </div>
+                            <span className="w-24 text-right text-sm font-medium text-[var(--text-primary)]">{formatCurrencyCompact(a.total, activeCurrency)}</span>
+                            <span className="w-16 text-right text-[11px] text-[var(--text-muted)]">{fmtNum(a.services)} svc</span>
+                          </li>
+                        )
+                      })}
+                    </ul>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       )}
 
@@ -945,6 +1166,36 @@ export default function PmPrograms() {
               <button onClick={() => !saving && setModalOpen(false)} className="p-1.5 rounded-lg hover:bg-[var(--input-bg)] text-[var(--text-muted)]"><X size={18} /></button>
             </div>
             <form onSubmit={submit} className="space-y-5">
+              {/* Start from a template (create mode only) */}
+              {!editing && (
+                <div className="rounded-xl border border-indigo-800/40 bg-indigo-500/5 p-4">
+                  <div className="flex items-center gap-2 mb-1">
+                    <LayoutTemplate size={15} className="text-indigo-300" />
+                    <h3 className="text-sm font-semibold text-[var(--text-primary)]">Start from a template</h3>
+                  </div>
+                  <p className="text-[11px] text-[var(--text-muted)] mb-3">
+                    Editable starting points from common OEM service practice, not live data. Pick one to prefill the plan, then adjust every field before saving.
+                  </p>
+                  <div className="flex flex-wrap items-end gap-3">
+                    <div className="flex-1 min-w-[240px]">
+                      <label className="label">Template{form.asset_category ? ` (${ASSET_CATEGORY_LABELS[canonAssetCategory(form.asset_category)] || 'category'})` : ''}</label>
+                      <select className="input w-full" value={templateId} onChange={(e) => applyTpl(e.target.value)}>
+                        <option value="">No template : start from blank</option>
+                        {availableTemplates.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
+                      </select>
+                    </div>
+                    {templateId && (
+                      <div className="text-[11px] text-[var(--text-muted)] pb-2">
+                        Prefilled {form.task_list.length} task{form.task_list.length === 1 ? '' : 's'}. Every field stays editable.
+                      </div>
+                    )}
+                  </div>
+                  {availableTemplates.length === 0 && (
+                    <p className="text-[11px] text-[var(--text-muted)]">No templates for this category yet. Choose another category or build the plan manually below.</p>
+                  )}
+                </div>
+              )}
+
               {/* Identity */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="sm:col-span-2">

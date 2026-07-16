@@ -106,6 +106,106 @@ describe('pmPrograms.recordPmService', () => {
       p_notes: null,
     })
   })
+
+  it('captures an odometer reading into odometer_logs (fleet meter stays fresh)', async () => {
+    const result = {
+      record: {
+        id: 'r1',
+        meter_type: 'odometer',
+        meter_reading: 12000,
+        asset_no: 'A1',
+        service_date: '2026-07-15',
+        country: 'KSA',
+      },
+      program: { id: 'p1', next_due: '2026-10-15' },
+    }
+    h.state.rpc = { data: result, error: null }
+
+    const out = await pm.recordPmService('p1', { meter_reading: '12000', site: 'NHC' })
+    // Still returns the RPC payload unchanged.
+    expect(out).toEqual(result)
+
+    // Attempted an insert into odometer_logs with odometer_km = the reading.
+    const rec = lastCall('odometer_logs')
+    expect(rec).toBeDefined()
+    const insertOp = rec.ops.find((o) => o[0] === 'insert')
+    expect(insertOp).toBeDefined()
+    expect(insertOp[1][0]).toEqual({
+      asset_no: 'A1',
+      reading_date: '2026-07-15',
+      source: 'PM service',
+      site: 'NHC',
+      country: 'KSA',
+      odometer_km: 12000,
+    })
+    // No engine-hours write for an odometer meter type.
+    expect(lastCall('engine_hours_logs')).toBeUndefined()
+  })
+
+  it('captures an engine-hours reading into engine_hours_logs', async () => {
+    const result = {
+      record: {
+        id: 'r2',
+        meter_type: 'engine_hours',
+        meter_reading: 850,
+        asset_no: 'GEN-2',
+        service_date: '2026-07-16',
+        country: null,
+      },
+      program: { id: 'p2' },
+    }
+    h.state.rpc = { data: result, error: null }
+
+    await pm.recordPmService('p2', {})
+    const rec = lastCall('engine_hours_logs')
+    expect(rec).toBeDefined()
+    const insertOp = rec.ops.find((o) => o[0] === 'insert')
+    expect(insertOp[1][0]).toEqual({
+      asset_no: 'GEN-2',
+      reading_date: '2026-07-16',
+      source: 'PM service',
+      site: null,
+      country: null,
+      engine_hours: 850,
+    })
+    expect(lastCall('odometer_logs')).toBeUndefined()
+  })
+
+  it('does not write a meter log when meter_type is none', async () => {
+    h.state.rpc = {
+      data: { record: { meter_type: 'none', meter_reading: null, asset_no: 'A1' }, program: {} },
+      error: null,
+    }
+    await pm.recordPmService('p3', {})
+    expect(lastCall('odometer_logs')).toBeUndefined()
+    expect(lastCall('engine_hours_logs')).toBeUndefined()
+  })
+
+  it('never rejects when the meter-log insert throws (best-effort side effect)', async () => {
+    const result = {
+      record: {
+        meter_type: 'odometer',
+        meter_reading: 5000,
+        asset_no: 'A1',
+        service_date: '2026-07-15',
+        country: 'KSA',
+      },
+      program: { id: 'p1' },
+    }
+    h.state.rpc = { data: result, error: null }
+
+    const origFrom = h.supabase.from
+    const spy = vi.spyOn(h.supabase, 'from').mockImplementation((t) => {
+      if (t === 'odometer_logs') throw new Error('meter log write failed')
+      return origFrom(t)
+    })
+    try {
+      // Must resolve (not reject) with the unchanged RPC payload.
+      await expect(pm.recordPmService('p1', {})).resolves.toEqual(result)
+    } finally {
+      spy.mockRestore()
+    }
+  })
 })
 
 describe('pmPrograms.listPmServiceRecords', () => {

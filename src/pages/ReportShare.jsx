@@ -24,9 +24,11 @@ import {
   TrendingUp, BarChart3, PieChart, Activity, ShieldAlert, MapPin, LayoutGrid,
   Car, CircleDot, Wallet, ClipboardCheck, Loader2,
   Wrench, CalendarClock, ListChecks, Timer, Bell, Gauge,
+  ChevronLeft, ChevronRight, RotateCw, Filter, Globe, Building2, Grid, Percent,
 } from 'lucide-react'
 import { getReportSnapshot, REPORT_PAGES } from '../lib/api/reportShares'
 import { categorical, colorAt, withAlpha } from '../lib/reportColors'
+import { safeImageSrc } from '../lib/safeUrl'
 
 // ── Light chart palette (pinned literals so canvases read on white paper) ──────
 const P = {
@@ -323,6 +325,93 @@ function treemapOption(items) {
   }
 }
 
+// Gauge: a single-value dial for a 0-100 percentage (recovery rate, open share,
+// availability proxy). `value` may be null for an honest N/A when the denominator
+// is zero. Colour is pulled from the shared palette so it follows the theme.
+function gaugeOption(value, label, idx = 0) {
+  const has = Number.isFinite(value)
+  const color = colorAt(idx)
+  const v = has ? Math.max(0, Math.min(100, value)) : 0
+  return {
+    backgroundColor: 'transparent',
+    series: [{
+      type: 'gauge', startAngle: 210, endAngle: -30, min: 0, max: 100,
+      radius: '92%', center: ['50%', '58%'],
+      progress: { show: true, width: 16, itemStyle: { color } },
+      axisLine: { lineStyle: { width: 16, color: [[1, withAlpha(color, 0.14)]] } },
+      pointer: { show: has, length: '62%', width: 5, itemStyle: { color } },
+      anchor: { show: has, size: 12, itemStyle: { color } },
+      axisTick: { show: false },
+      splitLine: { length: 10, lineStyle: { color: P.axisLine, width: 2 } },
+      axisLabel: { color: P.muted, fontSize: 12, distance: -32 },
+      title: { offsetCenter: [0, '30%'], color: P.subText, fontSize: 15, fontWeight: 600 },
+      detail: {
+        offsetCenter: [0, '-6%'], color: has ? P.text : P.muted,
+        fontSize: 40, fontWeight: 800,
+        formatter: () => (has ? `${Math.round(v)}%` : 'N/A'),
+      },
+      data: [{ value: v, name: label }],
+    }],
+  }
+}
+
+// Heatmap: site (y) against severity (x), coloured by incident count. Built from
+// snapshot.heatmap = [{ site, severity, value }]. Honest empty when no rows.
+function heatmapOption(rows) {
+  const xs = []
+  const ys = []
+  for (const r of rows) {
+    const sx = safeStr(r.severity)
+    const sy = safeStr(r.site)
+    if (!xs.includes(sx)) xs.push(sx)
+    if (!ys.includes(sy)) ys.push(sy)
+  }
+  const data = rows.map((r) => [
+    xs.indexOf(safeStr(r.severity)),
+    ys.indexOf(safeStr(r.site)),
+    Number(r.value) || 0,
+  ])
+  const max = Math.max(1, ...data.map((d) => d[2]))
+  const base = colorAt(3)
+  return {
+    backgroundColor: 'transparent',
+    tooltip: {
+      ...TOOLTIP, position: 'top',
+      formatter: (p) => `${ys[p.value[1]]} | ${xs[p.value[0]]}: <b>${fmtInt(p.value[2])}</b>`,
+    },
+    grid: { left: 10, right: 18, top: 10, bottom: 8, containLabel: true },
+    xAxis: {
+      type: 'category', data: xs, splitArea: { show: true },
+      axisLabel: { color: P.subText, fontSize: 13 },
+      axisLine: { lineStyle: { color: P.axisLine } }, axisTick: { show: false },
+    },
+    yAxis: {
+      type: 'category', data: ys, splitArea: { show: true },
+      axisLabel: { color: P.subText, fontSize: 13 },
+      axisLine: { lineStyle: { color: P.axisLine } }, axisTick: { show: false },
+    },
+    visualMap: {
+      min: 0, max, calculable: true, orient: 'horizontal',
+      left: 'center', bottom: 0, itemHeight: 90,
+      inRange: { color: [withAlpha(base, 0.12), withAlpha(base, 0.55), base] },
+      textStyle: { color: P.muted, fontSize: 12 },
+    },
+    series: [{
+      type: 'heatmap', data,
+      label: { show: true, color: P.text, fontSize: 13, formatter: (p) => (p.value[2] ? fmtInt(p.value[2]) : '') },
+      itemStyle: { borderColor: '#ffffff', borderWidth: 2, borderRadius: 4 },
+      emphasis: { itemStyle: { shadowBlur: 8, shadowColor: 'rgba(15,23,42,0.2)' } },
+    }],
+  }
+}
+
+// Client-side percentage from a numerator / denominator, null when undefined.
+function pct(num, den) {
+  const d = Number(den) || 0
+  if (d <= 0) return null
+  return (Number(num) || 0) / d * 100
+}
+
 // ── Lazy EChart import (this page renders outside the app bundle graph) ─────────
 // EChart is the shared wrapper; importing it statically is fine and keeps the
 // heavy echarts module dynamically loaded by the wrapper itself.
@@ -389,12 +478,19 @@ function ChartCard({ title, subtitle, icon: Icon, empty, emptyText, height = 360
   )
 }
 
-function RotationDots({ pages, active }) {
+function RotationDots({ pages, active, onPick }) {
   if (!pages.length) return null
   return (
-    <div className="rs-dots" aria-hidden="true">
+    <div className="rs-dots">
       {pages.map((key, i) => (
-        <span key={key} className={`rs-dot ${i === active ? 'rs-dot-on' : ''}`} title={PAGE_LABEL[key] || key} />
+        <button
+          key={key}
+          type="button"
+          className={`rs-dot ${i === active ? 'rs-dot-on' : ''}`}
+          title={PAGE_LABEL[key] || key}
+          aria-label={`Go to ${PAGE_LABEL[key] || key}`}
+          onClick={onPick ? () => onPick(i) : undefined}
+        />
       ))}
     </div>
   )
@@ -431,6 +527,16 @@ export default function ReportShare() {
   const [paused, setPaused] = useState(false)
   const [now, setNow] = useState(() => new Date())
 
+  // Timer nonce: bumping it restarts the auto-rotate interval AND the progress
+  // sweep from 0 after ANY user interaction (next / prev / filter / refresh / move).
+  const [timerNonce, setTimerNonce] = useState(0)
+  const [lastRefresh, setLastRefresh] = useState(null)
+  const [refreshing, setRefreshing] = useState(false)
+
+  // Server-side filters (V262). Empty string = all.
+  const [site, setSite] = useState('')
+  const [country, setCountry] = useState('')
+
   // Password screen local state
   const [pwInput, setPwInput] = useState('')
   const [pwError, setPwError] = useState('')
@@ -438,14 +544,20 @@ export default function ReportShare() {
 
   const pwRef = useRef(null)        // password that produced the current snapshot
   const loadedRef = useRef(false)   // true once a good snapshot has ever painted
+  const filtersRef = useRef({ site: '', country: '' }) // latest filters for interval callbacks
+  const moveRef = useRef(0)         // throttle mouse-move timer resets
 
-  // ── Initial / password-driven load ──────────────────────────────────────────
+  useEffect(() => { filtersRef.current = { site, country } }, [site, country])
+
+  const bumpTimer = useCallback(() => setTimerNonce((n) => n + 1), [])
+
+  // ── Initial / password-driven load (full state machine; resets page) ─────────
   const load = useCallback(async (pw = null) => {
-    if (!token) { setStatus('error'); setReason('invalid'); return }
+    if (!token) { setStatus('error'); setReason('invalid'); return false }
     if (!loadedRef.current) setStatus('loading')
     let res
     try {
-      res = await getReportSnapshot(token, pw)
+      res = await getReportSnapshot(token, pw, filtersRef.current)
     } catch {
       res = { ok: false, reason: 'unavailable' }
     }
@@ -455,6 +567,7 @@ export default function ReportShare() {
       setSnapshot(res)
       setPageIndex(0)
       setStatus('ok')
+      setLastRefresh(new Date())
       return true
     }
     const r = res?.reason || 'invalid'
@@ -469,6 +582,37 @@ export default function ReportShare() {
   }, [token])
 
   useEffect(() => { load() }, [load])
+
+  // Silent update: refresh the snapshot with the CURRENT password + filters,
+  // keeping the last good paint (and the current board) on any failure.
+  const silentUpdate = useCallback(async ({ resetPage = false } = {}) => {
+    if (!token) return
+    try {
+      const res = await getReportSnapshot(token, pwRef.current, filtersRef.current)
+      if (res && res.ok) {
+        setSnapshot(res)
+        setLastRefresh(new Date())
+        if (resetPage) setPageIndex(0)
+      }
+    } catch { /* keep showing the last good snapshot */ }
+  }, [token])
+
+  // Manual, on-demand refresh (button) with a brief busy indicator + timer reset.
+  const manualRefresh = useCallback(async () => {
+    setRefreshing(true)
+    await silentUpdate()
+    setRefreshing(false)
+    bumpTimer()
+  }, [silentUpdate, bumpTimer])
+
+  // Change a filter, re-fetch with it, reset rotation to the first board.
+  const changeFilter = useCallback((kind, value) => {
+    if (kind === 'site') setSite(value)
+    else setCountry(value)
+    filtersRef.current = { ...filtersRef.current, [kind]: value }
+    bumpTimer()
+    silentUpdate({ resetPage: true })
+  }, [bumpTimer, silentUpdate])
 
   const submitPassword = useCallback(async (e) => {
     e.preventDefault()
@@ -487,6 +631,21 @@ export default function ReportShare() {
     if (pages.length > 0 && pageIndex >= pages.length) setPageIndex(0)
   }, [pages, pageIndex])
 
+  // Manual board navigation (immediate) + timer reset.
+  const goTo = useCallback((next) => {
+    setPageIndex((i) => {
+      const n = pages.length
+      if (n <= 0) return 0
+      return ((next(i) % n) + n) % n
+    })
+    bumpTimer()
+  }, [pages.length, bumpTimer])
+  const goNext = useCallback(() => goTo((i) => i + 1), [goTo])
+  const goPrev = useCallback(() => goTo((i) => i - 1), [goTo])
+
+  // Auto-rotate. Depends on pageIndex + timerNonce so every board change AND every
+  // interaction restarts the countdown from a full interval; paused while hovering
+  // the controls so a reader is not interrupted mid-thought.
   useEffect(() => {
     if (status !== 'ok' || pages.length <= 1 || paused) return undefined
     const sec = clampSec(snapshot?.rotate_seconds, 30)
@@ -494,20 +653,21 @@ export default function ReportShare() {
       setPageIndex((i) => (i + 1) % pages.length)
     }, sec * 1000)
     return () => clearInterval(id)
-  }, [status, pages.length, snapshot?.rotate_seconds, paused])
+  }, [status, pages.length, snapshot?.rotate_seconds, paused, pageIndex, timerNonce])
 
   // ── Silent auto-refresh (keeps last good data on failure) ───────────────────
   useEffect(() => {
     if (status !== 'ok') return undefined
     const sec = clampSec(snapshot?.refresh_seconds, 300)
-    const id = setInterval(async () => {
-      try {
-        const res = await getReportSnapshot(token, pwRef.current)
-        if (res && res.ok) setSnapshot(res)
-      } catch { /* keep showing the last good snapshot */ }
-    }, sec * 1000)
+    const id = setInterval(() => { silentUpdate() }, sec * 1000)
     return () => clearInterval(id)
-  }, [status, snapshot?.refresh_seconds, token])
+  }, [status, snapshot?.refresh_seconds, silentUpdate])
+
+  // Throttled mouse-move-over-controls reset (about 2 per second, no churn storm).
+  const onControlsMove = useCallback(() => {
+    const t = Date.now()
+    if (t - moveRef.current > 500) { moveRef.current = t; bumpTimer() }
+  }, [bumpTimer])
 
   // ── Fullscreen ──────────────────────────────────────────────────────────────
   const toggleFs = useCallback(() => {
@@ -587,20 +747,21 @@ export default function ReportShare() {
   // ── State: OK (live board) ──────────────────────────────────────────────────
   const activeKey = pages[pageIndex] || pages[0]
   const rotateSec = clampSec(snapshot?.rotate_seconds, 30)
+  const canRotate = pages.length > 1
+  const logoSrc = safeImageSrc(snapshot?.logo)
+  const siteOpts = arr(snapshot?.sites)
+  const countryOpts = arr(snapshot?.countries)
+  const hasFilters = siteOpts.length > 0 || countryOpts.length > 0
 
   return (
-    <div
-      className="rs-root tp-report-paper"
-      onMouseEnter={() => setPaused(true)}
-      onMouseLeave={() => setPaused(false)}
-    >
+    <div className="rs-root tp-report-paper">
       <ScopedStyle />
 
-      {/* Top rotation progress bar */}
-      {pages.length > 1 && (
+      {/* Top rotation progress bar (restarts on board change + any interaction) */}
+      {canRotate && (
         <div className="rs-progress">
           <div
-            key={`${pageIndex}-${snapshot?.generated_at || ''}-${paused ? 'p' : 'r'}`}
+            key={`${pageIndex}-${timerNonce}-${paused ? 'p' : 'r'}`}
             className="rs-progress-fill"
             style={{ animationDuration: `${rotateSec}s`, animationPlayState: paused ? 'paused' : 'running' }}
           />
@@ -610,27 +771,98 @@ export default function ReportShare() {
       {/* Header band */}
       <header className="rs-header">
         <div className="rs-head-left">
-          <div className="rs-brand-mark" aria-hidden="true"><Gauge size={22} /></div>
+          {logoSrc ? (
+            <img src={logoSrc} alt={`${snapshot?.company || 'Company'} logo`} className="rs-logo" />
+          ) : (
+            <div className="rs-brand-mark" aria-hidden="true"><Gauge size={26} /></div>
+          )}
           <div className="rs-head-titles">
             <p className="rs-company">{snapshot?.company || 'Fleet report'}</p>
             <h1 className="rs-name">{snapshot?.name || 'Shared report'}</h1>
           </div>
         </div>
-        <div className="rs-head-mid">
-          <span className="rs-page-chip">{PAGE_LABEL[activeKey] || 'Report'}</span>
-          <RotationDots pages={pages} active={pageIndex} />
-        </div>
         <div className="rs-head-right">
           <span className="rs-clock" title="Local time">
-            <Clock size={16} aria-hidden="true" />
+            <Clock size={18} aria-hidden="true" />
             <span className="rs-clock-time">{fmtClock(now)}</span>
           </span>
           <span className="rs-updated">Updated {fmtUpdated(snapshot?.generated_at)}</span>
           <button type="button" onClick={toggleFs} className="rs-fsbtn" title={isFs ? 'Exit full screen' : 'Full screen'} aria-label={isFs ? 'Exit full screen' : 'Full screen'}>
-            {isFs ? <Minimize2 size={18} /> : <Maximize2 size={18} />}
+            {isFs ? <Minimize2 size={20} /> : <Maximize2 size={20} />}
           </button>
         </div>
       </header>
+
+      {/* Controls strip: board nav + filters + on-demand refresh. Hovering pauses
+          the auto-rotate; moving the mouse here resets the countdown. */}
+      <div
+        className="rs-controls"
+        onMouseEnter={() => setPaused(true)}
+        onMouseLeave={() => setPaused(false)}
+        onMouseMove={onControlsMove}
+      >
+        <div className="rs-board-nav">
+          <button
+            type="button" className="rs-navbtn" onClick={goPrev}
+            disabled={!canRotate} title="Previous board" aria-label="Previous board"
+          >
+            <ChevronLeft size={22} />
+          </button>
+          <div className="rs-board-now">
+            <span className="rs-board-kicker">
+              Board {pages.length ? pageIndex + 1 : 0} of {pages.length}
+            </span>
+            <span className="rs-board-title">{PAGE_LABEL[activeKey] || 'Report'}</span>
+          </div>
+          <button
+            type="button" className="rs-navbtn" onClick={goNext}
+            disabled={!canRotate} title="Next board" aria-label="Next board"
+          >
+            <ChevronRight size={22} />
+          </button>
+          <RotationDots pages={pages} active={pageIndex} onPick={(i) => { setPageIndex(i); bumpTimer() }} />
+        </div>
+
+        <div className="rs-controls-right">
+          {hasFilters && (
+            <div className="rs-filters">
+              <Filter size={16} className="rs-filter-ic" aria-hidden="true" />
+              {siteOpts.length > 0 && (
+                <label className="rs-select">
+                  <Building2 size={15} aria-hidden="true" />
+                  <select value={site} onChange={(e) => changeFilter('site', e.target.value)} aria-label="Filter by site">
+                    <option value="">All sites</option>
+                    {siteOpts.map((s) => <option key={s} value={s}>{s}</option>)}
+                  </select>
+                </label>
+              )}
+              {countryOpts.length > 0 && (
+                <label className="rs-select">
+                  <Globe size={15} aria-hidden="true" />
+                  <select value={country} onChange={(e) => changeFilter('country', e.target.value)} aria-label="Filter by country">
+                    <option value="">All countries</option>
+                    {countryOpts.map((c) => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                </label>
+              )}
+              <span className="rs-select rs-select-disabled" title="Date range filtering is coming soon">
+                <CalendarClock size={15} aria-hidden="true" />
+                <span>Date range: coming soon</span>
+              </span>
+            </div>
+          )}
+          <div className="rs-refresh">
+            <button
+              type="button" className="rs-refbtn" onClick={manualRefresh}
+              disabled={refreshing} title="Refresh now" aria-label="Refresh now"
+            >
+              <RotateCw size={18} className={refreshing ? 'rs-spin' : ''} />
+              <span>Refresh</span>
+            </button>
+            <span className="rs-lastref">Last refresh: {lastRefresh ? fmtClock(lastRefresh) : 'N/A'}</span>
+          </div>
+        </div>
+      </div>
 
       {/* Rotating page body (key drives the fade / slide transition) */}
       <main className="rs-body">
@@ -813,43 +1045,65 @@ function SpendTrendPage({ snapshot }) {
   )
 }
 
-// ── Page: Risk & Activity ─────────────────────────────────────────────────────
+// ── Page: Risk & Activity (gauges + severity + site-by-severity heatmap) ──────
 function RiskActivityPage({ snapshot }) {
+  const kpis = snapshot?.kpis || {}
   const severity = arr(snapshot?.breakdowns?.severity)
-  const accidentsBySite = arr(snapshot?.breakdowns?.accidents_by_site)
+  const heatmap = arr(snapshot?.heatmap)
+  const openShare = pct(kpis.open_accidents, kpis.accidents)
+  const recoveryRate = pct(kpis.claims_recovered, kpis.claims_claimed)
   return (
     <div className="rs-page">
       <TileStrip snapshot={snapshot} keys={['accidents', 'open_accidents', 'work_orders_open']} />
-      <div className="rs-page-row">
-        <ChartCard title="Accidents by severity" subtitle="Share of incidents by severity band" icon={PieChart} empty={!severity.length} height="50vh">
+      <div className="rs-page-row rs-row-3">
+        <ChartCard title="Open accident share" subtitle="Open accidents as a share of the 12-month total" icon={Percent} height="26vh">
+          <EChart option={gaugeOption(openShare, 'Open share', 3)} ariaLabel="Open accident share gauge" />
+        </ChartCard>
+        <ChartCard title="Claim recovery rate" subtitle="Recovered value against claimed value" icon={Percent} height="26vh">
+          <EChart option={gaugeOption(recoveryRate, 'Recovered', 1)} ariaLabel="Claim recovery rate gauge" />
+        </ChartCard>
+        <ChartCard title="Accidents by severity" subtitle="Share of incidents by severity band" icon={PieChart} empty={!severity.length} height="26vh">
           <EChart option={doughnutOption(severity)} ariaLabel="Accidents by severity" />
         </ChartCard>
-        <ChartCard title="Accidents by site" subtitle="Incident count across sites" icon={MapPin} empty={!accidentsBySite.length} height="50vh">
-          <EChart option={vbarOption(accidentsBySite)} ariaLabel="Accidents by site" />
-        </ChartCard>
       </div>
+      <ChartCard
+        wide
+        title="Incident intensity by site and severity"
+        subtitle="Incident count per site (rows) across severity bands (columns); darker is higher"
+        icon={Grid}
+        empty={!heatmap.length}
+        emptyText="No incidents to map for this period."
+        height="34vh"
+      >
+        <EChart option={heatmapOption(heatmap)} ariaLabel="Incident intensity heatmap by site and severity" />
+      </ChartCard>
     </div>
   )
 }
 
 // ── Page: Claims Desk ─────────────────────────────────────────────────────────
 function ClaimsDeskPage({ snapshot }) {
+  const kpis = snapshot?.kpis || {}
   const labels = arr(snapshot?.labels)
   const claimed = arr(snapshot?.trends?.claims_claimed)
   const recovered = arr(snapshot?.trends?.claims_recovered)
   const claimStatus = arr(snapshot?.breakdowns?.claim_status)
   const claimsEmpty = !labels.length || (!someNonZero(claimed) && !someNonZero(recovered))
+  const recoveryRate = pct(kpis.claims_recovered, kpis.claims_claimed)
   return (
     <div className="rs-page">
       <TileStrip snapshot={snapshot} keys={['claims_claimed', 'claims_recovered', 'open_accidents']} />
-      <div className="rs-page-row">
-        <ChartCard title="Claimed vs recovered" subtitle="Monthly claimed value against recovered value" icon={Activity} empty={claimsEmpty} height="50vh">
-          <EChart option={claimsOption(labels, claimed, recovered)} ariaLabel="Claims claimed versus recovered" />
+      <div className="rs-page-row rs-row-3">
+        <ChartCard title="Recovery rate" subtitle="Recovered value against claimed value" icon={Percent} height="30vh">
+          <EChart option={gaugeOption(recoveryRate, 'Recovered', 1)} ariaLabel="Claim recovery rate gauge" />
         </ChartCard>
-        <ChartCard title="Claims by status" subtitle="Open and closed claim volume" icon={BarChart3} empty={!claimStatus.length} height="50vh">
+        <ChartCard title="Claims by status" subtitle="Open and closed claim volume" icon={BarChart3} empty={!claimStatus.length} height="30vh">
           <EChart option={hbarOption(claimStatus)} ariaLabel="Claims by status" />
         </ChartCard>
       </div>
+      <ChartCard wide title="Claimed vs recovered" subtitle="Monthly claimed value against recovered value" icon={Activity} empty={claimsEmpty} height="34vh">
+        <EChart option={claimsOption(labels, claimed, recovered)} ariaLabel="Claims claimed versus recovered" />
+      </ChartCard>
     </div>
   )
 }
@@ -1183,40 +1437,137 @@ function ScopedStyle() {
       .rs-card-sub { margin:2px 0 0; font-size:13px; color:var(--rs-muted); }
       .rs-empty { display:flex; align-items:center; justify-content:center; color:var(--rs-muted); font-size:15px; }
 
+      /* Company logo (falls back to the brand mark when absent) */
+      .rs-logo { flex:0 0 auto; height:48px; max-width:200px; width:auto; object-fit:contain;
+        border-radius:10px; background:#ffffff; }
+
+      /* Controls strip: board nav + filters + refresh */
+      .rs-controls {
+        flex:0 0 auto; display:flex; align-items:center; justify-content:space-between;
+        gap:16px; flex-wrap:wrap; padding:12px 28px;
+        background:linear-gradient(180deg,#fbfcfe 0%,#f6f8fb 100%);
+        border-bottom:1px solid var(--rs-border);
+      }
+      .rs-board-nav { display:flex; align-items:center; gap:14px; min-width:0; }
+      .rs-navbtn {
+        display:inline-flex; align-items:center; justify-content:center; width:44px; height:44px;
+        border:1px solid var(--rs-border); border-radius:12px; background:#ffffff;
+        color:var(--rs-sub); cursor:pointer; transition:all .15s; flex:0 0 auto;
+      }
+      .rs-navbtn:hover:not(:disabled) { color:#ffffff; background:var(--rs-accent); border-color:var(--rs-accent);
+        box-shadow:0 6px 16px rgba(99,102,241,0.28); }
+      .rs-navbtn:disabled { opacity:.4; cursor:not-allowed; }
+      .rs-board-now { display:flex; flex-direction:column; min-width:0; }
+      .rs-board-kicker { font-size:12px; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:var(--rs-muted); }
+      .rs-board-title { font-size:26px; font-weight:800; color:var(--rs-text); line-height:1.1;
+        letter-spacing:-0.01em; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:34vw; }
+      .rs-dots { display:flex; align-items:center; gap:8px; }
+      .rs-dot { width:10px; height:10px; border-radius:999px; background:var(--rs-border);
+        border:none; padding:0; cursor:pointer; transition:all .25s ease; }
+      .rs-dot:hover { background:#c7cdda; }
+      .rs-dot-on { background:var(--rs-accent); width:28px; box-shadow:0 0 0 3px rgba(99,102,241,0.14); }
+      .rs-dot-on:hover { background:var(--rs-accent); }
+
+      .rs-controls-right { display:flex; align-items:center; gap:16px; flex-wrap:wrap; }
+      .rs-filters { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+      .rs-filter-ic { color:var(--rs-muted); flex:0 0 auto; }
+      .rs-select {
+        display:inline-flex; align-items:center; gap:7px; padding:8px 12px; border-radius:11px;
+        border:1px solid var(--rs-border); background:#ffffff; color:var(--rs-sub); font-size:14px;
+      }
+      .rs-select svg { color:var(--rs-accent); flex:0 0 auto; }
+      .rs-select select {
+        border:none; background:transparent; color:var(--rs-text); font-size:14px; font-weight:600;
+        outline:none; cursor:pointer; max-width:180px;
+      }
+      .rs-select-disabled { color:var(--rs-muted); background:#f1f5f9; cursor:not-allowed; }
+      .rs-select-disabled svg { color:var(--rs-muted); }
+
+      .rs-refresh { display:flex; align-items:center; gap:12px; }
+      .rs-refbtn {
+        display:inline-flex; align-items:center; gap:8px; padding:9px 16px; border-radius:12px;
+        border:1px solid var(--rs-border); background:#ffffff; color:var(--rs-sub);
+        font-size:14px; font-weight:600; cursor:pointer; transition:all .15s;
+      }
+      .rs-refbtn:hover:not(:disabled) { color:var(--rs-text); border-color:var(--rs-accent);
+        box-shadow:0 4px 12px rgba(99,102,241,0.16); }
+      .rs-refbtn:disabled { opacity:.6; cursor:progress; }
+      .rs-lastref { font-size:13px; color:var(--rs-muted); white-space:nowrap; font-variant-numeric:tabular-nums; }
+
+      /* Three-up chart row (gauges + doughnut) */
+      .rs-row-3 { grid-template-columns:repeat(3,minmax(0,1fr)); }
+
       /* Responsive reflow for laptops / smaller boards */
       @media (max-width:1280px) {
         .rs-stat-6 { grid-template-columns:repeat(3,minmax(0,1fr)); }
+        .rs-board-title { max-width:26vw; }
       }
       @media (max-width:1100px) {
         .rs-kpi-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
         .rs-name { max-width:32vw; font-size:22px; }
         .rs-updated { display:none; }
+        .rs-row-3 { grid-template-columns:repeat(2,minmax(0,1fr)); }
+        .rs-board-title { max-width:40vw; font-size:22px; }
       }
       @media (max-width:720px) {
         .rs-header { flex-wrap:wrap; gap:10px; padding:12px 16px; }
-        .rs-head-mid { order:3; width:100%; }
+        .rs-controls { padding:10px 16px; }
+        .rs-controls-right { width:100%; justify-content:space-between; }
         .rs-name { max-width:56vw; }
+        .rs-board-title { max-width:52vw; font-size:20px; }
         .rs-body { padding:14px 16px 18px; }
         .rs-kpi-grid { grid-template-columns:1fr; }
-        .rs-page-row, .rs-grid-2 { grid-template-columns:1fr; }
+        .rs-page-row, .rs-grid-2, .rs-row-3 { grid-template-columns:1fr; }
         .rs-strip { grid-template-columns:repeat(2,minmax(0,1fr)) !important; }
         .rs-stat-6 { grid-template-columns:repeat(2,minmax(0,1fr)); }
         .rs-clock-time { font-size:16px; }
+        .rs-select select { max-width:120px; }
       }
 
-      /* Larger boards: give tables and tiles more presence on 4k walls */
+      /* Full HD first: give tables, tiles and headings boardroom presence at 1080p */
       @media (min-width:1920px) {
+        .rs-header { padding:18px 44px; }
+        .rs-controls { padding:14px 44px; }
+        .rs-body { padding:28px 44px 34px; }
+        .rs-name { font-size:32px; }
+        .rs-board-title { font-size:30px; }
+        .rs-clock-time { font-size:22px; }
+        .rs-updated, .rs-lastref { font-size:15px; }
+        .rs-card-title { font-size:20px; }
+        .rs-card-sub { font-size:15px; }
         .rs-table { font-size:20px; }
         .rs-table thead th { font-size:14px; padding:14px 18px; }
         .rs-table tbody td { padding:15px 18px; }
-        .rs-body { padding:26px 40px 30px; }
+        .rs-tile-label, .rs-stat-label { font-size:15px; }
+        .rs-logo { height:56px; max-width:240px; }
+      }
+
+      /* 2K / 4K walls: scale up spacing and type another notch */
+      @media (min-width:2560px) {
+        .rs-header { padding:24px 60px; }
+        .rs-controls { padding:18px 60px; }
+        .rs-body { padding:36px 60px 44px; }
+        .rs-name { font-size:40px; }
+        .rs-board-title { font-size:38px; }
+        .rs-kpi-grid, .rs-page, .rs-page-row, .rs-grid-2, .rs-row-3, .rs-strip, .rs-stat-strip { gap:24px; }
+        .rs-card { padding:22px 26px; border-radius:20px; }
+        .rs-card-title { font-size:24px; }
+        .rs-card-sub { font-size:17px; }
+        .rs-table { font-size:24px; }
+        .rs-table thead th { font-size:16px; padding:18px 22px; }
+        .rs-table tbody td { padding:19px 22px; }
+        .rs-tile-label, .rs-stat-label { font-size:17px; }
+        .rs-clock-time { font-size:26px; }
+        .rs-logo { height:68px; max-width:300px; }
+        .rs-navbtn { width:52px; height:52px; }
       }
 
       /* Respect reduced-motion: no page slide, no progress sweep, no spin churn */
       @media (prefers-reduced-motion:reduce) {
         .rs-page-anim { animation:none; }
         .rs-progress-fill { animation:none; width:100%; }
-        .rs-dot { transition:none; }
+        .rs-dot, .rs-navbtn, .rs-refbtn, .rs-fsbtn { transition:none; }
+        .rs-spin { animation:none; }
       }
     `}</style>
   )

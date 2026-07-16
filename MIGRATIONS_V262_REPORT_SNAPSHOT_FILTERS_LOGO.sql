@@ -1,0 +1,8 @@
+-- MIGRATIONS_V262_REPORT_SNAPSHOT_FILTERS_LOGO.sql (applied live) - TV share upgrade.
+-- get_report_snapshot now takes optional p_site + p_country and threads them through
+-- every org-scoped aggregate (kpis/trends/breakdowns/ops/heatmap). Also returns:
+--   logo (system_config.company_logo, one global logo for all shares),
+--   sites[] + countries[] (distinct option lists for the viewer filter dropdowns),
+--   heatmap[] ({site,severity,value} for an ECharts heatmap).
+-- Old 2-arg overload dropped so the 4-arg (defaults null) resolves unambiguously.
+-- Org still derived from the token row; aggregates only, no PII. Next free V263.

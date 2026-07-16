@@ -91,9 +91,21 @@ export async function updateReportShare(id, patch = {}) {
   if (error) throw error
 }
 
-/** PUBLIC read: aggregate snapshot for a share token (callable by anon). */
-export async function getReportSnapshot(token, password = null) {
-  const { data, error } = await supabase.rpc('get_report_snapshot', { p_token: token, p_password: password })
+/**
+ * PUBLIC read: aggregate snapshot for a share token (callable by anon).
+ *
+ * @param {string} token         share token from the URL
+ * @param {string|null} password optional viewer password
+ * @param {{site?:string, country?:string}} opts server-side site / country filter
+ *   (V262). Empty / omitted values mean "all" and are sent as null.
+ */
+export async function getReportSnapshot(token, password = null, opts = {}) {
+  const { data, error } = await supabase.rpc('get_report_snapshot', {
+    p_token: token,
+    p_password: password,
+    p_site: opts.site || null,
+    p_country: opts.country || null,
+  })
   if (error) { if (isBackendMissing(error)) return { ok: false, reason: 'unavailable' }; throw error }
   return data || { ok: false, reason: 'invalid' }
 }

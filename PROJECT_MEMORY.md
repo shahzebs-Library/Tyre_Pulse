@@ -499,6 +499,24 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
   OpsIntelligence, Analytics/CostCenter/BoardOverview/Executive(cost), ExecutiveAnalytics, Reports - do NOT add
   more PM surfaces without a real user ask (avoid manufacturing).
 
+### Real light/dark theme toggle (2026-07-16) — full-palette, not just backgrounds
+- User: the old toggle "only changes backgrounds". Fixed by deepening BOTH the toggle and the light CSS.
+- Theme signal is the `html.light` class (dark = no class), driven by the EXISTING `src/contexts/ThemeContext.jsx`
+  (localStorage key `tp_mode`; modes light/dark/system; system follows matchMedia). Extended it with
+  `resolvedTheme` + guarded `setTheme` (all prior exports theme/isDark/toggleTheme/mode/setMode kept). Do NOT
+  duplicate this context.
+- **`src/components/ui/ThemeToggle.jsx`** (NEW) = Sun/Moon/Monitor cycle Light>Dark>System (or plain switch via
+  includeSystem={false}), currentColor-based so it reads on either header. Mounted in Layout.jsx (sidebar footer,
+  mobile top header, field/checklist header) and the choice also lives in Settings AppearancePanel (mode/setMode).
+  Available to ALL users (not super-admin gated - that constraint was only for the parked Admin module).
+- **`src/index.css`**: the `html.light {...}` block now fills every design token (added --surface-raised,
+  --border-subtle, --shadow-float, login-* group) AND adds `html.light`-scoped overrides for the raw dark
+  Tailwind utilities that ignore tokens (.bg-black, .text-slate-100/200, .bg-gray-600/500, .bg-white/2|5|10,
+  .border-white/*, divide-*, ring/border slate, pre/code/kbd). SEMANTIC status hues (red/green/amber/blue/purple)
+  and the brand green accent are deliberately preserved. DARK mode output is byte-for-byte unchanged (everything
+  is scoped under html.light). RULE: to fix a screen that still looks dark in light mode, add an html.light-scoped
+  override in index.css (never restyle dark); do not palettize semantic status colours.
+
 ### BACKLOG (user parked 2026-07-16, "do it later when I ask") — Advanced Admin Control & Self-Healing
 - A big SUPER-ADMIN-ONLY module the user specced for LATER (explicitly "put this for later, I will ask you to
   do it all"). Do NOT start until the user asks. Belongs under `/console` (super-admin), NOT the main nav.

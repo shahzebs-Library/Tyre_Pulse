@@ -310,8 +310,14 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
   `styleChartData` DEFAULT palette now follows `getReportPalette()` (explicit named block palettes still win),
   so Accident builder/PDF/PPTX follow the theme too. Board Overview + Executive already use `reportColors`.
   Tests: reportColors 9. RULE: to add a theme, add to PRESETS (auto-surfaces in the console picker).
-- **STILL TODO (wave 2, told user):** convert the remaining HARD-CODED chart colours to the palette:
-  `Analytics.jsx` (inline rgba) + `Accidents.jsx` analytics-tab category maps (PIE_COLORS etc.).
+- **Wave 2 DONE (2026-07-16):** the remaining hard-coded chart colours now follow the super-admin palette.
+  `Analytics.jsx` (the records/cost combo bar) and `Accidents.jsx` NON-SEMANTIC charts (monthly incidents,
+  top assets, by-site, payer cost, monthly trend line, status doughnut) use `colorAt(i)`/`categorical(n)`/
+  `withAlpha` from `reportColors` at render time (inside the useMemos, so they pick up the active theme).
+  PIE_COLORS const removed. RULE: SEMANTIC colour maps are DELIBERATELY kept hard-coded because the colour
+  carries meaning: accident severity ladder (Minor grey / Major orange / Total Loss red), claim status,
+  fault (Faulty red / Non-faulty green / Under review amber), and the recovery/status inline badges. Do NOT
+  palettize those. Only categorical/single-accent chart fills follow the theme.
 
 ### Shareable public/TV report links (V251/V252, 2026-07-16) — SHIPPED, do NOT duplicate
 - The "shareable PUBLIC/TV links for reports (LIGHT theme, admin-managed, advanced charts)" backlog item is

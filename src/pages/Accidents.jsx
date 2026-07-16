@@ -36,6 +36,7 @@ import {
   najmHasReport, taqdeerHasReport, recoveryIsYes, repairIsInternal, computeRecovered,
 } from '../lib/accidentVocab'
 import { makeValueLabelsPlugin, doughnutLegendCounts, summarizeChartData, REPORT_LIBRARY, normalizeConfig } from '../lib/accidentReport'
+import { colorAt, categorical, withAlpha } from '../lib/reportColors'
 import { listTemplates as listReportTemplates, createTemplate as createReportTemplate } from '../lib/api/accidentReportTemplates'
 import { builderReportType } from '../lib/api/scheduledReports'
 import { toUserMessage } from '../lib/safeError'
@@ -278,9 +279,6 @@ const CHART_OPTS_LINE = {
   plugins: { ...CHART_OPTS_BASE.plugins, legend: { display: false } },
   elements: { line: { tension: 0.35 }, point: { radius: 3, hoverRadius: 5 } },
 }
-
-// Shared categorical palette for doughnut segments.
-const PIE_COLORS = ['#ea580c', '#3b82f6', '#16a34a', '#9333ea', '#dc2626', '#ca8a04', '#0891b2', '#64748b']
 
 function monthKey(dateStr) {
   if (!dateStr) return null
@@ -561,8 +559,8 @@ export default function Accidents() {
       datasets: [{
         label: 'Incidents',
         data: keys.map(k => counts[k]),
-        backgroundColor: 'rgba(22,163,74,0.7)',
-        borderColor: '#16a34a',
+        backgroundColor: withAlpha(colorAt(0), 0.7),
+        borderColor: colorAt(0),
         borderWidth: 1,
         borderRadius: 3,
       }],
@@ -590,8 +588,8 @@ export default function Accidents() {
       datasets: [{
         label: 'Incidents',
         data: sorted.map(([, v]) => v),
-        backgroundColor: 'rgba(234,88,12,0.7)',
-        borderColor: '#ea580c',
+        backgroundColor: withAlpha(colorAt(3), 0.7),
+        borderColor: colorAt(3),
         borderWidth: 1,
         borderRadius: 3,
       }],
@@ -637,8 +635,8 @@ export default function Accidents() {
       datasets: [{
         label: 'Incidents',
         data: sorted.map(([, v]) => v),
-        backgroundColor: 'rgba(59,130,246,0.7)',
-        borderColor: '#3b82f6',
+        backgroundColor: withAlpha(colorAt(1), 0.7),
+        borderColor: colorAt(1),
         borderWidth: 1,
         borderRadius: 3,
       }],
@@ -720,8 +718,8 @@ export default function Accidents() {
       datasets: [{
         label: 'Cost',
         data: sorted.map(([, v]) => v),
-        backgroundColor: 'rgba(168,85,247,0.7)',
-        borderColor: '#a855f7',
+        backgroundColor: withAlpha(colorAt(5), 0.7),
+        borderColor: colorAt(5),
         borderWidth: 1,
         borderRadius: 3,
       }],
@@ -741,7 +739,7 @@ export default function Accidents() {
     const color = { Minor: '#64748b', Major: '#ea580c', 'Total Loss': '#dc2626', Unspecified: '#334155' }
     return {
       labels: entries.map(([k]) => k),
-      datasets: [{ data: entries.map(([, v]) => v), backgroundColor: entries.map(([k], i) => color[k] || PIE_COLORS[i % PIE_COLORS.length]), borderWidth: 0 }],
+      datasets: [{ data: entries.map(([, v]) => v), backgroundColor: entries.map(([k], i) => color[k] || colorAt(i)), borderWidth: 0 }],
     }
   }, [records])
 
@@ -751,7 +749,7 @@ export default function Accidents() {
     const entries = Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 8)
     return {
       labels: entries.map(([k]) => k),
-      datasets: [{ data: entries.map(([, v]) => v), backgroundColor: entries.map((_, i) => PIE_COLORS[i % PIE_COLORS.length]), borderWidth: 0 }],
+      datasets: [{ data: entries.map(([, v]) => v), backgroundColor: categorical(entries.length), borderWidth: 0 }],
     }
   }, [records])
 
@@ -765,8 +763,8 @@ export default function Accidents() {
       datasets: [{
         label: 'Incidents',
         data: keys.map(k => totals[k]),
-        borderColor: '#ea580c',
-        backgroundColor: 'rgba(234,88,12,0.18)',
+        borderColor: colorAt(2),
+        backgroundColor: withAlpha(colorAt(2), 0.18),
         fill: true,
       }],
     }

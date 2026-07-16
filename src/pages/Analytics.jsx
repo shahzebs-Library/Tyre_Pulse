@@ -16,6 +16,7 @@ import { fetchAllPages } from '../lib/fetchAll'
 import EnterpriseTable from '../components/ui/EnterpriseTable'
 import { useReportMeta } from '../hooks/useReportMeta'
 import { toUserMessage } from '../lib/safeError'
+import { colorAt, withAlpha } from '../lib/reportColors'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, LineElement, PointElement, Title, Tooltip, Legend)
 
@@ -79,8 +80,8 @@ export default function Analytics() {
   const chartData = useMemo(() => ({
     labels: monthlyData.map(d => d.month),
     datasets: [
-      { label: 'Records', data: monthlyData.map(d => d.count), backgroundColor: 'rgba(59,130,246,0.6)', yAxisID: 'y', borderRadius: 4 },
-      { label: 'Cost', data: monthlyData.map(d => d.cost), backgroundColor: 'rgba(16,185,129,0.6)', yAxisID: 'y1', borderRadius: 4 },
+      { label: 'Records', data: monthlyData.map(d => d.count), backgroundColor: withAlpha(colorAt(0), 0.6), borderColor: colorAt(0), yAxisID: 'y', borderRadius: 4 },
+      { label: 'Cost', data: monthlyData.map(d => d.cost), backgroundColor: withAlpha(colorAt(3), 0.6), borderColor: colorAt(3), yAxisID: 'y1', borderRadius: 4 },
     ],
   }), [monthlyData])
 

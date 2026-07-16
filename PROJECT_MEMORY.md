@@ -299,9 +299,22 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
   ('bar'|'doughnut'|'pie' per-point, 'line'|'area' per-dataset). Legible on dark UI + white PDF. Tests
   reportColors.test.js (6). Data loading uses fetchAllPages + the listKpi* / listAllAccidentsForPage /
   listWorkOrdersForPage / listStockRecords services (country-scoped).
-- **STILL TODO (told user):** the boss also wants the shared palette applied to ALL report exports app-wide
-  (Executive / Accident report / Analytics / scheduled). That is a separate sweep across many chart configs -
-  wave 2. BoardOverview + reportColors are wave 1.
+- **Super-admin Report theme (2026-07-16):** `reportColors.js` is now a THEME SYSTEM: 8 named PRESETS
+  (Vivid/Ocean/Sunset/Forest/Berry/Corporate Slate/High Contrast/Warm) + `setReportPalette(nameOrHexArray)` /
+  `getReportPalette` / `activePaletteName`; colorAt/categorical/stylize derive from the ACTIVE palette
+  (default Vivid). **Super-admin UI = `src/console/pages/ConsoleReportAppearance.jsx` (/console/appearance,
+  nav "Report Colors")**: preset swatch cards + Custom (12 colour inputs) + live Bar/Doughnut preview on white;
+  Save upserts `system_config.report_palette` (value = preset name or JSON hex array; super-admin write RLS
+  already exists, authenticated read) and applies live via setReportPalette. `SettingsContext` reads
+  `system_config.report_palette` on load and applies it org-wide (best-effort, never blocks). `accidentReport.js`
+  `styleChartData` DEFAULT palette now follows `getReportPalette()` (explicit named block palettes still win),
+  so Accident builder/PDF/PPTX follow the theme too. Board Overview + Executive already use `reportColors`.
+  Tests: reportColors 9. RULE: to add a theme, add to PRESETS (auto-surfaces in the console picker).
+- **STILL TODO (wave 2, told user):** convert the remaining HARD-CODED chart colours to the palette:
+  `Analytics.jsx` (inline rgba) + `Accidents.jsx` analytics-tab category maps (PIE_COLORS etc.). And the
+  BIG new asks (2026-07-16): shareable PUBLIC/TV links for reports (must be LIGHT theme, no dark), a
+  super-admin place to manage which reports are shared/live, and Executive-Analytics-style ADVANCED charts.
+  Existing infra to extend: V103 `/display/:token` + getDisplaySnapshot (DisplayShare TV token-share).
 
 ### Incident Report screen upgrade (2026-07-16) — from the user's field spec (xlsx)
 - The user's "incident_Report_Screen" spec was a BEHAVIOR upgrade list on the EXISTING accident form

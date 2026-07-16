@@ -14,6 +14,7 @@
  */
 import { analyzeClaims, hasClaim, isClosed } from './claimsAnalytics'
 import { STATUSES, SEVERITIES, FAULT_STATUS_OPTS, canonStatus, canonSeverity, canonFault } from './accidentVocab'
+import { getReportPalette } from './reportColors'
 
 // ── WYSIWYG paper theme (dark-on-white so on-screen preview == exported PDF) ──
 export const PAPER = { ink: '#0f172a', muted: '#475569', grid: 'rgba(15,23,42,0.08)' }
@@ -63,7 +64,10 @@ function hexToRgba(hex, alpha = 1) {
  */
 export function styleChartData(data, block = {}) {
   if (!data || !Array.isArray(data.labels) || !Array.isArray(data.datasets) || !data.datasets.length) return data
-  const palette = PALETTES[block.palette] || PALETTES.default
+  // An explicitly chosen named palette wins; otherwise (unset or 'default') the
+  // chart follows the org-wide report theme set by the super-admin (Console ->
+  // Report Colors), so accident reports match Board Overview and Executive.
+  const palette = (block.palette && block.palette !== 'default' && PALETTES[block.palette]) || getReportPalette()
   const borderOn = !!block.showBorders
   // Chosen border WIDTH (default 1.5 when borders are on) and an OPTIONAL explicit
   // border COLOUR (block.borderColor); when unset the border derives from the

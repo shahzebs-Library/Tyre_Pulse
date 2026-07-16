@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from './AuthContext'
+import { setReportPalette } from '../lib/reportColors'
 
 export const COUNTRIES = ['KSA', 'UAE', 'Egypt']
 export const COUNTRY_CURRENCY = { KSA: 'SAR', UAE: 'AED', Egypt: 'EGP' }
@@ -69,6 +70,22 @@ export function SettingsProvider({ children }) {
   useEffect(() => {
     if (user) refreshSettings()
   }, [user, refreshSettings])
+
+  // Apply the org-wide report colour theme chosen by the super-admin (Console ->
+  // Report Colors). Stored in system_config.report_palette as a preset name or a
+  // JSON hex array; any authenticated user can read it. Best-effort, never blocks.
+  useEffect(() => {
+    if (!user) return
+    let cancelled = false
+    supabase.from('system_config').select('value').eq('key', 'report_palette').maybeSingle()
+      .then(({ data }) => {
+        if (cancelled || !data?.value) return
+        try { setReportPalette(JSON.parse(data.value), { persist: false }) }
+        catch { setReportPalette(data.value, { persist: false }) }
+      })
+      .catch(() => { /* keep default theme */ })
+    return () => { cancelled = true }
+  }, [user])
 
   const value = useMemo(
     () => ({

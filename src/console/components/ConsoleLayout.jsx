@@ -3,7 +3,7 @@ import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import {
   Shield, LayoutDashboard, Building2, Users, Settings2,
   ClipboardList, Zap, Megaphone, Lock, LogOut, ChevronDown,
-  Globe, Menu, X, AlertTriangle, Layers, Smartphone,
+  Globe, Menu, X, AlertTriangle, Layers, Smartphone, Palette,
 } from 'lucide-react'
 import { useConsoleAuth } from '../ConsoleAuthContext'
 import Console2FAModal from './Console2FAModal'
@@ -21,6 +21,7 @@ const NAV = [
   { to: '/console/security',     label: 'Security',       icon: AlertTriangle },
   { to: '/console/system',       label: 'System',         icon: Settings2 },
   { to: '/console/config',       label: 'System Config',  icon: Settings2 },
+  { to: '/console/appearance',   label: 'Report Colors',  icon: Palette },
 ]
 
 export default function ConsoleLayout() {

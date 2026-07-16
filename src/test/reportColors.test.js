@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest'
-import { CATEGORICAL, colorAt, categorical, withAlpha, stylize, TREND_LINES } from '../lib/reportColors'
+import {
+  CATEGORICAL, colorAt, categorical, withAlpha, stylize, TREND_LINES,
+  PRESETS, PRESET_KEYS, setReportPalette, getReportPalette, activePaletteName, DEFAULT_PRESET,
+} from '../lib/reportColors'
+import { afterEach } from 'vitest'
+
+afterEach(() => setReportPalette(DEFAULT_PRESET, { persist: false })) // keep the singleton clean
 
 describe('reportColors', () => {
   it('categorical palette is 12 unique #rrggbb hues', () => {
@@ -49,5 +55,35 @@ describe('reportColors', () => {
     expect(stylize(null)).toBeNull()
     expect(stylize({})).toEqual({})
     expect(stylize({ datasets: 'x' })).toEqual({ datasets: 'x' })
+  })
+
+  it('every preset has 12 unique valid hex colours', () => {
+    expect(PRESET_KEYS.length).toBeGreaterThanOrEqual(6)
+    for (const key of PRESET_KEYS) {
+      const p = PRESETS[key]
+      expect(p, key).toHaveLength(12)
+      expect(new Set(p).size, `${key} has duplicates`).toBe(12)
+      for (const c of p) expect(c, key).toMatch(/^#[0-9a-f]{6}$/i)
+    }
+  })
+
+  it('setReportPalette switches the active palette by preset name', () => {
+    setReportPalette('ocean', { persist: false })
+    expect(activePaletteName()).toBe('ocean')
+    expect(getReportPalette()).toEqual(PRESETS.ocean)
+    expect(colorAt(0)).toBe(PRESETS.ocean[0])
+    const styled = stylize({ datasets: [{ data: [1, 2] }] }, 'bar')
+    expect(styled.datasets[0].backgroundColor).toEqual(PRESETS.ocean.slice(0, 2))
+  })
+
+  it('setReportPalette accepts a custom hex array and rejects junk', () => {
+    setReportPalette(['#123456', '#abcdef'], { persist: false })
+    expect(activePaletteName()).toBe('custom')
+    expect(getReportPalette()).toEqual(['#123456', '#abcdef'])
+    // invalid input is ignored (active palette unchanged)
+    setReportPalette('not-a-preset', { persist: false })
+    expect(getReportPalette()).toEqual(['#123456', '#abcdef'])
+    setReportPalette(['nope', ''], { persist: false })
+    expect(getReportPalette()).toEqual(['#123456', '#abcdef'])
   })
 })

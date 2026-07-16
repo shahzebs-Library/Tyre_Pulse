@@ -252,6 +252,7 @@ const ExecutiveAnalytics     = lazy(() => import('./pages/ExecutiveAnalytics'))
 const PermissionMatrix       = lazy(() => import('./pages/PermissionMatrix'))
 const MasterAccessControl    = lazy(() => import('./pages/MasterAccessControl'))
 const DisplayShare           = lazy(() => import('./pages/DisplayShare'))
+const ReportShare            = lazy(() => import('./pages/ReportShare'))
 const EventStream            = lazy(() => import('./pages/EventStream'))
 const Approvals              = lazy(() => import('./pages/Approvals'))
 const WorkflowSettings       = lazy(() => import('./pages/WorkflowSettings'))
@@ -332,6 +333,11 @@ function MainApp() {
                 no ProtectedRoute/flag: the RPC is anon-granted and the page degrades
                 gracefully until V103 is applied. */}
             <Route path="/display/:token" element={<Safe><DisplayShare /></Safe>} />
+            {/* Public, light-theme, auto-rotating TV/kiosk report viewer (V251/V252
+                share token) - ANON, no chrome. The get_report_snapshot RPC is
+                anon-granted and org-scoped by the token row; the page degrades
+                gracefully until the migrations are applied. */}
+            <Route path="/report/:token" element={<Safe><ReportShare /></Safe>} />
             {/* TV display mode: authed, but rendered WITHOUT the Layout chrome */}
             <Route
               path="/display"

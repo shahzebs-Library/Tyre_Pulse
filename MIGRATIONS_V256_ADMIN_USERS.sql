@@ -1,0 +1,7 @@
+-- MIGRATIONS_V256_ADMIN_USERS.sql (applied live) - Module 7 console admin role tiers.
+-- Table admin_users(user_id UNIQUE, admin_role super_admin|regional_admin|viewer,
+-- regions text[], active). Super-admin manages (RLS); user reads own row. Helpers
+-- my_admin_role() (DEFINER) + admin_set_admin_user(...) upsert (super-admin gated).
+-- NOTE: /console auth gate still requires profiles.is_super_admin; opening console
+-- to regional_admin/viewer (auth gate + scoped RLS) is the enforcement follow-up.
+-- Full DDL applied via Supabase MCP; see project history. Reversible: DROP TABLE.

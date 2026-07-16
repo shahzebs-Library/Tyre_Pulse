@@ -531,8 +531,25 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
 
 ### Admin Control & Self-Healing — Module 1 System Health (V255, 2026-07-16) — SHIPPED, phased
 - User un-parked the Admin Control module (super-admin, under `/console`). Delivering PHASED: after each
-  module STOP + report + await confirmation. Module 1 (System Health + Fleet Health Score + error log) DONE.
-  Modules 4 (backups) + 7 (admin roles) NEXT, pending user confirmation. Do NOT build 2/3/5/6/8 without ask.
+  module STOP + report + await confirmation. Modules 1 (System Health), 4 (Backups), 7 (Admin Roles) DONE.
+  Do NOT build 2/3/5/6/8 without ask. Next free migration **V258**.
+- **Module 7 (V256) admin_users**: table (user_id UNIQUE, admin_role super_admin/regional_admin/viewer,
+  regions text[], active), RLS super-admin-manage + self-read; `my_admin_role()` DEFINER; `admin_set_admin_user`
+  upsert RPC. Pure `src/lib/adminRoles.js` (ADMIN_ROLE_META + ADMIN_CAPABILITIES rank matrix + adminCan/canon,
+  18 tests). Service `src/lib/api/adminUsers.js` (10 tests). Page `src/console/pages/ConsoleAdminRoles.jsx`
+  (/console/admin-roles). HONEST GAP: the /console auth gate STILL requires profiles.is_super_admin, so
+  regional_admin/viewer cannot yet sign into the console - the role model + manager exist but gate-opening +
+  scoped RLS is the enforcement follow-up (banner says so in the UI). Do NOT claim it is enforced.
+- **Module 4 (V257) backups**: `backups` schema (snapshots + snapshot_tables jsonb), curated core-table list
+  (tyre_records/vehicle_fleet/accidents/inspections/work_orders/pm_programs/pm_service_records/stock_records).
+  Nightly pg_cron job `nightly-backup` 00:30 -> `cron_run_backup()` (snapshot + 30d purge). Super-admin RPCs:
+  create_backup_snapshot, list_backup_snapshots, backup_restore_preview (safety check: snapshot vs current +
+  missing + newer-current counts), **backup_restore_missing = NON-DESTRUCTIVE** (re-inserts only rows missing
+  now, ON CONFLICT DO NOTHING, excludes GENERATED cols - can NEVER overwrite newer live data; verified live).
+  backups schema never granted to anon/authenticated. Service `src/lib/api/backups.js` (8 tests). Page
+  `src/console/pages/ConsoleBackups.jsx` (/console/backups) - back-up-now, snapshot list, per-table restore
+  preview + typed-RESTORE-confirm recover-missing. RULE: restore is recover-deleted-rows only; a full
+  destructive restore is deliberately NOT built (data-safety).
 - **V255 (applied live + stub):** NEW table `system_logs` (id, organisation_id DEFAULT app_current_org(),
   module_id, severity info/warning/error/critical, source, message, detail jsonb, reference_id, url, user_id,
   user_email, resolved/resolved_by/resolved_at, created_at). RLS: RESTRICTIVE org isolation (null org allowed

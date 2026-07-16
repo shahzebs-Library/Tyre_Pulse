@@ -90,7 +90,7 @@ export async function listAccidentFleet() {
   return unwrap(
     await supabase
       .from('vehicle_fleet')
-      .select('asset_no, vehicle_type, site, country')
+      .select('asset_no, vehicle_type, site, country, registration_no, fleet_number')
       .order('asset_no'),
   )
 }

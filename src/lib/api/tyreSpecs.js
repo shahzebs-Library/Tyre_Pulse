@@ -15,7 +15,7 @@ import { supabase, fetchAllPages } from './_client'
 
 // Column set the page reads from tyre_specifications (verified against the page).
 const SPEC_COLS =
-  'id, vehicle_type, position, approved_sizes, approved_brands, min_load_index, min_speed_index, recommended_pressure, min_tread_depth, notes, country, created_by, created_at, updated_at'
+  'id, vehicle_type, position, approved_sizes, approved_brands, min_load_index, min_speed_index, ply_rating, recommended_pressure, min_tread_depth, notes, country, created_by, created_at, updated_at'
 
 /**
  * List tyre specifications, NULL-inclusive country scoping when a real country

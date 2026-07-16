@@ -17,6 +17,10 @@ import PageHeader from '../components/ui/PageHeader'
 import EmptyState from '../components/EmptyState'
 const uuidv4 = () => crypto.randomUUID()
 import * as tyreSpecsApi from '../lib/api/tyreSpecs'
+import {
+  VEHICLE_TYPES, POSITIONS, SPEED_INDICES, PLY_RATINGS, APPROVED_BRANDS, SMART_DEFAULTS,
+} from '../lib/tyreSpecCatalog'
+import { buildPolicySections, renderTyreSpecPolicyPdf } from '../lib/tyreSpecPolicy'
 import { normalizePosition } from '../lib/tyrePositions'
 import { useAuth } from '../contexts/AuthContext'
 import { useSettings } from '../contexts/SettingsContext'
@@ -29,78 +33,8 @@ ChartJS.register(ArcElement, Tooltip, Legend)
 
 const PAGE_SIZE = 25
 
-const POSITIONS = ['Steer', 'Drive', 'Trailer', 'Lift Axle', 'Tag Axle', 'All Positions']
-const VEHICLE_TYPES_COMMON = ['Rigid Truck', 'Mixer', 'Tipper', 'Semi-Trailer', 'Tanker', 'Flat Bed', 'Crane', 'Bus', 'Pickup', 'Other']
-const SPEED_INDICES = ['J','K','L','M','N','P','Q','R','S','T','U','H','V','W','Y']
-
-const SMART_DEFAULTS = [
-  {
-    vehicle_type: 'Rigid Truck',
-    position: 'Steer',
-    approved_sizes: ['315/80R22.5', '295/80R22.5'],
-    approved_brands: ['Michelin', 'Bridgestone', 'Continental'],
-    min_load_index: 154,
-    min_speed_index: 'M',
-    recommended_pressure: 120,
-    min_tread_depth: 3,
-    notes: 'Industry standard steer axle fitment for rigid trucks',
-  },
-  {
-    vehicle_type: 'Rigid Truck',
-    position: 'Drive',
-    approved_sizes: ['315/80R22.5', '11R22.5'],
-    approved_brands: ['Michelin', 'Goodyear', 'Bridgestone'],
-    min_load_index: 156,
-    min_speed_index: 'L',
-    recommended_pressure: 110,
-    min_tread_depth: 3,
-    notes: 'Drive axle, dual fitment. Deep traction pattern recommended',
-  },
-  {
-    vehicle_type: 'Semi-Trailer',
-    position: 'Trailer',
-    approved_sizes: ['385/65R22.5', '445/65R22.5'],
-    approved_brands: ['Michelin', 'Goodyear', 'Continental', 'Pirelli'],
-    min_load_index: 160,
-    min_speed_index: 'K',
-    recommended_pressure: 100,
-    min_tread_depth: 2,
-    notes: 'Wide base trailer fitment. Monitor for irregular wear',
-  },
-  {
-    vehicle_type: 'Mixer',
-    position: 'Steer',
-    approved_sizes: ['315/80R22.5', '295/80R22.5'],
-    approved_brands: ['Michelin', 'Bridgestone', 'Dunlop'],
-    min_load_index: 154,
-    min_speed_index: 'M',
-    recommended_pressure: 115,
-    min_tread_depth: 3,
-    notes: 'Mixer steer, higher payload consideration',
-  },
-  {
-    vehicle_type: 'Tipper',
-    position: 'Drive',
-    approved_sizes: ['315/80R22.5', '13R22.5'],
-    approved_brands: ['Michelin', 'Goodyear', 'BKT'],
-    min_load_index: 158,
-    min_speed_index: 'L',
-    recommended_pressure: 110,
-    min_tread_depth: 4,
-    notes: 'Tipper drive, aggressive pattern for off-road conditions',
-  },
-  {
-    vehicle_type: 'Bus',
-    position: 'Steer',
-    approved_sizes: ['295/80R22.5', '275/70R22.5'],
-    approved_brands: ['Michelin', 'Bridgestone', 'Continental'],
-    min_load_index: 152,
-    min_speed_index: 'N',
-    recommended_pressure: 110,
-    min_tread_depth: 3,
-    notes: 'Passenger comfort and wet grip priority',
-  },
-]
+// POSITIONS, VEHICLE_TYPES, SPEED_INDICES, PLY_RATINGS, APPROVED_BRANDS and
+// SMART_DEFAULTS are the shared single source imported from ../lib/tyreSpecCatalog.
 
 const STATUS_CONFIG = {
   Approved:            { label: 'Approved',           color: 'text-green-400',  bg: 'bg-green-900/20 border-green-800',  icon: CheckCircle },
@@ -146,6 +80,7 @@ function specToRow(form, { country = null, createdBy = null } = {}) {
     approved_brands: Array.isArray(form.approved_brands) ? form.approved_brands : [],
     min_load_index: toNum(form.min_load_index),
     min_speed_index: form.min_speed_index || null,
+    ply_rating: form.ply_rating?.trim() ? form.ply_rating.trim() : null,
     recommended_pressure: toNum(form.recommended_pressure),
     min_tread_depth: toNum(form.min_tread_depth),
     notes: form.notes?.trim() ? form.notes.trim() : null,
@@ -163,6 +98,7 @@ function rowToSpec(row) {
     approved_brands: row.approved_brands ?? [],
     min_load_index: row.min_load_index ?? '',
     min_speed_index: row.min_speed_index ?? '',
+    ply_rating: row.ply_rating ?? '',
     recommended_pressure: row.recommended_pressure ?? '',
     min_tread_depth: row.min_tread_depth ?? '',
     notes: row.notes ?? '',
@@ -213,9 +149,10 @@ function TagInput({ values = [], onChange, placeholder }) {
 
 // ── Brand tag input (preserves case) ──────────────────────────────────────────
 
-function BrandTagInput({ values = [], onChange, placeholder }) {
+function BrandTagInput({ values = [], onChange, placeholder, suggestions = [] }) {
   const [input, setInput] = useState('')
   const ref = useRef()
+  const listId = useRef(`brand-suggestions-${Math.random().toString(36).slice(2)}`)
 
   function add() {
     const v = input.trim()
@@ -242,6 +179,7 @@ function BrandTagInput({ values = [], onChange, placeholder }) {
       ))}
       <input
         ref={ref}
+        list={suggestions.length ? listId.current : undefined}
         value={input}
         onChange={e => setInput(e.target.value)}
         onKeyDown={e => { if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); add() } }}
@@ -249,6 +187,11 @@ function BrandTagInput({ values = [], onChange, placeholder }) {
         placeholder={values.length === 0 ? placeholder : ''}
         className="flex-1 min-w-[80px] bg-transparent text-[var(--text-primary)] text-sm outline-none placeholder-gray-600"
       />
+      {suggestions.length > 0 && (
+        <datalist id={listId.current}>
+          {suggestions.filter(b => !values.includes(b)).map(b => <option key={b} value={b} />)}
+        </datalist>
+      )}
     </div>
   )
 }
@@ -288,6 +231,7 @@ function SpecFormModal({ spec, onClose, onSave, isAdmin, saving }) {
     approved_brands: [],
     min_load_index: '',
     min_speed_index: '',
+    ply_rating: '',
     recommended_pressure: '',
     min_tread_depth: '',
     notes: '',
@@ -356,7 +300,7 @@ function SpecFormModal({ spec, onClose, onSave, isAdmin, saving }) {
                     className="w-full bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg px-3 py-2 text-[var(--text-primary)] text-sm focus:border-blue-500 outline-none"
                   />
                   <datalist id="vehicle-types-list">
-                    {VEHICLE_TYPES_COMMON.map(v => <option key={v} value={v} />)}
+                    {VEHICLE_TYPES.map(v => <option key={v} value={v} />)}
                   </datalist>
                 </div>
               </div>
@@ -390,7 +334,8 @@ function SpecFormModal({ spec, onClose, onSave, isAdmin, saving }) {
               <BrandTagInput
                 values={form.approved_brands}
                 onChange={v => set('approved_brands', v)}
-                placeholder="e.g. Michelin"
+                placeholder="e.g. Double Coin"
+                suggestions={APPROVED_BRANDS}
               />
             </div>
 
@@ -415,6 +360,19 @@ function SpecFormModal({ spec, onClose, onSave, isAdmin, saving }) {
                   <option value="">Select...</option>
                   {SPEED_INDICES.map(s => <option key={s} value={s}>{s}</option>)}
                 </select>
+              </div>
+              <div>
+                <label className="text-[var(--text-muted)] text-xs mb-1.5 block">Min Ply / Star Rating</label>
+                <input
+                  list="ply-ratings-list"
+                  value={form.ply_rating}
+                  onChange={e => set('ply_rating', e.target.value)}
+                  placeholder="e.g. 18PR"
+                  className="w-full bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg px-3 py-2 text-[var(--text-primary)] text-sm focus:border-blue-500 outline-none"
+                />
+                <datalist id="ply-ratings-list">
+                  {PLY_RATINGS.map(p => <option key={p} value={p} />)}
+                </datalist>
               </div>
               <div>
                 <label className="text-[var(--text-muted)] text-xs mb-1.5 block">Recommended Pressure (PSI)</label>
@@ -643,6 +601,10 @@ export default function TyreSpecifications() {
   const [editingSpec, setEditingSpec] = useState(null)
   const [deletingSpec, setDeletingSpec] = useState(null)
   const [workOrderAsset, setWorkOrderAsset] = useState(null)
+
+  // Fitment Policy PDF generation state
+  const [policyBusy, setPolicyBusy] = useState(false)
+  const [policyError, setPolicyError] = useState('')
 
   // ── In-session audit log (DB does not persist spec history) ──────────────────
 
@@ -909,6 +871,7 @@ export default function TyreSpecifications() {
       'Approved Brands': s.approved_brands.join(', '),
       'Min Load Index': s.min_load_index,
       'Min Speed Index': s.min_speed_index,
+      'Ply Rating': s.ply_rating,
       'Recommended Pressure': s.recommended_pressure,
       'Min Tread Depth': s.min_tread_depth,
       'Notes': s.notes,
@@ -969,6 +932,41 @@ export default function TyreSpecifications() {
     doc.save('TyrePulse_Compliance_Report.pdf')
   }
 
+  // ── Fitment Policy (branded standard document) ─────────────────────────────────
+
+  const policySections = useMemo(() => {
+    try {
+      return buildPolicySections({
+        specs,
+        company,
+        country,
+        generatedBy: profile?.email,
+        date: new Date(),
+      }) || []
+    } catch {
+      return []
+    }
+  }, [specs, company, country, profile?.email])
+
+  async function downloadPolicyPdf() {
+    setPolicyBusy(true)
+    setPolicyError('')
+    try {
+      await renderTyreSpecPolicyPdf({
+        specs,
+        company,
+        branding,
+        country,
+        generatedBy: profile?.email,
+        save: true,
+      })
+    } catch (e) {
+      setPolicyError(e?.message || 'Failed to generate the policy PDF')
+    } finally {
+      setPolicyBusy(false)
+    }
+  }
+
   // ── Tabs ───────────────────────────────────────────────────────────────────────
 
   const TABS = [
@@ -976,6 +974,7 @@ export default function TyreSpecifications() {
     { id: 'compliance',  label: 'Fleet Compliance',      icon: ClipboardCheck },
     { id: 'violations',  label: 'Non-Conformance',       icon: AlertOctagon },
     { id: 'defaults',    label: 'Quick Setup',           icon: Zap },
+    { id: 'policy',      label: 'Fitment Policy',        icon: FileText },
     { id: 'history',     label: 'Audit Trail',           icon: History },
   ]
 
@@ -1167,7 +1166,7 @@ export default function TyreSpecifications() {
                         </div>
                       </div>
 
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1 border-t border-[var(--input-border)]">
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1 border-t border-[var(--input-border)]">
                         {spec.recommended_pressure ? (
                           <div className="text-center">
                             <p className="text-[var(--text-muted)] text-xs">PSI</p>
@@ -1184,6 +1183,12 @@ export default function TyreSpecifications() {
                           <div className="text-center">
                             <p className="text-[var(--text-muted)] text-xs">Load Idx</p>
                             <p className="text-[var(--text-primary)] text-sm font-semibold">{spec.min_load_index}{spec.min_speed_index}</p>
+                          </div>
+                        ) : null}
+                        {spec.ply_rating ? (
+                          <div className="text-center">
+                            <p className="text-[var(--text-muted)] text-xs">Ply</p>
+                            <p className="text-[var(--text-primary)] text-sm font-semibold">{spec.ply_rating}</p>
                           </div>
                         ) : null}
                       </div>
@@ -1499,7 +1504,7 @@ export default function TyreSpecifications() {
                           {def.approved_brands.map(b => <span key={b} className="text-xs bg-purple-900/30 text-purple-300 border border-purple-800 px-2 py-0.5 rounded-full">{b}</span>)}
                         </div>
                       </div>
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-2 border-t border-[var(--input-border)]">
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2 border-t border-[var(--input-border)]">
                         <div className="text-center">
                           <p className="text-[var(--text-muted)] text-xs">PSI</p>
                           <p className="text-[var(--text-primary)] text-sm font-semibold">{def.recommended_pressure}</p>
@@ -1512,12 +1517,124 @@ export default function TyreSpecifications() {
                           <p className="text-[var(--text-muted)] text-xs">Load/Speed</p>
                           <p className="text-[var(--text-primary)] text-sm font-semibold">{def.min_load_index}{def.min_speed_index}</p>
                         </div>
+                        <div className="text-center">
+                          <p className="text-[var(--text-muted)] text-xs">Ply</p>
+                          <p className="text-[var(--text-primary)] text-sm font-semibold">{def.ply_rating || 'N/A'}</p>
+                        </div>
                       </div>
                       <p className="text-[var(--text-dim)] text-xs pt-1">{def.notes}</p>
                     </div>
                   </motion.div>
                 )
               })}
+            </div>
+          </motion.div>
+        )}
+
+        {/* ── Tab: Fitment Policy ─────────────────────────────────────────────── */}
+        {activeTab === 'policy' && (
+          <motion.div key="policy" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-4">
+
+            {/* Intro + download */}
+            <div className="card flex flex-col sm:flex-row sm:items-center gap-4">
+              <div className="p-2.5 rounded-lg bg-[var(--input-bg)] text-blue-400 shrink-0">
+                <FileText size={20} />
+              </div>
+              <div className="flex-1">
+                <p className="text-[var(--text-primary)] font-medium text-sm mb-1">Tyre Fitment and Specification Policy</p>
+                <p className="text-[var(--text-muted)] text-sm">
+                  Generate a standardized, company-branded policy document that defines the approved
+                  tyre fitment standards every workshop and fitter must follow. It compiles the current
+                  specification library into an official reference for procurement, fitment and audit.
+                </p>
+              </div>
+              <button
+                onClick={downloadPolicyPdf}
+                disabled={policyBusy}
+                className="btn-primary gap-2 disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
+              >
+                {policyBusy ? <RefreshCw size={15} className="animate-spin" /> : <FileText size={15} />}
+                {policyBusy ? 'Generating...' : 'Download Policy (PDF)'}
+              </button>
+            </div>
+
+            {policyError && (
+              <div className="bg-red-900/30 border border-red-700 text-red-300 text-sm px-4 py-2.5 rounded-lg flex items-center gap-2">
+                <AlertTriangle size={14} /> {policyError}
+                <button onClick={() => setPolicyError('')} className="ml-auto"><X size={14} /></button>
+              </div>
+            )}
+
+            {specs.length === 0 && (
+              <div className="bg-amber-900/20 border border-amber-800 text-amber-300 text-sm px-4 py-2.5 rounded-lg flex items-center gap-2">
+                <Info size={14} className="shrink-0" />
+                No specifications defined yet. The governance sections below still apply; adding specs in
+                the Specification Library will populate the Approved Fitment Standards table.
+              </div>
+            )}
+
+            {/* Live preview */}
+            <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl overflow-hidden">
+              <div className="px-4 py-3 border-b border-[var(--input-border)] flex items-center justify-between">
+                <p className="text-[var(--text-primary)] font-medium text-sm flex items-center gap-2">
+                  <BookOpen size={15} className="text-blue-400" /> Policy Preview
+                </p>
+                <span className="text-[var(--text-muted)] text-xs">{policySections.length} sections</span>
+              </div>
+
+              <div className="p-4 space-y-4">
+                {policySections.length === 0 ? (
+                  <p className="text-[var(--text-muted)] text-sm">Policy content will appear here.</p>
+                ) : (
+                  <ol className="space-y-3">
+                    {policySections.map((section, idx) => (
+                      <li key={section.n ?? idx} className="border-l-2 border-[var(--input-border)] pl-4">
+                        <p className="text-[var(--text-primary)] text-sm font-semibold mb-1">
+                          {section.n != null ? `${section.n}. ` : ''}{section.title}
+                        </p>
+                        {section.body && (
+                          <p className="text-[var(--text-muted)] text-xs whitespace-pre-line">{section.body}</p>
+                        )}
+                        {section.table && (() => {
+                          const t = section.table
+                          const head = Array.isArray(t.head) ? t.head
+                            : Array.isArray(t.columns) ? t.columns
+                            : (Array.isArray(t) && Array.isArray(t[0]) ? t[0] : [])
+                          const rows = Array.isArray(t.rows) ? t.rows
+                            : (Array.isArray(t) ? t.slice(head.length ? 1 : 0) : [])
+                          if (rows.length === 0) {
+                            return <p className="text-[var(--text-dim)] text-xs">No approved standards recorded yet.</p>
+                          }
+                          return (
+                            <div className="overflow-x-auto mt-2 border border-[var(--input-border)] rounded-lg">
+                              <table className="w-full">
+                                {head.length > 0 && (
+                                  <thead>
+                                    <tr className="border-b border-[var(--input-border)]">
+                                      {head.map((h, hi) => (
+                                        <th key={hi} className="px-3 py-2 text-left text-xs text-[var(--text-muted)] font-medium whitespace-nowrap">{h}</th>
+                                      ))}
+                                    </tr>
+                                  </thead>
+                                )}
+                                <tbody>
+                                  {rows.map((r, ri) => (
+                                    <tr key={ri} className="border-b border-[var(--input-border)] last:border-0">
+                                      {(Array.isArray(r) ? r : Object.values(r)).map((cell, ci) => (
+                                        <td key={ci} className="px-3 py-2 text-[var(--text-secondary)] text-xs">{cell == null || cell === '' ? 'N/A' : String(cell)}</td>
+                                      ))}
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          )
+                        })()}
+                      </li>
+                    ))}
+                  </ol>
+                )}
+              </div>
             </div>
           </motion.div>
         )}

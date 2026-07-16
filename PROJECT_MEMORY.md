@@ -272,6 +272,19 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
 - RULE reminder: every merged PR is terminal — never stack new commits expecting the old PR to carry them;
   open a fresh PR. Both V243 and V244 schema changes are LIVE on the DB independent of any merge.
 
+### V245 — vehicle_type casing normalized (applied LIVE 2026-07-16)
+- Mixed casing ("TR-MIXER" vs "Tr-Mixer", "PUMPS" vs "Pumps", "Bus" vs "BUS", etc.) split the SAME vehicle
+  type into separate buckets in fleet analytics + reports (e.g. TR-MIXER showed 1066 and 72 as two rows).
+  V245 canonicalizes to `upper(btrim(vehicle_type))` across ALL base tables carrying vehicle_type
+  (accidents, fleet_master, inspections, tyre_records, tyre_specifications, vehicle_fleet) and adds a cheap
+  BEFORE INSERT/UPDATE trigger `trg_normalize_vehicle_type` (fn `normalize_vehicle_type()`, pure string op)
+  so imports/edits can NEVER reintroduce the split. ~701 rows fixed; 0 collisions remain (TR-MIXER now 1138).
+  RULE: pure casing/whitespace fix only — genuinely distinct types are NOT merged ("Tri-mixer" -> "TRI-MIXER",
+  kept separate from TR-MIXER). GOTCHA: `inspections` has `trg_lock_inspection_content` (blocks edits to
+  locked checklists) — the backfill DISABLEs/ENABLEs it around just the inspections UPDATE (verified both
+  triggers back to tgenabled='O'). `vehicles`/`v_*_secure` are VIEWS over these base tables (no direct fix).
+  Next free migration **V246**.
+
 ### send-scheduled-reports v14 (deployed LIVE 2026-07-15): every report type emailed IDENTICAL data
 - ROOT CAUSE: `renderForSchedule` in the edge fn collapsed EVERY non-claims report_type into the single
   executive digest (`buildDigest`/`report_exec_digest`). So executive/kpi/fleet/cost/inspection/accidents/

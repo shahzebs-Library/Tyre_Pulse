@@ -261,17 +261,14 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
   by the ALREADY-deployed `send-scheduled-reports` edge fn — NO edge redeploy, NO new report_type. The user
   just picks cadence + recipients. (If they want the analytics CUSTOMIZED, that is already the Report Builder.)
 
-### Shipped status (2026-07-15/16 follow-up batches) — ALL MERGED TO MAIN
-- **PR #28 MERGED** (`eb36825`): accidents plate/vehicle-type auto-fill + **V243**, super-admin swap +
-  privileged-edit playbook doc, Accidents Analytics auto-email, **V244** report_schedules CHECK fix.
-- **PR #29 MERGED** (`4d0c96a`, 2026-07-16): **send-scheduled-reports v14** per-type digests (fixes "every
-  report emails identical data"), **V245** vehicle_type casing, **V246** site casing, **V247** site_aliases
-  canonical merge. Branch `claude/accident-builder-report-ui-2bkwb5` is now 0 commits ahead of main.
-- Main also carries two unrelated commits from another source (`853091e`/`8f37716` RfidScanner import fixes).
-- RULE reminder: every merged PR is terminal — never stack new commits expecting the old PR to carry them;
-  open a FRESH PR. All V243–V247 schema changes + edge fn v14 are LIVE on the DB/deploy independent of merge.
-  Next feature work: restart the branch from latest main (`git fetch origin main && git checkout -B
-  claude/accident-builder-report-ui-2bkwb5 origin/main`) so it isn't behind.
+### Shipped (2026-07-15/16) — all merged to main, nothing pending
+- Everything below is LIVE on the DB/deploy and merged to main (PRs #28/#29/#30, all terminal).
+  V243 accidents plate/vehicle_type + auto-fill; super-admin swap + privileged-edit playbook; Accidents
+  Analytics auto-email; V244 report_schedules CHECK fix; send-scheduled-reports **v14** per-type digests;
+  V245 vehicle_type casing; V246 site casing; V247 site_aliases canonical merge. Next free migration **V248**.
+- Branch `claude/accident-builder-report-ui-2bkwb5` == main. For NEW work, restart it from latest main
+  (`git fetch origin main && git checkout -B claude/accident-builder-report-ui-2bkwb5 origin/main`) and open
+  a FRESH PR — merged PRs are terminal, never stack onto them.
 
 ### V246 — site casing normalized + guard (applied LIVE 2026-07-16)
 - Same class of fix as V245 but for `site`. Mixed casing ("Metro"/"METRO", "Dhahban"/"DHAHBAN",

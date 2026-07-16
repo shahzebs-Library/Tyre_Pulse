@@ -489,6 +489,15 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
   (reportFileName) + catalog-backed parts picker in record-service (listParts, parts_used now {name,qty,cost}).
   INCIDENTAL FIX (reported): ExecutiveReport.jsx used `LayoutList` without importing it (latent crash) - the
   agent added the import. next free migration **V255**.
+- **PMV wave 4 (2026-07-16, 4-agent batch):** PM surfaced on more analytics screens (all reuse existing PM
+  services/engines, NO DB change): KpiScorecard.jsx (PM compliance/overdue/due-soon/active KPI cards);
+  Reports.jsx wizard (two new types: Preventive Maintenance over pm_programs + PM Service History over
+  pm_service_records, full customizable-columns/export); OpsIntelligence.jsx (PM health tile + overdue/due-soon
+  in the anomaly feed; incidental cleanup: removed dead anomalySummary/summarizeAnomalies); ExecutiveAnalytics.jsx
+  (PM compliance card + 12-month service-cost combo + cost-by-category + outcome doughnut, forced-light EChart).
+  RULE: PM now appears on Dashboard, DisplayDashboard, MaintenanceCalendar, AssetDetail, KpiScorecard,
+  OpsIntelligence, Analytics/CostCenter/BoardOverview/Executive(cost), ExecutiveAnalytics, Reports - do NOT add
+  more PM surfaces without a real user ask (avoid manufacturing).
 
 ### BACKLOG (user parked 2026-07-16, "do it later when I ask") — Advanced Admin Control & Self-Healing
 - A big SUPER-ADMIN-ONLY module the user specced for LATER (explicitly "put this for later, I will ask you to

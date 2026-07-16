@@ -1,5 +1,8 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
+import { Link } from 'react-router-dom'
 import * as kpiTargets from '../lib/api/kpiTargets'
+import { loadPmDashboard } from '../lib/api/pmPrograms'
+import { summarizePmCompliance } from '../lib/pmSchedule'
 import { useAuth } from '../contexts/AuthContext'
 import { useLanguage } from '../contexts/LanguageContext'
 import { useSettings, COUNTRIES } from '../contexts/SettingsContext'
@@ -9,7 +12,10 @@ import {
 } from '../lib/analyticsEngine'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import { formatCurrency as _fmtCurrencyBase } from '../lib/formatters'
-import { Download, FileText, AlertTriangle, ToggleLeft, ToggleRight, Target, RefreshCw } from 'lucide-react'
+import {
+  Download, FileText, AlertTriangle, ToggleLeft, ToggleRight, Target, RefreshCw,
+  Wrench, CalendarClock, ClipboardCheck, ArrowRight,
+} from 'lucide-react'
 import { motion } from 'framer-motion'
 import PageHeader from '../components/ui/PageHeader'
 import SectionTabs, { KPI_TABS } from '../components/ui/SectionTabs'
@@ -85,6 +91,36 @@ export default function KpiScorecard() {
   }, [activeCountry, yearFilter])
 
   useEffect(() => { load() }, [load])
+
+  // ── Preventive Maintenance KPI group (independent load, own tri-state) ──
+  // Loaded separately from the KPI-target data so a missing / unprovisioned
+  // pm_programs table (loader returns []) never affects the rest of the page.
+  const [pmState, setPmState] = useState({ loading: true, error: null, data: null })
+
+  useEffect(() => {
+    let cancelled = false
+    setPmState({ loading: true, error: null, data: null })
+    loadPmDashboard({ country: activeCountry })
+      .then((res) => {
+        if (cancelled) return
+        setPmState({ loading: false, error: null, data: res })
+      })
+      .catch((e) => {
+        if (cancelled) return
+        setPmState({ loading: false, error: e?.message || 'load_failed', data: null })
+      })
+    return () => { cancelled = true }
+  }, [activeCountry])
+
+  const pmSummary = useMemo(() => {
+    const data = pmState.data
+    if (!data) return null
+    return summarizePmCompliance(data.plans, {
+      now: Date.now(),
+      kmByAsset: data.kmByAsset,
+      hoursByAsset: data.hoursByAsset,
+    })
+  }, [pmState.data])
 
   // Build last 12 months axis
   const months = useMemo(() => {
@@ -555,6 +591,9 @@ export default function KpiScorecard() {
             </div>
           )}
 
+          {/* Preventive Maintenance KPI group */}
+          <PmKpiGroup state={pmState} summary={pmSummary} />
+
           {/* Charts */}
           <div className="space-y-6">
             <div className="card">
@@ -736,6 +775,114 @@ export default function KpiScorecard() {
           )}
         </div>
       )}
+    </div>
+  )
+}
+
+/**
+ * Preventive Maintenance KPI group. Additive, self-contained: renders scorecard
+ * cards for PM Compliance %, PM Overdue, PM Due Soon and Active PM Plans over the
+ * summarizePmCompliance() rollup, with a link into the PM Programs workspace.
+ *
+ * Honest states:
+ *   loading                       compact loading card.
+ *   error                         compact error card (never blocks the page).
+ *   no active plans / no table    renders nothing (pm_programs unprovisioned
+ *                                 returns [] -> summary.total 0 -> null).
+ */
+function PmKpiGroup({ state, summary }) {
+  if (state?.loading) {
+    return (
+      <div className="card flex items-center gap-2 text-sm text-gray-400">
+        <Wrench size={16} className="text-gray-500" />
+        Loading preventive maintenance KPIs...
+      </div>
+    )
+  }
+
+  if (state?.error) {
+    return (
+      <div className="card border border-red-700/40 flex items-center gap-2 text-sm text-red-300">
+        <AlertTriangle size={16} className="text-red-400" />
+        Preventive maintenance KPIs are unavailable right now.
+      </div>
+    )
+  }
+
+  // No summary, or no programs on file at all: show nothing extra (honest empty).
+  if (!summary || summary.total === 0) return null
+
+  const compliancePassing = summary.compliantPct == null || summary.compliantPct >= 80
+  const complianceLabel = summary.compliantPct == null ? 'N/A' : `${summary.compliantPct}%`
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <h3 className="text-sm font-medium text-gray-400 flex items-center gap-2">
+          <Wrench size={15} className="text-blue-400" />
+          Preventive Maintenance
+        </h3>
+        <Link
+          to="/pm-programs"
+          className="inline-flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300 transition-colors"
+        >
+          {'PM Programs'}
+          <ArrowRight size={13} />
+        </Link>
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className={`card border ${compliancePassing ? 'border-green-700/40' : 'border-red-700/50'}`}>
+          <div className="flex items-center justify-between">
+            <p className="text-xs text-gray-400">PM Compliance</p>
+            <ClipboardCheck size={15} className={compliancePassing ? 'text-green-400' : 'text-red-400'} />
+          </div>
+          <p className={`text-xl font-bold mt-1 tabular-nums ${compliancePassing ? 'text-green-400' : 'text-red-400'}`}>
+            {complianceLabel}
+          </p>
+          <p className="text-xs text-gray-500 mt-1">
+            {summary.compliantPct == null
+              ? 'No active plans to measure'
+              : `${summary.active - summary.overdue} of ${summary.active} on schedule`}
+          </p>
+        </div>
+
+        <div className={`card border ${summary.overdue > 0 ? 'border-red-700/50' : 'border-gray-700/40'}`}>
+          <div className="flex items-center justify-between">
+            <p className="text-xs text-gray-400">PM Overdue</p>
+            <AlertTriangle size={15} className={summary.overdue > 0 ? 'text-red-400' : 'text-gray-500'} />
+          </div>
+          <p className={`text-xl font-bold mt-1 tabular-nums ${summary.overdue > 0 ? 'text-red-400' : 'text-gray-300'}`}>
+            {summary.overdue}
+          </p>
+          <p className="text-xs text-gray-500 mt-1">Active plans past due</p>
+        </div>
+
+        <div className={`card border ${summary.dueSoon > 0 ? 'border-amber-700/50' : 'border-gray-700/40'}`}>
+          <div className="flex items-center justify-between">
+            <p className="text-xs text-gray-400">PM Due Soon</p>
+            <CalendarClock size={15} className={summary.dueSoon > 0 ? 'text-amber-400' : 'text-gray-500'} />
+          </div>
+          <p className={`text-xl font-bold mt-1 tabular-nums ${summary.dueSoon > 0 ? 'text-amber-400' : 'text-gray-300'}`}>
+            {summary.dueSoon}
+          </p>
+          <p className="text-xs text-gray-500 mt-1">Approaching next service</p>
+        </div>
+
+        <div className="card border border-gray-700/40">
+          <div className="flex items-center justify-between">
+            <p className="text-xs text-gray-400">Active PM Plans</p>
+            <Wrench size={15} className="text-blue-400" />
+          </div>
+          <p className="text-xl font-bold mt-1 tabular-nums text-gray-100">
+            {summary.active}
+          </p>
+          <p className="text-xs text-gray-500 mt-1">
+            {summary.total > summary.active
+              ? `${summary.total} total on file`
+              : 'All plans active'}
+          </p>
+        </div>
+      </div>
     </div>
   )
 }

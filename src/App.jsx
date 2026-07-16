@@ -198,6 +198,7 @@ const FleetIntelligence      = lazy(() => import('./pages/FleetIntelligence'))
 const AdvancedAnalytics      = lazy(() => import('./pages/AdvancedAnalytics'))
 const AiCommandCenter        = lazy(() => import('./pages/AiCommandCenter'))
 const ExecutiveReport        = lazy(() => import('./pages/ExecutiveReport'))
+const BoardOverview          = lazy(() => import('./pages/BoardOverview'))
 const ForecastingEngine      = lazy(() => import('./pages/ForecastingEngine'))
 const ContinuousImprovement  = lazy(() => import('./pages/ContinuousImprovement'))
 const ErpSync                = lazy(() => import('./pages/ErpSync'))
@@ -409,6 +410,7 @@ function MainApp() {
                       <Route path="/advanced-analytics"      element={<Safe><ModuleRoute moduleKey="analytics"><AdvancedAnalytics /></ModuleRoute></Safe>} />
                       <Route path="/ai-command-center"       element={<Safe><FlagRoute flag="ai_tools"><ModuleRoute moduleKey="ai_command_center"><AiCommandCenter /></ModuleRoute></FlagRoute></Safe>} />
                       <Route path="/executive-report"        element={<Safe><ModuleRoute moduleKey="executive_report"><ExecutiveReport /></ModuleRoute></Safe>} />
+                      <Route path="/board-overview"          element={<Safe><RoleRoute allowed={['Admin', 'Manager', 'Director']}><BoardOverview /></RoleRoute></Safe>} />
                       <Route path="/forecasting"             element={<Safe><ModuleRoute moduleKey="forecasting"><ForecastingEngine /></ModuleRoute></Safe>} />
                       <Route path="/cost-center"             element={<Safe><ModuleRoute moduleKey="budgets"><CostCenter /></ModuleRoute></Safe>} />
                       <Route path="/benchmark"               element={<Safe><ModuleRoute moduleKey="analytics"><PerformanceBenchmark /></ModuleRoute></Safe>} />

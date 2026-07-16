@@ -38,7 +38,7 @@ function isBackendMissing(err) {
   return m.includes('does not exist') || m.includes('could not find') || m.includes('schema cache') || m === '42p01' || m === 'pgrst202'
 }
 
-const COLS = 'id, name, token, pages, rotate_seconds, refresh_seconds, active, expires_at, created_at, last_viewed_at, view_count'
+const COLS = 'id, name, token, pages, layout, rotate_seconds, refresh_seconds, active, expires_at, created_at, last_viewed_at, view_count'
 
 /** List this org's report shares (elevated RLS). [] when not provisioned. */
 export async function listReportShares() {
@@ -77,7 +77,9 @@ export async function revokeReportShare(id) {
  * this to elevated own-org users (report_shares_update policy); rotate/refresh
  * are clamped here and re-validated by the table CHECK constraints.
  * @param {string} id
- * @param {{name?:string, pages?:string[], rotate?:number, refresh?:number}} patch
+ * @param {{name?:string, pages?:string[], rotate?:number, refresh?:number,
+ *          layout?:object|null}} patch layout = a custom board design (V264);
+ *          pass null to clear it (revert to the fixed page catalog).
  */
 export async function updateReportShare(id, patch = {}) {
   const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, Number(v)))
@@ -86,6 +88,7 @@ export async function updateReportShare(id, patch = {}) {
   if (Array.isArray(patch.pages)) row.pages = patch.pages
   if (patch.rotate != null && Number.isFinite(Number(patch.rotate))) row.rotate_seconds = clamp(patch.rotate, 5, 600)
   if (patch.refresh != null && Number.isFinite(Number(patch.refresh))) row.refresh_seconds = clamp(patch.refresh, 30, 3600)
+  if ('layout' in patch) row.layout = patch.layout ?? null
   if (Object.keys(row).length === 0) return
   const { error } = await supabase.from('report_shares').update(row).eq('id', id)
   if (error) throw error
@@ -96,8 +99,10 @@ export async function updateReportShare(id, patch = {}) {
  *
  * @param {string} token         share token from the URL
  * @param {string|null} password optional viewer password
- * @param {{site?:string, country?:string}} opts server-side site / country filter
- *   (V262). Empty / omitted values mean "all" and are sent as null.
+ * @param {{site?:string, country?:string, from?:string, to?:string}} opts server-side
+ *   filters. site / country (V262); from / to = an inclusive reporting-period date
+ *   window (V263, YYYY-MM-DD) applied to the event-dated aggregates. Empty / omitted
+ *   values mean "all" and are sent as null.
  */
 export async function getReportSnapshot(token, password = null, opts = {}) {
   const { data, error } = await supabase.rpc('get_report_snapshot', {
@@ -105,6 +110,8 @@ export async function getReportSnapshot(token, password = null, opts = {}) {
     p_password: password,
     p_site: opts.site || null,
     p_country: opts.country || null,
+    p_from: opts.from || null,
+    p_to: opts.to || null,
   })
   if (error) { if (isBackendMissing(error)) return { ok: false, reason: 'unavailable' }; throw error }
   return data || { ok: false, reason: 'invalid' }

@@ -1,0 +1,37 @@
+-- V263: get_report_snapshot gains an optional reporting-period date window.
+--
+-- Adds p_from / p_to (YYYY-MM-DD text, default NULL = "all time") to the public,
+-- token-gated TV / kiosk snapshot RPC. The window is applied to the event-dated
+-- aggregates using each table's natural event date:
+--   accidents.incident_date, tyre_records.issue_date, inspections.inspection_date
+-- covering the KPI counts/sums (tyres, tyre_spend, accidents, open_accidents,
+-- claims_claimed/recovered, inspections), the severity / by-site / claim-status
+-- breakdowns and the site x severity heatmap.
+--
+-- Intentionally NOT date-filtered (they are live states or fixed windows):
+--   * the fleet-register count and the open work-order count (current state),
+--   * the rolling 12-month trend series (labelled "12 mo" by design),
+--   * the "today" ops block (job cards / tyre changes / inspections / accidents
+--     today, alerts, PM due).
+--
+-- Invalid or blank date text coerces to NULL (no error to the anon caller). The
+-- old 4-arg overload is dropped so a single signature exists; existing 4-named-arg
+-- calls still resolve via the from/to defaults. Anon + authenticated keep EXECUTE.
+--
+-- The authoritative function body is applied live via Supabase MCP
+-- (project jhssdmeruxtrlqnwfksc); this file is the repo record of that migration.
+-- See src/lib/api/reportShares.js (getReportSnapshot opts.from / opts.to) and the
+-- date-range control in src/pages/ReportShare.jsx.
+
+DROP FUNCTION IF EXISTS public.get_report_snapshot(text, text, text, text);
+
+-- CREATE OR REPLACE FUNCTION public.get_report_snapshot(
+--   p_token text, p_password text DEFAULT NULL,
+--   p_site text DEFAULT NULL, p_country text DEFAULT NULL,
+--   p_from text DEFAULT NULL, p_to text DEFAULT NULL
+-- ) RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER
+--   SET search_path TO 'public','extensions'
+-- AS $function$ ... (see live definition) $function$;
+--
+-- REVOKE ALL ON FUNCTION public.get_report_snapshot(text,text,text,text,text,text) FROM PUBLIC;
+-- GRANT EXECUTE ON FUNCTION public.get_report_snapshot(text,text,text,text,text,text) TO anon, authenticated;

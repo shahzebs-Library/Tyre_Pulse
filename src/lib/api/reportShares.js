@@ -22,6 +22,8 @@ export const REPORT_PAGES = [
   { key: 'risk_activity',  group: 'Risk',       label: 'Risk & Activity', desc: 'Accidents, severity mix and incident sites.' },
   { key: 'claims_desk',    group: 'Risk',       label: 'Claims Desk',     desc: 'Claimed against recovered value and the claim status mix.' },
   { key: 'board_charts',   group: 'Breakdowns', label: 'Breakdowns',      desc: 'Severity, claim status and by-site breakdown charts.' },
+  { key: 'ops_today',      group: 'Operations', label: 'Open Job Cards',  desc: 'Live open job cards plus today activity: job cards, tyre changes, inspections, accidents.' },
+  { key: 'pm_due',         group: 'Operations', label: 'Maintenance Due', desc: 'Overdue and upcoming preventive-maintenance plans.' },
 ]
 // Ordered list of the group labels, for a grouped picker UI.
 export const PAGE_GROUPS = REPORT_PAGES.reduce((acc, p) => {

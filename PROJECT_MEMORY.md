@@ -381,6 +381,14 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
   (->seconds), optional password/expiry; one-time link reveal; list with copy-link/open/revoke. All errors via
   toUserMessage. RULE: to add a rotatable report page, extend REPORT_PAGES + the snapshot RPC's page payload +
   a render branch in ReportShare.jsx. Committed b2ad707 on branch claude/accident-builder-report-ui-2bkwb5.
+- **Ops TV pages + viewer polish (V261, 2026-07-16):** get_report_snapshot now also returns an `ops` object
+  (org-scoped aggregates only, no PII): work_orders_open, job_cards_today, tyre_changes_today,
+  inspections_today, accidents_today, alerts_critical, pm_overdue, pm_due_soon, open_job_cards[] (wo_no/asset_no/
+  status/site/priority/work_type top 14), pm_due_list[] (name/asset_no/next_due/priority soonest 14). Two NEW
+  REPORT_PAGES in the 'Operations' group: `ops_today` (Open Job Cards board + today tiles) and `pm_due`
+  (Maintenance Due). ReportShare.jsx got a UI polish pass (live clock, gradient KPI tiles, page-enter animation
+  w/ prefers-reduced-motion, sticky/zebra tables, semantic status/priority pills, 4k/laptop/phone responsive).
+  RULE to add an ops board page: extend the snapshot `ops` object + REPORT_PAGES + a render branch.
 - **STILL BACKLOG:** shareable links for reports currently expose the Board-Overview aggregate set; wiring the
   full Executive/Accident block-builder layouts into the public snapshot is a later extension. Existing V103
   `/display/:token` + getDisplaySnapshot (DisplayShare) remains the separate executive-board token-share.

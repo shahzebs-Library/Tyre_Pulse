@@ -23,6 +23,7 @@ import {
   Maximize2, Minimize2, RefreshCw, AlertTriangle, Lock, Clock, KeyRound,
   TrendingUp, BarChart3, PieChart, Activity, ShieldAlert, MapPin, LayoutGrid,
   Car, CircleDot, Wallet, ClipboardCheck, Loader2,
+  Wrench, CalendarClock, ListChecks, Timer, Bell, Gauge,
 } from 'lucide-react'
 import { getReportSnapshot, REPORT_PAGES } from '../lib/api/reportShares'
 import { categorical, colorAt, withAlpha } from '../lib/reportColors'
@@ -62,6 +63,49 @@ function fmtUpdated(iso) {
   return d.toLocaleString('en-US', {
     day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit',
   })
+}
+
+function fmtClock(d) {
+  try {
+    return d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+  } catch { return '' }
+}
+
+function fmtDueDate(iso) {
+  if (!iso) return 'N/A'
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return String(iso)
+  return d.toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' })
+}
+
+// Whole days from now until a due date. Negative = overdue.
+function daysUntil(iso) {
+  if (!iso) return null
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return null
+  const ms = d.setHours(0, 0, 0, 0) - new Date().setHours(0, 0, 0, 0)
+  return Math.round(ms / 86400000)
+}
+
+const safeStr = (v) => (v == null || v === '' ? 'N/A' : String(v))
+
+// Priority to a light-theme severity tone (semantic, deliberately not palettized).
+function priorityTone(p) {
+  const k = String(p || '').toLowerCase()
+  if (k.includes('crit')) return 'rs-pill-red'
+  if (k.includes('high')) return 'rs-pill-orange'
+  if (k.includes('med')) return 'rs-pill-amber'
+  if (k.includes('low')) return 'rs-pill-slate'
+  return 'rs-pill-slate'
+}
+
+// Work-order status to a neutral / active / done tone.
+function statusTone(s) {
+  const k = String(s || '').toLowerCase()
+  if (k.includes('progress') || k.includes('open') || k.includes('await') || k.includes('assigned')) return 'rs-pill-blue'
+  if (k.includes('hold') || k.includes('pending') || k.includes('wait')) return 'rs-pill-amber'
+  if (k.includes('complete') || k.includes('closed') || k.includes('done')) return 'rs-pill-green'
+  return 'rs-pill-slate'
 }
 
 const PAGE_LABEL = REPORT_PAGES.reduce((m, p) => { m[p.key] = p.label; return m }, {})
@@ -385,6 +429,7 @@ export default function ReportShare() {
   const [pageIndex, setPageIndex] = useState(0)
   const [isFs, setIsFs] = useState(false)
   const [paused, setPaused] = useState(false)
+  const [now, setNow] = useState(() => new Date())
 
   // Password screen local state
   const [pwInput, setPwInput] = useState('')
@@ -478,6 +523,12 @@ export default function ReportShare() {
     return () => document.removeEventListener('fullscreenchange', onChange)
   }, [])
 
+  // ── Live wall-clock (boardroom feel) ────────────────────────────────────────
+  useEffect(() => {
+    const id = setInterval(() => setNow(new Date()), 1000)
+    return () => clearInterval(id)
+  }, [])
+
   // ── States: loading ─────────────────────────────────────────────────────────
   if (status === 'loading') {
     return (
@@ -559,32 +610,41 @@ export default function ReportShare() {
       {/* Header band */}
       <header className="rs-header">
         <div className="rs-head-left">
-          <p className="rs-company">{snapshot?.company || 'Fleet report'}</p>
-          <h1 className="rs-name">{snapshot?.name || 'Shared report'}</h1>
+          <div className="rs-brand-mark" aria-hidden="true"><Gauge size={22} /></div>
+          <div className="rs-head-titles">
+            <p className="rs-company">{snapshot?.company || 'Fleet report'}</p>
+            <h1 className="rs-name">{snapshot?.name || 'Shared report'}</h1>
+          </div>
         </div>
         <div className="rs-head-mid">
           <span className="rs-page-chip">{PAGE_LABEL[activeKey] || 'Report'}</span>
           <RotationDots pages={pages} active={pageIndex} />
         </div>
         <div className="rs-head-right">
-          <span className="rs-updated">
-            <Clock size={14} aria-hidden="true" /> Updated {fmtUpdated(snapshot?.generated_at)}
+          <span className="rs-clock" title="Local time">
+            <Clock size={16} aria-hidden="true" />
+            <span className="rs-clock-time">{fmtClock(now)}</span>
           </span>
+          <span className="rs-updated">Updated {fmtUpdated(snapshot?.generated_at)}</span>
           <button type="button" onClick={toggleFs} className="rs-fsbtn" title={isFs ? 'Exit full screen' : 'Full screen'} aria-label={isFs ? 'Exit full screen' : 'Full screen'}>
             {isFs ? <Minimize2 size={18} /> : <Maximize2 size={18} />}
           </button>
         </div>
       </header>
 
-      {/* Rotating page body */}
+      {/* Rotating page body (key drives the fade / slide transition) */}
       <main className="rs-body">
-        {activeKey === 'board_kpis' && <KpisPage snapshot={snapshot} />}
-        {activeKey === 'fleet_overview' && <FleetOverviewPage snapshot={snapshot} />}
-        {activeKey === 'board_trends' && <TrendsPage snapshot={snapshot} />}
-        {activeKey === 'spend_trend' && <SpendTrendPage snapshot={snapshot} />}
-        {activeKey === 'risk_activity' && <RiskActivityPage snapshot={snapshot} />}
-        {activeKey === 'claims_desk' && <ClaimsDeskPage snapshot={snapshot} />}
-        {activeKey === 'board_charts' && <ChartsPage snapshot={snapshot} />}
+        <div key={`${activeKey}-${pageIndex}`} className="rs-page-anim">
+          {activeKey === 'board_kpis' && <KpisPage snapshot={snapshot} />}
+          {activeKey === 'fleet_overview' && <FleetOverviewPage snapshot={snapshot} />}
+          {activeKey === 'board_trends' && <TrendsPage snapshot={snapshot} />}
+          {activeKey === 'spend_trend' && <SpendTrendPage snapshot={snapshot} />}
+          {activeKey === 'risk_activity' && <RiskActivityPage snapshot={snapshot} />}
+          {activeKey === 'claims_desk' && <ClaimsDeskPage snapshot={snapshot} />}
+          {activeKey === 'board_charts' && <ChartsPage snapshot={snapshot} />}
+          {activeKey === 'ops_today' && <OpsTodayPage snapshot={snapshot} />}
+          {activeKey === 'pm_due' && <PmDuePage snapshot={snapshot} />}
+        </div>
       </main>
     </div>
   )
@@ -794,6 +854,147 @@ function ClaimsDeskPage({ snapshot }) {
   )
 }
 
+// ── Operations "today" stat tile (direct counts, no sparkline) ────────────────
+function StatTile({ label, value, icon: Icon, tone = 'indigo', accent }) {
+  return (
+    <div className={`rs-stat rs-stat-${tone}`}>
+      <div className="rs-stat-head">
+        <span className="rs-stat-label">{label}</span>
+        {Icon && <Icon size={22} className="rs-stat-icon" aria-hidden="true" />}
+      </div>
+      <div className="rs-stat-value">{fmtInt(value)}</div>
+      {accent && <span className="rs-stat-accent">{accent}</span>}
+    </div>
+  )
+}
+
+// ── Page: Open Job Cards + today activity ─────────────────────────────────────
+function OpsTodayPage({ snapshot }) {
+  const ops = snapshot?.ops || {}
+  const jobs = arr(ops.open_job_cards)
+  const rows = jobs.slice(0, 12)
+  const extra = Math.max(0, jobs.length - rows.length)
+  return (
+    <div className="rs-page">
+      <div className="rs-stat-strip rs-stat-6">
+        <StatTile label="Open Job Cards" value={ops.work_orders_open} icon={Wrench} tone="indigo" />
+        <StatTile label="Job Cards Today" value={ops.job_cards_today} icon={ClipboardCheck} tone="blue" />
+        <StatTile label="Tyre Changes Today" value={ops.tyre_changes_today} icon={CircleDot} tone="teal" />
+        <StatTile label="Inspections Today" value={ops.inspections_today} icon={ListChecks} tone="green" />
+        <StatTile label="Accidents Today" value={ops.accidents_today} icon={ShieldAlert} tone="amber" />
+        <StatTile label="Critical Alerts" value={ops.alerts_critical} icon={Bell} tone="red" />
+      </div>
+
+      <section className="rs-card rs-card-wide">
+        <div className="rs-card-head">
+          <Wrench size={18} className="rs-card-icon" aria-hidden="true" />
+          <div className="rs-card-titles">
+            <h3 className="rs-card-title">Open job cards</h3>
+            <p className="rs-card-sub">Live work orders currently open across the fleet</p>
+          </div>
+        </div>
+        {rows.length === 0 ? (
+          <div className="rs-empty" style={{ flex: '1 1 auto' }}>
+            <p>No open job cards.</p>
+          </div>
+        ) : (
+          <div className="rs-tablewrap">
+            <table className="rs-table">
+              <thead>
+                <tr>
+                  <th>Job Card</th>
+                  <th>Asset</th>
+                  <th>Work Type</th>
+                  <th>Status</th>
+                  <th>Site</th>
+                  <th>Priority</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((r, i) => (
+                  <tr key={`${r.wo_no || 'wo'}-${i}`}>
+                    <td className="rs-td-strong">{safeStr(r.wo_no)}</td>
+                    <td>{safeStr(r.asset_no)}</td>
+                    <td>{safeStr(r.work_type)}</td>
+                    <td><span className={`rs-pill ${statusTone(r.status)}`}>{safeStr(r.status)}</span></td>
+                    <td>{safeStr(r.site)}</td>
+                    <td><span className={`rs-pill ${priorityTone(r.priority)}`}>{safeStr(r.priority)}</span></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {extra > 0 && <p className="rs-table-more">Plus {fmtInt(extra)} more open job cards</p>}
+          </div>
+        )}
+      </section>
+    </div>
+  )
+}
+
+// ── Page: Maintenance Due (preventive-maintenance plans) ──────────────────────
+function PmDuePage({ snapshot }) {
+  const ops = snapshot?.ops || {}
+  const list = arr(ops.pm_due_list)
+  const rows = list.slice(0, 12)
+  const extra = Math.max(0, list.length - rows.length)
+  return (
+    <div className="rs-page">
+      <div className="rs-stat-strip rs-stat-2">
+        <StatTile label="Overdue Plans" value={ops.pm_overdue} icon={Timer} tone="red" accent="Action needed" />
+        <StatTile label="Due Soon" value={ops.pm_due_soon} icon={CalendarClock} tone="amber" accent="Upcoming" />
+      </div>
+
+      <section className="rs-card rs-card-wide">
+        <div className="rs-card-head">
+          <CalendarClock size={18} className="rs-card-icon" aria-hidden="true" />
+          <div className="rs-card-titles">
+            <h3 className="rs-card-title">Maintenance due</h3>
+            <p className="rs-card-sub">Overdue plans in red, upcoming preventive maintenance by due date</p>
+          </div>
+        </div>
+        {rows.length === 0 ? (
+          <div className="rs-empty" style={{ flex: '1 1 auto' }}>
+            <p>No maintenance due.</p>
+          </div>
+        ) : (
+          <div className="rs-tablewrap">
+            <table className="rs-table">
+              <thead>
+                <tr>
+                  <th>Asset</th>
+                  <th>Plan</th>
+                  <th>Next Due</th>
+                  <th>Status</th>
+                  <th>Priority</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((r, i) => {
+                  const d = daysUntil(r.next_due)
+                  const overdue = d != null && d < 0
+                  const dueLabel = d == null ? 'N/A'
+                    : overdue ? `Overdue ${fmtInt(Math.abs(d))}d`
+                      : d === 0 ? 'Due today' : `In ${fmtInt(d)}d`
+                  return (
+                    <tr key={`${r.asset_no || 'pm'}-${i}`} className={overdue ? 'rs-tr-alert' : ''}>
+                      <td className="rs-td-strong">{safeStr(r.asset_no)}</td>
+                      <td>{safeStr(r.name)}</td>
+                      <td>{fmtDueDate(r.next_due)}</td>
+                      <td><span className={`rs-pill ${overdue ? 'rs-pill-red' : 'rs-pill-amber'}`}>{dueLabel}</span></td>
+                      <td><span className={`rs-pill ${priorityTone(r.priority)}`}>{safeStr(r.priority)}</span></td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+            {extra > 0 && <p className="rs-table-more">Plus {fmtInt(extra)} more plans due</p>}
+          </div>
+        )}
+      </section>
+    </div>
+  )
+}
+
 // ── Scoped light theme + layout CSS (self-contained, no external stylesheet) ───
 function ScopedStyle() {
   return (
@@ -847,33 +1048,47 @@ function ScopedStyle() {
 
       .rs-header {
         flex:0 0 auto; display:flex; align-items:center; justify-content:space-between;
-        gap:16px; padding:16px 28px; background:var(--rs-card);
-        border-bottom:1px solid var(--rs-border);
+        gap:16px; padding:14px 28px; background:linear-gradient(180deg,#ffffff 0%,#fbfcfe 100%);
+        border-bottom:1px solid var(--rs-border); box-shadow:0 1px 0 rgba(15,23,42,0.03);
       }
-      .rs-head-left { min-width:0; }
-      .rs-company { margin:0; font-size:13px; font-weight:700; letter-spacing:.12em;
+      .rs-head-left { display:flex; align-items:center; gap:14px; min-width:0; }
+      .rs-brand-mark {
+        flex:0 0 auto; width:44px; height:44px; border-radius:13px;
+        display:flex; align-items:center; justify-content:center; color:#ffffff;
+        background:linear-gradient(135deg,var(--rs-accent) 0%,#8b5cf6 100%);
+        box-shadow:0 6px 16px rgba(99,102,241,0.32);
+      }
+      .rs-head-titles { min-width:0; }
+      .rs-company { margin:0; font-size:12px; font-weight:700; letter-spacing:.14em;
         text-transform:uppercase; color:var(--rs-muted); }
-      .rs-name { margin:2px 0 0; font-size:26px; font-weight:800; color:var(--rs-text);
-        line-height:1.1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:42vw; }
+      .rs-name { margin:2px 0 0; font-size:27px; font-weight:800; color:var(--rs-text);
+        line-height:1.1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:38vw;
+        letter-spacing:-0.01em; }
       .rs-head-mid { display:flex; align-items:center; gap:14px; }
       .rs-page-chip {
         font-size:15px; font-weight:700; color:var(--rs-accent);
         background:rgba(99,102,241,0.1); border:1px solid rgba(99,102,241,0.2);
-        padding:6px 14px; border-radius:999px; white-space:nowrap;
+        padding:7px 16px; border-radius:999px; white-space:nowrap;
       }
       .rs-dots { display:flex; align-items:center; gap:7px; }
-      .rs-dot { width:9px; height:9px; border-radius:999px; background:var(--rs-border); transition:all .2s; }
-      .rs-dot-on { background:var(--rs-accent); width:24px; }
-      .rs-head-right { display:flex; align-items:center; gap:14px; }
-      .rs-updated { display:inline-flex; align-items:center; gap:6px; font-size:13px; color:var(--rs-muted); white-space:nowrap; }
+      .rs-dot { width:9px; height:9px; border-radius:999px; background:var(--rs-border); transition:all .25s ease; }
+      .rs-dot-on { background:var(--rs-accent); width:26px; box-shadow:0 0 0 3px rgba(99,102,241,0.14); }
+      .rs-head-right { display:flex; align-items:center; gap:16px; }
+      .rs-clock { display:inline-flex; align-items:center; gap:7px; color:var(--rs-text);
+        font-weight:700; white-space:nowrap; }
+      .rs-clock svg { color:var(--rs-accent); }
+      .rs-clock-time { font-size:19px; font-variant-numeric:tabular-nums; letter-spacing:.02em; }
+      .rs-updated { font-size:13px; color:var(--rs-muted); white-space:nowrap; }
       .rs-fsbtn {
-        display:inline-flex; align-items:center; justify-content:center; width:38px; height:38px;
-        border:1px solid var(--rs-border); border-radius:11px; background:#ffffff;
+        display:inline-flex; align-items:center; justify-content:center; width:40px; height:40px;
+        border:1px solid var(--rs-border); border-radius:12px; background:#ffffff;
         color:var(--rs-sub); cursor:pointer; transition:all .15s;
       }
-      .rs-fsbtn:hover { color:var(--rs-text); border-color:var(--rs-accent); }
+      .rs-fsbtn:hover { color:var(--rs-text); border-color:var(--rs-accent); box-shadow:0 4px 12px rgba(99,102,241,0.16); }
 
       .rs-body { flex:1 1 auto; min-height:0; padding:20px 28px 24px; overflow:hidden; }
+      .rs-page-anim { height:100%; animation:rs-enter .5s cubic-bezier(.22,.61,.36,1) both; }
+      @keyframes rs-enter { from { opacity:0; transform:translateY(14px) scale(.995); } to { opacity:1; transform:none; } }
 
       /* KPI page */
       .rs-kpi-grid {
@@ -882,18 +1097,69 @@ function ScopedStyle() {
         grid-auto-rows:minmax(0,1fr);
       }
       .rs-tile {
-        background:var(--rs-card); border:1px solid var(--rs-border); border-radius:16px;
+        position:relative; overflow:hidden;
+        background:linear-gradient(180deg,#ffffff 0%,#f8fafc 100%);
+        border:1px solid var(--rs-border); border-radius:18px;
         padding:18px 20px; display:flex; flex-direction:column; justify-content:space-between;
-        box-shadow:0 4px 14px rgba(15,23,42,0.05); min-height:0;
+        box-shadow:0 6px 18px rgba(15,23,42,0.06); min-height:0;
+      }
+      .rs-tile::before {
+        content:''; position:absolute; left:0; top:0; bottom:0; width:4px;
+        background:linear-gradient(180deg,var(--rs-accent),#8b5cf6); opacity:.85;
       }
       .rs-tile-head { display:flex; align-items:flex-start; justify-content:space-between; gap:10px; }
       .rs-tile-label { font-size:13px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:var(--rs-muted); }
-      .rs-tile-icon { color:#cbd5e1; flex:0 0 auto; }
-      .rs-tile-value { font-size:clamp(30px,4.4vw,56px); font-weight:800; line-height:1; color:var(--rs-text);
-        font-variant-numeric:tabular-nums; margin:6px 0; }
+      .rs-tile-icon { color:var(--rs-accent); opacity:.55; flex:0 0 auto; }
+      .rs-tile-value { font-size:clamp(32px,4.6vw,60px); font-weight:800; line-height:1; color:var(--rs-text);
+        font-variant-numeric:tabular-nums; letter-spacing:-0.02em; margin:6px 0; }
       .rs-tile-foot { display:flex; align-items:flex-end; justify-content:space-between; gap:12px; }
       .rs-tile-cap { font-size:12px; color:var(--rs-muted); text-transform:uppercase; letter-spacing:.08em; }
       .rs-tile-spark { width:52%; max-width:180px; }
+
+      /* Operations "today" stat tiles */
+      .rs-stat-strip { display:grid; gap:16px; flex:0 0 auto; }
+      .rs-stat-6 { grid-template-columns:repeat(6,minmax(0,1fr)); }
+      .rs-stat-2 { grid-template-columns:repeat(2,minmax(0,1fr)); }
+      .rs-stat {
+        position:relative; overflow:hidden; border-radius:18px; padding:18px 20px;
+        background:linear-gradient(180deg,#ffffff 0%,#f8fafc 100%);
+        border:1px solid var(--rs-border); box-shadow:0 6px 18px rgba(15,23,42,0.06);
+        display:flex; flex-direction:column; gap:10px; min-height:0;
+      }
+      .rs-stat::before { content:''; position:absolute; left:0; top:0; bottom:0; width:4px; background:var(--st); }
+      .rs-stat-head { display:flex; align-items:center; justify-content:space-between; gap:10px; }
+      .rs-stat-label { font-size:13px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--rs-muted); line-height:1.25; }
+      .rs-stat-icon { color:var(--st); opacity:.9; flex:0 0 auto; }
+      .rs-stat-value { font-size:clamp(30px,4vw,54px); font-weight:800; line-height:1; color:var(--rs-text);
+        font-variant-numeric:tabular-nums; letter-spacing:-0.02em; }
+      .rs-stat-accent { font-size:12px; font-weight:600; color:var(--st); text-transform:uppercase; letter-spacing:.06em; }
+      .rs-stat-indigo { --st:#6366f1; } .rs-stat-blue { --st:#2563eb; } .rs-stat-teal { --st:#0d9488; }
+      .rs-stat-green { --st:#16a34a; } .rs-stat-amber { --st:#d97706; } .rs-stat-red { --st:#dc2626; }
+
+      /* TV-legible operations table */
+      .rs-tablewrap { flex:1 1 auto; min-height:0; overflow:auto; }
+      .rs-table { width:100%; border-collapse:collapse; font-size:clamp(14px,1.15vw,18px); }
+      .rs-table thead th {
+        position:sticky; top:0; z-index:1; text-align:left; padding:10px 14px;
+        font-size:12px; font-weight:700; letter-spacing:.07em; text-transform:uppercase;
+        color:var(--rs-muted); background:#f8fafc; border-bottom:2px solid var(--rs-border);
+      }
+      .rs-table tbody td { padding:11px 14px; border-bottom:1px solid var(--rs-border); color:var(--rs-sub); white-space:nowrap; }
+      .rs-table tbody tr:nth-child(even) { background:rgba(15,23,42,0.018); }
+      .rs-td-strong { color:var(--rs-text); font-weight:700; }
+      .rs-tr-alert { background:rgba(220,38,38,0.05) !important; }
+      .rs-table-more { margin:10px 2px 0; font-size:13px; color:var(--rs-muted); }
+
+      .rs-pill {
+        display:inline-block; padding:4px 12px; border-radius:999px; font-size:13px; font-weight:700;
+        white-space:nowrap; border:1px solid transparent;
+      }
+      .rs-pill-blue { color:#1d4ed8; background:rgba(37,99,235,0.1); border-color:rgba(37,99,235,0.2); }
+      .rs-pill-green { color:#15803d; background:rgba(22,163,74,0.1); border-color:rgba(22,163,74,0.2); }
+      .rs-pill-amber { color:#b45309; background:rgba(217,119,6,0.12); border-color:rgba(217,119,6,0.22); }
+      .rs-pill-orange { color:#c2410c; background:rgba(234,88,12,0.12); border-color:rgba(234,88,12,0.22); }
+      .rs-pill-red { color:#b91c1c; background:rgba(220,38,38,0.1); border-color:rgba(220,38,38,0.22); }
+      .rs-pill-slate { color:#475569; background:rgba(71,85,105,0.1); border-color:rgba(71,85,105,0.2); }
 
       /* Compact KPI strip on the board-style pages */
       .rs-strip { display:grid; gap:16px; flex:0 0 auto; }
@@ -918,18 +1184,39 @@ function ScopedStyle() {
       .rs-empty { display:flex; align-items:center; justify-content:center; color:var(--rs-muted); font-size:15px; }
 
       /* Responsive reflow for laptops / smaller boards */
+      @media (max-width:1280px) {
+        .rs-stat-6 { grid-template-columns:repeat(3,minmax(0,1fr)); }
+      }
       @media (max-width:1100px) {
         .rs-kpi-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
         .rs-name { max-width:32vw; font-size:22px; }
+        .rs-updated { display:none; }
       }
       @media (max-width:720px) {
         .rs-header { flex-wrap:wrap; gap:10px; padding:12px 16px; }
         .rs-head-mid { order:3; width:100%; }
-        .rs-name { max-width:60vw; }
+        .rs-name { max-width:56vw; }
         .rs-body { padding:14px 16px 18px; }
         .rs-kpi-grid { grid-template-columns:1fr; }
         .rs-page-row, .rs-grid-2 { grid-template-columns:1fr; }
         .rs-strip { grid-template-columns:repeat(2,minmax(0,1fr)) !important; }
+        .rs-stat-6 { grid-template-columns:repeat(2,minmax(0,1fr)); }
+        .rs-clock-time { font-size:16px; }
+      }
+
+      /* Larger boards: give tables and tiles more presence on 4k walls */
+      @media (min-width:1920px) {
+        .rs-table { font-size:20px; }
+        .rs-table thead th { font-size:14px; padding:14px 18px; }
+        .rs-table tbody td { padding:15px 18px; }
+        .rs-body { padding:26px 40px 30px; }
+      }
+
+      /* Respect reduced-motion: no page slide, no progress sweep, no spin churn */
+      @media (prefers-reduced-motion:reduce) {
+        .rs-page-anim { animation:none; }
+        .rs-progress-fill { animation:none; width:100%; }
+        .rs-dot { transition:none; }
       }
     `}</style>
   )

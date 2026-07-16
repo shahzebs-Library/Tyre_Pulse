@@ -61,7 +61,8 @@ import {
 } from '../lib/costSources'
 import { loadCostSplit } from '../lib/api/costSummary'
 import { generateWorkOrderNo, insertWorkOrder } from '../lib/api/workOrders'
-import { exportToExcel, exportToPdf } from '../lib/exportUtils'
+import { listParts } from '../lib/api/partsCatalog'
+import { exportToExcel, exportToPdf, reportFileName, reportDateLabel } from '../lib/exportUtils'
 import { formatCurrencyCompact } from '../lib/formatters'
 import { toUserMessage } from '../lib/safeError'
 
@@ -107,6 +108,20 @@ function monthLabel(m) {
   return idx >= 0 && idx < 12 ? `${MON[idx]} ${String(y).slice(2)}` : String(m)
 }
 const todayISO = () => new Date().toISOString().slice(0, 10)
+
+// Sum a parts_used list to a parts cost: qty (default 1) times unit cost, rounded
+// to 2 decimals. Backward compatible with legacy rows that carry no qty.
+function sumPartsCost(parts) {
+  if (!Array.isArray(parts)) return 0
+  const total = parts.reduce((s, p) => {
+    const qty = Number(p?.qty)
+    const cost = Number(p?.cost)
+    const q = Number.isFinite(qty) && qty > 0 ? qty : 1
+    const c = Number.isFinite(cost) ? cost : 0
+    return s + q * c
+  }, 0)
+  return Math.round(total * 100) / 100
+}
 
 function Badge({ tone, children }) {
   return (
@@ -191,7 +206,11 @@ export default function PmPrograms() {
   // Record-service modal
   const [recordFor, setRecordFor] = useState(null) // the plan being serviced
   const [recordForm, setRecordForm] = useState(EMPTY_RECORD)
-  const [partDraft, setPartDraft] = useState({ name: '', cost: '' })
+  const [partDraft, setPartDraft] = useState({ name: '', qty: '', cost: '' })
+
+  // Parts catalog (best-effort). Powers the record-service parts picker; when the
+  // table is absent or empty the modal degrades to free-text part entry.
+  const [partsCatalog, setPartsCatalog] = useState([])
   const [recording, setRecording] = useState(false)
   const [recordError, setRecordError] = useState('')
   const [recordOk, setRecordOk] = useState('')
@@ -226,6 +245,26 @@ export default function PmPrograms() {
   }, [activeCountry])
 
   useEffect(() => { load() }, [load])
+
+  // Load the spare-parts catalog once per country (best-effort, non-blocking).
+  useEffect(() => {
+    let alive = true
+    listParts({ country: activeCountry, status: 'active' })
+      .then((rows) => { if (alive) setPartsCatalog(Array.isArray(rows) ? rows : []) })
+      .catch(() => { if (alive) setPartsCatalog([]) })
+    return () => { alive = false }
+  }, [activeCountry])
+
+  const catalogParts = useMemo(
+    () => (partsCatalog || []).filter((p) => p && String(p.name || '').trim()),
+    [partsCatalog],
+  )
+  const hasCatalog = catalogParts.length > 0
+  const partByName = useMemo(() => {
+    const m = new Map()
+    for (const p of catalogParts) m.set(String(p.name).trim().toLowerCase(), p)
+    return m
+  }, [catalogParts])
 
   const plans = dashboard?.plans || []
   const kmByAsset = dashboard?.kmByAsset || {}
@@ -531,7 +570,7 @@ export default function PmPrograms() {
       meter_reading: rm.currentMeter != null ? String(rm.currentMeter) : '',
       tasks_done: [],
     })
-    setPartDraft({ name: '', cost: '' })
+    setPartDraft({ name: '', qty: '', cost: '' })
     setRecordError(''); setRecordOk('')
   }
   const setRecordField = (k, v) => setRecordForm((f) => ({ ...f, [k]: v }))
@@ -539,14 +578,36 @@ export default function PmPrograms() {
     ...f,
     tasks_done: f.tasks_done.includes(task) ? f.tasks_done.filter((t) => t !== task) : [...f.tasks_done, task],
   }))
+  // Selecting / typing a part name auto-fills the unit cost from the catalog when
+  // the field is empty (never clobbers a cost the user has already typed).
+  const onPartNameChange = (v) => setPartDraft((d) => {
+    const next = { ...d, name: v }
+    const match = partByName.get(String(v).trim().toLowerCase())
+    if (match && (d.cost === '' || d.cost == null) && match.unit_cost != null) next.cost = String(match.unit_cost)
+    return next
+  })
   const addPart = () => {
     const name = partDraft.name.trim()
     if (!name) return
-    const cost = partDraft.cost === '' ? null : Number(partDraft.cost)
-    setRecordForm((f) => ({ ...f, parts_used: [...f.parts_used, { name, cost: Number.isFinite(cost) ? cost : null }] }))
-    setPartDraft({ name: '', cost: '' })
+    const qtyN = partDraft.qty === '' ? 1 : Number(partDraft.qty)
+    const costN = partDraft.cost === '' ? null : Number(partDraft.cost)
+    const part = {
+      name,
+      qty: Number.isFinite(qtyN) && qtyN > 0 ? qtyN : 1,
+      cost: Number.isFinite(costN) ? costN : null,
+    }
+    setRecordForm((f) => {
+      const parts_used = [...f.parts_used, part]
+      const sum = sumPartsCost(parts_used)
+      return { ...f, parts_used, parts_cost: sum > 0 ? String(sum) : f.parts_cost }
+    })
+    setPartDraft((d) => ({ name: '', qty: '', cost: '', _task: d._task }))
   }
-  const removePart = (i) => setRecordForm((f) => ({ ...f, parts_used: f.parts_used.filter((_, idx) => idx !== i) }))
+  const removePart = (i) => setRecordForm((f) => {
+    const parts_used = f.parts_used.filter((_, idx) => idx !== i)
+    const sum = sumPartsCost(parts_used)
+    return { ...f, parts_used, parts_cost: sum > 0 ? String(sum) : f.parts_cost }
+  })
 
   const recordMeter = recordFor
     ? resolveMeter(recordFor, { currentKm: kmByAsset[recordFor.asset_no], currentHours: hoursByAsset[recordFor.asset_no] })
@@ -626,8 +687,9 @@ export default function PmPrograms() {
     status: PM_STATUS_META[p.status]?.label || p.status || '',
     due: PM_DUE_META[p._st.band]?.label || p._st.band || '',
   }))
-  const exportPlansExcel = () => exportToExcel(planExportRows, PLAN_COLS, PLAN_HEADERS, 'preventive maintenance plans', 'Plans', { title: 'Preventive Maintenance Plans', currency: activeCurrency })
-  const exportPlansPdf = () => exportToPdf(planExportRows, PLAN_COLS.map((k, i) => ({ key: k, header: PLAN_HEADERS[i] })), 'Preventive Maintenance Plans', 'preventive maintenance plans', 'landscape', '', { currency: activeCurrency })
+  const planFileName = () => reportFileName('Preventive Maintenance Plans', reportDateLabel())
+  const exportPlansExcel = () => exportToExcel(planExportRows, PLAN_COLS, PLAN_HEADERS, planFileName(), 'Plans', { title: 'Preventive Maintenance Plans', currency: activeCurrency })
+  const exportPlansPdf = () => exportToPdf(planExportRows, PLAN_COLS.map((k, i) => ({ key: k, header: PLAN_HEADERS[i] })), 'Preventive Maintenance Plans', planFileName(), 'landscape', '', { currency: activeCurrency })
 
   const HIST_COLS = ['service_date', 'asset_no', 'plan', 'meter', 'performed_by', 'outcome', 'parts_cost', 'labour_cost', 'total_cost', 'next_due', 'work_order_no']
   const HIST_HEADERS = ['Date', 'Asset', 'Plan', 'Meter reading', 'Performed by', 'Outcome', 'Parts', 'Labour', 'Total', 'Next due', 'WO no']
@@ -647,8 +709,9 @@ export default function PmPrograms() {
       work_order_no: r.work_order_no || '',
     }
   })
-  const exportHistExcel = () => exportToExcel(histExportRows, HIST_COLS, HIST_HEADERS, 'preventive maintenance history', 'History', { title: 'Preventive Maintenance Service History', currency: activeCurrency })
-  const exportHistPdf = () => exportToPdf(histExportRows, HIST_COLS.map((k, i) => ({ key: k, header: HIST_HEADERS[i] })), 'Preventive Maintenance Service History', 'preventive maintenance history', 'landscape', '', { currency: activeCurrency })
+  const histFileName = () => reportFileName('Preventive Maintenance Service History', reportDateLabel())
+  const exportHistExcel = () => exportToExcel(histExportRows, HIST_COLS, HIST_HEADERS, histFileName(), 'History', { title: 'Preventive Maintenance Service History', currency: activeCurrency })
+  const exportHistPdf = () => exportToPdf(histExportRows, HIST_COLS.map((k, i) => ({ key: k, header: HIST_HEADERS[i] })), 'Preventive Maintenance Service History', histFileName(), 'landscape', '', { currency: activeCurrency })
 
   const notLoaded = dashboard === null
 
@@ -671,12 +734,6 @@ export default function PmPrograms() {
         updatedAt={updatedAt}
         actions={
           <div className="flex items-center gap-2">
-            <button onClick={exportPlansExcel} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!planExportRows.length}>
-              <FileSpreadsheet size={14} /> Excel
-            </button>
-            <button onClick={exportPlansPdf} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!planExportRows.length}>
-              <FileText size={14} /> PDF
-            </button>
             <button onClick={openCreate} className="btn-primary text-sm inline-flex items-center gap-1.5" disabled={missing}>
               <Plus size={14} /> New plan
             </button>
@@ -1016,7 +1073,11 @@ export default function PmPrograms() {
                 <AlertTriangle size={14} /> Due only
               </button>
               {hasPlanFilters && <button onClick={clearPlanFilters} className="btn-secondary text-sm inline-flex items-center gap-1.5"><X size={14} /> Clear</button>}
-              <span className="text-xs text-[var(--text-muted)] ml-auto">{filteredPlans.length} of {plans.length}</span>
+              <div className="flex items-center gap-2 ml-auto">
+                <span className="text-xs text-[var(--text-muted)]">{filteredPlans.length} of {plans.length}</span>
+                <button onClick={exportPlansExcel} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!planExportRows.length}><FileSpreadsheet size={14} /> Excel</button>
+                <button onClick={exportPlansPdf} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!planExportRows.length}><FileText size={14} /> PDF</button>
+              </div>
             </div>
           </div>
 
@@ -1404,20 +1465,44 @@ export default function PmPrograms() {
               {/* Parts */}
               <div>
                 <label className="label">Parts used</label>
-                <div className="flex items-center gap-2">
-                  <input className="input flex-1" placeholder="Part name" value={partDraft.name} onChange={(e) => setPartDraft((d) => ({ ...d, name: e.target.value }))} />
-                  <input type="number" min="0" step="any" className="input w-32" placeholder={`Cost (${activeCurrency})`} value={partDraft.cost} onChange={(e) => setPartDraft((d) => ({ ...d, cost: e.target.value }))} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addPart() } }} />
+                {hasCatalog && (
+                  <datalist id="pm-parts-catalog">
+                    {catalogParts.slice(0, 1000).map((p) => (
+                      <option key={p.id} value={p.name} label={p.unit_cost != null ? `${activeCurrency} ${p.unit_cost}${p.part_no ? ` (${p.part_no})` : ''}` : (p.part_no || '')} />
+                    ))}
+                  </datalist>
+                )}
+                <div className="flex flex-wrap items-center gap-2">
+                  <input
+                    className="input flex-1 min-w-[180px]"
+                    list={hasCatalog ? 'pm-parts-catalog' : undefined}
+                    placeholder={hasCatalog ? 'Search catalog or type a part' : 'Part name'}
+                    value={partDraft.name}
+                    onChange={(e) => onPartNameChange(e.target.value)}
+                  />
+                  <input type="number" min="1" step="1" className="input w-20" placeholder="Qty" value={partDraft.qty} onChange={(e) => setPartDraft((d) => ({ ...d, qty: e.target.value }))} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addPart() } }} />
+                  <input type="number" min="0" step="any" className="input w-32" placeholder={`Unit cost (${activeCurrency})`} value={partDraft.cost} onChange={(e) => setPartDraft((d) => ({ ...d, cost: e.target.value }))} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addPart() } }} />
                   <button type="button" onClick={addPart} className="btn-secondary text-sm inline-flex items-center gap-1"><Plus size={14} /> Add</button>
                 </div>
+                <p className="text-[11px] text-[var(--text-muted)] mt-1">
+                  {hasCatalog
+                    ? 'Pick a catalog part to auto-fill its unit cost, or type an ad-hoc part. Line costs sum into Parts cost below.'
+                    : 'Type any part and unit cost. Line costs sum into Parts cost below.'}
+                </p>
                 {recordForm.parts_used.length > 0 && (
                   <ul className="mt-2 space-y-1">
-                    {recordForm.parts_used.map((p, i) => (
-                      <li key={i} className="flex items-center gap-2 text-sm text-[var(--text-secondary)] bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg px-2.5 py-1.5">
-                        <span className="flex-1 truncate">{p.name}</span>
-                        <span className="text-[var(--text-muted)]">{p.cost != null ? formatCurrencyCompact(p.cost, activeCurrency) : 'no cost'}</span>
-                        <button type="button" onClick={() => removePart(i)} className="text-[var(--text-muted)] hover:text-red-400"><X size={13} /></button>
-                      </li>
-                    ))}
+                    {recordForm.parts_used.map((p, i) => {
+                      const q = Number(p.qty) > 0 ? Number(p.qty) : 1
+                      const lineTotal = (Number.isFinite(Number(p.cost)) ? Number(p.cost) : 0) * q
+                      return (
+                        <li key={i} className="flex items-center gap-2 text-sm text-[var(--text-secondary)] bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg px-2.5 py-1.5">
+                          <span className="flex-1 truncate">{q > 1 ? `${fmtNum(q)} x ` : ''}{p.name}</span>
+                          <span className="text-[var(--text-muted)] text-[12px] whitespace-nowrap">{p.cost != null ? formatCurrencyCompact(p.cost, activeCurrency) : 'no cost'}</span>
+                          <span className="w-24 text-right text-[var(--text-secondary)] whitespace-nowrap">{p.cost != null ? formatCurrencyCompact(lineTotal, activeCurrency) : ''}</span>
+                          <button type="button" onClick={() => removePart(i)} className="text-[var(--text-muted)] hover:text-red-400"><X size={13} /></button>
+                        </li>
+                      )
+                    })}
                   </ul>
                 )}
               </div>

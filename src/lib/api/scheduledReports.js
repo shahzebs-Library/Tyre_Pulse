@@ -36,6 +36,7 @@ export const REPORT_TYPES = [
   { value: 'claims',     label: 'Insurance Claims Summary' },
   { value: 'stock',      label: 'Stock & Receipts' },
   { value: 'vendor',     label: 'Vendor / Procurement' },
+  { value: 'pm',         label: 'Preventive Maintenance' },
 ]
 
 export const FREQUENCIES = [
@@ -112,6 +113,17 @@ const DATASETS = {
     table: 'purchase_orders', dateCol: 'order_date', title: 'Vendor / Procurement Report',
     cols:    ['order_date', 'po_number', 'vendor_name', 'status', 'priority', 'site', 'total_amount', 'expected_delivery'],
     headers: ['Order Date', 'PO No', 'Vendor', 'Status', 'Priority', 'Site', 'Amount', 'Expected'],
+  },
+  pm: {
+    table: 'pm_programs', dateCol: 'next_due', title: 'Preventive Maintenance Due',
+    // Active PM programs surfaced soonest-due first (overdue at the top), so the
+    // report is a real "what needs servicing" work list, not a transaction log.
+    cols:    ['next_due', 'name', 'asset_no', 'asset_category', 'site', 'priority', 'status', 'interval_type', 'interval_value', 'estimated_cost', 'assigned_to'],
+    headers: ['Next Due', 'Program', 'Asset', 'Category', 'Site', 'Priority', 'Status', 'Interval', 'Every', 'Est. Cost', 'Assigned'],
+    // Only live programs; paused/completed plans are not "due".
+    eqFilter: { status: 'active' },
+    // next_due is forward-looking, so soonest-first (overdue -> upcoming).
+    orderAscending: true,
   },
 }
 
@@ -269,8 +281,9 @@ export async function fetchReportRows(reportType, { from, to, country } = {}) {
   q = applyCountry(q, country)
   if (from) q = q.gte(ds.dateCol, from)
   if (to)   q = q.lte(ds.dateCol, to)
+  if (ds.eqFilter) for (const [col, val] of Object.entries(ds.eqFilter)) q = q.eq(col, val)
   if (ds.orFilter) q = q.or(ds.orFilter)
-  q = q.order(ds.dateCol, { ascending: false }).limit(5000)
+  q = q.order(ds.dateCol, { ascending: ds.orderAscending === true, nullsFirst: false }).limit(5000)
   const { data, error } = await q
   if (error) throw error
   return { rows: data ?? [], dataset: ds }

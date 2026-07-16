@@ -22,6 +22,7 @@ import {
   ScrollText, Presentation,
   Settings2, Plus, Eye, EyeOff, X, ArrowUp, ArrowDown,
   Trash2, GripVertical, RotateCcw, StickyNote, SeparatorHorizontal,
+  LayoutList, Layers,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import EmailReportModal from '../components/EmailReportModal'
@@ -36,6 +37,8 @@ import { applyCountry } from '../lib/countryFilter'
 import { formatDate } from '../lib/formatters'
 import { fetchAllPages } from '../lib/fetchAll'
 import { recordCost } from '../lib/analyticsEngine'
+import { loadCostSplit } from '../lib/api/costSummary'
+import { COST_MODES, pickCost, costModeLabel, pickMonthly, splitTotals } from '../lib/costSources'
 import { resolvePdfBrand, pdfHeader, pdfFooter, pdfTableTheme, reportFileName, reportDateLabel } from '../lib/exportUtils'
 import { captureChartOnPaper, paperChartOptions } from '../lib/chartCapture'
 import { useTenant } from '../contexts/TenantContext'
@@ -300,6 +303,7 @@ const BUILTIN_DEFS = [
   { key: 'kpis',            label: 'KPI Dashboard' },
   { key: 'rootcause',       label: 'Root Cause Analysis' },
   { key: 'financial',       label: 'Financial Impact' },
+  { key: 'costsplit',       label: 'Tyres vs Maintenance Cost' },
   { key: 'risk',            label: 'Risk Assessment' },
   { key: 'recommendations', label: 'Recommendations' },
   { key: 'actionplan',      label: 'Action Plan' },
@@ -384,6 +388,12 @@ export default function ExecutiveReport() {
   // header toggle still lets power users flip back to the dark dashboard.
   const [reportMode,  setReportMode]  = useState(true)
 
+  // ── Tyres vs Maintenance cost split (own tri-state, independent of the main
+  // dataset load so a missing maintenance relation never blocks the report). ──
+  const [costSplit,        setCostSplit]        = useState({ tyre: 0, maintenance: 0, byMonth: [] })
+  const [costSplitState,   setCostSplitState]   = useState('loading') // 'loading' | 'ready' | 'error'
+  const [costMode,         setCostMode]         = useState('combined')
+
   // ── Customizable layout (persisted) ────────────────────────────────────────
   const [layout, setLayout] = useState(() => {
     try { return normalizeLayout(JSON.parse(localStorage.getItem(LAYOUT_STORAGE_KEY) || 'null')) }
@@ -452,6 +462,7 @@ export default function ExecutiveReport() {
   const costBySiteRef   = useRef(null)
   const riskTrendRef    = useRef(null)
   const costByBrandRef  = useRef(null)
+  const costSplitRef    = useRef(null)
 
   // ── Load data ──────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -491,6 +502,24 @@ export default function ExecutiveReport() {
       }
     }
     load()
+    return () => { cancelled = true }
+  }, [activeCountry])
+
+  // ── Tyres vs Maintenance cost split load (12 calendar months) ──────────────
+  useEffect(() => {
+    let cancelled = false
+    setCostSplitState('loading')
+    loadCostSplit({ country: activeCountry })
+      .then((res) => {
+        if (cancelled) return
+        setCostSplit(res || { tyre: 0, maintenance: 0, byMonth: [] })
+        setCostSplitState('ready')
+      })
+      .catch(() => {
+        if (cancelled) return
+        setCostSplit({ tyre: 0, maintenance: 0, byMonth: [] })
+        setCostSplitState('error')
+      })
     return () => { cancelled = true }
   }, [activeCountry])
 
@@ -997,6 +1026,25 @@ export default function ExecutiveReport() {
     }],
   }), [riskTrend6m])
 
+  // ── Tyres vs Maintenance cost derivations (single source: costSources) ─────
+  const costSplitByMonth  = useMemo(() => (Array.isArray(costSplit?.byMonth) ? costSplit.byMonth : []), [costSplit])
+  const costSplitSums      = useMemo(() => splitTotals(costSplitByMonth), [costSplitByMonth])
+  const costSplitHeadline  = useMemo(() => pickCost(costMode, costSplitSums), [costMode, costSplitSums])
+  const costSplitSeries    = useMemo(() => pickMonthly(costMode, costSplitByMonth), [costMode, costSplitByMonth])
+  const costSplitHasData   = costSplitSums.combined > 0
+
+  const costSplitChart = useMemo(() => ({
+    labels: costSplitSeries.map(m => m.month),
+    datasets: [{
+      label: `${costModeLabel(costMode)} Spend`,
+      data: costSplitSeries.map(m => m.value),
+      backgroundColor: 'rgba(20,184,166,0.7)',
+      borderColor: '#14b8a6',
+      borderWidth: 1,
+      borderRadius: 4,
+    }],
+  }), [costSplitSeries, costMode])
+
   // ── PDF Export (WYSIWYG: KPI cards + charts + tables, matches report view) ──
   const exportPDF = useCallback(async () => {
     const { default: jsPDF } = await import('jspdf')
@@ -1081,6 +1129,19 @@ export default function ExecutiveReport() {
           drawChart(costBySiteRef, M, finBottomY, halfW, finH, 'Cost by Site')
           drawChart(costByBrandRef, M + halfW + GAP, finBottomY, halfW, finH, 'Cost by Brand')
         },
+        costsplit: () => {
+          pdfHeader(doc, 'Tyres vs Maintenance Cost', `${costModeLabel(costMode)} | Last 12 months`, company, brand)
+          doc.setFont('helvetica', 'bold'); doc.setFontSize(16); doc.setTextColor(...INK)
+          doc.text(fmtCurrency(costSplitHeadline, currency), M, 40)
+          doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); doc.setTextColor(...MUTED)
+          doc.text(`${costModeLabel(costMode)} spend | Tyres ${fmtCurrency(costSplitSums.tyre, currency)} | Maintenance ${fmtCurrency(costSplitSums.maintenance, currency)}`, M, 46)
+          if (costSplitHasData) {
+            drawChart(costSplitRef, M, 52, W - 2 * M, H - 52 - M, `${costModeLabel(costMode)} spend by month`)
+          } else {
+            doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(...MUTED)
+            doc.text('No tyre or maintenance cost recorded in the last 12 months.', M, 58)
+          }
+        },
         risk: () => {
           pdfHeader(doc, 'Risk Assessment', periodLabel, company, brand)
           drawChart(riskTrendRef, M, 34, halfW, 92, '6-Month Risk Score Trend')
@@ -1127,7 +1188,7 @@ export default function ExecutiveReport() {
     } finally {
       setExporting(false)
     }
-  }, [period, kpis, rootCauses, riskMatrix, actionPlan, recommendations, kpiCards, totalSpend, projectedAnnual, costTrend, currency, company, branding, savingsOpportunity, chartImg, visibleBuiltinKeys])
+  }, [period, kpis, rootCauses, riskMatrix, actionPlan, recommendations, kpiCards, totalSpend, projectedAnnual, costTrend, currency, company, branding, savingsOpportunity, chartImg, visibleBuiltinKeys, costMode, costSplitHeadline, costSplitSums, costSplitHasData])
 
   // ── PowerPoint Export (WYSIWYG white deck: title + KPI + chart + table slides) ─
   const exportPPTX = useCallback(async () => {
@@ -1201,6 +1262,11 @@ export default function ExecutiveReport() {
           chartSlide(costBySiteRef, 'Cost by Site')
           chartSlide(costByBrandRef, 'Cost by Brand')
         },
+        costsplit: () => {
+          chartSlide(costSplitRef, `Tyres vs Maintenance Cost: ${costModeLabel(costMode)}`)
+          tableSlide('Tyres vs Maintenance Cost', ['Month', 'Tyres', 'Maintenance', 'Combined'],
+            costSplitByMonth.map(m => [m.month, fmtCurrency(m.tyre, currency), fmtCurrency(m.maintenance, currency), fmtCurrency(pickCost('combined', m), currency)]))
+        },
         risk: () => {
           chartSlide(riskTrendRef, '6-Month Risk Score Trend')
           tableSlide('Risk Matrix', ['Site', 'Critical', 'High', 'Medium', 'Low', 'Total', 'Risk Score'],
@@ -1224,7 +1290,7 @@ export default function ExecutiveReport() {
     } finally {
       setExporting(false)
     }
-  }, [period, kpiCards, rootCauses, riskMatrix, actionPlan, recommendations, currency, company, chartImg, visibleBuiltinKeys])
+  }, [period, kpiCards, rootCauses, riskMatrix, actionPlan, recommendations, currency, company, chartImg, visibleBuiltinKeys, costMode, costSplitByMonth])
 
   // ── Excel Export ──────────────────────────────────────────────────────────
   const exportExcel = useCallback(async () => {
@@ -1257,6 +1323,10 @@ export default function ExecutiveReport() {
         addSheet(costTrend.byMonth.map(m => ({ Month: m.month, 'Total Cost': Math.round(m.totalCost), Count: m.count })), 'Cost Trend')
         addSheet(costBySite.map(s => ({ Site: s.site, 'Total Cost': Math.round(s.cost) })), 'Cost by Site')
       },
+      costsplit: () => addSheet(costSplitByMonth.map(m => ({
+        Month: m.month, Tyres: Math.round(m.tyre), Maintenance: Math.round(m.maintenance),
+        Combined: Math.round(pickCost('combined', m)),
+      })), 'Tyres vs Maintenance'),
       risk: () => addSheet(riskMatrix.map(r => ({
         Site: r.site, Critical: r.Critical, High: r.High, Medium: r.Medium,
         Low: r.Low, Total: r.total, 'Risk Score': r.score.toFixed(2),
@@ -1273,7 +1343,7 @@ export default function ExecutiveReport() {
     ;(excelSeq.length ? excelSeq : ['kpis']).forEach(k => excelRenderers[k]())
 
     XLSX.writeFile(wb, `TyrePulse_Executive_Report_${periodValueLabel(period).replace(/[^\w-]+/g, '_')}_${new Date().toISOString().slice(0, 10)}.xlsx`)
-  }, [kpis, rootCauses, riskMatrix, actionPlan, recommendations, costTrend, costBySite, totalSpend, projectedAnnual, currency, period, visibleBuiltinKeys])
+  }, [kpis, rootCauses, riskMatrix, actionPlan, recommendations, costTrend, costBySite, totalSpend, projectedAnnual, currency, period, visibleBuiltinKeys, costSplitByMonth])
 
   const exportActionPlanPDF = useCallback(async () => {
     const { default: jsPDF } = await import('jspdf')
@@ -1960,6 +2030,75 @@ export default function ExecutiveReport() {
                   )}
                 </div>
               </div>
+            </div>
+          </Card>
+        </motion.div>
+
+        {/* ═══════════════════════════════════════════════════════════════
+            SECTION - TYRES VS MAINTENANCE COST
+        ═══════════════════════════════════════════════════════════════ */}
+        <motion.div style={blockStyle('costsplit')} initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, delay: 0.18 }}>
+          <Card>
+            <SectionHeader
+              icon={Layers}
+              title="Tyres vs Maintenance Cost"
+              subtitle="Combined, tyre only or maintenance only spend across the last 12 months"
+              badge={costModeLabel(costMode)}
+            />
+
+            {/* Segmented mode switch */}
+            <div className="flex flex-wrap items-center justify-between gap-3 mb-5">
+              <div className="inline-flex rounded-lg border border-[var(--border-bright)] overflow-hidden">
+                {COST_MODES.map((m) => {
+                  const on = costMode === m.key
+                  return (
+                    <button
+                      key={m.key}
+                      onClick={() => setCostMode(m.key)}
+                      aria-pressed={on}
+                      className={`px-4 py-1.5 text-xs font-medium transition-colors ${
+                        on
+                          ? 'bg-emerald-600 text-white'
+                          : 'bg-[var(--surface-1)] text-[var(--text-secondary)] hover:bg-[var(--surface-2)]'
+                      }`}
+                    >
+                      {m.label}
+                    </button>
+                  )
+                })}
+              </div>
+              <div className="text-right">
+                <p className="text-2xl font-bold tabular-nums text-[var(--text-primary)]">{fmtCurrency(costSplitHeadline, currency)}</p>
+                <p className="text-xs text-[var(--text-muted)] mt-0.5">{costModeLabel(costMode)} spend, last 12 months</p>
+              </div>
+            </div>
+
+            {/* Split summary tiles */}
+            <div className="grid grid-cols-3 gap-3 mb-5">
+              {[
+                { label: 'Tyres', value: costSplitSums.tyre },
+                { label: 'Maintenance', value: costSplitSums.maintenance },
+                { label: 'Combined', value: costSplitSums.combined },
+              ].map(s => (
+                <div key={s.label} className="bg-[var(--surface-1)] border border-[var(--border-dim)] rounded-xl p-3">
+                  <p className="text-base font-bold tabular-nums text-[var(--text-primary)]">{fmtCurrency(s.value, currency)}</p>
+                  <p className="text-xs text-[var(--text-muted)] mt-0.5">{s.label}</p>
+                </div>
+              ))}
+            </div>
+
+            {/* Monthly chart */}
+            <p className="text-xs text-[var(--text-secondary)] font-medium mb-2 uppercase tracking-wide">{costModeLabel(costMode)} spend by month</p>
+            <div className="h-64">
+              {costSplitState === 'loading' ? (
+                <div className="h-full flex items-center justify-center text-[var(--text-dim)] text-sm">Loading cost split...</div>
+              ) : costSplitState === 'error' ? (
+                <div className="h-full flex items-center justify-center text-[var(--text-dim)] text-sm">Cost split unavailable</div>
+              ) : costSplitHasData ? (
+                <Bar ref={costSplitRef} data={costSplitChart} options={barOpts} />
+              ) : (
+                <div className="h-full flex items-center justify-center text-[var(--text-dim)] text-sm">No tyre or maintenance cost recorded in the last 12 months</div>
+              )}
             </div>
           </Card>
         </motion.div>

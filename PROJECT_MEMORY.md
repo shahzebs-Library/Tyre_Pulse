@@ -476,6 +476,19 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
   (source 'PM service') so the fleet meter stays fresh (odometer trigger advances current_km). Tests:
   pmTemplates(15), pmAnalytics(21), pmPrograms.api now 12. RULE: reuse costSources/costSummary for any further
   tyre-vs-maintenance toggle; reuse pmAnalytics/pmTemplates - do not rebuild.
+- **PMV wave 3 (2026-07-16, 8-agent batch):** (a) NEW scheduled report type **'pm'** (Preventive Maintenance
+  due) - `scheduledReports.js` REPORT_TYPES + DATASETS.pm (pm_programs, dateCol next_due, eqFilter status=active,
+  orderAscending) + edge fn `send-scheduled-reports` DATASET_DIGEST.pm; **V254** widened
+  report_schedules.report_type CHECK to include 'pm'. EDGE FN NOT YET REDEPLOYED (still v14) - a 'pm' schedule
+  emails the exec fallback until send-scheduled-reports is redeployed (ops step; the pm digest code is in the
+  committed source). (b) Tyres-vs-Maintenance cost switch now ALSO on **Analytics.jsx, BoardOverview.jsx
+  (toggleable section, in PDF), ExecutiveReport.jsx (toggleable built-in section, in PDF/PPTX/Excel)** - all
+  reuse costSources/costSummary (CostCenter already had it). (c) PM signals added to **Dashboard.jsx** (overdue/
+  due-soon/compliance tile + priority recs), **DisplayDashboard.jsx** (new TV "Preventive Maintenance" board),
+  **AssetDetail.jsx** (per-asset PM plans + service history tab). (d) PmPrograms.jsx: per-tab Excel/PDF export
+  (reportFileName) + catalog-backed parts picker in record-service (listParts, parts_used now {name,qty,cost}).
+  INCIDENTAL FIX (reported): ExecutiveReport.jsx used `LayoutList` without importing it (latent crash) - the
+  agent added the import. next free migration **V255**.
 
 ### BACKLOG (user parked 2026-07-16, "do it later when I ask") — Advanced Admin Control & Self-Healing
 - A big SUPER-ADMIN-ONLY module the user specced for LATER (explicitly "put this for later, I will ask you to

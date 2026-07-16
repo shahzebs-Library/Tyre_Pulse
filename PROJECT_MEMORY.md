@@ -303,7 +303,7 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
   0 remain. inspections lock trigger bypassed around its backfill and restored (both back to 'O').
   EXCLUDED: `profiles.site` (guarded privileged column via trg_guard_profile_privileged + user scoping; 0 rows
   off-canonical; a normalize trigger there could race the guard's self-edit "site changed?" check) and pure
-  log/telemetry/audit tables (site not a report grouper there). Next free migration **V248** (see V247 below).
+  log/telemetry/audit tables (site not a report grouper there). Next free migration **V250** (V248/V249 taken by Tyre Spec/Value Advisor; see V247 below).
 - **DEEPER ISSUE SURFACED, NOT YET FIXED — site vocabulary reconciliation (needs USER sign-off):** casing is
   now clean but `tyre_records` uses a `<CODE>-ST` convention while `vehicle_fleet`/accidents/inspections use
   plain site/gate names, so the SAME physical site is recorded under different codes. High-confidence same-site
@@ -322,7 +322,7 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
   distinct sites). RULE: to add a future site merge, INSERT into site_aliases (alias must be UPPER/trimmed) and
   the trigger applies it on next write; backfill existing rows with `UPDATE <t> SET site=sa.canonical FROM
   site_aliases sa WHERE <t>.site=sa.alias` (disable/enable inspections lock around its update). Next free
-  migration **V248**.
+  migration **V250** (V248/V249 taken by Tyre Spec/Value Advisor).
 
 ### V245 — vehicle_type casing normalized (applied LIVE 2026-07-16)
 - Mixed casing ("TR-MIXER" vs "Tr-Mixer", "PUMPS" vs "Pumps", "Bus" vs "BUS", etc.) split the SAME vehicle

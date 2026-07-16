@@ -579,7 +579,11 @@ export default function ReportShare() {
       {/* Rotating page body */}
       <main className="rs-body">
         {activeKey === 'board_kpis' && <KpisPage snapshot={snapshot} />}
+        {activeKey === 'fleet_overview' && <FleetOverviewPage snapshot={snapshot} />}
         {activeKey === 'board_trends' && <TrendsPage snapshot={snapshot} />}
+        {activeKey === 'spend_trend' && <SpendTrendPage snapshot={snapshot} />}
+        {activeKey === 'risk_activity' && <RiskActivityPage snapshot={snapshot} />}
+        {activeKey === 'claims_desk' && <ClaimsDeskPage snapshot={snapshot} />}
         {activeKey === 'board_charts' && <ChartsPage snapshot={snapshot} />}
       </main>
     </div>
@@ -679,6 +683,113 @@ function ChartsPage({ snapshot }) {
       <ChartCard title="Tyres by site" subtitle="Tyre volume distribution across sites" icon={LayoutGrid} empty={!tyresBySite.length} height="34vh">
         <EChart option={treemapOption(tyresBySite)} ariaLabel="Tyres by site" />
       </ChartCard>
+    </div>
+  )
+}
+
+// ── Compact KPI tile strip (reused by the board-style pages below) ─────────────
+const SPARK_COLOR = { tyre_spend: 0, accidents: 3, claims_claimed: 4, claims_recovered: 1, inspections: 2 }
+function TileStrip({ snapshot, keys }) {
+  const kpis = snapshot?.kpis || {}
+  const trends = snapshot?.trends || {}
+  const tiles = keys.map((k) => KPI_TILES.find((t) => t.key === k)).filter(Boolean)
+  if (!tiles.length) return null
+  return (
+    <div className="rs-strip" style={{ gridTemplateColumns: `repeat(${tiles.length},minmax(0,1fr))` }}>
+      {tiles.map((tile) => (
+        <KpiTile
+          key={tile.key}
+          tile={tile}
+          value={kpis[tile.key] ?? 0}
+          series={tile.spark ? arr(trends[tile.spark]) : null}
+          sparkIdx={SPARK_COLOR[tile.spark] ?? 0}
+        />
+      ))}
+    </div>
+  )
+}
+
+// ── Page: Fleet Overview ──────────────────────────────────────────────────────
+function FleetOverviewPage({ snapshot }) {
+  const labels = arr(snapshot?.labels)
+  const inspections = arr(snapshot?.trends?.inspections)
+  const tyresBySite = arr(snapshot?.breakdowns?.tyres_by_site)
+  const inspEmpty = !labels.length || !someNonZero(inspections)
+  return (
+    <div className="rs-page">
+      <TileStrip snapshot={snapshot} keys={['fleet', 'tyres', 'inspections', 'work_orders_open']} />
+      <div className="rs-page-row">
+        <ChartCard title="Tyres by site" subtitle="Tyre volume distribution across sites" icon={LayoutGrid} empty={!tyresBySite.length} height="50vh">
+          <EChart option={treemapOption(tyresBySite)} ariaLabel="Tyres by site" />
+        </ChartCard>
+        <ChartCard title="Inspections completed" subtitle="Monthly inspection volume" icon={ClipboardCheck} empty={inspEmpty} height="50vh">
+          <EChart option={inspectionsOption(labels, inspections)} ariaLabel="Inspections completed trend" />
+        </ChartCard>
+      </div>
+    </div>
+  )
+}
+
+// ── Page: Spend Trend ─────────────────────────────────────────────────────────
+function SpendTrendPage({ snapshot }) {
+  const labels = arr(snapshot?.labels)
+  const spend = arr(snapshot?.trends?.tyre_spend)
+  const accidents = arr(snapshot?.trends?.accidents)
+  const comboEmpty = !labels.length || (!someNonZero(spend) && !someNonZero(accidents))
+  return (
+    <div className="rs-page">
+      <TileStrip snapshot={snapshot} keys={['tyre_spend', 'accidents', 'fleet']} />
+      <ChartCard
+        wide
+        title="Tyre spend and accidents"
+        subtitle="Monthly tyre spend (bars, left axis) against accident count (line, right axis)"
+        icon={TrendingUp}
+        empty={comboEmpty}
+        height="56vh"
+      >
+        <EChart option={comboOption(labels, spend, accidents)} ariaLabel="Tyre spend and accidents trend" />
+      </ChartCard>
+    </div>
+  )
+}
+
+// ── Page: Risk & Activity ─────────────────────────────────────────────────────
+function RiskActivityPage({ snapshot }) {
+  const severity = arr(snapshot?.breakdowns?.severity)
+  const accidentsBySite = arr(snapshot?.breakdowns?.accidents_by_site)
+  return (
+    <div className="rs-page">
+      <TileStrip snapshot={snapshot} keys={['accidents', 'open_accidents', 'work_orders_open']} />
+      <div className="rs-page-row">
+        <ChartCard title="Accidents by severity" subtitle="Share of incidents by severity band" icon={PieChart} empty={!severity.length} height="50vh">
+          <EChart option={doughnutOption(severity)} ariaLabel="Accidents by severity" />
+        </ChartCard>
+        <ChartCard title="Accidents by site" subtitle="Incident count across sites" icon={MapPin} empty={!accidentsBySite.length} height="50vh">
+          <EChart option={vbarOption(accidentsBySite)} ariaLabel="Accidents by site" />
+        </ChartCard>
+      </div>
+    </div>
+  )
+}
+
+// ── Page: Claims Desk ─────────────────────────────────────────────────────────
+function ClaimsDeskPage({ snapshot }) {
+  const labels = arr(snapshot?.labels)
+  const claimed = arr(snapshot?.trends?.claims_claimed)
+  const recovered = arr(snapshot?.trends?.claims_recovered)
+  const claimStatus = arr(snapshot?.breakdowns?.claim_status)
+  const claimsEmpty = !labels.length || (!someNonZero(claimed) && !someNonZero(recovered))
+  return (
+    <div className="rs-page">
+      <TileStrip snapshot={snapshot} keys={['claims_claimed', 'claims_recovered', 'open_accidents']} />
+      <div className="rs-page-row">
+        <ChartCard title="Claimed vs recovered" subtitle="Monthly claimed value against recovered value" icon={Activity} empty={claimsEmpty} height="50vh">
+          <EChart option={claimsOption(labels, claimed, recovered)} ariaLabel="Claims claimed versus recovered" />
+        </ChartCard>
+        <ChartCard title="Claims by status" subtitle="Open and closed claim volume" icon={BarChart3} empty={!claimStatus.length} height="50vh">
+          <EChart option={hbarOption(claimStatus)} ariaLabel="Claims by status" />
+        </ChartCard>
+      </div>
     </div>
   )
 }
@@ -784,6 +895,11 @@ function ScopedStyle() {
       .rs-tile-cap { font-size:12px; color:var(--rs-muted); text-transform:uppercase; letter-spacing:.08em; }
       .rs-tile-spark { width:52%; max-width:180px; }
 
+      /* Compact KPI strip on the board-style pages */
+      .rs-strip { display:grid; gap:16px; flex:0 0 auto; }
+      .rs-strip .rs-tile { padding:14px 18px; }
+      .rs-strip .rs-tile-value { font-size:clamp(26px,3.6vw,46px); margin:4px 0; }
+
       /* Trends + breakdown pages */
       .rs-page { display:flex; flex-direction:column; gap:16px; height:100%; }
       .rs-page-row { display:grid; grid-template-columns:1fr 1fr; gap:16px; min-height:0; }
@@ -813,6 +929,7 @@ function ScopedStyle() {
         .rs-body { padding:14px 16px 18px; }
         .rs-kpi-grid { grid-template-columns:1fr; }
         .rs-page-row, .rs-grid-2 { grid-template-columns:1fr; }
+        .rs-strip { grid-template-columns:repeat(2,minmax(0,1fr)) !important; }
       }
     `}</style>
   )

@@ -8,13 +8,26 @@
  */
 import { supabase } from '../supabase'
 
-// The report "pages" a share can rotate through (choose any). Extend as more
-// public report views are added; the viewer renders whatever the share lists.
+// The report "pages" a share can rotate through (choose any). This is the SINGLE
+// catalog of public TV / kiosk report views: the admin panel renders it as the
+// page picker and the public viewer (ReportShare.jsx) renders whatever a share
+// lists. To add a rotatable page: add an entry here + a render branch in the
+// viewer. Every page below is built from the get_report_snapshot aggregate, so
+// no schema change is needed to add one within that data.
 export const REPORT_PAGES = [
-  { key: 'board_kpis',   label: 'KPIs',      desc: 'Headline KPIs across every module.' },
-  { key: 'board_trends', label: 'Trends',    desc: '12-month trend charts (spend, accidents, claims, inspections).' },
-  { key: 'board_charts', label: 'Breakdowns', desc: 'Severity, claim status, by-site breakdown charts.' },
+  { key: 'board_kpis',     group: 'Overview',   label: 'KPIs',            desc: 'Headline KPIs across every module.' },
+  { key: 'fleet_overview', group: 'Overview',   label: 'Fleet Overview',  desc: 'Fleet and tyre volumes, inspections and open work orders, tyres by site.' },
+  { key: 'board_trends',   group: 'Trends',     label: 'Trends',          desc: '12-month spend, accidents, claims and inspection trend lines.' },
+  { key: 'spend_trend',    group: 'Trends',     label: 'Spend Trend',     desc: 'Tyre spend against accidents, with the monthly spend focus.' },
+  { key: 'risk_activity',  group: 'Risk',       label: 'Risk & Activity', desc: 'Accidents, severity mix and incident sites.' },
+  { key: 'claims_desk',    group: 'Risk',       label: 'Claims Desk',     desc: 'Claimed against recovered value and the claim status mix.' },
+  { key: 'board_charts',   group: 'Breakdowns', label: 'Breakdowns',      desc: 'Severity, claim status and by-site breakdown charts.' },
 ]
+// Ordered list of the group labels, for a grouped picker UI.
+export const PAGE_GROUPS = REPORT_PAGES.reduce((acc, p) => {
+  if (!acc.includes(p.group)) acc.push(p.group)
+  return acc
+}, [])
 export const DEFAULT_PAGES = REPORT_PAGES.map((p) => p.key)
 
 /** Missing-relation guard so the UI degrades gracefully before the migration. */

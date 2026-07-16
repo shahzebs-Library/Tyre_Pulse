@@ -317,6 +317,20 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
 - The "shareable PUBLIC/TV links for reports (LIGHT theme, admin-managed, advanced charts)" backlog item is
   DONE. Mirrors the V103 display-token pattern (org embedded in the token row; anon reads aggregates only via
   a SECURITY DEFINER RPC; no table is ever granted to anon). Do NOT build a second share surface.
+- **CONSOLIDATION (2026-07-16, user "make this as a one"):** this is now the ONE share surface. The OLD
+  executive display-token system was RETIRED per user choice ("Replace old entirely"): deleted
+  `src/pages/DisplayShare.jsx` + `src/components/display/DisplayTokensPanel.jsx`, removed the anon
+  `/display/:token` route from App.jsx, dropped DisplayTokensPanel from Settings, and set every active
+  `display_tokens` row inactive (live UPDATE). The `display_tokens` table + `get_display_snapshot` RPC still
+  exist in the DB (harmless, unreferenced). The AUTHED in-app TV kiosk `/display` (DisplayDashboard, nav "TV
+  Display Mode") is a DIFFERENT thing and was KEPT. Do NOT re-add a second token share panel/route.
+- **Page catalog is now 7 (advanced levels), grouped:** REPORT_PAGES (+PAGE_GROUPS) in reportShares.js:
+  Overview[board_kpis, fleet_overview] · Trends[board_trends, spend_trend] · Risk[risk_activity, claims_desk]
+  · Breakdowns[board_charts]. ALL 7 render from the SAME get_report_snapshot aggregate (no schema/RPC change
+  to add pages within that data — create_report_share stores p_pages verbatim, no key validation). The 4 new
+  pages (fleet_overview/spend_trend/risk_activity/claims_desk) + a `TileStrip` KPI-row helper live in
+  ReportShare.jsx. RULE: to add a rotatable page = add a REPORT_PAGES entry + a render branch + (only if it
+  needs new data) extend get_report_snapshot. Panel picker is grouped with per-group + Select all/Clear.
 - **DB (applied live):**
   - **V251** `public.report_shares` (id, organisation_id DEFAULT app_current_org(), name, token UNIQUE
     'rpt_'+18-byte hex, password_hash bcrypt, pages jsonb DEFAULT '["board_kpis","board_trends",

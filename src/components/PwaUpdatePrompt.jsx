@@ -9,6 +9,11 @@ export default function PwaUpdatePrompt() {
   const { t } = useLanguage()
   const registrationRef = useRef(null)
 
+  // Latest updater + pending-update flag, read from the hidden-tab auto-apply
+  // handler without re-subscribing it on every render.
+  const updateFnRef = useRef(null)
+  const needRefreshRef = useRef(false)
+
   const {
     offlineReady:  [offlineReady,  setOfflineReady],
     needRefresh:   [needRefresh,   setNeedRefresh],
@@ -25,25 +30,35 @@ export default function PwaUpdatePrompt() {
         registration.update().catch(() => {})
       }, UPDATE_INTERVAL_MS)
 
-      // iOS critical: check for updates every time the app comes to foreground
-      // (iOS suspends background timers, so visibility changes are the reliable trigger)
-      const onVisible = () => {
-        if (document.visibilityState === 'visible' && navigator.onLine) {
-          registration.update().catch(() => {})
+      // Visibility handler, two jobs:
+      //  - VISIBLE: check for a new deploy (iOS suspends background timers, so a
+      //    refocus is the reliable trigger).
+      //  - HIDDEN: if an update is already waiting, apply it QUIETLY now. The
+      //    reload happens while nobody is looking, so a kiosk / TV / backgrounded
+      //    tab self-heals to the latest build without ever interrupting work.
+      const onVisibility = () => {
+        if (document.visibilityState === 'visible') {
+          if (navigator.onLine) registration.update().catch(() => {})
+        } else if (needRefreshRef.current && typeof updateFnRef.current === 'function') {
+          updateFnRef.current(true) // activate the waiting SW -> reload while hidden
         }
       }
-      document.addEventListener('visibilitychange', onVisible)
+      document.addEventListener('visibilitychange', onVisibility)
 
       // Store cleanup on the ref so it can be called on unmount
       registrationRef.current._cleanup = () => {
         clearInterval(interval)
-        document.removeEventListener('visibilitychange', onVisible)
+        document.removeEventListener('visibilitychange', onVisibility)
       }
     },
     onRegisterError(err) {
       if (import.meta.env.DEV) console.warn('[PWA] SW registration failed:', err)
     },
   })
+
+  // Keep the refs the visibility handler reads in sync with the live hook state.
+  useEffect(() => { updateFnRef.current = updateServiceWorker }, [updateServiceWorker])
+  useEffect(() => { needRefreshRef.current = needRefresh }, [needRefresh])
 
   useEffect(() => {
     return () => {

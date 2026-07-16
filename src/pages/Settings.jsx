@@ -6,7 +6,6 @@ import { useLanguage } from '../contexts/LanguageContext'
 import LanguageSwitcher from '../components/LanguageSwitcher'
 import AppearancePanel from '../components/settings/AppearancePanel'
 import FeatureFlagsPanel from '../components/settings/FeatureFlagsPanel'
-import ReportSharesPanel from '../components/display/ReportSharesPanel'
 import { useSettings, COUNTRIES } from '../contexts/SettingsContext'
 import { Save, User, Settings2, Bell, BellRing, Database, Info, Target, Clock, Mail, Calendar, Trash2, Plus, Play, Lock, Shield, ShieldCheck, ShieldOff, AlertTriangle, Sparkles, Moon } from 'lucide-react'
 import { motion } from 'framer-motion'
@@ -744,10 +743,8 @@ export default function Settings() {
         {/* Feature Flags (org-wide, admin only — same gate as other admin sections) */}
         {isAdmin && <FeatureFlagsPanel />}
 
-        {/* Single home for shareable report / TV links: light-theme, auto-rotating,
-            no-login public board viewer. Replaces the old Executive display tokens.
-            Panel self-gates on elevated role. */}
-        <ReportSharesPanel />
+        {/* Shareable report / TV links now live on their own full page under
+            "Reports & Executive" > "Report Sharing" (/report-sharing). */}
 
         {/* App Preferences */}
         <div className="card space-y-4">

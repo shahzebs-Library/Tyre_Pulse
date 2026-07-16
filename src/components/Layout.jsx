@@ -186,7 +186,7 @@ const NAV_GROUPS = [
       { to: '/gate-pass',       label: 'Gate Pass',          icon: GatePassIc },
       { to: '/workshop',        label: 'Workshop Management', icon: WorkshopIc, adminOnly: A },
       { to: '/technician-scorecard', label: 'Technician Scorecard', icon: Award, adminOnly: A },
-      { to: '/pm-programs',     label: 'PM Programs',        icon: CalendarClock, adminOnly: A },
+      { to: '/pm-programs',     label: 'Preventive Maintenance', icon: CalendarClock, adminOnly: A },
       { to: '/dtc',             label: 'DTC Diagnostics',    icon: Cpu, adminOnly: A },
       { to: '/fuel-cards',      label: 'Fuel Cards',         icon: CreditCard, adminOnly: A },
       { to: '/fuel-delivery',   label: 'Fuel Delivery',      icon: Fuel, adminOnly: A },

@@ -832,6 +832,24 @@ html.light {
   --hairline:      rgba(15,23,42,0.10);
   --hero-from:     #ffffff;
   --hero-to:       #f5faf6;
+
+  /* Remaining design tokens that were still inheriting their DARK :root values
+     in light mode (raised surface, subtle hairline, float shadow, the login
+     token group). Filling them completes the light palette so every token the
+     app reads flips, not just the ambient backgrounds. */
+  --surface-raised: #ffffff;
+  --border-subtle:  rgba(15,23,42,0.04);
+  --shadow-float:   0 12px 32px rgba(16,24,40,0.12), 0 2px 8px rgba(16,24,40,0.06);
+
+  /* Login token group - the auth card is a light elevated panel in light mode,
+     so its text must be dark and its input surfaces light. */
+  --login-card-bg:      #ffffff;
+  --login-card-border:  rgba(22,163,74,0.22);
+  --login-card-shadow:  0 0 60px rgba(22,163,74,0.08), 0 24px 70px rgba(0,0,0,0.1);
+  --login-text:         #0f172a;
+  --login-text-dim:     rgba(15,23,42,0.55);
+  --login-input-bg:     #ffffff;
+  --login-input-border: rgba(22,163,74,0.2);
 }
 
 html.light body {
@@ -1070,6 +1088,61 @@ html.light [class*="text-gray-200"],
 html.light [class*="text-gray-300"] { color: #1e293b !important; }
 html.light [class*="text-gray-400"],
 html.light [class*="text-gray-500"] { color: #475569 !important; }
+
+/* ─── Light theme: deeper utility coverage ──────────────────────────────────
+   The substring block above catches gray/slate surfaces, text and gradients.
+   These rules close the remaining raw dark utilities so themed screens flip
+   fully (not just their backgrounds). Semantic status hues (red/green/amber/
+   blue/purple/teal for badges + severity) are deliberately NOT touched here. */
+
+/* Solid black surface (NOT the black/opacity modal scrims, which stay dim). */
+html.light .bg-black { background-color: #ffffff !important; }
+
+/* Light slate text tokens read as light text on dark; darken for white ground. */
+html.light .text-slate-100,
+html.light .text-slate-200 { color: #1e293b !important; }
+
+/* Mid-gray fills (toggles, avatars, chips) become a neutral light slate. */
+html.light .bg-gray-600,
+html.light .bg-gray-500 { background-color: #e2e8f0 !important; }
+
+/* Faint white raised sub-panels layered on dark cards become faint slate tints
+   so the raised hierarchy survives on a light surface. */
+html.light .bg-white\/2  { background-color: rgba(15,23,42,0.02) !important; }
+html.light .bg-white\/5  { background-color: rgba(15,23,42,0.03) !important; }
+html.light .bg-white\/10 { background-color: rgba(15,23,42,0.05) !important; }
+
+/* Hairline white borders (dividers, card edges) become subtle slate hairlines. */
+html.light .border-white\/3,
+html.light .border-white\/8,
+html.light .border-white\/10 { border-color: rgba(15,23,42,0.08) !important; }
+
+/* Divide utilities (all opacity variants + slate + white) - the child-border
+   dividers were invisible white/dark hairlines on a light surface. */
+html.light [class*="divide-gray-800"] > * + *,
+html.light [class*="divide-gray-700"] > * + *,
+html.light [class*="divide-slate-800"] > * + *,
+html.light [class*="divide-slate-700"] > * + * { border-color: rgba(15,23,42,0.10) !important; }
+html.light [class*="divide-white"] > * + * { border-color: rgba(15,23,42,0.08) !important; }
+
+/* Dark focus/ring hues on a light surface. */
+html.light .ring-gray-900,
+html.light .ring-gray-800 { --tw-ring-color: rgba(15,23,42,0.10) !important; }
+
+/* Slate borders not caught by the 800/700 substring block. */
+html.light .border-slate-600 { border-color: rgba(15,23,42,0.14) !important; }
+
+/* Code / mono blocks: light chip surface + dark ink. Applies only to the
+   element itself so syntax-token child spans keep their colours, and any raw
+   bg-* / text-* utility (mapped !important above) still wins. */
+html.light pre,
+html.light code,
+html.light kbd,
+html.light samp {
+  background-color: #f1f5f9 !important;
+  color: #0f172a;
+}
+html.light pre code { background-color: transparent !important; }
 
 /* ─── Design System Utility Extensions ─────────────────────────────────────── */
 @layer utilities {

@@ -139,24 +139,34 @@ export function ThemeProvider({ children }) {
 
   const setAccent = useCallback((v) => setAccentRaw(v ? normHex(v) : ''), [])
   const toggleTheme = useCallback(() => setMode(isDark ? 'light' : 'dark'), [isDark])
+  // `setTheme` is the mode setter with a guard so only valid modes are accepted.
+  const setTheme = useCallback((m) => {
+    if (m === 'light' || m === 'dark' || m === 'system') setMode(m)
+  }, [])
   const reset = useCallback(() => {
     setMode('system'); setAccentRaw(''); setDensity('comfortable'); setReducedMotion(false)
   }, [])
 
+  const resolvedTheme = isDark ? 'dark' : 'light'
+
   const value = useMemo(() => ({
     // legacy shape
-    theme: isDark ? 'dark' : 'light', isDark, toggleTheme,
+    theme: resolvedTheme, isDark, toggleTheme,
+    // canonical theme API: `theme` selection ('dark'|'light'|'system') via `mode`,
+    // `resolvedTheme` = what is actually applied, `setTheme`/`toggleTheme` mutate it.
+    resolvedTheme, setTheme,
     // appearance
     mode, setMode, accent, setAccent, density, setDensity, reducedMotion, setReducedMotion,
     reset, presets: ACCENT_PRESETS, modes: THEME_MODES, densities: DENSITIES,
     isCustomAccent: !!accent, isDefaultAppearance: mode === 'system' && !accent && density === 'comfortable' && !reducedMotion,
-  }), [isDark, toggleTheme, mode, setMode, accent, setAccent, density, reducedMotion, reset])
+  }), [resolvedTheme, isDark, toggleTheme, setTheme, mode, setMode, accent, setAccent, density, reducedMotion, reset])
 
   return <AppearanceContext.Provider value={value}>{children}</AppearanceContext.Provider>
 }
 
 const FALLBACK = {
-  theme: 'dark', isDark: true, toggleTheme: () => {}, mode: 'system', setMode: () => {},
+  theme: 'dark', resolvedTheme: 'dark', isDark: true, toggleTheme: () => {}, setTheme: () => {},
+  mode: 'system', setMode: () => {},
   accent: '', setAccent: () => {}, density: 'comfortable', setDensity: () => {},
   reducedMotion: false, setReducedMotion: () => {}, reset: () => {},
   presets: ACCENT_PRESETS, modes: THEME_MODES, densities: DENSITIES,

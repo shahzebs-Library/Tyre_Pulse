@@ -11,7 +11,6 @@ import { ACCESS_ROLES } from '../lib/moduleCatalog'
 const BUILTIN_NAV_ROLES = new Set([...ACCESS_ROLES, 'Maintenance Supervisor', 'Store Keeper'])
 const isCustomNavRole = (role) => !!role && !BUILTIN_NAV_ROLES.has(role)
 import { useSettings, COUNTRIES, COUNTRY_LABEL } from '../contexts/SettingsContext'
-import { useTheme } from '../contexts/ThemeContext'
 import {
   LayoutDashboard, CircleDot, Package, DollarSign,
   ClipboardList, Search, Upload, Settings, LogOut,
@@ -69,6 +68,7 @@ import NotificationCenter from './NotificationCenter'
 import GlobalSearch from './GlobalSearch'
 import MobileBottomNav from './MobileBottomNav'
 import LanguageSwitcher from './LanguageSwitcher'
+import ThemeToggle from './ui/ThemeToggle'
 import { useLanguage } from '../contexts/LanguageContext'
 import OnboardingWizard from './OnboardingWizard'
 import CommandPalette from './CommandPalette'
@@ -512,6 +512,10 @@ function TyreManShell({ children, alertCount }) {
             </button>
           )}
           <LanguageSwitcher />
+          <ThemeToggle
+            size={15}
+            className="w-7 h-7 flex items-center justify-center rounded-lg text-gray-500 hover:text-green-600 transition-colors hover:bg-green-500/10"
+          />
           <NavLink
             to="/alerts"
             className="relative w-7 h-7 flex items-center justify-center rounded-lg transition-colors"
@@ -627,7 +631,6 @@ export default function Layout({ children }) {
   const customAppIcon = resolveBrandLogo(branding, 'app_icon')
   const appIcon = customAppIcon || TpLogo
   const { activeCountry, setActiveCountry } = useSettings()
-  const { theme, toggleTheme }              = useTheme()
   const navigate     = useNavigate()
   const location     = useLocation()
 
@@ -1130,13 +1133,10 @@ export default function Layout({ children }) {
 
             {/* actions */}
             <div className="flex items-center gap-0.5 flex-shrink-0">
-              <button
-                onClick={toggleTheme}
-                title={theme === 'dark' ? 'Light mode' : 'Dark mode'}
+              <ThemeToggle
+                size={13}
                 className="w-7 h-7 flex items-center justify-center rounded-lg text-gray-600 hover:text-green-400 transition-all duration-200 hover:bg-green-400/10"
-              >
-                {theme === 'dark' ? <Sun size={13} /> : <Moon size={13} />}
-              </button>
+              />
               <NotificationCenter />
               <button
                 onClick={handleSignOut}
@@ -1194,6 +1194,11 @@ export default function Layout({ children }) {
           >
             <Search size={16} />
           </button>
+
+          <ThemeToggle
+            size={16}
+            className="w-8 h-8 flex items-center justify-center rounded-xl text-gray-500 active:text-green-400 hover:text-green-400 transition-colors"
+          />
 
           <button
             onClick={() => navigate('/alerts')}

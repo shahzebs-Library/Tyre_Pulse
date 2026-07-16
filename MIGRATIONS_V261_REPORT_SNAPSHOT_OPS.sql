@@ -1,0 +1,6 @@
+-- MIGRATIONS_V261_REPORT_SNAPSHOT_OPS.sql (applied live) - extend get_report_snapshot
+-- with an `ops` object for the public TV share: work_orders_open, job_cards_today,
+-- tyre_changes_today, inspections_today, accidents_today, alerts_critical, pm_overdue,
+-- pm_due_soon, open_job_cards[] (wo_no/asset_no/status/site/priority/work_type, top 14),
+-- pm_due_list[] (name/asset_no/next_due/priority, soonest 14). Org-scoped aggregates
+-- only (org derived from the token row); no PII. Next free migration V262.

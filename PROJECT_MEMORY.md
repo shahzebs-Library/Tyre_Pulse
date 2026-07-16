@@ -284,7 +284,7 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
   0 remain. inspections lock trigger bypassed around its backfill and restored (both back to 'O').
   EXCLUDED: `profiles.site` (guarded privileged column via trg_guard_profile_privileged + user scoping; 0 rows
   off-canonical; a normalize trigger there could race the guard's self-edit "site changed?" check) and pure
-  log/telemetry/audit tables (site not a report grouper there). Next free migration **V247**.
+  log/telemetry/audit tables (site not a report grouper there). Next free migration **V248** (see V247 below).
 - **DEEPER ISSUE SURFACED, NOT YET FIXED — site vocabulary reconciliation (needs USER sign-off):** casing is
   now clean but `tyre_records` uses a `<CODE>-ST` convention while `vehicle_fleet`/accidents/inspections use
   plain site/gate names, so the SAME physical site is recorded under different codes. High-confidence same-site
@@ -293,6 +293,17 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
   QIDDIYA-ST vs QIDDIYA-UPPER/LOWER PLATEAU; RIY-MET-ST vs METRO. RULE: this is a SEMANTIC merge, not a casing
   fix — build a confirmed `site_aliases` canonical map (alias->canonical) applied via the normalize trigger,
   only AFTER the user confirms the mapping. Do NOT collapse -ST codes blindly.
+  **RESOLVED by V247 (2026-07-16):** user delegated the call. `public.site_aliases` (alias PK -> canonical,
+  authenticated-read RLS) now holds the confirmed HIGH-CONFIDENCE merges: NHC-ST->NHC; REDSEA-ST/REDSEA->RED SEA;
+  KSP_TP-ST->KSP-TP; DHABAN-ST->DHAHBAN; AMALA-ST/AMALA->AMAALA (canonical = master vehicle_fleet spelling).
+  `normalize_site()` is now SECURITY DEFINER and, after casing-normalizing, maps NEW.site through site_aliases,
+  so future imports self-correct. Backfilled all 24 tables (0 alias rows remain; NHC now 735, RED SEA 140,
+  AMAALA 89, KSP-TP 68, DHAHBAN 154). AMBIGUOUS gate/plateau codes PRESERVED (NOT merged): DIRIYAH-ST vs
+  DIRIYAH-G1/G2, QIDDIYA-ST vs QIDDIYA-UPPER/LOWER PLATEAU, RIY-MET-ST vs METRO (vehicle_fleet lists these as
+  distinct sites). RULE: to add a future site merge, INSERT into site_aliases (alias must be UPPER/trimmed) and
+  the trigger applies it on next write; backfill existing rows with `UPDATE <t> SET site=sa.canonical FROM
+  site_aliases sa WHERE <t>.site=sa.alias` (disable/enable inspections lock around its update). Next free
+  migration **V248**.
 
 ### V245 — vehicle_type casing normalized (applied LIVE 2026-07-16)
 - Mixed casing ("TR-MIXER" vs "Tr-Mixer", "PUMPS" vs "Pumps", "Bus" vs "BUS", etc.) split the SAME vehicle

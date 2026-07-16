@@ -354,8 +354,19 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
     breakdowns{severity,accidents_by_site,tyres_by_site,claim_status}}` or `{ok:false, reason:'invalid'|
     'revoked'|'expired'|'password'|'unavailable'}`. Next free migration **V253**.
 - **Service (single source, do NOT re-query these tables elsewhere):** `src/lib/api/reportShares.js` -
-  REPORT_PAGES/DEFAULT_PAGES, listReportShares, createReportShare, revokeReportShare, getReportSnapshot
-  (anon-callable), buildShareUrl(token) -> `${origin}/report/${token}`.
+  REPORT_PAGES/PAGE_GROUPS/DEFAULT_PAGES, listReportShares, createReportShare, **updateReportShare** (edit in
+  place, keeps the SAME token/link), revokeReportShare, getReportSnapshot (anon-callable), buildShareUrl(token)
+  -> `${origin}/report/${token}`.
+- **Edit-in-place (2026-07-16):** the panel's pencil action loads a share into the same form and saves via
+  `updateReportShare(id, {name,pages,rotate,refresh})` = a direct RLS-gated `report_shares` UPDATE (policy
+  report_shares_update = is_elevated_user() AND own-org; the table CHECKs re-clamp rotate 5..600 / refresh
+  30..3600). NO migration/RPC needed. Password + expiry are intentionally NOT editable (revoke + recreate to
+  change those) so no bcrypt/expiry re-hash path is exposed client-side. Editing reconfigures the rotating
+  "playlist" without minting a new URL.
+- **Known data gaps (do NOT build public pages on these - they are empty/thin, would be dishonest):**
+  `tyre_records.brand` is 100% blank across all 1419 rows (no brand breakdown page); accidents carry asset_no
+  but only 25 incidents / 2 repeat-offenders (a "top assets" chart is real but low-signal). This is why the
+  public board is accident/claims/site/spend based, not brand/CPK based.
 - **Public viewer = `src/pages/ReportShare.jsx`** at route `/report/:token` (App.jsx, ANON, sibling of
   `/display/:token`, OUTSIDE ProtectedRoute). Forced LIGHT via the `.tp-report-paper` wrapper technique;
   auto-rotates every `rotate_seconds` (default 30) through ONLY the creator-chosen `snapshot.pages`; silently

@@ -11,6 +11,7 @@ import * as SplashScreen from 'expo-splash-screen'
 import Ionicons from '@expo/vector-icons/Ionicons'
 import { AuthProvider } from '../contexts/AuthContext'
 import { LanguageProvider } from '../contexts/LanguageContext'
+import { ThemeProvider } from '../contexts/ThemeContext'
 import { ErrorBoundary } from '../components/ErrorBoundary'
 import {
   setupNotificationChannels,
@@ -58,11 +59,13 @@ function RootLayout() {
     <ErrorBoundary>
       <GestureHandlerRootView style={{ flex: 1 }}>
         <SafeAreaProvider>
-          <LanguageProvider>
-            <AuthProvider>
-              <Stack screenOptions={{ headerShown: false }} />
-            </AuthProvider>
-          </LanguageProvider>
+          <ThemeProvider>
+            <LanguageProvider>
+              <AuthProvider>
+                <Stack screenOptions={{ headerShown: false }} />
+              </AuthProvider>
+            </LanguageProvider>
+          </ThemeProvider>
         </SafeAreaProvider>
       </GestureHandlerRootView>
     </ErrorBoundary>

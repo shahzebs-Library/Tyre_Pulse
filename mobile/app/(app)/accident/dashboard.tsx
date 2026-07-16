@@ -5,34 +5,54 @@
  * search, filterable accident list. Tap any report to open the detail view.
  */
 
-import { useState, useCallback, useEffect, useRef } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import {
-  View, Text, ScrollView, TouchableOpacity, StyleSheet,
-  RefreshControl, StatusBar, ActivityIndicator, TextInput,
+  View, ScrollView, TouchableOpacity, StyleSheet,
+  RefreshControl, TextInput,
 } from 'react-native'
-import { SafeAreaView } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
 import { useAuth } from '../../../contexts/AuthContext'
 import { useLanguage } from '../../../contexts/LanguageContext'
+import { useTheme } from '../../../contexts/ThemeContext'
 import { supabase } from '../../../lib/supabase'
 import { useRoleGuard } from '../../../hooks/useRoleGuard'
+import { spacing, radius, statusColor, StatusKind } from '../../../lib/theme'
 import {
-  AccidentRecord, AccidentSeverity,
-  SEVERITY_COLORS, STATUS_COLORS,
+  Screen, Card, AppText, Button, Badge, StatTile, EmptyState, Loading,
+} from '../../../components/ui'
+import {
+  AccidentRecord, AccidentSeverity, AccidentStatus,
   SEVERITY_ICONS, STATUS_ICONS,
   isAdminOrAbove,
 } from '../../../lib/types'
 
 type FilterTab = 'all' | 'mine'
+type IconName = React.ComponentProps<typeof Ionicons>['name']
 
 const SEVERITY_ORDER: AccidentSeverity[] = ['minor', 'moderate', 'severe', 'fatal']
+
+// Semantic mapping: preserve the MEANING of severity/status while sourcing the
+// actual colours from the theme status kinds (sunlight-tuned).
+const SEVERITY_KIND: Record<AccidentSeverity, StatusKind> = {
+  minor:    'success',
+  moderate: 'warning',
+  severe:   'critical',
+  fatal:    'danger',
+}
+const STATUS_KIND: Record<AccidentStatus, StatusKind> = {
+  reported:     'info',
+  under_review: 'warning',
+  closed:       'neutral',
+}
 
 export default function AccidentDashboardScreen() {
   const { allowed, loading: guardLoading } = useRoleGuard(['admin', 'manager', 'director', 'inspector'])
   const { profile } = useAuth()
   const { t, isRTL } = useLanguage()
+  const { theme } = useTheme()
   const router = useRouter()
+  const c = theme.color
 
   const [accidents, setAccidents]   = useState<AccidentRecord[]>([])
   const [sites, setSites]           = useState<string[]>([])
@@ -107,105 +127,116 @@ export default function AccidentDashboardScreen() {
 
   if (guardLoading || !allowed || loading) {
     return (
-      <SafeAreaView style={styles.safe}>
-        <StatusBar barStyle="dark-content" backgroundColor="#fff5f5" />
-        <View style={styles.loader}><ActivityIndicator size="large" color="#dc2626" /></View>
-      </SafeAreaView>
+      <Screen>
+        <Loading />
+      </Screen>
     )
   }
 
   return (
-    <SafeAreaView style={styles.safe}>
-      <StatusBar barStyle="dark-content" backgroundColor="#fff5f5" />
-
+    <Screen>
       {/* ── Header ──────────────────────────────────────────────────────────── */}
-      <View style={[styles.header, isRTL && { flexDirection: 'row-reverse' }]}>
+      <View
+        style={[
+          styles.header,
+          { backgroundColor: c.surface, borderBottomColor: c.border },
+          isRTL && { flexDirection: 'row-reverse' },
+        ]}
+      >
         <View style={{ flex: 1 }}>
-          <Text style={[styles.headerTitle, { textAlign }]}>{t('accident.dashboardTitle')}</Text>
-          <Text style={[styles.headerSub, { textAlign }]}>
+          <AppText variant="h2" style={{ textAlign }}>{t('accident.dashboardTitle')}</AppText>
+          <AppText variant="caption" color="secondary" style={{ textAlign, marginTop: 2 }}>
             {elevated
               ? siteFilter === 'all' ? 'All Sites' : siteFilter
               : profile?.site ?? 'My Site'
             }
-            {elevated ? <Text style={styles.adminTag}>  ·  Admin View</Text> : null}
-          </Text>
+            {elevated ? <AppText variant="caption" color="danger">  :  Admin View</AppText> : null}
+          </AppText>
         </View>
-        <TouchableOpacity
-          style={styles.reportBtn}
+        <Button
+          label={t('accident.reportNew')}
+          icon="add-circle"
+          size="sm"
+          variant="danger"
           onPress={() => router.push('/(app)/accident/report')}
-          activeOpacity={0.8}
-        >
-          <Ionicons name="add-circle" size={18} color="#fff" />
-          <Text style={styles.reportBtnText}>{t('accident.reportNew')}</Text>
-        </TouchableOpacity>
+        />
       </View>
 
       <ScrollView
         style={styles.scroll}
         contentContainerStyle={styles.content}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#dc2626" />}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={c.primary} />}
         keyboardShouldPersistTaps="handled"
       >
-        {/* ── KPI cards ───────────────────────────────────────────────────── */}
+        {/* ── KPI tiles ───────────────────────────────────────────────────── */}
         <View style={styles.kpiRow}>
-          <KpiCard label={t('accident.stats.total')}     value={total}     color="#0f172a" />
-          <KpiCard label={t('accident.stats.open')}      value={open}      color="#f59e0b" />
-          <KpiCard label={t('accident.stats.thisMonth')} value={thisMonth} color="#3b82f6" />
-          <KpiCard label={t('accident.stats.critical')}  value={critical}  color="#dc2626" />
+          <StatTile label={t('accident.stats.total')}     value={total}     icon="documents-outline" tint="slate" />
+          <StatTile label={t('accident.stats.open')}      value={open}      icon="time-outline"      tint="amber" />
+          <StatTile label={t('accident.stats.thisMonth')} value={thisMonth} icon="calendar-outline"  tint="blue" />
+          <StatTile label={t('accident.stats.critical')}  value={critical}  icon="warning-outline"   tint="red" />
         </View>
 
         {/* ── Severity breakdown ──────────────────────────────────────────── */}
-        <View style={styles.severityCard}>
-          <Text style={styles.sectionTitle}>Severity Breakdown</Text>
+        <Card padded>
+          <AppText variant="title">Severity Breakdown</AppText>
           <View style={styles.severityBreakdown}>
             {SEVERITY_ORDER.map(sev => {
-              const count = bySeverity[sev]
-              const pct   = total > 0 ? count / total : 0
+              const count   = bySeverity[sev]
+              const pct     = total > 0 ? count / total : 0
+              const sevBase = statusColor(theme, SEVERITY_KIND[sev]).base
               return (
                 <View key={sev} style={styles.sevRow}>
-                  <Text style={styles.sevLabel}>{t(`accident.severities.${sev}`)}</Text>
-                  <View style={styles.sevBarTrack}>
+                  <AppText variant="caption" color="secondary" style={styles.sevLabel}>
+                    {t(`accident.severities.${sev}`)}
+                  </AppText>
+                  <View style={[styles.sevBarTrack, { backgroundColor: c.surfaceSunken }]}>
                     <View
                       style={[
                         styles.sevBarFill,
-                        { width: `${Math.round(pct * 100)}%`, backgroundColor: SEVERITY_COLORS[sev] },
+                        { width: `${Math.round(pct * 100)}%`, backgroundColor: sevBase },
                       ]}
                     />
                   </View>
-                  <Text style={[styles.sevCount, { color: SEVERITY_COLORS[sev] }]}>{count}</Text>
+                  <AppText variant="bodyStrong" style={[styles.sevCount, { color: sevBase }]}>{count}</AppText>
                 </View>
               )
             })}
           </View>
-        </View>
+        </Card>
 
         {/* ── Admin: site filter chips ─────────────────────────────────────── */}
         {elevated && sites.length > 1 && (
           <View>
-            <Text style={styles.sectionLabel}>Filter by Site</Text>
+            <AppText variant="label" color="muted" style={styles.sectionLabel}>Filter by Site</AppText>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.siteScroll}>
-              {['all', ...sites].map(s => (
-                <TouchableOpacity
-                  key={s}
-                  style={[styles.siteChip, siteFilter === s && styles.siteChipActive]}
-                  onPress={() => setSiteFilter(s)}
-                >
-                  <Text style={[styles.siteChipText, siteFilter === s && styles.siteChipTextActive]}>
-                    {s === 'all' ? 'All Sites' : s}
-                  </Text>
-                </TouchableOpacity>
-              ))}
+              {['all', ...sites].map(s => {
+                const active = siteFilter === s
+                return (
+                  <TouchableOpacity
+                    key={s}
+                    style={[
+                      styles.siteChip,
+                      { backgroundColor: active ? c.primary : c.surface, borderColor: active ? c.primary : c.border },
+                    ]}
+                    onPress={() => setSiteFilter(s)}
+                  >
+                    <AppText variant="caption" style={{ color: active ? c.onPrimary : c.textMuted }}>
+                      {s === 'all' ? 'All Sites' : s}
+                    </AppText>
+                  </TouchableOpacity>
+                )
+              })}
             </ScrollView>
           </View>
         )}
 
         {/* ── Search bar ───────────────────────────────────────────────────── */}
-        <View style={styles.searchRow}>
-          <Ionicons name="search-outline" size={16} color="#94a3b8" />
+        <View style={[styles.searchRow, { backgroundColor: c.surface, borderColor: c.border }]}>
+          <Ionicons name="search-outline" size={16} color={c.textMuted} />
           <TextInput
-            style={styles.searchInput}
+            style={[styles.searchInput, { color: c.text }]}
             placeholder="Search asset, site, type, reporter..."
-            placeholderTextColor="#94a3b8"
+            placeholderTextColor={c.textMuted}
             value={search}
             onChangeText={setSearch}
             returnKeyType="search"
@@ -213,44 +244,46 @@ export default function AccidentDashboardScreen() {
           />
           {search.length > 0 && (
             <TouchableOpacity onPress={() => setSearch('')}>
-              <Ionicons name="close-circle" size={16} color="#94a3b8" />
+              <Ionicons name="close-circle" size={16} color={c.textMuted} />
             </TouchableOpacity>
           )}
         </View>
 
         {/* ── Filter tabs ─────────────────────────────────────────────────── */}
         <View style={styles.filterRow}>
-          {(['all', 'mine'] as FilterTab[]).map(tab => (
-            <TouchableOpacity
-              key={tab}
-              style={[styles.filterTab, filterTab === tab && styles.filterTabActive]}
-              onPress={() => setFilterTab(tab)}
-            >
-              <Text style={[styles.filterTabText, filterTab === tab && styles.filterTabTextActive]}>
-                {tab === 'all' ? t('accident.filterAll') : t('accident.filterMine')}
-              </Text>
-            </TouchableOpacity>
-          ))}
+          {(['all', 'mine'] as FilterTab[]).map(tab => {
+            const active = filterTab === tab
+            return (
+              <TouchableOpacity
+                key={tab}
+                style={[
+                  styles.filterTab,
+                  { backgroundColor: active ? c.primary : c.surface, borderColor: active ? c.primary : c.border },
+                ]}
+                onPress={() => setFilterTab(tab)}
+              >
+                <AppText variant="bodyStrong" style={{ color: active ? c.onPrimary : c.textMuted }}>
+                  {tab === 'all' ? t('accident.filterAll') : t('accident.filterMine')}
+                </AppText>
+              </TouchableOpacity>
+            )
+          })}
         </View>
 
         {/* ── Result count ─────────────────────────────────────────────────── */}
         {q.length > 0 && (
-          <Text style={styles.resultCount}>
+          <AppText variant="caption" color="muted">
             {filtered.length} result{filtered.length !== 1 ? 's' : ''} for "{search}"
-          </Text>
+          </AppText>
         )}
 
         {/* ── Accident list ─────────────────────────────────────────────────── */}
         {filtered.length === 0 ? (
-          <View style={styles.empty}>
-            <Ionicons name="shield-outline" size={52} color="#fca5a5" />
-            <Text style={styles.emptyTitle}>
-              {q ? 'No matching reports' : t('accident.noAccidents')}
-            </Text>
-            <Text style={styles.emptyHint}>
-              {q ? 'Try a different search term' : t('accident.noAccidentsHint')}
-            </Text>
-          </View>
+          <EmptyState
+            icon="shield-outline"
+            title={q ? 'No matching reports' : t('accident.noAccidents')}
+            message={q ? 'Try a different search term' : t('accident.noAccidentsHint')}
+          />
         ) : (
           filtered.map(acc => (
             <AccidentCard
@@ -263,17 +296,7 @@ export default function AccidentDashboardScreen() {
           ))
         )}
       </ScrollView>
-    </SafeAreaView>
-  )
-}
-
-// ── KPI Card ───────────────────────────────────────────────────────────────────
-function KpiCard({ label, value, color }: { label: string; value: number; color: string }) {
-  return (
-    <View style={[styles.kpiCard, { borderTopColor: color }]}>
-      <Text style={[styles.kpiValue, { color }]}>{value}</Text>
-      <Text style={styles.kpiLabel}>{label}</Text>
-    </View>
+    </Screen>
   )
 }
 
@@ -286,192 +309,139 @@ function AccidentCard({
   t: (k: string) => string
   showReporter: boolean
 }) {
-  const sevColor    = SEVERITY_COLORS[accident.severity]
-  const statusColor = STATUS_COLORS[accident.status]
+  const { theme } = useTheme()
+  const c = theme.color
+  const sevBase = statusColor(theme, SEVERITY_KIND[accident.severity]).base
 
   return (
-    <TouchableOpacity style={styles.accCard} onPress={onPress} activeOpacity={0.75}>
-      <View style={[styles.accStrip, { backgroundColor: sevColor }]} />
+    <Card onPress={onPress} padded={false} accent={sevBase} style={styles.accCard}>
       <View style={styles.accContent}>
         <View style={styles.accTopRow}>
           <View style={{ flex: 1 }}>
-            <Text style={styles.accAsset} numberOfLines={1}>
+            <AppText variant="bodyStrong" numberOfLines={1}>
               {accident.asset_no}
-              <Text style={styles.accSite}>  ·  {accident.site}</Text>
-            </Text>
-            <Text style={styles.accType}>{t(`accident.types.${accident.accident_type}`)}</Text>
+              <AppText variant="caption" color="secondary">  :  {accident.site}</AppText>
+            </AppText>
+            <AppText variant="caption" color="secondary" style={{ marginTop: 2 }}>
+              {t(`accident.types.${accident.accident_type}`)}
+            </AppText>
           </View>
-          <View style={[styles.accSeverityBadge, { backgroundColor: sevColor + '20', borderColor: sevColor + '50' }]}>
-            <Ionicons name={SEVERITY_ICONS[accident.severity] as any} size={12} color={sevColor} />
-            <Text style={[styles.accSeverityText, { color: sevColor }]}>
-              {t(`accident.severities.${accident.severity}`)}
-            </Text>
-          </View>
+          <Badge
+            kind={SEVERITY_KIND[accident.severity]}
+            icon={SEVERITY_ICONS[accident.severity] as IconName}
+          >
+            {t(`accident.severities.${accident.severity}`)}
+          </Badge>
         </View>
 
         <View style={styles.accBottomRow}>
           <View style={styles.accMeta}>
-            <Ionicons name="calendar-outline" size={12} color="#94a3b8" />
-            <Text style={styles.accMetaText}>{accident.incident_date}</Text>
+            <Ionicons name="calendar-outline" size={12} color={c.textMuted} />
+            <AppText variant="micro" color="muted">{accident.incident_date}</AppText>
           </View>
           {accident.location ? (
             <View style={styles.accMeta}>
-              <Ionicons name="location-outline" size={12} color="#94a3b8" />
-              <Text style={styles.accMetaText} numberOfLines={1}>{accident.location}</Text>
+              <Ionicons name="location-outline" size={12} color={c.textMuted} />
+              <AppText variant="micro" color="muted" numberOfLines={1}>{accident.location}</AppText>
             </View>
           ) : null}
           {accident.injuries && (
             <View style={styles.accMeta}>
-              <Ionicons name="medical-outline" size={12} color="#dc2626" />
-              <Text style={[styles.accMetaText, { color: '#dc2626' }]}>
+              <Ionicons name="medical-outline" size={12} color={c.danger.base} />
+              <AppText variant="micro" color="danger">
                 {accident.injury_count} {t('accident.injuries')}
-              </Text>
+              </AppText>
             </View>
           )}
-          <View style={[styles.accStatusBadge, { backgroundColor: statusColor + '20' }]}>
-            <Ionicons name={STATUS_ICONS[accident.status] as any} size={11} color={statusColor} />
-            <Text style={[styles.accStatusText, { color: statusColor }]}>
-              {t(`accident.statuses.${accident.status}`)}
-            </Text>
-          </View>
+          <Badge
+            kind={STATUS_KIND[accident.status]}
+            icon={STATUS_ICONS[accident.status] as IconName}
+          >
+            {t(`accident.statuses.${accident.status}`)}
+          </Badge>
         </View>
 
         {/* Admin/manager: show reporter + photo count inline */}
         {showReporter && accident.reporter_name ? (
           <View style={styles.reporterRow}>
-            <Ionicons name="person-outline" size={11} color="#94a3b8" />
-            <Text style={styles.reporterText}>{accident.reporter_name}</Text>
+            <Ionicons name="person-outline" size={11} color={c.textMuted} />
+            <AppText variant="micro" color="muted">{accident.reporter_name}</AppText>
             {accident.photos?.length > 0 && (
               <>
-                <View style={styles.reporterDot} />
-                <Ionicons name="images-outline" size={11} color="#94a3b8" />
-                <Text style={styles.reporterText}>{accident.photos.length} photos</Text>
+                <View style={[styles.reporterDot, { backgroundColor: c.borderStrong }]} />
+                <Ionicons name="images-outline" size={11} color={c.textMuted} />
+                <AppText variant="micro" color="muted">{accident.photos.length} photos</AppText>
               </>
             )}
           </View>
         ) : (
           accident.photos?.length > 0 && (
-            <View style={styles.accPhotoMeta}>
-              <Ionicons name="images-outline" size={12} color="#94a3b8" />
-              <Text style={styles.accMetaText}>{accident.photos.length} photos</Text>
+            <View style={styles.accMeta}>
+              <Ionicons name="images-outline" size={12} color={c.textMuted} />
+              <AppText variant="micro" color="muted">{accident.photos.length} photos</AppText>
             </View>
           )
         )}
       </View>
-      <Ionicons name="chevron-forward" size={16} color="#cbd5e1" />
-    </TouchableOpacity>
+      <Ionicons name="chevron-forward" size={16} color={c.textMuted} style={styles.accChevron} />
+    </Card>
   )
 }
 
 const styles = StyleSheet.create({
-  safe:    { flex: 1, backgroundColor: '#fff5f5' },
-  loader:  { flex: 1, alignItems: 'center', justifyContent: 'center' },
   scroll:  { flex: 1 },
-  content: { padding: 16, paddingBottom: 40, gap: 14 },
+  content: { padding: spacing.lg, paddingBottom: spacing['4xl'], gap: spacing.md },
 
   // Header
   header: {
     flexDirection: 'row', alignItems: 'center',
-    paddingHorizontal: 16, paddingVertical: 14,
-    backgroundColor: '#fff',
-    borderBottomWidth: 1, borderBottomColor: 'rgba(0,0,0,0.07)',
-    gap: 12,
+    paddingHorizontal: spacing.lg, paddingVertical: spacing.md,
+    borderBottomWidth: 1,
+    gap: spacing.md,
   },
-  headerTitle: { fontSize: 20, fontWeight: '800', color: '#0f172a' },
-  headerSub:   { fontSize: 12, color: '#64748b', marginTop: 2 },
-  adminTag:    { color: '#dc2626', fontWeight: '700' },
-
-  reportBtn: {
-    flexDirection: 'row', alignItems: 'center', gap: 6,
-    backgroundColor: '#dc2626',
-    paddingHorizontal: 14, paddingVertical: 9, borderRadius: 20,
-  },
-  reportBtnText: { fontSize: 12, fontWeight: '800', color: '#fff' },
 
   // KPI
-  kpiRow: { flexDirection: 'row', gap: 8 },
-  kpiCard: {
-    flex: 1, backgroundColor: '#fff', borderRadius: 12,
-    padding: 12, borderTopWidth: 3,
-    shadowColor: '#000', shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05, shadowRadius: 4, elevation: 2,
-    alignItems: 'center',
-  },
-  kpiValue: { fontSize: 22, fontWeight: '800' },
-  kpiLabel: { fontSize: 10, fontWeight: '600', color: '#94a3b8', marginTop: 2, textAlign: 'center' },
+  kpiRow: { flexDirection: 'row', gap: spacing.sm },
 
   // Severity breakdown
-  severityCard: {
-    backgroundColor: '#fff', borderRadius: 14, padding: 16,
-    shadowColor: '#000', shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05, shadowRadius: 4, elevation: 2, gap: 12,
-  },
-  sectionTitle:      { fontSize: 14, fontWeight: '700', color: '#0f172a' },
-  sectionLabel:      { fontSize: 12, fontWeight: '700', color: '#64748b', marginBottom: 8 },
-  severityBreakdown: { gap: 10 },
-  sevRow:     { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  sevLabel:   { fontSize: 12, fontWeight: '600', color: '#374151', width: 72 },
-  sevBarTrack:{ flex: 1, height: 8, backgroundColor: '#f1f5f9', borderRadius: 4, overflow: 'hidden' },
+  severityBreakdown: { gap: spacing.md, marginTop: spacing.md },
+  sectionLabel: { marginBottom: spacing.sm, textTransform: 'uppercase' },
+  sevRow:     { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  sevLabel:   { width: 72 },
+  sevBarTrack:{ flex: 1, height: 8, borderRadius: 4, overflow: 'hidden' },
   sevBarFill: { height: 8, borderRadius: 4, minWidth: 4 },
-  sevCount:   { fontSize: 13, fontWeight: '800', width: 24, textAlign: 'right' },
+  sevCount:   { width: 24, textAlign: 'right' },
 
   // Admin site filter
-  siteScroll: { marginHorizontal: -16, paddingHorizontal: 16 },
+  siteScroll: { marginHorizontal: -spacing.lg, paddingHorizontal: spacing.lg },
   siteChip: {
-    paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20,
-    backgroundColor: '#fff', borderWidth: 1.5, borderColor: '#e2e8f0', marginRight: 8,
+    paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderRadius: radius.pill,
+    borderWidth: 1.5, marginRight: spacing.sm,
   },
-  siteChipActive:    { backgroundColor: '#dc2626', borderColor: '#dc2626' },
-  siteChipText:      { fontSize: 12, fontWeight: '700', color: '#94a3b8' },
-  siteChipTextActive:{ color: '#fff' },
 
   // Search
   searchRow: {
     flexDirection: 'row', alignItems: 'center',
-    backgroundColor: '#fff', borderRadius: 12,
-    paddingHorizontal: 12, paddingVertical: 10,
-    borderWidth: 1.5, borderColor: '#e2e8f0', gap: 8,
+    borderRadius: radius.md,
+    paddingHorizontal: spacing.md, paddingVertical: spacing.sm + 2,
+    borderWidth: 1.5, gap: spacing.sm,
   },
-  searchInput: { flex: 1, fontSize: 13, color: '#0f172a', padding: 0 },
-  resultCount: { fontSize: 12, color: '#94a3b8', fontWeight: '600' },
+  searchInput: { flex: 1, fontSize: 13, padding: 0 },
 
   // Filter tabs
-  filterRow: { flexDirection: 'row', gap: 8 },
+  filterRow: { flexDirection: 'row', gap: spacing.sm },
   filterTab: {
-    flex: 1, paddingVertical: 9, borderRadius: 10,
-    backgroundColor: '#fff', borderWidth: 1.5, borderColor: '#e2e8f0', alignItems: 'center',
+    flex: 1, paddingVertical: spacing.sm + 1, borderRadius: radius.sm,
+    borderWidth: 1.5, alignItems: 'center',
   },
-  filterTabActive:     { backgroundColor: '#dc2626', borderColor: '#dc2626' },
-  filterTabText:       { fontSize: 13, fontWeight: '700', color: '#94a3b8' },
-  filterTabTextActive: { color: '#fff' },
 
   // Accident cards
-  accCard: {
-    flexDirection: 'row', alignItems: 'center',
-    backgroundColor: '#fff', borderRadius: 14, overflow: 'hidden',
-    shadowColor: '#000', shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05, shadowRadius: 4, elevation: 2,
-  },
-  accStrip:    { width: 4, alignSelf: 'stretch' },
-  accContent:  { flex: 1, padding: 14, gap: 8 },
-  accTopRow:   { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
-  accAsset:    { fontSize: 14, fontWeight: '800', color: '#0f172a' },
-  accSite:     { fontWeight: '400', color: '#64748b' },
-  accType:     { fontSize: 12, color: '#64748b', marginTop: 2 },
-  accSeverityBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8, borderWidth: 1 },
-  accSeverityText:  { fontSize: 11, fontWeight: '800' },
-  accBottomRow:     { flexDirection: 'row', flexWrap: 'wrap', gap: 8, alignItems: 'center' },
-  accMeta:          { flexDirection: 'row', alignItems: 'center', gap: 3 },
-  accMetaText:      { fontSize: 11, color: '#94a3b8' },
-  accStatusBadge:   { flexDirection: 'row', alignItems: 'center', gap: 3, paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6 },
-  accStatusText:    { fontSize: 10, fontWeight: '700' },
-  accPhotoMeta:     { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  reporterRow:      { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  reporterText:     { fontSize: 11, color: '#94a3b8' },
-  reporterDot:      { width: 3, height: 3, borderRadius: 2, backgroundColor: '#cbd5e1' },
-
-  // Empty
-  empty:      { alignItems: 'center', paddingVertical: 60, gap: 12 },
-  emptyTitle: { fontSize: 16, fontWeight: '700', color: '#374151' },
-  emptyHint:  { fontSize: 13, color: '#94a3b8', textAlign: 'center' },
+  accCard: { flexDirection: 'row', alignItems: 'center', overflow: 'hidden' },
+  accContent:  { flex: 1, padding: spacing.md, gap: spacing.sm },
+  accTopRow:   { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm },
+  accBottomRow:{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, alignItems: 'center' },
+  accMeta:     { flexDirection: 'row', alignItems: 'center', gap: 3 },
+  accChevron:  { marginRight: spacing.sm },
+  reporterRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
+  reporterDot: { width: 3, height: 3, borderRadius: 2 },
 })

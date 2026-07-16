@@ -19,6 +19,8 @@ import TyrePositionCard from '../../../components/TyrePositionCard'
 import TyreDetailModal from '../../../components/TyreDetailModal'
 import VehicleTyreDiagram from '../../../components/VehicleTyreDiagram'
 import { useRoleGuard } from '../../../hooks/useRoleGuard'
+import { useTheme } from '../../../contexts/ThemeContext'
+import { spacing, radius, elevation, Theme } from '../../../lib/theme'
 import {
   VehicleFleet, TyrePositionData, UserRole, GpsFix,
   getPositionsForVehicle, emptyTyrePosition,
@@ -32,6 +34,8 @@ type Step = 'header' | 'tyres' | 'submit'
 export default function NewInspectionScreen() {
   const { profile } = useAuth()
   const { t, isRTL } = useLanguage()
+  const { theme } = useTheme()
+  const styles = useMemo(() => makeStyles(theme), [theme])
   const router = useRouter()
   const params = useLocalSearchParams<{
     site?: string; asset?: string; tyreSerial?: string; tyrePosition?: string
@@ -405,20 +409,22 @@ export default function NewInspectionScreen() {
   if (!allowed) {
     return (
       <SafeAreaView style={[styles.safe, { justifyContent: 'center', alignItems: 'center' }]}>
-        <ActivityIndicator size="large" color="#16a34a" />
+        <ActivityIndicator size="large" color={theme.color.primary} />
       </SafeAreaView>
     )
   }
+
+  const statusBarStyle = theme.mode === 'dark' ? 'light-content' : 'dark-content'
 
   // ── Step: HEADER ───────────────────────────────────────────────────────────
   if (step === 'header') {
     return (
       <SafeAreaView style={styles.safe}>
-        <StatusBar barStyle="dark-content" backgroundColor="#f0f5f1" />
+        <StatusBar barStyle={statusBarStyle} backgroundColor={theme.color.bg} />
         <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
           <View style={[styles.nav, isRTL && styles.navRTL]}>
             <TouchableOpacity onPress={() => router.back()} style={styles.navBack}>
-              <Ionicons name={backIcon} size={22} color="#0f172a" />
+              <Ionicons name={backIcon} size={22} color={theme.color.text} />
             </TouchableOpacity>
             <Text style={styles.navTitle}>{t('inspection.navTitle')}</Text>
             <View style={styles.stepPills}>
@@ -445,7 +451,7 @@ export default function NewInspectionScreen() {
                   value={selectedSite}
                   onChangeText={v => { setSelectedSite(v); setSelectedVehicle(null) }}
                   placeholder="Type your site name..."
-                  placeholderTextColor="#94a3b8"
+                  placeholderTextColor={theme.color.textMuted}
                   autoCapitalize="words"
                 />
               ) : (
@@ -454,7 +460,7 @@ export default function NewInspectionScreen() {
                   onPress={() => { setSiteSearch(''); setSitePickerOpen(true) }}
                   activeOpacity={0.7}
                 >
-                  <Ionicons name="location-outline" size={18} color="#16a34a" />
+                  <Ionicons name="location-outline" size={18} color={theme.color.primary} />
                   <Text
                     style={[
                       styles.dropdownText,
@@ -465,7 +471,7 @@ export default function NewInspectionScreen() {
                   >
                     {selectedSite || t('inspection.siteSelectPlaceholder')}
                   </Text>
-                  <Ionicons name="chevron-down" size={18} color="#64748b" />
+                  <Ionicons name="chevron-down" size={18} color={theme.color.textMuted} />
                 </TouchableOpacity>
               )}
             </View>
@@ -478,29 +484,29 @@ export default function NewInspectionScreen() {
                 {!useManualEntry && (
                   <>
                     <View style={[styles.searchBox, isRTL && styles.searchBoxRTL]}>
-                      <Ionicons name="search-outline" size={18} color="#94a3b8" />
+                      <Ionicons name="search-outline" size={18} color={theme.color.textMuted} />
                       <TextInput
                         style={[styles.searchInput, { textAlign }]}
                         value={vehicleQuery}
                         onChangeText={setVehicleQuery}
                         placeholder={t('inspection.vehicleSearchPlaceholder')}
-                        placeholderTextColor="#94a3b8"
+                        placeholderTextColor={theme.color.textMuted}
                         autoCapitalize="characters"
                         autoCorrect={false}
                         returnKeyType="search"
                       />
                       {vehicleQuery.length > 0 && (
                         <TouchableOpacity onPress={() => setVehicleQuery('')}>
-                          <Ionicons name="close-circle" size={18} color="#cbd5e1" />
+                          <Ionicons name="close-circle" size={18} color={theme.color.borderStrong} />
                         </TouchableOpacity>
                       )}
                     </View>
 
                     {loadingVehicles ? (
-                      <ActivityIndicator size="small" color="#16a34a" style={{ marginTop: 10 }} />
+                      <ActivityIndicator size="small" color={theme.color.primary} style={{ marginTop: 10 }} />
                     ) : shownVehicles.length === 0 ? (
                       <View style={styles.vehicleEmpty}>
-                        <Ionicons name="car-outline" size={28} color="#cbd5e1" />
+                        <Ionicons name="car-outline" size={28} color={theme.color.borderStrong} />
                         <Text style={styles.vehicleEmptyText}>
                           {vehicleQuery ? t('inspection.vehicleNoMatch') : 'No vehicles registered for this site.'}
                         </Text>
@@ -509,7 +515,7 @@ export default function NewInspectionScreen() {
                             style={styles.manualEntryBtn}
                             onPress={() => setUseManualEntry(true)}
                           >
-                            <Ionicons name="pencil-outline" size={14} color="#16a34a" />
+                            <Ionicons name="pencil-outline" size={14} color={theme.color.primary} />
                             <Text style={styles.manualEntryText}>Enter asset manually</Text>
                           </TouchableOpacity>
                         )}
@@ -527,12 +533,12 @@ export default function NewInspectionScreen() {
                               <Ionicons
                                 name="bus-outline"
                                 size={20}
-                                color={selectedVehicle?.id === v.id ? '#fff' : '#16a34a'}
+                                color={selectedVehicle?.id === v.id ? theme.color.onPrimary : theme.color.primary}
                               />
-                              <Text style={[styles.vehicleCardAsset, selectedVehicle?.id === v.id && { color: '#fff' }]}>
+                              <Text style={[styles.vehicleCardAsset, selectedVehicle?.id === v.id && { color: theme.color.onPrimary }]}>
                                 {v.asset_no}
                               </Text>
-                              <Text style={[styles.vehicleCardType, selectedVehicle?.id === v.id && { color: 'rgba(255,255,255,0.75)' }]}>
+                              <Text style={[styles.vehicleCardType, selectedVehicle?.id === v.id && { color: theme.color.onPrimary, opacity: 0.75 }]}>
                                 {v.vehicle_type}
                               </Text>
                             </TouchableOpacity>
@@ -542,8 +548,8 @@ export default function NewInspectionScreen() {
                           style={styles.manualEntryBtn}
                           onPress={() => setUseManualEntry(true)}
                         >
-                          <Ionicons name="pencil-outline" size={14} color="#64748b" />
-                          <Text style={[styles.manualEntryText, { color: '#64748b' }]}>Not listed? Enter manually</Text>
+                          <Ionicons name="pencil-outline" size={14} color={theme.color.textMuted} />
+                          <Text style={[styles.manualEntryText, { color: theme.color.textMuted }]}>Not listed? Enter manually</Text>
                         </TouchableOpacity>
                       </>
                     )}
@@ -556,7 +562,7 @@ export default function NewInspectionScreen() {
                     <View style={styles.manualHeader}>
                       <Text style={styles.manualHeaderText}>Manual entry</Text>
                       <TouchableOpacity onPress={() => setUseManualEntry(false)}>
-                        <Text style={{ fontSize: 12, color: '#3b82f6', fontWeight: '600' }}>← Back to list</Text>
+                        <Text style={{ fontSize: 12, color: theme.color.info.base, fontWeight: '600' }}>← Back to list</Text>
                       </TouchableOpacity>
                     </View>
                     <TextInput
@@ -564,7 +570,7 @@ export default function NewInspectionScreen() {
                       value={manualAsset}
                       onChangeText={setManualAsset}
                       placeholder="Asset / Vehicle number (e.g. TRK-001)"
-                      placeholderTextColor="#94a3b8"
+                      placeholderTextColor={theme.color.textMuted}
                       autoCapitalize="characters"
                       autoCorrect={false}
                     />
@@ -573,7 +579,7 @@ export default function NewInspectionScreen() {
                         one-tap correction to the closest real asset if we found one. */}
                     {!manualAssetCheck.known && (
                       <View style={[styles.assetWarn, isRTL && styles.navRTL]}>
-                        <Ionicons name="alert-circle-outline" size={16} color="#b45309" />
+                        <Ionicons name="alert-circle-outline" size={16} color={theme.color.warning.on} />
                         <View style={{ flex: 1 }}>
                           <Text style={[styles.assetWarnText, { textAlign }]}>
                             {`"${manualAsset.trim().toUpperCase()}" isn't in the ${selectedSite} fleet — double-check the number.`}
@@ -615,7 +621,7 @@ export default function NewInspectionScreen() {
             {/* Selected vehicle summary */}
             {(selectedVehicle || (useManualEntry && manualAsset.trim())) && (
               <View style={[styles.vehicleInfo, isRTL && styles.vehicleInfoRTL]}>
-                <Ionicons name="bus-outline" size={18} color="#16a34a" />
+                <Ionicons name="bus-outline" size={18} color={theme.color.primary} />
                 <Text style={[styles.vehicleInfoText, { textAlign }]}>
                   {selectedVehicle
                     ? `${selectedVehicle.asset_no} · ${selectedVehicle.vehicle_type}${selectedVehicle.make ? ` · ${selectedVehicle.make}` : ''}`
@@ -631,7 +637,7 @@ export default function NewInspectionScreen() {
             <View style={styles.field}>
               <Text style={[styles.fieldLabel, { textAlign }]}>{t('inspection.inspectorLabel')}</Text>
               <View style={[styles.readonlyField, isRTL && styles.readonlyFieldRTL]}>
-                <Ionicons name="person-circle-outline" size={18} color="#16a34a" />
+                <Ionicons name="person-circle-outline" size={18} color={theme.color.primary} />
                 <Text style={[styles.readonlyText, { textAlign }]}>
                   {profile?.full_name ?? profile?.username ?? 'Unknown'}
                   {profile?.employee_id ? `  ·  ID: ${profile.employee_id}` : ''}
@@ -643,7 +649,7 @@ export default function NewInspectionScreen() {
             <View style={styles.field}>
               <Text style={[styles.fieldLabel, { textAlign }]}>{t('inspection.dateLabel')}</Text>
               <View style={[styles.readonlyField, isRTL && styles.readonlyFieldRTL]}>
-                <Ionicons name="calendar-outline" size={18} color="#16a34a" />
+                <Ionicons name="calendar-outline" size={18} color={theme.color.primary} />
                 <Text style={[styles.readonlyText, { textAlign }]}>
                   {new Date().toLocaleDateString(dateLocale, {
                     weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
@@ -660,7 +666,7 @@ export default function NewInspectionScreen() {
                 value={odometer}
                 onChangeText={setOdometer}
                 placeholder={t('inspection.odometerPlaceholder')}
-                placeholderTextColor="#94a3b8"
+                placeholderTextColor={theme.color.textMuted}
                 keyboardType="numeric"
               />
             </View>
@@ -673,7 +679,7 @@ export default function NewInspectionScreen() {
                 value={headerNotes}
                 onChangeText={setHeaderNotes}
                 placeholder={t('inspection.notesPlaceholder')}
-                placeholderTextColor="#94a3b8"
+                placeholderTextColor={theme.color.textMuted}
                 multiline
                 numberOfLines={3}
               />
@@ -701,7 +707,7 @@ export default function NewInspectionScreen() {
               disabled={!selectedSite || (!selectedVehicle && (!useManualEntry || !manualAsset.trim()))}
             >
               <Text style={styles.nextBtnText}>{t('inspection.nextButton')}</Text>
-              <Ionicons name={forwardIcon} size={18} color="#fff" />
+              <Ionicons name={forwardIcon} size={18} color={theme.color.onPrimary} />
             </TouchableOpacity>
           </ScrollView>
         </KeyboardAvoidingView>
@@ -720,23 +726,23 @@ export default function NewInspectionScreen() {
             <View style={[styles.pickerHeader, isRTL && styles.navRTL]}>
               <Text style={styles.pickerTitle}>{t('inspection.sitePickerTitle')}</Text>
               <TouchableOpacity onPress={() => setSitePickerOpen(false)} hitSlop={8}>
-                <Ionicons name="close" size={22} color="#64748b" />
+                <Ionicons name="close" size={22} color={theme.color.textMuted} />
               </TouchableOpacity>
             </View>
 
             <View style={[styles.searchBox, isRTL && styles.searchBoxRTL, { marginTop: 4 }]}>
-              <Ionicons name="search-outline" size={18} color="#94a3b8" />
+              <Ionicons name="search-outline" size={18} color={theme.color.textMuted} />
               <TextInput
                 style={[styles.searchInput, { textAlign }]}
                 value={siteSearch}
                 onChangeText={setSiteSearch}
                 placeholder={t('inspection.siteSearchPlaceholder')}
-                placeholderTextColor="#94a3b8"
+                placeholderTextColor={theme.color.textMuted}
                 autoCorrect={false}
               />
               {siteSearch.length > 0 && (
                 <TouchableOpacity onPress={() => setSiteSearch('')}>
-                  <Ionicons name="close-circle" size={18} color="#cbd5e1" />
+                  <Ionicons name="close-circle" size={18} color={theme.color.borderStrong} />
                 </TouchableOpacity>
               )}
             </View>
@@ -781,12 +787,12 @@ export default function NewInspectionScreen() {
                           <Ionicons
                             name="location-outline"
                             size={18}
-                            color={active ? '#16a34a' : '#64748b'}
+                            color={active ? theme.color.primary : theme.color.textMuted}
                           />
                           <Text style={[styles.pickerRowText, { textAlign, flex: 1 }, active && styles.pickerRowTextActive]}>
                             {name}
                           </Text>
-                          {active && <Ionicons name="checkmark-circle" size={20} color="#16a34a" />}
+                          {active && <Ionicons name="checkmark-circle" size={20} color={theme.color.primary} />}
                         </TouchableOpacity>
                       )
                     })}
@@ -804,10 +810,10 @@ export default function NewInspectionScreen() {
   if (step === 'tyres') {
     return (
       <SafeAreaView style={styles.safe}>
-        <StatusBar barStyle="dark-content" backgroundColor="#f0f5f1" />
+        <StatusBar barStyle={statusBarStyle} backgroundColor={theme.color.bg} />
         <View style={[styles.nav, isRTL && styles.navRTL]}>
           <TouchableOpacity onPress={() => setStep('header')} style={styles.navBack}>
-            <Ionicons name={backIcon} size={22} color="#0f172a" />
+            <Ionicons name={backIcon} size={22} color={theme.color.text} />
           </TouchableOpacity>
           <View style={{ flex: 1 }}>
             <Text style={[styles.navTitle, { textAlign }]}>{t('inspection.tyrePositionsTitle')}</Text>
@@ -852,7 +858,7 @@ export default function NewInspectionScreen() {
                   style={[
                     styles.progressFill,
                     { width: `${Math.round((recordedCount / positions.length) * 100)}%` },
-                    recordedCount === positions.length && { backgroundColor: '#16a34a' },
+                    recordedCount === positions.length && { backgroundColor: theme.color.primary },
                   ]}
                 />
               </View>
@@ -860,7 +866,7 @@ export default function NewInspectionScreen() {
           )}
 
           <View style={[styles.positionHint, isRTL && styles.positionHintRTL]}>
-            <Ionicons name="information-circle-outline" size={15} color="#64748b" />
+            <Ionicons name="information-circle-outline" size={15} color={theme.color.textMuted} />
             <Text style={[styles.positionHintText, { textAlign }]}>
               {t('inspection.tyreHint')}
             </Text>
@@ -895,14 +901,14 @@ export default function NewInspectionScreen() {
               size={15}
               color={
                 gpsStatus === 'captured'
-                  ? '#16a34a'
+                  ? theme.color.success.base
                   : gpsStatus === 'unavailable'
-                    ? '#b45309'
-                    : '#64748b'
+                    ? theme.color.warning.on
+                    : theme.color.textMuted
               }
             />
             {gpsStatus === 'capturing' && (
-              <ActivityIndicator size="small" color="#64748b" />
+              <ActivityIndicator size="small" color={theme.color.textMuted} />
             )}
             <Text
               style={[
@@ -931,10 +937,10 @@ export default function NewInspectionScreen() {
             disabled={submitting}
           >
             {submitting
-              ? <ActivityIndicator size="small" color="#fff" />
+              ? <ActivityIndicator size="small" color={theme.color.onPrimary} />
               : (
                 <>
-                  <Ionicons name="cloud-upload-outline" size={18} color="#fff" />
+                  <Ionicons name="cloud-upload-outline" size={18} color={theme.color.onPrimary} />
                   <Text style={styles.nextBtnText}>{t('inspection.submitButton')}</Text>
                 </>
               )
@@ -958,7 +964,7 @@ export default function NewInspectionScreen() {
   return (
     <SafeAreaView style={[styles.safe, { justifyContent: 'center', alignItems: 'center', padding: 32 }]}>
       <View style={styles.successIcon}>
-        <Ionicons name="checkmark-circle" size={64} color="#16a34a" />
+        <Ionicons name="checkmark-circle" size={64} color={theme.color.primary} />
       </View>
       <Text style={styles.successTitle}>{t('inspection.submittedTitle')}</Text>
       <Text style={styles.successSubtitle}>
@@ -979,7 +985,7 @@ export default function NewInspectionScreen() {
           router.replace('/(app)')
         }}
       >
-        <Ionicons name="home-outline" size={18} color="#fff" />
+        <Ionicons name="home-outline" size={18} color={theme.color.onPrimary} />
         <Text style={styles.nextBtnText}>{t('inspection.backHome')}</Text>
       </TouchableOpacity>
       <TouchableOpacity
@@ -993,338 +999,337 @@ export default function NewInspectionScreen() {
           setActivePosition(null)
         }}
       >
-        <Ionicons name="add-circle-outline" size={18} color="#16a34a" />
+        <Ionicons name="add-circle-outline" size={18} color={theme.color.primary} />
         <Text style={styles.outlineBtnText}>{t('inspection.newInspection')}</Text>
       </TouchableOpacity>
     </SafeAreaView>
   )
 }
 
-const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#f0f5f1' },
+function makeStyles(theme: Theme) {
+  const c = theme.color
+  return StyleSheet.create({
+  safe: { flex: 1, backgroundColor: c.bg },
   scroll: { flex: 1 },
-  content: { padding: 16, paddingBottom: 48, gap: 16 },
+  content: { padding: spacing.lg, paddingBottom: spacing['4xl'] + spacing.sm, gap: spacing.lg },
   nav: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: '#fff',
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    backgroundColor: c.surface,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(0,0,0,0.07)',
-    gap: 12,
+    borderBottomColor: c.border,
+    gap: spacing.md,
   },
   navRTL: { flexDirection: 'row-reverse' },
   navBack: {
     width: 36,
     height: 36,
-    borderRadius: 10,
-    backgroundColor: '#f1f5f9',
+    borderRadius: radius.md,
+    backgroundColor: c.surfaceAlt,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  navTitle: { fontSize: 16, fontWeight: '700', color: '#0f172a', flex: 1 },
-  navSubtitle: { fontSize: 11, color: '#64748b', marginTop: 1 },
-  stepPills: { flexDirection: 'row', gap: 6 },
+  navTitle: { fontSize: 16, fontWeight: '700', color: c.text, flex: 1 },
+  navSubtitle: { fontSize: 11, color: c.textMuted, marginTop: 1 },
+  stepPills: { flexDirection: 'row', gap: spacing.xs + 2 },
   stepPill: {
     width: 26, height: 26, borderRadius: 13,
-    backgroundColor: '#f1f5f9',
+    backgroundColor: c.surfaceAlt,
     alignItems: 'center', justifyContent: 'center',
   },
-  stepPillActive: { backgroundColor: '#16a34a' },
-  stepPillText: { fontSize: 12, fontWeight: '700', color: '#94a3b8' },
-  stepPillTextActive: { fontSize: 12, fontWeight: '700', color: '#fff' },
-  stepTitle: { fontSize: 20, fontWeight: '800', color: '#0f172a' },
+  stepPillActive: { backgroundColor: c.primary },
+  stepPillText: { fontSize: 12, fontWeight: '700', color: c.textMuted },
+  stepPillTextActive: { fontSize: 12, fontWeight: '700', color: c.onPrimary },
+  stepTitle: { fontSize: 20, fontWeight: '800', color: c.text },
   field: { gap: 0 },
   fieldLabel: {
     fontSize: 12,
-    fontWeight: '600',
-    color: '#64748b',
+    fontWeight: '700',
+    color: c.textSecondary,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
-    marginBottom: 8,
+    marginBottom: spacing.sm,
   },
-  chipRow: { flexDirection: 'row', gap: 8, paddingBottom: 4 },
+  chipRow: { flexDirection: 'row', gap: spacing.sm, paddingBottom: spacing.xs },
   chip: {
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 10,
-    backgroundColor: '#fff',
+    paddingHorizontal: spacing.lg - 2,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.md,
+    backgroundColor: c.surface,
     borderWidth: 1.5,
-    borderColor: '#e2e8f0',
+    borderColor: c.border,
     alignItems: 'center',
     minWidth: 60,
   },
-  chipActive: { backgroundColor: '#16a34a', borderColor: '#16a34a' },
-  chipText: { fontSize: 13, fontWeight: '600', color: '#0f172a' },
-  chipTextActive: { color: '#fff' },
-  chipSub: { fontSize: 10, color: '#94a3b8', marginTop: 1 },
+  chipActive: { backgroundColor: c.primary, borderColor: c.primary },
+  chipText: { fontSize: 13, fontWeight: '600', color: c.text },
+  chipTextActive: { color: c.onPrimary },
+  chipSub: { fontSize: 10, color: c.textMuted, marginTop: 1 },
   vehicleInfo: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    backgroundColor: 'rgba(22,163,74,0.08)',
+    gap: spacing.sm,
+    backgroundColor: c.primarySoft,
     borderWidth: 1,
-    borderColor: 'rgba(22,163,74,0.2)',
-    borderRadius: 12,
-    padding: 12,
+    borderColor: c.primary,
+    borderRadius: radius.md,
+    padding: spacing.md,
   },
   vehicleInfoRTL: { flexDirection: 'row-reverse' },
-  vehicleInfoText: { flex: 1, fontSize: 13, fontWeight: '600', color: '#15803d' },
+  vehicleInfoText: { flex: 1, fontSize: 13, fontWeight: '700', color: c.primaryDark },
   vehiclePositionCount: {
     fontSize: 11,
     fontWeight: '700',
-    color: '#16a34a',
-    backgroundColor: 'rgba(22,163,74,0.1)',
-    paddingHorizontal: 8,
+    color: c.onPrimary,
+    backgroundColor: c.primary,
+    paddingHorizontal: spacing.sm,
     paddingVertical: 3,
-    borderRadius: 6,
+    borderRadius: radius.sm - 2,
+    overflow: 'hidden',
   },
   readonlyField: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    backgroundColor: '#f8fafc',
+    gap: spacing.sm,
+    backgroundColor: c.surfaceAlt,
     borderWidth: 1,
-    borderColor: '#e2e8f0',
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 12,
+    borderColor: c.border,
+    borderRadius: radius.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.md,
   },
   readonlyFieldRTL: { flexDirection: 'row-reverse' },
-  readonlyText: { fontSize: 14, color: '#0f172a', flex: 1 },
+  readonlyText: { fontSize: 14, color: c.text, flex: 1 },
   input: {
-    backgroundColor: '#fff',
+    backgroundColor: c.surface,
     borderWidth: 1,
-    borderColor: '#e2e8f0',
-    borderRadius: 12,
-    paddingHorizontal: 12,
+    borderColor: c.borderStrong,
+    borderRadius: radius.md,
+    paddingHorizontal: spacing.md,
     paddingVertical: 11,
-    fontSize: 14,
-    color: '#0f172a',
+    fontSize: 15,
+    color: c.text,
   },
   textArea: { minHeight: 80, textAlignVertical: 'top' },
   nextBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
-    backgroundColor: '#16a34a',
-    borderRadius: 14,
+    gap: spacing.sm,
+    backgroundColor: c.primary,
+    borderRadius: radius.lg,
     height: 52,
-    shadowColor: '#16a34a',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 10,
-    elevation: 6,
-    marginTop: 8,
+    ...elevation(theme, 2),
+    marginTop: spacing.sm,
   },
   nextBtnDisabled: { opacity: 0.5 },
-  nextBtnText: { color: '#fff', fontSize: 16, fontWeight: '700' },
+  nextBtnText: { color: c.onPrimary, fontSize: 16, fontWeight: '700' },
   outlineBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
+    gap: spacing.sm,
     borderWidth: 1.5,
-    borderColor: '#16a34a',
-    borderRadius: 14,
+    borderColor: c.primary,
+    borderRadius: radius.lg,
     height: 48,
     minWidth: 200,
   },
-  outlineBtnText: { color: '#16a34a', fontSize: 15, fontWeight: '600' },
+  outlineBtnText: { color: c.primary, fontSize: 15, fontWeight: '700' },
   searchBox: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    marginTop: 6,
-    backgroundColor: '#fff',
+    gap: spacing.sm,
+    marginTop: spacing.xs + 2,
+    backgroundColor: c.surface,
     borderWidth: 1,
-    borderColor: '#e2e8f0',
-    borderRadius: 12,
-    paddingHorizontal: 12,
+    borderColor: c.borderStrong,
+    borderRadius: radius.md,
+    paddingHorizontal: spacing.md,
     height: 44,
   },
   searchBoxRTL: { flexDirection: 'row-reverse' },
-  searchInput: { flex: 1, fontSize: 14, color: '#0f172a' },
+  searchInput: { flex: 1, fontSize: 15, color: c.text },
   vehicleEmpty: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
-    marginTop: 10,
-    paddingVertical: 16,
+    gap: spacing.sm,
+    marginTop: spacing.md - 2,
+    paddingVertical: spacing.lg,
   },
-  vehicleEmptyText: { fontSize: 13, color: '#94a3b8', fontWeight: '500' },
+  vehicleEmptyText: { fontSize: 13, color: c.textMuted, fontWeight: '600' },
   progressWrap: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 12,
-    gap: 8,
+    backgroundColor: c.surface,
+    borderRadius: radius.md,
+    padding: spacing.md,
+    gap: spacing.sm,
     borderWidth: 1,
-    borderColor: 'rgba(0,0,0,0.06)',
+    borderColor: c.border,
   },
   progressLabelRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
   },
-  progressLabel: { fontSize: 12, fontWeight: '600', color: '#64748b' },
-  progressCount: { fontSize: 13, fontWeight: '800', color: '#0f172a' },
+  progressLabel: { fontSize: 12, fontWeight: '700', color: c.textSecondary },
+  progressCount: { fontSize: 13, fontWeight: '800', color: c.text },
   progressTrack: {
     height: 8,
     borderRadius: 4,
-    backgroundColor: '#f1f5f9',
+    backgroundColor: c.surfaceSunken,
     overflow: 'hidden',
   },
   progressFill: {
     height: 8,
     borderRadius: 4,
-    backgroundColor: '#f59e0b',
+    backgroundColor: c.warning.base,
   },
   positionHint: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    gap: 8,
-    backgroundColor: 'rgba(100,116,139,0.06)',
-    borderRadius: 10,
-    padding: 12,
+    gap: spacing.sm,
+    backgroundColor: c.surfaceAlt,
+    borderRadius: radius.md,
+    padding: spacing.md,
   },
   positionHintRTL: { flexDirection: 'row-reverse' },
-  positionHintText: { flex: 1, fontSize: 12, color: '#64748b', lineHeight: 18 },
+  positionHintText: { flex: 1, fontSize: 12, color: c.textSecondary, lineHeight: 18 },
   gpsChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    backgroundColor: 'rgba(100,116,139,0.06)',
+    gap: spacing.sm,
+    backgroundColor: c.surfaceAlt,
     borderWidth: 1,
-    borderColor: 'rgba(100,116,139,0.15)',
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    marginTop: 4,
+    borderColor: c.border,
+    borderRadius: radius.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.md - 2,
+    marginTop: spacing.xs,
   },
   gpsChipRTL: { flexDirection: 'row-reverse' },
   gpsChipOk: {
-    backgroundColor: 'rgba(22,163,74,0.08)',
-    borderColor: 'rgba(22,163,74,0.2)',
+    backgroundColor: c.success.soft,
+    borderColor: c.success.base,
   },
   gpsChipWarn: {
-    backgroundColor: 'rgba(245,158,11,0.08)',
-    borderColor: 'rgba(245,158,11,0.25)',
+    backgroundColor: c.warning.soft,
+    borderColor: c.warning.base,
   },
-  gpsChipText: { flex: 1, fontSize: 12, fontWeight: '600', color: '#64748b' },
-  gpsChipTextOk: { color: '#15803d' },
-  gpsChipTextWarn: { color: '#b45309' },
-  gpsRetry: { fontSize: 12, fontWeight: '700', color: '#3b82f6' },
+  gpsChipText: { flex: 1, fontSize: 12, fontWeight: '700', color: c.textSecondary },
+  gpsChipTextOk: { color: c.success.on },
+  gpsChipTextWarn: { color: c.warning.on },
+  gpsRetry: { fontSize: 12, fontWeight: '700', color: c.info.base },
   successIcon: {
-    marginBottom: 16,
-    padding: 16,
+    marginBottom: spacing.lg,
+    padding: spacing.lg,
     borderRadius: 40,
-    backgroundColor: 'rgba(22,163,74,0.1)',
+    backgroundColor: c.primarySoft,
   },
-  successTitle: { fontSize: 24, fontWeight: '800', color: '#0f172a', marginBottom: 8 },
+  successTitle: { fontSize: 24, fontWeight: '800', color: c.text, marginBottom: spacing.sm },
   successSubtitle: {
-    fontSize: 14, color: '#64748b', textAlign: 'center', lineHeight: 22, marginBottom: 8,
+    fontSize: 14, color: c.textSecondary, textAlign: 'center', lineHeight: 22, marginBottom: spacing.sm,
   },
   successNote: {
     fontSize: 12,
-    color: '#94a3b8',
+    color: c.textMuted,
     textAlign: 'center',
     lineHeight: 18,
     maxWidth: 280,
-    marginTop: 4,
+    marginTop: spacing.xs,
   },
 
   // ── Site dropdown + picker modal ─────────────────────────────────────────────
   dropdown: {
-    flexDirection: 'row', alignItems: 'center', gap: 8,
-    backgroundColor: '#fff', borderWidth: 1, borderColor: '#e2e8f0',
-    borderRadius: 12, paddingHorizontal: 12, height: 50,
+    flexDirection: 'row', alignItems: 'center', gap: spacing.sm,
+    backgroundColor: c.surface, borderWidth: 1, borderColor: c.borderStrong,
+    borderRadius: radius.md, paddingHorizontal: spacing.md, height: 50,
   },
   dropdownRTL: { flexDirection: 'row-reverse' },
-  dropdownText: { fontSize: 15, fontWeight: '600', color: '#0f172a' },
-  dropdownPlaceholder: { color: '#94a3b8', fontWeight: '500' },
-  pickerBackdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(15,23,42,0.55)' },
+  dropdownText: { fontSize: 15, fontWeight: '700', color: c.text },
+  dropdownPlaceholder: { color: c.textMuted, fontWeight: '500' },
+  pickerBackdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: c.overlay },
   pickerSheet: {
     position: 'absolute', left: 0, right: 0, bottom: 0,
-    backgroundColor: '#fff', borderTopLeftRadius: 24, borderTopRightRadius: 24,
-    paddingHorizontal: 20, paddingTop: 10,
-    paddingBottom: Platform.OS === 'ios' ? 34 : 20, maxHeight: '80%',
+    backgroundColor: c.surface, borderTopLeftRadius: radius['2xl'], borderTopRightRadius: radius['2xl'],
+    paddingHorizontal: spacing.xl, paddingTop: spacing.md - 2,
+    paddingBottom: Platform.OS === 'ios' ? 34 : spacing.xl, maxHeight: '80%',
+    borderTopWidth: 1, borderColor: c.border,
   },
   pickerHandle: {
     alignSelf: 'center', width: 40, height: 5, borderRadius: 3,
-    backgroundColor: '#e2e8f0', marginBottom: 12,
+    backgroundColor: c.borderStrong, marginBottom: spacing.md,
   },
   pickerHeader: {
     flexDirection: 'row', alignItems: 'center',
-    justifyContent: 'space-between', marginBottom: 8,
+    justifyContent: 'space-between', marginBottom: spacing.sm,
   },
-  pickerTitle: { fontSize: 17, fontWeight: '800', color: '#0f172a' },
-  pickerList: { marginTop: 10, flexGrow: 0, flexShrink: 1 },
-  pickerEmpty: { fontSize: 13, color: '#94a3b8', textAlign: 'center', paddingVertical: 24 },
+  pickerTitle: { fontSize: 17, fontWeight: '800', color: c.text },
+  pickerList: { marginTop: spacing.md - 2, flexGrow: 0, flexShrink: 1 },
+  pickerEmpty: { fontSize: 13, color: c.textMuted, textAlign: 'center', paddingVertical: spacing['2xl'] },
   pickerGroupLabel: {
-    fontSize: 10, fontWeight: '700', color: '#94a3b8',
-    textTransform: 'uppercase', letterSpacing: 0.8, marginTop: 10, marginBottom: 4,
+    fontSize: 10, fontWeight: '700', color: c.textMuted,
+    textTransform: 'uppercase', letterSpacing: 0.8, marginTop: spacing.md - 2, marginBottom: spacing.xs,
   },
   pickerRow: {
-    flexDirection: 'row', alignItems: 'center', gap: 10,
-    paddingVertical: 14, paddingHorizontal: 12, borderRadius: 12,
-    borderBottomWidth: 1, borderBottomColor: '#f1f5f9',
+    flexDirection: 'row', alignItems: 'center', gap: spacing.md - 2,
+    paddingVertical: spacing.lg - 2, paddingHorizontal: spacing.md, borderRadius: radius.md,
+    borderBottomWidth: 1, borderBottomColor: c.border,
   },
-  pickerRowActive: { backgroundColor: 'rgba(22,163,74,0.06)' },
-  pickerRowText: { fontSize: 15, fontWeight: '600', color: '#334155' },
-  pickerRowTextActive: { color: '#15803d', fontWeight: '800' },
+  pickerRowActive: { backgroundColor: c.primarySoft },
+  pickerRowText: { fontSize: 15, fontWeight: '600', color: c.textSecondary },
+  pickerRowTextActive: { color: c.primaryDark, fontWeight: '800' },
 
   // ── Site picker ─────────────────────────────────────────────────────────────
   countryLabel: {
-    fontSize: 10, fontWeight: '700', color: '#94a3b8',
-    textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 6,
+    fontSize: 10, fontWeight: '700', color: c.textMuted,
+    textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: spacing.xs + 2,
   },
-  siteGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  siteGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
   siteChip: {
     flexDirection: 'row', alignItems: 'center', gap: 5,
-    paddingHorizontal: 14, paddingVertical: 10,
-    backgroundColor: '#fff', borderRadius: 12,
-    borderWidth: 1.5, borderColor: '#e2e8f0',
-    shadowColor: '#000', shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.04, shadowRadius: 3, elevation: 1,
+    paddingHorizontal: spacing.lg - 2, paddingVertical: spacing.md - 2,
+    backgroundColor: c.surface, borderRadius: radius.md,
+    borderWidth: 1.5, borderColor: c.border,
+    ...elevation(theme, 1),
   },
-  siteChipActive: { backgroundColor: '#16a34a', borderColor: '#16a34a' },
-  siteChipText: { fontSize: 14, fontWeight: '700', color: '#374151' },
-  siteChipTextActive: { color: '#fff' },
+  siteChipActive: { backgroundColor: c.primary, borderColor: c.primary },
+  siteChipText: { fontSize: 14, fontWeight: '700', color: c.textSecondary },
+  siteChipTextActive: { color: c.onPrimary },
 
   // ── Vehicle grid ─────────────────────────────────────────────────────────────
-  vehicleGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 8 },
+  vehicleGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginTop: spacing.sm },
   vehicleCard: {
-    alignItems: 'center', gap: 4,
-    paddingHorizontal: 14, paddingVertical: 12,
-    backgroundColor: '#fff', borderRadius: 14,
-    borderWidth: 1.5, borderColor: '#e2e8f0', minWidth: 80,
-    shadowColor: '#000', shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.04, shadowRadius: 3, elevation: 1,
+    alignItems: 'center', gap: spacing.xs,
+    paddingHorizontal: spacing.lg - 2, paddingVertical: spacing.md,
+    backgroundColor: c.surface, borderRadius: radius.lg,
+    borderWidth: 1.5, borderColor: c.border, minWidth: 80,
+    ...elevation(theme, 1),
   },
-  vehicleCardActive: { backgroundColor: '#16a34a', borderColor: '#16a34a' },
-  vehicleCardAsset: { fontSize: 13, fontWeight: '800', color: '#0f172a' },
-  vehicleCardType:  { fontSize: 10, color: '#94a3b8', fontWeight: '500' },
+  vehicleCardActive: { backgroundColor: c.primary, borderColor: c.primary },
+  vehicleCardAsset: { fontSize: 13, fontWeight: '800', color: c.text },
+  vehicleCardType:  { fontSize: 10, color: c.textMuted, fontWeight: '600' },
 
   // ── Manual entry ─────────────────────────────────────────────────────────────
   manualEntryBtn: {
-    flexDirection: 'row', alignItems: 'center', gap: 6,
-    marginTop: 10, alignSelf: 'center',
+    flexDirection: 'row', alignItems: 'center', gap: spacing.xs + 2,
+    marginTop: spacing.md - 2, alignSelf: 'center',
   },
-  manualEntryText: { fontSize: 13, color: '#16a34a', fontWeight: '600' },
+  manualEntryText: { fontSize: 13, color: c.primary, fontWeight: '700' },
   manualHeader: {
     flexDirection: 'row', alignItems: 'center',
     justifyContent: 'space-between', marginBottom: 2,
   },
-  manualHeaderText: { fontSize: 13, fontWeight: '700', color: '#0f172a' },
+  manualHeaderText: { fontSize: 13, fontWeight: '700', color: c.text },
   assetWarn: {
-    flexDirection: 'row', alignItems: 'flex-start', gap: 8,
-    backgroundColor: 'rgba(245,158,11,0.08)',
-    borderWidth: 1, borderColor: 'rgba(245,158,11,0.25)',
-    borderRadius: 10, padding: 10,
+    flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm,
+    backgroundColor: c.warning.soft,
+    borderWidth: 1, borderColor: c.warning.base,
+    borderRadius: radius.md, padding: spacing.md - 2,
   },
-  assetWarnText: { fontSize: 12, color: '#b45309', fontWeight: '600', lineHeight: 17 },
-  assetWarnSuggest: { fontSize: 12, color: '#16a34a', fontWeight: '800', marginTop: 4 },
-})
+  assetWarnText: { fontSize: 12, color: c.warning.on, fontWeight: '700', lineHeight: 17 },
+  assetWarnSuggest: { fontSize: 12, color: c.primaryDark, fontWeight: '800', marginTop: spacing.xs },
+  })
+}

@@ -9,18 +9,18 @@ import { useNetworkSync } from '../../hooks/useNetworkSync'
 import { useRealtime } from '../../hooks/useRealtime'
 import { supabase } from '../../lib/supabase'
 import { TAB_BAR } from '../../lib/permissions'
+import { useTheme } from '../../contexts/ThemeContext'
 
 // Custom tab bar icon with active background pill
 function TabIcon({
-  name, color, focused, activeTint,
-}: { name: string; color: string; focused: boolean; activeTint?: string }) {
-  const activeColor = activeTint ?? '#16a34a'
+  name, focused, activeTint, inactiveColor,
+}: { name: string; focused: boolean; activeTint: string; inactiveColor: string }) {
   return (
-    <View style={[styles.iconWrap, focused && { backgroundColor: activeColor + '18' }]}>
+    <View style={[styles.iconWrap, focused && { backgroundColor: activeTint + '22' }]}>
       <Ionicons
         name={name as any}
         size={22}
-        color={focused ? activeColor : '#94a3b8'}
+        color={focused ? activeTint : inactiveColor}
       />
     </View>
   )
@@ -29,6 +29,7 @@ function TabIcon({
 export default function AppLayout() {
   const { user, loading, profile, signOut } = useAuth()
   const { t } = useLanguage()
+  const { theme } = useTheme()
   const [accidentBadge, setAccidentBadge] = useState(0)
   const [homeBadge, setHomeBadge] = useState(0)
 
@@ -53,8 +54,8 @@ export default function AppLayout() {
 
   if (loading) {
     return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#f0f5f1' }}>
-        <ActivityIndicator size="large" color="#16a34a" />
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: theme.color.bg }}>
+        <ActivityIndicator size="large" color={theme.color.primary} />
       </View>
     )
   }
@@ -73,9 +74,16 @@ export default function AppLayout() {
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: '#16a34a',
-        tabBarInactiveTintColor: '#94a3b8',
-        tabBarStyle: styles.tabBar,
+        tabBarActiveTintColor: theme.color.primary,
+        tabBarInactiveTintColor: theme.color.textMuted,
+        tabBarStyle: [
+          styles.tabBar,
+          {
+            backgroundColor: theme.color.surface,
+            borderTopColor: theme.color.border,
+            shadowColor: theme.color.shadow,
+          },
+        ],
         tabBarLabelStyle: styles.tabLabel,
         tabBarItemStyle: styles.tabItem,
       }}
@@ -88,17 +96,17 @@ export default function AppLayout() {
             name={tab.name}
             options={{
               title: t(tab.labelKey),
-              tabBarIcon: ({ color, focused }) => (
+              tabBarIcon: ({ focused }) => (
                 <TabIcon
                   name={focused
                     ? tab.icon.replace('-outline', '')
                     : tab.icon}
-                  color={color}
                   focused={focused}
-                  activeTint={tab.activeTint}
+                  activeTint={tab.activeTint ?? theme.color.primary}
+                  inactiveColor={theme.color.textMuted}
                 />
               ),
-              tabBarActiveTintColor: tab.activeTint ?? '#16a34a',
+              tabBarActiveTintColor: tab.activeTint ?? theme.color.primary,
               tabBarBadge:
                 tab.name === 'accident/dashboard' && accidentBadge > 0 ? accidentBadge
                 : tab.name === 'index' && homeBadge > 0 ? homeBadge

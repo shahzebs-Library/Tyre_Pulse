@@ -8,26 +8,31 @@
  *
  * Loading strategy: offline queue from AsyncStorage (instant), then
  * DB data in parallel (skeleton while waiting).
+ *
+ * Visuals: design-system tokens (light-first, sunlight-readable).
  */
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useMemo } from 'react'
 import {
-  View, Text, ScrollView, TouchableOpacity, StyleSheet,
-  RefreshControl, StatusBar, Platform, Animated,
+  View, Text, ScrollView, TouchableOpacity, StyleSheet, RefreshControl,
 } from 'react-native'
-import { SafeAreaView } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
 import { useAuth } from '../../contexts/AuthContext'
 import { useLanguage } from '../../contexts/LanguageContext'
+import { useTheme } from '../../contexts/ThemeContext'
 import { getQueue, getPendingCount, syncQueue } from '../../lib/offlineQueue'
 import { supabase } from '../../lib/supabase'
 import SyncBanner from '../../components/SyncBanner'
 import { SkeletonBox, SkeletonStatRow, SkeletonList } from '../../components/SkeletonLoader'
 import { isAdminOrAbove, UserRole } from '../../lib/types'
 import { canInspect } from '../../lib/permissions'
+import { Screen, StatTile, AppText } from '../../components/ui'
+import { Theme, spacing, radius, typography, elevation } from '../../lib/theme'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
+
+type TintKey = keyof Theme['tint']
 
 interface InspectionItem {
   id: string
@@ -53,103 +58,78 @@ interface QuickAction {
   label: string
   sublabel?: string
   route: string
-  color: string
-  bg: string
+  tint: TintKey
 }
 
 function getQuickActions(role: UserRole | null): QuickAction[] {
   switch (role) {
     case 'inspector':
       return [
-        { icon: 'clipboard-outline',     label: 'New Inspection', sublabel: 'Start a tyre check',   route: '/(app)/inspection/new',       color: '#16a34a', bg: '#f0fdf4' },
-        { icon: 'scan-outline',          label: 'Scan Asset',     sublabel: 'Barcode / QR code',    route: '/(app)/scanner',              color: '#0ea5e9', bg: '#f0f9ff' },
-        { icon: 'barcode-outline',       label: 'Serial Search',  sublabel: 'Find tyre by serial',  route: '/(app)/serial-search',        color: '#0ea5e9', bg: '#f0f9ff' },
-        { icon: 'checkbox-outline',      label: 'Checklists',     sublabel: 'Fill & submit checks', route: '/(app)/checklists/index',     color: '#16a34a', bg: '#f0fdf4' },
-        { icon: 'cube-outline',          label: 'Stock Count',    sublabel: 'Daily stock-take',     route: '/(app)/stock',                color: '#f59e0b', bg: '#fffbeb' },
-        { icon: 'warning-outline',       label: 'Accident',       sublabel: 'File a report',        route: '/(app)/accident/report',      color: '#dc2626', bg: '#fff5f5' },
-        { icon: 'speedometer-outline',   label: 'Meter Log',      sublabel: 'Daily odometer / hrs', route: '/(app)/meter-logs',           color: '#0369a1', bg: '#f0f9ff' },
+        { icon: 'clipboard-outline',   label: 'New Inspection', sublabel: 'Start a tyre check',   route: '/(app)/inspection/new',     tint: 'green' },
+        { icon: 'scan-outline',        label: 'Scan Asset',     sublabel: 'Barcode / QR code',    route: '/(app)/scanner',            tint: 'blue' },
+        { icon: 'barcode-outline',     label: 'Serial Search',  sublabel: 'Find tyre by serial',  route: '/(app)/serial-search',      tint: 'blue' },
+        { icon: 'checkbox-outline',    label: 'Checklists',     sublabel: 'Fill & submit checks', route: '/(app)/checklists/index',   tint: 'green' },
+        { icon: 'cube-outline',        label: 'Stock Count',    sublabel: 'Daily stock-take',     route: '/(app)/stock',              tint: 'amber' },
+        { icon: 'warning-outline',     label: 'Accident',       sublabel: 'File a report',        route: '/(app)/accident/report',    tint: 'red' },
+        { icon: 'speedometer-outline', label: 'Meter Log',      sublabel: 'Daily odometer / hrs', route: '/(app)/meter-logs',         tint: 'blue' },
       ]
     case 'tyre_man':
       return [
-        { icon: 'clipboard-outline',     label: 'New Inspection', sublabel: 'Start a tyre check',   route: '/(app)/inspection/new',       color: '#16a34a', bg: '#f0fdf4' },
-        { icon: 'scan-outline',          label: 'Scan Asset',     sublabel: 'Barcode / QR code',    route: '/(app)/scanner',              color: '#0ea5e9', bg: '#f0f9ff' },
-        { icon: 'barcode-outline',       label: 'Serial Search',  sublabel: 'Find tyre by serial',  route: '/(app)/serial-search',        color: '#0ea5e9', bg: '#f0f9ff' },
-        { icon: 'checkbox-outline',      label: 'Checklists',     sublabel: 'Fill & submit checks', route: '/(app)/checklists/index',     color: '#16a34a', bg: '#f0fdf4' },
-        { icon: 'speedometer-outline',   label: 'Meter Log',      sublabel: 'Daily odometer / hrs', route: '/(app)/meter-logs',           color: '#0369a1', bg: '#f0f9ff' },
+        { icon: 'clipboard-outline',   label: 'New Inspection', sublabel: 'Start a tyre check',   route: '/(app)/inspection/new',     tint: 'green' },
+        { icon: 'scan-outline',        label: 'Scan Asset',     sublabel: 'Barcode / QR code',    route: '/(app)/scanner',            tint: 'blue' },
+        { icon: 'barcode-outline',     label: 'Serial Search',  sublabel: 'Find tyre by serial',  route: '/(app)/serial-search',      tint: 'blue' },
+        { icon: 'checkbox-outline',    label: 'Checklists',     sublabel: 'Fill & submit checks', route: '/(app)/checklists/index',   tint: 'green' },
+        { icon: 'speedometer-outline', label: 'Meter Log',      sublabel: 'Daily odometer / hrs', route: '/(app)/meter-logs',         tint: 'blue' },
       ]
     case 'driver':
       return [
-        { icon: 'speedometer-outline',   label: 'Meter Log',      sublabel: "Log today's km / hours", route: '/(app)/meter-logs',         color: '#0369a1', bg: '#f0f9ff' },
+        { icon: 'speedometer-outline', label: 'Meter Log',      sublabel: "Log today's km / hours", route: '/(app)/meter-logs',       tint: 'blue' },
       ]
     case 'reporter':
       return [
-        { icon: 'speedometer-outline',   label: 'Meter Log',      sublabel: 'Daily odometer / hrs', route: '/(app)/meter-logs',           color: '#0369a1', bg: '#f0f9ff' },
-        { icon: 'document-text-outline', label: 'Reports',        sublabel: 'Generate PDF',         route: '/(app)/reports/index',        color: '#3b82f6', bg: '#eff6ff' },
-        { icon: 'layers-outline',        label: 'Tyre Records',   sublabel: 'Browse all records',  route: '/(app)/records/index',        color: '#6366f1', bg: '#eef2ff' },
-        { icon: 'warning-outline',       label: 'Accidents',      sublabel: 'Incident overview',    route: '/(app)/accident/dashboard',   color: '#dc2626', bg: '#fff5f5' },
+        { icon: 'speedometer-outline', label: 'Meter Log',      sublabel: 'Daily odometer / hrs', route: '/(app)/meter-logs',         tint: 'blue' },
+        { icon: 'document-text-outline', label: 'Reports',      sublabel: 'Generate PDF',         route: '/(app)/reports/index',      tint: 'blue' },
+        { icon: 'layers-outline',      label: 'Tyre Records',   sublabel: 'Browse all records',   route: '/(app)/records/index',      tint: 'violet' },
+        { icon: 'warning-outline',     label: 'Accidents',      sublabel: 'Incident overview',    route: '/(app)/accident/dashboard', tint: 'red' },
       ]
     case 'manager':
     case 'director':
       return [
-        { icon: 'bar-chart-outline',     label: 'Analytics',      sublabel: 'Fleet KPIs',           route: '/(app)/analytics/index',      color: '#3b82f6', bg: '#eff6ff' },
-        { icon: 'construct-outline',     label: 'Work Orders',    sublabel: 'Open actions',         route: '/(app)/workorders/index',     color: '#f59e0b', bg: '#fffbeb' },
-        { icon: 'document-text-outline', label: 'Reports',        sublabel: 'Generate PDF',         route: '/(app)/reports/index',        color: '#8b5cf6', bg: '#f5f3ff' },
-        { icon: 'sparkles-outline',      label: 'Fleet AI',       sublabel: 'Ask anything',         route: '/(app)/ai/index',             color: '#7c3aed', bg: '#f5f3ff' },
-        { icon: 'speedometer-outline',   label: 'Meter Log',      sublabel: 'Daily odometer / hrs', route: '/(app)/meter-logs',           color: '#0369a1', bg: '#f0f9ff' },
-        { icon: 'shield-outline',        label: 'Admin',          sublabel: 'Console & settings',   route: '/(app)/admin/index',          color: '#7c3aed', bg: '#f5f3ff' },
+        { icon: 'bar-chart-outline',   label: 'Analytics',      sublabel: 'Fleet KPIs',           route: '/(app)/analytics/index',    tint: 'blue' },
+        { icon: 'construct-outline',   label: 'Work Orders',    sublabel: 'Open actions',         route: '/(app)/workorders/index',   tint: 'amber' },
+        { icon: 'document-text-outline', label: 'Reports',      sublabel: 'Generate PDF',         route: '/(app)/reports/index',      tint: 'violet' },
+        { icon: 'sparkles-outline',    label: 'Fleet AI',       sublabel: 'Ask anything',         route: '/(app)/ai/index',           tint: 'violet' },
+        { icon: 'speedometer-outline', label: 'Meter Log',      sublabel: 'Daily odometer / hrs', route: '/(app)/meter-logs',         tint: 'blue' },
+        { icon: 'shield-outline',      label: 'Admin',          sublabel: 'Console & settings',   route: '/(app)/admin/index',        tint: 'slate' },
       ]
     default: // admin
       return [
-        { icon: 'sparkles-outline',      label: 'Fleet AI',       sublabel: 'Ask anything',         route: '/(app)/ai/index',             color: '#7c3aed', bg: '#f5f3ff' },
-        { icon: 'bar-chart-outline',     label: 'Analytics',      sublabel: 'Fleet KPIs',           route: '/(app)/analytics/index',      color: '#3b82f6', bg: '#eff6ff' },
-        { icon: 'construct-outline',     label: 'Work Orders',    sublabel: 'Open actions',         route: '/(app)/workorders/index',     color: '#f59e0b', bg: '#fffbeb' },
-        { icon: 'document-text-outline', label: 'Reports',        sublabel: 'Generate PDF',         route: '/(app)/reports/index',        color: '#16a34a', bg: '#f0fdf4' },
-        { icon: 'speedometer-outline',   label: 'Meter Log',      sublabel: 'Daily odometer / hrs', route: '/(app)/meter-logs',           color: '#0369a1', bg: '#f0f9ff' },
-        { icon: 'shield-outline',        label: 'Admin',          sublabel: 'Console & settings',   route: '/(app)/admin/index',          color: '#7c3aed', bg: '#f5f3ff' },
+        { icon: 'sparkles-outline',    label: 'Fleet AI',       sublabel: 'Ask anything',         route: '/(app)/ai/index',           tint: 'violet' },
+        { icon: 'bar-chart-outline',   label: 'Analytics',      sublabel: 'Fleet KPIs',           route: '/(app)/analytics/index',    tint: 'blue' },
+        { icon: 'construct-outline',   label: 'Work Orders',    sublabel: 'Open actions',         route: '/(app)/workorders/index',   tint: 'amber' },
+        { icon: 'document-text-outline', label: 'Reports',      sublabel: 'Generate PDF',         route: '/(app)/reports/index',      tint: 'green' },
+        { icon: 'speedometer-outline', label: 'Meter Log',      sublabel: 'Daily odometer / hrs', route: '/(app)/meter-logs',         tint: 'blue' },
+        { icon: 'shield-outline',      label: 'Admin',          sublabel: 'Console & settings',   route: '/(app)/admin/index',        tint: 'slate' },
       ]
   }
 }
-
-// ── Sub-components ─────────────────────────────────────────────────────────────
-
-function QuickActionCard({ action, onPress }: { action: QuickAction; onPress: () => void }) {
-  return (
-    <TouchableOpacity style={[qas.card, { backgroundColor: action.bg }]} onPress={onPress} activeOpacity={0.78}>
-      <View style={[qas.iconWrap, { backgroundColor: action.color + '1a' }]}>
-        <Ionicons name={action.icon as any} size={22} color={action.color} />
-      </View>
-      <Text style={[qas.label, { color: action.color }]}>{action.label}</Text>
-      {action.sublabel && <Text style={qas.sublabel}>{action.sublabel}</Text>}
-    </TouchableOpacity>
-  )
-}
-
-const qas = StyleSheet.create({
-  card: {
-    flex: 1, borderRadius: 16, padding: 14, gap: 6,
-    shadowColor: '#000', shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05, shadowRadius: 4, elevation: 2,
-    minHeight: 100,
-  },
-  iconWrap: { width: 42, height: 42, borderRadius: 13, alignItems: 'center', justifyContent: 'center' },
-  label:    { fontSize: 13, fontWeight: '800', marginTop: 2 },
-  sublabel: { fontSize: 11, color: '#94a3b8', fontWeight: '500' },
-})
 
 // ── Main screen ────────────────────────────────────────────────────────────────
 
 export default function HomeScreen() {
   const { profile } = useAuth()
   const { t, isRTL } = useLanguage()
+  const { theme } = useTheme()
   const router = useRouter()
+  const s = useMemo(() => makeStyles(theme), [theme])
 
-  const [pendingCount, setPendingCount]         = useState(0)
+  const [pendingCount, setPendingCount]           = useState(0)
   const [recentInspections, setRecentInspections] = useState<InspectionItem[]>([])
-  const [refreshing, setRefreshing]             = useState(false)
-  const [todayCount, setTodayCount]             = useState(0)
-  const [networkLoading, setNetworkLoading]     = useState(true)
-  const [fleetHealth, setFleetHealth]           = useState<FleetHealth | null>(null)
-  const [fleetLoading, setFleetLoading]         = useState(true)
+  const [refreshing, setRefreshing]               = useState(false)
+  const [todayCount, setTodayCount]               = useState(0)
+  const [networkLoading, setNetworkLoading]       = useState(true)
+  const [fleetHealth, setFleetHealth]             = useState<FleetHealth | null>(null)
+  const [fleetLoading, setFleetLoading]           = useState(true)
 
   const role = profile?.role as UserRole | null | undefined
   const elevated = isAdminOrAbove(role)
@@ -238,23 +218,24 @@ export default function HomeScreen() {
   const textAlign = isRTL ? 'right' : 'left'
 
   return (
-    <SafeAreaView style={s.safe}>
-      <StatusBar barStyle="dark-content" backgroundColor="#f0f5f1" />
+    <Screen edges={['top']}>
       <SyncBanner />
       <ScrollView
         style={s.scroll}
         contentContainerStyle={s.content}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#16a34a" />}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.color.primary} />}
         showsVerticalScrollIndicator={false}
       >
         {/* ── Header ────────────────────────────────────────────────────────── */}
         <View style={[s.header, isRTL && s.rowReverse]}>
           <View style={{ flex: 1 }}>
-            <Text style={[s.greeting, { textAlign }]}>{greeting}, {firstName}</Text>
-            <Text style={[s.date, { textAlign }]}>{today}</Text>
+            <AppText variant="caption" color="muted" style={{ textAlign }}>{greeting}</AppText>
+            <AppText variant="h1" style={{ textAlign }}>{firstName}</AppText>
+            <AppText variant="caption" color="secondary" style={{ textAlign, marginTop: 2 }}>{today}</AppText>
           </View>
           {pendingCount > 0 && (
-            <TouchableOpacity style={s.pendingBadge} onPress={() => router.push('/(app)/profile')}>
+            <TouchableOpacity style={s.pendingBadge} onPress={() => router.push('/(app)/profile')} activeOpacity={0.85}>
+              <Ionicons name="cloud-upload-outline" size={14} color={theme.color.warning.on} />
               <Text style={s.pendingNum}>{pendingCount}</Text>
               <Text style={s.pendingLbl}>{t('home.pending')}</Text>
             </TouchableOpacity>
@@ -264,55 +245,54 @@ export default function HomeScreen() {
         {/* ── Stats row ─────────────────────────────────────────────────────── */}
         {networkLoading ? <SkeletonStatRow /> : (
           <View style={s.statsRow}>
-            <StatCard
+            <StatTile
               icon="calendar-outline"
               value={todayCount.toString()}
               label={t('home.today')}
-              valueColor={todayCount > 0 ? '#16a34a' : '#0f172a'}
+              tint={todayCount > 0 ? 'green' : 'slate'}
             />
-            <StatCard
+            <StatTile
               icon="cloud-upload-outline"
               value={pendingCount.toString()}
               label={t('home.pendingSync')}
-              valueColor={pendingCount > 0 ? '#d97706' : '#0f172a'}
+              tint={pendingCount > 0 ? 'amber' : 'slate'}
+              onPress={pendingCount > 0 ? () => router.push('/(app)/profile') : undefined}
             />
-            <StatCard
+            <StatTile
               icon="location-outline"
               value={profile?.site ? profile.site.split(' ')[0] : t('home.allSites')}
               label="Site"
-              small
+              tint="blue"
             />
           </View>
         )}
 
         {/* ── Primary CTA (inspect-capable roles only) ──────────────────────── */}
         {canInspect(role) && (
-          <TouchableOpacity style={s.ctaButton} onPress={() => router.push('/(app)/inspection/new')} activeOpacity={0.88}>
+          <TouchableOpacity style={s.ctaButton} onPress={() => router.push('/(app)/inspection/new')} activeOpacity={0.9}>
             <View style={s.ctaIcon}>
-              <Ionicons name="add-circle" size={28} color="#fff" />
+              <Ionicons name="add-circle" size={28} color={theme.color.onPrimary} />
             </View>
             <View style={{ flex: 1 }}>
               <Text style={s.ctaTitle}>{t('home.startInspection')}</Text>
               <Text style={s.ctaSubtitle}>{t('home.startSubtitle')}</Text>
             </View>
-            <Ionicons name={isRTL ? 'arrow-back-circle' : 'arrow-forward-circle'} size={28} color="rgba(255,255,255,0.6)" />
+            <Ionicons name={isRTL ? 'arrow-back-circle' : 'arrow-forward-circle'} size={28} color="rgba(255,255,255,0.7)" />
           </TouchableOpacity>
         )}
 
         {/* ── Quick Actions grid ─────────────────────────────────────────────── */}
-        <View style={s.sectionHeader}>
-          <Text style={s.sectionTitle}>Quick Actions</Text>
-        </View>
+        <SectionLabel s={s} theme={theme}>Quick Actions</SectionLabel>
         <View style={s.quickGrid}>
           {quickActions.map((a, i) => (
-            <QuickActionCard key={i} action={a} onPress={() => router.push(a.route as any)} />
+            <QuickActionCard key={i} action={a} s={s} theme={theme} onPress={() => router.push(a.route as any)} />
           ))}
         </View>
 
         {/* ── Fleet Health (elevated roles) ─────────────────────────────────── */}
         {elevated && (
           <View>
-            <Text style={s.sectionTitle}>Fleet Health · This Week</Text>
+            <SectionLabel s={s} theme={theme}>Fleet Health · This Week</SectionLabel>
             {fleetLoading ? (
               <View style={s.fleetCard}>
                 <View style={s.fleetRow}>
@@ -327,23 +307,24 @@ export default function HomeScreen() {
             ) : fleetHealth && (
               <View style={s.fleetCard}>
                 <View style={s.fleetRow}>
-                  <FleetStat value={fleetHealth.totalVehicles} label="Vehicles" icon="car-outline" color="#3b82f6" />
-                  <FleetStat value={fleetHealth.criticalCount} label="Critical" icon="warning-outline" color="#dc2626" alert={fleetHealth.criticalCount > 0} />
-                  <FleetStat value={fleetHealth.openWorkOrders} label="Open Actions" icon="construct-outline" color="#f59e0b" alert={fleetHealth.openWorkOrders > 0} />
-                  <FleetStat value={fleetHealth.inspThisWeek} label="Inspections" icon="clipboard-outline" color="#16a34a" />
+                  <FleetStat s={s} theme={theme} value={fleetHealth.totalVehicles} label="Vehicles" icon="car-outline" tint="blue" />
+                  <FleetStat s={s} theme={theme} value={fleetHealth.criticalCount} label="Critical" icon="warning-outline" tint="red" alert={fleetHealth.criticalCount > 0} />
+                  <FleetStat s={s} theme={theme} value={fleetHealth.openWorkOrders} label="Open Actions" icon="construct-outline" tint="amber" alert={fleetHealth.openWorkOrders > 0} />
+                  <FleetStat s={s} theme={theme} value={fleetHealth.inspThisWeek} label="Inspections" icon="clipboard-outline" tint="green" />
                 </View>
                 {(fleetHealth.criticalCount > 0 || fleetHealth.openWorkOrders > 5) && (
                   <TouchableOpacity
                     style={s.fleetAlert}
+                    activeOpacity={0.85}
                     onPress={() => router.push(fleetHealth.criticalCount > 0 ? '/(app)/records/index' : '/(app)/workorders/index')}
                   >
-                    <Ionicons name="alert-circle-outline" size={14} color="#dc2626" />
+                    <Ionicons name="alert-circle-outline" size={15} color={theme.color.danger.base} />
                     <Text style={s.fleetAlertText}>
                       {fleetHealth.criticalCount > 0
                         ? `${fleetHealth.criticalCount} critical tyre${fleetHealth.criticalCount > 1 ? 's' : ''} need attention`
                         : `${fleetHealth.openWorkOrders} work orders open - review recommended`}
                     </Text>
-                    <Ionicons name="chevron-forward" size={13} color="#dc2626" />
+                    <Ionicons name="chevron-forward" size={14} color={theme.color.danger.base} />
                   </TouchableOpacity>
                 )}
               </View>
@@ -355,72 +336,86 @@ export default function HomeScreen() {
         {canInspect(role) && (
           <TouchableOpacity style={s.scanButton} onPress={() => router.push('/(app)/scanner')} activeOpacity={0.85}>
             <View style={s.scanIcon}>
-              <Ionicons name="scan" size={22} color="#16a34a" />
+              <Ionicons name="scan" size={22} color={theme.color.primary} />
             </View>
             <View style={{ flex: 1 }}>
               <Text style={s.scanTitle}>{t('home.scanAsset')}</Text>
               <Text style={s.scanSubtitle}>{t('home.scanSubtitle')}</Text>
             </View>
-            <Ionicons name={isRTL ? 'chevron-back' : 'chevron-forward'} size={20} color="#94a3b8" />
+            <Ionicons name={isRTL ? 'chevron-back' : 'chevron-forward'} size={20} color={theme.color.textMuted} />
           </TouchableOpacity>
         )}
 
         {/* ── Recent inspections ────────────────────────────────────────────── */}
         <View>
-          <View style={[s.sectionHeader, { marginBottom: 10 }]}>
-            <Text style={s.sectionTitle}>{t('home.recentInspections')}</Text>
+          <View style={s.sectionHeaderRow}>
+            <AppText style={[typography.label, { color: theme.color.textMuted, textTransform: 'uppercase' }]}>
+              {t('home.recentInspections')}
+            </AppText>
             <TouchableOpacity onPress={() => router.push('/(app)/history')}>
               <Text style={s.sectionLink}>{t('home.viewAll')}</Text>
             </TouchableOpacity>
           </View>
           {networkLoading ? <SkeletonList count={3} /> : recentInspections.length === 0 ? (
             <View style={s.emptyState}>
-              <Ionicons name="clipboard-outline" size={44} color="#cbd5e1" />
-              <Text style={s.emptyTitle}>{t('home.noInspections')}</Text>
-              <Text style={s.emptySubtitle}>{t('home.noInspectionsHint')}</Text>
+              <View style={s.emptyIcon}>
+                <Ionicons name="clipboard-outline" size={34} color={theme.color.textMuted} />
+              </View>
+              <AppText variant="h3" center>{t('home.noInspections')}</AppText>
+              <AppText variant="body" color="muted" center style={{ maxWidth: 280 }}>{t('home.noInspectionsHint')}</AppText>
             </View>
           ) : (
-            <View style={{ gap: 8 }}>
+            <View style={{ gap: spacing.sm }}>
               {recentInspections.map(item => (
-                <RecentCard key={item.id} item={item} t={t} />
+                <RecentCard key={item.id} item={item} t={t} s={s} theme={theme} />
               ))}
             </View>
           )}
         </View>
       </ScrollView>
-    </SafeAreaView>
+    </Screen>
   )
 }
 
-// ── Mini sub-components ────────────────────────────────────────────────────────
+// ── Sub-components ─────────────────────────────────────────────────────────────
 
-function StatCard({ icon, value, label, valueColor = '#0f172a', small = false }: {
-  icon: string; value: string; label: string; valueColor?: string; small?: boolean
-}) {
+function SectionLabel({ children, s, theme }: { children: string; s: Styles; theme: Theme }) {
   return (
-    <View style={s.statCard}>
-      <Ionicons name={icon as any} size={16} color={valueColor} />
-      <Text style={[s.statNum, { color: valueColor }, small && { fontSize: 12, fontWeight: '700' }]} numberOfLines={1}>{value}</Text>
-      <Text style={s.statLbl}>{label}</Text>
-    </View>
+    <AppText style={[typography.label, s.sectionTitle, { color: theme.color.textMuted }]}>{children}</AppText>
   )
 }
 
-function FleetStat({ value, label, icon, color, alert }: { value: number; label: string; icon: string; color: string; alert?: boolean }) {
+function QuickActionCard({ action, onPress, s, theme }: { action: QuickAction; onPress: () => void; s: Styles; theme: Theme }) {
+  const t = theme.tint[action.tint]
+  return (
+    <TouchableOpacity style={s.qaCard} onPress={onPress} activeOpacity={0.8}>
+      <View style={[s.qaIcon, { backgroundColor: t.bg }]}>
+        <Ionicons name={action.icon as any} size={22} color={t.fg} />
+      </View>
+      <Text style={s.qaLabel} numberOfLines={1}>{action.label}</Text>
+      {action.sublabel ? <Text style={s.qaSublabel} numberOfLines={1}>{action.sublabel}</Text> : null}
+    </TouchableOpacity>
+  )
+}
+
+function FleetStat({ value, label, icon, tint, alert, s, theme }: {
+  value: number; label: string; icon: string; tint: TintKey; alert?: boolean; s: Styles; theme: Theme
+}) {
+  const tc = theme.tint[tint]
   return (
     <View style={s.fleetStat}>
-      <Ionicons name={icon as any} size={16} color={color} />
-      <Text style={[s.fleetNum, { color: alert ? color : '#0f172a' }]}>{value}</Text>
+      <Ionicons name={icon as any} size={16} color={tc.fg} />
+      <Text style={[s.fleetNum, { color: alert ? tc.fg : theme.color.text }]}>{value}</Text>
       <Text style={s.fleetLbl}>{label}</Text>
     </View>
   )
 }
 
-function RecentCard({ item, t }: { item: InspectionItem; t: (k: string) => string }) {
-  const statusColor =
-    item.sync_status === 'pending' ? '#d97706'
-    : item.sync_status === 'failed' ? '#dc2626'
-    : '#16a34a'
+function RecentCard({ item, t, s, theme }: { item: InspectionItem; t: (k: string) => string; s: Styles; theme: Theme }) {
+  const c =
+    item.sync_status === 'pending' ? theme.color.warning
+    : item.sync_status === 'failed' ? theme.color.danger
+    : theme.color.success
   const statusLabel =
     item.sync_status === 'pending' ? t('home.pending')
     : item.sync_status === 'failed' ? t('home.failed')
@@ -429,7 +424,7 @@ function RecentCard({ item, t }: { item: InspectionItem; t: (k: string) => strin
   return (
     <View style={s.recentCard}>
       <View style={s.recentIcon}>
-        <Ionicons name="document-text-outline" size={18} color="#16a34a" />
+        <Ionicons name="document-text-outline" size={18} color={theme.color.primary} />
       </View>
       <View style={s.recentInfo}>
         <Text style={s.recentTitle} numberOfLines={1}>{item.title}</Text>
@@ -440,8 +435,8 @@ function RecentCard({ item, t }: { item: InspectionItem; t: (k: string) => strin
           ].filter(Boolean).join(' · ')}
         </Text>
       </View>
-      <View style={[s.syncBadge, { borderColor: statusColor + '44', backgroundColor: statusColor + '14' }]}>
-        <Text style={[s.syncBadgeText, { color: statusColor }]}>{statusLabel}</Text>
+      <View style={[s.syncBadge, { backgroundColor: c.soft }]}>
+        <Text style={[s.syncBadgeText, { color: c.on }]}>{statusLabel}</Text>
       </View>
     </View>
   )
@@ -449,95 +444,101 @@ function RecentCard({ item, t }: { item: InspectionItem; t: (k: string) => strin
 
 // ── Styles ─────────────────────────────────────────────────────────────────────
 
-const s = StyleSheet.create({
-  safe:    { flex: 1, backgroundColor: '#f0f5f1' },
-  scroll:  { flex: 1 },
-  content: { padding: 18, gap: 18, paddingBottom: Platform.OS === 'ios' ? 24 : 16 },
+type Styles = ReturnType<typeof makeStyles>
 
-  // Header
-  header:     { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
-  rowReverse: { flexDirection: 'row-reverse' },
-  greeting:   { fontSize: 22, fontWeight: '800', color: '#0f172a' },
-  date:       { fontSize: 12, color: '#64748b', marginTop: 3 },
-  pendingBadge: {
-    alignItems: 'center', backgroundColor: 'rgba(245,158,11,0.1)',
-    borderWidth: 1, borderColor: 'rgba(245,158,11,0.3)',
-    borderRadius: 12, paddingHorizontal: 12, paddingVertical: 6,
-  },
-  pendingNum: { fontSize: 18, fontWeight: '800', color: '#d97706' },
-  pendingLbl: { fontSize: 10, color: '#b45309', fontWeight: '600' },
+function makeStyles(theme: Theme) {
+  const c = theme.color
+  return StyleSheet.create({
+    scroll:  { flex: 1 },
+    content: { padding: spacing.lg, gap: spacing.lg, paddingBottom: spacing['2xl'] },
 
-  // Stats
-  statsRow: { flexDirection: 'row', gap: 10 },
-  statCard: {
-    flex: 1, backgroundColor: '#fff', borderRadius: 14, padding: 12,
-    alignItems: 'center', gap: 4,
-    borderWidth: 1, borderColor: 'rgba(0,0,0,0.06)',
-    shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.04, shadowRadius: 4, elevation: 1,
-  },
-  statNum: { fontSize: 20, fontWeight: '800', color: '#0f172a' },
-  statLbl: { fontSize: 10, color: '#94a3b8', fontWeight: '600', textAlign: 'center' },
+    // Header
+    header:     { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
+    rowReverse: { flexDirection: 'row-reverse' },
+    pendingBadge: {
+      flexDirection: 'row', alignItems: 'center', gap: 4,
+      backgroundColor: c.warning.soft,
+      borderRadius: radius.md, paddingHorizontal: 12, paddingVertical: 8,
+    },
+    pendingNum: { fontSize: 16, fontWeight: '800', color: c.warning.on },
+    pendingLbl: { fontSize: 11, color: c.warning.on, fontWeight: '700' },
 
-  // CTA
-  ctaButton: {
-    flexDirection: 'row', alignItems: 'center', gap: 14,
-    backgroundColor: '#16a34a', borderRadius: 18, padding: 18,
-    shadowColor: '#16a34a', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.32, shadowRadius: 14, elevation: 8,
-  },
-  ctaIcon:     { width: 44, height: 44, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.2)', alignItems: 'center', justifyContent: 'center' },
-  ctaTitle:    { fontSize: 17, fontWeight: '800', color: '#fff' },
-  ctaSubtitle: { fontSize: 12, color: 'rgba(255,255,255,0.7)', marginTop: 2 },
+    // Stats
+    statsRow: { flexDirection: 'row', gap: spacing.md },
 
-  // Quick actions
-  sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  sectionTitle:  { fontSize: 14, fontWeight: '700', color: '#0f172a' },
-  sectionLink:   { fontSize: 13, color: '#16a34a', fontWeight: '600' },
-  quickGrid:     { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+    // CTA
+    ctaButton: {
+      flexDirection: 'row', alignItems: 'center', gap: spacing.lg,
+      backgroundColor: c.primary, borderRadius: radius.xl, padding: spacing.xl,
+      ...elevation(theme, 2),
+    },
+    ctaIcon:     { width: 46, height: 46, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.22)', alignItems: 'center', justifyContent: 'center' },
+    ctaTitle:    { fontSize: 17, fontWeight: '800', color: c.onPrimary },
+    ctaSubtitle: { fontSize: 12.5, color: 'rgba(255,255,255,0.85)', marginTop: 2, fontWeight: '600' },
 
-  // Fleet health
-  fleetCard: {
-    backgroundColor: '#fff', borderRadius: 16, padding: 16,
-    shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 6, elevation: 2,
-    gap: 12,
-  },
-  fleetRow:  { flexDirection: 'row', justifyContent: 'space-around' },
-  fleetStat: { alignItems: 'center', gap: 4 },
-  fleetNum:  { fontSize: 22, fontWeight: '800', color: '#0f172a' },
-  fleetLbl:  { fontSize: 10, color: '#94a3b8', fontWeight: '600', textAlign: 'center' },
-  fleetAlert:{
-    flexDirection: 'row', alignItems: 'center', gap: 6,
-    backgroundColor: '#fef2f2', borderRadius: 10, padding: 10,
-    borderWidth: 1, borderColor: '#fecaca',
-  },
-  fleetAlertText: { flex: 1, fontSize: 12, color: '#dc2626', fontWeight: '600' },
+    // Section labels
+    sectionTitle:     { textTransform: 'uppercase', marginBottom: spacing.xs },
+    sectionHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.md },
+    sectionLink:      { fontSize: 13, color: c.primaryDark, fontWeight: '800' },
 
-  // Scan
-  scanButton: {
-    flexDirection: 'row', alignItems: 'center', gap: 14,
-    backgroundColor: '#fff', borderRadius: 16, padding: 15,
-    borderWidth: 1, borderColor: 'rgba(22,163,74,0.2)',
-    shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.04, shadowRadius: 4, elevation: 1,
-  },
-  scanIcon:    { width: 42, height: 42, borderRadius: 12, backgroundColor: 'rgba(22,163,74,0.1)', alignItems: 'center', justifyContent: 'center' },
-  scanTitle:   { fontSize: 14, fontWeight: '700', color: '#0f172a' },
-  scanSubtitle:{ fontSize: 12, color: '#64748b', marginTop: 2 },
+    // Quick actions
+    quickGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.md },
+    qaCard: {
+      flexGrow: 1, flexBasis: '30%', minWidth: 104,
+      backgroundColor: c.surface, borderRadius: radius.lg, padding: spacing.md, gap: 6,
+      borderWidth: 1, borderColor: c.border, minHeight: 104,
+      ...elevation(theme, 1),
+    },
+    qaIcon:     { width: 42, height: 42, borderRadius: 13, alignItems: 'center', justifyContent: 'center' },
+    qaLabel:    { fontSize: 13.5, fontWeight: '800', color: c.text, marginTop: 2 },
+    qaSublabel: { fontSize: 11, color: c.textMuted, fontWeight: '600' },
 
-  // Recent
-  recentCard: {
-    flexDirection: 'row', alignItems: 'center', gap: 12,
-    backgroundColor: '#fff', borderRadius: 12, padding: 13,
-    borderWidth: 1, borderColor: 'rgba(0,0,0,0.06)',
-    shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.04, shadowRadius: 3, elevation: 1,
-  },
-  recentIcon:  { width: 36, height: 36, borderRadius: 10, backgroundColor: 'rgba(22,163,74,0.08)', alignItems: 'center', justifyContent: 'center' },
-  recentInfo:  { flex: 1, gap: 3 },
-  recentTitle: { fontSize: 13, fontWeight: '600', color: '#0f172a' },
-  recentMeta:  { fontSize: 11, color: '#94a3b8' },
-  syncBadge:   { borderWidth: 1, borderRadius: 7, paddingHorizontal: 8, paddingVertical: 3 },
-  syncBadgeText: { fontSize: 10, fontWeight: '700' },
+    // Fleet health
+    fleetCard: {
+      backgroundColor: c.surface, borderRadius: radius.lg, padding: spacing.lg,
+      borderWidth: 1, borderColor: c.border, gap: spacing.md,
+      ...elevation(theme, 1),
+    },
+    fleetRow:  { flexDirection: 'row', justifyContent: 'space-around' },
+    fleetStat: { alignItems: 'center', gap: 4, flex: 1 },
+    fleetNum:  { fontSize: 22, fontWeight: '800', color: c.text },
+    fleetLbl:  { fontSize: 10.5, color: c.textMuted, fontWeight: '700', textAlign: 'center' },
+    fleetAlert:{
+      flexDirection: 'row', alignItems: 'center', gap: 6,
+      backgroundColor: c.danger.soft, borderRadius: radius.md, padding: spacing.md,
+    },
+    fleetAlertText: { flex: 1, fontSize: 12.5, color: c.danger.on, fontWeight: '700' },
 
-  // Empty
-  emptyState:   { alignItems: 'center', paddingVertical: 40, gap: 10 },
-  emptyTitle:   { fontSize: 15, fontWeight: '700', color: '#94a3b8' },
-  emptySubtitle:{ fontSize: 12, color: '#cbd5e1', textAlign: 'center', lineHeight: 18 },
-})
+    // Scan
+    scanButton: {
+      flexDirection: 'row', alignItems: 'center', gap: spacing.lg,
+      backgroundColor: c.surface, borderRadius: radius.lg, padding: spacing.lg,
+      borderWidth: 1, borderColor: c.border,
+      ...elevation(theme, 1),
+    },
+    scanIcon:     { width: 44, height: 44, borderRadius: 13, backgroundColor: c.primarySoft, alignItems: 'center', justifyContent: 'center' },
+    scanTitle:    { fontSize: 15, fontWeight: '800', color: c.text },
+    scanSubtitle: { fontSize: 12.5, color: c.textMuted, marginTop: 2, fontWeight: '600' },
+
+    // Recent
+    recentCard: {
+      flexDirection: 'row', alignItems: 'center', gap: spacing.md,
+      backgroundColor: c.surface, borderRadius: radius.lg, padding: spacing.md,
+      borderWidth: 1, borderColor: c.border,
+      ...elevation(theme, 1),
+    },
+    recentIcon:  { width: 38, height: 38, borderRadius: 11, backgroundColor: c.primarySoft, alignItems: 'center', justifyContent: 'center' },
+    recentInfo:  { flex: 1, gap: 3 },
+    recentTitle: { fontSize: 14, fontWeight: '700', color: c.text },
+    recentMeta:  { fontSize: 11.5, color: c.textMuted, fontWeight: '600' },
+    syncBadge:   { borderRadius: radius.pill, paddingHorizontal: 9, paddingVertical: 4 },
+    syncBadgeText: { fontSize: 11, fontWeight: '800' },
+
+    // Empty
+    emptyState: { alignItems: 'center', paddingVertical: spacing['3xl'], gap: spacing.sm },
+    emptyIcon: {
+      width: 72, height: 72, borderRadius: 36, backgroundColor: c.surfaceAlt,
+      alignItems: 'center', justifyContent: 'center', marginBottom: spacing.sm,
+    },
+  })
+}

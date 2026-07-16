@@ -529,7 +529,34 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
   attrs), dark tooltip bg consts, email HTML, semantic/categorical chart fills. RULE: theme chart.js colours via
   `var(--token)` (chartVarPlugin resolves them); SVG gauge/diagram strokes are NOT tokenizable without a rewrite.
 
-### BACKLOG (user parked 2026-07-16, "do it later when I ask") — Advanced Admin Control & Self-Healing
+### Admin Control & Self-Healing — Module 1 System Health (V255, 2026-07-16) — SHIPPED, phased
+- User un-parked the Admin Control module (super-admin, under `/console`). Delivering PHASED: after each
+  module STOP + report + await confirmation. Module 1 (System Health + Fleet Health Score + error log) DONE.
+  Modules 4 (backups) + 7 (admin roles) NEXT, pending user confirmation. Do NOT build 2/3/5/6/8 without ask.
+- **V255 (applied live + stub):** NEW table `system_logs` (id, organisation_id DEFAULT app_current_org(),
+  module_id, severity info/warning/error/critical, source, message, detail jsonb, reference_id, url, user_id,
+  user_email, resolved/resolved_by/resolved_at, created_at). RLS: RESTRICTIVE org isolation (null org allowed
+  for early-boot errors); any authenticated INSERT (fire-and-forget error logging); Admin/Manager/Director+super
+  SELECT; Admin/super UPDATE. RPC `resolve_system_logs(p_module,p_severity)` bulk-resolve (Admin/super gated).
+  There was NO app error log before (errors went to Sentry only). Next free migration **V256**.
+- **Pure engine `src/lib/adminHealth.js`** (37 tests) = 0-100 TyrePulse Health Score composer: freshnessScore
+  (per-stream staleness STREAM_STALE_DAYS), errorRateScore (dual-shape), reachabilityScore (systemHealth
+  summary), anomalyScore, computeHealthScore (weighted .3/.3/.3/.1, null-input renormalization, HEALTH_BANDS).
+  REUSES ideas from opsIntelligence.computeFleetHealth / analyticsEngine / systemHealth - do NOT rebuild.
+- **Service `src/lib/api/systemLogs.js`** (12 tests): listSystemLogs (filters+[]-degrade), resolveSystemLog,
+  resolveAllSystemLogs (RPC), logSystemEvent (fire-and-forget, never throws), getHealthMetrics (latestByStream/
+  errors/ai/reports/logsByDay, each source own try/catch).
+- **Page `src/console/pages/ConsoleSystemHealth.jsx`** (/console/health, NAV in ConsoleLayout, navy+orange):
+  big health score + factors, status cards (Supabase/last sync/AI/report/backup="Not configured yet"),
+  runAllChecks() subsystem tiles, error-log table (filter severity/module/since + Resolve/Resolve-all),
+  14-day error-trend chart, realtime channel on system_logs + 60s fallback. Plain-English tooltips; no raw SQL.
+- **INCIDENTAL (reported):** (a) `src/lib/monitoring.js` captureError now ALSO best-effort lazy-logs to
+  system_logs via logSystemEvent (window-guarded, never throws; so errors are captured even without a Sentry
+  DSN). (b) `src/components/ErrorBoundary.jsx` gained a "Report this to me" button -> logSystemEvent with the
+  ERR-XXXX reference id. RULE: system_logs is now the app error sink; new modules should pass module_id in
+  captureError context so their errors attribute correctly (Module 8 registry will consume module_id).
+
+### BACKLOG (user parked 2026-07-16, "do it later when I ask") — Advanced Admin Control & Self-Healing (Modules 2/3/5/6/8)
 - A big SUPER-ADMIN-ONLY module the user specced for LATER (explicitly "put this for later, I will ask you to
   do it all"). Do NOT start until the user asks. Belongs under `/console` (super-admin), NOT the main nav.
   8 modules: (1) System Health Dashboard + 0-100 Fleet Health Score + system_logs error table + realtime;

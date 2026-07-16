@@ -122,12 +122,31 @@ export function isMonitoringActive() {
  * Returns the Sentry event id when the event was captured, otherwise null.
  */
 export function captureError(error, context = undefined) {
-  if (!initialized) return null
+  let eventId = null
+  if (initialized) {
+    try {
+      eventId = Sentry.captureException(error, context ? { extra: context } : undefined) || null
+    } catch { /* no-op — monitoring must never throw */ }
+  }
+  // Best-effort mirror into system_logs so the super-admin System Health console
+  // sees application errors even when Sentry is not configured. Fully guarded:
+  // never throws, never runs server-side, and never blocks the caller.
   try {
-    const eventId = Sentry.captureException(error, context ? { extra: context } : undefined)
-    return eventId || null
-  } catch { /* no-op — monitoring must never throw */ }
-  return null
+    if (typeof window !== 'undefined') {
+      import('./api/systemLogs')
+        .then(m => m.logSystemEvent({
+          module_id: context?.module || context?.boundary || null,
+          severity: 'error',
+          source: context?.boundary || 'app',
+          message: String(error?.message || error),
+          reference_id: context?.referenceId || null,
+          url: (typeof location !== 'undefined' ? location.pathname : null),
+          detail: { componentStack: context?.componentStack },
+        }))
+        .catch(() => {})
+    }
+  } catch { /* no-op - logging must never break the caller */ }
+  return eventId
 }
 
 /**

@@ -4,7 +4,7 @@ import {
   Shield, LayoutDashboard, Building2, Users, Settings2,
   ClipboardList, Zap, Megaphone, Lock, LogOut, ChevronDown,
   Globe, Menu, X, AlertTriangle, Layers, Smartphone, Palette, Activity,
-  DatabaseBackup, UserCog, History, BellRing, Boxes,
+  DatabaseBackup, UserCog, History, BellRing, Boxes, HeartPulse, Search,
 } from 'lucide-react'
 import { useConsoleAuth } from '../ConsoleAuthContext'
 import Console2FAModal from './Console2FAModal'
@@ -17,6 +17,8 @@ const NAV = [
   { to: '/console/module-control', label: 'Module Control', icon: Boxes },
   { to: '/console/alert-rules',  label: 'Alert Rules',    icon: BellRing },
   { to: '/console/audit-trail',  label: 'Audit Trail',    icon: History },
+  { to: '/console/self-healing', label: 'Self-Healing',   icon: HeartPulse },
+  { to: '/console/data-browser', label: 'Data Browser',   icon: Search },
   { to: '/console/organisations', label: 'Organisations',  icon: Building2 },
   { to: '/console/users',        label: 'Users',          icon: Users },
   { to: '/console/permissions',  label: 'Permissions',    icon: Layers },

@@ -532,8 +532,21 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
 ### Admin Control & Self-Healing — Module 1 System Health (V255, 2026-07-16) — SHIPPED, phased
 - User un-parked the Admin Control module (super-admin, under `/console`). Delivering PHASED: after each
   module STOP + report + await confirmation. Modules 1 (System Health), 4 (Backups), 7 (Admin Roles),
-  5 (Alert Rules), 6 (Audit Trail), 8 (Module Control) DONE. Only Modules 2 (self-healing) + 3 (Ask-your-data)
-  remain parked. Next free migration **V260**.
+  5 (Alert Rules), 6 (Audit Trail), 8 (Module Control), 2 (Self-Healing), 3 (No-code DB + Ask-your-data) DONE.
+  ALL 8 Admin Control modules shipped. Next free migration **V261**.
+- **Module 2 Self-Healing** (`/console/self-healing`): pure `src/lib/selfHealing.js` (detectStaleGroups 7d +
+  summarizeFindings severities) + `src/lib/api/selfHealing.js` (runScans REUSES dataReconciliation RPCs +
+  anomalyEngine + a latest-per-site stale scan; fixes = thin pass-throughs to the EXISTING guarded recon RPCs
+  backfill-orphan / merge-identical-duplicate - NO new mutating ops; logHealFinding -> system_logs) +
+  ConsoleSelfHealing.jsx. SAFE: scans read-only, only already-guarded fixes applied. 23 tests.
+- **Module 3 No-code DB + Ask-your-data** (`/console/data-browser`, V260): super-admin READ-ONLY RPCs
+  admin_db_tables/admin_db_columns/admin_db_query over a fixed 14-table SAFELIST (operator whitelisted, value
+  param-bound - no injection, SELECT-only). Pure `src/lib/queryBuilder.js` (21 tests) + `src/lib/api/askData.js`
+  (question -> structured filter via the EXISTING chat-ai edge fn, parse-only/local-first, never throws; 12
+  tests) + `src/lib/api/dataBrowser.js` (6 tests) + ConsoleDataBrowser.jsx (table picker + dropdown filter
+  builder + Ask-your-data + Excel export). HONEST GAP: READ + export only this phase; generic edit/delete is a
+  deliberate later step (banner says so). RULE: all DB browse goes through the safelisted admin_db_* RPCs -
+  never expose arbitrary client SQL.
 - **Module 5 Alert Rules** (`/console/alert-rules`): alertRules.js + ConsoleAlertRules.jsx = no-code
   "if [metric][operator][value] notify [in-app/email]" builder over the EXISTING `alert_thresholds` table
   (evaluated hourly by existing cron) - NO new table. 6 tests.

@@ -1,0 +1,6 @@
+-- MIGRATIONS_V260_ADMIN_DB_BROWSE.sql (applied live) - Module 3 no-code DB browse.
+-- Super-admin READ-ONLY introspection + query over a fixed 14-table SAFELIST
+-- (_admin_db_safelist). RPCs admin_db_tables/admin_db_columns/admin_db_query;
+-- the query RPC whitelists the operator (eq/neq/gt/gte/lt/lte/ilike) and binds
+-- the value as a parameter (no SQL injection, SELECT-only, no arbitrary SQL from
+-- the client). Reversible: DROP the 4 functions. Next free migration V261.

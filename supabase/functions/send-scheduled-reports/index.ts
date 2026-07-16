@@ -702,13 +702,203 @@ function renderClaimsHtml(s: Schedule, d: ClaimsDigest, appUrl: string, currency
   </div>`
 }
 
-/** Render the correct digest e-mail (claims / builder / executive) for one schedule. */
+/* ── Per-type dataset digest (kpi / fleet / cost / inspection / accidents /
+      stock / vendor) ─────────────────────────────────────────────────────────
+   Each report type is backed by a DIFFERENT table + focused projection, mirror-
+   ing the app's scheduledReports.js DATASETS so the emailed digest matches the
+   "Generate now" PDF. Previously every non-claims type fell through to the one
+   executive digest, so cost/fleet/kpi/inspection/etc. all emailed identical
+   numbers - this gives each its own live, type-specific figures. */
+
+type DatasetDigestCfg = {
+  table: string
+  dateCol: string
+  money: string | null
+  accent: string
+  groups: Array<[string, string]> // [label, column]
+  recent: Array<[string, string]> // [column, header]
+  moneyCols: string[]             // recent-table columns rendered as money
+}
+
+const DATASET_DIGEST: Record<string, DatasetDigestCfg> = {
+  kpi: {
+    table: 'tyre_records', dateCol: 'issue_date', money: 'cost_per_tyre', accent: '#0e7490',
+    groups: [['Brand', 'brand'], ['Category', 'category'], ['Risk level', 'risk_level']],
+    recent: [['issue_date', 'Date'], ['asset_no', 'Asset'], ['brand', 'Brand'], ['category', 'Category'], ['risk_level', 'Risk'], ['total_km', 'Total KM'], ['cost_per_tyre', 'Cost']],
+    moneyCols: ['cost_per_tyre'],
+  },
+  fleet: {
+    table: 'tyre_records', dateCol: 'issue_date', money: null, accent: '#1d4ed8',
+    groups: [['Vehicle type', 'vehicle_type'], ['Site', 'site'], ['Status', 'status'], ['Brand', 'brand']],
+    recent: [['issue_date', 'Date'], ['asset_no', 'Asset'], ['vehicle_type', 'Vehicle Type'], ['brand', 'Brand'], ['site', 'Site'], ['position', 'Position'], ['status', 'Status'], ['risk_level', 'Risk']],
+    moneyCols: [],
+  },
+  cost: {
+    table: 'tyre_records', dateCol: 'issue_date', money: 'cost_per_tyre', accent: '#b45309',
+    groups: [['Brand', 'brand'], ['Site', 'site'], ['Category', 'category'], ['Supplier', 'supplier']],
+    recent: [['issue_date', 'Date'], ['asset_no', 'Asset'], ['brand', 'Brand'], ['site', 'Site'], ['category', 'Category'], ['supplier', 'Supplier'], ['qty', 'Qty'], ['cost_per_tyre', 'Cost']],
+    moneyCols: ['cost_per_tyre'],
+  },
+  inspection: {
+    table: 'inspections', dateCol: 'inspection_date', money: null, accent: '#047857',
+    groups: [['Type', 'inspection_type'], ['Site', 'site'], ['Status', 'status'], ['Severity', 'severity']],
+    recent: [['inspection_date', 'Date'], ['inspection_type', 'Type'], ['site', 'Site'], ['asset_no', 'Asset'], ['inspector', 'Inspector'], ['status', 'Status'], ['severity', 'Severity'], ['pressure_reading', 'Pressure']],
+    moneyCols: [],
+  },
+  accidents: {
+    table: 'accidents', dateCol: 'incident_date', money: 'estimated_damage_cost', accent: '#b91c1c',
+    groups: [['Type', 'accident_type'], ['Severity', 'severity'], ['Status', 'status'], ['Site', 'site']],
+    recent: [['incident_date', 'Date'], ['site', 'Site'], ['asset_no', 'Asset'], ['accident_type', 'Type'], ['severity', 'Severity'], ['status', 'Status'], ['estimated_damage_cost', 'Est. Damage'], ['claim_amount', 'Claim']],
+    moneyCols: ['estimated_damage_cost', 'claim_amount'],
+  },
+  stock: {
+    table: 'goods_receipts', dateCol: 'received_date', money: null, accent: '#7c3aed',
+    groups: [['Supplier', 'supplier'], ['Condition', 'condition'], ['Status', 'status'], ['Site', 'site']],
+    recent: [['received_date', 'Received'], ['grn_no', 'GRN'], ['po_ref', 'PO Ref'], ['supplier', 'Supplier'], ['item', 'Item'], ['qty_ordered', 'Ordered'], ['qty_received', 'Received'], ['condition', 'Condition'], ['status', 'Status']],
+    moneyCols: [],
+  },
+  vendor: {
+    table: 'purchase_orders', dateCol: 'order_date', money: 'total_amount', accent: '#0f766e',
+    groups: [['Vendor', 'vendor_name'], ['Status', 'status'], ['Priority', 'priority'], ['Site', 'site']],
+    recent: [['order_date', 'Order Date'], ['po_number', 'PO No'], ['vendor_name', 'Vendor'], ['status', 'Status'], ['priority', 'Priority'], ['site', 'Site'], ['total_amount', 'Amount'], ['expected_delivery', 'Expected']],
+    moneyCols: ['total_amount'],
+  },
+}
+
+type DatasetDigest = {
+  count: number
+  moneySum: number
+  recent30: number
+  first: string | null
+  last: string | null
+  groups: Array<{ label: string; items: TopItem[] }>
+  recent: Record<string, unknown>[]
+}
+
+// deno-lint-ignore no-explicit-any
+async function buildDatasetDigest(svc: any, cfg: DatasetDigestCfg, orgId: string | null): Promise<DatasetDigest> {
+  const cols = new Set<string>([cfg.dateCol])
+  if (cfg.money) cols.add(cfg.money)
+  cfg.groups.forEach(([, c]) => cols.add(c))
+  cfg.recent.forEach(([c]) => cols.add(c))
+  let q = svc.from(cfg.table).select([...cols].join(',')).order(cfg.dateCol, { ascending: false }).limit(5000)
+  // Service role bypasses RLS, so scope to the schedule's org explicitly.
+  if (orgId) q = q.eq('organisation_id', orgId)
+  const { data, error } = await q
+  if (error) throw new Error(`${cfg.table} query failed: ${error.message}`)
+  // deno-lint-ignore no-explicit-any
+  const rows = (data ?? []) as Record<string, any>[]
+
+  const cutoff = new Date(Date.now() - 30 * 86_400_000).toISOString().slice(0, 10)
+  let moneySum = 0, recent30 = 0
+  let first: string | null = null, last: string | null = null
+  const maps = cfg.groups.map(() => new Map<string, number>())
+  for (const r of rows) {
+    if (cfg.money) moneySum += n0(r[cfg.money])
+    const d = r[cfg.dateCol] ? String(r[cfg.dateCol]).slice(0, 10) : null
+    if (d) {
+      if (!first || d < first) first = d
+      if (!last || d > last) last = d
+      if (d >= cutoff) recent30++
+    }
+    cfg.groups.forEach(([, col], i) => {
+      const k = (r[col] == null || String(r[col]).trim() === '') ? '(unknown)' : String(r[col])
+      maps[i].set(k, (maps[i].get(k) ?? 0) + 1)
+    })
+  }
+  const groups = cfg.groups.map(([label], i) => ({
+    label,
+    items: [...maps[i].entries()].map(([l, v]) => ({ label: l, value: v })).sort((a, b) => b.value - a.value).slice(0, 6),
+  }))
+  return { count: rows.length, moneySum, recent30, first, last, groups, recent: rows.slice(0, 12) }
+}
+
+function renderDatasetHtml(s: Schedule, cfg: DatasetDigestCfg, d: DatasetDigest, appUrl: string, currency: string): string {
+  const genAt = new Date().toISOString().slice(0, 16).replace('T', ' ')
+  const coverage = (d.first || d.last) ? `${dateShort(d.first)} to ${dateShort(d.last)}` : 'N/A'
+  const label = typeLabel(s.report_type)
+
+  const summary = d.count === 0
+    ? `No ${label.toLowerCase()} records were found for this organisation yet. Rows appear here as soon as the data is captured.`
+    : `<b>${num(d.count)}</b> record(s) on file (${coverage})` +
+      `${cfg.money ? `, totalling <b>${money(d.moneySum, currency)}</b>` : ''}. ` +
+      `<b>${num(d.recent30)}</b> added in the last 30 days.`
+
+  // Group breakdowns, three columns per row.
+  const groupRows: string[] = []
+  for (let i = 0; i < d.groups.length; i += 3) {
+    const slice = d.groups.slice(i, i + 3)
+    const cells = slice.map((g) => topList(g.label, g.items, (n) => num(n))).join('')
+    groupRows.push(`<tr>${cells}${'<td></td>'.repeat((3 - slice.length + 3) % 3)}</tr>`)
+  }
+
+  const headerCells = cfg.recent.map(([, h]) =>
+    `<td style="padding:6px;font-size:10.5px;font-weight:700;color:#64748b;text-transform:uppercase">${h}</td>`).join('')
+  const bodyRows = d.recent.length
+    ? d.recent.map((r) => `<tr>${cfg.recent.map(([c]) => {
+        const raw = (r as Record<string, unknown>)[c]
+        const val = cfg.moneyCols.includes(c)
+          ? money(n0(raw as number), currency)
+          : (raw == null || String(raw).trim() === '') ? 'N/A'
+          : /_date$/.test(c) ? String(raw).slice(0, 10)
+          : String(raw)
+        return `<td style="padding:7px 6px;font-size:11.5px;color:#334155;border-bottom:1px solid #eef2f7">${val}</td>`
+      }).join('')}</tr>`).join('')
+    : `<tr><td colspan="${cfg.recent.length}" style="padding:10px 6px;font-size:12px;color:#94a3b8">No records to list.</td></tr>`
+
+  const kpis = [
+    tile('Total records', num(d.count)),
+    cfg.money ? tile('Total value', money(d.moneySum, currency)) : tile('Added last 30d', num(d.recent30)),
+    cfg.money ? tile('Added last 30d', num(d.recent30)) : tile('Coverage', coverage),
+  ].join('')
+
+  return `
+  <div style="font-family:Segoe UI,Arial,sans-serif;max-width:680px;margin:auto;color:#0f172a;background:#fff">
+    <div style="background:${cfg.accent};border-radius:12px 12px 0 0;padding:22px 26px;color:#fff">
+      <div style="font-size:19px;font-weight:800">TyrePulse ${label}</div>
+      <div style="font-size:12px;color:#e2e8f0;margin-top:3px">Schedule "${s.name}" | generated ${genAt} UTC | coverage ${coverage}</div>
+    </div>
+    <div style="border:1px solid #e2e8f0;border-top:0;border-radius:0 0 12px 12px;padding:22px 26px">
+      <div style="background:#f1f5f9;border-left:4px solid ${cfg.accent};border-radius:8px;padding:12px 16px;font-size:13px;color:#334155;line-height:1.6">${summary}</div>
+      <table role="presentation" width="100%" cellspacing="8" style="margin-top:6px">
+        ${sectionTitle(`${label} overview`)}
+        <tr>${kpis}</tr>
+        ${sectionTitle('Breakdown')}
+        ${groupRows.join('')}
+      </table>
+      <div style="margin-top:18px;font-size:13px;font-weight:800;color:#0f172a;text-transform:uppercase;letter-spacing:.6px;border-bottom:2px solid ${cfg.accent};padding-bottom:8px">Recent records</div>
+      <table role="presentation" width="100%" cellspacing="0" style="margin-top:8px">
+        <tr style="background:#f8fafc">${headerCells}</tr>
+        ${bodyRows}
+      </table>
+      <p style="font-size:12px;color:#475569;line-height:1.6;margin-top:16px">All figures are live from your ${label.toLowerCase()} data. N/A means the value was not captured and is never estimated.</p>
+      <a href="${appUrl}" style="display:inline-block;background:${cfg.accent};color:#fff;font-weight:700;font-size:13px;padding:11px 20px;border-radius:8px;text-decoration:none;margin-top:4px">Open TyrePulse</a>
+      <p style="font-size:11px;color:#94a3b8;margin-top:18px">You receive this because you are a recipient of the "${s.name}" schedule. Manage recipients and frequency in TyrePulse, Scheduled Reports.</p>
+    </div>
+  </div>`
+}
+
+/** Render the correct digest e-mail for one schedule. Each report type gets its
+ *  own focused digest: claims -> claims desk; executive -> full exec intel;
+ *  kpi/fleet/cost/inspection/accidents/stock/vendor -> their own dataset digest;
+ *  builder:<id> custom layouts -> the accident dataset digest. */
 // deno-lint-ignore no-explicit-any
 async function renderForSchedule(svc: any, s: Schedule, appUrl: string, currency: string): Promise<{ subject: string; html: string }> {
-  const isBuilder = (s.report_type ?? '').startsWith('builder:')
-  const html = (s.report_type === 'claims' || isBuilder)
-    ? renderClaimsHtml(s, await buildClaimsDigest(svc, s.org_id), appUrl, currency)
-    : renderHtml(s, await buildDigest(svc, s.org_id), appUrl, currency)
+  const type = s.report_type ?? ''
+  let html: string
+  if (type === 'claims') {
+    html = renderClaimsHtml(s, await buildClaimsDigest(svc, s.org_id), appUrl, currency)
+  } else if (type === 'executive') {
+    html = renderHtml(s, await buildDigest(svc, s.org_id), appUrl, currency)
+  } else if (type.startsWith('builder:')) {
+    const cfg = DATASET_DIGEST.accidents
+    html = renderDatasetHtml(s, cfg, await buildDatasetDigest(svc, cfg, s.org_id), appUrl, currency)
+  } else if (DATASET_DIGEST[type]) {
+    const cfg = DATASET_DIGEST[type]
+    html = renderDatasetHtml(s, cfg, await buildDatasetDigest(svc, cfg, s.org_id), appUrl, currency)
+  } else {
+    html = renderHtml(s, await buildDigest(svc, s.org_id), appUrl, currency)
+  }
   // No dash punctuation in report output (user preference) - sanitize both.
   return { subject: asciiSafe(`TyrePulse ${typeLabel(s.report_type) || 'Report'}: ${s.name}`), html: asciiSafe(html) }
 }

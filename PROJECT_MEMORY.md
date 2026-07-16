@@ -262,13 +262,76 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
   just picks cadence + recipients. (If they want the analytics CUSTOMIZED, that is already the Report Builder.)
 
 ### Shipped status (2026-07-15 follow-up batch)
-- **In main (merged):** super-admin control center V241/V242 + Preview & Override (main HEAD `1d87c93`).
-- **On branch `claude/accident-builder-report-ui-2bkwb5`, NOT yet in main (as of 2026-07-15):** the four
-  follow-up commits — accidents plate/vehicle-type auto-fill + **V243 migration (already applied LIVE to the
-  DB)**, the super-admin swap + privileged-edit playbook doc, and the Accidents Analytics auto-email. The
-  branch's original PR was ALREADY merged (it became `1d87c93`), so per the merged-PR rule this follow-up must
-  ship via a FRESH PR — do NOT reuse the merged PR. The V243 schema change is live regardless; only the
-  frontend for these two features awaits a new merge to reach production.
+- **In main:** super-admin control center V241/V242 + Preview & Override (`1d87c93`); THEN **PR #28 MERGED**
+  (merge `eb36825`) carrying accidents plate/vehicle-type auto-fill + **V243**, the super-admin swap +
+  privileged-edit playbook doc, the Accidents Analytics auto-email, and the **V244** report_schedules CHECK fix.
+- **On branch `claude/accident-builder-report-ui-2bkwb5`, NOT yet in main (as of 2026-07-15, post-#28):** the
+  **send-scheduled-reports v14** per-type-digest fix (edge fn already DEPLOYED LIVE, so it works regardless of
+  merge — the branch commits just keep `supabase/functions/send-scheduled-reports/index.ts` in sync) + its
+  memory doc. Per the merged-PR rule, if these need to reach main they go via a NEW PR (do NOT reuse #28).
+- RULE reminder: every merged PR is terminal — never stack new commits expecting the old PR to carry them;
+  open a fresh PR. Both V243 and V244 schema changes are LIVE on the DB independent of any merge.
+
+### V246 — site casing normalized + guard (applied LIVE 2026-07-16)
+- Same class of fix as V245 but for `site`. Mixed casing ("Metro"/"METRO", "Dhahban"/"DHAHBAN",
+  "Redsea"/"REDSEA") split the same site into separate report buckets. V246 canonicalizes to
+  `upper(regexp_replace(btrim(site),'\s+',' ','g'))` (upper + trim + collapse internal whitespace) and adds
+  BEFORE INSERT/UPDATE trigger `trg_normalize_site` (fn `normalize_site()`) on **24 operational site-grouping
+  base tables** (accidents, alerts, budgets, corrective_actions, customers, drivers, fleet_master, gate_passes,
+  goods_receipts, incident_reports, inspections, purchase_orders, rca_records, requisitions, stock,
+  stock_movements, stock_records, suppliers, tyre_records, tyre_rotations, tyre_service_events, vehicle_fleet,
+  warranty_claims, work_orders). Only 9 rows were off-canonical (inspections 6/accidents 2/corrective_actions 1);
+  0 remain. inspections lock trigger bypassed around its backfill and restored (both back to 'O').
+  EXCLUDED: `profiles.site` (guarded privileged column via trg_guard_profile_privileged + user scoping; 0 rows
+  off-canonical; a normalize trigger there could race the guard's self-edit "site changed?" check) and pure
+  log/telemetry/audit tables (site not a report grouper there). Next free migration **V248** (see V247 below).
+- **DEEPER ISSUE SURFACED, NOT YET FIXED — site vocabulary reconciliation (needs USER sign-off):** casing is
+  now clean but `tyre_records` uses a `<CODE>-ST` convention while `vehicle_fleet`/accidents/inspections use
+  plain site/gate names, so the SAME physical site is recorded under different codes. High-confidence same-site
+  groups: NHC-ST↔NHC; REDSEA-ST↔REDSEA↔RED SEA; KSP_TP-ST↔KSP-TP↔KSP; DHABAN-ST↔DHAHBAN; AMALA-ST↔AMALA↔AMAALA.
+  AMBIGUOUS (finer gate/plateau granularity in the master — do NOT auto-merge): DIRIYAH-ST vs DIRIYAH-G1/G2;
+  QIDDIYA-ST vs QIDDIYA-UPPER/LOWER PLATEAU; RIY-MET-ST vs METRO. RULE: this is a SEMANTIC merge, not a casing
+  fix — build a confirmed `site_aliases` canonical map (alias->canonical) applied via the normalize trigger,
+  only AFTER the user confirms the mapping. Do NOT collapse -ST codes blindly.
+  **RESOLVED by V247 (2026-07-16):** user delegated the call. `public.site_aliases` (alias PK -> canonical,
+  authenticated-read RLS) now holds the confirmed HIGH-CONFIDENCE merges: NHC-ST->NHC; REDSEA-ST/REDSEA->RED SEA;
+  KSP_TP-ST->KSP-TP; DHABAN-ST->DHAHBAN; AMALA-ST/AMALA->AMAALA (canonical = master vehicle_fleet spelling).
+  `normalize_site()` is now SECURITY DEFINER and, after casing-normalizing, maps NEW.site through site_aliases,
+  so future imports self-correct. Backfilled all 24 tables (0 alias rows remain; NHC now 735, RED SEA 140,
+  AMAALA 89, KSP-TP 68, DHAHBAN 154). AMBIGUOUS gate/plateau codes PRESERVED (NOT merged): DIRIYAH-ST vs
+  DIRIYAH-G1/G2, QIDDIYA-ST vs QIDDIYA-UPPER/LOWER PLATEAU, RIY-MET-ST vs METRO (vehicle_fleet lists these as
+  distinct sites). RULE: to add a future site merge, INSERT into site_aliases (alias must be UPPER/trimmed) and
+  the trigger applies it on next write; backfill existing rows with `UPDATE <t> SET site=sa.canonical FROM
+  site_aliases sa WHERE <t>.site=sa.alias` (disable/enable inspections lock around its update). Next free
+  migration **V248**.
+
+### V245 — vehicle_type casing normalized (applied LIVE 2026-07-16)
+- Mixed casing ("TR-MIXER" vs "Tr-Mixer", "PUMPS" vs "Pumps", "Bus" vs "BUS", etc.) split the SAME vehicle
+  type into separate buckets in fleet analytics + reports (e.g. TR-MIXER showed 1066 and 72 as two rows).
+  V245 canonicalizes to `upper(btrim(vehicle_type))` across ALL base tables carrying vehicle_type
+  (accidents, fleet_master, inspections, tyre_records, tyre_specifications, vehicle_fleet) and adds a cheap
+  BEFORE INSERT/UPDATE trigger `trg_normalize_vehicle_type` (fn `normalize_vehicle_type()`, pure string op)
+  so imports/edits can NEVER reintroduce the split. ~701 rows fixed; 0 collisions remain (TR-MIXER now 1138).
+  RULE: pure casing/whitespace fix only — genuinely distinct types are NOT merged ("Tri-mixer" -> "TRI-MIXER",
+  kept separate from TR-MIXER). GOTCHA: `inspections` has `trg_lock_inspection_content` (blocks edits to
+  locked checklists) — the backfill DISABLEs/ENABLEs it around just the inspections UPDATE (verified both
+  triggers back to tgenabled='O'). `vehicles`/`v_*_secure` are VIEWS over these base tables (no direct fix).
+  Next free migration **V246**.
+
+### send-scheduled-reports v14 (deployed LIVE 2026-07-15): every report type emailed IDENTICAL data
+- ROOT CAUSE: `renderForSchedule` in the edge fn collapsed EVERY non-claims report_type into the single
+  executive digest (`buildDigest`/`report_exec_digest`). So executive/kpi/fleet/cost/inspection/accidents/
+  stock/vendor all emailed the SAME all-fleet numbers - only the title differed. (The in-app "Generate now"
+  PDF/Excel were already correct per type via `fetchReportRows`; only the scheduled EMAIL was wrong.)
+- FIX (v14): added a per-type `DATASET_DIGEST` config (table + dateCol + money + group dims + recent cols,
+  mirroring scheduledReports.js DATASETS) + `buildDatasetDigest` (org-scoped, honest empty states) +
+  `renderDatasetHtml`. Routing now: claims->claims desk; executive->exec intel; kpi/fleet/cost/inspection/
+  accidents/stock/vendor->their OWN dataset digest; `builder:<id>`->accident dataset digest. Executive +
+  claims renderers unchanged. RULE: when adding a base report type, add its DATASET_DIGEST entry too, or it
+  falls back to the executive digest. NOTE: kpi vs cost both read tyre_records+cost, so they only diverge by
+  their group dimensions - and brand/category/supplier/risk_level are largely UNPOPULATED in the live data,
+  so those two still look similar until those columns are filled (data gap, not code). fleet (composition,
+  no money), inspection, accidents, claims, executive are all clearly distinct.
 
 ### V244 — report_schedules CHECK fix (applied LIVE 2026-07-15): "cannot save any scheduled report"
 - ROOT CAUSE: `report_schedules_report_type_check` only allowed

@@ -29,6 +29,8 @@ import {
 import { getReportSnapshot, REPORT_PAGES } from '../lib/api/reportShares'
 import { categorical, colorAt, withAlpha } from '../lib/reportColors'
 import { safeImageSrc } from '../lib/safeUrl'
+import { normalizeLayout, hasCustomLayout } from '../lib/reportShareLayout'
+import ShareBlockView from '../components/display/ShareBlockView'
 
 // ── Light chart palette (pinned literals so canvases read on white paper) ──────
 const P = {
@@ -478,19 +480,61 @@ function ChartCard({ title, subtitle, icon: Icon, empty, emptyText, height = 360
   )
 }
 
-function RotationDots({ pages, active, onPick }) {
-  if (!pages.length) return null
+function RotationDots({ items, active, onPick }) {
+  if (!items.length) return null
   return (
     <div className="rs-dots">
-      {pages.map((key, i) => (
+      {items.map((it, i) => (
         <button
-          key={key}
+          key={it.key}
           type="button"
           className={`rs-dot ${i === active ? 'rs-dot-on' : ''}`}
-          title={PAGE_LABEL[key] || key}
-          aria-label={`Go to ${PAGE_LABEL[key] || key}`}
+          title={it.label}
+          aria-label={`Go to ${it.label}`}
           onClick={onPick ? () => onPick(i) : undefined}
         />
+      ))}
+    </div>
+  )
+}
+
+// ── Custom board: a one-screen CSS grid of blocks (never scrolls) ──────────────
+// Fixed columns x rows fill the available body height; each block spans w x h
+// cells. min-height:0 lets ECharts shrink into its cell so a board always fits.
+function CustomBoard({ board, snapshot }) {
+  const cols = Math.max(1, Number(board?.cols) || 4)
+  const rows = Math.max(1, Number(board?.rows) || 3)
+  const blocks = Array.isArray(board?.blocks) ? board.blocks : []
+  if (!blocks.length) {
+    return (
+      <div className="rs-empty" style={{ height: '100%' }}>
+        <p>This board has no blocks yet.</p>
+      </div>
+    )
+  }
+  return (
+    <div
+      className="rs-cboard"
+      style={{
+        display: 'grid',
+        gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`,
+        gridTemplateRows: `repeat(${rows}, minmax(0, 1fr))`,
+        gap: '14px',
+        height: '100%',
+        minHeight: 0,
+      }}
+    >
+      {blocks.map((b) => (
+        <div
+          key={b.id}
+          style={{
+            gridColumn: `span ${Math.min(Math.max(1, b.w || 1), cols)}`,
+            gridRow: `span ${Math.min(Math.max(1, b.h || 1), rows)}`,
+            minWidth: 0, minHeight: 0,
+          }}
+        >
+          <ShareBlockView block={b} snapshot={snapshot} />
+        </div>
       ))}
     </div>
   )
@@ -636,22 +680,36 @@ export default function ReportShare() {
   }, [load, pwInput])
 
   // ── Rotation ────────────────────────────────────────────────────────────────
+  // A share renders EITHER a custom block layout (V264) OR the fixed page catalog.
+  const customBoards = useMemo(
+    () => (hasCustomLayout(snapshot?.layout) ? (normalizeLayout(snapshot?.layout)?.boards || []) : []),
+    [snapshot],
+  )
+  const isCustom = customBoards.length > 0
   const pages = useMemo(() => arr(snapshot?.pages).filter((k) => PAGE_LABEL[k]), [snapshot])
 
+  // Unified rotation units + their dots, whichever mode is active.
+  const dotItems = useMemo(() => (
+    isCustom
+      ? customBoards.map((b) => ({ key: b.id, label: b.title || 'Board' }))
+      : pages.map((k) => ({ key: k, label: PAGE_LABEL[k] || k }))
+  ), [isCustom, customBoards, pages])
+  const unitCount = dotItems.length
+
   useEffect(() => {
-    // Keep the active page in range after a silent refresh changes the set.
-    if (pages.length > 0 && pageIndex >= pages.length) setPageIndex(0)
-  }, [pages, pageIndex])
+    // Keep the active unit in range after a silent refresh changes the set.
+    if (unitCount > 0 && pageIndex >= unitCount) setPageIndex(0)
+  }, [unitCount, pageIndex])
 
   // Manual board navigation (immediate) + timer reset.
   const goTo = useCallback((next) => {
     setPageIndex((i) => {
-      const n = pages.length
+      const n = unitCount
       if (n <= 0) return 0
       return ((next(i) % n) + n) % n
     })
     bumpTimer()
-  }, [pages.length, bumpTimer])
+  }, [unitCount, bumpTimer])
   const goNext = useCallback(() => goTo((i) => i + 1), [goTo])
   const goPrev = useCallback(() => goTo((i) => i - 1), [goTo])
 
@@ -659,20 +717,31 @@ export default function ReportShare() {
   // interaction restarts the countdown from a full interval; paused while hovering
   // the controls so a reader is not interrupted mid-thought.
   useEffect(() => {
-    if (status !== 'ok' || pages.length <= 1 || paused) return undefined
+    if (status !== 'ok' || unitCount <= 1 || paused) return undefined
     const sec = clampSec(snapshot?.rotate_seconds, 30)
     const id = setInterval(() => {
-      setPageIndex((i) => (i + 1) % pages.length)
+      setPageIndex((i) => (i + 1) % unitCount)
     }, sec * 1000)
     return () => clearInterval(id)
-  }, [status, pages.length, snapshot?.rotate_seconds, paused, pageIndex, timerNonce])
+  }, [status, unitCount, snapshot?.rotate_seconds, paused, pageIndex, timerNonce])
 
   // ── Silent auto-refresh (keeps last good data on failure) ───────────────────
+  // Visibility gated: a TV that is off, a backgrounded tab, or a device asleep
+  // must NOT keep hitting the server. We skip the fetch while the page is hidden
+  // and do ONE catch-up refresh the moment it becomes visible again, so the board
+  // is fresh when someone looks at it without polling in the dark.
   useEffect(() => {
     if (status !== 'ok') return undefined
     const sec = clampSec(snapshot?.refresh_seconds, 300)
-    const id = setInterval(() => { silentUpdate() }, sec * 1000)
-    return () => clearInterval(id)
+    const id = setInterval(() => {
+      if (typeof document !== 'undefined' && document.hidden) return
+      silentUpdate()
+    }, sec * 1000)
+    const onVisible = () => {
+      if (typeof document !== 'undefined' && !document.hidden) silentUpdate()
+    }
+    document.addEventListener('visibilitychange', onVisible)
+    return () => { clearInterval(id); document.removeEventListener('visibilitychange', onVisible) }
   }, [status, snapshot?.refresh_seconds, silentUpdate])
 
   // Throttled mouse-move-over-controls reset (about 2 per second, no churn storm).
@@ -757,9 +826,12 @@ export default function ReportShare() {
   }
 
   // ── State: OK (live board) ──────────────────────────────────────────────────
-  const activeKey = pages[pageIndex] || pages[0]
+  const safeIndex = unitCount ? Math.min(pageIndex, unitCount - 1) : 0
+  const activeKey = pages[safeIndex] || pages[0]
+  const activeBoard = isCustom ? customBoards[safeIndex] : null
+  const activeTitle = isCustom ? (activeBoard?.title || 'Board') : (PAGE_LABEL[activeKey] || 'Report')
   const rotateSec = clampSec(snapshot?.rotate_seconds, 30)
-  const canRotate = pages.length > 1
+  const canRotate = unitCount > 1
   const logoSrc = safeImageSrc(snapshot?.logo)
   const siteOpts = arr(snapshot?.sites)
   const countryOpts = arr(snapshot?.countries)
@@ -824,9 +896,9 @@ export default function ReportShare() {
           </button>
           <div className="rs-board-now">
             <span className="rs-board-kicker">
-              Board {pages.length ? pageIndex + 1 : 0} of {pages.length}
+              Board {unitCount ? safeIndex + 1 : 0} of {unitCount}
             </span>
-            <span className="rs-board-title">{PAGE_LABEL[activeKey] || 'Report'}</span>
+            <span className="rs-board-title">{activeTitle}</span>
           </div>
           <button
             type="button" className="rs-navbtn" onClick={goNext}
@@ -834,7 +906,7 @@ export default function ReportShare() {
           >
             <ChevronRight size={22} />
           </button>
-          <RotationDots pages={pages} active={pageIndex} onPick={(i) => { setPageIndex(i); bumpTimer() }} />
+          <RotationDots items={dotItems} active={safeIndex} onPick={(i) => { setPageIndex(i); bumpTimer() }} />
         </div>
 
         <div className="rs-controls-right">
@@ -902,18 +974,25 @@ export default function ReportShare() {
         </div>
       </div>
 
-      {/* Rotating page body (key drives the fade / slide transition) */}
+      {/* Rotating body (key drives the fade / slide transition). Custom layouts
+          render a one-screen block grid; otherwise the fixed page catalog. */}
       <main className="rs-body">
-        <div key={`${activeKey}-${pageIndex}`} className="rs-page-anim">
-          {activeKey === 'board_kpis' && <KpisPage snapshot={snapshot} />}
-          {activeKey === 'fleet_overview' && <FleetOverviewPage snapshot={snapshot} />}
-          {activeKey === 'board_trends' && <TrendsPage snapshot={snapshot} />}
-          {activeKey === 'spend_trend' && <SpendTrendPage snapshot={snapshot} />}
-          {activeKey === 'risk_activity' && <RiskActivityPage snapshot={snapshot} />}
-          {activeKey === 'claims_desk' && <ClaimsDeskPage snapshot={snapshot} />}
-          {activeKey === 'board_charts' && <ChartsPage snapshot={snapshot} />}
-          {activeKey === 'ops_today' && <OpsTodayPage snapshot={snapshot} />}
-          {activeKey === 'pm_due' && <PmDuePage snapshot={snapshot} />}
+        <div key={`${isCustom ? activeBoard?.id : activeKey}-${safeIndex}`} className="rs-page-anim">
+          {isCustom ? (
+            <CustomBoard board={activeBoard} snapshot={snapshot} />
+          ) : (
+            <>
+              {activeKey === 'board_kpis' && <KpisPage snapshot={snapshot} />}
+              {activeKey === 'fleet_overview' && <FleetOverviewPage snapshot={snapshot} />}
+              {activeKey === 'board_trends' && <TrendsPage snapshot={snapshot} />}
+              {activeKey === 'spend_trend' && <SpendTrendPage snapshot={snapshot} />}
+              {activeKey === 'risk_activity' && <RiskActivityPage snapshot={snapshot} />}
+              {activeKey === 'claims_desk' && <ClaimsDeskPage snapshot={snapshot} />}
+              {activeKey === 'board_charts' && <ChartsPage snapshot={snapshot} />}
+              {activeKey === 'ops_today' && <OpsTodayPage snapshot={snapshot} />}
+              {activeKey === 'pm_due' && <PmDuePage snapshot={snapshot} />}
+            </>
+          )}
         </div>
       </main>
     </div>

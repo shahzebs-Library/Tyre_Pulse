@@ -408,7 +408,30 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
   `getReportSnapshot(token,pw,{site,country,from,to})`; ReportShare.jsx replaced the "coming soon" placeholder
   with two date inputs + an "All dates" clear (changeFilter handles site/country/from/to generically, re-fetches
   and resets rotation to board 1). Verified live: accidents 2026=25 vs 2020=0; tyres H1-2026=134; bad date -> null.
-  **Next free migration V264.**
+- **Custom report board BUILDER (V264, 2026-07-16):** shares can now carry a bespoke block-based layout INSTEAD of
+  the fixed 9-page catalog. `report_shares.layout jsonb` (NULL = fixed pages); `get_report_snapshot` echoes
+  `layout` back to the anon viewer alongside the SAME aggregate channels (no new data surface, no new grant).
+  Single pure engine **`src/lib/reportShareLayout.js`** (SOURCES catalog of ~30 data channels grouped by kind
+  kpi/series/breakdown/combo/claims/heatmap/ratio/table; VIZ_BY_KIND chart-style options; BLOCK_PRESETS;
+  normalizeLayout/normalizeBoard/normalizeBlock clamps; `resolveBlock(block,snapshot)` maps a block to render
+  data; STARTER_LAYOUTS + emptyLayout; 38 tests). Shared light chart options extracted to
+  **`src/lib/reportShareCharts.js`** (spark/combo/claims/seriesOption/breakdownOption/gauge/heatmap, follows the
+  reportColors theme) + single block renderer **`src/components/display/ShareBlockView.jsx`** (white surface,
+  inline styles so it is WYSIWYG in both the public light board and the dark app builder preview) used by BOTH
+  surfaces. Viewer `ReportShare.jsx`: when `hasCustomLayout(snapshot.layout)` it rotates through
+  `normalizeLayout(layout).boards` (unified `unitCount`/`dotItems` drive board nav + dots + progress), rendering
+  each board as a fixed `repeat(cols,1fr) x repeat(rows,1fr)` CSS grid that FILLS the body height so a board fits
+  ONE screen and never scrolls (min-height:0 lets ECharts shrink into its cell). Builder
+  **`src/components/display/ReportShareBuilder.jsx`** (modal from ReportSharesPanel "Design" button): board
+  tabs + cols/rows steppers, add-block palette, per-block source/chart-style/size(W,H)/accent/title editor, live
+  WYSIWYG preview via ShareBlockView, save via `updateReportShare(id,{layout})` (RLS UPDATE), "Use fixed pages
+  instead" clears layout to null. reportShares.js: COLS includes `layout`, `updateReportShare` accepts `layout`
+  ('layout' in patch => set, null clears). RULE to add a data channel: add a SOURCES entry (+ its snapshot key if
+  new) + a resolveBlock case + a ShareBlockView branch if a new kind.
+- **Smarter refresh (2026-07-16):** the viewer's silent auto-refresh is now VISIBILITY-GATED - it skips the fetch
+  while `document.hidden` (a TV that is off, a backgrounded tab, a sleeping device stops polling) and does ONE
+  catch-up refresh on `visibilitychange` back to visible. Rotation cadence unchanged; only server polling is gated.
+  **Next free migration V265.**
 - **STILL BACKLOG:** shareable links for reports currently expose the Board-Overview aggregate set; wiring the
   full Executive/Accident block-builder layouts into the public snapshot is a later extension. Existing V103
   `/display/:token` + getDisplaySnapshot (DisplayShare) remains the separate executive-board token-share.

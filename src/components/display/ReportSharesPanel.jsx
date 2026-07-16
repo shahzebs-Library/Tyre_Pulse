@@ -15,9 +15,10 @@
 import { useState, useEffect, useCallback } from 'react'
 import {
   Share2, Plus, Loader2, ShieldCheck, AlertCircle, Copy, Check, Trash2, X,
-  Lock, Clock, ExternalLink, Tv, Pencil, Save,
+  Lock, Clock, ExternalLink, Tv, Pencil, Save, LayoutGrid,
 } from 'lucide-react'
 import { useAuth } from '../../contexts/AuthContext'
+import ReportShareBuilder from './ReportShareBuilder'
 import {
   REPORT_PAGES, PAGE_GROUPS, DEFAULT_PAGES,
   listReportShares, createReportShare, updateReportShare, revokeReportShare, buildShareUrl,
@@ -84,6 +85,7 @@ export default function ReportSharesPanel() {
   const [copied, setCopied] = useState(null)    // key of the copied control
   const [revoking, setRevoking] = useState(null)
   const [confirmId, setConfirmId] = useState(null)
+  const [builderShare, setBuilderShare] = useState(null)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -454,6 +456,10 @@ export default function ReportSharesPanel() {
                       className="p-1.5 rounded-md text-[var(--text-muted)] hover:text-[var(--accent)]">
                       <ExternalLink size={14} />
                     </a>
+                    <button type="button" title="Design boards" onClick={() => setBuilderShare(row)}
+                      className="p-1.5 rounded-md text-[var(--text-muted)] hover:text-[var(--accent)]">
+                      <LayoutGrid size={14} />
+                    </button>
                     <button type="button" title="Edit link" onClick={() => openEdit(row)}
                       className={`p-1.5 rounded-md hover:text-[var(--accent)] ${editingId === row.id ? 'text-[var(--accent)]' : 'text-[var(--text-muted)]'}`}>
                       <Pencil size={14} />
@@ -485,6 +491,14 @@ export default function ReportSharesPanel() {
             )
           })}
         </div>
+      )}
+
+      {builderShare && (
+        <ReportShareBuilder
+          share={builderShare}
+          onClose={() => setBuilderShare(null)}
+          onSaved={() => { setBuilderShare(null); load() }}
+        />
       )}
     </div>
   )

@@ -23,7 +23,7 @@ ChartJS.register(
   Title, Tooltip, Legend, PointElement, LineElement,
 )
 
-const GRID   = { color: '#1f2937' }
+const GRID   = { color: 'var(--panel-2)' }
 const TICK   = { color: '#9ca3af' }
 const LEGEND = { labels: { color: '#9ca3af', boxWidth: 12 } }
 

@@ -33,7 +33,7 @@ const CHART_OPTS = {
   responsive: true, maintainAspectRatio: false,
   plugins: { legend: { labels: { color: '#9ca3af' } } },
   scales: {
-    x: { ticks: { color: '#6b7280' }, grid: { color: '#1f2937' } },
+    x: { ticks: { color: '#6b7280' }, grid: { color: 'var(--panel-2)' } },
     y: { ticks: { color: '#6b7280' }, grid: { color: '#374151' } },
   },
 }

@@ -26,8 +26,8 @@ const CHART_OPTS = (horizontal = false) => ({
   indexAxis: horizontal ? 'y' : 'x',
   plugins: { legend: { display: false } },
   scales: {
-    x: { grid: { color: '#1f2937' }, ticks: { color: '#9ca3af' } },
-    y: { grid: { color: '#1f2937' }, ticks: { color: '#9ca3af' } },
+    x: { grid: { color: 'var(--panel-2)' }, ticks: { color: '#9ca3af' } },
+    y: { grid: { color: 'var(--panel-2)' }, ticks: { color: '#9ca3af' } },
   },
 })
 
@@ -482,8 +482,8 @@ function BrandDrillDown({ brand, records }) {
     responsive: true, maintainAspectRatio: false,
     plugins: { legend: { labels: { color: '#9ca3af' } } },
     scales: {
-      x: { grid: { color: '#1f2937' }, ticks: { color: '#9ca3af' } },
-      y: { grid: { color: '#1f2937' }, ticks: { color: '#9ca3af' } },
+      x: { grid: { color: 'var(--panel-2)' }, ticks: { color: '#9ca3af' } },
+      y: { grid: { color: 'var(--panel-2)' }, ticks: { color: '#9ca3af' } },
     },
   }
 

@@ -64,8 +64,8 @@ const CHART_OPTS_BAR = {
   maintainAspectRatio: false,
   plugins: { legend: { display: false } },
   scales: {
-    x: { grid: { color: '#1f2937' }, ticks: { color: '#9ca3af', font: { size: 11 } } },
-    y: { grid: { color: '#1f2937' }, ticks: { color: '#9ca3af' }, min: 0, max: 100 },
+    x: { grid: { color: 'var(--panel-2)' }, ticks: { color: '#9ca3af', font: { size: 11 } } },
+    y: { grid: { color: 'var(--panel-2)' }, ticks: { color: '#9ca3af' }, min: 0, max: 100 },
   },
 }
 
@@ -76,8 +76,8 @@ const CHART_OPTS_LINE = {
     legend: { labels: { color: '#9ca3af', font: { size: 11 } } },
   },
   scales: {
-    x: { grid: { color: '#1f2937' }, ticks: { color: '#9ca3af', font: { size: 11 } } },
-    y: { grid: { color: '#1f2937' }, ticks: { color: '#9ca3af' }, min: 0, max: 100 },
+    x: { grid: { color: 'var(--panel-2)' }, ticks: { color: '#9ca3af', font: { size: 11 } } },
+    y: { grid: { color: 'var(--panel-2)' }, ticks: { color: '#9ca3af' }, min: 0, max: 100 },
   },
 }
 

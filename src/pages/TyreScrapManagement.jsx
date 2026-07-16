@@ -68,8 +68,8 @@ const CHART_OPTS = {
     },
   },
   scales: {
-    x: { ticks: { color: '#9ca3af', font: { size: 11 } }, grid: { color: '#1f2937' } },
-    y: { ticks: { color: '#9ca3af', font: { size: 11 } }, grid: { color: '#1f2937' } },
+    x: { ticks: { color: '#9ca3af', font: { size: 11 } }, grid: { color: 'var(--panel-2)' } },
+    y: { ticks: { color: '#9ca3af', font: { size: 11 } }, grid: { color: 'var(--panel-2)' } },
   },
 }
 
@@ -600,11 +600,11 @@ export default function TyreScrapManagement() {
     ...CHART_OPTS,
     interaction: { mode: 'index', intersect: false },
     scales: {
-      x: { ticks: { color: '#9ca3af', font: { size: 10 } }, grid: { color: '#1f2937' } },
+      x: { ticks: { color: '#9ca3af', font: { size: 10 } }, grid: { color: 'var(--panel-2)' } },
       y: {
         position: 'left',
         ticks: { color: '#9ca3af', font: { size: 10 } },
-        grid: { color: '#1f2937' },
+        grid: { color: 'var(--panel-2)' },
         title: { display: true, text: 'Count', color: '#6b7280', font: { size: 10 } },
       },
       y1: {

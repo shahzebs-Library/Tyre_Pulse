@@ -118,8 +118,8 @@ const CHART_BASE = {
     },
   },
   scales: {
-    x: { ticks: { color: '#6b7280', font: { size: 10 } }, grid: { color: '#1f2937' } },
-    y: { ticks: { color: '#6b7280', font: { size: 10 } }, grid: { color: '#1f2937' } },
+    x: { ticks: { color: '#6b7280', font: { size: 10 } }, grid: { color: 'var(--panel-2)' } },
+    y: { ticks: { color: '#6b7280', font: { size: 10 } }, grid: { color: 'var(--panel-2)' } },
   },
 }
 
@@ -1041,7 +1041,7 @@ export default function KpiCommandCenter() {
               scales: {
                 r: {
                   ticks: { color: '#6b7280', backdropColor: 'transparent', font: { size: 9 } },
-                  grid: { color: '#1f2937' },
+                  grid: { color: 'var(--panel-2)' },
                   pointLabels: { color: '#9ca3af', font: { size: 10 } },
                   suggestedMin: 0,
                   suggestedMax: 100,

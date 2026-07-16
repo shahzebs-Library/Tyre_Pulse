@@ -516,6 +516,18 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
   and the brand green accent are deliberately preserved. DARK mode output is byte-for-byte unchanged (everything
   is scoped under html.light). RULE: to fix a screen that still looks dark in light mode, add an html.light-scoped
   override in index.css (never restyle dark); do not palettize semantic status colours.
+- **Light-theme completion + bundle split (2026-07-16, 2-agent batch):** (a) `vite.config.js` manualChunks now
+  pins `vendor-echarts` (~1.1MB, was an anonymous hash-churning index chunk) + `vendor-table` (@tanstack, pulled
+  out of the eager shell); heavy export libs (jspdf/xlsx/pptxgenjs/html2canvas) stay LAZY - do NOT pin them.
+  chunkSizeWarningLimit raised to 900 after splitting. (b) Light-theme holdouts fixed by TOKENIZING hard-coded
+  darks (dark token value == the literal it replaced, so DARK output is byte-identical): index.css added
+  --panel-ink-2/3/4 (secondary/muted/dim panel text); ErrorBoundary bg #020704 -> var(--bg-base); Inspections
+  approve-modal texts -> panel-ink tokens; and across **30 chart pages** `grid:{color:'#1f2937'}` ->
+  `var(--panel-2)` (resolved per-theme by the EXISTING `src/lib/chartVarPlugin.js` registered in main.jsx - the
+  sanctioned way to theme chart.js colours). DELIBERATELY left dark: modal scrims rgba(0,0,0), camera/scanner
+  surfaces, SVG stroke/fill attrs (#1f2937/#374151 gauge tracks - CSS vars don't resolve in SVG presentation
+  attrs), dark tooltip bg consts, email HTML, semantic/categorical chart fills. RULE: theme chart.js colours via
+  `var(--token)` (chartVarPlugin resolves them); SVG gauge/diagram strokes are NOT tokenizable without a rewrite.
 
 ### BACKLOG (user parked 2026-07-16, "do it later when I ask") — Advanced Admin Control & Self-Healing
 - A big SUPER-ADMIN-ONLY module the user specced for LATER (explicitly "put this for later, I will ask you to

@@ -119,6 +119,14 @@ html.rtl .rtl-flip { transform: scaleX(-1); }
   --panel-overlay: rgba(17,24,39,0.92);
   --panel-deep:    rgba(8,15,10,0.9);
   --panel-ink:     #ffffff;
+  /* Secondary/muted/dim text ON the inline panel surfaces above. Dark values are
+     byte-identical to the literals they replace (gray-300/400/500) so dark output
+     is unchanged; html.light remaps them to readable slate on the flipped white
+     panel. Fixes light-gray text going invisible when a var(--panel) surface
+     flips to white in light mode. */
+  --panel-ink-2:   #d1d5db;
+  --panel-ink-3:   #9ca3af;
+  --panel-ink-4:   #6b7280;
   --hairline:      #374151;
   --hero-from:     rgba(9,18,11,0.98);
   --hero-to:       rgba(5,12,7,0.99);
@@ -829,6 +837,9 @@ html.light {
   --panel-overlay: rgba(255,255,255,0.95);
   --panel-deep:    rgba(255,255,255,0.96);
   --panel-ink:     #0f172a;
+  --panel-ink-2:   #344054;
+  --panel-ink-3:   #667085;
+  --panel-ink-4:   #475569;
   --hairline:      rgba(15,23,42,0.10);
   --hero-from:     #ffffff;
   --hero-to:       #f5faf6;

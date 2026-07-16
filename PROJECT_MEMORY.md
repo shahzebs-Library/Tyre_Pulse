@@ -389,6 +389,26 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
   (Maintenance Due). ReportShare.jsx got a UI polish pass (live clock, gradient KPI tiles, page-enter animation
   w/ prefers-reduced-motion, sticky/zebra tables, semantic status/priority pills, 4k/laptop/phone responsive).
   RULE to add an ops board page: extend the snapshot `ops` object + REPORT_PAGES + a render branch.
+- **TV wallboard upgrade (V262, 2026-07-16):** get_report_snapshot gained server-side `p_site`/`p_country`
+  filters (threaded as `AND (v_site IS NULL OR site=v_site) AND (v_country IS NULL OR country=v_country)` on
+  every scoped aggregate) plus `logo` (from system_config key `company_logo`), `sites[]`/`countries[]` option
+  lists, and a `heatmap[]` (site x severity incident counts). `getReportSnapshot(token,pw,{site,country})`.
+  ReportShare.jsx overhaul: prev/next board arrows + clickable dots + "Board N of M", interaction-resets-timer
+  (timerNonce), on-demand Refresh + "Last refresh", site/country filter bar, ECharts heatmap + gauge dials
+  (recovery rate / open-accident share, honest N/A when denom 0), logo in header (safeImageSrc + brand-mark
+  fallback), Full-HD (@media 1920/2560). Company logo is set once by super-admin in
+  ConsoleReportAppearance.jsx via `src/lib/api/brandLogo.js` (get/setCompanyLogo over system_config).
+- **Date-range filter (V263, 2026-07-16):** get_report_snapshot now takes optional `p_from`/`p_to` (YYYY-MM-DD
+  text, NULL = all time; invalid/blank coerces to NULL, no anon error). Applied to the event-dated aggregates
+  via each table's natural date (accidents.incident_date, tyre_records.issue_date, inspections.inspection_date):
+  the tyres/tyre_spend/accidents/open_accidents/claims/inspections KPIs, the severity/by-site/claim-status
+  breakdowns and the heatmap. DELIBERATELY unfiltered: the fleet-register + open-WO counts (live state), the
+  rolling 12-month trends (fixed window), and the "today" ops block. Old 4-arg overload DROPPED so one signature
+  exists (4-named-arg calls resolve via from/to defaults); anon+authenticated keep EXECUTE. Client:
+  `getReportSnapshot(token,pw,{site,country,from,to})`; ReportShare.jsx replaced the "coming soon" placeholder
+  with two date inputs + an "All dates" clear (changeFilter handles site/country/from/to generically, re-fetches
+  and resets rotation to board 1). Verified live: accidents 2026=25 vs 2020=0; tyres H1-2026=134; bad date -> null.
+  **Next free migration V264.**
 - **STILL BACKLOG:** shareable links for reports currently expose the Board-Overview aggregate set; wiring the
   full Executive/Accident block-builder layouts into the public snapshot is a later extension. Existing V103
   `/display/:token` + getDisplaySnapshot (DisplayShare) remains the separate executive-board token-share.

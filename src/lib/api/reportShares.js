@@ -96,8 +96,10 @@ export async function updateReportShare(id, patch = {}) {
  *
  * @param {string} token         share token from the URL
  * @param {string|null} password optional viewer password
- * @param {{site?:string, country?:string}} opts server-side site / country filter
- *   (V262). Empty / omitted values mean "all" and are sent as null.
+ * @param {{site?:string, country?:string, from?:string, to?:string}} opts server-side
+ *   filters. site / country (V262); from / to = an inclusive reporting-period date
+ *   window (V263, YYYY-MM-DD) applied to the event-dated aggregates. Empty / omitted
+ *   values mean "all" and are sent as null.
  */
 export async function getReportSnapshot(token, password = null, opts = {}) {
   const { data, error } = await supabase.rpc('get_report_snapshot', {
@@ -105,6 +107,8 @@ export async function getReportSnapshot(token, password = null, opts = {}) {
     p_password: password,
     p_site: opts.site || null,
     p_country: opts.country || null,
+    p_from: opts.from || null,
+    p_to: opts.to || null,
   })
   if (error) { if (isBackendMissing(error)) return { ok: false, reason: 'unavailable' }; throw error }
   return data || { ok: false, reason: 'invalid' }

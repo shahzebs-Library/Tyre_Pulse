@@ -533,9 +533,11 @@ export default function ReportShare() {
   const [lastRefresh, setLastRefresh] = useState(null)
   const [refreshing, setRefreshing] = useState(false)
 
-  // Server-side filters (V262). Empty string = all.
+  // Server-side filters (V262 site/country, V263 date range). Empty string = all.
   const [site, setSite] = useState('')
   const [country, setCountry] = useState('')
+  const [from, setFrom] = useState('')
+  const [to, setTo] = useState('')
 
   // Password screen local state
   const [pwInput, setPwInput] = useState('')
@@ -544,10 +546,10 @@ export default function ReportShare() {
 
   const pwRef = useRef(null)        // password that produced the current snapshot
   const loadedRef = useRef(false)   // true once a good snapshot has ever painted
-  const filtersRef = useRef({ site: '', country: '' }) // latest filters for interval callbacks
+  const filtersRef = useRef({ site: '', country: '', from: '', to: '' }) // latest filters for interval callbacks
   const moveRef = useRef(0)         // throttle mouse-move timer resets
 
-  useEffect(() => { filtersRef.current = { site, country } }, [site, country])
+  useEffect(() => { filtersRef.current = { site, country, from, to } }, [site, country, from, to])
 
   const bumpTimer = useCallback(() => setTimerNonce((n) => n + 1), [])
 
@@ -605,11 +607,21 @@ export default function ReportShare() {
     bumpTimer()
   }, [silentUpdate, bumpTimer])
 
-  // Change a filter, re-fetch with it, reset rotation to the first board.
+  // Change a filter, re-fetch with it, reset rotation to the first board. Handles
+  // site / country / from / to; the server treats an empty value as "all".
+  const SETTERS = { site: setSite, country: setCountry, from: setFrom, to: setTo }
   const changeFilter = useCallback((kind, value) => {
-    if (kind === 'site') setSite(value)
-    else setCountry(value)
+    const setter = SETTERS[kind]
+    if (setter) setter(value)
     filtersRef.current = { ...filtersRef.current, [kind]: value }
+    bumpTimer()
+    silentUpdate({ resetPage: true })
+  }, [bumpTimer, silentUpdate]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Clear the reporting-period window back to all-time in one action.
+  const clearDates = useCallback(() => {
+    setFrom(''); setTo('')
+    filtersRef.current = { ...filtersRef.current, from: '', to: '' }
     bumpTimer()
     silentUpdate({ resetPage: true })
   }, [bumpTimer, silentUpdate])
@@ -751,7 +763,9 @@ export default function ReportShare() {
   const logoSrc = safeImageSrc(snapshot?.logo)
   const siteOpts = arr(snapshot?.sites)
   const countryOpts = arr(snapshot?.countries)
-  const hasFilters = siteOpts.length > 0 || countryOpts.length > 0
+  // The date-range control is always available, so the filter bar always renders.
+  const hasFilters = true
+  const dateActive = Boolean(from || to)
 
   return (
     <div className="rs-root tp-report-paper">
@@ -845,10 +859,34 @@ export default function ReportShare() {
                   </select>
                 </label>
               )}
-              <span className="rs-select rs-select-disabled" title="Date range filtering is coming soon">
+              <label className="rs-select rs-date" title="Reporting period start">
                 <CalendarClock size={15} aria-hidden="true" />
-                <span>Date range: coming soon</span>
-              </span>
+                <input
+                  type="date"
+                  value={from}
+                  max={to || undefined}
+                  onChange={(e) => changeFilter('from', e.target.value)}
+                  aria-label="Reporting period start date"
+                />
+              </label>
+              <span className="rs-date-sep" aria-hidden="true">to</span>
+              <label className="rs-select rs-date" title="Reporting period end">
+                <input
+                  type="date"
+                  value={to}
+                  min={from || undefined}
+                  onChange={(e) => changeFilter('to', e.target.value)}
+                  aria-label="Reporting period end date"
+                />
+              </label>
+              {dateActive && (
+                <button
+                  type="button" className="rs-date-clear" onClick={clearDates}
+                  title="Clear date range" aria-label="Clear date range"
+                >
+                  All dates
+                </button>
+              )}
             </div>
           )}
           <div className="rs-refresh">
@@ -1480,8 +1518,17 @@ function ScopedStyle() {
         border:none; background:transparent; color:var(--rs-text); font-size:14px; font-weight:600;
         outline:none; cursor:pointer; max-width:180px;
       }
-      .rs-select-disabled { color:var(--rs-muted); background:#f1f5f9; cursor:not-allowed; }
-      .rs-select-disabled svg { color:var(--rs-muted); }
+      .rs-date { padding:6px 10px; }
+      .rs-date input {
+        border:none; background:transparent; color:var(--rs-text); font-size:14px; font-weight:600;
+        outline:none; cursor:pointer; font-family:inherit; color-scheme:light;
+      }
+      .rs-date-sep { font-size:13px; color:var(--rs-muted); }
+      .rs-date-clear {
+        padding:8px 12px; border-radius:11px; border:1px solid var(--rs-border); background:#ffffff;
+        color:var(--rs-sub); font-size:13px; font-weight:600; cursor:pointer; transition:all .15s;
+      }
+      .rs-date-clear:hover { color:var(--rs-text); border-color:var(--rs-accent); }
 
       .rs-refresh { display:flex; align-items:center; gap:12px; }
       .rs-refbtn {

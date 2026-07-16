@@ -1,0 +1,8 @@
+-- MIGRATIONS_V257_BACKUPS.sql (applied live) - Module 4 automated backups.
+-- schema backups (snapshots + snapshot_tables jsonb), curated core-table list.
+-- Nightly pg_cron 'nightly-backup' 00:30 -> cron_run_backup() (snapshot + 30d purge).
+-- Super-admin RPCs: create_backup_snapshot, list_backup_snapshots,
+-- backup_restore_preview (safety check: snapshot vs current, missing + newer counts),
+-- backup_restore_missing (NON-DESTRUCTIVE: re-inserts only rows missing now, ON
+-- CONFLICT DO NOTHING, excludes generated cols - can never overwrite newer data).
+-- backups schema never granted to anon/authenticated. Reversible: DROP SCHEMA backups CASCADE.

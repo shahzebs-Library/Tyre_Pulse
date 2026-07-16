@@ -84,8 +84,22 @@ export const WORKFLOW_STAGE_OPTS = CURRENT_CONDITION_OPTS
 export const CASE_STAGE_OPTS = CURRENT_CONDITION_OPTS
 
 // Damage condition is a DISTINCT axis (how bad the body damage is), not a
-// lifecycle stage — kept separate on purpose (datalist of suggested values).
-export const DAMAGE_CONDITION_OPTS = ['Minor', 'Moderate', 'Major Repair', 'Total Loss', 'Cosmetic', 'Structural']
+// lifecycle stage. Spec-aligned three-band ladder plus N/A (a proper dropdown).
+export const DAMAGE_CONDITION_OPTS = ['Minor', 'Moderate', 'Major', 'N/A']
+// Fold legacy free-text damage-condition values onto the new ladder so an old
+// record still selects a valid option when edited (honest passthrough otherwise).
+export const DAMAGE_CONDITION_ALIAS = {
+  'major repair': 'Major', 'total loss': 'Major', 'structural': 'Major', 'cosmetic': 'Minor',
+}
+
+// ── Incident Report screen dropdowns + gates (spec-driven) ───────────────────
+// Liability / payer become controlled dropdowns instead of free text.
+export const LIABLE_PARTY_OPTS = ['GCC', 'Other Party']
+export const PAYER_OPTS = ['GCC', 'Insurance', 'Recovery Claim']
+// Recovery decision gate: Yes reveals the recovery detail (source, date, ref,
+// amount transfer); No / N/A hide it. Stored verbatim on accidents.recovery_status
+// (a free-text column; legacy pending/partial/recovered values still display).
+export const RECOVERY_DECISION_OPTS = ['Yes', 'No', 'N/A']
 
 // Terminal stages — a case at/after these is NOT delayed and needs no next step.
 export const TERMINAL_STAGES = ['released', 'closed']
@@ -197,6 +211,34 @@ export const canonNajmFault     = (v) => matchOpt(v, NAJM_FAULT_OPTS)
 export const canonTaqdeerStatus = (v) => matchOpt(v, TAQDEER_STATUS_OPTS)
 export const canonRepairType    = (v) => matchOpt(v, REPAIR_TYPE_OPTS)
 export const canonDamageClass   = (v) => matchOpt(v, DAMAGE_CLASS_OPTS)
+export const canonLiableParty   = (v) => matchOpt(v, LIABLE_PARTY_OPTS)
+export const canonPayer         = (v) => matchOpt(v, PAYER_OPTS)
+export const canonDamageCondition = (v) => {
+  const raw = String(v ?? '').trim()
+  if (!raw) return ''
+  return DAMAGE_CONDITION_ALIAS[raw.toLowerCase()] || matchOpt(v, DAMAGE_CONDITION_OPTS)
+}
+
+// ── Report-existence gates (Najm / Taqdeer) + recovery / repair helpers ──────
+// A Najm or Taqdeer "report exists" value reveals its dependent detail; no /
+// not-available / N/A / blank hide it (honest: an unknown non-negative value
+// that mentions a report or "available" or "yes" is treated as present).
+const hasReport = (v) => {
+  const t = String(v ?? '').trim().toLowerCase()
+  if (!t) return false
+  if (/^(no|n\/a|none)$|no najm|no taqdeer|not available|no report/.test(t)) return false
+  return /report|available|^yes$/.test(t)
+}
+export const najmHasReport    = (v) => hasReport(v)
+export const taqdeerHasReport = (v) => hasReport(v)
+export const recoveryIsYes    = (v) => String(v ?? '').trim().toLowerCase() === 'yes'
+export const repairIsInternal = (v) => canonRepairType(v) === 'Internal'
+
+// Recovered = Claim - Approved - Deductible (spec formula), floored at 0.
+export const computeRecovered = (claim, approved, deductible) => {
+  const n = (x) => (Number.isFinite(Number(x)) ? Number(x) : 0)
+  return Math.max(0, n(claim) - n(approved) - n(deductible))
+}
 
 // ── Presentation pills (THE single source for accident list + detail badges) ──
 // One helper per axis so the register table and the /accidents/:id detail page

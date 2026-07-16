@@ -280,7 +280,36 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
   CPK/Longest Life, and grounds against realized fleet CPK by **REUSING kpiEngine.computeCpkByBrand /
   computeAvgTyreLife (do NOT rebuild CPK)**. New "Value Advisor" tab in TyreSpecifications.jsx: quote CRUD,
   per-fitment ranked comparison + engineer rationale + savings + realized-CPK column, brand-guidance fallback
-  when no quotes. Tests: tyreSpecCatalog(29), tyreSpecPolicy(7), tyreValueAdvisor(17). **Next free migration V250.**
+  when no quotes. Tests: tyreSpecCatalog(29), tyreSpecPolicy(7), tyreValueAdvisor(17). **(V250 now taken by the Incident Report upgrade; next free V251.)**
+
+### Incident Report screen upgrade (2026-07-16) — from the user's field spec (xlsx)
+- The user's "incident_Report_Screen" spec was a BEHAVIOR upgrade list on the EXISTING accident form
+  (`src/pages/Accidents.jsx`); all fields already existed. Wave 1 implemented (build+tests green):
+  - **V250** added `accidents.amount_transfer` (numeric), `accidents.workshop_location` (text),
+    `accidents.taqdeer_no` (text). Existing org/country RLS governs them. Next free migration **V251**.
+  - **accidentVocab.js** new single-source dropdowns/helpers: `LIABLE_PARTY_OPTS`(GCC/Other Party),
+    `PAYER_OPTS`(GCC/Insurance/Recovery Claim), `RECOVERY_DECISION_OPTS`(Yes/No/N/A),
+    `canonLiableParty/canonPayer/canonDamageCondition` (+ `DAMAGE_CONDITION_ALIAS` folds legacy
+    Major Repair/Total Loss/Structural->Major, Cosmetic->Minor), `najmHasReport/taqdeerHasReport`
+    (report-exists gates), `recoveryIsYes`, `repairIsInternal`, `computeRecovered`(claim-approved-deductible,
+    floored 0). DAMAGE_CONDITION_OPTS is now Minor/Moderate/Major/N/A.
+  - **Form**: Liable Party / Who Pays / Damage Condition are now dropdowns; Najm Fault shows only when a
+    Najm report exists; Taqdeer No (new) shows only when a Taqdeer report exists; Recovery Status is a
+    Yes/No/N/A gate revealing Recovery Source/Date/Reference + Amount Transfer (new); Recovered auto-calcs
+    = Claim - Approved - Deductible (editable; recoveredTouched ref, respected on edit, auto on add);
+    Repair Type internal -> Workshop Location = site dropdown + Repair Cost visible; external -> Workshop
+    Location free input + Repair Cost hidden. handleSave gates + canonicalises all of these; openEdit
+    hydrates + canonicalises; PAGE_COLS in api/accidents.js returns the 3 new columns; AccidentDetailModal
+    shows them (recovery_status label now falls back to the raw value for the new Yes/No/N/A vocabulary).
+  - RULE (recovery_status): it is FREE TEXT; claimsAnalytics does NOT parse it (only recovered_amount), so
+    the Yes/No/N/A gate is safe. Legacy pending/partial/recovered rows still display via passthrough.
+  - Tests: accidentVocab.test.js now 17. NO em/en dashes in new strings.
+- **STILL TODO (wave 2, told user):** (1) categorized photo uploads (Driving License / Resident ID /
+  Registration / Najm Report / Taqdeer Estimation single slots + multi accident photos, size-optimized;
+  photos is jsonb) - needs storage + structure change; (2) on-SAVE and on-UPDATE case email with the case
+  PDF + attachments (incident date/GCC responsibility/damage class/stage/policy/vehicle/asset/fault) -
+  needs a new edge function; (3) admin-managed insurer/policy list + Inspector/Responsible Owner as user
+  dropdowns. These are the heavier items, deliberately deferred.
 
 ### Heat Intelligence live weather (2026-07-16) — merged to main (PR #32)
 - HeatIntelligence (`/heat-intelligence`) now runs on REAL ambient temperature, not only the seasonal

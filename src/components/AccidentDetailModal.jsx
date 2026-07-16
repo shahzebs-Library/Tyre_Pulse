@@ -665,6 +665,7 @@ function RepairInsuranceTab({ acc, elevated, fmtCurrency, onEditIncident, editLo
           <KV label="Najm" value={acc.najm_status} />
           <KV label="Najm fault" value={acc.najm_fault} />
           <KV label="Taqdeer" value={acc.taqdeer_status} />
+          <KV label="Taqdeer no" value={acc.taqdeer_no} />
         </div>
       </div>
       <div>
@@ -679,6 +680,7 @@ function RepairInsuranceTab({ acc, elevated, fmtCurrency, onEditIncident, editLo
         <p className="text-xs font-semibold text-gray-400 mb-2">Workshop & Financials</p>
         <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
           <KV label="Workshop" value={acc.workshop_name} />
+          <KV label="Workshop location" value={acc.workshop_location} />
           <KV label="Quotation" value={acc.workshop_quotation != null ? fmtCurrency(acc.workshop_quotation) : '-'} />
           <KV label="Discount" value={acc.discount_pct != null ? `${acc.discount_pct}%` : '-'} />
           <KV label="Final amount" value={acc.final_amount != null ? fmtCurrency(acc.final_amount) : '-'} highlight />
@@ -709,7 +711,7 @@ function ClaimTab({ acc, elevated, fmtCurrency, onEditIncident, editLocked }) {
     <div className="space-y-4">
       <div className="flex gap-2">
         <span className={`badge text-xs ${CLAIM_BADGE[acc.claim_status ?? 'none']}`}>{CLAIM_STATUS_LABELS[acc.claim_status ?? 'none']}</span>
-        <span className={`badge text-xs ${RECOVERY_BADGE[acc.recovery_status ?? 'pending']}`}>Recovery: {RECOVERY_STATUS_LABELS[acc.recovery_status ?? 'pending']}</span>
+        <span className={`badge text-xs ${RECOVERY_BADGE[acc.recovery_status] ?? 'bg-[var(--input-bg)] text-[var(--text-dim)]'}`}>Recovery: {RECOVERY_STATUS_LABELS[acc.recovery_status] ?? acc.recovery_status ?? 'N/A'}</span>
       </div>
       <div className="grid grid-cols-2 gap-3">
         <KV label="Responsible party" value={acc.responsible_party} />
@@ -726,10 +728,11 @@ function ClaimTab({ acc, elevated, fmtCurrency, onEditIncident, editLocked }) {
         <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
           <KV label="Deductible" value={acc.deductible != null ? fmtCurrency(acc.deductible) : '-'} />
           <KV label="Recovered amount" value={acc.recovered_amount != null ? fmtCurrency(acc.recovered_amount) : '-'} highlight />
-          <KV label="Recovery status" value={RECOVERY_STATUS_LABELS[acc.recovery_status ?? 'pending']} />
+          <KV label="Recovery status" value={RECOVERY_STATUS_LABELS[acc.recovery_status] ?? acc.recovery_status} />
           <KV label="Recovery source" value={RECOVERY_SOURCE_LABELS[acc.recovery_source ?? 'none']} />
           <KV label="Recovery date" value={acc.recovery_date} />
           <KV label="Recovery reference" value={acc.recovery_reference} />
+          <KV label="Amount transfer" value={acc.amount_transfer != null ? fmtCurrency(acc.amount_transfer) : '-'} />
         </div>
       </div>
       <div className="grid grid-cols-3 gap-3 rounded-lg border border-gray-700 bg-gray-800/40 p-3">

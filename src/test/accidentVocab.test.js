@@ -9,6 +9,9 @@ import {
   canonSeverity, canonStatus, canonAccidentType, toDbSeverity, toDbStatus, toDbAccidentType,
   accidentSeverityPill, accidentStatusPill,
   canonFaultStatus, canonNajmStatus, canonRepairType,
+  LIABLE_PARTY_OPTS, PAYER_OPTS, RECOVERY_DECISION_OPTS,
+  canonLiableParty, canonPayer, canonDamageCondition,
+  najmHasReport, taqdeerHasReport, recoveryIsYes, repairIsInternal, computeRecovered,
 } from '../lib/accidentVocab'
 
 // DB CHECK-constraint vocabularies (accidents.severity/status/accident_type, V222).
@@ -148,6 +151,40 @@ describe('accidentVocab — presentation pills (shared list + detail source)', (
     expect(unknown.className).toContain('--input-bg')
     // blank -> empty pill
     expect(accidentStatusPill('').label).toBe('')
+  })
+
+  it('incident-report dropdowns are defined and canonicalise stray case', () => {
+    expect(LIABLE_PARTY_OPTS).toEqual(['GCC', 'Other Party'])
+    expect(PAYER_OPTS).toEqual(['GCC', 'Insurance', 'Recovery Claim'])
+    expect(RECOVERY_DECISION_OPTS).toEqual(['Yes', 'No', 'N/A'])
+    expect(canonLiableParty('gcc')).toBe('GCC')
+    expect(canonPayer('recovery claim')).toBe('Recovery Claim')
+    // legacy damage-condition values fold onto the new ladder; unknown passes through
+    expect(canonDamageCondition('Major Repair')).toBe('Major')
+    expect(canonDamageCondition('Total Loss')).toBe('Major')
+    expect(canonDamageCondition('cosmetic')).toBe('Minor')
+    expect(canonDamageCondition('moderate')).toBe('Moderate')
+    expect(canonDamageCondition('')).toBe('')
+  })
+
+  it('report-existence + recovery + repair gates behave correctly', () => {
+    expect(najmHasReport('Najm report')).toBe(true)
+    expect(najmHasReport('No Najm')).toBe(false)
+    expect(najmHasReport('')).toBe(false)
+    expect(taqdeerHasReport('Taqdeer report')).toBe(true)
+    expect(taqdeerHasReport('No Taqdeer')).toBe(false)
+    expect(recoveryIsYes('Yes')).toBe(true)
+    expect(recoveryIsYes('No')).toBe(false)
+    expect(recoveryIsYes('N/A')).toBe(false)
+    expect(repairIsInternal('internal')).toBe(true)
+    expect(repairIsInternal('External')).toBe(false)
+  })
+
+  it('computeRecovered = max(0, claim - approved - deductible)', () => {
+    expect(computeRecovered(1000, 700, 100)).toBe(200)
+    expect(computeRecovered(500, 500, 100)).toBe(0)   // floored at 0, never negative
+    expect(computeRecovered('', '', '')).toBe(0)
+    expect(computeRecovered('1000', '250', '50')).toBe(700)
   })
 
   it('case-field canon helpers fold stray-case values back onto the option label', () => {

@@ -184,6 +184,7 @@ const TYPE_LABEL: Record<string, string> = {
   claims: 'Insurance Claims Summary',
   stock: 'Stock & Goods Receipts',
   vendor: 'Vendor / Procurement Report',
+  pm: 'Preventive Maintenance due',
 }
 
 /** Friendly label for any report_type, incl. custom 'builder:<template-id>' layouts. */
@@ -718,6 +719,8 @@ type DatasetDigestCfg = {
   groups: Array<[string, string]> // [label, column]
   recent: Array<[string, string]> // [column, header]
   moneyCols: string[]             // recent-table columns rendered as money
+  eqFilter?: Record<string, string> // optional exact-match filters (e.g. status='active')
+  orderAscending?: boolean          // sort dateCol ascending (forward-looking dates like next_due)
 }
 
 const DATASET_DIGEST: Record<string, DatasetDigestCfg> = {
@@ -763,6 +766,17 @@ const DATASET_DIGEST: Record<string, DatasetDigestCfg> = {
     recent: [['order_date', 'Order Date'], ['po_number', 'PO No'], ['vendor_name', 'Vendor'], ['status', 'Status'], ['priority', 'Priority'], ['site', 'Site'], ['total_amount', 'Amount'], ['expected_delivery', 'Expected']],
     moneyCols: ['total_amount'],
   },
+  // Preventive Maintenance due / overdue: active PM programs grouped by asset
+  // category / site / priority, with the soonest-due plans listed. Only live
+  // (active) programs are counted so paused/completed plans never read as due.
+  pm: {
+    table: 'pm_programs', dateCol: 'next_due', money: 'estimated_cost', accent: '#0e7490',
+    groups: [['Asset category', 'asset_category'], ['Site', 'site'], ['Priority', 'priority']],
+    recent: [['next_due', 'Next Due'], ['name', 'Program'], ['asset_no', 'Asset'], ['asset_category', 'Category'], ['site', 'Site'], ['priority', 'Priority'], ['status', 'Status'], ['estimated_cost', 'Est. Cost']],
+    moneyCols: ['estimated_cost'],
+    eqFilter: { status: 'active' },
+    orderAscending: true,
+  },
 }
 
 type DatasetDigest = {
@@ -781,7 +795,10 @@ async function buildDatasetDigest(svc: any, cfg: DatasetDigestCfg, orgId: string
   if (cfg.money) cols.add(cfg.money)
   cfg.groups.forEach(([, c]) => cols.add(c))
   cfg.recent.forEach(([c]) => cols.add(c))
-  let q = svc.from(cfg.table).select([...cols].join(',')).order(cfg.dateCol, { ascending: false }).limit(5000)
+  let q = svc.from(cfg.table).select([...cols].join(','))
+    .order(cfg.dateCol, { ascending: cfg.orderAscending === true, nullsFirst: false }).limit(5000)
+  // Optional exact-match focus (e.g. PM programs where status='active').
+  if (cfg.eqFilter) for (const [col, val] of Object.entries(cfg.eqFilter)) q = q.eq(col, val)
   // Service role bypasses RLS, so scope to the schedule's org explicitly.
   if (orgId) q = q.eq('organisation_id', orgId)
   const { data, error } = await q

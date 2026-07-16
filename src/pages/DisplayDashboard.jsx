@@ -23,7 +23,7 @@ import {
   RefreshCw, Play, Pause, Radio, Gauge as GaugeIcon,
   LayoutGrid, LogOut, Check, X as XIcon,
   Wrench, Repeat, Car, Stamp, Clock, Timer, FileCheck2,
-  CalendarDays, Activity,
+  CalendarDays, Activity, CalendarClock, ClipboardCheck,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { fetchAllPages } from '../lib/fetchAll'
@@ -40,6 +40,8 @@ import {
   computeWorkOrderBoard, computeReplacementBoard, computeAccidentBoard,
   computeApprovalsBoard, daysBetween,
 } from '../lib/displayBoard'
+import { loadPmDashboard } from '../lib/api/pmPrograms'
+import { summarizePmCompliance } from '../lib/pmSchedule'
 
 const REFRESH_SECS = 60
 const ROTATE_SECS  = 30
@@ -52,6 +54,7 @@ const BOARDS = [
   { key: 'jobcards',     label: 'Open Job Cards' },
   { key: 'replacements', label: 'Tyre Replacements' },
   { key: 'accidents',    label: 'Accidents' },
+  { key: 'pm',           label: 'Preventive Maintenance' },
   { key: 'approvals',    label: 'Approvals Queue' },
   { key: 'alerts',       label: 'Alerts & Compliance' },
 ]
@@ -183,6 +186,25 @@ function agoLabel(when, ref) {
   return `${d} days`
 }
 
+// Human due phrase for a PM plan (date axis first, meter axis as fallback).
+// Null-safe: returns 'Due date not set' when neither axis has a signal.
+function pmDueLabel(item) {
+  const d = item?.daysToDue
+  if (d != null) {
+    if (d < 0) return `${Math.abs(d)} days overdue`
+    if (d === 0) return 'Due today'
+    if (d === 1) return 'Due in 1 day'
+    return `Due in ${d} days`
+  }
+  const m = item?.meterRemaining
+  const unit = item?.unit || ''
+  if (m != null && Number.isFinite(m)) {
+    if (m < 0) return `${Math.abs(Math.round(m))} ${unit} overdue`
+    return `${Math.round(m)} ${unit} to service`
+  }
+  return 'Due date not set'
+}
+
 function SiteBars({ sites, total }) {
   if (!sites.length) return <p className="text-slate-600 text-sm py-4 text-center">No vehicles recorded</p>
   const max = Math.max(...sites.map(s => s.count), 1)
@@ -228,6 +250,9 @@ export default function DisplayDashboard() {
   const [replacements, setReplacements] = useState(EMPTY_SLICE)
   const [incidents,    setIncidents]    = useState(EMPTY_SLICE)
   const [approvals,    setApprovals]    = useState(EMPTY_SLICE)
+  // PM slice carries a bundle (plans + per-asset meter maps) rather than a flat
+  // row array, so date AND meter due bands can be resolved on the board.
+  const [pm,           setPm]           = useState({ rows: { plans: [], kmByAsset: {}, hoursByAsset: {} }, error: null, loaded: false })
 
   const [now,          setNow]          = useState(() => new Date())
   const [countdown,    setCountdown]    = useState(REFRESH_SECS)
@@ -453,6 +478,21 @@ export default function DisplayDashboard() {
           return items
         },
       },
+      {
+        set: setPm,
+        run: async () => {
+          // Active PM plans + per-asset meter readings. loadPmDashboard returns
+          // an empty bundle (never throws) when pm_programs is unprovisioned, so
+          // the board honestly shows the empty state rather than an error tile.
+          const bundle = await loadPmDashboard({})
+          const plans = (bundle?.plans ?? []).filter(p => p?.status === 'active')
+          return {
+            plans,
+            kmByAsset: bundle?.kmByAsset ?? {},
+            hoursByAsset: bundle?.hoursByAsset ?? {},
+          }
+        },
+      },
     ]
 
     await Promise.allSettled(tasks.map(async t => {
@@ -547,6 +587,12 @@ export default function DisplayDashboard() {
   const replBoard    = useMemo(() => computeReplacementBoard(replacements.rows, dayRef), [replacements.rows, dayRef])
   const accBoard     = useMemo(() => computeAccidentBoard(incidents.rows, dayRef), [incidents.rows, dayRef])
   const apprBoard    = useMemo(() => computeApprovalsBoard(approvals.rows), [approvals.rows])
+  const pmSummary    = useMemo(
+    () => summarizePmCompliance(pm.rows.plans, {
+      now: dayRef, kmByAsset: pm.rows.kmByAsset, hoursByAsset: pm.rows.hoursByAsset,
+    }),
+    [pm.rows, dayRef],
+  )
 
   // ── "Today" live executive tiles (honest date-scoped counts from the same
   //    slices the other boards use, so they share the board's auto-refresh). All
@@ -1108,7 +1154,84 @@ export default function DisplayDashboard() {
           </div>
         )}
 
-        {/* ── (f) Approvals Queue ── */}
+        {/* ── (f) Preventive Maintenance ── */}
+        {board.key === 'pm' && (
+          <div className="grid grid-cols-12 gap-6 h-full">
+            <div className="col-span-12 grid grid-cols-2 xl:grid-cols-4 gap-6">
+              <SliceGuard slice={pm} lines={2}>
+                <BigStat label="PM Overdue" value={pmSummary.overdue}
+                  color={pmSummary.overdue > 0 ? '#ef4444' : '#22c55e'} icon={CalendarClock}
+                  sub="Active plans past due" />
+              </SliceGuard>
+              <SliceGuard slice={pm} lines={2}>
+                <BigStat label="Due Soon" value={pmSummary.dueSoon}
+                  color={pmSummary.dueSoon > 0 ? '#eab308' : '#22c55e'} icon={CalendarDays}
+                  sub="Within 14 days or meter" />
+              </SliceGuard>
+              <SliceGuard slice={pm} lines={2}>
+                <BigStat label="PM Compliance"
+                  value={pmSummary.compliantPct == null ? 'N/A' : `${pmSummary.compliantPct}%`}
+                  color={pmSummary.compliantPct == null
+                    ? '#64748b'
+                    : pmSummary.compliantPct >= 90 ? '#22c55e' : pmSummary.compliantPct >= 70 ? '#eab308' : '#ef4444'}
+                  icon={ShieldCheck}
+                  sub={`${pmSummary.active} active plans`} />
+              </SliceGuard>
+              <SliceGuard slice={pm} lines={2}>
+                <BigStat label="Active Plans" value={pmSummary.active} icon={ClipboardCheck}
+                  sub="Preventive programmes" />
+              </SliceGuard>
+            </div>
+
+            <div className="col-span-12">
+              <Panel title="Preventive Maintenance Due" icon={CalendarClock} className="h-full">
+                <SliceGuard slice={pm} lines={6}>
+                  {pmSummary.dueList.length === 0 ? (
+                    <BoardEmpty icon={ShieldCheck} label="No preventive maintenance due" />
+                  ) : (
+                    <div className="space-y-2.5">
+                      {pmSummary.dueList.slice(0, 8).map((it, i) => {
+                        const overdue = it.band === 'overdue'
+                        const color = overdue ? '#ef4444' : '#eab308'
+                        return (
+                          <div key={it.id ?? `${it.asset_no ?? 'plan'}-${i}`}
+                            className="flex items-center gap-4 bg-slate-900/60 border border-slate-800/60 rounded-xl px-4 py-3">
+                            <span
+                              className="text-xs font-bold uppercase tracking-wider px-2.5 py-1 rounded-md flex-shrink-0"
+                              style={{ color, backgroundColor: `${color}1f` }}
+                            >
+                              {overdue ? 'Overdue' : 'Due soon'}
+                            </span>
+                            <div className="min-w-0 flex-1">
+                              <p className="text-slate-100 text-lg font-semibold truncate">
+                                {it.asset_no || 'Unassigned asset'}
+                                <span className="text-slate-500 text-base font-normal ml-2">{it.name || 'PM plan'}</span>
+                              </p>
+                              <p className="text-slate-500 text-sm truncate">
+                                {it.site ? `${it.site}` : 'Site not recorded'}
+                                {it.asset_category ? ` : ${it.asset_category}` : ''}
+                              </p>
+                            </div>
+                            <div className="text-right flex-shrink-0 w-40">
+                              <p className="text-base font-bold tabular-nums" style={{ color }}>{pmDueLabel(it)}</p>
+                              <p className="text-slate-600 text-xs">
+                                {it.next_due
+                                  ? new Date(it.next_due).toLocaleDateString([], { day: '2-digit', month: 'short', year: 'numeric' })
+                                  : 'no due date'}
+                              </p>
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
+                </SliceGuard>
+              </Panel>
+            </div>
+          </div>
+        )}
+
+        {/* ── (g) Approvals Queue ── */}
         {board.key === 'approvals' && (
           <div className="grid grid-cols-12 gap-6 h-full">
             <div className="col-span-12 grid grid-cols-2 xl:grid-cols-5 gap-6">
@@ -1162,7 +1285,7 @@ export default function DisplayDashboard() {
           </div>
         )}
 
-        {/* ── (g) Alerts & Compliance ── */}
+        {/* ── (h) Alerts & Compliance ── */}
         {board.key === 'alerts' && (
           <div className="grid grid-cols-12 gap-6 h-full">
             <div className="col-span-12 grid grid-cols-2 xl:grid-cols-5 gap-6">

@@ -15,7 +15,7 @@ import {
 } from 'chart.js'
 import { Bar, Line, Doughnut } from 'react-chartjs-2'
 import {
-  LayoutDashboard, TrendingUp, PieChart, Lightbulb, Download, RefreshCw, Eye, EyeOff,
+  LayoutDashboard, TrendingUp, PieChart, Lightbulb, Download, RefreshCw, Eye, EyeOff, Wallet,
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
 import { useSettings } from '../contexts/SettingsContext'
@@ -30,6 +30,8 @@ import { listStockRecords } from '../lib/api/stock'
 import {
   buildBoardKpis, buildTrends, buildBreakdowns, buildBoardRecommendations,
 } from '../lib/boardOverview'
+import { COST_MODES, pickCost, pickMonthly, splitTotals, costModeLabel } from '../lib/costSources'
+import { loadCostSplit } from '../lib/api/costSummary'
 import { stylize, ACCENTS } from '../lib/reportColors'
 import { reportFileName, reportDateLabel } from '../lib/exportUtils'
 
@@ -43,8 +45,19 @@ const SECTIONS = [
   ['kpis', 'KPIs', LayoutDashboard],
   ['trends', 'Trends', TrendingUp],
   ['charts', 'Charts', PieChart],
+  ['costSplit', 'Tyres vs Maintenance', Wallet],
   ['recommendations', 'Recommendations', Lightbulb],
 ]
+const SECTION_DEFAULTS = { kpis: true, trends: true, charts: true, costSplit: true, recommendations: true }
+
+/** 'YYYY-MM' -> 'Mon YY' month label (passthrough for non date keys). */
+const monthLabel = (key) => {
+  const s = String(key || '')
+  if (!/^\d{4}-\d{2}/.test(s)) return s
+  const [y, m] = s.split('-')
+  const d = new Date(Number(y), Number(m) - 1, 1)
+  return d.toLocaleDateString('en', { month: 'short', year: '2-digit' })
+}
 
 const num = (v) => (v == null || !Number.isFinite(Number(v)) ? 'N/A' : Number(v).toLocaleString('en-US'))
 const money = (v) => (v == null || !Number.isFinite(Number(v)) ? 'N/A' : formatCurrency(Number(v)))
@@ -89,7 +102,7 @@ function ChartCard({ title, children, refCb }) {
 }
 
 export default function BoardOverview() {
-  const { activeCountry, appSettings } = useSettings()
+  const { activeCountry, appSettings, activeCurrency } = useSettings()
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -100,8 +113,8 @@ export default function BoardOverview() {
   const [sections, setSections] = useState(() => {
     try {
       const raw = JSON.parse(localStorage.getItem(LS_KEY) || 'null')
-      return { kpis: true, trends: true, charts: true, recommendations: true, ...(raw || {}) }
-    } catch { return { kpis: true, trends: true, charts: true, recommendations: true } }
+      return { ...SECTION_DEFAULTS, ...(raw || {}) }
+    } catch { return { ...SECTION_DEFAULTS } }
   })
   useEffect(() => { try { localStorage.setItem(LS_KEY, JSON.stringify(sections)) } catch { /* ignore */ } }, [sections])
   const toggle = (key) => setSections((s) => ({ ...s, [key]: !s[key] }))
@@ -144,6 +157,32 @@ export default function BoardOverview() {
 
   const recs = useMemo(() => buildBoardRecommendations(data?.kpis), [data])
 
+  // ── Tyres vs Maintenance cost split (own tri-state + cancel guard) ──────────
+  const [cost, setCost] = useState(null)      // { tyre, maintenance, byMonth } | null
+  const [costLoading, setCostLoading] = useState(true)
+  const [costError, setCostError] = useState('')
+  const [costMode, setCostMode] = useState('combined')
+
+  useEffect(() => {
+    let cancelled = false
+    setCostLoading(true); setCostError('')
+    loadCostSplit({ country: activeCountry })
+      .then((res) => { if (!cancelled) setCost(res) })
+      .catch((e) => { if (!cancelled) setCostError(e?.message || 'Could not load the cost split.') })
+      .finally(() => { if (!cancelled) setCostLoading(false) })
+    return () => { cancelled = true }
+  }, [activeCountry])
+
+  const costTotals = useMemo(() => splitTotals(cost?.byMonth || []), [cost])
+  const costHeadline = useMemo(() => pickCost(costMode, costTotals), [costMode, costTotals])
+  const costChart = useMemo(() => {
+    const rows = cost?.byMonth || []
+    return {
+      labels: rows.map((r) => monthLabel(r.month)),
+      datasets: [{ label: `${costModeLabel(costMode)} spend`, data: pickMonthly(costMode, rows).map((m) => m.value) }],
+    }
+  }, [cost, costMode])
+
   async function exportPdf() {
     if (!data) return
     setExporting(true)
@@ -179,7 +218,7 @@ export default function BoardOverview() {
       })
       y += 34
 
-      const order = ['trendSpend', 'trendAccidents', 'trendClaims', 'trendInspections', 'sev', 'claimStatus', 'accSite', 'tyreSite']
+      const order = ['trendSpend', 'trendAccidents', 'trendClaims', 'trendInspections', 'costSplit', 'sev', 'claimStatus', 'accSite', 'tyreSite']
       let placed = 0
       for (const key of order) {
         const el = chartRefs.current[key]
@@ -284,6 +323,50 @@ export default function BoardOverview() {
                 <ChartCard title="Claim status" refCb={setRef('claimStatus')}><Doughnut data={stylize(b.claimStatus, 'doughnut')} options={DOUGHNUT_OPTS} /></ChartCard>
                 <ChartCard title="Accidents by site" refCb={setRef('accSite')}><Bar data={stylize(b.accidentsBySite, 'bar')} options={chartBase(false)} /></ChartCard>
                 <ChartCard title="Tyres by site" refCb={setRef('tyreSite')}><Bar data={stylize(b.tyresBySite, 'bar')} options={chartBase(false)} /></ChartCard>
+              </div>
+            </section>
+          )}
+
+          {/* Tyres vs Maintenance cost split */}
+          {sections.costSplit && (
+            <section className="space-y-3">
+              <h2 className="text-sm font-bold uppercase tracking-wider text-[var(--text-secondary)] flex items-center gap-2"><Wallet size={15} /> Tyres vs Maintenance</h2>
+              <div className="card">
+                {costLoading ? (
+                  <div className="text-center text-[var(--text-muted)] py-8">Loading the cost split...</div>
+                ) : costError ? (
+                  <div className="text-sm text-red-300">{costError}</div>
+                ) : costTotals.combined === 0 ? (
+                  <div className="text-center text-[var(--text-muted)] py-8">No tyre or maintenance spend recorded in the last 12 months for the selected scope.</div>
+                ) : (
+                  <>
+                    <div className="flex items-start justify-between flex-wrap gap-3 mb-4">
+                      <div>
+                        <p className="text-3xl font-bold" style={{ color: ACCENTS.primary }}>{formatCurrency(costHeadline, activeCurrency, 0)}</p>
+                        <p className="text-xs text-[var(--text-muted)] mt-1">{costModeLabel(costMode)} spend, last 12 months</p>
+                        <div className="flex items-center gap-4 mt-2 text-[11px] text-[var(--text-dim)]">
+                          <span>Tyres: {formatCurrency(costTotals.tyre, activeCurrency, 0)}</span>
+                          <span>Maintenance: {formatCurrency(costTotals.maintenance, activeCurrency, 0)}</span>
+                          <span>Combined: {formatCurrency(costTotals.combined, activeCurrency, 0)}</span>
+                        </div>
+                      </div>
+                      <div className="inline-flex rounded-lg border border-[var(--input-border)] overflow-hidden self-start">
+                        {COST_MODES.map((m) => (
+                          <button
+                            key={m.key}
+                            onClick={() => setCostMode(m.key)}
+                            className={`text-xs font-semibold px-3 py-1.5 transition-colors ${costMode === m.key ? 'bg-[var(--accent)] text-white' : 'bg-[var(--input-bg)] text-[var(--text-muted)] hover:text-[var(--text-secondary)]'}`}
+                          >
+                            {m.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <div style={{ height: 240 }} ref={setRef('costSplit')}>
+                      <Bar data={stylize(costChart, 'bar')} options={chartBase(false)} />
+                    </div>
+                  </>
+                )}
               </div>
             </section>
           )}

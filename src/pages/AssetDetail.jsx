@@ -13,9 +13,13 @@ import {
   DollarSign, TrendingUp, MapPin, Zap, Target, Layers, Lock,
   ToggleLeft, ToggleRight, Truck, Wrench, ClipboardCheck, History,
   Shield, Gauge, ShieldAlert, User, Hash, Calendar, Building2, Fuel,
+  CalendarClock, ExternalLink,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import * as assetApi from '../lib/api/assetManagement'
+import { listPmPrograms, listPmServiceRecords } from '../lib/api/pmPrograms'
+import { pmAssetDueStatus } from '../lib/pmSchedule'
+import { PM_DUE_META } from '../lib/pmPrograms'
 import { useSettings } from '../contexts/SettingsContext'
 import { useAuth } from '../contexts/AuthContext'
 import { useLanguage } from '../contexts/LanguageContext'
@@ -42,6 +46,25 @@ const RISK_COLOR = {
   Low:      { bg: 'bg-green-900/50',  text: 'text-green-300',  hex: '#16a34a' },
 }
 const VEHICLE_TYPES = ['Truck','Tipper','Mixer','Rigid','Semi-Trailer','Pickup','Crane','Loader','Tanker','Bus','Other']
+
+// PM due-band badge palette (keyed by pmAssetDueStatus band / PM_DUE_META tone).
+const PM_DUE_BADGE = {
+  overdue:   'bg-red-900/50 text-red-300',
+  due_soon:  'bg-yellow-900/50 text-yellow-300',
+  scheduled: 'bg-green-900/50 text-green-300',
+  none:      'bg-[var(--surface-2)] text-[var(--text-secondary)]',
+}
+const PM_PRIORITY_BADGE = {
+  critical: 'bg-red-900/50 text-red-300',
+  high:     'bg-orange-900/50 text-orange-300',
+  medium:   'bg-yellow-900/50 text-yellow-300',
+  low:      'bg-[var(--surface-2)] text-[var(--text-secondary)]',
+}
+const PM_STATUS_BADGE = {
+  active:    'bg-green-900/50 text-green-300',
+  paused:    'bg-yellow-900/50 text-yellow-300',
+  completed: 'bg-[var(--surface-2)] text-[var(--text-secondary)]',
+}
 
 const CHART_OPTS = {
   responsive: true,
@@ -263,6 +286,8 @@ export default function AssetDetail() {
   const [inspections, setInspections] = useState([])
   const [accidents, setAccidents] = useState([])
   const [meter, setMeter] = useState({ odometer: null, engineHours: null })
+  const [pmPlans, setPmPlans] = useState([])
+  const [pmServices, setPmServices] = useState([])
   const [overview, setOverview] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -279,7 +304,7 @@ export default function AssetDetail() {
   const load = useCallback(async () => {
     setLoading(true); setError('')
     try {
-      const [assetRes, tyreRes, woRes, ovRes, inspRes, accRes, odoRes, ehRes] = await Promise.allSettled([
+      const [assetRes, tyreRes, woRes, ovRes, inspRes, accRes, odoRes, ehRes, pmRes, pmSvcRes] = await Promise.allSettled([
         // vehicle_fleet is the fleet registry (fleet_master is empty). Alias
         // is_active → active so the page keeps its `active` contract.
         supabase.from('vehicle_fleet')
@@ -292,6 +317,10 @@ export default function AssetDetail() {
         assetApi.listAssetAccidents(assetNo),
         assetApi.latestOdometer(assetNo),
         assetApi.latestEngineHours(assetNo),
+        // Preventive Maintenance: plans (client-filtered to this asset) + history.
+        // Both degrade to [] when the pm_* tables are not provisioned yet.
+        listPmPrograms({}),
+        listPmServiceRecords({ asset_no: assetNo }),
       ])
 
       if (assetRes.status === 'rejected') throw new Error(assetRes.reason?.message || String(assetRes.reason))
@@ -304,6 +333,8 @@ export default function AssetDetail() {
       const accRows  = accRes.status === 'fulfilled' ? (accRes.value.data ?? []) : []
       const odoRow   = odoRes.status === 'fulfilled' ? (odoRes.value.data ?? null) : null
       const ehRow    = ehRes.status === 'fulfilled' ? (ehRes.value.data ?? null) : null
+      const pmRows   = pmRes.status === 'fulfilled' ? (pmRes.value ?? []) : []
+      const pmSvcRows = pmSvcRes.status === 'fulfilled' ? (pmSvcRes.value ?? []) : []
       const ov       = ovRows.find(o => o.asset_no === assetNo) ?? null
 
       // Fall back to a synthesized record from the overview when vehicle_fleet
@@ -326,6 +357,8 @@ export default function AssetDetail() {
       setInspections(inspRows)
       setAccidents(accRows)
       setMeter({ odometer: odoRow, engineHours: ehRow })
+      setPmPlans(pmRows.filter(p => p.asset_no === assetNo))
+      setPmServices(pmSvcRows)
       setOverview(ov)
     } catch (e) {
       setError(e.message || t('assetmgmt.detail.loadError'))
@@ -357,6 +390,17 @@ export default function AssetDetail() {
     return fromAsset ?? fromLog
   }, [asset, meter])
   const fmtNum = (n) => (n == null || isNaN(n) ? '-' : Number(n).toLocaleString('en-US'))
+
+  // Current engine hours for meter-based PM bands (date-only when absent).
+  const currentHours = useMemo(
+    () => (meter.engineHours?.engine_hours != null ? Number(meter.engineHours.engine_hours) : null),
+    [meter],
+  )
+  // Each PM plan for this asset paired with its combined date + meter due band.
+  const pmDueRows = useMemo(() => {
+    const now = Date.now()
+    return pmPlans.map(plan => ({ plan, due: pmAssetDueStatus(plan, { now, currentKm, currentHours }) }))
+  }, [pmPlans, currentKm, currentHours])
 
   const monthlyData = useMemo(() => {
     const now = new Date()
@@ -454,6 +498,7 @@ export default function AssetDetail() {
     { id: 'costs',      label: t('assetmgmt.detail.tabs.costs'),      icon: DollarSign },
     { id: 'workorders', label: t('assetmgmt.detail.tabs.workOrders'), icon: Zap },
     { id: 'inspections', label: `Inspections${inspections.length ? ` (${inspections.length})` : ''}`, icon: ClipboardCheck },
+    { id: 'pm',         label: `Preventive Maintenance${pmPlans.length ? ` (${pmPlans.length})` : ''}`, icon: CalendarClock },
     { id: 'incidents',  label: `Incidents${accidents.length ? ` (${accidents.length})` : ''}`, icon: ShieldAlert },
     { id: 'approvals',  label: t('assetmgmt.detail.tabs.approvals'),  icon: Shield },
   ]
@@ -793,6 +838,103 @@ export default function AssetDetail() {
                   </div>
                 ) : (
                   <div className="p-6 text-center text-[var(--text-muted)] text-sm">No inspections recorded for this asset.</div>
+                )}
+              </div>
+            </motion.div>
+          )}
+
+          {/* ── Preventive Maintenance ────────────────────────────────────────── */}
+          {tab === 'pm' && (
+            <motion.div key="pm" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-6">
+              {/* Plans for this asset */}
+              <div className="bg-[var(--surface-2)] rounded-xl border border-[var(--border-bright)] overflow-hidden">
+                <div className="p-4 border-b border-[var(--border-bright)] flex items-center justify-between">
+                  <h3 className="text-sm font-semibold text-[var(--text-secondary)] flex items-center gap-2">
+                    <CalendarClock className="w-4 h-4 text-blue-400" /> Preventive Maintenance Plans ({pmPlans.length})
+                  </h3>
+                  <button onClick={() => navigate('/pm-programs')}
+                    className="text-xs text-blue-400 hover:text-blue-300 transition-colors inline-flex items-center gap-1">
+                    <ExternalLink className="w-3.5 h-3.5" /> Manage plans
+                  </button>
+                </div>
+                {pmDueRows.length ? (
+                  <div className="divide-y divide-[var(--border-bright)]">
+                    {pmDueRows.map(({ plan, due }, i) => {
+                      const meta = PM_DUE_META[due.band] ?? PM_DUE_META.none
+                      const priority = String(plan.priority ?? '').toLowerCase()
+                      const status = String(plan.status ?? '').toLowerCase()
+                      const meterDue = plan.next_due_meter != null
+                        ? `${fmtNum(plan.next_due_meter)}${due.unit ? ` ${due.unit}` : ''}`
+                        : null
+                      return (
+                        <div key={plan.id ?? i} className="px-4 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium text-[var(--text-primary)] truncate">{plan.name ?? 'Untitled plan'}</p>
+                            <p className="text-xs text-[var(--text-muted)] mt-0.5">
+                              {'Next due: '}
+                              {plan.next_due ? fmtDate(plan.next_due) : 'no date'}
+                              {meterDue ? ` | at ${meterDue}` : ''}
+                              {due.daysToDue != null ? ` | ${due.daysToDue}d` : ''}
+                              {due.meterRemaining != null ? ` | ${fmtNum(due.meterRemaining)}${due.unit ? ` ${due.unit}` : ''} left` : ''}
+                            </p>
+                          </div>
+                          <div className="flex items-center gap-2 shrink-0">
+                            <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${PM_DUE_BADGE[due.band] ?? PM_DUE_BADGE.none}`}>{meta.label}</span>
+                            {priority && (
+                              <span className={`px-2 py-0.5 rounded-full text-xs font-semibold capitalize ${PM_PRIORITY_BADGE[priority] ?? PM_PRIORITY_BADGE.low}`}>{priority}</span>
+                            )}
+                            {status && (
+                              <span className={`px-2 py-0.5 rounded-full text-xs font-semibold capitalize ${PM_STATUS_BADGE[status] ?? PM_STATUS_BADGE.completed}`}>{status}</span>
+                            )}
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                ) : (
+                  <div className="p-6 text-center text-[var(--text-muted)] text-sm">No preventive maintenance plans for this asset.</div>
+                )}
+              </div>
+
+              {/* Service history for this asset */}
+              <div className="bg-[var(--surface-2)] rounded-xl border border-[var(--border-bright)] overflow-hidden">
+                <div className="p-4 border-b border-[var(--border-bright)]">
+                  <h3 className="text-sm font-semibold text-[var(--text-secondary)] flex items-center gap-2">
+                    <Wrench className="w-4 h-4 text-yellow-400" /> Service History ({pmServices.length})
+                  </h3>
+                </div>
+                {pmServices.length ? (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-xs">
+                      <thead>
+                        <tr className="border-b border-[var(--border-bright)]">
+                          {['Date', 'Meter', 'Outcome', 'Performed By', 'Total Cost'].map(h => (
+                            <th key={h} className="px-3 py-2 text-left text-[var(--text-muted)] font-medium whitespace-nowrap">{h}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {pmServices.map((sv, i) => {
+                          const outcome = String(sv.outcome ?? '').toLowerCase()
+                          const outcomeColor = outcome === 'completed' ? 'text-green-400'
+                            : outcome === 'deferred' ? 'text-yellow-400'
+                            : outcome ? 'text-[var(--text-secondary)]' : 'text-[var(--text-dim)]'
+                          const meterUnit = sv.meter_type === 'engine_hours' ? 'h' : sv.meter_type === 'odometer' ? 'km' : ''
+                          return (
+                            <tr key={sv.id ?? i} className="border-b border-[var(--border-bright)] hover:bg-[var(--surface-3)] transition-colors">
+                              <td className="px-3 py-2 text-[var(--text-secondary)] whitespace-nowrap">{sv.service_date ? fmtDate(sv.service_date) : '-'}</td>
+                              <td className="px-3 py-2 text-[var(--text-secondary)] whitespace-nowrap">{sv.meter_reading != null ? `${fmtNum(sv.meter_reading)}${meterUnit ? ` ${meterUnit}` : ''}` : '-'}</td>
+                              <td className={`px-3 py-2 font-medium capitalize ${outcomeColor}`}>{sv.outcome ?? '-'}</td>
+                              <td className="px-3 py-2 text-[var(--text-secondary)]">{sv.performed_by ?? '-'}</td>
+                              <td className="px-3 py-2 text-[var(--text-secondary)] whitespace-nowrap">{sv.total_cost != null ? fmtCurrency(sv.total_cost, activeCurrency) : '-'}</td>
+                            </tr>
+                          )
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <div className="p-6 text-center text-[var(--text-muted)] text-sm">No preventive maintenance service history for this asset.</div>
                 )}
               </div>
             </motion.div>

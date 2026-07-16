@@ -2,6 +2,8 @@ import { useEffect, useState, useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { dashboard } from '../lib/api'
+import { loadPmDashboard } from '../lib/api/pmPrograms'
+import { summarizePmCompliance } from '../lib/pmSchedule'
 import { useAuth } from '../contexts/AuthContext'
 import { useSettings } from '../contexts/SettingsContext'
 import { useTenant } from '../contexts/TenantContext'
@@ -22,7 +24,7 @@ import {
   TrendingUp, TrendingDown, DollarSign, Presentation, Minus,
   FileSpreadsheet, FileText, Search, X, Calendar, Activity, Clock,
   Bell, Upload, ClipboardCheck, Maximize2, Zap, ChevronRight,
-  BarChart2, Shield, Cpu, ArrowUpRight, RefreshCw, CheckCircle2,
+  BarChart2, Shield, Cpu, ArrowUpRight, RefreshCw, CheckCircle2, Wrench,
 } from 'lucide-react'
 import { ChartModal } from '../components/ChartModal'
 import EmptyState from '../components/EmptyState'
@@ -196,6 +198,10 @@ export default function Dashboard() {
   const [expandedChart, setExpandedChart] = useState(null)
   const [exporting, setExporting]         = useState(null) // 'excel' | 'pdf' | 'pptx' | 'daily' | null
   const [exportMsg, setExportMsg]         = useState(null) // { text, type: 'ok' | 'err' }
+  // Preventive Maintenance signal (loaded independently of the tyre dashboard so
+  // an absent pm_programs table never affects the rest of the page). Tri-state:
+  // status 'loading' | 'ready' | 'error'. An unprovisioned table yields plans: [].
+  const [pm, setPm] = useState({ status: 'loading', plans: [], kmByAsset: {}, hoursByAsset: {} })
 
   const pad = n => String(n).padStart(2, '0')
   const fmt = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`
@@ -217,6 +223,18 @@ export default function Dashboard() {
 
   useEffect(() => { applyShortcut('This Month') }, [])
   useEffect(() => { load() }, [activeCountry, dateFrom, dateTo])
+
+  // Independent PM load: own lifecycle + cancel guard so a slow/failed PM fetch
+  // never blocks the tyre dashboard, and a stale in-flight result (after a fast
+  // country switch) is discarded. Honest error state; missing table yields [].
+  useEffect(() => {
+    let cancelled = false
+    setPm(prev => ({ ...prev, status: 'loading' }))
+    loadPmDashboard({ country: activeCountry })
+      .then(bundle => { if (!cancelled) setPm({ status: 'ready', ...bundle }) })
+      .catch(() => { if (!cancelled) setPm({ status: 'error', plans: [], kmByAsset: {}, hoursByAsset: {} }) })
+    return () => { cancelled = true }
+  }, [activeCountry])
 
   // Note: no window-focus reload - it made the page appear to refresh on its
   // own when switching tabs. Use the manual Refresh button to re-pull on demand.
@@ -366,6 +384,21 @@ export default function Dashboard() {
     return { delta: thisHigh - lastHigh, lastHigh }
   }, [tyres, dataAnchor])
 
+  // PM plans scoped to the active Site filter (when set) so the PM signal stays
+  // consistent with the rest of the filtered view. Country scoping already
+  // happened server-side in loadPmDashboard.
+  const pmPlans = useMemo(() => {
+    if (!siteFilter) return pm.plans
+    return pm.plans.filter(p => p.site === siteFilter)
+  }, [pm.plans, siteFilter])
+
+  // Compliance rollup over the (filtered) PM plans. compliantPct is null when
+  // there are no active plans -> the card renders an honest "N/A".
+  const pmCompliance = useMemo(
+    () => summarizePmCompliance(pmPlans, { now: Date.now(), kmByAsset: pm.kmByAsset, hoursByAsset: pm.hoursByAsset }),
+    [pmPlans, pm.kmByAsset, pm.hoursByAsset],
+  )
+
   // Priority recommendations: a short, number-led list of the real issues in the
   // current (filtered) view. Every item is derived from loaded data; nothing is
   // shown when the fleet is clean (honest "all clear" empty state). Structured
@@ -392,9 +425,15 @@ export default function Dashboard() {
     if (unclassified > 0) recs.push({ id: 'unclassified', severity: 'Low', color: '#0284c7', to: '/tyres',
       key: 'dashboard.recs.unclassified', fallback: '{n} tyre records missing risk classification', vars: { n: unclassified } })
 
+    // Preventive maintenance: number-led lines only when plans are actually due.
+    if (pmCompliance.overdue > 0) recs.push({ id: 'pm-overdue', severity: 'High', color: '#ea580c', to: '/pm-programs',
+      key: 'dashboard.recs.pmOverdue', fallback: '{n} preventive maintenance plans overdue', vars: { n: pmCompliance.overdue } })
+    if (pmCompliance.dueSoon > 0) recs.push({ id: 'pm-due', severity: 'Medium', color: '#ca8a04', to: '/pm-programs',
+      key: 'dashboard.recs.pmDueSoon', fallback: '{n} preventive maintenance plans due soon', vars: { n: pmCompliance.dueSoon } })
+
     const order = { Critical: 0, High: 1, Medium: 2, Low: 3 }
     return recs.sort((a, b) => order[a.severity] - order[b.severity]).slice(0, 6)
-  }, [tyres, stats.actions, openActions, riskTrend])
+  }, [tyres, stats.actions, openActions, riskTrend, pmCompliance])
 
   const periodChartData = useMemo(() => {
     const now = dataAnchor
@@ -944,6 +983,48 @@ export default function Dashboard() {
           </ul>
         )}
       </div>
+
+      {/* ── PREVENTIVE MAINTENANCE (compact signal, real plans only) ──────── */}
+      {pm.status === 'ready' && pmCompliance.total > 0 && (
+        <div className="card">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <div className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0"
+                style={{ background: 'rgba(59,130,246,0.1)', border: '1px solid rgba(59,130,246,0.2)' }}>
+                <Wrench size={13} className="text-blue-400" />
+              </div>
+              <h3 className="text-sm font-semibold text-[var(--text-primary)]">
+                {tf('dashboard.pm.title', 'Preventive Maintenance')}
+              </h3>
+              <span className="text-[11px] text-[var(--text-muted)]">
+                {tf('dashboard.pm.activePlans', '{count} active plans', { count: pmCompliance.active })}
+              </span>
+            </div>
+            <Link to="/pm-programs" className="text-[11px] text-blue-500 hover:text-blue-400 font-medium flex items-center gap-1 transition-colors">
+              {tf('dashboard.pm.view', 'View')} <ChevronRight size={11} />
+            </Link>
+          </div>
+          <div className="grid grid-cols-3 gap-3">
+            <Link to="/pm-programs" className="rounded-xl px-3 py-2.5 transition-colors"
+              style={{ background: 'rgba(234,88,12,0.06)', border: '1px solid rgba(234,88,12,0.16)' }}>
+              <p className="text-2xl font-extrabold leading-none tabular-nums text-orange-400">{pmCompliance.overdue}</p>
+              <p className="text-label mt-1.5">{tf('dashboard.pm.overdue', 'Overdue')}</p>
+            </Link>
+            <Link to="/pm-programs" className="rounded-xl px-3 py-2.5 transition-colors"
+              style={{ background: 'rgba(202,138,4,0.06)', border: '1px solid rgba(202,138,4,0.16)' }}>
+              <p className="text-2xl font-extrabold leading-none tabular-nums text-yellow-400">{pmCompliance.dueSoon}</p>
+              <p className="text-label mt-1.5">{tf('dashboard.pm.dueSoon', 'Due soon')}</p>
+            </Link>
+            <div className="rounded-xl px-3 py-2.5"
+              style={{ background: 'rgba(22,163,74,0.06)', border: '1px solid rgba(22,163,74,0.16)' }}>
+              <p className="text-2xl font-extrabold leading-none tabular-nums text-green-400">
+                {pmCompliance.compliantPct == null ? tf('dashboard.pm.na', 'N/A') : `${pmCompliance.compliantPct}%`}
+              </p>
+              <p className="text-label mt-1.5">{tf('dashboard.pm.compliance', 'Compliance')}</p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── FLEET GAUGES + NEEDS ATTENTION (instrument row) ──────────────── */}
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">

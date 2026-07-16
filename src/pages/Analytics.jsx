@@ -8,7 +8,7 @@ import {
   PointElement, Title, Tooltip, Legend,
 } from 'chart.js'
 import { Bar, Line } from 'react-chartjs-2'
-import { BarChart2, TrendingUp, AlertTriangle, Activity } from 'lucide-react'
+import { BarChart2, TrendingUp, AlertTriangle, Activity, Layers } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
 import PeriodFilter, { filterByPeriodValue } from '../components/ui/PeriodFilter'
 import { formatCurrencyCompact } from '../lib/formatters'
@@ -17,6 +17,8 @@ import EnterpriseTable from '../components/ui/EnterpriseTable'
 import { useReportMeta } from '../hooks/useReportMeta'
 import { toUserMessage } from '../lib/safeError'
 import { colorAt, withAlpha } from '../lib/reportColors'
+import { COST_MODES, pickCost, costModeLabel, pickMonthly, splitTotals } from '../lib/costSources'
+import { loadCostSplit } from '../lib/api/costSummary'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, LineElement, PointElement, Title, Tooltip, Legend)
 
@@ -51,6 +53,59 @@ export default function Analytics() {
   }, [activeCountry])
 
   useEffect(() => { load() }, [load])
+
+  // Additive Tyres vs Maintenance split (independent tri-state load, own
+  // cancellation guard, re-fetches on activeCountry change). Never blocks or
+  // alters the existing Analytics content above.
+  const [costMode, setCostMode] = useState('combined')
+  const [costSplit, setCostSplit] = useState(null)
+  const [costLoading, setCostLoading] = useState(true)
+  const [costError, setCostError] = useState(null)
+
+  useEffect(() => {
+    let cancelled = false
+    setCostLoading(true); setCostError(null)
+    loadCostSplit({ country: activeCountry === 'All' ? undefined : activeCountry })
+      .then((res) => { if (!cancelled) setCostSplit(res) })
+      .catch((err) => {
+        if (cancelled) return
+        setCostError(toUserMessage(err, 'Failed to load cost split.'))
+        setCostSplit(null)
+      })
+      .finally(() => { if (!cancelled) setCostLoading(false) })
+    return () => { cancelled = true }
+  }, [activeCountry])
+
+  const costByMonth = costSplit?.byMonth || []
+  const costTotals = useMemo(() => splitTotals(costByMonth), [costByMonth])
+  const costHeadline = pickCost(costMode, costTotals)
+  const costModeColor = useMemo(() => {
+    const idx = Math.max(0, COST_MODES.findIndex((m) => m.key === costMode))
+    return colorAt(idx)
+  }, [costMode])
+
+  const costChartData = useMemo(() => {
+    const series = pickMonthly(costMode, costByMonth)
+    return {
+      labels: series.map((d) => d.month),
+      datasets: [{
+        label: costModeLabel(costMode),
+        data: series.map((d) => d.value),
+        backgroundColor: withAlpha(costModeColor, 0.6),
+        borderColor: costModeColor,
+        borderRadius: 4,
+      }],
+    }
+  }, [costMode, costByMonth, costModeColor])
+
+  const costChartOpts = {
+    responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { display: false } },
+    scales: {
+      x: { ticks: { color: '#6b7280' }, grid: { color: '#1f2937' } },
+      y: { ticks: { color: '#6b7280' }, grid: { color: '#374151' } },
+    },
+  }
 
   const filtered = useMemo(() =>
     filterByPeriodValue(records, period, 'issue_date'),
@@ -165,6 +220,57 @@ export default function Analytics() {
           <p className="text-2xl font-bold text-red-400">{highRiskCount}</p>
           <p className="text-xs text-gray-500 mt-1">{t('analytics.kpi.highRisk')}</p>
         </div>
+      </div>
+
+      {/* Tyres vs Maintenance cost split (additive, independent load) */}
+      <div className="card">
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+          <h3 className="text-sm font-semibold text-white flex items-center gap-2">
+            <Layers size={15} style={{ color: costModeColor }} /> Tyres vs Maintenance
+          </h3>
+          <div className="inline-flex rounded-lg border border-[var(--border-dim)] overflow-hidden">
+            {COST_MODES.map((m) => (
+              <button
+                key={m.key}
+                type="button"
+                onClick={() => setCostMode(m.key)}
+                className={`px-3 py-1.5 text-xs font-medium transition-colors ${
+                  costMode === m.key
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-transparent text-gray-400 hover:text-white'
+                }`}
+              >
+                {m.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {costLoading ? (
+          <div className="animate-pulse h-64 rounded-lg bg-white/5" />
+        ) : costError ? (
+          <div className="flex items-center gap-2 text-red-400 text-sm bg-red-400/10 border border-red-400/20 rounded-xl px-4 py-3">
+            <AlertTriangle size={14} /> {costError}
+          </div>
+        ) : costTotals.combined === 0 ? (
+          <div className="text-center py-12">
+            <Activity size={32} className="text-gray-700 mx-auto mb-3" />
+            <p className="text-gray-400 font-medium">No cost data</p>
+            <p className="text-gray-600 text-sm mt-1">No tyre or maintenance spend in the last 12 months.</p>
+          </div>
+        ) : (
+          <>
+            <div className="mb-4">
+              <p className="text-2xl font-bold" style={{ color: costModeColor }}>
+                {formatCurrencyCompact(costHeadline, activeCurrency)}
+              </p>
+              <p className="text-xs text-gray-500 mt-1">{costModeLabel(costMode)} spend, last 12 months</p>
+            </div>
+            <div style={{ height: 280 }}>
+              <Bar data={costChartData} options={costChartOpts} />
+            </div>
+          </>
+        )}
       </div>
 
       {error && !loading && (

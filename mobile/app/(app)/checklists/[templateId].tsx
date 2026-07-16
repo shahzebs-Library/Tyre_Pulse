@@ -1,35 +1,68 @@
 /**
- * Checklist fill & submit
+ * Checklist fill & submit (visual, tap-to-record)
  *
- * Loads a published template, seeds blank answers, and renders each field in
- * order — hiding fields whose `visibleWhen` condition isn't met (recomputed live
- * as answers change). Validation, optional scoring and signature capture run at
- * submit; the write is offline-safe via the checklists service (record queue).
+ * Redesigned to mirror the tyre inspection's tap-a-thing feel: every checklist
+ * item is a big, iconic tile showing its live state (Pass / Fail / a value or
+ * "Tap to record"). Tapping a tile opens ChecklistItemSheet - a bottom sheet
+ * with large icon buttons - so a non-technical operator records one item at a
+ * time with gloves in the sun. A sticky progress bar shows "X of Y done".
+ *
+ * The data model, validation, optional scoring, signature capture and the
+ * offline-safe submit path are unchanged (submitChecklist through the record
+ * queue); only the presentation is new. Fields whose `visibleWhen` condition
+ * isn't met are hidden and recomputed live as answers change.
  */
 import { useEffect, useState, useCallback, useMemo } from 'react'
 import {
-  View, Text, ScrollView, TextInput, TouchableOpacity,
-  StyleSheet, Alert, ActivityIndicator, StatusBar, Platform,
-  KeyboardAvoidingView,
+  View, ScrollView, TextInput, TouchableOpacity, StyleSheet, Alert,
 } from 'react-native'
-import { SafeAreaView } from 'react-native-safe-area-context'
 import { useRouter, useLocalSearchParams } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
 import { useAuth } from '../../../contexts/AuthContext'
 import { useLanguage } from '../../../contexts/LanguageContext'
-import PhotoCapture from '../../../components/PhotoCapture'
-import ChecklistReferencePicker from '../../../components/ChecklistReferencePicker'
-import SignaturePad from '../../../components/SignaturePad'
+import { useTheme } from '../../../contexts/ThemeContext'
+import { Theme, spacing, radius, typography } from '../../../lib/theme'
+import { AppText, Screen, Badge, EmptyState, ErrorState, Loading } from '../../../components/ui'
+import ChecklistItemSheet, { optionTone } from '../../../components/ChecklistItemSheet'
 import { getTemplate, submitChecklist, ChecklistTemplate } from '../../../lib/checklists'
 import {
   ChecklistField, blankAnswer, isValueField, isFieldVisible,
-  validateSubmission, computeScore, isReferenceField, referenceSource,
-  isAutoField, resolveAutoValue,
+  validateSubmission, computeScore, isAutoField, resolveAutoValue,
+  isFieldAnswered, fieldSummaryText,
 } from '../../../lib/checklistFields'
+
+type IconName = keyof typeof Ionicons.glyphMap
+
+function looksLikeMissingTable(msg: string): boolean {
+  const m = (msg || '').toLowerCase()
+  return m.includes('does not exist') || m.includes('relation') || m.includes('schema cache')
+}
+
+// A friendly icon per field type for the tile.
+function fieldIcon(f: ChecklistField): IconName {
+  switch (f.type) {
+    case 'boolean': return 'checkmark-done-circle-outline'
+    case 'select': return 'options-outline'
+    case 'multiselect': return 'apps-outline'
+    case 'rating': return 'star-outline'
+    case 'number': return 'calculator-outline'
+    case 'date': return 'calendar-outline'
+    case 'textarea': return 'document-text-outline'
+    case 'asset': return 'car-outline'
+    case 'site': return 'business-outline'
+    case 'user': return 'person-outline'
+    case 'photo': return 'camera-outline'
+    case 'signature': return 'create-outline'
+    default: return 'create-outline'
+  }
+}
 
 export default function ChecklistFillScreen() {
   const { profile } = useAuth()
   const { isRTL } = useLanguage()
+  const { theme } = useTheme()
+  const styles = useMemo(() => makeStyles(theme), [theme])
+  const c = theme.color
   const router = useRouter()
   const params = useLocalSearchParams<{
     templateId?: string; assignment?: string; site?: string; asset_no?: string
@@ -40,6 +73,7 @@ export default function ChecklistFillScreen() {
   const [template, setTemplate] = useState<ChecklistTemplate | null>(null)
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
+  const [notEnabled, setNotEnabled] = useState(false)
 
   const [title, setTitle] = useState('')
   const [site, setSite] = useState(params.site ? String(params.site) : '')
@@ -50,18 +84,18 @@ export default function ChecklistFillScreen() {
   const [signatureData, setSignatureData] = useState<string | null>(null)
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [submitting, setSubmitting] = useState(false)
+  const [activeFieldId, setActiveFieldId] = useState<string | null>(null)
 
   const textAlign = isRTL ? 'right' : 'left'
 
   const load = useCallback(async () => {
     setLoadError(null)
+    setNotEnabled(false)
     try {
       const t = await getTemplate(templateId)
       if (!t) { setTemplate(null); setLoading(false); return }
       setTemplate(t)
       setTitle(t.name ?? '')
-      // Seed blank answers for every value field so controlled inputs stay stable.
-      // Auto-fill + lock fields are prefilled from live context (inspector/today).
       const today = new Date().toISOString().slice(0, 10)
       const userName = profile?.full_name || profile?.username || ''
       const seed: Record<string, any> = {}
@@ -72,7 +106,9 @@ export default function ChecklistFillScreen() {
       }
       setAnswers(seed)
     } catch (e: any) {
-      setLoadError(e?.message || 'Could not load this checklist.')
+      const msg = e?.message || 'Could not load this checklist.'
+      if (looksLikeMissingTable(msg)) setNotEnabled(true)
+      else setLoadError(msg)
     } finally {
       setLoading(false)
     }
@@ -89,10 +125,24 @@ export default function ChecklistFillScreen() {
     setPhotos(prev => ({ ...prev, [id]: urls }))
   }, [])
 
-  // Only fields currently visible are rendered / validated / scored.
+  // Only currently-visible fields are rendered / validated / scored.
   const visibleFields = useMemo(
     () => (template?.fields ?? []).filter(f => isFieldVisible(f, answers)),
     [template, answers],
+  )
+
+  // Progress across recordable (non-section) visible items.
+  const { total, done } = useMemo(() => {
+    const items = visibleFields.filter(f => f.type !== 'section')
+    const d = items.filter(f => isFieldAnswered(f, answers, photos, signatureData)).length
+    return { total: items.length, done: d }
+  }, [visibleFields, answers, photos, signatureData])
+
+  const pct = total > 0 ? Math.round((done / total) * 100) : 0
+
+  const activeField = useMemo(
+    () => visibleFields.find(f => f.id === activeFieldId) ?? null,
+    [visibleFields, activeFieldId],
   )
 
   async function handleSubmit() {
@@ -102,7 +152,7 @@ export default function ChecklistFillScreen() {
     if (!valid) {
       setErrors(errs)
       const first = Object.values(errs)[0]
-      Alert.alert('Please review', first || 'Some required fields need attention.')
+      Alert.alert('Please review', first || 'Some required items need attention.')
       return
     }
     setErrors({})
@@ -110,7 +160,7 @@ export default function ChecklistFillScreen() {
     const name = printedName.trim() || (profile?.full_name ?? '')
     if (template.require_signature) {
       if (!signatureData) {
-        Alert.alert('Signature required', 'Please sign in the signature box to complete this checklist.')
+        Alert.alert('Signature required', 'Please sign to complete this checklist.')
         return
       }
       if (!name) {
@@ -145,12 +195,12 @@ export default function ChecklistFillScreen() {
       })
 
       if (res.offline) {
-        Alert.alert('Saved on device', 'Saved on device — will sync when online.', [
+        Alert.alert('Saved on device', 'Saved on device. It will sync when online.', [
           { text: 'OK', onPress: () => router.back() },
         ])
       } else {
         const scoreLine = template.scored && score_pct != null
-          ? `\n\nScore: ${score_pct}%${score_passed != null ? ` · ${score_passed ? 'Passed' : 'Failed'}` : ''}`
+          ? `\n\nScore: ${score_pct}%${score_passed != null ? ` (${score_passed ? 'Passed' : 'Failed'})` : ''}`
           : ''
         Alert.alert('Checklist submitted', `Your checklist has been recorded.${scoreLine}`, [
           { text: 'Done', onPress: () => router.back() },
@@ -163,551 +213,297 @@ export default function ChecklistFillScreen() {
     }
   }
 
-  // ── Loading / error / not-found ────────────────────────────────────────────
-  if (loading) {
-    return (
-      <SafeAreaView style={[styles.safe, styles.center]}>
-        <StatusBar barStyle="dark-content" backgroundColor="#f0f5f1" />
-        <ActivityIndicator size="large" color="#16a34a" />
-      </SafeAreaView>
-    )
-  }
-
-  if (loadError || !template) {
-    return (
-      <SafeAreaView style={styles.safe}>
-        <StatusBar barStyle="dark-content" backgroundColor="#f0f5f1" />
-        <View style={[styles.nav, isRTL && styles.rowR]}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.navBack}>
-            <Ionicons name={isRTL ? 'arrow-forward' : 'arrow-back'} size={22} color="#0f172a" />
-          </TouchableOpacity>
-          <Text style={[styles.navTitle, { textAlign }]}>Checklist</Text>
-        </View>
-        <View style={styles.stateWrap}>
-          <Ionicons
-            name={loadError ? 'cloud-offline-outline' : 'help-circle-outline'}
-            size={52}
-            color={loadError ? '#fca5a5' : '#cbd5e1'}
-          />
-          <Text style={styles.stateTitle}>{loadError ? "Couldn't load checklist" : 'Checklist not found'}</Text>
-          <Text style={styles.stateText}>
-            {loadError || 'This checklist may have been unpublished or removed.'}
-          </Text>
-          {loadError && (
-            <TouchableOpacity style={styles.retryBtn} onPress={() => { setLoading(true); load() }}>
-              <Ionicons name="refresh" size={16} color="#fff" />
-              <Text style={styles.retryText}>Retry</Text>
-            </TouchableOpacity>
-          )}
-        </View>
-      </SafeAreaView>
-    )
-  }
-
-  return (
-    <SafeAreaView style={styles.safe}>
-      <StatusBar barStyle="dark-content" backgroundColor="#f0f5f1" />
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <View style={[styles.nav, isRTL && styles.rowR]}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.navBack}>
-            <Ionicons name={isRTL ? 'arrow-forward' : 'arrow-back'} size={22} color="#0f172a" />
-          </TouchableOpacity>
-          <View style={{ flex: 1 }}>
-            <Text style={[styles.navTitle, { textAlign }]} numberOfLines={1}>{template.name}</Text>
-            {!!template.category && (
-              <Text style={[styles.navSub, { textAlign }]} numberOfLines={1}>{template.category}</Text>
-            )}
-          </View>
-          {template.scored && (
-            <View style={styles.scoredPill}>
-              <Ionicons name="ribbon-outline" size={12} color="#15803d" />
-              <Text style={styles.scoredPillText}>Scored</Text>
-            </View>
-          )}
-        </View>
-
-        <ScrollView
-          style={styles.scroll}
-          contentContainerStyle={styles.content}
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
-        >
-          {/* ── Header block ─────────────────────────────────────────────────── */}
-          <View style={styles.card}>
-            <Field label="Title">
-              <TextInput
-                style={[styles.input, { textAlign }]}
-                value={title}
-                onChangeText={setTitle}
-                placeholder={template.name}
-                placeholderTextColor="#94a3b8"
-              />
-            </Field>
-            <View style={styles.row2}>
-              <View style={{ flex: 1 }}>
-                <Field label="Asset No">
-                  <TextInput
-                    style={[styles.input, { textAlign }]}
-                    value={assetNo}
-                    onChangeText={setAssetNo}
-                    placeholder="e.g. TRK-001"
-                    placeholderTextColor="#94a3b8"
-                    autoCapitalize="characters"
-                    autoCorrect={false}
-                  />
-                </Field>
-              </View>
-              <View style={{ flex: 1 }}>
-                <Field label="Site">
-                  <TextInput
-                    style={[styles.input, { textAlign }]}
-                    value={site}
-                    onChangeText={setSite}
-                    placeholder="Site"
-                    placeholderTextColor="#94a3b8"
-                  />
-                </Field>
-              </View>
-            </View>
-          </View>
-
-          {/* ── Dynamic fields ───────────────────────────────────────────────── */}
-          {visibleFields.map(field => (
-            <FieldRenderer
-              key={field.id}
-              field={field}
-              value={answers[field.id]}
-              photos={photos[field.id] ?? []}
-              error={errors[field.id]}
-              printedName={printedName}
-              signatureData={signatureData}
-              textAlign={textAlign}
-              country={profile?.country ?? null}
-              onChange={v => setAnswer(field.id, v)}
-              onPhotos={urls => setFieldPhotos(field.id, urls)}
-              onPrintedName={setPrintedName}
-              onSignature={setSignatureData}
-            />
-          ))}
-
-          {/* ── Submit ───────────────────────────────────────────────────────── */}
-          <TouchableOpacity
-            style={[styles.submitBtn, submitting && styles.submitBtnDisabled]}
-            onPress={handleSubmit}
-            disabled={submitting}
-            activeOpacity={0.88}
-          >
-            {submitting ? (
-              <ActivityIndicator size="small" color="#fff" />
-            ) : (
-              <>
-                <Ionicons name="cloud-upload-outline" size={18} color="#fff" />
-                <Text style={styles.submitText}>Submit Checklist</Text>
-              </>
-            )}
-          </TouchableOpacity>
-        </ScrollView>
-      </KeyboardAvoidingView>
-    </SafeAreaView>
-  )
-}
-
-// ── Field wrapper (label + required asterisk + help + error) ──────────────────
-function Field({
-  label, required, help, error, children, textAlign = 'left',
-}: {
-  label?: string; required?: boolean; help?: string; error?: string
-  children: React.ReactNode; textAlign?: 'left' | 'right'
-}) {
-  return (
-    <View style={styles.field}>
-      {!!label && (
-        <Text style={[styles.fieldLabel, { textAlign }]}>
-          {label}{required ? <Text style={styles.req}> *</Text> : null}
-        </Text>
-      )}
-      {children}
-      {!!help && !error && <Text style={[styles.help, { textAlign }]}>{help}</Text>}
-      {!!error && <Text style={[styles.errorText, { textAlign }]}>{error}</Text>}
+  // ── Header (shared) ─────────────────────────────────────────────────────────
+  const header = (
+    <View style={[styles.nav, isRTL && styles.rowR]}>
+      <TouchableOpacity onPress={() => router.back()} style={styles.navBack}>
+        <Ionicons name={isRTL ? 'arrow-forward' : 'arrow-back'} size={22} color={c.text} />
+      </TouchableOpacity>
+      <View style={{ flex: 1 }}>
+        <AppText variant="h3" style={{ textAlign }} numberOfLines={1}>
+          {template?.name ?? 'Checklist'}
+        </AppText>
+        {!!template?.category && (
+          <AppText variant="caption" color="muted" style={{ textAlign }} numberOfLines={1}>
+            {template.category}
+          </AppText>
+        )}
+      </View>
+      {template?.scored && <Badge kind="success">Scored</Badge>}
     </View>
   )
-}
 
-// ── Per-type field renderer ───────────────────────────────────────────────────
-function FieldRenderer({
-  field, value, photos, error, printedName, signatureData, textAlign, country,
-  onChange, onPhotos, onPrintedName, onSignature,
-}: {
-  field: ChecklistField
-  value: any
-  photos: string[]
-  error?: string
-  printedName: string
-  signatureData: string | null
-  textAlign: 'left' | 'right'
-  country?: string | null
-  onChange: (v: any) => void
-  onPhotos: (urls: string[]) => void
-  onPrintedName: (v: string) => void
-  onSignature: (v: string | null) => void
-}) {
-  // Section: a bold divider heading, no input.
-  if (field.type === 'section') {
+  // ── Loading / not-enabled / error / not-found ───────────────────────────────
+  if (loading) {
+    return <Screen>{header}<Loading /></Screen>
+  }
+  if (notEnabled) {
     return (
-      <View style={styles.section}>
-        <Text style={[styles.sectionLabel, { textAlign }]}>{field.label || 'Section'}</Text>
-        {!!field.help && <Text style={[styles.sectionHelp, { textAlign }]}>{field.help}</Text>}
-      </View>
+      <Screen>
+        {header}
+        <EmptyState
+          icon="checkbox-outline"
+          title="Checklists aren't enabled yet"
+          message="Ask your administrator to publish checklist templates for your site."
+        />
+      </Screen>
+    )
+  }
+  if (loadError) {
+    return (
+      <Screen>
+        {header}
+        <ErrorState message={loadError} onRetry={() => { setLoading(true); load() }} />
+      </Screen>
+    )
+  }
+  if (!template) {
+    return (
+      <Screen>
+        {header}
+        <EmptyState
+          icon="help-circle-outline"
+          title="Checklist not found"
+          message="This checklist may have been unpublished or removed."
+        />
+      </Screen>
     )
   }
 
-  // Photo field: capture grid stored under the field id.
-  if (field.type === 'photo') {
-    return (
-      <View style={styles.card}>
-        <Field label={field.label} required={field.required} help={field.help} error={error} textAlign={textAlign}>
-          <PhotoCapture value={photos} onChange={onPhotos} module="checklist" tint="#16a34a" />
-        </Field>
-      </View>
-    )
-  }
+  return (
+    <Screen>
+      {header}
 
-  // Signature: a real finger-drawn signature (captured as SVG) plus the printed
-  // name of who signed. Both are validated at submit when require_signature.
-  if (field.type === 'signature') {
-    return (
-      <View style={styles.card}>
-        <Field label={field.label || 'Signature'} required={field.required} error={error} textAlign={textAlign}>
-          <SignaturePad onChange={onSignature} height={180} />
-        </Field>
-        <View style={{ marginTop: 12 }}>
-          <Text style={[styles.fieldLabel, { textAlign }]}>Printed name</Text>
+      {/* Sticky progress */}
+      <View style={styles.progressBar}>
+        <View style={[styles.progressHead, isRTL && styles.rowR]}>
+          <AppText variant="label" color="secondary">
+            {done} of {total} done
+          </AppText>
+          <AppText variant="label" style={{ color: pct === 100 ? c.success.base : c.textMuted }}>
+            {pct}%
+          </AppText>
+        </View>
+        <View style={styles.track}>
+          <View style={[styles.fill, { width: `${pct}%`, backgroundColor: pct === 100 ? c.success.base : c.primary }]} />
+        </View>
+      </View>
+
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={styles.content}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Context: title / asset / site */}
+        <View style={styles.card}>
+          <AppText variant="label" color="secondary" style={{ marginBottom: 6 }}>Title</AppText>
           <TextInput
             style={[styles.input, { textAlign }]}
-            value={printedName}
-            onChangeText={onPrintedName}
-            placeholder="Type your full name"
-            placeholderTextColor="#94a3b8"
-            autoCapitalize="words"
+            value={title}
+            onChangeText={setTitle}
+            placeholder={template.name}
+            placeholderTextColor={c.textMuted}
           />
-          <Text style={[styles.help, { textAlign }]}>
-            {signatureData ? 'Signed — printed name confirms who signed.' : 'Sign above, then print your name.'}
-          </Text>
-        </View>
-      </View>
-    )
-  }
-
-  // Auto-fill + lock: prefilled from context and shown read-only (no editable control).
-  if (isAutoField(field)) {
-    return (
-      <View style={styles.card}>
-        <Field label={field.label} required={field.required} help={field.help} error={error} textAlign={textAlign}>
-          <View style={styles.lockedRow}>
-            <Text style={[styles.lockedText, { textAlign }]} numberOfLines={1}>
-              {value != null && value !== '' ? String(value) : '—'}
-            </Text>
-            <View style={styles.lockedHint}>
-              <Ionicons name="lock-closed" size={12} color="#94a3b8" />
-              <Text style={styles.lockedHintText}>Auto · locked</Text>
+          <View style={styles.row2}>
+            <View style={{ flex: 1 }}>
+              <AppText variant="label" color="secondary" style={{ marginBottom: 6, marginTop: spacing.md }}>Asset No</AppText>
+              <TextInput
+                style={[styles.input, { textAlign }]}
+                value={assetNo}
+                onChangeText={setAssetNo}
+                placeholder="e.g. TRK-001"
+                placeholderTextColor={c.textMuted}
+                autoCapitalize="characters"
+                autoCorrect={false}
+              />
+            </View>
+            <View style={{ flex: 1 }}>
+              <AppText variant="label" color="secondary" style={{ marginBottom: 6, marginTop: spacing.md }}>Site</AppText>
+              <TextInput
+                style={[styles.input, { textAlign }]}
+                value={site}
+                onChangeText={setSite}
+                placeholder="Site"
+                placeholderTextColor={c.textMuted}
+              />
             </View>
           </View>
-        </Field>
-      </View>
-    )
-  }
-
-  return (
-    <View style={styles.card}>
-      <Field label={field.label} required={field.required} help={field.help} error={error} textAlign={textAlign}>
-        <ValueInput field={field} value={value} textAlign={textAlign} country={country} onChange={onChange} />
-      </Field>
-      {/* Any non-photo field flagged allow_photo gets an inline capture. */}
-      {field.allow_photo && (
-        <View style={{ marginTop: 10 }}>
-          <Text style={[styles.help, { textAlign, marginBottom: 6 }]}>Attach photo</Text>
-          <PhotoCapture value={photos} onChange={onPhotos} module="checklist" tint="#16a34a" max={4} />
         </View>
-      )}
-    </View>
+
+        {/* Item tiles + section headings */}
+        {visibleFields.map(field => {
+          if (field.type === 'section') {
+            return (
+              <View key={field.id} style={styles.section}>
+                <AppText variant="h3" style={{ textAlign }}>{field.label || 'Section'}</AppText>
+                {!!field.help && (
+                  <AppText variant="caption" color="muted" style={{ textAlign, marginTop: 4 }}>{field.help}</AppText>
+                )}
+              </View>
+            )
+          }
+
+          const answered = isFieldAnswered(field, answers, photos, signatureData)
+          const summary = fieldSummaryText(field, answers, photos, signatureData)
+          const locked = isAutoField(field)
+          const err = errors[field.id]
+
+          // Tile status pill tone: pass/fail from option semantics where possible.
+          let pillKind: 'success' | 'danger' | 'neutral' | 'info' = answered ? 'info' : 'neutral'
+          if (answered) {
+            if (field.type === 'boolean') pillKind = answers[field.id] === true ? 'success' : 'danger'
+            else if (field.type === 'select') {
+              const t = optionTone(String(answers[field.id] ?? ''))
+              pillKind = t === 'pass' ? 'success' : t === 'fail' ? 'danger' : t === 'na' ? 'neutral' : 'info'
+            }
+          }
+          const iconTint =
+            pillKind === 'success' ? c.success.base
+            : pillKind === 'danger' ? c.danger.base
+            : answered ? c.primary : c.textMuted
+
+          return (
+            <TouchableOpacity
+              key={field.id}
+              style={[
+                styles.tile,
+                isRTL && styles.rowR,
+                answered && { borderColor: c.borderStrong },
+                !!err && { borderColor: c.danger.base, backgroundColor: c.danger.soft },
+              ]}
+              activeOpacity={locked ? 1 : 0.75}
+              onPress={() => setActiveFieldId(field.id)}
+            >
+              <View style={[styles.tileIcon, { backgroundColor: answered ? c.primarySoft : c.surfaceAlt }]}>
+                <Ionicons name={locked ? 'lock-closed-outline' : fieldIcon(field)} size={22} color={iconTint} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <AppText style={[typography.title, { textAlign }]} numberOfLines={2}>
+                  {field.label || 'Item'}
+                  {field.required ? <AppText style={{ color: c.danger.base }}> *</AppText> : null}
+                </AppText>
+                {!!err ? (
+                  <AppText variant="caption" style={{ color: c.danger.base, textAlign, marginTop: 2, fontWeight: '700' }} numberOfLines={2}>
+                    {err}
+                  </AppText>
+                ) : summary ? (
+                  <AppText variant="caption" color="secondary" style={{ textAlign, marginTop: 2 }} numberOfLines={2}>
+                    {summary}
+                  </AppText>
+                ) : field.help ? (
+                  <AppText variant="caption" color="muted" style={{ textAlign, marginTop: 2 }} numberOfLines={2}>
+                    {field.help}
+                  </AppText>
+                ) : (
+                  <AppText variant="caption" color="muted" style={{ textAlign, marginTop: 2 }}>
+                    Tap to record
+                  </AppText>
+                )}
+              </View>
+              {answered ? (
+                <Ionicons name="checkmark-circle" size={22} color={iconTint} />
+              ) : (
+                <Ionicons name={isRTL ? 'chevron-back' : 'chevron-forward'} size={20} color={c.textMuted} />
+              )}
+            </TouchableOpacity>
+          )
+        })}
+
+        {/* Submit */}
+        <View style={{ marginTop: spacing.sm }}>
+          <TouchableOpacity
+            style={[styles.submitBtn, submitting && { opacity: 0.55 }]}
+            onPress={handleSubmit}
+            disabled={submitting}
+            activeOpacity={0.9}
+          >
+            <Ionicons name="cloud-upload-outline" size={19} color={c.onPrimary} />
+            <AppText style={[typography.h3, { color: c.onPrimary }]}>
+              {submitting ? 'Submitting...' : 'Submit Checklist'}
+            </AppText>
+          </TouchableOpacity>
+          {template.require_signature && !signatureData && (
+            <AppText variant="caption" color="muted" center style={{ marginTop: spacing.sm }}>
+              A signature is required before you can submit.
+            </AppText>
+          )}
+        </View>
+      </ScrollView>
+
+      {/* Tap-to-record popup */}
+      <ChecklistItemSheet
+        visible={!!activeField}
+        field={activeField}
+        value={activeField ? answers[activeField.id] : undefined}
+        photos={activeField ? (photos[activeField.id] ?? []) : []}
+        printedName={printedName}
+        signatureData={signatureData}
+        country={profile?.country ?? null}
+        error={activeField ? errors[activeField.id] : undefined}
+        onChange={v => activeField && setAnswer(activeField.id, v)}
+        onPhotos={urls => activeField && setFieldPhotos(activeField.id, urls)}
+        onPrintedName={setPrintedName}
+        onSignature={setSignatureData}
+        onClose={() => setActiveFieldId(null)}
+      />
+    </Screen>
   )
 }
 
-// ── The actual input control per value type ───────────────────────────────────
-function ValueInput({
-  field, value, textAlign, country, onChange,
-}: {
-  field: ChecklistField; value: any; textAlign: 'left' | 'right'
-  country?: string | null; onChange: (v: any) => void
-}) {
-  // Reference fields (asset/site/user) use the live searchable picker.
-  if (isReferenceField(field.type)) {
-    return (
-      <ChecklistReferencePicker
-        source={referenceSource(field.type)!}
-        value={typeof value === 'string' ? value : ''}
-        onChange={onChange}
-        country={country}
-        placeholder={`Select a ${field.type}…`}
-      />
-    )
-  }
+function makeStyles(theme: Theme) {
+  const c = theme.color
+  return StyleSheet.create({
+    rowR: { flexDirection: 'row-reverse' },
 
-  switch (field.type) {
-    case 'textarea':
-      return (
-        <TextInput
-          style={[styles.input, styles.textArea, { textAlign }]}
-          value={String(value ?? '')}
-          onChangeText={onChange}
-          placeholder="Enter details..."
-          placeholderTextColor="#94a3b8"
-          multiline
-          numberOfLines={4}
-        />
-      )
+    nav: {
+      flexDirection: 'row', alignItems: 'center', gap: spacing.md,
+      paddingHorizontal: spacing.lg, paddingVertical: spacing.md,
+    },
+    navBack: {
+      width: 38, height: 38, borderRadius: radius.sm, backgroundColor: c.surface,
+      alignItems: 'center', justifyContent: 'center',
+      borderWidth: 1, borderColor: c.border,
+    },
 
-    case 'number':
-      return (
-        <TextInput
-          style={[styles.input, { textAlign }]}
-          value={String(value ?? '')}
-          onChangeText={onChange}
-          placeholder="0"
-          placeholderTextColor="#94a3b8"
-          keyboardType="numeric"
-        />
-      )
+    progressBar: {
+      paddingHorizontal: spacing.lg, paddingBottom: spacing.md, gap: 6,
+      borderBottomWidth: 1, borderBottomColor: c.border,
+    },
+    progressHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+    track: { height: 8, borderRadius: 4, backgroundColor: c.surfaceSunken, overflow: 'hidden' },
+    fill: { height: 8, borderRadius: 4 },
 
-    case 'date':
-      return (
-        <TextInput
-          style={[styles.input, { textAlign }]}
-          value={String(value ?? '')}
-          onChangeText={onChange}
-          placeholder="YYYY-MM-DD"
-          placeholderTextColor="#94a3b8"
-          autoCapitalize="none"
-          autoCorrect={false}
-        />
-      )
+    scroll: { flex: 1 },
+    content: { padding: spacing.lg, paddingBottom: spacing['4xl'], gap: spacing.md },
 
-    case 'select': {
-      const opts = field.options ?? []
-      return (
-        <View style={styles.chipWrap}>
-          {opts.map(opt => {
-            const active = value === opt
-            return (
-              <TouchableOpacity
-                key={opt}
-                style={[styles.choiceChip, active && styles.choiceChipActive]}
-                onPress={() => onChange(active ? '' : opt)}
-                activeOpacity={0.75}
-              >
-                <Text style={[styles.choiceText, active && styles.choiceTextActive]}>{opt}</Text>
-              </TouchableOpacity>
-            )
-          })}
-        </View>
-      )
-    }
+    card: {
+      backgroundColor: c.surface, borderRadius: radius.lg, padding: spacing.lg,
+      borderWidth: 1, borderColor: c.border,
+    },
+    row2: { flexDirection: 'row', gap: spacing.md },
+    input: {
+      backgroundColor: c.surfaceAlt, borderWidth: 1, borderColor: c.border,
+      borderRadius: radius.md, paddingHorizontal: spacing.md, paddingVertical: 12,
+      ...typography.body, color: c.text,
+    },
 
-    case 'multiselect': {
-      const opts = field.options ?? []
-      const arr: any[] = Array.isArray(value) ? value : []
-      return (
-        <View style={styles.chipWrap}>
-          {opts.map(opt => {
-            const active = arr.includes(opt)
-            return (
-              <TouchableOpacity
-                key={opt}
-                style={[styles.choiceChip, active && styles.choiceChipActive]}
-                onPress={() => onChange(active ? arr.filter(v => v !== opt) : [...arr, opt])}
-                activeOpacity={0.75}
-              >
-                {active && <Ionicons name="checkmark" size={13} color="#fff" />}
-                <Text style={[styles.choiceText, active && styles.choiceTextActive]}>{opt}</Text>
-              </TouchableOpacity>
-            )
-          })}
-        </View>
-      )
-    }
+    section: { marginTop: spacing.sm, paddingBottom: 2 },
 
-    case 'boolean': {
-      const opts: { label: string; val: boolean }[] = [
-        { label: 'Yes', val: true },
-        { label: 'No', val: false },
-      ]
-      return (
-        <View style={styles.segment}>
-          {opts.map(o => {
-            const active = value === o.val
-            return (
-              <TouchableOpacity
-                key={o.label}
-                style={[styles.segmentBtn, active && (o.val ? styles.segmentYes : styles.segmentNo)]}
-                onPress={() => onChange(active ? null : o.val)}
-                activeOpacity={0.8}
-              >
-                <Ionicons
-                  name={o.val ? 'checkmark-circle-outline' : 'close-circle-outline'}
-                  size={16}
-                  color={active ? '#fff' : (o.val ? '#16a34a' : '#dc2626')}
-                />
-                <Text style={[styles.segmentText, active && styles.segmentTextActive]}>{o.label}</Text>
-              </TouchableOpacity>
-            )
-          })}
-        </View>
-      )
-    }
+    tile: {
+      flexDirection: 'row', alignItems: 'center', gap: spacing.md,
+      backgroundColor: c.surface, borderRadius: radius.lg, padding: spacing.md,
+      borderWidth: 1, borderColor: c.border,
+      minHeight: 72,
+    },
+    tileIcon: {
+      width: 46, height: 46, borderRadius: radius.md,
+      alignItems: 'center', justifyContent: 'center',
+    },
 
-    case 'rating': {
-      const n = Number(value) || 0
-      return (
-        <View style={styles.starRow}>
-          {[1, 2, 3, 4, 5].map(star => (
-            <TouchableOpacity
-              key={star}
-              onPress={() => onChange(n === star ? 0 : star)}
-              hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
-              activeOpacity={0.7}
-            >
-              <Ionicons
-                name={star <= n ? 'star' : 'star-outline'}
-                size={30}
-                color={star <= n ? '#f59e0b' : '#cbd5e1'}
-              />
-            </TouchableOpacity>
-          ))}
-          {n > 0 && <Text style={styles.ratingValue}>{n}/5</Text>}
-        </View>
-      )
-    }
-
-    case 'text':
-    default:
-      return (
-        <TextInput
-          style={[styles.input, { textAlign }]}
-          value={String(value ?? '')}
-          onChangeText={onChange}
-          placeholder="Enter text..."
-          placeholderTextColor="#94a3b8"
-        />
-      )
-  }
+    submitBtn: {
+      flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+      backgroundColor: c.primary, borderRadius: radius.md, height: 56,
+    },
+  })
 }
-
-const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#f0f5f1' },
-  center: { justifyContent: 'center', alignItems: 'center' },
-  rowR: { flexDirection: 'row-reverse' },
-
-  nav: {
-    flexDirection: 'row', alignItems: 'center', gap: 12,
-    paddingHorizontal: 16, paddingVertical: 12,
-    backgroundColor: '#fff',
-    borderBottomWidth: 1, borderBottomColor: 'rgba(0,0,0,0.07)',
-  },
-  navBack: {
-    width: 36, height: 36, borderRadius: 10, backgroundColor: '#f1f5f9',
-    alignItems: 'center', justifyContent: 'center',
-  },
-  navTitle: { fontSize: 16, fontWeight: '700', color: '#0f172a' },
-  navSub: { fontSize: 11, color: '#64748b', marginTop: 1 },
-  scoredPill: {
-    flexDirection: 'row', alignItems: 'center', gap: 4,
-    backgroundColor: 'rgba(22,163,74,0.1)', borderRadius: 8,
-    paddingHorizontal: 8, paddingVertical: 4,
-  },
-  scoredPillText: { fontSize: 10.5, fontWeight: '800', color: '#15803d' },
-
-  scroll: { flex: 1 },
-  content: { padding: 16, paddingBottom: 48, gap: 12 },
-
-  card: {
-    backgroundColor: '#fff', borderRadius: 14, padding: 14,
-    borderWidth: 1, borderColor: 'rgba(0,0,0,0.06)',
-  },
-  row2: { flexDirection: 'row', gap: 12 },
-
-  field: { gap: 0 },
-  fieldLabel: {
-    fontSize: 12, fontWeight: '700', color: '#334155',
-    marginBottom: 8,
-  },
-  req: { color: '#dc2626', fontWeight: '800' },
-  help: { fontSize: 11.5, color: '#94a3b8', marginTop: 6, lineHeight: 16 },
-  errorText: { fontSize: 11.5, color: '#dc2626', fontWeight: '600', marginTop: 6 },
-
-  input: {
-    backgroundColor: '#f8fafc', borderWidth: 1, borderColor: '#e2e8f0',
-    borderRadius: 12, paddingHorizontal: 12, paddingVertical: 11,
-    fontSize: 14, color: '#0f172a',
-  },
-  textArea: { minHeight: 90, textAlignVertical: 'top' },
-
-  lockedRow: {
-    flexDirection: 'row', alignItems: 'center', gap: 8,
-    backgroundColor: '#f1f5f9', borderWidth: 1, borderColor: '#e2e8f0',
-    borderRadius: 12, paddingHorizontal: 12, paddingVertical: 11,
-  },
-  lockedText: { flex: 1, fontSize: 14, fontWeight: '600', color: '#475569' },
-  lockedHint: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  lockedHintText: { fontSize: 11, fontWeight: '700', color: '#94a3b8' },
-
-  section: { marginTop: 6, paddingBottom: 2 },
-  sectionLabel: {
-    fontSize: 15, fontWeight: '800', color: '#0f172a',
-    borderBottomWidth: 2, borderBottomColor: '#16a34a',
-    paddingBottom: 6, alignSelf: 'flex-start',
-  },
-  sectionHelp: { fontSize: 12, color: '#94a3b8', marginTop: 6, lineHeight: 17 },
-
-  chipWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  choiceChip: {
-    flexDirection: 'row', alignItems: 'center', gap: 5,
-    paddingHorizontal: 14, paddingVertical: 9, borderRadius: 10,
-    backgroundColor: '#fff', borderWidth: 1.5, borderColor: '#e2e8f0',
-  },
-  choiceChipActive: { backgroundColor: '#16a34a', borderColor: '#16a34a' },
-  choiceText: { fontSize: 13, fontWeight: '600', color: '#0f172a' },
-  choiceTextActive: { color: '#fff' },
-
-  segment: { flexDirection: 'row', gap: 10 },
-  segmentBtn: {
-    flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    gap: 6, height: 46, borderRadius: 12,
-    backgroundColor: '#fff', borderWidth: 1.5, borderColor: '#e2e8f0',
-  },
-  segmentYes: { backgroundColor: '#16a34a', borderColor: '#16a34a' },
-  segmentNo: { backgroundColor: '#dc2626', borderColor: '#dc2626' },
-  segmentText: { fontSize: 14, fontWeight: '700', color: '#334155' },
-  segmentTextActive: { color: '#fff' },
-
-  starRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  ratingValue: { fontSize: 13, fontWeight: '800', color: '#0f172a', marginLeft: 6 },
-
-  submitBtn: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
-    backgroundColor: '#16a34a', borderRadius: 14, height: 52, marginTop: 6,
-    shadowColor: '#16a34a', shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3, shadowRadius: 10, elevation: 6,
-  },
-  submitBtnDisabled: { opacity: 0.5 },
-  submitText: { color: '#fff', fontSize: 16, fontWeight: '700' },
-
-  stateWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32, gap: 12 },
-  stateTitle: { fontSize: 17, fontWeight: '800', color: '#0f172a', textAlign: 'center' },
-  stateText: { fontSize: 13, color: '#94a3b8', textAlign: 'center', lineHeight: 19, maxWidth: 300 },
-  retryBtn: {
-    flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 6,
-    backgroundColor: '#16a34a', borderRadius: 12, paddingHorizontal: 18, height: 44,
-    justifyContent: 'center',
-  },
-  retryText: { color: '#fff', fontSize: 14, fontWeight: '700' },
-})

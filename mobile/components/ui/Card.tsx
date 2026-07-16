@@ -24,7 +24,7 @@ export function Card({
   const { theme } = useTheme()
   const base: ViewStyle = {
     backgroundColor: theme.color.surface,
-    borderRadius: radius.lg,
+    borderRadius: radius.xl,
     borderWidth: 1,
     borderColor: theme.color.border,
     ...(padded ? { padding: spacing.lg } : null),

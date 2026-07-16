@@ -6,7 +6,7 @@
 import { ActivityIndicator, TouchableOpacity, StyleSheet, ViewStyle, View } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { useTheme } from '../../contexts/ThemeContext'
-import { HIT, radius, spacing, typography } from '../../lib/theme'
+import { HIT, radius, spacing, typography, elevation } from '../../lib/theme'
 import { AppText } from './Text'
 
 type IconName = React.ComponentProps<typeof Ionicons>['name']
@@ -43,7 +43,7 @@ export function Button({
 
   return (
     <TouchableOpacity
-      activeOpacity={0.85}
+      activeOpacity={0.8}
       onPress={off ? undefined : onPress}
       disabled={off}
       style={[
@@ -51,12 +51,14 @@ export function Button({
         {
           backgroundColor: bg,
           height,
-          borderRadius: radius.md,
+          borderRadius: radius.lg,
           borderWidth: variant === 'secondary' ? 1.5 : 0,
           borderColor: c.borderStrong,
-          opacity: off ? 0.55 : 1,
+          opacity: off ? 0.5 : 1,
           paddingHorizontal: size === 'sm' ? spacing.md : spacing.xl,
         },
+        // Filled buttons get a faint premium lift; ghost/secondary stay flat.
+        isFilled && !off ? elevation(theme, 1) : null,
         full && styles.full,
         style,
       ]}

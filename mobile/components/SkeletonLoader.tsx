@@ -5,7 +5,7 @@
  */
 
 import { useRef, useEffect } from 'react'
-import { Animated, View, StyleSheet, ViewStyle } from 'react-native'
+import { Animated, View, StyleSheet, ViewStyle, Easing } from 'react-native'
 import { useTheme } from '../contexts/ThemeContext'
 import { radius as R, spacing } from '../lib/theme'
 
@@ -19,13 +19,19 @@ interface SkeletonBoxProps {
 
 export function SkeletonBox({ width, widthPct = '100%', height, radius = 8, style }: SkeletonBoxProps) {
   const { theme } = useTheme()
-  const opacity = useRef(new Animated.Value(0.35)).current
+  const opacity = useRef(new Animated.Value(0.4)).current
 
   useEffect(() => {
     const anim = Animated.loop(
       Animated.sequence([
-        Animated.timing(opacity, { toValue: 0.75, duration: 650, useNativeDriver: true }),
-        Animated.timing(opacity, { toValue: 0.35, duration: 650, useNativeDriver: true }),
+        Animated.timing(opacity, {
+          toValue: 0.9, duration: 800,
+          easing: Easing.inOut(Easing.ease), useNativeDriver: true,
+        }),
+        Animated.timing(opacity, {
+          toValue: 0.4, duration: 800,
+          easing: Easing.inOut(Easing.ease), useNativeDriver: true,
+        }),
       ])
     )
     anim.start()
@@ -109,16 +115,16 @@ export function SkeletonKpiGrid({ cols = 4 }: { cols?: number }) {
 const sk = StyleSheet.create({
   statRow: { flexDirection: 'row', gap: spacing.md },
   statCard: {
-    flex: 1, borderRadius: R.lg, padding: spacing.lg,
+    flex: 1, borderRadius: R.xl, padding: spacing.lg,
     alignItems: 'center',
   },
   card: {
-    borderRadius: R.md, padding: spacing.lg,
+    borderRadius: R.xl, padding: spacing.lg,
   },
   cardRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   kpiGrid: { flexDirection: 'row', gap: 8 },
   kpiCard: {
-    flex: 1, borderRadius: R.md, padding: 10,
+    flex: 1, borderRadius: R.lg, padding: 10,
     alignItems: 'center',
   },
 })

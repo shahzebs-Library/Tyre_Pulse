@@ -119,34 +119,36 @@ export const HIT = 48
 // ── Light palette — the default, tuned for direct sun ────────────────────────
 
 const light: ThemeColors = {
-  bg: '#F4F7FA',
+  // Airy near-white canvas with the faintest cool cast so pure-white cards
+  // lift off it. Crisp, bright, high-reflectance for direct sun.
+  bg: '#F5F8FC',
   surface: '#FFFFFF',
-  surfaceAlt: '#EEF2F7',
-  surfaceSunken: '#E6EBF1',
+  surfaceAlt: '#EDF2F8',
+  surfaceSunken: '#E3E9F1',
 
-  text: '#0B1220',
-  textSecondary: '#33415A',
-  textMuted: '#5B6B84',
+  text: '#0A1120',          // near black — survives glare
+  textSecondary: '#334155',
+  textMuted: '#647389',
   textInverse: '#FFFFFF',
 
-  primary: '#15803D',       // deep green — high contrast on white in sun
+  primary: '#15803D',       // deep TyrePulse green — high contrast on white in sun
   primaryDark: '#166534',
   primarySoft: '#DCFCE7',
   onPrimary: '#FFFFFF',
 
-  border: '#D8E0EA',
-  borderStrong: '#B9C5D6',
+  border: '#DFE6EF',        // clean hairline
+  borderStrong: '#C3CDDB',
 
   focus: '#15803D',
-  overlay: 'rgba(6,12,22,0.55)',
-  shadow: '#0B1220',
+  overlay: 'rgba(8,14,24,0.5)',
+  shadow: '#1E293B',        // cool-slate shadow reads softer than pure black
 
   success:  { base: '#15803D', soft: '#DCFCE7', on: '#0F5C2E' },
   warning:  { base: '#B45309', soft: '#FEF3C7', on: '#8A3D07' },
   danger:   { base: '#DC2626', soft: '#FEE2E2', on: '#991B1B' },
   info:     { base: '#0369A1', soft: '#E0F2FE', on: '#075985' },
   critical: { base: '#B91C1C', soft: '#FEE2E2', on: '#7F1D1D' },
-  neutral:  { base: '#475569', soft: '#EEF2F7', on: '#33415A' },
+  neutral:  { base: '#475569', soft: '#EDF2F8', on: '#33415A' },
 }
 
 const lightTint: Theme['tint'] = {
@@ -156,7 +158,7 @@ const lightTint: Theme['tint'] = {
   red:    { fg: '#DC2626', bg: '#FEE2E2' },
   violet: { fg: '#6D28D9', bg: '#EDE9FE' },
   teal:   { fg: '#0F766E', bg: '#CCFBF1' },
-  slate:  { fg: '#334155', bg: '#EEF2F7' },
+  slate:  { fg: '#334155', bg: '#EDF2F8' },
 }
 
 // ── Dark palette — secondary (night / indoor). Not sun-optimised. ────────────
@@ -218,9 +220,9 @@ export function elevation(theme: Theme, level: 0 | 1 | 2 | 3 = 1) {
   if (level === 0) return {}
   const light = theme.mode === 'light'
   const map = {
-    1: { h: 1, r: 3, o: light ? 0.06 : 0.4, e: 1 },
-    2: { h: 3, r: 8, o: light ? 0.09 : 0.5, e: 3 },
-    3: { h: 8, r: 18, o: light ? 0.12 : 0.6, e: 8 },
+    1: { h: 1, r: 4, o: light ? 0.05 : 0.4, e: 1 },
+    2: { h: 4, r: 12, o: light ? 0.08 : 0.5, e: 3 },
+    3: { h: 10, r: 24, o: light ? 0.12 : 0.6, e: 8 },
   } as const
   const s = map[level]
   return {

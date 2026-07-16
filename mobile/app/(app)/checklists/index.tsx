@@ -11,14 +11,17 @@
  */
 import { useEffect, useState, useCallback, useMemo } from 'react'
 import {
-  View, Text, ScrollView, StyleSheet, TouchableOpacity,
-  RefreshControl, StatusBar, ActivityIndicator,
+  View, ScrollView, StyleSheet, TouchableOpacity, RefreshControl,
 } from 'react-native'
-import { SafeAreaView } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
 import { useAuth } from '../../../contexts/AuthContext'
 import { useLanguage } from '../../../contexts/LanguageContext'
+import { useTheme } from '../../../contexts/ThemeContext'
+import { Theme, spacing, radius, typography } from '../../../lib/theme'
+import {
+  Screen, AppText, Badge, EmptyState, ErrorState, Loading,
+} from '../../../components/ui'
 import {
   listTemplates, listAssignments, listPendingApprovals,
   ChecklistTemplate, ChecklistAssignment,
@@ -61,6 +64,8 @@ function looksLikeMissingTable(msg: string): boolean {
 export default function ChecklistsScreen() {
   const { profile } = useAuth()
   const { isRTL } = useLanguage()
+  const { theme } = useTheme()
+  const styles = useMemo(() => makeStyles(theme), [theme])
   const router = useRouter()
 
   const [templates, setTemplates] = useState<ChecklistTemplate[]>([])
@@ -145,48 +150,34 @@ export default function ChecklistsScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.safe}>
-      <StatusBar barStyle="dark-content" backgroundColor="#f0f5f1" />
-
+    <Screen>
       <View style={[styles.header, isRTL && styles.rowR]}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-          <Ionicons name={isRTL ? 'arrow-forward' : 'arrow-back'} size={22} color="#0f172a" />
+          <Ionicons name={isRTL ? 'arrow-forward' : 'arrow-back'} size={22} color={theme.color.text} />
         </TouchableOpacity>
         <View style={{ flex: 1 }}>
-          <Text style={[styles.title, { textAlign }]}>Checklists</Text>
-          <Text style={[styles.sub, { textAlign }]}>
+          <AppText variant="h2" style={{ textAlign }}>Checklists</AppText>
+          <AppText variant="caption" color="muted" style={{ textAlign, marginTop: 2 }}>
             {due.length} due · {templates.length} available
-          </Text>
+          </AppText>
         </View>
       </View>
 
       {loading ? (
-        <View style={styles.loader}>
-          <ActivityIndicator size="large" color="#16a34a" />
-        </View>
+        <Loading />
       ) : notEnabled ? (
-        <View style={styles.stateWrap}>
-          <Ionicons name="checkbox-outline" size={52} color="#cbd5e1" />
-          <Text style={styles.stateTitle}>Checklists aren't enabled yet</Text>
-          <Text style={styles.stateText}>
-            Ask your administrator to publish checklist templates for your site.
-          </Text>
-        </View>
+        <EmptyState
+          icon="checkbox-outline"
+          title="Checklists aren't enabled yet"
+          message="Ask your administrator to publish checklist templates for your site."
+        />
       ) : error ? (
-        <View style={styles.stateWrap}>
-          <Ionicons name="cloud-offline-outline" size={52} color="#fca5a5" />
-          <Text style={styles.stateTitle}>Couldn't load checklists</Text>
-          <Text style={styles.stateText} numberOfLines={3}>{error}</Text>
-          <TouchableOpacity style={styles.retryBtn} onPress={onRefresh} disabled={refreshing}>
-            <Ionicons name="refresh" size={16} color="#fff" />
-            <Text style={styles.retryText}>Retry</Text>
-          </TouchableOpacity>
-        </View>
+        <ErrorState message={error} onRetry={onRefresh} />
       ) : (
         <ScrollView
           style={styles.scroll}
           contentContainerStyle={styles.content}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#16a34a" />}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.color.primary} />}
           showsVerticalScrollIndicator={false}
         >
           {/* ── Approver entry (elevated roles) ──────────────────────────────── */}
@@ -197,39 +188,39 @@ export default function ChecklistsScreen() {
               onPress={() => router.push('/(app)/checklists/approvals')}
             >
               <View style={styles.approvalsIcon}>
-                <Ionicons name="shield-checkmark-outline" size={20} color="#b45309" />
+                <Ionicons name="shield-checkmark-outline" size={20} color={theme.color.warning.on} />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={[styles.approvalsTitle, { textAlign }]}>Approvals</Text>
-                <Text style={[styles.approvalsSub, { textAlign }]}>
+                <AppText style={[typography.bodyStrong, { textAlign }]}>Approvals</AppText>
+                <AppText variant="caption" style={[{ color: theme.color.warning.on, textAlign, marginTop: 2 }]}>
                   {pendingApprovals > 0
                     ? `${pendingApprovals} checklist${pendingApprovals === 1 ? '' : 's'} awaiting sign-off`
                     : 'Review and sign off submitted checklists'}
-                </Text>
+                </AppText>
               </View>
               {pendingApprovals > 0 && (
                 <View style={styles.approvalsBadge}>
-                  <Text style={styles.approvalsBadgeText}>{pendingApprovals}</Text>
+                  <AppText style={[typography.micro, { color: theme.color.onPrimary }]}>{pendingApprovals}</AppText>
                 </View>
               )}
-              <Ionicons name={isRTL ? 'chevron-back' : 'chevron-forward'} size={18} color="#cbd5e1" />
+              <Ionicons name={isRTL ? 'chevron-back' : 'chevron-forward'} size={18} color={theme.color.textMuted} />
             </TouchableOpacity>
           )}
 
           {/* ── Section A · Due ──────────────────────────────────────────────── */}
           <View style={styles.sectionHead}>
-            <Text style={styles.sectionTitle}>Due</Text>
+            <AppText style={typography.h3}>Due</AppText>
             {due.length > 0 && (
               <View style={styles.countPill}>
-                <Text style={styles.countPillText}>{due.length}</Text>
+                <AppText style={[typography.micro, { color: theme.color.danger.on }]}>{due.length}</AppText>
               </View>
             )}
           </View>
 
           {due.length === 0 ? (
             <View style={styles.inlineEmpty}>
-              <Ionicons name="checkmark-done-outline" size={22} color="#16a34a" />
-              <Text style={styles.inlineEmptyText}>No checklists due</Text>
+              <Ionicons name="checkmark-done-outline" size={22} color={theme.color.primary} />
+              <AppText style={[typography.body, { fontWeight: '700', color: theme.color.primaryDark }]}>No checklists due</AppText>
             </View>
           ) : (
             <View style={{ gap: 10 }}>
@@ -250,37 +241,33 @@ export default function ChecklistsScreen() {
                       <Ionicons
                         name={overdue ? 'alert-circle-outline' : 'time-outline'}
                         size={20}
-                        color={overdue ? '#dc2626' : '#d97706'}
+                        color={overdue ? theme.color.danger.base : theme.color.warning.base}
                       />
                     </View>
                     <View style={{ flex: 1, gap: 3 }}>
-                      <Text style={[styles.cardTitle, { textAlign }]} numberOfLines={1}>
+                      <AppText style={[typography.title, { textAlign }]} numberOfLines={1}>
                         {a.template_name ?? 'Checklist'}
-                      </Text>
+                      </AppText>
                       <View style={[styles.metaRow, isRTL && styles.rowR]}>
                         {!!(a.site || a.asset_no) && (
                           <>
-                            <Ionicons name="location-outline" size={12} color="#94a3b8" />
-                            <Text style={styles.metaText} numberOfLines={1}>
+                            <Ionicons name="location-outline" size={12} color={theme.color.textMuted} />
+                            <AppText style={styles.metaText} numberOfLines={1}>
                               {[a.site, a.asset_no].filter(Boolean).join(' · ')}
-                            </Text>
+                            </AppText>
                           </>
                         )}
                       </View>
                       <View style={[styles.metaRow, isRTL && styles.rowR]}>
-                        <Ionicons name="calendar-outline" size={12} color="#94a3b8" />
-                        <Text style={styles.metaText}>{dueLabel}</Text>
-                        <Text style={styles.metaDot}>·</Text>
-                        <Text style={[styles.hintText, overdue && styles.hintOverdue]}>
+                        <Ionicons name="calendar-outline" size={12} color={theme.color.textMuted} />
+                        <AppText style={styles.metaText}>{dueLabel}</AppText>
+                        <AppText style={styles.metaDot}>·</AppText>
+                        <AppText style={[styles.hintText, overdue && styles.hintOverdue]}>
                           {relativeHint(a.due_date)}
-                        </Text>
+                        </AppText>
                       </View>
                     </View>
-                    <View style={[styles.statusPill, overdue ? styles.pillOverdue : styles.pillPending]}>
-                      <Text style={[styles.statusPillText, overdue ? styles.pillTextOverdue : styles.pillTextPending]}>
-                        {overdue ? 'Overdue' : 'Pending'}
-                      </Text>
-                    </View>
+                    <Badge kind={overdue ? 'danger' : 'warning'}>{overdue ? 'Overdue' : 'Pending'}</Badge>
                   </TouchableOpacity>
                 )
               })}
@@ -289,13 +276,13 @@ export default function ChecklistsScreen() {
 
           {/* ── Section B · All checklists ───────────────────────────────────── */}
           <View style={[styles.sectionHead, { marginTop: 8 }]}>
-            <Text style={styles.sectionTitle}>All checklists</Text>
+            <AppText style={typography.h3}>All checklists</AppText>
           </View>
 
           {templates.length === 0 ? (
             <View style={styles.inlineEmpty}>
-              <Ionicons name="document-outline" size={22} color="#cbd5e1" />
-              <Text style={[styles.inlineEmptyText, { color: '#94a3b8' }]}>No published checklists</Text>
+              <Ionicons name="document-outline" size={22} color={theme.color.textMuted} />
+              <AppText style={[typography.body, { fontWeight: '700', color: theme.color.textMuted }]}>No published checklists</AppText>
             </View>
           ) : (
             <View style={{ gap: 10 }}>
@@ -308,38 +295,38 @@ export default function ChecklistsScreen() {
                 >
                   <View style={[styles.tplHead, isRTL && styles.rowR]}>
                     <View style={styles.tplIcon}>
-                      <Ionicons name={(t.icon as any) || 'checkbox-outline'} size={20} color="#16a34a" />
+                      <Ionicons name={(t.icon as any) || 'checkbox-outline'} size={20} color={theme.color.primary} />
                     </View>
                     <View style={{ flex: 1 }}>
-                      <Text style={[styles.cardTitle, { textAlign }]} numberOfLines={1}>{t.name}</Text>
+                      <AppText style={[typography.title, { textAlign }]} numberOfLines={1}>{t.name}</AppText>
                       {!!t.category && (
-                        <Text style={[styles.tplCategory, { textAlign }]} numberOfLines={1}>{t.category}</Text>
+                        <AppText style={[styles.tplCategory, { textAlign }]} numberOfLines={1}>{t.category}</AppText>
                       )}
                     </View>
-                    <Ionicons name={isRTL ? 'chevron-back' : 'chevron-forward'} size={18} color="#cbd5e1" />
+                    <Ionicons name={isRTL ? 'chevron-back' : 'chevron-forward'} size={18} color={theme.color.textMuted} />
                   </View>
 
                   <View style={[styles.badgeRow, isRTL && styles.rowR]}>
                     <View style={styles.badge}>
-                      <Ionicons name="list-outline" size={12} color="#64748b" />
-                      <Text style={styles.badgeText}>{fieldCount(t)} fields</Text>
+                      <Ionicons name="list-outline" size={12} color={theme.color.textSecondary} />
+                      <AppText style={styles.badgeText}>{fieldCount(t)} fields</AppText>
                     </View>
                     {t.scored && (
                       <View style={[styles.badge, styles.badgeGreen]}>
-                        <Ionicons name="ribbon-outline" size={12} color="#16a34a" />
-                        <Text style={[styles.badgeText, { color: '#15803d' }]}>Scored</Text>
+                        <Ionicons name="ribbon-outline" size={12} color={theme.color.primary} />
+                        <AppText style={[styles.badgeText, { color: theme.color.primaryDark }]}>Scored</AppText>
                       </View>
                     )}
                     {t.require_signature && (
                       <View style={[styles.badge, styles.badgeBlue]}>
-                        <Ionicons name="create-outline" size={12} color="#2563eb" />
-                        <Text style={[styles.badgeText, { color: '#1d4ed8' }]}>Signature</Text>
+                        <Ionicons name="create-outline" size={12} color={theme.color.info.base} />
+                        <AppText style={[styles.badgeText, { color: theme.color.info.on }]}>Signature</AppText>
                       </View>
                     )}
                     {t.require_approval && (
                       <View style={[styles.badge, styles.badgeAmber]}>
-                        <Ionicons name="shield-checkmark-outline" size={12} color="#b45309" />
-                        <Text style={[styles.badgeText, { color: '#b45309' }]}>Approval</Text>
+                        <Ionicons name="shield-checkmark-outline" size={12} color={theme.color.warning.base} />
+                        <AppText style={[styles.badgeText, { color: theme.color.warning.on }]}>Approval</AppText>
                       </View>
                     )}
                   </View>
@@ -349,116 +336,88 @@ export default function ChecklistsScreen() {
           )}
         </ScrollView>
       )}
-    </SafeAreaView>
+    </Screen>
   )
 }
 
-const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#f0f5f1' },
-  rowR: { flexDirection: 'row-reverse' },
-  header: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 16 },
-  backBtn: {
-    width: 38, height: 38, borderRadius: 10, backgroundColor: '#fff',
-    alignItems: 'center', justifyContent: 'center',
-    borderWidth: 1, borderColor: 'rgba(0,0,0,0.06)',
-  },
-  title: { fontSize: 20, fontWeight: '800', color: '#0f172a' },
-  sub: { fontSize: 12, color: '#64748b', marginTop: 2 },
+function makeStyles(theme: Theme) {
+  const c = theme.color
+  return StyleSheet.create({
+    rowR: { flexDirection: 'row-reverse' },
+    header: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, padding: spacing.lg },
+    backBtn: {
+      width: 38, height: 38, borderRadius: radius.sm, backgroundColor: c.surface,
+      alignItems: 'center', justifyContent: 'center',
+      borderWidth: 1, borderColor: c.border,
+    },
 
-  loader: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  scroll: { flex: 1 },
-  content: { padding: 16, paddingBottom: 40, gap: 12 },
+    scroll: { flex: 1 },
+    content: { padding: spacing.lg, paddingBottom: spacing['4xl'], gap: spacing.md },
 
-  stateWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32, gap: 12 },
-  stateTitle: { fontSize: 17, fontWeight: '800', color: '#0f172a', textAlign: 'center' },
-  stateText: { fontSize: 13, color: '#94a3b8', textAlign: 'center', lineHeight: 19, maxWidth: 300 },
-  retryBtn: {
-    flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 6,
-    backgroundColor: '#16a34a', borderRadius: 12, paddingHorizontal: 18, height: 44,
-    justifyContent: 'center',
-  },
-  retryText: { color: '#fff', fontSize: 14, fontWeight: '700' },
+    approvalsCard: {
+      flexDirection: 'row', alignItems: 'center', gap: spacing.md,
+      backgroundColor: c.warning.soft, borderRadius: radius.lg, padding: spacing.md,
+      borderWidth: 1, borderColor: c.warning.base,
+    },
+    approvalsIcon: {
+      width: 40, height: 40, borderRadius: radius.md,
+      backgroundColor: c.surface,
+      alignItems: 'center', justifyContent: 'center',
+    },
+    approvalsBadge: {
+      minWidth: 22, paddingHorizontal: 7, paddingVertical: 2, borderRadius: radius.sm,
+      backgroundColor: c.warning.base, alignItems: 'center',
+    },
 
-  approvalsCard: {
-    flexDirection: 'row', alignItems: 'center', gap: 12,
-    backgroundColor: '#fffbeb', borderRadius: 14, padding: 14,
-    borderWidth: 1, borderColor: 'rgba(245,158,11,0.35)',
-  },
-  approvalsIcon: {
-    width: 40, height: 40, borderRadius: 11,
-    backgroundColor: 'rgba(245,158,11,0.15)',
-    alignItems: 'center', justifyContent: 'center',
-  },
-  approvalsTitle: { fontSize: 14, fontWeight: '800', color: '#0f172a' },
-  approvalsSub: { fontSize: 11.5, color: '#92400e', marginTop: 2 },
-  approvalsBadge: {
-    minWidth: 22, paddingHorizontal: 7, paddingVertical: 2, borderRadius: 10,
-    backgroundColor: '#b45309', alignItems: 'center',
-  },
-  approvalsBadgeText: { fontSize: 11, fontWeight: '800', color: '#fff' },
+    sectionHead: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+    countPill: {
+      minWidth: 22, paddingHorizontal: 7, paddingVertical: 2, borderRadius: radius.sm,
+      backgroundColor: c.danger.soft, alignItems: 'center',
+    },
 
-  sectionHead: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  sectionTitle: { fontSize: 15, fontWeight: '800', color: '#0f172a' },
-  countPill: {
-    minWidth: 22, paddingHorizontal: 7, paddingVertical: 2, borderRadius: 10,
-    backgroundColor: 'rgba(220,38,38,0.1)', alignItems: 'center',
-  },
-  countPillText: { fontSize: 11, fontWeight: '800', color: '#dc2626' },
+    inlineEmpty: {
+      flexDirection: 'row', alignItems: 'center', gap: spacing.sm,
+      backgroundColor: c.surface, borderRadius: radius.md, padding: spacing.lg,
+      borderWidth: 1, borderColor: c.border,
+    },
 
-  inlineEmpty: {
-    flexDirection: 'row', alignItems: 'center', gap: 8,
-    backgroundColor: '#fff', borderRadius: 12, padding: 16,
-    borderWidth: 1, borderColor: 'rgba(0,0,0,0.06)',
-  },
-  inlineEmptyText: { fontSize: 13, fontWeight: '700', color: '#16a34a' },
+    dueCard: {
+      flexDirection: 'row', alignItems: 'center', gap: spacing.md,
+      backgroundColor: c.surface, borderRadius: radius.lg, padding: spacing.md,
+      borderWidth: 1, borderColor: c.border,
+    },
+    dueIcon: {
+      width: 40, height: 40, borderRadius: radius.md,
+      backgroundColor: c.warning.soft,
+      alignItems: 'center', justifyContent: 'center',
+    },
+    dueIconOverdue: { backgroundColor: c.danger.soft },
+    metaRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, flexWrap: 'wrap' },
+    metaText: { ...typography.caption, color: c.textMuted },
+    metaDot: { ...typography.caption, color: c.textMuted },
+    hintText: { ...typography.caption, fontWeight: '700', color: c.warning.on },
+    hintOverdue: { color: c.danger.base },
 
-  dueCard: {
-    flexDirection: 'row', alignItems: 'center', gap: 12,
-    backgroundColor: '#fff', borderRadius: 14, padding: 14,
-    borderWidth: 1, borderColor: 'rgba(0,0,0,0.06)',
-    shadowColor: '#000', shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.04, shadowRadius: 4, elevation: 2,
-  },
-  dueIcon: {
-    width: 40, height: 40, borderRadius: 11,
-    backgroundColor: 'rgba(245,158,11,0.1)',
-    alignItems: 'center', justifyContent: 'center',
-  },
-  dueIconOverdue: { backgroundColor: 'rgba(220,38,38,0.1)' },
-  cardTitle: { fontSize: 14, fontWeight: '700', color: '#0f172a' },
-  metaRow: { flexDirection: 'row', alignItems: 'center', gap: 4, flexWrap: 'wrap' },
-  metaText: { fontSize: 11.5, color: '#94a3b8' },
-  metaDot: { fontSize: 11.5, color: '#cbd5e1' },
-  hintText: { fontSize: 11.5, fontWeight: '700', color: '#d97706' },
-  hintOverdue: { color: '#dc2626' },
-  statusPill: { borderRadius: 8, paddingHorizontal: 9, paddingVertical: 4 },
-  pillPending: { backgroundColor: 'rgba(245,158,11,0.12)' },
-  pillOverdue: { backgroundColor: 'rgba(220,38,38,0.12)' },
-  statusPillText: { fontSize: 10, fontWeight: '800' },
-  pillTextPending: { color: '#b45309' },
-  pillTextOverdue: { color: '#dc2626' },
-
-  tplCard: {
-    backgroundColor: '#fff', borderRadius: 14, padding: 14, gap: 10,
-    borderWidth: 1, borderColor: 'rgba(0,0,0,0.06)',
-    shadowColor: '#000', shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.04, shadowRadius: 4, elevation: 2,
-  },
-  tplHead: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  tplIcon: {
-    width: 40, height: 40, borderRadius: 11,
-    backgroundColor: 'rgba(22,163,74,0.08)',
-    alignItems: 'center', justifyContent: 'center',
-  },
-  tplCategory: { fontSize: 11.5, color: '#94a3b8', marginTop: 2 },
-  badgeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
-  badge: {
-    flexDirection: 'row', alignItems: 'center', gap: 4,
-    backgroundColor: '#f1f5f9', borderRadius: 8,
-    paddingHorizontal: 8, paddingVertical: 4,
-  },
-  badgeGreen: { backgroundColor: 'rgba(22,163,74,0.1)' },
-  badgeBlue: { backgroundColor: 'rgba(37,99,235,0.1)' },
-  badgeAmber: { backgroundColor: 'rgba(245,158,11,0.12)' },
-  badgeText: { fontSize: 10.5, fontWeight: '700', color: '#64748b' },
-})
+    tplCard: {
+      backgroundColor: c.surface, borderRadius: radius.lg, padding: spacing.md, gap: spacing.sm,
+      borderWidth: 1, borderColor: c.border,
+    },
+    tplHead: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+    tplIcon: {
+      width: 40, height: 40, borderRadius: radius.md,
+      backgroundColor: c.primarySoft,
+      alignItems: 'center', justifyContent: 'center',
+    },
+    tplCategory: { ...typography.caption, color: c.textMuted, marginTop: 2 },
+    badgeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs },
+    badge: {
+      flexDirection: 'row', alignItems: 'center', gap: spacing.xs,
+      backgroundColor: c.surfaceAlt, borderRadius: radius.sm,
+      paddingHorizontal: spacing.sm, paddingVertical: spacing.xs,
+    },
+    badgeGreen: { backgroundColor: c.primarySoft },
+    badgeBlue: { backgroundColor: c.info.soft },
+    badgeAmber: { backgroundColor: c.warning.soft },
+    badgeText: { ...typography.micro, color: c.textSecondary },
+  })
+}

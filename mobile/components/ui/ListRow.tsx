@@ -60,7 +60,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md,
     borderWidth: 1,
-    borderRadius: radius.lg,
+    borderRadius: radius.xl,
   },
   iconChip: {
     width: 40, height: 40, borderRadius: 12,

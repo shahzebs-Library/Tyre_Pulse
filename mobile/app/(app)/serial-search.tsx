@@ -8,13 +8,13 @@
  * scanner starts one from a scanned tyre. Reads require connectivity — a lookup
  * that throws surfaces a friendly, retryable error rather than a raw failure.
  */
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
 import {
   View, Text, ScrollView, TextInput, TouchableOpacity,
   StyleSheet, ActivityIndicator, StatusBar, Platform, KeyboardAvoidingView,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
-import { useRouter } from 'expo-router'
+import { useRouter, useLocalSearchParams } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
 import { useLanguage } from '../../contexts/LanguageContext'
 import { useRoleGuard } from '../../hooks/useRoleGuard'
@@ -27,6 +27,8 @@ export default function SerialSearchScreen() {
   const router = useRouter()
   const { isRTL } = useLanguage()
   const { allowed } = useRoleGuard(['inspector', 'tyre_man', 'admin', 'manager', 'director'])
+  // Prefill from a scan handoff (scanner "Search manually" passes ?q=<code>).
+  const params = useLocalSearchParams<{ q?: string }>()
 
   const [query, setQuery] = useState('')
   const [state, setState] = useState<SearchState>('idle')
@@ -37,9 +39,9 @@ export default function SerialSearchScreen() {
   const textAlign = isRTL ? 'right' : 'left'
   const backIcon = isRTL ? 'arrow-forward' : 'arrow-back'
 
-  const runSearch = useCallback(async () => {
+  const runSearch = useCallback(async (override?: string) => {
     // Unwrap URL/QR/JSON payloads, then keep only safe serial chars.
-    const code = sanitizeSerial(extractScanCode(query))
+    const code = sanitizeSerial(extractScanCode(override ?? query))
     if (!code) return
     setState('searching')
     setTyre(null)
@@ -56,6 +58,18 @@ export default function SerialSearchScreen() {
       setState('error')
     }
   }, [query])
+
+  // On arrival with a prefilled code, populate the box and search once.
+  const didPrefill = useRef(false)
+  useEffect(() => {
+    if (didPrefill.current) return
+    const q = typeof params.q === 'string' ? params.q : ''
+    if (q && sanitizeSerial(extractScanCode(q))) {
+      didPrefill.current = true
+      setQuery(q)
+      runSearch(q)
+    }
+  }, [params.q, runSearch])
 
   function clearSearch() {
     setQuery('')
@@ -123,7 +137,7 @@ export default function SerialSearchScreen() {
                   autoCapitalize="characters"
                   autoCorrect={false}
                   returnKeyType="search"
-                  onSubmitEditing={runSearch}
+                  onSubmitEditing={() => runSearch()}
                 />
                 {query.length > 0 && (
                   <TouchableOpacity onPress={clearSearch} hitSlop={8}>
@@ -133,7 +147,7 @@ export default function SerialSearchScreen() {
               </View>
               <TouchableOpacity
                 style={[styles.searchBtn, !canSearch && styles.searchBtnDisabled]}
-                onPress={runSearch}
+                onPress={() => runSearch()}
                 disabled={!canSearch}
                 activeOpacity={0.88}
               >
@@ -217,7 +231,7 @@ export default function SerialSearchScreen() {
               <Text style={styles.stateSub}>
                 Searching a serial needs a connection. Check your network and try again.
               </Text>
-              <TouchableOpacity style={styles.retryBtn} onPress={runSearch} activeOpacity={0.88}>
+              <TouchableOpacity style={styles.retryBtn} onPress={() => runSearch()} activeOpacity={0.88}>
                 <Ionicons name="refresh-outline" size={18} color="#16a34a" />
                 <Text style={styles.retryBtnText}>Retry</Text>
               </TouchableOpacity>

@@ -56,6 +56,53 @@ export function isValueField(type?: string): boolean {
   return !['section', 'photo', 'signature'].includes(type || '')
 }
 
+/**
+ * A field the run screen renders as a tappable tile (everything except the
+ * layout-only `section` heading). Photo and signature items are recordable too.
+ */
+export function isRecordableField(type?: string): boolean {
+  return type !== 'section'
+}
+
+/**
+ * Whether a recordable field has been answered. Photos count when at least one
+ * image is attached; a signature counts when data is present; value fields count
+ * when non-empty. Used for live progress + tile state on the fill screen.
+ */
+export function isFieldAnswered(
+  field: ChecklistField,
+  answers: Answers = {},
+  photos: Record<string, string[]> = {},
+  signatureData: string | null = null,
+): boolean {
+  if (!field || field.type === 'section') return false
+  if (field.type === 'photo') return (photos[field.id]?.length ?? 0) > 0
+  if (field.type === 'signature') return !!signatureData
+  const v = answers[field.id]
+  return !(v == null || v === '' || (Array.isArray(v) && v.length === 0))
+}
+
+/** Short human summary of a field's current answer, for the tile status pill. */
+export function fieldSummaryText(
+  field: ChecklistField,
+  answers: Answers = {},
+  photos: Record<string, string[]> = {},
+  signatureData: string | null = null,
+): string {
+  if (!field) return ''
+  if (field.type === 'photo') {
+    const n = photos[field.id]?.length ?? 0
+    return n > 0 ? `${n} photo${n === 1 ? '' : 's'}` : ''
+  }
+  if (field.type === 'signature') return signatureData ? 'Signed' : ''
+  const v = answers[field.id]
+  if (v == null || v === '') return ''
+  if (field.type === 'boolean') return v === true ? 'Yes' : v === false ? 'No' : ''
+  if (field.type === 'rating') return Number(v) > 0 ? `${Number(v)}/5` : ''
+  if (Array.isArray(v)) return v.length ? `${v.length} selected` : ''
+  return String(v)
+}
+
 export function blankAnswer(field: ChecklistField): any {
   switch (field?.type) {
     case 'multiselect': return []

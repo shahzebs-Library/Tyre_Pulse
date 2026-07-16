@@ -13,15 +13,18 @@ import { useLanguage } from '../../contexts/LanguageContext'
 import { useTheme } from '../../contexts/ThemeContext'
 import { Theme, spacing, radius, typography, elevation } from '../../lib/theme'
 import { Screen, AppText, Button, EmptyState, Loading } from '../../components/ui'
-import { lookupTyreBySerial, TyreLookupRecord } from '../../lib/tyreLookup'
-import { lookupAssetByCode, extractScanCode, AssetLookupRecord } from '../../lib/assetLookup'
+import { extractScanCode } from '../../lib/assetLookup'
+import {
+  resolveScan, ScanResolution, RouteTarget,
+  inspectionForVehicle, tyreChangeForVehicle, viewAssetRoute,
+  inspectionForTyre, tyreChangeForTyre, manualSearchRoute,
+} from '../../lib/scanRouter'
 
 type ScanState = 'scanning' | 'searching' | 'result'
 
-type Resolved =
-  | { kind: 'vehicle'; code: string; vehicle: AssetLookupRecord }
-  | { kind: 'tyre'; code: string; tyre: TyreLookupRecord }
-  | { kind: 'none'; code: string }
+// Ignore the same code re-firing within this window (barcodes fire many
+// times per second while the frame is held on the label).
+const RESCAN_COOLDOWN_MS = 2500
 
 export default function ScannerScreen() {
   const router = useRouter()
@@ -32,72 +35,44 @@ export default function ScannerScreen() {
 
   const [state, setState] = useState<ScanState>('scanning')
   const [torch, setTorch] = useState(false)
-  const [resolved, setResolved] = useState<Resolved | null>(null)
+  const [resolved, setResolved] = useState<ScanResolution | null>(null)
   const lockRef = useRef(false)
+  // Last handled code + time, to swallow rapid duplicate frames of one label.
+  const lastScanRef = useRef<{ code: string; at: number }>({ code: '', at: 0 })
 
   const textAlign = isRTL ? 'right' : 'left'
   const backIcon = isRTL ? 'arrow-forward' : 'arrow-back'
 
-  const resolveCode = useCallback(async (raw: string) => {
-    // Asset codes may arrive wrapped in a URL/JSON label; extract the code.
-    const code = extractScanCode(raw)
-    if (!code) { reset(); return }
-
-    // 1) Asset / vehicle match (forgiving: exact -> case-insensitive -> fleet_number)
-    const vehicle = await lookupAssetByCode(raw)
-    if (vehicle) {
-      setResolved({ kind: 'vehicle', code: vehicle.asset_no || code, vehicle })
-      setState('result')
-      return
-    }
-
-    // 2) Tyre serial match (shared resolver - serials span several columns)
-    const tyre = await lookupTyreBySerial(code)
-    if (tyre) {
-      setResolved({ kind: 'tyre', code, tyre })
-      setState('result')
-      return
-    }
-
-    setResolved({ kind: 'none', code })
-    setState('result')
-  }, [])
-
   const onBarcodeScanned = useCallback((res: BarcodeScanningResult) => {
     if (lockRef.current || state !== 'scanning') return
+
+    const now = Date.now()
+    const code = extractScanCode(res.data)
+    // Debounce: same code seen again within the cooldown is ignored.
+    if (code && code === lastScanRef.current.code && now - lastScanRef.current.at < RESCAN_COOLDOWN_MS) {
+      return
+    }
+    lastScanRef.current = { code, at: now }
+
     lockRef.current = true
     setState('searching')
-    resolveCode(res.data).catch(() => {
-      setResolved({ kind: 'none', code: extractScanCode(res.data) })
-      setState('result')
-    })
-  }, [state, resolveCode])
+    resolveScan(res.data)
+      .then((r) => { setResolved(r); setState('result') })
+      .catch(() => { setResolved({ kind: 'none', code, raw: res.data }); setState('result') })
+  }, [state])
 
   function reset() {
     setResolved(null)
     lockRef.current = false
+    // Clear the debounce so an intentional re-scan of the same label works.
+    lastScanRef.current = { code: '', at: 0 }
     setState('scanning')
   }
 
-  function startInspectionForVehicle(v: AssetLookupRecord) {
-    router.replace({
-      pathname: '/(app)/inspection/new',
-      params: { site: v.site, asset: v.asset_no },
-    })
-  }
-
-  // Scanned a tyre serial -> jump straight into the inspection for its vehicle,
-  // pre-filling the matching position's serial and opening its detail popup.
-  function startInspectionForTyre(tyre: TyreLookupRecord, code: string) {
-    router.replace({
-      pathname: '/(app)/inspection/new',
-      params: {
-        site: tyre.site ?? '',
-        asset: tyre.asset_no ?? '',
-        tyreSerial: code,
-        tyrePosition: tyre.tyre_position ?? tyre.position ?? '',
-      },
-    })
+  // Every result action routes through the pure builders in scanRouter so the
+  // next screen always lands prefilled with what was scanned (nothing retyped).
+  function go(target: RouteTarget) {
+    router.replace(target as never)
   }
 
   // -- Permission gates -------------------------------------------------------
@@ -181,6 +156,20 @@ export default function ScannerScreen() {
         </View>
       )}
 
+      {/* Manual-entry fallback (when a label will not read) */}
+      {state === 'scanning' && (
+        <SafeAreaView style={styles.overlayBottom} edges={['bottom']}>
+          <TouchableOpacity
+            style={styles.manualBtn}
+            onPress={() => router.push('/(app)/serial-search')}
+            activeOpacity={0.85}
+          >
+            <Ionicons name="keypad-outline" size={18} color="#FFFFFF" />
+            <Text style={styles.manualBtnText}>Enter Code Manually</Text>
+          </TouchableOpacity>
+        </SafeAreaView>
+      )}
+
       {/* Searching */}
       {state === 'searching' && (
         <View style={styles.centerOverlay}>
@@ -214,7 +203,21 @@ export default function ScannerScreen() {
                 variant="primary"
                 full
                 style={styles.action}
-                onPress={() => startInspectionForVehicle(resolved.vehicle)}
+                onPress={() => go(inspectionForVehicle(resolved.vehicle))}
+              />
+              <Button
+                label="Tyre Change"
+                icon="sync-outline"
+                variant="secondary"
+                full
+                onPress={() => go(tyreChangeForVehicle(resolved.vehicle))}
+              />
+              <Button
+                label="View in Fleet"
+                icon="bus-outline"
+                variant="ghost"
+                full
+                onPress={() => go(viewAssetRoute(resolved.vehicle))}
               />
             </>
           )}
@@ -253,15 +256,33 @@ export default function ScannerScreen() {
                 />
               </View>
               {resolved.tyre.asset_no ? (
+                <>
+                  <Button
+                    label={t('scanner.inspectThisTyre')}
+                    icon="clipboard-outline"
+                    variant="primary"
+                    full
+                    style={styles.action}
+                    onPress={() => go(inspectionForTyre(resolved.tyre, resolved.code))}
+                  />
+                  <Button
+                    label="Tyre Change"
+                    icon="sync-outline"
+                    variant="secondary"
+                    full
+                    onPress={() => go(tyreChangeForTyre(resolved.tyre))}
+                  />
+                </>
+              ) : (
                 <Button
-                  label={t('scanner.inspectThisTyre')}
-                  icon="clipboard-outline"
-                  variant="primary"
+                  label="Open in Serial Search"
+                  icon="search-outline"
+                  variant="secondary"
                   full
                   style={styles.action}
-                  onPress={() => startInspectionForTyre(resolved.tyre, resolved.code)}
+                  onPress={() => go(manualSearchRoute(resolved.code))}
                 />
-              ) : null}
+              )}
             </>
           )}
 
@@ -275,10 +296,23 @@ export default function ScannerScreen() {
                   {t('scanner.noMatch')}
                 </AppText>
               </View>
-              <AppText variant="h1" style={{ textAlign }}>{resolved.code}</AppText>
+              <AppText variant="micro" color="muted" style={[styles.detailLabel, { textAlign }]}>
+                {t('scanner.scanned')}
+              </AppText>
+              <AppText variant="h1" style={{ textAlign }}>{resolved.code || '-'}</AppText>
               <AppText variant="body" color="secondary" style={{ textAlign }}>
                 {t('scanner.noMatchHint')}
               </AppText>
+              {resolved.code ? (
+                <Button
+                  label="Search Manually"
+                  icon="search-outline"
+                  variant="primary"
+                  full
+                  style={styles.action}
+                  onPress={() => go(manualSearchRoute(resolved.code))}
+                />
+              ) : null}
             </>
           )}
 
@@ -331,6 +365,17 @@ function makeStyles(theme: Theme) {
     },
     navTitleDark: { ...typography.title, color: '#FFFFFF' },
     overlayTop: { position: 'absolute', top: 0, left: 0, right: 0 },
+    overlayBottom: {
+      position: 'absolute', bottom: 0, left: 0, right: 0,
+      alignItems: 'center', paddingBottom: spacing.xl,
+    },
+    manualBtn: {
+      flexDirection: 'row', alignItems: 'center', gap: spacing.sm,
+      backgroundColor: 'rgba(0,0,0,0.55)', borderRadius: radius.lg,
+      paddingHorizontal: spacing.xl, paddingVertical: spacing.md,
+      borderWidth: 1, borderColor: 'rgba(255,255,255,0.25)',
+    },
+    manualBtnText: { color: '#FFFFFF', fontSize: 14, fontWeight: '600' },
 
     frameWrap: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center' },
     frame: { width: 250, height: 250, position: 'relative' },

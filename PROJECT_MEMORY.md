@@ -674,6 +674,23 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
   background swap) - must flip the full palette (surfaces/text/borders/charts), super-admin/admin surfaced.
   Tie into the existing CSS-var theming (`.tp-report-paper` light technique + SettingsContext). Not started.
 
+### SESSION CLOSED CLEAN (2026-07-16) — everything merged, nothing pending
+- All work through the custom TV/report board builder is MERGED to main and LIVE. Latest merges on branch
+  `claude/accident-builder-report-ui-2bkwb5`: **PR #54** (V262 TV wallboard: site/country filters, logo,
+  heatmap, gauges), **PR #55 squash `17bda45`** (V263 date-range filter + V264 custom board builder + one-screen
+  boards + visibility-gated refresh). Branch is realigned to `origin/main` (== 17bda45). **Next free migration
+  V265.** No outstanding TODO from this session.
+- Deferred-but-honest (only if the USER asks): the OLD FIXED share pages still stack vertically (one-screen fit
+  applies to the NEW custom boards only); `send-scheduled-reports` edge fn still v14 (a scheduled 'pm' report
+  emails the exec fallback until it is redeployed - the pm digest code is committed); regional_admin/viewer
+  console sign-in + scoped RLS (Module 7 gate follow-up); Module 8 app-wide module hiding (status stored only);
+  Module 3 generic edit/delete (read-only for now).
+- For NEW work: restart the branch from latest main (`git fetch origin main && git checkout -B
+  claude/accident-builder-report-ui-2bkwb5 origin/main`) and open a FRESH PR - merged PRs are terminal.
+- Git identity for future commits is set to Claude <noreply@anthropic.com>. NOTE: the merged squash commit
+  17bda45 shows Unverified (GitHub's merge committer noreply@github.com) - that is GitHub's own squash, not a
+  local commit; do NOT amend/force-push merged history to "fix" it.
+
 ### Shipped (2026-07-15/16) — all merged to main, nothing pending
 - Everything below is LIVE on the DB/deploy and merged to main (PRs #28/#29/#30, all terminal).
   V243 accidents plate/vehicle_type + auto-fill; super-admin swap + privileged-edit playbook; Accidents

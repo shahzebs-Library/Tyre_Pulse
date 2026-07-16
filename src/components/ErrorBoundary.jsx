@@ -1,5 +1,5 @@
 import { Component } from 'react'
-import { RefreshCw } from 'lucide-react'
+import { RefreshCw, Send } from 'lucide-react'
 import { captureError } from '../lib/monitoring'
 
 /**
@@ -20,7 +20,7 @@ function makeReferenceId() {
 export default class ErrorBoundary extends Component {
   constructor(props) {
     super(props)
-    this.state = { hasError: false, error: null, componentStack: null, referenceId: null, copied: false }
+    this.state = { hasError: false, error: null, componentStack: null, referenceId: null, copied: false, reported: false, reporting: false }
   }
 
   static getDerivedStateFromError(error) {
@@ -37,6 +37,29 @@ export default class ErrorBoundary extends Component {
       captureError(error, { boundary: 'page', componentStack, referenceId })
     } catch { /* monitoring must never break the boundary */ }
     console.error('[ErrorBoundary]', referenceId, error, info)
+  }
+
+  // Best-effort "Report this to me": records the crash into system_logs so the
+  // super-admin System Health console picks it up. Never crashes the boundary.
+  handleReport = () => {
+    if (this.state.reported || this.state.reporting) return
+    this.setState({ reporting: true })
+    try {
+      import('../lib/api/systemLogs')
+        .then(m => m.logSystemEvent({
+          module_id: this.props.name || 'page',
+          severity: 'error',
+          source: 'ErrorBoundary',
+          message: String(this.state.error?.message || this.state.error || 'Unhandled UI error'),
+          reference_id: this.state.referenceId || null,
+          url: (typeof location !== 'undefined' ? location.pathname : null),
+          detail: { componentStack: this.state.componentStack, component: this.props.name || null },
+        }))
+        .then(() => this.setState({ reported: true, reporting: false }))
+        .catch(() => this.setState({ reporting: false }))
+    } catch {
+      this.setState({ reporting: false })
+    }
   }
 
   handleCopy = () => {
@@ -125,19 +148,37 @@ export default class ErrorBoundary extends Component {
             {this.state.componentStack.trim().split('\n').slice(0, 8).join('\n')}
           </pre>
         )}
-        <button
-          onClick={() => window.location.reload()}
-          style={{
-            display: 'flex', alignItems: 'center', gap: 8,
-            padding: '11px 24px', borderRadius: 12, border: 'none',
-            background: 'linear-gradient(135deg, #16a34a, #15803d)',
-            color:'var(--panel-ink)', fontSize: 14, fontWeight: 700, cursor: 'pointer',
-            boxShadow: '0 4px 20px rgba(22,163,74,0.35)',
-          }}
-        >
-          <RefreshCw size={15} />
-          Reload App
-        </button>
+        <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap', justifyContent: 'center' }}>
+          <button
+            onClick={() => window.location.reload()}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 8,
+              padding: '11px 24px', borderRadius: 12, border: 'none',
+              background: 'linear-gradient(135deg, #16a34a, #15803d)',
+              color:'var(--panel-ink)', fontSize: 14, fontWeight: 700, cursor: 'pointer',
+              boxShadow: '0 4px 20px rgba(22,163,74,0.35)',
+            }}
+          >
+            <RefreshCw size={15} />
+            Reload App
+          </button>
+          <button
+            onClick={this.handleReport}
+            disabled={this.state.reported || this.state.reporting}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 8,
+              padding: '11px 20px', borderRadius: 12,
+              border: '1px solid rgba(255,255,255,0.15)', background: 'rgba(255,255,255,0.05)',
+              color: this.state.reported ? '#4ade80' : 'var(--panel-ink)',
+              fontSize: 13, fontWeight: 600,
+              cursor: this.state.reported || this.state.reporting ? 'default' : 'pointer',
+              opacity: this.state.reporting ? 0.6 : 1,
+            }}
+          >
+            <Send size={14} />
+            {this.state.reported ? 'Reported' : this.state.reporting ? 'Reporting...' : 'Report this to me'}
+          </button>
+        </div>
       </div>
     )
   }

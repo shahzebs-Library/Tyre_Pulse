@@ -10,11 +10,14 @@ export default defineConfig({
   plugins: [
     react(),
     VitePWA({
-      // autoUpdate: a new deploy activates on the next load/navigation without
-      // the user having to accept a prompt. 'prompt' + skipWaiting:false left
-      // users stranded on stale builds (old routes redirecting, AI calls failing
-      // against an outdated service worker) until they happened to click update.
-      registerType: 'autoUpdate',
+      // 'prompt': a new deploy is DETECTED automatically (PwaUpdatePrompt polls
+      // every 15 min + on refocus) but does NOT hijack the page. The new worker
+      // WAITS; the "New version available" toast appears so a user finishes their
+      // work first, and PwaUpdatePrompt also applies the waiting update quietly
+      // when the tab goes hidden (so kiosks / TVs still self-heal, nobody is
+      // stranded on a stale build). Previously 'autoUpdate' + skipWaiting force
+      // reloaded the page mid-work and bypassed the toast entirely.
+      registerType: 'prompt',
       injectRegister: 'auto',
       includeAssets: [
         'favicon.svg',
@@ -89,9 +92,13 @@ export default defineConfig({
         navigateFallbackDenylist: [/^\/api\//, /^\/supabase\//],
         offlineGoogleAnalytics: false,
         cleanupOutdatedCaches: true,
-        // autoUpdate: take over as soon as the new SW installs so users are
-        // never left on a stale build.
-        skipWaiting: true,
+        // prompt mode: the new SW must WAIT (do NOT skipWaiting) so the running
+        // tab keeps its current build - and its already-loaded lazy chunks stay
+        // served from the old precache - until the user (or the hidden-tab
+        // auto-apply in PwaUpdatePrompt) chooses to activate it. This is what
+        // stops the abrupt mid-work reload. clientsClaim stays so that once the
+        // new SW DOES activate it controls the page immediately.
+        skipWaiting: false,
         clientsClaim: true,
         runtimeCaching: [
           // SECURITY: authenticated Supabase traffic is NEVER cached in the

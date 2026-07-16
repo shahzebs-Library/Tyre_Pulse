@@ -272,6 +272,28 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
 - RULE reminder: every merged PR is terminal — never stack new commits expecting the old PR to carry them;
   open a fresh PR. Both V243 and V244 schema changes are LIVE on the DB independent of any merge.
 
+### V246 — site casing normalized + guard (applied LIVE 2026-07-16)
+- Same class of fix as V245 but for `site`. Mixed casing ("Metro"/"METRO", "Dhahban"/"DHAHBAN",
+  "Redsea"/"REDSEA") split the same site into separate report buckets. V246 canonicalizes to
+  `upper(regexp_replace(btrim(site),'\s+',' ','g'))` (upper + trim + collapse internal whitespace) and adds
+  BEFORE INSERT/UPDATE trigger `trg_normalize_site` (fn `normalize_site()`) on **24 operational site-grouping
+  base tables** (accidents, alerts, budgets, corrective_actions, customers, drivers, fleet_master, gate_passes,
+  goods_receipts, incident_reports, inspections, purchase_orders, rca_records, requisitions, stock,
+  stock_movements, stock_records, suppliers, tyre_records, tyre_rotations, tyre_service_events, vehicle_fleet,
+  warranty_claims, work_orders). Only 9 rows were off-canonical (inspections 6/accidents 2/corrective_actions 1);
+  0 remain. inspections lock trigger bypassed around its backfill and restored (both back to 'O').
+  EXCLUDED: `profiles.site` (guarded privileged column via trg_guard_profile_privileged + user scoping; 0 rows
+  off-canonical; a normalize trigger there could race the guard's self-edit "site changed?" check) and pure
+  log/telemetry/audit tables (site not a report grouper there). Next free migration **V247**.
+- **DEEPER ISSUE SURFACED, NOT YET FIXED — site vocabulary reconciliation (needs USER sign-off):** casing is
+  now clean but `tyre_records` uses a `<CODE>-ST` convention while `vehicle_fleet`/accidents/inspections use
+  plain site/gate names, so the SAME physical site is recorded under different codes. High-confidence same-site
+  groups: NHC-ST↔NHC; REDSEA-ST↔REDSEA↔RED SEA; KSP_TP-ST↔KSP-TP↔KSP; DHABAN-ST↔DHAHBAN; AMALA-ST↔AMALA↔AMAALA.
+  AMBIGUOUS (finer gate/plateau granularity in the master — do NOT auto-merge): DIRIYAH-ST vs DIRIYAH-G1/G2;
+  QIDDIYA-ST vs QIDDIYA-UPPER/LOWER PLATEAU; RIY-MET-ST vs METRO. RULE: this is a SEMANTIC merge, not a casing
+  fix — build a confirmed `site_aliases` canonical map (alias->canonical) applied via the normalize trigger,
+  only AFTER the user confirms the mapping. Do NOT collapse -ST codes blindly.
+
 ### V245 — vehicle_type casing normalized (applied LIVE 2026-07-16)
 - Mixed casing ("TR-MIXER" vs "Tr-Mixer", "PUMPS" vs "Pumps", "Bus" vs "BUS", etc.) split the SAME vehicle
   type into separate buckets in fleet analytics + reports (e.g. TR-MIXER showed 1066 and 72 as two rows).

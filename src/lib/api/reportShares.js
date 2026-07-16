@@ -69,6 +69,26 @@ export async function revokeReportShare(id) {
   if (error) throw error
 }
 
+/**
+ * Edit an existing share in place (keeps the SAME link/token). Reconfigures the
+ * rotating page set, name and timing without minting a new URL. RLS restricts
+ * this to elevated own-org users (report_shares_update policy); rotate/refresh
+ * are clamped here and re-validated by the table CHECK constraints.
+ * @param {string} id
+ * @param {{name?:string, pages?:string[], rotate?:number, refresh?:number}} patch
+ */
+export async function updateReportShare(id, patch = {}) {
+  const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, Number(v)))
+  const row = {}
+  if (patch.name != null) row.name = String(patch.name).trim() || 'Shared report'
+  if (Array.isArray(patch.pages)) row.pages = patch.pages
+  if (patch.rotate != null && Number.isFinite(Number(patch.rotate))) row.rotate_seconds = clamp(patch.rotate, 5, 600)
+  if (patch.refresh != null && Number.isFinite(Number(patch.refresh))) row.refresh_seconds = clamp(patch.refresh, 30, 3600)
+  if (Object.keys(row).length === 0) return
+  const { error } = await supabase.from('report_shares').update(row).eq('id', id)
+  if (error) throw error
+}
+
 /** PUBLIC read: aggregate snapshot for a share token (callable by anon). */
 export async function getReportSnapshot(token, password = null) {
   const { data, error } = await supabase.rpc('get_report_snapshot', { p_token: token, p_password: password })

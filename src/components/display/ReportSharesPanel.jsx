@@ -15,12 +15,12 @@
 import { useState, useEffect, useCallback } from 'react'
 import {
   Share2, Plus, Loader2, ShieldCheck, AlertCircle, Copy, Check, Trash2, X,
-  Lock, Clock, ExternalLink, Tv,
+  Lock, Clock, ExternalLink, Tv, Pencil, Save,
 } from 'lucide-react'
 import { useAuth } from '../../contexts/AuthContext'
 import {
   REPORT_PAGES, PAGE_GROUPS, DEFAULT_PAGES,
-  listReportShares, createReportShare, revokeReportShare, buildShareUrl,
+  listReportShares, createReportShare, updateReportShare, revokeReportShare, buildShareUrl,
 } from '../../lib/api/reportShares'
 import { toUserMessage } from '../../lib/safeError'
 
@@ -77,6 +77,7 @@ export default function ReportSharesPanel() {
   const [loadError, setLoadError] = useState(null)
   const [msg, setMsg] = useState(null)          // { type: 'ok'|'err', text }
   const [showForm, setShowForm] = useState(false)
+  const [editingId, setEditingId] = useState(null)   // share id when editing in place
   const [form, setForm] = useState(EMPTY_FORM)
   const [creating, setCreating] = useState(false)
   const [created, setCreated] = useState(null)  // { url } shown ONCE
@@ -127,6 +128,35 @@ export default function ReportSharesPanel() {
     }).catch(() => {})
   }
 
+  function openCreate() {
+    setEditingId(null)
+    setForm(EMPTY_FORM)
+    setShowForm(true)
+    setMsg(null); setCreated(null)
+  }
+
+  function openEdit(row) {
+    setEditingId(row.id)
+    setForm({
+      name: row.name || 'Shared report',
+      pages: DEFAULT_PAGES.filter((k) => (Array.isArray(row.pages) ? row.pages : []).includes(k)),
+      rotateSeconds: row.rotate_seconds ?? 30,
+      refreshMinutes: Math.round((row.refresh_seconds ?? 300) / 60) || 5,
+      password: '',
+      expires: '',
+    })
+    setShowForm(true)
+    setMsg(null); setCreated(null)
+    setConfirmId(null)
+  }
+
+  function closeForm() {
+    setShowForm(false)
+    setEditingId(null)
+    setForm(EMPTY_FORM)
+    setMsg(null)
+  }
+
   async function submit(e) {
     e.preventDefault()
     if (creating) return
@@ -138,6 +168,16 @@ export default function ReportSharesPanel() {
     try {
       const rotate = clamp(form.rotateSeconds, ROTATE_MIN, ROTATE_MAX, 30)
       const refresh = clamp(Number(form.refreshMinutes) * 60, REFRESH_SEC_MIN, REFRESH_SEC_MAX, 300)
+
+      if (editingId) {
+        // Edit in place: keeps the SAME link. Password / expiry are not changed here.
+        await updateReportShare(editingId, { name, pages: form.pages, rotate, refresh })
+        setMsg({ type: 'ok', text: 'Report link updated. The existing link keeps working with the new settings.' })
+        closeForm()
+        load()
+        return
+      }
+
       const res = await createReportShare({
         name,
         pages: form.pages,
@@ -156,7 +196,7 @@ export default function ReportSharesPanel() {
         setMsg({ type: 'err', text: 'Report link was not created. Please try again.' })
       }
     } catch (err) {
-      setMsg({ type: 'err', text: toUserMessage(err, 'Could not create the report link.') })
+      setMsg({ type: 'err', text: toUserMessage(err, editingId ? 'Could not update the report link.' : 'Could not create the report link.') })
     } finally {
       setCreating(false)
     }
@@ -186,7 +226,7 @@ export default function ReportSharesPanel() {
           <Tv size={15} className="text-[var(--accent)]" /> Shared report and TV links
         </h2>
         <button type="button"
-          onClick={() => { setShowForm((v) => !v); setMsg(null); setCreated(null) }}
+          onClick={() => { if (showForm) closeForm(); else openCreate() }}
           className="text-xs font-semibold px-2.5 py-1.5 rounded-lg bg-[var(--accent)] text-white flex items-center gap-1.5 hover:opacity-90 transition-opacity">
           {showForm ? <X size={13} /> : <Plus size={13} />}
           {showForm ? 'Cancel' : 'Create link'}
@@ -227,9 +267,13 @@ export default function ReportSharesPanel() {
         </div>
       )}
 
-      {/* Create form */}
+      {/* Create / edit form */}
       {showForm && (
         <form onSubmit={submit} className="rounded-lg px-3 py-3 bg-[var(--input-bg)] border border-[var(--input-border)] space-y-3">
+          <p className="text-xs font-semibold text-[var(--text-primary)] flex items-center gap-1.5">
+            {editingId ? <Pencil size={13} className="text-[var(--accent)]" /> : <Plus size={13} className="text-[var(--accent)]" />}
+            {editingId ? 'Edit this shared link (the link stays the same)' : 'New shared report link'}
+          </p>
           <div>
             <label className="text-xs font-semibold text-[var(--text-secondary)] block mb-1">Name</label>
             <input value={form.name} onChange={(e) => setF('name', e.target.value)} placeholder="Shared report" required
@@ -313,29 +357,35 @@ export default function ReportSharesPanel() {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="text-xs font-semibold text-[var(--text-secondary)] block mb-1 flex items-center gap-1">
-                <Lock size={11} /> Password <span className="text-[var(--text-muted)] font-normal">(optional)</span>
-              </label>
-              <input type="text" value={form.password} onChange={(e) => setF('password', e.target.value)} placeholder="None"
-                className="w-full text-sm px-2.5 py-2 rounded-md bg-[var(--card-bg)] border border-[var(--input-border)] text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)]" />
-              <p className="text-[10px] text-[var(--text-muted)] mt-1">Leave blank for no password.</p>
+          {editingId ? (
+            <p className="text-[11px] text-[var(--text-muted)] flex items-center gap-1.5">
+              <Lock size={11} /> Password and expiry are kept as set. To change those, revoke this link and create a new one.
+            </p>
+          ) : (
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs font-semibold text-[var(--text-secondary)] block mb-1 flex items-center gap-1">
+                  <Lock size={11} /> Password <span className="text-[var(--text-muted)] font-normal">(optional)</span>
+                </label>
+                <input type="text" value={form.password} onChange={(e) => setF('password', e.target.value)} placeholder="None"
+                  className="w-full text-sm px-2.5 py-2 rounded-md bg-[var(--card-bg)] border border-[var(--input-border)] text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)]" />
+                <p className="text-[10px] text-[var(--text-muted)] mt-1">Leave blank for no password.</p>
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-[var(--text-secondary)] block mb-1 flex items-center gap-1">
+                  <Clock size={11} /> Expires <span className="text-[var(--text-muted)] font-normal">(optional)</span>
+                </label>
+                <input type="date" value={form.expires} onChange={(e) => setF('expires', e.target.value)}
+                  className="w-full text-sm px-2.5 py-2 rounded-md bg-[var(--card-bg)] border border-[var(--input-border)] text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)]" />
+                <p className="text-[10px] text-[var(--text-muted)] mt-1">Link stops working after this day.</p>
+              </div>
             </div>
-            <div>
-              <label className="text-xs font-semibold text-[var(--text-secondary)] block mb-1 flex items-center gap-1">
-                <Clock size={11} /> Expires <span className="text-[var(--text-muted)] font-normal">(optional)</span>
-              </label>
-              <input type="date" value={form.expires} onChange={(e) => setF('expires', e.target.value)}
-                className="w-full text-sm px-2.5 py-2 rounded-md bg-[var(--card-bg)] border border-[var(--input-border)] text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)]" />
-              <p className="text-[10px] text-[var(--text-muted)] mt-1">Link stops working after this day.</p>
-            </div>
-          </div>
+          )}
 
           <button type="submit" disabled={creating || form.pages.length === 0}
             className="w-full text-sm font-semibold px-3 py-2.5 rounded-lg bg-[var(--accent)] text-white flex items-center justify-center gap-2 disabled:opacity-50 hover:opacity-90 transition-opacity">
-            {creating ? <Loader2 size={15} className="animate-spin" /> : <Plus size={15} />}
-            Create report link
+            {creating ? <Loader2 size={15} className="animate-spin" /> : (editingId ? <Save size={15} /> : <Plus size={15} />)}
+            {editingId ? 'Save changes' : 'Create report link'}
           </button>
         </form>
       )}
@@ -404,6 +454,10 @@ export default function ReportSharesPanel() {
                       className="p-1.5 rounded-md text-[var(--text-muted)] hover:text-[var(--accent)]">
                       <ExternalLink size={14} />
                     </a>
+                    <button type="button" title="Edit link" onClick={() => openEdit(row)}
+                      className={`p-1.5 rounded-md hover:text-[var(--accent)] ${editingId === row.id ? 'text-[var(--accent)]' : 'text-[var(--text-muted)]'}`}>
+                      <Pencil size={14} />
+                    </button>
                     <button type="button" title="Revoke" disabled={revoking === row.id}
                       onClick={() => setConfirmId((c) => (c === row.id ? null : row.id))}
                       className="p-1.5 rounded-md text-[var(--text-muted)] hover:text-red-400 disabled:opacity-50">

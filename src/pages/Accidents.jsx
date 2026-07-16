@@ -31,6 +31,9 @@ import {
   canonSeverity, canonStatus, canonAccidentType, toDbSeverity, toDbStatus, toDbAccidentType,
   canonFaultStatus, canonNajmStatus, canonNajmFault, canonTaqdeerStatus, canonRepairType, canonDamageClass,
   accidentSeverityPill, accidentStatusPill,
+  LIABLE_PARTY_OPTS, PAYER_OPTS, RECOVERY_DECISION_OPTS,
+  canonLiableParty, canonPayer, canonDamageCondition,
+  najmHasReport, taqdeerHasReport, recoveryIsYes, repairIsInternal, computeRecovered,
 } from '../lib/accidentVocab'
 import { makeValueLabelsPlugin, doughnutLegendCounts, summarizeChartData, REPORT_LIBRARY, normalizeConfig } from '../lib/accidentReport'
 import { listTemplates as listReportTemplates, createTemplate as createReportTemplate } from '../lib/api/accidentReportTemplates'
@@ -178,6 +181,7 @@ const EMPTY_FORM = {
   recovery_source: '',
   recovery_date: '',
   recovery_reference: '',
+  amount_transfer: '',
   // Parties & liability (former Claim tab)
   responsible_party: '',
   liable_party: '',
@@ -188,6 +192,7 @@ const EMPTY_FORM = {
   najm_status: '',
   najm_fault: '',
   taqdeer_status: '',
+  taqdeer_no: '',
   // Case tracking & workflow (former Tracker / Repair & Insurance tabs)
   case_stage: '',
   damage_condition: '',
@@ -202,6 +207,7 @@ const EMPTY_FORM = {
   // Repair
   repair_type: '',
   workshop_name: '',
+  workshop_location: '',
   workshop_quotation: '',
   discount_pct: '',
   final_amount: '',
@@ -1071,6 +1077,15 @@ export default function Accidents() {
     return arr
   }, [records, search, filterSite, filterSeverity, filterStatus, filterFrom, filterTo, statusFunnel, onlyPendingClosure, filterDelayed, filterStage, filterRepairType, filterFault, filterAge, filterOpenClaims])
 
+  // Recovered auto-calc: Claim - Approved - Deductible (spec), unless the user
+  // has explicitly typed a value in the Recovered field (then their input wins).
+  const recoveredTouched = useRef(false)
+  useEffect(() => {
+    if (recoveredTouched.current) return
+    const auto = computeRecovered(form.claim_amount, form.claim_approved_amount, form.deductible)
+    setForm((f) => (String(f.recovered_amount) === String(auto) ? f : { ...f, recovered_amount: auto }))
+  }, [form.claim_amount, form.claim_approved_amount, form.deductible])
+
   // Suggested final amount = workshop quotation minus discount% (former Repair
   // & Insurance tab helper). Null when there is no quotation — never fabricated.
   const suggestedFinal = useMemo(() => {
@@ -1085,6 +1100,7 @@ export default function Accidents() {
     setEditId(null)
     setFormError('')
     setAssetQuery('')
+    recoveredTouched.current = false   // a fresh record auto-calculates Recovered
     setShowForm(true)
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
@@ -1118,16 +1134,18 @@ export default function Accidents() {
       recovery_source:       row.recovery_source ?? '',
       recovery_date:         d(row.recovery_date),
       recovery_reference:    row.recovery_reference ?? '',
+      amount_transfer:       row.amount_transfer ?? '',
       responsible_party:     row.responsible_party ?? '',
-      liable_party:          row.liable_party ?? '',
-      payer:                 row.payer ?? '',
+      liable_party:          canonLiableParty(row.liable_party),
+      payer:                 canonPayer(row.payer),
       fault_status:          canonFaultStatus(row.fault_status),
       gcc_liability_ratio:   row.gcc_liability_ratio ?? '',
       najm_status:           canonNajmStatus(row.najm_status),
       najm_fault:            canonNajmFault(row.najm_fault),
       taqdeer_status:        canonTaqdeerStatus(row.taqdeer_status),
+      taqdeer_no:            row.taqdeer_no ?? '',
       case_stage:            row.case_stage ?? '',
-      damage_condition:      row.damage_condition ?? '',
+      damage_condition:      canonDamageCondition(row.damage_condition),
       current_status:        row.current_status ?? '',
       next_step:             row.next_step ?? '',
       responsible_owner:     row.responsible_owner ?? '',
@@ -1139,6 +1157,7 @@ export default function Accidents() {
       status_update_note:    row.status_update_note ?? '',
       repair_type:           canonRepairType(row.repair_type),
       workshop_name:         row.workshop_name ?? '',
+      workshop_location:     row.workshop_location ?? '',
       workshop_quotation:    row.workshop_quotation ?? '',
       discount_pct:          row.discount_pct ?? '',
       final_amount:          row.final_amount ?? '',
@@ -1151,6 +1170,7 @@ export default function Accidents() {
     })
     setEditId(row.id)
     setFormError('')
+    recoveredTouched.current = true    // respect the stored Recovered on edit
     setShowForm(true)
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
@@ -1204,26 +1224,32 @@ export default function Accidents() {
       claim_amount:          num(form.claim_amount),
       claim_approved_amount: num(form.claim_approved_amount),
       deductible:            num(form.deductible),
+      // Recovered = Claim - Approved - Deductible (spec formula, kept in sync by
+      // the auto-calc effect; still editable, so an explicit override is saved).
       recovered_amount:      num(form.recovered_amount),
-      // Cost recovery (DB defaults: recovery_status 'pending', recovery_source 'none')
-      recovery_status:       form.recovery_status || 'pending',
-      recovery_source:       form.recovery_source || 'none',
-      recovery_date:         form.recovery_date || null,
-      recovery_reference:    form.recovery_reference || null,
-      // Parties & liability
+      // Cost recovery gate: detail persists only when Recovery = Yes, else cleared
+      // so a No / N/A case never carries stale source/date/reference/transfer.
+      recovery_status:       form.recovery_status || 'N/A',
+      recovery_source:       recoveryIsYes(form.recovery_status) ? (form.recovery_source || 'none') : 'none',
+      recovery_date:         recoveryIsYes(form.recovery_status) ? (form.recovery_date || null) : null,
+      recovery_reference:    recoveryIsYes(form.recovery_status) ? (form.recovery_reference || null) : null,
+      amount_transfer:       recoveryIsYes(form.recovery_status) ? num(form.amount_transfer) : null,
+      // Parties & liability (controlled dropdowns; stray-case folds to the label)
       responsible_party:     form.responsible_party || null,
-      liable_party:          form.liable_party || null,
-      payer:                 form.payer || null,
+      liable_party:          canonLiableParty(form.liable_party) || null,
+      payer:                 canonPayer(form.payer) || null,
       // GCC case / liability — canonicalised so a stray-case value still matches
-      // the list badges + filters (which key off the exact option label).
+      // the list badges + filters (which key off the exact option label). Najm
+      // Fault + Taqdeer No are captured only when their report exists.
       fault_status:          canonFaultStatus(form.fault_status) || null,
       gcc_liability_ratio:   num(form.gcc_liability_ratio),
       najm_status:           canonNajmStatus(form.najm_status) || null,
-      najm_fault:            canonNajmFault(form.najm_fault) || null,
+      najm_fault:            najmHasReport(form.najm_status) ? (canonNajmFault(form.najm_fault) || null) : null,
       taqdeer_status:        canonTaqdeerStatus(form.taqdeer_status) || null,
+      taqdeer_no:            taqdeerHasReport(form.taqdeer_status) ? (form.taqdeer_no || null) : null,
       // Case tracking & workflow
       case_stage:            form.case_stage || null,
-      damage_condition:      form.damage_condition || null,
+      damage_condition:      canonDamageCondition(form.damage_condition) || null,
       current_status:        form.current_status || null,
       next_step:             form.next_step || null,
       // The merged "Action / Progress" field feeds BOTH legacy columns so every
@@ -1237,6 +1263,7 @@ export default function Accidents() {
       // Repair
       repair_type:           canonRepairType(form.repair_type) || null,
       workshop_name:         form.workshop_name || null,
+      workshop_location:     form.workshop_location || null,
       workshop_quotation:    num(form.workshop_quotation),
       discount_pct:          num(form.discount_pct),
       final_amount:          num(form.final_amount),
@@ -2516,13 +2543,15 @@ export default function Accidents() {
                       {NAJM_STATUS_OPTS.map(s => <option key={s} value={s}>{s}</option>)}
                     </select>
                   </div>
-                  <div>
-                    <label className="label">Najm Fault</label>
-                    <select className="input" value={form.najm_fault} onChange={e => setForm(f => ({ ...f, najm_fault: e.target.value }))}>
-                      <option value="">N/A</option>
-                      {NAJM_FAULT_OPTS.map(s => <option key={s} value={s}>{s}</option>)}
-                    </select>
-                  </div>
+                  {najmHasReport(form.najm_status) && (
+                    <div>
+                      <label className="label">Najm Fault</label>
+                      <select className="input" value={form.najm_fault} onChange={e => setForm(f => ({ ...f, najm_fault: e.target.value }))}>
+                        <option value="">N/A</option>
+                        {NAJM_FAULT_OPTS.map(s => <option key={s} value={s}>{s}</option>)}
+                      </select>
+                    </div>
+                  )}
                   <div>
                     <label className="label">Taqdeer</label>
                     <select className="input" value={form.taqdeer_status} onChange={e => setForm(f => ({ ...f, taqdeer_status: e.target.value }))}>
@@ -2530,11 +2559,20 @@ export default function Accidents() {
                       {TAQDEER_STATUS_OPTS.map(s => <option key={s} value={s}>{s}</option>)}
                     </select>
                   </div>
+                  {taqdeerHasReport(form.taqdeer_status) && (
+                    <div>
+                      <label className="label">Taqdeer No</label>
+                      <input className="input" placeholder="Estimation reference" value={form.taqdeer_no} onChange={e => setForm(f => ({ ...f, taqdeer_no: e.target.value }))} />
+                    </div>
+                  )}
                 </div>
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mt-3">
                   <div>
                     <label className="label">Liable Party</label>
-                    <input className="input" placeholder="e.g. 100% Third Party Liability" value={form.liable_party} onChange={e => setForm(f => ({ ...f, liable_party: e.target.value }))} />
+                    <select className="input" value={form.liable_party} onChange={e => setForm(f => ({ ...f, liable_party: e.target.value }))}>
+                      <option value="">N/A</option>
+                      {withValueOption(LIABLE_PARTY_OPTS, form.liable_party).map(s => <option key={s} value={s}>{s}</option>)}
+                    </select>
                   </div>
                   <div>
                     <label className="label">Responsible Party</label>
@@ -2542,7 +2580,10 @@ export default function Accidents() {
                   </div>
                   <div>
                     <label className="label">Who Pays</label>
-                    <input className="input" placeholder="Payer" value={form.payer} onChange={e => setForm(f => ({ ...f, payer: e.target.value }))} />
+                    <select className="input" value={form.payer} onChange={e => setForm(f => ({ ...f, payer: e.target.value }))}>
+                      <option value="">N/A</option>
+                      {withValueOption(PAYER_OPTS, form.payer).map(s => <option key={s} value={s}>{s}</option>)}
+                    </select>
                   </div>
                 </div>
               </FormSection>
@@ -2559,8 +2600,10 @@ export default function Accidents() {
                   </div>
                   <div>
                     <label className="label">Damage Condition</label>
-                    <input className="input" list="acc-damage-conditions" placeholder="Minor / Major Repair" value={form.damage_condition} onChange={e => setForm(f => ({ ...f, damage_condition: e.target.value }))} />
-                    <datalist id="acc-damage-conditions">{DAMAGE_CONDITION_OPTS.map(s => <option key={s} value={s} />)}</datalist>
+                    <select className="input" value={form.damage_condition} onChange={e => setForm(f => ({ ...f, damage_condition: e.target.value }))}>
+                      <option value="">N/A</option>
+                      {withValueOption(DAMAGE_CONDITION_OPTS, form.damage_condition).map(s => <option key={s} value={s}>{s}</option>)}
+                    </select>
                   </div>
                   <div>
                     <label className="label">Current Workflow Stage</label>
@@ -2638,7 +2681,9 @@ export default function Accidents() {
                   </div>
                   <div>
                     <label className="label">Recovered</label>
-                    <input type="number" min="0" step="0.01" className="input" value={form.recovered_amount} onChange={e => setForm(f => ({ ...f, recovered_amount: e.target.value }))} />
+                    <input type="number" min="0" step="0.01" className="input" value={form.recovered_amount}
+                      onChange={e => { recoveredTouched.current = true; setForm(f => ({ ...f, recovered_amount: e.target.value })) }} />
+                    <p className="text-[11px] text-[var(--text-muted)] mt-1">Auto: Claim minus Approved minus Deductible (editable)</p>
                   </div>
                 </div>
               </FormSection>
@@ -2650,24 +2695,32 @@ export default function Accidents() {
                     <label className="label">Recovery Status</label>
                     <select className="input" value={form.recovery_status} onChange={e => setForm(f => ({ ...f, recovery_status: e.target.value }))}>
                       <option value="">N/A</option>
-                      {RECOVERY_STATUS_OPTS.map(s => <option key={s} value={s}>{RECOVERY_STATUS_LABELS[s]}</option>)}
+                      {withValueOption(RECOVERY_DECISION_OPTS, form.recovery_status).map(s => <option key={s} value={s}>{s}</option>)}
                     </select>
                   </div>
-                  <div>
-                    <label className="label">Recovery Source</label>
-                    <select className="input" value={form.recovery_source} onChange={e => setForm(f => ({ ...f, recovery_source: e.target.value }))}>
-                      <option value="">N/A</option>
-                      {RECOVERY_SOURCE_OPTS.map(s => <option key={s} value={s}>{RECOVERY_SOURCE_LABELS[s]}</option>)}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="label">Recovery Date</label>
-                    <input type="date" className="input" value={form.recovery_date} onChange={e => setForm(f => ({ ...f, recovery_date: e.target.value }))} />
-                  </div>
-                  <div>
-                    <label className="label">Recovery Reference</label>
-                    <input className="input" placeholder="Payment / case ref" value={form.recovery_reference} onChange={e => setForm(f => ({ ...f, recovery_reference: e.target.value }))} />
-                  </div>
+                  {recoveryIsYes(form.recovery_status) && (
+                    <>
+                      <div>
+                        <label className="label">Recovery Source</label>
+                        <select className="input" value={form.recovery_source} onChange={e => setForm(f => ({ ...f, recovery_source: e.target.value }))}>
+                          <option value="">N/A</option>
+                          {RECOVERY_SOURCE_OPTS.map(s => <option key={s} value={s}>{RECOVERY_SOURCE_LABELS[s]}</option>)}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="label">Recovery Date</label>
+                        <input type="date" className="input" value={form.recovery_date} onChange={e => setForm(f => ({ ...f, recovery_date: e.target.value }))} />
+                      </div>
+                      <div>
+                        <label className="label">Recovery Reference</label>
+                        <input className="input" placeholder="Payment / case ref" value={form.recovery_reference} onChange={e => setForm(f => ({ ...f, recovery_reference: e.target.value }))} />
+                      </div>
+                      <div>
+                        <label className="label">Amount Transfer</label>
+                        <input type="number" min="0" step="0.01" className="input" value={form.amount_transfer} onChange={e => setForm(f => ({ ...f, amount_transfer: e.target.value }))} />
+                      </div>
+                    </>
+                  )}
                 </div>
               </FormSection>
 
@@ -2683,7 +2736,18 @@ export default function Accidents() {
                   </div>
                   <div>
                     <label className="label">Workshop</label>
-                    <input className="input" value={form.workshop_name} onChange={e => setForm(f => ({ ...f, workshop_name: e.target.value }))} />
+                    <input className="input" placeholder={repairIsInternal(form.repair_type) ? 'GCC Workshop' : 'External workshop name'} value={form.workshop_name} onChange={e => setForm(f => ({ ...f, workshop_name: e.target.value }))} />
+                  </div>
+                  <div>
+                    <label className="label">Workshop Location</label>
+                    {repairIsInternal(form.repair_type) ? (
+                      <select className="input" value={form.workshop_location} onChange={e => setForm(f => ({ ...f, workshop_location: e.target.value }))}>
+                        <option value="">Select site</option>
+                        {withValueOption(sites, form.workshop_location).map(s => <option key={s} value={s}>{s}</option>)}
+                      </select>
+                    ) : (
+                      <input className="input" placeholder="Workshop location / name" value={form.workshop_location} onChange={e => setForm(f => ({ ...f, workshop_location: e.target.value }))} />
+                    )}
                   </div>
                   <div>
                     <label className="label">Workshop Quotation</label>
@@ -2710,10 +2774,12 @@ export default function Accidents() {
                     <label className="label">Estimated Damage Cost</label>
                     <input type="number" min="0" step="0.01" className="input" value={form.estimated_damage_cost} onChange={e => setForm(f => ({ ...f, estimated_damage_cost: e.target.value }))} />
                   </div>
-                  <div>
-                    <label className="label">Repair Cost</label>
-                    <input type="number" min="0" step="0.01" className="input" value={form.repair_cost} onChange={e => setForm(f => ({ ...f, repair_cost: e.target.value }))} />
-                  </div>
+                  {repairIsInternal(form.repair_type) && (
+                    <div>
+                      <label className="label">Repair Cost</label>
+                      <input type="number" min="0" step="0.01" className="input" value={form.repair_cost} onChange={e => setForm(f => ({ ...f, repair_cost: e.target.value }))} />
+                    </div>
+                  )}
                   <div>
                     <label className="label">Expected Release</label>
                     <input type="date" className="input" value={form.expected_release_date} onChange={e => setForm(f => ({ ...f, expected_release_date: e.target.value }))} />

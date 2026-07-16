@@ -1,0 +1,12 @@
+-- V251 - Shareable public/TV report links. Mirrors V103 display_tokens: anon
+-- reads ONLY org-scoped aggregates via a SECURITY DEFINER RPC gated by a
+-- high-entropy token; no table granted to anon; org derived from the token row
+-- so cross-org leakage is impossible. Elevated users mint / revoke shares.
+-- (Full DDL applied live via Supabase MCP; see get_report_snapshot in V252.)
+-- report_shares(id, organisation_id DEFAULT app_current_org(), name, token UNIQUE
+--   ('rpt_'+hex), password_hash, pages jsonb, rotate_seconds 5..600 (default 30),
+--   refresh_seconds 30..3600, active, expires_at, created_by, created_at,
+--   last_viewed_at, view_count). RLS: elevated + own-org for select/update/delete;
+--   no INSERT policy (tokens minted only via create_report_share DEFINER RPC).
+-- create_report_share / revoke_report_share: SECURITY DEFINER, elevated-gated,
+--   granted to authenticated only.

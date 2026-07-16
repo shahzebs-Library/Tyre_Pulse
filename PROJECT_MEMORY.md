@@ -311,10 +311,48 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
   so Accident builder/PDF/PPTX follow the theme too. Board Overview + Executive already use `reportColors`.
   Tests: reportColors 9. RULE: to add a theme, add to PRESETS (auto-surfaces in the console picker).
 - **STILL TODO (wave 2, told user):** convert the remaining HARD-CODED chart colours to the palette:
-  `Analytics.jsx` (inline rgba) + `Accidents.jsx` analytics-tab category maps (PIE_COLORS etc.). And the
-  BIG new asks (2026-07-16): shareable PUBLIC/TV links for reports (must be LIGHT theme, no dark), a
-  super-admin place to manage which reports are shared/live, and Executive-Analytics-style ADVANCED charts.
-  Existing infra to extend: V103 `/display/:token` + getDisplaySnapshot (DisplayShare TV token-share).
+  `Analytics.jsx` (inline rgba) + `Accidents.jsx` analytics-tab category maps (PIE_COLORS etc.).
+
+### Shareable public/TV report links (V251/V252, 2026-07-16) — SHIPPED, do NOT duplicate
+- The "shareable PUBLIC/TV links for reports (LIGHT theme, admin-managed, advanced charts)" backlog item is
+  DONE. Mirrors the V103 display-token pattern (org embedded in the token row; anon reads aggregates only via
+  a SECURITY DEFINER RPC; no table is ever granted to anon). Do NOT build a second share surface.
+- **DB (applied live):**
+  - **V251** `public.report_shares` (id, organisation_id DEFAULT app_current_org(), name, token UNIQUE
+    'rpt_'+18-byte hex, password_hash bcrypt, pages jsonb DEFAULT '["board_kpis","board_trends",
+    "board_charts"]', rotate_seconds 5..600 DEFAULT 30, refresh_seconds 30..3600 DEFAULT 300, active,
+    expires_at, created_by DEFAULT auth.uid(), created_at, last_viewed_at, view_count). RLS: elevated +
+    own-org SELECT/UPDATE/DELETE, NO INSERT policy (mint only via RPC). RPCs `create_report_share(p_name,
+    p_pages,p_rotate,p_refresh,p_password,p_expires)` -> jsonb {id,token} (elevated, DEFINER, GRANT
+    authenticated) and `revoke_report_share(p_id)` (sets active=false).
+  - **V252** `get_report_snapshot(p_token text, p_password text DEFAULT NULL)` SECURITY DEFINER, GRANT
+    anon+authenticated, REVOKE PUBLIC. Validates token (active/expiry/bcrypt password), derives v_org from
+    the token row (NO cross-org leak), bumps view_count/last_viewed_at, returns org-scoped aggregates:
+    `{ok, company, name, generated_at, rotate_seconds, refresh_seconds, pages, labels[12], kpis{fleet,tyres,
+    tyre_spend,accidents,open_accidents,claims_claimed,claims_recovered,inspections,work_orders_open},
+    trends{tyre_spend[12],accidents[12],claims_claimed[12],claims_recovered[12],inspections[12]},
+    breakdowns{severity,accidents_by_site,tyres_by_site,claim_status}}` or `{ok:false, reason:'invalid'|
+    'revoked'|'expired'|'password'|'unavailable'}`. Next free migration **V253**.
+- **Service (single source, do NOT re-query these tables elsewhere):** `src/lib/api/reportShares.js` -
+  REPORT_PAGES/DEFAULT_PAGES, listReportShares, createReportShare, revokeReportShare, getReportSnapshot
+  (anon-callable), buildShareUrl(token) -> `${origin}/report/${token}`.
+- **Public viewer = `src/pages/ReportShare.jsx`** at route `/report/:token` (App.jsx, ANON, sibling of
+  `/display/:token`, OUTSIDE ProtectedRoute). Forced LIGHT via the `.tp-report-paper` wrapper technique;
+  auto-rotates every `rotate_seconds` (default 30) through ONLY the creator-chosen `snapshot.pages`; silently
+  re-fetches on `refresh_seconds` keeping last-good data on failure; fullscreen toggle + rotation progress;
+  password/expired/revoked/invalid states. Advanced ECharts (via `components/charts/EChart.jsx`, Executive-
+  Analytics style): dual-axis spend-vs-accidents combo, smooth claimed/recovered area lines, inspections
+  line, KPI tiles+sparklines, severity doughnut, claim-status bars, by-site bars, tyres treemap. Colours from
+  `reportColors` (categorical/colorAt/withAlpha) so it follows the super-admin theme.
+- **Admin manager = `src/components/display/ReportSharesPanel.jsx`**, mounted in `src/pages/Settings.jsx`
+  beside DisplayTokensPanel. Self-gates to Admin/Manager/Director/super-admin (user said "Admins too", not
+  only super-admin). Create form: name, REPORT_PAGES checkboxes, rotate seconds (default 30), refresh minutes
+  (->seconds), optional password/expiry; one-time link reveal; list with copy-link/open/revoke. All errors via
+  toUserMessage. RULE: to add a rotatable report page, extend REPORT_PAGES + the snapshot RPC's page payload +
+  a render branch in ReportShare.jsx. Committed b2ad707 on branch claude/accident-builder-report-ui-2bkwb5.
+- **STILL BACKLOG:** shareable links for reports currently expose the Board-Overview aggregate set; wiring the
+  full Executive/Accident block-builder layouts into the public snapshot is a later extension. Existing V103
+  `/display/:token` + getDisplaySnapshot (DisplayShare) remains the separate executive-board token-share.
 
 ### Incident Report screen upgrade (2026-07-16) — from the user's field spec (xlsx)
 - The user's "incident_Report_Screen" spec was a BEHAVIOR upgrade list on the EXISTING accident form

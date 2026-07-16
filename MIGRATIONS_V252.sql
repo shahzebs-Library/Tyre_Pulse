@@ -1,0 +1,5 @@
+-- V252 - get_report_snapshot(p_token, p_password): anon public-read snapshot for
+-- a report share. Returns ONLY org-scoped aggregates (KPIs, 12-month trends,
+-- breakdowns) - never raw rows / PII. Org derived from the token row. Password
+-- (bcrypt) enforced when set; honours active/expires. GRANT EXECUTE TO anon,
+-- authenticated; REVOKE FROM PUBLIC. (Full DDL applied live via Supabase MCP.)

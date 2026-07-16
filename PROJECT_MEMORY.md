@@ -282,6 +282,25 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
   per-fitment ranked comparison + engineer rationale + savings + realized-CPK column, brand-guidance fallback
   when no quotes. Tests: tyreSpecCatalog(29), tyreSpecPolicy(7), tyreValueAdvisor(17). **Next free migration V250.**
 
+### Heat Intelligence live weather (2026-07-16) — merged to main (PR #32)
+- HeatIntelligence (`/heat-intelligence`) now runs on REAL ambient temperature, not only the seasonal
+  `GCC_TEMP_PROFILES` climatology. Source = **Open-Meteo** (free, keyless, CORS) via new service
+  **`src/lib/api/weather.js`** (`getCurrentWeather(lat,lon,{signal,force})` + pure `normaliseWeather()`;
+  localStorage-cached 1h per rounded coord; NEVER throws, returns `{ok,data}`|`{ok:false,error}`). This is a
+  public HTTP source, so it does NOT use the Supabase `_client.js` layer.
+- Engine additions in **`src/lib/heatIntelligence.js` are ADDITIVE ONLY** (the existing pure fns are locked by
+  `heatBlowout.test.js`/`heatIntelligence.test.js` - do NOT change their signatures/outputs): `GCC_CITY_COORDS`
+  + `cityCoords()`, `hottestHours()`, `mergeLiveConditions(base,liveAmbient,source)` (overlays a real ambient
+  onto a `currentConditions()` result, recomputing road/severity/advisory/pressure via the same pure fns;
+  returns base unchanged on non-finite input). Climatology (`currentConditions`) stays the offline fallback.
+- Page: `HeatIntelligence.jsx` fetches per selected `city` (abortable), city-STAMPS the reading
+  (`weather.city_key`) so a stale in-flight result is never shown under the wrong city, derives `liveWeather`
+  (only when city_key matches) + blends into the `conditions` memo so hero/blowout-risk/calculator all use the
+  live number; "Live ambient weather" panel (now/feels-like/humidity/wind + hottest hours + 7-day max) with a
+  Live vs Seasonal badge and honest loading/fallback. RULE honored: NO em/en dashes in the NEW output.
+- Tests: `heatWeather.test.js` (11). Research + adversarial-review agents used; the one nit found (present-but-
+  non-numeric apparent/wind rendering 0 not N/A) is fixed + regression-tested. No DB/schema change.
+
 ### Shipped (2026-07-15/16) — all merged to main, nothing pending
 - Everything below is LIVE on the DB/deploy and merged to main (PRs #28/#29/#30, all terminal).
   V243 accidents plate/vehicle_type + auto-fill; super-admin swap + privileged-edit playbook; Accidents

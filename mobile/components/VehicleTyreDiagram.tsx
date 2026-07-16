@@ -7,7 +7,7 @@
  */
 
 import React, { useMemo } from 'react'
-import { View, Text, TouchableOpacity, StyleSheet, useWindowDimensions } from 'react-native'
+import { View, Text, TouchableOpacity, StyleSheet } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import Svg, {
   G, Rect, Ellipse, Circle, Line, Path,
@@ -15,6 +15,8 @@ import Svg, {
 } from 'react-native-svg'
 import type { TyreCondition, TyrePositionData } from '../lib/types'
 import { CONDITION_META } from '../lib/tyreConditions'
+import { useTheme } from '../contexts/ThemeContext'
+import { radius, spacing, typography, elevation, Theme } from '../lib/theme'
 
 // ── Risk colour palette ────────────────────────────────────────────────────────
 const RISK = {
@@ -126,7 +128,7 @@ function Tyre({ x, y, w, h, risk, label, selected, recorded, horizontal }: TyreP
           fill="#111111" stroke={selected ? '#3b82f6' : col.rim} strokeWidth={selected ? 2 : 1.2} />
         <Ellipse cx={cx} cy={cy} rx={w * 0.22} ry={h * 0.45} fill={`url(#rim_${risk})`} />
         <SvgText x={cx} y={cy + 1} textAnchor="middle"
-          fontSize={Math.max(4, Math.min(h * 0.9, 7))} fontWeight="800" fill="white">
+          fontSize={Math.max(4.5, Math.min(h * 0.95, 8))} fontWeight="800" fill="white">
           {label}
         </SvgText>
       </G>
@@ -165,7 +167,7 @@ function Tyre({ x, y, w, h, risk, label, selected, recorded, horizontal }: TyreP
       })}
       <Ellipse cx={cx} cy={cy} rx={w * 0.13} ry={h * 0.13} fill="url(#hub)" stroke="#374151" strokeWidth={0.4} />
       <SvgText x={cx} y={cy + 0.4} textAnchor="middle"
-        fontSize={Math.max(3.5, Math.min(w * 0.50, 8))} fontWeight="800" fill="white">
+        fontSize={Math.max(4, Math.min(w * 0.55, 9))} fontWeight="800" fill="white">
         {label}
       </SvgText>
       {recorded && !selected && (
@@ -520,6 +522,8 @@ interface Props {
 export default function VehicleTyreDiagram({
   vehicleType, positions, tyreData, selectedPosition, onPositionPress, width = 320,
 }: Props) {
+  const { theme } = useTheme()
+  const styles = useMemo(() => makeStyles(theme), [theme])
   // Use a bespoke hand-drawn layout only when it exactly matches the positions;
   // otherwise build one programmatically so every position is guaranteed to render.
   const layout = useMemo<VehicleLayout>(() => {
@@ -570,12 +574,10 @@ export default function VehicleTyreDiagram({
   // Nothing to render (no positions supplied) → honest empty state.
   if (positions.length === 0) {
     return (
-      <View style={[styles.container, { paddingVertical: 28, alignItems: 'center' }]}>
-        <Text style={{ fontSize: 30 }}>🛞</Text>
-        <Text style={{ fontSize: 14, fontWeight: '700', color: '#e2e8f0', marginTop: 6 }}>{vehicleType || 'Vehicle'}</Text>
-        <Text style={{ fontSize: 12, color: '#94a3b8', marginTop: 2, textAlign: 'center' }}>
-          No tyre positions to display.
-        </Text>
+      <View style={[styles.container, { paddingVertical: 32, alignItems: 'center' }]}>
+        <Text style={{ fontSize: 34 }}>🛞</Text>
+        <Text style={styles.emptyTitle}>{vehicleType || 'Vehicle'}</Text>
+        <Text style={styles.emptyText}>No tyre positions to display.</Text>
       </View>
     )
   }
@@ -583,7 +585,13 @@ export default function VehicleTyreDiagram({
   return (
     <View style={styles.container}>
       {/* FRONT label */}
-      <Text style={styles.frontLabel}>▲ FRONT</Text>
+      <View style={styles.frontLabel}>
+        <Ionicons name="chevron-up" size={13} color={theme.color.textMuted} />
+        <Text style={styles.frontLabelText}>FRONT</Text>
+      </View>
+
+      {/* Tap hint */}
+      <Text style={styles.tapHint}>Tap a tyre to record its condition</Text>
 
       {/* SVG diagram - purely visual, no touch handlers */}
       <View style={{ width, height: svgHeight }}>
@@ -638,7 +646,7 @@ export default function VehicleTyreDiagram({
         {(['Good', 'Worn', 'Damaged', 'Puncture', 'Flat', 'Missing'] as TyreCondition[]).map(c => {
           const m = CONDITION_META[c]
           return (
-            <View key={c} style={styles.legendItem}>
+            <View key={c} style={[styles.legendItem, { backgroundColor: m.tint, borderColor: m.borderColor }]}>
               <Text style={styles.legendEmoji}>{m.emoji}</Text>
               <Text style={[styles.legendLabel, { color: m.color }]}>{c}</Text>
             </View>
@@ -649,61 +657,83 @@ export default function VehicleTyreDiagram({
   )
 }
 
-const styles = StyleSheet.create({
-  container: {
-    alignItems: 'center',
-    backgroundColor: '#0f172a',
-    borderRadius: 18,
-    paddingTop: 8,
-    paddingBottom: 14,
-    marginBottom: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.35,
-    shadowRadius: 14,
-    elevation: 10,
-  },
-  frontLabel: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#64748b',
-    letterSpacing: 1.5,
-    marginBottom: 4,
-  },
-  svg: { overflow: 'visible' },
-  hitOverlay: {
-    position: 'absolute',
-    borderRadius: 8,
-    backgroundColor: 'transparent',
-    borderWidth: 0,
-  },
-  hitOverlaySelected: {
-    borderWidth: 2.5,
-    borderColor: '#3b82f6',
-    backgroundColor: 'rgba(59,130,246,0.08)',
-  },
-  condBadge: {
-    position: 'absolute',
-    top: 0,
-    right: 0,
-    width: 18,
-    height: 18,
-    borderRadius: 9,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1.5,
-    borderColor: '#0f172a',
-  },
-  condBadgeEmoji: { fontSize: 9 },
-  legend: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'center',
-    gap: 10,
-    paddingHorizontal: 12,
-    paddingTop: 12,
-  },
-  legendItem: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  legendEmoji: { fontSize: 14 },
-  legendLabel: { fontSize: 10, fontWeight: '700' },
-})
+function makeStyles(theme: Theme) {
+  const c = theme.color
+  return StyleSheet.create({
+    container: {
+      alignItems: 'center',
+      backgroundColor: c.surfaceAlt,
+      borderRadius: radius.xl,
+      borderWidth: 1,
+      borderColor: c.border,
+      paddingTop: spacing.md,
+      paddingBottom: spacing.lg,
+      marginBottom: spacing.lg,
+      ...elevation(theme, 1),
+    },
+    frontLabel: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 2,
+      marginBottom: spacing.xs,
+    },
+    frontLabelText: {
+      fontSize: 11,
+      fontWeight: '800',
+      color: c.textMuted,
+      letterSpacing: 2,
+    },
+    tapHint: {
+      ...typography.caption,
+      color: c.textSecondary,
+      marginBottom: spacing.sm,
+      textAlign: 'center',
+    },
+    emptyTitle: { ...typography.title, color: c.text, marginTop: spacing.sm },
+    emptyText: { ...typography.caption, color: c.textMuted, marginTop: 2, textAlign: 'center' },
+    svg: { overflow: 'visible' },
+    hitOverlay: {
+      position: 'absolute',
+      borderRadius: 8,
+      backgroundColor: 'transparent',
+      borderWidth: 0,
+    },
+    hitOverlaySelected: {
+      borderWidth: 3,
+      borderColor: c.info.base,
+      backgroundColor: theme.mode === 'dark' ? 'rgba(56,189,248,0.14)' : 'rgba(3,105,161,0.10)',
+    },
+    condBadge: {
+      position: 'absolute',
+      top: -2,
+      right: -2,
+      width: 20,
+      height: 20,
+      borderRadius: 10,
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderWidth: 2,
+      borderColor: c.surface,
+    },
+    condBadgeEmoji: { fontSize: 10 },
+    legend: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      justifyContent: 'center',
+      gap: spacing.sm,
+      paddingHorizontal: spacing.md,
+      paddingTop: spacing.md,
+    },
+    legendItem: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+      paddingHorizontal: spacing.sm,
+      paddingVertical: 5,
+      borderRadius: radius.pill,
+      borderWidth: 1,
+    },
+    legendEmoji: { fontSize: 13 },
+    legendLabel: { fontSize: 11, fontWeight: '800' },
+  })
+}

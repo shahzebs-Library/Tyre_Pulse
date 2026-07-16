@@ -5,37 +5,51 @@
  * - All users: view full report, photo gallery with lightbox
  * - Managers / Directors: update status via bottom-sheet modal
  * - Admin only: delete report (with confirmation), view full audit trail
+ *
+ * Visual: Daylight design system (theme tokens, sunlight-legible).
  */
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import {
-  View, Text, ScrollView, TouchableOpacity, StyleSheet,
-  StatusBar, ActivityIndicator, Alert, Modal, Image,
+  View, ScrollView, TouchableOpacity, StyleSheet,
+  ActivityIndicator, Alert, Modal, Image,
   Dimensions, Platform,
 } from 'react-native'
-import { SafeAreaView } from 'react-native-safe-area-context'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
 import { useAuth } from '../../../contexts/AuthContext'
 import { useLanguage } from '../../../contexts/LanguageContext'
+import { useTheme } from '../../../contexts/ThemeContext'
 import { supabase } from '../../../lib/supabase'
 import { useRoleGuard } from '../../../hooks/useRoleGuard'
+import { Theme, radius, spacing, statusColor, StatusKind } from '../../../lib/theme'
+import { Screen, Card, AppText, Badge } from '../../../components/ui'
 import AccidentClaimsPanel from '../../../components/AccidentClaimsPanel'
 import { describeAuditRow, AuditRow } from '../../../lib/auditDiff'
 import { exportAccidentPdf } from '../../../lib/accidentPdf'
 import { resolveStorageUrls } from '../../../lib/storageRefs'
 import {
-  AccidentRecord, AccidentStatus,
-  SEVERITY_COLORS, STATUS_COLORS,
+  AccidentRecord, AccidentStatus, AccidentSeverity,
   SEVERITY_ICONS, STATUS_ICONS,
   isAdminOrAbove, isAdmin,
 } from '../../../lib/types'
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window')
 
+type IconName = React.ComponentProps<typeof Ionicons>['name']
+
 const STATUS_OPTIONS: AccidentStatus[] = ['reported', 'under_review', 'closed']
 
-const TYPE_ICONS: Record<string, string> = {
+// Semantic mapping: preserve the MEANING of severity/status while sourcing the
+// actual colours from the theme status kinds (sunlight-tuned).
+const SEVERITY_KIND: Record<AccidentSeverity, StatusKind> = {
+  minor: 'success', moderate: 'warning', severe: 'critical', fatal: 'danger',
+}
+const STATUS_KIND: Record<AccidentStatus, StatusKind> = {
+  reported: 'info', under_review: 'warning', closed: 'neutral',
+}
+
+const TYPE_ICONS: Record<string, IconName> = {
   collision:       'car-sport-outline',
   rollover:        'refresh-circle-outline',
   tyre_failure:    'disc-outline',
@@ -50,6 +64,9 @@ export default function AccidentDetailScreen() {
   const { allowed, loading: guardLoading } = useRoleGuard(['admin', 'manager', 'director', 'inspector'])
   const { profile } = useAuth()
   const { t, isRTL } = useLanguage()
+  const { theme } = useTheme()
+  const c = theme.color
+  const styles = useMemo(() => createStyles(theme), [theme])
   const router = useRouter()
 
   const [accident, setAccident]             = useState<AccidentRecord | null>(null)
@@ -211,72 +228,71 @@ Risk Level: [Critical / High / Medium / Low]
 
   if (guardLoading || !allowed || loading) {
     return (
-      <SafeAreaView style={styles.safe}>
-        <StatusBar barStyle="dark-content" backgroundColor="#fff5f5" />
+      <Screen>
         <View style={styles.loader}>
-          <ActivityIndicator size="large" color="#dc2626" />
+          <ActivityIndicator size="large" color={c.primary} />
         </View>
-      </SafeAreaView>
+      </Screen>
     )
   }
 
   if (!accident) return null
 
-  const sevColor    = SEVERITY_COLORS[accident.severity]
-  const statusColor = STATUS_COLORS[accident.status]
+  const sevKind    = SEVERITY_KIND[accident.severity]
+  const statusKind = STATUS_KIND[accident.status]
+  const statusSc   = statusColor(theme, statusKind)
+  const sevSc      = statusColor(theme, sevKind)
   const photos: string[] = photoUrls
 
   return (
-    <SafeAreaView style={styles.safe}>
-      <StatusBar barStyle="dark-content" backgroundColor="#fff5f5" />
-
-      {/* ── Header ─────────────────────────────────────────────────────────── */}
+    <Screen>
+      {/* -- Header -------------------------------------------------------- */}
       <View style={[styles.header, isRTL && { flexDirection: 'row-reverse' }]}>
-        <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
-          <Ionicons name={isRTL ? 'chevron-forward' : 'chevron-back'} size={22} color="#0f172a" />
+        <TouchableOpacity style={styles.iconBtn} onPress={() => router.back()}>
+          <Ionicons name={isRTL ? 'chevron-forward' : 'chevron-back'} size={22} color={c.text} />
         </TouchableOpacity>
         <View style={{ flex: 1 }}>
-          <Text style={styles.headerTitle}>{t('accident.detailTitle')}</Text>
-          <Text style={styles.headerSub}>#{accident.id.slice(0, 8).toUpperCase()}</Text>
+          <AppText variant="h3" numberOfLines={1}>{t('accident.detailTitle')}</AppText>
+          <AppText variant="micro" color="muted">#{accident.id.slice(0, 8).toUpperCase()}</AppText>
         </View>
 
         {/* Status badge - tappable for managers/admins */}
         <TouchableOpacity
-          style={[styles.statusBadge, { backgroundColor: statusColor + '18', borderColor: statusColor + '50' }]}
+          style={[styles.statusBadge, { backgroundColor: statusSc.soft, borderColor: statusSc.base + '55' }]}
           onPress={() => canChangeStatus && setShowStatusModal(true)}
           activeOpacity={canChangeStatus ? 0.7 : 1}
         >
           {statusLoading
-            ? <ActivityIndicator size="small" color={statusColor} />
+            ? <ActivityIndicator size="small" color={statusSc.base} />
             : <>
-                <Ionicons name={STATUS_ICONS[accident.status] as any} size={13} color={statusColor} />
-                <Text style={[styles.statusText, { color: statusColor }]}>
+                <Ionicons name={STATUS_ICONS[accident.status] as IconName} size={13} color={statusSc.on} />
+                <AppText variant="micro" style={{ color: statusSc.on }}>
                   {t(`accident.statuses.${accident.status}`)}
-                </Text>
+                </AppText>
                 {canChangeStatus && (
-                  <Ionicons name="chevron-down" size={11} color={statusColor} style={{ marginLeft: 2 }} />
+                  <Ionicons name="chevron-down" size={11} color={statusSc.on} style={{ marginLeft: 2 }} />
                 )}
               </>
           }
         </TouchableOpacity>
 
         {/* Export PDF */}
-        <TouchableOpacity style={styles.pdfBtn} onPress={handleExportPdf} disabled={exporting}>
+        <TouchableOpacity style={[styles.iconBtn, { backgroundColor: c.danger.soft }]} onPress={handleExportPdf} disabled={exporting}>
           {exporting
-            ? <ActivityIndicator size="small" color="#dc2626" />
-            : <Ionicons name="share-outline" size={18} color="#dc2626" />}
+            ? <ActivityIndicator size="small" color={c.danger.base} />
+            : <Ionicons name="share-outline" size={18} color={c.danger.base} />}
         </TouchableOpacity>
 
         {/* Admin: delete button */}
         {canDelete && (
           <TouchableOpacity
-            style={styles.deleteBtn}
+            style={[styles.iconBtn, { backgroundColor: c.danger.soft }]}
             onPress={confirmDelete}
             disabled={deleting}
           >
             {deleting
-              ? <ActivityIndicator size="small" color="#dc2626" />
-              : <Ionicons name="trash-outline" size={18} color="#dc2626" />
+              ? <ActivityIndicator size="small" color={c.danger.base} />
+              : <Ionicons name="trash-outline" size={18} color={c.danger.base} />
             }
           </TouchableOpacity>
         )}
@@ -284,18 +300,15 @@ Risk Level: [Critical / High / Medium / Low]
 
       <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
 
-        {/* ── Hero severity card ────────────────────────────────────────────── */}
-        <View style={[styles.heroCard, { borderLeftColor: sevColor, borderLeftWidth: 5 }]}>
+        {/* -- Hero severity card ------------------------------------------ */}
+        <Card accent={sevSc.base} style={{ gap: spacing.md }}>
           <View style={styles.heroTop}>
-            <View style={[styles.sevBadge, { backgroundColor: sevColor + '18', borderColor: sevColor + '40' }]}>
-              <Ionicons name={SEVERITY_ICONS[accident.severity] as any} size={13} color={sevColor} />
-              <Text style={[styles.sevBadgeText, { color: sevColor }]}>
-                {t(`accident.severities.${accident.severity}`).toUpperCase()}
-              </Text>
-            </View>
-            <View style={styles.typeChip}>
-              <Ionicons name={TYPE_ICONS[accident.accident_type] as any ?? 'alert-circle-outline'} size={13} color="#475569" />
-              <Text style={styles.typeChipText}>{t(`accident.types.${accident.accident_type}`)}</Text>
+            <Badge kind={sevKind} icon={SEVERITY_ICONS[accident.severity] as IconName} solid>
+              {t(`accident.severities.${accident.severity}`).toUpperCase()}
+            </Badge>
+            <View style={[styles.typeChip, { backgroundColor: c.surfaceAlt }]}>
+              <Ionicons name={(TYPE_ICONS[accident.accident_type] ?? 'alert-circle-outline')} size={13} color={c.textSecondary} />
+              <AppText variant="caption" color="secondary">{t(`accident.types.${accident.accident_type}`)}</AppText>
             </View>
           </View>
           <View style={styles.heroMeta}>
@@ -305,16 +318,16 @@ Risk Level: [Critical / High / Medium / Low]
             {accident.incident_time ? <MetaItem icon="time-outline"     label={accident.incident_time} /> : null}
             {accident.location      ? <MetaItem icon="location-outline" label={accident.location} /> : null}
           </View>
-        </View>
+        </Card>
 
-        {/* ── Description ───────────────────────────────────────────────────── */}
+        {/* -- Description ------------------------------------------------- */}
         {accident.description ? (
           <SectionCard title={t('accident.incidentInfo')} icon="document-text-outline">
-            <Text style={styles.descText}>{accident.description}</Text>
+            <AppText variant="body" color="secondary">{accident.description}</AppText>
           </SectionCard>
         ) : null}
 
-        {/* ── Damage & Injuries ─────────────────────────────────────────────── */}
+        {/* -- Damage & Injuries ------------------------------------------ */}
         <SectionCard title={t('accident.damageInfo')} icon="medkit-outline">
           <InfoRow
             label={t('accident.injuriesLabel')}
@@ -340,13 +353,13 @@ Risk Level: [Critical / High / Medium / Low]
           )}
           {accident.damage_description ? (
             <View style={styles.blockField}>
-              <Text style={styles.blockLabel}>{t('accident.damageDescLabel')}</Text>
-              <Text style={styles.blockText}>{accident.damage_description}</Text>
+              <AppText variant="caption" color="muted">{t('accident.damageDescLabel')}</AppText>
+              <AppText variant="body" color="secondary">{accident.damage_description}</AppText>
             </View>
           ) : null}
         </SectionCard>
 
-        {/* ── Reporter info (admin sees reviewer too) ────────────────────────── */}
+        {/* -- Reporter info (admin sees reviewer too) -------------------- */}
         <SectionCard title="Report Info" icon="person-circle-outline">
           {accident.driver_name ? (
             <InfoRow label={t('accident.driverLabel')} value={accident.driver_name} />
@@ -361,30 +374,30 @@ Risk Level: [Critical / High / Medium / Low]
           )}
         </SectionCard>
 
-        {/* ── Notes ─────────────────────────────────────────────────────────── */}
+        {/* -- Notes ------------------------------------------------------ */}
         {accident.notes ? (
           <SectionCard title={t('accident.notesLabel')} icon="chatbubble-ellipses-outline">
-            <Text style={styles.descText}>{accident.notes}</Text>
+            <AppText variant="body" color="secondary">{accident.notes}</AppText>
           </SectionCard>
         ) : null}
 
-        {/* ── Deep claims module: closure, claim/responsibility, parts, log ──── */}
+        {/* -- Deep claims module: closure, claim/responsibility, parts, log -- */}
         <AccidentClaimsPanel accident={accident} onChanged={load} />
 
-        {/* ── Photo gallery ──────────────────────────────────────────────────── */}
+        {/* -- Photo gallery ---------------------------------------------- */}
         {photos.length > 0 && (
           <SectionCard title={`${t('accident.photosSection')} (${photos.length})`} icon="images-outline">
             <View style={styles.photoGrid}>
               {photos.map((uri, idx) => (
                 <TouchableOpacity
                   key={idx}
-                  style={styles.photoThumb}
+                  style={[styles.photoThumb, { backgroundColor: c.surfaceSunken }]}
                   onPress={() => setLightboxIndex(idx)}
                   activeOpacity={0.85}
                 >
                   <Image source={{ uri }} style={styles.photoImg} resizeMode="cover" />
                   <View style={styles.photoNum}>
-                    <Text style={styles.photoNumText}>{idx + 1}</Text>
+                    <AppText variant="micro" style={{ color: '#fff' }}>{idx + 1}</AppText>
                   </View>
                   <View style={styles.photoZoomHint}>
                     <Ionicons name="expand-outline" size={12} color="#fff" />
@@ -395,15 +408,15 @@ Risk Level: [Critical / High / Medium / Low]
           </SectionCard>
         )}
 
-        {/* ── Activity / Audit (admin / manager / director only) ─────────────── */}
+        {/* -- Activity / Audit (admin / manager / director only) --------- */}
         {canSeeAudit && auditLog.length > 0 && (
           <SectionCard title="Activity - who changed what" icon="shield-checkmark-outline">
             {auditLog.map((row, i) => {
               const actionColor =
-                row.action === 'status_change' ? '#3b82f6'
-                : row.action === 'delete'      ? '#dc2626'
-                : row.action?.startsWith('part_') ? '#7c3aed'
-                : '#16a34a'
+                row.action === 'status_change' ? c.info.base
+                : row.action === 'delete'      ? c.danger.base
+                : row.action?.startsWith('part_') ? theme.tint.violet.fg
+                : c.success.base
               const d = describeAuditRow(row)
 
               return (
@@ -411,19 +424,19 @@ Risk Level: [Critical / High / Medium / Low]
                   <View style={[styles.auditDot, { backgroundColor: actionColor }]} />
                   <View style={{ flex: 1, gap: 2 }}>
                     <View style={styles.auditTop}>
-                      <Text style={[styles.auditAction, { color: actionColor }]}>{d.title}</Text>
-                      <Text style={styles.auditTime}>
+                      <AppText variant="caption" style={{ color: actionColor }}>{d.title}</AppText>
+                      <AppText variant="micro" color="muted">
                         {new Date(row.changed_at).toLocaleDateString()} {new Date(row.changed_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                      </Text>
+                      </AppText>
                     </View>
-                    <Text style={styles.auditActor}>
-                      <Ionicons name="person-outline" size={10} color="#94a3b8" /> {row.actor_name ?? 'User'}
-                    </Text>
-                    {d.summary && <Text style={styles.auditDetail}>{d.summary}</Text>}
+                    <AppText variant="micro" color="muted">
+                      <Ionicons name="person-outline" size={10} color={c.textMuted} /> {row.actor_name ?? 'User'}
+                    </AppText>
+                    {d.summary && <AppText variant="micro" color="secondary">{d.summary}</AppText>}
                     {d.lines.map((l, li) => (
-                      <Text key={li} style={styles.auditDetail}>
-                        {l.label}: <Text style={{ color: '#dc2626' }}>{l.from}</Text> → <Text style={{ color: '#16a34a' }}>{l.to}</Text>
-                      </Text>
+                      <AppText key={li} variant="micro" color="secondary">
+                        {l.label}: <AppText variant="micro" style={{ color: c.danger.base }}>{l.from}</AppText> to <AppText variant="micro" style={{ color: c.success.base }}>{l.to}</AppText>
+                      </AppText>
                     ))}
                   </View>
                 </View>
@@ -435,101 +448,101 @@ Risk Level: [Critical / High / Medium / Low]
         <View style={{ height: canChangeStatus ? 96 : 36 }} />
       </ScrollView>
 
-      {/* ── AI Analyze FAB (admin / manager / director) ───────────────────────── */}
+      {/* -- AI Analyze FAB (admin / manager / director) ------------------- */}
       {canChangeStatus && (
-        <View style={styles.fabBar}>
+        <View style={[styles.fabBar, { backgroundColor: c.surface, borderTopColor: c.border }]}>
           <TouchableOpacity
-            style={[styles.analyzeBtn, analyzing && styles.analyzeBtnLoading]}
+            style={[styles.analyzeBtn, { backgroundColor: analyzing ? theme.tint.violet.fg + 'AA' : theme.tint.violet.fg }]}
             onPress={analyzeWithAI}
             disabled={analyzing}
             activeOpacity={0.85}
           >
             {analyzing
-              ? <><ActivityIndicator size="small" color="#fff" /><Text style={styles.analyzeBtnText}>Analyzing...</Text></>
-              : <><Ionicons name="sparkles-outline" size={18} color="#fff" /><Text style={styles.analyzeBtnText}>Analyze with AI</Text></>
+              ? <><ActivityIndicator size="small" color="#fff" /><AppText variant="bodyStrong" style={styles.analyzeBtnText}>Analyzing...</AppText></>
+              : <><Ionicons name="sparkles-outline" size={18} color="#fff" /><AppText variant="bodyStrong" style={styles.analyzeBtnText}>Analyze with AI</AppText></>
             }
           </TouchableOpacity>
         </View>
       )}
 
-      {/* ── AI Result Modal ───────────────────────────────────────────────────── */}
+      {/* -- AI Result Modal --------------------------------------------- */}
       <Modal
         visible={showAiModal}
         transparent
         animationType="slide"
         onRequestClose={() => setShowAiModal(false)}
       >
-        <View style={styles.aiModalBackdrop}>
-          <View style={styles.aiModalSheet}>
-            <View style={styles.modalHandle} />
-            <View style={styles.aiModalHeader}>
-              <View style={styles.aiModalIcon}>
-                <Ionicons name="sparkles" size={18} color="#7c3aed" />
+        <View style={[styles.modalBackdrop, { backgroundColor: c.overlay }]}>
+          <View style={[styles.aiModalSheet, { backgroundColor: c.surface }]}>
+            <View style={[styles.modalHandle, { backgroundColor: c.borderStrong }]} />
+            <View style={[styles.aiModalHeader, { borderBottomColor: c.border }]}>
+              <View style={[styles.aiModalIcon, { backgroundColor: theme.tint.violet.bg }]}>
+                <Ionicons name="sparkles" size={18} color={theme.tint.violet.fg} />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={styles.aiModalTitle}>AI Accident Analysis</Text>
-                <Text style={styles.aiModalSub}>Tyre Engineer Agent · {accident?.accident_type?.replace('_', ' ')}</Text>
+                <AppText variant="title">AI Accident Analysis</AppText>
+                <AppText variant="micro" color="muted" style={{ textTransform: 'capitalize' }}>Tyre Engineer Agent - {accident?.accident_type?.replace('_', ' ')}</AppText>
               </View>
               <TouchableOpacity onPress={() => setShowAiModal(false)}>
-                <Ionicons name="close-circle-outline" size={24} color="#94a3b8" />
+                <Ionicons name="close-circle-outline" size={24} color={c.textMuted} />
               </TouchableOpacity>
             </View>
             <ScrollView style={styles.aiModalBody} showsVerticalScrollIndicator={false}>
               {analyzing || !aiResult
                 ? <View style={styles.aiLoading}>
-                    <ActivityIndicator size="large" color="#7c3aed" />
-                    <Text style={styles.aiLoadingText}>Analyzing accident data...</Text>
+                    <ActivityIndicator size="large" color={theme.tint.violet.fg} />
+                    <AppText variant="caption" color="muted">Analyzing accident data...</AppText>
                   </View>
-                : <Text style={styles.aiResultText}>{aiResult}</Text>
+                : <AppText variant="body" color="secondary">{aiResult}</AppText>
               }
-              <View style={{ height: 24 }} />
+              <View style={{ height: spacing['2xl'] }} />
             </ScrollView>
           </View>
         </View>
       </Modal>
 
-      {/* ── Status Modal ──────────────────────────────────────────────────────── */}
+      {/* -- Status Modal ------------------------------------------------ */}
       <Modal
         visible={showStatusModal}
         transparent
         animationType="slide"
         onRequestClose={() => setShowStatusModal(false)}
       >
-        <TouchableOpacity style={styles.modalBackdrop} activeOpacity={1} onPress={() => setShowStatusModal(false)}>
-          <View style={styles.modalSheet}>
-            <View style={styles.modalHandle} />
-            <Text style={styles.modalTitle}>Update Status</Text>
-            <Text style={styles.modalSub}>Change the investigation status of this report</Text>
+        <TouchableOpacity style={[styles.modalBackdrop, { backgroundColor: c.overlay }]} activeOpacity={1} onPress={() => setShowStatusModal(false)}>
+          <View style={[styles.modalSheet, { backgroundColor: c.surface }]}>
+            <View style={[styles.modalHandle, { backgroundColor: c.borderStrong }]} />
+            <AppText variant="h3">Update Status</AppText>
+            <AppText variant="caption" color="muted" style={{ marginBottom: spacing.xs }}>Change the investigation status of this report</AppText>
             {STATUS_OPTIONS.map(opt => {
-              const c      = STATUS_COLORS[opt]
+              const sc     = statusColor(theme, STATUS_KIND[opt])
               const active = opt === accident.status
-              const icons  = { reported: 'flag-outline', under_review: 'search-outline', closed: 'checkmark-circle-outline' }
+              const icons: Record<AccidentStatus, IconName> = { reported: 'flag-outline', under_review: 'search-outline', closed: 'checkmark-circle-outline' }
               return (
                 <TouchableOpacity
                   key={opt}
-                  style={[styles.statusOption, active && { backgroundColor: c + '14' }]}
+                  style={[styles.statusOption, active && { backgroundColor: sc.soft }]}
                   onPress={() => updateStatus(opt)}
                 >
-                  <View style={[styles.statusOptionIcon, { backgroundColor: c + '18' }]}>
-                    <Ionicons name={icons[opt] as any} size={16} color={c} />
+                  <View style={[styles.statusOptionIcon, { backgroundColor: sc.soft }]}>
+                    <Ionicons name={icons[opt]} size={17} color={sc.base} />
                   </View>
                   <View style={{ flex: 1 }}>
-                    <Text style={[styles.statusOptionText, { color: active ? c : '#374151' }]}>
+                    <AppText variant="bodyStrong" style={{ color: active ? sc.on : c.textSecondary }}>
                       {t(`accident.statuses.${opt}`)}
-                    </Text>
+                    </AppText>
                   </View>
-                  {active && <Ionicons name="checkmark-circle" size={20} color={c} />}
+                  {active && <Ionicons name="checkmark-circle" size={20} color={sc.base} />}
                 </TouchableOpacity>
               )
             })}
-            <TouchableOpacity style={styles.modalCancel} onPress={() => setShowStatusModal(false)}>
-              <Text style={styles.modalCancelText}>{t('common.cancel')}</Text>
+            <TouchableOpacity style={[styles.modalCancel, { backgroundColor: c.surfaceAlt }]} onPress={() => setShowStatusModal(false)}>
+              <AppText variant="bodyStrong" color="secondary">{t('common.cancel')}</AppText>
             </TouchableOpacity>
           </View>
         </TouchableOpacity>
       </Modal>
 
-      {/* ── Lightbox ──────────────────────────────────────────────────────────── */}
+      {/* -- Lightbox ---------------------------------------------------- */}
       <Modal
         visible={lightboxIndex !== null}
         transparent
@@ -547,7 +560,7 @@ Risk Level: [Critical / High / Medium / Low]
                 style={styles.lightboxImage}
                 resizeMode="contain"
               />
-              <Text style={styles.lightboxCounter}>{lightboxIndex + 1} / {photos.length}</Text>
+              <AppText style={styles.lightboxCounter}>{lightboxIndex + 1} / {photos.length}</AppText>
               <View style={styles.lightboxNav}>
                 {lightboxIndex > 0 && (
                   <TouchableOpacity
@@ -574,235 +587,188 @@ Risk Level: [Critical / High / Medium / Low]
           )}
         </View>
       </Modal>
-    </SafeAreaView>
+    </Screen>
   )
 }
 
-// ── Sub-components ─────────────────────────────────────────────────────────────
+// -- Sub-components ---------------------------------------------------------------
 
-function SectionCard({ title, icon, children }: { title: string; icon: string; children: React.ReactNode }) {
+function SectionCard({ title, icon, children }: { title: string; icon: IconName; children: React.ReactNode }) {
+  const { theme } = useTheme()
+  const styles = useMemo(() => createStyles(theme), [theme])
   return (
-    <View style={styles.section}>
+    <Card padded={false}>
       <View style={styles.sectionHeader}>
-        <Ionicons name={icon as any} size={15} color="#dc2626" />
-        <Text style={styles.sectionTitle}>{title}</Text>
+        <Ionicons name={icon} size={15} color={theme.color.danger.base} />
+        <AppText variant="label" style={{ color: theme.color.text }}>{title}</AppText>
       </View>
       <View style={styles.sectionBody}>{children}</View>
-    </View>
+    </Card>
   )
 }
 
 function InfoRow({
   label, value, highlight = false,
 }: { label: string; value: string; highlight?: boolean }) {
+  const { theme } = useTheme()
+  const styles = useMemo(() => createStyles(theme), [theme])
   return (
     <View style={styles.infoRow}>
-      <Text style={styles.infoLabel}>{label}</Text>
-      <Text style={[styles.infoValue, highlight && styles.infoValueHighlight]}>{value}</Text>
+      <AppText variant="caption" color="muted" style={{ flex: 1 }}>{label}</AppText>
+      <AppText
+        variant="bodyStrong"
+        style={[styles.infoValue, { color: highlight ? theme.color.danger.base : theme.color.textSecondary }]}
+      >
+        {value}
+      </AppText>
     </View>
   )
 }
 
-function MetaItem({ icon, label, bold }: { icon: string; label: string; bold?: boolean }) {
+function MetaItem({ icon, label, bold }: { icon: IconName; label: string; bold?: boolean }) {
+  const { theme } = useTheme()
   return (
-    <View style={styles.metaItem}>
-      <Ionicons name={icon as any} size={13} color="#94a3b8" />
-      <Text style={[styles.metaLabel, bold && { fontWeight: '800', color: '#0f172a' }]}>{label}</Text>
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 7 }}>
+      <Ionicons name={icon} size={13} color={theme.color.textMuted} />
+      <AppText variant={bold ? 'bodyStrong' : 'body'} color={bold ? 'text' : 'secondary'} style={{ flex: 1 }}>{label}</AppText>
     </View>
   )
 }
 
-// ── Styles ─────────────────────────────────────────────────────────────────────
+// -- Styles -----------------------------------------------------------------------
 
 const PHOTO_SIZE = (SCREEN_WIDTH - 32 - 32 - 16) / 3
 
-const styles = StyleSheet.create({
-  safe:    { flex: 1, backgroundColor: '#fff5f5' },
-  loader:  { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  scroll:  { flex: 1 },
-  content: { padding: 16, gap: 14 },
+function createStyles(theme: Theme) {
+  const c = theme.color
+  return StyleSheet.create({
+    loader:  { flex: 1, alignItems: 'center', justifyContent: 'center' },
+    scroll:  { flex: 1 },
+    content: { padding: spacing.lg, gap: spacing.md, paddingBottom: spacing['4xl'] },
 
-  // Header
-  header: {
-    flexDirection: 'row', alignItems: 'center',
-    paddingHorizontal: 16, paddingVertical: 12,
-    backgroundColor: '#fff',
-    borderBottomWidth: 1, borderBottomColor: 'rgba(0,0,0,0.07)',
-    gap: 10,
-  },
-  backBtn: {
-    width: 36, height: 36, borderRadius: 18,
-    alignItems: 'center', justifyContent: 'center',
-    backgroundColor: '#f1f5f9',
-  },
-  deleteBtn: {
-    width: 36, height: 36, borderRadius: 18,
-    alignItems: 'center', justifyContent: 'center',
-    backgroundColor: '#fef2f2',
-  },
-  pdfBtn: {
-    width: 36, height: 36, borderRadius: 18,
-    alignItems: 'center', justifyContent: 'center',
-    backgroundColor: '#fef2f2',
-  },
-  headerTitle: { fontSize: 17, fontWeight: '800', color: '#0f172a' },
-  headerSub:   { fontSize: 11, color: '#94a3b8', marginTop: 1 },
+    // Header
+    header: {
+      flexDirection: 'row', alignItems: 'center',
+      paddingHorizontal: spacing.lg, paddingVertical: spacing.md,
+      backgroundColor: c.surface,
+      borderBottomWidth: 1, borderBottomColor: c.border,
+      gap: spacing.sm,
+    },
+    iconBtn: {
+      width: 38, height: 38, borderRadius: 12,
+      alignItems: 'center', justifyContent: 'center',
+      backgroundColor: c.surfaceAlt,
+    },
+    statusBadge: {
+      flexDirection: 'row', alignItems: 'center', gap: 5,
+      paddingHorizontal: spacing.md, paddingVertical: spacing.sm,
+      borderRadius: radius.pill, borderWidth: 1,
+    },
 
-  statusBadge: {
-    flexDirection: 'row', alignItems: 'center', gap: 5,
-    paddingHorizontal: 10, paddingVertical: 6,
-    borderRadius: 20, borderWidth: 1,
-  },
-  statusDot:  { width: 7, height: 7, borderRadius: 4 },
-  statusText: { fontSize: 11, fontWeight: '700' },
+    // Hero
+    heroTop: { flexDirection: 'row', gap: spacing.sm, flexWrap: 'wrap', alignItems: 'center' },
+    typeChip: {
+      flexDirection: 'row', alignItems: 'center', gap: 5,
+      paddingHorizontal: spacing.md, paddingVertical: 5,
+      borderRadius: radius.pill,
+    },
+    heroMeta:  { gap: 6 },
 
-  // Hero
-  heroCard: {
-    backgroundColor: '#fff', borderRadius: 14,
-    padding: 16, gap: 12,
-    shadowColor: '#000', shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.06, shadowRadius: 4, elevation: 2,
-  },
-  heroTop: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
-  sevBadge: {
-    flexDirection: 'row', alignItems: 'center', gap: 5,
-    paddingHorizontal: 10, paddingVertical: 5,
-    borderRadius: 20, borderWidth: 1,
-  },
-  sevBadgeText: { fontSize: 11, fontWeight: '800' },
-  typeChip: {
-    flexDirection: 'row', alignItems: 'center', gap: 5,
-    paddingHorizontal: 10, paddingVertical: 5,
-    borderRadius: 20, backgroundColor: '#f1f5f9',
-  },
-  typeChipText: { fontSize: 11, fontWeight: '600', color: '#475569' },
-  heroMeta:  { gap: 6 },
-  metaItem:  { flexDirection: 'row', alignItems: 'center', gap: 7 },
-  metaLabel: { fontSize: 13, color: '#475569', fontWeight: '500', flex: 1 },
+    // Sections
+    sectionHeader: {
+      flexDirection: 'row', alignItems: 'center', gap: spacing.sm,
+      paddingHorizontal: spacing.lg, paddingTop: spacing.md, paddingBottom: spacing.sm + 2,
+      borderBottomWidth: 1, borderBottomColor: c.border,
+    },
+    sectionBody:  { padding: spacing.lg, gap: spacing.md },
 
-  // Sections
-  section: {
-    backgroundColor: '#fff', borderRadius: 14,
-    shadowColor: '#000', shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05, shadowRadius: 4, elevation: 2,
-    overflow: 'hidden',
-  },
-  sectionHeader: {
-    flexDirection: 'row', alignItems: 'center', gap: 8,
-    paddingHorizontal: 16, paddingTop: 14, paddingBottom: 10,
-    borderBottomWidth: 1, borderBottomColor: '#f1f5f9',
-  },
-  sectionTitle: { fontSize: 13, fontWeight: '700', color: '#0f172a' },
-  sectionBody:  { padding: 16, gap: 10 },
+    // Info rows
+    infoRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: spacing.md },
+    infoValue:{ textAlign: 'right', flex: 2 },
+    blockField: { gap: spacing.xs, marginTop: spacing.xs },
 
-  // Info rows
-  infoRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 },
-  infoLabel:{ fontSize: 12, color: '#94a3b8', fontWeight: '600', flex: 1 },
-  infoValue:{ fontSize: 13, color: '#374151', fontWeight: '600', textAlign: 'right', flex: 2 },
-  infoValueHighlight: { color: '#dc2626', fontWeight: '800' },
+    // Photos
+    photoGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
+    photoThumb: {
+      width: PHOTO_SIZE, height: PHOTO_SIZE,
+      borderRadius: radius.md, overflow: 'hidden', position: 'relative',
+    },
+    photoImg: { width: '100%', height: '100%' },
+    photoNum: {
+      position: 'absolute', bottom: 4, right: 4,
+      backgroundColor: 'rgba(0,0,0,0.6)',
+      borderRadius: 8, paddingHorizontal: 5, paddingVertical: 1,
+    },
+    photoZoomHint: {
+      position: 'absolute', top: 4, right: 4,
+      backgroundColor: 'rgba(0,0,0,0.5)',
+      borderRadius: 6, padding: 3,
+    },
 
-  blockField: { gap: 4, marginTop: 4 },
-  blockLabel: { fontSize: 12, color: '#94a3b8', fontWeight: '600' },
-  blockText:  { fontSize: 13, color: '#374151', lineHeight: 20 },
-  descText:   { fontSize: 13, color: '#374151', lineHeight: 21 },
+    // Audit trail
+    auditRow: { flexDirection: 'row', gap: spacing.md, paddingVertical: spacing.sm },
+    auditRowBorder: { borderBottomWidth: 1, borderBottomColor: c.border },
+    auditDot: { width: 8, height: 8, borderRadius: 4, marginTop: 5 },
+    auditTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
 
-  // Photos
-  photoGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  photoThumb: {
-    width: PHOTO_SIZE, height: PHOTO_SIZE,
-    borderRadius: 10, overflow: 'hidden',
-    backgroundColor: '#f1f5f9', position: 'relative',
-  },
-  photoImg: { width: '100%', height: '100%' },
-  photoNum: {
-    position: 'absolute', bottom: 4, right: 4,
-    backgroundColor: 'rgba(0,0,0,0.55)',
-    borderRadius: 8, paddingHorizontal: 5, paddingVertical: 1,
-  },
-  photoNumText: { fontSize: 10, color: '#fff', fontWeight: '700' },
-  photoZoomHint: {
-    position: 'absolute', top: 4, right: 4,
-    backgroundColor: 'rgba(0,0,0,0.45)',
-    borderRadius: 6, padding: 3,
-  },
+    // Modals shared
+    modalBackdrop: { flex: 1, justifyContent: 'flex-end' },
+    modalSheet: {
+      borderTopLeftRadius: radius['2xl'], borderTopRightRadius: radius['2xl'],
+      padding: spacing.xl, paddingBottom: 36, gap: 6,
+    },
+    modalHandle: {
+      width: 40, height: 4, borderRadius: 2,
+      alignSelf: 'center', marginBottom: spacing.md,
+    },
+    statusOption: {
+      flexDirection: 'row', alignItems: 'center', gap: spacing.md,
+      paddingVertical: spacing.md, paddingHorizontal: spacing.md,
+      borderRadius: radius.md, marginBottom: 2,
+    },
+    statusOptionIcon: { width: 36, height: 36, borderRadius: radius.sm, alignItems: 'center', justifyContent: 'center' },
+    modalCancel: {
+      marginTop: spacing.sm, paddingVertical: spacing.md, borderRadius: radius.md,
+      alignItems: 'center',
+    },
 
-  // Audit trail
-  auditRow: { flexDirection: 'row', gap: 10, paddingVertical: 8 },
-  auditRowBorder: { borderBottomWidth: 1, borderBottomColor: '#f1f5f9' },
-  auditDot: { width: 8, height: 8, borderRadius: 4, marginTop: 5 },
-  auditTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  auditAction: { fontSize: 12, fontWeight: '700' },
-  auditTime:   { fontSize: 11, color: '#94a3b8' },
-  auditDetail: { fontSize: 11, color: '#64748b', marginTop: 1 },
-  auditActor:  { fontSize: 11, color: '#94a3b8', fontWeight: '600' },
+    // AI Analyze FAB
+    fabBar: {
+      position: 'absolute', bottom: 0, left: 0, right: 0,
+      paddingHorizontal: spacing.lg, paddingBottom: Platform.OS === 'ios' ? 24 : spacing.lg, paddingTop: spacing.md,
+      borderTopWidth: 1,
+    },
+    analyzeBtn: {
+      flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.sm,
+      borderRadius: radius.md, paddingVertical: spacing.md,
+    },
+    analyzeBtnText: { color: '#fff' },
 
-  // Status modal
-  modalBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' },
-  modalSheet: {
-    backgroundColor: '#fff', borderTopLeftRadius: 22, borderTopRightRadius: 22,
-    padding: 20, paddingBottom: 36, gap: 6,
-  },
-  modalHandle: {
-    width: 40, height: 4, borderRadius: 2,
-    backgroundColor: '#e2e8f0', alignSelf: 'center', marginBottom: 12,
-  },
-  modalTitle: { fontSize: 16, fontWeight: '800', color: '#0f172a' },
-  modalSub:   { fontSize: 12, color: '#94a3b8', marginBottom: 4 },
-  statusOption: {
-    flexDirection: 'row', alignItems: 'center', gap: 12,
-    paddingVertical: 13, paddingHorizontal: 12,
-    borderRadius: 12, marginBottom: 2,
-  },
-  statusOptionIcon: { width: 34, height: 34, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
-  statusOptionText: { fontSize: 14, fontWeight: '600' },
-  modalCancel: {
-    marginTop: 8, paddingVertical: 14, borderRadius: 12,
-    backgroundColor: '#f1f5f9', alignItems: 'center',
-  },
-  modalCancelText: { fontSize: 14, fontWeight: '700', color: '#64748b' },
+    // AI Modal
+    aiModalSheet: {
+      borderTopLeftRadius: radius['2xl'], borderTopRightRadius: radius['2xl'],
+      maxHeight: '85%', paddingBottom: Platform.OS === 'ios' ? 36 : spacing['2xl'],
+    },
+    aiModalHeader: {
+      flexDirection: 'row', alignItems: 'center', gap: spacing.md,
+      paddingHorizontal: spacing.xl, paddingTop: spacing.lg, paddingBottom: spacing.md,
+      borderBottomWidth: 1,
+    },
+    aiModalIcon: { width: 38, height: 38, borderRadius: radius.sm, alignItems: 'center', justifyContent: 'center' },
+    aiModalBody:  { paddingHorizontal: spacing.xl, paddingTop: spacing.md },
+    aiLoading:    { alignItems: 'center', paddingVertical: 48, gap: spacing.md },
 
-  // AI Analyze FAB
-  fabBar: {
-    position: 'absolute', bottom: 0, left: 0, right: 0,
-    paddingHorizontal: 16, paddingBottom: Platform.OS === 'ios' ? 24 : 16, paddingTop: 12,
-    backgroundColor: '#fff', borderTopWidth: 1, borderTopColor: '#f1f5f9',
-  },
-  analyzeBtn: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
-    backgroundColor: '#7c3aed', borderRadius: 14, paddingVertical: 14,
-  },
-  analyzeBtnLoading: { backgroundColor: '#a78bfa' },
-  analyzeBtnText: { fontSize: 15, fontWeight: '800', color: '#fff' },
-
-  // AI Modal
-  aiModalBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
-  aiModalSheet: {
-    backgroundColor: '#fff', borderTopLeftRadius: 24, borderTopRightRadius: 24,
-    maxHeight: '85%', paddingBottom: Platform.OS === 'ios' ? 36 : 24,
-  },
-  aiModalHeader: {
-    flexDirection: 'row', alignItems: 'center', gap: 10,
-    paddingHorizontal: 20, paddingTop: 16, paddingBottom: 12,
-    borderBottomWidth: 1, borderBottomColor: '#f1f5f9',
-  },
-  aiModalIcon: { width: 36, height: 36, borderRadius: 10, backgroundColor: '#f5f3ff', alignItems: 'center', justifyContent: 'center' },
-  aiModalTitle: { fontSize: 15, fontWeight: '800', color: '#0f172a' },
-  aiModalSub:   { fontSize: 11, color: '#94a3b8', marginTop: 1, textTransform: 'capitalize' },
-  aiModalBody:  { paddingHorizontal: 20, paddingTop: 14 },
-  aiLoading:    { alignItems: 'center', paddingVertical: 48, gap: 12 },
-  aiLoadingText:{ fontSize: 13, color: '#94a3b8' },
-  aiResultText: { fontSize: 13, color: '#374151', lineHeight: 22 },
-
-  // Lightbox
-  lightbox: {
-    flex: 1, backgroundColor: 'rgba(0,0,0,0.96)',
-    alignItems: 'center', justifyContent: 'center',
-  },
-  lightboxClose:   { position: 'absolute', top: 52, right: 20, zIndex: 10 },
-  lightboxImage:   { width: SCREEN_WIDTH, height: SCREEN_WIDTH * 1.2 },
-  lightboxCounter: { position: 'absolute', bottom: 60, fontSize: 14, color: 'rgba(255,255,255,0.6)', fontWeight: '600' },
-  lightboxNav:     { position: 'absolute', bottom: 44, width: '100%' },
-  lightboxNavBtn:  { position: 'absolute', left: 16 },
-  lightboxNavRight:{ left: undefined, right: 16 },
-  lightboxNavInner:{ backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: 24, padding: 10 },
-})
+    // Lightbox
+    lightbox: {
+      flex: 1, backgroundColor: 'rgba(0,0,0,0.96)',
+      alignItems: 'center', justifyContent: 'center',
+    },
+    lightboxClose:   { position: 'absolute', top: 52, right: 20, zIndex: 10 },
+    lightboxImage:   { width: SCREEN_WIDTH, height: SCREEN_WIDTH * 1.2 },
+    lightboxCounter: { position: 'absolute', bottom: 60, color: 'rgba(255,255,255,0.6)' },
+    lightboxNav:     { position: 'absolute', bottom: 44, width: '100%' },
+    lightboxNavBtn:  { position: 'absolute', left: 16 },
+    lightboxNavRight:{ left: undefined, right: 16 },
+    lightboxNavInner:{ backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: 24, padding: 10 },
+  })
+}

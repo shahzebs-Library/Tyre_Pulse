@@ -1177,14 +1177,14 @@ function makeStyles(theme: Theme) {
   progressLabel: { fontSize: 12, fontWeight: '700', color: c.textSecondary },
   progressCount: { fontSize: 13, fontWeight: '800', color: c.text },
   progressTrack: {
-    height: 8,
-    borderRadius: 4,
+    height: 10,
+    borderRadius: 5,
     backgroundColor: c.surfaceSunken,
     overflow: 'hidden',
   },
   progressFill: {
-    height: 8,
-    borderRadius: 4,
+    height: 10,
+    borderRadius: 5,
     backgroundColor: c.warning.base,
   },
   positionHint: {

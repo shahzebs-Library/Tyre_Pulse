@@ -282,6 +282,27 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
   per-fitment ranked comparison + engineer rationale + savings + realized-CPK column, brand-guidance fallback
   when no quotes. Tests: tyreSpecCatalog(29), tyreSpecPolicy(7), tyreValueAdvisor(17). **(V250 now taken by the Incident Report upgrade; next free V251.)**
 
+### Board Overview report + shared report palette (2026-07-16) — boss wants ONE colourful, trend-led report
+- **Single consolidated report = `src/pages/BoardOverview.jsx` (/board-overview, RoleRoute Admin/Manager/
+  Director, nav "Reports & Executive").** Layout order (user-chosen): KPIs -> Trends -> Charts ->
+  Recommendations, each a section with an on/off TOGGLE persisted to localStorage `boardOverview.sections.v1`.
+  Consolidates EVERY module: fleet, tyres/CPK, tyre spend, accidents, claims, inspections, work orders, stock.
+  Trend-led: 12-month line charts (tyre spend, accidents, claims claimed-vs-recovered, inspections). Breakdown
+  doughnut/bar charts (accident severity, claim status, accidents/tyres by site). Honest recommendations.
+  Export PDF (captureChartOnPaper -> jsPDF). Loading/empty/error states; no em/en dashes.
+- **Pure engine `src/lib/boardOverview.js`** (do NOT rebuild KPI maths): `months12/bucketMonthly` (12-month
+  buckets), `buildBoardKpis` (REUSES kpiEngine.computeAllKpis + claimsAnalytics.analyzeClaims - null when not
+  computable), `buildTrends`/`buildBreakdowns` (emit chart data WITHOUT colours - page applies palette),
+  `buildBoardRecommendations`. Tests boardOverview.test.js (6).
+- **Shared palette `src/lib/reportColors.js` (in main via PR #35)** = THE one report colour system: `CATEGORICAL`
+  (12 vivid hues), `ACCENTS`, `TREND_LINES`, `colorAt/categorical/withAlpha`, non-mutating `stylize(data, kind)`
+  ('bar'|'doughnut'|'pie' per-point, 'line'|'area' per-dataset). Legible on dark UI + white PDF. Tests
+  reportColors.test.js (6). Data loading uses fetchAllPages + the listKpi* / listAllAccidentsForPage /
+  listWorkOrdersForPage / listStockRecords services (country-scoped).
+- **STILL TODO (told user):** the boss also wants the shared palette applied to ALL report exports app-wide
+  (Executive / Accident report / Analytics / scheduled). That is a separate sweep across many chart configs -
+  wave 2. BoardOverview + reportColors are wave 1.
+
 ### Incident Report screen upgrade (2026-07-16) — from the user's field spec (xlsx)
 - The user's "incident_Report_Screen" spec was a BEHAVIOR upgrade list on the EXISTING accident form
   (`src/pages/Accidents.jsx`); all fields already existed. Wave 1 implemented (build+tests green):

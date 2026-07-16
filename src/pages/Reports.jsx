@@ -12,6 +12,7 @@ import { applyCountry } from '../lib/countryFilter'
 import { fetchAllPages } from '../lib/fetchAll'
 import EmailReportModal from '../components/EmailReportModal'
 import { formatDate } from '../lib/formatters'
+import { listPmPrograms, listPmServiceRecords } from '../lib/api/pmPrograms'
 
 const REPORT_TYPES = [
   { id: 'Vehicle History',       key: 'vehicleHistory',       desc: 'All tyre changes per vehicle, grouped by asset',  table: 'tyre_records' },
@@ -19,7 +20,30 @@ const REPORT_TYPES = [
   { id: 'Risk Summary',          key: 'riskSummary',          desc: 'High and Critical risk records',                   table: 'tyre_records filtered' },
   { id: 'Inspection Report',     key: 'inspectionReport',     desc: 'All inspections with findings',                    table: 'inspections' },
   { id: 'Tyre Replacement Log',  key: 'tyreReplacementLog',   desc: 'Chronological replacement list',                   table: 'tyre_records ordered by date' },
+  { id: 'Preventive Maintenance', key: 'preventiveMaintenance', desc: 'PM programs with due date, priority and status',   table: 'pm_programs' },
+  { id: 'PM Service History',     key: 'pmServiceHistory',      desc: 'Completed PM services with parts and labour cost', table: 'pm_service_records' },
 ]
+
+// Translate with a safe fallback: translate() returns the raw key path when a
+// namespace entry is missing, so callers that add a report type without a
+// matching locale entry still render a human label instead of "reports.x.y".
+function tOr(t, key, fallback) {
+  const s = t(key)
+  return s === key ? (fallback ?? key) : s
+}
+
+// Human-readable recurring interval for a PM program (e.g. "3 months",
+// "10000 km"). Prefers the calendar interval, then the meter interval; empty
+// string when neither is defined (honest blank, no fabricated cadence).
+function pmIntervalSummary(p) {
+  const v = p?.interval_value
+  if (v != null && v !== '' && p?.interval_type) return `${v} ${p.interval_type}`
+  if (p?.meter_interval != null && p?.meter_interval !== '' && p?.meter_source && p.meter_source !== 'none') {
+    const unit = p.meter_source === 'engine_hours' ? 'hours' : 'km'
+    return `${p.meter_interval} ${unit}`
+  }
+  return ''
+}
 
 // Looks up the translation key for a REPORT_TYPES.id (used wherever the raw
 // reportType string is shown as UI chrome, without altering the id itself).
@@ -33,6 +57,8 @@ const REPORT_COLUMNS = {
   'Risk Summary':         ['issue_date','asset_no','brand','serial_no','site','risk_level','description'],
   'Inspection Report':    ['inspection_date','asset_no','inspection_type','site','findings','inspector','status'],
   'Tyre Replacement Log': ['issue_date','asset_no','brand','serial_no','qty','cost','site','country'],
+  'Preventive Maintenance': ['name','asset_no','asset_category','interval_summary','next_due','next_due_meter','priority','status','assigned_to','site','estimated_cost'],
+  'PM Service History':     ['service_date','asset_no','performed_by','workshop','site','outcome','parts_cost','labour_cost','total_cost','work_order_no','next_due','findings'],
 }
 
 const COLUMN_LABELS = {
@@ -42,6 +68,14 @@ const COLUMN_LABELS = {
   inspection_date: 'Inspection Date', inspection_type: 'Inspection Type', findings: 'Findings',
   inspector: 'Inspector', status: 'Status', qty: 'Qty',
   brands: 'Brands Used', last_date: 'Last Date', high_risk_count: 'High Risk Count',
+  // Preventive Maintenance program columns
+  name: 'Program', asset_category: 'Asset Category', interval_summary: 'Interval',
+  next_due: 'Next Due', next_due_meter: 'Next Due Meter', priority: 'Priority',
+  assigned_to: 'Assigned To', estimated_cost: 'Estimated Cost',
+  // PM Service History columns
+  service_date: 'Service Date', performed_by: 'Performed By', workshop: 'Workshop',
+  outcome: 'Outcome', parts_cost: 'Parts Cost', labour_cost: 'Labour Cost',
+  work_order_no: 'Work Order No',
 }
 
 // Maps the same column keys to reports.json translation keys, used only for
@@ -237,7 +271,24 @@ export default function Reports() {
     try {
       let rows = []
 
-      if (reportType === 'Inspection Report') {
+      if (reportType === 'Preventive Maintenance') {
+        // PM programs are read through the service so a not-yet-migrated table
+        // degrades to [] (honest empty state) instead of throwing. The due-date
+        // (next_due) is filtered by the wizard date range, mirroring how the
+        // other report types scope on their own primary date column.
+        const plans = await listPmPrograms({ country: filterCountry || activeCountry, limit: 100000 })
+        rows = plans
+          .filter(p => !filterSite || String(p.site ?? '').toLowerCase().includes(filterSite.toLowerCase()))
+          .filter(p => !dateFrom   || (p.next_due && p.next_due >= dateFrom))
+          .filter(p => !dateTo     || (p.next_due && p.next_due <= dateTo))
+          .map(p => ({ ...p, interval_summary: pmIntervalSummary(p) }))
+      } else if (reportType === 'PM Service History') {
+        const records = await listPmServiceRecords({ country: filterCountry || activeCountry, limit: 100000 })
+        rows = records
+          .filter(r => !filterSite || String(r.site ?? '').toLowerCase().includes(filterSite.toLowerCase()))
+          .filter(r => !dateFrom   || (r.service_date && r.service_date >= dateFrom))
+          .filter(r => !dateTo     || (r.service_date && r.service_date <= dateTo))
+      } else if (reportType === 'Inspection Report') {
         const buildInsp = () => {
           let q = supabase.from('inspections').select('*')
           // scheduled_date is always populated; inspection_date can be null, so
@@ -427,8 +478,8 @@ export default function Reports() {
                   <FileText size={16} className="text-green-400" />
                 </div>
                 <div>
-                  <p className="text-[var(--text-primary)] font-semibold group-hover:text-green-400 transition-colors">{t(`reports.reportTypes.${rt.key}.label`)}</p>
-                  <p className="text-gray-400 text-sm mt-0.5">{t(`reports.reportTypes.${rt.key}.desc`)}</p>
+                  <p className="text-[var(--text-primary)] font-semibold group-hover:text-green-400 transition-colors">{tOr(t, `reports.reportTypes.${rt.key}.label`, rt.id)}</p>
+                  <p className="text-gray-400 text-sm mt-0.5">{tOr(t, `reports.reportTypes.${rt.key}.desc`, rt.desc)}</p>
                   <p className="text-gray-600 text-xs mt-1">{t('reports.source', { table: rt.table })}</p>
                 </div>
               </div>
@@ -456,7 +507,7 @@ export default function Reports() {
 
           <div className="card space-y-4">
             <h2 className="text-base font-semibold text-[var(--text-primary)]">
-              {t('reports.config.filtersTitle', { reportType: reportTypeKeyFor(reportType) ? t(`reports.reportTypes.${reportTypeKeyFor(reportType)}.label`) : reportType })}
+              {t('reports.config.filtersTitle', { reportType: reportTypeKeyFor(reportType) ? tOr(t, `reports.reportTypes.${reportTypeKeyFor(reportType)}.label`, reportType) : reportType })}
             </h2>
 
             {/* Date shortcut chips */}

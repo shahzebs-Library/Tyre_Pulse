@@ -26,14 +26,16 @@ import {
   Siren, Activity, HeartPulse, Gauge, AlertTriangle, AlertOctagon, ShieldAlert,
   Info, Search, X, Filter, FileSpreadsheet, FileText, ArrowUpRight, CheckCircle2,
   Building2, Layers, TrendingUp, DollarSign, Truck, Wrench, ClipboardCheck, Zap,
-  Package, Boxes, Wind,
+  Package, Boxes, Wind, CalendarClock,
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
 import { useSettings } from '../contexts/SettingsContext'
 import { loadOpsData } from '../lib/api/opsIntelligence'
+import { loadPmDashboard } from '../lib/api/pmPrograms'
+import { summarizePmCompliance } from '../lib/pmSchedule'
 import {
   buildExceptions, summarizeExceptions, buildFleetPulse, buildAnomalyFeed,
-  summarizeAnomalies, buildFinancials, buildExecutiveSummary,
+  buildFinancials, buildExecutiveSummary,
   SEVERITY_META, CATEGORY_META, CATEGORIES,
 } from '../lib/opsIntelligence'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
@@ -75,6 +77,8 @@ const ANOMALY_LABEL = {
   pressure_imbalance: 'Pressure imbalance',
   cost_outlier: 'Cost outlier',
   inspection_gap: 'Inspection gap',
+  pm_overdue: 'PM overdue',
+  pm_due_soon: 'PM due soon',
 }
 
 const fmtMoney = (n) => (n == null ? '—' : Number(n).toLocaleString(undefined, { maximumFractionDigits: 0 }))
@@ -95,6 +99,12 @@ export default function OpsIntelligence() {
   const [categoryFilter, setCategoryFilter] = useState('all')
   const [siteFilter, setSiteFilter] = useState('')
   const [search, setSearch] = useState('')
+
+  // Preventive-maintenance signal — loaded INDEPENDENTLY of the ops scan so a
+  // missing pm_programs table never affects the rest of the page. Tri-state:
+  // null = loading, an object = loaded (plans may be empty), and a load failure
+  // degrades to an empty bundle (honest: nothing extra surfaces when no plans).
+  const [pmData, setPmData] = useState(null)
 
   const load = useCallback(async () => {
     setRefreshing(true); setError('')
@@ -119,18 +129,71 @@ export default function OpsIntelligence() {
     return () => { if (timerRef.current) clearInterval(timerRef.current) }
   }, [load])
 
+  // Independent PM load with a cancel guard so a country switch / unmount cannot
+  // land a stale result. Never throws to the page (empty bundle on failure).
+  useEffect(() => {
+    let cancelled = false
+    setPmData(null)
+    loadPmDashboard({ country: activeCountry })
+      .then((res) => { if (!cancelled) setPmData(res) })
+      .catch(() => { if (!cancelled) setPmData({ plans: [], kmByAsset: {}, hoursByAsset: {} }) })
+    return () => { cancelled = true }
+  }, [activeCountry])
+
   // ── Derived intelligence (pure lib, live clock) ─────────────────────────────
   const exceptions = useMemo(() => (data ? buildExceptions(data, { now }) : []), [data, now])
   const summary = useMemo(() => summarizeExceptions(exceptions), [exceptions])
 
   const pulse = useMemo(() => (data ? buildFleetPulse(data, { now }) : null), [data, now])
   const anomalies = useMemo(() => (data ? buildAnomalyFeed(data, { now }) : []), [data, now])
-  const anomalySummary = useMemo(() => summarizeAnomalies(anomalies), [anomalies])
   const financials = useMemo(() => (data ? buildFinancials(data, { now }) : null), [data, now])
   const executive = useMemo(
     () => (pulse ? buildExecutiveSummary({ pulse, anomalies, financials }, { currency }) : null),
     [pulse, anomalies, financials, currency],
   )
+
+  // ── Preventive-maintenance compliance (independent, pure engine) ────────────
+  const pmCompliance = useMemo(
+    () => (pmData
+      ? summarizePmCompliance(pmData.plans, { now, kmByAsset: pmData.kmByAsset, hoursByAsset: pmData.hoursByAsset })
+      : null),
+    [pmData, now],
+  )
+
+  // PM-derived attention items, shaped like the anomaly feed rows and linked to
+  // the PM Programs module. Only emitted when plans are actually overdue / due
+  // soon, so a fleet with no PM plans shows nothing extra (honest empty state).
+  const pmAnomalies = useMemo(() => {
+    if (!pmCompliance) return []
+    const items = []
+    if (pmCompliance.overdue > 0) {
+      items.push({
+        type: 'pm_overdue',
+        severity: 'critical',
+        title: `${pmCompliance.overdue} preventive maintenance ${pmCompliance.overdue === 1 ? 'plan' : 'plans'} overdue`,
+        detail: 'Overdue preventive maintenance raises breakdown and safety risk. Review and schedule service now.',
+        action: 'Open PM Programs',
+        link: '/pm-programs',
+      })
+    }
+    if (pmCompliance.dueSoon > 0) {
+      items.push({
+        type: 'pm_due_soon',
+        severity: 'warning',
+        title: `${pmCompliance.dueSoon} preventive maintenance ${pmCompliance.dueSoon === 1 ? 'plan' : 'plans'} due soon`,
+        detail: 'These plans reach their service window shortly. Plan workshop capacity ahead of time.',
+        action: 'Open PM Programs',
+        link: '/pm-programs',
+      })
+    }
+    return items
+  }, [pmCompliance])
+
+  // Rendered feed = PM attention items first, then the tyre / pressure / cost /
+  // inspection anomalies. `anomalies` stays untouched for the executive strip.
+  const feedItems = useMemo(() => [...pmAnomalies, ...anomalies], [pmAnomalies, anomalies])
+  const feedTotal = feedItems.length
+  const feedCritical = useMemo(() => feedItems.filter((a) => a.severity === 'critical').length, [feedItems])
 
   const siteOptions = useMemo(
     () => [...new Set(exceptions.map((e) => e.site).filter(Boolean))].sort(),
@@ -290,6 +353,25 @@ export default function OpsIntelligence() {
               <Info size={12} className="mt-0.5 shrink-0" />
               No standalone alerts table in this schema — the critical-risk term uses the count of HIGH-severity exceptions from the scan below.
             </p>
+            {pmCompliance && pmCompliance.active > 0 && (
+              <div className="flex items-center gap-3 p-3 rounded-lg bg-[var(--input-bg)]/50 border border-[var(--input-border)]">
+                <CalendarClock size={18} className={`shrink-0 ${pmCompliance.overdue > 0 ? 'text-red-400' : pmCompliance.dueSoon > 0 ? 'text-amber-400' : 'text-green-400'}`} />
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-medium text-[var(--text-secondary)]">Preventive maintenance</p>
+                  <p className="text-[11px] text-[var(--text-muted)]">
+                    {pmCompliance.compliantPct == null ? 'No active plans' : `${pmCompliance.compliantPct}% compliant`}
+                    {' | '}{pmCompliance.overdue} overdue{' | '}{pmCompliance.dueSoon} due soon{' | '}{pmCompliance.active} active
+                  </p>
+                </div>
+                <button
+                  onClick={() => navigate('/pm-programs')}
+                  className="btn-secondary text-xs inline-flex items-center gap-1 px-2.5 py-1 shrink-0"
+                  title="Open PM Programs"
+                >
+                  Open <ArrowUpRight size={13} />
+                </button>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -321,23 +403,27 @@ export default function OpsIntelligence() {
               <Activity size={15} className="text-amber-400" /> Anomaly feed
             </h3>
             <div className="flex items-center gap-2">
-              {anomalySummary.critical > 0 && (
-                <span className="text-[11px] font-semibold px-2 py-0.5 rounded bg-red-900/40 text-red-300 border border-red-700/50">{anomalySummary.critical} critical</span>
+              {feedCritical > 0 && (
+                <span className="text-[11px] font-semibold px-2 py-0.5 rounded bg-red-900/40 text-red-300 border border-red-700/50">{feedCritical} critical</span>
               )}
-              <span className="text-[11px] text-[var(--text-muted)]">{anomalySummary.total} total</span>
+              <span className="text-[11px] text-[var(--text-muted)]">{feedTotal} total</span>
             </div>
           </div>
           <div className="max-h-80 overflow-y-auto divide-y divide-[var(--input-border)]/60">
             {loading ? (
               [0, 1, 2].map((i) => <div key={i} className="px-4 py-3"><div className="h-4 bg-[var(--input-bg)] rounded animate-pulse" /></div>)
-            ) : anomalies.length === 0 ? (
+            ) : feedItems.length === 0 ? (
               <div className="px-4 py-12 text-center text-[var(--text-muted)] text-sm">
                 <CheckCircle2 size={24} className="mx-auto mb-2 text-green-400 opacity-80" />
-                No anomalies detected — pressure, cost and inspection cadence all within range.
+                No anomalies detected — pressure, cost, inspection cadence and preventive maintenance all within range.
               </div>
             ) : (
-              anomalies.slice(0, 40).map((a, i) => (
-                <div key={`${a.type}:${a.asset_no || a.serial || i}`} className={`px-4 py-3 ${a.severity === 'critical' ? 'bg-red-900/15' : ''}`}>
+              feedItems.slice(0, 40).map((a, i) => (
+                <div
+                  key={`${a.type}:${a.asset_no || a.serial || i}`}
+                  className={`px-4 py-3 ${a.severity === 'critical' ? 'bg-red-900/15' : ''} ${a.link ? 'cursor-pointer hover:bg-[var(--input-bg)]/40' : ''}`}
+                  onClick={a.link ? () => navigate(a.link) : undefined}
+                >
                   <div className="flex items-start gap-2.5">
                     <AlertTriangle size={15} className={`mt-0.5 shrink-0 ${a.severity === 'critical' ? 'text-red-400' : 'text-amber-400'}`} />
                     <div className="min-w-0 flex-1">

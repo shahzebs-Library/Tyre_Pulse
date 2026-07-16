@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
-  AlertTriangle, BarChart3, FileSpreadsheet, Filter, Gauge as GaugeIcon,
-  Image as ImageIcon, Layers, LineChart, Lock, Network, RefreshCw, ShieldAlert,
+  AlertTriangle, BarChart3, CalendarClock, ClipboardCheck, FileSpreadsheet,
+  Filter, Gauge as GaugeIcon, Image as ImageIcon, Layers, LineChart, Lock,
+  Network, PieChart as PieChartIcon, RefreshCw, ShieldAlert, Wrench,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { fetchAllPages } from '../lib/fetchAll'
@@ -18,6 +19,9 @@ import {
   buildBrandSizeTreemap, buildCostHeatmap, buildFlowSankey, buildGauges,
   buildMonthlyCombo, buildRiskMatrix, toExcelRows,
 } from '../lib/executiveAnalytics'
+import { loadPmDashboard, listPmServiceRecords } from '../lib/api/pmPrograms'
+import { summarizePmCompliance } from '../lib/pmSchedule'
+import { monthlyServiceCost, costByCategory, outcomeBreakdown } from '../lib/pmAnalytics'
 
 /**
  * Executive Analytics — presentation-quality boardroom analytics built on
@@ -62,6 +66,15 @@ export default function ExecutiveAnalytics() {
   const [slices, setSlices] = useState({
     tyres: EMPTY_SLICE, inspections: EMPTY_SLICE, fleet: EMPTY_SLICE, openTyres: EMPTY_SLICE,
   })
+
+  // Preventive Maintenance block: own tri-state slice, loaded independently of
+  // the tyre/inspection/fleet analytics above so a missing PM table (honest [])
+  // or a slow PM query never blocks the boardroom charts.
+  const [pm, setPm] = useState({
+    loading: true, error: null,
+    plans: [], records: [], kmByAsset: {}, hoursByAsset: {},
+  })
+  const pmReqRef = useRef(0)
 
   const reqIdRef = useRef(0)
   const chartsRef = useRef({}) // chartKey -> echarts instance
@@ -146,6 +159,36 @@ export default function ExecutiveAnalytics() {
   }, [dateFrom, dateTo, country])
 
   useEffect(() => { if (canView) load() }, [load, canView])
+
+  // ── Preventive Maintenance load: independent, cancel-guarded ─────────────────
+  const loadPm = useCallback(async () => {
+    const myReq = ++pmReqRef.current
+    setPm((s) => ({ ...s, loading: true, error: null }))
+    const scope = country !== 'All' ? country : undefined
+    try {
+      const [dashboard, records] = await Promise.all([
+        loadPmDashboard({ country: scope }),
+        listPmServiceRecords({ country: scope, limit: 2000 }),
+      ])
+      if (myReq !== pmReqRef.current) return
+      setPm({
+        loading: false, error: null,
+        plans: dashboard?.plans ?? [],
+        kmByAsset: dashboard?.kmByAsset ?? {},
+        hoursByAsset: dashboard?.hoursByAsset ?? {},
+        records: Array.isArray(records) ? records : [],
+      })
+    } catch (err) {
+      if (myReq !== pmReqRef.current) return
+      setPm({
+        loading: false,
+        error: err?.message || String(err) || 'Failed to load preventive maintenance data.',
+        plans: [], records: [], kmByAsset: {}, hoursByAsset: {},
+      })
+    }
+  }, [country])
+
+  useEffect(() => { if (canView) loadPm() }, [loadPm, canView])
 
   // ── Shaped datasets (pure lib) ─────────────────────────────────────────────
   const months = monthsInRange(dateFrom, dateTo)
@@ -394,6 +437,143 @@ export default function ExecutiveAnalytics() {
     }
   }, [riskData, palette, baseTooltip, fmtC])
 
+  // ── Preventive Maintenance shaped datasets (pure lib) ───────────────────────
+  const pmNow = useMemo(() => new Date(), [pm.plans, pm.records])
+  const CATEGORY_LABEL = {
+    vehicle: 'Vehicle', generator: 'Generator', plant: 'Plant',
+    machinery: 'Machinery', equipment: 'Equipment', other: 'Other',
+  }
+  const OUTCOME_LABEL = {
+    completed: 'Completed', partial: 'Partial', deferred: 'Deferred', failed: 'Failed',
+  }
+  const monthShort = (key) => {
+    const m = /^(\d{4})-(\d{2})$/.exec(String(key || ''))
+    if (!m) return String(key || '')
+    const names = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+    return `${names[Number(m[2]) - 1] || m[2]} ${m[1].slice(2)}`
+  }
+
+  const pmCompliance = useMemo(
+    () => summarizePmCompliance(pm.plans, {
+      now: pmNow, kmByAsset: pm.kmByAsset, hoursByAsset: pm.hoursByAsset,
+    }),
+    [pm.plans, pm.kmByAsset, pm.hoursByAsset, pmNow])
+  const pmMonthly = useMemo(
+    () => monthlyServiceCost(pm.records, { now: pmNow, months: 12 }),
+    [pm.records, pmNow])
+  const pmByCategory = useMemo(
+    () => costByCategory(pm.plans, pm.records),
+    [pm.plans, pm.records])
+  const pmOutcomes = useMemo(
+    () => outcomeBreakdown(pm.records),
+    [pm.records])
+
+  const pmHasPlans = pm.plans.length > 0
+  const pmHasRecords = pm.records.length > 0
+  const pmMonthlyHasCost = pmMonthly.some((r) => r.total > 0 || r.count > 0)
+  const pmCategoryHasCost = pmByCategory.some((r) => r.total > 0)
+  const pmOutcomeTotal = pmOutcomes.reduce((s, r) => s + r.count, 0)
+  const pmBlockEmpty = !pm.loading && !pm.error && !pmHasPlans && !pmHasRecords
+
+  const pmMonthlyOption = useMemo(() => ({
+    tooltip: {
+      ...baseTooltip, trigger: 'axis', axisPointer: { type: 'shadow' },
+      formatter: (params) => {
+        const label = params[0]?.axisValue ?? ''
+        const spend = params.find((p) => p.seriesName === 'Service Cost')
+        const count = params.find((p) => p.seriesName === 'Services')
+        const lines = [label]
+        if (spend) lines.push(`${spend.marker} Service Cost: <b>${fmtC(spend.value)}</b>`)
+        if (count) lines.push(`${count.marker} Services: <b>${count.value}</b>`)
+        return lines.join('<br/>')
+      },
+    },
+    legend: { top: 0, textStyle: { color: palette.muted, fontSize: 11 } },
+    grid: { left: 8, right: 8, top: 32, bottom: 8, containLabel: true },
+    xAxis: {
+      type: 'category', data: pmMonthly.map((r) => monthShort(r.month)),
+      axisLabel: { color: palette.muted, fontSize: 11 },
+      axisLine: { lineStyle: { color: palette.axisLine } },
+    },
+    yAxis: [
+      {
+        type: 'value', name: 'Cost', nameTextStyle: { color: palette.muted },
+        axisLabel: { color: palette.muted, fontSize: 10, formatter: (v) => fmtC(v) },
+        splitLine: { lineStyle: { color: palette.splitLine } },
+      },
+      {
+        type: 'value', name: 'Services', nameTextStyle: { color: palette.muted },
+        axisLabel: { color: palette.muted, fontSize: 10 }, minInterval: 1,
+        splitLine: { show: false },
+      },
+    ],
+    series: [
+      {
+        name: 'Service Cost', type: 'bar', data: pmMonthly.map((r) => r.total),
+        itemStyle: { color: palette.series[0], borderRadius: [3, 3, 0, 0] }, barMaxWidth: 26,
+      },
+      {
+        name: 'Services', type: 'line', yAxisIndex: 1, data: pmMonthly.map((r) => r.count),
+        smooth: true, symbolSize: 6,
+        itemStyle: { color: palette.series[1] }, lineStyle: { width: 2.5 },
+      },
+    ],
+  }), [pmMonthly, palette, baseTooltip, fmtC])
+
+  const pmCategoryOption = useMemo(() => {
+    const rows = [...pmByCategory].reverse() // horizontal bar reads top-down largest-first
+    return {
+      tooltip: {
+        ...baseTooltip,
+        formatter: (p) => `${p.name}<br/><b>${fmtC(p.value)}</b>`,
+      },
+      grid: { left: 8, right: 16, top: 8, bottom: 8, containLabel: true },
+      xAxis: {
+        type: 'value',
+        axisLabel: { color: palette.muted, fontSize: 10, formatter: (v) => fmtC(v) },
+        splitLine: { lineStyle: { color: palette.splitLine } },
+      },
+      yAxis: {
+        type: 'category', data: rows.map((r) => CATEGORY_LABEL[r.category] || r.category),
+        axisLabel: { color: palette.subText, fontSize: 11 },
+        axisLine: { lineStyle: { color: palette.axisLine } },
+      },
+      series: [{
+        type: 'bar', data: rows.map((r) => r.total),
+        itemStyle: { color: palette.series[2] ?? palette.series[0], borderRadius: [0, 3, 3, 0] },
+        barMaxWidth: 22,
+      }],
+    }
+  }, [pmByCategory, palette, baseTooltip, fmtC])
+
+  const pmOutcomeOption = useMemo(() => {
+    const colorFor = {
+      completed: palette.good, partial: palette.warn,
+      deferred: palette.muted, failed: palette.bad,
+    }
+    return {
+      tooltip: {
+        ...baseTooltip, trigger: 'item',
+        formatter: (p) => `${p.name}: <b>${p.value}</b> (${p.percent}%)`,
+      },
+      legend: {
+        bottom: 0, textStyle: { color: palette.subText, fontSize: 11 },
+      },
+      series: [{
+        type: 'pie', radius: ['46%', '72%'], center: ['50%', '46%'],
+        avoidLabelOverlap: true,
+        itemStyle: { borderColor: palette.exportBg, borderWidth: 2 },
+        label: { color: palette.subText, fontSize: 11, formatter: '{b}: {c}' },
+        labelLine: { lineStyle: { color: palette.axisLine } },
+        data: pmOutcomes.map((r) => ({
+          name: OUTCOME_LABEL[r.outcome] || r.outcome,
+          value: r.count,
+          itemStyle: { color: colorFor[r.outcome] ?? palette.series[0] },
+        })),
+      }],
+    }
+  }, [pmOutcomes, palette, baseTooltip])
+
   // ── Exports ─────────────────────────────────────────────────────────────────
   const exportPng = useCallback((key) => {
     const inst = chartsRef.current[key]
@@ -417,6 +597,29 @@ export default function ExecutiveAnalytics() {
   }, [activeCurrency, dateFrom, dateTo, country])
 
   const onReady = useCallback((key) => (inst) => { chartsRef.current[key] = inst }, [])
+
+  const pmExcel = useCallback(async (key) => {
+    let rows = []; let columns = []; let headers = []; let title = ''
+    if (key === 'pm-monthly') {
+      rows = pmMonthly.map((r) => ({ month: monthShort(r.month), total: r.total, count: r.count }))
+      columns = ['month', 'total', 'count']; headers = ['Month', 'Service Cost', 'Services']
+      title = 'PM Service Cost by Month'
+    } else if (key === 'pm-category') {
+      rows = pmByCategory.map((r) => ({ category: CATEGORY_LABEL[r.category] || r.category, total: r.total }))
+      columns = ['category', 'total']; headers = ['Asset Category', 'Service Cost']
+      title = 'PM Cost by Asset Category'
+    } else if (key === 'pm-outcome') {
+      rows = pmOutcomes.map((r) => ({ outcome: OUTCOME_LABEL[r.outcome] || r.outcome, count: r.count }))
+      columns = ['outcome', 'count']; headers = ['Outcome', 'Services']
+      title = 'PM Service Outcomes'
+    }
+    if (!rows.length) return
+    await exportToExcel(rows, columns, headers, `executive-${key}`, title, {
+      title: `Executive Analytics: ${title}`,
+      currency: activeCurrency,
+      meta: { Country: country },
+    })
+  }, [pmMonthly, pmByCategory, pmOutcomes, activeCurrency, country])
 
   // ── RBAC gate ───────────────────────────────────────────────────────────────
   if (!canView) {
@@ -593,7 +796,153 @@ export default function ExecutiveAnalytics() {
           </div>
         </ChartCard>
       </div>
+
+      {/* ── Preventive Maintenance ──────────────────────────────────────────── */}
+      <div className="pt-2">
+        <h2 className="text-sm font-semibold text-[var(--text-primary)] flex items-center gap-2 mb-1">
+          <Wrench size={15} className="text-[var(--accent)]" />
+          Preventive Maintenance
+        </h2>
+        <p className="text-xs text-muted mb-3">
+          Program compliance, service spend and outcomes across the PM plans in scope
+        </p>
+
+        {/* Compliance summary */}
+        <PmComplianceCard
+          loading={pm.loading}
+          error={pm.error}
+          empty={pmBlockEmpty}
+          hasPlans={pmHasPlans}
+          compliance={pmCompliance}
+          onRetry={loadPm}
+        />
+
+        {/* PM charts */}
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 mt-4">
+          <ChartCard
+            className="xl:col-span-2"
+            icon={CalendarClock}
+            title="PM service cost vs services: last 12 months"
+            subtitle="total_cost of pm_service_records by service month (bars) and service count (line)"
+            loading={pm.loading} error={pm.error}
+            empty={pmBlockEmpty || !pmMonthlyHasCost}
+            emptyText={pmHasPlans && !pmHasRecords
+              ? 'PM plans exist but no services have been recorded yet.'
+              : 'No preventive maintenance services in the last 12 months.'}
+            onRetry={loadPm}
+            onPng={() => exportPng('pm-monthly')}
+            onExcel={() => pmExcel('pm-monthly')}
+          >
+            <div style={{ height: 320 }}>
+              <EChart option={pmMonthlyOption} onReady={onReady('pm-monthly')} ariaLabel="Preventive maintenance service cost by month" />
+            </div>
+          </ChartCard>
+
+          <ChartCard
+            icon={Layers}
+            title="PM cost by asset category"
+            subtitle="Service spend grouped by the plan asset category"
+            loading={pm.loading} error={pm.error}
+            empty={pmBlockEmpty || !pmCategoryHasCost}
+            emptyText="No recorded PM service cost to break down by category yet."
+            onRetry={loadPm}
+            onPng={() => exportPng('pm-category')}
+            onExcel={() => pmExcel('pm-category')}
+          >
+            <div style={{ height: 320 }}>
+              <EChart option={pmCategoryOption} onReady={onReady('pm-category')} ariaLabel="Preventive maintenance cost by asset category" />
+            </div>
+          </ChartCard>
+
+          <ChartCard
+            icon={PieChartIcon}
+            title="PM service outcomes"
+            subtitle="Completed, partial, deferred and failed service records"
+            loading={pm.loading} error={pm.error}
+            empty={pmBlockEmpty || pmOutcomeTotal === 0}
+            emptyText="No PM service outcomes recorded yet."
+            onRetry={loadPm}
+            onPng={() => exportPng('pm-outcome')}
+            onExcel={() => pmExcel('pm-outcome')}
+          >
+            <div style={{ height: 320 }}>
+              <EChart option={pmOutcomeOption} onReady={onReady('pm-outcome')} ariaLabel="Preventive maintenance service outcomes" />
+            </div>
+          </ChartCard>
+        </div>
+      </div>
     </div>
+  )
+}
+
+// ── PM compliance summary card: tiles + overdue/due-soon highlight ───────────
+function PmComplianceCard({ loading, error, empty, hasPlans, compliance, onRetry }) {
+  const pct = compliance?.compliantPct
+  const tiles = [
+    { label: 'Active plans', value: compliance?.active ?? 0, tone: 'text-[var(--text-primary)]' },
+    { label: 'Overdue', value: compliance?.overdue ?? 0, tone: (compliance?.overdue ?? 0) > 0 ? 'text-red-600' : 'text-[var(--text-primary)]' },
+    { label: 'Due soon', value: compliance?.dueSoon ?? 0, tone: (compliance?.dueSoon ?? 0) > 0 ? 'text-amber-600' : 'text-[var(--text-primary)]' },
+    { label: 'Compliance', value: pct == null ? 'N/A' : `${pct}%`, tone: pct != null && pct < 80 ? 'text-amber-600' : 'text-emerald-600' },
+  ]
+  return (
+    <section className="card p-4">
+      <div className="flex items-center gap-2 mb-3">
+        <ClipboardCheck size={15} className="text-[var(--accent)] shrink-0" />
+        <h3 className="text-sm font-semibold text-[var(--text-primary)]">PM compliance summary</h3>
+      </div>
+
+      {loading && <SkeletonChart />}
+
+      {!loading && error && (
+        <div className="flex flex-col items-center justify-center py-8 text-center">
+          <AlertTriangle size={24} className="text-red-400 mb-2" />
+          <p className="text-sm text-[var(--text-secondary)] mb-3 max-w-sm break-words">{String(error)}</p>
+          {onRetry && (
+            <button type="button" onClick={onRetry}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs transition-colors">
+              <RefreshCw size={13} /> Retry
+            </button>
+          )}
+        </div>
+      )}
+
+      {!loading && !error && empty && (
+        <div className="py-10 text-center">
+          <p className="text-sm text-muted max-w-md mx-auto">
+            No preventive maintenance plans in scope. Create a PM program to track service compliance here.
+          </p>
+        </div>
+      )}
+
+      {!loading && !error && !empty && (
+        <>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            {tiles.map((t) => (
+              <div key={t.label} className="rounded-xl border border-[var(--border-dim)] bg-[var(--surface-1)] p-3">
+                <p className="text-[11px] text-muted mb-1">{t.label}</p>
+                <p className={`text-2xl font-bold ${t.tone}`}>{t.value}</p>
+              </div>
+            ))}
+          </div>
+          {!hasPlans && (
+            <p className="text-xs text-muted mt-3">
+              Service records exist but no active PM plan is in scope for compliance scoring.
+            </p>
+          )}
+          {hasPlans && (compliance?.overdue > 0 || compliance?.dueSoon > 0) && (
+            <p className="text-xs text-[var(--text-secondary)] mt-3">
+              {compliance.overdue > 0
+                ? `${compliance.overdue} overdue and ${compliance.dueSoon} due soon`
+                : `${compliance.dueSoon} plan(s) due soon`}
+              {compliance.buckets ? ` (${compliance.buckets.d30} within 30 days)` : ''}.
+            </p>
+          )}
+          {hasPlans && compliance?.overdue === 0 && compliance?.dueSoon === 0 && (
+            <p className="text-xs text-emerald-600 mt-3">All active PM plans are on schedule.</p>
+          )}
+        </>
+      )}
+    </section>
   )
 }
 
@@ -614,26 +963,30 @@ function ChartCard({
           {subtitle && <p className="text-xs text-muted mt-0.5">{subtitle}</p>}
         </div>
         <div className="flex items-center gap-1.5 shrink-0">
-          <button
-            type="button"
-            onClick={onPng}
-            disabled={!hasBody}
-            title="Export PNG"
-            aria-label={`Export ${title} as PNG`}
-            className="p-1.5 rounded-lg border border-[var(--border-dim)] text-muted hover:text-[var(--text-primary)] disabled:opacity-40 transition-colors"
-          >
-            <ImageIcon size={14} />
-          </button>
-          <button
-            type="button"
-            onClick={onExcel}
-            disabled={!hasBody}
-            title="Export Excel"
-            aria-label={`Export ${title} data to Excel`}
-            className="p-1.5 rounded-lg border border-[var(--border-dim)] text-muted hover:text-[var(--text-primary)] disabled:opacity-40 transition-colors"
-          >
-            <FileSpreadsheet size={14} />
-          </button>
+          {onPng && (
+            <button
+              type="button"
+              onClick={onPng}
+              disabled={!hasBody}
+              title="Export PNG"
+              aria-label={`Export ${title} as PNG`}
+              className="p-1.5 rounded-lg border border-[var(--border-dim)] text-muted hover:text-[var(--text-primary)] disabled:opacity-40 transition-colors"
+            >
+              <ImageIcon size={14} />
+            </button>
+          )}
+          {onExcel && (
+            <button
+              type="button"
+              onClick={onExcel}
+              disabled={!hasBody}
+              title="Export Excel"
+              aria-label={`Export ${title} data to Excel`}
+              className="p-1.5 rounded-lg border border-[var(--border-dim)] text-muted hover:text-[var(--text-primary)] disabled:opacity-40 transition-colors"
+            >
+              <FileSpreadsheet size={14} />
+            </button>
+          )}
         </div>
       </div>
 

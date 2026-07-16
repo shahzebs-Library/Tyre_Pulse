@@ -42,7 +42,9 @@ import {
   summariseHeat, latestPerPosition, hotspots, classifyTemp, tempOverAmbient,
   GCC_CITIES, currentConditions, assessFleetRisk, pressureByTimeOfDay,
   enrichRoutes, correlationFromReadings,
+  cityCoords, mergeLiveConditions, hottestHours,
 } from '../lib/heatIntelligence'
+import { getCurrentWeather } from '../lib/api/weather'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Tooltip, Legend, Title)
@@ -97,6 +99,30 @@ function fmtDateTime(v) {
   return Number.isNaN(d.getTime()) ? '—' : d.toLocaleString()
 }
 
+// Live-weather formatters (kept ASCII, no dash glyphs).
+function fmtHour(v) {
+  const d = new Date(v)
+  return Number.isNaN(d.getTime()) ? 'N/A' : d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+}
+function fmtDay(v) {
+  const d = new Date(v)
+  return Number.isNaN(d.getTime()) ? 'N/A' : d.toLocaleDateString([], { weekday: 'short' })
+}
+function fmtStamp(v) {
+  const d = new Date(v)
+  return Number.isNaN(d.getTime()) ? 'recently' : d.toLocaleString([], { hour: '2-digit', minute: '2-digit', day: '2-digit', month: 'short' })
+}
+
+/** Compact metric tile used by the live weather panel. */
+function LiveTile({ label, value, accent = 'text-[var(--text-primary)]' }) {
+  return (
+    <div className="rounded-lg border border-[var(--input-border)] bg-[var(--input-bg)] px-3 py-2 text-center">
+      <p className={`text-xl font-bold ${accent}`}>{value}</p>
+      <p className="text-[10px] uppercase tracking-wider text-[var(--text-muted)] mt-0.5">{label}</p>
+    </div>
+  )
+}
+
 function isMissingRelation(err) {
   const m = String(err?.message || '').toLowerCase()
   return m.includes('does not exist') || m.includes('relation') ||
@@ -130,6 +156,11 @@ export default function HeatIntelligence() {
   const [tab, setTab] = useState('conditions')
   const [city, setCity] = useState('Dubai')
   const [coldPsi, setColdPsi] = useState('105')
+
+  // Live weather (Open-Meteo, free/keyless). Falls back to seasonal climatology.
+  const [weather, setWeather] = useState(null)
+  const [weatherLoading, setWeatherLoading] = useState(false)
+  const [weatherError, setWeatherError] = useState('')
 
   // Manual-logger data
   const [rows, setRows] = useState(null)
@@ -188,10 +219,39 @@ export default function HeatIntelligence() {
   useEffect(() => { load() }, [load])
   useEffect(() => { loadTyres() }, [loadTyres])
 
-  const refreshAll = useCallback(() => { load(); loadTyres() }, [load, loadTyres])
+  // Fetch live ambient temperature for the selected city. Never throws: on any
+  // failure we clear the live reading and the page uses the seasonal average.
+  const loadWeather = useCallback(async (signal) => {
+    const coords = cityCoords(city)
+    if (!coords) { setWeather(null); setWeatherError(''); return }
+    setWeatherLoading(true); setWeatherError('')
+    const res = await getCurrentWeather(coords.lat, coords.lon, { signal })
+    if (res.aborted) return
+    // Stamp the reading with the city it belongs to so a stale in-flight result
+    // is never rendered under a different city's label.
+    if (res.ok) { setWeather({ ...res.data, city_key: city }); setWeatherError('') }
+    else { setWeather(null); setWeatherError(res.error || 'Live weather is unavailable right now.') }
+    setWeatherLoading(false)
+  }, [city])
+
+  useEffect(() => {
+    const ctrl = new AbortController()
+    loadWeather(ctrl.signal)
+    return () => ctrl.abort()
+  }, [loadWeather])
+
+  const refreshAll = useCallback(() => { load(); loadTyres(); loadWeather() }, [load, loadTyres, loadWeather])
 
   // ── Derived: climatology, fleet risk, calculator, routes, correlation ──────
-  const conditions = useMemo(() => currentConditions(city), [city])
+  // Base is seasonal climatology; when a live reading is present we overlay the
+  // real ambient temperature so risk, calculator and hero all use actual weather.
+  // Only treat the reading as live when it belongs to the currently selected city.
+  const liveWeather = useMemo(() => (weather && weather.city_key === city ? weather : null), [weather, city])
+  const conditions = useMemo(() => {
+    const base = currentConditions(city)
+    return liveWeather?.ambient_c != null ? mergeLiveConditions(base, liveWeather.ambient_c, liveWeather.source) : base
+  }, [city, liveWeather])
+  const hotHours = useMemo(() => hottestHours(liveWeather?.hourly, 3), [liveWeather])
   const fleetRisk = useMemo(
     () => assessFleetRisk(tyres || [], { ambient_c: conditions.ambient_c, road_c: conditions.road_surface_c }),
     [tyres, conditions],
@@ -434,6 +494,70 @@ export default function HeatIntelligence() {
                 </p>
               </div>
             </div>
+          </div>
+
+          {/* Live ambient weather (Open-Meteo, free/keyless) with seasonal fallback */}
+          <div className="card">
+            <div className="flex items-center justify-between flex-wrap gap-2 mb-3">
+              <h3 className="text-sm font-semibold text-[var(--text-primary)] flex items-center gap-2">
+                <ThermometerSun size={15} className="text-amber-400" /> Live ambient weather
+              </h3>
+              {liveWeather?.ambient_c != null ? (
+                <span className="text-[11px] font-bold uppercase px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-300 border border-emerald-700/40 inline-flex items-center gap-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" /> Live : {liveWeather.source}
+                </span>
+              ) : (
+                <span className="text-[11px] font-bold uppercase px-2 py-0.5 rounded bg-[var(--input-bg)] text-[var(--text-muted)] border border-[var(--input-border)]">
+                  Seasonal average
+                </span>
+              )}
+            </div>
+
+            {weatherLoading && liveWeather == null ? (
+              <p className="text-sm text-[var(--text-muted)] inline-flex items-center gap-2">
+                <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin inline-block" /> Fetching live conditions for {city}...
+              </p>
+            ) : liveWeather?.ambient_c != null ? (
+              <>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  <LiveTile label="Now" value={`${liveWeather.ambient_c}°C`} accent="text-orange-300" />
+                  <LiveTile label="Feels like" value={liveWeather.apparent_c != null ? `${liveWeather.apparent_c}°C` : 'N/A'} accent="text-red-300" />
+                  <LiveTile label="Humidity" value={liveWeather.humidity_pct != null ? `${liveWeather.humidity_pct}%` : 'N/A'} />
+                  <LiveTile label="Wind" value={liveWeather.wind_kmh != null ? `${liveWeather.wind_kmh} km/h` : 'N/A'} />
+                </div>
+                {hotHours.length > 0 && (
+                  <div className="mt-3">
+                    <p className="text-[11px] uppercase tracking-wider text-[var(--text-muted)] mb-1">Hottest hours ahead</p>
+                    <div className="flex flex-wrap gap-2">
+                      {hotHours.map((h) => (
+                        <span key={h.time} className="text-xs px-2 py-1 rounded bg-orange-500/10 text-orange-300 border border-orange-700/40">
+                          {fmtHour(h.time)} : {h.temp_c}°C
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {liveWeather.daily?.length > 0 && (
+                  <div className="mt-3">
+                    <p className="text-[11px] uppercase tracking-wider text-[var(--text-muted)] mb-1">7 day max</p>
+                    <div className="flex flex-wrap gap-2">
+                      {liveWeather.daily.slice(0, 7).map((d) => (
+                        <span key={d.date} className="text-xs px-2 py-1 rounded bg-[var(--input-bg)] text-[var(--text-secondary)] border border-[var(--input-border)]">
+                          {fmtDay(d.date)} : <strong className="text-[var(--text-primary)]">{d.max_c != null ? `${Math.round(d.max_c)}°` : 'N/A'}</strong>
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                <p className="text-[11px] text-[var(--text-muted)] mt-3">
+                  Observed {liveWeather.observed_at ? fmtStamp(liveWeather.observed_at) : 'recently'} for {city}. The ambient, road surface, severity and pressure figures above use this live reading; blowout risk and the calculator follow it too.
+                </p>
+              </>
+            ) : (
+              <p className="text-sm text-[var(--text-muted)]">
+                {weatherError ? `${weatherError} ` : ''}Showing the seasonal average for {city} ({conditions.ambient_c}°C). Live weather refreshes hourly when reachable.
+              </p>
+            )}
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

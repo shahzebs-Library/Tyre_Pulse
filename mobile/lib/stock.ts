@@ -116,4 +116,92 @@ export async function adjustStock(
   }
 }
 
+export interface NewStockInput {
+  /** Tyre size token, e.g. "315/80R22.5". Prefixed into the description so the
+   *  existing size-parse filter (extractTyreSize) buckets the new row. */
+  size: string
+  /** Optional extra description (brand / notes) appended after the size. */
+  description?: string | null
+  site: string
+  qty: number
+  minLevel?: number | null
+  criticalLevel?: number | null
+  country?: string | null
+  userId?: string | null
+}
+
+export interface NewStockResult {
+  id: string | null
+}
+
+/**
+ * Compose the stored `description` from a tyre size + optional free text.
+ * stock_records has NO dedicated `size` column - size lives inside the
+ * free-text description (e.g. "315/80R22.5 Double Coin"), and the Stock screen
+ * derives the size filter by parsing it back out. Prefixing the size keeps that
+ * parse working for rows created here.
+ */
+export function composeStockDescription(size: string, description?: string | null): string {
+  const sz = (size || '').trim()
+  const rest = (description || '').trim()
+  if (!sz) return rest
+  // Avoid doubling the size if the user already typed it into the description.
+  if (rest.toUpperCase().startsWith(sz.toUpperCase())) return rest
+  return rest ? `${sz} ${rest}` : sz
+}
+
+/**
+ * Create a new stock record for a given tyre size + site. The size is embedded
+ * into `description` (no size column exists) so it is immediately usable in the
+ * size filter. organisation_id/country are governed by DB defaults + RLS; we
+ * still stamp the caller's country (matching other mobile-created rows) and the
+ * derived stock_status. A best-effort Initial movement ledger row is posted.
+ *
+ * Creating a NEW record needs connectivity (unlike count/adjust there is no
+ * existing row to reconcile against and no create RPC), so a failure is thrown
+ * for the caller to surface rather than silently queued.
+ */
+export async function createStockRecord(input: NewStockInput): Promise<NewStockResult> {
+  const qty = Math.max(0, Math.floor(Number(input.qty) || 0))
+  const min = input.minLevel == null ? null : Math.max(0, Math.floor(Number(input.minLevel)))
+  const crit = input.criticalLevel == null ? null : Math.max(0, Math.floor(Number(input.criticalLevel)))
+  const description = composeStockDescription(input.size, input.description)
+  const nowIso = new Date().toISOString()
+  const row = {
+    site: input.site.trim(),
+    description,
+    stock_qty: qty,
+    min_level: min,
+    critical_level: crit,
+    stock_status: statusFor(qty, min, crit),
+    country: input.country ?? null,
+    updated_by: input.userId ?? null,
+    updated_at: nowIso,
+  }
+  const { data, error } = await supabase
+    .from('stock_records')
+    .insert(row)
+    .select('id')
+    .single()
+  if (error) throw error
+  const id: string | null = (data as any)?.id ?? null
+  // Best-effort audit movement (Initial). Never blocks the create.
+  if (id) {
+    try {
+      await supabase.from('stock_movements').insert({
+        stock_id: id,
+        site: row.site,
+        description,
+        movement_type: 'Initial',
+        qty_before: 0,
+        qty_change: qty,
+        qty_after: qty,
+        reason: 'Initial stock entry (mobile)',
+        created_by: input.userId ?? null,
+      })
+    } catch { /* audit is best-effort */ }
+  }
+  return { id }
+}
+
 export { statusFor }

@@ -13,7 +13,7 @@ import { useTheme } from '../../contexts/ThemeContext'
 import { useRealtime } from '../../hooks/useRealtime'
 import { useRoleGuard } from '../../hooks/useRoleGuard'
 import { canCountStock } from '../../lib/permissions'
-import { setStockCount, adjustStock, statusFor } from '../../lib/stock'
+import { setStockCount, adjustStock, statusFor, createStockRecord } from '../../lib/stock'
 import { Theme, StatusKind, spacing, radius, elevation } from '../../lib/theme'
 import {
   Screen, Card, AppText, Badge, StatTile, Button, Loading, EmptyState, ErrorState,
@@ -63,6 +63,13 @@ function countedHint(iso: string | null, t: (k: string) => string): { text: stri
 // Bucket a row that has no recognisable tyre size.
 const NO_SIZE = 'No size'
 
+// Common GCC fleet tyre sizes offered as quick-pick chips when adding stock.
+// The user can always type a different size (free text) - this is only a shortcut.
+const COMMON_SIZES = [
+  '315/80R22.5', '295/80R22.5', '385/65R22.5', '13R22.5', '12R22.5', '11R22.5',
+  '295/75R22.5', '275/70R22.5', '385/55R22.5', '1200R20', '1100R20', '12.00R24',
+]
+
 /**
  * Derive a tyre size token from a free-text stock description. stock_records has
  * NO dedicated size column - the size is embedded in `description` (e.g.
@@ -105,6 +112,16 @@ export default function StockScreen() {
   const [countValue, setCountValue] = useState('')
   const [countReason, setCountReason] = useState('')
   const [countSaving, setCountSaving] = useState(false)
+
+  // Add-stock (by size) modal state
+  const [addOpen, setAddOpen] = useState(false)
+  const [addSize, setAddSize] = useState('')
+  const [addDesc, setAddDesc] = useState('')
+  const [addSite, setAddSite] = useState('')
+  const [addQty, setAddQty] = useState('')
+  const [addMin, setAddMin] = useState('5')
+  const [addCrit, setAddCrit] = useState('3')
+  const [addSaving, setAddSaving] = useState(false)
 
   const { allowed } = useRoleGuard(['tyre_man', 'admin', 'manager', 'director'])
   const textAlign = isRTL ? 'right' : 'left'
@@ -195,6 +212,53 @@ export default function StockScreen() {
     }
   }
 
+  function openAdd() {
+    if (!mayAdjust) return
+    setAddSize('')
+    setAddDesc('')
+    // Preselect the site the user is currently filtering by, if any.
+    setAddSite(locationFilter !== 'all' ? locationFilter : '')
+    setAddQty('')
+    setAddMin('5')
+    setAddCrit('3')
+    setAddOpen(true)
+  }
+
+  async function submitAdd() {
+    if (addSaving) return
+    const size = addSize.trim()
+    const site = addSite.trim()
+    const qty = Number(addQty)
+    if (!size) { Alert.alert('Size required', 'Enter or pick a tyre size for this stock.'); return }
+    if (!site) { Alert.alert('Location required', 'Enter or pick a location (site) for this stock.'); return }
+    if (addQty.trim() === '' || Number.isNaN(qty) || qty < 0) {
+      Alert.alert('Invalid quantity', 'Enter a quantity of zero or more.'); return
+    }
+    const min = addMin.trim() === '' ? null : Number(addMin)
+    const crit = addCrit.trim() === '' ? null : Number(addCrit)
+    setAddSaving(true)
+    try {
+      await createStockRecord({
+        size,
+        description: addDesc.trim() || null,
+        site,
+        qty,
+        minLevel: min != null && !Number.isNaN(min) ? min : null,
+        criticalLevel: crit != null && !Number.isNaN(crit) ? crit : null,
+        country: profile?.country ?? null,
+        userId: profile?.id ?? null,
+      })
+      setAddOpen(false)
+      // Surface the new size in the filter immediately.
+      setSizeFilter(size)
+      await load()
+    } catch (e: any) {
+      Alert.alert('Could not add stock', toUserMessage(e, t('common.tryAgain')))
+    } finally {
+      setAddSaving(false)
+    }
+  }
+
   // Distinct location (site) + tyre-size options, derived live from loaded rows
   // (never hardcoded). Size is extracted from the description; rows without a
   // recognisable size fall into the NO_SIZE bucket so the filter stays honest.
@@ -250,6 +314,11 @@ export default function StockScreen() {
             {rows.length} {t('modules.stock.items')} · {lowCount} {t('modules.stock.needReorder')}
           </AppText>
         </View>
+        {mayAdjust && (
+          <TouchableOpacity onPress={openAdd} style={s.addBtn} activeOpacity={0.85}>
+            <Ionicons name="add" size={22} color={theme.color.onPrimary} />
+          </TouchableOpacity>
+        )}
       </View>
 
       {!loading && (
@@ -499,6 +568,129 @@ export default function StockScreen() {
           </View>
         </KeyboardAvoidingView>
       </Modal>
+
+      {/* ── Add-stock (by size) modal ────────────────────────────────────────── */}
+      <Modal visible={addOpen} transparent animationType="fade" onRequestClose={() => setAddOpen(false)}>
+        <KeyboardAvoidingView style={s.modalRoot} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+          <TouchableOpacity style={[s.modalBackdrop, { backgroundColor: theme.color.overlay }]} activeOpacity={1} onPress={() => !addSaving && setAddOpen(false)} />
+          <View style={[s.modalCard, { maxHeight: '86%' }]}>
+            <View style={[s.modalHead, isRTL && s.rowR]}>
+              <View style={[s.modalIcon, { backgroundColor: theme.color.primarySoft }]}>
+                <Ionicons name="cube-outline" size={18} color={theme.color.primary} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <AppText variant="title" style={{ textAlign }}>Add stock</AppText>
+                <AppText variant="caption" color="muted" style={{ textAlign, marginTop: 2 }}>
+                  Add tyres to inventory by size and location
+                </AppText>
+              </View>
+            </View>
+
+            <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" contentContainerStyle={{ gap: spacing.md }}>
+              {/* Size */}
+              <View style={{ gap: spacing.sm }}>
+                <AppText variant="label" color="secondary" style={{ textAlign }}>Tyre size</AppText>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={[s.dimScroll, isRTL && s.rowR]}>
+                  {COMMON_SIZES.map(sz => {
+                    const active = addSize.trim() === sz
+                    return (
+                      <TouchableOpacity key={sz} style={[s.chipSm, active && s.chipActive]} onPress={() => setAddSize(sz)} activeOpacity={0.8}>
+                        <AppText variant="micro" style={{ color: active ? theme.color.onPrimary : theme.color.textSecondary, fontWeight: '700' }}>{sz}</AppText>
+                      </TouchableOpacity>
+                    )
+                  })}
+                </ScrollView>
+                <TextInput
+                  style={[s.reasonInput, { textAlign }]}
+                  value={addSize}
+                  onChangeText={setAddSize}
+                  placeholder="Or type a size, e.g. 315/80R22.5"
+                  placeholderTextColor={theme.color.textMuted}
+                  autoCapitalize="characters"
+                />
+              </View>
+
+              {/* Description / brand */}
+              <View style={{ gap: spacing.sm }}>
+                <AppText variant="label" color="secondary" style={{ textAlign }}>Brand / notes (optional)</AppText>
+                <TextInput
+                  style={[s.reasonInput, { textAlign }]}
+                  value={addDesc}
+                  onChangeText={setAddDesc}
+                  placeholder="e.g. Double Coin, steer"
+                  placeholderTextColor={theme.color.textMuted}
+                />
+              </View>
+
+              {/* Location / site */}
+              <View style={{ gap: spacing.sm }}>
+                <AppText variant="label" color="secondary" style={{ textAlign }}>Location (site)</AppText>
+                {locationOptions.length > 0 && (
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={[s.dimScroll, isRTL && s.rowR]}>
+                    {locationOptions.map(opt => {
+                      const active = addSite.trim() === opt
+                      return (
+                        <TouchableOpacity key={opt} style={[s.chipSm, active && s.chipActive]} onPress={() => setAddSite(opt)} activeOpacity={0.8}>
+                          <AppText variant="micro" style={{ color: active ? theme.color.onPrimary : theme.color.textSecondary, fontWeight: '700' }}>{opt}</AppText>
+                        </TouchableOpacity>
+                      )
+                    })}
+                  </ScrollView>
+                )}
+                <TextInput
+                  style={[s.reasonInput, { textAlign }]}
+                  value={addSite}
+                  onChangeText={setAddSite}
+                  placeholder="Or type a location"
+                  placeholderTextColor={theme.color.textMuted}
+                />
+              </View>
+
+              {/* Quantity + thresholds */}
+              <View style={[s.addNumRow, isRTL && s.rowR]}>
+                <View style={{ flex: 1, gap: spacing.sm }}>
+                  <AppText variant="label" color="secondary" style={{ textAlign }}>Quantity</AppText>
+                  <TextInput
+                    style={[s.numInput, { textAlign: 'center' }]}
+                    value={addQty}
+                    onChangeText={v => setAddQty(v.replace(/[^0-9]/g, ''))}
+                    keyboardType="number-pad"
+                    placeholder="0"
+                    placeholderTextColor={theme.color.textMuted}
+                  />
+                </View>
+                <View style={{ flex: 1, gap: spacing.sm }}>
+                  <AppText variant="label" color="secondary" style={{ textAlign }}>Min level</AppText>
+                  <TextInput
+                    style={[s.numInput, { textAlign: 'center' }]}
+                    value={addMin}
+                    onChangeText={v => setAddMin(v.replace(/[^0-9]/g, ''))}
+                    keyboardType="number-pad"
+                    placeholder="5"
+                    placeholderTextColor={theme.color.textMuted}
+                  />
+                </View>
+                <View style={{ flex: 1, gap: spacing.sm }}>
+                  <AppText variant="label" color="secondary" style={{ textAlign }}>Critical</AppText>
+                  <TextInput
+                    style={[s.numInput, { textAlign: 'center' }]}
+                    value={addCrit}
+                    onChangeText={v => setAddCrit(v.replace(/[^0-9]/g, ''))}
+                    keyboardType="number-pad"
+                    placeholder="3"
+                    placeholderTextColor={theme.color.textMuted}
+                  />
+                </View>
+              </View>
+            </ScrollView>
+
+            <View style={s.modalActions}>
+              <Button label={t('common.cancel')} variant="secondary" onPress={() => !addSaving && setAddOpen(false)} disabled={addSaving} style={{ flex: 1 }} />
+              <Button label="Add stock" icon="add-circle-outline" onPress={submitAdd} loading={addSaving} style={{ flex: 1.4 }} />
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
     </Screen>
   )
 }
@@ -515,6 +707,11 @@ function makeStyles(theme: Theme) {
       width: 40, height: 40, borderRadius: radius.md,
       backgroundColor: c.surface, alignItems: 'center', justifyContent: 'center',
       borderWidth: 1, borderColor: c.border, ...elevation(theme, 1),
+    },
+    addBtn: {
+      width: 40, height: 40, borderRadius: radius.md,
+      backgroundColor: c.primary, alignItems: 'center', justifyContent: 'center',
+      ...elevation(theme, 2),
     },
     statRow: {
       flexDirection: 'row', gap: spacing.md,
@@ -586,6 +783,12 @@ function makeStyles(theme: Theme) {
       backgroundColor: c.surfaceAlt, borderWidth: 1, borderColor: c.border,
       borderRadius: radius.md, paddingHorizontal: spacing.md, paddingVertical: 12,
       fontSize: 14, color: c.text,
+    },
+    addNumRow: { flexDirection: 'row', gap: spacing.md },
+    numInput: {
+      backgroundColor: c.surfaceAlt, borderWidth: 1.5, borderColor: c.border,
+      borderRadius: radius.md, paddingVertical: 12,
+      fontSize: 18, fontWeight: '800', color: c.text,
     },
     modalActions: { flexDirection: 'row', gap: spacing.md, marginTop: spacing.xs },
   })

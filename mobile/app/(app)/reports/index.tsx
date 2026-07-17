@@ -8,7 +8,7 @@
 
 import { useState, useMemo } from 'react'
 import {
-  View, ScrollView, StyleSheet, Alert, ActivityIndicator, TouchableOpacity,
+  View, ScrollView, StyleSheet, Alert, ActivityIndicator, TouchableOpacity, TextInput,
 } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import * as Print from 'expo-print'
@@ -22,6 +22,19 @@ import { Screen, AppText } from '../../../components/ui'
 import { Theme, spacing, radius } from '../../../lib/theme'
 
 type TintKey = keyof Theme['tint']
+
+type DateRange = { from: string; to: string }
+
+/** Local YYYY-MM-DD (avoids the UTC shift that toISOString() introduces). */
+function isoDay(d: Date): string {
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${d.getFullYear()}-${m}-${day}`
+}
+function daysAgo(days: number): string {
+  const d = new Date(); d.setDate(d.getDate() - days); return isoDay(d)
+}
+const isDay = (v: string) => /^\d{4}-\d{2}-\d{2}$/.test(v.trim())
 
 const REPORT_TYPES: {
   id: string; title: string; desc: string; icon: string; tint: TintKey
@@ -63,16 +76,34 @@ export default function ReportsScreen() {
   const role = profile?.role ?? null
   const elevated = isAdminOrAbove(role)
   const [generating, setGenerating] = useState<string | null>(null)
+  // Report date range. Defaults sensibly to the last 30 days; a chosen range
+  // scopes every generated report and is printed on the PDF.
+  const [fromDate, setFromDate] = useState(daysAgo(30))
+  const [toDate, setToDate] = useState(isoDay(new Date()))
+
+  // Resolve the effective range: fall back to last-30-days when a field is blank
+  // or not a complete YYYY-MM-DD, so a report always covers a sensible window.
+  function effectiveRange(): DateRange {
+    return {
+      from: isDay(fromDate) ? fromDate.trim() : daysAgo(30),
+      to: isDay(toDate) ? toDate.trim() : isoDay(new Date()),
+    }
+  }
+
+  function setRange(days: number) {
+    setFromDate(daysAgo(days)); setToDate(isoDay(new Date()))
+  }
 
   async function generate(reportId: string) {
     if (generating) return
     setGenerating(reportId)
     try {
+      const range = effectiveRange()
       let html = ''
-      if (reportId === 'fleet_summary')  html = await buildFleetSummary(profile?.site ?? null, elevated)
-      if (reportId === 'risk_report')    html = await buildRiskReport(profile?.site ?? null, elevated)
-      if (reportId === 'open_actions')   html = await buildOpenActions(profile?.site ?? null, elevated)
-      if (reportId === 'site_summary')   html = await buildSiteSummary(profile?.site ?? null, elevated)
+      if (reportId === 'fleet_summary')  html = await buildFleetSummary(profile?.site ?? null, elevated, range)
+      if (reportId === 'risk_report')    html = await buildRiskReport(profile?.site ?? null, elevated, range)
+      if (reportId === 'open_actions')   html = await buildOpenActions(profile?.site ?? null, elevated, range)
+      if (reportId === 'site_summary')   html = await buildSiteSummary(profile?.site ?? null, elevated, range)
 
       const { uri } = await Print.printToFileAsync({ html })
       if (await Sharing.isAvailableAsync()) {
@@ -100,6 +131,62 @@ export default function ReportsScreen() {
           <AppText variant="caption" color="info" style={styles.infoText}>
             Reports are generated from live data and exported as PDF.{elevated ? '' : ` Filtered to ${profile?.site ?? 'your site'}.`}
           </AppText>
+        </View>
+
+        {/* Date range - scopes every report; defaults to the last 30 days. */}
+        <View style={styles.rangeCard}>
+          <AppText variant="label" color="secondary">Date range</AppText>
+          <View style={styles.presetRow}>
+            {[
+              { label: '30 days', days: 30 },
+              { label: '90 days', days: 90 },
+              { label: '1 year', days: 365 },
+            ].map(p => {
+              const active = fromDate === daysAgo(p.days) && toDate === isoDay(new Date())
+              return (
+                <TouchableOpacity
+                  key={p.days}
+                  style={[styles.presetBtn, active && { backgroundColor: theme.color.primary, borderColor: theme.color.primary }]}
+                  onPress={() => setRange(p.days)}
+                  activeOpacity={0.8}
+                >
+                  <AppText variant="caption" style={{ color: active ? theme.color.onPrimary : theme.color.textSecondary, fontWeight: '700' }}>
+                    {p.label}
+                  </AppText>
+                </TouchableOpacity>
+              )
+            })}
+          </View>
+          <View style={styles.rangeInputs}>
+            <View style={styles.rangeField}>
+              <AppText variant="micro" color="muted">From</AppText>
+              <TextInput
+                style={styles.dateInput}
+                placeholder="YYYY-MM-DD"
+                placeholderTextColor={theme.color.textMuted}
+                value={fromDate}
+                onChangeText={setFromDate}
+                autoCapitalize="none"
+                autoCorrect={false}
+                keyboardType="numbers-and-punctuation"
+                maxLength={10}
+              />
+            </View>
+            <View style={styles.rangeField}>
+              <AppText variant="micro" color="muted">To</AppText>
+              <TextInput
+                style={styles.dateInput}
+                placeholder="YYYY-MM-DD"
+                placeholderTextColor={theme.color.textMuted}
+                value={toDate}
+                onChangeText={setToDate}
+                autoCapitalize="none"
+                autoCorrect={false}
+                keyboardType="numbers-and-punctuation"
+                maxLength={10}
+              />
+            </View>
+          </View>
         </View>
 
         {REPORT_TYPES.map(r => {
@@ -171,8 +258,10 @@ function riskBadge(r: string | null): string {
   return `<span class="badge ${cls}">${esc(r ?? 'Unknown')}</span>`
 }
 
-async function buildFleetSummary(site: string | null, elevated: boolean): Promise<string> {
-  let q = supabase.from('tyre_records').select('id,asset_no,brand,site,risk_level,cost_per_tyre,issue_date').order('issue_date', { ascending: false }).limit(5000)
+async function buildFleetSummary(site: string | null, elevated: boolean, range: DateRange): Promise<string> {
+  let q = supabase.from('tyre_records').select('id,asset_no,brand,site,risk_level,cost_per_tyre,issue_date')
+    .gte('issue_date', range.from).lte('issue_date', range.to)
+    .order('issue_date', { ascending: false }).limit(5000)
   if (!elevated && site) q = q.eq('site', site)
   const { data } = await q
   const records = data ?? []
@@ -189,7 +278,7 @@ async function buildFleetSummary(site: string | null, elevated: boolean): Promis
   })
   const topSites = Object.entries(bySite).sort((a, b) => b[1].cost - a[1].cost).slice(0, 10)
 
-  return header('Fleet Summary Report', `${elevated ? 'All sites' : site ?? 'All'} · ${new Date().toLocaleDateString()}`)
+  return header('Fleet Summary Report', `${elevated ? 'All sites' : site ?? 'All'} · ${range.from} to ${range.to}`)
     + `<div class="kpis">
         <div class="kpi"><div class="kpi-v">${records.length.toLocaleString()}</div><div class="kpi-l">Total Records</div></div>
         <div class="kpi"><div class="kpi-v">${money(totalCost)}</div><div class="kpi-l">Total Cost</div></div>
@@ -207,16 +296,17 @@ async function buildFleetSummary(site: string | null, elevated: boolean): Promis
     + footer()
 }
 
-async function buildRiskReport(site: string | null, elevated: boolean): Promise<string> {
+async function buildRiskReport(site: string | null, elevated: boolean, range: DateRange): Promise<string> {
   let q = supabase.from('tyre_records')
     .select('asset_no,serial_no,brand,site,risk_level,cost_per_tyre,issue_date,description')
     .in('risk_level', ['Critical', 'High'])
+    .gte('issue_date', range.from).lte('issue_date', range.to)
     .order('risk_level').order('issue_date', { ascending: false }).limit(500)
   if (!elevated && site) q = q.eq('site', site)
   const { data } = await q
   const records = data ?? []
 
-  return header('Risk & Critical Tyres Report', `${records.length} Critical/High risk records · ${new Date().toLocaleDateString()}`)
+  return header('Risk & Critical Tyres Report', `${records.length} Critical/High risk records · ${range.from} to ${range.to}`)
     + `<h2>Critical & High Risk Records (${records.length})</h2>
        <table>
          <tr><th>Asset</th><th>Serial</th><th>Brand</th><th>Site</th><th>Risk</th><th>Cost</th><th>Date</th></tr>
@@ -233,10 +323,11 @@ async function buildRiskReport(site: string | null, elevated: boolean): Promise<
     + footer()
 }
 
-async function buildOpenActions(site: string | null, elevated: boolean): Promise<string> {
+async function buildOpenActions(site: string | null, elevated: boolean, range: DateRange): Promise<string> {
   let q = supabase.from('corrective_actions')
     .select('title,priority,site,asset_no,assigned_to,status,due_date,created_at')
     .not('status', 'in', '("Closed")')
+    .gte('created_at', range.from).lte('created_at', range.to + 'T23:59:59')
     .order('priority').order('due_date', { ascending: true }).limit(200)
   if (!elevated && site) q = q.eq('site', site)
   const { data } = await q
@@ -245,7 +336,7 @@ async function buildOpenActions(site: string | null, elevated: boolean): Promise
   const prColor: Record<string, string> = { Critical: 'cr', High: 'hi', Medium: 'me', Low: 'lo' }
   const stColor: Record<string, string> = { Open: 'oc', 'In Progress': 'ip', Resolved: 're' }
 
-  return header('Open Corrective Actions', `${actions.length} open action${actions.length !== 1 ? 's' : ''} · ${new Date().toLocaleDateString()}`)
+  return header('Open Corrective Actions', `${actions.length} open action${actions.length !== 1 ? 's' : ''} · ${range.from} to ${range.to}`)
     + `<table>
          <tr><th>Title</th><th>Priority</th><th>Status</th><th>Asset</th><th>Site</th><th>Assigned</th><th>Due</th></tr>
          ${actions.map((a: any) => `<tr>
@@ -261,8 +352,9 @@ async function buildOpenActions(site: string | null, elevated: boolean): Promise
     + footer()
 }
 
-async function buildSiteSummary(site: string | null, elevated: boolean): Promise<string> {
-  let q = supabase.from('tyre_records').select('site,cost_per_tyre,risk_level').limit(10000)
+async function buildSiteSummary(site: string | null, elevated: boolean, range: DateRange): Promise<string> {
+  let q = supabase.from('tyre_records').select('site,cost_per_tyre,risk_level')
+    .gte('issue_date', range.from).lte('issue_date', range.to).limit(10000)
   if (!elevated && site) q = q.eq('site', site)
   const { data } = await q
   const records = data ?? []
@@ -279,7 +371,7 @@ async function buildSiteSummary(site: string | null, elevated: boolean): Promise
 
   const rows = Object.entries(map).sort((a, b) => b[1].cost - a[1].cost)
 
-  return header('Site Breakdown Report', `${rows.length} site${rows.length !== 1 ? 's' : ''} · ${new Date().toLocaleDateString()}`)
+  return header('Site Breakdown Report', `${rows.length} site${rows.length !== 1 ? 's' : ''} · ${range.from} to ${range.to}`)
     + `<table>
          <tr><th>Site</th><th>Records</th><th>Total Cost</th><th>Avg Cost</th><th>Critical</th><th>High</th></tr>
          ${rows.map(([s, v]) => `<tr>
@@ -317,5 +409,21 @@ function makeStyles(theme: Theme) {
     cardBusy: { opacity: 0.7 },
     iconBox: { width: 48, height: 48, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center' },
     hint: { marginTop: spacing.xs },
+    rangeCard: {
+      backgroundColor: c.surface, borderRadius: radius.xl, padding: spacing.lg,
+      borderWidth: 1, borderColor: c.border, gap: spacing.md,
+    },
+    presetRow: { flexDirection: 'row', gap: spacing.sm },
+    presetBtn: {
+      flex: 1, alignItems: 'center', paddingVertical: spacing.sm,
+      borderRadius: radius.md, borderWidth: 1.5, borderColor: c.border, backgroundColor: c.surfaceAlt,
+    },
+    rangeInputs: { flexDirection: 'row', gap: spacing.md },
+    rangeField: { flex: 1, gap: spacing.xs },
+    dateInput: {
+      height: 42, borderRadius: radius.md, borderWidth: 1.5, borderColor: c.border,
+      backgroundColor: c.surfaceAlt, paddingHorizontal: spacing.md,
+      fontSize: 14, color: c.text, fontWeight: '600',
+    },
   })
 }

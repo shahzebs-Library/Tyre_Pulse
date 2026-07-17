@@ -54,11 +54,11 @@ export default function PhotoCapture({ value, onChange, module = 'module', tint 
         const ref = await uploadModulePhoto(uri, module, idx)
         // On success store the permanent ref; on failure (e.g. offline) KEEP the
         // local file:// URI - the record queue re-uploads it before insert.
+        // On success store the permanent ref; on failure (offline) KEEP the local
+        // file:// URI so the record queue re-uploads it. No popup - the amber
+        // "pending" chip on the thumbnail already signals it will sync later.
         working = working.map((u, i) => (i === idx ? (ref || uri) : u))
         onChange(working)
-        if (!ref) {
-          Alert.alert('Saved offline', 'Photo will upload automatically when you are back online.')
-        }
       } finally {
         setUploadingIndex(null)
       }

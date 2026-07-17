@@ -18,13 +18,16 @@
 import { useEffect, useState, useCallback, useMemo } from 'react'
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet, RefreshControl,
+  ActivityIndicator, Alert,
 } from 'react-native'
 import { useRouter } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
 import { useAuth } from '../../contexts/AuthContext'
 import { useLanguage } from '../../contexts/LanguageContext'
 import { useTheme } from '../../contexts/ThemeContext'
-import { getQueue, getPendingCount, syncQueue } from '../../lib/offlineQueue'
+import { getQueue, getPendingCount, syncQueue, retryFailed } from '../../lib/offlineQueue'
+import { getPendingRecordCount, syncRecordQueue, retryFailedRecords } from '../../lib/recordQueue'
+import { toUserMessage } from '../../lib/safeError'
 import { supabase } from '../../lib/supabase'
 import SyncBanner from '../../components/SyncBanner'
 import { SkeletonBox, SkeletonStatRow, SkeletonList } from '../../components/SkeletonLoader'
@@ -118,6 +121,7 @@ export default function HomeScreen() {
   const s = useMemo(() => makeStyles(theme), [theme])
 
   const [pendingCount, setPendingCount]           = useState(0)
+  const [syncing, setSyncing]                     = useState(false)
   const [recentInspections, setRecentInspections] = useState<InspectionItem[]>([])
   const [refreshing, setRefreshing]               = useState(false)
   const [todayCount, setTodayCount]               = useState(0)
@@ -145,9 +149,11 @@ export default function HomeScreen() {
   )
 
   const load = useCallback(async () => {
-    // Phase 1: offline queue (AsyncStorage - instant)
-    const count = await getPendingCount()
-    setPendingCount(count)
+    // Phase 1: offline queue (AsyncStorage - instant). Count BOTH queues
+    // (inspections + typed record commands) so the pending indicator matches
+    // what the sync action actually uploads.
+    const [inspCount, recCount] = await Promise.all([getPendingCount(), getPendingRecordCount()])
+    setPendingCount(inspCount + recCount)
 
     // Phase 2: network (parallel)
     const todayStr = new Date().toISOString().split('T')[0]
@@ -219,6 +225,27 @@ export default function HomeScreen() {
     setRefreshing(false)
   }
 
+  // Tapping the "pending" indicator now actually uploads the offline queues
+  // (both inspections and typed record commands) with progress, then refreshes
+  // the count. Previously it only navigated to Profile and looked inert.
+  async function handlePendingSync() {
+    if (syncing) return
+    setSyncing(true)
+    try {
+      await Promise.all([retryFailed(), retryFailedRecords()])
+      const [insp, recs] = await Promise.all([syncQueue(), syncRecordQueue()])
+      await load()
+      const failed = insp.failed + recs.failed
+      if (failed > 0) {
+        Alert.alert(t('profile.syncCompleteTitle'), `${insp.synced + recs.synced} uploaded, ${failed} failed. Open Profile to retry.`)
+      }
+    } catch (e: any) {
+      Alert.alert('Sync', toUserMessage(e, 'Could not sync right now. Please try again.'))
+    } finally {
+      setSyncing(false)
+    }
+  }
+
   const textAlign = isRTL ? 'right' : 'left'
 
   return (
@@ -238,10 +265,12 @@ export default function HomeScreen() {
             <AppText variant="caption" color="secondary" style={{ textAlign, marginTop: 2 }}>{today}</AppText>
           </View>
           {pendingCount > 0 && (
-            <TouchableOpacity style={s.pendingBadge} onPress={() => router.push('/(app)/profile')} activeOpacity={0.85}>
-              <Ionicons name="cloud-upload-outline" size={14} color={theme.color.warning.on} />
+            <TouchableOpacity style={s.pendingBadge} onPress={handlePendingSync} disabled={syncing} activeOpacity={0.85}>
+              {syncing
+                ? <ActivityIndicator size="small" color={theme.color.warning.on} />
+                : <Ionicons name="cloud-upload-outline" size={14} color={theme.color.warning.on} />}
               <Text style={s.pendingNum}>{pendingCount}</Text>
-              <Text style={s.pendingLbl}>{t('home.pending')}</Text>
+              <Text style={s.pendingLbl}>{syncing ? t('profile.syncing') : t('home.pending')}</Text>
             </TouchableOpacity>
           )}
         </View>
@@ -257,10 +286,10 @@ export default function HomeScreen() {
             />
             <StatTile
               icon="cloud-upload-outline"
-              value={pendingCount.toString()}
-              label={t('home.pendingSync')}
+              value={syncing ? '...' : pendingCount.toString()}
+              label={syncing ? t('profile.syncing') : t('home.pendingSync')}
               tint={pendingCount > 0 ? 'amber' : 'slate'}
-              onPress={pendingCount > 0 ? () => router.push('/(app)/profile') : undefined}
+              onPress={pendingCount > 0 && !syncing ? handlePendingSync : undefined}
             />
             <StatTile
               icon="location-outline"

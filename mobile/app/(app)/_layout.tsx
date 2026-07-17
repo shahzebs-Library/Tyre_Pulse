@@ -43,7 +43,10 @@ export default function AppLayout() {
     const withC = (q: any) => cc ? q.or(`country.eq.${cc},country.is.null`) : q
     const [acc, task, alert] = await Promise.all([
       withC(supabase.from('accidents').select('id', { count: 'exact', head: true }).neq('status', 'closed')),
-      withC(supabase.from('corrective_actions').select('id', { count: 'exact', head: true }).neq('status', 'Closed')),
+      // Only count genuinely-actionable corrective actions. The old `.neq('status','Closed')`
+      // also counted 'Resolved' (effectively-done) rows and any NULL-status legacy rows,
+      // so the Home tab showed a persistent phantom badge for work that was finished.
+      withC(supabase.from('corrective_actions').select('id', { count: 'exact', head: true }).in('status', ['Open', 'In Progress'])),
       withC(supabase.from('tyre_records').select('id', { count: 'exact', head: true }).eq('risk_level', 'Critical')),
     ])
     setAccidentBadge(acc.count ?? 0)

@@ -64,6 +64,11 @@ export default function MeterLogScreen() {
   const [last, setLast] = useState<LastReading | null>(null)
   const [loadingLast, setLoadingLast] = useState(false)
   const [submitting, setSubmitting] = useState(false)
+  // Photo + confirm happen on a final review step, not the main entry form.
+  const [reviewOpen, setReviewOpen] = useState(false)
+  // Subtle, self-dismissing inline banner after a save. 'pending' = queued for
+  // silent auto-sync (no scary offline modal); 'synced' = written straight away.
+  const [savedFlash, setSavedFlash] = useState<'synced' | 'pending' | null>(null)
 
   // Site is auto-filled from the fleet master, but never over a value the user
   // typed / picked. Once the user edits site, we stop overwriting it.
@@ -109,6 +114,29 @@ export default function MeterLogScreen() {
     }, 350)
     return () => { cancelled = true; clearTimeout(h) }
   }, [assetNo])
+
+  // Auto-dismiss the "logged / pending sync" chip so it never lingers.
+  useEffect(() => {
+    if (!savedFlash) return
+    const h = setTimeout(() => setSavedFlash(null), 4000)
+    return () => clearTimeout(h)
+  }, [savedFlash])
+
+  // Clear every field back to a fresh, blank entry so the next asset can be
+  // logged immediately after a successful save.
+  const resetForm = useCallback(() => {
+    setAssetNo('')
+    setSite(profile?.site ?? '')
+    setOdometer('')
+    setOdoPhoto([])
+    setEngineHours('')
+    setHoursPhoto([])
+    setNotes('')
+    setSignature(null)
+    setSignPad(false)
+    setLast(null)
+    siteTouched.current = !!profile?.site
+  }, [profile?.site])
 
   const kmNum = Number(odometer)
   const hasKm = odometer.trim() !== '' && !Number.isNaN(kmNum)
@@ -188,21 +216,22 @@ export default function MeterLogScreen() {
         notes: notes.trim() || null,
         signature: signature || null,
       })
-      Alert.alert(
-        res.offline ? t('modules.meter.savedOnDevice') : t('modules.meter.readingLogged'),
-        res.offline
-          ? t('modules.meter.savedOnDeviceMsg')
-          : `${t('modules.meter.readingLoggedPrefix')} ${kmNum.toLocaleString()} ${t('modules.meter.readingLoggedMid')} ${assetNo.trim()}.`,
-        [{ text: t('common.done'), onPress: () => router.back() }],
-      )
+      // Seamless save: no "saved offline / saved locally" modal. The record
+      // queue auto-syncs on reconnect, so we just close the review step, reset
+      // to a fresh blank entry, and show a subtle self-dismissing chip.
+      setReviewOpen(false)
+      resetForm()
+      setSavedFlash(res.offline ? 'pending' : 'synced')
     } catch (e: any) {
       Alert.alert(t('modules.meter.logFailTitle'), toUserMessage(e, t('modules.meter.tryAgain')))
     } finally {
       setSubmitting(false)
     }
-  }, [assetNo, site, profile, today, kmNum, odoPhoto, engineHours, hoursPhoto, notes, signature, router])
+  }, [assetNo, site, profile, today, kmNum, odoPhoto, engineHours, hoursPhoto, notes, signature, resetForm, t])
 
-  function handleSubmit() {
+  // Validate the reading itself, then move to the review + photo step. The
+  // gauge photo is captured there, not on the main entry form.
+  function handleContinue() {
     if (submitting) return
     if (!assetNo.trim()) { Alert.alert(t('modules.meter.assetRequiredTitle'), t('modules.meter.assetRequiredMsg')); return }
     if (!hasKm) { Alert.alert(t('modules.meter.readingRequiredTitle'), t('modules.meter.readingRequiredMsg')); return }
@@ -212,16 +241,22 @@ export default function MeterLogScreen() {
       Alert.alert(t('modules.meter.tooLowTitle'), `${t('modules.meter.belowLastPrefix')} ${lastKmLabel} ${t('modules.meter.kmDot')}`)
       return
     }
-    if (!odoPhoto.find(Boolean)) {
-      Alert.alert(t('modules.meter.photoRequiredTitle'), t('modules.meter.photoRequiredMsg'))
-      return
-    }
     if (bigJump) {
       Alert.alert(
         t('modules.meter.bigJumpTitle'),
         `${t('modules.meter.bigJumpPrefix')} ${dailyDelta?.toLocaleString()} ${t('modules.meter.bigJumpSuffix')}`,
-        [{ text: t('modules.meter.recheck'), style: 'cancel' }, { text: t('modules.meter.logAnyway'), onPress: doSubmit }],
+        [{ text: t('modules.meter.recheck'), style: 'cancel' }, { text: t('modules.meter.logAnyway'), onPress: () => setReviewOpen(true) }],
       )
+      return
+    }
+    setReviewOpen(true)
+  }
+
+  // Final confirm on the review step: the gauge photo is required here.
+  function confirmSave() {
+    if (submitting) return
+    if (!odoPhoto.find(Boolean)) {
+      Alert.alert(t('modules.meter.photoRequiredTitle'), t('modules.meter.photoRequiredMsg'))
       return
     }
     doSubmit()
@@ -243,6 +278,19 @@ export default function MeterLogScreen() {
             </Text>
           </View>
         </View>
+
+        {savedFlash && (
+          <View style={[styles.flash, savedFlash === 'pending' ? styles.flashPending : styles.flashSynced, isRTL && styles.rowR]}>
+            <Ionicons
+              name={savedFlash === 'pending' ? 'cloud-upload-outline' : 'checkmark-circle'}
+              size={16}
+              color={savedFlash === 'pending' ? theme.color.warning.base : theme.color.success.base}
+            />
+            <Text style={[styles.flashText, { color: savedFlash === 'pending' ? theme.color.warning.on : theme.color.success.on, textAlign }]}>
+              {savedFlash === 'pending' ? 'Reading saved. Pending sync.' : 'Reading logged.'}
+            </Text>
+          </View>
+        )}
 
         <ScrollView
           style={styles.scroll}
@@ -328,8 +376,6 @@ export default function MeterLogScreen() {
                 {t('modules.meter.belowLastPrefix')} {lastKmLabel} {t('modules.meter.kmDot')}
               </Text>
             )}
-            <Text style={[styles.help, { textAlign }]}>{t('modules.meter.gaugePhoto')}</Text>
-            <PhotoCapture value={odoPhoto} onChange={setOdoPhoto} module="meter-log" tint={theme.color.primary} max={1} label={t('modules.meter.photographGauge')} />
           </View>
 
           {/* Engine hours / hour meter (optional) */}
@@ -348,9 +394,6 @@ export default function MeterLogScreen() {
                 ? t('modules.meter.hoursPhotoHelp')
                 : t('modules.meter.hoursHelp')}
             </Text>
-            {engineHours.trim() !== '' && (
-              <PhotoCapture value={hoursPhoto} onChange={setHoursPhoto} module="meter-log" tint={theme.color.info.base} max={1} label={t('modules.meter.photographGauge')} />
-            )}
           </View>
 
           {/* Notes */}
@@ -407,10 +450,9 @@ export default function MeterLogScreen() {
           </View>
 
           <Button
-            label={t('modules.meter.logReading')}
-            icon="save-outline"
-            onPress={handleSubmit}
-            loading={submitting}
+            label="Review & Save"
+            icon="arrow-forward"
+            onPress={handleContinue}
             disabled={submitting || belowLast}
             size="lg"
             full
@@ -418,6 +460,70 @@ export default function MeterLogScreen() {
           />
         </ScrollView>
       </KeyboardAvoidingView>
+
+      {/* Review + photo + confirm step */}
+      <Modal visible={reviewOpen} animationType="slide" transparent onRequestClose={() => { if (!submitting) setReviewOpen(false) }}>
+        <View style={styles.reviewBackdrop}>
+          <View style={styles.reviewSheet}>
+            <View style={[styles.reviewHead, isRTL && styles.rowR]}>
+              <Text style={[styles.reviewTitle, { textAlign }]}>Confirm reading</Text>
+              <TouchableOpacity onPress={() => { if (!submitting) setReviewOpen(false) }} style={styles.reviewClose} disabled={submitting}>
+                <Ionicons name="close" size={22} color={theme.color.text} />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView contentContainerStyle={styles.reviewBody} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+              <View style={styles.reviewSummary}>
+                <View style={[styles.reviewRow, isRTL && styles.rowR]}>
+                  <Text style={styles.reviewRowLabel}>{t('modules.meter.assetLabel')}</Text>
+                  <Text style={[styles.reviewRowValue, { textAlign }]}>{assetNo.trim()}</Text>
+                </View>
+                {!!site.trim() && (
+                  <View style={[styles.reviewRow, isRTL && styles.rowR]}>
+                    <Text style={styles.reviewRowLabel}>{t('modules.meter.site')}</Text>
+                    <Text style={[styles.reviewRowValue, { textAlign }]}>{site.trim()}</Text>
+                  </View>
+                )}
+                <View style={[styles.reviewRow, isRTL && styles.rowR]}>
+                  <Text style={styles.reviewRowLabel}>{t('modules.meter.odometerLabel')}</Text>
+                  <Text style={[styles.reviewRowValue, { textAlign }]}>{kmNum.toLocaleString()}</Text>
+                </View>
+                {engineHours.trim() !== '' && (
+                  <View style={[styles.reviewRow, isRTL && styles.rowR]}>
+                    <Text style={styles.reviewRowLabel}>{t('modules.meter.engineHoursLabel')}</Text>
+                    <Text style={[styles.reviewRowValue, { textAlign }]}>{engineHours.trim()}</Text>
+                  </View>
+                )}
+              </View>
+
+              <Text style={[styles.reviewSectionLabel, { textAlign }]}>{t('modules.meter.photographGauge')}</Text>
+              <Text style={[styles.help, { textAlign, marginTop: 0 }]}>{t('modules.meter.gaugePhoto')}</Text>
+              <PhotoCapture value={odoPhoto} onChange={setOdoPhoto} module="meter-log" tint={theme.color.primary} max={1} label={t('modules.meter.photographGauge')} />
+
+              {engineHours.trim() !== '' && (
+                <>
+                  <Text style={[styles.reviewSectionLabel, { textAlign, marginTop: spacing.md }]}>
+                    {t('modules.meter.engineHoursLabel')} <Text style={styles.optional}>{t('modules.common.optional')}</Text>
+                  </Text>
+                  <PhotoCapture value={hoursPhoto} onChange={setHoursPhoto} module="meter-log" tint={theme.color.info.base} max={1} label={t('modules.meter.photographGauge')} />
+                </>
+              )}
+            </ScrollView>
+
+            <View style={styles.reviewFoot}>
+              <Button
+                label="Save Reading"
+                icon="checkmark-circle-outline"
+                onPress={confirmSave}
+                loading={submitting}
+                disabled={submitting || !odoPhoto.find(Boolean)}
+                size="lg"
+                full
+              />
+            </View>
+          </View>
+        </View>
+      </Modal>
 
       {/* Asset barcode / QR scanner */}
       <Modal visible={scanOpen} animationType="slide" onRequestClose={closeScanner}>
@@ -491,6 +597,17 @@ function makeStyles(theme: Theme) {
     navTitle: { ...typography.title, color: c.text },
     navSub: { ...typography.caption, color: c.textMuted, marginTop: 1 },
 
+    // Post-save inline chip (self-dismisses). No modal / offline scare copy.
+    flash: {
+      flexDirection: 'row', alignItems: 'center', gap: spacing.sm,
+      marginHorizontal: spacing.lg, marginTop: spacing.md,
+      paddingHorizontal: spacing.md, paddingVertical: spacing.sm,
+      borderRadius: radius.md, borderWidth: 1,
+    },
+    flashSynced: { backgroundColor: c.success.soft, borderColor: c.success.base },
+    flashPending: { backgroundColor: c.warning.soft, borderColor: c.warning.base },
+    flashText: { ...typography.caption, fontWeight: '800', flex: 1 },
+
     scroll: { flex: 1 },
     content: { padding: spacing.lg, paddingBottom: spacing['4xl'], gap: spacing.md },
 
@@ -550,6 +667,36 @@ function makeStyles(theme: Theme) {
     sigActions: { flexDirection: 'row', alignItems: 'center', gap: spacing.lg, marginTop: spacing.sm },
     sigAction: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingVertical: 2 },
     sigActionText: { ...typography.caption, fontWeight: '800', color: c.primary },
+
+    // Review + confirm sheet
+    reviewBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
+    reviewSheet: {
+      backgroundColor: c.bg, borderTopLeftRadius: radius.xl, borderTopRightRadius: radius.xl,
+      maxHeight: '88%', paddingBottom: spacing.lg,
+    },
+    reviewHead: {
+      flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+      paddingHorizontal: spacing.lg, paddingTop: spacing.lg, paddingBottom: spacing.md,
+      borderBottomWidth: 1, borderBottomColor: c.border,
+    },
+    reviewTitle: { ...typography.title, color: c.text, flex: 1 },
+    reviewClose: {
+      width: 36, height: 36, borderRadius: radius.sm, backgroundColor: c.surfaceAlt,
+      alignItems: 'center', justifyContent: 'center',
+    },
+    reviewBody: { padding: spacing.lg, gap: spacing.sm },
+    reviewSummary: {
+      backgroundColor: c.surface, borderRadius: radius.lg, padding: spacing.md,
+      borderWidth: 1, borderColor: c.border, gap: spacing.sm, marginBottom: spacing.sm,
+    },
+    reviewRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.md },
+    reviewRowLabel: { ...typography.label, color: c.textSecondary },
+    reviewRowValue: { ...typography.body, fontWeight: '800', color: c.text, flexShrink: 1 },
+    reviewSectionLabel: { ...typography.label, color: c.textSecondary, marginBottom: spacing.xs },
+    reviewFoot: {
+      paddingHorizontal: spacing.lg, paddingTop: spacing.md,
+      borderTopWidth: 1, borderTopColor: c.border,
+    },
 
     // Scanner modal
     camRoot: { flex: 1, backgroundColor: '#000000' },

@@ -243,6 +243,9 @@ export default function AccidentReportScreen() {
   const [submitting, setSubmitting] = useState(false)
   const [manualAsset, setManualAsset] = useState('')
   const [useManualEntry, setUseManualEntry] = useState(false)
+  // Search-first asset picker: the fleet list is never dumped; matching assets
+  // appear only after the reporter types a search (or scans).
+  const [vehicleQuery, setVehicleQuery] = useState('')
   const [savedOffline, setSavedOffline] = useState(false)
   const [success, setSuccess] = useState(false)
 
@@ -557,25 +560,60 @@ export default function AccidentReportScreen() {
                   </View>
                 ) : (
                   <View style={{ gap: spacing.sm }}>
-                    {vehicles.length > 0 ? (
-                      <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                        <View style={styles.chipRow}>
-                          {vehicles.map(v => {
-                            const active = base.asset_no === v.asset_no
-                            return (
-                              <TouchableOpacity key={v.id}
-                                style={[styles.chip, { borderColor: c.border, backgroundColor: c.surface }, active && { borderColor: c.danger.base, backgroundColor: c.danger.base }]}
-                                onPress={() => applyAsset(v)}>
-                                <AppText variant="caption" style={{ color: active ? '#fff' : c.textSecondary }}>{v.asset_no}</AppText>
-                                <AppText variant="micro" style={{ color: active ? 'rgba(255,255,255,0.75)' : c.textMuted, marginTop: 2 }}>{v.vehicle_type}</AppText>
-                              </TouchableOpacity>
-                            )
-                          })}
-                        </View>
-                      </ScrollView>
-                    ) : (
-                      <AppText variant="caption" color="muted">{t('accident.report.phNoVehiclesSite')}</AppText>
-                    )}
+                    {/* Search box - assets appear only after a query */}
+                    <View style={[styles.searchBox, { borderColor: c.borderStrong, backgroundColor: c.surface }]}>
+                      <Ionicons name="search-outline" size={16} color={c.textMuted} />
+                      <TextInput
+                        style={[styles.searchInput, { color: c.text, textAlign }]}
+                        value={vehicleQuery}
+                        onChangeText={setVehicleQuery}
+                        placeholder={t('accident.report.phSearchVehicle')}
+                        placeholderTextColor={c.textMuted}
+                        autoCapitalize="characters"
+                        autoCorrect={false}
+                      />
+                      {vehicleQuery.length > 0 && (
+                        <TouchableOpacity onPress={() => setVehicleQuery('')}>
+                          <Ionicons name="close-circle" size={16} color={c.borderStrong} />
+                        </TouchableOpacity>
+                      )}
+                    </View>
+
+                    {(() => {
+                      const q = vehicleQuery.trim().toLowerCase()
+                      const matches = q
+                        ? vehicles.filter(v =>
+                            v.asset_no?.toLowerCase().includes(q) ||
+                            v.vehicle_type?.toLowerCase().includes(q) ||
+                            v.registration_no?.toLowerCase().includes(q))
+                        : []
+                      if (!q) {
+                        return (
+                          <AppText variant="caption" color="muted">{t('accident.report.phSearchToBegin')}</AppText>
+                        )
+                      }
+                      if (matches.length === 0) {
+                        return <AppText variant="caption" color="muted">{t('accident.report.phNoVehiclesSite')}</AppText>
+                      }
+                      return (
+                        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                          <View style={styles.chipRow}>
+                            {matches.map(v => {
+                              const active = base.asset_no === v.asset_no
+                              return (
+                                <TouchableOpacity key={v.id}
+                                  style={[styles.chip, { borderColor: c.border, backgroundColor: c.surface }, active && { borderColor: c.danger.base, backgroundColor: c.danger.base }]}
+                                  onPress={() => applyAsset(v)}>
+                                  <AppText variant="caption" style={{ color: active ? '#fff' : c.textSecondary }}>{v.asset_no}</AppText>
+                                  <AppText variant="micro" style={{ color: active ? 'rgba(255,255,255,0.75)' : c.textMuted, marginTop: 2 }}>{v.vehicle_type}</AppText>
+                                </TouchableOpacity>
+                              )
+                            })}
+                          </View>
+                        </ScrollView>
+                      )
+                    })()}
+
                     <TouchableOpacity onPress={() => { setUseManualEntry(true); setB({ asset_no: '', vehicle_id: null }); setX({ plate_number: '', vehicle_type: '' }) }} style={styles.manualToggle}>
                       <Ionicons name="create-outline" size={14} color={c.danger.base} />
                       <AppText variant="caption" style={{ color: c.danger.base }}>{t('accident.report.phEnterAssetManually')}</AppText>
@@ -965,6 +1003,11 @@ function createStyles(theme: Theme) {
     sevChip: { flex: 1, alignItems: 'center', paddingVertical: spacing.sm + 2, borderRadius: radius.pill, borderWidth: 1.5 },
 
     chipRow: { flexDirection: 'row', gap: spacing.sm, paddingBottom: spacing.xs },
+    searchBox: {
+      flexDirection: 'row', alignItems: 'center', gap: spacing.sm,
+      borderWidth: 1, borderRadius: radius.md, paddingHorizontal: spacing.md, height: 44,
+    },
+    searchInput: { flex: 1, fontSize: 15 },
     chip: { paddingHorizontal: spacing.md, paddingVertical: spacing.md - 2, borderRadius: radius.md, borderWidth: 1.5, alignItems: 'center' },
 
     manualToggle: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: spacing.sm },

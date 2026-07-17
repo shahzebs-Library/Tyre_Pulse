@@ -140,7 +140,25 @@
     "didYouMeanB": "؟ اضغط لاستخدامه.",
     "vehicleType": "نوع المركبة",
     "unknown": "غير معروف",
-    "validationRecordTyre": "سجّل حالة إطار واحد على الأقل لحفظ هذا الفحص."
+    "validationRecordTyre": "سجّل حالة إطار واحد على الأقل لحفظ هذا الفحص.",
+    "searchToBegin": "ابحث أو امسح أصلاً للبدء",
+    "searchToBeginHint": "اكتب رقم الأصل بالأعلى أو امسح الباركود. تظهر الأصول بعد البحث فقط.",
+    "step3": "3",
+    "reviewTitle": "المراجعة والتوقيع",
+    "reviewSubtitle": "أضف الملاحظات ووقّع قبل الإرسال",
+    "observationsLabel": "الملاحظات",
+    "observationsPlaceholder": "الحالة العامة للإطارات، المشكلات المكتشفة، الإجراءات المطلوبة...",
+    "hourMeterLabel": "عداد الساعات",
+    "hourMeterPlaceholder": "ساعات المحرك (اختياري)",
+    "inspectorSignatureLabel": "توقيع المفتش",
+    "signatureRequired": "التوقيع مطلوب",
+    "signatureRequiredMsg": "وقّع في المربع لإرسال الفحص للاعتماد.",
+    "reviewButton": "المراجعة والتوقيع",
+    "submitForApproval": "إرسال للاعتماد",
+    "reviewSummaryTitle": "ملخص الفحص",
+    "positionsRecorded": "موضعاً مسجلاً",
+    "submittedForApprovalTitle": "تم الإرسال للاعتماد",
+    "submittedForApprovalNote": "سيقوم المشرف بمراجعة هذا الفحص والتوقيع عليه. سيظهر ضمن السجل بعد الاعتماد."
   },
   "history": {
     "title": "سجل الفحوصات",
@@ -535,7 +553,9 @@
         "Third Party": "طرف ثالث",
         "Driver": "السائق",
         "Warranty": "الضمان"
-      }
+      },
+      "phSearchVehicle": "ابحث برقم الأصل أو اللوحة أو النوع...",
+      "phSearchToBegin": "اكتب رقم الأصل أو امسح لإيجاد المركبة. تظهر الأصول بعد البحث فقط."
     },
     "detail": {
       "exportFailed": "فشل التصدير",
@@ -580,7 +600,10 @@
       "userFallback": "مستخدم",
       "updateStatus": "تحديث الحالة",
       "updateStatusHint": "تغيير حالة التحقيق لهذا التقرير"
-    }
+    },
+    "takePhoto": "التقاط صورة",
+    "chooseFromGallery": "اختيار من المعرض",
+    "cancel": "إلغاء"
   },
   "modules": {
     "common": {
@@ -755,6 +778,10 @@
         "admin": {
           "label": "وحدة المسؤول",
           "sub": "الوحدة والإعدادات"
+        },
+        "approvals": {
+          "label": "الاعتمادات",
+          "sub": "اعتماد الفحوصات"
         }
       }
     },

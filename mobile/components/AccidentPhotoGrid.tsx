@@ -38,52 +38,76 @@ export default function AccidentPhotoGrid({ photos, localUris, onPhotosChange, o
   const c = theme.color
   const [uploadingIndex, setUploadingIndex] = useState<number | null>(null)
 
-  async function addPhoto() {
-    if (photos.length >= MAX_PHOTOS) {
-      Alert.alert('Maximum photos', `You can attach up to ${MAX_PHOTOS} photos per report.`)
-      return
+  // Upload a batch of picked/captured local URIs sequentially, keeping a working
+  // copy of the arrays so multi-select from the gallery stays consistent.
+  async function ingest(uris: string[]) {
+    let urls = [...photos]
+    let locals = [...localUris]
+    for (const localUri of uris) {
+      if (urls.length >= MAX_PHOTOS) break
+      const newIndex = urls.length
+      // Add with local URI for instant preview; placeholder for URL
+      urls = [...urls, '']
+      locals = [...locals, localUri]
+      onPhotosChange(urls, locals)
+      setUploadingIndex(newIndex)
+      onUploadingChange?.(true)
+      try {
+        const publicUrl = await uploadAccidentPhoto(localUri, newIndex)
+        // Only store a permanent URL; never persist a local file:// URI to the DB.
+        urls = urls.map((u, i) => (i === newIndex ? (publicUrl || '') : u))
+        onPhotosChange(urls, locals)
+        if (!publicUrl) {
+          Alert.alert('Upload failed', 'Photo could not be uploaded. Check your connection and retake.')
+        }
+      } finally {
+        setUploadingIndex(null)
+        onUploadingChange?.(false)
+      }
     }
+  }
 
+  // quality 0.55 keeps damage detail legible while cutting upload size, memory
+  // and battery vs 0.75 (no image-manipulator dependency available).
+  async function takePhoto() {
     const { status } = await ImagePicker.requestCameraPermissionsAsync()
     if (status !== 'granted') {
       Alert.alert(t('accident.cameraPermissionTitle'), t('accident.cameraPermissionMessage'))
       return
     }
-
-    // quality 0.55 keeps damage detail legible while cutting upload size,
-    // memory and battery vs 0.75 (no image-manipulator dependency available).
     const result = await ImagePicker.launchCameraAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      quality: 0.55,
-      allowsEditing: false,
+      mediaTypes: ImagePicker.MediaTypeOptions.Images, quality: 0.55, allowsEditing: false,
     })
-
     if (result.canceled || !result.assets[0]) return
+    await ingest([result.assets[0].uri])
+  }
 
-    const localUri = result.assets[0].uri
-    const newIndex = photos.length
-
-    // Add with local URI for instant preview; placeholder for URL
-    const newUrls      = [...photos, '']
-    const newLocalUris = [...localUris, localUri]
-    onPhotosChange(newUrls, newLocalUris)
-
-    // Upload in background (base64 -> public bucket; reliable in Expo/RN)
-    setUploadingIndex(newIndex)
-    onUploadingChange?.(true)
-    try {
-      const publicUrl = await uploadAccidentPhoto(localUri, newIndex)
-      const finalUrls = [...newUrls]
-      // Only store a permanent URL; never persist a local file:// URI to the DB.
-      finalUrls[newIndex] = publicUrl || ''
-      onPhotosChange(finalUrls, newLocalUris)
-      if (!publicUrl) {
-        Alert.alert('Upload failed', 'Photo could not be uploaded. Check your connection and retake.')
-      }
-    } finally {
-      setUploadingIndex(null)
-      onUploadingChange?.(false)
+  async function pickFromGallery() {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync()
+    if (status !== 'granted') {
+      Alert.alert(t('accident.cameraPermissionTitle'), t('accident.cameraPermissionMessage'))
+      return
     }
+    const remaining = MAX_PHOTOS - photos.length
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images, quality: 0.55,
+      allowsMultipleSelection: true, selectionLimit: remaining,
+    })
+    if (result.canceled || !result.assets?.length) return
+    await ingest(result.assets.map(a => a.uri))
+  }
+
+  // Let the reporter choose camera or gallery (the field ask: gallery uploads).
+  function addPhoto() {
+    if (photos.length >= MAX_PHOTOS) {
+      Alert.alert('Maximum photos', `You can attach up to ${MAX_PHOTOS} photos per report.`)
+      return
+    }
+    Alert.alert(t('accident.addPhoto'), undefined, [
+      { text: t('accident.takePhoto'), onPress: takePhoto },
+      { text: t('accident.chooseFromGallery'), onPress: pickFromGallery },
+      { text: t('accident.cancel'), style: 'cancel' },
+    ])
   }
 
   function removePhoto(index: number) {

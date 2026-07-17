@@ -139,9 +139,10 @@ export default function RegisterScreen() {
       }, { onConflict: 'id' })
 
       if (profileErr) {
-        // Profile update failed - log but still show success since the auth user
-        // and its trigger-created profile exist.
-        console.warn('Profile upsert failed:', profileErr.message)
+        // Profile update failed - log (dev only, production logcat is world-
+        // readable) but still show success since the auth user and its
+        // trigger-created profile exist.
+        if (__DEV__) console.warn('Profile upsert failed:', profileErr.message)
       }
 
       setStep('pending')

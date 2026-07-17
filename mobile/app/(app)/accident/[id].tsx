@@ -22,6 +22,7 @@ import { useLanguage } from '../../../contexts/LanguageContext'
 import { useTheme } from '../../../contexts/ThemeContext'
 import { supabase } from '../../../lib/supabase'
 import { toUserMessage } from '../../../lib/safeError'
+import { safeImageSrc } from '../../../lib/safeUrl'
 import { useRoleGuard } from '../../../hooks/useRoleGuard'
 import { Theme, radius, spacing, statusColor, StatusKind } from '../../../lib/theme'
 import { Screen, Card, AppText, Badge } from '../../../components/ui'
@@ -125,7 +126,9 @@ export default function AccidentDetailScreen() {
       // Photo URL resolution is best-effort: a storage hiccup must not blank the report.
       try {
         const refs = Array.isArray(loadedAccident.photos) ? loadedAccident.photos.filter(Boolean) : []
-        setPhotoUrls(await resolveStorageUrls(refs))
+        const resolved = await resolveStorageUrls(refs)
+        // DB photo refs are user-supplied data - only render http(s)/data:image URIs.
+        setPhotoUrls(resolved.map(u => safeImageSrc(u)).filter((u): u is string => !!u))
       } catch (e: any) {
         if (__DEV__) console.warn('[accident/detail] photo resolve failed:', e?.message)
         setPhotoUrls([])

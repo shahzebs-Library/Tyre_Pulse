@@ -807,6 +807,32 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
 - RULE: to re-skin the app icon, drop new art in `mobile/assets/{icon,adaptive-icon,splash,notification-icon}.png`
   (keep app.json paths); launcher icon = emblem only (no wordmark, it goes tiny), splash/login = full logo.
   The brand-green recolour recipe is a blue-family luminance ramp to #16a34a (dark shadows #06230f), no neon.
+- SHIPPED: merged to main via **PR #67** (squash `b01f721`). `release-play.yml` Play build triggered on main
+  (workflow_dispatch, run 29578022504) -> auto-submits to the Play Internal testing track. The new icon shows
+  on testers' devices once that build finishes + Play processes it. No DB/schema change; branch realigned to
+  origin/main. For NEW work restart the branch from latest main (merged PRs are terminal).
+
+### SESSION 2026-07-17 CLOSED CLEAN — mobile field-feedback + brand icon all merged
+- This session's mobile work is fully MERGED to main and nothing is pending in code: field-testing bug batch
+  (unmatched routes, checklist uuid, accident web-parity, meter-log validation/auto-fill/barcode/hour-meter/
+  signature V266, tyre SVG parity, inspection guard+PDF share, stock/overview filters, full Arabic+RTL, nav-bar
+  overlap, battery/perf, back-button, security tightening, `lib/safeError.ts`), then the real Tyre Pulse brand
+  icon/splash/login logo (PR #67). Migrations through **V266**; next free **V267**.
+- Deferred / USER-OPS only (not code): enable leaked-password protection in Supabase Auth dashboard; verify the
+  `tyre_man` RBAC removals on a FRESH build with a real tyre_man account (gating is correct in code — a role
+  still seeing removed modules = stale build); redeploy `send-scheduled-reports` if a scheduled 'pm' report is
+  wanted (still emails exec fallback until then).
+- **Brand-icon Play build VERIFIED SHIPPED**: `release-play.yml` run 29578022504 (head `b01f721`) completed
+  SUCCESS at 2026-07-17 11:58Z (~11 min). Step "Build AAB and auto-submit to Play (internal)" succeeded and the
+  "build only, no submit" fallback was SKIPPED, i.e. the AAB built AND auto-submitted to the **Play Internal**
+  track (GOOGLE_SERVICE_ACCOUNT_KEY secret is configured, so `eas build --auto-submit` submits). New icon reaches
+  internal testers once Google finishes processing. EAS remote versionCode auto-increments per build.
+- **Play release path (for the user, going PUBLIC)**: the same AAB is PROMOTED across tracks, no rebuild. Play
+  Console -> Testing -> Internal testing -> latest release -> "Promote release" -> Production -> review + rollout
+  (staged % recommended). Before Production unlocks, one-time items must be 100% complete: Store listing
+  (screenshots + 1024x512 feature graphic + 512 icon), Content rating, **Data safety** form, Target audience,
+  **App access** (must supply a reviewer test LOGIN since the app requires sign-in), Privacy policy URL, Ads
+  declaration. New Play accounts may require Closed testing with 12+ testers for 14 days before Production.
 
 ### SESSION CLOSED CLEAN (2026-07-16) — everything merged, nothing pending
 - All work through the custom TV/report board builder is MERGED to main and LIVE. Latest merges on branch

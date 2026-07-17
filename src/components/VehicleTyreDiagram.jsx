@@ -2,6 +2,8 @@ import React from 'react';
 import { legacyPositionCode } from '../lib/tyrePositions';
 import { Illustration } from './illustrations';
 import { vehicleArt } from '../lib/brand/vehicleArt';
+import CustomBody from './VehicleDiagramCustomBody';
+import { getCustomLayoutMap, canonVehicleTypeKey } from '../lib/api/vehicleDiagrams';
 
 // ── Vehicle type normaliser - maps any DB/prop value to a LAYOUTS key ──────────
 function resolveVehicleType(vt) {
@@ -1412,6 +1414,16 @@ export function isTyrelessEquipment(vt) {
 export default function VehicleTyreDiagram({ vehicleType, positions, tyreData, onPositionClick, onTyreClick, width = 240 }) {
   const resolved = resolveVehicleType(vehicleType)
 
+  // Custom layouts designed in the console Vehicle Designer (V268). Loaded
+  // once per session (cached promise in the service); {} when none exist or
+  // on any error, so built-in LAYOUTS always remain the fallback.
+  const [customLayouts, setCustomLayouts] = React.useState(null)
+  React.useEffect(() => {
+    let alive = true
+    getCustomLayoutMap().then((map) => { if (alive) setCustomLayouts(map) })
+    return () => { alive = false }
+  }, [])
+
   // Equipment without tyres (generator, chiller, ice/batch plant, reclaimer …):
   // show a clear "no tyres" state instead of a misleading 4-tyre layout.
   if (isTyrelessEquipment(vehicleType)) {
@@ -1425,9 +1437,14 @@ export default function VehicleTyreDiagram({ vehicleType, positions, tyreData, o
     )
   }
 
-  const layout = LAYOUTS[resolved] || LAYOUTS['Pickup']
+  // A custom ACTIVE layout for this exact vehicle type wins over the built-in
+  // resolution; built-ins are untouched when no custom row exists.
+  const customKey = canonVehicleTypeKey(vehicleType)
+  const customLayout = (customLayouts && customKey && customLayouts[customKey]) || null
+  const layout = customLayout || LAYOUTS[resolved] || LAYOUTS['Pickup']
 
-  const { emoji, viewH, Body, tyres } = layout;
+  const { emoji, viewH, tyres, Body } = layout;
+  const displayName = customLayout ? (customLayout.label || vehicleType || resolved) : resolved;
   const scale = width / 200;
 
   // Build unified riskMap: { id -> 'good'|'warning'|'critical'|'none' }
@@ -1458,7 +1475,7 @@ export default function VehicleTyreDiagram({ vehicleType, positions, tyreData, o
       {/* Title */}
       <div className="text-sm font-bold text-gray-100 flex items-center gap-2">
         <span className="text-xl">{emoji}</span>
-        <span>{resolved}</span>
+        <span>{displayName}</span>
         <span className="text-gray-500 font-normal text-xs">· {tyres.length} tyres</span>
       </div>
 
@@ -1476,8 +1493,8 @@ export default function VehicleTyreDiagram({ vehicleType, positions, tyreData, o
         <text x="100" y="-2" textAnchor="middle" fontSize="5.5" fill="#64748b"
           fontWeight="600" letterSpacing="1">▲ FRONT</text>
 
-        {/* Vehicle body illustration */}
-        <Body />
+        {/* Vehicle body illustration (built-in component or Vehicle Designer custom body) */}
+        {Body ? <Body /> : <CustomBody spec={layout.bodySpec} />}
 
         {/* Tyres rendered on top */}
         {tyres.map(t => (

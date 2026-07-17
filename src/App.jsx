@@ -39,6 +39,7 @@ const ConsoleAlertRules    = lazy(() => import('./console/pages/ConsoleAlertRule
 const ConsoleModuleControl = lazy(() => import('./console/pages/ConsoleModuleControl'))
 const ConsoleSelfHealing   = lazy(() => import('./console/pages/ConsoleSelfHealing'))
 const ConsoleDataBrowser   = lazy(() => import('./console/pages/ConsoleDataBrowser'))
+const ConsoleVehicleDesigner = lazy(() => import('./console/pages/ConsoleVehicleDesigner'))
 
 // Console admin pages built in parallel by other agents. Resolved via
 // import.meta.glob so this build succeeds whether or not the files exist yet: a
@@ -634,6 +635,7 @@ export default function App() {
           <Route path="module-control" element={<ConsoleModuleControl />} />
           <Route path="self-healing"  element={<ConsoleSelfHealing />} />
           <Route path="data-browser"  element={<ConsoleDataBrowser />} />
+          <Route path="vehicle-designer" element={<ConsoleVehicleDesigner />} />
           {/* Unified admin + access control hosted from the main app via ConsoleAuthBridge */}
           <Route path="access"        element={<ConsoleAuthBridge><Suspense fallback={<ConsoleModulePlaceholder label="Access Control" />}><ConsoleAccessControl /></Suspense></ConsoleAuthBridge>} />
           <Route path="ai-admin"      element={<ConsoleAuthBridge><Suspense fallback={<ConsoleModulePlaceholder label="AI Administration" />}><AiAdministration /></Suspense></ConsoleAuthBridge>} />

@@ -196,7 +196,7 @@ export default function AdminDashboardScreen() {
             sublabel="Ask anything"
             color="#7c3aed"
             bg="#f5f3ff"
-            onPress={() => router.push('/(app)/ai/index')}
+            onPress={() => router.push('/(app)/ai')}
           />
           {isAdmin(profile?.role) && (
             <QuickAction

@@ -320,11 +320,11 @@ function actionLabel(action: ActionTag): string {
 
 function handleAction(action: ActionTag) {
   switch (action) {
-    case 'view_critical':   router.push('/(app)/records/index')   ; break
-    case 'view_workorders': router.push('/(app)/workorders/index'); break
-    case 'view_analytics':  router.push('/(app)/analytics/index') ; break
-    case 'view_reports':    router.push('/(app)/reports/index')   ; break
-    case 'view_records':    router.push('/(app)/records/index')   ; break
+    case 'view_critical':   router.push('/(app)/records')   ; break
+    case 'view_workorders': router.push('/(app)/workorders'); break
+    case 'view_analytics':  router.push('/(app)/analytics') ; break
+    case 'view_reports':    router.push('/(app)/reports')   ; break
+    case 'view_records':    router.push('/(app)/records')   ; break
   }
 }
 

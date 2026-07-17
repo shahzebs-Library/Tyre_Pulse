@@ -81,11 +81,11 @@ const QUICK_ACTIONS: QuickAction[] = [
   { module: 'scan',        section: 'Field', icon: 'scan-outline',            label: 'Scan Asset',    sublabel: 'Barcode / QR code',    route: '/(app)/scanner',            tint: 'blue'   },
   { module: 'serial',      section: 'Field', icon: 'barcode-outline',         label: 'Serial Search', sublabel: 'Find tyre by serial',  route: '/(app)/serial-search',      tint: 'blue'   },
   { module: 'tyreChange',  section: 'Field', icon: 'swap-horizontal-outline', label: 'Tyre Change',   sublabel: 'Record a change',      route: '/(app)/tyre-change',        tint: 'teal'   },
-  { module: 'checklists',  section: 'Field', icon: 'checkbox-outline',        label: 'Checklists',    sublabel: 'Fill & submit checks', route: '/(app)/checklists/index',   tint: 'green'  },
+  { module: 'checklists',  section: 'Field', icon: 'checkbox-outline',        label: 'Checklists',    sublabel: 'Fill & submit checks', route: '/(app)/checklists',   tint: 'green'  },
   { module: 'meter',       section: 'Field', icon: 'speedometer-outline',     label: 'Meter Log',     sublabel: 'Daily odometer / hrs', route: '/(app)/meter-logs',         tint: 'blue'   },
   { module: 'reportIssue', section: 'Field', icon: 'megaphone-outline',       label: 'Report Issue',  sublabel: 'Flag a problem',       route: '/(app)/report-issue',       tint: 'amber'  },
   // Fleet ---------------------------------------------------------------------
-  { module: 'records',     section: 'Fleet', icon: 'layers-outline',          label: 'Tyre Records',  sublabel: 'Browse all records',   route: '/(app)/records/index',      tint: 'violet' },
+  { module: 'records',     section: 'Fleet', icon: 'layers-outline',          label: 'Tyre Records',  sublabel: 'Browse all records',   route: '/(app)/records',      tint: 'violet' },
   { module: 'vehicles',    section: 'Fleet', icon: 'car-outline',             label: 'Vehicles',      sublabel: 'Fleet assets',         route: '/(app)/vehicles',           tint: 'blue'   },
   { module: 'history',     section: 'Fleet', icon: 'time-outline',            label: 'History',       sublabel: 'Recent activity',      route: '/(app)/history',            tint: 'slate'  },
   { module: 'alerts',      section: 'Fleet', icon: 'notifications-outline',   label: 'Alerts',        sublabel: 'Critical tyres',       route: '/(app)/alerts',             tint: 'red'    },
@@ -93,18 +93,18 @@ const QUICK_ACTIONS: QuickAction[] = [
   // Maintenance ---------------------------------------------------------------
   { module: 'accidents',      section: 'Maintenance', icon: 'warning-outline',      label: 'Accidents',   sublabel: 'Incident overview',   route: '/(app)/accident/dashboard', tint: 'red'    },
   { module: 'reportAccident', section: 'Maintenance', icon: 'alert-circle-outline', label: 'File Accident', sublabel: 'Report an incident', route: '/(app)/accident/report',   tint: 'red'    },
-  { module: 'workorders',     section: 'Maintenance', icon: 'construct-outline',    label: 'Work Orders', sublabel: 'Open actions',        route: '/(app)/workorders/index',   tint: 'amber'  },
+  { module: 'workorders',     section: 'Maintenance', icon: 'construct-outline',    label: 'Work Orders', sublabel: 'Open actions',        route: '/(app)/workorders',   tint: 'amber'  },
   { module: 'rca',            section: 'Maintenance', icon: 'git-branch-outline',   label: 'Root Cause',  sublabel: 'RCA analysis',        route: '/(app)/rca',                tint: 'violet' },
   { module: 'tasks',          section: 'Maintenance', icon: 'list-outline',         label: 'Tasks',       sublabel: 'Corrective actions',  route: '/(app)/tasks',              tint: 'amber'  },
   { module: 'stock',          section: 'Maintenance', icon: 'cube-outline',         label: 'Stock Count', sublabel: 'Daily stock-take',    route: '/(app)/stock',              tint: 'amber'  },
   // Management ----------------------------------------------------------------
   { module: 'overview',    section: 'Management', icon: 'grid-outline',          label: 'Overview',   sublabel: 'Fleet snapshot',  route: '/(app)/overview',        tint: 'blue'   },
-  { module: 'reports',     section: 'Management', icon: 'document-text-outline', label: 'Reports',    sublabel: 'Generate PDF',    route: '/(app)/reports/index',   tint: 'violet' },
-  { module: 'analytics',   section: 'Management', icon: 'bar-chart-outline',     label: 'Analytics',  sublabel: 'Fleet KPIs',      route: '/(app)/analytics/index', tint: 'blue'   },
-  { module: 'ai',          section: 'Management', icon: 'sparkles-outline',      label: 'Fleet AI',   sublabel: 'Ask anything',    route: '/(app)/ai/index',        tint: 'violet' },
+  { module: 'reports',     section: 'Management', icon: 'document-text-outline', label: 'Reports',    sublabel: 'Generate PDF',    route: '/(app)/reports',   tint: 'violet' },
+  { module: 'analytics',   section: 'Management', icon: 'bar-chart-outline',     label: 'Analytics',  sublabel: 'Fleet KPIs',      route: '/(app)/analytics', tint: 'blue'   },
+  { module: 'ai',          section: 'Management', icon: 'sparkles-outline',      label: 'Fleet AI',   sublabel: 'Ask anything',    route: '/(app)/ai',        tint: 'violet' },
   { module: 'team',        section: 'Management', icon: 'people-outline',        label: 'Team',       sublabel: 'Members',         route: '/(app)/team',            tint: 'teal'   },
   // Admin ---------------------------------------------------------------------
-  { module: 'admin',       section: 'Admin', icon: 'shield-outline', label: 'Admin Console', sublabel: 'Console & settings', route: '/(app)/admin/index', tint: 'slate' },
+  { module: 'admin',       section: 'Admin', icon: 'shield-outline', label: 'Admin Console', sublabel: 'Console & settings', route: '/(app)/admin', tint: 'slate' },
 ]
 
 // ── Main screen ────────────────────────────────────────────────────────────────
@@ -323,7 +323,7 @@ export default function HomeScreen() {
                   <TouchableOpacity
                     style={s.fleetAlert}
                     activeOpacity={0.85}
-                    onPress={() => router.push(fleetHealth.criticalCount > 0 ? '/(app)/records/index' : '/(app)/workorders/index')}
+                    onPress={() => router.push(fleetHealth.criticalCount > 0 ? '/(app)/records' : '/(app)/workorders')}
                   >
                     <Ionicons name="alert-circle-outline" size={15} color={theme.color.danger.base} />
                     <Text style={s.fleetAlertText}>

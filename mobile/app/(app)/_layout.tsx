@@ -1,7 +1,9 @@
 import { useEffect, useState, useCallback } from 'react'
 import { Tabs, Redirect } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native'
+import { View, Text, StyleSheet, TouchableOpacity, DeviceEventEmitter } from 'react-native'
+import { getPendingCount } from '../../lib/offlineQueue'
+import { getPendingRecordCount } from '../../lib/recordQueue'
 import { useAuth } from '../../contexts/AuthContext'
 import { useLanguage } from '../../contexts/LanguageContext'
 import { ActivityIndicator } from 'react-native'
@@ -11,6 +13,10 @@ import { supabase } from '../../lib/supabase'
 import { TAB_BAR } from '../../lib/permissions'
 import { useTheme } from '../../contexts/ThemeContext'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
+
+// Emitted by the Home screen whenever it recounts the offline queues, so the
+// tab badge updates the instant a sync finishes (must match index.tsx).
+const PENDING_SYNC_EVENT = 'tyrepulse:pending-sync-changed'
 
 // Custom tab bar icon with active background pill
 function TabIcon({
@@ -41,21 +47,46 @@ export default function AppLayout() {
     if (!user) return
     const cc = profile?.country
     const withC = (q: any) => cc ? q.or(`country.eq.${cc},country.is.null`) : q
-    const [acc, task, alert] = await Promise.all([
-      withC(supabase.from('accidents').select('id', { count: 'exact', head: true }).neq('status', 'closed')),
-      // Only count genuinely-actionable corrective actions. The old `.neq('status','Closed')`
-      // also counted 'Resolved' (effectively-done) rows and any NULL-status legacy rows,
-      // so the Home tab showed a persistent phantom badge for work that was finished.
-      withC(supabase.from('corrective_actions').select('id', { count: 'exact', head: true }).in('status', ['Open', 'In Progress'])),
-      withC(supabase.from('tyre_records').select('id', { count: 'exact', head: true }).eq('risk_level', 'Critical')),
-    ])
+    const acc = await withC(
+      supabase.from('accidents').select('id', { count: 'exact', head: true }).neq('status', 'closed'),
+    )
     setAccidentBadge(acc.count ?? 0)
-    setHomeBadge((task.count ?? 0) + (alert.count ?? 0))
   }, [user, profile?.country])
 
   useEffect(() => { loadBadges() }, [loadBadges])
   useRealtime('accidents', loadBadges, { enabled: !!user })
-  useRealtime('corrective_actions', loadBadges, { enabled: !!user })
+
+  // Home tab badge = LIVE offline-queue pending count (inspections + typed
+  // record commands), mirroring what the Home screen and SyncBanner count.
+  // The old badge counted open corrective actions + critical tyres, which are
+  // fleet-wide facts a user cannot clear, so the red dot never went away.
+  const refreshPendingBadge = useCallback(async () => {
+    try {
+      const [insp, recs] = await Promise.all([getPendingCount(), getPendingRecordCount()])
+      setHomeBadge(insp + recs)
+    } catch {
+      // Storage read failed - keep the last known value
+    }
+  }, [])
+
+  useEffect(() => {
+    refreshPendingBadge()
+    // Instant update whenever the Home screen recounts (e.g. after "Sync now").
+    const sub = DeviceEventEmitter.addListener(PENDING_SYNC_EVENT, (total?: number) => {
+      if (typeof total === 'number') setHomeBadge(total)
+      else refreshPendingBadge()
+    })
+    return () => sub.remove()
+  }, [refreshPendingBadge])
+
+  // While a badge is showing, poll cheaply (AsyncStorage read) so background
+  // auto-syncs (useNetworkSync) clear it with no user action; stops at 0.
+  const hasPendingBadge = homeBadge > 0
+  useEffect(() => {
+    if (!hasPendingBadge) return
+    const id = setInterval(refreshPendingBadge, 5000)
+    return () => clearInterval(id)
+  }, [hasPendingBadge, refreshPendingBadge])
 
   if (loading) {
     return (
@@ -75,6 +106,9 @@ export default function AppLayout() {
 
   return (
     <Tabs
+      // Re-check the pending count on every tab focus change, so returning to
+      // any tab after an offline save or a sync refreshes the Home badge.
+      screenListeners={{ focus: () => { refreshPendingBadge() } }}
       screenOptions={{
         headerShown: false,
         tabBarActiveTintColor: theme.color.primary,

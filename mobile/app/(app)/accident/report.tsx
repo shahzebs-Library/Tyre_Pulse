@@ -213,6 +213,7 @@ interface FleetVehicle {
   asset_no: string
   vehicle_type: string
   registration_no?: string | null
+  fleet_number?: string | null
   country?: string | null
 }
 
@@ -251,6 +252,9 @@ export default function AccidentReportScreen() {
 
   // Once the user edits Recovered manually, stop auto-overwriting it.
   const recoveredTouched = useRef(false)
+  // Once the user picks a site manually, an asset pick never overwrites it
+  // (web parity: auto-fill only fills empty fields, never a typed value).
+  const siteManual = useRef(false)
 
   const textAlign = isRTL ? 'right' : 'left'
 
@@ -262,8 +266,9 @@ export default function AccidentReportScreen() {
     else router.replace('/(app)/accident/dashboard')
   }
 
-  useEffect(() => { if (allowed) loadSites() }, [allowed])
-  useEffect(() => { if (allowed && base.site) loadVehicles(base.site) }, [allowed, base.site])
+  // Asset-first flow (web parity): the fleet list loads up front so the reporter
+  // searches the VEHICLE first; site/plate/type auto-fill from the picked asset.
+  useEffect(() => { if (allowed) { loadSites(); loadVehicles() } }, [allowed])
 
   // Auto-recompute Recovered = Claim - Approved - Deductible until user overrides.
   useEffect(() => {
@@ -274,40 +279,35 @@ export default function AccidentReportScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [extra.claim_amount, extra.claim_approved_amount, extra.deductible])
 
+  // Sites are loaded only as choices/suggestions - the SITE VALUE comes from the
+  // picked asset's fleet-master row (or a manual tap), never pre-selected here.
   async function loadSites() {
     try {
       const { data: sitesData } = await supabase
         .from('sites').select('name').eq('active', true).order('name')
       if (sitesData && sitesData.length > 0) {
-        const names = sitesData.map((s: any) => s.name as string)
-        setSites(names)
-        const profMatch = profile?.site && names.includes(profile.site) ? profile.site : null
-        const autoSite = profMatch ?? (names.length === 1 ? names[0] : null)
-        if (autoSite) setB({ site: autoSite })
+        setSites(sitesData.map((s: any) => s.name as string))
         return
       }
       const { data: fleetData } = await supabase.from('vehicle_fleet').select('site').order('site')
       if (fleetData && fleetData.length > 0) {
-        const unique = [...new Set(fleetData.map((r: any) => r.site).filter(Boolean))] as string[]
-        setSites(unique)
-        const profMatch = profile?.site && unique.includes(profile.site) ? profile.site : null
-        const autoSite = profMatch ?? (unique.length === 1 ? unique[0] : null)
-        if (autoSite) setB({ site: autoSite })
+        setSites([...new Set(fleetData.map((r: any) => r.site).filter(Boolean))] as string[])
         return
       }
     } catch (e: any) {
       if (__DEV__) console.warn('[accident/report] loadSites failed:', e?.message)
     }
-    if (profile?.site) { setSites([profile.site]); setB({ site: profile.site }) }
+    if (profile?.site) setSites([profile.site])
   }
 
-  async function loadVehicles(site: string) {
+  // Whole-fleet load (RLS/org-scoped) so the asset search works BEFORE a site is
+  // chosen - mirrors the web form's fleetAssets list.
+  async function loadVehicles() {
     setLoadingVehicles(true)
     try {
       const { data } = await supabase
         .from('vehicle_fleet')
-        .select('id, site, asset_no, vehicle_type, registration_no, country')
-        .eq('site', site)
+        .select('id, site, asset_no, vehicle_type, registration_no, fleet_number, country')
         .order('asset_no')
       if (data) setVehicles(data as FleetVehicle[])
     } catch (e: any) {
@@ -317,18 +317,25 @@ export default function AccidentReportScreen() {
     }
   }
 
-  // Auto-fill plate / vehicle_type / site / country from the fleet master (web parity).
-  function applyAsset(v: { asset_no: string; id?: string | null; vehicle_type?: string | null; site?: string | null; registration_no?: string | null; country?: string | null }) {
-    setB({
+  // Auto-fill from the fleet master on asset pick (web applyAssetMaster parity):
+  // Fleet/plate no = fleet_number falling back to registration_no; site/country
+  // fill only when empty or previously auto-filled - a manual site tap is never
+  // overwritten. Plate/type have no typing surface on mobile, so they always
+  // track the picked asset (re-picking a different asset refreshes them).
+  function applyAsset(v: {
+    asset_no: string; id?: string | null; vehicle_type?: string | null; site?: string | null
+    registration_no?: string | null; fleet_number?: string | null; country?: string | null
+  }) {
+    setBase(prev => ({
+      ...prev,
       asset_no: v.asset_no,
       vehicle_id: v.id ?? null,
-      // Only fill site/country when empty so a manual choice is never clobbered.
-      ...(v.site ? { site: v.site } : {}),
-      ...(!base.country && v.country ? { country: v.country } : {}),
-    })
+      site: siteManual.current && prev.site ? prev.site : (v.site || prev.site),
+      country: prev.country || v.country || prev.country,
+    }))
     setX({
-      ...(v.vehicle_type ? { vehicle_type: v.vehicle_type } : {}),
-      ...(v.registration_no ? { plate_number: v.registration_no } : {}),
+      vehicle_type: v.vehicle_type || '',
+      plate_number: v.fleet_number || v.registration_no || '',
     })
   }
 
@@ -360,8 +367,8 @@ export default function AccidentReportScreen() {
   }
 
   function validate(): boolean {
-    if (!base.site) { Alert.alert(t('accident.report.alertRequired'), t('accident.report.alertSelectSite')); return false }
     if (!getEffectiveAssetNo()) { Alert.alert(t('accident.report.alertRequired'), t('accident.report.alertSelectVehicle')); return false }
+    if (!base.site) { Alert.alert(t('accident.report.alertRequired'), t('accident.report.alertSelectSite')); return false }
     if (!base.description.trim()) { Alert.alert(t('accident.report.alertRequired'), t('accident.report.alertDescribe')); return false }
     if (photoUrls.filter(isUploadedPhoto).length === 0) { Alert.alert(t('accident.report.alertRequired'), t('accident.report.alertAttachPhoto')); return false }
     return true
@@ -493,7 +500,7 @@ export default function AccidentReportScreen() {
               setBase(emptyBase()); setExtra(emptyExtra())
               setPhotoUrls([]); setPhotoLocalUris([])
               setManualAsset(''); setUseManualEntry(false)
-              recoveredTouched.current = false; setSuccess(false)
+              recoveredTouched.current = false; siteManual.current = false; setSuccess(false)
             }}
             style={{ marginTop: spacing.md, minWidth: 220 }} />
         </View>
@@ -525,108 +532,95 @@ export default function AccidentReportScreen() {
         <ScrollView style={styles.scroll} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
 
           {/* ========== INCIDENT ========== */}
+          {/* Field order mirrors the web incident form: Asset first (drives the
+              auto-fill), then Date, Time, Site, Location, Driver, Description. */}
           <Section title={t('accident.report.secIncident')} icon="alert-circle-outline" styles={styles} c={c}>
-            {/* Site */}
-            <Field label={t('accident.report.site')} styles={styles} textAlign={textAlign}>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                <View style={styles.chipRow}>
-                  {sites.map(s => {
-                    const active = base.site === s
-                    return (
-                      <TouchableOpacity key={s}
-                        style={[styles.chip, { borderColor: c.border, backgroundColor: c.surface }, active && { borderColor: c.danger.base, backgroundColor: c.danger.base }]}
-                        onPress={() => { setB({ site: s, asset_no: '', vehicle_id: null }); setX({ plate_number: '', vehicle_type: '' }); setVehicles([]) }}>
-                        <AppText variant="caption" style={{ color: active ? '#fff' : c.textSecondary }}>{s}</AppText>
-                      </TouchableOpacity>
-                    )
-                  })}
+            {/* Vehicle / Asset - picking one auto-fills site + fleet no + type */}
+            <Field label={t('accident.report.vehicle')} styles={styles} textAlign={textAlign}>
+              {loadingVehicles ? (
+                <ActivityIndicator size="small" color={c.danger.base} style={{ marginTop: spacing.sm }} />
+              ) : useManualEntry ? (
+                <View style={{ gap: spacing.sm }}>
+                  <TextInput style={[inputStyle, { textAlign }]} value={manualAsset} onChangeText={setManualAsset}
+                    placeholder={t('accident.report.phEnterAsset')} placeholderTextColor={c.textMuted} autoCapitalize="characters" />
+                  <TouchableOpacity onPress={() => { setUseManualEntry(false); setManualAsset(''); setX({ plate_number: '', vehicle_type: '' }) }} style={styles.manualToggle}>
+                    <Ionicons name="list-outline" size={14} color={c.danger.base} />
+                    <AppText variant="caption" style={{ color: c.danger.base }}>{t('accident.report.phSelectFromList')}</AppText>
+                  </TouchableOpacity>
                 </View>
-              </ScrollView>
-            </Field>
-
-            {/* Vehicle */}
-            {base.site ? (
-              <Field label={t('accident.report.vehicle')} styles={styles} textAlign={textAlign}>
-                {loadingVehicles ? (
-                  <ActivityIndicator size="small" color={c.danger.base} style={{ marginTop: spacing.sm }} />
-                ) : useManualEntry ? (
-                  <View style={{ gap: spacing.sm }}>
-                    <TextInput style={[inputStyle, { textAlign }]} value={manualAsset} onChangeText={setManualAsset}
-                      placeholder={t('accident.report.phEnterAsset')} placeholderTextColor={c.textMuted} autoCapitalize="characters" />
-                    <TouchableOpacity onPress={() => { setUseManualEntry(false); setManualAsset(''); setX({ plate_number: '', vehicle_type: '' }) }} style={styles.manualToggle}>
-                      <Ionicons name="list-outline" size={14} color={c.danger.base} />
-                      <AppText variant="caption" style={{ color: c.danger.base }}>{t('accident.report.phSelectFromList')}</AppText>
-                    </TouchableOpacity>
+              ) : (
+                <View style={{ gap: spacing.sm }}>
+                  {/* Search box - assets appear only after a query */}
+                  <View style={[styles.searchBox, { borderColor: c.borderStrong, backgroundColor: c.surface }]}>
+                    <Ionicons name="search-outline" size={16} color={c.textMuted} />
+                    <TextInput
+                      style={[styles.searchInput, { color: c.text, textAlign }]}
+                      value={vehicleQuery}
+                      onChangeText={setVehicleQuery}
+                      placeholder={t('accident.report.phSearchVehicle')}
+                      placeholderTextColor={c.textMuted}
+                      autoCapitalize="characters"
+                      autoCorrect={false}
+                    />
+                    {vehicleQuery.length > 0 && (
+                      <TouchableOpacity onPress={() => setVehicleQuery('')}>
+                        <Ionicons name="close-circle" size={16} color={c.borderStrong} />
+                      </TouchableOpacity>
+                    )}
                   </View>
-                ) : (
-                  <View style={{ gap: spacing.sm }}>
-                    {/* Search box - assets appear only after a query */}
-                    <View style={[styles.searchBox, { borderColor: c.borderStrong, backgroundColor: c.surface }]}>
-                      <Ionicons name="search-outline" size={16} color={c.textMuted} />
-                      <TextInput
-                        style={[styles.searchInput, { color: c.text, textAlign }]}
-                        value={vehicleQuery}
-                        onChangeText={setVehicleQuery}
-                        placeholder={t('accident.report.phSearchVehicle')}
-                        placeholderTextColor={c.textMuted}
-                        autoCapitalize="characters"
-                        autoCorrect={false}
-                      />
-                      {vehicleQuery.length > 0 && (
-                        <TouchableOpacity onPress={() => setVehicleQuery('')}>
-                          <Ionicons name="close-circle" size={16} color={c.borderStrong} />
-                        </TouchableOpacity>
-                      )}
-                    </View>
 
-                    {(() => {
-                      const q = vehicleQuery.trim().toLowerCase()
-                      const matches = q
-                        ? vehicles.filter(v =>
-                            v.asset_no?.toLowerCase().includes(q) ||
-                            v.vehicle_type?.toLowerCase().includes(q) ||
-                            v.registration_no?.toLowerCase().includes(q))
-                        : []
-                      if (!q) {
-                        return (
-                          <AppText variant="caption" color="muted">{t('accident.report.phSearchToBegin')}</AppText>
-                        )
-                      }
-                      if (matches.length === 0) {
-                        return <AppText variant="caption" color="muted">{t('accident.report.phNoVehiclesSite')}</AppText>
-                      }
+                  {(() => {
+                    const q = vehicleQuery.trim().toLowerCase()
+                    const matches = q
+                      ? vehicles.filter(v =>
+                          v.asset_no?.toLowerCase().includes(q) ||
+                          v.vehicle_type?.toLowerCase().includes(q) ||
+                          v.registration_no?.toLowerCase().includes(q) ||
+                          v.fleet_number?.toLowerCase().includes(q) ||
+                          v.site?.toLowerCase().includes(q))
+                      : []
+                    if (!q) {
                       return (
-                        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                          <View style={styles.chipRow}>
-                            {matches.map(v => {
-                              const active = base.asset_no === v.asset_no
-                              return (
-                                <TouchableOpacity key={v.id}
-                                  style={[styles.chip, { borderColor: c.border, backgroundColor: c.surface }, active && { borderColor: c.danger.base, backgroundColor: c.danger.base }]}
-                                  onPress={() => applyAsset(v)}>
-                                  <AppText variant="caption" style={{ color: active ? '#fff' : c.textSecondary }}>{v.asset_no}</AppText>
-                                  <AppText variant="micro" style={{ color: active ? 'rgba(255,255,255,0.75)' : c.textMuted, marginTop: 2 }}>{v.vehicle_type}</AppText>
-                                </TouchableOpacity>
-                              )
-                            })}
-                          </View>
-                        </ScrollView>
+                        <AppText variant="caption" color="muted">{t('accident.report.phSearchToBegin')}</AppText>
                       )
-                    })()}
+                    }
+                    if (matches.length === 0) {
+                      return <AppText variant="caption" color="muted">{t('accident.report.phNoVehicleMatch')}</AppText>
+                    }
+                    return (
+                      <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                        <View style={styles.chipRow}>
+                          {matches.map(v => {
+                            const active = base.asset_no === v.asset_no
+                            return (
+                              <TouchableOpacity key={v.id}
+                                style={[styles.chip, { borderColor: c.border, backgroundColor: c.surface }, active && { borderColor: c.danger.base, backgroundColor: c.danger.base }]}
+                                onPress={() => applyAsset(v)}>
+                                <AppText variant="caption" style={{ color: active ? '#fff' : c.textSecondary }}>{v.asset_no}</AppText>
+                                <AppText variant="micro" style={{ color: active ? 'rgba(255,255,255,0.75)' : c.textMuted, marginTop: 2 }}>
+                                  {[v.vehicle_type, v.site].filter(Boolean).join(' - ')}
+                                </AppText>
+                              </TouchableOpacity>
+                            )
+                          })}
+                        </View>
+                      </ScrollView>
+                    )
+                  })()}
 
-                    <TouchableOpacity onPress={() => { setUseManualEntry(true); setB({ asset_no: '', vehicle_id: null }); setX({ plate_number: '', vehicle_type: '' }) }} style={styles.manualToggle}>
-                      <Ionicons name="create-outline" size={14} color={c.danger.base} />
-                      <AppText variant="caption" style={{ color: c.danger.base }}>{t('accident.report.phEnterAssetManually')}</AppText>
-                    </TouchableOpacity>
-                  </View>
-                )}
-                {(extra.plate_number || extra.vehicle_type) ? (
-                  <AppText variant="micro" color="muted" style={{ marginTop: 4 }}>
-                    {t('accident.report.phMaster')} {extra.vehicle_type || t('accident.report.phTypeNa')}{extra.plate_number ? ` - ${t('accident.report.phPlate')} ${extra.plate_number}` : ''}
-                  </AppText>
-                ) : null}
-              </Field>
-            ) : null}
+                  <TouchableOpacity onPress={() => { setUseManualEntry(true); setB({ asset_no: '', vehicle_id: null }); setX({ plate_number: '', vehicle_type: '' }) }} style={styles.manualToggle}>
+                    <Ionicons name="create-outline" size={14} color={c.danger.base} />
+                    <AppText variant="caption" style={{ color: c.danger.base }}>{t('accident.report.phEnterAssetManually')}</AppText>
+                  </TouchableOpacity>
+                </View>
+              )}
+              {/* Master context line (web "Master:" parity): type + fleet/plate no */}
+              {(extra.plate_number || extra.vehicle_type) ? (
+                <AppText variant="micro" color="muted" style={{ marginTop: 4 }}>
+                  {t('accident.report.phMaster')} {extra.vehicle_type || t('accident.report.phTypeNa')}{extra.plate_number ? ` - ${t('accident.report.phFleetNo')} ${extra.plate_number}` : ''}
+                </AppText>
+              ) : null}
+            </Field>
 
             {/* Date & time */}
             <View style={styles.row}>
@@ -641,9 +635,44 @@ export default function AccidentReportScreen() {
               </Field>
             </View>
 
+            {/* Site - auto-filled from the picked asset, still editable */}
+            <Field label={t('accident.report.site')} styles={styles} textAlign={textAlign}>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                <View style={styles.chipRow}>
+                  {(base.site && !sites.includes(base.site) ? [base.site, ...sites] : sites).map(s => {
+                    const active = base.site === s
+                    return (
+                      <TouchableOpacity key={s}
+                        style={[styles.chip, { borderColor: c.border, backgroundColor: c.surface }, active && { borderColor: c.danger.base, backgroundColor: c.danger.base }]}
+                        onPress={() => { siteManual.current = true; setB({ site: s }) }}>
+                        <AppText variant="caption" style={{ color: active ? '#fff' : c.textSecondary }}>{s}</AppText>
+                      </TouchableOpacity>
+                    )
+                  })}
+                </View>
+              </ScrollView>
+            </Field>
+
+            {/* Location - free text with quick site suggestions */}
             <Field label={t('accident.report.location')} styles={styles} textAlign={textAlign}>
               <TextInput style={[inputStyle, { textAlign }]} value={base.location} onChangeText={v => setB({ location: v })}
                 placeholder={t('accident.report.phWhereHappen')} placeholderTextColor={c.textMuted} />
+              {sites.length > 0 && !base.location ? (
+                <View style={{ marginTop: 4, gap: 4 }}>
+                  <AppText variant="micro" color="muted" style={{ textAlign }}>{t('accident.report.locationSuggest')}</AppText>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                    <View style={styles.chipRow}>
+                      {sites.map(s => (
+                        <TouchableOpacity key={s}
+                          style={[styles.chip, { borderColor: c.border, backgroundColor: c.surface }]}
+                          onPress={() => setB({ location: s })}>
+                          <AppText variant="caption" style={{ color: c.textSecondary }}>{s}</AppText>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  </ScrollView>
+                </View>
+              ) : null}
             </Field>
 
             <Field label={t('accident.report.driver')} styles={styles} textAlign={textAlign}>

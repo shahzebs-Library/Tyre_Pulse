@@ -13,7 +13,8 @@ import { useTheme } from '../../contexts/ThemeContext'
 import { useRealtime } from '../../hooks/useRealtime'
 import { useRoleGuard } from '../../hooks/useRoleGuard'
 import { canCountStock } from '../../lib/permissions'
-import { setStockCount, adjustStock, statusFor, createStockRecord } from '../../lib/stock'
+import { isAdmin } from '../../lib/types'
+import { setStockCount, adjustStock, statusFor, createStockRecord, listStockSites } from '../../lib/stock'
 import { Theme, StatusKind, spacing, radius, elevation } from '../../lib/theme'
 import {
   Screen, Card, AppText, Badge, StatTile, Button, Loading, EmptyState, ErrorState,
@@ -89,7 +90,7 @@ function extractTyreSize(desc: string | null): string | null {
 }
 
 export default function StockScreen() {
-  const { profile } = useAuth()
+  const { profile, isSuperAdmin } = useAuth()
   const { t, isRTL } = useLanguage()
   const { theme } = useTheme()
   const s = useMemo(() => makeStyles(theme), [theme])
@@ -118,14 +119,20 @@ export default function StockScreen() {
   const [addSize, setAddSize] = useState('')
   const [addDesc, setAddDesc] = useState('')
   const [addSite, setAddSite] = useState('')
+  const [addSiteOther, setAddSiteOther] = useState(false)
   const [addQty, setAddQty] = useState('')
   const [addMin, setAddMin] = useState('5')
   const [addCrit, setAddCrit] = useState('3')
   const [addSaving, setAddSaving] = useState(false)
+  // Distinct fleet sites (vehicle_fleet.site) for the location picker.
+  const [fleetSites, setFleetSites] = useState<string[]>([])
+  const [fleetSitesLoaded, setFleetSitesLoaded] = useState(false)
 
   const { allowed } = useRoleGuard(['tyre_man', 'admin', 'manager', 'director'])
   const textAlign = isRTL ? 'right' : 'left'
   const mayAdjust = canCountStock(profile?.role)
+  // Reorder thresholds (min/critical) are admin-only: role admin or super-admin.
+  const mayEditThresholds = isAdmin(profile?.role) || isSuperAdmin === true
 
   const load = useCallback(async () => {
     try {
@@ -218,10 +225,16 @@ export default function StockScreen() {
     setAddDesc('')
     // Preselect the site the user is currently filtering by, if any.
     setAddSite(locationFilter !== 'all' ? locationFilter : '')
+    setAddSiteOther(false)
     setAddQty('')
     setAddMin('5')
     setAddCrit('3')
     setAddOpen(true)
+    // Lazy-load the fleet site list the first time the modal opens.
+    if (!fleetSitesLoaded) {
+      setFleetSitesLoaded(true)
+      listStockSites().then(setFleetSites).catch(() => {})
+    }
   }
 
   async function submitAdd() {
@@ -243,8 +256,14 @@ export default function StockScreen() {
         description: addDesc.trim() || null,
         site,
         qty,
-        minLevel: min != null && !Number.isNaN(min) ? min : null,
-        criticalLevel: crit != null && !Number.isNaN(crit) ? crit : null,
+        // Thresholds are admin-only: non-admin adds OMIT them entirely so the
+        // server-side defaults govern the new row.
+        ...(mayEditThresholds
+          ? {
+              minLevel: min != null && !Number.isNaN(min) ? min : null,
+              criticalLevel: crit != null && !Number.isNaN(crit) ? crit : null,
+            }
+          : {}),
         country: profile?.country ?? null,
         userId: profile?.id ?? null,
       })
@@ -267,6 +286,15 @@ export default function StockScreen() {
     for (const r of rows) { const v = r.site?.trim(); if (v) set.add(v) }
     return Array.from(set).sort((a, b) => a.localeCompare(b))
   }, [rows])
+
+  // Site choices for the add-stock LOCATION PICKER: fleet-master sites
+  // (vehicle_fleet.site) plus any site already used by existing stock rows,
+  // deduped + sorted, capped so the chip list stays usable.
+  const siteChoices = useMemo(() => {
+    const set = new Set<string>(fleetSites)
+    for (const v of locationOptions) set.add(v)
+    return Array.from(set).sort((a, b) => a.localeCompare(b)).slice(0, 100)
+  }, [fleetSites, locationOptions])
 
   const sizeOptions = useMemo(() => {
     const set = new Set<string>()
@@ -622,31 +650,52 @@ export default function StockScreen() {
                 />
               </View>
 
-              {/* Location / site */}
+              {/* Location / site - picker over fleet sites, with an Other fallback */}
               <View style={{ gap: spacing.sm }}>
                 <AppText variant="label" color="secondary" style={{ textAlign }}>Location (site)</AppText>
-                {locationOptions.length > 0 && (
-                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={[s.dimScroll, isRTL && s.rowR]}>
-                    {locationOptions.map(opt => {
-                      const active = addSite.trim() === opt
+                {siteChoices.length > 0 && (
+                  <View style={[s.siteWrap, isRTL && s.rowR]}>
+                    {siteChoices.map(opt => {
+                      const active = !addSiteOther && addSite.trim() === opt
                       return (
-                        <TouchableOpacity key={opt} style={[s.chipSm, active && s.chipActive]} onPress={() => setAddSite(opt)} activeOpacity={0.8}>
+                        <TouchableOpacity
+                          key={opt}
+                          style={[s.chipSm, active && s.chipActive]}
+                          onPress={() => { setAddSite(opt); setAddSiteOther(false) }}
+                          activeOpacity={0.8}
+                        >
                           <AppText variant="micro" style={{ color: active ? theme.color.onPrimary : theme.color.textSecondary, fontWeight: '700' }}>{opt}</AppText>
                         </TouchableOpacity>
                       )
                     })}
-                  </ScrollView>
+                    <TouchableOpacity
+                      style={[s.chipSm, addSiteOther && s.chipActive]}
+                      onPress={() => {
+                        if (!addSiteOther) {
+                          setAddSiteOther(true)
+                          if (siteChoices.includes(addSite.trim())) setAddSite('')
+                        }
+                      }}
+                      activeOpacity={0.8}
+                    >
+                      <AppText variant="micro" style={{ color: addSiteOther ? theme.color.onPrimary : theme.color.textSecondary, fontWeight: '700' }}>
+                        {t('stock.otherLocation')}
+                      </AppText>
+                    </TouchableOpacity>
+                  </View>
                 )}
-                <TextInput
-                  style={[s.reasonInput, { textAlign }]}
-                  value={addSite}
-                  onChangeText={setAddSite}
-                  placeholder="Or type a location"
-                  placeholderTextColor={theme.color.textMuted}
-                />
+                {(addSiteOther || siteChoices.length === 0) && (
+                  <TextInput
+                    style={[s.reasonInput, { textAlign }]}
+                    value={addSite}
+                    onChangeText={setAddSite}
+                    placeholder="Or type a location"
+                    placeholderTextColor={theme.color.textMuted}
+                  />
+                )}
               </View>
 
-              {/* Quantity + thresholds */}
+              {/* Quantity + admin-only reorder thresholds */}
               <View style={[s.addNumRow, isRTL && s.rowR]}>
                 <View style={{ flex: 1, gap: spacing.sm }}>
                   <AppText variant="label" color="secondary" style={{ textAlign }}>Quantity</AppText>
@@ -659,28 +708,32 @@ export default function StockScreen() {
                     placeholderTextColor={theme.color.textMuted}
                   />
                 </View>
-                <View style={{ flex: 1, gap: spacing.sm }}>
-                  <AppText variant="label" color="secondary" style={{ textAlign }}>Min level</AppText>
-                  <TextInput
-                    style={[s.numInput, { textAlign: 'center' }]}
-                    value={addMin}
-                    onChangeText={v => setAddMin(v.replace(/[^0-9]/g, ''))}
-                    keyboardType="number-pad"
-                    placeholder="5"
-                    placeholderTextColor={theme.color.textMuted}
-                  />
-                </View>
-                <View style={{ flex: 1, gap: spacing.sm }}>
-                  <AppText variant="label" color="secondary" style={{ textAlign }}>Critical</AppText>
-                  <TextInput
-                    style={[s.numInput, { textAlign: 'center' }]}
-                    value={addCrit}
-                    onChangeText={v => setAddCrit(v.replace(/[^0-9]/g, ''))}
-                    keyboardType="number-pad"
-                    placeholder="3"
-                    placeholderTextColor={theme.color.textMuted}
-                  />
-                </View>
+                {mayEditThresholds && (
+                  <View style={{ flex: 1, gap: spacing.sm }}>
+                    <AppText variant="label" color="secondary" style={{ textAlign }}>Min level</AppText>
+                    <TextInput
+                      style={[s.numInput, { textAlign: 'center' }]}
+                      value={addMin}
+                      onChangeText={v => setAddMin(v.replace(/[^0-9]/g, ''))}
+                      keyboardType="number-pad"
+                      placeholder="5"
+                      placeholderTextColor={theme.color.textMuted}
+                    />
+                  </View>
+                )}
+                {mayEditThresholds && (
+                  <View style={{ flex: 1, gap: spacing.sm }}>
+                    <AppText variant="label" color="secondary" style={{ textAlign }}>Critical</AppText>
+                    <TextInput
+                      style={[s.numInput, { textAlign: 'center' }]}
+                      value={addCrit}
+                      onChangeText={v => setAddCrit(v.replace(/[^0-9]/g, ''))}
+                      keyboardType="number-pad"
+                      placeholder="3"
+                      placeholderTextColor={theme.color.textMuted}
+                    />
+                  </View>
+                )}
               </View>
             </ScrollView>
 
@@ -785,6 +838,7 @@ function makeStyles(theme: Theme) {
       fontSize: 14, color: c.text,
     },
     addNumRow: { flexDirection: 'row', gap: spacing.md },
+    siteWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
     numInput: {
       backgroundColor: c.surfaceAlt, borderWidth: 1.5, borderColor: c.border,
       borderRadius: radius.md, paddingVertical: 12,

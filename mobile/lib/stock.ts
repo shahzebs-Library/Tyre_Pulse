@@ -124,6 +124,9 @@ export interface NewStockInput {
   description?: string | null
   site: string
   qty: number
+  /** Reorder thresholds are ADMIN-ONLY. Omit (leave undefined) to keep the
+   *  columns out of the insert entirely so the server-side defaults govern;
+   *  pass a number (or null) only for admin callers. */
   minLevel?: number | null
   criticalLevel?: number | null
   country?: string | null
@@ -163,21 +166,26 @@ export function composeStockDescription(size: string, description?: string | nul
  */
 export async function createStockRecord(input: NewStockInput): Promise<NewStockResult> {
   const qty = Math.max(0, Math.floor(Number(input.qty) || 0))
-  const min = input.minLevel == null ? null : Math.max(0, Math.floor(Number(input.minLevel)))
-  const crit = input.criticalLevel == null ? null : Math.max(0, Math.floor(Number(input.criticalLevel)))
+  // Thresholds are admin-only: an undefined level is OMITTED from the insert so
+  // the server-side column defaults apply; only explicit values are written.
+  const hasMin = input.minLevel !== undefined
+  const hasCrit = input.criticalLevel !== undefined
+  const min = hasMin && input.minLevel != null ? Math.max(0, Math.floor(Number(input.minLevel))) : null
+  const crit = hasCrit && input.criticalLevel != null ? Math.max(0, Math.floor(Number(input.criticalLevel))) : null
   const description = composeStockDescription(input.size, input.description)
   const nowIso = new Date().toISOString()
-  const row = {
-    site: input.site.trim(),
+  const siteName = input.site.trim()
+  const row: Record<string, unknown> = {
+    site: siteName,
     description,
     stock_qty: qty,
-    min_level: min,
-    critical_level: crit,
     stock_status: statusFor(qty, min, crit),
     country: input.country ?? null,
     updated_by: input.userId ?? null,
     updated_at: nowIso,
   }
+  if (hasMin) row.min_level = min
+  if (hasCrit) row.critical_level = crit
   const { data, error } = await supabase
     .from('stock_records')
     .insert(row)
@@ -190,7 +198,7 @@ export async function createStockRecord(input: NewStockInput): Promise<NewStockR
     try {
       await supabase.from('stock_movements').insert({
         stock_id: id,
-        site: row.site,
+        site: siteName,
         description,
         movement_type: 'Initial',
         qty_before: 0,
@@ -202,6 +210,32 @@ export async function createStockRecord(input: NewStockInput): Promise<NewStockR
     } catch { /* audit is best-effort */ }
   }
   return { id }
+}
+
+/**
+ * Distinct site (location) names from the fleet master (`vehicle_fleet.site`),
+ * for the add-stock location picker. RLS scopes rows to the caller's org and
+ * country. Deduped + sorted, capped at 100 options. Returns [] on any failure
+ * so the picker degrades honestly to free-text entry.
+ */
+export async function listStockSites(): Promise<string[]> {
+  try {
+    const { data, error } = await supabase
+      .from('vehicle_fleet')
+      .select('site')
+      .not('site', 'is', null)
+      .order('site')
+      .limit(2000)
+    if (error) throw error
+    const seen = new Set<string>()
+    for (const r of (data ?? []) as { site: string | null }[]) {
+      const v = r.site?.trim()
+      if (v) seen.add(v)
+    }
+    return Array.from(seen).sort((a, b) => a.localeCompare(b)).slice(0, 100)
+  } catch {
+    return []
+  }
 }
 
 export { statusFor }

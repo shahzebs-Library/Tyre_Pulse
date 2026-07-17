@@ -18,9 +18,9 @@
 import { useEffect, useState, useCallback, useMemo } from 'react'
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet, RefreshControl,
-  ActivityIndicator, Alert,
+  ActivityIndicator, Alert, DeviceEventEmitter,
 } from 'react-native'
-import { useRouter } from 'expo-router'
+import { useRouter, useFocusEffect } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
 import { useAuth } from '../../contexts/AuthContext'
 import { useLanguage } from '../../contexts/LanguageContext'
@@ -35,6 +35,11 @@ import { isAdminOrAbove, UserRole } from '../../lib/types'
 import { ModuleKey } from '../../lib/permissions'
 import { Screen, StatTile, AppText } from '../../components/ui'
 import { Theme, spacing, radius, typography, elevation } from '../../lib/theme'
+
+// Cross-screen display event: the tab bar in `_layout.tsx` listens for this so
+// the Home tab badge tracks the offline-queue pending count in real time (no
+// queue logic lives here - we only broadcast the freshly read count).
+const PENDING_SYNC_EVENT = 'tyrepulse:pending-sync-changed'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -149,12 +154,23 @@ export default function HomeScreen() {
     [canAccess],
   )
 
+  // Recount BOTH offline queues (inspections + typed record commands) so every
+  // pending indicator (header badge, stat tile, tab-bar badge) matches what the
+  // sync action actually uploads. Broadcasts the fresh count to the tab bar.
+  const refreshPending = useCallback(async () => {
+    try {
+      const [inspCount, recCount] = await Promise.all([getPendingCount(), getPendingRecordCount()])
+      const total = inspCount + recCount
+      setPendingCount(total)
+      DeviceEventEmitter.emit(PENDING_SYNC_EVENT, total)
+    } catch {
+      // Storage read failed - keep the last known count rather than lying with 0
+    }
+  }, [])
+
   const load = useCallback(async () => {
-    // Phase 1: offline queue (AsyncStorage - instant). Count BOTH queues
-    // (inspections + typed record commands) so the pending indicator matches
-    // what the sync action actually uploads.
-    const [inspCount, recCount] = await Promise.all([getPendingCount(), getPendingRecordCount()])
-    setPendingCount(inspCount + recCount)
+    // Phase 1: offline queue (AsyncStorage - instant).
+    await refreshPending()
 
     // Phase 2: network (parallel)
     const todayStr = new Date().toISOString().split('T')[0]
@@ -213,9 +229,23 @@ export default function HomeScreen() {
     } else {
       setFleetLoading(false)
     }
-  }, [profile?.id, elevated])
+  }, [profile?.id, elevated, refreshPending])
 
   useEffect(() => { load() }, [load])
+
+  // Recount the queues whenever Home regains focus (e.g. after an inspection
+  // was saved offline on another screen, or a sync ran elsewhere).
+  useFocusEffect(useCallback(() => { refreshPending() }, [refreshPending]))
+
+  // While anything is pending, poll cheaply (AsyncStorage read) so a background
+  // auto-sync (useNetworkSync / SyncBanner) clears the indicators without any
+  // user action. Stops as soon as the queues are empty.
+  const hasPending = pendingCount > 0
+  useEffect(() => {
+    if (!hasPending) return
+    const id = setInterval(refreshPending, 5000)
+    return () => clearInterval(id)
+  }, [hasPending, refreshPending])
 
   async function onRefresh() {
     setRefreshing(true)
@@ -251,7 +281,11 @@ export default function HomeScreen() {
 
   return (
     <Screen edges={['top']}>
-      <SyncBanner />
+      {/* Keyed on the pending count: when a sync (ours, the banner's own, or a
+          background auto-sync) changes the queue size, the banner remounts and
+          re-reads the queues - so it reliably disappears once everything is
+          uploaded, whichever surface triggered the sync. */}
+      <SyncBanner key={`syncbanner-${pendingCount}`} />
       <ScrollView
         style={s.scroll}
         contentContainerStyle={s.content}
@@ -292,11 +326,11 @@ export default function HomeScreen() {
               tint={pendingCount > 0 ? 'amber' : 'slate'}
               onPress={pendingCount > 0 && !syncing ? handlePendingSync : undefined}
             />
-            <StatTile
-              icon="location-outline"
-              value={profile?.site ? profile.site.split(' ')[0] : t('home.allSites')}
+            <SiteTile
+              s={s}
+              theme={theme}
+              value={profile?.site || t('home.allSites')}
               label={t('modules.common.site')}
-              tint="blue"
             />
           </View>
         )}
@@ -429,15 +463,41 @@ function SectionLabel({ children, s, theme }: { children: string; s: Styles; the
 
 function QuickActionCard({ action, onPress, s, theme, t }: { action: QuickAction; onPress: () => void; s: Styles; theme: Theme; t: (k: string) => string }) {
   const tint = theme.tint[action.tint]
-  const sub = t(`modules.home.qa.${action.module}.sub`)
+  // t() returns the raw key when a translation is missing (e.g. a module added
+  // before its locale entries land, like 'pm') - fall back to the registry's
+  // English strings so a tile never renders a dotted key path.
+  const labelKey = `modules.home.qa.${action.module}.label`
+  const subKey = `modules.home.qa.${action.module}.sub`
+  const labelTr = t(labelKey)
+  const subTr = t(subKey)
+  const label = labelTr === labelKey ? action.label : labelTr
+  const sub = subTr === subKey ? action.sublabel : subTr
   return (
     <TouchableOpacity style={s.qaCard} onPress={onPress} activeOpacity={0.8}>
       <View style={[s.qaIcon, { backgroundColor: tint.bg }]}>
         <Ionicons name={action.icon as any} size={22} color={tint.fg} />
       </View>
-      <Text style={s.qaLabel} numberOfLines={1}>{t(`modules.home.qa.${action.module}.label`)}</Text>
-      {sub ? <Text style={s.qaSublabel} numberOfLines={1}>{sub}</Text> : null}
+      <Text style={s.qaLabel} numberOfLines={2}>{label}</Text>
+      {sub ? <Text style={s.qaSublabel} numberOfLines={2}>{sub}</Text> : null}
     </TouchableOpacity>
+  )
+}
+
+// Site stat card: unlike the numeric StatTiles, the value is a NAME, so it must
+// wrap (2 lines) and shrink to fit instead of ellipsizing ("All S..."). Styled
+// to visually match StatTile (same surface, border, icon chip, padding).
+function SiteTile({ value, label, s, theme }: { value: string; label: string; s: Styles; theme: Theme }) {
+  const tint = theme.tint.blue
+  return (
+    <View style={s.siteTile}>
+      <View style={[s.siteTileIcon, { backgroundColor: tint.bg }]}>
+        <Ionicons name="location-outline" size={18} color={tint.fg} />
+      </View>
+      <Text style={s.siteTileValue} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.6}>
+        {value}
+      </Text>
+      <Text style={s.siteTileLabel} numberOfLines={1}>{label}</Text>
+    </View>
   )
 }
 
@@ -524,17 +584,30 @@ function makeStyles(theme: Theme) {
     sectionHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.md },
     sectionLink:      { fontSize: 13, color: c.primaryDark, fontWeight: '800' },
 
-    // Quick actions
+    // Quick actions. Cards are tall enough for a 2-line label + 2-line
+    // sublabel (no ellipsis); the icon chip is a fixed 42x42 so icons align
+    // across every tile and never clip.
     quickGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.md },
     qaCard: {
       flexGrow: 1, flexBasis: '30%', minWidth: 104,
-      backgroundColor: c.surface, borderRadius: radius.lg, padding: spacing.md, gap: 6,
-      borderWidth: 1, borderColor: c.border, minHeight: 104,
+      backgroundColor: c.surface, borderRadius: radius.lg, padding: spacing.md, gap: 5,
+      borderWidth: 1, borderColor: c.border, minHeight: 124,
       ...elevation(theme, 1),
     },
     qaIcon:     { width: 42, height: 42, borderRadius: 13, alignItems: 'center', justifyContent: 'center' },
-    qaLabel:    { fontSize: 13.5, fontWeight: '800', color: c.text, marginTop: 2 },
-    qaSublabel: { fontSize: 11, color: c.textMuted, fontWeight: '600' },
+    qaLabel:    { fontSize: 13, fontWeight: '800', color: c.text, marginTop: 2, lineHeight: 17 },
+    qaSublabel: { fontSize: 10.5, color: c.textMuted, fontWeight: '600', lineHeight: 14 },
+
+    // Site stat tile (mirrors components/ui/StatTile visuals, but wraps)
+    siteTile: {
+      flex: 1, minWidth: 0,
+      backgroundColor: c.surface, borderColor: c.border,
+      borderWidth: 1, borderRadius: radius.xl, padding: spacing.lg, gap: 2,
+      ...elevation(theme, 1),
+    },
+    siteTileIcon:  { width: 38, height: 38, borderRadius: 12, alignItems: 'center', justifyContent: 'center', marginBottom: spacing.sm },
+    siteTileValue: { fontSize: 19, fontWeight: '800', color: c.text, lineHeight: 23 },
+    siteTileLabel: { fontSize: 12, color: c.textMuted, fontWeight: '600' },
 
     // Fleet health
     fleetCard: {

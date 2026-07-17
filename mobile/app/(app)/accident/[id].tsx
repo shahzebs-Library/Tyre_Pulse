@@ -13,7 +13,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react'
 import {
   View, ScrollView, TouchableOpacity, StyleSheet,
   ActivityIndicator, Alert, Modal, Image,
-  Dimensions, Platform,
+  Dimensions,
 } from 'react-native'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
@@ -62,7 +62,7 @@ const TYPE_ICONS: Record<string, IconName> = {
 export default function AccidentDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>()
   const { allowed, loading: guardLoading } = useRoleGuard(['admin', 'manager', 'director', 'inspector'])
-  const { profile } = useAuth()
+  const { profile, isSuperAdmin } = useAuth()
   const { t, isRTL } = useLanguage()
   const { theme } = useTheme()
   const c = theme.color
@@ -76,9 +76,6 @@ export default function AccidentDetailScreen() {
   const [deleting, setDeleting]             = useState(false)
   const [showStatusModal, setShowStatusModal] = useState(false)
   const [lightboxIndex, setLightboxIndex]   = useState<number | null>(null)
-  const [analyzing, setAnalyzing]           = useState(false)
-  const [aiResult, setAiResult]             = useState<string | null>(null)
-  const [showAiModal, setShowAiModal]       = useState(false)
   const [exporting, setExporting]           = useState(false)
   const [photoUrls, setPhotoUrls]           = useState<string[]>([])
 
@@ -96,8 +93,16 @@ export default function AccidentDetailScreen() {
 
   const role           = profile?.role ?? null
   const canChangeStatus = isAdminOrAbove(role)
-  const canDelete       = isAdmin(role)
+  // Delete is strictly admin-only (or the platform super-admin).
+  const canDelete       = isAdmin(role) === true || isSuperAdmin === true
   const canSeeAudit     = isAdminOrAbove(role)
+
+  // Header back must return to the PREVIOUS screen, never Home. Fall back to the
+  // accident dashboard when there is no navigation history (deep link / cold open).
+  function goBack() {
+    if (router.canGoBack()) router.back()
+    else router.replace('/(app)/accident/dashboard')
+  }
 
   const load = useCallback(async () => {
     if (!allowed || !id) return
@@ -111,7 +116,7 @@ export default function AccidentDetailScreen() {
 
       if (accRes.error || !accRes.data) {
         Alert.alert('Error', 'Could not load accident report.')
-        router.back()
+        goBack()
         return
       }
       const loadedAccident = accRes.data as AccidentRecord
@@ -128,7 +133,7 @@ export default function AccidentDetailScreen() {
     } catch (e: any) {
       if (__DEV__) console.warn('[accident/detail] load failed:', e?.message)
       Alert.alert('Error', 'Could not load accident report. Please try again.')
-      router.back()
+      goBack()
     } finally {
       setLoading(false)
     }
@@ -162,66 +167,6 @@ export default function AccidentDetailScreen() {
     }
   }
 
-  async function analyzeWithAI() {
-    if (!accident) return
-    setAnalyzing(true)
-    setShowAiModal(true)
-    setAiResult(null)
-
-    const prompt = `You are a fleet accident investigator and tyre engineer. Analyze this accident report and provide a structured assessment.
-
-ACCIDENT REPORT:
-- Asset / Vehicle: ${accident.asset_no}
-- Site: ${accident.site}
-- Date: ${accident.incident_date} ${accident.incident_time ?? ''}
-- Location: ${accident.location ?? 'Not specified'}
-- Type: ${accident.accident_type.replace('_', ' ')}
-- Severity: ${accident.severity.toUpperCase()}
-- Description: ${accident.description ?? 'Not provided'}
-- Injuries: ${accident.injuries ? `Yes - ${accident.injury_count} persons` : 'No'}
-- Third Party Involved: ${accident.third_party_involved ? 'Yes' : 'No'}
-- Police Report: ${accident.police_report_no ?? 'None'}
-- Damage Description: ${accident.damage_description ?? 'Not specified'}
-- Estimated Damage Cost: ${accident.estimated_damage_cost ? `SAR ${accident.estimated_damage_cost}` : 'Not estimated'}
-
-Provide your analysis in exactly this structure:
-
-## Root Cause
-[Identify the most likely primary cause]
-
-## Contributing Factors
-[List 2-4 specific contributing factors]
-
-## Risk Assessment
-Risk Level: [Critical / High / Medium / Low]
-[Brief justification]
-
-## Immediate Actions Required
-[3-5 specific actions that should be taken now]
-
-## Prevention Recommendations
-[3-4 systemic changes to prevent recurrence]
-
-## Insurance / Legal Notes
-[Any relevant observations about documentation, liability, or reporting]`
-
-    try {
-      const { data, error } = await supabase.functions.invoke('chat-ai', {
-        body: {
-          system: 'You are TyrePulse\'s Tyre Engineer and fleet accident investigator. Provide expert, actionable analysis.',
-          user: prompt,
-          model: 'claude-haiku-4-5-20251001',
-          max_tokens: 1500,
-        },
-      })
-      setAiResult(error ? 'Unable to reach AI. Check your connection and try again.' : (data?.content ?? 'No analysis generated.'))
-    } catch {
-      setAiResult('Network error. Please try again.')
-    } finally {
-      setAnalyzing(false)
-    }
-  }
-
   function confirmDelete() {
     Alert.alert(
       'Delete Report',
@@ -239,7 +184,7 @@ Risk Level: [Critical / High / Medium / Low]
               if (error) {
                 Alert.alert('Error', 'Failed to delete report.')
               } else {
-                router.back()
+                goBack()
               }
             } catch (e: any) {
               if (__DEV__) console.warn('[accident/detail] delete failed:', e?.message)
@@ -275,7 +220,7 @@ Risk Level: [Critical / High / Medium / Low]
     <Screen>
       {/* -- Header -------------------------------------------------------- */}
       <View style={[styles.header, isRTL && { flexDirection: 'row-reverse' }]}>
-        <TouchableOpacity style={styles.iconBtn} onPress={() => router.back()}>
+        <TouchableOpacity style={styles.iconBtn} onPress={goBack}>
           <Ionicons name={isRTL ? 'chevron-forward' : 'chevron-back'} size={22} color={c.text} />
         </TouchableOpacity>
         <View style={{ flex: 1 }}>
@@ -283,12 +228,9 @@ Risk Level: [Critical / High / Medium / Low]
           <AppText variant="micro" color="muted">#{accident.id.slice(0, 8).toUpperCase()}</AppText>
         </View>
 
-        {/* Status badge - tappable for managers/admins */}
-        <TouchableOpacity
-          style={[styles.statusBadge, { backgroundColor: statusSc.soft, borderColor: statusSc.base + '55' }]}
-          onPress={() => canChangeStatus && setShowStatusModal(true)}
-          activeOpacity={canChangeStatus ? 0.7 : 1}
-        >
+        {/* Status badge - display only (status is changed via the clear
+            dropdown in the body for managers/admins) */}
+        <View style={[styles.statusBadge, { backgroundColor: statusSc.soft, borderColor: statusSc.base + '55' }]}>
           {statusLoading
             ? <ActivityIndicator size="small" color={statusSc.base} />
             : <>
@@ -296,12 +238,9 @@ Risk Level: [Critical / High / Medium / Low]
                 <AppText variant="micro" style={{ color: statusSc.on }}>
                   {t(`accident.statuses.${accident.status}`)}
                 </AppText>
-                {canChangeStatus && (
-                  <Ionicons name="chevron-down" size={11} color={statusSc.on} style={{ marginLeft: 2 }} />
-                )}
               </>
           }
-        </TouchableOpacity>
+        </View>
 
         {/* Export PDF */}
         <TouchableOpacity style={[styles.iconBtn, { backgroundColor: c.danger.soft }]} onPress={handleExportPdf} disabled={exporting}>
@@ -346,6 +285,29 @@ Risk Level: [Critical / High / Medium / Low]
             {accident.location      ? <MetaItem icon="location-outline" label={accident.location} /> : null}
           </View>
         </Card>
+
+        {/* -- Status dropdown (managers / admins) ------------------------ */}
+        {canChangeStatus && (
+          <SectionCard title="Investigation Status" icon="flag-outline">
+            <AppText variant="caption" color="muted" style={{ marginBottom: spacing.sm }}>
+              Select the current status of this report
+            </AppText>
+            <TouchableOpacity
+              style={[styles.statusDropdown, { backgroundColor: c.surface, borderColor: statusSc.base + '55' }]}
+              onPress={() => setShowStatusModal(true)}
+              disabled={statusLoading}
+              activeOpacity={0.8}
+            >
+              <View style={[styles.statusDropdownDot, { backgroundColor: statusSc.base }]} />
+              <AppText variant="bodyStrong" style={{ flex: 1, color: statusSc.on }}>
+                {t(`accident.statuses.${accident.status}`)}
+              </AppText>
+              {statusLoading
+                ? <ActivityIndicator size="small" color={statusSc.base} />
+                : <Ionicons name="chevron-down" size={18} color={c.textSecondary} />}
+            </TouchableOpacity>
+          </SectionCard>
+        )}
 
         {/* -- Description ------------------------------------------------- */}
         {accident.description ? (
@@ -472,61 +434,8 @@ Risk Level: [Critical / High / Medium / Low]
           </SectionCard>
         )}
 
-        <View style={{ height: canChangeStatus ? 96 : 36 }} />
+        <View style={{ height: 36 }} />
       </ScrollView>
-
-      {/* -- AI Analyze FAB (admin / manager / director) ------------------- */}
-      {canChangeStatus && (
-        <View style={[styles.fabBar, { backgroundColor: c.surface, borderTopColor: c.border }]}>
-          <TouchableOpacity
-            style={[styles.analyzeBtn, { backgroundColor: analyzing ? theme.tint.violet.fg + 'AA' : theme.tint.violet.fg }]}
-            onPress={analyzeWithAI}
-            disabled={analyzing}
-            activeOpacity={0.85}
-          >
-            {analyzing
-              ? <><ActivityIndicator size="small" color="#fff" /><AppText variant="bodyStrong" style={styles.analyzeBtnText}>Analyzing...</AppText></>
-              : <><Ionicons name="sparkles-outline" size={18} color="#fff" /><AppText variant="bodyStrong" style={styles.analyzeBtnText}>Analyze with AI</AppText></>
-            }
-          </TouchableOpacity>
-        </View>
-      )}
-
-      {/* -- AI Result Modal --------------------------------------------- */}
-      <Modal
-        visible={showAiModal}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setShowAiModal(false)}
-      >
-        <View style={[styles.modalBackdrop, { backgroundColor: c.overlay }]}>
-          <View style={[styles.aiModalSheet, { backgroundColor: c.surface }]}>
-            <View style={[styles.modalHandle, { backgroundColor: c.borderStrong }]} />
-            <View style={[styles.aiModalHeader, { borderBottomColor: c.border }]}>
-              <View style={[styles.aiModalIcon, { backgroundColor: theme.tint.violet.bg }]}>
-                <Ionicons name="sparkles" size={18} color={theme.tint.violet.fg} />
-              </View>
-              <View style={{ flex: 1 }}>
-                <AppText variant="title">AI Accident Analysis</AppText>
-                <AppText variant="micro" color="muted" style={{ textTransform: 'capitalize' }}>Tyre Engineer Agent - {accident?.accident_type?.replace('_', ' ')}</AppText>
-              </View>
-              <TouchableOpacity onPress={() => setShowAiModal(false)}>
-                <Ionicons name="close-circle-outline" size={24} color={c.textMuted} />
-              </TouchableOpacity>
-            </View>
-            <ScrollView style={styles.aiModalBody} showsVerticalScrollIndicator={false}>
-              {analyzing || !aiResult
-                ? <View style={styles.aiLoading}>
-                    <ActivityIndicator size="large" color={theme.tint.violet.fg} />
-                    <AppText variant="caption" color="muted">Analyzing accident data...</AppText>
-                  </View>
-                : <AppText variant="body" color="secondary">{aiResult}</AppText>
-              }
-              <View style={{ height: spacing['2xl'] }} />
-            </ScrollView>
-          </View>
-        </View>
-      </Modal>
 
       {/* -- Status Modal ------------------------------------------------ */}
       <Modal
@@ -759,31 +668,13 @@ function createStyles(theme: Theme) {
       alignItems: 'center',
     },
 
-    // AI Analyze FAB
-    fabBar: {
-      position: 'absolute', bottom: 0, left: 0, right: 0,
-      paddingHorizontal: spacing.lg, paddingBottom: Platform.OS === 'ios' ? 24 : spacing.lg, paddingTop: spacing.md,
-      borderTopWidth: 1,
-    },
-    analyzeBtn: {
-      flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.sm,
-      borderRadius: radius.md, paddingVertical: spacing.md,
-    },
-    analyzeBtnText: { color: '#fff' },
-
-    // AI Modal
-    aiModalSheet: {
-      borderTopLeftRadius: radius['2xl'], borderTopRightRadius: radius['2xl'],
-      maxHeight: '85%', paddingBottom: Platform.OS === 'ios' ? 36 : spacing['2xl'],
-    },
-    aiModalHeader: {
+    // Status dropdown (body control)
+    statusDropdown: {
       flexDirection: 'row', alignItems: 'center', gap: spacing.md,
-      paddingHorizontal: spacing.xl, paddingTop: spacing.lg, paddingBottom: spacing.md,
-      borderBottomWidth: 1,
+      paddingHorizontal: spacing.md, paddingVertical: spacing.md,
+      borderRadius: radius.md, borderWidth: 1.5,
     },
-    aiModalIcon: { width: 38, height: 38, borderRadius: radius.sm, alignItems: 'center', justifyContent: 'center' },
-    aiModalBody:  { paddingHorizontal: spacing.xl, paddingTop: spacing.md },
-    aiLoading:    { alignItems: 'center', paddingVertical: 48, gap: spacing.md },
+    statusDropdownDot: { width: 10, height: 10, borderRadius: 5 },
 
     // Lightbox
     lightbox: {

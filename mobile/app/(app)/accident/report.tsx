@@ -75,6 +75,13 @@ export default function AccidentReportScreen() {
   const textAlign   = isRTL ? 'right' : 'left'
   const backIcon: IconName    = isRTL ? 'arrow-forward' : 'arrow-back'
 
+  // Header back on the first step must return to the PREVIOUS screen, never Home.
+  // Fall back to the accident dashboard only when there is no navigation history.
+  function goBack() {
+    if (router.canGoBack()) router.back()
+    else router.replace('/(app)/accident/dashboard')
+  }
+
   useEffect(() => { if (allowed) loadSites() }, [allowed])
   useEffect(() => {
     if (allowed && draft.site) loadVehicles(draft.site)
@@ -277,7 +284,7 @@ export default function AccidentReportScreen() {
     return (
       <Screen>
         <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-          <NavBar titleKey="accident.step1Title" onBack={() => router.back()} />
+          <NavBar titleKey="accident.step1Title" onBack={goBack} />
           <ScrollView style={styles.scroll} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
 
             {/* Severity header card */}

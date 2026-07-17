@@ -75,10 +75,16 @@ export default function ChecklistApprovalsScreen() {
     router.push({ pathname: '/(app)/checklists/approvals/[submissionId]', params: { submissionId: s.id } })
   }
 
+  // Back = previous screen when there is history, else the checklists list.
+  const goBack = useCallback(() => {
+    if (router.canGoBack()) router.back()
+    else router.replace('/(app)/checklists')
+  }, [router])
+
   const count = items.length
   const header = (
     <View style={[styles.header, isRTL && styles.rowR]}>
-      <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+      <TouchableOpacity onPress={goBack} style={styles.backBtn}>
         <Ionicons name={isRTL ? 'arrow-forward' : 'arrow-back'} size={22} color={c.text} />
       </TouchableOpacity>
       <View style={{ flex: 1 }}>

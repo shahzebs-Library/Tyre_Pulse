@@ -17,7 +17,13 @@
     "done": "Done",
     "apply": "Apply",
     "clear": "Clear",
-    "confirm": "Confirm"
+    "confirm": "Confirm",
+    "sharePdf": "Share PDF",
+    "shareFailed": "Share failed",
+    "shareError": "Could not generate the PDF.",
+    "pdf": "PDF",
+    "locked": "Locked",
+    "clearAll": "Clear all"
   },
   "language": {
     "english": "English",
@@ -114,7 +120,23 @@
     "gpsUnavailable": "Location unavailable — inspection will submit without it",
     "gpsRetry": "Retry",
     "step1": "1",
-    "step2": "2"
+    "step2": "2",
+    "alertEnterAsset": "Please enter an asset / vehicle number.",
+    "alertRecordTyre": "Record at least one tyre condition before saving. Tap a tyre position and set its condition, tread, pressure, or serial.",
+    "typeSiteName": "Type your site name...",
+    "noVehiclesSite": "No vehicles registered for this site.",
+    "enterAssetManually": "Enter asset manually",
+    "notListedManual": "Not listed? Enter manually",
+    "manualEntry": "Manual entry",
+    "backToList": "Back to list",
+    "manualAssetPlaceholder": "Asset / Vehicle number (e.g. TRK-001)",
+    "notInFleetMid": "isn't in the",
+    "notInFleetEnd": "fleet. Double-check the number.",
+    "didYouMeanA": "Did you mean",
+    "didYouMeanB": "? Tap to use it.",
+    "vehicleType": "Vehicle Type",
+    "unknown": "Unknown",
+    "validationRecordTyre": "Record at least one tyre condition to save this inspection."
   },
   "history": {
     "title": "Inspection History",
@@ -124,7 +146,9 @@
     "searchPlaceholder": "Search by title, asset or site",
     "filterAll": "All",
     "noResults": "No matching inspections",
-    "noResultsHint": "Try adjusting your search or filters"
+    "noResultsHint": "Try adjusting your search or filters",
+    "syncedLoadError": "Could not load synced history. Pull down to retry.",
+    "loadError": "Could not load history. Pull down to retry."
   },
   "profile": {
     "employeeId": "Employee ID",
@@ -154,7 +178,17 @@
       "director": "Director",
       "inspector": "Inspector",
       "tyre_man": "Tyre Man"
-    }
+    },
+    "appearance": "Appearance",
+    "notifications": "Notifications",
+    "dailyReminder": "Daily Inspection Reminder",
+    "remindAt": "Remind me at",
+    "notifBlockedTitle": "Notifications Blocked",
+    "notifBlockedMsg": "Enable notifications for TyrePulse in your device settings to use reminders.",
+    "themeLight": "Light",
+    "themeDark": "Dark",
+    "themeSystem": "System",
+    "themeRecommended": "Recommended"
   },
   "tyre": {
     "serialNumber": "Serial Number",
@@ -323,7 +357,14 @@
     "position": "Position",
     "asset": "Asset",
     "site": "Site",
-    "lastReading": "Last reading"
+    "lastReading": "Last reading",
+    "camUnavailable": "Camera unavailable",
+    "camUnavailableMsg": "The camera could not be started on this device. You can still enter the code by hand.",
+    "enterManually": "Enter Code Manually",
+    "tyreChange": "Tyre Change",
+    "viewInFleet": "View in Fleet",
+    "openSerialSearch": "Open in Serial Search",
+    "searchManually": "Search Manually"
   },
   "modules": {
     "common": {
@@ -393,7 +434,113 @@
       "primaryDashT": "Open Dashboard",
       "primaryDashS": "Fleet accidents & claims",
       "primaryAlertsT": "View Alerts",
-      "primaryAlertsS": "Fleet tyre risks"
+      "primaryAlertsS": "Fleet tyre risks",
+      "sections": {
+        "Field": "Field",
+        "Fleet": "Fleet",
+        "Maintenance": "Maintenance",
+        "Management": "Management",
+        "Admin": "Admin"
+      },
+      "fleetHealthWeek": "Fleet Health This Week",
+      "openActions": "Open Actions",
+      "inspectionsLabel": "Inspections",
+      "criticalTyres": "critical tyres need attention",
+      "workOrdersReview": "work orders open, review recommended",
+      "qa": {
+        "scan": {
+          "label": "Scan Asset",
+          "sub": "Barcode / QR code"
+        },
+        "serial": {
+          "label": "Serial Search",
+          "sub": "Find tyre by serial"
+        },
+        "tyreChange": {
+          "label": "Tyre Change",
+          "sub": "Record a change"
+        },
+        "checklists": {
+          "label": "Checklists",
+          "sub": "Fill & submit checks"
+        },
+        "meter": {
+          "label": "Meter Log",
+          "sub": "Daily odometer / hrs"
+        },
+        "reportIssue": {
+          "label": "Report Issue",
+          "sub": "Flag a problem"
+        },
+        "records": {
+          "label": "Tyre Records",
+          "sub": "Browse all records"
+        },
+        "vehicles": {
+          "label": "Vehicles",
+          "sub": "Fleet assets"
+        },
+        "history": {
+          "label": "History",
+          "sub": "Recent activity"
+        },
+        "alerts": {
+          "label": "Alerts",
+          "sub": "Critical tyres"
+        },
+        "calendar": {
+          "label": "Calendar",
+          "sub": "Scheduled work"
+        },
+        "accidents": {
+          "label": "Accidents",
+          "sub": "Incident overview"
+        },
+        "reportAccident": {
+          "label": "File Accident",
+          "sub": "Report an incident"
+        },
+        "workorders": {
+          "label": "Work Orders",
+          "sub": "Open actions"
+        },
+        "rca": {
+          "label": "Root Cause",
+          "sub": "RCA analysis"
+        },
+        "tasks": {
+          "label": "Tasks",
+          "sub": "Corrective actions"
+        },
+        "stock": {
+          "label": "Stock Count",
+          "sub": "Daily stock-take"
+        },
+        "overview": {
+          "label": "Overview",
+          "sub": "Fleet snapshot"
+        },
+        "reports": {
+          "label": "Reports",
+          "sub": "Generate PDF"
+        },
+        "analytics": {
+          "label": "Analytics",
+          "sub": "Fleet KPIs"
+        },
+        "ai": {
+          "label": "Fleet AI",
+          "sub": "Ask anything"
+        },
+        "team": {
+          "label": "Team",
+          "sub": "Members"
+        },
+        "admin": {
+          "label": "Admin Console",
+          "sub": "Console & settings"
+        }
+      }
     },
     "tasks": {
       "title": "Corrective Actions",
@@ -413,7 +560,20 @@
       "all": "All",
       "critical": "Critical",
       "high": "High",
-      "none": "No active alerts"
+      "none": "No active alerts",
+      "ackTitle": "Acknowledge alert",
+      "ackMsgA": "Mark the",
+      "ackMsgB": "alert for",
+      "ackMsgC": "as reviewed? It will be removed from the list.",
+      "thisAsset": "this asset",
+      "acknowledge": "Acknowledge",
+      "ackFailTitle": "Could not acknowledge",
+      "ackFailMsg": "Please try again.",
+      "loadingLabel": "Loading alerts",
+      "noneFilter": "No alerts match this filter.",
+      "unknownAsset": "Unknown asset",
+      "ack": "Ack",
+      "loadError": "Could not load alerts. Pull down to retry."
     },
     "vehicles": {
       "title": "Vehicles",
@@ -568,7 +728,8 @@
       "site": "Site",
       "date": "Date",
       "inspector": "Inspector",
-      "notFound": "Not found"
+      "notFound": "Not found",
+      "loadError": "Could not load this inspection."
     },
     "workspace": {
       "title": "Workspace",
@@ -577,6 +738,145 @@
       "admin": "Admin Console",
       "ai": "AI Assistant",
       "accidents": "Accidents"
+    },
+    "records": {
+      "title": "Tyre Records",
+      "mySite": "My site",
+      "searchPlaceholder": "Search asset, serial, brand...",
+      "clearAll": "Clear all",
+      "noRecordsTitle": "No records found",
+      "noRecordsHint": "Try adjusting your search or filters",
+      "filterTitle": "Filter Records",
+      "riskLevel": "Risk Level",
+      "site": "Site",
+      "applyFilters": "Apply Filters",
+      "clearAllBtn": "Clear All",
+      "record": "Record",
+      "loadError": "Could not load records. Pull down to retry.",
+      "serialNo": "Serial No",
+      "issueDate": "Issue Date",
+      "category": "Category",
+      "costPerTyre": "Cost / Tyre",
+      "kmFitment": "KM at Fitment",
+      "kmRemoval": "KM at Removal",
+      "tyreLife": "Tyre Life (km)",
+      "country": "Country",
+      "description": "Description",
+      "remarks": "Remarks"
+    },
+    "meter": {
+      "title": "Daily Meter Log",
+      "assetLabel": "Asset / Vehicle *",
+      "scan": "Scan",
+      "assetPlaceholder": "Scan, select or type the asset...",
+      "site": "Site",
+      "sitePlaceholder": "Select the site...",
+      "siteHelp": "Site auto-fills from the asset's fleet record. You can change it.",
+      "checkingLast": "Checking last reading...",
+      "noPrevious": "No previous reading on record.",
+      "lastPrefix": "Last:",
+      "sinceLast": "km since last",
+      "lowerThanLast": "km (lower than last!)",
+      "odometerLabel": "Odometer (km) *",
+      "odometerPlaceholder": "e.g. 128450",
+      "belowLastPrefix": "Odometer cannot be less than the last reading of",
+      "kmDot": "km.",
+      "gaugePhoto": "Photo of the odometer gauge *",
+      "photographGauge": "Photograph gauge",
+      "engineHoursLabel": "Engine hours / Hour meter",
+      "hoursPlaceholder": "e.g. 4210",
+      "hoursPhotoHelp": "Photo of the hour-meter gauge",
+      "hoursHelp": "For generators / plant, enter the hour-meter reading (and add its photo).",
+      "notesLabel": "Notes",
+      "notesPlaceholder": "Anything worth noting...",
+      "logReading": "Log Reading",
+      "camNeededTitle": "Camera access needed",
+      "camNeededMsg": "Allow camera access to scan an asset barcode, or type the asset code by hand.",
+      "nothingScannedTitle": "Nothing scanned",
+      "nothingScannedMsg": "Could not read an asset code. Try again or type it in.",
+      "savedOnDevice": "Saved on device",
+      "savedOnDeviceMsg": "Saved on device. It will sync when back online.",
+      "readingLogged": "Reading logged",
+      "readingLoggedPrefix": "Odometer",
+      "readingLoggedMid": "km recorded for",
+      "logFailTitle": "Could not log reading",
+      "tryAgain": "Please try again.",
+      "assetRequiredTitle": "Asset required",
+      "assetRequiredMsg": "Select the vehicle / asset you are logging.",
+      "readingRequiredTitle": "Reading required",
+      "readingRequiredMsg": "Enter the current odometer reading (km).",
+      "invalidReadingTitle": "Invalid reading",
+      "invalidReadingMsg": "Odometer reading cannot be negative.",
+      "tooLowTitle": "Reading too low",
+      "photoRequiredTitle": "Photo required",
+      "photoRequiredMsg": "Take a photo of the odometer gauge to confirm the reading.",
+      "bigJumpTitle": "Large jump since last reading",
+      "bigJumpPrefix": "That is",
+      "bigJumpSuffix": "km since the last reading. Please double-check the number. Log it anyway?",
+      "recheck": "Re-check",
+      "logAnyway": "Log anyway",
+      "scanAsset": "Scan Asset",
+      "frameHint": "Point the camera at the asset barcode or QR label.",
+      "camUnavailable": "Camera unavailable",
+      "camUnavailableMsg": "The camera could not be started. Close this and type the asset code by hand."
+    },
+    "checklists": {
+      "title": "Checklists",
+      "approvals": "Approvals",
+      "awaitingSignoff": "checklists awaiting sign-off",
+      "reviewSignoff": "Review and sign off submitted checklists",
+      "due": "Due",
+      "noneDue": "No checklists due",
+      "checklistFallback": "Checklist",
+      "overdue": "Overdue",
+      "pending": "Pending",
+      "allChecklists": "All checklists",
+      "dueWord": "due",
+      "availableWord": "available",
+      "notEnabledTitle": "Checklists aren't enabled yet",
+      "notEnabledMsg": "Ask your administrator to publish checklist templates for your site.",
+      "noPublished": "No published checklists",
+      "fields": "fields",
+      "scored": "Scored",
+      "signature": "Signature",
+      "approval": "Approval",
+      "loadError": "Could not load checklists.",
+      "dueToday": "due today",
+      "daysOverdue": "days overdue",
+      "dueIn": "due in",
+      "days": "days"
+    },
+    "checklistFill": {
+      "reviewTitle": "Please review",
+      "reviewMsg": "Some required items need attention.",
+      "signatureRequired": "Signature required",
+      "signatureRequiredMsg": "Please sign to complete this checklist.",
+      "nameRequired": "Name required",
+      "nameRequiredMsg": "Type your name under the signature to confirm who signed.",
+      "savedOnDevice": "Saved on device",
+      "savedOnDeviceMsg": "Saved on device. It will sync when online.",
+      "submittedTitle": "Checklist submitted",
+      "submittedMsg": "Your checklist has been recorded.",
+      "submitFailTitle": "Submission failed",
+      "submitFailMsg": "Could not submit. Please try again.",
+      "scoreLabel": "Score:",
+      "passed": "Passed",
+      "failed": "Failed",
+      "notFoundTitle": "Checklist not found",
+      "notFoundMsg": "This checklist may have been unpublished or removed.",
+      "titleLabel": "Title",
+      "assetNo": "Asset No",
+      "assetPlaceholder": "e.g. TRK-001",
+      "site": "Site",
+      "sectionFallback": "Section",
+      "itemFallback": "Item",
+      "tapToRecord": "Tap to record",
+      "submitting": "Submitting...",
+      "submitChecklist": "Submit Checklist",
+      "signatureNeeded": "A signature is required before you can submit.",
+      "loadError": "Could not load this checklist.",
+      "of": "of",
+      "doneWord": "done"
     }
   }
 }

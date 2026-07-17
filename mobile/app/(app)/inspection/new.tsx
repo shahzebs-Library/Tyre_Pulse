@@ -297,7 +297,7 @@ export default function NewInspectionScreen() {
       return false
     }
     if (useManualEntry && !manualAsset.trim()) {
-      Alert.alert(t('inspection.alertRequired'), 'Please enter an asset / vehicle number.')
+      Alert.alert(t('inspection.alertRequired'), t('inspection.alertEnterAsset'))
       return false
     }
     return true
@@ -339,7 +339,7 @@ export default function NewInspectionScreen() {
     if (recordedCount === 0) {
       Alert.alert(
         t('inspection.alertRequired'),
-        'Record at least one tyre condition before saving. Tap a tyre position and set its condition, tread, pressure, or serial.',
+        t('inspection.alertRecordTyre'),
       )
       return
     }
@@ -482,7 +482,7 @@ export default function NewInspectionScreen() {
                   style={[styles.input, { textAlign }]}
                   value={selectedSite}
                   onChangeText={v => { setSelectedSite(v); setSelectedVehicle(null) }}
-                  placeholder="Type your site name..."
+                  placeholder={t('inspection.typeSiteName')}
                   placeholderTextColor={theme.color.textMuted}
                   autoCapitalize="words"
                 />
@@ -540,7 +540,7 @@ export default function NewInspectionScreen() {
                       <View style={styles.vehicleEmpty}>
                         <Ionicons name="car-outline" size={28} color={theme.color.borderStrong} />
                         <Text style={styles.vehicleEmptyText}>
-                          {vehicleQuery ? t('inspection.vehicleNoMatch') : 'No vehicles registered for this site.'}
+                          {vehicleQuery ? t('inspection.vehicleNoMatch') : t('inspection.noVehiclesSite')}
                         </Text>
                         {!vehicleQuery && (
                           <TouchableOpacity
@@ -548,7 +548,7 @@ export default function NewInspectionScreen() {
                             onPress={() => setUseManualEntry(true)}
                           >
                             <Ionicons name="pencil-outline" size={14} color={theme.color.primary} />
-                            <Text style={styles.manualEntryText}>Enter asset manually</Text>
+                            <Text style={styles.manualEntryText}>{t('inspection.enterAssetManually')}</Text>
                           </TouchableOpacity>
                         )}
                       </View>
@@ -581,7 +581,7 @@ export default function NewInspectionScreen() {
                           onPress={() => setUseManualEntry(true)}
                         >
                           <Ionicons name="pencil-outline" size={14} color={theme.color.textMuted} />
-                          <Text style={[styles.manualEntryText, { color: theme.color.textMuted }]}>Not listed? Enter manually</Text>
+                          <Text style={[styles.manualEntryText, { color: theme.color.textMuted }]}>{t('inspection.notListedManual')}</Text>
                         </TouchableOpacity>
                       </>
                     )}
@@ -592,16 +592,16 @@ export default function NewInspectionScreen() {
                 {useManualEntry && (
                   <View style={{ gap: 10 }}>
                     <View style={styles.manualHeader}>
-                      <Text style={styles.manualHeaderText}>Manual entry</Text>
+                      <Text style={styles.manualHeaderText}>{t('inspection.manualEntry')}</Text>
                       <TouchableOpacity onPress={() => setUseManualEntry(false)}>
-                        <Text style={{ fontSize: 12, color: theme.color.info.base, fontWeight: '600' }}>← Back to list</Text>
+                        <Text style={{ fontSize: 12, color: theme.color.info.base, fontWeight: '600' }}>{t('inspection.backToList')}</Text>
                       </TouchableOpacity>
                     </View>
                     <TextInput
                       style={[styles.input, { textAlign }]}
                       value={manualAsset}
                       onChangeText={setManualAsset}
-                      placeholder="Asset / Vehicle number (e.g. TRK-001)"
+                      placeholder={t('inspection.manualAssetPlaceholder')}
                       placeholderTextColor={theme.color.textMuted}
                       autoCapitalize="characters"
                       autoCorrect={false}
@@ -614,7 +614,7 @@ export default function NewInspectionScreen() {
                         <Ionicons name="alert-circle-outline" size={16} color={theme.color.warning.on} />
                         <View style={{ flex: 1 }}>
                           <Text style={[styles.assetWarnText, { textAlign }]}>
-                            {`"${manualAsset.trim().toUpperCase()}" isn't in the ${selectedSite} fleet — double-check the number.`}
+                            {`"${manualAsset.trim().toUpperCase()}" ${t('inspection.notInFleetMid')} ${selectedSite} ${t('inspection.notInFleetEnd')}`}
                           </Text>
                           {manualAssetCheck.suggestion && (
                             <TouchableOpacity
@@ -625,7 +625,7 @@ export default function NewInspectionScreen() {
                               activeOpacity={0.7}
                             >
                               <Text style={[styles.assetWarnSuggest, { textAlign }]}>
-                                {`Did you mean ${manualAssetCheck.suggestion}? Tap to use it.`}
+                                {`${t('inspection.didYouMeanA')} ${manualAssetCheck.suggestion}${t('inspection.didYouMeanB')}`}
                               </Text>
                             </TouchableOpacity>
                           )}
@@ -633,7 +633,7 @@ export default function NewInspectionScreen() {
                       </View>
                     )}
 
-                    <Text style={styles.fieldLabel}>Vehicle Type</Text>
+                    <Text style={styles.fieldLabel}>{t('inspection.vehicleType')}</Text>
                     <View style={styles.chipRow}>
                       {['Truck', 'Bus', 'Trailer', 'Crane', 'Forklift', 'Pickup', 'SUV', 'Other'].map(vt => (
                         <TouchableOpacity
@@ -671,7 +671,7 @@ export default function NewInspectionScreen() {
               <View style={[styles.readonlyField, isRTL && styles.readonlyFieldRTL]}>
                 <Ionicons name="person-circle-outline" size={18} color={theme.color.primary} />
                 <Text style={[styles.readonlyText, { textAlign }]}>
-                  {profile?.full_name ?? profile?.username ?? 'Unknown'}
+                  {profile?.full_name ?? profile?.username ?? t('inspection.unknown')}
                   {profile?.employee_id ? `  ·  ID: ${profile.employee_id}` : ''}
                 </Text>
               </View>
@@ -969,7 +969,7 @@ export default function NewInspectionScreen() {
             <View style={[styles.validationWarn, isRTL && styles.navRTL]}>
               <Ionicons name="alert-circle-outline" size={16} color={theme.color.warning.on} />
               <Text style={[styles.validationWarnText, { textAlign }]}>
-                Record at least one tyre condition to save this inspection.
+                {t('inspection.validationRecordTyre')}
               </Text>
             </View>
           )}

@@ -41,11 +41,11 @@ function daysUntil(due: string): number {
   return Math.round((d - t) / 86400000)
 }
 
-function relativeHint(due: string): string {
+function relativeHint(due: string, t: (k: string) => string): string {
   const n = daysUntil(due)
-  if (n === 0) return 'due today'
-  if (n < 0) return `${Math.abs(n)} day${Math.abs(n) === 1 ? '' : 's'} overdue`
-  return `due in ${n} day${n === 1 ? '' : 's'}`
+  if (n === 0) return t('modules.checklists.dueToday')
+  if (n < 0) return `${Math.abs(n)} ${t('modules.checklists.daysOverdue')}`
+  return `${t('modules.checklists.dueIn')} ${n} ${t('modules.checklists.days')}`
 }
 
 // An assignment is effectively overdue when pending and its due date has passed.
@@ -63,7 +63,7 @@ function looksLikeMissingTable(msg: string): boolean {
 
 export default function ChecklistsScreen() {
   const { profile } = useAuth()
-  const { isRTL } = useLanguage()
+  const { t, isRTL } = useLanguage()
   const { theme } = useTheme()
   const styles = useMemo(() => makeStyles(theme), [theme])
   const router = useRouter()
@@ -91,7 +91,7 @@ export default function ChecklistsScreen() {
       setAssignments(as)
       setTemplates(ts)
     } catch (e: any) {
-      const msg = e?.message || e?.error_description || 'Could not load checklists.'
+      const msg = e?.message || e?.error_description || t('modules.checklists.loadError')
       if (looksLikeMissingTable(msg)) setNotEnabled(true)
       else setError(msg)
     } finally {
@@ -165,11 +165,11 @@ export default function ChecklistsScreen() {
             <Ionicons name="shield-checkmark-outline" size={20} color={theme.color.warning.on} />
           </View>
           <View style={{ flex: 1 }}>
-            <AppText style={[typography.bodyStrong, { textAlign }]}>Approvals</AppText>
+            <AppText style={[typography.bodyStrong, { textAlign }]}>{t('modules.checklists.approvals')}</AppText>
             <AppText variant="caption" style={[{ color: theme.color.warning.on, textAlign, marginTop: 2 }]}>
               {pendingApprovals > 0
-                ? `${pendingApprovals} checklist${pendingApprovals === 1 ? '' : 's'} awaiting sign-off`
-                : 'Review and sign off submitted checklists'}
+                ? `${pendingApprovals} ${t('modules.checklists.awaitingSignoff')}`
+                : t('modules.checklists.reviewSignoff')}
             </AppText>
           </View>
           {pendingApprovals > 0 && (
@@ -183,7 +183,7 @@ export default function ChecklistsScreen() {
 
       {/* Section A - Due */}
       <View style={styles.sectionHead}>
-        <AppText style={typography.h3}>Due</AppText>
+        <AppText style={typography.h3}>{t('modules.checklists.due')}</AppText>
         {due.length > 0 && (
           <View style={styles.countPill}>
             <AppText style={[typography.micro, { color: theme.color.danger.on }]}>{due.length}</AppText>
@@ -194,7 +194,7 @@ export default function ChecklistsScreen() {
       {due.length === 0 ? (
         <View style={styles.inlineEmpty}>
           <Ionicons name="checkmark-done-outline" size={22} color={theme.color.primary} />
-          <AppText style={[typography.body, { fontWeight: '700', color: theme.color.primaryDark }]}>No checklists due</AppText>
+          <AppText style={[typography.body, { fontWeight: '700', color: theme.color.primaryDark }]}>{t('modules.checklists.noneDue')}</AppText>
         </View>
       ) : (
         <View style={{ gap: 10 }}>
@@ -220,7 +220,7 @@ export default function ChecklistsScreen() {
                 </View>
                 <View style={{ flex: 1, gap: 3 }}>
                   <AppText style={[typography.title, { textAlign }]} numberOfLines={1}>
-                    {a.template_name ?? 'Checklist'}
+                    {a.template_name ?? t('modules.checklists.checklistFallback')}
                   </AppText>
                   <View style={[styles.metaRow, isRTL && styles.rowR]}>
                     {!!(a.site || a.asset_no) && (
@@ -237,11 +237,11 @@ export default function ChecklistsScreen() {
                     <AppText style={styles.metaText}>{dueLabel}</AppText>
                     <AppText style={styles.metaDot}>·</AppText>
                     <AppText style={[styles.hintText, overdue && styles.hintOverdue]}>
-                      {relativeHint(a.due_date)}
+                      {relativeHint(a.due_date, t)}
                     </AppText>
                   </View>
                 </View>
-                <Badge kind={overdue ? 'danger' : 'warning'}>{overdue ? 'Overdue' : 'Pending'}</Badge>
+                <Badge kind={overdue ? 'danger' : 'warning'}>{overdue ? t('modules.checklists.overdue') : t('modules.checklists.pending')}</Badge>
               </TouchableOpacity>
             )
           })}
@@ -250,7 +250,7 @@ export default function ChecklistsScreen() {
 
       {/* Section B - All checklists (list rendered by FlatList below) */}
       <View style={[styles.sectionHead, { marginTop: 8 }]}>
-        <AppText style={typography.h3}>All checklists</AppText>
+        <AppText style={typography.h3}>{t('modules.checklists.allChecklists')}</AppText>
       </View>
     </View>
   )
@@ -262,9 +262,9 @@ export default function ChecklistsScreen() {
           <Ionicons name={isRTL ? 'arrow-forward' : 'arrow-back'} size={22} color={theme.color.text} />
         </TouchableOpacity>
         <View style={{ flex: 1 }}>
-          <AppText variant="h2" style={{ textAlign }}>Checklists</AppText>
+          <AppText variant="h2" style={{ textAlign }}>{t('modules.checklists.title')}</AppText>
           <AppText variant="caption" color="muted" style={{ textAlign, marginTop: 2 }}>
-            {due.length} due · {templates.length} available
+            {due.length} {t('modules.checklists.dueWord')} · {templates.length} {t('modules.checklists.availableWord')}
           </AppText>
         </View>
       </View>
@@ -274,8 +274,8 @@ export default function ChecklistsScreen() {
       ) : notEnabled ? (
         <EmptyState
           icon="checkbox-outline"
-          title="Checklists aren't enabled yet"
-          message="Ask your administrator to publish checklist templates for your site."
+          title={t('modules.checklists.notEnabledTitle')}
+          message={t('modules.checklists.notEnabledMsg')}
         />
       ) : error ? (
         <ErrorState message={error} onRetry={onRefresh} />
@@ -293,23 +293,23 @@ export default function ChecklistsScreen() {
           ListEmptyComponent={
             <View style={styles.inlineEmpty}>
               <Ionicons name="document-outline" size={22} color={theme.color.textMuted} />
-              <AppText style={[typography.body, { fontWeight: '700', color: theme.color.textMuted }]}>No published checklists</AppText>
+              <AppText style={[typography.body, { fontWeight: '700', color: theme.color.textMuted }]}>{t('modules.checklists.noPublished')}</AppText>
             </View>
           }
-          renderItem={({ item: t }) => (
+          renderItem={({ item: tpl }) => (
             <TouchableOpacity
               style={styles.tplCard}
               activeOpacity={0.75}
-              onPress={() => openTemplate(t)}
+              onPress={() => openTemplate(tpl)}
             >
               <View style={[styles.tplHead, isRTL && styles.rowR]}>
                 <View style={styles.tplIcon}>
-                  <Ionicons name={(t.icon as any) || 'checkbox-outline'} size={20} color={theme.color.primary} />
+                  <Ionicons name={(tpl.icon as any) || 'checkbox-outline'} size={20} color={theme.color.primary} />
                 </View>
                 <View style={{ flex: 1 }}>
-                  <AppText style={[typography.title, { textAlign }]} numberOfLines={1}>{t.name}</AppText>
-                  {!!t.category && (
-                    <AppText style={[styles.tplCategory, { textAlign }]} numberOfLines={1}>{t.category}</AppText>
+                  <AppText style={[typography.title, { textAlign }]} numberOfLines={1}>{tpl.name}</AppText>
+                  {!!tpl.category && (
+                    <AppText style={[styles.tplCategory, { textAlign }]} numberOfLines={1}>{tpl.category}</AppText>
                   )}
                 </View>
                 <Ionicons name={isRTL ? 'chevron-back' : 'chevron-forward'} size={18} color={theme.color.textMuted} />
@@ -318,24 +318,24 @@ export default function ChecklistsScreen() {
               <View style={[styles.badgeRow, isRTL && styles.rowR]}>
                 <View style={styles.badge}>
                   <Ionicons name="list-outline" size={12} color={theme.color.textSecondary} />
-                  <AppText style={styles.badgeText}>{fieldCount(t)} fields</AppText>
+                  <AppText style={styles.badgeText}>{fieldCount(tpl)} {t('modules.checklists.fields')}</AppText>
                 </View>
-                {t.scored && (
+                {tpl.scored && (
                   <View style={[styles.badge, styles.badgeGreen]}>
                     <Ionicons name="ribbon-outline" size={12} color={theme.color.primary} />
-                    <AppText style={[styles.badgeText, { color: theme.color.primaryDark }]}>Scored</AppText>
+                    <AppText style={[styles.badgeText, { color: theme.color.primaryDark }]}>{t('modules.checklists.scored')}</AppText>
                   </View>
                 )}
-                {t.require_signature && (
+                {tpl.require_signature && (
                   <View style={[styles.badge, styles.badgeBlue]}>
                     <Ionicons name="create-outline" size={12} color={theme.color.info.base} />
-                    <AppText style={[styles.badgeText, { color: theme.color.info.on }]}>Signature</AppText>
+                    <AppText style={[styles.badgeText, { color: theme.color.info.on }]}>{t('modules.checklists.signature')}</AppText>
                   </View>
                 )}
-                {t.require_approval && (
+                {tpl.require_approval && (
                   <View style={[styles.badge, styles.badgeAmber]}>
                     <Ionicons name="shield-checkmark-outline" size={12} color={theme.color.warning.base} />
-                    <AppText style={[styles.badgeText, { color: theme.color.warning.on }]}>Approval</AppText>
+                    <AppText style={[styles.badgeText, { color: theme.color.warning.on }]}>{t('modules.checklists.approval')}</AppText>
                   </View>
                 )}
               </View>

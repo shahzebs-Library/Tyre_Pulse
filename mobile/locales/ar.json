@@ -17,7 +17,13 @@
     "done": "تم",
     "apply": "تطبيق",
     "clear": "مسح",
-    "confirm": "تأكيد"
+    "confirm": "تأكيد",
+    "sharePdf": "مشاركة PDF",
+    "shareFailed": "فشلت المشاركة",
+    "shareError": "تعذّر إنشاء ملف PDF.",
+    "pdf": "PDF",
+    "locked": "مقفل",
+    "clearAll": "مسح الكل"
   },
   "language": {
     "english": "English",
@@ -115,7 +121,23 @@
     "gpsUnavailable": "الموقع غير متاح — سيُرسَل الفحص بدونه",
     "gpsRetry": "إعادة المحاولة",
     "step1": "١",
-    "step2": "٢"
+    "step2": "٢",
+    "alertEnterAsset": "يرجى إدخال رقم الأصل / المركبة.",
+    "alertRecordTyre": "سجّل حالة إطار واحد على الأقل قبل الحفظ. اضغط على موضع الإطار وحدّد حالته أو عمق المداس أو الضغط أو الرقم التسلسلي.",
+    "typeSiteName": "اكتب اسم موقعك...",
+    "noVehiclesSite": "لا توجد مركبات مسجلة لهذا الموقع.",
+    "enterAssetManually": "إدخال الأصل يدوياً",
+    "notListedManual": "غير مدرج؟ أدخله يدوياً",
+    "manualEntry": "إدخال يدوي",
+    "backToList": "العودة إلى القائمة",
+    "manualAssetPlaceholder": "رقم الأصل / المركبة (مثال TRK-001)",
+    "notInFleetMid": "غير موجود في أسطول",
+    "notInFleetEnd": ". تحقق من الرقم مرة أخرى.",
+    "didYouMeanA": "هل تقصد",
+    "didYouMeanB": "؟ اضغط لاستخدامه.",
+    "vehicleType": "نوع المركبة",
+    "unknown": "غير معروف",
+    "validationRecordTyre": "سجّل حالة إطار واحد على الأقل لحفظ هذا الفحص."
   },
   "history": {
     "title": "سجل الفحوصات",
@@ -125,7 +147,9 @@
     "searchPlaceholder": "ابحث بالعنوان أو الأصل أو الموقع",
     "filterAll": "الكل",
     "noResults": "لا توجد عمليات فحص مطابقة",
-    "noResultsHint": "حاول تعديل البحث أو عوامل التصفية"
+    "noResultsHint": "حاول تعديل البحث أو عوامل التصفية",
+    "syncedLoadError": "تعذّر تحميل السجل المتزامن. اسحب للأسفل لإعادة المحاولة.",
+    "loadError": "تعذّر تحميل السجل. اسحب للأسفل لإعادة المحاولة."
   },
   "profile": {
     "employeeId": "رقم الموظف",
@@ -155,7 +179,17 @@
       "director": "مدير تنفيذي",
       "inspector": "مفتش",
       "tyre_man": "فني الإطارات"
-    }
+    },
+    "appearance": "المظهر",
+    "notifications": "الإشعارات",
+    "dailyReminder": "تذكير الفحص اليومي",
+    "remindAt": "ذكّرني عند",
+    "notifBlockedTitle": "الإشعارات محظورة",
+    "notifBlockedMsg": "فعّل إشعارات TyrePulse في إعدادات جهازك لاستخدام التذكيرات.",
+    "themeLight": "فاتح",
+    "themeDark": "داكن",
+    "themeSystem": "النظام",
+    "themeRecommended": "موصى به"
   },
   "tyre": {
     "serialNumber": "الرقم التسلسلي",
@@ -234,7 +268,14 @@
     "position": "الموضع",
     "asset": "الأصل",
     "site": "الموقع",
-    "lastReading": "آخر قراءة"
+    "lastReading": "آخر قراءة",
+    "camUnavailable": "الكاميرا غير متاحة",
+    "camUnavailableMsg": "تعذّر تشغيل الكاميرا على هذا الجهاز. لا يزال بإمكانك إدخال الرمز يدوياً.",
+    "enterManually": "إدخال الرمز يدوياً",
+    "tyreChange": "تغيير الإطار",
+    "viewInFleet": "عرض في الأسطول",
+    "openSerialSearch": "فتح في بحث الرقم التسلسلي",
+    "searchManually": "بحث يدوي"
   },
   "accident": {
     "tabTitle": "بلاغ حادثة",
@@ -394,7 +435,113 @@
       "primaryDashT": "فتح لوحة التحكم",
       "primaryDashS": "حوادث ومطالبات الأسطول",
       "primaryAlertsT": "عرض التنبيهات",
-      "primaryAlertsS": "مخاطر إطارات الأسطول"
+      "primaryAlertsS": "مخاطر إطارات الأسطول",
+      "sections": {
+        "Field": "الميدان",
+        "Fleet": "الأسطول",
+        "Maintenance": "الصيانة",
+        "Management": "الإدارة",
+        "Admin": "المسؤول"
+      },
+      "fleetHealthWeek": "صحة الأسطول هذا الأسبوع",
+      "openActions": "إجراءات مفتوحة",
+      "inspectionsLabel": "عمليات الفحص",
+      "criticalTyres": "إطارات حرجة تحتاج إلى اهتمام",
+      "workOrdersReview": "أوامر عمل مفتوحة، يوصى بالمراجعة",
+      "qa": {
+        "scan": {
+          "label": "مسح الأصل",
+          "sub": "باركود / رمز QR"
+        },
+        "serial": {
+          "label": "بحث تسلسلي",
+          "sub": "ابحث عن الإطار بالرقم التسلسلي"
+        },
+        "tyreChange": {
+          "label": "تغيير الإطار",
+          "sub": "تسجيل تغيير"
+        },
+        "checklists": {
+          "label": "قوائم التحقق",
+          "sub": "املأ وأرسل الفحوصات"
+        },
+        "meter": {
+          "label": "سجل العداد",
+          "sub": "العداد اليومي / الساعات"
+        },
+        "reportIssue": {
+          "label": "الإبلاغ عن مشكلة",
+          "sub": "الإبلاغ عن خلل"
+        },
+        "records": {
+          "label": "سجلات الإطارات",
+          "sub": "تصفح جميع السجلات"
+        },
+        "vehicles": {
+          "label": "المركبات",
+          "sub": "أصول الأسطول"
+        },
+        "history": {
+          "label": "السجل",
+          "sub": "النشاط الأخير"
+        },
+        "alerts": {
+          "label": "التنبيهات",
+          "sub": "إطارات حرجة"
+        },
+        "calendar": {
+          "label": "التقويم",
+          "sub": "العمل المجدول"
+        },
+        "accidents": {
+          "label": "الحوادث",
+          "sub": "نظرة عامة على الحوادث"
+        },
+        "reportAccident": {
+          "label": "تسجيل حادثة",
+          "sub": "الإبلاغ عن حادثة"
+        },
+        "workorders": {
+          "label": "أوامر العمل",
+          "sub": "إجراءات مفتوحة"
+        },
+        "rca": {
+          "label": "السبب الجذري",
+          "sub": "تحليل السبب الجذري"
+        },
+        "tasks": {
+          "label": "المهام",
+          "sub": "إجراءات تصحيحية"
+        },
+        "stock": {
+          "label": "جرد المخزون",
+          "sub": "الجرد اليومي"
+        },
+        "overview": {
+          "label": "نظرة عامة",
+          "sub": "لمحة عن الأسطول"
+        },
+        "reports": {
+          "label": "التقارير",
+          "sub": "إنشاء PDF"
+        },
+        "analytics": {
+          "label": "التحليلات",
+          "sub": "مؤشرات الأسطول"
+        },
+        "ai": {
+          "label": "ذكاء الأسطول",
+          "sub": "اسأل أي شيء"
+        },
+        "team": {
+          "label": "الفريق",
+          "sub": "الأعضاء"
+        },
+        "admin": {
+          "label": "وحدة المسؤول",
+          "sub": "الوحدة والإعدادات"
+        }
+      }
     },
     "tasks": {
       "title": "الإجراءات التصحيحية",
@@ -414,7 +561,20 @@
       "all": "الكل",
       "critical": "حرجة",
       "high": "عالية",
-      "none": "لا توجد تنبيهات نشطة"
+      "none": "لا توجد تنبيهات نشطة",
+      "ackTitle": "الإقرار بالتنبيه",
+      "ackMsgA": "هل تريد تعليم تنبيه",
+      "ackMsgB": "الخاص بـ",
+      "ackMsgC": "كمراجَع؟ ستتم إزالته من القائمة.",
+      "thisAsset": "هذا الأصل",
+      "acknowledge": "إقرار",
+      "ackFailTitle": "تعذّر الإقرار",
+      "ackFailMsg": "يرجى المحاولة مرة أخرى.",
+      "loadingLabel": "جارٍ تحميل التنبيهات",
+      "noneFilter": "لا توجد تنبيهات تطابق هذا المرشح.",
+      "unknownAsset": "أصل غير معروف",
+      "ack": "إقرار",
+      "loadError": "تعذّر تحميل التنبيهات. اسحب للأسفل لإعادة المحاولة."
     },
     "vehicles": {
       "title": "المركبات",
@@ -569,7 +729,8 @@
       "site": "الموقع",
       "date": "التاريخ",
       "inspector": "المفتش",
-      "notFound": "غير موجود"
+      "notFound": "غير موجود",
+      "loadError": "تعذّر تحميل هذا الفحص."
     },
     "workspace": {
       "title": "مساحة العمل",
@@ -578,6 +739,145 @@
       "admin": "وحدة الإدارة",
       "ai": "المساعد الذكي",
       "accidents": "الحوادث"
+    },
+    "records": {
+      "title": "سجلات الإطارات",
+      "mySite": "موقعي",
+      "searchPlaceholder": "ابحث عن الأصل أو الرقم التسلسلي أو العلامة...",
+      "clearAll": "مسح الكل",
+      "noRecordsTitle": "لا توجد سجلات",
+      "noRecordsHint": "حاول تعديل البحث أو المرشحات",
+      "filterTitle": "تصفية السجلات",
+      "riskLevel": "مستوى الخطورة",
+      "site": "الموقع",
+      "applyFilters": "تطبيق المرشحات",
+      "clearAllBtn": "مسح الكل",
+      "record": "سجل",
+      "loadError": "تعذّر تحميل السجلات. اسحب للأسفل لإعادة المحاولة.",
+      "serialNo": "الرقم التسلسلي",
+      "issueDate": "تاريخ الإصدار",
+      "category": "الفئة",
+      "costPerTyre": "التكلفة / الإطار",
+      "kmFitment": "الكيلومترات عند التركيب",
+      "kmRemoval": "الكيلومترات عند الإزالة",
+      "tyreLife": "عمر الإطار (كم)",
+      "country": "الدولة",
+      "description": "الوصف",
+      "remarks": "ملاحظات"
+    },
+    "meter": {
+      "title": "سجل العداد اليومي",
+      "assetLabel": "الأصل / المركبة *",
+      "scan": "مسح",
+      "assetPlaceholder": "امسح أو اختر أو اكتب الأصل...",
+      "site": "الموقع",
+      "sitePlaceholder": "اختر الموقع...",
+      "siteHelp": "يُملأ الموقع تلقائياً من سجل أسطول الأصل. يمكنك تغييره.",
+      "checkingLast": "جارٍ التحقق من آخر قراءة...",
+      "noPrevious": "لا توجد قراءة سابقة مسجلة.",
+      "lastPrefix": "الأخيرة:",
+      "sinceLast": "كم منذ الأخيرة",
+      "lowerThanLast": "كم (أقل من الأخيرة!)",
+      "odometerLabel": "عداد المسافة (كم) *",
+      "odometerPlaceholder": "مثال 128450",
+      "belowLastPrefix": "لا يمكن أن يكون عداد المسافة أقل من آخر قراءة وهي",
+      "kmDot": "كم.",
+      "gaugePhoto": "صورة عداد المسافة *",
+      "photographGauge": "صوّر العداد",
+      "engineHoursLabel": "ساعات المحرك / عداد الساعات",
+      "hoursPlaceholder": "مثال 4210",
+      "hoursPhotoHelp": "صورة عداد الساعات",
+      "hoursHelp": "للمولدات / المعدات، أدخل قراءة عداد الساعات (وأضف صورتها).",
+      "notesLabel": "ملاحظات",
+      "notesPlaceholder": "أي ملاحظة تستحق التسجيل...",
+      "logReading": "تسجيل القراءة",
+      "camNeededTitle": "مطلوب الوصول إلى الكاميرا",
+      "camNeededMsg": "اسمح بالوصول إلى الكاميرا لمسح باركود الأصل، أو اكتب رمز الأصل يدوياً.",
+      "nothingScannedTitle": "لم يتم المسح",
+      "nothingScannedMsg": "تعذّر قراءة رمز الأصل. حاول مرة أخرى أو اكتبه.",
+      "savedOnDevice": "تم الحفظ على الجهاز",
+      "savedOnDeviceMsg": "تم الحفظ على الجهاز. ستتم المزامنة عند عودة الاتصال.",
+      "readingLogged": "تم تسجيل القراءة",
+      "readingLoggedPrefix": "عداد المسافة",
+      "readingLoggedMid": "كم مسجلة لـ",
+      "logFailTitle": "تعذّر تسجيل القراءة",
+      "tryAgain": "يرجى المحاولة مرة أخرى.",
+      "assetRequiredTitle": "الأصل مطلوب",
+      "assetRequiredMsg": "اختر المركبة / الأصل الذي تسجّله.",
+      "readingRequiredTitle": "القراءة مطلوبة",
+      "readingRequiredMsg": "أدخل قراءة عداد المسافة الحالية (كم).",
+      "invalidReadingTitle": "قراءة غير صالحة",
+      "invalidReadingMsg": "لا يمكن أن تكون قراءة العداد سالبة.",
+      "tooLowTitle": "القراءة منخفضة جداً",
+      "photoRequiredTitle": "الصورة مطلوبة",
+      "photoRequiredMsg": "التقط صورة لعداد المسافة لتأكيد القراءة.",
+      "bigJumpTitle": "قفزة كبيرة منذ آخر قراءة",
+      "bigJumpPrefix": "هذه",
+      "bigJumpSuffix": "كم منذ آخر قراءة. يرجى التحقق من الرقم. هل تريد تسجيلها على أي حال؟",
+      "recheck": "إعادة التحقق",
+      "logAnyway": "سجّل على أي حال",
+      "scanAsset": "مسح الأصل",
+      "frameHint": "وجّه الكاميرا نحو باركود الأصل أو ملصق QR.",
+      "camUnavailable": "الكاميرا غير متاحة",
+      "camUnavailableMsg": "تعذّر تشغيل الكاميرا. أغلق هذا واكتب رمز الأصل يدوياً."
+    },
+    "checklists": {
+      "title": "قوائم التحقق",
+      "approvals": "الموافقات",
+      "awaitingSignoff": "قوائم تحقق بانتظار الاعتماد",
+      "reviewSignoff": "راجع واعتمد قوائم التحقق المُرسَلة",
+      "due": "المستحقة",
+      "noneDue": "لا توجد قوائم تحقق مستحقة",
+      "checklistFallback": "قائمة تحقق",
+      "overdue": "متأخرة",
+      "pending": "قيد الانتظار",
+      "allChecklists": "كل قوائم التحقق",
+      "dueWord": "مستحقة",
+      "availableWord": "متاحة",
+      "notEnabledTitle": "لم يتم تفعيل قوائم التحقق بعد",
+      "notEnabledMsg": "اطلب من المسؤول نشر قوالب قوائم التحقق لموقعك.",
+      "noPublished": "لا توجد قوائم تحقق منشورة",
+      "fields": "حقول",
+      "scored": "مُقيَّمة",
+      "signature": "توقيع",
+      "approval": "موافقة",
+      "loadError": "تعذّر تحميل قوائم التحقق.",
+      "dueToday": "مستحقة اليوم",
+      "daysOverdue": "أيام متأخرة",
+      "dueIn": "مستحقة خلال",
+      "days": "أيام"
+    },
+    "checklistFill": {
+      "reviewTitle": "يرجى المراجعة",
+      "reviewMsg": "بعض العناصر المطلوبة تحتاج إلى انتباه.",
+      "signatureRequired": "التوقيع مطلوب",
+      "signatureRequiredMsg": "يرجى التوقيع لإكمال قائمة التحقق.",
+      "nameRequired": "الاسم مطلوب",
+      "nameRequiredMsg": "اكتب اسمك أسفل التوقيع لتأكيد الموقّع.",
+      "savedOnDevice": "تم الحفظ على الجهاز",
+      "savedOnDeviceMsg": "تم الحفظ على الجهاز. ستتم المزامنة عند الاتصال.",
+      "submittedTitle": "تم إرسال قائمة التحقق",
+      "submittedMsg": "تم تسجيل قائمة التحقق الخاصة بك.",
+      "submitFailTitle": "فشل الإرسال",
+      "submitFailMsg": "تعذّر الإرسال. يرجى المحاولة مرة أخرى.",
+      "scoreLabel": "النتيجة:",
+      "passed": "ناجح",
+      "failed": "راسب",
+      "notFoundTitle": "قائمة التحقق غير موجودة",
+      "notFoundMsg": "ربما تم إلغاء نشر قائمة التحقق أو إزالتها.",
+      "titleLabel": "العنوان",
+      "assetNo": "رقم الأصل",
+      "assetPlaceholder": "مثال TRK-001",
+      "site": "الموقع",
+      "sectionFallback": "قسم",
+      "itemFallback": "عنصر",
+      "tapToRecord": "اضغط للتسجيل",
+      "submitting": "جارٍ الإرسال...",
+      "submitChecklist": "إرسال قائمة التحقق",
+      "signatureNeeded": "التوقيع مطلوب قبل الإرسال.",
+      "loadError": "تعذّر تحميل قائمة التحقق.",
+      "of": "من",
+      "doneWord": "مكتمل"
     }
   }
 }

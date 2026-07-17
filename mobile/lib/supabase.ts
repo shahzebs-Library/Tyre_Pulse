@@ -16,7 +16,7 @@ const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? extra.supab
 
 if (!supabaseUrl || !supabaseAnonKey) {
   // Surfaces misconfiguration loudly in dev/logs instead of failing silently.
-  console.error('[TyrePulse] Missing Supabase config - set EXPO_PUBLIC_SUPABASE_URL / _ANON_KEY or app.json extra.')
+  if (__DEV__) console.error('[TyrePulse] Missing Supabase config - set EXPO_PUBLIC_SUPABASE_URL / _ANON_KEY or app.json extra.')
 }
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {

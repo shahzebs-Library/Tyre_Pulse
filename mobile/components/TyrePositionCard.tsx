@@ -6,7 +6,7 @@
  * the iconic condition state, key readings and a "recorded" indicator.
  */
 
-import { useMemo } from 'react'
+import { memo, useMemo } from 'react'
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { TyrePositionData } from '../lib/types'
@@ -23,7 +23,7 @@ interface Props {
   isHighlighted?: boolean
 }
 
-export default function TyrePositionCard({ data, onPress, isHighlighted = false }: Props) {
+function TyrePositionCard({ data, onPress, isHighlighted = false }: Props) {
   const { t, isRTL } = useLanguage()
   const { theme } = useTheme()
   const styles = useMemo(() => makeStyles(theme), [theme])
@@ -84,6 +84,8 @@ export default function TyrePositionCard({ data, onPress, isHighlighted = false 
     </TouchableOpacity>
   )
 }
+
+export default memo(TyrePositionCard)
 
 function makeStyles(theme: Theme) {
   const c = theme.color

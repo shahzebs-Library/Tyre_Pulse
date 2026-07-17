@@ -2,7 +2,7 @@
  * ListRow — tappable row: leading icon chip, title + subtitle, optional right
  * accessory (badge / chevron / value). Large touch target.
  */
-import { ReactNode } from 'react'
+import { memo, ReactNode } from 'react'
 import { View, TouchableOpacity, StyleSheet, ViewStyle } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { useTheme } from '../../contexts/ThemeContext'
@@ -22,7 +22,7 @@ export interface ListRowProps {
   style?: ViewStyle
 }
 
-export function ListRow({
+export const ListRow = memo(function ListRow({
   title, subtitle, icon, tint = 'slate', onPress, right, chevron = true, style,
 }: ListRowProps) {
   const { theme } = useTheme()
@@ -49,7 +49,7 @@ export function ListRow({
       ) : null}
     </Wrapper>
   )
-}
+})
 
 const styles = StyleSheet.create({
   row: {

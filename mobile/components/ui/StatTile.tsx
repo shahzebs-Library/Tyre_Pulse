@@ -2,6 +2,7 @@
  * StatTile — KPI number card. Big legible value, icon chip, optional trend.
  * Built for at-a-glance reading in the sun (large bold value, strong contrast).
  */
+import { memo } from 'react'
 import { View, StyleSheet, ViewStyle } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { useTheme } from '../../contexts/ThemeContext'
@@ -20,7 +21,7 @@ export interface StatTileProps {
   style?: ViewStyle
 }
 
-export function StatTile({ label, value, icon, tint = 'green', onPress, sublabel, style }: StatTileProps) {
+export const StatTile = memo(function StatTile({ label, value, icon, tint = 'green', onPress, sublabel, style }: StatTileProps) {
   const { theme } = useTheme()
   const t = theme.tint[tint]
   const Wrapper: any = onPress ? require('react-native').TouchableOpacity : View
@@ -50,7 +51,7 @@ export function StatTile({ label, value, icon, tint = 'green', onPress, sublabel
       {sublabel ? <AppText variant="micro" color="muted" numberOfLines={1}>{sublabel}</AppText> : null}
     </Wrapper>
   )
-}
+})
 
 const styles = StyleSheet.create({
   tile: {

@@ -17,6 +17,7 @@ import {
 import { Ionicons } from '@expo/vector-icons'
 import * as ImagePicker from 'expo-image-picker'
 import { uploadAccidentPhoto } from '../lib/photoUpload'
+import { safeImageSrc } from '../lib/safeUrl'
 import { useLanguage } from '../contexts/LanguageContext'
 import { useTheme } from '../contexts/ThemeContext'
 import { radius, spacing } from '../lib/theme'
@@ -49,9 +50,11 @@ export default function AccidentPhotoGrid({ photos, localUris, onPhotosChange, o
       return
     }
 
+    // quality 0.55 keeps damage detail legible while cutting upload size,
+    // memory and battery vs 0.75 (no image-manipulator dependency available).
     const result = await ImagePicker.launchCameraAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      quality: 0.75,
+      quality: 0.55,
       allowsEditing: false,
     })
 
@@ -104,7 +107,7 @@ export default function AccidentPhotoGrid({ photos, localUris, onPhotosChange, o
         {/* Photo thumbnails */}
         {localUris.map((uri, index) => (
           <View key={index} style={[styles.cell, { backgroundColor: c.surfaceSunken }]}>
-            <Image source={{ uri }} style={styles.thumb} resizeMode="cover" />
+            <Image source={{ uri: safeImageSrc(uri) }} style={styles.thumb} resizeMode="cover" />
 
             {/* Upload indicator */}
             {uploadingIndex === index && (

@@ -38,7 +38,7 @@ const RESCAN_COOLDOWN_MS = 2500
 
 export default function MeterLogScreen() {
   const { profile } = useAuth()
-  const { isRTL } = useLanguage()
+  const { t, isRTL } = useLanguage()
   const { theme } = useTheme()
   const styles = useMemo(() => makeStyles(theme), [theme])
   const router = useRouter()
@@ -122,8 +122,8 @@ export default function MeterLogScreen() {
       const res = await requestPermission()
       if (!res.granted) {
         Alert.alert(
-          'Camera access needed',
-          'Allow camera access to scan an asset barcode, or type the asset code by hand.',
+          t('modules.meter.camNeededTitle'),
+          t('modules.meter.camNeededMsg'),
         )
         return
       }
@@ -159,7 +159,7 @@ export default function MeterLogScreen() {
         }
       }
       closeScanner()
-      if (!resolved) Alert.alert('Nothing scanned', 'Could not read an asset code. Try again or type it in.')
+      if (!resolved) Alert.alert(t('modules.meter.nothingScannedTitle'), t('modules.meter.nothingScannedMsg'))
     })()
   }, [closeScanner])
 
@@ -181,14 +181,14 @@ export default function MeterLogScreen() {
         notes: notes.trim() || null,
       })
       Alert.alert(
-        res.offline ? 'Saved on device' : 'Reading logged',
+        res.offline ? t('modules.meter.savedOnDevice') : t('modules.meter.readingLogged'),
         res.offline
-          ? 'Saved on device — it will sync when back online.'
-          : `Odometer ${kmNum.toLocaleString()} km recorded for ${assetNo.trim()}.`,
-        [{ text: 'Done', onPress: () => router.back() }],
+          ? t('modules.meter.savedOnDeviceMsg')
+          : `${t('modules.meter.readingLoggedPrefix')} ${kmNum.toLocaleString()} ${t('modules.meter.readingLoggedMid')} ${assetNo.trim()}.`,
+        [{ text: t('common.done'), onPress: () => router.back() }],
       )
     } catch (e: any) {
-      Alert.alert('Could not log reading', e?.message || 'Please try again.')
+      Alert.alert(t('modules.meter.logFailTitle'), e?.message || t('modules.meter.tryAgain'))
     } finally {
       setSubmitting(false)
     }
@@ -196,23 +196,23 @@ export default function MeterLogScreen() {
 
   function handleSubmit() {
     if (submitting) return
-    if (!assetNo.trim()) { Alert.alert('Asset required', 'Select the vehicle / asset you are logging.'); return }
-    if (!hasKm) { Alert.alert('Reading required', 'Enter the current odometer reading (km).'); return }
-    if (kmNum < 0) { Alert.alert('Invalid reading', 'Odometer reading cannot be negative.'); return }
+    if (!assetNo.trim()) { Alert.alert(t('modules.meter.assetRequiredTitle'), t('modules.meter.assetRequiredMsg')); return }
+    if (!hasKm) { Alert.alert(t('modules.meter.readingRequiredTitle'), t('modules.meter.readingRequiredMsg')); return }
+    if (kmNum < 0) { Alert.alert(t('modules.meter.invalidReadingTitle'), t('modules.meter.invalidReadingMsg')); return }
     // Hard reject: never allow a reading below the last recorded one.
     if (belowLast) {
-      Alert.alert('Reading too low', `Odometer cannot be less than the last reading of ${lastKmLabel} km.`)
+      Alert.alert(t('modules.meter.tooLowTitle'), `${t('modules.meter.belowLastPrefix')} ${lastKmLabel} ${t('modules.meter.kmDot')}`)
       return
     }
     if (!odoPhoto.find(Boolean)) {
-      Alert.alert('Photo required', 'Take a photo of the odometer gauge to confirm the reading.')
+      Alert.alert(t('modules.meter.photoRequiredTitle'), t('modules.meter.photoRequiredMsg'))
       return
     }
     if (bigJump) {
       Alert.alert(
-        'Large jump since last reading',
-        `That is ${dailyDelta?.toLocaleString()} km since the last reading — please double-check the number. Log it anyway?`,
-        [{ text: 'Re-check', style: 'cancel' }, { text: 'Log anyway', onPress: doSubmit }],
+        t('modules.meter.bigJumpTitle'),
+        `${t('modules.meter.bigJumpPrefix')} ${dailyDelta?.toLocaleString()} ${t('modules.meter.bigJumpSuffix')}`,
+        [{ text: t('modules.meter.recheck'), style: 'cancel' }, { text: t('modules.meter.logAnyway'), onPress: doSubmit }],
       )
       return
     }
@@ -229,7 +229,7 @@ export default function MeterLogScreen() {
             <Ionicons name={isRTL ? 'arrow-forward' : 'arrow-back'} size={22} color={theme.color.text} />
           </TouchableOpacity>
           <View style={{ flex: 1 }}>
-            <Text style={[styles.navTitle, { textAlign }]}>Daily Meter Log</Text>
+            <Text style={[styles.navTitle, { textAlign }]}>{t('modules.meter.title')}</Text>
             <Text style={[styles.navSub, { textAlign }]}>
               {new Date().toLocaleDateString(dateLocale, { weekday: 'short', day: 'numeric', month: 'short' })}
             </Text>
@@ -245,10 +245,10 @@ export default function MeterLogScreen() {
           {/* Asset + site */}
           <View style={styles.card}>
             <View style={[styles.labelRow, isRTL && styles.rowR]}>
-              <Text style={[styles.label, styles.labelFlex, { textAlign }]}>Asset / Vehicle *</Text>
+              <Text style={[styles.label, styles.labelFlex, { textAlign }]}>{t('modules.meter.assetLabel')}</Text>
               <TouchableOpacity onPress={openScanner} style={styles.scanBtn} activeOpacity={0.85}>
                 <Ionicons name="scan-outline" size={16} color={theme.color.primary} />
-                <Text style={styles.scanBtnText}>Scan</Text>
+                <Text style={styles.scanBtnText}>{t('modules.meter.scan')}</Text>
               </TouchableOpacity>
             </View>
             <ChecklistReferencePicker
@@ -256,19 +256,19 @@ export default function MeterLogScreen() {
               value={assetNo}
               onChange={setAssetNo}
               country={profile?.country ?? null}
-              placeholder="Scan, select or type the asset…"
+              placeholder={t('modules.meter.assetPlaceholder')}
             />
             <View style={{ height: 12 }} />
-            <Text style={[styles.label, { textAlign }]}>Site</Text>
+            <Text style={[styles.label, { textAlign }]}>{t('modules.meter.site')}</Text>
             <ChecklistReferencePicker
               source="site"
               value={site}
               onChange={onSiteChange}
               country={profile?.country ?? null}
-              placeholder="Select the site…"
+              placeholder={t('modules.meter.sitePlaceholder')}
             />
             <Text style={[styles.help, { textAlign, marginTop: spacing.sm }]}>
-              Site auto-fills from the asset's fleet record. You can change it.
+              {t('modules.meter.siteHelp')}
             </Text>
           </View>
 
@@ -282,23 +282,23 @@ export default function MeterLogScreen() {
               />
               <View style={{ flex: 1 }}>
                 {loadingLast ? (
-                  <Text style={[styles.lastText, { textAlign }]}>Checking last reading…</Text>
+                  <Text style={[styles.lastText, { textAlign }]}>{t('modules.meter.checkingLast')}</Text>
                 ) : last?.odometer_km != null ? (
                   <>
                     <Text style={[styles.lastText, { textAlign }]}>
-                      Last: {lastKmLabel} km
+                      {t('modules.meter.lastPrefix')} {lastKmLabel} {t('modules.meter.kmDot').replace('.', '')}
                       {last.reading_date ? ` · ${new Date(last.reading_date + 'T00:00:00').toLocaleDateString(dateLocale, { day: 'numeric', month: 'short' })}` : ''}
                     </Text>
                     {dailyDelta != null && (
                       <Text style={[styles.deltaText, belowLast && { color: theme.color.danger.base }, bigJump && { color: theme.color.warning.base }, { textAlign }]}>
                         {belowLast
-                          ? `${dailyDelta.toLocaleString()} km (lower than last!)`
-                          : `+${dailyDelta.toLocaleString()} km since last`}
+                          ? `${dailyDelta.toLocaleString()} ${t('modules.meter.lowerThanLast')}`
+                          : `+${dailyDelta.toLocaleString()} ${t('modules.meter.sinceLast')}`}
                       </Text>
                     )}
                   </>
                 ) : (
-                  <Text style={[styles.lastText, { textAlign }]}>No previous reading on record.</Text>
+                  <Text style={[styles.lastText, { textAlign }]}>{t('modules.meter.noPrevious')}</Text>
                 )}
               </View>
             </View>
@@ -306,53 +306,53 @@ export default function MeterLogScreen() {
 
           {/* Odometer */}
           <View style={styles.card}>
-            <Text style={[styles.label, { textAlign }]}>Odometer (km) *</Text>
+            <Text style={[styles.label, { textAlign }]}>{t('modules.meter.odometerLabel')}</Text>
             <TextInput
               style={[styles.input, styles.bigInput, belowLast && styles.inputError, { textAlign }]}
               value={odometer}
-              onChangeText={t => setOdometer(t.replace(/[^0-9.]/g, ''))}
-              placeholder="e.g. 128450"
+              onChangeText={v => setOdometer(v.replace(/[^0-9.]/g, ''))}
+              placeholder={t('modules.meter.odometerPlaceholder')}
               placeholderTextColor={theme.color.textMuted}
               keyboardType="numeric"
             />
             {belowLast && (
               <Text style={[styles.errorText, { textAlign }]}>
-                Odometer cannot be less than the last reading of {lastKmLabel} km.
+                {t('modules.meter.belowLastPrefix')} {lastKmLabel} {t('modules.meter.kmDot')}
               </Text>
             )}
-            <Text style={[styles.help, { textAlign }]}>Photo of the odometer gauge *</Text>
-            <PhotoCapture value={odoPhoto} onChange={setOdoPhoto} module="meter-log" tint={theme.color.primary} max={1} label="Photograph gauge" />
+            <Text style={[styles.help, { textAlign }]}>{t('modules.meter.gaugePhoto')}</Text>
+            <PhotoCapture value={odoPhoto} onChange={setOdoPhoto} module="meter-log" tint={theme.color.primary} max={1} label={t('modules.meter.photographGauge')} />
           </View>
 
           {/* Engine hours / hour meter (optional) */}
           <View style={styles.card}>
-            <Text style={[styles.label, { textAlign }]}>Engine hours / Hour meter <Text style={styles.optional}>(optional)</Text></Text>
+            <Text style={[styles.label, { textAlign }]}>{t('modules.meter.engineHoursLabel')} <Text style={styles.optional}>{t('modules.common.optional')}</Text></Text>
             <TextInput
               style={[styles.input, { textAlign }]}
               value={engineHours}
-              onChangeText={t => setEngineHours(t.replace(/[^0-9.]/g, ''))}
-              placeholder="e.g. 4210"
+              onChangeText={v => setEngineHours(v.replace(/[^0-9.]/g, ''))}
+              placeholder={t('modules.meter.hoursPlaceholder')}
               placeholderTextColor={theme.color.textMuted}
               keyboardType="numeric"
             />
             <Text style={[styles.help, { textAlign }]}>
               {engineHours.trim() !== ''
-                ? 'Photo of the hour-meter gauge'
-                : 'For generators / plant, enter the hour-meter reading (and add its photo).'}
+                ? t('modules.meter.hoursPhotoHelp')
+                : t('modules.meter.hoursHelp')}
             </Text>
             {engineHours.trim() !== '' && (
-              <PhotoCapture value={hoursPhoto} onChange={setHoursPhoto} module="meter-log" tint={theme.color.info.base} max={1} label="Photograph gauge" />
+              <PhotoCapture value={hoursPhoto} onChange={setHoursPhoto} module="meter-log" tint={theme.color.info.base} max={1} label={t('modules.meter.photographGauge')} />
             )}
           </View>
 
           {/* Notes */}
           <View style={styles.card}>
-            <Text style={[styles.label, { textAlign }]}>Notes <Text style={styles.optional}>(optional)</Text></Text>
+            <Text style={[styles.label, { textAlign }]}>{t('modules.meter.notesLabel')} <Text style={styles.optional}>{t('modules.common.optional')}</Text></Text>
             <TextInput
               style={[styles.input, styles.textArea, { textAlign }]}
               value={notes}
               onChangeText={setNotes}
-              placeholder="Anything worth noting…"
+              placeholder={t('modules.meter.notesPlaceholder')}
               placeholderTextColor={theme.color.textMuted}
               multiline
               numberOfLines={3}
@@ -360,7 +360,7 @@ export default function MeterLogScreen() {
           </View>
 
           <Button
-            label="Log Reading"
+            label={t('modules.meter.logReading')}
             icon="save-outline"
             onPress={handleSubmit}
             loading={submitting}
@@ -380,7 +380,7 @@ export default function MeterLogScreen() {
               <TouchableOpacity onPress={closeScanner} style={styles.camBtn}>
                 <Ionicons name="close" size={22} color="#FFFFFF" />
               </TouchableOpacity>
-              <Text style={styles.camTitle}>Scan Asset</Text>
+              <Text style={styles.camTitle}>{t('modules.meter.scanAsset')}</Text>
               <TouchableOpacity onPress={() => setTorch(v => !v)} style={styles.camBtn} disabled={cameraError}>
                 <Ionicons name={torch ? 'flash' : 'flash-off'} size={20} color="#FFFFFF" />
               </TouchableOpacity>
@@ -390,11 +390,11 @@ export default function MeterLogScreen() {
           {cameraError ? (
             <View style={styles.camFallback}>
               <Ionicons name="camera-outline" size={40} color="#FFFFFF" />
-              <Text style={styles.camFallbackTitle}>Camera unavailable</Text>
+              <Text style={styles.camFallbackTitle}>{t('modules.meter.camUnavailable')}</Text>
               <Text style={styles.camFallbackText}>
-                The camera could not be started. Close this and type the asset code by hand.
+                {t('modules.meter.camUnavailableMsg')}
               </Text>
-              <Button label="Close" icon="close" variant="secondary" onPress={closeScanner} style={{ marginTop: spacing.lg }} />
+              <Button label={t('common.close')} icon="close" variant="secondary" onPress={closeScanner} style={{ marginTop: spacing.lg }} />
             </View>
           ) : (
             <>
@@ -418,7 +418,7 @@ export default function MeterLogScreen() {
                   <View style={[styles.corner, styles.cornerBL]} />
                   <View style={[styles.corner, styles.cornerBR]} />
                 </View>
-                <Text style={styles.frameHint}>Point the camera at the asset barcode or QR label.</Text>
+                <Text style={styles.frameHint}>{t('modules.meter.frameHint')}</Text>
               </View>
             </>
           )}

@@ -59,7 +59,7 @@ function fieldIcon(f: ChecklistField): IconName {
 
 export default function ChecklistFillScreen() {
   const { profile } = useAuth()
-  const { isRTL } = useLanguage()
+  const { t, isRTL } = useLanguage()
   const { theme } = useTheme()
   const styles = useMemo(() => makeStyles(theme), [theme])
   const c = theme.color
@@ -98,21 +98,21 @@ export default function ChecklistFillScreen() {
     setLoadError(null)
     setNotEnabled(false)
     try {
-      const t = await getTemplate(templateId)
-      if (!t) { setTemplate(null); setLoading(false); return }
-      setTemplate(t)
-      setTitle(t.name ?? '')
+      const tpl = await getTemplate(templateId)
+      if (!tpl) { setTemplate(null); setLoading(false); return }
+      setTemplate(tpl)
+      setTitle(tpl.name ?? '')
       const today = new Date().toISOString().slice(0, 10)
       const userName = profile?.full_name || profile?.username || ''
       const seed: Record<string, any> = {}
-      for (const f of t.fields ?? []) {
+      for (const f of tpl.fields ?? []) {
         if (isValueField(f.type)) {
           seed[f.id] = isAutoField(f) ? resolveAutoValue(f, { userName, today }) : blankAnswer(f)
         }
       }
       setAnswers(seed)
     } catch (e: any) {
-      const msg = e?.message || 'Could not load this checklist.'
+      const msg = e?.message || t('modules.checklistFill.loadError')
       if (looksLikeMissingTable(msg)) setNotEnabled(true)
       else setLoadError(msg)
     } finally {
@@ -158,7 +158,7 @@ export default function ChecklistFillScreen() {
     if (!valid) {
       setErrors(errs)
       const first = Object.values(errs)[0]
-      Alert.alert('Please review', first || 'Some required items need attention.')
+      Alert.alert(t('modules.checklistFill.reviewTitle'), first || t('modules.checklistFill.reviewMsg'))
       return
     }
     setErrors({})
@@ -166,11 +166,11 @@ export default function ChecklistFillScreen() {
     const name = printedName.trim() || (profile?.full_name ?? '')
     if (template.require_signature) {
       if (!signatureData) {
-        Alert.alert('Signature required', 'Please sign to complete this checklist.')
+        Alert.alert(t('modules.checklistFill.signatureRequired'), t('modules.checklistFill.signatureRequiredMsg'))
         return
       }
       if (!name) {
-        Alert.alert('Name required', 'Type your name under the signature to confirm who signed.')
+        Alert.alert(t('modules.checklistFill.nameRequired'), t('modules.checklistFill.nameRequiredMsg'))
         return
       }
     }
@@ -201,19 +201,19 @@ export default function ChecklistFillScreen() {
       })
 
       if (res.offline) {
-        Alert.alert('Saved on device', 'Saved on device. It will sync when online.', [
-          { text: 'OK', onPress: goBack },
+        Alert.alert(t('modules.checklistFill.savedOnDevice'), t('modules.checklistFill.savedOnDeviceMsg'), [
+          { text: t('common.ok'), onPress: goBack },
         ])
       } else {
         const scoreLine = template.scored && score_pct != null
-          ? `\n\nScore: ${score_pct}%${score_passed != null ? ` (${score_passed ? 'Passed' : 'Failed'})` : ''}`
+          ? `\n\n${t('modules.checklistFill.scoreLabel')} ${score_pct}%${score_passed != null ? ` (${score_passed ? t('modules.checklistFill.passed') : t('modules.checklistFill.failed')})` : ''}`
           : ''
-        Alert.alert('Checklist submitted', `Your checklist has been recorded.${scoreLine}`, [
-          { text: 'Done', onPress: goBack },
+        Alert.alert(t('modules.checklistFill.submittedTitle'), `${t('modules.checklistFill.submittedMsg')}${scoreLine}`, [
+          { text: t('common.done'), onPress: goBack },
         ])
       }
     } catch (e: any) {
-      Alert.alert('Submission failed', e?.message || 'Could not submit. Please try again.')
+      Alert.alert(t('modules.checklistFill.submitFailTitle'), e?.message || t('modules.checklistFill.submitFailMsg'))
     } finally {
       setSubmitting(false)
     }
@@ -227,7 +227,7 @@ export default function ChecklistFillScreen() {
       </TouchableOpacity>
       <View style={{ flex: 1 }}>
         <AppText variant="h3" style={{ textAlign }} numberOfLines={1}>
-          {template?.name ?? 'Checklist'}
+          {template?.name ?? t('modules.checklists.checklistFallback')}
         </AppText>
         {!!template?.category && (
           <AppText variant="caption" color="muted" style={{ textAlign }} numberOfLines={1}>
@@ -235,7 +235,7 @@ export default function ChecklistFillScreen() {
           </AppText>
         )}
       </View>
-      {template?.scored && <Badge kind="success">Scored</Badge>}
+      {template?.scored && <Badge kind="success">{t('modules.checklists.scored')}</Badge>}
     </View>
   )
 
@@ -249,8 +249,8 @@ export default function ChecklistFillScreen() {
         {header}
         <EmptyState
           icon="checkbox-outline"
-          title="Checklists aren't enabled yet"
-          message="Ask your administrator to publish checklist templates for your site."
+          title={t('modules.checklists.notEnabledTitle')}
+          message={t('modules.checklists.notEnabledMsg')}
         />
       </Screen>
     )
@@ -269,8 +269,8 @@ export default function ChecklistFillScreen() {
         {header}
         <EmptyState
           icon="help-circle-outline"
-          title="Checklist not found"
-          message="This checklist may have been unpublished or removed."
+          title={t('modules.checklistFill.notFoundTitle')}
+          message={t('modules.checklistFill.notFoundMsg')}
         />
       </Screen>
     )
@@ -284,7 +284,7 @@ export default function ChecklistFillScreen() {
       <View style={styles.progressBar}>
         <View style={[styles.progressHead, isRTL && styles.rowR]}>
           <AppText variant="label" color="secondary">
-            {done} of {total} done
+            {done} {t('modules.checklistFill.of')} {total} {t('modules.checklistFill.doneWord')}
           </AppText>
           <AppText variant="label" style={{ color: pct === 100 ? c.success.base : c.textMuted }}>
             {pct}%
@@ -303,7 +303,7 @@ export default function ChecklistFillScreen() {
       >
         {/* Context: title / asset / site */}
         <View style={styles.card}>
-          <AppText variant="label" color="secondary" style={{ marginBottom: 6 }}>Title</AppText>
+          <AppText variant="label" color="secondary" style={{ marginBottom: 6 }}>{t('modules.checklistFill.titleLabel')}</AppText>
           <TextInput
             style={[styles.input, { textAlign }]}
             value={title}
@@ -313,24 +313,24 @@ export default function ChecklistFillScreen() {
           />
           <View style={styles.row2}>
             <View style={{ flex: 1 }}>
-              <AppText variant="label" color="secondary" style={{ marginBottom: 6, marginTop: spacing.md }}>Asset No</AppText>
+              <AppText variant="label" color="secondary" style={{ marginBottom: 6, marginTop: spacing.md }}>{t('modules.checklistFill.assetNo')}</AppText>
               <TextInput
                 style={[styles.input, { textAlign }]}
                 value={assetNo}
                 onChangeText={setAssetNo}
-                placeholder="e.g. TRK-001"
+                placeholder={t('modules.checklistFill.assetPlaceholder')}
                 placeholderTextColor={c.textMuted}
                 autoCapitalize="characters"
                 autoCorrect={false}
               />
             </View>
             <View style={{ flex: 1 }}>
-              <AppText variant="label" color="secondary" style={{ marginBottom: 6, marginTop: spacing.md }}>Site</AppText>
+              <AppText variant="label" color="secondary" style={{ marginBottom: 6, marginTop: spacing.md }}>{t('modules.checklistFill.site')}</AppText>
               <TextInput
                 style={[styles.input, { textAlign }]}
                 value={site}
                 onChangeText={setSite}
-                placeholder="Site"
+                placeholder={t('modules.checklistFill.site')}
                 placeholderTextColor={c.textMuted}
               />
             </View>
@@ -342,7 +342,7 @@ export default function ChecklistFillScreen() {
           if (field.type === 'section') {
             return (
               <View key={field.id} style={styles.section}>
-                <AppText variant="h3" style={{ textAlign }}>{field.label || 'Section'}</AppText>
+                <AppText variant="h3" style={{ textAlign }}>{field.label || t('modules.checklistFill.sectionFallback')}</AppText>
                 {!!field.help && (
                   <AppText variant="caption" color="muted" style={{ textAlign, marginTop: 4 }}>{field.help}</AppText>
                 )}
@@ -386,7 +386,7 @@ export default function ChecklistFillScreen() {
               </View>
               <View style={{ flex: 1 }}>
                 <AppText style={[typography.title, { textAlign }]} numberOfLines={2}>
-                  {field.label || 'Item'}
+                  {field.label || t('modules.checklistFill.itemFallback')}
                   {field.required ? <AppText style={{ color: c.danger.base }}> *</AppText> : null}
                 </AppText>
                 {!!err ? (
@@ -403,7 +403,7 @@ export default function ChecklistFillScreen() {
                   </AppText>
                 ) : (
                   <AppText variant="caption" color="muted" style={{ textAlign, marginTop: 2 }}>
-                    Tap to record
+                    {t('modules.checklistFill.tapToRecord')}
                   </AppText>
                 )}
               </View>
@@ -426,12 +426,12 @@ export default function ChecklistFillScreen() {
           >
             <Ionicons name="cloud-upload-outline" size={19} color={c.onPrimary} />
             <AppText style={[typography.h3, { color: c.onPrimary }]}>
-              {submitting ? 'Submitting...' : 'Submit Checklist'}
+              {submitting ? t('modules.checklistFill.submitting') : t('modules.checklistFill.submitChecklist')}
             </AppText>
           </TouchableOpacity>
           {template.require_signature && !signatureData && (
             <AppText variant="caption" color="muted" center style={{ marginTop: spacing.sm }}>
-              A signature is required before you can submit.
+              {t('modules.checklistFill.signatureNeeded')}
             </AppText>
           )}
         </View>

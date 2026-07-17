@@ -324,9 +324,27 @@ export default function NewInspectionScreen() {
 
   async function handleSubmit() {
     if (submitting) return
-    setSubmitting(true)
 
+    // Save guard: never persist an empty inspection. Require the mandatory
+    // header fields (site + asset + inspector) AND at least one recorded tyre
+    // condition. This blocks the "saved without adding data" case before either
+    // the online insert OR the offline queue is touched, so the offline path is
+    // unaffected - a valid inspection still queues normally when offline.
     const effectiveVehicle = getEffectiveVehicle()
+    const inspectorName = profile?.full_name ?? profile?.username ?? ''
+    if (!selectedSite || !effectiveVehicle || !effectiveVehicle.asset_no || !inspectorName.trim()) {
+      Alert.alert(t('inspection.alertRequired'), t('inspection.alertSelectVehicle'))
+      return
+    }
+    if (recordedCount === 0) {
+      Alert.alert(
+        t('inspection.alertRequired'),
+        'Record at least one tyre condition before saving. Tap a tyre position and set its condition, tread, pressure, or serial.',
+      )
+      return
+    }
+
+    setSubmitting(true)
     if (!effectiveVehicle) { setSubmitting(false); return }
 
     // Use whatever GPS fix was warmed up on the tyre step. We deliberately do NOT
@@ -945,10 +963,21 @@ export default function NewInspectionScreen() {
             )}
           </View>
 
+          {/* Save guard: an inspection with no recorded tyre condition cannot be
+              saved (prevents empty records). */}
+          {recordedCount === 0 && (
+            <View style={[styles.validationWarn, isRTL && styles.navRTL]}>
+              <Ionicons name="alert-circle-outline" size={16} color={theme.color.warning.on} />
+              <Text style={[styles.validationWarnText, { textAlign }]}>
+                Record at least one tyre condition to save this inspection.
+              </Text>
+            </View>
+          )}
+
           <TouchableOpacity
-            style={[styles.nextBtn, submitting && styles.nextBtnDisabled]}
+            style={[styles.nextBtn, (submitting || recordedCount === 0) && styles.nextBtnDisabled]}
             onPress={handleSubmit}
-            disabled={submitting}
+            disabled={submitting || recordedCount === 0}
           >
             {submitting
               ? <ActivityIndicator size="small" color={theme.color.onPrimary} />
@@ -1345,5 +1374,12 @@ function makeStyles(theme: Theme) {
   },
   assetWarnText: { fontSize: 12, color: c.warning.on, fontWeight: '700', lineHeight: 17 },
   assetWarnSuggest: { fontSize: 12, color: c.primaryDark, fontWeight: '800', marginTop: spacing.xs },
+  validationWarn: {
+    flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm,
+    backgroundColor: c.warning.soft,
+    borderWidth: 1, borderColor: c.warning.base,
+    borderRadius: radius.md, padding: spacing.md - 2, marginTop: spacing.xs,
+  },
+  validationWarnText: { flex: 1, fontSize: 12, color: c.warning.on, fontWeight: '700', lineHeight: 17 },
   })
 }

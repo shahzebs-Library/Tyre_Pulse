@@ -10,6 +10,7 @@ import { useRealtime } from '../../hooks/useRealtime'
 import { supabase } from '../../lib/supabase'
 import { TAB_BAR } from '../../lib/permissions'
 import { useTheme } from '../../contexts/ThemeContext'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
 // Custom tab bar icon with active background pill
 function TabIcon({
@@ -30,6 +31,7 @@ export default function AppLayout() {
   const { user, loading, profile, signOut, canAccess } = useAuth()
   const { t } = useLanguage()
   const { theme } = useTheme()
+  const insets = useSafeAreaInsets()
   const [accidentBadge, setAccidentBadge] = useState(0)
   const [homeBadge, setHomeBadge] = useState(0)
 
@@ -80,6 +82,11 @@ export default function AppLayout() {
             backgroundColor: theme.color.surface,
             borderTopColor: theme.color.border,
             shadowColor: theme.color.shadow,
+            // Sit ABOVE the phone's system navigation bar (gesture pill or the
+            // back/home/recents buttons). A fixed height overrides React
+            // Navigation's automatic safe-area inset, so add it back here.
+            height: 60 + insets.bottom,
+            paddingBottom: Math.max(insets.bottom, 8),
           },
         ],
         tabBarLabelStyle: styles.tabLabel,
@@ -185,8 +192,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     borderTopColor: 'rgba(0,0,0,0.06)',
     borderTopWidth: 1,
-    height: 72,
-    paddingBottom: 8,
+    // height + paddingBottom are set dynamically from the safe-area inset in the
+    // tabBarStyle override so the bar clears the system navigation bar.
     paddingTop: 6,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: -2 },

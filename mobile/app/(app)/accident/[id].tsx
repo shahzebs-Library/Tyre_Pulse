@@ -363,6 +363,49 @@ export default function AccidentDetailScreen() {
           )}
         </SectionCard>
 
+        {/* -- Classification & GCC case --------------------------------- */}
+        {(() => {
+          const a = accident as any
+          const rows: Array<[string, string]> = []
+          if (a.plate_number) rows.push(['Plate Number', String(a.plate_number)])
+          if (a.vehicle_type) rows.push(['Vehicle Type', String(a.vehicle_type)])
+          if (a.current_status) rows.push(['Current Condition', String(a.current_status)])
+          if (a.damage_condition) rows.push(['Damage Condition', String(a.damage_condition)])
+          if (a.fault_status) rows.push(['Fault Status', String(a.fault_status)])
+          if (a.gcc_liability_ratio != null && a.gcc_liability_ratio !== '') rows.push(['GCC Liability', `${Number(a.gcc_liability_ratio)}%`])
+          if (a.najm_status) rows.push(['Najm Report', String(a.najm_status)])
+          if (a.najm_fault) rows.push(['Najm Fault', String(a.najm_fault)])
+          if (a.taqdeer_status) rows.push(['Taqdeer Report', String(a.taqdeer_status)])
+          if (a.taqdeer_no) rows.push(['Taqdeer No', String(a.taqdeer_no)])
+          if (a.liable_party) rows.push(['Liable Party', String(a.liable_party)])
+          if (a.payer) rows.push(['Who Pays', String(a.payer)])
+          if (a.responsible_party) rows.push(['Responsible Party', String(a.responsible_party)])
+          if (rows.length === 0) return null
+          return (
+            <SectionCard title="Classification & GCC Case" icon="shield-checkmark-outline">
+              {rows.map(([label, value]) => <InfoRow key={label} label={label} value={value} />)}
+            </SectionCard>
+          )
+        })()}
+
+        {/* -- Repair & Release ------------------------------------------ */}
+        {(() => {
+          const a = accident as any
+          const rows: Array<[string, string, boolean]> = []
+          if (a.repair_type) rows.push(['Repair Type', String(a.repair_type), false])
+          if (a.workshop_name) rows.push(['Workshop', String(a.workshop_name), false])
+          if (a.workshop_location) rows.push(['Workshop Location', String(a.workshop_location), false])
+          if (a.repair_cost != null) rows.push(['Repair Cost', `SAR ${Number(a.repair_cost).toLocaleString(undefined, { minimumFractionDigits: 2 })}`, true])
+          if (a.expected_release_date) rows.push(['Expected Release', String(a.expected_release_date), false])
+          if (a.release_date) rows.push(['Release Date', String(a.release_date), false])
+          if (rows.length === 0) return null
+          return (
+            <SectionCard title="Repair & Release" icon="construct-outline">
+              {rows.map(([label, value, hl]) => <InfoRow key={label} label={label} value={value} highlight={hl} />)}
+            </SectionCard>
+          )
+        })()}
+
         {/* -- Notes ------------------------------------------------------ */}
         {accident.notes ? (
           <SectionCard title={t('accident.notesLabel')} icon="chatbubble-ellipses-outline">

@@ -9,7 +9,7 @@
  * Visual: Daylight design system (theme tokens, sunlight-legible).
  */
 
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import {
   View, TextInput, TouchableOpacity, StyleSheet,
   Modal, Alert, ActivityIndicator, Platform,
@@ -39,6 +39,25 @@ const CLAIM_STATUSES: ClaimStatus[] = ['none', 'filed', 'approved', 'rejected', 
 const PART_STATUSES: PartStatus[] = ['needed', 'ordered', 'received', 'fitted']
 const RECOVERY_SOURCES: RecoverySource[] = ['none', 'insurer', 'third_party', 'driver', 'warranty']
 const RECOVERY_STATUSES: RecoveryStatus[] = ['pending', 'partial', 'recovered', 'written_off']
+
+// GCC case / repair vocabularies (mirror src/lib/accidentVocab.js). Stored as
+// display labels on their columns; the chip pickers below make them easy to edit.
+const FAULT_STATUS_OPTS = ['Faulty', 'Non-faulty', 'Under review']
+const LIABILITY_RATIO_OPTS = ['0', '50', '100']
+const NAJM_STATUS_OPTS = ['Najm report', 'No Najm']
+const NAJM_FAULT_OPTS = ['Faulty', 'Non-faulty', 'N/A']
+const TAQDEER_STATUS_OPTS = ['Taqdeer report', 'No Taqdeer']
+const DAMAGE_CONDITION_OPTS = ['Minor', 'Moderate', 'Major', 'N/A']
+const LIABLE_PARTY_OPTS = ['GCC', 'Other Party']
+const PAYER_OPTS = ['GCC', 'Insurance', 'Recovery Claim']
+const REPAIR_TYPE_OPTS = ['Internal', 'External']
+const najmHasReport = (v: string) => /report/i.test(v || '') && !/^no/i.test(v || '')
+const taqdeerHasReport = (v: string) => /report/i.test(v || '') && !/^no/i.test(v || '')
+const repairIsInternal = (v: string) => (v || '') === 'Internal'
+const computeRecovered = (claim: string, approved: string, deductible: string) => {
+  const n = (x: string) => (Number.isFinite(Number(x)) ? Number(x) : 0)
+  return Math.max(0, n(claim) - n(approved) - n(deductible))
+}
 
 function money(n: number | null | undefined): string {
   if (n == null || isNaN(Number(n))) return '-'
@@ -136,6 +155,9 @@ export default function AccidentClaimsPanel({ accident, onChanged }: Props) {
     load(); onChanged()
   }
 
+  // Extra field-parity columns are present at runtime (select('*')) but not on
+  // the AccidentRecord type; read them through a loose view.
+  const a = accident as any
   const claimColor = CLAIM_STATUS_COLORS[accident.claim_status ?? 'none']
   const recoveryColor = RECOVERY_STATUS_COLORS[accident.recovery_status ?? 'pending']
   const grossCost = (Number(accident.estimated_damage_cost) || 0) + partsTotal
@@ -240,9 +262,19 @@ export default function AccidentClaimsPanel({ accident, onChanged }: Props) {
           <Row label="Responsible party" value={accident.responsible_party} />
           <Row label="Liable party" value={accident.liable_party} />
           <Row label="Who pays" value={accident.payer} highlight />
+          <Row label="Fault status" value={a.fault_status} />
+          {a.gcc_liability_ratio != null && a.gcc_liability_ratio !== '' ? (
+            <Row label="GCC liability" value={`${Number(a.gcc_liability_ratio)}%`} />
+          ) : null}
+          <Row label="Najm report" value={a.najm_status} />
+          {najmHasReport(a.najm_status) ? <Row label="Najm fault" value={a.najm_fault} /> : null}
+          <Row label="Taqdeer report" value={a.taqdeer_status} />
+          {taqdeerHasReport(a.taqdeer_status) ? <Row label="Taqdeer no" value={a.taqdeer_no} /> : null}
+          <Row label="Damage condition" value={a.damage_condition} />
           <Row label="Driver" value={accident.driver_name} />
           <Row label="Insurer" value={accident.insurer} />
-          <Row label="Policy / Claim No" value={accident.policy_no} />
+          <Row label="Policy No" value={accident.policy_no} />
+          <Row label="Claim No" value={a.insurance_claim_no} />
           <Row label="Claim amount" value={money(accident.claim_amount)} />
           <Row label="Approved amount" value={money(accident.claim_approved_amount)} />
           <Row label="Deductible" value={money(accident.deductible)} />
@@ -260,6 +292,20 @@ export default function AccidentClaimsPanel({ accident, onChanged }: Props) {
           <Row label="Recovery source" value={RECOVERY_SOURCE_LABELS[accident.recovery_source ?? 'none']} />
           <Row label="Recovery date" value={accident.recovery_date} />
           <Row label="Recovery ref" value={accident.recovery_reference} />
+          {a.amount_transfer != null ? <Row label="Amount transfer" value={money(a.amount_transfer)} /> : null}
+
+          {/* Repair & release */}
+          {(a.repair_type || a.workshop_name || a.workshop_location || a.repair_cost != null || a.expected_release_date || a.release_date) ? (
+            <>
+              <View style={styles.divider} />
+              <Row label="Repair type" value={a.repair_type} />
+              <Row label="Workshop" value={a.workshop_name} />
+              <Row label="Workshop location" value={a.workshop_location} />
+              {a.repair_cost != null ? <Row label="Repair cost" value={money(a.repair_cost)} /> : null}
+              <Row label="Expected release" value={a.expected_release_date} />
+              <Row label="Release date" value={a.release_date} />
+            </>
+          ) : null}
 
           {/* Net cost after recovery */}
           <View style={styles.netRow}>
@@ -564,47 +610,84 @@ function ClaimEditModal({
   const { theme } = useTheme()
   const c = theme.color
   const styles = useStyles()
+  const a = accident as any
   const [f, setF] = useState({
     responsible_party: '', liable_party: '', payer: '', driver_name: '',
-    insurer: '', policy_no: '', claim_status: 'none' as ClaimStatus,
+    insurer: '', policy_no: '', insurance_claim_no: '', claim_status: 'none' as ClaimStatus,
     claim_amount: '', claim_approved_amount: '', deductible: '',
     recovered_amount: '', recovery_date: '', recovery_reference: '',
     recovery_source: 'none' as RecoverySource, recovery_status: 'pending' as RecoveryStatus,
+    // GCC case + repair (field-parity with the web incident form)
+    fault_status: '', gcc_liability_ratio: '', najm_status: '', najm_fault: '',
+    taqdeer_status: '', taqdeer_no: '', damage_condition: '', amount_transfer: '',
+    repair_type: '', workshop_name: '', workshop_location: '',
+    repair_cost: '', expected_release_date: '', release_date: '',
   })
   const [saving, setSaving] = useState(false)
+  const recoveredTouched = useRef(false)
 
   useEffect(() => {
-    if (visible) setF({
-      responsible_party: accident.responsible_party ?? '',
-      liable_party: accident.liable_party ?? '',
-      payer: accident.payer ?? '',
-      driver_name: accident.driver_name ?? '',
-      insurer: accident.insurer ?? '',
-      policy_no: accident.policy_no ?? '',
-      claim_status: accident.claim_status ?? 'none',
-      claim_amount: accident.claim_amount != null ? String(accident.claim_amount) : '',
-      claim_approved_amount: accident.claim_approved_amount != null ? String(accident.claim_approved_amount) : '',
-      deductible: accident.deductible != null ? String(accident.deductible) : '',
-      recovered_amount: accident.recovered_amount != null ? String(accident.recovered_amount) : '',
-      recovery_date: accident.recovery_date ?? '',
-      recovery_reference: accident.recovery_reference ?? '',
-      recovery_source: accident.recovery_source ?? 'none',
-      recovery_status: accident.recovery_status ?? 'pending',
-    })
+    if (visible) {
+      recoveredTouched.current = false
+      setF({
+        responsible_party: accident.responsible_party ?? '',
+        liable_party: accident.liable_party ?? '',
+        payer: accident.payer ?? '',
+        driver_name: accident.driver_name ?? '',
+        insurer: accident.insurer ?? '',
+        policy_no: accident.policy_no ?? '',
+        insurance_claim_no: a.insurance_claim_no ?? '',
+        claim_status: accident.claim_status ?? 'none',
+        claim_amount: accident.claim_amount != null ? String(accident.claim_amount) : '',
+        claim_approved_amount: accident.claim_approved_amount != null ? String(accident.claim_approved_amount) : '',
+        deductible: accident.deductible != null ? String(accident.deductible) : '',
+        recovered_amount: accident.recovered_amount != null ? String(accident.recovered_amount) : '',
+        recovery_date: accident.recovery_date ?? '',
+        recovery_reference: accident.recovery_reference ?? '',
+        recovery_source: accident.recovery_source ?? 'none',
+        recovery_status: accident.recovery_status ?? 'pending',
+        fault_status: a.fault_status ?? '',
+        gcc_liability_ratio: a.gcc_liability_ratio != null ? String(a.gcc_liability_ratio) : '',
+        najm_status: a.najm_status ?? '',
+        najm_fault: a.najm_fault ?? '',
+        taqdeer_status: a.taqdeer_status ?? '',
+        taqdeer_no: a.taqdeer_no ?? '',
+        damage_condition: a.damage_condition ?? '',
+        amount_transfer: a.amount_transfer != null ? String(a.amount_transfer) : '',
+        repair_type: a.repair_type ?? '',
+        workshop_name: a.workshop_name ?? '',
+        workshop_location: a.workshop_location ?? '',
+        repair_cost: a.repair_cost != null ? String(a.repair_cost) : '',
+        expected_release_date: a.expected_release_date ?? '',
+        release_date: a.release_date ?? '',
+      })
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visible, accident])
+
+  // Recovered = Claim - Approved - Deductible until the user overrides it.
+  useEffect(() => {
+    if (recoveredTouched.current) return
+    const r = computeRecovered(f.claim_amount, f.claim_approved_amount, f.deductible)
+    const next = r > 0 ? String(r) : ''
+    setF(prev => (prev.recovered_amount === next ? prev : { ...prev, recovered_amount: next }))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [f.claim_amount, f.claim_approved_amount, f.deductible])
 
   const set = (k: keyof typeof f, v: any) => setF(prev => ({ ...prev, [k]: v }))
   const inputStyle = [styles.input, { backgroundColor: c.surfaceAlt, borderColor: c.border, color: c.text }]
 
   async function save() {
     setSaving(true)
+    const internal = repairIsInternal(f.repair_type)
     const { error } = await supabase.from('accidents').update({
       responsible_party: f.responsible_party.trim() || null,
-      liable_party: f.liable_party.trim() || null,
-      payer: f.payer.trim() || null,
+      liable_party: f.liable_party || null,
+      payer: f.payer || null,
       driver_name: f.driver_name.trim() || null,
       insurer: f.insurer.trim() || null,
       policy_no: f.policy_no.trim() || null,
+      insurance_claim_no: f.insurance_claim_no.trim() || null,
       claim_status: f.claim_status,
       claim_amount: f.claim_amount ? Number(f.claim_amount) : null,
       claim_approved_amount: f.claim_approved_amount ? Number(f.claim_approved_amount) : null,
@@ -614,6 +697,22 @@ function ClaimEditModal({
       recovery_reference: f.recovery_reference.trim() || null,
       recovery_source: f.recovery_source,
       recovery_status: f.recovery_status,
+      // GCC case / classification
+      fault_status: f.fault_status || null,
+      gcc_liability_ratio: f.gcc_liability_ratio !== '' ? Number(f.gcc_liability_ratio) : null,
+      najm_status: f.najm_status || null,
+      najm_fault: najmHasReport(f.najm_status) ? (f.najm_fault || null) : null,
+      taqdeer_status: f.taqdeer_status || null,
+      taqdeer_no: taqdeerHasReport(f.taqdeer_status) ? (f.taqdeer_no.trim() || null) : null,
+      damage_condition: f.damage_condition || null,
+      amount_transfer: f.amount_transfer ? Number(f.amount_transfer) : null,
+      // Repair & release
+      repair_type: f.repair_type || null,
+      workshop_name: f.workshop_name.trim() || null,
+      workshop_location: f.workshop_location.trim() || null,
+      repair_cost: internal && f.repair_cost ? Number(f.repair_cost) : null,
+      expected_release_date: f.expected_release_date.trim() || null,
+      release_date: f.release_date.trim() || null,
     }).eq('id', accident.id)
     setSaving(false)
     if (error) { Alert.alert('Error', error.message); return }
@@ -628,15 +727,51 @@ function ClaimEditModal({
           <AppText variant="h3">Edit Claim and Responsibility</AppText>
           <View style={{ gap: spacing.md }}>
             <Field label="Responsible party"><TextInput style={inputStyle} value={f.responsible_party} onChangeText={v => set('responsible_party', v)} placeholder="Who is at fault" placeholderTextColor={c.textMuted} /></Field>
-            <View style={styles.twoCol}>
-              <Field label="Liable party" flex><TextInput style={inputStyle} value={f.liable_party} onChangeText={v => set('liable_party', v)} placeholder="Liable" placeholderTextColor={c.textMuted} /></Field>
-              <Field label="Who pays" flex><TextInput style={inputStyle} value={f.payer} onChangeText={v => set('payer', v)} placeholder="Payer" placeholderTextColor={c.textMuted} /></Field>
-            </View>
+            <Field label="Liable party">
+              <ChipPick options={LIABLE_PARTY_OPTS} value={f.liable_party} onSelect={v => set('liable_party', v)} c={c} styles={styles} clearable />
+            </Field>
+            <Field label="Who pays">
+              <ChipPick options={PAYER_OPTS} value={f.payer} onSelect={v => set('payer', v)} c={c} styles={styles} clearable />
+            </Field>
+
+            {/* GCC case / liability */}
+            <View style={styles.divider} />
+            <AppText variant="label" color="secondary" style={{ textTransform: 'uppercase' }}>GCC Case & Liability</AppText>
+            <Field label="Fault status">
+              <ChipPick options={FAULT_STATUS_OPTS} value={f.fault_status} onSelect={v => set('fault_status', v)} c={c} styles={styles} clearable />
+            </Field>
+            <Field label="GCC liability %">
+              <ChipPick options={LIABILITY_RATIO_OPTS} value={f.gcc_liability_ratio} onSelect={v => set('gcc_liability_ratio', v)} c={c} styles={styles} display={v => `${v}%`} clearable />
+            </Field>
+            <Field label="Najm report">
+              <ChipPick options={NAJM_STATUS_OPTS} value={f.najm_status} onSelect={v => set('najm_status', najmHasReport(v) ? v : v)} c={c} styles={styles} clearable />
+            </Field>
+            {najmHasReport(f.najm_status) && (
+              <Field label="Najm fault">
+                <ChipPick options={NAJM_FAULT_OPTS} value={f.najm_fault} onSelect={v => set('najm_fault', v)} c={c} styles={styles} clearable />
+              </Field>
+            )}
+            <Field label="Taqdeer report">
+              <ChipPick options={TAQDEER_STATUS_OPTS} value={f.taqdeer_status} onSelect={v => set('taqdeer_status', v)} c={c} styles={styles} clearable />
+            </Field>
+            {taqdeerHasReport(f.taqdeer_status) && (
+              <Field label="Taqdeer no"><TextInput style={inputStyle} value={f.taqdeer_no} onChangeText={v => set('taqdeer_no', v)} placeholder="Estimation reference" placeholderTextColor={c.textMuted} /></Field>
+            )}
+            <Field label="Damage condition">
+              <ChipPick options={DAMAGE_CONDITION_OPTS} value={f.damage_condition} onSelect={v => set('damage_condition', v)} c={c} styles={styles} clearable />
+            </Field>
+
+            {/* Insurance */}
+            <View style={styles.divider} />
+            <AppText variant="label" color="secondary" style={{ textTransform: 'uppercase' }}>Insurance</AppText>
             <View style={styles.twoCol}>
               <Field label="Driver" flex><TextInput style={inputStyle} value={f.driver_name} onChangeText={v => set('driver_name', v)} placeholderTextColor={c.textMuted} /></Field>
               <Field label="Insurer" flex><TextInput style={inputStyle} value={f.insurer} onChangeText={v => set('insurer', v)} placeholderTextColor={c.textMuted} /></Field>
             </View>
-            <Field label="Policy / Claim No"><TextInput style={inputStyle} value={f.policy_no} onChangeText={v => set('policy_no', v)} placeholderTextColor={c.textMuted} /></Field>
+            <View style={styles.twoCol}>
+              <Field label="Policy No" flex><TextInput style={inputStyle} value={f.policy_no} onChangeText={v => set('policy_no', v)} placeholderTextColor={c.textMuted} /></Field>
+              <Field label="Claim No" flex><TextInput style={inputStyle} value={f.insurance_claim_no} onChangeText={v => set('insurance_claim_no', v)} placeholderTextColor={c.textMuted} /></Field>
+            </View>
             <Field label="Claim status">
               <View style={styles.chipWrap}>
                 {CLAIM_STATUSES.map(s => {
@@ -660,7 +795,7 @@ function ClaimEditModal({
             <View style={styles.divider} />
             <AppText variant="label" color="secondary" style={{ textTransform: 'uppercase' }}>Cost Recovery</AppText>
             <View style={styles.twoCol}>
-              <Field label="Recovered amount" flex><TextInput style={inputStyle} value={f.recovered_amount} onChangeText={v => set('recovered_amount', v)} keyboardType="decimal-pad" placeholder="0.00" placeholderTextColor={c.textMuted} /></Field>
+              <Field label="Recovered (auto)" flex><TextInput style={inputStyle} value={f.recovered_amount} onChangeText={v => { recoveredTouched.current = true; set('recovered_amount', v) }} keyboardType="decimal-pad" placeholder="0.00" placeholderTextColor={c.textMuted} /></Field>
               <Field label="Recovery date" flex><TextInput style={inputStyle} value={f.recovery_date} onChangeText={v => set('recovery_date', v)} placeholder="YYYY-MM-DD" placeholderTextColor={c.textMuted} /></Field>
             </View>
             <Field label="Recovery source">
@@ -688,7 +823,28 @@ function ClaimEditModal({
                 })}
               </View>
             </Field>
-            <Field label="Recovery reference"><TextInput style={inputStyle} value={f.recovery_reference} onChangeText={v => set('recovery_reference', v)} placeholderTextColor={c.textMuted} /></Field>
+            <View style={styles.twoCol}>
+              <Field label="Recovery reference" flex><TextInput style={inputStyle} value={f.recovery_reference} onChangeText={v => set('recovery_reference', v)} placeholderTextColor={c.textMuted} /></Field>
+              <Field label="Amount transfer" flex><TextInput style={inputStyle} value={f.amount_transfer} onChangeText={v => set('amount_transfer', v)} keyboardType="decimal-pad" placeholder="0.00" placeholderTextColor={c.textMuted} /></Field>
+            </View>
+
+            {/* Repair & release */}
+            <View style={styles.divider} />
+            <AppText variant="label" color="secondary" style={{ textTransform: 'uppercase' }}>Repair & Release</AppText>
+            <Field label="Repair type">
+              <ChipPick options={REPAIR_TYPE_OPTS} value={f.repair_type} onSelect={v => set('repair_type', v)} c={c} styles={styles} clearable />
+            </Field>
+            <View style={styles.twoCol}>
+              <Field label="Workshop" flex><TextInput style={inputStyle} value={f.workshop_name} onChangeText={v => set('workshop_name', v)} placeholder={repairIsInternal(f.repair_type) ? 'GCC Workshop' : 'External'} placeholderTextColor={c.textMuted} /></Field>
+              <Field label="Workshop location" flex><TextInput style={inputStyle} value={f.workshop_location} onChangeText={v => set('workshop_location', v)} placeholderTextColor={c.textMuted} /></Field>
+            </View>
+            {repairIsInternal(f.repair_type) && (
+              <Field label="Repair cost"><TextInput style={inputStyle} value={f.repair_cost} onChangeText={v => set('repair_cost', v)} keyboardType="decimal-pad" placeholder="0.00" placeholderTextColor={c.textMuted} /></Field>
+            )}
+            <View style={styles.twoCol}>
+              <Field label="Expected release" flex><TextInput style={inputStyle} value={f.expected_release_date} onChangeText={v => set('expected_release_date', v)} placeholder="YYYY-MM-DD" placeholderTextColor={c.textMuted} /></Field>
+              <Field label="Release date" flex><TextInput style={inputStyle} value={f.release_date} onChangeText={v => set('release_date', v)} placeholder="YYYY-MM-DD" placeholderTextColor={c.textMuted} /></Field>
+            </View>
           </View>
           <View style={styles.sheetBtns}>
             <TouchableOpacity style={[styles.sheetCancel, { backgroundColor: c.surfaceAlt }]} onPress={onClose}><AppText variant="bodyStrong" color="secondary">Cancel</AppText></TouchableOpacity>
@@ -707,6 +863,36 @@ function Field({ label, children, flex }: { label: string; children: React.React
     <View style={[{ gap: 5 }, flex && { flex: 1 }]}>
       <AppText variant="micro" color="secondary" style={{ textTransform: 'uppercase' }}>{label}</AppText>
       {children}
+    </View>
+  )
+}
+
+/** Single-select chip picker for a constrained vocabulary (tap to toggle). */
+function ChipPick({
+  options, value, onSelect, c, styles, display, clearable,
+}: {
+  options: readonly string[]
+  value: string
+  onSelect: (v: string) => void
+  c: Theme['color']
+  styles: any
+  display?: (v: string) => string
+  clearable?: boolean
+}) {
+  return (
+    <View style={styles.chipWrap}>
+      {options.map(opt => {
+        const active = opt === value
+        return (
+          <TouchableOpacity
+            key={opt}
+            style={[styles.pickChip, { borderColor: c.border }, active && { backgroundColor: c.danger.soft, borderColor: c.danger.base }]}
+            onPress={() => onSelect(clearable && active ? '' : opt)}
+          >
+            <AppText variant="caption" style={{ color: active ? c.danger.on : c.textMuted }}>{display ? display(opt) : opt}</AppText>
+          </TouchableOpacity>
+        )
+      })}
     </View>
   )
 }

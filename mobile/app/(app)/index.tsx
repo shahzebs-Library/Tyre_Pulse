@@ -1,15 +1,18 @@
 /**
- * Home Screen - role-aware mission control
+ * Home Screen - access-aware mission control (Daylight design system)
  *
- * Inspector / Tyre Man  → inspection-focused: sync status, quick scan, today's count
- * Manager / Director    → fleet health mini-dashboard + navigation shortcuts
- * Admin                 → AI shortcut + executive summary
- * Reporter              → reports & records access
+ * Every quick action is gated by the effective access resolver
+ * `useAuth().canAccess(moduleKey)` = role default + per-user grant overlay +
+ * admin/super. An access change (grant / revoke) reflects on Home immediately,
+ * with no re-login, because AuthContext re-pulls grants in realtime.
  *
- * Loading strategy: offline queue from AsyncStorage (instant), then
- * DB data in parallel (skeleton while waiting).
+ * Quick actions are grouped into labelled sections (Field / Fleet / Maintenance
+ * / Management / Admin); a section renders only when the user can reach at least
+ * one of its actions, so the hub stays tidy for every role.
  *
- * Visuals: design-system tokens (light-first, sunlight-readable).
+ * Loading strategy: offline queue from AsyncStorage (instant), then DB data in
+ * parallel (skeleton while waiting). Visuals: design-system tokens
+ * (light-first, sunlight-readable).
  */
 
 import { useEffect, useState, useCallback, useMemo } from 'react'
@@ -26,7 +29,7 @@ import { supabase } from '../../lib/supabase'
 import SyncBanner from '../../components/SyncBanner'
 import { SkeletonBox, SkeletonStatRow, SkeletonList } from '../../components/SkeletonLoader'
 import { isAdminOrAbove, UserRole } from '../../lib/types'
-import { canInspect } from '../../lib/permissions'
+import { ModuleKey } from '../../lib/permissions'
 import { Screen, StatTile, AppText } from '../../components/ui'
 import { Theme, spacing, radius, typography, elevation } from '../../lib/theme'
 
@@ -51,73 +54,63 @@ interface FleetHealth {
   totalVehicles: number
 }
 
-// ── Role-aware quick actions ───────────────────────────────────────────────────
+// ── Access-aware quick actions ─────────────────────────────────────────────────
+//
+// One declarative registry. Each entry maps to a `ModuleKey`, so visibility is
+// resolved by `canAccess(module)` (role default + grant overlay). Grouped into
+// labelled sections; the grid renders sections in this order.
+
+type SectionKey = 'Field' | 'Fleet' | 'Maintenance' | 'Management' | 'Admin'
+
+const SECTION_ORDER: SectionKey[] = ['Field', 'Fleet', 'Maintenance', 'Management', 'Admin']
 
 interface QuickAction {
+  module: ModuleKey
+  section: SectionKey
   icon: string
   label: string
-  sublabel?: string
+  sublabel: string
   route: string
   tint: TintKey
 }
 
-function getQuickActions(role: UserRole | null): QuickAction[] {
-  switch (role) {
-    case 'inspector':
-      return [
-        { icon: 'clipboard-outline',   label: 'New Inspection', sublabel: 'Start a tyre check',   route: '/(app)/inspection/new',     tint: 'green' },
-        { icon: 'scan-outline',        label: 'Scan Asset',     sublabel: 'Barcode / QR code',    route: '/(app)/scanner',            tint: 'blue' },
-        { icon: 'barcode-outline',     label: 'Serial Search',  sublabel: 'Find tyre by serial',  route: '/(app)/serial-search',      tint: 'blue' },
-        { icon: 'checkbox-outline',    label: 'Checklists',     sublabel: 'Fill & submit checks', route: '/(app)/checklists/index',   tint: 'green' },
-        { icon: 'cube-outline',        label: 'Stock Count',    sublabel: 'Daily stock-take',     route: '/(app)/stock',              tint: 'amber' },
-        { icon: 'warning-outline',     label: 'Accident',       sublabel: 'File a report',        route: '/(app)/accident/report',    tint: 'red' },
-        { icon: 'speedometer-outline', label: 'Meter Log',      sublabel: 'Daily odometer / hrs', route: '/(app)/meter-logs',         tint: 'blue' },
-      ]
-    case 'tyre_man':
-      return [
-        { icon: 'clipboard-outline',   label: 'New Inspection', sublabel: 'Start a tyre check',   route: '/(app)/inspection/new',     tint: 'green' },
-        { icon: 'scan-outline',        label: 'Scan Asset',     sublabel: 'Barcode / QR code',    route: '/(app)/scanner',            tint: 'blue' },
-        { icon: 'barcode-outline',     label: 'Serial Search',  sublabel: 'Find tyre by serial',  route: '/(app)/serial-search',      tint: 'blue' },
-        { icon: 'checkbox-outline',    label: 'Checklists',     sublabel: 'Fill & submit checks', route: '/(app)/checklists/index',   tint: 'green' },
-        { icon: 'speedometer-outline', label: 'Meter Log',      sublabel: 'Daily odometer / hrs', route: '/(app)/meter-logs',         tint: 'blue' },
-      ]
-    case 'driver':
-      return [
-        { icon: 'speedometer-outline', label: 'Meter Log',      sublabel: "Log today's km / hours", route: '/(app)/meter-logs',       tint: 'blue' },
-      ]
-    case 'reporter':
-      return [
-        { icon: 'speedometer-outline', label: 'Meter Log',      sublabel: 'Daily odometer / hrs', route: '/(app)/meter-logs',         tint: 'blue' },
-        { icon: 'document-text-outline', label: 'Reports',      sublabel: 'Generate PDF',         route: '/(app)/reports/index',      tint: 'blue' },
-        { icon: 'layers-outline',      label: 'Tyre Records',   sublabel: 'Browse all records',   route: '/(app)/records/index',      tint: 'violet' },
-        { icon: 'warning-outline',     label: 'Accidents',      sublabel: 'Incident overview',    route: '/(app)/accident/dashboard', tint: 'red' },
-      ]
-    case 'manager':
-    case 'director':
-      return [
-        { icon: 'bar-chart-outline',   label: 'Analytics',      sublabel: 'Fleet KPIs',           route: '/(app)/analytics/index',    tint: 'blue' },
-        { icon: 'construct-outline',   label: 'Work Orders',    sublabel: 'Open actions',         route: '/(app)/workorders/index',   tint: 'amber' },
-        { icon: 'document-text-outline', label: 'Reports',      sublabel: 'Generate PDF',         route: '/(app)/reports/index',      tint: 'violet' },
-        { icon: 'sparkles-outline',    label: 'Fleet AI',       sublabel: 'Ask anything',         route: '/(app)/ai/index',           tint: 'violet' },
-        { icon: 'speedometer-outline', label: 'Meter Log',      sublabel: 'Daily odometer / hrs', route: '/(app)/meter-logs',         tint: 'blue' },
-        { icon: 'shield-outline',      label: 'Admin',          sublabel: 'Console & settings',   route: '/(app)/admin/index',        tint: 'slate' },
-      ]
-    default: // admin
-      return [
-        { icon: 'sparkles-outline',    label: 'Fleet AI',       sublabel: 'Ask anything',         route: '/(app)/ai/index',           tint: 'violet' },
-        { icon: 'bar-chart-outline',   label: 'Analytics',      sublabel: 'Fleet KPIs',           route: '/(app)/analytics/index',    tint: 'blue' },
-        { icon: 'construct-outline',   label: 'Work Orders',    sublabel: 'Open actions',         route: '/(app)/workorders/index',   tint: 'amber' },
-        { icon: 'document-text-outline', label: 'Reports',      sublabel: 'Generate PDF',         route: '/(app)/reports/index',      tint: 'green' },
-        { icon: 'speedometer-outline', label: 'Meter Log',      sublabel: 'Daily odometer / hrs', route: '/(app)/meter-logs',         tint: 'blue' },
-        { icon: 'shield-outline',      label: 'Admin',          sublabel: 'Console & settings',   route: '/(app)/admin/index',        tint: 'slate' },
-      ]
-  }
-}
+// The `inspect` action is deliberately surfaced as the big primary CTA (not in
+// the grid) so it is never duplicated; every other module lives in a section.
+const QUICK_ACTIONS: QuickAction[] = [
+  // Field ---------------------------------------------------------------------
+  { module: 'scan',        section: 'Field', icon: 'scan-outline',            label: 'Scan Asset',    sublabel: 'Barcode / QR code',    route: '/(app)/scanner',            tint: 'blue'   },
+  { module: 'serial',      section: 'Field', icon: 'barcode-outline',         label: 'Serial Search', sublabel: 'Find tyre by serial',  route: '/(app)/serial-search',      tint: 'blue'   },
+  { module: 'tyreChange',  section: 'Field', icon: 'swap-horizontal-outline', label: 'Tyre Change',   sublabel: 'Record a change',      route: '/(app)/tyre-change',        tint: 'teal'   },
+  { module: 'checklists',  section: 'Field', icon: 'checkbox-outline',        label: 'Checklists',    sublabel: 'Fill & submit checks', route: '/(app)/checklists/index',   tint: 'green'  },
+  { module: 'meter',       section: 'Field', icon: 'speedometer-outline',     label: 'Meter Log',     sublabel: 'Daily odometer / hrs', route: '/(app)/meter-logs',         tint: 'blue'   },
+  { module: 'reportIssue', section: 'Field', icon: 'megaphone-outline',       label: 'Report Issue',  sublabel: 'Flag a problem',       route: '/(app)/report-issue',       tint: 'amber'  },
+  // Fleet ---------------------------------------------------------------------
+  { module: 'records',     section: 'Fleet', icon: 'layers-outline',          label: 'Tyre Records',  sublabel: 'Browse all records',   route: '/(app)/records/index',      tint: 'violet' },
+  { module: 'vehicles',    section: 'Fleet', icon: 'car-outline',             label: 'Vehicles',      sublabel: 'Fleet assets',         route: '/(app)/vehicles',           tint: 'blue'   },
+  { module: 'history',     section: 'Fleet', icon: 'time-outline',            label: 'History',       sublabel: 'Recent activity',      route: '/(app)/history',            tint: 'slate'  },
+  { module: 'alerts',      section: 'Fleet', icon: 'notifications-outline',   label: 'Alerts',        sublabel: 'Critical tyres',       route: '/(app)/alerts',             tint: 'red'    },
+  { module: 'calendar',    section: 'Fleet', icon: 'calendar-outline',        label: 'Calendar',      sublabel: 'Scheduled work',       route: '/(app)/calendar',           tint: 'blue'   },
+  // Maintenance ---------------------------------------------------------------
+  { module: 'accidents',      section: 'Maintenance', icon: 'warning-outline',      label: 'Accidents',   sublabel: 'Incident overview',   route: '/(app)/accident/dashboard', tint: 'red'    },
+  { module: 'reportAccident', section: 'Maintenance', icon: 'alert-circle-outline', label: 'File Accident', sublabel: 'Report an incident', route: '/(app)/accident/report',   tint: 'red'    },
+  { module: 'workorders',     section: 'Maintenance', icon: 'construct-outline',    label: 'Work Orders', sublabel: 'Open actions',        route: '/(app)/workorders/index',   tint: 'amber'  },
+  { module: 'rca',            section: 'Maintenance', icon: 'git-branch-outline',   label: 'Root Cause',  sublabel: 'RCA analysis',        route: '/(app)/rca',                tint: 'violet' },
+  { module: 'tasks',          section: 'Maintenance', icon: 'list-outline',         label: 'Tasks',       sublabel: 'Corrective actions',  route: '/(app)/tasks',              tint: 'amber'  },
+  { module: 'stock',          section: 'Maintenance', icon: 'cube-outline',         label: 'Stock Count', sublabel: 'Daily stock-take',    route: '/(app)/stock',              tint: 'amber'  },
+  // Management ----------------------------------------------------------------
+  { module: 'overview',    section: 'Management', icon: 'grid-outline',          label: 'Overview',   sublabel: 'Fleet snapshot',  route: '/(app)/overview',        tint: 'blue'   },
+  { module: 'reports',     section: 'Management', icon: 'document-text-outline', label: 'Reports',    sublabel: 'Generate PDF',    route: '/(app)/reports/index',   tint: 'violet' },
+  { module: 'analytics',   section: 'Management', icon: 'bar-chart-outline',     label: 'Analytics',  sublabel: 'Fleet KPIs',      route: '/(app)/analytics/index', tint: 'blue'   },
+  { module: 'ai',          section: 'Management', icon: 'sparkles-outline',      label: 'Fleet AI',   sublabel: 'Ask anything',    route: '/(app)/ai/index',        tint: 'violet' },
+  { module: 'team',        section: 'Management', icon: 'people-outline',        label: 'Team',       sublabel: 'Members',         route: '/(app)/team',            tint: 'teal'   },
+  // Admin ---------------------------------------------------------------------
+  { module: 'admin',       section: 'Admin', icon: 'shield-outline', label: 'Admin Console', sublabel: 'Console & settings', route: '/(app)/admin/index', tint: 'slate' },
+]
 
 // ── Main screen ────────────────────────────────────────────────────────────────
 
 export default function HomeScreen() {
-  const { profile } = useAuth()
+  const { profile, canAccess } = useAuth()
   const { t, isRTL } = useLanguage()
   const { theme } = useTheme()
   const router = useRouter()
@@ -138,7 +131,17 @@ export default function HomeScreen() {
   const greeting = hour < 12 ? t('home.goodMorning') : hour < 17 ? t('home.goodAfternoon') : t('home.goodEvening')
   const today = new Date().toLocaleDateString(isRTL ? 'ar-SA' : 'en-GB', { weekday: 'long', day: 'numeric', month: 'long' })
 
-  const quickActions = getQuickActions(role ?? null)
+  // Effective access drives what shows. Recomputed whenever grants/role change,
+  // so a live grant / revoke reflects here without a re-login.
+  const canInspectNow = canAccess('inspect')
+  const canScan = canAccess('scan')
+  const canHistory = canAccess('history')
+  const sections = useMemo(
+    () => SECTION_ORDER
+      .map(key => ({ key, items: QUICK_ACTIONS.filter(a => a.section === key && canAccess(a.module)) }))
+      .filter(sec => sec.items.length > 0),
+    [canAccess],
+  )
 
   const load = useCallback(async () => {
     // Phase 1: offline queue (AsyncStorage - instant)
@@ -267,8 +270,8 @@ export default function HomeScreen() {
           </View>
         )}
 
-        {/* ── Primary CTA (inspect-capable roles only) ──────────────────────── */}
-        {canInspect(role) && (
+        {/* ── Primary CTA (inspect access only) ─────────────────────────────── */}
+        {canInspectNow && (
           <TouchableOpacity style={s.ctaButton} onPress={() => router.push('/(app)/inspection/new')} activeOpacity={0.9}>
             <View style={s.ctaIcon}>
               <Ionicons name="add-circle" size={28} color={theme.color.onPrimary} />
@@ -281,13 +284,17 @@ export default function HomeScreen() {
           </TouchableOpacity>
         )}
 
-        {/* ── Quick Actions grid ─────────────────────────────────────────────── */}
-        <SectionLabel s={s} theme={theme}>Quick Actions</SectionLabel>
-        <View style={s.quickGrid}>
-          {quickActions.map((a, i) => (
-            <QuickActionCard key={i} action={a} s={s} theme={theme} onPress={() => router.push(a.route as any)} />
-          ))}
-        </View>
+        {/* ── Quick Actions, grouped by section (access-gated) ──────────────── */}
+        {sections.map(sec => (
+          <View key={sec.key}>
+            <SectionLabel s={s} theme={theme}>{sec.key}</SectionLabel>
+            <View style={s.quickGrid}>
+              {sec.items.map(a => (
+                <QuickActionCard key={a.module} action={a} s={s} theme={theme} onPress={() => router.push(a.route as any)} />
+              ))}
+            </View>
+          </View>
+        ))}
 
         {/* ── Fleet Health (elevated roles) ─────────────────────────────────── */}
         {elevated && (
@@ -332,8 +339,8 @@ export default function HomeScreen() {
           </View>
         )}
 
-        {/* ── Scan shortcut (inspect-capable roles only) ────────────────────── */}
-        {canInspect(role) && (
+        {/* ── Scan shortcut (scan access only) ──────────────────────────────── */}
+        {canScan && (
           <TouchableOpacity style={s.scanButton} onPress={() => router.push('/(app)/scanner')} activeOpacity={0.85}>
             <View style={s.scanIcon}>
               <Ionicons name="scan" size={22} color={theme.color.primary} />
@@ -346,15 +353,18 @@ export default function HomeScreen() {
           </TouchableOpacity>
         )}
 
-        {/* ── Recent inspections ────────────────────────────────────────────── */}
+        {/* ── Recent inspections (inspect access only) ──────────────────────── */}
+        {canInspectNow && (
         <View>
           <View style={s.sectionHeaderRow}>
             <AppText style={[typography.label, { color: theme.color.textMuted, textTransform: 'uppercase' }]}>
               {t('home.recentInspections')}
             </AppText>
-            <TouchableOpacity onPress={() => router.push('/(app)/history')}>
-              <Text style={s.sectionLink}>{t('home.viewAll')}</Text>
-            </TouchableOpacity>
+            {canHistory && (
+              <TouchableOpacity onPress={() => router.push('/(app)/history')}>
+                <Text style={s.sectionLink}>{t('home.viewAll')}</Text>
+              </TouchableOpacity>
+            )}
           </View>
           {networkLoading ? <SkeletonList count={3} /> : recentInspections.length === 0 ? (
             <View style={s.emptyState}>
@@ -372,6 +382,7 @@ export default function HomeScreen() {
             </View>
           )}
         </View>
+        )}
       </ScrollView>
     </Screen>
   )

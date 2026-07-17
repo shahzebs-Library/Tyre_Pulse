@@ -27,7 +27,7 @@ function TabIcon({
 }
 
 export default function AppLayout() {
-  const { user, loading, profile, signOut } = useAuth()
+  const { user, loading, profile, signOut, canAccess } = useAuth()
   const { t } = useLanguage()
   const { theme } = useTheme()
   const [accidentBadge, setAccidentBadge] = useState(0)
@@ -68,8 +68,6 @@ export default function AppLayout() {
     return <AccessGate locked={profile.locked === true} onSignOut={signOut} />
   }
 
-  const role = profile?.role ?? null
-
   return (
     <Tabs
       screenOptions={{
@@ -89,7 +87,10 @@ export default function AppLayout() {
       }}
     >
       {TAB_BAR.map(tab => {
-        const allowed = tab.visible(role)
+        // Grant-aware gating: a tab tied to a module follows the effective
+        // access (role default + per-user grant overlay + admin/super); tabs
+        // with no moduleKey (Home, Profile) are always visible.
+        const allowed = tab.moduleKey ? canAccess(tab.moduleKey) : true
         return (
           <Tabs.Screen
             key={tab.name}
@@ -137,6 +138,7 @@ export default function AppLayout() {
       <Tabs.Screen name="accident/report" options={{ href: null }} />
       <Tabs.Screen name="accident/[id]"   options={{ href: null }} />
       <Tabs.Screen name="admin/ai-chat"   options={{ href: null }} />
+      <Tabs.Screen name="admin/access"    options={{ href: null }} />
       <Tabs.Screen name="admin/users"     options={{ href: null }} />
       <Tabs.Screen name="admin/approvals" options={{ href: null }} />
       <Tabs.Screen name="admin/sites"     options={{ href: null }} />

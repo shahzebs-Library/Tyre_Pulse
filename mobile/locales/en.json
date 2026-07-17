@@ -332,7 +332,11 @@
     "statuses": {
       "reported": "Reported",
       "under_review": "Under Review",
-      "closed": "Closed"
+      "closed": "Closed",
+      "awaiting_approval": "Awaiting Approval",
+      "insurance_claim": "Insurance Claim",
+      "repair_in_progress": "Repair In Progress",
+      "released": "Released"
     },
     "stats": {
       "total": "Total",
@@ -569,7 +573,9 @@
     },
     "takePhoto": "Take Photo",
     "chooseFromGallery": "Choose from Gallery",
-    "cancel": "Cancel"
+    "cancel": "Cancel",
+    "filterOpen": "Open",
+    "filterClosed": "Closed"
   },
   "scanner": {
     "title": "Scan Tyre / Asset",

@@ -364,9 +364,13 @@
       "fatal": "مميتة"
     },
     "statuses": {
-      "reported": "مُبلَّغ",
+      "reported": "تم الإبلاغ",
       "under_review": "قيد المراجعة",
-      "closed": "مغلق"
+      "closed": "مغلق",
+      "awaiting_approval": "بانتظار الموافقة",
+      "insurance_claim": "مطالبة تأمين",
+      "repair_in_progress": "قيد الإصلاح",
+      "released": "تم الإفراج"
     },
     "stats": {
       "total": "الإجمالي",
@@ -603,7 +607,9 @@
     },
     "takePhoto": "التقاط صورة",
     "chooseFromGallery": "اختيار من المعرض",
-    "cancel": "إلغاء"
+    "cancel": "إلغاء",
+    "filterOpen": "مفتوح",
+    "filterClosed": "مغلق"
   },
   "modules": {
     "common": {

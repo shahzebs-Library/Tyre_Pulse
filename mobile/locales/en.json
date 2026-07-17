@@ -26,7 +26,8 @@
     "clearAll": "Clear all",
     "error": "Error",
     "tryAgain": "Please try again.",
-    "all": "All"
+    "all": "All",
+    "saving": "Saving..."
   },
   "language": {
     "english": "English",
@@ -1259,6 +1260,37 @@
       "statusInProgress": "In Progress",
       "statusResolved": "Resolved",
       "statusClosed": "Closed"
+    },
+    "pm": {
+      "title": "Preventive Maintenance",
+      "plan": "PM Plan",
+      "overdue": "Overdue",
+      "dueSoon": "Due soon",
+      "activePlans": "Active plans",
+      "filterDue": "Due / Overdue",
+      "filterAll": "All active",
+      "emptyTitle": "Nothing here",
+      "emptyDue": "No plans are due or overdue. Good shape.",
+      "emptyAll": "No active maintenance plans found.",
+      "daysOverdue": "d overdue",
+      "daysLeft": "d left",
+      "noDate": "No date",
+      "recordService": "Record service",
+      "meterReading": "Meter reading",
+      "performedBy": "Performed by",
+      "workshop": "Workshop",
+      "partsCost": "Parts cost",
+      "labourCost": "Labour cost",
+      "findings": "Findings",
+      "findingsHint": "What was found / done",
+      "outcome": "Outcome",
+      "outcome_completed": "Completed",
+      "outcome_partial": "Partial",
+      "outcome_deferred": "Deferred",
+      "outcome_failed": "Failed",
+      "saveService": "Save service",
+      "savedTitle": "Service recorded",
+      "savedBody": "The schedule has been advanced to the next due date."
     }
   }
 }

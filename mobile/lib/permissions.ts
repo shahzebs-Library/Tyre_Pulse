@@ -28,7 +28,7 @@ export type ModuleKey =
   | 'vehicles' | 'workorders' | 'rca' | 'stock' | 'stockManage' | 'overview'
   | 'reports' | 'analytics' | 'ai' | 'admin' | 'users' | 'meter' | 'tasks'
   | 'calendar' | 'reportIssue' | 'checklists' | 'approvals' | 'alerts'
-  | 'history' | 'tyreChange' | 'team'
+  | 'history' | 'tyreChange' | 'team' | 'pm'
 
 export interface ModuleDef {
   key: ModuleKey
@@ -78,6 +78,7 @@ export const MODULES: ModuleDef[] = [
   M('rca',            'Root Cause',        'git-branch-outline',     'Maintenance',['manager', 'director', 'inspector']),
   M('tasks',          'Tasks',             'list-outline',           'Maintenance',['manager', 'director', 'inspector']),
   M('stock',          'Stock Count',       'cube-outline',           'Maintenance',['manager', 'inspector']),
+  M('pm',             'Maintenance Due',   'build-outline',          'Maintenance',['manager', 'director']),
   // Management ----------------------------------------------------------------
   M('overview',       'Overview',          'grid-outline',           'Management', ['manager', 'director']),
   M('reports',        'Reports',           'document-text-outline',  'Management', ['manager', 'director', 'reporter']),

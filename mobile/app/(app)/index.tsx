@@ -100,6 +100,7 @@ const QUICK_ACTIONS: QuickAction[] = [
   { module: 'rca',            section: 'Maintenance', icon: 'git-branch-outline',   label: 'Root Cause',  sublabel: 'RCA analysis',        route: '/(app)/rca',                tint: 'violet' },
   { module: 'tasks',          section: 'Maintenance', icon: 'list-outline',         label: 'Tasks',       sublabel: 'Corrective actions',  route: '/(app)/tasks',              tint: 'amber'  },
   { module: 'stock',          section: 'Maintenance', icon: 'cube-outline',         label: 'Stock Count', sublabel: 'Daily stock-take',    route: '/(app)/stock',              tint: 'amber'  },
+  { module: 'pm',             section: 'Maintenance', icon: 'build-outline',        label: 'Maintenance Due', sublabel: 'PM plans + record service', route: '/(app)/maintenance',  tint: 'teal'   },
   { module: 'approvals',      section: 'Maintenance', icon: 'checkmark-done-outline', label: 'Approvals', sublabel: 'Sign off inspections', route: '/(app)/inspection/approvals', tint: 'green' },
   // Management ----------------------------------------------------------------
   { module: 'overview',    section: 'Management', icon: 'grid-outline',          label: 'Overview',   sublabel: 'Fleet snapshot',  route: '/(app)/overview',        tint: 'blue'   },

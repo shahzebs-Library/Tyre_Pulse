@@ -26,7 +26,8 @@
     "clearAll": "مسح الكل",
     "error": "خطأ",
     "tryAgain": "يرجى المحاولة مرة أخرى.",
-    "all": "الكل"
+    "all": "الكل",
+    "saving": "جار الحفظ..."
   },
   "language": {
     "english": "English",
@@ -1260,6 +1261,37 @@
       "statusInProgress": "قيد التنفيذ",
       "statusResolved": "تم الحل",
       "statusClosed": "مغلق"
+    },
+    "pm": {
+      "title": "الصيانة الوقائية",
+      "plan": "خطة صيانة",
+      "overdue": "متأخرة",
+      "dueSoon": "مستحقة قريبا",
+      "activePlans": "الخطط النشطة",
+      "filterDue": "مستحقة / متأخرة",
+      "filterAll": "كل النشطة",
+      "emptyTitle": "لا يوجد شيء هنا",
+      "emptyDue": "لا توجد خطط مستحقة أو متأخرة. الوضع جيد.",
+      "emptyAll": "لا توجد خطط صيانة نشطة.",
+      "daysOverdue": " يوم تأخير",
+      "daysLeft": " يوم متبق",
+      "noDate": "بدون تاريخ",
+      "recordService": "تسجيل الصيانة",
+      "meterReading": "قراءة العداد",
+      "performedBy": "تم بواسطة",
+      "workshop": "الورشة",
+      "partsCost": "تكلفة القطع",
+      "labourCost": "تكلفة العمالة",
+      "findings": "الملاحظات",
+      "findingsHint": "ما تم اكتشافه / إنجازه",
+      "outcome": "النتيجة",
+      "outcome_completed": "مكتملة",
+      "outcome_partial": "جزئية",
+      "outcome_deferred": "مؤجلة",
+      "outcome_failed": "فشلت",
+      "saveService": "حفظ الصيانة",
+      "savedTitle": "تم تسجيل الصيانة",
+      "savedBody": "تم تحديث الجدول إلى موعد الاستحقاق التالي."
     }
   }
 }

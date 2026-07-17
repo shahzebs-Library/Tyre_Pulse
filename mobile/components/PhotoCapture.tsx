@@ -17,6 +17,7 @@ import {
 } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { uploadModulePhoto } from '../lib/photoUpload'
+import { safeImageSrc } from '../lib/safeUrl'
 import * as ImagePicker from 'expo-image-picker'
 
 interface Props {
@@ -41,8 +42,10 @@ export default function PhotoCapture({ value, onChange, module = 'module', tint 
     const { status } = await ImagePicker.requestCameraPermissionsAsync()
     if (status !== 'granted') { Alert.alert('Camera needed', 'Enable camera access to attach photos.'); return }
 
+    // quality 0.55 keeps photos legible while roughly halving file size vs 0.7,
+    // cutting memory, upload bytes and battery on capture-heavy flows.
     const result = await ImagePicker.launchCameraAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images, quality: 0.7, allowsEditing: false,
+      mediaTypes: ImagePicker.MediaTypeOptions.Images, quality: 0.55, allowsEditing: false,
     })
     if (result.canceled || !result.assets[0]) return
 
@@ -78,7 +81,7 @@ export default function PhotoCapture({ value, onChange, module = 'module', tint 
     <View style={styles.grid}>
       {value.map((url, index) => (
         <View key={index} style={styles.cell}>
-          <Image source={{ uri: localUris[index] || url }} style={styles.thumb} resizeMode="cover" />
+          <Image source={{ uri: safeImageSrc(localUris[index] || url) }} style={styles.thumb} resizeMode="cover" />
           {uploadingIndex === index && (
             <View style={styles.overlay}><ActivityIndicator size="small" color="#fff" /></View>
           )}

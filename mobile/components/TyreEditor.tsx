@@ -23,6 +23,7 @@ import { useTheme } from '../contexts/ThemeContext'
 import { radius, spacing, typography, Theme } from '../lib/theme'
 import { supabase } from '../lib/supabase'
 import { storageRef } from '../lib/storageRefs'
+import { safeImageSrc } from '../lib/safeUrl'
 
 type UploadState = 'idle' | 'uploading' | 'done' | 'error'
 type LookupState = 'idle' | 'searching' | 'found' | 'none'
@@ -72,7 +73,8 @@ export default function TyreEditor({ data, onChange }: Props) {
     try {
       const result = await ImagePicker.launchCameraAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        quality: 0.75,
+        // Lower quality trims upload size, memory and battery on capture.
+        quality: 0.55,
         allowsEditing: false,
       })
       if (!result.canceled && result.assets[0]) {
@@ -109,7 +111,7 @@ export default function TyreEditor({ data, onChange }: Props) {
       update({ photo_url: storageRef('tyre-photos', path) })
       setUploadState('done')
     } catch (err) {
-      console.warn('[TyrePulse] Photo upload failed:', err)
+      if (__DEV__) console.warn('[TyrePulse] Photo upload failed:', err)
       setUploadState('error')
     }
   }
@@ -263,7 +265,7 @@ export default function TyreEditor({ data, onChange }: Props) {
 
         {displayUri ? (
           <View style={styles.photoContainer}>
-            <Image source={{ uri: displayUri }} style={styles.photo} />
+            <Image source={{ uri: safeImageSrc(displayUri) }} style={styles.photo} />
             <TouchableOpacity
               style={styles.photoRetake}
               onPress={pickPhoto}

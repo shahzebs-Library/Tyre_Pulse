@@ -2,6 +2,7 @@
  * Badge / Pill — soft status chip, high-contrast text for sun readability.
  * <Badge kind="critical">Critical</Badge>
  */
+import { memo } from 'react'
 import { View, StyleSheet, ViewStyle } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { useTheme } from '../../contexts/ThemeContext'
@@ -19,7 +20,7 @@ export interface BadgeProps {
   style?: ViewStyle
 }
 
-export function Badge({ children, kind = 'neutral', icon, solid, style }: BadgeProps) {
+export const Badge = memo(function Badge({ children, kind = 'neutral', icon, solid, style }: BadgeProps) {
   const { theme } = useTheme()
   const sc = statusColor(theme, kind)
   const bg = solid ? sc.base : sc.soft
@@ -30,7 +31,7 @@ export function Badge({ children, kind = 'neutral', icon, solid, style }: BadgeP
       <AppText style={[typography.micro, { color: fg }]}>{children}</AppText>
     </View>
   )
-}
+})
 
 const styles = StyleSheet.create({
   pill: {

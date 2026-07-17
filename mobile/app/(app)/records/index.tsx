@@ -15,6 +15,7 @@ import {
 } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { useAuth } from '../../../contexts/AuthContext'
+import { useLanguage } from '../../../contexts/LanguageContext'
 import { useTheme } from '../../../contexts/ThemeContext'
 import { supabase } from '../../../lib/supabase'
 import { isAdminOrAbove } from '../../../lib/types'
@@ -58,6 +59,7 @@ interface TyreRecord {
 
 export default function RecordsScreen() {
   const { profile } = useAuth()
+  const { t } = useLanguage()
   const { theme } = useTheme()
   const c = theme.color
   const role = profile?.role ?? null
@@ -130,7 +132,7 @@ export default function RecordsScreen() {
       setHasMore(rows.length === PAGE)
     } catch (e: any) {
       if (__DEV__) console.warn('[records] load failed:', e?.message)
-      setError('Could not load records. Pull down to retry.')
+      setError(t('modules.records.loadError'))
       if (fresh) setRecords([])
       setHasMore(false)
     } finally {
@@ -161,9 +163,9 @@ export default function RecordsScreen() {
       {/* Header */}
       <View style={[styles.header, { backgroundColor: c.surface, borderBottomColor: c.border }]}>
         <View style={{ flex: 1 }}>
-          <AppText variant="h2">Tyre Records</AppText>
+          <AppText variant="h2">{t('modules.records.title')}</AppText>
           <AppText variant="caption" color="muted" style={{ marginTop: 2 }}>
-            {loading ? 'Loading...' : `${total.toLocaleString()} record${total !== 1 ? 's' : ''}${elevated ? '' : ` · ${profile?.site ?? 'My site'}`}`}
+            {loading ? t('common.loading') : `${total.toLocaleString()} ${t('common.records')}${elevated ? '' : ` · ${profile?.site ?? t('modules.records.mySite')}`}`}
           </AppText>
         </View>
         <TouchableOpacity
@@ -187,7 +189,7 @@ export default function RecordsScreen() {
         <Ionicons name="search-outline" size={16} color={c.textMuted} />
         <TextInput
           style={[styles.searchInput, { color: c.text }]}
-          placeholder="Search asset, serial, brand..."
+          placeholder={t('modules.records.searchPlaceholder')}
           placeholderTextColor={c.textMuted}
           value={search}
           onChangeText={setSearch}
@@ -218,12 +220,12 @@ export default function RecordsScreen() {
               style={[styles.chip, { backgroundColor: statusColor(theme, riskKind(riskFilter)).soft, borderColor: statusColor(theme, riskKind(riskFilter)).base }]}
               onPress={() => setRiskFilter('')}
             >
-              <AppText style={[typography.caption, { color: statusColor(theme, riskKind(riskFilter)).on }]}>{riskFilter}</AppText>
+              <AppText style={[typography.caption, { color: statusColor(theme, riskKind(riskFilter)).on }]}>{t(`modules.priority.${riskFilter}`)}</AppText>
               <Ionicons name="close" size={11} color={statusColor(theme, riskKind(riskFilter)).on} />
             </TouchableOpacity>
           ) : null}
           <TouchableOpacity onPress={() => { setSiteFilter(''); setRiskFilter('') }}>
-            <AppText style={[typography.caption, { color: c.danger.base, marginLeft: 4 }]}>Clear all</AppText>
+            <AppText style={[typography.caption, { color: c.danger.base, marginLeft: 4 }]}>{t('modules.records.clearAll')}</AppText>
           </TouchableOpacity>
         </View>
       )}
@@ -248,8 +250,8 @@ export default function RecordsScreen() {
             ) : (
               <EmptyState
                 icon="layers-outline"
-                title="No records found"
-                message="Try adjusting your search or filters"
+                title={t('modules.records.noRecordsTitle')}
+                message={t('modules.records.noRecordsHint')}
               />
             )
           }
@@ -301,9 +303,9 @@ export default function RecordsScreen() {
         <View style={[styles.sheetBackdrop, { backgroundColor: c.overlay }]}>
           <View style={[styles.sheet, { backgroundColor: c.surface }]}>
             <View style={[styles.sheetHandle, { backgroundColor: c.borderStrong }]} />
-            <AppText variant="h3">Filter Records</AppText>
+            <AppText variant="h3">{t('modules.records.filterTitle')}</AppText>
 
-            <AppText style={[typography.label, styles.sheetLabel, { color: c.textMuted }]}>Risk Level</AppText>
+            <AppText style={[typography.label, styles.sheetLabel, { color: c.textMuted }]}>{t('modules.records.riskLevel')}</AppText>
             <View style={styles.pillRow}>
               {RISKS.map(r => {
                 const active = riskFilter === r
@@ -317,7 +319,7 @@ export default function RecordsScreen() {
                     ]}
                     onPress={() => setRiskFilter(prev => prev === r ? '' : r)}
                   >
-                    <AppText style={[typography.label, { color: active ? c.textInverse : c.textSecondary }]}>{r}</AppText>
+                    <AppText style={[typography.label, { color: active ? c.textInverse : c.textSecondary }]}>{t(`modules.priority.${r}`)}</AppText>
                   </TouchableOpacity>
                 )
               })}
@@ -325,7 +327,7 @@ export default function RecordsScreen() {
 
             {elevated && sites.length > 0 && (
               <>
-                <AppText style={[typography.label, styles.sheetLabel, { color: c.textMuted }]}>Site</AppText>
+                <AppText style={[typography.label, styles.sheetLabel, { color: c.textMuted }]}>{t('modules.records.site')}</AppText>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false}>
                   <View style={styles.pillRow}>
                     {sites.map(s => {
@@ -348,9 +350,9 @@ export default function RecordsScreen() {
               </>
             )}
 
-            <Button label="Apply Filters" full onPress={() => setShowFilters(false)} style={{ marginTop: spacing.xs }} />
+            <Button label={t('modules.records.applyFilters')} full onPress={() => setShowFilters(false)} style={{ marginTop: spacing.xs }} />
             <Button
-              label="Clear All"
+              label={t('modules.records.clearAllBtn')}
               variant="ghost"
               full
               onPress={() => { setSiteFilter(''); setRiskFilter(''); setShowFilters(false) }}
@@ -367,7 +369,7 @@ export default function RecordsScreen() {
               <View style={[styles.sheetHandle, { backgroundColor: c.borderStrong }]} />
               <View style={styles.detailHeader}>
                 <View style={{ flex: 1 }}>
-                  <AppText variant="h3">{detail.asset_no ?? 'Record'}</AppText>
+                  <AppText variant="h3">{detail.asset_no ?? t('modules.records.record')}</AppText>
                   <AppText variant="caption" color="secondary" style={{ marginTop: 2 }}>{detail.brand ?? '-'}</AppText>
                 </View>
                 {detail.risk_level ? (
@@ -375,35 +377,35 @@ export default function RecordsScreen() {
                 ) : null}
               </View>
               <ScrollView showsVerticalScrollIndicator={false} style={{ flex: 1 }}>
-                <DetailRow label="Serial No" value={detail.serial_no} />
-                <DetailRow label="Site" value={detail.site} />
-                <DetailRow label="Issue Date" value={detail.issue_date} />
-                <DetailRow label="Category" value={detail.category} />
-                <DetailRow label="Cost / Tyre" value={detail.cost_per_tyre != null ? `SAR ${Number(detail.cost_per_tyre).toLocaleString()}` : null} />
-                <DetailRow label="KM at Fitment" value={detail.km_at_fitment?.toLocaleString()} />
-                <DetailRow label="KM at Removal" value={detail.km_at_removal?.toLocaleString()} />
+                <DetailRow label={t('modules.records.serialNo')} value={detail.serial_no} />
+                <DetailRow label={t('modules.records.site')} value={detail.site} />
+                <DetailRow label={t('modules.records.issueDate')} value={detail.issue_date} />
+                <DetailRow label={t('modules.records.category')} value={detail.category} />
+                <DetailRow label={t('modules.records.costPerTyre')} value={detail.cost_per_tyre != null ? `SAR ${Number(detail.cost_per_tyre).toLocaleString()}` : null} />
+                <DetailRow label={t('modules.records.kmFitment')} value={detail.km_at_fitment?.toLocaleString()} />
+                <DetailRow label={t('modules.records.kmRemoval')} value={detail.km_at_removal?.toLocaleString()} />
                 {detail.km_at_fitment != null && detail.km_at_removal != null && detail.km_at_removal > detail.km_at_fitment ? (
                   <DetailRow
-                    label="Tyre Life (km)"
+                    label={t('modules.records.tyreLife')}
                     value={(detail.km_at_removal - detail.km_at_fitment).toLocaleString()}
                     highlight
                   />
                 ) : null}
-                <DetailRow label="Country" value={detail.country} />
+                <DetailRow label={t('modules.records.country')} value={detail.country} />
                 {detail.description ? (
                   <View style={[styles.detailBlock, { borderBottomColor: c.border }]}>
-                    <AppText variant="caption" color="muted" style={{ marginBottom: 4 }}>Description</AppText>
+                    <AppText variant="caption" color="muted" style={{ marginBottom: 4 }}>{t('modules.records.description')}</AppText>
                     <AppText variant="body">{detail.description}</AppText>
                   </View>
                 ) : null}
                 {detail.remarks ? (
                   <View style={[styles.detailBlock, { borderBottomColor: c.border }]}>
-                    <AppText variant="caption" color="muted" style={{ marginBottom: 4 }}>Remarks</AppText>
+                    <AppText variant="caption" color="muted" style={{ marginBottom: 4 }}>{t('modules.records.remarks')}</AppText>
                     <AppText variant="body">{detail.remarks}</AppText>
                   </View>
                 ) : null}
               </ScrollView>
-              <Button label="Close" variant="secondary" full onPress={() => setDetail(null)} style={{ marginTop: spacing.md }} />
+              <Button label={t('common.close')} variant="secondary" full onPress={() => setDetail(null)} style={{ marginTop: spacing.md }} />
             </View>
           </View>
         </Modal>

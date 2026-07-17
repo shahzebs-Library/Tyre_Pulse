@@ -86,7 +86,7 @@ export async function registerPushToken(userId: string): Promise<string | null> 
 
     return token
   } catch (err) {
-    console.warn('[Notifications] Push token registration failed:', err)
+    if (__DEV__) console.warn('[Notifications] Push token registration failed:', err)
     return null
   }
 }

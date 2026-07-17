@@ -33,11 +33,11 @@ const LANG_OPTIONS: { code: Language; labelKey: string }[] = [
 type IconName = React.ComponentProps<typeof Ionicons>['name']
 
 const APPEARANCE_OPTIONS: {
-  key: ThemePreference; label: string; icon: IconName; hint?: string
+  key: ThemePreference; labelKey: string; icon: IconName; hintKey?: string
 }[] = [
-  { key: 'light', label: 'Light', icon: 'sunny-outline', hint: 'Recommended' },
-  { key: 'dark', label: 'Dark', icon: 'moon-outline' },
-  { key: 'system', label: 'System', icon: 'phone-portrait-outline' },
+  { key: 'light', labelKey: 'profile.themeLight', icon: 'sunny-outline', hintKey: 'profile.themeRecommended' },
+  { key: 'dark', labelKey: 'profile.themeDark', icon: 'moon-outline' },
+  { key: 'system', labelKey: 'profile.themeSystem', icon: 'phone-portrait-outline' },
 ]
 
 export default function ProfileScreen() {
@@ -85,7 +85,7 @@ export default function ProfileScreen() {
   async function toggleReminder(enabled: boolean) {
     const granted = await requestNotificationPermission()
     if (!granted) {
-      Alert.alert('Notifications Blocked', 'Enable notifications for TyrePulse in your device settings to use reminders.')
+      Alert.alert(t('profile.notifBlockedTitle'), t('profile.notifBlockedMsg'))
       return
     }
     setReminderEnabled(enabled)
@@ -222,7 +222,7 @@ export default function ProfileScreen() {
         )}
 
         {/* Appearance section */}
-        <SectionHeader title="Appearance" />
+        <SectionHeader title={t('profile.appearance')} />
         <Card padded={false} style={styles.groupCard}>
           <View style={styles.segment}>
             {APPEARANCE_OPTIONS.map(opt => {
@@ -243,14 +243,14 @@ export default function ProfileScreen() {
                     variant="label"
                     style={{ color: active ? theme.color.onPrimary : theme.color.textSecondary }}
                   >
-                    {opt.label}
+                    {t(opt.labelKey)}
                   </AppText>
-                  {opt.hint ? (
+                  {opt.hintKey ? (
                     <AppText
                       variant="micro"
                       style={{ color: active ? theme.color.onPrimary : theme.color.textMuted }}
                     >
-                      {opt.hint}
+                      {t(opt.hintKey)}
                     </AppText>
                   ) : null}
                 </TouchableOpacity>
@@ -291,11 +291,11 @@ export default function ProfileScreen() {
         </Card>
 
         {/* Notifications section */}
-        <SectionHeader title="Notifications" />
+        <SectionHeader title={t('profile.notifications')} />
         <Card padded={false} style={styles.groupCard}>
           <View style={[styles.detailRow, styles.detailRowLast, isRTL && styles.rowReverse]}>
             <Ionicons name="notifications-outline" size={16} color={theme.color.textMuted} />
-            <AppText variant="body" color="secondary" style={[styles.detailLabel, { flex: 1, textAlign }]}>Daily Inspection Reminder</AppText>
+            <AppText variant="body" color="secondary" style={[styles.detailLabel, { flex: 1, textAlign }]}>{t('profile.dailyReminder')}</AppText>
             <Switch
               value={reminderEnabled}
               onValueChange={toggleReminder}
@@ -305,7 +305,7 @@ export default function ProfileScreen() {
           </View>
           {reminderEnabled && (
             <View style={[styles.reminderTimeRow, isRTL && styles.rowReverse]}>
-              <AppText variant="caption" color="secondary" style={styles.reminderTimeLabel}>Remind me at</AppText>
+              <AppText variant="caption" color="secondary" style={styles.reminderTimeLabel}>{t('profile.remindAt')}</AppText>
               <View style={styles.reminderHourRow}>
                 {reminderHours.map(h => {
                   const active = reminderHour === h

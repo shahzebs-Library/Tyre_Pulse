@@ -50,7 +50,7 @@ export default function InspectionDetailScreen() {
     try {
       await shareInspectionPdf(insp)
     } catch (e: any) {
-      Alert.alert('Share failed', e?.message || 'Could not generate the PDF.')
+      Alert.alert(t('common.shareFailed'), e?.message || t('common.shareError'))
     } finally {
       setSharing(false)
     }
@@ -70,7 +70,7 @@ export default function InspectionDetailScreen() {
       setInsp((data as Inspection) ?? null)
     } catch (e: any) {
       setInsp(null)
-      setError(e?.message || 'Could not load this inspection.')
+      setError(e?.message || t('modules.inspectionDetail.loadError'))
     } finally {
       setLoading(false)
     }
@@ -107,7 +107,7 @@ export default function InspectionDetailScreen() {
               : (
                 <>
                   <Ionicons name="share-outline" size={16} color={theme.color.onPrimary} />
-                  <Text style={styles.shareBtnText}>Share PDF</Text>
+                  <Text style={styles.shareBtnText}>{t('common.sharePdf')}</Text>
                 </>
               )}
           </TouchableOpacity>
@@ -122,7 +122,7 @@ export default function InspectionDetailScreen() {
           <Text style={styles.emptyText}>{error}</Text>
           <TouchableOpacity style={styles.retryBtn} onPress={load} activeOpacity={0.85}>
             <Ionicons name="refresh" size={16} color={theme.color.onPrimary} />
-            <Text style={styles.retryText}>Retry</Text>
+            <Text style={styles.retryText}>{t('common.retry')}</Text>
           </TouchableOpacity>
         </View>
       ) : !insp ? (

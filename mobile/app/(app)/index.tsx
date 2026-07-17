@@ -264,7 +264,7 @@ export default function HomeScreen() {
             <StatTile
               icon="location-outline"
               value={profile?.site ? profile.site.split(' ')[0] : t('home.allSites')}
-              label="Site"
+              label={t('modules.common.site')}
               tint="blue"
             />
           </View>
@@ -287,10 +287,10 @@ export default function HomeScreen() {
         {/* ── Quick Actions, grouped by section (access-gated) ──────────────── */}
         {sections.map(sec => (
           <View key={sec.key}>
-            <SectionLabel s={s} theme={theme}>{sec.key}</SectionLabel>
+            <SectionLabel s={s} theme={theme}>{t(`modules.home.sections.${sec.key}`)}</SectionLabel>
             <View style={s.quickGrid}>
               {sec.items.map(a => (
-                <QuickActionCard key={a.module} action={a} s={s} theme={theme} onPress={() => router.push(a.route as any)} />
+                <QuickActionCard key={a.module} action={a} s={s} theme={theme} t={t} onPress={() => router.push(a.route as any)} />
               ))}
             </View>
           </View>
@@ -299,7 +299,7 @@ export default function HomeScreen() {
         {/* ── Fleet Health (elevated roles) ─────────────────────────────────── */}
         {elevated && (
           <View>
-            <SectionLabel s={s} theme={theme}>Fleet Health · This Week</SectionLabel>
+            <SectionLabel s={s} theme={theme}>{t('modules.home.fleetHealthWeek')}</SectionLabel>
             {fleetLoading ? (
               <View style={s.fleetCard}>
                 <View style={s.fleetRow}>
@@ -314,10 +314,10 @@ export default function HomeScreen() {
             ) : fleetHealth && (
               <View style={s.fleetCard}>
                 <View style={s.fleetRow}>
-                  <FleetStat s={s} theme={theme} value={fleetHealth.totalVehicles} label="Vehicles" icon="car-outline" tint="blue" />
-                  <FleetStat s={s} theme={theme} value={fleetHealth.criticalCount} label="Critical" icon="warning-outline" tint="red" alert={fleetHealth.criticalCount > 0} />
-                  <FleetStat s={s} theme={theme} value={fleetHealth.openWorkOrders} label="Open Actions" icon="construct-outline" tint="amber" alert={fleetHealth.openWorkOrders > 0} />
-                  <FleetStat s={s} theme={theme} value={fleetHealth.inspThisWeek} label="Inspections" icon="clipboard-outline" tint="green" />
+                  <FleetStat s={s} theme={theme} value={fleetHealth.totalVehicles} label={t('modules.home.vehicles')} icon="car-outline" tint="blue" />
+                  <FleetStat s={s} theme={theme} value={fleetHealth.criticalCount} label={t('modules.home.critical')} icon="warning-outline" tint="red" alert={fleetHealth.criticalCount > 0} />
+                  <FleetStat s={s} theme={theme} value={fleetHealth.openWorkOrders} label={t('modules.home.openActions')} icon="construct-outline" tint="amber" alert={fleetHealth.openWorkOrders > 0} />
+                  <FleetStat s={s} theme={theme} value={fleetHealth.inspThisWeek} label={t('modules.home.inspectionsLabel')} icon="clipboard-outline" tint="green" />
                 </View>
                 {(fleetHealth.criticalCount > 0 || fleetHealth.openWorkOrders > 5) && (
                   <TouchableOpacity
@@ -328,8 +328,8 @@ export default function HomeScreen() {
                     <Ionicons name="alert-circle-outline" size={15} color={theme.color.danger.base} />
                     <Text style={s.fleetAlertText}>
                       {fleetHealth.criticalCount > 0
-                        ? `${fleetHealth.criticalCount} critical tyre${fleetHealth.criticalCount > 1 ? 's' : ''} need attention`
-                        : `${fleetHealth.openWorkOrders} work orders open - review recommended`}
+                        ? `${fleetHealth.criticalCount} ${t('modules.home.criticalTyres')}`
+                        : `${fleetHealth.openWorkOrders} ${t('modules.home.workOrdersReview')}`}
                     </Text>
                     <Ionicons name="chevron-forward" size={14} color={theme.color.danger.base} />
                   </TouchableOpacity>
@@ -396,15 +396,16 @@ function SectionLabel({ children, s, theme }: { children: string; s: Styles; the
   )
 }
 
-function QuickActionCard({ action, onPress, s, theme }: { action: QuickAction; onPress: () => void; s: Styles; theme: Theme }) {
-  const t = theme.tint[action.tint]
+function QuickActionCard({ action, onPress, s, theme, t }: { action: QuickAction; onPress: () => void; s: Styles; theme: Theme; t: (k: string) => string }) {
+  const tint = theme.tint[action.tint]
+  const sub = t(`modules.home.qa.${action.module}.sub`)
   return (
     <TouchableOpacity style={s.qaCard} onPress={onPress} activeOpacity={0.8}>
-      <View style={[s.qaIcon, { backgroundColor: t.bg }]}>
-        <Ionicons name={action.icon as any} size={22} color={t.fg} />
+      <View style={[s.qaIcon, { backgroundColor: tint.bg }]}>
+        <Ionicons name={action.icon as any} size={22} color={tint.fg} />
       </View>
-      <Text style={s.qaLabel} numberOfLines={1}>{action.label}</Text>
-      {action.sublabel ? <Text style={s.qaSublabel} numberOfLines={1}>{action.sublabel}</Text> : null}
+      <Text style={s.qaLabel} numberOfLines={1}>{t(`modules.home.qa.${action.module}.label`)}</Text>
+      {sub ? <Text style={s.qaSublabel} numberOfLines={1}>{sub}</Text> : null}
     </TouchableOpacity>
   )
 }

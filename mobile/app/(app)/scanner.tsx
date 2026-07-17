@@ -140,9 +140,9 @@ export default function ScannerScreen() {
         <View style={styles.centerFill}>
           <EmptyState
             icon="camera-outline"
-            title="Camera unavailable"
-            message="The camera could not be started on this device. You can still enter the code by hand."
-            actionLabel="Enter Code Manually"
+            title={t('scanner.camUnavailable')}
+            message={t('scanner.camUnavailableMsg')}
+            actionLabel={t('scanner.enterManually')}
             onAction={() => router.replace('/(app)/serial-search')}
           />
         </View>
@@ -203,7 +203,7 @@ export default function ScannerScreen() {
             activeOpacity={0.85}
           >
             <Ionicons name="keypad-outline" size={18} color="#FFFFFF" />
-            <Text style={styles.manualBtnText}>Enter Code Manually</Text>
+            <Text style={styles.manualBtnText}>{t('scanner.enterManually')}</Text>
           </TouchableOpacity>
         </SafeAreaView>
       )}
@@ -244,14 +244,14 @@ export default function ScannerScreen() {
                 onPress={() => go(inspectionForVehicle(resolved.vehicle))}
               />
               <Button
-                label="Tyre Change"
+                label={t('scanner.tyreChange')}
                 icon="sync-outline"
                 variant="secondary"
                 full
                 onPress={() => go(tyreChangeForVehicle(resolved.vehicle))}
               />
               <Button
-                label="View in Fleet"
+                label={t('scanner.viewInFleet')}
                 icon="bus-outline"
                 variant="ghost"
                 full
@@ -304,7 +304,7 @@ export default function ScannerScreen() {
                     onPress={() => go(inspectionForTyre(resolved.tyre, resolved.code))}
                   />
                   <Button
-                    label="Tyre Change"
+                    label={t('scanner.tyreChange')}
                     icon="sync-outline"
                     variant="secondary"
                     full
@@ -313,7 +313,7 @@ export default function ScannerScreen() {
                 </>
               ) : (
                 <Button
-                  label="Open in Serial Search"
+                  label={t('scanner.openSerialSearch')}
                   icon="search-outline"
                   variant="secondary"
                   full
@@ -343,7 +343,7 @@ export default function ScannerScreen() {
               </AppText>
               {resolved.code ? (
                 <Button
-                  label="Search Manually"
+                  label={t('scanner.searchManually')}
                   icon="search-outline"
                   variant="primary"
                   full

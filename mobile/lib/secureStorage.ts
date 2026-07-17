@@ -12,7 +12,7 @@ const chunkKey = (key: string, index: number) => `${key}_chunk_${index}`
 export const secureStorage = {
   async getItem(key: string): Promise<string | null> {
     if (!key || typeof key !== 'string') {
-      console.warn('[SecureStorage] Invalid key provided to getItem:', key)
+      if (__DEV__) console.warn('[SecureStorage] Invalid key provided to getItem:', key)
       return null
     }
     
@@ -32,7 +32,7 @@ export const secureStorage = {
 
   async setItem(key: string, value: string): Promise<void> {
     if (!key || typeof key !== 'string') {
-      console.warn('[SecureStorage] Invalid key provided to setItem:', key)
+      if (__DEV__) console.warn('[SecureStorage] Invalid key provided to setItem:', key)
       return
     }
     
@@ -57,7 +57,7 @@ export const secureStorage = {
 
   async removeItem(key: string): Promise<void> {
     if (!key || typeof key !== 'string') {
-      console.warn('[SecureStorage] Invalid key provided to removeItem:', key)
+      if (__DEV__) console.warn('[SecureStorage] Invalid key provided to removeItem:', key)
       return
     }
     

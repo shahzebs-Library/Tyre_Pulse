@@ -82,7 +82,7 @@ export default function AlertsScreen() {
       setRows(((data as AlertRow[]) ?? []).filter(r => !acked.has(r.id)))
     } catch (e: any) {
       if (__DEV__) console.warn('[alerts] load failed:', e?.message)
-      setError('Could not load alerts. Pull down to retry.')
+      setError(t('modules.alerts.loadError'))
       setRows([])
     } finally {
       setLoading(false)
@@ -95,12 +95,12 @@ export default function AlertsScreen() {
 
   const acknowledge = useCallback((item: AlertRow) => {
     Alert.alert(
-      'Acknowledge alert',
-      `Mark the ${item.risk_level} alert for ${item.asset_no ?? 'this asset'} as reviewed? It will be removed from the list.`,
+      t('modules.alerts.ackTitle'),
+      `${t('modules.alerts.ackMsgA')} ${item.risk_level} ${t('modules.alerts.ackMsgB')} ${item.asset_no ?? t('modules.alerts.thisAsset')} ${t('modules.alerts.ackMsgC')}`,
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: t('common.cancel'), style: 'cancel' },
         {
-          text: 'Acknowledge',
+          text: t('modules.alerts.acknowledge'),
           onPress: async () => {
             setAckingId(item.id)
             // Optimistic removal
@@ -120,7 +120,7 @@ export default function AlertsScreen() {
             if (insErr) {
               // Roll back optimistic removal and surface the failure
               if (__DEV__) console.warn('[alerts] acknowledge failed:', insErr.message)
-              Alert.alert('Could not acknowledge', 'Please try again.')
+              Alert.alert(t('modules.alerts.ackFailTitle'), t('modules.alerts.ackFailMsg'))
               load()
             }
           },
@@ -203,7 +203,7 @@ export default function AlertsScreen() {
       </View>
 
       {loading ? (
-        <Loading label="Loading alerts" />
+        <Loading label={t('modules.alerts.loadingLabel')} />
       ) : (
         <FlatList
           data={shown}
@@ -222,7 +222,7 @@ export default function AlertsScreen() {
               <EmptyState
                 icon="shield-checkmark-outline"
                 title={t('modules.alerts.none')}
-                message={filter !== 'all' ? 'No alerts match this filter.' : undefined}
+                message={filter !== 'all' ? t('modules.alerts.noneFilter') : undefined}
               />
             )
           }
@@ -246,7 +246,7 @@ export default function AlertsScreen() {
                   </View>
                   <View style={{ flex: 1, gap: 3 }}>
                     <AppText variant="title" style={{ textAlign }} numberOfLines={1}>
-                      {item.asset_no ?? 'Unknown asset'}
+                      {item.asset_no ?? t('modules.alerts.unknownAsset')}
                     </AppText>
                     <AppText variant="caption" color="muted" style={{ textAlign }} numberOfLines={1}>{meta}</AppText>
                     {spec ? (
@@ -267,7 +267,7 @@ export default function AlertsScreen() {
                       ) : (
                         <>
                           <Ionicons name="checkmark-done" size={14} color={theme.color.primaryDark} />
-                          <AppText variant="micro" style={{ color: theme.color.primaryDark }}>Ack</AppText>
+                          <AppText variant="micro" style={{ color: theme.color.primaryDark }}>{t('modules.alerts.ack')}</AppText>
                         </>
                       )}
                     </TouchableOpacity>

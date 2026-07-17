@@ -66,7 +66,7 @@ export default function HistoryScreen() {
     try {
       await shareInspectionById(id)
     } catch (e: any) {
-      Alert.alert('Share failed', e?.message || 'Could not generate the PDF.')
+      Alert.alert(t('common.shareFailed'), e?.message || t('common.shareError'))
     } finally {
       setSharingId(null)
     }
@@ -100,7 +100,7 @@ export default function HistoryScreen() {
 
       if (dbErr) {
         if (__DEV__) console.warn('[history] synced fetch failed:', dbErr.message)
-        setError('Could not load synced history. Pull down to retry.')
+        setError(t('history.syncedLoadError'))
       } else {
         setError(null)
       }
@@ -120,7 +120,7 @@ export default function HistoryScreen() {
     setItems([...offlineItems, ...syncedItems])
     } catch (e: any) {
       if (__DEV__) console.warn('[history] load failed:', e?.message)
-      setError('Could not load history. Pull down to retry.')
+      setError(t('history.loadError'))
     } finally {
       setLoading(false)
     }
@@ -214,7 +214,7 @@ export default function HistoryScreen() {
           </View>
           <View style={s.cardRight}>
             <Badge kind={meta.kind} icon={meta.icon as any}>{statusLabelFor(item.sync_status)}</Badge>
-            {item.locked ? <Badge kind="neutral" icon="lock-closed">Locked</Badge> : null}
+            {item.locked ? <Badge kind="neutral" icon="lock-closed">{t('common.locked')}</Badge> : null}
             {openable ? (
               <TouchableOpacity
                 style={s.shareChip}
@@ -228,7 +228,7 @@ export default function HistoryScreen() {
                   : (
                     <>
                       <Ionicons name="share-outline" size={13} color={theme.color.primary} />
-                      <AppText variant="micro" style={{ color: theme.color.primary }}>PDF</AppText>
+                      <AppText variant="micro" style={{ color: theme.color.primary }}>{t('common.pdf')}</AppText>
                     </>
                   )}
               </TouchableOpacity>

@@ -165,6 +165,17 @@ export const COMMANDS: Record<CommandType, CommandSpec> = {
       'description', 'injuries', 'injury_count', 'third_party_involved',
       'police_report_no', 'damage_description', 'estimated_damage_cost',
       'photos', 'notes', 'status', 'country', 'driver_name',
+      // Field-parity capture (mirrors the web incident form). These are all
+      // real accidents columns; without them the queue's sanitize() would drop
+      // the full classification / GCC-case / claim / repair record on submit.
+      'plate_number', 'vehicle_type', 'current_status', 'damage_condition',
+      'fault_status', 'gcc_liability_ratio', 'najm_status', 'najm_fault',
+      'taqdeer_status', 'taqdeer_no', 'liable_party', 'payer', 'responsible_party',
+      'insurer', 'policy_no', 'insurance_claim_no', 'claim_status',
+      'claim_amount', 'claim_approved_amount', 'deductible', 'recovered_amount',
+      'recovery_status', 'recovery_source', 'recovery_date', 'recovery_reference',
+      'amount_transfer', 'repair_type', 'workshop_name', 'workshop_location',
+      'repair_cost', 'expected_release_date', 'release_date',
     ],
   },
 }

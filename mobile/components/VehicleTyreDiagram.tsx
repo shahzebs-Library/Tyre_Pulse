@@ -1,6 +1,12 @@
 /**
  * VehicleTyreDiagram - Interactive top-down vehicle diagram.
  *
+ * Layout parity with the WEB app (src/components/VehicleTyreDiagram.jsx): the
+ * per-vehicle-type axle structure - single-wheel steer axles, dual-wheel drive
+ * axles, lift/tag and trailer singles, and a spare shown ONLY when the vehicle
+ * carries one - is produced by the pure `buildTyreDiagramLayout` engine in
+ * lib/tyreLayout.ts. This component is presentation + touch only.
+ *
  * Touch approach: absolute-positioned TouchableOpacity overlays sit on top of
  * the SVG. This is far more reliable than touch handlers inside SVG elements,
  * which are frequently swallowed by the outer ScrollView on Android.
@@ -17,6 +23,9 @@ import type { TyreCondition, TyrePositionData } from '../lib/types'
 import { CONDITION_META } from '../lib/tyreConditions'
 import { useTheme } from '../contexts/ThemeContext'
 import { radius, spacing, typography, elevation, Theme } from '../lib/theme'
+import {
+  buildTyreDiagramLayout, TyreSlot, VehicleBodyClass,
+} from '../lib/tyreLayout'
 
 // ── Risk colour palette ────────────────────────────────────────────────────────
 const RISK = {
@@ -74,22 +83,22 @@ function SharedDefs() {
         <Stop offset="100%" stopColor="#1e3a8a" />
       </LinearGradient>
       <RadialGradient id="truckCab" cx="48%" cy="35%" r="60%">
-        <Stop offset="0%"   stopColor="#64748b" />
-        <Stop offset="40%"  stopColor="#334155" />
-        <Stop offset="100%" stopColor="#1e293b" />
+        <Stop offset="0%"   stopColor="#f8fafc" />
+        <Stop offset="45%"  stopColor="#e2e8f0" />
+        <Stop offset="100%" stopColor="#94a3b8" />
       </RadialGradient>
       <LinearGradient id="truckHood" x1="0%" y1="0%" x2="100%" y2="0%">
-        <Stop offset="0%"   stopColor="#1e293b" />
-        <Stop offset="50%"  stopColor="#475569" />
-        <Stop offset="100%" stopColor="#1e293b" />
+        <Stop offset="0%"   stopColor="#94a3b8" />
+        <Stop offset="50%"  stopColor="#f1f5f9" />
+        <Stop offset="100%" stopColor="#94a3b8" />
       </LinearGradient>
       <LinearGradient id="truckCargo" x1="0%" y1="0%" x2="100%" y2="100%">
-        <Stop offset="0%"   stopColor="#334155" />
-        <Stop offset="100%" stopColor="#0f172a" />
+        <Stop offset="0%"   stopColor="#e2e8f0" />
+        <Stop offset="100%" stopColor="#cbd5e1" />
       </LinearGradient>
       <LinearGradient id="trailerBox" x1="0%" y1="0%" x2="0%" y2="100%">
-        <Stop offset="0%"   stopColor="#475569" />
-        <Stop offset="100%" stopColor="#1e293b" />
+        <Stop offset="0%"   stopColor="#e2e8f0" />
+        <Stop offset="100%" stopColor="#94a3b8" />
       </LinearGradient>
       <LinearGradient id="glass" x1="0%" y1="0%" x2="100%" y2="100%">
         <Stop offset="0%"   stopColor="#dbeafe" stopOpacity="0.95" />
@@ -181,332 +190,130 @@ function Tyre({ x, y, w, h, risk, label, selected, recorded, horizontal }: TyreP
   )
 }
 
-// ── Vehicle body components ────────────────────────────────────────────────────
-function FourWheelerBody() {
+// ── Axle beams (drawn behind the wheels so each axle reads as one bar) ──────────
+interface Beam { y: number; x1: number; x2: number }
+function AxleBeams({ beams }: { beams: Beam[] }) {
   return (
     <G>
-      <Ellipse cx={100} cy={245} rx={52} ry={7} fill="rgba(0,0,0,0.2)" />
-      <Rect x={62} y={10} width={76} height={11} rx={4} fill="url(#chrome)" />
-      <Rect x={62} y={11} width={17} height={9} rx={2} fill="url(#headlt)" />
-      <Rect x={121} y={11} width={17} height={9} rx={2} fill="url(#headlt)" />
-      <Rect x={63} y={20} width={74} height={2} rx={1} fill="#fbbf24" opacity={0.8} />
-      <Rect x={62} y={22} width={76} height={44} rx={8} fill="url(#navyHood)" />
-      <Line x1={100} y1={24} x2={100} y2={64} stroke="#93c5fd" strokeWidth={0.8} opacity={0.5} />
-      <Path d="M 67,66 L 133,66 L 129,82 L 71,82 Z" fill="url(#glass)" opacity={0.9} />
-      <Path d="M 71,67 L 115,67 L 112,76 L 73,76 Z" fill="white" opacity={0.25} />
-      <Line x1={80} y1={80} x2={99} y2={68} stroke="#475569" strokeWidth={0.8} opacity={0.7} />
-      <Line x1={120} y1={80} x2={101} y2={68} stroke="#475569" strokeWidth={0.8} opacity={0.7} />
-      <Rect x={62} y={82} width={76} height={68} rx={3} fill="url(#navyRoof)" />
-      <Path d="M 62,82 L 67,66" stroke="#1e3a8a" strokeWidth={3} strokeLinecap="round" />
-      <Path d="M 138,82 L 133,66" stroke="#1e3a8a" strokeWidth={3} strokeLinecap="round" />
-      <Rect x={75} y={86} width={50} height={4} rx={2} fill="#60a5fa" opacity={0.35} />
-      <Line x1={100} y1={84} x2={100} y2={148} stroke="#1e3a8a" strokeWidth={1.2} opacity={0.7} />
-      <Rect x={83} y={118} width={11} height={3} rx={1.5} fill="url(#chrome)" />
-      <Rect x={106} y={118} width={11} height={3} rx={1.5} fill="url(#chrome)" />
-      <Ellipse cx={79} cy={99} rx={9} ry={7} fill="#1e3a8a" stroke="#1d4ed8" strokeWidth={0.5} />
-      <Ellipse cx={121} cy={99} rx={9} ry={7} fill="#1e3a8a" stroke="#1d4ed8" strokeWidth={0.5} />
-      <Path d="M 68,150 L 132,150 L 130,163 L 70,163 Z" fill="url(#glass)" opacity={0.8} />
-      <Rect x={62} y={163} width={76} height={66} rx={3} fill="url(#navyRoof)" />
-      {[0,1,2,3].map(i => (
-        <Line key={i} x1={65} y1={172 + i * 14} x2={135} y2={172 + i * 14}
-          stroke="#1e3a8a" strokeWidth={0.6} opacity={0.4} />
+      {beams.map((b, i) => (
+        <Line key={i} x1={b.x1} y1={b.y} x2={b.x2} y2={b.y}
+          stroke="#334155" strokeWidth={3.4} opacity={0.55} strokeLinecap="round" />
       ))}
-      <Rect x={62} y={229} width={76} height={11} rx={4} fill="url(#chrome)" />
-      <Rect x={62} y={230} width={18} height={9} rx={2} fill="url(#brklt)" />
-      <Rect x={120} y={230} width={18} height={9} rx={2} fill="url(#brklt)" />
-      <Rect x={84} y={231} width={32} height={7} rx={2} fill="#111827" />
-      <Rect x={44} y={60} width={17} height={7} rx={2.5} fill="#1d4ed8" stroke="#1e3a8a" strokeWidth={0.5} />
-      <Rect x={139} y={60} width={17} height={7} rx={2.5} fill="#1d4ed8" stroke="#1e3a8a" strokeWidth={0.5} />
     </G>
   )
 }
 
-interface TruckBodyProps { cargoH: number }
-function TruckBody({ cargoH }: TruckBodyProps) {
-  const cabBottom = 136
-  const cargoTop  = cabBottom
-  const cargoBot  = cargoTop + cargoH
-  const bumpTop   = cargoBot
+// ── Adaptive vehicle bodies (geometry driven by the layout engine) ─────────────
+interface BodyProps {
+  bodyClass: VehicleBodyClass
+  chassisTop: number
+  chassisBot: number
+  cabBottom: number
+}
+
+function VehicleBody({ bodyClass, chassisTop, chassisBot, cabBottom }: BodyProps) {
+  if (bodyClass === 'trailer') return <TrailerFrame top={chassisTop} bottom={chassisBot} />
+  if (bodyClass === 'car')     return <CarBody top={chassisTop} bottom={chassisBot} cabBottom={cabBottom} />
+  return <TruckFrame top={chassisTop} bottom={chassisBot} cabBottom={cabBottom} />
+}
+
+function CarBody({ top, bottom, cabBottom }: { top: number; bottom: number; cabBottom: number }) {
+  const hoodBot = Math.min(top + 30, cabBottom - 4)
   return (
     <G>
-      <Ellipse cx={100} cy={bumpTop + 20} rx={56} ry={8} fill="rgba(0,0,0,0.2)" />
-      <Rect x={58} y={8} width={84} height={13} rx={4} fill="url(#chrome)" />
-      <Rect x={68} y={10} width={64} height={7} rx={2} fill="#111827" />
-      {[0,1,2,3].map(i => (
-        <Rect key={i} x={70} y={11 + i * 1.5} width={60} height={1} rx={0.5} fill="#475569" opacity={0.8} />
-      ))}
-      <Rect x={58} y={9} width={22} height={11} rx={2} fill="url(#headlt)" />
-      <Rect x={120} y={9} width={22} height={11} rx={2} fill="url(#headlt)" />
-      <Rect x={60} y={20} width={80} height={2.5} rx={1} fill="#16a34a" opacity={0.8} />
-      <Rect x={60} y={23} width={80} height={42} rx={5} fill="url(#truckHood)" />
-      <Line x1={100} y1={25} x2={100} y2={64} stroke="#64748b" strokeWidth={1} opacity={0.5} />
-      <Path d="M 63,65 L 137,65 L 133,83 L 67,83 Z" fill="url(#glass)" opacity={0.9} />
-      <Path d="M 68,66 L 113,66 L 110,76 L 71,76 Z" fill="white" opacity={0.2} />
-      <Line x1={78} y1={81} x2={98} y2={67} stroke="#475569" strokeWidth={0.8} opacity={0.6} />
-      <Line x1={122} y1={81} x2={102} y2={67} stroke="#475569" strokeWidth={0.8} opacity={0.6} />
-      <Rect x={58} y={83} width={84} height={48} rx={3} fill="url(#truckCab)" />
-      <Rect x={62} y={86} width={18} height={14} rx={3} fill="url(#glass)" opacity={0.85} />
-      <Rect x={120} y={86} width={18} height={14} rx={3} fill="url(#glass)" opacity={0.85} />
-      <Circle cx={80} cy={112} r={9} fill="none" stroke="#0f172a" strokeWidth={2.5} />
-      <Circle cx={80} cy={112} r={2.5} fill="#0f172a" />
-      <Line x1={80} y1={104} x2={80} y2={120} stroke="#0f172a" strokeWidth={1.2} />
-      <Line x1={72} y1={112} x2={88} y2={112} stroke="#0f172a" strokeWidth={1.2} />
-      <Rect x={58} y={127} width={84} height={9} fill="#16a34a" opacity={0.85} />
-      <SvgText x={100} y={133} textAnchor="middle" fontSize={4} fontWeight="800" fill="white">FLEET VEHICLE</SvgText>
-      <Rect x={68} y={cabBottom} width={10} height={cargoH} fill="#334155" />
-      <Rect x={122} y={cabBottom} width={10} height={cargoH} fill="#334155" />
-      <Rect x={58} y={cargoTop} width={84} height={cargoH} rx={3} fill="url(#truckCargo)" />
-      <Rect x={58}  y={cargoTop} width={5} height={cargoH} rx={2} fill="#475569" opacity={0.8} />
-      <Rect x={137} y={cargoTop} width={5} height={cargoH} rx={2} fill="#475569" opacity={0.8} />
-      {Array.from({ length: Math.floor(cargoH / 20) }).map((_, i) => (
-        <Line key={i} x1={60} y1={cargoTop + 12 + i * 20} x2={140} y2={cargoTop + 12 + i * 20}
-          stroke="#475569" strokeWidth={0.7} opacity={0.5} />
-      ))}
-      <Rect x={58} y={bumpTop} width={84} height={12} rx={3} fill="url(#chrome)" />
-      <Rect x={60}  y={bumpTop + 1} width={22} height={8} rx={2} fill="url(#brklt)" />
-      <Rect x={118} y={bumpTop + 1} width={22} height={8} rx={2} fill="url(#brklt)" />
-      <Rect x={84}  y={bumpTop + 2} width={32} height={6} rx={2} fill="#111827" />
-      <Rect x={38} y={56} width={18} height={9} rx={3} fill="#334155" stroke="#475569" strokeWidth={0.8} />
-      <Rect x={144} y={56} width={18} height={9} rx={3} fill="#334155" stroke="#475569" strokeWidth={0.8} />
+      <Ellipse cx={100} cy={bottom + 10} rx={54} ry={8} fill="rgba(0,0,0,0.18)" />
+      {/* Front bumper + lights */}
+      <Rect x={62} y={top - 12} width={76} height={11} rx={4} fill="url(#chrome)" />
+      <Rect x={62} y={top - 11} width={17} height={9} rx={2} fill="url(#headlt)" />
+      <Rect x={121} y={top - 11} width={17} height={9} rx={2} fill="url(#headlt)" />
+      {/* Body shell */}
+      <Rect x={60} y={top} width={80} height={bottom - top} rx={14} fill="url(#navyRoof)" />
+      {/* Hood */}
+      <Rect x={62} y={top} width={76} height={hoodBot - top} rx={9} fill="url(#navyHood)" />
+      <Line x1={100} y1={top + 2} x2={100} y2={hoodBot} stroke="#93c5fd" strokeWidth={0.8} opacity={0.5} />
+      {/* Windshield + cabin */}
+      <Path d={`M 67,${hoodBot} L 133,${hoodBot} L 129,${hoodBot + 14} L 71,${hoodBot + 14} Z`} fill="url(#glass)" opacity={0.9} />
+      <Line x1={100} y1={cabBottom} x2={100} y2={bottom - 8} stroke="#1e3a8a" strokeWidth={1.2} opacity={0.6} />
+      {/* Roof highlight */}
+      <Rect x={74} y={cabBottom + 4} width={52} height={4} rx={2} fill="#60a5fa" opacity={0.35} />
+      {/* Rear bumper */}
+      <Rect x={62} y={bottom} width={76} height={10} rx={4} fill="url(#chrome)" />
+      <Rect x={64} y={bottom + 1} width={18} height={7} rx={2} fill="url(#brklt)" />
+      <Rect x={118} y={bottom + 1} width={18} height={7} rx={2} fill="url(#brklt)" />
+      {/* Mirrors */}
+      <Rect x={45} y={hoodBot - 4} width={16} height={7} rx={2.5} fill="#1d4ed8" stroke="#1e3a8a" strokeWidth={0.5} />
+      <Rect x={139} y={hoodBot - 4} width={16} height={7} rx={2.5} fill="#1d4ed8" stroke="#1e3a8a" strokeWidth={0.5} />
     </G>
   )
 }
 
-function TrailerBody() {
+function TruckFrame({ top, bottom, cabBottom }: { top: number; bottom: number; cabBottom: number }) {
+  const hoodBot = Math.min(top + 26, cabBottom - 8)
+  const cargoTop = cabBottom
   return (
     <G>
-      <Ellipse cx={100} cy={248} rx={55} ry={7} fill="rgba(0,0,0,0.2)" />
-      <Ellipse cx={100} cy={20} rx={16} ry={8} fill="#475569" />
-      <Ellipse cx={100} cy={20} rx={8} ry={4} fill="#1e293b" />
-      <Circle cx={100} cy={20} r={3} fill="#64748b" />
-      <Rect x={90} y={20} width={20} height={4} rx={2} fill="#334155" />
-      <Rect x={69} y={24} width={9} height={216} fill="#334155" />
-      <Rect x={122} y={24} width={9} height={216} fill="#334155" />
-      <Rect x={57} y={28} width={86} height={208} rx={4} fill="url(#trailerBox)" />
-      {[0,1,2,3,4,5].map(i => (
-        <Line key={i} x1={59} y1={46 + i * 30} x2={141} y2={46 + i * 30}
-          stroke="#475569" strokeWidth={0.8} opacity={0.5} />
+      <Ellipse cx={100} cy={bottom + 12} rx={58} ry={8} fill="rgba(0,0,0,0.18)" />
+      {/* Front bumper + lights */}
+      <Rect x={58} y={top - 12} width={84} height={12} rx={4} fill="url(#chrome)" />
+      <Rect x={58} y={top - 11} width={22} height={10} rx={2} fill="url(#headlt)" />
+      <Rect x={120} y={top - 11} width={22} height={10} rx={2} fill="url(#headlt)" />
+      {/* Chassis rails span the whole running length */}
+      <Rect x={68} y={cabBottom} width={9} height={bottom - cabBottom} fill="#334155" />
+      <Rect x={123} y={cabBottom} width={9} height={bottom - cabBottom} fill="#334155" />
+      {/* Cab */}
+      <Rect x={58} y={top} width={84} height={cabBottom - top} rx={6} fill="url(#truckCab)" />
+      {/* Hood */}
+      <Rect x={60} y={top} width={80} height={hoodBot - top} rx={4} fill="url(#truckHood)" />
+      <Line x1={100} y1={top + 2} x2={100} y2={hoodBot} stroke="#94a3b8" strokeWidth={0.8} opacity={0.5} />
+      {/* Windshield */}
+      <Path d={`M 63,${hoodBot} L 137,${hoodBot} L 133,${hoodBot + 16} L 67,${hoodBot + 16} Z`} fill="url(#glass)" opacity={0.9} />
+      {/* Brand stripe (Daylight green) across cab bottom */}
+      <Rect x={58} y={cabBottom - 8} width={84} height={8} fill="#16a34a" opacity={0.9} />
+      <SvgText x={100} y={cabBottom - 2.4} textAnchor="middle" fontSize={4} fontWeight="800" fill="white">FLEET VEHICLE</SvgText>
+      {/* Cargo box */}
+      <Rect x={58} y={cargoTop} width={84} height={bottom - cargoTop} rx={3} fill="url(#truckCargo)" />
+      <Rect x={58}  y={cargoTop} width={5} height={bottom - cargoTop} rx={2} fill="#cbd5e1" opacity={0.9} />
+      <Rect x={137} y={cargoTop} width={5} height={bottom - cargoTop} rx={2} fill="#cbd5e1" opacity={0.9} />
+      {Array.from({ length: Math.max(0, Math.floor((bottom - cargoTop) / 24)) }).map((_, i) => (
+        <Line key={i} x1={64} y1={cargoTop + 16 + i * 24} x2={136} y2={cargoTop + 16 + i * 24}
+          stroke="#94a3b8" strokeWidth={0.8} opacity={0.5} />
       ))}
-      <Rect x={57}  y={28} width={5} height={208} rx={2} fill="#64748b" opacity={0.6} />
-      <Rect x={138} y={28} width={5} height={208} rx={2} fill="#64748b" opacity={0.6} />
-      <Line x1={100} y1={30} x2={100} y2={233} stroke="#475569" strokeWidth={1} opacity={0.6} />
-      <Rect x={88} y={140} width={10} height={3} rx={1.5} fill="url(#chrome)" />
-      <Rect x={102} y={140} width={10} height={3} rx={1.5} fill="url(#chrome)" />
-      <Rect x={57} y={234} width={86} height={11} rx={3} fill="url(#chrome)" />
-      <Rect x={59}  y={235} width={22} height={8} rx={2} fill="url(#brklt)" />
-      <Rect x={119} y={235} width={22} height={8} rx={2} fill="url(#brklt)" />
-      <Rect x={84}  y={236} width={32} height={6} rx={2} fill="#111827" />
+      {/* Rear bumper */}
+      <Rect x={58} y={bottom} width={84} height={11} rx={3} fill="url(#chrome)" />
+      <Rect x={60}  y={bottom + 1} width={22} height={7} rx={2} fill="url(#brklt)" />
+      <Rect x={118} y={bottom + 1} width={22} height={7} rx={2} fill="url(#brklt)" />
+      {/* Mirrors */}
+      <Rect x={40} y={hoodBot} width={18} height={9} rx={3} fill="#e2e8f0" stroke="#94a3b8" strokeWidth={0.8} />
+      <Rect x={142} y={hoodBot} width={18} height={9} rx={3} fill="#e2e8f0" stroke="#94a3b8" strokeWidth={0.8} />
     </G>
   )
 }
 
-// ── Generic equipment body (used by the programmatic fallback layout) ──────────
-interface GenericBodyProps { chassisTop: number; chassisBot: number; axleYs: number[] }
-function GenericBody({ chassisTop, chassisBot, axleYs }: GenericBodyProps) {
-  const h = Math.max(0, chassisBot - chassisTop)
+function TrailerFrame({ top, bottom }: { top: number; bottom: number }) {
   return (
     <G>
-      <Ellipse cx={100} cy={chassisBot + 12} rx={54} ry={7} fill="rgba(0,0,0,0.2)" />
-      {/* Axles - drawn first so the chassis overlays their centre span */}
-      {axleYs.map((y, i) => (
-        <Line key={i} x1={36} y1={y} x2={164} y2={y}
-          stroke="#334155" strokeWidth={3} opacity={0.6} strokeLinecap="round" />
+      <Ellipse cx={100} cy={bottom + 10} rx={55} ry={7} fill="rgba(0,0,0,0.18)" />
+      {/* Coupling / king-pin */}
+      <Ellipse cx={100} cy={top - 8} rx={16} ry={8} fill="#94a3b8" />
+      <Ellipse cx={100} cy={top - 8} rx={8} ry={4} fill="#475569" />
+      <Rect x={90} y={top - 8} width={20} height={4} rx={2} fill="#64748b" />
+      {/* Chassis rails */}
+      <Rect x={69} y={top} width={9} height={bottom - top} fill="#334155" />
+      <Rect x={122} y={top} width={9} height={bottom - top} fill="#334155" />
+      {/* Box */}
+      <Rect x={57} y={top} width={86} height={bottom - top} rx={4} fill="url(#trailerBox)" />
+      <Rect x={57}  y={top} width={5} height={bottom - top} rx={2} fill="#94a3b8" opacity={0.7} />
+      <Rect x={138} y={top} width={5} height={bottom - top} rx={2} fill="#94a3b8" opacity={0.7} />
+      {Array.from({ length: Math.max(0, Math.floor((bottom - top) / 28)) }).map((_, i) => (
+        <Line key={i} x1={59} y1={top + 20 + i * 28} x2={141} y2={top + 20 + i * 28}
+          stroke="#94a3b8" strokeWidth={0.8} opacity={0.5} />
       ))}
-      {/* Cab / front marker */}
-      <Rect x={70} y={chassisTop - 16} width={60} height={18} rx={5}
-        fill="url(#truckCab)" stroke="#1e293b" strokeWidth={0.6} />
-      <Rect x={78} y={chassisTop - 12} width={44} height={7} rx={2} fill="url(#glass)" opacity={0.8} />
-      {/* Chassis / equipment frame */}
-      <Rect x={72} y={chassisTop} width={56} height={h} rx={7}
-        fill="url(#truckCargo)" stroke="#475569" strokeWidth={1} />
-      <Rect x={72} y={chassisTop} width={5} height={h} rx={2} fill="#475569" opacity={0.7} />
-      <Rect x={123} y={chassisTop} width={5} height={h} rx={2} fill="#475569" opacity={0.7} />
-      <Line x1={100} y1={chassisTop + 4} x2={100} y2={chassisBot - 4}
-        stroke="#475569" strokeWidth={1} opacity={0.5} />
+      {/* Rear bumper */}
+      <Rect x={57} y={bottom} width={86} height={11} rx={3} fill="url(#chrome)" />
+      <Rect x={59}  y={bottom + 1} width={22} height={7} rx={2} fill="url(#brklt)" />
+      <Rect x={119} y={bottom + 1} width={22} height={7} rx={2} fill="url(#brklt)" />
     </G>
   )
-}
-
-// ── Layout definitions ─────────────────────────────────────────────────────────
-interface TyreLayoutItem {
-  id: string; x: number; y: number; w: number; h: number
-  label: string; horizontal?: boolean
-}
-interface VehicleLayout {
-  viewH: number
-  Body: React.ComponentType<any>
-  bodyProps?: Record<string, any>
-  tyres: TyreLayoutItem[]
-}
-
-const LAYOUTS: Record<string, VehicleLayout> = {
-  '4w': {
-    viewH: 268,
-    Body: FourWheelerBody,
-    tyres: [
-      { id: 'FL',    x: 33,  y: 22,  w: 22, h: 38, label: 'FL' },
-      { id: 'FR',    x: 145, y: 22,  w: 22, h: 38, label: 'FR' },
-      { id: 'RL',    x: 33,  y: 190, w: 22, h: 38, label: 'RL' },
-      { id: 'RR',    x: 145, y: 190, w: 22, h: 38, label: 'RR' },
-      { id: 'Spare', x: 80,  y: 252, w: 40, h: 12, label: 'SP', horizontal: true },
-    ],
-  },
-  '6w': {
-    viewH: 305,
-    Body: TruckBody,
-    bodyProps: { cargoH: 130 },
-    tyres: [
-      { id: 'FL',  x: 34,  y: 22,  w: 22, h: 37, label: 'FL' },
-      { id: 'FR',  x: 144, y: 22,  w: 22, h: 37, label: 'FR' },
-      { id: 'RL1', x: 42,  y: 195, w: 18, h: 33, label: 'RL1' },
-      { id: 'RL2', x: 22,  y: 195, w: 18, h: 33, label: 'RL2' },
-      { id: 'RR1', x: 140, y: 195, w: 18, h: 33, label: 'RR1' },
-      { id: 'RR2', x: 160, y: 195, w: 18, h: 33, label: 'RR2' },
-      { id: 'Spare', x: 80, y: 293, w: 40, h: 11, label: 'SP', horizontal: true },
-    ],
-  },
-  '8w': {
-    viewH: 355,
-    Body: TruckBody,
-    bodyProps: { cargoH: 178 },
-    tyres: [
-      { id: 'FL',  x: 34,  y: 22,  w: 22, h: 37, label: 'FL' },
-      { id: 'FR',  x: 144, y: 22,  w: 22, h: 37, label: 'FR' },
-      { id: 'RL1', x: 26,  y: 178, w: 20, h: 33, label: 'RL1' },
-      { id: 'RR1', x: 154, y: 178, w: 20, h: 33, label: 'RR1' },
-      { id: 'RL2', x: 26,  y: 217, w: 20, h: 33, label: 'RL2' },
-      { id: 'RR2', x: 154, y: 217, w: 20, h: 33, label: 'RR2' },
-      { id: 'RL3', x: 26,  y: 256, w: 20, h: 33, label: 'RL3' },
-      { id: 'RR3', x: 154, y: 256, w: 20, h: 33, label: 'RR3' },
-      { id: 'Spare', x: 80, y: 343, w: 40, h: 11, label: 'SP', horizontal: true },
-    ],
-  },
-  '10w': {
-    viewH: 395,
-    Body: TruckBody,
-    bodyProps: { cargoH: 218 },
-    tyres: [
-      { id: 'FL',  x: 34,  y: 22,  w: 22, h: 37, label: 'FL' },
-      { id: 'FR',  x: 144, y: 22,  w: 22, h: 37, label: 'FR' },
-      { id: 'RL1', x: 26,  y: 178, w: 20, h: 32, label: 'RL1' },
-      { id: 'RR1', x: 154, y: 178, w: 20, h: 32, label: 'RR1' },
-      { id: 'RL2', x: 26,  y: 215, w: 20, h: 32, label: 'RL2' },
-      { id: 'RR2', x: 154, y: 215, w: 20, h: 32, label: 'RR2' },
-      { id: 'RL3', x: 26,  y: 252, w: 20, h: 32, label: 'RL3' },
-      { id: 'RR3', x: 154, y: 252, w: 20, h: 32, label: 'RR3' },
-      { id: 'SL',  x: 26,  y: 289, w: 20, h: 32, label: 'SL' },
-      { id: 'SR',  x: 154, y: 289, w: 20, h: 32, label: 'SR' },
-    ],
-  },
-  trailer: {
-    viewH: 268,
-    Body: TrailerBody,
-    tyres: [
-      { id: 'AxleL1', x: 26,  y: 108, w: 20, h: 35, label: 'L1' },
-      { id: 'AxleR1', x: 154, y: 108, w: 20, h: 35, label: 'R1' },
-      { id: 'AxleL2', x: 26,  y: 158, w: 20, h: 35, label: 'L2' },
-      { id: 'AxleR2', x: 154, y: 158, w: 20, h: 35, label: 'R2' },
-      { id: 'Spare',  x: 80,  y: 252, w: 40, h: 12, label: 'SP', horizontal: true },
-    ],
-  },
-}
-
-/**
- * Picks a hand-drawn layout ONLY when its tyre-id set is exactly the positions
- * we were asked to render (same ids, same count). Anything else — a 12-tyre
- * mixer, a 10-tyre 6x4, a 4-wheel loader with no spare — falls through to the
- * generic builder so every position is guaranteed a coordinate.
- */
-function pickExactHardLayout(positions: string[]): string | null {
-  if (!positions.length) return null
-  const want = new Set(positions)
-  for (const [key, layout] of Object.entries(LAYOUTS)) {
-    if (layout.tyres.length !== want.size) continue
-    if (layout.tyres.every(t => want.has(t.id))) return key
-  }
-  return null
-}
-
-// ── Generic programmatic layout ────────────────────────────────────────────────
-// Any position set without a bespoke layout is laid out here: two vertical wheel
-// columns (left/right) with steer axles at the top and spares along the bottom.
-// The SVG viewBox height grows with the axle count, so 4- and 12-tyre rigs both fit.
-function trailingAxleNum(id: string): number {
-  const m = id.match(/(\d+)\s*$/)
-  return m ? parseInt(m[1], 10) : 0
-}
-function sideOfPosition(id: string): 'left' | 'right' | 'spare' {
-  const u = id.toUpperCase()
-  if (u.includes('SPARE') || u === 'SP') return 'spare'
-  // Strip the "AXLE" token first — it contains an 'L' that would otherwise
-  // mis-classify right-side ids like "AxleR1" as left.
-  const s = u.replace(/AXLE/g, '')
-  // Rear-left ids ("RL2") carry an L; rear-right ("RR2") carry no L → check L first.
-  if (s.includes('L')) return 'left'
-  if (s.includes('R')) return 'right'
-  return 'left'
-}
-// Steer/front axles (ids starting with F) sort above rear axles.
-function axleGroupRank(id: string): number {
-  return /^f/i.test(id) ? 0 : 1
-}
-function shortTyreLabel(id: string): string {
-  if (/spare/i.test(id)) return 'SP'
-  return id.replace(/axle/i, '')
-}
-
-function buildGenericLayout(positions: string[]): VehicleLayout {
-  const left: string[] = []
-  const right: string[] = []
-  const spares: string[] = []
-  positions.forEach(id => {
-    const side = sideOfPosition(id)
-    if (side === 'spare') spares.push(id)
-    else if (side === 'right') right.push(id)
-    else left.push(id)
-  })
-
-  const cmp = (a: string, b: string) =>
-    (axleGroupRank(a) - axleGroupRank(b)) ||
-    (trailingAxleNum(a) - trailingAxleNum(b)) ||
-    a.localeCompare(b)
-  left.sort(cmp)
-  right.sort(cmp)
-
-  const startY = 34
-  const rowGap = 40
-  const tyreW  = 20
-  const tyreH  = 32
-  const leftX  = 26   // tyre centre 36
-  const rightX = 154  // tyre centre 164
-  const maxRows = Math.max(left.length, right.length, 1)
-
-  const tyres: TyreLayoutItem[] = []
-  left.forEach((id, i) => tyres.push({
-    id, x: leftX, y: startY + i * rowGap, w: tyreW, h: tyreH, label: shortTyreLabel(id),
-  }))
-  right.forEach((id, i) => tyres.push({
-    id, x: rightX, y: startY + i * rowGap, w: tyreW, h: tyreH, label: shortTyreLabel(id),
-  }))
-
-  const chassisTop = 20
-  const chassisBot = startY + (maxRows - 1) * rowGap + tyreH
-  const axleYs: number[] = []
-  for (let i = 0; i < maxRows; i++) axleYs.push(startY + i * rowGap + tyreH / 2)
-
-  // Spares laid out horizontally along the bottom, centred on x = 100.
-  const spW = 38, spH = 11, spGap = 6
-  const spareY = chassisBot + 16
-  const totalW = spares.length * spW + Math.max(0, spares.length - 1) * spGap
-  const spStartX = 100 - totalW / 2
-  spares.forEach((id, k) => tyres.push({
-    id, x: spStartX + k * (spW + spGap), y: spareY, w: spW, h: spH,
-    label: shortTyreLabel(id), horizontal: true,
-  }))
-
-  const viewH = spares.length ? spareY + spH + 10 : chassisBot + 14
-
-  return { viewH, Body: GenericBody, bodyProps: { chassisTop, chassisBot, axleYs }, tyres }
 }
 
 // ── Component ──────────────────────────────────────────────────────────────────
@@ -524,43 +331,69 @@ export default function VehicleTyreDiagram({
 }: Props) {
   const { theme } = useTheme()
   const styles = useMemo(() => makeStyles(theme), [theme])
-  // Use a bespoke hand-drawn layout only when it exactly matches the positions;
-  // otherwise build one programmatically so every position is guaranteed to render.
-  const layout = useMemo<VehicleLayout>(() => {
-    const hardKey = pickExactHardLayout(positions)
-    return hardKey ? LAYOUTS[hardKey] : buildGenericLayout(positions)
-  }, [positions.join('|')])
-  const { viewH, Body, bodyProps, tyres } = layout
+
+  // Build the per-vehicle-type axle layout (web-parity structure).
+  const layout = useMemo(
+    () => buildTyreDiagramLayout(vehicleType, positions),
+    [vehicleType, positions.join('|')],
+  )
+  const { viewH, bodyClass, chassisTop, chassisBot, axleYs, slots } = layout
 
   // SVG coordinate space is 220 units wide; scale to requested pixel width.
-  // The viewBox has a -10 left margin so we add 20 to the coordinate width.
   const SVG_COORD_W = 220
   const scale       = width / SVG_COORD_W
   const svgHeight   = Math.round(viewH * scale)
 
-  const posSet = new Set(positions)
+  // Cab bottom = midway between the last steer axle and the first driven axle,
+  // so the cab always sits above the running gear regardless of axle count.
+  const cabBottom = useMemo(() => {
+    const steerSlots = slots.filter(s => s.kind === 'steer')
+    const rearSlots  = slots.filter(s => s.kind === 'drive' || s.kind === 'lift' || s.kind === 'trailer')
+    if (steerSlots.length && rearSlots.length) {
+      const lastSteerY = Math.max(...steerSlots.map(s => s.y + s.h))
+      const firstRearY = Math.min(...rearSlots.map(s => s.y))
+      return Math.round((lastSteerY + firstRearY) / 2)
+    }
+    return Math.round(chassisTop + Math.max(28, (chassisBot - chassisTop) * 0.28))
+  }, [slots, chassisTop, chassisBot])
+
+  // Axle beams: one bar per axle, spanning that axle's wheels.
+  const beams = useMemo<Beam[]>(() => {
+    const byAxle = new Map<number, TyreSlot[]>()
+    slots.forEach(s => {
+      if (s.kind === 'spare') return
+      const arr = byAxle.get(s.axle) ?? []
+      arr.push(s)
+      byAxle.set(s.axle, arr)
+    })
+    const out: Beam[] = []
+    byAxle.forEach(arr => {
+      const y  = arr[0].y + arr[0].h / 2
+      const x1 = Math.min(...arr.map(s => s.x)) - 2
+      const x2 = Math.max(...arr.map(s => s.x + s.w)) + 2
+      out.push({ y, x1, x2 })
+    })
+    return out
+  }, [slots])
+
   const { riskMap, recordedMap, conditionMap } = useMemo(() => {
     const risk: Record<string, RiskKey>     = {}
     const recorded: Record<string, boolean> = {}
     const cond: Record<string, TyreCondition> = {}
-    tyres.forEach(t => {
-      const d = tyreData[t.id]
-      risk[t.id]     = d ? CONDITION_RISK[d.condition] : 'none'
-      cond[t.id]     = d?.condition ?? 'Good'
-      recorded[t.id] = !!d && (
+    slots.forEach(s => {
+      const d = tyreData[s.id]
+      risk[s.id]     = d ? CONDITION_RISK[d.condition] : 'none'
+      cond[s.id]     = d?.condition ?? 'Good'
+      recorded[s.id] = !!d && (
         !!d.serial_number || !!d.pressure_psi || !!d.tread_depth_mm ||
         !!d.notes || !!d.photo_uri || d.condition !== 'Good'
       )
     })
     return { riskMap: risk, recordedMap: recorded, conditionMap: cond }
-  }, [tyres, tyreData])
+  }, [slots, tyreData])
 
-  const allTyres = tyres.filter(t => posSet.size === 0 || posSet.has(t.id))
-
-  // Convert SVG coordinate space → screen pixels for the overlay touch targets.
-  // SVG viewBox: x from -10 to 210 (220 units), y from -6 to viewH+6
-  // Pixel mapping: screenX = (svgX + 10) * scale
-  //                screenY = (svgY + 6)  * scale
+  // Convert SVG coordinate space -> screen pixels for the overlay touch targets.
+  // SVG viewBox: x from -10 to 210 (220 units), y from -6 to viewH+6.
   function toScreen(svgX: number, svgY: number, svgW: number, svgH: number) {
     const pad = 10  // generous finger padding in SVG units
     return {
@@ -571,7 +404,7 @@ export default function VehicleTyreDiagram({
     }
   }
 
-  // Nothing to render (no positions supplied) → honest empty state.
+  // Nothing to render (no positions supplied) -> honest empty state.
   if (positions.length === 0) {
     return (
       <View style={[styles.container, { paddingVertical: 32, alignItems: 'center' }]}>
@@ -590,6 +423,9 @@ export default function VehicleTyreDiagram({
         <Text style={styles.frontLabelText}>FRONT</Text>
       </View>
 
+      {/* Vehicle heading + tyre count (mirrors the web caption) */}
+      <Text style={styles.caption}>{layout.resolvedType} · {slots.length} tyres</Text>
+
       {/* Tap hint */}
       <Text style={styles.tapHint}>Tap a tyre to record its condition</Text>
 
@@ -603,35 +439,41 @@ export default function VehicleTyreDiagram({
           pointerEvents="none"
         >
           <SharedDefs />
-          <Body {...(bodyProps ?? {})} />
-          {allTyres.map(t => (
+          <AxleBeams beams={beams} />
+          <VehicleBody
+            bodyClass={bodyClass}
+            chassisTop={chassisTop}
+            chassisBot={chassisBot}
+            cabBottom={cabBottom}
+          />
+          {slots.map(s => (
             <Tyre
-              key={t.id}
-              x={t.x} y={t.y} w={t.w} h={t.h}
-              label={t.label}
-              horizontal={t.horizontal}
-              risk={riskMap[t.id] ?? 'none'}
-              recorded={recordedMap[t.id]}
-              selected={selectedPosition === t.id}
+              key={s.id}
+              x={s.x} y={s.y} w={s.w} h={s.h}
+              label={s.label}
+              horizontal={s.horizontal}
+              risk={riskMap[s.id] ?? 'none'}
+              recorded={recordedMap[s.id]}
+              selected={selectedPosition === s.id}
             />
           ))}
         </Svg>
 
         {/* Absolute touch overlays - one per tyre, on top of the SVG */}
-        {allTyres.map(t => {
-          const pos = toScreen(t.x, t.y, t.w, t.h)
-          const isSelected = selectedPosition === t.id
-          const cond = conditionMap[t.id]
+        {slots.map(s => {
+          const pos = toScreen(s.x, s.y, s.w, s.h)
+          const isSelected = selectedPosition === s.id
+          const cond = conditionMap[s.id]
           const meta = cond ? CONDITION_META[cond] : null
           return (
             <TouchableOpacity
-              key={`hit-${t.id}`}
+              key={`hit-${s.id}`}
               style={[styles.hitOverlay, pos, isSelected && styles.hitOverlaySelected]}
-              onPress={() => onPositionPress?.(t.id)}
+              onPress={() => onPositionPress?.(s.id)}
               activeOpacity={0.6}
             >
               {/* Show emoji badge in top-right corner when recorded */}
-              {recordedMap[t.id] && meta && (
+              {recordedMap[s.id] && meta && (
                 <View style={[styles.condBadge, { backgroundColor: meta.color }]}>
                   <Text style={styles.condBadgeEmoji}>{meta.emoji}</Text>
                 </View>
@@ -682,6 +524,13 @@ function makeStyles(theme: Theme) {
       fontWeight: '800',
       color: c.textMuted,
       letterSpacing: 2,
+    },
+    caption: {
+      fontSize: 13,
+      fontWeight: '800',
+      color: c.text,
+      marginBottom: 2,
+      textAlign: 'center',
     },
     tapHint: {
       ...typography.caption,

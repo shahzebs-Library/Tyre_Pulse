@@ -1,7 +1,7 @@
 import { useEffect, useState, useMemo, useCallback } from 'react'
 import {
   View, Text, ScrollView, StyleSheet, TouchableOpacity,
-  StatusBar, ActivityIndicator, useWindowDimensions,
+  StatusBar, ActivityIndicator, useWindowDimensions, Alert,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useRouter, useLocalSearchParams } from 'expo-router'
@@ -12,6 +12,7 @@ import { useTheme } from '../../../contexts/ThemeContext'
 import { radius, spacing, typography, elevation, Theme } from '../../../lib/theme'
 import VehicleTyreDiagram from '../../../components/VehicleTyreDiagram'
 import { getPositionsForVehicle, TyrePositionData } from '../../../lib/types'
+import { shareInspectionPdf, conditionColor, conditionLabel } from '../../../lib/inspectionReportPdf'
 
 interface Inspection {
   id: string
@@ -27,10 +28,6 @@ interface Inspection {
   tyre_conditions: Record<string, TyrePositionData> | null
 }
 
-const RISK_COLOR: Record<string, string> = {
-  none: '#94a3b8', low: '#16a34a', medium: '#ca8a04', high: '#ea580c', critical: '#dc2626',
-}
-
 export default function InspectionDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>()
   const { t, isRTL } = useLanguage()
@@ -41,8 +38,23 @@ export default function InspectionDetailScreen() {
   const [insp, setInsp] = useState<Inspection | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [sharing, setSharing] = useState(false)
 
   const textAlign = isRTL ? 'right' : 'left'
+
+  // Build a PDF of this inspection (asset/site/date/inspector + per-position
+  // conditions coloured by condition + notes) and open the device share sheet.
+  const sharePdf = useCallback(async () => {
+    if (!insp || sharing) return
+    setSharing(true)
+    try {
+      await shareInspectionPdf(insp)
+    } catch (e: any) {
+      Alert.alert('Share failed', e?.message || 'Could not generate the PDF.')
+    } finally {
+      setSharing(false)
+    }
+  }, [insp, sharing])
 
   // Load guarded end-to-end: a network rejection or query error surfaces a
   // retryable error state instead of spinning forever or crashing.
@@ -72,11 +84,6 @@ export default function InspectionDetailScreen() {
     : []
   const shownPositions = positions.length ? positions : Object.keys(conditions)
 
-  function riskOf(c: any): string {
-    if (!c) return 'none'
-    return String(c.risk ?? c.condition ?? 'none').toLowerCase()
-  }
-
   return (
     <SafeAreaView style={styles.safe}>
       <StatusBar
@@ -88,6 +95,23 @@ export default function InspectionDetailScreen() {
           <Ionicons name={isRTL ? 'arrow-forward' : 'arrow-back'} size={22} color={theme.color.text} />
         </TouchableOpacity>
         <Text style={[styles.title, { textAlign }]} numberOfLines={1}>{t('modules.inspectionDetail.title')}</Text>
+        {insp && !loading && !error ? (
+          <TouchableOpacity
+            onPress={sharePdf}
+            style={styles.shareBtn}
+            disabled={sharing}
+            activeOpacity={0.85}
+          >
+            {sharing
+              ? <ActivityIndicator size="small" color={theme.color.onPrimary} />
+              : (
+                <>
+                  <Ionicons name="share-outline" size={16} color={theme.color.onPrimary} />
+                  <Text style={styles.shareBtnText}>Share PDF</Text>
+                </>
+              )}
+          </TouchableOpacity>
+        ) : null}
       </View>
 
       {loading ? (
@@ -148,18 +172,24 @@ export default function InspectionDetailScreen() {
               <Text style={styles.muted}>{t('modules.inspectionDetail.noData')}</Text>
             ) : (
               Object.entries(conditions).map(([pos, c]: [string, any]) => {
-                const rk = riskOf(c)
-                const rc = RISK_COLOR[rk] ?? '#94a3b8'
+                const rc = conditionColor(c?.condition ?? c?.risk)
+                const meta = [
+                  c?.tread_depth_mm ? `${c.tread_depth_mm}mm` : (c?.tread_depth != null ? `${c.tread_depth}mm` : null),
+                  c?.pressure_psi ? `${c.pressure_psi} psi` : (c?.pressure != null ? `${c.pressure} psi` : null),
+                  c?.brand,
+                  c?.serial_number ?? c?.serial,
+                ].filter(Boolean).join(' · ') || '-'
                 return (
                   <View key={pos} style={[styles.condRow, isRTL && styles.rowR]}>
                     <View style={[styles.posDot, { backgroundColor: rc }]}><Text style={styles.posText}>{pos}</Text></View>
                     <View style={{ flex: 1 }}>
-                      <Text style={[styles.condTitle, { textAlign }]}>
-                        {c?.condition ?? c?.risk ?? 'Recorded'}
+                      <Text style={[styles.condTitle, { textAlign, color: rc }]}>
+                        {conditionLabel(c)}
                       </Text>
-                      <Text style={[styles.condMeta, { textAlign }]}>
-                        {[c?.tread_depth != null ? `${c.tread_depth}mm` : null, c?.pressure != null ? `${c.pressure} psi` : null, c?.brand, c?.serial].filter(Boolean).join(' · ') || '-'}
-                      </Text>
+                      <Text style={[styles.condMeta, { textAlign }]}>{meta}</Text>
+                    </View>
+                    <View style={[styles.condChip, { backgroundColor: rc }]}>
+                      <Text style={styles.condChipText}>{conditionLabel(c)}</Text>
                     </View>
                   </View>
                 )
@@ -205,6 +235,12 @@ function makeStyles(theme: Theme) {
       alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: c.border,
     },
     title: { ...typography.h2, color: c.text, flex: 1 },
+    shareBtn: {
+      flexDirection: 'row', alignItems: 'center', gap: spacing.xs + 1,
+      backgroundColor: c.primary, borderRadius: radius.md,
+      paddingHorizontal: spacing.md, height: 40, minWidth: 44, justifyContent: 'center',
+    },
+    shareBtnText: { color: c.onPrimary, fontSize: 13, fontWeight: '800' },
     content: { padding: spacing.lg, gap: spacing.md, paddingBottom: spacing['4xl'] },
     card: {
       backgroundColor: c.surface, borderRadius: radius.xl, padding: spacing.lg,
@@ -239,6 +275,11 @@ function makeStyles(theme: Theme) {
     posText: { fontSize: 12, fontWeight: '800', color: '#fff' },
     condTitle: { fontSize: 14, fontWeight: '700', color: c.text, textTransform: 'capitalize' },
     condMeta: { fontSize: 12, color: c.textMuted, marginTop: 1 },
+    condChip: {
+      paddingHorizontal: spacing.sm, paddingVertical: 3, borderRadius: radius.sm - 2,
+      alignSelf: 'center',
+    },
+    condChipText: { fontSize: 11, fontWeight: '800', color: '#fff', textTransform: 'capitalize' },
     notes: { fontSize: 14, color: c.textSecondary, lineHeight: 20 },
     empty: { alignItems: 'center', paddingVertical: spacing['5xl'], gap: spacing.sm + 2, paddingHorizontal: spacing.lg },
     emptyText: { ...typography.title, color: c.textMuted, textAlign: 'center' },

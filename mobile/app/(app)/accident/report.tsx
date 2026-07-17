@@ -1,18 +1,21 @@
 /**
- * Accident Report - 3-step form
+ * Accident Report - full field-parity capture (mirrors the web incident form).
  *
- * Step 1: Incident Details  (site, vehicle, date/time, location, type, severity, description)
- * Step 2: Damage & People   (injuries, third party, police report, damage desc, cost)
- * Step 3: Photos + Submit   (multi-photo capture, min 1, submit to Supabase)
+ * Sectioned, scrollable, offline-safe form that captures the SAME record the web
+ * app writes: Incident, Classification, People & Damage, Liability & GCC case,
+ * Insurance & Claim, Repair & Release, and Photos. Constrained vocabularies use
+ * clear dropdowns and are mapped to the DB CHECK tokens exactly like the web
+ * accidentVocab helpers (severity/status/accident_type are lowercase tokens -
+ * a raw label is NEVER written straight to those columns).
  *
  * Visual: Daylight design system (theme tokens, sunlight-legible).
  */
 
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import {
   View, ScrollView, TextInput, TouchableOpacity,
   StyleSheet, Alert, ActivityIndicator, Platform,
-  KeyboardAvoidingView, Switch,
+  KeyboardAvoidingView, Switch, Modal,
 } from 'react-native'
 import { useRouter } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
@@ -25,101 +28,269 @@ import { supabase } from '../../../lib/supabase'
 import { saveCommand } from '../../../lib/recordQueue'
 import { safeUuid } from '../../../lib/ids'
 import { useRoleGuard } from '../../../hooks/useRoleGuard'
+import { extractScanCode, lookupAssetByCode } from '../../../lib/assetLookup'
 import AccidentPhotoGrid from '../../../components/AccidentPhotoGrid'
-import {
-  VehicleFleet, AccidentDraft, AccidentType, AccidentSeverity,
-  emptyAccidentDraft, SEVERITY_ICONS,
-} from '../../../lib/types'
 
-type Step = 'step1' | 'step2' | 'step3' | 'success'
 type IconName = React.ComponentProps<typeof Ionicons>['name']
 
-const TYPES: AccidentType[] = [
-  'collision', 'rollover', 'tyre_failure',
-  'mechanical', 'near_miss', 'property_damage', 'other',
-]
-const SEVERITIES: AccidentSeverity[] = ['minor', 'moderate', 'severe', 'fatal']
+// ── Vocabulary + DB token maps (inline mirror of src/lib/accidentVocab.js) ─────
+// The web app is the single source of truth; these replicate its label lists and
+// toDb*/canon* semantics so mobile writes CHECK-constraint-valid tokens.
 
-const SEVERITY_KIND: Record<AccidentSeverity, StatusKind> = {
-  minor: 'success', moderate: 'warning', severe: 'critical', fatal: 'danger',
+const SEVERITY_LABELS = ['Minor', 'Moderate', 'Major'] as const
+type SeverityLabel = (typeof SEVERITY_LABELS)[number]
+const SEV_KIND: Record<SeverityLabel, StatusKind> = {
+  Minor: 'success', Moderate: 'warning', Major: 'danger',
+}
+// Minor/Moderate/Major -> chk_severity tokens minor/moderate/severe.
+function toDbSeverity(s: string): string {
+  const v = s.trim().toLowerCase()
+  return ({ minor: 'minor', moderate: 'moderate', major: 'severe' } as Record<string, string>)[v] || 'minor'
 }
 
-// A photo counts as "uploaded" once it holds a permanent reference - either a
-// private-bucket storage ref (tp-storage://, resolved to a signed URL on
-// display) or a legacy public URL. Empty strings are un-uploaded placeholders.
+const STATUS_LABELS = [
+  'Reported', 'Under Investigation', 'Repair In Progress', 'Awaiting Parts',
+  'Awaiting Approval', 'Insurance Claim', 'Closed',
+]
+function toDbStatus(s: string): string {
+  const v = s.trim().toLowerCase().replace(/\s+/g, '_')
+  return ({
+    reported: 'reported', under_investigation: 'under_review',
+    repair_in_progress: 'repair_in_progress', awaiting_parts: 'awaiting_parts',
+    awaiting_approval: 'awaiting_approval', insurance_claim: 'insurance_claim',
+    closed: 'closed',
+  } as Record<string, string>)[v] || 'reported'
+}
+
+const ACCIDENT_TYPE_LABELS = [
+  'Collision', 'Rollover', 'Rear-end', 'Side-swipe', 'Reversing', 'Fire',
+  'Vandalism', 'Weather', 'Tyre failure', 'Mechanical', 'Near miss',
+  'Property damage', 'Other',
+]
+const ACCIDENT_TYPE_TOKENS = new Set([
+  'collision', 'rollover', 'rear_end', 'side_swipe', 'reversing', 'fire',
+  'vandalism', 'weather', 'tyre_failure', 'mechanical', 'near_miss',
+  'property_damage', 'other',
+])
+function toDbAccidentType(s: string): string {
+  if (!s) return 'other'
+  const k = s.toLowerCase().trim().replace(/[\s-]+/g, '_')
+  return ACCIDENT_TYPE_TOKENS.has(k) ? k : 'other'
+}
+
+const CURRENT_CONDITION_OPTS = [
+  'Running', 'Waiting for approval', 'Under Repair', 'Repair Completed', 'Released', 'Closed',
+]
+const DAMAGE_CONDITION_OPTS = ['Minor', 'Moderate', 'Major', 'N/A']
+const FAULT_STATUS_OPTS = ['Faulty', 'Non-faulty', 'Under review']
+const NAJM_STATUS_OPTS = ['Najm report', 'No Najm']
+const NAJM_FAULT_OPTS = ['Faulty', 'Non-faulty', 'N/A']
+const TAQDEER_STATUS_OPTS = ['Taqdeer report', 'No Taqdeer']
+const LIABILITY_RATIO_OPTS = ['0', '50', '100']
+const LIABLE_PARTY_OPTS = ['GCC', 'Other Party']
+const PAYER_OPTS = ['GCC', 'Insurance', 'Recovery Claim']
+const REPAIR_TYPE_OPTS = ['Internal', 'External']
+const RECOVERY_DECISION_OPTS = ['Yes', 'No', 'N/A']
+
+const CLAIM_STATUS_OPTS = ['none', 'filed', 'approved', 'rejected', 'settled']
+const CLAIM_STATUS_LABELS: Record<string, string> = {
+  none: 'No Claim', filed: 'Filed', approved: 'Approved', rejected: 'Rejected', settled: 'Settled',
+}
+const RECOVERY_SOURCE_OPTS = ['none', 'insurer', 'third_party', 'driver', 'warranty']
+const RECOVERY_SOURCE_LABELS: Record<string, string> = {
+  none: 'None', insurer: 'Insurer', third_party: 'Third Party', driver: 'Driver', warranty: 'Warranty',
+}
+
+const najmHasReport = (v: string) => /report/i.test(v || '') && !/^no/i.test(v || '')
+const taqdeerHasReport = (v: string) => /report/i.test(v || '') && !/^no/i.test(v || '')
+const recoveryIsYes = (v: string) => (v || '').trim().toLowerCase() === 'yes'
+const repairIsInternal = (v: string) => (v || '') === 'Internal'
+
+// Recovered = Claim - Approved - Deductible (spec formula), floored at 0.
+function computeRecovered(claim: string, approved: string, deductible: string): number {
+  const n = (x: string) => (Number.isFinite(Number(x)) ? Number(x) : 0)
+  return Math.max(0, n(claim) - n(approved) - n(deductible))
+}
+
+const ACC_TYPE_ICONS: Record<string, IconName> = {
+  Collision: 'car-sport-outline', Rollover: 'refresh-circle-outline',
+  'Rear-end': 'return-down-back-outline', 'Side-swipe': 'swap-horizontal-outline',
+  Reversing: 'arrow-undo-outline', Fire: 'flame-outline', Vandalism: 'hammer-outline',
+  Weather: 'thunderstorm-outline', 'Tyre failure': 'disc-outline', Mechanical: 'build-outline',
+  'Near miss': 'warning-outline', 'Property damage': 'business-outline', Other: 'ellipsis-horizontal-circle-outline',
+}
+
+// ── Extended (field-parity) form state, kept separate from the base AccidentDraft
+//    so we do not have to change the shared lib/types.ts contract. ──────────────
+interface ExtraForm {
+  plate_number: string
+  vehicle_type: string
+  severityLabel: SeverityLabel
+  typeLabel: string
+  statusLabel: string
+  current_status: string
+  damage_condition: string
+  fault_status: string
+  gcc_liability_ratio: string
+  najm_status: string
+  najm_fault: string
+  taqdeer_status: string
+  taqdeer_no: string
+  liable_party: string
+  payer: string
+  responsible_party: string
+  insurer: string
+  policy_no: string
+  insurance_claim_no: string
+  claim_status: string
+  claim_amount: string
+  claim_approved_amount: string
+  deductible: string
+  recovered_amount: string
+  recovery_status: string
+  recovery_source: string
+  recovery_date: string
+  recovery_reference: string
+  amount_transfer: string
+  repair_type: string
+  workshop_name: string
+  workshop_location: string
+  repair_cost: string
+  expected_release_date: string
+  release_date: string
+}
+
+function emptyExtra(): ExtraForm {
+  return {
+    plate_number: '', vehicle_type: '',
+    severityLabel: 'Minor', typeLabel: 'Collision', statusLabel: 'Reported',
+    current_status: '', damage_condition: '',
+    fault_status: '', gcc_liability_ratio: '', najm_status: '', najm_fault: '',
+    taqdeer_status: '', taqdeer_no: '', liable_party: '', payer: '', responsible_party: '',
+    insurer: '', policy_no: '', insurance_claim_no: '', claim_status: '',
+    claim_amount: '', claim_approved_amount: '', deductible: '', recovered_amount: '',
+    recovery_status: '', recovery_source: '', recovery_date: '', recovery_reference: '', amount_transfer: '',
+    repair_type: '', workshop_name: '', workshop_location: '', repair_cost: '',
+    expected_release_date: '', release_date: '',
+  }
+}
+
+// Base (already offline-safe) fields that stay in local state.
+interface BaseForm {
+  site: string
+  asset_no: string
+  vehicle_id: string | null
+  country: string
+  incident_date: string
+  incident_time: string
+  location: string
+  description: string
+  driver_name: string
+  injuries: boolean
+  injury_count: string
+  third_party_involved: boolean
+  police_report_no: string
+  damage_description: string
+  estimated_damage_cost: string
+  notes: string
+}
+function emptyBase(): BaseForm {
+  const now = new Date()
+  return {
+    site: '', asset_no: '', vehicle_id: null, country: '',
+    incident_date: now.toISOString().split('T')[0],
+    incident_time: `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`,
+    location: '', description: '', driver_name: '',
+    injuries: false, injury_count: '0', third_party_involved: false,
+    police_report_no: '', damage_description: '', estimated_damage_cost: '', notes: '',
+  }
+}
+
+interface FleetVehicle {
+  id: string
+  site: string
+  asset_no: string
+  vehicle_type: string
+  registration_no?: string | null
+  country?: string | null
+}
+
 const isUploadedPhoto = (u?: string | null): boolean =>
   !!u && (u.startsWith('tp-storage://') || u.startsWith('http'))
 
 export default function AccidentReportScreen() {
   const { allowed, loading: guardLoading } = useRoleGuard(['admin', 'manager', 'director', 'inspector', 'tyre_man'])
   const { profile } = useAuth()
-  const { t, isRTL } = useLanguage()
+  const { isRTL } = useLanguage()
   const { theme } = useTheme()
   const c = theme.color
   const styles = useMemo(() => createStyles(theme), [theme])
   const router = useRouter()
 
-  const [step, setStep] = useState<Step>('step1')
-  const [draft, setDraft] = useState<AccidentDraft>(emptyAccidentDraft())
-  const [photoUrls, setPhotoUrls]         = useState<string[]>([])
+  const [base, setBase] = useState<BaseForm>(emptyBase())
+  const [extra, setExtra] = useState<ExtraForm>(emptyExtra())
+  const [photoUrls, setPhotoUrls] = useState<string[]>([])
   const [photoLocalUris, setPhotoLocalUris] = useState<string[]>([])
   const [photosUploading, setPhotosUploading] = useState(false)
-  const [sites, setSites]                 = useState<string[]>([])
-  const [vehicles, setVehicles]           = useState<VehicleFleet[]>([])
+  const [sites, setSites] = useState<string[]>([])
+  const [vehicles, setVehicles] = useState<FleetVehicle[]>([])
   const [loadingVehicles, setLoadingVehicles] = useState(false)
-  const [submitting, setSubmitting]       = useState(false)
-  const [manualAsset, setManualAsset]     = useState('')
+  const [submitting, setSubmitting] = useState(false)
+  const [manualAsset, setManualAsset] = useState('')
   const [useManualEntry, setUseManualEntry] = useState(false)
-  const [savedOffline, setSavedOffline]   = useState(false)
+  const [savedOffline, setSavedOffline] = useState(false)
+  const [success, setSuccess] = useState(false)
 
-  const textAlign   = isRTL ? 'right' : 'left'
-  const backIcon: IconName    = isRTL ? 'arrow-forward' : 'arrow-back'
+  // Once the user edits Recovered manually, stop auto-overwriting it.
+  const recoveredTouched = useRef(false)
 
-  // Header back on the first step must return to the PREVIOUS screen, never Home.
-  // Fall back to the accident dashboard only when there is no navigation history.
+  const textAlign = isRTL ? 'right' : 'left'
+
+  const setB = (p: Partial<BaseForm>) => setBase(prev => ({ ...prev, ...p }))
+  const setX = (p: Partial<ExtraForm>) => setExtra(prev => ({ ...prev, ...p }))
+
   function goBack() {
     if (router.canGoBack()) router.back()
     else router.replace('/(app)/accident/dashboard')
   }
 
   useEffect(() => { if (allowed) loadSites() }, [allowed])
+  useEffect(() => { if (allowed && base.site) loadVehicles(base.site) }, [allowed, base.site])
+
+  // Auto-recompute Recovered = Claim - Approved - Deductible until user overrides.
   useEffect(() => {
-    if (allowed && draft.site) loadVehicles(draft.site)
-  }, [allowed, draft.site])
+    if (recoveredTouched.current) return
+    const r = computeRecovered(extra.claim_amount, extra.claim_approved_amount, extra.deductible)
+    const next = r > 0 ? String(r) : ''
+    if (next !== extra.recovered_amount) setX({ recovered_amount: next })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [extra.claim_amount, extra.claim_approved_amount, extra.deductible])
 
   async function loadSites() {
     try {
-      // 1. Try sites table (primary source)
       const { data: sitesData } = await supabase
         .from('sites').select('name').eq('active', true).order('name')
       if (sitesData && sitesData.length > 0) {
         const names = sitesData.map((s: any) => s.name as string)
         setSites(names)
-        // Auto-select: profile.site match -> single site -> nothing
         const profMatch = profile?.site && names.includes(profile.site) ? profile.site : null
         const autoSite = profMatch ?? (names.length === 1 ? names[0] : null)
-        if (autoSite) update({ site: autoSite })
+        if (autoSite) setB({ site: autoSite })
         return
       }
-      // 2. Fallback: vehicle_fleet.site
-      const { data: fleetData } = await supabase
-        .from('vehicle_fleet').select('site').order('site')
+      const { data: fleetData } = await supabase.from('vehicle_fleet').select('site').order('site')
       if (fleetData && fleetData.length > 0) {
         const unique = [...new Set(fleetData.map((r: any) => r.site).filter(Boolean))] as string[]
         setSites(unique)
         const profMatch = profile?.site && unique.includes(profile.site) ? profile.site : null
         const autoSite = profMatch ?? (unique.length === 1 ? unique[0] : null)
-        if (autoSite) update({ site: autoSite })
+        if (autoSite) setB({ site: autoSite })
         return
       }
     } catch (e: any) {
       if (__DEV__) console.warn('[accident/report] loadSites failed:', e?.message)
     }
-    // 3. Fallback: profile.site only (also covers a failed lookup above)
-    if (profile?.site) {
-      setSites([profile.site])
-      update({ site: profile.site })
-    }
+    if (profile?.site) { setSites([profile.site]); setB({ site: profile.site }) }
   }
 
   async function loadVehicles(site: string) {
@@ -127,10 +298,10 @@ export default function AccidentReportScreen() {
     try {
       const { data } = await supabase
         .from('vehicle_fleet')
-        .select('id, site, asset_no, vehicle_type, make, model')
+        .select('id, site, asset_no, vehicle_type, registration_no, country')
         .eq('site', site)
         .order('asset_no')
-      if (data) setVehicles(data)
+      if (data) setVehicles(data as FleetVehicle[])
     } catch (e: any) {
       if (__DEV__) console.warn('[accident/report] loadVehicles failed:', e?.message)
     } finally {
@@ -138,86 +309,135 @@ export default function AccidentReportScreen() {
     }
   }
 
-  function update(partial: Partial<AccidentDraft>) {
-    setDraft(prev => ({ ...prev, ...partial }))
+  // Auto-fill plate / vehicle_type / site / country from the fleet master (web parity).
+  function applyAsset(v: { asset_no: string; id?: string | null; vehicle_type?: string | null; site?: string | null; registration_no?: string | null; country?: string | null }) {
+    setB({
+      asset_no: v.asset_no,
+      vehicle_id: v.id ?? null,
+      // Only fill site/country when empty so a manual choice is never clobbered.
+      ...(v.site ? { site: v.site } : {}),
+      ...(!base.country && v.country ? { country: v.country } : {}),
+    })
+    setX({
+      ...(v.vehicle_type ? { vehicle_type: v.vehicle_type } : {}),
+      ...(v.registration_no ? { plate_number: v.registration_no } : {}),
+    })
   }
 
-  // -- Validation ------------------------------------------------------------
+  // Debounced manual-asset lookup (reuse lib/assetLookup) -> auto-fill.
+  useEffect(() => {
+    if (!useManualEntry) return
+    const code = extractScanCode(manualAsset)
+    if (!code) return
+    const h = setTimeout(async () => {
+      try {
+        const row = await lookupAssetByCode(manualAsset)
+        if (row && row.asset_no.toLowerCase() === code.toLowerCase()) {
+          // lookup gives site/vehicle_type; pull plate + country in one more read.
+          const { data } = await supabase
+            .from('vehicle_fleet').select('registration_no, country').eq('id', row.id).limit(1)
+          const meta = (data && data[0]) as { registration_no?: string | null; country?: string | null } | undefined
+          applyAsset({ ...row, registration_no: meta?.registration_no ?? null, country: meta?.country ?? null })
+        }
+      } catch (e: any) {
+        if (__DEV__) console.warn('[accident/report] asset lookup failed:', e?.message)
+      }
+    }, 550)
+    return () => clearTimeout(h)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [manualAsset, useManualEntry])
 
   function getEffectiveAssetNo(): string {
-    return useManualEntry ? manualAsset.trim() : draft.asset_no
+    return useManualEntry ? manualAsset.trim() : base.asset_no
   }
 
-  function validateStep1(): boolean {
-    if (!draft.site) {
-      Alert.alert(t('accident.alertRequired'), t('accident.alertSelectSite'))
-      return false
-    }
-    if (!getEffectiveAssetNo()) {
-      Alert.alert(t('accident.alertRequired'), t('accident.alertSelectVehicle'))
-      return false
-    }
-    if (!draft.description.trim()) {
-      Alert.alert(t('accident.alertRequired'), t('accident.alertDesc'))
-      return false
-    }
+  function validate(): boolean {
+    if (!base.site) { Alert.alert('Required', 'Select a site.'); return false }
+    if (!getEffectiveAssetNo()) { Alert.alert('Required', 'Select or enter a vehicle.'); return false }
+    if (!base.description.trim()) { Alert.alert('Required', 'Describe what happened.'); return false }
+    if (photoUrls.filter(isUploadedPhoto).length === 0) { Alert.alert('Required', 'Attach at least one photo.'); return false }
     return true
   }
 
-  function validateStep3(): boolean {
-    const uploadedPhotos = photoUrls.filter(isUploadedPhoto)
-    if (uploadedPhotos.length === 0) {
-      Alert.alert(t('accident.alertRequired'), t('accident.alertPhoto'))
-      return false
-    }
-    return true
-  }
-
-  // -- Submit ----------------------------------------------------------------
+  const num = (v: string) => (v !== '' && v != null ? Number(v) : null)
 
   async function handleSubmit() {
-    if (!validateStep3()) return
-    if (submitting) return
+    if (!validate()) return
+    if (submitting || photosUploading) return
     setSubmitting(true)
-
     try {
       const effectiveAsset = getEffectiveAssetNo()
-      const selectedVehicle = vehicles.find(v => v.asset_no === effectiveAsset)
+      const yes = recoveryIsYes(extra.recovery_status)
+      const internal = repairIsInternal(extra.repair_type)
       const payload = {
-        site:                   draft.site,
-        asset_no:               effectiveAsset,
-        vehicle_id:             selectedVehicle?.id ?? null,
-        reported_by:            profile?.id ?? null,
-        reporter_name:          profile?.full_name ?? profile?.username ?? null,
-        incident_date:          draft.incident_date,
-        incident_time:          draft.incident_time || null,
-        location:               draft.location || null,
-        accident_type:          draft.accident_type,
-        severity:               draft.severity,
-        description:            draft.description.trim(),
-        injuries:               draft.injuries,
-        injury_count:           parseInt(draft.injury_count) || 0,
-        third_party_involved:   draft.third_party_involved,
-        police_report_no:       draft.police_report_no || null,
-        damage_description:     draft.damage_description || null,
-        estimated_damage_cost:  draft.estimated_damage_cost
-                                  ? parseFloat(draft.estimated_damage_cost)
-                                  : null,
-        photos:                 photoUrls.filter(isUploadedPhoto),
-        notes:                  draft.notes || null,
-        status:                 'reported',
-        country:                profile?.country ?? null,
-        driver_name:            draft.driver_name?.trim() || null,
+        // Incident
+        site: base.site,
+        asset_no: effectiveAsset,
+        vehicle_id: base.vehicle_id ?? null,
+        plate_number: extra.plate_number || null,
+        vehicle_type: extra.vehicle_type || null,
+        reported_by: profile?.id ?? null,
+        reporter_name: profile?.full_name ?? profile?.username ?? null,
+        incident_date: base.incident_date,
+        incident_time: base.incident_time || null,
+        location: base.location || null,
+        driver_name: base.driver_name?.trim() || null,
+        description: base.description.trim(),
+        country: base.country || profile?.country || null,
+        // Classification (label -> DB CHECK token)
+        accident_type: toDbAccidentType(extra.typeLabel),
+        severity: toDbSeverity(extra.severityLabel),
+        status: toDbStatus(extra.statusLabel),
+        current_status: extra.current_status || null,
+        damage_condition: extra.damage_condition || null,
+        // People & damage
+        injuries: base.injuries,
+        injury_count: parseInt(base.injury_count) || 0,
+        third_party_involved: base.third_party_involved,
+        police_report_no: base.police_report_no || null,
+        damage_description: base.damage_description || null,
+        estimated_damage_cost: num(base.estimated_damage_cost),
+        // Liability & GCC case
+        fault_status: extra.fault_status || null,
+        gcc_liability_ratio: num(extra.gcc_liability_ratio),
+        najm_status: extra.najm_status || null,
+        najm_fault: najmHasReport(extra.najm_status) ? (extra.najm_fault || null) : null,
+        taqdeer_status: extra.taqdeer_status || null,
+        taqdeer_no: taqdeerHasReport(extra.taqdeer_status) ? (extra.taqdeer_no || null) : null,
+        liable_party: extra.liable_party || null,
+        payer: extra.payer || null,
+        responsible_party: extra.responsible_party || null,
+        // Insurance & claim
+        insurer: extra.insurer || null,
+        policy_no: extra.policy_no || null,
+        insurance_claim_no: extra.insurance_claim_no || null,
+        claim_status: extra.claim_status || null,
+        claim_amount: num(extra.claim_amount),
+        claim_approved_amount: num(extra.claim_approved_amount),
+        deductible: num(extra.deductible),
+        recovered_amount: num(extra.recovered_amount),
+        // Cost recovery (gated on Recovery = Yes)
+        recovery_status: extra.recovery_status || 'N/A',
+        recovery_source: yes ? (extra.recovery_source || 'none') : 'none',
+        recovery_date: yes ? (extra.recovery_date || null) : null,
+        recovery_reference: yes ? (extra.recovery_reference || null) : null,
+        amount_transfer: yes ? num(extra.amount_transfer) : null,
+        // Repair & release
+        repair_type: extra.repair_type || null,
+        workshop_name: extra.workshop_name || null,
+        workshop_location: extra.workshop_location || null,
+        repair_cost: internal ? num(extra.repair_cost) : null,
+        expected_release_date: extra.expected_release_date || null,
+        release_date: extra.release_date || null,
+        // Photos + notes
+        photos: photoUrls.filter(isUploadedPhoto),
+        notes: base.notes || null,
       }
 
-      // Offline-safe: route through the typed record queue like every other
-      // write. Inserts immediately when online, queues + auto-syncs when not -
-      // a report filed at a crash scene with no signal is never lost. The stable
-      // client id makes a replayed insert idempotent (V215 accidents.client_uuid).
       const res = await saveCommand('REPORT_ACCIDENT', payload, safeUuid())
       if (!res.ok) throw new Error(res.error || 'Please try again.')
       setSavedOffline(!!res.offline)
-      setStep('success')
+      setSuccess(true)
     } catch (err: any) {
       Alert.alert('Submission Failed', err.message ?? 'Please try again.')
     } finally {
@@ -225,142 +445,107 @@ export default function AccidentReportScreen() {
     }
   }
 
-  // -- Step header -----------------------------------------------------------
-
-  function NavBar({
-    titleKey, onBack,
-  }: { titleKey: string; onBack: () => void }) {
-    const stepNum = step === 'step1' ? 1 : step === 'step2' ? 2 : 3
-    return (
-      <View style={[styles.nav, isRTL && { flexDirection: 'row-reverse' }]}>
-        <TouchableOpacity onPress={onBack} style={styles.navBack}>
-          <Ionicons name={backIcon} size={22} color={c.danger.base} />
-        </TouchableOpacity>
-        <View style={{ flex: 1 }}>
-          <AppText variant="h3" style={{ textAlign }}>{t(titleKey)}</AppText>
-          {draft.asset_no ? (
-            <AppText variant="caption" color="muted" style={{ textAlign }}>
-              {draft.asset_no} - {draft.site}
-            </AppText>
-          ) : null}
-        </View>
-        <View style={styles.stepPills}>
-          {[1, 2, 3].map(n => {
-            const active = n === stepNum
-            const done = n < stepNum
-            return (
-              <View
-                key={n}
-                style={[
-                  styles.stepPill,
-                  { backgroundColor: active || done ? c.danger.base : c.danger.soft },
-                ]}
-              >
-                {done
-                  ? <Ionicons name="checkmark" size={13} color="#fff" />
-                  : <AppText variant="micro" style={{ color: active ? '#fff' : c.danger.on }}>{n}</AppText>}
-              </View>
-            )
-          })}
-        </View>
-      </View>
-    )
-  }
-
   const inputStyle = [styles.input, { backgroundColor: c.surface, borderColor: c.border, color: c.text }]
 
   if (guardLoading || !allowed) {
     return (
       <Screen>
-        <View style={styles.loader}>
-          <ActivityIndicator size="large" color={c.primary} />
+        <View style={styles.loader}><ActivityIndicator size="large" color={c.primary} /></View>
+      </Screen>
+    )
+  }
+
+  // -- SUCCESS ---------------------------------------------------------------
+  if (success) {
+    return (
+      <Screen>
+        <View style={styles.successWrap}>
+          <View style={[styles.successIcon, { backgroundColor: c.danger.soft }]}>
+            <Ionicons name="shield-checkmark" size={72} color={c.danger.base} />
+          </View>
+          <AppText variant="h1" center>Report Submitted</AppText>
+          <AppText variant="body" color="secondary" center style={{ marginTop: spacing.xs }}>
+            The incident record has been filed.
+          </AppText>
+          {savedOffline && (
+            <View style={[styles.offlineNote, { backgroundColor: c.warning.soft }]}>
+              <Ionicons name="cloud-offline-outline" size={16} color={c.warning.base} />
+              <AppText variant="caption" style={{ flex: 1, color: c.warning.on }}>
+                Saved on device - it will sync automatically when back online.
+              </AppText>
+            </View>
+          )}
+          <AppText variant="caption" color="muted" center style={{ marginTop: spacing.md }}>
+            {getEffectiveAssetNo()} - {base.site}{'\n'}{base.incident_date}
+          </AppText>
+          <Button label="Back to Home" icon="home-outline" variant="danger" size="lg"
+            onPress={() => router.replace('/(app)')} style={{ marginTop: spacing['2xl'], minWidth: 220 }} />
+          <Button label="New Report" icon="add-circle-outline" variant="secondary"
+            onPress={() => {
+              setBase(emptyBase()); setExtra(emptyExtra())
+              setPhotoUrls([]); setPhotoLocalUris([])
+              setManualAsset(''); setUseManualEntry(false)
+              recoveredTouched.current = false; setSuccess(false)
+            }}
+            style={{ marginTop: spacing.md, minWidth: 220 }} />
         </View>
       </Screen>
     )
   }
 
-  // -- STEP 1: Incident Details ---------------------------------------------
-  if (step === 'step1') {
-    return (
-      <Screen>
-        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-          <NavBar titleKey="accident.step1Title" onBack={goBack} />
-          <ScrollView style={styles.scroll} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+  const canSubmit = !submitting && !photosUploading &&
+    !!base.site && !!getEffectiveAssetNo() && photoUrls.filter(isUploadedPhoto).length > 0
 
-            {/* Severity header card */}
-            <Card style={{ padding: spacing.md }}>
-              <AppText variant="micro" color="muted" style={{ textTransform: 'uppercase', marginBottom: spacing.sm }}>
-                Severity
+  return (
+    <Screen>
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        {/* -- Header -- */}
+        <View style={[styles.nav, isRTL && { flexDirection: 'row-reverse' }]}>
+          <TouchableOpacity onPress={goBack} style={styles.navBack}>
+            <Ionicons name={isRTL ? 'arrow-forward' : 'arrow-back'} size={22} color={c.danger.base} />
+          </TouchableOpacity>
+          <View style={{ flex: 1 }}>
+            <AppText variant="h3" style={{ textAlign }}>Report an Incident</AppText>
+            {getEffectiveAssetNo() ? (
+              <AppText variant="caption" color="muted" style={{ textAlign }}>
+                {getEffectiveAssetNo()}{base.site ? ` - ${base.site}` : ''}
               </AppText>
-              <View style={styles.severityRow}>
-                {SEVERITIES.map(sev => {
-                  const active = draft.severity === sev
-                  const sc = statusColor(theme, SEVERITY_KIND[sev])
-                  return (
-                    <TouchableOpacity
-                      key={sev}
-                      style={[
-                        styles.severityChip,
-                        { borderColor: c.border, backgroundColor: c.surface },
-                        active && { backgroundColor: sc.base, borderColor: sc.base },
-                      ]}
-                      onPress={() => update({ severity: sev })}
-                    >
-                      <Ionicons
-                        name={SEVERITY_ICONS[sev] as IconName}
-                        size={16}
-                        color={active ? '#fff' : sc.base}
-                      />
-                      <AppText variant="caption" style={{ color: active ? '#fff' : c.textSecondary }}>
-                        {t(`accident.severities.${sev}`)}
-                      </AppText>
-                    </TouchableOpacity>
-                  )
-                })}
-              </View>
-            </Card>
+            ) : null}
+          </View>
+        </View>
 
+        <ScrollView style={styles.scroll} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+
+          {/* ========== INCIDENT ========== */}
+          <Section title="Incident" icon="alert-circle-outline" styles={styles} c={c}>
             {/* Site */}
-            <View style={styles.field}>
-              <AppText variant="micro" color="secondary" style={[styles.fieldLabel, { textAlign }]}>{t('accident.siteLabel')}</AppText>
+            <Field label="Site *" styles={styles} textAlign={textAlign}>
               <ScrollView horizontal showsHorizontalScrollIndicator={false}>
                 <View style={styles.chipRow}>
                   {sites.map(s => {
-                    const active = draft.site === s
+                    const active = base.site === s
                     return (
-                      <TouchableOpacity
-                        key={s}
+                      <TouchableOpacity key={s}
                         style={[styles.chip, { borderColor: c.border, backgroundColor: c.surface }, active && { borderColor: c.danger.base, backgroundColor: c.danger.base }]}
-                        onPress={() => { update({ site: s, asset_no: '', vehicle_id: null }); setVehicles([]) }}
-                      >
+                        onPress={() => { setB({ site: s, asset_no: '', vehicle_id: null }); setX({ plate_number: '', vehicle_type: '' }); setVehicles([]) }}>
                         <AppText variant="caption" style={{ color: active ? '#fff' : c.textSecondary }}>{s}</AppText>
                       </TouchableOpacity>
                     )
                   })}
                 </View>
               </ScrollView>
-            </View>
+            </Field>
 
             {/* Vehicle */}
-            {draft.site ? (
-              <View style={styles.field}>
-                <AppText variant="micro" color="secondary" style={[styles.fieldLabel, { textAlign }]}>{t('accident.vehicleLabel')}</AppText>
+            {base.site ? (
+              <Field label="Vehicle / Asset *" styles={styles} textAlign={textAlign}>
                 {loadingVehicles ? (
                   <ActivityIndicator size="small" color={c.danger.base} style={{ marginTop: spacing.sm }} />
                 ) : useManualEntry ? (
                   <View style={{ gap: spacing.sm }}>
-                    <TextInput
-                      style={[inputStyle, { textAlign }]}
-                      value={manualAsset}
-                      onChangeText={setManualAsset}
-                      placeholder="Enter asset / vehicle number"
-                      placeholderTextColor={c.textMuted}
-                      autoCapitalize="characters"
-                    />
-                    <TouchableOpacity
-                      onPress={() => { setUseManualEntry(false); setManualAsset('') }}
-                      style={styles.manualToggle}
-                    >
+                    <TextInput style={[inputStyle, { textAlign }]} value={manualAsset} onChangeText={setManualAsset}
+                      placeholder="Enter asset / vehicle number" placeholderTextColor={c.textMuted} autoCapitalize="characters" />
+                    <TouchableOpacity onPress={() => { setUseManualEntry(false); setManualAsset(''); setX({ plate_number: '', vehicle_type: '' }) }} style={styles.manualToggle}>
                       <Ionicons name="list-outline" size={14} color={c.danger.base} />
                       <AppText variant="caption" style={{ color: c.danger.base }}>Select from list</AppText>
                     </TouchableOpacity>
@@ -371,19 +556,13 @@ export default function AccidentReportScreen() {
                       <ScrollView horizontal showsHorizontalScrollIndicator={false}>
                         <View style={styles.chipRow}>
                           {vehicles.map(v => {
-                            const active = draft.asset_no === v.asset_no
+                            const active = base.asset_no === v.asset_no
                             return (
-                              <TouchableOpacity
-                                key={v.id}
+                              <TouchableOpacity key={v.id}
                                 style={[styles.chip, { borderColor: c.border, backgroundColor: c.surface }, active && { borderColor: c.danger.base, backgroundColor: c.danger.base }]}
-                                onPress={() => update({ asset_no: v.asset_no, vehicle_id: v.id })}
-                              >
-                                <AppText variant="caption" style={{ color: active ? '#fff' : c.textSecondary }}>
-                                  {v.asset_no}
-                                </AppText>
-                                <AppText variant="micro" style={{ color: active ? 'rgba(255,255,255,0.75)' : c.textMuted, marginTop: 2 }}>
-                                  {v.vehicle_type}
-                                </AppText>
+                                onPress={() => applyAsset(v)}>
+                                <AppText variant="caption" style={{ color: active ? '#fff' : c.textSecondary }}>{v.asset_no}</AppText>
+                                <AppText variant="micro" style={{ color: active ? 'rgba(255,255,255,0.75)' : c.textMuted, marginTop: 2 }}>{v.vehicle_type}</AppText>
                               </TouchableOpacity>
                             )
                           })}
@@ -392,280 +571,253 @@ export default function AccidentReportScreen() {
                     ) : (
                       <AppText variant="caption" color="muted">No vehicles registered for this site.</AppText>
                     )}
-                    <TouchableOpacity
-                      onPress={() => { setUseManualEntry(true); update({ asset_no: '', vehicle_id: null }) }}
-                      style={styles.manualToggle}
-                    >
+                    <TouchableOpacity onPress={() => { setUseManualEntry(true); setB({ asset_no: '', vehicle_id: null }); setX({ plate_number: '', vehicle_type: '' }) }} style={styles.manualToggle}>
                       <Ionicons name="create-outline" size={14} color={c.danger.base} />
                       <AppText variant="caption" style={{ color: c.danger.base }}>Enter asset number manually</AppText>
                     </TouchableOpacity>
                   </View>
                 )}
-              </View>
+                {(extra.plate_number || extra.vehicle_type) ? (
+                  <AppText variant="micro" color="muted" style={{ marginTop: 4 }}>
+                    Master: {extra.vehicle_type || 'type n/a'}{extra.plate_number ? ` - Plate ${extra.plate_number}` : ''}
+                  </AppText>
+                ) : null}
+              </Field>
             ) : null}
 
-            {/* Date & Time row */}
+            {/* Date & time */}
             <View style={styles.row}>
-              <View style={[styles.field, { flex: 1 }]}>
-                <AppText variant="micro" color="secondary" style={[styles.fieldLabel, { textAlign }]}>{t('accident.dateLabel')}</AppText>
-                <TextInput
-                  style={[inputStyle, { textAlign }]}
-                  value={draft.incident_date}
-                  onChangeText={v => update({ incident_date: v })}
-                  placeholder="YYYY-MM-DD"
-                  placeholderTextColor={c.textMuted}
-                />
-              </View>
+              <Field label="Date" styles={styles} textAlign={textAlign} flex>
+                <TextInput style={[inputStyle, { textAlign }]} value={base.incident_date} onChangeText={v => setB({ incident_date: v })}
+                  placeholder="YYYY-MM-DD" placeholderTextColor={c.textMuted} />
+              </Field>
               <View style={{ width: spacing.md }} />
-              <View style={[styles.field, { flex: 1 }]}>
-                <AppText variant="micro" color="secondary" style={[styles.fieldLabel, { textAlign }]}>{t('accident.timeLabel')}</AppText>
-                <TextInput
-                  style={[inputStyle, { textAlign }]}
-                  value={draft.incident_time}
-                  onChangeText={v => update({ incident_time: v })}
-                  placeholder="HH:MM"
-                  placeholderTextColor={c.textMuted}
-                  keyboardType="numbers-and-punctuation"
-                />
-              </View>
+              <Field label="Time" styles={styles} textAlign={textAlign} flex>
+                <TextInput style={[inputStyle, { textAlign }]} value={base.incident_time} onChangeText={v => setB({ incident_time: v })}
+                  placeholder="HH:MM" placeholderTextColor={c.textMuted} keyboardType="numbers-and-punctuation" />
+              </Field>
             </View>
 
-            {/* Location */}
-            <View style={styles.field}>
-              <AppText variant="micro" color="secondary" style={[styles.fieldLabel, { textAlign }]}>{t('accident.locationLabel')}</AppText>
-              <TextInput
-                style={[inputStyle, { textAlign }]}
-                value={draft.location}
-                onChangeText={v => update({ location: v })}
-                placeholder={t('accident.locationPlaceholder')}
-                placeholderTextColor={c.textMuted}
-              />
-            </View>
+            <Field label="Location" styles={styles} textAlign={textAlign}>
+              <TextInput style={[inputStyle, { textAlign }]} value={base.location} onChangeText={v => setB({ location: v })}
+                placeholder="Where did it happen" placeholderTextColor={c.textMuted} />
+            </Field>
 
-            {/* Accident Type */}
-            <View style={styles.field}>
-              <AppText variant="micro" color="secondary" style={[styles.fieldLabel, { textAlign }]}>{t('accident.typeLabel')}</AppText>
-              <View style={styles.typeGrid}>
-                {TYPES.map(type => {
-                  const active = draft.accident_type === type
+            <Field label="Driver" styles={styles} textAlign={textAlign}>
+              <TextInput style={[inputStyle, { textAlign }]} value={base.driver_name} onChangeText={v => setB({ driver_name: v })}
+                placeholder="Driver name" placeholderTextColor={c.textMuted} autoCapitalize="words" />
+            </Field>
+
+            <Field label="Description *" styles={styles} textAlign={textAlign}>
+              <TextInput style={[inputStyle, styles.textArea, { textAlign }]} value={base.description} onChangeText={v => setB({ description: v })}
+                placeholder="Describe what happened" placeholderTextColor={c.textMuted} multiline numberOfLines={4} />
+            </Field>
+          </Section>
+
+          {/* ========== CLASSIFICATION ========== */}
+          <Section title="Classification" icon="pricetags-outline" styles={styles} c={c}>
+            <Dropdown label="Accident Type" value={extra.typeLabel} options={ACCIDENT_TYPE_LABELS}
+              onSelect={v => setX({ typeLabel: v })} placeholder="Select type" />
+            {/* Severity as 3-band chips */}
+            <Field label="Severity" styles={styles} textAlign={textAlign}>
+              <View style={styles.sevRow}>
+                {SEVERITY_LABELS.map(sev => {
+                  const active = extra.severityLabel === sev
+                  const sc = statusColor(theme, SEV_KIND[sev])
                   return (
-                    <TouchableOpacity
-                      key={type}
-                      style={[styles.typeChip, { borderColor: c.danger.base + '55', backgroundColor: c.danger.soft }, active && { backgroundColor: c.danger.base, borderColor: c.danger.base }]}
-                      onPress={() => update({ accident_type: type })}
-                    >
-                      <Ionicons
-                        name={TYPE_ICONS[type]}
-                        size={16}
-                        color={active ? '#fff' : c.danger.base}
-                      />
-                      <AppText variant="caption" style={{ color: active ? '#fff' : c.danger.on }}>
-                        {t(`accident.types.${type}`)}
-                      </AppText>
+                    <TouchableOpacity key={sev}
+                      style={[styles.sevChip, { borderColor: c.border, backgroundColor: c.surface }, active && { backgroundColor: sc.base, borderColor: sc.base }]}
+                      onPress={() => setX({ severityLabel: sev })}>
+                      <AppText variant="caption" style={{ color: active ? '#fff' : c.textSecondary }}>{sev}</AppText>
                     </TouchableOpacity>
                   )
                 })}
               </View>
-            </View>
+            </Field>
+            <Dropdown label="Status" value={extra.statusLabel} options={STATUS_LABELS}
+              onSelect={v => setX({ statusLabel: v })} placeholder="Select status" />
+            <Dropdown label="Current Condition" value={extra.current_status} options={CURRENT_CONDITION_OPTS}
+              onSelect={v => setX({ current_status: v })} placeholder="Select condition" clearable />
+          </Section>
 
-            {/* Description */}
-            <View style={styles.field}>
-              <AppText variant="micro" color="secondary" style={[styles.fieldLabel, { textAlign }]}>{t('accident.descLabel')}</AppText>
-              <TextInput
-                style={[inputStyle, styles.textArea, { textAlign }]}
-                value={draft.description}
-                onChangeText={v => update({ description: v })}
-                placeholder={t('accident.descPlaceholder')}
-                placeholderTextColor={c.textMuted}
-                multiline
-                numberOfLines={4}
-              />
-            </View>
-
-            <Button
-              label={t('accident.nextBtn')}
-              icon="arrow-forward"
-              variant="danger"
-              size="lg"
-              full
-              disabled={!draft.site || !getEffectiveAssetNo()}
-              onPress={() => validateStep1() && setStep('step2')}
-              style={{ marginTop: spacing.xs }}
-            />
-          </ScrollView>
-        </KeyboardAvoidingView>
-      </Screen>
-    )
-  }
-
-  // -- STEP 2: Damage & People ----------------------------------------------
-  if (step === 'step2') {
-    return (
-      <Screen>
-        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-          <NavBar titleKey="accident.step2Title" onBack={() => setStep('step1')} />
-          <ScrollView style={styles.scroll} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-
-            {/* Driver involved */}
-            <View style={styles.field}>
-              <AppText variant="micro" color="secondary" style={[styles.fieldLabel, { textAlign }]}>{t('accident.driverLabel')}</AppText>
-              <TextInput
-                style={[inputStyle, { textAlign }]}
-                value={draft.driver_name}
-                onChangeText={v => update({ driver_name: v })}
-                placeholder={t('accident.driverPlaceholder')}
-                placeholderTextColor={c.textMuted}
-                autoCapitalize="words"
-              />
-            </View>
-
-            {/* Injuries toggle */}
+          {/* ========== PEOPLE & DAMAGE ========== */}
+          <Section title="People & Damage" icon="medkit-outline" styles={styles} c={c}>
             <View style={[styles.toggleRow, isRTL && { flexDirection: 'row-reverse' }]}>
-              <AppText variant="bodyStrong" style={{ flex: 1, textAlign }}>{t('accident.injuriesLabel')}</AppText>
-              <Switch
-                value={draft.injuries}
-                onValueChange={v => update({ injuries: v, injury_count: v ? draft.injury_count : '0' })}
-                trackColor={{ false: c.borderStrong, true: c.danger.soft }}
-                thumbColor={draft.injuries ? c.danger.base : c.textMuted}
-              />
+              <AppText variant="bodyStrong" style={{ flex: 1, textAlign }}>Injuries</AppText>
+              <Switch value={base.injuries} onValueChange={v => setB({ injuries: v, injury_count: v ? base.injury_count : '0' })}
+                trackColor={{ false: c.borderStrong, true: c.danger.soft }} thumbColor={base.injuries ? c.danger.base : c.textMuted} />
             </View>
-
-            {draft.injuries && (
-              <View style={styles.field}>
-                <AppText variant="micro" color="secondary" style={[styles.fieldLabel, { textAlign }]}>{t('accident.injuryCountLabel')}</AppText>
-                <TextInput
-                  style={[inputStyle, { textAlign }]}
-                  value={draft.injury_count}
-                  onChangeText={v => update({ injury_count: v })}
-                  placeholder={t('accident.injuryCountPlaceholder')}
-                  placeholderTextColor={c.textMuted}
-                  keyboardType="number-pad"
-                />
-              </View>
+            {base.injuries && (
+              <Field label="Injury Count" styles={styles} textAlign={textAlign}>
+                <TextInput style={[inputStyle, { textAlign }]} value={base.injury_count} onChangeText={v => setB({ injury_count: v })}
+                  placeholder="0" placeholderTextColor={c.textMuted} keyboardType="number-pad" />
+              </Field>
             )}
-
-            {/* Third party toggle */}
             <View style={[styles.toggleRow, isRTL && { flexDirection: 'row-reverse' }]}>
-              <AppText variant="bodyStrong" style={{ flex: 1, textAlign }}>{t('accident.thirdPartyLabel')}</AppText>
-              <Switch
-                value={draft.third_party_involved}
-                onValueChange={v => update({ third_party_involved: v })}
-                trackColor={{ false: c.borderStrong, true: c.danger.soft }}
-                thumbColor={draft.third_party_involved ? c.danger.base : c.textMuted}
-              />
+              <AppText variant="bodyStrong" style={{ flex: 1, textAlign }}>Third party involved</AppText>
+              <Switch value={base.third_party_involved} onValueChange={v => setB({ third_party_involved: v })}
+                trackColor={{ false: c.borderStrong, true: c.danger.soft }} thumbColor={base.third_party_involved ? c.danger.base : c.textMuted} />
             </View>
+            <Field label="Police Report No" styles={styles} textAlign={textAlign}>
+              <TextInput style={[inputStyle, { textAlign }]} value={base.police_report_no} onChangeText={v => setB({ police_report_no: v })}
+                placeholder="Optional" placeholderTextColor={c.textMuted} autoCapitalize="characters" />
+            </Field>
+            <Dropdown label="Damage Condition" value={extra.damage_condition} options={DAMAGE_CONDITION_OPTS}
+              onSelect={v => setX({ damage_condition: v })} placeholder="Select" clearable />
+            <Field label="Damage Description" styles={styles} textAlign={textAlign}>
+              <TextInput style={[inputStyle, styles.textArea, { textAlign }]} value={base.damage_description} onChangeText={v => setB({ damage_description: v })}
+                placeholder="What was damaged" placeholderTextColor={c.textMuted} multiline numberOfLines={3} />
+            </Field>
+            <Field label="Estimated Damage Cost (SAR)" styles={styles} textAlign={textAlign}>
+              <TextInput style={[inputStyle, { textAlign }]} value={base.estimated_damage_cost} onChangeText={v => setB({ estimated_damage_cost: v })}
+                placeholder="0.00" placeholderTextColor={c.textMuted} keyboardType="decimal-pad" />
+            </Field>
+          </Section>
 
-            {/* Police report no */}
-            <View style={styles.field}>
-              <AppText variant="micro" color="secondary" style={[styles.fieldLabel, { textAlign }]}>{t('accident.policeReportLabel')}</AppText>
-              <TextInput
-                style={[inputStyle, { textAlign }]}
-                value={draft.police_report_no}
-                onChangeText={v => update({ police_report_no: v })}
-                placeholder={t('accident.policeReportPlaceholder')}
-                placeholderTextColor={c.textMuted}
-                autoCapitalize="characters"
-              />
+          {/* ========== LIABILITY & GCC CASE ========== */}
+          <Section title="Liability & GCC Case" icon="shield-checkmark-outline" styles={styles} c={c}>
+            <Dropdown label="Fault Status" value={extra.fault_status} options={FAULT_STATUS_OPTS}
+              onSelect={v => setX({ fault_status: v })} placeholder="Select" clearable />
+            <Dropdown label="GCC Liability %" value={extra.gcc_liability_ratio}
+              options={LIABILITY_RATIO_OPTS} display={v => `${v}%`}
+              onSelect={v => setX({ gcc_liability_ratio: v })} placeholder="Select" clearable />
+            <Dropdown label="Najm Report" value={extra.najm_status} options={NAJM_STATUS_OPTS}
+              onSelect={v => setX({ najm_status: v, najm_fault: najmHasReport(v) ? extra.najm_fault : '' })} placeholder="Select" clearable />
+            {najmHasReport(extra.najm_status) && (
+              <Dropdown label="Najm Fault" value={extra.najm_fault} options={NAJM_FAULT_OPTS}
+                onSelect={v => setX({ najm_fault: v })} placeholder="Select" clearable />
+            )}
+            <Dropdown label="Taqdeer Report" value={extra.taqdeer_status} options={TAQDEER_STATUS_OPTS}
+              onSelect={v => setX({ taqdeer_status: v, taqdeer_no: taqdeerHasReport(v) ? extra.taqdeer_no : '' })} placeholder="Select" clearable />
+            {taqdeerHasReport(extra.taqdeer_status) && (
+              <Field label="Taqdeer No" styles={styles} textAlign={textAlign}>
+                <TextInput style={[inputStyle, { textAlign }]} value={extra.taqdeer_no} onChangeText={v => setX({ taqdeer_no: v })}
+                  placeholder="Estimation reference" placeholderTextColor={c.textMuted} />
+              </Field>
+            )}
+            <Dropdown label="Liable Party" value={extra.liable_party} options={LIABLE_PARTY_OPTS}
+              onSelect={v => setX({ liable_party: v })} placeholder="Select" clearable />
+            <Dropdown label="Who Pays" value={extra.payer} options={PAYER_OPTS}
+              onSelect={v => setX({ payer: v })} placeholder="Select" clearable />
+            <Field label="Responsible Party" styles={styles} textAlign={textAlign}>
+              <TextInput style={[inputStyle, { textAlign }]} value={extra.responsible_party} onChangeText={v => setX({ responsible_party: v })}
+                placeholder="Who is at fault" placeholderTextColor={c.textMuted} />
+            </Field>
+          </Section>
+
+          {/* ========== INSURANCE & CLAIM ========== */}
+          <Section title="Insurance & Claim" icon="briefcase-outline" styles={styles} c={c}>
+            <Field label="Insurer" styles={styles} textAlign={textAlign}>
+              <TextInput style={[inputStyle, { textAlign }]} value={extra.insurer} onChangeText={v => setX({ insurer: v })}
+                placeholder="Insurance company" placeholderTextColor={c.textMuted} />
+            </Field>
+            <View style={styles.row}>
+              <Field label="Policy No" styles={styles} textAlign={textAlign} flex>
+                <TextInput style={[inputStyle, { textAlign }]} value={extra.policy_no} onChangeText={v => setX({ policy_no: v })}
+                  placeholder="Policy" placeholderTextColor={c.textMuted} />
+              </Field>
+              <View style={{ width: spacing.md }} />
+              <Field label="Claim No" styles={styles} textAlign={textAlign} flex>
+                <TextInput style={[inputStyle, { textAlign }]} value={extra.insurance_claim_no} onChangeText={v => setX({ insurance_claim_no: v })}
+                  placeholder="Claim" placeholderTextColor={c.textMuted} />
+              </Field>
             </View>
-
-            {/* Damage description */}
-            <View style={styles.field}>
-              <AppText variant="micro" color="secondary" style={[styles.fieldLabel, { textAlign }]}>{t('accident.damageDescLabel')}</AppText>
-              <TextInput
-                style={[inputStyle, styles.textArea, { textAlign }]}
-                value={draft.damage_description}
-                onChangeText={v => update({ damage_description: v })}
-                placeholder={t('accident.damageDescPlaceholder')}
-                placeholderTextColor={c.textMuted}
-                multiline
-                numberOfLines={3}
-              />
+            <Dropdown label="Claim Status" value={extra.claim_status} options={CLAIM_STATUS_OPTS}
+              display={v => CLAIM_STATUS_LABELS[v] ?? v} onSelect={v => setX({ claim_status: v })} placeholder="Select" clearable />
+            <View style={styles.row}>
+              <Field label="Claim Amount" styles={styles} textAlign={textAlign} flex>
+                <TextInput style={[inputStyle, { textAlign }]} value={extra.claim_amount} onChangeText={v => setX({ claim_amount: v })}
+                  placeholder="0.00" placeholderTextColor={c.textMuted} keyboardType="decimal-pad" />
+              </Field>
+              <View style={{ width: spacing.md }} />
+              <Field label="Approved" styles={styles} textAlign={textAlign} flex>
+                <TextInput style={[inputStyle, { textAlign }]} value={extra.claim_approved_amount} onChangeText={v => setX({ claim_approved_amount: v })}
+                  placeholder="0.00" placeholderTextColor={c.textMuted} keyboardType="decimal-pad" />
+              </Field>
             </View>
+            <View style={styles.row}>
+              <Field label="Deductible" styles={styles} textAlign={textAlign} flex>
+                <TextInput style={[inputStyle, { textAlign }]} value={extra.deductible} onChangeText={v => setX({ deductible: v })}
+                  placeholder="0.00" placeholderTextColor={c.textMuted} keyboardType="decimal-pad" />
+              </Field>
+              <View style={{ width: spacing.md }} />
+              <Field label="Recovered (auto)" styles={styles} textAlign={textAlign} flex>
+                <TextInput style={[inputStyle, { textAlign }]} value={extra.recovered_amount}
+                  onChangeText={v => { recoveredTouched.current = true; setX({ recovered_amount: v }) }}
+                  placeholder="0.00" placeholderTextColor={c.textMuted} keyboardType="decimal-pad" />
+              </Field>
+            </View>
+            <AppText variant="micro" color="muted">Recovered = Claim - Approved - Deductible (auto, editable).</AppText>
 
-            {/* Estimated cost */}
-            <View style={styles.field}>
-              <AppText variant="micro" color="secondary" style={[styles.fieldLabel, { textAlign }]}>{t('accident.costLabel')}</AppText>
-              <View style={[styles.inputWithPrefix, { backgroundColor: c.surface, borderColor: c.border }, isRTL && { flexDirection: 'row-reverse' }]}>
-                <View style={[styles.inputPrefix, { backgroundColor: c.surfaceAlt, borderRightColor: c.border }]}>
-                  <AppText variant="caption" color="secondary">SAR</AppText>
+            {/* Recovery gate */}
+            <Dropdown label="Cost Recovery" value={extra.recovery_status} options={RECOVERY_DECISION_OPTS}
+              onSelect={v => setX({ recovery_status: v })} placeholder="Select" clearable />
+            {recoveryIsYes(extra.recovery_status) && (
+              <>
+                <Dropdown label="Recovery Source" value={extra.recovery_source} options={RECOVERY_SOURCE_OPTS}
+                  display={v => RECOVERY_SOURCE_LABELS[v] ?? v} onSelect={v => setX({ recovery_source: v })} placeholder="Select" clearable />
+                <View style={styles.row}>
+                  <Field label="Recovery Date" styles={styles} textAlign={textAlign} flex>
+                    <TextInput style={[inputStyle, { textAlign }]} value={extra.recovery_date} onChangeText={v => setX({ recovery_date: v })}
+                      placeholder="YYYY-MM-DD" placeholderTextColor={c.textMuted} />
+                  </Field>
+                  <View style={{ width: spacing.md }} />
+                  <Field label="Amount Transfer" styles={styles} textAlign={textAlign} flex>
+                    <TextInput style={[inputStyle, { textAlign }]} value={extra.amount_transfer} onChangeText={v => setX({ amount_transfer: v })}
+                      placeholder="0.00" placeholderTextColor={c.textMuted} keyboardType="decimal-pad" />
+                  </Field>
                 </View>
-                <TextInput
-                  style={[styles.inputInner, { color: c.text, textAlign }]}
-                  value={draft.estimated_damage_cost}
-                  onChangeText={v => update({ estimated_damage_cost: v })}
-                  placeholder={t('accident.costPlaceholder')}
-                  placeholderTextColor={c.textMuted}
-                  keyboardType="decimal-pad"
-                />
-              </View>
+                <Field label="Recovery Reference" styles={styles} textAlign={textAlign}>
+                  <TextInput style={[inputStyle, { textAlign }]} value={extra.recovery_reference} onChangeText={v => setX({ recovery_reference: v })}
+                    placeholder="Reference" placeholderTextColor={c.textMuted} />
+                </Field>
+              </>
+            )}
+          </Section>
+
+          {/* ========== REPAIR & RELEASE ========== */}
+          <Section title="Repair & Release" icon="construct-outline" styles={styles} c={c}>
+            <Dropdown label="Repair Type" value={extra.repair_type} options={REPAIR_TYPE_OPTS}
+              onSelect={v => setX({ repair_type: v })} placeholder="Select" clearable />
+            {repairIsInternal(extra.repair_type) ? (
+              <Dropdown label="Workshop Location" value={extra.workshop_location} options={sites}
+                onSelect={v => setX({ workshop_location: v })} placeholder="Select GCC site" clearable />
+            ) : (
+              <Field label="Workshop Location" styles={styles} textAlign={textAlign}>
+                <TextInput style={[inputStyle, { textAlign }]} value={extra.workshop_location} onChangeText={v => setX({ workshop_location: v })}
+                  placeholder="Workshop location / name" placeholderTextColor={c.textMuted} />
+              </Field>
+            )}
+            <Field label="Workshop Name" styles={styles} textAlign={textAlign}>
+              <TextInput style={[inputStyle, { textAlign }]} value={extra.workshop_name} onChangeText={v => setX({ workshop_name: v })}
+                placeholder={repairIsInternal(extra.repair_type) ? 'GCC Workshop' : 'External workshop name'} placeholderTextColor={c.textMuted} />
+            </Field>
+            {repairIsInternal(extra.repair_type) && (
+              <Field label="Repair Cost (SAR)" styles={styles} textAlign={textAlign}>
+                <TextInput style={[inputStyle, { textAlign }]} value={extra.repair_cost} onChangeText={v => setX({ repair_cost: v })}
+                  placeholder="0.00" placeholderTextColor={c.textMuted} keyboardType="decimal-pad" />
+              </Field>
+            )}
+            <View style={styles.row}>
+              <Field label="Expected Release" styles={styles} textAlign={textAlign} flex>
+                <TextInput style={[inputStyle, { textAlign }]} value={extra.expected_release_date} onChangeText={v => setX({ expected_release_date: v })}
+                  placeholder="YYYY-MM-DD" placeholderTextColor={c.textMuted} />
+              </Field>
+              <View style={{ width: spacing.md }} />
+              <Field label="Release Date" styles={styles} textAlign={textAlign} flex>
+                <TextInput style={[inputStyle, { textAlign }]} value={extra.release_date} onChangeText={v => setX({ release_date: v })}
+                  placeholder="YYYY-MM-DD" placeholderTextColor={c.textMuted} />
+              </Field>
             </View>
+          </Section>
 
-            {/* Notes */}
-            <View style={styles.field}>
-              <AppText variant="micro" color="secondary" style={[styles.fieldLabel, { textAlign }]}>{t('accident.notesLabel')}</AppText>
-              <TextInput
-                style={[inputStyle, styles.textArea, { textAlign }]}
-                value={draft.notes}
-                onChangeText={v => update({ notes: v })}
-                placeholder={t('accident.notesPlaceholder')}
-                placeholderTextColor={c.textMuted}
-                multiline
-                numberOfLines={3}
-              />
-            </View>
-
-            <Button
-              label={t('accident.nextBtn')}
-              icon="arrow-forward"
-              variant="danger"
-              size="lg"
-              full
-              onPress={() => setStep('step3')}
-              style={{ marginTop: spacing.xs }}
-            />
-          </ScrollView>
-        </KeyboardAvoidingView>
-      </Screen>
-    )
-  }
-
-  // -- STEP 3: Photos + Submit ----------------------------------------------
-  if (step === 'step3') {
-    const canSubmit = !submitting && !photosUploading && photoUrls.filter(isUploadedPhoto).length > 0
-    return (
-      <Screen>
-        <NavBar titleKey="accident.step3Title" onBack={() => setStep('step2')} />
-        <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
-
-          {/* Summary card */}
-          <Card accent={statusColor(theme, SEVERITY_KIND[draft.severity]).base} style={{ gap: spacing.xs }}>
-            <View style={styles.summaryRow}>
-              <View style={[styles.severityBadge, { backgroundColor: statusColor(theme, SEVERITY_KIND[draft.severity]).base }]}>
-                <AppText variant="micro" style={{ color: '#fff' }}>{t(`accident.severities.${draft.severity}`)}</AppText>
-              </View>
-              <AppText variant="bodyStrong">{t(`accident.types.${draft.accident_type}`)}</AppText>
-            </View>
-            <AppText variant="caption" color="secondary">{draft.asset_no} - {draft.site}</AppText>
-            <AppText variant="caption" color="muted">{draft.incident_date}{draft.incident_time ? '  ' + draft.incident_time : ''}</AppText>
-            {draft.location ? (
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                <Ionicons name="location-outline" size={12} color={c.textMuted} />
-                <AppText variant="caption" color="muted">{draft.location}</AppText>
-              </View>
-            ) : null}
-          </Card>
-
-          {/* Photos */}
-          <View style={styles.field}>
-            <AppText variant="micro" color="secondary" style={[styles.fieldLabel, { textAlign }]}>{t('accident.photosLabel')}</AppText>
-            <AppText variant="caption" color="muted" style={{ textAlign }}>{t('accident.photosHint')}</AppText>
+          {/* ========== PHOTOS ========== */}
+          <Section title="Photos *" icon="images-outline" styles={styles} c={c}>
+            <AppText variant="caption" color="muted" style={{ textAlign }}>Attach at least one photo of the scene / damage.</AppText>
             <View style={{ marginTop: spacing.sm }}>
-              <AccidentPhotoGrid
-                photos={photoUrls}
-                localUris={photoLocalUris}
+              <AccidentPhotoGrid photos={photoUrls} localUris={photoLocalUris}
                 onPhotosChange={(urls, uris) => { setPhotoUrls(urls); setPhotoLocalUris(uris) }}
-                onUploadingChange={setPhotosUploading}
-              />
+                onUploadingChange={setPhotosUploading} />
             </View>
             {photosUploading && (
               <View style={styles.uploadingRow}>
@@ -673,180 +825,163 @@ export default function AccidentReportScreen() {
                 <AppText variant="caption" color="muted">Uploading photo...</AppText>
               </View>
             )}
-          </View>
+            <Field label="Notes" styles={styles} textAlign={textAlign}>
+              <TextInput style={[inputStyle, styles.textArea, { textAlign }]} value={base.notes} onChangeText={v => setB({ notes: v })}
+                placeholder="Any extra context" placeholderTextColor={c.textMuted} multiline numberOfLines={3} />
+            </Field>
+          </Section>
 
-          <Button
-            label={submitting ? t('accident.submitting') : t('accident.submitBtn')}
-            icon="cloud-upload-outline"
-            variant="danger"
-            size="lg"
-            full
-            loading={submitting}
-            disabled={!canSubmit}
-            onPress={handleSubmit}
-            style={{ marginTop: spacing.xs }}
-          />
+          <Button label={submitting ? 'Submitting...' : 'Submit Report'} icon="cloud-upload-outline"
+            variant="danger" size="lg" full loading={submitting} disabled={!canSubmit}
+            onPress={handleSubmit} style={{ marginTop: spacing.xs }} />
         </ScrollView>
-      </Screen>
-    )
-  }
-
-  // -- SUCCESS ---------------------------------------------------------------
-  return (
-    <Screen>
-      <View style={styles.successWrap}>
-        <View style={[styles.successIcon, { backgroundColor: c.danger.soft }]}>
-          <Ionicons name="shield-checkmark" size={72} color={c.danger.base} />
-        </View>
-        <AppText variant="h1" center>{t('accident.submittedTitle')}</AppText>
-        <AppText variant="body" color="secondary" center style={{ marginTop: spacing.xs }}>{t('accident.submittedSubtitle')}</AppText>
-        {savedOffline && (
-          <View style={[styles.offlineNote, { backgroundColor: c.warning.soft }]}>
-            <Ionicons name="cloud-offline-outline" size={16} color={c.warning.base} />
-            <AppText variant="caption" style={{ flex: 1, color: c.warning.on }}>Saved on device - it will sync automatically when back online.</AppText>
-          </View>
-        )}
-        <AppText variant="caption" color="muted" center style={{ marginTop: spacing.md }}>
-          {getEffectiveAssetNo()} - {draft.site}{'\n'}
-          {draft.incident_date}
-        </AppText>
-
-        <Button
-          label={t('accident.backHome')}
-          icon="home-outline"
-          variant="danger"
-          size="lg"
-          onPress={() => router.replace('/(app)')}
-          style={{ marginTop: spacing['2xl'], minWidth: 220 }}
-        />
-        <Button
-          label={t('accident.newReport')}
-          icon="add-circle-outline"
-          variant="secondary"
-          onPress={() => {
-            setDraft(emptyAccidentDraft())
-            setPhotoUrls([])
-            setPhotoLocalUris([])
-            setStep('step1')
-          }}
-          style={{ marginTop: spacing.md, minWidth: 220 }}
-        />
-      </View>
+      </KeyboardAvoidingView>
     </Screen>
   )
 }
 
-// -- Type icon map ----------------------------------------------------------------
-const TYPE_ICONS: Record<AccidentType, IconName> = {
-  collision:       'car-sport-outline',
-  rollover:        'refresh-circle-outline',
-  tyre_failure:    'disc-outline',
-  mechanical:      'build-outline',
-  near_miss:       'warning-outline',
-  property_damage: 'business-outline',
-  other:           'ellipsis-horizontal-circle-outline',
+// ── Reusable pieces ────────────────────────────────────────────────────────────
+
+function Section({
+  title, icon, children, styles, c,
+}: { title: string; icon: IconName; children: React.ReactNode; styles: any; c: Theme['color'] }) {
+  return (
+    <Card padded={false}>
+      <View style={styles.sectionHeader}>
+        <Ionicons name={icon} size={15} color={c.danger.base} />
+        <AppText variant="label" style={{ color: c.text }}>{title}</AppText>
+      </View>
+      <View style={styles.sectionBody}>{children}</View>
+    </Card>
+  )
+}
+
+function Field({
+  label, children, styles, textAlign, flex,
+}: { label: string; children: React.ReactNode; styles: any; textAlign: 'left' | 'right'; flex?: boolean }) {
+  return (
+    <View style={[styles.field, flex && { flex: 1 }]}>
+      <AppText variant="micro" color="secondary" style={[styles.fieldLabel, { textAlign }]}>{label}</AppText>
+      {children}
+    </View>
+  )
+}
+
+/** Clear bottom-sheet dropdown for constrained vocabularies. */
+function Dropdown({
+  label, value, options, onSelect, placeholder, display, clearable,
+}: {
+  label: string
+  value: string
+  options: readonly string[]
+  onSelect: (v: string) => void
+  placeholder?: string
+  display?: (v: string) => string
+  clearable?: boolean
+}) {
+  const { theme } = useTheme()
+  const c = theme.color
+  const styles = useMemo(() => createStyles(theme), [theme])
+  const [open, setOpen] = useState(false)
+  const shown = value ? (display ? display(value) : value) : ''
+  return (
+    <View style={styles.field}>
+      <AppText variant="micro" color="secondary" style={styles.fieldLabel}>{label}</AppText>
+      <TouchableOpacity style={[styles.select, { backgroundColor: c.surface, borderColor: c.border }]} onPress={() => setOpen(true)} activeOpacity={0.8}>
+        <AppText variant="body" style={{ flex: 1, color: shown ? c.text : c.textMuted }}>{shown || placeholder || 'Select'}</AppText>
+        <Ionicons name="chevron-down" size={18} color={c.textSecondary} />
+      </TouchableOpacity>
+      <Modal visible={open} transparent animationType="slide" onRequestClose={() => setOpen(false)}>
+        <TouchableOpacity style={[styles.ddBackdrop, { backgroundColor: c.overlay }]} activeOpacity={1} onPress={() => setOpen(false)}>
+          <View style={[styles.ddSheet, { backgroundColor: c.surface }]}>
+            <View style={[styles.ddHandle, { backgroundColor: c.borderStrong }]} />
+            <AppText variant="h3" style={{ marginBottom: spacing.sm }}>{label}</AppText>
+            <ScrollView style={{ maxHeight: 360 }}>
+              {clearable && (
+                <TouchableOpacity style={styles.ddOption} onPress={() => { onSelect(''); setOpen(false) }}>
+                  <AppText variant="body" color="muted">Clear</AppText>
+                  {!value && <Ionicons name="checkmark-circle" size={20} color={c.danger.base} />}
+                </TouchableOpacity>
+              )}
+              {options.map(opt => {
+                const active = opt === value
+                return (
+                  <TouchableOpacity key={opt} style={[styles.ddOption, active && { backgroundColor: c.danger.soft }]} onPress={() => { onSelect(opt); setOpen(false) }}>
+                    <AppText variant="body" style={{ flex: 1, color: active ? c.danger.on : c.textSecondary }}>{display ? display(opt) : opt}</AppText>
+                    {active && <Ionicons name="checkmark-circle" size={20} color={c.danger.base} />}
+                  </TouchableOpacity>
+                )
+              })}
+            </ScrollView>
+            <TouchableOpacity style={[styles.ddCancel, { backgroundColor: c.surfaceAlt }]} onPress={() => setOpen(false)}>
+              <AppText variant="bodyStrong" color="secondary">Close</AppText>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
+    </View>
+  )
 }
 
 function createStyles(theme: Theme) {
   const c = theme.color
   return StyleSheet.create({
-    loader:  { flex: 1, alignItems: 'center', justifyContent: 'center' },
-    scroll:  { flex: 1 },
+    loader: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+    scroll: { flex: 1 },
     content: { padding: spacing.lg, paddingBottom: spacing['4xl'], gap: spacing.lg },
 
-    // Nav
     nav: {
       flexDirection: 'row', alignItems: 'center',
       paddingHorizontal: spacing.lg, paddingVertical: spacing.md,
-      backgroundColor: c.surface,
-      borderBottomWidth: 1, borderBottomColor: c.border,
-      gap: spacing.md,
+      backgroundColor: c.surface, borderBottomWidth: 1, borderBottomColor: c.border, gap: spacing.md,
     },
-    navBack: {
-      width: 38, height: 38, borderRadius: 12,
-      backgroundColor: c.danger.soft,
-      alignItems: 'center', justifyContent: 'center',
-    },
-    stepPills: { flexDirection: 'row', gap: 5 },
-    stepPill: {
-      width: 26, height: 26, borderRadius: 13,
-      alignItems: 'center', justifyContent: 'center',
-    },
+    navBack: { width: 38, height: 38, borderRadius: 12, backgroundColor: c.danger.soft, alignItems: 'center', justifyContent: 'center' },
 
-    // Fields
+    sectionHeader: {
+      flexDirection: 'row', alignItems: 'center', gap: spacing.sm,
+      paddingHorizontal: spacing.lg, paddingTop: spacing.md, paddingBottom: spacing.sm + 2,
+      borderBottomWidth: 1, borderBottomColor: c.border,
+    },
+    sectionBody: { padding: spacing.lg, gap: spacing.md },
+
     field: { gap: 6 },
     fieldLabel: { textTransform: 'uppercase', letterSpacing: 0.5 },
-    input: {
-      borderWidth: 1.5, borderRadius: radius.md,
-      paddingHorizontal: spacing.md, paddingVertical: spacing.md,
-      fontSize: 15,
-    },
-    textArea: { minHeight: 88, textAlignVertical: 'top' },
+    input: { borderWidth: 1.5, borderRadius: radius.md, paddingHorizontal: spacing.md, paddingVertical: spacing.md, fontSize: 15 },
+    textArea: { minHeight: 84, textAlignVertical: 'top' },
     row: { flexDirection: 'row' },
 
-    // Severity chips
-    severityRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
-    severityChip: {
-      flexDirection: 'row', alignItems: 'center', gap: 5,
-      paddingHorizontal: spacing.md, paddingVertical: spacing.sm,
-      borderRadius: radius.pill, borderWidth: 1.5,
+    select: {
+      flexDirection: 'row', alignItems: 'center', gap: spacing.sm,
+      borderWidth: 1.5, borderRadius: radius.md, paddingHorizontal: spacing.md, paddingVertical: spacing.md,
     },
 
-    // Accident type chips
-    typeGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
-    typeChip: {
-      flexDirection: 'row', alignItems: 'center', gap: 6,
-      paddingHorizontal: spacing.md, paddingVertical: spacing.sm,
-      borderRadius: radius.md, borderWidth: 1.5,
-    },
+    sevRow: { flexDirection: 'row', gap: spacing.sm },
+    sevChip: { flex: 1, alignItems: 'center', paddingVertical: spacing.sm + 2, borderRadius: radius.pill, borderWidth: 1.5 },
 
-    // Vehicle / site chips
     chipRow: { flexDirection: 'row', gap: spacing.sm, paddingBottom: spacing.xs },
-    chip: {
-      paddingHorizontal: spacing.md, paddingVertical: spacing.md - 2,
-      borderRadius: radius.md, borderWidth: 1.5, alignItems: 'center',
-    },
+    chip: { paddingHorizontal: spacing.md, paddingVertical: spacing.md - 2, borderRadius: radius.md, borderWidth: 1.5, alignItems: 'center' },
 
-    // Manual entry
-    manualToggle: {
-      flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: spacing.sm,
-    },
-
-    // Upload progress
+    manualToggle: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: spacing.sm },
     uploadingRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginTop: spacing.xs },
 
-    // Toggle rows
     toggleRow: {
       flexDirection: 'row', alignItems: 'center',
       backgroundColor: c.surface, borderRadius: radius.md,
       padding: spacing.md, borderWidth: 1, borderColor: c.border,
     },
 
-    // Input with prefix
-    inputWithPrefix: {
-      flexDirection: 'row', alignItems: 'center',
-      borderWidth: 1.5, borderRadius: radius.md, overflow: 'hidden',
+    // Dropdown sheet
+    ddBackdrop: { flex: 1, justifyContent: 'flex-end' },
+    ddSheet: { borderTopLeftRadius: radius['2xl'], borderTopRightRadius: radius['2xl'], padding: spacing.xl, paddingBottom: 36 },
+    ddHandle: { width: 40, height: 4, borderRadius: 2, alignSelf: 'center', marginBottom: spacing.md },
+    ddOption: {
+      flexDirection: 'row', alignItems: 'center', gap: spacing.md,
+      paddingVertical: spacing.md, paddingHorizontal: spacing.md, borderRadius: radius.md, marginBottom: 2,
     },
-    inputPrefix: {
-      paddingHorizontal: spacing.md, paddingVertical: spacing.md,
-      borderRightWidth: 1,
-    },
-    inputInner: {
-      flex: 1, paddingHorizontal: spacing.md, paddingVertical: spacing.md, fontSize: 15,
-    },
+    ddCancel: { marginTop: spacing.sm, paddingVertical: spacing.md, borderRadius: radius.md, alignItems: 'center' },
 
-    // Summary card (step 3)
-    summaryRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-    severityBadge: {
-      paddingHorizontal: spacing.md, paddingVertical: 4, borderRadius: radius.md,
-    },
-
-    // Success
     successWrap: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: spacing['2xl'] },
-    successIcon: {
-      width: 108, height: 108, borderRadius: 54,
-      alignItems: 'center', justifyContent: 'center', marginBottom: spacing.xl,
-    },
+    successIcon: { width: 108, height: 108, borderRadius: 54, alignItems: 'center', justifyContent: 'center', marginBottom: spacing.xl },
     offlineNote: {
       flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginTop: spacing.lg,
       borderRadius: radius.md, paddingHorizontal: spacing.md, paddingVertical: spacing.sm + 2, maxWidth: 340,

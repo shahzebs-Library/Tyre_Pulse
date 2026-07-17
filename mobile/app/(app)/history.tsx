@@ -1,12 +1,13 @@
 import { useEffect, useState, useCallback, useMemo } from 'react'
 import {
   View, FlatList, StyleSheet, TouchableOpacity,
-  RefreshControl, TextInput,
+  RefreshControl, TextInput, Alert, ActivityIndicator,
 } from 'react-native'
 import { useRouter } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
 import { supabase } from '../../lib/supabase'
 import { getQueue, syncQueue } from '../../lib/offlineQueue'
+import { shareInspectionById } from '../../lib/inspectionReportPdf'
 import { useAuth } from '../../contexts/AuthContext'
 import { useLanguage } from '../../contexts/LanguageContext'
 import { useTheme } from '../../contexts/ThemeContext'
@@ -54,6 +55,22 @@ export default function HistoryScreen() {
   const [query, setQuery] = useState('')
   const [filter, setFilter] = useState<FilterKey>('all')
   const [error, setError] = useState<string | null>(null)
+  const [sharingId, setSharingId] = useState<string | null>(null)
+
+  // Share a synced inspection as PDF (fetches the full record by id, then builds
+  // + opens the device share sheet). Only offered for synced (openable) rows -
+  // offline-queued rows are not yet persisted server-side.
+  const shareRow = useCallback(async (id: string) => {
+    if (sharingId) return
+    setSharingId(id)
+    try {
+      await shareInspectionById(id)
+    } catch (e: any) {
+      Alert.alert('Share failed', e?.message || 'Could not generate the PDF.')
+    } finally {
+      setSharingId(null)
+    }
+  }, [sharingId])
 
   const dateLocale = isRTL ? 'ar-SA' : 'en-GB'
   const textAlign = isRTL ? 'right' : 'left'
@@ -198,6 +215,24 @@ export default function HistoryScreen() {
           <View style={s.cardRight}>
             <Badge kind={meta.kind} icon={meta.icon as any}>{statusLabelFor(item.sync_status)}</Badge>
             {item.locked ? <Badge kind="neutral" icon="lock-closed">Locked</Badge> : null}
+            {openable ? (
+              <TouchableOpacity
+                style={s.shareChip}
+                onPress={() => shareRow(item.id)}
+                disabled={sharingId === item.id}
+                activeOpacity={0.85}
+                hitSlop={8}
+              >
+                {sharingId === item.id
+                  ? <ActivityIndicator size="small" color={theme.color.primary} />
+                  : (
+                    <>
+                      <Ionicons name="share-outline" size={13} color={theme.color.primary} />
+                      <AppText variant="micro" style={{ color: theme.color.primary }}>PDF</AppText>
+                    </>
+                  )}
+              </TouchableOpacity>
+            ) : null}
           </View>
         </View>
       </Card>
@@ -355,5 +390,11 @@ function makeStyles(theme: Theme) {
     cardIcon: { width: 42, height: 42, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center' },
     metaRow: { flexDirection: 'row', alignItems: 'center', gap: 4, flexWrap: 'wrap' },
     cardRight: { alignItems: 'flex-end', gap: spacing.xs },
+    shareChip: {
+      flexDirection: 'row', alignItems: 'center', gap: 3,
+      paddingHorizontal: spacing.sm, paddingVertical: 4,
+      borderRadius: radius.sm, borderWidth: 1, borderColor: c.primary,
+      backgroundColor: c.primarySoft, minWidth: 34, justifyContent: 'center',
+    },
   })
 }

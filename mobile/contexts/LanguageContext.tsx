@@ -11,8 +11,27 @@ import ur from '../locales/ur.json'
 
 export type Language = 'en' | 'ar' | 'ur'
 
-const TRANSLATIONS: Record<Language, typeof en> = { en, ar, ur }
+// en.json is the canonical key shape; ar/ur may carry extra keys and are
+// resolved at runtime with a key fallback, so a permissive value type is used.
+const TRANSLATIONS: Record<Language, Record<string, any>> = { en, ar, ur }
 const STORAGE_KEY = 'tp_language'
+
+/** Languages that render right-to-left. */
+function isRtlLang(lang: Language): boolean {
+  return lang === 'ar' || lang === 'ur'
+}
+
+/**
+ * Apply RTL layout, but only when it actually changes — flipping I18nManager
+ * unnecessarily is wasteful and, on native, a real change needs an app reload
+ * to fully take effect (handled by the reload prompt in setLanguage).
+ */
+function applyRTL(lang: Language) {
+  const shouldRTL = isRtlLang(lang)
+  if (I18nManager.isRTL === shouldRTL) return
+  I18nManager.allowRTL(shouldRTL)
+  I18nManager.forceRTL(shouldRTL)
+}
 
 interface LanguageContextType {
   language: Language
@@ -35,8 +54,7 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
     AsyncStorage.getItem(STORAGE_KEY).then(saved => {
       if (saved === 'ar' || saved === 'ur' || saved === 'en') {
         setLanguageState(saved)
-        I18nManager.allowRTL(saved === 'ar' || saved === 'ur')
-        I18nManager.forceRTL(saved === 'ar' || saved === 'ur')
+        applyRTL(saved)
       }
     })
   }, [])
@@ -59,20 +77,22 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
         text: continueLabel,
         onPress: async () => {
           await AsyncStorage.setItem(STORAGE_KEY, lang)
-          I18nManager.allowRTL(lang === 'ar' || lang === 'ur')
-          I18nManager.forceRTL(lang === 'ar' || lang === 'ur')
+          // Apply the RTL layout direction (guarded to only flip on a change).
+          // A native RTL flip only fully applies after a reload, prompted here.
+          applyRTL(lang)
+          setLanguageState(lang)
           try {
             await Updates.reloadAsync()
           } catch {
-            // In dev/Expo Go: Updates.reloadAsync may not be available
-            setLanguageState(lang)
+            // In dev/Expo Go: Updates.reloadAsync may not be available.
+            // The language state is already updated above so strings switch live.
           }
         },
       },
     ])
   }
 
-  const isRTL = language === 'ar' || language === 'ur'
+  const isRTL = isRtlLang(language)
 
   return (
     <LanguageContext.Provider value={{ language, isRTL, setLanguage, t }}>

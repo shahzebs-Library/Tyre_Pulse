@@ -15,7 +15,7 @@ import { canCountStock } from '../../lib/permissions'
 import { setStockCount, adjustStock, statusFor } from '../../lib/stock'
 import { Theme, StatusKind, spacing, radius, elevation } from '../../lib/theme'
 import {
-  Screen, Card, AppText, Badge, StatTile, Button, Loading, EmptyState,
+  Screen, Card, AppText, Badge, StatTile, Button, Loading, EmptyState, ErrorState,
 } from '../../components/ui'
 
 interface StockItem {
@@ -70,6 +70,7 @@ export default function StockScreen() {
   const router = useRouter()
   const [rows, setRows] = useState<StockItem[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [refreshing, setRefreshing] = useState(false)
   const [filter, setFilter] = useState<FilterKey>('all')
   const [query, setQuery] = useState('')
@@ -86,15 +87,23 @@ export default function StockScreen() {
   const mayAdjust = canCountStock(profile?.role)
 
   const load = useCallback(async () => {
-    let q = supabase
-      .from('stock_records')
-      .select('id,site,description,stock_qty,min_level,critical_level,stock_status,updated_at')
-      .order('site')
-      .limit(1000)
-    if (profile?.country) q = q.or(`country.eq.${profile.country},country.is.null`)
-    const { data } = await q
-    setRows((data as StockItem[]) ?? [])
-    setLoading(false)
+    try {
+      setError(null)
+      let q = supabase
+        .from('stock_records')
+        .select('id,site,description,stock_qty,min_level,critical_level,stock_status,updated_at')
+        .order('site')
+        .limit(1000)
+      if (profile?.country) q = q.or(`country.eq.${profile.country},country.is.null`)
+      const { data, error: qErr } = await q
+      if (qErr) throw qErr
+      setRows((data as StockItem[]) ?? [])
+    } catch (e: any) {
+      if (__DEV__) console.warn('[stock] load failed:', e?.message)
+      setError('Could not load stock. Pull down to retry.')
+    } finally {
+      setLoading(false)
+    }
   }, [profile?.country])
 
   useEffect(() => { load() }, [load])
@@ -256,13 +265,21 @@ export default function StockScreen() {
           keyExtractor={i => i.id}
           contentContainerStyle={s.list}
           showsVerticalScrollIndicator={false}
+          initialNumToRender={10}
+          maxToRenderPerBatch={12}
+          windowSize={11}
+          removeClippedSubviews
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.color.primary} />}
           ListEmptyComponent={
-            <EmptyState
-              icon="cube-outline"
-              title={t('modules.stock.none')}
-              message={query || filter !== 'all' ? 'Try a different search or filter.' : undefined}
-            />
+            error ? (
+              <ErrorState message={error} onRetry={onRefresh} />
+            ) : (
+              <EmptyState
+                icon="cube-outline"
+                title={t('modules.stock.none')}
+                message={query || filter !== 'all' ? 'Try a different search or filter.' : undefined}
+              />
+            )
           }
           renderItem={({ item }) => {
             const qty = item.stock_qty ?? 0

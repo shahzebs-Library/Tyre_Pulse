@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from 'react'
+import { useEffect, useState, useMemo, useCallback } from 'react'
 import {
   View, Text, ScrollView, StyleSheet, TouchableOpacity,
   StatusBar, ActivityIndicator, useWindowDimensions,
@@ -40,16 +40,31 @@ export default function InspectionDetailScreen() {
   const { width } = useWindowDimensions()
   const [insp, setInsp] = useState<Inspection | null>(null)
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
   const textAlign = isRTL ? 'right' : 'left'
 
-  useEffect(() => {
+  // Load guarded end-to-end: a network rejection or query error surfaces a
+  // retryable error state instead of spinning forever or crashing.
+  const load = useCallback(async () => {
     if (!id) { setLoading(false); return }
-    supabase.from('inspections')
-      .select('id,title,site,asset_no,vehicle_type,inspector,inspection_date,status,notes,locked,tyre_conditions')
-      .eq('id', id).single()
-      .then(({ data }) => { setInsp(data as Inspection); setLoading(false) })
+    setLoading(true)
+    setError(null)
+    try {
+      const { data, error: qErr } = await supabase.from('inspections')
+        .select('id,title,site,asset_no,vehicle_type,inspector,inspection_date,status,notes,locked,tyre_conditions')
+        .eq('id', id).single()
+      if (qErr) throw qErr
+      setInsp((data as Inspection) ?? null)
+    } catch (e: any) {
+      setInsp(null)
+      setError(e?.message || 'Could not load this inspection.')
+    } finally {
+      setLoading(false)
+    }
   }, [id])
+
+  useEffect(() => { load() }, [load])
 
   const conditions = insp?.tyre_conditions ?? {}
   const positions = insp
@@ -77,6 +92,15 @@ export default function InspectionDetailScreen() {
 
       {loading ? (
         <ActivityIndicator color={theme.color.primary} style={{ marginTop: 40 }} />
+      ) : error ? (
+        <View style={styles.empty}>
+          <Ionicons name="cloud-offline-outline" size={48} color={theme.color.danger.base} />
+          <Text style={styles.emptyText}>{error}</Text>
+          <TouchableOpacity style={styles.retryBtn} onPress={load} activeOpacity={0.85}>
+            <Ionicons name="refresh" size={16} color={theme.color.onPrimary} />
+            <Text style={styles.retryText}>Retry</Text>
+          </TouchableOpacity>
+        </View>
       ) : !insp ? (
         <View style={styles.empty}>
           <Ionicons name="document-outline" size={48} color={theme.color.borderStrong} />
@@ -216,7 +240,13 @@ function makeStyles(theme: Theme) {
     condTitle: { fontSize: 14, fontWeight: '700', color: c.text, textTransform: 'capitalize' },
     condMeta: { fontSize: 12, color: c.textMuted, marginTop: 1 },
     notes: { fontSize: 14, color: c.textSecondary, lineHeight: 20 },
-    empty: { alignItems: 'center', paddingVertical: spacing['5xl'], gap: spacing.sm + 2 },
-    emptyText: { ...typography.title, color: c.textMuted },
+    empty: { alignItems: 'center', paddingVertical: spacing['5xl'], gap: spacing.sm + 2, paddingHorizontal: spacing.lg },
+    emptyText: { ...typography.title, color: c.textMuted, textAlign: 'center' },
+    retryBtn: {
+      flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.xs + 2,
+      backgroundColor: c.primary, borderRadius: radius.md, paddingHorizontal: spacing.lg,
+      height: 44, marginTop: spacing.sm,
+    },
+    retryText: { color: c.onPrimary, fontSize: 14, fontWeight: '700' },
   })
 }

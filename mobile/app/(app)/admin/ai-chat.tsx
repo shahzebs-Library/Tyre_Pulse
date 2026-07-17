@@ -9,7 +9,7 @@
 
 import { useState, useRef, useCallback, useEffect } from 'react'
 import {
-  View, Text, ScrollView, TextInput, TouchableOpacity, StyleSheet,
+  View, Text, ScrollView, FlatList, TextInput, TouchableOpacity, StyleSheet,
   StatusBar, ActivityIndicator, KeyboardAvoidingView, Platform,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
@@ -85,33 +85,39 @@ export default function AiChatScreen() {
   const [input, setInput]       = useState('')
   const [sending, setSending]   = useState(false)
   const [context, setContext]   = useState('')
-  const scrollRef = useRef<ScrollView>(null)
+  const scrollRef = useRef<FlatList<Message>>(null)
 
   // Pre-load fleet context once
   useEffect(() => {
     if (!allowed) return
 
     async function buildContext() {
-      const [accRes, alertRes, inspRes] = await Promise.all([
-        supabase.from('accidents').select('severity, status, site').limit(200),
-        supabase.from('alerts').select('severity').eq('resolved', false).eq('is_active', true),
-        supabase.from('inspections').select('status, site').limit(200),
-      ])
-      const accs  = accRes.data ?? []
-      const alts  = alertRes.data ?? []
-      const insps = inspRes.data ?? []
+      try {
+        const [accRes, alertRes, inspRes] = await Promise.all([
+          supabase.from('accidents').select('severity, status, site').limit(200),
+          supabase.from('alerts').select('severity').eq('resolved', false).eq('is_active', true),
+          supabase.from('inspections').select('status, site').limit(200),
+        ])
+        const accs  = accRes.data ?? []
+        const alts  = alertRes.data ?? []
+        const insps = inspRes.data ?? []
 
-      const open    = accs.filter(a => a.status !== 'closed').length
-      const fatal   = accs.filter(a => a.severity === 'fatal').length
-      const severe  = accs.filter(a => a.severity === 'severe').length
+        const open    = accs.filter(a => a.status !== 'closed').length
+        const fatal   = accs.filter(a => a.severity === 'fatal').length
+        const severe  = accs.filter(a => a.severity === 'severe').length
 
-      setContext(
-        `FLEET CONTEXT (live data):\n` +
-        `- Total accidents: ${accs.length} | Open: ${open} | Fatal: ${fatal} | Severe: ${severe}\n` +
-        `- Active alerts: ${alts.length}\n` +
-        `- Total inspections: ${insps.length}\n` +
-        `- Admin user: ${profile?.full_name ?? 'Admin'} | Role: ${profile?.role}\n`
-      )
+        setContext(
+          `FLEET CONTEXT (live data):\n` +
+          `- Total accidents: ${accs.length} | Open: ${open} | Fatal: ${fatal} | Severe: ${severe}\n` +
+          `- Active alerts: ${alts.length}\n` +
+          `- Total inspections: ${insps.length}\n` +
+          `- Admin user: ${profile?.full_name ?? 'Admin'} | Role: ${profile?.role}\n`
+        )
+      } catch (e) {
+        // Context is best-effort; the chat still works without it.
+        if (__DEV__) console.warn('[ai-chat] context build failed', e)
+        setContext(`- Admin user: ${profile?.full_name ?? 'Admin'} | Role: ${profile?.role}\n`)
+      }
     }
     buildContext()
   }, [allowed, profile?.full_name, profile?.role])
@@ -228,13 +234,18 @@ export default function AiChatScreen() {
         keyboardVerticalOffset={0}
       >
         {/* ── Messages ─────────────────────────────────────────────────────── */}
-        <ScrollView
+        <FlatList
           ref={scrollRef}
           style={styles.messageScroll}
           contentContainerStyle={styles.messageContent}
-        >
-          {/* Welcome + suggestions */}
-          {messages.length === 0 && (
+          data={messages}
+          keyExtractor={(_, i) => String(i)}
+          initialNumToRender={10}
+          maxToRenderPerBatch={10}
+          windowSize={11}
+          keyboardShouldPersistTaps="handled"
+          onContentSizeChange={() => { if (messages.length > 0) scrollRef.current?.scrollToEnd({ animated: true }) }}
+          ListEmptyComponent={
             <View style={styles.welcome}>
               <View style={[styles.welcomeIcon, { backgroundColor: cfg.bg }]}>
                 <Ionicons name={cfg.icon as any} size={28} color={cfg.color} />
@@ -242,18 +253,16 @@ export default function AiChatScreen() {
               <Text style={styles.welcomeTitle}>{cfg.label} Agent</Text>
               <Text style={styles.welcomeSub}>{cfg.placeholder}</Text>
               <View style={styles.suggestionGrid}>
-                {SUGGESTIONS[agent].map((s, i) => (
-                  <TouchableOpacity key={i} style={styles.suggestion} onPress={() => send(s)}>
-                    <Text style={styles.suggestionText}>{s}</Text>
+                {SUGGESTIONS[agent].map((sg, i) => (
+                  <TouchableOpacity key={i} style={styles.suggestion} onPress={() => send(sg)}>
+                    <Text style={styles.suggestionText}>{sg}</Text>
                   </TouchableOpacity>
                 ))}
               </View>
             </View>
-          )}
-
-          {/* Chat bubbles */}
-          {messages.map((msg, i) => (
-            <View key={i} style={[styles.bubble, msg.role === 'user' ? styles.bubbleUser : styles.bubbleAi]}>
+          }
+          renderItem={({ item: msg }) => (
+            <View style={[styles.bubble, msg.role === 'user' ? styles.bubbleUser : styles.bubbleAi]}>
               {msg.role === 'assistant' && (
                 <View style={[styles.agentAvatar, { backgroundColor: AGENTS[msg.agent ?? 'analyst'].bg }]}>
                   <Ionicons name={AGENTS[msg.agent ?? 'analyst'].icon as any} size={13} color={AGENTS[msg.agent ?? 'analyst'].color} />
@@ -268,8 +277,8 @@ export default function AiChatScreen() {
                 }
               </View>
             </View>
-          ))}
-        </ScrollView>
+          )}
+        />
 
         {/* ── Input bar ────────────────────────────────────────────────────── */}
         <View style={styles.inputBar}>

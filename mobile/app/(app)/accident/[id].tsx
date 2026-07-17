@@ -101,23 +101,37 @@ export default function AccidentDetailScreen() {
 
   const load = useCallback(async () => {
     if (!allowed || !id) return
-    const [accRes, auditRes] = await Promise.all([
-      supabase.from('accidents').select('*').eq('id', id).single(),
-      canSeeAudit
-        ? supabase.rpc('get_accident_audit', { p_accident_id: id })
-        : Promise.resolve({ data: [] }),
-    ])
+    try {
+      const [accRes, auditRes] = await Promise.all([
+        supabase.from('accidents').select('*').eq('id', id).single(),
+        canSeeAudit
+          ? supabase.rpc('get_accident_audit', { p_accident_id: id })
+          : Promise.resolve({ data: [] }),
+      ])
 
-    if (accRes.error || !accRes.data) {
-      Alert.alert('Error', 'Could not load accident report.')
+      if (accRes.error || !accRes.data) {
+        Alert.alert('Error', 'Could not load accident report.')
+        router.back()
+        return
+      }
+      const loadedAccident = accRes.data as AccidentRecord
+      setAccident(loadedAccident)
+      // Photo URL resolution is best-effort: a storage hiccup must not blank the report.
+      try {
+        const refs = Array.isArray(loadedAccident.photos) ? loadedAccident.photos.filter(Boolean) : []
+        setPhotoUrls(await resolveStorageUrls(refs))
+      } catch (e: any) {
+        if (__DEV__) console.warn('[accident/detail] photo resolve failed:', e?.message)
+        setPhotoUrls([])
+      }
+      setAuditLog((auditRes.data ?? []) as AuditRow[])
+    } catch (e: any) {
+      if (__DEV__) console.warn('[accident/detail] load failed:', e?.message)
+      Alert.alert('Error', 'Could not load accident report. Please try again.')
       router.back()
-      return
+    } finally {
+      setLoading(false)
     }
-    const loadedAccident = accRes.data as AccidentRecord
-    setAccident(loadedAccident)
-    setPhotoUrls(await resolveStorageUrls(Array.isArray(loadedAccident.photos) ? loadedAccident.photos.filter(Boolean) : []))
-    setAuditLog((auditRes.data ?? []) as AuditRow[])
-    setLoading(false)
   }, [allowed, id, canSeeAudit])
 
   useEffect(() => { load() }, [load])
@@ -126,20 +140,26 @@ export default function AccidentDetailScreen() {
     if (!accident) return
     setStatusLoading(true)
     setShowStatusModal(false)
-    const { error } = await supabase
-      .from('accidents')
-      .update({ status: newStatus })
-      .eq('id', accident.id)
+    try {
+      const { error } = await supabase
+        .from('accidents')
+        .update({ status: newStatus })
+        .eq('id', accident.id)
 
-    if (error) {
-      Alert.alert('Error', 'Failed to update status.')
-    } else {
-      setAccident(prev => prev ? { ...prev, status: newStatus } : prev)
-      // Reload audit log
-      const { data } = await supabase.rpc('get_accident_audit', { p_accident_id: accident.id })
-      if (data) setAuditLog(data as AuditRow[])
+      if (error) {
+        Alert.alert('Error', 'Failed to update status.')
+      } else {
+        setAccident(prev => prev ? { ...prev, status: newStatus } : prev)
+        // Reload audit log (best-effort; a status update already succeeded)
+        const { data } = await supabase.rpc('get_accident_audit', { p_accident_id: accident.id })
+        if (data) setAuditLog(data as AuditRow[])
+      }
+    } catch (e: any) {
+      if (__DEV__) console.warn('[accident/detail] status update failed:', e?.message)
+      Alert.alert('Error', 'Failed to update status. Please try again.')
+    } finally {
+      setStatusLoading(false)
     }
-    setStatusLoading(false)
   }
 
   async function analyzeWithAI() {
@@ -212,13 +232,20 @@ Risk Level: [Critical / High / Medium / Low]
           text: 'Delete',
           style: 'destructive',
           onPress: async () => {
+            if (!accident) return
             setDeleting(true)
-            const { error } = await supabase.from('accidents').delete().eq('id', accident!.id)
-            setDeleting(false)
-            if (error) {
-              Alert.alert('Error', 'Failed to delete report.')
-            } else {
-              router.back()
+            try {
+              const { error } = await supabase.from('accidents').delete().eq('id', accident.id)
+              if (error) {
+                Alert.alert('Error', 'Failed to delete report.')
+              } else {
+                router.back()
+              }
+            } catch (e: any) {
+              if (__DEV__) console.warn('[accident/detail] delete failed:', e?.message)
+              Alert.alert('Error', 'Failed to delete report. Please try again.')
+            } finally {
+              setDeleting(false)
             }
           },
         },

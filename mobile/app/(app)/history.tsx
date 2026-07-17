@@ -59,6 +59,7 @@ export default function HistoryScreen() {
   const textAlign = isRTL ? 'right' : 'left'
 
   const load = useCallback(async () => {
+    try {
     const queue = await getQueue()
     const offlineItems: HistoryItem[] = queue.map(item => ({
       id: item.id,
@@ -100,7 +101,12 @@ export default function HistoryScreen() {
     }
 
     setItems([...offlineItems, ...syncedItems])
-    setLoading(false)
+    } catch (e: any) {
+      if (__DEV__) console.warn('[history] load failed:', e?.message)
+      setError('Could not load history. Pull down to retry.')
+    } finally {
+      setLoading(false)
+    }
   }, [profile?.id])
 
   useEffect(() => { load() }, [load])
@@ -108,9 +114,14 @@ export default function HistoryScreen() {
 
   async function onRefresh() {
     setRefreshing(true)
-    await syncQueue()
-    await load()
-    setRefreshing(false)
+    try {
+      await syncQueue()
+      await load()
+    } catch (e: any) {
+      if (__DEV__) console.warn('[history] refresh failed:', e?.message)
+    } finally {
+      setRefreshing(false)
+    }
   }
 
   // Counts per status drive the filter chip badges.
@@ -272,6 +283,10 @@ export default function HistoryScreen() {
           keyExtractor={i => i.id}
           renderItem={renderItem}
           contentContainerStyle={s.list}
+          initialNumToRender={10}
+          maxToRenderPerBatch={10}
+          windowSize={9}
+          removeClippedSubviews
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
           refreshControl={

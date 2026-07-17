@@ -11,7 +11,7 @@
  * with the shared UI kit so it matches the redesigned checklist surfaces.
  */
 import { useEffect, useState, useCallback, useMemo } from 'react'
-import { View, ScrollView, StyleSheet, TouchableOpacity, RefreshControl } from 'react-native'
+import { View, FlatList, StyleSheet, TouchableOpacity, RefreshControl } from 'react-native'
 import { useRouter, useFocusEffect } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
 import { useAuth } from '../../../../contexts/AuthContext'
@@ -117,66 +117,67 @@ export default function ChecklistApprovalsScreen() {
       ) : error ? (
         <ErrorState message={error} onRetry={onRefresh} />
       ) : (
-        <ScrollView
+        <FlatList
+          data={items}
+          keyExtractor={s => s.id}
           style={styles.scroll}
           contentContainerStyle={styles.content}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={c.primary} />}
           showsVerticalScrollIndicator={false}
-        >
-          {count === 0 ? (
+          initialNumToRender={10}
+          windowSize={11}
+          ListEmptyComponent={
             <View style={styles.inlineEmpty}>
               <Ionicons name="checkmark-done-outline" size={22} color={c.primary} />
               <AppText style={[typography.body, { fontWeight: '700', color: c.primaryDark }]}>Nothing awaiting approval</AppText>
             </View>
-          ) : (
-            items.map(s => {
-              const when = s.submitted_at
-                ? new Date(s.submitted_at).toLocaleDateString(dateLocale, {
-                    day: 'numeric', month: 'short', year: 'numeric',
-                  })
-                : 'N/A'
-              return (
-                <TouchableOpacity
-                  key={s.id}
-                  style={[styles.card, isRTL && styles.rowR]}
-                  activeOpacity={0.75}
-                  onPress={() => open(s)}
-                >
-                  <View style={styles.icon}>
-                    <Ionicons name="shield-checkmark-outline" size={20} color={c.warning.base} />
-                  </View>
-                  <View style={{ flex: 1, gap: 3 }}>
-                    <AppText style={[typography.title, { textAlign }]} numberOfLines={1}>
-                      {s.title || s.template_name || 'Checklist'}
-                    </AppText>
-                    {!!(s.site || s.asset_no) && (
-                      <View style={[styles.metaRow, isRTL && styles.rowR]}>
-                        <Ionicons name="location-outline" size={12} color={c.textMuted} />
-                        <AppText style={styles.metaText} numberOfLines={1}>
-                          {[s.site, s.asset_no].filter(Boolean).join(' - ')}
-                        </AppText>
-                      </View>
-                    )}
+          }
+          renderItem={({ item: s }) => {
+            const when = s.submitted_at
+              ? new Date(s.submitted_at).toLocaleDateString(dateLocale, {
+                  day: 'numeric', month: 'short', year: 'numeric',
+                })
+              : 'N/A'
+            return (
+              <TouchableOpacity
+                style={[styles.card, isRTL && styles.rowR]}
+                activeOpacity={0.75}
+                onPress={() => open(s)}
+              >
+                <View style={styles.icon}>
+                  <Ionicons name="shield-checkmark-outline" size={20} color={c.warning.base} />
+                </View>
+                <View style={{ flex: 1, gap: 3 }}>
+                  <AppText style={[typography.title, { textAlign }]} numberOfLines={1}>
+                    {s.title || s.template_name || 'Checklist'}
+                  </AppText>
+                  {!!(s.site || s.asset_no) && (
                     <View style={[styles.metaRow, isRTL && styles.rowR]}>
-                      <Ionicons name="calendar-outline" size={12} color={c.textMuted} />
-                      <AppText style={styles.metaText}>{when}</AppText>
-                      {s.score_pct != null && (
-                        <>
-                          <AppText style={styles.metaText}>|</AppText>
-                          <AppText style={[styles.scoreText, { color: s.score_passed === false ? c.danger.base : c.success.base }]}>
-                            {s.score_pct}%
-                          </AppText>
-                        </>
-                      )}
+                      <Ionicons name="location-outline" size={12} color={c.textMuted} />
+                      <AppText style={styles.metaText} numberOfLines={1}>
+                        {[s.site, s.asset_no].filter(Boolean).join(' - ')}
+                      </AppText>
                     </View>
+                  )}
+                  <View style={[styles.metaRow, isRTL && styles.rowR]}>
+                    <Ionicons name="calendar-outline" size={12} color={c.textMuted} />
+                    <AppText style={styles.metaText}>{when}</AppText>
+                    {s.score_pct != null && (
+                      <>
+                        <AppText style={styles.metaText}>|</AppText>
+                        <AppText style={[styles.scoreText, { color: s.score_passed === false ? c.danger.base : c.success.base }]}>
+                          {s.score_pct}%
+                        </AppText>
+                      </>
+                    )}
                   </View>
-                  <Badge kind="warning">Pending</Badge>
-                  <Ionicons name={isRTL ? 'chevron-back' : 'chevron-forward'} size={18} color={c.textMuted} />
-                </TouchableOpacity>
-              )
-            })
-          )}
-        </ScrollView>
+                </View>
+                <Badge kind="warning">Pending</Badge>
+                <Ionicons name={isRTL ? 'chevron-back' : 'chevron-forward'} size={18} color={c.textMuted} />
+              </TouchableOpacity>
+            )
+          }}
+        />
       )}
     </Screen>
   )

@@ -15,7 +15,7 @@ import {
   Theme, StatusKind, spacing, radius, elevation,
 } from '../../lib/theme'
 import {
-  Screen, Card, AppText, Badge, Button, Loading, EmptyState,
+  Screen, Card, AppText, Badge, Button, Loading, EmptyState, ErrorState,
 } from '../../components/ui'
 
 interface Vehicle {
@@ -61,21 +61,31 @@ export default function VehiclesScreen() {
   const [refreshing, setRefreshing] = useState(false)
   const [query, setQuery] = useState('')
   const [expandedId, setExpandedId] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
 
   const { allowed } = useRoleGuard(['inspector', 'tyre_man', 'admin', 'manager', 'director'])
   const textAlign = isRTL ? 'right' : 'left'
   const mayInspect = canInspect(profile?.role)
 
   const load = useCallback(async () => {
-    let q = supabase
-      .from('vehicle_fleet')
-      .select('id,asset_no,fleet_number,make,model,vehicle_type,site,status,operator_name,tyre_size,current_km,country,department,region,registration_no,year')
-      .order('asset_no')
-      .limit(2000)
-    if (profile?.country) q = q.or(`country.eq.${profile.country},country.is.null`)
-    const { data } = await q
-    setRows((data as Vehicle[]) ?? [])
-    setLoading(false)
+    try {
+      setError(null)
+      let q = supabase
+        .from('vehicle_fleet')
+        .select('id,asset_no,fleet_number,make,model,vehicle_type,site,status,operator_name,tyre_size,current_km,country,department,region,registration_no,year')
+        .order('asset_no')
+        .limit(2000)
+      if (profile?.country) q = q.or(`country.eq.${profile.country},country.is.null`)
+      const { data, error: qErr } = await q
+      if (qErr) throw qErr
+      setRows((data as Vehicle[]) ?? [])
+    } catch (e: any) {
+      if (__DEV__) console.warn('[vehicles] load failed:', e?.message)
+      setError('Could not load the fleet. Pull down to retry.')
+      setRows([])
+    } finally {
+      setLoading(false)
+    }
   }, [profile?.country])
 
   useEffect(() => { load() }, [load])
@@ -142,14 +152,22 @@ export default function VehiclesScreen() {
           data={shown}
           keyExtractor={i => i.id}
           contentContainerStyle={s.list}
+          initialNumToRender={10}
+          maxToRenderPerBatch={10}
+          windowSize={9}
+          removeClippedSubviews
           showsVerticalScrollIndicator={false}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.color.primary} />}
           ListEmptyComponent={
-            <EmptyState
-              icon="bus-outline"
-              title={t('modules.vehicles.none')}
-              message={query ? 'Try a different search term.' : undefined}
-            />
+            error ? (
+              <ErrorState message={error} onRetry={onRefresh} />
+            ) : (
+              <EmptyState
+                icon="bus-outline"
+                title={t('modules.vehicles.none')}
+                message={query ? 'Try a different search term.' : undefined}
+              />
+            )
           }
           renderItem={({ item }) => {
             const open = expandedId === item.id

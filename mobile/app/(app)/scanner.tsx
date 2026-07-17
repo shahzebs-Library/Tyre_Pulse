@@ -36,6 +36,9 @@ export default function ScannerScreen() {
   const [state, setState] = useState<ScanState>('scanning')
   const [torch, setTorch] = useState(false)
   const [resolved, setResolved] = useState<ScanResolution | null>(null)
+  // Set when the camera hardware fails to start (no camera, driver error, etc.)
+  // so the screen degrades to manual entry instead of crashing on a black feed.
+  const [cameraError, setCameraError] = useState(false)
   const lockRef = useRef(false)
   // Last handled code + time, to swallow rapid duplicate frames of one label.
   const lastScanRef = useRef<{ code: string; at: number }>({ code: '', at: 0 })
@@ -71,8 +74,14 @@ export default function ScannerScreen() {
 
   // Every result action routes through the pure builders in scanRouter so the
   // next screen always lands prefilled with what was scanned (nothing retyped).
+  // Guarded so a navigation failure never crashes the scanner - it falls back
+  // to a clean scanning state instead.
   function go(target: RouteTarget) {
-    router.replace(target as never)
+    try {
+      router.replace(target as never)
+    } catch {
+      reset()
+    }
   }
 
   // -- Permission gates -------------------------------------------------------
@@ -113,6 +122,34 @@ export default function ScannerScreen() {
     )
   }
 
+  // -- Camera hardware failed to mount ----------------------------------------
+  if (cameraError) {
+    return (
+      <Screen padded={false}>
+        <StatusBar
+          barStyle={theme.mode === 'dark' ? 'light-content' : 'dark-content'}
+          backgroundColor={theme.color.bg}
+        />
+        <View style={[styles.nav, isRTL && styles.navRTL]}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.navBack}>
+            <Ionicons name={backIcon} size={22} color={theme.color.text} />
+          </TouchableOpacity>
+          <AppText variant="title">{t('scanner.title')}</AppText>
+          <View style={{ width: 36 }} />
+        </View>
+        <View style={styles.centerFill}>
+          <EmptyState
+            icon="camera-outline"
+            title="Camera unavailable"
+            message="The camera could not be started on this device. You can still enter the code by hand."
+            actionLabel="Enter Code Manually"
+            onAction={() => router.replace('/(app)/serial-search')}
+          />
+        </View>
+      </Screen>
+    )
+  }
+
   // -- Camera + overlay -------------------------------------------------------
   return (
     <View style={styles.cameraRoot}>
@@ -121,6 +158,7 @@ export default function ScannerScreen() {
         style={StyleSheet.absoluteFill}
         facing="back"
         enableTorch={torch}
+        onMountError={() => setCameraError(true)}
         barcodeScannerSettings={{
           barcodeTypes: [
             'qr', 'code128', 'code39', 'code93', 'ean13', 'ean8',

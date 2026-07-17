@@ -209,6 +209,10 @@ export default function AlertsScreen() {
           data={shown}
           keyExtractor={i => i.id}
           contentContainerStyle={s.list}
+          initialNumToRender={10}
+          maxToRenderPerBatch={10}
+          windowSize={9}
+          removeClippedSubviews
           showsVerticalScrollIndicator={false}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.color.primary} />}
           ListEmptyComponent={

@@ -11,7 +11,7 @@
  */
 import { useEffect, useState, useCallback, useMemo } from 'react'
 import {
-  View, ScrollView, StyleSheet, TouchableOpacity, RefreshControl,
+  View, FlatList, StyleSheet, TouchableOpacity, RefreshControl,
 } from 'react-native'
 import { useRouter } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
@@ -149,6 +149,112 @@ export default function ChecklistsScreen() {
     return (t.fields ?? []).filter(f => isValueField(f.type)).length
   }
 
+  // Everything above the (potentially long) "All checklists" template list. The
+  // Due list is bounded per-operator so it stays a plain map inside the header;
+  // only the unbounded templates list below is virtualized via FlatList.
+  const listHeader = (
+    <View style={{ gap: spacing.md }}>
+      {/* Approver entry (elevated roles) */}
+      {canApprove && (
+        <TouchableOpacity
+          style={[styles.approvalsCard, isRTL && styles.rowR]}
+          activeOpacity={0.8}
+          onPress={() => router.push('/(app)/checklists/approvals')}
+        >
+          <View style={styles.approvalsIcon}>
+            <Ionicons name="shield-checkmark-outline" size={20} color={theme.color.warning.on} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <AppText style={[typography.bodyStrong, { textAlign }]}>Approvals</AppText>
+            <AppText variant="caption" style={[{ color: theme.color.warning.on, textAlign, marginTop: 2 }]}>
+              {pendingApprovals > 0
+                ? `${pendingApprovals} checklist${pendingApprovals === 1 ? '' : 's'} awaiting sign-off`
+                : 'Review and sign off submitted checklists'}
+            </AppText>
+          </View>
+          {pendingApprovals > 0 && (
+            <View style={styles.approvalsBadge}>
+              <AppText style={[typography.micro, { color: theme.color.onPrimary }]}>{pendingApprovals}</AppText>
+            </View>
+          )}
+          <Ionicons name={isRTL ? 'chevron-back' : 'chevron-forward'} size={18} color={theme.color.textMuted} />
+        </TouchableOpacity>
+      )}
+
+      {/* Section A - Due */}
+      <View style={styles.sectionHead}>
+        <AppText style={typography.h3}>Due</AppText>
+        {due.length > 0 && (
+          <View style={styles.countPill}>
+            <AppText style={[typography.micro, { color: theme.color.danger.on }]}>{due.length}</AppText>
+          </View>
+        )}
+      </View>
+
+      {due.length === 0 ? (
+        <View style={styles.inlineEmpty}>
+          <Ionicons name="checkmark-done-outline" size={22} color={theme.color.primary} />
+          <AppText style={[typography.body, { fontWeight: '700', color: theme.color.primaryDark }]}>No checklists due</AppText>
+        </View>
+      ) : (
+        <View style={{ gap: 10 }}>
+          {due.map(a => {
+            const st = effectiveStatus(a)
+            const overdue = st === 'overdue'
+            const dueLabel = new Date(a.due_date + 'T00:00:00').toLocaleDateString(dateLocale, {
+              day: 'numeric', month: 'short', year: 'numeric',
+            })
+            return (
+              <TouchableOpacity
+                key={a.id}
+                style={[styles.dueCard, isRTL && styles.rowR]}
+                activeOpacity={0.75}
+                onPress={() => openAssignment(a)}
+              >
+                <View style={[styles.dueIcon, overdue && styles.dueIconOverdue]}>
+                  <Ionicons
+                    name={overdue ? 'alert-circle-outline' : 'time-outline'}
+                    size={20}
+                    color={overdue ? theme.color.danger.base : theme.color.warning.base}
+                  />
+                </View>
+                <View style={{ flex: 1, gap: 3 }}>
+                  <AppText style={[typography.title, { textAlign }]} numberOfLines={1}>
+                    {a.template_name ?? 'Checklist'}
+                  </AppText>
+                  <View style={[styles.metaRow, isRTL && styles.rowR]}>
+                    {!!(a.site || a.asset_no) && (
+                      <>
+                        <Ionicons name="location-outline" size={12} color={theme.color.textMuted} />
+                        <AppText style={styles.metaText} numberOfLines={1}>
+                          {[a.site, a.asset_no].filter(Boolean).join(' · ')}
+                        </AppText>
+                      </>
+                    )}
+                  </View>
+                  <View style={[styles.metaRow, isRTL && styles.rowR]}>
+                    <Ionicons name="calendar-outline" size={12} color={theme.color.textMuted} />
+                    <AppText style={styles.metaText}>{dueLabel}</AppText>
+                    <AppText style={styles.metaDot}>·</AppText>
+                    <AppText style={[styles.hintText, overdue && styles.hintOverdue]}>
+                      {relativeHint(a.due_date)}
+                    </AppText>
+                  </View>
+                </View>
+                <Badge kind={overdue ? 'danger' : 'warning'}>{overdue ? 'Overdue' : 'Pending'}</Badge>
+              </TouchableOpacity>
+            )
+          })}
+        </View>
+      )}
+
+      {/* Section B - All checklists (list rendered by FlatList below) */}
+      <View style={[styles.sectionHead, { marginTop: 8 }]}>
+        <AppText style={typography.h3}>All checklists</AppText>
+      </View>
+    </View>
+  )
+
   return (
     <Screen>
       <View style={[styles.header, isRTL && styles.rowR]}>
@@ -174,167 +280,68 @@ export default function ChecklistsScreen() {
       ) : error ? (
         <ErrorState message={error} onRetry={onRefresh} />
       ) : (
-        <ScrollView
+        <FlatList
+          data={templates}
+          keyExtractor={item => item.id}
           style={styles.scroll}
           contentContainerStyle={styles.content}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.color.primary} />}
           showsVerticalScrollIndicator={false}
-        >
-          {/* ── Approver entry (elevated roles) ──────────────────────────────── */}
-          {canApprove && (
-            <TouchableOpacity
-              style={[styles.approvalsCard, isRTL && styles.rowR]}
-              activeOpacity={0.8}
-              onPress={() => router.push('/(app)/checklists/approvals')}
-            >
-              <View style={styles.approvalsIcon}>
-                <Ionicons name="shield-checkmark-outline" size={20} color={theme.color.warning.on} />
-              </View>
-              <View style={{ flex: 1 }}>
-                <AppText style={[typography.bodyStrong, { textAlign }]}>Approvals</AppText>
-                <AppText variant="caption" style={[{ color: theme.color.warning.on, textAlign, marginTop: 2 }]}>
-                  {pendingApprovals > 0
-                    ? `${pendingApprovals} checklist${pendingApprovals === 1 ? '' : 's'} awaiting sign-off`
-                    : 'Review and sign off submitted checklists'}
-                </AppText>
-              </View>
-              {pendingApprovals > 0 && (
-                <View style={styles.approvalsBadge}>
-                  <AppText style={[typography.micro, { color: theme.color.onPrimary }]}>{pendingApprovals}</AppText>
-                </View>
-              )}
-              <Ionicons name={isRTL ? 'chevron-back' : 'chevron-forward'} size={18} color={theme.color.textMuted} />
-            </TouchableOpacity>
-          )}
-
-          {/* ── Section A · Due ──────────────────────────────────────────────── */}
-          <View style={styles.sectionHead}>
-            <AppText style={typography.h3}>Due</AppText>
-            {due.length > 0 && (
-              <View style={styles.countPill}>
-                <AppText style={[typography.micro, { color: theme.color.danger.on }]}>{due.length}</AppText>
-              </View>
-            )}
-          </View>
-
-          {due.length === 0 ? (
-            <View style={styles.inlineEmpty}>
-              <Ionicons name="checkmark-done-outline" size={22} color={theme.color.primary} />
-              <AppText style={[typography.body, { fontWeight: '700', color: theme.color.primaryDark }]}>No checklists due</AppText>
-            </View>
-          ) : (
-            <View style={{ gap: 10 }}>
-              {due.map(a => {
-                const st = effectiveStatus(a)
-                const overdue = st === 'overdue'
-                const dueLabel = new Date(a.due_date + 'T00:00:00').toLocaleDateString(dateLocale, {
-                  day: 'numeric', month: 'short', year: 'numeric',
-                })
-                return (
-                  <TouchableOpacity
-                    key={a.id}
-                    style={[styles.dueCard, isRTL && styles.rowR]}
-                    activeOpacity={0.75}
-                    onPress={() => openAssignment(a)}
-                  >
-                    <View style={[styles.dueIcon, overdue && styles.dueIconOverdue]}>
-                      <Ionicons
-                        name={overdue ? 'alert-circle-outline' : 'time-outline'}
-                        size={20}
-                        color={overdue ? theme.color.danger.base : theme.color.warning.base}
-                      />
-                    </View>
-                    <View style={{ flex: 1, gap: 3 }}>
-                      <AppText style={[typography.title, { textAlign }]} numberOfLines={1}>
-                        {a.template_name ?? 'Checklist'}
-                      </AppText>
-                      <View style={[styles.metaRow, isRTL && styles.rowR]}>
-                        {!!(a.site || a.asset_no) && (
-                          <>
-                            <Ionicons name="location-outline" size={12} color={theme.color.textMuted} />
-                            <AppText style={styles.metaText} numberOfLines={1}>
-                              {[a.site, a.asset_no].filter(Boolean).join(' · ')}
-                            </AppText>
-                          </>
-                        )}
-                      </View>
-                      <View style={[styles.metaRow, isRTL && styles.rowR]}>
-                        <Ionicons name="calendar-outline" size={12} color={theme.color.textMuted} />
-                        <AppText style={styles.metaText}>{dueLabel}</AppText>
-                        <AppText style={styles.metaDot}>·</AppText>
-                        <AppText style={[styles.hintText, overdue && styles.hintOverdue]}>
-                          {relativeHint(a.due_date)}
-                        </AppText>
-                      </View>
-                    </View>
-                    <Badge kind={overdue ? 'danger' : 'warning'}>{overdue ? 'Overdue' : 'Pending'}</Badge>
-                  </TouchableOpacity>
-                )
-              })}
-            </View>
-          )}
-
-          {/* ── Section B · All checklists ───────────────────────────────────── */}
-          <View style={[styles.sectionHead, { marginTop: 8 }]}>
-            <AppText style={typography.h3}>All checklists</AppText>
-          </View>
-
-          {templates.length === 0 ? (
+          initialNumToRender={8}
+          windowSize={11}
+          ListHeaderComponent={listHeader}
+          ListEmptyComponent={
             <View style={styles.inlineEmpty}>
               <Ionicons name="document-outline" size={22} color={theme.color.textMuted} />
               <AppText style={[typography.body, { fontWeight: '700', color: theme.color.textMuted }]}>No published checklists</AppText>
             </View>
-          ) : (
-            <View style={{ gap: 10 }}>
-              {templates.map(t => (
-                <TouchableOpacity
-                  key={t.id}
-                  style={styles.tplCard}
-                  activeOpacity={0.75}
-                  onPress={() => openTemplate(t)}
-                >
-                  <View style={[styles.tplHead, isRTL && styles.rowR]}>
-                    <View style={styles.tplIcon}>
-                      <Ionicons name={(t.icon as any) || 'checkbox-outline'} size={20} color={theme.color.primary} />
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <AppText style={[typography.title, { textAlign }]} numberOfLines={1}>{t.name}</AppText>
-                      {!!t.category && (
-                        <AppText style={[styles.tplCategory, { textAlign }]} numberOfLines={1}>{t.category}</AppText>
-                      )}
-                    </View>
-                    <Ionicons name={isRTL ? 'chevron-back' : 'chevron-forward'} size={18} color={theme.color.textMuted} />
-                  </View>
+          }
+          renderItem={({ item: t }) => (
+            <TouchableOpacity
+              style={styles.tplCard}
+              activeOpacity={0.75}
+              onPress={() => openTemplate(t)}
+            >
+              <View style={[styles.tplHead, isRTL && styles.rowR]}>
+                <View style={styles.tplIcon}>
+                  <Ionicons name={(t.icon as any) || 'checkbox-outline'} size={20} color={theme.color.primary} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <AppText style={[typography.title, { textAlign }]} numberOfLines={1}>{t.name}</AppText>
+                  {!!t.category && (
+                    <AppText style={[styles.tplCategory, { textAlign }]} numberOfLines={1}>{t.category}</AppText>
+                  )}
+                </View>
+                <Ionicons name={isRTL ? 'chevron-back' : 'chevron-forward'} size={18} color={theme.color.textMuted} />
+              </View>
 
-                  <View style={[styles.badgeRow, isRTL && styles.rowR]}>
-                    <View style={styles.badge}>
-                      <Ionicons name="list-outline" size={12} color={theme.color.textSecondary} />
-                      <AppText style={styles.badgeText}>{fieldCount(t)} fields</AppText>
-                    </View>
-                    {t.scored && (
-                      <View style={[styles.badge, styles.badgeGreen]}>
-                        <Ionicons name="ribbon-outline" size={12} color={theme.color.primary} />
-                        <AppText style={[styles.badgeText, { color: theme.color.primaryDark }]}>Scored</AppText>
-                      </View>
-                    )}
-                    {t.require_signature && (
-                      <View style={[styles.badge, styles.badgeBlue]}>
-                        <Ionicons name="create-outline" size={12} color={theme.color.info.base} />
-                        <AppText style={[styles.badgeText, { color: theme.color.info.on }]}>Signature</AppText>
-                      </View>
-                    )}
-                    {t.require_approval && (
-                      <View style={[styles.badge, styles.badgeAmber]}>
-                        <Ionicons name="shield-checkmark-outline" size={12} color={theme.color.warning.base} />
-                        <AppText style={[styles.badgeText, { color: theme.color.warning.on }]}>Approval</AppText>
-                      </View>
-                    )}
+              <View style={[styles.badgeRow, isRTL && styles.rowR]}>
+                <View style={styles.badge}>
+                  <Ionicons name="list-outline" size={12} color={theme.color.textSecondary} />
+                  <AppText style={styles.badgeText}>{fieldCount(t)} fields</AppText>
+                </View>
+                {t.scored && (
+                  <View style={[styles.badge, styles.badgeGreen]}>
+                    <Ionicons name="ribbon-outline" size={12} color={theme.color.primary} />
+                    <AppText style={[styles.badgeText, { color: theme.color.primaryDark }]}>Scored</AppText>
                   </View>
-                </TouchableOpacity>
-              ))}
-            </View>
+                )}
+                {t.require_signature && (
+                  <View style={[styles.badge, styles.badgeBlue]}>
+                    <Ionicons name="create-outline" size={12} color={theme.color.info.base} />
+                    <AppText style={[styles.badgeText, { color: theme.color.info.on }]}>Signature</AppText>
+                  </View>
+                )}
+                {t.require_approval && (
+                  <View style={[styles.badge, styles.badgeAmber]}>
+                    <Ionicons name="shield-checkmark-outline" size={12} color={theme.color.warning.base} />
+                    <AppText style={[styles.badgeText, { color: theme.color.warning.on }]}>Approval</AppText>
+                  </View>
+                )}
+              </View>
+            </TouchableOpacity>
           )}
-        </ScrollView>
+        />
       )}
     </Screen>
   )

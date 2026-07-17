@@ -15,7 +15,7 @@ import { canManageUsers } from '../../lib/permissions'
 import { UserRole } from '../../lib/types'
 import { Theme, spacing, radius, elevation } from '../../lib/theme'
 import {
-  Screen, Card, AppText, Badge, StatTile, Loading, EmptyState,
+  Screen, Card, AppText, Badge, StatTile, Loading, EmptyState, ErrorState,
 } from '../../components/ui'
 
 const VIEW_ROLES: UserRole[] = ['admin', 'manager', 'director']
@@ -57,19 +57,28 @@ export default function TeamScreen() {
   const [rows, setRows] = useState<Member[]>([])
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   const [query, setQuery] = useState('')
 
   const textAlign = isRTL ? 'right' : 'left'
   const mayManage = canManageUsers(profile?.role)
 
   const load = useCallback(async () => {
-    const { data } = await supabase
-      .from('profiles')
-      .select('id,full_name,username,role,site,country,phone,email,approved,last_login_at')
-      .order('full_name')
-      .limit(1000)
-    setRows((data as Member[]) ?? [])
-    setLoading(false)
+    try {
+      const { data, error: qErr } = await supabase
+        .from('profiles')
+        .select('id,full_name,username,role,site,country,phone,email,approved,last_login_at')
+        .order('full_name')
+        .limit(1000)
+      if (qErr) throw qErr
+      setRows((data as Member[]) ?? [])
+      setError(null)
+    } catch (e: any) {
+      if (__DEV__) console.warn('[team] load failed', e)
+      setError(e?.message ?? 'Failed to load team members.')
+    } finally {
+      setLoading(false)
+    }
   }, [])
 
   useEffect(() => { if (allowed) load() }, [allowed, load])
@@ -148,6 +157,8 @@ export default function TeamScreen() {
 
       {loading ? (
         <Loading label="Loading team" />
+      ) : error && rows.length === 0 ? (
+        <ErrorState message={error} onRetry={load} />
       ) : (
         <FlatList
           data={shown}

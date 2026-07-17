@@ -8,7 +8,7 @@
 
 import { useState, useCallback, useEffect } from 'react'
 import {
-  View, Text, ScrollView, TouchableOpacity, StyleSheet,
+  View, Text, FlatList, TouchableOpacity, StyleSheet,
   StatusBar, ActivityIndicator, RefreshControl, TextInput, Alert,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
@@ -52,19 +52,28 @@ export default function UserManagementScreen() {
   const [users, setUsers]         = useState<UserProfile[]>([])
   const [loading, setLoading]     = useState(true)
   const [refreshing, setRefreshing] = useState(false)
+  const [error, setError]         = useState<string | null>(null)
   const [search, setSearch]       = useState('')
   const [filter, setFilter]       = useState<FilterKey>('pending')
   const [acting, setActing]       = useState<string | null>(null) // userId being actioned
 
   const load = useCallback(async () => {
-    const { data } = await supabase
-      .from('profiles')
-      .select('id, full_name, username, employee_id, role, site, country, approved, locked, created_at, pending_reason')
-      .order('approved', { ascending: true }) // pending first
-      .order('created_at', { ascending: false })
-      .limit(200)
-    setUsers((data ?? []) as UserProfile[])
-    setLoading(false)
+    try {
+      const { data, error: qErr } = await supabase
+        .from('profiles')
+        .select('id, full_name, username, employee_id, role, site, country, approved, locked, created_at, pending_reason')
+        .order('approved', { ascending: true }) // pending first
+        .order('created_at', { ascending: false })
+        .limit(200)
+      if (qErr) throw qErr
+      setUsers((data ?? []) as UserProfile[])
+      setError(null)
+    } catch (e: any) {
+      if (__DEV__) console.warn('[users] load failed', e)
+      setError(e?.message ?? 'Failed to load users.')
+    } finally {
+      setLoading(false)
+    }
   }, [])
 
   useEffect(() => { load() }, [load])
@@ -273,26 +282,43 @@ export default function UserManagementScreen() {
         ))}
       </View>
 
-      <ScrollView
+      <FlatList
         style={styles.scroll}
         contentContainerStyle={styles.content}
+        data={filtered}
+        keyExtractor={u => u.id}
+        initialNumToRender={12}
+        maxToRenderPerBatch={12}
+        windowSize={11}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#7c3aed" />}
-      >
-        {filtered.length === 0 ? (
-          <View style={styles.empty}>
-            <Ionicons name="people-outline" size={52} color="#a78bfa" />
-            <Text style={styles.emptyTitle}>No users found</Text>
-            <Text style={styles.emptyHint}>
-              {filter === 'pending' ? 'No pending approvals - you\'re all caught up' : 'Try adjusting your search'}
-            </Text>
-          </View>
-        ) : (
-          filtered.map(user => {
+        ListEmptyComponent={
+          error ? (
+            <View style={styles.empty}>
+              <Ionicons name="alert-circle-outline" size={52} color="#f87171" />
+              <Text style={styles.emptyTitle}>Couldn't load users</Text>
+              <Text style={styles.emptyHint}>{error}</Text>
+              <TouchableOpacity style={styles.retryBtn} onPress={load}>
+                <Ionicons name="refresh" size={16} color="#7c3aed" />
+                <Text style={styles.retryBtnText}>Retry</Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <View style={styles.empty}>
+              <Ionicons name="people-outline" size={52} color="#a78bfa" />
+              <Text style={styles.emptyTitle}>No users found</Text>
+              <Text style={styles.emptyHint}>
+                {filter === 'pending' ? 'No pending approvals - you\'re all caught up' : 'Try adjusting your search'}
+              </Text>
+            </View>
+          )
+        }
+        ListFooterComponent={<View style={{ height: 32 }} />}
+        renderItem={({ item: user }) => {
             const norm = normaliseRole(user.role)
             const rc   = ROLE_COLORS[norm] ?? ROLE_COLORS.reporter
             const isActing = acting === user.id
             return (
-              <View key={user.id} style={styles.userCard}>
+              <View style={styles.userCard}>
                 {/* Pending indicator strip */}
                 {!user.approved && <View style={styles.pendingStrip} />}
 
@@ -409,10 +435,8 @@ export default function UserManagementScreen() {
                 </View>
               </View>
             )
-          })
-        )}
-        <View style={{ height: 32 }} />
-      </ScrollView>
+        }}
+      />
     </SafeAreaView>
   )
 }
@@ -483,4 +507,6 @@ const styles = StyleSheet.create({
   empty:      { alignItems: 'center', paddingVertical: 60, gap: 12 },
   emptyTitle: { fontSize: 16, fontWeight: '700', color: '#374151' },
   emptyHint:  { fontSize: 13, color: '#94a3b8', textAlign: 'center', paddingHorizontal: 20 },
+  retryBtn:   { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 6, paddingHorizontal: 16, paddingVertical: 9, borderRadius: 10, borderWidth: 1.5, borderColor: '#ddd6fe', backgroundColor: '#f5f3ff' },
+  retryBtnText: { fontSize: 13, fontWeight: '700', color: '#7c3aed' },
 })

@@ -69,6 +69,7 @@ export default function CalendarScreen() {
   const [error, setError] = useState<string | null>(null)
 
   const load = useCallback(async () => {
+    try {
     const cc = profile?.country
     const scope = (q: any) => (cc ? q.or(`country.eq.${cc},country.is.null`) : q)
     // 30-day lookback so recent overdue work shows, but ancient rows do not flood.
@@ -153,7 +154,12 @@ export default function CalendarScreen() {
 
     setItems(collected)
     setError(anyOk ? null : 'Could not load the schedule. Pull down to retry.')
-    setLoading(false)
+    } catch (e: any) {
+      if (__DEV__) console.warn('[calendar] load failed:', e?.message)
+      setError('Could not load the schedule. Pull down to retry.')
+    } finally {
+      setLoading(false)
+    }
   }, [profile?.country])
 
   useEffect(() => { load() }, [load])
@@ -193,6 +199,7 @@ export default function CalendarScreen() {
       ) : (
         <ScrollView
           contentContainerStyle={styles.body}
+          removeClippedSubviews
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.color.primary} />}
         >
           {/* Summary strip */}

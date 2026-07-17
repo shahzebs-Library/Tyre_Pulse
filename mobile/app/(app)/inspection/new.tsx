@@ -208,65 +208,79 @@ export default function NewInspectionScreen() {
   }, [positions, params.tyreSerial, params.tyrePosition, t])
 
   async function loadSites() {
-    // Primary: dedicated sites table (created by migration)
-    const { data: sitesData } = await supabase
-      .from('sites')
-      .select('name, country')
-      .eq('active', true)
-      .order('country')
-      .order('name')
+    // Reads are best-effort: on any failure we fall back to the profile site (or
+    // a free-typed site) so the inspector is never blocked from starting.
+    try {
+      // Primary: dedicated sites table (created by migration)
+      const { data: sitesData } = await supabase
+        .from('sites')
+        .select('name, country')
+        .eq('active', true)
+        .order('country')
+        .order('name')
 
-    // Fallback: distinct sites from vehicle_fleet
-    const { data: fleetData } = await supabase
-      .from('vehicle_fleet')
-      .select('site, country')
-      .not('site', 'is', null)
-      .order('site')
+      // Fallback: distinct sites from vehicle_fleet
+      const { data: fleetData } = await supabase
+        .from('vehicle_fleet')
+        .select('site, country')
+        .not('site', 'is', null)
+        .order('site')
 
-    const fromSitesTable: { name: string; country: string }[] =
-      (sitesData ?? []).map((s: any) => ({ name: s.name, country: s.country ?? '' }))
+      const fromSitesTable: { name: string; country: string }[] =
+        (sitesData ?? []).map((s: any) => ({ name: s.name, country: s.country ?? '' }))
 
-    const fromFleet: { name: string; country: string }[] = []
-    const seen = new Set(fromSitesTable.map(s => s.name))
-    ;(fleetData ?? []).forEach((r: any) => {
-      if (r.site && !seen.has(r.site)) {
-        fromFleet.push({ name: r.site, country: r.country ?? '' })
-        seen.add(r.site)
+      const fromFleet: { name: string; country: string }[] = []
+      const seen = new Set(fromSitesTable.map(s => s.name))
+      ;(fleetData ?? []).forEach((r: any) => {
+        if (r.site && !seen.has(r.site)) {
+          fromFleet.push({ name: r.site, country: r.country ?? '' })
+          seen.add(r.site)
+        }
+      })
+
+      const all = [...fromSitesTable, ...fromFleet]
+
+      // Always include profile site as a fallback entry if not listed
+      if (profile?.site && !seen.has(profile.site)) {
+        all.unshift({ name: profile.site, country: '' })
       }
-    })
 
-    const all = [...fromSitesTable, ...fromFleet]
+      setSites(all)
 
-    // Always include profile site as a fallback entry if not listed
-    if (profile?.site && !seen.has(profile.site)) {
-      all.unshift({ name: profile.site, country: '' })
-    }
-
-    setSites(all)
-
-    // Auto-select: scanner param → profile site → first in list
-    const autoSite = params.site ?? profile?.site ?? (all.length === 1 ? all[0].name : '')
-    if (autoSite && !selectedSite) {
-      setSelectedSite(autoSite)
-    } else if (!selectedSite && all.length > 0 && !params.site) {
-      // If profile has a site always pre-select it
-      const profileSiteEntry = all.find(s => s.name === profile?.site)
-      if (profileSiteEntry) setSelectedSite(profileSiteEntry.name)
+      // Auto-select: scanner param -> profile site -> first in list
+      const autoSite = params.site ?? profile?.site ?? (all.length === 1 ? all[0].name : '')
+      if (autoSite && !selectedSite) {
+        setSelectedSite(autoSite)
+      } else if (!selectedSite && all.length > 0 && !params.site) {
+        // If profile has a site always pre-select it
+        const profileSiteEntry = all.find(s => s.name === profile?.site)
+        if (profileSiteEntry) setSelectedSite(profileSiteEntry.name)
+      }
+    } catch {
+      // Leave sites empty so the UI shows the type-your-site fallback; still
+      // preselect the profile site when we have one.
+      if (profile?.site && !selectedSite) setSelectedSite(profile.site)
     }
   }
 
   async function loadVehicles(site: string) {
     setLoadingVehicles(true)
-    const { data } = await supabase
-      .from('vehicle_fleet')
-      .select('id, site, asset_no, vehicle_type, make, model')
-      .eq('site', site)
-      .order('asset_no')
-    if (data) {
-      setVehicles(data)
-      setFilteredVehicles(data)
+    try {
+      const { data } = await supabase
+        .from('vehicle_fleet')
+        .select('id, site, asset_no, vehicle_type, make, model')
+        .eq('site', site)
+        .order('asset_no')
+      setVehicles(data ?? [])
+      setFilteredVehicles(data ?? [])
+    } catch {
+      // Surface an honest "no vehicles" state (manual entry stays available)
+      // rather than an unhandled rejection.
+      setVehicles([])
+      setFilteredVehicles([])
+    } finally {
+      setLoadingVehicles(false)
     }
-    setLoadingVehicles(false)
   }
 
   function handleTyreUpdate(position: string, data: TyrePositionData) {

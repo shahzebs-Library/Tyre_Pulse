@@ -81,30 +81,34 @@ export default function AccidentReportScreen() {
   }, [allowed, draft.site])
 
   async function loadSites() {
-    // 1. Try sites table (primary source)
-    const { data: sitesData } = await supabase
-      .from('sites').select('name').eq('active', true).order('name')
-    if (sitesData && sitesData.length > 0) {
-      const names = sitesData.map((s: any) => s.name as string)
-      setSites(names)
-      // Auto-select: profile.site match -> single site -> nothing
-      const profMatch = profile?.site && names.includes(profile.site) ? profile.site : null
-      const autoSite = profMatch ?? (names.length === 1 ? names[0] : null)
-      if (autoSite) update({ site: autoSite })
-      return
+    try {
+      // 1. Try sites table (primary source)
+      const { data: sitesData } = await supabase
+        .from('sites').select('name').eq('active', true).order('name')
+      if (sitesData && sitesData.length > 0) {
+        const names = sitesData.map((s: any) => s.name as string)
+        setSites(names)
+        // Auto-select: profile.site match -> single site -> nothing
+        const profMatch = profile?.site && names.includes(profile.site) ? profile.site : null
+        const autoSite = profMatch ?? (names.length === 1 ? names[0] : null)
+        if (autoSite) update({ site: autoSite })
+        return
+      }
+      // 2. Fallback: vehicle_fleet.site
+      const { data: fleetData } = await supabase
+        .from('vehicle_fleet').select('site').order('site')
+      if (fleetData && fleetData.length > 0) {
+        const unique = [...new Set(fleetData.map((r: any) => r.site).filter(Boolean))] as string[]
+        setSites(unique)
+        const profMatch = profile?.site && unique.includes(profile.site) ? profile.site : null
+        const autoSite = profMatch ?? (unique.length === 1 ? unique[0] : null)
+        if (autoSite) update({ site: autoSite })
+        return
+      }
+    } catch (e: any) {
+      if (__DEV__) console.warn('[accident/report] loadSites failed:', e?.message)
     }
-    // 2. Fallback: vehicle_fleet.site
-    const { data: fleetData } = await supabase
-      .from('vehicle_fleet').select('site').order('site')
-    if (fleetData && fleetData.length > 0) {
-      const unique = [...new Set(fleetData.map((r: any) => r.site).filter(Boolean))] as string[]
-      setSites(unique)
-      const profMatch = profile?.site && unique.includes(profile.site) ? profile.site : null
-      const autoSite = profMatch ?? (unique.length === 1 ? unique[0] : null)
-      if (autoSite) update({ site: autoSite })
-      return
-    }
-    // 3. Fallback: profile.site only
+    // 3. Fallback: profile.site only (also covers a failed lookup above)
     if (profile?.site) {
       setSites([profile.site])
       update({ site: profile.site })
@@ -113,13 +117,18 @@ export default function AccidentReportScreen() {
 
   async function loadVehicles(site: string) {
     setLoadingVehicles(true)
-    const { data } = await supabase
-      .from('vehicle_fleet')
-      .select('id, site, asset_no, vehicle_type, make, model')
-      .eq('site', site)
-      .order('asset_no')
-    if (data) setVehicles(data)
-    setLoadingVehicles(false)
+    try {
+      const { data } = await supabase
+        .from('vehicle_fleet')
+        .select('id, site, asset_no, vehicle_type, make, model')
+        .eq('site', site)
+        .order('asset_no')
+      if (data) setVehicles(data)
+    } catch (e: any) {
+      if (__DEV__) console.warn('[accident/report] loadVehicles failed:', e?.message)
+    } finally {
+      setLoadingVehicles(false)
+    }
   }
 
   function update(partial: Partial<AccidentDraft>) {

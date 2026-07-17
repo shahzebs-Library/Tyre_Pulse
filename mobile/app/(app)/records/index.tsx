@@ -22,7 +22,7 @@ import {
   spacing, radius, typography, statusColor, StatusKind,
 } from '../../../lib/theme'
 import {
-  Screen, Card, AppText, Button, Badge, EmptyState, Loading,
+  Screen, Card, AppText, Button, Badge, EmptyState, ErrorState, Loading,
 } from '../../../components/ui'
 
 const PAGE = 30
@@ -70,6 +70,7 @@ export default function RecordsScreen() {
   const [page, setPage]           = useState(0)
   const [loadingMore, setLoadingMore] = useState(false)
   const [hasMore, setHasMore]     = useState(true)
+  const [error, setError]         = useState<string | null>(null)
 
   const [search, setSearch]       = useState('')
   const [siteFilter, setSiteFilter] = useState('')
@@ -84,10 +85,14 @@ export default function RecordsScreen() {
   useEffect(() => { reset() }, [search, siteFilter, riskFilter])
 
   async function loadSites() {
-    let q = supabase.from('tyre_records').select('site').not('site', 'is', null)
-    if (!elevated && profile?.site) q = q.eq('site', profile.site)
-    const { data } = await q
-    if (data) setSites([...new Set(data.map((r: any) => r.site as string))].sort())
+    try {
+      let q = supabase.from('tyre_records').select('site').not('site', 'is', null)
+      if (!elevated && profile?.site) q = q.eq('site', profile.site)
+      const { data } = await q
+      if (data) setSites([...new Set(data.map((r: any) => r.site as string))].sort())
+    } catch (e: any) {
+      if (__DEV__) console.warn('[records] loadSites failed:', e?.message)
+    }
   }
 
   function reset() {
@@ -114,15 +119,25 @@ export default function RecordsScreen() {
     else if (!elevated && profile?.site) q = q.eq('site', profile.site)
     if (riskFilter) q = q.eq('risk_level', riskFilter)
 
-    const { data, count } = await q
-    const rows = (data ?? []) as TyreRecord[]
+    try {
+      const { data, count, error: qErr } = await q
+      if (qErr) throw qErr
+      const rows = (data ?? []) as TyreRecord[]
 
-    setTotal(count ?? 0)
-    setRecords(prev => fresh ? rows : [...prev, ...rows])
-    setHasMore(rows.length === PAGE)
-    setLoading(false)
-    setLoadingMore(false)
-    setRefreshing(false)
+      setError(null)
+      setTotal(count ?? 0)
+      setRecords(prev => fresh ? rows : [...prev, ...rows])
+      setHasMore(rows.length === PAGE)
+    } catch (e: any) {
+      if (__DEV__) console.warn('[records] load failed:', e?.message)
+      setError('Could not load records. Pull down to retry.')
+      if (fresh) setRecords([])
+      setHasMore(false)
+    } finally {
+      setLoading(false)
+      setLoadingMore(false)
+      setRefreshing(false)
+    }
   }, [search, siteFilter, riskFilter, elevated, profile?.site])
 
   useEffect(() => { loadPage(page) }, [page])
@@ -220,15 +235,23 @@ export default function RecordsScreen() {
           data={records}
           keyExtractor={r => r.id}
           contentContainerStyle={styles.list}
+          initialNumToRender={12}
+          maxToRenderPerBatch={12}
+          windowSize={9}
+          removeClippedSubviews
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={c.primary} />}
           onEndReached={loadMore}
           onEndReachedThreshold={0.3}
           ListEmptyComponent={
-            <EmptyState
-              icon="layers-outline"
-              title="No records found"
-              message="Try adjusting your search or filters"
-            />
+            error ? (
+              <ErrorState message={error} onRetry={onRefresh} />
+            ) : (
+              <EmptyState
+                icon="layers-outline"
+                title="No records found"
+                message="Try adjusting your search or filters"
+              />
+            )
           }
           ListFooterComponent={loadingMore ? <ActivityIndicator color={c.primary} style={{ margin: spacing.lg }} /> : null}
           renderItem={({ item }) => (

@@ -15,6 +15,7 @@ export interface Profile {
   country: string | null
   approved: boolean
   locked?: boolean | null
+  is_super_admin?: boolean | null
 }
 
 /**

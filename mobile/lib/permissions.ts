@@ -1,152 +1,189 @@
 /**
  * Centralised Role-Based Access Control (RBAC) for the mobile app.
  *
- * Single source of truth for "what a role is allowed to see / do". Screens and
- * the tab navigator derive their visible surface from here so that navigation
- * auto-adjusts per user and access never drifts between layers.
+ * SINGLE source of truth for "what a role is allowed to see / do". Every screen,
+ * the tab navigator and the Home hub derive their visible surface from the MODULE
+ * registry below, so navigation auto-adjusts per user and access never drifts
+ * between layers.
  *
- * Roles (see lib/types.ts): admin · manager · director · inspector · tyre_man · reporter
+ * Two layers, resolved by `resolveModuleAccess`:
+ *   1. ROLE DEFAULT  - the `roles` list on each module (this file).
+ *   2. PER-USER GRANT overlay - a super-admin can grant or revoke a single module
+ *      for one user (stored in `user_access_grants`, loaded by AuthContext). A
+ *      revoke always wins; a grant adds access the role would not otherwise have.
+ * Admin and super-admin always have full access.
+ *
+ * Roles (see lib/types.ts): admin | manager | director | inspector | tyre_man |
+ * reporter | driver.
  */
 
 import { UserRole, isAdminOrAbove, isAdmin } from './types'
 
-// ── Capability predicates ───────────────────────────────────────────────────
-// Role scopes (least-privilege):
-//   tyre_man  → inspections, tyre change, scan, vehicles(view), alerts, tasks,
-//               report issue, history  (NO accidents dashboard / stock / work
-//               orders / RCA / overview / team / AI / admin)
-//   inspector → tyre_man scope + accidents + RCA + work orders
-//   manager/director → all operational + overview/reports + stock (NOT user mgmt)
-//   admin     → everything incl. user management + admin console
+// ── Module registry ─────────────────────────────────────────────────────────
+// The one place access is defined. `roles` = the roles allowed BY DEFAULT (admin
+// is always allowed and may be omitted). To change what a role sees, edit its
+// module's `roles`. To expose a new gated destination, add a module here.
+export type ModuleKey =
+  | 'inspect' | 'records' | 'accidents' | 'reportAccident' | 'scan' | 'serial'
+  | 'vehicles' | 'workorders' | 'rca' | 'stock' | 'stockManage' | 'overview'
+  | 'reports' | 'analytics' | 'ai' | 'admin' | 'users' | 'meter' | 'tasks'
+  | 'calendar' | 'reportIssue' | 'checklists' | 'approvals' | 'alerts'
+  | 'history' | 'tyreChange' | 'team'
 
-/** Field staff who record tyre inspections, tyre changes, scans. */
-export function canInspect(role: UserRole | null | undefined): boolean {
-  return role === 'inspector' || role === 'tyre_man' || isAdminOrAbove(role)
+export interface ModuleDef {
+  key: ModuleKey
+  label: string
+  icon: string
+  /** Roles allowed by default. Admin is always allowed regardless. */
+  roles: UserRole[]
+  /** Grouping for the admin access editor. */
+  group: 'Field' | 'Fleet' | 'Maintenance' | 'Management' | 'Admin'
 }
 
-/** File an accident report — Inspector + management (not Tyre Man / Driver). */
-export function canReportAccident(role: UserRole | null | undefined): boolean {
-  return role === 'inspector' || isAdminOrAbove(role)
-}
+const M = (
+  key: ModuleKey, label: string, icon: string, group: ModuleDef['group'], roles: UserRole[],
+): ModuleDef => ({ key, label, icon, group, roles })
 
-/** Find a tyre by serial number — Inspector, Tyre Man, management. */
-export function canSearchSerial(role: UserRole | null | undefined): boolean {
-  return role === 'inspector' || role === 'tyre_man' || isAdminOrAbove(role)
-}
+/**
+ * Role defaults. Removals applied per the product owner (2026-07-17):
+ *   - director  loses analytics, ai, stock
+ *   - inspector loses vehicles, workorders, calendar, reportIssue
+ *   - tyre_man  loses records, vehicles, workorders, stock, meter, tasks
+ */
+export const MODULES: ModuleDef[] = [
+  // Field ---------------------------------------------------------------------
+  M('inspect',        'New Inspection',    'clipboard-outline',      'Field',      ['manager', 'director', 'inspector', 'tyre_man']),
+  M('scan',           'Scan',              'scan-outline',           'Field',      ['manager', 'director', 'inspector', 'tyre_man']),
+  M('serial',         'Serial Search',     'search-outline',         'Field',      ['manager', 'director', 'inspector', 'tyre_man']),
+  M('tyreChange',     'Tyre Change',       'swap-horizontal-outline','Field',      ['manager', 'director', 'inspector', 'tyre_man']),
+  M('checklists',     'Checklists',        'checkbox-outline',       'Field',      ['manager', 'director', 'inspector', 'tyre_man']),
+  M('meter',          'Meter Log',         'speedometer-outline',    'Field',      ['manager', 'director', 'inspector', 'reporter', 'driver']),
+  M('reportIssue',    'Report Issue',      'megaphone-outline',      'Field',      ['manager', 'director', 'tyre_man', 'reporter', 'driver']),
+  // Fleet ---------------------------------------------------------------------
+  M('records',        'Tyre Records',      'layers-outline',         'Fleet',      ['manager', 'director', 'inspector', 'reporter']),
+  M('vehicles',       'Vehicles',          'car-outline',            'Fleet',      ['manager', 'director']),
+  M('history',        'History',           'time-outline',           'Fleet',      ['manager', 'director', 'inspector', 'tyre_man', 'reporter']),
+  M('alerts',         'Alerts',            'notifications-outline',  'Fleet',      ['manager', 'director', 'inspector', 'tyre_man']),
+  M('calendar',       'Calendar',          'calendar-outline',       'Fleet',      ['manager', 'director', 'tyre_man', 'reporter']),
+  // Maintenance ---------------------------------------------------------------
+  M('accidents',      'Accidents',         'warning-outline',        'Maintenance',['manager', 'director', 'inspector']),
+  M('reportAccident', 'File Accident',     'alert-circle-outline',   'Maintenance',['manager', 'director', 'inspector']),
+  M('workorders',     'Work Orders',       'construct-outline',      'Maintenance',['manager', 'director']),
+  M('rca',            'Root Cause',        'git-branch-outline',     'Maintenance',['manager', 'director', 'inspector']),
+  M('tasks',          'Tasks',             'list-outline',           'Maintenance',['manager', 'director', 'inspector']),
+  M('stock',          'Stock Count',       'cube-outline',           'Maintenance',['manager', 'inspector']),
+  // Management ----------------------------------------------------------------
+  M('overview',       'Overview',          'grid-outline',           'Management', ['manager', 'director']),
+  M('reports',        'Reports',           'document-text-outline',  'Management', ['manager', 'director', 'reporter']),
+  M('analytics',      'Analytics',         'bar-chart-outline',      'Management', ['manager']),
+  M('stockManage',    'Stock Management',  'file-tray-full-outline', 'Management', ['manager']),
+  M('ai',             'Fleet AI',          'sparkles-outline',       'Management', ['manager']),
+  M('team',           'Team',              'people-outline',         'Management', ['manager', 'director']),
+  // Admin ---------------------------------------------------------------------
+  M('approvals',      'Approvals',         'checkmark-done-outline', 'Admin',      ['manager', 'director']),
+  M('admin',          'Admin Console',     'shield-outline',         'Admin',      ['manager', 'director']),
+  M('users',          'User Management',   'person-add-outline',     'Admin',      []),
+]
+export const MODULE_BY_KEY: Record<ModuleKey, ModuleDef> =
+  MODULES.reduce((m, d) => { m[d.key] = d; return m }, {} as Record<ModuleKey, ModuleDef>)
 
-/** Accident dashboard / list - review surface. Tyre techs excluded. */
-export function canViewAccidents(role: UserRole | null | undefined): boolean {
-  return role === 'inspector' || isAdminOrAbove(role)
-}
+/** Ordered list of the module groups, for a grouped access editor. */
+export const MODULE_GROUPS = MODULES.reduce<ModuleDef['group'][]>(
+  (a, d) => (a.includes(d.group) ? a : a.concat(d.group)), [],
+)
 
-/** Browse vehicles & raise tasks/alerts - operational field staff. */
-export function canViewFleet(role: UserRole | null | undefined): boolean {
-  return role === 'inspector' || role === 'tyre_man' || isAdminOrAbove(role)
-}
+/** Per-user grant overlay shape (keyed by mobile ModuleKey, prefix stripped). */
+export type GrantMap = Record<string, 'grant' | 'revoke'>
 
-/** Maintenance work orders. */
-export function canManageWorkOrders(role: UserRole | null | undefined): boolean {
-  return role === 'inspector' || isAdminOrAbove(role)
-}
+/**
+ * Mobile access grants are namespaced in `user_access_grants.module_key` with a
+ * `mobile:` prefix so they are INDEPENDENT of the web app's access / approvals
+ * grants (which use their own bare keys). Revoking a module on mobile never
+ * touches web access and vice versa.
+ */
+export const MOBILE_GRANT_PREFIX = 'mobile:'
 
-/** Root-cause analysis. */
-export function canDoRca(role: UserRole | null | undefined): boolean {
-  return role === 'inspector' || isAdminOrAbove(role)
-}
-
-/** Stock / inventory management - management only. */
-export function canManageStock(role: UserRole | null | undefined): boolean {
-  return isAdminOrAbove(role)
+/** Storage key for a mobile module (what the admin screen writes / revokes). */
+export function mobileGrantKey(key: ModuleKey): string {
+  return MOBILE_GRANT_PREFIX + key
 }
 
 /**
- * Count / adjust stock on hand (daily stock-take). Broader than stock master
- * data management: storekeepers and tyre handlers do the physical counts, so
- * tyre_man is included alongside management. The DB RPCs enforce approved +
- * unlocked + org boundary regardless.
+ * Build the mobile GrantMap from the raw `{module_key: effect}` returned by
+ * get_my_access_grants(): keep ONLY `mobile:` keys and strip the prefix, so web
+ * grants are ignored here.
  */
-export function canCountStock(role: UserRole | null | undefined): boolean {
-  return role === 'inspector' || isAdminOrAbove(role)
+export function mobileGrantsFromRaw(raw: Record<string, unknown> | null | undefined): GrantMap {
+  const out: GrantMap = {}
+  if (!raw) return out
+  for (const [k, v] of Object.entries(raw)) {
+    if (!k.startsWith(MOBILE_GRANT_PREFIX)) continue
+    if (v === 'grant' || v === 'revoke') out[k.slice(MOBILE_GRANT_PREFIX.length)] = v
+  }
+  return out
 }
 
-/** Fleet KPI overview / reports - management only. */
-export function canViewOverview(role: UserRole | null | undefined): boolean {
-  return isAdminOrAbove(role)
-}
-
-/** Elevated management console (admin snapshot, AI, reviews). */
-export function canAccessAdmin(role: UserRole | null | undefined): boolean {
-  return isAdminOrAbove(role)
-}
-
-/** User management - create/approve/edit accounts. Admin only. */
-export function canManageUsers(role: UserRole | null | undefined): boolean {
-  return isAdmin(role)
-}
-
-/** Fleet AI assistant. */
-export function canUseAI(role: UserRole | null | undefined): boolean {
-  return isAdminOrAbove(role)
-}
-
-/** Approve/review accident reports (close, change status). */
-export function canReviewAccidents(role: UserRole | null | undefined): boolean {
-  return isAdminOrAbove(role)
+/** Role default only (no grant overlay). Admin is always allowed. */
+export function moduleAllowedByRole(key: ModuleKey, role: UserRole | null | undefined): boolean {
+  if (isAdmin(role)) return true
+  const def = MODULE_BY_KEY[key]
+  if (!def) return false
+  return !!role && def.roles.includes(role)
 }
 
 /**
- * Approve/reject submitted checklists that require sign-off. Mirrors the V212
- * RLS gate (Admin/Manager/Director/Maintenance Supervisor); Maintenance
- * Supervisor is not a distinct mobile role, so the mobile subset is
- * admin/manager/director.
+ * Effective access = role default, then the per-user grant overlay.
+ * Precedence: admin / super-admin > revoke > grant > role default > deny.
  */
-export function canApproveChecklists(role: UserRole | null | undefined): boolean {
-  return isAdminOrAbove(role)
+export function resolveModuleAccess(
+  key: ModuleKey,
+  role: UserRole | null | undefined,
+  grants?: GrantMap | null,
+  isSuper?: boolean,
+): boolean {
+  if (isSuper || isAdmin(role)) return true
+  const override = grants?.[key]
+  if (override === 'revoke') return false
+  if (override === 'grant') return true
+  return moduleAllowedByRole(key, role)
 }
 
-/**
- * Log a daily odometer / engine-hour meter reading. This is routine field data
- * capture (especially for drivers in markets without telematics), so every
- * operational role may do it; RLS still enforces the org/country boundary.
- */
-export function canLogMeter(role: UserRole | null | undefined): boolean {
-  return role === 'inspector' || role === 'tyre_man' || role === 'reporter' || role === 'driver' || isAdminOrAbove(role)
-}
+// ── Capability predicates (role default; back-compat wrappers over the registry)
+// Existing screens import these by name - keep them. Each maps to a module so the
+// role matrix stays the single source of truth.
+export const canInspect          = (r: UserRole | null | undefined) => moduleAllowedByRole('inspect', r)
+export const canReportAccident   = (r: UserRole | null | undefined) => moduleAllowedByRole('reportAccident', r)
+export const canSearchSerial     = (r: UserRole | null | undefined) => moduleAllowedByRole('serial', r)
+export const canViewAccidents    = (r: UserRole | null | undefined) => moduleAllowedByRole('accidents', r)
+export const canViewFleet        = (r: UserRole | null | undefined) => moduleAllowedByRole('vehicles', r)
+export const canManageWorkOrders = (r: UserRole | null | undefined) => moduleAllowedByRole('workorders', r)
+export const canDoRca            = (r: UserRole | null | undefined) => moduleAllowedByRole('rca', r)
+export const canManageStock      = (r: UserRole | null | undefined) => moduleAllowedByRole('stockManage', r)
+export const canCountStock       = (r: UserRole | null | undefined) => moduleAllowedByRole('stock', r)
+export const canViewOverview     = (r: UserRole | null | undefined) => moduleAllowedByRole('overview', r)
+export const canAccessAdmin      = (r: UserRole | null | undefined) => moduleAllowedByRole('admin', r)
+export const canUseAI            = (r: UserRole | null | undefined) => moduleAllowedByRole('ai', r)
+export const canLogMeter         = (r: UserRole | null | undefined) => moduleAllowedByRole('meter', r)
+export const canViewRecords      = (r: UserRole | null | undefined) => moduleAllowedByRole('records', r)
+export const canViewAnalytics    = (r: UserRole | null | undefined) => moduleAllowedByRole('analytics', r)
+export const canViewWorkOrders   = (r: UserRole | null | undefined) => moduleAllowedByRole('workorders', r)
+export const canUpdateWorkOrders = (r: UserRole | null | undefined) => moduleAllowedByRole('workorders', r)
+export const canViewReports      = (r: UserRole | null | undefined) => moduleAllowedByRole('reports', r)
+export const canViewTasks        = (r: UserRole | null | undefined) => moduleAllowedByRole('tasks', r)
+export const canViewCalendar     = (r: UserRole | null | undefined) => moduleAllowedByRole('calendar', r)
+export const canReportIssue      = (r: UserRole | null | undefined) => moduleAllowedByRole('reportIssue', r)
 
-/** Tyre records list - all roles with operational access. */
-export function canViewRecords(role: UserRole | null | undefined): boolean {
-  return role === 'inspector' || role === 'tyre_man' || role === 'reporter' || isAdminOrAbove(role)
-}
-
-/** Can edit tyre records inline (admin and manager). */
-export function canEditRecords(role: UserRole | null | undefined): boolean {
-  return role === 'admin' || role === 'manager'
-}
-
-/** Fleet analytics - management roles only. */
-export function canViewAnalytics(role: UserRole | null | undefined): boolean {
-  return isAdminOrAbove(role)
-}
-
-/** Corrective actions / work orders - field staff + management. */
-export function canViewWorkOrders(role: UserRole | null | undefined): boolean {
-  return role === 'inspector' || role === 'tyre_man' || isAdminOrAbove(role)
-}
-
-/** Can update work order status. */
-export function canUpdateWorkOrders(role: UserRole | null | undefined): boolean {
-  return role === 'inspector' || role === 'tyre_man' || isAdminOrAbove(role)
-}
-
-/** PDF report generation - management + reporter. */
-export function canViewReports(role: UserRole | null | undefined): boolean {
-  return isAdminOrAbove(role) || role === 'reporter'
-}
+// These stay strictly role-based (management sign-off), unaffected by the removals.
+export const canReviewAccidents   = (r: UserRole | null | undefined) => isAdminOrAbove(r)
+export const canApproveChecklists = (r: UserRole | null | undefined) => isAdminOrAbove(r)
+export const canManageUsers       = (r: UserRole | null | undefined) => isAdmin(r)
+export const canEditRecords       = (r: UserRole | null | undefined) => r === 'admin' || r === 'manager'
 
 // ── Navigation model ────────────────────────────────────────────────────────
 //
 // The tab bar is rendered from this descriptor so a single change here keeps
-// routing, icons and RBAC in lockstep.
+// routing, icons and RBAC in lockstep. `moduleKey` ties a tab to the registry so
+// the grant overlay (via AuthContext.canAccess) governs it too.
 
 export interface TabDescriptor {
   /** expo-router route name within (app)/ */
@@ -157,7 +194,9 @@ export interface TabDescriptor {
   icon: string
   /** Optional active tint override (e.g. accident = red, admin = purple) */
   activeTint?: string
-  /** Returns true when this tab should be visible for the given role */
+  /** Module this tab maps to (drives role + grant gating). Omitted = always on. */
+  moduleKey?: ModuleKey
+  /** Returns true when this tab should be visible for the given role (default). */
   visible: (role: UserRole | null | undefined) => boolean
   /**
    * Shown in the bottom tab bar. Only a small set are primary; the rest stay
@@ -169,83 +208,15 @@ export interface TabDescriptor {
 }
 
 export const TAB_BAR: TabDescriptor[] = [
-  {
-    name: 'index',
-    labelKey: 'tabs.home',
-    icon: 'home-outline',
-    visible: () => true,
-    primary: true,
-  },
-  {
-    name: 'inspection/new',
-    labelKey: 'tabs.inspect',
-    icon: 'clipboard-outline',
-    visible: canInspect,
-    primary: true,
-  },
-  {
-    name: 'records/index',
-    labelKey: 'tabs.records',
-    icon: 'layers-outline',
-    visible: canViewRecords,
-    primary: true,
-  },
-  {
-    name: 'accident/dashboard',
-    labelKey: 'tabs.accident',
-    icon: 'warning-outline',
-    activeTint: '#dc2626',
-    visible: canViewAccidents,
-    primary: true,
-  },
-  {
-    // Driver-only primary tab: their whole job is the daily meter log, so it
-    // sits in the bar for them. Everyone else reaches Meter Log from Home.
-    name: 'meter-logs',
-    labelKey: 'tabs.meter',
-    icon: 'speedometer-outline',
-    activeTint: '#0369a1',
-    visible: (role) => role === 'driver',
-    primary: true,
-  },
-  {
-    name: 'workorders/index',
-    labelKey: 'tabs.workorders',
-    icon: 'construct-outline',
-    visible: canViewWorkOrders,
-  },
-  {
-    name: 'analytics/index',
-    labelKey: 'tabs.analytics',
-    icon: 'bar-chart-outline',
-    activeTint: '#3b82f6',
-    visible: canViewAnalytics,
-  },
-  {
-    name: 'reports/index',
-    labelKey: 'tabs.reports',
-    icon: 'document-text-outline',
-    visible: canViewReports,
-  },
-  {
-    name: 'ai/index',
-    labelKey: 'tabs.ai',
-    icon: 'sparkles-outline',
-    activeTint: '#7c3aed',
-    visible: canUseAI,
-  },
-  {
-    name: 'admin/index',
-    labelKey: 'tabs.admin',
-    icon: 'shield-outline',
-    activeTint: '#7c3aed',
-    visible: canAccessAdmin,
-  },
-  {
-    name: 'profile',
-    labelKey: 'tabs.profile',
-    icon: 'person-outline',
-    visible: () => true,
-    primary: true,
-  },
+  { name: 'index',              labelKey: 'tabs.home',       icon: 'home-outline',        visible: () => true,                 primary: true },
+  { name: 'inspection/new',     labelKey: 'tabs.inspect',    icon: 'clipboard-outline',   moduleKey: 'inspect',   visible: canInspect,        primary: true },
+  { name: 'records/index',      labelKey: 'tabs.records',    icon: 'layers-outline',      moduleKey: 'records',   visible: canViewRecords,    primary: true },
+  { name: 'accident/dashboard', labelKey: 'tabs.accident',   icon: 'warning-outline',     activeTint: '#dc2626', moduleKey: 'accidents', visible: canViewAccidents, primary: true },
+  { name: 'meter-logs',         labelKey: 'tabs.meter',      icon: 'speedometer-outline', activeTint: '#0369a1', moduleKey: 'meter',     visible: (r) => r === 'driver', primary: true },
+  { name: 'workorders/index',   labelKey: 'tabs.workorders', icon: 'construct-outline',   moduleKey: 'workorders', visible: canViewWorkOrders },
+  { name: 'analytics/index',    labelKey: 'tabs.analytics',  icon: 'bar-chart-outline',   activeTint: '#3b82f6', moduleKey: 'analytics', visible: canViewAnalytics },
+  { name: 'reports/index',      labelKey: 'tabs.reports',    icon: 'document-text-outline', moduleKey: 'reports', visible: canViewReports },
+  { name: 'ai/index',           labelKey: 'tabs.ai',         icon: 'sparkles-outline',    activeTint: '#7c3aed', moduleKey: 'ai',        visible: canUseAI },
+  { name: 'admin/index',        labelKey: 'tabs.admin',      icon: 'shield-outline',      activeTint: '#7c3aed', moduleKey: 'admin',     visible: canAccessAdmin },
+  { name: 'profile',            labelKey: 'tabs.profile',    icon: 'person-outline',      visible: () => true,                 primary: true },
 ]

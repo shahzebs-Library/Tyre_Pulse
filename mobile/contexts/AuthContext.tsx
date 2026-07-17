@@ -2,6 +2,9 @@ import { createContext, useContext, useEffect, useRef, useState, ReactNode } fro
 import type { User, AuthError, RealtimeChannel } from '@supabase/supabase-js'
 import { supabase } from '../lib/supabase'
 import { Profile, normaliseRole, normaliseCountry } from '../lib/types'
+import {
+  ModuleKey, GrantMap, mobileGrantsFromRaw, resolveModuleAccess,
+} from '../lib/permissions'
 import { syncQueue, clearQueue } from '../lib/offlineQueue'
 import { syncRecordQueue, clearRecordQueue } from '../lib/recordQueue'
 import { clearPushToken, cancelDailyInspectionReminder } from '../lib/notifications'
@@ -22,6 +25,14 @@ interface AuthContextType {
   user: User | null
   profile: Profile | null
   loading: boolean
+  /** True when this account is the platform super-admin. */
+  isSuperAdmin: boolean
+  /** Per-user mobile access overlay (mobile: grants, prefix stripped). */
+  grants: GrantMap
+  /** Effective access for a mobile module: role default + grant overlay. */
+  canAccess: (key: ModuleKey) => boolean
+  /** Re-pull this user's access grants (call after the admin changes them). */
+  refreshGrants: () => Promise<void>
   signIn: (identifier: string, password: string) => Promise<{ error: AuthError | Error | null }>
   signOut: () => Promise<void>
 }
@@ -32,7 +43,46 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser]       = useState<User | null>(null)
   const [profile, setProfile] = useState<Profile | null>(null)
   const [loading, setLoading] = useState(true)
+  const [grants, setGrants]   = useState<GrantMap>({})
   const profileChannelRef     = useRef<RealtimeChannel | null>(null)
+  const grantsChannelRef      = useRef<RealtimeChannel | null>(null)
+
+  const isSuperAdmin = profile?.is_super_admin === true
+
+  // Load this user's mobile access overlay. Fail-open to {} (never blocks the
+  // app); web grants are ignored (mobileGrantsFromRaw keeps only mobile: keys).
+  async function fetchGrants() {
+    try {
+      const { data } = await supabase.rpc('get_my_access_grants')
+      setGrants(mobileGrantsFromRaw(data as Record<string, unknown> | null))
+    } catch {
+      setGrants({})
+    }
+  }
+
+  // Realtime: when a super-admin changes THIS user's grants, re-pull so their
+  // navigation auto-adjusts without a re-login.
+  function subscribeToGrants(userId: string) {
+    if (grantsChannelRef.current) supabase.removeChannel(grantsChannelRef.current)
+    grantsChannelRef.current = supabase
+      .channel(`grants:${userId}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'user_access_grants', filter: `user_id=eq.${userId}` },
+        () => { fetchGrants() },
+      )
+      .subscribe()
+  }
+  function unsubscribeFromGrants() {
+    if (grantsChannelRef.current) {
+      supabase.removeChannel(grantsChannelRef.current)
+      grantsChannelRef.current = null
+    }
+  }
+
+  function canAccess(key: ModuleKey): boolean {
+    return resolveModuleAccess(key, profile?.role ?? null, grants, isSuperAdmin)
+  }
 
   // Subscribe to realtime updates on this user's profile row so any role/field
   // change made by an admin is applied immediately without requiring re-login.
@@ -75,6 +125,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (session?.user) {
           fetchProfile(session.user.id)
           subscribeToProfile(session.user.id)
+          fetchGrants()
+          subscribeToGrants(session.user.id)
         }
       })
       .catch(() => {})
@@ -86,10 +138,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (session?.user) {
         fetchProfile(session.user.id)
         subscribeToProfile(session.user.id)
+        fetchGrants()
+        subscribeToGrants(session.user.id)
       } else {
         setProfile(null)
+        setGrants({})
         setSentryUser(null)
         unsubscribeFromProfile()
+        unsubscribeFromGrants()
         // On any sign-out (manual OR forced lockout) purge device-local queues.
         clearLocalUserState().catch(() => {})
       }
@@ -100,12 +156,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       mounted = false
       subscription.unsubscribe()
       unsubscribeFromProfile()
+      unsubscribeFromGrants()
     }
   }, [])
 
   async function fetchProfile(userId: string) {
     try {
-      const { data } = await supabase.from('profiles').select('id,full_name,username,role,email,employee_id,site,country,approved,locked,created_at').eq('id', userId).maybeSingle()
+      const { data } = await supabase.from('profiles').select('id,full_name,username,role,email,employee_id,site,country,approved,locked,is_super_admin,created_at').eq('id', userId).maybeSingle()
       if (data) {
         // Enforce locked / unapproved accounts on the client immediately
         if (data.locked === true || data.approved === false) {
@@ -155,7 +212,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, profile, loading, signIn, signOut }}>
+    <AuthContext.Provider value={{
+      user, profile, loading, isSuperAdmin, grants, canAccess,
+      refreshGrants: fetchGrants, signIn, signOut,
+    }}>
       {children}
     </AuthContext.Provider>
   )

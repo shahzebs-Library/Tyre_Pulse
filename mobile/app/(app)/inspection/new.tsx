@@ -4,7 +4,7 @@ import {
   StyleSheet, Alert, ActivityIndicator, StatusBar, Platform,
   KeyboardAvoidingView, useWindowDimensions, Modal, Pressable,
 } from 'react-native'
-import { SafeAreaView } from 'react-native-safe-area-context'
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useRouter, useLocalSearchParams } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
 import { useAuth } from '../../../contexts/AuthContext'
@@ -37,6 +37,7 @@ export default function NewInspectionScreen() {
   const { profile } = useAuth()
   const { t, isRTL } = useLanguage()
   const { theme } = useTheme()
+  const insets = useSafeAreaInsets()
   const styles = useMemo(() => makeStyles(theme), [theme])
   const router = useRouter()
   const params = useLocalSearchParams<{
@@ -814,7 +815,7 @@ export default function NewInspectionScreen() {
           statusBarTranslucent
         >
           <Pressable style={styles.pickerBackdrop} onPress={() => setSitePickerOpen(false)} />
-          <View style={styles.pickerSheet}>
+          <View style={[styles.pickerSheet, { paddingBottom: Math.max(insets.bottom, spacing.xl) }]}>
             <View style={styles.pickerHandle} />
             <View style={[styles.pickerHeader, isRTL && styles.navRTL]}>
               <Text style={styles.pickerTitle}>{t('inspection.sitePickerTitle')}</Text>

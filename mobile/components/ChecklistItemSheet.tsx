@@ -19,6 +19,7 @@ import {
   ScrollView, KeyboardAvoidingView, Platform, Pressable,
 } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useTheme } from '../contexts/ThemeContext'
 import { Theme, spacing, radius, typography } from '../lib/theme'
 import PhotoCapture from './PhotoCapture'
@@ -125,6 +126,7 @@ export default function ChecklistItemSheet({
   onChange, onPhotos, onPrintedName, onSignature, onClose,
 }: Props) {
   const { theme } = useTheme()
+  const insets = useSafeAreaInsets()
   const styles = useMemo(() => makeStyles(theme), [theme])
   const c = theme.color
 
@@ -327,7 +329,7 @@ export default function ChecklistItemSheet({
         style={styles.sheetWrap}
         pointerEvents="box-none"
       >
-        <View style={styles.sheet}>
+        <View style={[styles.sheet, { paddingBottom: Math.max(insets.bottom, spacing.xl) }]}>
           <View style={styles.handle} />
 
           <View style={styles.header}>

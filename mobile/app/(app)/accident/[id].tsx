@@ -16,6 +16,7 @@ import {
   Dimensions,
 } from 'react-native'
 import { useLocalSearchParams, useRouter } from 'expo-router'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons'
 import { useAuth } from '../../../contexts/AuthContext'
 import { useLanguage } from '../../../contexts/LanguageContext'
@@ -68,6 +69,7 @@ export default function AccidentDetailScreen() {
   const { t, isRTL } = useLanguage()
   const { theme } = useTheme()
   const c = theme.color
+  const insets = useSafeAreaInsets()
   const styles = useMemo(() => createStyles(theme), [theme])
   const router = useRouter()
 
@@ -492,7 +494,7 @@ export default function AccidentDetailScreen() {
         onRequestClose={() => setShowStatusModal(false)}
       >
         <TouchableOpacity style={[styles.modalBackdrop, { backgroundColor: c.overlay }]} activeOpacity={1} onPress={() => setShowStatusModal(false)}>
-          <View style={[styles.modalSheet, { backgroundColor: c.surface }]}>
+          <View style={[styles.modalSheet, { backgroundColor: c.surface, paddingBottom: Math.max(insets.bottom, 24) }]}>
             <View style={[styles.modalHandle, { backgroundColor: c.borderStrong }]} />
             <AppText variant="h3">{t('accident.detail.updateStatus')}</AppText>
             <AppText variant="caption" color="muted" style={{ marginBottom: spacing.xs }}>{t('accident.detail.updateStatusHint')}</AppText>

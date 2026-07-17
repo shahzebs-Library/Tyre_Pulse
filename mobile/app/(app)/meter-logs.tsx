@@ -14,7 +14,7 @@ import {
   View, Text, ScrollView, TextInput, TouchableOpacity,
   StyleSheet, Alert, Platform, KeyboardAvoidingView, Modal,
 } from 'react-native'
-import { SafeAreaView } from 'react-native-safe-area-context'
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { SvgXml } from 'react-native-svg'
 import { useRouter, useLocalSearchParams } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
@@ -43,6 +43,7 @@ export default function MeterLogScreen() {
   const { profile } = useAuth()
   const { t, isRTL } = useLanguage()
   const { theme } = useTheme()
+  const insets = useSafeAreaInsets()
   const styles = useMemo(() => makeStyles(theme), [theme])
   const router = useRouter()
   const params = useLocalSearchParams<{ asset?: string; site?: string }>()
@@ -464,7 +465,7 @@ export default function MeterLogScreen() {
       {/* Review + photo + confirm step */}
       <Modal visible={reviewOpen} animationType="slide" transparent onRequestClose={() => { if (!submitting) setReviewOpen(false) }}>
         <View style={styles.reviewBackdrop}>
-          <View style={styles.reviewSheet}>
+          <View style={[styles.reviewSheet, { paddingBottom: Math.max(insets.bottom, 16) }]}>
             <View style={[styles.reviewHead, isRTL && styles.rowR]}>
               <Text style={[styles.reviewTitle, { textAlign }]}>Confirm reading</Text>
               <TouchableOpacity onPress={() => { if (!submitting) setReviewOpen(false) }} style={styles.reviewClose} disabled={submitting}>

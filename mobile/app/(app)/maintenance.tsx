@@ -16,6 +16,7 @@ import {
   StyleSheet, Alert, Platform, KeyboardAvoidingView, Modal, RefreshControl,
 } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
 import { useAuth } from '../../contexts/AuthContext'
 import { useLanguage } from '../../contexts/LanguageContext'
@@ -100,6 +101,7 @@ export default function MaintenanceScreen() {
   const { profile } = useAuth()
   const { t } = useLanguage()
   const { theme } = useTheme()
+  const insets = useSafeAreaInsets()
   const styles = useMemo(() => makeStyles(theme), [theme])
   const router = useRouter()
 
@@ -319,7 +321,7 @@ export default function MaintenanceScreen() {
           style={styles.modalWrap}
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         >
-          <View style={styles.modalCard}>
+          <View style={[styles.modalCard, { paddingBottom: Math.max(insets.bottom, 16) }]}>
             <View style={styles.modalHead}>
               <AppText variant="h3" numberOfLines={1} style={styles.modalTitle}>
                 {t('modules.pm.recordService')}

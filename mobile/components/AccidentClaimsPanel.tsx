@@ -11,10 +11,11 @@
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import {
-  View, TextInput, TouchableOpacity, StyleSheet,
+  View, TextInput, TouchableOpacity, StyleSheet, ScrollView,
   Modal, Alert, ActivityIndicator, Platform,
 } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useAuth } from '../contexts/AuthContext'
 import { useLanguage } from '../contexts/LanguageContext'
 import { useTheme } from '../contexts/ThemeContext'
@@ -532,6 +533,7 @@ function PartModal({
   const { theme } = useTheme()
   const c = theme.color
   const styles = useStyles()
+  const insets = useSafeAreaInsets()
   const [name, setName] = useState('')
   const [num, setNum] = useState('')
   const [qty, setQty] = useState('1')
@@ -565,7 +567,7 @@ function PartModal({
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <View style={[styles.sheetBackdrop, { backgroundColor: c.overlay }]}>
-        <View style={[styles.sheet, { backgroundColor: c.surface }]}>
+        <View style={[styles.sheet, { backgroundColor: c.surface, paddingBottom: Math.max(insets.bottom, spacing.xl) }]}>
           <View style={[styles.handle, { backgroundColor: c.borderStrong }]} />
           <AppText variant="h3">Add Part / Repair</AppText>
           <Field label="Part name *"><TextInput style={[styles.input, { backgroundColor: c.surfaceAlt, borderColor: c.border, color: c.text }]} value={name} onChangeText={setName} placeholder="e.g. Front bumper" placeholderTextColor={c.textMuted} /></Field>
@@ -611,6 +613,7 @@ function ClaimEditModal({
   const { theme } = useTheme()
   const c = theme.color
   const styles = useStyles()
+  const insets = useSafeAreaInsets()
   const a = accident as any
   const [f, setF] = useState({
     responsible_party: '', liable_party: '', payer: '', driver_name: '',
@@ -723,10 +726,18 @@ function ClaimEditModal({
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <View style={[styles.sheetBackdrop, { backgroundColor: c.overlay }]}>
-        <View style={[styles.sheet, { backgroundColor: c.surface, maxHeight: '90%' }]}>
+        <View style={[styles.sheet, { backgroundColor: c.surface, maxHeight: '90%', paddingBottom: Math.max(insets.bottom, spacing.xl) }]}>
           <View style={[styles.handle, { backgroundColor: c.borderStrong }]} />
           <AppText variant="h3">Edit Claim and Responsibility</AppText>
-          <View style={{ gap: spacing.md }}>
+          {/* The long field stack must scroll inside the sheet; the action row
+              below stays pinned above the safe-area inset. */}
+          <ScrollView
+            style={{ flexGrow: 0, flexShrink: 1 }}
+            contentContainerStyle={{ gap: spacing.md }}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+            nestedScrollEnabled
+          >
             <Field label="Responsible party"><TextInput style={inputStyle} value={f.responsible_party} onChangeText={v => set('responsible_party', v)} placeholder="Who is at fault" placeholderTextColor={c.textMuted} /></Field>
             <Field label="Liable party">
               <ChipPick options={LIABLE_PARTY_OPTS} value={f.liable_party} onSelect={v => set('liable_party', v)} c={c} styles={styles} clearable />
@@ -846,7 +857,7 @@ function ClaimEditModal({
               <Field label="Expected release" flex><TextInput style={inputStyle} value={f.expected_release_date} onChangeText={v => set('expected_release_date', v)} placeholder="YYYY-MM-DD" placeholderTextColor={c.textMuted} /></Field>
               <Field label="Release date" flex><TextInput style={inputStyle} value={f.release_date} onChangeText={v => set('release_date', v)} placeholder="YYYY-MM-DD" placeholderTextColor={c.textMuted} /></Field>
             </View>
-          </View>
+          </ScrollView>
           <View style={styles.sheetBtns}>
             <TouchableOpacity style={[styles.sheetCancel, { backgroundColor: c.surfaceAlt }]} onPress={onClose}><AppText variant="bodyStrong" color="secondary">Cancel</AppText></TouchableOpacity>
             <TouchableOpacity style={[styles.sheetSave, { backgroundColor: c.danger.base }]} onPress={save} disabled={saving}>

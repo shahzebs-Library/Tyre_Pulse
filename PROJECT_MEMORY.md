@@ -822,6 +822,17 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
   `tyre_man` RBAC removals on a FRESH build with a real tyre_man account (gating is correct in code — a role
   still seeing removed modules = stale build); redeploy `send-scheduled-reports` if a scheduled 'pm' report is
   wanted (still emails exec fallback until then).
+- **Brand-icon Play build VERIFIED SHIPPED**: `release-play.yml` run 29578022504 (head `b01f721`) completed
+  SUCCESS at 2026-07-17 11:58Z (~11 min). Step "Build AAB and auto-submit to Play (internal)" succeeded and the
+  "build only, no submit" fallback was SKIPPED, i.e. the AAB built AND auto-submitted to the **Play Internal**
+  track (GOOGLE_SERVICE_ACCOUNT_KEY secret is configured, so `eas build --auto-submit` submits). New icon reaches
+  internal testers once Google finishes processing. EAS remote versionCode auto-increments per build.
+- **Play release path (for the user, going PUBLIC)**: the same AAB is PROMOTED across tracks, no rebuild. Play
+  Console -> Testing -> Internal testing -> latest release -> "Promote release" -> Production -> review + rollout
+  (staged % recommended). Before Production unlocks, one-time items must be 100% complete: Store listing
+  (screenshots + 1024x512 feature graphic + 512 icon), Content rating, **Data safety** form, Target audience,
+  **App access** (must supply a reviewer test LOGIN since the app requires sign-in), Privacy policy URL, Ads
+  declaration. New Play accounts may require Closed testing with 12+ testers for 14 days before Production.
 
 ### SESSION CLOSED CLEAN (2026-07-16) — everything merged, nothing pending
 - All work through the custom TV/report board builder is MERGED to main and LIVE. Latest merges on branch

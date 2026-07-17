@@ -85,7 +85,7 @@ export default function AccidentDetailScreen() {
     try {
       await exportAccidentPdf(accident)
     } catch (e: any) {
-      Alert.alert('Export failed', e?.message ?? 'Could not generate the PDF.')
+      Alert.alert(t('accident.detail.exportFailed'), e?.message ?? t('common.shareError'))
     } finally {
       setExporting(false)
     }
@@ -115,7 +115,7 @@ export default function AccidentDetailScreen() {
       ])
 
       if (accRes.error || !accRes.data) {
-        Alert.alert('Error', 'Could not load accident report.')
+        Alert.alert(t('common.error'), t('accident.detail.loadError'))
         goBack()
         return
       }
@@ -132,7 +132,7 @@ export default function AccidentDetailScreen() {
       setAuditLog((auditRes.data ?? []) as AuditRow[])
     } catch (e: any) {
       if (__DEV__) console.warn('[accident/detail] load failed:', e?.message)
-      Alert.alert('Error', 'Could not load accident report. Please try again.')
+      Alert.alert(t('common.error'), t('accident.detail.loadErrorRetry'))
       goBack()
     } finally {
       setLoading(false)
@@ -152,7 +152,7 @@ export default function AccidentDetailScreen() {
         .eq('id', accident.id)
 
       if (error) {
-        Alert.alert('Error', 'Failed to update status.')
+        Alert.alert(t('common.error'), t('accident.detail.updateFailed'))
       } else {
         setAccident(prev => prev ? { ...prev, status: newStatus } : prev)
         // Reload audit log (best-effort; a status update already succeeded)
@@ -161,7 +161,7 @@ export default function AccidentDetailScreen() {
       }
     } catch (e: any) {
       if (__DEV__) console.warn('[accident/detail] status update failed:', e?.message)
-      Alert.alert('Error', 'Failed to update status. Please try again.')
+      Alert.alert(t('common.error'), t('accident.detail.updateFailedRetry'))
     } finally {
       setStatusLoading(false)
     }
@@ -169,12 +169,12 @@ export default function AccidentDetailScreen() {
 
   function confirmDelete() {
     Alert.alert(
-      'Delete Report',
-      'This will permanently delete the accident report and all audit history. This cannot be undone.',
+      t('accident.detail.deleteTitle'),
+      t('accident.detail.deleteMessage'),
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: t('common.cancel'), style: 'cancel' },
         {
-          text: 'Delete',
+          text: t('accident.detail.delete'),
           style: 'destructive',
           onPress: async () => {
             if (!accident) return
@@ -182,13 +182,13 @@ export default function AccidentDetailScreen() {
             try {
               const { error } = await supabase.from('accidents').delete().eq('id', accident.id)
               if (error) {
-                Alert.alert('Error', 'Failed to delete report.')
+                Alert.alert(t('common.error'), t('accident.detail.deleteFailed'))
               } else {
                 goBack()
               }
             } catch (e: any) {
               if (__DEV__) console.warn('[accident/detail] delete failed:', e?.message)
-              Alert.alert('Error', 'Failed to delete report. Please try again.')
+              Alert.alert(t('common.error'), t('accident.detail.deleteFailedRetry'))
             } finally {
               setDeleting(false)
             }
@@ -288,9 +288,9 @@ export default function AccidentDetailScreen() {
 
         {/* -- Status dropdown (managers / admins) ------------------------ */}
         {canChangeStatus && (
-          <SectionCard title="Investigation Status" icon="flag-outline">
+          <SectionCard title={t('accident.detail.investigationStatus')} icon="flag-outline">
             <AppText variant="caption" color="muted" style={{ marginBottom: spacing.sm }}>
-              Select the current status of this report
+              {t('accident.detail.selectStatusHint')}
             </AppText>
             <TouchableOpacity
               style={[styles.statusDropdown, { backgroundColor: c.surface, borderColor: statusSc.base + '55' }]}
@@ -349,17 +349,17 @@ export default function AccidentDetailScreen() {
         </SectionCard>
 
         {/* -- Reporter info (admin sees reviewer too) -------------------- */}
-        <SectionCard title="Report Info" icon="person-circle-outline">
+        <SectionCard title={t('accident.detail.reportInfo')} icon="person-circle-outline">
           {accident.driver_name ? (
             <InfoRow label={t('accident.driverLabel')} value={accident.driver_name} />
           ) : null}
-          <InfoRow label="Reported By"  value={accident.reporter_name ?? '-'} />
-          <InfoRow label="Submitted"    value={new Date(accident.created_at).toLocaleString()} />
+          <InfoRow label={t('accident.detail.reportedBy')}  value={accident.reporter_name ?? '-'} />
+          <InfoRow label={t('accident.detail.submitted')}    value={new Date(accident.created_at).toLocaleString()} />
           {accident.updated_at !== accident.created_at && (
-            <InfoRow label="Last Updated" value={new Date(accident.updated_at).toLocaleString()} />
+            <InfoRow label={t('accident.detail.lastUpdated')} value={new Date(accident.updated_at).toLocaleString()} />
           )}
           {canSeeAudit && accident.reviewed_by && (
-            <InfoRow label="Reviewed At" value={accident.reviewed_at ? new Date(accident.reviewed_at).toLocaleString() : '-'} />
+            <InfoRow label={t('accident.detail.reviewedAt')} value={accident.reviewed_at ? new Date(accident.reviewed_at).toLocaleString() : '-'} />
           )}
         </SectionCard>
 
@@ -367,22 +367,22 @@ export default function AccidentDetailScreen() {
         {(() => {
           const a = accident as any
           const rows: Array<[string, string]> = []
-          if (a.plate_number) rows.push(['Plate Number', String(a.plate_number)])
-          if (a.vehicle_type) rows.push(['Vehicle Type', String(a.vehicle_type)])
-          if (a.current_status) rows.push(['Current Condition', String(a.current_status)])
-          if (a.damage_condition) rows.push(['Damage Condition', String(a.damage_condition)])
-          if (a.fault_status) rows.push(['Fault Status', String(a.fault_status)])
-          if (a.gcc_liability_ratio != null && a.gcc_liability_ratio !== '') rows.push(['GCC Liability', `${Number(a.gcc_liability_ratio)}%`])
-          if (a.najm_status) rows.push(['Najm Report', String(a.najm_status)])
-          if (a.najm_fault) rows.push(['Najm Fault', String(a.najm_fault)])
-          if (a.taqdeer_status) rows.push(['Taqdeer Report', String(a.taqdeer_status)])
-          if (a.taqdeer_no) rows.push(['Taqdeer No', String(a.taqdeer_no)])
-          if (a.liable_party) rows.push(['Liable Party', String(a.liable_party)])
-          if (a.payer) rows.push(['Who Pays', String(a.payer)])
-          if (a.responsible_party) rows.push(['Responsible Party', String(a.responsible_party)])
+          if (a.plate_number) rows.push([t('accident.detail.plateNumber'), String(a.plate_number)])
+          if (a.vehicle_type) rows.push([t('accident.detail.vehicleType'), String(a.vehicle_type)])
+          if (a.current_status) rows.push([t('accident.detail.currentCondition'), String(a.current_status)])
+          if (a.damage_condition) rows.push([t('accident.detail.damageCondition'), String(a.damage_condition)])
+          if (a.fault_status) rows.push([t('accident.detail.faultStatus'), String(a.fault_status)])
+          if (a.gcc_liability_ratio != null && a.gcc_liability_ratio !== '') rows.push([t('accident.detail.gccLiability'), `${Number(a.gcc_liability_ratio)}%`])
+          if (a.najm_status) rows.push([t('accident.detail.najmReport'), String(a.najm_status)])
+          if (a.najm_fault) rows.push([t('accident.detail.najmFault'), String(a.najm_fault)])
+          if (a.taqdeer_status) rows.push([t('accident.detail.taqdeerReport'), String(a.taqdeer_status)])
+          if (a.taqdeer_no) rows.push([t('accident.detail.taqdeerNo'), String(a.taqdeer_no)])
+          if (a.liable_party) rows.push([t('accident.detail.liableParty'), String(a.liable_party)])
+          if (a.payer) rows.push([t('accident.detail.whoPays'), String(a.payer)])
+          if (a.responsible_party) rows.push([t('accident.detail.responsibleParty'), String(a.responsible_party)])
           if (rows.length === 0) return null
           return (
-            <SectionCard title="Classification & GCC Case" icon="shield-checkmark-outline">
+            <SectionCard title={t('accident.detail.classificationGcc')} icon="shield-checkmark-outline">
               {rows.map(([label, value]) => <InfoRow key={label} label={label} value={value} />)}
             </SectionCard>
           )
@@ -392,15 +392,15 @@ export default function AccidentDetailScreen() {
         {(() => {
           const a = accident as any
           const rows: Array<[string, string, boolean]> = []
-          if (a.repair_type) rows.push(['Repair Type', String(a.repair_type), false])
-          if (a.workshop_name) rows.push(['Workshop', String(a.workshop_name), false])
-          if (a.workshop_location) rows.push(['Workshop Location', String(a.workshop_location), false])
-          if (a.repair_cost != null) rows.push(['Repair Cost', `SAR ${Number(a.repair_cost).toLocaleString(undefined, { minimumFractionDigits: 2 })}`, true])
-          if (a.expected_release_date) rows.push(['Expected Release', String(a.expected_release_date), false])
-          if (a.release_date) rows.push(['Release Date', String(a.release_date), false])
+          if (a.repair_type) rows.push([t('accident.detail.repairType'), String(a.repair_type), false])
+          if (a.workshop_name) rows.push([t('accident.detail.workshop'), String(a.workshop_name), false])
+          if (a.workshop_location) rows.push([t('accident.detail.workshopLocation'), String(a.workshop_location), false])
+          if (a.repair_cost != null) rows.push([t('accident.detail.repairCost'), `SAR ${Number(a.repair_cost).toLocaleString(undefined, { minimumFractionDigits: 2 })}`, true])
+          if (a.expected_release_date) rows.push([t('accident.detail.expectedRelease'), String(a.expected_release_date), false])
+          if (a.release_date) rows.push([t('accident.detail.releaseDate'), String(a.release_date), false])
           if (rows.length === 0) return null
           return (
-            <SectionCard title="Repair & Release" icon="construct-outline">
+            <SectionCard title={t('accident.detail.repairRelease')} icon="construct-outline">
               {rows.map(([label, value, hl]) => <InfoRow key={label} label={label} value={value} highlight={hl} />)}
             </SectionCard>
           )
@@ -442,7 +442,7 @@ export default function AccidentDetailScreen() {
 
         {/* -- Activity / Audit (admin / manager / director only) --------- */}
         {canSeeAudit && auditLog.length > 0 && (
-          <SectionCard title="Activity - who changed what" icon="shield-checkmark-outline">
+          <SectionCard title={t('accident.detail.activity')} icon="shield-checkmark-outline">
             {auditLog.map((row, i) => {
               const actionColor =
                 row.action === 'status_change' ? c.info.base
@@ -462,7 +462,7 @@ export default function AccidentDetailScreen() {
                       </AppText>
                     </View>
                     <AppText variant="micro" color="muted">
-                      <Ionicons name="person-outline" size={10} color={c.textMuted} /> {row.actor_name ?? 'User'}
+                      <Ionicons name="person-outline" size={10} color={c.textMuted} /> {row.actor_name ?? t('accident.detail.userFallback')}
                     </AppText>
                     {d.summary && <AppText variant="micro" color="secondary">{d.summary}</AppText>}
                     {d.lines.map((l, li) => (
@@ -490,8 +490,8 @@ export default function AccidentDetailScreen() {
         <TouchableOpacity style={[styles.modalBackdrop, { backgroundColor: c.overlay }]} activeOpacity={1} onPress={() => setShowStatusModal(false)}>
           <View style={[styles.modalSheet, { backgroundColor: c.surface }]}>
             <View style={[styles.modalHandle, { backgroundColor: c.borderStrong }]} />
-            <AppText variant="h3">Update Status</AppText>
-            <AppText variant="caption" color="muted" style={{ marginBottom: spacing.xs }}>Change the investigation status of this report</AppText>
+            <AppText variant="h3">{t('accident.detail.updateStatus')}</AppText>
+            <AppText variant="caption" color="muted" style={{ marginBottom: spacing.xs }}>{t('accident.detail.updateStatusHint')}</AppText>
             {STATUS_OPTIONS.map(opt => {
               const sc     = statusColor(theme, STATUS_KIND[opt])
               const active = opt === accident.status

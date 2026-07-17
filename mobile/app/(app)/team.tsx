@@ -75,7 +75,7 @@ export default function TeamScreen() {
       setError(null)
     } catch (e: any) {
       if (__DEV__) console.warn('[team] load failed', e)
-      setError(e?.message ?? 'Failed to load team members.')
+      setError(e?.message ?? t('modules.team.loadError'))
     } finally {
       setLoading(false)
     }
@@ -133,7 +133,7 @@ export default function TeamScreen() {
       {!loading && (
         <View style={s.statRow}>
           <StatTile label={t('modules.team.members')} value={rows.length} icon="people" tint="blue" />
-          <StatTile label="Active" value={active} icon="checkmark-circle" tint="green" />
+          <StatTile label={t('modules.team.active')} value={active} icon="checkmark-circle" tint="green" />
           <StatTile label={t('modules.team.pending')} value={pending} icon="hourglass-outline" tint="amber" />
         </View>
       )}
@@ -156,7 +156,7 @@ export default function TeamScreen() {
       </View>
 
       {loading ? (
-        <Loading label="Loading team" />
+        <Loading label={t('modules.team.loadingLabel')} />
       ) : error && rows.length === 0 ? (
         <ErrorState message={error} onRetry={load} />
       ) : (
@@ -170,7 +170,7 @@ export default function TeamScreen() {
             <EmptyState
               icon="people-outline"
               title={t('modules.team.none')}
-              message={query ? 'Try a different search term.' : undefined}
+              message={query ? t('modules.team.tryTerm') : undefined}
             />
           }
           renderItem={({ item }) => {
@@ -186,7 +186,7 @@ export default function TeamScreen() {
                   </View>
                   <View style={{ flex: 1, gap: 5 }}>
                     <AppText variant="title" style={{ textAlign }} numberOfLines={1}>
-                      {item.full_name ?? item.username ?? 'Unknown'}
+                      {item.full_name ?? item.username ?? t('modules.team.unknown')}
                     </AppText>
                     <View style={[s.badges, isRTL && s.rowR]}>
                       <View style={[s.rolePill, { backgroundColor: tint.bg }]}>

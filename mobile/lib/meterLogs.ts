@@ -76,6 +76,8 @@ export interface SubmitMeterInput {
   engineHours?: number | null
   hoursPhoto?: string | null
   notes?: string | null
+  /** Optional self-contained SVG signature (from SignaturePad), stored as text. */
+  signature?: string | null
 }
 
 /**
@@ -87,6 +89,7 @@ export interface SubmitMeterInput {
 export async function submitMeterReading(input: SubmitMeterInput): Promise<{ offline: boolean }> {
   const asset = input.assetNo.trim()
   const date = input.readingDate ?? todayISODate()
+  const signature = input.signature?.trim() || null
   const base = {
     asset_no: asset,
     reading_date: date,
@@ -95,6 +98,10 @@ export async function submitMeterReading(input: SubmitMeterInput): Promise<{ off
     country: input.country ?? null,
     created_by: input.createdBy ?? null,
     notes: input.notes?.trim() || null,
+    // Only include the column when a signature was actually drawn; otherwise
+    // omit it entirely so the row is written without it (queue sanitize()
+    // drops undefined keys).
+    ...(signature ? { signature } : {}),
   }
 
   let offline = false

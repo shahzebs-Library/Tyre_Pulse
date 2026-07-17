@@ -33,14 +33,14 @@ import {
 
 // Presentation per source kind.
 const KIND_META: Record<ScheduleKind, {
-  label: string
+  labelKey: string
   icon: React.ComponentProps<typeof Ionicons>['name']
   tint: 'blue' | 'amber' | 'violet' | 'teal'
 }> = {
-  inspection:  { label: 'Inspection',  icon: 'clipboard-outline', tint: 'blue' },
-  maintenance: { label: 'Maintenance', icon: 'build-outline',     tint: 'amber' },
-  task:        { label: 'Task',        icon: 'checkbox-outline',  tint: 'violet' },
-  work_order:  { label: 'Work order',  icon: 'construct-outline', tint: 'teal' },
+  inspection:  { labelKey: 'modules.calendar.kindInspection',  icon: 'clipboard-outline', tint: 'blue' },
+  maintenance: { labelKey: 'modules.calendar.kindMaintenance', icon: 'build-outline',     tint: 'amber' },
+  task:        { labelKey: 'modules.calendar.kindTask',        icon: 'checkbox-outline',  tint: 'violet' },
+  work_order:  { labelKey: 'modules.calendar.kindWorkOrder',   icon: 'construct-outline', tint: 'teal' },
 }
 
 // Bucket -> badge colour for the due-date chip.
@@ -55,7 +55,7 @@ const closed = (s: string | null | undefined) => {
 
 export default function CalendarScreen() {
   const { profile } = useAuth()
-  const { isRTL } = useLanguage()
+  const { t, isRTL } = useLanguage()
   const { theme } = useTheme()
   const styles = useMemo(() => makeStyles(theme), [theme])
   const router = useRouter()
@@ -114,7 +114,7 @@ export default function CalendarScreen() {
         collected.push({
           id: `insp-${r.id}`,
           kind: 'inspection',
-          title: r.title || `Inspection ${r.asset_no ?? ''}`.trim(),
+          title: r.title || `${t('modules.calendar.kindInspection')} ${r.asset_no ?? ''}`.trim(),
           subtitle: [r.asset_no, r.site].filter(Boolean).join(' - ') || undefined,
           date: r.scheduled_date,
           route: `/(app)/inspection/${r.id}`,
@@ -128,7 +128,7 @@ export default function CalendarScreen() {
         collected.push({
           id: `pm-${r.id}`,
           kind: 'maintenance',
-          title: r.name || 'Maintenance due',
+          title: r.name || t('modules.calendar.kindMaintenance'),
           subtitle: [r.asset_no, r.site].filter(Boolean).join(' - ') || undefined,
           date: r.next_due,
         })
@@ -142,7 +142,7 @@ export default function CalendarScreen() {
         collected.push({
           id: `task-${r.id}`,
           kind: 'task',
-          title: r.title || 'Task',
+          title: r.title || t('modules.calendar.kindTask'),
           subtitle: [r.asset_no, r.site].filter(Boolean).join(' - ') || undefined,
           date: r.due_date,
           priority: r.priority,
@@ -153,10 +153,10 @@ export default function CalendarScreen() {
     }
 
     setItems(collected)
-    setError(anyOk ? null : 'Could not load the schedule. Pull down to retry.')
+    setError(anyOk ? null : t('modules.calendar.loadError'))
     } catch (e: any) {
       if (__DEV__) console.warn('[calendar] load failed:', e?.message)
-      setError('Could not load the schedule. Pull down to retry.')
+      setError(t('modules.calendar.loadError'))
     } finally {
       setLoading(false)
     }
@@ -185,15 +185,15 @@ export default function CalendarScreen() {
           <Ionicons name={isRTL ? 'arrow-forward' : 'arrow-back'} size={22} color={theme.color.text} />
         </TouchableOpacity>
         <View style={{ flex: 1 }}>
-          <AppText variant="h2" style={{ textAlign }}>Calendar</AppText>
+          <AppText variant="h2" style={{ textAlign }}>{t('modules.calendar.title')}</AppText>
           <AppText variant="caption" color="muted" style={{ textAlign }}>
-            {summary.total > 0 ? `${summary.total} scheduled` : 'Your schedule'}
+            {summary.total > 0 ? `${summary.total} ${t('modules.calendar.scheduledSuffix')}` : t('modules.calendar.yourSchedule')}
           </AppText>
         </View>
       </View>
 
       {loading ? (
-        <Loading label="Loading schedule" />
+        <Loading label={t('modules.calendar.loadingLabel')} />
       ) : error && items.length === 0 ? (
         <ErrorState message={error} onRetry={onRefresh} />
       ) : (
@@ -204,16 +204,16 @@ export default function CalendarScreen() {
         >
           {/* Summary strip */}
           <View style={styles.stats}>
-            <StatTile label="Overdue" value={summary.overdue} icon="alert-circle-outline" tint="red" />
-            <StatTile label="Due today" value={summary.today} icon="today-outline" tint="amber" />
-            <StatTile label="This week" value={summary.week} icon="calendar-outline" tint="blue" />
+            <StatTile label={t('modules.calendar.overdue')} value={summary.overdue} icon="alert-circle-outline" tint="red" />
+            <StatTile label={t('modules.calendar.dueToday')} value={summary.today} icon="today-outline" tint="amber" />
+            <StatTile label={t('modules.calendar.thisWeek')} value={summary.week} icon="calendar-outline" tint="blue" />
           </View>
 
           {groups.length === 0 ? (
             <EmptyState
               icon="calendar-clear-outline"
-              title="Nothing scheduled"
-              message="Upcoming inspections, maintenance and tasks with a due date will appear here."
+              title={t('modules.calendar.nothing')}
+              message={t('modules.calendar.nothingHint')}
             />
           ) : (
             groups.map(group => (
@@ -227,8 +227,8 @@ export default function CalendarScreen() {
                         key={item.id}
                         title={item.title}
                         subtitle={item.subtitle
-                          ? `${meta.label} - ${item.subtitle}`
-                          : meta.label}
+                          ? `${t(meta.labelKey)} - ${item.subtitle}`
+                          : t(meta.labelKey)}
                         icon={meta.icon}
                         tint={meta.tint}
                         chevron={!!item.route}
@@ -247,7 +247,7 @@ export default function CalendarScreen() {
           )}
 
           <AppText variant="micro" color="muted" center style={styles.footnote}>
-            Shows inspections, maintenance and tasks that carry a due date.
+            {t('modules.calendar.footnote')}
           </AppText>
         </ScrollView>
       )}

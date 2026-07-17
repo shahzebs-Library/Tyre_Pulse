@@ -16,6 +16,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons'
 import { useAuth } from '../../../contexts/AuthContext'
+import { useLanguage } from '../../../contexts/LanguageContext'
 import { supabase } from '../../../lib/supabase'
 import { saveCommand } from '../../../lib/recordQueue'
 import { isAdminOrAbove } from '../../../lib/types'
@@ -53,8 +54,18 @@ const STATUS_COLOR: Record<WorkOrderStatus, string> = {
   'Closed':      '#6b7280',
 }
 
+const STATUS_LABEL_KEY: Record<string, string> = {
+  Open: 'modules.workOrdersList.statusOpen',
+  'In Progress': 'modules.workOrdersList.statusInProgress',
+  Resolved: 'modules.workOrdersList.statusResolved',
+  Closed: 'modules.workOrdersList.statusClosed',
+}
+
 export default function WorkOrdersScreen() {
   const { profile } = useAuth()
+  const { t } = useLanguage()
+  const statusLabel = (s: string) => (STATUS_LABEL_KEY[s] ? t(STATUS_LABEL_KEY[s]) : s)
+  const priorityLabel = (p: string | null) => (p ? t(`modules.priority.${p}`) : '')
   const role     = profile?.role ?? null
   const elevated = isAdminOrAbove(role)
   const canUpdate = canUpdateWorkOrders(role)
@@ -105,7 +116,7 @@ export default function WorkOrdersScreen() {
       ? { ...o, status: newStatus, closed_at: closedAt ?? o.closed_at }
       : o))
     setDetail(null)
-    if (res.offline) { Alert.alert('Saved offline', 'It will sync automatically'); return }
+    if (res.offline) { Alert.alert(t('modules.workOrdersList.savedOffline'), t('modules.workOrdersList.savedOfflineMsg')); return }
     load()
   }
 
@@ -117,9 +128,9 @@ export default function WorkOrdersScreen() {
 
       <View style={styles.header}>
         <View style={{ flex: 1 }}>
-          <Text style={styles.title}>Work Orders</Text>
+          <Text style={styles.title}>{t('modules.workOrdersList.title')}</Text>
           <Text style={styles.subtitle}>
-            {loading ? 'Loading...' : `${orders.length} action${orders.length !== 1 ? 's' : ''}${elevated ? '' : ` · ${profile?.site ?? ''}`}`}
+            {loading ? t('common.loading') : `${orders.length} ${orders.length !== 1 ? t('modules.workOrdersList.actionsSuffix') : t('modules.workOrdersList.actionSuffix')}${elevated ? '' : ` · ${profile?.site ?? ''}`}`}
           </Text>
         </View>
       </View>
@@ -129,7 +140,7 @@ export default function WorkOrdersScreen() {
         <Ionicons name="search-outline" size={16} color="#94a3b8" />
         <TextInput
           style={styles.searchInput}
-          placeholder="Search title, asset, serial..."
+          placeholder={t('modules.workOrdersList.searchPh')}
           placeholderTextColor="#94a3b8"
           value={search}
           onChangeText={setSearch}
@@ -147,7 +158,7 @@ export default function WorkOrdersScreen() {
             onPress={() => setStatusFilter(s)}
           >
             <Text style={[styles.tabText, statusFilter === s && styles.tabTextActive]}>
-              {s === 'all' ? 'All' : s}
+              {s === 'all' ? t('modules.workOrdersList.all') : statusLabel(s)}
             </Text>
           </TouchableOpacity>
         ))}
@@ -164,9 +175,9 @@ export default function WorkOrdersScreen() {
           ListEmptyComponent={
             <View style={styles.empty}>
               <Ionicons name="construct-outline" size={48} color="#cbd5e1" />
-              <Text style={styles.emptyTitle}>No work orders</Text>
+              <Text style={styles.emptyTitle}>{t('modules.workOrdersList.none')}</Text>
               <Text style={styles.emptyHint}>
-                {statusFilter === 'Open' ? 'No open actions - great work!' : 'Nothing matches the current filter'}
+                {statusFilter === 'Open' ? t('modules.workOrdersList.noneOpenHint') : t('modules.workOrdersList.noneFilterHint')}
               </Text>
             </View>
           }
@@ -196,17 +207,17 @@ export default function WorkOrdersScreen() {
                   {item.due_date ? (
                     <View style={styles.metaItem}>
                       <Ionicons name="calendar-outline" size={11} color={overdue(item) ? '#dc2626' : '#94a3b8'} />
-                      <Text style={[styles.metaText, overdue(item) && { color: '#dc2626' }]}>Due {item.due_date.slice(0, 10)}</Text>
+                      <Text style={[styles.metaText, overdue(item) && { color: '#dc2626' }]}>{t('modules.workOrdersList.due')} {item.due_date.slice(0, 10)}</Text>
                     </View>
                   ) : null}
                 </View>
                 <View style={styles.cardBottom}>
                   <View style={[styles.statusBadge, { backgroundColor: STATUS_COLOR[item.status] + '18' }]}>
-                    <Text style={[styles.statusText, { color: STATUS_COLOR[item.status] }]}>{item.status}</Text>
+                    <Text style={[styles.statusText, { color: STATUS_COLOR[item.status] }]}>{statusLabel(item.status)}</Text>
                   </View>
                   {item.priority ? (
                     <View style={[styles.priorityBadge, { backgroundColor: PRIORITY_COLOR[item.priority] + '18' }]}>
-                      <Text style={[styles.priorityText, { color: PRIORITY_COLOR[item.priority] }]}>{item.priority}</Text>
+                      <Text style={[styles.priorityText, { color: PRIORITY_COLOR[item.priority] }]}>{priorityLabel(item.priority)}</Text>
                     </View>
                   ) : null}
                   {item.assigned_to ? (
@@ -233,29 +244,29 @@ export default function WorkOrdersScreen() {
                 <Text style={styles.detailTitle}>{detail.title}</Text>
                 <View style={styles.badgeRow}>
                   <View style={[styles.statusBadge, { backgroundColor: STATUS_COLOR[detail.status] + '20' }]}>
-                    <Text style={[styles.statusText, { color: STATUS_COLOR[detail.status] }]}>{detail.status}</Text>
+                    <Text style={[styles.statusText, { color: STATUS_COLOR[detail.status] }]}>{statusLabel(detail.status)}</Text>
                   </View>
                   {detail.priority ? (
                     <View style={[styles.priorityBadge, { backgroundColor: PRIORITY_COLOR[detail.priority] + '20' }]}>
-                      <Text style={[styles.priorityText, { color: PRIORITY_COLOR[detail.priority] }]}>{detail.priority}</Text>
+                      <Text style={[styles.priorityText, { color: PRIORITY_COLOR[detail.priority] }]}>{priorityLabel(detail.priority)}</Text>
                     </View>
                   ) : null}
                 </View>
-                {detail.asset_no ? <DRow label="Asset" value={detail.asset_no} /> : null}
-                {detail.site     ? <DRow label="Site"  value={detail.site} /> : null}
-                {detail.tyre_serial ? <DRow label="Tyre Serial" value={detail.tyre_serial} /> : null}
-                {detail.assigned_to ? <DRow label="Assigned To" value={detail.assigned_to} /> : null}
-                {detail.due_date ? <DRow label="Due Date" value={detail.due_date.slice(0, 10)} /> : null}
-                {detail.created_at ? <DRow label="Created" value={new Date(detail.created_at).toLocaleDateString()} /> : null}
+                {detail.asset_no ? <DRow label={t('modules.workOrdersList.asset')} value={detail.asset_no} /> : null}
+                {detail.site     ? <DRow label={t('modules.workOrdersList.site')}  value={detail.site} /> : null}
+                {detail.tyre_serial ? <DRow label={t('modules.workOrdersList.tyreSerial')} value={detail.tyre_serial} /> : null}
+                {detail.assigned_to ? <DRow label={t('modules.workOrdersList.assignedTo')} value={detail.assigned_to} /> : null}
+                {detail.due_date ? <DRow label={t('modules.workOrdersList.dueDate')} value={detail.due_date.slice(0, 10)} /> : null}
+                {detail.created_at ? <DRow label={t('modules.workOrdersList.created')} value={new Date(detail.created_at).toLocaleDateString()} /> : null}
                 {detail.description ? (
                   <View style={styles.textBlock}>
-                    <Text style={styles.textBlockLabel}>Description</Text>
+                    <Text style={styles.textBlockLabel}>{t('modules.workOrdersList.description')}</Text>
                     <Text style={styles.textBlockValue}>{detail.description}</Text>
                   </View>
                 ) : null}
                 {detail.root_cause ? (
                   <View style={styles.textBlock}>
-                    <Text style={styles.textBlockLabel}>Root Cause</Text>
+                    <Text style={styles.textBlockLabel}>{t('modules.workOrdersList.rootCause')}</Text>
                     <Text style={styles.textBlockValue}>{detail.root_cause}</Text>
                   </View>
                 ) : null}
@@ -263,7 +274,7 @@ export default function WorkOrdersScreen() {
                 {/* Status actions */}
                 {canUpdate && !readOnly && detail.status !== 'Closed' && (
                   <View style={styles.actionSection}>
-                    <Text style={styles.actionLabel}>Update Status</Text>
+                    <Text style={styles.actionLabel}>{t('modules.workOrdersList.updateStatus')}</Text>
                     <View style={styles.actionBtns}>
                       {(['In Progress', 'Resolved', 'Closed'] as WorkOrderStatus[])
                         .filter(s => s !== detail.status)
@@ -272,14 +283,14 @@ export default function WorkOrdersScreen() {
                             key={s}
                             style={[styles.actionBtn, { borderColor: STATUS_COLOR[s] }]}
                             onPress={() => {
-                              Alert.alert('Update Status', `Mark as "${s}"?`, [
-                                { text: 'Cancel', style: 'cancel' },
-                                { text: 'Confirm', onPress: () => updateStatus(detail.id, s) },
+                              Alert.alert(t('modules.workOrdersList.updateStatus'), `${t('modules.workOrdersList.updateStatusPrefix')} "${statusLabel(s)}"?`, [
+                                { text: t('common.cancel'), style: 'cancel' },
+                                { text: t('common.confirm'), onPress: () => updateStatus(detail.id, s) },
                               ])
                             }}
                             disabled={updating}
                           >
-                            <Text style={[styles.actionBtnText, { color: STATUS_COLOR[s] }]}>{s}</Text>
+                            <Text style={[styles.actionBtnText, { color: STATUS_COLOR[s] }]}>{statusLabel(s)}</Text>
                           </TouchableOpacity>
                         ))}
                     </View>
@@ -287,7 +298,7 @@ export default function WorkOrdersScreen() {
                 )}
               </ScrollView>
               <TouchableOpacity style={styles.closeBtn} onPress={() => setDetail(null)}>
-                <Text style={styles.closeBtnText}>Close</Text>
+                <Text style={styles.closeBtnText}>{t('modules.workOrdersList.close')}</Text>
               </TouchableOpacity>
             </View>
           </View>

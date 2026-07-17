@@ -172,10 +172,10 @@ export default function WorkOrdersScreen() {
                     <AppText style={[styles.cardTitle, { textAlign }]}>{item.asset_no ?? '-'}</AppText>
                     <AppText variant="micro" color="muted">{item.work_order_no}</AppText>
                   </View>
-                  <AppText variant="caption" color="secondary" style={{ textAlign }}>{item.work_type ?? 'Work'}{item.site ? ` · ${item.site}` : ''}</AppText>
+                  <AppText variant="caption" color="secondary" style={{ textAlign }}>{item.work_type ?? t('modules.workOrders.workFallback')}{item.site ? ` · ${item.site}` : ''}</AppText>
                   {item.description ? <AppText variant="caption" color="muted" style={{ textAlign }} numberOfLines={2}>{item.description}</AppText> : null}
                   <View style={[styles.badges, isRTL && styles.rowR]}>
-                    <Badge kind={WO_STATUS_KIND[(item.status ?? 'open').toLowerCase()] ?? 'neutral'}>{item.status ?? 'Open'}</Badge>
+                    <Badge kind={WO_STATUS_KIND[(item.status ?? 'open').toLowerCase()] ?? 'neutral'}>{item.status ?? t('modules.workOrders.statusOpen')}</Badge>
                     {item.priority ? <Badge kind={PRI_KIND[item.priority] ?? 'neutral'}>{item.priority}</Badge> : null}
                   </View>
                 </View>
@@ -226,7 +226,7 @@ export default function WorkOrdersScreen() {
                 })}
               </View>
               <AppText style={styles.label}>{t('modules.common.details')}</AppText>
-              <TextInput style={[styles.input, styles.textarea]} placeholder="What needs doing..." placeholderTextColor={theme.color.textMuted} value={desc} onChangeText={setDesc} multiline />
+              <TextInput style={[styles.input, styles.textarea]} placeholder={t('modules.workOrders.detailsPh')} placeholderTextColor={theme.color.textMuted} value={desc} onChangeText={setDesc} multiline />
               <Button label={t('modules.workOrders.create')} onPress={create} loading={saving} full style={{ marginTop: spacing.xl, marginBottom: spacing.md }} />
             </ScrollView>
           </View>

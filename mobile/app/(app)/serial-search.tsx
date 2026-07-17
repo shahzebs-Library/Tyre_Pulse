@@ -25,7 +25,7 @@ type SearchState = 'idle' | 'searching' | 'found' | 'empty' | 'error'
 
 export default function SerialSearchScreen() {
   const router = useRouter()
-  const { isRTL } = useLanguage()
+  const { t, isRTL } = useLanguage()
   const { allowed } = useRoleGuard(['inspector', 'tyre_man', 'admin', 'manager', 'director'])
   // Prefill from a scan handoff (scanner "Search manually" passes ?q=<code>).
   const params = useLocalSearchParams<{ q?: string }>()
@@ -111,8 +111,8 @@ export default function SerialSearchScreen() {
             <Ionicons name={backIcon} size={22} color="#0f172a" />
           </TouchableOpacity>
           <View style={{ flex: 1 }}>
-            <Text style={[styles.navTitle, { textAlign }]}>Serial No. Search</Text>
-            <Text style={[styles.navSub, { textAlign }]}>Find a tyre by its serial number</Text>
+            <Text style={[styles.navTitle, { textAlign }]}>{t('modules.serialSearch.title')}</Text>
+            <Text style={[styles.navSub, { textAlign }]}>{t('modules.serialSearch.subtitle')}</Text>
           </View>
         </View>
 
@@ -124,7 +124,7 @@ export default function SerialSearchScreen() {
         >
           {/* Search box */}
           <View style={styles.card}>
-            <Text style={[styles.label, { textAlign }]}>Tyre serial number</Text>
+            <Text style={[styles.label, { textAlign }]}>{t('modules.serialSearch.label')}</Text>
             <View style={[styles.searchRow, isRTL && styles.rowR]}>
               <View style={[styles.inputWrap, isRTL && styles.rowR]}>
                 <Ionicons name="barcode-outline" size={18} color="#94a3b8" />
@@ -132,7 +132,7 @@ export default function SerialSearchScreen() {
                   style={[styles.input, { textAlign }]}
                   value={query}
                   onChangeText={setQuery}
-                  placeholder="Type or paste a serial…"
+                  placeholder={t('modules.serialSearch.placeholder')}
                   placeholderTextColor="#94a3b8"
                   autoCapitalize="characters"
                   autoCorrect={false}
@@ -159,7 +159,7 @@ export default function SerialSearchScreen() {
               </TouchableOpacity>
             </View>
             <Text style={[styles.help, { textAlign }]}>
-              Scanned labels, links and QR text are unwrapped automatically.
+              {t('modules.serialSearch.help')}
             </Text>
           </View>
 
@@ -167,7 +167,7 @@ export default function SerialSearchScreen() {
           {state === 'searching' && (
             <View style={styles.stateBox}>
               <ActivityIndicator size="large" color="#16a34a" />
-              <Text style={styles.stateText}>Searching for tyre…</Text>
+              <Text style={styles.stateText}>{t('modules.serialSearch.searching')}</Text>
             </View>
           )}
 
@@ -178,29 +178,29 @@ export default function SerialSearchScreen() {
                 <View style={styles.resultBadge}>
                   <Ionicons name="ellipse-outline" size={20} color="#16a34a" />
                 </View>
-                <Text style={[styles.resultKicker, { textAlign }]}>Tyre found</Text>
+                <Text style={[styles.resultKicker, { textAlign }]}>{t('modules.serialSearch.found')}</Text>
               </View>
               <Text style={[styles.resultSerial, { textAlign }]}>{resolvedCode}</Text>
 
               <View style={styles.detailGrid}>
-                <Detail label="Brand" value={tyre.brand} align={textAlign} />
-                <Detail label="Size" value={tyre.size} align={textAlign} />
-                <Detail label="Position" value={tyre.tyre_position ?? tyre.position} align={textAlign} />
-                <Detail label="Asset" value={tyre.asset_no} align={textAlign} />
-                <Detail label="Site" value={tyre.site} align={textAlign} />
-                <Detail label="Last reading" value={lastReading} align={textAlign} />
+                <Detail label={t('modules.serialSearch.brand')} value={tyre.brand} align={textAlign} />
+                <Detail label={t('modules.serialSearch.size')} value={tyre.size} align={textAlign} />
+                <Detail label={t('modules.serialSearch.position')} value={tyre.tyre_position ?? tyre.position} align={textAlign} />
+                <Detail label={t('modules.serialSearch.asset')} value={tyre.asset_no} align={textAlign} />
+                <Detail label={t('modules.serialSearch.site')} value={tyre.site} align={textAlign} />
+                <Detail label={t('modules.serialSearch.lastReading')} value={lastReading} align={textAlign} />
               </View>
 
               {tyre.asset_no ? (
                 <TouchableOpacity style={styles.primaryBtn} onPress={() => inspectThisTyre(tyre)} activeOpacity={0.88}>
                   <Ionicons name="clipboard-outline" size={18} color="#fff" />
-                  <Text style={styles.primaryBtnText}>Inspect this tyre</Text>
+                  <Text style={styles.primaryBtnText}>{t('modules.serialSearch.inspectThis')}</Text>
                 </TouchableOpacity>
               ) : (
                 <View style={styles.noAssetNote}>
                   <Ionicons name="alert-circle-outline" size={16} color="#b45309" />
                   <Text style={[styles.noAssetText, { textAlign }]}>
-                    This tyre is not fitted to an asset, so an inspection cannot be started from here.
+                    {t('modules.serialSearch.noAssetNote')}
                   </Text>
                 </View>
               )}
@@ -213,9 +213,9 @@ export default function SerialSearchScreen() {
               <View style={styles.stateIconMuted}>
                 <Ionicons name="search-outline" size={28} color="#94a3b8" />
               </View>
-              <Text style={styles.stateTitle}>No tyre found for that serial</Text>
+              <Text style={styles.stateTitle}>{t('modules.serialSearch.emptyTitle')}</Text>
               <Text style={styles.stateSub}>
-                Check the serial and try again — it may belong to another site or not be recorded yet.
+                {t('modules.serialSearch.emptySub')}
               </Text>
               <Text style={[styles.stateCode, { textAlign }]}>{resolvedCode}</Text>
             </View>
@@ -227,13 +227,13 @@ export default function SerialSearchScreen() {
               <View style={styles.stateIconError}>
                 <Ionicons name="cloud-offline-outline" size={28} color="#dc2626" />
               </View>
-              <Text style={styles.stateTitle}>Could not search right now</Text>
+              <Text style={styles.stateTitle}>{t('modules.serialSearch.errorTitle')}</Text>
               <Text style={styles.stateSub}>
-                Searching a serial needs a connection. Check your network and try again.
+                {t('modules.serialSearch.errorSub')}
               </Text>
               <TouchableOpacity style={styles.retryBtn} onPress={() => runSearch()} activeOpacity={0.88}>
                 <Ionicons name="refresh-outline" size={18} color="#16a34a" />
-                <Text style={styles.retryBtnText}>Retry</Text>
+                <Text style={styles.retryBtnText}>{t('modules.serialSearch.retry')}</Text>
               </TouchableOpacity>
             </View>
           )}
@@ -244,9 +244,9 @@ export default function SerialSearchScreen() {
               <View style={styles.stateIconMuted}>
                 <Ionicons name="cube-outline" size={28} color="#94a3b8" />
               </View>
-              <Text style={styles.stateTitle}>Search a tyre serial</Text>
+              <Text style={styles.stateTitle}>{t('modules.serialSearch.idleTitle')}</Text>
               <Text style={styles.stateSub}>
-                Enter a serial number above to see the tyre’s brand, size, fitted position and last reading.
+                {t('modules.serialSearch.idleSub')}
               </Text>
             </View>
           )}

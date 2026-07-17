@@ -15,6 +15,7 @@ import {
   StyleSheet, Alert, Platform, KeyboardAvoidingView, Modal,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
+import { SvgXml } from 'react-native-svg'
 import { useRouter, useLocalSearchParams } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
 import { CameraView, useCameraPermissions, type BarcodeScanningResult } from 'expo-camera'
@@ -26,6 +27,7 @@ import { Screen, Button } from '../../components/ui'
 import { useRoleGuard } from '../../hooks/useRoleGuard'
 import PhotoCapture from '../../components/PhotoCapture'
 import ChecklistReferencePicker from '../../components/ChecklistReferencePicker'
+import SignaturePad from '../../components/SignaturePad'
 import { extractScanCode, lookupAssetByCode } from '../../lib/assetLookup'
 import {
   submitMeterReading, getLastOdometer, todayISODate, LastReading,
@@ -53,6 +55,10 @@ export default function MeterLogScreen() {
   const [engineHours, setEngineHours] = useState('')
   const [hoursPhoto, setHoursPhoto] = useState<string[]>([])
   const [notes, setNotes] = useState('')
+  // Optional signature (self-contained SVG from SignaturePad). `signPad` opens
+  // the drawing surface; a captured signature collapses to a small preview.
+  const [signature, setSignature] = useState<string | null>(null)
+  const [signPad, setSignPad] = useState(false)
 
   const [last, setLast] = useState<LastReading | null>(null)
   const [loadingLast, setLoadingLast] = useState(false)
@@ -179,6 +185,7 @@ export default function MeterLogScreen() {
         engineHours: hrsNum != null && !Number.isNaN(hrsNum) ? hrsNum : null,
         hoursPhoto: hoursPhoto.find(Boolean) ?? null,
         notes: notes.trim() || null,
+        signature: signature || null,
       })
       Alert.alert(
         res.offline ? t('modules.meter.savedOnDevice') : t('modules.meter.readingLogged'),
@@ -192,7 +199,7 @@ export default function MeterLogScreen() {
     } finally {
       setSubmitting(false)
     }
-  }, [assetNo, site, profile, today, kmNum, odoPhoto, engineHours, hoursPhoto, notes, router])
+  }, [assetNo, site, profile, today, kmNum, odoPhoto, engineHours, hoursPhoto, notes, signature, router])
 
   function handleSubmit() {
     if (submitting) return
@@ -359,6 +366,45 @@ export default function MeterLogScreen() {
             />
           </View>
 
+          {/* Signature (optional) */}
+          <View style={styles.card}>
+            <Text style={[styles.label, { textAlign }]}>Signature <Text style={styles.optional}>{t('modules.common.optional')}</Text></Text>
+            {signPad ? (
+              <>
+                <SignaturePad onChange={setSignature} penColor={theme.color.text} />
+                <TouchableOpacity
+                  onPress={() => setSignPad(false)}
+                  style={[styles.sigDone, signature ? null : styles.sigDoneDim]}
+                  activeOpacity={0.85}
+                >
+                  <Ionicons name="checkmark" size={16} color={signature ? theme.color.primary : theme.color.textMuted} />
+                  <Text style={[styles.sigDoneText, { color: signature ? theme.color.primary : theme.color.textMuted }]}>Done</Text>
+                </TouchableOpacity>
+              </>
+            ) : signature ? (
+              <View>
+                <View style={styles.sigPreview}>
+                  <SvgXml xml={signature} width="100%" height={90} />
+                </View>
+                <View style={[styles.sigActions, isRTL && styles.rowR]}>
+                  <TouchableOpacity onPress={() => setSignPad(true)} style={styles.sigAction} activeOpacity={0.85}>
+                    <Ionicons name="create-outline" size={15} color={theme.color.primary} />
+                    <Text style={styles.sigActionText}>Redo</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={() => { setSignature(null); setSignPad(false) }} style={styles.sigAction} activeOpacity={0.85}>
+                    <Ionicons name="trash-outline" size={15} color={theme.color.danger.base} />
+                    <Text style={[styles.sigActionText, { color: theme.color.danger.base }]}>Clear</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            ) : (
+              <TouchableOpacity onPress={() => setSignPad(true)} style={styles.sigAdd} activeOpacity={0.85}>
+                <Ionicons name="create-outline" size={18} color={theme.color.primary} />
+                <Text style={styles.sigAddText}>Add signature</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+
           <Button
             label={t('modules.meter.logReading')}
             icon="save-outline"
@@ -482,6 +528,27 @@ function makeStyles(theme: Theme) {
     lastCardWarn: { backgroundColor: c.danger.soft, borderColor: c.danger.base },
     lastText: { ...typography.body, fontWeight: '700', color: c.text },
     deltaText: { ...typography.caption, fontWeight: '700', color: c.info.on, marginTop: 2 },
+
+    // Signature (optional)
+    sigAdd: {
+      flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.sm,
+      paddingVertical: spacing.md, borderRadius: radius.md,
+      borderWidth: 1.5, borderColor: c.border, borderStyle: 'dashed', backgroundColor: c.surfaceAlt,
+    },
+    sigAddText: { ...typography.body, fontWeight: '800', color: c.primary },
+    sigDone: {
+      flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4,
+      alignSelf: 'flex-end', paddingHorizontal: spacing.md, paddingVertical: 6, marginTop: spacing.sm,
+    },
+    sigDoneDim: { opacity: 0.9 },
+    sigDoneText: { ...typography.caption, fontWeight: '800' },
+    sigPreview: {
+      backgroundColor: '#FFFFFF', borderRadius: radius.md, borderWidth: 1, borderColor: c.border,
+      padding: spacing.sm, overflow: 'hidden',
+    },
+    sigActions: { flexDirection: 'row', alignItems: 'center', gap: spacing.lg, marginTop: spacing.sm },
+    sigAction: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingVertical: 2 },
+    sigActionText: { ...typography.caption, fontWeight: '800', color: c.primary },
 
     // Scanner modal
     camRoot: { flex: 1, backgroundColor: '#000000' },

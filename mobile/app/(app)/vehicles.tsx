@@ -81,7 +81,7 @@ export default function VehiclesScreen() {
       setRows((data as Vehicle[]) ?? [])
     } catch (e: any) {
       if (__DEV__) console.warn('[vehicles] load failed:', e?.message)
-      setError('Could not load the fleet. Pull down to retry.')
+      setError(t('modules.vehicles.loadError'))
       setRows([])
     } finally {
       setLoading(false)
@@ -146,7 +146,7 @@ export default function VehiclesScreen() {
       </View>
 
       {loading ? (
-        <Loading label="Loading fleet" />
+        <Loading label={t('modules.vehicles.loadingLabel')} />
       ) : (
         <FlatList
           data={shown}
@@ -165,25 +165,25 @@ export default function VehiclesScreen() {
               <EmptyState
                 icon="bus-outline"
                 title={t('modules.vehicles.none')}
-                message={query ? 'Try a different search term.' : undefined}
+                message={query ? t('modules.vehicles.tryTerm') : undefined}
               />
             )
           }
           renderItem={({ item }) => {
             const open = expandedId === item.id
             const details: Array<[string, string]> = [
-              ['Fleet No', item.fleet_number ?? '-'],
-              ['Type', item.vehicle_type ?? '-'],
-              ['Make / Model', [item.make, item.model].filter(Boolean).join(' ') || '-'],
-              ['Year', item.year != null ? String(item.year) : '-'],
-              ['Current KM', item.current_km != null ? `${fmtNum(item.current_km)} km` : '-'],
-              ['Operator', item.operator_name ?? '-'],
-              ['Department', item.department ?? '-'],
-              ['Site', item.site ?? '-'],
-              ['Region', item.region ?? '-'],
-              ['Country', item.country ?? '-'],
-              ['Tyre Size', item.tyre_size ?? '-'],
-              ['Registration', item.registration_no ?? '-'],
+              [t('modules.vehicles.fleetNo'), item.fleet_number ?? '-'],
+              [t('modules.vehicles.type'), item.vehicle_type ?? '-'],
+              [t('modules.vehicles.makeModel'), [item.make, item.model].filter(Boolean).join(' ') || '-'],
+              [t('modules.vehicles.year'), item.year != null ? String(item.year) : '-'],
+              [t('modules.vehicles.currentKm'), item.current_km != null ? `${fmtNum(item.current_km)} km` : '-'],
+              [t('modules.vehicles.operator'), item.operator_name ?? '-'],
+              [t('modules.vehicles.department'), item.department ?? '-'],
+              [t('modules.vehicles.site'), item.site ?? '-'],
+              [t('modules.vehicles.region'), item.region ?? '-'],
+              [t('modules.vehicles.country'), item.country ?? '-'],
+              [t('modules.vehicles.tyreSize'), item.tyre_size ?? '-'],
+              [t('modules.vehicles.registration'), item.registration_no ?? '-'],
             ]
             return (
               <Card padded={false} style={s.card}>
@@ -197,7 +197,7 @@ export default function VehiclesScreen() {
                   </View>
                   <View style={{ flex: 1, gap: 3 }}>
                     <AppText variant="title" style={{ textAlign }} numberOfLines={1}>
-                      {item.asset_no ?? item.fleet_number ?? 'Unknown'}
+                      {item.asset_no ?? item.fleet_number ?? t('modules.vehicles.unknown')}
                     </AppText>
                     <AppText variant="caption" color="muted" style={{ textAlign }} numberOfLines={1}>
                       {[item.make, item.model, item.vehicle_type].filter(Boolean).join(' · ') || '-'}
@@ -226,7 +226,7 @@ export default function VehiclesScreen() {
                     </View>
                     {mayInspect && (
                       <Button
-                        label="Start Inspection"
+                        label={t('modules.vehicles.startInspection')}
                         icon="clipboard-outline"
                         full
                         onPress={() => router.push({ pathname: '/(app)/inspection/new', params: { site: item.site ?? '', asset: item.asset_no ?? '' } })}

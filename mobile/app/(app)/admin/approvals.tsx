@@ -24,6 +24,7 @@ import { useRouter } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
 import { useAuth } from '../../../contexts/AuthContext'
 import { supabase } from '../../../lib/supabase'
+import { toUserMessage } from '../../../lib/safeError'
 import { useAdminGuard } from '../../../hooks/useRoleGuard'
 import { COUNTRIES } from '../../../lib/types'
 import { canApproveChecklists } from '../../../lib/permissions'
@@ -109,7 +110,7 @@ export default function AdminApprovalsScreen() {
       setLoadError(null)
     } catch (e: any) {
       if (__DEV__) console.warn('[approvals] load uploads failed', e)
-      setLoadError(e?.message ?? 'Failed to load uploads.')
+      setLoadError(toUserMessage(e, 'Failed to load uploads.'))
     } finally {
       setLoading(false)
     }
@@ -130,7 +131,7 @@ export default function AdminApprovalsScreen() {
       setClosuresError(null)
     } catch (e: any) {
       if (__DEV__) console.warn('[approvals] load closures failed', e)
-      setClosuresError(e?.message ?? 'Failed to load closures.')
+      setClosuresError(toUserMessage(e, 'Failed to load closures.'))
     } finally {
       setClosuresLoading(false)
     }
@@ -176,13 +177,13 @@ export default function AdminApprovalsScreen() {
             const rows = Array.isArray(p.rows) ? p.rows : []
             for (let i = 0; i < rows.length; i += BATCH) {
               const { error } = await supabase.from(targetTable).insert(rows.slice(i, i + BATCH))
-              if (error) { setActing(null); Alert.alert('Insert failed', error.message); return }
+              if (error) { setActing(null); Alert.alert('Insert failed', toUserMessage(error)); return }
             }
             const { error: updErr } = await supabase.from('pending_uploads')
               .update({ status: 'approved', reviewed_by: profile?.id, reviewed_at: new Date().toISOString() })
               .eq('id', p.id)
             setActing(null)
-            if (updErr) Alert.alert('Error', updErr.message)
+            if (updErr) Alert.alert('Error', toUserMessage(updErr))
             else { setItems(prev => prev.map(x => x.id === p.id ? { ...x, status: 'approved' } : x)) }
           },
         },
@@ -205,7 +206,7 @@ export default function AdminApprovalsScreen() {
             const { error } = await supabase.from('pending_uploads')
               .update({ rows: newRows, country: c }).eq('id', p.id)
             setActing(null)
-            if (error) Alert.alert('Error', error.message)
+            if (error) Alert.alert('Error', toUserMessage(error))
             else setItems(prev => prev.map(x => x.id === p.id ? { ...x, rows: newRows, country: c } : x))
           },
         })),
@@ -229,7 +230,7 @@ export default function AdminApprovalsScreen() {
               .update({ status: 'rejected', reviewed_by: profile?.id, reviewed_at: new Date().toISOString() })
               .eq('id', p.id)
             setActing(null)
-            if (error) Alert.alert('Error', error.message)
+            if (error) Alert.alert('Error', toUserMessage(error))
             else setItems(prev => prev.map(x => x.id === p.id ? { ...x, status: 'rejected' } : x))
           },
         },
@@ -250,7 +251,7 @@ export default function AdminApprovalsScreen() {
             setActing(c.id)
             const { error } = await supabase.rpc('approve_accident_closure', { p_accident_id: c.id })
             setActing(null)
-            if (error) Alert.alert('Cannot approve', error.message)
+            if (error) Alert.alert('Cannot approve', toUserMessage(error))
             else setClosures(prev => prev.filter(x => x.id !== c.id))
           },
         },
@@ -262,7 +263,7 @@ export default function AdminApprovalsScreen() {
     setActing(id)
     const { error } = await supabase.rpc('reject_accident_closure', { p_accident_id: id, p_reason: reason })
     setActing(null)
-    if (error) Alert.alert('Cannot reject', error.message)
+    if (error) Alert.alert('Cannot reject', toUserMessage(error))
     else setClosures(prev => prev.filter(x => x.id !== id))
   }
 

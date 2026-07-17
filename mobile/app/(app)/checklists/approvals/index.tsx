@@ -21,6 +21,7 @@ import { Theme, spacing, radius, typography } from '../../../../lib/theme'
 import { Screen, AppText, Badge, EmptyState, ErrorState, Loading } from '../../../../components/ui'
 import { canApproveChecklists } from '../../../../lib/permissions'
 import { listPendingApprovals, ChecklistSubmission } from '../../../../lib/checklists'
+import { toUserMessage } from '../../../../lib/safeError'
 
 function looksLikeMissingTable(msg: string): boolean {
   const m = (msg || '').toLowerCase()
@@ -53,7 +54,7 @@ export default function ChecklistApprovalsScreen() {
       const rows = await listPendingApprovals(profile?.country)
       setItems(rows)
     } catch (e: any) {
-      const msg = e?.message || e?.error_description || 'Could not load approvals.'
+      const msg = toUserMessage(e, 'Could not load approvals.')
       if (looksLikeMissingTable(msg)) setNotEnabled(true)
       else setError(msg)
     } finally {

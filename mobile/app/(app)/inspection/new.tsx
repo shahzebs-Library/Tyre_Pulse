@@ -10,6 +10,7 @@ import { Ionicons } from '@expo/vector-icons'
 import { useAuth } from '../../../contexts/AuthContext'
 import { useLanguage } from '../../../contexts/LanguageContext'
 import { supabase } from '../../../lib/supabase'
+import { toUserMessage } from '../../../lib/safeError'
 import { enqueueInspection } from '../../../lib/offlineQueue'
 import { clientId } from '../../../lib/ids'
 import * as Network from 'expo-network'
@@ -425,7 +426,7 @@ export default function NewInspectionScreen() {
       await enqueueInspection(resolvedPayload, cuid)
 
       if (online) {
-        const reason = err?.message || err?.error_description || 'Unknown error.'
+        const reason = toUserMessage(err, 'Unknown error.')
         Alert.alert(
           t('inspection.saveIssueTitle'),
           `${t('inspection.saveIssueBody')}\n\n${reason}`,

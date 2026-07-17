@@ -26,6 +26,7 @@ import { Ionicons } from '@expo/vector-icons'
 import { useAuth } from '../../../contexts/AuthContext'
 import { useTheme } from '../../../contexts/ThemeContext'
 import { normaliseRole } from '../../../lib/types'
+import { toUserMessage } from '../../../lib/safeError'
 import {
   MODULES, MODULE_GROUPS, ModuleKey, GrantMap,
   moduleAllowedByRole, resolveModuleAccess,
@@ -69,7 +70,7 @@ export default function AccessConsoleScreen() {
       const rows = await listUsers()
       setUsers(rows)
     } catch (e) {
-      setLoadErr(e instanceof Error ? e.message : 'Could not load users.')
+      setLoadErr(toUserMessage(e as any, 'Could not load users.'))
     } finally {
       setLoading(false)
     }
@@ -86,7 +87,7 @@ export default function AccessConsoleScreen() {
     try {
       setGrants(await listUserMobileGrants(userId))
     } catch (e) {
-      setGrantsErr(e instanceof Error ? e.message : 'Could not load access.')
+      setGrantsErr(toUserMessage(e as any, 'Could not load access.'))
     } finally {
       setGrantsLoading(false)
     }
@@ -131,7 +132,7 @@ export default function AccessConsoleScreen() {
       // Reconcile ids / true state from the server.
       setGrants(await listUserMobileGrants(selected.id))
     } catch (e) {
-      setBanner(e instanceof Error ? e.message : 'Could not update access.')
+      setBanner(toUserMessage(e as any, 'Could not update access.'))
       // Reload to reflect the actual stored state after a failed write.
       try { setGrants(await listUserMobileGrants(selected.id)) } catch { /* keep banner */ }
     } finally {

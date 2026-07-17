@@ -21,6 +21,7 @@ import { useAuth } from '../../../contexts/AuthContext'
 import { useLanguage } from '../../../contexts/LanguageContext'
 import { useTheme } from '../../../contexts/ThemeContext'
 import { supabase } from '../../../lib/supabase'
+import { toUserMessage } from '../../../lib/safeError'
 import { useRoleGuard } from '../../../hooks/useRoleGuard'
 import { Theme, radius, spacing, statusColor, StatusKind } from '../../../lib/theme'
 import { Screen, Card, AppText, Badge } from '../../../components/ui'
@@ -85,7 +86,7 @@ export default function AccidentDetailScreen() {
     try {
       await exportAccidentPdf(accident)
     } catch (e: any) {
-      Alert.alert(t('accident.detail.exportFailed'), e?.message ?? t('common.shareError'))
+      Alert.alert(t('accident.detail.exportFailed'), toUserMessage(e, t('common.shareError')))
     } finally {
       setExporting(false)
     }

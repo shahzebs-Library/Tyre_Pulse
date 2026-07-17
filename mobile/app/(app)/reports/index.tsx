@@ -14,6 +14,7 @@ import { Ionicons } from '@expo/vector-icons'
 import * as Print from 'expo-print'
 import * as Sharing from 'expo-sharing'
 import { supabase } from '../../../lib/supabase'
+import { toUserMessage } from '../../../lib/safeError'
 import { useAuth } from '../../../contexts/AuthContext'
 import { useTheme } from '../../../contexts/ThemeContext'
 import { isAdminOrAbove } from '../../../lib/types'
@@ -80,7 +81,7 @@ export default function ReportsScreen() {
         Alert.alert('Saved', 'PDF saved to device.')
       }
     } catch (e: any) {
-      Alert.alert('Error', e?.message ?? 'Could not generate report.')
+      Alert.alert('Error', toUserMessage(e, 'Could not generate report.'))
     } finally {
       setGenerating(null)
     }

@@ -42,7 +42,9 @@ export class ErrorBoundary extends Component<Props, State> {
           <Ionicons name="warning-outline" size={48} color="#dc2626" />
         </View>
         <Text style={styles.title}>Something went wrong</Text>
-        <Text style={styles.message}>{error.message}</Text>
+        <Text style={styles.message}>
+          {__DEV__ ? error.message : 'An unexpected error occurred. Please try again.'}
+        </Text>
 
         {__DEV__ && (
           <ScrollView style={styles.stack} showsVerticalScrollIndicator={false}>

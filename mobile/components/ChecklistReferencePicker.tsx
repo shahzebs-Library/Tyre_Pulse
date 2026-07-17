@@ -18,6 +18,7 @@ import {
 import { Ionicons } from '@expo/vector-icons'
 import type { ReferenceSource } from '../lib/checklistFields'
 import { listReferenceOptions } from '../lib/checklists'
+import { toUserMessage } from '../lib/safeError'
 
 interface Props {
   source: ReferenceSource
@@ -53,7 +54,7 @@ export default function ChecklistReferencePicker({
       const opts = await listReferenceOptions(source, country)
       setOptions(Array.isArray(opts) ? opts : [])
     } catch (e: any) {
-      setError(e?.message || `Could not load ${meta.label.toLowerCase()} options.`)
+      setError(toUserMessage(e, `Could not load ${meta.label.toLowerCase()} options.`))
     } finally {
       setLoading(false)
     }

@@ -16,6 +16,7 @@ import { useRouter } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
 import { useAuth } from '../../../contexts/AuthContext'
 import { supabase } from '../../../lib/supabase'
+import { toUserMessage } from '../../../lib/safeError'
 import { normaliseRole, COUNTRIES } from '../../../lib/types'
 import { useAdminGuard } from '../../../hooks/useRoleGuard'
 
@@ -70,7 +71,7 @@ export default function UserManagementScreen() {
       setError(null)
     } catch (e: any) {
       if (__DEV__) console.warn('[users] load failed', e)
-      setError(e?.message ?? 'Failed to load users.')
+      setError(toUserMessage(e, 'Failed to load users.'))
     } finally {
       setLoading(false)
     }

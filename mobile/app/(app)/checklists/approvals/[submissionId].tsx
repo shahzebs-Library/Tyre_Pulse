@@ -19,6 +19,7 @@ import { Ionicons } from '@expo/vector-icons'
 import { useAuth } from '../../../../contexts/AuthContext'
 import { useLanguage } from '../../../../contexts/LanguageContext'
 import { canApproveChecklists } from '../../../../lib/permissions'
+import { toUserMessage } from '../../../../lib/safeError'
 import SignaturePad from '../../../../components/SignaturePad'
 import SignatureView from '../../../../components/SignatureView'
 import {
@@ -73,7 +74,7 @@ export default function ChecklistApprovalReviewScreen() {
         try { setTemplate(await getTemplate(s.template_id)) } catch { /* labels degrade to field ids */ }
       }
     } catch (e: any) {
-      setLoadError(e?.message || 'Could not load this submission.')
+      setLoadError(toUserMessage(e, 'Could not load this submission.'))
     } finally {
       setLoading(false)
     }
@@ -135,7 +136,7 @@ export default function ChecklistApprovalReviewScreen() {
         [{ text: 'Done', onPress: goBack }],
       )
     } catch (e: any) {
-      Alert.alert('Could not save decision', e?.message || 'Please try again.')
+      Alert.alert('Could not save decision', toUserMessage(e, 'Please try again.'))
     } finally {
       setBusy(null)
     }

@@ -7,6 +7,7 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import { useRouter, useLocalSearchParams } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
 import { supabase } from '../../../lib/supabase'
+import { toUserMessage } from '../../../lib/safeError'
 import { useLanguage } from '../../../contexts/LanguageContext'
 import { useTheme } from '../../../contexts/ThemeContext'
 import { radius, spacing, typography, elevation, Theme } from '../../../lib/theme'
@@ -50,7 +51,7 @@ export default function InspectionDetailScreen() {
     try {
       await shareInspectionPdf(insp)
     } catch (e: any) {
-      Alert.alert(t('common.shareFailed'), e?.message || t('common.shareError'))
+      Alert.alert(t('common.shareFailed'), toUserMessage(e, t('common.shareError')))
     } finally {
       setSharing(false)
     }
@@ -70,7 +71,7 @@ export default function InspectionDetailScreen() {
       setInsp((data as Inspection) ?? null)
     } catch (e: any) {
       setInsp(null)
-      setError(e?.message || t('modules.inspectionDetail.loadError'))
+      setError(toUserMessage(e, t('modules.inspectionDetail.loadError')))
     } finally {
       setLoading(false)
     }

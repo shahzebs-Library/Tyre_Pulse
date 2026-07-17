@@ -6,6 +6,7 @@ import {
 import { useRouter } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
 import { supabase } from '../../lib/supabase'
+import { toUserMessage } from '../../lib/safeError'
 import { useAuth } from '../../contexts/AuthContext'
 import { useLanguage } from '../../contexts/LanguageContext'
 import { useTheme } from '../../contexts/ThemeContext'
@@ -75,7 +76,7 @@ export default function TeamScreen() {
       setError(null)
     } catch (e: any) {
       if (__DEV__) console.warn('[team] load failed', e)
-      setError(e?.message ?? t('modules.team.loadError'))
+      setError(toUserMessage(e, t('modules.team.loadError')))
     } finally {
       setLoading(false)
     }

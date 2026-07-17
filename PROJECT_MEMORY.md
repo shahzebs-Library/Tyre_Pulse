@@ -738,6 +738,57 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
   `__DEV__`-gated. ErrorBoundary + Sentry global handlers already wrap the app; EAS `autoIncrement` + app-bundle;
   target SDK 35; publishable keys only. package.json version aligned to 1.2.0.
 
+### Mobile field-feedback fixes (2026-07-17, PRs #61-#65, V265/V266) — merged to main
+- Follow-up to PR #58 from live-testing feedback on the Expo app (`mobile/`). All merged; verify with
+  `cd mobile && npx tsc --noEmit` (0 errors). Builds via `release-play.yml` (EAS, `--auto-submit`) - expo-doctor
+  is NON-fatal in the EAS build; a doctor version-mismatch does NOT fail the build (but PR #60 aligned
+  expo@54.0.36 / expo-updates@29.0.19 to clear it).
+- **Nav regression FIX (PR #61):** the Home-hub rewrite pushed routes with a trailing `/index`
+  (`/(app)/workorders/index` etc.) - expo-router addresses an index route by its FOLDER path WITHOUT `/index`,
+  so those 404'd ("Unmatched Route") and `/(app)/checklists/index` hit the `[templateId]` route with id
+  "index" -> "invalid input syntax for type uuid: index". RULE: never push `/(app)/<folder>/index`; push
+  `/(app)/<folder>`. Fixed in index.tsx, ai/index.tsx, admin/index.tsx.
+- **Accidents (PR #62/#63):** removed "Analyze with AI"; delete restricted to admin/super-admin; status via a
+  clear dropdown; back button -> previous screen (dashboard fallback). FULL web-field parity (PR #63): the
+  report form now captures the same fields as web `src/pages/Accidents.jsx` (incident/classification/liability+
+  GCC/insurance+claim/repair+release) with the same `toDb*`/`canon*` token maps (mirrored inline) + recovered
+  auto-calc; the offline `recordQueue.ts` REPORT_ACCIDENT `fields` allow-list was extended so the new columns
+  persist (sanitize() strips unknown keys). Detail view shows the fields.
+- **Meter log (PR #62 + #65/V266):** reject an odometer reading below the asset's last reading; auto-fill site
+  from the asset's `vehicle_fleet.site` (never overwrites a typed value); barcode/QR scan to pick the asset;
+  engine-hour (hour meter) surfaced; **V266** added nullable `signature text` to `odometer_logs` +
+  `engine_hours_logs` and the app captures an optional SignaturePad SVG into both payloads + the queue allow-list.
+- **Tyre SVG web-parity (PR #63):** `lib/tyreLayout.ts` ports the web axle/dual/spare layout per vehicle type
+  (Tr-Mixer = 4 steer + 8 dual drive + spare = 13; spare shown per type). VehicleTyreDiagram Props unchanged.
+- **Inspection (PR #63):** cannot save an EMPTY inspection (require header fields + >=1 tyre condition);
+  Share-as-PDF from detail/history via `lib/inspectionReportPdf.ts` (expo-print/expo-sharing); condition colours.
+- **Stock / Overview (PR #62/#63):** stock filter by tyre size (derived from `description`) + location (`site`);
+  overview date-range + site + country filters.
+- **i18n (PR #63/#64/#65):** RTL wired via `I18nManager` (LanguageContext `isRTL`); ALL main + secondary screens
+  converted to `t()` keys; `locales/en.json` + `ar.json` key-synced (~640 new keys, Modern Standard Arabic).
+  RULE: keys in .tsx only (ASCII), Arabic values only in ar.json; accident dropdown DB tokens stay English -
+  only labels are translated.
+- **Android nav-bar overlap (PR #63):** the bottom tab bar now adds the safe-area bottom inset so the phone's
+  system nav buttons no longer cover it.
+- **Battery/perf + client security (PR #64):** image-picker capture quality 0.7 -> 0.55; `React.memo` on hot
+  list components (Badge/ListRow/StatTile/TyrePositionCard); new `lib/safeUrl.ts` (safeImageSrc/safeHref) on all
+  Image URIs; remaining `console.*` gated behind `__DEV__` (no error/key leaks in production logcat).
+- **Error hardening (in progress):** new `lib/safeError.ts` `toUserMessage(err, fallback)` maps any DB/PostgREST/
+  network error to a clean generic message (never SQL/column/uuid/endpoint/token). Being routed through EVERY
+  user-facing error surface (Alert.alert/setError/ErrorState + ErrorBoundary shows generic in prod). This closes
+  the "invalid input syntax for type uuid" class of raw-error leaks. RULE: never render a raw `err.message` to
+  users - always `toUserMessage(err)`.
+- **RBAC role removals are LIVE + verified correct in code** (Home hub filters actions by `canAccess(module)`;
+  `_layout` gates tabs by `canAccess(tab.moduleKey)`; registry drops tyre_man from records/vehicles/workorders/
+  stock/meter/tasks). If a role still sees a removed module it is a STALE build - rebuild and test with a real
+  `tyre_man` (not admin/super-admin) account.
+- **DB (V265):** pinned `search_path` on 5 advisor-flagged functions (config-only ALTER, applied live). The
+  ~300 "table exposed to anon/authenticated" advisor warnings are API-surface only - org+country RESTRICTIVE RLS
+  governs actual access. STILL a USER/OPS action: enable leaked-password protection in Supabase Auth (dashboard).
+- **Push notifications:** local (expo-notifications: daily inspection reminder + sync toasts, 3 Android channels)
+  + Expo push token registered to `profiles.push_token` (RLS-scoped, cleared on logout) for server-sent targeted
+  pushes via the Expo Push API. **Next free migration V267.**
+
 ### SESSION CLOSED CLEAN (2026-07-16) — everything merged, nothing pending
 - All work through the custom TV/report board builder is MERGED to main and LIVE. Latest merges on branch
   `claude/accident-builder-report-ui-2bkwb5`: **PR #54** (V262 TV wallboard: site/country filters, logo,

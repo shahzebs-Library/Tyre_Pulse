@@ -25,6 +25,7 @@ import { Theme, spacing, radius, typography } from '../../../lib/theme'
 import { AppText, Screen, Badge, EmptyState, ErrorState, Loading } from '../../../components/ui'
 import ChecklistItemSheet, { optionTone } from '../../../components/ChecklistItemSheet'
 import { getTemplate, submitChecklist, ChecklistTemplate } from '../../../lib/checklists'
+import { toUserMessage } from '../../../lib/safeError'
 import {
   ChecklistField, blankAnswer, isValueField, isFieldVisible,
   validateSubmission, computeScore, isAutoField, resolveAutoValue,
@@ -112,7 +113,7 @@ export default function ChecklistFillScreen() {
       }
       setAnswers(seed)
     } catch (e: any) {
-      const msg = e?.message || t('modules.checklistFill.loadError')
+      const msg = toUserMessage(e, t('modules.checklistFill.loadError'))
       if (looksLikeMissingTable(msg)) setNotEnabled(true)
       else setLoadError(msg)
     } finally {
@@ -213,7 +214,7 @@ export default function ChecklistFillScreen() {
         ])
       }
     } catch (e: any) {
-      Alert.alert(t('modules.checklistFill.submitFailTitle'), e?.message || t('modules.checklistFill.submitFailMsg'))
+      Alert.alert(t('modules.checklistFill.submitFailTitle'), toUserMessage(e, t('modules.checklistFill.submitFailMsg')))
     } finally {
       setSubmitting(false)
     }

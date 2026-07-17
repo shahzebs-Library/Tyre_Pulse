@@ -23,6 +23,7 @@ import { useAuth } from '../../contexts/AuthContext'
 import { useLanguage } from '../../contexts/LanguageContext'
 import { useTheme } from '../../contexts/ThemeContext'
 import { Theme, spacing, radius, typography } from '../../lib/theme'
+import { toUserMessage } from '../../lib/safeError'
 import { Screen, Button } from '../../components/ui'
 import { useRoleGuard } from '../../hooks/useRoleGuard'
 import PhotoCapture from '../../components/PhotoCapture'
@@ -195,7 +196,7 @@ export default function MeterLogScreen() {
         [{ text: t('common.done'), onPress: () => router.back() }],
       )
     } catch (e: any) {
-      Alert.alert(t('modules.meter.logFailTitle'), e?.message || t('modules.meter.tryAgain'))
+      Alert.alert(t('modules.meter.logFailTitle'), toUserMessage(e, t('modules.meter.tryAgain')))
     } finally {
       setSubmitting(false)
     }

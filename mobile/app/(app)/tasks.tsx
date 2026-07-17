@@ -7,6 +7,7 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
 import { supabase } from '../../lib/supabase'
+import { toUserMessage } from '../../lib/safeError'
 import { useAuth } from '../../contexts/AuthContext'
 import { useLanguage } from '../../contexts/LanguageContext'
 import { useRealtime } from '../../hooks/useRealtime'
@@ -81,7 +82,7 @@ export default function TasksScreen() {
       .update({ status: 'Closed', resolved_at: new Date().toISOString(), closed_by: profile?.id ?? null })
       .eq('id', task.id)
     setBusyId(null)
-    if (error) { Alert.alert(t('modules.tasks.couldNotResolve'), error.message); return }
+    if (error) { Alert.alert(t('modules.tasks.couldNotResolve'), toUserMessage(error)); return }
     load()
   }
 

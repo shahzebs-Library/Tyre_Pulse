@@ -21,6 +21,7 @@ import { useTheme } from '../contexts/ThemeContext'
 import { Theme, radius, spacing } from '../lib/theme'
 import { AppText } from './ui'
 import { supabase } from '../lib/supabase'
+import { toUserMessage } from '../lib/safeError'
 import {
   AccidentRecord, AccidentRemark, AccidentPart,
   ClaimStatus, PartStatus, ClosureStatus, RecoverySource, RecoveryStatus,
@@ -127,7 +128,7 @@ export default function AccidentClaimsPanel({ accident, onChanged }: Props) {
       p_accident_id: accident.id, p_note: note || null,
     })
     setBusy(false); setShowClose(false)
-    if (error) { Alert.alert('Error', error.message); return }
+    if (error) { Alert.alert('Error', toUserMessage(error)); return }
     onChanged(); load()
   }
 
@@ -135,7 +136,7 @@ export default function AccidentClaimsPanel({ accident, onChanged }: Props) {
     setBusy(true)
     const { error } = await supabase.rpc('approve_accident_closure', { p_accident_id: accident.id })
     setBusy(false)
-    if (error) { Alert.alert('Error', error.message); return }
+    if (error) { Alert.alert('Error', toUserMessage(error)); return }
     onChanged(); load()
   }
 
@@ -145,7 +146,7 @@ export default function AccidentClaimsPanel({ accident, onChanged }: Props) {
       p_accident_id: accident.id, p_reason: reason || null,
     })
     setBusy(false); setShowReject(false)
-    if (error) { Alert.alert('Error', error.message); return }
+    if (error) { Alert.alert('Error', toUserMessage(error)); return }
     onChanged(); load()
   }
 
@@ -557,7 +558,7 @@ function PartModal({
       created_by: authorId,
     })
     setSaving(false)
-    if (error) { Alert.alert('Error', error.message); return }
+    if (error) { Alert.alert('Error', toUserMessage(error)); return }
     onSaved()
   }
 
@@ -715,7 +716,7 @@ function ClaimEditModal({
       release_date: f.release_date.trim() || null,
     }).eq('id', accident.id)
     setSaving(false)
-    if (error) { Alert.alert('Error', error.message); return }
+    if (error) { Alert.alert('Error', toUserMessage(error)); return }
     onSaved()
   }
 

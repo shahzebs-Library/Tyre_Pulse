@@ -27,6 +27,7 @@ import {
   ChecklistTemplate, ChecklistAssignment,
 } from '../../../lib/checklists'
 import { isValueField } from '../../../lib/checklistFields'
+import { toUserMessage } from '../../../lib/safeError'
 import { canApproveChecklists } from '../../../lib/permissions'
 
 // Local midnight ISO date (YYYY-MM-DD) — assignment due_date is a plain date.
@@ -91,7 +92,7 @@ export default function ChecklistsScreen() {
       setAssignments(as)
       setTemplates(ts)
     } catch (e: any) {
-      const msg = e?.message || e?.error_description || t('modules.checklists.loadError')
+      const msg = toUserMessage(e, t('modules.checklists.loadError'))
       if (looksLikeMissingTable(msg)) setNotEnabled(true)
       else setError(msg)
     } finally {

@@ -17,6 +17,7 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons'
 import { useRouter } from 'expo-router'
 import { supabase } from '../../../lib/supabase'
+import { toUserMessage } from '../../../lib/safeError'
 import { useAuth } from '../../../contexts/AuthContext'
 import { useElevatedGuard } from '../../../hooks/useRoleGuard'
 
@@ -93,7 +94,7 @@ export default function SitesManagementScreen() {
       setError(null)
     } catch (e: any) {
       if (__DEV__) console.warn('[sites] load failed', e)
-      setError(e?.message ?? 'Failed to load sites and fleet.')
+      setError(toUserMessage(e, 'Failed to load sites and fleet.'))
     } finally {
       setLoading(false)
     }
@@ -177,7 +178,7 @@ export default function SitesManagementScreen() {
       setSiteModal(false)
       load()
     } catch (e: any) {
-      Alert.alert('Error', e.message ?? 'Could not save site.')
+      Alert.alert('Error', toUserMessage(e, 'Could not save site.'))
     } finally {
       setSavingSite(false)
     }
@@ -189,7 +190,7 @@ export default function SitesManagementScreen() {
       if (error) throw error
       load()
     } catch (e: any) {
-      Alert.alert('Error', e?.message ?? 'Could not update site.')
+      Alert.alert('Error', toUserMessage(e, 'Could not update site.'))
     }
   }
 
@@ -232,7 +233,7 @@ export default function SitesManagementScreen() {
       setVehicleModal(false)
       load()
     } catch (e: any) {
-      Alert.alert('Error', e.message ?? 'Could not save vehicle.')
+      Alert.alert('Error', toUserMessage(e, 'Could not save vehicle.'))
     } finally {
       setSavingVehicle(false)
     }
@@ -244,7 +245,7 @@ export default function SitesManagementScreen() {
       if (error) throw error
       load()
     } catch (e: any) {
-      Alert.alert('Error', e?.message ?? 'Could not update vehicle.')
+      Alert.alert('Error', toUserMessage(e, 'Could not update vehicle.'))
     }
   }
 
@@ -259,7 +260,7 @@ export default function SitesManagementScreen() {
             if (error) throw error
             load()
           } catch (e: any) {
-            Alert.alert('Error', e?.message ?? 'Could not delete vehicle.')
+            Alert.alert('Error', toUserMessage(e, 'Could not delete vehicle.'))
           }
         },
       },

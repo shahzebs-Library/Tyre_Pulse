@@ -6,6 +6,7 @@ import {
 import { useRouter } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
 import { supabase } from '../../lib/supabase'
+import { toUserMessage } from '../../lib/safeError'
 import { useAuth } from '../../contexts/AuthContext'
 import { useLanguage } from '../../contexts/LanguageContext'
 import { useTheme } from '../../contexts/ThemeContext'
@@ -158,7 +159,7 @@ export default function StockScreen() {
       if (res.offline) Alert.alert(t('modules.common.offlineSaved'))
     } catch (e: any) {
       await load() // reconcile from server on a real rejection
-      Alert.alert(t('modules.stock.couldNotUpdate'), e?.message || t('common.tryAgain'))
+      Alert.alert(t('modules.stock.couldNotUpdate'), toUserMessage(e, t('common.tryAgain')))
     } finally {
       setBusyId(null)
     }
@@ -188,7 +189,7 @@ export default function StockScreen() {
       setCountItem(null)
       if (res.offline) Alert.alert(t('modules.common.offlineSaved'))
     } catch (e: any) {
-      Alert.alert(t('modules.stock.couldNotSaveCount'), e?.message || t('common.tryAgain'))
+      Alert.alert(t('modules.stock.couldNotSaveCount'), toUserMessage(e, t('common.tryAgain')))
     } finally {
       setCountSaving(false)
     }

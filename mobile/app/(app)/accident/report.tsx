@@ -25,6 +25,7 @@ import { useTheme } from '../../../contexts/ThemeContext'
 import { Theme, radius, spacing, statusColor, StatusKind } from '../../../lib/theme'
 import { Screen, Card, AppText, Button } from '../../../components/ui'
 import { supabase } from '../../../lib/supabase'
+import { toUserMessage } from '../../../lib/safeError'
 import { saveCommand } from '../../../lib/recordQueue'
 import { safeUuid } from '../../../lib/ids'
 import { useRoleGuard } from '../../../hooks/useRoleGuard'
@@ -443,7 +444,7 @@ export default function AccidentReportScreen() {
       setSavedOffline(!!res.offline)
       setSuccess(true)
     } catch (err: any) {
-      Alert.alert(t('accident.report.alertSubmissionFailed'), err.message ?? t('common.tryAgain'))
+      Alert.alert(t('accident.report.alertSubmissionFailed'), toUserMessage(err, t('common.tryAgain')))
     } finally {
       setSubmitting(false)
     }

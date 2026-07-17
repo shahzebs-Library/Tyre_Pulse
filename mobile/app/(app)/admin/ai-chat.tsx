@@ -17,6 +17,7 @@ import { useRouter } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
 import { useAuth } from '../../../contexts/AuthContext'
 import { supabase } from '../../../lib/supabase'
+import { toUserMessage } from '../../../lib/safeError'
 import { useElevatedGuard } from '../../../hooks/useRoleGuard'
 
 // ── Agent definitions ─────────────────────────────────────────────────────────
@@ -162,7 +163,7 @@ export default function AiChatScreen() {
       let reply: string
       if (error) {
         // Surface the function's real error (e.g. missing API key)
-        let detail = error.message
+        let detail = toUserMessage(error)
         try { const body = await (error as any).context?.json?.(); if (body?.error) detail = body.error } catch { /* keep */ }
         reply = `AI unavailable: ${detail}`
       } else {

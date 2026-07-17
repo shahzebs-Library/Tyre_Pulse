@@ -6,6 +6,7 @@ import {
 import { useRouter } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
 import { supabase } from '../../lib/supabase'
+import { toUserMessage } from '../../lib/safeError'
 import { getQueue, syncQueue } from '../../lib/offlineQueue'
 import { shareInspectionById } from '../../lib/inspectionReportPdf'
 import { useAuth } from '../../contexts/AuthContext'
@@ -66,7 +67,7 @@ export default function HistoryScreen() {
     try {
       await shareInspectionById(id)
     } catch (e: any) {
-      Alert.alert(t('common.shareFailed'), e?.message || t('common.shareError'))
+      Alert.alert(t('common.shareFailed'), toUserMessage(e, t('common.shareError')))
     } finally {
       setSharingId(null)
     }

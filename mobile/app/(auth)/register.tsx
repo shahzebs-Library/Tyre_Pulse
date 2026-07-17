@@ -16,6 +16,7 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons'
 import { useRouter } from 'expo-router'
 import { supabase } from '../../lib/supabase'
+import { toUserMessage } from '../../lib/safeError'
 import { useLanguage, Language } from '../../contexts/LanguageContext'
 
 const LANG_OPTIONS: { code: Language; label: string }[] = [
@@ -112,7 +113,7 @@ export default function RegisterScreen() {
 
       if (authErr) {
         const taken = /already registered|already been registered|duplicate|already exists|database error/i.test(authErr.message || '')
-        setError(taken ? 'That username or Employee ID is already taken. Please choose another.' : authErr.message)
+        setError(taken ? 'That username or Employee ID is already taken. Please choose another.' : toUserMessage(authErr))
         return
       }
 
@@ -145,7 +146,7 @@ export default function RegisterScreen() {
 
       setStep('pending')
     } catch (e: any) {
-      setError(e?.message ?? 'An unexpected error occurred.')
+      setError(toUserMessage(e, 'An unexpected error occurred.'))
     } finally {
       setLoading(false)
     }

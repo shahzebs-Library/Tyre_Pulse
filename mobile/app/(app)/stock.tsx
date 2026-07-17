@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback, useMemo } from 'react'
 import {
-  View, FlatList, StyleSheet, TouchableOpacity, TextInput,
+  View, FlatList, ScrollView, StyleSheet, TouchableOpacity, TextInput,
   RefreshControl, ActivityIndicator, Alert, Modal, KeyboardAvoidingView, Platform,
 } from 'react-native'
 import { useRouter } from 'expo-router'
@@ -59,6 +59,27 @@ function countedHint(iso: string | null): { text: string; stale: boolean } {
   return { text: `Counted ${n}d ago`, stale: n >= 1 }
 }
 
+// Bucket a row that has no recognisable tyre size.
+const NO_SIZE = 'No size'
+
+/**
+ * Derive a tyre size token from a free-text stock description. stock_records has
+ * NO dedicated size column - the size is embedded in `description` (e.g.
+ * "315/80R22.5 Double Coin"), so we extract the standard tyre-size pattern.
+ * Returns null when the description carries no recognisable size.
+ */
+function extractTyreSize(desc: string | null): string | null {
+  if (!desc) return null
+  const s = desc.toUpperCase()
+  // Metric radial: 315/80R22.5, 295/80 R 22.5, 385/65R22.5
+  let m = s.match(/\d{2,3}\s*\/\s*\d{2,3}\s*R?\s*\d{2}(?:\.\d)?/)
+  if (m) return m[0].replace(/\s+/g, '')
+  // Radial / bias without aspect ratio: 11R22.5, 1200R20, 12.00-20, 385R22.5
+  m = s.match(/\d{2,4}(?:\.\d{1,2})?\s*[-R]\s*\d{2}(?:\.\d)?/)
+  if (m) return m[0].replace(/\s+/g, '')
+  return null
+}
+
 export default function StockScreen() {
   const { profile } = useAuth()
   const { t, isRTL } = useLanguage()
@@ -74,6 +95,8 @@ export default function StockScreen() {
   const [refreshing, setRefreshing] = useState(false)
   const [filter, setFilter] = useState<FilterKey>('all')
   const [query, setQuery] = useState('')
+  const [sizeFilter, setSizeFilter] = useState<string>('all')
+  const [locationFilter, setLocationFilter] = useState<string>('all')
   const [busyId, setBusyId] = useState<string | null>(null)
 
   // Stock-take modal state
@@ -171,14 +194,37 @@ export default function StockScreen() {
     }
   }
 
+  // Distinct location (site) + tyre-size options, derived live from loaded rows
+  // (never hardcoded). Size is extracted from the description; rows without a
+  // recognisable size fall into the NO_SIZE bucket so the filter stays honest.
+  const locationOptions = useMemo(() => {
+    const set = new Set<string>()
+    for (const r of rows) { const v = r.site?.trim(); if (v) set.add(v) }
+    return Array.from(set).sort((a, b) => a.localeCompare(b))
+  }, [rows])
+
+  const sizeOptions = useMemo(() => {
+    const set = new Set<string>()
+    let sawUnsized = false
+    for (const r of rows) {
+      const sz = extractTyreSize(r.description)
+      if (sz) set.add(sz); else sawUnsized = true
+    }
+    const list = Array.from(set).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }))
+    if (sawUnsized && set.size > 0) list.push(NO_SIZE)
+    return list
+  }, [rows])
+
   const shown = useMemo(() => {
     const term = query.trim().toLowerCase()
     let list = rows
     if (filter === 'low') list = list.filter(r => ['Low', 'Critical'].includes(statusFor(r.stock_qty ?? 0, r.min_level, r.critical_level)))
     if (filter === 'stale') list = list.filter(r => !isToday(r.updated_at))
+    if (locationFilter !== 'all') list = list.filter(r => (r.site?.trim() ?? '') === locationFilter)
+    if (sizeFilter !== 'all') list = list.filter(r => (extractTyreSize(r.description) ?? NO_SIZE) === sizeFilter)
     if (term) list = list.filter(r => r.description?.toLowerCase().includes(term) || r.site?.toLowerCase().includes(term))
     return list
-  }, [rows, filter, query])
+  }, [rows, filter, query, sizeFilter, locationFilter])
 
   const lowCount = useMemo(() => rows.filter(r => ['Low', 'Critical'].includes(statusFor(r.stock_qty ?? 0, r.min_level, r.critical_level))).length, [rows])
   const staleCount = useMemo(() => rows.filter(r => !isToday(r.updated_at)).length, [rows])
@@ -257,6 +303,68 @@ export default function StockScreen() {
         })}
       </View>
 
+      {/* Location (site) filter - options derived from the loaded rows */}
+      {locationOptions.length > 1 && (
+        <View style={[s.dimRow, isRTL && s.rowR]}>
+          <View style={[s.dimLead, isRTL && s.rowR]}>
+            <Ionicons name="location-outline" size={13} color={theme.color.textMuted} />
+            <AppText variant="micro" color="muted">Location</AppText>
+          </View>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={[s.dimScroll, isRTL && s.rowR]}
+          >
+            {['all', ...locationOptions].map(opt => {
+              const active = locationFilter === opt
+              return (
+                <TouchableOpacity
+                  key={opt}
+                  style={[s.chipSm, active && s.chipActive]}
+                  onPress={() => setLocationFilter(opt)}
+                  activeOpacity={0.8}
+                >
+                  <AppText variant="micro" style={{ color: active ? theme.color.onPrimary : theme.color.textSecondary, fontWeight: '700' }}>
+                    {opt === 'all' ? 'All' : opt}
+                  </AppText>
+                </TouchableOpacity>
+              )
+            })}
+          </ScrollView>
+        </View>
+      )}
+
+      {/* Tyre size filter - sizes extracted from each row description */}
+      {sizeOptions.length > 1 && (
+        <View style={[s.dimRow, isRTL && s.rowR]}>
+          <View style={[s.dimLead, isRTL && s.rowR]}>
+            <Ionicons name="resize-outline" size={13} color={theme.color.textMuted} />
+            <AppText variant="micro" color="muted">Size</AppText>
+          </View>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={[s.dimScroll, isRTL && s.rowR]}
+          >
+            {['all', ...sizeOptions].map(opt => {
+              const active = sizeFilter === opt
+              return (
+                <TouchableOpacity
+                  key={opt}
+                  style={[s.chipSm, active && s.chipActive]}
+                  onPress={() => setSizeFilter(opt)}
+                  activeOpacity={0.8}
+                >
+                  <AppText variant="micro" style={{ color: active ? theme.color.onPrimary : theme.color.textSecondary, fontWeight: '700' }}>
+                    {opt === 'all' ? 'All' : opt}
+                  </AppText>
+                </TouchableOpacity>
+              )
+            })}
+          </ScrollView>
+        </View>
+      )}
+
       {loading ? (
         <Loading label="Loading stock" />
       ) : (
@@ -277,7 +385,7 @@ export default function StockScreen() {
               <EmptyState
                 icon="cube-outline"
                 title={t('modules.stock.none')}
-                message={query || filter !== 'all' ? 'Try a different search or filter.' : undefined}
+                message={query || filter !== 'all' || sizeFilter !== 'all' || locationFilter !== 'all' ? 'Try a different search or filter.' : undefined}
               />
             )
           }
@@ -343,7 +451,23 @@ export default function StockScreen() {
               <View style={{ flex: 1 }}>
                 <AppText variant="title" style={{ textAlign }} numberOfLines={2}>{countItem?.description ?? 'Item'}</AppText>
                 <AppText variant="caption" color="muted" style={{ textAlign, marginTop: 2 }}>
-                  {countItem?.site ?? '-'} · was {countItem?.stock_qty ?? 0}
+                  was {countItem?.stock_qty ?? 0}
+                </AppText>
+              </View>
+            </View>
+
+            {/* Location + tyre size of the item being counted */}
+            <View style={[s.metaChips, isRTL && s.rowR]}>
+              <View style={[s.metaChip, isRTL && s.rowR]}>
+                <Ionicons name="location-outline" size={12} color={theme.color.primary} />
+                <AppText variant="micro" style={{ color: theme.color.text, fontWeight: '700' }}>
+                  {countItem?.site?.trim() || 'No location'}
+                </AppText>
+              </View>
+              <View style={[s.metaChip, isRTL && s.rowR]}>
+                <Ionicons name="resize-outline" size={12} color={theme.color.primary} />
+                <AppText variant="micro" style={{ color: theme.color.text, fontWeight: '700' }}>
+                  {(countItem && extractTyreSize(countItem.description)) || NO_SIZE}
                 </AppText>
               </View>
             </View>
@@ -413,6 +537,24 @@ function makeStyles(theme: Theme) {
       borderWidth: 1.5, borderColor: c.border,
     },
     chipActive: { backgroundColor: c.primary, borderColor: c.primary },
+    chipSm: {
+      paddingHorizontal: spacing.md, paddingVertical: 6,
+      borderRadius: radius.pill, backgroundColor: c.surface,
+      borderWidth: 1.5, borderColor: c.border, marginRight: spacing.sm,
+    },
+    dimRow: {
+      flexDirection: 'row', alignItems: 'center', gap: spacing.sm,
+      paddingLeft: spacing.lg, paddingBottom: spacing.sm,
+    },
+    dimLead: { flexDirection: 'row', alignItems: 'center', gap: 4, minWidth: 62 },
+    dimScroll: { paddingRight: spacing.lg, alignItems: 'center' },
+    metaChips: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginTop: -spacing.xs },
+    metaChip: {
+      flexDirection: 'row', alignItems: 'center', gap: 4,
+      backgroundColor: c.surfaceAlt, borderRadius: radius.pill,
+      paddingHorizontal: 10, paddingVertical: 5,
+      borderWidth: 1, borderColor: c.border,
+    },
     list: { paddingHorizontal: spacing.lg, paddingBottom: spacing['4xl'], gap: spacing.md, paddingTop: spacing.xs, flexGrow: 1 },
     card: { overflow: 'hidden' },
     cardRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, padding: spacing.md },

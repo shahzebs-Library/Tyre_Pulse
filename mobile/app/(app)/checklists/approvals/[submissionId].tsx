@@ -57,6 +57,12 @@ export default function ChecklistApprovalReviewScreen() {
   const dateLocale = isRTL ? 'ar-SA' : 'en-GB'
   const allowed = canApproveChecklists(profile?.role)
 
+  // Back = previous screen when there is history, else the approvals queue.
+  const goBack = useCallback(() => {
+    if (router.canGoBack()) router.back()
+    else router.replace('/(app)/checklists/approvals')
+  }, [router])
+
   const load = useCallback(async () => {
     setLoadError(null)
     try {
@@ -126,7 +132,7 @@ export default function ChecklistApprovalReviewScreen() {
       Alert.alert(
         approved ? 'Checklist approved' : 'Checklist returned',
         `The submission has been ${verb}.${tail}`,
-        [{ text: 'Done', onPress: () => router.back() }],
+        [{ text: 'Done', onPress: goBack }],
       )
     } catch (e: any) {
       Alert.alert('Could not save decision', e?.message || 'Please try again.')
@@ -138,7 +144,7 @@ export default function ChecklistApprovalReviewScreen() {
   // ── Loading / error / not-found / not-permitted ─────────────────────────────
   const nav = (title: string) => (
     <View style={[styles.nav, isRTL && styles.rowR]}>
-      <TouchableOpacity onPress={() => router.back()} style={styles.navBack}>
+      <TouchableOpacity onPress={goBack} style={styles.navBack}>
         <Ionicons name={isRTL ? 'arrow-forward' : 'arrow-back'} size={22} color="#0f172a" />
       </TouchableOpacity>
       <Text style={[styles.navTitle, { textAlign }]} numberOfLines={1}>{title}</Text>

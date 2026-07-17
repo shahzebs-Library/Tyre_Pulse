@@ -88,6 +88,12 @@ export default function ChecklistFillScreen() {
 
   const textAlign = isRTL ? 'right' : 'left'
 
+  // Back = previous screen when there is history, else the checklists list.
+  const goBack = useCallback(() => {
+    if (router.canGoBack()) router.back()
+    else router.replace('/(app)/checklists')
+  }, [router])
+
   const load = useCallback(async () => {
     setLoadError(null)
     setNotEnabled(false)
@@ -196,14 +202,14 @@ export default function ChecklistFillScreen() {
 
       if (res.offline) {
         Alert.alert('Saved on device', 'Saved on device. It will sync when online.', [
-          { text: 'OK', onPress: () => router.back() },
+          { text: 'OK', onPress: goBack },
         ])
       } else {
         const scoreLine = template.scored && score_pct != null
           ? `\n\nScore: ${score_pct}%${score_passed != null ? ` (${score_passed ? 'Passed' : 'Failed'})` : ''}`
           : ''
         Alert.alert('Checklist submitted', `Your checklist has been recorded.${scoreLine}`, [
-          { text: 'Done', onPress: () => router.back() },
+          { text: 'Done', onPress: goBack },
         ])
       }
     } catch (e: any) {
@@ -216,7 +222,7 @@ export default function ChecklistFillScreen() {
   // ── Header (shared) ─────────────────────────────────────────────────────────
   const header = (
     <View style={[styles.nav, isRTL && styles.rowR]}>
-      <TouchableOpacity onPress={() => router.back()} style={styles.navBack}>
+      <TouchableOpacity onPress={goBack} style={styles.navBack}>
         <Ionicons name={isRTL ? 'arrow-forward' : 'arrow-back'} size={22} color={c.text} />
       </TouchableOpacity>
       <View style={{ flex: 1 }}>

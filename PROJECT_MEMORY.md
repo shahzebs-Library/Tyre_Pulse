@@ -812,6 +812,26 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
   on testers' devices once that build finishes + Play processes it. No DB/schema change; branch realigned to
   origin/main. For NEW work restart the branch from latest main (merged PRs are terminal).
 
+### 2026-07-17 PM mobile + lost-commit recovery (PR #69)
+- **INCIDENT + RECOVERY**: 4 parallel-session commits (inspection approval flow/search-first assets/SVG
+  parity/gallery uploads; accident dashboard status labels + open-closed filter; meter-log flow/analytics-
+  reports filters/stock-by-size/sync+badge fixes; **Admin Console crash fix** - null stats deref on open)
+  were LOCAL-ONLY on the branch and got orphaned by a `git reset --hard origin/...` during a rebase tangle.
+  This was exactly the user's "my fixes are still not in the app + admin console crashes" report. Recovered
+  by cherry-pick (objects still in .git), all 4 applied clean. LESSON: before ANY reset --hard on the shared
+  branch, `git log origin/..HEAD` for unpushed local commits - a parallel session may have committed there.
+- **Mobile Preventive Maintenance screen** `mobile/app/(app)/maintenance.tsx` (module key `pm`, Home hub
+  Maintenance group, roles manager/director + admin implicit): due/overdue active pm_programs list
+  (overdue/due-soon/active tiles, date+meter due, priority badge) + Record Service bottom sheet -> the
+  V253 `record_pm_service` RPC (server advances the schedule; RPC re-checks Admin/Manager/Director).
+  ONLINE-ONLY by design (transactional RPC, no offline queue). i18n `modules.pm.*` en+ar.
+- **i18n fallback fix** (LanguageContext.resolve): missing keys now fall back to the ENGLISH string before
+  exposing the raw key - ur.json covers only ~478/1144 keys and Urdu users saw literal key paths. RULE:
+  new screens need en+ar keys; ur is optional (falls back), never ship raw-key UI.
+- **User-visible "still same in app" root cause is DOUBLE**: (a) the lost commits above (now shipped);
+  (b) testers must UPDATE from the Play internal track after each build - versionName stays 1.2.0, only
+  versionCode bumps, so the update is easy to miss in Play Store.
+
 ### SESSION 2026-07-17 CLOSED CLEAN — mobile field-feedback + brand icon all merged
 - This session's mobile work is fully MERGED to main and nothing is pending in code: field-testing bug batch
   (unmatched routes, checklist uuid, accident web-parity, meter-log validation/auto-fill/barcode/hour-meter/

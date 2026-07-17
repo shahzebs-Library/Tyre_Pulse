@@ -526,7 +526,10 @@
         "Warranty": "Warranty"
       },
       "phSearchVehicle": "Search asset, plate or type...",
-      "phSearchToBegin": "Type an asset number or scan to find the vehicle. Assets appear only after you search."
+      "phSearchToBegin": "Type an asset number or scan to find the vehicle. Assets appear only after you search.",
+      "locationSuggest": "Quick fill from sites:",
+      "phFleetNo": "Fleet No",
+      "phNoVehicleMatch": "No matching vehicles found."
     },
     "detail": {
       "exportFailed": "Export failed",
@@ -788,6 +791,10 @@
         "approvals": {
           "label": "Approvals",
           "sub": "Sign off inspections"
+        },
+        "pm": {
+          "label": "Maintenance Due",
+          "sub": "PM plans + record service"
         }
       }
     },
@@ -1292,5 +1299,12 @@
       "savedTitle": "Service recorded",
       "savedBody": "The schedule has been advanced to the next due date."
     }
+  },
+  "checklists": {
+    "assetSearchHint": "Type at least 2 characters to search assets.",
+    "useTypedAsset": "Use as typed"
+  },
+  "stock": {
+    "otherLocation": "Other"
   }
 }

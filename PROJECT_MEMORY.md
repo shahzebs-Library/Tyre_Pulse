@@ -812,6 +812,38 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
   on testers' devices once that build finishes + Play processes it. No DB/schema change; branch realigned to
   origin/main. For NEW work restart the branch from latest main (merged PRs are terminal).
 
+### 2026-07-17 field-feedback batch 2 (PR #70) — sync fix, approval push, form parity, diagram truth
+- **INSPECTION SYNC WAS SERVER-REJECTED (the "always pending / red home icon" bug)**: mobile wrote
+  `approval_status='pending'` + `status='Pending approval'` but the live CHECKs
+  (ck_inspection_approval_status / inspections_status_check) allow pending_approval|approved|rejected|done
+  and Scheduled|In Progress|Done|Overdue|Cancelled. Every retry failed with a generic error. FIX: submit
+  -> pending_approval + In Progress; approve -> approved + Done (locked); reject -> rejected + In Progress;
+  approvals queue filters pending_approval; offlineQueue.syncQueue() SANITIZES legacy tokens before upsert
+  so items stuck on phones self-heal. RULE: inspections.status/approval_status are CHECK-constrained -
+  never invent new tokens on mobile; match web (src/pages/Inspections.jsx) vocabulary.
+- **V267 approval push (applied live + stub)**: inspections/checklist_submissions entering their approval
+  queue emit `inspection.approval_requested` / `checklist.approval_requested` domain events (generic
+  trg_emit_domain_event); NEW consumer `consume_event_approval_push` builds an Expo-push payload
+  (recipients = approved Admin/Manager/Director/Maintenance Supervisor profiles with push_token, org+country
+  scoped) and enqueues `workflow_notifications` -> delivered by the EXISTING V119 pg_cron deliverer ->
+  workflow-notify edge fn -> Expo. Verified live (rolled back). 0 recipients = honest 'skipped'. Next free V268.
+- **Home badge truth**: the red Home tab badge counted fleet-wide open corrective_actions + critical tyres
+  (uncleareable by the user). Now = live offline-queue pending count (getPendingCount+getPendingRecordCount),
+  clears at 0, refreshes on focus + DeviceEventEmitter 'tyrepulse:pending-sync-changed' + 5s poll while >0.
+- **Accident report form = web order**: asset search FIRST (auto-fills site/fleet no/vehicle type from
+  vehicle_fleet, never overwrites typed), then Date/Time/Site/Location/Driver/Description; "Master:" line;
+  location quick-fill chips from sites.
+- **Stock**: min_level/critical_level admin-only (isAdmin||isSuperAdmin; non-admin insert omits them so DB
+  defaults rule); location = site picker (distinct vehicle_fleet.site chips + Other free-text fallback).
+- **Checklists**: fill-screen asset picker is now search-first (2+ chars, compact rows, no icon tiles).
+- **Tyre diagram truth (mobile/lib/tyreDiagramLayouts.ts = THE canonical resolver; tyreLayout.ts delegates)**:
+  pump keyword no longer sends Line/Spider/Stationary pumps to the 14-tyre concrete-pump layout (that was
+  "more axles, some without tyre"); N-Wheeler names mapped explicitly; heavy 6x4 types get a 10-tyre layout;
+  positions prop structurally matched (FL1/AxleL1 vocab) so only real wheels render; unknown types -> Pickup
+  4-tyre fallback; matching case/separator-insensitive.
+- **i18n**: full audit of all t() keys vs en.json (0 missing after adding agent keys); LanguageContext falls
+  back to English before raw key. RULE: run the audit (grep t('...') vs en.json) before each mobile release.
+
 ### 2026-07-17 PM mobile + lost-commit recovery (PR #69)
 - **INCIDENT + RECOVERY**: 4 parallel-session commits (inspection approval flow/search-first assets/SVG
   parity/gallery uploads; accident dashboard status labels + open-closed filter; meter-log flow/analytics-

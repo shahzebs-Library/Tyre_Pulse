@@ -151,6 +151,27 @@ export const LAYOUTS: Record<string, DiagramLayout> = {
       { id: 'RRo', x: 164, y: 178, w: 20, h: 36, label: 'RRo' },
     ],
   },
+  // Heavy 6x4 truck (D tanker, spider/line pump, crane, 8/10-wheeler):
+  // 1 steer axle + 2 dual-tyre drive axles = 10 tyres. Not in the web LAYOUTS
+  // (web collapses these onto Pickup/Concrete pump); added so the diagram
+  // matches the real fleet configuration in lib/types.ts (Truck6x4) instead of
+  // showing extra steer axles or a 4-tyre pickup.
+  'Truck 6x4': {
+    emoji: '🚛', viewH: 310,
+    bodyKey: 'canter',
+    tyres: [
+      { id: 'FL',   x: 31,  y: 36,  w: 22, h: 40, label: 'FL'   },
+      { id: 'FR',   x: 147, y: 36,  w: 22, h: 40, label: 'FR'   },
+      { id: 'R1Lo', x: 14,  y: 170, w: 19, h: 35, label: 'R1Lo' },
+      { id: 'R1Li', x: 35,  y: 170, w: 19, h: 35, label: 'R1Li' },
+      { id: 'R1Ri', x: 146, y: 170, w: 19, h: 35, label: 'R1Ri' },
+      { id: 'R1Ro', x: 167, y: 170, w: 19, h: 35, label: 'R1Ro' },
+      { id: 'R2Lo', x: 14,  y: 218, w: 19, h: 35, label: 'R2Lo' },
+      { id: 'R2Li', x: 35,  y: 218, w: 19, h: 35, label: 'R2Li' },
+      { id: 'R2Ri', x: 146, y: 218, w: 19, h: 35, label: 'R2Ri' },
+      { id: 'R2Ro', x: 167, y: 218, w: 19, h: 35, label: 'R2Ro' },
+    ],
+  },
   // MP concrete pump: 3 single-tyre steer axles up front, then 2 dual-tyre
   // drive axles at the rear (14 tyres total).
   'Concrete pump': {
@@ -176,13 +197,23 @@ export const LAYOUTS: Record<string, DiagramLayout> = {
 }
 
 // ── Vehicle type normaliser - maps any DB/prop value to a LAYOUTS key ────────────
+// Case-insensitive index of the layout keys ("TR-MIXER", "tri-mixer ", "Tri-mixer"
+// all resolve the same way - site data carries mixed casing).
+const LAYOUT_KEY_INDEX: Record<string, string> = {}
+Object.keys(LAYOUTS).forEach(k => { LAYOUT_KEY_INDEX[k.toLowerCase().replace(/[\s\-_]+/g, '')] = k })
+
 export function resolveVehicleType(vt?: string | null): string {
-  if (!vt) return 'Pickup'
-  if (LAYOUTS[vt]) return vt                                            // exact match
-  const s = vt.toLowerCase().trim()
+  const raw = String(vt ?? '').trim()
+  if (!raw) return 'Pickup'
+
+  // Exact layout-key match, case/spacing-insensitive.
+  const s = raw.toLowerCase()
+  const compact = s.replace(/[\s\-_]+/g, '')
+  const exact = LAYOUT_KEY_INDEX[compact]
+  if (exact) return exact
 
   // Plate-number prefix detection - first 2 alpha chars of asset_no
-  const prefix = (vt.match(/^[A-Za-z]+/) || [''])[0].toUpperCase().slice(0, 2)
+  const prefix = (raw.match(/^[A-Za-z]+/) || [''])[0].toUpperCase().slice(0, 2)
   const PREFIX_MAP: Record<string, string> = {
     TM: 'Tri-mixer',
     MP: 'Concrete pump',
@@ -192,10 +223,26 @@ export function resolveVehicleType(vt?: string | null): string {
   }
   if (PREFIX_MAP[prefix]) return PREFIX_MAP[prefix]
 
+  // Explicit "N-Wheeler" names FIRST - "wheeler" contains "wheel" and used to
+  // fall into the 4-tyre Wheel loader layout.
+  const wheeler = compact.match(/(\d+)wheeler/)
+  if (wheeler) {
+    const n = parseInt(wheeler[1], 10)
+    if (n >= 12) return 'Tri-mixer'
+    if (n >= 8) return 'Truck 6x4'
+    if (n >= 6) return 'Canter'
+    return 'Pickup'
+  }
+
   // Keyword fallback - covers the real fleet's vehicle_type spellings
   // (Tr-Mixer, Wheel_Loader, Line/Spider/Stationary Pump, Placing Boom, ...).
   if (s.includes('tri') || s.includes('mixer') || s.includes('transit')) return 'Tri-mixer'
   if (s.includes('boom') || s.includes('placing'))         return 'Concrete pump'
+  // Stationary / skid-mounted pumps are NOT the 5-axle truck-mounted pump -
+  // fall back to the minimal 2-axle default instead of 3 steer axles.
+  if (s.includes('stationary'))                            return 'Pickup'
+  // Spider / line pumps ride a standard 6x4 truck chassis (10 tyres).
+  if (compact.includes('spiderpump') || compact.includes('linepump') || s.includes('spider')) return 'Truck 6x4'
   if (s.includes('concrete') || s.includes('pump'))        return 'Concrete pump'
   if (s.includes('skid'))                                  return 'Skid loader'
   if (s.includes('wheel') || s.includes('loader') || s.includes('load')) return 'Wheel loader'
@@ -204,6 +251,9 @@ export function resolveVehicleType(vt?: string | null): string {
   if (s.includes('tata'))                                  return 'Tata'
   if (s.includes('ashok') || s.includes('leyland'))        return 'Ashok Leyland'
   if (s.includes('pickup') || s.includes('pick up') || s.includes('pick-up')) return 'Pickup'
+  // Heavy 6x4 chassis family (tankers, cranes, generic trucks): 10 tyres.
+  if (s.includes('tanker') || s.includes('crane') || s.includes('truck')) return 'Truck 6x4'
+  // Unknown -> minimal web default (2 axles / 4 tyres). Never guess extra axles.
   return 'Pickup'
 }
 
@@ -259,4 +309,134 @@ export function diagramPositions(vehicleType: string): string[] {
   if (isTyrelessEquipment(vehicleType)) return []
   const layout = LAYOUTS[resolveVehicleType(vehicleType)] || LAYOUTS.Pickup
   return layout.tyres.map(t => t.id)
+}
+
+// ── Position id -> structural role (single parser for BOTH id vocabularies) ─────
+// The app carries two position vocabularies:
+//   diagram ids (this file / web):  FL, RLo, F1L, R2Ro ...
+//   lib/types.ts TYRE_POSITIONS:    FL1, RL1..RL4, SL/SR, AxleL1, Spare ...
+// parsePositionStruct maps EITHER form onto (kind, side, axle, role) so the
+// diagram can place any caller-supplied position onto the correct wheel slot.
+export interface PositionStruct {
+  kind: 'steer' | 'drive' | 'lift' | 'axle' | 'spare' | 'unknown'
+  side: 'L' | 'R' | null
+  axle: number
+  role: 'outer' | 'inner' | 'single'
+}
+
+export function parsePositionStruct(id: string): PositionStruct {
+  const u = String(id ?? '').toUpperCase().trim().replace(/[\s\-_]+/g, '')
+  let m: RegExpMatchArray | null
+
+  if (/^SP(ARE)?\d*$/.test(u)) return { kind: 'spare', side: null, axle: 0, role: 'single' }
+
+  m = u.match(/^AXLE([LR])(\d*)$/)
+  if (m) return { kind: 'axle', side: m[1] as 'L' | 'R', axle: m[2] ? parseInt(m[2], 10) : 1, role: 'single' }
+
+  m = u.match(/^S([LR])(\d*)$/)
+  if (m) return { kind: 'lift', side: m[1] as 'L' | 'R', axle: m[2] ? parseInt(m[2], 10) : 1, role: 'single' }
+
+  m = u.match(/^F([LR])(\d*)$/)                                   // FL, FR, FL2
+  if (m) return { kind: 'steer', side: m[1] as 'L' | 'R', axle: m[2] ? parseInt(m[2], 10) : 1, role: 'single' }
+
+  m = u.match(/^F(\d+)([LR])$/)                                   // F1L, F3R
+  if (m) return { kind: 'steer', side: m[2] as 'L' | 'R', axle: parseInt(m[1], 10), role: 'single' }
+
+  m = u.match(/^R(\d*)([LR])([OI])$/)                             // RLo, R2Ri
+  if (m) {
+    return {
+      kind: 'drive', side: m[2] as 'L' | 'R',
+      axle: m[1] ? parseInt(m[1], 10) : 1,
+      role: m[3] === 'O' ? 'outer' : 'inner',
+    }
+  }
+
+  m = u.match(/^R([LR])(\d*)$/)                                   // RL, RR, RL1..RR4
+  if (m) {
+    const side = m[1] as 'L' | 'R'
+    if (!m[2]) return { kind: 'drive', side, axle: 1, role: 'single' }
+    const k = parseInt(m[2], 10)
+    const first = k % 2 === 1
+    return {
+      kind: 'drive', side,
+      axle: Math.ceil(k / 2),
+      // Consecutive pairs form a dual axle; left counts outer->inner,
+      // right counts inner->outer (mirrors lib/tyreLayout.ts pairing).
+      role: side === 'L' ? (first ? 'outer' : 'inner') : (first ? 'inner' : 'outer'),
+    }
+  }
+
+  return { kind: 'unknown', side: null, axle: 0, role: 'single' }
+}
+
+// ── Match caller-supplied positions onto the layout's wheel slots ───────────────
+// Renders ONLY wheels the caller's position set actually contains: no ghost
+// slots for positions the layout does not define, and no extra layout axles for
+// positions the vehicle does not carry. Ids the layout has no slot for (Spare,
+// lift axles on layouts without one, unknown tokens) are skipped. If NOTHING
+// matches (fully foreign vocabulary), the full layout is returned so the
+// diagram is never blank.
+export interface MatchedTyre extends TyreDef {
+  /** The caller's original position id - the tyreData/storage key. */
+  positionId: string
+}
+
+export function matchPositionsToLayout(
+  layout: DiagramLayout,
+  positions: string[] | null | undefined,
+): MatchedTyre[] {
+  const all: MatchedTyre[] = layout.tyres.map(t => ({ ...t, positionId: t.id }))
+  const list = (positions ?? []).map(p => String(p ?? '').trim()).filter(Boolean)
+  if (list.length === 0) return all
+
+  interface Slot { t: TyreDef; s: PositionStruct; used: boolean }
+  const slots: Slot[] = layout.tyres.map(t => ({ t, s: parsePositionStruct(t.id), used: false }))
+
+  // Overall axle rows (front -> back) for generic Axle/lift ordinal matching.
+  const rowOf = (s: PositionStruct) => `${s.kind}:${s.axle}`
+  const rowKeys: string[] = []
+  slots
+    .slice()
+    .sort((a, b) => a.t.y - b.t.y)
+    .forEach(sl => { const k = rowOf(sl.s); if (!rowKeys.includes(k)) rowKeys.push(k) })
+
+  const roleOrder = (want: PositionStruct['role']): PositionStruct['role'][] =>
+    want === 'single' ? ['single', 'outer', 'inner']
+      : want === 'outer' ? ['outer', 'single', 'inner']
+      : ['inner', 'single', 'outer']
+
+  const matched: MatchedTyre[] = []
+  for (const pos of list) {
+    // 1. Exact id match (fast path - covers diagramPositions callers).
+    const exact = slots.find(sl => !sl.used && sl.t.id.toUpperCase() === pos.toUpperCase())
+    if (exact) { exact.used = true; matched.push({ ...exact.t, positionId: pos }); continue }
+
+    const ps = parsePositionStruct(pos)
+    if (ps.kind === 'spare' || ps.kind === 'unknown') continue
+
+    let slot: Slot | undefined
+    if (ps.kind === 'steer' || ps.kind === 'drive') {
+      // 2. Structural match: same kind + side + axle, closest wheel role.
+      for (const role of roleOrder(ps.role)) {
+        slot = slots.find(sl =>
+          !sl.used && sl.s.kind === ps.kind && sl.s.side === ps.side &&
+          sl.s.axle === ps.axle && sl.s.role === role)
+        if (slot) break
+      }
+    } else {
+      // 3. Generic axle / lift ordinal -> Nth axle row, side-matched.
+      const key = rowKeys[ps.axle - 1]
+      if (key) {
+        const rowSlots = slots
+          .filter(sl => !sl.used && rowOf(sl.s) === key && (sl.s.side === ps.side || sl.s.side === null))
+          .sort((a, b) => a.t.x - b.t.x)
+        slot = ps.side === 'R' ? rowSlots[rowSlots.length - 1] : rowSlots[0]
+      }
+    }
+    if (slot) { slot.used = true; matched.push({ ...slot.t, positionId: pos }) }
+  }
+
+  if (matched.length === 0) return all
+  matched.sort((a, b) => (a.y - b.y) || (a.x - b.x))
+  return matched
 }

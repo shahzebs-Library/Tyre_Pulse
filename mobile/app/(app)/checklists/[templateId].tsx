@@ -12,9 +12,9 @@
  * queue); only the presentation is new. Fields whose `visibleWhen` condition
  * isn't met are hidden and recomputed live as answers change.
  */
-import { useEffect, useState, useCallback, useMemo } from 'react'
+import { useEffect, useState, useCallback, useMemo, useRef } from 'react'
 import {
-  View, ScrollView, TextInput, TouchableOpacity, StyleSheet, Alert,
+  View, ScrollView, TextInput, TouchableOpacity, StyleSheet, Alert, ActivityIndicator,
 } from 'react-native'
 import { useRouter, useLocalSearchParams } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
@@ -25,6 +25,7 @@ import { Theme, spacing, radius, typography } from '../../../lib/theme'
 import { AppText, Screen, Badge, EmptyState, ErrorState, Loading } from '../../../components/ui'
 import ChecklistItemSheet, { optionTone } from '../../../components/ChecklistItemSheet'
 import { getTemplate, submitChecklist, ChecklistTemplate } from '../../../lib/checklists'
+import { supabase } from '../../../lib/supabase'
 import { toUserMessage } from '../../../lib/safeError'
 import {
   ChecklistField, blankAnswer, isValueField, isFieldVisible,
@@ -37,6 +38,22 @@ type IconName = keyof typeof Ionicons.glyphMap
 function looksLikeMissingTable(msg: string): boolean {
   const m = (msg || '').toLowerCase()
   return m.includes('does not exist') || m.includes('relation') || m.includes('schema cache')
+}
+
+// Compact search-first asset picker (mirrors the accident report pattern):
+// nothing is listed until the operator types; results are plain text rows.
+interface AssetSearchRow {
+  id: string
+  asset_no: string
+  site: string | null
+  vehicle_type: string | null
+  fleet_number: string | null
+}
+
+// PostgREST or() filters break on commas/parens and ilike on unescaped %/_ —
+// strip them so a typed query is always a safe literal.
+function sanitizeAssetQuery(raw: string): string {
+  return (raw ?? '').trim().replace(/[(),%_]/g, '').slice(0, 40)
 }
 
 // A friendly icon per field type for the tile.
@@ -79,6 +96,11 @@ export default function ChecklistFillScreen() {
   const [title, setTitle] = useState('')
   const [site, setSite] = useState(params.site ? String(params.site) : '')
   const [assetNo, setAssetNo] = useState(params.asset_no ? String(params.asset_no) : '')
+  const [assetMeta, setAssetMeta] = useState<{ site?: string | null; vehicle_type?: string | null } | null>(null)
+  const [assetQuery, setAssetQuery] = useState('')
+  const [assetResults, setAssetResults] = useState<AssetSearchRow[]>([])
+  const [assetSearching, setAssetSearching] = useState(false)
+  const assetSearchStamp = useRef(0)
   const [answers, setAnswers] = useState<Record<string, any>>({})
   const [photos, setPhotos] = useState<Record<string, string[]>>({})
   const [printedName, setPrintedName] = useState('')
@@ -130,6 +152,55 @@ export default function ChecklistFillScreen() {
 
   const setFieldPhotos = useCallback((id: string, urls: string[]) => {
     setPhotos(prev => ({ ...prev, [id]: urls }))
+  }, [])
+
+  // Debounced fleet search — runs only while no asset is selected and at least
+  // 2 characters are typed. A stamp guards against stale responses landing late.
+  useEffect(() => {
+    if (assetNo) return
+    const q = sanitizeAssetQuery(assetQuery)
+    if (q.length < 2) {
+      setAssetResults([])
+      setAssetSearching(false)
+      return
+    }
+    setAssetSearching(true)
+    const stamp = ++assetSearchStamp.current
+    const h = setTimeout(async () => {
+      try {
+        const like = `%${q}%`
+        const { data } = await supabase
+          .from('vehicle_fleet')
+          .select('id, asset_no, site, vehicle_type, fleet_number')
+          .or(`asset_no.ilike.${like},fleet_number.ilike.${like},vehicle_type.ilike.${like}`)
+          .order('asset_no')
+          .limit(20)
+        if (assetSearchStamp.current === stamp) setAssetResults((data as AssetSearchRow[]) ?? [])
+      } catch (e: any) {
+        if (__DEV__) console.warn('[checklist] asset search failed:', e?.message)
+        if (assetSearchStamp.current === stamp) setAssetResults([])
+      } finally {
+        if (assetSearchStamp.current === stamp) setAssetSearching(false)
+      }
+    }, 350)
+    return () => clearTimeout(h)
+  }, [assetQuery, assetNo])
+
+  // Tap a result: commit the asset, remember its meta for the chip, and fill
+  // the site only when the operator has not typed one (never overwrites).
+  const selectAsset = useCallback((row: AssetSearchRow) => {
+    setAssetNo(row.asset_no)
+    setAssetMeta({ site: row.site, vehicle_type: row.vehicle_type })
+    setSite(prev => (prev.trim() ? prev : (row.site ?? prev)))
+    setAssetQuery('')
+    setAssetResults([])
+  }, [])
+
+  const clearAsset = useCallback(() => {
+    setAssetNo('')
+    setAssetMeta(null)
+    setAssetQuery('')
+    setAssetResults([])
   }, [])
 
   // Only currently-visible fields are rendered / validated / scored.
@@ -312,30 +383,107 @@ export default function ChecklistFillScreen() {
             placeholder={template.name}
             placeholderTextColor={c.textMuted}
           />
-          <View style={styles.row2}>
-            <View style={{ flex: 1 }}>
-              <AppText variant="label" color="secondary" style={{ marginBottom: 6, marginTop: spacing.md }}>{t('modules.checklistFill.assetNo')}</AppText>
-              <TextInput
-                style={[styles.input, { textAlign }]}
-                value={assetNo}
-                onChangeText={setAssetNo}
-                placeholder={t('modules.checklistFill.assetPlaceholder')}
-                placeholderTextColor={c.textMuted}
-                autoCapitalize="characters"
-                autoCorrect={false}
-              />
+          {/* Asset - compact search-first picker (no tiles, no icons in rows) */}
+          <AppText variant="label" color="secondary" style={{ marginBottom: 6, marginTop: spacing.md }}>{t('modules.checklistFill.assetNo')}</AppText>
+          {assetNo ? (
+            <View style={[styles.assetChip, isRTL && styles.rowR]}>
+              <View style={{ flex: 1 }}>
+                <AppText style={[typography.bodyStrong, { textAlign }]} numberOfLines={1}>{assetNo}</AppText>
+                {!!(assetMeta?.site || assetMeta?.vehicle_type) && (
+                  <AppText variant="caption" color="muted" style={{ textAlign, marginTop: 1 }} numberOfLines={1}>
+                    {[assetMeta?.site, assetMeta?.vehicle_type].filter(Boolean).join(' · ')}
+                  </AppText>
+                )}
+              </View>
+              <TouchableOpacity
+                onPress={clearAsset}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                accessibilityLabel="Clear selected asset"
+              >
+                <Ionicons name="close-circle" size={20} color={c.textMuted} />
+              </TouchableOpacity>
             </View>
-            <View style={{ flex: 1 }}>
-              <AppText variant="label" color="secondary" style={{ marginBottom: 6, marginTop: spacing.md }}>{t('modules.checklistFill.site')}</AppText>
-              <TextInput
-                style={[styles.input, { textAlign }]}
-                value={site}
-                onChangeText={setSite}
-                placeholder={t('modules.checklistFill.site')}
-                placeholderTextColor={c.textMuted}
-              />
+          ) : (
+            <View style={{ gap: spacing.sm }}>
+              <View style={[styles.assetSearchBox, isRTL && styles.rowR]}>
+                <Ionicons name="search-outline" size={16} color={c.textMuted} />
+                <TextInput
+                  style={[styles.assetSearchInput, { textAlign }]}
+                  value={assetQuery}
+                  onChangeText={setAssetQuery}
+                  placeholder={t('accident.report.phSearchVehicle')}
+                  placeholderTextColor={c.textMuted}
+                  autoCapitalize="characters"
+                  autoCorrect={false}
+                />
+                {assetQuery.length > 0 && (
+                  <TouchableOpacity onPress={() => setAssetQuery('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                    <Ionicons name="close-circle" size={16} color={c.textMuted} />
+                  </TouchableOpacity>
+                )}
+              </View>
+
+              {(() => {
+                const typed = sanitizeAssetQuery(assetQuery)
+                if (typed.length < 2) {
+                  return (
+                    <AppText variant="caption" color="muted" style={{ textAlign }}>
+                      {t('checklists.assetSearchHint')}
+                    </AppText>
+                  )
+                }
+                if (assetSearching) {
+                  return <ActivityIndicator size="small" color={c.primary} />
+                }
+                const exact = assetResults.some(r => r.asset_no?.toLowerCase() === typed.toLowerCase())
+                return (
+                  <View style={styles.assetResults}>
+                    {assetResults.map(row => (
+                      <TouchableOpacity
+                        key={row.id}
+                        style={[styles.assetRow, isRTL && styles.rowR]}
+                        activeOpacity={0.7}
+                        onPress={() => selectAsset(row)}
+                      >
+                        <AppText style={[typography.bodyStrong, { textAlign }]} numberOfLines={1}>{row.asset_no}</AppText>
+                        {!!(row.site || row.vehicle_type) && (
+                          <AppText variant="caption" color="muted" style={{ flexShrink: 1 }} numberOfLines={1}>
+                            {[row.site, row.vehicle_type].filter(Boolean).join(' · ')}
+                          </AppText>
+                        )}
+                      </TouchableOpacity>
+                    ))}
+                    {assetResults.length === 0 && (
+                      <AppText variant="caption" color="muted" style={[{ textAlign }, styles.assetRowPad]}>
+                        {t('inspection.vehicleNoMatch')}
+                      </AppText>
+                    )}
+                    {!exact && (
+                      <TouchableOpacity
+                        style={[styles.assetRow, isRTL && styles.rowR]}
+                        activeOpacity={0.7}
+                        onPress={() => { setAssetNo(typed); setAssetMeta(null); setAssetQuery(''); setAssetResults([]) }}
+                      >
+                        <AppText variant="caption" style={{ color: c.primaryDark, fontWeight: '700', textAlign }} numberOfLines={1}>
+                          {t('checklists.useTypedAsset')} "{typed}"
+                        </AppText>
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                )
+              })()}
             </View>
-          </View>
+          )}
+
+          {/* Site */}
+          <AppText variant="label" color="secondary" style={{ marginBottom: 6, marginTop: spacing.md }}>{t('modules.checklistFill.site')}</AppText>
+          <TextInput
+            style={[styles.input, { textAlign }]}
+            value={site}
+            onChangeText={setSite}
+            placeholder={t('modules.checklistFill.site')}
+            placeholderTextColor={c.textMuted}
+          />
         </View>
 
         {/* Item tiles + section headings */}
@@ -488,11 +636,34 @@ function makeStyles(theme: Theme) {
       backgroundColor: c.surface, borderRadius: radius.lg, padding: spacing.lg,
       borderWidth: 1, borderColor: c.border,
     },
-    row2: { flexDirection: 'row', gap: spacing.md },
     input: {
       backgroundColor: c.surfaceAlt, borderWidth: 1, borderColor: c.border,
       borderRadius: radius.md, paddingHorizontal: spacing.md, paddingVertical: 12,
       ...typography.body, color: c.text,
+    },
+
+    // Compact search-first asset picker
+    assetSearchBox: {
+      flexDirection: 'row', alignItems: 'center', gap: spacing.sm,
+      backgroundColor: c.surfaceAlt, borderWidth: 1, borderColor: c.border,
+      borderRadius: radius.md, paddingHorizontal: spacing.md, height: 46,
+    },
+    assetSearchInput: { flex: 1, ...typography.body, color: c.text, paddingVertical: 0 },
+    assetResults: {
+      borderWidth: 1, borderColor: c.border, borderRadius: radius.md,
+      backgroundColor: c.surface, overflow: 'hidden',
+    },
+    assetRow: {
+      flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm,
+      paddingHorizontal: spacing.md, paddingVertical: 11,
+      borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: c.border,
+    },
+    assetRowPad: { paddingHorizontal: spacing.md, paddingVertical: 11 },
+    assetChip: {
+      flexDirection: 'row', alignItems: 'center', gap: spacing.sm,
+      alignSelf: 'stretch',
+      backgroundColor: c.primarySoft, borderWidth: 1, borderColor: c.borderStrong,
+      borderRadius: radius.md, paddingHorizontal: spacing.md, paddingVertical: 10,
     },
 
     section: { marginTop: spacing.sm, paddingBottom: 2 },

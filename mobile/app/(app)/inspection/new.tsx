@@ -400,8 +400,11 @@ export default function NewInspectionScreen() {
       // Inspector signs on the review step; the record enters the supervisor
       // approval queue rather than being finalised immediately.
       inspector_signature: inspectorSig,
-      approval_status: 'pending',
-      status: 'Pending approval',
+      // DB vocabulary (ck_inspection_approval_status / inspections_status_check):
+      // approval_status pending_approval|approved|rejected|done, status stays
+      // 'In Progress' until a supervisor approves ('Done').
+      approval_status: 'pending_approval',
+      status: 'In Progress',
       country: profile?.country ?? null,
       // GPS geotag - folded identically into the online insert and the offline
       // queue so a queued inspection syncs with the same coordinates later.

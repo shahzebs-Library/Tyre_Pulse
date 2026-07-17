@@ -10,7 +10,7 @@ import { useState, useEffect } from 'react'
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
   KeyboardAvoidingView, Platform, ScrollView, ActivityIndicator,
-  StatusBar, Alert,
+  StatusBar, Alert, Image,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons'
@@ -196,10 +196,12 @@ export default function RegisterScreen() {
         >
           {/* Logo + header */}
           <View style={styles.logoArea}>
-            <View style={styles.logoCircle}>
-              <Text style={styles.logoEmoji}>🔧</Text>
-            </View>
-            <Text style={styles.appName}>TyrePulse</Text>
+            <Image
+              source={require('../../assets/logo.png')}
+              style={styles.logoImg}
+              resizeMode="contain"
+              accessibilityLabel="Tyre Pulse"
+            />
             <Text style={styles.appSubtitle}>Create your account</Text>
           </View>
 
@@ -493,9 +495,7 @@ const styles = StyleSheet.create({
   scroll: { flexGrow: 1, justifyContent: 'center', padding: 24, paddingTop: 12 },
 
   logoArea:    { alignItems: 'center', marginBottom: 28 },
-  logoCircle:  { width: 64, height: 64, borderRadius: 20, backgroundColor: '#fff', borderWidth: 1.5, borderColor: 'rgba(22,163,74,0.25)', alignItems: 'center', justifyContent: 'center', marginBottom: 12, shadowColor: '#16a34a', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.15, shadowRadius: 12, elevation: 6 },
-  logoEmoji:   { fontSize: 30 },
-  appName:     { fontSize: 26, fontWeight: '800', color: '#0f172a', letterSpacing: -0.5 },
+  logoImg:     { width: 220, height: 120, marginBottom: 4 },
   appSubtitle: { fontSize: 13, color: '#64748b', marginTop: 4, fontWeight: '500' },
 
   card: { backgroundColor: '#fff', borderRadius: 20, padding: 24, gap: 16, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.07, shadowRadius: 16, elevation: 4, borderWidth: 1, borderColor: 'rgba(0,0,0,0.06)' },

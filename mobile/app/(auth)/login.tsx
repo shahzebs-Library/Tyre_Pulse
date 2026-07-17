@@ -2,7 +2,7 @@ import { useState } from 'react'
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
   KeyboardAvoidingView, Platform, ScrollView, ActivityIndicator,
-  StatusBar,
+  StatusBar, Image,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons'
@@ -62,10 +62,12 @@ export default function LoginScreen() {
         >
           {/* Logo area */}
           <View style={styles.logoArea}>
-            <View style={styles.logoCircle}>
-              <Text style={styles.logoEmoji}>🔧</Text>
-            </View>
-            <Text style={styles.appName}>TyrePulse</Text>
+            <Image
+              source={require('../../assets/logo.png')}
+              style={styles.logoImg}
+              resizeMode="contain"
+              accessibilityLabel="Tyre Pulse"
+            />
             <Text style={styles.appSubtitle}>{t('login.appSubtitle')}</Text>
           </View>
 
@@ -194,28 +196,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 32,
   },
-  logoCircle: {
-    width: 72,
-    height: 72,
-    borderRadius: 22,
-    backgroundColor: '#fff',
-    borderWidth: 1.5,
-    borderColor: 'rgba(22,163,74,0.25)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 14,
-    shadowColor: '#16a34a',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 12,
-    elevation: 6,
-  },
-  logoEmoji: { fontSize: 34 },
-  appName: {
-    fontSize: 28,
-    fontWeight: '800',
-    color: '#0f172a',
-    letterSpacing: -0.5,
+  logoImg: {
+    width: 240,
+    height: 132,
+    marginBottom: 6,
   },
   appSubtitle: {
     fontSize: 14,

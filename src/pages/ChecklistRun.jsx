@@ -7,7 +7,7 @@ import {
 import { useSettings } from '../contexts/SettingsContext'
 import { useAuth } from '../contexts/AuthContext'
 import { getTemplate, createSubmission, uploadChecklistPhoto } from '../lib/api/checklists'
-import { blankAnswer, validateSubmission, isLayoutField, isFieldVisible, computeScore, isReferenceField, referenceSource, isAutoField, resolveAutoValue } from '../lib/checklist/fieldTypes'
+import { blankAnswer, validateSubmission, isLayoutField, isFieldVisible, visibleFields, computeScore, isReferenceField, referenceSource, isAutoField, resolveAutoValue } from '../lib/checklist/fieldTypes'
 import { completeAssignment } from '../lib/api/checklistSchedules'
 import SignaturePad from '../components/SignaturePad'
 import ReferencePicker from '../components/checklist/ReferencePicker'
@@ -229,7 +229,7 @@ export default function ChecklistRun() {
   // Recomputed on every render against the live `answers` state so conditional
   // fields appear/disappear as the user answers. Hidden fields never render and
   // (via validateSubmission/computeScore) never block submit or affect the score.
-  const contentFields = fields.filter((f) => f && f.type && isFieldVisible(f, answers))
+  const contentFields = visibleFields(fields, answers)
   const liveScore = template.scored ? computeScore(fields, answers, template.pass_threshold) : null
 
   return (

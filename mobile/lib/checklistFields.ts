@@ -147,6 +147,26 @@ export function isFieldVisible(field: ChecklistField, answers: Answers = {}): bo
   return conditionMet(c, answers)
 }
 
+/**
+ * Visible fields INCLUDING section pruning: a section header is dropped when
+ * every check under it (up to the next section) is hidden by its visibleWhen
+ * rule, so an interval-scoped checklist never shows empty category headers.
+ * Mirrors web src/lib/checklist/fieldTypes.js visibleFields().
+ */
+export function visibleChecklistFields(
+  fields: ChecklistField[] | null | undefined,
+  answers: Answers = {},
+): ChecklistField[] {
+  const list = (Array.isArray(fields) ? fields : []).filter(
+    (f) => f && f.type && isFieldVisible(f, answers),
+  )
+  return list.filter((f, i) => {
+    if (f.type !== 'section') return true
+    const next = list[i + 1]
+    return !!next && next.type !== 'section'
+  })
+}
+
 export function validateAnswer(field: ChecklistField, value: any): string | null {
   if (!field || isLayoutField(field.type)) return null
   const empty = value == null || value === '' || (Array.isArray(value) && value.length === 0)

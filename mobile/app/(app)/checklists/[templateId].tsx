@@ -28,7 +28,7 @@ import { getTemplate, submitChecklist, ChecklistTemplate } from '../../../lib/ch
 import { supabase } from '../../../lib/supabase'
 import { toUserMessage } from '../../../lib/safeError'
 import {
-  ChecklistField, blankAnswer, isValueField, isFieldVisible,
+  ChecklistField, blankAnswer, isValueField, isFieldVisible, visibleChecklistFields,
   validateSubmission, computeScore, isAutoField, resolveAutoValue,
   isFieldAnswered, fieldSummaryText,
 } from '../../../lib/checklistFields'
@@ -205,7 +205,7 @@ export default function ChecklistFillScreen() {
 
   // Only currently-visible fields are rendered / validated / scored.
   const visibleFields = useMemo(
-    () => (template?.fields ?? []).filter(f => isFieldVisible(f, answers)),
+    () => visibleChecklistFields(template?.fields, answers),
     [template, answers],
   )
 

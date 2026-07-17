@@ -212,6 +212,23 @@ export function isFieldVisible(field, answers = {}) {
 }
 
 /**
+ * Visible fields INCLUDING section pruning: a `section` header is dropped when
+ * every check under it (up to the next section) is hidden by its visibleWhen
+ * rule - e.g. an interval-scoped maintenance checklist should not show empty
+ * "AXLE" / "BRAKE SYSTEM" headers for intervals with no due checks.
+ */
+export function visibleFields(fields, answers = {}) {
+  const list = (Array.isArray(fields) ? fields : []).filter(
+    (f) => f && f.type && isFieldVisible(f, answers),
+  )
+  return list.filter((f, i) => {
+    if (f.type !== 'section') return true
+    const next = list[i + 1]
+    return !!next && next.type !== 'section'
+  })
+}
+
+/**
  * Compute a weighted score for a submission. Only fields with a numeric
  * `weight` count. A field "passes" when its answer is in `passValues` (for
  * choice/boolean) or is non-empty (fallback). Hidden fields are excluded.

@@ -6,52 +6,59 @@
  * and open actions. Shared via expo-sharing or print dialog.
  */
 
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import {
-  View, Text, ScrollView, StyleSheet, TouchableOpacity,
-  StatusBar, Alert, ActivityIndicator,
+  View, ScrollView, StyleSheet, Alert, ActivityIndicator, TouchableOpacity,
 } from 'react-native'
-import { SafeAreaView } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons'
 import * as Print from 'expo-print'
 import * as Sharing from 'expo-sharing'
 import { supabase } from '../../../lib/supabase'
 import { useAuth } from '../../../contexts/AuthContext'
+import { useTheme } from '../../../contexts/ThemeContext'
 import { isAdminOrAbove } from '../../../lib/types'
+import { Screen, AppText } from '../../../components/ui'
+import { Theme, spacing, radius } from '../../../lib/theme'
 
-const REPORT_TYPES = [
+type TintKey = keyof Theme['tint']
+
+const REPORT_TYPES: {
+  id: string; title: string; desc: string; icon: string; tint: TintKey
+}[] = [
   {
     id: 'fleet_summary',
     title: 'Fleet Summary Report',
     desc: 'Overall fleet KPIs, risk breakdown, top sites by cost',
     icon: 'bar-chart-outline',
-    color: '#3b82f6',
+    tint: 'blue',
   },
   {
     id: 'risk_report',
     title: 'Risk & Critical Tyres',
     desc: 'All Critical and High risk tyre records with details',
     icon: 'warning-outline',
-    color: '#dc2626',
+    tint: 'red',
   },
   {
     id: 'open_actions',
     title: 'Open Corrective Actions',
     desc: 'All open work orders sorted by priority',
     icon: 'construct-outline',
-    color: '#f59e0b',
+    tint: 'amber',
   },
   {
     id: 'site_summary',
     title: 'Site Breakdown',
     desc: 'Record count and cost per site',
     icon: 'location-outline',
-    color: '#16a34a',
+    tint: 'green',
   },
 ]
 
 export default function ReportsScreen() {
   const { profile } = useAuth()
+  const { theme } = useTheme()
+  const styles = useMemo(() => makeStyles(theme), [theme])
   const role = profile?.role ?? null
   const elevated = isAdminOrAbove(role)
   const [generating, setGenerating] = useState<string | null>(null)
@@ -80,50 +87,51 @@ export default function ReportsScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.safe}>
-      <StatusBar barStyle="dark-content" backgroundColor="#f0fdf4" />
-
+    <Screen edges={['top']}>
       <View style={styles.header}>
-        <Text style={styles.title}>Reports</Text>
-        <Text style={styles.subtitle}>Generate & share PDF reports</Text>
+        <AppText variant="h2">Reports</AppText>
+        <AppText variant="caption" color="secondary">Generate and share PDF reports</AppText>
       </View>
 
       <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.infoBox}>
-          <Ionicons name="information-circle-outline" size={16} color="#3b82f6" />
-          <Text style={styles.infoText}>
+          <Ionicons name="information-circle-outline" size={16} color={theme.color.info.base} />
+          <AppText variant="caption" color="info" style={styles.infoText}>
             Reports are generated from live data and exported as PDF.{elevated ? '' : ` Filtered to ${profile?.site ?? 'your site'}.`}
-          </Text>
+          </AppText>
         </View>
 
-        {REPORT_TYPES.map(r => (
-          <TouchableOpacity
-            key={r.id}
-            style={[styles.card, generating === r.id && styles.cardBusy]}
-            onPress={() => generate(r.id)}
-            activeOpacity={0.75}
-            disabled={!!generating}
-          >
-            <View style={[styles.iconBox, { backgroundColor: r.color + '18' }]}>
-              <Ionicons name={r.icon as any} size={24} color={r.color} />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.cardTitle}>{r.title}</Text>
-              <Text style={styles.cardDesc}>{r.desc}</Text>
-            </View>
-            {generating === r.id ? (
-              <ActivityIndicator size="small" color={r.color} />
-            ) : (
-              <Ionicons name="download-outline" size={20} color="#94a3b8" />
-            )}
-          </TouchableOpacity>
-        ))}
+        {REPORT_TYPES.map(r => {
+          const tint = theme.tint[r.tint]
+          return (
+            <TouchableOpacity
+              key={r.id}
+              style={[styles.card, generating === r.id && styles.cardBusy]}
+              onPress={() => generate(r.id)}
+              activeOpacity={0.8}
+              disabled={!!generating}
+            >
+              <View style={[styles.iconBox, { backgroundColor: tint.bg }]}>
+                <Ionicons name={r.icon as any} size={24} color={tint.fg} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <AppText variant="title">{r.title}</AppText>
+                <AppText variant="caption" color="secondary" style={{ marginTop: 2 }}>{r.desc}</AppText>
+              </View>
+              {generating === r.id ? (
+                <ActivityIndicator size="small" color={theme.color.primary} />
+              ) : (
+                <Ionicons name="download-outline" size={20} color={theme.color.textMuted} />
+              )}
+            </TouchableOpacity>
+          )
+        })}
 
-        <Text style={styles.hint}>
-          Reports are generated from live data at the time of export. PDF is shared via your device's share sheet.
-        </Text>
+        <AppText variant="caption" color="muted" center style={styles.hint}>
+          Reports are generated from live data at the time of export. PDF is shared via your device share sheet.
+        </AppText>
       </ScrollView>
-    </SafeAreaView>
+    </Screen>
   )
 }
 
@@ -285,34 +293,28 @@ async function buildSiteSummary(site: string | null, elevated: boolean): Promise
     + footer()
 }
 
-const styles = StyleSheet.create({
-  safe:     { flex: 1, backgroundColor: '#f0fdf4' },
-  header: {
-    paddingHorizontal: 16, paddingTop: 12, paddingBottom: 10,
-    backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: 'rgba(0,0,0,0.06)',
-  },
-  title:    { fontSize: 20, fontWeight: '800', color: '#0f172a' },
-  subtitle: { fontSize: 12, color: '#64748b', marginTop: 2 },
-
-  content: { padding: 16, gap: 12, paddingBottom: 40 },
-
-  infoBox: {
-    flexDirection: 'row', alignItems: 'flex-start', gap: 8,
-    backgroundColor: '#eff6ff', borderRadius: 12,
-    padding: 12, borderWidth: 1, borderColor: '#bfdbfe',
-  },
-  infoText: { flex: 1, fontSize: 12, color: '#1e40af', lineHeight: 18 },
-
-  card: {
-    flexDirection: 'row', alignItems: 'center', gap: 14,
-    backgroundColor: '#fff', borderRadius: 14, padding: 16,
-    shadowColor: '#000', shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05, shadowRadius: 4, elevation: 2,
-  },
-  cardBusy: { opacity: 0.7 },
-  iconBox:  { width: 48, height: 48, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
-  cardTitle:{ fontSize: 15, fontWeight: '700', color: '#0f172a' },
-  cardDesc: { fontSize: 12, color: '#64748b', marginTop: 2 },
-
-  hint: { fontSize: 11, color: '#94a3b8', textAlign: 'center', lineHeight: 16, marginTop: 4 },
-})
+function makeStyles(theme: Theme) {
+  const c = theme.color
+  return StyleSheet.create({
+    header: {
+      paddingHorizontal: spacing.lg, paddingTop: spacing.md, paddingBottom: spacing.sm,
+    },
+    content: { padding: spacing.lg, gap: spacing.md, paddingBottom: spacing['4xl'] },
+    infoBox: {
+      flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm,
+      backgroundColor: c.info.soft, borderRadius: radius.lg,
+      padding: spacing.md, borderWidth: 1, borderColor: c.border,
+    },
+    infoText: { flex: 1, lineHeight: 18 },
+    card: {
+      flexDirection: 'row', alignItems: 'center', gap: spacing.lg,
+      backgroundColor: c.surface, borderRadius: radius.xl, padding: spacing.lg,
+      borderWidth: 1, borderColor: c.border,
+      shadowColor: c.shadow, shadowOffset: { width: 0, height: 1 },
+      shadowOpacity: 1, shadowRadius: 6, elevation: 2,
+    },
+    cardBusy: { opacity: 0.7 },
+    iconBox: { width: 48, height: 48, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center' },
+    hint: { marginTop: spacing.xs },
+  })
+}

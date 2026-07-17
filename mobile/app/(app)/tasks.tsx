@@ -123,8 +123,8 @@ export default function TasksScreen() {
           <Ionicons name="calendar-outline" size={18} color="#0369a1" />
         </View>
         <View style={{ flex: 1 }}>
-          <Text style={[styles.calendarTitle, { textAlign }]}>Open calendar</Text>
-          <Text style={[styles.calendarSub, { textAlign }]}>Upcoming inspections, maintenance and tasks by day</Text>
+          <Text style={[styles.calendarTitle, { textAlign }]}>{t('modules.tasks.openCalendar')}</Text>
+          <Text style={[styles.calendarSub, { textAlign }]}>{t('modules.tasks.openCalendarSub')}</Text>
         </View>
         <Ionicons name={isRTL ? 'chevron-back' : 'chevron-forward'} size={18} color="#94a3b8" />
       </TouchableOpacity>
@@ -169,7 +169,7 @@ export default function TasksScreen() {
                   </Text>
                   <View style={[styles.badges, isRTL && styles.rowR]}>
                     <View style={[styles.badge, { backgroundColor: pc + '1a' }]}>
-                      <Text style={[styles.badgeText, { color: pc }]}>{item.priority ?? 'Normal'}</Text>
+                      <Text style={[styles.badgeText, { color: pc }]}>{item.priority ?? t('modules.tasks.normal')}</Text>
                     </View>
                     {item.due_date && (
                       <View style={[styles.badge, overdue && { backgroundColor: 'rgba(220,38,38,0.1)' }]}>

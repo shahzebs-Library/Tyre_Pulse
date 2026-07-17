@@ -94,7 +94,7 @@ export default function AccidentDashboardScreen() {
       }
     } catch (e: any) {
       if (__DEV__) console.warn('[accident/dashboard] load failed:', e?.message)
-      setError('Could not load accident reports. Pull down to retry.')
+      setError(t('accident.loadError'))
     } finally {
       setLoading(false)
     }
@@ -152,10 +152,10 @@ export default function AccidentDashboardScreen() {
           <AppText variant="h2" style={{ textAlign }}>{t('accident.dashboardTitle')}</AppText>
           <AppText variant="caption" color="secondary" style={{ textAlign, marginTop: 2 }}>
             {elevated
-              ? siteFilter === 'all' ? 'All Sites' : siteFilter
-              : profile?.site ?? 'My Site'
+              ? siteFilter === 'all' ? t('accident.allSites') : siteFilter
+              : profile?.site ?? t('accident.mySite')
             }
-            {elevated ? <AppText variant="caption" color="danger">  :  Admin View</AppText> : null}
+            {elevated ? <AppText variant="caption" color="danger">  :  {t('accident.adminView')}</AppText> : null}
           </AppText>
         </View>
         <Button
@@ -198,7 +198,7 @@ export default function AccidentDashboardScreen() {
 
             {/* ── Severity breakdown ────────────────────────────────────── */}
             <Card padded>
-              <AppText variant="title">Severity Breakdown</AppText>
+              <AppText variant="title">{t('accident.severityBreakdown')}</AppText>
               <View style={styles.severityBreakdown}>
                 {SEVERITY_ORDER.map(sev => {
                   const count   = bySeverity[sev]
@@ -227,7 +227,7 @@ export default function AccidentDashboardScreen() {
             {/* ── Admin: site filter chips ──────────────────────────────── */}
             {elevated && sites.length > 1 && (
               <View>
-                <AppText variant="label" color="muted" style={styles.sectionLabel}>Filter by Site</AppText>
+                <AppText variant="label" color="muted" style={styles.sectionLabel}>{t('accident.filterBySite')}</AppText>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.siteScroll}>
                   {['all', ...sites].map(sv => {
                     const active = siteFilter === sv
@@ -241,7 +241,7 @@ export default function AccidentDashboardScreen() {
                         onPress={() => setSiteFilter(sv)}
                       >
                         <AppText variant="caption" style={{ color: active ? c.onPrimary : c.textMuted }}>
-                          {sv === 'all' ? 'All Sites' : sv}
+                          {sv === 'all' ? t('accident.allSites') : sv}
                         </AppText>
                       </TouchableOpacity>
                     )
@@ -255,7 +255,7 @@ export default function AccidentDashboardScreen() {
               <Ionicons name="search-outline" size={16} color={c.textMuted} />
               <TextInput
                 style={[styles.searchInput, { color: c.text }]}
-                placeholder="Search asset, site, type, reporter..."
+                placeholder={t('accident.searchPh')}
                 placeholderTextColor={c.textMuted}
                 value={search}
                 onChangeText={setSearch}
@@ -293,7 +293,7 @@ export default function AccidentDashboardScreen() {
             {/* ── Result count ──────────────────────────────────────────── */}
             {q.length > 0 && (
               <AppText variant="caption" color="muted">
-                {filtered.length} result{filtered.length !== 1 ? 's' : ''} for "{search}"
+                {filtered.length} {filtered.length !== 1 ? t('accident.resultsFor') : t('accident.resultFor')} "{search}"
               </AppText>
             )}
           </View>
@@ -304,8 +304,8 @@ export default function AccidentDashboardScreen() {
           ) : (
             <EmptyState
               icon="shield-outline"
-              title={q ? 'No matching reports' : t('accident.noAccidents')}
-              message={q ? 'Try a different search term' : t('accident.noAccidentsHint')}
+              title={q ? t('accident.noMatch') : t('accident.noAccidents')}
+              message={q ? t('accident.noMatchHint') : t('accident.noAccidentsHint')}
             />
           )
         }
@@ -384,7 +384,7 @@ function AccidentCard({
               <>
                 <View style={[styles.reporterDot, { backgroundColor: c.borderStrong }]} />
                 <Ionicons name="images-outline" size={11} color={c.textMuted} />
-                <AppText variant="micro" color="muted">{accident.photos.length} photos</AppText>
+                <AppText variant="micro" color="muted">{accident.photos.length} {t('accident.photosCount')}</AppText>
               </>
             )}
           </View>
@@ -392,7 +392,7 @@ function AccidentCard({
           accident.photos?.length > 0 && (
             <View style={styles.accMeta}>
               <Ionicons name="images-outline" size={12} color={c.textMuted} />
-              <AppText variant="micro" color="muted">{accident.photos.length} photos</AppText>
+              <AppText variant="micro" color="muted">{accident.photos.length} {t('accident.photosCount')}</AppText>
             </View>
           )
         )}

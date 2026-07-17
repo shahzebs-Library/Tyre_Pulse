@@ -115,7 +115,7 @@ export default function OverviewScreen() {
       setRows(all)
     } catch (e: any) {
       if (__DEV__) console.warn('[overview] load failed:', e?.message)
-      setError('Could not load the summary. Pull down to retry.')
+      setError(t('modules.overview.loadError'))
       setRows([])
     } finally {
       setLoading(false)
@@ -363,7 +363,7 @@ export default function OverviewScreen() {
       {header}
 
       {loading ? (
-        <Loading label="Loading fleet summary" />
+        <Loading label={t('modules.overview.loadingLabel')} />
       ) : error ? (
         <ScrollView
           contentContainerStyle={s.stateWrap}
@@ -378,8 +378,8 @@ export default function OverviewScreen() {
         >
           <EmptyState
             icon="bar-chart-outline"
-            title="No data yet"
-            message="No tyre records for this country. Pull down to refresh."
+            title={t('modules.overview.noData')}
+            message={t('modules.overview.noDataHint')}
           />
         </ScrollView>
       ) : (

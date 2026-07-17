@@ -68,7 +68,7 @@ export default function ReportIssueScreen() {
     })
     setSaving(false)
     Alert.alert(res.offline ? t('modules.common.offlineSaved') : t('modules.reportIssue.raisedTitle'), t('modules.reportIssue.raisedMsg'), [
-      { text: 'OK', onPress: () => router.replace('/(app)/tasks') },
+      { text: t('common.ok'), onPress: () => router.replace('/(app)/tasks') },
     ])
   }
 
@@ -111,11 +111,11 @@ export default function ReportIssueScreen() {
           <View style={styles.row2}>
             <View style={{ flex: 1 }}>
               <Text style={[styles.label, { textAlign }]}>{t('modules.common.site')}</Text>
-              <TextInput style={[styles.input, { textAlign }]} placeholder="Site" placeholderTextColor="#94a3b8" value={site} onChangeText={setSite} />
+              <TextInput style={[styles.input, { textAlign }]} placeholder={t('modules.reportIssue.sitePh')} placeholderTextColor="#94a3b8" value={site} onChangeText={setSite} />
             </View>
             <View style={{ flex: 1 }}>
               <Text style={[styles.label, { textAlign }]}>{t('modules.common.asset')}</Text>
-              <TextInput style={[styles.input, { textAlign }]} placeholder="Asset" placeholderTextColor="#94a3b8" value={assetNo} onChangeText={setAssetNo} autoCapitalize="characters" />
+              <TextInput style={[styles.input, { textAlign }]} placeholder={t('modules.reportIssue.assetPh')} placeholderTextColor="#94a3b8" value={assetNo} onChangeText={setAssetNo} autoCapitalize="characters" />
             </View>
           </View>
 

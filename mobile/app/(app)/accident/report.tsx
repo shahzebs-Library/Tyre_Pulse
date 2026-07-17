@@ -221,11 +221,15 @@ const isUploadedPhoto = (u?: string | null): boolean =>
 export default function AccidentReportScreen() {
   const { allowed, loading: guardLoading } = useRoleGuard(['admin', 'manager', 'director', 'inspector', 'tyre_man'])
   const { profile } = useAuth()
-  const { isRTL } = useLanguage()
+  const { t, isRTL } = useLanguage()
   const { theme } = useTheme()
   const c = theme.color
   const styles = useMemo(() => createStyles(theme), [theme])
   const router = useRouter()
+
+  // Translate a constrained option LABEL for display only. The stored value
+  // stays the English label (mapped to a DB token by toDb*), so tokens never change.
+  const tOpt = (v: string) => (v ? t(`accident.report.opts.${v}`) : v)
 
   const [base, setBase] = useState<BaseForm>(emptyBase())
   const [extra, setExtra] = useState<ExtraForm>(emptyExtra())
@@ -352,10 +356,10 @@ export default function AccidentReportScreen() {
   }
 
   function validate(): boolean {
-    if (!base.site) { Alert.alert('Required', 'Select a site.'); return false }
-    if (!getEffectiveAssetNo()) { Alert.alert('Required', 'Select or enter a vehicle.'); return false }
-    if (!base.description.trim()) { Alert.alert('Required', 'Describe what happened.'); return false }
-    if (photoUrls.filter(isUploadedPhoto).length === 0) { Alert.alert('Required', 'Attach at least one photo.'); return false }
+    if (!base.site) { Alert.alert(t('accident.report.alertRequired'), t('accident.report.alertSelectSite')); return false }
+    if (!getEffectiveAssetNo()) { Alert.alert(t('accident.report.alertRequired'), t('accident.report.alertSelectVehicle')); return false }
+    if (!base.description.trim()) { Alert.alert(t('accident.report.alertRequired'), t('accident.report.alertDescribe')); return false }
+    if (photoUrls.filter(isUploadedPhoto).length === 0) { Alert.alert(t('accident.report.alertRequired'), t('accident.report.alertAttachPhoto')); return false }
     return true
   }
 
@@ -435,11 +439,11 @@ export default function AccidentReportScreen() {
       }
 
       const res = await saveCommand('REPORT_ACCIDENT', payload, safeUuid())
-      if (!res.ok) throw new Error(res.error || 'Please try again.')
+      if (!res.ok) throw new Error(res.error || t('common.tryAgain'))
       setSavedOffline(!!res.offline)
       setSuccess(true)
     } catch (err: any) {
-      Alert.alert('Submission Failed', err.message ?? 'Please try again.')
+      Alert.alert(t('accident.report.alertSubmissionFailed'), err.message ?? t('common.tryAgain'))
     } finally {
       setSubmitting(false)
     }
@@ -463,24 +467,24 @@ export default function AccidentReportScreen() {
           <View style={[styles.successIcon, { backgroundColor: c.danger.soft }]}>
             <Ionicons name="shield-checkmark" size={72} color={c.danger.base} />
           </View>
-          <AppText variant="h1" center>Report Submitted</AppText>
+          <AppText variant="h1" center>{t('accident.report.successTitle')}</AppText>
           <AppText variant="body" color="secondary" center style={{ marginTop: spacing.xs }}>
-            The incident record has been filed.
+            {t('accident.report.successSubtitle')}
           </AppText>
           {savedOffline && (
             <View style={[styles.offlineNote, { backgroundColor: c.warning.soft }]}>
               <Ionicons name="cloud-offline-outline" size={16} color={c.warning.base} />
               <AppText variant="caption" style={{ flex: 1, color: c.warning.on }}>
-                Saved on device - it will sync automatically when back online.
+                {t('accident.report.successOffline')}
               </AppText>
             </View>
           )}
           <AppText variant="caption" color="muted" center style={{ marginTop: spacing.md }}>
             {getEffectiveAssetNo()} - {base.site}{'\n'}{base.incident_date}
           </AppText>
-          <Button label="Back to Home" icon="home-outline" variant="danger" size="lg"
+          <Button label={t('accident.report.successBackHome')} icon="home-outline" variant="danger" size="lg"
             onPress={() => router.replace('/(app)')} style={{ marginTop: spacing['2xl'], minWidth: 220 }} />
-          <Button label="New Report" icon="add-circle-outline" variant="secondary"
+          <Button label={t('accident.report.successNewReport')} icon="add-circle-outline" variant="secondary"
             onPress={() => {
               setBase(emptyBase()); setExtra(emptyExtra())
               setPhotoUrls([]); setPhotoLocalUris([])
@@ -505,7 +509,7 @@ export default function AccidentReportScreen() {
             <Ionicons name={isRTL ? 'arrow-forward' : 'arrow-back'} size={22} color={c.danger.base} />
           </TouchableOpacity>
           <View style={{ flex: 1 }}>
-            <AppText variant="h3" style={{ textAlign }}>Report an Incident</AppText>
+            <AppText variant="h3" style={{ textAlign }}>{t('accident.report.header')}</AppText>
             {getEffectiveAssetNo() ? (
               <AppText variant="caption" color="muted" style={{ textAlign }}>
                 {getEffectiveAssetNo()}{base.site ? ` - ${base.site}` : ''}
@@ -517,9 +521,9 @@ export default function AccidentReportScreen() {
         <ScrollView style={styles.scroll} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
 
           {/* ========== INCIDENT ========== */}
-          <Section title="Incident" icon="alert-circle-outline" styles={styles} c={c}>
+          <Section title={t('accident.report.secIncident')} icon="alert-circle-outline" styles={styles} c={c}>
             {/* Site */}
-            <Field label="Site *" styles={styles} textAlign={textAlign}>
+            <Field label={t('accident.report.site')} styles={styles} textAlign={textAlign}>
               <ScrollView horizontal showsHorizontalScrollIndicator={false}>
                 <View style={styles.chipRow}>
                   {sites.map(s => {
@@ -538,16 +542,16 @@ export default function AccidentReportScreen() {
 
             {/* Vehicle */}
             {base.site ? (
-              <Field label="Vehicle / Asset *" styles={styles} textAlign={textAlign}>
+              <Field label={t('accident.report.vehicle')} styles={styles} textAlign={textAlign}>
                 {loadingVehicles ? (
                   <ActivityIndicator size="small" color={c.danger.base} style={{ marginTop: spacing.sm }} />
                 ) : useManualEntry ? (
                   <View style={{ gap: spacing.sm }}>
                     <TextInput style={[inputStyle, { textAlign }]} value={manualAsset} onChangeText={setManualAsset}
-                      placeholder="Enter asset / vehicle number" placeholderTextColor={c.textMuted} autoCapitalize="characters" />
+                      placeholder={t('accident.report.phEnterAsset')} placeholderTextColor={c.textMuted} autoCapitalize="characters" />
                     <TouchableOpacity onPress={() => { setUseManualEntry(false); setManualAsset(''); setX({ plate_number: '', vehicle_type: '' }) }} style={styles.manualToggle}>
                       <Ionicons name="list-outline" size={14} color={c.danger.base} />
-                      <AppText variant="caption" style={{ color: c.danger.base }}>Select from list</AppText>
+                      <AppText variant="caption" style={{ color: c.danger.base }}>{t('accident.report.phSelectFromList')}</AppText>
                     </TouchableOpacity>
                   </View>
                 ) : (
@@ -569,17 +573,17 @@ export default function AccidentReportScreen() {
                         </View>
                       </ScrollView>
                     ) : (
-                      <AppText variant="caption" color="muted">No vehicles registered for this site.</AppText>
+                      <AppText variant="caption" color="muted">{t('accident.report.phNoVehiclesSite')}</AppText>
                     )}
                     <TouchableOpacity onPress={() => { setUseManualEntry(true); setB({ asset_no: '', vehicle_id: null }); setX({ plate_number: '', vehicle_type: '' }) }} style={styles.manualToggle}>
                       <Ionicons name="create-outline" size={14} color={c.danger.base} />
-                      <AppText variant="caption" style={{ color: c.danger.base }}>Enter asset number manually</AppText>
+                      <AppText variant="caption" style={{ color: c.danger.base }}>{t('accident.report.phEnterAssetManually')}</AppText>
                     </TouchableOpacity>
                   </View>
                 )}
                 {(extra.plate_number || extra.vehicle_type) ? (
                   <AppText variant="micro" color="muted" style={{ marginTop: 4 }}>
-                    Master: {extra.vehicle_type || 'type n/a'}{extra.plate_number ? ` - Plate ${extra.plate_number}` : ''}
+                    {t('accident.report.phMaster')} {extra.vehicle_type || t('accident.report.phTypeNa')}{extra.plate_number ? ` - ${t('accident.report.phPlate')} ${extra.plate_number}` : ''}
                   </AppText>
                 ) : null}
               </Field>
@@ -587,39 +591,39 @@ export default function AccidentReportScreen() {
 
             {/* Date & time */}
             <View style={styles.row}>
-              <Field label="Date" styles={styles} textAlign={textAlign} flex>
+              <Field label={t('accident.report.date')} styles={styles} textAlign={textAlign} flex>
                 <TextInput style={[inputStyle, { textAlign }]} value={base.incident_date} onChangeText={v => setB({ incident_date: v })}
                   placeholder="YYYY-MM-DD" placeholderTextColor={c.textMuted} />
               </Field>
               <View style={{ width: spacing.md }} />
-              <Field label="Time" styles={styles} textAlign={textAlign} flex>
+              <Field label={t('accident.report.time')} styles={styles} textAlign={textAlign} flex>
                 <TextInput style={[inputStyle, { textAlign }]} value={base.incident_time} onChangeText={v => setB({ incident_time: v })}
                   placeholder="HH:MM" placeholderTextColor={c.textMuted} keyboardType="numbers-and-punctuation" />
               </Field>
             </View>
 
-            <Field label="Location" styles={styles} textAlign={textAlign}>
+            <Field label={t('accident.report.location')} styles={styles} textAlign={textAlign}>
               <TextInput style={[inputStyle, { textAlign }]} value={base.location} onChangeText={v => setB({ location: v })}
-                placeholder="Where did it happen" placeholderTextColor={c.textMuted} />
+                placeholder={t('accident.report.phWhereHappen')} placeholderTextColor={c.textMuted} />
             </Field>
 
-            <Field label="Driver" styles={styles} textAlign={textAlign}>
+            <Field label={t('accident.report.driver')} styles={styles} textAlign={textAlign}>
               <TextInput style={[inputStyle, { textAlign }]} value={base.driver_name} onChangeText={v => setB({ driver_name: v })}
-                placeholder="Driver name" placeholderTextColor={c.textMuted} autoCapitalize="words" />
+                placeholder={t('accident.report.phDriverName')} placeholderTextColor={c.textMuted} autoCapitalize="words" />
             </Field>
 
-            <Field label="Description *" styles={styles} textAlign={textAlign}>
+            <Field label={t('accident.report.description')} styles={styles} textAlign={textAlign}>
               <TextInput style={[inputStyle, styles.textArea, { textAlign }]} value={base.description} onChangeText={v => setB({ description: v })}
-                placeholder="Describe what happened" placeholderTextColor={c.textMuted} multiline numberOfLines={4} />
+                placeholder={t('accident.report.phDescribeHappen')} placeholderTextColor={c.textMuted} multiline numberOfLines={4} />
             </Field>
           </Section>
 
           {/* ========== CLASSIFICATION ========== */}
-          <Section title="Classification" icon="pricetags-outline" styles={styles} c={c}>
-            <Dropdown label="Accident Type" value={extra.typeLabel} options={ACCIDENT_TYPE_LABELS}
-              onSelect={v => setX({ typeLabel: v })} placeholder="Select type" />
+          <Section title={t('accident.report.secClassification')} icon="pricetags-outline" styles={styles} c={c}>
+            <Dropdown label={t('accident.report.accidentType')} value={extra.typeLabel} options={ACCIDENT_TYPE_LABELS}
+              onSelect={v => setX({ typeLabel: v })} placeholder={t('accident.report.phSelectType')} display={tOpt} />
             {/* Severity as 3-band chips */}
-            <Field label="Severity" styles={styles} textAlign={textAlign}>
+            <Field label={t('accident.report.severity')} styles={styles} textAlign={textAlign}>
               <View style={styles.sevRow}>
                 {SEVERITY_LABELS.map(sev => {
                   const active = extra.severityLabel === sev
@@ -628,183 +632,183 @@ export default function AccidentReportScreen() {
                     <TouchableOpacity key={sev}
                       style={[styles.sevChip, { borderColor: c.border, backgroundColor: c.surface }, active && { backgroundColor: sc.base, borderColor: sc.base }]}
                       onPress={() => setX({ severityLabel: sev })}>
-                      <AppText variant="caption" style={{ color: active ? '#fff' : c.textSecondary }}>{sev}</AppText>
+                      <AppText variant="caption" style={{ color: active ? '#fff' : c.textSecondary }}>{tOpt(sev)}</AppText>
                     </TouchableOpacity>
                   )
                 })}
               </View>
             </Field>
-            <Dropdown label="Status" value={extra.statusLabel} options={STATUS_LABELS}
-              onSelect={v => setX({ statusLabel: v })} placeholder="Select status" />
-            <Dropdown label="Current Condition" value={extra.current_status} options={CURRENT_CONDITION_OPTS}
-              onSelect={v => setX({ current_status: v })} placeholder="Select condition" clearable />
+            <Dropdown label={t('accident.report.status')} value={extra.statusLabel} options={STATUS_LABELS}
+              onSelect={v => setX({ statusLabel: v })} placeholder={t('accident.report.phSelectStatus')} display={tOpt} />
+            <Dropdown label={t('accident.report.currentCondition')} value={extra.current_status} options={CURRENT_CONDITION_OPTS}
+              onSelect={v => setX({ current_status: v })} placeholder={t('accident.report.phSelectCondition')} display={tOpt} clearable />
           </Section>
 
           {/* ========== PEOPLE & DAMAGE ========== */}
-          <Section title="People & Damage" icon="medkit-outline" styles={styles} c={c}>
+          <Section title={t('accident.report.secPeopleDamage')} icon="medkit-outline" styles={styles} c={c}>
             <View style={[styles.toggleRow, isRTL && { flexDirection: 'row-reverse' }]}>
-              <AppText variant="bodyStrong" style={{ flex: 1, textAlign }}>Injuries</AppText>
+              <AppText variant="bodyStrong" style={{ flex: 1, textAlign }}>{t('accident.report.injuries')}</AppText>
               <Switch value={base.injuries} onValueChange={v => setB({ injuries: v, injury_count: v ? base.injury_count : '0' })}
                 trackColor={{ false: c.borderStrong, true: c.danger.soft }} thumbColor={base.injuries ? c.danger.base : c.textMuted} />
             </View>
             {base.injuries && (
-              <Field label="Injury Count" styles={styles} textAlign={textAlign}>
+              <Field label={t('accident.report.injuryCount')} styles={styles} textAlign={textAlign}>
                 <TextInput style={[inputStyle, { textAlign }]} value={base.injury_count} onChangeText={v => setB({ injury_count: v })}
                   placeholder="0" placeholderTextColor={c.textMuted} keyboardType="number-pad" />
               </Field>
             )}
             <View style={[styles.toggleRow, isRTL && { flexDirection: 'row-reverse' }]}>
-              <AppText variant="bodyStrong" style={{ flex: 1, textAlign }}>Third party involved</AppText>
+              <AppText variant="bodyStrong" style={{ flex: 1, textAlign }}>{t('accident.report.thirdParty')}</AppText>
               <Switch value={base.third_party_involved} onValueChange={v => setB({ third_party_involved: v })}
                 trackColor={{ false: c.borderStrong, true: c.danger.soft }} thumbColor={base.third_party_involved ? c.danger.base : c.textMuted} />
             </View>
-            <Field label="Police Report No" styles={styles} textAlign={textAlign}>
+            <Field label={t('accident.report.policeReportNo')} styles={styles} textAlign={textAlign}>
               <TextInput style={[inputStyle, { textAlign }]} value={base.police_report_no} onChangeText={v => setB({ police_report_no: v })}
-                placeholder="Optional" placeholderTextColor={c.textMuted} autoCapitalize="characters" />
+                placeholder={t('modules.common.optional')} placeholderTextColor={c.textMuted} autoCapitalize="characters" />
             </Field>
-            <Dropdown label="Damage Condition" value={extra.damage_condition} options={DAMAGE_CONDITION_OPTS}
-              onSelect={v => setX({ damage_condition: v })} placeholder="Select" clearable />
-            <Field label="Damage Description" styles={styles} textAlign={textAlign}>
+            <Dropdown label={t('accident.report.damageCondition')} value={extra.damage_condition} options={DAMAGE_CONDITION_OPTS}
+              onSelect={v => setX({ damage_condition: v })} placeholder={t('accident.report.phSelect')} display={tOpt} clearable />
+            <Field label={t('accident.report.damageDescription')} styles={styles} textAlign={textAlign}>
               <TextInput style={[inputStyle, styles.textArea, { textAlign }]} value={base.damage_description} onChangeText={v => setB({ damage_description: v })}
-                placeholder="What was damaged" placeholderTextColor={c.textMuted} multiline numberOfLines={3} />
+                placeholder={t('accident.report.phWhatDamaged')} placeholderTextColor={c.textMuted} multiline numberOfLines={3} />
             </Field>
-            <Field label="Estimated Damage Cost (SAR)" styles={styles} textAlign={textAlign}>
+            <Field label={t('accident.report.estDamageCost')} styles={styles} textAlign={textAlign}>
               <TextInput style={[inputStyle, { textAlign }]} value={base.estimated_damage_cost} onChangeText={v => setB({ estimated_damage_cost: v })}
                 placeholder="0.00" placeholderTextColor={c.textMuted} keyboardType="decimal-pad" />
             </Field>
           </Section>
 
           {/* ========== LIABILITY & GCC CASE ========== */}
-          <Section title="Liability & GCC Case" icon="shield-checkmark-outline" styles={styles} c={c}>
-            <Dropdown label="Fault Status" value={extra.fault_status} options={FAULT_STATUS_OPTS}
-              onSelect={v => setX({ fault_status: v })} placeholder="Select" clearable />
-            <Dropdown label="GCC Liability %" value={extra.gcc_liability_ratio}
+          <Section title={t('accident.report.secLiabilityGcc')} icon="shield-checkmark-outline" styles={styles} c={c}>
+            <Dropdown label={t('accident.report.faultStatus')} value={extra.fault_status} options={FAULT_STATUS_OPTS}
+              onSelect={v => setX({ fault_status: v })} placeholder={t('accident.report.phSelect')} display={tOpt} clearable />
+            <Dropdown label={t('accident.report.gccLiability')} value={extra.gcc_liability_ratio}
               options={LIABILITY_RATIO_OPTS} display={v => `${v}%`}
-              onSelect={v => setX({ gcc_liability_ratio: v })} placeholder="Select" clearable />
-            <Dropdown label="Najm Report" value={extra.najm_status} options={NAJM_STATUS_OPTS}
-              onSelect={v => setX({ najm_status: v, najm_fault: najmHasReport(v) ? extra.najm_fault : '' })} placeholder="Select" clearable />
+              onSelect={v => setX({ gcc_liability_ratio: v })} placeholder={t('accident.report.phSelect')} clearable />
+            <Dropdown label={t('accident.report.najmReport')} value={extra.najm_status} options={NAJM_STATUS_OPTS}
+              onSelect={v => setX({ najm_status: v, najm_fault: najmHasReport(v) ? extra.najm_fault : '' })} placeholder={t('accident.report.phSelect')} display={tOpt} clearable />
             {najmHasReport(extra.najm_status) && (
-              <Dropdown label="Najm Fault" value={extra.najm_fault} options={NAJM_FAULT_OPTS}
-                onSelect={v => setX({ najm_fault: v })} placeholder="Select" clearable />
+              <Dropdown label={t('accident.report.najmFault')} value={extra.najm_fault} options={NAJM_FAULT_OPTS}
+                onSelect={v => setX({ najm_fault: v })} placeholder={t('accident.report.phSelect')} display={tOpt} clearable />
             )}
-            <Dropdown label="Taqdeer Report" value={extra.taqdeer_status} options={TAQDEER_STATUS_OPTS}
-              onSelect={v => setX({ taqdeer_status: v, taqdeer_no: taqdeerHasReport(v) ? extra.taqdeer_no : '' })} placeholder="Select" clearable />
+            <Dropdown label={t('accident.report.taqdeerReport')} value={extra.taqdeer_status} options={TAQDEER_STATUS_OPTS}
+              onSelect={v => setX({ taqdeer_status: v, taqdeer_no: taqdeerHasReport(v) ? extra.taqdeer_no : '' })} placeholder={t('accident.report.phSelect')} display={tOpt} clearable />
             {taqdeerHasReport(extra.taqdeer_status) && (
-              <Field label="Taqdeer No" styles={styles} textAlign={textAlign}>
+              <Field label={t('accident.report.taqdeerNo')} styles={styles} textAlign={textAlign}>
                 <TextInput style={[inputStyle, { textAlign }]} value={extra.taqdeer_no} onChangeText={v => setX({ taqdeer_no: v })}
-                  placeholder="Estimation reference" placeholderTextColor={c.textMuted} />
+                  placeholder={t('accident.report.phEstimationRef')} placeholderTextColor={c.textMuted} />
               </Field>
             )}
-            <Dropdown label="Liable Party" value={extra.liable_party} options={LIABLE_PARTY_OPTS}
-              onSelect={v => setX({ liable_party: v })} placeholder="Select" clearable />
-            <Dropdown label="Who Pays" value={extra.payer} options={PAYER_OPTS}
-              onSelect={v => setX({ payer: v })} placeholder="Select" clearable />
-            <Field label="Responsible Party" styles={styles} textAlign={textAlign}>
+            <Dropdown label={t('accident.report.liableParty')} value={extra.liable_party} options={LIABLE_PARTY_OPTS}
+              onSelect={v => setX({ liable_party: v })} placeholder={t('accident.report.phSelect')} display={tOpt} clearable />
+            <Dropdown label={t('accident.report.whoPays')} value={extra.payer} options={PAYER_OPTS}
+              onSelect={v => setX({ payer: v })} placeholder={t('accident.report.phSelect')} display={tOpt} clearable />
+            <Field label={t('accident.report.responsibleParty')} styles={styles} textAlign={textAlign}>
               <TextInput style={[inputStyle, { textAlign }]} value={extra.responsible_party} onChangeText={v => setX({ responsible_party: v })}
-                placeholder="Who is at fault" placeholderTextColor={c.textMuted} />
+                placeholder={t('accident.report.phWhoAtFault')} placeholderTextColor={c.textMuted} />
             </Field>
           </Section>
 
           {/* ========== INSURANCE & CLAIM ========== */}
-          <Section title="Insurance & Claim" icon="briefcase-outline" styles={styles} c={c}>
-            <Field label="Insurer" styles={styles} textAlign={textAlign}>
+          <Section title={t('accident.report.secInsuranceClaim')} icon="briefcase-outline" styles={styles} c={c}>
+            <Field label={t('accident.report.insurer')} styles={styles} textAlign={textAlign}>
               <TextInput style={[inputStyle, { textAlign }]} value={extra.insurer} onChangeText={v => setX({ insurer: v })}
-                placeholder="Insurance company" placeholderTextColor={c.textMuted} />
+                placeholder={t('accident.report.phInsuranceCompany')} placeholderTextColor={c.textMuted} />
             </Field>
             <View style={styles.row}>
-              <Field label="Policy No" styles={styles} textAlign={textAlign} flex>
+              <Field label={t('accident.report.policyNo')} styles={styles} textAlign={textAlign} flex>
                 <TextInput style={[inputStyle, { textAlign }]} value={extra.policy_no} onChangeText={v => setX({ policy_no: v })}
-                  placeholder="Policy" placeholderTextColor={c.textMuted} />
+                  placeholder={t('accident.report.phPolicy')} placeholderTextColor={c.textMuted} />
               </Field>
               <View style={{ width: spacing.md }} />
-              <Field label="Claim No" styles={styles} textAlign={textAlign} flex>
+              <Field label={t('accident.report.claimNo')} styles={styles} textAlign={textAlign} flex>
                 <TextInput style={[inputStyle, { textAlign }]} value={extra.insurance_claim_no} onChangeText={v => setX({ insurance_claim_no: v })}
-                  placeholder="Claim" placeholderTextColor={c.textMuted} />
+                  placeholder={t('accident.report.phClaim')} placeholderTextColor={c.textMuted} />
               </Field>
             </View>
-            <Dropdown label="Claim Status" value={extra.claim_status} options={CLAIM_STATUS_OPTS}
-              display={v => CLAIM_STATUS_LABELS[v] ?? v} onSelect={v => setX({ claim_status: v })} placeholder="Select" clearable />
+            <Dropdown label={t('accident.report.claimStatus')} value={extra.claim_status} options={CLAIM_STATUS_OPTS}
+              display={v => tOpt(CLAIM_STATUS_LABELS[v] ?? v)} onSelect={v => setX({ claim_status: v })} placeholder={t('accident.report.phSelect')} clearable />
             <View style={styles.row}>
-              <Field label="Claim Amount" styles={styles} textAlign={textAlign} flex>
+              <Field label={t('accident.report.claimAmount')} styles={styles} textAlign={textAlign} flex>
                 <TextInput style={[inputStyle, { textAlign }]} value={extra.claim_amount} onChangeText={v => setX({ claim_amount: v })}
                   placeholder="0.00" placeholderTextColor={c.textMuted} keyboardType="decimal-pad" />
               </Field>
               <View style={{ width: spacing.md }} />
-              <Field label="Approved" styles={styles} textAlign={textAlign} flex>
+              <Field label={t('accident.report.approved')} styles={styles} textAlign={textAlign} flex>
                 <TextInput style={[inputStyle, { textAlign }]} value={extra.claim_approved_amount} onChangeText={v => setX({ claim_approved_amount: v })}
                   placeholder="0.00" placeholderTextColor={c.textMuted} keyboardType="decimal-pad" />
               </Field>
             </View>
             <View style={styles.row}>
-              <Field label="Deductible" styles={styles} textAlign={textAlign} flex>
+              <Field label={t('accident.report.deductible')} styles={styles} textAlign={textAlign} flex>
                 <TextInput style={[inputStyle, { textAlign }]} value={extra.deductible} onChangeText={v => setX({ deductible: v })}
                   placeholder="0.00" placeholderTextColor={c.textMuted} keyboardType="decimal-pad" />
               </Field>
               <View style={{ width: spacing.md }} />
-              <Field label="Recovered (auto)" styles={styles} textAlign={textAlign} flex>
+              <Field label={t('accident.report.recoveredAuto')} styles={styles} textAlign={textAlign} flex>
                 <TextInput style={[inputStyle, { textAlign }]} value={extra.recovered_amount}
                   onChangeText={v => { recoveredTouched.current = true; setX({ recovered_amount: v }) }}
                   placeholder="0.00" placeholderTextColor={c.textMuted} keyboardType="decimal-pad" />
               </Field>
             </View>
-            <AppText variant="micro" color="muted">Recovered = Claim - Approved - Deductible (auto, editable).</AppText>
+            <AppText variant="micro" color="muted">{t('accident.report.recoveredFormula')}</AppText>
 
             {/* Recovery gate */}
-            <Dropdown label="Cost Recovery" value={extra.recovery_status} options={RECOVERY_DECISION_OPTS}
-              onSelect={v => setX({ recovery_status: v })} placeholder="Select" clearable />
+            <Dropdown label={t('accident.report.costRecovery')} value={extra.recovery_status} options={RECOVERY_DECISION_OPTS}
+              onSelect={v => setX({ recovery_status: v })} placeholder={t('accident.report.phSelect')} display={tOpt} clearable />
             {recoveryIsYes(extra.recovery_status) && (
               <>
-                <Dropdown label="Recovery Source" value={extra.recovery_source} options={RECOVERY_SOURCE_OPTS}
-                  display={v => RECOVERY_SOURCE_LABELS[v] ?? v} onSelect={v => setX({ recovery_source: v })} placeholder="Select" clearable />
+                <Dropdown label={t('accident.report.recoverySource')} value={extra.recovery_source} options={RECOVERY_SOURCE_OPTS}
+                  display={v => tOpt(RECOVERY_SOURCE_LABELS[v] ?? v)} onSelect={v => setX({ recovery_source: v })} placeholder={t('accident.report.phSelect')} clearable />
                 <View style={styles.row}>
-                  <Field label="Recovery Date" styles={styles} textAlign={textAlign} flex>
+                  <Field label={t('accident.report.recoveryDate')} styles={styles} textAlign={textAlign} flex>
                     <TextInput style={[inputStyle, { textAlign }]} value={extra.recovery_date} onChangeText={v => setX({ recovery_date: v })}
                       placeholder="YYYY-MM-DD" placeholderTextColor={c.textMuted} />
                   </Field>
                   <View style={{ width: spacing.md }} />
-                  <Field label="Amount Transfer" styles={styles} textAlign={textAlign} flex>
+                  <Field label={t('accident.report.amountTransfer')} styles={styles} textAlign={textAlign} flex>
                     <TextInput style={[inputStyle, { textAlign }]} value={extra.amount_transfer} onChangeText={v => setX({ amount_transfer: v })}
                       placeholder="0.00" placeholderTextColor={c.textMuted} keyboardType="decimal-pad" />
                   </Field>
                 </View>
-                <Field label="Recovery Reference" styles={styles} textAlign={textAlign}>
+                <Field label={t('accident.report.recoveryReference')} styles={styles} textAlign={textAlign}>
                   <TextInput style={[inputStyle, { textAlign }]} value={extra.recovery_reference} onChangeText={v => setX({ recovery_reference: v })}
-                    placeholder="Reference" placeholderTextColor={c.textMuted} />
+                    placeholder={t('accident.report.phReference')} placeholderTextColor={c.textMuted} />
                 </Field>
               </>
             )}
           </Section>
 
           {/* ========== REPAIR & RELEASE ========== */}
-          <Section title="Repair & Release" icon="construct-outline" styles={styles} c={c}>
-            <Dropdown label="Repair Type" value={extra.repair_type} options={REPAIR_TYPE_OPTS}
-              onSelect={v => setX({ repair_type: v })} placeholder="Select" clearable />
+          <Section title={t('accident.report.secRepairRelease')} icon="construct-outline" styles={styles} c={c}>
+            <Dropdown label={t('accident.report.repairType')} value={extra.repair_type} options={REPAIR_TYPE_OPTS}
+              onSelect={v => setX({ repair_type: v })} placeholder={t('accident.report.phSelect')} display={tOpt} clearable />
             {repairIsInternal(extra.repair_type) ? (
-              <Dropdown label="Workshop Location" value={extra.workshop_location} options={sites}
-                onSelect={v => setX({ workshop_location: v })} placeholder="Select GCC site" clearable />
+              <Dropdown label={t('accident.report.workshopLocation')} value={extra.workshop_location} options={sites}
+                onSelect={v => setX({ workshop_location: v })} placeholder={t('accident.report.phSelectGccSite')} clearable />
             ) : (
-              <Field label="Workshop Location" styles={styles} textAlign={textAlign}>
+              <Field label={t('accident.report.workshopLocation')} styles={styles} textAlign={textAlign}>
                 <TextInput style={[inputStyle, { textAlign }]} value={extra.workshop_location} onChangeText={v => setX({ workshop_location: v })}
-                  placeholder="Workshop location / name" placeholderTextColor={c.textMuted} />
+                  placeholder={t('accident.report.phWorkshopLocName')} placeholderTextColor={c.textMuted} />
               </Field>
             )}
-            <Field label="Workshop Name" styles={styles} textAlign={textAlign}>
+            <Field label={t('accident.report.workshopName')} styles={styles} textAlign={textAlign}>
               <TextInput style={[inputStyle, { textAlign }]} value={extra.workshop_name} onChangeText={v => setX({ workshop_name: v })}
-                placeholder={repairIsInternal(extra.repair_type) ? 'GCC Workshop' : 'External workshop name'} placeholderTextColor={c.textMuted} />
+                placeholder={repairIsInternal(extra.repair_type) ? t('accident.report.phGccWorkshop') : t('accident.report.phExtWorkshopName')} placeholderTextColor={c.textMuted} />
             </Field>
             {repairIsInternal(extra.repair_type) && (
-              <Field label="Repair Cost (SAR)" styles={styles} textAlign={textAlign}>
+              <Field label={t('accident.report.repairCost')} styles={styles} textAlign={textAlign}>
                 <TextInput style={[inputStyle, { textAlign }]} value={extra.repair_cost} onChangeText={v => setX({ repair_cost: v })}
                   placeholder="0.00" placeholderTextColor={c.textMuted} keyboardType="decimal-pad" />
               </Field>
             )}
             <View style={styles.row}>
-              <Field label="Expected Release" styles={styles} textAlign={textAlign} flex>
+              <Field label={t('accident.report.expectedRelease')} styles={styles} textAlign={textAlign} flex>
                 <TextInput style={[inputStyle, { textAlign }]} value={extra.expected_release_date} onChangeText={v => setX({ expected_release_date: v })}
                   placeholder="YYYY-MM-DD" placeholderTextColor={c.textMuted} />
               </Field>
               <View style={{ width: spacing.md }} />
-              <Field label="Release Date" styles={styles} textAlign={textAlign} flex>
+              <Field label={t('accident.report.releaseDate')} styles={styles} textAlign={textAlign} flex>
                 <TextInput style={[inputStyle, { textAlign }]} value={extra.release_date} onChangeText={v => setX({ release_date: v })}
                   placeholder="YYYY-MM-DD" placeholderTextColor={c.textMuted} />
               </Field>
@@ -812,8 +816,8 @@ export default function AccidentReportScreen() {
           </Section>
 
           {/* ========== PHOTOS ========== */}
-          <Section title="Photos *" icon="images-outline" styles={styles} c={c}>
-            <AppText variant="caption" color="muted" style={{ textAlign }}>Attach at least one photo of the scene / damage.</AppText>
+          <Section title={t('accident.report.secPhotos')} icon="images-outline" styles={styles} c={c}>
+            <AppText variant="caption" color="muted" style={{ textAlign }}>{t('accident.report.attachPhotoHint')}</AppText>
             <View style={{ marginTop: spacing.sm }}>
               <AccidentPhotoGrid photos={photoUrls} localUris={photoLocalUris}
                 onPhotosChange={(urls, uris) => { setPhotoUrls(urls); setPhotoLocalUris(uris) }}
@@ -822,16 +826,16 @@ export default function AccidentReportScreen() {
             {photosUploading && (
               <View style={styles.uploadingRow}>
                 <ActivityIndicator size="small" color={c.danger.base} />
-                <AppText variant="caption" color="muted">Uploading photo...</AppText>
+                <AppText variant="caption" color="muted">{t('accident.report.uploadingPhoto')}</AppText>
               </View>
             )}
-            <Field label="Notes" styles={styles} textAlign={textAlign}>
+            <Field label={t('accident.report.notes')} styles={styles} textAlign={textAlign}>
               <TextInput style={[inputStyle, styles.textArea, { textAlign }]} value={base.notes} onChangeText={v => setB({ notes: v })}
-                placeholder="Any extra context" placeholderTextColor={c.textMuted} multiline numberOfLines={3} />
+                placeholder={t('accident.report.phExtraContext')} placeholderTextColor={c.textMuted} multiline numberOfLines={3} />
             </Field>
           </Section>
 
-          <Button label={submitting ? 'Submitting...' : 'Submit Report'} icon="cloud-upload-outline"
+          <Button label={submitting ? t('accident.report.btnSubmitting') : t('accident.report.btnSubmit')} icon="cloud-upload-outline"
             variant="danger" size="lg" full loading={submitting} disabled={!canSubmit}
             onPress={handleSubmit} style={{ marginTop: spacing.xs }} />
         </ScrollView>
@@ -880,6 +884,7 @@ function Dropdown({
   clearable?: boolean
 }) {
   const { theme } = useTheme()
+  const { t } = useLanguage()
   const c = theme.color
   const styles = useMemo(() => createStyles(theme), [theme])
   const [open, setOpen] = useState(false)
@@ -888,7 +893,7 @@ function Dropdown({
     <View style={styles.field}>
       <AppText variant="micro" color="secondary" style={styles.fieldLabel}>{label}</AppText>
       <TouchableOpacity style={[styles.select, { backgroundColor: c.surface, borderColor: c.border }]} onPress={() => setOpen(true)} activeOpacity={0.8}>
-        <AppText variant="body" style={{ flex: 1, color: shown ? c.text : c.textMuted }}>{shown || placeholder || 'Select'}</AppText>
+        <AppText variant="body" style={{ flex: 1, color: shown ? c.text : c.textMuted }}>{shown || placeholder || t('accident.report.phSelect')}</AppText>
         <Ionicons name="chevron-down" size={18} color={c.textSecondary} />
       </TouchableOpacity>
       <Modal visible={open} transparent animationType="slide" onRequestClose={() => setOpen(false)}>
@@ -899,7 +904,7 @@ function Dropdown({
             <ScrollView style={{ maxHeight: 360 }}>
               {clearable && (
                 <TouchableOpacity style={styles.ddOption} onPress={() => { onSelect(''); setOpen(false) }}>
-                  <AppText variant="body" color="muted">Clear</AppText>
+                  <AppText variant="body" color="muted">{t('common.clear')}</AppText>
                   {!value && <Ionicons name="checkmark-circle" size={20} color={c.danger.base} />}
                 </TouchableOpacity>
               )}
@@ -914,7 +919,7 @@ function Dropdown({
               })}
             </ScrollView>
             <TouchableOpacity style={[styles.ddCancel, { backgroundColor: c.surfaceAlt }]} onPress={() => setOpen(false)}>
-              <AppText variant="bodyStrong" color="secondary">Close</AppText>
+              <AppText variant="bodyStrong" color="secondary">{t('accident.report.ddClose')}</AppText>
             </TouchableOpacity>
           </View>
         </TouchableOpacity>

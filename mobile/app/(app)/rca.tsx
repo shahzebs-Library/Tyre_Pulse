@@ -140,7 +140,7 @@ export default function RcaScreen() {
             <View style={styles.card}>
               <View style={styles.rcaIcon}><Ionicons name="git-network-outline" size={18} color={theme.tint.violet.fg} /></View>
               <View style={{ flex: 1, gap: 4 }}>
-                <AppText variant="bodyStrong" style={{ textAlign }}>{item.asset_no ?? 'Unknown'}{item.brand ? ` · ${item.brand}` : ''}</AppText>
+                <AppText variant="bodyStrong" style={{ textAlign }}>{item.asset_no ?? t('modules.rca.unknown')}{item.brand ? ` · ${item.brand}` : ''}</AppText>
                 <AppText variant="caption" color="secondary" style={{ textAlign }} numberOfLines={3}>{item.root_cause}</AppText>
                 <View style={[styles.badges, isRTL && styles.rowR]}>
                   {(item.contributing_factors ?? []).slice(0, 3).map(f => (
@@ -171,17 +171,17 @@ export default function RcaScreen() {
                 </View>
                 <View style={{ flex: 1 }}>
                   <AppText style={styles.label}>{t('modules.common.serial')}</AppText>
-                  <TextInput style={styles.input} placeholder="Tyre serial" placeholderTextColor={c.textMuted} value={serial} onChangeText={setSerial} autoCapitalize="characters" />
+                  <TextInput style={styles.input} placeholder={t('modules.rca.serialPh')} placeholderTextColor={c.textMuted} value={serial} onChangeText={setSerial} autoCapitalize="characters" />
                 </View>
               </View>
               <View style={styles.row2}>
                 <View style={{ flex: 1 }}>
                   <AppText style={styles.label}>{t('modules.common.brand')}</AppText>
-                  <TextInput style={styles.input} placeholder="Brand" placeholderTextColor={c.textMuted} value={brand} onChangeText={setBrand} />
+                  <TextInput style={styles.input} placeholder={t('modules.rca.brandPh')} placeholderTextColor={c.textMuted} value={brand} onChangeText={setBrand} />
                 </View>
                 <View style={{ flex: 1 }}>
                   <AppText style={styles.label}>{t('modules.rca.kmFailure')}</AppText>
-                  <TextInput style={styles.input} placeholder="km" placeholderTextColor={c.textMuted} value={km} onChangeText={setKm} keyboardType="numeric" />
+                  <TextInput style={styles.input} placeholder={t('modules.rca.kmPh')} placeholderTextColor={c.textMuted} value={km} onChangeText={setKm} keyboardType="numeric" />
                 </View>
               </View>
               <AppText style={styles.label}>{t('modules.rca.factors')}</AppText>

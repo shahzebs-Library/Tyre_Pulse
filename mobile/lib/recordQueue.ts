@@ -145,14 +145,14 @@ export const COMMANDS: Record<CommandType, CommandSpec> = {
     table: 'odometer_logs',
     fields: [
       'asset_no', 'odometer_km', 'reading_date', 'source', 'site',
-      'country', 'notes', 'photos', 'created_by',
+      'country', 'notes', 'photos', 'created_by', 'signature',
     ],
   },
   ENGINE_HOURS_LOG: {
     table: 'engine_hours_logs',
     fields: [
       'asset_no', 'engine_hours', 'reading_date', 'source', 'site',
-      'country', 'notes', 'photos', 'created_by',
+      'country', 'notes', 'photos', 'created_by', 'signature',
     ],
   },
   // Field accident report (offline-safe; photos already uploaded as refs). V215

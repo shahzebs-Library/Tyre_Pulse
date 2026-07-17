@@ -95,7 +95,7 @@ export default function TyreChangeScreen() {
             </View>
             <View style={{ flex: 1 }}>
               <Text style={[styles.label, { textAlign }]}>{t('modules.common.site')}</Text>
-              <TextInput style={[styles.input, { textAlign }]} placeholder="Site" placeholderTextColor={theme.color.textMuted} value={site} onChangeText={setSite} />
+              <TextInput style={[styles.input, { textAlign }]} placeholder={t('modules.tyreChange.sitePh')} placeholderTextColor={theme.color.textMuted} value={site} onChangeText={setSite} />
             </View>
           </View>
 
@@ -112,16 +112,16 @@ export default function TyreChangeScreen() {
           <View style={styles.row2}>
             <View style={{ flex: 1 }}>
               <Text style={[styles.label, { textAlign }]}>{t('modules.common.brand')}</Text>
-              <TextInput style={[styles.input, { textAlign }]} placeholder="Brand" placeholderTextColor={theme.color.textMuted} value={brand} onChangeText={setBrand} />
+              <TextInput style={[styles.input, { textAlign }]} placeholder={t('modules.tyreChange.brandPh')} placeholderTextColor={theme.color.textMuted} value={brand} onChangeText={setBrand} />
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={[styles.label, { textAlign }]}>Size</Text>
-              <TextInput style={[styles.input, { textAlign }]} placeholder="e.g. 315/80R22.5" placeholderTextColor={theme.color.textMuted} value={size} onChangeText={setSize} />
+              <Text style={[styles.label, { textAlign }]}>{t('modules.tyreChange.size')}</Text>
+              <TextInput style={[styles.input, { textAlign }]} placeholder={t('modules.tyreChange.sizePh')} placeholderTextColor={theme.color.textMuted} value={size} onChangeText={setSize} />
             </View>
           </View>
 
           <Text style={[styles.label, { textAlign }]}>{t('modules.common.serial')}</Text>
-          <TextInput style={[styles.input, { textAlign }]} placeholder="Tyre serial" placeholderTextColor={theme.color.textMuted} value={serial} onChangeText={setSerial} autoCapitalize="characters" />
+          <TextInput style={[styles.input, { textAlign }]} placeholder={t('modules.tyreChange.serialPh')} placeholderTextColor={theme.color.textMuted} value={serial} onChangeText={setSerial} autoCapitalize="characters" />
 
           <View style={styles.row2}>
             <View style={{ flex: 1 }}>

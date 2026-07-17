@@ -50,13 +50,13 @@ function isToday(iso: string | null): boolean {
   const n = new Date()
   return d.getFullYear() === n.getFullYear() && d.getMonth() === n.getMonth() && d.getDate() === n.getDate()
 }
-function countedHint(iso: string | null): { text: string; stale: boolean } {
-  if (!iso) return { text: 'Never counted', stale: true }
-  if (isToday(iso)) return { text: 'Counted today', stale: false }
+function countedHint(iso: string | null, t: (k: string) => string): { text: string; stale: boolean } {
+  if (!iso) return { text: t('modules.stock.neverCounted'), stale: true }
+  if (isToday(iso)) return { text: t('modules.stock.countedToday'), stale: false }
   const n = daysSince(iso)
-  if (n == null) return { text: 'Counted', stale: true }
-  if (n <= 0) return { text: 'Counted today', stale: false }
-  return { text: `Counted ${n}d ago`, stale: n >= 1 }
+  if (n == null) return { text: t('modules.stock.counted'), stale: true }
+  if (n <= 0) return { text: t('modules.stock.countedToday'), stale: false }
+  return { text: `${t('modules.stock.counted')} ${n}${t('modules.stock.dAgoSuffix')}`, stale: n >= 1 }
 }
 
 // Bucket a row that has no recognisable tyre size.
@@ -123,7 +123,7 @@ export default function StockScreen() {
       setRows((data as StockItem[]) ?? [])
     } catch (e: any) {
       if (__DEV__) console.warn('[stock] load failed:', e?.message)
-      setError('Could not load stock. Pull down to retry.')
+      setError(t('modules.stock.loadError'))
     } finally {
       setLoading(false)
     }
@@ -158,7 +158,7 @@ export default function StockScreen() {
       if (res.offline) Alert.alert(t('modules.common.offlineSaved'))
     } catch (e: any) {
       await load() // reconcile from server on a real rejection
-      Alert.alert('Could not update', e?.message || 'Please try again.')
+      Alert.alert(t('modules.stock.couldNotUpdate'), e?.message || t('common.tryAgain'))
     } finally {
       setBusyId(null)
     }
@@ -175,7 +175,7 @@ export default function StockScreen() {
     if (!countItem || countSaving) return
     const n = Number(countValue)
     if (countValue.trim() === '' || Number.isNaN(n) || n < 0) {
-      Alert.alert('Invalid count', 'Enter the exact quantity counted (0 or more).')
+      Alert.alert(t('modules.stock.invalidCount'), t('modules.stock.invalidCountMsg'))
       return
     }
     setCountSaving(true)
@@ -188,7 +188,7 @@ export default function StockScreen() {
       setCountItem(null)
       if (res.offline) Alert.alert(t('modules.common.offlineSaved'))
     } catch (e: any) {
-      Alert.alert('Could not save count', e?.message || 'Please try again.')
+      Alert.alert(t('modules.stock.couldNotSaveCount'), e?.message || t('common.tryAgain'))
     } finally {
       setCountSaving(false)
     }
@@ -232,7 +232,7 @@ export default function StockScreen() {
   const FILTERS: { key: FilterKey; label: string }[] = [
     { key: 'all', label: t('modules.stock.all') },
     { key: 'low', label: t('modules.stock.low') },
-    { key: 'stale', label: `Not counted today${staleCount ? ` (${staleCount})` : ''}` },
+    { key: 'stale', label: `${t('modules.stock.notCountedToday')}${staleCount ? ` (${staleCount})` : ''}` },
   ]
 
   if (!allowed) return null
@@ -262,7 +262,7 @@ export default function StockScreen() {
             icon="alert-circle" tint="red" onPress={() => setFilter('low')}
           />
           <StatTile
-            label="Not counted" value={staleCount}
+            label={t('modules.stock.notCounted')} value={staleCount}
             icon="time-outline" tint="amber" onPress={() => setFilter('stale')}
           />
         </View>
@@ -308,7 +308,7 @@ export default function StockScreen() {
         <View style={[s.dimRow, isRTL && s.rowR]}>
           <View style={[s.dimLead, isRTL && s.rowR]}>
             <Ionicons name="location-outline" size={13} color={theme.color.textMuted} />
-            <AppText variant="micro" color="muted">Location</AppText>
+            <AppText variant="micro" color="muted">{t('modules.stock.location')}</AppText>
           </View>
           <ScrollView
             horizontal
@@ -325,7 +325,7 @@ export default function StockScreen() {
                   activeOpacity={0.8}
                 >
                   <AppText variant="micro" style={{ color: active ? theme.color.onPrimary : theme.color.textSecondary, fontWeight: '700' }}>
-                    {opt === 'all' ? 'All' : opt}
+                    {opt === 'all' ? t('common.all') : opt}
                   </AppText>
                 </TouchableOpacity>
               )
@@ -339,7 +339,7 @@ export default function StockScreen() {
         <View style={[s.dimRow, isRTL && s.rowR]}>
           <View style={[s.dimLead, isRTL && s.rowR]}>
             <Ionicons name="resize-outline" size={13} color={theme.color.textMuted} />
-            <AppText variant="micro" color="muted">Size</AppText>
+            <AppText variant="micro" color="muted">{t('modules.stock.size')}</AppText>
           </View>
           <ScrollView
             horizontal
@@ -356,7 +356,7 @@ export default function StockScreen() {
                   activeOpacity={0.8}
                 >
                   <AppText variant="micro" style={{ color: active ? theme.color.onPrimary : theme.color.textSecondary, fontWeight: '700' }}>
-                    {opt === 'all' ? 'All' : opt}
+                    {opt === 'all' ? t('common.all') : opt}
                   </AppText>
                 </TouchableOpacity>
               )
@@ -366,7 +366,7 @@ export default function StockScreen() {
       )}
 
       {loading ? (
-        <Loading label="Loading stock" />
+        <Loading label={t('modules.stock.loadingLabel')} />
       ) : (
         <FlatList
           data={shown}
@@ -385,7 +385,7 @@ export default function StockScreen() {
               <EmptyState
                 icon="cube-outline"
                 title={t('modules.stock.none')}
-                message={query || filter !== 'all' || sizeFilter !== 'all' || locationFilter !== 'all' ? 'Try a different search or filter.' : undefined}
+                message={query || filter !== 'all' || sizeFilter !== 'all' || locationFilter !== 'all' ? t('modules.stock.tryFilter') : undefined}
               />
             )
           }
@@ -393,12 +393,12 @@ export default function StockScreen() {
             const qty = item.stock_qty ?? 0
             const st = statusFor(qty, item.min_level, item.critical_level)
             const kind = statusKind(st)
-            const counted = countedHint(item.updated_at)
+            const counted = countedHint(item.updated_at, t)
             return (
               <Card padded={false} accent={theme.color[kind].base} style={s.card}>
                 <View style={[s.cardRow, isRTL && s.rowR]}>
                   <View style={{ flex: 1, gap: 5 }}>
-                    <AppText variant="title" style={{ textAlign }} numberOfLines={2}>{item.description ?? 'Item'}</AppText>
+                    <AppText variant="title" style={{ textAlign }} numberOfLines={2}>{item.description ?? t('modules.stock.item')}</AppText>
                     <AppText variant="caption" color="muted" style={{ textAlign }}>
                       {item.site ?? '-'}{item.min_level != null ? ` · ${t('modules.stock.min')} ${item.min_level}` : ''}
                     </AppText>
@@ -424,7 +424,7 @@ export default function StockScreen() {
                     )}
                     <TouchableOpacity onPress={() => openCount(item)} disabled={!mayAdjust} activeOpacity={0.7} style={s.qtyTap}>
                       <AppText variant="h2" numberOfLines={1}>{qty}</AppText>
-                      {mayAdjust && <AppText variant="micro" color="info">tap to count</AppText>}
+                      {mayAdjust && <AppText variant="micro" color="info">{t('modules.stock.tapToCount')}</AppText>}
                     </TouchableOpacity>
                     {mayAdjust && (
                       <TouchableOpacity style={[s.qtyBtn, { backgroundColor: theme.color.success.soft }]} onPress={() => quickAdjust(item, 1)} disabled={busyId === item.id} activeOpacity={0.7}>
@@ -449,9 +449,9 @@ export default function StockScreen() {
                 <Ionicons name="clipboard-outline" size={18} color={theme.color.primary} />
               </View>
               <View style={{ flex: 1 }}>
-                <AppText variant="title" style={{ textAlign }} numberOfLines={2}>{countItem?.description ?? 'Item'}</AppText>
+                <AppText variant="title" style={{ textAlign }} numberOfLines={2}>{countItem?.description ?? t('modules.stock.item')}</AppText>
                 <AppText variant="caption" color="muted" style={{ textAlign, marginTop: 2 }}>
-                  was {countItem?.stock_qty ?? 0}
+                  {t('modules.stock.was')} {countItem?.stock_qty ?? 0}
                 </AppText>
               </View>
             </View>
@@ -461,7 +461,7 @@ export default function StockScreen() {
               <View style={[s.metaChip, isRTL && s.rowR]}>
                 <Ionicons name="location-outline" size={12} color={theme.color.primary} />
                 <AppText variant="micro" style={{ color: theme.color.text, fontWeight: '700' }}>
-                  {countItem?.site?.trim() || 'No location'}
+                  {countItem?.site?.trim() || t('modules.stock.noLocation')}
                 </AppText>
               </View>
               <View style={[s.metaChip, isRTL && s.rowR]}>
@@ -472,7 +472,7 @@ export default function StockScreen() {
               </View>
             </View>
 
-            <AppText variant="label" color="secondary" style={{ textAlign }}>Counted quantity</AppText>
+            <AppText variant="label" color="secondary" style={{ textAlign }}>{t('modules.stock.countedQty')}</AppText>
             <TextInput
               style={[s.countInput, { textAlign: 'center' }]}
               value={countValue}
@@ -487,13 +487,13 @@ export default function StockScreen() {
               style={[s.reasonInput, { textAlign }]}
               value={countReason}
               onChangeText={setCountReason}
-              placeholder="Reason / note (optional)"
+              placeholder={t('modules.stock.reasonPh')}
               placeholderTextColor={theme.color.textMuted}
             />
 
             <View style={s.modalActions}>
-              <Button label="Cancel" variant="secondary" onPress={() => !countSaving && setCountItem(null)} disabled={countSaving} style={{ flex: 1 }} />
-              <Button label="Save count" icon="save-outline" onPress={submitCount} loading={countSaving} style={{ flex: 1.4 }} />
+              <Button label={t('common.cancel')} variant="secondary" onPress={() => !countSaving && setCountItem(null)} disabled={countSaving} style={{ flex: 1 }} />
+              <Button label={t('modules.stock.saveCount')} icon="save-outline" onPress={submitCount} loading={countSaving} style={{ flex: 1.4 }} />
             </View>
           </View>
         </KeyboardAvoidingView>

@@ -188,7 +188,7 @@ export default function RegisterScreen() {
       <StatusBar barStyle="dark-content" backgroundColor="#f0f5f1" />
       <KeyboardAvoidingView
         style={{ flex: 1 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
         <ScrollView
           contentContainerStyle={styles.scroll}

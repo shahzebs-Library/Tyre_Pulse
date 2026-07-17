@@ -25,6 +25,7 @@
         "backgroundColor": "#ffffff"
       },
       "package": "com.shahzebrahman.tyrepulseinspector",
+      "softwareKeyboardLayoutMode": "resize",
       "permissions": [
         "android.permission.CAMERA",
         "android.permission.INTERNET",

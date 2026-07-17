@@ -498,7 +498,7 @@ export default function AICommandCenter() {
         )}
       </View>
 
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'} keyboardVerticalOffset={0}>
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={0}>
 
         {isEmpty ? (
           <ScrollView contentContainerStyle={ds.welcomeContent} keyboardShouldPersistTaps="handled">

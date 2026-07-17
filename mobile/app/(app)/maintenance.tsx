@@ -317,7 +317,7 @@ export default function MaintenanceScreen() {
       <Modal visible={target != null} animationType="slide" transparent onRequestClose={() => !saving && setTarget(null)}>
         <KeyboardAvoidingView
           style={styles.modalWrap}
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         >
           <View style={styles.modalCard}>
             <View style={styles.modalHead}>

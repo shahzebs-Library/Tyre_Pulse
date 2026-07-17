@@ -44,7 +44,10 @@ const LanguageContext = createContext<LanguageContextType | null>(null)
 
 function resolve(obj: Record<string, any>, key: string): string {
   const val = key.split('.').reduce<any>((o, k) => o?.[k], obj)
-  return typeof val === 'string' ? val : key
+  if (typeof val === 'string') return val
+  // Missing translation: fall back to English before exposing the raw key.
+  const en = key.split('.').reduce<any>((o, k) => o?.[k], TRANSLATIONS.en as Record<string, any>)
+  return typeof en === 'string' ? en : key
 }
 
 export function LanguageProvider({ children }: { children: ReactNode }) {

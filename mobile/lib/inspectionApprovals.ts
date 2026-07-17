@@ -2,7 +2,7 @@
  * Inspection approvals - supervisor sign-off over the `inspections` table.
  *
  * When a field inspection is submitted it is stored with
- * `approval_status = 'pending'` and the inspector's drawn signature. A
+ * `approval_status = 'pending_approval'` and the inspector's drawn signature. A
  * supervisor/manager reviews the recorded tyre conditions + signature and either
  * APPROVES (capturing their own signature, locking the record) or RETURNS it to
  * the field with a note. Country isolation + role gating are enforced server
@@ -10,7 +10,7 @@
  *
  * This mirrors the checklist approval flow (lib/checklists.decideApproval) but
  * over inspections, and reuses the same `approval_status` vocabulary the web app
- * writes ('pending' | 'approved' | 'returned').
+ * writes ('pending_approval' | 'approved' | 'rejected').
  */
 import { supabase } from './supabase'
 
@@ -49,7 +49,7 @@ export async function listPendingInspectionApprovals(
   let q = supabase
     .from('inspections')
     .select(LIST_COLS)
-    .eq('approval_status', 'pending')
+    .eq('approval_status', 'pending_approval')
     .order('created_at', { ascending: false })
     .limit(100)
 
@@ -96,7 +96,7 @@ export async function decideInspection(input: DecideInspectionInput): Promise<vo
   const patch: Record<string, any> = approved
     ? {
         approval_status: 'approved',
-        status: 'Approved',
+        status: 'Done',
         approver_signature: approverSignature,
         approver_email: approverName || null,
         approved_by: approverId,
@@ -104,8 +104,8 @@ export async function decideInspection(input: DecideInspectionInput): Promise<vo
         locked: true,
       }
     : {
-        approval_status: 'returned',
-        status: 'Returned',
+        approval_status: 'rejected',
+        status: 'In Progress',
         notes: [
           existingNotes?.trim() || '',
           reviewNote ? `Returned by ${approverName || 'supervisor'}: ${reviewNote}` : '',

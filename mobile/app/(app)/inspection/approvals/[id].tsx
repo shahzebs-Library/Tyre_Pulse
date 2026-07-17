@@ -159,7 +159,7 @@ export default function InspectionApprovalReviewScreen() {
     )
   }
 
-  const decided = insp.approval_status !== 'pending'
+  const decided = insp.approval_status !== 'pending_approval'
   const when = insp.created_at
     ? new Date(insp.created_at).toLocaleString(dateLocale, {
         day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit',

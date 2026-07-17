@@ -84,6 +84,13 @@ async function doSyncQueue(): Promise<{ synced: number; failed: number }> {
       // ── Phase 2: upsert the inspection record ────────────────────────────────
       // Upsert on the stable client id so a replay (crash / lost response /
       // overlapping sync) is ignored instead of inserting a duplicate.
+      // Heal items queued by older builds whose tokens violate the DB CHECKs
+      // (ck_inspection_approval_status / inspections_status_check) - otherwise
+      // they would retry-fail forever and pin the pending badge.
+      if (resolvedPayload.approval_status === 'pending') resolvedPayload.approval_status = 'pending_approval'
+      if (resolvedPayload.approval_status === 'returned') resolvedPayload.approval_status = 'rejected'
+      if (resolvedPayload.status === 'Pending approval') resolvedPayload.status = 'In Progress'
+      if (resolvedPayload.status === 'Approved' || resolvedPayload.status === 'Returned') resolvedPayload.status = 'Done'
       const { error } = await supabase.from('inspections')
         .upsert({ ...resolvedPayload, client_uuid: item.id }, { onConflict: 'client_uuid', ignoreDuplicates: true })
       if (error) throw error

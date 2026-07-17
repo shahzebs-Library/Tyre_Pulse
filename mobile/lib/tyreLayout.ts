@@ -15,7 +15,14 @@
  *
  * Coordinate space matches the SVG viewBox used by the diagram:
  *   viewBox = `-10 -6 220 (viewH + 12)`  -> usable x 0..200, centre x = 100.
+ *
+ * NOTE: the CANONICAL per-vehicle-type layout map + type resolver live in
+ * lib/tyreDiagramLayouts.ts (LAYOUTS / resolveVehicleType) - that is what
+ * components/VehicleTyreDiagram.tsx renders. This module is a generative
+ * fallback engine; its type resolution delegates to the canonical resolver.
  */
+
+import { resolveVehicleType as resolveCanonicalVehicleType } from './tyreDiagramLayouts'
 
 export type TyreSlotKind = 'steer' | 'drive' | 'lift' | 'trailer' | 'spare'
 export type TyreSide = 'L' | 'R' | 'C'
@@ -133,22 +140,17 @@ function chunkPairs<T>(arr: T[]): T[][] {
 }
 
 // ── Vehicle-type resolution (heading + body silhouette hint) ───────────────────
-/** Mirrors the web keyword mapping to a friendly heading label. */
+/**
+ * Friendly heading label for a vehicle type. DELEGATES to the single canonical
+ * resolver in lib/tyreDiagramLayouts.ts (resolveVehicleType) so both layout
+ * modules agree on how a vehicle_type string maps to a layout - do NOT
+ * re-implement keyword matching here.
+ */
 export function resolveVehicleLabel(vehicleType: string | null | undefined): string {
-  const s = String(vehicleType ?? '').toLowerCase().trim()
+  const s = String(vehicleType ?? '').trim()
   if (!s) return 'Vehicle'
-  if (s.includes('tri') || s.includes('mixer') || s.includes('transit')) return 'Tri-mixer'
-  if (s.includes('boom') || s.includes('placing')) return 'Concrete pump'
-  if (s.includes('concrete') || s.includes('pump')) return 'Concrete pump'
-  if (s.includes('skid')) return 'Skid loader'
-  if (s.includes('wheel') || s.includes('loader') || s.includes('load')) return 'Wheel loader'
-  if (s.includes('canter')) return 'Canter'
-  if (s.includes('bus') || s.includes('coaster')) return 'Bus'
-  if (s.includes('tata')) return 'Tata'
-  if (s.includes('ashok') || s.includes('leyland')) return 'Ashok Leyland'
-  if (s.includes('trailer')) return 'Trailer'
-  if (s.includes('pickup') || s.includes('pick up') || s.includes('pick-up')) return 'Pickup'
-  return vehicleType ?? 'Vehicle'
+  if (s.toLowerCase().includes('trailer')) return 'Trailer'
+  return resolveCanonicalVehicleType(s)
 }
 
 interface AxleRow {

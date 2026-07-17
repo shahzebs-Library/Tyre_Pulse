@@ -30,6 +30,7 @@ import { radius, spacing, typography, elevation, Theme } from '../lib/theme'
 import {
   RISK, RiskKey, BodyKey, LAYOUTS,
   resolveVehicleType, isTyrelessEquipment, diagramPositions,
+  matchPositionsToLayout,
 } from '../lib/tyreDiagramLayouts'
 
 // Re-export the pure helpers so callers can source positions/tyreless-state
@@ -1209,8 +1210,14 @@ export default function VehicleTyreDiagram({
 
   const resolved = resolveVehicleType(vehicleType)
   const layout   = LAYOUTS[resolved] || LAYOUTS.Pickup
-  const { emoji, viewH, bodyKey, tyres } = layout
+  const { emoji, viewH, bodyKey } = layout
   const Body = BODY_COMPONENTS[bodyKey]
+
+  // Render ONLY the wheels the caller's position set defines - callers may pass
+  // either the diagram id vocabulary (diagramPositions) or the lib/types.ts
+  // vocabulary (getPositionsForVehicle); both are mapped onto layout slots.
+  // Unmatched positions (Spare, foreign ids) never render as ghost slots.
+  const tyres = useMemo(() => matchPositionsToLayout(layout, positions), [layout, positions])
 
   // SVG viewBox: minX -10, width 220, minY -5, height viewH + 10.
   const SVG_COORD_W = 220
@@ -1219,16 +1226,18 @@ export default function VehicleTyreDiagram({
   const scale       = width / SVG_COORD_W
   const svgHeight   = Math.round((viewH + 10) * scale)
 
-  // Risk / recorded / condition maps keyed by internal tyre id.
+  // Risk / recorded / condition maps keyed by the caller's position id.
+  // Data may be stored under the position id OR the layout's internal id
+  // (older records) - check both.
   const { riskMap, recordedMap, conditionMap } = useMemo(() => {
     const risk: Record<string, RiskKey> = {}
     const recorded: Record<string, boolean> = {}
     const cond: Record<string, TyreCondition> = {}
     tyres.forEach(t => {
-      const d = tyreData[t.id]
-      risk[t.id] = d ? CONDITION_RISK[d.condition] : 'none'
-      cond[t.id] = d?.condition ?? 'Good'
-      recorded[t.id] = !!d && (
+      const d = tyreData[t.positionId] ?? tyreData[t.id]
+      risk[t.positionId] = d ? CONDITION_RISK[d.condition] : 'none'
+      cond[t.positionId] = d?.condition ?? 'Good'
+      recorded[t.positionId] = !!d && (
         !!d.serial_number || !!d.pressure_psi || !!d.tread_depth_mm ||
         !!d.notes || !!d.photo_uri || !!d.photo_url || d.condition !== 'Good'
       )
@@ -1305,12 +1314,12 @@ export default function VehicleTyreDiagram({
           {/* Tyres rendered on top */}
           {tyres.map(t => (
             <Tyre
-              key={t.id}
+              key={t.positionId}
               x={t.x} y={t.y} w={t.w} h={t.h}
-              id={t.id} label={t.label}
-              risk={riskMap[t.id] ?? 'none'}
-              recorded={recordedMap[t.id]}
-              selected={selectedPosition === t.id}
+              id={t.positionId} label={t.label}
+              risk={riskMap[t.positionId] ?? 'none'}
+              recorded={recordedMap[t.positionId]}
+              selected={selectedPosition === t.positionId}
             />
           ))}
         </Svg>
@@ -1318,17 +1327,17 @@ export default function VehicleTyreDiagram({
         {/* Absolute touch overlays - one per tyre, on top of the SVG */}
         {tyres.map(t => {
           const pos = toScreen(t.x, t.y, t.w, t.h)
-          const isSelected = selectedPosition === t.id
-          const cond = conditionMap[t.id]
+          const isSelected = selectedPosition === t.positionId
+          const cond = conditionMap[t.positionId]
           const meta = cond ? CONDITION_META[cond] : null
           return (
             <TouchableOpacity
-              key={`hit-${t.id}`}
+              key={`hit-${t.positionId}`}
               style={[styles.hitOverlay, pos, isSelected && styles.hitOverlaySelected]}
-              onPress={() => onPositionPress?.(t.id)}
+              onPress={() => onPositionPress?.(t.positionId)}
               activeOpacity={0.6}
             >
-              {recordedMap[t.id] && meta && (
+              {recordedMap[t.positionId] && meta && (
                 <View style={[styles.condBadge, { backgroundColor: meta.color }]}>
                   <Text style={styles.condBadgeEmoji}>{meta.emoji}</Text>
                 </View>

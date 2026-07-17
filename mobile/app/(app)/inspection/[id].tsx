@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useMemo, useCallback } from 'react'
 import {
   View, Text, ScrollView, StyleSheet, TouchableOpacity,
   StatusBar, ActivityIndicator, useWindowDimensions,
@@ -8,6 +8,8 @@ import { useRouter, useLocalSearchParams } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
 import { supabase } from '../../../lib/supabase'
 import { useLanguage } from '../../../contexts/LanguageContext'
+import { useTheme } from '../../../contexts/ThemeContext'
+import { radius, spacing, typography, elevation, Theme } from '../../../lib/theme'
 import VehicleTyreDiagram from '../../../components/VehicleTyreDiagram'
 import { getPositionsForVehicle, TyrePositionData } from '../../../lib/types'
 
@@ -32,20 +34,37 @@ const RISK_COLOR: Record<string, string> = {
 export default function InspectionDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>()
   const { t, isRTL } = useLanguage()
+  const { theme } = useTheme()
+  const styles = useMemo(() => makeStyles(theme), [theme])
   const router = useRouter()
   const { width } = useWindowDimensions()
   const [insp, setInsp] = useState<Inspection | null>(null)
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
   const textAlign = isRTL ? 'right' : 'left'
 
-  useEffect(() => {
+  // Load guarded end-to-end: a network rejection or query error surfaces a
+  // retryable error state instead of spinning forever or crashing.
+  const load = useCallback(async () => {
     if (!id) { setLoading(false); return }
-    supabase.from('inspections')
-      .select('id,title,site,asset_no,vehicle_type,inspector,inspection_date,status,notes,locked,tyre_conditions')
-      .eq('id', id).single()
-      .then(({ data }) => { setInsp(data as Inspection); setLoading(false) })
+    setLoading(true)
+    setError(null)
+    try {
+      const { data, error: qErr } = await supabase.from('inspections')
+        .select('id,title,site,asset_no,vehicle_type,inspector,inspection_date,status,notes,locked,tyre_conditions')
+        .eq('id', id).single()
+      if (qErr) throw qErr
+      setInsp((data as Inspection) ?? null)
+    } catch (e: any) {
+      setInsp(null)
+      setError(e?.message || 'Could not load this inspection.')
+    } finally {
+      setLoading(false)
+    }
   }, [id])
+
+  useEffect(() => { load() }, [load])
 
   const conditions = insp?.tyre_conditions ?? {}
   const positions = insp
@@ -60,32 +79,50 @@ export default function InspectionDetailScreen() {
 
   return (
     <SafeAreaView style={styles.safe}>
-      <StatusBar barStyle="dark-content" backgroundColor="#f0f5f1" />
+      <StatusBar
+        barStyle={theme.mode === 'dark' ? 'light-content' : 'dark-content'}
+        backgroundColor={theme.color.bg}
+      />
       <View style={[styles.header, isRTL && styles.rowR]}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-          <Ionicons name={isRTL ? 'arrow-forward' : 'arrow-back'} size={22} color="#0f172a" />
+          <Ionicons name={isRTL ? 'arrow-forward' : 'arrow-back'} size={22} color={theme.color.text} />
         </TouchableOpacity>
         <Text style={[styles.title, { textAlign }]} numberOfLines={1}>{t('modules.inspectionDetail.title')}</Text>
       </View>
 
       {loading ? (
-        <ActivityIndicator color="#16a34a" style={{ marginTop: 40 }} />
+        <ActivityIndicator color={theme.color.primary} style={{ marginTop: 40 }} />
+      ) : error ? (
+        <View style={styles.empty}>
+          <Ionicons name="cloud-offline-outline" size={48} color={theme.color.danger.base} />
+          <Text style={styles.emptyText}>{error}</Text>
+          <TouchableOpacity style={styles.retryBtn} onPress={load} activeOpacity={0.85}>
+            <Ionicons name="refresh" size={16} color={theme.color.onPrimary} />
+            <Text style={styles.retryText}>Retry</Text>
+          </TouchableOpacity>
+        </View>
       ) : !insp ? (
-        <View style={styles.empty}><Ionicons name="document-outline" size={48} color="#cbd5e1" /><Text style={styles.emptyText}>{t('modules.inspectionDetail.notFound')}</Text></View>
+        <View style={styles.empty}>
+          <Ionicons name="document-outline" size={48} color={theme.color.borderStrong} />
+          <Text style={styles.emptyText}>{t('modules.inspectionDetail.notFound')}</Text>
+        </View>
       ) : (
         <ScrollView contentContainerStyle={styles.content}>
           <View style={styles.card}>
             <View style={[styles.cardTop, isRTL && styles.rowR]}>
               <Text style={[styles.iTitle, { textAlign }]} numberOfLines={2}>{insp.title}</Text>
               {insp.locked && (
-                <View style={styles.lockBadge}><Ionicons name="lock-closed" size={11} color="#64748b" /><Text style={styles.lockText}>{t('modules.inspectionDetail.locked')}</Text></View>
+                <View style={styles.lockBadge}>
+                  <Ionicons name="lock-closed" size={11} color={theme.color.textSecondary} />
+                  <Text style={styles.lockText}>{t('modules.inspectionDetail.locked')}</Text>
+                </View>
               )}
             </View>
             <View style={styles.metaGrid}>
-              <Meta icon="bus-outline" label={t('modules.inspectionDetail.asset')} value={insp.asset_no} />
-              <Meta icon="location-outline" label={t('modules.inspectionDetail.site')} value={insp.site} />
-              <Meta icon="calendar-outline" label={t('modules.inspectionDetail.date')} value={insp.inspection_date} />
-              <Meta icon="person-outline" label={t('modules.inspectionDetail.inspector')} value={insp.inspector} />
+              <Meta theme={theme} icon="bus-outline" label={t('modules.inspectionDetail.asset')} value={insp.asset_no} />
+              <Meta theme={theme} icon="location-outline" label={t('modules.inspectionDetail.site')} value={insp.site} />
+              <Meta theme={theme} icon="calendar-outline" label={t('modules.inspectionDetail.date')} value={insp.inspection_date} />
+              <Meta theme={theme} icon="person-outline" label={t('modules.inspectionDetail.inspector')} value={insp.inspector} />
             </View>
           </View>
 
@@ -142,42 +179,74 @@ export default function InspectionDetailScreen() {
   )
 }
 
-function Meta({ icon, label, value }: { icon: string; label: string; value: string | null | undefined }) {
+function Meta({ theme, icon, label, value }: { theme: Theme; icon: string; label: string; value: string | null | undefined }) {
+  const styles = makeStyles(theme)
   return (
     <View style={styles.meta}>
-      <Ionicons name={icon as any} size={14} color="#94a3b8" />
-      <View>
+      <View style={styles.metaIcon}>
+        <Ionicons name={icon as any} size={15} color={theme.color.primary} />
+      </View>
+      <View style={{ flex: 1, minWidth: 0 }}>
         <Text style={styles.metaLabel}>{label}</Text>
-        <Text style={styles.metaValue}>{value || '-'}</Text>
+        <Text style={styles.metaValue} numberOfLines={1}>{value || '-'}</Text>
       </View>
     </View>
   )
 }
 
-const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#f0f5f1' },
-  rowR: { flexDirection: 'row-reverse' },
-  header: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 16 },
-  backBtn: { width: 38, height: 38, borderRadius: 10, backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: 'rgba(0,0,0,0.06)' },
-  title: { fontSize: 20, fontWeight: '800', color: '#0f172a', flex: 1 },
-  content: { padding: 16, gap: 12, paddingBottom: 40 },
-  card: { backgroundColor: '#fff', borderRadius: 16, padding: 16, borderWidth: 1, borderColor: 'rgba(0,0,0,0.06)', gap: 10 },
-  cardTop: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 },
-  iTitle: { flex: 1, fontSize: 15, fontWeight: '800', color: '#0f172a' },
-  lockBadge: { flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: 'rgba(100,116,139,0.1)', borderRadius: 6, paddingHorizontal: 7, paddingVertical: 3 },
-  lockText: { fontSize: 9, fontWeight: '800', color: '#64748b' },
-  metaGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 14 },
-  meta: { flexDirection: 'row', gap: 8, alignItems: 'center', width: '45%' },
-  metaLabel: { fontSize: 10, color: '#94a3b8', fontWeight: '600' },
-  metaValue: { fontSize: 13, color: '#0f172a', fontWeight: '700' },
-  section: { fontSize: 14, fontWeight: '800', color: '#0f172a' },
-  muted: { fontSize: 13, color: '#94a3b8' },
-  condRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 6, borderTopWidth: 1, borderTopColor: 'rgba(0,0,0,0.04)' },
-  posDot: { minWidth: 38, height: 30, borderRadius: 8, paddingHorizontal: 6, alignItems: 'center', justifyContent: 'center' },
-  posText: { fontSize: 11, fontWeight: '800', color: '#fff' },
-  condTitle: { fontSize: 13, fontWeight: '700', color: '#0f172a', textTransform: 'capitalize' },
-  condMeta: { fontSize: 11.5, color: '#94a3b8' },
-  notes: { fontSize: 13, color: '#475569', lineHeight: 19 },
-  empty: { alignItems: 'center', paddingVertical: 60, gap: 10 },
-  emptyText: { fontSize: 15, fontWeight: '700', color: '#94a3b8' },
-})
+function makeStyles(theme: Theme) {
+  const c = theme.color
+  return StyleSheet.create({
+    safe: { flex: 1, backgroundColor: c.bg },
+    rowR: { flexDirection: 'row-reverse' },
+    header: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm + 2, padding: spacing.lg },
+    backBtn: {
+      width: 40, height: 40, borderRadius: radius.md, backgroundColor: c.surface,
+      alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: c.border,
+    },
+    title: { ...typography.h2, color: c.text, flex: 1 },
+    content: { padding: spacing.lg, gap: spacing.md, paddingBottom: spacing['4xl'] },
+    card: {
+      backgroundColor: c.surface, borderRadius: radius.xl, padding: spacing.lg,
+      borderWidth: 1, borderColor: c.border, gap: spacing.md,
+      ...elevation(theme, 1),
+    },
+    cardTop: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: spacing.sm },
+    iTitle: { flex: 1, ...typography.title, color: c.text },
+    lockBadge: {
+      flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: c.surfaceAlt,
+      borderRadius: radius.sm - 2, paddingHorizontal: spacing.sm, paddingVertical: 3,
+    },
+    lockText: { fontSize: 10, fontWeight: '800', color: c.textSecondary },
+    metaGrid: { flexDirection: 'row', flexWrap: 'wrap', rowGap: spacing.md, columnGap: spacing.sm },
+    meta: { flexDirection: 'row', gap: spacing.sm, alignItems: 'center', width: '46%' },
+    metaIcon: {
+      width: 32, height: 32, borderRadius: radius.sm, backgroundColor: c.primarySoft,
+      alignItems: 'center', justifyContent: 'center',
+    },
+    metaLabel: { ...typography.micro, color: c.textMuted, textTransform: 'uppercase' },
+    metaValue: { fontSize: 14, color: c.text, fontWeight: '700' },
+    section: { ...typography.h3, color: c.text },
+    muted: { fontSize: 13, color: c.textMuted },
+    condRow: {
+      flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingVertical: spacing.sm,
+      borderTopWidth: 1, borderTopColor: c.border,
+    },
+    posDot: {
+      minWidth: 44, height: 34, borderRadius: radius.sm, paddingHorizontal: spacing.sm,
+      alignItems: 'center', justifyContent: 'center',
+    },
+    posText: { fontSize: 12, fontWeight: '800', color: '#fff' },
+    condTitle: { fontSize: 14, fontWeight: '700', color: c.text, textTransform: 'capitalize' },
+    condMeta: { fontSize: 12, color: c.textMuted, marginTop: 1 },
+    notes: { fontSize: 14, color: c.textSecondary, lineHeight: 20 },
+    empty: { alignItems: 'center', paddingVertical: spacing['5xl'], gap: spacing.sm + 2, paddingHorizontal: spacing.lg },
+    emptyText: { ...typography.title, color: c.textMuted, textAlign: 'center' },
+    retryBtn: {
+      flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.xs + 2,
+      backgroundColor: c.primary, borderRadius: radius.md, paddingHorizontal: spacing.lg,
+      height: 44, marginTop: spacing.sm,
+    },
+    retryText: { color: c.onPrimary, fontSize: 14, fontWeight: '700' },
+  })
+}

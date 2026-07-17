@@ -1,18 +1,22 @@
 import { useEffect, useState, useCallback, useMemo } from 'react'
 import {
-  View, Text, FlatList, StyleSheet, TouchableOpacity,
-  RefreshControl, StatusBar, ActivityIndicator, TextInput, Linking,
+  View, FlatList, StyleSheet, TouchableOpacity,
+  RefreshControl, TextInput, Linking,
 } from 'react-native'
-import { SafeAreaView } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import { useLanguage } from '../../contexts/LanguageContext'
+import { useTheme } from '../../contexts/ThemeContext'
 import { useRoleGuard } from '../../hooks/useRoleGuard'
 import { useRealtime } from '../../hooks/useRealtime'
 import { canManageUsers } from '../../lib/permissions'
 import { UserRole } from '../../lib/types'
+import { Theme, spacing, radius, elevation } from '../../lib/theme'
+import {
+  Screen, Card, AppText, Badge, StatTile, Loading, EmptyState, ErrorState,
+} from '../../components/ui'
 
 const VIEW_ROLES: UserRole[] = ['admin', 'manager', 'director']
 
@@ -29,9 +33,10 @@ interface Member {
   last_login_at: string | null
 }
 
-const ROLE_COLOR: Record<string, string> = {
-  admin: '#7c3aed', director: '#1d4ed8', manager: '#2563eb',
-  inspector: '#16a34a', tyre_man: '#0891b2', driver: '#ca8a04', viewer: '#64748b',
+/** Role -> accent tint (fg/bg) for avatars + role pills. Theme-aware. */
+const ROLE_TINT: Record<string, keyof Theme['tint']> = {
+  admin: 'violet', director: 'blue', manager: 'blue',
+  inspector: 'green', tyre_man: 'teal', driver: 'amber', viewer: 'slate',
 }
 const ROLE_LABEL: Record<string, string> = {
   admin: 'Admin', manager: 'Manager', director: 'Director',
@@ -45,24 +50,35 @@ function norm(role: string | null): string {
 export default function TeamScreen() {
   const { profile } = useAuth()
   const { t, isRTL } = useLanguage()
+  const { theme } = useTheme()
   const router = useRouter()
+  const s = useMemo(() => makeStyles(theme), [theme])
   const { allowed } = useRoleGuard(VIEW_ROLES)
   const [rows, setRows] = useState<Member[]>([])
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   const [query, setQuery] = useState('')
 
   const textAlign = isRTL ? 'right' : 'left'
   const mayManage = canManageUsers(profile?.role)
 
   const load = useCallback(async () => {
-    const { data } = await supabase
-      .from('profiles')
-      .select('id,full_name,username,role,site,country,phone,email,approved,last_login_at')
-      .order('full_name')
-      .limit(1000)
-    setRows((data as Member[]) ?? [])
-    setLoading(false)
+    try {
+      const { data, error: qErr } = await supabase
+        .from('profiles')
+        .select('id,full_name,username,role,site,country,phone,email,approved,last_login_at')
+        .order('full_name')
+        .limit(1000)
+      if (qErr) throw qErr
+      setRows((data as Member[]) ?? [])
+      setError(null)
+    } catch (e: any) {
+      if (__DEV__) console.warn('[team] load failed', e)
+      setError(e?.message ?? 'Failed to load team members.')
+    } finally {
+      setLoading(false)
+    }
   }, [])
 
   useEffect(() => { if (allowed) load() }, [allowed, load])
@@ -75,132 +91,169 @@ export default function TeamScreen() {
   }
 
   const shown = useMemo(() => {
-    const s = query.trim().toLowerCase()
-    if (!s) return rows
+    const term = query.trim().toLowerCase()
+    if (!term) return rows
     return rows.filter(m =>
-      m.full_name?.toLowerCase().includes(s) ||
-      m.username?.toLowerCase().includes(s) ||
-      norm(m.role).includes(s) ||
-      m.site?.toLowerCase().includes(s),
+      m.full_name?.toLowerCase().includes(term) ||
+      m.username?.toLowerCase().includes(term) ||
+      norm(m.role).includes(term) ||
+      m.site?.toLowerCase().includes(term),
     )
   }, [rows, query])
 
   const pending = useMemo(() => rows.filter(m => m.approved === false).length, [rows])
+  const active = useMemo(() => rows.filter(m => m.approved !== false).length, [rows])
 
   if (!allowed) return null
 
   return (
-    <SafeAreaView style={styles.safe}>
-      <StatusBar barStyle="dark-content" backgroundColor="#f0f5f1" />
-      <View style={[styles.header, isRTL && styles.rowR]}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-          <Ionicons name={isRTL ? 'arrow-forward' : 'arrow-back'} size={22} color="#0f172a" />
+    <Screen edges={['top']}>
+      <View style={[s.header, isRTL && s.rowR]}>
+        <TouchableOpacity onPress={() => router.back()} style={s.backBtn} activeOpacity={0.7}>
+          <Ionicons name={isRTL ? 'arrow-forward' : 'arrow-back'} size={22} color={theme.color.text} />
         </TouchableOpacity>
         <View style={{ flex: 1 }}>
-          <Text style={[styles.title, { textAlign }]}>{t('modules.team.title')}</Text>
-          <Text style={[styles.sub, { textAlign }]}>
+          <AppText variant="h2" style={{ textAlign }}>{t('modules.team.title')}</AppText>
+          <AppText variant="caption" color="secondary" style={{ textAlign, marginTop: 2 }}>
             {rows.length} {t('modules.team.members')}{pending > 0 ? ` · ${pending} ${t('modules.team.pending')}` : ''}
-          </Text>
+          </AppText>
         </View>
         {mayManage && (
-          <TouchableOpacity style={styles.manageBtn} onPress={() => router.push('/(app)/admin/users')}>
-            <Ionicons name="settings-outline" size={16} color="#7c3aed" />
-            <Text style={styles.manageText}>{t('modules.team.manage')}</Text>
+          <TouchableOpacity
+            style={[s.manageBtn, { backgroundColor: theme.tint.violet.bg }]}
+            onPress={() => router.push('/(app)/admin/users')}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="settings-outline" size={16} color={theme.tint.violet.fg} />
+            <AppText variant="label" style={{ color: theme.tint.violet.fg }}>{t('modules.team.manage')}</AppText>
           </TouchableOpacity>
         )}
       </View>
 
-      <View style={styles.searchWrap}>
-        <Ionicons name="search" size={18} color="#94a3b8" />
+      {!loading && (
+        <View style={s.statRow}>
+          <StatTile label={t('modules.team.members')} value={rows.length} icon="people" tint="blue" />
+          <StatTile label="Active" value={active} icon="checkmark-circle" tint="green" />
+          <StatTile label={t('modules.team.pending')} value={pending} icon="hourglass-outline" tint="amber" />
+        </View>
+      )}
+
+      <View style={[s.searchWrap, isRTL && s.rowR]}>
+        <Ionicons name="search-outline" size={18} color={theme.color.textMuted} />
         <TextInput
-          style={[styles.search, { textAlign }]}
+          style={[s.search, { color: theme.color.text, textAlign }]}
           placeholder={t('modules.team.searchPh')}
-          placeholderTextColor="#94a3b8"
+          placeholderTextColor={theme.color.textMuted}
           value={query}
           onChangeText={setQuery}
+          returnKeyType="search"
         />
+        {query.length > 0 && (
+          <TouchableOpacity onPress={() => setQuery('')}>
+            <Ionicons name="close-circle" size={18} color={theme.color.textMuted} />
+          </TouchableOpacity>
+        )}
       </View>
 
       {loading ? (
-        <ActivityIndicator color="#16a34a" style={{ marginTop: 40 }} />
+        <Loading label="Loading team" />
+      ) : error && rows.length === 0 ? (
+        <ErrorState message={error} onRetry={load} />
       ) : (
         <FlatList
           data={shown}
           keyExtractor={i => i.id}
-          contentContainerStyle={styles.list}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#16a34a" />}
+          contentContainerStyle={s.list}
+          showsVerticalScrollIndicator={false}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.color.primary} />}
           ListEmptyComponent={
-            <View style={styles.empty}>
-              <Ionicons name="people-outline" size={48} color="#cbd5e1" />
-              <Text style={styles.emptyText}>{t('modules.team.none')}</Text>
-            </View>
+            <EmptyState
+              icon="people-outline"
+              title={t('modules.team.none')}
+              message={query ? 'Try a different search term.' : undefined}
+            />
           }
           renderItem={({ item }) => {
             const rk = norm(item.role)
-            const rc = ROLE_COLOR[rk] ?? '#64748b'
+            const tint = theme.tint[ROLE_TINT[rk] ?? 'slate']
             const initials = (item.full_name ?? item.username ?? '?').split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase()
+            const roleLabel = ROLE_LABEL[rk] ? t(`modules.teamRoles.${rk}`) : item.role ?? '-'
             return (
-              <View style={styles.card}>
-                <View style={[styles.avatar, { backgroundColor: rc + '1a' }]}>
-                  <Text style={[styles.avatarText, { color: rc }]}>{initials}</Text>
-                </View>
-                <View style={{ flex: 1, gap: 3 }}>
-                  <Text style={[styles.cardTitle, { textAlign }]}>{item.full_name ?? item.username ?? 'Unknown'}</Text>
-                  <View style={[styles.badges, isRTL && styles.rowR]}>
-                    <View style={[styles.roleBadge, { backgroundColor: rc + '1a' }]}>
-                      <Text style={[styles.roleText, { color: rc }]}>{ROLE_LABEL[rk] ? t(`modules.teamRoles.${rk}`) : item.role ?? '-'}</Text>
+              <Card padded={false} style={s.card}>
+                <View style={[s.cardRow, isRTL && s.rowR]}>
+                  <View style={[s.avatar, { backgroundColor: tint.bg }]}>
+                    <AppText variant="h3" style={{ color: tint.fg }}>{initials}</AppText>
+                  </View>
+                  <View style={{ flex: 1, gap: 5 }}>
+                    <AppText variant="title" style={{ textAlign }} numberOfLines={1}>
+                      {item.full_name ?? item.username ?? 'Unknown'}
+                    </AppText>
+                    <View style={[s.badges, isRTL && s.rowR]}>
+                      <View style={[s.rolePill, { backgroundColor: tint.bg }]}>
+                        <AppText variant="micro" style={{ color: tint.fg }}>{roleLabel}</AppText>
+                      </View>
+                      {item.site ? <AppText variant="caption" color="muted">{item.site}</AppText> : null}
+                      {item.approved === false ? <Badge kind="warning">{t('modules.team.pending')}</Badge> : null}
                     </View>
-                    {item.site && <Text style={styles.cardMeta}>{item.site}</Text>}
-                    {item.approved === false && (
-                      <View style={styles.pendingBadge}><Text style={styles.pendingText}>{t('modules.team.pending')}</Text></View>
-                    )}
+                  </View>
+                  <View style={[s.actions, isRTL && s.rowR]}>
+                    {item.phone ? (
+                      <TouchableOpacity style={[s.actBtn, { backgroundColor: theme.color.success.soft }]} onPress={() => Linking.openURL(`tel:${item.phone}`)} activeOpacity={0.7}>
+                        <Ionicons name="call" size={18} color={theme.color.success.base} />
+                      </TouchableOpacity>
+                    ) : null}
+                    {item.email ? (
+                      <TouchableOpacity style={[s.actBtn, { backgroundColor: theme.color.info.soft }]} onPress={() => Linking.openURL(`mailto:${item.email}`)} activeOpacity={0.7}>
+                        <Ionicons name="mail" size={18} color={theme.color.info.base} />
+                      </TouchableOpacity>
+                    ) : null}
                   </View>
                 </View>
-                <View style={[styles.actions, isRTL && styles.rowR]}>
-                  {item.phone ? (
-                    <TouchableOpacity style={styles.actBtn} onPress={() => Linking.openURL(`tel:${item.phone}`)}>
-                      <Ionicons name="call" size={18} color="#16a34a" />
-                    </TouchableOpacity>
-                  ) : null}
-                  {item.email ? (
-                    <TouchableOpacity style={styles.actBtn} onPress={() => Linking.openURL(`mailto:${item.email}`)}>
-                      <Ionicons name="mail" size={18} color="#2563eb" />
-                    </TouchableOpacity>
-                  ) : null}
-                </View>
-              </View>
+              </Card>
             )
           }}
         />
       )}
-    </SafeAreaView>
+    </Screen>
   )
 }
 
-const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#f0f5f1' },
-  rowR: { flexDirection: 'row-reverse' },
-  header: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 16 },
-  backBtn: { width: 38, height: 38, borderRadius: 10, backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: 'rgba(0,0,0,0.06)' },
-  title: { fontSize: 20, fontWeight: '800', color: '#0f172a' },
-  sub: { fontSize: 12, color: '#64748b', marginTop: 2 },
-  manageBtn: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: 'rgba(124,58,237,0.1)', borderRadius: 10, paddingHorizontal: 10, paddingVertical: 7 },
-  manageText: { fontSize: 12, fontWeight: '700', color: '#7c3aed' },
-  searchWrap: { flexDirection: 'row', alignItems: 'center', gap: 8, marginHorizontal: 16, marginBottom: 8, backgroundColor: '#fff', borderRadius: 12, paddingHorizontal: 12, borderWidth: 1, borderColor: 'rgba(0,0,0,0.06)' },
-  search: { flex: 1, paddingVertical: 11, fontSize: 14, color: '#0f172a' },
-  list: { padding: 16, gap: 10, paddingBottom: 40 },
-  card: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: '#fff', borderRadius: 14, padding: 14, borderWidth: 1, borderColor: 'rgba(0,0,0,0.06)' },
-  avatar: { width: 42, height: 42, borderRadius: 21, alignItems: 'center', justifyContent: 'center' },
-  avatarText: { fontSize: 14, fontWeight: '800' },
-  cardTitle: { fontSize: 14, fontWeight: '800', color: '#0f172a' },
-  badges: { flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' },
-  roleBadge: { borderRadius: 6, paddingHorizontal: 7, paddingVertical: 2 },
-  roleText: { fontSize: 10, fontWeight: '800' },
-  cardMeta: { fontSize: 11.5, color: '#94a3b8' },
-  pendingBadge: { backgroundColor: 'rgba(245,158,11,0.12)', borderRadius: 6, paddingHorizontal: 7, paddingVertical: 2 },
-  pendingText: { fontSize: 10, fontWeight: '800', color: '#b45309' },
-  actions: { flexDirection: 'row', gap: 6 },
-  actBtn: { width: 36, height: 36, borderRadius: 10, backgroundColor: 'rgba(0,0,0,0.04)', alignItems: 'center', justifyContent: 'center' },
-  empty: { alignItems: 'center', paddingVertical: 60, gap: 10 },
-  emptyText: { fontSize: 15, fontWeight: '700', color: '#94a3b8' },
-})
+function makeStyles(theme: Theme) {
+  const c = theme.color
+  return StyleSheet.create({
+    rowR: { flexDirection: 'row-reverse' },
+    header: {
+      flexDirection: 'row', alignItems: 'center', gap: spacing.md,
+      paddingHorizontal: spacing.lg, paddingTop: spacing.sm, paddingBottom: spacing.md,
+    },
+    backBtn: {
+      width: 40, height: 40, borderRadius: radius.md,
+      backgroundColor: c.surface, alignItems: 'center', justifyContent: 'center',
+      borderWidth: 1, borderColor: c.border, ...elevation(theme, 1),
+    },
+    manageBtn: {
+      flexDirection: 'row', alignItems: 'center', gap: spacing.xs,
+      borderRadius: radius.md, paddingHorizontal: spacing.md, paddingVertical: spacing.sm,
+    },
+    statRow: {
+      flexDirection: 'row', gap: spacing.md,
+      paddingHorizontal: spacing.lg, paddingBottom: spacing.md,
+    },
+    searchWrap: {
+      flexDirection: 'row', alignItems: 'center', gap: spacing.sm,
+      marginHorizontal: spacing.lg, marginBottom: spacing.sm,
+      backgroundColor: c.surface, borderRadius: radius.md,
+      paddingHorizontal: spacing.md,
+      borderWidth: 1.5, borderColor: c.border,
+    },
+    search: { flex: 1, paddingVertical: 12, fontSize: 15, fontWeight: '500' },
+    list: { paddingHorizontal: spacing.lg, paddingBottom: spacing['4xl'], gap: spacing.md, paddingTop: spacing.xs, flexGrow: 1 },
+    card: { overflow: 'hidden' },
+    cardRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, padding: spacing.md },
+    avatar: { width: 46, height: 46, borderRadius: 23, alignItems: 'center', justifyContent: 'center' },
+    badges: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, flexWrap: 'wrap' },
+    rolePill: { borderRadius: radius.pill, paddingHorizontal: 8, paddingVertical: 3 },
+    actions: { flexDirection: 'row', gap: spacing.sm },
+    actBtn: { width: 40, height: 40, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center' },
+  })
+}

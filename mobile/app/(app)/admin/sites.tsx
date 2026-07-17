@@ -10,7 +10,7 @@
 
 import { useState, useCallback, useEffect, useMemo } from 'react'
 import {
-  View, Text, ScrollView, TouchableOpacity, TextInput, StyleSheet,
+  View, Text, ScrollView, FlatList, TouchableOpacity, TextInput, StyleSheet,
   Alert, ActivityIndicator, StatusBar, Modal, Platform, KeyboardAvoidingView,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
@@ -57,6 +57,7 @@ export default function SitesManagementScreen() {
   const [sites, setSites] = useState<Site[]>([])
   const [vehicles, setVehicles] = useState<Vehicle[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [selectedSiteFilter, setSelectedSiteFilter] = useState<string>('all')
 
   // Site modal
@@ -80,13 +81,22 @@ export default function SitesManagementScreen() {
 
   const load = useCallback(async () => {
     setLoading(true)
-    const [sitesRes, vehiclesRes] = await Promise.all([
-      supabase.from('sites').select('*').order('country').order('name'),
-      supabase.from('vehicle_fleet').select('id,asset_no,vehicle_type,make,model,site,country,status,is_active').order('site').order('asset_no'),
-    ])
-    setSites((sitesRes.data ?? []) as Site[])
-    setVehicles((vehiclesRes.data ?? []) as Vehicle[])
-    setLoading(false)
+    try {
+      const [sitesRes, vehiclesRes] = await Promise.all([
+        supabase.from('sites').select('*').order('country').order('name'),
+        supabase.from('vehicle_fleet').select('id,asset_no,vehicle_type,make,model,site,country,status,is_active').order('site').order('asset_no'),
+      ])
+      if (sitesRes.error) throw sitesRes.error
+      if (vehiclesRes.error) throw vehiclesRes.error
+      setSites((sitesRes.data ?? []) as Site[])
+      setVehicles((vehiclesRes.data ?? []) as Vehicle[])
+      setError(null)
+    } catch (e: any) {
+      if (__DEV__) console.warn('[sites] load failed', e)
+      setError(e?.message ?? 'Failed to load sites and fleet.')
+    } finally {
+      setLoading(false)
+    }
   }, [])
 
   useEffect(() => { if (allowed) load() }, [load, allowed])
@@ -174,8 +184,13 @@ export default function SitesManagementScreen() {
   }
 
   async function toggleSiteActive(site: Site) {
-    await supabase.from('sites').update({ active: !site.active }).eq('id', site.id)
-    load()
+    try {
+      const { error } = await supabase.from('sites').update({ active: !site.active }).eq('id', site.id)
+      if (error) throw error
+      load()
+    } catch (e: any) {
+      Alert.alert('Error', e?.message ?? 'Could not update site.')
+    }
   }
 
   // ── Vehicle CRUD ───────────────────────────────────────────────────────────
@@ -224,8 +239,13 @@ export default function SitesManagementScreen() {
   }
 
   async function toggleVehicleActive(v: Vehicle) {
-    await supabase.from('vehicle_fleet').update({ is_active: !v.is_active }).eq('id', v.id)
-    load()
+    try {
+      const { error } = await supabase.from('vehicle_fleet').update({ is_active: !v.is_active }).eq('id', v.id)
+      if (error) throw error
+      load()
+    } catch (e: any) {
+      Alert.alert('Error', e?.message ?? 'Could not update vehicle.')
+    }
   }
 
   async function deleteVehicle(v: Vehicle) {
@@ -234,8 +254,13 @@ export default function SitesManagementScreen() {
       {
         text: 'Delete', style: 'destructive',
         onPress: async () => {
-          await supabase.from('vehicle_fleet').delete().eq('id', v.id)
-          load()
+          try {
+            const { error } = await supabase.from('vehicle_fleet').delete().eq('id', v.id)
+            if (error) throw error
+            load()
+          } catch (e: any) {
+            Alert.alert('Error', e?.message ?? 'Could not delete vehicle.')
+          }
         },
       },
     ])
@@ -306,13 +331,23 @@ export default function SitesManagementScreen() {
 
         /* ── SITES TAB ──────────────────────────────────────────────────────── */
         <ScrollView contentContainerStyle={s.content} showsVerticalScrollIndicator={false}>
-          {sites.length === 0 && (
+          {error && sites.length === 0 ? (
+            <View style={s.empty}>
+              <Ionicons name="alert-circle-outline" size={48} color="#f87171" />
+              <Text style={s.emptyTitle}>Couldn't load sites</Text>
+              <Text style={s.emptySub}>{error}</Text>
+              <TouchableOpacity style={s.retryBtn} onPress={load}>
+                <Ionicons name="refresh" size={16} color="#16a34a" />
+                <Text style={s.retryBtnText}>Retry</Text>
+              </TouchableOpacity>
+            </View>
+          ) : sites.length === 0 ? (
             <View style={s.empty}>
               <Ionicons name="location-outline" size={48} color="#cbd5e1" />
               <Text style={s.emptyTitle}>No sites yet</Text>
               <Text style={s.emptySub}>Tap + to add your first site</Text>
             </View>
-          )}
+          ) : null}
           {Object.entries(byCountry).map(([country, countrySites]) => (
             <View key={country}>
               <View style={s.countryHeader}>
@@ -396,16 +431,35 @@ export default function SitesManagementScreen() {
             ))}
           </ScrollView>
 
-          <ScrollView contentContainerStyle={s.content} showsVerticalScrollIndicator={false}>
-            {filteredVehicles.length === 0 && (
-              <View style={s.empty}>
-                <Ionicons name="bus-outline" size={48} color="#cbd5e1" />
-                <Text style={s.emptyTitle}>No vehicles{selectedSiteFilter !== 'all' ? ` for ${selectedSiteFilter}` : ''}</Text>
-                <Text style={s.emptySub}>Tap + to add a vehicle to the fleet</Text>
-              </View>
-            )}
-            {filteredVehicles.map(v => (
-              <View key={v.id} style={[s.vehicleRow, !v.is_active && s.inactiveRow]}>
+          <FlatList
+            data={filteredVehicles}
+            keyExtractor={v => v.id}
+            contentContainerStyle={s.content}
+            showsVerticalScrollIndicator={false}
+            initialNumToRender={12}
+            maxToRenderPerBatch={12}
+            windowSize={11}
+            ListEmptyComponent={
+              error && vehicles.length === 0 ? (
+                <View style={s.empty}>
+                  <Ionicons name="alert-circle-outline" size={48} color="#f87171" />
+                  <Text style={s.emptyTitle}>Couldn't load fleet</Text>
+                  <Text style={s.emptySub}>{error}</Text>
+                  <TouchableOpacity style={s.retryBtn} onPress={load}>
+                    <Ionicons name="refresh" size={16} color="#16a34a" />
+                    <Text style={s.retryBtnText}>Retry</Text>
+                  </TouchableOpacity>
+                </View>
+              ) : (
+                <View style={s.empty}>
+                  <Ionicons name="bus-outline" size={48} color="#cbd5e1" />
+                  <Text style={s.emptyTitle}>No vehicles{selectedSiteFilter !== 'all' ? ` for ${selectedSiteFilter}` : ''}</Text>
+                  <Text style={s.emptySub}>Tap + to add a vehicle to the fleet</Text>
+                </View>
+              )
+            }
+            renderItem={({ item: v }) => (
+              <View style={[s.vehicleRow, !v.is_active && s.inactiveRow]}>
                 <View style={[s.vehicleIconWrap, { backgroundColor: v.is_active ? '#f0fdf4' : '#f8fafc' }]}>
                   <Ionicons name="bus-outline" size={20} color={v.is_active ? '#16a34a' : '#94a3b8'} />
                 </View>
@@ -431,8 +485,8 @@ export default function SitesManagementScreen() {
                   <Ionicons name="trash-outline" size={18} color="#ef4444" />
                 </TouchableOpacity>
               </View>
-            ))}
-          </ScrollView>
+            )}
+          />
         </>
       )}
 
@@ -590,7 +644,9 @@ const s = StyleSheet.create({
   // Empty
   empty:      { alignItems: 'center', paddingVertical: 60, gap: 10 },
   emptyTitle: { fontSize: 16, fontWeight: '700', color: '#94a3b8' },
-  emptySub:   { fontSize: 13, color: '#cbd5e1' },
+  emptySub:   { fontSize: 13, color: '#cbd5e1', textAlign: 'center', paddingHorizontal: 20 },
+  retryBtn:   { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 6, paddingHorizontal: 16, paddingVertical: 9, borderRadius: 10, borderWidth: 1.5, borderColor: '#bbf7d0', backgroundColor: '#f0fdf4' },
+  retryBtnText: { fontSize: 13, fontWeight: '700', color: '#16a34a' },
 })
 
 const m = StyleSheet.create({

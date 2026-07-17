@@ -1,17 +1,22 @@
 import { useEffect, useState, useCallback, useMemo } from 'react'
 import {
-  View, Text, FlatList, StyleSheet, TouchableOpacity,
-  RefreshControl, StatusBar, ActivityIndicator, TextInput,
+  View, FlatList, StyleSheet, TouchableOpacity,
+  RefreshControl, TextInput,
 } from 'react-native'
-import { SafeAreaView } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
 import { supabase } from '../../lib/supabase'
 import { getQueue, syncQueue } from '../../lib/offlineQueue'
 import { useAuth } from '../../contexts/AuthContext'
 import { useLanguage } from '../../contexts/LanguageContext'
+import { useTheme } from '../../contexts/ThemeContext'
 import SyncBanner from '../../components/SyncBanner'
+import { SkeletonList } from '../../components/SkeletonLoader'
 import { useRealtime } from '../../hooks/useRealtime'
+import { Theme, StatusKind, spacing, radius, elevation } from '../../lib/theme'
+import {
+  Screen, Card, AppText, Badge, EmptyState, ErrorState,
+} from '../../components/ui'
 
 type SyncStatus = 'synced' | 'pending' | 'failed'
 type FilterKey = 'all' | SyncStatus
@@ -30,10 +35,19 @@ interface HistoryItem {
 
 const FILTERS: FilterKey[] = ['all', 'synced', 'pending', 'failed']
 
+/** Sync state -> design-system status kind + icon. */
+const STATUS_META: Record<SyncStatus, { kind: StatusKind; icon: string }> = {
+  synced:  { kind: 'success', icon: 'cloud-done-outline' },
+  pending: { kind: 'warning', icon: 'cloud-upload-outline' },
+  failed:  { kind: 'danger',  icon: 'cloud-offline-outline' },
+}
+
 export default function HistoryScreen() {
   const { profile } = useAuth()
   const { t, isRTL } = useLanguage()
+  const { theme } = useTheme()
   const router = useRouter()
+  const s = useMemo(() => makeStyles(theme), [theme])
   const [items, setItems] = useState<HistoryItem[]>([])
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
@@ -45,6 +59,7 @@ export default function HistoryScreen() {
   const textAlign = isRTL ? 'right' : 'left'
 
   const load = useCallback(async () => {
+    try {
     const queue = await getQueue()
     const offlineItems: HistoryItem[] = queue.map(item => ({
       id: item.id,
@@ -86,7 +101,12 @@ export default function HistoryScreen() {
     }
 
     setItems([...offlineItems, ...syncedItems])
-    setLoading(false)
+    } catch (e: any) {
+      if (__DEV__) console.warn('[history] load failed:', e?.message)
+      setError('Could not load history. Pull down to retry.')
+    } finally {
+      setLoading(false)
+    }
   }, [profile?.id])
 
   useEffect(() => { load() }, [load])
@@ -94,9 +114,14 @@ export default function HistoryScreen() {
 
   async function onRefresh() {
     setRefreshing(true)
-    await syncQueue()
-    await load()
-    setRefreshing(false)
+    try {
+      await syncQueue()
+      await load()
+    } catch (e: any) {
+      if (__DEV__) console.warn('[history] refresh failed:', e?.message)
+    } finally {
+      setRefreshing(false)
+    }
   }
 
   // Counts per status drive the filter chip badges.
@@ -119,309 +144,216 @@ export default function HistoryScreen() {
     })
   }, [items, query, filter])
 
-  const STATUS_COLORS = {
-    synced:  { bg: 'rgba(22,163,74,0.08)',  text: '#15803d',  icon: 'cloud-done-outline' },
-    pending: { bg: 'rgba(245,158,11,0.08)', text: '#b45309',  icon: 'cloud-upload-outline' },
-    failed:  { bg: 'rgba(239,68,68,0.08)',  text: '#dc2626',  icon: 'cloud-offline-outline' },
-  } as const
-
   function filterLabel(key: FilterKey): string {
     if (key === 'all') return t('history.filterAll')
     return key === 'synced' ? t('common.synced') : key === 'pending' ? t('common.pending') : t('common.failed')
   }
 
+  function statusLabelFor(status: SyncStatus): string {
+    return status === 'synced' ? t('common.synced')
+      : status === 'pending' ? t('common.pending')
+      : t('common.failed')
+  }
+
   function renderItem({ item }: { item: HistoryItem }) {
-    const status = STATUS_COLORS[item.sync_status]
+    const meta = STATUS_META[item.sync_status]
     const formattedDate = item.inspection_date
       ? new Date(item.inspection_date + 'T00:00:00').toLocaleDateString(dateLocale, {
           day: 'numeric', month: 'short', year: 'numeric',
         })
       : '-'
-
-    const statusLabel = item.sync_status === 'synced' ? t('common.synced')
-      : item.sync_status === 'pending' ? t('common.pending')
-      : t('common.failed')
-
     const openable = !item.isOffline
+
     return (
-      <TouchableOpacity
-        style={styles.card}
-        activeOpacity={openable ? 0.7 : 1}
-        disabled={!openable}
-        onPress={() => openable && router.push(`/(app)/inspection/${item.id}`)}
+      <Card
+        padded={false}
+        onPress={openable ? () => router.push(`/(app)/inspection/${item.id}`) : undefined}
+        style={s.card}
       >
-        <View style={styles.cardLeft}>
-          <View style={styles.cardIcon}>
-            <Ionicons name="document-text-outline" size={20} color="#16a34a" />
+        <View style={[s.cardRow, isRTL && s.rowR]}>
+          <View style={[s.cardIcon, { backgroundColor: theme.color.primarySoft }]}>
+            <Ionicons name="document-text-outline" size={20} color={theme.color.primary} />
           </View>
-        </View>
-        <View style={styles.cardBody}>
-          <Text style={[styles.cardTitle, { textAlign }]} numberOfLines={1}>{item.title}</Text>
-          <View style={[styles.metaRow, isRTL && styles.metaRowRTL]}>
-            <Ionicons name="location-outline" size={12} color="#94a3b8" />
-            <Text style={styles.metaText}>{item.site}</Text>
-            <Text style={styles.metaDot}>·</Text>
-            <Ionicons name="bus-outline" size={12} color="#94a3b8" />
-            <Text style={styles.metaText}>{item.asset_no}</Text>
-          </View>
-          <View style={[styles.metaRow, isRTL && styles.metaRowRTL]}>
-            <Ionicons name="calendar-outline" size={12} color="#94a3b8" />
-            <Text style={styles.metaText}>{formattedDate}</Text>
-            {item.tyre_count ? (
-              <>
-                <Text style={styles.metaDot}>·</Text>
-                <Ionicons name="ellipse-outline" size={12} color="#94a3b8" />
-                <Text style={styles.metaText}>{item.tyre_count} {t('history.tyres')}</Text>
-              </>
-            ) : null}
-          </View>
-        </View>
-        <View style={{ alignItems: 'flex-end', gap: 4 }}>
-          <View style={[styles.statusBadge, { backgroundColor: status.bg }]}>
-            <Ionicons name={status.icon as any} size={13} color={status.text} />
-            <Text style={[styles.statusText, { color: status.text }]}>{statusLabel}</Text>
-          </View>
-          {item.locked && (
-            <View style={styles.lockBadge}>
-              <Ionicons name="lock-closed" size={11} color="#64748b" />
-              <Text style={styles.lockText}>Locked</Text>
+          <View style={{ flex: 1, gap: 4 }}>
+            <AppText variant="title" style={{ textAlign }} numberOfLines={1}>{item.title}</AppText>
+            <View style={[s.metaRow, isRTL && s.rowR]}>
+              <Ionicons name="location-outline" size={12} color={theme.color.textMuted} />
+              <AppText variant="caption" color="muted">{item.site}</AppText>
+              <AppText variant="caption" color="muted">·</AppText>
+              <Ionicons name="bus-outline" size={12} color={theme.color.textMuted} />
+              <AppText variant="caption" color="muted">{item.asset_no}</AppText>
             </View>
-          )}
+            <View style={[s.metaRow, isRTL && s.rowR]}>
+              <Ionicons name="calendar-outline" size={12} color={theme.color.textMuted} />
+              <AppText variant="caption" color="muted">{formattedDate}</AppText>
+              {item.tyre_count ? (
+                <>
+                  <AppText variant="caption" color="muted">·</AppText>
+                  <Ionicons name="ellipse-outline" size={12} color={theme.color.textMuted} />
+                  <AppText variant="caption" color="muted">{item.tyre_count} {t('history.tyres')}</AppText>
+                </>
+              ) : null}
+            </View>
+          </View>
+          <View style={s.cardRight}>
+            <Badge kind={meta.kind} icon={meta.icon as any}>{statusLabelFor(item.sync_status)}</Badge>
+            {item.locked ? <Badge kind="neutral" icon="lock-closed">Locked</Badge> : null}
+          </View>
         </View>
-      </TouchableOpacity>
+      </Card>
     )
   }
 
   const hasAnyRecords = items.length > 0
 
   return (
-    <SafeAreaView style={styles.safe}>
-      <StatusBar barStyle="dark-content" backgroundColor="#f0f5f1" />
-      <View style={[styles.header, isRTL && styles.headerRTL]}>
-        <Text style={[styles.headerTitle, { textAlign }]}>{t('history.title')}</Text>
-        <Text style={[styles.headerSub, { textAlign }]}>{filtered.length} {t('common.records')}</Text>
+    <Screen edges={['top']}>
+      <View style={s.header}>
+        <AppText variant="h2" style={{ textAlign }}>{t('history.title')}</AppText>
+        <AppText variant="caption" color="secondary" style={{ textAlign, marginTop: 2 }}>
+          {filtered.length} {t('common.records')}
+        </AppText>
       </View>
       <SyncBanner />
 
-      {/* Search + status filters */}
-      <View style={styles.controls}>
-        <View style={[styles.searchBox, isRTL && styles.searchBoxRTL]}>
-          <Ionicons name="search-outline" size={18} color="#94a3b8" />
-          <TextInput
-            style={[styles.searchInput, { textAlign }]}
-            value={query}
-            onChangeText={setQuery}
-            placeholder={t('history.searchPlaceholder')}
-            placeholderTextColor="#94a3b8"
-            autoCapitalize="none"
-            autoCorrect={false}
-            returnKeyType="search"
-          />
-          {query.length > 0 && (
-            <TouchableOpacity onPress={() => setQuery('')}>
-              <Ionicons name="close-circle" size={18} color="#cbd5e1" />
-            </TouchableOpacity>
-          )}
-        </View>
-
-        <FlatList
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          data={FILTERS}
-          keyExtractor={k => k}
-          contentContainerStyle={styles.filterRow}
-          renderItem={({ item: key }) => {
-            const active = filter === key
-            return (
-              <TouchableOpacity
-                style={[styles.filterChip, active && styles.filterChipActive]}
-                onPress={() => setFilter(key)}
-                activeOpacity={0.7}
-              >
-                <Text style={[styles.filterChipText, active && styles.filterChipTextActive]}>
-                  {filterLabel(key)}
-                </Text>
-                <View style={[styles.filterCount, active && styles.filterCountActive]}>
-                  <Text style={[styles.filterCountText, active && styles.filterCountTextActive]}>
-                    {counts[key]}
-                  </Text>
-                </View>
-              </TouchableOpacity>
-            )
-          }}
+      <View style={[s.searchWrap, isRTL && s.rowR]}>
+        <Ionicons name="search-outline" size={18} color={theme.color.textMuted} />
+        <TextInput
+          style={[s.search, { color: theme.color.text, textAlign }]}
+          value={query}
+          onChangeText={setQuery}
+          placeholder={t('history.searchPlaceholder')}
+          placeholderTextColor={theme.color.textMuted}
+          autoCapitalize="none"
+          autoCorrect={false}
+          returnKeyType="search"
         />
+        {query.length > 0 && (
+          <TouchableOpacity onPress={() => setQuery('')}>
+            <Ionicons name="close-circle" size={18} color={theme.color.textMuted} />
+          </TouchableOpacity>
+        )}
       </View>
 
-      {error && !loading && (
-        <View style={[styles.errorBanner, isRTL && styles.errorBannerRTL]}>
-          <Ionicons name="cloud-offline-outline" size={16} color="#dc2626" />
-          <Text style={[styles.errorText, { textAlign }]} numberOfLines={2}>{error}</Text>
-          <TouchableOpacity style={styles.errorRetry} onPress={onRefresh} disabled={refreshing}>
+      <FlatList
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        data={FILTERS}
+        keyExtractor={k => k}
+        contentContainerStyle={s.filterRow}
+        renderItem={({ item: key }) => {
+          const active = filter === key
+          return (
+            <TouchableOpacity
+              style={[s.chip, active && s.chipActive]}
+              onPress={() => setFilter(key)}
+              activeOpacity={0.8}
+            >
+              <AppText variant="label" style={{ color: active ? theme.color.onPrimary : theme.color.textSecondary }}>
+                {filterLabel(key)}
+              </AppText>
+              <View style={[s.chipCount, active && s.chipCountActive]}>
+                <AppText variant="micro" style={{ color: active ? theme.color.onPrimary : theme.color.textMuted }}>
+                  {counts[key]}
+                </AppText>
+              </View>
+            </TouchableOpacity>
+          )
+        }}
+      />
+
+      {error && !loading ? (
+        <View style={s.errorBanner}>
+          <Ionicons name="cloud-offline-outline" size={16} color={theme.color.danger.base} />
+          <AppText variant="caption" style={{ flex: 1, color: theme.color.danger.on, textAlign }} numberOfLines={2}>{error}</AppText>
+          <TouchableOpacity style={[s.errorRetry, { backgroundColor: theme.color.danger.base }]} onPress={onRefresh} disabled={refreshing} activeOpacity={0.8}>
             <Ionicons name="refresh" size={14} color="#fff" />
-            <Text style={styles.errorRetryText}>{t('common.retry')}</Text>
+            <AppText variant="micro" style={{ color: '#fff' }}>{t('common.retry')}</AppText>
           </TouchableOpacity>
         </View>
-      )}
+      ) : null}
 
       {loading ? (
-        <View style={styles.loader}>
-          <ActivityIndicator size="large" color="#16a34a" />
+        <View style={s.skeleton}>
+          <SkeletonList count={5} />
         </View>
       ) : (
         <FlatList
           data={filtered}
           keyExtractor={i => i.id}
           renderItem={renderItem}
-          contentContainerStyle={styles.list}
+          contentContainerStyle={s.list}
+          initialNumToRender={10}
+          maxToRenderPerBatch={10}
+          windowSize={9}
+          removeClippedSubviews
+          showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
           refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#16a34a" />
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.color.primary} />
           }
           ListEmptyComponent={
-            <View style={styles.empty}>
-              <Ionicons
-                name={hasAnyRecords ? 'filter-outline' : 'time-outline'}
-                size={52}
-                color="#cbd5e1"
+            error ? (
+              <ErrorState message={error} onRetry={onRefresh} />
+            ) : (
+              <EmptyState
+                icon={hasAnyRecords ? 'filter-outline' : 'time-outline'}
+                title={hasAnyRecords ? t('history.noResults') : t('history.noHistory')}
+                message={hasAnyRecords ? t('history.noResultsHint') : t('history.noHistoryHint')}
               />
-              <Text style={styles.emptyTitle}>
-                {hasAnyRecords ? t('history.noResults') : t('history.noHistory')}
-              </Text>
-              <Text style={styles.emptyText}>
-                {hasAnyRecords ? t('history.noResultsHint') : t('history.noHistoryHint')}
-              </Text>
-            </View>
+            )
           }
         />
       )}
-    </SafeAreaView>
+    </Screen>
   )
 }
 
-const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#f0f5f1' },
-  header: {
-    paddingHorizontal: 20,
-    paddingTop: 16,
-    paddingBottom: 12,
-    backgroundColor: '#fff',
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(0,0,0,0.07)',
-  },
-  headerRTL: { alignItems: 'flex-end' },
-  headerTitle: { fontSize: 20, fontWeight: '800', color: '#0f172a' },
-  headerSub: { fontSize: 13, color: '#94a3b8', marginTop: 2 },
-  controls: { backgroundColor: '#fff', paddingBottom: 10, borderBottomWidth: 1, borderBottomColor: 'rgba(0,0,0,0.05)' },
-  searchBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginHorizontal: 16,
-    marginTop: 12,
-    backgroundColor: '#f1f5f9',
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    height: 44,
-  },
-  searchBoxRTL: { flexDirection: 'row-reverse' },
-  searchInput: { flex: 1, fontSize: 14, color: '#0f172a' },
-  filterRow: { gap: 8, paddingHorizontal: 16, paddingTop: 12 },
-  filterChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: 10,
-    borderWidth: 1.5,
-    borderColor: '#e2e8f0',
-    backgroundColor: '#fff',
-  },
-  filterChipActive: { backgroundColor: '#16a34a', borderColor: '#16a34a' },
-  filterChipText: { fontSize: 13, fontWeight: '600', color: '#64748b' },
-  filterChipTextActive: { color: '#fff' },
-  filterCount: {
-    minWidth: 20,
-    paddingHorizontal: 5,
-    paddingVertical: 1,
-    borderRadius: 8,
-    backgroundColor: '#f1f5f9',
-    alignItems: 'center',
-  },
-  filterCountActive: { backgroundColor: 'rgba(255,255,255,0.25)' },
-  filterCountText: { fontSize: 11, fontWeight: '700', color: '#64748b' },
-  filterCountTextActive: { color: '#fff' },
-  errorBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginHorizontal: 16,
-    marginTop: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderRadius: 12,
-    backgroundColor: 'rgba(239,68,68,0.08)',
-    borderWidth: 1,
-    borderColor: 'rgba(239,68,68,0.25)',
-  },
-  errorBannerRTL: { flexDirection: 'row-reverse' },
-  errorText: { flex: 1, fontSize: 12, fontWeight: '600', color: '#dc2626' },
-  errorRetry: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 8,
-    backgroundColor: '#dc2626',
-  },
-  errorRetryText: { fontSize: 12, fontWeight: '700', color: '#fff' },
-  loader: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  list: { padding: 16, gap: 10, paddingBottom: 40, flexGrow: 1 },
-  card: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 12,
-    backgroundColor: '#fff',
-    borderRadius: 14,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: 'rgba(0,0,0,0.06)',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.04,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  cardLeft: {},
-  cardIcon: {
-    width: 38,
-    height: 38,
-    borderRadius: 10,
-    backgroundColor: 'rgba(22,163,74,0.08)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  cardBody: { flex: 1, gap: 4 },
-  cardTitle: { fontSize: 13, fontWeight: '700', color: '#0f172a' },
-  metaRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  metaRowRTL: { flexDirection: 'row-reverse' },
-  metaText: { fontSize: 11, color: '#94a3b8' },
-  metaDot: { fontSize: 11, color: '#cbd5e1' },
-  statusBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
-    alignSelf: 'flex-start',
-    marginTop: 2,
-  },
-  statusText: { fontSize: 10, fontWeight: '700' },
-  lockBadge: { flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: 'rgba(100,116,139,0.1)', borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2 },
-  lockText: { fontSize: 9, fontWeight: '700', color: '#64748b' },
-  empty: { alignItems: 'center', paddingTop: 60, gap: 10 },
-  emptyTitle: { fontSize: 16, fontWeight: '700', color: '#94a3b8' },
-  emptyText: { fontSize: 13, color: '#cbd5e1', textAlign: 'center' },
-})
+function makeStyles(theme: Theme) {
+  const c = theme.color
+  return StyleSheet.create({
+    rowR: { flexDirection: 'row-reverse' },
+    header: {
+      paddingHorizontal: spacing.lg, paddingTop: spacing.sm, paddingBottom: spacing.md,
+    },
+    searchWrap: {
+      flexDirection: 'row', alignItems: 'center', gap: spacing.sm,
+      marginHorizontal: spacing.lg, marginTop: spacing.sm,
+      backgroundColor: c.surface, borderRadius: radius.md,
+      paddingHorizontal: spacing.md,
+      borderWidth: 1.5, borderColor: c.border,
+    },
+    search: { flex: 1, paddingVertical: 12, fontSize: 15, fontWeight: '500' },
+    filterRow: { gap: spacing.sm, paddingHorizontal: spacing.lg, paddingTop: spacing.md, paddingBottom: spacing.xs },
+    chip: {
+      flexDirection: 'row', alignItems: 'center', gap: spacing.sm,
+      paddingHorizontal: spacing.md, paddingVertical: spacing.sm,
+      borderRadius: radius.pill, backgroundColor: c.surface,
+      borderWidth: 1.5, borderColor: c.border, height: 38,
+    },
+    chipActive: { backgroundColor: c.primary, borderColor: c.primary },
+    chipCount: {
+      minWidth: 22, paddingHorizontal: 6, paddingVertical: 1,
+      borderRadius: radius.pill, backgroundColor: c.surfaceAlt, alignItems: 'center',
+    },
+    chipCountActive: { backgroundColor: 'rgba(255,255,255,0.24)' },
+    errorBanner: {
+      flexDirection: 'row', alignItems: 'center', gap: spacing.sm,
+      marginHorizontal: spacing.lg, marginTop: spacing.sm,
+      paddingHorizontal: spacing.md, paddingVertical: spacing.md,
+      borderRadius: radius.md, backgroundColor: c.danger.soft,
+      borderWidth: 1, borderColor: c.danger.base,
+    },
+    errorRetry: {
+      flexDirection: 'row', alignItems: 'center', gap: 4,
+      paddingHorizontal: spacing.md, paddingVertical: 6, borderRadius: radius.sm,
+    },
+    skeleton: { paddingHorizontal: spacing.lg, paddingTop: spacing.md, gap: spacing.md },
+    list: { paddingHorizontal: spacing.lg, paddingBottom: spacing['4xl'], gap: spacing.md, paddingTop: spacing.md, flexGrow: 1 },
+    card: { overflow: 'hidden' },
+    cardRow: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.md, padding: spacing.md },
+    cardIcon: { width: 42, height: 42, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center' },
+    metaRow: { flexDirection: 'row', alignItems: 'center', gap: 4, flexWrap: 'wrap' },
+    cardRight: { alignItems: 'flex-end', gap: spacing.xs },
+  })
+}

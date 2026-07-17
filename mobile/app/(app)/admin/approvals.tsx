@@ -16,7 +16,7 @@
  */
 import { useState, useCallback, useEffect, useMemo } from 'react'
 import {
-  View, Text, ScrollView, TouchableOpacity, StyleSheet, Platform,
+  View, Text, FlatList, TouchableOpacity, StyleSheet, Platform,
   StatusBar, ActivityIndicator, RefreshControl, TextInput, Alert,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
@@ -90,32 +90,50 @@ export default function AdminApprovalsScreen() {
   const [acting, setActing]   = useState<string | null>(null)
   const [search, setSearch]   = useState('')
   const [tab, setTab]         = useState<'pending' | 'history'>('pending')
+  const [loadError, setLoadError] = useState<string | null>(null)
 
   // ── Closures ───────────────────────────────────────────────────────────────
   const [closures, setClosures] = useState<PendingClosure[]>([])
   const [closuresLoading, setClosuresLoading] = useState(true)
+  const [closuresError, setClosuresError] = useState<string | null>(null)
 
   const load = useCallback(async () => {
-    const { data } = await supabase
-      .from('pending_uploads')
-      .select('id, batch_id, uploader_name, country, upload_type, target_table, file_name, row_count, rows, status, review_note, created_at')
-      .order('created_at', { ascending: false })
-      .limit(200)
-    setItems((data ?? []) as PendingUpload[])
-    setLoading(false)
+    try {
+      const { data, error } = await supabase
+        .from('pending_uploads')
+        .select('id, batch_id, uploader_name, country, upload_type, target_table, file_name, row_count, rows, status, review_note, created_at')
+        .order('created_at', { ascending: false })
+        .limit(200)
+      if (error) throw error
+      setItems((data ?? []) as PendingUpload[])
+      setLoadError(null)
+    } catch (e: any) {
+      if (__DEV__) console.warn('[approvals] load uploads failed', e)
+      setLoadError(e?.message ?? 'Failed to load uploads.')
+    } finally {
+      setLoading(false)
+    }
   }, [])
 
   const loadClosures = useCallback(async () => {
-    const { data } = await supabase
-      .from('accidents')
-      .select(CLOSURE_COLS)
-      .eq('closure_status', 'pending_closure')
-      .order('close_requested_at', { ascending: true })
-      .limit(200)
-    // Cast through unknown: the generated DB types predate the accident closure
-    // columns, so PostgREST's inferred row type does not overlap PendingClosure.
-    setClosures((data ?? []) as unknown as PendingClosure[])
-    setClosuresLoading(false)
+    try {
+      const { data, error } = await supabase
+        .from('accidents')
+        .select(CLOSURE_COLS)
+        .eq('closure_status', 'pending_closure')
+        .order('close_requested_at', { ascending: true })
+        .limit(200)
+      if (error) throw error
+      // Cast through unknown: the generated DB types predate the accident closure
+      // columns, so PostgREST's inferred row type does not overlap PendingClosure.
+      setClosures((data ?? []) as unknown as PendingClosure[])
+      setClosuresError(null)
+    } catch (e: any) {
+      if (__DEV__) console.warn('[approvals] load closures failed', e)
+      setClosuresError(e?.message ?? 'Failed to load closures.')
+    } finally {
+      setClosuresLoading(false)
+    }
   }, [])
 
   useEffect(() => { load(); loadClosures() }, [load, loadClosures])
@@ -365,25 +383,42 @@ export default function AdminApprovalsScreen() {
             ))}
           </View>
 
-          <ScrollView
+          <FlatList
             style={styles.scroll}
             contentContainerStyle={styles.content}
+            data={filtered}
+            keyExtractor={p => p.id}
+            initialNumToRender={10}
+            maxToRenderPerBatch={10}
+            windowSize={11}
             refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#16a34a" />}
-          >
-            {filtered.length === 0 ? (
-              <View style={styles.empty}>
-                <Ionicons name="checkmark-done-outline" size={52} color="#86efac" />
-                <Text style={styles.emptyTitle}>{tab === 'pending' ? 'Nothing to approve' : 'No history yet'}</Text>
-                <Text style={styles.emptyHint}>
-                  {tab === 'pending' ? 'Uploads submitted by non-admins appear here.' : 'Approved and rejected uploads will show here.'}
-                </Text>
-              </View>
-            ) : (
-              filtered.map(p => {
+            ListFooterComponent={<View style={{ height: 32 }} />}
+            ListEmptyComponent={
+              loadError && items.length === 0 ? (
+                <View style={styles.empty}>
+                  <Ionicons name="alert-circle-outline" size={52} color="#f87171" />
+                  <Text style={styles.emptyTitle}>Couldn't load uploads</Text>
+                  <Text style={styles.emptyHint}>{loadError}</Text>
+                  <TouchableOpacity style={styles.retryBtn} onPress={load}>
+                    <Ionicons name="refresh" size={16} color="#16a34a" />
+                    <Text style={styles.retryBtnText}>Retry</Text>
+                  </TouchableOpacity>
+                </View>
+              ) : (
+                <View style={styles.empty}>
+                  <Ionicons name="checkmark-done-outline" size={52} color="#86efac" />
+                  <Text style={styles.emptyTitle}>{tab === 'pending' ? 'Nothing to approve' : 'No history yet'}</Text>
+                  <Text style={styles.emptyHint}>
+                    {tab === 'pending' ? 'Uploads submitted by non-admins appear here.' : 'Approved and rejected uploads will show here.'}
+                  </Text>
+                </View>
+              )
+            }
+            renderItem={({ item: p }) => {
                 const meta = TYPE_META[p.upload_type] ?? TYPE_META.tyres
                 const busy = acting === p.id
                 return (
-                  <View key={p.id} style={styles.card}>
+                  <View style={styles.card}>
                     <View style={[styles.typeStrip, { backgroundColor: meta.color }]} />
                     <View style={styles.cardBody}>
                       <View style={styles.cardTop}>
@@ -434,30 +469,45 @@ export default function AdminApprovalsScreen() {
                     </View>
                   </View>
                 )
-              })
-            )}
-            <View style={{ height: 32 }} />
-          </ScrollView>
+            }}
+          />
         </>
+      ) : closuresLoading ? (
+        <View style={styles.loaderInline}><ActivityIndicator size="small" color="#16a34a" /></View>
       ) : (
-        <ScrollView
+        <FlatList
           style={styles.scroll}
           contentContainerStyle={styles.content}
+          data={closures}
+          keyExtractor={c => c.id}
+          initialNumToRender={10}
+          maxToRenderPerBatch={10}
+          windowSize={11}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#16a34a" />}
-        >
-          {closuresLoading ? (
-            <View style={styles.loaderInline}><ActivityIndicator size="small" color="#16a34a" /></View>
-          ) : closures.length === 0 ? (
-            <View style={styles.empty}>
-              <Ionicons name="lock-closed-outline" size={52} color="#86efac" />
-              <Text style={styles.emptyTitle}>No closures awaiting approval</Text>
-              <Text style={styles.emptyHint}>Accident cases requested for closure appear here for sign-off.</Text>
-            </View>
-          ) : (
-            closures.map(c => {
+          ListFooterComponent={<View style={{ height: 32 }} />}
+          ListEmptyComponent={
+            closuresError && closures.length === 0 ? (
+              <View style={styles.empty}>
+                <Ionicons name="alert-circle-outline" size={52} color="#f87171" />
+                <Text style={styles.emptyTitle}>Couldn't load closures</Text>
+                <Text style={styles.emptyHint}>{closuresError}</Text>
+                <TouchableOpacity style={styles.retryBtn} onPress={loadClosures}>
+                  <Ionicons name="refresh" size={16} color="#16a34a" />
+                  <Text style={styles.retryBtnText}>Retry</Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <View style={styles.empty}>
+                <Ionicons name="lock-closed-outline" size={52} color="#86efac" />
+                <Text style={styles.emptyTitle}>No closures awaiting approval</Text>
+                <Text style={styles.emptyHint}>Accident cases requested for closure appear here for sign-off.</Text>
+              </View>
+            )
+          }
+          renderItem={({ item: c }) => {
               const busy = acting === c.id
               return (
-                <View key={c.id} style={styles.card}>
+                <View style={styles.card}>
                   <View style={[styles.typeStrip, { backgroundColor: '#b45309' }]} />
                   <View style={styles.cardBody}>
                     <View style={styles.cardTop}>
@@ -498,10 +548,8 @@ export default function AdminApprovalsScreen() {
                   </View>
                 </View>
               )
-            })
-          )}
-          <View style={{ height: 32 }} />
-        </ScrollView>
+          }}
+        />
       )}
     </SafeAreaView>
   )
@@ -554,4 +602,6 @@ const styles = StyleSheet.create({
   empty:      { alignItems: 'center', paddingVertical: 60, gap: 12 },
   emptyTitle: { fontSize: 16, fontWeight: '700', color: '#374151' },
   emptyHint:  { fontSize: 13, color: '#94a3b8', textAlign: 'center', paddingHorizontal: 20 },
+  retryBtn:   { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 6, paddingHorizontal: 16, paddingVertical: 9, borderRadius: 10, borderWidth: 1.5, borderColor: '#bbf7d0', backgroundColor: '#f0fdf4' },
+  retryBtnText: { fontSize: 13, fontWeight: '700', color: '#16a34a' },
 })

@@ -114,6 +114,21 @@ export default function TasksScreen() {
         )}
       </View>
 
+      <TouchableOpacity
+        style={[styles.calendarLink, isRTL && styles.rowR]}
+        onPress={() => router.push('/(app)/calendar')}
+        activeOpacity={0.8}
+      >
+        <View style={styles.calendarIcon}>
+          <Ionicons name="calendar-outline" size={18} color="#0369a1" />
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={[styles.calendarTitle, { textAlign }]}>Open calendar</Text>
+          <Text style={[styles.calendarSub, { textAlign }]}>Upcoming inspections, maintenance and tasks by day</Text>
+        </View>
+        <Ionicons name={isRTL ? 'chevron-back' : 'chevron-forward'} size={18} color="#94a3b8" />
+      </TouchableOpacity>
+
       <View style={styles.filters}>
         {FILTERS.map(f => (
           <TouchableOpacity
@@ -194,6 +209,10 @@ const styles = StyleSheet.create({
   title: { fontSize: 20, fontWeight: '800', color: '#0f172a' },
   sub: { fontSize: 12, color: '#64748b', marginTop: 2 },
   newBtn: { width: 40, height: 40, borderRadius: 12, backgroundColor: '#16a34a', alignItems: 'center', justifyContent: 'center' },
+  calendarLink: { flexDirection: 'row', alignItems: 'center', gap: 12, marginHorizontal: 16, marginBottom: 10, backgroundColor: '#fff', borderRadius: 14, padding: 12, borderWidth: 1, borderColor: 'rgba(0,0,0,0.06)' },
+  calendarIcon: { width: 38, height: 38, borderRadius: 10, backgroundColor: 'rgba(3,105,161,0.08)', alignItems: 'center', justifyContent: 'center' },
+  calendarTitle: { fontSize: 14, fontWeight: '700', color: '#0f172a' },
+  calendarSub: { fontSize: 11, color: '#94a3b8', marginTop: 2 },
   filters: { flexDirection: 'row', gap: 8, paddingHorizontal: 16, paddingBottom: 8 },
   chip: { paddingHorizontal: 14, paddingVertical: 7, borderRadius: 999, backgroundColor: '#fff', borderWidth: 1, borderColor: 'rgba(0,0,0,0.08)' },
   chipActive: { backgroundColor: '#16a34a', borderColor: '#16a34a' },

@@ -1,18 +1,20 @@
 import { useEffect, useState, useCallback, useMemo } from 'react'
 import {
-  View, Text, FlatList, StyleSheet, TouchableOpacity, Modal, TextInput,
-  RefreshControl, StatusBar, ActivityIndicator, Alert, ScrollView, KeyboardAvoidingView, Platform,
+  View, FlatList, StyleSheet, TouchableOpacity, Modal, TextInput,
+  RefreshControl, ScrollView, KeyboardAvoidingView, Platform, Alert, ActivityIndicator,
 } from 'react-native'
-import { SafeAreaView } from 'react-native-safe-area-context'
 import { useRouter, useLocalSearchParams } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
 import { supabase } from '../../lib/supabase'
 import { saveCommand } from '../../lib/recordQueue'
 import { useAuth } from '../../contexts/AuthContext'
 import { useLanguage } from '../../contexts/LanguageContext'
+import { useTheme } from '../../contexts/ThemeContext'
 import { useRealtime } from '../../hooks/useRealtime'
 import { useRoleGuard } from '../../hooks/useRoleGuard'
 import { canDoRca } from '../../lib/permissions'
+import { spacing, radius, typography, Theme } from '../../lib/theme'
+import { Screen, AppText, EmptyState, Loading } from '../../components/ui'
 import PhotoCapture from '../../components/PhotoCapture'
 
 interface Rca {
@@ -36,7 +38,10 @@ const FACTORS = [
 export default function RcaScreen() {
   const { profile } = useAuth()
   const { t, isRTL } = useLanguage()
+  const { theme } = useTheme()
   const router = useRouter()
+  const styles = useMemo(() => makeStyles(theme), [theme])
+  const c = theme.color
   const params = useLocalSearchParams<{ asset?: string; site?: string; serial?: string; brand?: string }>()
   const [rows, setRows] = useState<Rca[]>([])
   const [loading, setLoading] = useState(true)
@@ -106,46 +111,45 @@ export default function RcaScreen() {
   if (!allowed) return null
 
   return (
-    <SafeAreaView style={styles.safe}>
-      <StatusBar barStyle="dark-content" backgroundColor="#f0f5f1" />
+    <Screen>
       <View style={[styles.header, isRTL && styles.rowR]}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-          <Ionicons name={isRTL ? 'arrow-forward' : 'arrow-back'} size={22} color="#0f172a" />
+          <Ionicons name={isRTL ? 'arrow-forward' : 'arrow-back'} size={22} color={c.text} />
         </TouchableOpacity>
         <View style={{ flex: 1 }}>
-          <Text style={[styles.title, { textAlign }]}>{t('modules.rca.title')}</Text>
-          <Text style={[styles.sub, { textAlign }]}>{rows.length} {t('modules.rca.records')}</Text>
+          <AppText variant="h2" style={{ textAlign }}>{t('modules.rca.title')}</AppText>
+          <AppText variant="caption" color="secondary" style={{ textAlign, marginTop: 2 }}>{rows.length} {t('modules.rca.records')}</AppText>
         </View>
         {mayCreate && (
           <TouchableOpacity style={styles.newBtn} onPress={() => setShowForm(true)}>
-            <Ionicons name="add" size={20} color="#fff" />
+            <Ionicons name="add" size={20} color={c.onPrimary} />
           </TouchableOpacity>
         )}
       </View>
 
       {loading ? (
-        <ActivityIndicator color="#16a34a" style={{ marginTop: 40 }} />
+        <Loading />
       ) : (
         <FlatList
           data={rows}
           keyExtractor={i => i.id}
           contentContainerStyle={styles.list}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#16a34a" />}
-          ListEmptyComponent={<View style={styles.empty}><Ionicons name="search-outline" size={48} color="#cbd5e1" /><Text style={styles.emptyText}>{t('modules.rca.none')}</Text></View>}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={c.primary} />}
+          ListEmptyComponent={<EmptyState icon="search-outline" title={t('modules.rca.none')} />}
           renderItem={({ item }) => (
             <View style={styles.card}>
-              <View style={styles.rcaIcon}><Ionicons name="git-network-outline" size={18} color="#7c3aed" /></View>
+              <View style={styles.rcaIcon}><Ionicons name="git-network-outline" size={18} color={theme.tint.violet.fg} /></View>
               <View style={{ flex: 1, gap: 4 }}>
-                <Text style={[styles.cardTitle, { textAlign }]}>{item.asset_no ?? 'Unknown'}{item.brand ? ` · ${item.brand}` : ''}</Text>
-                <Text style={[styles.cardCause, { textAlign }]} numberOfLines={3}>{item.root_cause}</Text>
+                <AppText variant="bodyStrong" style={{ textAlign }}>{item.asset_no ?? 'Unknown'}{item.brand ? ` · ${item.brand}` : ''}</AppText>
+                <AppText variant="caption" color="secondary" style={{ textAlign }} numberOfLines={3}>{item.root_cause}</AppText>
                 <View style={[styles.badges, isRTL && styles.rowR]}>
                   {(item.contributing_factors ?? []).slice(0, 3).map(f => (
-                    <View key={f} style={styles.factorBadge}><Text style={styles.factorText}>{f}</Text></View>
+                    <View key={f} style={styles.factorBadge}><AppText style={[typography.micro, { color: theme.tint.violet.fg }]}>{f}</AppText></View>
                   ))}
                 </View>
-                <Text style={[styles.cardMeta, { textAlign }]}>
+                <AppText variant="micro" color="muted" style={{ textAlign }}>
                   {[item.site, item.failure_date, item.km_at_failure != null ? `${item.km_at_failure} km` : null].filter(Boolean).join(' · ')}
-                </Text>
+                </AppText>
               </View>
             </View>
           )}
@@ -156,85 +160,77 @@ export default function RcaScreen() {
         <KeyboardAvoidingView style={styles.modalWrap} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
           <View style={styles.sheet}>
             <View style={[styles.sheetHead, isRTL && styles.rowR]}>
-              <Text style={styles.sheetTitle}>{t('modules.rca.new')}</Text>
-              <TouchableOpacity onPress={() => setShowForm(false)}><Ionicons name="close" size={24} color="#64748b" /></TouchableOpacity>
+              <AppText variant="h3">{t('modules.rca.new')}</AppText>
+              <TouchableOpacity onPress={() => setShowForm(false)}><Ionicons name="close" size={24} color={c.textSecondary} /></TouchableOpacity>
             </View>
             <ScrollView keyboardShouldPersistTaps="handled">
               <View style={styles.row2}>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.label}>{t('modules.common.asset')}</Text>
-                  <TextInput style={styles.input} placeholder="TM-001" placeholderTextColor="#94a3b8" value={asset} onChangeText={setAsset} autoCapitalize="characters" />
+                  <AppText style={styles.label}>{t('modules.common.asset')}</AppText>
+                  <TextInput style={styles.input} placeholder="TM-001" placeholderTextColor={c.textMuted} value={asset} onChangeText={setAsset} autoCapitalize="characters" />
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.label}>{t('modules.common.serial')}</Text>
-                  <TextInput style={styles.input} placeholder="Tyre serial" placeholderTextColor="#94a3b8" value={serial} onChangeText={setSerial} autoCapitalize="characters" />
+                  <AppText style={styles.label}>{t('modules.common.serial')}</AppText>
+                  <TextInput style={styles.input} placeholder="Tyre serial" placeholderTextColor={c.textMuted} value={serial} onChangeText={setSerial} autoCapitalize="characters" />
                 </View>
               </View>
               <View style={styles.row2}>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.label}>{t('modules.common.brand')}</Text>
-                  <TextInput style={styles.input} placeholder="Brand" placeholderTextColor="#94a3b8" value={brand} onChangeText={setBrand} />
+                  <AppText style={styles.label}>{t('modules.common.brand')}</AppText>
+                  <TextInput style={styles.input} placeholder="Brand" placeholderTextColor={c.textMuted} value={brand} onChangeText={setBrand} />
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.label}>{t('modules.rca.kmFailure')}</Text>
-                  <TextInput style={styles.input} placeholder="km" placeholderTextColor="#94a3b8" value={km} onChangeText={setKm} keyboardType="numeric" />
+                  <AppText style={styles.label}>{t('modules.rca.kmFailure')}</AppText>
+                  <TextInput style={styles.input} placeholder="km" placeholderTextColor={c.textMuted} value={km} onChangeText={setKm} keyboardType="numeric" />
                 </View>
               </View>
-              <Text style={styles.label}>{t('modules.rca.factors')}</Text>
+              <AppText style={styles.label}>{t('modules.rca.factors')}</AppText>
               <View style={styles.chipRow}>
                 {FACTORS.map(f => (
                   <TouchableOpacity key={f} style={[styles.chip, factors.includes(f) && styles.chipActive]} onPress={() => toggleFactor(f)}>
-                    <Text style={[styles.chipText, factors.includes(f) && styles.chipTextActive]}>{t(`modules.factors.${f}`)}</Text>
+                    <AppText style={[typography.caption, factors.includes(f) ? styles.chipTextActive : styles.chipText]}>{t(`modules.factors.${f}`)}</AppText>
                   </TouchableOpacity>
                 ))}
               </View>
-              <Text style={styles.label}>{t('modules.rca.rootCause')}</Text>
-              <TextInput style={[styles.input, styles.textarea]} placeholder={t('modules.rca.rootCausePh')} placeholderTextColor="#94a3b8" value={rootCause} onChangeText={setRootCause} multiline />
-              <Text style={styles.label}>{t('modules.common.photos')}</Text>
-              <PhotoCapture value={photos} onChange={setPhotos} module="rca" tint="#7c3aed" />
+              <AppText style={styles.label}>{t('modules.rca.rootCause')}</AppText>
+              <TextInput style={[styles.input, styles.textarea]} placeholder={t('modules.rca.rootCausePh')} placeholderTextColor={c.textMuted} value={rootCause} onChangeText={setRootCause} multiline />
+              <AppText style={styles.label}>{t('modules.common.photos')}</AppText>
+              <PhotoCapture value={photos} onChange={setPhotos} module="rca" tint={theme.tint.violet.fg} />
               <TouchableOpacity style={[styles.submit, saving && { opacity: 0.6 }]} onPress={create} disabled={saving}>
-                {saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.submitText}>{t('modules.rca.save')}</Text>}
+                {saving ? <Ionicons name="ellipsis-horizontal" size={20} color={c.onPrimary} /> : <AppText style={[typography.title, { color: c.onPrimary }]}>{t('modules.rca.save')}</AppText>}
               </TouchableOpacity>
             </ScrollView>
           </View>
         </KeyboardAvoidingView>
       </Modal>
-    </SafeAreaView>
+    </Screen>
   )
 }
 
-const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#f0f5f1' },
-  rowR: { flexDirection: 'row-reverse' },
-  header: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 16 },
-  backBtn: { width: 38, height: 38, borderRadius: 10, backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: 'rgba(0,0,0,0.06)' },
-  title: { fontSize: 20, fontWeight: '800', color: '#0f172a' },
-  sub: { fontSize: 12, color: '#64748b', marginTop: 2 },
-  newBtn: { width: 40, height: 40, borderRadius: 12, backgroundColor: '#7c3aed', alignItems: 'center', justifyContent: 'center' },
-  list: { padding: 16, gap: 10, paddingBottom: 40 },
-  card: { flexDirection: 'row', gap: 12, backgroundColor: '#fff', borderRadius: 14, padding: 14, borderWidth: 1, borderColor: 'rgba(0,0,0,0.06)' },
-  rcaIcon: { width: 34, height: 34, borderRadius: 10, backgroundColor: 'rgba(124,58,237,0.1)', alignItems: 'center', justifyContent: 'center' },
-  cardTitle: { fontSize: 14, fontWeight: '800', color: '#0f172a' },
-  cardCause: { fontSize: 12.5, color: '#475569' },
-  cardMeta: { fontSize: 11, color: '#94a3b8' },
-  badges: { flexDirection: 'row', gap: 6, flexWrap: 'wrap' },
-  factorBadge: { backgroundColor: 'rgba(124,58,237,0.08)', borderRadius: 6, paddingHorizontal: 7, paddingVertical: 2 },
-  factorText: { fontSize: 10, fontWeight: '700', color: '#7c3aed' },
-  empty: { alignItems: 'center', paddingVertical: 60, gap: 10 },
-  emptyText: { fontSize: 15, fontWeight: '700', color: '#94a3b8' },
-  modalWrap: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.4)' },
-  sheet: { backgroundColor: '#f0f5f1', borderTopLeftRadius: 22, borderTopRightRadius: 22, padding: 18, maxHeight: '90%' },
-  sheetHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 },
-  sheetTitle: { fontSize: 18, fontWeight: '800', color: '#0f172a' },
-  label: { fontSize: 13, fontWeight: '700', color: '#475569', marginTop: 12, marginBottom: 6 },
-  input: { backgroundColor: '#fff', borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, fontSize: 14, color: '#0f172a', borderWidth: 1, borderColor: 'rgba(0,0,0,0.08)' },
-  textarea: { minHeight: 90, textAlignVertical: 'top' },
-  row2: { flexDirection: 'row', gap: 10 },
-  chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  chip: { paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999, backgroundColor: '#fff', borderWidth: 1, borderColor: 'rgba(0,0,0,0.1)' },
-  chipActive: { backgroundColor: '#7c3aed', borderColor: '#7c3aed' },
-  chipText: { fontSize: 12, fontWeight: '700', color: '#64748b' },
-  chipTextActive: { color: '#fff' },
-  submit: { backgroundColor: '#7c3aed', borderRadius: 14, padding: 16, alignItems: 'center', marginTop: 20, marginBottom: 12 },
-  submitText: { fontSize: 16, fontWeight: '800', color: '#fff' },
-})
+function makeStyles(theme: Theme) {
+  const c = theme.color
+  return StyleSheet.create({
+    rowR: { flexDirection: 'row-reverse' },
+    header: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, padding: spacing.lg },
+    backBtn: { width: 38, height: 38, borderRadius: radius.sm, backgroundColor: c.surface, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: c.border },
+    newBtn: { width: 40, height: 40, borderRadius: radius.md, backgroundColor: c.primary, alignItems: 'center', justifyContent: 'center' },
+    list: { padding: spacing.lg, gap: spacing.sm, paddingBottom: spacing['4xl'] },
+    card: { flexDirection: 'row', gap: spacing.md, backgroundColor: c.surface, borderRadius: radius.lg, padding: spacing.md, borderWidth: 1, borderColor: c.border },
+    rcaIcon: { width: 34, height: 34, borderRadius: radius.sm, backgroundColor: theme.tint.violet.bg, alignItems: 'center', justifyContent: 'center' },
+    badges: { flexDirection: 'row', gap: 6, flexWrap: 'wrap' },
+    factorBadge: { backgroundColor: theme.tint.violet.bg, borderRadius: radius.sm, paddingHorizontal: 7, paddingVertical: 2 },
+    modalWrap: { flex: 1, justifyContent: 'flex-end', backgroundColor: c.overlay },
+    sheet: { backgroundColor: c.bg, borderTopLeftRadius: radius['2xl'], borderTopRightRadius: radius['2xl'], padding: spacing.lg, maxHeight: '90%' },
+    sheetHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.sm },
+    label: { ...typography.label, color: c.textSecondary, marginTop: spacing.md, marginBottom: spacing.sm },
+    input: { backgroundColor: c.surface, borderRadius: radius.md, paddingHorizontal: spacing.md, paddingVertical: spacing.md, fontSize: 14, color: c.text, borderWidth: 1, borderColor: c.border },
+    textarea: { minHeight: 90, textAlignVertical: 'top' },
+    row2: { flexDirection: 'row', gap: spacing.sm },
+    chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
+    chip: { paddingHorizontal: spacing.md, paddingVertical: 7, borderRadius: radius.pill, backgroundColor: c.surface, borderWidth: 1, borderColor: c.border },
+    chipActive: { backgroundColor: c.primary, borderColor: c.primary },
+    chipText: { color: c.textSecondary },
+    chipTextActive: { color: c.onPrimary },
+    submit: { backgroundColor: c.primary, borderRadius: radius.lg, padding: spacing.lg, alignItems: 'center', marginTop: spacing.xl, marginBottom: spacing.md },
+  })
+}

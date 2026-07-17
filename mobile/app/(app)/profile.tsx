@@ -1,13 +1,15 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import {
-  View, Text, StyleSheet, TouchableOpacity, Alert, Switch,
-  ScrollView, StatusBar, ActivityIndicator,
+  View, StyleSheet, TouchableOpacity, Alert, Switch,
+  ScrollView, ActivityIndicator,
 } from 'react-native'
-import { SafeAreaView } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
 import { useAuth } from '../../contexts/AuthContext'
 import { useLanguage, Language } from '../../contexts/LanguageContext'
+import { useTheme, ThemePreference } from '../../contexts/ThemeContext'
+import { Theme, spacing, radius, typography, elevation } from '../../lib/theme'
+import { Screen, Card, AppText, Button, ListRow, SectionHeader } from '../../components/ui'
 import { getPendingCount, syncQueue, retryFailed, clearSynced, getQueue } from '../../lib/offlineQueue'
 import {
   getPendingRecordCount, syncRecordQueue, retryFailedRecords,
@@ -28,10 +30,22 @@ const LANG_OPTIONS: { code: Language; labelKey: string }[] = [
   { code: 'ur', labelKey: 'language.urdu' },
 ]
 
+type IconName = React.ComponentProps<typeof Ionicons>['name']
+
+const APPEARANCE_OPTIONS: {
+  key: ThemePreference; label: string; icon: IconName; hint?: string
+}[] = [
+  { key: 'light', label: 'Light', icon: 'sunny-outline', hint: 'Recommended' },
+  { key: 'dark', label: 'Dark', icon: 'moon-outline' },
+  { key: 'system', label: 'System', icon: 'phone-portrait-outline' },
+]
+
 export default function ProfileScreen() {
   const { profile, signOut } = useAuth()
   const { t, language, setLanguage, isRTL } = useLanguage()
+  const { theme, preference, setPreference } = useTheme()
   const router = useRouter()
+  const styles = useMemo(() => makeStyles(theme), [theme])
   const [pending, setPending] = useState(0)
   const [syncing, setSyncing] = useState(false)
   const [queueTotal, setQueueTotal] = useState(0)
@@ -131,160 +145,205 @@ export default function ProfileScreen() {
     )
   }
 
+  const role = profile?.role
+  type Tool = { key: string; label: string; icon: IconName; tint: 'blue' | 'violet' | 'green' | 'amber'; show: boolean; go: () => void }
+  const tools: Tool[] = ([
+    { key: 'team',  label: t('modules.workspace.team'),         icon: 'people-outline',    tint: 'blue',   show: canManageUsers(role) || canAccessAdmin(role), go: () => router.push('/(app)/team') },
+    { key: 'users', label: t('modules.workspace.manageUsers'),  icon: 'person-add-outline', tint: 'violet', show: canManageUsers(role), go: () => router.push('/(app)/admin/users') },
+    { key: 'admin', label: t('modules.workspace.admin'),        icon: 'shield-outline',    tint: 'violet', show: canAccessAdmin(role), go: () => router.push('/(app)/admin') },
+    { key: 'ai',    label: t('modules.workspace.ai'),           icon: 'sparkles-outline',  tint: 'green',  show: canUseAI(role), go: () => router.push('/(app)/admin/ai-chat') },
+    { key: 'acc',   label: t('modules.workspace.accidents'),    icon: 'warning-outline',   tint: 'amber',  show: canViewAccidents(role), go: () => router.push('/(app)/accident/dashboard') },
+  ] as Tool[]).filter(x => x.show)
+
   return (
-    <SafeAreaView style={styles.safe}>
-      <StatusBar barStyle="dark-content" backgroundColor="#f0f5f1" />
+    <Screen edges={['top']}>
       <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
 
         {/* Profile card */}
-        <View style={[styles.profileCard, isRTL && styles.profileCardRTL]}>
+        <Card level={2} style={StyleSheet.flatten([styles.profileCard, isRTL && styles.rowReverse])}>
           <View style={styles.avatar}>
-            <Text style={styles.avatarInitial}>
+            <AppText variant="h2" color="inverse" style={styles.avatarInitial}>
               {profile?.full_name?.[0]?.toUpperCase() ?? profile?.username?.[0]?.toUpperCase() ?? '?'}
-            </Text>
+            </AppText>
           </View>
           <View style={styles.profileInfo}>
-            <Text style={[styles.name, { textAlign }]}>
+            <AppText variant="h3" numberOfLines={1} style={{ textAlign }}>
               {profile?.full_name ?? profile?.username ?? t('tabs.profile')}
-            </Text>
+            </AppText>
             <View style={styles.roleBadge}>
-              <Text style={styles.roleText}>{roleLabel}</Text>
+              <AppText variant="micro" style={styles.roleText}>{roleLabel}</AppText>
             </View>
           </View>
-        </View>
+        </Card>
 
         {/* Details */}
-        <View style={styles.section}>
-          {profile?.employee_id && (
-            <View style={[styles.detailRow, isRTL && styles.detailRowRTL]}>
-              <Ionicons name="id-card-outline" size={16} color="#64748b" />
-              <Text style={[styles.detailLabel, { textAlign }]}>{t('profile.employeeId')}</Text>
-              <Text style={[styles.detailValue, { textAlign }]}>{profile.employee_id}</Text>
-            </View>
-          )}
-          {profile?.site && (
-            <View style={[styles.detailRow, isRTL && styles.detailRowRTL]}>
-              <Ionicons name="location-outline" size={16} color="#64748b" />
-              <Text style={[styles.detailLabel, { textAlign }]}>{t('profile.assignedSite')}</Text>
-              <Text style={[styles.detailValue, { textAlign }]}>{profile.site}</Text>
-            </View>
-          )}
-          {profile?.country && (
-            <View style={[styles.detailRow, isRTL && styles.detailRowRTL]}>
-              <Ionicons name="globe-outline" size={16} color="#64748b" />
-              <Text style={[styles.detailLabel, { textAlign }]}>{t('profile.country')}</Text>
-              <Text style={[styles.detailValue, { textAlign }]}>{profile.country}</Text>
-            </View>
-          )}
-        </View>
+        {(profile?.employee_id || profile?.site || profile?.country) ? (
+          <Card padded={false} style={styles.groupCard}>
+            {profile?.employee_id && (
+              <View style={[styles.detailRow, isRTL && styles.rowReverse]}>
+                <Ionicons name="id-card-outline" size={16} color={theme.color.textMuted} />
+                <AppText variant="body" color="secondary" style={[styles.detailLabel, { textAlign }]}>{t('profile.employeeId')}</AppText>
+                <AppText variant="bodyStrong" style={{ textAlign }}>{profile.employee_id}</AppText>
+              </View>
+            )}
+            {profile?.site && (
+              <View style={[styles.detailRow, isRTL && styles.rowReverse]}>
+                <Ionicons name="location-outline" size={16} color={theme.color.textMuted} />
+                <AppText variant="body" color="secondary" style={[styles.detailLabel, { textAlign }]}>{t('profile.assignedSite')}</AppText>
+                <AppText variant="bodyStrong" style={{ textAlign }}>{profile.site}</AppText>
+              </View>
+            )}
+            {profile?.country && (
+              <View style={[styles.detailRow, styles.detailRowLast, isRTL && styles.rowReverse]}>
+                <Ionicons name="globe-outline" size={16} color={theme.color.textMuted} />
+                <AppText variant="body" color="secondary" style={[styles.detailLabel, { textAlign }]}>{t('profile.country')}</AppText>
+                <AppText variant="bodyStrong" style={{ textAlign }}>{profile.country}</AppText>
+              </View>
+            )}
+          </Card>
+        ) : null}
 
         {/* Workspace - role-specific shortcuts */}
-        {(() => {
-          const role = profile?.role
-          const tools = [
-            { key: 'team',  label: t('modules.workspace.team'),          icon: 'people-outline',  tint: '#1d4ed8', show: canManageUsers(role) || canAccessAdmin(role), go: () => router.push('/(app)/team') },
-            { key: 'users', label: t('modules.workspace.manageUsers'),  icon: 'person-add-outline', tint: '#7c3aed', show: canManageUsers(role), go: () => router.push('/(app)/admin/users') },
-            { key: 'admin', label: t('modules.workspace.admin'), icon: 'shield-outline', tint: '#7c3aed', show: canAccessAdmin(role), go: () => router.push('/(app)/admin') },
-            { key: 'ai',    label: t('modules.workspace.ai'),  icon: 'sparkles-outline', tint: '#16a34a', show: canUseAI(role), go: () => router.push('/(app)/admin/ai-chat') },
-            { key: 'acc',   label: t('modules.workspace.accidents'), icon: 'warning-outline', tint: '#ea580c', show: canViewAccidents(role), go: () => router.push('/(app)/accident/dashboard') },
-          ].filter(x => x.show)
-          if (!tools.length) return null
-          return (
-            <>
-              <Text style={[styles.sectionTitle, { textAlign }]}>{t('modules.workspace.title')}</Text>
-              <View style={styles.section}>
-                {tools.map((x, i) => (
-                  <TouchableOpacity
-                    key={x.key}
-                    style={[styles.toolRow, isRTL && styles.detailRowRTL, i > 0 && styles.toolDivider]}
-                    onPress={x.go}
-                    activeOpacity={0.8}
+        {tools.length > 0 && (
+          <>
+            <SectionHeader title={t('modules.workspace.title')} />
+            <View style={styles.rowStack}>
+              {tools.map(x => (
+                <ListRow
+                  key={x.key}
+                  title={x.label}
+                  icon={x.icon}
+                  tint={x.tint}
+                  onPress={x.go}
+                />
+              ))}
+            </View>
+          </>
+        )}
+
+        {/* Appearance section */}
+        <SectionHeader title="Appearance" />
+        <Card padded={false} style={styles.groupCard}>
+          <View style={styles.segment}>
+            {APPEARANCE_OPTIONS.map(opt => {
+              const active = preference === opt.key
+              return (
+                <TouchableOpacity
+                  key={opt.key}
+                  style={[styles.segmentItem, active && styles.segmentItemActive]}
+                  onPress={() => setPreference(opt.key)}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons
+                    name={opt.icon}
+                    size={20}
+                    color={active ? theme.color.onPrimary : theme.color.textSecondary}
+                  />
+                  <AppText
+                    variant="label"
+                    style={{ color: active ? theme.color.onPrimary : theme.color.textSecondary }}
                   >
-                    <View style={[styles.toolIcon, { backgroundColor: x.tint + '14' }]}>
-                      <Ionicons name={x.icon as any} size={18} color={x.tint} />
-                    </View>
-                    <Text style={[styles.toolLabel, { textAlign }]}>{x.label}</Text>
-                    <Ionicons name={isRTL ? 'chevron-back' : 'chevron-forward'} size={18} color="#cbd5e1" />
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </>
-          )
-        })()}
+                    {opt.label}
+                  </AppText>
+                  {opt.hint ? (
+                    <AppText
+                      variant="micro"
+                      style={{ color: active ? theme.color.onPrimary : theme.color.textMuted }}
+                    >
+                      {opt.hint}
+                    </AppText>
+                  ) : null}
+                </TouchableOpacity>
+              )
+            })}
+          </View>
+        </Card>
 
         {/* Language section */}
-        <Text style={[styles.sectionTitle, { textAlign }]}>{t('language.sectionTitle')}</Text>
-        <View style={styles.section}>
-          {LANG_OPTIONS.map((opt, idx) => (
-            <TouchableOpacity
-              key={opt.code}
-              style={[
-                styles.langRow,
-                isRTL && styles.langRowRTL,
-                idx < LANG_OPTIONS.length - 1 && styles.langRowBorder,
-                language === opt.code && styles.langRowActive,
-              ]}
-              onPress={() => setLanguage(opt.code)}
-              activeOpacity={0.7}
-            >
-              <Text style={[styles.langLabel, language === opt.code && styles.langLabelActive]}>
-                {t(opt.labelKey)}
-              </Text>
-              {language === opt.code && (
-                <Ionicons name="checkmark-circle" size={20} color="#16a34a" />
-              )}
-            </TouchableOpacity>
-          ))}
-        </View>
+        <SectionHeader title={t('language.sectionTitle')} />
+        <Card padded={false} style={styles.groupCard}>
+          {LANG_OPTIONS.map((opt, idx) => {
+            const active = language === opt.code
+            return (
+              <TouchableOpacity
+                key={opt.code}
+                style={[
+                  styles.langRow,
+                  isRTL && styles.rowReverse,
+                  idx < LANG_OPTIONS.length - 1 && styles.divider,
+                  active && styles.langRowActive,
+                ]}
+                onPress={() => setLanguage(opt.code)}
+                activeOpacity={0.7}
+              >
+                <AppText
+                  variant={active ? 'bodyStrong' : 'body'}
+                  style={{ color: active ? theme.color.primaryDark : theme.color.text }}
+                >
+                  {t(opt.labelKey)}
+                </AppText>
+                {active && (
+                  <Ionicons name="checkmark-circle" size={20} color={theme.color.primary} />
+                )}
+              </TouchableOpacity>
+            )
+          })}
+        </Card>
 
         {/* Notifications section */}
-        <Text style={[styles.sectionTitle, { textAlign }]}>Notifications</Text>
-        <View style={styles.section}>
-          <View style={[styles.detailRow, { borderBottomWidth: 0 }, isRTL && styles.detailRowRTL]}>
-            <Ionicons name="notifications-outline" size={16} color="#64748b" />
-            <Text style={[styles.detailLabel, { flex: 1, textAlign }]}>Daily Inspection Reminder</Text>
+        <SectionHeader title="Notifications" />
+        <Card padded={false} style={styles.groupCard}>
+          <View style={[styles.detailRow, styles.detailRowLast, isRTL && styles.rowReverse]}>
+            <Ionicons name="notifications-outline" size={16} color={theme.color.textMuted} />
+            <AppText variant="body" color="secondary" style={[styles.detailLabel, { flex: 1, textAlign }]}>Daily Inspection Reminder</AppText>
             <Switch
               value={reminderEnabled}
               onValueChange={toggleReminder}
-              trackColor={{ false: '#e2e8f0', true: '#bbf7d0' }}
-              thumbColor={reminderEnabled ? '#16a34a' : '#94a3b8'}
+              trackColor={{ false: theme.color.surfaceSunken, true: theme.color.primarySoft }}
+              thumbColor={reminderEnabled ? theme.color.primary : theme.color.textMuted}
             />
           </View>
           {reminderEnabled && (
-            <View style={[styles.reminderTimeRow, isRTL && styles.detailRowRTL]}>
-              <Text style={styles.reminderTimeLabel}>Remind me at</Text>
+            <View style={[styles.reminderTimeRow, isRTL && styles.rowReverse]}>
+              <AppText variant="caption" color="secondary" style={styles.reminderTimeLabel}>Remind me at</AppText>
               <View style={styles.reminderHourRow}>
-                {reminderHours.map(h => (
-                  <TouchableOpacity
-                    key={h}
-                    style={[styles.hourChip, reminderHour === h && styles.hourChipActive]}
-                    onPress={async () => {
-                      setReminderHour(h)
-                      await scheduleDailyInspectionReminder(h, 0)
-                    }}
-                  >
-                    <Text style={[styles.hourChipText, reminderHour === h && styles.hourChipTextActive]}>
-                      {h < 12 ? `${h}am` : h === 12 ? '12pm' : `${h - 12}pm`}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
+                {reminderHours.map(h => {
+                  const active = reminderHour === h
+                  return (
+                    <TouchableOpacity
+                      key={h}
+                      style={[styles.hourChip, active && styles.hourChipActive]}
+                      onPress={async () => {
+                        setReminderHour(h)
+                        await scheduleDailyInspectionReminder(h, 0)
+                      }}
+                    >
+                      <AppText
+                        variant="caption"
+                        style={{ color: active ? theme.color.onPrimary : theme.color.textSecondary }}
+                      >
+                        {h < 12 ? `${h}am` : h === 12 ? '12pm' : `${h - 12}pm`}
+                      </AppText>
+                    </TouchableOpacity>
+                  )
+                })}
               </View>
             </View>
           )}
-        </View>
+        </Card>
 
         {/* Sync section */}
-        <Text style={[styles.sectionTitle, { textAlign }]}>{t('profile.offlineQueue')}</Text>
-        <View style={styles.section}>
+        <SectionHeader title={t('profile.offlineQueue')} />
+        <Card padded={false} style={styles.groupCard}>
           <View style={styles.syncStats}>
             <View style={styles.syncStat}>
-              <Text style={[styles.syncStatNum, pending > 0 && { color: '#d97706' }]}>{pending}</Text>
-              <Text style={styles.syncStatLabel}>{t('profile.pending')}</Text>
+              <AppText variant="display" style={{ color: pending > 0 ? theme.color.warning.base : theme.color.text }}>{pending}</AppText>
+              <AppText variant="caption" color="muted">{t('profile.pending')}</AppText>
             </View>
             <View style={styles.syncStatDivider} />
             <View style={styles.syncStat}>
-              <Text style={styles.syncStatNum}>{queueTotal}</Text>
-              <Text style={styles.syncStatLabel}>{t('profile.totalQueued')}</Text>
+              <AppText variant="display">{queueTotal}</AppText>
+              <AppText variant="caption" color="muted">{t('profile.totalQueued')}</AppText>
             </View>
           </View>
 
@@ -294,183 +353,149 @@ export default function ProfileScreen() {
             disabled={syncing}
           >
             {syncing
-              ? <ActivityIndicator size="small" color="#16a34a" />
-              : <Ionicons name="cloud-upload-outline" size={18} color="#16a34a" />
+              ? <ActivityIndicator size="small" color={theme.color.primary} />
+              : <Ionicons name="cloud-upload-outline" size={18} color={theme.color.primary} />
             }
-            <Text style={styles.actionBtnText}>
+            <AppText variant="bodyStrong" color="primary">
               {syncing ? t('profile.syncing') : t('profile.syncNow')}
-            </Text>
+            </AppText>
           </TouchableOpacity>
 
           <TouchableOpacity style={styles.ghostBtn} onPress={handleClearSynced}>
-            <Ionicons name="trash-outline" size={16} color="#94a3b8" />
-            <Text style={styles.ghostBtnText}>{t('profile.clearSynced')}</Text>
+            <Ionicons name="trash-outline" size={16} color={theme.color.textMuted} />
+            <AppText variant="caption" color="muted">{t('profile.clearSynced')}</AppText>
           </TouchableOpacity>
-        </View>
+        </Card>
 
         {/* Account / Sign out */}
-        <Text style={[styles.sectionTitle, { textAlign }]}>{t('profile.account')}</Text>
-        <View style={styles.section}>
-          <TouchableOpacity
-            style={[styles.signOutBtn, loggingOut && styles.actionBtnDisabled]}
-            onPress={handleLogout}
-            disabled={loggingOut}
-          >
-            {loggingOut
-              ? <ActivityIndicator size="small" color="#dc2626" />
-              : <Ionicons name="log-out-outline" size={18} color="#dc2626" />
-            }
-            <Text style={styles.signOutText}>{t('profile.signOut')}</Text>
-          </TouchableOpacity>
-        </View>
+        <SectionHeader title={t('profile.account')} />
+        <Button
+          label={t('profile.signOut')}
+          icon="log-out-outline"
+          variant="danger"
+          full
+          loading={loggingOut}
+          onPress={handleLogout}
+        />
 
-        <Text style={styles.version}>{t('profile.version')}</Text>
+        <AppText variant="caption" color="muted" center style={styles.version}>{t('profile.version')}</AppText>
       </ScrollView>
-    </SafeAreaView>
+    </Screen>
   )
 }
 
-const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#f0f5f1' },
-  scroll: { flex: 1 },
-  content: { padding: 20, paddingBottom: 48, gap: 12 },
-  profileCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 16,
-    backgroundColor: '#fff',
-    borderRadius: 18,
-    padding: 18,
-    borderWidth: 1,
-    borderColor: 'rgba(0,0,0,0.06)',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 10,
-    elevation: 3,
-  },
-  profileCardRTL: { flexDirection: 'row-reverse' },
-  avatar: {
-    width: 56,
-    height: 56,
-    borderRadius: 18,
-    backgroundColor: '#16a34a',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  avatarInitial: { fontSize: 24, fontWeight: '800', color: '#fff' },
-  profileInfo: { flex: 1, gap: 6 },
-  name: { fontSize: 18, fontWeight: '800', color: '#0f172a' },
-  roleBadge: {
-    alignSelf: 'flex-start',
-    backgroundColor: 'rgba(22,163,74,0.1)',
-    borderRadius: 6,
-    paddingHorizontal: 10,
-    paddingVertical: 3,
-  },
-  roleText: { fontSize: 11, fontWeight: '700', color: '#16a34a', textTransform: 'uppercase', letterSpacing: 0.5 },
-  sectionTitle: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#94a3b8',
-    textTransform: 'uppercase',
-    letterSpacing: 0.8,
-    marginTop: 4,
-  },
-  section: {
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: 'rgba(0,0,0,0.06)',
-    overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.04,
-    shadowRadius: 4,
-    elevation: 1,
-  },
-  toolRow: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14 },
-  toolDivider: { borderTopWidth: 1, borderTopColor: 'rgba(0,0,0,0.05)' },
-  toolIcon: { width: 34, height: 34, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
-  toolLabel: { flex: 1, fontSize: 14, fontWeight: '600', color: '#0f172a' },
-  detailRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f1f5f9',
-  },
-  detailRowRTL: { flexDirection: 'row-reverse' },
-  detailLabel: { fontSize: 13, color: '#64748b', flex: 1 },
-  detailValue: { fontSize: 13, fontWeight: '600', color: '#0f172a' },
-  langRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 15,
-  },
-  langRowRTL: { flexDirection: 'row-reverse' },
-  langRowBorder: {
-    borderBottomWidth: 1,
-    borderBottomColor: '#f1f5f9',
-  },
-  langRowActive: {
-    backgroundColor: 'rgba(22,163,74,0.04)',
-  },
-  langLabel: { fontSize: 15, color: '#0f172a', fontWeight: '500' },
-  langLabelActive: { color: '#16a34a', fontWeight: '700' },
-  syncStats: {
-    flexDirection: 'row',
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f1f5f9',
-  },
-  syncStat: { flex: 1, alignItems: 'center', gap: 2 },
-  syncStatNum: { fontSize: 24, fontWeight: '800', color: '#0f172a' },
-  syncStatLabel: { fontSize: 11, color: '#94a3b8', fontWeight: '500' },
-  syncStatDivider: { width: 1, backgroundColor: '#f1f5f9', marginVertical: 8 },
-  actionBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    paddingVertical: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f1f5f9',
-  },
-  actionBtnDisabled: { opacity: 0.5 },
-  actionBtnText: { fontSize: 15, fontWeight: '700', color: '#16a34a' },
-  ghostBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    paddingVertical: 12,
-  },
-  ghostBtnText: { fontSize: 13, color: '#94a3b8' },
-  signOutBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    paddingVertical: 16,
-  },
-  signOutText: { fontSize: 15, fontWeight: '700', color: '#dc2626' },
-  version: { textAlign: 'center', fontSize: 12, color: '#cbd5e1', marginTop: 8 },
-  reminderTimeRow: {
-    flexDirection: 'row', alignItems: 'center', gap: 10,
-    paddingHorizontal: 16, paddingBottom: 14, flexWrap: 'wrap',
-  },
-  reminderTimeLabel: { fontSize: 13, color: '#64748b', minWidth: 80 },
-  reminderHourRow: { flexDirection: 'row', gap: 6, flexWrap: 'wrap' },
-  hourChip: {
-    paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8,
-    backgroundColor: '#f1f5f9', borderWidth: 1, borderColor: '#e2e8f0',
-  },
-  hourChipActive: { backgroundColor: '#16a34a', borderColor: '#16a34a' },
-  hourChipText: { fontSize: 12, fontWeight: '600', color: '#64748b' },
-  hourChipTextActive: { color: '#fff' },
-})
+function makeStyles(theme: Theme) {
+  const c = theme.color
+  return StyleSheet.create({
+    scroll: { flex: 1 },
+    content: { padding: spacing.xl, paddingBottom: spacing['4xl'], gap: spacing.md },
+    rowReverse: { flexDirection: 'row-reverse' },
+    rowStack: { gap: spacing.sm },
+    groupCard: { overflow: 'hidden' },
+
+    profileCard: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.lg,
+    },
+    avatar: {
+      width: 56,
+      height: 56,
+      borderRadius: radius.lg,
+      backgroundColor: c.primary,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    avatarInitial: { lineHeight: 30 },
+    profileInfo: { flex: 1, gap: spacing.xs },
+    roleBadge: {
+      alignSelf: 'flex-start',
+      backgroundColor: c.primarySoft,
+      borderRadius: radius.sm,
+      paddingHorizontal: spacing.md,
+      paddingVertical: 3,
+    },
+    roleText: { color: c.primaryDark, textTransform: 'uppercase' },
+
+    detailRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.md,
+      paddingHorizontal: spacing.lg,
+      paddingVertical: spacing.lg - 2,
+      borderBottomWidth: 1,
+      borderBottomColor: c.border,
+    },
+    detailRowLast: { borderBottomWidth: 0 },
+    detailLabel: { flex: 1 },
+
+    segment: {
+      flexDirection: 'row',
+      padding: spacing.xs,
+      gap: spacing.xs,
+    },
+    segmentItem: {
+      flex: 1,
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: spacing.xs,
+      paddingVertical: spacing.md,
+      borderRadius: radius.md,
+      backgroundColor: c.surfaceAlt,
+    },
+    segmentItemActive: {
+      backgroundColor: c.primary,
+      ...elevation(theme, 1),
+    },
+
+    langRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingHorizontal: spacing.lg,
+      paddingVertical: spacing.lg - 1,
+    },
+    langRowActive: { backgroundColor: c.primarySoft },
+    divider: { borderBottomWidth: 1, borderBottomColor: c.border },
+
+    syncStats: {
+      flexDirection: 'row',
+      paddingVertical: spacing.lg,
+      borderBottomWidth: 1,
+      borderBottomColor: c.border,
+    },
+    syncStat: { flex: 1, alignItems: 'center', gap: spacing.xs },
+    syncStatDivider: { width: 1, backgroundColor: c.border, marginVertical: spacing.sm },
+    actionBtn: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: spacing.sm,
+      paddingVertical: spacing.lg - 2,
+      borderBottomWidth: 1,
+      borderBottomColor: c.border,
+    },
+    actionBtnDisabled: { opacity: 0.5 },
+    ghostBtn: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: spacing.sm,
+      paddingVertical: spacing.md,
+    },
+
+    version: { marginTop: spacing.sm },
+
+    reminderTimeRow: {
+      flexDirection: 'row', alignItems: 'center', gap: spacing.md,
+      paddingHorizontal: spacing.lg, paddingBottom: spacing.lg, flexWrap: 'wrap',
+    },
+    reminderTimeLabel: { minWidth: 80 },
+    reminderHourRow: { flexDirection: 'row', gap: spacing.sm, flexWrap: 'wrap' },
+    hourChip: {
+      paddingHorizontal: spacing.md, paddingVertical: spacing.xs + 1, borderRadius: radius.sm,
+      backgroundColor: c.surfaceAlt, borderWidth: 1, borderColor: c.border,
+    },
+    hourChipActive: { backgroundColor: c.primary, borderColor: c.primary },
+  })
+}

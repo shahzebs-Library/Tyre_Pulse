@@ -1,15 +1,17 @@
 import { useEffect, useState, useCallback, useMemo } from 'react'
 import {
-  View, Text, FlatList, StyleSheet, TouchableOpacity, Modal, TextInput,
-  RefreshControl, StatusBar, ActivityIndicator, Alert, ScrollView, KeyboardAvoidingView, Platform,
+  View, FlatList, StyleSheet, TouchableOpacity, Modal, TextInput,
+  RefreshControl, Alert, ScrollView, KeyboardAvoidingView, Platform,
 } from 'react-native'
-import { SafeAreaView } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
 import { supabase } from '../../lib/supabase'
 import { saveCommand } from '../../lib/recordQueue'
 import { useAuth } from '../../contexts/AuthContext'
 import { useLanguage } from '../../contexts/LanguageContext'
+import { useTheme } from '../../contexts/ThemeContext'
+import { Theme, spacing, radius, typography, elevation, statusColor, StatusKind } from '../../lib/theme'
+import { Screen, AppText, Button, Badge, Loading, EmptyState } from '../../components/ui'
 import { useRealtime } from '../../hooks/useRealtime'
 import { useRoleGuard } from '../../hooks/useRoleGuard'
 import { canManageWorkOrders } from '../../lib/permissions'
@@ -29,15 +31,18 @@ interface WorkOrder {
 
 type FilterKey = 'open' | 'all'
 const WORK_TYPES = ['Tyre Change', 'Repair', 'Rotation', 'Alignment', 'Inspection', 'Other']
-const STATUS_COLOR: Record<string, string> = {
-  open: '#2563eb', 'in progress': '#ca8a04', completed: '#16a34a', closed: '#64748b',
+const PRIORITIES = ['Low', 'Medium', 'High', 'Critical'] as const
+const PRI_KIND: Record<string, StatusKind> = { Low: 'success', Medium: 'warning', High: 'danger', Critical: 'critical' }
+const WO_STATUS_KIND: Record<string, StatusKind> = {
+  open: 'info', 'in progress': 'warning', completed: 'success', closed: 'neutral',
 }
-const PRI_COLOR: Record<string, string> = { Low: '#16a34a', Medium: '#ca8a04', High: '#ea580c', Critical: '#dc2626' }
 const NEXT_STATUS: Record<string, string> = { open: 'In Progress', 'in progress': 'Completed' }
 
 export default function WorkOrdersScreen() {
   const { profile } = useAuth()
   const { t, isRTL } = useLanguage()
+  const { theme } = useTheme()
+  const styles = useMemo(() => makeStyles(theme), [theme])
   const router = useRouter()
   const [rows, setRows] = useState<WorkOrder[]>([])
   const [loading, setLoading] = useState(true)
@@ -49,7 +54,7 @@ export default function WorkOrdersScreen() {
   // create form
   const [asset, setAsset] = useState('')
   const [workType, setWorkType] = useState('Tyre Change')
-  const [priority, setPriority] = useState<keyof typeof PRI_COLOR>('Medium')
+  const [priority, setPriority] = useState<typeof PRIORITIES[number]>('Medium')
   const [desc, setDesc] = useState('')
   const [saving, setSaving] = useState(false)
 
@@ -125,19 +130,18 @@ export default function WorkOrdersScreen() {
   if (!allowed) return null
 
   return (
-    <SafeAreaView style={styles.safe}>
-      <StatusBar barStyle="dark-content" backgroundColor="#f0f5f1" />
+    <Screen edges={['top']}>
       <View style={[styles.header, isRTL && styles.rowR]}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-          <Ionicons name={isRTL ? 'arrow-forward' : 'arrow-back'} size={22} color="#0f172a" />
+          <Ionicons name={isRTL ? 'arrow-forward' : 'arrow-back'} size={22} color={theme.color.text} />
         </TouchableOpacity>
         <View style={{ flex: 1 }}>
-          <Text style={[styles.title, { textAlign }]}>{t('modules.workOrders.title')}</Text>
-          <Text style={[styles.sub, { textAlign }]}>{openCount} {t('modules.workOrders.active')}</Text>
+          <AppText variant="h2" style={{ textAlign }}>{t('modules.workOrders.title')}</AppText>
+          <AppText variant="caption" color="muted" style={{ textAlign }}>{openCount} {t('modules.workOrders.active')}</AppText>
         </View>
         {mayEdit && (
           <TouchableOpacity style={styles.newBtn} onPress={() => setShowForm(true)}>
-            <Ionicons name="add" size={20} color="#fff" />
+            <Ionicons name="add" size={20} color={theme.color.onPrimary} />
           </TouchableOpacity>
         )}
       </View>
@@ -145,44 +149,42 @@ export default function WorkOrdersScreen() {
       <View style={styles.filters}>
         {(['open', 'all'] as FilterKey[]).map(f => (
           <TouchableOpacity key={f} style={[styles.chip, filter === f && styles.chipActive]} onPress={() => setFilter(f)}>
-            <Text style={[styles.chipText, filter === f && styles.chipTextActive]}>{f === 'open' ? t('modules.workOrders.filterActive') : t('modules.workOrders.filterAll')}</Text>
+            <AppText style={[styles.chipText, filter === f && styles.chipTextActive]}>{f === 'open' ? t('modules.workOrders.filterActive') : t('modules.workOrders.filterAll')}</AppText>
           </TouchableOpacity>
         ))}
       </View>
 
       {loading ? (
-        <ActivityIndicator color="#16a34a" style={{ marginTop: 40 }} />
+        <Loading />
       ) : (
         <FlatList
           data={shown}
           keyExtractor={i => i.id}
           contentContainerStyle={styles.list}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#16a34a" />}
-          ListEmptyComponent={<View style={styles.empty}><Ionicons name="construct-outline" size={48} color="#cbd5e1" /><Text style={styles.emptyText}>{t('modules.workOrders.none')}</Text></View>}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.color.primary} />}
+          ListEmptyComponent={<EmptyState icon="construct-outline" title={t('modules.workOrders.none')} />}
           renderItem={({ item }) => {
-            const sc = STATUS_COLOR[(item.status ?? 'open').toLowerCase()] ?? '#64748b'
-            const pc = PRI_COLOR[item.priority ?? ''] ?? '#64748b'
             const next = NEXT_STATUS[(item.status ?? 'open').toLowerCase()]
             return (
               <View style={styles.card}>
                 <View style={{ flex: 1, gap: 4 }}>
                   <View style={[styles.cardTop, isRTL && styles.rowR]}>
-                    <Text style={[styles.cardTitle, { textAlign }]}>{item.asset_no ?? '-'}</Text>
-                    <Text style={styles.wono}>{item.work_order_no}</Text>
+                    <AppText style={[styles.cardTitle, { textAlign }]}>{item.asset_no ?? '-'}</AppText>
+                    <AppText variant="micro" color="muted">{item.work_order_no}</AppText>
                   </View>
-                  <Text style={[styles.cardMeta, { textAlign }]}>{item.work_type ?? 'Work'}{item.site ? ` · ${item.site}` : ''}</Text>
-                  {item.description ? <Text style={[styles.cardDesc, { textAlign }]} numberOfLines={2}>{item.description}</Text> : null}
+                  <AppText variant="caption" color="secondary" style={{ textAlign }}>{item.work_type ?? 'Work'}{item.site ? ` · ${item.site}` : ''}</AppText>
+                  {item.description ? <AppText variant="caption" color="muted" style={{ textAlign }} numberOfLines={2}>{item.description}</AppText> : null}
                   <View style={[styles.badges, isRTL && styles.rowR]}>
-                    <View style={[styles.badge, { backgroundColor: sc + '1a' }]}><Text style={[styles.badgeText, { color: sc }]}>{item.status ?? 'Open'}</Text></View>
-                    {item.priority ? <View style={[styles.badge, { backgroundColor: pc + '1a' }]}><Text style={[styles.badgeText, { color: pc }]}>{item.priority}</Text></View> : null}
+                    <Badge kind={WO_STATUS_KIND[(item.status ?? 'open').toLowerCase()] ?? 'neutral'}>{item.status ?? 'Open'}</Badge>
+                    {item.priority ? <Badge kind={PRI_KIND[item.priority] ?? 'neutral'}>{item.priority}</Badge> : null}
                   </View>
                 </View>
                 {next && mayEdit && (
                   <TouchableOpacity style={styles.advBtn} onPress={() => advance(item)} disabled={busyId === item.id}>
-                    {busyId === item.id ? <ActivityIndicator size="small" color="#16a34a" /> : (
+                    {busyId === item.id ? <Loading /> : (
                       <>
-                        <Ionicons name="arrow-forward-circle" size={20} color="#16a34a" />
-                        <Text style={styles.advText}>{next === 'In Progress' ? t('modules.workOrders.inProgress') : t('modules.workOrders.completed')}</Text>
+                        <Ionicons name="arrow-forward-circle" size={20} color={theme.color.primary} />
+                        <AppText style={styles.advText}>{next === 'In Progress' ? t('modules.workOrders.inProgress') : t('modules.workOrders.completed')}</AppText>
                       </>
                     )}
                   </TouchableOpacity>
@@ -198,76 +200,67 @@ export default function WorkOrdersScreen() {
         <KeyboardAvoidingView style={styles.modalWrap} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
           <View style={styles.sheet}>
             <View style={[styles.sheetHead, isRTL && styles.rowR]}>
-              <Text style={styles.sheetTitle}>{t('modules.workOrders.new')}</Text>
-              <TouchableOpacity onPress={() => setShowForm(false)}><Ionicons name="close" size={24} color="#64748b" /></TouchableOpacity>
+              <AppText variant="h3">{t('modules.workOrders.new')}</AppText>
+              <TouchableOpacity onPress={() => setShowForm(false)}><Ionicons name="close" size={24} color={theme.color.textMuted} /></TouchableOpacity>
             </View>
             <ScrollView keyboardShouldPersistTaps="handled">
-              <Text style={styles.label}>{t('modules.common.asset')}</Text>
-              <TextInput style={styles.input} placeholder="e.g. TM-001" placeholderTextColor="#94a3b8" value={asset} onChangeText={setAsset} autoCapitalize="characters" />
-              <Text style={styles.label}>{t('modules.workOrders.workType')}</Text>
+              <AppText style={styles.label}>{t('modules.common.asset')}</AppText>
+              <TextInput style={styles.input} placeholder="e.g. TM-001" placeholderTextColor={theme.color.textMuted} value={asset} onChangeText={setAsset} autoCapitalize="characters" />
+              <AppText style={styles.label}>{t('modules.workOrders.workType')}</AppText>
               <View style={styles.chipRow}>
                 {WORK_TYPES.map(w => (
                   <TouchableOpacity key={w} style={[styles.chip, workType === w && styles.chipActive]} onPress={() => setWorkType(w)}>
-                    <Text style={[styles.chipText, workType === w && styles.chipTextActive]}>{t(`modules.workTypes.${w}`)}</Text>
+                    <AppText style={[styles.chipText, workType === w && styles.chipTextActive]}>{t(`modules.workTypes.${w}`)}</AppText>
                   </TouchableOpacity>
                 ))}
               </View>
-              <Text style={styles.label}>{t('modules.common.priority')}</Text>
+              <AppText style={styles.label}>{t('modules.common.priority')}</AppText>
               <View style={styles.chipRow}>
-                {(Object.keys(PRI_COLOR) as (keyof typeof PRI_COLOR)[]).map(p => (
-                  <TouchableOpacity key={p} style={[styles.chip, priority === p && { backgroundColor: PRI_COLOR[p], borderColor: PRI_COLOR[p] }]} onPress={() => setPriority(p)}>
-                    <Text style={[styles.chipText, priority === p && styles.chipTextActive]}>{t(`modules.priority.${p}`)}</Text>
-                  </TouchableOpacity>
-                ))}
+                {PRIORITIES.map(p => {
+                  const pc = statusColor(theme, PRI_KIND[p]).base
+                  return (
+                    <TouchableOpacity key={p} style={[styles.chip, priority === p && { backgroundColor: pc, borderColor: pc }]} onPress={() => setPriority(p)}>
+                      <AppText style={[styles.chipText, priority === p && styles.chipTextActive]}>{t(`modules.priority.${p}`)}</AppText>
+                    </TouchableOpacity>
+                  )
+                })}
               </View>
-              <Text style={styles.label}>{t('modules.common.details')}</Text>
-              <TextInput style={[styles.input, styles.textarea]} placeholder="What needs doing..." placeholderTextColor="#94a3b8" value={desc} onChangeText={setDesc} multiline />
-              <TouchableOpacity style={[styles.submit, saving && { opacity: 0.6 }]} onPress={create} disabled={saving}>
-                {saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.submitText}>{t('modules.workOrders.create')}</Text>}
-              </TouchableOpacity>
+              <AppText style={styles.label}>{t('modules.common.details')}</AppText>
+              <TextInput style={[styles.input, styles.textarea]} placeholder="What needs doing..." placeholderTextColor={theme.color.textMuted} value={desc} onChangeText={setDesc} multiline />
+              <Button label={t('modules.workOrders.create')} onPress={create} loading={saving} full style={{ marginTop: spacing.xl, marginBottom: spacing.md }} />
             </ScrollView>
           </View>
         </KeyboardAvoidingView>
       </Modal>
-    </SafeAreaView>
+    </Screen>
   )
 }
 
-const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#f0f5f1' },
-  rowR: { flexDirection: 'row-reverse' },
-  header: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 16 },
-  backBtn: { width: 38, height: 38, borderRadius: 10, backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: 'rgba(0,0,0,0.06)' },
-  title: { fontSize: 20, fontWeight: '800', color: '#0f172a' },
-  sub: { fontSize: 12, color: '#64748b', marginTop: 2 },
-  newBtn: { width: 40, height: 40, borderRadius: 12, backgroundColor: '#16a34a', alignItems: 'center', justifyContent: 'center' },
-  filters: { flexDirection: 'row', gap: 8, paddingHorizontal: 16, paddingBottom: 8 },
-  chip: { paddingHorizontal: 14, paddingVertical: 7, borderRadius: 999, backgroundColor: '#fff', borderWidth: 1, borderColor: 'rgba(0,0,0,0.08)' },
-  chipActive: { backgroundColor: '#16a34a', borderColor: '#16a34a' },
-  chipText: { fontSize: 12, fontWeight: '700', color: '#64748b' },
-  chipTextActive: { color: '#fff' },
-  list: { padding: 16, gap: 10, paddingBottom: 40 },
-  card: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: '#fff', borderRadius: 14, padding: 14, borderWidth: 1, borderColor: 'rgba(0,0,0,0.06)' },
-  cardTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  cardTitle: { fontSize: 14, fontWeight: '800', color: '#0f172a' },
-  wono: { fontSize: 11, fontWeight: '700', color: '#94a3b8' },
-  cardMeta: { fontSize: 12, color: '#64748b' },
-  cardDesc: { fontSize: 12, color: '#94a3b8' },
-  badges: { flexDirection: 'row', gap: 6, marginTop: 2 },
-  badge: { borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3 },
-  badgeText: { fontSize: 10, fontWeight: '800', textTransform: 'capitalize' },
-  advBtn: { alignItems: 'center', justifyContent: 'center', gap: 2, minWidth: 64 },
-  advText: { fontSize: 9, fontWeight: '700', color: '#16a34a' },
-  empty: { alignItems: 'center', paddingVertical: 60, gap: 10 },
-  emptyText: { fontSize: 15, fontWeight: '700', color: '#94a3b8' },
-  modalWrap: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.4)' },
-  sheet: { backgroundColor: '#f0f5f1', borderTopLeftRadius: 22, borderTopRightRadius: 22, padding: 18, maxHeight: '88%' },
-  sheetHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 },
-  sheetTitle: { fontSize: 18, fontWeight: '800', color: '#0f172a' },
-  label: { fontSize: 13, fontWeight: '700', color: '#475569', marginTop: 12, marginBottom: 6 },
-  input: { backgroundColor: '#fff', borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, fontSize: 14, color: '#0f172a', borderWidth: 1, borderColor: 'rgba(0,0,0,0.08)' },
-  textarea: { minHeight: 80, textAlignVertical: 'top' },
-  chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  submit: { backgroundColor: '#16a34a', borderRadius: 14, padding: 16, alignItems: 'center', marginTop: 20, marginBottom: 12 },
-  submitText: { fontSize: 16, fontWeight: '800', color: '#fff' },
-})
+function makeStyles(theme: Theme) {
+  const c = theme.color
+  return StyleSheet.create({
+    rowR: { flexDirection: 'row-reverse' },
+    header: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, padding: spacing.lg },
+    backBtn: { width: 38, height: 38, borderRadius: radius.md, backgroundColor: c.surface, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: c.border },
+    newBtn: { width: 40, height: 40, borderRadius: radius.md, backgroundColor: c.primary, alignItems: 'center', justifyContent: 'center' },
+    filters: { flexDirection: 'row', gap: spacing.sm, paddingHorizontal: spacing.lg, paddingBottom: spacing.sm },
+    chip: { paddingHorizontal: spacing.md, paddingVertical: 7, borderRadius: radius.pill, backgroundColor: c.surface, borderWidth: 1, borderColor: c.border },
+    chipActive: { backgroundColor: c.primary, borderColor: c.primary },
+    chipText: { ...typography.caption, color: c.textSecondary },
+    chipTextActive: { color: c.onPrimary },
+    list: { padding: spacing.lg, gap: spacing.sm, paddingBottom: spacing['4xl'] },
+    card: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, backgroundColor: c.surface, borderRadius: radius.lg, padding: spacing.md, borderWidth: 1, borderColor: c.border, ...elevation(theme, 1) },
+    cardTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+    cardTitle: { ...typography.title, color: c.text },
+    badges: { flexDirection: 'row', gap: spacing.xs, marginTop: 2 },
+    advBtn: { alignItems: 'center', justifyContent: 'center', gap: 2, minWidth: 64 },
+    advText: { ...typography.micro, color: c.primaryDark },
+    modalWrap: { flex: 1, justifyContent: 'flex-end', backgroundColor: c.overlay },
+    sheet: { backgroundColor: c.bg, borderTopLeftRadius: radius['2xl'], borderTopRightRadius: radius['2xl'], padding: spacing.lg, maxHeight: '88%' },
+    sheetHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.sm },
+    label: { ...typography.label, color: c.textSecondary, marginTop: spacing.md, marginBottom: spacing.sm },
+    input: { backgroundColor: c.surface, borderRadius: radius.md, paddingHorizontal: spacing.md, paddingVertical: spacing.md, ...typography.body, color: c.text, borderWidth: 1, borderColor: c.borderStrong },
+    textarea: { minHeight: 80, textAlignVertical: 'top' },
+    chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
+  })
+}

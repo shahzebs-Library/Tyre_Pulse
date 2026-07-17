@@ -61,7 +61,7 @@ const GREETING = () => {
 
 export default function AdminDashboardScreen() {
   const { allowed, loading: guardLoading } = useElevatedGuard()
-  const { profile } = useAuth()
+  const { profile, isSuperAdmin } = useAuth()
   const { t } = useLanguage()
   const router = useRouter()
 
@@ -258,6 +258,20 @@ export default function AdminDashboardScreen() {
             onPress={() => router.push('/(app)/reports')}
           />
         </View>
+
+        {/* ── Super-admin: access control ──────────────────────────────── */}
+        {isSuperAdmin && (
+          <View style={styles.quickRow}>
+            <QuickAction
+              icon="shield-checkmark-outline"
+              label="Access Control"
+              sublabel="Grant modules per user"
+              color="#7c3aed"
+              bg="#f5f3ff"
+              onPress={() => router.push('/(app)/admin/access')}
+            />
+          </View>
+        )}
 
         {/* ── Closures awaiting approval (elevated) ────────────────────── */}
         {stats != null && stats.pendingClosures > 0 && (

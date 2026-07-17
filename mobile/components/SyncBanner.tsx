@@ -6,10 +6,12 @@ import {
   getPendingRecordCount, syncRecordQueue, retryFailedRecords,
 } from '../lib/recordQueue'
 import { useLanguage } from '../contexts/LanguageContext'
+import { useTheme } from '../contexts/ThemeContext'
 import { addNetworkStateListener } from 'expo-network'
 
 export default function SyncBanner() {
   const { t } = useLanguage()
+  const { theme } = useTheme()
   const [pending, setPending] = useState(0)
   const [syncing, setSyncing] = useState(false)
   const [online, setOnline] = useState(true)
@@ -62,21 +64,23 @@ export default function SyncBanner() {
     ? `${pending} ${t('sync.pendingPlural')}`
     : `${pending} ${t('sync.pendingSingle')}`
 
+  const tone = online ? theme.color.success : theme.color.warning
+
   return (
-    <View style={[styles.banner, !online && styles.bannerOffline]}>
+    <View style={[styles.banner, { backgroundColor: tone.soft, borderBottomColor: tone.base + '33' }]}>
       <Animated.View style={{ transform: [{ scale: pulse }] }}>
         <Ionicons
           name={online ? 'cloud-upload-outline' : 'cloud-offline-outline'}
           size={16}
-          color={online ? '#16a34a' : '#f59e0b'}
+          color={tone.base}
         />
       </Animated.View>
-      <Text style={[styles.text, !online && styles.textOffline]}>
+      <Text style={[styles.text, { color: tone.on }]}>
         {!online ? t('sync.offline') : pendingLabel}
       </Text>
       {online && pending > 0 && (
         <TouchableOpacity onPress={attemptSync} disabled={syncing}>
-          <Text style={styles.action}>{syncing ? t('sync.syncing') : t('sync.syncNow')}</Text>
+          <Text style={[styles.action, { color: theme.color.primaryDark }]}>{syncing ? t('sync.syncing') : t('sync.syncNow')}</Text>
         </TouchableOpacity>
       )}
     </View>
@@ -88,28 +92,17 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    backgroundColor: 'rgba(22,163,74,0.08)',
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(22,163,74,0.2)',
     paddingHorizontal: 16,
     paddingVertical: 10,
   },
-  bannerOffline: {
-    backgroundColor: 'rgba(245,158,11,0.08)',
-    borderBottomColor: 'rgba(245,158,11,0.25)',
-  },
   text: {
     flex: 1,
-    fontSize: 12,
-    color: '#15803d',
-    fontWeight: '500',
-  },
-  textOffline: {
-    color: '#b45309',
+    fontSize: 12.5,
+    fontWeight: '700',
   },
   action: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#16a34a',
+    fontSize: 12.5,
+    fontWeight: '800',
   },
 })

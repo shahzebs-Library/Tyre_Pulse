@@ -7,7 +7,7 @@
  * lives in exactly one place.
  */
 
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import {
   View, Text, TextInput, TouchableOpacity, Image,
   StyleSheet, Alert, ActivityIndicator,
@@ -19,6 +19,8 @@ import { TyrePositionData } from '../lib/types'
 import { CONDITION_META, CONDITIONS, SHOW_TREAD_DEPTH } from '../lib/tyreConditions'
 import { lookupTyreBySerial, TyreLookupRecord } from '../lib/tyreLookup'
 import { useLanguage } from '../contexts/LanguageContext'
+import { useTheme } from '../contexts/ThemeContext'
+import { radius, spacing, typography, Theme } from '../lib/theme'
 import { supabase } from '../lib/supabase'
 import { storageRef } from '../lib/storageRefs'
 
@@ -32,6 +34,8 @@ interface Props {
 
 export default function TyreEditor({ data, onChange }: Props) {
   const { t } = useLanguage()
+  const { theme } = useTheme()
+  const styles = useMemo(() => makeStyles(theme), [theme])
   const [pickingPhoto, setPickingPhoto] = useState(false)
   const [uploadState, setUploadState] = useState<UploadState>('idle')
   const [lookupState, setLookupState] = useState<LookupState>('idle')
@@ -124,7 +128,7 @@ export default function TyreEditor({ data, onChange }: Props) {
             onChangeText={v => { update({ serial_number: v }); if (lookupState !== 'idle') { setLookupState('idle'); setMatched(null) } }}
             onSubmitEditing={runSerialLookup}
             placeholder={t('tyre.serialPlaceholder')}
-            placeholderTextColor="#94a3b8"
+            placeholderTextColor={theme.color.textMuted}
             autoCapitalize="characters"
             returnKeyType="search"
           />
@@ -135,8 +139,8 @@ export default function TyreEditor({ data, onChange }: Props) {
             activeOpacity={0.8}
           >
             {lookupState === 'searching'
-              ? <ActivityIndicator size="small" color="#fff" />
-              : <Ionicons name="search" size={18} color="#fff" />}
+              ? <ActivityIndicator size="small" color={theme.color.onPrimary} />
+              : <Ionicons name="search" size={18} color={theme.color.onPrimary} />}
           </TouchableOpacity>
         </View>
 
@@ -144,7 +148,7 @@ export default function TyreEditor({ data, onChange }: Props) {
         {lookupState === 'found' && matched && (
           <View style={styles.matchCard}>
             <View style={styles.matchHeader}>
-              <Ionicons name="checkmark-circle" size={15} color="#16a34a" />
+              <Ionicons name="checkmark-circle" size={15} color={theme.color.success.base} />
               <Text style={styles.matchTitle}>{t('tyre.matchFound')}</Text>
             </View>
             <Text style={styles.matchMeta}>
@@ -158,7 +162,7 @@ export default function TyreEditor({ data, onChange }: Props) {
                 onPress={() => update({ pressure_psi: lastPressure })}
                 activeOpacity={0.8}
               >
-                <Ionicons name="speedometer-outline" size={14} color="#16a34a" />
+                <Ionicons name="speedometer-outline" size={14} color={theme.color.success.base} />
                 <Text style={styles.matchActionText}>
                   {t('tyre.useLastPressure')} ({lastPressure} PSI)
                 </Text>
@@ -180,7 +184,7 @@ export default function TyreEditor({ data, onChange }: Props) {
             value={data.pressure_psi}
             onChangeText={v => update({ pressure_psi: v })}
             placeholder={t('tyre.pressurePlaceholder')}
-            placeholderTextColor="#94a3b8"
+            placeholderTextColor={theme.color.textMuted}
             keyboardType="decimal-pad"
           />
         </View>
@@ -194,7 +198,7 @@ export default function TyreEditor({ data, onChange }: Props) {
                 value={data.tread_depth_mm}
                 onChangeText={v => update({ tread_depth_mm: v })}
                 placeholder={t('tyre.treadPlaceholder')}
-                placeholderTextColor="#94a3b8"
+                placeholderTextColor={theme.color.textMuted}
                 keyboardType="decimal-pad"
               />
             </View>
@@ -272,8 +276,8 @@ export default function TyreEditor({ data, onChange }: Props) {
         ) : (
           <TouchableOpacity style={styles.photoBtn} onPress={pickPhoto} disabled={pickingPhoto}>
             {pickingPhoto
-              ? <ActivityIndicator size="small" color="#16a34a" />
-              : <Ionicons name="camera-outline" size={22} color="#16a34a" />}
+              ? <ActivityIndicator size="small" color={theme.color.primary} />
+              : <Ionicons name="camera-outline" size={22} color={theme.color.primary} />}
             <Text style={styles.photoBtnText}>
               {pickingPhoto ? t('tyre.openingCamera') : t('tyre.takePhoto')}
             </Text>
@@ -289,7 +293,7 @@ export default function TyreEditor({ data, onChange }: Props) {
           value={data.notes}
           onChangeText={v => update({ notes: v })}
           placeholder={t('tyre.notesPlaceholder')}
-          placeholderTextColor="#94a3b8"
+          placeholderTextColor={theme.color.textMuted}
           multiline
           numberOfLines={2}
         />
@@ -298,75 +302,78 @@ export default function TyreEditor({ data, onChange }: Props) {
   )
 }
 
-const styles = StyleSheet.create({
-  body: { gap: 16 },
-  field: { gap: 6 },
-  labelRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  label: {
-    fontSize: 12, fontWeight: '600', color: '#64748b',
-    letterSpacing: 0.3, textTransform: 'uppercase',
-  },
-  input: {
-    backgroundColor: '#f8fafc', borderWidth: 1, borderColor: '#e2e8f0',
-    borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10,
-    fontSize: 14, color: '#0f172a',
-  },
-  textArea: { minHeight: 60, textAlignVertical: 'top' },
-  row: { flexDirection: 'row' },
-  serialRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  lookupBtn: {
-    width: 44, height: 42, borderRadius: 10,
-    backgroundColor: '#16a34a', alignItems: 'center', justifyContent: 'center',
-  },
-  matchCard: {
-    marginTop: 8, gap: 6,
-    backgroundColor: 'rgba(22,163,74,0.06)',
-    borderWidth: 1, borderColor: 'rgba(22,163,74,0.25)',
-    borderRadius: 10, padding: 10,
-  },
-  matchHeader: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  matchTitle: {
-    fontSize: 11, fontWeight: '700', color: '#15803d',
-    textTransform: 'uppercase', letterSpacing: 0.4,
-  },
-  matchMeta: { fontSize: 13, fontWeight: '600', color: '#0f172a' },
-  matchAction: {
-    flexDirection: 'row', alignItems: 'center', gap: 6,
-    alignSelf: 'flex-start',
-    backgroundColor: '#fff', borderWidth: 1, borderColor: 'rgba(22,163,74,0.3)',
-    borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6, marginTop: 2,
-  },
-  matchActionText: { fontSize: 12, fontWeight: '700', color: '#16a34a' },
-  matchNone: { marginTop: 8, fontSize: 12, color: '#94a3b8', fontStyle: 'italic' },
-  conditionGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  conditionBtn: {
-    flexGrow: 1, flexBasis: '30%',
-    alignItems: 'center', justifyContent: 'center', gap: 4,
-    paddingVertical: 12, paddingHorizontal: 8,
-    borderRadius: 12, borderWidth: 1.5, borderColor: '#e2e8f0',
-    backgroundColor: '#fff',
-  },
-  conditionEmoji: { fontSize: 22, lineHeight: 26 },
-  conditionBtnText: { fontSize: 11, fontWeight: '700', color: '#64748b' },
-  uploadBadge: {
-    flexDirection: 'row', alignItems: 'center', gap: 3,
-    backgroundColor: '#64748b', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 12,
-  },
-  uploadBadgeDone:  { backgroundColor: '#16a34a' },
-  uploadBadgeError: { backgroundColor: '#f59e0b' },
-  uploadBadgeText: { fontSize: 10, fontWeight: '700', color: '#fff' },
-  photoBtn: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
-    backgroundColor: 'rgba(22,163,74,0.06)', borderWidth: 1.5, borderColor: 'rgba(22,163,74,0.25)',
-    borderStyle: 'dashed', borderRadius: 10, paddingVertical: 16,
-  },
-  photoBtnText: { fontSize: 14, fontWeight: '600', color: '#16a34a' },
-  photoContainer: { borderRadius: 10, overflow: 'hidden', position: 'relative' },
-  photo: { width: '100%', height: 160, borderRadius: 10 },
-  photoRetake: {
-    position: 'absolute', bottom: 8, right: 8,
-    flexDirection: 'row', alignItems: 'center', gap: 4,
-    backgroundColor: 'rgba(0,0,0,0.6)', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 20,
-  },
-  photoRetakeText: { fontSize: 12, color: '#fff', fontWeight: '600' },
-})
+function makeStyles(theme: Theme) {
+  const c = theme.color
+  return StyleSheet.create({
+    body: { gap: spacing.lg },
+    field: { gap: spacing.sm - 2 },
+    labelRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+    label: {
+      ...typography.label, color: c.textSecondary,
+      textTransform: 'uppercase',
+    },
+    input: {
+      backgroundColor: c.surfaceAlt, borderWidth: 1.5, borderColor: c.border,
+      borderRadius: radius.md, paddingHorizontal: spacing.md, paddingVertical: 12,
+      fontSize: 15, fontWeight: '600', color: c.text,
+    },
+    textArea: { minHeight: 64, textAlignVertical: 'top' },
+    row: { flexDirection: 'row' },
+    serialRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+    lookupBtn: {
+      width: 48, height: 48, borderRadius: radius.md,
+      backgroundColor: c.primary, alignItems: 'center', justifyContent: 'center',
+    },
+    matchCard: {
+      marginTop: spacing.sm, gap: spacing.sm - 2,
+      backgroundColor: c.success.soft,
+      borderWidth: 1, borderColor: c.success.base,
+      borderRadius: radius.md, padding: spacing.md,
+    },
+    matchHeader: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs + 2 },
+    matchTitle: {
+      ...typography.micro, color: c.success.on,
+      textTransform: 'uppercase',
+    },
+    matchMeta: { fontSize: 13, fontWeight: '700', color: c.text },
+    matchAction: {
+      flexDirection: 'row', alignItems: 'center', gap: spacing.xs + 2,
+      alignSelf: 'flex-start',
+      backgroundColor: c.surface, borderWidth: 1, borderColor: c.success.base,
+      borderRadius: radius.sm, paddingHorizontal: spacing.md, paddingVertical: spacing.xs + 2, marginTop: 2,
+    },
+    matchActionText: { fontSize: 12, fontWeight: '800', color: c.success.on },
+    matchNone: { marginTop: spacing.sm, fontSize: 12, color: c.textMuted, fontStyle: 'italic' },
+    conditionGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
+    conditionBtn: {
+      flexGrow: 1, flexBasis: '30%',
+      alignItems: 'center', justifyContent: 'center', gap: spacing.xs,
+      paddingVertical: spacing.lg - 2, paddingHorizontal: spacing.sm,
+      borderRadius: radius.lg, borderWidth: 1.5, borderColor: c.border,
+      backgroundColor: c.surface, minHeight: 74,
+    },
+    conditionEmoji: { fontSize: 26, lineHeight: 30 },
+    conditionBtnText: { fontSize: 12, fontWeight: '700', color: c.textSecondary },
+    uploadBadge: {
+      flexDirection: 'row', alignItems: 'center', gap: 3,
+      backgroundColor: c.neutral.base, paddingHorizontal: spacing.sm, paddingVertical: 3, borderRadius: radius.pill,
+    },
+    uploadBadgeDone:  { backgroundColor: c.success.base },
+    uploadBadgeError: { backgroundColor: c.warning.base },
+    uploadBadgeText: { fontSize: 10, fontWeight: '800', color: '#fff' },
+    photoBtn: {
+      flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.sm,
+      backgroundColor: c.primarySoft, borderWidth: 1.5, borderColor: c.primary,
+      borderStyle: 'dashed', borderRadius: radius.md, paddingVertical: spacing.lg,
+    },
+    photoBtnText: { fontSize: 15, fontWeight: '700', color: c.primaryDark },
+    photoContainer: { borderRadius: radius.md, overflow: 'hidden', position: 'relative' },
+    photo: { width: '100%', height: 170, borderRadius: radius.md },
+    photoRetake: {
+      position: 'absolute', bottom: spacing.sm, right: spacing.sm,
+      flexDirection: 'row', alignItems: 'center', gap: 4,
+      backgroundColor: 'rgba(0,0,0,0.62)', paddingHorizontal: spacing.md, paddingVertical: spacing.xs + 1, borderRadius: radius.pill,
+    },
+    photoRetakeText: { fontSize: 12, color: '#fff', fontWeight: '700' },
+  })
+}

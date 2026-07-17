@@ -1,16 +1,20 @@
 import { useEffect, useState, useCallback, useMemo } from 'react'
 import {
-  View, Text, FlatList, StyleSheet, TouchableOpacity,
-  RefreshControl, StatusBar, ActivityIndicator, Alert,
+  View, FlatList, StyleSheet, TouchableOpacity,
+  RefreshControl, ActivityIndicator, Alert,
 } from 'react-native'
-import { SafeAreaView } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import { useLanguage } from '../../contexts/LanguageContext'
+import { useTheme } from '../../contexts/ThemeContext'
 import { useRealtime } from '../../hooks/useRealtime'
 import { useRoleGuard } from '../../hooks/useRoleGuard'
+import { Theme, StatusKind, spacing, radius, elevation } from '../../lib/theme'
+import {
+  Screen, Card, AppText, Badge, StatTile, Loading, EmptyState, ErrorState,
+} from '../../components/ui'
 
 type FilterKey = 'all' | 'Critical' | 'High'
 
@@ -26,12 +30,18 @@ interface AlertRow {
   issue_date: string | null
 }
 
-const RISK_COLOR: Record<string, string> = { Critical: '#dc2626', High: '#ea580c' }
+/** Risk band -> design-system status kind (sun-legible, theme-aware). */
+const RISK_KIND: Record<string, StatusKind> = { Critical: 'critical', High: 'danger' }
+function riskKind(level?: string | null): StatusKind {
+  return RISK_KIND[level ?? ''] ?? 'neutral'
+}
 
 export default function AlertsScreen() {
   const { profile } = useAuth()
   const { t, isRTL } = useLanguage()
+  const { theme } = useTheme()
   const router = useRouter()
+  const s = useMemo(() => makeStyles(theme), [theme])
   const [rows, setRows] = useState<AlertRow[]>([])
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
@@ -130,123 +140,185 @@ export default function AlertsScreen() {
     [rows, filter],
   )
   const critCount = useMemo(() => rows.filter(r => r.risk_level === 'Critical').length, [rows])
+  const highCount = useMemo(() => rows.filter(r => r.risk_level === 'High').length, [rows])
+
+  const FILTERS: { key: FilterKey; label: string }[] = [
+    { key: 'all', label: t('modules.alerts.all') },
+    { key: 'Critical', label: t('modules.alerts.critical') },
+    { key: 'High', label: t('modules.alerts.high') },
+  ]
 
   if (!allowed) return null
 
   return (
-    <SafeAreaView style={styles.safe}>
-      <StatusBar barStyle="dark-content" backgroundColor="#f0f5f1" />
-      <View style={[styles.header, isRTL && styles.rowR]}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-          <Ionicons name={isRTL ? 'arrow-forward' : 'arrow-back'} size={22} color="#0f172a" />
+    <Screen edges={['top']}>
+      <View style={[s.header, isRTL && s.rowR]}>
+        <TouchableOpacity onPress={() => router.back()} style={s.backBtn} activeOpacity={0.7}>
+          <Ionicons name={isRTL ? 'arrow-forward' : 'arrow-back'} size={22} color={theme.color.text} />
         </TouchableOpacity>
         <View style={{ flex: 1 }}>
-          <Text style={[styles.title, { textAlign }]}>{t('modules.alerts.title')}</Text>
-          <Text style={[styles.sub, { textAlign }]}>{critCount} {t('modules.alerts.criticalN')} · {rows.length} {t('modules.alerts.flagged')}</Text>
+          <AppText variant="h2" style={{ textAlign }}>{t('modules.alerts.title')}</AppText>
+          <AppText variant="caption" color="secondary" style={{ textAlign, marginTop: 2 }}>
+            {critCount} {t('modules.alerts.criticalN')} · {rows.length} {t('modules.alerts.flagged')}
+          </AppText>
         </View>
       </View>
 
-      <View style={styles.filters}>
-        {(['all', 'Critical', 'High'] as FilterKey[]).map(f => (
-          <TouchableOpacity key={f} style={[styles.chip, filter === f && styles.chipActive]} onPress={() => setFilter(f)}>
-            <Text style={[styles.chipText, filter === f && styles.chipTextActive]}>{f === 'all' ? t('modules.alerts.all') : f === 'Critical' ? t('modules.alerts.critical') : t('modules.alerts.high')}</Text>
-          </TouchableOpacity>
-        ))}
+      {!loading && !error && (
+        <View style={s.statRow}>
+          <StatTile
+            label={t('modules.alerts.critical')} value={critCount}
+            icon="alert-circle" tint="red"
+            onPress={() => setFilter('Critical')}
+          />
+          <StatTile
+            label={t('modules.alerts.high')} value={highCount}
+            icon="warning" tint="amber"
+            onPress={() => setFilter('High')}
+          />
+          <StatTile
+            label={t('modules.alerts.flagged')} value={rows.length}
+            icon="shield-half" tint="slate"
+            onPress={() => setFilter('all')}
+          />
+        </View>
+      )}
+
+      <View style={[s.filters, isRTL && s.rowR]}>
+        {FILTERS.map(({ key, label }) => {
+          const active = filter === key
+          return (
+            <TouchableOpacity
+              key={key}
+              style={[s.chip, active && s.chipActive]}
+              onPress={() => setFilter(key)}
+              activeOpacity={0.8}
+            >
+              <AppText variant="label" style={{ color: active ? theme.color.onPrimary : theme.color.textSecondary }}>
+                {label}
+              </AppText>
+            </TouchableOpacity>
+          )
+        })}
       </View>
 
       {loading ? (
-        <ActivityIndicator color="#16a34a" style={{ marginTop: 40 }} />
+        <Loading label="Loading alerts" />
       ) : (
         <FlatList
           data={shown}
           keyExtractor={i => i.id}
-          contentContainerStyle={styles.list}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#16a34a" />}
+          contentContainerStyle={s.list}
+          initialNumToRender={10}
+          maxToRenderPerBatch={10}
+          windowSize={9}
+          removeClippedSubviews
+          showsVerticalScrollIndicator={false}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.color.primary} />}
           ListEmptyComponent={
             error ? (
-              <View style={styles.empty}>
-                <Ionicons name="cloud-offline-outline" size={48} color="#cbd5e1" />
-                <Text style={styles.emptyText}>{error}</Text>
-                <TouchableOpacity style={styles.retryBtn} onPress={onRefresh}>
-                  <Ionicons name="refresh" size={16} color="#fff" />
-                  <Text style={styles.retryText}>Retry</Text>
-                </TouchableOpacity>
-              </View>
+              <ErrorState message={error} onRetry={onRefresh} />
             ) : (
-              <View style={styles.empty}>
-                <Ionicons name="shield-checkmark-outline" size={48} color="#cbd5e1" />
-                <Text style={styles.emptyText}>{t('modules.alerts.none')}</Text>
-              </View>
+              <EmptyState
+                icon="shield-checkmark-outline"
+                title={t('modules.alerts.none')}
+                message={filter !== 'all' ? 'No alerts match this filter.' : undefined}
+              />
             )
           }
           renderItem={({ item }) => {
-            const rc = RISK_COLOR[item.risk_level ?? ''] ?? '#64748b'
+            const kind = riskKind(item.risk_level)
+            const meta = [item.site, item.brand, item.position].filter(Boolean).join(' · ') || '-'
+            const spec = [
+              item.serial_no ? `SN ${item.serial_no}` : null,
+              item.tread_depth != null ? `${item.tread_depth}mm` : null,
+            ].filter(Boolean).join('  ·  ')
             return (
-              <TouchableOpacity
-                style={styles.card}
-                activeOpacity={0.85}
+              <Card
+                padded={false}
+                accent={theme.color[kind].base}
                 onPress={() => item.asset_no && router.push({ pathname: '/(app)/inspection/new', params: { site: item.site ?? '', asset: item.asset_no } })}
+                style={s.card}
               >
-                <View style={[styles.riskDot, { backgroundColor: rc }]}>
-                  <Ionicons name="alert" size={16} color="#fff" />
-                </View>
-                <View style={{ flex: 1, gap: 3 }}>
-                  <Text style={[styles.cardTitle, { textAlign }]}>{item.asset_no ?? 'Unknown asset'}</Text>
-                  <Text style={[styles.cardMeta, { textAlign }]}>
-                    {[item.site, item.brand, item.position].filter(Boolean).join(' · ') || '-'}
-                  </Text>
-                  <Text style={[styles.cardMeta, { textAlign }]}>
-                    {item.serial_no ? `SN ${item.serial_no}` : ''}{item.tread_depth != null ? `  ·  ${item.tread_depth}mm` : ''}
-                  </Text>
-                </View>
-                <View style={styles.cardRight}>
-                  <View style={[styles.riskBadge, { backgroundColor: rc + '1a' }]}>
-                    <Text style={[styles.riskBadgeText, { color: rc }]}>{item.risk_level}</Text>
+                <View style={[s.cardRow, isRTL && s.rowR]}>
+                  <View style={[s.riskIcon, { backgroundColor: theme.color[kind].soft }]}>
+                    <Ionicons name="alert" size={20} color={theme.color[kind].base} />
                   </View>
-                  <TouchableOpacity
-                    style={styles.ackBtn}
-                    onPress={() => acknowledge(item)}
-                    disabled={ackingId === item.id}
-                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                  >
-                    {ackingId === item.id
-                      ? <ActivityIndicator size="small" color="#16a34a" />
-                      : <><Ionicons name="checkmark-done" size={14} color="#16a34a" /><Text style={styles.ackText}>Ack</Text></>}
-                  </TouchableOpacity>
+                  <View style={{ flex: 1, gap: 3 }}>
+                    <AppText variant="title" style={{ textAlign }} numberOfLines={1}>
+                      {item.asset_no ?? 'Unknown asset'}
+                    </AppText>
+                    <AppText variant="caption" color="muted" style={{ textAlign }} numberOfLines={1}>{meta}</AppText>
+                    {spec ? (
+                      <AppText variant="micro" color="muted" style={{ textAlign }} numberOfLines={1}>{spec}</AppText>
+                    ) : null}
+                  </View>
+                  <View style={s.cardRight}>
+                    <Badge kind={kind}>{item.risk_level ?? '-'}</Badge>
+                    <TouchableOpacity
+                      style={[s.ackBtn, { borderColor: theme.color.primary, backgroundColor: theme.color.primarySoft }]}
+                      onPress={() => acknowledge(item)}
+                      disabled={ackingId === item.id}
+                      activeOpacity={0.8}
+                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    >
+                      {ackingId === item.id ? (
+                        <ActivityIndicator size="small" color={theme.color.primary} />
+                      ) : (
+                        <>
+                          <Ionicons name="checkmark-done" size={14} color={theme.color.primaryDark} />
+                          <AppText variant="micro" style={{ color: theme.color.primaryDark }}>Ack</AppText>
+                        </>
+                      )}
+                    </TouchableOpacity>
+                  </View>
                 </View>
-              </TouchableOpacity>
+              </Card>
             )
           }}
         />
       )}
-    </SafeAreaView>
+    </Screen>
   )
 }
 
-const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#f0f5f1' },
-  rowR: { flexDirection: 'row-reverse' },
-  header: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 16 },
-  backBtn: { width: 38, height: 38, borderRadius: 10, backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: 'rgba(0,0,0,0.06)' },
-  title: { fontSize: 20, fontWeight: '800', color: '#0f172a' },
-  sub: { fontSize: 12, color: '#64748b', marginTop: 2 },
-  filters: { flexDirection: 'row', gap: 8, paddingHorizontal: 16, paddingBottom: 8 },
-  chip: { paddingHorizontal: 14, paddingVertical: 7, borderRadius: 999, backgroundColor: '#fff', borderWidth: 1, borderColor: 'rgba(0,0,0,0.08)' },
-  chipActive: { backgroundColor: '#dc2626', borderColor: '#dc2626' },
-  chipText: { fontSize: 12, fontWeight: '700', color: '#64748b' },
-  chipTextActive: { color: '#fff' },
-  list: { padding: 16, gap: 10, paddingBottom: 40 },
-  card: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: '#fff', borderRadius: 14, padding: 14, borderWidth: 1, borderColor: 'rgba(0,0,0,0.06)' },
-  riskDot: { width: 34, height: 34, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
-  cardTitle: { fontSize: 14, fontWeight: '800', color: '#0f172a' },
-  cardMeta: { fontSize: 11.5, color: '#94a3b8' },
-  cardRight: { alignItems: 'flex-end', gap: 6 },
-  riskBadge: { borderRadius: 8, paddingHorizontal: 10, paddingVertical: 5 },
-  riskBadgeText: { fontSize: 11, fontWeight: '800' },
-  ackBtn: { flexDirection: 'row', alignItems: 'center', gap: 3, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, backgroundColor: '#16a34a14', minWidth: 44, justifyContent: 'center' },
-  ackText: { fontSize: 11, fontWeight: '800', color: '#16a34a' },
-  empty: { alignItems: 'center', paddingVertical: 60, gap: 10 },
-  emptyText: { fontSize: 15, fontWeight: '700', color: '#94a3b8', textAlign: 'center', paddingHorizontal: 24 },
-  retryBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#16a34a', borderRadius: 10, paddingHorizontal: 16, paddingVertical: 9, marginTop: 4 },
-  retryText: { fontSize: 13, fontWeight: '800', color: '#fff' },
-})
+function makeStyles(theme: Theme) {
+  const c = theme.color
+  return StyleSheet.create({
+    rowR: { flexDirection: 'row-reverse' },
+    header: {
+      flexDirection: 'row', alignItems: 'center', gap: spacing.md,
+      paddingHorizontal: spacing.lg, paddingTop: spacing.sm, paddingBottom: spacing.md,
+    },
+    backBtn: {
+      width: 40, height: 40, borderRadius: radius.md,
+      backgroundColor: c.surface, alignItems: 'center', justifyContent: 'center',
+      borderWidth: 1, borderColor: c.border, ...elevation(theme, 1),
+    },
+    statRow: {
+      flexDirection: 'row', gap: spacing.md,
+      paddingHorizontal: spacing.lg, paddingBottom: spacing.md,
+    },
+    filters: {
+      flexDirection: 'row', gap: spacing.sm,
+      paddingHorizontal: spacing.lg, paddingBottom: spacing.sm,
+    },
+    chip: {
+      paddingHorizontal: spacing.lg, paddingVertical: spacing.sm,
+      borderRadius: radius.pill, backgroundColor: c.surface,
+      borderWidth: 1.5, borderColor: c.border,
+    },
+    chipActive: { backgroundColor: c.primary, borderColor: c.primary },
+    list: { paddingHorizontal: spacing.lg, paddingBottom: spacing['4xl'], gap: spacing.md, paddingTop: spacing.xs, flexGrow: 1 },
+    card: { overflow: 'hidden' },
+    cardRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, padding: spacing.md },
+    riskIcon: { width: 42, height: 42, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center' },
+    cardRight: { alignItems: 'flex-end', gap: spacing.sm },
+    ackBtn: {
+      flexDirection: 'row', alignItems: 'center', gap: 4,
+      paddingHorizontal: spacing.md, paddingVertical: 6,
+      borderRadius: radius.sm, borderWidth: 1,
+      minWidth: 56, justifyContent: 'center',
+    },
+  })
+}

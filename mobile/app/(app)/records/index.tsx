@@ -9,29 +9,34 @@
 
 import { useState, useCallback, useEffect } from 'react'
 import {
-  View, Text, FlatList, StyleSheet, TouchableOpacity,
-  TextInput, RefreshControl, StatusBar, ActivityIndicator,
+  View, FlatList, StyleSheet, TouchableOpacity,
+  TextInput, RefreshControl, ActivityIndicator,
   Modal, ScrollView,
 } from 'react-native'
-import { SafeAreaView } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons'
 import { useAuth } from '../../../contexts/AuthContext'
+import { useTheme } from '../../../contexts/ThemeContext'
 import { supabase } from '../../../lib/supabase'
 import { isAdminOrAbove } from '../../../lib/types'
+import {
+  spacing, radius, typography, statusColor, StatusKind,
+} from '../../../lib/theme'
+import {
+  Screen, Card, AppText, Button, Badge, EmptyState, ErrorState, Loading,
+} from '../../../components/ui'
 
 const PAGE = 30
 
-const RISK_COLOR: Record<string, string> = {
-  Critical: '#dc2626',
-  High:     '#ea580c',
-  Medium:   '#f59e0b',
-  Low:      '#16a34a',
+/** Map an operational risk band to a design-system status kind. */
+const RISK_KIND: Record<string, StatusKind> = {
+  Critical: 'critical',
+  High:     'danger',
+  Medium:   'warning',
+  Low:      'success',
 }
-const RISK_BG: Record<string, string> = {
-  Critical: '#fef2f2',
-  High:     '#fff7ed',
-  Medium:   '#fffbeb',
-  Low:      '#f0fdf4',
+
+function riskKind(risk?: string | null): StatusKind {
+  return (risk && RISK_KIND[risk]) || 'neutral'
 }
 
 interface TyreRecord {
@@ -53,6 +58,8 @@ interface TyreRecord {
 
 export default function RecordsScreen() {
   const { profile } = useAuth()
+  const { theme } = useTheme()
+  const c = theme.color
   const role = profile?.role ?? null
   const elevated = isAdminOrAbove(role)
 
@@ -63,6 +70,7 @@ export default function RecordsScreen() {
   const [page, setPage]           = useState(0)
   const [loadingMore, setLoadingMore] = useState(false)
   const [hasMore, setHasMore]     = useState(true)
+  const [error, setError]         = useState<string | null>(null)
 
   const [search, setSearch]       = useState('')
   const [siteFilter, setSiteFilter] = useState('')
@@ -77,10 +85,14 @@ export default function RecordsScreen() {
   useEffect(() => { reset() }, [search, siteFilter, riskFilter])
 
   async function loadSites() {
-    let q = supabase.from('tyre_records').select('site').not('site', 'is', null)
-    if (!elevated && profile?.site) q = q.eq('site', profile.site)
-    const { data } = await q
-    if (data) setSites([...new Set(data.map((r: any) => r.site as string))].sort())
+    try {
+      let q = supabase.from('tyre_records').select('site').not('site', 'is', null)
+      if (!elevated && profile?.site) q = q.eq('site', profile.site)
+      const { data } = await q
+      if (data) setSites([...new Set(data.map((r: any) => r.site as string))].sort())
+    } catch (e: any) {
+      if (__DEV__) console.warn('[records] loadSites failed:', e?.message)
+    }
   }
 
   function reset() {
@@ -107,15 +119,25 @@ export default function RecordsScreen() {
     else if (!elevated && profile?.site) q = q.eq('site', profile.site)
     if (riskFilter) q = q.eq('risk_level', riskFilter)
 
-    const { data, count } = await q
-    const rows = (data ?? []) as TyreRecord[]
+    try {
+      const { data, count, error: qErr } = await q
+      if (qErr) throw qErr
+      const rows = (data ?? []) as TyreRecord[]
 
-    setTotal(count ?? 0)
-    setRecords(prev => fresh ? rows : [...prev, ...rows])
-    setHasMore(rows.length === PAGE)
-    setLoading(false)
-    setLoadingMore(false)
-    setRefreshing(false)
+      setError(null)
+      setTotal(count ?? 0)
+      setRecords(prev => fresh ? rows : [...prev, ...rows])
+      setHasMore(rows.length === PAGE)
+    } catch (e: any) {
+      if (__DEV__) console.warn('[records] load failed:', e?.message)
+      setError('Could not load records. Pull down to retry.')
+      if (fresh) setRecords([])
+      setHasMore(false)
+    } finally {
+      setLoading(false)
+      setLoadingMore(false)
+      setRefreshing(false)
+    }
   }, [search, siteFilter, riskFilter, elevated, profile?.site])
 
   useEffect(() => { loadPage(page) }, [page])
@@ -135,35 +157,38 @@ export default function RecordsScreen() {
   const activeFilters = [siteFilter, riskFilter].filter(Boolean).length
 
   return (
-    <SafeAreaView style={styles.safe}>
-      <StatusBar barStyle="dark-content" backgroundColor="#f8fafc" />
-
+    <Screen edges={['top']} style={{ paddingHorizontal: 0 }}>
       {/* Header */}
-      <View style={styles.header}>
+      <View style={[styles.header, { backgroundColor: c.surface, borderBottomColor: c.border }]}>
         <View style={{ flex: 1 }}>
-          <Text style={styles.title}>Tyre Records</Text>
-          <Text style={styles.subtitle}>
+          <AppText variant="h2">Tyre Records</AppText>
+          <AppText variant="caption" color="muted" style={{ marginTop: 2 }}>
             {loading ? 'Loading...' : `${total.toLocaleString()} record${total !== 1 ? 's' : ''}${elevated ? '' : ` · ${profile?.site ?? 'My site'}`}`}
-          </Text>
+          </AppText>
         </View>
         <TouchableOpacity
-          style={[styles.filterBtn, activeFilters > 0 && styles.filterBtnActive]}
+          style={[
+            styles.filterBtn,
+            { backgroundColor: activeFilters > 0 ? c.primary : c.surfaceAlt },
+          ]}
           onPress={() => setShowFilters(true)}
         >
-          <Ionicons name="options-outline" size={18} color={activeFilters > 0 ? '#fff' : '#64748b'} />
+          <Ionicons name="options-outline" size={18} color={activeFilters > 0 ? c.onPrimary : c.textSecondary} />
           {activeFilters > 0 && (
-            <View style={styles.filterBadge}><Text style={styles.filterBadgeText}>{activeFilters}</Text></View>
+            <View style={[styles.filterBadge, { backgroundColor: c.danger.base }]}>
+              <AppText style={[typography.micro, { color: c.textInverse, fontSize: 9 }]}>{activeFilters}</AppText>
+            </View>
           )}
         </TouchableOpacity>
       </View>
 
       {/* Search */}
-      <View style={styles.searchRow}>
-        <Ionicons name="search-outline" size={16} color="#94a3b8" />
+      <View style={[styles.searchRow, { backgroundColor: c.surface, borderColor: c.border }]}>
+        <Ionicons name="search-outline" size={16} color={c.textMuted} />
         <TextInput
-          style={styles.searchInput}
+          style={[styles.searchInput, { color: c.text }]}
           placeholder="Search asset, serial, brand..."
-          placeholderTextColor="#94a3b8"
+          placeholderTextColor={c.textMuted}
           value={search}
           onChangeText={setSearch}
           returnKeyType="search"
@@ -171,7 +196,7 @@ export default function RecordsScreen() {
         />
         {search.length > 0 && (
           <TouchableOpacity onPress={() => setSearch('')}>
-            <Ionicons name="close-circle" size={16} color="#94a3b8" />
+            <Ionicons name="close-circle" size={16} color={c.textMuted} />
           </TouchableOpacity>
         )}
       </View>
@@ -180,126 +205,156 @@ export default function RecordsScreen() {
       {activeFilters > 0 && (
         <View style={styles.chipRow}>
           {siteFilter ? (
-            <TouchableOpacity style={styles.chip} onPress={() => setSiteFilter('')}>
-              <Text style={styles.chipText}>{siteFilter}</Text>
-              <Ionicons name="close" size={11} color="#64748b" />
+            <TouchableOpacity
+              style={[styles.chip, { backgroundColor: c.surface, borderColor: c.border }]}
+              onPress={() => setSiteFilter('')}
+            >
+              <AppText variant="caption" color="secondary">{siteFilter}</AppText>
+              <Ionicons name="close" size={11} color={c.textSecondary} />
             </TouchableOpacity>
           ) : null}
           {riskFilter ? (
-            <TouchableOpacity style={[styles.chip, { borderColor: RISK_COLOR[riskFilter] + '60' }]} onPress={() => setRiskFilter('')}>
-              <Text style={[styles.chipText, { color: RISK_COLOR[riskFilter] }]}>{riskFilter}</Text>
-              <Ionicons name="close" size={11} color={RISK_COLOR[riskFilter]} />
+            <TouchableOpacity
+              style={[styles.chip, { backgroundColor: statusColor(theme, riskKind(riskFilter)).soft, borderColor: statusColor(theme, riskKind(riskFilter)).base }]}
+              onPress={() => setRiskFilter('')}
+            >
+              <AppText style={[typography.caption, { color: statusColor(theme, riskKind(riskFilter)).on }]}>{riskFilter}</AppText>
+              <Ionicons name="close" size={11} color={statusColor(theme, riskKind(riskFilter)).on} />
             </TouchableOpacity>
           ) : null}
           <TouchableOpacity onPress={() => { setSiteFilter(''); setRiskFilter('') }}>
-            <Text style={styles.clearAll}>Clear all</Text>
+            <AppText style={[typography.caption, { color: c.danger.base, marginLeft: 4 }]}>Clear all</AppText>
           </TouchableOpacity>
         </View>
       )}
 
       {loading ? (
-        <View style={styles.center}><ActivityIndicator size="large" color="#16a34a" /></View>
+        <Loading />
       ) : (
         <FlatList
           data={records}
           keyExtractor={r => r.id}
           contentContainerStyle={styles.list}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#16a34a" />}
+          initialNumToRender={12}
+          maxToRenderPerBatch={12}
+          windowSize={9}
+          removeClippedSubviews
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={c.primary} />}
           onEndReached={loadMore}
           onEndReachedThreshold={0.3}
           ListEmptyComponent={
-            <View style={styles.empty}>
-              <Ionicons name="layers-outline" size={48} color="#cbd5e1" />
-              <Text style={styles.emptyTitle}>No records found</Text>
-              <Text style={styles.emptyHint}>Try adjusting your search or filters</Text>
-            </View>
+            error ? (
+              <ErrorState message={error} onRetry={onRefresh} />
+            ) : (
+              <EmptyState
+                icon="layers-outline"
+                title="No records found"
+                message="Try adjusting your search or filters"
+              />
+            )
           }
-          ListFooterComponent={loadingMore ? <ActivityIndicator color="#16a34a" style={{ margin: 16 }} /> : null}
+          ListFooterComponent={loadingMore ? <ActivityIndicator color={c.primary} style={{ margin: spacing.lg }} /> : null}
           renderItem={({ item }) => (
-            <TouchableOpacity style={styles.card} onPress={() => setDetail(item)} activeOpacity={0.75}>
-              <View style={[styles.riskStrip, { backgroundColor: RISK_COLOR[item.risk_level ?? ''] ?? '#94a3b8' }]} />
+            <Card
+              onPress={() => setDetail(item)}
+              padded={false}
+              accent={statusColor(theme, riskKind(item.risk_level)).base}
+              style={styles.card}
+            >
               <View style={styles.cardBody}>
                 <View style={styles.cardTop}>
-                  <Text style={styles.assetNo} numberOfLines={1}>{item.asset_no ?? '-'}</Text>
+                  <AppText variant="title" numberOfLines={1} style={{ flex: 1 }}>{item.asset_no ?? '-'}</AppText>
                   {item.risk_level ? (
-                    <View style={[styles.riskBadge, { backgroundColor: RISK_BG[item.risk_level] ?? '#f1f5f9', borderColor: RISK_COLOR[item.risk_level] + '40' }]}>
-                      <Text style={[styles.riskText, { color: RISK_COLOR[item.risk_level] }]}>{item.risk_level}</Text>
-                    </View>
+                    <Badge kind={riskKind(item.risk_level)}>{item.risk_level}</Badge>
                   ) : null}
                 </View>
-                <Text style={styles.brand}>{[item.brand, item.serial_no].filter(Boolean).join(' · ') || '-'}</Text>
+                <AppText variant="caption" color="secondary">{[item.brand, item.serial_no].filter(Boolean).join(' · ') || '-'}</AppText>
                 <View style={styles.cardMeta}>
                   {item.site ? (
                     <View style={styles.metaItem}>
-                      <Ionicons name="location-outline" size={11} color="#94a3b8" />
-                      <Text style={styles.metaText}>{item.site}</Text>
+                      <Ionicons name="location-outline" size={11} color={c.textMuted} />
+                      <AppText variant="micro" color="muted">{item.site}</AppText>
                     </View>
                   ) : null}
                   {item.issue_date ? (
                     <View style={styles.metaItem}>
-                      <Ionicons name="calendar-outline" size={11} color="#94a3b8" />
-                      <Text style={styles.metaText}>{item.issue_date}</Text>
+                      <Ionicons name="calendar-outline" size={11} color={c.textMuted} />
+                      <AppText variant="micro" color="muted">{item.issue_date}</AppText>
                     </View>
                   ) : null}
                   {item.cost_per_tyre != null ? (
                     <View style={styles.metaItem}>
-                      <Ionicons name="cash-outline" size={11} color="#94a3b8" />
-                      <Text style={styles.metaText}>{Number(item.cost_per_tyre).toLocaleString(undefined, { maximumFractionDigits: 0 })}</Text>
+                      <Ionicons name="cash-outline" size={11} color={c.textMuted} />
+                      <AppText variant="micro" color="muted">{Number(item.cost_per_tyre).toLocaleString(undefined, { maximumFractionDigits: 0 })}</AppText>
                     </View>
                   ) : null}
                 </View>
               </View>
-              <Ionicons name="chevron-forward" size={15} color="#cbd5e1" />
-            </TouchableOpacity>
+              <Ionicons name="chevron-forward" size={16} color={c.textMuted} style={{ marginRight: spacing.md }} />
+            </Card>
           )}
         />
       )}
 
       {/* Filter sheet */}
       <Modal visible={showFilters} transparent animationType="slide" onRequestClose={() => setShowFilters(false)}>
-        <View style={styles.sheetBackdrop}>
-          <View style={styles.sheet}>
-            <View style={styles.sheetHandle} />
-            <Text style={styles.sheetTitle}>Filter Records</Text>
+        <View style={[styles.sheetBackdrop, { backgroundColor: c.overlay }]}>
+          <View style={[styles.sheet, { backgroundColor: c.surface }]}>
+            <View style={[styles.sheetHandle, { backgroundColor: c.borderStrong }]} />
+            <AppText variant="h3">Filter Records</AppText>
 
-            <Text style={styles.sheetLabel}>Risk Level</Text>
+            <AppText style={[typography.label, styles.sheetLabel, { color: c.textMuted }]}>Risk Level</AppText>
             <View style={styles.pillRow}>
-              {RISKS.map(r => (
-                <TouchableOpacity
-                  key={r}
-                  style={[styles.pill, riskFilter === r && { backgroundColor: RISK_COLOR[r], borderColor: RISK_COLOR[r] }]}
-                  onPress={() => setRiskFilter(prev => prev === r ? '' : r)}
-                >
-                  <Text style={[styles.pillText, riskFilter === r && { color: '#fff' }]}>{r}</Text>
-                </TouchableOpacity>
-              ))}
+              {RISKS.map(r => {
+                const active = riskFilter === r
+                const sc = statusColor(theme, riskKind(r))
+                return (
+                  <TouchableOpacity
+                    key={r}
+                    style={[
+                      styles.pill,
+                      { backgroundColor: active ? sc.base : c.surfaceAlt, borderColor: active ? sc.base : c.border },
+                    ]}
+                    onPress={() => setRiskFilter(prev => prev === r ? '' : r)}
+                  >
+                    <AppText style={[typography.label, { color: active ? c.textInverse : c.textSecondary }]}>{r}</AppText>
+                  </TouchableOpacity>
+                )
+              })}
             </View>
 
             {elevated && sites.length > 0 && (
               <>
-                <Text style={styles.sheetLabel}>Site</Text>
+                <AppText style={[typography.label, styles.sheetLabel, { color: c.textMuted }]}>Site</AppText>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false}>
                   <View style={styles.pillRow}>
-                    {sites.map(s => (
-                      <TouchableOpacity
-                        key={s}
-                        style={[styles.pill, siteFilter === s && styles.pillActive]}
-                        onPress={() => setSiteFilter(prev => prev === s ? '' : s)}
-                      >
-                        <Text style={[styles.pillText, siteFilter === s && styles.pillTextActive]}>{s}</Text>
-                      </TouchableOpacity>
-                    ))}
+                    {sites.map(s => {
+                      const active = siteFilter === s
+                      return (
+                        <TouchableOpacity
+                          key={s}
+                          style={[
+                            styles.pill,
+                            { backgroundColor: active ? c.primary : c.surfaceAlt, borderColor: active ? c.primary : c.border },
+                          ]}
+                          onPress={() => setSiteFilter(prev => prev === s ? '' : s)}
+                        >
+                          <AppText style={[typography.label, { color: active ? c.onPrimary : c.textSecondary }]}>{s}</AppText>
+                        </TouchableOpacity>
+                      )
+                    })}
                   </View>
                 </ScrollView>
               </>
             )}
 
-            <TouchableOpacity style={styles.applyBtn} onPress={() => setShowFilters(false)}>
-              <Text style={styles.applyBtnText}>Apply Filters</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.clearBtn} onPress={() => { setSiteFilter(''); setRiskFilter(''); setShowFilters(false) }}>
-              <Text style={styles.clearBtnText}>Clear All</Text>
-            </TouchableOpacity>
+            <Button label="Apply Filters" full onPress={() => setShowFilters(false)} style={{ marginTop: spacing.xs }} />
+            <Button
+              label="Clear All"
+              variant="ghost"
+              full
+              onPress={() => { setSiteFilter(''); setRiskFilter(''); setShowFilters(false) }}
+            />
           </View>
         </View>
       </Modal>
@@ -307,18 +362,16 @@ export default function RecordsScreen() {
       {/* Detail sheet */}
       {detail && (
         <Modal visible animationType="slide" transparent onRequestClose={() => setDetail(null)}>
-          <View style={styles.sheetBackdrop}>
-            <View style={[styles.sheet, { maxHeight: '85%' }]}>
-              <View style={styles.sheetHandle} />
+          <View style={[styles.sheetBackdrop, { backgroundColor: c.overlay }]}>
+            <View style={[styles.sheet, { backgroundColor: c.surface, maxHeight: '85%' }]}>
+              <View style={[styles.sheetHandle, { backgroundColor: c.borderStrong }]} />
               <View style={styles.detailHeader}>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.detailAsset}>{detail.asset_no ?? 'Record'}</Text>
-                  <Text style={styles.detailBrand}>{detail.brand ?? '-'}</Text>
+                  <AppText variant="h3">{detail.asset_no ?? 'Record'}</AppText>
+                  <AppText variant="caption" color="secondary" style={{ marginTop: 2 }}>{detail.brand ?? '-'}</AppText>
                 </View>
                 {detail.risk_level ? (
-                  <View style={[styles.riskBadge, { backgroundColor: RISK_BG[detail.risk_level] ?? '#f1f5f9', borderColor: RISK_COLOR[detail.risk_level] + '60' }]}>
-                    <Text style={[styles.riskText, { color: RISK_COLOR[detail.risk_level] }]}>{detail.risk_level}</Text>
-                  </View>
+                  <Badge kind={riskKind(detail.risk_level)}>{detail.risk_level}</Badge>
                 ) : null}
               </View>
               <ScrollView showsVerticalScrollIndicator={false} style={{ flex: 1 }}>
@@ -338,147 +391,103 @@ export default function RecordsScreen() {
                 ) : null}
                 <DetailRow label="Country" value={detail.country} />
                 {detail.description ? (
-                  <View style={styles.detailBlock}>
-                    <Text style={styles.detailLabel}>Description</Text>
-                    <Text style={styles.detailValue}>{detail.description}</Text>
+                  <View style={[styles.detailBlock, { borderBottomColor: c.border }]}>
+                    <AppText variant="caption" color="muted" style={{ marginBottom: 4 }}>Description</AppText>
+                    <AppText variant="body">{detail.description}</AppText>
                   </View>
                 ) : null}
                 {detail.remarks ? (
-                  <View style={styles.detailBlock}>
-                    <Text style={styles.detailLabel}>Remarks</Text>
-                    <Text style={styles.detailValue}>{detail.remarks}</Text>
+                  <View style={[styles.detailBlock, { borderBottomColor: c.border }]}>
+                    <AppText variant="caption" color="muted" style={{ marginBottom: 4 }}>Remarks</AppText>
+                    <AppText variant="body">{detail.remarks}</AppText>
                   </View>
                 ) : null}
               </ScrollView>
-              <TouchableOpacity style={styles.closeDetailBtn} onPress={() => setDetail(null)}>
-                <Text style={styles.closeDetailText}>Close</Text>
-              </TouchableOpacity>
+              <Button label="Close" variant="secondary" full onPress={() => setDetail(null)} style={{ marginTop: spacing.md }} />
             </View>
           </View>
         </Modal>
       )}
-    </SafeAreaView>
+    </Screen>
   )
 }
 
 function DetailRow({ label, value, highlight }: { label: string; value?: string | null; highlight?: boolean }) {
+  const { theme } = useTheme()
+  const c = theme.color
   if (!value && value !== '0') return null
   return (
-    <View style={detailRowStyles.row}>
-      <Text style={detailRowStyles.label}>{label}</Text>
-      <Text style={[detailRowStyles.value, highlight && detailRowStyles.highlight]}>{value}</Text>
+    <View style={[detailRowStyles.row, { borderBottomColor: c.border }]}>
+      <AppText style={[detailRowStyles.label, { color: c.textSecondary }]}>{label}</AppText>
+      <AppText style={[detailRowStyles.value, { color: highlight ? c.primaryDark : c.text }]}>{value}</AppText>
     </View>
   )
 }
 
 const detailRowStyles = StyleSheet.create({
-  row: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#f1f5f9' },
-  label: { fontSize: 13, color: '#64748b', flex: 1 },
-  value: { fontSize: 13, color: '#0f172a', fontWeight: '600', flex: 1, textAlign: 'right' },
-  highlight: { color: '#16a34a' },
+  row: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 10, borderBottomWidth: 1 },
+  label: { fontSize: 13, flex: 1 },
+  value: { fontSize: 13, fontWeight: '600', flex: 1, textAlign: 'right' },
 })
 
 const styles = StyleSheet.create({
-  safe:     { flex: 1, backgroundColor: '#f8fafc' },
-  center:   { flex: 1, alignItems: 'center', justifyContent: 'center' },
-
   header: {
     flexDirection: 'row', alignItems: 'center',
-    paddingHorizontal: 16, paddingTop: 12, paddingBottom: 8,
-    backgroundColor: '#fff',
-    borderBottomWidth: 1, borderBottomColor: 'rgba(0,0,0,0.06)',
+    paddingHorizontal: spacing.lg, paddingTop: spacing.md, paddingBottom: spacing.sm,
+    borderBottomWidth: 1,
   },
-  title:    { fontSize: 20, fontWeight: '800', color: '#0f172a' },
-  subtitle: { fontSize: 12, color: '#64748b', marginTop: 2 },
 
   filterBtn: {
-    width: 38, height: 38, borderRadius: 10, backgroundColor: '#f1f5f9',
+    width: 38, height: 38, borderRadius: radius.md,
     alignItems: 'center', justifyContent: 'center',
   },
-  filterBtnActive:  { backgroundColor: '#16a34a' },
   filterBadge: {
     position: 'absolute', top: -4, right: -4,
     width: 16, height: 16, borderRadius: 8,
-    backgroundColor: '#dc2626', alignItems: 'center', justifyContent: 'center',
+    alignItems: 'center', justifyContent: 'center',
   },
-  filterBadgeText: { color: '#fff', fontSize: 9, fontWeight: '800' },
 
   searchRow: {
-    flexDirection: 'row', alignItems: 'center', gap: 8,
-    marginHorizontal: 16, marginVertical: 10,
-    backgroundColor: '#fff', borderRadius: 12,
-    paddingHorizontal: 12, paddingVertical: 10,
-    borderWidth: 1.5, borderColor: '#e2e8f0',
+    flexDirection: 'row', alignItems: 'center', gap: spacing.sm,
+    marginHorizontal: spacing.lg, marginVertical: spacing.sm,
+    borderRadius: radius.md,
+    paddingHorizontal: spacing.md, paddingVertical: spacing.sm,
+    borderWidth: 1.5,
   },
-  searchInput: { flex: 1, fontSize: 13, color: '#0f172a', padding: 0 },
+  searchInput: { flex: 1, fontSize: 14, padding: 0 },
 
-  chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, paddingHorizontal: 16, marginBottom: 6, alignItems: 'center' },
+  chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, paddingHorizontal: spacing.lg, marginBottom: 6, alignItems: 'center' },
   chip: {
     flexDirection: 'row', alignItems: 'center', gap: 4,
-    backgroundColor: '#fff', borderRadius: 20, borderWidth: 1, borderColor: '#e2e8f0',
+    borderRadius: radius.pill, borderWidth: 1,
     paddingHorizontal: 10, paddingVertical: 4,
   },
-  chipText: { fontSize: 12, fontWeight: '600', color: '#64748b' },
-  clearAll: { fontSize: 12, color: '#dc2626', fontWeight: '700', marginLeft: 4 },
 
-  list:  { paddingHorizontal: 16, paddingBottom: 40, gap: 10, paddingTop: 6 },
+  list: { paddingHorizontal: spacing.lg, paddingBottom: 40, gap: 10, paddingTop: 6 },
 
   card: {
     flexDirection: 'row', alignItems: 'center',
-    backgroundColor: '#fff', borderRadius: 14,
     overflow: 'hidden',
-    shadowColor: '#000', shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05, shadowRadius: 4, elevation: 2,
   },
-  riskStrip:  { width: 4, alignSelf: 'stretch' },
-  cardBody:   { flex: 1, padding: 12, gap: 4 },
-  cardTop:    { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  assetNo:    { fontSize: 15, fontWeight: '800', color: '#0f172a', flex: 1 },
-  brand:      { fontSize: 12, color: '#64748b' },
-  riskBadge: {
-    paddingHorizontal: 8, paddingVertical: 2, borderRadius: 8,
-    borderWidth: 1, alignSelf: 'flex-start',
-  },
-  riskText:   { fontSize: 11, fontWeight: '800' },
-  cardMeta:   { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 4 },
-  metaItem:   { flexDirection: 'row', alignItems: 'center', gap: 3 },
-  metaText:   { fontSize: 11, color: '#94a3b8' },
-
-  empty:      { alignItems: 'center', paddingVertical: 60, gap: 10 },
-  emptyTitle: { fontSize: 16, fontWeight: '700', color: '#374151' },
-  emptyHint:  { fontSize: 13, color: '#94a3b8' },
+  cardBody: { flex: 1, padding: spacing.md, gap: 4 },
+  cardTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm },
+  cardMeta: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 4 },
+  metaItem: { flexDirection: 'row', alignItems: 'center', gap: 3 },
 
   // Filter / detail sheets
-  sheetBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' },
+  sheetBackdrop: { flex: 1, justifyContent: 'flex-end' },
   sheet: {
-    backgroundColor: '#fff', borderTopLeftRadius: 24, borderTopRightRadius: 24,
-    padding: 20, paddingBottom: 36, gap: 12,
+    borderTopLeftRadius: radius['2xl'], borderTopRightRadius: radius['2xl'],
+    padding: spacing.xl, paddingBottom: 36, gap: spacing.md,
   },
-  sheetHandle: { width: 40, height: 4, borderRadius: 2, backgroundColor: '#e2e8f0', alignSelf: 'center', marginBottom: 4 },
-  sheetTitle:  { fontSize: 17, fontWeight: '800', color: '#0f172a' },
-  sheetLabel:  { fontSize: 12, fontWeight: '700', color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.5, marginTop: 4 },
-  pillRow:     { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  sheetHandle: { width: 40, height: 4, borderRadius: 2, alignSelf: 'center', marginBottom: 4 },
+  sheetLabel: { textTransform: 'uppercase', letterSpacing: 0.5, marginTop: 4 },
+  pillRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
   pill: {
-    paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20,
-    backgroundColor: '#f8fafc', borderWidth: 1.5, borderColor: '#e2e8f0',
+    paddingHorizontal: 14, paddingVertical: 8, borderRadius: radius.pill,
+    borderWidth: 1.5,
   },
-  pillActive:    { backgroundColor: '#16a34a', borderColor: '#16a34a' },
-  pillText:      { fontSize: 13, fontWeight: '700', color: '#64748b' },
-  pillTextActive:{ color: '#fff' },
-  applyBtn: {
-    backgroundColor: '#16a34a', borderRadius: 14,
-    paddingVertical: 14, alignItems: 'center', marginTop: 4,
-  },
-  applyBtnText: { color: '#fff', fontSize: 15, fontWeight: '800' },
-  clearBtn:     { alignItems: 'center', paddingVertical: 10 },
-  clearBtnText: { color: '#94a3b8', fontSize: 14 },
 
-  detailHeader:  { flexDirection: 'row', alignItems: 'flex-start', marginBottom: 8 },
-  detailAsset:   { fontSize: 18, fontWeight: '800', color: '#0f172a' },
-  detailBrand:   { fontSize: 13, color: '#64748b', marginTop: 2 },
-  detailBlock:   { paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#f1f5f9' },
-  detailLabel:   { fontSize: 12, color: '#64748b', marginBottom: 4 },
-  detailValue:   { fontSize: 13, color: '#0f172a' },
-  closeDetailBtn:{ backgroundColor: '#f1f5f9', borderRadius: 14, paddingVertical: 13, alignItems: 'center', marginTop: 12 },
-  closeDetailText:{ fontSize: 15, fontWeight: '700', color: '#374151' },
+  detailHeader: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: spacing.sm },
+  detailBlock: { paddingVertical: 10, borderBottomWidth: 1 },
 })

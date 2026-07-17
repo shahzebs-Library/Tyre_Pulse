@@ -6,11 +6,14 @@
  * the iconic condition state, key readings and a "recorded" indicator.
  */
 
+import { useMemo } from 'react'
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { TyrePositionData } from '../lib/types'
 import { CONDITION_META, SHOW_TREAD_DEPTH } from '../lib/tyreConditions'
 import { useLanguage } from '../contexts/LanguageContext'
+import { useTheme } from '../contexts/ThemeContext'
+import { radius, spacing, typography, elevation, Theme } from '../lib/theme'
 
 interface Props {
   data: TyrePositionData
@@ -22,6 +25,8 @@ interface Props {
 
 export default function TyrePositionCard({ data, onPress, isHighlighted = false }: Props) {
   const { t, isRTL } = useLanguage()
+  const { theme } = useTheme()
+  const styles = useMemo(() => makeStyles(theme), [theme])
   const meta = CONDITION_META[data.condition]
   const posLabel = t(`positions.${data.position}`)
 
@@ -62,8 +67,8 @@ export default function TyrePositionCard({ data, onPress, isHighlighted = false 
           {data.photo_uri ? (
             <Ionicons
               name={data.photo_url ? 'cloud-done-outline' : 'camera'}
-              size={14}
-              color={data.photo_url ? '#16a34a' : '#f59e0b'}
+              size={15}
+              color={data.photo_url ? theme.color.success.base : theme.color.warning.base}
             />
           ) : null}
         </View>
@@ -72,69 +77,67 @@ export default function TyrePositionCard({ data, onPress, isHighlighted = false 
       {/* Recorded indicator + chevron */}
       {recorded && (
         <View style={styles.recordedDot}>
-          <Ionicons name="checkmark" size={12} color="#fff" />
+          <Ionicons name="checkmark" size={13} color={theme.color.onPrimary} />
         </View>
       )}
-      <Ionicons name={isRTL ? 'chevron-back' : 'chevron-forward'} size={18} color="#cbd5e1" />
+      <Ionicons name={isRTL ? 'chevron-back' : 'chevron-forward'} size={18} color={theme.color.textMuted} />
     </TouchableOpacity>
   )
 }
 
-const styles = StyleSheet.create({
-  card: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    backgroundColor: '#fff',
-    borderRadius: 14,
-    marginBottom: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(0,0,0,0.07)',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  cardRTL: { flexDirection: 'row-reverse' },
-  cardHighlighted: {
-    borderColor: '#3b82f6',
-    borderWidth: 2,
-    shadowColor: '#3b82f6',
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 6,
-  },
-  positionBadge: {
-    minWidth: 48,
-    height: 44,
-    paddingHorizontal: 8,
-    borderRadius: 10,
-    borderWidth: 1.5,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  positionCode: { fontSize: 14, fontWeight: '800', letterSpacing: 0.5 },
-  summary: { flex: 1, gap: 4 },
-  posName: { fontSize: 14, fontWeight: '700', color: '#0f172a' },
-  metaRow: { flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
-  metaRowRTL: { flexDirection: 'row-reverse' },
-  conditionEmoji: { fontSize: 13 },
-  conditionPill: {
-    flexDirection: 'row', alignItems: 'center', gap: 4,
-    paddingHorizontal: 8, paddingVertical: 3,
-    borderRadius: 8, borderWidth: 1,
-  },
-  conditionText: { fontSize: 12, fontWeight: '700' },
-  metaChip: {
-    fontSize: 12, color: '#64748b',
-    backgroundColor: '#f1f5f9',
-    paddingHorizontal: 6, paddingVertical: 2, borderRadius: 5,
-  },
-  recordedDot: {
-    width: 20, height: 20, borderRadius: 10,
-    backgroundColor: '#16a34a', alignItems: 'center', justifyContent: 'center',
-  },
-})
+function makeStyles(theme: Theme) {
+  const c = theme.color
+  return StyleSheet.create({
+    card: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.md,
+      backgroundColor: c.surface,
+      borderRadius: radius.lg,
+      marginBottom: spacing.sm + 2,
+      paddingHorizontal: spacing.md + 2,
+      paddingVertical: spacing.md,
+      borderWidth: 1,
+      borderColor: c.border,
+      minHeight: 68,
+      ...elevation(theme, 1),
+    },
+    cardRTL: { flexDirection: 'row-reverse' },
+    cardHighlighted: {
+      borderColor: c.info.base,
+      borderWidth: 2,
+      backgroundColor: c.info.soft,
+    },
+    positionBadge: {
+      minWidth: 50,
+      height: 48,
+      paddingHorizontal: spacing.sm,
+      borderRadius: radius.md,
+      borderWidth: 1.5,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    positionCode: { fontSize: 15, fontWeight: '800', letterSpacing: 0.5 },
+    summary: { flex: 1, gap: 5 },
+    posName: { ...typography.title, color: c.text },
+    metaRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, flexWrap: 'wrap' },
+    metaRowRTL: { flexDirection: 'row-reverse' },
+    conditionEmoji: { fontSize: 14 },
+    conditionPill: {
+      flexDirection: 'row', alignItems: 'center', gap: 4,
+      paddingHorizontal: spacing.sm, paddingVertical: 4,
+      borderRadius: radius.sm, borderWidth: 1,
+    },
+    conditionText: { fontSize: 12, fontWeight: '800' },
+    metaChip: {
+      fontSize: 12, fontWeight: '700', color: c.textSecondary,
+      backgroundColor: c.surfaceAlt,
+      paddingHorizontal: spacing.sm, paddingVertical: 3, borderRadius: radius.sm - 2,
+      overflow: 'hidden',
+    },
+    recordedDot: {
+      width: 22, height: 22, borderRadius: 11,
+      backgroundColor: c.success.base, alignItems: 'center', justifyContent: 'center',
+    },
+  })
+}

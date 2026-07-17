@@ -8,16 +8,18 @@
  * reading" panel plus monotonic validation stops fat-finger rollbacks and
  * implausible jumps before they enter the fleet's distance history.
  */
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useMemo } from 'react'
 import {
   View, Text, ScrollView, TextInput, TouchableOpacity,
-  StyleSheet, Alert, ActivityIndicator, StatusBar, Platform, KeyboardAvoidingView,
+  StyleSheet, Alert, Platform, KeyboardAvoidingView,
 } from 'react-native'
-import { SafeAreaView } from 'react-native-safe-area-context'
 import { useRouter, useLocalSearchParams } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
 import { useAuth } from '../../contexts/AuthContext'
 import { useLanguage } from '../../contexts/LanguageContext'
+import { useTheme } from '../../contexts/ThemeContext'
+import { Theme, spacing, radius, typography } from '../../lib/theme'
+import { Screen, Button } from '../../components/ui'
 import { useRoleGuard } from '../../hooks/useRoleGuard'
 import PhotoCapture from '../../components/PhotoCapture'
 import ChecklistReferencePicker from '../../components/ChecklistReferencePicker'
@@ -31,6 +33,8 @@ const IMPLAUSIBLE_DAILY_KM = 2000
 export default function MeterLogScreen() {
   const { profile } = useAuth()
   const { isRTL } = useLanguage()
+  const { theme } = useTheme()
+  const styles = useMemo(() => makeStyles(theme), [theme])
   const router = useRouter()
   const params = useLocalSearchParams<{ asset?: string; site?: string }>()
 
@@ -139,12 +143,11 @@ export default function MeterLogScreen() {
   if (!allowed) return null
 
   return (
-    <SafeAreaView style={styles.safe}>
-      <StatusBar barStyle="dark-content" backgroundColor="#f0f5f1" />
+    <Screen padded={false}>
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <View style={[styles.nav, isRTL && styles.rowR]}>
           <TouchableOpacity onPress={() => router.back()} style={styles.navBack}>
-            <Ionicons name={isRTL ? 'arrow-forward' : 'arrow-back'} size={22} color="#0f172a" />
+            <Ionicons name={isRTL ? 'arrow-forward' : 'arrow-back'} size={22} color={theme.color.text} />
           </TouchableOpacity>
           <View style={{ flex: 1 }}>
             <Text style={[styles.navTitle, { textAlign }]}>Daily Meter Log</Text>
@@ -187,7 +190,7 @@ export default function MeterLogScreen() {
               <Ionicons
                 name={loadingLast ? 'time-outline' : last ? 'speedometer-outline' : 'help-circle-outline'}
                 size={18}
-                color={rollback ? '#dc2626' : '#0369a1'}
+                color={rollback ? theme.color.danger.base : theme.color.info.base}
               />
               <View style={{ flex: 1 }}>
                 {loadingLast ? (
@@ -199,7 +202,7 @@ export default function MeterLogScreen() {
                       {last.reading_date ? ` · ${new Date(last.reading_date + 'T00:00:00').toLocaleDateString(dateLocale, { day: 'numeric', month: 'short' })}` : ''}
                     </Text>
                     {dailyDelta != null && (
-                      <Text style={[styles.deltaText, rollback && { color: '#dc2626' }, bigJump && { color: '#b45309' }, { textAlign }]}>
+                      <Text style={[styles.deltaText, rollback && { color: theme.color.danger.base }, bigJump && { color: theme.color.warning.base }, { textAlign }]}>
                         {rollback
                           ? `${dailyDelta.toLocaleString()} km (lower than last!)`
                           : `+${dailyDelta.toLocaleString()} km since last`}
@@ -221,11 +224,11 @@ export default function MeterLogScreen() {
               value={odometer}
               onChangeText={t => setOdometer(t.replace(/[^0-9.]/g, ''))}
               placeholder="e.g. 128450"
-              placeholderTextColor="#94a3b8"
+              placeholderTextColor={theme.color.textMuted}
               keyboardType="numeric"
             />
             <Text style={[styles.help, { textAlign }]}>Photo of the odometer gauge *</Text>
-            <PhotoCapture value={odoPhoto} onChange={setOdoPhoto} module="meter-log" tint="#16a34a" max={1} label="Photograph gauge" />
+            <PhotoCapture value={odoPhoto} onChange={setOdoPhoto} module="meter-log" tint={theme.color.primary} max={1} label="Photograph gauge" />
           </View>
 
           {/* Engine hours (optional) */}
@@ -236,13 +239,13 @@ export default function MeterLogScreen() {
               value={engineHours}
               onChangeText={t => setEngineHours(t.replace(/[^0-9.]/g, ''))}
               placeholder="e.g. 4210"
-              placeholderTextColor="#94a3b8"
+              placeholderTextColor={theme.color.textMuted}
               keyboardType="numeric"
             />
             {engineHours.trim() !== '' && (
               <>
                 <Text style={[styles.help, { textAlign }]}>Photo of the hour-meter gauge</Text>
-                <PhotoCapture value={hoursPhoto} onChange={setHoursPhoto} module="meter-log" tint="#0ea5e9" max={1} label="Photograph gauge" />
+                <PhotoCapture value={hoursPhoto} onChange={setHoursPhoto} module="meter-log" tint={theme.color.info.base} max={1} label="Photograph gauge" />
               </>
             )}
           </View>
@@ -255,80 +258,69 @@ export default function MeterLogScreen() {
               value={notes}
               onChangeText={setNotes}
               placeholder="Anything worth noting…"
-              placeholderTextColor="#94a3b8"
+              placeholderTextColor={theme.color.textMuted}
               multiline
               numberOfLines={3}
             />
           </View>
 
-          <TouchableOpacity
-            style={[styles.submitBtn, submitting && styles.submitBtnDisabled]}
+          <Button
+            label="Log Reading"
+            icon="save-outline"
             onPress={handleSubmit}
+            loading={submitting}
             disabled={submitting}
-            activeOpacity={0.88}
-          >
-            {submitting ? (
-              <ActivityIndicator size="small" color="#fff" />
-            ) : (
-              <>
-                <Ionicons name="save-outline" size={18} color="#fff" />
-                <Text style={styles.submitText}>Log Reading</Text>
-              </>
-            )}
-          </TouchableOpacity>
+            size="lg"
+            full
+            style={{ marginTop: spacing.xs }}
+          />
         </ScrollView>
       </KeyboardAvoidingView>
-    </SafeAreaView>
+    </Screen>
   )
 }
 
-const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#f0f5f1' },
-  rowR: { flexDirection: 'row-reverse' },
-  nav: {
-    flexDirection: 'row', alignItems: 'center', gap: 12,
-    paddingHorizontal: 16, paddingVertical: 12, backgroundColor: '#fff',
-    borderBottomWidth: 1, borderBottomColor: 'rgba(0,0,0,0.07)',
-  },
-  navBack: {
-    width: 36, height: 36, borderRadius: 10, backgroundColor: '#f1f5f9',
-    alignItems: 'center', justifyContent: 'center',
-  },
-  navTitle: { fontSize: 16, fontWeight: '700', color: '#0f172a' },
-  navSub: { fontSize: 11, color: '#64748b', marginTop: 1 },
+function makeStyles(theme: Theme) {
+  const c = theme.color
+  return StyleSheet.create({
+    rowR: { flexDirection: 'row-reverse' },
+    nav: {
+      flexDirection: 'row', alignItems: 'center', gap: spacing.md,
+      paddingHorizontal: spacing.lg, paddingVertical: spacing.md, backgroundColor: c.surface,
+      borderBottomWidth: 1, borderBottomColor: c.border,
+    },
+    navBack: {
+      width: 36, height: 36, borderRadius: radius.sm, backgroundColor: c.surfaceAlt,
+      alignItems: 'center', justifyContent: 'center',
+    },
+    navTitle: { ...typography.title, color: c.text },
+    navSub: { ...typography.caption, color: c.textMuted, marginTop: 1 },
 
-  scroll: { flex: 1 },
-  content: { padding: 16, paddingBottom: 48, gap: 12 },
+    scroll: { flex: 1 },
+    content: { padding: spacing.lg, paddingBottom: spacing['4xl'], gap: spacing.md },
 
-  card: {
-    backgroundColor: '#fff', borderRadius: 14, padding: 14,
-    borderWidth: 1, borderColor: 'rgba(0,0,0,0.06)',
-  },
-  label: { fontSize: 12, fontWeight: '700', color: '#334155', marginBottom: 8 },
-  optional: { fontSize: 11, fontWeight: '600', color: '#94a3b8' },
-  help: { fontSize: 11.5, color: '#64748b', marginTop: 12, marginBottom: 8, fontWeight: '600' },
+    card: {
+      backgroundColor: c.surface, borderRadius: radius.lg, padding: spacing.md,
+      borderWidth: 1, borderColor: c.border,
+    },
+    label: { ...typography.label, color: c.textSecondary, marginBottom: spacing.sm },
+    optional: { ...typography.caption, color: c.textMuted },
+    help: { ...typography.caption, color: c.textMuted, marginTop: spacing.md, marginBottom: spacing.sm },
 
-  input: {
-    backgroundColor: '#f8fafc', borderWidth: 1, borderColor: '#e2e8f0',
-    borderRadius: 12, paddingHorizontal: 12, paddingVertical: 11, fontSize: 14, color: '#0f172a',
-  },
-  bigInput: { fontSize: 20, fontWeight: '800', paddingVertical: 13, letterSpacing: 0.5 },
-  textArea: { minHeight: 76, textAlignVertical: 'top' },
+    input: {
+      backgroundColor: c.surfaceAlt, borderWidth: 1, borderColor: c.border,
+      borderRadius: radius.md, paddingHorizontal: spacing.md, paddingVertical: 11, fontSize: 14, color: c.text,
+    },
+    bigInput: { fontSize: 20, fontWeight: '800', paddingVertical: 13, letterSpacing: 0.5 },
+    textArea: { minHeight: 76, textAlignVertical: 'top' },
 
-  lastCard: {
-    flexDirection: 'row', alignItems: 'center', gap: 10,
-    backgroundColor: '#f0f9ff', borderRadius: 12, padding: 12,
-    borderWidth: 1, borderColor: 'rgba(3,105,161,0.18)',
-  },
-  lastCardWarn: { backgroundColor: '#fef2f2', borderColor: 'rgba(220,38,38,0.25)' },
-  lastText: { fontSize: 13, fontWeight: '700', color: '#0f172a' },
-  deltaText: { fontSize: 11.5, fontWeight: '700', color: '#0369a1', marginTop: 2 },
-
-  submitBtn: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
-    backgroundColor: '#16a34a', borderRadius: 14, height: 52, marginTop: 4,
-    shadowColor: '#16a34a', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 10, elevation: 6,
-  },
-  submitBtnDisabled: { opacity: 0.5 },
-  submitText: { color: '#fff', fontSize: 16, fontWeight: '700' },
-})
+    lastCard: {
+      flexDirection: 'row', alignItems: 'center', gap: spacing.sm,
+      backgroundColor: c.info.soft, borderRadius: radius.md, padding: spacing.md,
+      borderWidth: 1, borderColor: c.info.base,
+    },
+    lastCardWarn: { backgroundColor: c.danger.soft, borderColor: c.danger.base },
+    lastText: { ...typography.body, fontWeight: '700', color: c.text },
+    deltaText: { ...typography.caption, fontWeight: '700', color: c.info.on, marginTop: 2 },
+  })
+}

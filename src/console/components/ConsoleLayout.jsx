@@ -4,7 +4,7 @@ import {
   Shield, LayoutDashboard, Building2, Users, Settings2,
   ClipboardList, Zap, Megaphone, Lock, LogOut, ChevronDown,
   Globe, Menu, X, AlertTriangle, Layers, Smartphone, Palette, Activity,
-  DatabaseBackup, UserCog, History, BellRing, Boxes, HeartPulse, Search,
+  DatabaseBackup, UserCog, History, BellRing, Boxes, HeartPulse, Search, Truck,
 } from 'lucide-react'
 import { useConsoleAuth } from '../ConsoleAuthContext'
 import Console2FAModal from './Console2FAModal'
@@ -31,6 +31,7 @@ const NAV = [
   { to: '/console/system',       label: 'System',         icon: Settings2 },
   { to: '/console/config',       label: 'System Config',  icon: Settings2 },
   { to: '/console/appearance',   label: 'Report Colors',  icon: Palette },
+  { to: '/console/vehicle-designer', label: 'Vehicle Designer', icon: Truck },
 ]
 
 export default function ConsoleLayout() {

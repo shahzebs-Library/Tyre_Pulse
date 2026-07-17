@@ -812,6 +812,26 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
   on testers' devices once that build finishes + Play processes it. No DB/schema change; branch realigned to
   origin/main. For NEW work restart the branch from latest main (merged PRs are terminal).
 
+### Vehicle SVG Designer (V268, 2026-07-17) — super-admin custom vehicle diagram builder
+- **/console/vehicle-designer** (ConsoleVehicleDesigner.jsx, nav "Vehicle Designer", Truck icon, pure console
+  navy+orange): design a vehicle type's diagram (axles 1..6 with kind steer/drive/trailer/lift + single/dual,
+  spare 0..2, 8 body styles truck/mixer/pump/bus/pickup/trailer/loader/van, accents hazard/beacon) with a LIVE
+  ANIMATED SVG preview (blinking amber hazard corners ~1s, pulsing roof beacon, rotating mixer drum stripes;
+  all honor prefers-reduced-motion). Saves to **V268 `vehicle_diagram_configs`** (org UNIQUE per vehicle_type;
+  authenticated SELECT, super-admin-only writes; config normalized before persist).
+- **Single engine `src/lib/vehicleDiagram.js`** (normalizeDiagramConfig clamps + positionsFromConfig emits the
+  EXACT built-in LAYOUTS shape with canonical GCC position labels LHF1/LHR1-O parseable by tyrePositions.js;
+  12 tests). Service `src/lib/api/vehicleDiagrams.js` (+barrel): list/upsert/delete + session-cached
+  `getCustomLayoutMap()` (never rejects, {} degrade) + invalidateCustomLayouts. Shared animated body renderer
+  `src/components/VehicleDiagramCustomBody.jsx` (CustomBody + CustomDiagramPreview) used by BOTH the console
+  preview and the app diagram, so preview == production render.
+- **Consumption: `src/components/VehicleTyreDiagram.jsx`** loads the custom map once per session; an ACTIVE
+  custom layout for the canonical (UPPER, V245) vehicle type WINS over the built-in LAYOUTS entry; built-ins
+  remain the fallback; zero change when no custom rows exist. RULE: to change how a vehicle type renders,
+  use the console designer (do NOT hand-edit LAYOUTS for org-specific configs); mobile does NOT read these
+  yet (its diagrams stay built-in - a later extension would port getCustomLayoutMap to mobile).
+- Next free migration **V269**.
+
 ### 2026-07-17 field-feedback batch 2 (PR #70) — sync fix, approval push, form parity, diagram truth
 - **INSPECTION SYNC WAS SERVER-REJECTED (the "always pending / red home icon" bug)**: mobile wrote
   `approval_status='pending'` + `status='Pending approval'` but the live CHECKs

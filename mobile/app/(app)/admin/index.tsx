@@ -75,6 +75,7 @@ export default function AdminDashboardScreen() {
     const weekAgo = new Date(); weekAgo.setDate(weekAgo.getDate() - 7)
     const weekStr = weekAgo.toISOString().split('T')[0]
 
+    try {
     const [
       vehiclesRes, accidentsRes, alertsRes, inspRes, usersRes,
       recentAccRes, activeAlertRes, closuresRes, uploadsRes,
@@ -114,7 +115,13 @@ export default function AdminDashboardScreen() {
     })
     setAccidents((recentAccRes.data ?? []) as RecentAccident[])
     setAlerts((activeAlertRes.data ?? []) as ActiveAlert[])
-    setLoading(false)
+    } catch (e: any) {
+      // A failed query must never crash or hang the console - degrade to the
+      // last-known (or empty) stats and clear the loading state.
+      if (__DEV__) console.warn('[admin/index] load failed:', e?.message)
+    } finally {
+      setLoading(false)
+    }
   }, [])
 
   useEffect(() => { load() }, [load])
@@ -158,7 +165,7 @@ export default function AdminDashboardScreen() {
         </View>
 
         {/* ── KPI grid (2×3) - replaces cramped horizontal strip ─────────── */}
-        {loading ? (
+        {(loading || !stats) ? (
           <View style={styles.kpiGrid}>
             {[0,1,2,3,4,5].map(i => (
               <View key={i} style={styles.kpiCard}>
@@ -213,10 +220,10 @@ export default function AdminDashboardScreen() {
             <QuickAction
               icon="cloud-upload-outline"
               label="Approvals"
-              sublabel={stats!.pendingUploads > 0 ? `${stats!.pendingUploads} pending` : 'Uploads'}
+              sublabel={stats != null && stats.pendingUploads > 0 ? `${stats.pendingUploads} pending` : 'Uploads'}
               color="#16a34a"
               bg="#f0fdf4"
-              badge={stats!.pendingUploads > 0 ? stats!.pendingUploads : undefined}
+              badge={stats != null && stats.pendingUploads > 0 ? stats.pendingUploads : undefined}
               onPress={() => router.push('/(app)/admin/approvals')}
             />
           )}

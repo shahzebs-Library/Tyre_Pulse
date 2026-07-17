@@ -705,6 +705,39 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
   the branch (after merge just `git checkout -B <branch> origin/main` locally, no push). Net: one production
   deploy per merged change. NOTE: if branch previews are wanted again, remove the deploymentEnabled entry.
 
+### Mobile app major pass (2026-07-17, PR #58 squash ec4fe26) — Daylight + access control + Play hardening
+- Big multi-agent pass over the Expo/RN inspector app (`mobile/`, "TyrePulse Inspector" v1.2.0, Expo 54 / RN 0.81).
+  Verify with `cd mobile && npx tsc --noEmit` (whole project 0 errors); no device/EAS build available here so
+  runtime crash/perf is NOT verified — static hardening + typecheck only. NOTE: a PARALLEL session was editing
+  the same `mobile/` working tree/branch concurrently (its commits 9b8b9f9 etc. + files meter-logs/rca/tyre-change/
+  work-orders); reconcile by committing only your own files, then merge theirs once they compile.
+- **Daylight design system** = light-first `mobile/lib/theme.ts` (brighter palette, tuned for GCC sun) + polished
+  `mobile/components/ui/*` kit (Screen/Card/AppText/Button/Badge/StatTile/ListRow/States/SkeletonLoader). Every
+  screen restyled onto it. Checklists rebuilt as tap-to-record tiles + icon bottom-sheet (`components/ChecklistItemSheet.tsx`)
+  matching the tyre-inspection feel. New `app/(app)/calendar.tsx` (schedule agenda) + `lib/schedule.ts`. Scanner
+  routing engine `lib/scanRouter.ts` (classify once, route to prefilled action).
+- **RBAC single source = `mobile/lib/permissions.ts`**: `MODULES` registry (key/label/icon/roles/group) is THE
+  place access is defined; existing `canX` predicates are thin wrappers over it. `resolveModuleAccess(key,role,grants,
+  isSuper)` = role default then per-user grant overlay (revoke > grant > role > deny; admin/super always allowed).
+  Role removals shipped: **director** loses analytics/ai/stock; **inspector** loses vehicles/workorders/calendar/
+  reportIssue; **tyre_man** loses records/vehicles/workorders/stock/meter/tasks. RULE: to change what a role sees,
+  edit that module's `roles`; to gate a new destination add a MODULE + a `moduleKey` on the tab/home entry.
+- **Per-user access overlay + super-admin console**: `contexts/AuthContext.tsx` now selects `is_super_admin`,
+  loads `get_my_access_grants()` (fail-open), exposes `isSuperAdmin`/`grants`/`canAccess(key)`/`refreshGrants`, and
+  re-pulls on realtime `user_access_grants` changes (nav auto-adjusts, no re-login). Mobile grants are NAMESPACED
+  `mobile:` (`MOBILE_GRANT_PREFIX`, `mobileGrantKey`, `mobileGrantsFromRaw`) so they are SEPARATE from the web
+  access/approvals grants (same `user_access_grants` table + `set_user_access_grant`/`revoke_user_access_grant`
+  RPCs, no migration). Console = `app/(app)/admin/access.tsx` (super-admin only) + service `lib/accessAdmin.ts`;
+  Allow/Deny/Default per module per user. `_layout.tsx` tabs + `app/(app)/index.tsx` Home hub gate on
+  `useAuth().canAccess` (5 primary tabs, rest grouped in Home).
+- **Play Store hardening**: removed `SCHEDULE_EXACT_ALARM`/`USE_EXACT_ALARM` from app.json (app only schedules
+  inexact DAILY reminders; Google restricts exact alarms). Crash-safety pass across all screen groups (wrap
+  unguarded loads/RPC/storage/status/delete in try/catch + honest error+Retry states; scanner camera-mount
+  fallback). Performance: long/unbounded lists -> FlatList with render-window tuning + ListHeaderComponent;
+  interactive forms + short lists kept as ScrollView (never nest FlatList in ScrollView). Added diagnostics are
+  `__DEV__`-gated. ErrorBoundary + Sentry global handlers already wrap the app; EAS `autoIncrement` + app-bundle;
+  target SDK 35; publishable keys only. package.json version aligned to 1.2.0.
+
 ### SESSION CLOSED CLEAN (2026-07-16) — everything merged, nothing pending
 - All work through the custom TV/report board builder is MERGED to main and LIVE. Latest merges on branch
   `claude/accident-builder-report-ui-2bkwb5`: **PR #54** (V262 TV wallboard: site/country filters, logo,

@@ -198,28 +198,24 @@ Also declare:
 
 ---
 
-## 7. ⚠️ Exact-alarm policy declaration (common rejection cause)
+## 7. Exact-alarm policy — RESOLVED (no declaration needed)
 
-`app.json` declares **`SCHEDULE_EXACT_ALARM`** and **`USE_EXACT_ALARM`**. On
-Android 13+ these are **restricted permissions** governed by Google Play's
-**"Alarms & reminders" / exact-alarm policy**. You **must** complete the
-*Exact alarm permission declaration* form in Play Console
-(*Policy → App content → Permissions declaration*) explaining why exact alarms
-are needed (e.g. precisely-timed inspection reminders). **Apps that declare these
-without an approved declaration are routinely rejected.**
+**Done (2026-07-17):** `SCHEDULE_EXACT_ALARM` and `USE_EXACT_ALARM` have been
+**removed** from `app.json`. The app schedules only **inexact** reminders
+(`expo-notifications` `SchedulableTriggerInputTypes.DAILY`), so the restricted
+exact-alarm permissions are unnecessary. This is the lower-risk path: you do NOT
+need to complete the Play Console *Exact alarm permission declaration* form, and
+you avoid that common rejection cause entirely.
 
-Decide before submission:
-- If the app genuinely needs precise, time-critical reminders → keep the
-  permissions and submit the declaration with justification.
-- If reminders can tolerate Doze/batching → **remove both
-  `SCHEDULE_EXACT_ALARM` and `USE_EXACT_ALARM`** from `app.json` and use inexact
-  alarms / `expo-notifications` scheduled triggers, avoiding the declaration
-  entirely. This is the lower-risk path unless exact timing is a hard
-  requirement.
+Do NOT re-add those permissions unless a future feature needs precisely-timed,
+Doze-exempt alarms (in which case you must submit the declaration with a
+justification).
 
-`RECEIVE_BOOT_COMPLETED` (re-arming notifications after reboot) and
+`RECEIVE_BOOT_COMPLETED` (re-arming daily reminders after reboot) and
 `POST_NOTIFICATIONS` are standard for notification apps and do not require a
-declaration form.
+declaration form. Location (`ACCESS_FINE_LOCATION`) is used only foreground /
+when-in-use to geo-tag an inspection and degrades gracefully if denied —
+declare it under Data safety (§6) but no separate permission form is required.
 
 ---
 
@@ -231,9 +227,8 @@ declaration form.
   `versionCode` by 1 on every build automatically. No manual edit needed per
   submission.
 - Bump the human-facing **`version`** (`app.json` → `expo.version`, currently
-  `1.2.0`) manually using semver when shipping a meaningful release. Note
-  `package.json` version (`1.1.0`) is out of sync with `app.json` (`1.2.0`) -
-  align `package.json` to match on the next release for clarity.
+  `1.2.0`) manually using semver when shipping a meaningful release.
+  `package.json` version is now aligned to `1.2.0` (done 2026-07-17).
 - Play rejects an upload whose `versionCode` is ≤ a previously uploaded one;
   `autoIncrement` prevents this.
 
@@ -244,7 +239,7 @@ declaration form.
 1. Add `mobile/google-services.json` (Firebase) and
    `mobile/google-service-account.json` (Play SA key) locally / as CI secrets.
 2. Add `mobile/assets/notification-icon.png` (white transparent PNG).
-3. Resolve the exact-alarm decision (§7).
+3. Exact-alarm decision is already resolved (§7 - permissions removed, no form).
 4. `eas build --platform android --profile production` → enroll in Play App
    Signing when prompted.
 5. In Play Console: create the internal-testing release, complete store listing

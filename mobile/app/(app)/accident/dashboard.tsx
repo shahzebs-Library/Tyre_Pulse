@@ -22,7 +22,7 @@ import {
   Screen, Card, AppText, Button, Badge, StatTile, EmptyState, ErrorState, Loading,
 } from '../../../components/ui'
 import {
-  AccidentRecord, AccidentSeverity, AccidentStatus,
+  AccidentRecord, AccidentSeverity,
   SEVERITY_ICONS, STATUS_ICONS,
   isAdminOrAbove,
 } from '../../../lib/types'
@@ -40,11 +40,20 @@ const SEVERITY_KIND: Record<AccidentSeverity, StatusKind> = {
   severe:   'critical',
   fatal:    'danger',
 }
-const STATUS_KIND: Record<AccidentStatus, StatusKind> = {
-  reported:     'info',
-  under_review: 'warning',
-  closed:       'neutral',
+// Keyed by the raw status token (the DB carries more statuses than the base
+// AccidentStatus union - awaiting_approval/insurance_claim/repair_in_progress/
+// released - so this is string-keyed with a neutral fallback at the call site).
+const STATUS_KIND: Record<string, StatusKind> = {
+  reported:           'info',
+  under_review:       'warning',
+  awaiting_approval:  'warning',
+  insurance_claim:    'info',
+  repair_in_progress: 'warning',
+  released:           'success',
+  closed:             'neutral',
 }
+
+type StatusFilter = 'all' | 'open' | 'closed'
 
 export default function AccidentDashboardScreen() {
   const { allowed, loading: guardLoading } = useRoleGuard(['admin', 'manager', 'director', 'inspector'])
@@ -61,6 +70,7 @@ export default function AccidentDashboardScreen() {
   const [refreshing, setRefreshing] = useState(false)
   const [filterTab, setFilterTab]   = useState<FilterTab>('all')
   const [siteFilter, setSiteFilter] = useState<string>('all')
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
   const [search, setSearch]         = useState('')
 
   const textAlign = isRTL ? 'right' : 'left'
@@ -118,17 +128,25 @@ export default function AccidentDashboardScreen() {
   const bySeverity: Record<AccidentSeverity, number> = { minor: 0, moderate: 0, severe: 0, fatal: 0 }
   accidents.forEach(a => { bySeverity[a.severity] = (bySeverity[a.severity] ?? 0) + 1 })
 
-  // ── Client-side search ─────────────────────────────────────────────────────
+  // ── Open/closed filter then client-side search ─────────────────────────────
+  // "Open" = any status that is not closed (reported / under review / awaiting
+  // approval / insurance claim / repair in progress / released); "Closed" = closed.
+  const byStatus = statusFilter === 'all'
+    ? accidents
+    : statusFilter === 'closed'
+      ? accidents.filter(a => a.status === 'closed')
+      : accidents.filter(a => a.status !== 'closed')
+
   const q = search.trim().toLowerCase()
   const filtered = q
-    ? accidents.filter(a =>
+    ? byStatus.filter(a =>
         a.asset_no.toLowerCase().includes(q) ||
         a.site.toLowerCase().includes(q) ||
         (a.location ?? '').toLowerCase().includes(q) ||
         (a.reporter_name ?? '').toLowerCase().includes(q) ||
         a.accident_type.toLowerCase().includes(q)
       )
-    : accidents
+    : byStatus
 
   if (guardLoading || !allowed || loading) {
     return (
@@ -290,6 +308,29 @@ export default function AccidentDashboardScreen() {
               })}
             </View>
 
+            {/* ── Open / Closed status filter ───────────────────────────── */}
+            <View style={styles.filterRow}>
+              {(['all', 'open', 'closed'] as StatusFilter[]).map(sf => {
+                const active = statusFilter === sf
+                const label = sf === 'all' ? t('accident.filterAll')
+                  : sf === 'open' ? t('accident.filterOpen') : t('accident.filterClosed')
+                return (
+                  <TouchableOpacity
+                    key={sf}
+                    style={[
+                      styles.filterTab,
+                      { backgroundColor: active ? c.primary : c.surface, borderColor: active ? c.primary : c.border },
+                    ]}
+                    onPress={() => setStatusFilter(sf)}
+                  >
+                    <AppText variant="bodyStrong" style={{ color: active ? c.onPrimary : c.textMuted }}>
+                      {label}
+                    </AppText>
+                  </TouchableOpacity>
+                )
+              })}
+            </View>
+
             {/* ── Result count ──────────────────────────────────────────── */}
             {q.length > 0 && (
               <AppText variant="caption" color="muted">
@@ -368,8 +409,8 @@ function AccidentCard({
             </View>
           )}
           <Badge
-            kind={STATUS_KIND[accident.status]}
-            icon={STATUS_ICONS[accident.status] as IconName}
+            kind={STATUS_KIND[accident.status] ?? 'neutral'}
+            icon={(STATUS_ICONS[accident.status] ?? 'ellipse-outline') as IconName}
           >
             {t(`accident.statuses.${accident.status}`)}
           </Badge>

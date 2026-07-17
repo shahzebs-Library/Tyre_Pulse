@@ -99,6 +99,16 @@ export interface InspectionPayload {
   tyre_conditions: Record<string, TyrePositionData>
   notes: string
   status: string
+  /** Free-text observations recorded on the review step (maps to inspections.findings). */
+  findings?: string | null
+  /** Odometer reading in km (inspections.odometer_km). */
+  odometer_km?: number | null
+  /** Engine hour-meter reading (inspections.hour_meter). */
+  hour_meter?: number | null
+  /** Inspector's drawn signature (self-contained SVG string). */
+  inspector_signature?: string | null
+  /** Supervisor-approval state: 'pending' when submitted for sign-off. */
+  approval_status?: string | null
   /** Stamped from the creator's profile so records never mix across countries */
   country: string | null
   /** GPS latitude of where the inspection was recorded (WGS84). Null when the

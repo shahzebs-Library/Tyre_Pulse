@@ -28,7 +28,7 @@ export type ModuleKey =
   | 'vehicles' | 'workorders' | 'rca' | 'stock' | 'stockManage' | 'overview'
   | 'reports' | 'analytics' | 'ai' | 'admin' | 'users' | 'meter' | 'tasks'
   | 'calendar' | 'reportIssue' | 'checklists' | 'approvals' | 'alerts'
-  | 'history' | 'tyreChange' | 'team'
+  | 'history' | 'tyreChange' | 'team' | 'pm'
 
 export interface ModuleDef {
   key: ModuleKey
@@ -48,22 +48,28 @@ const M = (
  * Role defaults. Removals applied per the product owner (2026-07-17):
  *   - director  loses analytics, ai, stock
  *   - inspector loses vehicles, workorders, calendar, reportIssue
- *   - tyre_man  loses records, vehicles, workorders, stock, meter, tasks
+ *
+ * Tyre Man (2026-07-17, field-feedback): the role is deliberately MINIMAL - its
+ * Home shows only Scan, Checklists ("recent vehicle checklist") and Meter Log,
+ * plus the New Inspection CTA and its own recent inspections. So tyre_man keeps
+ * inspect + scan + checklists + meter (meter RE-ADDED at the owner's request,
+ * reversing the earlier removal) and nothing else (no serial, tyreChange,
+ * reportIssue, history, alerts, records, vehicles, workorders, stock, tasks).
  */
 export const MODULES: ModuleDef[] = [
   // Field ---------------------------------------------------------------------
   M('inspect',        'New Inspection',    'clipboard-outline',      'Field',      ['manager', 'director', 'inspector', 'tyre_man']),
   M('scan',           'Scan',              'scan-outline',           'Field',      ['manager', 'director', 'inspector', 'tyre_man']),
-  M('serial',         'Serial Search',     'search-outline',         'Field',      ['manager', 'director', 'inspector', 'tyre_man']),
-  M('tyreChange',     'Tyre Change',       'swap-horizontal-outline','Field',      ['manager', 'director', 'inspector', 'tyre_man']),
+  M('serial',         'Serial Search',     'search-outline',         'Field',      ['manager', 'director', 'inspector']),
+  M('tyreChange',     'Tyre Change',       'swap-horizontal-outline','Field',      ['manager', 'director', 'inspector']),
   M('checklists',     'Checklists',        'checkbox-outline',       'Field',      ['manager', 'director', 'inspector', 'tyre_man']),
-  M('meter',          'Meter Log',         'speedometer-outline',    'Field',      ['manager', 'director', 'inspector', 'reporter', 'driver']),
-  M('reportIssue',    'Report Issue',      'megaphone-outline',      'Field',      ['manager', 'director', 'tyre_man', 'reporter', 'driver']),
+  M('meter',          'Meter Log',         'speedometer-outline',    'Field',      ['manager', 'director', 'inspector', 'tyre_man', 'reporter', 'driver']),
+  M('reportIssue',    'Report Issue',      'megaphone-outline',      'Field',      ['manager', 'director', 'reporter', 'driver']),
   // Fleet ---------------------------------------------------------------------
   M('records',        'Tyre Records',      'layers-outline',         'Fleet',      ['manager', 'director', 'inspector', 'reporter']),
   M('vehicles',       'Vehicles',          'car-outline',            'Fleet',      ['manager', 'director']),
-  M('history',        'History',           'time-outline',           'Fleet',      ['manager', 'director', 'inspector', 'tyre_man', 'reporter']),
-  M('alerts',         'Alerts',            'notifications-outline',  'Fleet',      ['manager', 'director', 'inspector', 'tyre_man']),
+  M('history',        'History',           'time-outline',           'Fleet',      ['manager', 'director', 'inspector', 'reporter']),
+  M('alerts',         'Alerts',            'notifications-outline',  'Fleet',      ['manager', 'director', 'inspector']),
   M('calendar',       'Calendar',          'calendar-outline',       'Fleet',      ['manager', 'director', 'tyre_man', 'reporter']),
   // Maintenance ---------------------------------------------------------------
   M('accidents',      'Accidents',         'warning-outline',        'Maintenance',['manager', 'director', 'inspector']),
@@ -72,6 +78,7 @@ export const MODULES: ModuleDef[] = [
   M('rca',            'Root Cause',        'git-branch-outline',     'Maintenance',['manager', 'director', 'inspector']),
   M('tasks',          'Tasks',             'list-outline',           'Maintenance',['manager', 'director', 'inspector']),
   M('stock',          'Stock Count',       'cube-outline',           'Maintenance',['manager', 'inspector']),
+  M('pm',             'Maintenance Due',   'build-outline',          'Maintenance',['manager', 'director']),
   // Management ----------------------------------------------------------------
   M('overview',       'Overview',          'grid-outline',           'Management', ['manager', 'director']),
   M('reports',        'Reports',           'document-text-outline',  'Management', ['manager', 'director', 'reporter']),

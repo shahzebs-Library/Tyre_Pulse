@@ -18,19 +18,20 @@ import { captureInspectionLocation, LocationStatus } from '../../../lib/location
 import { uploadAllPositionPhotos } from '../../../lib/photoUpload'
 import TyrePositionCard from '../../../components/TyrePositionCard'
 import TyreDetailModal from '../../../components/TyreDetailModal'
-import VehicleTyreDiagram from '../../../components/VehicleTyreDiagram'
+import VehicleTyreDiagram, { diagramPositions } from '../../../components/VehicleTyreDiagram'
+import SignaturePad from '../../../components/SignaturePad'
 import { useRoleGuard } from '../../../hooks/useRoleGuard'
 import { useTheme } from '../../../contexts/ThemeContext'
 import { spacing, radius, elevation, Theme } from '../../../lib/theme'
 import {
   VehicleFleet, TyrePositionData, UserRole, GpsFix,
-  getPositionsForVehicle, emptyTyrePosition,
+  emptyTyrePosition,
 } from '../../../lib/types'
 
 // Roles permitted to record inspections (mirrors permissions.canInspect)
 const INSPECT_ROLES: UserRole[] = ['inspector', 'tyre_man', 'admin', 'manager', 'director']
 
-type Step = 'header' | 'tyres' | 'submit'
+type Step = 'header' | 'tyres' | 'review' | 'submit'
 
 export default function NewInspectionScreen() {
   const { profile } = useAuth()
@@ -60,7 +61,11 @@ export default function NewInspectionScreen() {
   const [manualVehicleType, setManualVehicleType] = useState('Truck')
   const [useManualEntry, setUseManualEntry] = useState(false)
   const [odometer, setOdometer] = useState('')
+  const [hourMeter, setHourMeter] = useState('')
   const [headerNotes, setHeaderNotes] = useState('')
+  // Inspector's drawn signature (SVG string) captured on the review step. An
+  // inspection cannot be submitted for approval without it.
+  const [inspectorSig, setInspectorSig] = useState<string | null>(null)
   const [loadingVehicles, setLoadingVehicles] = useState(false)
   const [positions, setPositions] = useState<string[]>([])
   const [tyreData, setTyreData] = useState<Record<string, TyrePositionData>>({})
@@ -85,9 +90,15 @@ export default function NewInspectionScreen() {
   const forwardIcon = isRTL ? 'arrow-back' : 'arrow-forward'
 
   // Live vehicle search over the loaded site fleet.
+  //
+  // The full fleet is NEVER dumped as a grid: assets appear ONLY after the
+  // inspector types a search (or arrives via scan/asset param, which preselects
+  // the vehicle directly). An empty query returns an empty list so the picker
+  // shows a "search or scan" prompt instead of every asset on the site.
+  const hasVehicleQuery = vehicleQuery.trim().length > 0
   const shownVehicles = useMemo(() => {
     const q = vehicleQuery.trim().toLowerCase()
-    if (!q) return filteredVehicles
+    if (!q) return []
     return filteredVehicles.filter(v =>
       v.asset_no?.toLowerCase().includes(q) ||
       v.vehicle_type?.toLowerCase().includes(q) ||
@@ -177,7 +188,7 @@ export default function NewInspectionScreen() {
   useEffect(() => {
     const v = selectedVehicle ?? (useManualEntry && manualAsset ? getEffectiveVehicle() : null)
     if (v) {
-      const pos = getPositionsForVehicle(v.vehicle_type)
+      const pos = diagramPositions(v.vehicle_type)
       setPositions(pos)
       const initialData: Record<string, TyrePositionData> = {}
       pos.forEach(p => { initialData[p] = emptyTyrePosition(p) })
@@ -344,6 +355,11 @@ export default function NewInspectionScreen() {
       )
       return
     }
+    // The inspector must sign before the inspection can be submitted for approval.
+    if (!inspectorSig) {
+      Alert.alert(t('inspection.signatureRequired'), t('inspection.signatureRequiredMsg'))
+      return
+    }
 
     setSubmitting(true)
     if (!effectiveVehicle) { setSubmitting(false); return }
@@ -356,7 +372,13 @@ export default function NewInspectionScreen() {
 
     const inspectionDate = new Date().toISOString().split('T')[0]
     const odo = odometer.trim()
-    const notes = [odo ? `Odometer: ${odo} km` : '', headerNotes.trim()]
+    const hrs = hourMeter.trim()
+    const observations = headerNotes.trim()
+    const notes = [
+      odo ? `Odometer: ${odo} km` : '',
+      hrs ? `Hour meter: ${hrs} h` : '',
+      observations,
+    ]
       .filter(Boolean)
       .join('\n')
     const payload = {
@@ -371,7 +393,15 @@ export default function NewInspectionScreen() {
       inspection_type: 'Routine',
       tyre_conditions: tyreData,
       notes,
-      status: 'Done',
+      // Structured columns (mirror the web inspection record).
+      findings: observations || null,
+      odometer_km: odo ? Number(odo) : null,
+      hour_meter: hrs ? Number(hrs) : null,
+      // Inspector signs on the review step; the record enters the supervisor
+      // approval queue rather than being finalised immediately.
+      inspector_signature: inspectorSig,
+      approval_status: 'pending',
+      status: 'Pending approval',
       country: profile?.country ?? null,
       // GPS geotag - folded identically into the online insert and the offline
       // queue so a queued inspection syncs with the same coordinates later.
@@ -467,6 +497,9 @@ export default function NewInspectionScreen() {
               <View style={styles.stepPill}>
                 <Text style={styles.stepPillText}>{t('inspection.step2')}</Text>
               </View>
+              <View style={styles.stepPill}>
+                <Text style={styles.stepPillText}>{t('inspection.step3')}</Text>
+              </View>
             </View>
           </View>
 
@@ -537,13 +570,24 @@ export default function NewInspectionScreen() {
 
                     {loadingVehicles ? (
                       <ActivityIndicator size="small" color={theme.color.primary} style={{ marginTop: 10 }} />
-                    ) : shownVehicles.length === 0 ? (
-                      <View style={styles.vehicleEmpty}>
-                        <Ionicons name="car-outline" size={28} color={theme.color.borderStrong} />
-                        <Text style={styles.vehicleEmptyText}>
-                          {vehicleQuery ? t('inspection.vehicleNoMatch') : t('inspection.noVehiclesSite')}
-                        </Text>
-                        {!vehicleQuery && (
+                    ) : !hasVehicleQuery ? (
+                      /* Nothing searched yet - prompt to search or scan. The full
+                         asset list is deliberately NOT shown here. */
+                      <View style={styles.searchPrompt}>
+                        <View style={styles.searchPromptIcon}>
+                          <Ionicons name="search" size={26} color={theme.color.primary} />
+                        </View>
+                        <Text style={styles.searchPromptTitle}>{t('inspection.searchToBegin')}</Text>
+                        <Text style={styles.searchPromptHint}>{t('inspection.searchToBeginHint')}</Text>
+                        <View style={styles.searchPromptActions}>
+                          <TouchableOpacity
+                            style={styles.scanCta}
+                            onPress={() => router.push('/(app)/scanner')}
+                            activeOpacity={0.85}
+                          >
+                            <Ionicons name="scan-outline" size={16} color={theme.color.onPrimary} />
+                            <Text style={styles.scanCtaText}>{t('home.scanAsset')}</Text>
+                          </TouchableOpacity>
                           <TouchableOpacity
                             style={styles.manualEntryBtn}
                             onPress={() => setUseManualEntry(true)}
@@ -551,7 +595,21 @@ export default function NewInspectionScreen() {
                             <Ionicons name="pencil-outline" size={14} color={theme.color.primary} />
                             <Text style={styles.manualEntryText}>{t('inspection.enterAssetManually')}</Text>
                           </TouchableOpacity>
-                        )}
+                        </View>
+                      </View>
+                    ) : shownVehicles.length === 0 ? (
+                      <View style={styles.vehicleEmpty}>
+                        <Ionicons name="car-outline" size={28} color={theme.color.borderStrong} />
+                        <Text style={styles.vehicleEmptyText}>
+                          {t('inspection.vehicleNoMatch')}
+                        </Text>
+                        <TouchableOpacity
+                          style={styles.manualEntryBtn}
+                          onPress={() => setUseManualEntry(true)}
+                        >
+                          <Ionicons name="pencil-outline" size={14} color={theme.color.primary} />
+                          <Text style={styles.manualEntryText}>{t('inspection.enterAssetManually')}</Text>
+                        </TouchableOpacity>
                       </View>
                     ) : (
                       <>
@@ -661,7 +719,7 @@ export default function NewInspectionScreen() {
                     : `${manualAsset.trim().toUpperCase()} · ${manualVehicleType} (manual)`}
                 </Text>
                 <Text style={styles.vehiclePositionCount}>
-                  {getPositionsForVehicle(selectedVehicle?.vehicle_type ?? manualVehicleType).length} {t('inspection.tyres')}
+                  {diagramPositions(selectedVehicle?.vehicle_type ?? manualVehicleType).length} {t('inspection.tyres')}
                 </Text>
               </View>
             )}
@@ -691,31 +749,30 @@ export default function NewInspectionScreen() {
               </View>
             </View>
 
-            {/* Odometer */}
-            <View style={styles.field}>
-              <Text style={[styles.fieldLabel, { textAlign }]}>{t('inspection.odometerLabel')}</Text>
-              <TextInput
-                style={[styles.input, { textAlign }]}
-                value={odometer}
-                onChangeText={setOdometer}
-                placeholder={t('inspection.odometerPlaceholder')}
-                placeholderTextColor={theme.color.textMuted}
-                keyboardType="numeric"
-              />
-            </View>
-
-            {/* Notes */}
-            <View style={styles.field}>
-              <Text style={[styles.fieldLabel, { textAlign }]}>{t('inspection.notesLabel')}</Text>
-              <TextInput
-                style={[styles.input, styles.textArea, { textAlign }]}
-                value={headerNotes}
-                onChangeText={setHeaderNotes}
-                placeholder={t('inspection.notesPlaceholder')}
-                placeholderTextColor={theme.color.textMuted}
-                multiline
-                numberOfLines={3}
-              />
+            {/* Odometer + Hour meter (both optional) */}
+            <View style={[styles.meterRow, isRTL && styles.navRTL]}>
+              <View style={[styles.field, { flex: 1 }]}>
+                <Text style={[styles.fieldLabel, { textAlign }]}>{t('inspection.odometerLabel')}</Text>
+                <TextInput
+                  style={[styles.input, { textAlign }]}
+                  value={odometer}
+                  onChangeText={setOdometer}
+                  placeholder={t('inspection.odometerPlaceholder')}
+                  placeholderTextColor={theme.color.textMuted}
+                  keyboardType="numeric"
+                />
+              </View>
+              <View style={[styles.field, { flex: 1 }]}>
+                <Text style={[styles.fieldLabel, { textAlign }]}>{t('inspection.hourMeterLabel')}</Text>
+                <TextInput
+                  style={[styles.input, { textAlign }]}
+                  value={hourMeter}
+                  onChangeText={setHourMeter}
+                  placeholder={t('inspection.hourMeterPlaceholder')}
+                  placeholderTextColor={theme.color.textMuted}
+                  keyboardType="numeric"
+                />
+              </View>
             </View>
 
             <TouchableOpacity
@@ -728,7 +785,7 @@ export default function NewInspectionScreen() {
                   const v = getEffectiveVehicle()
                   if (v && v.id !== (selectedVehicle?.id)) {
                     // apply manual vehicle to positions
-                    const pos = getPositionsForVehicle(v.vehicle_type)
+                    const pos = diagramPositions(v.vehicle_type)
                     setPositions(pos)
                     const initialData: Record<string, TyrePositionData> = {}
                     pos.forEach(p => { initialData[p] = emptyTyrePosition(p) })
@@ -861,6 +918,9 @@ export default function NewInspectionScreen() {
             <View style={[styles.stepPill, styles.stepPillActive]}>
               <Text style={styles.stepPillTextActive}>{t('inspection.step2')}</Text>
             </View>
+            <View style={styles.stepPill}>
+              <Text style={styles.stepPillText}>{t('inspection.step3')}</Text>
+            </View>
           </View>
         </View>
 
@@ -976,19 +1036,12 @@ export default function NewInspectionScreen() {
           )}
 
           <TouchableOpacity
-            style={[styles.nextBtn, (submitting || recordedCount === 0) && styles.nextBtnDisabled]}
-            onPress={handleSubmit}
-            disabled={submitting || recordedCount === 0}
+            style={[styles.nextBtn, recordedCount === 0 && styles.nextBtnDisabled]}
+            onPress={() => setStep('review')}
+            disabled={recordedCount === 0}
           >
-            {submitting
-              ? <ActivityIndicator size="small" color={theme.color.onPrimary} />
-              : (
-                <>
-                  <Ionicons name="cloud-upload-outline" size={18} color={theme.color.onPrimary} />
-                  <Text style={styles.nextBtnText}>{t('inspection.submitButton')}</Text>
-                </>
-              )
-            }
+            <Text style={styles.nextBtnText}>{t('inspection.reviewButton')}</Text>
+            <Ionicons name={forwardIcon} size={18} color={theme.color.onPrimary} />
           </TouchableOpacity>
         </ScrollView>
 
@@ -1004,28 +1057,135 @@ export default function NewInspectionScreen() {
     )
   }
 
+  // ── Step: REVIEW & SIGN ────────────────────────────────────────────────────
+  if (step === 'review') {
+    const effVehicle = getEffectiveVehicle()
+    return (
+      <SafeAreaView style={styles.safe}>
+        <StatusBar barStyle={statusBarStyle} backgroundColor={theme.color.bg} />
+        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+          <View style={[styles.nav, isRTL && styles.navRTL]}>
+            <TouchableOpacity onPress={() => setStep('tyres')} style={styles.navBack}>
+              <Ionicons name={backIcon} size={22} color={theme.color.text} />
+            </TouchableOpacity>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.navTitle, { textAlign }]}>{t('inspection.reviewTitle')}</Text>
+              <Text style={[styles.navSubtitle, { textAlign }]}>{t('inspection.reviewSubtitle')}</Text>
+            </View>
+            <View style={styles.stepPills}>
+              <View style={styles.stepPill}><Text style={styles.stepPillText}>{t('inspection.step1')}</Text></View>
+              <View style={styles.stepPill}><Text style={styles.stepPillText}>{t('inspection.step2')}</Text></View>
+              <View style={[styles.stepPill, styles.stepPillActive]}>
+                <Text style={styles.stepPillTextActive}>{t('inspection.step3')}</Text>
+              </View>
+            </View>
+          </View>
+
+          <ScrollView style={styles.scroll} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+            {/* Summary */}
+            <Text style={[styles.stepTitle, { textAlign }]}>{t('inspection.reviewSummaryTitle')}</Text>
+            <View style={styles.summaryCard}>
+              <View style={[styles.summaryRow, isRTL && styles.navRTL]}>
+                <Ionicons name="bus-outline" size={16} color={theme.color.primary} />
+                <Text style={[styles.summaryValue, { textAlign }]} numberOfLines={1}>
+                  {effVehicle?.asset_no} · {effVehicle?.vehicle_type}
+                </Text>
+              </View>
+              <View style={[styles.summaryRow, isRTL && styles.navRTL]}>
+                <Ionicons name="location-outline" size={16} color={theme.color.primary} />
+                <Text style={[styles.summaryValue, { textAlign }]}>{selectedSite}</Text>
+              </View>
+              <View style={[styles.summaryRow, isRTL && styles.navRTL]}>
+                <Ionicons name="checkmark-done-outline" size={16} color={theme.color.primary} />
+                <Text style={[styles.summaryValue, { textAlign }]}>
+                  {recordedCount}/{positions.length} {t('inspection.positionsRecorded')}
+                </Text>
+              </View>
+              {(odometer.trim() || hourMeter.trim()) ? (
+                <View style={[styles.summaryRow, isRTL && styles.navRTL]}>
+                  <Ionicons name="speedometer-outline" size={16} color={theme.color.primary} />
+                  <Text style={[styles.summaryValue, { textAlign }]}>
+                    {[odometer.trim() ? `${odometer.trim()} km` : '', hourMeter.trim() ? `${hourMeter.trim()} h` : '']
+                      .filter(Boolean).join('  ·  ')}
+                  </Text>
+                </View>
+              ) : null}
+            </View>
+
+            {/* Observations */}
+            <View style={styles.field}>
+              <Text style={[styles.fieldLabel, { textAlign }]}>{t('inspection.observationsLabel')}</Text>
+              <TextInput
+                style={[styles.input, styles.textArea, { textAlign }]}
+                value={headerNotes}
+                onChangeText={setHeaderNotes}
+                placeholder={t('inspection.observationsPlaceholder')}
+                placeholderTextColor={theme.color.textMuted}
+                multiline
+                numberOfLines={4}
+              />
+            </View>
+
+            {/* Inspector signature */}
+            <View style={styles.field}>
+              <Text style={[styles.fieldLabel, { textAlign }]}>{t('inspection.inspectorSignatureLabel')}</Text>
+              <View style={styles.sigCard}>
+                <SignaturePad onChange={setInspectorSig} height={180} penColor={theme.color.text} />
+              </View>
+            </View>
+
+            {/* Approval note */}
+            <View style={[styles.approvalNote, isRTL && styles.navRTL]}>
+              <Ionicons name="shield-checkmark-outline" size={16} color={theme.color.info.base} />
+              <Text style={[styles.approvalNoteText, { textAlign }]}>{t('inspection.submittedForApprovalNote')}</Text>
+            </View>
+
+            <TouchableOpacity
+              style={[styles.nextBtn, (submitting || !inspectorSig) && styles.nextBtnDisabled]}
+              onPress={handleSubmit}
+              disabled={submitting || !inspectorSig}
+            >
+              {submitting
+                ? <ActivityIndicator size="small" color={theme.color.onPrimary} />
+                : (
+                  <>
+                    <Ionicons name="cloud-upload-outline" size={18} color={theme.color.onPrimary} />
+                    <Text style={styles.nextBtnText}>{t('inspection.submitForApproval')}</Text>
+                  </>
+                )
+              }
+            </TouchableOpacity>
+          </ScrollView>
+        </KeyboardAvoidingView>
+      </SafeAreaView>
+    )
+  }
+
   // ── Step: SUBMIT / SUCCESS ─────────────────────────────────────────────────
   return (
     <SafeAreaView style={[styles.safe, { justifyContent: 'center', alignItems: 'center', padding: 32 }]}>
       <View style={styles.successIcon}>
-        <Ionicons name="checkmark-circle" size={64} color={theme.color.primary} />
+        <Ionicons name="shield-checkmark" size={64} color={theme.color.primary} />
       </View>
-      <Text style={styles.successTitle}>{t('inspection.submittedTitle')}</Text>
+      <Text style={styles.successTitle}>{t('inspection.submittedForApprovalTitle')}</Text>
       <Text style={styles.successSubtitle}>
-        {selectedVehicle?.asset_no} · {selectedSite}
+        {(selectedVehicle?.asset_no ?? getEffectiveVehicle()?.asset_no)} · {selectedSite}
         {'\n'}
         {new Date().toLocaleDateString(dateLocale, { day: 'numeric', month: 'long', year: 'numeric' })}
       </Text>
-      <Text style={styles.successNote}>{t('inspection.offlineNote')}</Text>
+      <Text style={styles.successNote}>{t('inspection.submittedForApprovalNote')}</Text>
       <TouchableOpacity
         style={[styles.nextBtn, { marginTop: 24, minWidth: 200 }]}
         onPress={() => {
           setStep('header')
           setSelectedVehicle(null)
           setOdometer('')
+          setHourMeter('')
           setHeaderNotes('')
+          setInspectorSig(null)
           setTyreData({})
           setActivePosition(null)
+          prefilledRef.current = false
           router.replace('/(app)')
         }}
       >
@@ -1038,9 +1198,12 @@ export default function NewInspectionScreen() {
           setStep('header')
           setSelectedVehicle(null)
           setOdometer('')
+          setHourMeter('')
           setHeaderNotes('')
+          setInspectorSig(null)
           setTyreData({})
           setActivePosition(null)
+          prefilledRef.current = false
         }}
       >
         <Ionicons name="add-circle-outline" size={18} color={theme.color.primary} />
@@ -1382,5 +1545,49 @@ function makeStyles(theme: Theme) {
     borderRadius: radius.md, padding: spacing.md - 2, marginTop: spacing.xs,
   },
   validationWarnText: { flex: 1, fontSize: 12, color: c.warning.on, fontWeight: '700', lineHeight: 17 },
+
+  // ── Search-first asset prompt ────────────────────────────────────────────────
+  searchPrompt: {
+    alignItems: 'center', gap: spacing.sm, marginTop: spacing.md,
+    paddingVertical: spacing.xl, paddingHorizontal: spacing.lg,
+    backgroundColor: c.surfaceAlt, borderRadius: radius.lg,
+    borderWidth: 1, borderColor: c.border, borderStyle: 'dashed',
+  },
+  searchPromptIcon: {
+    width: 52, height: 52, borderRadius: 26, backgroundColor: c.primarySoft,
+    alignItems: 'center', justifyContent: 'center', marginBottom: spacing.xs,
+  },
+  searchPromptTitle: { fontSize: 15, fontWeight: '800', color: c.text, textAlign: 'center' },
+  searchPromptHint: {
+    fontSize: 12, color: c.textMuted, textAlign: 'center', lineHeight: 18, maxWidth: 280,
+  },
+  searchPromptActions: { flexDirection: 'row', alignItems: 'center', gap: spacing.lg, marginTop: spacing.sm },
+  scanCta: {
+    flexDirection: 'row', alignItems: 'center', gap: spacing.xs + 2,
+    backgroundColor: c.primary, borderRadius: radius.md,
+    paddingHorizontal: spacing.lg, paddingVertical: spacing.sm + 2,
+  },
+  scanCtaText: { color: c.onPrimary, fontSize: 13, fontWeight: '800' },
+
+  // ── Odometer/hour meter row ──────────────────────────────────────────────────
+  meterRow: { flexDirection: 'row', gap: spacing.md },
+
+  // ── Review step ──────────────────────────────────────────────────────────────
+  summaryCard: {
+    backgroundColor: c.surface, borderRadius: radius.lg, padding: spacing.md,
+    borderWidth: 1, borderColor: c.border, gap: spacing.sm,
+  },
+  summaryRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  summaryValue: { flex: 1, fontSize: 14, fontWeight: '700', color: c.text },
+  sigCard: {
+    backgroundColor: c.surface, borderRadius: radius.lg, padding: spacing.md,
+    borderWidth: 1, borderColor: c.border,
+  },
+  approvalNote: {
+    flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm,
+    backgroundColor: c.info.soft, borderRadius: radius.md, padding: spacing.md,
+    borderWidth: 1, borderColor: c.info.base,
+  },
+  approvalNoteText: { flex: 1, fontSize: 12, color: c.info.on, fontWeight: '700', lineHeight: 17 },
   })
 }

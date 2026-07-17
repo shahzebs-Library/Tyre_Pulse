@@ -26,7 +26,8 @@
     "clearAll": "Clear all",
     "error": "Error",
     "tryAgain": "Please try again.",
-    "all": "All"
+    "all": "All",
+    "saving": "Saving..."
   },
   "language": {
     "english": "English",
@@ -139,7 +140,25 @@
     "didYouMeanB": "? Tap to use it.",
     "vehicleType": "Vehicle Type",
     "unknown": "Unknown",
-    "validationRecordTyre": "Record at least one tyre condition to save this inspection."
+    "validationRecordTyre": "Record at least one tyre condition to save this inspection.",
+    "searchToBegin": "Search or scan an asset to begin",
+    "searchToBeginHint": "Type an asset number above, or scan its barcode. Assets appear only after you search.",
+    "step3": "3",
+    "reviewTitle": "Review & Sign",
+    "reviewSubtitle": "Add observations and sign before submitting",
+    "observationsLabel": "Observations",
+    "observationsPlaceholder": "Overall tyre condition, issues found, actions needed...",
+    "hourMeterLabel": "Hour Meter",
+    "hourMeterPlaceholder": "Engine hours (optional)",
+    "inspectorSignatureLabel": "Inspector signature",
+    "signatureRequired": "Signature required",
+    "signatureRequiredMsg": "Sign in the box to submit this inspection for approval.",
+    "reviewButton": "Review & Sign",
+    "submitForApproval": "Submit for approval",
+    "reviewSummaryTitle": "Inspection summary",
+    "positionsRecorded": "positions recorded",
+    "submittedForApprovalTitle": "Submitted for approval",
+    "submittedForApprovalNote": "A supervisor will review and sign off on this inspection. You will see it under History once approved."
   },
   "history": {
     "title": "Inspection History",
@@ -314,7 +333,11 @@
     "statuses": {
       "reported": "Reported",
       "under_review": "Under Review",
-      "closed": "Closed"
+      "closed": "Closed",
+      "awaiting_approval": "Awaiting Approval",
+      "insurance_claim": "Insurance Claim",
+      "repair_in_progress": "Repair In Progress",
+      "released": "Released"
     },
     "stats": {
       "total": "Total",
@@ -501,7 +524,9 @@
         "Third Party": "Third Party",
         "Driver": "Driver",
         "Warranty": "Warranty"
-      }
+      },
+      "phSearchVehicle": "Search asset, plate or type...",
+      "phSearchToBegin": "Type an asset number or scan to find the vehicle. Assets appear only after you search."
     },
     "detail": {
       "exportFailed": "Export failed",
@@ -546,7 +571,12 @@
       "userFallback": "User",
       "updateStatus": "Update Status",
       "updateStatusHint": "Change the investigation status of this report"
-    }
+    },
+    "takePhoto": "Take Photo",
+    "chooseFromGallery": "Choose from Gallery",
+    "cancel": "Cancel",
+    "filterOpen": "Open",
+    "filterClosed": "Closed"
   },
   "scanner": {
     "title": "Scan Tyre / Asset",
@@ -754,6 +784,10 @@
         "admin": {
           "label": "Admin Console",
           "sub": "Console & settings"
+        },
+        "approvals": {
+          "label": "Approvals",
+          "sub": "Sign off inspections"
         }
       }
     },
@@ -1226,6 +1260,37 @@
       "statusInProgress": "In Progress",
       "statusResolved": "Resolved",
       "statusClosed": "Closed"
+    },
+    "pm": {
+      "title": "Preventive Maintenance",
+      "plan": "PM Plan",
+      "overdue": "Overdue",
+      "dueSoon": "Due soon",
+      "activePlans": "Active plans",
+      "filterDue": "Due / Overdue",
+      "filterAll": "All active",
+      "emptyTitle": "Nothing here",
+      "emptyDue": "No plans are due or overdue. Good shape.",
+      "emptyAll": "No active maintenance plans found.",
+      "daysOverdue": "d overdue",
+      "daysLeft": "d left",
+      "noDate": "No date",
+      "recordService": "Record service",
+      "meterReading": "Meter reading",
+      "performedBy": "Performed by",
+      "workshop": "Workshop",
+      "partsCost": "Parts cost",
+      "labourCost": "Labour cost",
+      "findings": "Findings",
+      "findingsHint": "What was found / done",
+      "outcome": "Outcome",
+      "outcome_completed": "Completed",
+      "outcome_partial": "Partial",
+      "outcome_deferred": "Deferred",
+      "outcome_failed": "Failed",
+      "saveService": "Save service",
+      "savedTitle": "Service recorded",
+      "savedBody": "The schedule has been advanced to the next due date."
     }
   }
 }

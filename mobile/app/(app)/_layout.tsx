@@ -43,7 +43,10 @@ export default function AppLayout() {
     const withC = (q: any) => cc ? q.or(`country.eq.${cc},country.is.null`) : q
     const [acc, task, alert] = await Promise.all([
       withC(supabase.from('accidents').select('id', { count: 'exact', head: true }).neq('status', 'closed')),
-      withC(supabase.from('corrective_actions').select('id', { count: 'exact', head: true }).neq('status', 'Closed')),
+      // Only count genuinely-actionable corrective actions. The old `.neq('status','Closed')`
+      // also counted 'Resolved' (effectively-done) rows and any NULL-status legacy rows,
+      // so the Home tab showed a persistent phantom badge for work that was finished.
+      withC(supabase.from('corrective_actions').select('id', { count: 'exact', head: true }).in('status', ['Open', 'In Progress'])),
       withC(supabase.from('tyre_records').select('id', { count: 'exact', head: true }).eq('risk_level', 'Critical')),
     ])
     setAccidentBadge(acc.count ?? 0)
@@ -131,6 +134,7 @@ export default function AppLayout() {
       {/* Hidden routes - reachable via router.push but never in the tab bar */}
       <Tabs.Screen name="scanner"         options={{ href: null }} />
       <Tabs.Screen name="calendar"        options={{ href: null }} />
+      <Tabs.Screen name="maintenance"     options={{ href: null }} />
       <Tabs.Screen name="tasks"           options={{ href: null }} />
       <Tabs.Screen name="alerts"          options={{ href: null }} />
       <Tabs.Screen name="vehicles"        options={{ href: null }} />
@@ -142,6 +146,8 @@ export default function AppLayout() {
       <Tabs.Screen name="rca"             options={{ href: null }} />
       <Tabs.Screen name="overview"        options={{ href: null }} />
       <Tabs.Screen name="inspection/[id]" options={{ href: null }} />
+      <Tabs.Screen name="inspection/approvals/index" options={{ href: null }} />
+      <Tabs.Screen name="inspection/approvals/[id]" options={{ href: null }} />
       <Tabs.Screen name="accident/report" options={{ href: null }} />
       <Tabs.Screen name="accident/[id]"   options={{ href: null }} />
       <Tabs.Screen name="admin/ai-chat"   options={{ href: null }} />

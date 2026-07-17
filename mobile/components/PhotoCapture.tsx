@@ -37,39 +37,63 @@ export default function PhotoCapture({ value, onChange, module = 'module', tint 
   const [localUris, setLocalUris] = useState<string[]>([])
   const [uploadingIndex, setUploadingIndex] = useState<number | null>(null)
 
-  async function addPhoto() {
-    if (value.length >= max) { Alert.alert('Maximum photos', `Up to ${max} photos.`); return }
+  // Upload picked/captured local URIs sequentially, keeping a working copy so a
+  // multi-select from the gallery stays consistent (value is a stale prop mid-loop).
+  async function ingest(uris: string[]) {
+    let working = [...value]
+    let locals = [...localUris]
+    for (const uri of uris) {
+      if (working.length >= max) break
+      const idx = working.length
+      working = [...working, uri]        // keep the local URI so nothing is lost
+      locals = [...locals, uri]
+      setLocalUris(locals)
+      onChange(working)
+      setUploadingIndex(idx)
+      try {
+        const ref = await uploadModulePhoto(uri, module, idx)
+        // On success store the permanent ref; on failure (e.g. offline) KEEP the
+        // local file:// URI - the record queue re-uploads it before insert.
+        // On success store the permanent ref; on failure (offline) KEEP the local
+        // file:// URI so the record queue re-uploads it. No popup - the amber
+        // "pending" chip on the thumbnail already signals it will sync later.
+        working = working.map((u, i) => (i === idx ? (ref || uri) : u))
+        onChange(working)
+      } finally {
+        setUploadingIndex(null)
+      }
+    }
+  }
+
+  async function takePhoto() {
     const { status } = await ImagePicker.requestCameraPermissionsAsync()
     if (status !== 'granted') { Alert.alert('Camera needed', 'Enable camera access to attach photos.'); return }
-
-    // quality 0.55 keeps photos legible while roughly halving file size vs 0.7,
-    // cutting memory, upload bytes and battery on capture-heavy flows.
+    // quality 0.55 keeps photos legible while roughly halving file size vs 0.7.
     const result = await ImagePicker.launchCameraAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images, quality: 0.55, allowsEditing: false,
     })
     if (result.canceled || !result.assets[0]) return
+    await ingest([result.assets[0].uri])
+  }
 
-    const uri = result.assets[0].uri
-    const idx = value.length
-    setLocalUris(prev => [...prev, uri])
-    onChange([...value, uri])          // keep the local URI so nothing is lost
+  async function pickFromGallery() {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync()
+    if (status !== 'granted') { Alert.alert('Photos needed', 'Enable photo library access to attach photos.'); return }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images, quality: 0.55,
+      allowsMultipleSelection: true, selectionLimit: Math.max(1, max - value.length),
+    })
+    if (result.canceled || !result.assets?.length) return
+    await ingest(result.assets.map(a => a.uri))
+  }
 
-    setUploadingIndex(idx)
-    try {
-      const ref = await uploadModulePhoto(uri, module, idx)
-      // On success store the permanent ref; on failure (e.g. offline) KEEP the
-      // local file:// URI - the record queue re-uploads it before insert.
-      const next = [...value, ref || uri]
-      onChange(next)
-      if (!ref) {
-        Alert.alert(
-          'Saved offline',
-          'Photo will upload automatically when you are back online.',
-        )
-      }
-    } finally {
-      setUploadingIndex(null)
-    }
+  function addPhoto() {
+    if (value.length >= max) { Alert.alert('Maximum photos', `Up to ${max} photos.`); return }
+    Alert.alert(label, undefined, [
+      { text: 'Take Photo', onPress: takePhoto },
+      { text: 'Choose from Gallery', onPress: pickFromGallery },
+      { text: 'Cancel', style: 'cancel' },
+    ])
   }
 
   function remove(index: number) {

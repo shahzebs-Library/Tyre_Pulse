@@ -26,7 +26,8 @@
     "clearAll": "مسح الكل",
     "error": "خطأ",
     "tryAgain": "يرجى المحاولة مرة أخرى.",
-    "all": "الكل"
+    "all": "الكل",
+    "saving": "جار الحفظ..."
   },
   "language": {
     "english": "English",
@@ -140,7 +141,25 @@
     "didYouMeanB": "؟ اضغط لاستخدامه.",
     "vehicleType": "نوع المركبة",
     "unknown": "غير معروف",
-    "validationRecordTyre": "سجّل حالة إطار واحد على الأقل لحفظ هذا الفحص."
+    "validationRecordTyre": "سجّل حالة إطار واحد على الأقل لحفظ هذا الفحص.",
+    "searchToBegin": "ابحث أو امسح أصلاً للبدء",
+    "searchToBeginHint": "اكتب رقم الأصل بالأعلى أو امسح الباركود. تظهر الأصول بعد البحث فقط.",
+    "step3": "3",
+    "reviewTitle": "المراجعة والتوقيع",
+    "reviewSubtitle": "أضف الملاحظات ووقّع قبل الإرسال",
+    "observationsLabel": "الملاحظات",
+    "observationsPlaceholder": "الحالة العامة للإطارات، المشكلات المكتشفة، الإجراءات المطلوبة...",
+    "hourMeterLabel": "عداد الساعات",
+    "hourMeterPlaceholder": "ساعات المحرك (اختياري)",
+    "inspectorSignatureLabel": "توقيع المفتش",
+    "signatureRequired": "التوقيع مطلوب",
+    "signatureRequiredMsg": "وقّع في المربع لإرسال الفحص للاعتماد.",
+    "reviewButton": "المراجعة والتوقيع",
+    "submitForApproval": "إرسال للاعتماد",
+    "reviewSummaryTitle": "ملخص الفحص",
+    "positionsRecorded": "موضعاً مسجلاً",
+    "submittedForApprovalTitle": "تم الإرسال للاعتماد",
+    "submittedForApprovalNote": "سيقوم المشرف بمراجعة هذا الفحص والتوقيع عليه. سيظهر ضمن السجل بعد الاعتماد."
   },
   "history": {
     "title": "سجل الفحوصات",
@@ -346,9 +365,13 @@
       "fatal": "مميتة"
     },
     "statuses": {
-      "reported": "مُبلَّغ",
+      "reported": "تم الإبلاغ",
       "under_review": "قيد المراجعة",
-      "closed": "مغلق"
+      "closed": "مغلق",
+      "awaiting_approval": "بانتظار الموافقة",
+      "insurance_claim": "مطالبة تأمين",
+      "repair_in_progress": "قيد الإصلاح",
+      "released": "تم الإفراج"
     },
     "stats": {
       "total": "الإجمالي",
@@ -535,7 +558,9 @@
         "Third Party": "طرف ثالث",
         "Driver": "السائق",
         "Warranty": "الضمان"
-      }
+      },
+      "phSearchVehicle": "ابحث برقم الأصل أو اللوحة أو النوع...",
+      "phSearchToBegin": "اكتب رقم الأصل أو امسح لإيجاد المركبة. تظهر الأصول بعد البحث فقط."
     },
     "detail": {
       "exportFailed": "فشل التصدير",
@@ -580,7 +605,12 @@
       "userFallback": "مستخدم",
       "updateStatus": "تحديث الحالة",
       "updateStatusHint": "تغيير حالة التحقيق لهذا التقرير"
-    }
+    },
+    "takePhoto": "التقاط صورة",
+    "chooseFromGallery": "اختيار من المعرض",
+    "cancel": "إلغاء",
+    "filterOpen": "مفتوح",
+    "filterClosed": "مغلق"
   },
   "modules": {
     "common": {
@@ -755,6 +785,10 @@
         "admin": {
           "label": "وحدة المسؤول",
           "sub": "الوحدة والإعدادات"
+        },
+        "approvals": {
+          "label": "الاعتمادات",
+          "sub": "اعتماد الفحوصات"
         }
       }
     },
@@ -1227,6 +1261,37 @@
       "statusInProgress": "قيد التنفيذ",
       "statusResolved": "تم الحل",
       "statusClosed": "مغلق"
+    },
+    "pm": {
+      "title": "الصيانة الوقائية",
+      "plan": "خطة صيانة",
+      "overdue": "متأخرة",
+      "dueSoon": "مستحقة قريبا",
+      "activePlans": "الخطط النشطة",
+      "filterDue": "مستحقة / متأخرة",
+      "filterAll": "كل النشطة",
+      "emptyTitle": "لا يوجد شيء هنا",
+      "emptyDue": "لا توجد خطط مستحقة أو متأخرة. الوضع جيد.",
+      "emptyAll": "لا توجد خطط صيانة نشطة.",
+      "daysOverdue": " يوم تأخير",
+      "daysLeft": " يوم متبق",
+      "noDate": "بدون تاريخ",
+      "recordService": "تسجيل الصيانة",
+      "meterReading": "قراءة العداد",
+      "performedBy": "تم بواسطة",
+      "workshop": "الورشة",
+      "partsCost": "تكلفة القطع",
+      "labourCost": "تكلفة العمالة",
+      "findings": "الملاحظات",
+      "findingsHint": "ما تم اكتشافه / إنجازه",
+      "outcome": "النتيجة",
+      "outcome_completed": "مكتملة",
+      "outcome_partial": "جزئية",
+      "outcome_deferred": "مؤجلة",
+      "outcome_failed": "فشلت",
+      "saveService": "حفظ الصيانة",
+      "savedTitle": "تم تسجيل الصيانة",
+      "savedBody": "تم تحديث الجدول إلى موعد الاستحقاق التالي."
     }
   }
 }

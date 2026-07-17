@@ -7,14 +7,23 @@
 
 import { useState, useCallback, useEffect } from 'react'
 import {
-  View, Text, ScrollView, StyleSheet, TouchableOpacity,
+  View, Text, ScrollView, StyleSheet, TouchableOpacity, TextInput,
   RefreshControl, StatusBar, ActivityIndicator, Platform,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons'
 import { supabase } from '../../../lib/supabase'
-import { useAuth } from '../../../contexts/AuthContext'
 import { useElevatedGuard } from '../../../hooks/useRoleGuard'
+
+/** Local YYYY-MM-DD (avoids the UTC shift that toISOString() introduces). */
+function isoDay(d: Date): string {
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${d.getFullYear()}-${m}-${day}`
+}
+function daysAgo(days: number): string {
+  const d = new Date(); d.setDate(d.getDate() - days); return isoDay(d)
+}
 
 interface KPI {
   totalRecords: number
@@ -36,7 +45,6 @@ const RISK_COLOR: Record<string, string> = {
 
 export default function AnalyticsScreen() {
   const { allowed, loading: guardLoading } = useElevatedGuard()
-  const { profile } = useAuth()
 
   const [loading, setLoading]     = useState(true)
   const [refreshing, setRefreshing] = useState(false)
@@ -44,20 +52,61 @@ export default function AnalyticsScreen() {
   const [byRisk, setByRisk]       = useState<RiskStat[]>([])
   const [bySite, setBySite]       = useState<SiteStat[]>([])
   const [byBrand, setByBrand]     = useState<BrandStat[]>([])
-  const [period, setPeriod]       = useState<'30' | '90' | '365'>('90')
+  const [period, setPeriod]       = useState<'30' | '90' | '365' | 'custom'>('90')
+  // Custom date-range (YYYY-MM-DD); only used when period === 'custom'.
+  const [fromDate, setFromDate]   = useState('')
+  const [toDate, setToDate]       = useState('')
+  // Site/location filter ('' = all sites) + the distinct-site option list.
+  const [site, setSite]           = useState('')
+  const [siteOptions, setSiteOptions] = useState<string[]>([])
+
+  // Distinct sites for the location dropdown, sourced from the fleet master and
+  // fetched once (RLS scopes org + country). Kept independent of the site filter
+  // so selecting a site never collapses the option list.
+  useEffect(() => {
+    if (!allowed) return
+    let cancelled = false
+    supabase.from('vehicle_fleet').select('site').then(({ data }) => {
+      if (cancelled) return
+      const sites = [...new Set(((data ?? []) as { site: string | null }[])
+        .map(r => r.site).filter(Boolean) as string[])].sort()
+      setSiteOptions(sites)
+    })
+    return () => { cancelled = true }
+  }, [allowed])
+
+  // Resolve the active [from, to] window from the selected period / custom range.
+  // Empty string = open-ended on that side.
+  const resolveRange = useCallback((): { from: string; to: string } => {
+    if (period === 'custom') {
+      // Only feed a fully-formed YYYY-MM-DD into the query; ignore partial input
+      // so the charts do not thrash / error while the user is still typing.
+      const valid = (v: string) => (/^\d{4}-\d{2}-\d{2}$/.test(v.trim()) ? v.trim() : '')
+      return { from: valid(fromDate), to: valid(toDate) }
+    }
+    return { from: daysAgo(Number(period)), to: '' }
+  }, [period, fromDate, toDate])
 
   const load = useCallback(async () => {
     setLoading(true)
-    const since = new Date()
-    since.setDate(since.getDate() - Number(period))
-    const sinceStr = since.toISOString().split('T')[0]
+    const { from, to } = resolveRange()
+
+    let recordsQ = supabase.from('tyre_records')
+      .select('id,cost_per_tyre,risk_level,brand,site')
+    if (from) recordsQ = recordsQ.gte('issue_date', from)
+    if (to)   recordsQ = recordsQ.lte('issue_date', to)
+    if (site) recordsQ = recordsQ.eq('site', site)
+
+    let vehiclesQ = supabase.from('vehicle_fleet').select('id', { count: 'exact', head: true })
+    if (site) vehiclesQ = vehiclesQ.eq('site', site)
+
+    let actionsQ = supabase.from('corrective_actions')
+      .select('id', { count: 'exact', head: true })
+      .in('status', ['Open', 'In Progress'])
+    if (site) actionsQ = actionsQ.eq('site', site)
 
     const [recordsRes, vehiclesRes, actionsRes] = await Promise.all([
-      supabase.from('tyre_records')
-        .select('id,cost_per_tyre,risk_level,brand,site')
-        .gte('issue_date', sinceStr),
-      supabase.from('vehicle_fleet').select('id', { count: 'exact' }),
-      supabase.from('corrective_actions').select('id', { count: 'exact' }).eq('status', 'Open'),
+      recordsQ, vehiclesQ, actionsQ,
     ])
 
     const records = (recordsRes.data ?? []) as { cost_per_tyre: number | null; risk_level: string | null; brand: string | null; site: string | null }[]
@@ -103,7 +152,7 @@ export default function AnalyticsScreen() {
 
     setLoading(false)
     setRefreshing(false)
-  }, [period])
+  }, [resolveRange, site])
 
   useEffect(() => { if (allowed) load() }, [load, allowed])
 
@@ -132,23 +181,72 @@ export default function AnalyticsScreen() {
       <View style={styles.header}>
         <View style={{ flex: 1 }}>
           <Text style={styles.title}>Fleet Analytics</Text>
-          <Text style={styles.subtitle}>{profile?.site ? `${profile.site} · ` : ''}All records</Text>
+          <Text style={styles.subtitle}>{site ? `${site} · ` : 'All sites · '}{period === 'custom' ? 'Custom range' : period === '365' ? 'Last 1 year' : `Last ${period} days`}</Text>
         </View>
       </View>
 
       {/* Period picker */}
-      <View style={styles.periodRow}>
-        {(['30', '90', '365'] as const).map(p => (
-          <TouchableOpacity
-            key={p}
-            style={[styles.periodBtn, period === p && styles.periodBtnActive]}
-            onPress={() => setPeriod(p)}
-          >
-            <Text style={[styles.periodText, period === p && styles.periodTextActive]}>
-              {p === '30' ? '30 days' : p === '90' ? '90 days' : '1 year'}
-            </Text>
-          </TouchableOpacity>
-        ))}
+      <View style={styles.filterBar}>
+        <View style={styles.periodRow}>
+          {(['30', '90', '365', 'custom'] as const).map(p => (
+            <TouchableOpacity
+              key={p}
+              style={[styles.periodBtn, period === p && styles.periodBtnActive]}
+              onPress={() => setPeriod(p)}
+            >
+              <Text style={[styles.periodText, period === p && styles.periodTextActive]}>
+                {p === '30' ? '30 days' : p === '90' ? '90 days' : p === '365' ? '1 year' : 'Custom'}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+
+        {/* Custom date range (revealed only for the Custom preset) */}
+        {period === 'custom' && (
+          <View style={styles.dateRow}>
+            <View style={styles.dateField}>
+              <Text style={styles.dateLabel}>From</Text>
+              <TextInput
+                style={styles.dateInput}
+                placeholder="YYYY-MM-DD"
+                placeholderTextColor="#94a3b8"
+                value={fromDate}
+                onChangeText={setFromDate}
+                autoCapitalize="none"
+                autoCorrect={false}
+                keyboardType="numbers-and-punctuation"
+                maxLength={10}
+              />
+            </View>
+            <View style={styles.dateField}>
+              <Text style={styles.dateLabel}>To</Text>
+              <TextInput
+                style={styles.dateInput}
+                placeholder="YYYY-MM-DD"
+                placeholderTextColor="#94a3b8"
+                value={toDate}
+                onChangeText={setToDate}
+                autoCapitalize="none"
+                autoCorrect={false}
+                keyboardType="numbers-and-punctuation"
+                maxLength={10}
+              />
+            </View>
+          </View>
+        )}
+
+        {/* Location / site dropdown */}
+        {siteOptions.length > 0 && (
+          <View style={styles.siteRow}>
+            <Text style={styles.dateLabel}>Location</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipRow}>
+              <SiteChip label="All sites" active={site === ''} onPress={() => setSite('')} />
+              {siteOptions.map(st => (
+                <SiteChip key={st} label={st} active={site === st} onPress={() => setSite(prev => prev === st ? '' : st)} />
+              ))}
+            </ScrollView>
+          </View>
+        )}
       </View>
 
       {loading ? (
@@ -269,6 +367,18 @@ export default function AnalyticsScreen() {
   )
 }
 
+function SiteChip({ label, active, onPress }: { label: string; active: boolean; onPress: () => void }) {
+  return (
+    <TouchableOpacity
+      style={[styles.chip, active && styles.chipActive]}
+      onPress={onPress}
+      activeOpacity={0.8}
+    >
+      <Text style={[styles.chipText, active && styles.chipTextActive]} numberOfLines={1}>{label}</Text>
+    </TouchableOpacity>
+  )
+}
+
 function KpiCard({ icon, label, value, color }: { icon: string; label: string; value: string; color: string }) {
   return (
     <View style={[kpiStyles.card, { borderTopColor: color }]}>
@@ -304,11 +414,26 @@ const styles = StyleSheet.create({
   title:    { fontSize: 20, fontWeight: '800', color: '#0f172a' },
   subtitle: { fontSize: 12, color: '#64748b', marginTop: 2 },
 
-  periodRow: { flexDirection: 'row', gap: 8, padding: 12, backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#f1f5f9' },
+  filterBar: { backgroundColor: '#fff', paddingBottom: 4, borderBottomWidth: 1, borderBottomColor: '#f1f5f9' },
+  periodRow: { flexDirection: 'row', gap: 8, paddingHorizontal: 12, paddingTop: 12, paddingBottom: 8 },
   periodBtn: { flex: 1, paddingVertical: 7, borderRadius: 10, backgroundColor: '#f8fafc', borderWidth: 1.5, borderColor: '#e2e8f0', alignItems: 'center' },
   periodBtnActive: { backgroundColor: '#3b82f6', borderColor: '#3b82f6' },
   periodText:      { fontSize: 12, fontWeight: '700', color: '#94a3b8' },
   periodTextActive:{ color: '#fff' },
+
+  dateRow:   { flexDirection: 'row', gap: 10, paddingHorizontal: 12, paddingBottom: 8 },
+  dateField: { flex: 1, gap: 4 },
+  dateLabel: { fontSize: 11, fontWeight: '700', color: '#94a3b8' },
+  dateInput: {
+    height: 40, borderRadius: 10, borderWidth: 1.5, borderColor: '#e2e8f0',
+    backgroundColor: '#f8fafc', paddingHorizontal: 12, fontSize: 13, color: '#0f172a', fontWeight: '600',
+  },
+  siteRow:   { paddingBottom: 8, gap: 4, paddingHorizontal: 12 },
+  chipRow:   { flexDirection: 'row', gap: 8, paddingVertical: 2, paddingRight: 12 },
+  chip:      { paddingHorizontal: 14, paddingVertical: 7, borderRadius: 10, backgroundColor: '#f8fafc', borderWidth: 1.5, borderColor: '#e2e8f0', maxWidth: 180 },
+  chipActive:{ backgroundColor: '#3b82f6', borderColor: '#3b82f6' },
+  chipText:  { fontSize: 12, fontWeight: '700', color: '#94a3b8' },
+  chipTextActive: { color: '#fff' },
 
   content: { padding: 16, gap: 14, paddingBottom: Platform.OS === 'ios' ? 24 : 16 },
   kpiGrid: { flexDirection: 'row', gap: 8 },

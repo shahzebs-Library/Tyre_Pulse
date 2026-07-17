@@ -789,6 +789,25 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
   + Expo push token registered to `profiles.push_token` (RLS-scoped, cleared on logout) for server-sent targeted
   pushes via the Expo Push API. **Next free migration V267.**
 
+### Mobile brand icon + splash + login logo (2026-07-17) — real Tyre Pulse mark, brand green
+- Replaced the placeholder "TP"-white-on-green launcher icon with the user's ACTUAL Tyre Pulse logo
+  (tyre tread + wheel + heartbeat pulse + road emblem, "TYRE PULSE" wordmark + "Smarter Wheels. Stronger
+  Fleet" tagline). Source art was blue/navy; recoloured to the BRAND GREEN via a dark-green->#16a34a
+  luminance ramp (NO neon — the user rejected the first bright-green pass and asked for the darker brand
+  green). Recolour was a pure PIL pass (blue-family pixels only; black tread outlines + white road markings
+  + transparency preserved). Assets regenerated under `mobile/assets/`:
+  - `icon.png` (1024, emblem-only on white) + `adaptive-icon.png` (1024, emblem transparent, 60% safe-zone)
+    = Android/iOS launcher mark. `app.json` android.adaptiveIcon.backgroundColor #16a34a -> #ffffff.
+  - `splash.png` (1600, FULL logo w/ wordmark on white). `app.json` splash.backgroundColor #f0f5f1 -> #ffffff.
+  - `notification-icon.png` (256, WHITE monochrome silhouette — Android status-bar icons must be white/transparent).
+  - NEW `logo.png` (full mark, transparent) + `logo-mark.png` (emblem, transparent) for in-app use.
+- `app/(auth)/login.tsx` + `register.tsx`: the wrench-emoji "🔧" logo circle + "TyrePulse" text is replaced
+  by `<Image source={require('../../assets/logo.png')}>` (the real logo shows on first app open). Removed the
+  now-dead logoCircle/logoEmoji/appName styles; added `logoImg`. tsc clean.
+- RULE: to re-skin the app icon, drop new art in `mobile/assets/{icon,adaptive-icon,splash,notification-icon}.png`
+  (keep app.json paths); launcher icon = emblem only (no wordmark, it goes tiny), splash/login = full logo.
+  The brand-green recolour recipe is a blue-family luminance ramp to #16a34a (dark shadows #06230f), no neon.
+
 ### SESSION CLOSED CLEAN (2026-07-16) — everything merged, nothing pending
 - All work through the custom TV/report board builder is MERGED to main and LIVE. Latest merges on branch
   `claude/accident-builder-report-ui-2bkwb5`: **PR #54** (V262 TV wallboard: site/country filters, logo,

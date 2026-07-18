@@ -812,6 +812,26 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
   on testers' devices once that build finishes + Play processes it. No DB/schema change; branch realigned to
   origin/main. For NEW work restart the branch from latest main (merged PRs are terminal).
 
+### Console session ISOLATED from main app - no cross-tab bleed (2026-07-18)
+- **BUG (user, persisted after the AAL fix because their super-admin has NO 2FA):** main app + /console
+  shared ONE Supabase client keyed to localStorage 'tp_auth'. Logging into the Console in one browser TAB
+  authenticated a main-app tab in ANOTHER tab with no click (standard supabase cross-tab session sync over
+  the shared storageKey). For a break-glass admin console this is unwanted.
+- **FIX (src/lib/supabase.js):** partition the auth session by SURFACE. React Router renders EITHER the
+  `/console/*` tree (ConsoleAuthProvider) OR the main-app tree (`*`, AuthProvider) per tab - never both -
+  so the URL the tab BOOTED on identifies the surface: `IS_CONSOLE_SURFACE = location.pathname.startsWith
+  ('/console')` -> `AUTH_STORAGE_KEY = 'tp_console_auth'` else `'tp_auth'`. supabase-js only cross-tab-syncs
+  its OWN storageKey, so a Console login (separate tab / direct URL) lands in 'tp_console_auth' and main-app
+  tabs (watching 'tp_auth') never see it, and vice versa. Single client still (all data services use the
+  one `supabase` singleton), so NO service/query change - the singleton just uses the right key per tab.
+- DELIBERATE, coherent behavior: the in-app `<Link to="/console">` (client-side nav, no reload) keeps the
+  tab's main-app session, so a signed-in super admin reaches the console seamlessly IN THAT TAB; only a
+  SEPARATELY-opened console tab gets its own login. Existing main-app sessions unaffected (still 'tp_auth');
+  a super admin re-logs into a standalone console tab once. Console still persists across reload (localStorage,
+  just a different key) - switch to sessionStorage if a console-dies-on-tab-close posture is wanted later.
+- Pairs with the AAL gate (still merged): partition stops cross-tab bleed; AAL stops pre-2FA data exposure.
+  RULE: never hardcode 'tp_auth' elsewhere; read AUTH_STORAGE_KEY. Build clean; no migration.
+
 ### Auth assurance gate - password-only (pre-2FA) sessions no longer expose data (2026-07-18)
 - **BUG (user-reported, real):** the main app + admin `/console` SHARE one Supabase client + one
   localStorage session. `signInWithPassword` creates a LIVE session at AAL1 the instant the password

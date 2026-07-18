@@ -1079,6 +1079,21 @@ Multi-agent batch. All merged; migrations through **V271**, next free **V272**.
   resolveModuleAccess (role matrix layer; per-user grant still wins; fail-open). IN PROGRESS (agent): role-wide
   one-click Mobile-only/Web-only, authoritative saves (narrowing a scope now turns the other surface OFF, was
   a documented gap), and a saved-access surface-badge view.
+- **Close MOBILE modules from web (merged PR #105):** the AccessManager web tree is keyed on the WEB catalog
+  (moduleCatalog.js, e.g. `tyre_records`), so its `mobile:` writes used WEB keys (`mobile:tyre_records`) the
+  phone app never reads (its key is `records`) - only ~6 coincidental keys were closable, ~21 were not (a stale
+  `mobile:inspections` DB row proved the drift; mobile's key is `inspect`). FIX = a dedicated **Mobile App
+  access** panel `src/console/pages/access/MobileAccessPanel.jsx` mounted in AccessManager (role + user modes)
+  that iterates the REAL mobile keys from NEW `src/lib/mobileModules.js` (web mirror of mobile/lib/permissions.ts
+  MODULES - 29 modules, EXACT keys, groups, role defaults; KEEP IN SYNC). Allow/Deny writes land on
+  `mobile:<mobileKey>`: ROLE -> module_permissions row via saveModulePermissions/set_module_permissions;
+  USER -> user_access_grants via setUserAccessGrantScoped(scope:'mobile')/set_user_access_grant. Self-contained
+  load/save (does NOT entangle the web tree's draft/scope reconciliation); Admin/super never lockable. NO schema
+  change - reuses the surface-partitioned convention mobile ALREADY enforces in resolveModuleAccess (per-user
+  grant > role matrix > role default). VERIFIED on live DB: role rows must use `profiles.role` Title Case
+  ("Tyre Man") because get_user_module_permissions filters `module_permissions.role = profiles.role`. Mobile
+  needs no change. Tests mobileModules.test.js (5). RULE: to close a mobile module, use the Mobile App panel
+  (real mobile keys) - the web tree's Web/Mobile/Both scope only lines up for keys shared with the web catalog.
 - **Play release:** release-play.yml (workflow_dispatch on main) built + auto-submitted build to the Play
   INTERNAL track (verified run success). NOTE the user's test device is on the CLOSED track (older build) -
   promote Internal -> Closed in Play Console for testers to receive it (or point the workflow at Closed).

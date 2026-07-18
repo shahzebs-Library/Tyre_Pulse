@@ -28,7 +28,7 @@ import { Screen, Button } from '../../components/ui'
 import PhotoCapture from '../../components/PhotoCapture'
 import ChecklistReferencePicker from '../../components/ChecklistReferencePicker'
 import { extractScanCode, lookupAssetByCode, AssetLookupRecord } from '../../lib/assetLookup'
-import { submitWash, listRecentWashes, todayISODate } from '../../lib/wash'
+import { submitWash, listRecentWashes, todayISODate, WASH_STATUS_CHOICES } from '../../lib/wash'
 import { washDueList, WashDueEntry, WASH_INTERVAL_DAYS } from '../../lib/washSchedule'
 import { notifyWashDue } from '../../lib/notifications'
 
@@ -50,16 +50,23 @@ export default function WashingScreen() {
 
   const allowed = canAccess('washing')
 
+  // Translate-with-fallback: use the English literal when a key is not yet in the
+  // locale files (avoids shipping raw key paths for the new status/operator UI).
+  const tf = useCallback((key: string, fallback: string) => {
+    const s = t(key)
+    return !s || s === key ? fallback : s
+  }, [t])
+
   const [assetNo, setAssetNo] = useState('')
   const [site, setSite] = useState(profile?.site ?? '')
   const [master, setMaster] = useState<AssetLookupRecord | null>(null)
   const [vehicleType, setVehicleType] = useState('')
   const [washType, setWashType] = useState<WashType | ''>('')
+  const [status, setStatus] = useState<string>('In Progress')
+  const [operator, setOperator] = useState<string>(profile?.full_name ?? '')
   const [photos, setPhotos] = useState<string[]>([])
   const [notes, setNotes] = useState('')
   const [bay, setBay] = useState('')
-  const [water, setWater] = useState('')
-  const [duration, setDuration] = useState('')
   const [odometer, setOdometer] = useState('')
 
   const [submitting, setSubmitting] = useState(false)
@@ -140,14 +147,14 @@ export default function WashingScreen() {
     setMaster(null)
     setVehicleType('')
     setWashType('')
+    setStatus('In Progress')
+    setOperator(profile?.full_name ?? '')
     setPhotos([])
     setNotes('')
     setBay('')
-    setWater('')
-    setDuration('')
     setOdometer('')
     siteTouched.current = !!profile?.site
-  }, [profile?.site])
+  }, [profile?.full_name, profile?.site])
 
   const onSiteChange = useCallback((v: string) => {
     siteTouched.current = true
@@ -208,13 +215,11 @@ export default function WashingScreen() {
         site: site.trim() || null,
         country: profile?.country ?? null,
         createdBy: profile?.id ?? null,
-        washedBy: profile?.full_name ?? null,
         washDate: today,
         washType: washType || null,
+        status,
+        washedBy: operator.trim() || null,
         bay: bay.trim() || null,
-        waterLiters: numOrNull(water),
-        cost: null,
-        durationMin: numOrNull(duration),
         odometerKm: numOrNull(odometer),
         notes: notes.trim() || null,
         photos: photos.filter(Boolean),
@@ -228,7 +233,7 @@ export default function WashingScreen() {
     } finally {
       setSubmitting(false)
     }
-  }, [assetNo, vehicleType, site, profile, today, washType, bay, water, duration, odometer, notes, photos, resetForm, loadDue, t])
+  }, [assetNo, vehicleType, site, profile, today, washType, status, operator, bay, odometer, notes, photos, resetForm, loadDue, t])
 
   function handleSave() {
     if (submitting) return
@@ -388,6 +393,27 @@ export default function WashingScreen() {
             </View>
           </View>
 
+          {/* Status (supervisor sets) */}
+          <View style={styles.card}>
+            <Text style={[styles.label, { textAlign }]}>{tf('modules.washing.statusLabel', 'Status')}</Text>
+            <View style={styles.chipWrap}>
+              {WASH_STATUS_CHOICES.map(s => {
+                const active = status === s
+                const key = s.replace(/\s+/g, '')
+                return (
+                  <TouchableOpacity
+                    key={s}
+                    style={[styles.chip, active && styles.chipActive]}
+                    onPress={() => setStatus(s)}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={[styles.chipText, active && styles.chipTextActive]}>{tf(`modules.washing.statuses.${key}`, s)}</Text>
+                  </TouchableOpacity>
+                )
+              })}
+            </View>
+          </View>
+
           {/* Photos */}
           <View style={styles.card}>
             <Text style={[styles.label, { textAlign }]}>{t('modules.washing.photosLabel')} <Text style={styles.optional}>{t('modules.common.optional')}</Text></Text>
@@ -397,7 +423,15 @@ export default function WashingScreen() {
           {/* Optional details */}
           <View style={styles.card}>
             <Text style={[styles.label, { textAlign }]}>{t('modules.washing.detailsLabel')} <Text style={styles.optional}>{t('modules.common.optional')}</Text></Text>
-            <View style={styles.twoCol}>
+            <Text style={[styles.subLabel, { textAlign }]}>{tf('modules.washing.operator', 'Operator name')}</Text>
+            <TextInput
+              style={[styles.input, { textAlign }]}
+              value={operator}
+              onChangeText={setOperator}
+              placeholder={tf('modules.washing.operatorPlaceholder', 'Who washed the vehicle')}
+              placeholderTextColor={theme.color.textMuted}
+            />
+            <View style={[styles.twoCol, { marginTop: spacing.sm }]}>
               <View style={styles.col}>
                 <Text style={[styles.subLabel, { textAlign }]}>{t('modules.washing.bay')}</Text>
                 <TextInput
@@ -406,30 +440,6 @@ export default function WashingScreen() {
                   onChangeText={setBay}
                   placeholder={t('modules.washing.bayPlaceholder')}
                   placeholderTextColor={theme.color.textMuted}
-                />
-              </View>
-              <View style={styles.col}>
-                <Text style={[styles.subLabel, { textAlign }]}>{t('modules.washing.water')}</Text>
-                <TextInput
-                  style={[styles.input, { textAlign }]}
-                  value={water}
-                  onChangeText={v => setWater(v.replace(/[^0-9.]/g, ''))}
-                  placeholder={t('modules.washing.waterPlaceholder')}
-                  placeholderTextColor={theme.color.textMuted}
-                  keyboardType="numeric"
-                />
-              </View>
-            </View>
-            <View style={[styles.twoCol, { marginTop: spacing.sm }]}>
-              <View style={styles.col}>
-                <Text style={[styles.subLabel, { textAlign }]}>{t('modules.washing.duration')}</Text>
-                <TextInput
-                  style={[styles.input, { textAlign }]}
-                  value={duration}
-                  onChangeText={v => setDuration(v.replace(/[^0-9.]/g, ''))}
-                  placeholder={t('modules.washing.durationPlaceholder')}
-                  placeholderTextColor={theme.color.textMuted}
-                  keyboardType="numeric"
                 />
               </View>
               <View style={styles.col}>

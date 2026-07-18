@@ -14,6 +14,7 @@ export interface WashRecord {
   asset_no: string
   vehicle_type: string | null
   wash_date: string | null
+  wash_time: string | null
   wash_type: string | null
   site: string | null
   bay: string | null
@@ -29,7 +30,7 @@ export interface WashRecord {
 }
 
 const WASH_COLS =
-  'id,asset_no,vehicle_type,wash_date,wash_type,site,bay,washed_by,water_liters,cost,duration_min,odometer_km,status,notes,photos,created_at'
+  'id,asset_no,vehicle_type,wash_date,wash_time,wash_type,site,bay,washed_by,water_liters,cost,duration_min,odometer_km,status,notes,photos,created_at'
 
 /** Local (device-timezone) YYYY-MM-DD so a wash is dated the driver's day. */
 export function todayISODate(): string {
@@ -53,6 +54,10 @@ export async function listRecentWashes(limit = 200): Promise<WashRecord[]> {
   return (data ?? []) as WashRecord[]
 }
 
+/** The two statuses a supervisor picks. Default = first. */
+export const WASH_STATUS_CHOICES = ['In Progress', 'Completed'] as const
+export type WashStatus = typeof WASH_STATUS_CHOICES[number]
+
 export interface SubmitWashInput {
   assetNo: string
   vehicleType?: string | null
@@ -62,10 +67,8 @@ export interface SubmitWashInput {
   washedBy?: string | null
   washDate?: string | null
   washType?: string | null
+  status?: string | null
   bay?: string | null
-  waterLiters?: number | null
-  cost?: number | null
-  durationMin?: number | null
   odometerKm?: number | null
   notes?: string | null
   photos?: string[] | null
@@ -73,12 +76,17 @@ export interface SubmitWashInput {
 
 /**
  * Log a vehicle wash. Always dated today (the driver logs a same-day wash).
- * Returns whether the record was stored offline (queued for later sync).
+ * cost / water_liters / duration_min are no longer written (removed per field
+ * feedback). Returns whether the record was stored offline (queued for later).
  */
 export async function submitWash(input: SubmitWashInput): Promise<{ offline: boolean }> {
   const asset = input.assetNo.trim()
   const date = input.washDate ?? todayISODate()
   const photos = (input.photos ?? []).filter(Boolean)
+  const status = input.status?.trim() || 'In Progress'
+  // Time is captured automatically at save (local HH:MM), never user-editable.
+  const now = new Date()
+  const washTime = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`
 
   const res = await saveCommand(
     'WASH_RECORD',
@@ -90,13 +98,11 @@ export async function submitWash(input: SubmitWashInput): Promise<{ offline: boo
       created_by: input.createdBy ?? null,
       washed_by: input.washedBy?.trim() || null,
       wash_date: date,
+      wash_time: washTime,
       wash_type: input.washType?.trim() || null,
       bay: input.bay?.trim() || null,
-      water_liters: input.waterLiters ?? null,
-      cost: input.cost ?? null,
-      duration_min: input.durationMin ?? null,
       odometer_km: input.odometerKm ?? null,
-      status: 'Completed',
+      status,
       notes: input.notes?.trim() || null,
       photos: photos.length ? photos : null,
     },

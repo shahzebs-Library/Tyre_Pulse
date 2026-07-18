@@ -1019,7 +1019,14 @@ Multi-agent batch. All merged; migrations through **V271**, next free **V272**.
   decision: m3 source = production-log entry screen (like meter-logs) and/or an ERP m3 import. Next free
   migration **V276**.
 
-### SESSION 2026-07-18 (continued) — shipped to main. Migrations through V277, next free V278.
+### SESSION 2026-07-18 (continued) — CLOSED CLEAN. All merged to main; migrations through V278, next free **V279**.
+- **Session close:** everything this session is MERGED to main and the branch is realigned to origin/main -
+  nothing pending in code. Last items: maintenance window + web-only login gate (V278), ERP template downloads,
+  mobile Home fixes (PR #104), and closing MOBILE modules from the web Access Manager (PR #105/#106, see the
+  "Close MOBILE modules from web" entry below). For NEW work restart the branch from latest main (merged PRs are
+  terminal). USER/OPS-only follow-ups (unchanged): enable Supabase leaked-password protection; promote the Play
+  Internal build to the Closed track for testers; redeploy send-scheduled-reports if a 'pm' scheduled report is
+  wanted; true million-row ERP loads still need the server COPY pipeline (the /erp-import review surface is shipped).
 - **Console security hardening V272 (applied):** dropped forgeable always-true INSERT policies on
   audit_log_v2 + inspection_audit_log; REVOKE anon/PUBLIC EXECUTE on the admin/access/backup/import RPC
   family (authenticated kept; public token/login RPCs left); pinned backups._core_tables search_path;

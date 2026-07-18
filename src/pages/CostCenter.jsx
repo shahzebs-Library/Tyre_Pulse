@@ -9,6 +9,8 @@ import { COST_MODES, pickCost, costModeLabel, pickMonthly, splitTotals } from '.
 import { loadCostSplit } from '../lib/api/costSummary'
 import { buildCostIntelligence, UNIT_META } from '../lib/costIntelligence'
 import { listProduction, createProduction, updateProduction, deleteProduction, sumProductionM3 } from '../lib/api/production'
+import { parseWorkbook } from '../lib/import'
+import { mapSheetToRows, DATASETS, normHeader } from '../lib/erpImport'
 import { applyCountry } from '../lib/api/_client'
 import { useAuth } from '../contexts/AuthContext'
 import { toUserMessage } from '../lib/safeError'
@@ -18,7 +20,7 @@ import {
   DollarSign, TrendingUp, TrendingDown, BarChart2, PieChart, Target,
   AlertTriangle, Award, ArrowUpRight, ArrowDownRight, Minus, Download,
   RefreshCw, Loader2, FileSpreadsheet, FileText, Zap, SlidersHorizontal, Wrench,
-  Gauge, Navigation, Boxes, Timer, Plus, Trash2, Pencil, Save, X,
+  Gauge, Navigation, Boxes, Timer, Plus, Trash2, Pencil, Save, X, CheckCircle2,
 } from 'lucide-react'
 import { SkeletonCards, SkeletonTable } from '../components/ui/Skeleton'
 import {
@@ -1472,6 +1474,51 @@ function CostPerUnitSection({ currency, country, siteOptions = [] }) {
     }
   }
 
+  // ── m3 bulk import (reuses the shared workbook parser + ERP mapper) ──────────
+  const importRef = useRef(null)
+  const [importing, setImporting] = useState(false)
+  const [importResult, setImportResult] = useState('')
+
+  async function onImportM3(e) {
+    const f = e.target.files?.[0]
+    if (importRef.current) importRef.current.value = ''
+    if (!f) return
+    setFormError(''); setImportResult(''); setImporting(true)
+    try {
+      const wb = await parseWorkbook(await f.arrayBuffer(), { fileName: f.name })
+      const wanted = new Set((DATASETS.production.tabAliases || []).map(normHeader))
+      const sheet = wb.sheets.find((s) => wanted.has(normHeader(s.name))) || wb.sheets[0]
+      if (!sheet) throw new Error('No sheet found in the file.')
+      const rows = mapSheetToRows('production', sheet.rows || [])
+        .filter((r) => r.site && r.period_date && r.m3 != null)
+      if (rows.length === 0) throw new Error('No valid production rows found (need Site, Period, m3).')
+      const kept = rows.slice(0, 20000)
+      let saved = 0
+      const failures = []
+      for (const r of kept) {
+        try {
+          await createProduction({
+            site: r.site, asset_no: r.asset_no, period_date: r.period_date,
+            m3: r.m3, source: r.source || 'ERP import', notes: r.notes,
+            country: country && country !== 'All' ? country : null,
+          })
+          saved += 1
+        } catch (err) { failures.push(r.source_row) }
+      }
+      const capped = rows.length - kept.length
+      setImportResult(
+        `Imported ${saved} of ${rows.length} row(s)` +
+        (capped > 0 ? `. ${capped} beyond the 20000 browser cap were skipped` : '') +
+        (failures.length ? `. ${failures.length} row(s) failed` : '') + '.',
+      )
+      await load()
+    } catch (err) {
+      setFormError(toUserMessage(err, 'Could not import the production file.'))
+    } finally {
+      setImporting(false)
+    }
+  }
+
   function startEdit(row) {
     setEditingId(row.id)
     setFormError('')
@@ -1624,10 +1671,23 @@ function CostPerUnitSection({ currency, country, siteOptions = [] }) {
           {/* m3 entry */}
           <div className="mt-5 grid grid-cols-1 lg:grid-cols-2 gap-5">
             <div className="p-4 rounded-xl border border-gray-800" style={{ background: 'rgba(15,23,18,0.6)' }}>
-              <h4 className="text-xs font-semibold text-gray-200 flex items-center gap-2 mb-3">
-                <Boxes size={13} className="text-green-400" />
-                {editingId ? 'Edit production (m3)' : 'Log production (m3)'}
-              </h4>
+              <div className="flex items-center justify-between gap-2 mb-3">
+                <h4 className="text-xs font-semibold text-gray-200 flex items-center gap-2">
+                  <Boxes size={13} className="text-green-400" />
+                  {editingId ? 'Edit production (m3)' : 'Log production (m3)'}
+                </h4>
+                {canWrite && (
+                  <label className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-gray-800 border border-gray-700 text-[var(--panel-ink-3)] text-[11px] hover:text-[var(--panel-ink-2)] cursor-pointer transition-colors" title="Import m3 from an Excel file (Site, Period, m3)">
+                    <input ref={importRef} type="file" accept=".xlsx,.xls,.xlsm,.csv,.tsv" className="hidden" onChange={onImportM3} disabled={importing} />
+                    {importing ? <Loader2 size={12} className="animate-spin" /> : <FileSpreadsheet size={12} />} Import m3
+                  </label>
+                )}
+              </div>
+              {importResult && (
+                <div className="mb-2 flex items-center gap-2 p-2 rounded-lg bg-green-900/25 border border-green-800/50 text-green-300 text-[11px]">
+                  <CheckCircle2 size={12} />{importResult}
+                </div>
+              )}
               {!canWrite ? (
                 <p className="text-xs text-[var(--panel-ink-4)]">Only Admin, Manager, or Director can record production output.</p>
               ) : (

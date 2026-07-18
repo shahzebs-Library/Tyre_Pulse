@@ -124,8 +124,8 @@ export async function upsertModule({
     category: category == null ? null : String(category),
     status: MODULE_STATUSES.includes(status) ? status : 'live',
     visible_to: visibleTo || 'all',
-    roles: Array.isArray(roles) ? roles : null,
-    depends_on: Array.isArray(dependsOn) ? dependsOn : null,
+    roles: Array.isArray(roles) ? roles : [],
+    depends_on: Array.isArray(dependsOn) ? dependsOn : [],
     note: note == null ? null : String(note),
     last_updated: new Date().toISOString(),
   }
@@ -216,8 +216,8 @@ export async function seedFromCatalog(catalog) {
         category: m.category == null ? null : String(m.category),
         status: 'live',
         visible_to: 'all',
-        roles: null,
-        depends_on: null,
+        roles: [],
+        depends_on: [],
         note: null,
         last_updated: new Date().toISOString(),
       })

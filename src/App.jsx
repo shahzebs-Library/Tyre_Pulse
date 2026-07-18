@@ -75,6 +75,7 @@ const CorrectiveActions      = lazy(() => import('./pages/CorrectiveActions'))
 const RcaRecords             = lazy(() => import('./pages/RcaRecords'))
 const DataCleaning           = lazy(() => import('./pages/DataCleaning'))
 const DataReconciliation     = lazy(() => import('./pages/DataReconciliation'))
+const ErpImport              = lazy(() => import('./pages/ErpImport'))
 const UploadData             = lazy(() => import('./pages/UploadData'))
 const DataIntakeCenter       = lazy(() => import('./pages/DataIntakeCenter'))
 const NotFound               = lazy(() => import('./pages/NotFound'))
@@ -458,6 +459,7 @@ function MainApp() {
                       {/* ── Data ── */}
                       <Route path="/cleaning"    element={<Safe><ModuleRoute moduleKey="data_cleaning"><DataCleaning /></ModuleRoute></Safe>} />
                       <Route path="/data-reconciliation" element={<Safe><RoleRoute allowed={['Admin','Manager','Director']}><DataReconciliation /></RoleRoute></Safe>} />
+                      <Route path="/erp-import"  element={<Safe><RoleRoute allowed={['Admin','Manager','Director']}><ErpImport /></RoleRoute></Safe>} />
                       <Route path="/audit"       element={<Safe><ModuleRoute moduleKey="audit_trail"><AuditTrail /></ModuleRoute></Safe>} />
                       <Route path="/users"       element={<Navigate to="/console/users" replace />} />
                       {/* ── Universal ── */}

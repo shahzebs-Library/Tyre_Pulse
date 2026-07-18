@@ -185,7 +185,7 @@ export const COMMANDS: Record<CommandType, CommandSpec> = {
     table: 'wash_records',
     fields: [
       'asset_no', 'vehicle_type', 'site', 'country', 'created_by', 'washed_by',
-      'wash_date', 'wash_type', 'bay', 'water_liters', 'cost', 'duration_min',
+      'wash_date', 'wash_time', 'wash_type', 'bay', 'water_liters', 'cost', 'duration_min',
       'odometer_km', 'status', 'notes', 'photos',
     ],
   },

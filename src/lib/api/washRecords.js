@@ -12,12 +12,58 @@ import { supabase, unwrap, applyCountry, fetchAllPages } from './_client'
 
 export const COLS =
   'id,organisation_id,country,site,area,asset_no,vehicle_type,wash_date,wash_time,' +
-  'wash_type,bay,washed_by,water_liters,cost,duration_min,status,odometer_km,notes,' +
+  'wash_type,bay,washed_by,water_liters,cost,duration_min,status,odometer_km,notes,photos,' +
   'created_by,created_at,updated_at'
 
 /** Controlled vocabularies (mirror the DB CHECK constraints). */
 export const WASH_TYPES = ['Exterior', 'Interior', 'Full', 'Engine Bay', 'Undercarriage', 'Steam', 'Waterless']
+/** Full DB CHECK vocabulary (legacy rows may carry any of these). */
 export const WASH_STATUSES = ['Scheduled', 'In Progress', 'Completed', 'Cancelled']
+/** The two statuses a supervisor picks in the UI. Default = first. */
+export const WASH_STATUS_CHOICES = ['In Progress', 'Completed']
+
+// Photos live in the PRIVATE `tyre-photos` bucket (module-scoped), matching the
+// mobile driver app so a wash's photos resolve identically on both surfaces. We
+// store `tp-storage://<bucket>/<path>` refs (never a public URL); the UI resolves
+// them to short-lived signed URLs via src/lib/storageRefs.js on display.
+const PHOTO_BUCKET = 'tyre-photos'
+const PHOTO_MIME_EXT = Object.freeze({
+  'image/jpeg': 'jpg',
+  'image/png': 'png',
+  'image/webp': 'webp',
+  'image/heic': 'heic',
+})
+const MAX_PHOTO_BYTES = 20 * 1024 * 1024
+
+/**
+ * Validate a user-supplied wash image before upload. Returns the canonical
+ * extension derived from the (trusted) MIME type, never the raw filename, so a
+ * spoofed extension cannot influence the storage path. Throws on invalid input.
+ */
+export function validateWashPhoto(file) {
+  if (!file || typeof file !== 'object') throw new Error('No image file was provided.')
+  const ext = PHOTO_MIME_EXT[file.type]
+  if (!ext) throw new Error('Only JPEG, PNG, WebP, or HEIC images are allowed.')
+  if (Number(file.size) > MAX_PHOTO_BYTES) throw new Error('Image must be 20 MB or smaller.')
+  return ext
+}
+
+/**
+ * Upload one wash photo to the private bucket and return a tp-storage:// ref.
+ * Path is collision-resistant: modules/wash/<uid>/<timestamp>_<index>_<rand>.<ext>
+ */
+export async function uploadWashPhoto(file, index = 0) {
+  const ext = validateWashPhoto(file)
+  const { data: { user } = {} } = await supabase.auth.getUser()
+  const uid = (user?.id || 'anon').slice(0, 8)
+  const rand = Math.random().toString(36).slice(2, 6)
+  const path = `modules/wash/${uid}/${Date.now()}_${index}_${rand}.${ext}`
+  const { error } = await supabase.storage.from(PHOTO_BUCKET).upload(path, file, {
+    upsert: false, contentType: file.type || 'image/jpeg', cacheControl: '3600',
+  })
+  if (error) throw new Error(error.message || 'Photo upload failed.')
+  return `tp-storage://${PHOTO_BUCKET}/${path}`
+}
 
 /** Coerce a value to a finite number or null (empty string / null / NaN -> null). */
 function numOrNull(v) {
@@ -79,10 +125,22 @@ export async function listWashRecords({
   }
 }
 
-/** Whitelist + coerce a create/update payload against the wash_records schema. */
+/** Sanitize a photos value into a bounded array of string refs, or null. */
+function photoArray(v) {
+  if (!Array.isArray(v)) return null
+  const arr = v.filter((x) => typeof x === 'string' && x.trim() !== '').map((x) => x.trim().slice(0, 500)).slice(0, 12)
+  return arr.length ? arr : null
+}
+
+/**
+ * Whitelist + coerce a create/update payload against the wash_records schema.
+ * water_liters / cost / duration_min are DELIBERATELY not written (removed per
+ * field-feedback); the columns remain in the DB for legacy rows but are never
+ * set from the app.
+ */
 function buildPayload(values = {}) {
   const washType = WASH_TYPES.includes(values.wash_type) ? values.wash_type : null
-  const status = WASH_STATUSES.includes(values.status) ? values.status : 'Completed'
+  const status = WASH_STATUSES.includes(values.status) ? values.status : 'In Progress'
   return {
     asset_no: textOrNull(values.asset_no, 120),
     vehicle_type: textOrNull(values.vehicle_type, 120),
@@ -93,12 +151,10 @@ function buildPayload(values = {}) {
     wash_type: washType,
     bay: textOrNull(values.bay, 60),
     washed_by: textOrNull(values.washed_by, 120),
-    water_liters: numOrNull(values.water_liters),
-    cost: numOrNull(values.cost),
-    duration_min: numOrNull(values.duration_min),
     status,
     odometer_km: numOrNull(values.odometer_km),
     notes: textOrNull(values.notes, 4000),
+    photos: photoArray(values.photos),
     country: values.country ?? null,
   }
 }

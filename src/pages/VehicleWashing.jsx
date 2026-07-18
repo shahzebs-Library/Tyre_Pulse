@@ -4,11 +4,12 @@
  *
  * Two tabs:
  *   1. Reporting - date-range + site + area + wash-type filters (with quick
- *      ranges), six KPI tiles, four charts (monthly trend line, washes by type
- *      doughnut, washes by site bar, cost by site bar) and a filtered records
- *      table with per-asset links and PDF / Excel export.
- *   2. Quick Log - a compact create form (asset auto-fills vehicle type + site
- *      from the fleet master) that prepends the new wash to the loaded set.
+ *      ranges), volume KPI tiles, three charts (monthly trend line, washes by
+ *      type doughnut, washes by site bar) and a filtered records table with
+ *      per-asset links and PDF / Excel export.
+ *   2. Quick Log - a compact create form. The asset is a searchable picker that
+ *      auto-fills vehicle type + site from the fleet master; time is captured
+ *      automatically at save; the supervisor sets the status; photos optional.
  *
  * All maths live in the pure, unit-tested washAnalytics engine; this page is
  * presentation + orchestration only. Data is org-isolated and country + site
@@ -21,23 +22,26 @@ import {
 } from 'chart.js'
 import { Bar, Doughnut, Line } from 'react-chartjs-2'
 import {
-  Droplets, LayoutDashboard, ClipboardList, Plus, Search, X, Filter, Calendar,
-  MapPin, Wallet, Clock, Car, TrendingUp, PieChart, BarChart3, CheckCircle2,
+  Droplets, LayoutDashboard, ClipboardList, Plus, X, Filter,
+  MapPin, Layers, Car, TrendingUp, PieChart, BarChart3, CheckCircle2,
   AlertTriangle, Loader2, Save, FileSpreadsheet, FileText, Trash2, ExternalLink,
+  ImagePlus, Image as ImageIcon,
 } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import PageHeader from '../components/ui/PageHeader'
+import ReferencePicker from '../components/checklist/ReferencePicker'
 import { useSettings } from '../contexts/SettingsContext'
 import { useAuth } from '../contexts/AuthContext'
 import {
-  listWashRecords, createWashRecord, deleteWashRecord,
-  distinctSites, distinctAreas, WASH_TYPES, WASH_STATUSES,
+  listWashRecords, createWashRecord, deleteWashRecord, uploadWashPhoto,
+  distinctSites, distinctAreas, WASH_TYPES, WASH_STATUS_CHOICES,
 } from '../lib/api/washRecords'
 import { getAssetByNo } from '../lib/api/assets'
 import { summarizeWashes, filterWashes } from '../lib/washAnalytics'
 import { colorAt, categorical, withAlpha } from '../lib/reportColors'
 import { exportToExcel, exportToPdf, reportFileName, reportDateLabel } from '../lib/exportUtils'
-import { formatCurrencyCompact } from '../lib/formatters'
+import { resolveStorageUrl } from '../lib/storageRefs'
+import { safeImageSrc } from '../lib/safeUrl'
 import { toUserMessage } from '../lib/safeError'
 
 ChartJS.register(
@@ -54,16 +58,23 @@ const TABS = [
 
 const EMPTY_FORM = {
   asset_no: '', vehicle_type: '', site: '', area: '',
-  wash_date: '', wash_time: '', wash_type: 'Full', bay: '', washed_by: '',
-  water_liters: '', cost: '', duration_min: '', odometer_km: '',
-  status: 'Completed', notes: '',
+  wash_date: '', wash_type: 'Full', bay: '', washed_by: '',
+  odometer_km: '', status: 'In Progress', notes: '', photos: [],
 }
+
+const MAX_PHOTOS = 6
 
 const STATUS_TONE = {
   Completed: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30',
   'In Progress': 'bg-sky-500/15 text-sky-300 border-sky-500/30',
   Scheduled: 'bg-amber-500/15 text-amber-300 border-amber-500/30',
   Cancelled: 'bg-slate-500/15 text-slate-300 border-slate-500/30',
+}
+
+/** Current local time as HH:MM (auto-captured at save; not user-editable). */
+function nowHHMM() {
+  const d = new Date()
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
 }
 
 function isMissingRelation(err) {
@@ -127,6 +138,16 @@ export default function VehicleWashing() {
   const [formOk, setFormOk] = useState('')
   const assetLookupRef = useRef(0)
 
+  // Master context (read-only) for the picked asset.
+  const [master, setMaster] = useState(null)
+
+  // Photos: form.photos holds tp-storage:// refs; previews holds resolved signed
+  // URLs for the thumbnails (parallel array, keyed by ref).
+  const [previews, setPreviews] = useState({})
+  const [photoBusy, setPhotoBusy] = useState(false)
+  const [photoError, setPhotoError] = useState('')
+  const photoInputRef = useRef(null)
+
   // Delete confirm.
   const [confirmDelete, setConfirmDelete] = useState(null)
   const [deleting, setDeleting] = useState(false)
@@ -157,8 +178,6 @@ export default function VehicleWashing() {
   // Filtered rows + KPI/chart summary (single pure pass).
   const filtered = useMemo(() => filterWashes(rows, filters), [rows, filters])
   const summary = useMemo(() => summarizeWashes(rows, filters), [rows, filters])
-
-  const money = (n) => formatCurrencyCompact(n, activeCurrency)
 
   // ── Chart data ────────────────────────────────────────────────────────────
   const trendData = useMemo(() => {
@@ -197,15 +216,6 @@ export default function VehicleWashing() {
     }
   }, [summary.bySite])
 
-  const siteCostData = useMemo(() => {
-    const g = summary.bySite.slice(0, 12)
-    const c = colorAt(2)
-    return {
-      labels: g.map((x) => x.key),
-      datasets: [{ label: 'Cost', data: g.map((x) => x.cost), backgroundColor: withAlpha(c, 0.75), borderColor: c, borderWidth: 1, borderRadius: 4 }],
-    }
-  }, [summary.bySite])
-
   const barOpts = { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: AXIS }
   const lineOpts = { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: AXIS }
   const doughnutOpts = {
@@ -221,21 +231,65 @@ export default function VehicleWashing() {
     { id: 'all', label: 'All', from: '', to: '' },
   ]
 
-  // ── Asset auto-fill on the quick-log form ─────────────────────────────────
-  const onAssetBlur = useCallback(async () => {
-    const assetNo = String(form.asset_no || '').trim()
-    if (!assetNo) return
+  // ── Asset picker: on select, auto-fill vehicle type + site + country from the
+  // fleet master (only when empty, never overwriting a typed value) and show a
+  // read-only master context line. ─────────────────────────────────────────────
+  const onAssetPick = useCallback(async (value) => {
+    const assetNo = String(value || '').trim()
+    setForm((f) => ({ ...f, asset_no: assetNo }))
+    if (!assetNo) { setMaster(null); return }
     const ticket = ++assetLookupRef.current
     try {
       const asset = await getAssetByNo(assetNo)
-      if (ticket !== assetLookupRef.current || !asset) return
-      setForm((f) => ({
-        ...f,
-        vehicle_type: f.vehicle_type || asset.vehicle_type || '',
-        site: f.site || asset.site || '',
-      }))
+      if (ticket !== assetLookupRef.current) return
+      setMaster(asset || null)
+      if (asset) {
+        setForm((f) => ({
+          ...f,
+          vehicle_type: f.vehicle_type || asset.vehicle_type || '',
+          site: f.site || asset.site || '',
+        }))
+      }
     } catch { /* lookup is a convenience; never surface an error */ }
-  }, [form.asset_no])
+  }, [])
+
+  const resetForm = useCallback(() => {
+    setForm({ ...EMPTY_FORM, wash_date: todayISO() })
+    setMaster(null)
+    setPreviews({})
+    setPhotoError('')
+  }, [])
+
+  // ── Photos: validate + upload to the private bucket, storing tp-storage refs ─
+  const onAddPhotos = useCallback(async (e) => {
+    const files = Array.from(e.target?.files || [])
+    if (photoInputRef.current) photoInputRef.current.value = ''
+    if (!files.length) return
+    setPhotoError('')
+    setPhotoBusy(true)
+    try {
+      let added = 0
+      for (const file of files) {
+        // Cap using the latest known count to avoid exceeding MAX_PHOTOS.
+        if ((form.photos?.length || 0) + added >= MAX_PHOTOS) break
+        const ref = await uploadWashPhoto(file, (form.photos?.length || 0) + added)
+        added += 1
+        let url = null
+        try { url = await resolveStorageUrl(ref) } catch { /* preview best-effort */ }
+        setForm((f) => ({ ...f, photos: [...(f.photos || []), ref] }))
+        setPreviews((p) => ({ ...p, [ref]: url }))
+      }
+    } catch (err) {
+      setPhotoError(toUserMessage(err, 'Could not add the photo.'))
+    } finally {
+      setPhotoBusy(false)
+    }
+  }, [form.photos])
+
+  const removePhoto = useCallback((ref) => {
+    setForm((f) => ({ ...f, photos: (f.photos || []).filter((r) => r !== ref) }))
+    setPreviews((p) => { const n = { ...p }; delete n[ref]; return n })
+  }, [])
 
   const submitForm = useCallback(async (e) => {
     e?.preventDefault?.()
@@ -245,18 +299,20 @@ export default function VehicleWashing() {
     try {
       const created = await createWashRecord({
         ...form,
+        wash_date: form.wash_date || todayISO(),
+        wash_time: nowHHMM(),               // captured automatically at save
         country: activeCountry !== 'All' ? activeCountry : null,
       })
       if (created) setRows((r) => [created, ...r])
       setFormOk('Wash logged.')
-      setForm({ ...EMPTY_FORM, wash_date: todayISO() })
+      resetForm()
       setUpdatedAt(new Date())
     } catch (err) {
       setFormError(toUserMessage(err, 'Could not log the wash.'))
     } finally {
       setSaving(false)
     }
-  }, [form, activeCountry])
+  }, [form, activeCountry, resetForm])
 
   const doDelete = useCallback(async () => {
     if (!confirmDelete) return
@@ -273,10 +329,11 @@ export default function VehicleWashing() {
   }, [confirmDelete])
 
   // ── Exports (filtered rows) ────────────────────────────────────────────────
-  const EXPORT_COLS = ['wash_date', 'asset_no', 'vehicle_type', 'wash_type', 'site', 'area', 'bay', 'washed_by', 'water_liters', 'cost', 'duration_min', 'status']
-  const EXPORT_HEADERS = ['Date', 'Asset', 'Vehicle Type', 'Wash Type', 'Site', 'Area', 'Bay', 'Washed By', 'Water (L)', 'Cost', 'Duration (min)', 'Status']
+  const EXPORT_COLS = ['wash_date', 'wash_time', 'asset_no', 'vehicle_type', 'wash_type', 'site', 'area', 'bay', 'washed_by', 'status']
+  const EXPORT_HEADERS = ['Date', 'Time', 'Asset', 'Vehicle Type', 'Wash Type', 'Site', 'Area', 'Bay', 'Operator', 'Status']
   const exportRows = () => filtered.map((r) => ({
     wash_date: r.wash_date ? String(r.wash_date).slice(0, 10) : '',
+    wash_time: r.wash_time || '',
     asset_no: r.asset_no || '',
     vehicle_type: r.vehicle_type || '',
     wash_type: r.wash_type || '',
@@ -284,9 +341,6 @@ export default function VehicleWashing() {
     area: r.area || '',
     bay: r.bay || '',
     washed_by: r.washed_by || '',
-    water_liters: r.water_liters ?? '',
-    cost: r.cost ?? '',
-    duration_min: r.duration_min ?? '',
     status: r.status || '',
   }))
   const exportExcel = () => {
@@ -309,10 +363,8 @@ export default function VehicleWashing() {
   const kpis = [
     { label: 'Total Washes', value: fmtNum(summary.totalWashes), icon: Droplets },
     { label: 'Vehicles Washed', value: fmtNum(summary.distinctAssets), icon: Car },
-    { label: 'Total Cost', value: money(summary.totalCost), icon: Wallet },
-    { label: 'Avg Cost per Wash', value: money(summary.avgCost), icon: TrendingUp },
-    { label: 'Water Used (L)', value: fmtNum(summary.totalWater), icon: Droplets },
-    { label: 'Avg Duration (min)', value: summary.avgDuration ? fmtNum(summary.avgDuration) : 'N/A', icon: Clock },
+    { label: 'Sites Covered', value: fmtNum(summary.bySite.length), icon: MapPin },
+    { label: 'Wash Types', value: fmtNum(summary.byType.length), icon: Layers },
   ]
 
   const inputCls = 'w-full rounded-lg bg-[var(--input-bg)] border border-[var(--input-border)] px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none focus:border-blue-500'
@@ -321,7 +373,7 @@ export default function VehicleWashing() {
     <div className="space-y-6">
       <PageHeader
         title="Vehicle Washing"
-        subtitle="Log vehicle washes for quick use and report on them by date range, site, area and wash type. Track cost, water usage and duration across the fleet."
+        subtitle="Log vehicle washes for quick use and report on them by date range, site, area and wash type. Track wash volume and coverage across the fleet."
         icon={Droplets}
         onRefresh={load}
         refreshing={refreshing}
@@ -427,7 +479,7 @@ export default function VehicleWashing() {
           </div>
 
           {/* KPI tiles */}
-          <div className="grid grid-cols-2 lg:grid-cols-6 gap-3">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
             {kpis.map((k) => {
               const Icon = k.icon
               return (
@@ -477,17 +529,6 @@ export default function VehicleWashing() {
                   : <Bar data={siteCountData} options={barOpts} />}
               </div>
             </div>
-            <div className="card">
-              <div className="flex items-center gap-2 mb-3">
-                <Wallet size={16} className="text-[var(--text-secondary)]" />
-                <h3 className="font-semibold text-[var(--text-primary)]">Cost by site</h3>
-              </div>
-              <div className="h-[240px]">
-                {summary.bySite.length === 0 || summary.totalCost === 0
-                  ? <EmptyChart hint="No cost recorded for the selected filters." />
-                  : <Bar data={siteCostData} options={barOpts} />}
-              </div>
-            </div>
           </div>
 
           {/* Records table */}
@@ -523,8 +564,8 @@ export default function VehicleWashing() {
                       <th className="py-2 pr-3 font-medium">Site</th>
                       <th className="py-2 pr-3 font-medium">Area</th>
                       <th className="py-2 pr-3 font-medium">Bay</th>
-                      <th className="py-2 pr-3 font-medium">Washed By</th>
-                      <th className="py-2 pr-3 font-medium text-right">Cost</th>
+                      <th className="py-2 pr-3 font-medium">Operator</th>
+                      <th className="py-2 pr-3 font-medium text-center">Photos</th>
                       <th className="py-2 pr-3 font-medium">Status</th>
                       {canWrite && <th className="py-2 font-medium text-right">Actions</th>}
                     </tr>
@@ -545,7 +586,13 @@ export default function VehicleWashing() {
                         <td className="py-2 pr-3 text-[var(--text-secondary)]">{r.area || 'N/A'}</td>
                         <td className="py-2 pr-3 text-[var(--text-secondary)]">{r.bay || 'N/A'}</td>
                         <td className="py-2 pr-3 text-[var(--text-secondary)]">{r.washed_by || 'N/A'}</td>
-                        <td className="py-2 pr-3 text-right text-[var(--text-secondary)]">{r.cost != null && r.cost !== '' ? money(r.cost) : 'N/A'}</td>
+                        <td className="py-2 pr-3 text-center text-[var(--text-secondary)]">
+                          {Array.isArray(r.photos) && r.photos.length > 0 ? (
+                            <span className="inline-flex items-center gap-1 text-[var(--text-secondary)]">
+                              <ImageIcon size={13} className="opacity-70" /> {r.photos.length}
+                            </span>
+                          ) : <span className="text-[var(--text-muted)]">-</span>}
+                        </td>
                         <td className="py-2 pr-3">
                           <span className={`inline-block text-[11px] px-2 py-0.5 rounded-full border ${STATUS_TONE[r.status] || STATUS_TONE.Cancelled}`}>{r.status || 'N/A'}</span>
                         </td>
@@ -592,10 +639,28 @@ export default function VehicleWashing() {
           )}
 
           <form onSubmit={submitForm} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            <label className="text-xs text-[var(--text-muted)] space-y-1">
+            {/* Asset picker (searchable) + read-only master context */}
+            <div className="text-xs text-[var(--text-muted)] space-y-1 sm:col-span-2 lg:col-span-3">
               <span>Asset number <span className="text-red-400">*</span></span>
-              <input value={form.asset_no} onChange={(e) => setField('asset_no', e.target.value)} onBlur={onAssetBlur} className={inputCls} placeholder="e.g. A-1024" />
-            </label>
+              <ReferencePicker
+                source="asset"
+                value={form.asset_no}
+                onChange={onAssetPick}
+                country={activeCountry}
+                placeholder="Search assets by number..."
+              />
+              {master && (
+                <p className="text-[11px] text-[var(--text-secondary)] pt-0.5">
+                  Master: {[
+                    master.vehicle_type,
+                    [master.make, master.model].filter(Boolean).join(' '),
+                    master.fleet_number ? `Fleet ${master.fleet_number}` : null,
+                    master.site,
+                  ].filter(Boolean).join(' | ') || 'no additional details'}
+                </p>
+              )}
+            </div>
+
             <label className="text-xs text-[var(--text-muted)] space-y-1">
               <span>Vehicle type</span>
               <input value={form.vehicle_type} onChange={(e) => setField('vehicle_type', e.target.value)} className={inputCls} placeholder="auto-filled from asset" />
@@ -606,20 +671,27 @@ export default function VehicleWashing() {
                 {WASH_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
               </select>
             </label>
+            <label className="text-xs text-[var(--text-muted)] space-y-1">
+              <span>Status</span>
+              <select value={form.status} onChange={(e) => setField('status', e.target.value)} className={inputCls}>
+                {WASH_STATUS_CHOICES.map((s) => <option key={s} value={s}>{s}</option>)}
+              </select>
+            </label>
 
             <label className="text-xs text-[var(--text-muted)] space-y-1">
               <span>Wash date</span>
               <input type="date" value={form.wash_date} onChange={(e) => setField('wash_date', e.target.value)} className={inputCls} />
             </label>
-            <label className="text-xs text-[var(--text-muted)] space-y-1">
+            <div className="text-xs text-[var(--text-muted)] space-y-1">
               <span>Wash time</span>
-              <input type="time" value={form.wash_time} onChange={(e) => setField('wash_time', e.target.value)} className={inputCls} />
-            </label>
+              <div className={`${inputCls} flex items-center gap-1.5 text-[var(--text-secondary)]`}>
+                <CheckCircle2 size={13} className="text-[var(--text-muted)]" />
+                Captured automatically at save
+              </div>
+            </div>
             <label className="text-xs text-[var(--text-muted)] space-y-1">
-              <span>Status</span>
-              <select value={form.status} onChange={(e) => setField('status', e.target.value)} className={inputCls}>
-                {WASH_STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
-              </select>
+              <span>Operator name <span className="text-[var(--text-muted)]">(optional)</span></span>
+              <input value={form.washed_by} onChange={(e) => setField('washed_by', e.target.value)} className={inputCls} placeholder="who washed the vehicle" />
             </label>
 
             <label className="text-xs text-[var(--text-muted)] space-y-1">
@@ -636,36 +708,66 @@ export default function VehicleWashing() {
             </label>
 
             <label className="text-xs text-[var(--text-muted)] space-y-1">
-              <span>Washed by</span>
-              <input value={form.washed_by} onChange={(e) => setField('washed_by', e.target.value)} className={inputCls} placeholder="operator name" />
-            </label>
-            <label className="text-xs text-[var(--text-muted)] space-y-1">
-              <span>Water used (L)</span>
-              <input type="number" min="0" step="any" value={form.water_liters} onChange={(e) => setField('water_liters', e.target.value)} className={inputCls} />
-            </label>
-            <label className="text-xs text-[var(--text-muted)] space-y-1">
-              <span>Cost ({activeCurrency})</span>
-              <input type="number" min="0" step="any" value={form.cost} onChange={(e) => setField('cost', e.target.value)} className={inputCls} />
-            </label>
-
-            <label className="text-xs text-[var(--text-muted)] space-y-1">
-              <span>Duration (min)</span>
-              <input type="number" min="0" step="any" value={form.duration_min} onChange={(e) => setField('duration_min', e.target.value)} className={inputCls} />
-            </label>
-            <label className="text-xs text-[var(--text-muted)] space-y-1">
-              <span>Odometer (km)</span>
+              <span>Odometer (km) <span className="text-[var(--text-muted)]">(optional)</span></span>
               <input type="number" min="0" step="any" value={form.odometer_km} onChange={(e) => setField('odometer_km', e.target.value)} className={inputCls} />
             </label>
-            <label className="text-xs text-[var(--text-muted)] space-y-1 sm:col-span-2 lg:col-span-3">
-              <span>Notes</span>
-              <textarea value={form.notes} onChange={(e) => setField('notes', e.target.value)} rows={2} className={inputCls} placeholder="optional" />
+            <label className="text-xs text-[var(--text-muted)] space-y-1 sm:col-span-2 lg:col-span-2">
+              <span>Notes <span className="text-[var(--text-muted)]">(optional)</span></span>
+              <input value={form.notes} onChange={(e) => setField('notes', e.target.value)} className={inputCls} placeholder="optional" />
             </label>
+
+            {/* Photos */}
+            <div className="text-xs text-[var(--text-muted)] space-y-2 sm:col-span-2 lg:col-span-3">
+              <span>Photos <span className="text-[var(--text-muted)]">(optional, up to {MAX_PHOTOS})</span></span>
+              <div className="flex flex-wrap items-center gap-2">
+                {(form.photos || []).map((ref) => {
+                  const src = safeImageSrc(previews[ref] || '')
+                  return (
+                    <div key={ref} className="relative w-20 h-20 rounded-lg overflow-hidden border border-[var(--input-border)] bg-[var(--input-bg)]">
+                      {src ? (
+                        <img src={src} alt="Wash" className="w-full h-full object-cover" />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center"><ImageIcon size={18} className="text-[var(--text-muted)]" /></div>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => removePhoto(ref)}
+                        className="absolute top-0.5 right-0.5 p-0.5 rounded-full bg-black/55 text-white hover:bg-black/75"
+                        title="Remove photo"
+                      >
+                        <X size={13} />
+                      </button>
+                    </div>
+                  )
+                })}
+                {(form.photos?.length || 0) < MAX_PHOTOS && (
+                  <button
+                    type="button"
+                    onClick={() => photoInputRef.current?.click()}
+                    disabled={photoBusy}
+                    className="w-20 h-20 rounded-lg border-2 border-dashed border-[var(--input-border)] flex flex-col items-center justify-center gap-1 text-[var(--text-muted)] hover:border-blue-500/50 hover:text-[var(--text-secondary)] disabled:opacity-60"
+                  >
+                    {photoBusy ? <Loader2 size={18} className="animate-spin" /> : <ImagePlus size={18} />}
+                    <span className="text-[10px]">Add photo</span>
+                  </button>
+                )}
+                <input
+                  ref={photoInputRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,image/heic"
+                  multiple
+                  onChange={onAddPhotos}
+                  className="hidden"
+                />
+              </div>
+              {photoError && <p className="text-[11px] text-red-300">{photoError}</p>}
+            </div>
 
             <div className="sm:col-span-2 lg:col-span-3 flex items-center gap-3 pt-1">
               <button type="submit" disabled={saving || missing} className="btn-primary text-sm inline-flex items-center gap-1.5 disabled:opacity-60">
                 {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />} Log wash
               </button>
-              <button type="button" onClick={() => setForm({ ...EMPTY_FORM, wash_date: todayISO() })} className="text-sm text-[var(--text-muted)] hover:text-[var(--text-secondary)]">Clear</button>
+              <button type="button" onClick={resetForm} className="text-sm text-[var(--text-muted)] hover:text-[var(--text-secondary)]">Clear</button>
             </div>
           </form>
         </div>

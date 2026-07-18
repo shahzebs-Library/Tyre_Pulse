@@ -566,8 +566,8 @@ function MainApp() {
                       <Route path="/scan"        element={<Safe><TyreScan /></Safe>} />
 <Route path="/qr-labels"   element={<Safe><RoleRoute allowed={['Admin']}><QrLabels /></RoleRoute></Safe>} />
                       <Route path="/rfid-registry" element={<Safe><ModuleRoute moduleKey="tyre_records"><RfidRegistry /></ModuleRoute></Safe>} />
-                      <Route path="/report-builder"      element={<Safe><ReportBuilder /></Safe>} />
-                      <Route path="/dashboard-builder"   element={<Safe><DashboardBuilder /></Safe>} />
+                      <Route path="/report-builder"      element={<Safe><RoleRoute allowed={['Admin', 'Manager', 'Director']}><ReportBuilder /></RoleRoute></Safe>} />
+                      <Route path="/dashboard-builder"   element={<Safe><RoleRoute allowed={['Admin', 'Manager', 'Director']}><DashboardBuilder /></RoleRoute></Safe>} />
                       <Route path="/executive-analytics" element={<Safe><RoleRoute allowed={['Admin', 'Manager', 'Director']}><ExecutiveAnalytics /></RoleRoute></Safe>} />
                       <Route path="/security-center"     element={<Navigate to="/console/access?tab=security" replace />} />
                       <Route path="/system-health"       element={<Safe><RoleRoute allowed={['Admin']}><SystemHealth /></RoleRoute></Safe>} />

@@ -91,6 +91,7 @@ const QUICK_ACTIONS: QuickAction[] = [
   { module: 'tyreChange',  section: 'Field', icon: 'swap-horizontal-outline', label: 'Tyre Change',   sublabel: 'Record a change',      route: '/(app)/tyre-change',        tint: 'teal'   },
   { module: 'checklists',  section: 'Field', icon: 'checkbox-outline',        label: 'Checklists',    sublabel: 'Fill & submit checks', route: '/(app)/checklists',   tint: 'green'  },
   { module: 'meter',       section: 'Field', icon: 'speedometer-outline',     label: 'Meter Log',     sublabel: 'Daily odometer / hrs', route: '/(app)/meter-logs',         tint: 'blue'   },
+  { module: 'washing',     section: 'Field', icon: 'water-outline',           label: 'Vehicle Washing', sublabel: 'Log a wash',         route: '/(app)/washing',            tint: 'teal'   },
   { module: 'reportIssue', section: 'Field', icon: 'megaphone-outline',       label: 'Report Issue',  sublabel: 'Flag a problem',       route: '/(app)/report-issue',       tint: 'amber'  },
   // Fleet ---------------------------------------------------------------------
   { module: 'records',     section: 'Fleet', icon: 'layers-outline',          label: 'Tyre Records',  sublabel: 'Browse all records',   route: '/(app)/records',      tint: 'violet' },

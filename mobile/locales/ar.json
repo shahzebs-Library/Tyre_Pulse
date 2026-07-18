@@ -808,6 +808,10 @@
         "pm": {
           "label": "الصيانة المستحقة",
           "sub": "خطط الصيانة وتسجيل الخدمة"
+        },
+        "washing": {
+          "label": "غسيل المركبات",
+          "sub": "تسجيل غسيل"
         }
       }
     },
@@ -1178,7 +1182,12 @@
       "dueToday": "مستحقة اليوم",
       "daysOverdue": "أيام متأخرة",
       "dueIn": "مستحقة خلال",
-      "days": "أيام"
+      "days": "أيام",
+      "tmPickAsset": "ابحث عن أصلك للبدء",
+      "tmSearchPlaceholder": "ابحث برقم الأصل...",
+      "tmSearchHint": "اكتب حرفين على الأقل للعثور على أصلك.",
+      "tmNoMatch": "لم يتم العثور على أصل مطابق.",
+      "tmChange": "تغيير"
     },
     "checklistFill": {
       "reviewTitle": "يرجى المراجعة",
@@ -1311,6 +1320,62 @@
       "saveService": "حفظ الصيانة",
       "savedTitle": "تم تسجيل الصيانة",
       "savedBody": "تم تحديث الجدول إلى موعد الاستحقاق التالي."
+    },
+    "washing": {
+      "title": "غسيل المركبات",
+      "assetLabel": "الأصل / المركبة *",
+      "scan": "مسح",
+      "assetPlaceholder": "امسح أو اختر أو اكتب رقم الأصل...",
+      "fleetNo": "رقم الأسطول",
+      "site": "الموقع",
+      "sitePlaceholder": "اختر الموقع...",
+      "siteHelp": "يتم تعبئة الموقع تلقائيا من سجل الأصل. يمكنك تغييره.",
+      "dateLabel": "تاريخ الغسيل",
+      "today": "اليوم",
+      "typeLabel": "نوع الغسيل *",
+      "types": {
+        "Exterior": "خارجي",
+        "Interior": "داخلي",
+        "Full": "كامل",
+        "EngineBay": "حجرة المحرك",
+        "Undercarriage": "أسفل المركبة",
+        "Steam": "بخار",
+        "Waterless": "بدون ماء"
+      },
+      "photosLabel": "صور الغسيل",
+      "addPhoto": "إضافة صورة",
+      "detailsLabel": "تفاصيل الغسيل",
+      "bay": "الحوض",
+      "bayPlaceholder": "مثال: الحوض 2",
+      "water": "الماء (لتر)",
+      "waterPlaceholder": "مثال: 120",
+      "duration": "المدة (دقيقة)",
+      "durationPlaceholder": "مثال: 25",
+      "odometer": "عداد المسافة (كم)",
+      "odometerPlaceholder": "مثال: 128450",
+      "notesLabel": "ملاحظات",
+      "notesPlaceholder": "أي شيء يستحق الذكر...",
+      "save": "حفظ الغسيل",
+      "savedLogged": "تم تسجيل الغسيل.",
+      "savedPending": "تم حفظ الغسيل. بانتظار المزامنة.",
+      "dueTitle": "مستحق للغسيل",
+      "dueNone": "لا توجد مركبات مستحقة للغسيل.",
+      "dueToday": "مستحق اليوم",
+      "daysOverdue": "أيام متأخرة",
+      "assetRequiredTitle": "الأصل مطلوب",
+      "assetRequiredMsg": "اختر المركبة / الأصل الذي قمت بغسله.",
+      "typeRequiredTitle": "نوع الغسيل مطلوب",
+      "typeRequiredMsg": "اختر نوع الغسيل الذي تم إجراؤه.",
+      "saveFailTitle": "تعذر تسجيل الغسيل",
+      "tryAgain": "يرجى المحاولة مرة أخرى.",
+      "camNeededTitle": "مطلوب الوصول إلى الكاميرا",
+      "camNeededMsg": "اسمح بالوصول إلى الكاميرا لمسح باركود الأصل، أو اكتب رمز الأصل يدويا.",
+      "nothingScannedTitle": "لم يتم مسح شيء",
+      "nothingScannedMsg": "تعذرت قراءة رمز الأصل. حاول مرة أخرى أو اكتبه.",
+      "scanAsset": "مسح الأصل",
+      "frameHint": "وجّه الكاميرا نحو باركود الأصل أو ملصق رمز QR.",
+      "camUnavailable": "الكاميرا غير متاحة",
+      "camUnavailableMsg": "تعذر تشغيل الكاميرا. أغلق هذا واكتب رمز الأصل يدويا."
     }
   },
   "checklists": {

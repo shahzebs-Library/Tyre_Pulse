@@ -28,7 +28,7 @@ export type ModuleKey =
   | 'vehicles' | 'workorders' | 'rca' | 'stock' | 'stockManage' | 'overview'
   | 'reports' | 'analytics' | 'ai' | 'admin' | 'users' | 'meter' | 'tasks'
   | 'calendar' | 'reportIssue' | 'checklists' | 'approvals' | 'alerts'
-  | 'history' | 'tyreChange' | 'team' | 'pm'
+  | 'history' | 'tyreChange' | 'team' | 'pm' | 'washing'
 
 export interface ModuleDef {
   key: ModuleKey
@@ -64,6 +64,7 @@ export const MODULES: ModuleDef[] = [
   M('tyreChange',     'Tyre Change',       'swap-horizontal-outline','Field',      ['manager', 'director', 'inspector']),
   M('checklists',     'Checklists',        'checkbox-outline',       'Field',      ['manager', 'director', 'inspector', 'tyre_man']),
   M('meter',          'Meter Log',         'speedometer-outline',    'Field',      ['manager', 'director', 'inspector', 'tyre_man', 'reporter', 'driver']),
+  M('washing',        'Vehicle Washing',   'water-outline',          'Field',      ['manager', 'director', 'inspector', 'driver']),
   M('reportIssue',    'Report Issue',      'megaphone-outline',      'Field',      ['manager', 'director', 'reporter', 'driver']),
   // Fleet ---------------------------------------------------------------------
   M('records',        'Tyre Records',      'layers-outline',         'Fleet',      ['manager', 'director', 'inspector', 'reporter']),

@@ -12,6 +12,7 @@
 import { useEffect, useState, useCallback, useMemo } from 'react'
 import {
   View, FlatList, StyleSheet, TouchableOpacity, RefreshControl,
+  TextInput, ActivityIndicator,
 } from 'react-native'
 import { useRouter } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
@@ -23,12 +24,24 @@ import {
   Screen, AppText, Badge, EmptyState, ErrorState, Loading,
 } from '../../../components/ui'
 import {
-  listTemplates, listAssignments, listPendingApprovals,
+  listTemplates, listAssignments, listPendingApprovals, listReferenceOptions,
   ChecklistTemplate, ChecklistAssignment,
 } from '../../../lib/checklists'
 import { isValueField } from '../../../lib/checklistFields'
 import { toUserMessage } from '../../../lib/safeError'
 import { canApproveChecklists } from '../../../lib/permissions'
+import { lookupAssetByCode } from '../../../lib/assetLookup'
+
+/**
+ * Route entry. A TYRE MAN gets a search-first single-asset flow (find one asset,
+ * then pick its checklist) instead of scrolling the full "Due + All templates"
+ * hub. Every other role keeps the existing hub verbatim.
+ */
+export default function ChecklistsRoute() {
+  const { profile } = useAuth()
+  if (profile?.role === 'tyre_man') return <TyreManChecklistFlow />
+  return <ChecklistsScreen />
+}
 
 // Local midnight ISO date (YYYY-MM-DD) — assignment due_date is a plain date.
 function todayStr(): string {
@@ -62,7 +75,7 @@ function looksLikeMissingTable(msg: string): boolean {
   return m.includes('does not exist') || m.includes('relation') || m.includes('schema cache')
 }
 
-export default function ChecklistsScreen() {
+function ChecklistsScreen() {
   const { profile } = useAuth()
   const { t, isRTL } = useLanguage()
   const { theme } = useTheme()
@@ -346,6 +359,297 @@ export default function ChecklistsScreen() {
       )}
     </Screen>
   )
+}
+
+/**
+ * Tyre Man flow: search ONE asset, then pick its checklist. No long scrolling
+ * list. Step 1 = a search box (2+ chars, compact rows) over the asset options;
+ * Step 2 = the published templates, each opening a blank fill pre-linked to the
+ * chosen asset. Country-scoped and offline-friendly (asset options + templates
+ * are fetched once; template open works from cached data).
+ */
+function TyreManChecklistFlow() {
+  const { profile } = useAuth()
+  const { t, isRTL } = useLanguage()
+  const { theme } = useTheme()
+  const styles = useMemo(() => makeTmStyles(theme), [theme])
+  const router = useRouter()
+
+  const [assets, setAssets] = useState<string[]>([])
+  const [templates, setTemplates] = useState<ChecklistTemplate[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [notEnabled, setNotEnabled] = useState(false)
+
+  const [search, setSearch] = useState('')
+  const [selectedAsset, setSelectedAsset] = useState<string | null>(null)
+  const [selectedSite, setSelectedSite] = useState<string>('')
+  const [resolvingSite, setResolvingSite] = useState(false)
+
+  const textAlign = isRTL ? 'right' : 'left'
+
+  const load = useCallback(async () => {
+    setError(null)
+    setNotEnabled(false)
+    setLoading(true)
+    try {
+      const [opts, ts] = await Promise.all([
+        listReferenceOptions('asset', profile?.country).catch(() => [] as string[]),
+        listTemplates(profile?.country),
+      ])
+      setAssets(Array.isArray(opts) ? opts : [])
+      setTemplates(ts)
+    } catch (e: any) {
+      const msg = toUserMessage(e, t('modules.checklists.loadError'))
+      if (looksLikeMissingTable(msg)) setNotEnabled(true)
+      else setError(msg)
+    } finally {
+      setLoading(false)
+    }
+  }, [profile?.country, t])
+
+  useEffect(() => { load() }, [load])
+
+  const query = search.trim().toLowerCase()
+  const matches = useMemo(() => {
+    if (query.length < 2) return []
+    return assets.filter(a => a.toLowerCase().includes(query)).slice(0, 40)
+  }, [assets, query])
+
+  const pickAsset = useCallback(async (asset: string) => {
+    setSelectedAsset(asset)
+    setSelectedSite('')
+    setResolvingSite(true)
+    // Best-effort site prefill from the fleet master (never blocks the flow).
+    try {
+      const rec = await lookupAssetByCode(asset)
+      setSelectedSite(rec?.site?.trim() || '')
+    } catch {
+      setSelectedSite('')
+    } finally {
+      setResolvingSite(false)
+    }
+  }, [])
+
+  function openTemplateForAsset(tpl: ChecklistTemplate) {
+    router.push({
+      pathname: '/(app)/checklists/[templateId]',
+      params: {
+        templateId: tpl.id,
+        asset_no: selectedAsset ?? '',
+        site: selectedSite,
+      },
+    })
+  }
+
+  function fieldCount(tpl: ChecklistTemplate): number {
+    return (tpl.fields ?? []).filter(f => isValueField(f.type)).length
+  }
+
+  return (
+    <Screen>
+      <View style={[styles.header, isRTL && styles.rowR]}>
+        <TouchableOpacity
+          onPress={() => (selectedAsset ? setSelectedAsset(null) : router.back())}
+          style={styles.backBtn}
+        >
+          <Ionicons name={isRTL ? 'arrow-forward' : 'arrow-back'} size={22} color={theme.color.text} />
+        </TouchableOpacity>
+        <View style={{ flex: 1 }}>
+          <AppText variant="h2" style={{ textAlign }}>{t('modules.checklists.title')}</AppText>
+          <AppText variant="caption" color="muted" style={{ textAlign, marginTop: 2 }}>
+            {selectedAsset ? selectedAsset : t('modules.checklists.tmPickAsset')}
+          </AppText>
+        </View>
+      </View>
+
+      {loading ? (
+        <Loading />
+      ) : notEnabled ? (
+        <EmptyState
+          icon="checkbox-outline"
+          title={t('modules.checklists.notEnabledTitle')}
+          message={t('modules.checklists.notEnabledMsg')}
+        />
+      ) : error ? (
+        <ErrorState message={error} onRetry={load} />
+      ) : !selectedAsset ? (
+        // Step 1 - search one asset
+        <View style={styles.body}>
+          <View style={[styles.searchBox, isRTL && styles.rowR]}>
+            <Ionicons name="search-outline" size={18} color={theme.color.textMuted} />
+            <TextInput
+              style={[styles.searchInput, { textAlign }]}
+              value={search}
+              onChangeText={setSearch}
+              placeholder={t('modules.checklists.tmSearchPlaceholder')}
+              placeholderTextColor={theme.color.textMuted}
+              autoCapitalize="characters"
+              autoCorrect={false}
+              returnKeyType="search"
+            />
+            {search.length > 0 && (
+              <TouchableOpacity onPress={() => setSearch('')} hitSlop={8}>
+                <Ionicons name="close-circle" size={18} color={theme.color.textMuted} />
+              </TouchableOpacity>
+            )}
+          </View>
+
+          {query.length < 2 ? (
+            <View style={styles.hintBox}>
+              <Ionicons name="car-outline" size={26} color={theme.color.textMuted} />
+              <AppText style={[typography.body, { fontWeight: '700', color: theme.color.textSecondary, textAlign: 'center' }]}>
+                {t('modules.checklists.tmSearchHint')}
+              </AppText>
+            </View>
+          ) : (
+            <FlatList
+              data={matches}
+              keyExtractor={(item, i) => `${item}-${i}`}
+              keyboardShouldPersistTaps="handled"
+              contentContainerStyle={styles.list}
+              showsVerticalScrollIndicator={false}
+              renderItem={({ item }) => (
+                <TouchableOpacity style={[styles.assetRow, isRTL && styles.rowR]} activeOpacity={0.75} onPress={() => pickAsset(item)}>
+                  <Ionicons name="car-outline" size={18} color={theme.color.primary} />
+                  <AppText style={[styles.assetText, { textAlign }]} numberOfLines={1}>{item}</AppText>
+                  <Ionicons name={isRTL ? 'chevron-back' : 'chevron-forward'} size={16} color={theme.color.textMuted} />
+                </TouchableOpacity>
+              )}
+              ListEmptyComponent={
+                <View style={styles.hintBox}>
+                  <Ionicons name="search-outline" size={24} color={theme.color.textMuted} />
+                  <AppText style={[typography.body, { fontWeight: '700', color: theme.color.textMuted, textAlign: 'center' }]}>
+                    {t('modules.checklists.tmNoMatch')}
+                  </AppText>
+                </View>
+              }
+            />
+          )}
+        </View>
+      ) : (
+        // Step 2 - pick a checklist for the chosen asset
+        <View style={styles.body}>
+          <View style={[styles.assetChip, isRTL && styles.rowR]}>
+            <Ionicons name="car" size={16} color={theme.color.primaryDark} />
+            <View style={{ flex: 1 }}>
+              <AppText style={[styles.assetChipText, { textAlign }]} numberOfLines={1}>{selectedAsset}</AppText>
+              {resolvingSite ? (
+                <ActivityIndicator size="small" color={theme.color.textMuted} style={{ alignSelf: isRTL ? 'flex-end' : 'flex-start' }} />
+              ) : selectedSite ? (
+                <AppText style={[styles.assetChipSub, { textAlign }]} numberOfLines={1}>{selectedSite}</AppText>
+              ) : null}
+            </View>
+            <TouchableOpacity onPress={() => setSelectedAsset(null)} style={styles.changeBtn} activeOpacity={0.8}>
+              <Ionicons name="swap-horizontal-outline" size={14} color={theme.color.primary} />
+              <AppText style={styles.changeBtnText}>{t('modules.checklists.tmChange')}</AppText>
+            </TouchableOpacity>
+          </View>
+
+          <FlatList
+            data={templates}
+            keyExtractor={item => item.id}
+            contentContainerStyle={styles.list}
+            showsVerticalScrollIndicator={false}
+            ListEmptyComponent={
+              <View style={styles.hintBox}>
+                <Ionicons name="document-outline" size={24} color={theme.color.textMuted} />
+                <AppText style={[typography.body, { fontWeight: '700', color: theme.color.textMuted, textAlign: 'center' }]}>
+                  {t('modules.checklists.noPublished')}
+                </AppText>
+              </View>
+            }
+            renderItem={({ item: tpl }) => (
+              <TouchableOpacity style={styles.tplCard} activeOpacity={0.75} onPress={() => openTemplateForAsset(tpl)}>
+                <View style={[styles.tplHead, isRTL && styles.rowR]}>
+                  <View style={styles.tplIcon}>
+                    <Ionicons name={(tpl.icon as any) || 'checkbox-outline'} size={20} color={theme.color.primary} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <AppText style={[typography.title, { textAlign }]} numberOfLines={1}>{tpl.name}</AppText>
+                    {!!tpl.category && (
+                      <AppText style={[styles.tplCategory, { textAlign }]} numberOfLines={1}>{tpl.category}</AppText>
+                    )}
+                  </View>
+                  <Ionicons name={isRTL ? 'chevron-back' : 'chevron-forward'} size={18} color={theme.color.textMuted} />
+                </View>
+                <View style={[styles.badgeRow, isRTL && styles.rowR]}>
+                  <View style={styles.badge}>
+                    <Ionicons name="list-outline" size={12} color={theme.color.textSecondary} />
+                    <AppText style={styles.badgeText}>{fieldCount(tpl)} {t('modules.checklists.fields')}</AppText>
+                  </View>
+                  {tpl.require_signature && (
+                    <View style={[styles.badge, styles.badgeBlue]}>
+                      <Ionicons name="create-outline" size={12} color={theme.color.info.base} />
+                      <AppText style={[styles.badgeText, { color: theme.color.info.on }]}>{t('modules.checklists.signature')}</AppText>
+                    </View>
+                  )}
+                </View>
+              </TouchableOpacity>
+            )}
+          />
+        </View>
+      )}
+    </Screen>
+  )
+}
+
+function makeTmStyles(theme: Theme) {
+  const c = theme.color
+  return StyleSheet.create({
+    rowR: { flexDirection: 'row-reverse' },
+    header: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, padding: spacing.lg },
+    backBtn: {
+      width: 38, height: 38, borderRadius: radius.sm, backgroundColor: c.surface,
+      alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: c.border,
+    },
+    body: { flex: 1, paddingHorizontal: spacing.lg },
+    searchBox: {
+      flexDirection: 'row', alignItems: 'center', gap: spacing.sm,
+      backgroundColor: c.surface, borderWidth: 1, borderColor: c.border,
+      borderRadius: radius.md, paddingHorizontal: spacing.md, height: 50,
+    },
+    searchInput: { flex: 1, fontSize: 15, fontWeight: '600', color: c.text, letterSpacing: 0.3 },
+    hintBox: { alignItems: 'center', justifyContent: 'center', gap: spacing.sm, paddingVertical: spacing['3xl'] },
+    list: { paddingVertical: spacing.md, paddingBottom: spacing['4xl'], gap: 10 },
+    assetRow: {
+      flexDirection: 'row', alignItems: 'center', gap: spacing.md,
+      backgroundColor: c.surface, borderRadius: radius.md, padding: spacing.md,
+      borderWidth: 1, borderColor: c.border,
+    },
+    assetText: { flex: 1, ...typography.body, fontWeight: '700', color: c.text },
+    assetChip: {
+      flexDirection: 'row', alignItems: 'center', gap: spacing.sm,
+      backgroundColor: c.primarySoft, borderRadius: radius.md, padding: spacing.md,
+      borderWidth: 1, borderColor: c.primary, marginTop: spacing.md,
+    },
+    assetChipText: { ...typography.body, fontWeight: '800', color: c.primaryDark },
+    assetChipSub: { ...typography.micro, color: c.textMuted, marginTop: 1 },
+    changeBtn: {
+      flexDirection: 'row', alignItems: 'center', gap: 4,
+      paddingHorizontal: spacing.md, paddingVertical: 6, borderRadius: radius.md,
+      backgroundColor: c.surface, borderWidth: 1, borderColor: c.border,
+    },
+    changeBtnText: { ...typography.caption, fontWeight: '800', color: c.primary },
+    tplCard: {
+      backgroundColor: c.surface, borderRadius: radius.lg, padding: spacing.md, gap: spacing.sm,
+      borderWidth: 1, borderColor: c.border,
+    },
+    tplHead: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+    tplIcon: {
+      width: 40, height: 40, borderRadius: radius.md, backgroundColor: c.primarySoft,
+      alignItems: 'center', justifyContent: 'center',
+    },
+    tplCategory: { ...typography.caption, color: c.textMuted, marginTop: 2 },
+    badgeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs },
+    badge: {
+      flexDirection: 'row', alignItems: 'center', gap: spacing.xs,
+      backgroundColor: c.surfaceAlt, borderRadius: radius.sm,
+      paddingHorizontal: spacing.sm, paddingVertical: spacing.xs,
+    },
+    badgeBlue: { backgroundColor: c.info.soft },
+    badgeText: { ...typography.micro, color: c.textSecondary },
+  })
 }
 
 function makeStyles(theme: Theme) {

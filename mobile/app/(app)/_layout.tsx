@@ -167,6 +167,7 @@ export default function AppLayout() {
 
       {/* Hidden routes - reachable via router.push but never in the tab bar */}
       <Tabs.Screen name="scanner"         options={{ href: null }} />
+      <Tabs.Screen name="washing"         options={{ href: null }} />
       <Tabs.Screen name="calendar"        options={{ href: null }} />
       <Tabs.Screen name="maintenance"     options={{ href: null }} />
       <Tabs.Screen name="tasks"           options={{ href: null }} />

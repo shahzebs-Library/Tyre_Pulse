@@ -61,8 +61,11 @@ export default function ProtectedRoute({ children }) {
 }
 
 export function RoleRoute({ allowed, children }) {
-  const { profile, loading } = useAuth()
+  const { profile, isSuperAdmin, loading } = useAuth()
   if (loading) return <RouteLoading />
+
+  // Super admins are never locked out of a role-gated route (break-glass).
+  if (isSuperAdmin) return children
 
   if (!profile || !allowed.includes(profile.role)) {
     return <AccessDenied role={profile?.role} allowed={allowed} />

@@ -148,10 +148,13 @@ export function resolveModuleAccess(
   grants?: GrantMap | null,
   isSuper?: boolean,
 ): boolean {
-  if (isSuper || isAdmin(role)) return true
+  // Super-admin is never lockable. An ADMIN's default is allow-all, but an
+  // explicit per-user Deny now beats it (user ask: "I change access and it
+  // does not change in actual" - admins were un-revokable).
+  if (isSuper) return true
   const override = grants?.[key]
   if (override === 'revoke') return false
-  if (override === 'grant') return true
+  if (override === 'grant' || isAdmin(role)) return true
   return moduleAllowedByRole(key, role)
 }
 

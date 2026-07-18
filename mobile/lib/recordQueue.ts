@@ -37,6 +37,7 @@ export type CommandType =
   | 'ODOMETER_LOG'
   | 'ENGINE_HOURS_LOG'
   | 'REPORT_ACCIDENT'
+  | 'WASH_RECORD'
 
 /** How a command mutates its table. Defaults to 'insert' to preserve v1 behavior. */
 export type CommandOp = 'insert' | 'update'
@@ -178,6 +179,16 @@ export const COMMANDS: Record<CommandType, CommandSpec> = {
       'repair_cost', 'expected_release_date', 'release_date',
     ],
   },
+  // Driver vehicle-wash log (V270 wash_records + V271 photos/driver-insert).
+  // Photos flow through the queue's photo pipeline (file:// -> tp-storage://).
+  WASH_RECORD: {
+    table: 'wash_records',
+    fields: [
+      'asset_no', 'vehicle_type', 'site', 'country', 'created_by', 'washed_by',
+      'wash_date', 'wash_type', 'bay', 'water_liters', 'cost', 'duration_min',
+      'odometer_km', 'status', 'notes', 'photos',
+    ],
+  },
 }
 
 export interface QueuedRecord {
@@ -230,6 +241,7 @@ const TYPE_TO_MODULE: Record<CommandType, string> = {
   ODOMETER_LOG: 'meter-log',
   ENGINE_HOURS_LOG: 'meter-log',
   REPORT_ACCIDENT: 'accident',
+  WASH_RECORD: 'wash',
 }
 
 /** True when a command patches an existing row rather than inserting a new one. */

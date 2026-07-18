@@ -150,6 +150,25 @@ export async function notifyPhotoUploadFailure(position: string): Promise<void> 
   })
 }
 
+/**
+ * Local "vehicles due for wash" reminder. Fires immediately (no server cron)
+ * when the washing screen finds assets past their wash interval. Deduped by a
+ * fixed identifier so it replaces, rather than stacks, a prior reminder.
+ */
+export async function notifyWashDue(count: number): Promise<void> {
+  if (count <= 0) return
+  await Notifications.scheduleNotificationAsync({
+    content: {
+      title: 'Vehicles due for wash',
+      body: `${count} vehicle${count !== 1 ? 's are' : ' is'} due for washing again.`,
+      sound: true,
+      data: { type: 'wash_due' },
+    },
+    trigger: null,
+    identifier: 'wash_due',
+  })
+}
+
 // ── Inspection reminders ──────────────────────────────────────────────────────
 
 /** Schedule a daily inspection reminder at the given hour:minute (24-hour). */

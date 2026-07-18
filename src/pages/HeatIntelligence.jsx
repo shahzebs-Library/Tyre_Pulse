@@ -44,7 +44,7 @@ import {
   enrichRoutes, correlationFromReadings,
   cityCoords, mergeLiveConditions, hottestHours,
 } from '../lib/heatIntelligence'
-import { getCurrentWeather } from '../lib/api/weather'
+import { getCurrentWeather, getAirQuality, aqiBand } from '../lib/api/weather'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Tooltip, Legend, Title)
@@ -162,6 +162,11 @@ export default function HeatIntelligence() {
   const [weatherLoading, setWeatherLoading] = useState(false)
   const [weatherError, setWeatherError] = useState('')
 
+  // Live air quality (Open-Meteo Air Quality, free/keyless). Independent of weather.
+  const [airQuality, setAirQuality] = useState(null)
+  const [aqLoading, setAqLoading] = useState(false)
+  const [aqError, setAqError] = useState('')
+
   // Manual-logger data
   const [rows, setRows] = useState(null)
   const [error, setError] = useState('')
@@ -240,13 +245,37 @@ export default function HeatIntelligence() {
     return () => ctrl.abort()
   }, [loadWeather])
 
-  const refreshAll = useCallback(() => { load(); loadTyres(); loadWeather() }, [load, loadTyres, loadWeather])
+  // Fetch live air quality for the selected city. Never throws; on failure the
+  // Air Quality panel shows an honest unavailable state.
+  const loadAirQuality = useCallback(async (signal) => {
+    const coords = cityCoords(city)
+    if (!coords) { setAirQuality(null); setAqError(''); return }
+    setAqLoading(true); setAqError('')
+    const res = await getAirQuality(coords.lat, coords.lon, { signal })
+    if (res.aborted) return
+    // City-stamp the reading so a stale in-flight result never shows under a
+    // different city's label.
+    if (res.ok) { setAirQuality({ ...res.data, city_key: city }); setAqError('') }
+    else { setAirQuality(null); setAqError(res.error || 'Live air quality is unavailable right now.') }
+    setAqLoading(false)
+  }, [city])
+
+  useEffect(() => {
+    const ctrl = new AbortController()
+    loadAirQuality(ctrl.signal)
+    return () => ctrl.abort()
+  }, [loadAirQuality])
+
+  const refreshAll = useCallback(() => { load(); loadTyres(); loadWeather(); loadAirQuality() }, [load, loadTyres, loadWeather, loadAirQuality])
 
   // ── Derived: climatology, fleet risk, calculator, routes, correlation ──────
   // Base is seasonal climatology; when a live reading is present we overlay the
   // real ambient temperature so risk, calculator and hero all use actual weather.
   // Only treat the reading as live when it belongs to the currently selected city.
   const liveWeather = useMemo(() => (weather && weather.city_key === city ? weather : null), [weather, city])
+  // Only treat the air-quality reading as live when it belongs to the selected city.
+  const liveAir = useMemo(() => (airQuality && airQuality.city_key === city ? airQuality : null), [airQuality, city])
+  const aqBand = useMemo(() => (liveAir ? aqiBand(liveAir.aqi) : null), [liveAir])
   const conditions = useMemo(() => {
     const base = currentConditions(city)
     return liveWeather?.ambient_c != null ? mergeLiveConditions(base, liveWeather.ambient_c, liveWeather.source) : base
@@ -523,7 +552,10 @@ export default function HeatIntelligence() {
                   <LiveTile label="Now" value={`${liveWeather.ambient_c}°C`} accent="text-orange-300" />
                   <LiveTile label="Feels like" value={liveWeather.apparent_c != null ? `${liveWeather.apparent_c}°C` : 'N/A'} accent="text-red-300" />
                   <LiveTile label="Humidity" value={liveWeather.humidity_pct != null ? `${liveWeather.humidity_pct}%` : 'N/A'} />
+                  <LiveTile label="UV index" value={liveWeather.uv_index != null ? `${liveWeather.uv_index}` : 'N/A'} accent="text-amber-300" />
                   <LiveTile label="Wind" value={liveWeather.wind_kmh != null ? `${liveWeather.wind_kmh} km/h` : 'N/A'} />
+                  <LiveTile label="Gusts" value={liveWeather.wind_gusts_kmh != null ? `${liveWeather.wind_gusts_kmh} km/h` : 'N/A'} />
+                  <LiveTile label="Precipitation" value={liveWeather.precipitation_mm != null ? `${liveWeather.precipitation_mm} mm` : 'N/A'} />
                 </div>
                 {hotHours.length > 0 && (
                   <div className="mt-3">
@@ -556,6 +588,54 @@ export default function HeatIntelligence() {
             ) : (
               <p className="text-sm text-[var(--text-muted)]">
                 {weatherError ? `${weatherError} ` : ''}Showing the seasonal average for {city} ({conditions.ambient_c}°C). Live weather refreshes hourly when reachable.
+              </p>
+            )}
+          </div>
+
+          {/* Air Quality & Dust (Open-Meteo Air Quality, free/keyless) */}
+          <div className="card">
+            <div className="flex items-center justify-between flex-wrap gap-2 mb-3">
+              <h3 className="text-sm font-semibold text-[var(--text-primary)] flex items-center gap-2">
+                <Wind size={15} className="text-sky-400" /> Air quality &amp; dust
+              </h3>
+              {liveAir ? (
+                <span className="text-[11px] font-bold uppercase px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-300 border border-emerald-700/40 inline-flex items-center gap-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" /> Live : {liveAir.source}
+                </span>
+              ) : (
+                <span className="text-[11px] font-bold uppercase px-2 py-0.5 rounded bg-[var(--input-bg)] text-[var(--text-muted)] border border-[var(--input-border)]">
+                  Unavailable
+                </span>
+              )}
+            </div>
+
+            {aqLoading && liveAir == null ? (
+              <p className="text-sm text-[var(--text-muted)] inline-flex items-center gap-2">
+                <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin inline-block" /> Fetching air quality for {city}...
+              </p>
+            ) : liveAir ? (
+              <>
+                <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+                  <LiveTile label="PM2.5 ug/m3" value={liveAir.pm2_5 != null ? `${liveAir.pm2_5}` : 'N/A'} accent="text-orange-300" />
+                  <LiveTile label="PM10 ug/m3" value={liveAir.pm10 != null ? `${liveAir.pm10}` : 'N/A'} accent="text-amber-300" />
+                  <LiveTile label="Dust ug/m3" value={liveAir.dust != null ? `${liveAir.dust}` : 'N/A'} accent="text-yellow-300" />
+                  <LiveTile label="UV index" value={liveAir.uv != null ? `${liveAir.uv}` : 'N/A'} />
+                  <div className="rounded-lg border border-[var(--input-border)] bg-[var(--input-bg)] px-3 py-2 text-center flex flex-col items-center justify-center">
+                    {aqBand ? (
+                      <span className={`text-sm font-bold uppercase px-2.5 py-1 rounded ${(SEVERITY_META[aqBand.severity] || SEVERITY_META.low).pill}`}>{aqBand.label}</span>
+                    ) : (
+                      <span className="text-xl font-bold text-[var(--text-primary)]">N/A</span>
+                    )}
+                    <p className="text-[10px] uppercase tracking-wider text-[var(--text-muted)] mt-1">AQI {liveAir.aqi != null ? liveAir.aqi : ''}</p>
+                  </div>
+                </div>
+                <p className="text-[11px] text-[var(--text-muted)] mt-3">
+                  European AQI band for {city}{liveAir.observed_at ? `, observed ${fmtStamp(liveAir.observed_at)}` : ''}. High airborne dust and particulates accelerate tyre and air-filter abrasion across GCC fleets.
+                </p>
+              </>
+            ) : (
+              <p className="text-sm text-[var(--text-muted)]">
+                {aqError ? `${aqError} ` : ''}Live air quality for {city} is unavailable right now. It refreshes hourly when reachable.
               </p>
             )}
           </div>

@@ -3,7 +3,8 @@ import type { User, AuthError, RealtimeChannel } from '@supabase/supabase-js'
 import { supabase } from '../lib/supabase'
 import { Profile, normaliseRole, normaliseCountry } from '../lib/types'
 import {
-  ModuleKey, GrantMap, mobileGrantsFromRaw, resolveModuleAccess,
+  ModuleKey, GrantMap, RoleMatrix, mobileGrantsFromRaw, mobileRoleMatrixFromRaw,
+  resolveModuleAccess,
 } from '../lib/permissions'
 import { syncQueue, clearQueue } from '../lib/offlineQueue'
 import { syncRecordQueue, clearRecordQueue } from '../lib/recordQueue'
@@ -29,9 +30,11 @@ interface AuthContextType {
   isSuperAdmin: boolean
   /** Per-user mobile access overlay (mobile: grants, prefix stripped). */
   grants: GrantMap
-  /** Effective access for a mobile module: role default + grant overlay. */
+  /** ROLE-level mobile permission matrix (mobile: module_permissions rows). */
+  roleMatrix: RoleMatrix
+  /** Effective access for a mobile module: role default + role matrix + grants. */
   canAccess: (key: ModuleKey) => boolean
-  /** Re-pull this user's access grants (call after the admin changes them). */
+  /** Re-pull this user's grants AND the role mobile matrix (after admin edits). */
   refreshGrants: () => Promise<void>
   signIn: (identifier: string, password: string) => Promise<{ error: AuthError | Error | null }>
   signOut: () => Promise<void>
@@ -44,8 +47,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [profile, setProfile] = useState<Profile | null>(null)
   const [loading, setLoading] = useState(true)
   const [grants, setGrants]   = useState<GrantMap>({})
+  const [roleMatrix, setRoleMatrix] = useState<RoleMatrix>({})
   const profileChannelRef     = useRef<RealtimeChannel | null>(null)
   const grantsChannelRef      = useRef<RealtimeChannel | null>(null)
+  const roleMatrixChannelRef  = useRef<RealtimeChannel | null>(null)
 
   const isSuperAdmin = profile?.is_super_admin === true
 
@@ -58,6 +63,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch {
       setGrants({})
     }
+  }
+
+  // Load the ROLE-level mobile permission matrix for this user's role. The RPC
+  // is role-scoped server-side and returns every module_permissions row for the
+  // role; we keep only the `mobile:` prefixed ones. Fail-OPEN to {} on any error
+  // so a transient failure can never lock the user out (role default applies).
+  async function fetchRoleMatrix() {
+    try {
+      const { data } = await supabase.rpc('get_user_module_permissions')
+      setRoleMatrix(mobileRoleMatrixFromRaw(data as Record<string, unknown> | null))
+    } catch {
+      setRoleMatrix({})
+    }
+  }
+
+  // Re-pull both overlays together (used on tab focus / after admin edits).
+  async function refreshAccess() {
+    await Promise.all([fetchGrants(), fetchRoleMatrix()])
   }
 
   // Realtime: when a super-admin changes THIS user's grants, re-pull so their
@@ -80,8 +103,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }
 
+  // Realtime: when an admin edits the role -> module matrix (module_permissions),
+  // re-pull the mobile matrix so the whole role's navigation auto-adjusts live.
+  function subscribeToRoleMatrix() {
+    if (roleMatrixChannelRef.current) supabase.removeChannel(roleMatrixChannelRef.current)
+    roleMatrixChannelRef.current = supabase
+      .channel('role-mobile-matrix')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'module_permissions' },
+        () => { fetchRoleMatrix() },
+      )
+      .subscribe()
+  }
+  function unsubscribeFromRoleMatrix() {
+    if (roleMatrixChannelRef.current) {
+      supabase.removeChannel(roleMatrixChannelRef.current)
+      roleMatrixChannelRef.current = null
+    }
+  }
+
   function canAccess(key: ModuleKey): boolean {
-    return resolveModuleAccess(key, profile?.role ?? null, grants, isSuperAdmin)
+    return resolveModuleAccess(key, profile?.role ?? null, grants, isSuperAdmin, roleMatrix)
   }
 
   // Subscribe to realtime updates on this user's profile row so any role/field
@@ -127,6 +170,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           subscribeToProfile(session.user.id)
           fetchGrants()
           subscribeToGrants(session.user.id)
+          fetchRoleMatrix()
+          subscribeToRoleMatrix()
         }
       })
       .catch(() => {})
@@ -140,12 +185,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         subscribeToProfile(session.user.id)
         fetchGrants()
         subscribeToGrants(session.user.id)
+        fetchRoleMatrix()
+        subscribeToRoleMatrix()
       } else {
         setProfile(null)
         setGrants({})
+        setRoleMatrix({})
         setSentryUser(null)
         unsubscribeFromProfile()
         unsubscribeFromGrants()
+        unsubscribeFromRoleMatrix()
         // On any sign-out (manual OR forced lockout) purge device-local queues.
         clearLocalUserState().catch(() => {})
       }
@@ -157,6 +206,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       subscription.unsubscribe()
       unsubscribeFromProfile()
       unsubscribeFromGrants()
+      unsubscribeFromRoleMatrix()
     }
   }, [])
 
@@ -213,8 +263,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   return (
     <AuthContext.Provider value={{
-      user, profile, loading, isSuperAdmin, grants, canAccess,
-      refreshGrants: fetchGrants, signIn, signOut,
+      user, profile, loading, isSuperAdmin, grants, roleMatrix, canAccess,
+      refreshGrants: refreshAccess, signIn, signOut,
     }}>
       {children}
     </AuthContext.Provider>

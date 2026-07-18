@@ -140,6 +140,39 @@ export function mobileGrantKey(moduleKey) {
 }
 
 /**
+ * True when a stored key targets the MOBILE surface (a `mobile:`-prefixed
+ * module_key). The web app's permission readers do keyed lookups on PLAIN module
+ * keys only, so a mobile: row can never match a web module key - this predicate
+ * lets callers defensively skip mobile: rows when iterating a mixed key set.
+ */
+export function isMobileGrantKey(key) {
+  return typeof key === 'string' && key.startsWith(MOBILE_GRANT_PREFIX)
+}
+
+/**
+ * Detect the SURFACE SCOPE a module currently occupies at the ROLE level, from
+ * the presence of a plain (web) and/or a `mobile:` (mobile) row in a single
+ * role's module_permissions map ({ module_key: enabled }). This is the role-mode
+ * analogue of the per-user `rowScope`: it only looks at whether the surface's row
+ * EXISTS (enabled true or false), not its value.
+ *
+ *   plain only   -> 'web'
+ *   mobile only  -> 'mobile'
+ *   both present -> 'both'
+ *   neither      -> null  (no row on either surface; caller defaults the selector)
+ *
+ * @param {Record<string, boolean>|null|undefined} roleRows  one role's map
+ * @param {string} moduleKey  the plain (web) module key
+ * @returns {('web'|'mobile'|'both'|null)}
+ */
+export function roleScopeForKey(roleRows, moduleKey) {
+  const has = (k) => !!roleRows && Object.prototype.hasOwnProperty.call(roleRows, k)
+  const hasPlain = has(moduleKey)
+  const hasMobile = has(mobileGrantKey(moduleKey))
+  return parseGrantScope(hasPlain ? 'grant' : null, hasMobile ? 'grant' : null)
+}
+
+/**
  * Resolve the surface scope of an existing override from the presence of a plain
  * (web) and a mobile: override effect. Each argument is the override effect on
  * that surface ('grant' | 'revoke') or null/undefined when no override exists.

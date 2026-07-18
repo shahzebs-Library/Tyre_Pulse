@@ -44,6 +44,7 @@ import { listProfiles } from '../../../lib/api/users'
 import {
   listUserGrants, revokeUserAccessGrant,
   setUserAccessGrantScoped, mobileGrantKey, parseGrantScope,
+  grantKeysForScope, roleScopeForKey,
 } from '../../../lib/api/accessGrants'
 import { toUserMessage } from '../../../lib/safeError'
 
@@ -89,40 +90,106 @@ function roleHasDbRows(viewMap, role) {
 }
 
 /**
+ * Resolve one ROLE node's ON/OFF view AND its surface scope from a single role's
+ * module_permissions map. A module can carry a plain (web) row and/or a `mobile:`
+ * (mobile) row; the toggle is ON when EITHER present surface is enabled, and the
+ * scope reflects which surfaces have a row.
+ *
+ * @param {Record<string,boolean>|undefined} roleRows  the role's { key: enabled }
+ * @param {string}  key          plain module/sub-module key
+ * @param {boolean} isAdmin      Admin is always fully allowed
+ * @param {boolean} hasRows      role has ANY explicit rows (sparse-matrix guard)
+ * @param {boolean} [inheritView] sub-module fallback = parent's view
+ * @param {string}  role         role name (for defaultViewAccess)
+ * @returns {{ view: boolean, scope: ('web'|'mobile'|'both') }}
+ */
+function roleKeyState(roleRows, key, isAdmin, hasRows, inheritView, role) {
+  const mobKey = mobileGrantKey(key)
+  const hasPlain = !!roleRows && Object.prototype.hasOwnProperty.call(roleRows, key)
+  const hasMobile = !!roleRows && Object.prototype.hasOwnProperty.call(roleRows, mobKey)
+  const scope = roleScopeForKey(roleRows, key) || DEFAULT_SCOPE
+  let view
+  if (isAdmin) {
+    view = true
+  } else if (hasPlain || hasMobile) {
+    // Enabled when any surface that HAS a row is enabled.
+    view = (hasPlain && roleRows[key] === true) || (hasMobile && roleRows[mobKey] === true)
+  } else if (typeof inheritView === 'boolean') {
+    view = inheritView
+  } else {
+    view = hasRows ? false : defaultViewAccess(role, key)
+  }
+  return { view, scope }
+}
+
+/**
  * Effective per-node access for a ROLE, mirroring getEffectiveMatrix semantics:
  *  - base module view: DB rows win when present, else the hardcoded default.
  *  - base module caps: override wins, else defaults to the module's view default.
  *  - sub-module view: explicit composite row wins, else inherits the parent.
+ *  - per-node surface scope: web / mobile / both, from which rows exist.
  *  - Admin is always fully allowed.
- * @returns {{ view: Record<string,boolean>, caps: Record<string,Record<string,boolean>> }}
+ * @returns {{ view: Record<string,boolean>, caps: Record<string,Record<string,boolean>>, scope: Record<string,string> }}
  */
 function buildRoleState(role, viewMap, overrides) {
   const isAdmin = role === 'Admin'
+  const roleRows = viewMap?.[role]
   const hasRows = roleHasDbRows(viewMap, role)
   const view = {}
   const caps = {}
+  const scope = {}
   for (const g of MODULE_GROUPS) {
     for (const m of g.modules) {
-      const baseView = isAdmin
-        ? true
-        : hasRows
-          ? viewMap[role][m.key] === true
-          : defaultViewAccess(role, m.key)
+      const st = roleKeyState(roleRows, m.key, isAdmin, hasRows, undefined, role)
+      const baseView = st.view
       view[m.key] = baseView
+      scope[m.key] = st.scope
       const ov = overrides?.[role]?.[m.key] || {}
       caps[m.key] = {}
       for (const c of EXTRA_CAPS) {
         caps[m.key][c.key] = isAdmin ? true : c.key in ov ? ov[c.key] === true : baseView
       }
       for (const s of SUBMODULES[m.key] || []) {
-        const explicit = viewMap?.[role] && Object.prototype.hasOwnProperty.call(viewMap[role], s.key)
-        view[s.key] = isAdmin ? true : explicit ? viewMap[role][s.key] === true : baseView
+        const sst = roleKeyState(roleRows, s.key, isAdmin, hasRows, baseView, role)
+        view[s.key] = sst.view
+        scope[s.key] = sst.scope
         // Sub-module non-view caps are not stored for roles; mirror sub view.
         caps[s.key] = Object.fromEntries(EXTRA_CAPS.map((c) => [c.key, view[s.key]]))
       }
     }
   }
-  return { view, caps }
+  return { view, caps, scope }
+}
+
+/**
+ * The `module_permissions` row writes needed to persist a ROLE draft's view+scope.
+ * For each visible key, the desired ON/OFF is written to the surface(s) the scope
+ * targets (web = plain key, mobile = `mobile:` key, both = both). A surface with
+ * NO existing row is written only when ENABLING (never gratuitously stamp an
+ * explicit-false that would override a role's hardcoded default); an existing row
+ * is written when its stored value differs from the desired one.
+ *
+ * HONEST LIMITATION: narrowing a scope (e.g. both -> web) does NOT delete the now
+ * untargeted surface's row - `set_module_permissions` only upserts. To turn a
+ * surface OFF, target it with the toggle OFF (writes enabled=false there).
+ *
+ * @returns {{ role:string, module_key:string, enabled:boolean, nodeKey:string }[]}
+ */
+function roleViewChanges(role, draftView, scopeDraft, roleRows) {
+  const changes = []
+  for (const key of Object.keys(draftView || {})) {
+    const scope = scopeDraft?.[key] || DEFAULT_SCOPE
+    const enabled = draftView[key] === true
+    for (const tk of grantKeysForScope(key, scope)) {
+      const exists = !!roleRows && Object.prototype.hasOwnProperty.call(roleRows, tk)
+      if (!exists) {
+        if (enabled) changes.push({ role, module_key: tk, enabled: true, nodeKey: key })
+      } else if ((roleRows[tk] === true) !== enabled) {
+        changes.push({ role, module_key: tk, enabled, nodeKey: key })
+      }
+    }
+  }
+  return changes
 }
 
 /** Index grant rows: key -> capability -> effect -> grantId. Includes both plain
@@ -292,6 +359,9 @@ export default function AccessManager() {
     setBaseline(state)
     setRoleBaseline(null)
     setDraft(structuredClone(state))
+    // Role mode also carries a per-node surface scope (web / mobile / both).
+    setScopeBaseline({ ...(state.scope || {}) })
+    setScopeDraft({ ...(state.scope || {}) })
   }, [selectedRole, viewMap, overrides])
 
   const buildUser = useCallback(async (user) => {
@@ -343,6 +413,17 @@ export default function AccessManager() {
   const dirtyKeys = useMemo(() => {
     const s = new Set()
     if (!baseline || !draft) return s
+    if (mode === 'role') {
+      const roleRows = viewMap?.[selectedRole] || {}
+      // caps changed (base-module non-view caps -> app_settings overrides)
+      for (const key of Object.keys(draft.view)) {
+        const dc = draft.caps[key] || {}, bc = baseline.caps[key] || {}
+        for (const c of EXTRA_CAPS) if (dc[c.key] !== bc[c.key]) { s.add(key); break }
+      }
+      // view/scope changes that produce an actual module_permissions row write
+      for (const ch of roleViewChanges(selectedRole, draft.view, scopeDraft, roleRows)) s.add(ch.nodeKey)
+      return s
+    }
     for (const key of Object.keys(draft.view)) {
       if (draft.view[key] !== baseline.view[key]) { s.add(key); continue }
       const dc = draft.caps[key] || {}, bc = baseline.caps[key] || {}
@@ -357,7 +438,7 @@ export default function AccessManager() {
       }
     }
     return s
-  }, [baseline, draft, mode, scopeDraft, scopeBaseline, rowHasOverride])
+  }, [baseline, draft, mode, scopeDraft, scopeBaseline, rowHasOverride, viewMap, selectedRole])
   const dirtyCount = dirtyKeys.size
 
   // ── Mutators ─────────────────────────────────────────────────────────────────
@@ -491,13 +572,12 @@ export default function AccessManager() {
     try {
       if (mode === 'role') {
         if (!canWriteRole) throw new Error('Only an Admin can change role access.')
-        // 1) view changes (base + sub) via the enforced module_permissions path
-        const viewChanges = []
-        for (const key of Object.keys(draft.view)) {
-          if (draft.view[key] !== baseline.view[key]) {
-            viewChanges.push({ role: selectedRole, module_key: key, enabled: draft.view[key] })
-          }
-        }
+        // 1) view + surface-scope changes (base + sub) via the enforced
+        // module_permissions path. Each write targets the plain (web) and/or
+        // `mobile:` (mobile) module_key per the row's chosen scope.
+        const roleRows = viewMap?.[selectedRole] || {}
+        const planned = roleViewChanges(selectedRole, draft.view, scopeDraft, roleRows)
+        const viewChanges = planned.map(({ role, module_key, enabled }) => ({ role, module_key, enabled }))
         if (viewChanges.length) await saveModulePermissions(viewChanges)
 
         // 2) base-module non-view caps -> app_settings overrides (merge, keep other roles)
@@ -523,9 +603,10 @@ export default function AccessManager() {
         setViewMap(vm || {}); setOverrides(ov || {})
         const fresh = buildRoleState(selectedRole, vm || {}, ov || {})
         setBaseline(fresh); setDraft(structuredClone(fresh))
+        setScopeBaseline({ ...(fresh.scope || {}) }); setScopeDraft({ ...(fresh.scope || {}) })
         flash(
           viewChanges.length
-            ? `Saved. ${viewChanges.length} view change${viewChanges.length !== 1 ? 's' : ''} apply on each user's next load; other capabilities and sub-modules are stored for progressive enforcement.`
+            ? `Saved. ${viewChanges.length} access change${viewChanges.length !== 1 ? 's' : ''} written across web and mobile; they apply on each user's next load. Other capabilities and sub-modules are stored for progressive enforcement.`
             : 'Saved. Capability changes are stored for progressive enforcement.',
         )
       } else {
@@ -832,7 +913,7 @@ export default function AccessManager() {
                               capEditable={capEditable(m.key)}
                               advancedOpen={openAdvanced.has(m.key)}
                               scope={scopeDraft[m.key] || DEFAULT_SCOPE}
-                              onSetScope={mode === 'user' ? (v) => setScope(m.key, v) : null}
+                              onSetScope={(v) => setScope(m.key, v)}
                               onToggleView={() => toggleView(m.key)}
                               onToggleCap={(c) => toggleCap(m.key, c)}
                               onToggleAdvanced={() => toggleAdvanced(m.key)}
@@ -847,7 +928,7 @@ export default function AccessManager() {
                                 capEditable={capEditable(s.key)}
                                 advancedOpen={openAdvanced.has(s.key)}
                                 scope={scopeDraft[s.key] || DEFAULT_SCOPE}
-                                onSetScope={mode === 'user' ? (v) => setScope(s.key, v) : null}
+                                onSetScope={(v) => setScope(s.key, v)}
                                 onToggleView={() => toggleView(s.key)}
                                 onToggleCap={(c) => toggleCap(s.key, c)}
                                 onToggleAdvanced={() => toggleAdvanced(s.key)}
@@ -864,14 +945,15 @@ export default function AccessManager() {
                 <p className="text-[11px] text-[var(--text-muted)] flex items-center gap-1.5">
                   <Info size={12} /> A row indented under a module is a tab inside it. Sub-module and non-view toggles are stored for progressive enforcement (labelled "stored only").
                 </p>
-                {mode === 'user' && (
-                  <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-[var(--text-muted)] px-1">
-                    <span className="inline-flex items-center gap-1.5 font-semibold text-[var(--text-secondary)]">Access surface:</span>
-                    <span className="inline-flex items-center gap-1.5"><Monitor size={12} className="text-[var(--brand-bright)]" /> Web applies the override to the web app only.</span>
-                    <span className="inline-flex items-center gap-1.5"><Smartphone size={12} className="text-[var(--brand-bright)]" /> Mobile applies it to the inspector app only.</span>
-                    <span className="inline-flex items-center gap-1.5"><Layers size={12} className="text-[var(--brand-bright)]" /> Both applies it to web and mobile.</span>
-                  </div>
-                )}
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-[var(--text-muted)] px-1">
+                  <span className="inline-flex items-center gap-1.5 font-semibold text-[var(--text-secondary)]">Access surface:</span>
+                  <span className="inline-flex items-center gap-1.5"><Monitor size={12} className="text-[var(--brand-bright)]" /> Web applies to the web app only.</span>
+                  <span className="inline-flex items-center gap-1.5"><Smartphone size={12} className="text-[var(--brand-bright)]" /> Mobile applies to the inspector app only.</span>
+                  <span className="inline-flex items-center gap-1.5"><Layers size={12} className="text-[var(--brand-bright)]" /> Both applies to web and mobile.</span>
+                  {mode === 'role' && (
+                    <span className="inline-flex items-center gap-1.5">To turn a surface off, set its toggle off with that surface selected.</span>
+                  )}
+                </div>
               </div>
             )}
           </div>
@@ -993,8 +1075,8 @@ function NodeRow({ node, draft, dirty, readOnly, mode, capEditable, advancedOpen
           {dirty && <span className="ml-2 text-[9px] uppercase tracking-wide text-amber-300">changed</span>}
         </div>
 
-        {/* Surface scope (user mode only) */}
-        {mode === 'user' && onSetScope && (
+        {/* Surface scope (web / mobile / both) - role and user mode */}
+        {onSetScope && (
           <ScopeSelect scope={scope || DEFAULT_SCOPE} onSetScope={onSetScope} readOnly={readOnly} />
         )}
 

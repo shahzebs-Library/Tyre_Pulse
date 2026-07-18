@@ -104,6 +104,17 @@ export const MODULE_GROUPS = MODULES.reduce<ModuleDef['group'][]>(
 export type GrantMap = Record<string, 'grant' | 'revoke'>
 
 /**
+ * ROLE-level mobile permission matrix (keyed by mobile ModuleKey, prefix
+ * stripped). Sourced from the shared `module_permissions` table's `mobile:`
+ * prefixed rows for the user's role. `true` explicitly enables a module on
+ * mobile, `false` explicitly denies it. A key that is ABSENT means "no role
+ * override on mobile" so the client-side role default (moduleAllowedByRole)
+ * decides. This is the mirror of the web role matrix, but scoped to mobile via
+ * the `mobile:` module_key convention (see MOBILE_GRANT_PREFIX below).
+ */
+export type RoleMatrix = Record<string, boolean>
+
+/**
  * Mobile access grants are namespaced in `user_access_grants.module_key` with a
  * `mobile:` prefix so they are INDEPENDENT of the web app's access / approvals
  * grants (which use their own bare keys). Revoking a module on mobile never
@@ -131,6 +142,22 @@ export function mobileGrantsFromRaw(raw: Record<string, unknown> | null | undefi
   return out
 }
 
+/**
+ * Build the mobile RoleMatrix from the raw `{module_key: enabled}` map returned
+ * by the `get_user_module_permissions()` RPC: keep ONLY `mobile:` keys and strip
+ * the prefix, so the plain (web) role rows are ignored here. Non-boolean values
+ * are dropped defensively so a malformed row can never enable/deny by accident.
+ */
+export function mobileRoleMatrixFromRaw(raw: Record<string, unknown> | null | undefined): RoleMatrix {
+  const out: RoleMatrix = {}
+  if (!raw) return out
+  for (const [k, v] of Object.entries(raw)) {
+    if (!k.startsWith(MOBILE_GRANT_PREFIX)) continue
+    if (typeof v === 'boolean') out[k.slice(MOBILE_GRANT_PREFIX.length)] = v
+  }
+  return out
+}
+
 /** Role default only (no grant overlay). Admin is always allowed. */
 export function moduleAllowedByRole(key: ModuleKey, role: UserRole | null | undefined): boolean {
   if (isAdmin(role)) return true
@@ -140,22 +167,41 @@ export function moduleAllowedByRole(key: ModuleKey, role: UserRole | null | unde
 }
 
 /**
- * Effective access = role default, then the per-user grant overlay.
- * Precedence: admin / super-admin > revoke > grant > role default > deny.
+ * Effective access = role default, then the ROLE-level mobile matrix, then the
+ * per-user grant overlay.
+ *
+ * Precedence (highest first):
+ *   1. admin / super-admin        -> always allowed
+ *   2. per-user grant `revoke`    -> deny
+ *   3. per-user grant `grant`     -> allow
+ *   4. ROLE mobile matrix explicit-> `true` allow / `false` deny (this surface)
+ *   5. client-side role default   -> moduleAllowedByRole
+ *
+ * `roleMatrix` is OPTIONAL and defaults to none, so existing 4-arg callers keep
+ * working and the app FAILS OPEN: when the matrix is empty/undefined the module
+ * falls back to the role default exactly as before.
  */
 export function resolveModuleAccess(
   key: ModuleKey,
   role: UserRole | null | undefined,
   grants?: GrantMap | null,
   isSuper?: boolean,
+  roleMatrix?: RoleMatrix | null,
 ): boolean {
-  // Super-admin is never lockable. An ADMIN's default is allow-all, but an
-  // explicit per-user Deny now beats it (user ask: "I change access and it
-  // does not change in actual" - admins were un-revokable).
+  // Super-admin is never lockable.
   if (isSuper) return true
+  // Per-user override wins over everything below. An explicit per-user Deny even
+  // beats an ADMIN's allow-all default (user ask: admins were un-revokable).
   const override = grants?.[key]
   if (override === 'revoke') return false
-  if (override === 'grant' || isAdmin(role)) return true
+  if (override === 'grant') return true
+  if (isAdmin(role)) return true
+  // ROLE-level mobile matrix: an admin can enable or deny a module for a whole
+  // role on mobile only, via the `mobile:`-prefixed module_permissions rows.
+  const matrix = roleMatrix?.[key]
+  if (matrix === true) return true
+  if (matrix === false) return false
+  // No per-user and no role override on mobile -> client-side role default.
   return moduleAllowedByRole(key, role)
 }
 

@@ -16,6 +16,7 @@ import {
 } from '../lib/api/erpImport'
 import { createProduction } from '../lib/api/production'
 import { exportToExcel } from '../lib/exportUtils'
+import { downloadErpTemplates } from '../lib/erpTemplates'
 import { toUserMessage } from '../lib/safeError'
 
 const ELEVATED = ['admin', 'manager', 'director']
@@ -250,6 +251,20 @@ function ImportPanel({
   const displayCols = dataset.columns.map((c) => c.key)
   const previewRows = derived.slice(0, PREVIEW_LIMIT)
 
+  const [tplBusy, setTplBusy] = useState(false)
+  const [tplErr, setTplErr] = useState('')
+
+  async function handleTemplate(keys) {
+    setTplErr(''); setTplBusy(true)
+    try {
+      await downloadErpTemplates(keys)
+    } catch (e) {
+      setTplErr(toUserMessage(e, 'Could not build the template file.'))
+    } finally {
+      setTplBusy(false)
+    }
+  }
+
   return (
     <div className="space-y-5">
       {!canWrite && (
@@ -257,6 +272,44 @@ function ImportPanel({
           <AlertTriangle size={16} /> Only Admin, Manager, or Director can save imports. You can still preview a file.
         </div>
       )}
+
+      {/* Downloadable ERP templates */}
+      <div className="bg-[var(--surface-1)] border border-[var(--border-dim)] rounded-xl p-4 space-y-3">
+        <div className="flex items-start gap-3">
+          <FileSpreadsheet size={18} className="shrink-0 text-green-400 mt-0.5" />
+          <div>
+            <p className="text-sm font-medium text-[var(--text-primary)]">Download import templates</p>
+            <p className="text-xs text-[var(--text-muted)] mt-0.5">
+              Send these templates to your ERP vendor, then upload the filled file here. Every sheet header is exactly what the importer expects, so a filled file maps automatically on upload.
+            </p>
+          </div>
+        </div>
+        {tplErr && (
+          <div className="bg-red-900/20 border border-red-700/50 rounded-lg p-2.5 text-red-300 text-xs flex gap-2">
+            <AlertTriangle size={14} /> {tplErr}
+          </div>
+        )}
+        <div className="flex flex-wrap gap-2">
+          <button
+            onClick={() => handleTemplate(null)}
+            disabled={tplBusy}
+            className="px-4 py-2 rounded-lg bg-green-600 hover:bg-green-500 text-white text-sm flex items-center gap-2 disabled:opacity-50"
+          >
+            {tplBusy ? <Loader2 size={15} className="animate-spin" /> : <Download size={15} />}
+            Download all templates
+          </button>
+          <button
+            onClick={() => handleTemplate([datasetKey])}
+            disabled={tplBusy}
+            className="px-4 py-2 rounded-lg bg-[var(--surface-2)] hover:bg-[var(--surface-3)] text-sm flex items-center gap-2 disabled:opacity-50"
+          >
+            <Download size={15} /> {dataset.label} template
+          </button>
+        </div>
+        <p className="text-xs text-[var(--text-muted)]">
+          One workbook with four sheets: Asset Master, Tyre Change Log, Tyre Expense (Purchase) and Production m3. Each sheet has the header row plus an example row and a format hint row.
+        </p>
+      </div>
 
       {/* File chooser */}
       <label className="block border-2 border-dashed border-[var(--border-bright)] rounded-xl p-8 text-center cursor-pointer hover:border-green-600/60">

@@ -27,6 +27,8 @@ import {
   listModules, seedFromCatalog, setModuleStatus, bulkSetStatus,
   dependencyWarnings, MODULE_STATUS_META,
 } from '../../lib/api/modulesRegistry'
+import { buildNavModuleCatalog } from '../../lib/moduleCatalog'
+import { NAV_CATALOG } from '../../components/Layout'
 import { toUserMessage } from '../../lib/safeError'
 
 // ── Small building blocks ─────────────────────────────────────────────────────
@@ -118,7 +120,9 @@ export default function ConsoleModuleControl() {
     setLoading(true)
     setError(null)
     try {
-      await seedFromCatalog()
+      // Seed from the COMPLETE navigable-module catalog (curated base modules +
+      // every real sidebar item), so Module Control covers the whole app.
+      await seedFromCatalog(buildNavModuleCatalog(NAV_CATALOG))
       const rows = await listModules()
       setModules(rows)
     } catch (err) {

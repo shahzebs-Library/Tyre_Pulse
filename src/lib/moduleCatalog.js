@@ -3,7 +3,17 @@
  * the 8 product workspaces used by the sidebar. Drives the Access Control matrix
  * (role × module) in User Management. Keys match `module_permissions.module_key`
  * and the `moduleKey` props on <ModuleRoute> in App.jsx.
+ *
+ * The curated MODULE_GROUPS below is the STABLE, hand-maintained set (its keys are
+ * referenced by module_permissions / user_access_grants and MUST NOT be renamed).
+ * `buildNavModuleCatalog()` (bottom of this file) expands it to the COMPLETE set of
+ * navigable modules by merging in every sidebar item, so surfaces that need full
+ * coverage (e.g. the super-admin Module Control Center) see every real app module
+ * without a second, drift-prone catalog. That merge is pure: the live nav
+ * descriptor (Layout.NAV_CATALOG) is passed in, never imported here, so this stays
+ * a React-free data module with no import cycle back into Layout.
  */
+import { NAV_MODULE_KEY } from './navAccess'
 
 /** @type {{ group: string, modules: { key: string, label: string }[] }[]} */
 export const MODULE_GROUPS = [
@@ -185,3 +195,80 @@ export const isSubmoduleKey = (key) => typeof key === 'string' && key.includes('
 /** The parent module_key of a sub-module key, or null for a base key. */
 export const parentModuleKey = (key) =>
   isSubmoduleKey(key) ? String(key).split(':', 1)[0] : null
+
+/**
+ * Convert a sidebar route into a stable, storable module key for nav items that
+ * have no explicit NAV_MODULE_KEY mapping. Deterministic and lowercase:
+ *   '/live-fleet'          -> 'live_fleet'
+ *   '/tyre-age-compliance' -> 'tyre_age_compliance'
+ * Leading slashes are stripped and every run of non-alphanumerics collapses to a
+ * single underscore. An empty result (e.g. the root '/') falls back to 'root';
+ * in practice '/' always resolves through NAV_MODULE_KEY to 'dashboard' first.
+ *
+ * @param {string} route
+ * @returns {string}
+ */
+export function slugifyModuleKey(route) {
+  const s = String(route == null ? '' : route)
+    .trim()
+    .toLowerCase()
+    .replace(/^\/+/, '')
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+  return s || 'root'
+}
+
+/**
+ * Build the COMPLETE, grouped module catalog by merging the live sidebar
+ * descriptor (Layout.NAV_CATALOG) onto the curated base catalog (MODULE_GROUPS).
+ *
+ * ONE source of truth, no fabrication: every navigable sidebar item becomes an
+ * access-controlled module.
+ *   - Curated base keys go first and OWN their label + group (they are the stable
+ *     module_permissions / user_access_grants keys, never renamed here).
+ *   - A nav item whose route resolves to an existing key collapses onto it, so the
+ *     many-routes-to-one-module cases (e.g. the KPI pages, the fleet_master pages)
+ *     stay a single module.
+ *   - A nav item with no curated key is ADDED under its sidebar group, keyed by its
+ *     NAV_MODULE_KEY when one exists, else a slug of the route.
+ *
+ * Pure + deterministic: the nav descriptor is an argument (Layout is a React
+ * module; keeping this helper React-free avoids a cycle and keeps the service
+ * layer light). Returns a flat, de-duplicated, order-stable list.
+ *
+ * @param {{key?:string,label?:string,items?:{key?:string,label?:string}[]}[]} navCatalog
+ *        Layout.NAV_CATALOG shape: group key = group label, item key = route `to`.
+ * @param {Record<string,string>} [moduleKeyMap=NAV_MODULE_KEY] route -> module key.
+ * @returns {{module_id:string,name:string,category:string}[]}
+ */
+export function buildNavModuleCatalog(navCatalog, moduleKeyMap = NAV_MODULE_KEY) {
+  const out = []
+  const seen = new Set()
+
+  // 1. Curated base modules first: they own their label + group (stable keys).
+  for (const m of ALL_MODULES) {
+    if (seen.has(m.key)) continue
+    seen.add(m.key)
+    out.push({ module_id: m.key, name: m.label, category: m.group })
+  }
+
+  // 2. Every sidebar item, in sidebar order, grouped by its nav group.
+  const groups = Array.isArray(navCatalog) ? navCatalog : []
+  for (const g of groups) {
+    if (!g || typeof g !== 'object') continue
+    const category =
+      typeof g.label === 'string' && g.label.trim() ? g.label.trim() : String(g.key || '')
+    const items = Array.isArray(g.items) ? g.items : []
+    for (const it of items) {
+      if (!it || typeof it !== 'object') continue
+      const route = typeof it.key === 'string' ? it.key : ''
+      if (!route) continue
+      const key = (moduleKeyMap && moduleKeyMap[route]) || slugifyModuleKey(route)
+      if (!key || seen.has(key)) continue
+      seen.add(key)
+      out.push({ module_id: key, name: String(it.label || key), category })
+    }
+  }
+
+  return out
+}

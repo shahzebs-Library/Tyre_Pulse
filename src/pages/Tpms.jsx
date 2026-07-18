@@ -2,26 +2,33 @@ import { useState, useEffect, useMemo, useCallback } from 'react'
 import { motion } from 'framer-motion'
 import {
   Chart as ChartJS,
-  CategoryScale, LinearScale, BarElement, ArcElement,
-  Title, Tooltip, Legend,
+  CategoryScale, LinearScale, BarElement, ArcElement, PointElement, LineElement,
+  Title, Tooltip, Legend, Filler,
 } from 'chart.js'
-import { Doughnut, Bar } from 'react-chartjs-2'
+import { Doughnut, Bar, Line } from 'react-chartjs-2'
 import {
   Gauge, AlertTriangle, TrendingDown, TrendingUp, Activity,
   Download, Filter, X, Search, RefreshCw, BarChart3, CheckCircle,
-  XCircle, Radio, Building2, Thermometer, Info,
+  XCircle, Radio, Building2, Thermometer, Info, LineChart, Percent,
+  ArrowUpDown, Layers, FileText, ShieldAlert,
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
 import { useSettings } from '../contexts/SettingsContext'
 import { tpms as tpmsApi } from '../lib/api'
+import { classifyPressure, DEFAULT_TARGET_PRESSURE, DEFAULT_TOLERANCE_PCT } from '../lib/tpms'
 import {
-  classifyPressure, summarizePressure,
-  DEFAULT_TARGET_PRESSURE, DEFAULT_TOLERANCE_PCT,
-} from '../lib/tpms'
+  computeKpis, bandDistribution, worstOffenders, complianceTrend,
+  siteCompliance, positionBreakdown, underInflationInsights,
+} from '../lib/tpmsAnalytics'
+import { exportToExcel, exportToPdf, reportFileName } from '../lib/exportUtils'
+import { toUserMessage } from '../lib/safeError'
 
-ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Title, Tooltip, Legend)
+ChartJS.register(
+  CategoryScale, LinearScale, BarElement, ArcElement, PointElement, LineElement,
+  Title, Tooltip, Legend, Filler,
+)
 
-// ── Band presentation ─────────────────────────────────────────────────────────
+// -- Band presentation ---------------------------------------------------------
 const BAND_META = {
   optimal:  { label: 'Optimal',  color: '#22c55e', text: 'text-green-400',  chip: 'bg-green-500/20 text-green-300 border border-green-500/40' },
   under:    { label: 'Under',    color: '#f97316', text: 'text-orange-400', chip: 'bg-orange-500/20 text-orange-300 border border-orange-500/40' },
@@ -35,7 +42,7 @@ function BandChip({ band }) {
   return <span className={`text-xs px-2 py-0.5 rounded-full font-medium whitespace-nowrap ${m.chip}`}>{m.label}</span>
 }
 
-// ── KPI tile ──────────────────────────────────────────────────────────────────
+// -- KPI tile ------------------------------------------------------------------
 function KpiTile({ title, value, sub, icon: Icon, tone = 'blue', alert }) {
   const border = {
     green:  'border-green-700/40 bg-green-950/20',
@@ -61,7 +68,7 @@ function KpiTile({ title, value, sub, icon: Icon, tone = 'blue', alert }) {
   )
 }
 
-// ── Select helper ─────────────────────────────────────────────────────────────
+// -- Select helper -------------------------------------------------------------
 function Select({ value, onChange, options, placeholder, className = '' }) {
   return (
     <select
@@ -81,6 +88,8 @@ const chartTooltip = {
   backgroundColor: 'var(--panel)', titleColor: '#f9fafb', bodyColor: '#d1d5db',
   borderColor: 'var(--hairline)', borderWidth: 1,
 }
+const axisGrid = { color: 'var(--panel-2)' }
+const axisTick = { color: '#9ca3af', font: { size: 10 } }
 
 // Normalize either data source into one reading shape the page renders.
 function normalize(row, source) {
@@ -106,18 +115,38 @@ function normalize(row, source) {
   }
 }
 
+// Signed deviation for a normalized reading, ready to display.
+function devLabel(r) {
+  if (r.pressure == null || !(r.target > 0)) return 'N/A'
+  const d = ((r.pressure - r.target) / r.target) * 100
+  const sign = d > 0 ? '+' : ''
+  return `${sign}${d.toFixed(0)}%`
+}
+
+const SORTS = {
+  worst:    { label: 'Worst first' },
+  pressure: { label: 'Pressure low to high' },
+  deviation:{ label: 'Deviation high to low' },
+  recent:   { label: 'Most recent' },
+}
+const BAND_RANK = { critical: 0, under: 1, over: 2, optimal: 3, unknown: 4 }
+
 export default function Tpms() {
-  const { activeCountry } = useSettings()
+  const { activeCountry, appSettings } = useSettings()
+  const company = appSettings?.company_name || 'TyrePulse'
 
   const [readings, setReadings] = useState([])
   const [dataSource, setDataSource] = useState('baseline') // 'sensor' | 'baseline'
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [exporting, setExporting] = useState(false)
 
   // Filters
   const [bandFilter, setBandFilter] = useState('')
   const [siteFilter, setSiteFilter] = useState('')
+  const [positionFilter, setPositionFilter] = useState('')
   const [search, setSearch] = useState('')
+  const [sortBy, setSortBy] = useState('worst')
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -135,7 +164,7 @@ export default function Tpms() {
         setDataSource('baseline')
       }
     } catch (e) {
-      setError(e?.message || 'Failed to load TPMS data')
+      setError(toUserMessage(e, 'Failed to load TPMS data'))
       setReadings([])
     } finally {
       setLoading(false)
@@ -149,12 +178,17 @@ export default function Tpms() {
     () => [...new Set(readings.map(r => r.site).filter(Boolean))].sort(),
     [readings],
   )
+  const positions = useMemo(
+    () => [...new Set(readings.map(r => r.position).filter(Boolean))].sort(),
+    [readings],
+  )
 
   // Apply filters
   const filtered = useMemo(() => {
     let d = readings
     if (bandFilter) d = d.filter(r => r.band === bandFilter)
     if (siteFilter) d = d.filter(r => r.site === siteFilter)
+    if (positionFilter) d = d.filter(r => r.position === positionFilter)
     if (search) {
       const q = search.toLowerCase()
       d = d.filter(r =>
@@ -164,34 +198,47 @@ export default function Tpms() {
         (r.position || '').toLowerCase().includes(q))
     }
     return d
-  }, [readings, bandFilter, siteFilter, search])
+  }, [readings, bandFilter, siteFilter, positionFilter, search])
 
-  const summary = useMemo(() => summarizePressure(filtered), [filtered])
+  // Analytics engine (single source of truth for all KPIs / charts / tables)
+  const kpis = useMemo(() => computeKpis(filtered), [filtered])
+  const dist = useMemo(() => bandDistribution(filtered), [filtered])
+  const trend = useMemo(() => complianceTrend(filtered, { months: 12 }), [filtered])
+  const sitesRank = useMemo(() => siteCompliance(filtered), [filtered])
+  const positionRank = useMemo(() => positionBreakdown(filtered), [filtered])
+  const offenders = useMemo(() => worstOffenders(filtered, { limit: 0 }), [filtered])
+  const insights = useMemo(() => underInflationInsights(filtered), [filtered])
 
-  // Alerts = under / over / critical, worst first
+  // Alerts table with a selectable sort. Base set = under / over / critical.
   const alertRows = useMemo(() => {
-    const rank = { critical: 0, under: 1, over: 2 }
-    return filtered
-      .filter(r => r.band === 'under' || r.band === 'over' || r.band === 'critical')
-      .sort((a, b) => (rank[a.band] ?? 9) - (rank[b.band] ?? 9) || (b.date || '') > (a.date || '') ? 1 : -1)
-  }, [filtered])
+    const rows = offenders.slice()
+    if (sortBy === 'pressure') {
+      rows.sort((a, b) => (a.pressure ?? Infinity) - (b.pressure ?? Infinity))
+    } else if (sortBy === 'deviation') {
+      rows.sort((a, b) => (b.absDeviationPct ?? -1) - (a.absDeviationPct ?? -1))
+    } else if (sortBy === 'recent') {
+      rows.sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')))
+    } else {
+      rows.sort((a, b) =>
+        (BAND_RANK[a.band] ?? 9) - (BAND_RANK[b.band] ?? 9) ||
+        (b.absDeviationPct ?? -1) - (a.absDeviationPct ?? -1))
+    }
+    return rows
+  }, [offenders, sortBy])
 
   // Charts
-  const doughnutData = useMemo(() => {
-    const order = ['optimal', 'under', 'over', 'critical']
-    return {
-      labels: order.map(b => BAND_META[b].label),
-      datasets: [{
-        data: order.map(b => summary.bands[b]),
-        backgroundColor: order.map(b => BAND_META[b].color),
-        borderColor: 'rgba(17,24,39,0.9)',
-        borderWidth: 2,
-      }],
-    }
-  }, [summary])
+  const doughnutData = useMemo(() => ({
+    labels: dist.map(d => d.label),
+    datasets: [{
+      data: dist.map(d => d.count),
+      backgroundColor: dist.map(d => BAND_META[d.band]?.color ?? BAND_META.unknown.color),
+      borderColor: 'rgba(17,24,39,0.9)',
+      borderWidth: 2,
+    }],
+  }), [dist])
 
   const siteBarData = useMemo(() => {
-    const rows = summary.bySite.slice(0, 12)
+    const rows = sitesRank.slice(0, 12)
     return {
       labels: rows.map(r => r.site),
       datasets: [
@@ -201,51 +248,128 @@ export default function Tpms() {
         { label: 'Critical', data: rows.map(r => r.critical),  backgroundColor: BAND_META.critical.color, stack: 's' },
       ],
     }
-  }, [summary])
+  }, [sitesRank])
 
-  const compliancePct = summary.total > 0
-    ? ((summary.bands.optimal / summary.total) * 100).toFixed(1)
-    : '0.0'
+  const trendData = useMemo(() => ({
+    labels: trend.map(m => m.label),
+    datasets: [
+      {
+        type: 'line',
+        label: 'Compliance %',
+        data: trend.map(m => m.compliancePct),
+        borderColor: '#22c55e',
+        backgroundColor: 'rgba(34,197,94,0.15)',
+        fill: true,
+        tension: 0.35,
+        yAxisID: 'y',
+        pointRadius: 3,
+      },
+      {
+        type: 'bar',
+        label: 'Under + Critical',
+        data: trend.map(m => m.under + m.critical),
+        backgroundColor: BAND_META.under.color,
+        yAxisID: 'y1',
+        barPercentage: 0.6,
+      },
+    ],
+  }), [trend])
 
-  // Export
+  const compliancePct = kpis.compliancePct.toFixed(1)
+
+  // -- Exports -----------------------------------------------------------------
+  const exportRows = useMemo(() => filtered.map(r => ({
+    asset_no: r.asset_no || 'N/A',
+    serial: r.serial || 'N/A',
+    position: r.position || 'N/A',
+    size: r.size || 'N/A',
+    pressure: r.pressure ?? 'N/A',
+    target: r.target,
+    deviation: devLabel(r),
+    temperature: r.temperature ?? 'N/A',
+    status: BAND_META[r.band]?.label ?? r.band,
+    site: r.site || 'N/A',
+    country: r.country || 'N/A',
+    recorded: r.date ? String(r.date).slice(0, 10) : 'N/A',
+    source: r.source,
+  })), [filtered])
+
+  const EXPORT_COLS = ['asset_no', 'serial', 'position', 'size', 'pressure', 'target', 'deviation', 'temperature', 'status', 'site', 'country', 'recorded', 'source']
+  const EXPORT_HEADERS = ['Asset No', 'Serial', 'Position', 'Size', 'Pressure (bar)', 'Target (bar)', 'Deviation', 'Temp (C)', 'Status', 'Site', 'Country', 'Recorded', 'Source']
+
   const exportExcel = useCallback(async () => {
-    const XLSX = await import('xlsx')
-    const rows = filtered.map(r => ({
-      'Asset No': r.asset_no || '',
-      'Serial': r.serial || '',
-      'Position': r.position || '',
-      'Size': r.size || '',
-      'Pressure (bar)': r.pressure ?? '',
-      'Target (bar)': r.target,
-      'Temp (°C)': r.temperature ?? '',
-      'Status': BAND_META[r.band]?.label ?? r.band,
-      'Site': r.site || '',
-      'Country': r.country || '',
-      'Recorded': r.date || '',
-      'Source': r.source,
-    }))
-    const ws = XLSX.utils.json_to_sheet(rows)
-    ws['!cols'] = Object.keys(rows[0] || { a: 1 }).map(k => ({ wch: Math.max(k.length + 2, 12) }))
-    const wb = XLSX.utils.book_new()
-    XLSX.utils.book_append_sheet(wb, ws, 'TPMS Readings')
-    XLSX.writeFile(wb, `tpms_${new Date().toISOString().slice(0, 10)}.xlsx`)
-  }, [filtered])
+    setExporting(true)
+    try {
+      await exportToExcel(
+        exportRows, EXPORT_COLS, EXPORT_HEADERS,
+        reportFileName('TPMS Pressure Compliance'),
+        'TPMS Readings',
+        {
+          title: 'TPMS Pressure Compliance',
+          company,
+          meta: {
+            'Data source': dataSource === 'sensor' ? 'Live sensor (tpms_readings)' : 'Tyre-record baseline',
+            'Compliance %': `${compliancePct}%`,
+            'Under-inflated': kpis.underInflated,
+            'Over-inflated': kpis.overInflated,
+            'Critical': kpis.critical,
+            'Target (bar)': DEFAULT_TARGET_PRESSURE.toFixed(1),
+            'Tolerance %': DEFAULT_TOLERANCE_PCT,
+          },
+        },
+      )
+    } catch (e) {
+      setError(toUserMessage(e, 'Export failed'))
+    } finally {
+      setExporting(false)
+    }
+  }, [exportRows, company, dataSource, compliancePct, kpis])
 
-  const hasFilter = bandFilter || siteFilter || search
+  const exportPdf = useCallback(async () => {
+    setExporting(true)
+    try {
+      const cols = EXPORT_COLS.map((k, i) => ({ key: k, header: EXPORT_HEADERS[i] }))
+      await exportToPdf(
+        exportRows, cols,
+        'TPMS Pressure Compliance',
+        reportFileName('TPMS Pressure Compliance'),
+        'landscape',
+        company,
+        {
+          emptyHint: 'No pressure readings for the selected filters. Adjust the filters and export again.',
+          meta: {
+            'Compliance': `${compliancePct}%`,
+            'Under-inflated': kpis.underInflated,
+            'Critical': kpis.critical,
+          },
+        },
+      )
+    } catch (e) {
+      setError(toUserMessage(e, 'Export failed'))
+    } finally {
+      setExporting(false)
+    }
+  }, [exportRows, company, compliancePct, kpis])
+
+  const clearFilters = () => { setBandFilter(''); setSiteFilter(''); setPositionFilter(''); setSearch('') }
+  const hasFilter = bandFilter || siteFilter || positionFilter || search
 
   return (
     <div className="text-gray-100 space-y-5">
       <PageHeader
-        title="TPMS — Tyre Pressure Monitoring"
-        subtitle={`Live pressure & temperature monitoring with under/over-inflation alerts${summary.total > 0 ? ` · ${summary.total.toLocaleString()} readings` : ''}`}
+        title="TPMS - Tyre Pressure Monitoring"
+        subtitle={`Pressure compliance with under and over-inflation alerts${kpis.total > 0 ? ` · ${kpis.total.toLocaleString()} readings` : ''}`}
         icon={Radio}
         actions={
           <div className="flex items-center gap-2">
             <button onClick={load} className="btn-secondary text-xs px-3 py-1.5 flex items-center gap-1.5">
               <RefreshCw size={13} className={loading ? 'animate-spin' : ''} /> Refresh
             </button>
-            <button onClick={exportExcel} disabled={filtered.length === 0} className="btn-secondary text-xs px-3 py-1.5 flex items-center gap-1.5 disabled:opacity-40">
+            <button onClick={exportExcel} disabled={filtered.length === 0 || exporting} className="btn-secondary text-xs px-3 py-1.5 flex items-center gap-1.5 disabled:opacity-40">
               <Download size={13} /> Excel
+            </button>
+            <button onClick={exportPdf} disabled={filtered.length === 0 || exporting} className="btn-secondary text-xs px-3 py-1.5 flex items-center gap-1.5 disabled:opacity-40">
+              <FileText size={13} /> PDF
             </button>
           </div>
         }
@@ -255,8 +379,8 @@ export default function Tpms() {
       <div className={`rounded-xl border px-4 py-2.5 flex items-center gap-2 text-xs ${dataSource === 'sensor' ? 'border-blue-700/40 bg-blue-950/20 text-blue-300' : 'border-gray-700/50 bg-gray-900/40 text-gray-400'}`}>
         <Info size={13} className="shrink-0" />
         {dataSource === 'sensor'
-          ? <span>Live source: <strong className="text-blue-200">TPMS sensor readings</strong> (tpms_readings). Bands computed against a {DEFAULT_TARGET_PRESSURE.toFixed(1)} bar target ±{DEFAULT_TOLERANCE_PCT}%.</span>
-          : <span>No live sensor readings yet — showing <strong className="text-gray-200">tyre-record pressure baseline</strong> (tyre_records.pressure_reading). Bands computed against a {DEFAULT_TARGET_PRESSURE.toFixed(1)} bar target ±{DEFAULT_TOLERANCE_PCT}%. Ingest sensor data to enable live monitoring.</span>}
+          ? <span>Live source: <strong className="text-blue-200">TPMS sensor readings</strong> (tpms_readings). Bands computed against a {DEFAULT_TARGET_PRESSURE.toFixed(1)} bar target with a {DEFAULT_TOLERANCE_PCT}% tolerance.</span>
+          : <span>No live sensor readings yet. Showing the <strong className="text-gray-200">tyre-record pressure baseline</strong> (tyre_records.pressure_reading). Bands computed against a {DEFAULT_TARGET_PRESSURE.toFixed(1)} bar target with a {DEFAULT_TOLERANCE_PCT}% tolerance. Ingest sensor data to enable live monitoring.</span>}
       </div>
 
       {/* Filters */}
@@ -265,7 +389,7 @@ export default function Tpms() {
           <Filter size={13} className="text-gray-400" />
           <span className="text-xs font-medium text-gray-400">Filters</span>
           {hasFilter && (
-            <button onClick={() => { setBandFilter(''); setSiteFilter(''); setSearch('') }} className="ml-auto flex items-center gap-1 text-xs text-red-400 hover:text-red-300">
+            <button onClick={clearFilters} className="ml-auto flex items-center gap-1 text-xs text-red-400 hover:text-red-300">
               <X size={12} /> Clear
             </button>
           )}
@@ -279,7 +403,8 @@ export default function Tpms() {
               { value: 'critical', label: 'Critical' },
             ]} />
           <Select value={siteFilter} onChange={setSiteFilter} options={sites} placeholder="All Sites" />
-          <div className="relative sm:col-span-2 md:col-span-2">
+          <Select value={positionFilter} onChange={setPositionFilter} options={positions} placeholder="All Positions" />
+          <div className="relative">
             <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-500" />
             <input
               value={search}
@@ -299,41 +424,70 @@ export default function Tpms() {
         </div>
       )}
       {error && !loading && (
-        <div className="bg-red-950/30 border border-red-700/40 rounded-xl p-4 flex items-center gap-3">
-          <XCircle size={16} className="text-red-400" />
-          <p className="text-sm text-red-300">{error}</p>
+        <div className="bg-red-950/30 border border-red-700/40 rounded-xl p-4 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <XCircle size={16} className="text-red-400" />
+            <p className="text-sm text-red-300">{error}</p>
+          </div>
+          <button onClick={load} className="btn-secondary text-xs px-3 py-1.5 flex items-center gap-1.5 shrink-0">
+            <RefreshCw size={12} /> Retry
+          </button>
         </div>
       )}
 
       {!loading && !error && (
         <>
-          {summary.total === 0 ? (
+          {kpis.total === 0 ? (
             <div className="flex flex-col items-center justify-center py-24 gap-3">
               <Gauge size={40} className="text-gray-700" />
               <p className="text-gray-500 text-sm">No pressure readings found for the selected filters.</p>
               {hasFilter && (
-                <button onClick={() => { setBandFilter(''); setSiteFilter(''); setSearch('') }} className="btn-secondary text-xs px-3 py-1.5">Clear filters</button>
+                <button onClick={clearFilters} className="btn-secondary text-xs px-3 py-1.5">Clear filters</button>
               )}
             </div>
           ) : (
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-5">
 
               {/* KPI tiles */}
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-                <KpiTile title="Readings" value={summary.total.toLocaleString()} sub={`${compliancePct}% optimal`} icon={Activity} tone="blue" />
-                <KpiTile title="Under-Inflated" value={summary.bands.under} sub="Below target band" icon={TrendingDown} tone={summary.bands.under > 0 ? 'orange' : 'green'} />
-                <KpiTile title="Over-Inflated" value={summary.bands.over} sub="Above target band" icon={TrendingUp} tone={summary.bands.over > 0 ? 'amber' : 'green'} />
-                <KpiTile title="Critical" value={summary.bands.critical} sub="Severe under-inflation" icon={AlertTriangle} tone={summary.bands.critical > 0 ? 'red' : 'green'} alert={summary.bands.critical > 0} />
-                <KpiTile title="Avg Pressure" value={summary.avgPressure != null ? `${summary.avgPressure.toFixed(1)} bar` : 'N/A'} sub={`Target ${DEFAULT_TARGET_PRESSURE.toFixed(1)} bar`} icon={Gauge} tone="blue" />
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+                <KpiTile title="Readings" value={kpis.total.toLocaleString()} sub={`${kpis.assessed.toLocaleString()} assessed`} icon={Activity} tone="blue" />
+                <KpiTile title="Compliance" value={`${compliancePct}%`} sub="Within target band" icon={Percent} tone={kpis.compliancePct >= 90 ? 'green' : kpis.compliancePct >= 75 ? 'amber' : 'red'} />
+                <KpiTile title="Under-Inflated" value={kpis.underInflated.toLocaleString()} sub={`${kpis.underInflatedPct.toFixed(0)}% of assessed`} icon={TrendingDown} tone={kpis.underInflated > 0 ? 'orange' : 'green'} alert={kpis.underInflated > 0} />
+                <KpiTile title="Over-Inflated" value={kpis.overInflated.toLocaleString()} sub="Above target band" icon={TrendingUp} tone={kpis.overInflated > 0 ? 'amber' : 'green'} />
+                <KpiTile title="Critical" value={kpis.critical.toLocaleString()} sub="Severe under-inflation" icon={AlertTriangle} tone={kpis.critical > 0 ? 'red' : 'green'} alert={kpis.critical > 0} />
+                <KpiTile title="Avg Pressure" value={kpis.avgPressure != null ? `${kpis.avgPressure.toFixed(1)} bar` : 'N/A'} sub={`Target ${DEFAULT_TARGET_PRESSURE.toFixed(1)} bar`} icon={Gauge} tone="blue" />
               </div>
 
-              {/* Charts */}
+              {/* Under-inflation intelligence callout */}
+              <div className={`rounded-xl border px-4 py-3 flex flex-wrap items-center gap-x-6 gap-y-2 text-xs ${insights.underInflatedCount > 0 ? 'border-orange-700/40 bg-orange-950/20' : 'border-green-800/40 bg-green-950/20'}`}>
+                <div className="flex items-center gap-2">
+                  <ShieldAlert size={15} className={insights.underInflatedCount > 0 ? 'text-orange-400' : 'text-green-400'} />
+                  <span className="font-semibold text-gray-200">Under-Inflation Intelligence</span>
+                </div>
+                {insights.underInflatedCount > 0 ? (
+                  <>
+                    <span className="text-gray-300"><strong className="text-orange-300">{insights.underInflatedCount}</strong> under-inflated ({insights.underInflatedPct.toFixed(0)}% of assessed), {insights.criticalCount} critical</span>
+                    {insights.avgUnderDeviationPct != null && (
+                      <span className="text-gray-400">Avg shortfall <strong className="text-orange-300">{insights.avgUnderDeviationPct.toFixed(0)}%</strong> below target</span>
+                    )}
+                    <span className="text-gray-400">{insights.sitesAffected} site{insights.sitesAffected === 1 ? '' : 's'} affected</span>
+                    {insights.worstSite && (
+                      <span className="text-gray-400">Worst site: <strong className="text-orange-300">{insights.worstSite.site}</strong> ({insights.worstSite.underInflated})</span>
+                    )}
+                    <span className="text-gray-500">Under-inflation raises rolling resistance, fuel burn and blow-out risk. Address critical readings first.</span>
+                  </>
+                ) : (
+                  <span className="text-gray-300">No under-inflated readings in the current view. Every assessed tyre is at or above the target band.</span>
+                )}
+              </div>
+
+              {/* Charts row 1 */}
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                 <div className="card">
                   <div className="flex items-center gap-2 mb-3">
                     <BarChart3 size={14} className="text-blue-400" />
                     <h3 className="text-sm font-semibold text-[var(--text-primary)]">Pressure Band Split</h3>
-                    <span className="ml-auto text-xs text-gray-500">{summary.total} readings</span>
+                    <span className="ml-auto text-xs text-gray-500">{kpis.total} readings</span>
                   </div>
                   <div className="h-64 flex items-center justify-center">
                     <Doughnut
@@ -351,11 +505,40 @@ export default function Tpms() {
 
                 <div className="card">
                   <div className="flex items-center gap-2 mb-3">
+                    <LineChart size={14} className="text-green-400" />
+                    <h3 className="text-sm font-semibold text-[var(--text-primary)]">Compliance Trend</h3>
+                    <span className="ml-auto text-xs text-gray-500">{trend.length ? `Last ${trend.length} month${trend.length === 1 ? '' : 's'}` : 'No dated readings'}</span>
+                  </div>
+                  {trend.length === 0 ? (
+                    <div className="flex items-center justify-center h-64 text-gray-600 text-sm">No dated readings to trend</div>
+                  ) : (
+                    <div className="h-64">
+                      <Line
+                        data={trendData}
+                        options={{
+                          responsive: true, maintainAspectRatio: false,
+                          plugins: { legend: { labels: { color: '#9ca3af', font: { size: 10 } } }, tooltip: chartTooltip },
+                          scales: {
+                            x: { grid: axisGrid, ticks: { ...axisTick, font: { size: 9 } } },
+                            y: { position: 'left', min: 0, max: 100, grid: axisGrid, ticks: { ...axisTick, callback: v => `${v}%` }, title: { display: true, text: 'Compliance %', color: '#6b7280', font: { size: 9 } } },
+                            y1: { position: 'right', min: 0, grid: { drawOnChartArea: false }, ticks: axisTick, title: { display: true, text: 'Under + Critical', color: '#6b7280', font: { size: 9 } } },
+                          },
+                        }}
+                      />
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Charts row 2 */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                <div className="card">
+                  <div className="flex items-center gap-2 mb-3">
                     <Building2 size={14} className="text-purple-400" />
                     <h3 className="text-sm font-semibold text-[var(--text-primary)]">Readings by Site</h3>
-                    <span className="ml-auto text-xs text-gray-500">Top {Math.min(12, summary.bySite.length)} sites</span>
+                    <span className="ml-auto text-xs text-gray-500">Top {Math.min(12, sitesRank.length)} sites</span>
                   </div>
-                  {summary.bySite.length === 0 ? (
+                  {sitesRank.length === 0 ? (
                     <div className="flex items-center justify-center h-64 text-gray-600 text-sm">No site data</div>
                   ) : (
                     <div className="h-64">
@@ -365,11 +548,50 @@ export default function Tpms() {
                           responsive: true, maintainAspectRatio: false,
                           plugins: { legend: { labels: { color: '#9ca3af', font: { size: 10 } } }, tooltip: chartTooltip },
                           scales: {
-                            x: { stacked: true, grid: { color: 'rgba(31,41,55,0.8)' }, ticks: { color: '#9ca3af', font: { size: 9 } } },
-                            y: { stacked: true, grid: { color: 'rgba(31,41,55,0.8)' }, ticks: { color: '#9ca3af', font: { size: 10 } } },
+                            x: { stacked: true, grid: axisGrid, ticks: { ...axisTick, font: { size: 9 } } },
+                            y: { stacked: true, grid: axisGrid, ticks: axisTick },
                           },
                         }}
                       />
+                    </div>
+                  )}
+                </div>
+
+                {/* Position breakdown table */}
+                <div className="card">
+                  <div className="flex items-center gap-2 mb-3">
+                    <Layers size={14} className="text-blue-400" />
+                    <h3 className="text-sm font-semibold text-[var(--text-primary)]">Compliance by Position</h3>
+                    <span className="ml-auto text-xs text-gray-500">{positionRank.length} position{positionRank.length === 1 ? '' : 's'}</span>
+                  </div>
+                  {positionRank.length === 0 ? (
+                    <div className="flex items-center justify-center h-64 text-gray-600 text-sm">No position data</div>
+                  ) : (
+                    <div className="overflow-x-auto max-h-64">
+                      <table className="w-full text-xs">
+                        <thead>
+                          <tr className="border-b border-gray-700/60 text-gray-500">
+                            {['Position', 'Readings', 'Under', 'Over', 'Critical', 'Compliance'].map(h => (
+                              <th key={h} className="text-left pb-2 pr-3 font-medium whitespace-nowrap">{h}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {positionRank.slice(0, 30).map((p, i) => {
+                            const tone = p.compliancePct >= 90 ? 'text-green-400' : p.compliancePct >= 75 ? 'text-amber-400' : 'text-red-400'
+                            return (
+                              <tr key={p.position ?? i} className="border-b border-gray-800/60 hover:bg-gray-800/30">
+                                <td className="py-1.5 pr-3 text-gray-200 whitespace-nowrap">{p.position}</td>
+                                <td className="py-1.5 pr-3 text-gray-400">{p.total}</td>
+                                <td className="py-1.5 pr-3 text-orange-400">{p.under}</td>
+                                <td className="py-1.5 pr-3 text-amber-400">{p.over}</td>
+                                <td className="py-1.5 pr-3 text-red-400">{p.critical}</td>
+                                <td className={`py-1.5 pr-3 font-bold ${tone}`}>{p.compliancePct.toFixed(0)}%</td>
+                              </tr>
+                            )
+                          })}
+                        </tbody>
+                      </table>
                     </div>
                   )}
                 </div>
@@ -383,20 +605,24 @@ export default function Tpms() {
                     <h3 className="text-sm font-semibold text-[var(--text-primary)]">Inflation Alerts</h3>
                     <span className="text-xs px-2 py-0.5 bg-red-900/30 text-red-300 border border-red-700/40 rounded-full">{alertRows.length}</span>
                   </div>
-                  <span className="sm:ml-auto text-xs text-gray-500">Under / over / critical readings, worst first</span>
+                  <div className="sm:ml-auto flex items-center gap-2">
+                    <ArrowUpDown size={12} className="text-gray-500" />
+                    <Select value={sortBy === 'worst' ? '' : sortBy} onChange={v => setSortBy(v || 'worst')} placeholder="Worst first"
+                      options={Object.entries(SORTS).filter(([k]) => k !== 'worst').map(([value, m]) => ({ value, label: m.label }))} />
+                  </div>
                 </div>
 
                 {alertRows.length === 0 ? (
                   <div className="flex flex-col items-center py-12 gap-2">
                     <CheckCircle size={28} className="text-green-500" />
-                    <p className="text-gray-400 text-sm">No inflation alerts — all readings within the target band.</p>
+                    <p className="text-gray-400 text-sm">No inflation alerts. All readings are within the target band.</p>
                   </div>
                 ) : (
                   <div className="overflow-x-auto">
                     <table className="w-full text-xs">
                       <thead>
                         <tr className="border-b border-gray-700/60">
-                          {['Asset', 'Position', 'Serial', 'Pressure', 'Target', 'Temp', 'Status', 'Site', 'Recorded'].map(h => (
+                          {['Asset', 'Position', 'Serial', 'Pressure', 'Target', 'Deviation', 'Temp', 'Status', 'Site', 'Recorded'].map(h => (
                             <th key={h} className="text-left text-gray-500 pb-2 pr-3 font-medium whitespace-nowrap">{h}</th>
                           ))}
                         </tr>
@@ -404,42 +630,44 @@ export default function Tpms() {
                       <tbody>
                         {alertRows.slice(0, 200).map((r, i) => (
                           <tr key={r.id ?? i} className="border-b border-gray-800/60 hover:bg-gray-800/30 transition-colors">
-                            <td className="py-2 pr-3 text-white font-medium">{r.asset_no || '-'}</td>
-                            <td className="py-2 pr-3 text-gray-300">{r.position || '-'}</td>
-                            <td className="py-2 pr-3 text-gray-400 font-mono">{r.serial || '-'}</td>
-                            <td className={`py-2 pr-3 font-bold ${BAND_META[r.band]?.text ?? ''}`}>{r.pressure != null ? `${r.pressure.toFixed(1)} bar` : '-'}</td>
+                            <td className="py-2 pr-3 text-white font-medium">{r.asset_no || 'N/A'}</td>
+                            <td className="py-2 pr-3 text-gray-300">{r.position || 'N/A'}</td>
+                            <td className="py-2 pr-3 text-gray-400 font-mono">{r.serial || 'N/A'}</td>
+                            <td className={`py-2 pr-3 font-bold ${BAND_META[r.band]?.text ?? ''}`}>{r.pressure != null ? `${r.pressure.toFixed(1)} bar` : 'N/A'}</td>
                             <td className="py-2 pr-3 text-gray-400">{r.target.toFixed(1)} bar</td>
-                            <td className="py-2 pr-3 text-gray-400">{r.temperature != null ? `${r.temperature.toFixed(0)}°C` : '-'}</td>
+                            <td className={`py-2 pr-3 font-medium ${BAND_META[r.band]?.text ?? 'text-gray-400'}`}>{devLabel(r)}</td>
+                            <td className="py-2 pr-3 text-gray-400">{r.temperature != null ? `${r.temperature.toFixed(0)}C` : 'N/A'}</td>
                             <td className="py-2 pr-3"><BandChip band={r.band} /></td>
-                            <td className="py-2 pr-3 text-gray-400">{r.site || '-'}</td>
-                            <td className="py-2 pr-3 text-gray-500 whitespace-nowrap">{r.date ? String(r.date).slice(0, 10) : '-'}</td>
+                            <td className="py-2 pr-3 text-gray-400">{r.site || 'N/A'}</td>
+                            <td className="py-2 pr-3 text-gray-500 whitespace-nowrap">{r.date ? String(r.date).slice(0, 10) : 'N/A'}</td>
                           </tr>
                         ))}
                       </tbody>
                     </table>
                     {alertRows.length > 200 && (
-                      <p className="text-xs text-gray-500 mt-3">Showing first 200 of {alertRows.length} alerts — refine filters or export for the full set.</p>
+                      <p className="text-xs text-gray-500 mt-3">Showing first 200 of {alertRows.length} alerts. Refine filters or export for the full set.</p>
                     )}
                   </div>
                 )}
               </div>
 
-              {/* Site breakdown strip */}
-              {summary.bySite.length > 0 && (
+              {/* Site compliance strip */}
+              {sitesRank.length > 0 && (
                 <div className="card">
                   <div className="flex items-center gap-2 mb-3">
                     <Thermometer size={14} className="text-amber-400" />
                     <h3 className="text-sm font-semibold text-[var(--text-primary)]">Compliance by Site</h3>
+                    <span className="ml-auto text-xs text-gray-500">Worst first</span>
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                    {summary.bySite.slice(0, 9).map(s => {
-                      const pct = s.total > 0 ? ((s.optimal / s.total) * 100).toFixed(0) : '0'
-                      const tone = Number(pct) >= 90 ? 'text-green-400' : Number(pct) >= 75 ? 'text-amber-400' : 'text-red-400'
+                    {sitesRank.slice(0, 9).map(s => {
+                      const pct = s.compliancePct
+                      const tone = pct >= 90 ? 'text-green-400' : pct >= 75 ? 'text-amber-400' : 'text-red-400'
                       return (
                         <div key={s.site} className="bg-gray-800/40 rounded-xl p-3 border border-gray-700/40">
                           <div className="flex items-center justify-between">
                             <p className="text-xs text-gray-400 truncate">{s.site}</p>
-                            <span className={`text-sm font-bold ${tone}`}>{pct}%</span>
+                            <span className={`text-sm font-bold ${tone}`}>{pct.toFixed(0)}%</span>
                           </div>
                           <p className="text-xs text-gray-600 mt-1">{s.total} readings · {s.alerts} alert{s.alerts === 1 ? '' : 's'}</p>
                         </div>

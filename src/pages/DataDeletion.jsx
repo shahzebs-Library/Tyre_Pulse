@@ -12,8 +12,8 @@
  */
 import { useState } from 'react'
 
-// The monitored inbox that receives deletion requests. CHANGE to your real one.
-const SUPPORT_EMAIL = 'privacy@tyrepulse.com'
+// The monitored inbox that receives deletion requests.
+const SUPPORT_EMAIL = 'info@tyrepulse.app'
 const APP_NAME = 'Tyre Pulse'
 const RETENTION_DAYS = 30
 

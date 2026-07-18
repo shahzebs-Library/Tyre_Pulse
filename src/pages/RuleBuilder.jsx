@@ -193,11 +193,11 @@ export default function RuleBuilder() {
   // ── Loading (edit) ──
   if (loading) {
     return (
-      <div className="text-white">
+      <div className="text-[var(--text-primary)]">
         <BuilderHeader mode={mode} onBack={goBack} />
         <div className="max-w-2xl mx-auto mt-6 space-y-4">
           {Array.from({ length: 5 }).map((_, i) => (
-            <div key={i} className="h-16 rounded-xl bg-gray-800 border border-gray-700 animate-pulse" />
+            <div key={i} className="h-16 rounded-xl bg-[var(--surface-2)] border border-[var(--input-border)] animate-pulse" />
           ))}
         </div>
       </div>
@@ -207,17 +207,17 @@ export default function RuleBuilder() {
   // ── Load error / not found (edit) ──
   if (loadError || notFound) {
     return (
-      <div className="text-white">
+      <div className="text-[var(--text-primary)]">
         <BuilderHeader mode={mode} onBack={goBack} />
         <div className="max-w-2xl mx-auto mt-8 flex flex-col items-center justify-center gap-4 py-16 text-center">
-          <div className="w-16 h-16 rounded-full bg-gray-800 border border-gray-700 flex items-center justify-center">
+          <div className="w-16 h-16 rounded-full bg-[var(--surface-2)] border border-[var(--input-border)] flex items-center justify-center">
             <AlertTriangle className="w-7 h-7 text-red-400" />
           </div>
           <div>
             <p className="text-gray-200 text-base font-medium">
               {notFound ? 'Rule not found' : 'Could not load this rule'}
             </p>
-            <p className="text-gray-500 text-sm mt-1">
+            <p className="text-[var(--text-muted)] text-sm mt-1">
               {notFound
                 ? 'It may have been deleted. Return to the rules list to continue.'
                 : (loadError || 'An unexpected error occurred.')}
@@ -234,7 +234,7 @@ export default function RuleBuilder() {
             )}
             <button
               onClick={goBack}
-              className="px-4 py-2 text-sm text-gray-300 hover:text-white bg-gray-800 hover:bg-gray-700 rounded-lg border border-gray-700 transition-all"
+              className="px-4 py-2 text-sm text-gray-300 hover:text-[var(--text-primary)] bg-[var(--surface-2)] hover:bg-[var(--surface-3)] rounded-lg border border-[var(--input-border)] transition-all"
             >
               Back to rules
             </button>
@@ -246,7 +246,7 @@ export default function RuleBuilder() {
 
   // ── Builder form ──
   return (
-    <div className="text-white">
+    <div className="text-[var(--text-primary)]">
       <BuilderHeader mode={mode} onBack={goBack} />
 
       {saveError && (
@@ -257,11 +257,11 @@ export default function RuleBuilder() {
       )}
 
       <form onSubmit={handleSubmit} className="max-w-2xl mx-auto mt-6">
-        <div className="bg-gray-900 border border-gray-800 rounded-2xl overflow-hidden">
+        <div className="bg-[var(--surface-1)] border border-[var(--border-dim)] rounded-2xl overflow-hidden">
           <div className="px-6 py-6 space-y-5">
             {/* Name */}
             <div>
-              <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1.5">
+              <label className="block text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wider mb-1.5">
                 Rule Name <span className="text-orange-500">*</span>
               </label>
               <input
@@ -269,31 +269,31 @@ export default function RuleBuilder() {
                 value={form.name}
                 onChange={e => set('name', e.target.value)}
                 placeholder="e.g. Critical tread alert for Riyadh"
-                className={`w-full bg-gray-800 border rounded-lg px-3 py-2.5 text-white text-sm placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-orange-500 transition-all ${errors.name ? 'border-red-500' : 'border-gray-700'}`}
+                className={`w-full bg-[var(--surface-2)] border rounded-lg px-3 py-2.5 text-[var(--text-primary)] text-sm placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-orange-500 transition-all ${errors.name ? 'border-red-500' : 'border-[var(--input-border)]'}`}
               />
               {errors.name && <p className="text-red-400 text-xs mt-1">{errors.name}</p>}
             </div>
 
             {/* Description */}
             <div>
-              <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1.5">
-                Description <span className="text-gray-600 font-normal normal-case">(optional)</span>
+              <label className="block text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wider mb-1.5">
+                Description <span className="text-[var(--text-muted)] font-normal normal-case">(optional)</span>
               </label>
               <textarea
                 value={form.description}
                 onChange={e => set('description', e.target.value)}
                 rows={2}
                 placeholder="What this rule automates and why"
-                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2.5 text-white text-sm placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-orange-500 transition-all resize-none"
+                className="w-full bg-[var(--surface-2)] border border-[var(--input-border)] rounded-lg px-3 py-2.5 text-[var(--text-primary)] text-sm placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-orange-500 transition-all resize-none"
               />
             </div>
 
             {/* Event types */}
             <div>
-              <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">
+              <label className="block text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wider mb-2">
                 Trigger Events <span className="text-orange-500">*</span>
               </label>
-              <div className="flex flex-wrap gap-1.5 p-3 rounded-xl bg-gray-800 border border-gray-700 max-h-48 overflow-y-auto">
+              <div className="flex flex-wrap gap-1.5 p-3 rounded-xl bg-[var(--surface-2)] border border-[var(--input-border)] max-h-48 overflow-y-auto">
                 {EVENT_TYPES.map(ev => {
                   const on = form.event_types.includes(ev)
                   return (
@@ -302,7 +302,7 @@ export default function RuleBuilder() {
                       type="button"
                       onClick={() => toggleEvent(ev)}
                       className={`px-2 py-1 rounded-md text-[11px] font-mono border transition-all ${
-                        on ? 'bg-purple-500/20 text-purple-300 border-purple-500/40' : 'bg-gray-900 text-gray-500 border-gray-700 hover:text-gray-300'
+                        on ? 'bg-purple-500/20 text-purple-300 border-purple-500/40' : 'bg-[var(--surface-1)] text-[var(--text-muted)] border-[var(--input-border)] hover:text-gray-300'
                       }`}
                     >
                       {ev}
@@ -316,8 +316,8 @@ export default function RuleBuilder() {
             {/* Conditions builder */}
             <div>
               <div className="flex items-center justify-between mb-2">
-                <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider">
-                  Conditions <span className="text-gray-600 font-normal normal-case">(all must match, blank = always)</span>
+                <label className="block text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wider">
+                  Conditions <span className="text-[var(--text-muted)] font-normal normal-case">(all must match, blank = always)</span>
                 </label>
                 <button
                   type="button"
@@ -328,7 +328,7 @@ export default function RuleBuilder() {
                 </button>
               </div>
               {form.conditions.length === 0 ? (
-                <p className="text-gray-600 text-xs px-3 py-2.5 rounded-xl bg-gray-800/60 border border-gray-700/50">
+                <p className="text-[var(--text-muted)] text-xs px-3 py-2.5 rounded-xl bg-[var(--surface-2)] border border-[var(--border-dim)]">
                   No conditions, actions run on every matching event.
                 </p>
               ) : (
@@ -341,12 +341,12 @@ export default function RuleBuilder() {
                         value={c.field}
                         onChange={e => setCondition(i, 'field', e.target.value)}
                         placeholder="payload field"
-                        className="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm font-mono placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-orange-500 transition-all"
+                        className="flex-1 bg-[var(--surface-2)] border border-[var(--input-border)] rounded-lg px-3 py-2 text-[var(--text-primary)] text-sm font-mono placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-orange-500 transition-all"
                       />
                       <select
                         value={c.operator}
                         onChange={e => setCondition(i, 'operator', e.target.value)}
-                        className="w-28 bg-gray-800 border border-gray-700 rounded-lg px-2 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 transition-all appearance-none cursor-pointer"
+                        className="w-28 bg-[var(--surface-2)] border border-[var(--input-border)] rounded-lg px-2 py-2 text-[var(--text-primary)] text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 transition-all appearance-none cursor-pointer"
                         aria-label="Operator"
                       >
                         {OPERATORS.map(o => <option key={o.value} value={o.value}>{o.label} {o.text}</option>)}
@@ -356,12 +356,12 @@ export default function RuleBuilder() {
                         value={c.value}
                         onChange={e => setCondition(i, 'value', e.target.value)}
                         placeholder="value"
-                        className="w-28 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-orange-500 transition-all"
+                        className="w-28 bg-[var(--surface-2)] border border-[var(--input-border)] rounded-lg px-3 py-2 text-[var(--text-primary)] text-sm placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-orange-500 transition-all"
                       />
                       <button
                         type="button"
                         onClick={() => set('conditions', form.conditions.filter((_, idx) => idx !== i))}
-                        className="p-1.5 rounded-lg text-gray-500 hover:text-red-400 transition-colors shrink-0"
+                        className="p-1.5 rounded-lg text-[var(--text-muted)] hover:text-red-400 transition-colors shrink-0"
                         title="Remove condition"
                         aria-label="Remove condition"
                       >
@@ -380,7 +380,7 @@ export default function RuleBuilder() {
             {/* Actions builder */}
             <div>
               <div className="flex items-center justify-between mb-2">
-                <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider">
+                <label className="block text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wider">
                   Actions <span className="text-orange-500">*</span>
                 </label>
                 <div className="flex gap-3">
@@ -402,7 +402,7 @@ export default function RuleBuilder() {
               </div>
               <div className="space-y-2">
                 {form.actions.map((a, i) => (
-                  <div key={i} className="p-3 rounded-xl bg-gray-800 border border-gray-700">
+                  <div key={i} className="p-3 rounded-xl bg-[var(--surface-2)] border border-[var(--input-border)]">
                     <div className="flex items-center justify-between gap-2 mb-2">
                       <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold ${
                         a.type === 'notify_role' ? 'bg-orange-500/15 text-orange-300' : 'bg-blue-500/15 text-blue-300'
@@ -413,7 +413,7 @@ export default function RuleBuilder() {
                       <button
                         type="button"
                         onClick={() => set('actions', form.actions.filter((_, idx) => idx !== i))}
-                        className="p-1 rounded text-gray-500 hover:text-red-400 transition-colors"
+                        className="p-1 rounded text-[var(--text-muted)] hover:text-red-400 transition-colors"
                         title="Remove action"
                         aria-label="Remove action"
                       >
@@ -425,7 +425,7 @@ export default function RuleBuilder() {
                         <select
                           value={a.role}
                           onChange={e => setAction(i, { role: e.target.value })}
-                          className="w-full bg-gray-900 border border-gray-700 rounded-lg px-2 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 transition-all appearance-none cursor-pointer"
+                          className="w-full bg-[var(--surface-1)] border border-[var(--input-border)] rounded-lg px-2 py-2 text-[var(--text-primary)] text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 transition-all appearance-none cursor-pointer"
                           aria-label="Role to notify"
                         >
                           {ROLES.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
@@ -435,29 +435,29 @@ export default function RuleBuilder() {
                           value={a.title}
                           onChange={e => setAction(i, { title: e.target.value })}
                           placeholder="Notification title (optional)"
-                          className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-orange-500 transition-all"
+                          className="w-full bg-[var(--surface-1)] border border-[var(--input-border)] rounded-lg px-3 py-2 text-[var(--text-primary)] text-sm placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-orange-500 transition-all"
                         />
                         <input
                           type="text"
                           value={a.message}
                           onChange={e => setAction(i, { message: e.target.value })}
                           placeholder="Message (optional, defaults to rule name)"
-                          className="w-full sm:col-span-2 bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-orange-500 transition-all"
+                          className="w-full sm:col-span-2 bg-[var(--surface-1)] border border-[var(--input-border)] rounded-lg px-3 py-2 text-[var(--text-primary)] text-sm placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-orange-500 transition-all"
                         />
                       </div>
                     ) : (
                       <div>
                         <div className="flex items-center gap-2">
-                          <span className="text-gray-500 text-sm font-mono shrink-0">rule.</span>
+                          <span className="text-[var(--text-muted)] text-sm font-mono shrink-0">rule.</span>
                           <input
                             type="text"
                             value={a.event_type}
                             onChange={e => setAction(i, { event_type: e.target.value })}
                             placeholder="custom.event_name"
-                            className="flex-1 bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm font-mono placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-orange-500 transition-all"
+                            className="flex-1 bg-[var(--surface-1)] border border-[var(--input-border)] rounded-lg px-3 py-2 text-[var(--text-primary)] text-sm font-mono placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-orange-500 transition-all"
                           />
                         </div>
-                        <p className="text-gray-600 text-[10px] mt-1">Emitted back into the event stream with the <code className="font-mono">rule.</code> prefix, usable as a webhook or workflow trigger.</p>
+                        <p className="text-[var(--text-muted)] text-[10px] mt-1">Emitted back into the event stream with the <code className="font-mono">rule.</code> prefix, usable as a webhook or workflow trigger.</p>
                       </div>
                     )}
                   </div>
@@ -469,8 +469,8 @@ export default function RuleBuilder() {
             {/* Cooldown + active */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
-                <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1.5">
-                  Cooldown <span className="text-gray-600 font-normal normal-case">(minutes, 0 = none)</span>
+                <label className="block text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wider mb-1.5">
+                  Cooldown <span className="text-[var(--text-muted)] font-normal normal-case">(minutes, 0 = none)</span>
                 </label>
                 <input
                   type="number"
@@ -479,31 +479,31 @@ export default function RuleBuilder() {
                   step="1"
                   value={form.cooldown_minutes}
                   onChange={e => set('cooldown_minutes', e.target.value)}
-                  className={`w-full bg-gray-800 border rounded-lg px-3 py-2.5 text-white text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 transition-all ${errors.cooldown_minutes ? 'border-red-500' : 'border-gray-700'}`}
+                  className={`w-full bg-[var(--surface-2)] border rounded-lg px-3 py-2.5 text-[var(--text-primary)] text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 transition-all ${errors.cooldown_minutes ? 'border-red-500' : 'border-[var(--input-border)]'}`}
                 />
                 {errors.cooldown_minutes && <p className="text-red-400 text-xs mt-1">{errors.cooldown_minutes}</p>}
               </div>
-              <div className="flex items-center justify-between py-3 px-4 rounded-xl bg-gray-800 border border-gray-700 self-end">
+              <div className="flex items-center justify-between py-3 px-4 rounded-xl bg-[var(--surface-2)] border border-[var(--input-border)] self-end">
                 <div>
-                  <p className="text-white text-sm font-medium">Rule active</p>
-                  <p className="text-gray-500 text-xs">Disable to pause without deleting</p>
+                  <p className="text-[var(--text-primary)] text-sm font-medium">Rule active</p>
+                  <p className="text-[var(--text-muted)] text-xs">Disable to pause without deleting</p>
                 </div>
                 <button type="button" onClick={() => set('active', !form.active)} className="transition-colors" aria-label="Toggle active">
-                  {form.active ? <ToggleRight className="w-8 h-8 text-orange-500" /> : <ToggleLeft className="w-8 h-8 text-gray-500" />}
+                  {form.active ? <ToggleRight className="w-8 h-8 text-orange-500" /> : <ToggleLeft className="w-8 h-8 text-[var(--text-muted)]" />}
                 </button>
               </div>
             </div>
           </div>
 
           {/* Footer actions */}
-          <div className="px-6 py-4 border-t border-gray-800 flex gap-3 justify-end bg-gray-900/80">
-            <button type="button" onClick={goBack} className="px-4 py-2 text-sm text-gray-400 hover:text-white bg-gray-800 hover:bg-gray-700 rounded-lg border border-gray-700 transition-all">
+          <div className="px-6 py-4 border-t border-[var(--border-dim)] flex gap-3 justify-end bg-[var(--surface-1)]">
+            <button type="button" onClick={goBack} className="px-4 py-2 text-sm text-[var(--text-secondary)] hover:text-[var(--text-primary)] bg-[var(--surface-2)] hover:bg-[var(--surface-3)] rounded-lg border border-[var(--input-border)] transition-all">
               Cancel
             </button>
             <button
               type="submit"
               disabled={saving}
-              className="inline-flex items-center gap-2 px-5 py-2 text-sm font-semibold text-white bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 rounded-lg disabled:opacity-50 transition-all shadow-lg shadow-orange-500/20"
+              className="inline-flex items-center gap-2 px-5 py-2 text-sm font-semibold text-[var(--text-primary)] bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 rounded-lg disabled:opacity-50 transition-all shadow-lg shadow-orange-500/20"
             >
               {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
               {mode === 'edit' ? 'Save Changes' : 'Create Rule'}
@@ -522,7 +522,7 @@ function BuilderHeader({ mode, onBack }) {
     <div className="flex items-center gap-3">
       <button
         onClick={onBack}
-        className="shrink-0 p-2 rounded-lg text-gray-400 hover:text-white hover:bg-gray-800 transition-all"
+        className="shrink-0 p-2 rounded-lg text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-2)] transition-all"
         aria-label="Back to automation rules"
         title="Back to rules"
       >
@@ -533,10 +533,10 @@ function BuilderHeader({ mode, onBack }) {
           <Zap className="w-5 h-5 text-orange-400" />
         </div>
         <div>
-          <h1 className="text-2xl font-bold text-white leading-tight">
+          <h1 className="text-2xl font-bold text-[var(--text-primary)] leading-tight">
             {mode === 'edit' ? 'Edit Rule' : 'New Automation Rule'}
           </h1>
-          <p className="text-gray-400 text-sm">If-this-then-that rule evaluated on every domain event</p>
+          <p className="text-[var(--text-secondary)] text-sm">If-this-then-that rule evaluated on every domain event</p>
         </div>
       </div>
     </div>

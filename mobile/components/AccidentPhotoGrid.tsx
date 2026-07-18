@@ -27,6 +27,7 @@ import * as ImagePicker from 'expo-image-picker'
 import * as FileSystem from 'expo-file-system'
 import { supabase } from '../lib/supabase'
 import { storageRef } from '../lib/storageRefs'
+import { prepareForUpload } from '../lib/photoUpload'
 import { safeImageSrc } from '../lib/safeUrl'
 import { useLanguage } from '../contexts/LanguageContext'
 import { useTheme } from '../contexts/ThemeContext'
@@ -71,7 +72,7 @@ const SINGLE_SLOTS: { category: AccidentPhotoCategory; icon: IconName; labelKey:
 //    bucket, size limit, base64 path and tp-storage:// ref; only the filename
 //    gains the category prefix). Picker quality stays 0.55 as before. ─────────
 const ALLOWED_EXTS = new Set(['jpg', 'jpeg', 'png', 'heic', 'heif'])
-const MAX_PHOTO_BYTES = 20 * 1024 * 1024 // 20 MB
+const MAX_DECODE_BYTES = 12 * 1024 * 1024 // hard cap on the file we base64-decode
 
 async function uploadCategorizedPhoto(
   localUri: string,
@@ -79,20 +80,23 @@ async function uploadCategorizedPhoto(
 ): Promise<string | null> {
   if (!localUri || !localUri.startsWith('file://')) return null
   try {
-    const rawExt = localUri.split('.').pop()?.toLowerCase() ?? 'jpg'
+    // Resize/compress first (shared helper) so the base64 decode stays small (avoids OOM).
+    const uploadUri = await prepareForUpload(localUri)
+
+    const rawExt = uploadUri.split('.').pop()?.toLowerCase() ?? 'jpg'
     if (!ALLOWED_EXTS.has(rawExt)) return null
     const ext = rawExt === 'heic' || rawExt === 'heif' ? 'jpg' : rawExt
     const contentType = ext === 'png' ? 'image/png' : 'image/jpeg'
 
-    const info = await FileSystem.getInfoAsync(localUri)
-    if (info.exists && (info as any).size > MAX_PHOTO_BYTES) return null
+    const info = await FileSystem.getInfoAsync(uploadUri)
+    if (info.exists && (info as any).size > MAX_DECODE_BYTES) return null
 
     const { data: { user } } = await supabase.auth.getUser()
     const uid = user?.id?.slice(0, 8) ?? 'anon'
     const rand = Math.random().toString(36).slice(2, 6)
     const path = `accidents/${uid}/${CATEGORY_PREFIX[category]}_${Date.now()}_${rand}.${ext}`
 
-    const base64 = await FileSystem.readAsStringAsync(localUri, { encoding: 'base64' })
+    const base64 = await FileSystem.readAsStringAsync(uploadUri, { encoding: 'base64' })
     const bytes = decodeBase64(base64)
 
     const { error } = await supabase.storage

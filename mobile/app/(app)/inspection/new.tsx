@@ -482,6 +482,10 @@ export default function NewInspectionScreen() {
   }
 
   const statusBarStyle = theme.mode === 'dark' ? 'light-content' : 'dark-content'
+  // Non-narrowed alias: inside the search branch selectedVehicle is narrowed to
+  // null, so `selectedVehicle?.id` there is `never` - reading the id up here keeps
+  // it `string | undefined` for the grid's active-highlight comparison.
+  const selectedVehicleId = selectedVehicle?.id
 
   // ── Step: HEADER ───────────────────────────────────────────────────────────
   if (step === 'header') {
@@ -552,6 +556,27 @@ export default function NewInspectionScreen() {
                 <Text style={[styles.fieldLabel, { textAlign }]}>{t('inspection.vehicleLabel')}</Text>
 
                 {!useManualEntry && (
+                  selectedVehicle ? (
+                    /* Collapsed: a vehicle is chosen - show it + a Change control
+                       and hide the search results until the user reopens search. */
+                    <View style={[styles.selectedVehicleRow, isRTL && styles.navRTL]}>
+                      <Ionicons name="bus" size={18} color={theme.color.primary} />
+                      <View style={{ flex: 1 }}>
+                        <Text style={[styles.selectedVehicleAsset, { textAlign }]} numberOfLines={1}>{selectedVehicle.asset_no}</Text>
+                        <Text style={[styles.selectedVehicleType, { textAlign }]} numberOfLines={1}>
+                          {[selectedVehicle.vehicle_type, selectedVehicle.make].filter(Boolean).join(' · ')}
+                        </Text>
+                      </View>
+                      <TouchableOpacity
+                        style={styles.changeVehicleBtn}
+                        onPress={() => { setSelectedVehicle(null); setVehicleQuery('') }}
+                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                      >
+                        <Ionicons name="swap-horizontal-outline" size={14} color={theme.color.primary} />
+                        <Text style={styles.changeVehicleText}>{t('common.change')}</Text>
+                      </TouchableOpacity>
+                    </View>
+                  ) : (
                   <>
                     <View style={[styles.searchBox, isRTL && styles.searchBoxRTL]}>
                       <Ionicons name="search-outline" size={18} color={theme.color.textMuted} />
@@ -621,19 +646,19 @@ export default function NewInspectionScreen() {
                           {shownVehicles.map(v => (
                             <TouchableOpacity
                               key={v.id}
-                              style={[styles.vehicleCard, selectedVehicle?.id === v.id && styles.vehicleCardActive]}
-                              onPress={() => setSelectedVehicle(v)}
+                              style={[styles.vehicleCard, selectedVehicleId === v.id && styles.vehicleCardActive]}
+                              onPress={() => { setSelectedVehicle(v); setVehicleQuery('') }}
                               activeOpacity={0.75}
                             >
                               <Ionicons
                                 name="bus-outline"
                                 size={20}
-                                color={selectedVehicle?.id === v.id ? theme.color.onPrimary : theme.color.primary}
+                                color={selectedVehicleId === v.id ? theme.color.onPrimary : theme.color.primary}
                               />
-                              <Text style={[styles.vehicleCardAsset, selectedVehicle?.id === v.id && { color: theme.color.onPrimary }]}>
+                              <Text style={[styles.vehicleCardAsset, selectedVehicleId === v.id && { color: theme.color.onPrimary }]}>
                                 {v.asset_no}
                               </Text>
-                              <Text style={[styles.vehicleCardType, selectedVehicle?.id === v.id && { color: theme.color.onPrimary, opacity: 0.75 }]}>
+                              <Text style={[styles.vehicleCardType, selectedVehicleId === v.id && { color: theme.color.onPrimary, opacity: 0.75 }]}>
                                 {v.vehicle_type}
                               </Text>
                             </TouchableOpacity>
@@ -649,6 +674,7 @@ export default function NewInspectionScreen() {
                       </>
                     )}
                   </>
+                  )
                 )}
 
                 {/* Manual asset entry */}
@@ -1290,6 +1316,31 @@ function makeStyles(theme: Theme) {
   },
   vehicleInfoRTL: { flexDirection: 'row-reverse' },
   vehicleInfoText: { flex: 1, fontSize: 13, fontWeight: '700', color: c.primaryDark },
+  selectedVehicleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    backgroundColor: c.primarySoft,
+    borderWidth: 1,
+    borderColor: c.primary,
+    borderRadius: radius.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.md - 2,
+  },
+  selectedVehicleAsset: { fontSize: 14, fontWeight: '800', color: c.primaryDark },
+  selectedVehicleType: { fontSize: 11, fontWeight: '600', color: c.textMuted, marginTop: 1 },
+  changeVehicleBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 6,
+    borderRadius: radius.sm,
+    backgroundColor: c.bg,
+    borderWidth: 1,
+    borderColor: c.primary,
+  },
+  changeVehicleText: { fontSize: 12, fontWeight: '700', color: c.primary },
   vehiclePositionCount: {
     fontSize: 11,
     fontWeight: '700',

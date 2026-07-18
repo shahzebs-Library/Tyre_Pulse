@@ -7,11 +7,46 @@
  */
 
 import * as FileSystem from 'expo-file-system'
+import { ImageManipulator, SaveFormat } from 'expo-image-manipulator'
 import { supabase } from './supabase'
 import { storageRef } from './storageRefs'
 
 const ALLOWED_EXTS = new Set(['jpg', 'jpeg', 'png', 'heic', 'heif'])
-const MAX_PHOTO_BYTES = 20 * 1024 * 1024 // 20 MB
+
+// Resize/compress every captured photo BEFORE reading it into JS memory.
+const MAX_UPLOAD_DIM = 1600 // px, resize target width (aspect preserved)
+const UPLOAD_COMPRESS = 0.5 // JPEG quality after resize
+const MAX_DECODE_BYTES = 12 * 1024 * 1024 // hard cap on the file we base64-decode
+
+/**
+ * Shrink and compress a locally captured image before it is read as base64.
+ *
+ * Camera photos are multi-megapixel and expo-image-picker's quality option
+ * only compresses, it does NOT reduce dimensions. Reading several full-size
+ * images into JS memory as base64 (atob -> Uint8Array) can exhaust native
+ * memory and crash the app (a native OOM that try/catch cannot recover from).
+ * Resizing to a max width + re-encoding as JPEG cuts the in-memory bytes
+ * roughly 10x, so the decode stays small.
+ *
+ * Never throws: if manipulation fails for any reason the ORIGINAL uri is
+ * returned so the upload still proceeds (just larger).
+ *
+ * @param localUri file:// URI from expo-camera / expo-image-picker
+ * @returns a new (smaller) file:// URI, or the original on any failure
+ */
+export async function prepareForUpload(localUri: string): Promise<string> {
+  if (!localUri || !localUri.startsWith('file://')) return localUri
+  try {
+    const context = ImageManipulator.manipulate(localUri)
+    context.resize({ width: MAX_UPLOAD_DIM })
+    const image = await context.renderAsync()
+    const result = await image.saveAsync({ compress: UPLOAD_COMPRESS, format: SaveFormat.JPEG })
+    return result?.uri || localUri
+  } catch (err: any) {
+    if (__DEV__) console.warn('[photoUpload] resize skipped:', err?.message)
+    return localUri
+  }
+}
 
 /**
  * Upload a locally captured photo to Supabase Storage.
@@ -29,22 +64,25 @@ export async function uploadInspectionPhoto(
   if (!localUri || !localUri.startsWith('file://')) return null
 
   try {
-    const rawExt = localUri.split('.').pop()?.toLowerCase() ?? 'jpg'
+    // Resize/compress first so the base64 decode below stays small (avoids OOM).
+    const uploadUri = await prepareForUpload(localUri)
+
+    const rawExt = uploadUri.split('.').pop()?.toLowerCase() ?? 'jpg'
     if (!ALLOWED_EXTS.has(rawExt)) return null
 
     // Normalise extension - some devices return HEIC; storage serves as jpeg
     const ext = rawExt === 'heic' || rawExt === 'heif' ? 'jpg' : rawExt
     const contentType = ext === 'png' ? 'image/png' : 'image/jpeg'
 
-    const info = await FileSystem.getInfoAsync(localUri)
-    if (info.exists && (info as any).size > MAX_PHOTO_BYTES) return null
+    const info = await FileSystem.getInfoAsync(uploadUri)
+    if (info.exists && (info as any).size > MAX_DECODE_BYTES) return null
 
     // Build deterministic storage path:  inspections/<id>/<position>_<timestamp>.<ext>
     const sanitisedPosition = tyrePosition.replace(/[^a-zA-Z0-9_-]/g, '_')
     const path = `inspections/${inspectionId}/${sanitisedPosition}_${Date.now()}.${ext}`
 
     // Read file as base64 - required for RN where Blob is not a true File
-    const base64 = await FileSystem.readAsStringAsync(localUri, {
+    const base64 = await FileSystem.readAsStringAsync(uploadUri, {
       encoding: 'base64',
     })
 
@@ -79,14 +117,17 @@ export async function uploadAccidentPhoto(localUri: string, index = 0): Promise<
   // Reject anything that isn't a local file URI - never store http/data URIs directly
   if (!localUri || !localUri.startsWith('file://')) return null
   try {
-    const rawExt = localUri.split('.').pop()?.toLowerCase() ?? 'jpg'
+    // Resize/compress first so the base64 decode below stays small (avoids OOM).
+    const uploadUri = await prepareForUpload(localUri)
+
+    const rawExt = uploadUri.split('.').pop()?.toLowerCase() ?? 'jpg'
     if (!ALLOWED_EXTS.has(rawExt)) return null
 
     const ext = rawExt === 'heic' || rawExt === 'heif' ? 'jpg' : rawExt
     const contentType = ext === 'png' ? 'image/png' : 'image/jpeg'
 
-    const info = await FileSystem.getInfoAsync(localUri)
-    if (info.exists && (info as any).size > MAX_PHOTO_BYTES) return null
+    const info = await FileSystem.getInfoAsync(uploadUri)
+    if (info.exists && (info as any).size > MAX_DECODE_BYTES) return null
 
     // Collision-resistant path: include user uid + timestamp + random suffix
     const { data: { user } } = await supabase.auth.getUser()
@@ -94,7 +135,7 @@ export async function uploadAccidentPhoto(localUri: string, index = 0): Promise<
     const rand = Math.random().toString(36).slice(2, 6)
     const path = `accidents/${uid}/${Date.now()}_${index}_${rand}.${ext}`
 
-    const base64 = await FileSystem.readAsStringAsync(localUri, { encoding: 'base64' })
+    const base64 = await FileSystem.readAsStringAsync(uploadUri, { encoding: 'base64' })
     const bytes = decodeBase64(base64)
 
     const { error } = await supabase.storage
@@ -127,14 +168,17 @@ export async function uploadModulePhoto(
 ): Promise<string | null> {
   if (!localUri || !localUri.startsWith('file://')) return null
   try {
-    const rawExt = localUri.split('.').pop()?.toLowerCase() ?? 'jpg'
+    // Resize/compress first so the base64 decode below stays small (avoids OOM).
+    const uploadUri = await prepareForUpload(localUri)
+
+    const rawExt = uploadUri.split('.').pop()?.toLowerCase() ?? 'jpg'
     if (!ALLOWED_EXTS.has(rawExt)) return null
 
     const ext = rawExt === 'heic' || rawExt === 'heif' ? 'jpg' : rawExt
     const contentType = ext === 'png' ? 'image/png' : 'image/jpeg'
 
-    const info = await FileSystem.getInfoAsync(localUri)
-    if (info.exists && (info as any).size > MAX_PHOTO_BYTES) return null
+    const info = await FileSystem.getInfoAsync(uploadUri)
+    if (info.exists && (info as any).size > MAX_DECODE_BYTES) return null
 
     const { data: { user } } = await supabase.auth.getUser()
     const uid = user?.id?.slice(0, 8) ?? 'anon'
@@ -142,7 +186,7 @@ export async function uploadModulePhoto(
     const safeModule = (module || 'module').replace(/[^a-zA-Z0-9_-]/g, '-')
     const path = `modules/${safeModule}/${uid}/${Date.now()}_${index}_${rand}.${ext}`
 
-    const base64 = await FileSystem.readAsStringAsync(localUri, { encoding: 'base64' })
+    const base64 = await FileSystem.readAsStringAsync(uploadUri, { encoding: 'base64' })
     const bytes = decodeBase64(base64)
 
     const { error } = await supabase.storage

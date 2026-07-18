@@ -283,9 +283,6 @@ export default function AccidentReportScreen() {
 
   // Once the user edits Recovered manually, stop auto-overwriting it.
   const recoveredTouched = useRef(false)
-  // Once the user picks a site manually, an asset pick never overwrites it
-  // (web parity: auto-fill only fills empty fields, never a typed value).
-  const siteManual = useRef(false)
 
   const textAlign = isRTL ? 'right' : 'left'
 
@@ -355,12 +352,12 @@ export default function AccidentReportScreen() {
   }
 
   // Auto-fill from the fleet master on asset pick (web applyAssetMaster parity):
-  // Fleet/plate no = fleet_number falling back to registration_no. SITE RULE
-  // (deterministic): auto-fill writes site ONLY when the field is still empty
-  // AND the user never tapped a site chip - a manual choice always wins and is
-  // never overwritten by later asset picks or the debounced manual-asset
-  // lookup. Plate/type have no typing surface on mobile, so they always track
-  // the picked asset (re-picking a different asset refreshes them).
+  // Fleet/plate no = fleet_number falling back to registration_no. SITE RULE:
+  // the picked vehicle's OWN site is authoritative, so it REPLACES any prior /
+  // pre-set / previously-tapped site (a stale chip must never linger). It only
+  // keeps the current value when the vehicle master carries no site. Plate/type
+  // have no typing surface on mobile, so they always track the picked asset
+  // (re-picking a different asset refreshes them).
   function applyAsset(v: {
     asset_no: string; id?: string | null; vehicle_type?: string | null; site?: string | null
     registration_no?: string | null; fleet_number?: string | null; country?: string | null
@@ -369,7 +366,7 @@ export default function AccidentReportScreen() {
       ...prev,
       asset_no: v.asset_no,
       vehicle_id: v.id ?? null,
-      site: (siteManual.current || prev.site) ? prev.site : (v.site || ''),
+      site: v.site || prev.site,
       country: prev.country || v.country || prev.country,
     }))
     setX({
@@ -542,7 +539,7 @@ export default function AccidentReportScreen() {
               setBase(emptyBase()); setExtra(emptyExtra())
               setPhotoEntries([]); setLocationOther(false)
               setManualAsset(''); setUseManualEntry(false)
-              recoveredTouched.current = false; siteManual.current = false; setSuccess(false)
+              recoveredTouched.current = false; setSuccess(false)
             }}
             style={{ marginTop: spacing.md, minWidth: 220 }} />
         </View>
@@ -588,6 +585,28 @@ export default function AccidentReportScreen() {
                   <TouchableOpacity onPress={() => { setUseManualEntry(false); setManualAsset(''); setX({ plate_number: '', vehicle_type: '' }) }} style={styles.manualToggle}>
                     <Ionicons name="list-outline" size={14} color={c.danger.base} />
                     <AppText variant="caption" style={{ color: c.danger.base }}>{t('accident.report.phSelectFromList')}</AppText>
+                  </TouchableOpacity>
+                </View>
+              ) : base.asset_no ? (
+                /* Collapsed: an asset is chosen - show it + a Change control so the
+                   suggestion list does not linger after selection. */
+                <View style={styles.selectedAssetRow}>
+                  <Ionicons name="bus" size={18} color={c.danger.base} />
+                  <View style={{ flex: 1 }}>
+                    <AppText variant="bodyStrong" style={{ textAlign }} numberOfLines={1}>{base.asset_no}</AppText>
+                    {(extra.vehicle_type || base.site) ? (
+                      <AppText variant="micro" color="muted" style={{ textAlign }} numberOfLines={1}>
+                        {[extra.vehicle_type, base.site].filter(Boolean).join(' - ')}
+                      </AppText>
+                    ) : null}
+                  </View>
+                  <TouchableOpacity
+                    style={[styles.changeAssetBtn, { borderColor: c.danger.base }]}
+                    onPress={() => { setB({ asset_no: '', vehicle_id: null }); setX({ plate_number: '', vehicle_type: '' }); setVehicleQuery('') }}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  >
+                    <Ionicons name="swap-horizontal-outline" size={14} color={c.danger.base} />
+                    <AppText variant="caption" style={{ color: c.danger.base }}>{t('common.change')}</AppText>
                   </TouchableOpacity>
                 </View>
               ) : (
@@ -640,7 +659,7 @@ export default function AccidentReportScreen() {
                             return (
                               <TouchableOpacity key={v.id}
                                 style={[styles.chip, { borderColor: c.border, backgroundColor: c.surface }, active && { borderColor: c.danger.base, backgroundColor: c.danger.base }]}
-                                onPress={() => applyAsset(v)}>
+                                onPress={() => { applyAsset(v); setVehicleQuery('') }}>
                                 <AppText variant="caption" style={{ color: active ? '#fff' : c.textSecondary }}>{v.asset_no}</AppText>
                                 <AppText variant="micro" style={{ color: active ? 'rgba(255,255,255,0.75)' : c.textMuted, marginTop: 2 }}>
                                   {[v.vehicle_type, v.site].filter(Boolean).join(' - ')}
@@ -687,7 +706,7 @@ export default function AccidentReportScreen() {
                     return (
                       <TouchableOpacity key={s}
                         style={[styles.chip, { borderColor: c.border, backgroundColor: c.surface }, active && { borderColor: c.danger.base, backgroundColor: c.danger.base }]}
-                        onPress={() => { siteManual.current = true; setB({ site: s }) }}>
+                        onPress={() => setB({ site: s })}>
                         <AppText variant="caption" style={{ color: active ? '#fff' : c.textSecondary }}>{s}</AppText>
                       </TouchableOpacity>
                     )
@@ -1140,6 +1159,16 @@ function createStyles(theme: Theme) {
     chip: { paddingHorizontal: spacing.md, paddingVertical: spacing.md - 2, borderRadius: radius.md, borderWidth: 1.5, alignItems: 'center' },
 
     manualToggle: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: spacing.sm },
+    selectedAssetRow: {
+      flexDirection: 'row', alignItems: 'center', gap: spacing.sm,
+      borderWidth: 1.5, borderColor: c.danger.soft, backgroundColor: c.danger.soft,
+      borderRadius: radius.md, paddingHorizontal: spacing.md, paddingVertical: spacing.md - 2,
+    },
+    changeAssetBtn: {
+      flexDirection: 'row', alignItems: 'center', gap: 4,
+      paddingHorizontal: spacing.sm, paddingVertical: 6,
+      borderRadius: radius.sm, backgroundColor: c.surface, borderWidth: 1,
+    },
     uploadingRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginTop: spacing.xs },
 
     toggleRow: {

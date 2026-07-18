@@ -11,6 +11,7 @@ import { useEffect, useState, useCallback, useMemo } from 'react'
 import {
   View, Text, ScrollView, TextInput, TouchableOpacity,
   StyleSheet, Alert, ActivityIndicator, StatusBar, Platform, KeyboardAvoidingView,
+  useWindowDimensions,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useRouter, useLocalSearchParams } from 'expo-router'
@@ -22,6 +23,8 @@ import { Theme, spacing, radius } from '../../../../lib/theme'
 import { toUserMessage } from '../../../../lib/safeError'
 import SignaturePad from '../../../../components/SignaturePad'
 import SignatureView from '../../../../components/SignatureView'
+import VehicleTyreDiagram from '../../../../components/VehicleTyreDiagram'
+import { resolveVehicleType, LAYOUTS, matchPositionsToLayout } from '../../../../lib/tyreDiagramLayouts'
 import { conditionColor, conditionLabel } from '../../../../lib/inspectionReportPdf'
 import {
   getInspectionForApproval, decideInspection, InspectionApprovalItem,
@@ -69,10 +72,24 @@ export default function InspectionApprovalReviewScreen() {
 
   useEffect(() => { load() }, [load])
 
+  const { width: screenW } = useWindowDimensions()
+
   const positions = useMemo(() => {
     const conds = insp?.tyre_conditions ?? {}
     return Object.keys(conds)
   }, [insp])
+
+  // Prefer the pseudo-3D vehicle diagram (each wheel lit by its condition) over
+  // the flat colour grid. Fall back to the grid when the vehicle type has no
+  // layout, or the recorded positions do not map onto the layout's wheels
+  // (matchPositionsToLayout returns the whole layout when nothing matched, which
+  // would render grey ghost wheels) - so data is never hidden.
+  const diagramReady = useMemo(() => {
+    if (!insp || positions.length === 0) return false
+    const layout = LAYOUTS[resolveVehicleType(insp.vehicle_type ?? '')]
+    if (!layout) return false
+    return matchPositionsToLayout(layout, positions).some(m => positions.includes(m.positionId))
+  }, [insp, positions])
 
   async function decide(approved: boolean) {
     if (!insp || busy) return
@@ -206,6 +223,16 @@ export default function InspectionApprovalReviewScreen() {
           <View style={styles.card}>
             {positions.length === 0 ? (
               <Text style={[styles.help, { textAlign }]}>No tyre conditions recorded.</Text>
+            ) : diagramReady ? (
+              <View style={{ alignItems: 'center' }}>
+                <VehicleTyreDiagram
+                  vehicleType={insp.vehicle_type ?? ''}
+                  positions={positions}
+                  tyreData={conds as any}
+                  selectedPosition={null}
+                  width={Math.min(screenW - 64, 300)}
+                />
+              </View>
             ) : (
               <View style={styles.tyreGrid}>
                 {positions.map(pos => {

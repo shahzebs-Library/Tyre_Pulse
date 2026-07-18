@@ -98,3 +98,25 @@ export async function updateSpeedLimiter(id, patch = {}) {
 export async function deleteSpeedLimiter(id) {
   return unwrap(await supabase.from('speed_limiters').delete().eq('id', id))
 }
+
+/**
+ * Lean fleet projection (asset_no + site + is_active) used ONLY to compute
+ * speed-limiter coverage vs the fleet on the registry page. Country-scoped and
+ * null-safe. Degrades to [] when vehicle_fleet is unavailable so the page can
+ * fall back to a limiter-only view (honest: coverage ratios become null when
+ * there is no fleet denominator). Capped high enough to cover a full fleet.
+ * @param {{ country?:string, limit?:number }} [opts]
+ */
+export async function listFleetForCoverage({ country, limit = 5000 } = {}) {
+  try {
+    let q = supabase.from('vehicle_fleet').select('asset_no,site,is_active')
+    q = applyCountry(q, country)
+    const rows = unwrap(await q.limit(limit)) || []
+    // Governed-fleet denominator = assets that are still in service. Rows with a
+    // null is_active are treated as active (legacy data), never dropped silently.
+    return rows.filter((r) => r && r.is_active !== false)
+  } catch (err) {
+    if (isMissingRelation(err)) return []
+    throw err
+  }
+}

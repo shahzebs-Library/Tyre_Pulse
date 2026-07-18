@@ -835,7 +835,7 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
   is now TAB-LOCAL - `supabase.js` uses `window.sessionStorage` (not localStorage) when IS_CONSOLE_SURFACE, so
   a separately-opened console tab's session is NEVER shared with any other tab (not even another console tab,
   by sessionStorage spec) and is CLEARED on tab close (break-glass posture). `IS_CONSOLE_SURFACE` is now
-  EXPORTED from supabase.js. ConsoleAuthContext adds idle auto-logout (CONSOLE_IDLE_LIMIT_MS 20min) + absolute
+  EXPORTED from supabase.js. ConsoleAuthContext adds idle auto-logout (CONSOLE_IDLE_LIMIT_MS 10min) + absolute
   cap (CONSOLE_ABSOLUTE_LIMIT_MS 8h), GATED on IS_CONSOLE_SURFACE so it only ends the console's OWN isolated
   session - never the main-app session when the console piggybacks it via the in-app System Console <Link>
   (same tab). Main app intentionally KEEPS localStorage persistence (field users on phones/shared terminals;

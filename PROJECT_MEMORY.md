@@ -812,6 +812,20 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
   on testers' devices once that build finishes + Play processes it. No DB/schema change; branch realigned to
   origin/main. For NEW work restart the branch from latest main (merged PRs are terminal).
 
+### Site-level ABAC (V269, 2026-07-18) — per-user site visibility, DB-enforced
+- **Model: RBAC (what you can do) + attributes (which data you see): org > country > SITE.**
+  `profiles.sites text[]`: NULL/empty = ALL sites; Admin/super always all. Helper
+  `app_can_see_site(site)` (DEFINER; null-site rows visible to all) consumed by RESTRICTIVE
+  **SELECT** policies `<t>_site_isolation` on 21 operational site tables (list in
+  MIGRATIONS_V269_SITE_ABAC.sql). Writes NOT site-gated yet (visibility first, like V226 country).
+- Assign via RPC **`admin_set_user_sites(p_user_id, p_sites)`** (super/Admin gated; UPPER-trims;
+  NULL clears; internally disables/re-enables trg_guard_profile_privileged around its UPDATE) -
+  console Users page has the per-user Sites editor (adminAccess.adminSetUserSites). Verified live
+  rolled-back: DHAHBAN-assigned user saw exactly the 152 DHAHBAN tyre_records.
+- SAFE ROLLOUT: at apply time no user had sites assigned = zero behavior change until an admin
+  assigns. RULE: site values are canonical UPPER (V246); helper compares upper(btrim()). Mobile
+  needs no change (RLS enforces server-side). Next free migration **V270**.
+
 ### Vehicle SVG Designer (V268, 2026-07-17) — super-admin custom vehicle diagram builder
 - **/console/vehicle-designer** (ConsoleVehicleDesigner.jsx, nav "Vehicle Designer", Truck icon, pure console
   navy+orange): design a vehicle type's diagram (axles 1..6 with kind steer/drive/trailer/lift + single/dual,

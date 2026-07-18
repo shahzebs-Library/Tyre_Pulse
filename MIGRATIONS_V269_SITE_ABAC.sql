@@ -1,0 +1,13 @@
+-- V269: SITE-LEVEL ABAC (applied live via Supabase MCP 2026-07-18). Next free V270.
+-- profiles.sites text[] (NULL/empty = ALL sites; admins/super always all).
+-- Helper app_can_see_site(p_site) (DEFINER, null-site rows visible to all) +
+-- RESTRICTIVE SELECT policies <t>_site_isolation on 21 operational site tables
+-- (accidents, alerts, budgets, corrective_actions, drivers, fleet_master,
+--  gate_passes, goods_receipts, incident_reports, inspections, purchase_orders,
+--  rca_records, requisitions, stock_movements, stock_records, tyre_records,
+--  tyre_rotations, tyre_service_events, vehicle_fleet, warranty_claims, work_orders).
+-- Admin RPC admin_set_user_sites(p_user_id, p_sites) (super/Admin gated, UPPER-trims,
+-- NULL/empty clears = all sites; bypasses trg_guard_profile_privileged around its own
+-- UPDATE). Safe rollout: nobody has sites assigned at apply time = zero change.
+-- Verified live (rolled back): user assigned DHAHBAN saw exactly the 152 DHAHBAN
+-- tyre_records rows. See supabase migration v269_site_abac for the full SQL.

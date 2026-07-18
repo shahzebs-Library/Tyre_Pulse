@@ -25,18 +25,21 @@ const registry = await import('../lib/api/modulesRegistry')
 beforeEach(() => { h.state.result = { data: [], error: null }; h.state.last = null })
 
 describe('modulesRegistry - listModuleStatuses', () => {
-  it('projects module_id + status only and returns a { id: status } map', async () => {
+  it('projects id + status + window and returns a { id: {status,until,note} } map', async () => {
     h.state.result = {
       data: [
-        { module_id: 'analytics', status: 'live' },
-        { module_id: 'reports', status: 'maintenance' },
+        { module_id: 'analytics', status: 'live', maintenance_until: null, maintenance_note: null },
+        { module_id: 'reports', status: 'maintenance', maintenance_until: '2026-07-20T10:00:00Z', maintenance_note: 'Upgrading' },
       ],
       error: null,
     }
     const map = await registry.listModuleStatuses()
     expect(h.state.last._table).toBe('modules')
-    expect(h.state.last._calls.select).toBe('module_id,status')
-    expect(map).toEqual({ analytics: 'live', reports: 'maintenance' })
+    expect(h.state.last._calls.select).toBe('module_id,status,maintenance_until,maintenance_note')
+    expect(map).toEqual({
+      analytics: { status: 'live', until: null, note: null },
+      reports: { status: 'maintenance', until: '2026-07-20T10:00:00Z', note: 'Upgrading' },
+    })
   })
 
   it('degrades to {} when the table is not migrated yet (fail open)', async () => {
@@ -51,25 +54,28 @@ describe('modulesRegistry - listModuleStatuses', () => {
 
   it('ignores rows without a module_id', async () => {
     h.state.result = {
-      data: [{ status: 'disabled' }, { module_id: 'stock', status: 'disabled' }],
+      data: [{ status: 'disabled' }, { module_id: 'stock', status: 'disabled', maintenance_until: null, maintenance_note: null }],
       error: null,
     }
     const map = await registry.listModuleStatuses()
-    expect(map).toEqual({ stock: 'disabled' })
+    expect(map).toEqual({ stock: { status: 'disabled', until: null, note: null } })
   })
 })
 
 // Pure default-open contract mirrored by AuthContext.moduleStatus: an unknown key
 // or an empty / unreadable map must resolve to 'live' (availability over lockout).
+// The stored value is now an object { status, until, note }; a legacy bare string
+// is still tolerated.
 function moduleStatusOf(map, key) {
   if (!key) return 'live'
-  const s = map?.[key]
+  const entry = map?.[key]
+  const s = typeof entry === 'string' ? entry : entry?.status
   return typeof s === 'string' && s ? s : 'live'
 }
 
 describe('module status default-open resolution', () => {
   it('returns live for an unknown key', () => {
-    expect(moduleStatusOf({ analytics: 'maintenance' }, 'reports')).toBe('live')
+    expect(moduleStatusOf({ analytics: { status: 'maintenance' } }, 'reports')).toBe('live')
   })
 
   it('returns live for an empty / unreadable map', () => {
@@ -77,8 +83,12 @@ describe('module status default-open resolution', () => {
     expect(moduleStatusOf(undefined, 'analytics')).toBe('live')
   })
 
-  it('returns the stored status when present', () => {
+  it('returns the stored status when present (object shape)', () => {
+    expect(moduleStatusOf({ analytics: { status: 'maintenance' } }, 'analytics')).toBe('maintenance')
+    expect(moduleStatusOf({ stock: { status: 'disabled' } }, 'stock')).toBe('disabled')
+  })
+
+  it('tolerates a legacy bare-string value', () => {
     expect(moduleStatusOf({ analytics: 'maintenance' }, 'analytics')).toBe('maintenance')
-    expect(moduleStatusOf({ stock: 'disabled' }, 'stock')).toBe('disabled')
   })
 })

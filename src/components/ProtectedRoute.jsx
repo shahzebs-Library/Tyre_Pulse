@@ -3,6 +3,22 @@ import { useAuth } from '../contexts/AuthContext'
 import { useLanguage } from '../contexts/LanguageContext'
 import LoadingSpinner from './LoadingSpinner'
 
+/**
+ * Pure decision helper (exported for testing): should this account be blocked
+ * from the WEB app? True only when web_access is explicitly false AND the user
+ * is neither a super-admin nor an Admin. web_access null/undefined/true keeps
+ * the account on the web (fail-open) and Admin / super-admin are NEVER blocked
+ * (never lock yourself out). Mobile is unaffected by this flag.
+ *
+ * @param {object|null} profile
+ * @returns {boolean}
+ */
+export function shouldBlockWeb(profile) {
+  if (!profile) return false
+  const isSuper = profile.is_super_admin === true
+  return profile.web_access === false && !isSuper && profile.role !== 'Admin'
+}
+
 export default function ProtectedRoute({ children }) {
   const { user, profile, loading } = useAuth()
   const { t } = useLanguage()
@@ -57,6 +73,31 @@ export default function ProtectedRoute({ children }) {
       </div>
     )
   }
+
+  // Web-only access gate (V278). A mobile-only account (web_access = false) is
+  // informed to use the mobile app instead of the web shell. Admin / super-admin
+  // are never blocked, so an administrator can never lock themselves out.
+  if (shouldBlockWeb(profile)) {
+    return (
+      <div className="min-h-screen flex items-center justify-center px-4">
+        <div className="text-center max-w-sm">
+          <div className="inline-flex items-center justify-center w-16 h-16 rounded-full mb-5"
+            style={{ background: 'rgba(59,130,246,0.12)', border: '1px solid rgba(59,130,246,0.3)' }}>
+            <span className="text-4xl">📱</span>
+          </div>
+          <h2 className="text-xl font-bold text-white mb-3">Mobile app only</h2>
+          <p className="text-gray-400 text-sm leading-relaxed">
+            This account is set up for the Tyre Pulse mobile app. Please sign in from the mobile app to continue.
+          </p>
+          <button
+            onClick={() => import('../lib/supabase').then(m => m.supabase.auth.signOut())}
+            className="mt-6 text-sm text-gray-500 hover:text-green-400 transition-colors">
+            {t('common.signOut')}
+          </button>
+        </div>
+      </div>
+    )
+  }
   return children
 }
 
@@ -74,7 +115,7 @@ export function RoleRoute({ allowed, children }) {
 }
 
 export function ModuleRoute({ moduleKey, children }) {
-  const { profile, hasPermission, loading, isSuperAdmin, moduleStatus } = useAuth()
+  const { profile, hasPermission, loading, isSuperAdmin, moduleStatus, moduleMaintenance } = useAuth()
   if (loading) return <RouteLoading />
 
   if (!profile || !hasPermission(moduleKey)) {
@@ -88,7 +129,10 @@ export function ModuleRoute({ moduleKey, children }) {
   const status = typeof moduleStatus === 'function' ? moduleStatus(moduleKey) : 'live'
   if ((status === 'maintenance' || status === 'disabled')
       && !isSuperAdmin && profile.role !== 'Admin') {
-    return <ModuleUnavailable status={status} />
+    const window = typeof moduleMaintenance === 'function'
+      ? moduleMaintenance(moduleKey)
+      : { until: null, note: null }
+    return <ModuleUnavailable status={status} until={window?.until} note={window?.note} />
   }
   return children
 }
@@ -107,9 +151,15 @@ export function SuperAdminRoute({ children }) {
 
 // Calm full-screen state shown when a module is in Maintenance or turned Off for
 // regular users (Module Control). Mirrors the AccessDenied layout; plain English,
-// no raw status codes or technical detail.
-function ModuleUnavailable({ status }) {
+// no raw status codes or technical detail. When a maintenance window (V278) is
+// set, shows the expected return time and any note.
+function ModuleUnavailable({ status, until, note }) {
   const maintenance = status === 'maintenance'
+  let etaLabel = null
+  if (maintenance && until) {
+    const d = new Date(until)
+    if (!Number.isNaN(d.getTime())) etaLabel = d.toLocaleString()
+  }
   return (
     <div className="flex flex-col items-center justify-center h-96 text-center px-4">
       <div className="inline-flex items-center justify-center w-16 h-16 rounded-full mb-4"
@@ -124,6 +174,14 @@ function ModuleUnavailable({ status }) {
           ? 'This module is temporarily under maintenance. Please check back shortly.'
           : 'This module is currently turned off. Please contact your administrator if you need access.'}
       </p>
+      {maintenance && etaLabel && (
+        <p className="text-amber-300 text-sm font-semibold mt-3">
+          Expected back by {etaLabel}
+        </p>
+      )}
+      {maintenance && note && (
+        <p className="text-gray-500 text-xs max-w-sm mt-2 leading-relaxed">{note}</p>
+      )}
     </div>
   )
 }

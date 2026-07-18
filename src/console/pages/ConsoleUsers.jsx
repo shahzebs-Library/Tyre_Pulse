@@ -5,7 +5,7 @@ import {
   RefreshCw, Edit2, Key, AlertTriangle,
   Shield, MoreVertical, UserCheck, UserX,
   Globe, CheckSquare, Square, UserCog, ShieldCheck, X as XClose,
-  MapPin, Plus,
+  MapPin, Plus, Smartphone, Monitor,
 } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { sanitizeSearchTerm } from '../../lib/searchFilter'
@@ -13,7 +13,7 @@ import { toUserMessage } from '../../lib/safeError'
 import { useConsoleAuth } from '../ConsoleAuthContext'
 import { ACCESS_ROLES, ALL_MODULES } from '../../lib/moduleCatalog'
 import { listCustomRoles } from '../../lib/api/customRoles'
-import { setUserCountry, bulkSetRole, bulkSetGrant, adminSetUserSites } from '../../lib/api/adminAccess'
+import { setUserCountry, bulkSetRole, bulkSetGrant, adminSetUserSites, adminSetWebAccess } from '../../lib/api/adminAccess'
 import { listDataSiteOptions } from '../../lib/api/sites'
 
 // Site options are capped so a runaway fleet register can never flood the
@@ -51,6 +51,10 @@ export default function ConsoleUsers() {
   const [actionMenu, setActionMenu] = useState(null)
   const [editModal, setEditModal] = useState(null)
   const [resetModal, setResetModal] = useState(null)
+  // Web-access deny confirmation (blocking web login on an account).
+  const [webModal, setWebModal] = useState(null)
+  const [webBusy, setWebBusy]   = useState(false)
+  const [webError, setWebError] = useState(null)
   const [editForm, setEditForm] = useState({})
   const [saving, setSaving]   = useState(false)
   const [error, setError]     = useState(null)
@@ -80,7 +84,7 @@ export default function ConsoleUsers() {
     setLoading(true)
     let q = supabase
       .from('profiles')
-      .select('id, full_name, email, role, site, sites, country, approved, locked, created_at, organisation_id, is_super_admin', { count: 'exact' })
+      .select('id, full_name, email, role, site, sites, country, approved, locked, web_access, created_at, organisation_id, is_super_admin', { count: 'exact' })
       .order('created_at', { ascending: false })
       .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1)
 
@@ -167,6 +171,31 @@ export default function ConsoleUsers() {
     await supabase.from('profiles').update({ locked }).eq('id', user.id)
     await logAction(locked ? 'lock_user' : 'unlock_user', user.id, 'user', { email: user.email })
     load()
+  }
+
+  // Web-app access (V278). Enabling is applied directly; disabling (mobile-only)
+  // asks for confirmation first. Admins / super-admins are never blocked (the
+  // server RPC and the client gate both exempt them), so this only affects
+  // regular accounts.
+  async function applyWeb(user, web) {
+    setWebBusy(true); setWebError(null)
+    try {
+      await adminSetWebAccess(user.id, web)
+      await logAction(web ? 'allow_web_access' : 'block_web_access', user.id, 'user', { email: user.email })
+      setUsers(prev => prev.map(u => (u.id === user.id ? { ...u, web_access: web } : u)))
+      setWebModal(null)
+      flashToast(web ? 'Web login allowed' : 'Web login blocked (mobile app only)')
+    } catch (e) {
+      setWebError(toUserMessage(e, 'Could not change web access.'))
+    } finally {
+      setWebBusy(false)
+    }
+  }
+
+  function toggleWeb(user) {
+    setActionMenu(null)
+    if (user.web_access === false) applyWeb(user, true)
+    else { setWebError(null); setWebModal(user) }
   }
 
   function openEdit(user) {
@@ -475,6 +504,11 @@ export default function ConsoleUsers() {
                           <div className="flex items-center gap-1.5">
                             <p className="font-semibold text-white truncate">{user.full_name ?? 'N/A'}</p>
                             {user.is_super_admin && <Shield size={10} className="text-orange-400 flex-shrink-0" />}
+                            {user.web_access === false && (
+                              <span title="Mobile app only (web login blocked)">
+                                <Smartphone size={10} className="text-blue-400 flex-shrink-0" />
+                              </span>
+                            )}
                           </div>
                           <p className="text-gray-500 truncate">{user.email ?? 'N/A'}</p>
                         </div>
@@ -553,6 +587,10 @@ export default function ConsoleUsers() {
                               label={user.locked ? 'Unlock Account' : 'Lock Account'}
                               onClick={() => { toggleLock(user); setActionMenu(null) }}
                               danger={!user.locked} />
+                            <MenuItem icon={user.web_access === false ? Monitor : Smartphone}
+                              label={user.web_access === false ? 'Allow web login' : 'Block web login (mobile only)'}
+                              onClick={() => toggleWeb(user)}
+                              danger={user.web_access !== false} />
                             <MenuItem icon={Key} label="Reset Password"
                               onClick={() => { setResetModal(user); setResetSent(false); setActionMenu(null) }} />
                             <MenuItem icon={ShieldCheck} label="Manage grants"
@@ -821,6 +859,39 @@ export default function ConsoleUsers() {
                   Send Reset Email
                 </button>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Block web login confirm modal */}
+      {webModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+          <div className="w-full max-w-sm bg-gray-900 border border-gray-700 rounded-2xl shadow-2xl p-6">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-full bg-blue-900/40 flex items-center justify-center">
+                <Smartphone size={16} className="text-blue-400" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-sm font-bold text-white">Block web login</p>
+                <p className="text-xs text-gray-500 truncate">{webModal.email}</p>
+              </div>
+            </div>
+            {webError && <div className="mb-3"><ErrBox msg={webError} /></div>}
+            <p className="text-xs text-gray-400 mb-5">
+              This account will be set to mobile app only. The user will not be able to sign in to the web
+              app and will be asked to use the mobile app instead. Mobile access is not affected. You can
+              re-enable web login at any time.
+            </p>
+            <div className="flex gap-2">
+              <button onClick={() => setWebModal(null)} disabled={webBusy}
+                className="flex-1 py-2 rounded-lg text-xs text-gray-400 bg-gray-800 hover:bg-gray-700 transition-colors disabled:opacity-50">
+                Cancel
+              </button>
+              <button onClick={() => applyWeb(webModal, false)} disabled={webBusy}
+                className="flex-1 py-2 rounded-lg text-xs font-semibold text-white bg-blue-700 hover:bg-blue-600 transition-colors disabled:opacity-50">
+                {webBusy ? 'Applying...' : 'Block web login'}
+              </button>
             </div>
           </div>
         </div>

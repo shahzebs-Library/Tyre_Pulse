@@ -86,7 +86,10 @@ interface QuickAction {
 // the grid) so it is never duplicated; every other module lives in a section.
 const QUICK_ACTIONS: QuickAction[] = [
   // Field ---------------------------------------------------------------------
-  { module: 'scan',        section: 'Field', icon: 'scan-outline',            label: 'Scan Asset',    sublabel: 'Barcode / QR code',    route: '/(app)/scanner',            tint: 'blue'   },
+  // NOTE: there is deliberately NO 'scan' tile here. Scanning is surfaced once,
+  // as the big green Scan shortcut below the grid (gated by canAccess('scan')),
+  // so the asset scanner is never offered twice on Home. Serial Search stays
+  // because it is a DISTINCT action (find a tyre by serial, not a camera scan).
   { module: 'serial',      section: 'Field', icon: 'barcode-outline',         label: 'Serial Search', sublabel: 'Find tyre by serial',  route: '/(app)/serial-search',      tint: 'blue'   },
   { module: 'tyreChange',  section: 'Field', icon: 'swap-horizontal-outline', label: 'Tyre Change',   sublabel: 'Record a change',      route: '/(app)/tyre-change',        tint: 'teal'   },
   { module: 'checklists',  section: 'Field', icon: 'checkbox-outline',        label: 'Checklists',    sublabel: 'Fill & submit checks', route: '/(app)/checklists',   tint: 'green'  },

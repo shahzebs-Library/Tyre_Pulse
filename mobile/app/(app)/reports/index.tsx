@@ -1,7 +1,10 @@
 /**
  * Reports - mobile PDF generation & sharing
  *
- * Available to: admin · manager · director · reporter
+ * Available to: admin, manager, director, reporter, inspector, tyre_man
+ * (see lib/permissions.ts `reports` module). Field roles are scoped to their OWN
+ * site: every builder below passes profile.site for non-elevated users, so a
+ * field submitter only ever generates and shares reports for their own site.
  * Generates a fleet summary PDF with KPIs, risk breakdown, top sites,
  * and open actions. Shared via expo-sharing or print dialog.
  */

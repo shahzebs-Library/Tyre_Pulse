@@ -53,8 +53,19 @@ const M = (
  * Home shows only Scan, Checklists ("recent vehicle checklist") and Meter Log,
  * plus the New Inspection CTA and its own recent inspections. So tyre_man keeps
  * inspect + scan + checklists + meter (meter RE-ADDED at the owner's request,
- * reversing the earlier removal) and nothing else (no serial, tyreChange,
- * reportIssue, history, alerts, records, vehicles, workorders, stock, tasks).
+ * reversing the earlier removal) and little else (no serial, tyreChange,
+ * reportIssue, alerts, records, vehicles, workorders, stock, tasks).
+ *
+ * Reporting (2026-07-18, field-feedback): field submitters must be able to SEE
+ * and SHARE their own submitted work as PDF, so tyre_man also gets `history`
+ * (their own submitted inspections/checklists, each shareable as PDF via the
+ * per-row Share action) and `reports` (the site-scoped fleet PDF reports, which
+ * the Reports screen already restricts to the user's own site for non-elevated
+ * roles). `inspector` gains `reports` for the same reason (it already had
+ * `history`). Driver is intentionally left out of both: a driver submits meter /
+ * wash / issue records, not tyre inspections, so a tyre risk/cost report is not
+ * their responsibility and their History would be empty - surfacing either would
+ * be dishonest padding rather than a real capability.
  */
 export const MODULES: ModuleDef[] = [
   // Field ---------------------------------------------------------------------
@@ -69,7 +80,7 @@ export const MODULES: ModuleDef[] = [
   // Fleet ---------------------------------------------------------------------
   M('records',        'Tyre Records',      'layers-outline',         'Fleet',      ['manager', 'director', 'inspector', 'reporter']),
   M('vehicles',       'Vehicles',          'car-outline',            'Fleet',      ['manager', 'director']),
-  M('history',        'History',           'time-outline',           'Fleet',      ['manager', 'director', 'inspector', 'reporter']),
+  M('history',        'History',           'time-outline',           'Fleet',      ['manager', 'director', 'inspector', 'reporter', 'tyre_man']),
   M('alerts',         'Alerts',            'notifications-outline',  'Fleet',      ['manager', 'director', 'inspector']),
   M('calendar',       'Calendar',          'calendar-outline',       'Fleet',      ['manager', 'director', 'tyre_man', 'reporter']),
   // Maintenance ---------------------------------------------------------------
@@ -82,7 +93,7 @@ export const MODULES: ModuleDef[] = [
   M('pm',             'Maintenance Due',   'build-outline',          'Maintenance',['manager', 'director']),
   // Management ----------------------------------------------------------------
   M('overview',       'Overview',          'grid-outline',           'Management', ['manager', 'director']),
-  M('reports',        'Reports',           'document-text-outline',  'Management', ['manager', 'director', 'reporter']),
+  M('reports',        'Reports',           'document-text-outline',  'Management', ['manager', 'director', 'reporter', 'inspector', 'tyre_man']),
   M('analytics',      'Analytics',         'bar-chart-outline',      'Management', ['manager']),
   M('stockManage',    'Stock Management',  'file-tray-full-outline', 'Management', ['manager']),
   M('ai',             'Fleet AI',          'sparkles-outline',       'Management', ['manager']),

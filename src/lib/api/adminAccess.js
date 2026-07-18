@@ -95,6 +95,25 @@ export async function adminSetUserSites(userId, sites) {
 }
 
 /**
+ * Set whether an account may use the WEB app (profiles.web_access, V278) via
+ * `admin_set_web_access`. Server-side gated to Admin / super-admin. Mobile is
+ * unaffected by this flag. Admins / super-admins are never blocked even if set
+ * to false (the client gate and the RPC both exempt them).
+ *
+ * @param {string}  userId  the target user's uuid
+ * @param {boolean} web     true = allow web login, false = mobile-only
+ * @returns {Promise<void>}
+ */
+export async function adminSetWebAccess(userId, web) {
+  return unwrap(
+    await supabase.rpc('admin_set_web_access', {
+      p_user_id: userId,
+      p_web: web === true,
+    }),
+  )
+}
+
+/**
  * Grant or revoke a capability across many users in one call via
  * `admin_bulk_set_grant`. Super-admin only.
  *

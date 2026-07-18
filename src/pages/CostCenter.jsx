@@ -7,12 +7,18 @@ import { useLanguage } from '../contexts/LanguageContext'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import { COST_MODES, pickCost, costModeLabel, pickMonthly, splitTotals } from '../lib/costSources'
 import { loadCostSplit } from '../lib/api/costSummary'
+import { buildCostIntelligence, UNIT_META } from '../lib/costIntelligence'
+import { listProduction, createProduction, updateProduction, deleteProduction, sumProductionM3 } from '../lib/api/production'
+import { applyCountry } from '../lib/api/_client'
+import { useAuth } from '../contexts/AuthContext'
+import { toUserMessage } from '../lib/safeError'
 import PageHeader from '../components/ui/PageHeader'
 import BudgetTabs from '../components/budgets/BudgetTabs'
 import {
   DollarSign, TrendingUp, TrendingDown, BarChart2, PieChart, Target,
   AlertTriangle, Award, ArrowUpRight, ArrowDownRight, Minus, Download,
   RefreshCw, Loader2, FileSpreadsheet, FileText, Zap, SlidersHorizontal, Wrench,
+  Gauge, Navigation, Boxes, Timer, Plus, Trash2, Pencil, Save, X,
 } from 'lucide-react'
 import { SkeletonCards, SkeletonTable } from '../components/ui/Skeleton'
 import {
@@ -813,6 +819,13 @@ export default function CostCenter() {
             )}
           </div>
 
+          {/* ── 1c. Cost per unit (m3 / km / engine-hour) ────────────────────── */}
+          <CostPerUnitSection
+            currency={activeCurrency}
+            country={activeCountry}
+            siteOptions={bySite.map(s => s.site).filter(s => s && s !== 'Unknown')}
+          />
+
           {/* ── 2. Dimension Tabs ────────────────────────────────────────────── */}
           <div
             className="rounded-xl border border-gray-800 overflow-hidden"
@@ -1306,4 +1319,419 @@ function RankBadge({ rank }) {
   if (rank === 2) return <span className="inline-flex items-center gap-1 text-[var(--panel-ink-2)] text-xs font-bold">#2</span>
   if (rank === 3) return <span className="inline-flex items-center gap-1 text-orange-400 text-xs font-bold">#3</span>
   return <span className="text-gray-600 text-xs font-medium">#{rank}</span>
+}
+
+// ── Cost per unit (m3 / km / engine-hour) ────────────────────────────────────
+const WRITE_ROLES = new Set(['Admin', 'Manager', 'Director'])
+const UNIT_RANGES = [
+  { label: '3m', months: 3 },
+  { label: '6m', months: 6 },
+  { label: '1yr', months: 12 },
+  { label: 'YTD', ytd: true },
+  { label: 'All', all: true },
+]
+
+function isoDaysAgo(days) {
+  const d = new Date()
+  d.setDate(d.getDate() - days)
+  return d.toISOString().slice(0, 10)
+}
+function isoMonthsAgo(months) {
+  const d = new Date()
+  d.setMonth(d.getMonth() - months)
+  return d.toISOString().slice(0, 10)
+}
+function todayIso() { return new Date().toISOString().slice(0, 10) }
+function firstOfYearIso() { return `${new Date().getFullYear()}-01-01` }
+
+function fmtPerUnit(value, currency, suffix) {
+  if (value == null || !isFinite(value)) return null
+  return `${currency} ${value.toFixed(4)}${suffix}`
+}
+
+/**
+ * Sum meter movement (km or engine-hours) across a date range as the sum of
+ * per-asset (max reading - min reading). Degrades to 0 when the table is
+ * missing / errors, so a per-unit figure is never fabricated.
+ */
+async function sumMeterDeltas(table, valueCol, { country, site, from, to }) {
+  try {
+    let q = supabase.from(table).select(`asset_no,${valueCol},reading_date`)
+    q = applyCountry(q, country)
+    if (site && site !== 'All') q = q.eq('site', site)
+    if (from) q = q.gte('reading_date', from)
+    if (to) q = q.lte('reading_date', to)
+    const { data, error } = await q.limit(100000)
+    if (error) throw error
+    const byAsset = new Map()
+    for (const r of data || []) {
+      const v = Number(r?.[valueCol])
+      if (!Number.isFinite(v)) continue
+      const a = r?.asset_no || '__none__'
+      const cur = byAsset.get(a)
+      if (!cur) byAsset.set(a, { min: v, max: v })
+      else { cur.min = Math.min(cur.min, v); cur.max = Math.max(cur.max, v) }
+    }
+    let total = 0
+    for (const { min, max } of byAsset.values()) total += Math.max(0, max - min)
+    return total
+  } catch {
+    return 0
+  }
+}
+
+function CostPerUnitSection({ currency, country, siteOptions = [] }) {
+  const { profile, isSuperAdmin } = useAuth()
+  const canWrite = isSuperAdmin === true || WRITE_ROLES.has(profile?.role)
+
+  const [mode, setMode] = useState('combined')
+  const [from, setFrom] = useState(firstOfYearIso())
+  const [to, setTo] = useState(todayIso())
+  const [rangeKey, setRangeKey] = useState('YTD')
+  const [site, setSite] = useState('All')
+
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+  const [data, setData] = useState({ split: { tyre: 0, maintenance: 0 }, m3: 0, km: 0, hours: 0 })
+  const [prodRows, setProdRows] = useState([])
+
+  // m3 entry form.
+  const [form, setForm] = useState({ site: '', period: new Date().toISOString().slice(0, 7), m3: '', source: '', notes: '' })
+  const [editingId, setEditingId] = useState(null)
+  const [saving, setSaving] = useState(false)
+  const [formError, setFormError] = useState('')
+
+  const allSites = useMemo(() => {
+    const set = new Set(siteOptions)
+    for (const r of prodRows) if (r?.site) set.add(r.site)
+    return [...set].sort((a, b) => String(a).localeCompare(String(b)))
+  }, [siteOptions, prodRows])
+
+  const load = useCallback(async () => {
+    setLoading(true)
+    setError('')
+    try {
+      const siteArg = site && site !== 'All' ? site : undefined
+      const [split, m3, km, hours, rows] = await Promise.all([
+        loadCostSplit({ country, from: from || undefined, to: to || undefined, site: siteArg }),
+        sumProductionM3({ country, site: siteArg, from: from || undefined, to: to || undefined }),
+        sumMeterDeltas('odometer_logs', 'odometer_km', { country, site: siteArg, from, to }),
+        sumMeterDeltas('engine_hours_logs', 'engine_hours', { country, site: siteArg, from, to }),
+        listProduction({ country, site: siteArg, from: from || undefined, to: to || undefined, limit: 200 }),
+      ])
+      setData({ split: { tyre: split.tyre, maintenance: split.maintenance }, m3, km, hours })
+      setProdRows(rows)
+    } catch (e) {
+      setError(toUserMessage(e, 'Could not load unit cost data.'))
+    } finally {
+      setLoading(false)
+    }
+  }, [country, from, to, site])
+
+  useEffect(() => { load() }, [load])
+
+  const ci = useMemo(
+    () => buildCostIntelligence({ split: data.split, mode, km: data.km, hours: data.hours, m3: data.m3 }),
+    [data, mode],
+  )
+
+  function applyRange(r) {
+    setRangeKey(r.label)
+    if (r.all) { setFrom(''); setTo('') }
+    else if (r.ytd) { setFrom(firstOfYearIso()); setTo(todayIso()) }
+    else { setFrom(isoMonthsAgo(r.months)); setTo(todayIso()) }
+  }
+
+  function resetForm() {
+    setForm({ site: '', period: new Date().toISOString().slice(0, 7), m3: '', source: '', notes: '' })
+    setEditingId(null)
+    setFormError('')
+  }
+
+  async function submitProduction(e) {
+    e.preventDefault()
+    setFormError('')
+    setSaving(true)
+    try {
+      const values = {
+        site: form.site,
+        period_date: form.period ? `${form.period}-01` : '',
+        m3: form.m3,
+        source: form.source,
+        notes: form.notes,
+        country: country && country !== 'All' ? country : null,
+      }
+      if (editingId) await updateProduction(editingId, values)
+      else await createProduction(values)
+      resetForm()
+      await load()
+    } catch (e2) {
+      setFormError(toUserMessage(e2, 'Could not save the production entry.'))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  function startEdit(row) {
+    setEditingId(row.id)
+    setFormError('')
+    setForm({
+      site: row.site || '',
+      period: String(row.period_date || '').slice(0, 7) || new Date().toISOString().slice(0, 7),
+      m3: row.m3 == null ? '' : String(row.m3),
+      source: row.source || '',
+      notes: row.notes || '',
+    })
+  }
+
+  async function removeProduction(id) {
+    if (!window.confirm('Delete this production entry?')) return
+    try {
+      await deleteProduction(id)
+      if (editingId === id) resetForm()
+      await load()
+    } catch (e) {
+      setFormError(toUserMessage(e, 'Could not delete the production entry.'))
+    }
+  }
+
+  const modeOptions = COST_MODES.map(m => ({ ...m, label: m.key === 'maintenance' ? 'General' : m.label }))
+  const modeLabel = mode === 'maintenance' ? 'General' : costModeLabel(mode)
+
+  const tiles = [
+    {
+      key: 'exp', icon: DollarSign, accent: '#3b82f6',
+      label: `Total expenses (${modeLabel})`,
+      value: fmtCurrency(ci.expenses, currency),
+      sub: from || to ? `${from || 'start'} to ${to || 'today'}` : 'All dates',
+    },
+    {
+      key: 'm3', icon: Boxes, accent: '#10b981',
+      label: 'Cost per m3',
+      value: fmtPerUnit(ci.perM3.value, currency, UNIT_META.m3.suffix) || 'N/A - no m3 recorded',
+      sub: ci.perM3.value != null ? `over ${Math.round(ci.perM3.running).toLocaleString()} m3` : 'Log production below',
+      na: ci.perM3.value == null,
+    },
+    {
+      key: 'km', icon: Navigation, accent: '#f59e0b',
+      label: 'Cost per km',
+      value: fmtPerUnit(ci.perKm.value, currency, UNIT_META.km.suffix) || 'N/A - no km recorded',
+      sub: ci.perKm.value != null ? `over ${Math.round(ci.perKm.running).toLocaleString()} km` : 'From odometer logs',
+      na: ci.perKm.value == null,
+    },
+    {
+      key: 'hr', icon: Timer, accent: '#a855f7',
+      label: 'Cost per engine-hour',
+      value: fmtPerUnit(ci.perHour.value, currency, UNIT_META.engine_hours.suffix) || 'N/A - no engine hours',
+      sub: ci.perHour.value != null ? `over ${Math.round(ci.perHour.running).toLocaleString()} hours` : 'From engine hour logs',
+      na: ci.perHour.value == null,
+    },
+  ]
+
+  return (
+    <div className="rounded-xl border border-gray-800 p-5" style={{ background: 'var(--panel-deep)' }}>
+      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 mb-5">
+        <div>
+          <h3 className="text-sm font-semibold text-gray-200 flex items-center gap-2">
+            <Gauge size={15} className="text-green-400" />
+            Cost per unit (m3 / km / engine-hour)
+          </h3>
+          <p className="text-xs text-[var(--panel-ink-4)] mt-0.5">
+            Unit-aware cost over a date range. m3 is location-wise production; km and engine hours come from meter logs. When a running unit has no data the tile falls back to total expenses only.
+          </p>
+        </div>
+        <div className="flex items-center gap-1 p-1 rounded-lg bg-gray-900 border border-gray-800 w-fit">
+          {modeOptions.map(m => (
+            <button
+              key={m.key}
+              onClick={() => setMode(m.key)}
+              className={`px-4 py-1.5 text-xs rounded-md font-medium transition-all ${
+                mode === m.key ? 'bg-green-700 text-white' : 'text-[var(--panel-ink-4)] hover:text-[var(--panel-ink-2)]'
+              }`}
+            >
+              {m.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Filters */}
+      <div className="flex flex-wrap items-end gap-3 mb-5">
+        <div className="flex items-center gap-1 p-1 rounded-lg bg-gray-900 border border-gray-800">
+          {UNIT_RANGES.map(r => (
+            <button
+              key={r.label}
+              onClick={() => applyRange(r)}
+              className={`px-3 py-1 text-xs rounded-md font-medium transition-all ${
+                rangeKey === r.label ? 'bg-green-700 text-white' : 'text-[var(--panel-ink-4)] hover:text-[var(--panel-ink-2)]'
+              }`}
+            >
+              {r.label}
+            </button>
+          ))}
+        </div>
+        <div className="flex flex-col gap-1">
+          <label className="text-[11px] text-[var(--panel-ink-4)]">From</label>
+          <input type="date" value={from} onChange={e => { setFrom(e.target.value); setRangeKey('custom') }}
+            className="text-xs bg-gray-900 border border-gray-700 text-[var(--panel-ink-2)] rounded-lg px-2 py-1.5 focus:outline-none focus:border-green-600" />
+        </div>
+        <div className="flex flex-col gap-1">
+          <label className="text-[11px] text-[var(--panel-ink-4)]">To</label>
+          <input type="date" value={to} onChange={e => { setTo(e.target.value); setRangeKey('custom') }}
+            className="text-xs bg-gray-900 border border-gray-700 text-[var(--panel-ink-2)] rounded-lg px-2 py-1.5 focus:outline-none focus:border-green-600" />
+        </div>
+        <div className="flex flex-col gap-1">
+          <label className="text-[11px] text-[var(--panel-ink-4)]">Site</label>
+          <select value={site} onChange={e => setSite(e.target.value)}
+            className="text-xs bg-gray-900 border border-gray-700 text-[var(--panel-ink-2)] rounded-lg px-2 py-1.5 focus:outline-none focus:border-green-600 min-w-[9rem]">
+            <option value="All">All sites</option>
+            {allSites.map(s => <option key={s} value={s}>{s}</option>)}
+          </select>
+        </div>
+        <button onClick={load} disabled={loading}
+          className="p-2 rounded-lg bg-gray-900 border border-gray-700 text-[var(--panel-ink-3)] hover:text-green-400 hover:border-green-700 transition-all disabled:opacity-50">
+          {loading ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
+        </button>
+      </div>
+
+      {error ? (
+        <div className="flex items-center gap-2 p-3 rounded-lg bg-red-900/30 border border-red-800/60 text-red-300 text-sm">
+          <AlertTriangle size={16} />{error}
+        </div>
+      ) : loading ? (
+        <div className="flex items-center justify-center py-12 text-[var(--panel-ink-4)] text-sm gap-2">
+          <Loader2 size={16} className="animate-spin" /> Loading unit costs
+        </div>
+      ) : (
+        <>
+          {/* Tiles */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
+            {tiles.map(tile => (
+              <div key={tile.key} className="p-4 rounded-xl border"
+                style={{ borderColor: `${tile.accent}44`, background: `linear-gradient(135deg, ${tile.accent}12 0%, rgba(8,15,10,0.9) 100%)` }}>
+                <div className="flex items-center gap-2 mb-2">
+                  <tile.icon size={14} style={{ color: tile.accent }} />
+                  <span className="text-[11px] text-[var(--panel-ink-4)] font-medium">{tile.label}</span>
+                </div>
+                <p className={`text-lg font-bold leading-none ${tile.na ? 'text-[var(--panel-ink-4)]' : 'text-[var(--text-primary)]'}`}>
+                  {tile.value}
+                </p>
+                <p className="text-[11px] text-gray-600 mt-1.5">{tile.sub}</p>
+              </div>
+            ))}
+          </div>
+
+          {/* m3 entry */}
+          <div className="mt-5 grid grid-cols-1 lg:grid-cols-2 gap-5">
+            <div className="p-4 rounded-xl border border-gray-800" style={{ background: 'rgba(15,23,18,0.6)' }}>
+              <h4 className="text-xs font-semibold text-gray-200 flex items-center gap-2 mb-3">
+                <Boxes size={13} className="text-green-400" />
+                {editingId ? 'Edit production (m3)' : 'Log production (m3)'}
+              </h4>
+              {!canWrite ? (
+                <p className="text-xs text-[var(--panel-ink-4)]">Only Admin, Manager, or Director can record production output.</p>
+              ) : (
+                <form onSubmit={submitProduction} className="space-y-2.5">
+                  {formError && (
+                    <div className="flex items-center gap-2 p-2 rounded-lg bg-red-900/30 border border-red-800/60 text-red-300 text-xs">
+                      <AlertTriangle size={13} />{formError}
+                    </div>
+                  )}
+                  <div className="grid grid-cols-2 gap-2.5">
+                    <div className="flex flex-col gap-1">
+                      <label className="text-[11px] text-[var(--panel-ink-4)]">Site</label>
+                      <input list="cpu-sites" value={form.site} onChange={e => setForm(f => ({ ...f, site: e.target.value }))}
+                        placeholder="Site name" required
+                        className="text-xs bg-gray-900 border border-gray-700 text-[var(--panel-ink-2)] rounded-lg px-2 py-1.5 focus:outline-none focus:border-green-600" />
+                      <datalist id="cpu-sites">{allSites.map(s => <option key={s} value={s} />)}</datalist>
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      <label className="text-[11px] text-[var(--panel-ink-4)]">Period (month)</label>
+                      <input type="month" value={form.period} onChange={e => setForm(f => ({ ...f, period: e.target.value }))} required
+                        className="text-xs bg-gray-900 border border-gray-700 text-[var(--panel-ink-2)] rounded-lg px-2 py-1.5 focus:outline-none focus:border-green-600" />
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      <label className="text-[11px] text-[var(--panel-ink-4)]">Production (m3)</label>
+                      <input type="number" step="any" min="0" value={form.m3} onChange={e => setForm(f => ({ ...f, m3: e.target.value }))}
+                        placeholder="0" required
+                        className="text-xs bg-gray-900 border border-gray-700 text-[var(--panel-ink-2)] rounded-lg px-2 py-1.5 focus:outline-none focus:border-green-600" />
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      <label className="text-[11px] text-[var(--panel-ink-4)]">Source (optional)</label>
+                      <input value={form.source} onChange={e => setForm(f => ({ ...f, source: e.target.value }))}
+                        placeholder="e.g. batching log"
+                        className="text-xs bg-gray-900 border border-gray-700 text-[var(--panel-ink-2)] rounded-lg px-2 py-1.5 focus:outline-none focus:border-green-600" />
+                    </div>
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <label className="text-[11px] text-[var(--panel-ink-4)]">Notes (optional)</label>
+                    <input value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}
+                      className="text-xs bg-gray-900 border border-gray-700 text-[var(--panel-ink-2)] rounded-lg px-2 py-1.5 focus:outline-none focus:border-green-600" />
+                  </div>
+                  <div className="flex items-center gap-2 pt-1">
+                    <button type="submit" disabled={saving}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-green-700 hover:bg-green-600 text-white text-xs font-medium transition-colors disabled:opacity-50">
+                      {saving ? <Loader2 size={13} className="animate-spin" /> : editingId ? <Save size={13} /> : <Plus size={13} />}
+                      {editingId ? 'Save changes' : 'Add production'}
+                    </button>
+                    {editingId && (
+                      <button type="button" onClick={resetForm}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gray-800 border border-gray-700 text-[var(--panel-ink-3)] text-xs hover:text-[var(--panel-ink-2)] transition-colors">
+                        <X size={13} /> Cancel
+                      </button>
+                    )}
+                  </div>
+                </form>
+              )}
+            </div>
+
+            {/* Recent m3 list */}
+            <div className="p-4 rounded-xl border border-gray-800" style={{ background: 'rgba(15,23,18,0.6)' }}>
+              <h4 className="text-xs font-semibold text-gray-200 mb-3">Recent production entries</h4>
+              {prodRows.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-8 gap-2">
+                  <Boxes size={26} className="text-gray-700" />
+                  <p className="text-[var(--panel-ink-4)] text-xs">No m3 recorded for this range yet.</p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto max-h-64 overflow-y-auto">
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="border-b border-gray-800 text-left text-[var(--panel-ink-4)]">
+                        <th className="pb-2 pr-3 font-medium">Site</th>
+                        <th className="pb-2 pr-3 font-medium">Period</th>
+                        <th className="pb-2 pr-3 font-medium text-right">m3</th>
+                        {canWrite && <th className="pb-2 font-medium text-right">Actions</th>}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {prodRows.map(r => (
+                        <tr key={r.id} className="border-b border-gray-800/50">
+                          <td className="py-2 pr-3 text-[var(--panel-ink-2)]">{r.site || 'N/A'}</td>
+                          <td className="py-2 pr-3 text-[var(--panel-ink-3)]">{String(r.period_date || '').slice(0, 7) || 'N/A'}</td>
+                          <td className="py-2 pr-3 text-right text-gray-200 tabular-nums">{Number(r.m3 || 0).toLocaleString()}</td>
+                          {canWrite && (
+                            <td className="py-2 text-right">
+                              <div className="flex items-center justify-end gap-1.5">
+                                <button onClick={() => startEdit(r)} className="text-[var(--panel-ink-4)] hover:text-green-400 transition-colors" title="Edit">
+                                  <Pencil size={13} />
+                                </button>
+                                <button onClick={() => removeProduction(r.id)} className="text-[var(--panel-ink-4)] hover:text-red-400 transition-colors" title="Delete">
+                                  <Trash2 size={13} />
+                                </button>
+                              </div>
+                            </td>
+                          )}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  )
 }

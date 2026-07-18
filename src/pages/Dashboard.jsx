@@ -3,6 +3,8 @@ import { Link } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { dashboard } from '../lib/api'
 import { loadPmDashboard } from '../lib/api/pmPrograms'
+import { loadCostSplit } from '../lib/api/costSummary'
+import { COST_MODES, pickCost } from '../lib/costSources'
 import { summarizePmCompliance } from '../lib/pmSchedule'
 import { useAuth } from '../contexts/AuthContext'
 import { useSettings } from '../contexts/SettingsContext'
@@ -202,6 +204,11 @@ export default function Dashboard() {
   // an absent pm_programs table never affects the rest of the page). Tri-state:
   // status 'loading' | 'ready' | 'error'. An unprovisioned table yields plans: [].
   const [pm, setPm] = useState({ status: 'loading', plans: [], kmByAsset: {}, hoursByAsset: {} })
+  // Tyres vs General(Maintenance) vs Combined cost switch driving the Total Cost
+  // KPI. Loaded independently (country scoped); a missing table degrades to a
+  // zero split so the tile falls back to the tyre-only server figure.
+  const [costMode, setCostMode] = useState('tyres')
+  const [costSplit, setCostSplit] = useState(null)
 
   const pad = n => String(n).padStart(2, '0')
   const fmt = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`
@@ -222,6 +229,15 @@ export default function Dashboard() {
   }
 
   useEffect(() => { applyShortcut('This Month') }, [])
+
+  // Load the tyre vs maintenance cost split (last 12 months, country scoped).
+  useEffect(() => {
+    let cancelled = false
+    loadCostSplit({ country: activeCountry })
+      .then(res => { if (!cancelled) setCostSplit(res) })
+      .catch(() => { if (!cancelled) setCostSplit(null) })
+    return () => { cancelled = true }
+  }, [activeCountry])
   useEffect(() => { load() }, [activeCountry, dateFrom, dateTo])
 
   // Independent PM load: own lifecycle + cancel guard so a slow/failed PM fetch
@@ -319,6 +335,15 @@ export default function Dashboard() {
     const crit = tyres.filter(isHigh).length
     return { tyres: tyres.length, stock: rawStock.length, actions: open, critical: crit, cost, vehicles: new Set(tyres.map(t => t.asset_no).filter(Boolean)).size }
   }, [tyres, rawActions, rawStock, summary, isFiltered])
+
+  // The Total Cost KPI responds to the cost-view switch. 'tyres' keeps the exact
+  // window-accurate tyre figure shown before; 'combined'/'general' use the 12-month
+  // tyre + maintenance split (null-safe: falls back to the tyre figure).
+  const costModeOptions = COST_MODES.map(m => ({ value: m.key, label: m.key === 'maintenance' ? 'General' : m.label }))
+  const totalCostFigure = useMemo(() => {
+    if (costMode === 'tyres' || !costSplit) return stats.cost
+    return pickCost(costMode, { tyre: costSplit.tyre, maintenance: costSplit.maintenance })
+  }, [costMode, costSplit, stats.cost])
 
   // "Needs attention" — the highest-cost critical tyres, surfaced so the thing
   // that needs action reads at a glance. Real data only; empty when clean.
@@ -923,6 +948,20 @@ export default function Dashboard() {
         </div>
       </div>
 
+      {/* ── Cost view switch (drives the Total Cost KPI) ─────────────────── */}
+      <div className="flex items-center justify-end gap-2">
+        <span className="text-[11px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">
+          {tf('dashboard.costView.label', 'Cost view')}
+        </span>
+        <SegmentedControl
+          size="sm"
+          ariaLabel="cost-view"
+          options={costModeOptions}
+          value={costMode}
+          onChange={setCostMode}
+        />
+      </div>
+
       {/* ── KPI METRICS (console stat-tiles) ─────────────────────────────── */}
       <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3">
         <StatTile index={0} to="/fleet" icon={CircleDot} tone="accent"
@@ -941,7 +980,8 @@ export default function Dashboard() {
           delta={riskTrend?.delta} deltaSuffix="" deltaGood={(riskTrend?.delta ?? 0) <= 0}
           spark={sparkSeries.risk} />
         <StatTile index={5} to="/analytics" icon={DollarSign} tone="accent"
-          label={t('dashboard.kpi.totalCost')} value={`${(stats.cost / 1000).toFixed(0)}K`}
+          label={`${t('dashboard.kpi.totalCost')} (${costMode === 'maintenance' ? 'General' : costMode === 'tyres' ? 'Tyres' : 'Combined'})`}
+          value={`${(totalCostFigure / 1000).toFixed(0)}K`}
           unit={activeCurrency} spark={sparkSeries.cost} />
       </div>
 

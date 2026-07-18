@@ -132,7 +132,7 @@ function ExpandableIssueList({ items, labelFn }) {
   return (
     <div className="mt-2">
       {visible.map((it, i) => (
-        <div key={i} className="text-xs text-gray-400 py-0.5 border-b border-white/5 last:border-0">
+        <div key={i} className="text-xs text-[var(--panel-ink-3)] py-0.5 border-b border-white/5 last:border-0">
           {labelFn(it)}
         </div>
       ))}
@@ -178,7 +178,7 @@ function RecommendationCard({ priority, message }) {
       <div className={`w-2 h-2 rounded-full mt-1 flex-shrink-0 ${s.dot}`} />
       <div>
         <span className={`text-xs font-semibold uppercase tracking-wide ${s.label}`}>{priority}</span>
-        <p className="text-sm text-gray-300 mt-0.5">{message}</p>
+        <p className="text-sm text-[var(--panel-ink-2)] mt-0.5">{message}</p>
       </div>
     </div>
   )
@@ -621,7 +621,7 @@ export default function InspectionIntelligence() {
       <div className="flex items-center justify-center h-80">
         <div className="flex flex-col items-center gap-3">
           <div className="w-8 h-8 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
-          <p className="text-gray-400 text-sm">Loading inspection data...</p>
+          <p className="text-[var(--panel-ink-3)] text-sm">Loading inspection data...</p>
         </div>
       </div>
     )
@@ -633,7 +633,7 @@ export default function InspectionIntelligence() {
         <div className="card p-8 text-center max-w-sm">
           <XCircle className="mx-auto mb-3 text-red-400" size={32} />
           <p className="text-red-400 font-semibold">Failed to load data</p>
-          <p className="text-gray-500 text-sm mt-1">{error}</p>
+          <p className="text-[var(--panel-ink-4)] text-sm mt-1">{error}</p>
         </div>
       </div>
     )
@@ -644,8 +644,8 @@ export default function InspectionIntelligence() {
       <div className="flex items-center justify-center h-80">
         <div className="card p-10 text-center max-w-md">
           <ClipboardCheck className="mx-auto mb-4 text-gray-600" size={40} />
-          <p className="text-gray-300 font-semibold text-lg">No inspection records found</p>
-          <p className="text-gray-500 text-sm mt-2">
+          <p className="text-[var(--panel-ink-2)] font-semibold text-lg">No inspection records found</p>
+          <p className="text-[var(--panel-ink-4)] text-sm mt-2">
             Schedule inspections to enable intelligence monitoring.
           </p>
         </div>
@@ -683,7 +683,7 @@ export default function InspectionIntelligence() {
                 className={`px-3 py-1 rounded-full text-xs font-semibold border transition-colors ${
                   activeCountry === c
                     ? 'bg-indigo-600 border-indigo-500 text-white'
-                    : 'border-gray-700 text-gray-400 hover:border-indigo-500 hover:text-gray-200'
+                    : 'border-gray-700 text-[var(--panel-ink-3)] hover:border-indigo-500 hover:text-gray-200'
                 }`}
               >
                 {c}
@@ -712,7 +712,7 @@ export default function InspectionIntelligence() {
                 className={`px-3 py-1 rounded text-xs font-semibold border transition-colors ${
                   datePreset === days
                     ? 'bg-indigo-600 border-indigo-500 text-white'
-                    : 'border-gray-700 text-gray-400 hover:border-indigo-500'
+                    : 'border-gray-700 text-[var(--panel-ink-3)] hover:border-indigo-500'
                 }`}
               >
                 {label}
@@ -722,7 +722,7 @@ export default function InspectionIntelligence() {
 
           {/* Search */}
           <div className="flex items-center gap-2 flex-1 min-w-48 max-w-xs">
-            <Search size={14} className="text-gray-500 flex-shrink-0" />
+            <Search size={14} className="text-[var(--panel-ink-4)] flex-shrink-0" />
             <input
               className="input text-sm py-1.5 flex-1"
               placeholder="Search asset, site, inspector..."
@@ -731,7 +731,7 @@ export default function InspectionIntelligence() {
             />
           </div>
 
-          <span className="text-xs text-gray-500 ml-auto">
+          <span className="text-xs text-[var(--panel-ink-4)] ml-auto">
             {filtered.length} inspection{filtered.length !== 1 ? 's' : ''} in view
           </span>
         </div>
@@ -742,13 +742,13 @@ export default function InspectionIntelligence() {
         {/* Inspection Compliance */}
         <div className={`card p-5 border ${complianceBg(complianceMetrics.compliancePct)}`}>
           <div className="flex items-center justify-between mb-3">
-            <span className="text-xs text-gray-400 uppercase tracking-wider font-medium">Inspection Compliance</span>
+            <span className="text-xs text-[var(--panel-ink-3)] uppercase tracking-wider font-medium">Inspection Compliance</span>
             <CheckCircle size={16} className={complianceColor(complianceMetrics.compliancePct)} />
           </div>
           <p className={`text-3xl font-bold ${complianceColor(complianceMetrics.compliancePct)}`}>
             {complianceMetrics.compliancePct}%
           </p>
-          <p className="text-xs text-gray-500 mt-1">
+          <p className="text-xs text-[var(--panel-ink-4)] mt-1">
             {complianceMetrics.completedOnTime} of {complianceMetrics.totalScheduled} on-time
           </p>
           <div className="mt-2 h-1 bg-gray-700 rounded-full overflow-hidden">
@@ -762,13 +762,13 @@ export default function InspectionIntelligence() {
         {/* Pressure Data Coverage */}
         <div className={`card p-5 border ${parseFloat(complianceMetrics.pressureCovPct) >= 75 ? 'bg-green-900/10 border-green-700/30' : parseFloat(complianceMetrics.pressureCovPct) >= 50 ? 'bg-yellow-900/10 border-yellow-700/30' : 'bg-red-900/10 border-red-700/30'}`}>
           <div className="flex items-center justify-between mb-3">
-            <span className="text-xs text-gray-400 uppercase tracking-wider font-medium">Pressure Coverage</span>
+            <span className="text-xs text-[var(--panel-ink-3)] uppercase tracking-wider font-medium">Pressure Coverage</span>
             <BarChart2 size={16} className={coverageColor(complianceMetrics.pressureCovPct)} />
           </div>
           <p className={`text-3xl font-bold ${coverageColor(complianceMetrics.pressureCovPct)}`}>
             {complianceMetrics.pressureCovPct}%
           </p>
-          <p className="text-xs text-gray-500 mt-1">Inspections with pressure readings</p>
+          <p className="text-xs text-[var(--panel-ink-4)] mt-1">Inspections with pressure readings</p>
           <div className="mt-2 h-1 bg-gray-700 rounded-full overflow-hidden">
             <div
               className={`h-full rounded-full ${parseFloat(complianceMetrics.pressureCovPct) >= 75 ? 'bg-green-500' : parseFloat(complianceMetrics.pressureCovPct) >= 50 ? 'bg-yellow-500' : 'bg-red-500'}`}
@@ -780,13 +780,13 @@ export default function InspectionIntelligence() {
         {/* Missing Inspections */}
         <div className={`card p-5 border ${missingInspections.length === 0 ? 'bg-green-900/10 border-green-700/30' : missingInspections.length <= 5 ? 'bg-yellow-900/10 border-yellow-700/30' : 'bg-red-900/10 border-red-700/30'}`}>
           <div className="flex items-center justify-between mb-3">
-            <span className="text-xs text-gray-400 uppercase tracking-wider font-medium">Missing Inspections</span>
+            <span className="text-xs text-[var(--panel-ink-3)] uppercase tracking-wider font-medium">Missing Inspections</span>
             <AlertTriangle size={16} className={missingColor(missingInspections.length)} />
           </div>
           <p className={`text-3xl font-bold ${missingColor(missingInspections.length)}`}>
             {missingInspections.length}
           </p>
-          <p className="text-xs text-gray-500 mt-1">Vehicles with no recent inspection</p>
+          <p className="text-xs text-[var(--panel-ink-4)] mt-1">Vehicles with no recent inspection</p>
           <p className="text-xs mt-2">
             <span className="text-red-400">{missingInspections.filter(v => v.severity === 'critical').length} critical</span>
             {' · '}
@@ -797,13 +797,13 @@ export default function InspectionIntelligence() {
         {/* Data Quality Score */}
         <div className={`card p-5 border ${parseFloat(complianceMetrics.dqScore) >= 80 ? 'bg-green-900/10 border-green-700/30' : parseFloat(complianceMetrics.dqScore) >= 60 ? 'bg-yellow-900/10 border-yellow-700/30' : 'bg-red-900/10 border-red-700/30'}`}>
           <div className="flex items-center justify-between mb-3">
-            <span className="text-xs text-gray-400 uppercase tracking-wider font-medium">Data Quality Score</span>
+            <span className="text-xs text-[var(--panel-ink-3)] uppercase tracking-wider font-medium">Data Quality Score</span>
             <ShieldCheck size={16} className={dqColor(complianceMetrics.dqScore)} />
           </div>
           <p className={`text-3xl font-bold ${dqColor(complianceMetrics.dqScore)}`}>
             {complianceMetrics.dqScore}%
           </p>
-          <p className="text-xs text-gray-500 mt-1">Based on findings + date completeness</p>
+          <p className="text-xs text-[var(--panel-ink-4)] mt-1">Based on findings + date completeness</p>
           <div className="mt-2 h-1 bg-gray-700 rounded-full overflow-hidden">
             <div
               className={`h-full rounded-full ${parseFloat(complianceMetrics.dqScore) >= 80 ? 'bg-green-500' : parseFloat(complianceMetrics.dqScore) >= 60 ? 'bg-yellow-500' : 'bg-red-500'}`}
@@ -817,7 +817,7 @@ export default function InspectionIntelligence() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* Compliance by Site */}
         <div className="card p-4">
-          <p className="text-sm font-semibold text-gray-300 mb-3">Compliance % by Site</p>
+          <p className="text-sm font-semibold text-[var(--panel-ink-2)] mb-3">Compliance % by Site</p>
           {complianceBySite.length === 0 ? (
             <div className="flex items-center justify-center h-[260px] text-gray-600 text-sm">No site data</div>
           ) : (
@@ -829,7 +829,7 @@ export default function InspectionIntelligence() {
 
         {/* Monthly Trend */}
         <div className="card p-4">
-          <p className="text-sm font-semibold text-gray-300 mb-3">Monthly Compliance Trend</p>
+          <p className="text-sm font-semibold text-[var(--panel-ink-2)] mb-3">Monthly Compliance Trend</p>
           <div style={{ height: 260 }}>
             <Line data={trendChartData} options={CHART_OPTS_LINE} />
           </div>
@@ -837,7 +837,7 @@ export default function InspectionIntelligence() {
 
         {/* Inspection Type Distribution */}
         <div className="card p-4">
-          <p className="text-sm font-semibold text-gray-300 mb-3">Inspection Type Distribution</p>
+          <p className="text-sm font-semibold text-[var(--panel-ink-2)] mb-3">Inspection Type Distribution</p>
           {typeDistribution.length === 0 ? (
             <div className="flex items-center justify-center h-[240px] text-gray-600 text-sm">No data</div>
           ) : (
@@ -885,8 +885,8 @@ export default function InspectionIntelligence() {
                     className={`border-t border-white/5 ${v.severity === 'critical' ? 'bg-red-900/10' : v.severity === 'high' ? 'bg-orange-900/10' : 'bg-yellow-900/5'}`}
                   >
                     <td className="table-cell font-mono text-xs">{v.asset_no}</td>
-                    <td className="table-cell text-gray-300">{v.site}</td>
-                    <td className="table-cell text-gray-400">{v.lastInspectionDate || '-'}</td>
+                    <td className="table-cell text-[var(--panel-ink-2)]">{v.site}</td>
+                    <td className="table-cell text-[var(--panel-ink-3)]">{v.lastInspectionDate || '-'}</td>
                     <td className="table-cell font-semibold">{v.daysSince === '-' ? '-' : `${v.daysSince}d`}</td>
                     <td className="table-cell"><SeverityBadge sev={v.severity} /></td>
                     <td className="table-cell text-right">
@@ -946,14 +946,14 @@ export default function InspectionIntelligence() {
                 {duplicates.map((d, i) => (
                   <tr key={i} className="border-t border-white/5 bg-yellow-900/5">
                     <td className="table-cell font-mono text-xs">{d.asset_no || '-'}</td>
-                    <td className="table-cell text-gray-400">{d.date || '-'}</td>
-                    <td className="table-cell text-gray-300">{d.type || '-'}</td>
+                    <td className="table-cell text-[var(--panel-ink-3)]">{d.date || '-'}</td>
+                    <td className="table-cell text-[var(--panel-ink-2)]">{d.type || '-'}</td>
                     <td className="table-cell text-center">
                       <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-yellow-900/40 text-yellow-400 border border-yellow-700/50">
                         ×{d.count}
                       </span>
                     </td>
-                    <td className="table-cell text-gray-400 text-xs">{d.inspectorNames || '-'}</td>
+                    <td className="table-cell text-[var(--panel-ink-3)] text-xs">{d.inspectorNames || '-'}</td>
                     <td className="table-cell text-right">
                       <a
                         href="/inspections"
@@ -978,8 +978,8 @@ export default function InspectionIntelligence() {
         </div>
 
         {inspectorScores.length === 0 ? (
-          <div className="px-5 py-10 text-center text-gray-500 text-sm">
-            Inspector data will appear once the <code className="text-gray-400 bg-gray-800 px-1 rounded">inspector</code> field is captured in inspections
+          <div className="px-5 py-10 text-center text-[var(--panel-ink-4)] text-sm">
+            Inspector data will appear once the <code className="text-[var(--panel-ink-3)] bg-gray-800 px-1 rounded">inspector</code> field is captured in inspections
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -1001,22 +1001,22 @@ export default function InspectionIntelligence() {
                     ? { label: 'Top Performer', style: 'bg-green-900/30 text-green-400 border-green-700/50' }
                     : scorePct < 70
                     ? { label: 'Needs Improvement', style: 'bg-yellow-900/30 text-yellow-400 border-yellow-700/50' }
-                    : { label: 'Average', style: 'bg-gray-800 text-gray-400 border-gray-700' }
+                    : { label: 'Average', style: 'bg-gray-800 text-[var(--panel-ink-3)] border-gray-700' }
 
                   return (
                     <tr key={i} className="border-t border-white/5 hover:bg-white/[0.02]">
                       <td className="table-cell font-medium text-gray-200">{ins.inspector}</td>
-                      <td className="table-cell text-center text-gray-300">{ins.totalInspections}</td>
+                      <td className="table-cell text-center text-[var(--panel-ink-2)]">{ins.totalInspections}</td>
                       <td className="table-cell min-w-[140px]">
                         <QualityBar score={ins.qualityScore} />
                       </td>
                       <td className="table-cell text-center">
-                        <span className={`${ins.missingFindings > 0 ? 'text-red-400 font-semibold' : 'text-gray-500'}`}>
+                        <span className={`${ins.missingFindings > 0 ? 'text-red-400 font-semibold' : 'text-[var(--panel-ink-4)]'}`}>
                           {ins.missingFindings}
                         </span>
                       </td>
                       <td className="table-cell text-center">
-                        <span className={`${ins.incompleteCount > 0 ? 'text-orange-400 font-semibold' : 'text-gray-500'}`}>
+                        <span className={`${ins.incompleteCount > 0 ? 'text-orange-400 font-semibold' : 'text-[var(--panel-ink-4)]'}`}>
                           {ins.incompleteCount}
                         </span>
                       </td>
@@ -1045,7 +1045,7 @@ export default function InspectionIntelligence() {
           {/* No Findings */}
           <div className="bg-gray-800/50 rounded-lg p-4">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-xs text-gray-400 font-medium uppercase tracking-wide">No Findings Text</span>
+              <span className="text-xs text-[var(--panel-ink-3)] font-medium uppercase tracking-wide">No Findings Text</span>
               <span className={`text-lg font-bold ${complianceMetrics.missingFindings.length > 0 ? 'text-red-400' : 'text-green-400'}`}>
                 {complianceMetrics.missingFindings.length}
               </span>
@@ -1072,7 +1072,7 @@ export default function InspectionIntelligence() {
           {/* No Inspector */}
           <div className="bg-gray-800/50 rounded-lg p-4">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-xs text-gray-400 font-medium uppercase tracking-wide">No Inspector Name</span>
+              <span className="text-xs text-[var(--panel-ink-3)] font-medium uppercase tracking-wide">No Inspector Name</span>
               <span className={`text-lg font-bold ${complianceMetrics.noInspector.length > 0 ? 'text-yellow-400' : 'text-green-400'}`}>
                 {complianceMetrics.noInspector.length}
               </span>
@@ -1099,7 +1099,7 @@ export default function InspectionIntelligence() {
           {/* Suspicious Date */}
           <div className="bg-gray-800/50 rounded-lg p-4">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-xs text-gray-400 font-medium uppercase tracking-wide">Suspicious Date</span>
+              <span className="text-xs text-[var(--panel-ink-3)] font-medium uppercase tracking-wide">Suspicious Date</span>
               <span className={`text-lg font-bold ${complianceMetrics.suspiciousDate.length > 0 ? 'text-orange-400' : 'text-green-400'}`}>
                 {complianceMetrics.suspiciousDate.length}
               </span>
@@ -1144,11 +1144,11 @@ export default function InspectionIntelligence() {
                 <div className="w-2 h-2 rounded-full bg-purple-500 mt-1.5 flex-shrink-0" />
                 <div>
                   <span className="text-sm font-semibold text-gray-200">{item.asset_no}</span>
-                  <span className="text-xs text-gray-500 ml-2">{item.site}</span>
+                  <span className="text-xs text-[var(--panel-ink-4)] ml-2">{item.site}</span>
                   <span className="ml-2 px-2 py-0.5 rounded text-xs bg-purple-900/30 text-purple-400 border border-purple-700/40">
                     {item.inconsistencyType}
                   </span>
-                  <p className="text-xs text-gray-400 mt-0.5">{item.description}</p>
+                  <p className="text-xs text-[var(--panel-ink-3)] mt-0.5">{item.description}</p>
                 </div>
               </div>
             ))}
@@ -1161,7 +1161,7 @@ export default function InspectionIntelligence() {
         <div className="flex items-center gap-2 mb-4">
           <AlertCircle size={16} className="text-yellow-400" />
           <p className="font-semibold text-gray-200">Automated Recommendations</p>
-          <span className="text-xs text-gray-500">({recommendations.length} action{recommendations.length !== 1 ? 's' : ''})</span>
+          <span className="text-xs text-[var(--panel-ink-4)]">({recommendations.length} action{recommendations.length !== 1 ? 's' : ''})</span>
         </div>
 
         {recommendations.length === 0 ? (

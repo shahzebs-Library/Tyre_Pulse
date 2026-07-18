@@ -78,7 +78,7 @@ function StatusBadge({ status }) {
     under:          'bg-orange-500/20 text-orange-300 border border-orange-500/40',
     over:           'bg-amber-500/20 text-amber-300 border border-amber-500/40',
     ok:             'bg-green-500/20 text-green-300 border border-green-500/40',
-    unknown:        'bg-gray-800 text-gray-400',
+    unknown:        'bg-gray-800 text-[var(--panel-ink-3)]',
   }
   const label = {
     critical_under: 'Critical Under',
@@ -115,8 +115,8 @@ function KpiCard({ title, value, sub, icon: Icon, color, alert }) {
     <div className={`rounded-xl border p-4 flex flex-col gap-2 ${border[color] ?? 'border-gray-700/40 bg-gray-900/40'}`}>
       <div className="flex items-start justify-between">
         <div className="flex items-center gap-2">
-          <Icon size={14} className={iconColor[color] ?? 'text-gray-400'} />
-          <span className="text-xs text-gray-400 font-medium">{title}</span>
+          <Icon size={14} className={iconColor[color] ?? 'text-[var(--panel-ink-3)]'} />
+          <span className="text-xs text-[var(--panel-ink-3)] font-medium">{title}</span>
         </div>
         {alert && (
           <span className="text-xs px-1.5 py-0.5 rounded bg-red-500/20 text-red-300 border border-red-500/40 font-bold animate-pulse">
@@ -125,7 +125,7 @@ function KpiCard({ title, value, sub, icon: Icon, color, alert }) {
         )}
       </div>
       <p className={`text-2xl font-bold leading-tight ${valueColor[color] ?? 'text-white'}`}>{value}</p>
-      {sub && <p className="text-xs text-gray-500">{sub}</p>}
+      {sub && <p className="text-xs text-[var(--panel-ink-4)]">{sub}</p>}
     </div>
   )
 }
@@ -847,8 +847,8 @@ export default function PressureIntelligence() {
       {/* Filters */}
       <div className="card">
         <div className="flex items-center gap-2 mb-3">
-          <Filter size={13} className="text-gray-400" />
-          <span className="text-xs font-medium text-gray-400">Filters</span>
+          <Filter size={13} className="text-[var(--panel-ink-3)]" />
+          <span className="text-xs font-medium text-[var(--panel-ink-3)]">Filters</span>
           {hasActiveFilter && (
             <button
               onClick={() => { setSiteFilter(''); setCountryFilter(''); setPositionFilter(''); setDateFrom(''); setDateTo(''); setInspectorFilter('') }}
@@ -884,7 +884,7 @@ export default function PressureIntelligence() {
       {loading && (
         <div className="flex items-center justify-center py-20">
           <RefreshCw size={22} className="text-blue-400 animate-spin mr-2" />
-          <span className="text-gray-400 text-sm">Loading pressure data...</span>
+          <span className="text-[var(--panel-ink-3)] text-sm">Loading pressure data...</span>
         </div>
       )}
       {error && (
@@ -899,7 +899,7 @@ export default function PressureIntelligence() {
           {enriched.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-24 gap-3">
               <Gauge size={40} className="text-gray-700" />
-              <p className="text-gray-500 text-sm">No pressure readings found for the selected filters.</p>
+              <p className="text-[var(--panel-ink-4)] text-sm">No pressure readings found for the selected filters.</p>
             </div>
           ) : (
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-5">
@@ -908,13 +908,13 @@ export default function PressureIntelligence() {
               <div className="flex flex-wrap gap-2">
                 {Object.entries(SPEC).map(([pos, psi]) => (
                   <div key={pos} className="flex items-center gap-1.5 bg-gray-900 border border-gray-800 rounded-lg px-3 py-1.5">
-                    <span className="text-xs text-gray-400">{pos}:</span>
+                    <span className="text-xs text-[var(--panel-ink-3)]">{pos}:</span>
                     <span className="text-xs font-bold text-white">{psi} PSI</span>
                     <span className="text-xs text-gray-600">({Math.round(psi * 0.9)}-{Math.round(psi * 1.1)} OK)</span>
                   </div>
                 ))}
                 <div className="flex items-center gap-1.5 bg-gray-900 border border-gray-800 rounded-lg px-3 py-1.5">
-                  <span className="text-xs text-gray-400">Default:</span>
+                  <span className="text-xs text-[var(--panel-ink-3)]">Default:</span>
                   <span className="text-xs font-bold text-white">105 PSI</span>
                 </div>
               </div>
@@ -966,7 +966,7 @@ export default function PressureIntelligence() {
                   <div className="flex items-center gap-2 mb-3">
                     <BarChart3 size={14} className="text-blue-400" />
                     <h3 className="text-sm font-semibold text-[var(--text-primary)]">Pressure Distribution</h3>
-                    <span className="ml-auto text-xs text-gray-500">All readings by PSI band</span>
+                    <span className="ml-auto text-xs text-[var(--panel-ink-4)]">All readings by PSI band</span>
                   </div>
                   <div className="h-56">
                     <Bar data={histogramData} options={histogramOpts} />
@@ -980,7 +980,7 @@ export default function PressureIntelligence() {
                     ].map(l => (
                       <div key={l.label} className="flex items-center gap-1.5">
                         <span className={`w-2.5 h-2.5 rounded-sm ${l.color}`} />
-                        <span className="text-xs text-gray-500">{l.label}</span>
+                        <span className="text-xs text-[var(--panel-ink-4)]">{l.label}</span>
                       </div>
                     ))}
                   </div>
@@ -991,7 +991,7 @@ export default function PressureIntelligence() {
                   <div className="flex items-center gap-2 mb-3">
                     <Building2 size={14} className="text-purple-400" />
                     <h3 className="text-sm font-semibold text-[var(--text-primary)]">Compliance by Site</h3>
-                    <span className="ml-auto text-xs text-gray-500">Ranked best → worst</span>
+                    <span className="ml-auto text-xs text-[var(--panel-ink-4)]">Ranked best → worst</span>
                   </div>
                   {siteCompliance.length === 0 ? (
                     <div className="flex items-center justify-center h-56 text-gray-600 text-sm">No site data</div>
@@ -1009,7 +1009,7 @@ export default function PressureIntelligence() {
                     ].map(l => (
                       <div key={l.label} className="flex items-center gap-1.5">
                         <span className={`w-2.5 h-2.5 rounded-sm ${l.color}`} />
-                        <span className="text-xs text-gray-500">{l.label}</span>
+                        <span className="text-xs text-[var(--panel-ink-4)]">{l.label}</span>
                       </div>
                     ))}
                   </div>
@@ -1021,7 +1021,7 @@ export default function PressureIntelligence() {
                 <div className="flex items-center gap-2 mb-3">
                   <TrendingUp size={14} className="text-green-400" />
                   <h3 className="text-sm font-semibold text-[var(--text-primary)]">Pressure Trend by Position</h3>
-                  <span className="ml-auto text-xs text-gray-500">12-month monthly averages</span>
+                  <span className="ml-auto text-xs text-[var(--panel-ink-4)]">12-month monthly averages</span>
                 </div>
                 <div className="h-64">
                   <Line
@@ -1037,8 +1037,8 @@ export default function PressureIntelligence() {
                 </div>
                 <div className="flex flex-wrap gap-4 mt-2">
                   {Object.entries(SPEC).map(([pos, psi]) => (
-                    <div key={pos} className="text-xs text-gray-500">
-                      {pos} spec: <span className="text-gray-300 font-medium">{psi} PSI</span>
+                    <div key={pos} className="text-xs text-[var(--panel-ink-4)]">
+                      {pos} spec: <span className="text-[var(--panel-ink-2)] font-medium">{psi} PSI</span>
                     </div>
                   ))}
                 </div>
@@ -1049,7 +1049,7 @@ export default function PressureIntelligence() {
                 <div className="flex items-center gap-2 mb-3">
                   <Thermometer size={14} className="text-amber-400" />
                   <h3 className="text-sm font-semibold text-[var(--text-primary)]">Seasonal Pressure Analysis</h3>
-                  <span className="ml-auto text-xs text-gray-500">Monthly avg + non-compliance rate</span>
+                  <span className="ml-auto text-xs text-[var(--panel-ink-4)]">Monthly avg + non-compliance rate</span>
                 </div>
                 <div className="h-64">
                   <Line data={seasonalData} options={seasonalOpts} />
@@ -1057,7 +1057,7 @@ export default function PressureIntelligence() {
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-3">
                   {seasonalData.avgs.map((avg, i) => avg !== null && (
                     <div key={i} className="bg-gray-800/50 rounded-lg p-2">
-                      <p className="text-xs text-gray-500">{['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][i]}</p>
+                      <p className="text-xs text-[var(--panel-ink-4)]">{['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][i]}</p>
                       <p className="text-sm font-bold text-white">{Number(avg).toFixed(0)} PSI</p>
                       <p className="text-xs text-red-400">{seasonalData.ncPct[i]}% non-compliant</p>
                     </div>
@@ -1077,7 +1077,7 @@ export default function PressureIntelligence() {
                   </div>
                   <div className="sm:ml-auto flex flex-wrap items-center gap-2">
                     <div className="relative">
-                      <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-500" />
+                      <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--panel-ink-4)]" />
                       <input
                         value={tableSearch}
                         onChange={e => { setTableSearch(e.target.value); setAnomalyPage(1) }}
@@ -1098,7 +1098,7 @@ export default function PressureIntelligence() {
                 {anomalies.length === 0 ? (
                   <div className="flex flex-col items-center py-12 gap-2">
                     <CheckCircle size={28} className="text-green-500" />
-                    <p className="text-gray-400 text-sm">No pressure anomalies detected, full compliance!</p>
+                    <p className="text-[var(--panel-ink-3)] text-sm">No pressure anomalies detected, full compliance!</p>
                   </div>
                 ) : (
                   <>
@@ -1107,7 +1107,7 @@ export default function PressureIntelligence() {
                         <thead>
                           <tr className="border-b border-gray-700/60">
                             {['Asset', 'Position', 'Serial', 'Reading', 'Spec', 'Deviation', 'Status', 'Inspector', 'Date', 'Site', ''].map(h => (
-                              <th key={h} className="text-left text-gray-500 pb-2 pr-3 font-medium whitespace-nowrap">{h}</th>
+                              <th key={h} className="text-left text-[var(--panel-ink-4)] pb-2 pr-3 font-medium whitespace-nowrap">{h}</th>
                             ))}
                           </tr>
                         </thead>
@@ -1118,21 +1118,21 @@ export default function PressureIntelligence() {
                               className="border-b border-gray-800/60 hover:bg-gray-800/30 transition-colors"
                             >
                               <td className="py-2 pr-3 text-white font-medium">{r.asset_no || '-'}</td>
-                              <td className="py-2 pr-3 text-gray-300">{r.position || '-'}</td>
-                              <td className="py-2 pr-3 text-gray-400 font-mono">{r.serial || '-'}</td>
+                              <td className="py-2 pr-3 text-[var(--panel-ink-2)]">{r.position || '-'}</td>
+                              <td className="py-2 pr-3 text-[var(--panel-ink-3)] font-mono">{r.serial || '-'}</td>
                               <td className={`py-2 pr-3 font-bold ${r.status === 'critical_under' ? 'text-red-400' : r.status === 'under' ? 'text-orange-400' : 'text-amber-400'}`}>
                                 {r.reading} PSI
                               </td>
-                              <td className="py-2 pr-3 text-gray-400">{r.spec} PSI</td>
-                              <td className="py-2 pr-3 text-gray-300">{r.devPct.toFixed(1)}%</td>
+                              <td className="py-2 pr-3 text-[var(--panel-ink-3)]">{r.spec} PSI</td>
+                              <td className="py-2 pr-3 text-[var(--panel-ink-2)]">{r.devPct.toFixed(1)}%</td>
                               <td className="py-2 pr-3"><StatusBadge status={r.status} /></td>
-                              <td className="py-2 pr-3 text-gray-400">{r.inspector || '-'}</td>
-                              <td className="py-2 pr-3 text-gray-500 whitespace-nowrap">{r.date || '-'}</td>
-                              <td className="py-2 pr-3 text-gray-400">{r.site || '-'}</td>
+                              <td className="py-2 pr-3 text-[var(--panel-ink-3)]">{r.inspector || '-'}</td>
+                              <td className="py-2 pr-3 text-[var(--panel-ink-4)] whitespace-nowrap">{r.date || '-'}</td>
+                              <td className="py-2 pr-3 text-[var(--panel-ink-3)]">{r.site || '-'}</td>
                               <td className="py-2">
                                 <button
                                   onClick={() => setAssetDrilldown(r.asset_no === assetDrilldown ? null : r.asset_no)}
-                                  className="p-1 text-gray-500 hover:text-blue-400 transition-colors"
+                                  className="p-1 text-[var(--panel-ink-4)] hover:text-blue-400 transition-colors"
                                   title="View asset history"
                                 >
                                   <Eye size={12} />
@@ -1146,22 +1146,22 @@ export default function PressureIntelligence() {
 
                     {/* Pagination */}
                     <div className="flex items-center justify-between mt-3">
-                      <p className="text-xs text-gray-500">
+                      <p className="text-xs text-[var(--panel-ink-4)]">
                         {(anomalyPage - 1) * ANOMALY_PAGE_SIZE + 1}-{Math.min(anomalyPage * ANOMALY_PAGE_SIZE, anomalies.length)} of {anomalies.length}
                       </p>
                       <div className="flex items-center gap-1">
                         <button
                           disabled={anomalyPage === 1}
                           onClick={() => setAnomalyPage(p => p - 1)}
-                          className="p-1.5 rounded-lg bg-gray-800 border border-gray-700 text-gray-400 hover:text-white disabled:opacity-40 transition-colors"
+                          className="p-1.5 rounded-lg bg-gray-800 border border-gray-700 text-[var(--panel-ink-3)] hover:text-white disabled:opacity-40 transition-colors"
                         >
                           <ChevronLeft size={14} />
                         </button>
-                        <span className="text-xs text-gray-400 px-2">{anomalyPage} / {anomalyPageCount}</span>
+                        <span className="text-xs text-[var(--panel-ink-3)] px-2">{anomalyPage} / {anomalyPageCount}</span>
                         <button
                           disabled={anomalyPage === anomalyPageCount}
                           onClick={() => setAnomalyPage(p => p + 1)}
-                          className="p-1.5 rounded-lg bg-gray-800 border border-gray-700 text-gray-400 hover:text-white disabled:opacity-40 transition-colors"
+                          className="p-1.5 rounded-lg bg-gray-800 border border-gray-700 text-[var(--panel-ink-3)] hover:text-white disabled:opacity-40 transition-colors"
                         >
                           <ChevronRight size={14} />
                         </button>
@@ -1184,9 +1184,9 @@ export default function PressureIntelligence() {
                       <div className="flex items-center gap-2">
                         <Eye size={14} className="text-blue-400" />
                         <span className="text-sm font-semibold text-[var(--text-primary)]">Pressure History - {assetDrilldown}</span>
-                        <span className="text-xs text-gray-500">{assetHistory.length} readings</span>
+                        <span className="text-xs text-[var(--panel-ink-4)]">{assetHistory.length} readings</span>
                       </div>
-                      <button onClick={() => setAssetDrilldown(null)} className="text-gray-500 hover:text-white">
+                      <button onClick={() => setAssetDrilldown(null)} className="text-[var(--panel-ink-4)] hover:text-white">
                         <X size={14} />
                       </button>
                     </div>
@@ -1195,24 +1195,24 @@ export default function PressureIntelligence() {
                         <thead>
                           <tr className="border-b border-gray-700/60">
                             {['Date', 'Position', 'Serial', 'Reading', 'Spec', 'Dev %', 'Status', 'Inspector', 'Site'].map(h => (
-                              <th key={h} className="text-left text-gray-500 pb-2 pr-3 font-medium">{h}</th>
+                              <th key={h} className="text-left text-[var(--panel-ink-4)] pb-2 pr-3 font-medium">{h}</th>
                             ))}
                           </tr>
                         </thead>
                         <tbody>
                           {assetHistory.map((r, i) => (
                             <tr key={i} className="border-b border-gray-800/40">
-                              <td className="py-1.5 pr-3 text-gray-400">{r.date || '-'}</td>
-                              <td className="py-1.5 pr-3 text-gray-300">{r.position || '-'}</td>
-                              <td className="py-1.5 pr-3 text-gray-400 font-mono">{r.serial || '-'}</td>
+                              <td className="py-1.5 pr-3 text-[var(--panel-ink-3)]">{r.date || '-'}</td>
+                              <td className="py-1.5 pr-3 text-[var(--panel-ink-2)]">{r.position || '-'}</td>
+                              <td className="py-1.5 pr-3 text-[var(--panel-ink-3)] font-mono">{r.serial || '-'}</td>
                               <td className={`py-1.5 pr-3 font-bold ${r.status === 'critical_under' ? 'text-red-400' : r.status === 'under' ? 'text-orange-400' : r.status === 'over' ? 'text-amber-400' : 'text-green-400'}`}>
                                 {r.reading} PSI
                               </td>
-                              <td className="py-1.5 pr-3 text-gray-500">{r.spec} PSI</td>
-                              <td className="py-1.5 pr-3 text-gray-300">{r.devPct.toFixed(1)}%</td>
+                              <td className="py-1.5 pr-3 text-[var(--panel-ink-4)]">{r.spec} PSI</td>
+                              <td className="py-1.5 pr-3 text-[var(--panel-ink-2)]">{r.devPct.toFixed(1)}%</td>
                               <td className="py-1.5 pr-3"><StatusBadge status={r.status} /></td>
-                              <td className="py-1.5 pr-3 text-gray-400">{r.inspector || '-'}</td>
-                              <td className="py-1.5 pr-3 text-gray-400">{r.site || '-'}</td>
+                              <td className="py-1.5 pr-3 text-[var(--panel-ink-3)]">{r.inspector || '-'}</td>
+                              <td className="py-1.5 pr-3 text-[var(--panel-ink-3)]">{r.site || '-'}</td>
                             </tr>
                           ))}
                         </tbody>
@@ -1227,17 +1227,17 @@ export default function PressureIntelligence() {
                 <div className="flex items-center gap-2 mb-4">
                   <Users size={14} className="text-indigo-400" />
                   <h3 className="text-sm font-semibold text-[var(--text-primary)]">Inspector Quality Analysis</h3>
-                  <span className="ml-auto text-xs text-gray-500">{inspectorStats.length} inspectors</span>
+                  <span className="ml-auto text-xs text-[var(--panel-ink-4)]">{inspectorStats.length} inspectors</span>
                 </div>
                 {inspectorStats.length === 0 ? (
-                  <p className="text-gray-500 text-sm py-6 text-center">No inspector data available</p>
+                  <p className="text-[var(--panel-ink-4)] text-sm py-6 text-center">No inspector data available</p>
                 ) : (
                   <div className="overflow-x-auto">
                     <table className="w-full text-xs">
                       <thead>
                         <tr className="border-b border-gray-700/60">
                           {['Inspector', 'Total Readings', 'Avg Reading', 'Anomaly Rate', 'Consistency Score', 'Sites', 'Flag'].map(h => (
-                            <th key={h} className="text-left text-gray-500 pb-2 pr-4 font-medium">{h}</th>
+                            <th key={h} className="text-left text-[var(--panel-ink-4)] pb-2 pr-4 font-medium">{h}</th>
                           ))}
                         </tr>
                       </thead>
@@ -1245,8 +1245,8 @@ export default function PressureIntelligence() {
                         {inspectorStats.map((ins, i) => (
                           <tr key={i} className={`border-b border-gray-800/50 ${ins.flag ? 'bg-yellow-950/10' : ''}`}>
                             <td className="py-2 pr-4 text-white font-medium">{ins.name}</td>
-                            <td className="py-2 pr-4 text-gray-300">{ins.total}</td>
-                            <td className="py-2 pr-4 text-gray-300">{ins.avg} PSI</td>
+                            <td className="py-2 pr-4 text-[var(--panel-ink-2)]">{ins.total}</td>
+                            <td className="py-2 pr-4 text-[var(--panel-ink-2)]">{ins.avg} PSI</td>
                             <td className={`py-2 pr-4 font-bold ${Number(ins.anomPct) > 30 ? 'text-red-400' : Number(ins.anomPct) > 15 ? 'text-orange-400' : 'text-green-400'}`}>
                               {ins.anomPct}%
                             </td>
@@ -1258,10 +1258,10 @@ export default function PressureIntelligence() {
                                     style={{ width: `${Math.min(100, Number(ins.consistency))}%` }}
                                   />
                                 </div>
-                                <span className="text-gray-300 text-xs">{ins.consistency}</span>
+                                <span className="text-[var(--panel-ink-2)] text-xs">{ins.consistency}</span>
                               </div>
                             </td>
-                            <td className="py-2 pr-4 text-gray-500 max-w-xs truncate">{ins.sites || '-'}</td>
+                            <td className="py-2 pr-4 text-[var(--panel-ink-4)] max-w-xs truncate">{ins.sites || '-'}</td>
                             <td className="py-2">
                               {ins.flag && (
                                 <span className="text-xs px-2 py-0.5 rounded-full bg-yellow-900/30 text-yellow-300 border border-yellow-700/40 whitespace-nowrap">
@@ -1290,7 +1290,7 @@ export default function PressureIntelligence() {
                         <span className={`text-sm font-semibold ${rc.color}`}>{rc.cause}</span>
                         <span className={`text-2xl font-bold ${rc.color}`}>{rc.count}</span>
                       </div>
-                      <p className="text-xs text-gray-500 leading-snug">{rc.rec}</p>
+                      <p className="text-xs text-[var(--panel-ink-4)] leading-snug">{rc.rec}</p>
                     </div>
                   ))}
                 </div>
@@ -1350,7 +1350,7 @@ export default function PressureIntelligence() {
                     },
                   ].map(item => (
                     <div key={item.label} className="bg-gray-800/40 rounded-xl p-3 border border-gray-700/40">
-                      <p className="text-xs text-gray-500 mb-1">{item.label}</p>
+                      <p className="text-xs text-[var(--panel-ink-4)] mb-1">{item.label}</p>
                       <p className={`text-base font-bold ${item.color}`}>{item.value}</p>
                       <p className="text-xs text-gray-600 mt-0.5">{item.detail}</p>
                     </div>

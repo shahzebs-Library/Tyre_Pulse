@@ -9,12 +9,13 @@ import { Bar, Doughnut } from 'react-chartjs-2'
 import {
   CircleDot, Package, RefreshCw, Trash2, ChevronDown, ChevronUp,
   Search, X, FileText, FileSpreadsheet, TrendingUp, Gauge,
-  DollarSign, Activity, Filter, ChevronLeft, ChevronRight,
+  DollarSign, Activity, Filter, ChevronLeft, ChevronRight, AlertTriangle,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { fetchAllPages } from '../lib/fetchAll'
 import { useSettings } from '../contexts/SettingsContext'
 import { exportToPdf, exportToExcel } from '../lib/exportUtils'
+import { toUserMessage } from '../lib/safeError'
 import PageHeader from '../components/ui/PageHeader'
 import PeriodFilter, { filterByPeriodValue } from '../components/ui/PeriodFilter'
 
@@ -97,6 +98,7 @@ export default function TyreLifecycle() {
 
   const [records, setRecords]       = useState([])
   const [loading, setLoading]       = useState(true)
+  const [error, setError]           = useState(null)
   const [expandedSerial, setExpandedSerial] = useState(null)
 
   // Filters
@@ -109,16 +111,24 @@ export default function TyreLifecycle() {
 
   const fetchData = useCallback(async () => {
     setLoading(true)
-    const { data } = await fetchAllPages((from, to) => {
-      let q = supabase
-        .from('tyre_records')
-        .select('id,asset_no,serial_number,position,brand,size,tread_depth,cost_per_tyre,issue_date,km_at_fitment,km_at_removal,risk_level,site,country,category')
-        .order('issue_date', { ascending: false })
-      if (activeCountry !== 'All') q = q.eq('country', activeCountry)
-      return q.range(from, to)
-    })
-    setRecords(data || [])
-    setLoading(false)
+    setError(null)
+    try {
+      const { data, error: qErr } = await fetchAllPages((from, to) => {
+        let q = supabase
+          .from('tyre_records')
+          .select('id,asset_no,serial_number,position,brand,size,tread_depth,cost_per_tyre,issue_date,km_at_fitment,km_at_removal,risk_level,site,country,category')
+          .order('issue_date', { ascending: false })
+        if (activeCountry !== 'All') q = q.eq('country', activeCountry)
+        return q.range(from, to)
+      })
+      if (qErr) throw qErr
+      setRecords(data || [])
+    } catch (err) {
+      setError(toUserMessage(err, 'Could not load lifecycle data.'))
+      setRecords([])
+    } finally {
+      setLoading(false)
+    }
   }, [activeCountry])
 
   useEffect(() => { fetchData() }, [fetchData])
@@ -377,6 +387,14 @@ export default function TyreLifecycle() {
           </div>
         }
       />
+
+      {error && (
+        <div className="card border border-red-500/30 flex items-center gap-3">
+          <AlertTriangle size={18} className="text-red-400 shrink-0" />
+          <p className="text-sm text-red-300 flex-1">{error}</p>
+          <button onClick={fetchData} className="btn-secondary text-xs px-3 py-1.5">Retry</button>
+        </div>
+      )}
 
       {/* KPI Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">

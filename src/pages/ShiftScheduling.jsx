@@ -16,6 +16,7 @@ import { useSettings } from '../contexts/SettingsContext'
 import { listShifts, createShift, updateShift, deleteShift, SHIFT_STATUS_VALUES } from '../lib/api/shifts'
 import { summarizeShifts } from '../lib/shifts'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
+import { toUserMessage } from '../lib/safeError'
 
 const STATUS_META = {
   scheduled: { label: 'Scheduled', cls: 'bg-sky-900/40 text-sky-300 border border-sky-700/50', icon: Calendar },
@@ -88,7 +89,7 @@ function ShiftModal({ open, initial, onClose, onSaved, activeCountry }) {
         onSaved?.()
         onClose?.()
       } catch (err) {
-        setError(err?.message || 'Could not save the shift. Please try again.')
+        setError(toUserMessage(err, 'Could not save the shift. Please try again.'))
       } finally {
         setBusy(false)
       }
@@ -235,7 +236,7 @@ export default function ShiftScheduling() {
       setUpdatedAt(new Date())
     } catch (err) {
       if (isMissingRelation(err)) { setMissing(true); setRows([]) }
-      else { setError(err?.message || 'Could not load shifts.'); setRows([]) }
+      else { setError(toUserMessage(err, 'Could not load shifts.')); setRows([]) }
     } finally {
       setRefreshing(false)
     }
@@ -286,7 +287,7 @@ export default function ShiftScheduling() {
       setToDelete(null)
       await load()
     } catch (err) {
-      setError(err?.message || 'Could not delete the shift.')
+      setError(toUserMessage(err, 'Could not delete the shift.'))
     } finally {
       setDeleting(false)
     }

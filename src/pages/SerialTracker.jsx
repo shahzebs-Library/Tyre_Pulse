@@ -2,9 +2,10 @@ import { useState, useMemo, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 import { exportToPdf, exportToExcel } from '../lib/exportUtils'
 import { formatCurrencyCompact, formatDate } from '../lib/formatters'
-import { ScanLine, Search, Download, FileText, Upload } from 'lucide-react'
+import { ScanLine, Search, Download, FileText, Upload, AlertTriangle } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
 import EmptyState from '../components/EmptyState'
+import { toUserMessage } from '../lib/safeError'
 
 function SearchSkeleton() {
   return (
@@ -72,6 +73,7 @@ export default function SerialTracker() {
   const [loading, setLoading]         = useState(false)
   const [searched, setSearched]       = useState(false)
   const [lastQuery, setLastQuery]     = useState('')
+  const [error, setError]             = useState(null)
 
   // ── Bulk Lookup state ─────────────────────────────────────────────────────
   const [bulkResults, setBulkResults]   = useState([])
@@ -88,16 +90,24 @@ export default function SerialTracker() {
     if (!serialInput.trim()) return
     setLoading(true)
     setSearched(false)
+    setError(null)
     const q = serialInput.trim()
-    const { data } = await supabase
-      .from('tyre_records')
-      .select('*')
-      .eq('serial_no', q)
-      .order('issue_date', { ascending: true })
-    setRecords(data || [])
-    setLastQuery(q)
-    setSearched(true)
-    setLoading(false)
+    try {
+      const { data, error: qErr } = await supabase
+        .from('tyre_records')
+        .select('*')
+        .eq('serial_no', q)
+        .order('issue_date', { ascending: true })
+      if (qErr) throw qErr
+      setRecords(data || [])
+    } catch (err) {
+      setError(toUserMessage(err, 'Could not search for that serial.'))
+      setRecords([])
+    } finally {
+      setLastQuery(q)
+      setSearched(true)
+      setLoading(false)
+    }
   }
 
   const stats = useMemo(() => {
@@ -189,56 +199,64 @@ export default function SerialTracker() {
     setBulkResults([])
     setBulkSearch('')
     setStatusFilter(null)
+    setError(null)
 
-    const arrayBuffer = await file.arrayBuffer()
-    const wb = XLSX.read(arrayBuffer, { type: 'array' })
-    const serials = extractSerialsFromSheet(wb, XLSX)
+    try {
+      const arrayBuffer = await file.arrayBuffer()
+      const wb = XLSX.read(arrayBuffer, { type: 'array' })
+      const serials = extractSerialsFromSheet(wb, XLSX)
 
-    if (serials.length === 0) {
+      if (serials.length === 0) {
+        setBulkLoading(false)
+        setBulkDone(true)
+        return
+      }
+
+      const cutoff = new Date()
+      cutoff.setMonth(cutoff.getMonth() - 12)
+      const cutoffStr = cutoff.toISOString().split('T')[0]
+
+      const results = []
+      const BATCH_SIZE = 10
+
+      for (let i = 0; i < serials.length; i += BATCH_SIZE) {
+        const batch = serials.slice(i, i + BATCH_SIZE)
+        const batchResults = await Promise.all(
+          batch.map(async serial => {
+            const { data, error: qErr } = await supabase
+              .from('tyre_records')
+              .select('serial_no, issue_date, asset_no, cost:cost_per_tyre')
+              .eq('serial_no', serial)
+              .order('issue_date', { ascending: true })
+            if (qErr) throw qErr
+            if (!data || data.length === 0) {
+              return { serial, first_seen: null, last_asset: null, total_records: 0, cost: 0, status: 'Not Found' }
+            }
+            const first = data[0]
+            const last  = data[data.length - 1]
+            const isActive = last.issue_date && last.issue_date >= cutoffStr
+            const cost = data.reduce((s, r) => s + (parseFloat(r.cost) || 0), 0)
+            return {
+              serial,
+              first_seen: first.issue_date || null,
+              last_asset: last.asset_no || null,
+              total_records: data.length,
+              cost,
+              status: isActive ? 'Active' : 'Retired',
+            }
+          })
+        )
+        results.push(...batchResults)
+      }
+
+      setBulkResults(results)
+    } catch (err) {
+      setError(toUserMessage(err, 'Could not process that file.'))
+      setBulkResults([])
+    } finally {
       setBulkLoading(false)
       setBulkDone(true)
-      return
     }
-
-    const cutoff = new Date()
-    cutoff.setMonth(cutoff.getMonth() - 12)
-    const cutoffStr = cutoff.toISOString().split('T')[0]
-
-    const results = []
-    const BATCH_SIZE = 10
-
-    for (let i = 0; i < serials.length; i += BATCH_SIZE) {
-      const batch = serials.slice(i, i + BATCH_SIZE)
-      const batchResults = await Promise.all(
-        batch.map(async serial => {
-          const { data } = await supabase
-            .from('tyre_records')
-            .select('serial_no, issue_date, asset_no, cost:cost_per_tyre')
-            .eq('serial_no', serial)
-            .order('issue_date', { ascending: true })
-          if (!data || data.length === 0) {
-            return { serial, first_seen: null, last_asset: null, total_records: 0, cost: 0, status: 'Not Found' }
-          }
-          const first = data[0]
-          const last  = data[data.length - 1]
-          const isActive = last.issue_date && last.issue_date >= cutoffStr
-          const cost = data.reduce((s, r) => s + (parseFloat(r.cost) || 0), 0)
-          return {
-            serial,
-            first_seen: first.issue_date || null,
-            last_asset: last.asset_no || null,
-            total_records: data.length,
-            cost,
-            status: isActive ? 'Active' : 'Retired',
-          }
-        })
-      )
-      results.push(...batchResults)
-    }
-
-    setBulkResults(results)
-    setBulkLoading(false)
-    setBulkDone(true)
   }
 
   function handleBulkFileInput(e) {
@@ -329,7 +347,15 @@ export default function SerialTracker() {
 
           {loading && <SearchSkeleton />}
 
-          {!loading && searched && records.length === 0 && (
+          {!loading && error && (
+            <div className="card border border-red-500/30 flex items-center gap-3">
+              <AlertTriangle size={18} className="text-red-400 shrink-0" />
+              <p className="text-sm text-red-300 flex-1">{error}</p>
+              <button onClick={search} className="btn-secondary text-xs px-3 py-1.5">Retry</button>
+            </div>
+          )}
+
+          {!loading && !error && searched && records.length === 0 && (
             <div className="card">
               <EmptyState
                 illustration="state/search-empty"
@@ -471,7 +497,14 @@ export default function SerialTracker() {
             </div>
           )}
 
-          {bulkDone && !bulkLoading && (
+          {error && !bulkLoading && (
+            <div className="card border border-red-500/30 flex items-center gap-3">
+              <AlertTriangle size={18} className="text-red-400 shrink-0" />
+              <p className="text-sm text-red-300 flex-1">{error}</p>
+            </div>
+          )}
+
+          {bulkDone && !bulkLoading && !error && (
             <>
               {bulkSummary && (
                 <div className="rounded-xl px-5 py-4 space-y-3"

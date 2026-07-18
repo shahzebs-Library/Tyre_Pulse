@@ -5,9 +5,10 @@ import { useAuth } from '../contexts/AuthContext'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   QrCode, Printer, Download, Search, CircleDot, Truck,
-  CheckSquare, Square, RefreshCw, Check, Info, X,
+  CheckSquare, Square, RefreshCw, Check, Info, X, AlertCircle,
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
+import { toUserMessage } from '../lib/safeError'
 
 const LABEL_SIZES = {
   sm: { label: 'Small',  dim: 140, desc: '40 mm' },
@@ -34,6 +35,7 @@ export default function QrLabels() {
   const [mode,       setMode]       = useState('tyres')  // 'tyres' | 'assets'
   const [data,       setData]       = useState([])
   const [loading,    setLoading]    = useState(true)
+  const [error,      setError]      = useState(null)
   const [sites,      setSites]      = useState([])
   const [selected,   setSelected]   = useState(new Set())
   const [search,     setSearch]     = useState('')
@@ -54,25 +56,34 @@ export default function QrLabels() {
 
   async function loadData() {
     setLoading(true)
-    if (mode === 'tyres') {
-      const { data: rows } = await supabase
-        .from('tyre_records')
-        .select('id, serial_number, brand, site, asset_no, risk_level')
-        .order('asset_no')
-        .limit(1000)
-      setData(rows || [])
-      setSites([...new Set((rows || []).map(r => r.site).filter(Boolean))].sort())
-    } else {
-      const { data: rows } = await supabase
-        .from('vehicle_fleet')
-        .select('id, asset_no, vehicle_type, site')
-        .not('asset_no', 'is', null)
-        .order('asset_no')
-        .limit(1000)
-      setData(rows || [])
-      setSites([...new Set((rows || []).map(r => r.site).filter(Boolean))].sort())
+    setError(null)
+    try {
+      if (mode === 'tyres') {
+        const { data: rows, error: qErr } = await supabase
+          .from('tyre_records')
+          .select('id, serial_number, brand, site, asset_no, risk_level')
+          .order('asset_no')
+          .limit(1000)
+        if (qErr) throw qErr
+        setData(rows || [])
+        setSites([...new Set((rows || []).map(r => r.site).filter(Boolean))].sort())
+      } else {
+        const { data: rows, error: qErr } = await supabase
+          .from('vehicle_fleet')
+          .select('id, asset_no, vehicle_type, site')
+          .not('asset_no', 'is', null)
+          .order('asset_no')
+          .limit(1000)
+        if (qErr) throw qErr
+        setData(rows || [])
+        setSites([...new Set((rows || []).map(r => r.site).filter(Boolean))].sort())
+      }
+    } catch (err) {
+      setError(toUserMessage(err, 'Could not load records.'))
+      setData([]); setSites([])
+    } finally {
+      setLoading(false)
     }
-    setLoading(false)
   }
 
   const filtered = data.filter(r => {
@@ -243,7 +254,7 @@ export default function QrLabels() {
         {readyItems.map(item => (
           <div key={item.id} className="tp-print-label">
             <div className="tp-print-header"><span>TYREPULSE</span></div>
-            <img src={qrImages[item.id]} alt="" className="tp-print-qr" />
+            <img src={qrImages[item.id]} alt={`QR code for ${getLabel(item)}`} className="tp-print-qr" />
             <p className="tp-print-serial">{getLabel(item)}</p>
             {getSub(item) && <p className="tp-print-sub">{getSub(item)}</p>}
           </div>
@@ -276,6 +287,16 @@ export default function QrLabels() {
             </div>
           }
         />
+
+        {error && (
+          <div className="card border border-red-500/30 flex items-center gap-3">
+            <AlertCircle size={18} className="text-red-400 shrink-0" />
+            <p className="text-sm text-red-300 flex-1">{error}</p>
+            <button onClick={loadData} className="btn-secondary text-xs inline-flex items-center gap-1.5">
+              <RefreshCw size={13} /> Retry
+            </button>
+          </div>
+        )}
 
         {/* ── Controls row ──────────────────────────────────────────────────────── */}
         <div className="flex flex-wrap gap-3 items-center">

@@ -14,6 +14,7 @@ import { Search, AlertTriangle, X, FileText, Car, TrendingUp } from 'lucide-reac
 import VehicleTyreDiagram from '../components/VehicleTyreDiagram'
 import PageHeader from '../components/ui/PageHeader'
 import { useLanguage } from '../contexts/LanguageContext'
+import { toUserMessage } from '../lib/safeError'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Title, Tooltip, Legend)
 
@@ -238,6 +239,7 @@ export default function VehicleHistory() {
 
   const [allRecords, setAllRecords]   = useState([])
   const [loading, setLoading]         = useState(true)
+  const [error, setError]             = useState(null)
   const [sites, setSites]             = useState([])
   const [selected, setSelected]       = useState(null)   // asset_no string
 
@@ -258,11 +260,15 @@ export default function VehicleHistory() {
   // Tyre positions for SVG diagram
   const [tyrePositions, setTyrePositions] = useState([])
 
+  // Bump to re-run the loader (Retry).
+  const [reloadKey, setReloadKey] = useState(0)
+
   // ── Load data ────────────────────────────────────────────────────────────────
   useEffect(() => {
     let cancelled = false
     async function load() {
       setLoading(true)
+      setError(null)
       try {
         const { data } = await vehicleHistoryApi.listFleetTyreRecords({ country: activeCountry })
         if (cancelled) return
@@ -277,13 +283,15 @@ export default function VehicleHistory() {
         const map = {}
         ;(fleetData || []).forEach(v => { map[v.asset_no] = v })
         setFleetMap(map)
+      } catch (err) {
+        if (!cancelled) setError(toUserMessage(err, 'Could not load vehicle history.'))
       } finally {
         if (!cancelled) setLoading(false)
       }
     }
     load()
     return () => { cancelled = true }
-  }, [activeCountry])
+  }, [activeCountry, reloadKey])
 
   // ── Detect anomalies across full fleet ───────────────────────────────────────
   const allAnomalies = useMemo(() => {
@@ -403,6 +411,14 @@ export default function VehicleHistory() {
         subtitle={t('vehiclehistory.header.subtitle')}
         icon={Car}
       />
+
+      {error && (
+        <div className="card border border-red-500/30 flex items-center gap-3">
+          <AlertTriangle size={18} className="text-red-400 shrink-0" />
+          <p className="text-sm text-red-300 flex-1">{error}</p>
+          <button onClick={() => setReloadKey(k => k + 1)} className="btn-secondary text-xs px-3 py-1.5">Retry</button>
+        </div>
+      )}
 
       {/* Summary strip */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">

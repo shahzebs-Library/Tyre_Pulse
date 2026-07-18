@@ -100,6 +100,7 @@ export const NAV_COMMANDS = [
   // Administration & Data
   { id: 'cleaning',       label: 'Data Cleaning',        path: '/cleaning',     icon: 'Trash2',     adminOnly: true, moduleKey: 'data_cleaning' },
   { id: 'data-intake',    label: 'Data Intake Center',   path: '/data-intake',  icon: 'Upload', keywords: ['upload', 'import', 'excel', 'csv', 'file'] },
+  { id: 'erp-import',     label: 'ERP Data Import',      path: '/erp-import',   icon: 'Upload', keywords: ['erp', 'import', 'template', 'asset', 'tyre change', 'expense', 'm3', 'production'] },
   { id: 'upload-approvals', label: 'Upload Approvals',   path: '/upload-approvals', icon: 'ClipboardCheck', adminOnly: true },
   { id: 'custom-data',    label: 'Custom Data',          path: '/custom-data',  icon: 'FileText' },
   { id: 'audit',          label: 'Audit Trail',          path: '/audit',        icon: 'History',    adminOnly: true, moduleKey: 'audit_trail' },

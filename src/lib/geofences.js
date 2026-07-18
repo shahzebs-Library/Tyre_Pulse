@@ -116,3 +116,192 @@ export function summarizeGeofences(rows = []) {
     areaKm2: Math.round(areaKm2 * 100) / 100,
   }
 }
+
+// ── Geometry primitives ──────────────────────────────────────────────────────
+
+/** Mean Earth radius in kilometres (spherical approximation). */
+export const EARTH_RADIUS_KM = 6371.0088
+
+const toRad = (deg) => (deg * Math.PI) / 180
+
+/**
+ * Great-circle (haversine) distance in kilometres between two lat/lng points.
+ * Accepts finite degrees only; returns null when any coordinate is missing or
+ * out of range, so callers get an honest "cannot measure" rather than NaN.
+ */
+export function haversineKm(lat1, lng1, lat2, lng2) {
+  const a = toFiniteNumber(lat1)
+  const b = toFiniteNumber(lng1)
+  const c = toFiniteNumber(lat2)
+  const d = toFiniteNumber(lng2)
+  if (a == null || b == null || c == null || d == null) return null
+  if (a < -90 || a > 90 || c < -90 || c > 90) return null
+  if (b < -180 || b > 180 || d < -180 || d > 180) return null
+  const dLat = toRad(c - a)
+  const dLng = toRad(d - b)
+  const s =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(a)) * Math.cos(toRad(c)) * Math.sin(dLng / 2) ** 2
+  const angle = 2 * Math.atan2(Math.sqrt(s), Math.sqrt(1 - s))
+  return EARTH_RADIUS_KM * angle
+}
+
+/**
+ * Circular coverage area of a single zone in square kilometres (pi * r^2).
+ * `radiusM` is metres; returns null for a missing or non-positive radius.
+ */
+export function zoneAreaKm2(radiusM) {
+  const r = toFiniteNumber(radiusM)
+  if (r == null || r <= 0) return null
+  return (Math.PI * r * r) / 1_000_000
+}
+
+/**
+ * True when a row carries a usable centre coordinate pair (finite, in range).
+ */
+export function hasValidCenter(row) {
+  const lat = toFiniteNumber(row?.center_lat)
+  const lng = toFiniteNumber(row?.center_lng)
+  if (lat == null || lng == null) return false
+  return lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180
+}
+
+/**
+ * Detect overlapping zone pairs. Two circles overlap when the distance between
+ * their centres is less than the sum of their radii. Only geolocated zones with
+ * a positive radius are considered. Returns pairs sorted by overlap (deepest
+ * first), each with the centre distance (km) and overlap depth (metres and km).
+ */
+export function detectOverlaps(rows = []) {
+  const list = (Array.isArray(rows) ? rows : []).filter(
+    (r) => hasValidCenter(r) && toFiniteNumber(r?.radius_m) > 0,
+  )
+  const pairs = []
+  for (let i = 0; i < list.length; i += 1) {
+    for (let j = i + 1; j < list.length; j += 1) {
+      const a = list[i]
+      const b = list[j]
+      const distKm = haversineKm(a.center_lat, a.center_lng, b.center_lat, b.center_lng)
+      if (distKm == null) continue
+      const distM = distKm * 1000
+      const rA = toFiniteNumber(a.radius_m)
+      const rB = toFiniteNumber(b.radius_m)
+      const reach = rA + rB
+      if (distM < reach) {
+        const overlapM = reach - distM
+        pairs.push({
+          aId: a.id ?? null,
+          bId: b.id ?? null,
+          aName: a.name || 'Unnamed zone',
+          bName: b.name || 'Unnamed zone',
+          distanceKm: Math.round(distKm * 1000) / 1000,
+          distanceM: Math.round(distM),
+          overlapM: Math.round(overlapM),
+          overlapKm: Math.round((overlapM / 1000) * 1000) / 1000,
+          // True containment: the smaller circle sits fully inside the larger.
+          contained: distM + Math.min(rA, rB) <= Math.max(rA, rB),
+        })
+      }
+    }
+  }
+  return pairs.sort((x, y) => y.overlapM - x.overlapM)
+}
+
+/**
+ * Nearest geolocated zone to an arbitrary point (by centre distance). Returns
+ * `{ zone, distanceKm }` or null when there is no point / no located zone.
+ */
+export function nearestZone(point, rows = []) {
+  const lat = toFiniteNumber(point?.lat ?? point?.center_lat)
+  const lng = toFiniteNumber(point?.lng ?? point?.center_lng)
+  if (lat == null || lng == null) return null
+  let best = null
+  for (const r of Array.isArray(rows) ? rows : []) {
+    if (!hasValidCenter(r)) continue
+    const d = haversineKm(lat, lng, r.center_lat, r.center_lng)
+    if (d == null) continue
+    if (!best || d < best.distanceKm) {
+      best = { zone: r, distanceKm: Math.round(d * 1000) / 1000 }
+    }
+  }
+  return best
+}
+
+/**
+ * Data-quality audit: flag zones that cannot be placed or measured. Each entry
+ * lists the concrete issues (missing/invalid coordinate, non-positive/missing
+ * radius). Returns [] when every zone is clean.
+ */
+export function geofenceDataQuality(rows = []) {
+  const flagged = []
+  for (const r of Array.isArray(rows) ? rows : []) {
+    const issues = []
+    const lat = toFiniteNumber(r?.center_lat)
+    const lng = toFiniteNumber(r?.center_lng)
+    const hasLat = r?.center_lat !== '' && r?.center_lat != null
+    const hasLng = r?.center_lng !== '' && r?.center_lng != null
+
+    if (!hasLat && !hasLng) issues.push('No centre coordinate set')
+    else if (hasLat !== hasLng) issues.push('Latitude and longitude must be set together')
+    else {
+      if (lat == null || lat < -90 || lat > 90) issues.push('Latitude out of range (-90 to 90)')
+      if (lng == null || lng < -180 || lng > 180) issues.push('Longitude out of range (-180 to 180)')
+    }
+
+    const radius = toFiniteNumber(r?.radius_m)
+    const hasRadius = r?.radius_m !== '' && r?.radius_m != null
+    if (!hasRadius) issues.push('No radius set')
+    else if (radius == null) issues.push('Radius is not a number')
+    else if (radius <= 0) issues.push('Radius must be greater than zero')
+
+    if (issues.length) {
+      flagged.push({
+        id: r?.id ?? null,
+        name: r?.name || 'Unnamed zone',
+        zone_type: ZONE_TYPES.includes(r?.zone_type) ? r.zone_type : 'custom',
+        issues,
+      })
+    }
+  }
+  return flagged
+}
+
+/**
+ * Rich coverage summary for the page: everything from `summarizeGeofences`
+ * plus per-type covered area (km^2), average radius, the overlapping-pair set
+ * (with a count) and the data-quality flag set (with a count). Pure, so the
+ * page and any report can share one computation.
+ */
+export function coverageSummary(rows = []) {
+  const list = Array.isArray(rows) ? rows : []
+  const base = summarizeGeofences(list)
+
+  const areaByType = { site: 0, restricted: 0, service: 0, custom: 0 }
+  let radiusSum = 0
+  let radiusCount = 0
+  for (const r of list) {
+    const type = ZONE_TYPES.includes(r?.zone_type) ? r.zone_type : 'custom'
+    const area = zoneAreaKm2(r?.radius_m)
+    if (area != null) areaByType[type] += area
+    const radius = toFiniteNumber(r?.radius_m)
+    if (radius != null && radius > 0) {
+      radiusSum += radius
+      radiusCount += 1
+    }
+  }
+  for (const k of ZONE_TYPES) areaByType[k] = Math.round(areaByType[k] * 100) / 100
+
+  const overlaps = detectOverlaps(list)
+  const flagged = geofenceDataQuality(list)
+
+  return {
+    ...base,
+    areaByType,
+    avgRadiusM: radiusCount ? Math.round(radiusSum / radiusCount) : 0,
+    radiusCount,
+    overlaps,
+    overlapPairs: overlaps.length,
+    flagged,
+    flaggedCount: flagged.length,
+  }
+}

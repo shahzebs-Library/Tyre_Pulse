@@ -1,18 +1,26 @@
 /**
- * TyreServiceEvents (route /tyre-service-events) — an operational log of every
- * hands-on tyre intervention (rotation, repair, inflation, inspection,
- * replacement) against a tyre serial and/or asset. Full CRUD on the
- * `tyre_service_events` table (V151): create/edit modal, event-type filters +
- * search, a by-type doughnut, KPI tiles (total events, tyres serviced, total
- * cost, most common type), Excel/PDF export, and loading/empty/error states with
- * a migration prompt when the table is absent.
+ * TyreServiceEvents (route /tyre-service-events) - the operational fit / remove /
+ * rotate / repair lifecycle log behind CPK and rotation. Full CRUD on the
+ * `tyre_service_events` table (V151) plus a deep analytics layer: 6 KPI tiles
+ * (total, this period, top type, distinct assets serviced, documented-removal
+ * data quality, mean interval between interventions), an event-type doughnut, a
+ * 12-month trend bar, most-active assets / positions and a by-site breakdown -
+ * every metric derived from real rows via src/lib/tyreServiceEventsAnalytics.js
+ * with honest empty / null states (NEVER fabricated). Filterable, searchable,
+ * sortable table with date-range + site + position + type filters and Excel/PDF
+ * export. Loading / error+Retry / empty states throughout.
  */
 import { useState, useEffect, useMemo, useCallback } from 'react'
-import { Chart as ChartJS, ArcElement, Tooltip, Legend } from 'chart.js'
-import { Doughnut } from 'react-chartjs-2'
+import {
+  Chart as ChartJS, ArcElement, CategoryScale, LinearScale, BarElement,
+  Tooltip, Legend,
+} from 'chart.js'
+import { Doughnut, Bar } from 'react-chartjs-2'
 import {
   Wrench, Activity, RotateCcw, Gauge, Plus, Pencil, Trash2, Search, X, Filter,
   Save, Loader2, AlertTriangle, FileSpreadsheet, FileText, CircleDot,
+  Building2, MapPin, TrendingUp, ClipboardCheck, Timer, ArrowUp, ArrowDown,
+  RefreshCw,
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
 import { useSettings } from '../contexts/SettingsContext'
@@ -20,13 +28,14 @@ import { formatCurrencyCompact } from '../lib/formatters'
 import {
   listServiceEvents, createServiceEvent, updateServiceEvent, deleteServiceEvent,
 } from '../lib/api/tyreServiceEvents'
+import { EVENT_TYPES, EVENT_TYPE_META } from '../lib/tyreServiceEvents'
 import {
-  summarizeServiceEvents, EVENT_TYPES, EVENT_TYPE_META,
-} from '../lib/tyreServiceEvents'
+  analyzeServiceEvents, filterEvents, distinctValues, eventTypeLabel,
+} from '../lib/tyreServiceEventsAnalytics'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import { toUserMessage } from '../lib/safeError'
 
-ChartJS.register(ArcElement, Tooltip, Legend)
+ChartJS.register(ArcElement, CategoryScale, LinearScale, BarElement, Tooltip, Legend)
 
 const EVENT_ICON = {
   rotation: RotateCcw,
@@ -49,8 +58,12 @@ function isMissingRelation(err) {
   const m = String(err?.message || '').toLowerCase()
   return m.includes('does not exist') || m.includes('relation') || m.includes('schema cache') || m.includes('could not find the table')
 }
-const num = (v) => (v == null || v === '' ? '—' : v)
-const fmtDate = (v) => (v ? String(v).slice(0, 10) : '—')
+const num = (v) => (v == null || v === '' ? 'N/A' : v)
+const fmtDate = (v) => (v ? String(v).slice(0, 10) : 'N/A')
+const cssVar = (name, fallback) => {
+  try { return (getComputedStyle(document.documentElement).getPropertyValue(name) || '').trim() || fallback }
+  catch { return fallback }
+}
 
 const EMPTY_FORM = {
   tyre_serial: '', asset_no: '', position: '', event_type: 'inspection',
@@ -72,6 +85,7 @@ function EventModal({ open, initial, onClose, onSaved }) {
   }, [open, initial])
 
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }))
+  const isRemoval = form.event_type === 'replacement' || form.event_type === 'repair'
 
   const submit = useCallback(async (e) => {
     e?.preventDefault?.()
@@ -155,8 +169,10 @@ function EventModal({ open, initial, onClose, onSaved }) {
           </div>
         </div>
         <div>
-          <label className="label">Notes</label>
-          <textarea className="input w-full min-h-[90px] resize-y" placeholder="Observations, root cause, actions taken…" value={form.notes} maxLength={4000} onChange={(e) => set('notes', e.target.value)} />
+          <label className="label">
+            Notes {isRemoval && <span className="text-amber-400">(reason recommended for this removal)</span>}
+          </label>
+          <textarea className="input w-full min-h-[90px] resize-y" placeholder="Observations, root cause, actions taken..." value={form.notes} maxLength={4000} onChange={(e) => set('notes', e.target.value)} />
         </div>
 
         {error && (
@@ -168,7 +184,7 @@ function EventModal({ open, initial, onClose, onSaved }) {
         <div className="flex items-center gap-3">
           <button type="submit" disabled={busy} className="btn-primary inline-flex items-center gap-2 disabled:opacity-60">
             {busy ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />}
-            {busy ? 'Saving…' : editing ? 'Save changes' : 'Log event'}
+            {busy ? 'Saving...' : editing ? 'Save changes' : 'Log event'}
           </button>
           <button type="button" onClick={onClose} className="btn-secondary text-sm">Cancel</button>
         </div>
@@ -201,7 +217,46 @@ function ConfirmDelete({ open, onCancel, onConfirm, busy }) {
   )
 }
 
+// ─── Small ranking list card ────────────────────────────────────────────────
+function RankCard({ title, icon: Icon, rows, labelKey, currency, empty }) {
+  const max = rows.reduce((m, r) => Math.max(m, r.count), 0) || 1
+  return (
+    <div className="card">
+      <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-3 inline-flex items-center gap-2">
+        <Icon size={15} className="text-[var(--text-muted)]" /> {title}
+      </h3>
+      {rows.length === 0 ? (
+        <p className="text-sm text-[var(--text-muted)] py-6 text-center">{empty}</p>
+      ) : (
+        <ul className="space-y-2">
+          {rows.map((r) => (
+            <li key={r[labelKey] || 'x'} className="text-sm">
+              <div className="flex items-center justify-between gap-2">
+                <span className="font-mono text-xs text-[var(--text-primary)] truncate" title={r[labelKey]}>{r[labelKey]}</span>
+                <span className="text-[var(--text-muted)] text-xs shrink-0">
+                  {r.count} {r.count === 1 ? 'event' : 'events'}
+                  {r.totalCost > 0 && <span className="ml-2 text-amber-400">{formatCurrencyCompact(r.totalCost, currency)}</span>}
+                </span>
+              </div>
+              <div className="mt-1 h-1.5 rounded bg-[var(--input-bg)] overflow-hidden">
+                <div className="h-full bg-sky-500/70 rounded" style={{ width: `${(r.count / max) * 100}%` }} />
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  )
+}
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
+const SORTS = {
+  event_date: (a, b) => String(a.event_date || '').localeCompare(String(b.event_date || '')),
+  event_type: (a, b) => eventTypeLabel(a.event_type).localeCompare(eventTypeLabel(b.event_type)),
+  asset_no: (a, b) => String(a.asset_no || '').localeCompare(String(b.asset_no || '')),
+  cost: (a, b) => (Number(a.cost) || 0) - (Number(b.cost) || 0),
+}
+
 export default function TyreServiceEvents() {
   const { activeCountry, activeCurrency } = useSettings()
   const [rows, setRows] = useState(null)
@@ -210,7 +265,13 @@ export default function TyreServiceEvents() {
   const [updatedAt, setUpdatedAt] = useState(null)
 
   const [typeFilter, setTypeFilter] = useState('all')
+  const [siteFilter, setSiteFilter] = useState('all')
+  const [positionFilter, setPositionFilter] = useState('all')
+  const [from, setFrom] = useState('')
+  const [to, setTo] = useState('')
   const [search, setSearch] = useState('')
+  const [sortKey, setSortKey] = useState('event_date')
+  const [sortDir, setSortDir] = useState('desc')
 
   const [modalOpen, setModalOpen] = useState(false)
   const [editRow, setEditRow] = useState(null)
@@ -233,26 +294,26 @@ export default function TyreServiceEvents() {
 
   useEffect(() => { load() }, [load])
 
-  const summary = useMemo(() => summarizeServiceEvents(rows || []), [rows])
+  // Whole-dataset analytics (KPIs, breakdown, trend, rankings). Honest on [].
+  const analysis = useMemo(() => analyzeServiceEvents(rows || [], { periodDays: 30, months: 12 }), [rows])
+  const siteOptions = useMemo(() => distinctValues(rows || [], 'site'), [rows])
+  const positionOptions = useMemo(() => distinctValues(rows || [], 'position'), [rows])
 
   const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase()
-    return (rows || []).filter((r) => {
-      if (typeFilter !== 'all' && r.event_type !== typeFilter) return false
-      if (q) {
-        const hay = `${r.tyre_serial || ''} ${r.asset_no || ''} ${r.position || ''} ${r.technician || ''} ${r.site || ''} ${r.notes || ''}`.toLowerCase()
-        if (!hay.includes(q)) return false
-      }
-      return true
-    })
-  }, [rows, typeFilter, search])
+    const list = filterEvents(rows || [], { type: typeFilter, site: siteFilter, position: positionFilter, from, to, search })
+    const cmp = SORTS[sortKey] || SORTS.event_date
+    const sorted = [...list].sort(cmp)
+    return sortDir === 'desc' ? sorted.reverse() : sorted
+  }, [rows, typeFilter, siteFilter, positionFilter, from, to, search, sortKey, sortDir])
 
-  const chartText = getComputedStyle(document.documentElement).getPropertyValue('--text-muted') || '#9ca3af'
+  const chartText = cssVar('--text-muted', '#9ca3af')
+  const gridColor = cssVar('--panel-2', 'rgba(148,163,184,0.15)')
+
   const donutData = {
-    labels: EVENT_TYPES.map((t) => EVENT_TYPE_META[t].label),
+    labels: analysis.breakdown.items.map((i) => i.label),
     datasets: [{
-      data: EVENT_TYPES.map((t) => summary.byType[t] || 0),
-      backgroundColor: EVENT_TYPES.map((t) => EVENT_TYPE_META[t].color),
+      data: analysis.breakdown.items.map((i) => i.count),
+      backgroundColor: analysis.breakdown.items.map((i) => i.color),
       borderWidth: 0,
     }],
   }
@@ -261,8 +322,46 @@ export default function TyreServiceEvents() {
     plugins: { legend: { position: 'right', labels: { color: chartText, boxWidth: 12 } } },
   }
 
-  const EXPORT_COLS = ['event_date', 'event_type', 'tyre_serial', 'asset_no', 'position', 'tread_depth', 'pressure', 'cost', 'technician', 'site']
-  const EXPORT_HEADERS = ['Date', 'Type', 'Serial', 'Asset', 'Position', 'Tread (mm)', 'Pressure', 'Cost', 'Technician', 'Site']
+  const trendData = {
+    labels: analysis.trend.map((b) => b.label),
+    datasets: [{
+      label: 'Events',
+      data: analysis.trend.map((b) => b.total),
+      backgroundColor: '#38bdf8',
+      borderRadius: 4,
+      maxBarThickness: 28,
+    }],
+  }
+  const barOpts = {
+    responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { display: false } },
+    scales: {
+      x: { ticks: { color: chartText, maxRotation: 0, autoSkip: true }, grid: { display: false } },
+      y: { beginAtZero: true, ticks: { color: chartText, precision: 0 }, grid: { color: gridColor } },
+    },
+  }
+
+  const siteChart = {
+    labels: analysis.bySite.map((s) => s.site),
+    datasets: [{
+      label: 'Events',
+      data: analysis.bySite.map((s) => s.count),
+      backgroundColor: '#818cf8',
+      borderRadius: 4,
+      maxBarThickness: 22,
+    }],
+  }
+  const siteBarOpts = {
+    ...barOpts,
+    indexAxis: 'y',
+    scales: {
+      x: { beginAtZero: true, ticks: { color: chartText, precision: 0 }, grid: { color: gridColor } },
+      y: { ticks: { color: chartText }, grid: { display: false } },
+    },
+  }
+
+  const EXPORT_COLS = ['event_date', 'event_type', 'tyre_serial', 'asset_no', 'position', 'tread_depth', 'pressure', 'cost', 'technician', 'site', 'notes']
+  const EXPORT_HEADERS = ['Date', 'Type', 'Serial', 'Asset', 'Position', 'Tread (mm)', 'Pressure', 'Cost', 'Technician', 'Site', 'Notes']
   const exportRows = filtered.map((r) => ({
     event_date: fmtDate(r.event_date),
     event_type: EVENT_TYPE_META[r.event_type]?.label || r.event_type,
@@ -274,19 +373,34 @@ export default function TyreServiceEvents() {
     cost: r.cost ?? '',
     technician: r.technician || '',
     site: r.site || '',
+    notes: r.notes || '',
   }))
 
+  const k = analysis.kpis
   const kpis = [
-    { label: 'Total events', value: summary.total, icon: Activity, tone: 'text-[var(--text-primary)]' },
-    { label: 'Tyres serviced', value: summary.tyresServiced, icon: CircleDot, tone: 'text-sky-400' },
-    { label: 'Total cost', value: formatCurrencyCompact(summary.totalCost, activeCurrency), icon: Wrench, tone: 'text-amber-400' },
-    { label: 'Most common', value: summary.mostCommonType ? (EVENT_TYPE_META[summary.mostCommonType]?.label || summary.mostCommonType) : '—', icon: Gauge, tone: 'text-green-400' },
+    { label: 'Total events', value: k.total, icon: Activity, tone: 'text-[var(--text-primary)]',
+      sub: `${analysis.breakdown.items.length} event ${analysis.breakdown.items.length === 1 ? 'type' : 'types'}` },
+    { label: `Last ${k.periodDays} days`, value: k.thisPeriod, icon: TrendingUp, tone: 'text-sky-400',
+      sub: 'recent activity' },
+    { label: 'Top event type', value: k.topType ? k.topType.label : 'N/A', icon: Gauge, tone: 'text-green-400',
+      sub: k.topType ? `${k.topType.count} logged` : 'no events yet' },
+    { label: 'Assets serviced', value: k.distinctAssets, icon: Building2, tone: 'text-indigo-400',
+      sub: `${k.distinctTyres} distinct tyres` },
+    { label: 'Removals documented', value: k.removalEvents ? `${k.removalDocumentedPct}%` : 'N/A', icon: ClipboardCheck, tone: 'text-amber-400',
+      sub: k.removalEvents ? `${k.removalBlank} of ${k.removalEvents} missing reason` : 'no removals' },
+    { label: 'Mean interval', value: k.meanDaysBetween == null ? 'N/A' : `${k.meanDaysBetween}d`, icon: Timer, tone: 'text-violet-400',
+      sub: k.meanDaysBetween == null ? 'need 2+ events / tyre' : 'between events per tyre' },
   ]
 
-  const clearFilters = () => { setTypeFilter('all'); setSearch('') }
-  const hasFilters = typeFilter !== 'all' || search
+  const clearFilters = () => { setTypeFilter('all'); setSiteFilter('all'); setPositionFilter('all'); setFrom(''); setTo(''); setSearch('') }
+  const hasFilters = typeFilter !== 'all' || siteFilter !== 'all' || positionFilter !== 'all' || from || to || search
   const openCreate = () => { setEditRow(null); setModalOpen(true) }
   const openEdit = (r) => { setEditRow(r); setModalOpen(true) }
+  const toggleSort = (key) => {
+    if (sortKey === key) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))
+    else { setSortKey(key); setSortDir('desc') }
+  }
+  const SortIcon = ({ col }) => sortKey !== col ? null : (sortDir === 'asc' ? <ArrowUp size={11} className="inline ml-1" /> : <ArrowDown size={11} className="inline ml-1" />)
 
   const confirmDelete = useCallback(async () => {
     if (!deleteRow) return
@@ -302,11 +416,13 @@ export default function TyreServiceEvents() {
     }
   }, [deleteRow, load])
 
+  const hasData = rows && rows.length > 0
+
   return (
     <div className="space-y-6">
       <PageHeader
         title="Tyre Service Events"
-        subtitle="Operational log of every tyre intervention — rotation, repair, inflation, inspection & replacement — with tread, pressure, cost and technician."
+        subtitle="Operational fit, remove, rotate, repair and inflation log per tyre - the lifecycle history behind CPK and rotation, with tread, pressure, cost and technician."
         icon={Wrench}
         onRefresh={load}
         refreshing={refreshing}
@@ -316,7 +432,7 @@ export default function TyreServiceEvents() {
             <button onClick={() => exportToExcel(exportRows, EXPORT_COLS, EXPORT_HEADERS, 'tyre_service_events')} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!filtered.length}>
               <FileSpreadsheet size={14} /> Excel
             </button>
-            <button onClick={() => exportToPdf(exportRows, EXPORT_COLS.map((k, i) => ({ key: k, header: EXPORT_HEADERS[i] })), 'Tyre Service Events', 'tyre_service_events', 'landscape')} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!filtered.length}>
+            <button onClick={() => exportToPdf(exportRows, EXPORT_COLS.map((k2, i) => ({ key: k2, header: EXPORT_HEADERS[i] })), 'Tyre Service Events', 'tyre_service_events', 'landscape')} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!filtered.length}>
               <FileText size={14} /> PDF
             </button>
             <button onClick={openCreate} className="btn-primary text-sm inline-flex items-center gap-1.5">
@@ -330,7 +446,7 @@ export default function TyreServiceEvents() {
         <div className="card border border-amber-800/50 flex items-start gap-3">
           <AlertTriangle size={18} className="text-amber-400 mt-0.5 shrink-0" />
           <div>
-            <p className="text-amber-300 font-medium">Tyre service events aren’t enabled on this database yet.</p>
+            <p className="text-amber-300 font-medium">Tyre service events are not enabled on this database yet.</p>
             <p className="text-[var(--text-muted)] text-sm mt-1">
               Apply <span className="font-mono text-[var(--text-primary)]">MIGRATIONS_V151_TYRE_SERVICE_EVENTS.sql</span>, then reload.
             </p>
@@ -338,59 +454,113 @@ export default function TyreServiceEvents() {
         </div>
       )}
       {error && error !== 'missing' && (
-        <div className="card border border-red-800/50 flex items-start gap-3">
-          <AlertTriangle size={18} className="text-red-400 mt-0.5 shrink-0" />
-          <div><p className="text-red-300 font-medium">Couldn’t load service events.</p><p className="text-[var(--text-muted)] text-sm mt-1">{error}</p></div>
+        <div className="card border border-red-800/50 flex items-start justify-between gap-3">
+          <div className="flex items-start gap-3">
+            <AlertTriangle size={18} className="text-red-400 mt-0.5 shrink-0" />
+            <div><p className="text-red-300 font-medium">Could not load service events.</p><p className="text-[var(--text-muted)] text-sm mt-1">{error}</p></div>
+          </div>
+          <button onClick={load} className="btn-secondary text-sm inline-flex items-center gap-1.5 shrink-0"><RefreshCw size={14} /> Retry</button>
         </div>
       )}
 
       {/* KPI tiles */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        {kpis.map((k) => {
-          const Icon = k.icon
+      <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3">
+        {kpis.map((kp) => {
+          const Icon = kp.icon
           return (
-            <div key={k.label} className="card">
+            <div key={kp.label} className="card">
               <div className="flex items-center justify-between">
-                <p className="text-xs text-[var(--text-muted)]">{k.label}</p>
-                <Icon size={16} className={k.tone} />
+                <p className="text-xs text-[var(--text-muted)]">{kp.label}</p>
+                <Icon size={16} className={kp.tone} />
               </div>
-              <p className={`text-3xl font-bold mt-1 ${k.tone}`}>{rows === null ? '—' : k.value}</p>
+              <p className={`text-2xl font-bold mt-1 ${kp.tone}`}>{rows === null ? 'N/A' : kp.value}</p>
+              <p className="text-[11px] text-[var(--text-dim)] mt-0.5">{rows === null ? '' : kp.sub}</p>
             </div>
           )
         })}
       </div>
 
-      {/* Chart + filters */}
+      {/* Charts row: type doughnut + monthly trend */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <div className="card lg:col-span-1">
           <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-3">Events by type</h3>
           <div className="h-64">
-            {rows && rows.length
-              ? <Doughnut data={donutData} options={donutOpts} />
-              : <div className="h-full flex items-center justify-center text-sm text-[var(--text-muted)]">{rows === null ? <div className="w-full h-full bg-[var(--input-bg)] rounded animate-pulse" /> : 'No service events yet.'}</div>}
+            {rows === null
+              ? <div className="w-full h-full bg-[var(--input-bg)] rounded animate-pulse" />
+              : hasData && analysis.breakdown.items.length
+                ? <Doughnut data={donutData} options={donutOpts} />
+                : <div className="h-full flex items-center justify-center text-sm text-[var(--text-muted)]">No service events yet.</div>}
           </div>
         </div>
 
-        <div className="card lg:col-span-2 space-y-3">
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="relative flex-1 min-w-[200px]">
-              <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
-              <input className="input pl-9 w-full" placeholder="Search serial, asset, technician, notes…" value={search} onChange={(e) => setSearch(e.target.value)} />
-            </div>
-            <select className="input" value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)} aria-label="Event type">
-              <option value="all">All types</option>
-              {EVENT_TYPES.map((t) => <option key={t} value={t}>{EVENT_TYPE_META[t].label}</option>)}
-            </select>
-            {hasFilters && <button onClick={clearFilters} className="btn-secondary text-sm inline-flex items-center gap-1.5"><X size={14} /> Clear</button>}
-            <span className="text-xs text-[var(--text-muted)] ml-auto">{filtered.length} of {summary.total}</span>
+        <div className="card lg:col-span-2">
+          <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-3">Events over the last 12 months</h3>
+          <div className="h-64">
+            {rows === null
+              ? <div className="w-full h-full bg-[var(--input-bg)] rounded animate-pulse" />
+              : hasData
+                ? <Bar data={trendData} options={barOpts} />
+                : <div className="h-full flex items-center justify-center text-sm text-[var(--text-muted)]">No dated events to trend.</div>}
           </div>
-          <div className="flex flex-wrap gap-2 pt-1">
-            {EVENT_TYPES.map((t) => (
-              <span key={t} className={`badge text-[11px] px-2 py-0.5 rounded inline-flex items-center gap-1 ${BADGE_STYLES[t]}`}>
-                {EVENT_TYPE_META[t].label}: <span className="font-semibold">{summary.byType[t] || 0}</span>
-              </span>
-            ))}
+        </div>
+      </div>
+
+      {/* Rankings + site breakdown */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <RankCard title="Most-serviced assets" icon={Building2} rows={analysis.topAssets} labelKey="asset_no" currency={activeCurrency} empty={rows === null ? 'Loading...' : 'No asset-linked events.'} />
+        <RankCard title="Most-serviced positions" icon={MapPin} rows={analysis.topPositions} labelKey="position" currency={activeCurrency} empty={rows === null ? 'Loading...' : 'No position data recorded.'} />
+        <div className="card">
+          <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-3 inline-flex items-center gap-2">
+            <Building2 size={15} className="text-[var(--text-muted)]" /> Events by site
+          </h3>
+          <div className="h-52">
+            {analysis.bySite.length
+              ? <Bar data={siteChart} options={siteBarOpts} />
+              : <div className="h-full flex items-center justify-center text-sm text-[var(--text-muted)]">{rows === null ? 'Loading...' : 'No site data recorded.'}</div>}
           </div>
+        </div>
+      </div>
+
+      {/* Filters */}
+      <div className="card space-y-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="relative flex-1 min-w-[200px]">
+            <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
+            <input className="input pl-9 w-full" placeholder="Search serial, asset, position, technician, notes..." value={search} onChange={(e) => setSearch(e.target.value)} />
+          </div>
+          <select className="input" value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)} aria-label="Event type">
+            <option value="all">All types</option>
+            {EVENT_TYPES.map((t) => <option key={t} value={t}>{EVENT_TYPE_META[t].label}</option>)}
+          </select>
+          <select className="input" value={siteFilter} onChange={(e) => setSiteFilter(e.target.value)} aria-label="Site" disabled={!siteOptions.length}>
+            <option value="all">All sites</option>
+            {siteOptions.map((s) => <option key={s} value={s}>{s}</option>)}
+          </select>
+          <select className="input" value={positionFilter} onChange={(e) => setPositionFilter(e.target.value)} aria-label="Position" disabled={!positionOptions.length}>
+            <option value="all">All positions</option>
+            {positionOptions.map((p) => <option key={p} value={p}>{p}</option>)}
+          </select>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <label className="text-xs text-[var(--text-muted)]">From</label>
+          <input type="date" className="input" value={from} onChange={(e) => setFrom(e.target.value)} aria-label="From date" />
+          <label className="text-xs text-[var(--text-muted)]">To</label>
+          <input type="date" className="input" value={to} onChange={(e) => setTo(e.target.value)} aria-label="To date" />
+          {hasFilters && <button onClick={clearFilters} className="btn-secondary text-sm inline-flex items-center gap-1.5"><X size={14} /> Clear</button>}
+          <span className="text-xs text-[var(--text-muted)] ml-auto">{filtered.length} of {k.total}</span>
+        </div>
+        <div className="flex flex-wrap gap-2 pt-1">
+          {analysis.breakdown.items.length === 0 ? (
+            <span className="text-xs text-[var(--text-dim)]">No events logged yet.</span>
+          ) : EVENT_TYPES.filter((t) => analysis.breakdown.byType[t] > 0).map((t) => (
+            <button
+              key={t}
+              onClick={() => setTypeFilter((cur) => (cur === t ? 'all' : t))}
+              className={`badge text-[11px] px-2 py-0.5 rounded inline-flex items-center gap-1 ${BADGE_STYLES[t]} ${typeFilter === t ? 'ring-1 ring-[var(--text-secondary)]' : ''}`}
+            >
+              {EVENT_TYPE_META[t].label}: <span className="font-semibold">{analysis.breakdown.byType[t]}</span>
+            </button>
+          ))}
         </div>
       </div>
 
@@ -400,9 +570,17 @@ export default function TyreServiceEvents() {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-[var(--input-border)] text-left text-xs uppercase tracking-wider text-[var(--text-muted)]">
-                {['Date', 'Type', 'Serial', 'Asset', 'Position', 'Tread', 'PSI', 'Cost', 'Technician', 'Site', ''].map((h, i) => (
-                  <th key={i} className="px-4 py-3 font-semibold whitespace-nowrap">{h}</th>
-                ))}
+                <th className="px-4 py-3 font-semibold whitespace-nowrap cursor-pointer select-none" onClick={() => toggleSort('event_date')}>Date<SortIcon col="event_date" /></th>
+                <th className="px-4 py-3 font-semibold whitespace-nowrap cursor-pointer select-none" onClick={() => toggleSort('event_type')}>Type<SortIcon col="event_type" /></th>
+                <th className="px-4 py-3 font-semibold whitespace-nowrap">Serial</th>
+                <th className="px-4 py-3 font-semibold whitespace-nowrap cursor-pointer select-none" onClick={() => toggleSort('asset_no')}>Asset<SortIcon col="asset_no" /></th>
+                <th className="px-4 py-3 font-semibold whitespace-nowrap">Position</th>
+                <th className="px-4 py-3 font-semibold whitespace-nowrap">Tread</th>
+                <th className="px-4 py-3 font-semibold whitespace-nowrap">PSI</th>
+                <th className="px-4 py-3 font-semibold whitespace-nowrap cursor-pointer select-none" onClick={() => toggleSort('cost')}>Cost<SortIcon col="cost" /></th>
+                <th className="px-4 py-3 font-semibold whitespace-nowrap">Technician</th>
+                <th className="px-4 py-3 font-semibold whitespace-nowrap">Site</th>
+                <th className="px-4 py-3 font-semibold whitespace-nowrap"></th>
               </tr>
             </thead>
             <tbody>
@@ -411,7 +589,7 @@ export default function TyreServiceEvents() {
               ) : filtered.length === 0 ? (
                 <tr><td colSpan={11} className="px-4 py-12 text-center text-[var(--text-muted)]">
                   <Filter size={22} className="mx-auto mb-2 opacity-60" />
-                  {rows.length === 0 ? 'No service events logged yet — use “Log event” to add the first.' : 'No events match these filters.'}
+                  {rows.length === 0 ? 'No service events logged yet - use "Log event" to add the first.' : 'No events match these filters.'}
                 </td></tr>
               ) : (
                 filtered.slice(0, 500).map((r) => {
@@ -424,14 +602,14 @@ export default function TyreServiceEvents() {
                           <Icon size={11} /> {EVENT_TYPE_META[r.event_type]?.label || r.event_type}
                         </span>
                       </td>
-                      <td className="px-4 py-2.5 font-mono text-xs text-[var(--text-primary)]">{r.tyre_serial || '—'}</td>
-                      <td className="px-4 py-2.5 font-mono text-xs text-[var(--text-secondary)]">{r.asset_no || '—'}</td>
-                      <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.position || '—'}</td>
+                      <td className="px-4 py-2.5 font-mono text-xs text-[var(--text-primary)]">{r.tyre_serial || 'N/A'}</td>
+                      <td className="px-4 py-2.5 font-mono text-xs text-[var(--text-secondary)]">{r.asset_no || 'N/A'}</td>
+                      <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.position || 'N/A'}</td>
                       <td className="px-4 py-2.5 text-[var(--text-secondary)]">{num(r.tread_depth)}</td>
                       <td className="px-4 py-2.5 text-[var(--text-secondary)]">{num(r.pressure)}</td>
-                      <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.cost == null ? '—' : formatCurrencyCompact(r.cost, activeCurrency)}</td>
-                      <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.technician || '—'}</td>
-                      <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.site || '—'}</td>
+                      <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.cost == null ? 'N/A' : formatCurrencyCompact(r.cost, activeCurrency)}</td>
+                      <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.technician || 'N/A'}</td>
+                      <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.site || 'N/A'}</td>
                       <td className="px-4 py-2.5 whitespace-nowrap">
                         <div className="flex items-center gap-1.5">
                           <button onClick={() => openEdit(r)} className="p-1.5 rounded hover:bg-[var(--input-bg)] text-[var(--text-muted)] hover:text-[var(--text-primary)]" title="Edit"><Pencil size={14} /></button>
@@ -445,7 +623,7 @@ export default function TyreServiceEvents() {
             </tbody>
           </table>
         </div>
-        {filtered.length > 500 && <p className="px-4 py-2 text-xs text-[var(--text-muted)] border-t border-[var(--input-border)]">Showing first 500 — refine filters or export for the full set.</p>}
+        {filtered.length > 500 && <p className="px-4 py-2 text-xs text-[var(--text-muted)] border-t border-[var(--input-border)]">Showing first 500 - refine filters or export for the full set.</p>}
       </div>
 
       <EventModal open={modalOpen} initial={editRow} onClose={() => setModalOpen(false)} onSaved={load} />

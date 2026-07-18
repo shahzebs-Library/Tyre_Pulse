@@ -1,5 +1,5 @@
 /**
- * Telematics devices service — the single seam between the Telematics Device
+ * Telematics devices service - the single seam between the Telematics Device
  * Registry page (/telematics-devices) and Supabase (table `telematics_devices`,
  * V147). Keeps an explicit column list (least-privilege selects), null-safe
  * country scoping, and validation via the pure `src/lib/telematicsDevices.js`
@@ -42,6 +42,26 @@ export async function listDevices({ country, status, limit = 500 } = {}) {
     return unwrap(await q.order('created_at', { ascending: false }).limit(limit)) || []
   } catch (err) {
     if (isMissingRelation(err)) return []
+    throw err
+  }
+}
+
+/**
+ * List devices AND report whether the registry table exists yet, in one call.
+ * Returns `{ rows, missing }`: `missing` is true only when the failure is a
+ * genuine "table not provisioned" (pre-migration) case, so the page can show
+ * the honest "enable the registry" banner without conflating it with a real
+ * empty registry. Any other error is rethrown for the page's error+Retry state.
+ */
+export async function listDevicesWithMeta({ country, status, limit = 500 } = {}) {
+  try {
+    let q = supabase.from('telematics_devices').select(COLS)
+    if (status && DEVICE_STATUSES.includes(status)) q = q.eq('status', status)
+    q = applyCountry(q, country)
+    const rows = unwrap(await q.order('created_at', { ascending: false }).limit(limit)) || []
+    return { rows, missing: false }
+  } catch (err) {
+    if (isMissingRelation(err)) return { rows: [], missing: true }
     throw err
   }
 }
@@ -105,4 +125,25 @@ export async function updateDevice(id, patch = {}) {
 
 export async function deleteDevice(id) {
   return unwrap(await supabase.from('telematics_devices').delete().eq('id', id))
+}
+
+/**
+ * Real fleet size for the coverage % denominator: count of active fleet assets
+ * (`vehicle_fleet`, org- and country-scoped via RLS + null-safe country filter).
+ * Uses a head-only COUNT (no rows fetched). Returns `null` on any error so the
+ * page shows an honest "N/A" coverage instead of guessing a denominator.
+ */
+export async function countFleetAssets({ country } = {}) {
+  try {
+    let q = supabase
+      .from('vehicle_fleet')
+      .select('id', { count: 'exact', head: true })
+      .eq('is_active', true)
+    q = applyCountry(q, country)
+    const { count, error } = await q
+    if (error) throw error
+    return typeof count === 'number' ? count : null
+  } catch {
+    return null
+  }
 }

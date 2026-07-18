@@ -9,7 +9,7 @@
  * has not run the migration) degrades listing to an empty array so the page can
  * render its "apply the migration" empty state instead of erroring.
  */
-import { supabase, unwrap, applyCountry } from './_client'
+import { supabase, unwrap, applyCountry, fetchAllPages } from './_client'
 import { toFiniteNumber } from '../odometerLogs'
 
 export const COLS =
@@ -51,6 +51,34 @@ export async function listOdometerLogs({ country, limit = 500 } = {}) {
         .order('created_at', { ascending: false })
         .limit(limit),
     ) || []
+  } catch (err) {
+    if (isMissingRelation(err)) return []
+    throw err
+  }
+}
+
+/**
+ * Fetch EVERY reading (paging past the PostgREST cap) for fleet-wide mileage
+ * analytics that must see the complete history, not just the newest page.
+ * Ordered oldest-first so consecutive-delta maths read naturally. Returns []
+ * when the table has not been provisioned yet.
+ * @param {{ country?:string, max?:number }} [opts]
+ */
+export async function listAllOdometerLogs({ country, max = 100000 } = {}) {
+  try {
+    const { data, error } = await fetchAllPages(
+      (from, to) => {
+        let q = supabase.from('odometer_logs').select(COLS)
+        q = applyCountry(q, country)
+        return q
+          .order('reading_date', { ascending: true, nullsFirst: true })
+          .order('created_at', { ascending: true })
+          .range(from, to)
+      },
+      { max },
+    )
+    if (error) throw error
+    return data || []
   } catch (err) {
     if (isMissingRelation(err)) return []
     throw err

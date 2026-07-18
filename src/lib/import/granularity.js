@@ -81,6 +81,22 @@ export function hasNaturalKey(module) {
 }
 
 /**
+ * The lone non-country field of a module's natural key, when there is EXACTLY
+ * one - e.g. workorder → 'work_order_no'. `aggregateStagedRows()` groups rows
+ * by a single transformed field, so this tells the wizard which modules can
+ * safely offer a one-click "combine line items" action; a module whose key
+ * needs several fields (e.g. gatepass: asset_no + pass_date) returns null,
+ * since collapsing on either field alone would merge unrelated records.
+ *
+ * @param {string} module
+ * @returns {string|null}
+ */
+export function singleKeyField(module) {
+  const keys = (NATURAL_KEY_FIELDS[module] || []).filter((k) => k !== 'country')
+  return keys.length === 1 ? keys[0] : null
+}
+
+/**
  * Fraction of KEYED rows that collapse onto an existing/repeated key
  * (in-batch duplicates + conflicts + already-live duplicates), out of the rows
  * that actually produced a usable natural key. Returns 0 when no rows are keyed.

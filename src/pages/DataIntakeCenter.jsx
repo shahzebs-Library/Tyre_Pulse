@@ -11,10 +11,10 @@ import { useLanguage } from '../contexts/LanguageContext'
 import {
   parseWorkbook, sha256OfArrayBuffer, suggestMapping, transformRow, validateRow,
   classifyDuplicates, naturalKey, countryConflict, rowFingerprint, MODULE_FIELDS,
-  wrongModuleWarning, WRONG_MODULE_THRESHOLD,
+  wrongModuleWarning, WRONG_MODULE_THRESHOLD, singleKeyField, naturalKeyLabel,
   buildAliasMap, applyAliasesToRow,
   extractZip, matchAttachment, buildMatchRows,
-  headerFingerprint, aggregateStagedRows,
+  headerFingerprint, aggregateStagedRows, COST_FIELDS,
 } from '../lib/import'
 import * as imports from '../lib/api/imports'
 import { summarizeValidation, summarizeCommitResult, diagnoseBatchHealth, formatDiagnosticsReport } from '../lib/import/diagnostics'
@@ -137,6 +137,16 @@ export default function DataIntakeCenter() {
     [counts, module],
   )
 
+  // One-click "combine line items" for modules whose natural key is a single
+  // field (e.g. workorder → work_order_no). Several task lines sharing one Job
+  // Card No. are a normal export shape, not a wrong-module file - this lets the
+  // operator collapse them into one record per key without a saved profile.
+  // Off by default; a saved profile's own aggregate config always takes priority.
+  const aggKeyField = useMemo(() => singleKeyField(module), [module])
+  const [manualAggregate, setManualAggregate] = useState(false)
+  const [combinedNotice, setCombinedNotice] = useState(false)
+  const [combinedKeyLabel, setCombinedKeyLabel] = useState('')
+
   // Smart default action for a row, given the current global toggles. This is the
   // system's recommendation; the operator can override it per row (rowActionOverride).
   //  · error            → reject, unless force-include is on (elevated) → insert
@@ -250,6 +260,7 @@ export default function DataIntakeCenter() {
     setStep(0); setFile(null); setParsed(null); setSheetIdx(0); setBatchId(null); setAppliedProfile(null)
     setMapping([]); setAnnotated([]); setCounts(null); setResult(null); setAutomation(null); setError(''); setProfiles([]); setCountryAck(false); setForceFlagged(false); setEnrichExisting(false); setAliasMaps(null); setFxRatesMap(null); autoSavedFp.current = null
     setAttachItems([]); setAttachWarnings([]); setAttachDone(false); setAttachBusy(false)
+    setManualAggregate(false); setCombinedNotice(false)
   }
 
   // ── Step 1: parse a chosen file ──────────────────────────────────────────────
@@ -407,7 +418,8 @@ export default function DataIntakeCenter() {
   }
 
   // ── Step 3: validate + classify (in-batch + live-table dedup) ────────────────
-  async function runValidation() {
+  async function runValidation(opts = {}) {
+    const useManualAggregate = 'aggregate' in opts ? opts.aggregate : manualAggregate
     let rows = sheet.rows.map((raw, i) => {
       const { mapped, transformed: t0, custom } = transformRow(raw, mapping, { module, baseCurrency: activeCurrency, fxRates: fxRatesMap })
       // Normalise master-data spellings via saved aliases (site/supplier/brand).
@@ -442,6 +454,7 @@ export default function DataIntakeCenter() {
     // Collapse them here - costs summed, every source line preserved in
     // custom_data.line_items - so the commit produces ONE record per key.
     const aggCfg = appliedProfile?.unit_settings?.aggregate
+      || (useManualAggregate && aggKeyField ? { by: aggKeyField, sum: COST_FIELDS[module] || [] } : null)
     if (aggCfg?.by) rows = aggregateStagedRows(rows, aggCfg)
 
     // Country-scope guard (directive rule #1: never mix countries). A row whose
@@ -512,6 +525,9 @@ export default function DataIntakeCenter() {
     c.amount = Math.round(c.amount * 100) / 100
     setRowActionOverride({}) // fresh validation ⇒ back to smart defaults
     setAnnotated(rows); setCounts(c)
+    setManualAggregate(useManualAggregate)
+    setCombinedNotice(!!(useManualAggregate && aggKeyField))
+    if (useManualAggregate && aggKeyField) setCombinedKeyLabel(naturalKeyLabel(module) || aggKeyField)
   }
   useEffect(() => { if (step === 2 && sheet && mapping.length) runValidation() }, [step]) // eslint-disable-line
 
@@ -830,6 +846,39 @@ export default function DataIntakeCenter() {
                 {' '}collapse to existing keys. Committing here would discard the line-item detail. If this is
                 {' '}per-line data (e.g. parts consumption), import it under a finer-grained module instead. Review before committing.
               </p>
+              {aggKeyField && (
+                <div className="flex flex-wrap items-center gap-3 pt-1">
+                  <p className="text-xs text-[var(--text-secondary)]">
+                    Or, if these are multiple task/detail lines for the SAME record (e.g. several complaints on one
+                    {' '}{granularityWarning.keyLabel}), combine them into one row per key - every source line stays
+                    visible in that record's detail, nothing is discarded.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => runValidation({ aggregate: true })}
+                    disabled={busy}
+                    className="btn-secondary text-xs whitespace-nowrap"
+                  >
+                    Combine rows into one record per {granularityWarning.keyLabel}
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+          {combinedNotice && (
+            <div className="bg-emerald-900/15 border border-emerald-700/40 rounded-xl p-3 flex flex-wrap items-center justify-between gap-3">
+              <p className="text-sm text-emerald-300 flex items-center gap-2">
+                <CheckCircle2 size={16} />
+                Rows combined - one record per {combinedKeyLabel || 'key'}. Every source line is kept in that record's detail.
+              </p>
+              <button
+                type="button"
+                onClick={() => runValidation({ aggregate: false })}
+                disabled={busy}
+                className="text-xs text-emerald-300/80 hover:text-emerald-200 underline whitespace-nowrap"
+              >
+                Undo - show one row per line item
+              </button>
             </div>
           )}
           {/* Diagnostics: health checks + grouped error reasons + one-click

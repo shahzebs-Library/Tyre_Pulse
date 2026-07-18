@@ -4,6 +4,7 @@ import {
   duplicateRatio,
   naturalKeyLabel,
   hasNaturalKey,
+  singleKeyField,
   WRONG_MODULE_THRESHOLD,
 } from '../lib/import'
 
@@ -92,5 +93,27 @@ describe('wrongModuleWarning', () => {
 
   it('exports the default threshold as 0.6', () => {
     expect(WRONG_MODULE_THRESHOLD).toBe(0.6)
+  })
+})
+
+describe('singleKeyField', () => {
+  it('returns the lone non-country key field for single-part keys', () => {
+    expect(singleKeyField('workorder')).toBe('work_order_no')
+    expect(singleKeyField('fleet')).toBe('asset_no')
+    expect(singleKeyField('tyre')).toBe('serial_no')
+    expect(singleKeyField('accident')).toBe('insurance_claim_no')
+    expect(singleKeyField('supplier')).toBe('supplier_code')
+    expect(singleKeyField('driver')).toBe('driver_id')
+  })
+
+  it('returns null when the key needs more than one field', () => {
+    expect(singleKeyField('stock')).toBeNull()          // site + description
+    expect(singleKeyField('inspection')).toBeNull()      // asset+type+date+inspector
+    expect(singleKeyField('warranty')).toBeNull()         // serial_number + claim_no
+    expect(singleKeyField('gatepass')).toBeNull()         // asset_no + pass_date
+  })
+
+  it('returns null for an unknown module', () => {
+    expect(singleKeyField('nope')).toBeNull()
   })
 })

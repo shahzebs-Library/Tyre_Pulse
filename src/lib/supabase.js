@@ -31,12 +31,30 @@ const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
   }
 })()
 
+// ── Auth-session partition by surface ────────────────────────────────────────
+// The admin Console (/console) is a separate secure area and MUST NOT share its
+// login session with the main app: a Console login in one browser tab must never
+// authenticate a main-app tab (or vice versa). React Router renders EITHER the
+// console route tree OR the main-app tree per tab (App.jsx: `/console/*` vs `*`),
+// so the URL the tab BOOTED on uniquely identifies the surface. supabase-js only
+// cross-tab-syncs sessions stored under its own `storageKey`, so giving each
+// surface a distinct key yields two fully independent sessions across tabs.
+// A Console opened via the in-app <Link to="/console"> (client-side nav, no
+// reload) keeps the tab's main-app session, so a signed-in super admin still
+// reaches it seamlessly; only a separately-opened Console tab gets its own login.
+const IS_CONSOLE_SURFACE =
+  typeof window !== 'undefined' &&
+  typeof window.location?.pathname === 'string' &&
+  window.location.pathname.startsWith('/console')
+
+export const AUTH_STORAGE_KEY = IS_CONSOLE_SURFACE ? 'tp_console_auth' : 'tp_auth'
+
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
     persistSession:     true,
     autoRefreshToken:   true,
     detectSessionInUrl: true,
-    storageKey:         'tp_auth',
+    storageKey:         AUTH_STORAGE_KEY,
   },
   db: {
     schema: 'public',

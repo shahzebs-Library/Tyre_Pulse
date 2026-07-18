@@ -29,7 +29,7 @@ import {
   Users, Search, ChevronRight, ChevronDown, ChevronsDownUp,
   ChevronsUpDown, Crown, Save, Loader2, Check, X, RotateCcw, Info,
   AlertTriangle, SlidersHorizontal, UserCog, Eye, Ban, RefreshCw,
-  FolderTree, Zap, Monitor, Smartphone, Layers,
+  FolderTree, Zap, Monitor, Smartphone, Layers, ShieldCheck,
 } from 'lucide-react'
 import { useAuth } from '../../../contexts/AuthContext'
 import {
@@ -44,7 +44,7 @@ import { listProfiles } from '../../../lib/api/users'
 import {
   listUserGrants, revokeUserAccessGrant,
   setUserAccessGrantScoped, mobileGrantKey, parseGrantScope,
-  grantKeysForScope, roleScopeForKey,
+  grantKeysForScope, computeRoleViewChanges,
 } from '../../../lib/api/accessGrants'
 import { toUserMessage } from '../../../lib/safeError'
 
@@ -93,7 +93,12 @@ function roleHasDbRows(viewMap, role) {
  * Resolve one ROLE node's ON/OFF view AND its surface scope from a single role's
  * module_permissions map. A module can carry a plain (web) row and/or a `mobile:`
  * (mobile) row; the toggle is ON when EITHER present surface is enabled, and the
- * scope reflects which surfaces have a row.
+ * scope is derived from the stored VALUES (not mere presence) so it round-trips a
+ * save: after web-only writes plain=true + mobile=false the state reads back as
+ * 'web'; after mobile-only writes plain=false + mobile=true it reads back as
+ * 'mobile'; both true = 'both'. A module with no explicit row on a surface
+ * defaults that surface's scope contribution to the primary (web) surface, so an
+ * unconfigured module shows the conservative 'web' scope until narrowed.
  *
  * @param {Record<string,boolean>|undefined} roleRows  the role's { key: enabled }
  * @param {string}  key          plain module/sub-module key
@@ -104,20 +109,33 @@ function roleHasDbRows(viewMap, role) {
  * @returns {{ view: boolean, scope: ('web'|'mobile'|'both') }}
  */
 function roleKeyState(roleRows, key, isAdmin, hasRows, inheritView, role) {
+  if (isAdmin) return { view: true, scope: 'both' }
   const mobKey = mobileGrantKey(key)
   const hasPlain = !!roleRows && Object.prototype.hasOwnProperty.call(roleRows, key)
   const hasMobile = !!roleRows && Object.prototype.hasOwnProperty.call(roleRows, mobKey)
-  const scope = roleScopeForKey(roleRows, key) || DEFAULT_SCOPE
+  const webVal = hasPlain ? roleRows[key] === true : null
+  const mobVal = hasMobile ? roleRows[mobKey] === true : null
+
+  // Overall ON when any explicitly-enabled surface exists; else inherit/default.
   let view
-  if (isAdmin) {
+  if (webVal === true || mobVal === true) {
     view = true
   } else if (hasPlain || hasMobile) {
-    // Enabled when any surface that HAS a row is enabled.
-    view = (hasPlain && roleRows[key] === true) || (hasMobile && roleRows[mobKey] === true)
+    view = false // present but all explicit surfaces are false
   } else if (typeof inheritView === 'boolean') {
     view = inheritView
   } else {
     view = hasRows ? false : defaultViewAccess(role, key)
+  }
+
+  // Scope from explicit surface VALUES (round-trips web/mobile/both).
+  let scope
+  if (hasPlain && hasMobile) {
+    scope = webVal && mobVal ? 'both' : mobVal ? 'mobile' : webVal ? 'web' : DEFAULT_SCOPE
+  } else if (hasMobile) {
+    scope = mobVal ? 'mobile' : DEFAULT_SCOPE
+  } else {
+    scope = DEFAULT_SCOPE // web-only or unconfigured
   }
   return { view, scope }
 }
@@ -159,37 +177,6 @@ function buildRoleState(role, viewMap, overrides) {
     }
   }
   return { view, caps, scope }
-}
-
-/**
- * The `module_permissions` row writes needed to persist a ROLE draft's view+scope.
- * For each visible key, the desired ON/OFF is written to the surface(s) the scope
- * targets (web = plain key, mobile = `mobile:` key, both = both). A surface with
- * NO existing row is written only when ENABLING (never gratuitously stamp an
- * explicit-false that would override a role's hardcoded default); an existing row
- * is written when its stored value differs from the desired one.
- *
- * HONEST LIMITATION: narrowing a scope (e.g. both -> web) does NOT delete the now
- * untargeted surface's row - `set_module_permissions` only upserts. To turn a
- * surface OFF, target it with the toggle OFF (writes enabled=false there).
- *
- * @returns {{ role:string, module_key:string, enabled:boolean, nodeKey:string }[]}
- */
-function roleViewChanges(role, draftView, scopeDraft, roleRows) {
-  const changes = []
-  for (const key of Object.keys(draftView || {})) {
-    const scope = scopeDraft?.[key] || DEFAULT_SCOPE
-    const enabled = draftView[key] === true
-    for (const tk of grantKeysForScope(key, scope)) {
-      const exists = !!roleRows && Object.prototype.hasOwnProperty.call(roleRows, tk)
-      if (!exists) {
-        if (enabled) changes.push({ role, module_key: tk, enabled: true, nodeKey: key })
-      } else if ((roleRows[tk] === true) !== enabled) {
-        changes.push({ role, module_key: tk, enabled, nodeKey: key })
-      }
-    }
-  }
-  return changes
 }
 
 /** Index grant rows: key -> capability -> effect -> grantId. Includes both plain
@@ -318,6 +305,11 @@ export default function AccessManager() {
   const [notice, setNotice] = useState('')
   const [errorMsg, setErrorMsg] = useState('')
 
+  // Role-wide surface control (role mode): 'permodule' shows the per-module
+  // Web/Mobile/Both selectors; 'web'/'mobile' means the whole role is uniform on
+  // that one surface (per-module selectors hidden).
+  const [roleSurfaceView, setRoleSurfaceView] = useState('permodule')
+
   const flashTimer = useRef(null)
   const flash = useCallback((msg, isError = false) => {
     if (isError) { setErrorMsg(msg); setNotice('') } else { setNotice(msg); setErrorMsg('') }
@@ -362,6 +354,13 @@ export default function AccessManager() {
     // Role mode also carries a per-node surface scope (web / mobile / both).
     setScopeBaseline({ ...(state.scope || {}) })
     setScopeDraft({ ...(state.scope || {}) })
+    // Reflect the role-wide surface control: if EVERY enabled base module shares
+    // one surface (all web or all mobile), show that; otherwise per-module.
+    const baseKeys = MODULE_GROUPS.flatMap((g) => g.modules.map((m) => m.key))
+    const enabledScopes = baseKeys.filter((k) => state.view[k]).map((k) => state.scope[k] || DEFAULT_SCOPE)
+    const uniform = enabledScopes.length > 0 && enabledScopes.every((s) => s === enabledScopes[0])
+      ? enabledScopes[0] : null
+    setRoleSurfaceView(uniform === 'web' || uniform === 'mobile' ? uniform : 'permodule')
   }, [selectedRole, viewMap, overrides])
 
   const buildUser = useCallback(async (user) => {
@@ -421,7 +420,11 @@ export default function AccessManager() {
         for (const c of EXTRA_CAPS) if (dc[c.key] !== bc[c.key]) { s.add(key); break }
       }
       // view/scope changes that produce an actual module_permissions row write
-      for (const ch of roleViewChanges(selectedRole, draft.view, scopeDraft, roleRows)) s.add(ch.nodeKey)
+      const planned = computeRoleViewChanges({
+        role: selectedRole, draftView: draft.view, scopeDraft,
+        baselineView: baseline.view, scopeBaseline, roleRows,
+      })
+      for (const ch of planned) s.add(ch.nodeKey)
       return s
     }
     for (const key of Object.keys(draft.view)) {
@@ -461,7 +464,13 @@ export default function AccessManager() {
 
   function toggleView(key) {
     if (!draft) return
-    setNode(key, { view: !draft.view[key] })
+    const nextOn = !draft.view[key]
+    setNode(key, { view: nextOn })
+    // In a uniform role surface (Web only / Mobile only), a newly enabled module
+    // inherits that surface so it never sneaks onto the wrong app.
+    if (nextOn && mode === 'role' && (roleSurfaceView === 'web' || roleSurfaceView === 'mobile')) {
+      setScope(key, roleSurfaceView)
+    }
   }
 
   function toggleCap(key, cap) {
@@ -565,6 +574,26 @@ export default function AccessManager() {
     return { viewable, overrides: ovCount, total: baseNodes.length }
   }, [draft, mode, roleBaseline])
 
+  // ── Saved-access summary (role mode) ─────────────────────────────────────────
+  // What is ACTUALLY stored for this role right now, straight from the persisted
+  // baseline (rebuilt from listGlobalPermissions after every save) - NOT the draft.
+  // Each enabled base module is shown with its saved Web / Mobile / Both surface so
+  // the operator can trust that what they saved is really there.
+  const savedSummary = useMemo(() => {
+    if (mode !== 'role' || !baseline) return { items: [], counts: { web: 0, mobile: 0, both: 0 } }
+    const counts = { web: 0, mobile: 0, both: 0 }
+    const items = []
+    for (const g of MODULE_GROUPS) {
+      for (const m of g.modules) {
+        if (baseline.view[m.key] !== true) continue
+        const surface = selectedRole === 'Admin' ? 'both' : (baseline.scope[m.key] || DEFAULT_SCOPE)
+        counts[surface] = (counts[surface] || 0) + 1
+        items.push({ key: m.key, label: m.label, surface })
+      }
+    }
+    return { items, counts }
+  }, [mode, baseline, selectedRole])
+
   // ── Save ─────────────────────────────────────────────────────────────────────
   const save = useCallback(async () => {
     if (!draft || !baseline || dirtyCount === 0 || saving) return
@@ -576,7 +605,10 @@ export default function AccessManager() {
         // module_permissions path. Each write targets the plain (web) and/or
         // `mobile:` (mobile) module_key per the row's chosen scope.
         const roleRows = viewMap?.[selectedRole] || {}
-        const planned = roleViewChanges(selectedRole, draft.view, scopeDraft, roleRows)
+        const planned = computeRoleViewChanges({
+          role: selectedRole, draftView: draft.view, scopeDraft,
+          baselineView: baseline.view, scopeBaseline, roleRows,
+        })
         const viewChanges = planned.map(({ role, module_key, enabled }) => ({ role, module_key, enabled }))
         if (viewChanges.length) await saveModulePermissions(viewChanges)
 
@@ -672,7 +704,60 @@ export default function AccessManager() {
     } finally {
       setSaving(false)
     }
-  }, [draft, baseline, dirtyCount, dirtyKeys, saving, mode, canWriteRole, canWriteUser, selectedRole, selectedUser, overrides, roleBaseline, grantIdx, scopeDraft, flash])
+  }, [draft, baseline, dirtyCount, dirtyKeys, saving, mode, canWriteRole, canWriteUser, selectedRole, selectedUser, overrides, roleBaseline, grantIdx, scopeDraft, scopeBaseline, flash])
+
+  // ── Role-wide surface control (role mode) ─────────────────────────────────────
+  // One click to make a whole role Web-only or Mobile-only: set every enabled
+  // module to that surface and persist authoritatively in ONE save (the other
+  // surface is turned off for each). 'permodule' just reveals the per-module
+  // Web/Mobile/Both selectors and performs no save.
+  const applyRoleSurface = useCallback(async (surface) => {
+    if (surface === 'permodule') { setRoleSurfaceView('permodule'); return }
+    if (!draft || !baseline || saving) return
+    if (!canWriteRole) { flash('Only an Admin can change role access.', true); return }
+    if (selectedRole === 'Admin') { flash('Admin always has full access, so surface changes do not apply.', true); return }
+    const label = surface === 'mobile' ? 'Mobile only' : 'Web only'
+    const other = surface === 'mobile' ? 'web' : 'mobile'
+    const baseKeys = MODULE_GROUPS.flatMap((g) => g.modules.map((m) => m.key))
+    const enabledKeys = Object.keys(draft.view).filter((k) => draft.view[k] === true)
+    const enabledBase = baseKeys.filter((k) => draft.view[k] === true)
+    if (!enabledBase.length) { flash('This role has no enabled modules to set.', true); return }
+    // eslint-disable-next-line no-alert
+    if (typeof window !== 'undefined' && window.confirm &&
+      !window.confirm(`Set every enabled module for ${selectedRole} to ${label}? The ${other} surface is turned off for those modules.`)) {
+      return
+    }
+    const target = { ...scopeDraft }
+    for (const k of enabledKeys) target[k] = surface // also cover sub-nodes for consistency
+    setSaving(true); setErrorMsg(''); setNotice('')
+    try {
+      const roleRows = viewMap?.[selectedRole] || {}
+      const planned = computeRoleViewChanges({
+        role: selectedRole, draftView: draft.view, scopeDraft: target,
+        baselineView: baseline.view, scopeBaseline, roleRows,
+      })
+      const viewChanges = planned.map(({ role, module_key, enabled }) => ({ role, module_key, enabled }))
+      if (viewChanges.length) await saveModulePermissions(viewChanges)
+      const changedModules = new Set(planned.map((c) => c.nodeKey).filter((k) => baseKeys.includes(k)))
+      // refresh from DB so baseline/draft reflect the persisted, authoritative state
+      const vm = await listGlobalPermissions()
+      setViewMap(vm || {})
+      const fresh = buildRoleState(selectedRole, vm || {}, overrides || {})
+      setBaseline(fresh); setDraft(structuredClone(fresh))
+      setScopeBaseline({ ...(fresh.scope || {}) }); setScopeDraft({ ...(fresh.scope || {}) })
+      setRoleSurfaceView(surface)
+      const n = changedModules.size
+      flash(
+        n > 0
+          ? `Set ${n} module${n !== 1 ? 's' : ''} for ${selectedRole} to ${label}. The ${other} surface is now off for them; changes apply on each user's next load.`
+          : `Every enabled module for ${selectedRole} was already ${label}.`,
+      )
+    } catch (err) {
+      flash(toUserMessage(err, 'Could not update the role surface. Try again.'), true)
+    } finally {
+      setSaving(false)
+    }
+  }, [draft, baseline, saving, canWriteRole, selectedRole, scopeDraft, scopeBaseline, viewMap, overrides, flash])
 
   // ── User directory (user mode) ────────────────────────────────────────────────
   const roleOptions = useMemo(() => {
@@ -693,6 +778,9 @@ export default function AccessManager() {
   }, [users, uSearch, uRoleFilter])
 
   const readOnly = mode === 'role' ? !canWriteRole : !canWriteUser
+  // Per-module surface selector shows in user mode, and in role mode only when the
+  // role-wide control is set to "Both (per module)" (a uniform role hides them).
+  const showRowScope = mode === 'user' || roleSurfaceView === 'permodule'
 
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
@@ -847,6 +935,50 @@ export default function AccessManager() {
               </div>
             ) : (
               <div className="space-y-3">
+                {/* Role-wide surface control (role mode only) */}
+                {mode === 'role' && selectedRole !== 'Admin' && (
+                  <div className="card !py-3 space-y-2">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="text-[11px] uppercase tracking-wider text-[var(--text-muted)] font-semibold inline-flex items-center gap-1.5 mr-1">
+                        <Layers size={12} /> Surface for this role
+                      </span>
+                      {[
+                        { key: 'web', label: 'Web only', icon: Monitor },
+                        { key: 'mobile', label: 'Mobile only', icon: Smartphone },
+                        { key: 'permodule', label: 'Both (per module)', icon: Layers },
+                      ].map((opt) => {
+                        const on = roleSurfaceView === opt.key
+                        const Icon = opt.icon
+                        return (
+                          <button
+                            key={opt.key}
+                            type="button"
+                            disabled={readOnly || saving}
+                            onClick={() => applyRoleSurface(opt.key)}
+                            aria-pressed={on}
+                            title={
+                              opt.key === 'permodule'
+                                ? 'Choose Web, Mobile or Both for each module'
+                                : `Set every enabled module for ${selectedRole} to ${opt.label} in one save`
+                            }
+                            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors disabled:opacity-40 ${
+                              on
+                                ? 'bg-[var(--surface-3)] border-[var(--border-bright)] text-[var(--brand-bright)]'
+                                : 'bg-[var(--input-bg)] border-[var(--input-border)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:border-[var(--border-bright)]'
+                            }`}
+                          >
+                            <Icon size={13} /> {opt.label}
+                          </button>
+                        )
+                      })}
+                    </div>
+                    <p className="text-[11px] text-[var(--text-muted)] inline-flex items-start gap-1.5">
+                      <Info size={12} className="mt-0.5 shrink-0" />
+                      Web only or Mobile only applies to every enabled module at once and turns the other surface off. Both (per module) reveals a Web, Mobile or Both choice on each row.
+                    </p>
+                  </div>
+                )}
+
                 {/* Toolbar */}
                 <div className="card !py-3 space-y-3">
                   <div className="flex flex-wrap items-center gap-2">
@@ -913,7 +1045,7 @@ export default function AccessManager() {
                               capEditable={capEditable(m.key)}
                               advancedOpen={openAdvanced.has(m.key)}
                               scope={scopeDraft[m.key] || DEFAULT_SCOPE}
-                              onSetScope={(v) => setScope(m.key, v)}
+                              onSetScope={showRowScope ? (v) => setScope(m.key, v) : null}
                               onToggleView={() => toggleView(m.key)}
                               onToggleCap={(c) => toggleCap(m.key, c)}
                               onToggleAdvanced={() => toggleAdvanced(m.key)}
@@ -928,7 +1060,7 @@ export default function AccessManager() {
                                 capEditable={capEditable(s.key)}
                                 advancedOpen={openAdvanced.has(s.key)}
                                 scope={scopeDraft[s.key] || DEFAULT_SCOPE}
-                                onSetScope={(v) => setScope(s.key, v)}
+                                onSetScope={showRowScope ? (v) => setScope(s.key, v) : null}
                                 onToggleView={() => toggleView(s.key)}
                                 onToggleCap={(c) => toggleCap(s.key, c)}
                                 onToggleAdvanced={() => toggleAdvanced(s.key)}
@@ -951,7 +1083,7 @@ export default function AccessManager() {
                   <span className="inline-flex items-center gap-1.5"><Smartphone size={12} className="text-[var(--brand-bright)]" /> Mobile applies to the inspector app only.</span>
                   <span className="inline-flex items-center gap-1.5"><Layers size={12} className="text-[var(--brand-bright)]" /> Both applies to web and mobile.</span>
                   {mode === 'role' && (
-                    <span className="inline-flex items-center gap-1.5">To turn a surface off, set its toggle off with that surface selected.</span>
+                    <span className="inline-flex items-center gap-1.5">Picking Web or Mobile now turns the other surface off for you, so the saved state always matches what is shown.</span>
                   )}
                 </div>
               </div>
@@ -1001,6 +1133,37 @@ export default function AccessManager() {
                 </div>
                 <p className="text-[10px] text-[var(--text-muted)]">Preview reflects View access. Only base-module View is enforced today.</p>
               </div>
+
+              {/* Saved access summary (role mode): what is really stored right now */}
+              {mode === 'role' && (
+                <div className="card mt-4 space-y-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <h3 className="text-sm font-semibold text-[var(--text-primary)] inline-flex items-center gap-1.5">
+                      <ShieldCheck size={15} className="text-[var(--brand-bright)]" /> Saved for this role
+                    </h3>
+                    <span className="text-[10px] uppercase tracking-wider text-[var(--text-muted)]">In database</span>
+                  </div>
+                  <p className="text-[11px] text-[var(--text-muted)]">
+                    The surface actually stored for {selectedRole} now (not your unsaved edits).
+                  </p>
+                  <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
+                    <span className="inline-flex items-center gap-1 text-[var(--text-secondary)]"><Monitor size={12} className="text-[var(--brand-bright)]" /> Web {savedSummary.counts.web}</span>
+                    <span className="inline-flex items-center gap-1 text-[var(--text-secondary)]"><Smartphone size={12} className="text-[var(--brand-bright)]" /> Mobile {savedSummary.counts.mobile}</span>
+                    <span className="inline-flex items-center gap-1 text-[var(--text-secondary)]"><Layers size={12} className="text-[var(--brand-bright)]" /> Both {savedSummary.counts.both}</span>
+                  </div>
+                  <div className="max-h-[36vh] overflow-y-auto pr-1 space-y-1">
+                    {savedSummary.items.length === 0 ? (
+                      <p className="text-xs text-[var(--text-muted)] py-3 text-center">No modules enabled for this role.</p>
+                    ) : savedSummary.items.map((it) => (
+                      <div key={it.key} className="flex items-center gap-2 text-xs">
+                        <Check size={12} className="text-green-400 shrink-0" />
+                        <span className="truncate flex-1 text-[var(--text-secondary)]">{it.label}</span>
+                        <SurfaceBadge surface={it.surface} />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -1147,5 +1310,20 @@ function Stat({ label, value, tint }) {
       <p className="text-[10px] uppercase tracking-wider text-[var(--text-muted)] leading-tight">{label}</p>
       <p className={`text-base font-bold ${tint}`}>{value}</p>
     </div>
+  )
+}
+
+// Small Web / Mobile / Both surface badge (saved-access summary).
+function SurfaceBadge({ surface }) {
+  const meta = surface === 'mobile'
+    ? { Icon: Smartphone, label: 'Mobile' }
+    : surface === 'both'
+      ? { Icon: Layers, label: 'Both' }
+      : { Icon: Monitor, label: 'Web' }
+  const { Icon, label } = meta
+  return (
+    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-medium border border-[var(--input-border)] bg-[var(--input-bg)]/60 text-[var(--text-secondary)] shrink-0">
+      <Icon size={10} className="text-[var(--brand-bright)]" /> {label}
+    </span>
   )
 }

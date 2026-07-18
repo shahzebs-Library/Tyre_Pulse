@@ -211,6 +211,84 @@ export function grantKeysForScope(moduleKey, scope) {
   return [moduleKey] // 'web' (default)
 }
 
+// ── Authoritative role surface writes (web / mobile enabled per surface) ──────
+//
+// The ROLE-mode reliability contract: the persisted `module_permissions` rows must
+// ALWAYS match the shown surface, with no lingering enabled surface. `web` scope =
+// web ON, mobile OFF; `mobile` = web OFF, mobile ON; `both` = both ON; a module
+// turned OFF = both surfaces OFF. Web enforcement reads the plain key and Mobile
+// reads the `mobile:` key, both PER-KEY, so an absent row falls back to that
+// surface's role default. To turn a surface OFF authoritatively we must therefore
+// WRITE an explicit `enabled=false` on that surface, not merely stop targeting it.
+
+/**
+ * The per-surface enabled values for a module's shown (enabled, scope). This is
+ * the single definition of what "web / mobile / both / off" mean on the two
+ * surfaces, reused by the change planner below and by the UI/tests.
+ *
+ *   off             -> { web:false, mobile:false }
+ *   on + 'web'      -> { web:true,  mobile:false }
+ *   on + 'mobile'   -> { web:false, mobile:true  }
+ *   on + 'both'     -> { web:true,  mobile:true  }
+ *
+ * @param {boolean} enabled  the module's shown ON/OFF
+ * @param {('web'|'mobile'|'both')} scope
+ * @returns {{ web: boolean, mobile: boolean }}
+ */
+export function surfaceScopeValues(enabled, scope) {
+  if (!enabled) return { web: false, mobile: false }
+  if (scope === 'mobile') return { web: false, mobile: true }
+  if (scope === 'both') return { web: true, mobile: true }
+  return { web: true, mobile: false } // 'web' (default)
+}
+
+/**
+ * Plan the AUTHORITATIVE `module_permissions` row writes for a ROLE draft so the
+ * saved state exactly matches what is shown, with no stale surface left enabled.
+ *
+ * A key is only reconciled when the operator actually CHANGED it (its shown
+ * enabled or its scope differs from the persisted baseline) so untouched modules
+ * never generate phantom writes. For a changed key, each surface (plain = web,
+ * `mobile:` = mobile) is written to its desired value whenever the stored row
+ * differs OR is absent (absent means the surface currently resolves to its role
+ * default, which we override explicitly to make the scope authoritative). Admin
+ * is always full access, so its changes are ignored.
+ *
+ * @param {object}  params
+ * @param {string}  params.role
+ * @param {Record<string,boolean>} params.draftView       shown ON/OFF per node key
+ * @param {Record<string,string>}  params.scopeDraft      shown scope per node key
+ * @param {Record<string,boolean>} params.baselineView    persisted ON/OFF per node key
+ * @param {Record<string,string>}  params.scopeBaseline   persisted scope per node key
+ * @param {Record<string,boolean>} params.roleRows        the role's stored { key: enabled }
+ * @returns {{ role:string, module_key:string, enabled:boolean, nodeKey:string }[]}
+ */
+export function computeRoleViewChanges({
+  role, draftView, scopeDraft, baselineView, scopeBaseline, roleRows,
+}) {
+  if (role === 'Admin') return []
+  const DEF = 'web'
+  const changes = []
+  for (const key of Object.keys(draftView || {})) {
+    const bView = baselineView?.[key] === true
+    const bScope = scopeBaseline?.[key] || DEF
+    const dView = draftView[key] === true
+    const dScope = scopeDraft?.[key] || DEF
+    if (dView === bView && dScope === bScope) continue // untouched: no phantom writes
+    const want = surfaceScopeValues(dView, dScope)
+    const targets = [
+      { sk: key, on: want.web },
+      { sk: mobileGrantKey(key), on: want.mobile },
+    ]
+    for (const { sk, on } of targets) {
+      const exists = !!roleRows && Object.prototype.hasOwnProperty.call(roleRows, sk)
+      const current = exists ? roleRows[sk] === true : null // null = no row (falls to default)
+      if (current !== on) changes.push({ role, module_key: sk, enabled: on, nodeKey: key })
+    }
+  }
+  return changes
+}
+
 /**
  * Set/upsert an access grant for a user across a SURFACE SCOPE (web | mobile |
  * both). Thin scope-aware wrapper over `setUserAccessGrant`: it writes the same

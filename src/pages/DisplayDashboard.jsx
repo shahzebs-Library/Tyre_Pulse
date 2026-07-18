@@ -31,7 +31,6 @@ import { safeImageSrc } from '../lib/safeUrl'
 import { useTenant } from '../contexts/TenantContext'
 import { severityColor, normalizeSeverity } from '../lib/severity'
 import { canonSeverity, canonStatus } from '../lib/accidentVocab'
-import Gauge from '../components/ui/Gauge'
 import StatTile from '../components/ui/StatTile'
 import {
   computeFleetAvailability, groupVehiclesBySite, computeTyreAttention,
@@ -42,6 +41,11 @@ import {
 } from '../lib/displayBoard'
 import { loadPmDashboard } from '../lib/api/pmPrograms'
 import { summarizePmCompliance } from '../lib/pmSchedule'
+import EChart from '../components/charts/EChart'
+import {
+  donutOption, hBarOption, vBarOption, gaugeOption,
+  tyreRiskItems, inspectionStatusItems, alertSeverityItems, countBy,
+} from '../lib/displayCharts'
 
 const REFRESH_SECS = 60
 const ROTATE_SECS  = 30
@@ -205,33 +209,6 @@ function pmDueLabel(item) {
   return 'Due date not set'
 }
 
-function SiteBars({ sites, total }) {
-  if (!sites.length) return <p className="text-slate-600 text-sm py-4 text-center">No vehicles recorded</p>
-  const max = Math.max(...sites.map(s => s.count), 1)
-  return (
-    <div className="space-y-3.5">
-      {sites.map(s => (
-        <div key={s.site}>
-          <div className="flex items-center justify-between mb-1.5">
-            <span className="text-slate-200 text-lg font-semibold truncate mr-3">{s.site}</span>
-            <span className="text-slate-400 text-lg font-bold tabular-nums flex-shrink-0">
-              {s.count}
-              <span className="text-slate-600 text-sm font-medium ml-1.5">
-                {total ? Math.round((s.count / total) * 100) : 0}%
-              </span>
-            </span>
-          </div>
-          <div className="h-2.5 bg-slate-800/80 rounded-full overflow-hidden">
-            <div
-              className="h-full rounded-full bg-gradient-to-r from-emerald-600 to-emerald-400 transition-all duration-700"
-              style={{ width: `${(s.count / max) * 100}%` }}
-            />
-          </div>
-        </div>
-      ))}
-    </div>
-  )
-}
 
 // ── Main component ────────────────────────────────────────────────────────────
 
@@ -594,6 +571,26 @@ export default function DisplayDashboard() {
     [pm.rows, dayRef],
   )
 
+  // ── Chart data (ECharts) derived from the same slices, so a wall display gets
+  //    a report-grade visual view alongside the number tiles. All honest: empty
+  //    arrays yield an empty state, never a fabricated chart.
+  const ACC_SEV_COLOR = { Major: '#ef4444', Moderate: '#f97316', Minor: '#eab308' }
+  const accSeverityItems = useMemo(() => (
+    countBy(incidents.rows, (a) => canonSeverity(a.severity) || 'Unclassified')
+      .map((it) => ({ ...it, color: ACC_SEV_COLOR[it.label] || '#64748b' }))
+  ), [incidents.rows])
+  const accSiteItems = useMemo(
+    () => countBy(incidents.rows, (a) => a.site, { top: 7, fallback: 'No site' }),
+    [incidents.rows],
+  )
+  const siteChartItems = useMemo(
+    () => (siteGroups || []).map((s) => ({ label: s.site, value: s.count })),
+    [siteGroups],
+  )
+  const tyreRisk = useMemo(() => tyreRiskItems(attention), [attention])
+  const inspStatus = useMemo(() => inspectionStatusItems(todayInsp), [todayInsp])
+  const alertSevItems = useMemo(() => alertSeverityItems(alertSummary.bySeverity), [alertSummary.bySeverity])
+
   // ── "Today" live executive tiles (honest date-scoped counts from the same
   //    slices the other boards use, so they share the board's auto-refresh). All
   //    date comparisons mirror countTodaysInspections: slice(0,10) === todayStr.
@@ -875,9 +872,12 @@ export default function DisplayDashboard() {
             <div className="col-span-12 xl:col-span-4">
               <Panel title="Fleet Availability" icon={GaugeIcon} className="h-full items-stretch">
                 <SliceGuard slice={fleet} lines={4}>
-                  <div className="flex flex-col items-center justify-center h-full gap-4">
-                    <Gauge value={availability.pct} max={100} unit="%" size={260} label="Available" />
-                    <p className="text-slate-400 text-lg">
+                  <div className="flex flex-col h-full">
+                    <div className="flex-1 min-h-[200px]">
+                      <EChart option={gaugeOption(availability.pct, { label: 'Available' })}
+                        ariaLabel="Fleet availability" style={{ height: '100%', width: '100%' }} />
+                    </div>
+                    <p className="text-slate-400 text-lg text-center">
                       <span className="text-white font-bold tabular-nums">{availability.available}</span>
                       {' of '}
                       <span className="text-white font-bold tabular-nums">{availability.total}</span>
@@ -906,7 +906,14 @@ export default function DisplayDashboard() {
             <div className="col-span-12 xl:col-span-4">
               <Panel title="Vehicles by Site" icon={MapPin} className="h-full">
                 <SliceGuard slice={fleet} lines={5}>
-                  <SiteBars sites={siteGroups} total={availability.total} />
+                  {siteChartItems.length ? (
+                    <div className="h-full min-h-[220px]">
+                      <EChart option={hBarOption(siteChartItems)} ariaLabel="Vehicles by site"
+                        style={{ height: '100%', width: '100%' }} />
+                    </div>
+                  ) : (
+                    <BoardEmpty icon={MapPin} label="No vehicles recorded" />
+                  )}
                 </SliceGuard>
               </Panel>
             </div>
@@ -953,38 +960,51 @@ export default function DisplayDashboard() {
               </SliceGuard>
             </div>
 
-            <div className="col-span-12 xl:col-span-6">
+            <div className="col-span-12 xl:col-span-4">
               <Panel title="Pressure Compliance" icon={ShieldCheck} className="h-full">
                 <SliceGuard slice={inspections} lines={4}>
-                  <div className="flex flex-col items-center justify-center h-full gap-4">
-                    <Gauge value={compliance.pct} max={100} unit="%" size={240} label="Compliant Inspections" />
-                    <p className="text-slate-400 text-lg">
+                  <div className="flex flex-col h-full">
+                    <div className="flex-1 min-h-[200px]">
+                      <EChart option={gaugeOption(compliance.pct, { label: 'Compliant' })}
+                        ariaLabel="Pressure compliance" style={{ height: '100%', width: '100%' }} />
+                    </div>
+                    <p className="text-slate-400 text-base text-center">
                       <span className="text-white font-bold tabular-nums">{compliance.compliant}</span>
                       {' of '}
                       <span className="text-white font-bold tabular-nums">{compliance.total}</span>
-                      {' inspections compliant (90 days)'}
+                      {' compliant (90 days)'}
                     </p>
                   </div>
                 </SliceGuard>
               </Panel>
             </div>
 
-            <div className="col-span-12 xl:col-span-6">
-              <Panel title="Today's Inspection Programme" icon={ClipboardList} className="h-full">
+            <div className="col-span-12 xl:col-span-4">
+              <Panel title="Tyre Risk Composition" icon={CircleDot} className="h-full">
+                <SliceGuard slice={tyres} lines={4}>
+                  {tyreRisk.length ? (
+                    <div className="h-full min-h-[220px]">
+                      <EChart option={donutOption(tyreRisk)} ariaLabel="Tyre risk composition"
+                        style={{ height: '100%', width: '100%' }} />
+                    </div>
+                  ) : (
+                    <BoardEmpty icon={CircleDot} label="No tyres in service" />
+                  )}
+                </SliceGuard>
+              </Panel>
+            </div>
+
+            <div className="col-span-12 xl:col-span-4">
+              <Panel title="Today's Inspections" icon={ClipboardList} className="h-full">
                 <SliceGuard slice={inspections} lines={4}>
-                  <div className="grid grid-cols-2 gap-4 h-full content-center">
-                    {[
-                      { label: 'Scheduled', value: todayInsp.total,   color: '#38bdf8' },
-                      { label: 'Completed', value: todayInsp.done,    color: '#22c55e' },
-                      { label: 'Pending',   value: todayInsp.pending, color: '#eab308' },
-                      { label: 'Overdue',   value: todayInsp.overdue, color: todayInsp.overdue > 0 ? '#ef4444' : '#22c55e' },
-                    ].map(s => (
-                      <div key={s.label} className="bg-slate-900/60 border border-slate-800/60 rounded-xl p-5 text-center">
-                        <p className="text-4xl font-bold tabular-nums" style={{ color: s.color }}>{s.value}</p>
-                        <p className="text-slate-500 text-sm font-semibold uppercase tracking-wider mt-2">{s.label}</p>
-                      </div>
-                    ))}
-                  </div>
+                  {todayInsp.total > 0 ? (
+                    <div className="h-full min-h-[220px]">
+                      <EChart option={donutOption(inspStatus)} ariaLabel="Today's inspection status"
+                        style={{ height: '100%', width: '100%' }} />
+                    </div>
+                  ) : (
+                    <BoardEmpty icon={ClipboardList} label="No inspections scheduled today" />
+                  )}
                 </SliceGuard>
               </Panel>
             </div>
@@ -1118,7 +1138,34 @@ export default function DisplayDashboard() {
               </SliceGuard>
             </div>
 
-            <div className="col-span-12">
+            <div className="col-span-12 xl:col-span-5 grid grid-rows-2 gap-6">
+              <Panel title="Accidents by Severity" icon={AlertTriangle} className="h-full">
+                <SliceGuard slice={incidents} lines={4}>
+                  {accSeverityItems.length ? (
+                    <div className="h-full min-h-[180px]">
+                      <EChart option={donutOption(accSeverityItems)} ariaLabel="Accidents by severity"
+                        style={{ height: '100%', width: '100%' }} />
+                    </div>
+                  ) : (
+                    <BoardEmpty icon={ShieldCheck} label="No incidents recorded" />
+                  )}
+                </SliceGuard>
+              </Panel>
+              <Panel title="Incidents by Site" icon={MapPin} className="h-full">
+                <SliceGuard slice={incidents} lines={4}>
+                  {accSiteItems.length ? (
+                    <div className="h-full min-h-[180px]">
+                      <EChart option={vBarOption(accSiteItems)} ariaLabel="Incidents by site"
+                        style={{ height: '100%', width: '100%' }} />
+                    </div>
+                  ) : (
+                    <BoardEmpty icon={ShieldCheck} label="No incidents recorded" />
+                  )}
+                </SliceGuard>
+              </Panel>
+            </div>
+
+            <div className="col-span-12 xl:col-span-7">
               <Panel title="Latest Incidents" icon={Car} className="h-full">
                 <SliceGuard slice={incidents} lines={6}>
                   {accBoard.list.length === 0 ? (
@@ -1288,7 +1335,21 @@ export default function DisplayDashboard() {
         {/* ── (h) Alerts & Compliance ── */}
         {board.key === 'alerts' && (
           <div className="grid grid-cols-12 gap-6 h-full">
-            <div className="col-span-12 grid grid-cols-2 xl:grid-cols-5 gap-6">
+            <div className="col-span-12 xl:col-span-4">
+              <Panel title="Alerts by Severity" icon={Bell} className="h-full">
+                <SliceGuard slice={alerts} lines={4}>
+                  {alertSummary.total > 0 ? (
+                    <div className="h-full min-h-[200px]">
+                      <EChart option={donutOption(alertSevItems)} ariaLabel="Alerts by severity"
+                        style={{ height: '100%', width: '100%' }} />
+                    </div>
+                  ) : (
+                    <BoardEmpty icon={ShieldCheck} label="No active alerts" />
+                  )}
+                </SliceGuard>
+              </Panel>
+            </div>
+            <div className="col-span-12 xl:col-span-8 grid grid-cols-2 xl:grid-cols-5 gap-6 content-start">
               {['Critical', 'High', 'Medium', 'Low', 'Info'].map(sev => (
                 <SliceGuard key={sev} slice={alerts} lines={2}>
                   <BigStat

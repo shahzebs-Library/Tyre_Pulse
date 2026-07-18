@@ -982,6 +982,8 @@ export default function ReportShare() {
             <CustomBoard board={activeBoard} snapshot={snapshot} />
           ) : (
             <>
+              {activeKey === 'exec_summary' && <ExecutiveSummaryPage snapshot={snapshot} />}
+              {activeKey === 'cost_claims' && <CostClaimsPage snapshot={snapshot} />}
               {activeKey === 'board_kpis' && <KpisPage snapshot={snapshot} />}
               {activeKey === 'fleet_overview' && <FleetOverviewPage snapshot={snapshot} />}
               {activeKey === 'board_trends' && <TrendsPage snapshot={snapshot} />}
@@ -995,6 +997,85 @@ export default function ReportShare() {
           )}
         </div>
       </main>
+    </div>
+  )
+}
+
+// ── Page: Executive Summary (dense one-screen board room view) ────────────────
+// Combines the headline KPI strip, the spend-vs-accidents trend, and a gauge +
+// severity row, so a single rotating page reads like a whole executive report.
+// Reuses the existing snapshot channels and chart builders (no new data).
+function ExecutiveSummaryPage({ snapshot }) {
+  const kpis = snapshot?.kpis || {}
+  const labels = arr(snapshot?.labels)
+  const spend = arr(snapshot?.trends?.tyre_spend)
+  const accidents = arr(snapshot?.trends?.accidents)
+  const severity = arr(snapshot?.breakdowns?.severity)
+  const comboEmpty = !labels.length || (!someNonZero(spend) && !someNonZero(accidents))
+  const openShare = pct(kpis.open_accidents, kpis.accidents)
+  const recoveryRate = pct(kpis.claims_recovered, kpis.claims_claimed)
+  return (
+    <div className="rs-page">
+      <TileStrip snapshot={snapshot} keys={['fleet', 'tyre_spend', 'accidents', 'claims_recovered', 'work_orders_open']} />
+      <ChartCard
+        wide
+        title="Tyre spend and accidents"
+        subtitle="Monthly tyre spend (bars, left axis) against accident count (line, right axis)"
+        icon={TrendingUp}
+        empty={comboEmpty}
+        height="34vh"
+      >
+        <EChart option={comboOption(labels, spend, accidents)} ariaLabel="Tyre spend and accidents trend" />
+      </ChartCard>
+      <div className="rs-page-row rs-row-3">
+        <ChartCard title="Claim recovery rate" subtitle="Recovered value against claimed value" icon={Percent} height="27vh">
+          <EChart option={gaugeOption(recoveryRate, 'Recovered', 1)} ariaLabel="Claim recovery rate gauge" />
+        </ChartCard>
+        <ChartCard title="Open accident share" subtitle="Open accidents as a share of the 12-month total" icon={Percent} height="27vh">
+          <EChart option={gaugeOption(openShare, 'Open share', 3)} ariaLabel="Open accident share gauge" />
+        </ChartCard>
+        <ChartCard title="Accidents by severity" subtitle="Share of incidents by severity band" icon={PieChart} empty={!severity.length} height="27vh">
+          <EChart option={doughnutOption(severity)} ariaLabel="Accidents by severity" />
+        </ChartCard>
+      </div>
+    </div>
+  )
+}
+
+// ── Page: Cost & Claims (finance board) ───────────────────────────────────────
+// Spend and claims on one screen: the money KPI strip, the claimed-vs-recovered
+// trend, and a recovery gauge + claim-status mix. Distinct from Spend Trend
+// (spend only) and Claims Desk (claims only) - this pairs cost with recovery.
+function CostClaimsPage({ snapshot }) {
+  const kpis = snapshot?.kpis || {}
+  const labels = arr(snapshot?.labels)
+  const claimed = arr(snapshot?.trends?.claims_claimed)
+  const recovered = arr(snapshot?.trends?.claims_recovered)
+  const spend = arr(snapshot?.trends?.tyre_spend)
+  const accidents = arr(snapshot?.trends?.accidents)
+  const claimStatus = arr(snapshot?.breakdowns?.claim_status)
+  const claimsEmpty = !labels.length || (!someNonZero(claimed) && !someNonZero(recovered))
+  const spendEmpty = !labels.length || (!someNonZero(spend) && !someNonZero(accidents))
+  const recoveryRate = pct(kpis.claims_recovered, kpis.claims_claimed)
+  return (
+    <div className="rs-page">
+      <TileStrip snapshot={snapshot} keys={['tyre_spend', 'claims_claimed', 'claims_recovered', 'accidents']} />
+      <div className="rs-page-row">
+        <ChartCard title="Claimed vs recovered" subtitle="Monthly claimed value against recovered value" icon={Activity} empty={claimsEmpty} height="34vh">
+          <EChart option={claimsOption(labels, claimed, recovered)} ariaLabel="Claims claimed versus recovered" />
+        </ChartCard>
+        <ChartCard title="Tyre spend and accidents" subtitle="Monthly tyre spend against accident count" icon={TrendingUp} empty={spendEmpty} height="34vh">
+          <EChart option={comboOption(labels, spend, accidents)} ariaLabel="Tyre spend and accidents trend" />
+        </ChartCard>
+      </div>
+      <div className="rs-page-row rs-row-3">
+        <ChartCard title="Recovery rate" subtitle="Recovered value against claimed value" icon={Percent} height="26vh">
+          <EChart option={gaugeOption(recoveryRate, 'Recovered', 1)} ariaLabel="Claim recovery rate gauge" />
+        </ChartCard>
+        <ChartCard title="Claims by status" subtitle="Open and closed claim volume" icon={BarChart3} empty={!claimStatus.length} height="26vh">
+          <EChart option={hbarOption(claimStatus)} ariaLabel="Claims by status" />
+        </ChartCard>
+      </div>
     </div>
   )
 }

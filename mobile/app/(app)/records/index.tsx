@@ -14,6 +14,7 @@ import {
   Modal, ScrollView,
 } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useAuth } from '../../../contexts/AuthContext'
 import { useLanguage } from '../../../contexts/LanguageContext'
 import { useTheme } from '../../../contexts/ThemeContext'
@@ -61,6 +62,7 @@ export default function RecordsScreen() {
   const { profile } = useAuth()
   const { t } = useLanguage()
   const { theme } = useTheme()
+  const insets = useSafeAreaInsets()
   const c = theme.color
   const role = profile?.role ?? null
   const elevated = isAdminOrAbove(role)
@@ -301,7 +303,7 @@ export default function RecordsScreen() {
       {/* Filter sheet */}
       <Modal visible={showFilters} transparent animationType="slide" onRequestClose={() => setShowFilters(false)}>
         <View style={[styles.sheetBackdrop, { backgroundColor: c.overlay }]}>
-          <View style={[styles.sheet, { backgroundColor: c.surface }]}>
+          <View style={[styles.sheet, { backgroundColor: c.surface, paddingBottom: Math.max(insets.bottom, 24) }]}>
             <View style={[styles.sheetHandle, { backgroundColor: c.borderStrong }]} />
             <AppText variant="h3">{t('modules.records.filterTitle')}</AppText>
 
@@ -365,7 +367,7 @@ export default function RecordsScreen() {
       {detail && (
         <Modal visible animationType="slide" transparent onRequestClose={() => setDetail(null)}>
           <View style={[styles.sheetBackdrop, { backgroundColor: c.overlay }]}>
-            <View style={[styles.sheet, { backgroundColor: c.surface, maxHeight: '85%' }]}>
+            <View style={[styles.sheet, { backgroundColor: c.surface, maxHeight: '85%', paddingBottom: Math.max(insets.bottom, 24) }]}>
               <View style={[styles.sheetHandle, { backgroundColor: c.borderStrong }]} />
               <View style={styles.detailHeader}>
                 <View style={{ flex: 1 }}>

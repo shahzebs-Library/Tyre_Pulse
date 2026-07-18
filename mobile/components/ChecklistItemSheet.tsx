@@ -19,6 +19,7 @@ import {
   ScrollView, KeyboardAvoidingView, Platform, Pressable,
 } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useTheme } from '../contexts/ThemeContext'
 import { Theme, spacing, radius, typography } from '../lib/theme'
 import PhotoCapture from './PhotoCapture'
@@ -73,11 +74,59 @@ interface Props {
   onClose: () => void
 }
 
+type ToneColors = { fg: string; bg: string; border: string }
+
+function toneColorFor(c: Theme['color'], tone: Tone): ToneColors {
+  switch (tone) {
+    case 'pass': return { fg: c.success.on, bg: c.success.soft, border: c.success.base }
+    case 'fail': return { fg: c.danger.on, bg: c.danger.soft, border: c.danger.base }
+    case 'na': return { fg: c.neutral.on, bg: c.neutral.soft, border: c.neutral.base }
+    default: return { fg: c.info.on, bg: c.info.soft, border: c.info.base }
+  }
+}
+
+// Big square-ish option button used by select / multiselect / boolean.
+// Module-level on purpose: components declared inside a render body get a new
+// identity every render, which remounts their subtree on each keystroke
+// (focus loss + keyboard flicker). Never move this back inside the sheet.
+function OptionButton({
+  label, active, tone, onPress, styles, c,
+}: {
+  label: string; active: boolean; tone: Tone; onPress: () => void
+  styles: ReturnType<typeof makeStyles>; c: Theme['color']
+}) {
+  const t = toneColorFor(c, tone)
+  return (
+    <TouchableOpacity
+      style={[
+        styles.optBtn,
+        { borderColor: c.border },
+        active && { backgroundColor: t.bg, borderColor: t.border },
+      ]}
+      onPress={onPress}
+      activeOpacity={0.8}
+    >
+      <Ionicons
+        name={toneIcon(tone)}
+        size={30}
+        color={active ? t.border : c.textMuted}
+      />
+      <Text
+        style={[styles.optLabel, active && { color: t.fg }]}
+        numberOfLines={2}
+      >
+        {label}
+      </Text>
+    </TouchableOpacity>
+  )
+}
+
 export default function ChecklistItemSheet({
   visible, field, value, photos, printedName, signatureData, country, error,
   onChange, onPhotos, onPrintedName, onSignature, onClose,
 }: Props) {
   const { theme } = useTheme()
+  const insets = useSafeAreaInsets()
   const styles = useMemo(() => makeStyles(theme), [theme])
   const c = theme.color
 
@@ -85,46 +134,10 @@ export default function ChecklistItemSheet({
     return <Modal visible={false} transparent animationType="slide" onRequestClose={onClose} />
   }
 
-  const toneColor = (tone: Tone): { fg: string; bg: string; border: string } => {
-    switch (tone) {
-      case 'pass': return { fg: c.success.on, bg: c.success.soft, border: c.success.base }
-      case 'fail': return { fg: c.danger.on, bg: c.danger.soft, border: c.danger.base }
-      case 'na': return { fg: c.neutral.on, bg: c.neutral.soft, border: c.neutral.base }
-      default: return { fg: c.info.on, bg: c.info.soft, border: c.info.base }
-    }
-  }
-
-  // Big square-ish option button used by select / multiselect / boolean.
-  function OptionButton({
-    label, active, tone, onPress,
-  }: { label: string; active: boolean; tone: Tone; onPress: () => void }) {
-    const t = toneColor(tone)
-    return (
-      <TouchableOpacity
-        style={[
-          styles.optBtn,
-          { borderColor: c.border },
-          active && { backgroundColor: t.bg, borderColor: t.border },
-        ]}
-        onPress={onPress}
-        activeOpacity={0.8}
-      >
-        <Ionicons
-          name={toneIcon(tone)}
-          size={30}
-          color={active ? t.border : c.textMuted}
-        />
-        <Text
-          style={[styles.optLabel, active && { color: t.fg }]}
-          numberOfLines={2}
-        >
-          {label}
-        </Text>
-      </TouchableOpacity>
-    )
-  }
-
-  function Body() {
+  // Plain render FUNCTION (called as renderBody(), never as <Body />): a JSX
+  // component defined here would remount on every parent render, dropping
+  // TextInput focus on each keystroke and making the keyboard blink.
+  const renderBody = () => {
     const f = field!
 
     // Reference (asset / site / user) — live searchable picker.
@@ -179,6 +192,8 @@ export default function ChecklistItemSheet({
                 tone={o.tone}
                 active={value === o.val}
                 onPress={() => onChange(value === o.val ? null : o.val)}
+                styles={styles}
+                c={c}
               />
             ))}
           </View>
@@ -196,6 +211,8 @@ export default function ChecklistItemSheet({
                 tone={optionTone(opt)}
                 active={value === opt}
                 onPress={() => onChange(value === opt ? '' : opt)}
+                styles={styles}
+                c={c}
               />
             ))}
           </View>
@@ -216,6 +233,8 @@ export default function ChecklistItemSheet({
                   tone={optionTone(opt)}
                   active={active}
                   onPress={() => onChange(active ? arr.filter(v => v !== opt) : [...arr, opt])}
+                  styles={styles}
+                  c={c}
                 />
               )
             })}
@@ -310,7 +329,7 @@ export default function ChecklistItemSheet({
         style={styles.sheetWrap}
         pointerEvents="box-none"
       >
-        <View style={styles.sheet}>
+        <View style={[styles.sheet, { paddingBottom: Math.max(insets.bottom, spacing.xl) }]}>
           <View style={styles.handle} />
 
           <View style={styles.header}>
@@ -344,7 +363,7 @@ export default function ChecklistItemSheet({
                 </View>
               </View>
             ) : (
-              <Body />
+              renderBody()
             )}
 
             {/* Inline photo attach for any non-photo item flagged allow_photo. */}

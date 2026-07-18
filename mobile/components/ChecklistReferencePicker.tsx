@@ -16,6 +16,7 @@ import {
   FlatList, StyleSheet, ActivityIndicator, Platform,
 } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import type { ReferenceSource } from '../lib/checklistFields'
 import { listReferenceOptions } from '../lib/checklists'
 import { toUserMessage } from '../lib/safeError'
@@ -38,6 +39,7 @@ export default function ChecklistReferencePicker({
   source, value, onChange, country, placeholder,
 }: Props) {
   const meta = SOURCE_META[source] ?? SOURCE_META.asset
+  const insets = useSafeAreaInsets()
 
   const [open, setOpen] = useState(false)
   const [search, setSearch] = useState('')
@@ -123,7 +125,7 @@ export default function ChecklistReferencePicker({
         statusBarTranslucent
       >
         <Pressable style={styles.backdrop} onPress={handleClose} />
-        <View style={styles.sheet}>
+        <View style={[styles.sheet, { paddingBottom: Math.max(insets.bottom, 16) }]}>
           <View style={styles.handle} />
 
           <View style={styles.header}>

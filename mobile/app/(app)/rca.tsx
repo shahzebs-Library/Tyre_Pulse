@@ -4,6 +4,7 @@ import {
   RefreshControl, ScrollView, KeyboardAvoidingView, Platform, Alert, ActivityIndicator,
 } from 'react-native'
 import { useRouter, useLocalSearchParams } from 'expo-router'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons'
 import { supabase } from '../../lib/supabase'
 import { saveCommand } from '../../lib/recordQueue'
@@ -39,6 +40,7 @@ export default function RcaScreen() {
   const { profile } = useAuth()
   const { t, isRTL } = useLanguage()
   const { theme } = useTheme()
+  const insets = useSafeAreaInsets()
   const router = useRouter()
   const styles = useMemo(() => makeStyles(theme), [theme])
   const c = theme.color
@@ -158,7 +160,7 @@ export default function RcaScreen() {
 
       <Modal visible={showForm} animationType="slide" transparent onRequestClose={() => setShowForm(false)}>
         <KeyboardAvoidingView style={styles.modalWrap} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-          <View style={styles.sheet}>
+          <View style={[styles.sheet, { paddingBottom: Math.max(insets.bottom, spacing.lg) }]}>
             <View style={[styles.sheetHead, isRTL && styles.rowR]}>
               <AppText variant="h3">{t('modules.rca.new')}</AppText>
               <TouchableOpacity onPress={() => setShowForm(false)}><Ionicons name="close" size={24} color={c.textSecondary} /></TouchableOpacity>

@@ -12,6 +12,7 @@ import {
   KeyboardAvoidingView, Platform, Pressable,
 } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { TyrePositionData } from '../lib/types'
 import { CONDITION_META } from '../lib/tyreConditions'
 import { useLanguage } from '../contexts/LanguageContext'
@@ -31,6 +32,7 @@ interface Props {
 export default function TyreDetailModal({ visible, position, data, onChange, onClose }: Props) {
   const { t, isRTL } = useLanguage()
   const { theme } = useTheme()
+  const insets = useSafeAreaInsets()
   const styles = useMemo(() => makeStyles(theme), [theme])
 
   if (!position || !data) {
@@ -52,7 +54,9 @@ export default function TyreDetailModal({ visible, position, data, onChange, onC
         style={styles.sheetWrap}
         pointerEvents="box-none"
       >
-        <View style={styles.sheet}>
+        {/* Bottom padding tracks the safe-area inset so the Done button clears
+            the Android system navigation bar / iOS home indicator. */}
+        <View style={[styles.sheet, { paddingBottom: Math.max(insets.bottom, spacing.xl) }]}>
           {/* Grab handle */}
           <View style={styles.handle} />
 

@@ -13,7 +13,7 @@ import {
   RefreshControl, StatusBar, ActivityIndicator, TextInput,
   Alert, Modal, ScrollView,
 } from 'react-native'
-import { SafeAreaView } from 'react-native-safe-area-context'
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons'
 import { useAuth } from '../../../contexts/AuthContext'
 import { useLanguage } from '../../../contexts/LanguageContext'
@@ -64,6 +64,7 @@ const STATUS_LABEL_KEY: Record<string, string> = {
 export default function WorkOrdersScreen() {
   const { profile } = useAuth()
   const { t } = useLanguage()
+  const insets = useSafeAreaInsets()
   const statusLabel = (s: string) => (STATUS_LABEL_KEY[s] ? t(STATUS_LABEL_KEY[s]) : s)
   const priorityLabel = (p: string | null) => (p ? t(`modules.priority.${p}`) : '')
   const role     = profile?.role ?? null
@@ -238,7 +239,7 @@ export default function WorkOrdersScreen() {
       {detail && (
         <Modal visible animationType="slide" transparent onRequestClose={() => setDetail(null)}>
           <View style={styles.sheetBackdrop}>
-            <View style={styles.sheet}>
+            <View style={[styles.sheet, { paddingBottom: Math.max(insets.bottom, 24) }]}>
               <View style={styles.sheetHandle} />
               <ScrollView showsVerticalScrollIndicator={false}>
                 <Text style={styles.detailTitle}>{detail.title}</Text>

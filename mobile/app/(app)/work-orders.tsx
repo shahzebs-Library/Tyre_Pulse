@@ -4,6 +4,7 @@ import {
   RefreshControl, Alert, ScrollView, KeyboardAvoidingView, Platform,
 } from 'react-native'
 import { useRouter } from 'expo-router'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons'
 import { supabase } from '../../lib/supabase'
 import { saveCommand } from '../../lib/recordQueue'
@@ -42,6 +43,7 @@ export default function WorkOrdersScreen() {
   const { profile } = useAuth()
   const { t, isRTL } = useLanguage()
   const { theme } = useTheme()
+  const insets = useSafeAreaInsets()
   const styles = useMemo(() => makeStyles(theme), [theme])
   const router = useRouter()
   const [rows, setRows] = useState<WorkOrder[]>([])
@@ -198,7 +200,7 @@ export default function WorkOrdersScreen() {
       {/* Create modal */}
       <Modal visible={showForm} animationType="slide" transparent onRequestClose={() => setShowForm(false)}>
         <KeyboardAvoidingView style={styles.modalWrap} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-          <View style={styles.sheet}>
+          <View style={[styles.sheet, { paddingBottom: Math.max(insets.bottom, spacing.lg) }]}>
             <View style={[styles.sheetHead, isRTL && styles.rowR]}>
               <AppText variant="h3">{t('modules.workOrders.new')}</AppText>
               <TouchableOpacity onPress={() => setShowForm(false)}><Ionicons name="close" size={24} color={theme.color.textMuted} /></TouchableOpacity>

@@ -831,6 +831,16 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
   just a different key) - switch to sessionStorage if a console-dies-on-tab-close posture is wanted later.
 - Pairs with the AAL gate (still merged): partition stops cross-tab bleed; AAL stops pre-2FA data exposure.
   RULE: never hardcode 'tp_auth' elsewhere; read AUTH_STORAGE_KEY. Build clean; no migration.
+- **HARDENED (2026-07-18, user "no compromise, in depth clear session securities"):** the console session
+  is now TAB-LOCAL - `supabase.js` uses `window.sessionStorage` (not localStorage) when IS_CONSOLE_SURFACE, so
+  a separately-opened console tab's session is NEVER shared with any other tab (not even another console tab,
+  by sessionStorage spec) and is CLEARED on tab close (break-glass posture). `IS_CONSOLE_SURFACE` is now
+  EXPORTED from supabase.js. ConsoleAuthContext adds idle auto-logout (CONSOLE_IDLE_LIMIT_MS 20min) + absolute
+  cap (CONSOLE_ABSOLUTE_LIMIT_MS 8h), GATED on IS_CONSOLE_SURFACE so it only ends the console's OWN isolated
+  session - never the main-app session when the console piggybacks it via the in-app System Console <Link>
+  (same tab). Main app intentionally KEEPS localStorage persistence (field users on phones/shared terminals;
+  RLS + AAL are their boundary). Console session no longer persists across tab close - a super admin logs into
+  a standalone console tab each session (desired). Build clean; no migration.
 
 ### Auth assurance gate - password-only (pre-2FA) sessions no longer expose data (2026-07-18)
 - **BUG (user-reported, real):** the main app + admin `/console` SHARE one Supabase client + one

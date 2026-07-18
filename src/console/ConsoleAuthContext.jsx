@@ -5,8 +5,14 @@
  * Supports TOTP MFA (Supabase built-in AAL2).
  */
 import { createContext, useContext, useEffect, useState } from 'react'
-import { supabase } from '../lib/supabase'
+import { supabase, IS_CONSOLE_SURFACE } from '../lib/supabase'
 import { hasUnmetMfa } from '../lib/authAssurance'
+
+// Break-glass admin console: auto sign out after this much inactivity so a
+// console left open on a shared/unattended machine cannot be walked up to.
+const CONSOLE_IDLE_LIMIT_MS = 20 * 60 * 1000 // 20 minutes
+// Hard ceiling regardless of activity: force re-authentication after this long.
+const CONSOLE_ABSOLUTE_LIMIT_MS = 8 * 60 * 60 * 1000 // 8 hours
 
 const ConsoleAuthContext = createContext(null)
 
@@ -27,6 +33,32 @@ export function ConsoleAuthProvider({ children }) {
     })
     return () => subscription.unsubscribe()
   }, [])
+
+  // Idle + absolute-lifetime auto sign-out for the ISOLATED console session (a
+  // separately-opened console tab on its own tab-local sessionStorage session).
+  // Deliberately skipped when the console piggybacks the main-app session via the
+  // in-app System Console link (same tab, IS_CONSOLE_SURFACE=false) - there a
+  // sign-out would also drop the user's main-app session, which is not ours to end.
+  useEffect(() => {
+    if (!admin || !IS_CONSOLE_SURFACE || typeof window === 'undefined') return
+    const start = Date.now()
+    let last = Date.now()
+    const bump = () => { last = Date.now() }
+    const events = ['mousemove', 'mousedown', 'keydown', 'scroll', 'touchstart']
+    events.forEach((e) => window.addEventListener(e, bump, { passive: true }))
+    const iv = setInterval(() => {
+      const now = Date.now()
+      if (now - last > CONSOLE_IDLE_LIMIT_MS || now - start > CONSOLE_ABSOLUTE_LIMIT_MS) {
+        signOut()
+      }
+    }, 30 * 1000)
+    return () => {
+      events.forEach((e) => window.removeEventListener(e, bump))
+      clearInterval(iv)
+    }
+    // signOut is a stable function declaration within this provider.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [admin])
 
   async function resolveAdmin(userId) {
     const { data } = await supabase

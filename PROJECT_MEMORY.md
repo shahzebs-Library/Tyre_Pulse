@@ -435,6 +435,22 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
 - **STILL BACKLOG:** shareable links for reports currently expose the Board-Overview aggregate set; wiring the
   full Executive/Accident block-builder layouts into the public snapshot is a later extension. Existing V103
   `/display/:token` + getDisplaySnapshot (DisplayShare) remains the separate executive-board token-share.
+- **More fixed pages + Cost-per-unit + Operations Command (2026-07-18, PR #110 + #111):** the ReportShare fixed
+  catalog grew from 9 -> 13 pages, all built from the SAME get_report_snapshot aggregate (add a REPORT_PAGES entry
+  + a page component + a render branch; PAGE_LABEL filter gates the key). PR #110 added **Executive Summary** +
+  **Cost & Claims** (existing snapshot data only). **V279 (applied live)** extended get_report_snapshot with two
+  server-aggregated channels (NO new grant/table): `cost` = unit-aware operating cost (tyre_cost + maintenance_cost
+  [work_orders labour+parts+lubricant+outside_repair EXCLUDING tyre_cost, + pm_service_records.total_cost] =
+  total_cost; running units km/hours = last-minus-first reading per asset from odometer_logs/engine_hours_logs,
+  m3 = sum(production_logs.m3); per-unit cost_per_km/hour/m3 + tyre_cpk are NULL when the denominator is 0 - honest
+  N/A, never faked; 12-month total-cost + m3 trend); and richer `ops.*` (wo_by_status/wo_by_site/wo_by_type/wo_trend
+  [12mo]/pm_compliance [0..100 or null]/wo_heatmap [site x status]). Cost window = p_from/p_to when set else rolling
+  12 months. Two new pages consume them: **Cost per Unit** (`cost_unit`, Trends) and **Operations Command**
+  (`ops_command`, Operations - exec-style: today tiles + WO status doughnut + WO type bar + PM gauge + WO trend +
+  site x status heatmap). New light chart builders costTrendOption/trendLineOption in ReportShare.jsx. VERIFIED live:
+  tyre_cost 1.15M + real monthly trend; km/hours/m3 = 0 for the pilot org (no meter/production logs yet) so per-unit
+  reads N/A until that data lands. INCIDENTAL: added missing `/erp-import` to commandSearch NAV_COMMANDS (a prior
+  ERP-import PR left the coverage test red). Next free migration **V280**.
 
 ### Incident Report screen upgrade (2026-07-16) — from the user's field spec (xlsx)
 - The user's "incident_Report_Screen" spec was a BEHAVIOR upgrade list on the EXISTING accident form

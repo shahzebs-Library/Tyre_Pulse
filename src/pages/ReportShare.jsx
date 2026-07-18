@@ -407,6 +407,61 @@ function heatmapOption(rows) {
   }
 }
 
+// Operating-cost combo: monthly total cost (bars) + production m3 (line, right
+// axis) when any m3 was recorded. Labelled Cost / m3 (unlike the spend combo).
+function costTrendOption(labels, total, m3) {
+  const cCost = colorAt(0)
+  const cM3 = colorAt(6)
+  const hasM3 = Array.isArray(m3) && m3.some((v) => Number(v) > 0)
+  const series = [{
+    name: 'Total cost', type: 'bar', data: total || [], barMaxWidth: 34,
+    itemStyle: { color: cCost, borderRadius: [5, 5, 0, 0] },
+  }]
+  if (hasM3) {
+    series.push({
+      name: 'Production m3', type: 'line', yAxisIndex: 1, data: m3, smooth: true,
+      symbol: 'circle', symbolSize: 7, lineStyle: { width: 3, color: cM3 },
+      itemStyle: { color: cM3 }, areaStyle: { color: withAlpha(cM3, 0.1) },
+    })
+  }
+  return {
+    backgroundColor: 'transparent',
+    tooltip: { ...TOOLTIP, trigger: 'axis', axisPointer: { type: 'shadow' } },
+    legend: { top: 0, textStyle: { color: P.subText, fontSize: 14 }, itemGap: 20 },
+    grid: { left: 10, right: 12, top: 44, bottom: 8, containLabel: true },
+    xAxis: {
+      type: 'category', data: labels,
+      axisLabel: { color: P.muted, fontSize: 13 },
+      axisLine: { lineStyle: { color: P.axisLine } }, axisTick: { show: false },
+    },
+    yAxis: [
+      { type: 'value', name: 'Cost', nameTextStyle: { color: P.muted, fontSize: 12 }, axisLabel: { color: P.muted, fontSize: 12, formatter: (v) => fmtCompact(v) }, splitLine: { lineStyle: { color: P.splitLine } } },
+      { type: 'value', name: 'm3', nameTextStyle: { color: P.muted, fontSize: 12 }, axisLabel: { color: P.muted, fontSize: 12, formatter: (v) => fmtCompact(v) }, splitLine: { show: false } },
+    ],
+    series,
+  }
+}
+
+// Generic single-series trend line (e.g. work orders opened per month).
+function trendLineOption(labels, data, name, idx = 2) {
+  const color = colorAt(idx)
+  return {
+    backgroundColor: 'transparent',
+    tooltip: { ...TOOLTIP, trigger: 'axis', valueFormatter: (v) => fmtInt(v) },
+    grid: { left: 10, right: 14, top: 16, bottom: 8, containLabel: true },
+    xAxis: {
+      type: 'category', data: labels,
+      axisLabel: { color: P.muted, fontSize: 13 },
+      axisLine: { lineStyle: { color: P.axisLine } }, axisTick: { show: false },
+    },
+    yAxis: { type: 'value', minInterval: 1, axisLabel: { color: P.muted, fontSize: 12 }, splitLine: { lineStyle: { color: P.splitLine } } },
+    series: [{
+      name, type: 'line', data: data || [], smooth: true, symbol: 'circle', symbolSize: 7,
+      lineStyle: { width: 3, color }, itemStyle: { color }, areaStyle: { color: withAlpha(color, 0.14) },
+    }],
+  }
+}
+
 // Client-side percentage from a numerator / denominator, null when undefined.
 function pct(num, den) {
   const d = Number(den) || 0
@@ -984,6 +1039,8 @@ export default function ReportShare() {
             <>
               {activeKey === 'exec_summary' && <ExecutiveSummaryPage snapshot={snapshot} />}
               {activeKey === 'cost_claims' && <CostClaimsPage snapshot={snapshot} />}
+              {activeKey === 'cost_unit' && <CostPerUnitPage snapshot={snapshot} />}
+              {activeKey === 'ops_command' && <OpsCommandPage snapshot={snapshot} />}
               {activeKey === 'board_kpis' && <KpisPage snapshot={snapshot} />}
               {activeKey === 'fleet_overview' && <FleetOverviewPage snapshot={snapshot} />}
               {activeKey === 'board_trends' && <TrendsPage snapshot={snapshot} />}
@@ -1074,6 +1131,108 @@ function CostClaimsPage({ snapshot }) {
         </ChartCard>
         <ChartCard title="Claims by status" subtitle="Open and closed claim volume" icon={BarChart3} empty={!claimStatus.length} height="26vh">
           <EChart option={hbarOption(claimStatus)} ariaLabel="Claims by status" />
+        </ChartCard>
+      </div>
+    </div>
+  )
+}
+
+// ── Cost tile (money / per-unit; honest N/A when the value is null) ───────────
+function fmtCost(v, decimals = 0) {
+  if (v == null || !Number.isFinite(Number(v))) return 'N/A'
+  return Number(v).toLocaleString(undefined, { minimumFractionDigits: decimals, maximumFractionDigits: decimals })
+}
+function CostTile({ label, value, decimals = 0, suffix, icon: Icon, tone = 'teal' }) {
+  const has = value != null && Number.isFinite(Number(value))
+  return (
+    <div className={`rs-stat rs-stat-${tone}`}>
+      <div className="rs-stat-head">
+        <span className="rs-stat-label">{label}</span>
+        {Icon && <Icon size={22} className="rs-stat-icon" aria-hidden="true" />}
+      </div>
+      <div className="rs-stat-value">
+        {fmtCost(value, decimals)}{has && suffix ? <span style={{ fontSize: '0.5em', fontWeight: 600, opacity: 0.7 }}> {suffix}</span> : ''}
+      </div>
+    </div>
+  )
+}
+
+// ── Page: Cost per Unit (cost per km / engine hour / m3) ──────────────────────
+// Unit-aware operating cost from the snapshot `cost` object (server-aggregated).
+// Per-unit values are honest N/A when the running unit (km / hours / m3) is not
+// recorded for the period - never a fabricated 0.
+function CostPerUnitPage({ snapshot }) {
+  const c = snapshot?.cost || {}
+  const labels = arr(snapshot?.labels)
+  const total = arr(c?.trend?.total)
+  const m3 = arr(c?.trend?.m3)
+  const trendEmpty = !labels.length || !someNonZero(total)
+  return (
+    <div className="rs-page">
+      <div className="rs-stat-strip" style={{ gridTemplateColumns: 'repeat(4,minmax(0,1fr))' }}>
+        <CostTile label="Cost / km" value={c.cost_per_km} decimals={2} suffix="per km" icon={Activity} tone="teal" />
+        <CostTile label="Cost / engine hour" value={c.cost_per_hour} decimals={2} suffix="per hr" icon={Clock} tone="blue" />
+        <CostTile label="Cost / m3" value={c.cost_per_m3} decimals={2} suffix="per m3" icon={Grid} tone="indigo" />
+        <CostTile label="Tyre CPK" value={c.tyre_cpk} decimals={2} suffix="per km" icon={CircleDot} tone="green" />
+      </div>
+      <div className="rs-stat-strip" style={{ gridTemplateColumns: 'repeat(3,minmax(0,1fr))' }}>
+        <CostTile label="Total operating cost" value={c.total_cost} icon={Wallet} tone="amber" />
+        <CostTile label="Tyre cost" value={c.tyre_cost} icon={CircleDot} tone="teal" />
+        <CostTile label="Maintenance cost" value={c.maintenance_cost} icon={Wrench} tone="blue" />
+      </div>
+      <ChartCard
+        wide
+        title="Operating cost trend"
+        subtitle="Monthly total operating cost (bars) with production volume in m3 (line) when recorded"
+        icon={TrendingUp}
+        empty={trendEmpty}
+        height="42vh"
+      >
+        <EChart option={costTrendOption(labels, total, m3)} ariaLabel="Operating cost and production trend" />
+      </ChartCard>
+    </div>
+  )
+}
+
+// ── Page: Operations Command (exec-style ops board with heatmap) ──────────────
+// Rich operations view: today activity tiles, work-order status / type mix, PM
+// compliance gauge, the work-order trend and a site x status heatmap. Built from
+// the snapshot `ops` object (server-aggregated).
+function OpsCommandPage({ snapshot }) {
+  const ops = snapshot?.ops || {}
+  const labels = arr(snapshot?.labels)
+  const byStatus = arr(ops.wo_by_status)
+  const byType = arr(ops.wo_by_type)
+  const woTrend = arr(ops.wo_trend)
+  const heat = arr(ops.wo_heatmap)
+  const pmc = ops.pm_compliance
+  return (
+    <div className="rs-page">
+      <div className="rs-stat-strip rs-stat-6">
+        <StatTile label="Open Job Cards" value={ops.work_orders_open} icon={Wrench} tone="indigo" />
+        <StatTile label="Job Cards Today" value={ops.job_cards_today} icon={ClipboardCheck} tone="blue" />
+        <StatTile label="Inspections Today" value={ops.inspections_today} icon={ListChecks} tone="green" />
+        <StatTile label="Accidents Today" value={ops.accidents_today} icon={ShieldAlert} tone="amber" />
+        <StatTile label="PM Overdue" value={ops.pm_overdue} icon={CalendarClock} tone="red" />
+        <StatTile label="Critical Alerts" value={ops.alerts_critical} icon={Bell} tone="red" />
+      </div>
+      <div className="rs-page-row rs-row-3">
+        <ChartCard title="Work orders by status" subtitle="Open work-order volume by status" icon={PieChart} empty={!byStatus.length} height="27vh">
+          <EChart option={doughnutOption(byStatus)} ariaLabel="Work orders by status" />
+        </ChartCard>
+        <ChartCard title="Work orders by type" subtitle="Open work-order volume by work type" icon={BarChart3} empty={!byType.length} height="27vh">
+          <EChart option={hbarOption(byType)} ariaLabel="Work orders by type" />
+        </ChartCard>
+        <ChartCard title="PM compliance" subtitle="Active plans not overdue" icon={Gauge} height="27vh">
+          <EChart option={gaugeOption(pmc == null ? null : Number(pmc), 'Compliant', 1)} ariaLabel="Preventive maintenance compliance gauge" />
+        </ChartCard>
+      </div>
+      <div className="rs-page-row">
+        <ChartCard title="Work orders opened" subtitle="Monthly work-order volume" icon={TrendingUp} empty={!someNonZero(woTrend)} height="30vh">
+          <EChart option={trendLineOption(labels, woTrend, 'Work orders', 0)} ariaLabel="Work orders opened trend" />
+        </ChartCard>
+        <ChartCard title="Open work orders by site and status" subtitle="Where the open work sits; darker is higher" icon={Grid} empty={!heat.length} emptyText="No open work orders to map." height="30vh">
+          <EChart option={heatmapOption(heat)} ariaLabel="Open work orders heatmap by site and status" />
         </ChartCard>
       </div>
     </div>

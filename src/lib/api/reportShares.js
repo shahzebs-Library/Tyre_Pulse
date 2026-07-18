@@ -21,6 +21,8 @@ export const REPORT_PAGES = [
   { key: 'board_trends',   group: 'Trends',     label: 'Trends',          desc: '12-month spend, accidents, claims and inspection trend lines.' },
   { key: 'spend_trend',    group: 'Trends',     label: 'Spend Trend',     desc: 'Tyre spend against accidents, with the monthly spend focus.' },
   { key: 'cost_claims',    group: 'Trends',     label: 'Cost & Claims',   desc: 'Finance board: tyre spend and claims KPIs, claimed vs recovered trend, recovery rate and the claim status mix.' },
+  { key: 'cost_unit',      group: 'Trends',     label: 'Cost per Unit',   desc: 'Unit-aware operating cost: cost per km, engine hour and m3, tyre CPK, total tyre and maintenance cost, and the monthly cost vs production trend.' },
+  { key: 'ops_command',    group: 'Operations', label: 'Operations Command', desc: 'Command board: today activity, work-order status and type mix, PM compliance gauge, work-order trend and a site x status heatmap.' },
   { key: 'risk_activity',  group: 'Risk',       label: 'Risk & Activity', desc: 'Accidents, severity mix and incident sites.' },
   { key: 'claims_desk',    group: 'Risk',       label: 'Claims Desk',     desc: 'Claimed against recovered value and the claim status mix.' },
   { key: 'board_charts',   group: 'Breakdowns', label: 'Breakdowns',      desc: 'Severity, claim status and by-site breakdown charts.' },

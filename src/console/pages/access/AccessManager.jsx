@@ -41,6 +41,7 @@ import {
 } from '../../../lib/permissionMatrix'
 import { listGlobalPermissions, saveModulePermissions } from '../../../lib/api/modulePermissions'
 import { listProfiles } from '../../../lib/api/users'
+import MobileAccessPanel from './MobileAccessPanel'
 import {
   listUserGrants, revokeUserAccessGrant,
   setUserAccessGrantScoped, mobileGrantKey, parseGrantScope,
@@ -1166,6 +1167,22 @@ export default function AccessManager() {
               )}
             </div>
           )}
+        </div>
+      )}
+
+      {/* Mobile app access - the REAL mobile module keys (src/lib/mobileModules.js),
+          separate from the web tree above (which is keyed on the web catalog). This
+          is how a mobile module is actually closed for a role or a user: writes land
+          on `mobile:<mobileKey>` rows the phone app enforces. Self-contained load/save. */}
+      {!loading && !loadError && (mode === 'role' || selectedUser) && (
+        <div className="pt-2">
+          <MobileAccessPanel
+            mode={mode}
+            role={selectedRole}
+            user={selectedUser}
+            canWriteRole={canWriteRole}
+            canWriteUser={canWriteUser}
+          />
         </div>
       )}
 

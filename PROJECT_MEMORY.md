@@ -812,6 +812,25 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
   on testers' devices once that build finishes + Play processes it. No DB/schema change; branch realigned to
   origin/main. For NEW work restart the branch from latest main (merged PRs are terminal).
 
+### SESSION 2026-07-18 CLOSED CLEAN — all merged to main, nothing pending
+- Everything this session is MERGED to main (PRs #67-#81) and branch realigned to origin/main. Migrations
+  through **V269**; next free **V270**. No outstanding code TODO.
+- **Mobile (Play Internal builds shipped):** brand icon/splash/login logo (#67); recovered 4 lost field
+  commits + admin-console crash fix + Preventive Maintenance screen (#69); inspection-sync CHECK-token fix +
+  V267 approval push + accident asset-first form/stock admin gating/checklist search/home badge/tyre diagram
+  truth (#70); accident date-time pickers + categorized photos + keyboard-flicker fix + nav-bar overlap sweep
+  + checklist interval section-pruning (#72); per-user Deny applies to admins (#74). RULE: native changes
+  (datetimepicker, keyboard mode, icon) need a fresh EAS build - testers must UPDATE from the Play track.
+- **Web:** Vehicle SVG Designer V268 (#71) + deepened (#73) + pseudo-3D art (#75); Site-level ABAC V269 (#76);
+  Data Intake one-click "combine line items" for single-key modules (#77).
+- **Session security (the big one, 3 layers + a policy tweak):** #78 pre-2FA block, #79 surface partition,
+  #80 tab-local sessionStorage + idle/absolute auto-logout, #81 idle tightened to 10min (2FA kept OPTIONAL
+  per user). Console is now fully isolated + auto-expiring; main app keeps localStorage persistence for field
+  use. See the two dated sections just below for the full mechanics.
+- Deferred / USER-OPS only: enable leaked-password protection in Supabase Auth dashboard; verify tyre_man
+  RBAC on a fresh build with a real tyre_man account; enrol 2FA in the console Security tab to make the AAL
+  gate actually apply to the super-admin. For NEW work restart the branch from latest main (merged PRs terminal).
+
 ### Console session ISOLATED from main app - no cross-tab bleed (2026-07-18)
 - **BUG (user, persisted after the AAL fix because their super-admin has NO 2FA):** main app + /console
   shared ONE Supabase client keyed to localStorage 'tp_auth'. Logging into the Console in one browser TAB

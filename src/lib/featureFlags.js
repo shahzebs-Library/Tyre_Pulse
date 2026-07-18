@@ -107,7 +107,7 @@ export const FLAG_DEFS = [
     label: 'Automation Platform',
     description:
       'Event Stream, Approval Workflows, Automation Rules, and API & Webhooks. ' +
-      'Requires migrations V96–V103 + the automation edge functions to be applied ' +
+      'Requires migrations V96-V103 + the automation edge functions to be applied ' +
       'to the database first (see docs/AUTOMATION_PLATFORM_DEPLOYMENT.md).',
     // V96–V103 + edge functions are applied to the live DB and the backing
     // feature_flags row is TRUE, so this defaults ON to match the deployed state.
@@ -252,7 +252,7 @@ export async function saveFlags(flags) {
     },
     { onConflict: 'key' },
   )
-  if (error) throw new Error(error.message || 'Could not save feature flags.')
+  if (error) throw new Error('Could not save feature flags.')
   cache = { flags: clean, at: Date.now() }
   notify(clean)
   return clean

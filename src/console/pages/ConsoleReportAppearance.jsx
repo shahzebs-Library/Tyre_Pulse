@@ -130,7 +130,7 @@ export default function ConsoleReportAppearance() {
     const { error: err } = await supabase
       .from('system_config')
       .upsert([{ key: CONFIG_KEY, value, updated_at: new Date().toISOString() }], { onConflict: 'key', ignoreDuplicates: false })
-    if (err) { setError(err.message); setSaving(false); return }
+    if (err) { setError(toUserMessage(err, 'Could not save the palette.')); setSaving(false); return }
     setReportPalette(sel)              // apply live for this session immediately
     await logAction('update_config', null, 'report_palette', { theme: isCustom ? 'custom' : sel })
     setSaved(true); setSaving(false)

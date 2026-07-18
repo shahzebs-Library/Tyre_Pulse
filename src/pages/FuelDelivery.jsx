@@ -19,6 +19,7 @@ import {
   isDeliveriesTableMissing, DELIVERY_STATUSES,
 } from '../lib/api/fuelDeliveries'
 import { summarizeDeliveries } from '../lib/fuelDeliveries'
+import { toUserMessage } from '../lib/safeError'
 import { formatCurrencyCompact } from '../lib/formatters'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 
@@ -36,13 +37,13 @@ const EMPTY_FORM = {
 }
 
 function fmtDate(v) {
-  if (!v) return '—'
+  if (!v) return 'N/A'
   const d = new Date(v)
-  return Number.isNaN(d.getTime()) ? '—' : d.toLocaleDateString()
+  return Number.isNaN(d.getTime()) ? 'N/A' : d.toLocaleDateString()
 }
 function fmtNum(v) {
   const n = parseFloat(v)
-  return Number.isFinite(n) ? n.toLocaleString(undefined, { maximumFractionDigits: 2 }) : '—'
+  return Number.isFinite(n) ? n.toLocaleString(undefined, { maximumFractionDigits: 2 }) : 'N/A'
 }
 
 // ─── Create / edit modal ──────────────────────────────────────────────────────
@@ -94,7 +95,7 @@ function DeliveryModal({ open, initial, onClose, onSaved, activeCountry }) {
       else await createDelivery(payload)
       onSaved?.()
     } catch (err) {
-      setError(err?.message || 'Could not save the delivery.')
+      setError(toUserMessage(err, 'Could not save the delivery.'))
     } finally {
       setBusy(false)
     }
@@ -171,7 +172,7 @@ function DeliveryModal({ open, initial, onClose, onSaved, activeCountry }) {
           </div>
           <div>
             <label className="label">Notes</label>
-            <textarea className="input w-full min-h-[80px] resize-y" placeholder="Optional — reference, driver, batch quality…"
+            <textarea className="input w-full min-h-[80px] resize-y" placeholder="Optional - reference, driver, batch quality..."
               value={form.notes} maxLength={8000} onChange={(e) => set('notes', e.target.value)} />
           </div>
 
@@ -185,7 +186,7 @@ function DeliveryModal({ open, initial, onClose, onSaved, activeCountry }) {
             <button type="button" onClick={onClose} className="btn-secondary text-sm">Cancel</button>
             <button type="submit" disabled={busy} className="btn-primary text-sm inline-flex items-center gap-2 disabled:opacity-60">
               {busy ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />}
-              {busy ? 'Saving…' : editing ? 'Save changes' : 'Log delivery'}
+              {busy ? 'Saving...' : editing ? 'Save changes' : 'Log delivery'}
             </button>
           </div>
         </form>
@@ -204,7 +205,7 @@ function ConfirmDelete({ row, onCancel, onConfirm, busy }) {
           <Trash2 size={16} className="text-red-400" /> Delete delivery
         </h3>
         <p className="text-sm text-[var(--text-muted)] mt-2">
-          Delete the delivery{row.delivery_no ? ` “${row.delivery_no}”` : ''}
+          Delete the delivery{row.delivery_no ? ` "${row.delivery_no}"` : ''}
           {row.supplier ? ` from ${row.supplier}` : ''}? This cannot be undone.
         </p>
         <div className="flex items-center justify-end gap-2 mt-4">
@@ -250,7 +251,7 @@ export default function FuelDelivery() {
       // so we can surface the "apply migration" prompt only when truly absent.
       setMissing(data.length === 0 ? await isDeliveriesTableMissing() : false)
     } catch (err) {
-      setError(err?.message || 'Could not load fuel deliveries.')
+      setError(toUserMessage(err, 'Could not load fuel deliveries.'))
       setRows([])
     } finally {
       setRefreshing(false)
@@ -283,7 +284,7 @@ export default function FuelDelivery() {
     { label: 'Deliveries', value: summary.totalDeliveries.toLocaleString(), icon: Package, tone: 'text-[var(--text-primary)]' },
     { label: 'Total litres', value: `${summary.totalLitres.toLocaleString()} L`, icon: Droplet, tone: 'text-sky-400' },
     { label: 'Total cost', value: formatCurrencyCompact(summary.totalCost, activeCurrency), icon: DollarSign, tone: 'text-amber-400' },
-    { label: 'Avg price / L', value: summary.avgPricePerLitre ? `${activeCurrency} ${summary.avgPricePerLitre.toFixed(3)}` : '—', icon: Fuel, tone: 'text-green-400' },
+    { label: 'Avg price / L', value: summary.avgPricePerLitre ? `${activeCurrency} ${summary.avgPricePerLitre.toFixed(3)}` : 'N/A', icon: Fuel, tone: 'text-green-400' },
   ]
 
   const EXPORT_COLS = ['delivery_no', 'supplier', 'site', 'tank', 'litres', 'unit_price', 'total_cost', 'delivered_at', 'status']
@@ -306,7 +307,7 @@ export default function FuelDelivery() {
       setConfirm(null)
       load()
     } catch (err) {
-      setError(err?.message || 'Could not delete the delivery.')
+      setError(toUserMessage(err, 'Could not delete the delivery.'))
     } finally {
       setDeleting(false)
     }
@@ -319,7 +320,7 @@ export default function FuelDelivery() {
     <div className="space-y-6">
       <PageHeader
         title="Fuel Delivery"
-        subtitle="Log and track bulk fuel deliveries into sites and storage tanks — supplier, litres, cost and status."
+        subtitle="Log and track bulk fuel deliveries into sites and storage tanks - supplier, litres, cost and status."
         icon={Fuel}
         onRefresh={load}
         refreshing={refreshing}
@@ -345,7 +346,7 @@ export default function FuelDelivery() {
         <div className="card border border-amber-800/50 flex items-start gap-3">
           <AlertTriangle size={18} className="text-amber-400 mt-0.5 shrink-0" />
           <div>
-            <p className="text-amber-300 font-medium">Fuel deliveries aren’t enabled on this database yet.</p>
+            <p className="text-amber-300 font-medium">Fuel deliveries aren't enabled on this database yet.</p>
             <p className="text-[var(--text-muted)] text-sm mt-1">
               Apply <span className="font-mono text-[var(--text-primary)]">MIGRATIONS_V148_FUEL_DELIVERIES.sql</span>, then reload.
             </p>
@@ -370,7 +371,7 @@ export default function FuelDelivery() {
                 <p className="text-xs text-[var(--text-muted)]">{k.label}</p>
                 <Icon size={16} className={k.tone} />
               </div>
-              <p className={`text-2xl font-bold mt-1 ${k.tone}`}>{rows === null ? '—' : k.value}</p>
+              <p className={`text-2xl font-bold mt-1 ${k.tone}`}>{rows === null ? 'N/A' : k.value}</p>
             </div>
           )
         })}
@@ -381,7 +382,7 @@ export default function FuelDelivery() {
         <div className="flex flex-wrap items-center gap-2">
           <div className="relative flex-1 min-w-[200px]">
             <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
-            <input className="input pl-9 w-full" placeholder="Search delivery no, supplier, site, tank…" value={search} onChange={(e) => setSearch(e.target.value)} />
+            <input className="input pl-9 w-full" placeholder="Search delivery no, supplier, site, tank..." value={search} onChange={(e) => setSearch(e.target.value)} />
           </div>
           <select className="input" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} aria-label="Status">
             <option value="all">All statuses</option>
@@ -413,7 +414,7 @@ export default function FuelDelivery() {
               ) : filtered.length === 0 ? (
                 <tr><td colSpan={9} className="px-4 py-12 text-center text-[var(--text-muted)]">
                   <Filter size={22} className="mx-auto mb-2 opacity-60" />
-                  {(rows || []).length === 0 ? 'No fuel deliveries logged yet. Use “Log delivery” to add the first.' : 'No deliveries match these filters.'}
+                  {(rows || []).length === 0 ? 'No fuel deliveries logged yet. Use "Log delivery" to add the first.' : 'No deliveries match these filters.'}
                 </td></tr>
               ) : (
                 filtered.slice(0, 500).map((r) => {
@@ -421,12 +422,12 @@ export default function FuelDelivery() {
                   const StatusIcon = st.icon
                   return (
                     <tr key={r.id} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/40">
-                      <td className="px-4 py-2.5 font-mono text-xs text-[var(--text-primary)]">{r.delivery_no || '—'}</td>
-                      <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.supplier || '—'}</td>
-                      <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.site || '—'}{r.tank ? ` · ${r.tank}` : ''}</td>
-                      <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.litres == null ? '—' : `${fmtNum(r.litres)} L`}</td>
-                      <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.unit_price == null ? '—' : `${activeCurrency} ${fmtNum(r.unit_price)}`}</td>
-                      <td className="px-4 py-2.5 text-[var(--text-primary)] font-medium">{r.total_cost == null ? '—' : formatCurrencyCompact(r.total_cost, activeCurrency)}</td>
+                      <td className="px-4 py-2.5 font-mono text-xs text-[var(--text-primary)]">{r.delivery_no || 'N/A'}</td>
+                      <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.supplier || 'N/A'}</td>
+                      <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.site || 'N/A'}{r.tank ? ` | ${r.tank}` : ''}</td>
+                      <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.litres == null ? 'N/A' : `${fmtNum(r.litres)} L`}</td>
+                      <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.unit_price == null ? 'N/A' : `${activeCurrency} ${fmtNum(r.unit_price)}`}</td>
+                      <td className="px-4 py-2.5 text-[var(--text-primary)] font-medium">{r.total_cost == null ? 'N/A' : formatCurrencyCompact(r.total_cost, activeCurrency)}</td>
                       <td className="px-4 py-2.5 text-[var(--text-secondary)]">{fmtDate(r.delivered_at)}</td>
                       <td className="px-4 py-2.5">
                         <span className={`badge text-[11px] px-2 py-0.5 rounded inline-flex items-center gap-1 ${st.cls}`}>
@@ -450,7 +451,7 @@ export default function FuelDelivery() {
             </tbody>
           </table>
         </div>
-        {filtered.length > 500 && <p className="px-4 py-2 text-xs text-[var(--text-muted)] border-t border-[var(--input-border)]">Showing first 500 — refine filters or export for the full set.</p>}
+        {filtered.length > 500 && <p className="px-4 py-2 text-xs text-[var(--text-muted)] border-t border-[var(--input-border)]">Showing first 500 - refine filters or export for the full set.</p>}
       </div>
 
       <DeliveryModal

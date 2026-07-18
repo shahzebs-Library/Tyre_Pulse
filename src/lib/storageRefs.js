@@ -35,7 +35,7 @@ export async function resolveStorageUrl(value) {
     .createSignedUrl(ref.path, SIGNED_URL_TTL_SECONDS)
 
   if (error) {
-    console.warn('[storageRefs] Failed to create signed URL:', error.message)
+    if (import.meta.env?.DEV) console.warn('[storageRefs] Failed to create signed URL:', error.message)
     return null
   }
 

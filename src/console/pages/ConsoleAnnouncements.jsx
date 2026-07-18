@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { Megaphone, Plus, Edit2, Trash2, RefreshCw, Save, X, Eye, EyeOff, AlertTriangle, CheckCircle } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
+import { toUserMessage } from '../../lib/safeError'
 import { useConsoleAuth } from '../ConsoleAuthContext'
 
 const ROLES = ['Admin', 'Manager', 'Director', 'Inspector', 'Tyre Man', 'Reporter', 'Driver']
@@ -72,11 +73,11 @@ export default function ConsoleAnnouncements() {
     }
     if (modal === 'create') {
       const { data, error: err } = await supabase.from('announcements').insert(payload).select().single()
-      if (err) { setError(err.message); setSaving(false); return }
+      if (err) { setError(toUserMessage(err, 'Could not save the announcement.')); setSaving(false); return }
       await logAction('create_announcement', data.id, 'announcement', { title: data.title })
     } else {
       const { error: err } = await supabase.from('announcements').update(payload).eq('id', modal.id)
-      if (err) { setError(err.message); setSaving(false); return }
+      if (err) { setError(toUserMessage(err, 'Could not save the announcement.')); setSaving(false); return }
       await logAction('update_announcement', modal.id, 'announcement', { title: payload.title })
     }
     setSaving(false); setModal(null); load()
@@ -105,7 +106,7 @@ export default function ConsoleAnnouncements() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-xl font-bold text-white">Announcements</h1>
-          <p className="text-sm text-gray-500 mt-0.5">{active.length} active · {inactive.length} inactive</p>
+          <p className="text-sm text-gray-500 mt-0.5">{active.length} active | {inactive.length} inactive</p>
         </div>
         <div className="flex items-center gap-2">
           <button onClick={load} disabled={loading}
@@ -128,7 +129,7 @@ export default function ConsoleAnnouncements() {
         <div className="flex flex-col items-center justify-center h-48 text-gray-600">
           <Megaphone size={32} className="mb-2 opacity-30" />
           <p className="text-sm">No announcements yet</p>
-          <button onClick={openCreate} className="mt-3 text-xs text-orange-400 hover:text-orange-300">Create the first one →</button>
+          <button onClick={openCreate} className="mt-3 text-xs text-orange-400 hover:text-orange-300">Create the first one</button>
         </div>
       ) : (
         <>
@@ -263,7 +264,7 @@ function AnnCard({ ann, orgs, onEdit, onToggle, onDelete }) {
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-1">
             <span className={`text-[10px] px-1.5 py-0.5 rounded border font-semibold uppercase ${TYPE_STYLE[ann.type]}`}>{ann.type}</span>
-            {orgName && <span className="text-[10px] text-gray-500">→ {orgName}</span>}
+            {orgName && <span className="text-[10px] text-gray-500">to {orgName}</span>}
             {expired && <span className="text-[10px] text-red-500">EXPIRED</span>}
             {ann.show_until && !expired && (
               <span className="text-[10px] text-gray-500">

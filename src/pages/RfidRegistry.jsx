@@ -11,6 +11,7 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import PageHeader from '../components/ui/PageHeader'
 import RfidScanner from '../components/RfidScanner'
+import { toUserMessage } from '../lib/safeError'
 
 const STATUS_COLORS = {
   available: 'text-blue-400 bg-blue-400/15 border-blue-400/30',
@@ -43,6 +44,7 @@ export default function RfidRegistry() {
   const [refreshing, setRefreshing] = useState(false)
   const [scannerOpen, setScannerOpen] = useState(false)
   const [lastUpdated, setLastUpdated] = useState(null)
+  const [error, setError] = useState(null)
 
   // Dashboard data
   const [stats, setStats] = useState({
@@ -93,6 +95,7 @@ export default function RfidRegistry() {
 
   async function loadData() {
     setLoading(true)
+    setError(null)
     try {
       // Load stats
       const { data: tagStats } = await supabase.from('rfid_tags').select('status')
@@ -171,6 +174,8 @@ export default function RfidRegistry() {
       }
 
       setLastUpdated(new Date())
+    } catch (err) {
+      setError(toUserMessage(err, 'Could not load RFID data.'))
     } finally {
       setLoading(false)
       setRefreshing(false)
@@ -289,6 +294,16 @@ export default function RfidRegistry() {
           </button>
         }
       />
+
+      {error && (
+        <div className="card border border-red-500/30 flex items-center gap-3">
+          <AlertCircle size={18} className="text-red-400 shrink-0" />
+          <p className="text-sm text-red-300 flex-1">{error}</p>
+          <button onClick={handleRefresh} disabled={refreshing} className="btn-secondary text-xs inline-flex items-center gap-1.5 disabled:opacity-50">
+            <RefreshCw size={13} className={refreshing ? 'animate-spin' : ''} /> Retry
+          </button>
+        </div>
+      )}
 
       {/* Tab Navigation */}
       <div className="flex gap-2 flex-wrap">

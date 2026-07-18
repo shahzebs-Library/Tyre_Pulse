@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
 import { fetchAllPages } from '../lib/fetchAll'
+import { toUserMessage } from '../lib/safeError'
 import { useSettings } from '../contexts/SettingsContext'
 import { formatCurrency as _fmtCurrencyBase } from '../lib/formatters'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
@@ -173,7 +174,7 @@ export default function PositionIntelligence() {
       if (err) throw err
       setRecords(data || [])
     } catch (e) {
-      setError(e.message)
+      setError(toUserMessage(e, 'Could not load position data.'))
     } finally {
       setLoading(false)
     }
@@ -711,7 +712,7 @@ export default function PositionIntelligence() {
                 }}
               />
             </div>
-            <p className="text-[10px] text-gray-600 mt-1">Green &lt;1.0 · Yellow 1.0-2.0 · Red ≥2.0</p>
+            <p className="text-[10px] text-gray-600 mt-1">Green &lt;1.0 | Yellow 1.0-2.0 | Red ≥2.0</p>
           </div>
 
           {/* Chart 2: Failure Rate by Position */}
@@ -740,7 +741,7 @@ export default function PositionIntelligence() {
                 }}
               />
             </div>
-            <p className="text-[10px] text-gray-600 mt-1">Red &gt;25% · Yellow &gt;15% · Green ≤15%</p>
+            <p className="text-[10px] text-gray-600 mt-1">Red &gt;25% | Yellow &gt;15% | Green ≤15%</p>
           </div>
 
           {/* Chart 3: Avg KM Life by Position */}

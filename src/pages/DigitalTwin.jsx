@@ -16,6 +16,7 @@ import PageHeader from '../components/ui/PageHeader'
 import { useSettings } from '../contexts/SettingsContext'
 import { getAssetTwinRecords, searchAssets } from '../lib/api/digitalTwin'
 import { buildTwin, healthBand } from '../lib/digitalTwin'
+import { toUserMessage } from '../lib/safeError'
 import { AGE_BAND_META } from '../lib/tyreAge'
 
 const AGE_BADGE = {
@@ -164,7 +165,7 @@ export default function DigitalTwin() {
     try {
       setRecords(await getAssetTwinRecords(an, { country: activeCountry }))
     } catch (err) {
-      setError(err?.message || 'Could not load this vehicle.'); setRecords([])
+      setError(toUserMessage(err, 'Could not load this vehicle.')); setRecords([])
     } finally { setLoading(false) }
   }, [activeCountry])
 

@@ -21,6 +21,7 @@ import {
   listOdometerLogs, createOdometerLog, updateOdometerLog, deleteOdometerLog,
 } from '../lib/api/odometerLogs'
 import { summarizeOdometer, latestPerAsset } from '../lib/odometerLogs'
+import { toUserMessage } from '../lib/safeError'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 
 const EMPTY_FORM = {
@@ -28,12 +29,12 @@ const EMPTY_FORM = {
 }
 
 const fmtKm = (v) =>
-  v == null || v === '' ? '—' : `${Number(v).toLocaleString()} km`
+  v == null || v === '' ? 'N/A' : `${Number(v).toLocaleString()} km`
 
 function fmtDate(v) {
-  if (!v) return '—'
+  if (!v) return 'N/A'
   const d = new Date(v)
-  return Number.isNaN(d.getTime()) ? '—' : d.toLocaleDateString()
+  return Number.isNaN(d.getTime()) ? 'N/A' : d.toLocaleDateString()
 }
 
 function isMissingRelation(err) {
@@ -69,7 +70,7 @@ export default function OdometerLogs() {
       setUpdatedAt(new Date())
     } catch (err) {
       if (isMissingRelation(err)) setNotProvisioned(true)
-      else setError(err?.message || 'Could not load odometer logs.')
+      else setError(toUserMessage(err, 'Could not load odometer logs.'))
       setRows([])
     } finally {
       setRefreshing(false)
@@ -102,7 +103,7 @@ export default function OdometerLogs() {
   const kpis = [
     { label: 'Readings logged', value: summary.totalReadings, icon: Activity, tone: 'text-[var(--text-primary)]' },
     { label: 'Assets tracked', value: summary.distinctAssets, icon: Truck, tone: 'text-sky-400' },
-    { label: 'Highest odometer', value: summary.highestKm == null ? '—' : `${summary.highestKm.toLocaleString()} km`, icon: Gauge, tone: 'text-amber-400' },
+    { label: 'Highest odometer', value: summary.highestKm == null ? 'N/A' : `${summary.highestKm.toLocaleString()} km`, icon: Gauge, tone: 'text-amber-400' },
     { label: 'Fleet distance', value: `${Math.round(summary.fleetKm).toLocaleString()} km`, icon: TrendingUp, tone: 'text-green-400' },
   ]
 
@@ -147,7 +148,7 @@ export default function OdometerLogs() {
       setShowModal(false); setEditing(null)
       await load()
     } catch (err) {
-      setFormError(err?.message || 'Could not save the reading.')
+      setFormError(toUserMessage(err, 'Could not save the reading.'))
     } finally {
       setSaving(false)
     }
@@ -161,7 +162,7 @@ export default function OdometerLogs() {
       setConfirmDelete(null)
       await load()
     } catch (err) {
-      setError(err?.message || 'Could not delete the reading.')
+      setError(toUserMessage(err, 'Could not delete the reading.'))
     } finally {
       setDeleting(false)
     }
@@ -174,7 +175,7 @@ export default function OdometerLogs() {
     <div className="space-y-6">
       <PageHeader
         title="Odometer Logs"
-        subtitle="Capture and track odometer (km) readings per asset over time — the distance basis for CPK, tyre-life, and utilisation analytics."
+        subtitle="Capture and track odometer (km) readings per asset over time - the distance basis for CPK, tyre-life, and utilisation analytics."
         icon={Gauge}
         onRefresh={load}
         refreshing={refreshing}
@@ -198,7 +199,7 @@ export default function OdometerLogs() {
         <div className="card border border-amber-800/50 flex items-start gap-3">
           <AlertTriangle size={18} className="text-amber-400 mt-0.5 shrink-0" />
           <div>
-            <p className="text-amber-300 font-medium">Odometer logging isn’t enabled on this database yet.</p>
+            <p className="text-amber-300 font-medium">Odometer logging isn't enabled on this database yet.</p>
             <p className="text-[var(--text-muted)] text-sm mt-1">
               Apply <span className="font-mono text-[var(--text-primary)]">MIGRATIONS_V162_ODOMETER_LOGS.sql</span>, then reload.
             </p>
@@ -209,7 +210,7 @@ export default function OdometerLogs() {
       {error && (
         <div className="card border border-red-800/50 flex items-start gap-3">
           <AlertTriangle size={18} className="text-red-400 mt-0.5 shrink-0" />
-          <div><p className="text-red-300 font-medium">Couldn’t load odometer logs.</p><p className="text-[var(--text-muted)] text-sm mt-1">{error}</p></div>
+          <div><p className="text-red-300 font-medium">Couldn't load odometer logs.</p><p className="text-[var(--text-muted)] text-sm mt-1">{error}</p></div>
         </div>
       )}
 
@@ -223,7 +224,7 @@ export default function OdometerLogs() {
                 <p className="text-xs text-[var(--text-muted)]">{k.label}</p>
                 <Icon size={16} className={k.tone} />
               </div>
-              <p className={`text-3xl font-bold mt-1 ${k.tone}`}>{rows === null ? '—' : k.value}</p>
+              <p className={`text-3xl font-bold mt-1 ${k.tone}`}>{rows === null ? 'N/A' : k.value}</p>
             </div>
           )
         })}
@@ -260,7 +261,7 @@ export default function OdometerLogs() {
         <div className="flex flex-wrap items-center gap-2">
           <div className="relative flex-1 min-w-[200px]">
             <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
-            <input className="input pl-9 w-full" placeholder="Search asset, site, source, notes…" value={search} onChange={(e) => setSearch(e.target.value)} />
+            <input className="input pl-9 w-full" placeholder="Search asset, site, source, notes..." value={search} onChange={(e) => setSearch(e.target.value)} />
           </div>
           <select className="input" value={assetFilter} onChange={(e) => setAssetFilter(e.target.value)} aria-label="Asset">
             <option value="">All assets</option>
@@ -286,16 +287,16 @@ export default function OdometerLogs() {
               ) : filtered.length === 0 ? (
                 <tr><td colSpan={6} className="px-4 py-12 text-center text-[var(--text-muted)]">
                   <Filter size={22} className="mx-auto mb-2 opacity-60" />
-                  {rows.length === 0 && !notProvisioned ? 'No readings logged yet — log your first reading.' : 'No readings match these filters.'}
+                  {rows.length === 0 && !notProvisioned ? 'No readings logged yet - log your first reading.' : 'No readings match these filters.'}
                 </td></tr>
               ) : (
                 filtered.slice(0, 500).map((r) => (
                   <tr key={r.id} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/40">
-                    <td className="px-4 py-2.5 font-medium text-[var(--text-primary)]">{r.asset_no || '—'}</td>
+                    <td className="px-4 py-2.5 font-medium text-[var(--text-primary)]">{r.asset_no || 'N/A'}</td>
                     <td className="px-4 py-2.5 font-semibold text-[var(--text-primary)]">{fmtKm(r.odometer_km)}</td>
                     <td className="px-4 py-2.5 text-[var(--text-secondary)] whitespace-nowrap">{fmtDate(r.reading_date)}</td>
-                    <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.source || '—'}</td>
-                    <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.site || '—'}</td>
+                    <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.source || 'N/A'}</td>
+                    <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.site || 'N/A'}</td>
                     <td className="px-4 py-2.5">
                       <div className="flex items-center justify-end gap-1">
                         <button onClick={() => openEdit(r)} className="p-1.5 rounded hover:bg-[var(--input-bg)] text-[var(--text-muted)] hover:text-[var(--text-primary)]" aria-label="Edit"><Pencil size={14} /></button>
@@ -308,7 +309,7 @@ export default function OdometerLogs() {
             </tbody>
           </table>
         </div>
-        {filtered.length > 500 && <p className="px-4 py-2 text-xs text-[var(--text-muted)] border-t border-[var(--input-border)]">Showing first 500 — refine filters or export for the full set.</p>}
+        {filtered.length > 500 && <p className="px-4 py-2 text-xs text-[var(--text-muted)] border-t border-[var(--input-border)]">Showing first 500 - refine filters or export for the full set.</p>}
       </div>
 
       {/* Create / Edit modal */}
@@ -359,7 +360,7 @@ export default function OdometerLogs() {
               <div className="flex items-center justify-end gap-2 pt-1">
                 <button type="button" onClick={closeModal} className="btn-secondary text-sm" disabled={saving}>Cancel</button>
                 <button type="submit" className="btn-primary text-sm inline-flex items-center gap-1.5 disabled:opacity-60" disabled={saving}>
-                  {saving ? 'Saving…' : editing ? 'Save changes' : 'Log reading'}
+                  {saving ? 'Saving...' : editing ? 'Save changes' : 'Log reading'}
                 </button>
               </div>
             </form>
@@ -376,14 +377,14 @@ export default function OdometerLogs() {
               <div>
                 <h3 className="text-[var(--text-primary)] font-semibold">Delete this reading?</h3>
                 <p className="text-sm text-[var(--text-muted)] mt-1">
-                  {confirmDelete.asset_no || 'Reading'} · {fmtKm(confirmDelete.odometer_km)} · {fmtDate(confirmDelete.reading_date)}. This can’t be undone.
+                  {confirmDelete.asset_no || 'Reading'} | {fmtKm(confirmDelete.odometer_km)} | {fmtDate(confirmDelete.reading_date)}. This can't be undone.
                 </p>
               </div>
             </div>
             <div className="flex items-center justify-end gap-2 mt-5">
               <button onClick={() => setConfirmDelete(null)} className="btn-secondary text-sm" disabled={deleting}>Cancel</button>
               <button onClick={doDelete} className="btn-danger text-sm inline-flex items-center gap-1.5 disabled:opacity-60" disabled={deleting}>
-                <Trash2 size={14} /> {deleting ? 'Deleting…' : 'Delete'}
+                <Trash2 size={14} /> {deleting ? 'Deleting...' : 'Delete'}
               </button>
             </div>
           </div>

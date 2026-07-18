@@ -1182,7 +1182,7 @@ export default function UploadData() {
           </button>
         }
       />
-      <p className="text-xs text-gray-500 -mt-2 mb-1">
+      <p className="text-xs text-[var(--panel-ink-4)] -mt-2 mb-1">
         {t('uploaddata.banner.prefix')}{' '}
         <button
           type="button"
@@ -1226,8 +1226,8 @@ export default function UploadData() {
                     style={active ? { borderColor: c.border, background: c.bg, boxShadow: `0 0 20px ${c.border}` } : {}}
                   >
                     <Icon size={22} className={`mb-2 ${active ? c.icon : 'text-gray-600'}`} />
-                    <p className={`text-sm font-semibold ${active ? c.text : 'text-gray-300'}`}>{opt.label}</p>
-                    <p className="text-xs text-gray-500 mt-0.5 leading-snug">{opt.desc}</p>
+                    <p className={`text-sm font-semibold ${active ? c.text : 'text-[var(--panel-ink-2)]'}`}>{opt.label}</p>
+                    <p className="text-xs text-[var(--panel-ink-4)] mt-0.5 leading-snug">{opt.desc}</p>
                   </motion.button>
                 )
               })}
@@ -1239,7 +1239,7 @@ export default function UploadData() {
                   <AlertTriangle size={20} className="text-yellow-400 flex-shrink-0 mt-0.5" />
                   <div>
                     <p className="text-sm font-semibold text-yellow-300">{t('uploaddata.idle.fleetBanner.title')}</p>
-                    <p className="text-sm text-gray-400 mt-1">{t('uploaddata.idle.fleetBanner.desc')}</p>
+                    <p className="text-sm text-[var(--panel-ink-3)] mt-1">{t('uploaddata.idle.fleetBanner.desc')}</p>
                     <a href="/fleet-master" className="inline-block mt-2 text-sm text-green-400 underline hover:text-green-300">{t('uploaddata.idle.fleetBanner.link')}</a>
                   </div>
                 </div>
@@ -1252,7 +1252,7 @@ export default function UploadData() {
                     <Info size={15} className="text-green-400" />
                     <span className="text-sm font-semibold text-green-300">Your columns don't need to match exactly</span>
                   </div>
-                  <p className="text-xs text-gray-400 mb-3">
+                  <p className="text-xs text-[var(--panel-ink-3)] mb-3">
                     The smart mapping engine recognises hundreds of column name variations, abbreviations, and Arabic headers.
                     Use any naming convention. The engine will match automatically. You can adjust any mapping before uploading.
                   </p>
@@ -1261,7 +1261,7 @@ export default function UploadData() {
                       <div key={f.key} className="flex items-start gap-1.5">
                         <span className="text-green-500 text-xs mt-0.5 flex-shrink-0">✓</span>
                         <div>
-                          <span className="text-xs font-semibold text-gray-300">{f.label}</span>
+                          <span className="text-xs font-semibold text-[var(--panel-ink-2)]">{f.label}</span>
                           <p className="text-xs text-gray-600 leading-tight">{f.guesses.slice(0,3).join(', ')}...</p>
                         </div>
                       </div>
@@ -1286,7 +1286,7 @@ export default function UploadData() {
                     </motion.div>
                     <div className="text-center">
                       <p className="text-xl font-semibold text-white mb-1">{dragging ? 'Drop to upload' : 'Drop your Excel or CSV file here'}</p>
-                      <p className="text-gray-500 text-sm">or click to browse · Excel, OpenDocument, CSV/TSV supported</p>
+                      <p className="text-[var(--panel-ink-4)] text-sm">or click to browse · Excel, OpenDocument, CSV/TSV supported</p>
                     </div>
                     <div className="flex items-center gap-2 text-xs text-gray-600 flex-wrap justify-center">
                       {['.xlsx', '.xls', '.xlsm', '.xlsb', '.ods', '.csv', '.tsv', '.txt'].map(x => (
@@ -1306,7 +1306,7 @@ export default function UploadData() {
         {step === 'sheets' && (
           <div className="card space-y-4">
             <h2 className="text-base font-semibold text-white">Select Sheets to Import</h2>
-            <p className="text-sm text-gray-400">This workbook has {sheetOptions.length} sheets. Choose which to include. Pivot and summary sheets are suggested to skip.</p>
+            <p className="text-sm text-[var(--panel-ink-3)]">This workbook has {sheetOptions.length} sheets. Choose which to include. Pivot and summary sheets are suggested to skip.</p>
             <div className="space-y-2">
               {sheetOptions.map((s, i) => (
                 <label key={s.name} className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${s.selected ? 'border-green-700/50 bg-green-900/10' : 'border-gray-700 bg-gray-800/30'}`}>
@@ -1315,7 +1315,7 @@ export default function UploadData() {
                     className="accent-green-500" />
                   <span className="text-white text-sm font-medium flex-1">{s.name}</span>
                   {s.likelyPivot && <span className="text-xs text-yellow-400">looks like a pivot</span>}
-                  <span className="text-xs text-gray-500">{s.rows} rows</span>
+                  <span className="text-xs text-[var(--panel-ink-4)]">{s.rows} rows</span>
                 </label>
               ))}
             </div>
@@ -1348,9 +1348,9 @@ export default function UploadData() {
         {step === 'mapping' && (
           <div className="space-y-4">
             {/* Header row */}
-            <div className="flex flex-wrap items-center gap-3 text-sm text-gray-400">
+            <div className="flex flex-wrap items-center gap-3 text-sm text-[var(--panel-ink-3)]">
               <FileSpreadsheet size={16} className="text-blue-400" />
-              <span className="font-medium text-gray-300">{fileName}</span>
+              <span className="font-medium text-[var(--panel-ink-2)]">{fileName}</span>
               <span>· {rows.length.toLocaleString()} rows · {headers.length} columns detected</span>
               {mappingSource === 'memory' && (
                 <span className="badge bg-green-900/50 text-green-300 border border-green-700/50 flex items-center gap-1 text-xs px-2 py-0.5 rounded-full">
@@ -1370,9 +1370,9 @@ export default function UploadData() {
                 <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
                   <div>
                     <h2 className="text-base font-semibold text-white">File Preview</h2>
-                    <p className="text-xs text-gray-500 mt-0.5">If the wrong row was detected as the header, pick the correct one. The table re-maps instantly.</p>
+                    <p className="text-xs text-[var(--panel-ink-4)] mt-0.5">If the wrong row was detected as the header, pick the correct one. The table re-maps instantly.</p>
                   </div>
-                  <label className="flex items-center gap-2 text-xs text-gray-400">
+                  <label className="flex items-center gap-2 text-xs text-[var(--panel-ink-3)]">
                     Header row:
                     <select
                       className="input text-xs py-1"
@@ -1393,7 +1393,7 @@ export default function UploadData() {
                         <tr key={ri} className={ri === headerRowIdx ? 'bg-green-900/30' : ri < headerRowIdx ? 'opacity-40' : ''}>
                           <td className="px-2 py-1 text-gray-600 border-r border-gray-800 sticky left-0 bg-inherit">{ri + 1}</td>
                           {(r || []).slice(0, 12).map((c, ci) => (
-                            <td key={ci} className={`px-2 py-1 whitespace-nowrap ${ri === headerRowIdx ? 'text-green-300 font-semibold' : 'text-gray-400'}`}>
+                            <td key={ci} className={`px-2 py-1 whitespace-nowrap ${ri === headerRowIdx ? 'text-green-300 font-semibold' : 'text-[var(--panel-ink-3)]'}`}>
                               {c == null || c === '' ? '·' : String(c).slice(0, 24)}
                             </td>
                           ))}
@@ -1429,12 +1429,12 @@ export default function UploadData() {
             {/* Unmapped source columns warning */}
             {unmappedSource.length > 0 && (
               <div className="bg-gray-800/50 border border-gray-700/50 rounded-xl px-4 py-3">
-                <p className="text-xs font-semibold text-gray-400 mb-1.5">
-                  {unmappedSource.length} column{unmappedSource.length !== 1 ? 's' : ''} from your file are not mapped to any field - they will be saved in <code className="text-gray-300">extra_fields</code> and not lost:
+                <p className="text-xs font-semibold text-[var(--panel-ink-3)] mb-1.5">
+                  {unmappedSource.length} column{unmappedSource.length !== 1 ? 's' : ''} from your file are not mapped to any field - they will be saved in <code className="text-[var(--panel-ink-2)]">extra_fields</code> and not lost:
                 </p>
                 <div className="flex flex-wrap gap-1.5">
                   {unmappedSource.map(h => (
-                    <span key={h} className="text-xs bg-gray-700/60 text-gray-300 px-2 py-0.5 rounded-full">{h}</span>
+                    <span key={h} className="text-xs bg-gray-700/60 text-[var(--panel-ink-2)] px-2 py-0.5 rounded-full">{h}</span>
                   ))}
                 </div>
               </div>
@@ -1444,11 +1444,11 @@ export default function UploadData() {
               <div className="flex items-center justify-between mb-4">
                 <div>
                   <h2 className="text-base font-semibold text-white">Column Mapping</h2>
-                  <p className="text-xs text-gray-500 mt-0.5">Match your file's columns to the system fields. Confidence shown by colour.</p>
+                  <p className="text-xs text-[var(--panel-ink-4)] mt-0.5">Match your file's columns to the system fields. Confidence shown by colour.</p>
                 </div>
                 {/* Search */}
                 <div className="relative">
-                  <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-500" />
+                  <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--panel-ink-4)]" />
                   <input
                     className="input text-xs pl-7 py-1.5 w-36"
                     placeholder="Filter fields..."
@@ -1459,7 +1459,7 @@ export default function UploadData() {
               </div>
 
               {/* Legend */}
-              <div className="flex flex-wrap items-center gap-3 mb-4 text-xs text-gray-500">
+              <div className="flex flex-wrap items-center gap-3 mb-4 text-xs text-[var(--panel-ink-4)]">
                 <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-green-500 inline-block" /> Exact / High match</span>
                 <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-yellow-500 inline-block" /> Medium match</span>
                 <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-500 inline-block" /> No match: please select</span>
@@ -1489,7 +1489,7 @@ export default function UploadData() {
                     <div key={field.key} className={`rounded-lg border p-3 transition-all ${borderColor}`}>
                       <div className="flex items-center gap-2 mb-1.5">
                         <span className={`w-2 h-2 rounded-full flex-shrink-0 ${dotColor}`} />
-                        <label className="text-xs font-semibold text-gray-300">
+                        <label className="text-xs font-semibold text-[var(--panel-ink-2)]">
                           {field.label}
                           {field.required && <span className="text-red-400 ml-0.5">*</span>}
                         </label>
@@ -1555,8 +1555,8 @@ export default function UploadData() {
                 </div>
                 <div className="flex flex-wrap gap-2">
                   {dupCheck.exact.length > 0 && <button className="btn-primary text-sm py-1.5 px-3" onClick={() => setSkipIds(new Set(dupCheck.exact.map(d => d.idx)))}>Skip duplicates ({dupCheck.exact.length})</button>}
-                  {(dupCheck.exact.length > 0 || dupCheck.conflicts.length > 0) && <button className="px-3 py-1.5 text-sm rounded-lg border border-gray-600 text-gray-300 hover:text-white" onClick={() => setDupReview(true)}>Review individually</button>}
-                  <button className="px-3 py-1.5 text-sm rounded-lg border border-gray-600 text-gray-400 hover:text-white" onClick={() => { setSkipIds(new Set()); setDupCheck(null) }}>Upload all anyway</button>
+                  {(dupCheck.exact.length > 0 || dupCheck.conflicts.length > 0) && <button className="px-3 py-1.5 text-sm rounded-lg border border-gray-600 text-[var(--panel-ink-2)] hover:text-white" onClick={() => setDupReview(true)}>Review individually</button>}
+                  <button className="px-3 py-1.5 text-sm rounded-lg border border-gray-600 text-[var(--panel-ink-3)] hover:text-white" onClick={() => { setSkipIds(new Set()); setDupCheck(null) }}>Upload all anyway</button>
                 </div>
                 {skipIds.size > 0 && <p className="text-xs text-green-400 mt-2">{skipIds.size} row{skipIds.size !== 1 ? 's' : ''} will be skipped</p>}
               </div>
@@ -1573,7 +1573,7 @@ export default function UploadData() {
                         <div className="flex items-start justify-between gap-3">
                           <div className="text-xs space-y-0.5">
                             <p className="text-white font-mono font-semibold">Row {idx + 1}: {row.serial_no}</p>
-                            <p className="text-gray-400">File: {row.asset_no} · {row.issue_date} | DB: {existing.asset_no} · {existing.issue_date}</p>
+                            <p className="text-[var(--panel-ink-3)]">File: {row.asset_no} · {row.issue_date} | DB: {existing.asset_no} · {existing.issue_date}</p>
                           </div>
                           <div className="flex gap-1.5 flex-shrink-0">
                             <button onClick={() => setSkipIds(s => { const n = new Set(s); n.add(idx); return n })} className="text-xs px-2 py-1 rounded bg-red-900/30 text-red-400 border border-red-800/50">Skip</button>
@@ -1614,7 +1614,7 @@ export default function UploadData() {
                 <div className="flex items-center gap-2 mb-3">
                   <Database size={15} className="text-green-400" />
                   <h2 className="text-base font-semibold text-white">Data Quality</h2>
-                  <span className="text-xs text-gray-500">· {rows.length.toLocaleString()} rows analysed</span>
+                  <span className="text-xs text-[var(--panel-ink-4)]">· {rows.length.toLocaleString()} rows analysed</span>
                 </div>
                 <div className="overflow-x-auto">
                   <table className="w-full text-xs">
@@ -1629,7 +1629,7 @@ export default function UploadData() {
                         <tr key={qf.key}>
                           <td className="table-cell">{qf.label}{qf.required && <span className="text-red-400 ml-0.5">*</span>}</td>
                           <td className="table-cell">
-                            <span className={qf.fillPct >= 90 ? 'text-green-400' : qf.fillPct >= 50 ? 'text-yellow-400' : qf.required ? 'text-red-400' : 'text-gray-400'}>
+                            <span className={qf.fillPct >= 90 ? 'text-green-400' : qf.fillPct >= 50 ? 'text-yellow-400' : qf.required ? 'text-red-400' : 'text-[var(--panel-ink-3)]'}>
                               {qf.fillPct}%
                             </span>
                           </td>
@@ -1656,16 +1656,16 @@ export default function UploadData() {
                 <div className="flex flex-wrap gap-4 text-sm mb-3">
                   <span className="text-green-400">{cleanPreview.auto.toLocaleString()} auto-classified</span>
                   <span className="text-yellow-400">{cleanPreview.review.toLocaleString()} need review</span>
-                  <span className="text-gray-500">of {cleanPreview.total.toLocaleString()} sampled</span>
+                  <span className="text-[var(--panel-ink-4)]">of {cleanPreview.total.toLocaleString()} sampled</span>
                 </div>
                 {cleanPreview.examples.length > 0 && (
                   <div className="space-y-1 mb-3">
                     {cleanPreview.examples.map((ex, i) => (
                       <div key={i} className="flex items-center gap-2 text-xs">
-                        <span className="text-gray-400 truncate max-w-xs">{ex.text}</span>
+                        <span className="text-[var(--panel-ink-3)] truncate max-w-xs">{ex.text}</span>
                         <ChevronRight size={11} className="text-gray-600 flex-shrink-0" />
-                        <span className="text-gray-300">{ex.category || '-'}</span>
-                        {ex.risk && <span className="px-1.5 py-0.5 rounded bg-gray-800 text-gray-400">{ex.risk}</span>}
+                        <span className="text-[var(--panel-ink-2)]">{ex.category || '-'}</span>
+                        {ex.risk && <span className="px-1.5 py-0.5 rounded bg-gray-800 text-[var(--panel-ink-3)]">{ex.risk}</span>}
                         <span className={`px-1.5 py-0.5 rounded ${ex.conf === 'Low' ? 'bg-yellow-900/40 text-yellow-400' : 'bg-green-900/40 text-green-400'}`}>{ex.conf}</span>
                       </div>
                     ))}
@@ -1673,9 +1673,9 @@ export default function UploadData() {
                 )}
                 <label className="flex items-start gap-2 cursor-pointer border-t border-gray-800 pt-3">
                   <input type="checkbox" className="accent-purple-500 mt-0.5" checked={useAI} onChange={e => setUseAI(e.target.checked)} />
-                  <span className="text-sm text-gray-300">
+                  <span className="text-sm text-[var(--panel-ink-2)]">
                     Clean low-confidence rows with AI
-                    <span className="text-xs text-gray-500 block">Routes the {cleanPreview.review.toLocaleString()} "need review" rows through the secure AI cleaning function for better category/risk. Uses AI tokens, off by default.</span>
+                    <span className="text-xs text-[var(--panel-ink-4)] block">Routes the {cleanPreview.review.toLocaleString()} "need review" rows through the secure AI cleaning function for better category/risk. Uses AI tokens, off by default.</span>
                   </span>
                 </label>
               </div>
@@ -1734,10 +1734,10 @@ export default function UploadData() {
               <div className="absolute inset-0 flex items-center justify-center"><Rocket size={20} className="text-green-400" /></div>
             </div>
             <p className="text-white text-lg font-semibold mb-1">Uploading & classifying</p>
-            <p className="text-gray-500 text-sm mb-6">Auto-classifying records with the Smart Engine</p>
+            <p className="text-[var(--panel-ink-4)] text-sm mb-6">Auto-classifying records with the Smart Engine</p>
             {progress.total > 0 && (
               <div className="max-w-sm mx-auto">
-                <div className="flex justify-between text-xs text-gray-500 mb-2">
+                <div className="flex justify-between text-xs text-[var(--panel-ink-4)] mb-2">
                   <span>{progress.done.toLocaleString()} rows processed</span>
                   <span>{Math.round((progress.done / progress.total) * 100)}%</span>
                 </div>
@@ -1762,7 +1762,7 @@ export default function UploadData() {
               </motion.div>
               <div>
                 <h2 className="text-xl font-bold text-white">{result.pending ? 'Submitted for Approval' : 'Upload Complete'}</h2>
-                <p className="text-gray-500 text-sm">
+                <p className="text-[var(--panel-ink-4)] text-sm">
                   {result.pending
                     ? `${(result.submitted ?? 0).toLocaleString()} ${result.pending ? 'records' : ''} sent to an administrator. They will appear once approved.`
                     : 'Records imported and classified successfully'}
@@ -1784,7 +1784,7 @@ export default function UploadData() {
                   <p className="text-white font-medium">
                     {result.extraColCount} extra column{result.extraColCount !== 1 ? 's' : ''} saved as custom data, nothing was lost
                   </p>
-                  <p className="text-sm text-gray-400 mt-0.5">
+                  <p className="text-sm text-[var(--panel-ink-3)] mt-0.5">
                     All columns that don't match a standard field are preserved in Custom Data. You can browse, search, export, or teach the system to recognise them permanently.
                   </p>
                   <Link to="/custom-data" className="inline-flex items-center gap-1.5 mt-2 text-sm text-purple-300 hover:text-purple-200 underline">
@@ -1799,14 +1799,14 @@ export default function UploadData() {
                   <Wand2 size={18} className="text-yellow-400 flex-shrink-0 mt-0.5" />
                   <div>
                     <p className="text-white font-medium">{result.needsReviewCount.toLocaleString()} records need manual classification</p>
-                    <p className="text-sm text-gray-400 mt-0.5">Open Data Cleaning to approve or adjust them.</p>
+                    <p className="text-sm text-[var(--panel-ink-3)] mt-0.5">Open Data Cleaning to approve or adjust them.</p>
                     <button onClick={() => navigate('/cleaning')} className="btn-primary mt-3 text-sm flex items-center gap-2"><Wand2 size={14} /> Go to Data Cleaning</button>
                   </div>
                 </div>
               </div>
             )}
             {result.skipLog?.length > 0 && (
-              <details className="text-sm text-gray-400 mb-4">
+              <details className="text-sm text-[var(--panel-ink-3)] mb-4">
                 <summary className="cursor-pointer text-yellow-400">View error log ({result.skipLog.length} row(s) skipped, see reason per row)</summary>
                 <pre className="mt-2 bg-gray-800 rounded p-3 text-xs overflow-auto">{JSON.stringify(result.skipLog, null, 2)}</pre>
               </details>
@@ -1825,7 +1825,7 @@ function Tile({ label, value, color }) {
     green:  'text-green-400 border-green-800 bg-green-900/20',
     blue:   'text-blue-400 border-blue-800 bg-blue-900/20',
     yellow: 'text-yellow-400 border-yellow-800 bg-yellow-900/20',
-    gray:   'text-gray-400 border-gray-700 bg-gray-800/50',
+    gray:   'text-[var(--panel-ink-3)] border-gray-700 bg-gray-800/50',
   }
   return (
     <div className={`border rounded-lg p-3 ${colors[color]}`}>

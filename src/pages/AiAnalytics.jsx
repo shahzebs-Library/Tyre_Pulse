@@ -77,7 +77,7 @@ function AgentBadge({ agentType }) {
 function RiskBadge({ level }) {
   if (!level) return null
   return (
-    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold border ${RISK_BADGE[level] ?? 'text-gray-300 bg-gray-800 border-gray-700'}`}>
+    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold border ${RISK_BADGE[level] ?? 'text-[var(--panel-ink-2)] bg-gray-800 border-gray-700'}`}>
       {level}
     </span>
   )
@@ -88,7 +88,7 @@ function AiChart({ chartType, chartData, chartTitle }) {
   const data = applyPalette(chartData)
   return (
     <div className="space-y-2">
-      {chartTitle && <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider">{chartTitle}</h4>}
+      {chartTitle && <h4 className="text-xs font-semibold text-[var(--panel-ink-3)] uppercase tracking-wider">{chartTitle}</h4>}
       <div style={{ height: 280 }}>
         {chartType === 'bar'      && <Bar      data={data} options={CHART_OPTS}     />}
         {chartType === 'line'     && <Line     data={data} options={CHART_OPTS}     />}
@@ -106,7 +106,7 @@ function AiTable({ tableHeaders, tableRows }) {
         <thead>
           <tr className="bg-gray-900/80">
             {tableHeaders.map((h, i) => (
-              <th key={i} className="px-3 py-2 text-left font-semibold text-gray-400 border-b border-gray-800 whitespace-nowrap">{h}</th>
+              <th key={i} className="px-3 py-2 text-left font-semibold text-[var(--panel-ink-3)] border-b border-gray-800 whitespace-nowrap">{h}</th>
             ))}
           </tr>
         </thead>
@@ -114,7 +114,7 @@ function AiTable({ tableHeaders, tableRows }) {
           {tableRows.map((row, i) => (
             <tr key={i} className="border-b border-gray-800/50 hover:bg-gray-800/20 transition-colors">
               {row.map((cell, j) => (
-                <td key={j} className="px-3 py-2 text-gray-300">{cell}</td>
+                <td key={j} className="px-3 py-2 text-[var(--panel-ink-2)]">{cell}</td>
               ))}
             </tr>
           ))}
@@ -163,23 +163,23 @@ function ResponseCard({ item, onFollowUp, index }) {
         <div className="flex items-center gap-2 min-w-0">
           <AgentBadge agentType={r.agentType} />
           {r.riskLevel && <RiskBadge level={r.riskLevel} />}
-          <span className="text-xs text-gray-400 truncate">{item.question}</span>
+          <span className="text-xs text-[var(--panel-ink-3)] truncate">{item.question}</span>
         </div>
         <div className="flex items-center gap-1.5 flex-shrink-0 ml-2">
-          <button onClick={copyAnswer} className="p-1 rounded hover:bg-white/5 text-gray-600 hover:text-gray-300 transition-colors" title="Copy answer">
+          <button onClick={copyAnswer} className="p-1 rounded hover:bg-white/5 text-gray-600 hover:text-[var(--panel-ink-2)] transition-colors" title="Copy answer">
             {copied ? <Check size={12} className="text-green-400" /> : <Copy size={12} />}
           </button>
           {(r.tableHeaders?.length && r.tableRows?.length) ? (
             <>
-              <button onClick={handleExportExcel} className="p-1 rounded hover:bg-white/5 text-gray-600 hover:text-gray-300 transition-colors" title="Export Excel">
+              <button onClick={handleExportExcel} className="p-1 rounded hover:bg-white/5 text-gray-600 hover:text-[var(--panel-ink-2)] transition-colors" title="Export Excel">
                 <Download size={12} />
               </button>
-              <button onClick={handleExportPdf} className="p-1 rounded hover:bg-white/5 text-gray-600 hover:text-gray-300 transition-colors" title="Export PDF">
+              <button onClick={handleExportPdf} className="p-1 rounded hover:bg-white/5 text-gray-600 hover:text-[var(--panel-ink-2)] transition-colors" title="Export PDF">
                 <FileText size={12} />
               </button>
             </>
           ) : null}
-          <button onClick={() => setExpanded(v => !v)} className="p-1 rounded hover:bg-white/5 text-gray-600 hover:text-gray-300 transition-colors">
+          <button onClick={() => setExpanded(v => !v)} className="p-1 rounded hover:bg-white/5 text-gray-600 hover:text-[var(--panel-ink-2)] transition-colors">
             {expanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
           </button>
         </div>
@@ -195,12 +195,12 @@ function ResponseCard({ item, onFollowUp, index }) {
           {/* Insights */}
           {r.insights?.length > 0 && (
             <div className="space-y-1.5">
-              <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Key Insights</p>
+              <p className="text-[10px] font-bold text-[var(--panel-ink-4)] uppercase tracking-widest">Key Insights</p>
               <ul className="space-y-1">
                 {r.insights.map((ins, i) => (
                   <li key={i} className={`flex items-start gap-2 text-sm ${colors.text}`}>
                     <span className="mt-0.5 flex-shrink-0">•</span>
-                    <span className="text-gray-300">{ins}</span>
+                    <span className="text-[var(--panel-ink-2)]">{ins}</span>
                   </li>
                 ))}
               </ul>
@@ -228,14 +228,14 @@ function ResponseCard({ item, onFollowUp, index }) {
           {/* Recommendations */}
           {r.recommendations?.length > 0 && (
             <div className="space-y-1.5">
-              <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Recommended Actions</p>
+              <p className="text-[10px] font-bold text-[var(--panel-ink-4)] uppercase tracking-widest">Recommended Actions</p>
               <ul className="space-y-1.5">
                 {r.recommendations.map((rec, i) => (
                   <li key={i} className="flex items-start gap-2">
                     <div className={`w-4 h-4 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5 text-[8px] font-bold ${colors.bg} ${colors.text} border ${colors.border}`}>
                       {i + 1}
                     </div>
-                    <span className="text-sm text-gray-300">{rec}</span>
+                    <span className="text-sm text-[var(--panel-ink-2)]">{rec}</span>
                   </li>
                 ))}
               </ul>
@@ -247,7 +247,7 @@ function ResponseCard({ item, onFollowUp, index }) {
             <span className="text-[10px] text-gray-600">Follow up:</span>
             {['Tell me more', 'Which assets are affected?', 'Show cost impact', 'Create action plan'].map(q => (
               <button key={q} onClick={() => onFollowUp?.(q, r.agentType)}
-                className="text-[10px] px-2 py-1 rounded-full text-gray-500 border border-gray-700 hover:border-gray-500 hover:text-gray-300 transition-colors">
+                className="text-[10px] px-2 py-1 rounded-full text-[var(--panel-ink-4)] border border-gray-700 hover:border-gray-500 hover:text-[var(--panel-ink-2)] transition-colors">
                 {q}
               </button>
             ))}
@@ -351,7 +351,7 @@ export default function AiAnalytics() {
     return (
       <div className="flex flex-col items-center justify-center h-64 gap-3">
         <div className="w-8 h-8 border-2 border-green-500 border-t-transparent rounded-full animate-spin" />
-        <p className="text-gray-400 text-sm">Loading fleet data...</p>
+        <p className="text-[var(--panel-ink-3)] text-sm">Loading fleet data...</p>
       </div>
     )
   }
@@ -376,7 +376,7 @@ export default function AiAnalytics() {
             <Icon size={16} className={color} />
             <div>
               <p className={`text-lg font-bold ${color} leading-none`}>{value}</p>
-              <p className="text-gray-500 text-xs mt-0.5">{label}</p>
+              <p className="text-[var(--panel-ink-4)] text-xs mt-0.5">{label}</p>
             </div>
           </div>
         ))}
@@ -390,8 +390,8 @@ export default function AiAnalytics() {
           {/* Agent Selector */}
           <div className="card py-3 space-y-3">
             <div className="flex items-center justify-between">
-              <p className="text-xs font-bold text-gray-500 uppercase tracking-widest">Active Agent</p>
-              <label className="flex items-center gap-1.5 text-xs text-gray-500 cursor-pointer">
+              <p className="text-xs font-bold text-[var(--panel-ink-4)] uppercase tracking-widest">Active Agent</p>
+              <label className="flex items-center gap-1.5 text-xs text-[var(--panel-ink-4)] cursor-pointer">
                 <div
                   onClick={() => setAutoDetect(v => !v)}
                   className={`w-8 h-4 rounded-full transition-colors cursor-pointer relative ${autoDetect ? 'bg-green-600' : 'bg-gray-700'}`}>
@@ -409,7 +409,7 @@ export default function AiAnalytics() {
                     key={type}
                     onClick={() => { setAgentType(type); setAutoDetect(false) }}
                     className={`p-2.5 rounded-xl border text-left transition-all ${
-                      isActive ? `${colors.bg} ${colors.border} ${colors.text}` : 'bg-gray-900/50 border-gray-800 text-gray-500 hover:border-gray-600 hover:text-gray-300'
+                      isActive ? `${colors.bg} ${colors.border} ${colors.text}` : 'bg-gray-900/50 border-gray-800 text-[var(--panel-ink-4)] hover:border-gray-600 hover:text-[var(--panel-ink-2)]'
                     }`}
                   >
                     <p className="text-xs font-bold">{AGENT_LABELS[type]}</p>
@@ -428,7 +428,7 @@ export default function AiAnalytics() {
                   <Brain size={20} className="text-green-400" />
                 </div>
                 <div>
-                  <p className="text-sm font-semibold text-gray-300">Ask anything about your fleet</p>
+                  <p className="text-sm font-semibold text-[var(--panel-ink-2)]">Ask anything about your fleet</p>
                   <p className="text-xs text-gray-600 mt-1">Use the suggested questions or deep analysis presets to get started</p>
                 </div>
               </div>
@@ -441,7 +441,7 @@ export default function AiAnalytics() {
             {asking && (
               <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-gray-900/60 border border-gray-800">
                 <div className="w-4 h-4 border-2 border-green-500 border-t-transparent rounded-full animate-spin flex-shrink-0" />
-                <p className="text-sm text-gray-400">
+                <p className="text-sm text-[var(--panel-ink-3)]">
                   <AgentBadge agentType={agentType} />
                   <span className="ml-2">Analysing fleet data...</span>
                 </p>
@@ -499,7 +499,7 @@ export default function AiAnalytics() {
                 {records.length} records · {anomalies.length} anomalies · {inspections.length} inspections
                 {activeCountry !== 'All' ? ` · ${activeCountry}` : ' · All countries'}
               </p>
-              <button onClick={load} className="flex items-center gap-1 text-[10px] text-gray-600 hover:text-gray-400 transition-colors">
+              <button onClick={load} className="flex items-center gap-1 text-[10px] text-gray-600 hover:text-[var(--panel-ink-3)] transition-colors">
                 <RefreshCw size={10} /> Refresh data
               </button>
             </div>
@@ -513,7 +513,7 @@ export default function AiAnalytics() {
           <div className="card space-y-3">
             <div className="flex items-center gap-2">
               <Zap size={13} className="text-yellow-400" />
-              <p className="text-xs font-bold text-gray-300 uppercase tracking-widest">Deep Analysis</p>
+              <p className="text-xs font-bold text-[var(--panel-ink-2)] uppercase tracking-widest">Deep Analysis</p>
             </div>
             <div className="grid grid-cols-1 gap-2">
               {DEEP_ANALYSIS_PRESETS.map(preset => {
@@ -542,14 +542,14 @@ export default function AiAnalytics() {
           <div className="card space-y-3">
             <div className="flex items-center gap-2">
               <Sparkles size={13} className="text-blue-400" />
-              <p className="text-xs font-bold text-gray-300 uppercase tracking-widest">Suggested Questions</p>
+              <p className="text-xs font-bold text-[var(--panel-ink-2)] uppercase tracking-widest">Suggested Questions</p>
             </div>
             <div className="flex flex-wrap gap-1.5">
               {(SUGGESTED_QUESTIONS[agentType] ?? SUGGESTED_QUESTIONS.analyst).map(q => (
                 <button
                   key={q}
                   onClick={() => { setQuestion(q); textareaRef.current?.focus() }}
-                  className="px-2.5 py-1 rounded-full text-[10px] font-medium text-gray-400 border border-gray-700 hover:border-green-600/60 hover:text-green-400 hover:bg-green-900/10 transition-colors"
+                  className="px-2.5 py-1 rounded-full text-[10px] font-medium text-[var(--panel-ink-3)] border border-gray-700 hover:border-green-600/60 hover:text-green-400 hover:bg-green-900/10 transition-colors"
                 >
                   {q}
                 </button>
@@ -561,7 +561,7 @@ export default function AiAnalytics() {
           <div className="card space-y-3">
             <div className="flex items-center gap-2">
               <TrendingUp size={13} className="text-green-400" />
-              <p className="text-xs font-bold text-gray-300 uppercase tracking-widest">Fleet Snapshot</p>
+              <p className="text-xs font-bold text-[var(--panel-ink-2)] uppercase tracking-widest">Fleet Snapshot</p>
             </div>
             <div className="space-y-2">
               {[
@@ -572,8 +572,8 @@ export default function AiAnalytics() {
               ].map(({ label, value, bar, color }) => (
                 <div key={label}>
                   <div className="flex justify-between text-[10px] mb-1">
-                    <span className="text-gray-500">{label}</span>
-                    <span className="text-gray-300 font-semibold">{value}</span>
+                    <span className="text-[var(--panel-ink-4)]">{label}</span>
+                    <span className="text-[var(--panel-ink-2)] font-semibold">{value}</span>
                   </div>
                   <div className="h-1.5 bg-gray-800 rounded-full overflow-hidden">
                     <div className={`h-full rounded-full ${color} transition-all`} style={{ width: `${Math.min(100, bar)}%` }} />
@@ -588,8 +588,8 @@ export default function AiAnalytics() {
                 <p className="text-[10px] text-gray-600 uppercase tracking-wider mb-2">Top Sites by Cost</p>
                 {dataContext.bySite.slice(0, 4).map((site, i) => (
                   <div key={site.name} className="flex items-center justify-between text-[11px] mb-1.5">
-                    <span className="text-gray-400 truncate max-w-[120px]">{site.name}</span>
-                    <span className="text-gray-300 font-semibold ml-2">SAR {site.cost.toLocaleString()}</span>
+                    <span className="text-[var(--panel-ink-3)] truncate max-w-[120px]">{site.name}</span>
+                    <span className="text-[var(--panel-ink-2)] font-semibold ml-2">SAR {site.cost.toLocaleString()}</span>
                   </div>
                 ))}
               </div>
@@ -602,13 +602,13 @@ export default function AiAnalytics() {
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <Cpu size={13} className="text-purple-400" />
-                  <p className="text-xs font-bold text-gray-300 uppercase tracking-widest">Session</p>
+                  <p className="text-xs font-bold text-[var(--panel-ink-2)] uppercase tracking-widest">Session</p>
                 </div>
                 <button onClick={clearConversation} className="text-[10px] text-gray-600 hover:text-red-400 flex items-center gap-1">
                   <X size={10} /> Clear
                 </button>
               </div>
-              <p className="text-xs text-gray-500">{messages.length} question{messages.length !== 1 ? 's' : ''} asked</p>
+              <p className="text-xs text-[var(--panel-ink-4)]">{messages.length} question{messages.length !== 1 ? 's' : ''} asked</p>
               {messages.slice(-3).reverse().map((m, i) => (
                 <div key={m.ts} className="flex items-center gap-2 text-[10px]">
                   <AgentBadge agentType={m.agent} />

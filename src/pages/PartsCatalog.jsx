@@ -20,6 +20,7 @@ import {
 } from '../lib/api/partsCatalog'
 import { partIsLowStock, summarizeParts } from '../lib/partsCatalog'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
+import { toUserMessage } from '../lib/safeError'
 
 const CATEGORIES = [
   'engine', 'brakes', 'tyres', 'electrical', 'body', 'hydraulic', 'air_system',
@@ -76,7 +77,7 @@ export default function PartsCatalog() {
       setUpdatedAt(new Date())
     } catch (err) {
       if (isMissingRelation(err)) { setMissing(true); setRows([]) }
-      else { setError(err?.message || 'Could not load the parts catalog.'); setRows([]) }
+      else { setError(toUserMessage(err, 'Could not load the parts catalog.')); setRows([]) }
     } finally {
       setRefreshing(false)
     }
@@ -129,7 +130,7 @@ export default function PartsCatalog() {
       closeForm()
       await load()
     } catch (err) {
-      setFormError(err?.message || 'Could not save the part.')
+      setFormError(toUserMessage(err, 'Could not save the part.'))
     } finally {
       setSaving(false)
     }
@@ -143,7 +144,7 @@ export default function PartsCatalog() {
       setPendingDelete(null)
       await load()
     } catch (err) {
-      setError(err?.message || 'Could not delete the part.')
+      setError(toUserMessage(err, 'Could not delete the part.'))
     } finally {
       setDeleting(false)
     }

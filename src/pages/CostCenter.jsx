@@ -121,7 +121,7 @@ function cpkDeltaBadge(cpk, fleetAvg) {
   // Non-finite guard too: a site with no CPK yields NaN (not null) and rendered "NaN%".
   if (cpk == null || fleetAvg == null || fleetAvg === 0 || !isFinite(cpk) || !isFinite(fleetAvg)) return null
   const pct = ((cpk - fleetAvg) / fleetAvg) * 100
-  if (Math.abs(pct) < 5) return { icon: Minus, label: '≈ avg', cls: 'text-gray-400' }
+  if (Math.abs(pct) < 5) return { icon: Minus, label: '≈ avg', cls: 'text-[var(--panel-ink-3)]' }
   if (pct > 0) return { icon: ArrowUpRight, label: `+${pct.toFixed(0)}%`, cls: 'text-red-400' }
   return { icon: ArrowDownRight, label: `${pct.toFixed(0)}%`, cls: 'text-green-400' }
 }
@@ -614,7 +614,7 @@ export default function CostCenter() {
                 className={`px-3 py-1 text-xs rounded-md font-medium transition-all ${
                   preset === p.label
                     ? 'bg-green-700 text-white'
-                    : 'text-gray-500 hover:text-gray-300'
+                    : 'text-[var(--panel-ink-4)] hover:text-[var(--panel-ink-2)]'
                 }`}
               >
                 {t(`costcenter.periods.${p.label}`)}
@@ -623,24 +623,24 @@ export default function CostCenter() {
           </div>
           <input
             type="date" value={dateFrom} onChange={e => { setDateFrom(e.target.value); setPreset('custom') }}
-            className="text-xs bg-gray-900 border border-gray-700 text-gray-300 rounded-lg px-2 py-1.5 focus:outline-none focus:border-green-600"
+            className="text-xs bg-gray-900 border border-gray-700 text-[var(--panel-ink-2)] rounded-lg px-2 py-1.5 focus:outline-none focus:border-green-600"
           />
           <span className="text-gray-600 text-xs">→</span>
           <input
             type="date" value={dateTo} onChange={e => { setDateTo(e.target.value); setPreset('custom') }}
-            className="text-xs bg-gray-900 border border-gray-700 text-gray-300 rounded-lg px-2 py-1.5 focus:outline-none focus:border-green-600"
+            className="text-xs bg-gray-900 border border-gray-700 text-[var(--panel-ink-2)] rounded-lg px-2 py-1.5 focus:outline-none focus:border-green-600"
           />
           <button
             onClick={fetchData}
             disabled={loading}
-            className="p-2 rounded-lg bg-gray-900 border border-gray-700 text-gray-400 hover:text-green-400 hover:border-green-700 transition-all disabled:opacity-50"
+            className="p-2 rounded-lg bg-gray-900 border border-gray-700 text-[var(--panel-ink-3)] hover:text-green-400 hover:border-green-700 transition-all disabled:opacity-50"
           >
             {loading ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
           </button>
           <button
             onClick={handleExcelExport}
             disabled={exporting}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gray-900 border border-gray-700 text-gray-400 hover:text-green-400 hover:border-green-700 transition-all text-xs disabled:opacity-50"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gray-900 border border-gray-700 text-[var(--panel-ink-3)] hover:text-green-400 hover:border-green-700 transition-all text-xs disabled:opacity-50"
           >
             <FileSpreadsheet size={13} />
             {t('costcenter.actions.excel')}
@@ -648,7 +648,7 @@ export default function CostCenter() {
           <button
             onClick={handlePdfExport}
             disabled={exporting}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gray-900 border border-gray-700 text-gray-400 hover:text-green-400 hover:border-green-700 transition-all text-xs disabled:opacity-50"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gray-900 border border-gray-700 text-[var(--panel-ink-3)] hover:text-green-400 hover:border-green-700 transition-all text-xs disabled:opacity-50"
           >
             <FileText size={13} />
             {t('costcenter.actions.pdf')}
@@ -721,7 +721,7 @@ export default function CostCenter() {
                   <SlidersHorizontal size={15} className="text-green-400" />
                   Tyres vs Maintenance
                 </h3>
-                <p className="text-xs text-gray-500 mt-0.5">
+                <p className="text-xs text-[var(--panel-ink-4)] mt-0.5">
                   One click separates tyre spend from maintenance spend (pm services plus work order repairs) over the last 12 months.
                 </p>
               </div>
@@ -734,7 +734,7 @@ export default function CostCenter() {
                     className={`px-4 py-1.5 text-xs rounded-md font-medium transition-all ${
                       costMode === m.key
                         ? 'bg-green-700 text-white'
-                        : 'text-gray-500 hover:text-gray-300'
+                        : 'text-[var(--panel-ink-4)] hover:text-[var(--panel-ink-2)]'
                     }`}
                   >
                     {m.label}
@@ -749,14 +749,14 @@ export default function CostCenter() {
                 {splitError}
               </div>
             ) : splitLoading ? (
-              <div className="flex items-center justify-center py-16 text-gray-500 text-sm gap-2">
+              <div className="flex items-center justify-center py-16 text-[var(--panel-ink-4)] text-sm gap-2">
                 <Loader2 size={16} className="animate-spin" />
                 Loading cost split
               </div>
             ) : !splitHasData ? (
               <div className="flex flex-col items-center justify-center py-16 gap-2">
                 <Wrench size={32} className="text-gray-700" />
-                <p className="text-gray-500 text-sm font-medium">No tyre or maintenance spend recorded</p>
+                <p className="text-[var(--panel-ink-4)] text-sm font-medium">No tyre or maintenance spend recorded</p>
                 <p className="text-gray-600 text-xs">Costs will appear here once tyre or maintenance records exist for this period.</p>
               </div>
             ) : (
@@ -767,7 +767,7 @@ export default function CostCenter() {
                     className="p-4 rounded-xl border"
                     style={{ borderColor: `${MODE_COLOR[costMode]}55`, background: `linear-gradient(135deg, ${MODE_COLOR[costMode]}12 0%, rgba(8,15,10,0.9) 100%)` }}
                   >
-                    <p className="text-xs text-gray-500 font-medium">{costModeLabel(costMode)} spend (12 months)</p>
+                    <p className="text-xs text-[var(--panel-ink-4)] font-medium">{costModeLabel(costMode)} spend (12 months)</p>
                     <p className="text-2xl font-bold mt-1" style={{ color: MODE_COLOR[costMode] }}>
                       {fmtCurrency(splitHeadline, activeCurrency)}
                     </p>
@@ -777,19 +777,19 @@ export default function CostCenter() {
                       onClick={() => setCostMode('tyres')}
                       className={`p-3 rounded-lg border text-left transition-colors ${costMode === 'tyres' ? 'border-green-700' : 'border-gray-700 hover:border-gray-600'}`}
                     >
-                      <p className="text-[11px] text-gray-500">Tyres</p>
+                      <p className="text-[11px] text-[var(--panel-ink-4)]">Tyres</p>
                       <p className="text-sm font-bold text-green-400 mt-0.5">{fmtCurrency(splitAgg.tyre, activeCurrency)}</p>
                     </button>
                     <button
                       onClick={() => setCostMode('maintenance')}
                       className={`p-3 rounded-lg border text-left transition-colors ${costMode === 'maintenance' ? 'border-orange-700' : 'border-gray-700 hover:border-gray-600'}`}
                     >
-                      <p className="text-[11px] text-gray-500">Maintenance</p>
+                      <p className="text-[11px] text-[var(--panel-ink-4)]">Maintenance</p>
                       <p className="text-sm font-bold text-orange-400 mt-0.5">{fmtCurrency(splitAgg.maintenance, activeCurrency)}</p>
                     </button>
                   </div>
                   <div className="p-3 rounded-lg bg-gray-800/50 border border-gray-700">
-                    <p className="text-[11px] text-gray-500">
+                    <p className="text-[11px] text-[var(--panel-ink-4)]">
                       Tyres are {fmtPct(splitAgg.combined > 0 ? (splitAgg.tyre / splitAgg.combined) * 100 : 0)} of total spend, maintenance {fmtPct(splitAgg.combined > 0 ? (splitAgg.maintenance / splitAgg.combined) * 100 : 0)}.
                     </p>
                   </div>
@@ -825,7 +825,7 @@ export default function CostCenter() {
                   key={tab}
                   onClick={() => setActiveTab(i)}
                   className={`px-5 py-3 text-sm font-medium transition-all relative ${
-                    activeTab === i ? 'text-green-300' : 'text-gray-500 hover:text-gray-300'
+                    activeTab === i ? 'text-green-300' : 'text-[var(--panel-ink-4)] hover:text-[var(--panel-ink-2)]'
                   }`}
                 >
                   {t(`costcenter.tabs.${DIMENSION_TAB_KEYS[i]}`)}
@@ -877,7 +877,7 @@ export default function CostCenter() {
                               t('costcenter.columns.bySite.avgCpk'),
                               t('costcenter.columns.bySite.vsFleetAvg'),
                             ].map(h => (
-                              <th key={h} className="pb-2 pr-4 text-xs text-gray-500 font-medium">{h}</th>
+                              <th key={h} className="pb-2 pr-4 text-xs text-[var(--panel-ink-4)] font-medium">{h}</th>
                             ))}
                           </tr>
                         </thead>
@@ -888,10 +888,10 @@ export default function CostCenter() {
                             return (
                               <tr key={s.site} className="border-b border-gray-800/50 hover:bg-gray-800/30 transition-colors">
                                 <td className="py-2.5 pr-4 text-gray-200 font-medium">{s.site}</td>
-                                <td className="py-2.5 pr-4 text-gray-400">{s.count}</td>
+                                <td className="py-2.5 pr-4 text-[var(--panel-ink-3)]">{s.count}</td>
                                 <td className="py-2.5 pr-4 text-gray-200">{fmtCurrency(s.totalCost, activeCurrency)}</td>
-                                <td className="py-2.5 pr-4 text-gray-400">{fmtCurrency(s.avgCost, activeCurrency)}</td>
-                                <td className="py-2.5 pr-4 text-gray-300">{fmtCpk(s.avgCpk, activeCurrency)}</td>
+                                <td className="py-2.5 pr-4 text-[var(--panel-ink-3)]">{fmtCurrency(s.avgCost, activeCurrency)}</td>
+                                <td className="py-2.5 pr-4 text-[var(--panel-ink-2)]">{fmtCpk(s.avgCpk, activeCurrency)}</td>
                                 <td className="py-2.5 pr-4">
                                   {delta ? (
                                     <span className={`flex items-center gap-1 text-xs font-medium ${delta.cls}`}>
@@ -940,7 +940,7 @@ export default function CostCenter() {
                               t('costcenter.columns.byBrand.failureRate'),
                               t('costcenter.columns.byBrand.bestPosition'),
                             ].map(h => (
-                              <th key={h} className="pb-2 pr-4 text-xs text-gray-500 font-medium">{h}</th>
+                              <th key={h} className="pb-2 pr-4 text-xs text-[var(--panel-ink-4)] font-medium">{h}</th>
                             ))}
                           </tr>
                         </thead>
@@ -951,15 +951,15 @@ export default function CostCenter() {
                                 <RankBadge rank={b.rank} />
                               </td>
                               <td className="py-2.5 pr-4 text-gray-200 font-medium">{b.brand}</td>
-                              <td className="py-2.5 pr-4 text-gray-400">{b.count}</td>
+                              <td className="py-2.5 pr-4 text-[var(--panel-ink-3)]">{b.count}</td>
                               <td className="py-2.5 pr-4 text-gray-200">{fmtCurrency(b.totalCost, activeCurrency)}</td>
-                              <td className="py-2.5 pr-4 text-gray-300">{fmtCpk(b.avgCpk, activeCurrency)}</td>
+                              <td className="py-2.5 pr-4 text-[var(--panel-ink-2)]">{fmtCpk(b.avgCpk, activeCurrency)}</td>
                               <td className="py-2.5 pr-4">
                                 <span className={`text-xs font-medium ${b.failureRate > 20 ? 'text-red-400' : b.failureRate > 10 ? 'text-orange-400' : 'text-green-400'}`}>
                                   {fmtPct(b.failureRate)}
                                 </span>
                               </td>
-                              <td className="py-2.5 pr-4 text-gray-400 text-xs">{b.bestPosition}</td>
+                              <td className="py-2.5 pr-4 text-[var(--panel-ink-3)] text-xs">{b.bestPosition}</td>
                             </tr>
                           ))}
                           {byBrand.length === 0 && (
@@ -985,7 +985,7 @@ export default function CostCenter() {
                             t('costcenter.columns.byVehicle.riskScore'),
                             t('costcenter.columns.byVehicle.trend'),
                           ].map(h => (
-                            <th key={h} className="pb-2 pr-4 text-xs text-gray-500 font-medium">{h}</th>
+                            <th key={h} className="pb-2 pr-4 text-xs text-[var(--panel-ink-4)] font-medium">{h}</th>
                           ))}
                         </tr>
                       </thead>
@@ -993,9 +993,9 @@ export default function CostCenter() {
                         {byVehicle.map(v => (
                           <tr key={v.asset} className="border-b border-gray-800/50 hover:bg-gray-800/30 transition-colors">
                             <td className="py-2.5 pr-4 text-gray-200 font-medium font-mono text-xs">{v.asset}</td>
-                            <td className="py-2.5 pr-4 text-gray-400">{v.count}</td>
+                            <td className="py-2.5 pr-4 text-[var(--panel-ink-3)]">{v.count}</td>
                             <td className="py-2.5 pr-4 text-gray-200">{fmtCurrency(v.totalCost, activeCurrency)}</td>
-                            <td className="py-2.5 pr-4 text-gray-300">{fmtCpk(v.avgCpk, activeCurrency)}</td>
+                            <td className="py-2.5 pr-4 text-[var(--panel-ink-2)]">{fmtCpk(v.avgCpk, activeCurrency)}</td>
                             <td className="py-2.5 pr-4">
                               <span className={`text-xs font-bold ${v.riskScore > 3 ? 'text-red-400' : v.riskScore > 1 ? 'text-orange-400' : 'text-green-400'}`}>
                                 {v.riskScore > 0 ? t('costcenter.risk.high', { count: v.riskScore }) : t('costcenter.risk.low')}
@@ -1004,7 +1004,7 @@ export default function CostCenter() {
                             <td className="py-2.5 pr-4">
                               {v.trend === 'up'   && <span className="flex items-center gap-1 text-xs text-red-400"><TrendingUp size={12} />{t('costcenter.trend.rising')}</span>}
                               {v.trend === 'down' && <span className="flex items-center gap-1 text-xs text-green-400"><TrendingDown size={12} />{t('costcenter.trend.falling')}</span>}
-                              {v.trend === 'flat' && <span className="flex items-center gap-1 text-xs text-gray-500"><Minus size={12} />{t('costcenter.trend.stable')}</span>}
+                              {v.trend === 'flat' && <span className="flex items-center gap-1 text-xs text-[var(--panel-ink-4)]"><Minus size={12} />{t('costcenter.trend.stable')}</span>}
                             </td>
                           </tr>
                         ))}
@@ -1150,7 +1150,7 @@ export default function CostCenter() {
                 <Target size={18} className="text-green-400 flex-shrink-0" />
                 <div>
                   <p className="text-sm font-medium text-green-300">{t('costcenter.anomaly.noneTitle')}</p>
-                  <p className="text-xs text-gray-500 mt-0.5">{t('costcenter.anomaly.noneDesc')}</p>
+                  <p className="text-xs text-[var(--panel-ink-4)] mt-0.5">{t('costcenter.anomaly.noneDesc')}</p>
                 </div>
               </div>
             ) : (
@@ -1170,8 +1170,8 @@ export default function CostCenter() {
                         {t(`costcenter.severity.${a.severity.toLowerCase()}`)}
                       </span>
                     </div>
-                    <p className="text-xs text-gray-400 mb-1">{a.metric}</p>
-                    <p className="text-xs text-gray-500 mb-2">{a.description}</p>
+                    <p className="text-xs text-[var(--panel-ink-3)] mb-1">{a.metric}</p>
+                    <p className="text-xs text-[var(--panel-ink-4)] mb-2">{a.description}</p>
                     <p className="text-[11px] text-green-400 font-medium leading-tight">
                       ↪ {a.recommendation}
                     </p>
@@ -1187,7 +1187,7 @@ export default function CostCenter() {
               <Zap size={15} className="text-yellow-400" />
               {t('costcenter.roi.heading')}
             </h3>
-            <p className="text-xs text-gray-500 mb-5">
+            <p className="text-xs text-[var(--panel-ink-4)] mb-5">
               {t('costcenter.roi.subtitle')}
             </p>
 
@@ -1195,7 +1195,7 @@ export default function CostCenter() {
               {/* Slider input */}
               <div>
                 <div className="flex items-center justify-between mb-3">
-                  <label className="text-sm text-gray-300 font-medium">{t('costcenter.roi.sliderLabel')}</label>
+                  <label className="text-sm text-[var(--panel-ink-2)] font-medium">{t('costcenter.roi.sliderLabel')}</label>
                   <span className="text-xl font-bold text-green-400">{roiSlider}%</span>
                 </div>
                 <input
@@ -1215,10 +1215,10 @@ export default function CostCenter() {
                 {/* Benchmark callout */}
                 <div className="mt-4 p-3 rounded-lg bg-blue-900/20 border border-blue-800/40">
                   <p className="text-xs text-blue-300 font-medium">{t('costcenter.roi.benchmarkTitle')}</p>
-                  <p className="text-sm text-gray-300 mt-0.5">
+                  <p className="text-sm text-[var(--panel-ink-2)] mt-0.5">
                     <span className="font-bold text-blue-300">{t('costcenter.roi.benchmarkTarget', { currency: activeCurrency, value: INDUSTRY_BENCHMARK_CPK })}</span>
                     {Number.isFinite(kpis.fleetAvgCpk) && kpis.fleetAvgCpk > 0 && (
-                      <span className="ml-2 text-gray-500">
+                      <span className="ml-2 text-[var(--panel-ink-4)]">
                         ({kpis.fleetAvgCpk > INDUSTRY_BENCHMARK_CPK
                           ? t('costcenter.roi.aboveBenchmark', { pct: ((kpis.fleetAvgCpk / INDUSTRY_BENCHMARK_CPK - 1) * 100).toFixed(0) })
                           : t('costcenter.roi.withinBenchmark')})
@@ -1231,15 +1231,15 @@ export default function CostCenter() {
               {/* Output tiles */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div className="p-4 rounded-xl border border-gray-700 text-center">
-                  <p className="text-xs text-gray-500 mb-1">{t('costcenter.roi.monthlySavings')}</p>
+                  <p className="text-xs text-[var(--panel-ink-4)] mb-1">{t('costcenter.roi.monthlySavings')}</p>
                   <p className="text-lg font-bold text-green-400">{fmtCurrency(roi.monthlySavings, activeCurrency)}</p>
                 </div>
                 <div className="p-4 rounded-xl border border-gray-700 text-center">
-                  <p className="text-xs text-gray-500 mb-1">{t('costcenter.roi.annualSavings')}</p>
+                  <p className="text-xs text-[var(--panel-ink-4)] mb-1">{t('costcenter.roi.annualSavings')}</p>
                   <p className="text-lg font-bold text-green-400">{fmtCurrency(roi.annualSavings, activeCurrency)}</p>
                 </div>
                 <div className="p-4 rounded-xl border border-gray-700 text-center">
-                  <p className="text-xs text-gray-500 mb-1">{t('costcenter.roi.paybackPeriod')}</p>
+                  <p className="text-xs text-[var(--panel-ink-4)] mb-1">{t('costcenter.roi.paybackPeriod')}</p>
                   <p className="text-lg font-bold text-yellow-400">
                     {roi.paybackMonths != null && isFinite(roi.paybackMonths)
                       ? t('costcenter.roi.paybackMonths', { months: roi.paybackMonths.toFixed(1) })
@@ -1249,7 +1249,7 @@ export default function CostCenter() {
 
                 {/* Insight */}
                 <div className="col-span-3 p-3 rounded-lg bg-gray-800/60 border border-gray-700">
-                  <p className="text-xs text-gray-400 leading-relaxed">
+                  <p className="text-xs text-[var(--panel-ink-3)] leading-relaxed">
                     {t('costcenter.roi.insight', {
                       pct: roiSlider,
                       count: normalised.length,
@@ -1265,7 +1265,7 @@ export default function CostCenter() {
           {normalised.length === 0 && !error && (
             <div className="flex flex-col items-center justify-center py-20 gap-3">
               <BarChart2 size={40} className="text-gray-700" />
-              <p className="text-gray-500 font-medium">{t('costcenter.empty.title')}</p>
+              <p className="text-[var(--panel-ink-4)] font-medium">{t('costcenter.empty.title')}</p>
               <p className="text-gray-600 text-sm">{t('costcenter.empty.subtitle')}</p>
             </div>
           )}
@@ -1293,7 +1293,7 @@ function KpiCard({ icon: Icon, label, value, sub, accent = 'green' }) {
     >
       <div className="flex items-center gap-2 mb-2">
         <Icon size={15} className={styles.icon} />
-        <span className="text-xs text-gray-500 font-medium">{label}</span>
+        <span className="text-xs text-[var(--panel-ink-4)] font-medium">{label}</span>
       </div>
       <p className="text-xl font-bold text-[var(--text-primary)] leading-none">{value}</p>
       {sub && <p className="text-xs text-gray-600 mt-1.5">{sub}</p>}
@@ -1303,7 +1303,7 @@ function KpiCard({ icon: Icon, label, value, sub, accent = 'green' }) {
 
 function RankBadge({ rank }) {
   if (rank === 1) return <span className="inline-flex items-center gap-1 text-yellow-400 text-xs font-bold"><Award size={13} /> #1</span>
-  if (rank === 2) return <span className="inline-flex items-center gap-1 text-gray-300 text-xs font-bold">#2</span>
+  if (rank === 2) return <span className="inline-flex items-center gap-1 text-[var(--panel-ink-2)] text-xs font-bold">#2</span>
   if (rank === 3) return <span className="inline-flex items-center gap-1 text-orange-400 text-xs font-bold">#3</span>
   return <span className="text-gray-600 text-xs font-medium">#{rank}</span>
 }

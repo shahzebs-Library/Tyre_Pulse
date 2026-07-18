@@ -17,6 +17,7 @@ import {
   Star, AlertTriangle, CheckCircle, Info, ArrowUpRight, ArrowDownRight,
 } from 'lucide-react'
 import * as analytics from '../lib/api/analyticsReads'
+import { toUserMessage } from '../lib/safeError'
 import { useSettings } from '../contexts/SettingsContext'
 import { useTenant } from '../contexts/TenantContext'
 import { resolvePdfBrand, pdfHeader, pdfFooter, pdfEmptyState, pdfTableTheme } from '../lib/exportUtils'
@@ -161,7 +162,7 @@ export default function PerformanceBenchmark() {
       ])
       setRecords(tr.data || [])
       setInspections(insp.data || [])
-    } catch (e) { setError(e.message) }
+    } catch (e) { setError(toUserMessage(e, 'Could not load benchmark data.')) }
     finally { setLoading(false) }
   }, [activeCountry, period])
 
@@ -628,7 +629,7 @@ export default function PerformanceBenchmark() {
                     <AlertTriangle size={16} className="text-orange-400 flex-shrink-0 mt-0.5" />
                     <div>
                       <p className="text-white text-sm font-medium">{m.label}</p>
-                      <p className="text-gray-400 text-xs mt-0.5">Current: {m.format(m.value)} → Target: {m.format(m.good)}</p>
+                      <p className="text-gray-400 text-xs mt-0.5">Current: {m.format(m.value)} to Target: {m.format(m.good)}</p>
                     </div>
                   </div>
                   <p className="text-gray-400 text-xs leading-relaxed">

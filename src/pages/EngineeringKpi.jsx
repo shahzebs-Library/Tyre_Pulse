@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import * as engKpiApi from '../lib/api/engineeringKpi'
 import { fetchAllPages } from '../lib/fetchAll'
+import { toUserMessage } from '../lib/safeError'
 import { useSettings, COUNTRIES } from '../contexts/SettingsContext'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import {
@@ -231,10 +232,10 @@ export default function EngineeringKpi() {
       ])
 
       if (myReq !== reqIdRef.current) return
-      if (recRes.error)  throw new Error(`Records: ${recRes.error.message}`)
-      if (insRes.error)  throw new Error(`Inspections: ${insRes.error.message}`)
-      if (actRes.error)  throw new Error(`Actions: ${actRes.error.message}`)
-      if (fleetRes.error) throw new Error(`Fleet: ${fleetRes.error.message}`)
+      if (recRes.error)  throw recRes.error
+      if (insRes.error)  throw insRes.error
+      if (actRes.error)  throw actRes.error
+      if (fleetRes.error) throw fleetRes.error
 
       let recs = recRes.data || []
       if (siteFilter) recs = recs.filter(r => r.site === siteFilter)
@@ -244,7 +245,7 @@ export default function EngineeringKpi() {
       setActions(actRes.data || [])
       setFleetSize((fleetRes.data || []).length)
     } catch (err) {
-      if (myReq === reqIdRef.current) setError(err.message)
+      if (myReq === reqIdRef.current) setError(toUserMessage(err, 'Could not load engineering KPIs.'))
     } finally {
       if (myReq === reqIdRef.current) setLoading(false)
     }
@@ -586,7 +587,7 @@ export default function EngineeringKpi() {
         title: 'Tyre Failure Rate',
         value: `${fmtPct(failPct)}`,
         subValue: `${failureRate.failureCount} failures of ${failureRate.totalCount} total`,
-        description: `Critical: ${failureRate.criticalRate > 0 ? fmtPct(failureRate.criticalRate * 100) : '0%'} · High: ${fmtPct(failureRate.highRate * 100)}`,
+        description: `Critical: ${failureRate.criticalRate > 0 ? fmtPct(failureRate.criticalRate * 100) : '0%'} | High: ${fmtPct(failureRate.highRate * 100)}`,
         status: failStatus,
         trend: failPct > 20 ? 'up' : 'down',
         trendLabel: failPct > 20 ? 'Exceeds 20% threshold' : 'Within acceptable range',
@@ -617,7 +618,7 @@ export default function EngineeringKpi() {
         title: 'Inspection Compliance %',
         value: inspections.length === 0 ? 'N/A (no inspections)' : fmtPct(inspPct),
         subValue: `On-time: ${inspectionCompliance.onTimeCount} of ${inspectionCompliance.totalScheduled} scheduled`,
-        description: `Overdue: ${inspectionCompliance.overdueCount} · Late: ${inspectionCompliance.lateCount}`,
+        description: `Overdue: ${inspectionCompliance.overdueCount} | Late: ${inspectionCompliance.lateCount}`,
         status: inspections.length === 0 ? 'neutral' : inspStatus,
         trend: inspPct > 85 ? 'up' : 'down',
         trendLabel: inspPct > 85 ? 'Target achieved' : `${(85 - inspPct).toFixed(1)}% gap to 85% target`,
@@ -631,7 +632,7 @@ export default function EngineeringKpi() {
             ? `${retreadPerformance.savingsPct.toFixed(1)}% cheaper`
             : `${Math.abs(retreadPerformance.savingsPct).toFixed(1)}% more expensive`,
         subValue: retreadPerformance
-          ? `Retread CPK: ${currency} ${retreadPerformance.retreadCpk.toFixed(4)} · New: ${currency} ${retreadPerformance.newCpk.toFixed(4)}`
+          ? `Retread CPK: ${currency} ${retreadPerformance.retreadCpk.toFixed(4)} | New: ${currency} ${retreadPerformance.newCpk.toFixed(4)}`
           : 'Need retread records with km data',
         description: retreadPerformance
           ? `${retreadPerformance.retreadCount} retreads vs ${retreadPerformance.newCount} new tyres`
@@ -679,7 +680,7 @@ export default function EngineeringKpi() {
         value: costTrend.trend === 'improving' ? '▼ Improving'
           : costTrend.trend === 'worsening' ? '▲ Worsening' : '- Stable',
         subValue: `Slope: ${costTrend.slope > 0 ? '+' : ''}${currency} ${Math.round(Math.abs(costTrend.slope)).toLocaleString()}/month`,
-        description: `Forecast next month: ${currency} ${Math.round(Math.max(0, costTrend.forecastNextMonth)).toLocaleString()} · Avg monthly: ${currency} ${Math.round(costTrend.avgMonthlyCost).toLocaleString()}`,
+        description: `Forecast next month: ${currency} ${Math.round(Math.max(0, costTrend.forecastNextMonth)).toLocaleString()} | Avg monthly: ${currency} ${Math.round(costTrend.avgMonthlyCost).toLocaleString()}`,
         status: trendStatus,
         trend: costTrend.trend === 'improving' ? 'down' : costTrend.trend === 'worsening' ? 'up' : null,
         trendLabel: costTrend.trend === 'improving' ? 'Costs declining'
@@ -705,9 +706,9 @@ export default function EngineeringKpi() {
       {
         title: 'Workshop Performance',
         value: bestSite ? `Best: ${bestSite.site}` : 'N/A (no site data)',
-        subValue: bestSite ? `Score: ${bestSite.score.toFixed(2)} · Failure: ${fmtPct(bestSite.highRiskPct)}` : '',
+        subValue: bestSite ? `Score: ${bestSite.score.toFixed(2)} | Failure: ${fmtPct(bestSite.highRiskPct)}` : '',
         description: worstSite && bestSite && worstSite.site !== bestSite.site
-          ? `Worst: ${worstSite.site} (Score: ${worstSite.score.toFixed(2)} · Failure: ${fmtPct(worstSite.highRiskPct)})`
+          ? `Worst: ${worstSite.site} (Score: ${worstSite.score.toFixed(2)} | Failure: ${fmtPct(worstSite.highRiskPct)})`
           : workshopPerformance.bySite.length > 0 ? `${workshopPerformance.bySite.length} sites evaluated` : '',
         status: workshopPerformance.bySite.length > 0 ? (bestSite?.highRiskPct < 15 ? 'good' : 'warning') : 'neutral',
         trend: null,
@@ -717,7 +718,7 @@ export default function EngineeringKpi() {
       {
         title: 'Fleet CPK Coverage',
         value: `${cpk.coveragePct.toFixed(1)}% of records`,
-        subValue: `${cpk.validCount} valid · ${cpk.totalCount - cpk.validCount} missing km data`,
+        subValue: `${cpk.validCount} valid | ${cpk.totalCount - cpk.validCount} missing km data`,
         description: cpk.coveragePct < 50
           ? 'Low coverage: CPK metrics unreliable. Upload km_at_fitment & km_at_removal.'
           : cpk.coveragePct < 80
@@ -896,7 +897,7 @@ export default function EngineeringKpi() {
             <HeadlineCard
               title="Fleet CPK"
               value={kpis.cpk.validCount === 0 ? 'N/A' : `${activeCurrency} ${kpis.cpk.fleetAvgCpk.toFixed(4)}`}
-              sub={kpis.cpk.validCount === 0 ? 'No km data' : `${activeCurrency}/km · ${kpis.cpk.coveragePct.toFixed(0)}% coverage`}
+              sub={kpis.cpk.validCount === 0 ? 'No km data' : `${activeCurrency}/km | ${kpis.cpk.coveragePct.toFixed(0)}% coverage`}
               status={
                 kpis.cpk.validCount === 0 ? 'neutral'
                 : kpis.cpk.fleetAvgCpk < 1.0 ? 'good'
@@ -979,7 +980,7 @@ export default function EngineeringKpi() {
               <div className="card">
                 <div className="flex items-center justify-between mb-3">
                   <h3 className="text-sm font-medium text-gray-300">CPK by Brand: Top 10</h3>
-                  <span className="text-xs text-gray-500">Lower = better · Green &lt;1.0 · Yellow 1-2 · Red ≥2</span>
+                  <span className="text-xs text-gray-500">Lower = better | Green &lt;1.0 | Yellow 1-2 | Red ≥2</span>
                 </div>
                 {cpkBrandChart ? (
                   <div style={{ height: 280 }}>
@@ -1025,7 +1026,7 @@ export default function EngineeringKpi() {
               <div className="card">
                 <div className="flex items-center justify-between mb-3">
                   <h3 className="text-sm font-medium text-gray-300">Failure Rate by Site</h3>
-                  <span className="text-xs text-gray-500">Sorted by rate desc · Red &gt;30% · Yellow &gt;15%</span>
+                  <span className="text-xs text-gray-500">Sorted by rate desc | Red &gt;30% | Yellow &gt;15%</span>
                 </div>
                 {failureBySiteChart && failureBySiteChart.labels.length > 0 ? (
                   <div style={{ height: 280 }}>
@@ -1239,11 +1240,11 @@ function buildKpiSummaryRows(kpis, currency) {
     { kpi: 'Pressure Compliance (%)',          value: pressureCompliance.compliancePct.toFixed(1),                              status: pressureCompliance.compliancePct > 85 ? 'Good' : pressureCompliance.compliancePct > 60 ? 'Warning' : 'Critical', description: `${pressureCompliance.compliantCount}/${pressureCompliance.totalCount}` },
     { kpi: 'Inspection Compliance (%)',        value: inspectionCompliance.compliancePct.toFixed(1),                            status: inspectionCompliance.compliancePct > 85 ? 'Good' : inspectionCompliance.compliancePct > 60 ? 'Warning' : 'Critical', description: `On-time: ${inspectionCompliance.onTimeCount}, Overdue: ${inspectionCompliance.overdueCount}` },
     { kpi: 'Retread Performance',              value: retreadPerformance ? `${retreadPerformance.savingsPct.toFixed(1)}% savings` : 'Insufficient data', status: retreadPerformance && retreadPerformance.savingsPct > 0 ? 'Good' : 'Neutral', description: retreadPerformance ? `Retread CPK: ${retreadPerformance.retreadCpk.toFixed(4)} vs New: ${retreadPerformance.newCpk.toFixed(4)}` : '' },
-    { kpi: 'Scrap Rate (%)',                   value: (scrapRate.scrapRate * 100).toFixed(1),                                   status: scrapRate.scrapRate > 0.20 ? 'Critical' : scrapRate.scrapRate > 0.10 ? 'Warning' : 'Good', description: `${scrapRate.scrapCount} scrapped · Est. cost: ${currency} ${scrapRate.estimatedScrapCost.toLocaleString()}` },
+    { kpi: 'Scrap Rate (%)',                   value: (scrapRate.scrapRate * 100).toFixed(1),                                   status: scrapRate.scrapRate > 0.20 ? 'Critical' : scrapRate.scrapRate > 0.10 ? 'Warning' : 'Good', description: `${scrapRate.scrapCount} scrapped | Est. cost: ${currency} ${scrapRate.estimatedScrapCost.toLocaleString()}` },
     { kpi: 'Fleet Availability Impact (%)',    value: fleetAvailability.availabilityPct.toFixed(1),                             status: fleetAvailability.availabilityPct > 90 ? 'Good' : fleetAvailability.availabilityPct > 75 ? 'Warning' : 'Critical', description: `${fleetAvailability.unavailableCount} critical of ${fleetAvailability.fleetSize}` },
     { kpi: 'Vehicle Downtime Impact (hrs)',    value: downtimeImpact.totalDowntimeHours.toLocaleString(),                       status: downtimeImpact.totalDowntimeHours > 500 ? 'Critical' : 'Informational', description: `Avg ${downtimeImpact.avgDowntimePerVehicle.toFixed(1)} hrs/vehicle` },
-    { kpi: 'Cost Trend',                       value: costTrend.trend,                                                          status: costTrend.trend === 'improving' ? 'Good' : costTrend.trend === 'worsening' ? 'Critical' : 'Neutral', description: `Slope: ${currency} ${Math.round(costTrend.slope)}/month · Forecast: ${currency} ${Math.round(Math.max(0, costTrend.forecastNextMonth)).toLocaleString()}` },
-    { kpi: 'Vendor Performance (Top Brand)',   value: vendorPerformance[0]?.brand ?? 'N/A',                                     status: 'Informational', description: vendorPerformance[0] ? `Score: ${vendorPerformance[0].score.toFixed(3)} · CPK: ${vendorPerformance[0].avgCpk.toFixed(4)}` : '' },
+    { kpi: 'Cost Trend',                       value: costTrend.trend,                                                          status: costTrend.trend === 'improving' ? 'Good' : costTrend.trend === 'worsening' ? 'Critical' : 'Neutral', description: `Slope: ${currency} ${Math.round(costTrend.slope)}/month | Forecast: ${currency} ${Math.round(Math.max(0, costTrend.forecastNextMonth)).toLocaleString()}` },
+    { kpi: 'Vendor Performance (Top Brand)',   value: vendorPerformance[0]?.brand ?? 'N/A',                                     status: 'Informational', description: vendorPerformance[0] ? `Score: ${vendorPerformance[0].score.toFixed(3)} | CPK: ${vendorPerformance[0].avgCpk.toFixed(4)}` : '' },
     { kpi: 'Workshop Performance (Best Site)', value: workshopPerformance.bySite[0]?.site ?? 'N/A',                            status: 'Informational', description: workshopPerformance.bySite[0] ? `Score: ${workshopPerformance.bySite[0].score.toFixed(3)}` : '' },
     { kpi: 'Fleet CPK Coverage (%)',           value: cpk.coveragePct.toFixed(1),                                              status: cpk.coveragePct > 80 ? 'Good' : cpk.coveragePct > 50 ? 'Warning' : 'Critical', description: `${cpk.validCount} valid / ${cpk.totalCount - cpk.validCount} missing km data` },
   ]

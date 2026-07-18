@@ -6,6 +6,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { Smartphone, Shield, CheckCircle, X, AlertTriangle, Copy, Eye, EyeOff } from 'lucide-react'
 import { useConsoleAuth } from '../ConsoleAuthContext'
+import { toUserMessage } from '../../lib/safeError'
 
 // step: 'status' | 'enroll_qr' | 'enroll_verify' | 'unenroll_confirm'
 export default function Console2FAModal({ onClose }) {
@@ -41,7 +42,7 @@ export default function Console2FAModal({ onClose }) {
     setError(null); setLoading(true)
     const result = await enrollMfa()
     setLoading(false)
-    if (result.error) { setError(result.error.message); return }
+    if (result.error) { setError(toUserMessage(result.error, 'Could not start enrollment.')); return }
     setEnrollData(result)
     setStep('enroll_qr')
   }
@@ -68,7 +69,7 @@ export default function Console2FAModal({ onClose }) {
     setLoading(true); setError(null)
     const { error: err } = await unenrollMfa(factorId)
     setLoading(false)
-    if (err) { setError(err.message); return }
+    if (err) { setError(toUserMessage(err, 'Could not remove 2FA.')); return }
     setSuccess('2FA has been removed from your account.')
     await load()
     setStep('status')
@@ -164,7 +165,7 @@ export default function Console2FAModal({ onClose }) {
                               <div>
                                 <p className="text-xs font-semibold text-white">{f.friendly_name || 'Authenticator App'}</p>
                                 <p className="text-[10px] text-gray-500">
-                                  Added {new Date(f.created_at).toLocaleDateString()} · TOTP
+                                  Added {new Date(f.created_at).toLocaleDateString()} | TOTP
                                 </p>
                               </div>
                             </div>
@@ -298,7 +299,7 @@ export default function Console2FAModal({ onClose }) {
               <button onClick={() => { setStep('enroll_verify'); setError(null); setCode(['','','','','','']) }}
                 className="flex-1 py-2 rounded-lg text-xs font-semibold text-white"
                 style={{ background: 'linear-gradient(135deg,#1d4ed8,#3b82f6)' }}>
-                I've scanned it → Next
+                I've scanned it - Next
               </button>
             </>
           )}

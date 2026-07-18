@@ -21,6 +21,7 @@ import {
   Globe, ChevronRight, RefreshCw, Building2, Users, AlertTriangle,
 } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
+import { toUserMessage } from '../../lib/safeError'
 
 const LINKS = [
   { to: '/system-health',          label: 'System Health',  desc: 'Live platform, database and job health monitors.', icon: Activity,          external: true },
@@ -58,11 +59,11 @@ export default function ConsoleSystem() {
         supabase.from('organisations').select('id', { count: 'exact', head: true }),
         supabase.from('profiles').select('id', { count: 'exact', head: true }),
       ])
-      if (orgRes.error) throw new Error(orgRes.error.message)
-      if (userRes.error) throw new Error(userRes.error.message)
+      if (orgRes.error) throw orgRes.error
+      if (userRes.error) throw userRes.error
       setStats({ orgs: orgRes.count ?? 0, users: userRes.count ?? 0 })
     } catch (e) {
-      setError(e?.message || 'Could not load system counts.')
+      setError(toUserMessage(e, 'Could not load system counts.'))
       setStats({ orgs: null, users: null })
     }
     setLoading(false)

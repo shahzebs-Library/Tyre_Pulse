@@ -4,6 +4,7 @@ import { motion } from 'framer-motion'
 import * as supplierApi from '../lib/api/supplierManagementApi'
 import { recordCost } from '../lib/analyticsEngine'
 import { fetchAllPages } from '../lib/fetchAll'
+import { toUserMessage } from '../lib/safeError'
 import { useSettings } from '../contexts/SettingsContext'
 import { useAuth } from '../contexts/AuthContext'
 import { formatDate } from '../lib/formatters'
@@ -232,8 +233,8 @@ export default function SupplierDetail() {
       supplierApi.listSupplierRatings({ country: activeCountry }),
       supplierApi.listSupplierContracts({ country: activeCountry }),
     ])
-    if (tyresRes.error) { setError(tyresRes.error.message); setLoading(false); return }
-    if (ratingsRes.error) setRatingsError(ratingsRes.error.message)
+    if (tyresRes.error) { setError(toUserMessage(tyresRes.error, 'Could not load supplier tyres.')); setLoading(false); return }
+    if (ratingsRes.error) setRatingsError(toUserMessage(ratingsRes.error, 'Could not load supplier ratings.'))
     setRecords(tyresRes.data || [])
     const map = {}
     ;(ratingsRes.data || []).forEach(row => {
@@ -310,7 +311,7 @@ export default function SupplierDetail() {
       created_by: user?.id || null,
     }, RATING_COLS)
     const { error: err } = await supplierApi.upsertSupplierRating(payload)
-    if (err) return err.message
+    if (err) return toUserMessage(err, 'Could not save the rating.')
     // Optimistic local refresh so metrics/rating stay consistent without a full reload.
     setRatings(prev => ({
       ...prev,

@@ -336,7 +336,7 @@ export default function KpiScorecard() {
     }).sort((a, b) => b.totalCost - a.totalCost)
   }, [filteredRecords, filteredActions, currentMonthStr, t])
 
-  if (loading) return <div className="flex items-center justify-center h-64 text-gray-400">{t('kpiscorecard.states.loading')}</div>
+  if (loading) return <div className="flex items-center justify-center h-64 text-[var(--panel-ink-3)]">{t('kpiscorecard.states.loading')}</div>
 
   if (error && !records.length) return (
     <div className="space-y-5">
@@ -344,7 +344,7 @@ export default function KpiScorecard() {
       <div className="card py-16 flex flex-col items-center gap-3">
         <AlertTriangle size={40} className="text-red-400" />
         <p className="text-red-300 font-medium">{t('kpiscorecard.states.errorTitle')}</p>
-        <p className="text-gray-500 text-sm">{error}</p>
+        <p className="text-[var(--panel-ink-4)] text-sm">{error}</p>
         <button onClick={load} className="mt-2 inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-sm rounded-lg transition-colors">
           <RefreshCw size={16} /> {t('kpiscorecard.states.retry')}
         </button>
@@ -377,12 +377,12 @@ export default function KpiScorecard() {
             className={`flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-lg border transition-colors ${
               showYoY
                 ? 'bg-purple-900/40 border-purple-600 text-purple-300'
-                : 'bg-gray-800 border-gray-700 text-gray-400 hover:border-gray-500'
+                : 'bg-gray-800 border-gray-700 text-[var(--panel-ink-3)] hover:border-gray-500'
             }`}
           >
             {showYoY ? <ToggleRight size={16} /> : <ToggleLeft size={16} />}
             {t('kpiscorecard.actions.yoyCompare')}
-            {yoyLoading && <span className="text-xs text-gray-500 ml-1">...</span>}
+            {yoyLoading && <span className="text-xs text-[var(--panel-ink-4)] ml-1">...</span>}
           </button>
 
           <button
@@ -414,7 +414,7 @@ export default function KpiScorecard() {
       {/* Filter row: year + country chips */}
       <div className="flex flex-wrap items-center gap-3">
         <div className="flex items-center gap-2">
-          <span className="text-xs text-gray-400">{t('kpiscorecard.filters.year')}</span>
+          <span className="text-xs text-[var(--panel-ink-3)]">{t('kpiscorecard.filters.year')}</span>
           <select
             className="input w-28 text-sm"
             value={yearFilter}
@@ -433,7 +433,7 @@ export default function KpiScorecard() {
               className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${
                 countryChip === c
                   ? 'bg-blue-600 text-white border-blue-500'
-                  : 'bg-gray-800 text-gray-400 border-gray-700 hover:border-gray-500'
+                  : 'bg-gray-800 text-[var(--panel-ink-3)] border-gray-700 hover:border-gray-500'
               }`}
             >
               {c === 'All' ? t('kpiscorecard.filters.allCountries') : c}
@@ -454,7 +454,7 @@ export default function KpiScorecard() {
             className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
               activeMainTab === tab.id
                 ? 'border-blue-500 text-blue-400'
-                : 'border-transparent text-gray-500 hover:text-gray-300'
+                : 'border-transparent text-[var(--panel-ink-4)] hover:text-[var(--panel-ink-2)]'
             }`}
           >
             {t(`kpiscorecard.tabs.${tab.id}`)}
@@ -479,7 +479,7 @@ export default function KpiScorecard() {
             </p>
             <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1">
               {performanceAlerts.map(alert => (
-                <span key={alert.key} className="text-xs text-gray-300">
+                <span key={alert.key} className="text-xs text-[var(--panel-ink-2)]">
                   <span className={alert.overage > 0.50 ? 'text-red-400 font-medium' : 'text-amber-400 font-medium'}>
                     {alert.label}
                   </span>
@@ -575,11 +575,11 @@ export default function KpiScorecard() {
               />
               {costTrend.reg && (
                 <div className="card">
-                  <p className="text-xs text-gray-400 mb-1">{t('kpiscorecard.cards.forecastNextMonth')}</p>
+                  <p className="text-xs text-[var(--panel-ink-3)] mb-1">{t('kpiscorecard.cards.forecastNextMonth')}</p>
                   <p className="text-xl font-bold text-yellow-400 tabular-nums">
                     {fmtCurrency(Math.max(0, Math.round(costTrend.reg.predict(months.length))))}
                   </p>
-                  <p className="text-xs text-gray-500 mt-1">
+                  <p className="text-xs text-[var(--panel-ink-4)] mt-1">
                     {t('kpiscorecard.cards.rSquaredSlope', {
                       r2: costTrend.reg.r2.toFixed(2),
                       sign: costTrend.reg.slope > 0 ? '+' : '',
@@ -597,7 +597,7 @@ export default function KpiScorecard() {
           {/* Charts */}
           <div className="space-y-6">
             <div className="card">
-              <h3 className="text-sm font-medium text-gray-400 mb-4">
+              <h3 className="text-sm font-medium text-[var(--panel-ink-3)] mb-4">
                 {t('kpiscorecard.charts.monthlyCostVsTarget')}{showYoY ? t('kpiscorecard.charts.lyOverlaySuffix') : ''}
               </h3>
               <div style={{ height: 320 }}>
@@ -605,7 +605,7 @@ export default function KpiScorecard() {
               </div>
             </div>
             <div className="card">
-              <h3 className="text-sm font-medium text-gray-400 mb-4">{t('kpiscorecard.charts.highRiskVsTarget')}</h3>
+              <h3 className="text-sm font-medium text-[var(--panel-ink-3)] mb-4">{t('kpiscorecard.charts.highRiskVsTarget')}</h3>
               <div style={{ height: 260 }}>
                 <Line data={highRiskChartData} options={chartOpts()} />
               </div>
@@ -614,10 +614,10 @@ export default function KpiScorecard() {
 
           {/* Monthly table */}
           <div className="card overflow-x-auto">
-            <h3 className="text-sm font-medium text-gray-400 mb-4">{t('kpiscorecard.table.monthlyActualsTitle')}</h3>
+            <h3 className="text-sm font-medium text-[var(--panel-ink-3)] mb-4">{t('kpiscorecard.table.monthlyActualsTitle')}</h3>
             <table className="w-full text-sm">
               <thead>
-                <tr className="text-left text-gray-400 border-b border-gray-800">
+                <tr className="text-left text-[var(--panel-ink-3)] border-b border-gray-800">
                   <th className="pb-2 pr-4">{t('kpiscorecard.table.columns.month')}</th>
                   <th className="pb-2 pr-4 text-right">{t('kpiscorecard.table.columns.records')}</th>
                   <th className="pb-2 pr-4 text-right">{t('kpiscorecard.table.columns.totalCost')}</th>
@@ -634,10 +634,10 @@ export default function KpiScorecard() {
                   const lyData     = showYoY ? yoyActualsMap[a.month] : null
                   return (
                     <tr key={a.month} className="border-b border-gray-800/50">
-                      <td className="py-2 pr-4 text-gray-300">{a.month}</td>
-                      <td className="py-2 pr-4 text-gray-300 text-right">{a.count}</td>
+                      <td className="py-2 pr-4 text-[var(--panel-ink-2)]">{a.month}</td>
+                      <td className="py-2 pr-4 text-[var(--panel-ink-2)] text-right">{a.count}</td>
                       <td className="py-2 pr-4 text-right">
-                        <span className={overBudget ? 'text-red-400 font-medium' : 'text-gray-300'}>
+                        <span className={overBudget ? 'text-red-400 font-medium' : 'text-[var(--panel-ink-2)]'}>
                           {fmtCurrency(a.totalCost)}
                         </span>
                       </td>
@@ -645,7 +645,7 @@ export default function KpiScorecard() {
                         <td className="py-2 pr-4 text-right">
                           {lyData
                             ? (
-                              <span className="text-gray-500 text-xs">
+                              <span className="text-[var(--panel-ink-4)] text-xs">
                                 {fmtCurrency(lyData.totalCost)}
                                 {lyData.totalCost > 0 && a.totalCost > 0 && (
                                   <span className={`ml-1 ${a.totalCost > lyData.totalCost ? 'text-red-400' : 'text-green-400'}`}>
@@ -668,7 +668,7 @@ export default function KpiScorecard() {
                         }
                       </td>
                       <td className="py-2 pr-4 text-right">
-                        <span className={overRisk && a.count > 0 ? 'text-red-400' : 'text-gray-300'}>
+                        <span className={overRisk && a.count > 0 ? 'text-red-400' : 'text-[var(--panel-ink-2)]'}>
                           {a.count > 0 ? `${a.highRiskPct.toFixed(1)}%` : '-'}
                         </span>
                       </td>
@@ -691,17 +691,17 @@ export default function KpiScorecard() {
       {activeMainTab === 'sites' && (
         <div className="card overflow-x-auto">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-sm font-medium text-gray-400">
+            <h3 className="text-sm font-medium text-[var(--panel-ink-3)]">
               {t('kpiscorecard.sites.title', { month: currentMonthStr })}
             </h3>
-            <p className="text-xs text-gray-500">{t('kpiscorecard.sites.siteCount', { count: siteBreakdown.length, plural: siteBreakdown.length !== 1 ? 's' : '' })}</p>
+            <p className="text-xs text-[var(--panel-ink-4)]">{t('kpiscorecard.sites.siteCount', { count: siteBreakdown.length, plural: siteBreakdown.length !== 1 ? 's' : '' })}</p>
           </div>
           {siteBreakdown.length === 0 ? (
-            <p className="text-gray-500 text-sm py-8 text-center">{t('kpiscorecard.sites.noData', { month: currentMonthStr })}</p>
+            <p className="text-[var(--panel-ink-4)] text-sm py-8 text-center">{t('kpiscorecard.sites.noData', { month: currentMonthStr })}</p>
           ) : (
             <table className="w-full text-sm">
               <thead>
-                <tr className="text-left text-gray-400 border-b border-gray-800">
+                <tr className="text-left text-[var(--panel-ink-3)] border-b border-gray-800">
                   <th className="pb-2 pr-4">{t('kpiscorecard.sites.columns.site')}</th>
                   <th className="pb-2 pr-4 text-right">{t('kpiscorecard.sites.columns.monthlyCost')}</th>
                   <th className="pb-2 pr-4 text-right">{t('kpiscorecard.sites.columns.highRiskPct')}</th>
@@ -731,7 +731,7 @@ export default function KpiScorecard() {
                         </span>
                       </td>
                       <td className="py-2.5 pr-4 text-right">
-                        <span className={`text-xs px-2 py-1 rounded ${s.count > 0 ? cellCls(riskFail) : 'text-gray-500'}`}>
+                        <span className={`text-xs px-2 py-1 rounded ${s.count > 0 ? cellCls(riskFail) : 'text-[var(--panel-ink-4)]'}`}>
                           {s.count > 0 ? `${s.highRiskPct.toFixed(1)}%` : '-'}
                         </span>
                       </td>
@@ -746,7 +746,7 @@ export default function KpiScorecard() {
                         </span>
                       </td>
                       <td className="py-2.5 text-right">
-                        <span className={`text-xs px-2 py-1 rounded ${s.count > 0 ? cellCls(avgFail) : 'text-gray-500'}`}>
+                        <span className={`text-xs px-2 py-1 rounded ${s.count > 0 ? cellCls(avgFail) : 'text-[var(--panel-ink-4)]'}`}>
                           {s.count > 0
                             ? fmtCurrency(Math.round(s.avgCostPerTyre))
                             : '-'
@@ -758,13 +758,13 @@ export default function KpiScorecard() {
                 })}
               </tbody>
               <tfoot>
-                <tr className="border-t border-gray-700 text-gray-400 text-xs">
+                <tr className="border-t border-gray-700 text-[var(--panel-ink-3)] text-xs">
                   <td className="pt-2 pr-4 font-medium">{t('kpiscorecard.sites.total')}</td>
-                  <td className="pt-2 pr-4 text-right font-medium text-gray-300">
+                  <td className="pt-2 pr-4 text-right font-medium text-[var(--panel-ink-2)]">
                     {fmtCurrency(siteBreakdown.reduce((s, r) => s + r.totalCost, 0))}
                   </td>
                   <td className="pt-2 pr-4 text-right">-</td>
-                  <td className="pt-2 pr-4 text-right font-medium text-gray-300">
+                  <td className="pt-2 pr-4 text-right font-medium text-[var(--panel-ink-2)]">
                     {siteBreakdown.reduce((s, r) => s + r.count, 0)}
                   </td>
                   <td className="pt-2 pr-4 text-right">-</td>
@@ -793,8 +793,8 @@ export default function KpiScorecard() {
 function PmKpiGroup({ state, summary }) {
   if (state?.loading) {
     return (
-      <div className="card flex items-center gap-2 text-sm text-gray-400">
-        <Wrench size={16} className="text-gray-500" />
+      <div className="card flex items-center gap-2 text-sm text-[var(--panel-ink-3)]">
+        <Wrench size={16} className="text-[var(--panel-ink-4)]" />
         Loading preventive maintenance KPIs...
       </div>
     )
@@ -818,7 +818,7 @@ function PmKpiGroup({ state, summary }) {
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between flex-wrap gap-2">
-        <h3 className="text-sm font-medium text-gray-400 flex items-center gap-2">
+        <h3 className="text-sm font-medium text-[var(--panel-ink-3)] flex items-center gap-2">
           <Wrench size={15} className="text-blue-400" />
           Preventive Maintenance
         </h3>
@@ -833,13 +833,13 @@ function PmKpiGroup({ state, summary }) {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <div className={`card border ${compliancePassing ? 'border-green-700/40' : 'border-red-700/50'}`}>
           <div className="flex items-center justify-between">
-            <p className="text-xs text-gray-400">PM Compliance</p>
+            <p className="text-xs text-[var(--panel-ink-3)]">PM Compliance</p>
             <ClipboardCheck size={15} className={compliancePassing ? 'text-green-400' : 'text-red-400'} />
           </div>
           <p className={`text-xl font-bold mt-1 tabular-nums ${compliancePassing ? 'text-green-400' : 'text-red-400'}`}>
             {complianceLabel}
           </p>
-          <p className="text-xs text-gray-500 mt-1">
+          <p className="text-xs text-[var(--panel-ink-4)] mt-1">
             {summary.compliantPct == null
               ? 'No active plans to measure'
               : `${summary.active - summary.overdue} of ${summary.active} on schedule`}
@@ -848,35 +848,35 @@ function PmKpiGroup({ state, summary }) {
 
         <div className={`card border ${summary.overdue > 0 ? 'border-red-700/50' : 'border-gray-700/40'}`}>
           <div className="flex items-center justify-between">
-            <p className="text-xs text-gray-400">PM Overdue</p>
-            <AlertTriangle size={15} className={summary.overdue > 0 ? 'text-red-400' : 'text-gray-500'} />
+            <p className="text-xs text-[var(--panel-ink-3)]">PM Overdue</p>
+            <AlertTriangle size={15} className={summary.overdue > 0 ? 'text-red-400' : 'text-[var(--panel-ink-4)]'} />
           </div>
-          <p className={`text-xl font-bold mt-1 tabular-nums ${summary.overdue > 0 ? 'text-red-400' : 'text-gray-300'}`}>
+          <p className={`text-xl font-bold mt-1 tabular-nums ${summary.overdue > 0 ? 'text-red-400' : 'text-[var(--panel-ink-2)]'}`}>
             {summary.overdue}
           </p>
-          <p className="text-xs text-gray-500 mt-1">Active plans past due</p>
+          <p className="text-xs text-[var(--panel-ink-4)] mt-1">Active plans past due</p>
         </div>
 
         <div className={`card border ${summary.dueSoon > 0 ? 'border-amber-700/50' : 'border-gray-700/40'}`}>
           <div className="flex items-center justify-between">
-            <p className="text-xs text-gray-400">PM Due Soon</p>
-            <CalendarClock size={15} className={summary.dueSoon > 0 ? 'text-amber-400' : 'text-gray-500'} />
+            <p className="text-xs text-[var(--panel-ink-3)]">PM Due Soon</p>
+            <CalendarClock size={15} className={summary.dueSoon > 0 ? 'text-amber-400' : 'text-[var(--panel-ink-4)]'} />
           </div>
-          <p className={`text-xl font-bold mt-1 tabular-nums ${summary.dueSoon > 0 ? 'text-amber-400' : 'text-gray-300'}`}>
+          <p className={`text-xl font-bold mt-1 tabular-nums ${summary.dueSoon > 0 ? 'text-amber-400' : 'text-[var(--panel-ink-2)]'}`}>
             {summary.dueSoon}
           </p>
-          <p className="text-xs text-gray-500 mt-1">Approaching next service</p>
+          <p className="text-xs text-[var(--panel-ink-4)] mt-1">Approaching next service</p>
         </div>
 
         <div className="card border border-gray-700/40">
           <div className="flex items-center justify-between">
-            <p className="text-xs text-gray-400">Active PM Plans</p>
+            <p className="text-xs text-[var(--panel-ink-3)]">Active PM Plans</p>
             <Wrench size={15} className="text-blue-400" />
           </div>
           <p className="text-xl font-bold mt-1 tabular-nums text-gray-100">
             {summary.active}
           </p>
-          <p className="text-xs text-gray-500 mt-1">
+          <p className="text-xs text-[var(--panel-ink-4)] mt-1">
             {summary.total > summary.active
               ? `${summary.total} total on file`
               : 'All plans active'}
@@ -899,12 +899,12 @@ function KpiCard({ label, actual, target, format, invert, higherIsBad, prev, yoy
 
   return (
     <div className={`card border ${passing ? 'border-green-700/40' : 'border-red-700/50'}`}>
-      <p className="text-xs text-gray-400">{label}</p>
+      <p className="text-xs text-[var(--panel-ink-3)]">{label}</p>
       <p className={`text-xl font-bold mt-1 tabular-nums ${passing ? 'text-green-400' : 'text-red-400'}`}>
         {format(actual)}
       </p>
       <div className="flex items-center justify-between mt-2">
-        <p className="text-xs text-gray-500">
+        <p className="text-xs text-[var(--panel-ink-4)]">
           {t('kpiscorecard.cards.target')} {format(target)}
         </p>
         <span className={`text-xs px-1.5 py-0.5 rounded ${passing ? 'bg-green-900/40 text-green-400' : 'bg-red-900/40 text-red-400'}`}>
@@ -912,12 +912,12 @@ function KpiCard({ label, actual, target, format, invert, higherIsBad, prev, yoy
         </span>
       </div>
       {delta !== null && (
-        <p className={`text-xs mt-1 ${delta === 0 ? 'text-gray-500' : (higherIsBad ? delta > 0 : delta < 0) ? 'text-red-400' : 'text-green-400'}`}>
+        <p className={`text-xs mt-1 ${delta === 0 ? 'text-[var(--panel-ink-4)]' : (higherIsBad ? delta > 0 : delta < 0) ? 'text-red-400' : 'text-green-400'}`}>
           {delta > 0 ? '▲' : delta < 0 ? '▼' : '-'} {format(Math.abs(delta))} {t('kpiscorecard.cards.vsPrevMonth')}
         </p>
       )}
       {yoyDelta !== null && yoyPct !== null && (
-        <p className="text-xs mt-0.5 text-gray-500">
+        <p className="text-xs mt-0.5 text-[var(--panel-ink-4)]">
           {yoyDelta > 0 ? '▲' : yoyDelta < 0 ? '▼' : '-'}{' '}
           {(yoyFormat || format)(Math.abs(yoyDelta))}
           {' '}

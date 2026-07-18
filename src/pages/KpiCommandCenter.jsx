@@ -17,6 +17,7 @@ import {
 import { useLanguage } from '../contexts/LanguageContext'
 import { supabase } from '../lib/supabase'
 import { fetchAllPages } from '../lib/fetchAll'
+import { toUserMessage } from '../lib/safeError'
 import { useSettings, COUNTRIES } from '../contexts/SettingsContext'
 import { useTenant } from '../contexts/TenantContext'
 import { formatDate, formatMonthYear } from '../lib/formatters'
@@ -603,8 +604,8 @@ export default function KpiCommandCenter() {
         ).range(from_, to_), { max: 200000 }),
       ])
 
-      if (e1) throw new Error(e1.message)
-      if (e3) throw new Error(e3.message)
+      if (e1) throw e1
+      if (e3) throw e3
 
       setRecords(recs || [])
       setPrevRecords(prevRecs || [])
@@ -635,7 +636,7 @@ export default function KpiCommandCenter() {
         setMonthlyKpiMatrix(matrix)
       }
     } catch (err) {
-      setError(err.message)
+      setError(toUserMessage(err, 'Could not load KPI data.'))
     } finally {
       setLoading(false)
     }
@@ -803,7 +804,7 @@ export default function KpiCommandCenter() {
     const { default: autoTable } = await import('jspdf-autotable')
     const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
     const brand = await resolvePdfBrand(branding)
-    pdfHeader(doc, 'KPI Command Center', `Period: ${from} to ${to}  ·  Overall Fleet Score: ${overallScore.toFixed(0)}/100  ·  ${formatDate(new Date())}`, company, brand)
+    pdfHeader(doc, 'KPI Command Center', `Period: ${from} to ${to}  |  Overall Fleet Score: ${overallScore.toFixed(0)}/100  |  ${formatDate(new Date())}`, company, brand)
 
     autoTable(doc, {
       ...pdfTableTheme(brand.accent),

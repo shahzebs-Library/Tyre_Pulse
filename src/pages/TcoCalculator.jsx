@@ -29,6 +29,7 @@ import PageHeader from '../components/ui/PageHeader'
 import { useSettings } from '../contexts/SettingsContext'
 import { formatCurrencyCompact, formatCurrency } from '../lib/formatters'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
+import { toUserMessage } from '../lib/safeError'
 import { fetchAllPages } from '../lib/fetchAll'
 import * as tyreApi from '../lib/api/tyreRecords'
 import { computeCpkFleet } from '../lib/kpiEngine'
@@ -80,7 +81,7 @@ function FleetActuals() {
       setRecords(recRes.data || [])
       setFleet(fleetRes.data || [])
     } catch (e) {
-      setError(e?.message || 'Failed to load fleet TCO data.')
+      setError(toUserMessage(e, 'Failed to load fleet TCO data.'))
     } finally {
       setLoading(false)
     }

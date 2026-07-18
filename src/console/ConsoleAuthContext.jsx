@@ -10,7 +10,7 @@ import { hasUnmetMfa } from '../lib/authAssurance'
 
 // Break-glass admin console: auto sign out after this much inactivity so a
 // console left open on a shared/unattended machine cannot be walked up to.
-const CONSOLE_IDLE_LIMIT_MS = 20 * 60 * 1000 // 20 minutes
+const CONSOLE_IDLE_LIMIT_MS = 10 * 60 * 1000 // 10 minutes
 // Hard ceiling regardless of activity: force re-authentication after this long.
 const CONSOLE_ABSOLUTE_LIMIT_MS = 8 * 60 * 60 * 1000 // 8 hours
 

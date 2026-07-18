@@ -9,7 +9,7 @@
  * (org has not run the migration) degrades listing to an empty array so the
  * page can render its "apply the migration" empty state instead of erroring.
  */
-import { supabase, unwrap, applyCountry } from './_client'
+import { supabase, unwrap, applyCountry, fetchAllPages } from './_client'
 import { EQUIPMENT_STATUSES } from '../equipment'
 
 export const COLS =
@@ -47,6 +47,28 @@ export async function listEquipment({ country, status, limit = 500 } = {}) {
     if (status && EQUIPMENT_STATUSES.includes(status)) q = q.eq('status', status)
     q = applyCountry(q, country)
     return unwrap(await q.order('created_at', { ascending: false }).limit(limit)) || []
+  } catch (err) {
+    if (isMissingRelation(err)) return []
+    throw err
+  }
+}
+
+/**
+ * List EVERY equipment row (transparently paging past the PostgREST 1000-row
+ * cap) so registry analytics reflect the full set, not just the first page.
+ * Country-scoped like listEquipment. Returns [] when the table is not
+ * provisioned yet. `max` guards against runaway pulls.
+ */
+export async function listAllEquipment({ country, max = 20000 } = {}) {
+  try {
+    const { data, error } = await fetchAllPages(
+      (from, to) => applyCountry(supabase.from('equipment').select(COLS), country)
+        .order('created_at', { ascending: false })
+        .range(from, to),
+      { max },
+    )
+    if (error) throw error
+    return data || []
   } catch (err) {
     if (isMissingRelation(err)) return []
     throw err

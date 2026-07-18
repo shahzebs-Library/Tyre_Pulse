@@ -9,8 +9,14 @@
  */
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import {
+  Chart as ChartJS, CategoryScale, LinearScale, BarElement, ArcElement,
+  Title, Tooltip, Legend,
+} from 'chart.js'
+import { Bar, Doughnut } from 'react-chartjs-2'
+import {
   Boxes, Package, PackageX, DollarSign, Layers, Plus, X, Trash2, Loader2,
-  Search, Pencil, AlertTriangle, Filter, FileSpreadsheet, FileText, Save,
+  Search, Pencil, AlertTriangle, FileSpreadsheet, FileText, Save,
+  ShoppingCart, BarChart3, ClipboardList, ShieldAlert,
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
 import { useSettings } from '../contexts/SettingsContext'
@@ -18,9 +24,17 @@ import { formatCurrencyCompact, formatCurrency } from '../lib/formatters'
 import {
   listParts, createPart, updatePart, deletePart, PART_STATUSES,
 } from '../lib/api/partsCatalog'
-import { partIsLowStock, summarizeParts } from '../lib/partsCatalog'
+import {
+  partIsLowStock, summarizeParts, buildPartsAnalytics, partStockStatus,
+  partLineValue, abcClassByPart, STOCK_STATUS_META,
+} from '../lib/partsCatalog'
+import { colorAt, categorical, withAlpha } from '../lib/reportColors'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import { toUserMessage } from '../lib/safeError'
+
+ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Title, Tooltip, Legend)
+
+const ABC_COLORS = { A: '#10b981', B: '#f59e0b', C: '#64748b' }
 
 const CATEGORIES = [
   'engine', 'brakes', 'tyres', 'electrical', 'body', 'hydraulic', 'air_system',
@@ -86,6 +100,50 @@ export default function PartsCatalog() {
   useEffect(() => { load() }, [load])
 
   const summary = useMemo(() => summarizeParts(rows || []), [rows])
+  const analytics = useMemo(() => buildPartsAnalytics(rows || []), [rows])
+  const abcMap = useMemo(() => abcClassByPart(rows || []), [rows])
+
+  const chartAxis = {
+    plugins: { legend: { display: false } },
+    scales: {
+      x: { ticks: { color: '#9ca3af', font: { size: 11 } }, grid: { color: 'var(--panel-2)' } },
+      y: { beginAtZero: true, ticks: { color: '#9ca3af', font: { size: 11 } }, grid: { color: 'var(--panel-2)' } },
+    },
+    maintainAspectRatio: false,
+    responsive: true,
+  }
+
+  const valueByCategory = useMemo(() => {
+    const cats = analytics.valuation.byCategory.slice(0, 10)
+    return {
+      labels: cats.map((c) => c.category),
+      datasets: [{ data: cats.map((c) => c.value), backgroundColor: categorical(cats.length), borderWidth: 0 }],
+    }
+  }, [analytics])
+
+  const statusBar = useMemo(() => {
+    const keys = ['out', 'below_reorder', 'low', 'ok', 'unknown']
+    return {
+      labels: keys.map((k) => STOCK_STATUS_META[k].label),
+      datasets: [{ data: keys.map((k) => analytics.statusCounts[k]), backgroundColor: keys.map((k) => STOCK_STATUS_META[k].color), borderWidth: 0 }],
+    }
+  }, [analytics])
+
+  const abcBar = useMemo(() => {
+    const keys = ['A', 'B', 'C']
+    return {
+      labels: keys.map((k) => `Class ${k}`),
+      datasets: [{ data: keys.map((k) => analytics.abc.summary[k].count), backgroundColor: keys.map((k) => ABC_COLORS[k]), borderWidth: 0 }],
+    }
+  }, [analytics])
+
+  const topValueBar = useMemo(() => {
+    const top = analytics.abc.items.filter((i) => i.value > 0).slice(0, 8)
+    return {
+      labels: top.map((i) => i.part_no),
+      datasets: [{ data: top.map((i) => i.value), backgroundColor: top.map((_, i) => withAlpha(colorAt(i), 0.85)), borderWidth: 0 }],
+    }
+  }, [analytics])
 
   const categoryOptions = useMemo(
     () => [...new Set((rows || []).map((r) => r.category).filter(Boolean))].sort(),
@@ -150,21 +208,27 @@ export default function PartsCatalog() {
     }
   }, [pendingDelete, load])
 
-  // Export
-  const EXPORT_COLS = ['part_no', 'name', 'category', 'unit_cost', 'on_hand_qty', 'reorder_level', 'supplier', 'uom', 'status']
-  const EXPORT_HEADERS = ['Part No', 'Name', 'Category', 'Unit Cost', 'On Hand', 'Reorder Lvl', 'Supplier', 'UoM', 'Status']
-  const exportRows = filtered.map((r) => ({
-    part_no: r.part_no || '', name: r.name || '', category: r.category || '',
-    unit_cost: r.unit_cost ?? '', on_hand_qty: r.on_hand_qty ?? '',
-    reorder_level: r.reorder_level ?? '', supplier: r.supplier || '',
-    uom: r.uom || '', status: r.status || '',
-  }))
+  // Export (enriched with derived stock status, ABC class and line value)
+  const EXPORT_COLS = ['part_no', 'name', 'category', 'unit_cost', 'on_hand_qty', 'reorder_level', 'stock_status', 'line_value', 'abc_class', 'supplier', 'uom', 'status']
+  const EXPORT_HEADERS = ['Part No', 'Name', 'Category', 'Unit Cost', 'On Hand', 'Reorder Lvl', 'Stock Status', 'Line Value', 'ABC', 'Supplier', 'UoM', 'Status']
+  const exportRows = filtered.map((r) => {
+    const lv = partLineValue(r)
+    return {
+      part_no: r.part_no || '', name: r.name || '', category: r.category || '',
+      unit_cost: r.unit_cost ?? '', on_hand_qty: r.on_hand_qty ?? '',
+      reorder_level: r.reorder_level ?? '',
+      stock_status: STOCK_STATUS_META[partStockStatus(r)].label,
+      line_value: lv == null ? '' : lv,
+      abc_class: abcMap.get(r.id) || '',
+      supplier: r.supplier || '', uom: r.uom || '', status: r.status || '',
+    }
+  })
 
   const kpis = [
-    { label: 'Total parts', value: summary.total, icon: Package, tone: 'text-[var(--text-primary)]' },
-    { label: 'Inventory value', value: formatCurrencyCompact(summary.inventoryValue, activeCurrency), icon: DollarSign, tone: 'text-amber-400' },
-    { label: 'Low stock', value: summary.lowStock, icon: PackageX, tone: 'text-red-400' },
-    { label: 'Categories', value: summary.categoryCount, icon: Layers, tone: 'text-sky-400' },
+    { label: 'Total SKUs', value: analytics.kpis.totalSkus, icon: Package, tone: 'text-[var(--text-primary)]' },
+    { label: 'Inventory value', value: formatCurrencyCompact(analytics.kpis.inventoryValue, activeCurrency), icon: DollarSign, tone: 'text-amber-400' },
+    { label: 'Out of stock', value: analytics.kpis.outOfStock, icon: PackageX, tone: 'text-red-400' },
+    { label: 'Below reorder', value: analytics.kpis.belowReorder, icon: ShoppingCart, tone: 'text-orange-400' },
   ]
 
   const clearFilters = () => { setCategoryFilter('all'); setStatusFilter('all'); setSearch('') }
@@ -305,6 +369,175 @@ export default function PartsCatalog() {
           </table>
         </div>
       </div>
+
+      {/* Analytics */}
+      {rows !== null && summary.total > 0 && (
+        <div className="space-y-6">
+          <div className="flex items-center gap-2 pt-1">
+            <BarChart3 size={18} className="text-sky-400" />
+            <h2 className="font-bold text-[var(--text-primary)]">Inventory analytics</h2>
+            <span className="text-xs text-[var(--text-muted)] ml-auto">Across all {summary.total} catalog parts</span>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <div className="card">
+              <p className="text-sm font-semibold text-[var(--text-primary)] mb-1">Value by category</p>
+              <p className="text-xs text-[var(--text-muted)] mb-3">Inventory value ({activeCurrency}) contribution per category</p>
+              <div className="h-64">
+                {analytics.valuation.total > 0
+                  ? <Doughnut data={valueByCategory} options={{ maintainAspectRatio: false, responsive: true, plugins: { legend: { position: 'right', labels: { color: '#9ca3af', font: { size: 11 }, boxWidth: 12 } } } }} />
+                  : <div className="h-full flex items-center justify-center text-sm text-[var(--text-muted)]">No costed stock to value yet.</div>}
+              </div>
+            </div>
+
+            <div className="card">
+              <p className="text-sm font-semibold text-[var(--text-primary)] mb-1">Stock status</p>
+              <p className="text-xs text-[var(--text-muted)] mb-3">Parts by on-hand position vs reorder point</p>
+              <div className="h-64"><Bar data={statusBar} options={chartAxis} /></div>
+            </div>
+
+            <div className="card">
+              <p className="text-sm font-semibold text-[var(--text-primary)] mb-1">ABC class distribution</p>
+              <p className="text-xs text-[var(--text-muted)] mb-3">Pareto split by inventory value (A ~80%, B ~15%, C ~5%)</p>
+              <div className="h-64"><Bar data={abcBar} options={chartAxis} /></div>
+            </div>
+
+            <div className="card">
+              <p className="text-sm font-semibold text-[var(--text-primary)] mb-1">Top value parts</p>
+              <p className="text-xs text-[var(--text-muted)] mb-3">Highest line value ({activeCurrency}) SKUs</p>
+              <div className="h-64">
+                {topValueBar.labels.length
+                  ? <Bar data={topValueBar} options={{ ...chartAxis, indexAxis: 'y' }} />
+                  : <div className="h-full flex items-center justify-center text-sm text-[var(--text-muted)]">No costed stock to rank yet.</div>}
+              </div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+            {/* Reorder needed */}
+            <div className="card !p-0 overflow-hidden">
+              <div className="px-4 py-3 border-b border-[var(--input-border)] flex items-center gap-2">
+                <ShoppingCart size={16} className="text-orange-400" />
+                <h3 className="font-semibold text-[var(--text-primary)] text-sm">Reorder needed</h3>
+                <span className="text-xs text-[var(--text-muted)] ml-auto">{analytics.reorder.length} parts</span>
+              </div>
+              {analytics.reorder.length === 0 ? (
+                <div className="px-4 py-10 text-center text-sm text-[var(--text-muted)]">
+                  <ClipboardList size={20} className="mx-auto mb-2 opacity-60" />
+                  All active parts are above their reorder point.
+                </div>
+              ) : (
+                <div className="overflow-x-auto max-h-80 overflow-y-auto">
+                  <table className="w-full text-sm">
+                    <thead className="sticky top-0 bg-[var(--card-bg)]">
+                      <tr className="border-b border-[var(--input-border)] text-left text-xs uppercase tracking-wider text-[var(--text-muted)]">
+                        {['Part', 'On Hand', 'Reorder', 'Suggest Qty', 'Est. Cost', 'Supplier'].map((h) => (
+                          <th key={h} className="px-3 py-2 font-semibold whitespace-nowrap">{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {analytics.reorder.map((r) => (
+                        <tr key={r.id} className="border-b border-[var(--input-border)]/50">
+                          <td className="px-3 py-2">
+                            <div className="font-mono text-xs text-[var(--text-primary)]">{r.part_no}</div>
+                            {r.name ? <div className="text-xs text-[var(--text-muted)] truncate max-w-[160px]">{r.name}</div> : null}
+                          </td>
+                          <td className="px-3 py-2">
+                            <span className="font-semibold" style={{ color: STOCK_STATUS_META[r.status].color }}>{r.on_hand_qty}</span>
+                          </td>
+                          <td className="px-3 py-2 text-[var(--text-muted)]">{r.reorder_level}</td>
+                          <td className="px-3 py-2 font-semibold text-[var(--text-primary)]">{r.suggestedQty}{r.uom ? <span className="text-[var(--text-muted)] font-normal text-xs"> {r.uom}</span> : null}</td>
+                          <td className="px-3 py-2 text-[var(--text-secondary)]">{r.estimatedCost == null ? 'N/A' : formatCurrency(r.estimatedCost, activeCurrency)}</td>
+                          <td className="px-3 py-2 text-[var(--text-secondary)]">{r.supplier || 'N/A'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+
+            {/* ABC analysis */}
+            <div className="card !p-0 overflow-hidden">
+              <div className="px-4 py-3 border-b border-[var(--input-border)] flex items-center gap-2">
+                <Layers size={16} className="text-emerald-400" />
+                <h3 className="font-semibold text-[var(--text-primary)] text-sm">ABC analysis</h3>
+                <span className="text-xs text-[var(--text-muted)] ml-auto">By inventory value</span>
+              </div>
+              {analytics.abc.total <= 0 ? (
+                <div className="px-4 py-10 text-center text-sm text-[var(--text-muted)]">
+                  <BarChart3 size={20} className="mx-auto mb-2 opacity-60" />
+                  No costed stock to rank yet. Add unit cost and on-hand quantity.
+                </div>
+              ) : (
+                <>
+                  <div className="grid grid-cols-3 gap-px bg-[var(--input-border)]">
+                    {['A', 'B', 'C'].map((cls) => {
+                      const s = analytics.abc.summary[cls]
+                      const share = analytics.abc.total > 0 ? Math.round((s.value / analytics.abc.total) * 100) : 0
+                      return (
+                        <div key={cls} className="bg-[var(--card-bg)] px-3 py-3 text-center">
+                          <div className="text-xs text-[var(--text-muted)]">Class {cls}</div>
+                          <div className="text-xl font-bold" style={{ color: ABC_COLORS[cls] }}>{s.count}</div>
+                          <div className="text-xs text-[var(--text-muted)]">{share}% value</div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                  <div className="overflow-x-auto max-h-72 overflow-y-auto">
+                    <table className="w-full text-sm">
+                      <thead className="sticky top-0 bg-[var(--card-bg)]">
+                        <tr className="border-b border-[var(--input-border)] text-left text-xs uppercase tracking-wider text-[var(--text-muted)]">
+                          {['Part', 'Value', 'Cum %', 'Class'].map((h) => (
+                            <th key={h} className="px-3 py-2 font-semibold whitespace-nowrap">{h}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {analytics.abc.items.filter((i) => i.value > 0).slice(0, 30).map((i) => (
+                          <tr key={i.id} className="border-b border-[var(--input-border)]/50">
+                            <td className="px-3 py-2 font-mono text-xs text-[var(--text-primary)]">{i.part_no}</td>
+                            <td className="px-3 py-2 text-[var(--text-secondary)]">{formatCurrency(i.value, activeCurrency)}</td>
+                            <td className="px-3 py-2 text-[var(--text-muted)]">{i.cumShare}%</td>
+                            <td className="px-3 py-2">
+                              <span className="badge text-[11px] px-2 py-0.5 rounded" style={{ backgroundColor: withAlpha(ABC_COLORS[i.abcClass], 0.18), color: ABC_COLORS[i.abcClass] }}>{i.abcClass}</span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+
+          {/* Data quality */}
+          {analytics.dataQuality.totalIssues > 0 && (
+            <div className="card border border-amber-800/40">
+              <div className="flex items-center gap-2 mb-3">
+                <ShieldAlert size={16} className="text-amber-400" />
+                <h3 className="font-semibold text-[var(--text-primary)] text-sm">Data quality</h3>
+                <span className="text-xs text-[var(--text-muted)] ml-auto">{analytics.dataQuality.totalIssues} issues found</span>
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center">
+                {[
+                  { label: 'Missing cost', value: analytics.dataQuality.counts.missingCost },
+                  { label: 'Missing reorder', value: analytics.dataQuality.counts.missingReorder },
+                  { label: 'Negative qty', value: analytics.dataQuality.counts.negativeQty },
+                  { label: 'Missing category', value: analytics.dataQuality.counts.missingCategory },
+                ].map((d) => (
+                  <div key={d.label} className="rounded-lg bg-[var(--input-bg)]/50 px-3 py-2">
+                    <div className={`text-lg font-bold ${d.value > 0 ? 'text-amber-400' : 'text-[var(--text-muted)]'}`}>{d.value}</div>
+                    <div className="text-xs text-[var(--text-muted)]">{d.label}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Create / edit modal */}
       {showForm && (

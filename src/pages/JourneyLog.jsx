@@ -11,18 +11,55 @@
  */
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import {
+  Chart as ChartJS, CategoryScale, LinearScale, BarElement, LineElement,
+  PointElement, ArcElement, Filler, Tooltip, Legend,
+} from 'chart.js'
+import { Line, Doughnut, Bar } from 'react-chartjs-2'
+import {
   Navigation, Plus, Search, X, Filter, FileSpreadsheet, FileText,
   AlertTriangle, Loader2, Milestone, PlayCircle, Gauge, Pencil, Trash2, Send,
+  Clock, Timer, CheckCircle2, ArrowUpDown, ShieldAlert, TrendingUp,
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
 import { useSettings } from '../contexts/SettingsContext'
+import { toUserMessage } from '../lib/safeError'
 import {
   listJourneys, createJourney, updateJourney, deleteJourney,
 } from '../lib/api/journeys'
 import {
-  summarizeJourneys, journeyDurationHours, JOURNEY_STATUSES, JOURNEY_STATUS_META,
+  summarizeJourneys, journeyDurationHours, journeyOnTime, journeyAvgSpeedKmh,
+  buildJourneyAnalytics, JOURNEY_STATUSES, JOURNEY_STATUS_META, ON_TIME_META,
 } from '../lib/journeys'
+import { colorAt, categorical, withAlpha } from '../lib/reportColors'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
+
+ChartJS.register(
+  CategoryScale, LinearScale, BarElement, LineElement, PointElement,
+  ArcElement, Filler, Tooltip, Legend,
+)
+
+// Semantic status colours (meaning-carrying, deliberately not palettized).
+const STATUS_COLOR = { planned: '#0ea5e9', in_progress: '#f59e0b', completed: '#10b981', cancelled: '#ef4444' }
+// Semantic on-time colours (early sky, on-time green, late red, unknown slate).
+const ON_TIME_COLOR = { early: '#0ea5e9', on_time: '#10b981', late: '#ef4444', unknown: '#64748b' }
+
+const CHART_OPTS = {
+  responsive: true,
+  maintainAspectRatio: false,
+  plugins: {
+    legend: { labels: { color: 'var(--text-muted)', font: { size: 11 }, boxWidth: 12 } },
+    tooltip: { enabled: true },
+  },
+  scales: {
+    x: { ticks: { color: 'var(--text-muted)', font: { size: 10 } }, grid: { color: 'var(--panel-2)' } },
+    y: { ticks: { color: 'var(--text-muted)', font: { size: 10 } }, grid: { color: 'var(--panel-2)' }, beginAtZero: true },
+  },
+}
+const DOUGHNUT_OPTS = {
+  responsive: true,
+  maintainAspectRatio: false,
+  plugins: { legend: { position: 'right', labels: { color: 'var(--text-muted)', font: { size: 11 }, boxWidth: 12 } } },
+}
 
 const STATUS_BADGE = {
   planned: 'bg-sky-900/40 text-sky-300 border border-sky-700/50',
@@ -75,6 +112,10 @@ export default function JourneyLog() {
   const [confirmDelete, setConfirmDelete] = useState(null)
   const [deleting, setDeleting] = useState(false)
 
+  const [perfView, setPerfView] = useState('driver') // 'driver' | 'asset'
+  const [sortKey, setSortKey] = useState('distance')
+  const [sortDir, setSortDir] = useState('desc')
+
   const load = useCallback(async () => {
     setRefreshing(true); setError(''); setMissing(false)
     try {
@@ -83,7 +124,7 @@ export default function JourneyLog() {
       setUpdatedAt(new Date())
     } catch (err) {
       if (isMissingRelation(err)) { setMissing(true); setRows([]) }
-      else { setError(err?.message || 'Could not load journeys.'); setRows([]) }
+      else { setError(toUserMessage(err, 'Could not load journeys.')); setRows([]) }
     } finally {
       setRefreshing(false)
     }
@@ -109,6 +150,76 @@ export default function JourneyLog() {
       return true
     })
   }, [rows, statusFilter, assetFilter, search])
+
+  // Deep analytics over the FILTERED set so charts + tables respond to filters.
+  const analytics = useMemo(() => buildJourneyAnalytics(filtered), [filtered])
+
+  const monthlyChart = useMemo(() => {
+    const c = colorAt(0)
+    return {
+      data: {
+        labels: analytics.monthly.labels,
+        datasets: [{
+          label: 'Distance (km)', data: analytics.monthly.distance,
+          borderColor: c, backgroundColor: withAlpha(c, 0.15),
+          pointBackgroundColor: c, borderWidth: 2, tension: 0.35, fill: true,
+        }],
+      },
+    }
+  }, [analytics])
+
+  const statusChart = useMemo(() => {
+    const rowsF = analytics.funnel.filter((f) => f.count > 0)
+    return {
+      data: {
+        labels: rowsF.map((f) => f.label),
+        datasets: [{ data: rowsF.map((f) => f.count), backgroundColor: rowsF.map((f) => STATUS_COLOR[f.status]), borderWidth: 0 }],
+      },
+      total: analytics.funnel.reduce((s, f) => s + f.count, 0),
+    }
+  }, [analytics])
+
+  const onTimeChart = useMemo(() => {
+    const order = ['early', 'on_time', 'late']
+    return {
+      data: {
+        labels: order.map((k) => ON_TIME_META[k]?.label || k),
+        datasets: [{ label: 'Trips', data: order.map((k) => analytics.onTime[k]), backgroundColor: order.map((k) => ON_TIME_COLOR[k]), borderWidth: 0 }],
+      },
+    }
+  }, [analytics])
+
+  const topDistanceChart = useMemo(() => {
+    const list = (perfView === 'asset' ? analytics.assets : analytics.drivers).slice(0, 8)
+    const colors = categorical(list.length)
+    return {
+      data: {
+        labels: list.map((x) => (perfView === 'asset' ? x.asset : x.driver)),
+        datasets: [{ label: 'Distance (km)', data: list.map((x) => x.distance), backgroundColor: colors, borderWidth: 0 }],
+      },
+      empty: list.length === 0,
+    }
+  }, [analytics, perfView])
+
+  const perfRows = useMemo(() => {
+    const list = perfView === 'asset' ? analytics.assets : analytics.drivers
+    const nameKey = perfView === 'asset' ? 'asset' : 'driver'
+    const dir = sortDir === 'asc' ? 1 : -1
+    const val = (r) => {
+      const v = r[sortKey === 'name' ? nameKey : sortKey]
+      return v == null ? -Infinity : v
+    }
+    return [...list].sort((a, b) => {
+      const av = val(a); const bv = val(b)
+      if (typeof av === 'string' || typeof bv === 'string') return String(av).localeCompare(String(bv)) * dir
+      return (av - bv) * dir
+    })
+  }, [analytics, perfView, sortKey, sortDir])
+
+  const toggleSort = (key) => {
+    if (sortKey === key) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))
+    else { setSortKey(key); setSortDir(key === 'name' ? 'asc' : 'desc') }
+  }
 
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }))
 
@@ -143,7 +254,7 @@ export default function JourneyLog() {
       }
       setModalOpen(false)
     } catch (err) {
-      setFormError(err?.message || 'Could not save the journey.')
+      setFormError(toUserMessage(err, 'Could not save the journey.'))
     } finally {
       setSaving(false)
     }
@@ -157,7 +268,7 @@ export default function JourneyLog() {
       setRows((prev) => (prev || []).filter((r) => r.id !== confirmDelete.id))
       setConfirmDelete(null)
     } catch (err) {
-      setError(err?.message || 'Could not delete the journey.')
+      setError(toUserMessage(err, 'Could not delete the journey.'))
     } finally {
       setDeleting(false)
     }
@@ -166,21 +277,36 @@ export default function JourneyLog() {
   const clearFilters = () => { setStatusFilter('all'); setAssetFilter(''); setSearch('') }
   const hasFilters = statusFilter !== 'all' || assetFilter || search
 
-  const EXPORT_COLS = ['asset_no', 'driver_name', 'origin', 'destination', 'purpose', 'start_time', 'end_time', 'distance_km', 'site', 'status']
-  const EXPORT_HEADERS = ['Asset', 'Driver', 'Origin', 'Destination', 'Purpose', 'Start', 'End', 'Distance (km)', 'Site', 'Status']
-  const exportRows = filtered.map((r) => ({
-    asset_no: r.asset_no || '', driver_name: r.driver_name || '', origin: r.origin || '',
-    destination: r.destination || '', purpose: r.purpose || '',
-    start_time: fmtDateTime(r.start_time), end_time: fmtDateTime(r.end_time),
-    distance_km: r.distance_km ?? '', site: r.site || '',
-    status: JOURNEY_STATUS_META[r.status]?.label || r.status || '',
-  }))
+  const EXPORT_COLS = ['asset_no', 'driver_name', 'origin', 'destination', 'purpose', 'start_time', 'end_time', 'distance_km', 'duration_h', 'avg_speed', 'on_time', 'site', 'status']
+  const EXPORT_HEADERS = ['Asset', 'Driver', 'Origin', 'Destination', 'Purpose', 'Start', 'End', 'Distance (km)', 'Duration (h)', 'Avg speed (km/h)', 'On time', 'Site', 'Status']
+  const exportRows = filtered.map((r) => {
+    const dur = journeyDurationHours(r)
+    const spd = journeyAvgSpeedKmh(r)
+    const ot = journeyOnTime(r)
+    return {
+      asset_no: r.asset_no || '', driver_name: r.driver_name || '', origin: r.origin || '',
+      destination: r.destination || '', purpose: r.purpose || '',
+      start_time: fmtDateTime(r.start_time), end_time: fmtDateTime(r.end_time),
+      distance_km: r.distance_km ?? '',
+      duration_h: dur == null ? 'N/A' : dur,
+      avg_speed: spd == null ? 'N/A' : spd,
+      on_time: ot.class === 'unknown' ? 'N/A' : (ON_TIME_META[ot.class]?.label || ot.class),
+      site: r.site || '',
+      status: JOURNEY_STATUS_META[r.status]?.label || r.status || '',
+    }
+  })
 
+  const k = analytics.kpis
+  const fmt = (v, suffix = '') => (v == null ? 'N/A' : `${v}${suffix}`)
   const kpis = [
-    { label: 'Total journeys', value: summary.totalTrips, icon: Navigation, tone: 'text-[var(--text-primary)]' },
-    { label: 'In progress', value: summary.byStatus.in_progress, icon: PlayCircle, tone: 'text-amber-400' },
-    { label: 'Total distance (km)', value: summary.totalDistance, icon: Milestone, tone: 'text-sky-400' },
-    { label: 'Avg distance (km)', value: summary.avgDistance, icon: Gauge, tone: 'text-emerald-400' },
+    { label: 'Total journeys', value: k.totalTrips, icon: Navigation, tone: 'text-[var(--text-primary)]' },
+    { label: 'Completed', value: k.completedTrips, icon: CheckCircle2, tone: 'text-emerald-400' },
+    { label: 'Active / in progress', value: k.activeTrips, icon: PlayCircle, tone: 'text-amber-400' },
+    { label: 'Total distance', value: fmt(k.totalDistance, ' km'), icon: Milestone, tone: 'text-sky-400' },
+    { label: 'On-time', value: k.onTimePct == null ? 'N/A' : `${k.onTimePct}%`, icon: Clock, tone: 'text-emerald-400' },
+    { label: 'Avg trip duration', value: fmt(k.avgDurationHours, ' h'), icon: Timer, tone: 'text-violet-400' },
+    { label: 'Avg speed', value: fmt(k.avgSpeedKmh, ' km/h'), icon: Gauge, tone: 'text-cyan-400' },
+    { label: 'Distance (12 mo)', value: fmt(k.distance12mo, ' km'), icon: TrendingUp, tone: 'text-indigo-400' },
   ]
 
   return (
@@ -227,20 +353,148 @@ export default function JourneyLog() {
       )}
 
       {/* KPI tiles */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        {kpis.map((k) => {
-          const Icon = k.icon
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {kpis.map((tile) => {
+          const Icon = tile.icon
           return (
-            <div key={k.label} className="card">
+            <div key={tile.label} className="card">
               <div className="flex items-center justify-between">
-                <p className="text-xs text-[var(--text-muted)]">{k.label}</p>
-                <Icon size={16} className={k.tone} />
+                <p className="text-xs text-[var(--text-muted)]">{tile.label}</p>
+                <Icon size={16} className={tile.tone} />
               </div>
-              <p className={`text-3xl font-bold mt-1 ${k.tone}`}>{rows === null ? '—' : k.value}</p>
+              <p className={`text-2xl font-bold mt-1 ${tile.tone}`}>{rows === null ? '...' : tile.value}</p>
             </div>
           )
         })}
       </div>
+
+      {/* Analytics */}
+      {rows !== null && filtered.length > 0 && (
+        <div className="space-y-4">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <div className="card">
+              <div className="flex items-center gap-2 mb-3">
+                <TrendingUp size={16} className="text-[var(--text-muted)]" />
+                <h3 className="font-semibold text-[var(--text-primary)] text-sm">Distance trend (last 12 months)</h3>
+              </div>
+              <div className="h-64"><Line data={monthlyChart.data} options={CHART_OPTS} /></div>
+            </div>
+            <div className="card">
+              <div className="flex items-center gap-2 mb-3">
+                <Navigation size={16} className="text-[var(--text-muted)]" />
+                <h3 className="font-semibold text-[var(--text-primary)] text-sm">Trips by status</h3>
+              </div>
+              {statusChart.total > 0 ? (
+                <div className="h-64"><Doughnut data={statusChart.data} options={DOUGHNUT_OPTS} /></div>
+              ) : (
+                <div className="h-64 flex items-center justify-center text-[var(--text-muted)] text-sm">No trips to chart.</div>
+              )}
+            </div>
+            <div className="card">
+              <div className="flex items-center gap-2 mb-1">
+                <Clock size={16} className="text-[var(--text-muted)]" />
+                <h3 className="font-semibold text-[var(--text-primary)] text-sm">On-time performance</h3>
+              </div>
+              <p className="text-xs text-[var(--text-muted)] mb-3">
+                {analytics.onTime.evaluated > 0
+                  ? `${analytics.onTime.evaluated} of ${filtered.length} trips have a scheduled arrival to measure against (tolerance +/- 15 min).`
+                  : 'No scheduled arrival times captured yet, so on-time cannot be measured. Metric lights up once trips carry a scheduled arrival.'}
+              </p>
+              {analytics.onTime.evaluated > 0 ? (
+                <div className="h-56"><Bar data={onTimeChart.data} options={CHART_OPTS} /></div>
+              ) : (
+                <div className="h-56 flex flex-col items-center justify-center text-center gap-2 text-[var(--text-muted)] text-sm">
+                  <Clock size={24} className="opacity-50" />
+                  <span>On-time breakdown is unavailable.</span>
+                </div>
+              )}
+            </div>
+            <div className="card">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <Milestone size={16} className="text-[var(--text-muted)]" />
+                  <h3 className="font-semibold text-[var(--text-primary)] text-sm">Top {perfView === 'asset' ? 'assets' : 'drivers'} by distance</h3>
+                </div>
+                <div className="flex rounded-lg border border-[var(--input-border)] overflow-hidden text-xs">
+                  {['driver', 'asset'].map((v) => (
+                    <button key={v} onClick={() => setPerfView(v)}
+                      className={`px-3 py-1 ${perfView === v ? 'bg-[var(--input-bg)] text-[var(--text-primary)]' : 'text-[var(--text-muted)]'}`}>
+                      {v === 'driver' ? 'Drivers' : 'Assets'}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              {topDistanceChart.empty ? (
+                <div className="h-56 flex items-center justify-center text-[var(--text-muted)] text-sm">No {perfView} distance recorded.</div>
+              ) : (
+                <div className="h-56"><Bar data={topDistanceChart.data} options={{ ...CHART_OPTS, indexAxis: 'y', plugins: { ...CHART_OPTS.plugins, legend: { display: false } } }} /></div>
+              )}
+            </div>
+          </div>
+
+          {analytics.dataQuality.rowsFlagged > 0 && (
+            <div className="card border border-amber-800/40 flex items-start gap-3">
+              <ShieldAlert size={18} className="text-amber-400 mt-0.5 shrink-0" />
+              <div className="text-sm">
+                <p className="text-amber-300 font-medium">
+                  {analytics.dataQuality.rowsFlagged} of {analytics.dataQuality.total} journeys have data-quality issues.
+                </p>
+                <p className="text-[var(--text-muted)] mt-1">
+                  {[
+                    analytics.dataQuality.byCode.end_before_start && `${analytics.dataQuality.byCode.end_before_start} with an end before start`,
+                    analytics.dataQuality.byCode.nonpositive_distance && `${analytics.dataQuality.byCode.nonpositive_distance} completed with zero or negative distance`,
+                    analytics.dataQuality.byCode.missing_times && `${analytics.dataQuality.byCode.missing_times} completed missing a start or end time`,
+                  ].filter(Boolean).join(' | ') || 'Review flagged rows.'}
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* Performance table */}
+          <div className="card overflow-hidden !p-0">
+            <div className="px-4 py-3 border-b border-[var(--input-border)] flex items-center gap-2">
+              <ArrowUpDown size={15} className="text-[var(--text-muted)]" />
+              <h3 className="font-semibold text-[var(--text-primary)] text-sm">{perfView === 'asset' ? 'Asset' : 'Driver'} performance</h3>
+              <span className="text-xs text-[var(--text-muted)] ml-auto">{perfRows.length} {perfView === 'asset' ? 'assets' : 'drivers'}</span>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-[var(--input-border)] text-left text-xs uppercase tracking-wider text-[var(--text-muted)]">
+                    {[
+                      { key: 'name', label: perfView === 'asset' ? 'Asset' : 'Driver' },
+                      { key: 'trips', label: 'Trips' },
+                      { key: 'distance', label: 'Distance (km)' },
+                      { key: 'completionRate', label: 'Completion %' },
+                      { key: 'onTimeRate', label: 'On-time %' },
+                      { key: 'avgDurationHours', label: 'Avg duration (h)' },
+                    ].map((c) => (
+                      <th key={c.key} className="px-4 py-2.5 font-semibold whitespace-nowrap cursor-pointer select-none hover:text-[var(--text-primary)]" onClick={() => toggleSort(c.key)}>
+                        <span className="inline-flex items-center gap-1">{c.label}{sortKey === c.key && <ArrowUpDown size={11} />}</span>
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {perfRows.slice(0, 200).map((r) => {
+                    const name = perfView === 'asset' ? r.asset : r.driver
+                    return (
+                      <tr key={name} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/40">
+                        <td className="px-4 py-2 font-mono text-xs text-[var(--text-primary)]">{name}</td>
+                        <td className="px-4 py-2 text-[var(--text-secondary)]">{r.trips}</td>
+                        <td className="px-4 py-2 text-[var(--text-secondary)]">{r.distance}</td>
+                        <td className="px-4 py-2 text-[var(--text-secondary)]">{r.completionRate}%</td>
+                        <td className="px-4 py-2 text-[var(--text-secondary)]">{r.onTimeRate == null ? 'N/A' : `${r.onTimeRate}%`}</td>
+                        <td className="px-4 py-2 text-[var(--text-secondary)]">{r.avgDurationHours == null ? 'N/A' : r.avgDurationHours}</td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Filters */}
       <div className="card space-y-3">

@@ -263,6 +263,7 @@ const PermissionMatrix       = lazy(() => import('./pages/PermissionMatrix'))
 const MasterAccessControl    = lazy(() => import('./pages/MasterAccessControl'))
 const ReportShare            = lazy(() => import('./pages/ReportShare'))
 const DataDeletion           = lazy(() => import('./pages/DataDeletion'))
+const Privacy                = lazy(() => import('./pages/Privacy'))
 const EventStream            = lazy(() => import('./pages/EventStream'))
 const Approvals              = lazy(() => import('./pages/Approvals'))
 const WorkflowSettings       = lazy(() => import('./pages/WorkflowSettings'))
@@ -343,6 +344,9 @@ function MainApp() {
                 Data Safety form's deletion mechanism. Anon, no app shell. */}
             <Route path="/data-deletion"   element={<Safe><DataDeletion /></Safe>} />
             <Route path="/delete-account"  element={<Navigate to="/data-deletion" replace />} />
+            {/* PUBLIC privacy policy - the URL for Play Console App content + Data Safety. */}
+            <Route path="/privacy"         element={<Safe><Privacy /></Safe>} />
+            <Route path="/privacy-policy"  element={<Navigate to="/privacy" replace />} />
             {/* Public, light-theme, auto-rotating TV/kiosk report viewer (V251/V252
                 share token) - ANON, no chrome. The single public report-share surface
                 (replaces the retired /display/:token executive board). The

@@ -34,11 +34,17 @@ function isMissingRelation(err) {
  * filters. Returns [] when the table is missing so the UI can prompt for the
  * migration rather than error.
  */
-export async function listCertifications({ country, status, subjectType, limit = 500 } = {}) {
+export async function listCertifications({
+  country, status, subjectType, expiryFrom, expiryTo, limit = 500,
+} = {}) {
   try {
     let q = supabase.from('certifications').select(COLS)
     if (status) q = q.eq('status', status)
     if (subjectType) q = q.eq('subject_type', subjectType)
+    // Optional server-side expiry window (inclusive). Rows with a NULL expiry
+    // date are excluded by these bounds by design (nothing to renew).
+    if (expiryFrom) q = q.gte('expiry_date', expiryFrom)
+    if (expiryTo) q = q.lte('expiry_date', expiryTo)
     q = applyCountry(q, country)
     return unwrap(await q.order('expiry_date', { ascending: true, nullsFirst: false }).limit(limit)) || []
   } catch (err) {

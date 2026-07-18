@@ -1,5 +1,15 @@
 # TyrePulse Mobile - Status Audit (updated 4 July 2026 · Session 8)
 
+> **CURRENT (2026-07-18):** see `PROJECT_MEMORY.md` for the live per-session detail. Since this audit the
+> app shipped to the Play **Internal** track (via `release-play.yml` EAS `--auto-submit`) with: real Tyre
+> Pulse brand icon/splash/login logo; inspection-sync CHECK-token fix (was stuck "pending"); V267 approval
+> push notifications; accident asset-first form + native date/time pickers + categorized photos; keyboard-
+> flicker + Android nav-bar-overlap fixes; PM record-service screen; per-user Deny applies to admins;
+> full Arabic + RTL. `npx tsc --noEmit` clean. Google Play **Data Safety**: crash/diagnostics (Sentry) are
+> the only third-party-shared data; deletion URL `https://tyrepulse.app/data-deletion`. RULE: native changes
+> need a fresh EAS build - testers must UPDATE from the Play track.
+
+
 > **Note:** the "What Is Missing / Incomplete" and "Critical Code Issues"
 > sections below were the June-2026 audit. Most were resolved in Sessions 4–8
 > and are annotated inline — photo upload to Storage, push notifications,

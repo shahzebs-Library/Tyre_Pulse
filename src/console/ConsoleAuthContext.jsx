@@ -76,7 +76,13 @@ export function ConsoleAuthProvider({ children }) {
       setAdmin(data)
       await loadOrgs()
     } else {
-      await supabase.auth.signOut()
+      // Not a super admin. Only end the session when this is a STANDALONE console
+      // tab (its own isolated storage). When the console is reached via the in-app
+      // System Console link (same tab, IS_CONSOLE_SURFACE=false) the session is the
+      // user's shared main-app session - signing out here would log them out of the
+      // whole app just for visiting /console. Withhold `admin` without signing out;
+      // the guard shows the console login instead.
+      if (IS_CONSOLE_SURFACE) await supabase.auth.signOut()
       setAdmin(null)
     }
     setLoading(false)

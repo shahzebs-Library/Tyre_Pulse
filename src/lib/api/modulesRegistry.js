@@ -152,34 +152,53 @@ export async function bulkSetStatus(moduleIds, status) {
 }
 
 /**
- * Seed the registry from the module catalog. Best-effort: reads the existing
- * rows, then upserts any catalog module that has no row yet with status 'live'
- * so the control center is populated on first use. Never throws; returns the
- * number of rows seeded (0 when nothing was missing or on any failure).
+ * Flatten the curated MODULE_GROUPS into the seed shape. Used as the fallback
+ * when no explicit catalog is supplied so callers keep the old behaviour.
  *
+ * @returns {{module_id:string,name:string,category:string}[]}
+ */
+function curatedSeedList() {
+  return MODULE_GROUPS.flatMap((g) =>
+    g.modules.map((m) => ({ module_id: m.key, name: m.label, category: g.group })),
+  )
+}
+
+/**
+ * Seed the registry from a module catalog. Best-effort: reads the existing rows,
+ * then upserts any catalog module that has no row yet with status 'live' so the
+ * control center is populated on first use. Never throws; returns the number of
+ * rows seeded (0 when nothing was missing or on any failure).
+ *
+ * Pass the COMPLETE catalog (e.g. `buildNavModuleCatalog(NAV_CATALOG)`) to cover
+ * every navigable module; called with no argument it falls back to the curated
+ * MODULE_GROUPS set so existing behaviour is unchanged. Existing rows are never
+ * touched, so previously seeded keys keep their stored label / category / status.
+ *
+ * @param {{module_id:string,name?:string,category?:string}[]} [catalog]
  * @returns {Promise<number>}
  */
-export async function seedFromCatalog() {
+export async function seedFromCatalog(catalog) {
   try {
+    const list = Array.isArray(catalog) && catalog.length ? catalog : curatedSeedList()
     const existing = await listModules()
     const have = new Set((existing || []).map((r) => r.module_id))
+    const seen = new Set()
     const missing = []
-    for (const g of MODULE_GROUPS) {
-      for (const m of g.modules) {
-        if (!have.has(m.key)) {
-          missing.push({
-            module_id: m.key,
-            name: m.label,
-            category: g.group,
-            status: 'live',
-            visible_to: 'all',
-            roles: null,
-            depends_on: null,
-            note: null,
-            last_updated: new Date().toISOString(),
-          })
-        }
-      }
+    for (const m of list) {
+      const id = m && m.module_id != null ? String(m.module_id).trim() : ''
+      if (!id || seen.has(id) || have.has(id)) continue
+      seen.add(id)
+      missing.push({
+        module_id: id,
+        name: m.name == null ? id : String(m.name),
+        category: m.category == null ? null : String(m.category),
+        status: 'live',
+        visible_to: 'all',
+        roles: null,
+        depends_on: null,
+        note: null,
+        last_updated: new Date().toISOString(),
+      })
     }
     if (missing.length === 0) return 0
     const { error } = await supabase.from('modules')

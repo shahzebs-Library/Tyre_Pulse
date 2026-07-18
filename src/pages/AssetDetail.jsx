@@ -27,6 +27,7 @@ import { formatCurrencyCompact, formatDate, formatMonthYear } from '../lib/forma
 import LoadingState from '../components/LoadingState'
 import EmptyState from '../components/EmptyState'
 import CustomFieldsPanel from '../components/CustomFieldsPanel'
+import TyreBay from '../components/TyreBay'
 import EntityApprovalPanel from '../components/workflow/EntityApprovalPanel'
 import { Illustration } from '../components/illustrations'
 import { vehicleArt } from '../lib/brand/vehicleArt'
@@ -669,59 +670,20 @@ export default function AssetDetail() {
             </motion.div>
           )}
 
-          {/* ── Tyres ─────────────────────────────────────────────────────────── */}
+          {/* ── Tyre Bay ──────────────────────────────────────────────────────────
+              Per-vehicle wheel bay: 3D diagram with current-tyre risk lit up,
+              selected-position detail + full position history, one-click Move/Swap
+              and Remove (gated by the approval lock), and per-tyre passport links.
+              Receives the FULL tyres array so history is complete. */}
           {tab === 'tyres' && (
             <motion.div key="tyres" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-              <div className="bg-[var(--surface-2)] rounded-xl border border-[var(--border-bright)] overflow-hidden">
-                <div className="p-4 border-b border-[var(--border-bright)]">
-                  <h3 className="text-sm font-semibold text-[var(--text-secondary)] flex items-center gap-2">
-                    <Activity className="w-4 h-4 text-green-400" /> {t('assetmgmt.drawer.activeTyres', { count: activeTyres.length })}
-                  </h3>
-                </div>
-                {activeTyres.length ? (
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-xs">
-                      <thead>
-                        <tr className="border-b border-[var(--border-bright)]">
-                          {[
-                            t('assetmgmt.drawer.columns.position'), t('assetmgmt.drawer.columns.serial'), t('assetmgmt.drawer.columns.brand'),
-                            t('assetmgmt.drawer.columns.size'), t('assetmgmt.drawer.columns.tread'), t('assetmgmt.drawer.columns.risk'),
-                            t('assetmgmt.drawer.columns.daysFitted'), t('assetmgmt.drawer.columns.cpk'),
-                          ].map(h => (
-                            <th key={h} className="px-3 py-2 text-left text-[var(--text-muted)] font-medium whitespace-nowrap">{h}</th>
-                          ))}
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {activeTyres.map((tRow, i) => {
-                          const days = tRow.issue_date ? daysSince(tRow.issue_date) : null
-                          const km = (parseFloat(tRow.km_at_removal) || 0) - (parseFloat(tRow.km_at_fitment) || 0)
-                          const cpk = km > 0 && tRow.cost_per_tyre ? (parseFloat(tRow.cost_per_tyre) / km).toFixed(4) : '-'
-                          const rc = RISK_COLOR[tRow.risk_level] ?? { bg: 'bg-[var(--surface-2)]', text: 'text-[var(--text-secondary)]' }
-                          return (
-                            <tr key={tRow.id ?? i} className="border-b border-[var(--border-bright)] hover:bg-[var(--surface-3)] transition-colors">
-                              <td className="px-3 py-2 font-mono text-[var(--text-secondary)]">{tRow.position ?? '-'}</td>
-                              <td className="px-3 py-2 text-[var(--text-secondary)]">{tRow.serial_number ?? '-'}</td>
-                              <td className="px-3 py-2 text-[var(--text-secondary)]">{tRow.brand ?? '-'}</td>
-                              <td className="px-3 py-2 text-[var(--text-secondary)]">{tRow.size ?? '-'}</td>
-                              <td className="px-3 py-2 text-[var(--text-secondary)]">{tRow.tread_depth ? `${tRow.tread_depth}mm` : '-'}</td>
-                              <td className="px-3 py-2">
-                                {tRow.risk_level ? (
-                                  <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${rc.bg} ${rc.text}`}>{tRow.risk_level}</span>
-                                ) : <span className="text-[var(--text-dim)]">-</span>}
-                              </td>
-                              <td className="px-3 py-2 text-[var(--text-secondary)]">{days != null ? `${days}d` : '-'}</td>
-                              <td className="px-3 py-2 text-[var(--text-secondary)]">{cpk}</td>
-                            </tr>
-                          )
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                ) : (
-                  <div className="p-6 text-center text-[var(--text-muted)] text-sm">{t('assetmgmt.drawer.noActiveTyres')}</div>
-                )}
-              </div>
+              <TyreBay
+                asset={asset}
+                tyres={tyres}
+                currency={activeCurrency}
+                locked={wfLocked}
+                onMoved={load}
+              />
             </motion.div>
           )}
 

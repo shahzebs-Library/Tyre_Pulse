@@ -120,3 +120,103 @@ export async function setUserAccessGrant({
 export async function revokeUserAccessGrant(id) {
   return unwrap(await supabase.rpc('revoke_user_access_grant', { p_id: id }))
 }
+
+// ── Web / Mobile scope (surface partitioning) ────────────────────────────────
+//
+// Per-user grants are separated by SURFACE using the `module_key` prefix:
+//   - WEB    grants use the plain module key            (e.g. `analytics`)
+//   - MOBILE grants use a `mobile:` prefixed module key  (e.g. `mobile:analytics`)
+// The mobile app (mobile/lib/permissions.ts MOBILE_GRANT_PREFIX) reads ONLY the
+// prefixed rows; the web app reads ONLY the plain rows. So the same override can
+// target web, mobile, or both surfaces with no schema change - just which
+// module_key row(s) carry the grant. Keep this prefix in lockstep with mobile.
+
+/** The surface prefix that scopes a grant to the mobile app. */
+export const MOBILE_GRANT_PREFIX = 'mobile:'
+
+/** Storage key for a module's MOBILE grant (what mobile reads / this writes). */
+export function mobileGrantKey(moduleKey) {
+  return `${MOBILE_GRANT_PREFIX}${moduleKey}`
+}
+
+/**
+ * Resolve the surface scope of an existing override from the presence of a plain
+ * (web) and a mobile: override effect. Each argument is the override effect on
+ * that surface ('grant' | 'revoke') or null/undefined when no override exists.
+ *
+ *   plain only   -> 'web'
+ *   mobile only  -> 'mobile'
+ *   both present -> 'both'
+ *   neither      -> null   (no override; the UI defaults the selector to 'web')
+ *
+ * @param {('grant'|'revoke'|null|undefined)} plainOverride   web-surface effect
+ * @param {('grant'|'revoke'|null|undefined)} mobileOverride  mobile-surface effect
+ * @returns {('web'|'mobile'|'both'|null)}
+ */
+export function parseGrantScope(plainOverride, mobileOverride) {
+  const hasPlain = plainOverride === 'grant' || plainOverride === 'revoke'
+  const hasMobile = mobileOverride === 'grant' || mobileOverride === 'revoke'
+  if (hasPlain && hasMobile) return 'both'
+  if (hasPlain) return 'web'
+  if (hasMobile) return 'mobile'
+  return null
+}
+
+/**
+ * The storage key(s) a grant of the given scope must be written to / cleared from.
+ *   web    -> [plainKey]
+ *   mobile -> [mobileKey]
+ *   both   -> [plainKey, mobileKey]
+ *
+ * @param {string} moduleKey  the plain (web) module key
+ * @param {('web'|'mobile'|'both')} scope
+ * @returns {string[]}
+ */
+export function grantKeysForScope(moduleKey, scope) {
+  if (scope === 'mobile') return [mobileGrantKey(moduleKey)]
+  if (scope === 'both') return [moduleKey, mobileGrantKey(moduleKey)]
+  return [moduleKey] // 'web' (default)
+}
+
+/**
+ * Set/upsert an access grant for a user across a SURFACE SCOPE (web | mobile |
+ * both). Thin scope-aware wrapper over `setUserAccessGrant`: it writes the same
+ * effect to the plain module_key and/or the `mobile:`-prefixed module_key per
+ * the scope. Clearing rows (delete) is done separately via
+ * `revokeUserAccessGrant(id)` since that needs the grant's uuid.
+ *
+ * @param {string}  userId              target user's uuid
+ * @param {string}  moduleKey           the plain (web) module key
+ * @param {object}  params
+ * @param {string}  [params.capability='view']
+ * @param {string}  [params.effect='grant']       'grant' | 'revoke'
+ * @param {('web'|'mobile'|'both')} [params.scope='web']
+ * @param {string?} [params.note=null]
+ * @param {string?} [params.expiresAt=null]        ISO expiry (timestamptz)
+ * @param {string?} [params.expires_at=null]       snake_case alias for expiresAt
+ * @returns {Promise<string[]>} the written grants' uuids (one per surface)
+ */
+export async function setUserAccessGrantScoped(userId, moduleKey, {
+  capability = 'view',
+  effect = 'grant',
+  scope = 'web',
+  note = null,
+  expiresAt = null,
+  expires_at = null,
+} = {}) {
+  const keys = grantKeysForScope(moduleKey, scope)
+  const ids = []
+  for (const key of keys) {
+    ids.push(
+      await setUserAccessGrant({
+        userId,
+        moduleKey: key,
+        capability,
+        effect,
+        note,
+        expiresAt: expiresAt ?? expires_at,
+      }),
+    )
+  }
+  return ids
+}

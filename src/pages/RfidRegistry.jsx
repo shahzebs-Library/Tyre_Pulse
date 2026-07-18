@@ -16,13 +16,13 @@ const STATUS_COLORS = {
   available: 'text-blue-400 bg-blue-400/15 border-blue-400/30',
   assigned: 'text-yellow-400 bg-yellow-400/15 border-yellow-400/30',
   attached: 'text-green-400 bg-green-400/15 border-green-400/30',
-  removed: 'text-gray-400 bg-gray-400/15 border-gray-400/30',
+  removed: 'text-[var(--text-secondary)] bg-gray-400/15 border-gray-400/30',
   lost: 'text-red-400 bg-red-400/15 border-red-400/30',
   damaged: 'text-purple-400 bg-purple-400/15 border-purple-400/30',
 }
 
 const SEVERITY_COLORS = {
-  low: 'text-gray-400 bg-gray-400/15',
+  low: 'text-[var(--text-secondary)] bg-gray-400/15',
   medium: 'text-yellow-400 bg-yellow-400/15',
   high: 'text-orange-400 bg-orange-400/15',
   critical: 'text-red-400 bg-red-400/15',
@@ -299,7 +299,7 @@ export default function RfidRegistry() {
             className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all ${
               activeTab === id
                 ? 'bg-brand-primary/20 border border-brand-primary/30 text-brand-bright'
-                : 'bg-panel-deep border border-white/5 text-gray-400 hover:text-gray-200'
+                : 'bg-panel-deep border border-white/5 text-[var(--text-secondary)] hover:text-gray-200'
             }`}
           >
             <Icon size={15} /> {label}
@@ -317,34 +317,34 @@ export default function RfidRegistry() {
           {/* Stats Grid */}
           <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
             <div className="card p-4 text-center">
-              <p className="text-2xl font-bold text-white">{stats.totalTags}</p>
-              <p className="text-xs text-gray-500 mt-1">Total Tags</p>
+              <p className="text-2xl font-bold text-[var(--text-primary)]">{stats.totalTags}</p>
+              <p className="text-xs text-[var(--text-muted)] mt-1">Total Tags</p>
             </div>
             <div className="card p-4 text-center">
               <p className="text-2xl font-bold text-green-400">{stats.attachedTags}</p>
-              <p className="text-xs text-gray-500 mt-1">Attached</p>
+              <p className="text-xs text-[var(--text-muted)] mt-1">Attached</p>
             </div>
             <div className="card p-4 text-center">
               <p className="text-2xl font-bold text-blue-400">{stats.availableTags}</p>
-              <p className="text-xs text-gray-500 mt-1">Available</p>
+              <p className="text-xs text-[var(--text-muted)] mt-1">Available</p>
             </div>
             <div className="card p-4 text-center">
               <p className="text-2xl font-bold text-red-400">{stats.lostTags}</p>
-              <p className="text-xs text-gray-500 mt-1">Lost/Damaged</p>
+              <p className="text-xs text-[var(--text-muted)] mt-1">Lost/Damaged</p>
             </div>
             <div className="card p-4 text-center">
               <p className="text-2xl font-bold text-green-400">{stats.activeReaders}/{stats.totalReaders}</p>
-              <p className="text-xs text-gray-500 mt-1">Readers Active</p>
+              <p className="text-xs text-[var(--text-muted)] mt-1">Readers Active</p>
             </div>
             <div className="card p-4 text-center">
               <p className="text-2xl font-bold text-yellow-400">{stats.alertsOpen}</p>
-              <p className="text-xs text-gray-500 mt-1">Open Alerts</p>
+              <p className="text-xs text-[var(--text-muted)] mt-1">Open Alerts</p>
             </div>
           </div>
 
           {/* Quick Actions */}
           <div className="card p-4">
-            <h3 className="text-sm font-semibold text-white mb-3 flex items-center gap-2">
+            <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-3 flex items-center gap-2">
               <Activity size={15} className="text-green-400" /> Quick Actions
             </h3>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -353,28 +353,28 @@ export default function RfidRegistry() {
                 className="flex flex-col items-center gap-2 p-4 rounded-xl bg-brand-primary/10 border border-brand-primary/20 hover:bg-brand-primary/20 transition-colors"
               >
                 <Plus size={24} className="text-green-400" />
-                <span className="text-xs font-medium text-white">Add Tag</span>
+                <span className="text-xs font-medium text-[var(--text-primary)]">Add Tag</span>
               </button>
               <button
                 onClick={() => setScannerOpen(true)}
                 className="flex flex-col items-center gap-2 p-4 rounded-xl bg-brand-primary/10 border border-brand-primary/20 hover:bg-brand-primary/20 transition-colors"
               >
                 <Radio size={24} className="text-green-400" />
-                <span className="text-xs font-medium text-white">Scan Tag</span>
+                <span className="text-xs font-medium text-[var(--text-primary)]">Scan Tag</span>
               </button>
               <button
                 onClick={() => setActiveTab('readers')}
                 className="flex flex-col items-center gap-2 p-4 rounded-xl bg-blue-500/10 border border-blue-500/20 hover:bg-blue-500/20 transition-colors"
               >
                 <MapPin size={24} className="text-blue-400" />
-                <span className="text-xs font-medium text-white">Manage Zones</span>
+                <span className="text-xs font-medium text-[var(--text-primary)]">Manage Zones</span>
               </button>
               <button
                 onClick={() => setActiveTab('alerts')}
                 className="flex flex-col items-center gap-2 p-4 rounded-xl bg-red-500/10 border border-red-500/20 hover:bg-red-500/20 transition-colors"
               >
                 <AlertCircle size={24} className="text-red-400" />
-                <span className="text-xs font-medium text-white">View Alerts</span>
+                <span className="text-xs font-medium text-[var(--text-primary)]">View Alerts</span>
               </button>
             </div>
           </div>
@@ -383,7 +383,7 @@ export default function RfidRegistry() {
           {alerts.filter(a => !a.resolved_at).slice(0, 5).length > 0 && (
             <div className="card p-0">
               <div className="px-4 py-3 border-b border-white/5">
-                <h3 className="text-sm font-semibold text-white flex items-center gap-2">
+                <h3 className="text-sm font-semibold text-[var(--text-primary)] flex items-center gap-2">
                   <AlertCircle size={15} className="text-red-400" /> Recent Alerts
                 </h3>
               </div>
@@ -394,9 +394,9 @@ export default function RfidRegistry() {
                       <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${SEVERITY_COLORS[alert.severity] || SEVERITY_COLORS.medium}`}>
                         {alert.severity}
                       </span>
-                      <span className="text-sm text-white">{alert.message}</span>
+                      <span className="text-sm text-[var(--text-primary)]">{alert.message}</span>
                     </div>
-                    <span className="text-xs text-gray-500">
+                    <span className="text-xs text-[var(--text-muted)]">
                       {new Date(alert.created_at).toLocaleDateString()}
                     </span>
                   </div>
@@ -413,7 +413,7 @@ export default function RfidRegistry() {
           {/* Filters */}
           <div className="flex gap-3 flex-wrap items-center">
             <div className="relative flex-1 min-w-52">
-              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
+              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
               <input
                 className="input pl-9 text-sm"
                 placeholder="Search tags, serials, manufacturers..."
@@ -442,12 +442,12 @@ export default function RfidRegistry() {
           {/* Tags Table */}
           <div className="card overflow-hidden p-0">
             {loading ? (
-              <div className="flex items-center justify-center py-12 text-gray-500">Loading tags...</div>
+              <div className="flex items-center justify-center py-12 text-[var(--text-muted)]">Loading tags...</div>
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="text-left text-[10px] text-gray-500 uppercase" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+                    <tr className="text-left text-[10px] text-[var(--text-muted)] uppercase" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
                       <th className="px-4 py-3">Tag UID</th>
                       <th className="px-3 py-3">Type</th>
                       <th className="px-3 py-3">Tyre Serial</th>
@@ -461,25 +461,25 @@ export default function RfidRegistry() {
                   <tbody>
                     {filteredTags.map(tag => (
                       <tr key={tag.id} className="border-t border-white/5 hover:bg-white/2">
-                        <td className="px-4 py-2.5 font-mono text-xs text-white">{tag.tag_uid}</td>
-                        <td className="px-3 py-2.5 text-gray-400 text-xs">{tag.tag_type || '-'}</td>
+                        <td className="px-4 py-2.5 font-mono text-xs text-[var(--text-primary)]">{tag.tag_uid}</td>
+                        <td className="px-3 py-2.5 text-[var(--text-secondary)] text-xs">{tag.tag_type || '-'}</td>
                         <td className="px-3 py-2.5 text-gray-300 text-xs">{tag.tyre_records?.serial_no || '-'}</td>
                         <td className="px-3 py-2.5 text-gray-300 text-xs">{tag.tyre_records?.asset_no || '-'}</td>
-                        <td className="px-3 py-2.5 text-gray-400 text-xs">{tag.site || '-'}</td>
+                        <td className="px-3 py-2.5 text-[var(--text-secondary)] text-xs">{tag.site || '-'}</td>
                         <td className="px-3 py-2.5">
                           <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${STATUS_COLORS[tag.status] || STATUS_COLORS.attached}`}>
                             {tag.status}
                           </span>
                         </td>
-                        <td className="px-3 py-2.5 text-gray-400 text-xs">
+                        <td className="px-3 py-2.5 text-[var(--text-secondary)] text-xs">
                           {tag.last_seen_at ? new Date(tag.last_seen_at).toLocaleDateString() : '-'}
                         </td>
                         <td className="px-3 py-2.5">
                           <div className="flex items-center gap-1">
-                            <button onClick={() => openTagForm(tag)} className="p-1 text-gray-400 hover:text-white" title="Edit">
+                            <button onClick={() => openTagForm(tag)} className="p-1 text-[var(--text-secondary)] hover:text-[var(--text-primary)]" title="Edit">
                               <Edit size={13} />
                             </button>
-                            <button onClick={() => deleteTag(tag.id)} className="p-1 text-gray-400 hover:text-red-400" title="Delete">
+                            <button onClick={() => deleteTag(tag.id)} className="p-1 text-[var(--text-secondary)] hover:text-red-400" title="Delete">
                               <Trash2 size={13} />
                             </button>
                           </div>
@@ -488,7 +488,7 @@ export default function RfidRegistry() {
                     ))}
                     {filteredTags.length === 0 && (
                       <tr>
-                        <td colSpan={8} className="py-12 text-center text-gray-600">No RFID tags found</td>
+                        <td colSpan={8} className="py-12 text-center text-[var(--text-muted)]">No RFID tags found</td>
                       </tr>
                     )}
                   </tbody>
@@ -505,7 +505,7 @@ export default function RfidRegistry() {
           {/* Filters */}
           <div className="flex gap-3 flex-wrap items-center">
             <div className="relative flex-1 min-w-52">
-              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
+              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
               <input
                 className="input pl-9 text-sm"
                 placeholder="Search readers, zones..."
@@ -526,31 +526,31 @@ export default function RfidRegistry() {
                 <div key={reader.id} className="card p-4 space-y-3">
                   <div className="flex items-start justify-between">
                     <div>
-                      <h3 className="font-semibold text-white">{reader.name}</h3>
-                      <p className="text-xs text-gray-500">{reader.zone_name}</p>
+                      <h3 className="font-semibold text-[var(--text-primary)]">{reader.name}</h3>
+                      <p className="text-xs text-[var(--text-muted)]">{reader.zone_name}</p>
                     </div>
                     <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${
-                      reader.status === 'active' ? STATUS_COLORS.attached : 'text-gray-400 bg-gray-400/15'
+                      reader.status === 'active' ? STATUS_COLORS.attached : 'text-[var(--text-secondary)] bg-gray-400/15'
                     }`}>
                       {reader.status}
                     </span>
                   </div>
                   <div className="grid grid-cols-2 gap-2 text-xs">
                     <div>
-                      <p className="text-gray-600">Type</p>
-                      <p className="text-white">{reader.reader_type}</p>
+                      <p className="text-[var(--text-muted)]">Type</p>
+                      <p className="text-[var(--text-primary)]">{reader.reader_type}</p>
                     </div>
                     <div>
-                      <p className="text-gray-600">Site</p>
-                      <p className="text-white">{reader.site || '-'}</p>
+                      <p className="text-[var(--text-muted)]">Site</p>
+                      <p className="text-[var(--text-primary)]">{reader.site || '-'}</p>
                     </div>
                     <div>
-                      <p className="text-gray-600">Last Seen</p>
-                      <p className="text-white">{reader.last_heartbeat ? new Date(reader.last_heartbeat).toLocaleTimeString() : '-'}</p>
+                      <p className="text-[var(--text-muted)]">Last Seen</p>
+                      <p className="text-[var(--text-primary)]">{reader.last_heartbeat ? new Date(reader.last_heartbeat).toLocaleTimeString() : '-'}</p>
                     </div>
                     <div>
-                      <p className="text-gray-600">Firmware</p>
-                      <p className="text-white">{reader.firmware_version || '-'}</p>
+                      <p className="text-[var(--text-muted)]">Firmware</p>
+                      <p className="text-[var(--text-primary)]">{reader.firmware_version || '-'}</p>
                     </div>
                   </div>
                 </div>
@@ -574,15 +574,15 @@ export default function RfidRegistry() {
 
           <div className="card overflow-hidden p-0">
             {loading ? (
-              <div className="flex items-center justify-center py-12 text-gray-500">Loading alerts...</div>
+              <div className="flex items-center justify-center py-12 text-[var(--text-muted)]">Loading alerts...</div>
             ) : (
               <div className="max-h-96 overflow-y-auto">
                 {filteredAlerts.length === 0 ? (
-                  <div className="py-12 text-center text-gray-600">No alerts to display</div>
+                  <div className="py-12 text-center text-[var(--text-muted)]">No alerts to display</div>
                 ) : (
                   <table className="w-full text-sm">
                     <thead className="sticky top-0 bg-panel-deep">
-                      <tr className="text-left text-[10px] text-gray-500 uppercase" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+                      <tr className="text-left text-[10px] text-[var(--text-muted)] uppercase" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
                         <th className="px-4 py-3">Severity</th>
                         <th className="px-3 py-3">Tag</th>
                         <th className="px-3 py-3">Type</th>
@@ -599,10 +599,10 @@ export default function RfidRegistry() {
                               {alert.severity}
                             </span>
                           </td>
-                          <td className="px-3 py-2.5 font-mono text-xs text-white">{alert.tag_uid}</td>
-                          <td className="px-3 py-2.5 text-gray-400 text-xs">{alert.alert_type.replace('_', ' ')}</td>
+                          <td className="px-3 py-2.5 font-mono text-xs text-[var(--text-primary)]">{alert.tag_uid}</td>
+                          <td className="px-3 py-2.5 text-[var(--text-secondary)] text-xs">{alert.alert_type.replace('_', ' ')}</td>
                           <td className="px-3 py-2.5 text-gray-300 text-xs">{alert.message}</td>
-                          <td className="px-3 py-2.5 text-gray-400 text-xs">{new Date(alert.created_at).toLocaleString()}</td>
+                          <td className="px-3 py-2.5 text-[var(--text-secondary)] text-xs">{new Date(alert.created_at).toLocaleString()}</td>
                           <td className="px-3 py-2.5">
                             {!alert.resolved_at && (
                               <button
@@ -630,7 +630,7 @@ export default function RfidRegistry() {
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-4">
           <div className="flex gap-3 flex-wrap items-center">
             <div className="relative flex-1 min-w-52">
-              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
+              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
               <input
                 className="input pl-9 text-sm"
                 placeholder="Search tag UID, zone..."
@@ -645,12 +645,12 @@ export default function RfidRegistry() {
 
           <div className="card overflow-hidden p-0">
             {loading ? (
-              <div className="flex items-center justify-center py-12 text-gray-500">Loading history...</div>
+              <div className="flex items-center justify-center py-12 text-[var(--text-muted)]">Loading history...</div>
             ) : (
               <div className="max-h-96 overflow-y-auto">
                 <table className="w-full text-sm">
                   <thead className="sticky top-0 bg-panel-deep">
-                    <tr className="text-left text-[10px] text-gray-500 uppercase" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+                    <tr className="text-left text-[10px] text-[var(--text-muted)] uppercase" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
                       <th className="px-4 py-3">Time</th>
                       <th className="px-3 py-3">Tag UID</th>
                       <th className="px-3 py-3">Zone</th>
@@ -663,9 +663,9 @@ export default function RfidRegistry() {
                       .filter(h => !historySearch || h.tag_uid?.toLowerCase().includes(historySearch.toLowerCase()) || h.zone_name?.toLowerCase().includes(historySearch.toLowerCase()))
                       .map((read, idx) => (
                         <tr key={idx} className="border-t border-white/5 hover:bg-white/2">
-                          <td className="px-4 py-2.5 text-gray-400 text-xs">{new Date(read.read_at).toLocaleString()}</td>
-                          <td className="px-3 py-2.5 font-mono text-xs text-white">{read.tag_uid}</td>
-                          <td className="px-3 py-2.5 text-gray-400 text-xs">{read.rfid_readers?.zone_name || read.zone_name || '-'}</td>
+                          <td className="px-4 py-2.5 text-[var(--text-secondary)] text-xs">{new Date(read.read_at).toLocaleString()}</td>
+                          <td className="px-3 py-2.5 font-mono text-xs text-[var(--text-primary)]">{read.tag_uid}</td>
+                          <td className="px-3 py-2.5 text-[var(--text-secondary)] text-xs">{read.rfid_readers?.zone_name || read.zone_name || '-'}</td>
                           <td className="px-3 py-2.5 text-xs">
                             {read.rssi ? (
                               <span className={`${read.rssi > -50 ? 'text-green-400' : read.rssi > -70 ? 'text-yellow-400' : 'text-red-400'}`}>
@@ -673,12 +673,12 @@ export default function RfidRegistry() {
                               </span>
                             ) : '-'}
                           </td>
-                          <td className="px-3 py-2.5 text-gray-400 text-xs">{read.site || '-'}</td>
+                          <td className="px-3 py-2.5 text-[var(--text-secondary)] text-xs">{read.site || '-'}</td>
                         </tr>
                       ))}
                     {history.length === 0 && (
                       <tr>
-                        <td colSpan={5} className="py-12 text-center text-gray-600">No read events recorded</td>
+                        <td colSpan={5} className="py-12 text-center text-[var(--text-muted)]">No read events recorded</td>
                       </tr>
                     )}
                   </tbody>
@@ -706,17 +706,17 @@ export default function RfidRegistry() {
               className="card max-w-md w-full p-6 space-y-4"
             >
               <div className="flex items-center justify-between">
-                <h3 className="text-lg font-bold text-white">
+                <h3 className="text-lg font-bold text-[var(--text-primary)]">
                   {editingTag ? 'Edit RFID Tag' : 'Add New RFID Tag'}
                 </h3>
-                <button onClick={closeTagForm} className="p-1 text-gray-400 hover:text-white">
+                <button onClick={closeTagForm} className="p-1 text-[var(--text-secondary)] hover:text-[var(--text-primary)]">
                   <X size={18} />
                 </button>
               </div>
 
               <div className="space-y-3">
                 <div>
-                  <label className="text-xs font-semibold text-gray-500 uppercase">Tag UID *</label>
+                  <label className="text-xs font-semibold text-[var(--text-muted)] uppercase">Tag UID *</label>
                   <input
                     type="text"
                     className="input w-full mt-1"
@@ -726,7 +726,7 @@ export default function RfidRegistry() {
                   />
                 </div>
                 <div>
-                  <label className="text-xs font-semibold text-gray-500 uppercase">EPC Code</label>
+                  <label className="text-xs font-semibold text-[var(--text-muted)] uppercase">EPC Code</label>
                   <input
                     type="text"
                     className="input w-full mt-1"
@@ -736,7 +736,7 @@ export default function RfidRegistry() {
                   />
                 </div>
                 <div>
-                  <label className="text-xs font-semibold text-gray-500 uppercase">Tag Type</label>
+                  <label className="text-xs font-semibold text-[var(--text-muted)] uppercase">Tag Type</label>
                   <select
                     className="input w-full mt-1"
                     value={tagFormData.tag_type}
@@ -749,7 +749,7 @@ export default function RfidRegistry() {
                   </select>
                 </div>
                 <div>
-                  <label className="text-xs font-semibold text-gray-500 uppercase">Manufacturer</label>
+                  <label className="text-xs font-semibold text-[var(--text-muted)] uppercase">Manufacturer</label>
                   <input
                     type="text"
                     className="input w-full mt-1"
@@ -759,7 +759,7 @@ export default function RfidRegistry() {
                   />
                 </div>
                 <div>
-                  <label className="text-xs font-semibold text-gray-500 uppercase">Site</label>
+                  <label className="text-xs font-semibold text-[var(--text-muted)] uppercase">Site</label>
                   <input
                     type="text"
                     className="input w-full mt-1"

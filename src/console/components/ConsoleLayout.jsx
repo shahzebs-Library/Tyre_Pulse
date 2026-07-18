@@ -5,9 +5,11 @@ import {
   ClipboardList, Zap, Megaphone, Lock, LogOut, ChevronDown,
   Globe, Menu, X, AlertTriangle, Layers, Smartphone, Palette, Activity,
   DatabaseBackup, UserCog, History, BellRing, Boxes, HeartPulse, Search, Truck,
+  LayoutList,
 } from 'lucide-react'
 import { useConsoleAuth } from '../ConsoleAuthContext'
 import Console2FAModal from './Console2FAModal'
+import ThemeToggle from '../../components/ui/ThemeToggle'
 
 const NAV = [
   { to: '/console',              label: 'Dashboard',      icon: LayoutDashboard, end: true },
@@ -21,7 +23,6 @@ const NAV = [
   { to: '/console/data-browser', label: 'Data Browser',   icon: Search },
   { to: '/console/organisations', label: 'Organisations',  icon: Building2 },
   { to: '/console/users',        label: 'Users',          icon: Users },
-  { to: '/console/permissions',  label: 'Permissions',    icon: Layers },
   { to: '/console/access',       label: 'Access Control', icon: Lock },
   { to: '/console/ai-usage',     label: 'AI Usage',       icon: Zap },
   { to: '/console/ai-admin',     label: 'AI Admin',       icon: Zap },
@@ -32,6 +33,7 @@ const NAV = [
   { to: '/console/config',       label: 'System Config',  icon: Settings2 },
   { to: '/console/appearance',   label: 'Report Colors',  icon: Palette },
   { to: '/console/vehicle-designer', label: 'Vehicle Designer', icon: Truck },
+  { to: '/console/navigation',   label: 'Navigation',     icon: LayoutList },
 ]
 
 export default function ConsoleLayout() {
@@ -47,7 +49,7 @@ export default function ConsoleLayout() {
   }
 
   return (
-    <div className="flex h-screen bg-[#0a0a0f] text-white overflow-hidden">
+    <div className="console-root flex h-screen bg-[#0a0a0f] text-white overflow-hidden">
       {/* ── Sidebar ─────────────────────────────────────────────────────────── */}
       <aside className={`${sidebarOpen ? 'w-56' : 'w-14'} flex-shrink-0 flex flex-col border-r border-gray-800/80 transition-all duration-200 bg-gray-950`}>
         {/* Logo */}
@@ -116,10 +118,17 @@ export default function ConsoleLayout() {
 
         {/* Admin info + sign out */}
         <div className="border-t border-gray-800/80 p-3">
-          {sidebarOpen && (
-            <div className="mb-2 px-2">
-              <p className="text-xs text-gray-300 font-medium truncate">{admin?.full_name ?? 'Super Admin'}</p>
-              <p className="text-[10px] text-gray-600 truncate">{admin?.email ?? ''}</p>
+          {sidebarOpen ? (
+            <div className="mb-2 px-2 flex items-center gap-2">
+              <div className="min-w-0 flex-1">
+                <p className="text-xs text-gray-300 font-medium truncate">{admin?.full_name ?? 'Super Admin'}</p>
+                <p className="text-[10px] text-gray-600 truncate">{admin?.email ?? ''}</p>
+              </div>
+              <ThemeToggle size={15} className="inline-flex items-center justify-center w-7 h-7 rounded-lg text-gray-500 hover:text-orange-400 hover:bg-orange-400/10 transition-colors flex-shrink-0" />
+            </div>
+          ) : (
+            <div className="mb-1 flex justify-center">
+              <ThemeToggle size={15} className="inline-flex items-center justify-center w-7 h-7 rounded-lg text-gray-500 hover:text-orange-400 hover:bg-orange-400/10 transition-colors" />
             </div>
           )}
           <button onClick={() => setShow2FA(true)}

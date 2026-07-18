@@ -1,10 +1,12 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { NavLink, useNavigate, useLocation } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useAuth } from '../contexts/AuthContext'
 import { isChecklistOnlyRole, isChecklistPathAllowed } from '../lib/checklistAccess'
 import { navItemAllowedForCustomRole, NAV_MODULE_KEY } from '../lib/navAccess'
 import { ACCESS_ROLES } from '../lib/moduleCatalog'
+import { applyNavLayout } from '../lib/navLayout'
+import { getNavLayout } from '../lib/api/navLayout'
 
 // Built-in roles have hardcoded sidebar rules below; any other (non-empty) role
 // is an admin-defined CUSTOM role whose sidebar is derived from its module grants.
@@ -187,6 +189,7 @@ const NAV_GROUPS = [
       { to: '/workshop',        label: 'Workshop Management', icon: WorkshopIc, adminOnly: A },
       { to: '/technician-scorecard', label: 'Technician Scorecard', icon: Award, adminOnly: A },
       { to: '/pm-programs',     label: 'Preventive Maintenance', icon: CalendarClock, adminOnly: A },
+      { to: '/vehicle-washing', label: 'Vehicle Washing',    icon: Droplet },
       { to: '/dtc',             label: 'DTC Diagnostics',    icon: Cpu, adminOnly: A },
       { to: '/fuel-cards',      label: 'Fuel Cards',         icon: CreditCard, adminOnly: A },
       { to: '/fuel-delivery',   label: 'Fuel Delivery',      icon: Fuel, adminOnly: A },
@@ -328,6 +331,16 @@ const NAV_GROUPS = [
   },
 ]
 
+// Lightweight, icon-free descriptor of the built-in nav (group key = its label,
+// item key = its route) for the super-admin Navigation Customizer console page.
+// Single source of truth: derived from NAV_GROUPS so the editor can never drift
+// from the real sidebar. NAV_GROUPS itself stays the applied definition.
+export const NAV_CATALOG = NAV_GROUPS.map((g) => ({
+  key: g.label,
+  label: g.label,
+  items: g.items.map((it) => ({ key: it.to, label: it.label })),
+}))
+
 function shouldShowGroup(group, profile) {
   if (!group.groupRoles) return true
   return group.groupRoles.includes(profile?.role)
@@ -393,7 +406,7 @@ const TYRE_MAN_TABS = [
   { to: '/settings',    tk: 'profile', label: 'Profile',   icon: User },
 ]
 
-function TyreManShell({ children, alertCount }) {
+function TyreManShell({ children, alertCount, appIcon, customAppIcon }) {
   const { signOut, profile } = useAuth()
   const { t } = useLanguage()
   const location = useLocation()
@@ -652,6 +665,19 @@ export default function Layout({ children }) {
   const [globalSearchOpen, setGlobalSearchOpen] = useState(false)
   const [alertCount, setAlertCount]           = useState(0)
   const [hoveredItem, setHoveredItem]         = useState(null)
+  // Org-wide sidebar customization (super-admin Navigation Customizer). Loaded
+  // once, best-effort; {} → applyNavLayout returns the built-in defaults, so this
+  // is a no-op when no layout is configured. Applied BEFORE role/flag filtering
+  // below, so gating still runs on the reordered/regrouped set.
+  const [navLayout, setNavLayout]             = useState({})
+
+  useEffect(() => {
+    let alive = true
+    getNavLayout().then((layout) => { if (alive) setNavLayout(layout || {}) }).catch(() => {})
+    return () => { alive = false }
+  }, [])
+
+  const effectiveGroups = useMemo(() => applyNavLayout(NAV_GROUPS, navLayout), [navLayout])
 
   function toggleGroup(label) {
     setCollapsedGroups(prev => {
@@ -761,7 +787,7 @@ export default function Layout({ children }) {
     : {}
 
   if (profile?.role === 'Tyre Man') {
-    return <TyreManShell alertCount={alertCount}>{children}</TyreManShell>
+    return <TyreManShell alertCount={alertCount} appIcon={appIcon} customAppIcon={customAppIcon}>{children}</TyreManShell>
   }
 
   const navItemVariants = {
@@ -919,21 +945,31 @@ export default function Layout({ children }) {
 
         {/* ── Nav ────────────────────────────────────────────────────────────── */}
         <nav className="flex-1 overflow-y-auto py-1.5 px-2" style={{ scrollbarWidth: 'thin' }}>
-          {NAV_GROUPS.map((group) => {
-            const { label, items } = group
+          {effectiveGroups.map((group) => {
+            const { items } = group
+            // Stable identity = the group's default key (survives renames) for the
+            // React key, collapse state, and translation lookup.
+            const groupId = group.key || group.label
             if (!shouldShowGroup(group, profile)) return null
             const visibleItems = items.filter(item => shouldShowNavItem(item, profile, isFlagEnabled, hasPermission, grantedModules, isSuperAdmin))
             if (visibleItems.length === 0) return null
-            const isCollapsed = collapsedGroups.has(label)
+            const isCollapsed = collapsedGroups.has(groupId)
+            const _grpKey = `nav.groups.${groupId}`
+            const _grpRaw = t(_grpKey)
+            const renamed = group.label && group.label !== groupId
+            // A super-admin rename wins; otherwise use the translation (fallback to label).
+            const groupHeading = renamed
+              ? group.label
+              : ((!_grpRaw || _grpRaw === _grpKey) ? group.label : _grpRaw)
             return (
-              <div key={label} className="mb-0.5">
+              <div key={groupId} className="mb-0.5">
                 {sidebarOpen && (
                   <button
-                    onClick={() => toggleGroup(label)}
+                    onClick={() => toggleGroup(groupId)}
                     className="w-full flex items-center justify-between px-2.5 pt-3 pb-1.5 group/sec cursor-pointer"
                   >
                     <span className="text-[9.5px] font-bold uppercase tracking-[0.11em] text-gray-700 group-hover/sec:text-gray-500 transition-colors">
-                      {t(`nav.groups.${label}`)}
+                      {groupHeading}
                     </span>
                     <motion.div
                       animate={{ rotate: isCollapsed ? -90 : 0 }}
@@ -947,7 +983,7 @@ export default function Layout({ children }) {
                 <AnimatePresence initial={false}>
                   {(!isCollapsed || !sidebarOpen) && (
                     <motion.div
-                      key={label + '-items'}
+                      key={groupId + '-items'}
                       initial={{ height: 0, opacity: 0 }}
                       animate={{ height: 'auto', opacity: 1 }}
                       exit={{ height: 0, opacity: 0 }}

@@ -41,6 +41,7 @@ export const NAV_MODULE_KEY = {
   '/reports': 'reports',
   '/report-center': 'reports',
   '/gate-pass': 'gate_pass',
+  '/vehicle-washing': 'vehicle_washing',
   '/work-orders': 'work_orders',
   '/assets': 'fleet_master',
   '/kpi-engine': 'kpi_scorecard',

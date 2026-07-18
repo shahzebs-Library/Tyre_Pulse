@@ -29,7 +29,7 @@ import {
   Users, Search, ChevronRight, ChevronDown, ChevronsDownUp,
   ChevronsUpDown, Crown, Save, Loader2, Check, X, RotateCcw, Info,
   AlertTriangle, SlidersHorizontal, UserCog, Eye, Ban, RefreshCw,
-  FolderTree, Zap,
+  FolderTree, Zap, Monitor, Smartphone, Layers,
 } from 'lucide-react'
 import { useAuth } from '../../../contexts/AuthContext'
 import {
@@ -42,13 +42,23 @@ import {
 import { listGlobalPermissions, saveModulePermissions } from '../../../lib/api/modulePermissions'
 import { listProfiles } from '../../../lib/api/users'
 import {
-  listUserGrants, setUserAccessGrant, revokeUserAccessGrant,
+  listUserGrants, revokeUserAccessGrant,
+  setUserAccessGrantScoped, mobileGrantKey, parseGrantScope,
 } from '../../../lib/api/accessGrants'
 import { toUserMessage } from '../../../lib/safeError'
 
 // Capabilities beyond `view` (the Advanced row). view is the big ON/OFF toggle.
 const EXTRA_CAPS = CAPABILITIES.filter((c) => c.key !== 'view')
 const CAP_KEYS = CAPABILITIES.map((c) => c.key)
+
+// Surface scope for a per-user override: which app(s) the grant reaches. Web =
+// the plain module_key row, Mobile = the `mobile:`-prefixed row, Both = both.
+const SCOPES = [
+  { key: 'web', label: 'Web', icon: Monitor },
+  { key: 'mobile', label: 'Mobile', icon: Smartphone },
+  { key: 'both', label: 'Both', icon: Layers },
+]
+const DEFAULT_SCOPE = 'web'
 
 const ROLE_TINT = {
   Admin: 'text-purple-300', Manager: 'text-blue-300', Director: 'text-indigo-300',
@@ -115,7 +125,8 @@ function buildRoleState(role, viewMap, overrides) {
   return { view, caps }
 }
 
-/** Index grant rows: key -> capability -> effect -> grantId. */
+/** Index grant rows: key -> capability -> effect -> grantId. Includes both plain
+ * (web) and `mobile:`-prefixed (mobile) module_key rows as stored. */
 function indexGrants(rows) {
   const idx = {}
   for (const r of rows || []) {
@@ -126,10 +137,45 @@ function indexGrants(rows) {
 }
 
 /**
- * Effective per-node access for a USER = role baseline overlaid with grants.
- * Super admins bypass everything (all true).
+ * Resolve the surface scope of a user's EXISTING override on a module key from
+ * whether any capability carries a plain (web) and/or a `mobile:` (mobile) row.
+ * Returns 'web' | 'mobile' | 'both', defaulting to DEFAULT_SCOPE when there is
+ * no override at all (so the selector shows a sensible default).
  */
-function buildUserState(user, roleState, grantIdx) {
+function rowScope(idx, key) {
+  const hasPlain = !!idx?.[key] && Object.keys(idx[key]).length > 0
+  const mKey = mobileGrantKey(key)
+  const hasMobile = !!idx?.[mKey] && Object.keys(idx[mKey]).length > 0
+  return parseGrantScope(hasPlain ? 'grant' : null, hasMobile ? 'grant' : null) || DEFAULT_SCOPE
+}
+
+/** Build the per-key scope baseline map for a user's current grants. */
+function buildScopeMap(roleState, grantIdx) {
+  const m = {}
+  for (const key of Object.keys(roleState.view)) m[key] = rowScope(grantIdx, key)
+  return m
+}
+
+/**
+ * The override effect on a capability, read from the storage key(s) that the
+ * row's scope points at (plain for web, mobile: for mobile, either for both).
+ * Revoke wins within a key (grantEffect handles that).
+ */
+function combinedGrantEffect(idx, key, cap, scope) {
+  const plain = grantEffect(idx, key, cap)
+  const mobile = grantEffect(idx, mobileGrantKey(key), cap)
+  if (scope === 'mobile') return mobile
+  if (scope === 'both') return plain || mobile
+  return plain // 'web'
+}
+
+/**
+ * Effective per-node access for a USER = role baseline overlaid with grants.
+ * Super admins bypass everything (all true). The override for each key is read
+ * from the storage key(s) its scope points at (web = plain, mobile = mobile:,
+ * both = either) so the draft reflects grants written on either surface.
+ */
+function buildUserState(user, roleState, grantIdx, scopeMap) {
   const isSuper = user?.is_super_admin === true
   const role = user?.role
   const view = {}
@@ -138,17 +184,18 @@ function buildUserState(user, roleState, grantIdx) {
   for (const key of allKeys) {
     const sub = isSubmoduleKey(key)
     const parent = sub ? key.split(':', 1)[0] : key
+    const scope = scopeMap?.[key] || DEFAULT_SCOPE
     // baseline for a sub-module = its parent's role baseline (nothing enforces the sub key).
     const baseView = sub ? roleState.view[parent] : roleState.view[key]
     view[key] = isSuper
       ? true
-      : resolveCapability({ role, isSuperAdmin: isSuper, roleAllows: baseView, override: grantEffect(grantIdx, key, 'view') })
+      : resolveCapability({ role, isSuperAdmin: isSuper, roleAllows: baseView, override: combinedGrantEffect(grantIdx, key, 'view', scope) })
     caps[key] = {}
     for (const c of EXTRA_CAPS) {
       const baseCap = sub ? roleState.caps[parent]?.[c.key] : roleState.caps[key]?.[c.key]
       caps[key][c.key] = isSuper
         ? true
-        : resolveCapability({ role, isSuperAdmin: isSuper, roleAllows: baseCap === true, override: grantEffect(grantIdx, key, c.key) })
+        : resolveCapability({ role, isSuperAdmin: isSuper, roleAllows: baseCap === true, override: combinedGrantEffect(grantIdx, key, c.key, scope) })
     }
   }
   return { view, caps }
@@ -189,6 +236,10 @@ export default function AccessManager() {
   const [baseline, setBaseline] = useState(null) // loaded effective state
   const [draft, setDraft] = useState(null)        // edited state
   const [roleBaseline, setRoleBaseline] = useState(null) // user mode: role-only baseline for reset/diff
+
+  // Per-key surface scope (user mode): which app(s) an override reaches.
+  const [scopeBaseline, setScopeBaseline] = useState({})
+  const [scopeDraft, setScopeDraft] = useState({})
 
   // UI
   const [search, setSearch] = useState('')
@@ -252,7 +303,10 @@ export default function AccessManager() {
       setGrantIdx(idx)
       const rState = buildRoleState(user.role, viewMap, overrides)
       setRoleBaseline(rState)
-      const uState = buildUserState(user, rState, idx)
+      const scopeMap = buildScopeMap(rState, idx)
+      setScopeBaseline(scopeMap)
+      setScopeDraft({ ...scopeMap })
+      const uState = buildUserState(user, rState, idx, scopeMap)
       setBaseline(uState)
       setDraft(structuredClone(uState))
     } catch (err) {
@@ -269,6 +323,22 @@ export default function AccessManager() {
     else buildUser(selectedUser)
   }, [loading, mode, selectedRole, selectedUser, buildRole, buildUser])
 
+  // Does this row carry an override (draft differs from the ROLE baseline)?
+  // Only then does its surface scope matter (a non-override scope change writes
+  // nothing on save, so it must not count as an unsaved change).
+  const rowHasOverride = useCallback((key) => {
+    if (!draft || !roleBaseline) return false
+    const sub = isSubmoduleKey(key)
+    const parent = sub ? key.split(':', 1)[0] : key
+    const bView = sub ? roleBaseline.view[parent] : roleBaseline.view[key]
+    if ((draft.view[key] === true) !== (bView === true)) return true
+    for (const c of EXTRA_CAPS) {
+      const bc = sub ? roleBaseline.caps[parent]?.[c.key] : roleBaseline.caps[key]?.[c.key]
+      if ((draft.caps[key]?.[c.key] === true) !== (bc === true)) return true
+    }
+    return false
+  }, [draft, roleBaseline])
+
   // ── Dirty detection ────────────────────────────────────────────────────────
   const dirtyKeys = useMemo(() => {
     const s = new Set()
@@ -276,10 +346,18 @@ export default function AccessManager() {
     for (const key of Object.keys(draft.view)) {
       if (draft.view[key] !== baseline.view[key]) { s.add(key); continue }
       const dc = draft.caps[key] || {}, bc = baseline.caps[key] || {}
-      for (const c of EXTRA_CAPS) if (dc[c.key] !== bc[c.key]) { s.add(key); break }
+      let capChanged = false
+      for (const c of EXTRA_CAPS) if (dc[c.key] !== bc[c.key]) { capChanged = true; break }
+      if (capChanged) { s.add(key); continue }
+      // scope-only change: only meaningful when the row actually carries an override
+      if (mode === 'user' &&
+        (scopeDraft[key] || DEFAULT_SCOPE) !== (scopeBaseline[key] || DEFAULT_SCOPE) &&
+        rowHasOverride(key)) {
+        s.add(key)
+      }
     }
     return s
-  }, [baseline, draft])
+  }, [baseline, draft, mode, scopeDraft, scopeBaseline, rowHasOverride])
   const dirtyCount = dirtyKeys.size
 
   // ── Mutators ─────────────────────────────────────────────────────────────────
@@ -308,6 +386,10 @@ export default function AccessManager() {
   function toggleCap(key, cap) {
     if (!draft || !capEditable(key)) return
     setNode(key, { caps: { [cap]: !(draft.caps[key]?.[cap] === true) } })
+  }
+
+  function setScope(key, scope) {
+    setScopeDraft((s) => ({ ...s, [key]: scope }))
   }
 
   const applyPresetToKeys = useCallback((preset, keys) => {
@@ -342,6 +424,7 @@ export default function AccessManager() {
 
   function discard() {
     setDraft(baseline ? structuredClone(baseline) : null)
+    setScopeDraft({ ...scopeBaseline })
     setNotice(''); setErrorMsg('')
   }
 
@@ -448,46 +531,67 @@ export default function AccessManager() {
       } else {
         if (!canWriteUser) throw new Error('Only a Super Admin can change per-user access.')
         if (!selectedUser || !roleBaseline) throw new Error('Select a user first.')
-        // Reconcile each changed node/capability into user_access_grants.
+        // Reconcile each changed node/capability into user_access_grants, routing
+        // the override to the chosen surface(s): web = plain module_key row,
+        // mobile = mobile: prefixed row, both = both rows. Rows on a surface that
+        // is no longer targeted (or when the value matches the role default) are
+        // cleared, so switching Web -> Mobile drops the web row and vice versa.
         let writes = 0, deletes = 0
         for (const key of dirtyKeys) {
           const sub = isSubmoduleKey(key)
           const parent = sub ? key.split(':', 1)[0] : key
+          const scope = scopeDraft[key] || DEFAULT_SCOPE
+          const plainKey = key
+          const mobKey = mobileGrantKey(key)
+          const targetKeys = grantKeysForScope(key, scope) // where an override should live
           for (const cap of CAP_KEYS) {
-            const desired = cap === 'view' ? draft.view[key] : draft.caps[key]?.[cap] === true
+            const desired = cap === 'view' ? draft.view[key] === true : draft.caps[key]?.[cap] === true
             const base = cap === 'view'
-              ? (sub ? roleBaseline.view[parent] : roleBaseline.view[key])
+              ? (sub ? roleBaseline.view[parent] === true : roleBaseline.view[key] === true)
               : (sub ? roleBaseline.caps[parent]?.[cap] === true : roleBaseline.caps[key]?.[cap] === true)
-            const existing = grantIdx?.[key]?.[cap] || {}
-            if (desired === base) {
-              // reset: drop any override rows on this key/cap
-              if (existing.grant) { await revokeUserAccessGrant(existing.grant); deletes += 1 }
-              if (existing.revoke) { await revokeUserAccessGrant(existing.revoke); deletes += 1 }
-            } else {
-              const want = desired ? 'grant' : 'revoke'
-              const opp = desired ? 'revoke' : 'grant'
-              if (existing[opp]) { await revokeUserAccessGrant(existing[opp]); deletes += 1 }
-              if (!existing[want]) {
-                await setUserAccessGrant({ userId: selectedUser.id, moduleKey: key, capability: cap, effect: want })
-                writes += 1
+            const isOverride = desired !== base
+            const want = desired ? 'grant' : 'revoke'
+            const opp = desired ? 'revoke' : 'grant'
+            // Cleanup pass: on each surface drop rows that must not exist there.
+            for (const sk of [plainKey, mobKey]) {
+              const ex = grantIdx?.[sk]?.[cap] || {}
+              const keepHere = isOverride && targetKeys.includes(sk)
+              if (!keepHere) {
+                if (ex.grant) { await revokeUserAccessGrant(ex.grant); deletes += 1 }
+                if (ex.revoke) { await revokeUserAccessGrant(ex.revoke); deletes += 1 }
+              } else if (ex[opp]) {
+                await revokeUserAccessGrant(ex[opp]); deletes += 1
+              }
+            }
+            // Write pass: ensure the wanted effect exists on target surfaces that lack it.
+            if (isOverride) {
+              const missing = targetKeys.filter((sk) => !(grantIdx?.[sk]?.[cap]?.[want]))
+              if (missing.length) {
+                const needPlain = missing.includes(plainKey)
+                const needMobile = missing.includes(mobKey)
+                const writeScope = needPlain && needMobile ? 'both' : needMobile ? 'mobile' : 'web'
+                await setUserAccessGrantScoped(selectedUser.id, key, { capability: cap, effect: want, scope: writeScope })
+                writes += missing.length
               }
             }
           }
         }
-        // reload grants -> rebuild baseline/draft
+        // reload grants -> rebuild baseline/draft + scope
         const rows = await listUserGrants(selectedUser.id)
         const idx = indexGrants(rows)
         setGrantIdx(idx)
-        const uState = buildUserState(selectedUser, roleBaseline, idx)
+        const scopeMap = buildScopeMap(roleBaseline, idx)
+        setScopeBaseline(scopeMap); setScopeDraft({ ...scopeMap })
+        const uState = buildUserState(selectedUser, roleBaseline, idx, scopeMap)
         setBaseline(uState); setDraft(structuredClone(uState))
-        flash(`Saved. ${writes} override${writes !== 1 ? 's' : ''} set, ${deletes} reset to role. Only View on base modules is enforced today; the rest are stored.`)
+        flash(`Saved. ${writes} override${writes !== 1 ? 's' : ''} set, ${deletes} reset. Web and Mobile access are stored separately; only View on base modules is enforced today.`)
       }
     } catch (err) {
       flash(toUserMessage(err, 'Could not save access changes. Your edits are still here, try again.'), true)
     } finally {
       setSaving(false)
     }
-  }, [draft, baseline, dirtyCount, dirtyKeys, saving, mode, canWriteRole, canWriteUser, selectedRole, selectedUser, overrides, roleBaseline, grantIdx, flash])
+  }, [draft, baseline, dirtyCount, dirtyKeys, saving, mode, canWriteRole, canWriteUser, selectedRole, selectedUser, overrides, roleBaseline, grantIdx, scopeDraft, flash])
 
   // ── User directory (user mode) ────────────────────────────────────────────────
   const roleOptions = useMemo(() => {
@@ -727,6 +831,8 @@ export default function AccessManager() {
                               readOnly={readOnly} mode={mode}
                               capEditable={capEditable(m.key)}
                               advancedOpen={openAdvanced.has(m.key)}
+                              scope={scopeDraft[m.key] || DEFAULT_SCOPE}
+                              onSetScope={mode === 'user' ? (v) => setScope(m.key, v) : null}
                               onToggleView={() => toggleView(m.key)}
                               onToggleCap={(c) => toggleCap(m.key, c)}
                               onToggleAdvanced={() => toggleAdvanced(m.key)}
@@ -740,6 +846,8 @@ export default function AccessManager() {
                                 readOnly={readOnly} mode={mode}
                                 capEditable={capEditable(s.key)}
                                 advancedOpen={openAdvanced.has(s.key)}
+                                scope={scopeDraft[s.key] || DEFAULT_SCOPE}
+                                onSetScope={mode === 'user' ? (v) => setScope(s.key, v) : null}
                                 onToggleView={() => toggleView(s.key)}
                                 onToggleCap={(c) => toggleCap(s.key, c)}
                                 onToggleAdvanced={() => toggleAdvanced(s.key)}
@@ -756,6 +864,14 @@ export default function AccessManager() {
                 <p className="text-[11px] text-[var(--text-muted)] flex items-center gap-1.5">
                   <Info size={12} /> A row indented under a module is a tab inside it. Sub-module and non-view toggles are stored for progressive enforcement (labelled "stored only").
                 </p>
+                {mode === 'user' && (
+                  <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-[var(--text-muted)] px-1">
+                    <span className="inline-flex items-center gap-1.5 font-semibold text-[var(--text-secondary)]">Access surface:</span>
+                    <span className="inline-flex items-center gap-1.5"><Monitor size={12} className="text-[var(--brand-bright)]" /> Web applies the override to the web app only.</span>
+                    <span className="inline-flex items-center gap-1.5"><Smartphone size={12} className="text-[var(--brand-bright)]" /> Mobile applies it to the inspector app only.</span>
+                    <span className="inline-flex items-center gap-1.5"><Layers size={12} className="text-[var(--brand-bright)]" /> Both applies it to web and mobile.</span>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -833,8 +949,35 @@ export default function AccessManager() {
   )
 }
 
+// ── Scope selector (user mode) ───────────────────────────────────────────────
+function ScopeSelect({ scope, onSetScope, readOnly }) {
+  return (
+    <div className="inline-flex rounded-md border border-[var(--input-border)] overflow-hidden shrink-0" role="group" aria-label="Access surface">
+      {SCOPES.map((s) => {
+        const on = scope === s.key
+        const Icon = s.icon
+        return (
+          <button
+            key={s.key}
+            type="button"
+            onClick={() => onSetScope?.(s.key)}
+            disabled={readOnly}
+            aria-pressed={on}
+            title={`Apply this override to ${s.label}`}
+            className={`inline-flex items-center gap-1 px-2 py-1 text-[11px] font-medium border-l first:border-l-0 border-[var(--input-border)] transition-colors disabled:opacity-40 ${
+              on ? 'bg-[var(--surface-3)] text-[var(--brand-bright)]' : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
+            }`}
+          >
+            <Icon size={11} /> {s.label}
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
 // ── Row ──────────────────────────────────────────────────────────────────────
-function NodeRow({ node, draft, dirty, readOnly, mode, capEditable, advancedOpen, onToggleView, onToggleCap, onToggleAdvanced, onResetRow }) {
+function NodeRow({ node, draft, dirty, readOnly, mode, capEditable, advancedOpen, scope, onSetScope, onToggleView, onToggleCap, onToggleAdvanced, onResetRow }) {
   const sub = node.level === 1
   const on = draft?.view?.[node.key] === true
   const caps = draft?.caps?.[node.key] || {}
@@ -849,6 +992,11 @@ function NodeRow({ node, draft, dirty, readOnly, mode, capEditable, advancedOpen
           {sub && <span className="ml-2 text-[9px] uppercase tracking-wide text-[var(--text-muted)] opacity-70">stored only</span>}
           {dirty && <span className="ml-2 text-[9px] uppercase tracking-wide text-amber-300">changed</span>}
         </div>
+
+        {/* Surface scope (user mode only) */}
+        {mode === 'user' && onSetScope && (
+          <ScopeSelect scope={scope || DEFAULT_SCOPE} onSetScope={onSetScope} readOnly={readOnly} />
+        )}
 
         {/* Advanced toggle */}
         <button

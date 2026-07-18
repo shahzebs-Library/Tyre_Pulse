@@ -177,13 +177,13 @@ function StepEditor({
       onDrop={e => onDrop(e, index)}
       onDragEnd={onDragEnd}
       className={`rounded-xl border transition-all ${
-        error ? 'border-red-500/60' : 'border-gray-700'
+        error ? 'border-red-500/60' : 'border-[var(--input-border)]'
       } ${dragging ? 'opacity-40' : ''} ${
-        dropTarget ? 'ring-2 ring-orange-500 ring-offset-2 ring-offset-gray-900' : ''
-      } bg-gray-800`}
+        dropTarget ? 'ring-2 ring-orange-500 ring-offset-2 ring-offset-[var(--surface-1)]' : ''
+      } bg-[var(--surface-2)]`}
     >
       <div className="flex items-center gap-2 p-3">
-        <span className="cursor-grab active:cursor-grabbing text-gray-500 hover:text-gray-300 shrink-0" title="Drag to reorder">
+        <span className="cursor-grab active:cursor-grabbing text-[var(--text-muted)] hover:text-gray-300 shrink-0" title="Drag to reorder">
           <GripVertical className="w-4 h-4" />
         </span>
         <span
@@ -197,12 +197,12 @@ function StepEditor({
           value={step.name}
           onChange={e => set('name', e.target.value)}
           placeholder="Step name (e.g. Inspector review)"
-          className="flex-1 min-w-0 bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-orange-500 transition-all"
+          className="flex-1 min-w-0 bg-[var(--surface-1)] border border-[var(--input-border)] rounded-lg px-3 py-2 text-[var(--text-primary)] text-sm placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-orange-500 transition-all"
         />
         <button
           type="button"
           onClick={() => setOpen(o => !o)}
-          className="shrink-0 inline-flex items-center gap-1 text-gray-400 hover:text-white text-xs px-2 py-1.5 rounded-lg hover:bg-gray-700 transition-all"
+          className="shrink-0 inline-flex items-center gap-1 text-[var(--text-secondary)] hover:text-[var(--text-primary)] text-xs px-2 py-1.5 rounded-lg hover:bg-[var(--surface-3)] transition-all"
           title="Edit details"
         >
           <SlidersHorizontal className="w-3.5 h-3.5" />
@@ -212,7 +212,7 @@ function StepEditor({
           type="button"
           onClick={onRemove}
           disabled={total === 1}
-          className="shrink-0 p-1.5 rounded-lg text-gray-500 hover:text-red-400 disabled:opacity-30 transition-colors"
+          className="shrink-0 p-1.5 rounded-lg text-[var(--text-muted)] hover:text-red-400 disabled:opacity-30 transition-colors"
           title={total === 1 ? 'A workflow needs at least one step' : 'Remove step'}
         >
           <Trash2 className="w-3.5 h-3.5" />
@@ -229,14 +229,14 @@ function StepEditor({
           {assigneeLabel(step)}
         </span>
         {step.sla_hours ? (
-          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] bg-gray-700 text-gray-300">
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] bg-[var(--surface-3)] text-gray-300">
             <Clock className="w-3 h-3" /> {step.sla_hours}h SLA
           </span>
         ) : null}
         {REQUIREMENTS.filter(r => step[r.key]).map(r => {
           const Icon = r.icon
           return (
-            <span key={r.key} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] bg-gray-700 text-gray-300" title={r.label}>
+            <span key={r.key} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] bg-[var(--surface-3)] text-gray-300" title={r.label}>
               <Icon className="w-3 h-3" /> {r.short}
             </span>
           )
@@ -251,14 +251,14 @@ function StepEditor({
 
       {/* Expanded detail editor */}
       {open && (
-        <div className="border-t border-gray-700/60 p-3 pl-14 space-y-3">
+        <div className="border-t border-[var(--border-dim)] p-3 pl-14 space-y-3">
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
             <div>
-              <label className="block text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-1">Assignee type</label>
+              <label className="block text-[10px] font-semibold text-[var(--text-muted)] uppercase tracking-wider mb-1">Assignee type</label>
               <select
                 value={step.assignee_type}
                 onChange={e => set('assignee_type', e.target.value)}
-                className="w-full bg-gray-900 border border-gray-700 rounded-lg px-2 py-1.5 text-white text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 appearance-none cursor-pointer"
+                className="w-full bg-[var(--surface-1)] border border-[var(--input-border)] rounded-lg px-2 py-1.5 text-[var(--text-primary)] text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 appearance-none cursor-pointer"
               >
                 <option value="role">Role</option>
                 <option value="user">Specific user</option>
@@ -266,29 +266,29 @@ function StepEditor({
             </div>
             {step.assignee_type === 'role' ? (
               <div>
-                <label className="block text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-1">Approver role</label>
+                <label className="block text-[10px] font-semibold text-[var(--text-muted)] uppercase tracking-wider mb-1">Approver role</label>
                 <select
                   value={step.approver_role}
                   onChange={e => set('approver_role', e.target.value)}
-                  className="w-full bg-gray-900 border border-gray-700 rounded-lg px-2 py-1.5 text-white text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 appearance-none cursor-pointer"
+                  className="w-full bg-[var(--surface-1)] border border-[var(--input-border)] rounded-lg px-2 py-1.5 text-[var(--text-primary)] text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 appearance-none cursor-pointer"
                 >
                   {APPROVER_ROLES.map(r => <option key={r} value={r}>{r}</option>)}
                 </select>
               </div>
             ) : (
               <div>
-                <label className="block text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-1">Approver user id</label>
+                <label className="block text-[10px] font-semibold text-[var(--text-muted)] uppercase tracking-wider mb-1">Approver user id</label>
                 <input
                   type="text"
                   value={step.approver_user_id}
                   onChange={e => set('approver_user_id', e.target.value)}
                   placeholder="user uuid / id"
-                  className="w-full bg-gray-900 border border-gray-700 rounded-lg px-2 py-1.5 text-white text-sm placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-orange-500 font-mono"
+                  className="w-full bg-[var(--surface-1)] border border-[var(--input-border)] rounded-lg px-2 py-1.5 text-[var(--text-primary)] text-sm placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-orange-500 font-mono"
                 />
               </div>
             )}
             <div>
-              <label className="block text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-1">SLA hours</label>
+              <label className="block text-[10px] font-semibold text-[var(--text-muted)] uppercase tracking-wider mb-1">SLA hours</label>
               <input
                 type="number"
                 min="1"
@@ -296,14 +296,14 @@ function StepEditor({
                 value={step.sla_hours}
                 onChange={e => set('sla_hours', e.target.value)}
                 placeholder="e.g. 24"
-                className="w-full bg-gray-900 border border-gray-700 rounded-lg px-2 py-1.5 text-white text-sm placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-orange-500"
+                className="w-full bg-[var(--surface-1)] border border-[var(--input-border)] rounded-lg px-2 py-1.5 text-[var(--text-primary)] text-sm placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-orange-500"
               />
             </div>
           </div>
 
           {/* Requirement toggles */}
           <div>
-            <label className="block text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Requirements</label>
+            <label className="block text-[10px] font-semibold text-[var(--text-muted)] uppercase tracking-wider mb-1.5">Requirements</label>
             <div className="flex flex-wrap gap-1.5">
               {REQUIREMENTS.map(r => {
                 const Icon = r.icon
@@ -316,7 +316,7 @@ function StepEditor({
                     className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium border transition-all ${
                       on
                         ? 'bg-orange-500/15 border-orange-500/40 text-orange-300'
-                        : 'bg-gray-900 border-gray-700 text-gray-500 hover:text-gray-300'
+                        : 'bg-[var(--surface-1)] border-[var(--input-border)] text-[var(--text-muted)] hover:text-gray-300'
                     }`}
                   >
                     <Icon className="w-3.5 h-3.5" /> {r.label}
@@ -329,11 +329,11 @@ function StepEditor({
           {/* Condition editor */}
           <div>
             <div className="flex items-center justify-between mb-1.5">
-              <label className="block text-[10px] font-semibold text-gray-500 uppercase tracking-wider">
-                Condition <span className="text-gray-600 normal-case font-normal">(step runs only if true)</span>
+              <label className="block text-[10px] font-semibold text-[var(--text-muted)] uppercase tracking-wider">
+                Condition <span className="text-[var(--text-muted)] normal-case font-normal">(step runs only if true)</span>
               </label>
               {step.condition ? (
-                <button type="button" onClick={() => set('condition', null)} className="text-gray-500 hover:text-red-400 text-[11px] transition-colors">
+                <button type="button" onClick={() => set('condition', null)} className="text-[var(--text-muted)] hover:text-red-400 text-[11px] transition-colors">
                   Remove
                 </button>
               ) : (
@@ -354,12 +354,12 @@ function StepEditor({
                   value={step.condition.field}
                   onChange={e => setCondition({ field: e.target.value })}
                   placeholder="field"
-                  className="w-full bg-gray-900 border border-gray-700 rounded-lg px-2 py-1.5 text-white text-sm font-mono placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-orange-500"
+                  className="w-full bg-[var(--surface-1)] border border-[var(--input-border)] rounded-lg px-2 py-1.5 text-[var(--text-primary)] text-sm font-mono placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-orange-500"
                 />
                 <select
                   value={step.condition.op}
                   onChange={e => setCondition({ op: e.target.value })}
-                  className="w-full bg-gray-900 border border-gray-700 rounded-lg px-1 py-1.5 text-white text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 appearance-none cursor-pointer"
+                  className="w-full bg-[var(--surface-1)] border border-[var(--input-border)] rounded-lg px-1 py-1.5 text-[var(--text-primary)] text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 appearance-none cursor-pointer"
                 >
                   {CONDITION_OPS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
                 </select>
@@ -368,7 +368,7 @@ function StepEditor({
                   value={step.condition.value}
                   onChange={e => setCondition({ value: e.target.value })}
                   placeholder="value (e.g. 5000)"
-                  className="w-full bg-gray-900 border border-gray-700 rounded-lg px-2 py-1.5 text-white text-sm placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-orange-500"
+                  className="w-full bg-[var(--surface-1)] border border-[var(--input-border)] rounded-lg px-2 py-1.5 text-[var(--text-primary)] text-sm placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-orange-500"
                 />
               </div>
             )}
@@ -394,20 +394,20 @@ function PreviewChain({ steps }) {
         const hue = roleHue(s.assignee_type === 'role' ? s.approver_role : 'user')
         return (
           <div key={s._key} className="pl-3">
-            <div className="w-px h-3 bg-gray-700 ml-3" />
+            <div className="w-px h-3 bg-[var(--surface-3)] ml-3" />
             <div className="flex items-start gap-2">
               <span className="w-6 h-6 shrink-0 rounded-full text-[11px] font-bold flex items-center justify-center" style={{ backgroundColor: `${hue}33`, color: hue }}>{i + 1}</span>
               <div className="min-w-0 flex-1 pt-0.5">
-                <p className="text-white text-sm truncate">
-                  {s.name || <span className="text-gray-600 italic">Unnamed step</span>}
-                  {s.optional && <span className="ml-1.5 text-[10px] text-gray-500">(optional)</span>}
+                <p className="text-[var(--text-primary)] text-sm truncate">
+                  {s.name || <span className="text-[var(--text-muted)] italic">Unnamed step</span>}
+                  {s.optional && <span className="ml-1.5 text-[10px] text-[var(--text-muted)]">(optional)</span>}
                 </p>
                 <div className="flex flex-wrap items-center gap-1 mt-0.5">
                   <span className="text-[11px]" style={{ color: hue }}>{assigneeLabel(s)}</span>
-                  {s.sla_hours ? <span className="text-[10px] text-gray-500 inline-flex items-center gap-0.5"><Clock className="w-2.5 h-2.5" />{s.sla_hours}h</span> : null}
+                  {s.sla_hours ? <span className="text-[10px] text-[var(--text-muted)] inline-flex items-center gap-0.5"><Clock className="w-2.5 h-2.5" />{s.sla_hours}h</span> : null}
                   {REQUIREMENTS.filter(r => s[r.key]).map(r => {
                     const Icon = r.icon
-                    return <Icon key={r.key} className="w-3 h-3 text-gray-500" title={r.label} />
+                    return <Icon key={r.key} className="w-3 h-3 text-[var(--text-muted)]" title={r.label} />
                   })}
                   {s.condition?.field ? (
                     <span className="text-[10px] text-purple-300 font-mono">if {s.condition.field} {s.condition.op} {s.condition.value || '?'}</span>
@@ -419,7 +419,7 @@ function PreviewChain({ steps }) {
         )
       })}
       <div className="pl-3">
-        <div className="w-px h-3 bg-gray-700 ml-3" />
+        <div className="w-px h-3 bg-[var(--surface-3)] ml-3" />
         <div className="flex items-center gap-2 text-xs text-blue-400">
           <span className="w-6 h-6 rounded-full bg-blue-500/15 flex items-center justify-center"><Flag className="w-3 h-3" /></span>
           <span className="font-medium">Complete</span>
@@ -614,15 +614,15 @@ export default function WorkflowBuilder() {
   // ── Loading (edit mode) ──
   if (loading) {
     return (
-      <div className="text-white space-y-6" dir={isRTL ? 'rtl' : 'ltr'}>
+      <div className="text-[var(--text-primary)] space-y-6" dir={isRTL ? 'rtl' : 'ltr'}>
         <BuilderHeader t={t} isEdit={isEdit} onBack={goBack} disabled />
         <div className="grid grid-cols-1 lg:grid-cols-[1.5fr,1fr] gap-6">
           <div className="space-y-4">
             {Array.from({ length: 5 }).map((_, i) => (
-              <div key={i} className="h-14 rounded-xl bg-gray-800 border border-gray-700 animate-pulse" />
+              <div key={i} className="h-14 rounded-xl bg-[var(--surface-2)] border border-[var(--input-border)] animate-pulse" />
             ))}
           </div>
-          <div className="h-64 rounded-xl bg-gray-800 border border-gray-700 animate-pulse" />
+          <div className="h-64 rounded-xl bg-[var(--surface-2)] border border-[var(--input-border)] animate-pulse" />
         </div>
       </div>
     )
@@ -631,7 +631,7 @@ export default function WorkflowBuilder() {
   // ── Load error (edit mode) ──
   if (loadError) {
     return (
-      <div className="text-white space-y-6" dir={isRTL ? 'rtl' : 'ltr'}>
+      <div className="text-[var(--text-primary)] space-y-6" dir={isRTL ? 'rtl' : 'ltr'}>
         <BuilderHeader t={t} isEdit={isEdit} onBack={goBack} />
         <div className="flex flex-col items-center justify-center py-16 gap-4">
           <div className="flex items-center gap-2.5 p-4 rounded-xl bg-red-500/10 border border-red-500/30 max-w-lg">
@@ -642,7 +642,7 @@ export default function WorkflowBuilder() {
             <button onClick={load} className="px-3 py-1.5 text-xs font-semibold text-red-300 bg-red-500/15 hover:bg-red-500/25 rounded-lg border border-red-500/30 transition-all">
               Retry
             </button>
-            <button onClick={goBack} className="px-3 py-1.5 text-xs font-semibold text-gray-300 bg-gray-800 hover:bg-gray-700 rounded-lg border border-gray-700 transition-all">
+            <button onClick={goBack} className="px-3 py-1.5 text-xs font-semibold text-gray-300 bg-[var(--surface-2)] hover:bg-[var(--surface-3)] rounded-lg border border-[var(--input-border)] transition-all">
               Back to workflows
             </button>
           </div>
@@ -654,7 +654,7 @@ export default function WorkflowBuilder() {
   if (!form) return null
 
   return (
-    <form onSubmit={handleSubmit} className="text-white space-y-6" dir={isRTL ? 'rtl' : 'ltr'}>
+    <form onSubmit={handleSubmit} className="text-[var(--text-primary)] space-y-6" dir={isRTL ? 'rtl' : 'ltr'}>
       <BuilderHeader
         t={t}
         isEdit={isEdit}
@@ -664,18 +664,18 @@ export default function WorkflowBuilder() {
 
       {/* Template picker */}
       {showTemplates && (
-        <div className="p-4 rounded-xl border border-gray-800 bg-gray-800/40">
-          <p className="text-xs text-gray-400 mb-2">{t('workflow.builder.templateHint')}</p>
+        <div className="p-4 rounded-xl border border-[var(--border-dim)] bg-[var(--surface-2)]">
+          <p className="text-xs text-[var(--text-secondary)] mb-2">{t('workflow.builder.templateHint')}</p>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
             {STARTER_TEMPLATES.map(tpl => (
               <button
                 key={tpl.name}
                 type="button"
                 onClick={() => loadTemplate(tpl)}
-                className="text-left p-2.5 rounded-lg bg-gray-800 border border-gray-700 hover:border-orange-500/50 transition-all"
+                className="text-left p-2.5 rounded-lg bg-[var(--surface-2)] border border-[var(--input-border)] hover:border-orange-500/50 transition-all"
               >
-                <p className="text-white text-xs font-semibold truncate">{tpl.name}</p>
-                <p className="text-gray-500 text-[11px] mt-0.5">{tpl.steps.length} steps · {tpl.entity_type}</p>
+                <p className="text-[var(--text-primary)] text-xs font-semibold truncate">{tpl.name}</p>
+                <p className="text-[var(--text-muted)] text-[11px] mt-0.5">{tpl.steps.length} steps · {tpl.entity_type}</p>
               </button>
             ))}
           </div>
@@ -684,9 +684,9 @@ export default function WorkflowBuilder() {
 
       <div className="grid grid-cols-1 lg:grid-cols-[1.5fr,1fr] gap-6">
         {/* Left: config + steps */}
-        <div className="space-y-5 rounded-2xl border border-gray-800 bg-gray-900/40 p-5 sm:p-6">
+        <div className="space-y-5 rounded-2xl border border-[var(--border-dim)] bg-[var(--surface-1)] p-5 sm:p-6">
           <div>
-            <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1.5">
+            <label className="block text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wider mb-1.5">
               Workflow Name <span className="text-orange-500">*</span>
             </label>
             <input
@@ -694,27 +694,27 @@ export default function WorkflowBuilder() {
               value={form.name}
               onChange={e => set('name', e.target.value)}
               placeholder="e.g. Daily Vehicle Inspection"
-              className={`w-full bg-gray-800 border rounded-lg px-3 py-2.5 text-white text-sm placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-orange-500 transition-all ${errors.name ? 'border-red-500' : 'border-gray-700'}`}
+              className={`w-full bg-[var(--surface-2)] border rounded-lg px-3 py-2.5 text-[var(--text-primary)] text-sm placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-orange-500 transition-all ${errors.name ? 'border-red-500' : 'border-[var(--input-border)]'}`}
             />
             {errors.name && <p className="text-red-400 text-xs mt-1">{errors.name}</p>}
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1.5">
-              Description <span className="text-gray-600 font-normal normal-case">(optional)</span>
+            <label className="block text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wider mb-1.5">
+              Description <span className="text-[var(--text-muted)] font-normal normal-case">(optional)</span>
             </label>
             <textarea
               value={form.description}
               onChange={e => set('description', e.target.value)}
               rows={2}
               placeholder="What this workflow approves and why"
-              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2.5 text-white text-sm placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-orange-500 transition-all resize-none"
+              className="w-full bg-[var(--surface-2)] border border-[var(--input-border)] rounded-lg px-3 py-2.5 text-[var(--text-primary)] text-sm placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-orange-500 transition-all resize-none"
             />
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1.5">
+              <label className="block text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wider mb-1.5">
                 Entity Type <span className="text-orange-500">*</span>
               </label>
               <input
@@ -723,13 +723,13 @@ export default function WorkflowBuilder() {
                 value={form.entity_type}
                 onChange={e => set('entity_type', e.target.value)}
                 placeholder="e.g. inspection"
-                className={`w-full bg-gray-800 border rounded-lg px-3 py-2.5 text-white text-sm placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-orange-500 transition-all ${errors.entity_type ? 'border-red-500' : 'border-gray-700'}`}
+                className={`w-full bg-[var(--surface-2)] border rounded-lg px-3 py-2.5 text-[var(--text-primary)] text-sm placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-orange-500 transition-all ${errors.entity_type ? 'border-red-500' : 'border-[var(--input-border)]'}`}
               />
               {errors.entity_type && <p className="text-red-400 text-xs mt-1">{errors.entity_type}</p>}
             </div>
             <div>
-              <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1.5">
-                Trigger Event <span className="text-gray-600 font-normal normal-case">(blank = manual)</span>
+              <label className="block text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wider mb-1.5">
+                Trigger Event <span className="text-[var(--text-muted)] font-normal normal-case">(blank = manual)</span>
               </label>
               <input
                 type="text"
@@ -737,7 +737,7 @@ export default function WorkflowBuilder() {
                 value={form.trigger_event}
                 onChange={e => set('trigger_event', e.target.value)}
                 placeholder="manual"
-                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2.5 text-white text-sm font-mono placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-orange-500 transition-all"
+                className="w-full bg-[var(--surface-2)] border border-[var(--input-border)] rounded-lg px-3 py-2.5 text-[var(--text-primary)] text-sm font-mono placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-orange-500 transition-all"
               />
             </div>
           </div>
@@ -745,9 +745,9 @@ export default function WorkflowBuilder() {
           {/* Steps chain */}
           <div>
             <div className="flex items-center justify-between mb-2">
-              <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider">
+              <label className="block text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wider">
                 Approval Steps <span className="text-orange-500">*</span>
-                <span className="text-gray-600 font-normal normal-case"> ({form.steps.length}/{MAX_STEPS}) · drag to reorder</span>
+                <span className="text-[var(--text-muted)] font-normal normal-case"> ({form.steps.length}/{MAX_STEPS}) · drag to reorder</span>
               </label>
               <button
                 type="button"
@@ -780,27 +780,27 @@ export default function WorkflowBuilder() {
             {errors.steps && <p className="text-red-400 text-xs mt-1.5">{errors.steps}</p>}
           </div>
 
-          <div className="flex items-center justify-between py-3 px-4 rounded-xl bg-gray-800 border border-gray-700">
+          <div className="flex items-center justify-between py-3 px-4 rounded-xl bg-[var(--surface-2)] border border-[var(--input-border)]">
             <div>
-              <p className="text-white text-sm font-medium">Workflow active</p>
-              <p className="text-gray-500 text-xs">Inactive workflows never auto-start; in-flight instances continue</p>
+              <p className="text-[var(--text-primary)] text-sm font-medium">Workflow active</p>
+              <p className="text-[var(--text-muted)] text-xs">Inactive workflows never auto-start; in-flight instances continue</p>
             </div>
             <button type="button" onClick={() => set('active', !form.active)} className="transition-colors" aria-label="Toggle active">
               {form.active
                 ? <ToggleRight className="w-8 h-8 text-orange-500" />
-                : <ToggleLeft className="w-8 h-8 text-gray-500" />
+                : <ToggleLeft className="w-8 h-8 text-[var(--text-muted)]" />
               }
             </button>
           </div>
         </div>
 
         {/* Right: live preview */}
-        <div className="lg:sticky lg:top-4 self-start rounded-2xl border border-gray-800 bg-gray-900/40 p-5 sm:p-6">
-          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Live Preview</p>
-          <div className="rounded-xl border border-gray-800 bg-gray-800/40 p-4">
+        <div className="lg:sticky lg:top-4 self-start rounded-2xl border border-[var(--border-dim)] bg-[var(--surface-1)] p-5 sm:p-6">
+          <p className="text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wider mb-3">Live Preview</p>
+          <div className="rounded-xl border border-[var(--border-dim)] bg-[var(--surface-2)] p-4">
             <PreviewChain steps={form.steps} />
           </div>
-          <p className="text-[11px] text-gray-600 mt-3 leading-relaxed">
+          <p className="text-[11px] text-[var(--text-muted)] mt-3 leading-relaxed">
             Optional steps and conditions are evaluated server-side at runtime against the
             document context. The chain above shows the maximal path.
           </p>
@@ -815,14 +815,14 @@ export default function WorkflowBuilder() {
       )}
 
       {/* Sticky action bar */}
-      <div className="sticky bottom-0 -mx-4 sm:mx-0 px-4 sm:px-5 py-4 border-t border-gray-800 flex gap-3 justify-end bg-gray-900/90 backdrop-blur-sm sm:rounded-b-2xl">
-        <button type="button" onClick={goBack} className="px-4 py-2 text-sm text-gray-400 hover:text-white bg-gray-800 hover:bg-gray-700 rounded-lg border border-gray-700 transition-all">
+      <div className="sticky bottom-0 -mx-4 sm:mx-0 px-4 sm:px-5 py-4 border-t border-[var(--border-dim)] flex gap-3 justify-end bg-[var(--surface-1)] backdrop-blur-sm sm:rounded-b-2xl">
+        <button type="button" onClick={goBack} className="px-4 py-2 text-sm text-[var(--text-secondary)] hover:text-[var(--text-primary)] bg-[var(--surface-2)] hover:bg-[var(--surface-3)] rounded-lg border border-[var(--input-border)] transition-all">
           Cancel
         </button>
         <button
           type="submit"
           disabled={saving}
-          className="inline-flex items-center gap-2 px-5 py-2 text-sm font-semibold text-white bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 rounded-lg disabled:opacity-50 transition-all shadow-lg shadow-orange-500/20"
+          className="inline-flex items-center gap-2 px-5 py-2 text-sm font-semibold text-[var(--text-primary)] bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 rounded-lg disabled:opacity-50 transition-all shadow-lg shadow-orange-500/20"
         >
           {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
           {isEdit ? 'Save Changes' : 'Create Workflow'}
@@ -851,7 +851,7 @@ function BuilderHeader({ t, isEdit, onBack, onToggleTemplates, disabled }) {
         <button
           type="button"
           onClick={onBack}
-          className="inline-flex items-center gap-1.5 text-gray-400 hover:text-white text-xs font-medium mb-2 transition-colors"
+          className="inline-flex items-center gap-1.5 text-[var(--text-secondary)] hover:text-[var(--text-primary)] text-xs font-medium mb-2 transition-colors"
         >
           <ArrowLeft className="w-3.5 h-3.5" /> {t('workflow.builder.back')}
         </button>
@@ -859,11 +859,11 @@ function BuilderHeader({ t, isEdit, onBack, onToggleTemplates, disabled }) {
           <div className="p-2 rounded-lg bg-orange-500/20">
             <GitBranch className="w-5 h-5 text-orange-400" />
           </div>
-          <h1 className="text-2xl font-bold text-white">
+          <h1 className="text-2xl font-bold text-[var(--text-primary)]">
             {isEdit ? t('workflow.builder.editTitle') : t('workflow.builder.createTitle')}
           </h1>
         </div>
-        <p className="text-gray-400 text-sm ml-11">{t('workflow.builder.subtitle')}</p>
+        <p className="text-[var(--text-secondary)] text-sm ml-11">{t('workflow.builder.subtitle')}</p>
       </div>
       {onToggleTemplates && (
         <button

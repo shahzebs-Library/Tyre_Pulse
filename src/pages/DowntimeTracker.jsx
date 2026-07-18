@@ -149,7 +149,7 @@ function causeLabel(record) {
 
 // ── Heatmap Cell ─────────────────────────────────────────────────────────────
 function heatColor(hours) {
-  if (!hours || hours === 0) return 'bg-gray-800 text-gray-600'
+  if (!hours || hours === 0) return 'bg-[var(--surface-2)] text-[var(--text-muted)]'
   if (hours <= 4)  return 'bg-yellow-500/30 text-yellow-300'
   if (hours <= 8)  return 'bg-orange-500/40 text-orange-300'
   return 'bg-red-500/40 text-red-300'
@@ -162,7 +162,7 @@ function ChartCard({ title, children, onExpand }) {
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-sm font-semibold text-gray-300">{title}</h3>
         {onExpand && (
-          <button onClick={onExpand} className="text-gray-500 hover:text-gray-300 transition-colors">
+          <button onClick={onExpand} className="text-[var(--text-muted)] hover:text-gray-300 transition-colors">
             <Maximize2 size={14} />
           </button>
         )}
@@ -827,7 +827,7 @@ export default function DowntimeTracker() {
 
   // ── Sort icon ─────────────────────────────────────────────────────────────────
   function SortIcon({ col }) {
-    if (sortCol !== col) return <ChevronDown size={12} className="text-gray-600" />
+    if (sortCol !== col) return <ChevronDown size={12} className="text-[var(--text-muted)]" />
     return sortDir === 'desc' ? <ChevronDown size={12} className="text-green-400" /> : <ChevronUp size={12} className="text-green-400" />
   }
 
@@ -835,7 +835,7 @@ export default function DowntimeTracker() {
   function Th({ col, label }) {
     return (
       <th
-        className="px-3 py-2.5 text-left text-[10px] font-bold uppercase tracking-widest text-gray-500 cursor-pointer hover:text-gray-300 select-none whitespace-nowrap"
+        className="px-3 py-2.5 text-left text-[10px] font-bold uppercase tracking-widest text-[var(--text-muted)] cursor-pointer hover:text-gray-300 select-none whitespace-nowrap"
         onClick={() => toggleSort(col)}
       >
         <span className="flex items-center gap-1">{label}<SortIcon col={col} /></span>
@@ -847,7 +847,7 @@ export default function DowntimeTracker() {
     return (
       <div className="flex items-center justify-center h-64">
         <Loader2 size={28} className="animate-spin text-green-400" />
-        <span className="ml-3 text-gray-400">{t('downtime.loading')}</span>
+        <span className="ml-3 text-[var(--text-secondary)]">{t('downtime.loading')}</span>
       </div>
     )
   }
@@ -878,20 +878,20 @@ export default function DowntimeTracker() {
           <button
             onClick={() => load(true)}
             disabled={refreshing}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-800 border border-gray-700 rounded-lg text-xs text-gray-400 hover:text-white hover:border-gray-600 transition-colors"
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-[var(--surface-2)] border border-[var(--input-border)] rounded-lg text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:border-[var(--border-bright)] transition-colors"
           >
             <RefreshCw size={13} className={refreshing ? 'animate-spin' : ''} />
             {t('downtime.actions.refresh')}
           </button>
           <button
             onClick={handleExportPdf}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-800 border border-gray-700 rounded-lg text-xs text-gray-400 hover:text-white hover:border-gray-600 transition-colors"
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-[var(--surface-2)] border border-[var(--input-border)] rounded-lg text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:border-[var(--border-bright)] transition-colors"
           >
             <FileText size={13} />{t('downtime.actions.pdf')}
           </button>
           <button
             onClick={handleExportExcel}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-green-700 hover:bg-green-600 rounded-lg text-xs text-white transition-colors"
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-green-700 hover:bg-green-600 rounded-lg text-xs text-[var(--text-primary)] transition-colors"
           >
             <FileSpreadsheet size={13} />{t('downtime.actions.excel')}
           </button>
@@ -913,7 +913,7 @@ export default function DowntimeTracker() {
           <select
             value={siteFilter}
             onChange={e => setSiteFilter(e.target.value)}
-            className="px-3 py-1.5 bg-gray-800 border border-gray-700 rounded-lg text-xs text-gray-300 focus:outline-none focus:border-green-600"
+            className="px-3 py-1.5 bg-[var(--surface-2)] border border-[var(--input-border)] rounded-lg text-xs text-gray-300 focus:outline-none focus:border-green-600"
           >
             <option value="">{t('downtime.filters.allSites')}</option>
             {sites.map(s => <option key={s} value={s}>{s}</option>)}
@@ -923,7 +923,7 @@ export default function DowntimeTracker() {
             <select
               value={countryFilter}
               onChange={e => setCountryFilter(e.target.value)}
-              className="px-3 py-1.5 bg-gray-800 border border-gray-700 rounded-lg text-xs text-gray-300 focus:outline-none focus:border-green-600"
+              className="px-3 py-1.5 bg-[var(--surface-2)] border border-[var(--input-border)] rounded-lg text-xs text-gray-300 focus:outline-none focus:border-green-600"
             >
               <option value="">{t('downtime.filters.allCountries')}</option>
               {countries.map(c => <option key={c} value={c}>{c}</option>)}
@@ -933,35 +933,35 @@ export default function DowntimeTracker() {
           <select
             value={riskFilter}
             onChange={e => setRiskFilter(e.target.value)}
-            className="px-3 py-1.5 bg-gray-800 border border-gray-700 rounded-lg text-xs text-gray-300 focus:outline-none focus:border-green-600"
+            className="px-3 py-1.5 bg-[var(--surface-2)] border border-[var(--input-border)] rounded-lg text-xs text-gray-300 focus:outline-none focus:border-green-600"
           >
             <option value="">{t('downtime.filters.allRiskLevels')}</option>
             {RISK_LEVELS.map(r => <option key={r} value={r}>{t(`downtime.riskLevels.${r.toLowerCase()}`)}</option>)}
           </select>
           {/* Asset search */}
           <div className="relative">
-            <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-500" />
+            <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
             <input
               type="text"
               placeholder={t('downtime.filters.searchPlaceholder')}
               value={assetSearch}
               onChange={e => setAssetSearch(e.target.value)}
-              className="pl-7 pr-7 py-1.5 bg-gray-800 border border-gray-700 rounded-lg text-xs text-gray-300 focus:outline-none focus:border-green-600 w-36"
+              className="pl-7 pr-7 py-1.5 bg-[var(--surface-2)] border border-[var(--input-border)] rounded-lg text-xs text-gray-300 focus:outline-none focus:border-green-600 w-36"
             />
             {assetSearch && (
-              <button onClick={() => setAssetSearch('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300">
+              <button onClick={() => setAssetSearch('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-[var(--text-muted)] hover:text-gray-300">
                 <X size={12} />
               </button>
             )}
           </div>
-          <span className="ml-auto text-xs text-gray-500">{t('downtime.filters.eventsCount', { count: filtered.length.toLocaleString() })}</span>
+          <span className="ml-auto text-xs text-[var(--text-muted)]">{t('downtime.filters.eventsCount', { count: filtered.length.toLocaleString() })}</span>
         </div>
       </div>
 
       {/* Estimation basis banner */}
       <div className="flex items-start gap-2.5 bg-yellow-500/5 border border-yellow-500/20 rounded-2xl px-4 py-3">
         <AlertCircle size={15} className="text-yellow-400 shrink-0 mt-0.5" />
-        <p className="text-xs text-gray-400 leading-relaxed">
+        <p className="text-xs text-[var(--text-secondary)] leading-relaxed">
           <span className="text-yellow-400 font-semibold">{t('downtime.banner.title')}</span>{' '}
           {t(usingActual ? 'downtime.banner.bodyActual' : 'downtime.banner.bodyEstimated', {
             rate: `${sym} ${downtimeRate.toLocaleString()}`,
@@ -1028,11 +1028,11 @@ export default function DowntimeTracker() {
             <div className="flex items-center gap-4 mt-2">
               <div className="flex items-center gap-1.5">
                 <div className="w-3 h-0.5 bg-green-400" />
-                <span className="text-[10px] text-gray-500">{t('downtime.charts.availabilityLegend')}</span>
+                <span className="text-[10px] text-[var(--text-muted)]">{t('downtime.charts.availabilityLegend')}</span>
               </div>
               <div className="flex items-center gap-1.5">
                 <div className="w-3 h-0.5 bg-indigo-400 border-dashed" style={{ borderTop: '2px dashed #818cf8' }} />
-                <span className="text-[10px] text-gray-500">{t('downtime.charts.targetLegend', { pct: TARGET_AVAILABILITY })}</span>
+                <span className="text-[10px] text-[var(--text-muted)]">{t('downtime.charts.targetLegend', { pct: TARGET_AVAILABILITY })}</span>
               </div>
             </div>
           </ChartCard>
@@ -1044,7 +1044,7 @@ export default function DowntimeTracker() {
               <Doughnut data={causeData} options={doughnutOpts} />
             </div>
           ) : (
-            <div className="h-56 flex items-center justify-center text-gray-600 text-sm">{t('downtime.charts.noData')}</div>
+            <div className="h-56 flex items-center justify-center text-[var(--text-muted)] text-sm">{t('downtime.charts.noData')}</div>
           )}
         </ChartCard>
       </div>
@@ -1058,7 +1058,7 @@ export default function DowntimeTracker() {
               <Bar data={siteData} options={siteBarOpts} />
             </div>
           ) : (
-            <div className="h-64 flex items-center justify-center text-gray-600 text-sm">{t('downtime.charts.noData')}</div>
+            <div className="h-64 flex items-center justify-center text-[var(--text-muted)] text-sm">{t('downtime.charts.noData')}</div>
           )}
         </ChartCard>
         {/* Monthly Cost */}
@@ -1068,12 +1068,12 @@ export default function DowntimeTracker() {
           </div>
           <div className="mt-2 flex items-center gap-1.5">
             <div className="w-2 h-2 rounded-sm bg-red-500/70" />
-            <span className="text-[10px] text-gray-500">{t('downtime.charts.unplannedLegend')}</span>
+            <span className="text-[10px] text-[var(--text-muted)]">{t('downtime.charts.unplannedLegend')}</span>
             <div className="w-2 h-2 rounded-sm bg-blue-500/70 ml-2" />
-            <span className="text-[10px] text-gray-500">{t('downtime.charts.plannedLegend')}</span>
+            <span className="text-[10px] text-[var(--text-muted)]">{t('downtime.charts.plannedLegend')}</span>
             <div className="w-4 h-0.5 bg-green-400 ml-2" />
-            <span className="text-[10px] text-gray-500">{t('downtime.charts.cumulativeLegend')}</span>
-            <span className="ml-auto text-[10px] text-gray-600">{t('downtime.charts.budgetThreshold', { value: fmtCurrency(BUDGET_THRESHOLD, sym) })}</span>
+            <span className="text-[10px] text-[var(--text-muted)]">{t('downtime.charts.cumulativeLegend')}</span>
+            <span className="ml-auto text-[10px] text-[var(--text-muted)]">{t('downtime.charts.budgetThreshold', { value: fmtCurrency(BUDGET_THRESHOLD, sym) })}</span>
           </div>
         </ChartCard>
       </div>
@@ -1082,20 +1082,20 @@ export default function DowntimeTracker() {
       <div className="card">
         <h3 className="text-sm font-semibold text-gray-300 mb-4">{t('downtime.heatmap.heading')}</h3>
         {heatmap.rows.length === 0 ? (
-          <div className="text-center text-gray-600 text-sm py-8">{t('downtime.heatmap.empty')}</div>
+          <div className="text-center text-[var(--text-muted)] text-sm py-8">{t('downtime.heatmap.empty')}</div>
         ) : (
           <div className="overflow-x-auto">
             <div className="min-w-max">
               {/* Month labels */}
               <div className="flex items-center gap-1 mb-1 ml-28">
                 {heatmap.months.map(m => (
-                  <div key={m} className="w-10 text-center text-[9px] text-gray-600 font-medium">{monthLabel(m)}</div>
+                  <div key={m} className="w-10 text-center text-[9px] text-[var(--text-muted)] font-medium">{monthLabel(m)}</div>
                 ))}
               </div>
               {/* Rows */}
               {heatmap.rows.map(({ asset, cells }) => (
                 <div key={asset} className="flex items-center gap-1 mb-1">
-                  <div className="w-28 text-[10px] text-gray-400 truncate font-medium pr-2 text-right">{asset}</div>
+                  <div className="w-28 text-[10px] text-[var(--text-secondary)] truncate font-medium pr-2 text-right">{asset}</div>
                   {cells.map((h, i) => (
                     <div
                       key={i}
@@ -1109,11 +1109,11 @@ export default function DowntimeTracker() {
               ))}
               {/* Legend */}
               <div className="flex items-center gap-3 mt-3 ml-28">
-                <span className="text-[9px] text-gray-600">{t('downtime.heatmap.hoursLabel')}</span>
-                {[{ label: '0', cls: 'bg-gray-800' }, { label: '1-4', cls: 'bg-yellow-500/30' }, { label: '5-8', cls: 'bg-orange-500/40' }, { label: '8+', cls: 'bg-red-500/40' }].map(({ label, cls }) => (
+                <span className="text-[9px] text-[var(--text-muted)]">{t('downtime.heatmap.hoursLabel')}</span>
+                {[{ label: '0', cls: 'bg-[var(--surface-2)]' }, { label: '1-4', cls: 'bg-yellow-500/30' }, { label: '5-8', cls: 'bg-orange-500/40' }, { label: '8+', cls: 'bg-red-500/40' }].map(({ label, cls }) => (
                   <span key={label} className="flex items-center gap-1">
                     <span className={`w-4 h-4 rounded ${cls} inline-block`} />
-                    <span className="text-[9px] text-gray-600">{label}h</span>
+                    <span className="text-[9px] text-[var(--text-muted)]">{label}h</span>
                   </span>
                 ))}
               </div>
@@ -1123,24 +1123,24 @@ export default function DowntimeTracker() {
       </div>
 
       {/* Vehicles Table */}
-      <div className="bg-gray-900 border border-gray-800 rounded-2xl overflow-hidden">
-        <div className="px-5 py-4 border-b border-gray-800 flex items-center justify-between">
+      <div className="bg-[var(--surface-1)] border border-[var(--border-dim)] rounded-2xl overflow-hidden">
+        <div className="px-5 py-4 border-b border-[var(--border-dim)] flex items-center justify-between">
           <h3 className="text-sm font-semibold text-gray-300">{t('downtime.table.heading')}</h3>
-          <span className="text-xs text-gray-600">{t('downtime.table.summary', { count: vehicleTable.length, col: SORT_COL_LABEL[sortCol] ? t(`downtime.table.columns.${SORT_COL_LABEL[sortCol]}`) : sortCol })}</span>
+          <span className="text-xs text-[var(--text-muted)]">{t('downtime.table.summary', { count: vehicleTable.length, col: SORT_COL_LABEL[sortCol] ? t(`downtime.table.columns.${SORT_COL_LABEL[sortCol]}`) : sortCol })}</span>
         </div>
         <div className="overflow-x-auto">
           {vehicleTable.length === 0 ? (
-            <div className="text-center text-gray-600 text-sm py-10">{t('downtime.table.empty')}</div>
+            <div className="text-center text-[var(--text-muted)] text-sm py-10">{t('downtime.table.empty')}</div>
           ) : (
             <table className="w-full text-sm">
-              <thead className="border-b border-gray-800">
+              <thead className="border-b border-[var(--border-dim)]">
                 <tr>
                   <Th col="asset"      label={t('downtime.table.columns.asset')} />
                   <Th col="site"       label={t('downtime.table.columns.site')} />
                   <Th col="eventCount" label={t('downtime.table.columns.events')} />
                   <Th col="totalHours" label={t('downtime.table.columns.totalHours')} />
                   <Th col="totalCost"  label={t('downtime.table.columns.totalCost')} />
-                  <th className="px-3 py-2.5 text-left text-[10px] font-bold uppercase tracking-widest text-gray-500 whitespace-nowrap">{t('downtime.table.columns.avgBetweenEvents')}</th>
+                  <th className="px-3 py-2.5 text-left text-[10px] font-bold uppercase tracking-widest text-[var(--text-muted)] whitespace-nowrap">{t('downtime.table.columns.avgBetweenEvents')}</th>
                   <Th col="riskScore"  label={t('downtime.table.columns.riskScore')} />
                 </tr>
               </thead>
@@ -1151,13 +1151,13 @@ export default function DowntimeTracker() {
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     transition={{ delay: i * 0.02 }}
-                    className={`transition-colors hover:bg-gray-800/40 ${v.isHigh ? 'bg-red-500/5' : ''}`}
+                    className={`transition-colors hover:bg-[var(--surface-2)] ${v.isHigh ? 'bg-red-500/5' : ''}`}
                   >
                     <td className="px-3 py-2.5">
-                      <span className={`font-semibold ${v.isHigh ? 'text-red-400' : 'text-white'}`}>{v.asset}</span>
+                      <span className={`font-semibold ${v.isHigh ? 'text-red-400' : 'text-[var(--text-primary)]'}`}>{v.asset}</span>
                       {v.isHigh && <span className="ml-2 text-[9px] bg-red-500/20 text-red-400 px-1.5 py-0.5 rounded font-bold">{t('downtime.table.highRisk')}</span>}
                     </td>
-                    <td className="px-3 py-2.5 text-gray-400 text-xs">{v.site}</td>
+                    <td className="px-3 py-2.5 text-[var(--text-secondary)] text-xs">{v.site}</td>
                     <td className="px-3 py-2.5 text-center">
                       <span className={`font-bold ${v.eventCount >= 5 ? 'text-red-400' : v.eventCount >= 3 ? 'text-orange-400' : 'text-gray-300'}`}>
                         {v.eventCount}
@@ -1165,7 +1165,7 @@ export default function DowntimeTracker() {
                     </td>
                     <td className="px-3 py-2.5 text-gray-300 font-medium">{v.totalHours.toFixed(1)} h</td>
                     <td className="px-3 py-2.5 text-gray-300 font-medium">{fmtCurrency(v.totalCost, sym)}</td>
-                    <td className="px-3 py-2.5 text-gray-500 text-xs">{v.avgBetween ? `${v.avgBetween.toFixed(0)} days` : '-'}</td>
+                    <td className="px-3 py-2.5 text-[var(--text-muted)] text-xs">{v.avgBetween ? `${v.avgBetween.toFixed(0)} days` : '-'}</td>
                     <td className="px-3 py-2.5">
                       <span className={`font-bold text-xs ${v.riskScore >= 3 ? 'text-red-400' : v.riskScore >= 1.5 ? 'text-orange-400' : v.riskScore >= 0.5 ? 'text-yellow-400' : 'text-green-400'}`}>
                         {v.riskScore.toFixed(2)}
@@ -1184,7 +1184,7 @@ export default function DowntimeTracker() {
         <div className="flex items-center gap-2 mb-4">
           <Zap size={15} className="text-yellow-400" />
           <h3 className="text-sm font-semibold text-gray-300">{t('downtime.recommendations.heading')}</h3>
-          <span className="ml-auto text-xs text-gray-600">{t('downtime.recommendations.insightsCount', { count: recommendations.length })}</span>
+          <span className="ml-auto text-xs text-[var(--text-muted)]">{t('downtime.recommendations.insightsCount', { count: recommendations.length })}</span>
         </div>
         <div className="space-y-3">
           {recommendations.map((r, i) => {
@@ -1196,12 +1196,12 @@ export default function DowntimeTracker() {
                 initial={{ opacity: 0, x: -10 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ delay: i * 0.08 }}
-                className={`flex gap-3 p-3 bg-gray-800/50 rounded-xl border-l-2 ${borderMap[r.severity]}`}
+                className={`flex gap-3 p-3 bg-[var(--surface-2)] rounded-xl border-l-2 ${borderMap[r.severity]}`}
               >
                 {iconMap[r.severity]}
                 <div className="min-w-0">
                   <p className="text-sm text-gray-200 font-medium leading-snug">{r.message}</p>
-                  <p className="text-xs text-gray-500 mt-1 leading-relaxed">{t('downtime.recommendations.actionPrefix', { action: r.action })}</p>
+                  <p className="text-xs text-[var(--text-muted)] mt-1 leading-relaxed">{t('downtime.recommendations.actionPrefix', { action: r.action })}</p>
                 </div>
                 <SeverityBadge level={r.severity} />
               </motion.div>

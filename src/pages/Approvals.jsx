@@ -55,7 +55,7 @@ const TONE_TEXT = {
   green:  'text-green-400',
   blue:   'text-blue-400',
   teal:   'text-teal-400',
-  gray:   'text-gray-400',
+  gray:   'text-[var(--text-secondary)]',
 }
 
 const TONE_BADGE = {
@@ -161,15 +161,15 @@ function toChecklistItem(c) {
 
 function MetricCard({ icon: Icon, label, value, tone, loading }) {
   return (
-    <div className="card border border-gray-800 bg-gray-900/40">
+    <div className="card border border-[var(--border-dim)] bg-[var(--surface-1)]">
       <div className="flex items-center justify-between">
-        <span className="text-xs font-medium text-gray-400 uppercase tracking-wider">{label}</span>
-        <Icon className={`w-4 h-4 ${TONE_TEXT[tone] || 'text-gray-400'}`} />
+        <span className="text-xs font-medium text-[var(--text-secondary)] uppercase tracking-wider">{label}</span>
+        <Icon className={`w-4 h-4 ${TONE_TEXT[tone] || 'text-[var(--text-secondary)]'}`} />
       </div>
       {loading ? (
-        <div className="mt-2 h-8 w-16 rounded bg-gray-800/60 animate-pulse" />
+        <div className="mt-2 h-8 w-16 rounded bg-[var(--surface-2)] animate-pulse" />
       ) : (
-        <p className={`mt-1 text-2xl font-bold ${TONE_TEXT[tone] || 'text-white'}`}>{value ?? 0}</p>
+        <p className={`mt-1 text-2xl font-bold ${TONE_TEXT[tone] || 'text-[var(--text-primary)]'}`}>{value ?? 0}</p>
       )}
     </div>
   )
@@ -225,33 +225,33 @@ function InstanceRow({ instance, bucketKey, onOpen }) {
   return (
     <button
       onClick={() => onOpen(instance)}
-      className={`w-full text-left flex items-center gap-3 px-4 py-3 rounded-xl border transition-all hover:border-gray-600 ${
-        overdue ? 'border-red-800/60 bg-red-950/20' : 'border-gray-800 bg-gray-900/40'
+      className={`w-full text-left flex items-center gap-3 px-4 py-3 rounded-xl border transition-all hover:border-[var(--border-bright)] ${
+        overdue ? 'border-red-800/60 bg-red-950/20' : 'border-[var(--border-dim)] bg-[var(--surface-1)]'
       }`}
     >
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
           <SourceBadge source={SOURCE.workflow} />
-          <p className="text-white text-sm font-medium truncate">{entityLabelOf(instance)}</p>
+          <p className="text-[var(--text-primary)] text-sm font-medium truncate">{entityLabelOf(instance)}</p>
         </div>
-        <p className="text-gray-500 text-xs truncate mt-0.5">
+        <p className="text-[var(--text-muted)] text-xs truncate mt-0.5">
           {instance.definition_name || 'Workflow'}
-          {instance.entity_type && <span className="text-gray-600"> · {instance.entity_type}</span>}
+          {instance.entity_type && <span className="text-[var(--text-muted)]"> · {instance.entity_type}</span>}
           {step && (
-            <span className="text-gray-400"> · Step {idx + 1}/{total}: {step.name}</span>
+            <span className="text-[var(--text-secondary)]"> · Step {idx + 1}/{total}: {step.name}</span>
           )}
         </p>
       </div>
 
       <div className="hidden md:flex flex-col items-end gap-1 shrink-0">
-        <span className={`text-xs whitespace-nowrap ${overdue ? 'text-red-400 font-semibold' : 'text-gray-500'}`}>
+        <span className={`text-xs whitespace-nowrap ${overdue ? 'text-red-400 font-semibold' : 'text-[var(--text-muted)]'}`}>
           {overdue && <AlertTriangle className="w-3 h-3 inline mr-1 -mt-0.5" />}
           {sla?.dueLabel || relTime(timeRef) || '—'}
         </span>
       </div>
 
       <ApprovalStatusBadge status={instance.status} />
-      <ChevronRight className="w-4 h-4 text-gray-600 shrink-0" />
+      <ChevronRight className="w-4 h-4 text-[var(--text-muted)] shrink-0" />
     </button>
   )
 }
@@ -262,7 +262,7 @@ function GenericRow({ item, onOpen }) {
   return (
     <button
       onClick={() => onOpen(item)}
-      className="w-full text-left flex items-center gap-3 px-4 py-3 rounded-xl border border-gray-800 bg-gray-900/40 transition-all hover:border-gray-600"
+      className="w-full text-left flex items-center gap-3 px-4 py-3 rounded-xl border border-[var(--border-dim)] bg-[var(--surface-1)] transition-all hover:border-[var(--border-bright)]"
     >
       <div className={`shrink-0 w-9 h-9 rounded-lg flex items-center justify-center ${TONE_BADGE[meta.tone] || TONE_BADGE.blue}`}>
         <meta.icon className="w-4 h-4" />
@@ -270,21 +270,21 @@ function GenericRow({ item, onOpen }) {
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
           <SourceBadge source={item.source} />
-          <p className="text-white text-sm font-medium truncate">{item.title}</p>
+          <p className="text-[var(--text-primary)] text-sm font-medium truncate">{item.title}</p>
         </div>
-        <p className="text-gray-500 text-xs truncate mt-0.5">
+        <p className="text-[var(--text-muted)] text-xs truncate mt-0.5">
           {item.subtitle}
-          {item.site && <span className="text-gray-600"> · {item.site}</span>}
-          {item.country && <span className="text-gray-600"> · {item.country}</span>}
+          {item.site && <span className="text-[var(--text-muted)]"> · {item.site}</span>}
+          {item.country && <span className="text-[var(--text-muted)]"> · {item.country}</span>}
         </p>
       </div>
       <div className="hidden md:flex flex-col items-end gap-1 shrink-0">
-        <span className="text-xs whitespace-nowrap text-gray-500">{relTime(item.created_at) || '—'}</span>
+        <span className="text-xs whitespace-nowrap text-[var(--text-muted)]">{relTime(item.created_at) || '—'}</span>
       </div>
       <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[11px] font-semibold bg-amber-500/15 text-amber-300 border-amber-500/30">
         <Clock className="w-3 h-3" /> Pending
       </span>
-      <ChevronRight className="w-4 h-4 text-gray-600 shrink-0" />
+      <ChevronRight className="w-4 h-4 text-[var(--text-muted)] shrink-0" />
     </button>
   )
 }
@@ -348,7 +348,7 @@ function DetailDrawer({ instance, actionable, onClose, onActed }) {
 
       {actionable && (
         <section>
-          <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+          <h3 className="text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wider mb-2 flex items-center gap-1.5">
             <ClipboardList className="w-3.5 h-3.5" /> Decision
           </h3>
           <ApprovalAction requirements={requirements} onAct={handleAct} busy={busy} />
@@ -356,7 +356,7 @@ function DetailDrawer({ instance, actionable, onClose, onActed }) {
       )}
 
       <section>
-        <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3 flex items-center gap-1.5">
+        <h3 className="text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wider mb-3 flex items-center gap-1.5">
           <Clock className="w-3.5 h-3.5" /> Approval History
         </h3>
         {trailErr ? (
@@ -449,18 +449,18 @@ function SimpleApprovalDrawer({ item, canAct, onClose, onActed }) {
       {feedback && <FeedbackBanner feedback={feedback} />}
 
       <section>
-        <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Details</h3>
+        <h3 className="text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wider mb-2">Details</h3>
         <dl className="grid grid-cols-2 gap-x-4 gap-y-2">
           {details.filter(([, v]) => v != null && v !== '').map(([k, v]) => (
             <div key={k} className="min-w-0">
-              <dt className="text-[10px] uppercase tracking-wider text-gray-500">{k}</dt>
+              <dt className="text-[10px] uppercase tracking-wider text-[var(--text-muted)]">{k}</dt>
               <dd className="text-sm text-gray-200 truncate">{String(v)}</dd>
             </div>
           ))}
         </dl>
         {item.note && (
-          <div className="mt-3 p-3 rounded-lg bg-gray-800/60 border border-gray-700">
-            <p className="text-[10px] uppercase tracking-wider text-gray-500 mb-1">Requester note</p>
+          <div className="mt-3 p-3 rounded-lg bg-[var(--surface-2)] border border-[var(--input-border)]">
+            <p className="text-[10px] uppercase tracking-wider text-[var(--text-muted)] mb-1">Requester note</p>
             <p className="text-sm text-gray-300 whitespace-pre-wrap">{item.note}</p>
           </div>
         )}
@@ -468,7 +468,7 @@ function SimpleApprovalDrawer({ item, canAct, onClose, onActed }) {
 
       {canAct ? (
         <section>
-          <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+          <h3 className="text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wider mb-2 flex items-center gap-1.5">
             <ClipboardList className="w-3.5 h-3.5" /> Decision
           </h3>
           <textarea
@@ -480,7 +480,7 @@ function SimpleApprovalDrawer({ item, canAct, onClose, onActed }) {
                 ? 'Reason (required to return for correction)…'
                 : 'Reason for rejection (optional, sent to requester)…'
             }
-            className="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2.5 text-white text-sm placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-orange-500 transition-all resize-none"
+            className="w-full bg-[var(--surface-2)] border border-[var(--input-border)] rounded-xl px-3 py-2.5 text-[var(--text-primary)] text-sm placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-orange-500 transition-all resize-none"
           />
           <div className="flex gap-2 mt-3">
             <button
@@ -494,7 +494,7 @@ function SimpleApprovalDrawer({ item, canAct, onClose, onActed }) {
             <button
               onClick={() => act(true)}
               disabled={busy}
-              className="flex-[2] inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl font-semibold text-sm text-white bg-gradient-to-r from-green-600 to-green-700 hover:from-green-500 hover:to-green-600 shadow-lg shadow-green-900/30 disabled:opacity-50 transition-all"
+              className="flex-[2] inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl font-semibold text-sm text-[var(--text-primary)] bg-gradient-to-r from-green-600 to-green-700 hover:from-green-500 hover:to-green-600 shadow-lg shadow-green-900/30 disabled:opacity-50 transition-all"
             >
               {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
               Approve
@@ -502,7 +502,7 @@ function SimpleApprovalDrawer({ item, canAct, onClose, onActed }) {
           </div>
         </section>
       ) : (
-        <div className="flex items-center gap-2.5 p-3 rounded-xl bg-gray-800/60 border border-gray-700 text-sm text-gray-400">
+        <div className="flex items-center gap-2.5 p-3 rounded-xl bg-[var(--surface-2)] border border-[var(--input-border)] text-sm text-[var(--text-secondary)]">
           <AlertTriangle className="w-4 h-4 shrink-0 text-amber-400" />
           You need an Admin, Manager or Director role to action this item.
         </div>
@@ -543,20 +543,20 @@ function DrawerShell({ title, badge, subtitle, onClose, children }) {
         aria-label="Approval detail"
       >
         <div
-          className="sticky top-0 z-10 flex items-start justify-between gap-3 px-5 py-4 border-b bg-gray-900/95 backdrop-blur"
+          className="sticky top-0 z-10 flex items-start justify-between gap-3 px-5 py-4 border-b bg-[var(--surface-1)] backdrop-blur"
           style={{ borderColor: 'var(--border-dim)' }}
         >
           <div className="min-w-0">
             <div className="flex items-center gap-2 mb-1">
-              <h2 className="text-white font-semibold text-sm truncate">{title}</h2>
+              <h2 className="text-[var(--text-primary)] font-semibold text-sm truncate">{title}</h2>
               {badge}
             </div>
-            <p className="text-gray-500 text-xs truncate">{subtitle}</p>
+            <p className="text-[var(--text-muted)] text-xs truncate">{subtitle}</p>
           </div>
           <button
             onClick={onClose}
             aria-label="Close"
-            className="shrink-0 text-gray-400 hover:text-white p-1 rounded-lg hover:bg-gray-800 transition-colors"
+            className="shrink-0 text-[var(--text-secondary)] hover:text-[var(--text-primary)] p-1 rounded-lg hover:bg-[var(--surface-2)] transition-colors"
           >
             <X className="w-4 h-4" />
           </button>
@@ -580,10 +580,10 @@ function DataIntakeCard({ count, onGo }) {
         <Database className="w-4 h-4" />
       </div>
       <div className="flex-1 min-w-0">
-        <p className="text-white text-sm font-medium">
+        <p className="text-[var(--text-primary)] text-sm font-medium">
           {count} data-intake {count === 1 ? 'batch' : 'batches'} awaiting approval
         </p>
-        <p className="text-gray-500 text-xs mt-0.5">Reviewed on the Data Intake Approvals screen (staged rows + commit)</p>
+        <p className="text-[var(--text-muted)] text-xs mt-0.5">Reviewed on the Data Intake Approvals screen (staged rows + commit)</p>
       </div>
       <span className="inline-flex items-center gap-1 text-xs font-semibold text-purple-300 shrink-0">
         Open <ExternalLink className="w-3.5 h-3.5" />
@@ -601,14 +601,14 @@ function EngineUnavailable({ message, onRetry, retrying }) {
         <ServerCrash className="w-7 h-7 text-amber-400" />
       </div>
       <div>
-        <p className="text-white text-sm font-semibold">Approval services unavailable</p>
-        <p className="text-gray-500 text-xs mt-1 max-w-md">
+        <p className="text-[var(--text-primary)] text-sm font-semibold">Approval services unavailable</p>
+        <p className="text-[var(--text-muted)] text-xs mt-1 max-w-md">
           None of the approval sources could be reached. This usually means a
           connectivity issue or that the workflow engine migrations (V116–V118)
           have not been applied to this environment yet.
         </p>
         {message && (
-          <p className="text-gray-600 text-[11px] mt-2 font-mono break-all max-w-md">{message}</p>
+          <p className="text-[var(--text-muted)] text-[11px] mt-2 font-mono break-all max-w-md">{message}</p>
         )}
       </div>
       <button
@@ -771,7 +771,7 @@ export default function Approvals() {
   }
 
   return (
-    <div className="text-white space-y-6">
+    <div className="text-[var(--text-primary)] space-y-6">
       <PageHeader
         title="Approval Dashboard"
         subtitle="Every pending approval across your organisation — workflows, accident closures and checklist sign-offs"
@@ -810,31 +810,31 @@ export default function Approvals() {
           {/* Filters */}
           <div className="flex flex-col sm:flex-row gap-3 sm:items-center">
             <div className="relative flex-1 sm:max-w-sm">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--text-muted)]" />
               <input
                 type="text"
                 value={search}
                 onChange={e => setSearch(e.target.value)}
                 placeholder="Search entity, workflow or checklist…"
-                className="w-full bg-gray-800 border border-gray-700 rounded-xl pl-9 pr-9 py-2.5 text-white text-sm placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-orange-500 transition-all"
+                className="w-full bg-[var(--surface-2)] border border-[var(--input-border)] rounded-xl pl-9 pr-9 py-2.5 text-[var(--text-primary)] text-sm placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-orange-500 transition-all"
               />
               {search && (
                 <button
                   onClick={() => setSearch('')}
                   aria-label="Clear search"
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)] hover:text-[var(--text-primary)]"
                 >
                   <X className="w-3.5 h-3.5" />
                 </button>
               )}
             </div>
             <div className="relative">
-              <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 pointer-events-none" />
+              <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--text-muted)] pointer-events-none" />
               <select
                 value={sourceFilter}
                 onChange={e => setSourceFilter(e.target.value)}
                 aria-label="Filter by approval type"
-                className="appearance-none bg-gray-800 border border-gray-700 rounded-xl pl-9 pr-8 py-2.5 text-white text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 transition-all"
+                className="appearance-none bg-[var(--surface-2)] border border-[var(--input-border)] rounded-xl pl-9 pr-8 py-2.5 text-[var(--text-primary)] text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 transition-all"
               >
                 <option value="all">All approval types</option>
                 <option value={SOURCE.workflow}>Workflow</option>
@@ -844,12 +844,12 @@ export default function Approvals() {
             </div>
             {siteOptions.length > 0 && (
               <div className="relative">
-                <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 pointer-events-none" />
+                <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--text-muted)] pointer-events-none" />
                 <select
                   value={siteFilter}
                   onChange={e => setSiteFilter(e.target.value)}
                   aria-label="Filter by site"
-                  className="appearance-none bg-gray-800 border border-gray-700 rounded-xl pl-9 pr-8 py-2.5 text-white text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 transition-all"
+                  className="appearance-none bg-[var(--surface-2)] border border-[var(--input-border)] rounded-xl pl-9 pr-8 py-2.5 text-[var(--text-primary)] text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 transition-all"
                 >
                   <option value="all">All sites</option>
                   {siteOptions.map(s => <option key={s} value={s}>{s}</option>)}
@@ -859,7 +859,7 @@ export default function Approvals() {
           </div>
 
           {/* Bucket tabs */}
-          <div className="flex flex-wrap gap-2 border-b border-gray-800 pb-3">
+          <div className="flex flex-wrap gap-2 border-b border-[var(--border-dim)] pb-3">
             {BUCKETS.map(b => {
               const count = b.key === 'pending' ? counts.total_pending : (buckets[b.key] || []).length
               const active = activeBucket === b.key
@@ -871,12 +871,12 @@ export default function Approvals() {
                   className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-semibold border transition-all ${
                     active
                       ? (TONE_TAB_ACTIVE[b.tone] || 'bg-orange-500/15 text-orange-300 border-orange-500/40')
-                      : 'bg-gray-800/60 text-gray-400 border-gray-700 hover:text-white hover:border-gray-600'
+                      : 'bg-[var(--surface-2)] text-[var(--text-secondary)] border-[var(--input-border)] hover:text-[var(--text-primary)] hover:border-[var(--border-bright)]'
                   }`}
                 >
                   <Icon className="w-3.5 h-3.5" />
                   {b.label}
-                  <span className={`ml-0.5 px-1.5 rounded-full text-[10px] ${active ? 'bg-black/30' : 'bg-gray-700/60'}`}>
+                  <span className={`ml-0.5 px-1.5 rounded-full text-[10px] ${active ? 'bg-black/30' : 'bg-[var(--surface-3)]'}`}>
                     {loading ? '·' : count}
                   </span>
                 </button>
@@ -888,15 +888,15 @@ export default function Approvals() {
           {loading ? (
             <div className="space-y-2">
               {Array.from({ length: 6 }).map((_, i) => (
-                <div key={i} className="h-16 rounded-xl bg-gray-800/60 border border-gray-800 animate-pulse" />
+                <div key={i} className="h-16 rounded-xl bg-[var(--surface-2)] border border-[var(--border-dim)] animate-pulse" />
               ))}
             </div>
           ) : activeList.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-20 gap-4 text-center">
-              <div className="w-16 h-16 rounded-full bg-gray-800 border border-gray-700 flex items-center justify-center">
+              <div className="w-16 h-16 rounded-full bg-[var(--surface-2)] border border-[var(--input-border)] flex items-center justify-center">
                 {activeBucket === 'recently_approved'
                   ? <CheckCircle2 className="w-7 h-7 text-green-500" />
-                  : <Inbox className="w-7 h-7 text-gray-500" />}
+                  : <Inbox className="w-7 h-7 text-[var(--text-muted)]" />}
               </div>
               <div>
                 <p className="text-gray-300 text-sm font-medium">
@@ -904,7 +904,7 @@ export default function Approvals() {
                     ? 'No approvals match your filters'
                     : `Nothing in ${BUCKETS.find(b => b.key === activeBucket)?.label}`}
                 </p>
-                <p className="text-gray-500 text-xs mt-1">
+                <p className="text-[var(--text-muted)] text-xs mt-1">
                   {hasFilters
                     ? 'Try a different search term, type or site.'
                     : activeBucket === 'overdue'

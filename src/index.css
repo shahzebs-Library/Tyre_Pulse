@@ -1155,6 +1155,50 @@ html.light samp {
 }
 html.light pre code { background-color: transparent !important; }
 
+/* ─── System Console (/console) light theme ─────────────────────────────────
+   The System Console is dark-only by design (ConsoleLayout hardcodes near-black
+   surfaces + raw dark utilities). These rules — scoped under
+   html.light .console-root, so they out-specify the global html.light utilities
+   above — flip the console to a legible LIGHT theme while KEEPING the orange
+   console accent (orange stays orange; only surfaces/text/borders flip). DARK
+   mode is byte-identical: no console-root rule applies without html.light. */
+
+/* Root shell: the arbitrary near-black bg-[#0a0a0f] is not caught by the gray
+   catch-all above, so the whole console would stay black without this. */
+html.light .console-root { background-color: #f8fafc !important; color: #0f172a !important; }
+
+/* Sidebar + top bar surfaces (explicit so every opacity variant lands exact). */
+html.light .console-root aside  { background-color: #ffffff !important; }
+html.light .console-root header { background-color: rgba(255,255,255,0.92) !important; }
+
+/* Dark borders → subtle slate hairlines across the console subtree. */
+html.light .console-root [class*="border-gray-800"],
+html.light .console-root [class*="border-gray-700"] { border-color: rgba(15,23,42,0.10) !important; }
+
+/* Muted labels / secondary text on the light shell. */
+html.light .console-root .text-gray-600 { color: #64748b !important; }
+html.light .console-root .text-gray-700 { color: #475569 !important; }
+
+/* Orange ACCENT stays orange — but the light-orange 300 tone is illegible on a
+   white ground, so darken it to orange-700/600 while fills keep an orange tint. */
+html.light .console-root [class*="text-orange-300"] { color: #c2410c !important; }
+html.light .console-root [class*="text-orange-400"] { color: #ea580c !important; }
+
+/* Active nav item + accent badges: deep-orange fills → light orange tints. */
+html.light .console-root [class*="bg-orange-950"],
+html.light .console-root [class*="bg-orange-900"]  { background-color: rgba(249,115,22,0.12) !important; }
+html.light .console-root [class*="bg-orange-500/"],
+html.light .console-root [class*="bg-orange-400/"] { background-color: rgba(249,115,22,0.14) !important; }
+html.light .console-root [class*="border-orange-800"] { border-color: rgba(249,115,22,0.30) !important; }
+html.light .console-root [class*="border-orange-500"] { border-color: rgba(249,115,22,0.35) !important; }
+
+/* Other semantic hover/badge tints (2FA blue, sign-out/locked red) on light. */
+html.light .console-root [class*="bg-blue-950"] { background-color: rgba(37,99,235,0.10) !important; }
+html.light .console-root [class*="bg-red-950"],
+html.light .console-root [class*="bg-red-900"]  { background-color: rgba(220,38,38,0.10) !important; }
+html.light .console-root [class*="text-red-300"]    { color: #dc2626 !important; }
+html.light .console-root [class*="border-red-800"]  { border-color: rgba(220,38,38,0.28) !important; }
+
 /* ─── Design System Utility Extensions ─────────────────────────────────────── */
 @layer utilities {
   /* Surface backgrounds */

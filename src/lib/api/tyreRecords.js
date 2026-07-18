@@ -13,6 +13,7 @@
  */
 import { supabase, applyCountry, fetchAllPages } from './_client'
 import { sanitizeSearchTerm } from '../searchFilter'
+import { createServiceEvent } from './tyreServiceEvents'
 
 /** Distinct non-null `site` values (raw rows) for the site filter dropdown. */
 export function listSiteOptions() {
@@ -95,6 +96,93 @@ export function updateRecord(id, payload) {
 /** Insert a single tyre record. */
 export function insertRecord(payload) {
   return supabase.from('tyre_records').insert(payload)
+}
+
+const numOrNull = (v) => {
+  if (v === '' || v == null) return null
+  const n = typeof v === 'number' ? v : parseFloat(v)
+  return Number.isFinite(n) ? n : null
+}
+const serialOf = (r) => (r?.serial_no || r?.serial_number || r?.tyre_serial || '').toString().trim() || null
+const todayISO = () => new Date().toISOString().slice(0, 10)
+
+/**
+ * Move / swap a fitted tyre to another position (same vehicle) or another asset
+ * (cross vehicle). Composes a single `updateRecord` on the tyre's own record:
+ * same-vehicle = relocate position; cross-vehicle = re-point asset_no + position
+ * and clear the removal fields so it reads as fitted at its new home. A rotation
+ * service event is logged best-effort (a missing table never blocks the move).
+ * @param {{tyre:object, toAssetNo?:string, toPosition:string, km?:number|string, date?:string}} args
+ * @returns {Promise<{error:any}>}
+ */
+export async function moveTyre({ tyre, toAssetNo, toPosition, km, date } = {}) {
+  if (!tyre?.id) return { error: new Error('A tyre record id is required.') }
+  const targetAsset = (toAssetNo || '').toString().trim().toUpperCase()
+  const crossVehicle = targetAsset && targetAsset !== String(tyre.asset_no || '').toUpperCase()
+  const kmNum = numOrNull(km)
+
+  const payload = { position: (toPosition || '').toString().trim() || null }
+  if (kmNum != null) payload.km_at_fitment = kmNum
+  if (crossVehicle) {
+    payload.asset_no = targetAsset
+    payload.status = 'Active'
+    payload.removal_date = null
+    payload.km_at_removal = null
+  }
+
+  const { error } = await updateRecord(tyre.id, payload)
+  if (error) return { error }
+
+  try {
+    await createServiceEvent({
+      tyre_serial: serialOf(tyre),
+      asset_no: payload.asset_no || tyre.asset_no || null,
+      position: payload.position,
+      event_type: 'rotation',
+      event_date: date || todayISO(),
+      site: tyre.site || null,
+      country: tyre.country || null,
+      notes: crossVehicle
+        ? `Moved from ${tyre.asset_no || 'asset'} ${tyre.position || ''} to ${targetAsset} ${payload.position || ''}`.trim()
+        : `Swapped to position ${payload.position || ''}`.trim(),
+    })
+  } catch { /* service-event log is best-effort */ }
+
+  return { error: null }
+}
+
+/**
+ * Remove a fitted tyre: stamp removal date + odometer + reason and mark it
+ * Removed, leaving a closed stint that the position history surfaces. Logs a
+ * replacement service event best-effort.
+ * @param {{tyre:object, reason?:string, km?:number|string, date?:string}} args
+ * @returns {Promise<{error:any}>}
+ */
+export async function removeTyre({ tyre, reason, km, date } = {}) {
+  if (!tyre?.id) return { error: new Error('A tyre record id is required.') }
+  const payload = {
+    status: 'Removed',
+    removal_date: date || todayISO(),
+    km_at_removal: numOrNull(km),
+    removal_reason: (reason || '').toString().trim() || null,
+  }
+  const { error } = await updateRecord(tyre.id, payload)
+  if (error) return { error }
+
+  try {
+    await createServiceEvent({
+      tyre_serial: serialOf(tyre),
+      asset_no: tyre.asset_no || null,
+      position: tyre.position || tyre.tyre_position || null,
+      event_type: 'replacement',
+      event_date: payload.removal_date,
+      site: tyre.site || null,
+      country: tyre.country || null,
+      notes: payload.removal_reason ? `Removed: ${payload.removal_reason}` : 'Removed',
+    })
+  } catch { /* service-event log is best-effort */ }
+
+  return { error: null }
 }
 
 /** Update a batch of tyre records by id (page loops in 200-id chunks). */

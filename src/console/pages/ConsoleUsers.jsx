@@ -5,13 +5,20 @@ import {
   RefreshCw, Edit2, Key, AlertTriangle,
   Shield, MoreVertical, UserCheck, UserX,
   Globe, CheckSquare, Square, UserCog, ShieldCheck, X as XClose,
+  MapPin, Plus,
 } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { sanitizeSearchTerm } from '../../lib/searchFilter'
+import { toUserMessage } from '../../lib/safeError'
 import { useConsoleAuth } from '../ConsoleAuthContext'
 import { ACCESS_ROLES, ALL_MODULES } from '../../lib/moduleCatalog'
 import { listCustomRoles } from '../../lib/api/customRoles'
-import { setUserCountry, bulkSetRole, bulkSetGrant } from '../../lib/api/adminAccess'
+import { setUserCountry, bulkSetRole, bulkSetGrant, adminSetUserSites } from '../../lib/api/adminAccess'
+import { listDataSiteOptions } from '../../lib/api/sites'
+
+// Site options are capped so a runaway fleet register can never flood the
+// editor; anything already stored on a user still renders as a chip.
+const SITE_OPTIONS_CAP = 100
 
 // Country scope vocabulary (GCC + Egypt). Any country already stored on a user
 // that is not in this list is still shown and preserved as an existing chip.
@@ -61,13 +68,19 @@ export default function ConsoleUsers() {
   const [bulkError, setBulkError]   = useState(null)
   const [toast, setToast]           = useState(null)
 
+  // Distinct operational site options for the per-user Sites editor.
+  const [siteOpts, setSiteOpts]         = useState([])
+  const [siteOptsLoading, setSiteOptsLoading] = useState(true)
+  const [siteOptsError, setSiteOptsError]     = useState(false)
+  const [siteAdd, setSiteAdd]           = useState('')
+
   const PAGE_SIZE = 20
 
   const load = useCallback(async () => {
     setLoading(true)
     let q = supabase
       .from('profiles')
-      .select('id, full_name, email, role, site, country, approved, locked, created_at, organisation_id, is_super_admin', { count: 'exact' })
+      .select('id, full_name, email, role, site, sites, country, approved, locked, created_at, organisation_id, is_super_admin', { count: 'exact' })
       .order('created_at', { ascending: false })
       .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1)
 
@@ -104,6 +117,39 @@ export default function ConsoleUsers() {
       .catch(() => setRoles(ACCESS_ROLES))
   }, [])
 
+  // Distinct site list for the Sites editor. Prefer the org-scoped reference
+  // RPC (aggregates every operational table); fall back to a direct distinct
+  // read over vehicle_fleet.site if the RPC is unavailable.
+  useEffect(() => {
+    let cancelled = false
+    async function loadSiteOptions() {
+      setSiteOptsLoading(true); setSiteOptsError(false)
+      try {
+        let names = []
+        try {
+          names = await listDataSiteOptions(null)
+        } catch {
+          const { data, error: err } = await supabase
+            .from('vehicle_fleet')
+            .select('site')
+            .not('site', 'is', null)
+            .order('site')
+            .limit(2000)
+          if (err) throw new Error(err.message)
+          names = [...new Set((data ?? []).map(r => String(r.site ?? '').trim()).filter(Boolean))]
+        }
+        if (cancelled) return
+        setSiteOpts([...new Set(names)].sort((a, b) => a.localeCompare(b)).slice(0, SITE_OPTIONS_CAP))
+      } catch {
+        if (!cancelled) { setSiteOpts([]); setSiteOptsError(true) }
+      } finally {
+        if (!cancelled) setSiteOptsLoading(false)
+      }
+    }
+    loadSiteOptions()
+    return () => { cancelled = true }
+  }, [])
+
   function flashToast(msg) {
     setToast(msg)
     setTimeout(() => setToast(null), 4000)
@@ -125,11 +171,13 @@ export default function ConsoleUsers() {
 
   function openEdit(user) {
     setError(null)
+    setSiteAdd('')
     setEditForm({
       full_name: user.full_name ?? '',
       role: user.role ?? '',
       site: user.site ?? '',
       countries: Array.isArray(user.country) ? [...user.country] : (user.country ? [user.country] : []),
+      sites: Array.isArray(user.sites) ? [...user.sites] : [],
     })
     setEditModal(user)
     setActionMenu(null)
@@ -140,6 +188,20 @@ export default function ConsoleUsers() {
       const has = f.countries.includes(c)
       return { ...f, countries: has ? f.countries.filter(x => x !== c) : [...f.countries, c] }
     })
+  }
+
+  function toggleEditSite(s) {
+    setEditForm(f => {
+      const has = f.sites.includes(s)
+      return { ...f, sites: has ? f.sites.filter(x => x !== s) : [...f.sites, s] }
+    })
+  }
+
+  function addFreeTextSite() {
+    const s = siteAdd.trim().toUpperCase()
+    if (!s) return
+    setEditForm(f => (f.sites.includes(s) ? f : { ...f, sites: [...f.sites, s] }))
+    setSiteAdd('')
   }
 
   async function handleEditSave() {
@@ -153,12 +215,37 @@ export default function ConsoleUsers() {
       // Country scope is a text[] behind super-admin RLS -> dedicated RPC.
       await setUserCountry(editModal.id, editForm.countries)
 
+      // Site scope (profiles.sites text[], V269) -> dedicated RPC. Only call
+      // when the selection actually changed.
+      const prevSites = Array.isArray(editModal.sites) ? editModal.sites : []
+      const nextSites = editForm.sites
+      const sitesChanged =
+        prevSites.length !== nextSites.length || nextSites.some(s => !prevSites.includes(s))
+      if (sitesChanged) {
+        await adminSetUserSites(editModal.id, nextSites)
+        await logAction('set_user_sites', editModal.id, 'user', {
+          email: editModal.email, sites: nextSites,
+        })
+      }
+
       await logAction('update_user', editModal.id, 'user', {
         role: editForm.role, email: editModal.email, countries: editForm.countries,
+        sites: nextSites,
       })
+      // Optimistic update so the row reflects the new scope immediately.
+      setUsers(prev => prev.map(u => (u.id === editModal.id
+        ? {
+            ...u,
+            full_name: editForm.full_name,
+            role: editForm.role,
+            site: editForm.site,
+            country: editForm.countries,
+            sites: nextSites.length > 0 ? nextSites : null,
+          }
+        : u)))
       setSaving(false); setEditModal(null); load()
     } catch (e) {
-      setError(e?.message || 'Could not save user.')
+      setError(toUserMessage(e, 'Could not save user.'))
       setSaving(false)
     }
   }
@@ -354,6 +441,7 @@ export default function ConsoleUsers() {
                 <th className="text-left px-4 py-3 text-gray-500 font-semibold uppercase tracking-wider">User</th>
                 <th className="text-left px-4 py-3 text-gray-500 font-semibold uppercase tracking-wider">Role</th>
                 <th className="text-left px-4 py-3 text-gray-500 font-semibold uppercase tracking-wider">Countries</th>
+                <th className="text-left px-4 py-3 text-gray-500 font-semibold uppercase tracking-wider">Sites</th>
                 <th className="text-left px-4 py-3 text-gray-500 font-semibold uppercase tracking-wider">Site</th>
                 <th className="text-left px-4 py-3 text-gray-500 font-semibold uppercase tracking-wider">Status</th>
                 <th className="text-left px-4 py-3 text-gray-500 font-semibold uppercase tracking-wider">Joined</th>
@@ -364,6 +452,7 @@ export default function ConsoleUsers() {
               {users.map(user => {
                 const isSel = selected.has(user.id)
                 const countries = Array.isArray(user.country) ? user.country : (user.country ? [user.country] : [])
+                const userSites = Array.isArray(user.sites) ? user.sites.filter(Boolean) : []
                 return (
                   <tr key={user.id}
                     className={`border-b border-gray-800/60 hover:bg-gray-800/30 transition-colors ${
@@ -404,6 +493,29 @@ export default function ConsoleUsers() {
                             ))}
                           </div>
                         )}
+                    </td>
+                    <td className="px-4 py-3">
+                      <button type="button" onClick={e => { e.stopPropagation(); openEdit(user) }}
+                        title="Edit site access" className="text-left">
+                        {userSites.length === 0
+                          ? (
+                            <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-orange-900/25 border border-orange-700/40 text-orange-300">
+                              <MapPin size={9} /> All sites
+                            </span>
+                          )
+                          : (
+                            <span className="flex flex-wrap gap-1">
+                              {userSites.slice(0, 3).map(s => (
+                                <span key={s} className="text-[10px] px-1.5 py-0.5 rounded bg-gray-800 border border-gray-700 text-gray-300">{s}</span>
+                              ))}
+                              {userSites.length > 3 && (
+                                <span className="text-[10px] px-1.5 py-0.5 rounded bg-gray-800 border border-gray-700 text-gray-500">
+                                  +{userSites.length - 3}
+                                </span>
+                              )}
+                            </span>
+                          )}
+                      </button>
                     </td>
                     <td className="px-4 py-3 text-gray-400">{user.site ?? 'N/A'}</td>
                     <td className="px-4 py-3">
@@ -516,6 +628,68 @@ export default function ConsoleUsers() {
                   })}
                 </div>
                 <p className="text-[10px] text-gray-600 mt-1.5">No selection = access to all countries.</p>
+              </Field>
+              <Field label={<span className="flex items-center gap-1.5"><MapPin size={11} /> Site Access</span>}>
+                <div className="flex items-center justify-between mb-1.5">
+                  {editForm.sites?.length > 0
+                    ? (
+                      <div className="flex flex-wrap gap-1 mr-2">
+                        {editForm.sites.map(s => (
+                          <span key={s} className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-orange-500/15 border border-orange-500/40 text-orange-200">
+                            {s}
+                            <button type="button" onClick={() => toggleEditSite(s)} className="text-orange-300/70 hover:text-white" title={`Remove ${s}`}>
+                              <XClose size={9} />
+                            </button>
+                          </span>
+                        ))}
+                      </div>
+                    )
+                    : (
+                      <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-orange-900/25 border border-orange-700/40 text-orange-300">
+                        <MapPin size={9} /> All sites
+                      </span>
+                    )}
+                  {editForm.sites?.length > 0 && (
+                    <button type="button" onClick={() => setEditForm(f => ({ ...f, sites: [] }))}
+                      className="flex-shrink-0 text-[10px] px-2 py-1 rounded-lg bg-gray-800 border border-gray-700 text-gray-400 hover:text-white transition-colors">
+                      All sites (clear)
+                    </button>
+                  )}
+                </div>
+                {siteOptsLoading ? (
+                  <div className="flex items-center gap-2 py-2 text-[11px] text-gray-500">
+                    <div className="w-3 h-3 border-2 border-orange-500 border-t-transparent rounded-full animate-spin" />
+                    Loading site list...
+                  </div>
+                ) : siteOptsError ? (
+                  <p className="text-[10px] text-red-400 py-1">Could not load the site list. You can still add sites by name below.</p>
+                ) : siteOpts.length === 0 && (editForm.sites?.length ?? 0) === 0 ? (
+                  <p className="text-[10px] text-gray-600 py-1">No operational sites found yet. Add a site by name below.</p>
+                ) : (
+                  <div className="max-h-40 overflow-y-auto rounded-lg border border-gray-700 bg-gray-800/60 divide-y divide-gray-800">
+                    {[...new Set([...siteOpts, ...(editForm.sites ?? [])])].sort((a, b) => a.localeCompare(b)).map(s => {
+                      const on = editForm.sites?.includes(s)
+                      return (
+                        <label key={s} className="flex items-center gap-2 px-2.5 py-1.5 text-[11px] text-gray-300 hover:bg-gray-700/50 cursor-pointer">
+                          <input type="checkbox" checked={!!on} onChange={() => toggleEditSite(s)}
+                            className="accent-orange-500 w-3 h-3" />
+                          <span className={on ? 'text-orange-200' : ''}>{s}</span>
+                        </label>
+                      )
+                    })}
+                  </div>
+                )}
+                <div className="flex gap-1.5 mt-1.5">
+                  <input value={siteAdd} onChange={e => setSiteAdd(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addFreeTextSite() } }}
+                    placeholder="Add site by name..."
+                    className="flex-1 h-8 bg-gray-800 border border-gray-700 rounded-lg px-2.5 text-[11px] text-white placeholder-gray-600 focus:outline-none focus:border-orange-500" />
+                  <button type="button" onClick={addFreeTextSite} disabled={!siteAdd.trim()}
+                    className="flex items-center gap-1 h-8 px-2.5 rounded-lg bg-gray-800 border border-gray-700 text-[11px] text-gray-300 hover:text-white disabled:opacity-40 transition-colors">
+                    <Plus size={11} /> Add
+                  </button>
+                </div>
+                <p className="text-[10px] text-gray-600 mt-1.5">Users with no sites assigned see every site. Site visibility is enforced by the database.</p>
               </Field>
             </div>
             <div className="flex gap-2 px-6 pb-5">

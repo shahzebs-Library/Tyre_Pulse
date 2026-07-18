@@ -75,6 +75,26 @@ export async function setUserCountry(userId, countries) {
 }
 
 /**
+ * Set a user's site scope (profiles.sites, a text[]) via `admin_set_user_sites`
+ * (V269). Server-side gated to super-admin/Admin. Pass null or an empty array
+ * to clear the scope, which means the user sees every site. Site visibility is
+ * enforced by RESTRICTIVE RLS policies in the database (app_can_see_site).
+ *
+ * @param {string}          userId  the target user's uuid
+ * @param {string[] | null} sites   the new site array (replaces the current
+ *                                  one); null/empty clears = all sites
+ * @returns {Promise<void>}
+ */
+export async function adminSetUserSites(userId, sites) {
+  return unwrap(
+    await supabase.rpc('admin_set_user_sites', {
+      p_user_id: userId,
+      p_sites: Array.isArray(sites) && sites.length > 0 ? sites : null,
+    }),
+  )
+}
+
+/**
  * Grant or revoke a capability across many users in one call via
  * `admin_bulk_set_grant`. Super-admin only.
  *

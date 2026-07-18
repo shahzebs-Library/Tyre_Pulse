@@ -2,6 +2,8 @@ import { describe, it, expect } from 'vitest'
 import {
   buildPassport, serialOfRecord, treadScore, pressureScore, ageScore, alertScore,
   historyScore, riskLevel, computeHealth, computeWear, HEALTH_WEIGHTS,
+  buildJourney, auditDataQuality, normalizeServiceEvent, normalizeWarrantyClaim,
+  normalizeRetreadClaim,
 } from '../lib/tyrePassport'
 
 describe('buildPassport', () => {
@@ -43,7 +45,7 @@ describe('buildPassport', () => {
   })
 })
 
-describe('tyrePassport — health sub-scores (bucket boundaries)', () => {
+describe('tyrePassport - health sub-scores (bucket boundaries)', () => {
   it('treadScore buckets on remaining %', () => {
     expect(treadScore(null)).toBe(70) // neutral when no signal
     expect(treadScore(90)).toBe(100)
@@ -79,7 +81,7 @@ describe('tyrePassport — health sub-scores (bucket boundaries)', () => {
   })
 })
 
-describe('tyrePassport — computeHealth', () => {
+describe('tyrePassport - computeHealth', () => {
   it('weights components and flags missing data', () => {
     const h = computeHealth({ treadRemainingPct: 90, pressureDeltaPct: null, ageYears: null, openAlerts: null, repairCount: 0 })
     // tread=100*.35, pressure=70*.20, age=70*.15, alerts=70*.20, history=100*.10
@@ -90,7 +92,7 @@ describe('tyrePassport — computeHealth', () => {
     expect(h.components.history.hasData).toBe(true)
     expect(Object.values(HEALTH_WEIGHTS).reduce((a, b) => a + b, 0)).toBeCloseTo(1)
   })
-  it('clamps to 0–100 and sets risk band', () => {
+  it('clamps to 0 to 100 and sets risk band', () => {
     const h = computeHealth({ treadRemainingPct: 5, pressureDeltaPct: null, ageYears: null, openAlerts: 5, repairCount: 5 })
     expect(h.overall).toBeGreaterThanOrEqual(0)
     expect(h.overall).toBeLessThanOrEqual(100)
@@ -98,9 +100,9 @@ describe('tyrePassport — computeHealth', () => {
   })
 })
 
-describe('tyrePassport — computeWear', () => {
+describe('tyrePassport - computeWear', () => {
   it('computes remaining %, wear rate and projected life from readings', () => {
-    // initial 16 → current 8 over 80,000 km: consumed 8mm
+    // initial 16 to current 8 over 80,000 km: consumed 8mm
     const w = computeWear([{ date: '2023-01-01', tread: 16 }, { date: '2024-01-01', tread: 8 }], 80000)
     expect(w.currentTread).toBe(8)
     expect(w.initialTread).toBe(16)
@@ -120,7 +122,7 @@ describe('tyrePassport — computeWear', () => {
   })
 })
 
-describe('buildPassport — deep engine wiring', () => {
+describe('buildPassport - deep engine wiring', () => {
   it('attaches health, wear, stats and wear curve', () => {
     const p = buildPassport([
       { id: 1, serial_no: 'C9', asset_no: 'A1', position: 'Steer', fitment_date: '2023-01-01', tread_depth: 16, total_km: 0 },
@@ -132,5 +134,102 @@ describe('buildPassport — deep engine wiring', () => {
     expect(p.stats.recordCount).toBe(2)
     expect(p.stats.positionsServed).toBe(2)
     expect(p.stats.repairCount).toBe(1) // "puncture repair" matched
+  })
+})
+
+describe('buildPassport - identity, journey and cross-vehicle stints', () => {
+  const recs = [
+    { id: 1, serial_no: 'J1', asset_no: 'A1', position: 'Steer', fitment_date: '2023-01-01', removal_date: '2023-07-01', km_at_fitment: 0, km_at_removal: 30000, cost_per_tyre: 1000 },
+    { id: 2, serial_no: 'J1', asset_no: 'A2', position: 'Drive', fitment_date: '2023-07-02', total_km: 20000, cost_per_tyre: 0 },
+  ]
+  it('derives first-fitted date, distinct vehicles and a per-stint journey with CPK', () => {
+    const p = buildPassport(recs)
+    expect(p.firstFittedDate).toBe('2023-01-01')
+    expect(p.distinctVehicles).toBe(2)
+    expect(p.journey).toHaveLength(2)
+    // stint 1: cost 1000 over 30000 km -> cpk 0.033
+    expect(p.journey[0].asset_no).toBe('A1')
+    expect(p.journey[0].km_run).toBe(30000)
+    expect(p.journey[0].cpk).toBeCloseTo(0.033, 3)
+    // last stint has no removal date -> current asset
+    expect(p.currentAssetNo).toBe('A2')
+    expect(p.scrapped).toBe(false)
+    expect(p.ageDays).toBeGreaterThan(0)
+  })
+  it('marks a removed tyre and clears current asset', () => {
+    const p = buildPassport([{ id: 1, serial_no: 'R1', asset_no: 'A1', fitment_date: '2023-01-01', removal_date: '2023-06-01', reason_for_removal: 'Worn out', status: 'scrapped' }])
+    expect(p.scrapped).toBe(true)
+    expect(p.currentAssetNo).toBeNull()
+    expect(p.scrapReason).toBe('Worn out')
+  })
+})
+
+describe('buildPassport - auxiliary sources', () => {
+  it('folds in service events, warranty and retread claims with cost breakdown', () => {
+    const p = buildPassport(
+      [{ id: 1, serial_no: 'X1', asset_no: 'A1', fitment_date: '2023-01-01', total_km: 50000, cost_per_tyre: 2000, tread_depth: 16 }],
+      {
+        serviceEvents: [
+          { id: 's1', tyre_serial: 'X1', event_type: 'repair', event_date: '2023-03-01', cost: 150, tread_depth: 12 },
+          { id: 's2', tyre_serial: 'X1', event_type: 'rotation', event_date: '2023-05-01' },
+        ],
+        warrantyClaims: [{ id: 'w1', serial_number: 'X1', claim_no: 'WC-1', claim_status: 'approved', credit_amount: 500 }],
+        retreadClaims: [{ id: 'rc1', tyre_serial: 'X1', vendor: 'V', amount_recovered: 100 }],
+        statusMarks: [{ serial: 'X1', mark_type: 'write_off' }],
+      },
+    )
+    expect(p.serviceEvents).toHaveLength(2)
+    expect(p.warranty).toHaveLength(1)
+    expect(p.retreadClaims).toHaveLength(1)
+    expect(p.statusMarks).toEqual(['write_off'])
+    expect(p.rotationCount).toBe(1)
+    expect(p.stats.repairCount).toBe(1)
+    // purchase 2000 + service 150 = 1650 recovered -> net 2000+150-600
+    expect(p.costBreakdown.purchase).toBe(2000)
+    expect(p.costBreakdown.service).toBe(150)
+    expect(p.costBreakdown.lifetime).toBe(2150)
+    expect(p.costBreakdown.recovered).toBe(600)
+    expect(p.costBreakdown.netLifetime).toBe(1550)
+    // tread series merges record (16) + service (12) readings
+    expect(p.treadSeries.length).toBeGreaterThanOrEqual(2)
+  })
+  it('still works with no auxiliary sources (back-compatible single arg)', () => {
+    const p = buildPassport([{ id: 1, serial_no: 'Y1', cost_per_tyre: 100, total_km: 10000 }])
+    expect(p.serviceEvents).toEqual([])
+    expect(p.warranty).toEqual([])
+    expect(p.costBreakdown.lifetime).toBe(100)
+  })
+})
+
+describe('tyrePassport - data-quality audit', () => {
+  it('flags impossible overlap on two vehicles', () => {
+    const journey = [
+      { asset_no: 'A1', fitted: '2023-01-01', removed: '2023-06-01', km_run: 100 },
+      { asset_no: 'A2', fitted: '2023-03-01', removed: '2023-08-01', km_run: 100 },
+    ]
+    const w = auditDataQuality(journey, [])
+    expect(w.some((x) => x.code === 'overlap')).toBe(true)
+  })
+  it('flags a tread reading that increases over time', () => {
+    const w = auditDataQuality([], [{ date: '2023-01-01', tread: 8 }, { date: '2023-06-01', tread: 12 }])
+    expect(w.some((x) => x.code === 'tread_increase')).toBe(true)
+  })
+  it('flags missing odometer on a removed stint and passes clean data', () => {
+    expect(auditDataQuality([{ asset_no: 'A1', fitted: '2023-01-01', removed: '2023-06-01', km_run: null }], [])
+      .some((x) => x.code === 'missing_km')).toBe(true)
+    expect(auditDataQuality([{ asset_no: 'A1', fitted: '2023-01-01', removed: '2023-06-01', km_run: 100 }],
+      [{ date: '2023-01-01', tread: 12 }, { date: '2023-06-01', tread: 8 }])).toEqual([])
+  })
+})
+
+describe('tyrePassport - normalizers and buildJourney', () => {
+  it('normalizes aux rows defensively', () => {
+    expect(normalizeServiceEvent({ event_type: 'repair', cost: '150' }).cost).toBe(150)
+    expect(normalizeWarrantyClaim({ claim_status: 'approved', credit_amount: '500' }).credit_amount).toBe(500)
+    expect(normalizeRetreadClaim({ vendor: 'V', amount_recovered: '100' }).amount_recovered).toBe(100)
+  })
+  it('buildJourney computes per-stint cpk', () => {
+    const j = buildJourney([{ id: 1, asset_no: 'A1', kmEarned: 20000, cost: 1000, fitment_date: '2023-01-01' }])
+    expect(j[0].cpk).toBeCloseTo(0.05, 3)
   })
 })

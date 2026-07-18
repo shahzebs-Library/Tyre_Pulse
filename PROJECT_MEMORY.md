@@ -1019,6 +1019,73 @@ Multi-agent batch. All merged; migrations through **V271**, next free **V272**.
   decision: m3 source = production-log entry screen (like meter-logs) and/or an ERP m3 import. Next free
   migration **V276**.
 
+### SESSION 2026-07-18 (continued) — shipped to main. Migrations through V277, next free V278.
+- **Console security hardening V272 (applied):** dropped forgeable always-true INSERT policies on
+  audit_log_v2 + inspection_audit_log; REVOKE anon/PUBLIC EXECUTE on the admin/access/backup/import RPC
+  family (authenticated kept; public token/login RPCs left); pinned backups._core_tables search_path;
+  admin_update_profile now requires super-admin for role/approval/lock/org changes (non-super Admin confined
+  to own-org descriptive edits). Also: resolveAdmin no longer signs out a piggybacked main-app session when a
+  non-super user visits /console in-tab (only a standalone console tab ends its own session).
+- **New console modules (super-admin):** Sessions & Devices (/console/sessions, V273 admin_clear_push_token) -
+  per-user sessions + devices, lock/unlock, clear push token; Automation Health (/console/automation, V274
+  read-only console_cron_jobs) - scheduled-reports + pg_cron + edge-fn checklist; Delivery & Notifications
+  (/console/delivery) - email/push deliverability. Server-stamped non-forgeable console audit (V275
+  log_console_event; console_sessions client INSERT blocked). Module Control status is now ENFORCED app-wide
+  via ProtectedRoute.ModuleRoute (maintenance/disabled -> ModuleUnavailable for non-super/Admin), fail-open.
+- **Module Registry was EMPTY (bug fixed):** modules table had 0 rows because seedFromCatalog/upsertModule
+  passed roles:null/depends_on:null into NOT NULL columns -> every insert failed silently. Fixed to `[]`;
+  Module Control self-seeds all ~163 modules on next load. (modules table is GLOBAL, no organisation_id;
+  writes gated is_super_admin OR Admin; V275 added authenticated SELECT.)
+- **Cost Intelligence (V276 production_logs applied):** unit-aware cost per m3 / km / engine-hour over a date
+  range on CostCenter ("Cost per unit" section: date range + site + Combined/Tyres/General switch; honest N/A
+  fallback to plain expenses when no running unit; m3 entry form + Import m3 button). Engine
+  src/lib/costIntelligence.js (unit by asset type: pumps/water->m3, generator->hours, else km; null when no
+  running); src/lib/api/production.js; loadCostSplit extended with optional {from,to,site} (back-compat). The
+  Combined/Tyres/General cost switch was ADDED to Dashboard + EngineeringKpi (was only on CostCenter/Analytics/
+  BoardOverview/Executive/PM). production_logs = location-wise m3 (site + period_date + m3), org+country+site RLS.
+- **ERP Data Import (V277 applied):** /erp-import (Admin/Manager/Director, Administration & Data). Import the
+  filled template tabs (Asset Master extended / Tyre Change Log / Tyre Expense / Production m3) -> SAVE into
+  REVIEW staging tables erp_asset_import / erp_tyre_change_import / erp_tyre_expense_import (per-batch, org+
+  country+site RLS) NOT master; a review grid cross-checks every detail incl. the ACTIVE-vs-OLD tyre derivation
+  (latest fix_date per asset+position = active, regardless of remove_date) + old_serialno chain validation +
+  missing-cost flags; delete-batch to revert. Pure src/lib/erpImport.js (normalizeCell 'NULL'->null,
+  deriveTyreActivity, validateExpense) + src/lib/api/erpImport.js. Production m3 loads straight into
+  production_logs. Browser cap 20000 rows/batch; true million-row loads still need the server COPY pipeline
+  (staging -> SQL transform -> idempotent upsert) - this is the review/cross-check surface, not the bulk loader.
+- **Search coverage fix:** the command palette indexed only 100 of 186 nav items (Vehicle Washing, PM Programs,
+  Board Overview, Report Sharing... were unfindable). Backfilled all into NAV_COMMANDS + added
+  src/test/commandSearchCoverage.test.js so it can never drift from the sidebar again.
+- **Frontend hygiene sweeps (merged):** raw DB errors on ~22 pages/console/libs routed through
+  safeError.toUserMessage; banned em/en dashes removed from user-facing strings (-> ASCII / N/A); missing
+  loading/error/empty states + Retry added (RfidRegistry/SerialTracker/TyreLifecycle/VehicleHistory/QrLabels
+  + TcoCalculator/PartsCatalog/ShiftScheduling/DigitalTwin); QR alt text; 337 neutral Tailwind classes on 7
+  heavy pages tokenized to --panel-ink (dark byte-identical, light fixed). PII routes /insurance-claims +
+  /incidents guarded RoleRoute; /report-builder + /dashboard-builder guarded.
+- **Tyre Passport deep rebuild (merged):** identity header + health ring + 6 KPIs + 6 tabs (Overview, Journey
+  = cross-vehicle stints with km/cost/CPK/reason, Wear curve, Service & repairs, Warranty, Data quality);
+  buildPassport additively wired to tyre_service_events/warranty_claims/tyre_status_marks/retread_claims (each
+  []-degrades); predictions + data-quality audit; PDF/Excel; dashes -> N/A.
+- **Tyre Bay (merged earlier this session):** per-vehicle Asset Detail Tyres tab = pseudo-3D wheel diagram +
+  current tyre + full per-position history + one-click Move/Swap/Remove (approval-lock gated) + passport link.
+- **Mobile fixes (merged, need a fresh EAS build):** PHOTO-UPLOAD OOM CRASH FIXED - lib/photoUpload.ts now
+  resizes+compresses every image (expo-image-manipulator, max 1600px q0.5) via prepareForUpload BEFORE the
+  base64 read (~10x less memory; covers accident/inspection/washing/meter/checklist; storage refs/paths
+  unchanged). Asset picker collapses on select (inspection/new + accident/report). Inspection detail tyre
+  conditions render the SVG VehicleTyreDiagram (colored by condition, box-grid fallback). Accident site now
+  cleanly REPLACES with the picked vehicle's site (no leftover chip - applyAsset was keeping prev.site).
+  Mobile driver Vehicle Washing + wash-due local notification (V271) + tyre-man search-one-asset checklist.
+- **Role-level Web/Mobile/Both access (merged PR #91):** AccessManager Role view has a Web|Mobile|Both scope
+  per module (stores plain vs `mobile:`-prefixed module_permissions rows); mobile enforces it in
+  resolveModuleAccess (role matrix layer; per-user grant still wins; fail-open). IN PROGRESS (agent): role-wide
+  one-click Mobile-only/Web-only, authoritative saves (narrowing a scope now turns the other surface OFF, was
+  a documented gap), and a saved-access surface-badge view.
+- **Play release:** release-play.yml (workflow_dispatch on main) built + auto-submitted build to the Play
+  INTERNAL track (verified run success). NOTE the user's test device is on the CLOSED track (older build) -
+  promote Internal -> Closed in Play Console for testers to receive it (or point the workflow at Closed).
+- **Store assets:** store-assets/ has the 512 Play icon + 1024x500 feature graphic + PLAY_STORE_LISTING.md;
+  mobile/assets/splash.png enlarged. Excel data-collection template (scratchpad, not a repo file) now also has
+  Asset Master (ERP Extended) / Tyre Change Log / Tyre Expense tabs matching the real ERP export.
+
 ### Vehicle SVG Designer (V268, 2026-07-17) — super-admin custom vehicle diagram builder
 - **/console/vehicle-designer** (ConsoleVehicleDesigner.jsx, nav "Vehicle Designer", Truck icon, pure console
   navy+orange): design a vehicle type's diagram (axles 1..6 with kind steer/drive/trailer/lift + single/dual,

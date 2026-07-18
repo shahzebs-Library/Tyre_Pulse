@@ -38,6 +38,7 @@ export {
   duplicateRatio,
   naturalKeyLabel,
   hasNaturalKey,
+  singleKeyField,
   WRONG_MODULE_THRESHOLD,
   NATURAL_KEY_FIELDS,
 } from './granularity'

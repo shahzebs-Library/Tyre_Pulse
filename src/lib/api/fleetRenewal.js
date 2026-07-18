@@ -1,5 +1,5 @@
 /**
- * Fleet Renewal service — reads/writes the `fleet_renewal_plans` table backing
+ * Fleet Renewal service - reads/writes the `fleet_renewal_plans` table backing
  * the Fleet Renewal Planning module (/fleet-renewal). Single boundary for that
  * table: explicit least-privilege column list (no SELECT *), null-safe country
  * scoping, and consistent ServiceError handling via unwrap. Mirrors the
@@ -60,6 +60,40 @@ export async function listRenewalPlans({ country, status, limit = 500 } = {}) {
 /** Get one renewal plan by id (or null if not found). */
 export async function getRenewalPlan(id) {
   return unwrap(await supabase.from('fleet_renewal_plans').select(COLS).eq('id', id).maybeSingle())
+}
+
+/**
+ * List renewal plans, enriched with `vehicle_type` looked up from vehicle_fleet
+ * by asset_no. Enrichment is best-effort and RLS-scoped: any failure or missing
+ * master row leaves `vehicle_type` undefined (the analytics engine then treats
+ * the "by vehicle type" breakdown as honestly empty for those rows). No cost or
+ * category value is ever fabricated.
+ * @param {{ country?:string, status?:string, limit?:number }} [opts]
+ */
+export async function listRenewalPlansEnriched(opts = {}) {
+  const plans = await listRenewalPlans(opts)
+  if (!plans.length) return plans
+  const assetNos = [...new Set(plans.map((p) => p.asset_no).filter(Boolean))]
+  if (!assetNos.length) return plans
+  let typeByAsset = {}
+  try {
+    const rows = unwrap(
+      await supabase
+        .from('vehicle_fleet')
+        .select('asset_no,vehicle_type')
+        .in('asset_no', assetNos),
+    ) || []
+    typeByAsset = rows.reduce((acc, r) => {
+      if (r?.asset_no && r?.vehicle_type) acc[r.asset_no] = r.vehicle_type
+      return acc
+    }, {})
+  } catch {
+    typeByAsset = {}
+  }
+  return plans.map((p) => {
+    const vt = typeByAsset[p.asset_no]
+    return vt ? { ...p, vehicle_type: vt } : p
+  })
 }
 
 /**

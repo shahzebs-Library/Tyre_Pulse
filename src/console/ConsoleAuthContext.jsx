@@ -6,6 +6,7 @@
  */
 import { createContext, useContext, useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
+import { hasUnmetMfa } from '../lib/authAssurance'
 
 const ConsoleAuthContext = createContext(null)
 
@@ -34,6 +35,12 @@ export function ConsoleAuthProvider({ children }) {
       .eq('id', userId)
       .maybeSingle()
     if (data?.is_super_admin) {
+      // A super admin with MFA enrolled must have COMPLETED it. A password-only
+      // (AAL1) session is a half login and must not enter the console. Do NOT
+      // sign out here - the ConsoleLogin MFA step is finishing that same session
+      // and would be aborted; just withhold `admin` so the guard shows the login
+      // (and its MFA prompt). The verified AAL2 session admits on the next event.
+      if (await hasUnmetMfa()) { setAdmin(null); setLoading(false); return }
       setAdmin(data)
       await loadOrgs()
     } else {

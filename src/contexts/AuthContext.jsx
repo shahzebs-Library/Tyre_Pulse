@@ -5,6 +5,7 @@ import { setMonitoringUser, clearMonitoringUser } from '../lib/monitoring'
 import { identifyUser, resetAnalyticsUser } from '../lib/analytics'
 import { audit } from '../lib/auditLogger'
 import { resolveCapability } from '../lib/permissionMatrix'
+import { hasUnmetMfa } from '../lib/authAssurance'
 
 // Exported so the isolated System Console can supply its own Provider value via
 // ConsoleAuthBridge, letting main-app admin pages render verbatim inside /console.
@@ -146,31 +147,58 @@ export function AuthProvider({ children }) {
   // unmount the whole routed tree (ProtectedRoute renders a spinner while
   // loading) and wipe every page's in-progress state (e.g. the Data Intake
   // wizard). We only do a full (re)load when the user IDENTITY actually changes.
-  function handleSession(session) {
+  // Tear down all user-scoped state. Shared by the signed-out branch and the
+  // assurance-refusal branch (a half-authenticated session is not a user).
+  function clearUserScopedState() {
+    currentUserIdRef.current = null
+    setProfile(null)
+    setModulePerms(null)
+    setGrantOverrides({})
+    setCapabilities({})
+    unsubscribeFromProfile()
+    setMfaEnabled(false)
+    clearMonitoringUser()
+    resetAnalyticsUser()
+  }
+
+  async function handleSession(session) {
     const newUserId = session?.user?.id ?? null
-    setUser(session?.user ?? null)
 
     if (!newUserId) {
       // Signed out.
+      setUser(null)
       if (currentUserIdRef.current === null) { setLoading(false); return }
-      currentUserIdRef.current = null
-      setProfile(null)
-      setModulePerms(null)
-      setGrantOverrides({})
-      setCapabilities({})
-      unsubscribeFromProfile()
-      setMfaEnabled(false)
-      clearMonitoringUser()
-      resetAnalyticsUser()
+      clearUserScopedState()
       setLoading(false)
       return
     }
 
     // Same user - token refresh / tab refocus / duplicate INITIAL_SESSION.
-    // Keep the fresh session but do not remount the app.
-    if (newUserId === currentUserIdRef.current) return
+    // Keep the fresh session but do not remount the app (and skip the assurance
+    // re-check: assurance never downgrades without a sign-out).
+    if (newUserId === currentUserIdRef.current) { setUser(session.user); return }
 
-    // A genuinely different (or first) user signed in → full load.
+    // SECURITY GATE. A brand-new session identity must have reached its required
+    // authentication assurance level. A password-only (AAL1) session for a user
+    // who has MFA enrolled is a HALF login - it must not expose the app or any
+    // data, on ANY tab. This closes the hole where entering only a password (in
+    // the main login form OR the Console tab, which shares one Supabase session)
+    // instantly showed all data before the 2FA step, and stops a Console login
+    // from silently authenticating a main-app tab across the browser.
+    //
+    // We refuse LOCALLY (user stays null, the login page + its MFA modal show)
+    // but never sign out here: the same session is shared with the tab that is
+    // completing MFA. Once the second factor is verified the session upgrades to
+    // AAL2 and the next auth event admits it.
+    if (await hasUnmetMfa()) {
+      setUser(null)
+      if (currentUserIdRef.current !== null) clearUserScopedState()
+      setLoading(false)
+      return
+    }
+
+    // A genuinely different (or first) fully-authenticated user → full load.
+    setUser(session.user)
     currentUserIdRef.current = newUserId
     setLoading(true)
     fetchProfile(newUserId)

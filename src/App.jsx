@@ -41,6 +41,9 @@ const ConsoleSelfHealing   = lazy(() => import('./console/pages/ConsoleSelfHeali
 const ConsoleDataBrowser   = lazy(() => import('./console/pages/ConsoleDataBrowser'))
 const ConsoleVehicleDesigner = lazy(() => import('./console/pages/ConsoleVehicleDesigner'))
 const ConsoleNavigation    = lazy(() => import('./console/pages/ConsoleNavigation'))
+const ConsoleSessions      = lazy(() => import('./console/pages/ConsoleSessions'))
+const ConsoleAutomation    = lazy(() => import('./console/pages/ConsoleAutomation'))
+const ConsoleDelivery      = lazy(() => import('./console/pages/ConsoleDelivery'))
 
 // Console admin pages built in parallel by other agents. Resolved via
 // import.meta.glob so this build succeeds whether or not the files exist yet: a
@@ -490,11 +493,11 @@ function MainApp() {
                       <Route path="/contracts"             element={<Safe><Contracts /></Safe>} />
                       <Route path="/rfid"                  element={<Safe><RoleRoute allowed={['Admin']}><Rfid /></RoleRoute></Safe>} />
                       <Route path="/geofencing"            element={<Safe><RoleRoute allowed={['Admin']}><Geofencing /></RoleRoute></Safe>} />
-                      <Route path="/insurance-claims"      element={<Safe><InsuranceClaims /></Safe>} />
+                      <Route path="/insurance-claims"      element={<Safe><RoleRoute allowed={['Admin', 'Manager', 'Director']}><InsuranceClaims /></RoleRoute></Safe>} />
                       <Route path="/fuel-cards"            element={<Safe><RoleRoute allowed={['Admin']}><FuelCards /></RoleRoute></Safe>} />
                       <Route path="/certifications"        element={<Safe><Certifications /></Safe>} />
                       <Route path="/policies"              element={<Safe><RoleRoute allowed={['Admin']}><PolicyManagement /></RoleRoute></Safe>} />
-                      <Route path="/incidents"             element={<Safe><IncidentReports /></Safe>} />
+                      <Route path="/incidents"             element={<Safe><RoleRoute allowed={['Admin', 'Manager', 'Director']}><IncidentReports /></RoleRoute></Safe>} />
                       <Route path="/journeys"              element={<Safe><RoleRoute allowed={['Admin']}><JourneyLog /></RoleRoute></Safe>} />
                       <Route path="/digital-twin"          element={<Safe><RoleRoute allowed={['Admin', 'Manager', 'Director']}><DigitalTwin /></RoleRoute></Safe>} />
                       <Route path="/digital-twin/:assetNo" element={<Safe><RoleRoute allowed={['Admin', 'Manager', 'Director']}><DigitalTwin /></RoleRoute></Safe>} />
@@ -649,6 +652,9 @@ export default function App() {
           <Route path="data-browser"  element={<ConsoleDataBrowser />} />
           <Route path="vehicle-designer" element={<ConsoleVehicleDesigner />} />
           <Route path="navigation"    element={<ConsoleNavigation />} />
+          <Route path="sessions"      element={<ConsoleSessions />} />
+          <Route path="automation"    element={<ConsoleAutomation />} />
+          <Route path="delivery"      element={<ConsoleDelivery />} />
           {/* Unified admin + access control hosted from the main app via ConsoleAuthBridge */}
           <Route path="access"        element={<ConsoleAuthBridge><Suspense fallback={<ConsoleModulePlaceholder label="Access Control" />}><ConsoleAccessControl /></Suspense></ConsoleAuthBridge>} />
           <Route path="ai-admin"      element={<ConsoleAuthBridge><Suspense fallback={<ConsoleModulePlaceholder label="AI Administration" />}><AiAdministration /></Suspense></ConsoleAuthBridge>} />

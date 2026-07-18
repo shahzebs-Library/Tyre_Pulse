@@ -6,6 +6,7 @@ import { identifyUser, resetAnalyticsUser } from '../lib/analytics'
 import { audit } from '../lib/auditLogger'
 import { resolveCapability } from '../lib/permissionMatrix'
 import { hasUnmetMfa } from '../lib/authAssurance'
+import { listModuleStatuses } from '../lib/api/modulesRegistry'
 
 // Exported so the isolated System Console can supply its own Provider value via
 // ConsoleAuthBridge, letting main-app admin pages render verbatim inside /console.
@@ -77,6 +78,10 @@ export function AuthProvider({ children }) {
   // Fail-closed to {}. UI-gating only — the server (app_user_can / RLS) is the
   // real boundary; only `view` is server-enforced today.
   const [capabilities, setCapabilities] = useState({})
+  // Module lifecycle status map { module_id: 'live'|'maintenance'|'disabled'|'beta' }
+  // from Module Control (V258). Best-effort: unreadable / pre-migration -> {} so
+  // status enforcement fails OPEN (an unknown key is treated as 'live').
+  const [moduleStatuses, setModuleStatuses] = useState({})
 
   // Idle timeout - sign out after 30 minutes of inactivity.
   // Uses an in-memory ref instead of localStorage so the timer cannot be
@@ -155,6 +160,7 @@ export function AuthProvider({ children }) {
     setModulePerms(null)
     setGrantOverrides({})
     setCapabilities({})
+    setModuleStatuses({})
     unsubscribeFromProfile()
     setMfaEnabled(false)
     clearMonitoringUser()
@@ -280,6 +286,8 @@ export function AuthProvider({ children }) {
     setCapabilities(caps && typeof caps === 'object' && !Array.isArray(caps) ? caps : {})
     setMfaEnabled((factorsRes.data?.totp?.length ?? 0) > 0)
     setLoading(false)
+    // Module lifecycle statuses - best-effort, never blocks login, always {}-safe.
+    listModuleStatuses().then(setModuleStatuses)
   }
 
   // ── Live access refresh (no re-login) ──────────────────────────────────────
@@ -301,6 +309,8 @@ export function AuthProvider({ children }) {
         const caps = capsRes?.data
         setCapabilities(caps && typeof caps === 'object' && !Array.isArray(caps) ? caps : {})
       }
+      // Refresh module lifecycle statuses too (best-effort, {}-safe).
+      listModuleStatuses().then(setModuleStatuses)
     } catch { /* keep current access on a transient failure */ }
   }, [])
 
@@ -324,6 +334,15 @@ export function AuthProvider({ children }) {
   }, [user?.id, refreshAccess])
 
   const isSuperAdmin = profile?.is_super_admin === true
+
+  // Lifecycle status of a module from Module Control. Returns 'live' whenever the
+  // key is unknown or the registry is unreadable (fail-open) so route enforcement
+  // never locks users out of a module that simply has no status row.
+  const moduleStatus = useCallback((moduleKey) => {
+    if (!moduleKey) return 'live'
+    const s = moduleStatuses?.[moduleKey]
+    return typeof s === 'string' && s ? s : 'live'
+  }, [moduleStatuses])
 
   // Set of module keys the user was explicitly GRANTED beyond their role.
   const grantedModules = useMemo(
@@ -448,8 +467,8 @@ export function AuthProvider({ children }) {
   }, [])
 
   const value = useMemo(
-    () => ({ user, profile, loading, modulePerms, hasPermission, signIn, signOut, mfaEnabled, setMfaEnabled, isSuperAdmin, grantOverrides, grantedModules, refreshAccess, capabilities, hasCapability }),
-    [user, profile, loading, modulePerms, mfaEnabled, hasPermission, signIn, signOut, setMfaEnabled, isSuperAdmin, grantOverrides, grantedModules, refreshAccess, capabilities, hasCapability],
+    () => ({ user, profile, loading, modulePerms, hasPermission, signIn, signOut, mfaEnabled, setMfaEnabled, isSuperAdmin, grantOverrides, grantedModules, refreshAccess, capabilities, hasCapability, moduleStatus }),
+    [user, profile, loading, modulePerms, mfaEnabled, hasPermission, signIn, signOut, setMfaEnabled, isSuperAdmin, grantOverrides, grantedModules, refreshAccess, capabilities, hasCapability, moduleStatus],
   )
 
   return (

@@ -74,11 +74,21 @@ export function RoleRoute({ allowed, children }) {
 }
 
 export function ModuleRoute({ moduleKey, children }) {
-  const { profile, hasPermission, loading } = useAuth()
+  const { profile, hasPermission, loading, isSuperAdmin, moduleStatus } = useAuth()
   if (loading) return <RouteLoading />
 
   if (!profile || !hasPermission(moduleKey)) {
     return <AccessDenied role={profile?.role} moduleKey={moduleKey} />
+  }
+
+  // Module Control status enforcement (V275). A module put into Maintenance or
+  // taken Off is unavailable to regular users, but Admin / Super Admin always
+  // pass (they administer and verify it). Unknown key / unreadable registry ->
+  // moduleStatus returns 'live' so this NEVER locks anyone out by accident.
+  const status = typeof moduleStatus === 'function' ? moduleStatus(moduleKey) : 'live'
+  if ((status === 'maintenance' || status === 'disabled')
+      && !isSuperAdmin && profile.role !== 'Admin') {
+    return <ModuleUnavailable status={status} />
   }
   return children
 }
@@ -93,6 +103,29 @@ export function SuperAdminRoute({ children }) {
     return <AccessDenied role={profile?.role} />
   }
   return children
+}
+
+// Calm full-screen state shown when a module is in Maintenance or turned Off for
+// regular users (Module Control). Mirrors the AccessDenied layout; plain English,
+// no raw status codes or technical detail.
+function ModuleUnavailable({ status }) {
+  const maintenance = status === 'maintenance'
+  return (
+    <div className="flex flex-col items-center justify-center h-96 text-center px-4">
+      <div className="inline-flex items-center justify-center w-16 h-16 rounded-full mb-4"
+        style={{ background: 'rgba(234,179,8,0.12)', border: '1px solid rgba(234,179,8,0.3)' }}>
+        <span className="text-3xl">{maintenance ? '🛠️' : '🚧'}</span>
+      </div>
+      <h2 className="text-xl font-bold text-white mb-2">
+        {maintenance ? 'Under maintenance' : 'Module unavailable'}
+      </h2>
+      <p className="text-gray-400 text-sm max-w-sm">
+        {maintenance
+          ? 'This module is temporarily under maintenance. Please check back shortly.'
+          : 'This module is currently turned off. Please contact your administrator if you need access.'}
+      </p>
+    </div>
+  )
 }
 
 function RouteLoading() {

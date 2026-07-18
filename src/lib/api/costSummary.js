@@ -57,17 +57,62 @@ function last12MonthKeys(now) {
   return keys
 }
 
+/** Parse a date-ish value to a Date, or null when invalid/empty. */
+function toDate(v) {
+  if (!v) return null
+  const d = v instanceof Date ? v : new Date(v)
+  return Number.isNaN(d.getTime()) ? null : d
+}
+
 /**
- * Compute the tyre vs maintenance spend split for the last 12 calendar months.
- * @param {{ country?:string, now?:Date|string|number }} [opts]
+ * Continuous 'YYYY-MM' keys spanning [from, to] inclusive (oldest to newest).
+ * A missing bound is clamped: no `from` starts 11 months before `to`; no `to`
+ * ends at `from`. Capped at 120 months so a stray range can never blow up.
+ */
+function monthKeysBetween(from, to) {
+  const end = toDate(to) || new Date()
+  let start = toDate(from)
+  if (!start) start = new Date(Date.UTC(end.getUTCFullYear(), end.getUTCMonth() - 11, 1))
+  let sy = start.getUTCFullYear()
+  let sm = start.getUTCMonth()
+  const ey = end.getUTCFullYear()
+  const em = end.getUTCMonth()
+  const keys = []
+  while ((sy < ey || (sy === ey && sm <= em)) && keys.length < 120) {
+    keys.push(`${sy}-${String(sm + 1).padStart(2, '0')}`)
+    sm += 1
+    if (sm > 11) { sm = 0; sy += 1 }
+  }
+  return keys.length ? keys : [`${ey}-${String(em + 1).padStart(2, '0')}`]
+}
+
+/**
+ * Compute the tyre vs maintenance spend split.
+ *
+ * Default (no from/to): the last 12 calendar months ending at `now` - identical
+ * to the original behaviour, so existing callers are unaffected.
+ *
+ * Range mode (from and/or to given): buckets tyre + maintenance spend by month
+ * across the [from, to] window instead. When `site` is given the spend is scoped
+ * to that site. All three cost tables carry a `site` column (tyre_records,
+ * pm_service_records, work_orders), so the site filter applies to every source.
+ *
+ * Every source degrades independently: a missing relation contributes 0 rather
+ * than throwing, so one absent table never sinks the whole split.
+ *
+ * @param {{ country?:string, now?:Date|string|number, from?:string, to?:string,
+ *   site?:string }} [opts]
  * @returns {Promise<{ tyre:number, maintenance:number,
+ *   totals:{ tyre:number, maintenance:number },
  *   byMonth:Array<{ month:string, tyre:number, maintenance:number }> }>}
  */
-export async function loadCostSplit({ country, now } = {}) {
-  const keys = last12MonthKeys(now || new Date())
+export async function loadCostSplit({ country, now, from, to, site } = {}) {
+  const rangeMode = Boolean(from || to)
+  const keys = rangeMode ? monthKeysBetween(from, to) : last12MonthKeys(now || new Date())
   const inWindow = new Set(keys)
   const tyreByMonth = Object.fromEntries(keys.map((k) => [k, 0]))
   const maintByMonth = Object.fromEntries(keys.map((k) => [k, 0]))
+  const siteEq = site && site !== 'All' ? String(site) : null
 
   const add = (bucket, key, amount) => {
     if (key && inWindow.has(key)) bucket[key] += num(amount)
@@ -75,10 +120,12 @@ export async function loadCostSplit({ country, now } = {}) {
 
   // TYRE spend: cost_per_tyre x (qty || 1), bucketed by issue_date.
   try {
-    const { data, error } = await fetchAllPages((from, to) => {
-      const q = supabase.from('tyre_records').select('cost_per_tyre,qty,issue_date')
-        .order('id', { ascending: true }).range(from, to)
-      return applyCountry(q, country)
+    const { data, error } = await fetchAllPages((f, t) => {
+      let q = supabase.from('tyre_records').select('cost_per_tyre,qty,issue_date')
+        .order('id', { ascending: true }).range(f, t)
+      q = applyCountry(q, country)
+      if (siteEq) q = q.eq('site', siteEq)
+      return q
     })
     if (error) throw error
     for (const r of data || []) {
@@ -91,10 +138,12 @@ export async function loadCostSplit({ country, now } = {}) {
 
   // MAINTENANCE spend part 1: pm_service_records total_cost by service_date.
   try {
-    const { data, error } = await fetchAllPages((from, to) => {
-      const q = supabase.from('pm_service_records').select('total_cost,service_date')
-        .order('service_date', { ascending: true }).range(from, to)
-      return applyCountry(q, country)
+    const { data, error } = await fetchAllPages((f, t) => {
+      let q = supabase.from('pm_service_records').select('total_cost,service_date,site')
+        .order('service_date', { ascending: true }).range(f, t)
+      q = applyCountry(q, country)
+      if (siteEq) q = q.eq('site', siteEq)
+      return q
     })
     if (error) throw error
     for (const r of data || []) {
@@ -107,11 +156,13 @@ export async function loadCostSplit({ country, now } = {}) {
   // MAINTENANCE spend part 2: work_orders non-tyre cost (labour + parts +
   // lubricant + outside repair), EXCLUDING tyre_cost, by completed_at||created_at.
   try {
-    const { data, error } = await fetchAllPages((from, to) => {
-      const q = supabase.from('work_orders')
-        .select('labour_cost,parts_cost,lubricant_cost,outside_repair_cost,tyre_cost,completed_at,created_at')
-        .order('created_at', { ascending: true }).range(from, to)
-      return applyCountry(q, country)
+    const { data, error } = await fetchAllPages((f, t) => {
+      let q = supabase.from('work_orders')
+        .select('labour_cost,parts_cost,lubricant_cost,outside_repair_cost,tyre_cost,completed_at,created_at,site')
+        .order('created_at', { ascending: true }).range(f, t)
+      q = applyCountry(q, country)
+      if (siteEq) q = q.eq('site', siteEq)
+      return q
     })
     if (error) throw error
     for (const r of data || []) {
@@ -126,5 +177,5 @@ export async function loadCostSplit({ country, now } = {}) {
   const byMonth = keys.map((k) => ({ month: k, tyre: tyreByMonth[k], maintenance: maintByMonth[k] }))
   const tyre = byMonth.reduce((s, m) => s + m.tyre, 0)
   const maintenance = byMonth.reduce((s, m) => s + m.maintenance, 0)
-  return { tyre, maintenance, byMonth }
+  return { tyre, maintenance, totals: { tyre, maintenance }, byMonth }
 }

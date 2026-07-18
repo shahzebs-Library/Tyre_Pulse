@@ -3,6 +3,8 @@ import * as engKpiApi from '../lib/api/engineeringKpi'
 import { fetchAllPages } from '../lib/fetchAll'
 import { toUserMessage } from '../lib/safeError'
 import { useSettings, COUNTRIES } from '../contexts/SettingsContext'
+import { loadCostSplit } from '../lib/api/costSummary'
+import { COST_MODES, pickCost } from '../lib/costSources'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import {
   computeAllKpis,
@@ -194,6 +196,32 @@ export default function EngineeringKpi() {
   const [loading,     setLoading]     = useState(true)
   const [error,       setError]       = useState(null)
   const [emailModalOpen, setEmailModalOpen] = useState(false)
+
+  // Tyres vs General(Maintenance) vs Combined cost switch. Surfaces the split so
+  // the total tyre/maintenance spend is visible here (the CPK maths is unchanged).
+  const [costMode, setCostMode] = useState('tyres')
+  const [costSplit, setCostSplit] = useState(null)
+  const [costSplitLoading, setCostSplitLoading] = useState(true)
+
+  const effectiveCountry = countryChip !== 'All' ? countryChip : (activeCountry !== 'All' ? activeCountry : undefined)
+
+  useEffect(() => {
+    let cancelled = false
+    setCostSplitLoading(true)
+    loadCostSplit({
+      country: effectiveCountry,
+      from: dateFrom || undefined,
+      to: dateTo || undefined,
+      site: siteFilter || undefined,
+    })
+      .then(res => { if (!cancelled) setCostSplit(res) })
+      .catch(() => { if (!cancelled) setCostSplit(null) })
+      .finally(() => { if (!cancelled) setCostSplitLoading(false) })
+    return () => { cancelled = true }
+  }, [effectiveCountry, dateFrom, dateTo, siteFilter])
+
+  const costFigure = costSplit ? pickCost(costMode, { tyre: costSplit.tyre, maintenance: costSplit.maintenance }) : 0
+  const costModeOptions = COST_MODES.map(m => ({ ...m, label: m.key === 'maintenance' ? 'General' : m.label }))
 
   // Sites list for select
   const sites = useMemo(() =>
@@ -875,6 +903,33 @@ export default function EngineeringKpi() {
               </button>
             )}
           </div>
+        </div>
+      </div>
+
+      {/* ── Cost view (Tyres / General / Combined) ───────────────────────────── */}
+      <div className="card flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div>
+          <p className="text-xs text-gray-400 font-medium">Cost view (respects the country, site, and date filters above)</p>
+          <p className="text-2xl font-bold text-green-400 mt-0.5">
+            {costSplitLoading ? '...' : `${activeCurrency} ${Math.round(costFigure).toLocaleString()}`}
+          </p>
+          <p className="text-xs text-gray-500 mt-0.5">
+            {costMode === 'tyres' ? 'Tyre spend' : costMode === 'maintenance' ? 'General (maintenance) spend' : 'Combined tyre + maintenance spend'}
+            {dateFrom || dateTo ? ` (${dateFrom || 'start'} to ${dateTo || 'today'})` : ' (last 12 months)'}
+          </p>
+        </div>
+        <div className="flex items-center gap-1 p-1 rounded-lg bg-gray-800 border border-gray-700 w-fit">
+          {costModeOptions.map(m => (
+            <button
+              key={m.key}
+              onClick={() => setCostMode(m.key)}
+              className={`px-4 py-1.5 text-xs rounded-md font-medium transition-all ${
+                costMode === m.key ? 'bg-green-700 text-white' : 'text-gray-400 hover:text-gray-200'
+              }`}
+            >
+              {m.label}
+            </button>
+          ))}
         </div>
       </div>
 

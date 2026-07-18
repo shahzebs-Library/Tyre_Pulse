@@ -42,12 +42,24 @@ const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
 // A Console opened via the in-app <Link to="/console"> (client-side nav, no
 // reload) keeps the tab's main-app session, so a signed-in super admin still
 // reaches it seamlessly; only a separately-opened Console tab gets its own login.
-const IS_CONSOLE_SURFACE =
+export const IS_CONSOLE_SURFACE =
   typeof window !== 'undefined' &&
   typeof window.location?.pathname === 'string' &&
   window.location.pathname.startsWith('/console')
 
 export const AUTH_STORAGE_KEY = IS_CONSOLE_SURFACE ? 'tp_console_auth' : 'tp_auth'
+
+// Console is a break-glass admin area: its session is TAB-LOCAL (sessionStorage)
+// - it is never shared with any other tab (not even another console tab), and it
+// is CLEARED the moment the tab closes, so an admin console can never be left
+// silently authenticated. The main app keeps localStorage persistence (field
+// users on phones/shared terminals rely on staying signed in; RLS + the AAL 2FA
+// gate are their server-side boundary). sessionStorage satisfies the supabase
+// storage interface (getItem/setItem/removeItem) and is tab-scoped by spec.
+const AUTH_STORAGE =
+  IS_CONSOLE_SURFACE && typeof window !== 'undefined' && window.sessionStorage
+    ? window.sessionStorage
+    : undefined // undefined -> supabase default (localStorage)
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
@@ -55,6 +67,7 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     autoRefreshToken:   true,
     detectSessionInUrl: true,
     storageKey:         AUTH_STORAGE_KEY,
+    ...(AUTH_STORAGE ? { storage: AUTH_STORAGE } : {}),
   },
   db: {
     schema: 'public',

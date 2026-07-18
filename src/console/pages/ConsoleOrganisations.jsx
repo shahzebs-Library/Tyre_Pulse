@@ -5,6 +5,7 @@ import {
   Users, Database, AlertTriangle, Eye,
 } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
+import { toUserMessage } from '../../lib/safeError'
 import { useConsoleAuth } from '../ConsoleAuthContext'
 
 const PLANS = ['trial', 'starter', 'professional', 'enterprise']
@@ -88,11 +89,11 @@ export default function ConsoleOrganisations() {
     }
     if (modal === 'create') {
       const { data, error: err } = await supabase.from('organisations').insert(payload).select().single()
-      if (err) { setError(err.message); setSaving(false); return }
+      if (err) { setError(toUserMessage(err, 'Could not save the organisation.')); setSaving(false); return }
       await logAction('create_org', data.id, 'organisation', { name: data.name })
     } else {
       const { error: err } = await supabase.from('organisations').update(payload).eq('id', modal.id)
-      if (err) { setError(err.message); setSaving(false); return }
+      if (err) { setError(toUserMessage(err, 'Could not save the organisation.')); setSaving(false); return }
       await logAction('update_org', modal.id, 'organisation', { name: payload.name })
     }
     setSaving(false); setModal(null); load()

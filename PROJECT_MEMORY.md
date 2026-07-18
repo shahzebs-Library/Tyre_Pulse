@@ -915,6 +915,74 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
   assigns. RULE: site values are canonical UPPER (V246); helper compares upper(btrim()). Mobile
   needs no change (RLS enforces server-side). Next free migration **V270**.
 
+### Console deep-fix + Tyre Bay + Washing module (2026-07-18, PRs #87/#88) — MERGED to main
+Multi-agent batch. All merged; migrations through **V271**, next free **V272**.
+- **Console light/dark toggle**: `ThemeToggle` mounted in `src/console/components/ConsoleLayout.jsx`
+  (expanded + collapsed sidebar); `src/index.css` has `html.light .console-root`-scoped overrides
+  (dark output byte-identical, orange accent preserved). Console was dark-only before.
+- **Per-user access Web/Mobile/Both scope** (NO migration): `src/lib/api/accessGrants.js` added
+  `MOBILE_GRANT_PREFIX`-aware `setUserAccessGrantScoped(userId, moduleKey, {..., scope})` +
+  `parseGrantScope`/`grantKeysForScope` (web=plain key row, mobile=`mobile:`key row, both=both rows,
+  same effect). `src/console/pages/access/AccessManager.jsx` USER view renders a 3-way Web|Mobile|Both
+  segmented control per module (Monitor/Smartphone/Layers); ROLE view unchanged. Reuses the existing
+  mobile-vs-web grant split (mobile reads `mobile:`-prefixed grants) so surfaces stay independent.
+- **Navigation editor** = `/console/navigation` (`src/console/pages/ConsoleNavigation.jsx`, nav
+  "Navigation", LayoutList icon). Super-admin reorders/regroups/renames/hides nav groups+items. Pure
+  engine `src/lib/navLayout.js` (normalizeNavLayout/applyNavLayout/buildNavEditorModel/
+  editorModelToLayout; 16 tests) + api `src/lib/api/navLayout.js` (system_config key `nav_layout`,
+  authenticated read / super-admin write). `src/components/Layout.jsx` exports `NAV_CATALOG` and computes
+  `effectiveGroups = applyNavLayout(NAV_GROUPS, navLayout)` BEFORE `shouldShowNavItem` role/flag/perm
+  filtering, so hiding is COSMETIC only - RBAC still governs every route (a hidden item cannot escalate).
+- **Module Control now lists ALL modules (37 -> 163)**: `src/lib/moduleCatalog.js` added pure
+  `slugifyModuleKey` + `buildNavModuleCatalog(navCatalog, moduleKeyMap=NAV_MODULE_KEY)` (imports
+  `NAV_MODULE_KEY` from `navAccess.js` - no cycle; do NOT import Layout.jsx into moduleCatalog, that cycles).
+  `src/lib/api/modulesRegistry.js` `seedFromCatalog(catalog?)` takes an optional complete catalog (defaults
+  to the curated 37). `ConsoleModuleControl.jsx` seeds from `buildNavModuleCatalog(NAV_CATALOG)`. Curated 37
+  keys stay first + STABLE (existing module_permissions/user_access_grants rows keyed on them are safe);
+  nav items collapse onto an existing key via NAV_MODULE_KEY or are added keyed by route slug. RULE: to add
+  module coverage, extend NAV_GROUPS (auto-flows into Module Control + nav editor).
+- **Console "Permissions" menu item REMOVED** from ConsoleLayout NAV (it only `<Navigate>`-redirected to
+  `/console/access?tab=roles`; Access Control is the single canonical role x module surface). Route kept for
+  old links. Do NOT re-add a Permissions nav entry.
+- **Route hardening** (`src/App.jsx` + `src/components/ProtectedRoute.jsx`): ~85 previously-unguarded
+  admin/analytics routes wrapped in RoleRoute/ModuleRoute; **RoleRoute now admits super-admin as
+  break-glass** (`if (isSuperAdmin) return children`) so the new guards never lock a super-admin out.
+  `/report-builder` + `/dashboard-builder` were reachable by ANY authenticated user via direct URL (no guard,
+  no nav) - now `RoleRoute ['Admin','Manager','Director']`. STILL a policy call (left as-is): `/data-reconciliation`
+  + `/developer-portal` nav items are adminOnly but their routes allow Manager/Director (route matches documented
+  intent; nav is the stricter view).
+- **Tyre Bay = per-vehicle unified tyre view** (deepened the EXISTING Asset Detail `/assets/:assetNo` Tyres
+  tab; NO schema change): `src/components/TyreBay.jsx` + pure `src/lib/tyreBay.js` (groupTyresByPosition
+  current-vs-history split; `canonicalToSlotId(vehicleType, positionCode)` = inverse of
+  tyrePositions.legacyPositionCode, null-degrades; cpk/life/days helpers; 15 tests). Reuses the shipped
+  pseudo-3D `VehicleTyreDiagram` (lights each wheel by its CURRENT tyre risk), shows current tyre + full
+  per-position history, one-click **Move/Swap/Remove** via `tyreRecords.updateRecord` (+ best-effort
+  `tyreServiceEvents.createServiceEvent` log) GATED by the existing `wfLocked` approval lock, and links each
+  serial to `/tyre-passport/:serial`. AssetDetail passes the FULL `tyres` array (history was already loaded,
+  just previously filtered to active).
+- **Vehicle Washing module (V270, web)** = `src/pages/VehicleWashing.jsx` (/vehicle-washing, ModuleRoute
+  `vehicle_washing`, nav "Workshop & Downtime"). Table **`wash_records`** (org + country + site RESTRICTIVE
+  RLS; app_is_active SELECT; Admin/Manager/Director writes) via `src/lib/api/washRecords.js`; pure
+  `src/lib/washAnalytics.js` (summarizeWashes/filterWashes/byType/bySite/monthlyTrend; 12 tests). Reporting
+  tab: date-range + site + area + wash-type filters + quick ranges, 6 KPIs, 4 charts (reportColors theme),
+  PDF/Excel export; Quick Log tab (asset auto-fill, role-gated create/edit/delete). []-degrades pre-migration.
+- **Vehicle Washing mobile (V271, driver-facing)**: `mobile/app/(app)/washing.tsx` - scan/search asset
+  (assetLookup) auto-fills+shows details, multi-photo (PhotoCapture q0.55), site auto, **wash_date LOCKED to
+  today**, offline-safe `WASH_RECORD` queue command (recordQueue) with idempotent client_uuid upsert. Pure
+  `mobile/lib/washSchedule.ts` (`washDueList`/`nextWashDue`, WASH_INTERVAL_DAYS=7) drives a "Due for wash"
+  list + a device-LOCAL reminder (`notifications.notifyWashDue`) - NO server cron. `washing` ModuleKey
+  (driver+inspector+manager+director) in permissions.ts + Home hub entry + `_layout` href:null; en/ar i18n.
+  **V271** (applied live): `wash_records.photos jsonb` + `client_uuid` + unique index; INSERT policy widened
+  to include `driver` (UPDATE/DELETE stay elevated). Verified live (photos+client_uuid cols, driver in check).
+- **Mobile tyre-man checklist = search ONE asset** (`mobile/app/(app)/checklists/index.tsx`): for
+  `role === 'tyre_man'` a new `TyreManChecklistFlow` (search-first asset picker 2+ chars -> that asset's
+  published templates) renders instead of the long template hub; ALL OTHER roles keep the existing
+  `ChecklistsScreen` verbatim.
+- **Delivered outside the repo** (not committed): a complete Excel data-collection template for the ERP
+  vendor - 10 importer-aligned tabs (headers == MODULE_FIELDS labels so they auto-map) + Tyre Configuration /
+  Tyre Specifications / PM Schedules / Service History reference tabs + a READ ME. Regenerate from
+  `src/lib/import/synonyms.js` MODULE_FIELDS if needed.
+
 ### Vehicle SVG Designer (V268, 2026-07-17) — super-admin custom vehicle diagram builder
 - **/console/vehicle-designer** (ConsoleVehicleDesigner.jsx, nav "Vehicle Designer", Truck icon, pure console
   navy+orange): design a vehicle type's diagram (axles 1..6 with kind steer/drive/trailer/lift + single/dual,

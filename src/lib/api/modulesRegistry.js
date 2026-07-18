@@ -70,6 +70,28 @@ export async function listModules() {
 }
 
 /**
+ * Read a lightweight { module_id: status } map of every module row, for app-wide
+ * status enforcement (Module Control). Least-privilege projection (id + status
+ * only). Degrades to an empty map on ANY failure - missing table (pre-migration),
+ * read error, or unexpected shape - so enforcement can FAIL OPEN (availability
+ * over lockout) rather than blocking routes when the registry is unreadable.
+ *
+ * @returns {Promise<Record<string,string>>}
+ */
+export async function listModuleStatuses() {
+  try {
+    const rows = unwrap(await supabase.from('modules').select('module_id,status')) || []
+    const map = {}
+    for (const r of rows) {
+      if (r && r.module_id != null) map[String(r.module_id)] = r.status
+    }
+    return map
+  } catch {
+    return {}
+  }
+}
+
+/**
  * Upsert a single module row (insert or update on module_id conflict). Only the
  * provided fields are written; status defaults to 'live'. Returns the stored row.
  *

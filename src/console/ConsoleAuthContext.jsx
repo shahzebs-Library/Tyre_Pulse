@@ -136,11 +136,8 @@ export function ConsoleAuthProvider({ children }) {
       }
     }
 
-    // No MFA or already at aal2 - log the session and proceed
-    await supabase.from('console_sessions').insert({
-      admin_id: data.user.id, action: 'login', target_type: 'system',
-      details: { email, user_agent: navigator.userAgent }
-    })
+    // No MFA or already at aal2 - log the session (server-stamped) and proceed.
+    await logConsoleEvent('login', null, 'system', { email, user_agent: navigator.userAgent })
     return { error: null }
   }
 
@@ -150,14 +147,8 @@ export function ConsoleAuthProvider({ children }) {
   async function verifyMfa(factorId, challengeId, code) {
     const { error } = await supabase.auth.mfa.verify({ factorId, challengeId, code })
     if (error) return { error }
-    // Log session after successful MFA
-    const { data: { user } } = await supabase.auth.getUser()
-    if (user) {
-      await supabase.from('console_sessions').insert({
-        admin_id: user.id, action: 'login', target_type: 'system',
-        details: { mfa: true, user_agent: navigator.userAgent }
-      })
-    }
+    // Log session after successful MFA (server-stamped, self-gated).
+    await logConsoleEvent('login', null, 'system', { mfa: true, user_agent: navigator.userAgent })
     return { error: null }
   }
 
@@ -208,9 +199,7 @@ export function ConsoleAuthProvider({ children }) {
 
   async function signOut() {
     if (admin) {
-      await supabase.from('console_sessions').insert({
-        admin_id: admin.id, action: 'logout', target_type: 'system', details: {}
-      })
+      await logConsoleEvent('logout', null, 'system', {})
     }
     await supabase.auth.signOut()
     setAdmin(null); setActiveOrg(null)
@@ -218,9 +207,25 @@ export function ConsoleAuthProvider({ children }) {
 
   async function logAction(action, targetId, targetType, details = {}) {
     if (!admin) return
-    await supabase.from('console_sessions').insert({
-      admin_id: admin.id, action, target_id: targetId, target_type: targetType, details
-    })
+    await logConsoleEvent(action, targetId, targetType, details)
+  }
+
+  /**
+   * Fire-and-forget server-stamped console audit write (V275). Routes through
+   * the SECURITY DEFINER `log_console_event` RPC, which stamps admin_id from
+   * auth.uid() and self-gates to super-admins - a browser can no longer forge
+   * or skip a console_sessions row. Never throws into the UI: audit failures
+   * must not block a login / logout / MFA action.
+   */
+  async function logConsoleEvent(action, targetId, targetType, details = {}) {
+    try {
+      await supabase.rpc('log_console_event', {
+        p_action: action,
+        p_target_id: targetId ?? null,
+        p_target_type: targetType ?? null,
+        p_details: details ?? {},
+      })
+    } catch { /* audit is best-effort - never surface to the user */ }
   }
 
   return (

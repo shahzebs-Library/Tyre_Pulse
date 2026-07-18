@@ -22,6 +22,7 @@ import {
   EXPENSE_STATUSES, EXPENSE_CATEGORIES,
 } from '../lib/api/driverExpenses'
 import { summarizeExpenses } from '../lib/driverExpenses'
+import { toUserMessage } from '../lib/safeError'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 
 const STATUS_META = {
@@ -43,9 +44,9 @@ function isMissingRelation(err) {
   return m.includes('does not exist') || m.includes('could not find the table') || m.includes('schema cache')
 }
 function fmtDate(v) {
-  if (!v) return '—'
+  if (!v) return 'N/A'
   const d = new Date(v)
-  return Number.isNaN(d.getTime()) ? '—' : d.toLocaleDateString()
+  return Number.isNaN(d.getTime()) ? 'N/A' : d.toLocaleDateString()
 }
 const cap = (s) => (s ? s[0].toUpperCase() + s.slice(1) : '')
 
@@ -82,7 +83,7 @@ function ExpenseModal({ open, initial, onClose, onSaved }) {
       else await createExpense(form)
       onSaved?.()
     } catch (err) {
-      setError(err?.message || 'Could not save the expense claim.')
+      setError(toUserMessage(err, 'Could not save the expense claim.'))
     } finally {
       setBusy(false)
     }
@@ -159,7 +160,7 @@ function ExpenseModal({ open, initial, onClose, onSaved }) {
           <label className="label">Description</label>
           <textarea
             className="input w-full min-h-[90px] resize-y" maxLength={8000}
-            placeholder="Optional notes about this claim…"
+            placeholder="Optional notes about this claim..."
             value={form.description} onChange={(e) => set('description', e.target.value)}
           />
         </div>
@@ -174,7 +175,7 @@ function ExpenseModal({ open, initial, onClose, onSaved }) {
           <button type="button" onClick={onClose} className="btn-secondary text-sm">Cancel</button>
           <button type="submit" disabled={busy} className="btn-primary text-sm inline-flex items-center gap-2 disabled:opacity-60">
             {busy ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />}
-            {busy ? 'Saving…' : 'Save claim'}
+            {busy ? 'Saving...' : 'Save claim'}
           </button>
         </div>
       </form>
@@ -189,7 +190,7 @@ function DeleteDialog({ row, onCancel, onConfirm }) {
   if (!row) return null
   const run = async () => {
     setBusy(true); setError('')
-    try { await onConfirm() } catch (e) { setError(e?.message || 'Could not delete.'); setBusy(false) }
+    try { await onConfirm() } catch (e) { setError(toUserMessage(e, 'Could not delete.')); setBusy(false) }
   }
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60" onClick={onCancel}>
@@ -240,7 +241,7 @@ export default function DriverExpenses() {
       setUpdatedAt(new Date())
     } catch (err) {
       if (isMissingRelation(err)) { setMissing(true); setRows([]) }
-      else { setError(err?.message || 'Could not load expense claims.'); setRows([]) }
+      else { setError(toUserMessage(err, 'Could not load expense claims.')); setRows([]) }
     } finally {
       setRefreshing(false)
     }
@@ -297,7 +298,7 @@ export default function DriverExpenses() {
     <div className="space-y-6">
       <PageHeader
         title="Driver Expenses"
-        subtitle="Log, review and reimburse driver expense claims across the fleet — with status tracking and export."
+        subtitle="Log, review and reimburse driver expense claims across the fleet - with status tracking and export."
         icon={Wallet}
         onRefresh={load}
         refreshing={refreshing}
@@ -327,7 +328,7 @@ export default function DriverExpenses() {
         <div className="card border border-amber-800/50 flex items-start gap-3">
           <AlertTriangle size={18} className="text-amber-400 mt-0.5 shrink-0" />
           <div>
-            <p className="text-amber-300 font-medium">Driver expenses aren’t enabled on this database yet.</p>
+            <p className="text-amber-300 font-medium">Driver expenses aren't enabled on this database yet.</p>
             <p className="text-[var(--text-muted)] text-sm mt-1">
               Apply <span className="font-mono text-[var(--text-primary)]">MIGRATIONS_V152_DRIVER_EXPENSES.sql</span>, then reload.
             </p>
@@ -338,7 +339,7 @@ export default function DriverExpenses() {
       {error && !missing && (
         <div className="card border border-red-800/50 flex items-start gap-3">
           <AlertTriangle size={18} className="text-red-400 mt-0.5 shrink-0" />
-          <div><p className="text-red-300 font-medium">Couldn’t load expense claims.</p><p className="text-[var(--text-muted)] text-sm mt-1">{error}</p></div>
+          <div><p className="text-red-300 font-medium">Couldn't load expense claims.</p><p className="text-[var(--text-muted)] text-sm mt-1">{error}</p></div>
         </div>
       )}
 
@@ -352,7 +353,7 @@ export default function DriverExpenses() {
                 <p className="text-xs text-[var(--text-muted)]">{k.label}</p>
                 <Icon size={16} className={k.tone} />
               </div>
-              <p className={`text-3xl font-bold mt-1 ${k.tone}`}>{rows === null ? '—' : k.value}</p>
+              <p className={`text-3xl font-bold mt-1 ${k.tone}`}>{rows === null ? 'N/A' : k.value}</p>
               {k.sub && rows !== null && <p className="text-xs text-[var(--text-muted)] mt-1">{k.sub} pending</p>}
             </div>
           )
@@ -364,7 +365,7 @@ export default function DriverExpenses() {
         <div className="flex flex-wrap items-center gap-2">
           <div className="relative flex-1 min-w-[200px]">
             <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
-            <input className="input pl-9 w-full" placeholder="Search driver, category, asset, notes…" value={search} onChange={(e) => setSearch(e.target.value)} />
+            <input className="input pl-9 w-full" placeholder="Search driver, category, asset, notes..." value={search} onChange={(e) => setSearch(e.target.value)} />
           </div>
           <select className="input" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} aria-label="Status">
             <option value="all">All statuses</option>
@@ -408,12 +409,12 @@ export default function DriverExpenses() {
                   return (
                     <tr key={r.id} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/40">
                       <td className="px-4 py-2.5 text-[var(--text-primary)] font-medium">
-                        <span className="inline-flex items-center gap-2"><User size={13} className="text-[var(--text-muted)]" />{r.driver_name || '—'}</span>
+                        <span className="inline-flex items-center gap-2"><User size={13} className="text-[var(--text-muted)]" />{r.driver_name || 'N/A'}</span>
                       </td>
-                      <td className="px-4 py-2.5 text-[var(--text-secondary)]">{cap(r.category) || '—'}</td>
-                      <td className="px-4 py-2.5 text-[var(--text-secondary)] font-medium">{r.amount == null || r.amount === '' ? '—' : fmtMoney(r.amount)}</td>
+                      <td className="px-4 py-2.5 text-[var(--text-secondary)]">{cap(r.category) || 'N/A'}</td>
+                      <td className="px-4 py-2.5 text-[var(--text-secondary)] font-medium">{r.amount == null || r.amount === '' ? 'N/A' : fmtMoney(r.amount)}</td>
                       <td className="px-4 py-2.5 text-[var(--text-secondary)]">{fmtDate(r.expense_date)}</td>
-                      <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.asset_no || '—'}</td>
+                      <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.asset_no || 'N/A'}</td>
                       <td className="px-4 py-2.5"><span className={`badge text-[11px] px-2 py-0.5 rounded ${st.cls}`}>{st.label}</span></td>
                       <td className="px-4 py-2.5">
                         <div className="flex items-center justify-end gap-1">
@@ -428,7 +429,7 @@ export default function DriverExpenses() {
             </tbody>
           </table>
         </div>
-        {filtered.length > 500 && <p className="px-4 py-2 text-xs text-[var(--text-muted)] border-t border-[var(--input-border)]">Showing first 500 — refine filters or export for the full set.</p>}
+        {filtered.length > 500 && <p className="px-4 py-2 text-xs text-[var(--text-muted)] border-t border-[var(--input-border)]">Showing first 500 - refine filters or export for the full set.</p>}
       </div>
 
       <ExpenseModal open={modalOpen} initial={editing} onClose={() => { setModalOpen(false); setEditing(null) }} onSaved={onSaved} />

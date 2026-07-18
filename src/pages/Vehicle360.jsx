@@ -3,6 +3,7 @@ import { useParams, Link } from 'react-router-dom'
 import { ArrowLeft, Camera, Upload, Loader2, MapPin, Save, CircleDot, DollarSign, AlertTriangle, Gauge as GaugeIcon, Car, ClipboardCheck } from 'lucide-react'
 import { useSettings } from '../contexts/SettingsContext'
 import * as v360 from '../lib/api/vehicle360'
+import { toUserMessage } from '../lib/safeError'
 import { recordCost } from '../lib/analyticsEngine'
 import Gauge from '../components/ui/Gauge'
 import StatTile from '../components/ui/StatTile'
@@ -37,7 +38,7 @@ export default function Vehicle360() {
       setVehicle(v); setTyres(t || [])
       setGps({ lat: v.latitude ?? '', lng: v.longitude ?? '' })
       setPhotoUrl(v.image_path ? await v360.vehiclePhotoUrl(v.image_path) : null)
-    } catch (e) { setError(e?.message || 'Could not load the vehicle.') }
+    } catch (e) { setError(toUserMessage(e, 'Could not load the vehicle.')) }
     finally { setLoading(false) }
   }, [assetNo])
   useEffect(() => { load() }, [load])
@@ -50,7 +51,7 @@ export default function Vehicle360() {
     try {
       const { url } = await v360.uploadVehiclePhoto(assetNo, file)
       setPhotoUrl(url); setMsg({ type: 'ok', text: 'Photo updated.' })
-    } catch (err) { setMsg({ type: 'err', text: err?.message || 'Upload failed.' }) }
+    } catch (err) { setMsg({ type: 'err', text: toUserMessage(err, 'Upload failed.') }) }
     finally { setUploading(false); if (fileRef.current) fileRef.current.value = '' }
   }
 
@@ -60,7 +61,7 @@ export default function Vehicle360() {
       const { latitude, longitude } = await v360.saveVehicleGps(assetNo, gps.lat, gps.lng)
       setVehicle((v) => ({ ...v, latitude, longitude }))
       setMsg({ type: 'ok', text: 'Location saved.' })
-    } catch (err) { setMsg({ type: 'err', text: err?.message || 'Could not save location.' }) }
+    } catch (err) { setMsg({ type: 'err', text: toUserMessage(err, 'Could not save location.') }) }
     finally { setSavingGps(false) }
   }
 
@@ -84,7 +85,7 @@ export default function Vehicle360() {
   const targetKm = vehicle?.expected_km_per_tyre || 100000
   const money = (n) => `${activeCurrency} ${Math.round(n).toLocaleString()}`
 
-  if (loading) return <LoadingState message="Loading vehicle…" />
+  if (loading) return <LoadingState message="Loading vehicle..." />
   if (error) return (
     <div className="p-6 max-w-3xl mx-auto">
       <Link to="/fleet-master" className="text-sm text-[var(--text-muted)] hover:text-[var(--text-primary)] flex items-center gap-1.5 mb-4"><ArrowLeft size={15} /> Back to Fleet</Link>
@@ -103,7 +104,7 @@ export default function Vehicle360() {
               <Car size={20} className="text-[var(--accent)]" />
               {[vehicle.make, vehicle.model].filter(Boolean).join(' ') || vehicle.asset_no}
             </h1>
-            <p className="text-sm text-[var(--text-muted)]">{vehicle.asset_no}{vehicle.vehicle_type ? ` · ${vehicle.vehicle_type}` : ''}{vehicle.site ? ` · ${vehicle.site}` : ''}</p>
+            <p className="text-sm text-[var(--text-muted)]">{vehicle.asset_no}{vehicle.vehicle_type ? ` | ${vehicle.vehicle_type}` : ''}{vehicle.site ? ` | ${vehicle.site}` : ''}</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -182,7 +183,7 @@ export default function Vehicle360() {
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             <StatTile index={0} icon={CircleDot} tone="info" label="Tyres" value={m.total.toLocaleString()} />
             <StatTile index={1} icon={DollarSign} tone="accent" label="Tyre spend" value={`${(m.spend / 1000).toFixed(1)}K`} unit={activeCurrency} />
-            <StatTile index={2} icon={GaugeIcon} tone="neutral" label="Avg CPK" value={m.cpk ? m.cpk.toFixed(2) : '—'} unit={m.cpk ? `${activeCurrency}/km` : ''} />
+            <StatTile index={2} icon={GaugeIcon} tone="neutral" label="Avg CPK" value={m.cpk ? m.cpk.toFixed(2) : 'N/A'} unit={m.cpk ? `${activeCurrency}/km` : ''} />
             <StatTile index={3} icon={AlertTriangle} tone="crit" label="Critical" value={m.critical.toLocaleString()} unit={m.total ? `(${m.highRate.toFixed(0)}%)` : ''} />
           </div>
 
@@ -223,16 +224,16 @@ export default function Vehicle360() {
                   <tbody>
                     {tyres.map((t) => {
                       const km = (t.km_at_removal || 0) - (t.km_at_fitment || 0)
-                      const risk = t.risk_level || '—'
+                      const risk = t.risk_level || 'N/A'
                       const tone = isHigh(t) ? 'text-red-400 bg-red-900/30' : risk === 'Medium' ? 'text-amber-400 bg-amber-900/30' : 'text-green-400 bg-green-900/30'
                       return (
                         <tr key={t.id} className="border-t border-[var(--table-cell-border)]">
-                          <td className="px-3 py-2 text-[var(--text-muted)]">{t.issue_date?.slice(0, 10) || '—'}</td>
-                          <td className="px-3 py-2 text-[var(--text-primary)] font-medium">{t.serial_no || '—'}</td>
-                          <td className="px-3 py-2">{t.brand || '—'}</td>
-                          <td className="px-3 py-2">{t.position || '—'}</td>
-                          <td className="px-3 py-2">{t.size || '—'}</td>
-                          <td className="px-3 py-2 text-right tabular-nums">{km > 0 ? km.toLocaleString() : '—'}</td>
+                          <td className="px-3 py-2 text-[var(--text-muted)]">{t.issue_date?.slice(0, 10) || 'N/A'}</td>
+                          <td className="px-3 py-2 text-[var(--text-primary)] font-medium">{t.serial_no || 'N/A'}</td>
+                          <td className="px-3 py-2">{t.brand || 'N/A'}</td>
+                          <td className="px-3 py-2">{t.position || 'N/A'}</td>
+                          <td className="px-3 py-2">{t.size || 'N/A'}</td>
+                          <td className="px-3 py-2 text-right tabular-nums">{km > 0 ? km.toLocaleString() : 'N/A'}</td>
                           <td className="px-3 py-2 text-right tabular-nums text-[var(--text-primary)]">{money(recordCost(t))}</td>
                           <td className="px-3 py-2"><span className={`px-2 py-0.5 rounded text-[10px] font-semibold ${tone}`}>{risk}</span></td>
                         </tr>

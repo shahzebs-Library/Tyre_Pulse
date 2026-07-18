@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { supabase } from '../lib/supabase'
 import { applyCountry } from '../lib/countryFilter'
 import { fetchAllPages } from '../lib/fetchAll'
+import { toUserMessage } from '../lib/safeError'
 import { useSettings } from '../contexts/SettingsContext'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import { formatDate } from '../lib/formatters'
@@ -274,14 +275,14 @@ export default function WorkshopManagement() {
           setTableExists(false)
           setOrders([])
         } else {
-          setError(err.message)
+          setError(toUserMessage(err, 'Could not load work orders.'))
         }
       } else {
         setTableExists(true)
         setOrders(data || [])
       }
     } catch (e) {
-      setError(e.message)
+      setError(toUserMessage(e, 'Could not load work orders.'))
     } finally {
       setLoading(false)
     }
@@ -768,7 +769,7 @@ export default function WorkshopManagement() {
                 icon={Clock}
                 label="Avg Turnaround"
                 value={fmtHours(kpis.avgTA)}
-                sub="created → completed"
+                sub="created to completed"
                 color="purple"
               />
               <KpiCard
@@ -932,7 +933,7 @@ export default function WorkshopManagement() {
                 >
                   <div className="flex items-center justify-between">
                     <p className="text-sm text-[var(--text-muted)]">
-                      {filteredOrders.length.toLocaleString()} jobs · page {page} of {totalPages}
+                      {filteredOrders.length.toLocaleString()} jobs | page {page} of {totalPages}
                     </p>
                   </div>
 

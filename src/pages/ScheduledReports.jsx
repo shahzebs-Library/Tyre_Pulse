@@ -84,15 +84,15 @@ function useT() {
 }
 
 function formatNextRun(nextRunAt, td) {
-  if (!nextRunAt) return '—'
+  if (!nextRunAt) return '-'
   const d = new Date(nextRunAt)
-  if (Number.isNaN(d.getTime())) return '—'
+  if (Number.isNaN(d.getTime())) return '-'
   const time = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
   const diff = d - new Date()
   if (diff < 0) return td('schedreports.time.due', 'Due now')
   if (diff < 24 * 3600_000) return td('schedreports.time.today', 'Today at {time}', { time })
   if (diff < 48 * 3600_000) return td('schedreports.time.tomorrow', 'Tomorrow at {time}', { time })
-  return `${d.toLocaleDateString([], { day: 'numeric', month: 'short', year: 'numeric' })} · ${time}`
+  return `${d.toLocaleDateString([], { day: 'numeric', month: 'short', year: 'numeric' })} | ${time}`
 }
 
 function formatLastSent(ts, td) {
@@ -378,7 +378,7 @@ function Modal({ title, onClose, onSave, saving, form, setForm, formError, setFo
             {isBuilderType(form.report_type) && (
               <p className="text-xs text-[var(--text-muted)] mt-1.5 flex items-start gap-1.5">
                 <LayoutTemplate className="w-3.5 h-3.5 mt-0.5 flex-shrink-0 text-pink-400" />
-                {td('schedreports.modal.builderHint', 'A saved Accident Report Builder layout — “Generate now” renders its exact block design over the covered period. Manage layouts in Accidents → Report Builder.')}
+                {td('schedreports.modal.builderHint', 'A saved Accident Report Builder layout - "Generate now" renders its exact block design over the covered period. Manage layouts in Accidents > Report Builder.')}
               </p>
             )}
           </div>
@@ -499,7 +499,7 @@ function Modal({ title, onClose, onSave, saving, form, setForm, formError, setFo
               onChange={e => { setForm(f => ({ ...f, recipients_raw: e.target.value })); setFormError('') }}
               className={`${INPUT_CLASS} placeholder-gray-500 resize-none font-mono`}
             />
-            <p className="text-xs text-[var(--text-muted)] mt-1">{td('schedreports.modal.recipientsHint', 'One email address per line — scheduled deliveries e-mail these recipients.')}</p>
+            <p className="text-xs text-[var(--text-muted)] mt-1">{td('schedreports.modal.recipientsHint', 'One email address per line - scheduled deliveries e-mail these recipients.')}</p>
           </div>
 
           {/* Active toggle */}
@@ -642,7 +642,7 @@ function DeliveryHistory({ runs, summary, loading, error, open, onToggle, onRefr
             </p>
             <p className="text-[var(--text-secondary)] text-xs mt-0.5">
               {summary && summary.total > 0
-                ? td('schedreports.history.summary', '{total} runs · {sent} sent · {failed} failed (last 60 days)', {
+                ? td('schedreports.history.summary', '{total} runs | {sent} sent | {failed} failed (last 60 days)', {
                   total: summary.total, sent: summary.sent, failed: summary.failed,
                 })
                 : td('schedreports.history.subtitle', 'Recent scheduled report deliveries (last 60 days)')}
@@ -767,7 +767,7 @@ export default function ScheduledReports() {
     try {
       setSchedules(await listSchedules())
     } catch (e) {
-      setError(e.message)
+      setError(toUserMessage(e, 'Could not load scheduled reports.'))
     } finally {
       setLoading(false)
     }
@@ -912,7 +912,7 @@ export default function ScheduledReports() {
       fetchSchedules()
       setToast({ type: 'ok', text: td('schedreports.toast.saved', 'Schedule saved') })
     } catch (e) {
-      setFormError(e.message)
+      setFormError(toUserMessage(e, 'Could not save the schedule.'))
     } finally {
       setSaving(false)
     }
@@ -926,7 +926,7 @@ export default function ScheduledReports() {
       await updateSchedule(s.id, { active: !s.active, next_run_at })
     } catch (e) {
       setSchedules(prev => prev.map(x => x.id === s.id ? s : x))
-      setError(e.message)
+      setError(toUserMessage(e, 'Could not update the schedule.'))
     }
   }
 
@@ -939,7 +939,7 @@ export default function ScheduledReports() {
       setSchedules(prev => prev.filter(s => s.id !== deleteTarget.id))
       setDeleteTarget(null)
     } catch (e) {
-      setError(e.message)
+      setError(toUserMessage(e, 'Could not delete the schedule.'))
     } finally {
       setDeleting(false)
     }
@@ -1002,11 +1002,11 @@ export default function ScheduledReports() {
       setToast({
         type: rows.length ? 'ok' : 'warn',
         text: rows.length
-          ? td('schedreports.toast.generated', 'Generated {type} · {n} records', { type: typeLabel, n: rows.length })
-          : td('schedreports.toast.generatedEmpty', 'Generated {type} — no records in range (empty report)', { type: typeLabel }),
+          ? td('schedreports.toast.generated', 'Generated {type} | {n} records', { type: typeLabel, n: rows.length })
+          : td('schedreports.toast.generatedEmpty', 'Generated {type} - no records in range (empty report)', { type: typeLabel }),
       })
     } catch (e) {
-      setToast({ type: 'err', text: e.message || td('schedreports.toast.genFailed', 'Report generation failed') })
+      setToast({ type: 'err', text: toUserMessage(e, td('schedreports.toast.genFailed', 'Report generation failed')) })
     } finally {
       setGenerating(null)
     }
@@ -1035,7 +1035,7 @@ export default function ScheduledReports() {
         text: td('schedreports.toast.sentNow', 'Report emailed to {n} recipient(s)', { n: data?.recipients ?? (s.recipients ?? []).length }),
       })
     } catch (e) {
-      setToast({ type: 'err', text: e.message || td('schedreports.toast.sendFailed', 'Send failed') })
+      setToast({ type: 'err', text: toUserMessage(e, td('schedreports.toast.sendFailed', 'Send failed')) })
     } finally {
       setSendingNow(null)
     }
@@ -1075,8 +1075,8 @@ export default function ScheduledReports() {
             {loading
               ? td('schedreports.header.loading', 'Loading...')
               : (activeCount !== 1
-                ? td('schedreports.header.summaryOther', '{count} active schedules · {total} total', { count: activeCount, total: schedules.length })
-                : td('schedreports.header.summaryOne', '{count} active schedule · {total} total', { count: activeCount, total: schedules.length }))}
+                ? td('schedreports.header.summaryOther', '{count} active schedules | {total} total', { count: activeCount, total: schedules.length })
+                : td('schedreports.header.summaryOne', '{count} active schedule | {total} total', { count: activeCount, total: schedules.length }))}
           </p>
         </div>
         <button

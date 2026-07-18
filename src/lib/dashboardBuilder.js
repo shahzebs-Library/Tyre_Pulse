@@ -524,7 +524,7 @@ export function parseLayoutsValue(value) {
 export async function fetchLayouts(supabase) {
   const { data, error } = await supabase
     .from('app_settings').select('value').eq('key', DASHBOARD_LAYOUTS_KEY).maybeSingle()
-  if (error) throw new Error(error.message || 'Could not load dashboard layouts.')
+  if (error) throw new Error('Could not load dashboard layouts.')
   return parseLayoutsValue(data?.value)
 }
 
@@ -543,6 +543,6 @@ export async function saveLayouts(supabase, layouts) {
     { key: DASHBOARD_LAYOUTS_KEY, value: JSON.stringify(clean) },
     { onConflict: 'key' },
   )
-  if (error) throw new Error(error.message || 'Could not save dashboard layouts.')
+  if (error) throw new Error('Could not save dashboard layouts.')
   return clean
 }

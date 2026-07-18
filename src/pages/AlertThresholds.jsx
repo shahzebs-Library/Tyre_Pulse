@@ -6,6 +6,7 @@ import {
   Search, Filter, X, Save, Loader2, ToggleLeft, ToggleRight,
 } from 'lucide-react'
 import * as alertThresholds from '../lib/api/alertThresholds'
+import { toUserMessage } from '../lib/safeError'
 import { useAuth } from '../contexts/AuthContext'
 import { formatDistanceToNow } from 'date-fns'
 
@@ -215,7 +216,7 @@ function ThresholdCard({ threshold, onEdit, onDelete, onToggle }) {
             }
           </span>
           {triggered && (
-            <span className="text-[var(--text-dim)] text-xs">· {triggered}</span>
+            <span className="text-[var(--text-dim)] text-xs">| {triggered}</span>
           )}
         </div>
 
@@ -502,7 +503,7 @@ export default function AlertThresholds() {
       setThresholds(data || [])
       setLoading(false)
     } catch (err) {
-      setError(err.message); setLoading(false)
+      setError(toUserMessage(err, 'Could not load alert thresholds.')); setLoading(false)
     }
   }, [profile?.id])
 
@@ -534,7 +535,7 @@ export default function AlertThresholds() {
       }
     } catch (err) {
       setSaving(false)
-      setError(err.message); return
+      setError(toUserMessage(err, 'Could not save the threshold.')); return
     }
     setSaving(false)
     setModal(null)
@@ -544,14 +545,14 @@ export default function AlertThresholds() {
   async function handleDelete(id) {
     try {
       await alertThresholds.deleteAlertThreshold(id)
-    } catch (err) { setError(err.message); return }
+    } catch (err) { setError(toUserMessage(err, 'Could not delete the threshold.')); return }
     setThresholds(prev => prev.filter(t => t.id !== id))
   }
 
   async function handleToggle(id, active) {
     try {
       await alertThresholds.updateAlertThreshold(id, { active, updated_at: new Date().toISOString() })
-    } catch (err) { setError(err.message); return }
+    } catch (err) { setError(toUserMessage(err, 'Could not update the threshold.')); return }
     setThresholds(prev => prev.map(t => t.id === id ? { ...t, active } : t))
   }
 

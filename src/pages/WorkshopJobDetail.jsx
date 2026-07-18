@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { supabase } from '../lib/supabase'
+import { toUserMessage } from '../lib/safeError'
 import { useSettings } from '../contexts/SettingsContext'
 import { useLanguage } from '../contexts/LanguageContext'
 import { exportToPdf } from '../lib/exportUtils'
@@ -116,10 +117,10 @@ export default function WorkshopJobDetail() {
       q = /^[0-9a-f-]{16,}$/i.test(id) ? q.eq('id', id) : q.eq('work_order_no', id)
       if (scoped) q = q.eq('country', scoped)
       const { data, error: err } = await q.maybeSingle()
-      if (err) { setError(err.message); setJob(null) }
+      if (err) { setError(toUserMessage(err, 'Could not load the job.')); setJob(null) }
       else setJob(data || null)
     } catch (e) {
-      setError(e.message)
+      setError(toUserMessage(e, 'Could not load the job.'))
       setJob(null)
     } finally {
       setLoading(false)

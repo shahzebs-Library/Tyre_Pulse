@@ -135,7 +135,7 @@ export default function ConsoleUsers() {
             .not('site', 'is', null)
             .order('site')
             .limit(2000)
-          if (err) throw new Error(err.message)
+          if (err) throw err
           names = [...new Set((data ?? []).map(r => String(r.site ?? '').trim()).filter(Boolean))]
         }
         if (cancelled) return
@@ -210,7 +210,7 @@ export default function ConsoleUsers() {
       const { error: err } = await supabase.from('profiles')
         .update({ role: editForm.role, site: editForm.site, full_name: editForm.full_name })
         .eq('id', editModal.id)
-      if (err) throw new Error(err.message)
+      if (err) throw err
 
       // Country scope is a text[] behind super-admin RLS -> dedicated RPC.
       await setUserCountry(editModal.id, editForm.countries)
@@ -300,7 +300,7 @@ export default function ConsoleUsers() {
       flashToast(`${n} updated to role "${bulkRole}"`)
       load()
     } catch (e) {
-      setBulkError(e?.message || 'Bulk role change failed.'); setBulkBusy(false)
+      setBulkError(toUserMessage(e, 'Bulk role change failed.')); setBulkBusy(false)
     }
   }
 
@@ -323,7 +323,7 @@ export default function ConsoleUsers() {
       flashToast(`${n} updated : ${bulkEffect} ${bulkCapability} on ${bulkModule}`)
       load()
     } catch (e) {
-      setBulkError(e?.message || 'Bulk grant failed.'); setBulkBusy(false)
+      setBulkError(toUserMessage(e, 'Bulk grant failed.')); setBulkBusy(false)
     }
   }
 

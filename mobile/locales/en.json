@@ -529,7 +529,19 @@
       "phSearchToBegin": "Type an asset number or scan to find the vehicle. Assets appear only after you search.",
       "locationSuggest": "Quick fill from sites:",
       "phFleetNo": "Fleet No",
-      "phNoVehicleMatch": "No matching vehicles found."
+      "phNoVehicleMatch": "No matching vehicles found.",
+      "clearSelection": "Clear selection",
+      "photoLicense": "Driving License",
+      "photoResidentId": "Resident ID",
+      "photoRegistration": "Vehicle Registration",
+      "photoNajm": "Najm Report",
+      "photoTaqdeer": "Taqdeer Estimation",
+      "photoAccident": "Accident Photos",
+      "photoReplace": "Replace",
+      "photoRemove": "Remove",
+      "photoRemoveConfirm": "Remove this photo?",
+      "photoUploadFailed": "Photo could not be uploaded. Check your connection and try again.",
+      "photoMaxReached": "Maximum accident photos reached"
     },
     "detail": {
       "exportFailed": "Export failed",

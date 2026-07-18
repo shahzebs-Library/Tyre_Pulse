@@ -19,6 +19,8 @@ import {
 } from 'react-native'
 import { useRouter } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker'
 import { useAuth } from '../../../contexts/AuthContext'
 import { useLanguage } from '../../../contexts/LanguageContext'
 import { useTheme } from '../../../contexts/ThemeContext'
@@ -30,7 +32,7 @@ import { saveCommand } from '../../../lib/recordQueue'
 import { safeUuid } from '../../../lib/ids'
 import { useRoleGuard } from '../../../hooks/useRoleGuard'
 import { extractScanCode, lookupAssetByCode } from '../../../lib/assetLookup'
-import AccidentPhotoGrid from '../../../components/AccidentPhotoGrid'
+import AccidentPhotoGrid, { AccidentPhotoEntry } from '../../../components/AccidentPhotoGrid'
 
 type IconName = React.ComponentProps<typeof Ionicons>['name']
 
@@ -112,6 +114,30 @@ function computeRecovered(claim: string, approved: string, deductible: string): 
   const n = (x: string) => (Number.isFinite(Number(x)) ? Number(x) : 0)
   return Math.max(0, n(claim) - n(approved) - n(deductible))
 }
+
+// ── Native date/time picker plumbing ───────────────────────────────────────────
+// Stored formats are EXACTLY what the submit payload already writes:
+// dates as YYYY-MM-DD (accidents.incident_date etc.), time as HH:mm
+// (accidents.incident_time). Formatting is LOCAL-time (never toISOString,
+// which is UTC and can shift the calendar day for GCC timezones).
+const pad2 = (n: number) => String(n).padStart(2, '0')
+const formatDateLocal = (d: Date) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`
+const formatTimeLocal = (d: Date) => `${pad2(d.getHours())}:${pad2(d.getMinutes())}`
+function parseDateValue(v: string): Date {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec((v || '').trim())
+  // Noon avoids any DST/timezone edge flipping the day inside the picker.
+  if (m) return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]), 12, 0, 0)
+  return new Date()
+}
+function parseTimeValue(v: string): Date {
+  const m = /^(\d{1,2}):(\d{2})$/.exec((v || '').trim())
+  const d = new Date()
+  if (m) d.setHours(Math.min(23, Number(m[1])), Math.min(59, Number(m[2])), 0, 0)
+  return d
+}
+
+// Sentinel for the Location dropdown's free-text branch (never persisted).
+const OTHER_LOCATION = '__other__'
 
 const ACC_TYPE_ICONS: Record<string, IconName> = {
   Collision: 'car-sport-outline', Rollover: 'refresh-circle-outline',
@@ -226,6 +252,7 @@ export default function AccidentReportScreen() {
   const { t, isRTL } = useLanguage()
   const { theme } = useTheme()
   const c = theme.color
+  const insets = useSafeAreaInsets()
   const styles = useMemo(() => createStyles(theme), [theme])
   const router = useRouter()
 
@@ -235,9 +262,13 @@ export default function AccidentReportScreen() {
 
   const [base, setBase] = useState<BaseForm>(emptyBase())
   const [extra, setExtra] = useState<ExtraForm>(emptyExtra())
-  const [photoUrls, setPhotoUrls] = useState<string[]>([])
-  const [photoLocalUris, setPhotoLocalUris] = useState<string[]>([])
+  // Categorized photo entries (single doc slots + multi accident photos). The
+  // grid keeps them ordered by category; the payload stays a plain string[]
+  // of uploaded refs (category is encoded in each ref's storage filename).
+  const [photoEntries, setPhotoEntries] = useState<AccidentPhotoEntry[]>([])
   const [photosUploading, setPhotosUploading] = useState(false)
+  // Location dropdown: true when the reporter chose "Other" (free-text branch).
+  const [locationOther, setLocationOther] = useState(false)
   const [sites, setSites] = useState<string[]>([])
   const [vehicles, setVehicles] = useState<FleetVehicle[]>([])
   const [loadingVehicles, setLoadingVehicles] = useState(false)
@@ -260,6 +291,12 @@ export default function AccidentReportScreen() {
 
   const setB = (p: Partial<BaseForm>) => setBase(prev => ({ ...prev, ...p }))
   const setX = (p: Partial<ExtraForm>) => setExtra(prev => ({ ...prev, ...p }))
+
+  // Ordered, uploaded-only refs for validation + the submit payload.
+  const uploadedPhotoRefs = useMemo(
+    () => photoEntries.filter(e => isUploadedPhoto(e.url)).map(e => e.url),
+    [photoEntries],
+  )
 
   function goBack() {
     if (router.canGoBack()) router.back()
@@ -318,10 +355,12 @@ export default function AccidentReportScreen() {
   }
 
   // Auto-fill from the fleet master on asset pick (web applyAssetMaster parity):
-  // Fleet/plate no = fleet_number falling back to registration_no; site/country
-  // fill only when empty or previously auto-filled - a manual site tap is never
-  // overwritten. Plate/type have no typing surface on mobile, so they always
-  // track the picked asset (re-picking a different asset refreshes them).
+  // Fleet/plate no = fleet_number falling back to registration_no. SITE RULE
+  // (deterministic): auto-fill writes site ONLY when the field is still empty
+  // AND the user never tapped a site chip - a manual choice always wins and is
+  // never overwritten by later asset picks or the debounced manual-asset
+  // lookup. Plate/type have no typing surface on mobile, so they always track
+  // the picked asset (re-picking a different asset refreshes them).
   function applyAsset(v: {
     asset_no: string; id?: string | null; vehicle_type?: string | null; site?: string | null
     registration_no?: string | null; fleet_number?: string | null; country?: string | null
@@ -330,7 +369,7 @@ export default function AccidentReportScreen() {
       ...prev,
       asset_no: v.asset_no,
       vehicle_id: v.id ?? null,
-      site: siteManual.current && prev.site ? prev.site : (v.site || prev.site),
+      site: (siteManual.current || prev.site) ? prev.site : (v.site || ''),
       country: prev.country || v.country || prev.country,
     }))
     setX({
@@ -370,7 +409,7 @@ export default function AccidentReportScreen() {
     if (!getEffectiveAssetNo()) { Alert.alert(t('accident.report.alertRequired'), t('accident.report.alertSelectVehicle')); return false }
     if (!base.site) { Alert.alert(t('accident.report.alertRequired'), t('accident.report.alertSelectSite')); return false }
     if (!base.description.trim()) { Alert.alert(t('accident.report.alertRequired'), t('accident.report.alertDescribe')); return false }
-    if (photoUrls.filter(isUploadedPhoto).length === 0) { Alert.alert(t('accident.report.alertRequired'), t('accident.report.alertAttachPhoto')); return false }
+    if (uploadedPhotoRefs.length === 0) { Alert.alert(t('accident.report.alertRequired'), t('accident.report.alertAttachPhoto')); return false }
     return true
   }
 
@@ -444,8 +483,11 @@ export default function AccidentReportScreen() {
         repair_cost: internal ? num(extra.repair_cost) : null,
         expected_release_date: extra.expected_release_date || null,
         release_date: extra.release_date || null,
-        // Photos + notes
-        photos: photoUrls.filter(isUploadedPhoto),
+        // Photos + notes - plain string[] of uploaded refs, ordered by category
+        // (license/resident/registration/najm/taqdeer first, accident photos
+        // last); the category also lives in each ref's storage filename prefix,
+        // so the recordQueue allow-list and web rendering are untouched.
+        photos: uploadedPhotoRefs,
         notes: base.notes || null,
       }
 
@@ -498,7 +540,7 @@ export default function AccidentReportScreen() {
           <Button label={t('accident.report.successNewReport')} icon="add-circle-outline" variant="secondary"
             onPress={() => {
               setBase(emptyBase()); setExtra(emptyExtra())
-              setPhotoUrls([]); setPhotoLocalUris([])
+              setPhotoEntries([]); setLocationOther(false)
               setManualAsset(''); setUseManualEntry(false)
               recoveredTouched.current = false; siteManual.current = false; setSuccess(false)
             }}
@@ -509,7 +551,7 @@ export default function AccidentReportScreen() {
   }
 
   const canSubmit = !submitting && !photosUploading &&
-    !!base.site && !!getEffectiveAssetNo() && photoUrls.filter(isUploadedPhoto).length > 0
+    !!base.site && !!getEffectiveAssetNo() && uploadedPhotoRefs.length > 0
 
   return (
     <Screen>
@@ -587,8 +629,11 @@ export default function AccidentReportScreen() {
                     if (matches.length === 0) {
                       return <AppText variant="caption" color="muted">{t('accident.report.phNoVehicleMatch')}</AppText>
                     }
+                    // keyboardShouldPersistTaps is NOT inherited from the outer
+                    // ScrollView - without it the first chip tap while the
+                    // search keyboard is open only dismisses the keyboard.
                     return (
-                      <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                      <ScrollView horizontal showsHorizontalScrollIndicator={false} keyboardShouldPersistTaps="handled">
                         <View style={styles.chipRow}>
                           {matches.map(v => {
                             const active = base.asset_no === v.asset_no
@@ -622,22 +667,20 @@ export default function AccidentReportScreen() {
               ) : null}
             </Field>
 
-            {/* Date & time */}
+            {/* Date & time - native calendar/clock pickers; stored formats stay
+                YYYY-MM-DD and HH:mm exactly as the submit payload expects. */}
             <View style={styles.row}>
-              <Field label={t('accident.report.date')} styles={styles} textAlign={textAlign} flex>
-                <TextInput style={[inputStyle, { textAlign }]} value={base.incident_date} onChangeText={v => setB({ incident_date: v })}
-                  placeholder="YYYY-MM-DD" placeholderTextColor={c.textMuted} />
-              </Field>
+              <DateField label={t('accident.report.date')} value={base.incident_date}
+                onChange={v => setB({ incident_date: v })} mode="date" flex />
               <View style={{ width: spacing.md }} />
-              <Field label={t('accident.report.time')} styles={styles} textAlign={textAlign} flex>
-                <TextInput style={[inputStyle, { textAlign }]} value={base.incident_time} onChangeText={v => setB({ incident_time: v })}
-                  placeholder="HH:MM" placeholderTextColor={c.textMuted} keyboardType="numbers-and-punctuation" />
-              </Field>
+              <DateField label={t('accident.report.time')} value={base.incident_time}
+                onChange={v => setB({ incident_time: v })} mode="time" flex />
             </View>
 
-            {/* Site - auto-filled from the picked asset, still editable */}
+            {/* Site - auto-filled from the picked asset; a manual tap always wins.
+                keyboardShouldPersistTaps: see the vehicle chip row note. */}
             <Field label={t('accident.report.site')} styles={styles} textAlign={textAlign}>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} keyboardShouldPersistTaps="handled">
                 <View style={styles.chipRow}>
                   {(base.site && !sites.includes(base.site) ? [base.site, ...sites] : sites).map(s => {
                     const active = base.site === s
@@ -653,27 +696,21 @@ export default function AccidentReportScreen() {
               </ScrollView>
             </Field>
 
-            {/* Location - free text with quick site suggestions */}
-            <Field label={t('accident.report.location')} styles={styles} textAlign={textAlign}>
+            {/* Location - labeled dropdown (site list + Other free-text branch),
+                same bottom-sheet style as every other constrained field. */}
+            <Dropdown label={t('accident.report.location')}
+              value={locationOther ? OTHER_LOCATION : base.location}
+              options={[...sites, OTHER_LOCATION]}
+              display={v => (v === OTHER_LOCATION ? tOpt('Other') : v)}
+              onSelect={v => {
+                if (v === OTHER_LOCATION) { setLocationOther(true); setB({ location: '' }) }
+                else { setLocationOther(false); setB({ location: v }) }
+              }}
+              placeholder={t('accident.report.phWhereHappen')} clearable />
+            {locationOther && (
               <TextInput style={[inputStyle, { textAlign }]} value={base.location} onChangeText={v => setB({ location: v })}
-                placeholder={t('accident.report.phWhereHappen')} placeholderTextColor={c.textMuted} />
-              {sites.length > 0 && !base.location ? (
-                <View style={{ marginTop: 4, gap: 4 }}>
-                  <AppText variant="micro" color="muted" style={{ textAlign }}>{t('accident.report.locationSuggest')}</AppText>
-                  <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                    <View style={styles.chipRow}>
-                      {sites.map(s => (
-                        <TouchableOpacity key={s}
-                          style={[styles.chip, { borderColor: c.border, backgroundColor: c.surface }]}
-                          onPress={() => setB({ location: s })}>
-                          <AppText variant="caption" style={{ color: c.textSecondary }}>{s}</AppText>
-                        </TouchableOpacity>
-                      ))}
-                    </View>
-                  </ScrollView>
-                </View>
-              ) : null}
-            </Field>
+                placeholder={t('accident.report.phWhereHappen')} placeholderTextColor={c.textMuted} autoFocus />
+            )}
 
             <Field label={t('accident.report.driver')} styles={styles} textAlign={textAlign}>
               <TextInput style={[inputStyle, { textAlign }]} value={base.driver_name} onChangeText={v => setB({ driver_name: v })}
@@ -829,10 +866,8 @@ export default function AccidentReportScreen() {
                 <Dropdown label={t('accident.report.recoverySource')} value={extra.recovery_source} options={RECOVERY_SOURCE_OPTS}
                   display={v => tOpt(RECOVERY_SOURCE_LABELS[v] ?? v)} onSelect={v => setX({ recovery_source: v })} placeholder={t('accident.report.phSelect')} clearable />
                 <View style={styles.row}>
-                  <Field label={t('accident.report.recoveryDate')} styles={styles} textAlign={textAlign} flex>
-                    <TextInput style={[inputStyle, { textAlign }]} value={extra.recovery_date} onChangeText={v => setX({ recovery_date: v })}
-                      placeholder="YYYY-MM-DD" placeholderTextColor={c.textMuted} />
-                  </Field>
+                  <DateField label={t('accident.report.recoveryDate')} value={extra.recovery_date}
+                    onChange={v => setX({ recovery_date: v })} mode="date" flex allowClear />
                   <View style={{ width: spacing.md }} />
                   <Field label={t('accident.report.amountTransfer')} styles={styles} textAlign={textAlign} flex>
                     <TextInput style={[inputStyle, { textAlign }]} value={extra.amount_transfer} onChangeText={v => setX({ amount_transfer: v })}
@@ -871,15 +906,11 @@ export default function AccidentReportScreen() {
               </Field>
             )}
             <View style={styles.row}>
-              <Field label={t('accident.report.expectedRelease')} styles={styles} textAlign={textAlign} flex>
-                <TextInput style={[inputStyle, { textAlign }]} value={extra.expected_release_date} onChangeText={v => setX({ expected_release_date: v })}
-                  placeholder="YYYY-MM-DD" placeholderTextColor={c.textMuted} />
-              </Field>
+              <DateField label={t('accident.report.expectedRelease')} value={extra.expected_release_date}
+                onChange={v => setX({ expected_release_date: v })} mode="date" flex allowClear />
               <View style={{ width: spacing.md }} />
-              <Field label={t('accident.report.releaseDate')} styles={styles} textAlign={textAlign} flex>
-                <TextInput style={[inputStyle, { textAlign }]} value={extra.release_date} onChangeText={v => setX({ release_date: v })}
-                  placeholder="YYYY-MM-DD" placeholderTextColor={c.textMuted} />
-              </Field>
+              <DateField label={t('accident.report.releaseDate')} value={extra.release_date}
+                onChange={v => setX({ release_date: v })} mode="date" flex allowClear />
             </View>
           </Section>
 
@@ -887,8 +918,7 @@ export default function AccidentReportScreen() {
           <Section title={t('accident.report.secPhotos')} icon="images-outline" styles={styles} c={c}>
             <AppText variant="caption" color="muted" style={{ textAlign }}>{t('accident.report.attachPhotoHint')}</AppText>
             <View style={{ marginTop: spacing.sm }}>
-              <AccidentPhotoGrid photos={photoUrls} localUris={photoLocalUris}
-                onPhotosChange={(urls, uris) => { setPhotoUrls(urls); setPhotoLocalUris(uris) }}
+              <AccidentPhotoGrid entries={photoEntries} onChange={setPhotoEntries}
                 onUploadingChange={setPhotosUploading} />
             </View>
             {photosUploading && (
@@ -939,6 +969,68 @@ function Field({
   )
 }
 
+/**
+ * Native date/time field: read-only input showing the stored value, tapping it
+ * opens the platform calendar (mode="date") or clock (mode="time"). Android
+ * renders the picker conditionally as a dialog (fires onChange once, then
+ * closes); iOS shows an inline spinner with a Done row. Stored formats are
+ * unchanged: YYYY-MM-DD for dates, HH:mm for time.
+ */
+function DateField({
+  label, value, onChange, mode = 'date', flex, allowClear,
+}: {
+  label: string
+  value: string
+  onChange: (v: string) => void
+  mode?: 'date' | 'time'
+  flex?: boolean
+  allowClear?: boolean
+}) {
+  const { theme } = useTheme()
+  const { t } = useLanguage()
+  const c = theme.color
+  const styles = useMemo(() => createStyles(theme), [theme])
+  const [open, setOpen] = useState(false)
+  const parsed = mode === 'date' ? parseDateValue(value) : parseTimeValue(value)
+  const commit = (d: Date) => onChange(mode === 'date' ? formatDateLocal(d) : formatTimeLocal(d))
+  const onPicked = (event: DateTimePickerEvent, d?: Date) => {
+    if (Platform.OS !== 'ios') setOpen(false) // Android dialog: single onChange, then close
+    if (event.type === 'set' && d) commit(d)
+  }
+  return (
+    <View style={[styles.field, flex && { flex: 1 }]}>
+      <AppText variant="micro" color="secondary" style={styles.fieldLabel}>{label}</AppText>
+      <TouchableOpacity style={[styles.select, { backgroundColor: c.surface, borderColor: c.border }]}
+        onPress={() => setOpen(true)} activeOpacity={0.8}>
+        <Ionicons name={mode === 'date' ? 'calendar-outline' : 'time-outline'} size={16} color={c.textSecondary} />
+        <AppText variant="body" style={{ flex: 1, color: value ? c.text : c.textMuted }}>
+          {value || (mode === 'date' ? 'YYYY-MM-DD' : 'HH:MM')}
+        </AppText>
+        {allowClear && !!value ? (
+          <TouchableOpacity onPress={() => { setOpen(false); onChange('') }}
+            hitSlop={{ top: 8, right: 8, bottom: 8, left: 8 }}>
+            <Ionicons name="close-circle" size={16} color={c.borderStrong} />
+          </TouchableOpacity>
+        ) : (
+          <Ionicons name="chevron-down" size={16} color={c.textSecondary} />
+        )}
+      </TouchableOpacity>
+      {open && (
+        <>
+          <DateTimePicker value={parsed} mode={mode} is24Hour
+            display={Platform.OS === 'ios' ? 'spinner' : 'default'} onChange={onPicked} />
+          {Platform.OS === 'ios' && (
+            <TouchableOpacity style={[styles.ddCancel, { backgroundColor: c.surfaceAlt }]}
+              onPress={() => { if (!value) commit(parsed); setOpen(false) }}>
+              <AppText variant="bodyStrong" color="secondary">{t('common.done')}</AppText>
+            </TouchableOpacity>
+          )}
+        </>
+      )}
+    </View>
+  )
+}
+
 /** Clear bottom-sheet dropdown for constrained vocabularies. */
 function Dropdown({
   label, value, options, onSelect, placeholder, display, clearable,
@@ -954,6 +1046,7 @@ function Dropdown({
   const { theme } = useTheme()
   const { t } = useLanguage()
   const c = theme.color
+  const insets = useSafeAreaInsets()
   const styles = useMemo(() => createStyles(theme), [theme])
   const [open, setOpen] = useState(false)
   const shown = value ? (display ? display(value) : value) : ''
@@ -966,13 +1059,20 @@ function Dropdown({
       </TouchableOpacity>
       <Modal visible={open} transparent animationType="slide" onRequestClose={() => setOpen(false)}>
         <TouchableOpacity style={[styles.ddBackdrop, { backgroundColor: c.overlay }]} activeOpacity={1} onPress={() => setOpen(false)}>
-          <View style={[styles.ddSheet, { backgroundColor: c.surface }]}>
+          <View style={[styles.ddSheet, { backgroundColor: c.surface, paddingBottom: Math.max(insets.bottom, 24) }]}>
             <View style={[styles.ddHandle, { backgroundColor: c.borderStrong }]} />
             <AppText variant="h3" style={{ marginBottom: spacing.sm }}>{label}</AppText>
             <ScrollView style={{ maxHeight: 360 }}>
+              {/* Deselect row - visually distinct (muted + eraser icon) so it can
+                  never be read as one of the actual values. */}
               {clearable && (
-                <TouchableOpacity style={styles.ddOption} onPress={() => { onSelect(''); setOpen(false) }}>
-                  <AppText variant="body" color="muted">{t('common.clear')}</AppText>
+                <TouchableOpacity
+                  style={[styles.ddOption, styles.ddClearRow, { backgroundColor: c.surfaceAlt, borderColor: c.border }]}
+                  onPress={() => { onSelect(''); setOpen(false) }}>
+                  <Ionicons name="backspace-outline" size={16} color={c.textMuted} />
+                  <AppText variant="caption" color="muted" style={{ flex: 1, fontStyle: 'italic' }}>
+                    {t('accident.report.clearSelection')}
+                  </AppText>
                   {!value && <Ionicons name="checkmark-circle" size={20} color={c.danger.base} />}
                 </TouchableOpacity>
               )}
@@ -1056,6 +1156,7 @@ function createStyles(theme: Theme) {
       flexDirection: 'row', alignItems: 'center', gap: spacing.md,
       paddingVertical: spacing.md, paddingHorizontal: spacing.md, borderRadius: radius.md, marginBottom: 2,
     },
+    ddClearRow: { borderWidth: 1, borderStyle: 'dashed', gap: spacing.sm, marginBottom: spacing.sm, paddingVertical: spacing.sm + 2 },
     ddCancel: { marginTop: spacing.sm, paddingVertical: spacing.md, borderRadius: radius.md, alignItems: 'center' },
 
     successWrap: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: spacing['2xl'] },

@@ -563,7 +563,19 @@
       "phSearchToBegin": "اكتب رقم الأصل أو امسح لإيجاد المركبة. تظهر الأصول بعد البحث فقط.",
       "locationSuggest": "تعبئة سريعة من المواقع:",
       "phFleetNo": "رقم الأسطول",
-      "phNoVehicleMatch": "لم يتم العثور على مركبات مطابقة."
+      "phNoVehicleMatch": "لم يتم العثور على مركبات مطابقة.",
+      "clearSelection": "مسح الاختيار",
+      "photoLicense": "رخصة القيادة",
+      "photoResidentId": "هوية المقيم (الإقامة)",
+      "photoRegistration": "استمارة المركبة",
+      "photoNajm": "تقرير نجم",
+      "photoTaqdeer": "تقرير تقدير",
+      "photoAccident": "صور الحادث",
+      "photoReplace": "استبدال",
+      "photoRemove": "إزالة",
+      "photoRemoveConfirm": "هل تريد إزالة هذه الصورة؟",
+      "photoUploadFailed": "تعذر رفع الصورة. تحقق من الاتصال وحاول مرة أخرى.",
+      "photoMaxReached": "تم بلوغ الحد الأقصى لصور الحادث"
     },
     "detail": {
       "exportFailed": "فشل التصدير",

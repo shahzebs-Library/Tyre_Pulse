@@ -830,6 +830,10 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
   remain the fallback; zero change when no custom rows exist. RULE: to change how a vehicle type renders,
   use the console designer (do NOT hand-edit LAYOUTS for org-specific configs); mobile does NOT read these
   yet (its diagrams stay built-in - a later extension would port getCustomLayoutMap to mobile).
+- **Deepened (2026-07-18)**: per-axle lift/spacing/tyreSize; accents headlights/workLight/hazardSpeed;
+  "Start from" built-in template picker (builtinToConfig) + Duplicate + bulk "Apply to more types";
+  preview-only tyre-status simulation (statuses prop, never persisted); fleet coverage panel (types with
+  no design) + saved-design search. Engine tests 22. Config back-compat: normalize defaults every new field.
 - Next free migration **V269**.
 
 ### 2026-07-17 field-feedback batch 2 (PR #70) — sync fix, approval push, form parity, diagram truth

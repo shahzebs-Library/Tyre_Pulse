@@ -5,9 +5,11 @@ import React from 'react'
  *
  * Draws a top-down vehicle body from the pure `bodySpec` emitted by
  * src/lib/vehicleDiagram.js positionsFromConfig(): cab + hull rectangles
- * styled per body style, plus animated accents (blinking hazard indicators,
- * pulsing roof beacon, rotating mixer drum). All animation is CSS keyframes
- * inside the SVG and is disabled under prefers-reduced-motion.
+ * styled per body style, plus animated accents (blinking hazard indicators
+ * with selectable speed, pulsing roof beacon, rotating mixer drum), static
+ * glow accents (headlight beams, rear work light) and LIFT axle markers.
+ * All animation is CSS keyframes inside the SVG and is disabled under
+ * prefers-reduced-motion.
  *
  * Shared by src/components/VehicleTyreDiagram.jsx (custom layouts in the app)
  * and the console Vehicle Designer live preview - do NOT fork this renderer.
@@ -28,17 +30,70 @@ const ANIM_CSS = `
 }
 `
 
-function HazardLights({ cab, hull }) {
+/** Blink interval per configured hazard speed ('slow'|'normal'|'fast'). */
+const HAZARD_BLINK_SECONDS = { slow: 1.6, normal: 1, fast: 0.5 }
+
+function HazardLights({ cab, hull, speed = 'normal' }) {
   const top = cab.y + 3
   const bottom = hull.y + hull.h - 3
   const xL = cab.x + 4
   const xR = cab.x + cab.w - 4
+  const dur = HAZARD_BLINK_SECONDS[speed] || HAZARD_BLINK_SECONDS.normal
   return (
-    <g className="vdz-hazard">
+    <g className="vdz-hazard" style={{ animationDuration: `${dur}s` }}>
       {[[xL, top], [xR, top], [xL, bottom], [xR, bottom]].map(([x, y], i) => (
         <g key={i}>
           <circle cx={x} cy={y} r="4.5" fill="#f59e0b" opacity="0.25" />
           <circle cx={x} cy={y} r="2.6" fill="#fbbf24" stroke="#b45309" strokeWidth="0.5" />
+        </g>
+      ))}
+    </g>
+  )
+}
+
+/** Soft white headlight beams at the cab front (vehicle front = top). */
+function Headlights({ cab }) {
+  const y = cab.y + 1
+  const xs = [cab.x + 13, cab.x + cab.w - 13]
+  return (
+    <g>
+      {xs.map((x, i) => (
+        <g key={i}>
+          <path d={`M ${x - 3},${y} L ${x + 3},${y} L ${x + 7},${y - 12} L ${x - 7},${y - 12} Z`}
+            fill="#f8fafc" opacity="0.18" />
+          <rect x={x - 3.5} y={y - 1.5} width="7" height="3.5" rx="1.2"
+            fill="#e0f2fe" stroke="#64748b" strokeWidth="0.5" />
+        </g>
+      ))}
+    </g>
+  )
+}
+
+/** Rear amber work-light glow at the back of the hull. */
+function WorkLight({ hull }) {
+  const cx = hull.x + hull.w / 2
+  const y = hull.y + hull.h
+  return (
+    <g>
+      <ellipse cx={cx} cy={y + 4} rx="17" ry="7" fill="#fbbf24" opacity="0.22" />
+      <ellipse cx={cx} cy={y + 3} rx="9" ry="4" fill="#fde68a" opacity="0.3" />
+      <rect x={cx - 4.5} y={y - 2} width="9" height="4" rx="1.2"
+        fill="#fde68a" stroke="#b45309" strokeWidth="0.5" />
+    </g>
+  )
+}
+
+/** Small LIFT pills over each lifted axle line. */
+function LiftMarkers({ markers }) {
+  if (!Array.isArray(markers) || markers.length === 0) return null
+  return (
+    <g>
+      {markers.map((m, i) => (
+        <g key={i} opacity="0.92">
+          <rect x="87" y={m.y - 4.5} width="26" height="9" rx="3.5"
+            fill="#0f172a" stroke="#f97316" strokeWidth="0.6" />
+          <text x="100" y={m.y + 1.7} textAnchor="middle" fontSize="4.6"
+            fontWeight="800" fill="#fdba74" letterSpacing="0.6">LIFT</text>
         </g>
       ))}
     </g>
@@ -247,18 +302,35 @@ export default function CustomBody({ spec }) {
       {body === 'pickup' && <PickupHull hull={hull} />}
       {body === 'trailer' && <TrailerHull hull={hull} />}
       {body === 'loader' && <LoaderHull cab={cab} hull={hull} />}
-      {accents.hazard && <HazardLights cab={cab} hull={hull} />}
+      <LiftMarkers markers={spec.liftMarkers} />
+      {accents.headlights && <Headlights cab={cab} />}
+      {accents.workLight && <WorkLight hull={hull} />}
+      {accents.hazard && <HazardLights cab={cab} hull={hull} speed={accents.hazardSpeed} />}
       {accents.beacon && <Beacon cab={cab} />}
     </g>
   )
 }
 
 /**
+ * The app's tyre status palette (matches RISK in VehicleTyreDiagram.jsx) so
+ * the designer's "Simulate tyre status" preview shows the real live colours.
+ */
+export const PREVIEW_STATUS_COLORS = {
+  good: { rim: '#22c55e', hub: '#15803d' },
+  warning: { rim: '#f59e0b', hub: '#b45309' },
+  critical: { rim: '#ef4444', hub: '#b91c1c' },
+}
+
+/**
  * Standalone preview SVG for the console designer: same viewBox geometry as
  * VehicleTyreDiagram, the shared CustomBody, and simple wheel slots rendered
  * from the SAME positionsFromConfig() output the app consumes.
+ *
+ * `statuses` (optional, preview-only) is a { tyreId: 'good'|'warning'|
+ * 'critical' } map; matching wheels get the app's status ring + hub colour so
+ * an admin can see the design under live data. It is never persisted.
  */
-export function CustomDiagramPreview({ layout, width = 260 }) {
+export function CustomDiagramPreview({ layout, width = 260, statuses = null }) {
   if (!layout) return null
   const { viewH, tyres, bodySpec } = layout
   const scale = width / 200
@@ -274,22 +346,26 @@ export function CustomDiagramPreview({ layout, width = 260 }) {
       <text x="100" y="-1" textAnchor="middle" fontSize="5.5" fill="#94a3b8"
         fontWeight="600" letterSpacing="1">FRONT</text>
       <CustomBody spec={bodySpec} />
-      {tyres.map((t) => (
-        <g key={t.id}>
-          <rect x={t.x} y={t.y} width={t.w} height={t.h} rx={t.w * 0.28}
-            fill="#111111" stroke="#000" strokeWidth="0.6" />
-          {[0.22, 0.42, 0.62, 0.8].map((pct, i) => (
-            <rect key={i} x={t.x + 1.5} y={t.y + t.h * pct} width={t.w - 3} height={t.h * 0.08}
-              rx="0.8" fill="#2d2d2d" />
-          ))}
-          <ellipse cx={t.x + t.w / 2} cy={t.y + t.h / 2} rx={t.w * 0.3} ry={t.h * 0.3}
-            fill="#6b7280" stroke="#374151" strokeWidth="0.6" />
-          <text x={t.x + t.w / 2} y={t.y + t.h / 2 + 1} textAnchor="middle" dominantBaseline="middle"
-            fontSize="4.6" fontWeight="800" fill="white" style={{ userSelect: 'none' }}>
-            {t.label}
-          </text>
-        </g>
-      ))}
+      {tyres.map((t) => {
+        const status = statuses ? PREVIEW_STATUS_COLORS[statuses[t.id]] : null
+        return (
+          <g key={t.id}>
+            <rect x={t.x} y={t.y} width={t.w} height={t.h} rx={t.w * 0.28}
+              fill="#111111" stroke={status ? status.rim : '#000'}
+              strokeWidth={status ? 1.4 : 0.6} />
+            {[0.22, 0.42, 0.62, 0.8].map((pct, i) => (
+              <rect key={i} x={t.x + 1.5} y={t.y + t.h * pct} width={t.w - 3} height={t.h * 0.08}
+                rx="0.8" fill="#2d2d2d" />
+            ))}
+            <ellipse cx={t.x + t.w / 2} cy={t.y + t.h / 2} rx={t.w * 0.3} ry={t.h * 0.3}
+              fill={status ? status.hub : '#6b7280'} stroke={status ? status.rim : '#374151'} strokeWidth="0.6" />
+            <text x={t.x + t.w / 2} y={t.y + t.h / 2 + 1} textAnchor="middle" dominantBaseline="middle"
+              fontSize="4.6" fontWeight="800" fill="white" style={{ userSelect: 'none' }}>
+              {t.label}
+            </text>
+          </g>
+        )
+      })}
     </svg>
   )
 }

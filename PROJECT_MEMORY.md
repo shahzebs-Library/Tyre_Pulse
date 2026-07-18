@@ -983,6 +983,42 @@ Multi-agent batch. All merged; migrations through **V271**, next free **V272**.
   Tyre Specifications / PM Schedules / Service History reference tabs + a READ ME. Regenerate from
   `src/lib/import/synonyms.js` MODULE_FIELDS if needed.
 
+### ERP data intake template + Cost-per-unit (km / hour / m3) plan (2026-07-18)
+- **Asset data-collection template UPDATED** (delivered to the user, lives in scratchpad, NOT a repo file):
+  `TyrePulse_Data_Collection_Template.xlsx` now has 3 EXTRA tabs beyond the 10 importer tabs +
+  reference tabs: **Asset Master (ERP Extended)** (plate, finance Purchase/NBV/monthly-dep, insurance,
+  operating card, driver-licence dates, capacity, shift, org/OU), **Tyre Change Log** (the real tyre
+  lifecycle columns from the ERP: asset_no, tire_pos, srno=serial, tire_size, tyre_brand, fix_date/fix_KM/
+  fix_HM, remove_date/remove_KM/remove_HM, total_km, old_serialno, old_tyrebrand, Job Card No, version,
+  site), and **Tyre Expense - Purchase** (serial/job-card + unit cost + supplier/invoice/PO -- the COST the
+  change log lacks). Regenerate by appending to the base template built from `src/lib/import/synonyms.js`
+  MODULE_FIELDS.
+- **ERP files understood (2 samples reviewed):** `asset_details_ksa.xlsx` = Asset Master -> `vehicle_fleet`
+  (+ finance/insurance/operating-card). `Book1.xlsx` = Job Cards with tyre-change columns bolted on; in the
+  sample EVERY tyre column was NULL (job-card-only export), so real tyre-change rows must come from a
+  dedicated tyre export (the new Tyre Change Log tab). Book1 has NO tyre cost column -> Tyre Expense tab is
+  required for CPK.
+- **Active-vs-old tyre RULE (confirmed logic, for the future loader):** group tyre-change rows by
+  (asset_no, tire_pos), sort by fix_date; the row with the LATEST fix_date = the CURRENT/active tyre (goes
+  active) REGARDLESS of remove_date (old rows often have a blank remove_date). All earlier rows on that
+  position = OLD/history/expense. Validate with `old_serialno` == previous row's `srno` (mismatch = data-
+  quality flag). A serial on multiple assets over time = the tyre MOVED (latest fitment wins). Do NOT rely on
+  "remove_date IS NULL = active" alone.
+- **Million-row ingestion PLAN (not the browser importer):** COPY into staging tables (stg_asset_master/
+  stg_tyre_changes/stg_job_cards) -> SQL transform (normalize casing via V245/V246/V247, derive is_active,
+  compute total_km, chain by old_serialno) -> idempotent UPSERT into vehicle_fleet(asset_no) /
+  tyre_records(serial_no,asset_no,fix_date) / work_orders(job card); incremental via version_no/update_date.
+- **BACKLOG - Unit-aware Cost Intelligence (cost per km / engine-hour / m3):** the operating company measures
+  cost as "cost per cubic meter" for volume assets (concrete pumps / water treatment). Build a unit-aware
+  metric = total expenses in [from,to] / total running-unit in [from,to], where unit = km (odometer_logs) /
+  hours (engine_hours_logs) / **m3 (NEW production_logs table - does not exist yet; V276)**. REUSE
+  `src/lib/costSources.js` (COST_MODES Combined/Tyres/Maintenance switch) + `src/lib/api/costSummary.js`
+  loadCostSplit (extend to accept from/to instead of fixed 12 months) + kpiEngine (do NOT rebuild CPK maths).
+  ALSO: surface the existing Tyres/General/Combined cost switch on Dashboard + EngineeringKpi (it is currently
+  only on CostCenter/Analytics/BoardOverview/ExecutiveReport/PmPrograms - user could not find it). Open
+  decision: m3 source = production-log entry screen (like meter-logs) and/or an ERP m3 import. Next free
+  migration **V276**.
+
 ### Vehicle SVG Designer (V268, 2026-07-17) — super-admin custom vehicle diagram builder
 - **/console/vehicle-designer** (ConsoleVehicleDesigner.jsx, nav "Vehicle Designer", Truck icon, pure console
   navy+orange): design a vehicle type's diagram (axles 1..6 with kind steer/drive/trailer/lift + single/dual,

@@ -807,6 +807,10 @@
         "pm": {
           "label": "Maintenance Due",
           "sub": "PM plans + record service"
+        },
+        "washing": {
+          "label": "Vehicle Washing",
+          "sub": "Log a wash"
         }
       }
     },
@@ -1177,7 +1181,12 @@
       "dueToday": "due today",
       "daysOverdue": "days overdue",
       "dueIn": "due in",
-      "days": "days"
+      "days": "days",
+      "tmPickAsset": "Search your asset to begin",
+      "tmSearchPlaceholder": "Search asset number...",
+      "tmSearchHint": "Type at least 2 characters to find your asset.",
+      "tmNoMatch": "No matching asset found.",
+      "tmChange": "Change"
     },
     "checklistFill": {
       "reviewTitle": "Please review",
@@ -1310,6 +1319,62 @@
       "saveService": "Save service",
       "savedTitle": "Service recorded",
       "savedBody": "The schedule has been advanced to the next due date."
+    },
+    "washing": {
+      "title": "Vehicle Washing",
+      "assetLabel": "Asset / Vehicle *",
+      "scan": "Scan",
+      "assetPlaceholder": "Scan, select or type the asset...",
+      "fleetNo": "Fleet No.",
+      "site": "Site",
+      "sitePlaceholder": "Select the site...",
+      "siteHelp": "Site auto-fills from the asset's fleet record. You can change it.",
+      "dateLabel": "Wash date",
+      "today": "Today",
+      "typeLabel": "Wash type *",
+      "types": {
+        "Exterior": "Exterior",
+        "Interior": "Interior",
+        "Full": "Full",
+        "EngineBay": "Engine Bay",
+        "Undercarriage": "Undercarriage",
+        "Steam": "Steam",
+        "Waterless": "Waterless"
+      },
+      "photosLabel": "Wash photos",
+      "addPhoto": "Add Photo",
+      "detailsLabel": "Wash details",
+      "bay": "Bay",
+      "bayPlaceholder": "e.g. Bay 2",
+      "water": "Water (liters)",
+      "waterPlaceholder": "e.g. 120",
+      "duration": "Duration (min)",
+      "durationPlaceholder": "e.g. 25",
+      "odometer": "Odometer (km)",
+      "odometerPlaceholder": "e.g. 128450",
+      "notesLabel": "Notes",
+      "notesPlaceholder": "Anything worth noting...",
+      "save": "Save Wash",
+      "savedLogged": "Wash logged.",
+      "savedPending": "Wash saved. Pending sync.",
+      "dueTitle": "Due for wash",
+      "dueNone": "No vehicles are due for a wash.",
+      "dueToday": "Due today",
+      "daysOverdue": "days overdue",
+      "assetRequiredTitle": "Asset required",
+      "assetRequiredMsg": "Select the vehicle / asset you washed.",
+      "typeRequiredTitle": "Wash type required",
+      "typeRequiredMsg": "Choose the type of wash performed.",
+      "saveFailTitle": "Could not log wash",
+      "tryAgain": "Please try again.",
+      "camNeededTitle": "Camera access needed",
+      "camNeededMsg": "Allow camera access to scan an asset barcode, or type the asset code by hand.",
+      "nothingScannedTitle": "Nothing scanned",
+      "nothingScannedMsg": "Could not read an asset code. Try again or type it in.",
+      "scanAsset": "Scan Asset",
+      "frameHint": "Point the camera at the asset barcode or QR label.",
+      "camUnavailable": "Camera unavailable",
+      "camUnavailableMsg": "The camera could not be started. Close this and type the asset code by hand."
     }
   },
   "checklists": {

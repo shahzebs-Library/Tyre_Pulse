@@ -812,6 +812,30 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
   on testers' devices once that build finishes + Play processes it. No DB/schema change; branch realigned to
   origin/main. For NEW work restart the branch from latest main (merged PRs are terminal).
 
+### Auth assurance gate - password-only (pre-2FA) sessions no longer expose data (2026-07-18)
+- **BUG (user-reported, real):** the main app + admin `/console` SHARE one Supabase client + one
+  localStorage session. `signInWithPassword` creates a LIVE session at AAL1 the instant the password
+  is accepted, BEFORE the 2FA step. `AuthContext.handleSession` (the passive/cross-tab
+  onAuthStateChange listener) set `user` + loaded ALL data on ANY session and never checked the
+  assurance level. Net effect: entering only a password (in the main login form OR the Console tab)
+  showed all data before completing 2FA, and a Console login silently authenticated a main-app tab
+  in another browser tab with no click. The console 2FA gate was cosmetic for data access.
+- **FIX (defense in depth, no server change):** single helper **`src/lib/authAssurance.js`**
+  `hasUnmetMfa()` = `getAuthenticatorAssuranceLevel()` returns currentLevel aal1 while nextLevel aal2
+  (MFA enrolled but not completed). Fails OPEN=false on error (never locks out a no-MFA user; RLS is
+  still the server boundary). Consumed by:
+  - `AuthContext.handleSession` (now async): a NEW session identity is admitted only after
+    `!hasUnmetMfa()`; a half-login is refused LOCALLY (user stays null, login page + its existing MFA
+    modal show) - it does NOT sign out (the shared session is mid-MFA in the Console tab; signing out
+    would abort it). Same-user token-refresh/refocus path skips the check (assurance never downgrades).
+    Extracted `clearUserScopedState()` shared by signed-out + refusal branches.
+  - `ConsoleAuthContext.resolveAdmin`: a super-admin with unmet MFA is NOT granted `admin` (guard shows
+    the login/MFA prompt); no sign-out for the same reason. Verified AAL2 session admits on the next event.
+- RULE: cross-tab session sharing for a FULLY-authenticated (AAL2 or no-MFA) user is standard browser
+  behavior and is intentionally kept; only the half-authenticated case is blocked. To make the gate
+  actually apply to a super-admin, they must ENROLL 2FA in the console (Security). Tests
+  `authAssurance.test.js` (6). Build clean. No migration.
+
 ### Site-level ABAC (V269, 2026-07-18) — per-user site visibility, DB-enforced
 - **Model: RBAC (what you can do) + attributes (which data you see): org > country > SITE.**
   `profiles.sites text[]`: NULL/empty = ALL sites; Admin/super always all. Helper

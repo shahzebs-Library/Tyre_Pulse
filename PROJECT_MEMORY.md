@@ -812,8 +812,23 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
   on testers' devices once that build finishes + Play processes it. No DB/schema change; branch realigned to
   origin/main. For NEW work restart the branch from latest main (merged PRs are terminal).
 
+### Play Store Data Safety + public data-deletion page (2026-07-18, PRs #82/#83)
+- **Deletion mechanism (Google Play requirement):** NEW public anon page **`src/pages/DataDeletion.jsx`** at
+  route **`/data-deletion`** (+ `/delete-account` redirect), wired in App.jsx MainApp Routes OUTSIDE
+  ProtectedRoute (sibling of /login, /report/:token). Self-contained light-theme document (no app shell/auth):
+  how to request account+data deletion, what is deleted vs retained (org audit records de-identified), ~30-day
+  timeline, encrypted-in-transit, no ads / no data selling. `SUPPORT_EMAIL = 'info@tyrepulse.app'` (real inbox;
+  deletion requests land there). **URL for the Play Data Safety form = `https://tyrepulse.app/data-deletion`.**
+- **Data Safety declaration (what the MOBILE app actually collects, for the form):** App info & performance =
+  Crash logs + Diagnostics/performance traces (Sentry @sentry/react-native, tracesSampleRate 0.2, tags user
+  id/username) -> the ONLY data SHARED to a third party. Personal info = Name/Phone(optional)/User IDs
+  (username+employee_id; email is a SYNTHETIC non-routable @users.tyrepulse.app so can be declared Not
+  collected). Location = foreground-only balanced accuracy (geotags inspections). Photos. Device/other IDs =
+  push_token. App activity = inspections/accidents/meter logs. ALL Collected + encrypted in transit; NO
+  third-party analytics/ads in mobile (no PostHog/Firebase/ad SDKs) -> "used to track users"/"Ads" = No.
+
 ### SESSION 2026-07-18 CLOSED CLEAN — all merged to main, nothing pending
-- Everything this session is MERGED to main (PRs #67-#81) and branch realigned to origin/main. Migrations
+- Everything this session is MERGED to main (PRs #67-#83) and branch realigned to origin/main. Migrations
   through **V269**; next free **V270**. No outstanding code TODO.
 - **Mobile (Play Internal builds shipped):** brand icon/splash/login logo (#67); recovered 4 lost field
   commits + admin-console crash fix + Preventive Maintenance screen (#69); inspection-sync CHECK-token fix +
@@ -822,7 +837,8 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
   + checklist interval section-pruning (#72); per-user Deny applies to admins (#74). RULE: native changes
   (datetimepicker, keyboard mode, icon) need a fresh EAS build - testers must UPDATE from the Play track.
 - **Web:** Vehicle SVG Designer V268 (#71) + deepened (#73) + pseudo-3D art (#75); Site-level ABAC V269 (#76);
-  Data Intake one-click "combine line items" for single-key modules (#77).
+  Data Intake one-click "combine line items" for single-key modules (#77); public /data-deletion page +
+  Play Data Safety mapping (#82/#83, see section above).
 - **Session security (the big one, 3 layers + a policy tweak):** #78 pre-2FA block, #79 surface partition,
   #80 tab-local sessionStorage + idle/absolute auto-logout, #81 idle tightened to 10min (2FA kept OPTIONAL
   per user). Console is now fully isolated + auto-expiring; main app keeps localStorage persistence for field

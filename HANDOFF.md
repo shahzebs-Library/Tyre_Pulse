@@ -1,4 +1,30 @@
 # TyrePulse - Developer Handoff
+
+> **CURRENT SOURCE OF TRUTH = `PROJECT_MEMORY.md`.** It carries the durable,
+> per-session detail for everything after Session 16 (migrations, module map,
+> anti-duplication rules). Read it first. The block below is the current-state
+> snapshot; the sections further down are the older Session-16 handoff, kept for
+> reference.
+
+## Current state (2026-07-18)
+- **Branch:** `main` (auto-deploys to Vercel). Active dev branch
+  `claude/accident-builder-report-ui-2bkwb5` (== `main` between merges).
+- **DB migrations applied live:** through **V269** (project `jhssdmeruxtrlqnwfksc`); next free **V270**.
+- **Web:** `vite build` clean. Recent: Vehicle SVG Designer (`/console/vehicle-designer`, 3D art),
+  Site-level ABAC (V269, per-user `profiles.sites`), Data Intake "combine line items", and a
+  **session-security overhaul** (3 layers): pre-2FA data block, console/main-app session PARTITION
+  (separate storage keys, no cross-tab bleed), console session TAB-LOCAL (sessionStorage) + idle(10min)/
+  absolute(8h) auto-logout. Public **`/data-deletion`** page = the Google Play Data Safety deletion URL
+  (`https://tyrepulse.app/data-deletion`, inbox `info@tyrepulse.app`).
+- **Mobile (Expo SDK 54 / RN 0.81):** `tsc --noEmit` clean; ships to the Play **Internal** track via
+  `release-play.yml` (EAS `--auto-submit`). Recent: real brand icon/splash, inspection-sync CHECK-token
+  fix, V267 approval push, accident asset-first form + native date/time pickers + categorized photos,
+  keyboard-flicker + nav-bar-overlap fixes, PM record-service screen, per-user Deny applies to admins.
+  RULE: native changes need a fresh EAS build - testers must UPDATE from the Play track.
+
+---
+
+## Session 16 handoff (historical, 12 July 2026)
 **Last updated:** 12 July 2026 (Session 16)
 **Branch:** `main` (auto-deploys to Vercel). Session 16 shipped the accident-detail crash fix, intake diagnostics, the 3 remaining approval modules, and the whole **Checklist system** (builder → runtime → approval → schedules → mobile), all committed + pushed to `main`.
 **Web build status:** ✅ Clean - builds with zero errors (`vite build` green); full suite **1775 tests green**, auto-deploys to Vercel.

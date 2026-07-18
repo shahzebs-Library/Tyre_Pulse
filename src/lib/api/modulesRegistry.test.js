@@ -41,7 +41,27 @@ describe('service layer - modules registry', () => {
     expect(h.state.table).toBe('modules')
     expect(h.state.update).toMatchObject({ status: 'maintenance' })
     expect(h.state.update.last_updated).toBeTruthy()
+    // No window supplied -> both maintenance columns cleared.
+    expect(h.state.update.maintenance_until).toBeNull()
+    expect(h.state.update.maintenance_note).toBeNull()
     expect(out).toEqual(row)
+  })
+
+  it('setModuleStatus persists the maintenance window (until ISO + trimmed note)', async () => {
+    h.state.result = { data: {}, error: null }
+    await reg.setModuleStatus('reports', 'maintenance', { until: '2026-07-20T10:00', note: '  Upgrading  ' })
+    expect(h.state.update.status).toBe('maintenance')
+    expect(typeof h.state.update.maintenance_until).toBe('string')
+    expect(Number.isNaN(new Date(h.state.update.maintenance_until).getTime())).toBe(false)
+    expect(h.state.update.maintenance_note).toBe('Upgrading')
+  })
+
+  it('setModuleStatus clears the window when status is not maintenance', async () => {
+    h.state.result = { data: {}, error: null }
+    await reg.setModuleStatus('reports', 'live', { until: '2026-07-20T10:00', note: 'stale' })
+    expect(h.state.update.status).toBe('live')
+    expect(h.state.update.maintenance_until).toBeNull()
+    expect(h.state.update.maintenance_note).toBeNull()
   })
 
   it('listModules degrades to [] when the table is missing', async () => {

@@ -78,9 +78,10 @@ export function AuthProvider({ children }) {
   // Fail-closed to {}. UI-gating only — the server (app_user_can / RLS) is the
   // real boundary; only `view` is server-enforced today.
   const [capabilities, setCapabilities] = useState({})
-  // Module lifecycle status map { module_id: 'live'|'maintenance'|'disabled'|'beta' }
-  // from Module Control (V258). Best-effort: unreadable / pre-migration -> {} so
-  // status enforcement fails OPEN (an unknown key is treated as 'live').
+  // Module lifecycle status map { module_id: { status, until, note } } from
+  // Module Control (V258 + V278 maintenance window). Best-effort: unreadable /
+  // pre-migration -> {} so status enforcement fails OPEN (an unknown key is
+  // treated as 'live').
   const [moduleStatuses, setModuleStatuses] = useState({})
 
   // Idle timeout - sign out after 30 minutes of inactivity.
@@ -228,7 +229,7 @@ export function AuthProvider({ children }) {
 
   async function fetchProfile(userId) {
     const [profileRes, permsRes, factorsRes, grantsRes, capsRes] = await Promise.all([
-      supabase.from('profiles').select('id,full_name,username,role,email,employee_id,site,country,approved,locked,is_super_admin,created_at').eq('id', userId).single(),
+      supabase.from('profiles').select('id,full_name,username,role,email,employee_id,site,country,approved,locked,is_super_admin,web_access,created_at').eq('id', userId).single(),
       supabase.rpc('get_user_module_permissions'),
       supabase.auth.mfa.listFactors(),
       // Per-user access grants. Fail-closed: on any error keep {} — never throw
@@ -337,11 +338,24 @@ export function AuthProvider({ children }) {
 
   // Lifecycle status of a module from Module Control. Returns 'live' whenever the
   // key is unknown or the registry is unreadable (fail-open) so route enforcement
-  // never locks users out of a module that simply has no status row.
+  // never locks users out of a module that simply has no status row. The stored
+  // value is an object { status, until, note }; a legacy bare-string value is
+  // still tolerated so nothing breaks if the shape is ever mixed.
   const moduleStatus = useCallback((moduleKey) => {
     if (!moduleKey) return 'live'
-    const s = moduleStatuses?.[moduleKey]
+    const entry = moduleStatuses?.[moduleKey]
+    const s = typeof entry === 'string' ? entry : entry?.status
     return typeof s === 'string' && s ? s : 'live'
+  }, [moduleStatuses])
+
+  // Maintenance window for a module from Module Control (V278): the optional ETA
+  // (ISO string) and note shown on the "Under maintenance" screen. Returns
+  // { until: null, note: null } when unknown/unreadable (nothing to show).
+  const moduleMaintenance = useCallback((moduleKey) => {
+    if (!moduleKey) return { until: null, note: null }
+    const entry = moduleStatuses?.[moduleKey]
+    if (!entry || typeof entry === 'string') return { until: null, note: null }
+    return { until: entry.until ?? null, note: entry.note ?? null }
   }, [moduleStatuses])
 
   // Set of module keys the user was explicitly GRANTED beyond their role.
@@ -467,8 +481,8 @@ export function AuthProvider({ children }) {
   }, [])
 
   const value = useMemo(
-    () => ({ user, profile, loading, modulePerms, hasPermission, signIn, signOut, mfaEnabled, setMfaEnabled, isSuperAdmin, grantOverrides, grantedModules, refreshAccess, capabilities, hasCapability, moduleStatus }),
-    [user, profile, loading, modulePerms, mfaEnabled, hasPermission, signIn, signOut, setMfaEnabled, isSuperAdmin, grantOverrides, grantedModules, refreshAccess, capabilities, hasCapability, moduleStatus],
+    () => ({ user, profile, loading, modulePerms, hasPermission, signIn, signOut, mfaEnabled, setMfaEnabled, isSuperAdmin, grantOverrides, grantedModules, refreshAccess, capabilities, hasCapability, moduleStatus, moduleMaintenance }),
+    [user, profile, loading, modulePerms, mfaEnabled, hasPermission, signIn, signOut, setMfaEnabled, isSuperAdmin, grantOverrides, grantedModules, refreshAccess, capabilities, hasCapability, moduleStatus, moduleMaintenance],
   )
 
   return (

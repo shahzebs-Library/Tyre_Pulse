@@ -31,7 +31,7 @@ export const MODULE_STATUS_META = {
 
 /** Explicit least-privilege column list (no SELECT *). */
 export const MODULE_COLS =
-  'module_id,name,category,status,visible_to,roles,depends_on,note,last_updated,updated_by'
+  'module_id,name,category,status,visible_to,roles,depends_on,note,maintenance_until,maintenance_note,last_updated,updated_by'
 
 /**
  * True when the failure is "table does not exist yet" (pre-migration) so callers
@@ -70,20 +70,34 @@ export async function listModules() {
 }
 
 /**
- * Read a lightweight { module_id: status } map of every module row, for app-wide
- * status enforcement (Module Control). Least-privilege projection (id + status
- * only). Degrades to an empty map on ANY failure - missing table (pre-migration),
- * read error, or unexpected shape - so enforcement can FAIL OPEN (availability
- * over lockout) rather than blocking routes when the registry is unreadable.
+ * Read a lightweight { module_id: { status, until, note } } map of every module
+ * row, for app-wide status enforcement (Module Control) plus the maintenance
+ * window (ETA + note). Least-privilege projection (id + status + the two
+ * maintenance columns). Degrades to an empty map on ANY failure - missing table
+ * (pre-migration), read error, or unexpected shape - so enforcement can FAIL
+ * OPEN (availability over lockout) rather than blocking routes when the registry
+ * is unreadable.
  *
- * @returns {Promise<Record<string,string>>}
+ * NOTE: the map VALUE is an object (not a bare status string). Callers read
+ * `.status` for the lifecycle state and `.until` / `.note` for the maintenance
+ * window (AuthContext.moduleStatus / moduleMaintenance do exactly this).
+ *
+ * @returns {Promise<Record<string,{status:string,until:(string|null),note:(string|null)}>>}
  */
 export async function listModuleStatuses() {
   try {
-    const rows = unwrap(await supabase.from('modules').select('module_id,status')) || []
+    const rows = unwrap(
+      await supabase.from('modules').select('module_id,status,maintenance_until,maintenance_note'),
+    ) || []
     const map = {}
     for (const r of rows) {
-      if (r && r.module_id != null) map[String(r.module_id)] = r.status
+      if (r && r.module_id != null) {
+        map[String(r.module_id)] = {
+          status: r.status,
+          until: r.maintenance_until ?? null,
+          note: r.maintenance_note ?? null,
+        }
+      }
     }
     return map
   } catch {
@@ -140,14 +154,36 @@ export async function upsertModule({
 /**
  * Set a single module's lifecycle status. Stamps last_updated. Returns the row.
  *
+ * Optionally carries a maintenance window (ETA + note) when moving INTO
+ * maintenance. When the status is anything other than 'maintenance' the window
+ * is cleared (both columns nulled) so a stale ETA/note never lingers on a Live
+ * or Off module.
+ *
  * @param {string} moduleId
  * @param {string} status  one of MODULE_STATUSES
+ * @param {object} [opts]
+ * @param {(string|Date|null)} [opts.until]  maintenance ETA (ISO string / Date)
+ * @param {(string|null)}      [opts.note]   short maintenance note
  * @returns {Promise<object|null>}
  */
-export async function setModuleStatus(moduleId, status) {
+export async function setModuleStatus(moduleId, status, { until, note } = {}) {
+  const maintenance = status === 'maintenance'
+  let untilIso = null
+  if (maintenance && until) {
+    const d = until instanceof Date ? until : new Date(until)
+    if (!Number.isNaN(d.getTime())) untilIso = d.toISOString()
+  }
+  const noteVal = maintenance && note != null && String(note).trim()
+    ? String(note).trim()
+    : null
   return unwrap(
     await supabase.from('modules')
-      .update({ status, last_updated: new Date().toISOString() })
+      .update({
+        status,
+        maintenance_until: untilIso,
+        maintenance_note: noteVal,
+        last_updated: new Date().toISOString(),
+      })
       .eq('module_id', moduleId)
       .select(MODULE_COLS)
       .single(),
@@ -165,9 +201,16 @@ export async function setModuleStatus(moduleId, status) {
 export async function bulkSetStatus(moduleIds, status) {
   const ids = Array.isArray(moduleIds) ? moduleIds.filter(Boolean) : []
   if (ids.length === 0) return []
+  // A bulk change carries no per-module window, so any prior ETA/note is cleared
+  // (mirrors setModuleStatus clearing the window when not in maintenance).
   return unwrap(
     await supabase.from('modules')
-      .update({ status, last_updated: new Date().toISOString() })
+      .update({
+        status,
+        maintenance_until: null,
+        maintenance_note: null,
+        last_updated: new Date().toISOString(),
+      })
       .in('module_id', ids)
       .select(MODULE_COLS),
   ) || []

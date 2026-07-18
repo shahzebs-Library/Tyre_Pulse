@@ -20,7 +20,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   Boxes, RefreshCw, Search, Filter, Info, X, AlertTriangle, CheckCircle2,
-  Power, Wrench, Rocket, Sparkles, ShieldAlert,
+  Power, Wrench, Rocket, Sparkles, ShieldAlert, Clock,
 } from 'lucide-react'
 import { useConsoleAuth } from '../ConsoleAuthContext'
 import {
@@ -116,6 +116,12 @@ export default function ConsoleModuleControl() {
   // { scope: 'one'|'bulk', ids: string[], status, warnings: string[] }
   const [confirm, setConfirm] = useState(null)
 
+  // Maintenance-window capture (V278). { scope, ids } while collecting the
+  // optional ETA + note before applying the 'maintenance' status.
+  const [maintModal, setMaintModal] = useState(null)
+  const [maintUntil, setMaintUntil] = useState('')
+  const [maintNote, setMaintNote] = useState('')
+
   const load = useCallback(async () => {
     setLoading(true)
     setError(null)
@@ -170,6 +176,14 @@ export default function ConsoleModuleControl() {
   }
 
   function requestStatus(scope, ids, status) {
+    // Moving INTO maintenance collects an optional ETA + note first (the
+    // dependency warnings are surfaced inside that same modal).
+    if (status === 'maintenance') {
+      setMaintUntil('')
+      setMaintNote('')
+      setMaintModal({ scope, ids })
+      return
+    }
     // Gather dependency warnings across every module being taken out of service.
     const warnings = []
     for (const id of ids) {
@@ -184,22 +198,40 @@ export default function ConsoleModuleControl() {
     }
   }
 
-  async function applyStatus(scope, ids, status) {
+  async function applyStatus(scope, ids, status, opts = {}) {
     setConfirm(null)
+    setMaintModal(null)
     setError(null)
     try {
       if (scope === 'bulk') {
         setSavingBulk(true)
-        await bulkSetStatus(ids, status)
+        if (status === 'maintenance') {
+          // Per-module so the shared window (ETA + note) persists on each row.
+          for (const id of ids) await setModuleStatus(id, status, opts)
+        } else {
+          await bulkSetStatus(ids, status)
+        }
       } else {
         setBusyId(ids[0])
-        await setModuleStatus(ids[0], status)
+        await setModuleStatus(ids[0], status, opts)
       }
-      // Optimistic local update so the board reflects the change immediately.
+      // Optimistic local update so the board reflects the change immediately,
+      // including the maintenance window (cleared when not in maintenance).
+      const maintenance = status === 'maintenance'
+      let untilIso = null
+      if (maintenance && opts.until) {
+        const d = new Date(opts.until)
+        if (!Number.isNaN(d.getTime())) untilIso = d.toISOString()
+      }
+      const noteVal = maintenance && opts.note != null && String(opts.note).trim()
+        ? String(opts.note).trim()
+        : null
       const idSet = new Set(ids)
       const stamp = new Date().toISOString()
       setModules((prev) => prev.map((m) => (
-        idSet.has(m.module_id) ? { ...m, status, last_updated: stamp } : m
+        idSet.has(m.module_id)
+          ? { ...m, status, last_updated: stamp, maintenance_until: untilIso, maintenance_note: noteVal }
+          : m
       )))
       if (scope === 'bulk') setSelected(new Set())
     } catch (err) {
@@ -209,6 +241,18 @@ export default function ConsoleModuleControl() {
       setSavingBulk(false)
     }
   }
+
+  // Dependency warnings for the modules currently pending a maintenance window.
+  const maintWarnings = useMemo(() => {
+    if (!maintModal) return []
+    const out = []
+    for (const id of maintModal.ids) {
+      for (const w of dependencyWarnings(modules, id, 'maintenance')) {
+        if (!out.includes(w)) out.push(w)
+      }
+    }
+    return out
+  }, [maintModal, modules])
 
   const selectedIds = useMemo(
     () => filtered.filter((m) => selected.has(m.module_id)).map((m) => m.module_id),
@@ -366,6 +410,21 @@ export default function ConsoleModuleControl() {
           onConfirm={() => applyStatus(confirm.scope, confirm.ids, confirm.status)}
         />
       )}
+
+      {/* Maintenance window modal */}
+      {maintModal && (
+        <MaintenanceModal
+          count={maintModal.ids.length}
+          until={maintUntil}
+          note={maintNote}
+          warnings={maintWarnings}
+          busy={savingBulk || busyId != null}
+          onUntil={setMaintUntil}
+          onNote={setMaintNote}
+          onCancel={() => setMaintModal(null)}
+          onConfirm={() => applyStatus(maintModal.scope, maintModal.ids, 'maintenance', { until: maintUntil, note: maintNote })}
+        />
+      )}
     </div>
   )
 }
@@ -419,12 +478,108 @@ function ModuleCard({ module: m, busy, checked, onToggleSelect, onPick }) {
 
       {m.note && <p className="text-[11px] text-gray-500 mt-2 leading-relaxed">{m.note}</p>}
 
+      {m.status === 'maintenance' && (m.maintenance_until || m.maintenance_note) && (
+        <div className="mt-2 rounded-lg border border-amber-700/40 bg-amber-900/15 px-2.5 py-1.5">
+          {m.maintenance_until && (
+            <p className="text-[11px] text-amber-200 flex items-center gap-1.5">
+              <Clock size={11} className="flex-shrink-0" />
+              Expected back by {formatUntil(m.maintenance_until)}
+            </p>
+          )}
+          {m.maintenance_note && (
+            <p className="text-[11px] text-amber-200/80 mt-1 leading-relaxed">{m.maintenance_note}</p>
+          )}
+        </div>
+      )}
+
       <div className="flex items-center justify-between gap-2 mt-3">
         <StatusToggle current={m.status} disabled={busy} onPick={onPick} />
         <span className="text-[10px] text-gray-600 flex items-center gap-1">
           Visible: {VISIBLE_LABEL[m.visible_to] || m.visible_to || 'Everyone'}
           <InfoDot text="Who this module is intended for. Enforcement of visibility is being rolled out." />
         </span>
+      </div>
+    </div>
+  )
+}
+
+/** Safe local-time label for a stored maintenance ETA. */
+function formatUntil(value) {
+  if (!value) return ''
+  const d = new Date(value)
+  return Number.isNaN(d.getTime()) ? '' : d.toLocaleString()
+}
+
+function MaintenanceModal({ count, until, note, warnings, busy, onUntil, onNote, onCancel, onConfirm }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+      <div className="w-full max-w-md rounded-xl border border-gray-700 bg-gray-900 shadow-2xl">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-800">
+          <h3 className="text-sm font-semibold text-white flex items-center gap-2">
+            <Wrench size={15} className="text-amber-400" /> Set maintenance
+          </h3>
+          <button onClick={onCancel} className="text-gray-500 hover:text-white">
+            <X size={16} />
+          </button>
+        </div>
+        <div className="p-4 space-y-4">
+          <p className="text-xs text-gray-400 leading-relaxed">
+            {count > 1 ? `${count} modules` : 'This module'} will show an "Under maintenance" screen to
+            regular users. Add an optional expected return time and a short note (both are shown to users).
+          </p>
+          <div>
+            <label className="block text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-1">
+              Maintenance until (optional)
+            </label>
+            <input
+              type="datetime-local"
+              value={until}
+              onChange={(e) => onUntil(e.target.value)}
+              className="w-full h-9 bg-gray-800 border border-gray-700 rounded-lg px-3 text-xs text-white focus:outline-none focus:border-amber-600"
+            />
+          </div>
+          <div>
+            <label className="block text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-1">
+              Note (optional)
+            </label>
+            <input
+              type="text"
+              value={note}
+              maxLength={200}
+              onChange={(e) => onNote(e.target.value)}
+              placeholder="e.g. Upgrading the analytics engine"
+              className="w-full h-9 bg-gray-800 border border-gray-700 rounded-lg px-3 text-xs text-white placeholder-gray-600 focus:outline-none focus:border-amber-600"
+            />
+          </div>
+          {warnings.length > 0 && (
+            <div className="rounded-lg border border-amber-700/40 bg-amber-900/15 p-2.5">
+              <p className="text-[11px] text-amber-200 font-semibold mb-1.5 flex items-center gap-1.5">
+                <AlertTriangle size={12} /> Other Live modules depend on this:
+              </p>
+              <ul className="space-y-1">
+                {warnings.map((w, i) => (
+                  <li key={i} className="text-[11px] text-amber-200/90">{w}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
+        <div className="flex items-center justify-end gap-2 px-4 py-3 border-t border-gray-800">
+          <button
+            onClick={onCancel}
+            disabled={busy}
+            className="px-3 py-1.5 rounded-lg text-xs text-gray-400 hover:text-white border border-gray-700 disabled:opacity-50"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={onConfirm}
+            disabled={busy}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-white bg-amber-600 hover:bg-amber-500 disabled:opacity-50"
+          >
+            <Wrench size={13} /> {busy ? 'Applying...' : 'Set maintenance'}
+          </button>
+        </div>
       </div>
     </div>
   )

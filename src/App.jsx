@@ -133,6 +133,7 @@ const DtcDiagnostics         = lazy(() => import('./pages/DtcDiagnostics'))
 const EngineHours            = lazy(() => import('./pages/EngineHours'))
 const OdometerLogs           = lazy(() => import('./pages/OdometerLogs'))
 const PmPrograms             = lazy(() => import('./pages/PmPrograms'))
+const VehicleWashing         = lazy(() => import('./pages/VehicleWashing'))
 const Trips                  = lazy(() => import('./pages/Trips'))
 const RouteOptimization      = lazy(() => import('./pages/RouteOptimization'))
 const ChargingSessions       = lazy(() => import('./pages/ChargingSessions'))
@@ -521,6 +522,7 @@ function MainApp() {
                       <Route path="/engine-hours"          element={<Safe><RoleRoute allowed={['Admin']}><EngineHours /></RoleRoute></Safe>} />
                       <Route path="/odometer-logs"         element={<Safe><RoleRoute allowed={['Admin']}><OdometerLogs /></RoleRoute></Safe>} />
                       <Route path="/pm-programs"           element={<Safe><RoleRoute allowed={['Admin']}><PmPrograms /></RoleRoute></Safe>} />
+                      <Route path="/vehicle-washing"       element={<Safe><ModuleRoute moduleKey="vehicle_washing"><VehicleWashing /></ModuleRoute></Safe>} />
                       <Route path="/trips"                 element={<Safe><RoleRoute allowed={['Admin']}><Trips /></RoleRoute></Safe>} />
                       <Route path="/route-optimization"    element={<Safe><RoleRoute allowed={['Admin']}><RouteOptimization /></RoleRoute></Safe>} />
                       <Route path="/charging-sessions"     element={<Safe><RoleRoute allowed={['Admin']}><ChargingSessions /></RoleRoute></Safe>} />

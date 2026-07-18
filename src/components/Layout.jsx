@@ -189,6 +189,7 @@ const NAV_GROUPS = [
       { to: '/workshop',        label: 'Workshop Management', icon: WorkshopIc, adminOnly: A },
       { to: '/technician-scorecard', label: 'Technician Scorecard', icon: Award, adminOnly: A },
       { to: '/pm-programs',     label: 'Preventive Maintenance', icon: CalendarClock, adminOnly: A },
+      { to: '/vehicle-washing', label: 'Vehicle Washing',    icon: Droplet },
       { to: '/dtc',             label: 'DTC Diagnostics',    icon: Cpu, adminOnly: A },
       { to: '/fuel-cards',      label: 'Fuel Cards',         icon: CreditCard, adminOnly: A },
       { to: '/fuel-delivery',   label: 'Fuel Delivery',      icon: Fuel, adminOnly: A },

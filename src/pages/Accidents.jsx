@@ -368,12 +368,15 @@ export default function Accidents() {
   // Matched vehicle-master row for the currently entered asset (read-only
   // context shown under the Asset field). Auto-populate reads from here.
   const [assetInfo, setAssetInfo]              = useState(null)
+  const loadReqRef                             = useRef(0)
 
   const loadRecords = useCallback(async () => {
+    const token = ++loadReqRef.current   // guard against out-of-order responses on rapid country switches
     setLoading(true)
     // Paginate past the 1000-row cap so the list AND its exports are complete.
     const { data, error: err } = await accidentsApi.listAllAccidentsForPage({ country: activeCountry })
-    if (err) { setError(err.message); setLoading(false); return }
+    if (token !== loadReqRef.current) return
+    if (err) { setError(toUserMessage(err, 'Could not load incidents.')); setLoading(false); return }
     setError('')
     let rows = data ?? []
     // Resilient back-fill: if the accidents API select does not yet expose the
@@ -398,6 +401,7 @@ export default function Accidents() {
     // Canonicalise the DB's lowercase status/severity to display labels once, so
     // every label-based consumer (status/severity counts, funnel filters, charts,
     // badges) agrees. Save/edit paths convert back via toDb*/canon* helpers.
+    if (token !== loadReqRef.current) return
     setRecords(rows.map(r => ({ ...r, status: canonStatus(r.status), severity: canonSeverity(r.severity), accident_type: canonAccidentType(r.accident_type) })))
     setLoading(false)
   }, [activeCountry])
@@ -522,7 +526,7 @@ export default function Accidents() {
     }
 
     // Severity mix
-    const sevMix = { Minor: 0, Major: 0, 'Total Loss': 0 }
+    const sevMix = { Minor: 0, Moderate: 0, Major: 0 }
     records.forEach(r => { const s = canonSeverity(r.severity); if (sevMix[s] !== undefined) sevMix[s]++ })
 
     // At-fault %: a record is "at fault" when the liable/responsible party points
@@ -608,8 +612,8 @@ export default function Accidents() {
       const k = monthKey(r.incident_date)
       if (k && bySev[r.severity] && bySev[r.severity][k] !== undefined) bySev[r.severity][k]++
     })
-    const colors = { Minor: 'rgba(107,114,128,0.7)', Major: 'rgba(234,88,12,0.7)', 'Total Loss': 'rgba(220,38,38,0.7)' }
-    const borders = { Minor: '#6b7280', Major: '#ea580c', 'Total Loss': '#dc2626' }
+    const colors = { Minor: 'rgba(107,114,128,0.7)', Moderate: 'rgba(234,179,8,0.7)', Major: 'rgba(234,88,12,0.7)' }
+    const borders = { Minor: '#6b7280', Moderate: '#eab308', Major: '#ea580c' }
     return {
       labels: keys.map(k => monthLabel(k)),
       datasets: SEVERITIES.map(s => ({
@@ -736,7 +740,7 @@ export default function Accidents() {
     const counts = {}
     records.forEach(r => { const k = canonSeverity(r.severity) || 'Unspecified'; counts[k] = (counts[k] ?? 0) + 1 })
     const entries = Object.entries(counts)
-    const color = { Minor: '#64748b', Major: '#ea580c', 'Total Loss': '#dc2626', Unspecified: '#334155' }
+    const color = { Minor: '#64748b', Moderate: '#eab308', Major: '#ea580c', Unspecified: '#334155' }
     return {
       labels: entries.map(([k]) => k),
       datasets: [{ data: entries.map(([, v]) => v), backgroundColor: entries.map(([k], i) => color[k] || colorAt(i)), borderWidth: 0 }],
@@ -1064,8 +1068,8 @@ export default function Accidents() {
     }
     if (filterSeverity) arr = arr.filter(r => r.severity === filterSeverity)
     if (filterSite)     arr = arr.filter(r => r.site === filterSite)
-    if (filterFrom)     arr = arr.filter(r => r.incident_date >= filterFrom)
-    if (filterTo)       arr = arr.filter(r => r.incident_date <= filterTo)
+    if (filterFrom)     arr = arr.filter(r => String(r.incident_date || '').slice(0, 10) >= filterFrom)
+    if (filterTo)       arr = arr.filter(r => String(r.incident_date || '').slice(0, 10) <= filterTo)
     if (search.trim()) {
       const q = search.toLowerCase()
       arr = arr.filter(r =>
@@ -1793,8 +1797,8 @@ export default function Accidents() {
             <div className="flex h-3 w-full rounded-full overflow-hidden bg-[var(--input-border)]">
               {[
                 { k: 'Minor', c: '#6b7280' },
+                { k: 'Moderate', c: '#eab308' },
                 { k: 'Major', c: '#ea580c' },
-                { k: 'Total Loss', c: '#dc2626' },
               ].map(s => {
                 const pct = stats.total ? (stats.sevMix[s.k] / stats.total) * 100 : 0
                 return pct > 0 ? <div key={s.k} title={`${s.k}: ${stats.sevMix[s.k]}`} style={{ width: `${pct}%`, background: s.c }} /> : null
@@ -1803,8 +1807,8 @@ export default function Accidents() {
             <div className="flex flex-wrap gap-4 mt-2">
               {[
                 { k: 'Minor', c: 'bg-gray-500' },
+                { k: 'Moderate', c: 'bg-yellow-500' },
                 { k: 'Major', c: 'bg-orange-500' },
-                { k: 'Total Loss', c: 'bg-red-500' },
               ].map(s => (
                 <span key={s.k} className="inline-flex items-center gap-1.5 text-xs text-[var(--text-muted)]">
                   <span className={`w-2.5 h-2.5 rounded-sm ${s.c}`} /> {s.k}

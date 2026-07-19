@@ -173,6 +173,7 @@ export default function HomeScreen() {
   }, [])
 
   const load = useCallback(async () => {
+   try {
     // Phase 1: offline queue (AsyncStorage - instant).
     await refreshPending()
 
@@ -233,6 +234,13 @@ export default function HomeScreen() {
     } else {
       setFleetLoading(false)
     }
+   } catch (e) {
+      // Never leave the first post-login screen stuck on skeletons if a query throws.
+      if (__DEV__) console.warn('[home] load failed:', (e as any)?.message)
+   } finally {
+      setNetworkLoading(false)
+      setFleetLoading(false)
+   }
   }, [profile?.id, elevated, refreshPending])
 
   useEffect(() => { load() }, [load])

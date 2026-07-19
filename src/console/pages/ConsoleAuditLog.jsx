@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback } from 'react'
 import { ClipboardList, Search, RefreshCw, Filter, Download } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useConsoleAuth } from '../ConsoleAuthContext'
+import { sanitizeCell } from '../../lib/exportUtils'
 
 const ACTION_COLORS = {
   login:          'bg-green-900/30 text-green-400 border-green-700/30',
@@ -87,7 +88,8 @@ export default function ConsoleAuditLog() {
       JSON.stringify(l.details ?? {}),
     ])
     const header = 'Timestamp,Admin,Action,Target Type,Target ID,Details'
-    const csv = [header, ...rows.map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(','))].join('\n')
+    // sanitizeCell neutralizes CSV formula-injection (=,+,-,@) before quoting.
+    const csv = [header, ...rows.map(r => r.map(c => `"${String(sanitizeCell(String(c))).replace(/"/g, '""')}"`).join(','))].join('\n')
     const blob = new Blob([csv], { type: 'text/csv' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')

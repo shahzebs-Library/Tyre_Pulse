@@ -19,7 +19,15 @@ export const secureStorage = {
     const metaRaw = await SecureStore.getItemAsync(metaKey(key))
     if (!metaRaw) return SecureStore.getItemAsync(key)
 
-    const meta = JSON.parse(metaRaw) as ChunkMeta
+    // A corrupt _meta entry must NOT make getItem reject (guarded callers would then
+    // read a full offline queue as empty and appear to lose pending items). Fall back
+    // to the unchunked value / null instead of throwing.
+    let meta: ChunkMeta
+    try {
+      meta = JSON.parse(metaRaw) as ChunkMeta
+    } catch {
+      return SecureStore.getItemAsync(key)
+    }
     const chunks = await Promise.all(
       Array.from({ length: meta.chunks }, (_, index) =>
         SecureStore.getItemAsync(chunkKey(key, index))

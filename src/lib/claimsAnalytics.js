@@ -34,7 +34,7 @@ export function hasClaim(r) {
 export function isClosed(r) {
   if (s(r.release_date)) return true
   const blob = `${s(r.status)} ${s(r.closure_status)} ${s(r.claim_status)}`.toLowerCase()
-  return /clos|settl|paid|recovered|complete|resolved|reject/.test(blob)
+  return /clos|settl|(?<!un)paid|recovered|complete|resolved|reject/.test(blob)
 }
 
 /** Open claim past its expected release date (a delayed / overdue claim). */
@@ -290,6 +290,6 @@ function bump(map, key, value, recovered) {
 function tallyReport(acc, status) {
   const v = s(status).toLowerCase()
   if (!v) { acc.unknown++; return }
-  if (/no|without|none|missing|pending/.test(v)) acc.no_report++
+  if (/\bno\b|\bnone\b|without|missing|pending/.test(v)) acc.no_report++
   else acc.with_report++
 }

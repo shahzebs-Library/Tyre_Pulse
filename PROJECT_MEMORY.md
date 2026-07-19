@@ -4,6 +4,48 @@ Durable, committed project knowledge so any session has full context. Keep this
 current. Read it before adding/changing modules. Governing spec: `Tyre pulse enterprise.md`
 (consolidation-first: one function = one module = one calculation service).
 
+## Backend security audit (2026-07-19) — anon lockdown + workflow-notify fail-open (SHIPPED)
+- **V281 anon role hardening (applied live + `MIGRATIONS_V281_HARDEN_ANON_ROLE.sql`).** Audit found the
+  `anon` (unauthenticated) role held SELECT + INSERT/UPDATE/DELETE/TRUNCATE on 100 public tables (Supabase
+  default GRANT-to-anon), with RLS as the ONLY backstop. Verified by impersonating anon (`SET LOCAL ROLE anon`,
+  no JWT): writes were all RLS-denied, BUT `module_permissions` LEAKED 559 rows to anonymous callers (the whole
+  role->module capability matrix) via the public SELECT policy `users_read_own_org_permissions` (org_id IS NULL
+  branch); every data table (vehicle_fleet/accidents/stock/...) was protected only ACCIDENTALLY because anon
+  lacked EXECUTE on `app_can_see_country()` (the RESTRICTIVE policy threw). Fix: `REVOKE ALL ON ALL TABLES IN
+  SCHEMA public FROM anon` + `ALTER DEFAULT PRIVILEGES ... REVOKE ALL ON TABLES FROM anon`. Anon now reaches NO
+  base table (verified: every probe blocked; module_permissions 559->blocked). Everything anon legitimately
+  needs runs through SECURITY DEFINER RPCs (`get_email_by_identifier` login, `get_report_snapshot` +
+  `get_display_snapshot` public /report and /display token links) which execute as owner and are UNAFFECTED by
+  table grants (verified all three still return normally for anon). Pre-auth pages read no tables; SettingsContext
+  reads settings/system_config only behind `if (user)`. Authenticated grants untouched -> app unaffected (super-
+  admin still reads 684 fleet rows). Security advisors dropped 499->399 (all 100 `pg_graphql_anon_table_exposed`
+  cleared). RULE: never GRANT anon on a base table; give anon data only through a DEFINER RPC that self-validates.
+- **workflow-notify fail-open FIXED + deployed v2 (verify_jwt=false).** The edge fn gated on
+  `x-workflow-secret` only `if (WORKFLOW_NOTIFY_SECRET)` env was set -> if unset it fell OPEN, letting any
+  unauthenticated caller relay brand-domain email + billable Twilio WhatsApp + Expo push to attacker-supplied
+  recipients. Now the gate is MANDATORY and never fails open: `resolveExpectedSecret()` uses the env var, else
+  falls back to the DB-seeded `cron_config.workflow_notify_secret` (V119 — the exact value the pg_cron deliverer
+  sends) read via the auto-injected service role; 503 if neither exists; constant-time compare. The deployed
+  function is a SELF-CONTAINED single file (inlined CORS, no `_shared` import) — repo source updated to match
+  (removed pre-existing drift). VERIFIED live via pg_net: correct cron secret -> 200, wrong/missing -> 401, so
+  delivery is intact and the hole is closed. RULE: workflow-notify deploys as ONE self-contained index.ts.
+- **safeError.js marker gap closed.** Added `invalid input syntax`/`invalid input value`/`enum`/`does not
+  exist`/`foreign key`/`null value in column`/`operator does not exist` to DB_MESSAGE_MARKERS so code-less
+  Postgres text (e.g. `invalid input syntax for type uuid: "index"`) can never fall through rule-5 passthrough
+  to the UI. `adminUsers.searchProfiles` now uses `sanitizeSearchTerm` (strips backslash too). Tests: safeError 20.
+- **Verified CLEAN (no action):** no hardcoded service-role key / secret / XSS / eval in `src/` (supabase.js
+  actively rejects a service-role token in the anon slot; monitoring.js redacts JWTs); billing-webhook Stripe
+  signature verification correct; public-api uses hashed API-key lookup + per-org scoping + rate limit;
+  chat-ai/ai-orchestrator JWT-gated + org-scoped + prompt-injection hardened; all 43 anon-executable DEFINER
+  fns have PINNED search_path. The 213 `authenticated_table_exposed` advisor warnings are the normal PostgREST
+  model (RLS governs) — NOT a finding.
+- **OPEN (lower priority, flagged not fixed):** send-email has no recipient allowlist/rate-limit (authenticated
+  manager/director could use it as a brand-domain relay — MEDIUM insider); send-scheduled-reports treats a
+  null-`org_id` schedule as a global cross-tenant digest (MEDIUM, needs an RLS-visible null-org schedule);
+  minor raw-provider-error leakage in send-email/generate-embedding; ~14 service files re-throw
+  `new Error(rawDbMessage)` dropping the code (mitigated by the new safeError markers). USER/OPS: enable
+  Supabase leaked-password protection (dashboard). Next free migration **V282**.
+
 ## Golden rules (from Tyre pulse enterprise.md)
 - **Never duplicate a module or a KPI.** If a function exists, extend/merge it — do not
   create a parallel page or a second calc engine. (§1, §8)

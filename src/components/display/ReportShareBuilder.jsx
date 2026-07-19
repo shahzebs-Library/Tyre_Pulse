@@ -263,7 +263,7 @@ export default function ReportShareBuilder({ share, onClose, onSaved }) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-black/70 backdrop-blur-sm">
-      <div className="w-full max-w-6xl max-h-[94vh] flex flex-col rounded-2xl bg-[var(--card-bg)] border border-[var(--input-border)] shadow-2xl overflow-hidden">
+      <div className="w-[97vw] max-w-[1760px] h-[93vh] flex flex-col rounded-2xl bg-[var(--card-bg)] border border-[var(--input-border)] shadow-2xl overflow-hidden">
         {/* Header */}
         <div className="flex items-center justify-between gap-3 px-4 py-3 border-b border-[var(--input-border)] shrink-0">
           <div className="min-w-0">
@@ -306,7 +306,7 @@ export default function ReportShareBuilder({ share, onClose, onSaved }) {
         <div className="flex-1 min-h-0 overflow-auto">
           <div className="flex flex-col lg:flex-row gap-4 p-4">
             {/* LEFT CONTROLS */}
-            <div className="lg:w-[46%] shrink-0 space-y-4">
+            <div className="lg:w-[400px] shrink-0 space-y-4">
               {/* Board tabs */}
               <div>
                 <div className="flex items-center flex-wrap gap-1.5 mb-2">
@@ -526,7 +526,8 @@ export default function ReportShareBuilder({ share, onClose, onSaved }) {
                 display: 'grid',
                 gridTemplateColumns: `repeat(${cols},1fr)`,
                 gridTemplateRows: `repeat(${rows},1fr)`,
-                gap: 10, height: 520, background: '#f1f5f9', padding: 12, borderRadius: 12,
+                gap: 10, height: 'min(72vh, 900px)', minHeight: 460,
+                background: '#f1f5f9', padding: 12, borderRadius: 12,
               }}>
                 {(!activeBoard || activeBoard.blocks.length === 0) ? (
                   <div style={{

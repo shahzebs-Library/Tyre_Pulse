@@ -15,12 +15,13 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   Bug, RefreshCw, Settings, AlertTriangle, ExternalLink, Users, Activity,
   ShieldAlert, CheckCircle2, Save, Loader2, Info, Search, X, Check, EyeOff, RotateCcw,
-  Smartphone, Cpu, Tag as TagIcon,
+  Smartphone, Cpu, UserPlus, MessageSquare, Send, Clock,
 } from 'lucide-react'
 import { useConsoleAuth } from '../ConsoleAuthContext'
 import {
   getSentryStatus, saveSentryConfig, listSentryIssues,
   getSentryProjects, getSentryIssueDetail, updateSentryIssue,
+  getSentryMembers, assignSentryIssue, commentSentryIssue,
 } from '../../lib/api/sentryCrashes'
 import { safeHref } from '../../lib/safeUrl'
 import { toUserMessage } from '../../lib/safeError'
@@ -84,11 +85,14 @@ export default function ConsoleCrashReports() {
 
   const [projects, setProjects] = useState([])
   const [projectId, setProjectId] = useState('')
+  const [members, setMembers] = useState([])
 
-  const [detail, setDetail] = useState(null)      // { issue, event }
+  const [detail, setDetail] = useState(null)      // { issue, event, activity }
   const [detailFor, setDetailFor] = useState(null) // issue being viewed
   const [detailLoading, setDetailLoading] = useState(false)
   const [acting, setActing] = useState('')
+  const [commentText, setCommentText] = useState('')
+  const [commenting, setCommenting] = useState(false)
 
   // setup form
   const [token, setToken] = useState('')
@@ -129,8 +133,15 @@ export default function ConsoleCrashReports() {
     } catch { /* non-fatal */ }
   }, [])
 
+  const loadMembers = useCallback(async () => {
+    try {
+      const res = await getSentryMembers()
+      if (res?.ok && Array.isArray(res.members)) setMembers(res.members)
+    } catch { /* non-fatal */ }
+  }, [])
+
   useEffect(() => { loadStatus() }, [loadStatus])
-  useEffect(() => { if (status?.configured) { loadIssues(); loadProjects() } }, [status?.configured, loadIssues, loadProjects])
+  useEffect(() => { if (status?.configured) { loadIssues(); loadProjects(); loadMembers() } }, [status?.configured, loadIssues, loadProjects, loadMembers])
 
   const summary = useMemo(() => {
     const fatal = issues.filter(i => i.level === 'fatal').length
@@ -151,7 +162,7 @@ export default function ConsoleCrashReports() {
   }
 
   const openDetail = async (issue) => {
-    setDetailFor(issue); setDetail(null); setDetailLoading(true)
+    setDetailFor(issue); setDetail(null); setDetailLoading(true); setCommentText('')
     try {
       const res = await getSentryIssueDetail(issue.id)
       if (res?.ok) setDetail(res)
@@ -173,6 +184,37 @@ export default function ConsoleCrashReports() {
       else setError('Could not update the issue.')
     } catch (e) { setError(toUserMessage(e, 'Could not update the issue.')) }
     finally { setActing('') }
+  }
+
+  const assign = async (issue, userId) => {
+    setActing(issue.id); setError(''); setNotice('')
+    try {
+      const assignee = userId ? `user:${userId}` : ''
+      const res = await assignSentryIssue(issue.id, assignee)
+      if (res?.ok) {
+        const who = res.assignedTo || (userId ? { type: 'user', id: userId, name: (members.find(m => m.userId === userId)?.name) || 'user' } : null)
+        setNotice(who ? `Assigned to ${who.name}.` : 'Unassigned.')
+        setIssues(prev => prev.map(i => i.id === issue.id ? { ...i, assignedTo: who } : i))
+        if (detailFor?.id === issue.id) { setDetailFor(f => ({ ...f, assignedTo: who })); setDetail(d => d ? { ...d, issue: { ...d.issue, assignedTo: who } } : d) }
+      } else if (res?.reason === 'auth') setError('Sentry rejected the action - the token needs write (issue:write) scope.')
+      else setError('Could not assign the issue.')
+    } catch (e) { setError(toUserMessage(e, 'Could not assign the issue.')) }
+    finally { setActing('') }
+  }
+
+  const submitComment = async () => {
+    if (!detailFor || !commentText.trim()) return
+    setCommenting(true); setError(''); setNotice('')
+    try {
+      const res = await commentSentryIssue(detailFor.id, commentText.trim())
+      if (res?.ok) {
+        setCommentText(''); setNotice('Comment added.')
+        const d = await getSentryIssueDetail(detailFor.id)   // refresh the activity timeline
+        if (d?.ok) setDetail(d)
+      } else if (res?.reason === 'auth') setError('Sentry rejected the comment - the token needs write (issue:write) scope.')
+      else setError('Could not add the comment.')
+    } catch (e) { setError(toUserMessage(e, 'Could not add the comment.')) }
+    finally { setCommenting(false) }
   }
 
   const submitSearch = (e) => { e?.preventDefault?.(); setActiveQuery(queryText.trim()) }
@@ -324,13 +366,22 @@ export default function ConsoleCrashReports() {
                             className="p-1.5 rounded-md bg-amber-500/10 border border-amber-500/30 text-amber-300 hover:bg-amber-500/20 disabled:opacity-50"><RotateCcw size={13} /></button>
                         )}
                       </div>
+                      {members.length > 0 && (
+                        <select value={it.assignedTo?.type === 'user' ? it.assignedTo.id : ''} disabled={acting === it.id}
+                          onChange={e => assign(it, e.target.value)} title="Assign to"
+                          className="max-w-[130px] px-2 py-1 rounded-md bg-gray-900 border border-gray-800 text-gray-300 text-[11px] outline-none focus:border-orange-500">
+                          <option value="">Unassigned</option>
+                          {members.map(m => <option key={m.userId} value={m.userId}>{m.name}</option>)}
+                        </select>
+                      )}
                     </div>
                   </div>
-                  <div className="flex items-center gap-4 mt-2.5 text-[11px] text-gray-400">
+                  <div className="flex items-center gap-4 mt-2.5 text-[11px] text-gray-400 flex-wrap">
                     <span className="inline-flex items-center gap-1"><Activity size={12} /> {it.count} event{it.count !== 1 ? 's' : ''}</span>
                     <span className="inline-flex items-center gap-1"><Users size={12} /> {it.userCount} user{it.userCount !== 1 ? 's' : ''}</span>
                     <span>first {timeAgo(it.firstSeen)}</span>
                     <span>last {timeAgo(it.lastSeen)}</span>
+                    {it.assignedTo && <span className="inline-flex items-center gap-1 text-orange-300"><UserPlus size={12} /> {it.assignedTo.name}</span>}
                   </div>
                 </div>
               )
@@ -361,6 +412,19 @@ export default function ConsoleCrashReports() {
               {detailFor.status !== 'unresolved' && <button onClick={() => act(detailFor, 'unresolved')} disabled={acting === detailFor.id} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs bg-amber-500/10 border border-amber-500/30 text-amber-300 hover:bg-amber-500/20"><RotateCcw size={13} /> Reopen</button>}
               {safeHref(detailFor.permalink) && <a href={safeHref(detailFor.permalink)} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs bg-orange-500/10 border border-orange-500/30 text-orange-300 hover:bg-orange-500/20 ml-auto">Open in Sentry <ExternalLink size={12} /></a>}
             </div>
+
+            {/* Assignee */}
+            {members.length > 0 && (
+              <div className="flex items-center gap-2 text-xs">
+                <span className="text-gray-400 inline-flex items-center gap-1.5"><UserPlus size={14} className="text-orange-400" /> Assigned to</span>
+                <select value={detailFor.assignedTo?.type === 'user' ? detailFor.assignedTo.id : ''} disabled={acting === detailFor.id}
+                  onChange={e => assign(detailFor, e.target.value)}
+                  className="px-2.5 py-1.5 rounded-lg bg-gray-900 border border-gray-800 text-gray-200 text-xs outline-none focus:border-orange-500">
+                  <option value="">Unassigned</option>
+                  {members.map(m => <option key={m.userId} value={m.userId}>{m.name}{m.email ? ` (${m.email})` : ''}</option>)}
+                </select>
+              </div>
+            )}
 
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center">
               <Tile label="Events" value={detailFor.count} />
@@ -414,6 +478,39 @@ export default function ConsoleCrashReports() {
               </>
             ) : (
               <p className="text-xs text-gray-500">No event detail available.</p>
+            )}
+
+            {/* Comment box */}
+            <div className="pt-1">
+              <h4 className="text-xs font-semibold text-gray-300 mb-1.5 flex items-center gap-1.5"><MessageSquare size={13} className="text-orange-400" /> Add a note</h4>
+              <div className="flex items-start gap-2">
+                <textarea value={commentText} onChange={e => setCommentText(e.target.value)} rows={2}
+                  placeholder="e.g. Fixed in v1.3.1 - resizing photos before base64. Assigned to me."
+                  className="flex-1 px-3 py-2 rounded-lg bg-gray-950 border border-gray-800 text-gray-100 text-xs focus:border-orange-500 outline-none resize-y" />
+                <button onClick={submitComment} disabled={commenting || !commentText.trim()}
+                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs bg-orange-500/90 hover:bg-orange-500 text-white disabled:opacity-50 shrink-0">
+                  {commenting ? <Loader2 size={13} className="animate-spin" /> : <Send size={13} />} Post
+                </button>
+              </div>
+            </div>
+
+            {/* Activity timeline */}
+            {detail?.activity?.length > 0 && (
+              <div>
+                <h4 className="text-xs font-semibold text-gray-300 mb-1.5 flex items-center gap-1.5"><Clock size={13} className="text-orange-400" /> Activity</h4>
+                <div className="space-y-1.5">
+                  {detail.activity.map((a, ai) => (
+                    <div key={ai} className="text-[11px] text-gray-400 flex items-start gap-2">
+                      <span className="text-gray-600 shrink-0">{timeAgo(a.dateCreated)}</span>
+                      <span className="min-w-0">
+                        <span className="text-gray-200 font-medium">{a.user}</span>{' '}
+                        <span className="text-gray-500">{a.type.replace(/_/g, ' ')}</span>
+                        {a.text && <span className="block text-gray-300 mt-0.5">{a.text}</span>}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
             )}
           </div>
         </div>

@@ -1,17 +1,19 @@
 // ============================================================================
 // sentry-issues - super-admin-only proxy to the Sentry API for the /console
-// Crash Reports page.
+// Crash Reports page (read -> assign -> comment -> resolve workflow).
 //
 // The Sentry auth token is a secret stored in the deny-all cron_config table and
 // read here via the service role. The caller must present a valid JWT for a
 // super-admin profile. The token never leaves the server.
 //
-// Request (POST): { action?, query?, period?, project?, issueId?, status? }
-//   action 'list'     (default) -> org issues (query/period/project filters)
-//   action 'projects'           -> the org's projects (id/slug/name/platform)
-//   action 'detail'  + issueId  -> issue meta + latest event (stacktrace, tags)
-//   action 'update'  + issueId + status ('resolved'|'ignored'|'unresolved')
-// Response: { ok:true, ... } | { ok:false, reason:'not_configured'|'auth'|'unauthorized'|'error' }
+// Request (POST): { action?, query?, period?, project?, issueId?, status?, assignee?, text? }
+//   'list'     (default) -> org issues (query/period/project filters)
+//   'projects'           -> the org's projects
+//   'members'            -> org members (for the assignee picker)
+//   'detail'  + issueId  -> issue meta + latest event (stacktrace, tags) + activity
+//   'update'  + issueId + status ('resolved'|'ignored'|'unresolved')
+//   'assign'  + issueId + assignee ('user:<id>' or '' to clear)
+//   'comment' + issueId + text
 // ============================================================================
 
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts'
@@ -36,13 +38,16 @@ function json(req: Request, body: unknown, status = 200): Response {
 const VALID_PERIODS = new Set(['24h', '7d', '14d', '30d', '90d'])
 const VALID_STATUS = new Set(['resolved', 'ignored', 'unresolved'])
 
+function assignee(a: any) {
+  return a ? { type: a.type || 'user', id: a.id, name: a.name || a.email || '' } : null
+}
 function trimIssue(i: any) {
   return {
     id: i.id, shortId: i.shortId, title: i.title || i.metadata?.type || 'Issue', culprit: i.culprit || '',
     level: i.level || 'error', status: i.status || 'unresolved', count: Number(i.count) || 0,
     userCount: Number(i.userCount) || 0, firstSeen: i.firstSeen || null, lastSeen: i.lastSeen || null,
     permalink: i.permalink || '', platform: i.platform || '', value: i.metadata?.value || '',
-    project: i.project?.slug || '',
+    project: i.project?.slug || '', assignedTo: assignee(i.assignedTo),
   }
 }
 
@@ -55,7 +60,6 @@ serve(async (req) => {
   const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
   if (!url || !anonKey || !serviceKey) return json(req, { ok: false, reason: 'error' }, 500)
 
-  // 1. Authenticate the caller and require super-admin.
   const token = req.headers.get('authorization')?.replace(/^Bearer\s+/i, '')
   if (!token) return json(req, { ok: false, reason: 'unauthorized' }, 401)
   const authClient = createClient(url, anonKey, { global: { headers: { Authorization: `Bearer ${token}` } } })
@@ -64,7 +68,6 @@ serve(async (req) => {
   const { data: prof } = await authClient.from('profiles').select('is_super_admin').eq('id', userData.user.id).maybeSingle()
   if (prof?.is_super_admin !== true) return json(req, { ok: false, reason: 'unauthorized' }, 403)
 
-  // 2. Read the Sentry connection from the deny-all config (service role).
   const admin = createClient(url, serviceKey)
   const { data: cfgRows } = await admin.from('cron_config').select('name, value')
     .in('name', ['sentry_auth_token', 'sentry_org', 'sentry_region_url'])
@@ -76,44 +79,72 @@ serve(async (req) => {
   if (!sentryToken) return json(req, { ok: false, reason: 'not_configured' })
 
   const authHeader = { Authorization: `Bearer ${sentryToken}` }
+  const jsonHeader = { ...authHeader, 'Content-Type': 'application/json' }
   const base = `${region}/api/0/organizations/${encodeURIComponent(org)}`
 
   let body: any = {}
   try { body = await req.json() } catch { /* defaults */ }
   const action = typeof body.action === 'string' ? body.action : 'list'
+  const issueUrl = (id: string) => `${base}/issues/${encodeURIComponent(id)}/`
 
   try {
-    // ── projects ──────────────────────────────────────────────────────────────
     if (action === 'projects') {
       const res = await fetch(`${base}/projects/`, { headers: authHeader })
       if (res.status === 401 || res.status === 403) return json(req, { ok: false, reason: 'auth' })
       if (!res.ok) return json(req, { ok: false, reason: 'error', status: res.status })
       const raw = await res.json() as any[]
-      const projects = (Array.isArray(raw) ? raw : []).map(p => ({ id: p.id, slug: p.slug, name: p.name, platform: p.platform || '' }))
-      return json(req, { ok: true, projects })
+      return json(req, { ok: true, projects: (Array.isArray(raw) ? raw : []).map(p => ({ id: p.id, slug: p.slug, name: p.name, platform: p.platform || '' })) })
     }
 
-    // ── update (resolve / ignore / reopen) ──────────────────────────────────────
+    if (action === 'members') {
+      const res = await fetch(`${base}/members/`, { headers: authHeader })
+      if (res.status === 401 || res.status === 403) return json(req, { ok: false, reason: 'auth' })
+      if (!res.ok) return json(req, { ok: false, reason: 'error', status: res.status })
+      const raw = await res.json() as any[]
+      const members = (Array.isArray(raw) ? raw : [])
+        .map(m => ({ userId: m.user?.id || null, name: m.name || m.user?.name || m.email || 'member', email: m.email || '', role: m.role || '' }))
+        .filter(m => m.userId)
+      return json(req, { ok: true, members })
+    }
+
     if (action === 'update') {
       const issueId = String(body.issueId || '')
       const status = String(body.status || '')
       if (!issueId || !VALID_STATUS.has(status)) return json(req, { ok: false, reason: 'error' }, 400)
-      const res = await fetch(`${base}/issues/${encodeURIComponent(issueId)}/`, {
-        method: 'PUT', headers: { ...authHeader, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status }),
-      })
+      const res = await fetch(issueUrl(issueId), { method: 'PUT', headers: jsonHeader, body: JSON.stringify({ status }) })
       if (res.status === 401 || res.status === 403) return json(req, { ok: false, reason: 'auth' })
       if (!res.ok) return json(req, { ok: false, reason: 'error', status: res.status })
       return json(req, { ok: true, status })
     }
 
-    // ── detail (issue meta + latest event) ──────────────────────────────────────
+    if (action === 'assign') {
+      const issueId = String(body.issueId || '')
+      if (!issueId) return json(req, { ok: false, reason: 'error' }, 400)
+      const assignTo = typeof body.assignee === 'string' ? body.assignee : ''  // 'user:<id>' or '' to clear
+      const res = await fetch(issueUrl(issueId), { method: 'PUT', headers: jsonHeader, body: JSON.stringify({ assignedTo: assignTo }) })
+      if (res.status === 401 || res.status === 403) return json(req, { ok: false, reason: 'auth' })
+      if (!res.ok) return json(req, { ok: false, reason: 'error', status: res.status })
+      const upd = await res.json().catch(() => ({}))
+      return json(req, { ok: true, assignedTo: assignee(upd?.assignedTo) })
+    }
+
+    if (action === 'comment') {
+      const issueId = String(body.issueId || '')
+      const text = String(body.text || '').slice(0, 2000)
+      if (!issueId || !text.trim()) return json(req, { ok: false, reason: 'error' }, 400)
+      const res = await fetch(`${issueUrl(issueId)}comments/`, { method: 'POST', headers: jsonHeader, body: JSON.stringify({ text }) })
+      if (res.status === 401 || res.status === 403) return json(req, { ok: false, reason: 'auth' })
+      if (!res.ok) return json(req, { ok: false, reason: 'error', status: res.status })
+      return json(req, { ok: true })
+    }
+
     if (action === 'detail') {
       const issueId = String(body.issueId || '')
       if (!issueId) return json(req, { ok: false, reason: 'error' }, 400)
-      const [issueRes, eventRes] = await Promise.all([
-        fetch(`${base}/issues/${encodeURIComponent(issueId)}/`, { headers: authHeader }),
-        fetch(`${base}/issues/${encodeURIComponent(issueId)}/events/latest/`, { headers: authHeader }),
+      const [issueRes, eventRes, actRes] = await Promise.all([
+        fetch(issueUrl(issueId), { headers: authHeader }),
+        fetch(`${issueUrl(issueId)}events/latest/`, { headers: authHeader }),
+        fetch(`${issueUrl(issueId)}activities/`, { headers: authHeader }),
       ])
       if (issueRes.status === 401 || issueRes.status === 403) return json(req, { ok: false, reason: 'auth' })
       if (!issueRes.ok) return json(req, { ok: false, reason: 'error', status: issueRes.status })
@@ -121,7 +152,6 @@ serve(async (req) => {
       let event: any = null
       if (eventRes.ok) {
         const ev = await eventRes.json()
-        // Extract a readable stack from the exception entry.
         const frames: any[] = []
         const exc = (ev.entries || []).find((e: any) => e.type === 'exception')
         for (const val of (exc?.data?.values || [])) {
@@ -134,14 +164,22 @@ serve(async (req) => {
           dateCreated: ev.dateCreated || null,
           tags: (ev.tags || []).map((t: any) => ({ key: t.key, value: t.value })),
           user: ev.user ? { id: ev.user.id, username: ev.user.username, geo: ev.user.geo } : null,
-          message: ev.message || ev.title || '',
           exceptions: frames,
         }
       }
-      return json(req, { ok: true, issue: trimIssue(issue), event })
+      let activity: any[] = []
+      if (actRes.ok) {
+        const a = await actRes.json()
+        activity = (a.activity || []).slice(0, 30).map((x: any) => ({
+          type: x.type || '', dateCreated: x.dateCreated || null,
+          user: x.user?.name || x.user?.email || 'system',
+          text: x.data?.text || '',
+        }))
+      }
+      return json(req, { ok: true, issue: trimIssue(issue), event, activity })
     }
 
-    // ── list (default) ──────────────────────────────────────────────────────────
+    // list (default)
     const query = typeof body.query === 'string' && body.query.length <= 200 ? body.query : 'is:unresolved'
     const period = VALID_PERIODS.has(body.period || '') ? body.period : '14d'
     const projectParam = (body.project && /^\d+$/.test(String(body.project))) ? String(body.project) : '-1'
@@ -150,8 +188,7 @@ serve(async (req) => {
     if (res.status === 401 || res.status === 403) return json(req, { ok: false, reason: 'auth' })
     if (!res.ok) return json(req, { ok: false, reason: 'error', status: res.status })
     const raw = await res.json() as any[]
-    const issues = (Array.isArray(raw) ? raw : []).map(trimIssue)
-    return json(req, { ok: true, org, issues })
+    return json(req, { ok: true, org, issues: (Array.isArray(raw) ? raw : []).map(trimIssue) })
   } catch {
     return json(req, { ok: false, reason: 'error' })
   }

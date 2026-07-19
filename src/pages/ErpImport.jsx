@@ -16,6 +16,7 @@ import {
 } from '../lib/api/erpImport'
 import { createProduction } from '../lib/api/production'
 import { exportToExcel } from '../lib/exportUtils'
+import { configNum } from '../lib/api/systemConfig'
 import { downloadErpTemplates } from '../lib/erpTemplates'
 import { toUserMessage } from '../lib/safeError'
 
@@ -127,6 +128,14 @@ export default function ErpImport() {
 
   async function save() {
     if (!mapped.length) return
+    // Admin upload policy (System Configuration -> max_upload_rows). 0/unset = the
+    // browser cap governs; a positive limit hard-blocks an over-size import here
+    // just as it does in the Data Intake Center. Never silently truncate past it.
+    const maxRows = configNum('max_upload_rows', 0)
+    if (maxRows > 0 && mapped.length > maxRows) {
+      setError(`This sheet has ${mapped.length.toLocaleString()} rows which exceeds the maximum of ${maxRows.toLocaleString()} allowed per upload. Split the file and try again.`)
+      return
+    }
     setError(''); setBusy(true); setSaveResult(null)
     try {
       if (datasetKey === 'production') {

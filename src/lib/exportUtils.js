@@ -17,6 +17,16 @@ function guardExport(rows) {
   return max > 0 && arr.length > max ? arr.slice(0, max) : arr
 }
 
+/**
+ * Public export policy gate for export paths that do NOT go through
+ * exportToExcel/exportToPdf/exportToPptx (e.g. the CSV branch of the table
+ * exporter, or single-document PDF builders). Throws when export is disabled and
+ * caps the row array to max_export_rows. Returns the (possibly capped) rows.
+ */
+export function applyExportPolicy(rows) {
+  return guardExport(rows)
+}
+
 // ── Lazy-loaded heavy libraries ────────────────────────────────────────────────
 // xlsx (~420 KB), jspdf (~400 KB) and pptxgenjs (~385 KB) must never ship with a
 // page's initial chunk - they load on the first export click and are then
@@ -991,6 +1001,7 @@ export async function exportToPdf(rows, columns, title, filename = 'report', ori
  * @param {string}  [opts.company]
  */
 export async function exportInspectionDetailPdf(row, opts = {}) {
+  guardExport([])
   await ensurePdf()
   const doc     = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
   const pw      = doc.internal.pageSize.width
@@ -1337,6 +1348,7 @@ export async function exportInspectionDetailPdf(row, opts = {}) {
  *   await exportAccidentCasePdf(acc, { parts, remarks, branding, company, fmtCurrency })
  */
 export async function exportAccidentCasePdf(acc = {}, opts = {}) {
+  guardExport([])
   await ensurePdf()
   const doc     = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
   const pw      = doc.internal.pageSize.width
@@ -1543,6 +1555,7 @@ export async function exportAccidentCasePdf(acc = {}, opts = {}) {
  *   await exportChecklistSubmissionPdf(submission, { company, branding, fields })
  */
 export async function exportChecklistSubmissionPdf(submission = {}, opts = {}) {
+  guardExport([])
   await ensurePdf()
   const doc     = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
   const pw      = doc.internal.pageSize.width
@@ -1941,6 +1954,7 @@ function _fmtThousands(v) {
  * @param {Object} opts  { company, branding, currency, filename }
  */
 export async function exportDailyOpsBriefingPdf(data = {}, opts = {}) {
+  guardExport([])
   await ensurePdf()
   const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
   const PW  = doc.internal.pageSize.width
@@ -2038,6 +2052,7 @@ function _buildRecommendations(riskCounts, totalT, row) {
  * @param {string} [filename]
  */
 export async function exportDailyExecutivePdf(data, filename) {
+  guardExport([])
   await ensurePdf()
   const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
   const PW  = doc.internal.pageSize.width   // 297

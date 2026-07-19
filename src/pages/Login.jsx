@@ -361,8 +361,11 @@ export default function Login() {
     }
     const uname = signupUsername.trim()
     const empId = employeeId.trim()
+    // Enforce the configured minimum password length (system_config.password_min_length,
+    // default 8). Never weaken the existing 6-char floor: use the stronger of the two.
+    const minLen = Math.max(6, parseInt(cfg?.password_min_length, 10) || 8)
     if (password !== confirm)   { setError(t('auth.login.errPasswordMismatch')); return }
-    if (password.length < 6)    { setError(t('auth.login.errPasswordShort')); return }
+    if (password.length < minLen) { setError(`Password must be at least ${minLen} characters.`); return }
     if (uname.length < 3)       { setError(t('auth.login.errUsernameRequired')); return }
     if (!/^[a-zA-Z0-9._-]+$/.test(uname)) { setError('Username may only contain letters, numbers, and . _ -'); return }
     if (!empId)                 { setError('Employee ID is required.'); return }

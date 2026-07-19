@@ -7,6 +7,7 @@ import { navItemAllowedForCustomRole, NAV_MODULE_KEY } from '../lib/navAccess'
 import { ACCESS_ROLES } from '../lib/moduleCatalog'
 import { applyNavLayout } from '../lib/navLayout'
 import { getNavLayout } from '../lib/api/navLayout'
+import { configStr } from '../lib/api/systemConfig'
 
 // Built-in roles have hardcoded sidebar rules below; any other (non-empty) role
 // is an admin-defined CUSTOM role whose sidebar is derived from its module grants.
@@ -680,6 +681,10 @@ export default function Layout({ children }) {
 
   const effectiveGroups = useMemo(() => applyNavLayout(NAV_GROUPS, navLayout), [navLayout])
 
+  // App version label (system_config.app_version). Read from the primed config
+  // cache (SettingsContext primes it for authed pages); empty when unset.
+  const appVersion = configStr('app_version', '')
+
   function toggleGroup(label) {
     setCollapsedGroups(prev => {
       const next = new Set(prev)
@@ -1165,6 +1170,12 @@ export default function Layout({ children }) {
                       </span>
                     )}
                   </div>
+                  {/* App version (system_config.app_version). Rendered only when set. */}
+                  {appVersion && (
+                    <p className="text-[9.5px] font-medium text-gray-600 truncate leading-none mt-1">
+                      v{appVersion}
+                    </p>
+                  )}
                 </motion.div>
               )}
             </AnimatePresence>

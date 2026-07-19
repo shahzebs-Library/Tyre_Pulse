@@ -2,6 +2,7 @@ import { Navigate, useLocation, Link } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { useLanguage } from '../contexts/LanguageContext'
 import { governingModuleKey } from '../lib/navAccess'
+import { isBuiltInRole } from '../lib/api/customRoles'
 import { configBool } from '../lib/api/systemConfig'
 import LoadingSpinner from './LoadingSpinner'
 
@@ -144,7 +145,7 @@ export default function ProtectedRoute({ children }) {
 }
 
 export function RoleRoute({ allowed, moduleKey, children }) {
-  const { profile, isSuperAdmin, hasPermission, loading } = useAuth()
+  const { profile, isSuperAdmin, hasPermission, grantedModules, loading } = useAuth()
   const location = useLocation()
   if (loading) return <RouteLoading />
 
@@ -155,15 +156,21 @@ export function RoleRoute({ allowed, moduleKey, children }) {
   // Primary path: the account's built-in role is on the allow list.
   if (allowed.includes(profile.role)) return children
 
-  // Additive fallback (never removes access): a CUSTOM role or a per-user grant
-  // that an admin explicitly enabled for the governing module reaches the page,
-  // so "give access -> it works" holds for RoleRoute pages too (previously only
-  // ModuleRoute pages honored the matrix). resolvePermission is deny-by-default,
-  // so this only admits accounts that were positively granted the module.
+  // Additive fallback (never removes access, never WIDENS a built-in role):
+  // admit ONLY on POSITIVE, explicit access -
+  //   (a) a CUSTOM (non built-in) role whose governing module is enabled in the
+  //       matrix (hasPermission for a custom role is deny-by-default - it has no
+  //       ROLE_DEFAULTS entry, so it is true only when explicitly granted), OR
+  //   (b) any account (built-in included) with an explicit per-user GRANT for it.
+  // We must NOT fall back to hasPermission for a built-in role: ROLE_DEFAULTS make
+  // Manager/Director permissive (allow-all-except-four), which would silently let
+  // them onto Admin-only pages. A built-in role's page access is fully expressed
+  // by `allowed`; only an explicit grant may extend it.
   const govKey = moduleKey || governingModuleKey(location?.pathname)
-  if (govKey && typeof hasPermission === 'function' && hasPermission(govKey)) {
-    return children
-  }
+  const explicitGrant = govKey && typeof grantedModules?.has === 'function' && grantedModules.has(govKey)
+  const customRoleAllowed = govKey && !isBuiltInRole(profile.role)
+    && typeof hasPermission === 'function' && hasPermission(govKey)
+  if (explicitGrant || customRoleAllowed) return children
 
   return <AccessDenied role={profile.role} allowed={allowed} />
 }

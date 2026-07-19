@@ -93,12 +93,12 @@ describe('systemConfig — enforcement registry honesty', () => {
     // These are wired end to end and MUST stay active.
     for (const k of ['maintenance_mode', 'registration_open', 'export_enabled', 'max_export_rows',
       'max_upload_rows', 'session_timeout_hours', 'two_factor_required', 'backup_enabled',
-      'ai_enabled', 'ai_monthly_budget_usd', 'ai_rate_limit_per_min']) {
+      'ai_enabled', 'ai_monthly_budget_usd', 'ai_rate_limit_per_min', 'ai_cache_ttl_hours',
+      'password_min_length', 'app_version', 'email_notifications', 'push_notifications']) {
       expect(active, k).toContain(k)
     }
     // These are deliberately NOT claimed active (honest saved-only).
-    for (const k of ['ai_model', 'password_min_length', 'app_version', 'max_login_attempts',
-      'email_notifications', 'push_notifications', 'audit_retention_days', 'data_retention_months']) {
+    for (const k of ['ai_model', 'max_login_attempts', 'audit_retention_days', 'data_retention_months']) {
       expect(active, k).not.toContain(k)
     }
   })

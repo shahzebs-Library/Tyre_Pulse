@@ -140,6 +140,23 @@ async function resolveExpectedSecret(): Promise<string> {
   } catch { return '' }
 }
 
+// Global push switch (system_config.push_notifications). Returns true ONLY when
+// the value is explicitly off, so the push channel can be skipped while email and
+// WhatsApp are untouched. Fail-SAFE: any read error returns false (send push).
+// Self-contained (no _shared import); service role is auto-injected.
+async function pushNotificationsDisabled(): Promise<boolean> {
+  try {
+    const url = Deno.env.get('SUPABASE_URL'); const key = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
+    if (!url || !key) return false
+    const admin = createClient(url, key)
+    const { data } = await admin.from('system_config').select('value').eq('key', 'push_notifications').maybeSingle()
+    const raw = data?.value
+    if (raw === undefined || raw === null) return false
+    const s = String(raw).trim().toLowerCase().replace(/^"|"$/g, '')
+    return ['false', '0', 'off', 'no'].includes(s)
+  } catch { return false }
+}
+
 // Constant-time comparison to avoid leaking the shared secret via timing.
 function constantTimeEqual(a: string, b: string): boolean {
   const enc = new TextEncoder(); const ab = enc.encode(a); const bb = enc.encode(b)
@@ -169,9 +186,13 @@ serve(async (req) => {
   if (!recipients.length) return jsonResponse(req, { email: 0, push: 0, whatsapp: 0, skipped: ['no recipients'] })
   const msg = buildMessage(payload)
   const skipped: string[] = []
+  // Global push switch: when explicitly off, skip ONLY the push channel (email +
+  // WhatsApp still go out). Fail-safe: a read error leaves push enabled.
+  const pushDisabled = await pushNotificationsDisabled()
+  if (pushDisabled) skipped.push('push: push_notifications disabled')
   const [email, push, whatsapp] = await Promise.all([
     sendEmails(recipients, msg, skipped).catch(err => { skipped.push(`email: ${errMsg(err)}`); return 0 }),
-    sendPush(recipients, msg, payload.instance_id, skipped).catch(err => { skipped.push(`push: ${errMsg(err)}`); return 0 }),
+    pushDisabled ? Promise.resolve(0) : sendPush(recipients, msg, payload.instance_id, skipped).catch(err => { skipped.push(`push: ${errMsg(err)}`); return 0 }),
     sendWhatsApp(recipients, msg, skipped).catch(err => { skipped.push(`whatsapp: ${errMsg(err)}`); return 0 }),
   ])
   return jsonResponse(req, { email, push, whatsapp, skipped })

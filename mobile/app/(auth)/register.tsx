@@ -111,6 +111,14 @@ export default function RegisterScreen() {
         return
       }
 
+      // Enforce the configured minimum password length (system_config.password_min_length,
+      // default 8). Never weaken the existing 8-char floor in validate(): use the stronger.
+      const minLen = Math.max(8, parseInt(cfg?.password_min_length, 10) || 8)
+      if (password.length < minLen) {
+        setError(`Password must be at least ${minLen} characters.`)
+        return
+      }
+
       const uname = username.trim()
       const empId = employeeId.trim()
       // Match the web: users sign up with a username + Employee ID, not an email.

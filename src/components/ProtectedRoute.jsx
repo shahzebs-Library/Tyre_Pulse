@@ -1,6 +1,7 @@
-import { Navigate } from 'react-router-dom'
+import { Navigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { useLanguage } from '../contexts/LanguageContext'
+import { governingModuleKey } from '../lib/navAccess'
 import LoadingSpinner from './LoadingSpinner'
 
 /**
@@ -101,17 +102,29 @@ export default function ProtectedRoute({ children }) {
   return children
 }
 
-export function RoleRoute({ allowed, children }) {
-  const { profile, isSuperAdmin, loading } = useAuth()
+export function RoleRoute({ allowed, moduleKey, children }) {
+  const { profile, isSuperAdmin, hasPermission, loading } = useAuth()
+  const location = useLocation()
   if (loading) return <RouteLoading />
 
   // Super admins are never locked out of a role-gated route (break-glass).
   if (isSuperAdmin) return children
+  if (!profile) return <AccessDenied role={undefined} allowed={allowed} />
 
-  if (!profile || !allowed.includes(profile.role)) {
-    return <AccessDenied role={profile?.role} allowed={allowed} />
+  // Primary path: the account's built-in role is on the allow list.
+  if (allowed.includes(profile.role)) return children
+
+  // Additive fallback (never removes access): a CUSTOM role or a per-user grant
+  // that an admin explicitly enabled for the governing module reaches the page,
+  // so "give access -> it works" holds for RoleRoute pages too (previously only
+  // ModuleRoute pages honored the matrix). resolvePermission is deny-by-default,
+  // so this only admits accounts that were positively granted the module.
+  const govKey = moduleKey || governingModuleKey(location?.pathname)
+  if (govKey && typeof hasPermission === 'function' && hasPermission(govKey)) {
+    return children
   }
-  return children
+
+  return <AccessDenied role={profile.role} allowed={allowed} />
 }
 
 export function ModuleRoute({ moduleKey, children }) {

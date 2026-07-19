@@ -19,12 +19,14 @@ export async function getSentryStatus() {
 }
 
 /** Save the Sentry connection. A blank token keeps the existing one. */
-export async function saveSentryConfig({ token, org, regionUrl, project } = {}) {
+export async function saveSentryConfig({ token, org, regionUrl, project, alertEmail, alertsEnabled } = {}) {
   const { data, error } = await supabase.rpc('set_sentry_config', {
     p_token: token && token.trim() ? token.trim() : null,
     p_org: org ?? null,
     p_region_url: regionUrl ?? null,
     p_project: project ?? null,
+    p_alert_email: alertEmail ?? null,
+    p_alerts_enabled: (alertsEnabled === true || alertsEnabled === false) ? alertsEnabled : null,
   })
   if (error) throw new Error(toUserMessage(error, 'Could not save Sentry settings.'))
   return data

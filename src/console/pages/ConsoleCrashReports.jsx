@@ -99,6 +99,8 @@ export default function ConsoleCrashReports() {
   const [org, setOrg] = useState('shah-profile')
   const [regionUrl, setRegionUrl] = useState('https://de.sentry.io')
   const [project, setProject] = useState('')
+  const [alertEmail, setAlertEmail] = useState('')
+  const [alertsEnabled, setAlertsEnabled] = useState(false)
   const [saving, setSaving] = useState(false)
   const [notice, setNotice] = useState('')
 
@@ -107,6 +109,7 @@ export default function ConsoleCrashReports() {
     try {
       const s = await getSentryStatus()
       setStatus(s); setOrg(s.org || 'shah-profile'); setRegionUrl(s.region_url || 'https://de.sentry.io'); setProject(s.project || '')
+      setAlertEmail(s.alert_email || ''); setAlertsEnabled(s.alerts_enabled === true)
       if (!s.configured) setShowSetup(true)
     } catch (e) { setError(toUserMessage(e, 'Could not load Sentry settings.')) }
     finally { setStatusLoading(false) }
@@ -154,7 +157,7 @@ export default function ConsoleCrashReports() {
   const onSave = async () => {
     setSaving(true); setError(''); setNotice('')
     try {
-      await saveSentryConfig({ token, org, regionUrl, project })
+      await saveSentryConfig({ token, org, regionUrl, project, alertEmail, alertsEnabled })
       setToken(''); setNotice('Sentry connection saved.'); setShowSetup(false)
       await loadStatus()
     } catch (e) { setError(toUserMessage(e, 'Could not save Sentry settings.')) }
@@ -268,6 +271,25 @@ export default function ConsoleCrashReports() {
               <input value={regionUrl} onChange={e => setRegionUrl(e.target.value)} placeholder="https://de.sentry.io" className="w-full px-3 py-2 rounded-lg bg-gray-950 border border-gray-700 text-gray-100 text-sm focus:border-orange-500 outline-none" /></label>
             <label className="text-xs text-gray-400 space-y-1"><span>Project slug (optional)</span>
               <input value={project} onChange={e => setProject(e.target.value)} placeholder="all projects" className="w-full px-3 py-2 rounded-lg bg-gray-950 border border-gray-700 text-gray-100 text-sm focus:border-orange-500 outline-none" /></label>
+          </div>
+          {/* Fatal-crash alerts */}
+          <div className="pt-2 mt-1 border-t border-gray-800 space-y-3">
+            <label className="flex items-center gap-2.5 cursor-pointer">
+              <button type="button" role="switch" aria-checked={alertsEnabled} onClick={() => setAlertsEnabled(v => !v)}
+                className={`relative w-10 h-5 rounded-full transition-colors ${alertsEnabled ? 'bg-orange-500' : 'bg-gray-700'}`}>
+                <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white transition-all ${alertsEnabled ? 'left-[22px]' : 'left-0.5'}`} />
+              </button>
+              <span className="text-sm text-gray-200 font-medium">Alert on new fatal crashes</span>
+            </label>
+            <p className="text-[11px] text-gray-500 flex items-start gap-1.5 -mt-1">
+              <Info size={12} className="mt-0.5 shrink-0" />
+              Every 15 minutes we check for new <code className="text-red-300">level:fatal</code> issues. Each new one is logged to System Health and emailed below (deduped, never twice).
+            </p>
+            <label className="text-xs text-gray-400 space-y-1 block max-w-md">
+              <span>Alert email(s) &mdash; comma separated</span>
+              <input value={alertEmail} onChange={e => setAlertEmail(e.target.value)} placeholder="ops@tyrepulse.app, you@company.com"
+                className="w-full px-3 py-2 rounded-lg bg-gray-950 border border-gray-700 text-gray-100 text-sm focus:border-orange-500 outline-none" />
+            </label>
           </div>
           <div className="flex items-center gap-2">
             <button onClick={onSave} disabled={saving || (!status?.configured && !token.trim())}

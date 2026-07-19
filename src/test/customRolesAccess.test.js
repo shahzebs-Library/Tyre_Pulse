@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { isBuiltInRole } from '../lib/api/customRoles'
+import { isBuiltInRole, reduceRoleCounts, duplicateName } from '../lib/api/customRoles'
 import { navItemAllowedForCustomRole, NAV_MODULE_KEY, ALWAYS_ALLOWED_PATHS } from '../lib/navAccess'
 
 describe('customRoles — isBuiltInRole', () => {
@@ -13,6 +13,60 @@ describe('customRoles — isBuiltInRole', () => {
     expect(isBuiltInRole('Yard Supervisor')).toBe(false)
     expect(isBuiltInRole('Claims Reviewer')).toBe(false)
     expect(isBuiltInRole('')).toBe(false)
+  })
+})
+
+describe('customRoles — reduceRoleCounts (assigned-user awareness)', () => {
+  it('counts profile rows per requested role name', () => {
+    const rows = [
+      { role: 'Yard Supervisor' }, { role: 'Yard Supervisor' }, { role: 'Claims Reviewer' },
+    ]
+    expect(reduceRoleCounts(rows, ['Yard Supervisor', 'Claims Reviewer'])).toEqual({
+      'Yard Supervisor': 2, 'Claims Reviewer': 1,
+    })
+  })
+
+  it('seeds every requested name with an honest 0 when no users are assigned', () => {
+    expect(reduceRoleCounts([], ['Yard Supervisor', 'Night Shift'])).toEqual({
+      'Yard Supervisor': 0, 'Night Shift': 0,
+    })
+  })
+
+  it('ignores rows whose role was not requested and malformed rows', () => {
+    const rows = [{ role: 'Admin' }, { role: null }, {}, null, { role: 'Yard Supervisor' }]
+    expect(reduceRoleCounts(rows, ['Yard Supervisor'])).toEqual({ 'Yard Supervisor': 1 })
+  })
+
+  it('is safe on empty or missing inputs', () => {
+    expect(reduceRoleCounts(null, null)).toEqual({})
+    expect(reduceRoleCounts(undefined, [])).toEqual({})
+    expect(reduceRoleCounts([], ['', null, 'A'])).toEqual({ A: 0 })
+  })
+
+  it('does not count prototype-polluting role names via inherited keys', () => {
+    expect(reduceRoleCounts([{ role: 'toString' }, { role: 'constructor' }], ['A'])).toEqual({ A: 0 })
+  })
+})
+
+describe('customRoles — duplicateName (per-row Duplicate action)', () => {
+  it('appends " copy" to the source name', () => {
+    expect(duplicateName('Yard Supervisor', [])).toBe('Yard Supervisor copy')
+  })
+
+  it('bumps a numeric suffix until the name is free (case-insensitive)', () => {
+    const existing = ['Yard Supervisor', 'yard supervisor COPY', 'Yard Supervisor copy 2']
+    expect(duplicateName('Yard Supervisor', existing)).toBe('Yard Supervisor copy 3')
+  })
+
+  it('never lands on a built-in role name', () => {
+    // "Admin copy" is free, fine; but a contrived source cannot resolve to a built-in.
+    expect(isBuiltInRole(duplicateName('Admin', []))).toBe(false)
+  })
+
+  it('trims and handles empty/odd input without throwing', () => {
+    expect(duplicateName('  Spaced  ', [])).toBe('Spaced copy')
+    expect(duplicateName('', [])).toBe('copy')
+    expect(duplicateName('X', null)).toBe('X copy')
   })
 })
 

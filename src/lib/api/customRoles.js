@@ -26,6 +26,59 @@ export function isBuiltInRole(name) {
   return [...BUILTIN].some((b) => b.toLowerCase() === n)
 }
 
+/**
+ * Pure reducer: profile rows -> { roleName: count }. Every requested name is
+ * seeded with 0 so a role with no users reads an honest 0 (never undefined).
+ * Rows whose role is not in `names` are ignored.
+ */
+export function reduceRoleCounts(rows, names) {
+  const counts = {}
+  for (const n of names || []) {
+    if (n) counts[n] = 0
+  }
+  for (const r of rows || []) {
+    const role = r?.role
+    if (role != null && Object.prototype.hasOwnProperty.call(counts, role)) counts[role] += 1
+  }
+  return counts
+}
+
+/**
+ * Count assigned users per role name (RLS-scoped: only profiles the caller can
+ * see are counted). Degrades to {} on any error so the UI never blocks on it.
+ * @param {string[]} names
+ * @returns {Promise<Record<string, number>>}
+ */
+export async function countUsersByRole(names) {
+  const clean = (names || []).filter(Boolean)
+  if (!clean.length) return {}
+  try {
+    const rows = unwrap(
+      await supabase.from('profiles').select('role').in('role', clean),
+    ) || []
+    return reduceRoleCounts(rows, clean)
+  } catch {
+    return {}
+  }
+}
+
+/**
+ * Pure name generator for the Duplicate action: `<name> copy`, then
+ * `<name> copy 2`, `copy 3`, ... until it collides with neither an existing
+ * role name (case-insensitive) nor a built-in role.
+ */
+export function duplicateName(name, existingNames = []) {
+  const base = `${String(name || '').trim()} copy`.trim()
+  const taken = new Set((existingNames || []).filter(Boolean).map((n) => String(n).trim().toLowerCase()))
+  const isFree = (candidate) => !taken.has(candidate.toLowerCase()) && !isBuiltInRole(candidate)
+  if (isFree(base)) return base
+  for (let i = 2; i <= 99; i += 1) {
+    const candidate = `${base} ${i}`
+    if (isFree(candidate)) return candidate
+  }
+  return `${base} ${Date.now()}`
+}
+
 function isMissingRelation(err) {
   const code = err?.code || err?.cause?.code
   const msg = String(err?.message || '').toLowerCase()

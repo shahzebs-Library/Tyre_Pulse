@@ -29,7 +29,7 @@ import {
   Users, Search, ChevronRight, ChevronDown, ChevronsDownUp,
   ChevronsUpDown, Crown, Save, Loader2, Check, X, RotateCcw, Info,
   AlertTriangle, SlidersHorizontal, UserCog, Eye, Ban, RefreshCw,
-  FolderTree, Zap, Monitor, Smartphone, Layers, ShieldCheck,
+  FolderTree, Zap, Monitor, Smartphone, Layers, ShieldCheck, KeyRound,
 } from 'lucide-react'
 import { useAuth } from '../../../contexts/AuthContext'
 import {
@@ -41,6 +41,7 @@ import {
 } from '../../../lib/permissionMatrix'
 import { listGlobalPermissions, saveModulePermissions } from '../../../lib/api/modulePermissions'
 import { listProfiles } from '../../../lib/api/users'
+import { listCustomRoles } from '../../../lib/api/customRoles'
 import MobileAccessPanel from './MobileAccessPanel'
 import {
   listUserGrants, revokeUserAccessGrant,
@@ -276,6 +277,12 @@ export default function AccessManager() {
   const [selectedRole, setSelectedRole] = useState('Manager')
   const [selectedUserId, setSelectedUserId] = useState(null)
 
+  // Custom roles (custom_roles table) get first-class chips beside the built-ins.
+  // Their access already lives in the SAME module_permissions rows keyed by the
+  // role name string, so selecting one edits it exactly like a built-in role.
+  const [customRoles, setCustomRoles] = useState([])
+  const [customRolesLoaded, setCustomRolesLoaded] = useState(false)
+
   // Loaded globals (shared by both modes)
   const [viewMap, setViewMap] = useState(null)
   const [overrides, setOverrides] = useState(null)
@@ -339,6 +346,42 @@ export default function AccessManager() {
   }, [])
 
   useEffect(() => { loadGlobals() }, [loadGlobals])
+
+  // ── Custom roles: load on mount + refresh on tab focus/visibility, so a role
+  // created moments ago in the Custom Roles tab (or another tab) appears here
+  // without a full reload. Fail-open: on error keep the last good list ([] at
+  // first) and never block the editor.
+  const loadCustomRoles = useCallback(async () => {
+    try {
+      const rows = await listCustomRoles()
+      setCustomRoles(Array.isArray(rows) ? rows : [])
+    } catch {
+      // fail-open: keep whatever we already have (initially [])
+    } finally {
+      setCustomRolesLoaded(true)
+    }
+  }, [])
+
+  useEffect(() => {
+    loadCustomRoles()
+    const onFocus = () => loadCustomRoles()
+    const onVisibility = () => { if (!document.hidden) loadCustomRoles() }
+    window.addEventListener('focus', onFocus)
+    document.addEventListener('visibilitychange', onVisibility)
+    return () => {
+      window.removeEventListener('focus', onFocus)
+      document.removeEventListener('visibilitychange', onVisibility)
+    }
+  }, [loadCustomRoles])
+
+  // If the selected CUSTOM role disappears (deleted in the Custom Roles tab),
+  // fall back to Manager instead of editing a ghost role. Built-ins never fall.
+  const isCustomSelected = !ACCESS_ROLES.includes(selectedRole)
+  useEffect(() => {
+    if (mode !== 'role' || !customRolesLoaded) return
+    if (ACCESS_ROLES.includes(selectedRole)) return
+    if (!customRoles.some((r) => r.name === selectedRole)) setSelectedRole('Manager')
+  }, [mode, selectedRole, customRoles, customRolesLoaded])
 
   const selectedUser = useMemo(
     () => (users || []).find((u) => u.id === selectedUserId) || null,
@@ -838,6 +881,35 @@ export default function AccessManager() {
                   </button>
                 )
               })}
+              {customRoles.length > 0 && (
+                <>
+                  <span className="pl-2.5 ml-1 border-l border-[var(--input-border)] text-[10px] uppercase tracking-wider text-[var(--text-muted)] font-semibold select-none">
+                    Custom roles
+                  </span>
+                  {customRoles.map((cr) => {
+                    const on = cr.name === selectedRole
+                    const inactive = cr.active === false
+                    return (
+                      <button
+                        key={cr.id}
+                        type="button"
+                        onClick={() => setSelectedRole(cr.name)}
+                        className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium border border-dashed transition-colors ${
+                          on
+                            ? 'bg-[var(--surface-3)] border-[var(--border-bright)] text-[var(--brand-bright)]'
+                            : `bg-[var(--input-bg)] border-[var(--input-border)] hover:text-[var(--text-primary)] ${inactive ? 'text-[var(--text-muted)]' : 'text-teal-300'}`
+                        }`}
+                        title={`Edit ${cr.name} access (custom role)${cr.description ? `: ${cr.description}` : ''}${inactive ? '. This role is inactive.' : ''}`}
+                      >
+                        <KeyRound size={11} className="shrink-0" />
+                        {cr.name}
+                        {inactive && <span className="opacity-70">(inactive)</span>}
+                        <span className="text-[8px] uppercase tracking-wide opacity-60">custom</span>
+                      </button>
+                    )
+                  })}
+                </>
+              )}
             </div>
           ) : (
             <span className="text-xs text-[var(--text-muted)] inline-flex items-center gap-1.5">
@@ -855,6 +927,18 @@ export default function AccessManager() {
         {mode === 'role' && selectedRole === 'Admin' && (
           <div className="flex items-start gap-2 px-3 py-2 rounded-lg bg-amber-900/15 border border-amber-800/40 text-xs text-amber-200">
             <Crown size={13} className="mt-0.5 shrink-0" /> Admin always has full access to every module and capability. Edits here are ignored for Admin.
+          </div>
+        )}
+
+        {mode === 'role' && isCustomSelected && (
+          <div className="flex items-start gap-2 px-3 py-2 rounded-lg bg-[var(--input-bg)] border border-[var(--input-border)] text-xs text-[var(--text-secondary)]">
+            <KeyRound size={13} className="mt-0.5 shrink-0 text-teal-300" />
+            <span>
+              <span className="font-semibold text-[var(--text-primary)]">{selectedRole}</span> is a custom role: it has no built-in defaults, so every module stays off until you turn it on here. Your toggles below are the whole story for this role.
+              {customRoles.find((r) => r.name === selectedRole)?.active === false && (
+                <span className="text-amber-300"> This role is currently inactive; access is stored but the role is not offered for assignment.</span>
+              )}
+            </span>
           </div>
         )}
       </div>

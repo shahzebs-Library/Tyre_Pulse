@@ -11,6 +11,7 @@ import { useTheme } from '../contexts/ThemeContext'
 import { useLanguage } from '../contexts/LanguageContext'
 import LanguageSwitcher from '../components/LanguageSwitcher'
 import { supabase } from '../lib/supabase'
+import { getPublicConfig } from '../lib/api/systemConfig'
 import TpLogo from '../assets/logo.svg'
 import { readCachedLogo } from '../lib/brand/library'
 import TwoFactorChallenge from '../components/TwoFactorChallenge'
@@ -222,6 +223,21 @@ export default function Login() {
   const [loginAttempts, setLoginAttempts] = useState(0)
   const [cooldownUntil, setCooldownUntil] = useState(0)
   const [ssoLoading, setSsoLoading]   = useState(false)
+  // Registration switch (registration_open / legacy allow_signups). When OFF,
+  // self-service signup is blocked. Read via the anon-safe get_public_config RPC
+  // before any session exists. Defaults to OPEN so a transient read never blocks.
+  const [signupClosed, setSignupClosed] = useState(false)
+
+  // Pre-auth read of the registration switch on mount. getPublicConfig never
+  // throws (returns {} on failure), so a read miss leaves signup permissively open.
+  useEffect(() => {
+    let alive = true
+    getPublicConfig().then((cfg) => {
+      if (!alive) return
+      if (cfg?.registration_open === 'false' || cfg?.allow_signups === 'false') setSignupClosed(true)
+    })
+    return () => { alive = false }
+  }, [])
 
   // Track network status
   useEffect(() => {
@@ -335,6 +351,14 @@ export default function Login() {
 
   async function handleSignup(e) {
     e.preventDefault(); setError('')
+    // Re-check the live registration switch right before creating the account so a
+    // switch flipped off after page load still blocks the signup.
+    const cfg = await getPublicConfig()
+    if (cfg?.registration_open === 'false' || cfg?.allow_signups === 'false') {
+      setSignupClosed(true)
+      setError('New account sign-up is currently closed. Please contact your administrator.')
+      return
+    }
     const uname = signupUsername.trim()
     const empId = employeeId.trim()
     if (password !== confirm)   { setError(t('auth.login.errPasswordMismatch')); return }
@@ -875,6 +899,17 @@ export default function Login() {
                   onSubmit={handleSignup}
                   style={{ display:'flex', flexDirection:'column', gap:14 }}
                 >
+                  {signupClosed && (
+                    <div style={{
+                      display:'flex', alignItems:'flex-start', gap:9,
+                      padding:'11px 14px', borderRadius:12, fontSize:13,
+                      color:'#fcd34d', background:'rgba(234,179,8,0.08)',
+                      border:'1.5px solid rgba(234,179,8,0.22)', lineHeight:1.5,
+                    }}>
+                      <AlertCircle size={15} style={{flexShrink:0, marginTop:1}}/>
+                      New account sign-up is currently closed. Please contact your administrator.
+                    </div>
+                  )}
                   <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12 }}>
                     <div>
                       <div style={labelStyle}>Full Name</div>
@@ -948,16 +983,16 @@ export default function Login() {
                     🔒 New accounts require admin approval before access is granted.
                   </div>
 
-                  <button type="submit" disabled={loading} className="tp-btn-shine" style={{
+                  <button type="submit" disabled={loading || signupClosed} className="tp-btn-shine" style={{
                     width:'100%', padding:'13px', borderRadius:14, border:'none',
-                    background: loading ? 'rgba(22,163,74,0.3)' : 'linear-gradient(135deg, #16a34a, #15803d)',
-                    color:'#fff', fontSize:14, fontWeight:700, cursor:loading?'not-allowed':'pointer',
+                    background: (loading || signupClosed) ? 'rgba(22,163,74,0.3)' : 'linear-gradient(135deg, #16a34a, #15803d)',
+                    color:'#fff', fontSize:14, fontWeight:700, cursor:(loading || signupClosed)?'not-allowed':'pointer',
                     display:'flex', alignItems:'center', justifyContent:'center', gap:8,
-                    boxShadow: loading ? 'none' : '0 4px 28px rgba(22,163,74,0.4)',
+                    boxShadow: (loading || signupClosed) ? 'none' : '0 4px 28px rgba(22,163,74,0.4)',
                   }}>
                     {loading && <Loader2 size={16} className="animate-spin"/>}
-                    {loading ? 'Creating account...' : 'Create Account'}
-                    {!loading && <ArrowRight size={15}/>}
+                    {loading ? 'Creating account...' : signupClosed ? 'Sign-up closed' : 'Create Account'}
+                    {!loading && !signupClosed && <ArrowRight size={15}/>}
                   </button>
                 </motion.form>
               )}

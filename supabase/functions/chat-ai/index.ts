@@ -27,6 +27,48 @@ function serviceClient() {
   return createClient(url, key, { auth: { persistSession: false } })
 }
 
+// ── System Configuration (console System Configuration page) ─────────────────
+// Read the global AI controls so the admin switches are REAL: master enable,
+// per-minute rate limit, cache TTL and the monthly budget cap. Fail-SAFE: any
+// read error keeps AI enabled with the env/default limits (never hard-off).
+async function loadAiConfig(svc: ReturnType<typeof serviceClient>): Promise<{
+  enabled: boolean; ratePerMin: number; cacheTtlSec: number; monthlyBudget: number;
+}> {
+  const dflt = { enabled: true, ratePerMin: RL_PER_MIN, cacheTtlSec: CACHE_TTL_SECONDS, monthlyBudget: 0 }
+  if (!svc) return dflt
+  try {
+    const { data } = await svc.from('system_config').select('key, value')
+      .in('key', ['ai_enabled', 'ai_rate_limit_per_min', 'ai_cache_ttl_hours', 'ai_monthly_budget_usd'])
+    const m: Record<string, string> = {}
+    for (const r of data ?? []) m[r.key] = String(r.value ?? '')
+    const num = (k: string, d: number) => {
+      const n = Number(m[k]); return Number.isFinite(n) && n > 0 ? n : d
+    }
+    return {
+      enabled: !(m.ai_enabled && ['false', '0', 'off', 'no'].includes(m.ai_enabled.trim().toLowerCase())),
+      ratePerMin: num('ai_rate_limit_per_min', RL_PER_MIN),
+      cacheTtlSec: m.ai_cache_ttl_hours ? num('ai_cache_ttl_hours', CACHE_TTL_SECONDS / 3600) * 3600 : CACHE_TTL_SECONDS,
+      monthlyBudget: num('ai_monthly_budget_usd', 0),
+    }
+  } catch {
+    return dflt
+  }
+}
+
+// Current-month AI spend (USD) across ai_token_logs, for the budget guard.
+async function monthSpendUsd(svc: ReturnType<typeof serviceClient>): Promise<number> {
+  if (!svc) return 0
+  try {
+    const start = new Date(); start.setUTCDate(1); start.setUTCHours(0, 0, 0, 0)
+    const { data } = await svc.from('ai_token_logs').select('cost_usd').gte('created_at', start.toISOString())
+    let sum = 0
+    for (const r of data ?? []) sum += Number(r.cost_usd) || 0
+    return sum
+  } catch {
+    return 0
+  }
+}
+
 async function sha256Hex(input: string): Promise<string> {
   const bytes = new TextEncoder().encode(input)
   const digest = await crypto.subtle.digest('SHA-256', bytes)
@@ -98,7 +140,22 @@ serve(async (req) => {
     const svc = serviceClient()
     const nowMs = Date.now()
 
-    // ── Per-user rate limiting ────────────────────────────────────────────────
+    // ── Global AI controls (System Configuration) ─────────────────────────────
+    const aiCfg = await loadAiConfig(svc)
+    if (!aiCfg.enabled) {
+      logAiFailure(svc, { userId, status: 'blocked', httpStatus: 403, error: 'AI disabled by admin' })
+      return jsonResponse(req, { error: 'AI features are currently disabled by your administrator.' }, 403)
+    }
+    // Monthly budget cap (0 = uncapped). Global across the platform.
+    if (aiCfg.monthlyBudget > 0) {
+      const spend = await monthSpendUsd(svc)
+      if (spend >= aiCfg.monthlyBudget) {
+        logAiFailure(svc, { userId, status: 'blocked', httpStatus: 402, error: `Monthly AI budget reached (${spend.toFixed(2)}/${aiCfg.monthlyBudget})` })
+        return jsonResponse(req, { error: 'The monthly AI budget has been reached. Please contact your administrator.' }, 402)
+      }
+    }
+
+    // ── Per-user rate limiting (per-minute cap from System Configuration) ─────
     if (svc) {
       try {
         const sinceMin = new Date(nowMs - 60_000).toISOString()
@@ -107,7 +164,7 @@ serve(async (req) => {
           svc.from('ai_usage_log').select('id', { count: 'exact', head: true }).eq('user_id', userId).gte('created_at', sinceMin),
           svc.from('ai_usage_log').select('id', { count: 'exact', head: true }).eq('user_id', userId).gte('created_at', sinceDay),
         ])
-        if ((perMin ?? 0) >= RL_PER_MIN || (perDay ?? 0) >= RL_PER_DAY) {
+        if ((perMin ?? 0) >= aiCfg.ratePerMin || (perDay ?? 0) >= RL_PER_DAY) {
           logAiFailure(svc, { userId, status: 'rate_limited', httpStatus: 429, error: 'Rate limit exceeded' })
           return jsonResponse(req, { error: 'Rate limit exceeded. Please wait before sending more AI requests.' }, 429)
         }
@@ -216,7 +273,7 @@ serve(async (req) => {
           tokens_used: inputTokens + outputTokens,
           model: MODEL,
           created_at: new Date(nowMs).toISOString(),
-          expires_at: new Date(nowMs + CACHE_TTL_SECONDS * 1000).toISOString(),
+          expires_at: new Date(nowMs + aiCfg.cacheTtlSec * 1000).toISOString(),
         }, { onConflict: 'query_hash' }).then(({ error }) => {
           if (error) console.error('[chat-ai] cache store failed:', error.message)
         })

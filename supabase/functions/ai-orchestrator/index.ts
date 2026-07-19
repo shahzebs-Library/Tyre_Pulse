@@ -230,7 +230,42 @@ serve(async (req) => {
     const { data: prof } = await svc.from('profiles').select('organisation_id').eq('id', userId).maybeSingle()
     const orgId: string | null = prof?.organisation_id ?? null
 
-    // ── Rate limiting (same policy as chat-ai) ────────────────────────────────
+    // ── Global AI controls (System Configuration): master enable + monthly budget
+    //    + per-minute rate limit. Fail-SAFE: a read error keeps AI enabled with
+    //    env defaults (never hard-off). Mirrors chat-ai.
+    let cfgEnabled = true
+    let cfgRatePerMin = RL_PER_MIN
+    let cfgMonthlyBudget = 0
+    try {
+      const { data: cfgRows } = await svc.from('system_config').select('key, value')
+        .in('key', ['ai_enabled', 'ai_rate_limit_per_min', 'ai_monthly_budget_usd'])
+      const m: Record<string, string> = {}
+      for (const r of cfgRows ?? []) m[r.key] = String(r.value ?? '')
+      if (m.ai_enabled && ['false', '0', 'off', 'no'].includes(m.ai_enabled.trim().toLowerCase())) cfgEnabled = false
+      const rn = Number(m.ai_rate_limit_per_min); if (Number.isFinite(rn) && rn > 0) cfgRatePerMin = rn
+      const bn = Number(m.ai_monthly_budget_usd); if (Number.isFinite(bn) && bn > 0) cfgMonthlyBudget = bn
+    } catch (e) {
+      console.error('[ai-orchestrator] config read failed (allowing):', e)
+    }
+    if (!cfgEnabled) {
+      logAiFailure(svc, { userId, status: 'blocked', httpStatus: 403, error: 'AI disabled by admin' })
+      return jsonResponse(req, { error: 'AI features are currently disabled by your administrator.' }, 403)
+    }
+    if (cfgMonthlyBudget > 0) {
+      try {
+        const start = new Date(); start.setUTCDate(1); start.setUTCHours(0, 0, 0, 0)
+        const { data: spendRows } = await svc.from('ai_token_logs').select('cost_usd').gte('created_at', start.toISOString())
+        let spend = 0; for (const r of spendRows ?? []) spend += Number(r.cost_usd) || 0
+        if (spend >= cfgMonthlyBudget) {
+          logAiFailure(svc, { userId, status: 'blocked', httpStatus: 402, error: `Monthly AI budget reached (${spend.toFixed(2)}/${cfgMonthlyBudget})` })
+          return jsonResponse(req, { error: 'The monthly AI budget has been reached. Please contact your administrator.' }, 402)
+        }
+      } catch (e) {
+        console.error('[ai-orchestrator] budget check failed (allowing):', e)
+      }
+    }
+
+    // ── Rate limiting (same policy as chat-ai; per-minute cap from config) ────
     const nowMs = Date.now()
     try {
       const sinceMin = new Date(nowMs - 60_000).toISOString()
@@ -239,7 +274,7 @@ serve(async (req) => {
         svc.from('ai_usage_log').select('id', { count: 'exact', head: true }).eq('user_id', userId).gte('created_at', sinceMin),
         svc.from('ai_usage_log').select('id', { count: 'exact', head: true }).eq('user_id', userId).gte('created_at', sinceDay),
       ])
-      if ((perMin ?? 0) >= RL_PER_MIN || (perDay ?? 0) >= RL_PER_DAY) {
+      if ((perMin ?? 0) >= cfgRatePerMin || (perDay ?? 0) >= RL_PER_DAY) {
         logAiFailure(svc, { userId, status: 'rate_limited', httpStatus: 429, error: 'Rate limit exceeded' })
         return jsonResponse(req, { error: 'Rate limit exceeded. Please wait before sending more AI requests.' }, 429)
       }

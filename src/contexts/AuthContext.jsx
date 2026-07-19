@@ -7,6 +7,7 @@ import { audit } from '../lib/auditLogger'
 import { resolveCapability } from '../lib/permissionMatrix'
 import { hasUnmetMfa } from '../lib/authAssurance'
 import { listModuleStatuses } from '../lib/api/modulesRegistry'
+import { configNum } from '../lib/api/systemConfig'
 
 // Exported so the isolated System Console can supply its own Provider value via
 // ConsoleAuthBridge, letting main-app admin pages render verbatim inside /console.
@@ -85,34 +86,49 @@ export function AuthProvider({ children }) {
   // treated as 'live').
   const [moduleStatuses, setModuleStatuses] = useState({})
 
-  // Idle timeout - sign out after 30 minutes of inactivity.
-  // Uses an in-memory ref instead of localStorage so the timer cannot be
-  // bypassed by a user opening DevTools and modifying localStorage values.
-  const IDLE_MS = 30 * 60 * 1000
+  // Idle timeout - sign the user out after a configured period of inactivity.
+  // Driven by the `session_timeout_hours` System Configuration value (0 or unset
+  // = disabled) read from the primed in-memory config cache. Uses an in-memory
+  // ref instead of localStorage so the timer cannot be bypassed by editing
+  // localStorage in DevTools. Activity updates are throttled to at most once per
+  // 30s to avoid churn; the idle check runs every 60s and re-reads the config so
+  // an admin changing the value takes effect without a reload. Only active while
+  // a user is signed in. Never throws.
   useEffect(() => {
+    if (!user) return undefined
+    lastActivityRef.current = Date.now()
+    let lastReset = 0
     function resetTimer() {
-      lastActivityRef.current = Date.now()
+      const now = Date.now()
+      if (now - lastReset < 30_000) return
+      lastReset = now
+      lastActivityRef.current = now
+    }
+    function onVisible() {
+      if (document.visibilityState === 'visible') resetTimer()
     }
     function checkIdle() {
-      if (Date.now() - lastActivityRef.current > IDLE_MS) {
+      let hours = 0
+      try { hours = configNum('session_timeout_hours', 0) } catch { hours = 0 }
+      if (!(hours > 0)) return // disabled / unset -> no auto-logout
+      if (Date.now() - lastActivityRef.current > hours * 3600_000) {
         audit.logout().finally(() => supabase.auth.signOut())
         localStorage.setItem('tp_session_expired', '1')
       }
     }
-    window.addEventListener('mousemove', resetTimer)
+    window.addEventListener('mousedown', resetTimer)
     window.addEventListener('keydown', resetTimer)
-    window.addEventListener('click', resetTimer)
     window.addEventListener('touchstart', resetTimer)
-    resetTimer()
-    const interval = setInterval(checkIdle, 30_000)
+    document.addEventListener('visibilitychange', onVisible)
+    const interval = setInterval(checkIdle, 60_000)
     return () => {
-      window.removeEventListener('mousemove', resetTimer)
+      window.removeEventListener('mousedown', resetTimer)
       window.removeEventListener('keydown', resetTimer)
-      window.removeEventListener('click', resetTimer)
       window.removeEventListener('touchstart', resetTimer)
+      document.removeEventListener('visibilitychange', onVisible)
       clearInterval(interval)
     }
-  }, [])
+  }, [user])
 
   // Subscribe to realtime updates on this user's profile row so any role/field
   // change made by an admin is applied immediately without requiring re-login.

@@ -17,6 +17,7 @@ import {
   headerFingerprint, aggregateStagedRows, COST_FIELDS,
 } from '../lib/import'
 import * as imports from '../lib/api/imports'
+import { configNum } from '../lib/api/systemConfig'
 import { summarizeValidation, summarizeCommitResult, diagnoseBatchHealth, formatDiagnosticsReport } from '../lib/import/diagnostics'
 import { getBatchDiagnostics } from '../lib/api/importDiagnostics'
 import MappingProfilesManager from '../components/intake/MappingProfilesManager'
@@ -295,6 +296,14 @@ export default function DataIntakeCenter() {
 
   async function startBatch() {
     if (!sheet) return
+    // Upload row cap (max_upload_rows; 0/unset = no cap). Block an oversized file
+    // here — the single funnel every Excel/CSV import passes through — before any
+    // batch is created or row is inserted. Never silently truncate.
+    const maxUpload = configNum('max_upload_rows', 0)
+    if (maxUpload > 0 && sheet.rows.length > maxUpload) {
+      setError(`This file has ${sheet.rows.length.toLocaleString('en-US')} rows which exceeds the maximum of ${maxUpload.toLocaleString('en-US')} allowed per upload. Split the file and try again.`)
+      return
+    }
     setError(''); setBusy(true)
     try {
       const buf = await file.arrayBuffer()

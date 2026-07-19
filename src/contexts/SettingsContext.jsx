@@ -2,6 +2,7 @@ import { createContext, useContext, useState, useEffect, useCallback, useMemo } 
 import { supabase } from '../lib/supabase'
 import { useAuth } from './AuthContext'
 import { setReportPalette } from '../lib/reportColors'
+import { primeConfigCache, configBool } from '../lib/api/systemConfig'
 
 export const COUNTRIES = ['KSA', 'UAE', 'Egypt']
 export const COUNTRY_CURRENCY = { KSA: 'SAR', UAE: 'AED', Egypt: 'EGP' }
@@ -71,29 +72,57 @@ export function SettingsProvider({ children }) {
     if (user) refreshSettings()
   }, [user, refreshSettings])
 
-  // Apply the org-wide report colour theme chosen by the super-admin (Console ->
-  // Report Colors). Stored in system_config.report_palette as a preset name or a
-  // JSON hex array; any authenticated user can read it. Best-effort, never blocks.
+  // Global system_config (System Configuration console page). Loaded ONCE per
+  // authenticated session and primed into the central systemConfig cache so every
+  // enforcement point (export/upload guards, maintenance gate, session timeout,
+  // ...) reads a single source. Also applies the super-admin report colour theme
+  // (report_palette) from the same fetch. Best-effort, never blocks the app.
+  const [systemConfig, setSystemConfig] = useState({})
+  const refreshSystemConfig = useCallback(async () => {
+    const { data } = await supabase.from('system_config').select('key, value')
+    if (!data) return {}
+    const map = {}
+    for (const { key, value } of data) map[key] = value
+    primeConfigCache(map)
+    setSystemConfig(map)
+    if (map.report_palette) {
+      try { setReportPalette(JSON.parse(map.report_palette), { persist: false }) }
+      catch { setReportPalette(map.report_palette, { persist: false }) }
+    }
+    return map
+  }, [])
+
   useEffect(() => {
     if (!user) return
     let cancelled = false
-    supabase.from('system_config').select('value').eq('key', 'report_palette').maybeSingle()
-      .then(({ data }) => {
-        if (cancelled || !data?.value) return
-        try { setReportPalette(JSON.parse(data.value), { persist: false }) }
-        catch { setReportPalette(data.value, { persist: false }) }
-      })
-      .catch(() => { /* keep default theme */ })
-    return () => { cancelled = true }
-  }, [user])
+    refreshSystemConfig().catch(() => { /* keep defaults */ })
+    // Live-refresh when a super-admin changes global config (no reload needed).
+    const ch = supabase
+      .channel('system_config_live')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'system_config' },
+        () => { if (!cancelled) refreshSystemConfig().catch(() => {}) })
+      .subscribe()
+    return () => { cancelled = true; supabase.removeChannel(ch) }
+  }, [user, refreshSystemConfig])
+
+  // Maintenance mode is a global switch; super-admins/Admins are never locked out
+  // (they administer the toggle). Enforced in ProtectedRoute via this flag.
+  const maintenanceActive = useMemo(() => {
+    if (!('maintenance_mode' in systemConfig)) return false
+    const on = configBool('maintenance_mode', false)
+    const isPrivileged = profile?.is_super_admin === true || profile?.role === 'Admin'
+    return on && !isPrivileged
+  }, [systemConfig, profile])
 
   const value = useMemo(
     () => ({
       appSettings, refreshSettings,
       activeCountry, setActiveCountry,
       activeCurrency,
+      systemConfig, refreshSystemConfig, maintenanceActive,
     }),
-    [appSettings, refreshSettings, activeCountry, setActiveCountry, activeCurrency],
+    [appSettings, refreshSettings, activeCountry, setActiveCountry, activeCurrency,
+     systemConfig, refreshSystemConfig, maintenanceActive],
   )
 
   return (

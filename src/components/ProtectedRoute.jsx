@@ -1,7 +1,8 @@
-import { Navigate, useLocation } from 'react-router-dom'
+import { Navigate, useLocation, Link } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { useLanguage } from '../contexts/LanguageContext'
 import { governingModuleKey } from '../lib/navAccess'
+import { configBool } from '../lib/api/systemConfig'
 import LoadingSpinner from './LoadingSpinner'
 
 /**
@@ -21,7 +22,7 @@ export function shouldBlockWeb(profile) {
 }
 
 export default function ProtectedRoute({ children }) {
-  const { user, profile, loading } = useAuth()
+  const { user, profile, loading, mfaEnabled, isSuperAdmin } = useAuth()
   const { t } = useLanguage()
   if (loading) return <LoadingSpinner />
   if (!user) return <Navigate to="/login" replace />
@@ -95,6 +96,46 @@ export default function ProtectedRoute({ children }) {
             className="mt-6 text-sm text-gray-500 hover:text-green-400 transition-colors">
             {t('common.signOut')}
           </button>
+        </div>
+      </div>
+    )
+  }
+
+  // Mandatory two-factor authentication for administrators (System Configuration
+  // `two_factor_required`). An Admin-role or super-admin account that has not
+  // enrolled 2FA is blocked from the app until they enrol, but is never hard
+  // locked: they can still reach Settings (where enrolment lives) or sign out.
+  // Fails SAFE: no-op when the toggle is off, when 2FA is enrolled, or for any
+  // non-admin account.
+  const require2fa = (() => { try { return configBool('two_factor_required', false) } catch { return false } })()
+  const isAdminAccount = !!profile && (profile.role === 'Admin' || isSuperAdmin === true || profile.is_super_admin === true)
+  if (require2fa && isAdminAccount && mfaEnabled === false) {
+    return (
+      <div className="min-h-screen flex items-center justify-center px-4">
+        <div className="text-center max-w-sm">
+          <div className="inline-flex items-center justify-center w-16 h-16 rounded-full mb-5"
+            style={{ background: 'rgba(59,130,246,0.12)', border: '1px solid rgba(59,130,246,0.3)' }}>
+            <span className="text-4xl">🔐</span>
+          </div>
+          <h2 className="text-xl font-bold text-white mb-3">Two-factor authentication required</h2>
+          <p className="text-gray-400 text-sm leading-relaxed mb-1">
+            Your organization requires administrators to secure their account with two-factor authentication before continuing.
+          </p>
+          <p className="text-gray-500 text-xs leading-relaxed">
+            Enrol in Settings under Security to unlock access.
+          </p>
+          <Link
+            to="/settings"
+            className="mt-6 inline-block text-sm font-semibold text-green-400 hover:text-green-300 transition-colors">
+            Go to Settings
+          </Link>
+          <div>
+            <button
+              onClick={() => import('../lib/supabase').then(m => m.supabase.auth.signOut())}
+              className="mt-4 text-sm text-gray-500 hover:text-green-400 transition-colors">
+              {t('common.signOut')}
+            </button>
+          </div>
         </div>
       </div>
     )

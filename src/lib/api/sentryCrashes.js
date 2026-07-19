@@ -34,10 +34,31 @@ export async function saveSentryConfig({ token, org, regionUrl, project } = {}) 
  * List Sentry issues via the edge proxy. Returns the raw payload:
  *   { ok:true, org, issues:[...] } | { ok:false, reason:'not_configured'|'auth'|'unauthorized'|'error' }
  */
-export async function listSentryIssues({ query, period } = {}) {
+export async function listSentryIssues({ query, period, project } = {}) {
   const { data, error } = await supabase.functions.invoke('sentry-issues', {
-    body: { query: query || 'is:unresolved', period: period || '14d' },
+    body: { action: 'list', query: query || 'is:unresolved', period: period || '14d', project: project || '' },
   })
   if (error) throw new Error(toUserMessage(error, 'Could not load crash reports.'))
+  return data || { ok: false, reason: 'error' }
+}
+
+/** The org's Sentry projects: { ok, projects:[{id,slug,name,platform}] }. */
+export async function getSentryProjects() {
+  const { data, error } = await supabase.functions.invoke('sentry-issues', { body: { action: 'projects' } })
+  if (error) throw new Error(toUserMessage(error, 'Could not load Sentry projects.'))
+  return data || { ok: false, reason: 'error' }
+}
+
+/** Full detail for one issue: { ok, issue, event:{ exceptions, tags, user, dateCreated } }. */
+export async function getSentryIssueDetail(issueId) {
+  const { data, error } = await supabase.functions.invoke('sentry-issues', { body: { action: 'detail', issueId } })
+  if (error) throw new Error(toUserMessage(error, 'Could not load the crash details.'))
+  return data || { ok: false, reason: 'error' }
+}
+
+/** Change an issue's status: 'resolved' | 'ignored' | 'unresolved'. */
+export async function updateSentryIssue(issueId, status) {
+  const { data, error } = await supabase.functions.invoke('sentry-issues', { body: { action: 'update', issueId, status } })
+  if (error) throw new Error(toUserMessage(error, 'Could not update the issue.'))
   return data || { ok: false, reason: 'error' }
 }

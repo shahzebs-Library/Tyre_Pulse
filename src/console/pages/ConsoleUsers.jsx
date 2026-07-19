@@ -112,7 +112,10 @@ export default function ConsoleUsers() {
   }, [])
 
   // Merge built-in roles with any custom roles so every assignable role appears.
-  useEffect(() => {
+  // Re-fetched on mount AND whenever the tab regains focus / becomes visible, so
+  // a custom role created elsewhere (Access Control -> Custom Roles) shows up in
+  // the role pickers without a full page reload.
+  const loadRoles = useCallback(() => {
     listCustomRoles()
       .then(rows => {
         const names = (rows ?? []).map(r => r.name).filter(Boolean)
@@ -120,6 +123,17 @@ export default function ConsoleUsers() {
       })
       .catch(() => setRoles(ACCESS_ROLES))
   }, [])
+  useEffect(() => {
+    loadRoles()
+    const onFocus = () => loadRoles()
+    const onVis = () => { if (!document.hidden) loadRoles() }
+    window.addEventListener('focus', onFocus)
+    document.addEventListener('visibilitychange', onVis)
+    return () => {
+      window.removeEventListener('focus', onFocus)
+      document.removeEventListener('visibilitychange', onVis)
+    }
+  }, [loadRoles])
 
   // Distinct site list for the Sites editor. Prefer the org-scoped reference
   // RPC (aggregates every operational table); fall back to a direct distinct

@@ -349,15 +349,26 @@ export default function UserManagement() {
   const { profile: currentProfile } = useAuth()
 
   // Admin-defined custom roles are assignable alongside the built-in ROLES.
+  // Re-fetched on mount AND on focus / tab-visibility so a role created in
+  // Custom Roles appears in the assignable-role pickers without a page reload.
   const [customRoleNames, setCustomRoleNames] = useState([])
-  useEffect(() => {
-    let cancelled = false
+  const loadCustomRoles = useCallback(() => {
     import('../lib/api/customRoles')
       .then((m) => m.listCustomRoles())
-      .then((rows) => { if (!cancelled) setCustomRoleNames((rows || []).filter((r) => r.active !== false).map((r) => r.name)) })
+      .then((rows) => setCustomRoleNames((rows || []).filter((r) => r.active !== false).map((r) => r.name)))
       .catch(() => {})
-    return () => { cancelled = true }
   }, [])
+  useEffect(() => {
+    loadCustomRoles()
+    const onFocus = () => loadCustomRoles()
+    const onVis = () => { if (!document.hidden) loadCustomRoles() }
+    window.addEventListener('focus', onFocus)
+    document.addEventListener('visibilitychange', onVis)
+    return () => {
+      window.removeEventListener('focus', onFocus)
+      document.removeEventListener('visibilitychange', onVis)
+    }
+  }, [loadCustomRoles])
   const effectiveRoles = useMemo(
     () => [...ROLES, ...customRoleNames.filter((n) => !ROLES.includes(n))],
     [customRoleNames],

@@ -24,6 +24,7 @@ import { useTenant } from '../contexts/TenantContext'
 import { resolvePdfBrand, pdfHeader, pdfFooter, pdfTableTheme } from '../lib/exportUtils'
 import PageHeader from '../components/ui/PageHeader'
 import { formatDate } from '../lib/formatters'
+import { toUserMessage } from '../lib/safeError'
 
 ChartJS.register(
   CategoryScale, LinearScale, BarElement,
@@ -96,7 +97,7 @@ export default function SafetyCompliance() {
       setInspections(insp.data || [])
       setAccidents(acc.data || [])
     } catch (e) {
-      setError(e.message)
+      setError(toUserMessage(e, 'Something went wrong. Please try again.'))
     } finally {
       setLoading(false)
     }
@@ -253,6 +254,7 @@ export default function SafetyCompliance() {
 
   // ── Export ────────────────────────────────────────────────────────────────
   async function exportPdf() {
+    try {
     const { default: jsPDF } = await import('jspdf')
     const { default: autoTable } = await import('jspdf-autotable')
     if (!compliance) return
@@ -290,9 +292,13 @@ export default function SafetyCompliance() {
     const pgCount = doc.internal.getNumberOfPages()
     for (let i = 1; i <= pgCount; i++) { doc.setPage(i); pdfFooter(doc, i, pgCount, company, brand) }
     doc.save(`safety-compliance-${new Date().toISOString().slice(0,10)}.pdf`)
+    } catch (e) {
+      setError(toUserMessage(e, 'Could not export. Try again.'))
+    }
   }
 
   async function exportExcel() {
+    try {
     const XLSX = await import('xlsx')
     if (!compliance) return
     const ws = XLSX.utils.json_to_sheet([
@@ -314,6 +320,9 @@ export default function SafetyCompliance() {
       XLSX.utils.book_append_sheet(wb, ws2, 'By Site')
     }
     XLSX.writeFile(wb, `safety-compliance-${new Date().toISOString().slice(0,10)}.xlsx`)
+    } catch (e) {
+      setError(toUserMessage(e, 'Could not export. Try again.'))
+    }
   }
 
   // ── Score color ───────────────────────────────────────────────────────────

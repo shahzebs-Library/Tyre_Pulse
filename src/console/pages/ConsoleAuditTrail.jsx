@@ -7,6 +7,7 @@ import {
   AUDIT_SOURCES, listDataAudit, listAccessAudit, listConsoleAudit,
 } from '../../lib/api/auditTrail'
 import { exportToExcel } from '../../lib/exportUtils'
+import { toUserMessage } from '../../lib/safeError'
 
 // Read-only unified audit viewer (Module 6). Reads three independently-owned
 // audit tables (data changes, access control, console actions) through the
@@ -143,7 +144,11 @@ export default function ConsoleAuditTrail() {
       source: r.source || '',
     }))
     const label = AUDIT_SOURCES.find((s) => s.key === sourceKey)?.label || 'Audit'
-    await exportToExcel(exportRows, cols, headers, `Audit Trail ${label}`, 'Audit')
+    try {
+      await exportToExcel(exportRows, cols, headers, `Audit Trail ${label}`, 'Audit')
+    } catch (err) {
+      setError(toUserMessage(err, 'Could not export. Please try again.'))
+    }
   }
 
   return (

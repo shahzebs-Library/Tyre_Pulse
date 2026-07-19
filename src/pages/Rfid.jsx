@@ -15,6 +15,7 @@ import { useSettings } from '../contexts/SettingsContext'
 import { listTags, createTag, updateTag, deleteTag, findByTag } from '../lib/api/rfid'
 import { summarizeTags, normalizeTagId, RFID_STATUSES, RFID_STATUS_META } from '../lib/rfid'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
+import { toUserMessage } from '../lib/safeError'
 
 const STATUS_STYLES = {
   active: 'bg-green-900/40 text-green-300 border border-green-700/50',
@@ -67,7 +68,7 @@ function TagModal({ open, initial, onClose, onSaved, country }) {
       onSaved?.()
       onClose?.()
     } catch (err) {
-      setError(err?.message || 'Could not save the tag.')
+      setError(toUserMessage(err, 'Could not save the tag.'))
     } finally {
       setBusy(false)
     }
@@ -161,7 +162,7 @@ function ScanPanel({ country, onEdit }) {
       const row = await findByTag(normalized, { country: country && country !== 'All' ? country : undefined })
       setResult(row || null)
     } catch (err) {
-      setError(err?.message || 'Lookup failed.')
+      setError(toUserMessage(err, 'Lookup failed.'))
       setResult(undefined)
     } finally {
       setBusy(false)
@@ -249,7 +250,7 @@ export default function Rfid() {
       setUpdatedAt(new Date())
     } catch (err) {
       if (isMissingRelation(err)) { setMissing(true); setRows([]) }
-      else { setError(err?.message || 'Could not load RFID tags.'); setRows([]) }
+      else { setError(toUserMessage(err, 'Could not load RFID tags.')); setRows([]) }
     } finally {
       setRefreshing(false)
     }
@@ -287,7 +288,7 @@ export default function Rfid() {
       setConfirmDelete(null)
       await load()
     } catch (err) {
-      setError(err?.message || 'Could not delete the tag.')
+      setError(toUserMessage(err, 'Could not delete the tag.'))
     } finally {
       setDeleting(false)
     }

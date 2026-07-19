@@ -88,19 +88,21 @@ describe('createWashRecord', () => {
     expect(payload.asset_no).toBe('A9')
     expect(payload.wash_type).toBe('Full')
     expect(payload.status).toBe('Completed')
-    expect(payload.cost).toBe(75.5)
-    expect(payload.water_liters).toBeNull()
-    expect(payload.duration_min).toBeNull()
+    // cost / water_liters / duration_min are DELIBERATELY not written from the app
+    // (removed per field-feedback); the columns remain in the DB for legacy rows only.
+    expect(payload).not.toHaveProperty('cost')
+    expect(payload).not.toHaveProperty('water_liters')
+    expect(payload).not.toHaveProperty('duration_min')
     expect(payload).not.toHaveProperty('bogus_field')
   })
 
-  it('coerces an invalid wash_type to null and invalid status to Completed', async () => {
+  it('coerces an invalid wash_type to null and an invalid status to the In Progress default', async () => {
     h.state.tables.wash_records = { data: { id: 'w3' }, error: null }
     await api.createWashRecord({ asset_no: 'A1', wash_type: 'Wax', status: 'Weird' })
     const rec = lastCall('wash_records')
     const [payload] = opArgs(rec, 'insert')[0]
     expect(payload.wash_type).toBeNull()
-    expect(payload.status).toBe('Completed')
+    expect(payload.status).toBe('In Progress')
   })
 
   it('throws when asset_no is missing', async () => {

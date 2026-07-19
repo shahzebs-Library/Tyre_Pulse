@@ -14,6 +14,7 @@ import { sendReportEmail } from '../lib/emailService'
 import TwoFactorSetup from '../components/TwoFactorSetup'
 import * as notifPrefsApi from '../lib/api/notificationPreferences'
 import { DEFAULT_PREFS, DIGEST_FREQUENCIES, PRIORITY_ORDER, summarisePrefs } from '../lib/notificationPrefs'
+import { toUserMessage } from '../lib/safeError'
 
 const ROLE_BADGE = {
   Admin:   'bg-purple-900/50 text-purple-300 border border-purple-700/50',
@@ -253,7 +254,7 @@ export default function Settings() {
       const prefs = await notifPrefsApi.getMyPreferences()
       setNotifPrefs({ ...DEFAULT_PREFS, ...prefs })
     } catch (err) {
-      setNotifError(err?.message || 'Could not load your notification preferences.')
+      setNotifError(toUserMessage(err, 'Could not load your notification preferences.'))
     } finally {
       setLoadingNotif(false)
     }
@@ -286,7 +287,7 @@ export default function Settings() {
       setNotifPrefs({ ...DEFAULT_PREFS, ...saved })
       setNotifMsg('Notification preferences saved')
     } catch (err) {
-      setNotifError(err?.message || 'Could not save your notification preferences.')
+      setNotifError(toUserMessage(err, 'Could not save your notification preferences.'))
     } finally {
       setSavingNotif(false)
       setTimeout(() => setNotifMsg(''), 3000)
@@ -313,7 +314,7 @@ export default function Settings() {
     setSavingProfile(true)
     setProfileMsg('')
     const { error } = await settingsApi.updateProfile(user?.id, profileForm)
-    setProfileMsg(error ? error.message : 'Profile updated')
+    setProfileMsg(error ? toUserMessage(error, 'Could not update profile.') : 'Profile updated')
     setSavingProfile(false)
     setTimeout(() => setProfileMsg(''), 3000)
   }
@@ -348,7 +349,7 @@ export default function Settings() {
       { key: 'alert_thresholds', value: JSON.stringify(alertThresholds), updated_by: profile?.id }
     )
 
-    setThreshMsg(error ? 'Save failed: ' + error.message : 'Thresholds saved')
+    setThreshMsg(error ? toUserMessage(error, 'Save failed. Please try again.') : 'Thresholds saved')
     setSavingThresholds(false)
     setTimeout(() => setThreshMsg(''), 3000)
   }
@@ -371,7 +372,7 @@ export default function Settings() {
     const { error } = await settingsApi.upsertKpiTargets(upserts)
 
     if (error) {
-      setKpiMsg('Save failed: ' + error.message)
+      setKpiMsg(toUserMessage(error, 'Save failed. Please try again.'))
     } else {
       setKpiTargets(draftKpiTargets)
       setEditingKpi(false)
@@ -407,7 +408,7 @@ export default function Settings() {
 
   async function loadSchedules() {
     const { data, error } = await settingsApi.listReportSchedules()
-    if (error) { setScheduleError(error.message); return }
+    if (error) { setScheduleError(toUserMessage(error, 'Could not load schedules. Please try again.')); return }
     setSchedules((data || []).map(rowToUi))
   }
 
@@ -425,7 +426,7 @@ export default function Settings() {
       active: newSchedule.active !== false,
       created_by: profile?.id ?? null,
     })
-    if (error) { setScheduleError(`Could not save the schedule: ${error.message}`); return }
+    if (error) { setScheduleError(toUserMessage(error, 'Could not save the schedule.')); return }
     setNewSchedule({ ...EMPTY_SCHEDULE })
     setShowAddForm(false)
     await loadSchedules()
@@ -435,7 +436,7 @@ export default function Settings() {
     setScheduleError('')
     const { data, error } = await settingsApi.deleteReportSchedule(id)
     if (error || (data?.length ?? 0) === 0) {
-      setScheduleError(error?.message || 'The schedule could not be deleted. Check your permissions.')
+      setScheduleError(toUserMessage(error, 'The schedule could not be deleted. Check your permissions.'))
       return
     }
     setTestMsg(prev => { const n = { ...prev }; delete n[id]; return n })
@@ -447,7 +448,7 @@ export default function Settings() {
     if (!target) return
     setScheduleError('')
     const { error } = await settingsApi.updateReportSchedule(id, { active: !target.active, next_run_at: null }) // delivery fn recomputes
-    if (error) { setScheduleError(`Could not update the schedule: ${error.message}`); return }
+    if (error) { setScheduleError(toUserMessage(error, 'Could not update the schedule.')); return }
     await loadSchedules()
   }
 
@@ -471,7 +472,7 @@ export default function Settings() {
       })
       setTestMsg(prev => ({ ...prev, [schedule.id]: 'Test sent successfully' }))
     } catch (err) {
-      setTestMsg(prev => ({ ...prev, [schedule.id]: `Failed: ${err.message}` }))
+      setTestMsg(prev => ({ ...prev, [schedule.id]: toUserMessage(err, 'Failed. Please try again.') }))
     } finally {
       setSendingTest(null)
       setTimeout(() => setTestMsg(prev => { const n = { ...prev }; delete n[schedule.id]; return n }), 4000)
@@ -486,7 +487,7 @@ export default function Settings() {
     setPwMsg('')
     const { error } = await settingsApi.updatePassword(pwNew)
     if (error) {
-      setPwMsg(error.message)
+      setPwMsg(toUserMessage(error, 'Something went wrong. Please try again.'))
     } else {
       setPwMsg('Password updated successfully')
       setPwNew('')
@@ -508,7 +509,7 @@ export default function Settings() {
       setMfaEnabled(false)
       setMfaMsg('Two-factor authentication removed')
     } catch (err) {
-      setMfaMsg('Failed: ' + (err.message ?? 'Unknown error'))
+      setMfaMsg(toUserMessage(err, 'Failed. Please try again.'))
     } finally {
       setRemovingMfa(false)
       setConfirmRemoveMfa(false)

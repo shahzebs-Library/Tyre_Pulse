@@ -30,6 +30,7 @@ import {
 } from '../lib/taas'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import { formatCurrency, formatCurrencyCompact } from '../lib/formatters'
+import { toUserMessage } from '../lib/safeError'
 
 const EMPTY_FORM = {
   subscription_no: '', customer_name: '', asset_no: '', plan_type: 'per_km',
@@ -132,7 +133,7 @@ export default function Taas() {
       setUpdatedAt(new Date())
     } catch (err) {
       if (isMissingRelation(err)) setNotProvisioned(true)
-      else setError(err?.message || 'Could not load TaaS subscriptions.')
+      else setError(toUserMessage(err, 'Could not load TaaS subscriptions.'))
       setRows([])
     } finally {
       setRefreshing(false)
@@ -251,7 +252,7 @@ export default function Taas() {
       setShowModal(false); setEditing(null)
       await load()
     } catch (err) {
-      setFormError(err?.message || 'Could not save the subscription.')
+      setFormError(toUserMessage(err, 'Could not save the subscription.'))
     } finally {
       setSaving(false)
     }
@@ -265,7 +266,7 @@ export default function Taas() {
       setConfirmDelete(null)
       await load()
     } catch (err) {
-      setError(err?.message || 'Could not delete the subscription.')
+      setError(toUserMessage(err, 'Could not delete the subscription.'))
     } finally {
       setDeleting(false)
     }

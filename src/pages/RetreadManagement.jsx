@@ -21,6 +21,7 @@ import { useSettings } from '../contexts/SettingsContext'
 import { useTenant } from '../contexts/TenantContext'
 import { exportToExcel, exportToPdf, resolvePdfBrand, pdfHeader, pdfFooter, pdfTableTheme } from '../lib/exportUtils'
 import { formatMonthYear } from '../lib/formatters'
+import { toUserMessage } from '../lib/safeError'
 import PageHeader from '../components/ui/PageHeader'
 
 ChartJS.register(
@@ -294,7 +295,7 @@ export default function RetreadManagement() {
       if (err) throw err
       setRecords(data ?? [])
     } catch (e) {
-      setError(e.message ?? 'Failed to load data')
+      setError(toUserMessage(e, 'Failed to load data'))
     } finally {
       setLoading(false)
     }

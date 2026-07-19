@@ -172,7 +172,7 @@ export default function ConsoleSessions() {
     }
   }
 
-  function handleExport() {
+  async function handleExport() {
     const rows = filtered.map((d) => ({
       full_name: d.full_name || '',
       username: d.username || '',
@@ -186,7 +186,11 @@ export default function ConsoleSessions() {
     }))
     const colKeys = ['full_name', 'username', 'role', 'country', 'locked', 'has_device', 'push_token_updated_at', 'last_login_at', 'login_count']
     const headers = ['Name', 'Username', 'Role', 'Country', 'Status', 'Has device', 'Device updated', 'Last login', 'Login count']
-    exportToExcel(rows, colKeys, headers, 'TyrePulse Users and Devices', 'Users')
+    try {
+      await exportToExcel(rows, colKeys, headers, 'TyrePulse Users and Devices', 'Users')
+    } catch (err) {
+      setError(toUserMessage(err, 'Could not export. Please try again.'))
+    }
   }
 
   // ── Render ─────────────────────────────────────────────────────────────────────

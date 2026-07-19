@@ -27,6 +27,7 @@ import {
 import { listProfiles } from '../lib/api/users'
 import { summariseDelegations, delegationStatus } from '../lib/approvalDelegations'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
+import { toUserMessage } from '../lib/safeError'
 
 const MANAGER_ROLES = new Set(['Admin', 'Manager', 'Director'])
 
@@ -110,7 +111,7 @@ export default function ApprovalDelegations() {
       setUpdatedAt(new Date())
     } catch (err) {
       if (isMissingRelation(err)) setNotProvisioned(true)
-      else setError(err?.message || 'Could not load delegations.')
+      else setError(toUserMessage(err, 'Could not load delegations.'))
       setRows([])
     } finally {
       setRefreshing(false)
@@ -238,7 +239,7 @@ export default function ApprovalDelegations() {
       setShowModal(false); setEditing(null)
       await load()
     } catch (err) {
-      setFormError(err?.message || 'Could not save the delegation.')
+      setFormError(toUserMessage(err, 'Could not save the delegation.'))
     } finally {
       setSaving(false)
     }
@@ -252,7 +253,7 @@ export default function ApprovalDelegations() {
       setConfirmDelete(null)
       await load()
     } catch (err) {
-      setError(err?.message || 'Could not delete the delegation.')
+      setError(toUserMessage(err, 'Could not delete the delegation.'))
     } finally {
       setDeleting(false)
     }
@@ -305,10 +306,10 @@ export default function ApprovalDelegations() {
         updatedAt={updatedAt}
         actions={
           <div className="flex items-center gap-2">
-            <button onClick={() => exportToExcel(exportRows, EXPORT_COLS, EXPORT_HEADERS, 'approval_delegations')} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!filtered.length}>
+            <button onClick={async () => { try { await exportToExcel(exportRows, EXPORT_COLS, EXPORT_HEADERS, 'approval_delegations') } catch (e) { setError(toUserMessage(e, 'Could not export. Try again.')) } }} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!filtered.length}>
               <FileSpreadsheet size={14} /> Excel
             </button>
-            <button onClick={() => exportToPdf(exportRows, EXPORT_COLS.map((k, i) => ({ key: k, header: EXPORT_HEADERS[i] })), 'Approval Delegations', 'approval_delegations', 'landscape')} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!filtered.length}>
+            <button onClick={async () => { try { await exportToPdf(exportRows, EXPORT_COLS.map((k, i) => ({ key: k, header: EXPORT_HEADERS[i] })), 'Approval Delegations', 'approval_delegations', 'landscape') } catch (e) { setError(toUserMessage(e, 'Could not export. Try again.')) } }} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!filtered.length}>
               <FileText size={14} /> PDF
             </button>
             <button onClick={openCreate} className="btn-primary text-sm inline-flex items-center gap-1.5" disabled={notProvisioned}>

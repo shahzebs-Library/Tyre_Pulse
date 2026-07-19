@@ -45,6 +45,7 @@ import {
 import * as AccidentReportLib from '../../lib/accidentReport'
 import { useAuth } from '../../contexts/AuthContext'
 import { renderAccidentReportPdf } from '../../lib/accidentReportPdf'
+import { toUserMessage } from '../../lib/safeError'
 import { listTemplates, createTemplate, updateTemplate, deleteTemplate } from '../../lib/api/accidentReportTemplates'
 import { formatCurrencyCompact } from '../../lib/formatters'
 import { reportFileName, reportDateLabel, exportToExcel } from '../../lib/exportUtils'
@@ -270,7 +271,7 @@ export default function AccidentReportBuilder({ records = [], company = 'TyrePul
       await deleteTemplate(row.id)
       setTemplates((ts) => ts.filter((x) => x.id !== row.id))
       if (tplId === row.id) { setTplId(''); setDirty(true) }
-    } catch (e) { setToast({ t: 'err', m: e?.message || 'Delete failed.' }) }
+    } catch (e) { setToast({ t: 'err', m: toUserMessage(e, 'Delete failed.') }) }
   }
   const newTemplate = () => { setTplId(''); setTplName(''); setBlocks(STARTER()); setOrientation('portrait'); setDirty(false); setToast({ t: 'ok', m: 'Started a fresh layout.' }) }
 
@@ -289,7 +290,7 @@ export default function AccidentReportBuilder({ records = [], company = 'TyrePul
       setDirty(false)
       setToast({ t: 'ok', m: `Layout “${name}” saved — you can now schedule it in Scheduled Reports.` })
     } catch (e) {
-      setToast({ t: 'err', m: e?.message || 'Could not save layout (draft kept locally).' })
+      setToast({ t: 'err', m: toUserMessage(e, 'Could not save layout (draft kept locally).') })
     } finally { setSaving(false) }
   }
 
@@ -304,7 +305,7 @@ export default function AccidentReportBuilder({ records = [], company = 'TyrePul
       })
       setToast({ t: 'ok', m: 'PDF exported.' })
     } catch (e) {
-      setToast({ t: 'err', m: e?.message || 'Export failed.' })
+      setToast({ t: 'err', m: toUserMessage(e, 'Export failed.') })
     } finally { setExporting(false) }
   }, [config, records, company, currency])
 
@@ -320,7 +321,7 @@ export default function AccidentReportBuilder({ records = [], company = 'TyrePul
       })
       setToast({ t: 'ok', m: 'PowerPoint exported.' })
     } catch (e) {
-      setToast({ t: 'err', m: e?.message || 'Export failed.' })
+      setToast({ t: 'err', m: toUserMessage(e, 'Export failed.') })
     } finally { setExporting(false) }
   }, [config, records, company, currency])
 

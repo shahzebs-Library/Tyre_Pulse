@@ -9,6 +9,7 @@ import { useLanguage } from '../contexts/LanguageContext'
 import * as imports from '../lib/api/imports'
 import { reconcileBatch } from '../lib/import/reconcile'
 import { formatDate } from '../lib/formatters'
+import { toUserMessage } from '../lib/safeError'
 
 const ELEVATED = ['admin', 'manager', 'director']
 const TABS = [
@@ -75,7 +76,7 @@ export default function DataIntakeHistory() {
       else if (tab === 'aliases') setAliases(await imports.listAliases({ country: activeCountry }))
       else if (tab === 'fx') setFxRates(await imports.listCurrencyRates({ approvedOnly: false }))
     } catch (e) {
-      setError(e?.message || t('intakehistory.errors.loadFailed'))
+      setError(toUserMessage(e, t('intakehistory.errors.loadFailed')))
     } finally { setLoading(false) }
   }, [tab, activeCountry])
 
@@ -87,7 +88,7 @@ export default function DataIntakeHistory() {
       setAliasForm((f) => ({ ...f, rawValue: '', canonicalValue: '' }))
       await load()
     } catch (e) {
-      setError(e?.message || t('intakehistory.errors.aliasSaveFailed'))
+      setError(toUserMessage(e, t('intakehistory.errors.aliasSaveFailed')))
     } finally { setSavingAlias(false) }
   }
 
@@ -103,27 +104,27 @@ export default function DataIntakeHistory() {
       setFxForm((s) => ({ ...s, rate: '' }))
       await load()
     } catch (e) {
-      setError(e?.message || t('intakehistory.errors.fxSaveFailed'))
+      setError(toUserMessage(e, t('intakehistory.errors.fxSaveFailed')))
     } finally { setSavingFx(false) }
   }
   async function approveFx(id) {
     setError('')
     try { await imports.approveCurrencyRate(id); await load() }
-    catch (e) { setError(e?.message || t('intakehistory.errors.fxApproveFailed')) }
+    catch (e) { setError(toUserMessage(e, t('intakehistory.errors.fxApproveFailed'))) }
   }
   useEffect(() => { load() }, [load])
 
   async function openDrill(batch) {
     setDrill({ batch, rows: null })
     try { setDrill({ batch, rows: await imports.getBatchRows(batch.id) }) }
-    catch (e) { setDrill({ batch, rows: [], error: e?.message }) }
+    catch (e) { setDrill({ batch, rows: [], error: toUserMessage(e, 'Could not load rows.') }) }
   }
 
   async function reverse(batch) {
     if (!window.confirm(t('intakehistory.confirm.reverseImport', { module: batch.module, country: batch.country }))) return
     setBusyId(batch.id)
     try { await imports.reverseBatch(batch.id); await load() }
-    catch (e) { setError(e?.message || t('intakehistory.errors.reverseFailed')) }
+    catch (e) { setError(toUserMessage(e, t('intakehistory.errors.reverseFailed'))) }
     finally { setBusyId(null) }
   }
 
@@ -149,7 +150,7 @@ export default function DataIntakeHistory() {
         setError(t('intakehistory.errors.commitNoRows', { failed: res.failed }))
       }
     } catch (e) {
-      setError(e?.message || t('intakehistory.errors.commitFailed'))
+      setError(toUserMessage(e, t('intakehistory.errors.commitFailed')))
     } finally { setBusyId(null) }
   }
 

@@ -41,6 +41,7 @@ import {
   FITMENT_UNAVAILABLE_CHECKS, FITMENT_UNAVAILABLE_NOTE,
 } from '../lib/fitmentValidation'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
+import { toUserMessage } from '../lib/safeError'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Tooltip, Legend)
 
@@ -136,7 +137,7 @@ export default function FitmentValidation() {
       setUpdatedAt(new Date())
       await Promise.all([loadRules(), loadValidations()])
     } catch (err) {
-      setError(err?.message || 'Could not load fleet or tyre data.')
+      setError(toUserMessage(err, 'Could not load fleet or tyre data.'))
       setData({ vehicles: [], tyres: [] })
     } finally {
       setRefreshing(false)
@@ -330,10 +331,10 @@ export default function FitmentValidation() {
         updatedAt={updatedAt}
         actions={tab === 'audit' ? (
           <div className="flex items-center gap-2">
-            <button onClick={() => exportToExcel(exportRows, EXPORT_COLS, EXPORT_HEADERS, 'fitment_validation')} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!filtered.length}>
+            <button onClick={async () => { try { await exportToExcel(exportRows, EXPORT_COLS, EXPORT_HEADERS, 'fitment_validation') } catch (e) { setError(toUserMessage(e, 'Could not export. Try again.')) } }} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!filtered.length}>
               <FileSpreadsheet size={14} /> Excel
             </button>
-            <button onClick={() => exportToPdf(exportRows, EXPORT_COLS.map((k, i) => ({ key: k, header: EXPORT_HEADERS[i] })), 'Fitment Validation', 'fitment_validation', 'landscape')} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!filtered.length}>
+            <button onClick={async () => { try { await exportToPdf(exportRows, EXPORT_COLS.map((k, i) => ({ key: k, header: EXPORT_HEADERS[i] })), 'Fitment Validation', 'fitment_validation', 'landscape') } catch (e) { setError(toUserMessage(e, 'Could not export. Try again.')) } }} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!filtered.length}>
               <FileText size={14} /> PDF
             </button>
           </div>

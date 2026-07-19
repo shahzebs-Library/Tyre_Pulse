@@ -14,6 +14,7 @@ import {
   Rocket, Info, Zap, Search, Database, Clock,
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
+import { toUserMessage } from '../lib/safeError'
 
 // ── Step bar ──────────────────────────────────────────────────────────────────
 
@@ -749,7 +750,7 @@ export default function UploadData() {
         if (isText) { try { await tryText() } catch { await tryBinary() } }
         else        { try { await tryBinary() } catch { await tryText() } }
       } catch (err) {
-        setError(t('uploaddata.idle.parseError', { fileName: file.name, message: err.message }))
+        setError(t('uploaddata.idle.parseError', { fileName: file.name, message: toUserMessage(err, 'unknown error') }))
       }
     }
 
@@ -878,7 +879,7 @@ export default function UploadData() {
     setStep('preview')
     } catch (err) {
       console.error('[UploadData] buildPreview failed:', err)
-      setError(t('uploaddata.preview.buildError', { message: err?.message || 'unknown error' }))
+      setError(t('uploaddata.preview.buildError', { message: toUserMessage(err, 'unknown error') }))
     }
   }
 
@@ -987,7 +988,7 @@ export default function UploadData() {
       }))
       if (!isAdminUploader) {
         const { error: pErr } = await submitForApproval({ batchId, country: uploadCountry, uploadType: 'stock', targetTable: 'stock_records', rows: stockRows })
-        if (pErr) { setError(t('uploaddata.errors.approvalError', { message: pErr.message })); setStep('preview'); return }
+        if (pErr) { setError(t('uploaddata.errors.approvalError', { message: toUserMessage(pErr, 'unknown error') })); setStep('preview'); return }
         setResult({ pending: true, submitted: stockRows.length, added: 0, autoClassifiedCount: 0, needsReviewCount: 0, dupesSkipped: 0, skipLog: [] })
         setStep('done')
         return
@@ -1097,7 +1098,7 @@ export default function UploadData() {
     // Non-admins: stage the fully-prepared rows for admin approval, don't go live.
     if (!isAdminUploader) {
       const { error: pErr } = await submitForApproval({ batchId, country: uploadCountry, uploadType: 'tyres', targetTable: 'tyre_records', rows: records })
-      if (pErr) { setError(t('uploaddata.errors.approvalError', { message: pErr.message })); setStep('preview'); return }
+      if (pErr) { setError(t('uploaddata.errors.approvalError', { message: toUserMessage(pErr, 'unknown error') })); setStep('preview'); return }
       setResult({ pending: true, submitted: records.length, added: 0, skipped: 0, skipLog: [], autoClassifiedCount, needsReviewCount, dupesSkipped: skipDupes ? dupes.length : 0, extraColCount: unmappedSource.length })
       setStep('done')
       return

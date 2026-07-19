@@ -26,6 +26,7 @@ import {
   buildHierarchy, rollupAssetCount, depthOf, summariseGroups,
 } from '../lib/fleetGroups'
 import { formatCurrencyCompact } from '../lib/formatters'
+import { toUserMessage } from '../lib/safeError'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 
 const EMPTY_FORM = {
@@ -152,7 +153,7 @@ export default function FleetGroups() {
       setUpdatedAt(new Date())
     } catch (err) {
       if (isMissingRelation(err)) setNotProvisioned(true)
-      else setError(err?.message || 'Could not load fleet groups.')
+      else setError(toUserMessage(err, 'Could not load fleet groups.'))
       setRows([])
     } finally {
       setRefreshing(false)
@@ -248,7 +249,7 @@ export default function FleetGroups() {
       setShowModal(false); setEditing(null)
       await load()
     } catch (err) {
-      setFormError(err?.message || 'Could not save the group.')
+      setFormError(toUserMessage(err, 'Could not save the group.'))
     } finally {
       setSaving(false)
     }
@@ -262,7 +263,7 @@ export default function FleetGroups() {
       setConfirmDelete(null)
       await load()
     } catch (err) {
-      setError(err?.message || 'Could not delete the group.')
+      setError(toUserMessage(err, 'Could not delete the group.'))
     } finally {
       setDeleting(false)
     }
@@ -282,10 +283,10 @@ export default function FleetGroups() {
         updatedAt={updatedAt}
         actions={
           <div className="flex items-center gap-2">
-            <button onClick={() => exportToExcel(exportRows, EXPORT_COLS, EXPORT_HEADERS, 'fleet_groups')} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!filtered.length}>
+            <button onClick={async () => { try { await exportToExcel(exportRows, EXPORT_COLS, EXPORT_HEADERS, 'fleet_groups') } catch (e) { setError(toUserMessage(e, 'Could not export. Try again.')) } }} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!filtered.length}>
               <FileSpreadsheet size={14} /> Excel
             </button>
-            <button onClick={() => exportToPdf(exportRows, EXPORT_COLS.map((k, i) => ({ key: k, header: EXPORT_HEADERS[i] })), 'Fleet Groups Hierarchy', 'fleet_groups', 'landscape')} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!filtered.length}>
+            <button onClick={async () => { try { await exportToPdf(exportRows, EXPORT_COLS.map((k, i) => ({ key: k, header: EXPORT_HEADERS[i] })), 'Fleet Groups Hierarchy', 'fleet_groups', 'landscape') } catch (e) { setError(toUserMessage(e, 'Could not export. Try again.')) } }} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!filtered.length}>
               <FileText size={14} /> PDF
             </button>
             <button onClick={openCreate} className="btn-primary text-sm inline-flex items-center gap-1.5" disabled={notProvisioned}>

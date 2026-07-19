@@ -3,6 +3,7 @@ import { ToggleRight, RotateCcw, Save } from 'lucide-react'
 import {
   FLAG_DEFS, DEFAULT_FLAGS, fetchFlags, saveFlags, flagsByCategory,
 } from '../../lib/featureFlags'
+import { toUserMessage } from '../../lib/safeError'
 
 /**
  * Feature Flags — admin-only, org-wide feature switches (Roadmap #5).
@@ -39,7 +40,7 @@ export default function FeatureFlagsPanel() {
       flash(true, 'Feature flags saved')
     } catch (err) {
       setFlags(prev) // rollback the optimistic update
-      flash(false, `Save failed: ${err.message}`)
+      flash(false, toUserMessage(err, 'Save failed. Please try again.'))
     } finally {
       setSaving(false)
     }

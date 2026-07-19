@@ -14,6 +14,7 @@ import { useReportMeta } from '../hooks/useReportMeta'
 import { formatCurrencyCompact } from '../lib/formatters'
 import { fetchAllPages } from '../lib/fetchAll'
 import { computeCountryMetrics } from '../lib/analyticsEngine'
+import { toUserMessage } from '../lib/safeError'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend)
 
@@ -93,7 +94,7 @@ export default function CountryComparison() {
         return available.slice(0, Math.min(3, available.length))
       })
     } catch (err) {
-      setError(err.message || 'Failed to load country data.')
+      setError(toUserMessage(err, 'Failed to load country data.'))
       setRecords([])
       setAllCountries([])
       setCountries([])

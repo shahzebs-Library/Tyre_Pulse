@@ -25,6 +25,7 @@ import {
 import { summarisePods, byStatus, byDriver, POD_STATUSES } from '../lib/podRecords'
 import { safeHref } from '../lib/safeUrl'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
+import { toUserMessage } from '../lib/safeError'
 
 const EMPTY_FORM = {
   pod_no: '', asset_no: '', driver_name: '', customer_name: '', delivery_address: '',
@@ -101,7 +102,7 @@ export default function ProofOfDelivery() {
       setUpdatedAt(new Date())
     } catch (err) {
       if (isMissingRelation(err)) setNotProvisioned(true)
-      else setError(err?.message || 'Could not load proof of delivery records.')
+      else setError(toUserMessage(err, 'Could not load proof of delivery records.'))
       setRows([])
     } finally {
       setRefreshing(false)
@@ -181,7 +182,7 @@ export default function ProofOfDelivery() {
       setShowModal(false); setEditing(null)
       await load()
     } catch (err) {
-      setFormError(err?.message || 'Could not save the POD record.')
+      setFormError(toUserMessage(err, 'Could not save the POD record.'))
     } finally {
       setSaving(false)
     }
@@ -195,7 +196,7 @@ export default function ProofOfDelivery() {
       setConfirmDelete(null)
       await load()
     } catch (err) {
-      setError(err?.message || 'Could not delete the POD record.')
+      setError(toUserMessage(err, 'Could not delete the POD record.'))
     } finally {
       setDeleting(false)
     }

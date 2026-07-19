@@ -19,6 +19,7 @@ import {
 } from '../lib/api/vehicleCheckInOut'
 import { summarizeCheckInOut } from '../lib/vehicleCheckInOut'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
+import { toUserMessage } from '../lib/safeError'
 
 const DIRECTION_META = {
   out: { label: 'Checked out', icon: LogOut, cls: 'bg-sky-900/40 text-sky-300 border border-sky-700/50' },
@@ -76,7 +77,7 @@ export default function VehicleCheckInOut() {
       setUpdatedAt(new Date())
     } catch (err) {
       if (isMissingCheckInOutTable(err)) { setMissing(true); setRows([]) }
-      else { setError(err?.message || 'Could not load check-in/out entries.'); setRows([]) }
+      else { setError(toUserMessage(err, 'Could not load check-in/out entries.')); setRows([]) }
     } finally {
       setRefreshing(false)
     }
@@ -157,7 +158,7 @@ export default function VehicleCheckInOut() {
       setModalOpen(false)
       setUpdatedAt(new Date())
     } catch (err) {
-      setFormError(err?.message || 'Could not save this entry.')
+      setFormError(toUserMessage(err, 'Could not save this entry.'))
     } finally {
       setSaving(false)
     }
@@ -171,7 +172,7 @@ export default function VehicleCheckInOut() {
       setRows((prev) => (prev || []).filter((r) => r.id !== confirmDelete.id))
       setConfirmDelete(null)
     } catch (err) {
-      setError(err?.message || 'Could not delete this entry.')
+      setError(toUserMessage(err, 'Could not delete this entry.'))
     } finally {
       setDeleting(false)
     }

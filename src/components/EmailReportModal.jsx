@@ -6,6 +6,7 @@ import {
 import { sendReportEmail, generateReportPdf, buildFleetSummaryEmail } from '../lib/emailService'
 import { useTenant } from '../contexts/TenantContext'
 import { useSettings } from '../contexts/SettingsContext'
+import { toUserMessage } from '../lib/safeError'
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
@@ -112,7 +113,7 @@ export default function EmailReportModal({
 
       setResult({ success: true })
     } catch (err) {
-      setResult({ error: err.message || 'An unexpected error occurred. Please try again.' })
+      setResult({ error: toUserMessage(err, 'An unexpected error occurred. Please try again.') })
     } finally {
       setSending(false)
     }

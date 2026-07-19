@@ -29,6 +29,7 @@ import {
   summariseTrip, orderSegments, countEvents, speedProfile, EVENT_TYPES,
 } from '../lib/tripReplay'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
+import { toUserMessage } from '../lib/safeError'
 
 const EMPTY_FORM = {
   trip_ref: '', asset_no: '', driver_name: '', sequence: '', latitude: '',
@@ -119,7 +120,7 @@ export default function TripReplay() {
       })
     } catch (err) {
       if (isMissingRelation(err)) setNotProvisioned(true)
-      else setError(err?.message || 'Could not load trips.')
+      else setError(toUserMessage(err, 'Could not load trips.'))
       setTrips([])
       setTripRef('')
     } finally {
@@ -138,7 +139,7 @@ export default function TripReplay() {
       setSegments(orderSegments(Array.isArray(data) ? data : []))
     } catch (err) {
       if (isMissingRelation(err)) setNotProvisioned(true)
-      else setError(err?.message || 'Could not load trip segments.')
+      else setError(toUserMessage(err, 'Could not load trip segments.'))
       setSegments([])
     } finally {
       setSegLoading(false)
@@ -244,7 +245,7 @@ export default function TripReplay() {
       if (!editing && payload.trip_ref !== tripRef) setTripRef(payload.trip_ref.trim())
       await reloadAll()
     } catch (err) {
-      setFormError(err?.message || 'Could not save the segment.')
+      setFormError(toUserMessage(err, 'Could not save the segment.'))
     } finally {
       setSaving(false)
     }
@@ -258,7 +259,7 @@ export default function TripReplay() {
       setConfirmDelete(null)
       await reloadAll()
     } catch (err) {
-      setError(err?.message || 'Could not delete the segment.')
+      setError(toUserMessage(err, 'Could not delete the segment.'))
     } finally {
       setDeleting(false)
     }

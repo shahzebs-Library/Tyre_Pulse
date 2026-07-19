@@ -16,6 +16,7 @@ import {
 } from 'lucide-react'
 import EmailReportModal from '../components/EmailReportModal'
 import { supabase } from '../lib/supabase'
+import { toUserMessage } from '../lib/safeError'
 import { fetchAllPages } from '../lib/fetchAll'
 import { applyCountry } from '../lib/countryFilter'
 import PageHeader from '../components/ui/PageHeader'
@@ -419,7 +420,7 @@ export default function FleetIntelligence() {
         setInspections([])
       }
     } catch (err) {
-      setError(err.message || 'Failed to load fleet intelligence data')
+      setError(toUserMessage(err, 'Failed to load fleet intelligence data'))
     } finally {
       setLoading(false)
     }

@@ -9,6 +9,7 @@ import { motion } from 'framer-motion'
 import PageHeader from '../components/ui/PageHeader'
 import SectionTabs, { FLEET_TABS } from '../components/ui/SectionTabs'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
+import { toUserMessage } from '../lib/safeError'
 import { formatCurrencyCompact } from '../lib/formatters'
 import {
   Chart as ChartJS, CategoryScale, LinearScale, BarElement, LineElement,
@@ -56,7 +57,7 @@ export default function FleetAnalytics() {
       setAssetMetrics(m)
       setTotalRecords(m.reduce((s, a) => s + (a.count || 0), 0))
     } catch (e) {
-      if (myReq === reqIdRef.current) setError(e.message || t('fleetanalytics.loadErrorFallback'))
+      if (myReq === reqIdRef.current) setError(toUserMessage(e, t('fleetanalytics.loadErrorFallback')))
     } finally {
       if (myReq === reqIdRef.current) setLoading(false)
     }
@@ -182,7 +183,7 @@ export default function FleetAnalytics() {
           </select>
           <div className="flex gap-2 ml-auto">
             <button
-              onClick={() => exportToExcel(
+              onClick={async () => { try { await exportToExcel(
                 filtered.slice(0, 1000).map(a => ({
                   asset_no: a.assetNo, records: a.count,
                   total_cost: a.totalCost, high_risk: a.highRiskCount,
@@ -193,13 +194,13 @@ export default function FleetAnalytics() {
                 ['asset_no','records','total_cost','high_risk','fail_per_month','sites','brands','last_seen'],
                 ['Asset No','Records','Total Cost','High Risk','Fail/Mo','Sites','Brands','Last Seen'],
                 'TyrePulse_FleetAnalytics'
-              )}
+              ) } catch (e) { setError(toUserMessage(e, 'Could not export. Try again.')) } }}
               className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-1.5"
             >
               <Download size={14} /> {t('fleetanalytics.actions.excel')}
             </button>
             <button
-              onClick={() => exportToPdf(
+              onClick={async () => { try { await exportToPdf(
                 filtered.slice(0, 200).map(a => ({
                   asset_no: a.assetNo, records: a.count,
                   total_cost: formatCurrencyCompact(a.totalCost, activeCurrency),
@@ -216,7 +217,7 @@ export default function FleetAnalytics() {
                 'Fleet Analytics Report',
                 'TyrePulse_FleetAnalytics',
                 'landscape'
-              )}
+              ) } catch (e) { setError(toUserMessage(e, 'Could not export. Try again.')) } }}
               className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-1.5"
             >
               <FileText size={14} /> {t('fleetanalytics.actions.pdf')}

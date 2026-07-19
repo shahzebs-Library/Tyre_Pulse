@@ -8,6 +8,7 @@ import {
   listSites, upsertSite, deleteSite, setSiteActive, emptySite,
   SITE_TYPES,
 } from '../lib/api/sites'
+import { toUserMessage } from '../lib/safeError'
 
 /**
  * SitesMasterPanel — admin/manager editor for the Sites master (V109). Curate
@@ -37,7 +38,7 @@ export default function SitesMasterPanel({ canEdit }) {
   const load = useCallback(async () => {
     setLoading(true); setError('')
     try { setRows(await listSites({})) }
-    catch (e) { setError(e?.message || 'Could not load sites.') }
+    catch (e) { setError(toUserMessage(e, 'Could not load sites.')) }
     finally { setLoading(false) }
   }, [])
   useEffect(() => { load() }, [load])
@@ -67,7 +68,7 @@ export default function SitesMasterPanel({ canEdit }) {
       setAddForm(emptySite(country)); setAdding(false)
       await load()
       setOkMsg('Site added.')
-    } catch (e) { setError(e?.message || 'Could not add the site.') }
+    } catch (e) { setError(toUserMessage(e, 'Could not add the site.')) }
     finally { setBusyId(null) }
   }
 
@@ -79,7 +80,7 @@ export default function SitesMasterPanel({ canEdit }) {
       setEditId(null); setEditForm(null)
       await load()
       setOkMsg('Site updated.')
-    } catch (e) { setError(e?.message || 'Could not update the site.') }
+    } catch (e) { setError(toUserMessage(e, 'Could not update the site.')) }
     finally { setBusyId(null) }
   }
 
@@ -87,7 +88,7 @@ export default function SitesMasterPanel({ canEdit }) {
     if (!canEdit) return
     setBusyId(site.id); setError(''); setOkMsg('')
     try { await setSiteActive(site.id, site.active === false); await load() }
-    catch (e) { setError(e?.message || 'Could not change status.') }
+    catch (e) { setError(toUserMessage(e, 'Could not change status.')) }
     finally { setBusyId(null) }
   }
 
@@ -95,7 +96,7 @@ export default function SitesMasterPanel({ canEdit }) {
     if (!canEdit || !window.confirm(`Delete site “${site.name}” (${site.country})? This cannot be undone.`)) return
     setBusyId(site.id); setError(''); setOkMsg('')
     try { await deleteSite(site.id); await load(); setOkMsg('Site deleted.') }
-    catch (e) { setError(e?.message || 'Could not delete the site.') }
+    catch (e) { setError(toUserMessage(e, 'Could not delete the site.')) }
     finally { setBusyId(null) }
   }
 

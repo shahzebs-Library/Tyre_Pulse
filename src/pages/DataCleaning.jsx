@@ -12,6 +12,7 @@ import { SkeletonTable } from '../components/ui/Skeleton'
 import { motion } from 'framer-motion'
 import PageHeader from '../components/ui/PageHeader'
 import { formatDate } from '../lib/formatters'
+import { toUserMessage } from '../lib/safeError'
 
 const PAGE_SIZE = 50
 
@@ -557,7 +558,7 @@ export default function DataCleaning() {
       setDupModal(null)
       await checkDuplicateSerials()
     } catch (e) {
-      setToast({ message: `Update failed: ${e.message}`, type: 'error' })
+      setToast({ message: `Update failed: ${toUserMessage(e, 'Please try again.')}`, type: 'error' })
     }
     setFixingDup(false)
   }
@@ -577,7 +578,7 @@ export default function DataCleaning() {
       setOdomEdits({})
       await checkOdometerIssues()
     } catch (e) {
-      setToast({ message: `Update failed: ${e.message}`, type: 'error' })
+      setToast({ message: `Update failed: ${toUserMessage(e, 'Please try again.')}`, type: 'error' })
     }
     setFixingOdom(false)
   }
@@ -589,7 +590,7 @@ export default function DataCleaning() {
       setToast({ message: `Record ${record.id} marked as Needs Review`, type: 'success' })
       await checkUnrealisticLife()
     } catch (e) {
-      setToast({ message: `Update failed: ${e.message}`, type: 'error' })
+      setToast({ message: `Update failed: ${toUserMessage(e, 'Please try again.')}`, type: 'error' })
     }
   }
 
@@ -716,7 +717,7 @@ export default function DataCleaning() {
       setSaveCount(c => c + 1)
       setToast({ message: 'Classification reverted', type: 'success' })
     } catch (e) {
-      setToast({ message: `Could not revert: ${e.message}`, type: 'error' })
+      setToast({ message: `Could not revert: ${toUserMessage(e, 'Please try again.')}`, type: 'error' })
     }
   }
 

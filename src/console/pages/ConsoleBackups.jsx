@@ -26,6 +26,7 @@ import {
   createBackupSnapshot, listBackupSnapshots, restorePreview, restoreMissing,
 } from '../../lib/api/backups'
 import { exportToExcel } from '../../lib/exportUtils'
+import { toUserMessage } from '../../lib/safeError'
 
 const REFRESH_MS = 120_000
 
@@ -128,7 +129,7 @@ export default function ConsoleBackups() {
       const rows = await listBackupSnapshots(60)
       if (mountedRef.current) setSnapshots(Array.isArray(rows) ? rows : [])
     } catch (err) {
-      if (mountedRef.current) setError(err?.message || 'Could not load your backups')
+      if (mountedRef.current) setError(toUserMessage(err, 'Could not load your backups'))
     } finally {
       if (mountedRef.current) { setLoading(false); setRefreshing(false) }
     }
@@ -156,7 +157,7 @@ export default function ConsoleBackups() {
       await load()
       flash(`Backup created. It saved ${fmtNum(header?.total_rows)} rows across ${fmtNum(header?.table_count)} tables.`)
     } catch (err) {
-      flash(err?.message || 'Could not create the backup. Please try again.', 'error')
+      flash(toUserMessage(err, 'Could not create the backup. Please try again.'), 'error')
     } finally {
       if (mountedRef.current) setBackingUp(false)
     }
@@ -181,7 +182,7 @@ export default function ConsoleBackups() {
       const delta = await restorePreview(snapshotId, table)
       if (mountedRef.current) setPreview({ key, snapshotId, table, ...delta })
     } catch (err) {
-      if (mountedRef.current) setPreviewError(err?.message || 'Could not build the restore preview.')
+      if (mountedRef.current) setPreviewError(toUserMessage(err, 'Could not build the restore preview.'))
     } finally {
       if (mountedRef.current) setPreviewLoading(false)
     }
@@ -210,13 +211,13 @@ export default function ConsoleBackups() {
       handlePreview(confirmTarget.snapshotId, confirmTarget.table)
       load()
     } catch (err) {
-      flash(err?.message || 'The recovery did not complete. No data was changed.', 'error')
+      flash(toUserMessage(err, 'The recovery did not complete. No data was changed.'), 'error')
     } finally {
       if (mountedRef.current) setRestoring(false)
     }
   }
 
-  function handleExport() {
+  async function handleExport() {
     const rows = snapshots.map(s => ({
       taken_at: fmtDateTime(s.taken_at),
       kind: isNightly(s.reason) ? 'Nightly (automatic)' : 'Manual',
@@ -225,14 +226,18 @@ export default function ConsoleBackups() {
       table_count: s.table_count ?? 0,
       total_rows: s.total_rows ?? 0,
     }))
-    exportToExcel(
-      rows,
-      ['taken_at', 'kind', 'reason', 'taken_by', 'table_count', 'total_rows'],
-      ['Taken at', 'Kind', 'Reason', 'Taken by', 'Tables', 'Total rows'],
-      'TyrePulse Backups',
-      'Backups',
-      { title: 'TyrePulse Backups' },
-    )
+    try {
+      await exportToExcel(
+        rows,
+        ['taken_at', 'kind', 'reason', 'taken_by', 'table_count', 'total_rows'],
+        ['Taken at', 'Kind', 'Reason', 'Taken by', 'Tables', 'Total rows'],
+        'TyrePulse Backups',
+        'Backups',
+        { title: 'TyrePulse Backups' },
+      )
+    } catch (err) {
+      flash(toUserMessage(err, 'Could not export. Please try again.'), 'error')
+    }
   }
 
   const totalRowsAcross = useMemo(

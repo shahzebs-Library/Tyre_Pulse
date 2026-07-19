@@ -13,6 +13,7 @@ import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import { formatDate } from '../lib/formatters'
 import { RISK_BADGE_DARK } from '../lib/formatters'
 import { useLanguage } from '../contexts/LanguageContext'
+import { toUserMessage } from '../lib/safeError'
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 const STATUS_META = {
@@ -371,7 +372,7 @@ export default function CorrectiveActions() {
     try {
       if (editId) await correctiveActions.updateCorrectiveAction(editId, payload)
       else await correctiveActions.createCorrectiveAction(payload)
-    } catch (err) { setFormError(err.message); setSaving(false); return }
+    } catch (err) { setFormError(toUserMessage(err, 'Something went wrong. Please try again.')); setSaving(false); return }
     setShowForm(false)
     load(true)
     setSaving(false)

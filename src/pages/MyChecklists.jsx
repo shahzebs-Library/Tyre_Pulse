@@ -7,6 +7,7 @@ import {
 import PageHeader from '../components/ui/PageHeader'
 import { useSettings } from '../contexts/SettingsContext'
 import { listAssignments, skipAssignment, generateNow } from '../lib/api/checklistSchedules'
+import { toUserMessage } from '../lib/safeError'
 
 // "Tables not deployed yet" heuristic — mirrors Billing.jsx / Checklists.jsx.
 function isMissingRelation(err) {
@@ -125,7 +126,7 @@ export default function MyChecklists() {
       setUpdatedAt(new Date())
     } catch (err) {
       if (isMissingRelation(err)) setMissing(true)
-      else setError(err?.message || 'Could not load your checklists.')
+      else setError(toUserMessage(err, 'Could not load your checklists.'))
     } finally {
       setLoading(false)
     }
@@ -180,7 +181,7 @@ export default function MyChecklists() {
         : 'Due checklists refreshed.')
     } catch (err) {
       if (isMissingRelation(err)) setMissing(true)
-      showToast('error', err?.message || 'Could not generate due checklists.')
+      showToast('error', toUserMessage(err, 'Could not generate due checklists.'))
     } finally {
       setGenerating(false)
     }
@@ -195,7 +196,7 @@ export default function MyChecklists() {
       setAssignments((prev) => prev.map((r) => r.id === a.id ? { ...r, status: 'skipped' } : r))
       showToast('success', 'Assignment skipped.')
     } catch (err) {
-      showToast('error', err?.message || 'Could not skip this assignment.')
+      showToast('error', toUserMessage(err, 'Could not skip this assignment.'))
     } finally {
       setBusyId(null)
     }

@@ -21,6 +21,7 @@ import {
   Boxes, Send, TrendingUp, Search, X, Filter, FileSpreadsheet, FileText,
   Plus, Pencil, Trash2, AlertTriangle,
 } from 'lucide-react'
+import { toUserMessage } from '../lib/safeError'
 import PageHeader from '../components/ui/PageHeader'
 import { useSettings } from '../contexts/SettingsContext'
 import {
@@ -132,7 +133,7 @@ export default function SupplierMarketplace() {
       setUpdatedAt(new Date())
     } catch (err) {
       if (isMissingRelation(err)) setNotProvisioned(true)
-      else setError(err?.message || 'Could not load the marketplace.')
+      else setError(toUserMessage(err, 'Could not load the marketplace.'))
       setListings([]); setRfqs([])
     } finally {
       setRefreshing(false)
@@ -283,7 +284,7 @@ export default function SupplierMarketplace() {
       setShowModal(false); setEditing(null)
       await load()
     } catch (err) {
-      setFormError(err?.message || 'Could not save.')
+      setFormError(toUserMessage(err, 'Could not save.'))
     } finally {
       setSaving(false)
     }
@@ -298,7 +299,7 @@ export default function SupplierMarketplace() {
       setConfirmDelete(null)
       await load()
     } catch (err) {
-      setError(err?.message || 'Could not delete the record.')
+      setError(toUserMessage(err, 'Could not delete the record.'))
     } finally {
       setDeleting(false)
     }

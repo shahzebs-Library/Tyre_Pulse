@@ -25,6 +25,7 @@ import {
   applyMergeDuplicate, logHealFinding,
 } from '../../lib/api/selfHealing'
 import { detectStaleGroups, summarizeFindings } from '../../lib/selfHealing'
+import { toUserMessage } from '../../lib/safeError'
 
 // ── Presentation helpers ──────────────────────────────────────────────────────
 
@@ -113,7 +114,7 @@ export default function ConsoleSelfHealing() {
       setScannedAt(new Date().toISOString())
       logHealFinding(sum) // fire-and-forget: surface findings on System Health
     } catch (err) {
-      if (mountedRef.current) setError(err?.message || 'The scan could not complete. Please try again.')
+      if (mountedRef.current) setError(toUserMessage(err, 'The scan could not complete. Please try again.'))
     } finally {
       if (mountedRef.current) setScanning(false)
     }
@@ -138,7 +139,7 @@ export default function ConsoleSelfHealing() {
       if (mountedRef.current) setNotice(typeof okMsg === 'function' ? okMsg(result) : okMsg)
       await runScan()
     } catch (err) {
-      if (mountedRef.current) setError(err?.message || 'That fix could not be applied.')
+      if (mountedRef.current) setError(toUserMessage(err, 'That fix could not be applied.'))
     } finally {
       if (mountedRef.current) setBusyKey(null)
     }

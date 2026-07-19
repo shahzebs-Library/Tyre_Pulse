@@ -7,6 +7,7 @@ import {
 import * as domainEvents from '../lib/api/domainEvents'
 import { formatDistanceToNow } from 'date-fns'
 import { formatDateTime } from '../lib/formatters'
+import { toUserMessage } from '../lib/safeError'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -134,7 +135,7 @@ export default function EventStream() {
       setCount(total || 0)
       setLastRefresh(new Date())
     } catch (err) {
-      setError(err.message || 'Failed to load events')
+      setError(toUserMessage(err, 'Failed to load events'))
     } finally {
       setLoading(false)
       setRefreshing(false)

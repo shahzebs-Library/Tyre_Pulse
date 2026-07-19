@@ -16,6 +16,7 @@ import { useState, useCallback } from 'react'
 import { Sparkles, Copy, RefreshCw, ChevronUp, AlertTriangle, Check, Loader2 } from 'lucide-react'
 import { useAuth } from '../../contexts/AuthContext'
 import { runCopilotTask, COPILOT_TASKS } from '../../lib/aiCopilot'
+import { toUserMessage } from '../../lib/safeError'
 
 function escapeHtml(str) {
   return String(str)
@@ -167,7 +168,7 @@ export default function CopilotCard({ task, context, className = '' }) {
       const res = await runCopilotTask(task, context, { bypassCache })
       setText(res.text || '')
     } catch (e) {
-      setError(e?.message || 'AI request failed.')
+      setError(toUserMessage(e, 'AI request failed.'))
     } finally {
       setLoading(false)
     }

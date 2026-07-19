@@ -36,6 +36,7 @@ import {
   listDashboards, saveDashboard, deleteDashboard,
   setDefaultDashboard, shareDashboard,
 } from '../lib/api/savedViews'
+import { toUserMessage } from '../lib/safeError'
 
 const REFRESH_MS = 120_000
 
@@ -297,7 +298,7 @@ export default function DashboardBuilder() {
         setDirty(false)
       } catch (e) {
         if (!alive) return
-        setLoadError(e.message || 'Could not load dashboard layouts.')
+        setLoadError(toUserMessage(e, 'Could not load dashboard layouts.'))
         setDraft(validateLayout(DEFAULT_LAYOUT))
       } finally {
         if (alive) setLoading(false)
@@ -323,7 +324,7 @@ export default function DashboardBuilder() {
       } catch (e) {
         setSlices(prev => ({
           ...prev,
-          [id]: { ...(prev[id] || EMPTY_SLICE), error: e?.message || 'Query failed', loaded: true },
+          [id]: { ...(prev[id] || EMPTY_SLICE), error: toUserMessage(e, 'Query failed'), loaded: true },
         }))
       }
     }))
@@ -405,7 +406,7 @@ export default function DashboardBuilder() {
       flash(okMsg)
       return next
     } catch (e) {
-      flash(e.message || 'Save failed.', 'err')
+      flash(toUserMessage(e, 'Save failed.'), 'err')
       return null
     } finally {
       setSaving(false)

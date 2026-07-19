@@ -1,6 +1,6 @@
 import { useState, useMemo, useRef } from 'react'
 import { supabase } from '../lib/supabase'
-import { exportToPdf, exportToExcel } from '../lib/exportUtils'
+import { exportToPdf, exportToExcel, reportFileName } from '../lib/exportUtils'
 import { formatCurrencyCompact, formatDate } from '../lib/formatters'
 import { ScanLine, Search, Download, FileText, Upload, AlertTriangle } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
@@ -141,31 +141,39 @@ export default function SerialTracker() {
   }, [records])
 
   function exportLifecyclePdf() {
-    exportToPdf(
-      records,
-      [
-        { key: 'issue_date',  header: 'Date' },
-        { key: 'asset_no',    header: 'Asset No' },
-        { key: 'site',        header: 'Site' },
-        { key: 'position',    header: 'Position' },
-        { key: 'brand',       header: 'Brand' },
-        { key: 'description', header: 'Description' },
-        { key: 'risk_level',  header: 'Risk' },
-        { key: 'cost',        header: 'Cost' },
-      ],
-      `Serial Lifecycle: ${lastQuery}`,
-      `TyrePulse_Serial_${lastQuery}`,
-      'landscape'
-    )
+    try {
+      exportToPdf(
+        records,
+        [
+          { key: 'issue_date',  header: 'Date' },
+          { key: 'asset_no',    header: 'Asset No' },
+          { key: 'site',        header: 'Site' },
+          { key: 'position',    header: 'Position' },
+          { key: 'brand',       header: 'Brand' },
+          { key: 'description', header: 'Description' },
+          { key: 'risk_level',  header: 'Risk' },
+          { key: 'cost',        header: 'Cost' },
+        ],
+        `Serial Lifecycle: ${lastQuery}`,
+        reportFileName('TyrePulse Serial', lastQuery),
+        'landscape'
+      )
+    } catch (err) {
+      setError(toUserMessage(err, 'Could not export. Try again.'))
+    }
   }
 
   function exportLifecycleExcel() {
-    exportToExcel(
-      records,
-      ['issue_date','asset_no','site','position','brand','description','risk_level','cost','remarks'],
-      ['Date','Asset No','Site','Position','Brand','Description','Risk','Cost','Remarks'],
-      `TyrePulse_Serial_${lastQuery}`
-    )
+    try {
+      exportToExcel(
+        records,
+        ['issue_date','asset_no','site','position','brand','description','risk_level','cost','remarks'],
+        ['Date','Asset No','Site','Position','Brand','Description','Risk','Cost','Remarks'],
+        reportFileName('TyrePulse Serial', lastQuery)
+      )
+    } catch (err) {
+      setError(toUserMessage(err, 'Could not export. Try again.'))
+    }
   }
 
   const riskColor = r => {
@@ -272,12 +280,16 @@ export default function SerialTracker() {
   }
 
   function exportBulkExcel() {
-    exportToExcel(
-      bulkResults,
-      ['serial', 'first_seen', 'last_asset', 'total_records', 'cost', 'status'],
-      ['Serial No', 'First Seen', 'Last Asset', 'Records', 'Cost', 'Status'],
-      'TyrePulse_BulkLookup'
-    )
+    try {
+      exportToExcel(
+        bulkResults,
+        ['serial', 'first_seen', 'last_asset', 'total_records', 'cost', 'status'],
+        ['Serial No', 'First Seen', 'Last Asset', 'Records', 'Cost', 'Status'],
+        'TyrePulse_BulkLookup'
+      )
+    } catch (err) {
+      setError(toUserMessage(err, 'Could not export. Try again.'))
+    }
   }
 
   const bulkSummary = useMemo(() => {

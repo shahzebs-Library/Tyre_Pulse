@@ -161,7 +161,7 @@ export default function CostCenter() {
     setSplitError(null)
     loadCostSplit({ country: activeCountry })
       .then(res => { if (!cancelled) setSplit(res) })
-      .catch(e => { if (!cancelled) setSplitError(e?.message ?? 'Failed to load cost split') })
+      .catch(e => { if (!cancelled) setSplitError(toUserMessage(e, 'Failed to load cost split')) })
       .finally(() => { if (!cancelled) setSplitLoading(false) })
     return () => { cancelled = true }
   }, [activeCountry])
@@ -191,7 +191,7 @@ export default function CostCenter() {
       if (err) throw err
       setRecords(data ?? [])
     } catch (e) {
-      setError(e.message ?? 'Failed to load data')
+      setError(toUserMessage(e, 'Failed to load data'))
     } finally {
       setLoading(false)
     }

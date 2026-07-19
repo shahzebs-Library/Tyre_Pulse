@@ -27,6 +27,7 @@ import PageHeader from '../components/ui/PageHeader'
 import EntityApprovalPanel from '../components/workflow/EntityApprovalPanel'
 import EmptyState from '../components/EmptyState'
 import { formatDate } from '../lib/formatters'
+import { toUserMessage } from '../lib/safeError'
 
 ChartJS.register(
   CategoryScale, LinearScale, BarElement, LineElement, PointElement,
@@ -694,7 +695,7 @@ export default function RotationSchedule() {
       const data = await rotations.listRotationRecords({ country: activeCountry })
       setRecords(data || [])
     } catch (e) {
-      setError(e.message || 'Failed to load data')
+      setError(toUserMessage(e, 'Failed to load data'))
     } finally {
       setLoading(false)
     }
@@ -724,7 +725,7 @@ export default function RotationSchedule() {
       const data = await rotations.listRotations({ country: activeCountry })
       setSchedules((data || []).map(mapRow))
     } catch (e) {
-      setSchedError(e.message || 'Failed to load schedule')
+      setSchedError(toUserMessage(e, 'Failed to load schedule'))
     } finally {
       setSchedLoading(false)
     }
@@ -754,7 +755,7 @@ export default function RotationSchedule() {
       await rotations.createRotations(rows)
       await fetchSchedules()
     } catch (e) {
-      setSchedError(e.message || 'Failed to save schedule')
+      setSchedError(toUserMessage(e, 'Failed to save schedule'))
     } finally {
       setSchedBusy(false)
     }
@@ -773,7 +774,7 @@ export default function RotationSchedule() {
       await rotations.updateRotation(id, { status, updated_at: new Date().toISOString() })
       await fetchSchedules()
     } catch (e) {
-      setSchedError(e.message || 'Failed to update schedule')
+      setSchedError(toUserMessage(e, 'Failed to update schedule'))
     } finally {
       setSchedBusy(false)
     }
@@ -786,7 +787,7 @@ export default function RotationSchedule() {
       await rotations.deleteRotation(id)
       await fetchSchedules()
     } catch (e) {
-      setSchedError(e.message || 'Failed to remove schedule')
+      setSchedError(toUserMessage(e, 'Failed to remove schedule'))
     } finally {
       setSchedBusy(false)
     }

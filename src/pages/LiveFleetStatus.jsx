@@ -16,6 +16,7 @@ import {
   Eye, ChevronDown, ChevronUp, Radio, ClipboardCheck,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
+import { toUserMessage } from '../lib/safeError'
 import { fetchAllPages } from '../lib/fetchAll'
 import { formatDate } from '../lib/formatters'
 import { useAuth } from '../contexts/AuthContext'
@@ -489,7 +490,7 @@ export default function LiveFleetStatus() {
       setAlertsData(alertRes.data  ?? [])
       setLastUpdated(new Date())
     } catch (e) {
-      setError(e.message ?? 'Failed to load fleet data')
+      setError(toUserMessage(e, 'Failed to load fleet data'))
     } finally {
       setLoading(false)
       setRefreshing(false)

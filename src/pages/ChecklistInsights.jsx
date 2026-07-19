@@ -15,6 +15,7 @@ import PageHeader from '../components/ui/PageHeader'
 import { useSettings } from '../contexts/SettingsContext'
 import { listSubmissions, listTemplates } from '../lib/api/checklists'
 import { isValueField, fieldTypeDef } from '../lib/checklist/fieldTypes'
+import { toUserMessage } from '../lib/safeError'
 
 ChartJS.register(
   CategoryScale, LinearScale,
@@ -400,7 +401,7 @@ export default function ChecklistInsights() {
                 {missing
                   ? <>The checklist tables aren&apos;t applied to this database yet. Apply{' '}
                     <span className="font-mono text-[var(--text-primary)]">MIGRATIONS_V123_CHECKLIST_TEMPLATES.sql</span>, then reload.</>
-                  : (error.message || 'An unexpected error occurred.')}
+                  : toUserMessage(error, 'An unexpected error occurred.')}
               </p>
               <button onClick={loadData} className="btn-secondary text-sm mt-3 inline-flex items-center gap-2">
                 <RefreshCw size={14} /> Retry

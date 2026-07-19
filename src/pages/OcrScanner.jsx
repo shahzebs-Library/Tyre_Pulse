@@ -32,6 +32,7 @@ import {
 } from '../lib/ocrScanner'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import { safeHref } from '../lib/safeUrl'
+import { toUserMessage } from '../lib/safeError'
 
 const SCAN_TYPES = [
   { value: 'tyre_sidewall', label: 'Tyre sidewall' },
@@ -142,7 +143,7 @@ export default function OcrScanner() {
       setUpdatedAt(new Date())
     } catch (err) {
       if (isMissingRelation(err)) setNotProvisioned(true)
-      else setError(err?.message || 'Could not load OCR scans.')
+      else setError(toUserMessage(err, 'Could not load OCR scans.'))
       setRows([])
     } finally {
       setRefreshing(false)
@@ -248,7 +249,7 @@ export default function OcrScanner() {
       setShowModal(false); setEditing(null)
       await load()
     } catch (err) {
-      setFormError(err?.message || 'Could not save the scan.')
+      setFormError(toUserMessage(err, 'Could not save the scan.'))
     } finally {
       setSaving(false)
     }
@@ -259,7 +260,7 @@ export default function OcrScanner() {
       await updateOcrScan(r.id, { review_status })
       await load()
     } catch (err) {
-      setError(err?.message || 'Could not update the scan.')
+      setError(toUserMessage(err, 'Could not update the scan.'))
     }
   }, [load])
 
@@ -271,7 +272,7 @@ export default function OcrScanner() {
       setConfirmDelete(null)
       await load()
     } catch (err) {
-      setError(err?.message || 'Could not delete the scan.')
+      setError(toUserMessage(err, 'Could not delete the scan.'))
     } finally {
       setDeleting(false)
     }

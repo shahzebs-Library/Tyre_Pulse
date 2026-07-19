@@ -29,6 +29,7 @@ import {
   prioritise, summariseActions, byCategory, bySeverity, isOverdue, isOpen,
 } from '../lib/actionCenter'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
+import { toUserMessage } from '../lib/safeError'
 
 // ── Enum vocabularies (mirror the V186 CHECK constraints) ────────────────────
 const CATEGORY_OPTS = [
@@ -142,7 +143,7 @@ export default function ActionCenter() {
       setUpdatedAt(new Date())
     } catch (err) {
       if (isMissingRelation(err)) setNotProvisioned(true)
-      else setError(err?.message || 'Could not load action items.')
+      else setError(toUserMessage(err, 'Could not load action items.'))
       setRows([])
     } finally {
       setRefreshing(false)
@@ -229,7 +230,7 @@ export default function ActionCenter() {
       setShowModal(false); setEditing(null)
       await load()
     } catch (err) {
-      setFormError(err?.message || 'Could not save the action item.')
+      setFormError(toUserMessage(err, 'Could not save the action item.'))
     } finally {
       setSaving(false)
     }
@@ -243,7 +244,7 @@ export default function ActionCenter() {
       setConfirmDelete(null)
       await load()
     } catch (err) {
-      setError(err?.message || 'Could not delete the action item.')
+      setError(toUserMessage(err, 'Could not delete the action item.'))
     } finally {
       setDeleting(false)
     }
@@ -266,10 +267,10 @@ export default function ActionCenter() {
         updatedAt={updatedAt}
         actions={
           <div className="flex items-center gap-2">
-            <button onClick={() => exportToExcel(exportRows, EXPORT_COLS, EXPORT_HEADERS, 'action_center')} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!filtered.length}>
+            <button onClick={async () => { try { await exportToExcel(exportRows, EXPORT_COLS, EXPORT_HEADERS, 'action_center') } catch (e) { setError(toUserMessage(e, 'Could not export. Try again.')) } }} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!filtered.length}>
               <FileSpreadsheet size={14} /> Excel
             </button>
-            <button onClick={() => exportToPdf(exportRows, EXPORT_COLS.map((k, i) => ({ key: k, header: EXPORT_HEADERS[i] })), 'Action Center — Exception Queue', 'action_center', 'landscape')} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!filtered.length}>
+            <button onClick={async () => { try { await exportToPdf(exportRows, EXPORT_COLS.map((k, i) => ({ key: k, header: EXPORT_HEADERS[i] })), 'Action Center — Exception Queue', 'action_center', 'landscape') } catch (e) { setError(toUserMessage(e, 'Could not export. Try again.')) } }} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!filtered.length}>
               <FileText size={14} /> PDF
             </button>
             <button onClick={openCreate} className="btn-primary text-sm inline-flex items-center gap-1.5" disabled={notProvisioned}>

@@ -23,6 +23,7 @@ import { Truck, MapPin, User, Search, ChevronDown, X, Loader2, Check, AlertTrian
 import { listAssets, listDataAssetOptions } from '../../lib/api/assets'
 import { listSites, siteOptionsForCountry, listDataSiteOptions } from '../../lib/api/sites'
 import { listProfiles } from '../../lib/api/users'
+import { toUserMessage } from '../../lib/safeError'
 
 const SOURCE_META = {
   asset: { Icon: Truck,  noun: 'asset',  placeholder: 'Search assets…' },
@@ -96,7 +97,7 @@ export default function ReferencePicker({ source, value, onChange, country, plac
     setLoading(true); setError('')
     loadOptions(source, country)
       .then((opts) => { if (!cancelled) setOptions(Array.isArray(opts) ? opts : []) })
-      .catch((e) => { if (!cancelled) { setOptions([]); setError(e?.message || `Could not load ${meta.noun}s.`) } })
+      .catch((e) => { if (!cancelled) { setOptions([]); setError(toUserMessage(e, `Could not load ${meta.noun}s.`)) } })
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
   }, [source, country, meta.noun])

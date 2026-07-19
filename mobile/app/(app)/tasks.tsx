@@ -44,6 +44,7 @@ export default function TasksScreen() {
   const router = useRouter()
   const [tasks, setTasks] = useState<Task[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [refreshing, setRefreshing] = useState(false)
   const [filter, setFilter] = useState<FilterKey>('open')
   const [busyId, setBusyId] = useState<string | null>(null)
@@ -54,15 +55,22 @@ export default function TasksScreen() {
   const myName = profile?.full_name ?? profile?.username ?? ''
 
   const load = useCallback(async () => {
-    let q = supabase
-      .from('corrective_actions')
-      .select('id,title,priority,status,site,asset_no,description,assigned_to,due_date,created_at')
-      .order('created_at', { ascending: false })
-      .limit(200)
-    if (profile?.country) q = q.or(`country.eq.${profile.country},country.is.null`)
-    const { data } = await q
-    setTasks((data as Task[]) ?? [])
-    setLoading(false)
+    setError(null)
+    try {
+      let q = supabase
+        .from('corrective_actions')
+        .select('id,title,priority,status,site,asset_no,description,assigned_to,due_date,created_at')
+        .order('created_at', { ascending: false })
+        .limit(200)
+      if (profile?.country) q = q.or(`country.eq.${profile.country},country.is.null`)
+      const { data, error: qErr } = await q
+      if (qErr) throw qErr
+      setTasks((data as Task[]) ?? [])
+    } catch (e: any) {
+      setError(toUserMessage(e))
+    } finally {
+      setLoading(false)
+    }
   }, [profile?.country])
 
   useEffect(() => { load() }, [load])
@@ -151,10 +159,20 @@ export default function TasksScreen() {
           contentContainerStyle={styles.list}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#16a34a" />}
           ListEmptyComponent={
-            <View style={styles.empty}>
-              <Ionicons name="checkmark-done-circle-outline" size={48} color="#cbd5e1" />
-              <Text style={styles.emptyText}>{t('modules.tasks.none')}</Text>
-            </View>
+            error ? (
+              <View style={styles.empty}>
+                <Ionicons name="cloud-offline-outline" size={48} color="#cbd5e1" />
+                <Text style={styles.emptyText}>{error}</Text>
+                <TouchableOpacity onPress={load} style={{ marginTop: 14, backgroundColor: '#16a34a', paddingHorizontal: 20, paddingVertical: 10, borderRadius: 8 }}>
+                  <Text style={{ color: '#fff', fontWeight: '600' }}>{t('common.retry')}</Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <View style={styles.empty}>
+                <Ionicons name="checkmark-done-circle-outline" size={48} color="#cbd5e1" />
+                <Text style={styles.emptyText}>{t('modules.tasks.none')}</Text>
+              </View>
+            )
           }
           renderItem={({ item }) => {
             const closed = (item.status ?? '').toLowerCase() === 'closed'

@@ -28,6 +28,7 @@ import {
 import { supabase } from '../lib/supabase'
 import { fetchAllPages } from '../lib/fetchAll'
 import { safeImageSrc } from '../lib/safeUrl'
+import { toUserMessage } from '../lib/safeError'
 import { useTenant } from '../contexts/TenantContext'
 import { severityColor, normalizeSeverity } from '../lib/severity'
 import { canonSeverity, canonStatus } from '../lib/accidentVocab'
@@ -478,7 +479,7 @@ export default function DisplayDashboard() {
         t.set({ rows, error: null, loaded: true })
       } catch (e) {
         // Keep last good rows on transient failure; surface the error state.
-        t.set(prev => ({ ...prev, error: e?.message || 'Query failed', loaded: true }))
+        t.set(prev => ({ ...prev, error: toUserMessage(e, 'Query failed'), loaded: true }))
       }
     }))
 

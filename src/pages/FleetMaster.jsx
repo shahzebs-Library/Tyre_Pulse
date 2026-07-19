@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback, useMemo, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
+import { toUserMessage } from '../lib/safeError'
 import { fetchAllPages } from '../lib/fetchAll'
 import { useAuth } from '../contexts/AuthContext'
 import { useSettings } from '../contexts/SettingsContext'
@@ -242,7 +243,7 @@ export default function FleetMaster() {
       ? await supabase.from('vehicle_fleet').update(payload).eq('id', editRecord.id)
       : await supabase.from('vehicle_fleet').insert(payload)
 
-    if (error) { setFormError(error.message); setSaving(false); return }
+    if (error) { setFormError(toUserMessage(error, 'Could not save the vehicle.')); setSaving(false); return }
     setEditRecord(null)
     loadRecords()
     loadSites()

@@ -490,7 +490,7 @@ export default function SupplierManagement() {
   const fetchRatings = useCallback(async () => {
     setRatingsError(null)
     const { data, error: err } = await supplierApi.listSupplierRatings({ country: activeCountry })
-    if (err) { setRatingsError(err.message); return }
+    if (err) { setRatingsError(toUserMessage(err, 'Could not load ratings.')); return }
     const map = {}
     ;(data || []).forEach(row => {
       map[row.brand] = { id: row.id, label: numToRating(row.rating), notes: row.notes || '' }
@@ -503,7 +503,7 @@ export default function SupplierManagement() {
     setContractsLoading(true)
     setContractsError(null)
     const { data, error: err } = await supplierApi.listSupplierContracts({ country: activeCountry })
-    if (err) { setContractsError(err.message); setContractsLoading(false); return }
+    if (err) { setContractsError(toUserMessage(err, 'Could not load contracts.')); setContractsLoading(false); return }
     setContracts(data || [])
     setContractsLoading(false)
   }, [activeCountry])
@@ -618,7 +618,7 @@ export default function SupplierManagement() {
     } else {
       ;({ error: err } = await supplierApi.insertSupplierContract(payload))
     }
-    if (err) return err.message
+    if (err) return toUserMessage(err, 'Could not save the contract.')
     await fetchContracts()
     setContractModal(null)
     return null
@@ -630,7 +630,7 @@ export default function SupplierManagement() {
     setContractDeleteError(null)
     const { data, error: err } = await supplierApi.deleteSupplierContract(contractDeleteTarget.id)
     if (err || (data?.length ?? 0) === 0) {
-      setContractDeleteError(err?.message || t('suppliers.deleteContract.defaultError'))
+      setContractDeleteError(toUserMessage(err, t('suppliers.deleteContract.defaultError')))
       setContractDeleting(false)
       return
     }

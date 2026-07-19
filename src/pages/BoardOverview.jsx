@@ -34,6 +34,7 @@ import { COST_MODES, pickCost, pickMonthly, splitTotals, costModeLabel } from '.
 import { loadCostSplit } from '../lib/api/costSummary'
 import { stylize, ACCENTS } from '../lib/reportColors'
 import { reportFileName, reportDateLabel } from '../lib/exportUtils'
+import { toUserMessage } from '../lib/safeError'
 
 ChartJS.register(
   CategoryScale, LinearScale, BarElement, LineElement, PointElement,
@@ -147,7 +148,7 @@ export default function BoardOverview() {
       })
       setUpdatedAt(new Date())
     } catch (e) {
-      setError(e?.message || 'Could not load the board overview.')
+      setError(toUserMessage(e, 'Could not load the board overview.'))
     } finally {
       setLoading(false); setRefreshing(false)
     }
@@ -168,7 +169,7 @@ export default function BoardOverview() {
     setCostLoading(true); setCostError('')
     loadCostSplit({ country: activeCountry })
       .then((res) => { if (!cancelled) setCost(res) })
-      .catch((e) => { if (!cancelled) setCostError(e?.message || 'Could not load the cost split.') })
+      .catch((e) => { if (!cancelled) setCostError(toUserMessage(e, 'Could not load the cost split.')) })
       .finally(() => { if (!cancelled) setCostLoading(false) })
     return () => { cancelled = true }
   }, [activeCountry])
@@ -237,7 +238,7 @@ export default function BoardOverview() {
       }
       doc.save(`${reportFileName(company, 'Board Overview', reportDateLabel())}.pdf`)
     } catch (e) {
-      setError(`Export failed: ${e?.message || 'unexpected error'}`)
+      setError(toUserMessage(e, 'Export failed. Please try again.'))
     } finally {
       setExporting(false)
     }

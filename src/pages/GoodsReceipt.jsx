@@ -31,6 +31,7 @@ import {
   GOODS_RECEIPT_STATUSES, GOODS_RECEIPT_STATUS_META, GOODS_RECEIPT_CONDITIONS,
 } from '../lib/goodsReceipts'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
+import { toUserMessage } from '../lib/safeError'
 
 ChartJS.register(ArcElement, Tooltip, Legend)
 
@@ -88,7 +89,7 @@ export default function GoodsReceipt() {
       setUpdatedAt(new Date())
     } catch (err) {
       if (isMissingRelation(err)) { setMissing(true); setRows([]) }
-      else { setError(err?.message || 'Could not load goods receipts.'); setRows([]) }
+      else { setError(toUserMessage(err, 'Could not load goods receipts.')); setRows([]) }
     } finally {
       setRefreshing(false)
     }
@@ -190,7 +191,7 @@ export default function GoodsReceipt() {
       setModalOpen(false); setEditing(null)
       setUpdatedAt(new Date())
     } catch (err) {
-      setFormError(err?.message || 'Could not save the goods receipt.')
+      setFormError(toUserMessage(err, 'Could not save the goods receipt.'))
     } finally {
       setSaving(false)
     }
@@ -204,7 +205,7 @@ export default function GoodsReceipt() {
       setRows((prev) => (prev || []).filter((r) => r.id !== confirmDel.id))
       setConfirmDel(null)
     } catch (err) {
-      setError(err?.message || 'Could not delete the goods receipt.')
+      setError(toUserMessage(err, 'Could not delete the goods receipt.'))
     } finally {
       setDeleting(false)
     }
@@ -227,10 +228,10 @@ export default function GoodsReceipt() {
         updatedAt={updatedAt}
         actions={
           <div className="flex items-center gap-2">
-            <button onClick={() => exportToExcel(exportRows, EXPORT_COLS, EXPORT_HEADERS, 'goods_receipts')} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!filtered.length}>
+            <button onClick={async () => { try { await exportToExcel(exportRows, EXPORT_COLS, EXPORT_HEADERS, 'goods_receipts') } catch (e) { setError(toUserMessage(e, 'Could not export. Try again.')) } }} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!filtered.length}>
               <FileSpreadsheet size={14} /> Excel
             </button>
-            <button onClick={() => exportToPdf(exportRows, EXPORT_COLS.map((k, i) => ({ key: k, header: EXPORT_HEADERS[i] })), 'Goods Receipt', 'goods_receipts', 'landscape')} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!filtered.length}>
+            <button onClick={async () => { try { await exportToPdf(exportRows, EXPORT_COLS.map((k, i) => ({ key: k, header: EXPORT_HEADERS[i] })), 'Goods Receipt', 'goods_receipts', 'landscape') } catch (e) { setError(toUserMessage(e, 'Could not export. Try again.')) } }} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!filtered.length}>
               <FileText size={14} /> PDF
             </button>
             <button onClick={openCreate} className="btn-primary text-sm inline-flex items-center gap-1.5">

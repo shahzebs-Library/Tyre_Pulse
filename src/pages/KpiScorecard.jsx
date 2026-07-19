@@ -11,6 +11,7 @@ import {
   computeMonthlyKpiActuals, sum,
 } from '../lib/analyticsEngine'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
+import { toUserMessage } from '../lib/safeError'
 import { formatCurrency as _fmtCurrencyBase } from '../lib/formatters'
 import {
   Download, FileText, AlertTriangle, ToggleLeft, ToggleRight, Target, RefreshCw,
@@ -84,7 +85,7 @@ export default function KpiScorecard() {
       setDraftTargets(merged)
       setDbTargets(t.data || [])
     } catch (e) {
-      setError(e.message || t('kpiscorecard.states.errorDefault'))
+      setError(toUserMessage(e, t('kpiscorecard.states.errorDefault')))
     } finally {
       setLoading(false)
     }
@@ -386,13 +387,13 @@ export default function KpiScorecard() {
           </button>
 
           <button
-            onClick={() => exportToExcel(actuals, KPI_COLS.map(c => c.key), KPI_COLS.map(c => c.header), 'TyrePulse_KpiScorecard')}
+            onClick={async () => { try { await exportToExcel(actuals, KPI_COLS.map(c => c.key), KPI_COLS.map(c => c.header), 'TyrePulse_KpiScorecard') } catch (e) { setError(toUserMessage(e, 'Could not export. Try again.')) } }}
             className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-1.5"
           >
             <Download size={14} /> {t('kpiscorecard.actions.excel')}
           </button>
           <button
-            onClick={() => exportToPdf(actuals, KPI_COLS, 'KPI Scorecard · Monthly Actuals', 'TyrePulse_KpiScorecard', 'landscape')}
+            onClick={async () => { try { await exportToPdf(actuals, KPI_COLS, 'KPI Scorecard · Monthly Actuals', 'TyrePulse_KpiScorecard', 'landscape') } catch (e) { setError(toUserMessage(e, 'Could not export. Try again.')) } }}
             className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-1.5"
           >
             <FileText size={14} /> {t('kpiscorecard.actions.pdf')}

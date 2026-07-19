@@ -32,6 +32,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { useSettings } from '../contexts/SettingsContext'
 import { useTenant } from '../contexts/TenantContext'
 import { resolvePdfBrand, pdfHeader, pdfFooter, pdfEmptyState, pdfTableTheme } from '../lib/exportUtils'
+import { toUserMessage } from '../lib/safeError'
 
 ChartJS.register(ArcElement, Tooltip, Legend)
 
@@ -506,7 +507,7 @@ function RaiseWorkOrderModal({ asset, violations, country, createdBy, onClose })
       if (insErr) throw insErr
       setDone(true)
     } catch (err) {
-      setError(err.message || 'Failed to raise work order')
+      setError(toUserMessage(err, 'Failed to raise work order'))
     } finally {
       setSaving(false)
     }
@@ -1467,7 +1468,7 @@ export default function TyreSpecifications() {
         save: true,
       })
     } catch (e) {
-      setPolicyError(e?.message || 'Failed to generate the policy PDF')
+      setPolicyError(toUserMessage(e, 'Failed to generate the policy PDF'))
     } finally {
       setPolicyBusy(false)
     }

@@ -27,6 +27,7 @@ import {
 import { analyzeDtc, severityRank } from '../lib/dtcCodes'
 import { colorAt, categorical, withAlpha } from '../lib/reportColors'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
+import { toUserMessage } from '../lib/safeError'
 
 ChartJS.register(ArcElement, Tooltip, Legend, BarElement, CategoryScale, LinearScale)
 
@@ -80,7 +81,7 @@ function CodeModal({ open, initial, onClose, onSaved, country }) {
       onSaved?.(row, editing)
       onClose?.()
     } catch (err) {
-      setError(err?.message || 'Could not save the diagnostic code.')
+      setError(toUserMessage(err, 'Could not save the diagnostic code.'))
     } finally {
       setBusy(false)
     }
@@ -218,7 +219,7 @@ export default function DtcDiagnostics() {
       setUpdatedAt(new Date())
     } catch (err) {
       if (isMissingRelation(err)) { setMissing(true); setRows([]) }
-      else { setError(err?.message || 'Could not load diagnostic codes.'); setRows([]) }
+      else { setError(toUserMessage(err, 'Could not load diagnostic codes.')); setRows([]) }
     } finally {
       setRefreshing(false)
     }
@@ -373,7 +374,7 @@ export default function DtcDiagnostics() {
       setRows((prev) => (prev || []).filter((r) => r.id !== toDelete.id))
       setToDelete(null)
     } catch (err) {
-      setError(err?.message || 'Could not delete the code.')
+      setError(toUserMessage(err, 'Could not delete the code.'))
     } finally {
       setDeleteBusy(false)
     }
@@ -393,10 +394,10 @@ export default function DtcDiagnostics() {
         updatedAt={updatedAt}
         actions={
           <div className="flex items-center gap-2">
-            <button onClick={() => exportToExcel(exportRows, EXPORT_COLS, EXPORT_HEADERS, 'dtc_diagnostics')} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!filtered.length}>
+            <button onClick={async () => { try { await exportToExcel(exportRows, EXPORT_COLS, EXPORT_HEADERS, 'dtc_diagnostics') } catch (e) { setError(toUserMessage(e, 'Could not export. Try again.')) } }} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!filtered.length}>
               <FileSpreadsheet size={14} /> Excel
             </button>
-            <button onClick={() => exportToPdf(exportRows, EXPORT_COLS.map((k, i) => ({ key: k, header: EXPORT_HEADERS[i] })), 'DTC Diagnostics', 'dtc_diagnostics', 'landscape')} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!filtered.length}>
+            <button onClick={async () => { try { await exportToPdf(exportRows, EXPORT_COLS.map((k, i) => ({ key: k, header: EXPORT_HEADERS[i] })), 'DTC Diagnostics', 'dtc_diagnostics', 'landscape') } catch (e) { setError(toUserMessage(e, 'Could not export. Try again.')) } }} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!filtered.length}>
               <FileText size={14} /> PDF
             </button>
             <button onClick={() => { setEditing(null); setModalOpen(true) }} className="btn-primary text-sm inline-flex items-center gap-1.5">

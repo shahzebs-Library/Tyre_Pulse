@@ -17,6 +17,7 @@ import { useSettings } from '../contexts/SettingsContext'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import PageHeader from '../components/ui/PageHeader'
 import SegmentedControl from '../components/ui/SegmentedControl'
+import { toUserMessage } from '../lib/safeError'
 
 ChartJS.register(
   CategoryScale, LinearScale, BarElement, LineElement,
@@ -310,7 +311,7 @@ export default function ContinuousImprovement() {
       setInspections(insRes.data ?? [])
       setTargets(tgtRes.data ?? [])
     } catch (e) {
-      setError(e.message ?? 'Failed to load data')
+      setError(toUserMessage(e, 'Failed to load data'))
     }
     setLoading(false)
   }, [activeCountry])
@@ -821,7 +822,7 @@ export default function ContinuousImprovement() {
       const { data } = await ciApi.listCorrectiveActionsRefresh()
       setActions(data ?? [])
     } catch (e) {
-      setToast({ message: e.message ?? 'Failed to create action', type: 'error' })
+      setToast({ message: toUserMessage(e, 'Failed to create action'), type: 'error' })
     }
     setCreatingKey(null)
   }, [])

@@ -4,6 +4,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { useLanguage } from '../contexts/LanguageContext'
 import * as imports from '../lib/api/imports'
 import PageHeader from '../components/ui/PageHeader'
+import { toUserMessage } from '../lib/safeError'
 import {
   ClipboardCheck, CheckCircle, XCircle, Clock, FileSpreadsheet,
   User, Globe, Search, AlertTriangle, Pencil, Package, Save, Trash2, Wand2,
@@ -42,7 +43,7 @@ export default function UploadApprovals() {
       setIntake(rows ?? [])
     } catch (e) {
       console.error('[UploadApprovals] loadIntake failed:', e)
-      setError(e?.message || t('uploadapprovals.intake.loadError'))
+      setError(toUserMessage(e, t('uploadapprovals.intake.loadError')))
     } finally {
       setIntakeLoading(false)
     }
@@ -59,7 +60,7 @@ export default function UploadApprovals() {
     if (err) {
       // Surface to the console for debugging instead of silently rendering an empty list.
       console.error('[UploadApprovals] load failed:', err)
-      setError(err.message)
+      setError(toUserMessage(err, 'Something went wrong. Please try again.'))
       setLoading(false)
       return
     }
@@ -91,7 +92,7 @@ export default function UploadApprovals() {
       const { error: insErr } = await supabase.from(p.target_table).insert(chunk)
       if (insErr) {
         console.error(`[UploadApprovals] approve insert into ${p.target_table} failed:`, insErr)
-        setError(t('uploadapprovals.legacy.insertFailed', { file: p.file_name, inserted, total: rows.length, message: insErr.message }))
+        setError(t('uploadapprovals.legacy.insertFailed', { file: p.file_name, inserted, total: rows.length, message: toUserMessage(insErr, t('uploadapprovals.intake.unknownError')) }))
         setActing(null); return
       }
       inserted += chunk.length
@@ -100,7 +101,7 @@ export default function UploadApprovals() {
       .update({ status: 'approved', reviewed_by: profile?.id, reviewed_at: new Date().toISOString() })
       .eq('id', p.id)
     setActing(null)
-    if (updErr) { setError(updErr.message); return }
+    if (updErr) { setError(toUserMessage(updErr, t('uploadapprovals.intake.unknownError'))); return }
     await load()
   }
 
@@ -113,7 +114,7 @@ export default function UploadApprovals() {
       .update({ status: 'rejected', reviewed_by: profile?.id, reviewed_at: new Date().toISOString(), review_note: note || null })
       .eq('id', p.id)
     setActing(null)
-    if (err) { console.error('[UploadApprovals] reject failed:', err); setError(err.message); return }
+    if (err) { console.error('[UploadApprovals] reject failed:', err); setError(toUserMessage(err, 'Something went wrong. Please try again.')); return }
     await load()
   }
 
@@ -125,7 +126,7 @@ export default function UploadApprovals() {
     setActing(p.id); setError('')
     const { error: err } = await supabase.from('pending_uploads').delete().eq('id', p.id)
     setActing(null)
-    if (err) { console.error('[UploadApprovals] delete failed:', err); setError(err.message); return }
+    if (err) { console.error('[UploadApprovals] delete failed:', err); setError(toUserMessage(err, 'Something went wrong. Please try again.')); return }
     setPreviewing(prev => (prev?.id === p.id ? null : prev))
     await load()
   }
@@ -142,7 +143,7 @@ export default function UploadApprovals() {
       await loadIntake()
     } catch (e) {
       console.error('[UploadApprovals] approveIntake failed:', e)
-      setError(t('uploadapprovals.intake.commitFailed', { module: b.module, message: e?.message || t('uploadapprovals.intake.unknownError') }))
+      setError(t('uploadapprovals.intake.commitFailed', { module: b.module, message: toUserMessage(e, t('uploadapprovals.intake.unknownError')) }))
     } finally { setActing(null) }
   }
 
@@ -151,7 +152,7 @@ export default function UploadApprovals() {
     if (!window.confirm(t('uploadapprovals.intake.rejectConfirm', { module: b.module, count: (b.total_rows || 0).toLocaleString() }))) return
     setActing(b.id); setError('')
     try { await imports.rejectBatch(b.id); await loadIntake() }
-    catch (e) { console.error('[UploadApprovals] rejectIntake failed:', e); setError(e?.message || t('uploadapprovals.intake.rejectFailed')) }
+    catch (e) { console.error('[UploadApprovals] rejectIntake failed:', e); setError(toUserMessage(e, t('uploadapprovals.intake.rejectFailed'))) }
     finally { setActing(null) }
   }
 
@@ -159,7 +160,7 @@ export default function UploadApprovals() {
     if (acting) return
     setActing(b.id); setError('')
     try { const rows = await imports.getBatchRows(b.id, 500); setIntakePreview({ batch: b, rows: rows ?? [] }) }
-    catch (e) { console.error('[UploadApprovals] viewIntake failed:', e); setError(e?.message || t('uploadapprovals.intake.viewFailed')) }
+    catch (e) { console.error('[UploadApprovals] viewIntake failed:', e); setError(toUserMessage(e, t('uploadapprovals.intake.viewFailed'))) }
     finally { setActing(null) }
   }
 
@@ -474,7 +475,7 @@ function EditBatchModal({ batch, editable, onClose, onSaved }) {
       .update({ rows, row_count: rows.length })
       .eq('id', batch.id)
     setSaving(false)
-    if (error) { setErr(error.message); return }
+    if (error) { setErr(toUserMessage(error, 'Something went wrong. Please try again.')); return }
     onSaved()
   }
 

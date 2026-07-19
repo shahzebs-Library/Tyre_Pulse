@@ -27,6 +27,7 @@ import {
   IDLE_TIMEOUT_MS,
   SECURITY_EVENT_WINDOW_DAYS,
 } from '../lib/securityCenter'
+import { toUserMessage } from '../lib/safeError'
 
 // ── Formatting helpers ────────────────────────────────────────────────────────
 
@@ -185,7 +186,7 @@ export default function SecurityCenter() {
       setRows(data)
       setUpdatedAt(new Date())
     } catch (err) {
-      setHistoryError(err?.message || 'Failed to load login history')
+      setHistoryError(toUserMessage(err, 'Failed to load login history'))
     } finally {
       setHistoryLoading(false)
     }
@@ -196,7 +197,7 @@ export default function SecurityCenter() {
     setEventsLoading(true)
     setEventsError(null)
     try { setEvents(await fetchRecentSecurityEvents()) }
-    catch (err) { setEventsError(err?.message || 'Failed to load security events') }
+    catch (err) { setEventsError(toUserMessage(err, 'Failed to load security events')) }
     finally { setEventsLoading(false) }
   }, [isAdmin])
 

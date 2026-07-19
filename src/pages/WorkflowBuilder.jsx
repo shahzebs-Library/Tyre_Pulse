@@ -11,6 +11,7 @@ import * as workflows from '../lib/api/workflows'
 import { STARTER_TEMPLATES } from '../lib/workflow/starterTemplates'
 import { useLanguage } from '../contexts/LanguageContext'
 import { useSettings } from '../contexts/SettingsContext'
+import { toUserMessage } from '../lib/safeError'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -499,7 +500,7 @@ export default function WorkflowBuilder() {
       setInitial(def)
       setForm(hydrateForm(def))
     } catch (err) {
-      setLoadError(err.message || 'Failed to load workflow')
+      setLoadError(toUserMessage(err, 'Failed to load workflow'))
     } finally {
       setLoading(false)
     }
@@ -605,7 +606,7 @@ export default function WorkflowBuilder() {
       else await workflows.createWorkflowDefinition(values)
       goBack()
     } catch (err) {
-      setSaveError(err.message || 'Save failed. The live database may not yet accept the richer step schema (V116).')
+      setSaveError(toUserMessage(err, 'Save failed. The live database may not yet accept the richer step schema (V116).'))
     } finally {
       setSaving(false)
     }

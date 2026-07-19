@@ -15,6 +15,7 @@ import OrgBrandingPanel from '../components/OrgBrandingPanel'
 import BrandLogoStudio from '../components/BrandLogoStudio'
 import CountryAddressPanel from '../components/CountryAddressPanel'
 import SitesMasterPanel from '../components/SitesMasterPanel'
+import { toUserMessage } from '../lib/safeError'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -455,7 +456,7 @@ export default function UserManagement() {
       ) {
         setRlsBlocked(true)
       } else {
-        setLoadError(error.message)
+        setLoadError(toUserMessage(error, 'Could not load users.'))
       }
       setUsers([])
     }
@@ -726,7 +727,7 @@ export default function UserManagement() {
     try {
       await usersApi.deleteProfileById(deleteTarget.id)
     } catch (error) {
-      setDeleteError(error.message)
+      setDeleteError(toUserMessage(error, 'Could not delete the user.'))
       setDeleteLoading(false)
       return
     }

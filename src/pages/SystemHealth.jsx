@@ -17,6 +17,7 @@ import {
 } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { cn } from '../lib/cn'
+import { toUserMessage } from '../lib/safeError'
 import PageHeader from '../components/ui/PageHeader'
 import { Skeleton } from '../components/ui/Skeleton'
 import { runAllChecks, STATUS } from '../lib/systemHealth'
@@ -187,7 +188,7 @@ export default function SystemHealth() {
       if (mountedRef.current) setReport(next)
     } catch (err) {
       // runAllChecks isolates per-check failures; this only fires on a bug.
-      if (mountedRef.current) setRunError(err?.message || 'Health run failed')
+      if (mountedRef.current) setRunError(toUserMessage(err, 'Health run failed'))
     } finally {
       if (mountedRef.current) setRefreshing(false)
     }

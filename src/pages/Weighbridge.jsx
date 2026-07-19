@@ -23,6 +23,7 @@ import {
 } from '../lib/api/weighbridgeTickets'
 import { summariseTickets, netWeight, overloadKg, isOverweight } from '../lib/weighbridgeTickets'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
+import { toUserMessage } from '../lib/safeError'
 
 const EMPTY_FORM = {
   ticket_no: '', asset_no: '', driver_name: '', site: '', weighed_at: '',
@@ -95,7 +96,7 @@ export default function Weighbridge() {
       setUpdatedAt(new Date())
     } catch (err) {
       if (isMissingRelation(err)) setNotProvisioned(true)
-      else setError(err?.message || 'Could not load weighbridge tickets.')
+      else setError(toUserMessage(err, 'Could not load weighbridge tickets.'))
       setRows([])
     } finally {
       setRefreshing(false)
@@ -187,7 +188,7 @@ export default function Weighbridge() {
       setShowModal(false); setEditing(null)
       await load()
     } catch (err) {
-      setFormError(err?.message || 'Could not save the ticket.')
+      setFormError(toUserMessage(err, 'Could not save the ticket.'))
     } finally {
       setSaving(false)
     }
@@ -201,7 +202,7 @@ export default function Weighbridge() {
       setConfirmDelete(null)
       await load()
     } catch (err) {
-      setError(err?.message || 'Could not delete the ticket.')
+      setError(toUserMessage(err, 'Could not delete the ticket.'))
     } finally {
       setDeleting(false)
     }

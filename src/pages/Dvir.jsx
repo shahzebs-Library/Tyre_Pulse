@@ -28,6 +28,7 @@ import {
 } from '../lib/api/dvir'
 import { summarizeDvir, DVIR_TYPE_META, DVIR_STATUS_META } from '../lib/dvir'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
+import { toUserMessage } from '../lib/safeError'
 
 ChartJS.register(ArcElement, Tooltip, Legend)
 
@@ -101,7 +102,7 @@ function DvirModal({ initial, activeCountry, onClose, onSaved }) {
       }
       onSaved?.()
     } catch (err) {
-      setError(err?.message || 'Could not save the inspection report.')
+      setError(toUserMessage(err, 'Could not save the inspection report.'))
     } finally {
       setBusy(false)
     }
@@ -201,7 +202,7 @@ function DeleteConfirm({ row, onCancel, onConfirm }) {
   const go = async () => {
     setBusy(true); setError('')
     try { await deleteDvirReport(row.id); onConfirm?.() }
-    catch (err) { setError(err?.message || 'Could not delete the report.'); setBusy(false) }
+    catch (err) { setError(toUserMessage(err, 'Could not delete the report.')); setBusy(false) }
   }
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60" role="dialog" aria-modal="true">
@@ -255,7 +256,7 @@ export default function Dvir() {
       setUpdatedAt(new Date())
     } catch (err) {
       if (isMissingRelation(err)) { setMissing(true); setRows([]) }
-      else { setError(err?.message || 'Could not load inspection reports.'); setRows([]) }
+      else { setError(toUserMessage(err, 'Could not load inspection reports.')); setRows([]) }
     } finally {
       setRefreshing(false)
     }
@@ -332,10 +333,10 @@ export default function Dvir() {
         updatedAt={updatedAt}
         actions={
           <div className="flex items-center gap-2">
-            <button onClick={() => exportToExcel(exportRows, EXPORT_COLS, EXPORT_HEADERS, 'dvir_reports')} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!filtered.length}>
+            <button onClick={async () => { try { await exportToExcel(exportRows, EXPORT_COLS, EXPORT_HEADERS, 'dvir_reports') } catch (e) { setError(toUserMessage(e, 'Could not export. Try again.')) } }} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!filtered.length}>
               <FileSpreadsheet size={14} /> Excel
             </button>
-            <button onClick={() => exportToPdf(exportRows, EXPORT_COLS.map((k, i) => ({ key: k, header: EXPORT_HEADERS[i] })), 'DVIR Reports', 'dvir_reports', 'landscape')} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!filtered.length}>
+            <button onClick={async () => { try { await exportToPdf(exportRows, EXPORT_COLS.map((k, i) => ({ key: k, header: EXPORT_HEADERS[i] })), 'DVIR Reports', 'dvir_reports', 'landscape') } catch (e) { setError(toUserMessage(e, 'Could not export. Try again.')) } }} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!filtered.length}>
               <FileText size={14} /> PDF
             </button>
             <button onClick={() => setModal({ row: null })} className="btn-primary text-sm inline-flex items-center gap-1.5">

@@ -30,6 +30,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { useSettings } from '../contexts/SettingsContext'
 import { supabase } from '../lib/supabase'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
+import { toUserMessage } from '../lib/safeError'
 import { costPerCall, summariseModels, budgetStatus } from '../lib/aiAdmin'
 import {
   listAiModels, createAiModel, updateAiModel, deleteAiModel,
@@ -225,7 +226,7 @@ function useResource(loader, country) {
       // not-provisioned on an explicit relation error below.
     } catch (err) {
       if (isMissingRelationErr(err)) setNotProvisioned(true)
-      else setError(err?.message || 'Could not load records.')
+      else setError(toUserMessage(err, 'Could not load records.'))
       setRows([])
     } finally {
       setRefreshing(false)
@@ -282,7 +283,7 @@ function ModelsTab({ country }) {
       if (modal.editing) await updateAiModel(modal.editing.id, form)
       else await createAiModel(form)
       setModal(null); await load()
-    } catch (err) { setFormError(err?.message || 'Could not save the model.') }
+    } catch (err) { setFormError(toUserMessage(err, 'Could not save the model.')) }
     finally { setSaving(false) }
   }
 
@@ -290,7 +291,7 @@ function ModelsTab({ country }) {
     if (!confirmDelete) return
     setDeleting(true)
     try { await deleteAiModel(confirmDelete.id); setConfirmDelete(null); await load() }
-    catch (err) { setError(err?.message || 'Could not delete the model.') }
+    catch (err) { setError(toUserMessage(err, 'Could not delete the model.')) }
     finally { setDeleting(false) }
   }
 
@@ -318,8 +319,8 @@ function ModelsTab({ country }) {
 
       <Toolbar
         search={search} setSearch={setSearch} placeholder="Search key, provider, model id, notes…"
-        onExcel={() => exportToExcel(exportRows, COLS, HEADERS, 'ai_models')}
-        onPdf={() => exportToPdf(exportRows, COLS.map((k, i) => ({ key: k, header: HEADERS[i] })), 'AI Models', 'ai_models', 'landscape')}
+        onExcel={async () => { try { await exportToExcel(exportRows, COLS, HEADERS, 'ai_models') } catch (e) { setError(toUserMessage(e, 'Could not export. Try again.')) } }}
+        onPdf={async () => { try { await exportToPdf(exportRows, COLS.map((k, i) => ({ key: k, header: HEADERS[i] })), 'AI Models', 'ai_models', 'landscape') } catch (e) { setError(toUserMessage(e, 'Could not export. Try again.')) } }}
         onCreate={openCreate} createLabel="Add model" canCreate={!notProvisioned}
         count={filtered.length} total={summary.total}
       />
@@ -419,7 +420,7 @@ function PromptsTab({ country }) {
       if (modal.editing) await updateAiPrompt(modal.editing.id, form)
       else await createAiPrompt(form)
       setModal(null); await load()
-    } catch (err) { setFormError(err?.message || 'Could not save the prompt.') }
+    } catch (err) { setFormError(toUserMessage(err, 'Could not save the prompt.')) }
     finally { setSaving(false) }
   }
 
@@ -427,7 +428,7 @@ function PromptsTab({ country }) {
     if (!confirmDelete) return
     setDeleting(true)
     try { await deleteAiPrompt(confirmDelete.id); setConfirmDelete(null); await load() }
-    catch (err) { setError(err?.message || 'Could not delete the prompt.') }
+    catch (err) { setError(toUserMessage(err, 'Could not delete the prompt.')) }
     finally { setDeleting(false) }
   }
 
@@ -457,8 +458,8 @@ function PromptsTab({ country }) {
             {LOCALES.map((l) => <option key={l} value={l}>{l}</option>)}
           </select>
         )}
-        onExcel={() => exportToExcel(exportRows, COLS, HEADERS, 'ai_prompts')}
-        onPdf={() => exportToPdf(exportRows, COLS.map((k, i) => ({ key: k, header: HEADERS[i] })), 'AI Prompts', 'ai_prompts', 'landscape')}
+        onExcel={async () => { try { await exportToExcel(exportRows, COLS, HEADERS, 'ai_prompts') } catch (e) { setError(toUserMessage(e, 'Could not export. Try again.')) } }}
+        onPdf={async () => { try { await exportToPdf(exportRows, COLS.map((k, i) => ({ key: k, header: HEADERS[i] })), 'AI Prompts', 'ai_prompts', 'landscape') } catch (e) { setError(toUserMessage(e, 'Could not export. Try again.')) } }}
         onCreate={openCreate} createLabel="Add prompt" canCreate={!notProvisioned}
         count={filtered.length} total={total}
       />
@@ -591,7 +592,7 @@ function BudgetsTab({ country }) {
       if (modal.editing) await updateAiBudget(modal.editing.id, form)
       else await createAiBudget(form)
       setModal(null); await load()
-    } catch (err) { setFormError(err?.message || 'Could not save the budget.') }
+    } catch (err) { setFormError(toUserMessage(err, 'Could not save the budget.')) }
     finally { setSaving(false) }
   }
 
@@ -599,7 +600,7 @@ function BudgetsTab({ country }) {
     if (!confirmDelete) return
     setDeleting(true)
     try { await deleteAiBudget(confirmDelete.id); setConfirmDelete(null); await load() }
-    catch (err) { setError(err?.message || 'Could not delete the budget.') }
+    catch (err) { setError(toUserMessage(err, 'Could not delete the budget.')) }
     finally { setDeleting(false) }
   }
 
@@ -627,8 +628,8 @@ function BudgetsTab({ country }) {
 
       <Toolbar
         search={search} setSearch={setSearch} placeholder="Search period, scope, notes…"
-        onExcel={() => exportToExcel(exportRows, COLS, HEADERS, 'ai_budgets')}
-        onPdf={() => exportToPdf(exportRows, COLS.map((k, i) => ({ key: k, header: HEADERS[i] })), 'AI Budgets', 'ai_budgets', 'landscape')}
+        onExcel={async () => { try { await exportToExcel(exportRows, COLS, HEADERS, 'ai_budgets') } catch (e) { setError(toUserMessage(e, 'Could not export. Try again.')) } }}
+        onPdf={async () => { try { await exportToPdf(exportRows, COLS.map((k, i) => ({ key: k, header: HEADERS[i] })), 'AI Budgets', 'ai_budgets', 'landscape') } catch (e) { setError(toUserMessage(e, 'Could not export. Try again.')) } }}
         onCreate={openCreate} createLabel="Add budget" canCreate={!notProvisioned}
         count={filtered.length} total={total}
       />
@@ -746,7 +747,7 @@ function FeedbackTab({ country }) {
       if (modal.editing) await updateAiFeedback(modal.editing.id, normalise(form))
       else await createAiFeedback(normalise(form))
       setModal(null); await load()
-    } catch (err) { setFormError(err?.message || 'Could not save the feedback.') }
+    } catch (err) { setFormError(toUserMessage(err, 'Could not save the feedback.')) }
     finally { setSaving(false) }
   }
 
@@ -754,7 +755,7 @@ function FeedbackTab({ country }) {
     if (!confirmDelete) return
     setDeleting(true)
     try { await deleteAiFeedback(confirmDelete.id); setConfirmDelete(null); await load() }
-    catch (err) { setError(err?.message || 'Could not delete the feedback.') }
+    catch (err) { setError(toUserMessage(err, 'Could not delete the feedback.')) }
     finally { setDeleting(false) }
   }
 
@@ -779,8 +780,8 @@ function FeedbackTab({ country }) {
 
       <Toolbar
         search={search} setSearch={setSearch} placeholder="Search note, conversation, message id…"
-        onExcel={() => exportToExcel(exportRows, COLS, HEADERS, 'ai_feedback')}
-        onPdf={() => exportToPdf(exportRows, COLS.map((k, i) => ({ key: k, header: HEADERS[i] })), 'AI Feedback', 'ai_feedback', 'landscape')}
+        onExcel={async () => { try { await exportToExcel(exportRows, COLS, HEADERS, 'ai_feedback') } catch (e) { setError(toUserMessage(e, 'Could not export. Try again.')) } }}
+        onPdf={async () => { try { await exportToPdf(exportRows, COLS.map((k, i) => ({ key: k, header: HEADERS[i] })), 'AI Feedback', 'ai_feedback', 'landscape') } catch (e) { setError(toUserMessage(e, 'Could not export. Try again.')) } }}
         onCreate={openCreate} createLabel="Log feedback" canCreate={!notProvisioned}
         count={filtered.length} total={total}
       />

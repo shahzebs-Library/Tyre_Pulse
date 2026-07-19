@@ -12,6 +12,7 @@ import { completeAssignment } from '../lib/api/checklistSchedules'
 import SignaturePad from '../components/SignaturePad'
 import ReferencePicker from '../components/checklist/ReferencePicker'
 import { safeHref, safeImageSrc } from '../lib/safeUrl'
+import { toUserMessage } from '../lib/safeError'
 
 function isMissingRelation(err) {
   const m = String(err?.message || '').toLowerCase()
@@ -61,7 +62,7 @@ export default function ChecklistRun() {
       }
       setAnswers(seeded)
     } catch (err) {
-      setLoadError(isMissingRelation(err) ? 'missing' : (err?.message || 'Could not load the checklist.'))
+      setLoadError(isMissingRelation(err) ? 'missing' : toUserMessage(err, 'Could not load the checklist.'))
     } finally {
       setLoading(false)
     }
@@ -95,7 +96,7 @@ export default function ChecklistRun() {
         setPhotos((prev) => ({ ...prev, [fieldId]: [...(prev[fieldId] || []), ...urls] }))
       }
     } catch (err) {
-      setSubmitError(err?.message || 'Photo upload failed.')
+      setSubmitError(toUserMessage(err, 'Photo upload failed.'))
     } finally {
       setUploading((p) => ({ ...p, [fieldId]: false }))
     }
@@ -164,13 +165,13 @@ export default function ChecklistRun() {
           try {
             await completeAssignment(assignmentId, created.id)
           } catch (err) {
-            setSubmitError(`Submission saved, but the assignment could not be marked complete: ${err?.message || 'unknown error'}`)
+            setSubmitError(`Submission saved, but the assignment could not be marked complete: ${toUserMessage(err, 'unknown error')}`)
           }
         }
         navigate(`/checklists/submission/${created.id}`)
       } else { setSubmitError('Submission saved but no id was returned.'); setSubmitting(false) }
     } catch (err) {
-      setSubmitError(err?.message || 'Could not submit the checklist.')
+      setSubmitError(toUserMessage(err, 'Could not submit the checklist.'))
       setSubmitting(false)
     }
   }

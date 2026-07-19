@@ -30,6 +30,7 @@ import {
 } from '../lib/geofences'
 import { colorAt, withAlpha } from '../lib/reportColors'
 import { exportToExcel, exportToPdf, reportFileName } from '../lib/exportUtils'
+import { toUserMessage } from '../lib/safeError'
 
 ChartJS.register(ArcElement, BarElement, CategoryScale, LinearScale, Tooltip, Legend)
 
@@ -121,7 +122,7 @@ export default function Geofencing() {
       }
       setUpdatedAt(new Date())
     } catch (err) {
-      setError(err?.message || 'Could not load geofences.')
+      setError(toUserMessage(err, 'Could not load geofences.'))
       setRows([])
     } finally {
       setRefreshing(false)
@@ -250,7 +251,7 @@ export default function Geofencing() {
       setModalOpen(false)
       await load()
     } catch (err) {
-      setSaveError(err?.message || 'Could not save the geofence.')
+      setSaveError(toUserMessage(err, 'Could not save the geofence.'))
     } finally {
       setSaving(false)
     }
@@ -264,7 +265,7 @@ export default function Geofencing() {
       setConfirmDelete(null)
       await load()
     } catch (err) {
-      setSaveError(err?.message || 'Could not delete the geofence.')
+      setSaveError(toUserMessage(err, 'Could not delete the geofence.'))
     } finally {
       setDeleting(false)
     }
@@ -303,10 +304,10 @@ export default function Geofencing() {
         updatedAt={updatedAt}
         actions={
           <div className="flex items-center gap-2">
-            <button onClick={() => exportToExcel(exportRows, EXPORT_COLS, EXPORT_HEADERS, exportName)} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!filtered.length}>
+            <button onClick={async () => { try { await exportToExcel(exportRows, EXPORT_COLS, EXPORT_HEADERS, exportName) } catch (e) { setError(toUserMessage(e, 'Could not export. Try again.')) } }} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!filtered.length}>
               <FileSpreadsheet size={14} /> Excel
             </button>
-            <button onClick={() => exportToPdf(exportRows, EXPORT_COLS.map((k, i) => ({ key: k, header: EXPORT_HEADERS[i] })), 'Geofence Zones', exportName, 'landscape')} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!filtered.length}>
+            <button onClick={async () => { try { await exportToPdf(exportRows, EXPORT_COLS.map((k, i) => ({ key: k, header: EXPORT_HEADERS[i] })), 'Geofence Zones', exportName, 'landscape') } catch (e) { setError(toUserMessage(e, 'Could not export. Try again.')) } }} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!filtered.length}>
               <FileText size={14} /> PDF
             </button>
             <button onClick={openCreate} className="btn-primary text-sm inline-flex items-center gap-1.5">

@@ -24,6 +24,7 @@ import * as sitesApi from '../lib/api/sites'
 import { useAuth } from '../contexts/AuthContext'
 import { useSettings } from '../contexts/SettingsContext'
 import { exportToExcel } from '../lib/exportUtils'
+import { toUserMessage } from '../lib/safeError'
 
 const fmt = (n) => (n == null || isNaN(Number(n)) ? '-' : Number(n).toLocaleString('en-US'))
 
@@ -64,7 +65,7 @@ function SiteModal({ site, onSaved, onClose }) {
       await sitesApi.upsertSite(form)
       onSaved()
     } catch (e) {
-      setError(e.message ?? 'Could not save site.')
+      setError(toUserMessage(e, 'Could not save site.'))
       setSaving(false)
     }
   }
@@ -174,7 +175,7 @@ export default function SiteManagement() {
       ])
       setRollup(sitesApi.buildSiteRollup(master ?? [], assets ?? []))
     } catch (e) {
-      setLoadError(e.message || 'Could not load sites.')
+      setLoadError(toUserMessage(e, 'Could not load sites.'))
       setRollup([])
     } finally {
       setLoading(false)

@@ -10,6 +10,7 @@ import { useSettings } from '../contexts/SettingsContext'
 import { useAuth } from '../contexts/AuthContext'
 import { listTemplates, listSubmissions } from '../lib/api/checklists'
 import { isValueField } from '../lib/checklist/fieldTypes'
+import { toUserMessage } from '../lib/safeError'
 
 const ELEVATED = ['admin', 'manager', 'director']
 
@@ -76,7 +77,7 @@ export default function Checklists() {
       setUpdatedAt(new Date())
     } catch (err) {
       if (isMissingRelation(err)) setMissing(true)
-      else setError(err?.message || 'Could not load checklists.')
+      else setError(toUserMessage(err, 'Could not load checklists.'))
     } finally {
       setLoading(false)
     }

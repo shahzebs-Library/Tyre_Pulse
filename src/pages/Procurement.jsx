@@ -432,7 +432,7 @@ export default function Procurement() {
     if (!po) return
     const items = po.items.map((it, i) => i === itemIdx ? { ...it, received_qty: parseInt(qty) || 0 } : it)
     procurementApi.updatePurchaseOrder(poId, { items, updated_at: new Date().toISOString() }).then(({ error: err }) => {
-      if (err) { alert(t('procurement.alerts.updateFailed', { message: err.message })); return }
+      if (err) { alert(t('procurement.alerts.updateFailed', { message: toUserMessage(err) })); return }
       load()
       setViewPO(v => v ? { ...v, items } : null)
     })
@@ -488,7 +488,7 @@ export default function Procurement() {
       await load()
       setShowForm(false)
     } catch (e) {
-      alert(t('procurement.alerts.saveFailed', { message: e.message }))
+      alert(t('procurement.alerts.saveFailed', { message: toUserMessage(e) }))
     } finally {
       setSaving(false)
     }
@@ -502,7 +502,7 @@ export default function Procurement() {
     const patch = { status: newStatus }
     if (newStatus === 'Delivered') patch.actual_delivery = new Date().toISOString().slice(0, 10)
     const { error: err } = await procurementApi.updatePurchaseOrder(po.id, patch)
-    if (err) { alert(t('procurement.alerts.updateFailed', { message: err.message })); return }
+    if (err) { alert(t('procurement.alerts.updateFailed', { message: toUserMessage(err) })); return }
     await load()
     if (viewPO?.id === po.id) setViewPO(v => ({ ...v, ...patch }))
   }
@@ -517,7 +517,7 @@ export default function Procurement() {
       const { error: err } = await procurementApi.upsertSetting(BUDGET_KEY, JSON.stringify(val))
       if (err) {
         setBudget(prev)
-        setBudgetError(t('procurement.budgetPanel.saveError', { message: err.message }))
+        setBudgetError(t('procurement.budgetPanel.saveError', { message: toUserMessage(err) }))
       }
     }
     setEditBudget(false)

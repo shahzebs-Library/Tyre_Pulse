@@ -22,6 +22,7 @@ import { exportToPdf, exportToExcel, resolvePdfBrand, pdfHeader, pdfFooter, pdfT
 import PageHeader from '../components/ui/PageHeader'
 import EmptyState from '../components/EmptyState'
 import { formatDate } from '../lib/formatters'
+import { toUserMessage } from '../lib/safeError'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Title, Tooltip, Legend)
 
@@ -497,7 +498,7 @@ export default function TyreExchange() {
     const { error } = await exchangeApi.upsertTyreStatusMark(serial, markType)
     if (error) {
       setList(prev)
-      setMarkError(`Could not save the ${markType.replace('_', '-')} mark for ${serial}: ${error.message}`)
+      setMarkError(toUserMessage(error, `Could not save the ${markType.replace('_', '-')} mark for ${serial}.`))
     }
   }
 

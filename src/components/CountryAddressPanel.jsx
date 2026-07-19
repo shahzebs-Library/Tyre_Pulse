@@ -10,6 +10,7 @@ import {
   buildCountryAddressList, isBlankAddress, formatAddressLine,
   COUNTRY_ADDRESS_FIELDS,
 } from '../lib/api/countryAddresses'
+import { toUserMessage } from '../lib/safeError'
 
 /**
  * CountryAddressPanel — admin editor for the per-country address book (V108).
@@ -83,7 +84,7 @@ export default function CountryAddressPanel({ canEdit }) {
       setRows(data || [])
       hydrate(data || [])
     } catch (e) {
-      setError(e?.message || 'Could not load country addresses.')
+      setError(toUserMessage(e, 'Could not load country addresses.'))
     } finally {
       setLoading(false)
     }
@@ -113,7 +114,7 @@ export default function CountryAddressPanel({ canEdit }) {
       hydrate(data || [])
       setOkMsg(`${COUNTRY_LABEL[country] || country} address saved.`)
     } catch (e) {
-      setError(e?.message || 'Could not save the address.')
+      setError(toUserMessage(e, 'Could not save the address.'))
     } finally {
       setSavingC(null)
     }
@@ -129,7 +130,7 @@ export default function CountryAddressPanel({ canEdit }) {
       hydrate(data || [])
       setOkMsg(`${COUNTRY_LABEL[country] || country} reset to the organisation address.`)
     } catch (e) {
-      setError(e?.message || 'Could not reset the address.')
+      setError(toUserMessage(e, 'Could not reset the address.'))
     } finally {
       setSavingC(null)
     }

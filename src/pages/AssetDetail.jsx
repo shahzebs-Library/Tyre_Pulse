@@ -18,6 +18,7 @@ import {
 import { supabase } from '../lib/supabase'
 import * as assetApi from '../lib/api/assetManagement'
 import { listPmPrograms, listPmServiceRecords } from '../lib/api/pmPrograms'
+import { toUserMessage } from '../lib/safeError'
 import { pmAssetDueStatus } from '../lib/pmSchedule'
 import { PM_DUE_META } from '../lib/pmPrograms'
 import { useSettings } from '../contexts/SettingsContext'
@@ -170,12 +171,12 @@ function EditPanel({ asset, sites, countries, onSaved, onClose, locked = false }
       const { error: supaErr } = await assetApi.updateAsset(asset.id, payload)
       if (supaErr) {
         const dup = /duplicate key|unique constraint/i.test(supaErr.message || '')
-        setError(dup ? t('assetmgmt.modal.errDuplicate') : (supaErr.message || t('assetmgmt.modal.errSaveFailed')))
+        setError(dup ? t('assetmgmt.modal.errDuplicate') : toUserMessage(supaErr, t('assetmgmt.modal.errSaveFailed')))
         setSaving(false); return
       }
       onSaved(payload)
     } catch (e) {
-      setError(e.message ?? t('assetmgmt.modal.errUnexpected'))
+      setError(toUserMessage(e, t('assetmgmt.modal.errUnexpected')))
     } finally {
       setSaving(false)
     }
@@ -362,7 +363,7 @@ export default function AssetDetail() {
       setPmServices(pmSvcRows)
       setOverview(ov)
     } catch (e) {
-      setError(e.message || t('assetmgmt.detail.loadError'))
+      setError(toUserMessage(e, t('assetmgmt.detail.loadError')))
       setAsset(null)
     } finally {
       setLoading(false)

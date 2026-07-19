@@ -10,6 +10,7 @@ import { fetchAllPages } from '../lib/fetchAll'
 import { useSettings } from '../contexts/SettingsContext'
 import { useLanguage } from '../contexts/LanguageContext'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
+import { toUserMessage } from '../lib/safeError'
 import EmptyState from '../components/EmptyState'
 import LoadingState from '../components/LoadingState'
 import EntityApprovalPanel from '../components/workflow/EntityApprovalPanel'
@@ -214,7 +215,7 @@ export default function DriverDetail() {
         setDriver({ ...base, riskScore: ranked?.riskScore ?? 0, rank: ranked?.rank ?? null })
       }
     } catch (e) {
-      if (myReq === reqIdRef.current) setError(e.message || 'Failed to load driver record')
+      if (myReq === reqIdRef.current) setError(toUserMessage(e, 'Failed to load driver record'))
     } finally {
       if (myReq === reqIdRef.current) setLoading(false)
     }

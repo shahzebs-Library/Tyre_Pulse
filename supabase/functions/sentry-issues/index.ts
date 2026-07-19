@@ -1,14 +1,17 @@
 // ============================================================================
-// sentry-issues - super-admin-only proxy to the Sentry issues API for the
-// in-app /console Crash Reports page.
+// sentry-issues - super-admin-only proxy to the Sentry API for the /console
+// Crash Reports page.
 //
-// The Sentry auth token is a secret; it is stored in the deny-all cron_config
-// table (never granted to anon/authenticated) and read here via the service
-// role. The caller must present a valid JWT for a super-admin profile. The
-// token never leaves the server.
+// The Sentry auth token is a secret stored in the deny-all cron_config table and
+// read here via the service role. The caller must present a valid JWT for a
+// super-admin profile. The token never leaves the server.
 //
-// Request (POST): { query?: string, period?: '24h'|'7d'|'14d'|'30d'|'90d' }
-// Response: { ok:true, issues:[...] } | { ok:false, reason:'not_configured'|'auth'|'unauthorized'|'error' }
+// Request (POST): { action?, query?, period?, project?, issueId?, status? }
+//   action 'list'     (default) -> org issues (query/period/project filters)
+//   action 'projects'           -> the org's projects (id/slug/name/platform)
+//   action 'detail'  + issueId  -> issue meta + latest event (stacktrace, tags)
+//   action 'update'  + issueId + status ('resolved'|'ignored'|'unresolved')
+// Response: { ok:true, ... } | { ok:false, reason:'not_configured'|'auth'|'unauthorized'|'error' }
 // ============================================================================
 
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts'
@@ -31,6 +34,17 @@ function json(req: Request, body: unknown, status = 200): Response {
 }
 
 const VALID_PERIODS = new Set(['24h', '7d', '14d', '30d', '90d'])
+const VALID_STATUS = new Set(['resolved', 'ignored', 'unresolved'])
+
+function trimIssue(i: any) {
+  return {
+    id: i.id, shortId: i.shortId, title: i.title || i.metadata?.type || 'Issue', culprit: i.culprit || '',
+    level: i.level || 'error', status: i.status || 'unresolved', count: Number(i.count) || 0,
+    userCount: Number(i.userCount) || 0, firstSeen: i.firstSeen || null, lastSeen: i.lastSeen || null,
+    permalink: i.permalink || '', platform: i.platform || '', value: i.metadata?.value || '',
+    project: i.project?.slug || '',
+  }
+}
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders(req) })
@@ -47,14 +61,12 @@ serve(async (req) => {
   const authClient = createClient(url, anonKey, { global: { headers: { Authorization: `Bearer ${token}` } } })
   const { data: userData, error: userErr } = await authClient.auth.getUser(token)
   if (userErr || !userData?.user) return json(req, { ok: false, reason: 'unauthorized' }, 401)
-  const { data: prof } = await authClient
-    .from('profiles').select('is_super_admin').eq('id', userData.user.id).maybeSingle()
+  const { data: prof } = await authClient.from('profiles').select('is_super_admin').eq('id', userData.user.id).maybeSingle()
   if (prof?.is_super_admin !== true) return json(req, { ok: false, reason: 'unauthorized' }, 403)
 
   // 2. Read the Sentry connection from the deny-all config (service role).
   const admin = createClient(url, serviceKey)
-  const { data: cfgRows } = await admin
-    .from('cron_config').select('name, value')
+  const { data: cfgRows } = await admin.from('cron_config').select('name, value')
     .in('name', ['sentry_auth_token', 'sentry_org', 'sentry_region_url'])
   const cfg: Record<string, string> = {}
   for (const r of cfgRows ?? []) cfg[r.name] = r.value
@@ -63,34 +75,82 @@ serve(async (req) => {
   const region = (cfg['sentry_region_url'] || 'https://de.sentry.io').replace(/\/+$/, '')
   if (!sentryToken) return json(req, { ok: false, reason: 'not_configured' })
 
-  // 3. Query Sentry.
-  let body: { query?: string; period?: string } = {}
+  const authHeader = { Authorization: `Bearer ${sentryToken}` }
+  const base = `${region}/api/0/organizations/${encodeURIComponent(org)}`
+
+  let body: any = {}
   try { body = await req.json() } catch { /* defaults */ }
-  const query = typeof body.query === 'string' && body.query.length <= 200 ? body.query : 'is:unresolved'
-  const period = VALID_PERIODS.has(body.period || '') ? body.period : '14d'
-  const api = `${region}/api/0/organizations/${encodeURIComponent(org)}/issues/`
-    + `?query=${encodeURIComponent(query)}&statsPeriod=${period}&project=-1&limit=50`
+  const action = typeof body.action === 'string' ? body.action : 'list'
 
   try {
-    const res = await fetch(api, { headers: { Authorization: `Bearer ${sentryToken}` } })
+    // ── projects ──────────────────────────────────────────────────────────────
+    if (action === 'projects') {
+      const res = await fetch(`${base}/projects/`, { headers: authHeader })
+      if (res.status === 401 || res.status === 403) return json(req, { ok: false, reason: 'auth' })
+      if (!res.ok) return json(req, { ok: false, reason: 'error', status: res.status })
+      const raw = await res.json() as any[]
+      const projects = (Array.isArray(raw) ? raw : []).map(p => ({ id: p.id, slug: p.slug, name: p.name, platform: p.platform || '' }))
+      return json(req, { ok: true, projects })
+    }
+
+    // ── update (resolve / ignore / reopen) ──────────────────────────────────────
+    if (action === 'update') {
+      const issueId = String(body.issueId || '')
+      const status = String(body.status || '')
+      if (!issueId || !VALID_STATUS.has(status)) return json(req, { ok: false, reason: 'error' }, 400)
+      const res = await fetch(`${base}/issues/${encodeURIComponent(issueId)}/`, {
+        method: 'PUT', headers: { ...authHeader, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status }),
+      })
+      if (res.status === 401 || res.status === 403) return json(req, { ok: false, reason: 'auth' })
+      if (!res.ok) return json(req, { ok: false, reason: 'error', status: res.status })
+      return json(req, { ok: true, status })
+    }
+
+    // ── detail (issue meta + latest event) ──────────────────────────────────────
+    if (action === 'detail') {
+      const issueId = String(body.issueId || '')
+      if (!issueId) return json(req, { ok: false, reason: 'error' }, 400)
+      const [issueRes, eventRes] = await Promise.all([
+        fetch(`${base}/issues/${encodeURIComponent(issueId)}/`, { headers: authHeader }),
+        fetch(`${base}/issues/${encodeURIComponent(issueId)}/events/latest/`, { headers: authHeader }),
+      ])
+      if (issueRes.status === 401 || issueRes.status === 403) return json(req, { ok: false, reason: 'auth' })
+      if (!issueRes.ok) return json(req, { ok: false, reason: 'error', status: issueRes.status })
+      const issue = await issueRes.json()
+      let event: any = null
+      if (eventRes.ok) {
+        const ev = await eventRes.json()
+        // Extract a readable stack from the exception entry.
+        const frames: any[] = []
+        const exc = (ev.entries || []).find((e: any) => e.type === 'exception')
+        for (const val of (exc?.data?.values || [])) {
+          const fr = (val.stacktrace?.frames || []).slice(-25).reverse().map((f: any) => ({
+            fn: f.function || '<anonymous>', file: f.filename || f.module || '', line: f.lineNo ?? null, inApp: !!f.inApp,
+          }))
+          frames.push({ type: val.type || '', value: val.value || '', frames: fr })
+        }
+        event = {
+          dateCreated: ev.dateCreated || null,
+          tags: (ev.tags || []).map((t: any) => ({ key: t.key, value: t.value })),
+          user: ev.user ? { id: ev.user.id, username: ev.user.username, geo: ev.user.geo } : null,
+          message: ev.message || ev.title || '',
+          exceptions: frames,
+        }
+      }
+      return json(req, { ok: true, issue: trimIssue(issue), event })
+    }
+
+    // ── list (default) ──────────────────────────────────────────────────────────
+    const query = typeof body.query === 'string' && body.query.length <= 200 ? body.query : 'is:unresolved'
+    const period = VALID_PERIODS.has(body.period || '') ? body.period : '14d'
+    const projectParam = (body.project && /^\d+$/.test(String(body.project))) ? String(body.project) : '-1'
+    const api = `${base}/issues/?query=${encodeURIComponent(query)}&statsPeriod=${period}&project=${projectParam}&limit=50`
+    const res = await fetch(api, { headers: authHeader })
     if (res.status === 401 || res.status === 403) return json(req, { ok: false, reason: 'auth' })
     if (!res.ok) return json(req, { ok: false, reason: 'error', status: res.status })
     const raw = await res.json() as any[]
-    const issues = (Array.isArray(raw) ? raw : []).map((i) => ({
-      id: i.id,
-      shortId: i.shortId,
-      title: i.title || i.metadata?.type || 'Issue',
-      culprit: i.culprit || '',
-      level: i.level || 'error',
-      status: i.status || 'unresolved',
-      count: Number(i.count) || 0,
-      userCount: Number(i.userCount) || 0,
-      firstSeen: i.firstSeen || null,
-      lastSeen: i.lastSeen || null,
-      permalink: i.permalink || '',
-      platform: i.platform || '',
-      value: i.metadata?.value || '',
-    }))
+    const issues = (Array.isArray(raw) ? raw : []).map(trimIssue)
     return json(req, { ok: true, org, issues })
   } catch {
     return json(req, { ok: false, reason: 'error' })

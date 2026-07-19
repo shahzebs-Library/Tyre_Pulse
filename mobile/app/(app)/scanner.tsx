@@ -100,7 +100,6 @@ export default function ScannerScreen() {
       <Screen padded={false}>
         <StatusBar
           barStyle={theme.mode === 'dark' ? 'light-content' : 'dark-content'}
-          backgroundColor={theme.color.bg}
         />
         <View style={[styles.nav, isRTL && styles.navRTL]}>
           <TouchableOpacity onPress={() => router.back()} style={styles.navBack}>
@@ -128,7 +127,6 @@ export default function ScannerScreen() {
       <Screen padded={false}>
         <StatusBar
           barStyle={theme.mode === 'dark' ? 'light-content' : 'dark-content'}
-          backgroundColor={theme.color.bg}
         />
         <View style={[styles.nav, isRTL && styles.navRTL]}>
           <TouchableOpacity onPress={() => router.back()} style={styles.navBack}>

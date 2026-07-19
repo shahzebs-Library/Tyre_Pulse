@@ -155,7 +155,7 @@ export default function ChecklistApprovalReviewScreen() {
   if (!allowed) {
     return (
       <SafeAreaView style={styles.safe}>
-        <StatusBar barStyle="dark-content" backgroundColor="#f0f5f1" />
+        <StatusBar barStyle="dark-content" />
         {nav('Approval')}
         <View style={styles.stateWrap}>
           <Ionicons name="lock-closed-outline" size={52} color="#cbd5e1" />
@@ -169,7 +169,7 @@ export default function ChecklistApprovalReviewScreen() {
   if (loading) {
     return (
       <SafeAreaView style={[styles.safe, styles.center]}>
-        <StatusBar barStyle="dark-content" backgroundColor="#f0f5f1" />
+        <StatusBar barStyle="dark-content" />
         <ActivityIndicator size="large" color="#16a34a" />
       </SafeAreaView>
     )
@@ -178,7 +178,7 @@ export default function ChecklistApprovalReviewScreen() {
   if (loadError || !submission) {
     return (
       <SafeAreaView style={styles.safe}>
-        <StatusBar barStyle="dark-content" backgroundColor="#f0f5f1" />
+        <StatusBar barStyle="dark-content" />
         {nav('Approval')}
         <View style={styles.stateWrap}>
           <Ionicons name={loadError ? 'cloud-offline-outline' : 'help-circle-outline'} size={52} color={loadError ? '#fca5a5' : '#cbd5e1'} />
@@ -204,7 +204,7 @@ export default function ChecklistApprovalReviewScreen() {
 
   return (
     <SafeAreaView style={styles.safe}>
-      <StatusBar barStyle="dark-content" backgroundColor="#f0f5f1" />
+      <StatusBar barStyle="dark-content" />
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         {nav(submission.title || submission.template_name || 'Checklist')}
 

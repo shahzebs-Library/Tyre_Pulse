@@ -135,7 +135,7 @@ export default function AdminDashboardScreen() {
   if (guardLoading || !allowed) {
     return (
       <SafeAreaView style={styles.safe}>
-        <StatusBar barStyle="light-content" backgroundColor="#4c1d95" />
+        <StatusBar barStyle="light-content" />
         <View style={styles.loader}><ActivityIndicator size="large" color="#7c3aed" /></View>
       </SafeAreaView>
     )
@@ -147,7 +147,7 @@ export default function AdminDashboardScreen() {
 
   return (
     <SafeAreaView style={styles.safe}>
-      <StatusBar barStyle="light-content" backgroundColor="#4c1d95" />
+      <StatusBar barStyle="light-content" />
 
       {/* ── Purple header ─────────────────────────────────────────────────── */}
       <View style={styles.header}>

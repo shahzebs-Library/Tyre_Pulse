@@ -103,7 +103,7 @@ export default function SerialSearchScreen() {
 
   return (
     <SafeAreaView style={styles.safe}>
-      <StatusBar barStyle="dark-content" backgroundColor="#f0f5f1" />
+      <StatusBar barStyle="dark-content" />
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         {/* Nav header */}
         <View style={[styles.nav, isRTL && styles.rowR]}>

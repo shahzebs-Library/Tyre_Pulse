@@ -126,7 +126,7 @@ export default function AiChatScreen() {
   if (guardLoading || !allowed) {
     return (
       <SafeAreaView style={styles.safe}>
-        <StatusBar barStyle="light-content" backgroundColor="#4c1d95" />
+        <StatusBar barStyle="light-content" />
         <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
           <ActivityIndicator size="large" color="#7c3aed" />
         </View>
@@ -192,7 +192,7 @@ export default function AiChatScreen() {
 
   return (
     <SafeAreaView style={styles.safe}>
-      <StatusBar barStyle="light-content" backgroundColor="#4c1d95" />
+      <StatusBar barStyle="light-content" />
 
       {/* ── Header ─────────────────────────────────────────────────────────── */}
       <View style={styles.header}>

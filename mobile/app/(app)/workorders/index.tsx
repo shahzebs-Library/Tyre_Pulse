@@ -125,7 +125,7 @@ export default function WorkOrdersScreen() {
 
   return (
     <SafeAreaView style={styles.safe}>
-      <StatusBar barStyle="dark-content" backgroundColor="#fff7ed" />
+      <StatusBar barStyle="dark-content" />
 
       <View style={styles.header}>
         <View style={{ flex: 1 }}>

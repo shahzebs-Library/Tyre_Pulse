@@ -62,6 +62,7 @@ export function AuthProvider({ children }) {
   const [profile, setProfile] = useState(null)
   const [loading, setLoading] = useState(true)
   const profileChannelRef  = useRef(null)
+  const refreshAccessRef   = useRef(null)
   const currentUserIdRef   = useRef(null)
   const lastActivityRef    = useRef(Date.now())
   // True while signIn() is running its own approval/lock check, so the auth
@@ -135,6 +136,12 @@ export function AuthProvider({ children }) {
             return
           }
           setProfile(np)
+          // The enforced module map (get_user_module_permissions) is keyed on the
+          // user's role, so a role change (e.g. assigning a custom role) must
+          // ALSO re-pull it - otherwise the new role resolves against the OLD
+          // role's stale perms and the app looks empty until reload. Any profile
+          // change (role / site / country) can shift access, so refresh access.
+          refreshAccessRef.current?.()
         }
       )
       .subscribe()
@@ -314,6 +321,32 @@ export function AuthProvider({ children }) {
       listModuleStatuses().then(setModuleStatuses)
     } catch { /* keep current access on a transient failure */ }
   }, [])
+  // Expose the latest refreshAccess to the profile realtime handler (which is a
+  // plain function created before this callback) so a live role change can
+  // re-pull the role-keyed module map immediately.
+  refreshAccessRef.current = refreshAccess
+
+  // Re-pull THIS user's own profile row (role / site / country / approval), so a
+  // role change an admin just made is reflected without a re-login. Paired with
+  // refreshAccess (which re-pulls the role-keyed module map) it makes a role
+  // reassignment take full effect on the next tab refocus even if realtime is
+  // not delivering profile updates. Never toggles `loading` (no tree unmount).
+  const refreshProfile = useCallback(async (uid) => {
+    if (!uid) return
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('id,full_name,username,role,email,employee_id,site,country,approved,locked,is_super_admin,web_access,created_at')
+        .eq('id', uid).single()
+      if (error || !data) return
+      if (data.locked === true || data.approved === false) {
+        localStorage.setItem(data.locked === true ? 'tp_access_revoked' : 'tp_pending_approval', '1')
+        audit.logout().finally(() => supabase.auth.signOut())
+        return
+      }
+      setProfile(data)
+    } catch { /* keep current profile on a transient failure */ }
+  }, [])
 
   // A change an admin makes in Master Access Control should reach an affected
   // user's OPEN session without a re-login: refresh on tab refocus, and live via
@@ -321,7 +354,9 @@ export function AuthProvider({ children }) {
   // and on the role permission matrix.
   useEffect(() => {
     if (!user?.id) return undefined
-    const onVisible = () => { if (document.visibilityState === 'visible') refreshAccess() }
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') { refreshProfile(user.id); refreshAccess() }
+    }
     document.addEventListener('visibilitychange', onVisible)
     const ch = supabase
       .channel(`access-${user.id}`)
@@ -332,7 +367,7 @@ export function AuthProvider({ children }) {
       document.removeEventListener('visibilitychange', onVisible)
       supabase.removeChannel(ch)
     }
-  }, [user?.id, refreshAccess])
+  }, [user?.id, refreshAccess, refreshProfile])
 
   const isSuperAdmin = profile?.is_super_admin === true
 

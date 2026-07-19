@@ -39,7 +39,16 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
     the OLD v1.2.0+20 build — already guarded/fixed in current v1.3.0 (stale-build crash). `SIGABRT/abort` =
     native crash on the Sentry executor thread (art::Runtime::Abort) on a low-end Unisoc device, 1 event, no app
     frames — not an app-logic bug. USER OPS: the org auth token `sntrys_` works for READS; for assign/comment/
-    resolve it needs a token with `issue:write`. Next free migration **V284**.
+    resolve it needs a token with `issue:write`.
+  - **Fatal-crash alerts (V284, LIVE):** pg_cron job `sentry-crash-alert` every 15 min -> edge fn
+    `sentry-crash-alert` (cron-secret gated, verify_jwt=false) polls unresolved `level:fatal` issues; each NEW
+    one (deduped via table `sentry_alert_log`, super-admin read / service-role writes) -> a critical
+    `system_logs` row (Console System Health) + one Resend summary email to `sentry_alert_email`.
+    `set_sentry_config`/`get_sentry_config_status` EXTENDED to 6 args (+p_alert_email/+p_alerts_enabled; old
+    4-arg dropped); Console Connection form has an "Alert on new fatal crashes" toggle + alert email(s). Runs
+    only when `sentry_alerts_enabled='true'` (enabled live) AND a token exists. Verified live: first fire
+    {new:1} logged the standing abort crash, second {new:0} (dedupe holds). All Sentry config in cron_config:
+    sentry_auth_token/org/region_url/project/alert_email/alerts_enabled. Next free migration **V285**.
 
 ## Backend security audit (2026-07-19) — anon lockdown + workflow-notify fail-open (SHIPPED)
 - **V281 anon role hardening (applied live + `MIGRATIONS_V281_HARDEN_ANON_ROLE.sql`).** Audit found the

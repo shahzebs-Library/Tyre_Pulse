@@ -12,6 +12,7 @@
  * the enforcement lives in Postgres.
  */
 import { supabase, unwrap, ServiceError } from './_client'
+import { sanitizeSearchTerm } from '../searchFilter'
 
 /** The three console admin roles (matches the admin_users.admin_role CHECK). */
 export const ADMIN_ROLE_VALUES = ['super_admin', 'regional_admin', 'viewer']
@@ -113,8 +114,10 @@ export async function searchProfiles(query) {
     .limit(20)
   const term = (query ?? '').trim()
   if (term) {
-    const s = term.replace(/[%,()]/g, ' ')
-    q = q.or(`email.ilike.%${s}%,full_name.ilike.%${s}%`)
+    // Reuse the shared sanitiser so structural chars AND backslash are stripped
+    // before interpolation into the PostgREST .or() filter (predicate-injection guard).
+    const s = sanitizeSearchTerm(term)
+    if (s) q = q.or(`email.ilike.%${s}%,full_name.ilike.%${s}%`)
   }
   const { data, error } = await q
   if (error) return []

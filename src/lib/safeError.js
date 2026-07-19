@@ -41,6 +41,16 @@ const DB_MESSAGE_MARKERS = [
   'schema cache',
   'constraint',
   'duplicate key',
+  // Code-less Postgres text that still leaks schema internals (e.g. a bare
+  // `invalid input syntax for type uuid: "index"` or an enum/type mismatch) must
+  // be caught here so it can never fall through to the rule-5 passthrough below.
+  'invalid input syntax',
+  'invalid input value',
+  'enum',
+  'does not exist',
+  'foreign key',
+  'null value in column',
+  'operator does not exist',
 ]
 
 // Substrings that specifically indicate a permission / RLS failure.

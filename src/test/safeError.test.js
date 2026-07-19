@@ -38,6 +38,25 @@ describe('toUserMessage — Postgres code mappings', () => {
   })
 })
 
+describe('toUserMessage — code-less DB text must not leak (V281 hardening)', () => {
+  it('suppresses a bare "invalid input syntax for type uuid" with no code', () => {
+    const err = new Error('invalid input syntax for type uuid: "index"')
+    expect(toUserMessage(err, 'fb')).toBe('fb')
+  })
+  it('suppresses an enum/type mismatch with no code', () => {
+    const err = new Error('invalid input value for enum severity: "Total Loss"')
+    expect(toUserMessage(err, 'fb')).toBe('fb')
+  })
+  it('suppresses a "column ... does not exist" style message', () => {
+    const err = new Error('column "item_description" of relation "stock_records" does not exist')
+    expect(toUserMessage(err, 'fb')).toBe('fb')
+  })
+  it('still lets a genuine short client validation message through', () => {
+    const err = new Error('Please enter a valid odometer reading.')
+    expect(toUserMessage(err, 'fb')).toBe('Please enter a valid odometer reading.')
+  })
+})
+
 describe('toUserMessage — textual permission / RLS detection', () => {
   it('detects row-level security failures without a code', () => {
     const err = new Error('new row violates row-level security policy for table "alerts"')

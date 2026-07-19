@@ -38,7 +38,26 @@ const SELECT_COLS = {
 }
 
 const MAX_SAVE_ROWS = 20000
-const INSERT_CHUNK = 1000
+// Small chunks keep each POST body well under corporate proxy / antivirus body
+// inspection limits (a common cause of a large bulk POST being silently dropped
+// with a browser "Failed to fetch" even while smaller GET/POST requests work).
+const INSERT_CHUNK = 200
+const MAX_ATTEMPTS = 4          // 1 try + 3 retries per chunk
+const RETRY_BASE_MS = 400       // exponential backoff base
+
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
+
+/** A transient transport failure worth retrying (never a permission/validation error). */
+function isTransient(err) {
+  const code = String(err?.code || err?.cause?.code || '')
+  const m = String(err?.message || err?.cause?.message || '').toLowerCase()
+  if (['08000', '08003', '08006', '57014', '53300', 'PGRST001'].includes(code)) return true
+  return (
+    m.includes('failed to fetch') || m.includes('network') || m.includes('load failed') ||
+    m.includes('fetch failed') || m.includes('timeout') || m.includes('timed out') ||
+    m.includes('connection') || m.includes('econnreset')
+  )
+}
 
 function tableFor(dataset) {
   const t = TABLE[dataset]
@@ -124,6 +143,13 @@ export async function listImportRows(dataset, { batch_id, country, limit = 20000
  * @param {'asset'|'change'|'expense'} dataset
  * @param {Array<Record<string,*>>} rows  mapped rows (mapSheetToRows output)
  * @param {string} batch_id  uuid for this upload
+ * Each chunk is retried with exponential backoff on transient transport
+ * failures (a dropped/blocked POST, brief connectivity loss, statement
+ * timeout). Chunks commit independently, so `saved` reflects real partial
+ * progress: if a chunk still fails after all retries, the error is thrown with
+ * `saved`/`batch_id` attached so the caller can report what landed and let the
+ * user retry (the staging batch is safe to delete and re-run).
+ *
  * @param {{ country?:string }} [opts]
  * @returns {Promise<{ saved:number, requested:number, capped:number, batch_id:string }>}
  */
@@ -150,7 +176,23 @@ export async function saveImportRows(dataset, rows, batch_id, { country } = {}) 
   let saved = 0
   for (let i = 0; i < payload.length; i += INSERT_CHUNK) {
     const chunk = payload.slice(i, i + INSERT_CHUNK)
-    unwrap(await supabase.from(table).insert(chunk))
+    let lastErr = null
+    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) {
+      try {
+        unwrap(await supabase.from(table).insert(chunk))
+        lastErr = null
+        break
+      } catch (err) {
+        lastErr = err
+        if (attempt >= MAX_ATTEMPTS || !isTransient(err)) break
+        await sleep(RETRY_BASE_MS * 2 ** (attempt - 1))
+      }
+    }
+    if (lastErr) {
+      lastErr.saved = saved
+      lastErr.batch_id = batch_id
+      throw lastErr
+    }
     saved += chunk.length
   }
   return { saved, requested, capped, batch_id }

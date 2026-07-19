@@ -157,7 +157,15 @@ export default function ErpImport() {
         setSaveResult({ ...res, dataset: datasetKey, failures: [] })
       }
     } catch (err) {
-      setError(toUserMessage(err, 'Could not save the import.'))
+      // Chunked saves commit independently: surface how many rows landed before
+      // a transient network drop so the upload is not reported as a total loss.
+      const partial = Number.isFinite(err?.saved) ? err.saved : 0
+      const base = toUserMessage(err, 'Could not save the import.')
+      setError(
+        partial > 0
+          ? `${base} Saved ${partial.toLocaleString()} row(s) before the connection dropped. Open the Review tab to check that batch, then re-upload the file to save the rest (delete the partial batch first to avoid duplicates).`
+          : `${base} If you are on a corporate or VPN network, a firewall may be blocking large uploads. Try again, or split the file into smaller parts.`,
+      )
     } finally { setBusy(false) }
   }
 

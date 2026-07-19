@@ -4,6 +4,43 @@ Durable, committed project knowledge so any session has full context. Keep this
 current. Read it before adding/changing modules. Governing spec: `Tyre pulse enterprise.md`
 (consolidation-first: one function = one module = one calculation service).
 
+## Custom roles assignable (V282) + Sentry crash console (V283) (2026-07-19, SHIPPED)
+- **V282 — custom roles could NEVER be assigned to a user (root-caused + fixed).** User: "I add new
+  roles, assign to them, it's still same even when I change it." Root cause = TWO hardcoded allowlists of the
+  10 built-in role names: (1) BEFORE trigger `normalize_profiles_role()` coerced ANY non-builtin role back to
+  'Reporter' (so the UPDATE reported 1 row but the stored role never changed — verified live: assigning
+  'Fleet Supervisor' left the row as 'Reporter'), and (2) the `profiles_role_check` CHECK allowed only those
+  10. Fix: the trigger now accepts a built-in role OR any name present in `custom_roles` (unknown roles still
+  fall back to Reporter); the static CHECK is DROPPED (a CHECK can't reference custom_roles) — the trigger is
+  the single dynamic validator. Verified live as super-admin: Fleet Supervisor/Insurance Officer now persist,
+  garbage->Reporter, Manager unaffected. RULE: the whole access chain (module_permissions write/read RPCs,
+  hasPermission per-key, realtime publication) was ALREADY correct — this trigger was the only blocker.
+  NOTE for "changes don't show": super-admins/Admin BYPASS all gating (`resolvePermission` returns true), so
+  an admin testing on their OWN account never sees a change; use the "Effective access" preview or a real
+  non-admin login. Custom-role users get ONLY modules explicitly enabled for that role (ROLE_DEFAULTS has no
+  custom-role entry -> deny-by-default), which is correct.
+- **Sentry crash console = `src/console/pages/ConsoleCrashReports.jsx` (/console/crash-reports, super-admin,
+  nav "Crash Reports", Bug icon).** Live Sentry issue stream (mobile crashes + web errors) INSIDE the console
+  with a full read -> assign -> comment -> resolve workflow. Do NOT build a second Sentry surface.
+  - **Token is a SECRET, never client-side.** Stored server-side in the deny-all `cron_config` table via
+    super-admin RPCs (V283: `set_sentry_config`/`get_sentry_config_status` — status returns configured/org/
+    region/project, NEVER the token). Sentry org = `shah-profile`, region `https://de.sentry.io` (EU).
+  - **Edge fn `sentry-issues` (deployed v3, verify_jwt=false, self-validates a super-admin JWT)** reads the
+    token via the service role and proxies the Sentry API. Actions: `list` (default), `projects`, `members`,
+    `detail` (issue + latest event stacktrace/tags + activity timeline), `update` (resolve/ignore/unresolve),
+    `assign` ('user:<id>' or '' to clear), `comment`. Self-contained single file; write actions return
+    reason:'auth' if the token lacks `issue:write` scope (UI shows "token needs write scope").
+  - Service `src/lib/api/sentryCrashes.js` (getSentryStatus/saveSentryConfig/listSentryIssues/getSentryProjects/
+    getSentryIssueDetail/updateSentryIssue/getSentryMembers/assignSentryIssue/commentSentryIssue). Page: summary
+    tiles, search + project + period filters, per-issue resolve/ignore/reopen + assignee dropdown, detail drawer
+    (stacktrace w/ in-app frames highlighted, device/OS/release tags, affected user, comment box, activity
+    timeline). Verified live: list/projects/detail/members/activities all 200 with the connected token.
+  - **DIAGNOSED (this session):** `TypeError ...'pendingUploads' of null` in mobile AdminDashboardScreen was on
+    the OLD v1.2.0+20 build — already guarded/fixed in current v1.3.0 (stale-build crash). `SIGABRT/abort` =
+    native crash on the Sentry executor thread (art::Runtime::Abort) on a low-end Unisoc device, 1 event, no app
+    frames — not an app-logic bug. USER OPS: the org auth token `sntrys_` works for READS; for assign/comment/
+    resolve it needs a token with `issue:write`. Next free migration **V284**.
+
 ## Backend security audit (2026-07-19) — anon lockdown + workflow-notify fail-open (SHIPPED)
 - **V281 anon role hardening (applied live + `MIGRATIONS_V281_HARDEN_ANON_ROLE.sql`).** Audit found the
   `anon` (unauthenticated) role held SELECT + INSERT/UPDATE/DELETE/TRUNCATE on 100 public tables (Supabase

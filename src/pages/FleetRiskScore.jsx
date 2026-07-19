@@ -30,6 +30,7 @@ import {
 } from '../lib/fleetRisk'
 import { getFleetRiskData } from '../lib/api/fleetRisk'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
+import { toUserMessage } from '../lib/safeError'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Tooltip, Legend)
 
@@ -86,7 +87,7 @@ export default function FleetRiskScore() {
       setData(await getFleetRiskData({ country: activeCountry }))
       setUpdatedAt(new Date())
     } catch (err) {
-      setError(err?.message || 'Could not load fleet risk data.')
+      setError(toUserMessage(err, 'Could not load fleet risk data.'))
       setData({ tyres: [] })
     } finally {
       setRefreshing(false)
@@ -210,10 +211,10 @@ export default function FleetRiskScore() {
         updatedAt={updatedAt}
         actions={
           <div className="flex items-center gap-2">
-            <button onClick={() => exportToExcel(exportRows, exportCols, exportHeaders, exportName)} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!exportRows.length}>
+            <button onClick={async () => { try { await exportToExcel(exportRows, exportCols, exportHeaders, exportName) } catch (e) { setError(toUserMessage(e, 'Could not export. Try again.')) } }} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!exportRows.length}>
               <FileSpreadsheet size={14} /> Excel
             </button>
-            <button onClick={() => exportToPdf(exportRows, exportCols.map((k, i) => ({ key: k, header: exportHeaders[i] })), 'Fleet Risk Score', exportName, 'landscape')} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!exportRows.length}>
+            <button onClick={async () => { try { await exportToPdf(exportRows, exportCols.map((k, i) => ({ key: k, header: exportHeaders[i] })), 'Fleet Risk Score', exportName, 'landscape') } catch (e) { setError(toUserMessage(e, 'Could not export. Try again.')) } }} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!exportRows.length}>
               <FileText size={14} /> PDF
             </button>
           </div>

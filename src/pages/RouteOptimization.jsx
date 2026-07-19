@@ -23,6 +23,7 @@ import {
 } from '../lib/api/routePlans'
 import { summariseRoutePlans, computeSavings } from '../lib/routePlans'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
+import { toUserMessage } from '../lib/safeError'
 
 const EMPTY_FORM = {
   plan_name: '', asset_no: '', driver_name: '', plan_date: '', stops_count: '',
@@ -84,7 +85,7 @@ export default function RouteOptimization() {
       setUpdatedAt(new Date())
     } catch (err) {
       if (isMissingRelation(err)) setNotProvisioned(true)
-      else setError(err?.message || 'Could not load route plans.')
+      else setError(toUserMessage(err, 'Could not load route plans.'))
       setRows([])
     } finally {
       setRefreshing(false)
@@ -183,7 +184,7 @@ export default function RouteOptimization() {
       setShowModal(false); setEditing(null)
       await load()
     } catch (err) {
-      setFormError(err?.message || 'Could not save the route plan.')
+      setFormError(toUserMessage(err, 'Could not save the route plan.'))
     } finally {
       setSaving(false)
     }
@@ -197,7 +198,7 @@ export default function RouteOptimization() {
       setConfirmDelete(null)
       await load()
     } catch (err) {
-      setError(err?.message || 'Could not delete the route plan.')
+      setError(toUserMessage(err, 'Could not delete the route plan.'))
     } finally {
       setDeleting(false)
     }

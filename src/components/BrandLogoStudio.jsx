@@ -10,6 +10,7 @@ import {
   assetUrl, resolveLogoValue, isUrlValue, cacheResolvedLogos,
 } from '../lib/brand/library'
 import { useTenant } from '../contexts/TenantContext'
+import { toUserMessage } from '../lib/safeError'
 
 /**
  * BrandLogoStudio — admin studio for placing the bundled Tyre Pulse logo
@@ -69,7 +70,7 @@ export default function BrandLogoStudio({ canEdit }) {
         setOrgs(list || [])
         setOrgId((prev) => prev || list?.[0]?.id || '')
       } catch (e) {
-        if (alive) setError(e.message || 'Could not load organisations.')
+        if (alive) setError(toUserMessage(e, 'Could not load organisations.'))
       } finally {
         if (alive) setLoading(false)
       }
@@ -87,7 +88,7 @@ export default function BrandLogoStudio({ canEdit }) {
       setLogos({ ...(merged.logos || {}) })
       setSaved({ ...(merged.logos || {}) })
     } catch (e) {
-      setError(e.message || 'Could not load branding.')
+      setError(toUserMessage(e, 'Could not load branding.'))
     } finally {
       setLoadingB(false)
     }
@@ -131,7 +132,7 @@ export default function BrandLogoStudio({ canEdit }) {
       refreshBranding?.()
       cacheResolvedLogos(merged)
     } catch (e) {
-      setError(e.message || 'Save failed. Check your permissions and try again.')
+      setError(toUserMessage(e, 'Save failed. Check your permissions and try again.'))
     } finally {
       setSaving(false)
     }

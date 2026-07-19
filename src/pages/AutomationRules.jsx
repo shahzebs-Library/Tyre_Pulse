@@ -6,6 +6,7 @@ import {
   Bell, Clock, History, AlertTriangle, CheckCircle,
 } from 'lucide-react'
 import * as businessRules from '../lib/api/businessRules'
+import { toUserMessage } from '../lib/safeError'
 import { formatDistanceToNow } from 'date-fns'
 import { formatDateTime } from '../lib/formatters'
 
@@ -86,7 +87,7 @@ function RuleCard({ rule, onEdit, onDelete, onToggle }) {
         const rows = await businessRules.listRuleExecutions({ ruleId: rule.id, limit: 20 })
         setExecutions(rows || [])
       } catch (err) {
-        setExecError(err.message || 'Failed to load executions')
+        setExecError(toUserMessage(err, 'Failed to load executions'))
         setExecutions([])
       }
     }
@@ -229,7 +230,7 @@ export default function AutomationRules() {
     try {
       const rows = await businessRules.listBusinessRules()
       setRules(rows || [])
-    } catch (err) { setError(err.message || 'Failed to load rules') }
+    } catch (err) { setError(toUserMessage(err, 'Failed to load rules')) }
     finally { setLoading(false) }
   }, [])
 
@@ -250,7 +251,7 @@ export default function AutomationRules() {
     try {
       await businessRules.deleteBusinessRule(id)
       setRules(prev => prev.filter(r => r.id !== id))
-    } catch (err) { setError(err.message || 'Delete failed') }
+    } catch (err) { setError(toUserMessage(err, 'Delete failed')) }
   }
 
   async function handleToggle(id, active) {
@@ -258,7 +259,7 @@ export default function AutomationRules() {
     try {
       await businessRules.updateBusinessRule(id, { active })
       setRules(prev => prev.map(r => r.id === id ? { ...r, active } : r))
-    } catch (err) { setError(err.message || 'Update failed') }
+    } catch (err) { setError(toUserMessage(err, 'Update failed')) }
   }
 
   const activeCount = rules.filter(r => r.active).length

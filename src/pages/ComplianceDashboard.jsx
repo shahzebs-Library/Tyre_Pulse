@@ -20,6 +20,7 @@ import { useSettings } from '../contexts/SettingsContext'
 import { useTenant } from '../contexts/TenantContext'
 import { resolvePdfBrand, pdfHeader, pdfFooter, pdfTableTheme } from '../lib/exportUtils'
 import { formatDate } from '../lib/formatters'
+import { toUserMessage } from '../lib/safeError'
 
 ChartJS.register(
   CategoryScale, LinearScale, BarElement, LineElement, PointElement,
@@ -294,7 +295,7 @@ export default function ComplianceDashboard() {
       setFleetMaster(fm || [])
       setLastRefresh(new Date())
     } catch (e) {
-      setError(e.message)
+      setError(toUserMessage(e, 'Something went wrong. Please try again.'))
     } finally {
       setLoading(false)
     }

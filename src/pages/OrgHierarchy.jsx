@@ -27,6 +27,7 @@ import {
   buildTree, descendantsOf, depthOf, summariseUnits, assignmentsActive, coverageByUser,
 } from '../lib/orgUnits'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
+import { toUserMessage } from '../lib/safeError'
 
 const EMPTY_FORM = {
   name: '', unit_type: '', parent_id: '', code: '',
@@ -182,7 +183,7 @@ export default function OrgHierarchy() {
       setUpdatedAt(new Date())
     } catch (err) {
       if (isMissingRelation(err)) setNotProvisioned(true)
-      else setError(err?.message || 'Could not load organisation units.')
+      else setError(toUserMessage(err, 'Could not load organisation units.'))
       setRows([])
     } finally {
       setRefreshing(false)
@@ -336,7 +337,7 @@ export default function OrgHierarchy() {
       setShowModal(false); setEditing(null)
       await load()
     } catch (err) {
-      setFormError(err?.message || 'Could not save the unit.')
+      setFormError(toUserMessage(err, 'Could not save the unit.'))
     } finally {
       setSaving(false)
     }
@@ -350,7 +351,7 @@ export default function OrgHierarchy() {
       setConfirmDelete(null)
       await load()
     } catch (err) {
-      setError(err?.message || 'Could not delete the unit.')
+      setError(toUserMessage(err, 'Could not delete the unit.'))
     } finally {
       setDeleting(false)
     }
@@ -415,7 +416,7 @@ export default function OrgHierarchy() {
       setAssignError(
         /duplicate|unique/i.test(msg)
           ? 'That user is already assigned to this unit.'
-          : msg || 'Could not save the assignment.',
+          : toUserMessage(err, 'Could not save the assignment.'),
       )
     } finally {
       setAssignSaving(false)
@@ -430,7 +431,7 @@ export default function OrgHierarchy() {
       setConfirmRemove(null)
       await load()
     } catch (err) {
-      setAssignError(err?.message || 'Could not remove the assignment.')
+      setAssignError(toUserMessage(err, 'Could not remove the assignment.'))
     } finally {
       setRemoving(false)
     }

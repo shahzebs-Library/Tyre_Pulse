@@ -46,6 +46,7 @@ import {
 } from '../lib/heatIntelligence'
 import { getCurrentWeather, getAirQuality, aqiBand } from '../lib/api/weather'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
+import { toUserMessage } from '../lib/safeError'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Tooltip, Legend, Title)
 
@@ -201,7 +202,7 @@ export default function HeatIntelligence() {
       setUpdatedAt(new Date())
     } catch (err) {
       if (isMissingRelation(err)) setNotProvisioned(true)
-      else setError(err?.message || 'Could not load temperature readings.')
+      else setError(toUserMessage(err, 'Could not load temperature readings.'))
       setRows([])
     } finally {
       setRefreshing(false)
@@ -439,7 +440,7 @@ export default function HeatIntelligence() {
       setShowModal(false); setEditing(null)
       await load()
     } catch (err) {
-      setFormError(err?.message || 'Could not save the reading.')
+      setFormError(toUserMessage(err, 'Could not save the reading.'))
     } finally {
       setSaving(false)
     }
@@ -453,7 +454,7 @@ export default function HeatIntelligence() {
       setConfirmDelete(null)
       await load()
     } catch (err) {
-      setError(err?.message || 'Could not delete the reading.')
+      setError(toUserMessage(err, 'Could not delete the reading.'))
     } finally {
       setDeleting(false)
     }
@@ -729,10 +730,10 @@ export default function HeatIntelligence() {
                 <p className="text-2xl font-bold text-orange-400 leading-none">{fleetRisk.fleet_risk_score}%</p>
                 <p className="text-[11px] uppercase tracking-wider text-[var(--text-muted)]">Fleet risk score</p>
               </div>
-              <button onClick={() => exportToExcel(riskExportRows, RISK_COLS, RISK_HEADERS, 'heat_blowout_risk')} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!riskExportRows.length}>
+              <button onClick={async () => { try { await exportToExcel(riskExportRows, RISK_COLS, RISK_HEADERS, 'heat_blowout_risk') } catch (e) { setError(toUserMessage(e, 'Could not export. Try again.')) } }} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!riskExportRows.length}>
                 <FileSpreadsheet size={14} /> Excel
               </button>
-              <button onClick={() => exportToPdf(riskExportRows, RISK_COLS.map((k, i) => ({ key: k, header: RISK_HEADERS[i] })), 'Fleet Blowout Risk', 'heat_blowout_risk', 'landscape')} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!riskExportRows.length}>
+              <button onClick={async () => { try { await exportToPdf(riskExportRows, RISK_COLS.map((k, i) => ({ key: k, header: RISK_HEADERS[i] })), 'Fleet Blowout Risk', 'heat_blowout_risk', 'landscape') } catch (e) { setError(toUserMessage(e, 'Could not export. Try again.')) } }} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!riskExportRows.length}>
                 <FileText size={14} /> PDF
               </button>
             </div>
@@ -912,10 +913,10 @@ export default function HeatIntelligence() {
       {tab === 'log' && (
         <div className="space-y-6">
           <div className="flex items-center justify-end gap-2">
-            <button onClick={() => exportToExcel(exportRows, EXPORT_COLS, EXPORT_HEADERS, 'heat_intelligence')} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!filtered.length}>
+            <button onClick={async () => { try { await exportToExcel(exportRows, EXPORT_COLS, EXPORT_HEADERS, 'heat_intelligence') } catch (e) { setError(toUserMessage(e, 'Could not export. Try again.')) } }} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!filtered.length}>
               <FileSpreadsheet size={14} /> Excel
             </button>
-            <button onClick={() => exportToPdf(exportRows, EXPORT_COLS.map((k, i) => ({ key: k, header: EXPORT_HEADERS[i] })), 'Heat Intelligence', 'heat_intelligence', 'landscape')} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!filtered.length}>
+            <button onClick={async () => { try { await exportToPdf(exportRows, EXPORT_COLS.map((k, i) => ({ key: k, header: EXPORT_HEADERS[i] })), 'Heat Intelligence', 'heat_intelligence', 'landscape') } catch (e) { setError(toUserMessage(e, 'Could not export. Try again.')) } }} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!filtered.length}>
               <FileText size={14} /> PDF
             </button>
             <button onClick={openCreate} className="btn-primary text-sm inline-flex items-center gap-1.5" disabled={notProvisioned}>

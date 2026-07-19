@@ -32,6 +32,7 @@ import {
   computeHealthScore, freshnessScore, errorRateScore, reachabilityScore,
 } from '../../lib/adminHealth'
 import { runAllChecks } from '../../lib/systemHealth'
+import { toUserMessage } from '../../lib/safeError'
 
 ChartJS.register(BarElement, CategoryScale, LinearScale, ChartTooltip)
 
@@ -190,7 +191,7 @@ export default function ConsoleSystemHealth() {
       const rows = await listSystemLogs(buildLogFilters())
       if (mountedRef.current) setLogs(Array.isArray(rows) ? rows : [])
     } catch (err) {
-      if (mountedRef.current) setLogsError(err?.message || 'Could not load the error log')
+      if (mountedRef.current) setLogsError(toUserMessage(err, 'Could not load the error log'))
     }
   }, [buildLogFilters])
 
@@ -205,7 +206,7 @@ export default function ConsoleSystemHealth() {
 
     let m = null
     if (metricsRes.status === 'fulfilled') m = metricsRes.value
-    else setError(metricsRes.reason?.message || 'Could not load health metrics')
+    else setError(toUserMessage(metricsRes.reason, 'Could not load health metrics'))
     if (mountedRef.current) setMetrics(m)
 
     let rep = null

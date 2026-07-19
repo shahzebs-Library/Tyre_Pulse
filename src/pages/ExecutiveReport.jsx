@@ -25,6 +25,7 @@ import {
   LayoutList, Layers,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
+import { toUserMessage } from '../lib/safeError'
 import EmailReportModal from '../components/EmailReportModal'
 import {
   computeAllKpis,
@@ -496,7 +497,7 @@ export default function ExecutiveReport() {
         setActions(aRes.data || [])
         setFleet(fRes.data || [])
       } catch (e) {
-        if (!cancelled) setError(e.message || 'Failed to load data')
+        if (!cancelled) setError(toUserMessage(e, 'Failed to load data'))
       } finally {
         if (!cancelled) setLoading(false)
       }

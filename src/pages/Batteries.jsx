@@ -29,6 +29,7 @@ import {
   BATTERY_STATUSES, BATTERY_STATUS_META,
 } from '../lib/batteries'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
+import { toUserMessage } from '../lib/safeError'
 
 ChartJS.register(ArcElement, Tooltip, Legend)
 
@@ -95,7 +96,7 @@ export default function Batteries() {
       setUpdatedAt(new Date())
     } catch (err) {
       if (isMissingRelation(err)) { setMissing(true); setRows([]) }
-      else { setError(err?.message || 'Could not load batteries.'); setRows([]) }
+      else { setError(toUserMessage(err, 'Could not load batteries.')); setRows([]) }
     } finally {
       setRefreshing(false)
     }
@@ -201,7 +202,7 @@ export default function Batteries() {
       setModalOpen(false); setEditing(null)
       setUpdatedAt(new Date())
     } catch (err) {
-      setFormError(err?.message || 'Could not save the battery.')
+      setFormError(toUserMessage(err, 'Could not save the battery.'))
     } finally {
       setSaving(false)
     }
@@ -215,7 +216,7 @@ export default function Batteries() {
       setRows((prev) => (prev || []).filter((r) => r.id !== confirmDel.id))
       setConfirmDel(null)
     } catch (err) {
-      setError(err?.message || 'Could not delete the battery.')
+      setError(toUserMessage(err, 'Could not delete the battery.'))
     } finally {
       setDeleting(false)
     }
@@ -235,10 +236,10 @@ export default function Batteries() {
         updatedAt={updatedAt}
         actions={
           <div className="flex items-center gap-2">
-            <button onClick={() => exportToExcel(exportRows, EXPORT_COLS, EXPORT_HEADERS, 'batteries')} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!filtered.length}>
+            <button onClick={async () => { try { await exportToExcel(exportRows, EXPORT_COLS, EXPORT_HEADERS, 'batteries') } catch (e) { setError(toUserMessage(e, 'Could not export. Try again.')) } }} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!filtered.length}>
               <FileSpreadsheet size={14} /> Excel
             </button>
-            <button onClick={() => exportToPdf(exportRows, EXPORT_COLS.map((k, i) => ({ key: k, header: EXPORT_HEADERS[i] })), 'Battery Lifecycle', 'batteries', 'landscape')} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!filtered.length}>
+            <button onClick={async () => { try { await exportToPdf(exportRows, EXPORT_COLS.map((k, i) => ({ key: k, header: EXPORT_HEADERS[i] })), 'Battery Lifecycle', 'batteries', 'landscape') } catch (e) { setError(toUserMessage(e, 'Could not export. Try again.')) } }} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!filtered.length}>
               <FileText size={14} /> PDF
             </button>
             <button onClick={openCreate} className="btn-primary text-sm inline-flex items-center gap-1.5">

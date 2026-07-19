@@ -21,6 +21,7 @@ import {
   CalendarClock, Search, X, Filter, FileSpreadsheet, FileText, Plus, Pencil,
   Trash2, AlertTriangle, CheckCircle2,
 } from 'lucide-react'
+import { toUserMessage } from '../lib/safeError'
 import PageHeader from '../components/ui/PageHeader'
 import { useSettings } from '../contexts/SettingsContext'
 import {
@@ -121,7 +122,7 @@ export default function SsoConfiguration() {
       setUpdatedAt(new Date())
     } catch (err) {
       if (isMissingRelation(err)) setNotProvisioned(true)
-      else setError(err?.message || 'Could not load SSO connections.')
+      else setError(toUserMessage(err, 'Could not load SSO connections.'))
       setRows([])
     } finally {
       setRefreshing(false)
@@ -220,7 +221,7 @@ export default function SsoConfiguration() {
       setShowModal(false); setEditing(null)
       await load()
     } catch (err) {
-      setFormError(err?.message || 'Could not save the connection.')
+      setFormError(toUserMessage(err, 'Could not save the connection.'))
     } finally {
       setSaving(false)
     }
@@ -234,7 +235,7 @@ export default function SsoConfiguration() {
       setConfirmDelete(null)
       await load()
     } catch (err) {
-      setError(err?.message || 'Could not delete the connection.')
+      setError(toUserMessage(err, 'Could not delete the connection.'))
     } finally {
       setDeleting(false)
     }

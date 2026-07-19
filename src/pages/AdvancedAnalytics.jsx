@@ -25,6 +25,7 @@ import {
 } from '../lib/analyticsEngine'
 import { fetchAllPages } from '../lib/fetchAll'
 import { formatCurrencyCompact } from '../lib/formatters'
+import { toUserMessage } from '../lib/safeError'
 
 ChartJS.register(
   CategoryScale, LinearScale, BarElement, LineElement,
@@ -253,7 +254,7 @@ export default function AdvancedAnalytics() {
         if (err) throw err
         setRecords(data || [])
       } catch (e) {
-        setError(e.message || t('advancedanalytics.states.loadFailed'))
+        setError(toUserMessage(e, t('advancedanalytics.states.loadFailed')))
       } finally {
         setLoading(false)
       }
@@ -639,13 +640,17 @@ export default function AdvancedAnalytics() {
   // ═══════════════════════════════════════════════════════════════════════════
   // EXPORT HANDLERS
   // ═══════════════════════════════════════════════════════════════════════════
-  function handleExportExcel() {
+  async function handleExportExcel() {
     const cols = ['asset_no','site','brand','position','risk_level','category','km_at_fitment','km_at_removal','cost_per_tyre','issue_date']
     const hdrs = ['Asset No','Site','Brand','Position','Risk Level','Category','KM Fitment','KM Removal','Cost/Tyre','Issue Date']
-    exportToExcel(filtered, cols, hdrs, `advanced_analytics_${activeTab}_${datePreset}`, activeTab)
+    try {
+      await exportToExcel(filtered, cols, hdrs, `advanced_analytics_${activeTab}_${datePreset}`, activeTab)
+    } catch (e) {
+      setError(toUserMessage(e, 'Could not export. Try again.'))
+    }
   }
 
-  function handleExportPdf() {
+  async function handleExportPdf() {
     const cols = [
       { key: 'asset_no', header: 'Asset No' },
       { key: 'site', header: 'Site' },
@@ -656,7 +661,11 @@ export default function AdvancedAnalytics() {
       { key: 'cost_per_tyre', header: `Cost (${activeCurrency})` },
       { key: 'issue_date', header: 'Date' },
     ]
-    exportToPdf(filtered, cols, `Advanced Analytics - ${activeTab}`, `advanced_analytics_${activeTab}`)
+    try {
+      await exportToPdf(filtered, cols, `Advanced Analytics - ${activeTab}`, `advanced_analytics_${activeTab}`)
+    } catch (e) {
+      setError(toUserMessage(e, 'Could not export. Try again.'))
+    }
   }
 
   // ═══════════════════════════════════════════════════════════════════════════

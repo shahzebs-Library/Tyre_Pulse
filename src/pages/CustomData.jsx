@@ -15,6 +15,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { useSettings } from '../contexts/SettingsContext'
 import { useLanguage } from '../contexts/LanguageContext'
 import { formatCurrencyCompact, formatDate } from '../lib/formatters'
+import { toUserMessage } from '../lib/safeError'
 import {
   Database, Search, Plus, Trash2, Check, X, ArrowRight,
   ChevronRight, Download, RefreshCw, Eye, EyeOff, Filter,
@@ -156,7 +157,7 @@ export default function CustomData() {
       })
       setNewCustom(''); setNewMapsTo(''); await loadSynonyms()
     } catch (error) {
-      setAddError(error.message)
+      setAddError(toUserMessage(error, 'Could not save. Please try again.'))
     }
     setAddSaving(false)
   }
@@ -185,7 +186,7 @@ export default function CustomData() {
       setSynonyms(s => s.filter(x => x.id !== deleteTarget.id))
       setDeleteTarget(null)
     } catch (e) {
-      setDeleteError(e.message || t('customdata.synonyms.delete.errFailed'))
+      setDeleteError(toUserMessage(e, t('customdata.synonyms.delete.errFailed')))
     } finally {
       setDeleting(false)
     }

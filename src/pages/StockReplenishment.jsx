@@ -22,6 +22,7 @@ import { useTenant } from '../contexts/TenantContext'
 import { formatCurrency as fmtCurrency, formatDate, formatMonthYear, formatDateTime } from '../lib/formatters'
 import { resolvePdfBrand, pdfHeader, pdfFooter, pdfEmptyState, pdfTableTheme } from '../lib/exportUtils'
 import { useLanguage } from '../contexts/LanguageContext'
+import { toUserMessage } from '../lib/safeError'
 import PageHeader from '../components/ui/PageHeader'
 
 ChartJS.register(
@@ -152,7 +153,7 @@ export default function StockReplenishment() {
       setTyreRecords(tyreRows || [])
       setLastSync(new Date())
     } catch (e) {
-      setError(e.message)
+      setError(toUserMessage(e, 'Something went wrong. Please try again.'))
     } finally {
       setLoading(false)
     }
@@ -466,85 +467,93 @@ export default function StockReplenishment() {
 
   // ── Export PO to Excel ─────────────────────────────────────────────────────
   async function exportOrderExcel() {
-    const XLSX = await import('xlsx')
-    const rows = orderLines.map((l, i) => ({
-      '#':               i + 1,
-      'Brand':           l.brand,
-      'Size':            l.size,
-      'Site':            l.site,
-      'Quantity':        l.qty,
-      'Unit Cost':       l.unitCost,
-      'Total Cost':      l.totalCost,
-      'Preferred Supplier': l.supplier,
-    }))
-    rows.push({
-      '#': '', Brand: '', Size: '', Site: '', Quantity: '',
-      'Unit Cost': 'TOTAL',
-      'Total Cost': orderTotal,
-      'Preferred Supplier': '',
-    })
-    const ws = XLSX.utils.json_to_sheet(rows)
-    const wb = XLSX.utils.book_new()
-    XLSX.utils.book_append_sheet(wb, ws, 'Purchase Order')
-    XLSX.writeFile(wb, `replenishment-po-${new Date().toISOString().slice(0, 10)}.xlsx`)
+    try {
+      const XLSX = await import('xlsx')
+      const rows = orderLines.map((l, i) => ({
+        '#':               i + 1,
+        'Brand':           l.brand,
+        'Size':            l.size,
+        'Site':            l.site,
+        'Quantity':        l.qty,
+        'Unit Cost':       l.unitCost,
+        'Total Cost':      l.totalCost,
+        'Preferred Supplier': l.supplier,
+      }))
+      rows.push({
+        '#': '', Brand: '', Size: '', Site: '', Quantity: '',
+        'Unit Cost': 'TOTAL',
+        'Total Cost': orderTotal,
+        'Preferred Supplier': '',
+      })
+      const ws = XLSX.utils.json_to_sheet(rows)
+      const wb = XLSX.utils.book_new()
+      XLSX.utils.book_append_sheet(wb, ws, 'Purchase Order')
+      XLSX.writeFile(wb, `replenishment-po-${new Date().toISOString().slice(0, 10)}.xlsx`)
+    } catch (e) {
+      setError(toUserMessage(e, 'Could not export. Try again.'))
+    }
   }
 
   // ── Export PO to PDF ───────────────────────────────────────────────────────
   async function exportOrderPDF() {
-    const { default: jsPDF } = await import('jspdf')
-    const { default: autoTable } = await import('jspdf-autotable')
-    const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
-    const brand = await resolvePdfBrand(branding)
-    const company = branding?.legal_name || branding?.display_name || appSettings?.company_name || 'TyrePulse'
-    const poRef = `REPO-${new Date().getFullYear()}-${Date.now().toString().slice(-5)}`
+    try {
+      const { default: jsPDF } = await import('jspdf')
+      const { default: autoTable } = await import('jspdf-autotable')
+      const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
+      const brand = await resolvePdfBrand(branding)
+      const company = branding?.legal_name || branding?.display_name || appSettings?.company_name || 'TyrePulse'
+      const poRef = `REPO-${new Date().getFullYear()}-${Date.now().toString().slice(-5)}`
 
-    pdfHeader(doc, 'Stock Replenishment Purchase Order',
-      `Ref: ${poRef} · Lead Time: ${leadTimeDays} days · ${formatDateTime(new Date())}`, company, brand)
+      pdfHeader(doc, 'Stock Replenishment Purchase Order',
+        `Ref: ${poRef} · Lead Time: ${leadTimeDays} days · ${formatDateTime(new Date())}`, company, brand)
 
-    // Empty state - no order lines to bill
-    if (orderLines.length === 0) {
-      pdfEmptyState(doc, 'No order lines to include in this purchase order',
-        'Add lines from the Replenishment Matrix and export again.')
-      pdfFooter(doc, 1, 1, company, brand)
+      // Empty state - no order lines to bill
+      if (orderLines.length === 0) {
+        pdfEmptyState(doc, 'No order lines to include in this purchase order',
+          'Add lines from the Replenishment Matrix and export again.')
+        pdfFooter(doc, 1, 1, company, brand)
+        doc.save(`replenishment-po-${new Date().toISOString().slice(0, 10)}.pdf`)
+        return
+      }
+
+      // Summary row
+      autoTable(doc, {
+        ...pdfTableTheme(brand.accent),
+        startY: 30,
+        head: [['Field', 'Value', 'Field', 'Value']],
+        body: [
+          ['PO Reference', poRef,                                  'Date',          formatDate(new Date())],
+          ['Generated By', user?.email || 'TyrePulse System',      'Currency',      activeCurrency],
+          ['Total Lines',  `${orderLines.length} items`,           'Total Value',   fmtCurrency(orderTotal, activeCurrency)],
+        ],
+        columnStyles: { 0: { fontStyle: 'bold', cellWidth: 38 }, 2: { fontStyle: 'bold', cellWidth: 38 } },
+        margin: { left: 14, right: 14 },
+      })
+
+      let y = (doc.lastAutoTable?.finalY || 70) + 8
+
+      // Line items
+      autoTable(doc, {
+        ...pdfTableTheme(brand.accent),
+        startY: y,
+        head: [['#', 'Brand', 'Size', 'Site', 'Qty', 'Unit Cost', 'Total', 'Supplier']],
+        body: orderLines.map((l, i) => [
+          i + 1, l.brand, l.size, l.site || '-', l.qty,
+          fmtCurrency(l.unitCost, activeCurrency),
+          fmtCurrency(l.totalCost, activeCurrency),
+          l.supplier || '-',
+        ]),
+        foot: [['', '', '', '', '', 'TOTAL', fmtCurrency(orderTotal, activeCurrency), '']],
+        footStyles: { fillColor: brand.accent, textColor: 255, fontStyle: 'bold' },
+        margin: { left: 14, right: 14 },
+      })
+
+      const totalPages = doc.internal.getNumberOfPages()
+      for (let p = 1; p <= totalPages; p++) { doc.setPage(p); pdfFooter(doc, p, totalPages, company, brand) }
       doc.save(`replenishment-po-${new Date().toISOString().slice(0, 10)}.pdf`)
-      return
+    } catch (e) {
+      setError(toUserMessage(e, 'Could not export. Try again.'))
     }
-
-    // Summary row
-    autoTable(doc, {
-      ...pdfTableTheme(brand.accent),
-      startY: 30,
-      head: [['Field', 'Value', 'Field', 'Value']],
-      body: [
-        ['PO Reference', poRef,                                  'Date',          formatDate(new Date())],
-        ['Generated By', user?.email || 'TyrePulse System',      'Currency',      activeCurrency],
-        ['Total Lines',  `${orderLines.length} items`,           'Total Value',   fmtCurrency(orderTotal, activeCurrency)],
-      ],
-      columnStyles: { 0: { fontStyle: 'bold', cellWidth: 38 }, 2: { fontStyle: 'bold', cellWidth: 38 } },
-      margin: { left: 14, right: 14 },
-    })
-
-    let y = (doc.lastAutoTable?.finalY || 70) + 8
-
-    // Line items
-    autoTable(doc, {
-      ...pdfTableTheme(brand.accent),
-      startY: y,
-      head: [['#', 'Brand', 'Size', 'Site', 'Qty', 'Unit Cost', 'Total', 'Supplier']],
-      body: orderLines.map((l, i) => [
-        i + 1, l.brand, l.size, l.site || '-', l.qty,
-        fmtCurrency(l.unitCost, activeCurrency),
-        fmtCurrency(l.totalCost, activeCurrency),
-        l.supplier || '-',
-      ]),
-      foot: [['', '', '', '', '', 'TOTAL', fmtCurrency(orderTotal, activeCurrency), '']],
-      footStyles: { fillColor: brand.accent, textColor: 255, fontStyle: 'bold' },
-      margin: { left: 14, right: 14 },
-    })
-
-    const totalPages = doc.internal.getNumberOfPages()
-    for (let p = 1; p <= totalPages; p++) { doc.setPage(p); pdfFooter(doc, p, totalPages, company, brand) }
-    doc.save(`replenishment-po-${new Date().toISOString().slice(0, 10)}.pdf`)
   }
 
   // ── Create Purchase Order (persist to purchase_orders) ─────────────────────

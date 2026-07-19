@@ -38,6 +38,7 @@ import { resolveStorageUrls } from '../lib/storageRefs'
 import CustomFieldsPanel from './CustomFieldsPanel'
 import CopilotCard from './ai/CopilotCard'
 import EntityApprovalPanel from './workflow/EntityApprovalPanel'
+import { toUserMessage } from '../lib/safeError'
 
 // Vocabularies + canonicalisation come from the single shared source
 // `src/lib/accidentVocab.js` (imported above) — do NOT re-declare them here.
@@ -80,11 +81,10 @@ function isElevated(role) {
   return ['admin', 'manager', 'director'].includes(String(role || '').toLowerCase().replace(/\s+/g, '_'))
 }
 
-// Coerce any thrown value / PostgREST error object into a plain user string.
+// Coerce any thrown value / PostgREST error object into a safe user string.
 function loadErrMsg(e) {
   if (!e) return ''
-  if (typeof e === 'string') return e
-  return e.message || e.error_description || e.details || ''
+  return toUserMessage(e, '')
 }
 
 // Days a still-open case may sit without a status update before it is "Delayed".
@@ -227,7 +227,7 @@ function AccidentDetail({ accidentId, onBack, onClose, onChanged, variant = 'pag
     try {
       await exportAccidentCasePdf(acc, { parts, remarks, branding, company, fmtCurrency })
     } catch (e) {
-      setErr(e?.message || 'Could not generate the case PDF.')
+      setErr(toUserMessage(e, 'Could not generate the case PDF.'))
     } finally {
       setDownloading(false)
     }
@@ -246,7 +246,7 @@ function AccidentDetail({ accidentId, onBack, onClose, onChanged, variant = 'pag
     setBusy(true); setErr('')
     const { error } = await supabase.rpc(fn, args)
     setBusy(false)
-    if (error) { setErr(error.message); return false }
+    if (error) { setErr(toUserMessage(error, 'Could not save. Please try again.')); return false }
     await load(); onChanged?.()
     return true
   }
@@ -546,7 +546,7 @@ function CaseTimelineSection({ acc }) {
     setRows(null); setLoadErr('')
     listStatusTransitions(acc.id)
       .then(r => { if (!cancelled) setRows(r) })
-      .catch(e => { if (!cancelled) { setLoadErr(e?.message || 'Could not load the case timeline.'); setRows([]) } })
+      .catch(e => { if (!cancelled) { setLoadErr(toUserMessage(e, 'Could not load the case timeline.')); setRows([]) } })
     return () => { cancelled = true }
   }, [acc.id])
 
@@ -754,7 +754,7 @@ function ActivityTab({ accidentId }) {
     ;(async () => {
       const { data, error } = await supabase.rpc('get_accident_audit', { p_accident_id: accidentId })
       if (cancelled) return
-      if (error) setErr(error.message)
+      if (error) setErr(toUserMessage(error, 'Could not save. Please try again.'))
       else setRows(data ?? [])
     })()
     return () => { cancelled = true }
@@ -815,7 +815,7 @@ function PartsTab({ acc, parts, partsTotal, elevated, profile, reload, setErr, f
       created_by: profile?.id ?? null,
     })
     setSaving(false)
-    if (error) { setErr(error.message); return }
+    if (error) { setErr(toUserMessage(error, 'Could not save. Please try again.')); return }
     setF({ part_name: '', part_number: '', quantity: '1', unit_cost: '', supplier: '', status: 'needed' })
     setAdding(false); reload()
   }
@@ -823,7 +823,7 @@ function PartsTab({ acc, parts, partsTotal, elevated, profile, reload, setErr, f
   async function remove(id) {
     if (!window.confirm('Remove this part?')) return
     const { error } = await supabase.from('accident_parts').delete().eq('id', id)
-    if (error) { setErr(error.message); return }
+    if (error) { setErr(toUserMessage(error, 'Could not save. Please try again.')); return }
     reload()
   }
 
@@ -909,7 +909,7 @@ function LogTab({ acc, remarks, profile, reload, setErr }) {
       remark_type: 'note',
     })
     setSending(false)
-    if (error) { setErr(error.message); return }
+    if (error) { setErr(toUserMessage(error, 'Could not save. Please try again.')); return }
     setText(''); reload()
   }
 

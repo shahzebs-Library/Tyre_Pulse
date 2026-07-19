@@ -26,6 +26,7 @@ import {
   summariseHos, driverDaySummary, DAILY_DRIVE_LIMIT_MIN, DAILY_DUTY_LIMIT_MIN,
 } from '../lib/hosLogs'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
+import { toUserMessage } from '../lib/safeError'
 
 const EMPTY_FORM = {
   driver_name: '', asset_no: '', log_date: '', duty_status: 'driving',
@@ -126,7 +127,7 @@ export default function HoursOfService() {
       setUpdatedAt(new Date())
     } catch (err) {
       if (isMissingRelation(err)) setNotProvisioned(true)
-      else setError(err?.message || 'Could not load hours-of-service logs.')
+      else setError(toUserMessage(err, 'Could not load hours-of-service logs.'))
       setRows([])
     } finally {
       setRefreshing(false)
@@ -223,7 +224,7 @@ export default function HoursOfService() {
       setShowModal(false); setEditing(null)
       await load()
     } catch (err) {
-      setFormError(err?.message || 'Could not save the log.')
+      setFormError(toUserMessage(err, 'Could not save the log.'))
     } finally {
       setSaving(false)
     }
@@ -237,7 +238,7 @@ export default function HoursOfService() {
       setConfirmDelete(null)
       await load()
     } catch (err) {
-      setError(err?.message || 'Could not delete the log.')
+      setError(toUserMessage(err, 'Could not delete the log.'))
     } finally {
       setDeleting(false)
     }
@@ -257,10 +258,10 @@ export default function HoursOfService() {
         updatedAt={updatedAt}
         actions={
           <div className="flex items-center gap-2">
-            <button onClick={() => exportToExcel(exportRows, EXPORT_COLS, EXPORT_HEADERS, 'hours_of_service')} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!filtered.length}>
+            <button onClick={async () => { try { await exportToExcel(exportRows, EXPORT_COLS, EXPORT_HEADERS, 'hours_of_service') } catch (e) { setError(toUserMessage(e, 'Could not export. Try again.')) } }} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!filtered.length}>
               <FileSpreadsheet size={14} /> Excel
             </button>
-            <button onClick={() => exportToPdf(exportRows, EXPORT_COLS.map((k, i) => ({ key: k, header: EXPORT_HEADERS[i] })), 'Hours of Service', 'hours_of_service', 'landscape')} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!filtered.length}>
+            <button onClick={async () => { try { await exportToPdf(exportRows, EXPORT_COLS.map((k, i) => ({ key: k, header: EXPORT_HEADERS[i] })), 'Hours of Service', 'hours_of_service', 'landscape') } catch (e) { setError(toUserMessage(e, 'Could not export. Try again.')) } }} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!filtered.length}>
               <FileText size={14} /> PDF
             </button>
             <button onClick={openCreate} className="btn-primary text-sm inline-flex items-center gap-1.5" disabled={notProvisioned}>

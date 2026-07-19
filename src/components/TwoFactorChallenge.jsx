@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 import { Shield, Loader2, AlertCircle, X, KeyRound } from 'lucide-react'
+import { toUserMessage } from '../lib/safeError'
 
 export default function TwoFactorChallenge({ open, factorId, onSuccess, onCancel }) {
   const [code, setCode]               = useState('')
@@ -47,7 +48,7 @@ export default function TwoFactorChallenge({ open, factorId, onSuccess, onCancel
       if (vErr) throw vErr
       onSuccess?.()
     } catch (err) {
-      setError(err.message ?? 'Invalid code. Please try again.')
+      setError(toUserMessage(err, 'Invalid code. Please try again.'))
       setCode('')
       setBackupCode('')
       if (useBackup) backupRef.current?.focus()

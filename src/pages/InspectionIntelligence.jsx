@@ -4,6 +4,7 @@ import * as inspIntelApi from '../lib/api/inspectionIntelligence'
 import PageHeader from '../components/ui/PageHeader'
 import { useSettings, COUNTRIES } from '../contexts/SettingsContext'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
+import { toUserMessage } from '../lib/safeError'
 import {
   Chart as ChartJS, CategoryScale, LinearScale, BarElement, LineElement,
   PointElement, ArcElement, Title, Tooltip, Legend,
@@ -218,7 +219,7 @@ export default function InspectionIntelligence() {
         setInspections(inspData || [])
         setFleet(fleetData || [])
       } catch (err) {
-        setError(err.message || 'Failed to load inspection data')
+        setError(toUserMessage(err, 'Failed to load inspection data'))
       } finally {
         setLoading(false)
       }

@@ -29,6 +29,7 @@ import {
 } from '../lib/onboarding'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import { safeHref } from '../lib/safeUrl'
+import { toUserMessage } from '../lib/safeError'
 
 const EMPTY_FORM = {
   title: '', phase: 'setup', description: '', sort_order: '', required: true,
@@ -118,7 +119,7 @@ export default function OnboardingWizard() {
       setUpdatedAt(new Date())
     } catch (err) {
       if (isMissingRelation(err)) setNotProvisioned(true)
-      else setError(err?.message || 'Could not load onboarding tasks.')
+      else setError(toUserMessage(err, 'Could not load onboarding tasks.'))
       setRows([])
     } finally {
       setRefreshing(false)
@@ -209,7 +210,7 @@ export default function OnboardingWizard() {
       setShowModal(false); setEditing(null)
       await load()
     } catch (err) {
-      setFormError(err?.message || 'Could not save the task.')
+      setFormError(toUserMessage(err, 'Could not save the task.'))
     } finally {
       setSaving(false)
     }
@@ -223,7 +224,7 @@ export default function OnboardingWizard() {
       await updateOnboardingTask(task.id, { status })
       await load()
     } catch (err) {
-      setError(err?.message || 'Could not update the task status.')
+      setError(toUserMessage(err, 'Could not update the task status.'))
     } finally {
       setBusyId(null)
     }
@@ -237,7 +238,7 @@ export default function OnboardingWizard() {
       setConfirmDelete(null)
       await load()
     } catch (err) {
-      setError(err?.message || 'Could not delete the task.')
+      setError(toUserMessage(err, 'Could not delete the task.'))
     } finally {
       setDeleting(false)
     }

@@ -13,6 +13,7 @@ import { fetchAllPages } from '../lib/fetchAll'
 import EmailReportModal from '../components/EmailReportModal'
 import { formatDate } from '../lib/formatters'
 import { listPmPrograms, listPmServiceRecords } from '../lib/api/pmPrograms'
+import { toUserMessage } from '../lib/safeError'
 
 const REPORT_TYPES = [
   { id: 'Vehicle History',       key: 'vehicleHistory',       desc: 'All tyre changes per vehicle, grouped by asset',  table: 'tyre_records' },
@@ -380,7 +381,7 @@ export default function Reports() {
       setAllRows(rows)
     } catch (e) {
       setAllRows([])
-      setError(e?.message || 'Could not load this report. Please try again.')
+      setError(toUserMessage(e, 'Could not load this report. Please try again.'))
     } finally {
       setLoading(false)
     }

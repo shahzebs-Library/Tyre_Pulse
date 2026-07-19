@@ -21,6 +21,7 @@ import SegmentedControl from '../components/ui/SegmentedControl'
 import { exportToExcel, exportToPdf, resolvePdfBrand, pdfHeader, pdfFooter, pdfEmptyState, pdfTableTheme } from '../lib/exportUtils'
 import { useTenant } from '../contexts/TenantContext'
 import { useLanguage } from '../contexts/LanguageContext'
+import { toUserMessage } from '../lib/safeError'
 
 ChartJS.register(
   CategoryScale, LinearScale, BarElement, LineElement,
@@ -242,7 +243,7 @@ export default function DowntimeTracker() {
         setHasWorkOrders(woData.length > 0)
       }
     } catch (e) {
-      if (myReq === reqIdRef.current) setError(e.message || 'Failed to load data')
+      if (myReq === reqIdRef.current) setError(toUserMessage(e, 'Failed to load data'))
     } finally {
       if (myReq === reqIdRef.current) {
         setLoading(false)

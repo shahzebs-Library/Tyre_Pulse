@@ -6,6 +6,7 @@ import { useSettings } from '../contexts/SettingsContext'
 import { computeSiteMetrics, buildSiteRadar, bucketByMonth } from '../lib/analyticsEngine'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import { formatCurrencyCompact } from '../lib/formatters'
+import { toUserMessage } from '../lib/safeError'
 import { Download, FileText, Maximize2, GitMerge, AlertTriangle, RefreshCw } from 'lucide-react'
 import { motion } from 'framer-motion'
 import PageHeader from '../components/ui/PageHeader'
@@ -140,7 +141,7 @@ export default function SiteComparison() {
       const top4 = Object.entries(byCount).sort(([, a], [, b]) => b - a).slice(0, 4).map(([s]) => s)
       setSelectedSites(top4)
     } catch (err) {
-      setError(err.message || 'Failed to load site data.')
+      setError(toUserMessage(err, 'Failed to load site data.'))
       setRecords([])
     } finally {
       setLoading(false)

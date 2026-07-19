@@ -18,6 +18,7 @@ import {
   getTemplate, createTemplate, updateTemplate, publishTemplate,
 } from '../lib/api/checklists'
 import { buildTemplateFromRows } from '../lib/checklist/importChecklist'
+import { toUserMessage } from '../lib/safeError'
 
 // ─── Static config ────────────────────────────────────────────────────────────
 
@@ -1110,7 +1111,7 @@ export default function ChecklistBuilder() {
       setTemplateId(row.id)
       setDirty(false)
     } catch (err) {
-      setLoadError(err?.message || 'Failed to load the template.')
+      setLoadError(toUserMessage(err, 'Failed to load the template.'))
     } finally {
       setLoading(false)
     }
@@ -1241,7 +1242,7 @@ export default function ChecklistBuilder() {
           'Review, edit and publish when ready.',
       )
     } catch (err) {
-      setImportError(err?.message || 'Import failed — please try a different file.')
+      setImportError(toUserMessage(err, 'Import failed — please try a different file.'))
     } finally {
       setImporting(false)
     }
@@ -1435,7 +1436,7 @@ export default function ChecklistBuilder() {
       // Reflect the id in the URL so subsequent saves update (not duplicate).
       if (newId && !isEdit) navigate(`/checklist-builder/${newId}`, { replace: true })
     } catch (err) {
-      setSaveError(err?.message || 'Could not save the draft.')
+      setSaveError(toUserMessage(err, 'Could not save the draft.'))
     } finally {
       setSaving(false)
     }
@@ -1466,7 +1467,7 @@ export default function ChecklistBuilder() {
       await publishTemplate(newId)
       navigate(CHECKLISTS_ROUTE)
     } catch (err) {
-      setSaveError(err?.message || 'Publishing failed. Please try again.')
+      setSaveError(toUserMessage(err, 'Publishing failed. Please try again.'))
     } finally {
       setSaving(false)
     }

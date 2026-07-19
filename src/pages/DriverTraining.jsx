@@ -27,6 +27,7 @@ import {
   summariseTraining, byCategory, daysUntilExpiry, expiryStatus,
 } from '../lib/driverTraining'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
+import { toUserMessage } from '../lib/safeError'
 
 const EMPTY_FORM = {
   driver_name: '', course_name: '', category: '', provider: '',
@@ -116,7 +117,7 @@ export default function DriverTraining() {
       setUpdatedAt(new Date())
     } catch (err) {
       if (isMissingRelation(err)) setNotProvisioned(true)
-      else setError(err?.message || 'Could not load driver training records.')
+      else setError(toUserMessage(err, 'Could not load driver training records.'))
       setRows([])
     } finally {
       setRefreshing(false)
@@ -220,7 +221,7 @@ export default function DriverTraining() {
       setShowModal(false); setEditing(null)
       await load()
     } catch (err) {
-      setFormError(err?.message || 'Could not save the training record.')
+      setFormError(toUserMessage(err, 'Could not save the training record.'))
     } finally {
       setSaving(false)
     }
@@ -234,7 +235,7 @@ export default function DriverTraining() {
       setConfirmDelete(null)
       await load()
     } catch (err) {
-      setError(err?.message || 'Could not delete the training record.')
+      setError(toUserMessage(err, 'Could not delete the training record.'))
     } finally {
       setDeleting(false)
     }
@@ -254,10 +255,10 @@ export default function DriverTraining() {
         updatedAt={updatedAt}
         actions={
           <div className="flex items-center gap-2">
-            <button onClick={() => exportToExcel(exportRows, EXPORT_COLS, EXPORT_HEADERS, 'driver_training')} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!filtered.length}>
+            <button onClick={async () => { try { await exportToExcel(exportRows, EXPORT_COLS, EXPORT_HEADERS, 'driver_training') } catch (e) { setError(toUserMessage(e, 'Could not export. Try again.')) } }} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!filtered.length}>
               <FileSpreadsheet size={14} /> Excel
             </button>
-            <button onClick={() => exportToPdf(exportRows, EXPORT_COLS.map((k, i) => ({ key: k, header: EXPORT_HEADERS[i] })), 'Driver Training Records', 'driver_training', 'landscape')} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!filtered.length}>
+            <button onClick={async () => { try { await exportToPdf(exportRows, EXPORT_COLS.map((k, i) => ({ key: k, header: EXPORT_HEADERS[i] })), 'Driver Training Records', 'driver_training', 'landscape') } catch (e) { setError(toUserMessage(e, 'Could not export. Try again.')) } }} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!filtered.length}>
               <FileText size={14} /> PDF
             </button>
             <button onClick={openCreate} className="btn-primary text-sm inline-flex items-center gap-1.5" disabled={notProvisioned}>

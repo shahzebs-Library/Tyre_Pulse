@@ -31,6 +31,7 @@ import { formatCurrencyCompact } from '../lib/formatters'
 import { listAllAccidentsForPage } from '../lib/api/accidents'
 import { analyzeClaims, isClosed, isDelayed } from '../lib/claimsAnalytics'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
+import { toUserMessage } from '../lib/safeError'
 
 ChartJS.register(
   CategoryScale, LinearScale, BarElement,
@@ -130,7 +131,7 @@ export default function ClaimsSummary() {
       setRows(Array.isArray(data) ? data : [])
       setUpdatedAt(new Date())
     } catch (e) {
-      setError(e?.message || 'Could not load claims.'); setRows([])
+      setError(toUserMessage(e, 'Could not load claims.')); setRows([])
     } finally {
       setRefreshing(false)
     }

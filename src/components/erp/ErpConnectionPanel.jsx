@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { PlugZap, Save, Loader2, KeyRound, ShieldCheck, AlertCircle, Info } from 'lucide-react'
 import { useAuth } from '../../contexts/AuthContext'
 import * as erp from '../../lib/api/erp'
+import { toUserMessage } from '../../lib/safeError'
 
 /**
  * ERP Connection — the place to store how TyrePulse reaches your ERP: system,
@@ -37,7 +38,7 @@ export default function ErpConnectionPanel() {
   async function save(e) {
     e.preventDefault(); setSaving(true); setMsg(null)
     try { setCfg(await erp.saveErpConnection(cfg)); setMsg({ type: 'ok', text: 'ERP connection saved.' }) }
-    catch (err) { setMsg({ type: 'err', text: err?.message || 'Could not save.' }) }
+    catch (err) { setMsg({ type: 'err', text: toUserMessage(err, 'Could not save.') }) }
     finally { setSaving(false) }
   }
 

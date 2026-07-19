@@ -13,6 +13,7 @@ import {
 } from 'chart.js'
 import { Bar, Line } from 'react-chartjs-2'
 import { supabase } from '../lib/supabase'
+import { toUserMessage } from '../lib/safeError'
 import { fetchAllPages } from '../lib/fetchAll'
 import { useSettings } from '../contexts/SettingsContext'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
@@ -233,7 +234,7 @@ export default function ForecastingEngine() {
         setRecords(recRes.data || [])
         setFleet(fleetRes.data || [])
       } catch (err) {
-        if (!cancelled) setError(err.message || 'Failed to load data')
+        if (!cancelled) setError(toUserMessage(err, 'Failed to load data'))
       } finally {
         if (!cancelled) setLoading(false)
       }

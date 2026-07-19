@@ -27,6 +27,7 @@ import {
   FUEL_CARD_STATUS_META, EXPIRY_BAND_META,
 } from '../lib/fuelCards'
 import { formatCurrencyCompact } from '../lib/formatters'
+import { toUserMessage } from '../lib/safeError'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 
 const STATUS_META = {
@@ -88,7 +89,7 @@ function FuelCardModal({ open, initial, currency, onClose, onSaved }) {
       else await createFuelCard({ ...form, currency })
       onSaved?.()
     } catch (err) {
-      setError(err?.message || 'Could not save the fuel card.')
+      setError(toUserMessage(err, 'Could not save the fuel card.'))
     } finally {
       setBusy(false)
     }
@@ -202,7 +203,7 @@ export default function FuelCards() {
       setRows(Array.isArray(data) ? data : [])
       setUpdatedAt(new Date())
     } catch (err) {
-      setError(err?.message || 'Could not load fuel cards.')
+      setError(toUserMessage(err, 'Could not load fuel cards.'))
       setRows([])
     } finally {
       setRefreshing(false)
@@ -249,7 +250,7 @@ export default function FuelCards() {
       await deleteFuelCard(id)
       setRows((prev) => (prev || []).filter((r) => r.id !== id))
     } catch (err) {
-      setError(err?.message || 'Could not delete the fuel card.')
+      setError(toUserMessage(err, 'Could not delete the fuel card.'))
     } finally {
       setDeletingId(null)
     }
@@ -292,10 +293,10 @@ export default function FuelCards() {
         updatedAt={updatedAt}
         actions={
           <div className="flex items-center gap-2">
-            <button onClick={() => exportToExcel(exportRows, EXPORT_COLS, EXPORT_HEADERS, 'fuel_cards')} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!filtered.length}>
+            <button onClick={async () => { try { await exportToExcel(exportRows, EXPORT_COLS, EXPORT_HEADERS, 'fuel_cards') } catch (e) { setError(toUserMessage(e, 'Could not export. Try again.')) } }} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!filtered.length}>
               <FileSpreadsheet size={14} /> Excel
             </button>
-            <button onClick={() => exportToPdf(exportRows, EXPORT_COLS.map((k, i) => ({ key: k, header: EXPORT_HEADERS[i] })), 'Fuel Cards', 'fuel_cards', 'landscape')} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!filtered.length}>
+            <button onClick={async () => { try { await exportToPdf(exportRows, EXPORT_COLS.map((k, i) => ({ key: k, header: EXPORT_HEADERS[i] })), 'Fuel Cards', 'fuel_cards', 'landscape') } catch (e) { setError(toUserMessage(e, 'Could not export. Try again.')) } }} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!filtered.length}>
               <FileText size={14} /> PDF
             </button>
             <button onClick={openCreate} className="btn-primary text-sm inline-flex items-center gap-1.5">

@@ -305,7 +305,8 @@ describe('persistence wrappers (mock supabase)', () => {
 
   it('fetchLayouts returns [] when nothing is stored and throws on DB error', async () => {
     expect(await fetchLayouts(mockSupabase())).toEqual([])
-    await expect(fetchLayouts(mockSupabase({ error: { message: 'denied' } }))).rejects.toThrow('denied')
+    // Raw DB text is intentionally suppressed (no db/api leakage); a generic message is thrown.
+    await expect(fetchLayouts(mockSupabase({ error: { message: 'denied' } }))).rejects.toThrow(/could not load dashboard/i)
   })
 
   it('saveLayouts validates, serialises and upserts on the key', async () => {
@@ -322,6 +323,6 @@ describe('persistence wrappers (mock supabase)', () => {
 
   it('saveLayouts surfaces upsert failures', async () => {
     const sb = mockSupabase({ upsertError: { message: 'RLS: admins only' } })
-    await expect(saveLayouts(sb, [])).rejects.toThrow('RLS: admins only')
+    await expect(saveLayouts(sb, [])).rejects.toThrow(/could not save dashboard/i)
   })
 })

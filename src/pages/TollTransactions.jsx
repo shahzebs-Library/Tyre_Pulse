@@ -22,6 +22,7 @@ import {
 } from '../lib/api/tollTransactions'
 import { summariseTolls, byAsset, byPlaza } from '../lib/tollTransactions'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
+import { toUserMessage } from '../lib/safeError'
 
 const EMPTY_FORM = {
   asset_no: '', driver_name: '', tag_id: '', plaza_name: '', highway: '',
@@ -98,7 +99,7 @@ export default function TollTransactions() {
       setUpdatedAt(new Date())
     } catch (err) {
       if (isMissingRelation(err)) setNotProvisioned(true)
-      else setError(err?.message || 'Could not load toll transactions.')
+      else setError(toUserMessage(err, 'Could not load toll transactions.'))
       setRows([])
     } finally {
       setRefreshing(false)
@@ -192,7 +193,7 @@ export default function TollTransactions() {
       setShowModal(false); setEditing(null)
       await load()
     } catch (err) {
-      setFormError(err?.message || 'Could not save the toll transaction.')
+      setFormError(toUserMessage(err, 'Could not save the toll transaction.'))
     } finally {
       setSaving(false)
     }
@@ -206,7 +207,7 @@ export default function TollTransactions() {
       setConfirmDelete(null)
       await load()
     } catch (err) {
-      setError(err?.message || 'Could not delete the toll transaction.')
+      setError(toUserMessage(err, 'Could not delete the toll transaction.'))
     } finally {
       setDeleting(false)
     }

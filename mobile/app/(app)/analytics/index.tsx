@@ -14,6 +14,7 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons'
 import { supabase } from '../../../lib/supabase'
 import { useElevatedGuard } from '../../../hooks/useRoleGuard'
+import { toUserMessage } from '../../../lib/safeError'
 
 /** Local YYYY-MM-DD (avoids the UTC shift that toISOString() introduces). */
 function isoDay(d: Date): string {
@@ -47,6 +48,7 @@ export default function AnalyticsScreen() {
   const { allowed, loading: guardLoading } = useElevatedGuard()
 
   const [loading, setLoading]     = useState(true)
+  const [error, setError]         = useState<string | null>(null)
   const [refreshing, setRefreshing] = useState(false)
   const [kpi, setKpi]             = useState<KPI | null>(null)
   const [byRisk, setByRisk]       = useState<RiskStat[]>([])
@@ -89,6 +91,8 @@ export default function AnalyticsScreen() {
 
   const load = useCallback(async () => {
     setLoading(true)
+    setError(null)
+    try {
     const { from, to } = resolveRange()
 
     let recordsQ = supabase.from('tyre_records')
@@ -108,6 +112,7 @@ export default function AnalyticsScreen() {
     const [recordsRes, vehiclesRes, actionsRes] = await Promise.all([
       recordsQ, vehiclesQ, actionsQ,
     ])
+    if (recordsRes.error) throw recordsRes.error
 
     const records = (recordsRes.data ?? []) as { cost_per_tyre: number | null; risk_level: string | null; brand: string | null; site: string | null }[]
 
@@ -149,9 +154,12 @@ export default function AnalyticsScreen() {
       brandMap[b].cost += Number(r.cost_per_tyre) || 0
     })
     setByBrand(Object.values(brandMap).sort((a, b) => b.count - a.count).slice(0, 5))
-
-    setLoading(false)
-    setRefreshing(false)
+    } catch (e: any) {
+      setError(toUserMessage(e, 'Could not load analytics. Please try again.'))
+    } finally {
+      setLoading(false)
+      setRefreshing(false)
+    }
   }, [resolveRange, site])
 
   useEffect(() => { if (allowed) load() }, [load, allowed])
@@ -273,6 +281,19 @@ export default function AnalyticsScreen() {
           {[120, 160, 140].map((h, i) => (
             <View key={i} style={[styles.card, { height: h }]} />
           ))}
+        </ScrollView>
+      ) : (error || !kpi) ? (
+        <ScrollView
+          contentContainerStyle={[styles.content, { alignItems: 'center', justifyContent: 'center', flexGrow: 1 }]}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#3b82f6" />}
+        >
+          <Ionicons name="cloud-offline-outline" size={40} color="#94a3b8" />
+          <Text style={{ color: '#475569', fontSize: 14, textAlign: 'center', marginTop: 12, paddingHorizontal: 24 }}>
+            {error || 'No analytics data yet.'}
+          </Text>
+          <TouchableOpacity onPress={load} style={{ marginTop: 16, backgroundColor: '#3b82f6', paddingHorizontal: 20, paddingVertical: 10, borderRadius: 8 }}>
+            <Text style={{ color: '#fff', fontWeight: '600' }}>Retry</Text>
+          </TouchableOpacity>
         </ScrollView>
       ) : (
         <ScrollView

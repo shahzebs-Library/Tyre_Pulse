@@ -29,6 +29,7 @@ import {
   summariseMaterials, byCategory, reorderList, stockValue, stockStatus,
 } from '../lib/materials'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
+import { toUserMessage } from '../lib/safeError'
 
 const CATEGORIES = [
   'oil', 'filter', 'valve', 'sealant', 'grease', 'coolant', 'cleaning',
@@ -101,7 +102,7 @@ export default function Materials() {
       setUpdatedAt(new Date())
     } catch (err) {
       if (isMissingRelation(err)) setNotProvisioned(true)
-      else setError(err?.message || 'Could not load materials.')
+      else setError(toUserMessage(err, 'Could not load materials.'))
       setRows([])
     } finally {
       setRefreshing(false)
@@ -195,7 +196,7 @@ export default function Materials() {
       setShowModal(false); setEditing(null)
       await load()
     } catch (err) {
-      setFormError(err?.message || 'Could not save the material.')
+      setFormError(toUserMessage(err, 'Could not save the material.'))
     } finally {
       setSaving(false)
     }
@@ -209,7 +210,7 @@ export default function Materials() {
       setConfirmDelete(null)
       await load()
     } catch (err) {
-      setError(err?.message || 'Could not delete the material.')
+      setError(toUserMessage(err, 'Could not delete the material.'))
     } finally {
       setDeleting(false)
     }

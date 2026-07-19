@@ -26,6 +26,7 @@ import {
   optimizeFleet, serialOf, positionOf, treadOf, DEFAULT_ROTATION_OPTS,
 } from '../lib/rotationOptimizer'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
+import { toUserMessage } from '../lib/safeError'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Title, ChartTooltip, Legend)
 
@@ -83,7 +84,7 @@ export default function RotationOptimizer() {
       setRows(Array.isArray(data) ? data : [])
       setUpdatedAt(new Date())
     } catch (err) {
-      setError(err?.message || 'Could not load tyre records.')
+      setError(toUserMessage(err, 'Could not load tyre records.'))
       setRows([])
     } finally {
       setRefreshing(false)

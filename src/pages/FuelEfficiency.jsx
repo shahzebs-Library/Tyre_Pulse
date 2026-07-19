@@ -15,6 +15,7 @@ import {
   Info, ArrowUpRight, ArrowDownRight, ShieldCheck, Lock, X,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
+import { toUserMessage } from '../lib/safeError'
 import { fetchAllPages } from '../lib/fetchAll'
 import { useSettings } from '../contexts/SettingsContext'
 import { useTenant } from '../contexts/TenantContext'
@@ -161,7 +162,7 @@ export default function FuelEfficiency() {
       setRecords(recs ?? [])
       setLastRefresh(new Date())
     } catch (e) {
-      setError(e.message ?? 'Failed to load data')
+      setError(toUserMessage(e, 'Failed to load data'))
     } finally {
       setLoading(false)
     }

@@ -25,6 +25,7 @@ import {
   summariseAccounts, byTier, needsAttention, portalAdoptionRate,
 } from '../lib/customerPortal'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
+import { toUserMessage } from '../lib/safeError'
 
 const EMPTY_FORM = {
   company_name: '', account_code: '', contact_name: '', email: '', phone: '',
@@ -99,7 +100,7 @@ export default function CustomerPortal() {
       setUpdatedAt(new Date())
     } catch (err) {
       if (isMissingRelation(err)) setNotProvisioned(true)
-      else setError(err?.message || 'Could not load customer accounts.')
+      else setError(toUserMessage(err, 'Could not load customer accounts.'))
       setRows([])
     } finally {
       setRefreshing(false)
@@ -189,7 +190,7 @@ export default function CustomerPortal() {
       setShowModal(false); setEditing(null)
       await load()
     } catch (err) {
-      setFormError(err?.message || 'Could not save the account.')
+      setFormError(toUserMessage(err, 'Could not save the account.'))
     } finally {
       setSaving(false)
     }
@@ -203,7 +204,7 @@ export default function CustomerPortal() {
       setConfirmDelete(null)
       await load()
     } catch (err) {
-      setError(err?.message || 'Could not delete the account.')
+      setError(toUserMessage(err, 'Could not delete the account.'))
     } finally {
       setDeleting(false)
     }
@@ -214,7 +215,7 @@ export default function CustomerPortal() {
       await updateCustomerAccount(r.id, { portal_enabled: !r.portal_enabled })
       await load()
     } catch (err) {
-      setError(err?.message || 'Could not update portal access.')
+      setError(toUserMessage(err, 'Could not update portal access.'))
     }
   }, [load])
 
@@ -233,10 +234,10 @@ export default function CustomerPortal() {
         updatedAt={updatedAt}
         actions={
           <div className="flex items-center gap-2">
-            <button onClick={() => exportToExcel(exportRows, EXPORT_COLS, EXPORT_HEADERS, 'customer_accounts')} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!filtered.length}>
+            <button onClick={async () => { try { await exportToExcel(exportRows, EXPORT_COLS, EXPORT_HEADERS, 'customer_accounts') } catch (e) { setError(toUserMessage(e, 'Could not export. Try again.')) } }} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!filtered.length}>
               <FileSpreadsheet size={14} /> Excel
             </button>
-            <button onClick={() => exportToPdf(exportRows, EXPORT_COLS.map((k, i) => ({ key: k, header: EXPORT_HEADERS[i] })), 'Customer Portal Accounts', 'customer_accounts', 'landscape')} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!filtered.length}>
+            <button onClick={async () => { try { await exportToPdf(exportRows, EXPORT_COLS.map((k, i) => ({ key: k, header: EXPORT_HEADERS[i] })), 'Customer Portal Accounts', 'customer_accounts', 'landscape') } catch (e) { setError(toUserMessage(e, 'Could not export. Try again.')) } }} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!filtered.length}>
               <FileText size={14} /> PDF
             </button>
             <button onClick={openCreate} className="btn-primary text-sm inline-flex items-center gap-1.5" disabled={notProvisioned}>

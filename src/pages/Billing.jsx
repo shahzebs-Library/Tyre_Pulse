@@ -11,6 +11,7 @@ import {
   STATUS_META, monthlyEquivalent, annualSavingPct, planAllows,
 } from '../lib/entitlements'
 import { formatCurrency, formatDate } from '../lib/formatters'
+import { toUserMessage } from '../lib/safeError'
 import EnterpriseTable from '../components/ui/EnterpriseTable'
 import { useReportMeta } from '../hooks/useReportMeta'
 import { Illustration } from '../components/illustrations'
@@ -147,7 +148,7 @@ export default function Billing() {
       setActionMsg(`Switched to the ${target.name} plan.`)
       refresh()
     } catch (err) {
-      setActionErr(err.message || 'Could not change the plan.')
+      setActionErr(toUserMessage(err, 'Could not change the plan.'))
     } finally {
       setPending(null)
       setConfirm(null)
@@ -167,7 +168,7 @@ export default function Billing() {
         : 'Cancellation reverted. Your subscription will renew.')
       refresh()
     } catch (err) {
-      setActionErr(err.message || 'Could not update the subscription.')
+      setActionErr(toUserMessage(err, 'Could not update the subscription.'))
     } finally {
       setTimeout(() => setActionMsg(''), 4000)
     }
@@ -241,7 +242,7 @@ export default function Billing() {
               <p className="text-gray-400 text-sm mt-1">
                 {error.message?.includes('function') || error.message?.includes('does not exist')
                   ? 'The billing tables aren\u2019t applied to this database yet. Apply MIGRATIONS_V105_SUBSCRIPTION_BILLING.sql, then reload.'
-                  : error.message}
+                  : toUserMessage(error, 'Could not load billing information.')}
               </p>
               <button onClick={refresh} className="btn-secondary text-sm mt-3 inline-flex items-center gap-2">
                 <RefreshCw size={14} /> Retry
@@ -435,7 +436,7 @@ export default function Billing() {
             <Loader2 size={18} className="animate-spin mr-2" /> Loading invoices…
           </div>
         ) : invoicesError ? (
-          <p className="text-sm text-red-300">Couldn't load invoices: {invoicesError.message}</p>
+          <p className="text-sm text-red-300">Couldn't load invoices: {toUserMessage(invoicesError, 'Please try again.')}</p>
         ) : invoices.length === 0 ? (
           <div className="text-center py-10 border border-dashed border-gray-700 rounded-xl">
             <FileText size={26} className="text-gray-600 mx-auto mb-3" />

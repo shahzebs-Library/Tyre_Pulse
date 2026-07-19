@@ -22,6 +22,7 @@ import {
 } from '../lib/api/chargingSessions'
 import { summariseCharging, costPerKwh } from '../lib/chargingSessions'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
+import { toUserMessage } from '../lib/safeError'
 
 const EMPTY_FORM = {
   asset_no: '', station_name: '', connector_type: '', started_at: '', ended_at: '',
@@ -92,7 +93,7 @@ export default function ChargingSessions() {
       setUpdatedAt(new Date())
     } catch (err) {
       if (isMissingRelation(err)) setNotProvisioned(true)
-      else setError(err?.message || 'Could not load charging sessions.')
+      else setError(toUserMessage(err, 'Could not load charging sessions.'))
       setRows([])
     } finally {
       setRefreshing(false)
@@ -187,7 +188,7 @@ export default function ChargingSessions() {
       setShowModal(false); setEditing(null)
       await load()
     } catch (err) {
-      setFormError(err?.message || 'Could not save the session.')
+      setFormError(toUserMessage(err, 'Could not save the session.'))
     } finally {
       setSaving(false)
     }
@@ -201,7 +202,7 @@ export default function ChargingSessions() {
       setConfirmDelete(null)
       await load()
     } catch (err) {
-      setError(err?.message || 'Could not delete the session.')
+      setError(toUserMessage(err, 'Could not delete the session.'))
     } finally {
       setDeleting(false)
     }
@@ -221,10 +222,10 @@ export default function ChargingSessions() {
         updatedAt={updatedAt}
         actions={
           <div className="flex items-center gap-2">
-            <button onClick={() => exportToExcel(exportRows, EXPORT_COLS, EXPORT_HEADERS, 'charging_sessions')} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!filtered.length}>
+            <button onClick={async () => { try { await exportToExcel(exportRows, EXPORT_COLS, EXPORT_HEADERS, 'charging_sessions') } catch (e) { setError(toUserMessage(e, 'Could not export. Try again.')) } }} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!filtered.length}>
               <FileSpreadsheet size={14} /> Excel
             </button>
-            <button onClick={() => exportToPdf(exportRows, EXPORT_COLS.map((k, i) => ({ key: k, header: EXPORT_HEADERS[i] })), 'EV Charging Sessions', 'charging_sessions', 'landscape')} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!filtered.length}>
+            <button onClick={async () => { try { await exportToPdf(exportRows, EXPORT_COLS.map((k, i) => ({ key: k, header: EXPORT_HEADERS[i] })), 'EV Charging Sessions', 'charging_sessions', 'landscape') } catch (e) { setError(toUserMessage(e, 'Could not export. Try again.')) } }} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!filtered.length}>
               <FileText size={14} /> PDF
             </button>
             <button onClick={openCreate} className="btn-primary text-sm inline-flex items-center gap-1.5" disabled={notProvisioned}>

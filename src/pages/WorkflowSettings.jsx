@@ -7,6 +7,7 @@ import {
 } from 'lucide-react'
 import * as workflows from '../lib/api/workflows'
 import { STARTER_TEMPLATES } from '../lib/workflow/starterTemplates'
+import { toUserMessage } from '../lib/safeError'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -140,7 +141,7 @@ export default function WorkflowSettings() {
     try {
       const rows = await workflows.listWorkflowDefinitions()
       setDefinitions(rows || [])
-    } catch (err) { setError(err.message || 'Failed to load workflows') }
+    } catch (err) { setError(toUserMessage(err, 'Failed to load workflows')) }
     finally { setLoading(false) }
   }, [])
 
@@ -161,7 +162,7 @@ export default function WorkflowSettings() {
     try {
       await workflows.deleteWorkflowDefinition(id)
       setDefinitions(prev => prev.filter(d => d.id !== id))
-    } catch (err) { setError(err.message || 'Delete failed') }
+    } catch (err) { setError(toUserMessage(err, 'Delete failed')) }
   }
 
   async function handleToggle(id, active) {
@@ -169,7 +170,7 @@ export default function WorkflowSettings() {
     try {
       await workflows.updateWorkflowDefinition(id, { active })
       setDefinitions(prev => prev.map(d => d.id === id ? { ...d, active } : d))
-    } catch (err) { setError(err.message || 'Update failed') }
+    } catch (err) { setError(toUserMessage(err, 'Update failed')) }
   }
 
   // Navigate to the builder page in create mode, pre-loaded with a copy of an

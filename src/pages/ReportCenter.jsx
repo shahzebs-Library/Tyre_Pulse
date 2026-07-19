@@ -19,6 +19,7 @@ import SectionTabs, { REPORTS_TABS } from '../components/ui/SectionTabs'
 import LoadingState from '../components/LoadingState'
 import EmptyState from '../components/EmptyState'
 import { Illustration } from '../components/illustrations'
+import { toUserMessage } from '../lib/safeError'
 
 /**
  * ReportCenter — one place to generate the fleet's branded reports on demand and
@@ -188,7 +189,7 @@ export default function ReportCenter() {
       setToast({ text: t('reportcenter.toast.success'), type: 'ok' })
     } catch (e) {
       console.error(`[ReportCenter] ${id} failed:`, e)
-      setToast({ text: t('reportcenter.toast.errorPrefix', { message: e?.message || t('reportcenter.toast.unexpectedError') }), type: 'err' })
+      setToast({ text: t('reportcenter.toast.errorPrefix', { message: toUserMessage(e, t('reportcenter.toast.unexpectedError')) }), type: 'err' })
     } finally {
       setGenerating(null)
     }

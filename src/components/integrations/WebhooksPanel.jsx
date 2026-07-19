@@ -5,6 +5,7 @@ import {
 } from 'lucide-react'
 import { useAuth } from '../../contexts/AuthContext'
 import { EVENT_TYPES } from '../../lib/events'
+import { toUserMessage } from '../../lib/safeError'
 import {
   getWebhookEndpoints, saveWebhookEndpoints, validateWebhookUrl, sendTestEvent,
 } from '../../lib/webhooks'
@@ -53,7 +54,7 @@ export default function WebhooksPanel() {
       setMsg({ type: 'ok', text: okText })
       setForm(null)
     } catch (err) {
-      setMsg({ type: 'err', text: err?.message || 'Could not save webhooks.' })
+      setMsg({ type: 'err', text: toUserMessage(err, 'Could not save webhooks.') })
     } finally { setSaving(false) }
   }
 

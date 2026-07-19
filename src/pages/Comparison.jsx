@@ -11,6 +11,7 @@ import { exportToPdf, exportToExcel } from '../lib/exportUtils'
 import { formatCurrencyCompact } from '../lib/formatters'
 import { fetchAllPages } from '../lib/fetchAll'
 import { recordCost } from '../lib/analyticsEngine'
+import { toUserMessage } from '../lib/safeError'
 import {
   GitCompare, Download, FileText, TrendingUp, TrendingDown,
   ArrowUpRight, ArrowDownRight, BarChart2, RefreshCw, AlertTriangle,
@@ -175,7 +176,7 @@ export default function Comparison() {
       return q.range(from, to)
     })
     if (fetchErr) {
-      setError(fetchErr.message || 'Failed to load comparison data.')
+      setError(toUserMessage(fetchErr, 'Failed to load comparison data.'))
       setRecords([])
       setRan(true)
       setLoading(false)

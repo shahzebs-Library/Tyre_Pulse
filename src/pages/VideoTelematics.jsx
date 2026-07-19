@@ -26,6 +26,7 @@ import {
 import { summariseDashcam, byEventType, bySeverity } from '../lib/dashcamEvents'
 import { safeHref } from '../lib/safeUrl'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
+import { toUserMessage } from '../lib/safeError'
 
 const EVENT_TYPES = [
   { value: 'collision', label: 'Collision' },
@@ -119,7 +120,7 @@ export default function VideoTelematics() {
       setUpdatedAt(new Date())
     } catch (err) {
       if (isMissingRelation(err)) setNotProvisioned(true)
-      else setError(err?.message || 'Could not load dashcam events.')
+      else setError(toUserMessage(err, 'Could not load dashcam events.'))
       setRows([])
     } finally {
       setRefreshing(false)
@@ -203,7 +204,7 @@ export default function VideoTelematics() {
       setShowModal(false); setEditing(null)
       await load()
     } catch (err) {
-      setFormError(err?.message || 'Could not save the event.')
+      setFormError(toUserMessage(err, 'Could not save the event.'))
     } finally {
       setSaving(false)
     }
@@ -217,7 +218,7 @@ export default function VideoTelematics() {
       setConfirmDelete(null)
       await load()
     } catch (err) {
-      setError(err?.message || 'Could not delete the event.')
+      setError(toUserMessage(err, 'Could not delete the event.'))
     } finally {
       setDeleting(false)
     }

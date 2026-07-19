@@ -13,6 +13,7 @@ import {
 import { supabase } from '../lib/supabase'
 import { fetchAllPages } from '../lib/fetchAll'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
+import { toUserMessage } from '../lib/safeError'
 import { useSettings } from '../contexts/SettingsContext'
 import PageHeader from '../components/ui/PageHeader'
 import SectionTabs, { RCA_TABS } from '../components/ui/SectionTabs'
@@ -328,7 +329,7 @@ export default function RootCauseEngine() {
       return q.range(from, to)
     }).then(({ data, error: err }) => {
       if (err) {
-        setError(err.message)
+        setError(toUserMessage(err, 'Could not load root cause data.'))
       } else {
         setRecords(data || [])
       }

@@ -24,6 +24,7 @@ import {
   DEFAULT_NEW_TREAD_MM, DEFAULT_AVG_KM_LIFE, DEFAULT_DAILY_KM as LIB_DEFAULT_DAILY_KM,
   LIMITING_FACTORS,
 } from '../lib/predictiveMaintenance'
+import { toUserMessage } from '../lib/safeError'
 
 ChartJS.register(
   CategoryScale, LinearScale,
@@ -611,7 +612,7 @@ export default function PredictiveMaintenance() {
         setFleetMasterAvailable(false)
       }
     } catch (err) {
-      setError(err.message || 'Failed to load data')
+      setError(toUserMessage(err, 'Failed to load data'))
     } finally {
       setLoading(false)
     }

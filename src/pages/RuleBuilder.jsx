@@ -22,6 +22,7 @@ import {
   ToggleLeft, ToggleRight, XCircle, AlertTriangle,
 } from 'lucide-react'
 import * as businessRules from '../lib/api/businessRules'
+import { toUserMessage } from '../lib/safeError'
 
 // ─── Constants (mirrors AutomationRules) ────────────────────────────────────
 
@@ -112,7 +113,7 @@ export default function RuleBuilder() {
       if (!rule) { setNotFound(true); return }
       setForm(toForm(rule))
     } catch (err) {
-      setLoadError(err.message || 'Failed to load rule')
+      setLoadError(toUserMessage(err, 'Failed to load rule'))
     } finally {
       setLoading(false)
     }
@@ -184,7 +185,7 @@ export default function RuleBuilder() {
       else await businessRules.createBusinessRule(values)
       goBack()
     } catch (err) {
-      setSaveError(err.message || 'Save failed')
+      setSaveError(toUserMessage(err, 'Save failed'))
     } finally {
       setSaving(false)
     }

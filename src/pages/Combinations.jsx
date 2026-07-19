@@ -32,6 +32,7 @@ import {
 } from '../lib/combinations'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import { formatCurrency, fmt } from '../lib/formatters'
+import { toUserMessage } from '../lib/safeError'
 
 const STATUS_STYLES = {
   active: 'bg-green-900/40 text-green-300 border border-green-700/50',
@@ -80,7 +81,7 @@ export default function Combinations() {
       setRows(Array.isArray(data) ? data : [])
       setUpdatedAt(new Date())
     } catch (err) {
-      setError(err?.message || 'Could not load combinations.')
+      setError(toUserMessage(err, 'Could not load combinations.'))
       setRows([])
     } finally {
       setRefreshing(false)
@@ -131,7 +132,7 @@ export default function Combinations() {
       const data = await getCombinationIntelligence(combo, { country: activeCountry })
       setIntel(data)
     } catch (err) {
-      setIntelError(err?.message || 'Could not load combined-unit data.')
+      setIntelError(toUserMessage(err, 'Could not load combined-unit data.'))
       setIntel(null)
     } finally {
       setIntelLoading(false)
@@ -194,7 +195,7 @@ export default function Combinations() {
       setModalOpen(false); setEditing(null)
       await load()
     } catch (err) {
-      setFormError(err?.message || 'Could not save combination.')
+      setFormError(toUserMessage(err, 'Could not save combination.'))
     } finally {
       setSaving(false)
     }
@@ -208,7 +209,7 @@ export default function Combinations() {
       setConfirmDelete(null)
       await load()
     } catch (err) {
-      setError(err?.message || 'Could not delete combination.')
+      setError(toUserMessage(err, 'Could not delete combination.'))
     } finally {
       setDeleting(false)
     }
@@ -238,10 +239,10 @@ export default function Combinations() {
         actions={
           view === 'registry' ? (
             <div className="flex items-center gap-2">
-              <button onClick={() => exportToExcel(exportRows, EXPORT_COLS, EXPORT_HEADERS, 'combinations')} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!filtered.length}>
+              <button onClick={async () => { try { await exportToExcel(exportRows, EXPORT_COLS, EXPORT_HEADERS, 'combinations') } catch (e) { setError(toUserMessage(e, 'Could not export. Try again.')) } }} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!filtered.length}>
                 <FileSpreadsheet size={14} /> Excel
               </button>
-              <button onClick={() => exportToPdf(exportRows, EXPORT_COLS.map((k, i) => ({ key: k, header: EXPORT_HEADERS[i] })), 'Asset Combinations', 'combinations', 'landscape')} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!filtered.length}>
+              <button onClick={async () => { try { await exportToPdf(exportRows, EXPORT_COLS.map((k, i) => ({ key: k, header: EXPORT_HEADERS[i] })), 'Asset Combinations', 'combinations', 'landscape') } catch (e) { setError(toUserMessage(e, 'Could not export. Try again.')) } }} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!filtered.length}>
                 <FileText size={14} /> PDF
               </button>
               <button onClick={openCreate} className="btn-primary text-sm inline-flex items-center gap-1.5">

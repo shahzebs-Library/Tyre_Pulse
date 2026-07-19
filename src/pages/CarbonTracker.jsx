@@ -210,10 +210,10 @@ function LifecycleEsgView() {
             <select className="input" value={period} onChange={(e) => setPeriod(Number(e.target.value))} aria-label="Period">
               {PERIODS.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
             </select>
-            <button onClick={() => exportToExcel(carbon.tyreBreakdown, EXPORT_COLS, EXPORT_HEADERS, 'carbon_lifecycle')} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!carbon.tyreBreakdown.length}>
+            <button onClick={async () => { try { await exportToExcel(carbon.tyreBreakdown, EXPORT_COLS, EXPORT_HEADERS, 'carbon_lifecycle') } catch (e) { setError(toUserMessage(e, 'Could not export. Try again.')) } }} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!carbon.tyreBreakdown.length}>
               <FileSpreadsheet size={14} /> Excel
             </button>
-            <button onClick={() => exportToPdf(carbon.tyreBreakdown, EXPORT_COLS.map((k, i) => ({ key: k, header: EXPORT_HEADERS[i] })), 'Carbon Lifecycle ESG', 'carbon_lifecycle', 'landscape')} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!carbon.tyreBreakdown.length}>
+            <button onClick={async () => { try { await exportToPdf(carbon.tyreBreakdown, EXPORT_COLS.map((k, i) => ({ key: k, header: EXPORT_HEADERS[i] })), 'Carbon Lifecycle ESG', 'carbon_lifecycle', 'landscape') } catch (e) { setError(toUserMessage(e, 'Could not export. Try again.')) } }} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!carbon.tyreBreakdown.length}>
               <FileText size={14} /> PDF
             </button>
           </div>
@@ -608,7 +608,7 @@ function FuelEmissionsView() {
       setRows(Array.isArray(data) ? data : [])
       setUpdatedAt(new Date())
     } catch (err) {
-      setError(err?.message || 'Could not load fuel usage data.')
+      setError(toUserMessage(err, 'Could not load fuel usage data.'))
       setRows([])
     } finally {
       setRefreshing(false)
@@ -729,10 +729,10 @@ function FuelEmissionsView() {
             <select className="input" value={period} onChange={(e) => setPeriod(Number(e.target.value))} aria-label="Period">
               {PERIODS.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
             </select>
-            <button onClick={() => exportToExcel(exportRows, EXPORT_COLS, EXPORT_HEADERS, 'carbon_tracker')} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!filteredVehicles.length}>
+            <button onClick={async () => { try { await exportToExcel(exportRows, EXPORT_COLS, EXPORT_HEADERS, 'carbon_tracker') } catch (e) { setError(toUserMessage(e, 'Could not export. Try again.')) } }} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!filteredVehicles.length}>
               <FileSpreadsheet size={14} /> Excel
             </button>
-            <button onClick={() => exportToPdf(exportRows, EXPORT_COLS.map((k, i) => ({ key: k, header: EXPORT_HEADERS[i] })), 'Carbon Tracker', 'carbon_tracker', 'landscape')} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!filteredVehicles.length}>
+            <button onClick={async () => { try { await exportToPdf(exportRows, EXPORT_COLS.map((k, i) => ({ key: k, header: EXPORT_HEADERS[i] })), 'Carbon Tracker', 'carbon_tracker', 'landscape') } catch (e) { setError(toUserMessage(e, 'Could not export. Try again.')) } }} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!filteredVehicles.length}>
               <FileText size={14} /> PDF
             </button>
           </div>

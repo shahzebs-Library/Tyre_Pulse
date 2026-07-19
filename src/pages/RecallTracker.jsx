@@ -25,6 +25,7 @@ import { resolvePdfBrand, pdfHeader, pdfFooter, pdfEmptyState, pdfTableTheme } f
 import PageHeader from '../components/ui/PageHeader'
 import EmptyState from '../components/EmptyState'
 import { formatDate } from '../lib/formatters'
+import { toUserMessage } from '../lib/safeError'
 
 ChartJS.register(
   CategoryScale, LinearScale, BarElement, LineElement,
@@ -404,7 +405,7 @@ export default function RecallTracker() {
     } catch (e) {
       // 23505 = unique_violation on (recall_number, country)
       if (e?.code === '23505') { setFormError('Recall number already exists'); setSaving(false); return }
-      setFormError(e?.message || 'Could not save the recall. Please retry.')
+      setFormError(toUserMessage(e, 'Could not save the recall. Please retry.'))
     } finally {
       setSaving(false)
     }
@@ -415,7 +416,7 @@ export default function RecallTracker() {
       await recallsApi.updateRecall(recallId, { status: 'Closed', closed_at: new Date().toISOString() })
       await loadRecalls()
     } catch (e) {
-      window.alert(e?.message || 'Could not close the recall.')
+      window.alert(toUserMessage(e, 'Could not close the recall.'))
     }
   }
 
@@ -425,7 +426,7 @@ export default function RecallTracker() {
       await recallsApi.deleteRecall(recallId)
       await loadRecalls()
     } catch (e) {
-      window.alert(e?.message || 'Could not delete the recall.')
+      window.alert(toUserMessage(e, 'Could not delete the recall.'))
     }
   }
 

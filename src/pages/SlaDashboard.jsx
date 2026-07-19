@@ -17,6 +17,7 @@ import {
   AlertTriangle, Search, X, Filter, FileSpreadsheet, FileText, Plus, Pencil,
   Trash2, ListChecks, Flag, Clock,
 } from 'lucide-react'
+import { toUserMessage } from '../lib/safeError'
 import PageHeader from '../components/ui/PageHeader'
 import { useSettings } from '../contexts/SettingsContext'
 import {
@@ -126,7 +127,7 @@ export default function SlaDashboard() {
       setUpdatedAt(new Date())
     } catch (err) {
       if (isMissingRelation(err)) setNotProvisioned(true)
-      else setError(err?.message || 'Could not load SLA records.')
+      else setError(toUserMessage(err, 'Could not load SLA records.'))
       setRows([])
     } finally {
       setRefreshing(false)
@@ -249,7 +250,7 @@ export default function SlaDashboard() {
       setShowModal(false); setEditing(null)
       await load()
     } catch (err) {
-      setFormError(err?.message || 'Could not save the SLA record.')
+      setFormError(toUserMessage(err, 'Could not save the SLA record.'))
     } finally {
       setSaving(false)
     }
@@ -263,7 +264,7 @@ export default function SlaDashboard() {
       setConfirmDelete(null)
       await load()
     } catch (err) {
-      setError(err?.message || 'Could not delete the SLA record.')
+      setError(toUserMessage(err, 'Could not delete the SLA record.'))
     } finally {
       setDeleting(false)
     }

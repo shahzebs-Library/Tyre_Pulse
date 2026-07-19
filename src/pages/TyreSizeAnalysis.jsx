@@ -21,6 +21,7 @@ import {
 } from 'chart.js'
 import { Bar, Line, Doughnut } from 'react-chartjs-2'
 import PageHeader from '../components/ui/PageHeader'
+import { toUserMessage } from '../lib/safeError'
 
 ChartJS.register(
   CategoryScale, LinearScale, BarElement, LineElement, PointElement,
@@ -186,7 +187,7 @@ export default function TyreSizeAnalysis() {
       if (activeCountry !== 'All') q = q.eq('country', activeCountry)
       return q.range(from, to)
     }).then(({ data, error: err }) => {
-      if (err) { setError(err.message); setLoading(false); return }
+      if (err) { setError(toUserMessage(err, 'Could not load tyre data.')); setLoading(false); return }
       setRecords(data || [])
       setLoading(false)
     })

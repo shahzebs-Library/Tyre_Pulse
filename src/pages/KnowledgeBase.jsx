@@ -5,6 +5,7 @@ import {
   ChevronDown, X, Plus, Loader, Lock,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase' // retained solely for reindexMissingEmbeddings(supabase)
+import { toUserMessage } from '../lib/safeError'
 import * as knowledgeDocuments from '../lib/api/knowledgeDocuments'
 import { useAuth } from '../contexts/AuthContext'
 import { generateEmbedding, reindexMissingEmbeddings } from '../lib/embeddingService'
@@ -126,7 +127,7 @@ function UploadModal({ onClose, onSuccess, sites }) {
 
       onSuccess(chunks.length)
     } catch (e) {
-      setError(e.message)
+      setError(toUserMessage(e, 'Could not process the document. Try again.'))
     } finally {
       setUploading(false)
       setProgress('')
@@ -303,7 +304,7 @@ export default function KnowledgeBase() {
       const uniqueSites = [...new Set(rows.map(d => d.site).filter(Boolean))].sort()
       setSites(uniqueSites)
     } catch (e) {
-      setError(e.message)
+      setError(toUserMessage(e, 'Could not load knowledge base documents.'))
     } finally {
       setLoading(false)
     }
@@ -321,7 +322,7 @@ export default function KnowledgeBase() {
     if (!window.confirm('Delete this document from the knowledge base?')) return
     try {
       await knowledgeDocuments.deleteKnowledgeDocument(id)
-    } catch (err) { setError(err.message); return }
+    } catch (err) { setError(toUserMessage(err, 'Could not delete the document.')); return }
     setDocs(prev => prev.filter(d => d.id !== id))
     setStats(prev => ({ ...prev, total: prev.total - 1 }))
     if (viewDoc?.id === id) setViewDoc(null)

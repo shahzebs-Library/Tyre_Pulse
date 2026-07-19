@@ -5,6 +5,7 @@ import { detectAnomalies } from '../lib/anomalyEngine'
 import { askAI, buildDataContext, DEEP_ANALYSIS_PRESETS, SUGGESTED_QUESTIONS } from '../lib/aiAnalytics'
 import { AGENT_TYPES, AGENT_LABELS, AGENT_COLORS, AGENT_DESCRIPTIONS, classifyQuery } from '../lib/aiRouter'
 import { exportToPdf, exportToExcel, exportDailyExecutivePdf } from '../lib/exportUtils'
+import { toUserMessage } from '../lib/safeError'
 import {
   Chart as ChartJS, CategoryScale, LinearScale, BarElement, LineElement,
   PointElement, ArcElement, Title, Tooltip, Legend, Filler,
@@ -323,7 +324,7 @@ export default function AiAnalytics() {
       setMessages(prev => [...prev, newMsg])
       setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: 'smooth' }), 100)
     } catch (err) {
-      setError(err.message || 'AI request failed. Please check your connection and try again.')
+      setError(toUserMessage(err, 'AI request failed. Please check your connection and try again.'))
     } finally {
       setAsking(false)
     }

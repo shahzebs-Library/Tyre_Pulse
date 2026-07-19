@@ -26,6 +26,7 @@ import {
   QUERY_OPERATORS, operatorLabel, normalizeFilter, describeFilter, isValidOperator,
 } from '../../lib/queryBuilder'
 import { exportToExcel } from '../../lib/exportUtils'
+import { toUserMessage } from '../../lib/safeError'
 
 const LIMIT_OPTIONS = [50, 100, 500]
 const EMPTY_FILTER = { column: '', op: 'eq', value: '' }
@@ -160,14 +161,18 @@ export default function ConsoleDataBrowser() {
   async function handleExport() {
     if (!rows.length) return
     const keys = rowKeys
-    await exportToExcel(
-      rows,
-      keys,
-      keys,
-      `TyrePulse ${selected} Data`,
-      'Data',
-      { title: `${selected} data browser export` },
-    )
+    try {
+      await exportToExcel(
+        rows,
+        keys,
+        keys,
+        `TyrePulse ${selected} Data`,
+        'Data',
+        { title: `${selected} data browser export` },
+      )
+    } catch (err) {
+      setError(toUserMessage(err, 'Could not export. Please try again.'))
+    }
   }
 
   const filterSummary = describeFilter({ table: selected, ...filter }, { columns: columnLabels })

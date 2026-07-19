@@ -9,6 +9,7 @@ import {
 import { motion, AnimatePresence } from 'framer-motion'
 import * as workflows from '../lib/api/workflows'
 import * as queue from '../lib/api/approvalsQueue'
+import { toUserMessage } from '../lib/safeError'
 import { useAuth } from '../contexts/AuthContext'
 import { useSettings } from '../contexts/SettingsContext'
 import { formatDistanceToNow } from 'date-fns'
@@ -307,7 +308,7 @@ function DetailDrawer({ instance, actionable, onClose, onActed }) {
       const rows = await workflows.listStepEvents(instance.id)
       setEvents(rows || [])
     } catch (err) {
-      setTrailErr(err?.message || 'Failed to load approval history')
+      setTrailErr(toUserMessage(err, 'Failed to load approval history'))
     }
   }, [instance.id])
 
@@ -326,7 +327,7 @@ function DetailDrawer({ instance, actionable, onClose, onActed }) {
       await loadTrail()
       onActed?.()
     } catch (err) {
-      setFeedback({ kind: 'error', text: err?.message || `Failed to ${action} the workflow.` })
+      setFeedback({ kind: 'error', text: toUserMessage(err, `Failed to ${action} the workflow.`) })
     } finally {
       setBusy(false)
     }
@@ -411,7 +412,7 @@ function SimpleApprovalDrawer({ item, canAct, onClose, onActed }) {
       setFeedback({ kind: 'success', text: approved ? 'Approved successfully.' : 'Returned / rejected successfully.' })
       onActed?.()
     } catch (err) {
-      setFeedback({ kind: 'error', text: err?.message || 'Action failed.' })
+      setFeedback({ kind: 'error', text: toUserMessage(err, 'Action failed.') })
     } finally {
       setBusy(false)
     }
@@ -672,7 +673,7 @@ export default function Approvals() {
     } else {
       setBuckets(EMPTY_BUCKETS)
       setMetricsRaw(null)
-      setWorkflowError(dashR.reason?.message || 'Workflow engine unavailable')
+      setWorkflowError(toUserMessage(dashR.reason, 'Workflow engine unavailable'))
     }
     setActionableIds(new Set(
       mineR.status === 'fulfilled' ? (mineR.value || []).map(r => r.id) : [],
@@ -683,7 +684,7 @@ export default function Approvals() {
 
     // Fatal only when EVERY primary source failed.
     const anyOk = [dashR, closuresR, checklistR].some(r => r.status === 'fulfilled')
-    if (!anyOk) setFatalError(dashR.reason?.message || 'Failed to load approvals')
+    if (!anyOk) setFatalError(toUserMessage(dashR.reason, 'Failed to load approvals'))
 
     setUpdatedAt(new Date())
     setLoading(false)

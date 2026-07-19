@@ -25,6 +25,7 @@ import { useSettings } from '../contexts/SettingsContext'
 import { listLoads, createLoad, updateLoad, deleteLoad, LOAD_STATUSES } from '../lib/api/dispatch'
 import { summarizeDispatch, loadStatusMeta } from '../lib/dispatch'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
+import { toUserMessage } from '../lib/safeError'
 
 ChartJS.register(ArcElement, Tooltip, Legend)
 
@@ -93,7 +94,7 @@ function LoadModal({ initial, onClose, onSaved }) {
       onSaved?.(row)
       onClose?.()
     } catch (err) {
-      setError(err?.message || 'Could not save this load. Please try again.')
+      setError(toUserMessage(err, 'Could not save this load. Please try again.'))
     } finally {
       setBusy(false)
     }
@@ -185,7 +186,7 @@ function DeleteConfirm({ load, onCancel, onConfirm }) {
   const [err, setErr] = useState('')
   const go = async () => {
     setBusy(true); setErr('')
-    try { await onConfirm() } catch (e) { setErr(e?.message || 'Could not delete.'); setBusy(false) }
+    try { await onConfirm() } catch (e) { setErr(toUserMessage(e, 'Could not delete.')); setBusy(false) }
   }
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" role="dialog" aria-modal="true">
@@ -237,7 +238,7 @@ export default function Dispatch() {
       setUpdatedAt(new Date())
     } catch (err) {
       if (isMissingRelation(err)) { setMissing(true); setRows([]) }
-      else { setError(err?.message || 'Could not load dispatch loads.'); setRows([]) }
+      else { setError(toUserMessage(err, 'Could not load dispatch loads.')); setRows([]) }
     } finally {
       setRefreshing(false)
     }
@@ -318,10 +319,10 @@ export default function Dispatch() {
         updatedAt={updatedAt}
         actions={
           <div className="flex items-center gap-2">
-            <button onClick={() => exportToExcel(exportRows, EXPORT_COLS, EXPORT_HEADERS, 'dispatch_loads')} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!filtered.length}>
+            <button onClick={async () => { try { await exportToExcel(exportRows, EXPORT_COLS, EXPORT_HEADERS, 'dispatch_loads') } catch (e) { setError(toUserMessage(e, 'Could not export. Try again.')) } }} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!filtered.length}>
               <FileSpreadsheet size={14} /> Excel
             </button>
-            <button onClick={() => exportToPdf(exportRows, EXPORT_COLS.map((k, i) => ({ key: k, header: EXPORT_HEADERS[i] })), 'Dispatch Loads', 'dispatch_loads', 'landscape')} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!filtered.length}>
+            <button onClick={async () => { try { await exportToPdf(exportRows, EXPORT_COLS.map((k, i) => ({ key: k, header: EXPORT_HEADERS[i] })), 'Dispatch Loads', 'dispatch_loads', 'landscape') } catch (e) { setError(toUserMessage(e, 'Could not export. Try again.')) } }} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!filtered.length}>
               <FileText size={14} /> PDF
             </button>
             <button onClick={() => setModal({ initial: null })} className="btn-primary text-sm inline-flex items-center gap-1.5">

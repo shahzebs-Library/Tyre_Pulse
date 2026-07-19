@@ -9,6 +9,7 @@ import * as integrations from '../lib/api/integrations'
 import { canAddResource } from '../lib/api/billing'
 import { formatDistanceToNow } from 'date-fns'
 import { formatDateTime } from '../lib/formatters'
+import { toUserMessage } from '../lib/safeError'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -106,7 +107,7 @@ function ApiKeysTab({ search }) {
     try {
       const rows = await integrations.listApiKeys()
       setKeys(rows || [])
-    } catch (err) { setError(err.message || 'Failed to load API keys') }
+    } catch (err) { setError(toUserMessage(err, 'Failed to load API keys')) }
     finally { setLoading(false) }
   }, [])
 
@@ -136,7 +137,7 @@ function ApiKeysTab({ search }) {
       setExpiresAt('')
       setShowForm(false)
       fetch()
-    } catch (err) { setFormError(err.message || 'Failed to create key') }
+    } catch (err) { setFormError(toUserMessage(err, 'Failed to create key')) }
     finally { setCreating(false) }
   }
 
@@ -147,7 +148,7 @@ function ApiKeysTab({ search }) {
     try {
       await integrations.revokeApiKey(k.id)
       fetch()
-    } catch (err) { setError(err.message || 'Revoke failed') }
+    } catch (err) { setError(toUserMessage(err, 'Revoke failed')) }
     finally { setRevoking(null) }
   }
 
@@ -568,7 +569,7 @@ function WebhooksTab({ search }) {
     try {
       const rows = await integrations.listWebhooks()
       setHooks(rows || [])
-    } catch (err) { setError(err.message || 'Failed to load webhooks') }
+    } catch (err) { setError(toUserMessage(err, 'Failed to load webhooks')) }
     finally { setLoading(false) }
   }, [])
 
@@ -582,7 +583,7 @@ function WebhooksTab({ search }) {
       else await integrations.createWebhook(values)
       setModal(null)
       fetch()
-    } catch (err) { setError(err.message || 'Save failed') }
+    } catch (err) { setError(toUserMessage(err, 'Save failed')) }
     finally { setSaving(false) }
   }
 
@@ -591,7 +592,7 @@ function WebhooksTab({ search }) {
     try {
       await integrations.deleteWebhook(id)
       setHooks(prev => prev.filter(h => h.id !== id))
-    } catch (err) { setError(err.message || 'Delete failed') }
+    } catch (err) { setError(toUserMessage(err, 'Delete failed')) }
   }
 
   async function handleToggle(id, active) {
@@ -599,7 +600,7 @@ function WebhooksTab({ search }) {
     try {
       await integrations.updateWebhook(id, { active })
       setHooks(prev => prev.map(h => h.id === id ? { ...h, active } : h))
-    } catch (err) { setError(err.message || 'Update failed') }
+    } catch (err) { setError(toUserMessage(err, 'Update failed')) }
   }
 
   const q = search.trim().toLowerCase()
@@ -674,7 +675,7 @@ function DeliveriesTab({ search }) {
       })
       setRows(data || [])
       setCount(total || 0)
-    } catch (err) { setError(err.message || 'Failed to load deliveries') }
+    } catch (err) { setError(toUserMessage(err, 'Failed to load deliveries')) }
     finally { setLoading(false) }
   }, [subId, page])
 

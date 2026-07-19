@@ -22,6 +22,7 @@ import {
 } from '../lib/api/trips'
 import { summariseTrips, perAssetTotals } from '../lib/trips'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
+import { toUserMessage } from '../lib/safeError'
 
 const EMPTY_FORM = {
   asset_no: '', driver_name: '', origin: '', destination: '',
@@ -103,7 +104,7 @@ export default function Trips() {
       setUpdatedAt(new Date())
     } catch (err) {
       if (isMissingRelation(err)) setNotProvisioned(true)
-      else setError(err?.message || 'Could not load trips.')
+      else setError(toUserMessage(err, 'Could not load trips.'))
       setRows([])
     } finally {
       setRefreshing(false)
@@ -195,7 +196,7 @@ export default function Trips() {
       setShowModal(false); setEditing(null)
       await load()
     } catch (err) {
-      setFormError(err?.message || 'Could not save the trip.')
+      setFormError(toUserMessage(err, 'Could not save the trip.'))
     } finally {
       setSaving(false)
     }
@@ -209,7 +210,7 @@ export default function Trips() {
       setConfirmDelete(null)
       await load()
     } catch (err) {
-      setError(err?.message || 'Could not delete the trip.')
+      setError(toUserMessage(err, 'Could not delete the trip.'))
     } finally {
       setDeleting(false)
     }

@@ -4,6 +4,7 @@ import { useEntityWorkflow } from '../../hooks/useEntityWorkflow'
 import ApprovalStatusBadge from './ApprovalStatusBadge'
 import ApprovalAction from './ApprovalAction'
 import ApprovalTrail from './ApprovalTrail'
+import { toUserMessage } from '../../lib/safeError'
 
 /**
  * EntityApprovalPanel — drop-in approval block for any module page.
@@ -46,7 +47,7 @@ export default function EntityApprovalPanel({
       await wf.act(action, payload)
       setMsg({ ok: true, text: `Recorded: ${action}` })
     } catch (e) {
-      setMsg({ ok: false, text: e?.message || 'Action failed' })
+      setMsg({ ok: false, text: toUserMessage(e, 'Action failed') })
     }
   }
 
@@ -56,7 +57,7 @@ export default function EntityApprovalPanel({
       await wf.start(pickDef)
       setMsg({ ok: true, text: 'Approval started' })
     } catch (e) {
-      setMsg({ ok: false, text: e?.message || 'Could not start approval' })
+      setMsg({ ok: false, text: toUserMessage(e, 'Could not start approval') })
     }
   }
 

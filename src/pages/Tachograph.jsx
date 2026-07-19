@@ -24,6 +24,7 @@ import {
 } from '../lib/api/tachographRecords'
 import { summariseTachograph, byDriver, hasInfringement } from '../lib/tachographRecords'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
+import { toUserMessage } from '../lib/safeError'
 
 const EMPTY_FORM = {
   driver_name: '', asset_no: '', card_number: '', record_date: '',
@@ -123,7 +124,7 @@ export default function Tachograph() {
       setUpdatedAt(new Date())
     } catch (err) {
       if (isMissingRelation(err)) setNotProvisioned(true)
-      else setError(err?.message || 'Could not load tachograph records.')
+      else setError(toUserMessage(err, 'Could not load tachograph records.'))
       setRows([])
     } finally {
       setRefreshing(false)
@@ -215,7 +216,7 @@ export default function Tachograph() {
       setShowModal(false); setEditing(null)
       await load()
     } catch (err) {
-      setFormError(err?.message || 'Could not save the record.')
+      setFormError(toUserMessage(err, 'Could not save the record.'))
     } finally {
       setSaving(false)
     }
@@ -229,7 +230,7 @@ export default function Tachograph() {
       setConfirmDelete(null)
       await load()
     } catch (err) {
-      setError(err?.message || 'Could not delete the record.')
+      setError(toUserMessage(err, 'Could not delete the record.'))
     } finally {
       setDeleting(false)
     }

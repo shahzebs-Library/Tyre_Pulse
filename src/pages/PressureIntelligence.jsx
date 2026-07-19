@@ -17,6 +17,7 @@ import { fetchAllPages } from '../lib/fetchAll'
 import { useSettings } from '../contexts/SettingsContext'
 import { useTenant } from '../contexts/TenantContext'
 import { resolvePdfBrand, pdfHeader, pdfFooter, pdfEmptyState, pdfTableTheme } from '../lib/exportUtils'
+import { toUserMessage } from '../lib/safeError'
 
 ChartJS.register(
   CategoryScale, LinearScale, BarElement, LineElement, PointElement,
@@ -222,7 +223,7 @@ export default function PressureIntelligence() {
         setInspections(ins || [])
         setTyreRecords(tr || [])
       } catch (e) {
-        setError(e.message)
+        setError(toUserMessage(e, 'Could not load pressure data.'))
       } finally {
         setLoading(false)
       }

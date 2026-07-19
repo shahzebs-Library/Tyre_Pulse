@@ -9,6 +9,7 @@ import { SkeletonTable } from '../components/ui/Skeleton'
 import EmptyState from '../components/EmptyState'
 import * as recallsApi from '../lib/api/recalls'
 import { useSettings } from '../contexts/SettingsContext'
+import { toUserMessage } from '../lib/safeError'
 
 // ── Config shared with the RecallTracker registry so badges read identically ──
 const SEVERITY_CFG = {
@@ -97,7 +98,7 @@ export default function RecallDetail() {
       setRecall(rec || null)
       setTyres(tyreRes?.data ?? [])
     } catch (e) {
-      setError(e?.message || 'Could not load this recall record.')
+      setError(toUserMessage(e, 'Could not load this recall record.'))
       setRecall(null)
     } finally {
       setLoading(false)

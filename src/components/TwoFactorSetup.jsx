@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
+import { toUserMessage } from '../lib/safeError'
 import {
   X, Shield, Copy, Check, Download, Loader2, CheckCircle2, AlertCircle, KeyRound,
 } from 'lucide-react'
@@ -61,7 +62,7 @@ export default function TwoFactorSetup({ open, onClose, onSuccess }) {
     setVerifyError('')
     const { data, error } = await supabase.auth.mfa.enroll({ factorType: 'totp' })
     if (error) {
-      setVerifyError(error.message)
+      setVerifyError(toUserMessage(error, 'Could not verify. Please try again.'))
       setEnrolling(false)
       return
     }
@@ -102,7 +103,7 @@ export default function TwoFactorSetup({ open, onClose, onSuccess }) {
       setStep(3)
       onSuccess?.()
     } catch (err) {
-      setVerifyError(err.message ?? 'Invalid code, please try again')
+      setVerifyError(toUserMessage(err, 'Invalid code, please try again'))
       setCode('')
       codeRef.current?.focus()
     } finally {

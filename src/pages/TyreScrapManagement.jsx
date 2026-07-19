@@ -25,6 +25,7 @@ import { resolvePdfBrand, pdfHeader, pdfFooter, pdfEmptyState, pdfTableTheme } f
 import { formatMonthYear } from '../lib/formatters'
 import PageHeader from '../components/ui/PageHeader'
 import EmptyState from '../components/EmptyState'
+import { toUserMessage } from '../lib/safeError'
 
 ChartJS.register(
   CategoryScale, LinearScale, BarElement, LineElement,
@@ -230,7 +231,7 @@ export default function TyreScrapManagement() {
       if (err) throw err
       setAllTyres(data ?? [])
     } catch (e) {
-      setError(e.message ?? 'Failed to load tyre data')
+      setError(toUserMessage(e, 'Failed to load tyre data'))
     } finally {
       setLoading(false)
     }
@@ -566,7 +567,7 @@ export default function TyreScrapManagement() {
       .then(({ error: err }) => {
         if (err) {
           setDisposals(prev => ({ ...prev, [id]: prevStatus ?? 'Pending' }))
-          setDisposalError(`Could not save the disposal status: ${err.message}`)
+          setDisposalError(toUserMessage(err, 'Could not save the disposal status.'))
         }
       })
   }, [expandedId, wfLocked])

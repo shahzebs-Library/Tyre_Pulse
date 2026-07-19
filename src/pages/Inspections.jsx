@@ -981,18 +981,18 @@ export default function Inspections() {
         actions={isTyreMan ? null : (
           <div className="flex gap-2 flex-wrap">
             <button
-              onClick={() => exportToExcel(
+              onClick={async () => { try { await exportToExcel(
                 filtered,
                 ['inspection_type','title','site','asset_no','scheduled_date','status','severity','inspector','attendees','findings'],
                 ['Type','Title','Site','Asset No','Date','Status','Severity','Inspector','Attendees','Findings'],
                 'TyrePulse_Inspections'
-              )}
+              ) } catch (e) { setApproveMsg({ type: 'error', text: toUserMessage(e, 'Could not export. Try again.') }) } }}
               className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-1.5"
             >
               <Download size={14}/> {t('inspections.actions.excel')}
             </button>
             <button
-              onClick={() => exportToPdf(
+              onClick={async () => { try { await exportToPdf(
                 filtered,
                 [
                   {key:'inspection_type',header:'Type'},
@@ -1007,7 +1007,7 @@ export default function Inspections() {
                 'Inspections & Observations',
                 'TyrePulse_Inspections',
                 'landscape'
-              )}
+              ) } catch (e) { setApproveMsg({ type: 'error', text: toUserMessage(e, 'Could not export. Try again.') }) } }}
               className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-1.5"
             >
               <FileText size={14}/> {t('inspections.actions.pdf')}

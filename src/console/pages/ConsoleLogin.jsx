@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Shield, Eye, EyeOff, AlertTriangle, Lock, Smartphone, ChevronLeft } from 'lucide-react'
 import { useConsoleAuth } from '../ConsoleAuthContext'
+import { toUserMessage } from '../../lib/safeError'
 
 // step: 'credentials' | 'totp'
 export default function ConsoleLogin() {
@@ -38,7 +39,7 @@ export default function ConsoleLogin() {
     )
 
     if (err) {
-      setError(err.message); setLoading(false); return
+      setError(toUserMessage(err, 'Could not sign you in. Check your details and try again.')); setLoading(false); return
     }
     if (mfaRequired) {
       setFactorId(fid)

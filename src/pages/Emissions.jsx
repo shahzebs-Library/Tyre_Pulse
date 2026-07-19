@@ -25,6 +25,7 @@ import {
   summariseEmissions, latestPerAsset, expiryStatus, daysUntilExpiry,
 } from '../lib/emissionsTests'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
+import { toUserMessage } from '../lib/safeError'
 
 const EMPTY_FORM = {
   asset_no: '', certificate_no: '', test_date: '', expiry_date: '', test_center: '',
@@ -129,7 +130,7 @@ export default function Emissions() {
       setUpdatedAt(new Date())
     } catch (err) {
       if (isMissingRelation(err)) setNotProvisioned(true)
-      else setError(err?.message || 'Could not load emissions tests.')
+      else setError(toUserMessage(err, 'Could not load emissions tests.'))
       setRows([])
     } finally {
       setRefreshing(false)
@@ -223,7 +224,7 @@ export default function Emissions() {
       setShowModal(false); setEditing(null)
       await load()
     } catch (err) {
-      setFormError(err?.message || 'Could not save the emissions test.')
+      setFormError(toUserMessage(err, 'Could not save the emissions test.'))
     } finally {
       setSaving(false)
     }
@@ -237,7 +238,7 @@ export default function Emissions() {
       setConfirmDelete(null)
       await load()
     } catch (err) {
-      setError(err?.message || 'Could not delete the emissions test.')
+      setError(toUserMessage(err, 'Could not delete the emissions test.'))
     } finally {
       setDeleting(false)
     }
@@ -257,10 +258,10 @@ export default function Emissions() {
         updatedAt={updatedAt}
         actions={
           <div className="flex items-center gap-2">
-            <button onClick={() => exportToExcel(exportRows, EXPORT_COLS, EXPORT_HEADERS, 'emissions_tests')} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!filtered.length}>
+            <button onClick={async () => { try { await exportToExcel(exportRows, EXPORT_COLS, EXPORT_HEADERS, 'emissions_tests') } catch (e) { setError(toUserMessage(e, 'Could not export. Try again.')) } }} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!filtered.length}>
               <FileSpreadsheet size={14} /> Excel
             </button>
-            <button onClick={() => exportToPdf(exportRows, EXPORT_COLS.map((k, i) => ({ key: k, header: EXPORT_HEADERS[i] })), 'Emissions Tests', 'emissions_tests', 'landscape')} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!filtered.length}>
+            <button onClick={async () => { try { await exportToPdf(exportRows, EXPORT_COLS.map((k, i) => ({ key: k, header: EXPORT_HEADERS[i] })), 'Emissions Tests', 'emissions_tests', 'landscape') } catch (e) { setError(toUserMessage(e, 'Could not export. Try again.')) } }} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!filtered.length}>
               <FileText size={14} /> PDF
             </button>
             <button onClick={openCreate} className="btn-primary text-sm inline-flex items-center gap-1.5" disabled={notProvisioned}>

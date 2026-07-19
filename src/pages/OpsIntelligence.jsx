@@ -39,6 +39,7 @@ import {
   SEVERITY_META, CATEGORY_META, CATEGORIES,
 } from '../lib/opsIntelligence'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
+import { toUserMessage } from '../lib/safeError'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Tooltip, Legend)
 
@@ -114,7 +115,7 @@ export default function OpsIntelligence() {
       setNow(Date.now())
       setUpdatedAt(new Date())
     } catch (err) {
-      setError(err?.message || 'Could not load fleet data.')
+      setError(toUserMessage(err, 'Could not load fleet data.'))
       setData({ tyres: [], workOrders: [], inspections: [], budgets: [], activeVehicles: null })
     } finally {
       setRefreshing(false)

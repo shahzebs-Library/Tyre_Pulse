@@ -13,6 +13,7 @@ import { exportChecklistSubmissionPdf } from '../lib/exportUtils'
 import { useTenant } from '../contexts/TenantContext'
 import EntityApprovalPanel from '../components/workflow/EntityApprovalPanel'
 import { safeHref, safeImageSrc } from '../lib/safeUrl'
+import { toUserMessage } from '../lib/safeError'
 
 const STATUS_BADGE = {
   submitted: 'bg-sky-900/40 text-sky-300 border border-sky-700/50',
@@ -70,7 +71,7 @@ export default function ChecklistSubmission() {
       if (!row) { setSub(null); setLoadError('not_found'); return }
       setSub(row)
     } catch (err) {
-      setLoadError(isMissingRelation(err) ? 'missing' : (err?.message || 'Could not load the submission.'))
+      setLoadError(isMissingRelation(err) ? 'missing' : toUserMessage(err, 'Could not load the submission.'))
     } finally {
       setLoading(false)
     }
@@ -130,7 +131,7 @@ export default function ChecklistSubmission() {
     try {
       await exportChecklistSubmissionPdf(sub, { company, branding, fields: templateFields })
     } catch (err) {
-      setExportError(err?.message || 'Could not generate the PDF.')
+      setExportError(toUserMessage(err, 'Could not generate the PDF.'))
     } finally {
       setExporting(false)
     }

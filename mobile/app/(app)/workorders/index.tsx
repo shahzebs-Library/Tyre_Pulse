@@ -21,6 +21,7 @@ import { supabase } from '../../../lib/supabase'
 import { saveCommand } from '../../../lib/recordQueue'
 import { isAdminOrAbove } from '../../../lib/types'
 import { canUpdateWorkOrders } from '../../../lib/permissions'
+import { toUserMessage } from '../../../lib/safeError'
 
 type WorkOrderStatus = 'Open' | 'In Progress' | 'Resolved' | 'Closed'
 type Priority = 'Critical' | 'High' | 'Medium' | 'Low'
@@ -74,6 +75,7 @@ export default function WorkOrdersScreen() {
 
   const [orders, setOrders]         = useState<WorkOrder[]>([])
   const [loading, setLoading]       = useState(true)
+  const [error, setError]           = useState<string | null>(null)
   const [refreshing, setRefreshing] = useState(false)
   const [statusFilter, setStatusFilter] = useState<FilterStatus>('Open')
   const [search, setSearch]         = useState('')
@@ -82,20 +84,27 @@ export default function WorkOrdersScreen() {
 
   const load = useCallback(async () => {
     setLoading(true)
-    let q = supabase
-      .from('corrective_actions')
-      .select('id,title,priority,site,asset_no,tyre_serial,assigned_to,status,description,root_cause,due_date,created_at,closed_at')
-      .order('created_at', { ascending: false })
-      .limit(200)
+    setError(null)
+    try {
+      let q = supabase
+        .from('corrective_actions')
+        .select('id,title,priority,site,asset_no,tyre_serial,assigned_to,status,description,root_cause,due_date,created_at,closed_at')
+        .order('created_at', { ascending: false })
+        .limit(200)
 
-    if (statusFilter !== 'all') q = q.eq('status', statusFilter)
-    if (!elevated && profile?.site) q = q.eq('site', profile.site)
-    if (search.trim()) q = q.or(`title.ilike.%${search}%,asset_no.ilike.%${search}%,tyre_serial.ilike.%${search}%`)
+      if (statusFilter !== 'all') q = q.eq('status', statusFilter)
+      if (!elevated && profile?.site) q = q.eq('site', profile.site)
+      if (search.trim()) q = q.or(`title.ilike.%${search}%,asset_no.ilike.%${search}%,tyre_serial.ilike.%${search}%`)
 
-    const { data } = await q
-    setOrders((data ?? []) as WorkOrder[])
-    setLoading(false)
-    setRefreshing(false)
+      const { data, error: qErr } = await q
+      if (qErr) throw qErr
+      setOrders((data ?? []) as WorkOrder[])
+    } catch (e: any) {
+      setError(toUserMessage(e))
+    } finally {
+      setLoading(false)
+      setRefreshing(false)
+    }
   }, [statusFilter, search, elevated, profile?.site])
 
   useEffect(() => { load() }, [load])
@@ -174,13 +183,23 @@ export default function WorkOrdersScreen() {
           contentContainerStyle={styles.list}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#f59e0b" />}
           ListEmptyComponent={
-            <View style={styles.empty}>
-              <Ionicons name="construct-outline" size={48} color="#cbd5e1" />
-              <Text style={styles.emptyTitle}>{t('modules.workOrdersList.none')}</Text>
-              <Text style={styles.emptyHint}>
-                {statusFilter === 'Open' ? t('modules.workOrdersList.noneOpenHint') : t('modules.workOrdersList.noneFilterHint')}
-              </Text>
-            </View>
+            error ? (
+              <View style={styles.empty}>
+                <Ionicons name="cloud-offline-outline" size={48} color="#cbd5e1" />
+                <Text style={styles.emptyTitle}>{error}</Text>
+                <TouchableOpacity onPress={load} style={{ marginTop: 14, backgroundColor: '#f59e0b', paddingHorizontal: 20, paddingVertical: 10, borderRadius: 8 }}>
+                  <Text style={{ color: '#fff', fontWeight: '600' }}>{t('common.retry')}</Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <View style={styles.empty}>
+                <Ionicons name="construct-outline" size={48} color="#cbd5e1" />
+                <Text style={styles.emptyTitle}>{t('modules.workOrdersList.none')}</Text>
+                <Text style={styles.emptyHint}>
+                  {statusFilter === 'Open' ? t('modules.workOrdersList.noneOpenHint') : t('modules.workOrdersList.noneFilterHint')}
+                </Text>
+              </View>
+            )
           }
           renderItem={({ item }) => (
             <TouchableOpacity style={styles.card} onPress={() => setDetail(item)} activeOpacity={0.75}>

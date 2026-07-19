@@ -6,6 +6,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { useTenant } from '../contexts/TenantContext'
 import { useLanguage } from '../contexts/LanguageContext'
 import { resolvePdfBrand, pdfHeader, pdfFooter, pdfEmptyState, pdfTableTheme } from '../lib/exportUtils'
+import { toUserMessage } from '../lib/safeError'
 import {
   Chart as ChartJS,
   CategoryScale, LinearScale, BarElement, LineElement, PointElement,
@@ -151,7 +152,7 @@ export default function BudgetPlanner() {
       if (err) throw err
       setRecords(data ?? [])
     } catch (e) {
-      setError(e.message ?? 'Failed to load tyre records')
+      setError(toUserMessage(e, 'Failed to load tyre records'))
     } finally {
       setLoading(false)
     }
@@ -185,7 +186,7 @@ export default function BudgetPlanner() {
       setSiteBudgets(siteMap)
       setStoredAnnual(annual)
     } catch (e) {
-      setBudgetsError(e.message ?? 'Failed to load budgets')
+      setBudgetsError(toUserMessage(e, 'Failed to load budgets'))
       setSiteBudgets({})
       setStoredAnnual(null)
     } finally {
@@ -549,7 +550,7 @@ export default function BudgetPlanner() {
       setSiteBudgets(prev => ({ ...prev, [site]: val }))
       setEditingSite(null)
     } catch (e) {
-      setSaveError(e.message ?? 'Failed to save site budget')
+      setSaveError(toUserMessage(e, 'Failed to save site budget'))
     } finally {
       setSaving(false)
     }
@@ -565,7 +566,7 @@ export default function BudgetPlanner() {
       setStoredAnnual(val)
       setEditingAnnual(false)
     } catch (e) {
-      setSaveError(e.message ?? 'Failed to save annual budget')
+      setSaveError(toUserMessage(e, 'Failed to save annual budget'))
     } finally {
       setSaving(false)
     }

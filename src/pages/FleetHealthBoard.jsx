@@ -16,6 +16,7 @@ import {
   BarChart2, Filter,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
+import { toUserMessage } from '../lib/safeError'
 import { fetchAllPages } from '../lib/fetchAll'
 import { formatDate } from '../lib/formatters'
 import { useSettings } from '../contexts/SettingsContext'
@@ -259,7 +260,7 @@ export default function FleetHealthBoard() {
       if (myReq !== reqIdRef.current) return
       setTrendData(trendRaw ?? [])
     } catch (e) {
-      if (myReq === reqIdRef.current) setError(e.message ?? 'Failed to load fleet data')
+      if (myReq === reqIdRef.current) setError(toUserMessage(e, 'Failed to load fleet data'))
     } finally {
       if (myReq === reqIdRef.current) {
         setLoading(false)

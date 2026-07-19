@@ -26,6 +26,7 @@ import {
 } from '../lib/api/vehicleReservations'
 import { summariseReservations, findConflicts, durationHours } from '../lib/vehicleReservations'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
+import { toUserMessage } from '../lib/safeError'
 
 const EMPTY_FORM = {
   reference: '', asset_no: '', requester_name: '', department: '', purpose: '',
@@ -112,7 +113,7 @@ export default function VehicleReservations() {
       setUpdatedAt(new Date())
     } catch (err) {
       if (isMissingRelation(err)) setNotProvisioned(true)
-      else setError(err?.message || 'Could not load vehicle reservations.')
+      else setError(toUserMessage(err, 'Could not load vehicle reservations.'))
       setRows([])
     } finally {
       setRefreshing(false)
@@ -209,7 +210,7 @@ export default function VehicleReservations() {
       setShowModal(false); setEditing(null)
       await load()
     } catch (err) {
-      setFormError(err?.message || 'Could not save the reservation.')
+      setFormError(toUserMessage(err, 'Could not save the reservation.'))
     } finally {
       setSaving(false)
     }
@@ -223,7 +224,7 @@ export default function VehicleReservations() {
       setConfirmDelete(null)
       await load()
     } catch (err) {
-      setError(err?.message || 'Could not delete the reservation.')
+      setError(toUserMessage(err, 'Could not delete the reservation.'))
     } finally {
       setDeleting(false)
     }

@@ -4,6 +4,7 @@ import { listOrganisations } from '../lib/api/users'
 import { getOrgBranding, setOrgBranding, withBrandingDefaults, BRANDING_FIELDS } from '../lib/api/branding'
 import { safeImageSrc } from '../lib/safeUrl'
 import { useTenant } from '../contexts/TenantContext'
+import { toUserMessage } from '../lib/safeError'
 
 /**
  * OrgBrandingPanel — admin editor for per-organisation report branding.
@@ -55,7 +56,7 @@ export default function OrgBrandingPanel({ canEdit }) {
         setOrgs(list || [])
         setOrgId((prev) => prev || list?.[0]?.id || '')
       } catch (e) {
-        if (alive) setError(e.message || 'Could not load organisations.')
+        if (alive) setError(toUserMessage(e, 'Could not load organisations.'))
       } finally {
         if (alive) setLoading(false)
       }
@@ -72,7 +73,7 @@ export default function OrgBrandingPanel({ canEdit }) {
       const merged = withBrandingDefaults(raw)
       setForm(merged); setSaved(merged)
     } catch (e) {
-      setError(e.message || 'Could not load branding.')
+      setError(toUserMessage(e, 'Could not load branding.'))
     } finally {
       setLoadingBrand(false)
     }
@@ -95,7 +96,7 @@ export default function OrgBrandingPanel({ canEdit }) {
       // Refresh the app-wide tenant branding if we edited our own org.
       refreshBranding?.()
     } catch (e) {
-      setError(e.message || 'Save failed. Check your permissions and try again.')
+      setError(toUserMessage(e, 'Save failed. Check your permissions and try again.'))
     } finally {
       setSaving(false)
     }

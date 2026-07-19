@@ -17,6 +17,7 @@ import EnterpriseTable from '../components/ui/EnterpriseTable'
 import { useReportMeta } from '../hooks/useReportMeta'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import { captureChartOnPaper } from '../lib/chartCapture'
+import { toUserMessage } from '../lib/safeError'
 import {
   AGG_FNS, CHART_TYPES, DATASETS, DATASET_LIST, DEFAULT_LIMIT, KPI_FNS, KPI_FN_LABELS,
   LIST_OPS, MAX_CHART_BLOCKS, MAX_KPI_TILES, MAX_LIMIT,
@@ -295,7 +296,7 @@ export default function ReportBuilder() {
     try {
       setSaved(await listReports())
     } catch (e) {
-      setSavedError(e.message)
+      setSavedError(toUserMessage(e, 'Could not load saved reports.'))
     } finally {
       setSavedLoading(false)
     }
@@ -348,7 +349,7 @@ export default function ReportBuilder() {
       setRows(Array.isArray(data) ? data : [])
       setHasRun(true)
     } catch (e) {
-      setRunError(e.message)
+      setRunError(toUserMessage(e, 'Query failed.'))
       setRows([])
       setHasRun(true)
     } finally {
@@ -424,7 +425,7 @@ export default function ReportBuilder() {
         { title: exportBase, meta: { Dataset: dataset.label, Rows: resultRows.length } },
       )
     } catch (e) {
-      setRunError(e.message)
+      setRunError(toUserMessage(e, 'Could not export. Try again.'))
     } finally {
       setExporting(false)
     }
@@ -458,7 +459,7 @@ export default function ReportBuilder() {
         leadImage ? { leadImage, leadImageCaption: parts.join(' | ') } : {},
       )
     } catch (e) {
-      setRunError(e.message)
+      setRunError(toUserMessage(e, 'Could not export. Try again.'))
     } finally {
       setExporting(false)
     }
@@ -489,7 +490,7 @@ export default function ReportBuilder() {
       const target = reportSaveTarget(check.config.dataset)
       if (!target.table && target.reason) setSavedError(target.reason)
     } catch (e) {
-      setSaveError(e.message)
+      setSaveError(toUserMessage(e, 'Could not save the report.'))
     } finally {
       setSaving(false)
     }
@@ -528,7 +529,7 @@ export default function ReportBuilder() {
       const next = await renameSavedReport(id, name, saved)
       setSaved(next)
     } catch (e) {
-      setSavedError(e.message)
+      setSavedError(toUserMessage(e, 'Could not rename the report.'))
     } finally {
       setRenamingId(null)
       setRenameText('')
@@ -540,7 +541,7 @@ export default function ReportBuilder() {
       await deleteSavedReport(id, saved)
       setSaved(saved.filter(r => r.id !== id))
     } catch (e) {
-      setSavedError(e.message)
+      setSavedError(toUserMessage(e, 'Could not delete the report.'))
     }
   }
 

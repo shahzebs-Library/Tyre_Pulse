@@ -22,6 +22,7 @@ import { useSettings } from '../contexts/SettingsContext'
 import { useAuth } from '../contexts/AuthContext'
 import { useLanguage } from '../contexts/LanguageContext'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
+import { toUserMessage } from '../lib/safeError'
 import { formatCurrencyCompact, formatDate } from '../lib/formatters'
 import PageHeader from '../components/ui/PageHeader'
 
@@ -130,13 +131,13 @@ function AssetModal({ asset, sites, countries, onSave, onClose, locked = false }
       // everyone else and lost on cache clear. Surface the real error instead.
       if (supaErr) {
         const dup = /duplicate key|unique constraint/i.test(supaErr.message || '')
-        setError(dup ? t('assetmgmt.modal.errDuplicate') : (supaErr.message || t('assetmgmt.modal.errSaveFailed')))
+        setError(dup ? t('assetmgmt.modal.errDuplicate') : toUserMessage(supaErr, t('assetmgmt.modal.errSaveFailed')))
         setSaving(false)
         return
       }
       onSave()
     } catch (e) {
-      setError(e.message ?? t('assetmgmt.modal.errUnexpected'))
+      setError(toUserMessage(e, t('assetmgmt.modal.errUnexpected')))
     } finally {
       setSaving(false)
     }
@@ -355,7 +356,7 @@ export default function AssetManagement() {
       setAssets(filtered)
       setOverview(ov)
     } catch (e) {
-      setLoadError(e.message || t('assetmgmt.registry.loadErrorFallback'))
+      setLoadError(toUserMessage(e, t('assetmgmt.registry.loadErrorFallback')))
       setAssets([])
     } finally {
       setLoading(false)
@@ -490,7 +491,7 @@ export default function AssetManagement() {
   const pageAssets = filteredAssets.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE)
 
   // ── Export ────────────────────────────────────────────────────────────────────
-  function handleExcelExport() {
+  async function handleExcelExport() {
     const rows = filteredAssets.map(a => ({
       asset_no: a.asset_no,
       fleet_number: a.fleet_number ?? '',
@@ -509,18 +510,23 @@ export default function AssetManagement() {
       last_service: fmtDate(a._latestDate),
       health_score: a._healthScore,
     }))
-    exportToExcel(
-      rows,
-      ['asset_no','fleet_number','vehicle_type','make','model','year','site','country','current_km','operator_name','active','active_tyres','worst_risk','ytd_cost','last_service','health_score'],
-      ['Asset No','Fleet No','Type','Make','Model','Year','Site','Country','Current KM','Operator','Status','Active Tyres','Worst Risk','YTD Cost','Last Service','Health Score'],
-      `asset_register_${new Date().toISOString().slice(0,10)}`,
-      'Assets'
-    )
+    try {
+      await exportToExcel(
+        rows,
+        ['asset_no','fleet_number','vehicle_type','make','model','year','site','country','current_km','operator_name','active','active_tyres','worst_risk','ytd_cost','last_service','health_score'],
+        ['Asset No','Fleet No','Type','Make','Model','Year','Site','Country','Current KM','Operator','Status','Active Tyres','Worst Risk','YTD Cost','Last Service','Health Score'],
+        `asset_register_${new Date().toISOString().slice(0,10)}`,
+        'Assets'
+      )
+    } catch (e) {
+      setLoadError(toUserMessage(e, 'Could not export. Try again.'))
+    }
   }
 
-  function handlePdfExport() {
-    exportToPdf(
-      filteredAssets.map(a => ({
+  async function handlePdfExport() {
+    try {
+      await exportToPdf(
+        filteredAssets.map(a => ({
         asset_no: a.asset_no,
         vehicle_type: a.vehicle_type ?? '-',
         make: `${a.make ?? ''} ${a.model ?? ''}`.trim() || '-',
@@ -546,7 +552,10 @@ export default function AssetManagement() {
       ],
       'Asset Management Register',
       `asset_register_${new Date().toISOString().slice(0,10)}`
-    )
+      )
+    } catch (e) {
+      setLoadError(toUserMessage(e, 'Could not export. Try again.'))
+    }
   }
 
   // ── Render ────────────────────────────────────────────────────────────────────

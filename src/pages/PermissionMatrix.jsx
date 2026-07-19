@@ -11,6 +11,7 @@ import {
   extractViewChanges, stripView, isEmptyDiff, countDiff,
   getPermissionOverrides, savePermissionOverrides, buildDefaultMatrix,
 } from '../lib/permissionMatrix'
+import { toUserMessage } from '../lib/safeError'
 
 const ROLE_TINT = {
   Admin: 'text-purple-300', Manager: 'text-blue-300', Director: 'text-indigo-300',
@@ -52,7 +53,7 @@ export default function PermissionMatrix() {
       setBaseline(effective)
       setDraft(structuredClone(effective))
     } catch (e) {
-      setError(e.message || 'Could not load the permission matrix.')
+      setError(toUserMessage(e, 'Could not load the permission matrix.'))
     } finally {
       setLoading(false)
     }
@@ -141,7 +142,7 @@ export default function PermissionMatrix() {
       )
     } catch (e) {
       setBaseline(prevBaseline)
-      setError(e.message || 'Could not save permission changes. Your edits are still here, try again.')
+      setError(toUserMessage(e, 'Could not save permission changes. Your edits are still here, try again.'))
     } finally {
       setSaving(false)
     }

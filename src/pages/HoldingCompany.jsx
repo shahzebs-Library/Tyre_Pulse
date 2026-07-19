@@ -29,6 +29,7 @@ import {
   leagueTable, spendBreakdown, permissionMatrix, summariseHolding, LEAGUE_METRICS,
 } from '../lib/holdingCompany'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
+import { toUserMessage } from '../lib/safeError'
 
 const TABS = [
   { id: 'overview', label: 'Overview', icon: Layers },
@@ -130,7 +131,7 @@ export default function HoldingCompany() {
       setUpdatedAt(new Date())
     } catch (err) {
       if (isMissingRelation(err)) setNotProvisioned(true)
-      else setError(err?.message || 'Could not load group consolidation.')
+      else setError(toUserMessage(err, 'Could not load group consolidation.'))
       setDashboard(null); setSubsidiaries([]); setTransfers([])
     } finally {
       setRefreshing(false)
@@ -264,7 +265,7 @@ export default function HoldingCompany() {
       setShowModal(false); setEditing(null)
       await load()
     } catch (err) {
-      setFormError(err?.message || 'Could not save the transfer.')
+      setFormError(toUserMessage(err, 'Could not save the transfer.'))
     } finally {
       setSaving(false)
     }
@@ -278,7 +279,7 @@ export default function HoldingCompany() {
       setConfirmDelete(null)
       await load()
     } catch (err) {
-      setError(err?.message || 'Could not delete the transfer.')
+      setError(toUserMessage(err, 'Could not delete the transfer.'))
     } finally {
       setDeleting(false)
     }

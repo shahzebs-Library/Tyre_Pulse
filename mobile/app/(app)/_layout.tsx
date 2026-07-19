@@ -45,12 +45,16 @@ export default function AppLayout() {
 
   const loadBadges = useCallback(async () => {
     if (!user) return
-    const cc = profile?.country
-    const withC = (q: any) => cc ? q.or(`country.eq.${cc},country.is.null`) : q
-    const acc = await withC(
-      supabase.from('accidents').select('id', { count: 'exact', head: true }).neq('status', 'closed'),
-    )
-    setAccidentBadge(acc.count ?? 0)
+    try {
+      const cc = profile?.country
+      const withC = (q: any) => cc ? q.or(`country.eq.${cc},country.is.null`) : q
+      const acc = await withC(
+        supabase.from('accidents').select('id', { count: 'exact', head: true }).neq('status', 'closed'),
+      )
+      setAccidentBadge(acc.count ?? 0)
+    } catch {
+      // Badge count failed - keep the last known value, never crash the shell.
+    }
   }, [user, profile?.country])
 
   useEffect(() => { loadBadges() }, [loadBadges])

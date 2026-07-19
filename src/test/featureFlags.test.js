@@ -209,7 +209,8 @@ describe('saveFlags', () => {
     h.state.upsertResult = { error: { message: 'permission denied' } }
     const seen = []
     const unsubscribe = subscribe((f) => seen.push(f))
-    await expect(saveFlags({ ai_tools: false })).rejects.toThrow('permission denied')
+    // Raw DB text is intentionally suppressed; a generic message is thrown instead.
+    await expect(saveFlags({ ai_tools: false })).rejects.toThrow(/could not save feature flags/i)
     unsubscribe()
     expect(seen).toHaveLength(0)
   })

@@ -24,6 +24,7 @@ import {
 } from '../lib/api/handoverReports'
 import { summariseHandovers, byCondition, damageCount } from '../lib/handoverReports'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
+import { toUserMessage } from '../lib/safeError'
 
 const EMPTY_FORM = {
   asset_no: '', report_no: '', handover_type: 'checkout', from_driver: '', to_driver: '',
@@ -111,7 +112,7 @@ export default function VehicleHandover() {
       setUpdatedAt(new Date())
     } catch (err) {
       if (isMissingRelation(err)) setNotProvisioned(true)
-      else setError(err?.message || 'Could not load handover reports.')
+      else setError(toUserMessage(err, 'Could not load handover reports.'))
       setRows([])
     } finally {
       setRefreshing(false)
@@ -199,7 +200,7 @@ export default function VehicleHandover() {
       setShowModal(false); setEditing(null)
       await load()
     } catch (err) {
-      setFormError(err?.message || 'Could not save the handover report.')
+      setFormError(toUserMessage(err, 'Could not save the handover report.'))
     } finally {
       setSaving(false)
     }
@@ -213,7 +214,7 @@ export default function VehicleHandover() {
       setConfirmDelete(null)
       await load()
     } catch (err) {
-      setError(err?.message || 'Could not delete the handover report.')
+      setError(toUserMessage(err, 'Could not delete the handover report.'))
     } finally {
       setDeleting(false)
     }

@@ -25,6 +25,7 @@ import { formatDate } from '../lib/formatters'
 import { resolvePdfBrand, pdfHeader, pdfFooter, pdfEmptyState, pdfTableTheme } from '../lib/exportUtils'
 import PageHeader from '../components/ui/PageHeader'
 import EmptyState from '../components/EmptyState'
+import { toUserMessage } from '../lib/safeError'
 
 ChartJS.register(
   CategoryScale, LinearScale, BarElement, LineElement,
@@ -483,7 +484,7 @@ export default function WarrantyTracker() {
       setEditClaim(null)
       setForm(EMPTY_FORM)
     } catch (e) {
-      setFormError(e?.message || 'Could not save the claim. Please retry.')
+      setFormError(toUserMessage(e, 'Could not save the claim. Please retry.'))
     } finally {
       setSaving(false)
     }
@@ -502,7 +503,7 @@ export default function WarrantyTracker() {
       await removeClaim(id)
       setDrawer(null)
     } catch (e) {
-      window.alert(e?.message || 'Could not delete the claim.')
+      window.alert(toUserMessage(e, 'Could not delete the claim.'))
     }
   }, [removeClaim, editClaim, claimLocked])
 

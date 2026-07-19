@@ -25,6 +25,7 @@ import {
 } from '../lib/api/advancedSearch'
 import { summariseSearches, groupByEntity } from '../lib/advancedSearch'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
+import { toUserMessage } from '../lib/safeError'
 
 // ── Entity metadata (labels, icons, live-result shaping) ─────────────────────
 const ENTITY_META = {
@@ -115,7 +116,7 @@ export default function AdvancedSearch() {
       setUpdatedAt(new Date())
     } catch (err) {
       if (isMissingRelation(err)) setNotProvisioned(true)
-      else setError(err?.message || 'Could not load saved searches.')
+      else setError(toUserMessage(err, 'Could not load saved searches.'))
       setSaved([])
     } finally {
       setRefreshing(false)
@@ -151,7 +152,7 @@ export default function AdvancedSearch() {
       setResults(out); setRanTerm(t)
       return out
     } catch (err) {
-      setSearchError(err?.message || 'Search failed.')
+      setSearchError(toUserMessage(err, 'Search failed.'))
       setResults({ assets: [], tyres: [], workOrders: [], inspections: [], total: 0 })
       return null
     } finally {
@@ -183,7 +184,7 @@ export default function AdvancedSearch() {
       await setSavedSearchPinned(row.id, next)
     } catch (err) {
       setSaved((prev) => (prev || []).map((r) => r.id === row.id ? { ...r, pinned: !next } : r))
-      setError(err?.message || 'Could not update pin.')
+      setError(toUserMessage(err, 'Could not update pin.'))
     }
   }, [])
 
@@ -238,7 +239,7 @@ export default function AdvancedSearch() {
       setShowModal(false); setEditing(null)
       await load()
     } catch (err) {
-      setFormError(err?.message || 'Could not save the search.')
+      setFormError(toUserMessage(err, 'Could not save the search.'))
     } finally {
       setSaving(false)
     }
@@ -252,7 +253,7 @@ export default function AdvancedSearch() {
       setConfirmDelete(null)
       await load()
     } catch (err) {
-      setError(err?.message || 'Could not delete the search.')
+      setError(toUserMessage(err, 'Could not delete the search.'))
     } finally {
       setDeleting(false)
     }
@@ -275,10 +276,10 @@ export default function AdvancedSearch() {
         updatedAt={updatedAt}
         actions={
           <div className="flex items-center gap-2">
-            <button onClick={() => exportToExcel(exportRows, EXPORT_COLS, EXPORT_HEADERS, 'saved_searches')} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!filteredSaved.length}>
+            <button onClick={async () => { try { await exportToExcel(exportRows, EXPORT_COLS, EXPORT_HEADERS, 'saved_searches') } catch (e) { setError(toUserMessage(e, 'Could not export. Try again.')) } }} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!filteredSaved.length}>
               <FileSpreadsheet size={14} /> Excel
             </button>
-            <button onClick={() => exportToPdf(exportRows, EXPORT_COLS.map((k, i) => ({ key: k, header: EXPORT_HEADERS[i] })), 'Saved Searches', 'saved_searches', 'landscape')} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!filteredSaved.length}>
+            <button onClick={async () => { try { await exportToPdf(exportRows, EXPORT_COLS.map((k, i) => ({ key: k, header: EXPORT_HEADERS[i] })), 'Saved Searches', 'saved_searches', 'landscape') } catch (e) { setError(toUserMessage(e, 'Could not export. Try again.')) } }} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!filteredSaved.length}>
               <FileText size={14} /> PDF
             </button>
             <button onClick={openCreate} className="btn-primary text-sm inline-flex items-center gap-1.5" disabled={notProvisioned}>

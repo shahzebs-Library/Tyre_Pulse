@@ -12,6 +12,7 @@ import {
 } from '../lib/api/checklistSchedules'
 import { listTemplates } from '../lib/api/checklists'
 import { useSites } from '../hooks/useSites'
+import { toUserMessage } from '../lib/safeError'
 
 // The friendly "tables not deployed yet" heuristic — mirrors Billing.jsx / Checklists.jsx.
 function isMissingRelation(err) {
@@ -113,7 +114,7 @@ export default function ChecklistSchedules() {
       setUpdatedAt(new Date())
     } catch (err) {
       if (isMissingRelation(err)) setMissing(true)
-      else setError(err?.message || 'Could not load checklist schedules.')
+      else setError(toUserMessage(err, 'Could not load checklist schedules.'))
     } finally {
       setLoading(false)
     }
@@ -191,7 +192,7 @@ export default function ChecklistSchedules() {
       await load()
     } catch (err) {
       if (isMissingRelation(err)) setMissing(true)
-      setFormError(err?.message || 'Could not create the schedule.')
+      setFormError(toUserMessage(err, 'Could not create the schedule.'))
     } finally {
       setSaving(false)
     }
@@ -209,7 +210,7 @@ export default function ChecklistSchedules() {
       showToast('success', next ? 'Schedule activated.' : 'Schedule paused.')
     } catch (err) {
       setSchedules((rows) => rows.map((r) => (r.id === s.id ? { ...r, active: s.active } : r)))
-      showToast('error', err?.message || 'Could not update the schedule.')
+      showToast('error', toUserMessage(err, 'Could not update the schedule.'))
     } finally {
       setRowBusyId(null)
     }
@@ -224,7 +225,7 @@ export default function ChecklistSchedules() {
       setSchedules((rows) => rows.filter((r) => r.id !== s.id))
       showToast('success', 'Schedule deleted.')
     } catch (err) {
-      showToast('error', err?.message || 'Could not delete the schedule.')
+      showToast('error', toUserMessage(err, 'Could not delete the schedule.'))
     } finally {
       setRowBusyId(null)
     }
@@ -241,7 +242,7 @@ export default function ChecklistSchedules() {
       await load()
     } catch (err) {
       if (isMissingRelation(err)) setMissing(true)
-      showToast('error', err?.message || 'Could not generate assignments.')
+      showToast('error', toUserMessage(err, 'Could not generate assignments.'))
     } finally {
       setGenerating(false)
     }

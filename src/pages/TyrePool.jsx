@@ -41,6 +41,7 @@ import {
 } from '../lib/tyrePool'
 import { formatCurrencyCompact } from '../lib/formatters'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
+import { toUserMessage } from '../lib/safeError'
 
 ChartJS.register(ArcElement, Tooltip, Legend)
 
@@ -116,7 +117,7 @@ export default function TyrePool() {
       setActiveVehicles(vehicles || 0)
     } catch (err) {
       if (isMissingRelation(err)) setNotProvisioned(true)
-      else setMgrError(err?.message || 'Could not load the tyre pool.')
+      else setMgrError(toUserMessage(err, 'Could not load the tyre pool.'))
       setEntries([])
     }
   }, [activeCountry, statusFilter])
@@ -127,7 +128,7 @@ export default function TyrePool() {
       const data = await listPoolCandidates({ country: activeCountry })
       setRows(Array.isArray(data) ? data : [])
     } catch (err) {
-      setError(err?.message || 'Could not load tyre records.')
+      setError(toUserMessage(err, 'Could not load tyre records.'))
       setRows([])
     }
   }, [activeCountry])
@@ -195,7 +196,7 @@ export default function TyrePool() {
       setShowAdd(false); setAddForm(EMPTY_ADD)
       await loadManager()
     } catch (err) {
-      setAddError(err?.message || 'Could not add the tyre to the pool.')
+      setAddError(toUserMessage(err, 'Could not add the tyre to the pool.'))
     } finally {
       setSaving(false)
     }
@@ -221,7 +222,7 @@ export default function TyrePool() {
       closeAction(id)
       await loadManager()
     } catch (err) {
-      setRowError(err?.message || 'Could not deploy the spare.')
+      setRowError(toUserMessage(err, 'Could not deploy the spare.'))
     } finally {
       setRowBusy('')
     }
@@ -236,7 +237,7 @@ export default function TyrePool() {
       closeAction(id)
       await loadManager()
     } catch (err) {
-      setRowError(err?.message || 'Could not return the spare.')
+      setRowError(toUserMessage(err, 'Could not return the spare.'))
     } finally {
       setRowBusy('')
     }

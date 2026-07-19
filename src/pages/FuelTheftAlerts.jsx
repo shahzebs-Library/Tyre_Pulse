@@ -23,6 +23,7 @@ import {
 } from '../lib/api/fuelTheftAlerts'
 import { summariseAlerts, byAsset, estimatedLoss } from '../lib/fuelTheftAlerts'
 import { formatCurrency } from '../lib/formatters'
+import { toUserMessage } from '../lib/safeError'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 
 const EMPTY_FORM = {
@@ -93,7 +94,7 @@ export default function FuelTheftAlerts() {
       setUpdatedAt(new Date())
     } catch (err) {
       if (isMissingRelation(err)) setNotProvisioned(true)
-      else setError(err?.message || 'Could not load fuel theft alerts.')
+      else setError(toUserMessage(err, 'Could not load fuel theft alerts.'))
       setRows([])
     } finally {
       setRefreshing(false)
@@ -184,7 +185,7 @@ export default function FuelTheftAlerts() {
       setShowModal(false); setEditing(null)
       await load()
     } catch (err) {
-      setFormError(err?.message || 'Could not save the alert.')
+      setFormError(toUserMessage(err, 'Could not save the alert.'))
     } finally {
       setSaving(false)
     }
@@ -198,7 +199,7 @@ export default function FuelTheftAlerts() {
       setConfirmDelete(null)
       await load()
     } catch (err) {
-      setError(err?.message || 'Could not delete the alert.')
+      setError(toUserMessage(err, 'Could not delete the alert.'))
     } finally {
       setDeleting(false)
     }
@@ -218,10 +219,10 @@ export default function FuelTheftAlerts() {
         updatedAt={updatedAt}
         actions={
           <div className="flex items-center gap-2">
-            <button onClick={() => exportToExcel(exportRows, EXPORT_COLS, EXPORT_HEADERS, 'fuel_theft_alerts')} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!filtered.length}>
+            <button onClick={async () => { try { await exportToExcel(exportRows, EXPORT_COLS, EXPORT_HEADERS, 'fuel_theft_alerts') } catch (e) { setError(toUserMessage(e, 'Could not export. Try again.')) } }} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!filtered.length}>
               <FileSpreadsheet size={14} /> Excel
             </button>
-            <button onClick={() => exportToPdf(exportRows, EXPORT_COLS.map((k, i) => ({ key: k, header: EXPORT_HEADERS[i] })), 'Fuel Theft Alerts', 'fuel_theft_alerts', 'landscape')} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!filtered.length}>
+            <button onClick={async () => { try { await exportToPdf(exportRows, EXPORT_COLS.map((k, i) => ({ key: k, header: EXPORT_HEADERS[i] })), 'Fuel Theft Alerts', 'fuel_theft_alerts', 'landscape') } catch (e) { setError(toUserMessage(e, 'Could not export. Try again.')) } }} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!filtered.length}>
               <FileText size={14} /> PDF
             </button>
             <button onClick={openCreate} className="btn-primary text-sm inline-flex items-center gap-1.5" disabled={notProvisioned}>

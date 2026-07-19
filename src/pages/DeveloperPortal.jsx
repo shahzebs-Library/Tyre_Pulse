@@ -32,6 +32,7 @@ import {
   summariseKeys, summariseWebhooks, healthyWebhookRate, isKeyExpired, maskKey,
 } from '../lib/developerPortal'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
+import { toUserMessage } from '../lib/safeError'
 
 const EMPTY_KEY_FORM = {
   key_name: '', key_prefix: '', scopes: '', environment: 'sandbox',
@@ -120,7 +121,7 @@ export default function DeveloperPortal() {
       setUpdatedAt(new Date())
     } catch (err) {
       if (isMissingRelation(err)) setNotProvisioned(true)
-      else setError(err?.message || 'Could not load the developer portal.')
+      else setError(toUserMessage(err, 'Could not load the developer portal.'))
       setKeys([]); setHooks([])
     } finally {
       setRefreshing(false)
@@ -271,7 +272,7 @@ export default function DeveloperPortal() {
       setShowModal(false); setEditing(null)
       await load()
     } catch (err) {
-      setFormError(err?.message || 'Could not save.')
+      setFormError(toUserMessage(err, 'Could not save.'))
     } finally {
       setSaving(false)
     }
@@ -286,7 +287,7 @@ export default function DeveloperPortal() {
       setConfirmDelete(null)
       await load()
     } catch (err) {
-      setError(err?.message || 'Could not delete.')
+      setError(toUserMessage(err, 'Could not delete.'))
     } finally {
       setDeleting(false)
     }

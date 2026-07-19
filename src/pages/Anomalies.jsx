@@ -11,6 +11,7 @@ import PageHeader from '../components/ui/PageHeader'
 import EnterpriseTable from '../components/ui/EnterpriseTable'
 import { formatCurrencyCompact } from '../lib/formatters'
 import { cn } from '../lib/cn'
+import { toUserMessage } from '../lib/safeError'
 import {
   detectAnomalies,
   detectVisitFrequency,
@@ -136,7 +137,7 @@ export default function Anomalies() {
       setAnomalies([...freq, ...engine, ...dq])
       setVisitStats(computeVisitStats(rows, { workOrders }))
     } catch (e) {
-      setError(e.message || 'Failed to load anomalies')
+      setError(toUserMessage(e, 'Failed to load anomalies'))
     } finally {
       setLoading(false)
     }

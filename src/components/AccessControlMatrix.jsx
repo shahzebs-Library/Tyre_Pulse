@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, useCallback } from 'react'
 import { Shield, Search, Save, Loader2, Check, AlertTriangle, RotateCcw, Lock } from 'lucide-react'
 import { MODULE_GROUPS, ACCESS_ROLES, ALL_MODULES } from '../lib/moduleCatalog'
 import { listGlobalPermissions, saveModulePermissions } from '../lib/api/modulePermissions'
+import { toUserMessage } from '../lib/safeError'
 
 const ROLE_TINT = {
   Admin:      'text-purple-300',
@@ -39,7 +40,7 @@ export default function AccessControlMatrix({ canEdit }) {
       setPerms(withAdmin)
       setDraft(structuredClone(withAdmin))
     } catch (e) {
-      setError(e.message || 'Could not load access settings.')
+      setError(toUserMessage(e, 'Could not load access settings.'))
     } finally {
       setLoading(false)
     }
@@ -93,7 +94,7 @@ export default function AccessControlMatrix({ canEdit }) {
       setPerms(structuredClone(draft))
       setMsg(`Saved. ${n} access change${n !== 1 ? 's' : ''} applied. Affected users see it on their next load.`)
     } catch (e) {
-      setError(e.message || 'Could not save access changes.')
+      setError(toUserMessage(e, 'Could not save access changes.'))
     } finally {
       setSaving(false)
     }

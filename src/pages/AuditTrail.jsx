@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback, useMemo } from 'react'
 import { supabase } from '../lib/supabase'
 import { exportToExcel } from '../lib/exportUtils'
+import { toUserMessage } from '../lib/safeError'
 import { useAuth } from '../contexts/AuthContext'
 import { logAuditEvent } from '../lib/auditLogger'
 import { formatDateTime, formatDate } from '../lib/formatters'
@@ -284,7 +285,7 @@ export default function AuditTrail() {
       setDeleteConfirm('')
       loadUploadHistory()
     } catch (e) {
-      setDeleteError(e.message || 'Delete failed. Please try again.')
+      setDeleteError(toUserMessage(e, 'Delete failed. Please try again.'))
     } finally {
       setDeleting(false)
     }

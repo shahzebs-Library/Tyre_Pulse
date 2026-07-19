@@ -18,6 +18,7 @@ import { useConsoleAuth } from '../ConsoleAuthContext'
 import {
   ADMIN_ROLE_VALUES, listAdminUsers, setAdminUser, removeAdminUser, searchProfiles,
 } from '../../lib/api/adminUsers'
+import { toUserMessage } from '../../lib/safeError'
 
 // Plain-English description of each console admin level (shown by the picker).
 const ROLE_META = {
@@ -79,7 +80,7 @@ export default function ConsoleAdminRoles() {
         setProfileMap({})
       }
     } catch (e) {
-      setError(e?.message || 'Could not load admin roles.')
+      setError(toUserMessage(e, 'Could not load admin roles.'))
     } finally {
       setLoading(false)
     }
@@ -157,7 +158,7 @@ export default function ConsoleAdminRoles() {
       flashToast(`${ROLE_META[form.role].label} saved for ${form.user.email || form.user.id}`)
       load()
     } catch (e) {
-      setFormError(e?.message || 'Could not save the admin role.')
+      setFormError(toUserMessage(e, 'Could not save the admin role.'))
     } finally {
       setSaving(false)
     }
@@ -171,7 +172,7 @@ export default function ConsoleAdminRoles() {
       flashToast('Admin role removed.')
       load()
     } catch (e) {
-      setError(e?.message || 'Could not remove the admin role.')
+      setError(toUserMessage(e, 'Could not remove the admin role.'))
     } finally {
       setRemovingId(null)
     }

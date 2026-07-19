@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { Eye, EyeOff } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useLanguage } from '../contexts/LanguageContext'
+import { toUserMessage } from '../lib/safeError'
 
 export default function ResetPassword() {
   const navigate = useNavigate()
@@ -36,7 +37,7 @@ export default function ResetPassword() {
     setLoading(true)
     const { error: updateErr } = await supabase.auth.updateUser({ password })
     if (updateErr) {
-      setError(updateErr.message)
+      setError(toUserMessage(updateErr, 'Could not update your password. Please try again.'))
       setLoading(false)
     } else {
       setDone(true)

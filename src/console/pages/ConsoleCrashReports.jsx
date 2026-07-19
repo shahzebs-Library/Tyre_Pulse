@@ -11,7 +11,7 @@
  * Every Sentry call goes through the `sentry-issues` edge proxy which self-gates to
  * super-admin and reads the token via the service role.
  */
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Bug, RefreshCw, Settings, AlertTriangle, ExternalLink, Users, Activity,
   ShieldAlert, CheckCircle2, Save, Loader2, Info, Search, X, Check, EyeOff, RotateCcw,
@@ -93,6 +93,7 @@ export default function ConsoleCrashReports() {
   const [acting, setActing] = useState('')
   const [commentText, setCommentText] = useState('')
   const [commenting, setCommenting] = useState(false)
+  const detailReqRef = useRef(null)   // guards against out-of-order detail loads
 
   // setup form
   const [token, setToken] = useState('')
@@ -165,13 +166,18 @@ export default function ConsoleCrashReports() {
   }
 
   const openDetail = async (issue) => {
+    detailReqRef.current = issue.id
     setDetailFor(issue); setDetail(null); setDetailLoading(true); setCommentText('')
     try {
       const res = await getSentryIssueDetail(issue.id)
+      if (detailReqRef.current !== issue.id) return  // a newer issue was opened; ignore this stale response
       if (res?.ok) setDetail(res)
       else setDetail({ issue, event: null, error: res?.reason === 'auth' ? 'Token lacks event read scope.' : 'Could not load details.' })
-    } catch (e) { setDetail({ issue, event: null, error: toUserMessage(e, 'Could not load details.') }) }
-    finally { setDetailLoading(false) }
+    } catch (e) {
+      if (detailReqRef.current === issue.id) setDetail({ issue, event: null, error: toUserMessage(e, 'Could not load details.') })
+    } finally {
+      if (detailReqRef.current === issue.id) setDetailLoading(false)
+    }
   }
 
   const act = async (issue, status) => {
@@ -182,7 +188,10 @@ export default function ConsoleCrashReports() {
         setNotice(`Issue ${status === 'unresolved' ? 'reopened' : status}.`)
         setIssues(prev => prev.map(i => i.id === issue.id ? { ...i, status } : i)
           .filter(i => !(activeQuery.includes('is:unresolved') && i.id === issue.id && status !== 'unresolved')))
-        if (detailFor?.id === issue.id) setDetail(d => d ? { ...d, issue: { ...d.issue, status } } : d)
+        if (detailFor?.id === issue.id) {
+          setDetailFor(f => f ? { ...f, status } : f)   // keep the drawer's action buttons in sync
+          setDetail(d => d ? { ...d, issue: { ...d.issue, status } } : d)
+        }
       } else if (res?.reason === 'auth') setError('Sentry rejected the action - the token needs write (issue:write) scope.')
       else setError('Could not update the issue.')
     } catch (e) { setError(toUserMessage(e, 'Could not update the issue.')) }

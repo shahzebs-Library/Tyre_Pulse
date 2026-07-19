@@ -1035,6 +1035,41 @@ Multi-agent batch. All merged; migrations through **V271**, next free **V272**.
   decision: m3 source = production-log entry screen (like meter-logs) and/or an ERP m3 import. Next free
   migration **V276**.
 
+### SESSION 2026-07-19 — module deepening + report ECharts + Cost-per-unit. All merged to main; migrations through V279, next free **V280**.
+- Everything this session is MERGED to main and the branch (`claude/accident-builder-report-ui-2bkwb5`) is
+  realigned to origin/main; nothing pending in code. Multi-session note UNCHANGED: a parallel Claude session also
+  pushes to this branch, so the shared branch often shows the previous batch's un-squashed commits after a merge -
+  they are CONTENT-IDENTICAL to what main already carries via the squash; reconcile by `git rebase origin/main`
+  then `git push --force-with-lease` (verified each time that HEAD is a superset before forcing).
+- **Web -> mobile access bridge (PR #105/#106)** - see the "Close MOBILE modules from web" entry above.
+- **17 thin operational pages DEEPENED to production depth (PR #108 = 10, PR #109 = 7), real data only, honest
+  empty states, NO fabrication, NO migration, CRUD/RLS untouched.** Each got a NEW pure engine
+  `src/lib/<name>Analytics.js` (injectable now, zero I/O) + a rebuilt page (KPIs + charts + filters/search/sort +
+  Excel/PDF export + loading/empty/error+Retry) + a test file. Modules: TyreAgeCompliance (DOT/manufacture
+  calendar-age bands + unknown-DOB bucket), Tpms (pressure compliance over tpms_readings), RetreadClaims,
+  EngineHours (utilization + meter-reset anomalies), OdometerLogs (mileage deltas + rollback/jump anomalies),
+  TyreServiceEvents (fit/remove/rotate/repair lifecycle), Certifications (expiry + renewal pipeline), Contracts
+  (lifecycle + annualized value + renewal pipeline), TelematicsDevices (device health + connectivity + fleet
+  coverage %), DriverExpenses (spend by status/category/driver), FuelDelivery (blended price/litre + anomalies),
+  SpeedLimiter (re-verification pipeline from last_verified_at - no calibration column, derived honestly),
+  ColdChain (temperature excursion episodes from real timestamps), FleetRenewal (replacement pipeline + budget
+  null-when-uncosted), PolicyManagement (policies is a DOCUMENT register, not insurance - mapped honestly),
+  InsuranceClaims (ledger analytics, DISTINCT from /claims-summary + claimsAnalytics which stayed untouched). Plus
+  an earlier same-treatment batch: Geofencing / Journeys / Equipment / Parts Catalog / DTC Diagnostics. RULE: to
+  deepen more, follow this exact recipe; do NOT fabricate a column/metric a table lacks (each honest gap is
+  labelled in-UI: no Retread brand chart, no service-event distance, Contracts renewal=end-date, Telematics
+  coverage N/A when fleet total unreadable, cost N/A when no meter/production data).
+- **Report ECharts upgrade (PR #110):** (a) NEW dark ECharts builder lib `src/lib/displayCharts.js` (pure
+  donut/hBar/vBar/gauge/line/combo + data shapers, honest empty states) wired across the TV kiosk
+  `DisplayDashboard.jsx` (/display): Fleet availability gauge + vehicles-by-site bar; Tyre pressure gauge +
+  tyre-risk doughnut + inspection doughnut; Accidents severity doughnut + by-site bar; Alerts severity doughnut
+  (removed the old custom SiteBars + Gauge usage). (b) Two NEW shareable fixed pages built from the EXISTING
+  get_report_snapshot: **Executive Summary** (Overview) and **Cost & Claims** (Trends). See the ReportShare
+  "More fixed pages" entry for the full 13-page catalog + the V279 Cost-per-unit / Operations Command detail.
+- **USER/OPS follow-ups (unchanged):** enable Supabase leaked-password protection; per-unit report costs read
+  N/A until drivers log odometer/engine-hours (mobile) and m3 production logs are entered/imported; promote the
+  Play Internal build to Closed for testers; true million-row ERP loads still need the server COPY pipeline.
+
 ### SESSION 2026-07-18 (continued) — CLOSED CLEAN. All merged to main; migrations through V278, next free **V279**.
 - **Session close:** everything this session is MERGED to main and the branch is realigned to origin/main -
   nothing pending in code. Last items: maintenance window + web-only login gate (V278), ERP template downloads,

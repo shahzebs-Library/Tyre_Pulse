@@ -62,3 +62,24 @@ export async function updateSentryIssue(issueId, status) {
   if (error) throw new Error(toUserMessage(error, 'Could not update the issue.'))
   return data || { ok: false, reason: 'error' }
 }
+
+/** Org members for the assignee picker: { ok, members:[{userId,name,email,role}] }. */
+export async function getSentryMembers() {
+  const { data, error } = await supabase.functions.invoke('sentry-issues', { body: { action: 'members' } })
+  if (error) throw new Error(toUserMessage(error, 'Could not load Sentry members.'))
+  return data || { ok: false, reason: 'error' }
+}
+
+/** Assign an issue. `assignee` = 'user:<id>' or '' to clear. */
+export async function assignSentryIssue(issueId, assignee) {
+  const { data, error } = await supabase.functions.invoke('sentry-issues', { body: { action: 'assign', issueId, assignee } })
+  if (error) throw new Error(toUserMessage(error, 'Could not assign the issue.'))
+  return data || { ok: false, reason: 'error' }
+}
+
+/** Add a comment/note to an issue. */
+export async function commentSentryIssue(issueId, text) {
+  const { data, error } = await supabase.functions.invoke('sentry-issues', { body: { action: 'comment', issueId, text } })
+  if (error) throw new Error(toUserMessage(error, 'Could not add the comment.'))
+  return data || { ok: false, reason: 'error' }
+}

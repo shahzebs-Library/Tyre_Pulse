@@ -57,7 +57,7 @@ serve(async (req) => {
   // Fetch unresolved fatal issues.
   let issues: any[] = []
   try {
-    const res = await fetch(`${base}/issues/?query=${encodeURIComponent('is:unresolved level:fatal')}&statsPeriod=24h&project=-1&limit=25`,
+    const res = await fetch(`${base}/issues/?query=${encodeURIComponent('is:unresolved level:fatal')}&statsPeriod=24h&project=-1&limit=100`,
       { headers: { Authorization: `Bearer ${token}` } })
     if (!res.ok) return new Response(JSON.stringify({ ok: false, reason: res.status === 401 ? 'auth' : 'error' }), { status: 200 })
     const raw = await res.json()
@@ -74,13 +74,18 @@ serve(async (req) => {
   const fresh = issues.filter(i => !seen.has(String(i.id)))
   if (!fresh.length) return new Response(JSON.stringify({ ok: true, new: 0 }), { status: 200 })
 
-  // Record + log each new fatal crash.
+  // Record each new fatal crash FIRST (dedupe claim). Only issues we successfully
+  // recorded get a system_logs row / email, so a failed insert can never fire the
+  // alert while leaving the issue "unseen" (which would re-alert every 15 min).
+  const recorded: any[] = []
   for (const i of fresh) {
     const title = i.title || i.metadata?.type || 'Fatal crash'
-    await admin.from('sentry_alert_log').insert({
+    const { error: insErr } = await admin.from('sentry_alert_log').insert({
       issue_id: String(i.id), short_id: i.shortId || null, title, permalink: i.permalink || null,
       level: i.level || 'fatal', first_seen: i.firstSeen || null,
-    }).select().maybeSingle()
+    })
+    if (insErr) continue   // concurrent run claimed it, or a transient failure -> skip; retried next tick
+    recorded.push(i)
     await admin.from('system_logs').insert({
       organisation_id: null, severity: 'critical', source: 'sentry', module_id: 'crash_alert',
       message: `Fatal crash: ${title}`.slice(0, 500),
@@ -88,6 +93,7 @@ serve(async (req) => {
       url: i.permalink || null,
     })
   }
+  if (!recorded.length) return new Response(JSON.stringify({ ok: true, new: 0 }), { status: 200 })
 
   // Email summary (best-effort).
   const alertEmail = (cfg['sentry_alert_email'] || '').split(',').map(s => s.trim()).filter(Boolean)
@@ -95,24 +101,24 @@ serve(async (req) => {
   const FROM = Deno.env.get('FROM_EMAIL') || 'reports@tyrepulse.app'
   let emailed = 0
   if (alertEmail.length && RESEND) {
-    const rows = fresh.map(i => {
+    const rows = recorded.map(i => {
       const title = i.title || i.metadata?.type || 'Fatal crash'
       return `<tr><td style="padding:6px 10px;border-bottom:1px solid #eee"><b>${esc(title)}</b>`
         + `<div style="color:#666;font-size:12px">${esc(i.culprit || '')} &middot; ${i.count || 0} events &middot; ${i.userCount || 0} users`
         + `${i.permalink ? ` &middot; <a href="${esc(i.permalink)}">open</a>` : ''}</div></td></tr>`
     }).join('')
     const html = `<div style="font-family:system-ui,Arial,sans-serif;font-size:14px;color:#111">`
-      + `<h2 style="margin:0 0 12px;color:#b91c1c">${fresh.length} new fatal crash${fresh.length > 1 ? 'es' : ''} detected</h2>`
+      + `<h2 style="margin:0 0 12px;color:#b91c1c">${recorded.length} new fatal crash${recorded.length > 1 ? 'es' : ''} detected</h2>`
       + `<table style="border-collapse:collapse;width:100%">${rows}</table>`
       + `<p style="margin:14px 0 0;color:#666;font-size:12px">Tyre Pulse - Crash Alerts. Manage in Console -> Crash Reports.</p></div>`
     try {
       const r = await fetch('https://api.resend.com/emails', {
         method: 'POST', headers: { Authorization: `Bearer ${RESEND}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ from: FROM, to: alertEmail, subject: `[Tyre Pulse] ${fresh.length} new fatal crash${fresh.length > 1 ? 'es' : ''}`, html }),
+        body: JSON.stringify({ from: FROM, to: alertEmail, subject: `[Tyre Pulse] ${recorded.length} new fatal crash${recorded.length > 1 ? 'es' : ''}`, html }),
       })
       if (r.ok) emailed = alertEmail.length
     } catch { /* logged to system_logs regardless */ }
   }
 
-  return new Response(JSON.stringify({ ok: true, new: fresh.length, emailed }), { status: 200, headers: { 'Content-Type': 'application/json' } })
+  return new Response(JSON.stringify({ ok: true, new: recorded.length, emailed }), { status: 200, headers: { 'Content-Type': 'application/json' } })
 })

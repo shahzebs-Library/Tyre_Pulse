@@ -19,10 +19,14 @@
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
+const ALLOWED_ORIGINS = ['https://tyrepulse.app', 'https://www.tyrepulse.app']
+const VERCEL_ORIGIN = /^https:\/\/[a-z0-9-]+\.vercel\.app$/
 function corsHeaders(req: Request): Record<string, string> {
   const origin = req.headers.get('origin')
   let allowOrigin = '*'
-  if (origin) allowOrigin = (/^https:\/\//.test(origin) || origin.startsWith('http://localhost')) ? origin : 'null'
+  if (origin) {
+    allowOrigin = (ALLOWED_ORIGINS.includes(origin) || VERCEL_ORIGIN.test(origin) || origin.startsWith('http://localhost')) ? origin : 'null'
+  }
   const requestedHeaders = req.headers.get('access-control-request-headers')
   return {
     'Access-Control-Allow-Origin': allowOrigin,

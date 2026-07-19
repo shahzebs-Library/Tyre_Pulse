@@ -96,85 +96,82 @@ function Tyre({ x, y, w, h, id, risk, label, selected, recorded }: TyreProps) {
   const cy  = y + h / 2
   const uid = `tyre-${id}`
 
-  const r1 = Math.min(w, h) * 0.12
-  const r2 = Math.min(w, h) * 0.3
-  const spokes = [0, 60, 120]
+  // Lug-nut ring (8 bolts) around the hub.
+  const lugs = [0, 1, 2, 3, 4, 5, 6, 7].map((k) => {
+    const a = (k * Math.PI) / 4
+    return { lx: cx + Math.cos(a) * w * 0.2, ly: cy + Math.sin(a) * h * 0.19 }
+  })
+  // 7 tread rows, each a split pair (directional block feel).
+  const treadRows = [0, 1, 2, 3, 4, 5, 6]
 
   return (
     <G>
       <Defs>
-        {/* Rubber gradient - dark edges, slight sheen */}
-        <RadialGradient id={`${uid}-rubber`} cx="35%" cy="30%" r="65%">
-          <Stop offset="0%"   stopColor="#2d2d2d" />
-          <Stop offset="70%"  stopColor="#111111" />
-          <Stop offset="100%" stopColor="#0a0a0a" />
+        {/* Rubber - dark, slight top-left sheen */}
+        <RadialGradient id={`${uid}-rubber`} cx="33%" cy="24%" r="82%">
+          <Stop offset="0%"   stopColor="#454545" />
+          <Stop offset="50%"  stopColor="#161616" />
+          <Stop offset="100%" stopColor="#050505" />
         </RadialGradient>
-        {/* Rim gradient - metallic 3D */}
-        <RadialGradient id={`${uid}-rim`} cx="35%" cy="30%" r="65%">
-          <Stop offset="0%"   stopColor={col.rim} stopOpacity="1" />
-          <Stop offset="60%"  stopColor={col.glow} />
+        {/* Rim - metallic, risk-coloured */}
+        <RadialGradient id={`${uid}-rim`} cx="33%" cy="26%" r="80%">
+          <Stop offset="0%"   stopColor={col.rim} />
+          <Stop offset="55%"  stopColor={col.glow} />
           <Stop offset="100%" stopColor={col.dark} />
         </RadialGradient>
         {/* Hub cap shine */}
-        <RadialGradient id={`${uid}-hub`} cx="30%" cy="30%" r="70%">
-          <Stop offset="0%"   stopColor="#9ca3af" />
-          <Stop offset="100%" stopColor="#1f2937" />
+        <RadialGradient id={`${uid}-hub`} cx="32%" cy="28%" r="76%">
+          <Stop offset="0%"   stopColor="#eef2f6" />
+          <Stop offset="60%"  stopColor="#94a3b8" />
+          <Stop offset="100%" stopColor="#28313d" />
         </RadialGradient>
       </Defs>
 
-      {/* Drop shadow */}
-      <Ellipse cx={cx + 1.5} cy={cy + 2} rx={w / 2 + 1} ry={h / 2 + 0.5} fill="rgba(0,0,0,0.45)" />
+      {/* Ground shadow */}
+      <Ellipse cx={cx + 1.6} cy={cy + 2.4} rx={w / 2 + 1.6} ry={h / 2 + 1.2} fill="rgba(2,6,23,0.4)" />
 
       {/* Rubber body */}
-      <Rect x={x} y={y} width={w} height={h} rx={w * 0.28}
-        fill={`url(#${uid}-rubber)`} stroke="#000" strokeWidth={0.6} />
+      <Rect x={x} y={y} width={w} height={h} rx={w * 0.3}
+        fill={`url(#${uid}-rubber)`} stroke="#000" strokeWidth={0.7} />
 
-      {/* Tread blocks */}
-      {[0.2, 0.38, 0.56, 0.74].map((pct, i) => (
-        <Rect key={i} x={x + 1.5} y={y + h * pct} width={w - 3} height={h * 0.1}
-          rx={0.8} fill="#222" opacity={0.7} />
+      {/* Deep directional tread (split blocks) */}
+      {treadRows.map((i) => {
+        const gy = y + h * (0.08 + i * 0.128)
+        const bw = (w - 2) * 0.44
+        return (
+          <G key={`tr-${i}`}>
+            <Rect x={x + 1} y={gy} width={bw} height={h * 0.07} rx={0.8} fill="#000" opacity={0.6} />
+            <Rect x={x + 1 + (w - 2) * 0.52} y={gy} width={bw} height={h * 0.07} rx={0.8} fill="#000" opacity={0.6} />
+          </G>
+        )
+      })}
+
+      {/* Sidewall ring + top light */}
+      <Rect x={x + 0.7} y={y + 0.7} width={w - 1.4} height={h - 1.4} rx={w * 0.27}
+        fill="none" stroke="#5b6470" strokeWidth={0.6} opacity={0.55} />
+      <Rect x={x + 1} y={y + 1} width={w - 2} height={h * 0.3} rx={w * 0.24}
+        fill="#ffffff" opacity={0.09} />
+
+      {/* Rim disc + ring */}
+      <Ellipse cx={cx} cy={cy} rx={w * 0.37} ry={h * 0.35} fill={`url(#${uid}-rim)`} stroke={col.dark} strokeWidth={0.7} />
+      <Ellipse cx={cx} cy={cy} rx={w * 0.37} ry={h * 0.35} fill="none" stroke="#000" strokeWidth={0.4} opacity={0.3} />
+
+      {/* Lug nuts */}
+      {lugs.map((l, i) => (
+        <Circle key={`lug-${i}`} cx={l.lx} cy={l.ly} r={Math.max(0.7, w * 0.035)} fill={col.dark} opacity={0.9} />
       ))}
 
-      {/* Tyre sidewall highlight */}
-      <Rect x={x + 0.5} y={y + 0.5} width={w - 1} height={h - 1} rx={w * 0.26}
-        fill="none" stroke="#555" strokeWidth={0.4} opacity={0.5} />
+      {/* Hub cap + shine */}
+      <Ellipse cx={cx} cy={cy} rx={w * 0.13} ry={h * 0.13} fill={`url(#${uid}-hub)`} stroke="#1f2937" strokeWidth={0.4} />
+      <Ellipse cx={cx - w * 0.035} cy={cy - h * 0.035} rx={w * 0.045} ry={h * 0.045} fill="#f8fafc" opacity={0.85} />
 
-      {/* Rim disc */}
-      <Ellipse cx={cx} cy={cy} rx={w * 0.33} ry={h * 0.33} fill={`url(#${uid}-rim)`} />
-
-      {/* Rim ring border */}
-      <Ellipse cx={cx} cy={cy} rx={w * 0.33} ry={h * 0.33}
-        fill="none" stroke={col.dark} strokeWidth={0.6} />
-
-      {/* Spoke lines */}
-      {spokes.map((angle, i) => {
-        const rad = (angle * Math.PI) / 180
-        return (
-          <Line key={i}
-            x1={cx + Math.cos(rad) * r1} y1={cy + Math.sin(rad) * r1 * (h / w)}
-            x2={cx + Math.cos(rad) * r2} y2={cy + Math.sin(rad) * r2 * (h / w)}
-            stroke={col.dark} strokeWidth={0.8} opacity={0.7}
-          />
-        )
-      })}
-      {spokes.map((angle, i) => {
-        const rad = ((angle + 180) * Math.PI) / 180
-        return (
-          <Line key={i + 3}
-            x1={cx + Math.cos(rad) * r1} y1={cy + Math.sin(rad) * r1 * (h / w)}
-            x2={cx + Math.cos(rad) * r2} y2={cy + Math.sin(rad) * r2 * (h / w)}
-            stroke={col.dark} strokeWidth={0.8} opacity={0.7}
-          />
-        )
-      })}
-
-      {/* Hub cap */}
-      <Ellipse cx={cx} cy={cy} rx={w * 0.13} ry={h * 0.13}
-        fill={`url(#${uid}-hub)`} stroke="#374151" strokeWidth={0.4} />
-
-      {/* Label */}
+      {/* Label - dark shadow pass then white, for legibility on any rim colour */}
+      <SvgText x={cx} y={cy + 0.9} textAnchor="middle"
+        fontSize={Math.max(3.5, Math.min(w * 0.42, 7))} fontWeight="800" fill="#000" opacity={0.55}>
+        {label}
+      </SvgText>
       <SvgText x={cx} y={cy + 0.4} textAnchor="middle"
-        fontSize={Math.max(3.5, Math.min(w * 0.5, 8))} fontWeight="800" fill="white">
+        fontSize={Math.max(3.5, Math.min(w * 0.42, 7))} fontWeight="800" fill="#ffffff">
         {label}
       </SvgText>
 

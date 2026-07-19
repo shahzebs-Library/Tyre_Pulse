@@ -54,12 +54,24 @@ export async function getRoleModules(role) {
 }
 
 /**
- * Set the exact module set a role can access. Diffs against the full module
- * catalog so removed modules are explicitly disabled (not just left stale).
+ * Set the exact module set a role can access. Writes an enabled=true row for
+ * EVERY chosen module key (any nav module, not just the curated base set) and an
+ * enabled=false row for every key the role currently has but no longer wants, so
+ * a removal always sticks. The write set is the union of: the wanted keys, the
+ * role's currently-granted keys, and the curated base modules (a stable baseline
+ * that is toggled off when not selected). This lets a custom role reach ALL ~163
+ * navigable modules, not only the 37 curated ones.
  */
 export async function setRoleModules(role, moduleKeys) {
   const want = new Set((moduleKeys || []).filter(Boolean))
-  const changes = ALL_MODULES.map((m) => ({ role, module_key: m.key, enabled: want.has(m.key) }))
+  let current = []
+  try { current = await getRoleModules(role) } catch { current = [] }
+  const all = new Set([
+    ...want,
+    ...current,
+    ...ALL_MODULES.map((m) => m.key),
+  ])
+  const changes = [...all].map((key) => ({ role, module_key: key, enabled: want.has(key) }))
   return saveModulePermissions(changes)
 }
 

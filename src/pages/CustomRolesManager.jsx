@@ -11,7 +11,8 @@ import {
   KeyRound, Info,
 } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
-import { MODULE_GROUPS } from '../lib/moduleCatalog'
+import { buildNavModuleCatalog } from '../lib/moduleCatalog'
+import { NAV_CATALOG } from '../components/Layout'
 import {
   listCustomRoles, createCustomRole, updateCustomRole, deleteCustomRole,
   getRoleModules, setRoleModules, isBuiltInRole,
@@ -19,11 +20,27 @@ import {
 
 const EMPTY = { name: '', description: '', moduleKeys: [] }
 
-function ModulePicker({ selected, onToggle, search }) {
+// The FULL navigable module catalog (all ~163 modules), grouped by nav group for
+// the picker, so a custom role can be granted access to ANY page - not only the
+// curated 37 base modules. Keys are the exact NAV_MODULE_KEY / route-slug values
+// the sidebar gates on (see navAccess.navItemAllowedForCustomRole), so a ticked
+// module actually reveals its page for the role. Computed once at module load.
+const CUSTOM_ROLE_GROUPS = (() => {
+  const order = []
+  const byCat = new Map()
+  for (const m of buildNavModuleCatalog(NAV_CATALOG)) {
+    const cat = m.category || 'Other'
+    if (!byCat.has(cat)) { byCat.set(cat, []); order.push(cat) }
+    byCat.get(cat).push({ key: m.module_id, label: m.name })
+  }
+  return order.map((cat) => ({ group: cat, modules: byCat.get(cat) }))
+})()
+
+function ModulePicker({ selected, onToggle, search, groups = CUSTOM_ROLE_GROUPS }) {
   const q = search.trim().toLowerCase()
   return (
     <div className="max-h-[46vh] overflow-y-auto pr-1 space-y-4">
-      {MODULE_GROUPS.map((g) => {
+      {groups.map((g) => {
         const mods = g.modules.filter((m) => !q || m.label.toLowerCase().includes(q) || m.key.includes(q))
         if (!mods.length) return null
         const allOn = mods.every((m) => selected.includes(m.key))

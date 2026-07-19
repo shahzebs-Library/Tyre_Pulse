@@ -491,7 +491,7 @@ export default function NewInspectionScreen() {
   if (step === 'header') {
     return (
       <SafeAreaView style={styles.safe}>
-        <StatusBar barStyle={statusBarStyle} backgroundColor={theme.color.bg} />
+        <StatusBar barStyle={statusBarStyle} />
         <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
           <View style={[styles.nav, isRTL && styles.navRTL]}>
             <TouchableOpacity onPress={() => router.back()} style={styles.navBack}>
@@ -930,7 +930,7 @@ export default function NewInspectionScreen() {
   if (step === 'tyres') {
     return (
       <SafeAreaView style={styles.safe}>
-        <StatusBar barStyle={statusBarStyle} backgroundColor={theme.color.bg} />
+        <StatusBar barStyle={statusBarStyle} />
         <View style={[styles.nav, isRTL && styles.navRTL]}>
           <TouchableOpacity onPress={() => setStep('header')} style={styles.navBack}>
             <Ionicons name={backIcon} size={22} color={theme.color.text} />
@@ -1092,7 +1092,7 @@ export default function NewInspectionScreen() {
     const effVehicle = getEffectiveVehicle()
     return (
       <SafeAreaView style={styles.safe}>
-        <StatusBar barStyle={statusBarStyle} backgroundColor={theme.color.bg} />
+        <StatusBar barStyle={statusBarStyle} />
         <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
           <View style={[styles.nav, isRTL && styles.navRTL]}>
             <TouchableOpacity onPress={() => setStep('tyres')} style={styles.navBack}>

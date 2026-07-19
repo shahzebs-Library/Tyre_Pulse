@@ -89,7 +89,6 @@ export default function InspectionDetailScreen() {
     <SafeAreaView style={styles.safe}>
       <StatusBar
         barStyle={theme.mode === 'dark' ? 'light-content' : 'dark-content'}
-        backgroundColor={theme.color.bg}
       />
       <View style={[styles.header, isRTL && styles.rowR]}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>

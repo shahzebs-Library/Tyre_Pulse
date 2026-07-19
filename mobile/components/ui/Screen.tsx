@@ -26,7 +26,6 @@ export function Screen({
     <SafeAreaView edges={edges} style={[styles.root, { backgroundColor: bg }]}>
       <StatusBar
         barStyle={theme.mode === 'dark' ? 'light-content' : 'dark-content'}
-        backgroundColor={bg}
       />
       <View style={[styles.body, padded && styles.padded, style]}>{children}</View>
     </SafeAreaView>

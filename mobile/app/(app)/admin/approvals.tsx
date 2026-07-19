@@ -307,7 +307,7 @@ export default function AdminApprovalsScreen() {
   if (guardLoading || !allowed || (loading && closuresLoading)) {
     return (
       <SafeAreaView style={styles.safe}>
-        <StatusBar barStyle="light-content" backgroundColor="#065f46" />
+        <StatusBar barStyle="light-content" />
         <View style={styles.loader}><ActivityIndicator size="large" color="#16a34a" /></View>
       </SafeAreaView>
     )
@@ -318,7 +318,7 @@ export default function AdminApprovalsScreen() {
 
   return (
     <SafeAreaView style={styles.safe}>
-      <StatusBar barStyle="light-content" backgroundColor="#065f46" />
+      <StatusBar barStyle="light-content" />
 
       <View style={styles.header}>
         <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>

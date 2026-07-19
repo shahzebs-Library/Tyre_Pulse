@@ -99,7 +99,7 @@ export default function TasksScreen() {
 
   return (
     <SafeAreaView style={styles.safe}>
-      <StatusBar barStyle="dark-content" backgroundColor="#f0f5f1" />
+      <StatusBar barStyle="dark-content" />
       <View style={[styles.header, isRTL && styles.rowR]}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
           <Ionicons name={isRTL ? 'arrow-forward' : 'arrow-back'} size={22} color="#0f172a" />

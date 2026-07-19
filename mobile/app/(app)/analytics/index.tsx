@@ -176,7 +176,7 @@ export default function AnalyticsScreen() {
 
   return (
     <SafeAreaView style={styles.safe}>
-      <StatusBar barStyle="dark-content" backgroundColor="#eff6ff" />
+      <StatusBar barStyle="dark-content" />
 
       <View style={styles.header}>
         <View style={{ flex: 1 }}>

@@ -157,7 +157,7 @@ export default function RegisterScreen() {
   if (step === 'pending') {
     return (
       <SafeAreaView style={styles.safe}>
-        <StatusBar barStyle="dark-content" backgroundColor="#f0f5f1" />
+        <StatusBar barStyle="dark-content" />
         <View style={styles.pendingContainer}>
           <View style={styles.pendingIcon}>
             <Ionicons name="hourglass-outline" size={40} color="#f59e0b" />
@@ -185,7 +185,7 @@ export default function RegisterScreen() {
   // ── Registration form ─────────────────────────────────────────────────────────
   return (
     <SafeAreaView style={styles.safe}>
-      <StatusBar barStyle="dark-content" backgroundColor="#f0f5f1" />
+      <StatusBar barStyle="dark-content" />
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}

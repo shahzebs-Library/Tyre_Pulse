@@ -292,7 +292,7 @@ export default function SitesManagementScreen() {
 
   return (
     <SafeAreaView style={s.safe}>
-      <StatusBar barStyle="dark-content" backgroundColor="#f0fdf4" />
+      <StatusBar barStyle="dark-content" />
 
       {/* Header */}
       <View style={s.header}>

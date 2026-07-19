@@ -230,7 +230,7 @@ export default function UserManagementScreen() {
   if (guardLoading || !allowed || loading) {
     return (
       <SafeAreaView style={styles.safe}>
-        <StatusBar barStyle="light-content" backgroundColor="#4c1d95" />
+        <StatusBar barStyle="light-content" />
         <View style={styles.loader}><ActivityIndicator size="large" color="#7c3aed" /></View>
       </SafeAreaView>
     )
@@ -238,7 +238,7 @@ export default function UserManagementScreen() {
 
   return (
     <SafeAreaView style={styles.safe}>
-      <StatusBar barStyle="light-content" backgroundColor="#4c1d95" />
+      <StatusBar barStyle="light-content" />
 
       {/* ── Header ─────────────────────────────────────────────────────────── */}
       <View style={styles.header}>

@@ -480,7 +480,7 @@ export default function AICommandCenter() {
 
   return (
     <SafeAreaView style={ds.safe}>
-      <StatusBar barStyle="dark-content" backgroundColor="#faf5ff" />
+      <StatusBar barStyle="dark-content" />
 
       {/* Header */}
       <View style={ds.header}>

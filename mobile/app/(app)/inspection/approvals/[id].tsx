@@ -136,7 +136,7 @@ export default function InspectionApprovalReviewScreen() {
   if (!allowed) {
     return (
       <SafeAreaView style={styles.safe}>
-        <StatusBar barStyle={statusBarStyle} backgroundColor={c.bg} />
+        <StatusBar barStyle={statusBarStyle} />
         {nav('Approval')}
         <View style={styles.stateWrap}>
           <Ionicons name="lock-closed-outline" size={52} color={c.borderStrong} />
@@ -150,7 +150,7 @@ export default function InspectionApprovalReviewScreen() {
   if (loading) {
     return (
       <SafeAreaView style={[styles.safe, styles.center]}>
-        <StatusBar barStyle={statusBarStyle} backgroundColor={c.bg} />
+        <StatusBar barStyle={statusBarStyle} />
         <ActivityIndicator size="large" color={c.primary} />
       </SafeAreaView>
     )
@@ -159,7 +159,7 @@ export default function InspectionApprovalReviewScreen() {
   if (loadError || !insp) {
     return (
       <SafeAreaView style={styles.safe}>
-        <StatusBar barStyle={statusBarStyle} backgroundColor={c.bg} />
+        <StatusBar barStyle={statusBarStyle} />
         {nav('Approval')}
         <View style={styles.stateWrap}>
           <Ionicons name={loadError ? 'cloud-offline-outline' : 'help-circle-outline'} size={52} color={loadError ? c.danger.base : c.borderStrong} />
@@ -186,7 +186,7 @@ export default function InspectionApprovalReviewScreen() {
 
   return (
     <SafeAreaView style={styles.safe}>
-      <StatusBar barStyle={statusBarStyle} backgroundColor={c.bg} />
+      <StatusBar barStyle={statusBarStyle} />
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         {nav([insp.asset_no, insp.vehicle_type].filter(Boolean).join(' · ') || 'Inspection')}
 

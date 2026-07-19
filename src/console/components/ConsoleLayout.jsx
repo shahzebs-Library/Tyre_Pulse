@@ -5,7 +5,7 @@ import {
   ClipboardList, Zap, Megaphone, Lock, LogOut, ChevronDown,
   Globe, Menu, X, AlertTriangle, Layers, Smartphone, Palette, Activity,
   DatabaseBackup, UserCog, History, BellRing, Boxes, HeartPulse, Search, Truck,
-  LayoutList,
+  LayoutList, Bug,
 } from 'lucide-react'
 import { useConsoleAuth } from '../ConsoleAuthContext'
 import Console2FAModal from './Console2FAModal'
@@ -14,6 +14,7 @@ import ThemeToggle from '../../components/ui/ThemeToggle'
 const NAV = [
   { to: '/console',              label: 'Dashboard',      icon: LayoutDashboard, end: true },
   { to: '/console/health',       label: 'System Health',  icon: Activity },
+  { to: '/console/crash-reports', label: 'Crash Reports',  icon: Bug },
   { to: '/console/backups',      label: 'Backups',        icon: DatabaseBackup },
   { to: '/console/admin-roles',  label: 'Admin Roles',    icon: UserCog },
   { to: '/console/module-control', label: 'Module Control', icon: Boxes },

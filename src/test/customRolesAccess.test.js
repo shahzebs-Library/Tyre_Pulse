@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { isBuiltInRole, reduceRoleCounts, duplicateName } from '../lib/api/customRoles'
-import { navItemAllowedForCustomRole, NAV_MODULE_KEY, ALWAYS_ALLOWED_PATHS } from '../lib/navAccess'
+import { navItemAllowedForCustomRole, governingModuleKey, NAV_MODULE_KEY, ALWAYS_ALLOWED_PATHS } from '../lib/navAccess'
 
 describe('customRoles — isBuiltInRole', () => {
   it('flags built-in role names (case-insensitive)', () => {
@@ -85,8 +85,16 @@ describe('navAccess — custom-role sidebar filter', () => {
     expect(navItemAllowedForCustomRole('/tyres', grant('tyre_records'))).toBe(true)
   })
 
-  it('hides unmapped paths for custom roles (restrictive by default)', () => {
+  it('hides unmapped paths for custom roles when the module is NOT granted', () => {
     expect(navItemAllowedForCustomRole('/some-unmapped-page', grant('accidents'))).toBe(false)
+  })
+
+  it('shows a specialty (unmapped) page when its slug module IS granted', () => {
+    // Pages with no curated NAV_MODULE_KEY resolve to their route slug — the exact
+    // key the Access Manager stores — so a grant on them now reaches the page.
+    expect(navItemAllowedForCustomRole('/board-overview', grant('board_overview'))).toBe(true)
+    expect(navItemAllowedForCustomRole('/roi-calculator', grant('roi_calculator'))).toBe(true)
+    expect(navItemAllowedForCustomRole('/board-overview', grant('accidents'))).toBe(false)
   })
 
   it('maps the dashboard and known module paths', () => {
@@ -99,5 +107,25 @@ describe('navAccess — custom-role sidebar filter', () => {
   it('is safe when no permission checker is provided', () => {
     expect(navItemAllowedForCustomRole('/accidents', undefined)).toBe(false)
     expect(navItemAllowedForCustomRole('/settings', undefined)).toBe(true)
+  })
+})
+
+describe('navAccess — governingModuleKey (route -> permission module)', () => {
+  it('prefers the curated NAV_MODULE_KEY mapping', () => {
+    expect(governingModuleKey('/')).toBe('dashboard')
+    expect(governingModuleKey('/accidents')).toBe('accidents')
+    expect(governingModuleKey('/tyres')).toBe('tyre_records')
+  })
+
+  it('slugs specialty routes with no curated mapping (matches stored keys)', () => {
+    expect(governingModuleKey('/board-overview')).toBe('board_overview')
+    expect(governingModuleKey('/roi-calculator')).toBe('roi_calculator')
+    expect(governingModuleKey('/tyre-age-compliance')).toBe('tyre_age_compliance')
+  })
+
+  it('is stable on odd input', () => {
+    expect(governingModuleKey('/')).toBe('dashboard')
+    expect(governingModuleKey('')).toBe('root')
+    expect(governingModuleKey(null)).toBe('root')
   })
 })

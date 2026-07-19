@@ -81,13 +81,45 @@ export const NAV_MODULE_KEY = {
 }
 
 /**
+ * Slugify a route into a stable module key for pages with no explicit
+ * NAV_MODULE_KEY entry, e.g. '/board-overview' -> 'board_overview'. Kept in sync
+ * with (and byte-identical to) moduleCatalog.slugifyModuleKey; inlined here to
+ * avoid an import cycle (moduleCatalog imports NAV_MODULE_KEY from this module).
+ * @param {string} route
+ * @returns {string}
+ */
+function slugify(route) {
+  const s = String(route == null ? '' : route)
+    .trim()
+    .toLowerCase()
+    .replace(/^\/+/, '')
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+  return s || 'root'
+}
+
+/**
+ * The permission module key that governs a route. Prefers the curated
+ * NAV_MODULE_KEY mapping (many routes -> one shared module), else the slug of the
+ * route — which is exactly the key buildNavModuleCatalog() stores for pages with
+ * no curated mapping, so a grant on a specialty page (board_overview,
+ * roi_calculator, ...) resolves consistently for both sidebar visibility and
+ * route access.
+ * @param {string} path route `to`
+ * @returns {string}
+ */
+export function governingModuleKey(path) {
+  return NAV_MODULE_KEY[path] || slugify(path)
+}
+
+/**
  * Should a CUSTOM-role sidebar show this path?
  * @param {string} path         nav item `to`
  * @param {(k:string)=>boolean} hasPermission  AuthContext.hasPermission
  */
 export function navItemAllowedForCustomRole(path, hasPermission) {
   if (ALWAYS_ALLOWED_PATHS.has(path)) return true
-  const key = NAV_MODULE_KEY[path]
+  const key = governingModuleKey(path)
   if (!key) return false
   return typeof hasPermission === 'function' ? hasPermission(key) === true : false
 }

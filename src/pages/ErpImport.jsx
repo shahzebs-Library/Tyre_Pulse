@@ -22,7 +22,7 @@ import { toUserMessage } from '../lib/safeError'
 
 const ELEVATED = ['admin', 'manager', 'director']
 const PREVIEW_LIMIT = 50
-const ROW_CAP = 20000
+const ROW_CAP = 100000
 
 function newBatchId() {
   try {

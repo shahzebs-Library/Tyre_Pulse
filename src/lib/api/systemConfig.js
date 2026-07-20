@@ -50,7 +50,7 @@ export const CONFIG_DEFAULTS = Object.freeze({
   backup_enabled: true,
   export_enabled: true,
   max_export_rows: 50000,
-  max_upload_rows: 10000,
+  max_upload_rows: 100000,
   data_retention_months: 0,      // 0 = keep forever
   audit_retention_days: 0,       // 0 = keep forever
 })

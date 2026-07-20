@@ -3,6 +3,15 @@
 Durable, committed project knowledge so any session has full context. Keep this
 current. Read it before adding/changing modules. Governing spec: `Tyre pulse enterprise.md`
 
+## Marketing website (2026-07-20) — `marketing/` (separate Next.js app)
+- Standalone **Next.js 16 App-Router** marketing site added at repo `marketing/` (self-contained; NOT part of the
+  Vite main app). Pages: home/product/pricing/industries/security/contact + `/ar` (Arabic) + `app/api/contact`
+  route + robots/sitemap. Stack: React 19, three.js/@react-three (3D hero), framer-motion, tailwind/postcss, zod.
+- Deploy as its OWN Vercel project with **Root Directory = `marketing`** (build `next build`); do NOT mix with the
+  main app's vercel.json. `node_modules/.next/.env*` are gitignored; copy `.env.example`. NOTE: deps (Next16+three)
+  were NOT installed/built in the agent environment (heavy install timed out) — run `cd marketing && npm install
+  && npm run build` locally/CI to verify before first deploy.
+
 ## Phase-1 multi-tenant SaaS security hardening (V306-V315 applied; V316 STAGED, 2026-07-20) — migrations through V315, next free **V316** (V316 file exists, NOT applied)
 - **BATCH 3:**
   - **V315 (applied+verified)** — `organisation_id` is now `NOT NULL` on the 10 V290-stamped import-target

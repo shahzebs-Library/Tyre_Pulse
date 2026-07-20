@@ -185,6 +185,7 @@ const TYPE_LABEL: Record<string, string> = {
   stock: 'Stock & Goods Receipts',
   vendor: 'Vendor / Procurement Report',
   pm: 'Preventive Maintenance due',
+  workshop: 'Workshop Summary',
 }
 
 /** Friendly label for any report_type, incl. custom 'builder:<template-id>' layouts. */
@@ -776,6 +777,15 @@ const DATASET_DIGEST: Record<string, DatasetDigestCfg> = {
     moneyCols: ['estimated_cost'],
     eqFilter: { status: 'active' },
     orderAscending: true,
+  },
+  // Workshop summary: job cards grouped by status / work type / site / priority,
+  // with the most recent jobs and their total cost. Backs the 'workshop'
+  // scheduled report (V298 widened the report_schedules CHECK to allow it).
+  workshop: {
+    table: 'work_orders', dateCol: 'opened_at', money: 'total_cost', accent: '#4f46e5',
+    groups: [['Status', 'status'], ['Work type', 'work_type'], ['Site', 'site'], ['Priority', 'priority']],
+    recent: [['opened_at', 'Opened'], ['work_order_no', 'WO No'], ['asset_no', 'Asset'], ['work_type', 'Type'], ['status', 'Status'], ['priority', 'Priority'], ['technician_name', 'Technician'], ['site', 'Site'], ['total_cost', 'Cost']],
+    moneyCols: ['total_cost'],
   },
 }
 

@@ -2,6 +2,24 @@
 
 Durable, committed project knowledge so any session has full context. Keep this
 current. Read it before adding/changing modules. Governing spec: `Tyre pulse enterprise.md`
+
+## Report email "edge function missing" FIXED (2026-07-20)
+- User: emailing a report failed with an "edge function missing" error. Root cause: `send-email` was
+  the ONLY self-validating edge fn deployed with **verify_jwt=true** (its metadata was even inconsistent
+  between list=true / get=false). When the gateway rejected a JWT it returned a 401 WITHOUT CORS headers,
+  so the browser blocked the response and supabase-js threw a transport-level `FunctionsFetchError`
+  ("Failed to send a request to the Edge Function") -> reads to a user as "edge function missing". The
+  function ALREADY enforces auth in-code via `requireApprovedRole(['admin','manager','director'])`, so the
+  gateway check was redundant. FIX: redeployed **send-email v13 with verify_jwt=false** (matches chat-ai/
+  workflow-notify/ai-orchestrator - every other self-validating fn is verify_jwt=false so its CORS-wrapped
+  error JSON is readable). Also softened the missing-key path to a clean 503 "Email delivery is not
+  configured" (no internals). Client `src/lib/emailService.js` sendReportEmail hardened: pre-checks an
+  authenticated session (clean "session expired" msg), guards oversized base64 attachments (>7MB ->
+  "report too large, narrow filters"), and `readFunctionError()` reads the function's own JSON `{error}`
+  from the FunctionsHttpError `.context` Response so the user sees the REAL sanitized reason, not an opaque
+  transport string. Verified live: send-email now verify_jwt=false consistently; email_notifications='true'
+  (not skipped). RULE: authenticated-but-self-validating edge fns MUST deploy verify_jwt=false so their
+  requireApprovedRole 401/403 JSON is CORS-readable by the browser; never leave one at verify_jwt=true.
 (consolidation-first: one function = one module = one calculation service).
 
 ## System Configuration ENFORCEMENT + custom-role RoleRoute fix (V286, 2026-07-19, SHIPPED)

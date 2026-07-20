@@ -39,13 +39,23 @@ const SELECT_COLS = {
 
 const MAX_SAVE_ROWS = 100000
 // Small chunks keep each POST body well under corporate proxy / antivirus body
-// inspection limits (a common cause of a large bulk POST being silently dropped
-// with a browser "Failed to fetch" even while smaller GET/POST requests work).
-const INSERT_CHUNK = 500
-const MAX_ATTEMPTS = 4          // 1 try + 3 retries per chunk
-const RETRY_BASE_MS = 400       // exponential backoff base
+// inspection limits AND keep each request small enough to survive a weak mobile
+// signal (a large bulk POST is the first thing to be dropped with a browser
+// "Failed to fetch" while smaller requests still get through). 250 rows/POST is
+// a reliability-first size; the retry + deferred-sweep logic below then absorbs
+// intermittent drops so a big file still completes in one action.
+const INSERT_CHUNK = 250
+const MAX_ATTEMPTS = 6          // 1 try + 5 retries per chunk (mobile-data friendly)
+const RETRY_BASE_MS = 500       // exponential backoff base
+const RETRY_MAX_MS = 8000       // backoff ceiling
+const DEFER_PAUSE_MS = 2000     // pause before the final sweep of deferred chunks
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
+// Backoff with jitter so retries after a signal drop don't all fire in lockstep.
+function backoffMs(attempt) {
+  const base = Math.min(RETRY_MAX_MS, RETRY_BASE_MS * 2 ** (attempt - 1))
+  return base + Math.floor(base * 0.3 * ((attempt * 2654435761) % 1000) / 1000)
+}
 
 /** A transient transport failure worth retrying (never a permission/validation error). */
 function isTransient(err) {
@@ -55,7 +65,9 @@ function isTransient(err) {
   return (
     m.includes('failed to fetch') || m.includes('network') || m.includes('load failed') ||
     m.includes('fetch failed') || m.includes('timeout') || m.includes('timed out') ||
-    m.includes('connection') || m.includes('econnreset')
+    m.includes('connection') || m.includes('econnreset') || m.includes('aborted') ||
+    m.includes('err_network') || m.includes('gateway') || m.includes('502') ||
+    m.includes('503') || m.includes('504')
   )
 }
 
@@ -174,26 +186,56 @@ export async function saveImportRows(dataset, rows, batch_id, { country } = {}) 
   })
 
   let saved = 0
-  for (let i = 0; i < payload.length; i += INSERT_CHUNK) {
-    const chunk = payload.slice(i, i + INSERT_CHUNK)
+
+  // Insert one chunk with in-line retry. Returns null on success, or the error:
+  // a NON-transient error (permission/validation) is returned immediately (no
+  // point retrying); a transient error is returned only after all attempts fail.
+  async function insertChunk(chunk) {
     let lastErr = null
     for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) {
       try {
         unwrap(await supabase.from(table).insert(chunk))
-        lastErr = null
-        break
+        return null
       } catch (err) {
         lastErr = err
-        if (attempt >= MAX_ATTEMPTS || !isTransient(err)) break
-        await sleep(RETRY_BASE_MS * 2 ** (attempt - 1))
+        if (!isTransient(err)) return err
+        if (attempt < MAX_ATTEMPTS) await sleep(backoffMs(attempt))
       }
     }
-    if (lastErr) {
-      lastErr.saved = saved
-      lastErr.batch_id = batch_id
-      throw lastErr
+    return lastErr
+  }
+
+  // Pass 1: stream every chunk. A transient failure is DEFERRED (not fatal) so a
+  // brief mobile-signal drop mid-upload does not abandon the whole file; a real
+  // (non-transient) error still aborts immediately with the saved-so-far count.
+  const deferred = []
+  for (let i = 0; i < payload.length; i += INSERT_CHUNK) {
+    const chunk = payload.slice(i, i + INSERT_CHUNK)
+    const err = await insertChunk(chunk)
+    if (!err) { saved += chunk.length; continue }
+    if (!isTransient(err)) { err.saved = saved; err.batch_id = batch_id; throw err }
+    deferred.push(chunk)
+  }
+
+  // Pass 2: after a short pause (let the connection recover), retry the chunks
+  // that were dropped. Only if rows STILL fail here do we surface an error, with
+  // the saved count + how many rows remain so the caller can finish the rest.
+  if (deferred.length) {
+    await sleep(DEFER_PAUSE_MS)
+    let remaining = 0
+    let firstErr = null
+    for (const chunk of deferred) {
+      const err = await insertChunk(chunk)
+      if (!err) { saved += chunk.length; continue }
+      remaining += chunk.length
+      if (!firstErr) firstErr = err
     }
-    saved += chunk.length
+    if (firstErr) {
+      firstErr.saved = saved
+      firstErr.batch_id = batch_id
+      firstErr.remaining = remaining
+      throw firstErr
+    }
   }
   return { saved, requested, capped, batch_id }
 }

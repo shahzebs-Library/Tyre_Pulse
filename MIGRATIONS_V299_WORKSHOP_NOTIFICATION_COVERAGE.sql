@@ -1,0 +1,11 @@
+-- V299: in-app notification coverage for parts-request outcomes + QC failures
+-- (applied live via Supabase MCP). Reuses the notifications table +
+-- notify_elevated_users pattern. FAIL-SAFE: the notify body is wrapped in an
+-- exception block so a notification failure can NEVER block the base write.
+--   trg_notify_workshop_parts on parts_requests: INSERT -> notify elevated
+--     (foreman/store); status change to approved/issued/fulfilled/rejected ->
+--     notify the requester (requested_by).
+--   trg_notify_workshop_qc on work_orders: qc_status -> 'failed' with an
+--     assigned_owner_id -> notify that technician (rework required).
+-- Verified live (rolled back): requester + owner each got one notification.
+-- Next free migration V300.

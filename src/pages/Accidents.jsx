@@ -14,6 +14,7 @@ import { getAssetByNo } from '../lib/api/assets'
 import { useAuth } from '../contexts/AuthContext'
 import { useSettings } from '../contexts/SettingsContext'
 import { exportToExcel, exportToPdf, reportFileName, reportDateLabel } from '../lib/exportUtils'
+import { sendReportEmail } from '../lib/emailService'
 import { formatCurrency as _fmtCurrencyBase, formatDate, formatMonthYear } from '../lib/formatters'
 import { resolveStorageUrl } from '../lib/storageRefs'
 import { Bar, Doughnut, Line } from 'react-chartjs-2'
@@ -905,9 +906,10 @@ export default function Accidents() {
     dlTimerRef.current = setTimeout(() => setDlAnalytics(s => ({ ...s, msg: '' })), 5000)
   }
 
-  async function downloadAnalyticsPdf() {
-    setDlAnalytics({ busy: true, msg: '', ok: true })
-    try {
+  // Build the Accident Analytics PDF. Shared by Download + Email so the emailed
+  // report is identical to the downloaded one ("same as it is"). Returns the
+  // jsPDF doc (never saved here) + chart count + company for the caller.
+  async function buildAnalyticsDoc() {
       // Charts in on-screen order; refs are null for charts hidden by their
       // honest "No data" empty state, so those drop out automatically.
       const chartList = [
@@ -1006,11 +1008,46 @@ export default function Accidents() {
         doc.text(`${company} | ${stamp} | page 2 of 2`, W - M, 12, { align: 'right' })
         drawGrid(chartList.slice(6, 12), 16)
       }
+      return { doc, chartCount: chartList.length, company }
+  }
 
+  async function downloadAnalyticsPdf() {
+    setDlAnalytics({ busy: true, msg: '', ok: true })
+    try {
+      const { doc, chartCount, company } = await buildAnalyticsDoc()
       doc.save(`${reportFileName(company, 'Accident Analytics', reportDateLabel())}.pdf`)
-      flashDl(`Analytics PDF downloaded (${chartList.length} charts, ${chartList.length > 6 ? 2 : 1} page${chartList.length > 6 ? 's' : ''}).`, true)
+      flashDl(`Analytics PDF downloaded (${chartCount} charts, ${chartCount > 6 ? 2 : 1} page${chartCount > 6 ? 's' : ''}).`, true)
     } catch (e) {
       flashDl(`Download failed: ${e?.message || 'unexpected error'}`, false)
+    }
+  }
+
+  // Email the EXACT analytics PDF (same as Download) as an attachment via the
+  // send-email edge function. `to` is a comma/semicolon separated recipient list.
+  const [emailModal, setEmailModal] = useState({ open: false, to: '', busy: false, msg: '', ok: true })
+  async function emailAnalyticsPdf() {
+    const recipients = emailModal.to.split(/[,;\s]+/).map(s => s.trim()).filter(Boolean)
+    if (!recipients.length || !recipients.every(e => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e))) {
+      setEmailModal(m => ({ ...m, msg: 'Enter one or more valid email addresses.', ok: false }))
+      return
+    }
+    setEmailModal(m => ({ ...m, busy: true, msg: '', ok: true }))
+    try {
+      const { doc, chartCount, company } = await buildAnalyticsDoc()
+      const pdfBase64 = doc.output('datauristring').split(',')[1]
+      const stamp = new Date().toISOString().slice(0, 10)
+      const scope = activeCountry && activeCountry !== 'All' ? activeCountry : 'All countries'
+      await sendReportEmail({
+        to: recipients,
+        subject: `Accident Analytics Summary - ${company} - ${stamp}`,
+        bodyHtml: `<p>Attached is the Accident Analytics Summary (${chartCount} chart${chartCount === 1 ? '' : 's'}) for ${company}.</p>`
+          + `<p>Scope: ${scope}. Generated ${stamp}. ${records.length} incidents.</p>`,
+        pdfBase64,
+        pdfName: `${reportFileName(company, 'Accident Analytics', reportDateLabel())}.pdf`,
+      })
+      setEmailModal(m => ({ ...m, busy: false, msg: `Sent to ${recipients.length} recipient(s).`, ok: true }))
+    } catch (e) {
+      setEmailModal(m => ({ ...m, busy: false, msg: `Could not send: ${toUserMessage(e, 'email failed')}`, ok: false }))
     }
   }
 
@@ -2014,7 +2051,42 @@ export default function Accidents() {
                 ? <><span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin inline-block" /> Preparing PDF...</>
                 : <><Download size={14} /> Download Analytics PDF</>}
             </button>
+            <button
+              onClick={() => setEmailModal({ open: true, to: '', busy: false, msg: '', ok: true })}
+              disabled={records.length === 0}
+              title={records.length === 0 ? 'No incident data to email' : 'Email this exact analytics report as a PDF attachment to chosen recipients now'}
+              className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-1.5 disabled:opacity-50"
+            >
+              <Mail size={14} /> Email Analytics PDF
+            </button>
           </div>
+
+          {emailModal.open && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4" onClick={() => !emailModal.busy && setEmailModal(m => ({ ...m, open: false }))}>
+              <div className="w-full max-w-md rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5" onClick={(e) => e.stopPropagation()}>
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-sm font-bold flex items-center gap-2"><Mail size={15} /> Email Analytics PDF</h3>
+                  <button onClick={() => !emailModal.busy && setEmailModal(m => ({ ...m, open: false }))} className="text-[var(--text-muted)] hover:text-[var(--text)]"><X size={16} /></button>
+                </div>
+                <p className="text-xs text-[var(--text-muted)] mb-2">The exact analytics report you see here is attached as a PDF and sent right away.</p>
+                <input autoFocus type="text" value={emailModal.to}
+                  onChange={(e) => setEmailModal(m => ({ ...m, to: e.target.value, msg: '' }))}
+                  placeholder="name@company.com, another@company.com"
+                  className="w-full h-9 rounded-lg px-3 text-sm bg-[var(--surface-2)] border border-[var(--border)] focus:outline-none focus:border-[var(--accent)]" />
+                {emailModal.msg && <p className={`text-xs mt-2 ${emailModal.ok ? 'text-green-400' : 'text-red-400'}`}>{emailModal.msg}</p>}
+                <div className="flex items-center gap-2 mt-4">
+                  <button onClick={() => setEmailModal(m => ({ ...m, open: false }))} disabled={emailModal.busy}
+                    className="btn-secondary flex-1 text-sm px-3 py-2">Cancel</button>
+                  <button onClick={emailAnalyticsPdf} disabled={emailModal.busy || !emailModal.to.trim()}
+                    className="btn-primary flex-1 flex items-center justify-center gap-1.5 text-sm px-3 py-2 disabled:opacity-50">
+                    {emailModal.busy
+                      ? <><span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin inline-block" /> Sending...</>
+                      : <><Mail size={14} /> Send now</>}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* KPI row */}
           <div className="grid grid-cols-2 md:grid-cols-5 gap-3">

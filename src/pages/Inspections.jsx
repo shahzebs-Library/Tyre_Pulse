@@ -519,15 +519,25 @@ export default function Inspections() {
     setSaving(true)
     setSaveError(null)
     const displayType = form.inspection_type
+    // Send ONLY real, writable columns. Spreading the whole `form` used to leak
+    // read-only / generated columns from a loaded edit row into the insert or
+    // update, which failed with a raw "column not compatible" database error.
+    const WRITABLE_COLS = [
+      'title', 'inspection_type', 'site', 'asset_no', 'tyre_serial', 'scheduled_date',
+      'completed_date', 'inspection_date', 'status', 'findings', 'inspector', 'notes',
+      'attendees', 'severity', 'photo_data', 'vehicle_type', 'tyre_conditions',
+      'odometer_km', 'hour_meter', 'pressure_reading', 'approval_status', 'region',
+    ]
+    const base = {}
+    for (const k of WRITABLE_COLS) if (form[k] !== undefined) base[k] = form[k]
     const payload = {
-      ...form,
+      ...base,
       created_by: profile?.id ?? null,
       // Persist a CHECK-valid inspection_type; carry the true display type
       // (observation/training) in custom_data so it round-trips on read.
       inspection_type: dbInspectionType(displayType),
       custom_data: { ...(form.custom_data || {}), record_type: displayType },
     }
-    delete payload.id
 
     try {
       if (form.id) {
@@ -538,7 +548,7 @@ export default function Inspections() {
       setForm(null)
       await load()
     } catch (error) {
-      setSaveError(toUserMessage(error, 'Save failed. If this persists, run MIGRATIONS_SAFE.sql to update the inspections table schema.'))
+      setSaveError(toUserMessage(error, 'Could not save the inspection. Please check the required fields and try again.'))
     }
     setSaving(false)
   }

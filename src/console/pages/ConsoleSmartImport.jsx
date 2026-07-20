@@ -49,6 +49,25 @@ const PREVIEW_SAMPLE = 2000
 // fastest path (the in-app import still works, just slower for very large files).
 const LARGE_FILE_ROWS = 50000
 
+// Move any out-of-vocab enum value aside so a DB CHECK constraint (e.g.
+// inspection status / accident severity) cannot reject the whole row. The column
+// falls back to its table default and the original value is kept in custom_data
+// for review. Mirrors the Data Intake Center behavior so imports never fail with
+// a raw "value not compatible" constraint error.
+function sanitizeEnums(transformed, mapped, custom, issues) {
+  const t = { ...(transformed || {}) }
+  const m = { ...(mapped || {}) }
+  const c = { ...(custom || {}) }
+  for (const iss of issues || []) {
+    if (iss.code === 'ENUM_INVALID' && t[iss.field] != null) {
+      c[`${iss.field}__unmapped`] = t[iss.field]
+      delete t[iss.field]
+      delete m[iss.field]
+    }
+  }
+  return { transformed: t, mapped: m, custom: c }
+}
+
 function confBadge(conf) {
   if (conf >= 90) return { text: 'Auto', cls: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30' }
   if (conf >= 60) return { text: `${conf}%`, cls: 'bg-amber-500/15 text-amber-300 border-amber-500/30' }
@@ -156,6 +175,10 @@ export default function ConsoleSmartImport() {
         const { transformed } = transformRow(raw, mapping, { module })
         t = transformed
       } catch { t = {} }
+      // Reflect the same enum cleanup the commit applies, so the preview counts
+      // are honest: an out-of-vocab enum does not count as a failing row.
+      const v0 = validateRow(t, module)
+      t = sanitizeEnums(t, {}, {}, v0.issues).transformed
       const v = validateRow(t, module)
       if (v.status === 'error') errorRows++
       else if (v.status === 'warning') warning++
@@ -190,6 +213,12 @@ export default function ConsoleSmartImport() {
           const r = transformRow(raw, mapping, { module })
           mapped = r.mapped; transformed = r.transformed; custom = r.custom
         } catch { /* keep empty; validation will flag it */ }
+        // Strip out-of-vocab enum values so a DB CHECK cannot reject the row;
+        // the original is preserved in custom_data and the column takes its
+        // table default.
+        const issues = (validateRow(transformed, module).issues) || []
+        const cleaned = sanitizeEnums(transformed, mapped, custom, issues)
+        mapped = cleaned.mapped; transformed = cleaned.transformed; custom = cleaned.custom
         const v = validateRow(transformed, module)
         return {
           sheetName: sheet.name, sourceRowNo: i + 1, raw, mapped, transformed, custom,

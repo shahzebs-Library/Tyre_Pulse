@@ -1,15 +1,16 @@
-import { useState, Suspense } from 'react'
+import { useState, useEffect, useCallback, Suspense } from 'react'
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import {
   Shield, LayoutDashboard, Building2, Users, Settings2,
   ClipboardList, Zap, Megaphone, Lock, LogOut, ChevronDown,
   Globe, Menu, X, AlertTriangle, Layers, Smartphone, Palette, Activity,
   DatabaseBackup, UserCog, History, BellRing, Boxes, HeartPulse, Search, Truck, Trash2,
-  LayoutList, Bug, Wand2,
+  LayoutList, Bug, Wand2, LifeBuoy, Eye,
 } from 'lucide-react'
 import { useConsoleAuth } from '../ConsoleAuthContext'
 import Console2FAModal from './Console2FAModal'
 import ThemeToggle from '../../components/ui/ThemeToggle'
+import { getCurrentSupportSession, endSupportSession } from '../../lib/api/supportSessions'
 
 const NAV = [
   { to: '/console',              label: 'Dashboard',      icon: LayoutDashboard, end: true },
@@ -24,6 +25,7 @@ const NAV = [
   { to: '/console/sessions',     label: 'Sessions & Devices', icon: Smartphone },
   { to: '/console/automation',   label: 'Automation Health',  icon: Activity },
   { to: '/console/delivery',     label: 'Delivery & Alerts',  icon: BellRing },
+  { to: '/console/support-sessions', label: 'Support Sessions', icon: LifeBuoy },
   { to: '/console/smart-import', label: 'Smart Import',   icon: Wand2 },
   { to: '/console/data-browser', label: 'Data Browser',   icon: Search },
   { to: '/console/data-cleanup', label: 'Data Cleanup',   icon: Trash2 },
@@ -48,6 +50,43 @@ export default function ConsoleLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [orgOpen, setOrgOpen]         = useState(false)
   const [show2FA, setShow2FA]         = useState(false)
+  const [support, setSupport]         = useState(null)   // active support session
+  const [supportNow, setSupportNow]   = useState(() => Date.now())
+  const [endingSupport, setEndingSupport] = useState(false)
+
+  const refreshSupport = useCallback(async () => {
+    const s = await getCurrentSupportSession()
+    setSupport(s)
+    setSupportNow(Date.now())
+  }, [])
+
+  // Keep the always-visible banner in sync: poll while active, tick the
+  // countdown, and re-check when the tab regains focus.
+  useEffect(() => {
+    refreshSupport()
+    const poll = setInterval(refreshSupport, 60000)
+    const tick = setInterval(() => setSupportNow(Date.now()), 30000)
+    const onFocus = () => refreshSupport()
+    window.addEventListener('focus', onFocus)
+    return () => { clearInterval(poll); clearInterval(tick); window.removeEventListener('focus', onFocus) }
+  }, [refreshSupport])
+
+  const supportOrgName = support
+    ? (orgs?.find(o => o.id === support.target_org_id)?.name || support.target_org_id)
+    : null
+  const supportMinsLeft = (() => {
+    if (!support?.expires_at) return null
+    const t = new Date(support.expires_at).getTime()
+    return Number.isNaN(t) ? null : Math.max(0, Math.ceil((t - supportNow) / 60000))
+  })()
+
+  async function handleEndSupport() {
+    if (!support?.id) return
+    setEndingSupport(true)
+    try { await endSupportSession(support.id) } catch { /* keep banner; page surfaces errors */ }
+    setEndingSupport(false)
+    refreshSupport()
+  }
 
   async function handleSignOut() {
     await signOut()
@@ -173,6 +212,26 @@ export default function ConsoleLayout() {
             </div>
           </div>
         </header>
+
+        {/* Active support-session banner (always visible while a session is open) */}
+        {support && (
+          <div className="flex-shrink-0 flex flex-wrap items-center gap-x-2 gap-y-1 px-6 py-2 bg-orange-600/15 border-b border-orange-700/40 text-xs">
+            <Eye size={13} className="text-orange-400 flex-shrink-0" />
+            <span className="text-orange-200 font-semibold">Support session active</span>
+            <span className="text-orange-300/70">inspecting</span>
+            <span className="text-white font-medium">{supportOrgName}</span>
+            <span className="px-1.5 py-0.5 rounded text-[9px] font-semibold border border-orange-700/50 text-orange-200 bg-orange-900/30">
+              {support.mode === 'edit' ? 'EDIT' : 'READ ONLY'}
+            </span>
+            {supportMinsLeft != null && (
+              <span className="text-orange-300/70">{supportMinsLeft === 0 ? 'expired' : `ends in ${supportMinsLeft}m`}</span>
+            )}
+            <button onClick={handleEndSupport} disabled={endingSupport}
+              className="ml-auto px-2 py-0.5 rounded-md text-[11px] font-semibold text-white bg-red-600/80 hover:bg-red-600 disabled:opacity-40">
+              {endingSupport ? 'Ending...' : 'End'}
+            </button>
+          </div>
+        )}
 
         {/* Page content */}
         <main className="flex-1 overflow-y-auto p-6">

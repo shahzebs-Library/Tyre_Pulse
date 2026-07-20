@@ -223,6 +223,7 @@ const ForecastingEngine      = lazy(() => import('./pages/ForecastingEngine'))
 const ContinuousImprovement  = lazy(() => import('./pages/ContinuousImprovement'))
 const ErpSync                = lazy(() => import('./pages/ErpSync'))
 const WorkOrders             = lazy(() => import('./pages/WorkOrders'))
+const WorkshopLive           = lazy(() => import('./pages/WorkshopLive'))
 const MaintenanceCalendar    = lazy(() => import('./pages/MaintenanceCalendar'))
 const DriverManagement       = lazy(() => import('./pages/DriverManagement'))
 const SafetyCompliance       = lazy(() => import('./pages/SafetyCompliance'))
@@ -440,6 +441,7 @@ function MainApp() {
                       <Route path="/gate-pass"            element={<Safe><ModuleRoute moduleKey="gate_pass"><GatePass /></ModuleRoute></Safe>} />
                       <Route path="/serial-tracker"       element={<Safe><RoleRoute allowed={['Admin']}><SerialTracker /></RoleRoute></Safe>} />
                       <Route path="/work-orders"          element={<Safe><ModuleRoute moduleKey="work_orders"><WorkOrders /></ModuleRoute></Safe>} />
+                      <Route path="/workshop-live"        element={<Safe><RoleRoute allowed={['Admin','Manager','Director']}><WorkshopLive /></RoleRoute></Safe>} />
                       <Route path="/maintenance-calendar" element={<Safe><RoleRoute allowed={['Admin']}><MaintenanceCalendar /></RoleRoute></Safe>} />
                       <Route path="/safety-compliance"    element={<Safe><RoleRoute allowed={['Admin']}><SafetyCompliance /></RoleRoute></Safe>} />
                       <Route path="/assets"               element={<Safe><ModuleRoute moduleKey="fleet_master"><AssetManagement /></ModuleRoute></Safe>} />

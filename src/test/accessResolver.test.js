@@ -120,6 +120,30 @@ describe('resolveAccess — parity with resolvePermission & resolveCapability', 
   })
 })
 
+// ── Delegation: legacy resolvers now route THROUGH resolveAccess ──────────────
+describe('resolvePermission / resolveCapability delegate to resolveAccess', () => {
+  const cases = [
+    { role: 'Admin',    isSuperAdmin: false, roleAllows: false, override: 'revoke' },
+    { role: 'Reporter', isSuperAdmin: true,  roleAllows: false, override: 'revoke' },
+    { role: 'Manager',  isSuperAdmin: false, roleAllows: true,  override: undefined },
+    { role: 'Reporter', isSuperAdmin: false, roleAllows: false, override: 'grant' },
+    { role: 'Reporter', isSuperAdmin: false, roleAllows: false, override: 'revoke' },
+    { role: 'Reporter', isSuperAdmin: false, roleAllows: false, override: undefined },
+  ]
+  it('returns resolveAccess(...).allowed for representative inputs', () => {
+    for (const c of cases) {
+      const backed = resolveAccess({
+        role: c.role,
+        isSuperAdmin: c.isSuperAdmin,
+        roleAllows: c.roleAllows,
+        ...overrideToFlags(c.override),
+      }).allowed
+      expect(resolvePermission(c)).toBe(backed)
+      expect(resolveCapability(c)).toBe(backed)
+    }
+  })
+})
+
 // ── Re-exported scope sentinel helpers (single import surface) ────────────────
 describe('accessResolver re-exports scopeSentinel helpers', () => {
   it('exposes SITE_ALL_TOKENS', () => {

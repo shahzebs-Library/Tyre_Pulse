@@ -12,7 +12,31 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
   were NOT installed/built in the agent environment (heavy install timed out) — run `cd marketing && npm install
   && npm run build` locally/CI to verify before first deploy.
 
-## Phase-1 multi-tenant SaaS security hardening (V306-V315 applied; V316 STAGED, 2026-07-20) — migrations through V315, next free **V316** (V316 file exists, NOT applied)
+## Phase-1 multi-tenant SaaS security hardening (V306-V318 applied; V316 STAGED, 2026-07-20) — next free **V319** (V316 file exists, NOT applied)
+- **BATCH 4 (V317/V318 applied + code):**
+  - **V317 (applied+verified)** `account_deletion_requests` — in-app self-service deletion REQUEST (Settings
+    "Delete my account", typed DELETE gate, records intent only, never a client hard-delete); user files/reads own,
+    Admin/super read+update within org, immutable. Play/privacy in-app deletion path. Service
+    `src/lib/api/accountDeletion.js` degrades gracefully pre-apply. Verified own-insert OK / other-user blocked.
+  - **V318 (applied+verified)** `support_sessions` + RPCs `start/end/current_support_session` — platform-owner
+    time-boxed, reason-required, read-only-default, AUDITED authorization for a super-admin to inspect ONE
+    customer org (replaces silent unrestricted cross-org access). Super-admin gated; audits into console_sessions
+    DIRECTLY (NOT via log_console_event — that fn types target_id as text but the column is uuid, so it cannot
+    carry a uuid session id; the DEFINER RPC inserts the audit row itself). RECORDS/authorizes only — WIRING an
+    active session into app_current_org()/RLS to actually retarget reads is a DELIBERATE separate follow-up (NOT
+    done). Service `src/lib/api/supportSessions.js`. Verified: super start/current OK, non-super blocked. NOTE:
+    `log_console_event(p_target_id text)` is latently broken for a non-null target_id (uuid column) — other
+    callers must pass null; a future fix should cast p_target_id::uuid.
+  - **Subscription-status ENFORCEMENT wired** (`src/components/SubscriptionGate.jsx` + src/App.jsx): app-wide
+    banner (past_due amber / canceled gray / expired+suspended red) + full-screen block when `!canUseApp`
+    (expired/suspended) allowing only /billing + sign-out; canceled = read-only banner. FAIL-OPEN (missing/unknown
+    -> renders normally) + admins/super never hard-blocked (banner only). /billing + public routes allow-listed.
+    Consumes the pure subscriptionAccess policy. No data-layer write block yet (UX gate; RLS is the later boundary).
+  - **Single canonical `src/lib/accessResolver.js`** (committed): resolveAccess (admin/super > revoke > grant >
+    role > deny), behavior-identical to legacy resolvePermission/resolveCapability (216-combo parity green);
+    re-exports scope helpers; staging toward one permission engine (no call sites rewired yet).
+
+## Phase-1 multi-tenant SaaS security hardening (V306-V315 applied; V316 STAGED) — batches 1-3
 - **BATCH 3:**
   - **V315 (applied+verified)** — `organisation_id` is now `NOT NULL` on the 10 V290-stamped import-target
     business tables (vehicle_fleet/tyre_records/accidents/inspections/work_orders/stock_records/warranty_claims/

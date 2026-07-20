@@ -14,6 +14,7 @@ import Layout from './components/Layout'
 import LoadingSpinner from './components/LoadingSpinner'
 import PwaUpdatePrompt from './components/PwaUpdatePrompt'
 import ErrorBoundary from './components/ErrorBoundary'
+import SubscriptionGate from './components/SubscriptionGate'
 import { useFeatureGate } from './hooks/useFeatureFlags'
 // Console (completely isolated auth context)
 import { ConsoleAuthProvider, useConsoleAuth } from './console/ConsoleAuthContext'
@@ -414,6 +415,7 @@ function MainApp() {
                 <ProtectedRoute>
                   <MaintenanceGate>
                   <Layout>
+                    <SubscriptionGate>
                     <ChecklistOnlyGate>
                     <Routes>
                       <Route path="/"            element={<Safe><HomeRoute /></Safe>} />
@@ -648,6 +650,7 @@ function MainApp() {
                       <Route path="*"            element={<NotFound />} />
                     </Routes>
                     </ChecklistOnlyGate>
+                    </SubscriptionGate>
                   </Layout>
                   </MaintenanceGate>
                 </ProtectedRoute>

@@ -26,6 +26,7 @@ import { AppText, Screen, Badge, EmptyState, ErrorState, Loading } from '../../.
 import ChecklistItemSheet, { optionTone } from '../../../components/ChecklistItemSheet'
 import { getTemplate, submitChecklist, ChecklistTemplate } from '../../../lib/checklists'
 import { supabase } from '../../../lib/supabase'
+import { escapeLike, orIlike } from '../../../lib/queryFilters'
 import { toUserMessage } from '../../../lib/safeError'
 import {
   ChecklistField, blankAnswer, isValueField, isFieldVisible, visibleChecklistFields,
@@ -51,9 +52,9 @@ interface AssetSearchRow {
 }
 
 // PostgREST or() filters break on commas/parens and ilike on unescaped %/_ —
-// strip them so a typed query is always a safe literal.
+// escapeLike strips them so a typed query is always a safe literal.
 function sanitizeAssetQuery(raw: string): string {
-  return (raw ?? '').trim().replace(/[(),%_]/g, '').slice(0, 40)
+  return escapeLike(raw ?? '').slice(0, 40)
 }
 
 // A friendly icon per field type for the tile.
@@ -168,15 +169,20 @@ function ChecklistFillScreen() {
       setAssetSearching(false)
       return
     }
+    const searchOr = orIlike(['asset_no', 'fleet_number', 'vehicle_type'], q)
+    if (!searchOr) {
+      setAssetResults([])
+      setAssetSearching(false)
+      return
+    }
     setAssetSearching(true)
     const stamp = ++assetSearchStamp.current
     const h = setTimeout(async () => {
       try {
-        const like = `%${q}%`
         const { data } = await supabase
           .from('vehicle_fleet')
           .select('id, asset_no, site, vehicle_type, fleet_number')
-          .or(`asset_no.ilike.${like},fleet_number.ilike.${like},vehicle_type.ilike.${like}`)
+          .or(searchOr)
           .order('asset_no')
           .limit(20)
         if (assetSearchStamp.current === stamp) setAssetResults((data as AssetSearchRow[]) ?? [])

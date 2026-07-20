@@ -3,6 +3,28 @@
 Durable, committed project knowledge so any session has full context. Keep this
 current. Read it before adding/changing modules. Governing spec: `Tyre pulse enterprise.md`
 
+## Console Smart Import (2026-07-20) — super-admin "upload a file, it auto-adjusts by columns"
+- User asked for a BACKEND CONSOLE place where a super-admin just uploads any Excel/CSV and it maps itself
+  (the frontpage /data-intake + /erp-import exist but user wanted it in /console and fully automatic). Built
+  as a NEW SURFACE over the SINGLE import engine — NOT a second engine (golden rule). Do NOT duplicate.
+- **Route `/console/smart-import`** (`src/console/pages/ConsoleSmartImport.jsx`, nav "Smart Import", Wand2 icon,
+  pure console navy+orange, super-admin only). Flow: upload -> `parseWorkbook` -> **auto-detect module** ->
+  auto-map columns (`suggestMapping`, editable) -> transformed+validated PREVIEW (ready/needs-review/would-fail
+  counts via `transformRow`+`validateRow`) -> commit through the EXISTING staging pipeline in
+  `src/lib/api/imports.js` (createBatch -> saveSheets -> stageRows -> setBatchCounts -> approveBatch ->
+  commitBatch). Org+country RLS enforced server-side; reversible from Data Intake history; run logged via
+  console `logAction('smart_import_commit',...)`. Errors sanitized via `toUserMessage` (no DB/endpoint leak).
+- **NEW pure engine `src/lib/import/detectModule.js`** (the genuinely new capability): `detectModule(columns,
+  sampleRows)` + `rankModules` score the headers against EACH of the 10 MODULE_FIELDS via the SAME
+  `suggestMapping` scorer, blended 0.55*required-field-coverage + 0.30*avg-confidence + 0.15*mapped-share, and
+  return the best module + a confident flag (DETECT_CONFIDENCE=45, needs a >=12pt lead or full required
+  coverage). Routes fleet/tyre/stock/accident/inspection/workorder/warranty/gatepass/supplier/driver. Exported
+  from the `src/lib/import` barrel. Verified: tyre/fleet/stock/accident sample headers each route to the right
+  module #1. Tests `src/test/detectModule.test.js` (8). Build clean; import-engine tests green.
+- RULE: to add a routable module, it just needs a MODULE_FIELDS + MODULE_TABLES entry (detectModule + the
+  page pick it up automatically). This is the console counterpart to /data-intake; the browser path still caps
+  ~100k rows/file — true million-row loads still need the server COPY pipeline.
+
 ## Report email "edge function missing" FIXED (2026-07-20)
 - User: emailing a report failed with an "edge function missing" error. Root cause: `send-email` was
   the ONLY self-validating edge fn deployed with **verify_jwt=true** (its metadata was even inconsistent

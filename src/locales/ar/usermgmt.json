@@ -52,6 +52,7 @@
     "noUsersMatch": "لا يوجد مستخدمون مطابقون للمرشحات الحالية.",
     "clearFilters": "مسح جميع المرشحات",
     "all": "الكل",
+    "noCountry": "لا صلاحية",
     "locked": "مقفل",
     "pending": "بانتظار",
     "activeBadge": "نشط",
@@ -116,6 +117,8 @@
     "cannotChangeOwnRole": "لا يمكنك تغيير دورك الخاص.",
     "countryAccess": "صلاحية الدول",
     "noRestriction": "بدون تقييد - يمكن للمستخدم رؤية جميع الدول.",
+    "seesAllCountries": "هذا الدور يرى جميع الدول بغض النظر عن النطاق.",
+    "noCountryAccess": "لا توجد صلاحية للدول. عيّن دولة أو أكثر لمنح الرؤية.",
     "restrictedTo": "مقيّد بـ: {countries}",
     "adminNotes": "ملاحظات المسؤول",
     "placeholders": {

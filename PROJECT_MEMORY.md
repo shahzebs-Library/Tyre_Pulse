@@ -3,6 +3,168 @@
 Durable, committed project knowledge so any session has full context. Keep this
 current. Read it before adding/changing modules. Governing spec: `Tyre pulse enterprise.md`
 
+## Marketing website (2026-07-20) — `marketing/` (separate Next.js app)
+- Standalone **Next.js 16 App-Router** marketing site added at repo `marketing/` (self-contained; NOT part of the
+  Vite main app). Pages: home/product/pricing/industries/security/contact + `/ar` (Arabic) + `app/api/contact`
+  route + robots/sitemap. Stack: React 19, three.js/@react-three (3D hero), framer-motion, tailwind/postcss, zod.
+- Deploy as its OWN Vercel project with **Root Directory = `marketing`** (build `next build`); do NOT mix with the
+  main app's vercel.json. `node_modules/.next/.env*` are gitignored; copy `.env.example`. NOTE: deps (Next16+three)
+  were NOT installed/built in the agent environment (heavy install timed out) — run `cd marketing && npm install
+  && npm run build` locally/CI to verify before first deploy.
+
+## Phase-1 multi-tenant SaaS security hardening (V306-V318 applied; V316 STAGED, 2026-07-20) — next free **V319** (V316 file exists, NOT applied)
+- **BATCH 4 (V317/V318 applied + code):**
+  - **V317 (applied+verified)** `account_deletion_requests` — in-app self-service deletion REQUEST (Settings
+    "Delete my account", typed DELETE gate, records intent only, never a client hard-delete); user files/reads own,
+    Admin/super read+update within org, immutable. Play/privacy in-app deletion path. Service
+    `src/lib/api/accountDeletion.js` degrades gracefully pre-apply. Verified own-insert OK / other-user blocked.
+  - **V318 (applied+verified)** `support_sessions` + RPCs `start/end/current_support_session` — platform-owner
+    time-boxed, reason-required, read-only-default, AUDITED authorization for a super-admin to inspect ONE
+    customer org (replaces silent unrestricted cross-org access). Super-admin gated; audits into console_sessions
+    DIRECTLY (NOT via log_console_event — that fn types target_id as text but the column is uuid, so it cannot
+    carry a uuid session id; the DEFINER RPC inserts the audit row itself). RECORDS/authorizes only — WIRING an
+    active session into app_current_org()/RLS to actually retarget reads is a DELIBERATE separate follow-up (NOT
+    done). Service `src/lib/api/supportSessions.js`. Verified: super start/current OK, non-super blocked. NOTE:
+    `log_console_event(p_target_id text)` is latently broken for a non-null target_id (uuid column) — other
+    callers must pass null; a future fix should cast p_target_id::uuid.
+  - **Subscription-status ENFORCEMENT wired** (`src/components/SubscriptionGate.jsx` + src/App.jsx): app-wide
+    banner (past_due amber / canceled gray / expired+suspended red) + full-screen block when `!canUseApp`
+    (expired/suspended) allowing only /billing + sign-out; canceled = read-only banner. FAIL-OPEN (missing/unknown
+    -> renders normally) + admins/super never hard-blocked (banner only). /billing + public routes allow-listed.
+    Consumes the pure subscriptionAccess policy. No data-layer write block yet (UX gate; RLS is the later boundary).
+  - **Single canonical `src/lib/accessResolver.js`** (committed): resolveAccess (admin/super > revoke > grant >
+    role > deny), behavior-identical to legacy resolvePermission/resolveCapability (216-combo parity green);
+    re-exports scope helpers; staging toward one permission engine (no call sites rewired yet).
+
+## Phase-1 multi-tenant SaaS security hardening (V306-V315 applied; V316 STAGED) — batches 1-3
+- **BATCH 3:**
+  - **V315 (applied+verified)** — `organisation_id` is now `NOT NULL` on the 10 V290-stamped import-target
+    business tables (vehicle_fleet/tyre_records/accidents/inspections/work_orders/stock_records/warranty_claims/
+    gate_passes/suppliers/drivers); added the missing app_current_org() default to drivers+suppliers first.
+    0 null-org rows anywhere; the V290 BEFORE-INSERT stamp trigger + column default guarantee non-null on every
+    path. pm_programs/pm_service_records left DEFAULT-only (no stamp trigger); wash_records already NOT NULL.
+  - **Subscription-STATUS policy (code, committed)** — pure `src/lib/subscriptionAccess.js`
+    (`subscriptionAccess(overview)` -> per-status {canUseApp/canWrite/readOnly/billingOnly/
+    blockSelfServiceBilling/banner}: trialing/active full; past_due grace+block self-serve billing; canceled
+    read-only; expired billing/export only; suspended blocked; missing/unknown FAIL-OPEN). Exposed read-only via
+    `useBilling()`. NO route/write block wired yet (deliberate next step). 22 tests.
+  - **V316 `create_workspace_owner` RPC — WRITTEN, NOT APPLIED (needs product sign-off).** Atomic self-serve
+    workspace: new organisations row + owner membership + caller promoted to org Admin/approved + trialing
+    org_subscriptions, one txn. Guarded (rejects super-admins + anyone who already owns a workspace; never sets
+    is_super_admin; hijack/double-create safe). Bypasses ONLY trg_guard_profile_privileged for its single
+    self-UPDATE (V269 precedent; ACCESS EXCLUSIVE lock serializes it). **DELIBERATELY LEFT UNAPPLIED**: it turns
+    the app from single-tenant into OPEN self-serve signup (any authenticated user can create an org + become its
+    Admin) — a product/tenant-model decision, not a security fix. Apply only on explicit user go-ahead. Dormant
+    client stub `src/lib/api/onboarding.js createWorkspaceOwner()` added (not wired to any UI).
+  - **REMAINING roadmap (not started):** wire subscriptionAccess into real route/write gates; full Platform-Owner
+    vs Company-Admin surface split; one unified permission engine; individual-vs-company signup UI; support-session
+    (owner inspects a tenant, audited); Play account-deletion completeness.
+
+## Phase-1 multi-tenant SaaS security hardening — earlier batches (V306-V314, 2026-07-20)
+- **BATCH 2 (V311-V314 + code, applied live + verified):**
+  - **V311** `tr_sync_profile_org` BEFORE INS/UPD trigger keeps `profiles.org_id` <-> `organisation_id` in
+    sync (fills a NULL from the other; if both set and differ, org_id wins since app_current_org() reads org_id).
+    Sorts before `trg_guard_profile_privileged`; no-op on today's data (all rows equal). Removes the divergence
+    class of bug. `imports.js currentOrgId` now reads `organisation_id ?? org_id`.
+  - **V312** backfilled `organisation_id` on the workflow/event tables from derivable sources
+    (workflow_instances<-profiles via started_by; step_events/notifications<-instances; domain_events<-actor;
+    rule_executions<-business_rules) and TIGHTENED the SELECT policy (dropped the null-org branch) on
+    workflow_instances/step_events/rule_executions (0 null after) and workflow_notifications (1 orphan row whose
+    instance had no derivable org stays null = now hidden — accepted; an un-attributable row must not leak).
+    NOT tightened (underivable null-org rows remain): workflow_definitions (25, no actor/FK), domain_events
+    (~20 actor-less), report_send_log (158, report_schedules.org_id itself null).
+  - **V313** `enforce_plan_limit()` BEFORE INSERT trigger on vehicle_fleet + api_keys consuming the existing
+    `org_can_add()`. SAFE BY CONSTRUCTION: (1) GRANDFATHER — enforces ONLY for an org that has an
+    org_subscriptions row (0 today) so it is INERT until billing goes live per-org (Company A has 683 vehicles
+    vs a trial cap of 25 and NO subscription -> would be blocked by a naive trigger; grandfather avoids that);
+    (2) service-role/no-JWT bypass (imports/webhooks); (3) fail-OPEN on any decision error. VERIFIED: Company A
+    vehicle insert still allowed. This closes the "limits only client-side" gap for when billing is live.
+  - **V314** cross-org bypass sweep: the ONLY 4 remaining `app_is_org_admin()` (= super OR plain admin) policies
+    outside the V306 set were real cross-tenant leaks -> swapped to `is_super_admin()`: `organisations_select`
+    (tenant registry enumeration), `report_schedules_select`, `report_send_log_read` (kept their null-org
+    branches, all rows null today). `storage.objects/vehicle_photos_delete` had NO org scoping (a plain Admin
+    could delete ANY tenant's photos) -> now `app_is_org_admin() AND storage_object_in_my_org(owner)` (keeps
+    in-tenant admin delete, closes cross-org). VERIFIED: no cross-org app_is_org_admin policy remains (only the
+    now-org-scoped photo-delete).
+  - **entitlements.js fail-CLOSED** (fixed): `canAdd` now returns false for a KNOWN_METERED resource
+    (vehicles/users/api_keys/storage_gb) with a missing/unparseable limit (was unlimited-true); `planAllows`
+    returns false for a KNOWN_FEATURES key (ai_tools/automation_platform/tv_display/erp_sync/report_scheduling)
+    when the plan's feature map/key is absent; both stay permissive when `overview` is null (not-loaded). Explicit
+    unlimited (`isExplicitUnlimited`) preserved. entitlements.test.js 38 green.
+  - **Console gate AUDITED = secure** (no change): only a true `is_super_admin` (MFA-satisfied) enters /console;
+    ConsoleGuard + resolveAdmin + signIn all key on is_super_admin; ConsoleAuthBridge's hardcoded true only
+    renders inside the guard. **Web signup AUDITED = already safe** (Login.jsx writes no role/org/scope; relies
+    on handle_new_user). **UserManagement.jsx** legacy copy fixed (blank country -> "No access" not "All" for
+    non-admins; en+ar keys).
+
+## Phase-1 multi-tenant SaaS security hardening — BATCH 1 (V306-V310, 2026-07-20)
+- User is opening Tyre Pulse to multiple companies/individuals. First security pass to make tenant
+  isolation real. All applied live + repo files + live-verified by impersonation; web build + mobile tsc clean.
+- **V306 (A1 + B2) — the critical fix: Company Admins no longer cross the org boundary.** The 45 RESTRICTIVE
+  `*_org_isolation` policies bypassed isolation via `app_is_org_admin()` (= `is_super_admin() OR role='admin'`),
+  so ANY plain `Admin` could read/write EVERY organisation's data (the V67 hole). Regenerated each policy
+  (preserving cmd + roles) to `((organisation_id = (select app_current_org())) or (select is_super_admin()))`
+  — only a true super-admin crosses orgs — and dropped the `organisation_id IS NULL` cross-org branch.
+  `system_logs_org_isolation` DELIBERATELY excluded (its null-org branch is intentional early-boot logging and
+  it never used the admin bypass). VERIFIED: plain Admin (Company A) still sees all 1419 tyres / 683 fleet
+  (all data is Company A, both admins are Company A, so ZERO current regression); 0 policies still bypassed.
+- **V307 (A2) — no self-escalation.** `guard_profile_privileged_cols` authorized any privileged profile change
+  (role/approved/locked/is_super_admin/country/site/org) on `role='Admin'`, letting a plain Admin set
+  `is_super_admin=true` on themselves, move a user to another org, or edit a profile in another org. Rewritten:
+  no-op passes; super-admin passes; a non-super Admin may manage role/approve/lock/country/site of users IN
+  THEIR OWN ORG only, and can NEVER change super-admin status or org membership. VERIFIED live: self-escalate
+  BLOCKED, org-move BLOCKED, same-org manage ALLOWED.
+- **V308 (C2) — last-admin lockout guard.** New `guard_last_admin()` + BEFORE UPDATE/DELETE triggers on
+  profiles block demote/lock/unapprove/delete of the last active super-admin, and the last active `Admin` of an
+  org (checks for ANOTHER active holder, so a promote-then-demote SWAP still works). VERIFIED: last-super
+  demote/delete BLOCKED, non-last admin demote ALLOWED.
+- **V309 (B1) — blank scope = NO access (was "see all").** `app_can_see_site`/`app_can_see_country` treated an
+  empty `sites`/`country` as "see everything", so a newly-approved user with no scope saw all data. Now blank =
+  no scoped access; org-wide is EXPLICIT via an `'ALL'`/`'*'` sentinel (admins/super still see all). BACKFILLED
+  all 33 users (every one had blank `sites`) to `ARRAY['ALL']` so nobody is blacked out; new users
+  (handle_new_user leaves sites null) get no scope until an admin assigns. VERIFIED: `ALL` sentinel sees 1419;
+  narrowing to `['NHC']` sees exactly 549 (the real NHC rows); blank sees 0. NOTE: `guard_profile_privileged`
+  checks the scalar `site`/`country` columns, NOT the `sites[]` scope array, so the backfill did not hit it.
+- **C1 mobile register hardened** (`mobile/app/(auth)/register.tsx`): removed the role picker + site picker/
+  requirement; the client upsert no longer sends role/site (it used to OVERWRITE the trigger's `Reporter`). New
+  signups are always pending `Reporter` with no scope; admin assigns role + scope on approval. tsc clean.
+- **Web admin reconciliation** (`ConsoleUsers.jsx` + `adminAccess.js`): site access is now an honest three-state
+  (No access / All sites org-wide / specific sites). "Grant all sites (org-wide)" writes the `['ALL']` sentinel;
+  picking a specific site drops the sentinel; helper `isOrgWideSites`/`withoutOrgWide` at top of ConsoleUsers.
+  Copy fixed (the old "clear = all sites" was now backwards). `adminSetUserSites` empty still = null = no access.
+- **CONTINUATION (same session) — V310 + billing + UI copy:**
+  - **V310** billing RLS: `invoices` + `org_subscriptions` read/write policies dropped the `organisation_id IS
+    NULL` cross-org branch (0 rows, 0 null-org; a billing row always has an org). The OTHER null-org policies are
+    the WORKFLOW ENGINE + report_send_log tables which legitimately hold null-org/system rows (report_send_log
+    158/158 null, workflow_definitions/instances/step_events all-null, domain_events 82 null) — left AS-IS; they
+    need an org backfill before they can be scoped. So the "16 null-org policies" item is PARTIALLY closed
+    (billing done; engine tables deferred with reason).
+  - **Billing free-activation hole CLOSED** (client code): `src/lib/api/billing.js` `changePlan` now THROWS for
+    any paid plan (planCode != trial/free) — a paid plan can only be activated by the signature-verified Stripe
+    webhook, never a direct client write (previously any org Admin could self-set status='active' for free).
+    `canAddResource` now fails CLOSED (returns false on RPC error, was true). `src/pages/Billing.jsx` no longer
+    falls back to `changePlan` when checkout is unconfigured — it shows "checkout not set up, contact admin".
+  - **billing-webhook edge fn REDEPLOYED v2** (verify_jwt=false): on a handler/reconciliation error it now returns
+    500 (Stripe retries) instead of 200 {received:true} (which silently dropped failed activations/cancellations).
+  - **Access-preview UI aligned to the V309 semantics** (display only, no DB/write change): `CountryScope.jsx`,
+    `EffectivePermissions.jsx`, `AccessPreviewOverride.jsx` now render a blank scope as "No access" (was "All"),
+    an 'ALL'/'*' sentinel as org-wide, and CORRECTED the country sees-all set to super/Admin only (Director is
+    country-scoped by the DB `app_can_see_country` = app_is_org_admin; the old UI wrongly showed Director as
+    all-countries). `AccessManager.jsx` needed no change (module/capability editor, no scope display).
+  - **STILL fail-open (deliberately NOT changed, flagged):** the PURE `entitlements.js` `canAdd`/`planAllows`
+    still treat a missing limit/feature map as unlimited/allowed — the null-vs-unlimited ambiguity makes a blind
+    fail-closed risky, and plan limits have NO server-side enforcement anyway (no trigger/RLS consumes
+    `org_can_add`; e.g. Company A is already over its trial vehicle cap). Real fix = a BEFORE-INSERT enforcement
+    trigger, deferred (would need per-org limit verification to avoid blocking existing over-cap fleets).
+- **OPEN / follow-ups (flagged, NOT done — need decision):** (1) the WORKFLOW-ENGINE + report_send_log null-org
+  policies still carry `organisation_id IS NULL` — need an org backfill before scoping (billing ones already
+  tightened in V310). (2) `org_id` vs `organisation_id` split
+  (profiles/billing/module_permissions use org_id; data tables use organisation_id — identical on all 33
+  profiles today, fragile) — standardize later. (3) other access preview surfaces (CountryScope.jsx /
+  EffectivePermissions.jsx / AccessPreviewOverride.jsx / AccessManager.jsx) still say empty-scope = "all" — copy
+  needs the same three-state treatment. (4) Later phases from the roadmap: Platform-Owner vs Company-Admin
+  identity split, one permission engine, org-required business rows (NOT NULL), billing enforcement.
+
 ## Accident Management — one controlled end-to-end workflow (V300-V305, 2026-07-20) — migrations through V305, next free **V306**
 - Rebuilt Accident Management into a SINGLE configurable multi-department workflow + a backend email/notification
   engine (NOT frontend email). All DB changes ADDITIVE/non-destructive — no historical accident row/column dropped;
@@ -60,7 +222,23 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
   (mobile still writes legacy `status`; the derive trigger backfills stage so mobile is NOT broken) + wiring
   workflow_stage into reports/PDF/PPTX/exec dashboard + a formal accident PDF attachment on the case email.
 
-## SESSION 2026-07-20 CLOSED — all merged to main; migrations through V299, next free V300
+## SESSION 2026-07-20 CLOSED (final) — all merged to main; migrations through V305, next free V306
+- FULLY RECONCILED: branch `claude/accident-builder-report-ui-2bkwb5` == origin/main (0 ahead/0 behind, nothing
+  uncommitted). A PARALLEL session's **Accident Management** feature (V300-V305, engine + settings page + gated
+  notification engine) was stranded on the shared branch; verified (build clean, accidentWorkflow.test 14 green,
+  DB V300-V305 already applied live) and merged to main via **#153**. See the Accident Management section at the
+  TOP of this file for the full detail. My workshop/notifications work this session merged via #139-#152.
+- **TWO OPEN OPS ITEMS (not blocking, not code-complete):**
+  1. `send-scheduled-reports` edge fn NOT redeployed — the `DATASET_DIGEST.workshop` branch is in the merged repo
+     source (#151) but not live; run `supabase functions deploy send-scheduled-reports --project-ref tyrepulse`
+     (keep verify_jwt=true) or deploy + byte-diff vs repo. Scheduled 'workshop' report emails the exec-digest
+     fallback until then; on-demand Workshop PDF/Excel works. Do NOT hand-inline-reproduce that 1103-line shared fn.
+  2. **Repo migration files V301-V305 are MISSING** — the parallel session applied V300-V305 live but only committed
+     `MIGRATIONS_V300_ACCIDENT_WORKFLOW.sql`. DB is the source of truth and IS applied; backfill V301-V305 repo
+     stub files from supabase_migrations.schema_migrations if repo completeness is wanted.
+- Also OPEN from Accident Management (per that section): accident emails are intentionally OFF — flip
+  `system_config.accident_emails_enabled='true'` (Email Delivery tab) to go live; needs RESEND_API_KEY (present).
+- Original session-shipped list (workshop suite etc.) below is retained for detail.
 - Everything this session is MERGED to main and the branch `claude/accident-builder-report-ui-2bkwb5` is
   realigned to origin/main. Shipped, in order: report-email edge-fn fix (send-email verify_jwt=false, #139);
   Console Smart Import auto-detect module + zero-mapping CSV/Excel templates + V290 CSV-import org auto-stamp

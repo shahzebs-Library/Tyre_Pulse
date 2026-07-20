@@ -14,6 +14,7 @@ import Layout from './components/Layout'
 import LoadingSpinner from './components/LoadingSpinner'
 import PwaUpdatePrompt from './components/PwaUpdatePrompt'
 import ErrorBoundary from './components/ErrorBoundary'
+import SubscriptionGate from './components/SubscriptionGate'
 import { useFeatureGate } from './hooks/useFeatureFlags'
 // Console (completely isolated auth context)
 import { ConsoleAuthProvider, useConsoleAuth } from './console/ConsoleAuthContext'
@@ -47,6 +48,8 @@ const ConsoleCrashReports  = lazy(() => import('./console/pages/ConsoleCrashRepo
 const ConsoleSessions      = lazy(() => import('./console/pages/ConsoleSessions'))
 const ConsoleAutomation    = lazy(() => import('./console/pages/ConsoleAutomation'))
 const ConsoleDelivery      = lazy(() => import('./console/pages/ConsoleDelivery'))
+const ConsoleSupportSessions = lazy(() => import('./console/pages/ConsoleSupportSessions'))
+const ConsoleAccountDeletions = lazy(() => import('./console/pages/ConsoleAccountDeletions'))
 
 // Console admin pages built in parallel by other agents. Resolved via
 // import.meta.glob so this build succeeds whether or not the files exist yet: a
@@ -414,6 +417,7 @@ function MainApp() {
                 <ProtectedRoute>
                   <MaintenanceGate>
                   <Layout>
+                    <SubscriptionGate>
                     <ChecklistOnlyGate>
                     <Routes>
                       <Route path="/"            element={<Safe><HomeRoute /></Safe>} />
@@ -648,6 +652,7 @@ function MainApp() {
                       <Route path="*"            element={<NotFound />} />
                     </Routes>
                     </ChecklistOnlyGate>
+                    </SubscriptionGate>
                   </Layout>
                   </MaintenanceGate>
                 </ProtectedRoute>
@@ -708,6 +713,8 @@ export default function App() {
           <Route path="sessions"      element={<ConsoleSessions />} />
           <Route path="automation"    element={<ConsoleAutomation />} />
           <Route path="delivery"      element={<ConsoleDelivery />} />
+          <Route path="support-sessions" element={<ConsoleSupportSessions />} />
+          <Route path="account-deletions" element={<ConsoleAccountDeletions />} />
           {/* Unified admin + access control hosted from the main app via ConsoleAuthBridge */}
           <Route path="access"        element={<ConsoleAuthBridge><Suspense fallback={<ConsoleModulePlaceholder label="Access Control" />}><ConsoleAccessControl /></Suspense></ConsoleAuthBridge>} />
           <Route path="ai-admin"      element={<ConsoleAuthBridge><Suspense fallback={<ConsoleModulePlaceholder label="AI Administration" />}><AiAdministration /></Suspense></ConsoleAuthBridge>} />

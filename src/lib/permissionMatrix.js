@@ -28,6 +28,7 @@
 
 import { supabase } from './supabase'
 import { MODULE_GROUPS, ACCESS_ROLES, ALL_MODULES, MODULE_LABEL } from './moduleCatalog'
+import { resolveAccess, overrideToFlags } from './accessResolver'
 
 // ── Vocabulary (single source of truth: moduleCatalog.js) ────────────────────
 
@@ -306,11 +307,15 @@ function sanitizeOverrides(overrides) {
  * @returns {boolean}
  */
 export function resolveCapability({ role, isSuperAdmin, roleAllows, override }) {
-  if (role === 'Admin' || isSuperAdmin === true) return true
-  if (override === 'revoke') return false
-  if (roleAllows === true) return true
-  if (override === 'grant') return true
-  return false
+  // Delegates to the ONE canonical access engine (src/lib/accessResolver.js).
+  // Behaviour-identical to the former inline copy (proven by the 216-combo
+  // parity test in src/test/accessResolver.test.js) — this is a pure route-through.
+  return resolveAccess({
+    role,
+    isSuperAdmin,
+    roleAllows,
+    ...overrideToFlags(override),
+  }).allowed
 }
 
 // ── Resolution (the hook AuthContext can consume later) ──────────────────────

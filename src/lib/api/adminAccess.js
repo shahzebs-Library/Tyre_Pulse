@@ -76,13 +76,15 @@ export async function setUserCountry(userId, countries) {
 
 /**
  * Set a user's site scope (profiles.sites, a text[]) via `admin_set_user_sites`
- * (V269). Server-side gated to super-admin/Admin. Pass null or an empty array
- * to clear the scope, which means the user sees every site. Site visibility is
- * enforced by RESTRICTIVE RLS policies in the database (app_can_see_site).
+ * (V269). Server-side gated to super-admin/Admin. Site visibility is enforced by
+ * RESTRICTIVE RLS in the database (app_can_see_site).
+ *
+ * Semantics (V309): an empty/null array = NO site-scoped access; org-wide access
+ * must be explicit via the ['ALL'] sentinel. (Admins/super always see all.)
  *
  * @param {string}          userId  the target user's uuid
- * @param {string[] | null} sites   the new site array (replaces the current
- *                                  one); null/empty clears = all sites
+ * @param {string[] | null} sites   the new site array (replaces the current one);
+ *                                  ['ALL'] = org-wide; null/empty = no access
  * @returns {Promise<void>}
  */
 export async function adminSetUserSites(userId, sites) {

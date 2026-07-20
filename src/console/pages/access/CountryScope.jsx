@@ -4,11 +4,12 @@
  *
  * The country array is the data-visibility boundary: RESTRICTIVE RLS
  * (app_can_see_country) limits a member to rows tagged with one of their
- * countries. An EMPTY array means "no country restriction" (the user sees all
- * countries), and Admin / super-admin roles see every country regardless of
- * this field. This screen surfaces that honestly and lets a super admin add or
- * remove country chips, then persist via adminAccess.setUserCountry (a
- * security-definer, super-admin-only RPC).
+ * countries. Admin / Director / super-admin roles see every country regardless
+ * of this field. For every other role an EMPTY array means NO country access
+ * (they see no country-tagged records until one is assigned), and an "all"/"*"
+ * entry grants every country. This screen surfaces that honestly and lets a
+ * super admin add or remove country chips, then persist via
+ * adminAccess.setUserCountry (a security-definer, super-admin-only RPC).
  *
  * Writes are optimistic-free: we save, then re-read the directory so the list
  * reflects the authoritative stored value. A toast reports success or a clean,
@@ -33,7 +34,10 @@ const ROLE_TINT = {
   Driver: 'text-[var(--text-secondary)]',
 }
 
-const SEES_ALL_ROLES = new Set(['Admin', 'Director'])
+// Only super-admins and Admins see every country regardless of scope
+// (the DB gate app_can_see_country grants all-countries only to
+// app_is_org_admin = super OR Admin; Director is country-scoped).
+const SEES_ALL_ROLES = new Set(['Admin'])
 
 function displayName(u) {
   return u?.full_name || u?.username || u?.email || 'Unnamed user'
@@ -43,6 +47,16 @@ function normaliseCountry(country) {
   if (!country) return []
   const arr = Array.isArray(country) ? country : [country]
   return Array.from(new Set(arr.map((c) => String(c).trim()).filter(Boolean)))
+}
+
+// An "all"/"*" sentinel in the country array grants every country.
+function isAllCountries(country) {
+  return Array.isArray(country) && country.some((c) => ['ALL', '*'].includes(String(c ?? '').trim().toUpperCase()))
+}
+
+// Roles that see every country regardless of the stored scope.
+function roleSeesAll(u) {
+  return !!u && (u.is_super_admin === true || SEES_ALL_ROLES.has(u.role))
 }
 
 export default function CountryScope() {
@@ -154,9 +168,12 @@ export default function CountryScope() {
     setSaving(true)
     try {
       await setUserCountry(selectedUser.id, draft)
+      const sa = roleSeesAll(selectedUser) || isAllCountries(draft)
       pushToast('success', draft.length
         ? `Saved: ${displayName(selectedUser)} now scoped to ${draft.join(', ')}.`
-        : `Saved: ${displayName(selectedUser)} now sees all countries.`)
+        : sa
+          ? `Saved: ${displayName(selectedUser)} sees all countries (role level).`
+          : `Saved: ${displayName(selectedUser)} now has no country access.`)
       setBaseline(draft)
       // Re-read so the directory reflects the authoritative stored value.
       await loadUsers()
@@ -174,10 +191,11 @@ export default function CountryScope() {
       <div className="flex items-start gap-2">
         <Info size={15} className="text-[var(--text-muted)] mt-0.5 shrink-0" />
         <p className="text-xs text-[var(--text-muted)] max-w-3xl">
-          The country scope limits which records a user can see. An empty scope means no restriction
-          (the user sees all countries). Admin, Director and super admin roles see every country
-          regardless of this field, so a scope on them has no effect. The database RLS
-          (app_can_see_country) is the real boundary; this editor sets the stored value it reads.
+          The country scope limits which records a user can see. Admin, Director and super admin roles
+          see every country regardless of this field. For every other role an empty scope means no
+          country access (they see no country-tagged records until you assign one); an "all" entry
+          grants every country. The database RLS (app_can_see_country) is the real boundary; this
+          editor sets the stored value it reads.
         </p>
       </div>
 
@@ -261,7 +279,9 @@ export default function CountryScope() {
                             {u.is_super_admin && <Crown size={12} className="text-amber-400 shrink-0" />}
                           </p>
                           <p className="text-xs text-[var(--text-muted)] truncate">
-                            {scope.length ? scope.join(', ') : 'All countries'}
+                            {roleSeesAll(u) || isAllCountries(scope)
+                              ? 'All countries'
+                              : scope.length ? scope.join(', ') : 'No country access'}
                           </p>
                         </div>
                         <span className={`text-[11px] font-medium shrink-0 ${ROLE_TINT[u.role] || 'text-[var(--text-secondary)]'}`}>
@@ -325,13 +345,17 @@ export default function CountryScope() {
                       <MapPin size={14} className="text-[var(--brand-bright)]" /> Assigned countries
                     </h4>
                     <span className="text-xs text-[var(--text-muted)]">
-                      {draft.length ? `${draft.length} selected` : 'Empty = sees all countries'}
+                      {draft.length
+                        ? `${draft.length} selected`
+                        : seesAll ? 'Sees all countries (role)' : 'Empty = no country access'}
                     </span>
                   </div>
                   {draft.length === 0 ? (
                     <div className="rounded-lg border border-dashed border-[var(--input-border)] px-3 py-4 text-center">
                       <p className="text-sm text-[var(--text-muted)]">
-                        No countries assigned. This user is <span className="text-[var(--text-primary)] font-medium">not restricted</span> and can see all countries.
+                        {seesAll
+                          ? <>No countries assigned. This role <span className="text-[var(--text-primary)] font-medium">sees every country</span> regardless of this scope.</>
+                          : <>No countries assigned. This user has <span className="text-[var(--text-primary)] font-medium">no country access</span> and cannot see country-tagged records until you assign one.</>}
                       </p>
                     </div>
                   ) : (

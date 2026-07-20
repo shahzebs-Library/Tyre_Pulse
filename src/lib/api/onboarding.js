@@ -179,3 +179,30 @@ export async function updateOnboardingTask(id, patch = {}) {
 export async function deleteOnboardingTask(id) {
   return unwrap(await supabase.from('onboarding_tasks').delete().eq('id', id))
 }
+
+/**
+ * Atomic self-serve WORKSPACE creation. Makes the signed-in user the owner of a
+ * brand-new organisation in ONE transaction: provisions the organisation, an
+ * owner membership, the caller's Admin/approved promotion and a trialing
+ * subscription, or nothing at all. Individuals and companies use the same model;
+ * `kind` only records which it is.
+ *
+ * All authorisation, atomicity and anti-hijack guards live server-side in the
+ * SECURITY DEFINER RPC `public.create_workspace_owner`
+ * (MIGRATIONS_V316_WORKSPACE_ONBOARDING.sql) — this layer only shapes the call.
+ * Fails cleanly (ServiceError) when the caller already owns a workspace or is a
+ * platform admin. Returns { ok, organisation_id, slug, kind, plan_code, status }.
+ *
+ * @param {string} name  Workspace / company name (required).
+ * @param {'company'|'individual'} [kind='company']
+ */
+export async function createWorkspaceOwner(name, kind = 'company') {
+  const trimmed = (name || '').trim()
+  if (!trimmed) throw new Error('A workspace name is required.')
+  return unwrap(
+    await supabase.rpc('create_workspace_owner', {
+      p_org_name: trimmed,
+      p_kind: kind === 'individual' ? 'individual' : 'company',
+    }),
+  )
+}

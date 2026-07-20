@@ -5,6 +5,7 @@ import { setMonitoringUser, clearMonitoringUser } from '../lib/monitoring'
 import { identifyUser, resetAnalyticsUser } from '../lib/analytics'
 import { audit } from '../lib/auditLogger'
 import { resolveCapability } from '../lib/permissionMatrix'
+import { resolveAccess, overrideToFlags } from '../lib/accessResolver'
 import { hasUnmetMfa } from '../lib/authAssurance'
 import { listModuleStatuses } from '../lib/api/modulesRegistry'
 import { configNum } from '../lib/api/systemConfig'
@@ -32,11 +33,15 @@ export const AuthContext = createContext(null)
  * @returns {boolean}
  */
 export function resolvePermission({ role, isSuperAdmin, roleAllows, override }) {
-  if (role === 'Admin' || isSuperAdmin === true) return true
-  if (override === 'revoke') return false
-  if (roleAllows === true) return true
-  if (override === 'grant') return true
-  return false
+  // Delegates to the ONE canonical access engine (src/lib/accessResolver.js).
+  // Behaviour-identical to the former inline copy (proven by the 216-combo
+  // parity test in src/test/accessResolver.test.js) — this is a pure route-through.
+  return resolveAccess({
+    role,
+    isSuperAdmin,
+    roleAllows,
+    ...overrideToFlags(override),
+  }).allowed
 }
 
 // Role-based defaults used when no DB permissions have been configured yet

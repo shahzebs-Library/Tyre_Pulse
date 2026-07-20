@@ -100,8 +100,13 @@ Deno.serve(async (req) => {
         .eq('external_subscription_id', obj.id)
     }
   } catch (e) {
-    // Ack anyway to avoid Stripe retry storms; the error is logged for triage.
+    // A failed reconciliation must NOT be ACKed as success — return 5xx so Stripe
+    // retries, otherwise a paid subscription can silently never activate (or a
+    // cancellation never applies). The (signature-verified) error is logged.
     console.error('billing-webhook handler error', e)
+    return new Response(JSON.stringify({ error: 'reconciliation_failed' }), {
+      status: 500, headers: { 'Content-Type': 'application/json' },
+    })
   }
 
   return new Response(JSON.stringify({ received: true }), {

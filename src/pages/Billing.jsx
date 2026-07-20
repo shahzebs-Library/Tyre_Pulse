@@ -94,7 +94,10 @@ export default function Billing() {
   const {
     overview, plans, invoices, rows, trialDaysLeft,
     loading, invoicesLoading, error, invoicesError, refresh,
+    subscriptionAccess,
   } = useBilling()
+  // Fail-open: only block when the pure policy explicitly says so.
+  const blockPlanChange = subscriptionAccess?.blockSelfServiceBilling === true
 
   const [interval, setInterval] = useState('monthly')
   const [pending, setPending] = useState(null)
@@ -125,24 +128,35 @@ export default function Billing() {
   const currentIndex = orderedPlans.findIndex((p) => p.code === currentCode)
 
   async function applyPlan(target) {
+    // Grace period (e.g. past_due): block self-service plan changes at the
+    // action boundary too, so a disabled button can never be bypassed.
+    if (blockPlanChange) {
+      setConfirm(null)
+      setActionMsg('')
+      setActionErr('Your payment is past due. Resolve billing before changing plans.')
+      return
+    }
     setPending(target.code)
     setActionErr('')
     setActionMsg('')
     try {
       const paid = target.code !== 'trial' && (target.price_monthly > 0 || target.price_annual > 0)
       if (paid) {
-        try {
-          const res = await billing.startCheckout({ planCode: target.code, interval })
-          if (res?.configured && res.url) {
-            // Only ever redirect the browser to an https checkout endpoint —
-            // never a javascript:/data: or plain-http URL smuggled in the response.
-            if (typeof res.url !== 'string' || !res.url.trim().toLowerCase().startsWith('https://')) {
-              throw new Error('Checkout returned an invalid redirect URL.')
-            }
-            window.location.href = res.url
-            return
+        // A paid plan can ONLY be activated through Stripe checkout + the
+        // signature-verified webhook. Never fall back to a direct changePlan
+        // (that would grant the paid plan for free).
+        const res = await billing.startCheckout({ planCode: target.code, interval })
+        if (res?.configured && res.url) {
+          // Only ever redirect the browser to an https checkout endpoint —
+          // never a javascript:/data: or plain-http URL smuggled in the response.
+          if (typeof res.url !== 'string' || !res.url.trim().toLowerCase().startsWith('https://')) {
+            throw new Error('Checkout returned an invalid redirect URL.')
           }
-        } catch { /* fall through */ }
+          window.location.href = res.url
+          return
+        }
+        setActionErr('Online checkout is not set up yet. Please contact your administrator to activate a paid plan.')
+        return
       }
       await billing.changePlan({ planCode: target.code, interval })
       setActionMsg(`Switched to the ${target.name} plan.`)
@@ -375,6 +389,21 @@ export default function Billing() {
             ))}
           </div>
         </div>
+        {blockPlanChange && (
+          <div className="rounded-lg px-4 py-3 mb-5 bg-amber-900/30 border border-amber-800/50 text-amber-200 text-sm flex items-start gap-2">
+            <AlertTriangle size={16} className="text-amber-400 mt-0.5 shrink-0" />
+            <p className="flex-1">
+              Your payment is past due - resolve billing before changing plans.{' '}
+              <a
+                href="mailto:support@tyrepulse.app?subject=Past%20due%20billing"
+                className="underline font-medium text-amber-100 hover:text-white"
+              >
+                Update payment / contact support
+              </a>
+              .
+            </p>
+          </div>
+        )}
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
           {orderedPlans.map((p, idx) => {
             const isCurrent = p.code === currentCode
@@ -413,6 +442,11 @@ export default function Billing() {
                     <button disabled className="btn-secondary w-full justify-center text-sm opacity-60 cursor-default">Current plan</button>
                   ) : !isAdmin ? (
                     <button disabled className="btn-secondary w-full justify-center text-sm opacity-50 cursor-not-allowed">Admin only</button>
+                  ) : blockPlanChange ? (
+                    <button disabled title="Resolve past-due billing before changing plans"
+                      className="btn-secondary w-full justify-center text-sm opacity-50 cursor-not-allowed">
+                      Billing past due
+                    </button>
                   ) : (
                     <button onClick={() => setConfirm({ plan: p, direction })} disabled={pending === p.code}
                       className={`w-full justify-center text-sm inline-flex items-center gap-2 px-4 py-2 rounded-xl transition-colors disabled:opacity-50 ${direction === 'Upgrade' ? 'bg-emerald-600 hover:bg-emerald-500 text-white' : 'bg-gray-700 hover:bg-gray-600 text-white'}`}>

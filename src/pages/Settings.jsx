@@ -13,6 +13,7 @@ import PageHeader from '../components/ui/PageHeader'
 import { sendReportEmail } from '../lib/emailService'
 import TwoFactorSetup from '../components/TwoFactorSetup'
 import * as notifPrefsApi from '../lib/api/notificationPreferences'
+import * as accountDeletionApi from '../lib/api/accountDeletion'
 import { DEFAULT_PREFS, DIGEST_FREQUENCIES, PRIORITY_ORDER, summarisePrefs } from '../lib/notificationPrefs'
 import { toUserMessage } from '../lib/safeError'
 
@@ -649,6 +650,9 @@ export default function Settings() {
             <p><span className="text-[var(--text-muted)]">Support:</span> Contact your tyre planning engineer</p>
           </div>
         </div>
+
+        {/* Delete My Account (in-app deletion request) */}
+        <AccountDeletionCard userEmail={user?.email} />
       </div>
       <TwoFactorSetup
         open={showMfaSetup}
@@ -1386,6 +1390,9 @@ export default function Settings() {
         </div>
       </div>
 
+      {/* Delete My Account (in-app deletion request) */}
+      <AccountDeletionCard userEmail={user?.email} />
+
       <TwoFactorSetup
         open={showMfaSetup}
         onClose={() => setShowMfaSetup(false)}
@@ -1488,6 +1495,144 @@ function TwoFactorCard({ mfaEnabled, onEnable, confirmRemoveMfa, setConfirmRemov
       {msg && (
         <p className={`text-sm ${msg.startsWith('Failed') ? 'text-red-400' : 'text-green-400'}`}>{msg}</p>
       )}
+    </div>
+  )
+}
+
+/* ── Account deletion card (in-app "Request account deletion") ─────────────────
+ * Google Play / privacy require an in-app account & data deletion REQUEST path.
+ * Submitting here only RECORDS a request for admin action — it never deletes
+ * auth/user/business data client-side. Copy mirrors /data-deletion. */
+function AccountDeletionCard({ userEmail }) {
+  const [confirm, setConfirm]   = useState('')
+  const [reason, setReason]     = useState('')
+  const [saving, setSaving]     = useState(false)
+  const [msg, setMsg]           = useState('')
+  const [error, setError]       = useState('')
+  const [requests, setRequests] = useState([])
+  const [loaded, setLoaded]     = useState(false)
+
+  useEffect(() => {
+    let alive = true
+    accountDeletionApi.listMyDeletionRequests()
+      .then(rows => { if (alive) setRequests(rows) })
+      .catch(() => { /* non-fatal: page still renders the request form */ })
+      .finally(() => { if (alive) setLoaded(true) })
+    return () => { alive = false }
+  }, [])
+
+  const armed = confirm.trim().toUpperCase() === 'DELETE'
+  const hasOpen = requests.some(r => r.status === 'pending' || r.status === 'processing')
+
+  async function submit(e) {
+    e.preventDefault()
+    if (!armed || saving) return
+    setSaving(true); setMsg(''); setError('')
+    try {
+      const res = await accountDeletionApi.requestAccountDeletion(reason)
+      if (!res.ok) {
+        setError(res.message || accountDeletionApi.NOT_AVAILABLE_MESSAGE)
+        return
+      }
+      setConfirm(''); setReason('')
+      setMsg('Deletion request submitted. Our team will verify and process it.')
+      setRequests(prev => [res.request, ...prev])
+    } catch (err) {
+      setError(toUserMessage(err, 'Could not submit your request. Please try again.'))
+    } finally {
+      setSaving(false)
+      setTimeout(() => setMsg(''), 6000)
+    }
+  }
+
+  return (
+    <div className="card space-y-4 border border-red-900/40">
+      <h2 className="text-base font-semibold text-[var(--text-primary)] flex items-center gap-2">
+        <Trash2 size={16} className="text-red-400" /> Delete My Account
+      </h2>
+
+      <p className="text-[var(--text-secondary)] text-sm leading-relaxed">
+        Request permanent deletion of your account and the personal data associated with it. This
+        submits a request for our team to verify and action; it does not delete anything immediately.
+      </p>
+
+      <div className="text-xs text-[var(--text-secondary)] leading-relaxed space-y-2 bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-lg p-3">
+        <p className="font-semibold text-[var(--text-primary)] flex items-center gap-1.5">
+          <Info size={12} /> What happens
+        </p>
+        <ul className="list-disc pl-4 space-y-1">
+          <li>Your profile and login (name, username, Employee ID, phone, device push token) are removed.</li>
+          <li>Your captured location tags, photos, and diagnostic/crash records linked to your account are removed.</li>
+          <li>
+            Operational fleet records you created (inspections, accidents, work orders, meter logs) may be
+            retained by your organisation as business/audit records, de-identified from your profile.
+          </li>
+          <li>Verified requests are completed within 30 days.</li>
+        </ul>
+        <p className="text-[var(--text-muted)]">
+          Full details:{' '}
+          <Link to="/data-deletion" className="text-red-400 hover:underline font-medium">Account &amp; Data Deletion policy</Link>
+        </p>
+      </div>
+
+      {hasOpen && loaded && (
+        <div className="flex items-start gap-2 bg-amber-950/30 border border-amber-800/40 rounded-lg px-3 py-2.5">
+          <Clock size={14} className="text-amber-400 mt-0.5 shrink-0" />
+          <p className="text-xs text-amber-300 leading-relaxed">
+            You already have a deletion request in progress. Our team will contact you at
+            {' '}<strong>{userEmail || 'your account email'}</strong> once it is processed.
+          </p>
+        </div>
+      )}
+
+      {error && (
+        <p className="text-sm text-red-300 bg-red-900/30 border border-red-700 rounded-lg p-2.5">{error}</p>
+      )}
+      {msg && (
+        <div className="flex items-start gap-2 bg-green-950/30 border border-green-800/40 rounded-lg px-3 py-2.5">
+          <ShieldCheck size={14} className="text-green-400 mt-0.5 shrink-0" />
+          <p className="text-sm text-green-300">{msg}</p>
+        </div>
+      )}
+
+      <form onSubmit={submit} className="space-y-3">
+        <div>
+          <label className="label">Reason (optional)</label>
+          <textarea
+            className="input min-h-[68px] resize-y"
+            value={reason}
+            onChange={e => setReason(e.target.value)}
+            maxLength={2000}
+            placeholder="Tell us why you are leaving (optional)"
+          />
+        </div>
+        <div>
+          <label className="label flex items-center gap-1.5 text-red-300">
+            <AlertTriangle size={12} /> Type DELETE to confirm
+          </label>
+          <input
+            className="input"
+            value={confirm}
+            onChange={e => setConfirm(e.target.value)}
+            placeholder="DELETE"
+            autoComplete="off"
+            spellCheck={false}
+          />
+        </div>
+        <div className="flex items-center gap-3 pt-1">
+          <button
+            type="submit"
+            disabled={!armed || saving}
+            className="inline-flex items-center gap-2 text-sm px-4 py-2.5 rounded-xl bg-red-600 hover:bg-red-500 disabled:bg-red-900/40 disabled:cursor-not-allowed text-white font-semibold transition-colors"
+          >
+            {saving
+              ? <><span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin inline-block" /> Submitting...</>
+              : <><Trash2 size={14} /> Request Account Deletion</>
+            }
+          </button>
+          <span className="text-xs text-[var(--text-muted)]">This records a request; it does not delete data instantly.</span>
+        </div>
+      </form>
     </div>
   )
 }

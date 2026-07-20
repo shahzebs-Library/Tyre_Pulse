@@ -22,6 +22,32 @@
 /** Resource keys that carry a numeric cap. */
 export const LIMITED_RESOURCES = ['vehicles', 'users', 'api_keys', 'storage_gb']
 
+/**
+ * Known metered resources — the exact `limits` keys emitted by
+ * `get_subscription_overview()` (V105) and understood by `org_can_add()`.
+ * For any of these, a MISSING or unparseable cap must fail CLOSED (no headroom)
+ * rather than be treated as unlimited: a metered resource with no readable cap
+ * is a stale/broken payload, not a licence to add unlimited records.
+ * (The plan schema exposes only these four caps — there is no sites/countries
+ * limit today; add a key here only when the overview actually emits it.)
+ */
+export const KNOWN_METERED = ['vehicles', 'users', 'api_keys', 'storage_gb']
+
+/**
+ * Known plan feature-flag keys (mirrors the plan `features` map seeded in V105
+ * and the Billing page FEATURE_LABELS). A KNOWN feature that is absent from a
+ * present plan's feature map fails CLOSED (not entitled) instead of fail-open,
+ * so a mis-seeded or partial plan payload can never silently unlock a gated
+ * capability. Unknown keys stay permissive (forward-compatible).
+ */
+export const KNOWN_FEATURES = [
+  'ai_tools',
+  'automation_platform',
+  'tv_display',
+  'erp_sync',
+  'report_scheduling',
+]
+
 /** Human labels for the four metered resources. */
 export const RESOURCE_LABELS = {
   vehicles: 'Vehicles',
@@ -61,6 +87,19 @@ export function isUnlimited(limit) {
 }
 
 /**
+ * True only when a raw limit is an EXPLICIT unlimited marker — a genuine `null`
+ * cap or the literal string `'unlimited'`. Distinct from a MISSING/unparseable
+ * value: both normalise to `null`, but only an explicit marker means the plan
+ * really grants unlimited headroom. Used so `canAdd` can preserve genuine
+ * unlimited plans while failing closed on a metered resource with no cap.
+ */
+export function isExplicitUnlimited(raw) {
+  if (raw === null) return true
+  if (typeof raw === 'string' && raw.trim().toLowerCase() === 'unlimited') return true
+  return false
+}
+
+/**
  * Utilisation fraction (0..1+) for one resource. Unlimited → 0. A zero limit
  * with any usage is fully consumed (→ 1). Values can exceed 1 when a fleet is
  * over an enforced cap (e.g. after a downgrade), which the UI surfaces in red.
@@ -90,12 +129,30 @@ export function remaining(usage, limit) {
 
 /**
  * Can the org add `count` more of `resource` without exceeding its plan?
- * Unlimited or unknown resource → always true (fail open).
+ *
+ * Fail-CLOSED for a known metered resource whose cap is missing/unparseable —
+ * a broken payload must not be read as unlimited headroom. Rules:
+ *   - `overview` null/absent (not loaded yet) → true, so the UI does not
+ *     flash-block a legitimate action before billing data has arrived.
+ *   - explicit unlimited cap (null / `'unlimited'` marker) → true (genuine
+ *     unlimited plans are preserved).
+ *   - a numeric cap → compares against usage as before.
+ *   - a KNOWN_METERED resource with a missing/unparseable cap → FALSE.
+ *   - any other unknown resource with no cap → true (permissive).
+ * Note: `org_can_add()` (server) remains the authoritative enforcement point;
+ * this is the client-side convenience gate.
  */
 export function canAdd(overview, resource, count = 1) {
-  const limit = overview?.limits?.[resource]
-  if (isUnlimited(limit)) return true
-  const usage = overview?.usage?.[resource]
+  // Not loaded yet — stay permissive so the UI does not block before data loads.
+  if (!overview) return true
+  const raw = overview.limits?.[resource]
+  const limit = normalizeLimit(raw)
+  if (limit === null) {
+    if (isExplicitUnlimited(raw)) return true          // genuine unlimited plan
+    if (KNOWN_METERED.includes(resource)) return false // metered but no readable cap → no headroom
+    return true                                        // unknown resource → permissive
+  }
+  const usage = overview.usage?.[resource]
   return remaining(usage, limit) >= count
 }
 
@@ -105,15 +162,27 @@ export function isAtLimit(overview, resource) {
 }
 
 /**
- * Is a plan feature entitled? Missing map/key fails OPEN (true) so a plan that
- * predates a new feature key never hides it. Combine with the org feature flags
- * (an admin can still switch a plan-entitled feature off) at the call site.
+ * Is a plan feature entitled?
+ *   - `overview` null/absent (not loaded yet) → true, so a gated capability is
+ *     not hidden before billing data arrives.
+ *   - a present plan whose feature map is absent OR omits the key → FALSE for a
+ *     KNOWN_FEATURES key (fail closed: a mis-seeded/partial plan must not
+ *     silently unlock a gated capability).
+ *   - an unknown feature key → true (permissive; forward-compatible with new
+ *     keys that predate the plan payload).
+ * Combine with the org feature flags (an admin can still switch a plan-entitled
+ * feature off) at the call site.
  */
 export function planAllows(overview, featureKey) {
-  const features = overview?.plan?.features
-  if (!features || typeof features !== 'object') return true
-  const v = features[featureKey]
-  return typeof v === 'boolean' ? v : true
+  // Not loaded yet — stay permissive so the UI does not hide before data loads.
+  if (!overview) return true
+  const plan = overview.plan
+  if (!plan || typeof plan !== 'object') return true
+  const features = plan.features
+  const v = features && typeof features === 'object' ? features[featureKey] : undefined
+  if (typeof v === 'boolean') return v
+  // Map/key absent: fail closed for a known feature, permissive for unknowns.
+  return !KNOWN_FEATURES.includes(featureKey)
 }
 
 /**

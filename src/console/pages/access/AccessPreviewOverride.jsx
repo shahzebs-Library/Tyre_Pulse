@@ -43,6 +43,10 @@ const ROLE_TINT = {
   Driver: 'text-[var(--text-secondary)]',
 }
 
+// Roles that see every country regardless of their profiles.country array.
+// DB app_can_see_country grants all-countries only to super/Admin; Director is scoped.
+const COUNTRY_SEES_ALL_ROLES = new Set(['Admin'])
+
 const MODULE_FILTERS = [
   { key: 'all', label: 'All' },
   { key: 'allowed', label: 'Allowed' },
@@ -54,10 +58,15 @@ function displayName(u) {
   return u?.full_name || u?.username || u?.email || 'Unnamed user'
 }
 
-function countryLabel(country) {
-  if (!country) return 'All countries'
+// Honest country label under the new scope semantics: admins/super (and the
+// see-all roles) see every country; an "all"/"*" sentinel grants every country;
+// otherwise a non-admin sees only the listed countries, and an empty array is
+// no country access.
+function countryLabel(country, seesAll) {
   const arr = Array.isArray(country) ? country.filter(Boolean) : [country].filter(Boolean)
-  return arr.length ? arr.join(', ') : 'All countries'
+  const isAll = arr.some((c) => ['ALL', '*'].includes(String(c ?? '').trim().toUpperCase()))
+  if (seesAll || isAll) return 'All countries'
+  return arr.length ? arr.join(', ') : 'No country access'
 }
 
 export default function AccessPreviewOverride() {
@@ -407,7 +416,10 @@ export default function AccessPreviewOverride() {
                           <ShieldCheck size={12} /> {access?.role || selectedUser.role || 'No role'}
                         </span>
                         <span className="badge inline-flex items-center gap-1.5 bg-[var(--input-bg)] text-[var(--text-secondary)] border border-[var(--input-border)]">
-                          <Globe size={12} /> {countryLabel(access?.country ?? selectedUser.country)}
+                          <Globe size={12} /> {countryLabel(
+                            access?.country ?? selectedUser.country,
+                            isSuperSubject || COUNTRY_SEES_ALL_ROLES.has(access?.role || selectedUser.role),
+                          )}
                         </span>
                       </>
                     )}

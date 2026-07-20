@@ -817,6 +817,7 @@ export async function exportToPdf(rows, columns, title, filename = 'report', ori
     _emptyStatePanel(doc, 'No records for the selected filters',
       opts.emptyHint || 'Adjust the date range or country filter and export again.')
     _pageFooter(doc, 1, 1, company, ftrOpts)
+    if (opts.returnBase64) return doc.output('datauristring').split(',')[1]
     doc.save(`${filename}.pdf`)
     return
   }
@@ -990,6 +991,9 @@ export async function exportToPdf(rows, columns, title, filename = 'report', ori
     },
   })
 
+  // Email path: return the PDF as base64 (no download) so the caller can attach
+  // it to an email that sends "the report as it is".
+  if (opts.returnBase64) return doc.output('datauristring').split(',')[1]
   doc.save(`${filename}.pdf`)
 }
 

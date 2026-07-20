@@ -3,6 +3,63 @@
 Durable, committed project knowledge so any session has full context. Keep this
 current. Read it before adding/changing modules. Governing spec: `Tyre pulse enterprise.md`
 
+## Accident Management — one controlled end-to-end workflow (V300-V305, 2026-07-20) — migrations through V305, next free **V306**
+- Rebuilt Accident Management into a SINGLE configurable multi-department workflow + a backend email/notification
+  engine (NOT frontend email). All DB changes ADDITIVE/non-destructive — no historical accident row/column dropped;
+  legacy status columns MAPPED, never removed. Consolidation-first; do NOT add a second lifecycle/status/calc.
+- **Unified lifecycle = ONE column `accidents.workflow_stage`** (CHECK) replacing the 6 competing axes (status/
+  current_status/case_stage/closure_status + damage_class/damage_condition still exist but are secondary/mapped):
+  reported -> initial_review -> hse_investigation -> workshop_assessment -> insurance_claim -> repair_approval ->
+  repair_in_progress -> final_inspection -> vehicle_release -> cost_recovery -> closed (+cancelled). **Single source
+  of truth = pure engine `src/lib/accidentWorkflow.js`** (WORKFLOW_STAGES, STAGE_FLOW, stageOf/stageLabel/nextStages,
+  stageFromStatus/statusFromStage = byte-mirror of the SQL, severityLabel/isCritical, evaluateRouting,
+  resolveRecipients, buildAccidentKpis). Tests `accidentWorkflow.test.js` (14). RULE: never hardcode a stage string
+  or re-derive stages/routing/KPIs elsewhere — import the engine.
+- **V300** accidents structural fields (all nullable/defaulted): workflow_stage, reference_no (auto `ACC-YYYY-####`),
+  project, department, departments_involved[], responsible_owner_id, latitude/longitude (GPS), vor + vor_since (VOR),
+  documents/videos jsonb (categorised police/license/registration/najm/taqdeer + videos), root_cause/
+  corrective_action/preventive_action, hse_investigation, target_date, closure_evidence, sla_due_at,
+  approved_repair_amount/estimate_approved_by/at. Backfilled all 32 rows' stage+reference. **V301** BEFORE trigger
+  `accident_derive_fields` (generates reference_no; keeps workflow_stage<->legacy status in sync BOTH ways so mobile/
+  imports that still write `status` get a stage, and a stage change syncs status; manages vor_since) +
+  `accident_stage_from_status`/`accident_status_from_stage`.
+- **Department + routing config (lightweight, NO org_units dependency — org_units is empty):** **V302** tables
+  `departments` (12 seeded: Site Management/Operations/Fleet-PMV/Workshop/HSE-Safety/Insurance/Finance/HR/Legal/
+  Procurement/Security/Senior Management), `accident_routing_rules` (match severity/type/site/country/min_cost/
+  injury/vor/third_party -> departments + to_roles/cc_roles/escalate_roles), `accident_email_templates` (approved
+  templates, {{token}} bodies). All org-isolated RESTRICTIVE + app_is_active select + app_is_elevated write. **V303**
+  seeds 7 default rules + 15 templates for Company A. **NO hardcoded employee names** — recipients resolve by
+  role + site + country from `profiles` (profiles has NO department column; department is descriptive on the rule).
+- **Notification engine (reuses the domain-event bus; do NOT build a parallel one):** **V304** trigger
+  `emit_accident_domain_events` (replaces old trg_ev_accident_reported/closure + the dead-branch
+  dispatch_accident_notifications) emits accident.reported/stage_changed/claim_changed/vor_changed; consumer
+  `consume_event_accident_notify` (registered in `event_consumers`) resolves routing rules -> recipient profiles ->
+  ALWAYS inserts in-app `notifications` to the routed people, and enqueues a templated email into
+  `workflow_notifications` (dedupe on event_id + backoff/retry/audit already there) ONLY when
+  `system_config.accident_emails_enabled='true'` (DEFAULT 'false' = OFF, user chose gated go-live). Rendering via
+  `accident_apply_tokens`. **V305** adds accident.vor_sla_breach + accident.overdue events + daily cron
+  `accident-sla-scan` (06:30 UTC, once-only dedupe via vor_sla_notified_at/overdue_notified_at; SLA days =
+  system_config.accident_vor_sla_days default 7) + escalate_roles routing for those. Edge fn **workflow-notify v5**
+  (verify_jwt=false) extended to send the pre-rendered accident {subject,html} email + {title,body} push carried in
+  the payload (backward-compatible with workflow.* copy). VERIFIED live (rolled back): a test insert routed to the
+  4 correct Company A recipients in-app, 0 emails while toggle OFF.
+- **Web UI:** `src/lib/api/accidentWorkflow.js` service (departments/rules/templates CRUD, setAccidentStage/
+  setAccidentVor, get/setAccidentEmailsEnabled, listRoutingProfiles). Accidents.jsx form+register+Analytics now carry
+  workflow_stage (stage select), VOR, GPS, RCA/corrective/preventive, HSE, project, department, target_date,
+  approved_repair_amount + a stage/VOR filter + the full `buildAccidentKpis` dashboard (total/open/critical/injury/
+  VOR+overSLA/pending police/pending+delayed claims/repair in-progress+completed/avg closure/repair cost/insurance
+  recovery/unrecovered + by site/driver/asset-type/root-cause/stage). AccidentDetailModal shows a stage stepper +
+  advance control (setAccidentStage; Admin can jump, others nextStages) + VOR toggle + reference_no + RCA fields.
+  New admin page **`src/pages/AccidentWorkflowSettings.jsx`** (route `/accident-workflow-settings`, RoleRoute Admin/
+  Manager/Director, nav "Accident Workflow" under Accident & Insurance, GitBranch icon): tabs Departments / Routing
+  Rules / Email Templates (token legend + sandboxed iframe preview) / Email Delivery (master ON/OFF, default OFF,
+  confirm-to-enable warning). PAGE_COLS in api/accidents.js extended with the new columns.
+- **OPEN / OPS follow-ups:** email is intentionally OFF — flip `accident_emails_enabled` in the Email Delivery tab
+  (or system_config) to go live; real deliveries also need RESEND_API_KEY (already used by send-email) + technicians'/
+  managers' profiles to carry email (they do). Phase 2 (NOT done this session): mobile accident form new-field UI
+  (mobile still writes legacy `status`; the derive trigger backfills stage so mobile is NOT broken) + wiring
+  workflow_stage into reports/PDF/PPTX/exec dashboard + a formal accident PDF attachment on the case email.
+
 ## SESSION 2026-07-20 CLOSED — all merged to main; migrations through V299, next free V300
 - Everything this session is MERGED to main and the branch `claude/accident-builder-report-ui-2bkwb5` is
   realigned to origin/main. Shipped, in order: report-email edge-fn fix (send-email verify_jwt=false, #139);

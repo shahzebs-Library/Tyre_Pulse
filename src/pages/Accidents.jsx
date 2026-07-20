@@ -43,6 +43,8 @@ import { builderReportType } from '../lib/api/scheduledReports'
 import { toUserMessage } from '../lib/safeError'
 import { hasClaim, isClosed as isClaimClosed, claimNet } from '../lib/claimsAnalytics'
 import { captureChartOnPaper } from '../lib/chartCapture'
+import { WORKFLOW_STAGES, DEFAULT_DEPARTMENTS, stageOf, stageLabel, buildAccidentKpis } from '../lib/accidentWorkflow'
+import { listDepartments } from '../lib/api/accidentWorkflow'
 
 ChartJS.register(
   CategoryScale, LinearScale, BarElement,
@@ -68,6 +70,38 @@ function FormSection({ title, children }) {
 // dropdown never drops an existing (legacy / bespoke) value from a saved record.
 const withValueOption = (opts, value) =>
   value && !opts.some(o => String(o) === String(value)) ? [value, ...opts] : opts
+
+// Compact ranked breakdown (proportional bars) for the workflow analytics.
+// `rows` = [{label, value}] from the single KPI engine; palette from reportColors
+// so it follows the super-admin report theme. Honest empty state, never fabricated.
+function BreakdownCard({ title, icon: Icon, rows, valueFmt = (v) => v }) {
+  const list = Array.isArray(rows) ? rows.filter(r => r && r.value > 0).slice(0, 8) : []
+  const max = list.reduce((m, r) => Math.max(m, r.value), 0) || 1
+  return (
+    <div className="card">
+      <p className="text-sm font-semibold text-[var(--text-dim)] mb-3 flex items-center gap-1.5">
+        {Icon && <Icon size={14} className="text-[var(--text-muted)]" />} {title}
+      </p>
+      {list.length === 0 ? (
+        <p className="text-[var(--text-muted)] text-sm text-center py-6">No data</p>
+      ) : (
+        <div className="space-y-2">
+          {list.map((r, i) => (
+            <div key={`${r.label}-${i}`}>
+              <div className="flex items-center justify-between text-xs mb-1 gap-2">
+                <span className="text-[var(--text-dim)] truncate">{r.label}</span>
+                <span className="text-[var(--text-secondary)] font-medium shrink-0">{valueFmt(r.value)}</span>
+              </div>
+              <div className="w-full bg-[var(--input-border)] rounded-full h-1.5">
+                <div className="h-1.5 rounded-full" style={{ width: `${(r.value / max) * 100}%`, background: colorAt(i) }} />
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
 
 // Severity / status list pills now come from the shared accidentVocab helpers
 // (accidentSeverityPill / accidentStatusPill) so the register table and the
@@ -219,6 +253,22 @@ const EMPTY_FORM = {
   release_date: '',
   inspector: '',
   photos: [],
+  // Unified workflow lifecycle (src/lib/accidentWorkflow.js). workflow_stage is
+  // the canonical stage column; reference_no is server-generated (read-only).
+  workflow_stage: 'reported',
+  reference_no: '',
+  project: '',
+  department: '',
+  latitude: '',
+  longitude: '',
+  vor: false,
+  root_cause: '',
+  corrective_action: '',
+  preventive_action: '',
+  hse_investigation: '',
+  target_date: '',
+  closure_evidence: '',
+  approved_repair_amount: '',
 }
 
 // On-screen value labels: light ink readable on the dark UI theme (the report
@@ -348,6 +398,8 @@ export default function Accidents() {
   const [filterRepairType, setFilterRepairType] = useState('')
   const [filterFault, setFilterFault]          = useState('')
   const [filterAge, setFilterAge]              = useState('') // '' | '0-15' | '16-30' | '30+' — open cases only
+  const [filterWfStage, setFilterWfStage]      = useState('') // canonical workflow_stage key
+  const [filterVor, setFilterVor]              = useState(false) // Vehicle-Off-Road only
 
   // Row → dedicated detail page (`/accidents/:id`). The former inline modal +
   // companion approval panel now live on that route; the approval engine there
@@ -370,6 +422,15 @@ export default function Accidents() {
   // context shown under the Asset field). Auto-populate reads from here.
   const [assetInfo, setAssetInfo]              = useState(null)
   const loadReqRef                             = useRef(0)
+
+  // Active departments for the workflow "Department" picker (free-text fallback
+  // via datalist). Degrades to the engine's default list when the table is empty.
+  const [departments, setDepartments]          = useState([])
+  useEffect(() => {
+    listDepartments({ activeOnly: true })
+      .then((rows) => setDepartments((rows ?? []).map((d) => d.name).filter(Boolean)))
+      .catch(() => setDepartments([]))
+  }, [])
 
   const loadRecords = useCallback(async () => {
     const token = ++loadReqRef.current   // guard against out-of-order responses on rapid country switches
@@ -549,6 +610,12 @@ export default function Accidents() {
 
     return { total, open, delayed, insur, openClaims, cost, avgDays, avgDaysDenom, sevMix, atFaultPct, atFaultCount, atFaultDenom: withLiability.length, avgClaim, per100, fleetSize }
   }, [records, fleetAssets])
+
+  // Unified accident-workflow KPI set (single calc source: buildAccidentKpis in
+  // src/lib/accidentWorkflow.js). Covers stage/VOR/repair/police/claims across the
+  // whole loaded set. Honest: values that cannot be computed stay null (rendered
+  // as N/A), never fabricated.
+  const wfKpis = useMemo(() => buildAccidentKpis(records, {}), [records])
 
   // Monthly incidents chart (incidents tab)
   const chartData = useMemo(() => {
@@ -1090,6 +1157,8 @@ export default function Accidents() {
     if (filterDelayed)  arr = arr.filter(isDelayed)
     if (statusFunnel)   arr = arr.filter(r => r.status === statusFunnel)
     if (filterStatus)   arr = arr.filter(r => r.status === filterStatus)
+    if (filterWfStage)  arr = arr.filter(r => stageOf(r) === filterWfStage)
+    if (filterVor)      arr = arr.filter(r => r.vor === true || r.vor === 'true')
     if (filterStage)    arr = arr.filter(r => r.current_status === filterStage || r.case_stage === filterStage)
     if (filterRepairType) arr = arr.filter(r => r.repair_type === filterRepairType)
     if (filterFault)    arr = arr.filter(r => r.fault_status === filterFault)
@@ -1115,7 +1184,7 @@ export default function Accidents() {
       )
     }
     return arr
-  }, [records, search, filterSite, filterSeverity, filterStatus, filterFrom, filterTo, statusFunnel, onlyPendingClosure, filterDelayed, filterStage, filterRepairType, filterFault, filterAge, filterOpenClaims])
+  }, [records, search, filterSite, filterSeverity, filterStatus, filterFrom, filterTo, statusFunnel, onlyPendingClosure, filterDelayed, filterStage, filterRepairType, filterFault, filterAge, filterOpenClaims, filterWfStage, filterVor])
 
   // Recovered auto-calc: Claim - Approved - Deductible (spec), unless the user
   // has explicitly typed a value in the Recovered field (then their input wins).
@@ -1207,6 +1276,21 @@ export default function Accidents() {
       release_date:          d(row.release_date),
       inspector:             row.inspector ?? '',
       photos:                row.photos ?? [],
+      // Unified workflow lifecycle
+      workflow_stage:        row.workflow_stage || stageOf(row) || 'reported',
+      reference_no:          row.reference_no ?? '',
+      project:               row.project ?? '',
+      department:            row.department ?? '',
+      latitude:              row.latitude ?? '',
+      longitude:             row.longitude ?? '',
+      vor:                   row.vor === true || row.vor === 'true',
+      root_cause:            row.root_cause ?? '',
+      corrective_action:     row.corrective_action ?? '',
+      preventive_action:     row.preventive_action ?? '',
+      hse_investigation:     row.hse_investigation ?? '',
+      target_date:           d(row.target_date),
+      closure_evidence:      row.closure_evidence ?? '',
+      approved_repair_amount: row.approved_repair_amount ?? '',
     })
     setEditId(row.id)
     setFormError('')
@@ -1313,6 +1397,22 @@ export default function Accidents() {
       release_date:          form.release_date || null,
       inspector:             form.inspector || null,
       photos:                form.photos.length ? form.photos : [],  // photos is NOT NULL (DB default '[]') — never send null
+      // Unified workflow lifecycle. workflow_stage is the canonical stage column
+      // (DB trigger keeps the legacy status in sync). reference_no is
+      // server-generated and vor_since is server-managed, so neither is written.
+      workflow_stage:        form.workflow_stage || 'reported',
+      project:               form.project || null,
+      department:            form.department || null,
+      latitude:              num(form.latitude),
+      longitude:             num(form.longitude),
+      vor:                   !!form.vor,
+      root_cause:            form.root_cause || null,
+      corrective_action:     form.corrective_action || null,
+      preventive_action:     form.preventive_action || null,
+      hse_investigation:     form.hse_investigation || null,
+      target_date:           form.target_date || null,
+      closure_evidence:      form.closure_evidence || null,
+      approved_repair_amount: num(form.approved_repair_amount),
     }
     if (!editId) payload.reported_by = profile?.id  // accidents has `reported_by`, not `created_by`
     const { error: err } = editId
@@ -1564,10 +1664,21 @@ export default function Accidents() {
         cell: ({ row }) => {
           const r = row.original
           const stage = r.current_status || r.case_stage
+          const wfStage = stageOf(r)
           const { label: statusLabel, className: statusClass } = accidentStatusPill(r.status)
           return (
             <div className="flex flex-col gap-1 items-start">
               {statusLabel && <span className={`badge text-xs ${statusClass}`}>{statusLabel}</span>}
+              {wfStage && (
+                <span className="text-[10px] text-[var(--text-secondary)] flex items-center gap-1" title="Unified workflow stage">
+                  <span className="w-1.5 h-1.5 rounded-full bg-green-500/70 inline-block" /> {stageLabel(wfStage)}
+                </span>
+              )}
+              {r.vor === true && (
+                <span className="badge text-[10px] bg-red-900/50 text-red-300 border border-red-700/50 flex items-center gap-1">
+                  <AlertOctagon size={9} /> Off road
+                </span>
+              )}
               {stage && (
                 <span className="text-[11px] text-[var(--text-dim)] truncate max-w-[150px]" title={r.next_step ? `Next: ${r.next_step}` : stage}>
                   {stage}
@@ -1922,6 +2033,10 @@ export default function Accidents() {
               <option value="">All Fault</option>
               {FAULT_STATUS_OPTS.map(s => <option key={s} value={s}>{s}</option>)}
             </select>
+            <select className="input text-sm w-48" value={filterWfStage} onChange={e => setFilterWfStage(e.target.value)} title="Unified workflow stage">
+              <option value="">All Workflow Stages</option>
+              {WORKFLOW_STAGES.map(s => <option key={s.key} value={s.key}>{s.label}</option>)}
+            </select>
             <select className="input text-sm w-40" value={filterAge} onChange={e => setFilterAge(e.target.value)} title="How long open cases have been running (days since incident)">
               <option value="">Any Days Open</option>
               <option value="0-15">Open &le; {CASE_AGE_GREEN_DAYS}d</option>
@@ -1942,6 +2057,18 @@ export default function Accidents() {
               <Clock size={13} /> Delayed only
             </button>
             <button
+              onClick={() => setFilterVor(v => !v)}
+              aria-pressed={filterVor}
+              className={`px-3 py-1 rounded-lg text-sm font-medium border transition-colors flex items-center gap-1.5 ${
+                filterVor
+                  ? 'bg-red-900/40 text-red-300 border-red-600'
+                  : 'bg-[var(--input-bg)] text-[var(--text-muted)] border-[var(--input-border)] hover:text-[var(--text-primary)]'
+              }`}
+              title="Show only vehicles currently off road (VOR)"
+            >
+              <AlertOctagon size={13} /> Off road only{wfKpis.vor ? ` (${wfKpis.vor})` : ''}
+            </button>
+            <button
               onClick={() => setOpenClaims(!filterOpenClaims)}
               aria-pressed={filterOpenClaims}
               className={`px-3 py-1 rounded-lg text-sm font-medium border transition-colors flex items-center gap-1.5 ${
@@ -1953,9 +2080,9 @@ export default function Accidents() {
             >
               <ShieldAlert size={13} /> Open claims only{stats.openClaims ? ` (${stats.openClaims})` : ''}
             </button>
-            {(search || filterSite || filterSeverity || filterStatus || filterStage || filterRepairType || filterFault || filterAge || filterFrom || filterTo || filterDelayed || filterOpenClaims) && (
+            {(search || filterSite || filterSeverity || filterStatus || filterStage || filterRepairType || filterFault || filterAge || filterFrom || filterTo || filterDelayed || filterOpenClaims || filterWfStage || filterVor) && (
               <button
-                onClick={() => { setSearch(''); setFilterSite(''); setFilterSeverity(''); setFilterStatus(''); setFilterStage(''); setFilterRepairType(''); setFilterFault(''); setFilterAge(''); setFilterFrom(''); setFilterTo(''); setFilterDelayed(false); setOpenClaims(false) }}
+                onClick={() => { setSearch(''); setFilterSite(''); setFilterSeverity(''); setFilterStatus(''); setFilterStage(''); setFilterRepairType(''); setFilterFault(''); setFilterAge(''); setFilterFrom(''); setFilterTo(''); setFilterDelayed(false); setOpenClaims(false); setFilterWfStage(''); setFilterVor(false) }}
                 className="text-xs text-[var(--text-muted)] hover:text-[var(--text-primary)] px-2 flex items-center gap-1"
               >
                 <X size={12} /> Clear filters
@@ -2087,6 +2214,48 @@ export default function Accidents() {
               </div>
             </div>
           )}
+
+          {/* ===== Accident Workflow KPIs (single engine: buildAccidentKpis) ===== */}
+          <div className="card border-l-2 border-l-green-500/60">
+            <div className="flex items-center gap-2 mb-3">
+              <BarChart2 size={16} className="text-green-400" />
+              <p className="text-sm font-semibold text-[var(--text-primary)]">Accident Workflow KPIs</p>
+              <span className="text-xs text-[var(--text-muted)] ml-auto">across {wfKpis.total} incident{wfKpis.total !== 1 ? 's' : ''}</span>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-3">
+              {[
+                { v: wfKpis.total, label: 'Total', cls: 'text-[var(--text-primary)]' },
+                { v: wfKpis.open, label: 'Open', cls: 'text-orange-400', sub: `${wfKpis.closed} closed` },
+                { v: wfKpis.critical, label: 'Critical', cls: 'text-red-400' },
+                { v: wfKpis.injuryCases, label: 'Injury Cases', cls: 'text-red-400' },
+                { v: wfKpis.vor, label: 'Vehicles Off Road', cls: 'text-red-400', sub: wfKpis.vorOverSla ? `${wfKpis.vorOverSla} over SLA` : 'within SLA' },
+                { v: wfKpis.pendingPolice, label: 'Pending Police Reports', cls: 'text-yellow-400' },
+                { v: wfKpis.pendingClaims, label: 'Pending Insurance Claims', cls: 'text-blue-400' },
+                { v: wfKpis.claimsDelayed, label: 'Claims Delayed', cls: 'text-red-400' },
+                { v: wfKpis.repairInProgress, label: 'Repair In Progress', cls: 'text-blue-400' },
+                { v: wfKpis.repairCompleted, label: 'Repair Completed', cls: 'text-green-400' },
+                { v: wfKpis.avgClosureDays == null ? 'N/A' : `${wfKpis.avgClosureDays}d`, label: 'Avg Closure Time', cls: 'text-[var(--text-primary)]' },
+                { v: fmtCurrency(wfKpis.totalRepairCost), label: 'Total Repair Cost', cls: 'text-green-400' },
+                { v: fmtCurrency(wfKpis.insuranceRecovery), label: 'Insurance Recovery', cls: 'text-emerald-400' },
+                { v: fmtCurrency(wfKpis.unrecoveredCost), label: 'Unrecovered Cost', cls: 'text-orange-400' },
+              ].map((k) => (
+                <div key={k.label} className="rounded-lg border border-[var(--input-border)] bg-[var(--input-bg)]/40 px-3 py-2.5 text-center">
+                  <p className={`text-xl font-bold ${k.cls}`}>{k.v}</p>
+                  <p className="text-[11px] text-[var(--text-muted)] mt-1 leading-tight">{k.label}</p>
+                  {k.sub && <p className="text-[10px] text-[var(--text-muted)]/70 mt-0.5">{k.sub}</p>}
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* ===== Workflow breakdowns (by stage / site / driver / asset type / root cause) ===== */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <BreakdownCard title="By Workflow Stage" icon={BarChart2} rows={wfKpis.byStage} />
+            <BreakdownCard title="By Site" icon={AlertOctagon} rows={wfKpis.bySite} />
+            <BreakdownCard title="By Asset Type" icon={TrendingUp} rows={wfKpis.byAssetType} />
+            <BreakdownCard title="By Driver" icon={Users} rows={wfKpis.byDriver} />
+            <BreakdownCard title="By Root Cause" icon={Lightbulb} rows={wfKpis.byRootCause} />
+          </div>
 
           {/* KPI row */}
           <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
@@ -2716,6 +2885,77 @@ export default function Accidents() {
                   <div className="md:col-span-3">
                     <label className="label">Status Update Note</label>
                     <input className="input" placeholder="Optional note for this update" value={form.status_update_note} onChange={e => setForm(f => ({ ...f, status_update_note: e.target.value }))} />
+                  </div>
+                </div>
+              </FormSection>
+
+              {/* Unified workflow & HSE investigation */}
+              <FormSection title="Workflow & Investigation">
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                  <div>
+                    <label className="label">Workflow Stage</label>
+                    <select className="input" value={form.workflow_stage} onChange={e => setForm(f => ({ ...f, workflow_stage: e.target.value }))}>
+                      {WORKFLOW_STAGES.map(s => <option key={s.key} value={s.key}>{s.label}</option>)}
+                    </select>
+                  </div>
+                  {editId && form.reference_no && (
+                    <div>
+                      <label className="label">Reference No</label>
+                      <input className="input opacity-70 cursor-not-allowed" value={form.reference_no} readOnly title="System-generated reference (read-only)" />
+                    </div>
+                  )}
+                  <div>
+                    <label className="label">Project</label>
+                    <input className="input" placeholder="Project / contract" value={form.project} onChange={e => setForm(f => ({ ...f, project: e.target.value }))} />
+                  </div>
+                  <div>
+                    <label className="label">Department</label>
+                    <input className="input" list="acc-departments" placeholder="Responsible department" value={form.department} onChange={e => setForm(f => ({ ...f, department: e.target.value }))} />
+                    <datalist id="acc-departments">{(departments.length ? departments : DEFAULT_DEPARTMENTS).map(s => <option key={s} value={s} />)}</datalist>
+                  </div>
+                  <div>
+                    <label className="label">Target Date</label>
+                    <input type="date" className="input" value={form.target_date} onChange={e => setForm(f => ({ ...f, target_date: e.target.value }))} />
+                  </div>
+                  <div>
+                    <label className="label">Approved Repair Amount</label>
+                    <input type="number" min="0" step="0.01" className="input" value={form.approved_repair_amount} onChange={e => setForm(f => ({ ...f, approved_repair_amount: e.target.value }))} />
+                  </div>
+                  <div>
+                    <label className="label">Latitude</label>
+                    <input type="number" step="any" className="input" placeholder="e.g. 21.5433" value={form.latitude} onChange={e => setForm(f => ({ ...f, latitude: e.target.value }))} />
+                  </div>
+                  <div>
+                    <label className="label">Longitude</label>
+                    <input type="number" step="any" className="input" placeholder="e.g. 39.1728" value={form.longitude} onChange={e => setForm(f => ({ ...f, longitude: e.target.value }))} />
+                  </div>
+                  <div className="flex items-end">
+                    <label className="inline-flex items-center gap-2 text-sm text-[var(--text-secondary)] cursor-pointer select-none pb-2">
+                      <input type="checkbox" className="w-4 h-4 rounded border-[var(--input-border)] bg-[var(--input-bg)] accent-red-600" checked={!!form.vor} onChange={e => setForm(f => ({ ...f, vor: e.target.checked }))} />
+                      Vehicle Off Road (VOR)
+                    </label>
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
+                  <div>
+                    <label className="label">Root Cause</label>
+                    <textarea className="input" rows={2} placeholder="Underlying cause of the incident" value={form.root_cause} onChange={e => setForm(f => ({ ...f, root_cause: e.target.value }))} />
+                  </div>
+                  <div>
+                    <label className="label">HSE Investigation</label>
+                    <textarea className="input" rows={2} placeholder="Safety investigation findings" value={form.hse_investigation} onChange={e => setForm(f => ({ ...f, hse_investigation: e.target.value }))} />
+                  </div>
+                  <div>
+                    <label className="label">Corrective Action</label>
+                    <textarea className="input" rows={2} placeholder="Action taken to fix" value={form.corrective_action} onChange={e => setForm(f => ({ ...f, corrective_action: e.target.value }))} />
+                  </div>
+                  <div>
+                    <label className="label">Preventive Action</label>
+                    <textarea className="input" rows={2} placeholder="Action to prevent recurrence" value={form.preventive_action} onChange={e => setForm(f => ({ ...f, preventive_action: e.target.value }))} />
+                  </div>
+                  <div className="md:col-span-2">
+                    <label className="label">Closure Evidence</label>
+                    <input className="input" placeholder="Document / reference confirming closure" value={form.closure_evidence} onChange={e => setForm(f => ({ ...f, closure_evidence: e.target.value }))} />
                   </div>
                 </div>
               </FormSection>

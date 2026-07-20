@@ -19,6 +19,7 @@ import {
   X, Plus, Trash2, Send, Lock, CheckCircle2, XCircle,
   ShieldCheck, Hourglass, FileText, Wrench, MessageSquare, Briefcase, History, User, ClipboardList,
   ArrowLeft, AlertOctagon, ChevronRight, Download, Loader2, ShieldAlert, Clock, Pencil,
+  GitBranch, MapPin, Ban, Hash,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
@@ -34,6 +35,11 @@ import { exportAccidentCasePdf } from '../lib/exportUtils'
 import { describeAuditRow } from '../lib/auditDiff'
 import { buildCaseTimeline } from '../lib/accidentTimeline'
 import { listStatusTransitions } from '../lib/api/accidentTimeline'
+import {
+  WORKFLOW_STAGES, STAGE_FLOW, STAGE_KEYS, stageOf, stageLabel, stageTone,
+  stageDept, stageIndex, nextStages,
+} from '../lib/accidentWorkflow'
+import { setAccidentStage, setAccidentVor } from '../lib/api/accidentWorkflow'
 import { resolveStorageUrls } from '../lib/storageRefs'
 import CustomFieldsPanel from './CustomFieldsPanel'
 import CopilotCard from './ai/CopilotCard'
@@ -146,6 +152,9 @@ function AccidentDetail({ accidentId, onBack, onClose, onChanged, variant = 'pag
   const navigate = useNavigate()
   const company = branding?.legal_name || branding?.display_name || 'TyrePulse'
   const elevated = isElevated(profile?.role)
+  // Admins (and super-admins) may jump to ANY stage; managers/directors get the
+  // guided forward/close/cancel set only.
+  const isAdmin = String(profile?.role || '').toLowerCase() === 'admin' || profile?.is_super_admin === true
   const fmtCurrency = (v) => _fmtCurrencyBase(v, activeCurrency, 0)
   const [downloading, setDownloading] = useState(false)
 
@@ -320,6 +329,10 @@ function AccidentDetail({ accidentId, onBack, onClose, onChanged, variant = 'pag
       <div className="flex-1 overflow-y-auto p-6">
         {tab === 'overview'  && (
           <div className="space-y-4">
+            <WorkflowStageSection
+              acc={acc} elevated={elevated} isAdmin={isAdmin}
+              locked={editLocked} reload={load} setErr={setErr}
+            />
             <CopilotCard task="summarize_accident" context={{ accident: acc, remarks, parts }} />
             <OverviewTab acc={acc} fmtCurrency={fmtCurrency} />
             <CaseTimelineSection acc={acc} />
@@ -423,6 +436,11 @@ function AccidentDetail({ accidentId, onBack, onClose, onChanged, variant = 'pag
                 {acc.site || '-'}{acc.country ? ` · ${acc.country}` : ''} · {acc.incident_date ? new Date(acc.incident_date).toLocaleDateString() : '-'}
               </p>
               <div className="flex items-center gap-2 mt-2 flex-wrap">
+                {acc.reference_no && (
+                  <span className="badge text-xs bg-[var(--input-bg)] text-[var(--text-secondary)] border border-[var(--input-border)] flex items-center gap-1 font-mono">
+                    <Hash size={10} /> {acc.reference_no}
+                  </span>
+                )}
                 {severityPill.label && <span className={`badge text-xs ${severityPill.className}`}>{severityPill.label}</span>}
                 {statusPill.label && <span className={`badge text-xs ${statusPill.className}`}>{statusPill.label}</span>}
                 <ClosureBadge closure={closure} />
@@ -481,6 +499,220 @@ export function AccidentDetailModal({ accidentId, onClose, onChanged }) {
 }
 
 // ── Tabs ──────────────────────────────────────────────────────────────────────
+
+const truthyVor = (v) => v === true || v === 'true' || v === 1 || v === '1'
+
+// Tone -> tailwind classes for the stage stepper (mirrors the engine's stageTone).
+const STAGE_STEP_TONE = {
+  slate:  { done: 'bg-slate-500 border-slate-400',   cur: 'bg-slate-500 border-slate-300 ring-2 ring-slate-400/40',   text: 'text-slate-300' },
+  blue:   { done: 'bg-blue-500 border-blue-400',     cur: 'bg-blue-500 border-blue-300 ring-2 ring-blue-400/40',      text: 'text-blue-300' },
+  amber:  { done: 'bg-amber-500 border-amber-400',   cur: 'bg-amber-500 border-amber-300 ring-2 ring-amber-400/40',   text: 'text-amber-300' },
+  purple: { done: 'bg-purple-500 border-purple-400', cur: 'bg-purple-500 border-purple-300 ring-2 ring-purple-400/40', text: 'text-purple-300' },
+  green:  { done: 'bg-green-500 border-green-400',    cur: 'bg-green-500 border-green-300 ring-2 ring-green-400/40',    text: 'text-green-300' },
+}
+
+// ── Unified workflow control (Overview) ───────────────────────────────────────
+// Surfaces the single accident lifecycle (src/lib/accidentWorkflow.js): a stage
+// stepper for the current position, a guarded advance/set-stage control (managers
+// get nextStages, Admins can jump anywhere), the Vehicle-Off-Road toggle, and the
+// HSE / root-cause investigation fields. All maths + the stage vocabulary come
+// from the pure engine; writes go through the guarded service (which syncs the
+// legacy status + emits routed notifications server-side). Honest: only fields
+// that carry a value are shown; nothing is fabricated.
+function WorkflowStageSection({ acc, elevated, isAdmin, locked, reload, setErr }) {
+  const current = stageOf(acc)
+  const curIdx = stageIndex(current)          // -1 when cancelled (off the happy path)
+  const cancelled = current === 'cancelled'
+  const meta = WORKFLOW_STAGES.find((s) => s.key === current)
+  const [target, setTarget] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [localErr, setLocalErr] = useState('')
+
+  useEffect(() => { setTarget('') }, [current])
+
+  // Admin: any other stage. Manager/Director: guided forward + close/cancel only.
+  const options = useMemo(
+    () => (isAdmin ? STAGE_KEYS.filter((k) => k !== current) : nextStages(current)),
+    [isAdmin, current],
+  )
+
+  const vorOn = truthyVor(acc.vor)
+  const canAct = elevated && !locked
+
+  async function applyStage() {
+    if (!target || !canAct) return
+    setBusy(true); setLocalErr('')
+    try {
+      await setAccidentStage(acc.id, target)
+      setTarget('')
+      await reload?.()
+    } catch (e) {
+      const m = toUserMessage(e, 'Could not change the workflow stage.')
+      setLocalErr(m); setErr?.(m)
+    } finally { setBusy(false) }
+  }
+
+  async function toggleVor() {
+    if (!canAct) return
+    setBusy(true); setLocalErr('')
+    try {
+      await setAccidentVor(acc.id, !vorOn)
+      await reload?.()
+    } catch (e) {
+      const m = toUserMessage(e, 'Could not update the off-road flag.')
+      setLocalErr(m); setErr?.(m)
+    } finally { setBusy(false) }
+  }
+
+  // Investigation / HSE detail — long-form; only render blocks that carry a value.
+  const notes = [
+    ['Root cause', acc.root_cause],
+    ['Corrective action', acc.corrective_action],
+    ['Preventive action', acc.preventive_action],
+    ['HSE investigation', acc.hse_investigation],
+  ].filter(([, v]) => v != null && String(v).trim())
+
+  const facts = [
+    ['Reference', acc.reference_no],
+    ['Project', acc.project],
+    ['Department', acc.department],
+    ['Owner dept', stageDept(current)],
+    ['Target date', acc.target_date ? new Date(acc.target_date).toLocaleDateString() : null],
+    ['GPS', (acc.latitude != null && acc.latitude !== '' && acc.longitude != null && acc.longitude !== '')
+      ? `${Number(acc.latitude).toFixed(5)}, ${Number(acc.longitude).toFixed(5)}` : null],
+  ].filter(([, v]) => v != null && String(v).trim())
+
+  return (
+    <div className="card space-y-4 border-l-2 border-l-green-500/50">
+      <div className="flex items-start justify-between gap-3 flex-wrap">
+        <div className="min-w-0">
+          <p className="text-xs font-semibold text-[var(--text-dim)] flex items-center gap-1.5">
+            <GitBranch size={13} className="text-green-400" /> Workflow Stage
+          </p>
+          <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+            <span className={`badge text-sm ${STAGE_STEP_TONE[stageTone(current)]?.text || 'text-slate-300'} bg-[var(--input-bg)] border border-[var(--input-border)]`}>
+              {cancelled && <Ban size={11} className="inline mr-1 -mt-0.5" />}
+              {stageLabel(current)}
+            </span>
+            {meta?.dept && <span className="text-[11px] text-[var(--text-muted)]">{meta.dept}</span>}
+            {!cancelled && curIdx >= 0 && (
+              <span className="text-[11px] text-[var(--text-muted)]">Step {curIdx + 1} of {STAGE_FLOW.length}</span>
+            )}
+          </div>
+        </div>
+        {/* Vehicle-Off-Road toggle */}
+        <div className="text-right">
+          <button
+            type="button"
+            onClick={toggleVor}
+            disabled={!canAct || busy}
+            title={canAct ? 'Toggle Vehicle Off Road' : (locked ? 'Locked while an approval workflow is active' : 'Only Admin / Manager / Director can change this')}
+            className={`badge text-xs inline-flex items-center gap-1.5 border transition-colors disabled:opacity-60 ${
+              vorOn
+                ? 'bg-red-900/50 text-red-300 border-red-700/50'
+                : 'bg-[var(--input-bg)] text-[var(--text-muted)] border-[var(--input-border)] hover:text-[var(--text-primary)]'
+            }`}
+          >
+            <AlertOctagon size={11} /> {vorOn ? 'Vehicle Off Road' : 'Mark Off Road'}
+          </button>
+          {vorOn && acc.vor_since && (
+            <p className="text-[10px] text-[var(--text-muted)] mt-1">Since {new Date(acc.vor_since).toLocaleDateString()}</p>
+          )}
+        </div>
+      </div>
+
+      {/* Stepper (the ordered happy path) */}
+      <div className="overflow-x-auto -mx-1 px-1">
+        <ol className="flex items-start gap-0 min-w-max">
+          {STAGE_FLOW.map((s, i) => {
+            const done = !cancelled && curIdx >= 0 && i < curIdx
+            const cur = !cancelled && i === curIdx
+            const tone = STAGE_STEP_TONE[stageTone(s)] || STAGE_STEP_TONE.slate
+            return (
+              <li key={s} className="flex flex-col items-center relative" style={{ width: 84 }}>
+                {i < STAGE_FLOW.length - 1 && (
+                  <span className={`absolute top-[9px] left-1/2 w-full h-0.5 ${done ? 'bg-green-500/60' : 'bg-[var(--input-border)]'}`} />
+                )}
+                <span
+                  className={`relative z-10 w-[18px] h-[18px] rounded-full border flex items-center justify-center ${
+                    done ? tone.done : cur ? tone.cur : 'bg-[var(--input-bg)] border-[var(--input-border)]'
+                  }`}
+                >
+                  {done && <CheckCircle2 size={11} className="text-white" />}
+                </span>
+                <span className={`text-[10px] leading-tight text-center mt-1.5 px-1 ${cur ? tone.text + ' font-semibold' : done ? 'text-[var(--text-dim)]' : 'text-[var(--text-muted)]'}`}>
+                  {stageLabel(s)}
+                </span>
+              </li>
+            )
+          })}
+        </ol>
+      </div>
+      {cancelled && (
+        <p className="text-[11px] text-[var(--text-muted)] flex items-center gap-1"><Ban size={11} /> This case was cancelled and is off the standard flow.</p>
+      )}
+
+      {/* Advance / set stage */}
+      {elevated ? (
+        <div className="flex items-end gap-2 flex-wrap">
+          <div className="flex-1 min-w-[200px]">
+            <label className="text-[11px] uppercase tracking-wide text-[var(--text-muted)] font-semibold">Advance / set stage</label>
+            <select
+              className="input mt-1"
+              value={target}
+              onChange={(e) => setTarget(e.target.value)}
+              disabled={locked || busy || options.length === 0}
+            >
+              <option value="">{isAdmin ? 'Select a stage...' : 'Select next step...'}</option>
+              {options.map((k) => (
+                <option key={k} value={k}>{stageLabel(k)}{stageDept(k) ? ` — ${stageDept(k)}` : ''}</option>
+              ))}
+            </select>
+          </div>
+          <button
+            type="button"
+            onClick={applyStage}
+            disabled={!target || locked || busy}
+            className="btn-primary text-sm inline-flex items-center gap-1.5 disabled:opacity-50"
+          >
+            {busy ? <Loader2 size={14} className="animate-spin" /> : <ChevronRight size={14} />}
+            {busy ? 'Saving...' : 'Apply'}
+          </button>
+        </div>
+      ) : (
+        <p className="text-xs text-[var(--text-muted)]">Only Admin / Manager / Director can change the workflow stage.</p>
+      )}
+      {locked && elevated && (
+        <p className="text-[11px] text-purple-300 flex items-center gap-1"><Lock size={10} /> Stage changes are locked while an approval workflow is active.</p>
+      )}
+      {localErr && <p className="text-xs text-red-400">{localErr}</p>}
+
+      {/* Investigation facts + notes (honest — only when present) */}
+      {(facts.length > 0 || notes.length > 0) && (
+        <div className="border-t border-[var(--input-border)] pt-3 space-y-3">
+          {facts.length > 0 && (
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+              {facts.map(([label, value]) => (
+                <div key={label}>
+                  <p className="text-[11px] uppercase tracking-wide text-[var(--text-muted)] font-semibold flex items-center gap-1">
+                    {label === 'GPS' && <MapPin size={10} />}{label}
+                  </p>
+                  <p className="text-sm font-medium mt-0.5 text-[var(--text-secondary)] break-words">{value}</p>
+                </div>
+              ))}
+            </div>
+          )}
+          {notes.map(([label, value]) => (
+            <div key={label}>
+              <p className="text-[11px] uppercase tracking-wide text-[var(--text-muted)] font-semibold">{label}</p>
+              <p className="text-sm text-[var(--text-secondary)] leading-relaxed mt-0.5 whitespace-pre-wrap">{value}</p>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
 
 function OverviewTab({ acc, fmtCurrency }) {
   const photos = Array.isArray(acc.photos) ? acc.photos.filter(Boolean) : []

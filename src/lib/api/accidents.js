@@ -15,6 +15,8 @@ const COLS =
 // Omits organisation_id (RLS-managed).
 const PAGE_COLS =
   'id,site,asset_no,vehicle_id,plate_number,vehicle_type,reported_by,reporter_name,incident_date,incident_time,location,accident_type,severity,description,injuries,injury_count,third_party_involved,police_report_no,damage_description,estimated_damage_cost,photos,status,notes,created_at,updated_at,reviewed_by,reviewed_at,responsible_party,liable_party,payer,driver_name,insurer,policy_no,claim_status,claim_amount,claim_approved_amount,deductible,parts_cost,closure_status,close_requested_by,close_requested_at,close_request_note,closure_approved_by,closure_approved_at,closure_rejected_reason,recovered_amount,recovery_date,recovery_source,recovery_status,recovery_reference,country,case_stage,damage_condition,current_status,action_to_be_taken,responsible_owner,required_action,status_update_date,status_update_note,expected_release_date,repair_cost,insurance_claim_no,inspector,damage_class,fault_status,najm_status,najm_fault,taqdeer_status,gcc_liability_ratio,repair_type,next_step,workshop_name,workshop_location,workshop_quotation,discount_pct,final_amount,amount_transfer,taqdeer_no,release_date'
+  // V300+ unified workflow + structured fields (single lifecycle, VOR, routing, RCA, docs)
+  + ',workflow_stage,reference_no,project,department,departments_involved,responsible_owner_id,latitude,longitude,vor,vor_since,documents,videos,root_cause,corrective_action,preventive_action,hse_investigation,target_date,closure_evidence,sla_due_at,approved_repair_amount,estimate_approved_by,estimate_approved_at'
 
 /**
  * List accidents, newest first. Country-scoped (null-safe) and optionally

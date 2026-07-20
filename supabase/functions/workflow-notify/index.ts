@@ -46,7 +46,14 @@ function jsonResponse(req: Request, body: unknown, status = 200): Response {
 }
 
 type Recipient = { user_id?: string | null; email?: string | null; push_token?: string | null; phone?: string | null; role?: string | null }
-type NotifyPayload = { event_type?: string; instance_id?: string; definition_name?: string; entity_type?: string; entity_label?: string; step_name?: string; comment?: string; recipients?: Recipient[] }
+type NotifyPayload = {
+  event_type?: string; instance_id?: string; definition_name?: string; entity_type?: string;
+  entity_label?: string; step_name?: string; comment?: string; recipients?: Recipient[];
+  // Accident (and other pre-rendered) notifications: the caller supplies the exact
+  // approved subject/html + push copy, so this function just delivers them.
+  channel?: string; entity_id?: string;
+  email?: { subject?: string; html?: string }; push?: { title?: string; body?: string }
+}
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
@@ -64,17 +71,16 @@ function buildMessage(p: NotifyPayload): { title: string; body: string } {
   }
 }
 
-async function sendEmails(recipients: Recipient[], msg: { title: string; body: string }, skipped: string[]): Promise<number> {
+async function sendEmails(recipients: Recipient[], subject: string, html: string, skipped: string[]): Promise<number> {
   const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY')
   const FROM_EMAIL = Deno.env.get('FROM_EMAIL') || 'reports@tyrepulse.app'
   const emails = Array.from(new Set(recipients.map(r => (r.email || '').trim().toLowerCase()).filter(e => EMAIL_RE.test(e))))
   if (!RESEND_API_KEY) { if (emails.length) skipped.push('email: RESEND_API_KEY not configured'); return 0 }
   if (!emails.length) { skipped.push('email: no valid recipient addresses'); return 0 }
-  const html = `<div style="font-family:system-ui,Segoe UI,Arial,sans-serif;font-size:14px;color:#111"><h2 style="margin:0 0 12px">${escapeHtml(msg.title)}</h2><p style="margin:0 0 16px;line-height:1.5">${escapeHtml(msg.body)}</p><p style="margin:0;color:#666;font-size:12px">Tyre Pulse &mdash; Approval &amp; Workflow Engine</p></div>`
   let sent = 0
   for (const to of emails) {
     try {
-      const res = await fetch('https://api.resend.com/emails', { method: 'POST', headers: { 'Authorization': `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ from: FROM_EMAIL, to: [to], subject: msg.title, html }) })
+      const res = await fetch('https://api.resend.com/emails', { method: 'POST', headers: { 'Authorization': `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ from: FROM_EMAIL, to: [to], subject, html }) })
       if (res.ok) { sent++ } else { const data = await res.json().catch(() => ({})); skipped.push(`email(${to}): ${data?.message || `HTTP ${res.status}`}`) }
     } catch (err) { skipped.push(`email(${to}): ${errMsg(err)}`) }
   }
@@ -185,15 +191,25 @@ serve(async (req) => {
   const recipients = Array.isArray(payload.recipients) ? payload.recipients : []
   if (!payload.event_type) return jsonResponse(req, { error: 'Missing required field: event_type' }, 400)
   if (!recipients.length) return jsonResponse(req, { email: 0, push: 0, whatsapp: 0, skipped: ['no recipients'] })
-  const msg = buildMessage(payload)
+  // Push/WhatsApp copy: use the caller-supplied push copy when present (accident
+  // notifications), otherwise derive it from the workflow event_type.
+  const msg = (payload.push && payload.push.title)
+    ? { title: payload.push.title, body: payload.push.body || '' }
+    : buildMessage(payload)
+  // Email subject/body: pre-rendered approved template (accident) wins; otherwise
+  // fall back to the generic workflow HTML built from msg.
+  const emailSubject = (payload.email && payload.email.subject) ? payload.email.subject : msg.title
+  const emailHtml = (payload.email && payload.email.html)
+    ? payload.email.html
+    : `<div style="font-family:system-ui,Segoe UI,Arial,sans-serif;font-size:14px;color:#111"><h2 style="margin:0 0 12px">${escapeHtml(msg.title)}</h2><p style="margin:0 0 16px;line-height:1.5">${escapeHtml(msg.body)}</p><p style="margin:0;color:#666;font-size:12px">Tyre Pulse &mdash; Approval &amp; Workflow Engine</p></div>`
   const skipped: string[] = []
   // Global push switch: when explicitly off, skip ONLY the push channel (email +
   // WhatsApp still go out). Fail-safe: a read error leaves push enabled.
   const pushDisabled = await pushNotificationsDisabled()
   if (pushDisabled) skipped.push('push: push_notifications disabled')
   const [email, push, whatsapp] = await Promise.all([
-    sendEmails(recipients, msg, skipped).catch(err => { skipped.push(`email: ${errMsg(err)}`); return 0 }),
-    pushDisabled ? Promise.resolve(0) : sendPush(recipients, msg, payload.instance_id, skipped).catch(err => { skipped.push(`push: ${errMsg(err)}`); return 0 }),
+    sendEmails(recipients, emailSubject, emailHtml, skipped).catch(err => { skipped.push(`email: ${errMsg(err)}`); return 0 }),
+    pushDisabled ? Promise.resolve(0) : sendPush(recipients, msg, payload.instance_id || payload.entity_id, skipped).catch(err => { skipped.push(`push: ${errMsg(err)}`); return 0 }),
     sendWhatsApp(recipients, msg, skipped).catch(err => { skipped.push(`whatsapp: ${errMsg(err)}`); return 0 }),
   ])
   return jsonResponse(req, { email, push, whatsapp, skipped })

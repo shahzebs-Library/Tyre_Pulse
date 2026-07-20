@@ -1448,7 +1448,19 @@
         "awaiting_inspection": "Awaiting Inspection",
         "off_duty": "Off Duty",
         "absent": "Absent"
-      }
+      },
+      "myProductivity": "My day so far",
+      "prodProductive": "Productive",
+      "prodBlocked": "Blocked",
+      "prodUnassigned": "Unassigned",
+      "prodDone": "Completed",
+      "tasksLabel": "Tasks",
+      "taskUntitled": "Task",
+      "taskHint": "Pick a task before Start or Complete.",
+      "selectTaskTitle": "Select a task",
+      "selectTaskMsg": "Pick the task you are working on first.",
+      "photoLabel": "Photo",
+      "addPhoto": "Add Photo"
     }
   },
   "checklists": {

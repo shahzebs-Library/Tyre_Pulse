@@ -211,3 +211,152 @@ export function isCheckedIn(events: WorkshopEventLike[] | null | undefined): boo
   if (!duty.length) return false
   return duty[duty.length - 1].e.event_type === 'check_in'
 }
+
+// ── My productivity today (compact self-rollup) ──────────────────────────────
+//
+// A minimal, dependency-free port of the web engine's buildSegments +
+// rollupTechnician (src/lib/workshopLive.js) reduced to just the numbers the
+// technician's own summary card needs. Deterministic: `now` is passed in, never
+// read from Date.now() here.
+
+const MIN = 60_000
+
+/** The on-duty "state" an event moves the technician into (segment classifier). */
+const EVENT_STATE: Record<string, string> = {
+  check_in: 'available',
+  start_job: 'productive',
+  resume_job: 'productive',
+  complete_task: 'available', // awaiting next assignment / inspection
+  request_parts: 'blocked:parts',
+  waiting_tools: 'blocked:tools',
+  waiting_approval: 'blocked:approval',
+  waiting_vehicle: 'blocked:vehicle',
+  start_break: 'break',
+  end_break: 'available',
+  training: 'training',
+  check_out: 'off',
+  // pause_job & report_problem handled specially (reason-dependent / inherit)
+}
+
+type SegKind = 'productive' | 'blocked' | 'break' | 'training' | 'unassigned' | 'off'
+
+interface Segment { kind: SegKind; reason: string | null; start: number; end: number; minutes: number }
+
+/**
+ * Turn one technician's ordered events into contiguous, classified time segments.
+ * A `pause_job` uses its own reason_code (blocked reason -> blocked, break ->
+ * break, otherwise unassigned); `report_problem` is an annotation and inherits
+ * the current state. Faithful (reduced) port of the web engine.
+ */
+export function buildSegments(
+  events: WorkshopEventLike[] | null | undefined,
+  ctx: { now: number; shiftEnd?: number },
+): Segment[] {
+  const { now, shiftEnd } = ctx
+  const evs = (Array.isArray(events) ? events : [])
+    .map((e) => ({ ...e, _t: ts(e.at) }))
+    .filter((e) => Number.isFinite(e._t))
+    .sort((a, b) => a._t - b._t)
+  if (!evs.length) return []
+
+  const segs: Segment[] = []
+  let state: string | null = null
+  let reason: string | null = null
+  let start: number | null = null
+
+  const close = (end: number) => {
+    if (state && start != null && end > start) {
+      const kind: SegKind = state === 'productive' ? 'productive'
+        : state === 'break' ? 'break'
+          : state === 'training' ? 'training'
+            : state === 'off' ? 'off'
+              : reason ? 'blocked'
+                : 'unassigned'
+      if (kind !== 'off') {
+        segs.push({ kind, reason: kind === 'blocked' ? reason : null, start, end, minutes: (end - start) / MIN })
+      }
+    }
+  }
+
+  for (const e of evs) {
+    const et = e.event_type
+    let nextState: string
+    let nextReason: string | null = null
+    if (et === 'pause_job') {
+      const r = String(e.reason_code || '').toLowerCase()
+      if ((BLOCKED_REASONS as readonly string[]).includes(r)) { nextState = 'blocked'; nextReason = r }
+      else if (r === 'break') nextState = 'break'
+      else nextState = 'available'
+    } else if (et === 'report_problem') {
+      continue // annotation only - inherit the current state
+    } else {
+      const mapped = EVENT_STATE[et]
+      if (!mapped) continue
+      if (mapped.startsWith('blocked:')) { nextState = 'blocked'; nextReason = mapped.slice(8) }
+      else nextState = mapped
+    }
+
+    close((e as any)._t)
+
+    state = nextState
+    reason = nextReason
+    if (nextState === 'off') { state = null; reason = null; start = null; continue }
+    start = (e as any)._t
+  }
+
+  if (state && start != null) {
+    const end = shiftEnd ? Math.min(now, Math.max(shiftEnd, start)) : now
+    close(Math.max(end, start))
+  }
+  return segs
+}
+
+export interface MyProductivity {
+  productiveMin: number
+  blockedMin: number
+  unassignedMin: number
+  breakMin: number
+  jobsCompleted: number
+}
+
+function round1(n: number): number { return Math.round((Number(n) || 0) * 10) / 10 }
+
+/**
+ * Compact self-rollup for the technician's OWN summary card: how many minutes of
+ * their duty so far were productive vs blocked (waiting parts/tools/approval/
+ * vehicle) vs unassigned (leftover on-duty) vs break, and how many tasks they
+ * completed. Reduced port of rollupTechnician - deterministic (`now` passed in).
+ */
+export function myProductivityToday(
+  events: WorkshopEventLike[] | null | undefined,
+  ctx: { now: number; shiftStart?: number; shiftEnd?: number },
+): MyProductivity {
+  const { now, shiftStart, shiftEnd } = ctx
+  const evs = (Array.isArray(events) ? events : [])
+    .map((e) => ({ ...e, _t: ts(e.at) }))
+    .filter((e) => Number.isFinite((e as any)._t))
+  const segs = buildSegments(evs, { now, shiftEnd })
+
+  const bucket: Record<string, number> = { productive: 0, blocked: 0, break: 0, training: 0, unassigned: 0 }
+  for (const s of segs) bucket[s.kind] = (bucket[s.kind] || 0) + s.minutes
+
+  // Available duty = shift length when known, else the sum of classified time.
+  let availableDutyMin: number
+  if (Number.isFinite(shiftStart) && Number.isFinite(shiftEnd) && (shiftEnd as number) > (shiftStart as number)) {
+    availableDutyMin = (Math.min(now, shiftEnd as number) - (shiftStart as number)) / MIN
+  } else {
+    availableDutyMin = bucket.productive + bucket.blocked + bucket.unassigned + bucket.break + bucket.training
+  }
+  const dutyForUtil = Math.max(0, availableDutyMin - bucket.break - bucket.training)
+  const unassignedMin = Math.max(bucket.unassigned, Math.max(0, dutyForUtil - bucket.productive - bucket.blocked))
+
+  const jobsCompleted = evs.filter((e) => e.event_type === 'complete_task').length
+
+  return {
+    productiveMin: round1(bucket.productive),
+    blockedMin: round1(bucket.blocked),
+    unassignedMin: round1(unassignedMin),
+    breakMin: round1(bucket.break),
+    jobsCompleted,
+  }
+}

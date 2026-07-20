@@ -448,6 +448,34 @@ export async function listEvents({ site, country, from, to, user_id } = {}) {
   }
 }
 
+// ── Technician skills (technician_skills, V207) ────────────────────────────────
+
+/**
+ * Load the skills each technician holds, for the smart-assignment engine.
+ * Returns { [user_id]: [skill_id] } (skill_id is a stable text key into the
+ * in-app SKILL_CATALOGUE; there is no separate skills lookup table, so the raw
+ * skill_id is returned and the engine expands it to a name). Country/org scoping
+ * is enforced server-side by RLS. `site` is accepted for signature symmetry but
+ * technician_skills carries no site column, so it is not applied here. []/{}
+ * degrades when the table is missing.
+ * @param {{ site?:string }} [opts]
+ * @returns {Promise<Object>} { [user_id]: string[] }
+ */
+export async function listTechnicianSkills({ site } = {}) { // eslint-disable-line no-unused-vars
+  try {
+    const rows = unwrap(await supabase.from('technician_skills').select('user_id,skill_id')) || []
+    const out = {}
+    for (const r of rows) {
+      if (!r?.user_id || !r?.skill_id) continue
+      ;(out[r.user_id] = out[r.user_id] || []).push(r.skill_id)
+    }
+    return out
+  } catch (err) {
+    if (isMissingRelation(err)) return {}
+    throw err
+  }
+}
+
 // ── Attendance (workshop_attendance) ───────────────────────────────────────────
 
 /** Check a technician in (records a workshop_attendance row for today). */

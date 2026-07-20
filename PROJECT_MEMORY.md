@@ -68,6 +68,36 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
     dept/action/priority table). Engine tests 13 -> 22.
   - Migrations now through **V294**; next free **V295**. Remaining nice-to-haves: plate_number on work_orders
     (board shows asset only); mobile does not read the TV board (web-only, by design).
+- **Phase 3 SHIPPED (V295, 4-agent batch, 2026-07-20):**
+  - **Productivity Analytics** `src/pages/WorkshopAnalytics.jsx` (route `/workshop-analytics`, nav "Workshop
+    Analytics", TrendingUp) + pure `src/lib/workshopAnalytics.js` (REUSES rollupTechnician/delayBreakdown over a
+    date range: dailyTrend, technicianLeaderboard, delayCostTrend, firstTimeFixRate [heuristic: a completed job
+    with no later report_problem/resume/start on that job_id = first-time fix; null when none], avgTaskDuration,
+    targetVsActual, summary — honest null/empty) + service `src/lib/api/workshopAnalytics.js` loadWorkshopHistory.
+    Tests (8).
+  - **Job tasks + smart assignment + foreman drawer** (WorkshopLive.jsx): pure `src/lib/workshopTasks.js`
+    (minutesByTask/taskRollup/jobTaskSummary) + `src/lib/workshopAssign.js` (recommendTechnicians scored 0..100:
+    skill 40 [neutral 20 when no skill data — never a false high] + availability 30 + workload 20 + site 10,
+    excludes off/absent). Service += `listTechnicianSkills`. Dashboard: job-card task expander + Split-into-tasks
+    modal + SmartAssignModal (top-3 suggested + reasons) + TechDrawer (Mark unavailable = real pause_job/support
+    event so lost time is honestly counted; Escalate = event + foreman_confirmed; Call = tel: via safeHref;
+    Send notification = recorded as an activity note, UI says push is NOT wired; workload-by-skill summary).
+    Tests workshopTasks(7)+workshopAssign(6).
+  - **Mobile advanced** (`mobile/app/(app)/workshop.tsx` + workshopApi.ts + workshopLive.ts): task-chip picker
+    (event carries task_id when a job has wo_tasks), "My productivity today" card (myProductivityToday mirror),
+    photo on Report Problem/Request Parts (resize/compress via prepareForUpload -> tp-storage:// ref folded into
+    the event `note` — tech_activity_events has NO photos column, verified; offline photo that cannot upload is
+    dropped, event still records). i18n en+ar. tsc 0.
+  - **Admin config** (V295 `workshop_config` table, key/value jsonb, org-isolated RESTRICTIVE + app_is_active
+    select + app_is_elevated write; RLS live-tested): service `src/lib/api/workshopConfig.js` (loadWorkshopConfig
+    merges DB over WORKSHOP_CONFIG_DEFAULTS = engine DEFAULT_THRESHOLDS + targetUtilization 0.75 + labourRate 120
+    + shiftDefault 08:00-17:00; clamps; never throws) + page `src/pages/WorkshopSettings.jsx` (route
+    `/workshop-settings`, nav "Workshop Settings", SlidersHorizontal; Admin writes, Mgr/Dir view). The dashboard
+    now loads config and threads `cfg.thresholds` -> deriveAlerts and `cfg.labourRate` -> delayBreakdown (both
+    fall back to engine defaults when unset). Tests (8).
+  - Migrations now through **V295**; next free **V296**. Workshop nav group now: Live Control, Absence &
+    Attendance, Workshop Analytics, Workshop Settings (+ existing Work Orders / Workshop Management / PM /
+    Technician Scorecard). All workshop tests green (88 across 8 files); mobile tsc clean.
 
 ## Supabase dashboard CSV import now VISIBLE (V290, 2026-07-20) — org auto-stamp
 - User wanted the EASIEST reliable bulk-load: Supabase Table Editor "Import data from CSV" (no app screens,

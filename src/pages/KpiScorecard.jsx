@@ -11,6 +11,7 @@ import {
   computeMonthlyKpiActuals, sum,
 } from '../lib/analyticsEngine'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
+import EmailPdfButton from '../components/EmailPdfButton'
 import { toUserMessage } from '../lib/safeError'
 import { formatCurrency as _fmtCurrencyBase } from '../lib/formatters'
 import {
@@ -398,6 +399,15 @@ export default function KpiScorecard() {
           >
             <FileText size={14} /> {t('kpiscorecard.actions.pdf')}
           </button>
+          <EmailPdfButton
+            className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-1.5"
+            getPdf={async () => ({
+              base64: await exportToPdf(actuals, KPI_COLS, 'KPI Scorecard - Monthly Actuals', 'TyrePulse_KpiScorecard', 'landscape', '', { returnBase64: true }),
+              filename: 'TyrePulse_KpiScorecard.pdf',
+              subject: 'KPI Scorecard - Monthly Actuals',
+              bodyHtml: '<p>Attached is the KPI Scorecard (monthly actuals).</p>',
+            })}
+          />
           {!editing
             ? <button onClick={() => setEditing(true)} className="btn-secondary text-sm">{t('kpiscorecard.actions.editTargets')}</button>
             : (

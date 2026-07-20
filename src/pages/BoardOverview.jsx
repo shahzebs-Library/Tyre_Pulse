@@ -34,6 +34,7 @@ import { COST_MODES, pickCost, pickMonthly, splitTotals, costModeLabel } from '.
 import { loadCostSplit } from '../lib/api/costSummary'
 import { stylize, ACCENTS } from '../lib/reportColors'
 import { reportFileName, reportDateLabel } from '../lib/exportUtils'
+import EmailPdfButton from '../components/EmailPdfButton'
 import { toUserMessage } from '../lib/safeError'
 
 ChartJS.register(
@@ -184,13 +185,13 @@ export default function BoardOverview() {
     }
   }, [cost, costMode])
 
-  async function exportPdf() {
-    if (!data) return
-    setExporting(true)
-    try {
-      const { captureChartOnPaper } = await import('../lib/chartCapture')
-      const { default: jsPDF } = await import('jspdf')
-      const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
+  // Build the Board Overview PDF doc. Shared by Download + Email so the emailed
+  // report is identical to the downloaded one. Returns { doc, company } or null.
+  async function buildBoardDoc() {
+    if (!data) return null
+    const { captureChartOnPaper } = await import('../lib/chartCapture')
+    const { default: jsPDF } = await import('jspdf')
+    const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
       const W = doc.internal.pageSize.getWidth()
       const M = 12
       const company = appSettings?.company_name || 'TyrePulse'
@@ -236,7 +237,15 @@ export default function BoardOverview() {
         doc.addImage(img, 'PNG', x, yy, cw, ch)
         placed += 1
       }
-      doc.save(`${reportFileName(company, 'Board Overview', reportDateLabel())}.pdf`)
+      return { doc, company }
+  }
+
+  async function exportPdf() {
+    if (!data) return
+    setExporting(true)
+    try {
+      const built = await buildBoardDoc()
+      if (built) built.doc.save(`${reportFileName(built.company, 'Board Overview', reportDateLabel())}.pdf`)
     } catch (e) {
       setError(toUserMessage(e, 'Export failed. Please try again.'))
     } finally {
@@ -274,6 +283,20 @@ export default function BoardOverview() {
           <button onClick={exportPdf} disabled={exporting || !hasAny} className="btn-primary text-sm px-3 py-1.5 inline-flex items-center gap-1.5 disabled:opacity-50">
             <Download size={14} /> {exporting ? 'Preparing...' : 'Export PDF'}
           </button>
+          <EmailPdfButton
+            disabled={!hasAny}
+            className="btn-secondary text-sm px-3 py-1.5 inline-flex items-center gap-1.5 disabled:opacity-50"
+            getPdf={async () => {
+              const built = await buildBoardDoc()
+              if (!built) throw new Error('No data to send.')
+              return {
+                base64: built.doc.output('datauristring').split(',')[1],
+                filename: `${reportFileName(built.company, 'Board Overview', reportDateLabel())}.pdf`,
+                subject: `${built.company} - Board Overview`,
+                bodyHtml: `<p>Attached is the ${built.company} Board Overview report.</p>`,
+              }
+            }}
+          />
         </div>
       </div>
 

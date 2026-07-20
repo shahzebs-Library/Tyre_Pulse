@@ -31,6 +31,7 @@ import { formatCurrencyCompact } from '../lib/formatters'
 import { listAllAccidentsForPage } from '../lib/api/accidents'
 import { analyzeClaims, isClosed, isDelayed } from '../lib/claimsAnalytics'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
+import EmailPdfButton from '../components/EmailPdfButton'
 import { toUserMessage } from '../lib/safeError'
 
 ChartJS.register(
@@ -278,6 +279,20 @@ export default function ClaimsSummary() {
           <div className="flex items-center gap-2">
             <button onClick={exportExcel} disabled={empty} className="btn-secondary text-sm inline-flex items-center gap-1.5 disabled:opacity-50"><FileSpreadsheet size={14} /> Excel</button>
             <button onClick={exportPdf} disabled={empty} className="btn-secondary text-sm inline-flex items-center gap-1.5 disabled:opacity-50"><FileText size={14} /> PDF</button>
+            <EmailPdfButton
+              disabled={empty}
+              label="Email PDF"
+              getPdf={async () => ({
+                base64: await exportToPdf(
+                  exportRows, EXPORT_KEYS.map((k, i) => ({ key: k, header: EXPORT_HEADERS[i] })),
+                  'Insurance Claims Summary', `ClaimsSummary_${stamp()}`, 'landscape',
+                  appSettings?.company_name || '', { currency: ccy, returnBase64: true },
+                ),
+                filename: `ClaimsSummary_${stamp()}.pdf`,
+                subject: 'Insurance Claims Summary',
+                bodyHtml: `<p>Attached is the Insurance Claims Summary for ${appSettings?.company_name || 'your fleet'} (scope: ${scope}).</p>`,
+              })}
+            />
           </div>
         }
       />

@@ -188,6 +188,8 @@ const NAV_GROUPS = [
       { to: '/work-orders',     label: 'Work Orders',        icon: WorkOrderIc },
       { to: '/workshop-live',   label: 'Live Control',       icon: Activity, roles: ['Admin', 'Manager', 'Director'] },
       { to: '/workshop-absence', label: 'Absence & Attendance', icon: CalendarCheck2, roles: ['Admin', 'Manager', 'Director'] },
+      { to: '/workshop-analytics', label: 'Workshop Analytics', icon: TrendingUp, roles: ['Admin', 'Manager', 'Director'] },
+      { to: '/workshop-settings', label: 'Workshop Settings', icon: SlidersHorizontal, roles: ['Admin', 'Manager', 'Director'] },
       { to: '/gate-pass',       label: 'Gate Pass',          icon: GatePassIc },
       { to: '/workshop',        label: 'Workshop Management', icon: WorkshopIc, adminOnly: A },
       { to: '/technician-scorecard', label: 'Technician Scorecard', icon: Award, adminOnly: A },

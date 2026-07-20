@@ -1449,7 +1449,19 @@
         "awaiting_inspection": "بانتظار الفحص",
         "off_duty": "خارج الخدمة",
         "absent": "غائب"
-      }
+      },
+      "myProductivity": "يومي حتى الآن",
+      "prodProductive": "منتج",
+      "prodBlocked": "متوقف",
+      "prodUnassigned": "غير مخصص",
+      "prodDone": "مكتمل",
+      "tasksLabel": "المهام",
+      "taskUntitled": "مهمة",
+      "taskHint": "اختر مهمة قبل البدء أو الإكمال.",
+      "selectTaskTitle": "اختر مهمة",
+      "selectTaskMsg": "اختر المهمة التي تعمل عليها أولا.",
+      "photoLabel": "صورة",
+      "addPhoto": "إضافة صورة"
     }
   },
   "checklists": {

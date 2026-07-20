@@ -20,21 +20,26 @@ import { Link } from 'react-router-dom'
 import {
   Activity, RefreshCw, Users, Wrench, Clock, AlertTriangle, Package, ShieldAlert,
   Coffee, UserX, X, Gauge, Timer, TrendingUp, CheckCircle2, Car, UserCheck,
-  Bell, User, Zap, ExternalLink,
+  Bell, User, Zap, ExternalLink, ListChecks, Plus, ChevronDown, ChevronUp,
+  Phone, Send, GraduationCap, PauseCircle, Sparkles, Settings2, Layers,
+  ClipboardList,
 } from 'lucide-react'
 
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import * as workshop from '../lib/api/workshopLive'
+import { loadWorkshopConfig } from '../lib/api/workshopConfig'
 import {
   buildBoard, computeKpis, deriveAlerts, delayBreakdown,
   STATUS, STATUS_META, statusColor, TONE_COLOR,
 } from '../lib/workshopLive'
+import { taskRollup, jobTaskSummary, TASK_STATUS, TASK_STATUS_LABEL } from '../lib/workshopTasks'
+import { recommendTechnicians } from '../lib/workshopAssign'
 import EChart from '../components/charts/EChart'
 import PageHeader from '../components/ui/PageHeader'
 import WorkshopTvShareButton from '../components/workshop/WorkshopTvShareButton'
 import { colorAt, withAlpha } from '../lib/reportColors'
-import { safeImageSrc } from '../lib/safeUrl'
+import { safeImageSrc, safeHref } from '../lib/safeUrl'
 import { toUserMessage } from '../lib/safeError'
 import {
   normalizeWoStatus, woKanbanColumn, WO_STATUSES,
@@ -92,6 +97,12 @@ const PRIORITY_TONE = {
 }
 
 const ALERT_TONE = { critical: TONE_COLOR.red, warning: TONE_COLOR.amber, info: TONE_COLOR.blue }
+
+// Task status -> colour (mirrors the engine TASK_STATUS vocabulary).
+const TASK_TONE = {
+  pending: TONE_COLOR.grey, in_progress: TONE_COLOR.blue, blocked: TONE_COLOR.amber,
+  done: TONE_COLOR.green, qc: TONE_COLOR.purple,
+}
 
 /** Column a job belongs to (overdue derived from target_completion). */
 function jobColumnKey(job, now) {
@@ -169,7 +180,7 @@ function KpiCard({ def, active, onClick }) {
 
 // ── Technician card ─────────────────────────────────────────────────────────
 
-function TechCard({ tech, events, jobs, techById, busy, onAssign, onReassign, onConfirm, highlight }) {
+function TechCard({ tech, events, jobs, techById, busy, onAssign, onReassign, onConfirm, onOpenDrawer, highlight }) {
   const [assignTo, setAssignTo] = useState('')
   const band = statusColor(tech.status)
   const openForAssign = jobs // pre-filtered open jobs
@@ -218,6 +229,16 @@ function TechCard({ tech, events, jobs, techById, busy, onAssign, onReassign, on
             {[tech.employeeId, tech.trade, tech.shift].filter(Boolean).join(' | ') || 'No shift assigned'}
           </div>
         </div>
+        <button
+          type="button"
+          onClick={() => onOpenDrawer(tech)}
+          className="shrink-0 rounded-lg p-1.5 border text-muted hover:text-white"
+          style={{ background: 'var(--surface-2)', borderColor: 'var(--border-dim)' }}
+          title="Foreman actions"
+          aria-label={`Foreman actions for ${tech.name}`}
+        >
+          <Settings2 className="w-4 h-4" />
+        </button>
       </div>
 
       {/* Current job */}
@@ -304,7 +325,10 @@ function TimeCell({ label, value, color }) {
 
 // ── Job card (kanban) ─────────────────────────────────────────────────────────
 
-function JobCard({ job, now, technicians, techById, busy, onAssign, onReassign, onStatus, onPriority, onVor, onComplete, highlight }) {
+function JobCard({
+  job, now, technicians, techById, busy, onAssign, onReassign, onStatus, onPriority, onVor, onComplete, highlight,
+  tasks, taskSummary, expanded, onToggleTasks, onManageTasks, onSmartAssign, onSetTaskStatus,
+}) {
   const canonicalStatus = normalizeWoStatus(job.status)
   const tgt = toTs(job.target_completion)
   const overdue = canonicalStatus !== 'Completed' && canonicalStatus !== 'Cancelled' && Number.isFinite(tgt) && tgt < now
@@ -312,6 +336,7 @@ function JobCard({ job, now, technicians, techById, busy, onAssign, onReassign, 
   const prioColor = PRIORITY_TONE[prio] || TONE_COLOR.grey
   const ownerName = job.assigned_owner_id ? (techById[job.assigned_owner_id]?.name || job.technician_name || null) : job.technician_name || null
   const isQc = canonicalStatus === 'Quality Inspection'
+  const hasTasks = (taskSummary?.total || 0) > 0
 
   return (
     <div
@@ -328,11 +353,22 @@ function JobCard({ job, now, technicians, techById, busy, onAssign, onReassign, 
           <div className="font-semibold text-white text-sm truncate">{job.work_order_no || `WO ${job.id}`}</div>
           <div className="text-[11px] text-muted truncate">{job.asset_no || 'No asset'}{job.plate_number ? ` | ${job.plate_number}` : ''}</div>
         </div>
-        {job.priority && (
-          <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded shrink-0" style={{ background: withAlpha(prioColor, 0.16), color: prioColor }}>
-            {job.priority}
-          </span>
-        )}
+        <div className="flex items-center gap-1.5 shrink-0">
+          {hasTasks && (
+            <span
+              className="text-[10px] font-semibold px-1.5 py-0.5 rounded inline-flex items-center gap-1"
+              style={{ background: withAlpha(TONE_COLOR.blue, 0.16), color: TONE_COLOR.blue }}
+              title={`${taskSummary.done} of ${taskSummary.total} tasks done`}
+            >
+              <ListChecks className="w-3 h-3" />{taskSummary.done}/{taskSummary.total}
+            </span>
+          )}
+          {job.priority && (
+            <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded" style={{ background: withAlpha(prioColor, 0.16), color: prioColor }}>
+              {job.priority}
+            </span>
+          )}
+        </div>
       </div>
 
       <div className="flex items-center gap-2 text-[11px] text-muted flex-wrap">
@@ -408,6 +444,84 @@ function JobCard({ job, now, technicians, techById, busy, onAssign, onReassign, 
           {job.vor ? 'Clear VOR' : 'Set VOR'}
         </button>
       </div>
+
+      {hasTasks && (
+        <div className="h-1.5 rounded-full overflow-hidden" style={{ background: 'var(--surface-2)' }}>
+          <div className="h-full rounded-full" style={{ width: `${taskSummary.pct}%`, background: TONE_COLOR.green }} />
+        </div>
+      )}
+
+      <div className="flex items-center gap-1.5 flex-wrap">
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => onSmartAssign(job)}
+          className="text-[11px] rounded-lg px-2 py-1 border font-medium inline-flex items-center gap-1 disabled:opacity-40"
+          style={{ background: withAlpha(TONE_COLOR.green, 0.12), borderColor: withAlpha(TONE_COLOR.green, 0.4), color: TONE_COLOR.green }}
+          title="Suggest the best technician by skill, availability and workload"
+        >
+          <Sparkles className="w-3 h-3" /> Smart assign
+        </button>
+        <button
+          type="button"
+          onClick={() => onToggleTasks(job.id)}
+          className="text-[11px] rounded-lg px-2 py-1 border font-medium inline-flex items-center gap-1"
+          style={{ background: 'var(--surface-2)', borderColor: 'var(--border-dim)', color: 'var(--panel-ink)' }}
+          aria-expanded={expanded}
+        >
+          <ListChecks className="w-3 h-3" /> Tasks{hasTasks ? ` (${taskSummary.total})` : ''}
+          {expanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+        </button>
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => onManageTasks(job)}
+          className="text-[11px] rounded-lg px-2 py-1 border font-medium inline-flex items-center gap-1 disabled:opacity-40"
+          style={{ background: 'var(--surface-2)', borderColor: 'var(--border-dim)', color: 'var(--panel-ink)' }}
+          title="Split this job into tasks"
+        >
+          <Plus className="w-3 h-3" /> Split
+        </button>
+      </div>
+
+      {expanded && (
+        <div className="rounded-lg p-2 flex flex-col gap-1.5" style={{ background: 'var(--surface-2)' }}>
+          {(!tasks || tasks.length === 0) ? (
+            <div className="text-[11px] text-muted text-center py-2">
+              No tasks yet. Use Split to break this job into tasks.
+            </div>
+          ) : tasks.map((tk) => {
+            const tone = TASK_TONE[tk.status] || TONE_COLOR.grey
+            const assigneeName = tk.assignee ? (techById[tk.assignee]?.name || 'Assigned') : null
+            return (
+              <div key={tk.id} className="rounded-lg px-2 py-1.5 border" style={{ background: 'var(--surface-1)', borderColor: 'var(--border-dim)' }}>
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[11px] text-white truncate flex-1">
+                    {tk.title}
+                    {tk.skill ? <span className="text-muted"> · {tk.skill}</span> : null}
+                  </span>
+                  <select
+                    aria-label={`Set status for ${tk.title}`}
+                    disabled={busy}
+                    value={tk.status}
+                    onChange={(e) => onSetTaskStatus(tk.id, e.target.value, job.id)}
+                    className="text-[10px] rounded px-1 py-0.5 border shrink-0"
+                    style={{ background: 'var(--surface-2)', borderColor: withAlpha(tone, 0.4), color: tone }}
+                  >
+                    {TASK_STATUS.map((s) => <option key={s} value={s}>{TASK_STATUS_LABEL[s]}</option>)}
+                  </select>
+                </div>
+                <div className="flex items-center gap-2 text-[10px] text-muted mt-0.5">
+                  <span className="tabular-nums">{fmtMins(tk.minutesSpent)} spent</span>
+                  {tk.est_minutes != null && <span className="tabular-nums">/ {fmtMins(tk.est_minutes)} est</span>}
+                  {tk.overBudget && <span style={{ color: TONE_COLOR.red }}>over budget</span>}
+                  {assigneeName && <span className="truncate"><User className="w-2.5 h-2.5 inline mr-0.5" />{assigneeName}</span>}
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
 
       <div className="flex items-center justify-between gap-2">
         {isQc ? (
@@ -552,6 +666,305 @@ function AlertsRail({ alerts, onFocus }) {
   )
 }
 
+// ── Modal shell ────────────────────────────────────────────────────────────
+// Fixed overlay (NOT inside a .card, which clips overflow) so pickers are never
+// hidden. Mobile-friendly: full-width sheet on small screens, centred on large.
+
+function ModalShell({ title, icon: Icon, onClose, children, footer }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4" style={{ background: 'rgba(0,0,0,0.6)' }} onClick={onClose}>
+      <div
+        className="w-full sm:max-w-lg max-h-[90vh] rounded-t-2xl sm:rounded-2xl border flex flex-col"
+        style={{ background: 'var(--surface-1)', borderColor: 'var(--border-dim)' }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between gap-2 p-4 border-b" style={{ borderColor: 'var(--border-dim)' }}>
+          <h3 className="text-sm font-semibold text-white flex items-center gap-2">
+            {Icon && <Icon className="w-4 h-4" />} {title}
+          </h3>
+          <button type="button" onClick={onClose} className="text-muted hover:text-white" aria-label="Close">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+        <div className="p-4 overflow-y-auto flex-1">{children}</div>
+        {footer && <div className="p-3 border-t" style={{ borderColor: 'var(--border-dim)' }}>{footer}</div>}
+      </div>
+    </div>
+  )
+}
+
+// ── Smart assign modal (job -> ranked technicians) ──────────────────────────
+
+function SmartAssignModal({ job, board, technicians, skillsByUser, assignments, busy, onClose, onAssign, onReassign }) {
+  const recs = useMemo(
+    () => recommendTechnicians(job, { technicians, skillsByUser, board, assignments }),
+    [job, technicians, skillsByUser, board, assignments],
+  )
+  const top = recs.slice(0, 3)
+  const owner = job.assigned_owner_id || null
+
+  const pick = (userId) => {
+    if (owner && String(owner) !== String(userId)) onReassign(job.id, owner, userId)
+    else onAssign(job.id, userId)
+    onClose()
+  }
+
+  const Row = ({ r, suggested }) => {
+    const c = r.score >= 70 ? TONE_COLOR.green : r.score >= 45 ? TONE_COLOR.amber : TONE_COLOR.grey
+    return (
+      <div className="rounded-xl p-3 border flex items-start gap-3" style={{ background: 'var(--surface-2)', borderColor: suggested ? withAlpha(TONE_COLOR.green, 0.4) : 'var(--border-dim)' }}>
+        <div className="flex flex-col items-center shrink-0">
+          <div className="w-11 h-11 rounded-full flex items-center justify-center text-xs font-bold" style={{ background: withAlpha(c, 0.18), color: c }}>
+            {r.score}
+          </div>
+          <span className="text-[9px] text-muted mt-0.5">/ 100</span>
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-semibold text-white truncate">{r.name}</span>
+            {suggested && <Sparkles className="w-3 h-3" style={{ color: TONE_COLOR.green }} />}
+            {r.available && <span className="text-[10px] px-1.5 py-0.5 rounded" style={{ background: withAlpha(TONE_COLOR.green, 0.16), color: TONE_COLOR.green }}>Available</span>}
+          </div>
+          <div className="text-[11px] text-muted mt-1 flex flex-wrap gap-x-2 gap-y-0.5">
+            {r.reasons.slice(0, 4).map((rn, i) => <span key={i}>· {rn}</span>)}
+          </div>
+        </div>
+        <button type="button" disabled={busy} onClick={() => pick(r.userId)} className="btn-primary text-[11px] px-3 py-1.5 shrink-0 disabled:opacity-40">
+          Assign
+        </button>
+      </div>
+    )
+  }
+
+  return (
+    <ModalShell title={`Smart assign · ${job.work_order_no || 'Job'}`} icon={Sparkles} onClose={onClose}>
+      <p className="text-[11px] text-muted mb-3">
+        Ranked by skill match, availability, workload and site. {job.work_type ? `Job type: ${job.work_type}.` : 'No job type set - skill match is neutral.'}
+      </p>
+      {recs.length === 0 ? (
+        <div className="text-sm text-muted text-center py-6">No eligible technicians (all off duty or absent).</div>
+      ) : (
+        <div className="flex flex-col gap-3">
+          {top.length > 0 && (
+            <div>
+              <div className="text-[11px] font-semibold uppercase tracking-wide text-muted mb-2">Suggested</div>
+              <div className="flex flex-col gap-2">{top.map((r) => <Row key={r.userId} r={r} suggested />)}</div>
+            </div>
+          )}
+          {recs.length > top.length && (
+            <div>
+              <div className="text-[11px] font-semibold uppercase tracking-wide text-muted mb-2">All technicians</div>
+              <div className="flex flex-col gap-2">{recs.slice(3).map((r) => <Row key={r.userId} r={r} />)}</div>
+            </div>
+          )}
+        </div>
+      )}
+    </ModalShell>
+  )
+}
+
+// ── Task management modal (split a job into tasks) ──────────────────────────
+
+function TaskModal({ job, tasks, technicians, busy, onClose, onCreate, onUpdate, onSetStatus }) {
+  const [title, setTitle] = useState('')
+  const [skill, setSkill] = useState('')
+  const [est, setEst] = useState('')
+
+  const add = () => {
+    if (!title.trim()) return
+    onCreate(job.id, { title: title.trim(), skill: skill.trim() || null, est_minutes: est === '' ? null : Number(est) })
+    setTitle(''); setSkill(''); setEst('')
+  }
+
+  return (
+    <ModalShell title={`Tasks · ${job.work_order_no || 'Job'}`} icon={ClipboardList} onClose={onClose}>
+      <div className="flex flex-col gap-2 mb-4">
+        <input
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          placeholder="Task title (e.g. Remove and inspect steer tyres)"
+          className="text-sm rounded-lg px-3 py-2 border w-full"
+          style={{ background: 'var(--surface-2)', borderColor: 'var(--border-dim)', color: 'var(--panel-ink)' }}
+        />
+        <div className="flex gap-2">
+          <input
+            value={skill}
+            onChange={(e) => setSkill(e.target.value)}
+            placeholder="Skill (optional)"
+            className="text-sm rounded-lg px-3 py-2 border flex-1 min-w-0"
+            style={{ background: 'var(--surface-2)', borderColor: 'var(--border-dim)', color: 'var(--panel-ink)' }}
+          />
+          <input
+            value={est}
+            onChange={(e) => setEst(e.target.value.replace(/[^0-9]/g, ''))}
+            placeholder="Est. min"
+            inputMode="numeric"
+            className="text-sm rounded-lg px-3 py-2 border w-24"
+            style={{ background: 'var(--surface-2)', borderColor: 'var(--border-dim)', color: 'var(--panel-ink)' }}
+          />
+          <button type="button" disabled={busy || !title.trim()} onClick={add} className="btn-primary text-sm px-3 py-2 shrink-0 disabled:opacity-40">
+            <Plus className="w-4 h-4 inline" /> Add
+          </button>
+        </div>
+      </div>
+
+      {(!tasks || tasks.length === 0) ? (
+        <div className="text-sm text-muted text-center py-4">No tasks yet. Add the first one above.</div>
+      ) : (
+        <div className="flex flex-col gap-2">
+          {tasks.map((tk) => {
+            const tone = TASK_TONE[tk.status] || TONE_COLOR.grey
+            return (
+              <div key={tk.id} className="rounded-lg p-2.5 border" style={{ background: 'var(--surface-2)', borderColor: 'var(--border-dim)' }}>
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-sm text-white truncate flex-1">{tk.title}</span>
+                  <span className="text-[10px] tabular-nums text-muted shrink-0">{fmtMins(tk.minutesSpent)}{tk.est_minutes != null ? ` / ${fmtMins(tk.est_minutes)}` : ''}</span>
+                </div>
+                <div className="flex items-center gap-2 mt-2">
+                  <select
+                    aria-label="Task status"
+                    disabled={busy}
+                    value={tk.status}
+                    onChange={(e) => onSetStatus(tk.id, e.target.value)}
+                    className="text-[11px] rounded-lg px-2 py-1 border"
+                    style={{ background: 'var(--surface-1)', borderColor: withAlpha(tone, 0.4), color: tone }}
+                  >
+                    {TASK_STATUS.map((s) => <option key={s} value={s}>{TASK_STATUS_LABEL[s]}</option>)}
+                  </select>
+                  <select
+                    aria-label="Task assignee"
+                    disabled={busy}
+                    value={tk.assignee || ''}
+                    onChange={(e) => onUpdate(tk.id, { assignee_user_id: e.target.value || null })}
+                    className="text-[11px] rounded-lg px-2 py-1 border flex-1 min-w-0 truncate"
+                    style={{ background: 'var(--surface-1)', borderColor: 'var(--border-dim)', color: 'var(--panel-ink)' }}
+                  >
+                    <option value="">Unassigned</option>
+                    {technicians.map((t) => <option key={t.userId} value={t.userId}>{t.name}</option>)}
+                  </select>
+                  {tk.overBudget && <span className="text-[10px] shrink-0" style={{ color: TONE_COLOR.red }}>over</span>}
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </ModalShell>
+  )
+}
+
+// ── Foreman action drawer (per technician) ──────────────────────────────────
+
+function TechDrawer({ tech, meta, assignments, skillsByUser, busy, onClose, onEvent, onNotify, onOpenJob }) {
+  const [note, setNote] = useState('')
+  const activeJobs = useMemo(
+    () => (assignments || []).filter((a) => a.active !== false && String(a.user_id) === String(tech.userId)),
+    [assignments, tech.userId],
+  )
+  const skills = skillsByUser?.[tech.userId] || []
+  const phone = meta?.phone || null
+
+  const Action = ({ icon: Icon, label, tone, onClick, disabled, title }) => (
+    <button
+      type="button"
+      disabled={busy || disabled}
+      onClick={onClick}
+      title={title}
+      className="w-full text-left rounded-lg px-3 py-2.5 border flex items-center gap-2.5 text-sm font-medium disabled:opacity-40"
+      style={{ background: 'var(--surface-2)', borderColor: withAlpha(tone || TONE_COLOR.grey, 0.35), color: 'var(--panel-ink)' }}
+    >
+      <Icon className="w-4 h-4 shrink-0" style={{ color: tone || 'var(--text-muted)' }} /> {label}
+    </button>
+  )
+
+  return (
+    <ModalShell title={`Foreman actions · ${tech.name}`} icon={Settings2} onClose={onClose}>
+      <div className="flex items-center gap-2 mb-3">
+        <StatusPill status={tech.status} />
+        {tech.job && <span className="text-[11px] text-muted truncate">on {tech.job.no || 'a job'}</span>}
+      </div>
+
+      <div className="flex flex-col gap-2">
+        <Action
+          icon={PauseCircle} label="Mark temporarily unavailable" tone={TONE_COLOR.amber}
+          title="Logs a support pause on the technician (counts as blocked time, shown in the delay panel)"
+          onClick={() => onEvent(tech.userId, { event_type: 'pause_job', reason_code: 'support', note: 'Marked unavailable by foreman', job_id: tech.currentJobId || null })}
+        />
+        <Action
+          icon={Package} label="Escalate parts" tone={TONE_COLOR.blue}
+          title="Records a parts request and foreman-confirms it"
+          onClick={() => onEvent(tech.userId, { event_type: 'request_parts', reason_code: 'parts', note: 'Parts escalated by foreman', job_id: tech.currentJobId || null, confirm: true })}
+        />
+        <Action
+          icon={ShieldAlert} label="Escalate approval" tone={TONE_COLOR.blue}
+          title="Records a waiting-for-approval event and foreman-confirms it"
+          onClick={() => onEvent(tech.userId, { event_type: 'waiting_approval', reason_code: 'approval', note: 'Approval escalated by foreman', job_id: tech.currentJobId || null, confirm: true })}
+        />
+        <Action
+          icon={GraduationCap} label="Send to training" tone={TONE_COLOR.purple}
+          title="Moves the technician to training (excluded from utilization)"
+          onClick={() => onEvent(tech.userId, { event_type: 'training', note: 'Assigned to training by foreman' })}
+        />
+        {phone ? (
+          <a
+            href={safeHref(`tel:${String(phone).replace(/[^+0-9]/g, '')}`) || undefined}
+            className="w-full text-left rounded-lg px-3 py-2.5 border flex items-center gap-2.5 text-sm font-medium"
+            style={{ background: 'var(--surface-2)', borderColor: withAlpha(TONE_COLOR.green, 0.35), color: 'var(--panel-ink)' }}
+          >
+            <Phone className="w-4 h-4 shrink-0" style={{ color: TONE_COLOR.green }} /> Call {phone}
+          </a>
+        ) : (
+          <div className="w-full rounded-lg px-3 py-2.5 border flex items-center gap-2.5 text-sm text-muted" style={{ background: 'var(--surface-2)', borderColor: 'var(--border-dim)' }}>
+            <Phone className="w-4 h-4 shrink-0" /> No phone number on file
+          </div>
+        )}
+        {tech.currentJobId && (
+          <Action icon={ExternalLink} label="Open current job" tone={TONE_COLOR.grey} onClick={() => onOpenJob(tech.currentJobId)} />
+        )}
+      </div>
+
+      {/* Send note to technician (records an activity annotation, not a push) */}
+      <div className="mt-4">
+        <label className="text-[11px] font-semibold text-white flex items-center gap-1.5 mb-1"><Send className="w-3.5 h-3.5" /> Send note to technician</label>
+        <div className="flex gap-2">
+          <input
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            placeholder="Message (logged to their activity feed)"
+            className="text-sm rounded-lg px-3 py-2 border flex-1 min-w-0"
+            style={{ background: 'var(--surface-2)', borderColor: 'var(--border-dim)', color: 'var(--panel-ink)' }}
+          />
+          <button
+            type="button"
+            disabled={busy || !note.trim()}
+            onClick={() => { onNotify(tech.userId, note.trim()); setNote('') }}
+            className="btn-primary text-sm px-3 py-2 shrink-0 disabled:opacity-40"
+          >
+            Send
+          </button>
+        </div>
+        <p className="text-[10px] text-muted mt-1">Recorded as a note on the technician's activity log (audit trail). Push delivery is not wired.</p>
+      </div>
+
+      {/* Workload by skill + shift */}
+      <div className="mt-4 rounded-lg p-3 border" style={{ background: 'var(--surface-2)', borderColor: 'var(--border-dim)' }}>
+        <div className="text-[11px] font-semibold text-white flex items-center gap-1.5 mb-2"><Layers className="w-3.5 h-3.5" /> Workload by skill and shift</div>
+        <div className="grid grid-cols-3 gap-2 text-center mb-2">
+          <div><div className="text-base font-bold text-white tabular-nums">{activeJobs.length}</div><div className="text-[10px] text-muted">Active jobs</div></div>
+          <div><div className="text-base font-bold text-white tabular-nums">{skills.length}</div><div className="text-[10px] text-muted">Skills</div></div>
+          <div><div className="text-base font-bold text-white tabular-nums">{tech.utilization == null ? 'N/A' : `${Math.round(tech.utilization * 100)}%`}</div><div className="text-[10px] text-muted">Utilization</div></div>
+        </div>
+        <div className="text-[11px] text-muted">Shift: <span className="text-white">{tech.shift || 'None assigned'}</span></div>
+        {skills.length > 0 && (
+          <div className="flex flex-wrap gap-1 mt-2">
+            {skills.map((s) => <span key={s} className="text-[10px] px-1.5 py-0.5 rounded" style={{ background: withAlpha(TONE_COLOR.blue, 0.14), color: TONE_COLOR.blue }}>{s}</span>)}
+          </div>
+        )}
+      </div>
+    </ModalShell>
+  )
+}
+
 // ── Loading skeleton ──────────────────────────────────────────────────────
 
 function Skeleton() {
@@ -572,6 +985,7 @@ function Skeleton() {
 export default function WorkshopLive() {
   const { profile } = useAuth()
   const [raw, setRaw] = useState(null)
+  const [cfg, setCfg] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [refreshing, setRefreshing] = useState(false)
@@ -582,6 +996,12 @@ export default function WorkshopLive() {
   const [nowTs, setNowTs] = useState(() => Date.now())
   const [highlightRef, setHighlightRef] = useState(null)
   const [updatedAt, setUpdatedAt] = useState(null)
+  const [skillsByUser, setSkillsByUser] = useState({})
+  const [tasksByJob, setTasksByJob] = useState({})     // { [jobId]: rawTask[] }
+  const [expandedJobs, setExpandedJobs] = useState({})  // { [jobId]: bool }
+  const [smartAssignJob, setSmartAssignJob] = useState(null)
+  const [taskModalJob, setTaskModalJob] = useState(null)
+  const [drawerTech, setDrawerTech] = useState(null)
 
   const reloadTimer = useRef(null)
   const flashTimer = useRef(null)
@@ -592,9 +1012,15 @@ export default function WorkshopLive() {
     if (silent) setRefreshing(true)
     else setLoading(true)
     try {
-      const data = await workshop.loadLiveBoard({})
+      const [data, skills, config] = await Promise.all([
+        workshop.loadLiveBoard({}),
+        workshop.listTechnicianSkills({}).catch(() => ({})),
+        loadWorkshopConfig().catch(() => null),
+      ])
       if (!mounted.current) return
       setRaw(data)
+      setSkillsByUser(skills || {})
+      if (config) setCfg(config)
       setError(null)
       setNowTs(Date.now())
       setUpdatedAt(new Date())
@@ -630,6 +1056,7 @@ export default function WorkshopLive() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'tech_activity_events' }, scheduleReload)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'work_orders' }, scheduleReload)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'wo_assignments' }, scheduleReload)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'wo_tasks' }, scheduleReload)
       .subscribe()
     return () => { supabase.removeChannel(channel) }
   }, [scheduleReload])
@@ -656,12 +1083,34 @@ export default function WorkshopLive() {
 
   const kpis = useMemo(() => computeKpis(board, raw?.jobs || [], { now: nowTs, todayStart }), [board, raw, nowTs, todayStart])
   const alerts = useMemo(
-    () => deriveAlerts(board, raw?.jobs || [], { now: nowTs, assignments: raw?.assignments || [], presentByUser: raw?.presentByUser || {} }),
-    [board, raw, nowTs],
+    () => deriveAlerts(board, raw?.jobs || [], { now: nowTs, assignments: raw?.assignments || [], presentByUser: raw?.presentByUser || {}, thresholds: cfg?.thresholds }),
+    [board, raw, nowTs, cfg],
   )
-  const delays = useMemo(() => delayBreakdown(board, { jobs: raw?.jobs || [] }), [board, raw])
+  const delays = useMemo(() => delayBreakdown(board, { jobs: raw?.jobs || [], labourRate: cfg?.labourRate }), [board, raw, cfg])
 
   const kpiDefs = useMemo(() => buildKpiDefs(kpis), [kpis])
+
+  // Flat event list (grouped by user in the load) so task time can be scoped by job.
+  const allEvents = useMemo(() => Object.values(raw?.eventsByUser || {}).flat(), [raw])
+  const eventsForJob = useCallback((jobId) => allEvents.filter((e) => String(e.job_id) === String(jobId)), [allEvents])
+
+  // Per-job task rollup + summary (from the cached raw tasks + this job's events).
+  const taskRollupByJob = useMemo(() => {
+    const out = {}
+    for (const [jobId, tks] of Object.entries(tasksByJob)) {
+      out[jobId] = taskRollup(tks, eventsForJob(jobId), { now: nowTs })
+    }
+    return out
+  }, [tasksByJob, eventsForJob, nowTs])
+
+  const taskSummaryByJob = useMemo(() => {
+    const out = {}
+    for (const [jobId, tks] of Object.entries(tasksByJob)) out[jobId] = jobTaskSummary(tks)
+    return out
+  }, [tasksByJob])
+
+  // Technician metadata (phone) from the raw roster, for the foreman drawer.
+  const techMetaById = useMemo(() => Object.fromEntries((raw?.technicians || []).map((t) => [t.id, t])), [raw])
 
   // Site options (client-side filter over the loaded board + jobs).
   const siteOptions = useMemo(() => {
@@ -733,6 +1182,56 @@ export default function WorkshopLive() {
   const onVor = (jobId, on) => mutate(workshop.setVor(jobId, on), on ? 'Marked Vehicle Off Road.' : 'Cleared Vehicle Off Road.')
   const onComplete = (jobId) => mutate(workshop.setJobStatus(jobId, 'Completed'), 'Job marked complete.')
   const onConfirm = (eventId) => mutate(workshop.confirmEvent(eventId), 'Task confirmed.')
+
+  // ── Tasks ──────────────────────────────────────────────────────────────────
+  const refreshTasks = useCallback(async (jobId) => {
+    try {
+      const rows = await workshop.listTasks(jobId)
+      if (mounted.current) setTasksByJob((cur) => ({ ...cur, [jobId]: rows }))
+    } catch {
+      // Non-fatal: leave the cached task list; the mutate() flash reports errors.
+    }
+  }, [])
+
+  const toggleTasks = useCallback((jobId) => {
+    setExpandedJobs((cur) => {
+      const next = { ...cur, [jobId]: !cur[jobId] }
+      if (next[jobId] && !tasksByJob[jobId]) refreshTasks(jobId)
+      return next
+    })
+  }, [tasksByJob, refreshTasks])
+
+  const openTaskModal = useCallback((job) => {
+    setTaskModalJob(job)
+    if (!tasksByJob[job.id]) refreshTasks(job.id)
+  }, [tasksByJob, refreshTasks])
+
+  const onCreateTask = (jobId, values) =>
+    mutate(workshop.createTask(jobId, values).then(() => refreshTasks(jobId)), 'Task added.')
+  const onUpdateTask = (jobId, taskId, patch) =>
+    mutate(workshop.updateTask(taskId, patch).then(() => refreshTasks(jobId)), 'Task updated.')
+  const onSetTaskStatus = (jobId, taskId, status) =>
+    mutate(workshop.setTaskStatus(taskId, status).then(() => refreshTasks(jobId)), 'Task status updated.')
+
+  // ── Foreman drawer events ────────────────────────────────────────────────────
+  const onForemanEvent = (userId, { event_type, reason_code, note, job_id, confirm }) => {
+    const label = {
+      pause_job: 'Technician marked unavailable.', request_parts: 'Parts escalated.',
+      waiting_approval: 'Approval escalated.', training: 'Technician sent to training.',
+    }[event_type] || 'Action recorded.'
+    const run = workshop.recordEvent({ user_id: userId, event_type, reason_code, note, job_id })
+      .then((row) => (confirm && row?.id ? workshop.confirmEvent(row.id) : row))
+    mutate(run, label)
+    setDrawerTech(null)
+  }
+
+  const onForemanNotify = (userId, message) =>
+    mutate(
+      workshop.recordEvent({ user_id: userId, event_type: 'report_problem', note: `Foreman note: ${message}` }),
+      'Note sent to technician.',
+    )
+
+  const openJobById = (jobId) => { setDrawerTech(null); focusRef(jobId) }
 
   const focusRef = (ref) => {
     setHighlightRef(ref)
@@ -863,6 +1362,7 @@ export default function WorkshopLive() {
                     onAssign={onAssign}
                     onReassign={onReassign}
                     onConfirm={onConfirm}
+                    onOpenDrawer={setDrawerTech}
                     highlight={highlightRef === tech.userId}
                   />
                 ))}
@@ -910,6 +1410,13 @@ export default function WorkshopLive() {
                             onPriority={onPriority}
                             onVor={onVor}
                             onComplete={onComplete}
+                            tasks={taskRollupByJob[job.id]}
+                            taskSummary={taskSummaryByJob[job.id]}
+                            expanded={!!expandedJobs[job.id]}
+                            onToggleTasks={toggleTasks}
+                            onManageTasks={openTaskModal}
+                            onSmartAssign={setSmartAssignJob}
+                            onSetTaskStatus={(taskId, status, jobId) => onSetTaskStatus(jobId, taskId, status)}
                             highlight={highlightRef === job.id}
                           />
                         ))}
@@ -930,6 +1437,47 @@ export default function WorkshopLive() {
           <AlertsRail alerts={alerts} onFocus={focusRef} />
         </aside>
       </div>
+
+      {smartAssignJob && (
+        <SmartAssignModal
+          job={smartAssignJob}
+          board={board}
+          technicians={board}
+          skillsByUser={skillsByUser}
+          assignments={raw?.assignments || []}
+          busy={busy}
+          onClose={() => setSmartAssignJob(null)}
+          onAssign={onAssign}
+          onReassign={onReassign}
+        />
+      )}
+
+      {taskModalJob && (
+        <TaskModal
+          job={taskModalJob}
+          tasks={taskRollupByJob[taskModalJob.id]}
+          technicians={board}
+          busy={busy}
+          onClose={() => setTaskModalJob(null)}
+          onCreate={onCreateTask}
+          onUpdate={(taskId, patch) => onUpdateTask(taskModalJob.id, taskId, patch)}
+          onSetStatus={(taskId, status) => onSetTaskStatus(taskModalJob.id, taskId, status)}
+        />
+      )}
+
+      {drawerTech && (
+        <TechDrawer
+          tech={drawerTech}
+          meta={techMetaById[drawerTech.userId]}
+          assignments={raw?.assignments || []}
+          skillsByUser={skillsByUser}
+          busy={busy}
+          onClose={() => setDrawerTech(null)}
+          onEvent={onForemanEvent}
+          onNotify={onForemanNotify}
+          onOpenJob={openJobById}
+        />
+      )}
     </div>
   )
 }

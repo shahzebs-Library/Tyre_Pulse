@@ -23,14 +23,16 @@ import { useTheme } from '../../contexts/ThemeContext'
 import { Theme, spacing, radius, typography, elevation, statusColor as themeStatus } from '../../lib/theme'
 import { toUserMessage } from '../../lib/safeError'
 import { Screen, Badge, Button, EmptyState, ErrorState, Loading } from '../../components/ui'
+import PhotoCapture from '../../components/PhotoCapture'
 import { captureInspectionLocation } from '../../lib/location'
 import {
   TECH_ACTIONS, TechAction, WorkshopStatus, statusFromEvents, statusLabel,
-  statusKind, isCheckedIn,
+  statusKind, isCheckedIn, myProductivityToday,
 } from '../../lib/workshopLive'
 import {
-  listMyJobs, listMyRecentEvents, recordWorkshopEvent, checkIn, checkOut,
-  WorkshopJob, WorkshopEvent,
+  listMyJobs, listMyRecentEvents, listMyEventsToday, listTasksForJob,
+  resolveWorkshopPhotos, recordWorkshopEvent, checkIn, checkOut,
+  WorkshopJob, WorkshopEvent, WorkshopTask,
 } from '../../lib/workshopApi'
 
 // Actions that collect an optional note before recording (a blocked reason or a
@@ -38,6 +40,28 @@ import {
 function needsNote(a: TechAction): boolean {
   if (a.event === 'report_problem' || a.event === 'request_assistance') return true
   return !!a.reason && a.reason !== 'break'
+}
+
+// Actions where a photo helps explain the situation. tech_activity_events has no
+// photos column, so an attached photo's storage ref is folded into the event
+// note ("Photos: <ref>") - honest, no invented column.
+function allowsPhoto(a: TechAction): boolean {
+  return a.event === 'report_problem' || a.event === 'request_parts'
+}
+
+// Actions that must reference a specific task when the job has been split into
+// tasks (the technician picks which step they are starting / completing).
+function requiresTask(a: TechAction): boolean {
+  return a.event === 'start_job' || a.event === 'complete_task'
+}
+
+// Compact minutes -> "45m" / "1h 20m".
+function fmtMins(m: number): string {
+  const mins = Math.max(0, Math.round(m || 0))
+  if (mins < 60) return `${mins}m`
+  const h = Math.floor(mins / 60)
+  const r = mins % 60
+  return r ? `${h}h ${r}m` : `${h}h`
 }
 
 // Priority -> semantic pill kind (job cards).
@@ -67,6 +91,7 @@ export default function WorkshopScreen() {
 
   const [jobs, setJobs] = useState<WorkshopJob[]>([])
   const [events, setEvents] = useState<WorkshopEvent[]>([])
+  const [todayEvents, setTodayEvents] = useState<WorkshopEvent[]>([])
   const [loading, setLoading] = useState(true)
   const [errored, setErrored] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
@@ -75,9 +100,18 @@ export default function WorkshopScreen() {
   const [busyKey, setBusyKey] = useState<string | null>(null)
   const [savedFlash, setSavedFlash] = useState<'synced' | 'pending' | null>(null)
 
-  // Note modal (blocked reason / problem / assistance).
+  // Tasks for the selected job (wo_tasks) + the picked task.
+  const [tasks, setTasks] = useState<WorkshopTask[]>([])
+  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null)
+
+  // A minute-resolution clock so the productivity card advances the running
+  // segment without a full reload.
+  const [nowTick, setNowTick] = useState<number>(() => Date.now())
+
+  // Note modal (blocked reason / problem / assistance) + optional attached photo.
   const [modalAction, setModalAction] = useState<TechAction | null>(null)
   const [note, setNote] = useState('')
+  const [problemPhotos, setProblemPhotos] = useState<string[]>([])
 
   // Best-effort GPS captured once on mount, reused for every event.
   const gpsRef = useRef<{ lat: number | null; lng: number | null }>({ lat: null, lng: null })
@@ -102,9 +136,12 @@ export default function WorkshopScreen() {
     if (!userId) { setLoading(false); return }
     setErrored(false)
     try {
-      const [j, e] = await Promise.all([listMyJobs(userId), listMyRecentEvents(userId)])
+      const [j, e, te] = await Promise.all([
+        listMyJobs(userId), listMyRecentEvents(userId), listMyEventsToday(userId),
+      ])
       setJobs(j)
       setEvents(e)
+      setTodayEvents(te)
       // Keep the current selection if still open, else pick the first job.
       setSelectedJobId((prev) => (prev && j.some((x) => x.id === prev)) ? prev : (j[0]?.id ?? null))
     } catch {
@@ -115,6 +152,24 @@ export default function WorkshopScreen() {
   }, [userId])
 
   useEffect(() => { if (allowed) { setLoading(true); load() } }, [allowed, load])
+
+  // Load the selected job's tasks (if any). A job with no tasks keeps the plain
+  // job-level flow. []-degrades if the table is absent.
+  useEffect(() => {
+    let cancelled = false
+    setSelectedTaskId(null)
+    if (!selectedJobId) { setTasks([]); return }
+    listTasksForJob(selectedJobId)
+      .then((t) => { if (!cancelled) setTasks(t) })
+      .catch(() => { if (!cancelled) setTasks([]) })
+    return () => { cancelled = true }
+  }, [selectedJobId])
+
+  // Advance the productivity clock once a minute.
+  useEffect(() => {
+    const h = setInterval(() => setNowTick(Date.now()), 60_000)
+    return () => clearInterval(h)
+  }, [])
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true)
@@ -139,8 +194,9 @@ export default function WorkshopScreen() {
     return statusFromEvents(jobEvents, { present: checkedIn })
   }, [events, selectedJob, checkedIn])
 
-  // Optimistically append a just-recorded event so the derived status updates
-  // instantly, then reconcile from the server on the next load/refresh.
+  // Optimistically append a just-recorded event so the derived status + the
+  // productivity card update instantly, then reconcile from the server on the
+  // next load/refresh.
   const appendLocal = useCallback((eventType: string, jobId: string | null, reason: string | null, noteText: string | null) => {
     const optimistic: WorkshopEvent = {
       id: `local_${Date.now()}`,
@@ -153,13 +209,21 @@ export default function WorkshopScreen() {
       at: new Date().toISOString(),
     }
     setEvents((prev) => [...prev, optimistic])
+    setTodayEvents((prev) => [...prev, optimistic])
   }, [userId, selectedJob])
+
+  // Compact "my productivity today" rollup from the technician's own events.
+  const productivity = useMemo(
+    () => myProductivityToday(todayEvents, { now: nowTick }),
+    [todayEvents, nowTick],
+  )
 
   const doRecord = useCallback(async (
     a: TechAction | { event: any; reason?: any },
     jobId: string | null,
     noteText: string | null,
     busyLabel: string,
+    photoRefs?: string[] | null,
   ) => {
     if (!userId) return
     setBusyKey(busyLabel)
@@ -169,9 +233,12 @@ export default function WorkshopScreen() {
         userId,
         eventType: a.event,
         jobId,
+        // A job-scoped event carries the picked task (when the job has tasks).
+        taskId: jobId ? selectedTaskId : null,
         assetNo: jobId ? (selectedJob?.asset_no ?? null) : null,
         reasonCode: reason,
         note: noteText,
+        photoRefs: photoRefs ?? null,
         site: selectedJob?.site ?? profile?.site ?? null,
         country: profile?.country ?? null,
         device: `mobile:${Platform.OS}`,
@@ -185,7 +252,7 @@ export default function WorkshopScreen() {
     } finally {
       setBusyKey(null)
     }
-  }, [userId, selectedJob, profile, appendLocal, tf])
+  }, [userId, selectedJob, selectedTaskId, profile, appendLocal, tf])
 
   // Shift check in / out (no job).
   const onCheckToggle = useCallback(async () => {
@@ -210,10 +277,18 @@ export default function WorkshopScreen() {
     }
   }, [userId, busyKey, checkedIn, profile, appendLocal, tf])
 
+  const closeModal = useCallback(() => { setModalAction(null); setNote(''); setProblemPhotos([]) }, [])
+
   const onActionPress = useCallback((a: TechAction) => {
     if (busyKey) return
     if (!selectedJob) { Alert.alert(tf('modules.workshop.selectJobTitle', 'Select a job'), tf('modules.workshop.selectJobMsg', 'Pick one of your jobs first.')); return }
     if (!checkedIn) { Alert.alert(tf('modules.workshop.checkInFirstTitle', 'Check in first'), tf('modules.workshop.checkInFirstMsg', 'Check in for your shift before recording work.')); return }
+
+    // When the job is split into tasks, Start / Complete must reference a task.
+    if (requiresTask(a) && tasks.length > 0 && !selectedTaskId) {
+      Alert.alert(tf('modules.workshop.selectTaskTitle', 'Select a task'), tf('modules.workshop.selectTaskMsg', 'Pick the task you are working on first.'))
+      return
+    }
 
     // A completion is significant -> confirm.
     if (a.confirm) {
@@ -228,20 +303,30 @@ export default function WorkshopScreen() {
       return
     }
 
-    // Blocked reasons / problem / assistance -> collect an optional note.
-    if (needsNote(a)) { setModalAction(a); setNote(''); return }
+    // Blocked reasons / problem / assistance -> collect an optional note (+ photo).
+    if (needsNote(a)) { setModalAction(a); setNote(''); setProblemPhotos([]); return }
 
     // Everything else records immediately.
     doRecord(a, selectedJob.id, null, a.key)
-  }, [busyKey, selectedJob, checkedIn, doRecord, tf])
+  }, [busyKey, selectedJob, checkedIn, tasks, selectedTaskId, doRecord, tf])
 
-  const submitModal = useCallback(() => {
-    if (!modalAction || !selectedJob) { setModalAction(null); return }
+  const submitModal = useCallback(async () => {
+    if (!modalAction || !selectedJob) { closeModal(); return }
     const a = modalAction
     const n = note.trim() || null
+    const photos = problemPhotos
     setModalAction(null)
-    doRecord(a, selectedJob.id, n, a.key)
-  }, [modalAction, selectedJob, note, doRecord])
+    // Upload any attached photos (resize/compress inside) to permanent refs; a
+    // photo that cannot upload offline is dropped, the event still records.
+    let refs: string[] = []
+    if (allowsPhoto(a) && photos.length) {
+      setBusyKey(a.key)
+      try { refs = await resolveWorkshopPhotos(photos) } catch { refs = [] }
+    }
+    setNote('')
+    setProblemPhotos([])
+    doRecord(a, selectedJob.id, n, a.key, refs)
+  }, [modalAction, selectedJob, note, problemPhotos, doRecord, closeModal])
 
   const actionLabel = useCallback((a: TechAction) => tf(`modules.workshop.actions.${a.key}`, a.label), [tf])
 
@@ -311,6 +396,34 @@ export default function WorkshopScreen() {
               />
             </View>
 
+            {/* My productivity today */}
+            {todayEvents.length > 0 && (
+              <View style={styles.prodCard}>
+                <View style={[styles.prodHead, isRTL && styles.rowR]}>
+                  <Ionicons name="stats-chart-outline" size={16} color={theme.color.primary} />
+                  <Text style={[styles.prodTitle, { textAlign }]}>{tf('modules.workshop.myProductivity', 'My day so far')}</Text>
+                </View>
+                <View style={[styles.prodRow, isRTL && styles.rowR]}>
+                  <View style={styles.prodItem}>
+                    <Text style={[styles.prodValue, { color: theme.color.success.base }]}>{fmtMins(productivity.productiveMin)}</Text>
+                    <Text style={styles.prodLabel} numberOfLines={1}>{tf('modules.workshop.prodProductive', 'Productive')}</Text>
+                  </View>
+                  <View style={styles.prodItem}>
+                    <Text style={[styles.prodValue, { color: theme.color.warning.base }]}>{fmtMins(productivity.blockedMin)}</Text>
+                    <Text style={styles.prodLabel} numberOfLines={1}>{tf('modules.workshop.prodBlocked', 'Blocked')}</Text>
+                  </View>
+                  <View style={styles.prodItem}>
+                    <Text style={[styles.prodValue, { color: theme.color.textSecondary }]}>{fmtMins(productivity.unassignedMin)}</Text>
+                    <Text style={styles.prodLabel} numberOfLines={1}>{tf('modules.workshop.prodUnassigned', 'Unassigned')}</Text>
+                  </View>
+                  <View style={styles.prodItem}>
+                    <Text style={[styles.prodValue, { color: theme.color.primary }]}>{productivity.jobsCompleted}</Text>
+                    <Text style={styles.prodLabel} numberOfLines={1}>{tf('modules.workshop.prodDone', 'Completed')}</Text>
+                  </View>
+                </View>
+              </View>
+            )}
+
             {/* My jobs */}
             <Text style={[styles.sectionLabel, { textAlign }]}>{tf('modules.workshop.myJobs', 'My open jobs')}</Text>
             {jobs.length === 0 ? (
@@ -378,6 +491,35 @@ export default function WorkshopScreen() {
                               <Text style={[styles.hintText, { textAlign }]}>{tf('modules.workshop.checkInHint', 'Check in for your shift to enable actions.')}</Text>
                             </View>
                           )}
+
+                          {/* Task picker (only when the job is split into tasks) */}
+                          {tasks.length > 0 && (
+                            <View style={styles.taskWrap}>
+                              <Text style={[styles.taskLabel, { textAlign }]}>{tf('modules.workshop.tasksLabel', 'Tasks')}</Text>
+                              <View style={[styles.taskRow, isRTL && styles.rowR]}>
+                                {tasks.map((tk) => {
+                                  const tActive = tk.id === selectedTaskId
+                                  return (
+                                    <TouchableOpacity
+                                      key={tk.id}
+                                      style={[styles.taskChip, tActive && styles.taskChipOn]}
+                                      activeOpacity={0.8}
+                                      onPress={() => setSelectedTaskId(tActive ? null : tk.id)}
+                                    >
+                                      <Text style={[styles.taskChipText, tActive && styles.taskChipTextOn]} numberOfLines={1}>
+                                        {[tk.seq != null ? `${tk.seq}.` : null, tk.title || tf('modules.workshop.taskUntitled', 'Task')].filter(Boolean).join(' ')}
+                                      </Text>
+                                      {tk.est_minutes != null ? (
+                                        <Text style={[styles.taskChipMeta, tActive && styles.taskChipTextOn]}>{fmtMins(Number(tk.est_minutes))}</Text>
+                                      ) : null}
+                                    </TouchableOpacity>
+                                  )
+                                })}
+                              </View>
+                              <Text style={[styles.taskHint, { textAlign }]}>{tf('modules.workshop.taskHint', 'Pick a task before Start or Complete.')}</Text>
+                            </View>
+                          )}
+
                           <View style={styles.actionGrid}>
                             {TECH_ACTIONS.map((a) => {
                               const kind = a.event === 'report_problem' ? 'danger'
@@ -411,35 +553,52 @@ export default function WorkshopScreen() {
         )}
       </KeyboardAvoidingView>
 
-      {/* Note modal for blocked reason / problem / assistance */}
-      <Modal visible={!!modalAction} transparent animationType="fade" onRequestClose={() => setModalAction(null)}>
-        <View style={styles.modalRoot}>
+      {/* Note modal for blocked reason / problem / assistance (+ optional photo) */}
+      <Modal visible={!!modalAction} transparent animationType="fade" onRequestClose={closeModal}>
+        <KeyboardAvoidingView style={styles.modalRoot} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
           <View style={styles.modalCard}>
-            <Text style={[styles.modalTitle, { textAlign }]}>{modalAction ? actionLabel(modalAction) : ''}</Text>
-            {modalAction?.reason ? (
-              <Text style={[styles.modalReason, { textAlign }]}>
-                {tf('modules.workshop.reasonLabel', 'Reason')}: {tf(`modules.workshop.reasons.${modalAction.reason}`, modalAction.reason)}
+            <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} contentContainerStyle={{ gap: spacing.sm }}>
+              <Text style={[styles.modalTitle, { textAlign }]}>{modalAction ? actionLabel(modalAction) : ''}</Text>
+              {modalAction?.reason ? (
+                <Text style={[styles.modalReason, { textAlign }]}>
+                  {tf('modules.workshop.reasonLabel', 'Reason')}: {tf(`modules.workshop.reasons.${modalAction.reason}`, modalAction.reason)}
+                </Text>
+              ) : null}
+              <Text style={[styles.modalNoteLabel, { textAlign }]}>
+                {tf('modules.workshop.noteLabel', 'Note')} <Text style={styles.optional}>{tf('modules.common.optional', '(optional)')}</Text>
               </Text>
-            ) : null}
-            <Text style={[styles.modalNoteLabel, { textAlign }]}>
-              {tf('modules.workshop.noteLabel', 'Note')} <Text style={styles.optional}>{tf('modules.common.optional', '(optional)')}</Text>
-            </Text>
-            <TextInput
-              style={[styles.modalInput, { textAlign }]}
-              value={note}
-              onChangeText={setNote}
-              placeholder={tf('modules.workshop.notePlaceholder', 'Add any detail for the foreman')}
-              placeholderTextColor={theme.color.textMuted}
-              multiline
-              numberOfLines={3}
-              autoFocus
-            />
+              <TextInput
+                style={[styles.modalInput, { textAlign }]}
+                value={note}
+                onChangeText={setNote}
+                placeholder={tf('modules.workshop.notePlaceholder', 'Add any detail for the foreman')}
+                placeholderTextColor={theme.color.textMuted}
+                multiline
+                numberOfLines={3}
+                autoFocus
+              />
+              {modalAction && allowsPhoto(modalAction) ? (
+                <View style={{ gap: spacing.xs }}>
+                  <Text style={[styles.modalNoteLabel, { textAlign }]}>
+                    {tf('modules.workshop.photoLabel', 'Photo')} <Text style={styles.optional}>{tf('modules.common.optional', '(optional)')}</Text>
+                  </Text>
+                  <PhotoCapture
+                    value={problemPhotos}
+                    onChange={setProblemPhotos}
+                    module="workshop"
+                    tint={theme.color.primary}
+                    max={3}
+                    label={tf('modules.workshop.addPhoto', 'Add Photo')}
+                  />
+                </View>
+              ) : null}
+            </ScrollView>
             <View style={[styles.modalBtns, isRTL && styles.rowR]}>
-              <Button label={tf('common.cancel', 'Cancel')} variant="ghost" size="md" onPress={() => setModalAction(null)} style={{ flex: 1 }} />
-              <Button label={tf('modules.workshop.record', 'Record')} icon="checkmark" size="md" onPress={submitModal} style={{ flex: 1 }} />
+              <Button label={tf('common.cancel', 'Cancel')} variant="ghost" size="md" onPress={closeModal} style={{ flex: 1 }} disabled={!!busyKey} />
+              <Button label={tf('modules.workshop.record', 'Record')} icon="checkmark" size="md" onPress={submitModal} style={{ flex: 1 }} disabled={!!busyKey} />
             </View>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
     </Screen>
   )
@@ -486,6 +645,18 @@ function makeStyles(theme: Theme) {
     checkTitle: { ...typography.bodyStrong, color: c.text },
     checkSub: { ...typography.caption, color: c.textMuted, marginTop: 1 },
 
+    // Productivity card
+    prodCard: {
+      backgroundColor: c.surface, borderRadius: radius.lg, padding: spacing.md,
+      borderWidth: 1, borderColor: c.border, gap: spacing.sm, ...elevation(theme, 1),
+    },
+    prodHead: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
+    prodTitle: { ...typography.label, color: c.textSecondary, textTransform: 'uppercase' },
+    prodRow: { flexDirection: 'row', alignItems: 'stretch', gap: spacing.xs },
+    prodItem: { flex: 1, alignItems: 'center', gap: 2 },
+    prodValue: { ...typography.bodyStrong, fontWeight: '800' },
+    prodLabel: { ...typography.micro, color: c.textMuted, textAlign: 'center' },
+
     sectionLabel: { ...typography.label, color: c.textMuted, textTransform: 'uppercase', marginTop: spacing.xs },
 
     // Job card
@@ -503,6 +674,21 @@ function makeStyles(theme: Theme) {
     jobAsset: { ...typography.bodyStrong, color: c.text },
     jobMeta: { ...typography.caption, color: c.textMuted, marginTop: 1 },
     jobPills: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs, alignItems: 'center' },
+
+    // Task picker
+    taskWrap: { gap: spacing.xs },
+    taskLabel: { ...typography.label, color: c.textMuted, textTransform: 'uppercase' },
+    taskRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs },
+    taskChip: {
+      flexDirection: 'row', alignItems: 'center', gap: 6,
+      backgroundColor: c.surfaceAlt, borderWidth: 1, borderColor: c.border,
+      borderRadius: radius.md, paddingHorizontal: spacing.sm, paddingVertical: 7, maxWidth: '100%',
+    },
+    taskChipOn: { backgroundColor: c.primarySoft, borderColor: c.primary },
+    taskChipText: { ...typography.caption, color: c.text, fontWeight: '700', flexShrink: 1 },
+    taskChipTextOn: { color: c.primary },
+    taskChipMeta: { ...typography.micro, color: c.textMuted, fontWeight: '700' },
+    taskHint: { ...typography.micro, color: c.textMuted },
 
     // Actions
     actionsWrap: { marginTop: spacing.sm, gap: spacing.sm, borderTopWidth: 1, borderTopColor: c.border, paddingTop: spacing.md },
@@ -524,7 +710,7 @@ function makeStyles(theme: Theme) {
     optional: { ...typography.caption, color: c.textMuted },
     modalRoot: { flex: 1, backgroundColor: c.overlay, alignItems: 'center', justifyContent: 'center', padding: spacing.xl },
     modalCard: {
-      width: '100%', maxWidth: 420, backgroundColor: c.surface, borderRadius: radius.lg,
+      width: '100%', maxWidth: 420, maxHeight: '85%', backgroundColor: c.surface, borderRadius: radius.lg,
       padding: spacing.lg, gap: spacing.sm, borderWidth: 1, borderColor: c.border,
       ...elevation(theme, 3),
     },

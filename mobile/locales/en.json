@@ -1461,6 +1461,14 @@
       "selectTaskMsg": "Pick the task you are working on first.",
       "photoLabel": "Photo",
       "addPhoto": "Add Photo"
+    },
+    "notifications": {
+      "title": "Notifications",
+      "markAll": "Mark all read",
+      "loading": "Loading notifications...",
+      "loadFail": "Could not load notifications.",
+      "emptyTitle": "You are all caught up",
+      "emptyBody": "Work notifications will appear here."
     }
   },
   "checklists": {

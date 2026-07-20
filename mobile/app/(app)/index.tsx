@@ -27,6 +27,8 @@ import { useLanguage } from '../../contexts/LanguageContext'
 import { useTheme } from '../../contexts/ThemeContext'
 import { getQueue, getPendingCount, syncQueue, retryFailed } from '../../lib/offlineQueue'
 import { getPendingRecordCount, syncRecordQueue, retryFailedRecords } from '../../lib/recordQueue'
+import { unreadCount as loadUnreadCount } from '../../lib/notificationsInbox'
+import { UNREAD_EVENT } from './notifications'
 import { toUserMessage } from '../../lib/safeError'
 import { supabase } from '../../lib/supabase'
 import SyncBanner from '../../components/SyncBanner'
@@ -132,6 +134,7 @@ export default function HomeScreen() {
   const s = useMemo(() => makeStyles(theme), [theme])
 
   const [pendingCount, setPendingCount]           = useState(0)
+  const [notifUnread, setNotifUnread]             = useState(0)
   const [syncing, setSyncing]                     = useState(false)
   const [recentInspections, setRecentInspections] = useState<InspectionItem[]>([])
   const [refreshing, setRefreshing]               = useState(false)
@@ -250,6 +253,18 @@ export default function HomeScreen() {
   // was saved offline on another screen, or a sync ran elsewhere).
   useFocusEffect(useCallback(() => { refreshPending() }, [refreshPending]))
 
+  // Unread notification badge on the header bell: refresh on focus, and follow
+  // the live UNREAD_EVENT the inbox screen emits (optimistic mark-read etc.).
+  const refreshUnread = useCallback(() => {
+    if (!profile?.id) { setNotifUnread(0); return }
+    loadUnreadCount(profile.id).then(setNotifUnread).catch(() => {})
+  }, [profile?.id])
+  useFocusEffect(useCallback(() => { refreshUnread() }, [refreshUnread]))
+  useEffect(() => {
+    const sub = DeviceEventEmitter.addListener(UNREAD_EVENT, (n: number) => setNotifUnread(Number(n) || 0))
+    return () => sub.remove()
+  }, [])
+
   // While anything is pending, poll cheaply (AsyncStorage read) so a background
   // auto-sync (useNetworkSync / SyncBanner) clears the indicators without any
   // user action. Stops as soon as the queues are empty.
@@ -321,6 +336,19 @@ export default function HomeScreen() {
               <Text style={s.pendingLbl}>{syncing ? t('profile.syncing') : t('home.pending')}</Text>
             </TouchableOpacity>
           )}
+          <TouchableOpacity
+            style={s.bellBtn}
+            onPress={() => router.push('/(app)/notifications')}
+            activeOpacity={0.8}
+            accessibilityLabel={t('modules.notifications.title')}
+          >
+            <Ionicons name="notifications-outline" size={22} color={theme.color.text} />
+            {notifUnread > 0 && (
+              <View style={s.bellBadge}>
+                <Text style={s.bellBadgeTxt}>{notifUnread > 99 ? '99+' : notifUnread}</Text>
+              </View>
+            )}
+          </TouchableOpacity>
         </View>
 
         {/* ── Stats row ─────────────────────────────────────────────────────── */}
@@ -578,6 +606,18 @@ function makeStyles(theme: Theme) {
     },
     pendingNum: { fontSize: 16, fontWeight: '800', color: c.warning.on },
     pendingLbl: { fontSize: 11, color: c.warning.on, fontWeight: '700' },
+
+    // Notifications bell
+    bellBtn: {
+      width: 42, height: 42, borderRadius: radius.md, marginLeft: 8,
+      alignItems: 'center', justifyContent: 'center',
+      backgroundColor: c.surfaceAlt, borderWidth: StyleSheet.hairlineWidth, borderColor: c.border,
+    },
+    bellBadge: {
+      position: 'absolute', top: -4, right: -4, minWidth: 18, height: 18, borderRadius: 9,
+      paddingHorizontal: 4, alignItems: 'center', justifyContent: 'center', backgroundColor: c.danger.base,
+    },
+    bellBadgeTxt: { color: c.onPrimary, fontSize: 10, fontWeight: '800' },
 
     // Stats
     statsRow: { flexDirection: 'row', gap: spacing.md },

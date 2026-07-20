@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import {
   View, StyleSheet, TouchableOpacity, Alert, Switch,
-  ScrollView, ActivityIndicator,
+  ScrollView, ActivityIndicator, TextInput,
 } from 'react-native'
 import { useRouter } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
@@ -16,6 +16,7 @@ import {
   clearSyncedRecords, getRecordQueue,
 } from '../../lib/recordQueue'
 import { canAccessAdmin, canManageUsers, canUseAI, canViewAccidents } from '../../lib/permissions'
+import { requestAccountDeletion } from '../../lib/accountDeletion'
 import {
   requestNotificationPermission,
   registerPushToken,
@@ -52,6 +53,10 @@ export default function ProfileScreen() {
   const [loggingOut, setLoggingOut] = useState(false)
   const [reminderEnabled, setReminderEnabled] = useState(false)
   const [reminderHour, setReminderHour] = useState(7)
+  const [deleteOpen, setDeleteOpen] = useState(false)
+  const [deleteReason, setDeleteReason] = useState('')
+  const [deleteConfirm, setDeleteConfirm] = useState('')
+  const [deleting, setDeleting] = useState(false)
 
   const textAlign = isRTL ? 'right' : 'left'
 
@@ -143,6 +148,28 @@ export default function ProfileScreen() {
         },
       ]
     )
+  }
+
+  async function handleDeleteAccount() {
+    const confirmWord = t('profile.deleteConfirmWord')
+    if (deleteConfirm.trim().toUpperCase() !== confirmWord.toUpperCase()) {
+      Alert.alert(t('profile.deleteErrorTitle'), t('profile.deleteMismatch'))
+      return
+    }
+    setDeleting(true)
+    try {
+      const res = await requestAccountDeletion(deleteReason)
+      if (res.ok) {
+        setDeleteOpen(false)
+        setDeleteReason('')
+        setDeleteConfirm('')
+        Alert.alert(t('profile.deleteSuccessTitle'), t('profile.deleteSuccessMsg'))
+      } else {
+        Alert.alert(t('profile.deleteErrorTitle'), res.message ?? t('common.error'))
+      }
+    } finally {
+      setDeleting(false)
+    }
   }
 
   const role = profile?.role
@@ -378,6 +405,83 @@ export default function ProfileScreen() {
           onPress={handleLogout}
         />
 
+        {/* Danger zone - account & data deletion request (Play requirement) */}
+        <SectionHeader title={t('profile.dangerZone')} />
+        <Card padded={false} style={styles.groupCard}>
+          <TouchableOpacity
+            style={[styles.deleteToggle, isRTL && styles.rowReverse]}
+            onPress={() => setDeleteOpen(o => !o)}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="trash-outline" size={18} color={theme.color.danger.base} />
+            <View style={{ flex: 1 }}>
+              <AppText variant="bodyStrong" style={{ color: theme.color.danger.base, textAlign }}>
+                {t('profile.deleteAccount')}
+              </AppText>
+              <AppText variant="caption" color="muted" style={{ textAlign }}>
+                {t('profile.deleteAccountSubtitle')}
+              </AppText>
+            </View>
+            <Ionicons
+              name={deleteOpen ? 'chevron-up' : 'chevron-down'}
+              size={18}
+              color={theme.color.textMuted}
+            />
+          </TouchableOpacity>
+
+          {deleteOpen && (
+            <View style={styles.deletePanel}>
+              <AppText variant="caption" color="secondary" style={{ textAlign }}>
+                {t('profile.deleteIntro')}
+              </AppText>
+              <AppText variant="caption" color="muted" style={{ textAlign }}>
+                {t('profile.deleteWhatHappens')}
+              </AppText>
+              <AppText variant="caption" color="muted" style={{ textAlign }}>
+                {t('profile.deleteTimeline')}
+              </AppText>
+
+              <AppText variant="label" color="secondary" style={[styles.deleteFieldLabel, { textAlign }]}>
+                {t('profile.deleteReasonLabel')}
+              </AppText>
+              <TextInput
+                style={[styles.input, styles.inputMultiline, { textAlign }]}
+                value={deleteReason}
+                onChangeText={setDeleteReason}
+                placeholder={t('profile.deleteReasonPlaceholder')}
+                placeholderTextColor={theme.color.textMuted}
+                multiline
+                numberOfLines={3}
+                editable={!deleting}
+              />
+
+              <AppText variant="label" color="secondary" style={[styles.deleteFieldLabel, { textAlign }]}>
+                {t('profile.deleteConfirmLabel')}
+              </AppText>
+              <TextInput
+                style={[styles.input, { textAlign }]}
+                value={deleteConfirm}
+                onChangeText={setDeleteConfirm}
+                placeholder={t('profile.deleteConfirmPlaceholder')}
+                placeholderTextColor={theme.color.textMuted}
+                autoCapitalize="characters"
+                autoCorrect={false}
+                editable={!deleting}
+              />
+
+              <Button
+                label={deleting ? t('profile.deleteSubmitting') : t('profile.deleteSubmit')}
+                icon="trash-outline"
+                variant="danger"
+                full
+                loading={deleting}
+                disabled={deleting || deleteConfirm.trim().toUpperCase() !== t('profile.deleteConfirmWord').toUpperCase()}
+                onPress={handleDeleteAccount}
+              />
+            </View>
+          )}
+        </Card>
+
         <AppText variant="caption" color="muted" center style={styles.version}>{t('profile.version')}</AppText>
       </ScrollView>
     </Screen>
@@ -497,5 +601,33 @@ function makeStyles(theme: Theme) {
       backgroundColor: c.surfaceAlt, borderWidth: 1, borderColor: c.border,
     },
     hourChipActive: { backgroundColor: c.primary, borderColor: c.primary },
+
+    deleteToggle: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.md,
+      paddingHorizontal: spacing.lg,
+      paddingVertical: spacing.lg - 2,
+    },
+    deletePanel: {
+      paddingHorizontal: spacing.lg,
+      paddingBottom: spacing.lg,
+      gap: spacing.sm,
+      borderTopWidth: 1,
+      borderTopColor: c.border,
+      paddingTop: spacing.md,
+    },
+    deleteFieldLabel: { marginTop: spacing.sm },
+    input: {
+      borderWidth: 1,
+      borderColor: c.border,
+      borderRadius: radius.md,
+      backgroundColor: c.surfaceAlt,
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.md,
+      color: c.text,
+      ...typography.body,
+    },
+    inputMultiline: { minHeight: 72, textAlignVertical: 'top' },
   })
 }

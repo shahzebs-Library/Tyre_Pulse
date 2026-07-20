@@ -3,6 +3,25 @@
 Durable, committed project knowledge so any session has full context. Keep this
 current. Read it before adding/changing modules. Governing spec: `Tyre pulse enterprise.md`
 
+## SESSION 2026-07-20 CLOSED — all merged to main; migrations through V299, next free V300
+- Everything this session is MERGED to main and the branch `claude/accident-builder-report-ui-2bkwb5` is
+  realigned to origin/main. Shipped, in order: report-email edge-fn fix (send-email verify_jwt=false, #139);
+  Console Smart Import auto-detect module + zero-mapping CSV/Excel templates + V290 CSV-import org auto-stamp
+  (#140/#141); Smart Import big-file hardening (#142); enum-safe import + Inspections save whitelist (#143);
+  Report Sharing per-board error isolation (#144); Site Management not-iterable fix + short-reply CLAUDE.md rule
+  (#145); then the big build: **Workshop Live Control & Technician Productivity P1-P4 + notifications** across
+  #146-#151 (see the detailed Workshop sections below). Migrations V291-V299 all applied live + repo files.
+- **ONE open OPS step (not code):** `send-scheduled-reports` edge fn has the `DATASET_DIGEST.workshop` branch in
+  the repo source (merged, #151) but is NOT redeployed. Until `supabase functions deploy send-scheduled-reports
+  --project-ref tyrepulse` (keep verify_jwt=true) runs, a scheduled 'workshop' report emails the exec-digest
+  fallback; on-demand Workshop PDF/Excel already works. Do NOT hand-reproduce that 1103-line file inline to
+  redeploy (regex/template-string transcription risk on a shared fn that emails EVERY report type) - use the CLI,
+  or deploy + immediately byte-diff the deployed content vs the repo file to catch any slip.
+- USER/OPS follow-ups still standing (unchanged from prior sessions): enable Supabase leaked-password protection;
+  technicians must register a device push_token for real assignment/approval push delivery (0 tokens today; the
+  mobile app registers on login); promote the Play Internal build to Closed for testers; true million-row ERP
+  loads still need the server COPY pipeline.
+
 ## Workshop Live Control & Technician Productivity (V291/V292, 2026-07-20) — P1 shipped
 - NEW module: live workshop dashboard where a foreman/manager sees every technician's real status,
   assigns job cards, and measures PRODUCTIVE vs BLOCKED vs UNASSIGNED time (the fairness rule: non-working

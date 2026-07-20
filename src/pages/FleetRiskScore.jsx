@@ -24,6 +24,7 @@ import {
   Truck, ListChecks, Wind,
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
+import EmailPdfButton from '../components/EmailPdfButton'
 import { useSettings } from '../contexts/SettingsContext'
 import {
   scoreTyres, summarizeTyreRisk, rollupVehicles, RISK_LEVEL_META, RISK_WEIGHTS,
@@ -217,6 +218,16 @@ export default function FleetRiskScore() {
             <button onClick={async () => { try { await exportToPdf(exportRows, exportCols.map((k, i) => ({ key: k, header: exportHeaders[i] })), 'Fleet Risk Score', exportName, 'landscape') } catch (e) { setError(toUserMessage(e, 'Could not export. Try again.')) } }} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!exportRows.length}>
               <FileText size={14} /> PDF
             </button>
+            <EmailPdfButton
+              disabled={!exportRows.length}
+              className="btn-secondary text-sm inline-flex items-center gap-1.5 disabled:opacity-50"
+              getPdf={async () => ({
+                base64: await exportToPdf(exportRows, exportCols.map((k, i) => ({ key: k, header: exportHeaders[i] })), 'Fleet Risk Score', exportName, 'landscape', '', { returnBase64: true }),
+                filename: `${exportName}.pdf`,
+                subject: 'Fleet Risk Score',
+                bodyHtml: '<p>Attached is the Fleet Risk Score report.</p>',
+              })}
+            />
           </div>
         }
       />

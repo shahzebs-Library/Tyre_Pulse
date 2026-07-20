@@ -7,6 +7,7 @@ import { BarChart2, Download, FileText, AlertTriangle, RefreshCw } from 'lucide-
 import { SkeletonCards, SkeletonChart } from '../components/ui/Skeleton'
 import { motion } from 'framer-motion'
 import PageHeader from '../components/ui/PageHeader'
+import EmailPdfButton from '../components/EmailPdfButton'
 import SectionTabs, { FLEET_TABS } from '../components/ui/SectionTabs'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import { toUserMessage } from '../lib/safeError'
@@ -222,6 +223,34 @@ export default function FleetAnalytics() {
             >
               <FileText size={14} /> {t('fleetanalytics.actions.pdf')}
             </button>
+            <EmailPdfButton
+              className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-1.5"
+              getPdf={async () => ({
+                base64: await exportToPdf(
+                  filtered.slice(0, 200).map(a => ({
+                    asset_no: a.assetNo, records: a.count,
+                    total_cost: formatCurrencyCompact(a.totalCost, activeCurrency),
+                    high_risk: a.highRiskCount,
+                    fail_per_month: a.failureFreqPerMonth.toFixed(1),
+                  })),
+                  [
+                    { key: 'asset_no',       header: 'Asset No' },
+                    { key: 'records',        header: 'Records' },
+                    { key: 'total_cost',     header: 'Total Cost' },
+                    { key: 'high_risk',      header: 'High Risk' },
+                    { key: 'fail_per_month', header: 'Fail/Mo' },
+                  ],
+                  'Fleet Analytics Report',
+                  'TyrePulse_FleetAnalytics',
+                  'landscape',
+                  '',
+                  { returnBase64: true }
+                ),
+                filename: 'TyrePulse_FleetAnalytics.pdf',
+                subject: 'Fleet Analytics',
+                bodyHtml: '<p>Attached is the Fleet Analytics report.</p>',
+              })}
+            />
           </div>
         </div>
         <div className="flex flex-wrap gap-3 mb-4 items-center">

@@ -29,6 +29,7 @@ import {
   Package, Boxes, Wind, CalendarClock,
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
+import EmailPdfButton from '../components/EmailPdfButton'
 import { useSettings } from '../contexts/SettingsContext'
 import { loadOpsData } from '../lib/api/opsIntelligence'
 import { loadPmDashboard } from '../lib/api/pmPrograms'
@@ -303,6 +304,16 @@ export default function OpsIntelligence() {
             <button onClick={() => exportToPdf(exportRows, EXPORT_COLS.map((k, i) => ({ key: k, header: EXPORT_HEADERS[i] })), 'Ops Intelligence — Exception Command Center', 'ops_intelligence_exceptions', 'landscape')} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!filtered.length}>
               <FileText size={14} /> PDF
             </button>
+            <EmailPdfButton
+              disabled={!filtered.length}
+              className="btn-secondary text-sm inline-flex items-center gap-1.5 disabled:opacity-50"
+              getPdf={async () => ({
+                base64: await exportToPdf(exportRows, EXPORT_COLS.map((k, i) => ({ key: k, header: EXPORT_HEADERS[i] })), 'Ops Intelligence — Exception Command Center', 'ops_intelligence_exceptions', 'landscape', '', { returnBase64: true }),
+                filename: 'ops_intelligence_exceptions.pdf',
+                subject: 'Ops Intelligence',
+                bodyHtml: '<p>Attached is the Ops Intelligence report.</p>',
+              })}
+            />
           </div>
         }
       />

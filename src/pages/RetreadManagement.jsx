@@ -23,6 +23,7 @@ import { exportToExcel, exportToPdf, resolvePdfBrand, pdfHeader, pdfFooter, pdfT
 import { formatMonthYear } from '../lib/formatters'
 import { toUserMessage } from '../lib/safeError'
 import PageHeader from '../components/ui/PageHeader'
+import EmailPdfButton from '../components/EmailPdfButton'
 
 ChartJS.register(
   CategoryScale, LinearScale, BarElement, LineElement,
@@ -691,7 +692,7 @@ export default function RetreadManagement() {
     exportToExcel(rows, EXPORT_COLS, EXPORT_HEADERS, `TyrePulse_Retread_${new Date().toISOString().slice(0, 10)}`, 'Retread Records')
   }, [enriched])
 
-  const handleExportPdf = useCallback(() => {
+  const handleExportPdf = useCallback((opts = {}) => (
     exportToPdf(
       enriched.map(t => ({
         serial_number: t.serial_number,
@@ -725,8 +726,10 @@ export default function RetreadManagement() {
       'Retread Management Report',
       `TyrePulse_Retread_${new Date().toISOString().slice(0, 10)}`,
       'landscape',
+      '',
+      opts,
     )
-  }, [enriched])
+  ), [enriched])
 
   const handleExportRoiPdf = useCallback(async () => {
     const { default: jsPDF } = await import('jspdf')
@@ -851,11 +854,20 @@ export default function RetreadManagement() {
             <RefreshCw size={14} className={loading ? 'animate-spin' : ''} /> Refresh
           </button>
           <button
-            onClick={handleExportPdf}
+            onClick={() => handleExportPdf()}
             className="flex items-center gap-1.5 px-3 py-2 bg-[var(--input-bg)] hover:bg-[var(--input-bg-hover)] border border-[var(--input-border)] rounded-lg text-sm text-[var(--text-secondary)] transition"
           >
             <FileText size={14} /> PDF
           </button>
+          <EmailPdfButton
+            className="flex items-center gap-1.5 px-3 py-2 bg-[var(--input-bg)] hover:bg-[var(--input-bg-hover)] border border-[var(--input-border)] rounded-lg text-sm text-[var(--text-secondary)] transition disabled:opacity-50"
+            getPdf={async () => ({
+              base64: await handleExportPdf({ returnBase64: true }),
+              filename: `TyrePulse_Retread_${new Date().toISOString().slice(0, 10)}.pdf`,
+              subject: 'Retread Management',
+              bodyHtml: '<p>Attached is the Retread Management report.</p>',
+            })}
+          />
           <button
             onClick={handleExportExcel}
             className="flex items-center gap-1.5 px-3 py-2 bg-[var(--input-bg)] hover:bg-[var(--input-bg-hover)] border border-[var(--input-border)] rounded-lg text-sm text-[var(--text-secondary)] transition"

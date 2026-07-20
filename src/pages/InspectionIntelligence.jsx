@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { motion } from 'framer-motion'
 import * as inspIntelApi from '../lib/api/inspectionIntelligence'
 import PageHeader from '../components/ui/PageHeader'
+import EmailPdfButton from '../components/EmailPdfButton'
 import { useSettings, COUNTRIES } from '../contexts/SettingsContext'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import { toUserMessage } from '../lib/safeError'
@@ -592,13 +593,15 @@ export default function InspectionIntelligence() {
     )
   }
 
-  function handlePdfExport() {
-    exportToPdf(
+  function handlePdfExport(opts = {}) {
+    return exportToPdf(
       filtered,
       ['asset_no', 'site', 'inspection_type', 'scheduled_date', 'status', 'inspector'],
       ['Asset No', 'Site', 'Type', 'Scheduled', 'Status', 'Inspector'],
       'Inspection Intelligence Report',
       'inspection_intelligence',
+      '',
+      opts,
     )
   }
 
@@ -666,9 +669,18 @@ export default function InspectionIntelligence() {
           <button onClick={handleExcelExport} className="btn-secondary flex items-center gap-1.5 text-sm">
             <Download size={14} /> Excel
           </button>
-          <button onClick={handlePdfExport} className="btn-secondary flex items-center gap-1.5 text-sm">
+          <button onClick={() => handlePdfExport()} className="btn-secondary flex items-center gap-1.5 text-sm">
             <FileText size={14} /> PDF
           </button>
+          <EmailPdfButton
+            className="btn-secondary flex items-center gap-1.5 text-sm"
+            getPdf={async () => ({
+              base64: await handlePdfExport({ returnBase64: true }),
+              filename: 'Inspection Intelligence Report.pdf',
+              subject: 'Inspection Intelligence',
+              bodyHtml: '<p>Attached is the Inspection Intelligence report.</p>',
+            })}
+          />
         </>}
       />
 

@@ -32,6 +32,7 @@ import {
   Factory, Activity, CircleDollarSign,
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
+import EmailPdfButton from '../components/EmailPdfButton'
 import { useSettings } from '../contexts/SettingsContext'
 import { useAuth } from '../contexts/AuthContext'
 import {
@@ -216,6 +217,16 @@ function LifecycleEsgView() {
             <button onClick={async () => { try { await exportToPdf(carbon.tyreBreakdown, EXPORT_COLS.map((k, i) => ({ key: k, header: EXPORT_HEADERS[i] })), 'Carbon Lifecycle ESG', 'carbon_lifecycle', 'landscape') } catch (e) { setError(toUserMessage(e, 'Could not export. Try again.')) } }} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!carbon.tyreBreakdown.length}>
               <FileText size={14} /> PDF
             </button>
+            <EmailPdfButton
+              disabled={!carbon.tyreBreakdown.length}
+              className="btn-secondary text-sm inline-flex items-center gap-1.5 disabled:opacity-50"
+              getPdf={async () => ({
+                base64: await exportToPdf(carbon.tyreBreakdown, EXPORT_COLS.map((k, i) => ({ key: k, header: EXPORT_HEADERS[i] })), 'Carbon Lifecycle ESG', 'carbon_lifecycle', 'landscape', '', { returnBase64: true }),
+                filename: 'carbon_lifecycle.pdf',
+                subject: 'Carbon Lifecycle ESG',
+                bodyHtml: '<p>Attached is the Carbon Lifecycle ESG report.</p>',
+              })}
+            />
           </div>
         }
       />
@@ -735,6 +746,16 @@ function FuelEmissionsView() {
             <button onClick={async () => { try { await exportToPdf(exportRows, EXPORT_COLS.map((k, i) => ({ key: k, header: EXPORT_HEADERS[i] })), 'Carbon Tracker', 'carbon_tracker', 'landscape') } catch (e) { setError(toUserMessage(e, 'Could not export. Try again.')) } }} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!filteredVehicles.length}>
               <FileText size={14} /> PDF
             </button>
+            <EmailPdfButton
+              disabled={!filteredVehicles.length}
+              className="btn-secondary text-sm inline-flex items-center gap-1.5 disabled:opacity-50"
+              getPdf={async () => ({
+                base64: await exportToPdf(exportRows, EXPORT_COLS.map((k, i) => ({ key: k, header: EXPORT_HEADERS[i] })), 'Carbon Tracker', 'carbon_tracker', 'landscape', '', { returnBase64: true }),
+                filename: 'carbon_tracker.pdf',
+                subject: 'Carbon Tracker',
+                bodyHtml: '<p>Attached is the Carbon Tracker report.</p>',
+              })}
+            />
           </div>
         }
       />

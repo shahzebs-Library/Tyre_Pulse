@@ -23,6 +23,7 @@ import {
   Wrench, GraduationCap, TrendingUp, Activity,
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
+import EmailPdfButton from '../components/EmailPdfButton'
 import { useSettings } from '../contexts/SettingsContext'
 import {
   listDriverSafetyEvents, createDriverSafetyEvent, updateDriverSafetyEvent,
@@ -336,6 +337,16 @@ export default function DriverSafety() {
             <button onClick={async () => { try { await exportToPdf(exportRows, EXPORT_COLS.map((k, i) => ({ key: k, header: EXPORT_HEADERS[i] })), 'Driver Safety Events', 'driver_safety_events', 'landscape') } catch (e) { setError(toUserMessage(e, 'Could not export. Try again.')) } }} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!filtered.length}>
               <FileText size={14} /> PDF
             </button>
+            <EmailPdfButton
+              disabled={!filtered.length}
+              className="btn-secondary text-sm inline-flex items-center gap-1.5 disabled:opacity-50"
+              getPdf={async () => ({
+                base64: await exportToPdf(exportRows, EXPORT_COLS.map((k, i) => ({ key: k, header: EXPORT_HEADERS[i] })), 'Driver Safety Events', 'driver_safety_events', 'landscape', '', { returnBase64: true }),
+                filename: 'driver_safety_events.pdf',
+                subject: 'Driver Safety',
+                bodyHtml: '<p>Attached is the Driver Safety report.</p>',
+              })}
+            />
             <button onClick={openCreate} className="btn-primary text-sm inline-flex items-center gap-1.5" disabled={notProvisioned}>
               <Plus size={14} /> Log event
             </button>

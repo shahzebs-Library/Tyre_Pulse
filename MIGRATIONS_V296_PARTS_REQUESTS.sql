@@ -1,0 +1,8 @@
+-- V296: workshop parts-request lifecycle (applied live via Supabase MCP).
+-- Table public.parts_requests (job_id -> work_orders, part_id -> parts_catalog,
+-- part_name, qty, status[requested|approved|issued|fulfilled|rejected|cancelled],
+-- priority, requested_by/approved_by, requested_at/needed_by/fulfilled_at, notes).
+-- Indexes (job_id),(status),(organisation_id); set_updated_at trigger. RLS:
+-- org(restrictive all)+country+site(restrictive select)+member select+self-insert
+-- (requested_by=auth.uid() OR elevated)+elevated manage. revoke anon; grant auth.
+-- Engine src/lib/partsRequests.js + page src/pages/PartsRequests.jsx. Next free V297+.

@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { dashboard } from '../lib/api'
 import { loadPmDashboard } from '../lib/api/pmPrograms'
+import { loadWorkshopKpis } from '../lib/api/workshopLive'
 import { loadCostSplit } from '../lib/api/costSummary'
 import { COST_MODES, pickCost } from '../lib/costSources'
 import { summarizePmCompliance } from '../lib/pmSchedule'
@@ -209,6 +210,11 @@ export default function Dashboard() {
   // zero split so the tile falls back to the tyre-only server figure.
   const [costMode, setCostMode] = useState('tyres')
   const [costSplit, setCostSplit] = useState(null)
+  // Workshop live signal (loaded independently of the tyre dashboard so an absent
+  // workshop schema never affects the rest of the page). Tri-state status; the
+  // KPI numbers come straight from the shared workshopLive engine (no local
+  // maths). hasData false = no workshop tables/rows -> the section stays hidden.
+  const [ws, setWs] = useState({ status: 'loading', kpis: null, hasData: false })
 
   const pad = n => String(n).padStart(2, '0')
   const fmt = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`
@@ -249,6 +255,18 @@ export default function Dashboard() {
     loadPmDashboard({ country: activeCountry })
       .then(bundle => { if (!cancelled) setPm({ status: 'ready', ...bundle }) })
       .catch(() => { if (!cancelled) setPm({ status: 'error', plans: [], kmByAsset: {}, hoursByAsset: {} }) })
+    return () => { cancelled = true }
+  }, [activeCountry])
+
+  // Independent workshop-KPI load: own lifecycle + cancel guard so a slow/failed
+  // workshop fetch never blocks the dashboard. loadWorkshopKpis never throws
+  // (degrades to zeros); a country switch discards a stale in-flight result.
+  useEffect(() => {
+    let cancelled = false
+    setWs(prev => ({ ...prev, status: 'loading' }))
+    loadWorkshopKpis({ country: activeCountry })
+      .then(res => { if (!cancelled) setWs({ status: 'ready', kpis: res.kpis, hasData: res.hasData }) })
+      .catch(() => { if (!cancelled) setWs({ status: 'error', kpis: null, hasData: false }) })
     return () => { cancelled = true }
   }, [activeCountry])
 
@@ -1062,6 +1080,48 @@ export default function Dashboard() {
               </p>
               <p className="text-label mt-1.5">{tf('dashboard.pm.compliance', 'Compliance')}</p>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── WORKSHOP TODAY (live technician + job-card signal, engine-sourced) ─
+           Hidden entirely when there is no workshop data (honest, uncluttered).
+           Every number comes from the shared workshopLive engine via
+           loadWorkshopKpis - no maths is duplicated here. */}
+      {ws.status === 'ready' && ws.hasData && ws.kpis && (
+        <div className="card">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <div className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0"
+                style={{ background: 'rgba(34,197,94,0.1)', border: '1px solid rgba(34,197,94,0.2)' }}>
+                <Activity size={13} className="text-green-400" />
+              </div>
+              <h3 className="text-sm font-semibold text-[var(--text-primary)]">
+                {tf('dashboard.workshop.title', 'Workshop Today')}
+              </h3>
+            </div>
+            <Link to="/workshop-live" className="text-[11px] text-green-500 hover:text-green-400 font-medium flex items-center gap-1 transition-colors">
+              {tf('dashboard.workshop.view', 'Live Control')} <ChevronRight size={11} />
+            </Link>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-7 gap-3">
+            {[
+              { key: 'working',   label: tf('dashboard.workshop.working', 'Working'),        value: ws.kpis.working,           color: '#22c55e' },
+              { key: 'available', label: tf('dashboard.workshop.available', 'Available'),    value: ws.kpis.available,         color: '#38bdf8' },
+              { key: 'openJobs',  label: tf('dashboard.workshop.openJobs', 'Open job cards'),value: ws.kpis.openJobs,          color: '#3b82f6' },
+              { key: 'overdue',   label: tf('dashboard.workshop.overdue', 'Overdue'),        value: ws.kpis.overdueJobs,       color: ws.kpis.overdueJobs > 0 ? '#ef4444' : '#22c55e' },
+              { key: 'vor',       label: tf('dashboard.workshop.vor', 'Vehicles off road'),  value: ws.kpis.vehiclesOffRoad,   color: ws.kpis.vehiclesOffRoad > 0 ? '#ef4444' : '#22c55e' },
+              { key: 'util',      label: tf('dashboard.workshop.utilization', 'Utilization'),value: ws.kpis.utilization == null ? tf('dashboard.workshop.na', 'N/A') : `${ws.kpis.utilization}%`, color: '#a855f7' },
+              { key: 'done',      label: tf('dashboard.workshop.completed', 'Completed today'), value: ws.kpis.jobsCompletedToday, color: '#22c55e' },
+            ].map(cell => (
+              <Link key={cell.key} to="/workshop-live" className="rounded-xl px-3 py-2.5 transition-colors"
+                style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)' }}>
+                <p className="text-2xl font-extrabold leading-none tabular-nums" style={{ color: cell.color }}>
+                  {typeof cell.value === 'number' ? Number(cell.value).toLocaleString() : cell.value}
+                </p>
+                <p className="text-label mt-1.5">{cell.label}</p>
+              </Link>
+            ))}
           </div>
         </div>
       )}

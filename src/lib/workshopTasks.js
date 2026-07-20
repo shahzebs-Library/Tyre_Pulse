@@ -12,7 +12,14 @@
  *
  * Honest: a task with no matching events shows 0 minutes (never invented); a job
  * with no tasks yields an all-zero summary the UI renders as an empty state.
+ *
+ * It also owns the small PURE quality-inspection (QC) transition helper used by
+ * the foreman Pass / Fail sign-off on the live board: it maps a QC decision to
+ * the canonical work-order status (via workOrderStatus.js - the single status
+ * source) plus the qc_status flag and a rework signal, with NO I/O.
  */
+
+import { normalizeWoStatus } from './workOrderStatus'
 
 const MIN = 60_000
 
@@ -124,4 +131,39 @@ export function jobTaskSummary(tasks) {
     qc: count('qc'),
     pct: total ? Math.round((done / total) * 100) : 0,
   }
+}
+
+// ── Quality inspection (QC) sign-off ──────────────────────────────────────────
+
+/** qc_status values (mirror the intended work_orders.qc_status vocabulary). */
+export const QC_STATUSES = Object.freeze(['pending', 'passed', 'failed'])
+
+/**
+ * Map a foreman QC decision to the work-order transition to apply.
+ *
+ * - 'pass' -> move to canonical 'Completed', qc_status 'passed', no rework.
+ * - 'fail' -> move BACK to canonical 'In Progress', qc_status 'failed', and flag
+ *   a rework signal (the caller records a report_problem event) so first-time-fix
+ *   analytics stay honest - a QC failure is not a clean first-time fix.
+ *
+ * Status values come from workOrderStatus.js (the single status source), so this
+ * never hardcodes a raw status token. Pure + deterministic; unknown action -> null.
+ *
+ * @param {string} action  'pass' | 'fail' (case-insensitive)
+ * @returns {{ status:string, qc_status:string, rework:boolean, note:(string|null) }|null}
+ */
+export function qcOutcome(action) {
+  const a = String(action || '').trim().toLowerCase()
+  if (a === 'pass') {
+    return { status: normalizeWoStatus('Completed'), qc_status: 'passed', rework: false, note: null }
+  }
+  if (a === 'fail') {
+    return {
+      status: normalizeWoStatus('In Progress'),
+      qc_status: 'failed',
+      rework: true,
+      note: 'QC failed: rework required',
+    }
+  }
+  return null
 }

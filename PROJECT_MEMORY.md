@@ -3,7 +3,31 @@
 Durable, committed project knowledge so any session has full context. Keep this
 current. Read it before adding/changing modules. Governing spec: `Tyre pulse enterprise.md`
 
-## Phase-1 multi-tenant SaaS security hardening (V306-V314, 2026-07-20) — migrations through V314, next free **V315**
+## Phase-1 multi-tenant SaaS security hardening (V306-V315 applied; V316 STAGED, 2026-07-20) — migrations through V315, next free **V316** (V316 file exists, NOT applied)
+- **BATCH 3:**
+  - **V315 (applied+verified)** — `organisation_id` is now `NOT NULL` on the 10 V290-stamped import-target
+    business tables (vehicle_fleet/tyre_records/accidents/inspections/work_orders/stock_records/warranty_claims/
+    gate_passes/suppliers/drivers); added the missing app_current_org() default to drivers+suppliers first.
+    0 null-org rows anywhere; the V290 BEFORE-INSERT stamp trigger + column default guarantee non-null on every
+    path. pm_programs/pm_service_records left DEFAULT-only (no stamp trigger); wash_records already NOT NULL.
+  - **Subscription-STATUS policy (code, committed)** — pure `src/lib/subscriptionAccess.js`
+    (`subscriptionAccess(overview)` -> per-status {canUseApp/canWrite/readOnly/billingOnly/
+    blockSelfServiceBilling/banner}: trialing/active full; past_due grace+block self-serve billing; canceled
+    read-only; expired billing/export only; suspended blocked; missing/unknown FAIL-OPEN). Exposed read-only via
+    `useBilling()`. NO route/write block wired yet (deliberate next step). 22 tests.
+  - **V316 `create_workspace_owner` RPC — WRITTEN, NOT APPLIED (needs product sign-off).** Atomic self-serve
+    workspace: new organisations row + owner membership + caller promoted to org Admin/approved + trialing
+    org_subscriptions, one txn. Guarded (rejects super-admins + anyone who already owns a workspace; never sets
+    is_super_admin; hijack/double-create safe). Bypasses ONLY trg_guard_profile_privileged for its single
+    self-UPDATE (V269 precedent; ACCESS EXCLUSIVE lock serializes it). **DELIBERATELY LEFT UNAPPLIED**: it turns
+    the app from single-tenant into OPEN self-serve signup (any authenticated user can create an org + become its
+    Admin) — a product/tenant-model decision, not a security fix. Apply only on explicit user go-ahead. Dormant
+    client stub `src/lib/api/onboarding.js createWorkspaceOwner()` added (not wired to any UI).
+  - **REMAINING roadmap (not started):** wire subscriptionAccess into real route/write gates; full Platform-Owner
+    vs Company-Admin surface split; one unified permission engine; individual-vs-company signup UI; support-session
+    (owner inspects a tenant, audited); Play account-deletion completeness.
+
+## Phase-1 multi-tenant SaaS security hardening — earlier batches (V306-V314, 2026-07-20)
 - **BATCH 2 (V311-V314 + code, applied live + verified):**
   - **V311** `tr_sync_profile_org` BEFORE INS/UPD trigger keeps `profiles.org_id` <-> `organisation_id` in
     sync (fills a NULL from the other; if both set and differ, org_id wins since app_current_org() reads org_id).

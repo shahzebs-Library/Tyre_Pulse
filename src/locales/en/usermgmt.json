@@ -52,6 +52,7 @@
     "noUsersMatch": "No users match the current filters.",
     "clearFilters": "Clear all filters",
     "all": "All",
+    "noCountry": "No access",
     "locked": "Locked",
     "pending": "Pending",
     "activeBadge": "Active",
@@ -116,6 +117,8 @@
     "cannotChangeOwnRole": "You cannot change your own role.",
     "countryAccess": "Country Access",
     "noRestriction": "No restriction - user can see all countries.",
+    "seesAllCountries": "This role sees all countries regardless of scope.",
+    "noCountryAccess": "No country access. Assign one or more countries to grant visibility.",
     "restrictedTo": "Restricted to: {countries}",
     "adminNotes": "Admin Notes",
     "placeholders": {

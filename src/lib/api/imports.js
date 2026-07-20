@@ -18,11 +18,13 @@ async function currentUser() {
   return data?.user ?? null
 }
 
-/** The caller's organisation_id (for storage paths); falls back to default org. */
+/** The caller's organisation_id (for storage paths); falls back to default org.
+ * Reads BOTH mirror columns and prefers organisation_id, falling back to org_id,
+ * so a row where only one is populated still resolves a real org. */
 async function currentOrgId(userId) {
   if (!userId) return '00000000-0000-0000-0000-000000000001'
-  const { data } = await supabase.from('profiles').select('org_id').eq('id', userId).maybeSingle()
-  return data?.org_id ?? '00000000-0000-0000-0000-000000000001'
+  const { data } = await supabase.from('profiles').select('organisation_id,org_id').eq('id', userId).maybeSingle()
+  return data?.organisation_id ?? data?.org_id ?? '00000000-0000-0000-0000-000000000001'
 }
 
 /**

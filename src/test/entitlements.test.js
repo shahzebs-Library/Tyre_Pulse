@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest'
 import {
-  normalizeLimit, isUnlimited, utilisation, utilisationPct, remaining,
+  normalizeLimit, isUnlimited, isExplicitUnlimited, utilisation, utilisationPct, remaining,
   canAdd, isAtLimit, planAllows, trialDaysLeft, usageRows,
-  monthlyEquivalent, annualSavingPct,
+  monthlyEquivalent, annualSavingPct, KNOWN_METERED, KNOWN_FEATURES,
 } from '../lib/entitlements'
 
 const overview = (over = {}) => ({
@@ -27,6 +27,30 @@ describe('isUnlimited', () => {
     expect(isUnlimited(null)).toBe(true)
     expect(isUnlimited(0)).toBe(false)
     expect(isUnlimited(50)).toBe(false)
+  })
+})
+
+describe('isExplicitUnlimited', () => {
+  it('is true only for an explicit unlimited marker (null / "unlimited")', () => {
+    expect(isExplicitUnlimited(null)).toBe(true)
+    expect(isExplicitUnlimited('unlimited')).toBe(true)
+    expect(isExplicitUnlimited('  Unlimited ')).toBe(true)
+  })
+  it('is false for missing/unparseable/garbage/empty (not an explicit marker)', () => {
+    for (const v of [undefined, '', 'abc', NaN, 0, 100, '100']) {
+      expect(isExplicitUnlimited(v)).toBe(false)
+    }
+  })
+})
+
+describe('registry constants', () => {
+  it('KNOWN_METERED matches the real overview limit keys', () => {
+    expect(KNOWN_METERED).toEqual(['vehicles', 'users', 'api_keys', 'storage_gb'])
+  })
+  it('KNOWN_FEATURES matches the seeded plan feature keys', () => {
+    expect(KNOWN_FEATURES).toEqual([
+      'ai_tools', 'automation_platform', 'tv_display', 'erp_sync', 'report_scheduling',
+    ])
   })
 })
 
@@ -74,14 +98,33 @@ describe('canAdd / isAtLimit', () => {
     expect(canAdd(o, 'vehicles', 5)).toBe(true)
     expect(canAdd(o, 'vehicles', 6)).toBe(false)
   })
-  it('unlimited resource always allows', () => {
+  it('explicit unlimited resource always allows (genuine unlimited plan preserved)', () => {
     expect(canAdd(overview({ limits: { vehicles: null } }), 'vehicles', 9999)).toBe(true)
+    expect(canAdd(overview({ limits: { vehicles: 'unlimited' } }), 'vehicles', 9999)).toBe(true)
   })
   it('unknown resource fails open', () => {
     expect(canAdd(overview(), 'widgets', 1)).toBe(true)
   })
-  it('null overview fails open', () => {
+  it('null/absent overview stays permissive (not loaded yet, no flash-block)', () => {
     expect(canAdd(null, 'vehicles', 1)).toBe(true)
+    expect(canAdd(undefined, 'vehicles', 1)).toBe(true)
+  })
+  it('fails CLOSED for a known metered resource whose cap is MISSING', () => {
+    // limits present for others but vehicles cap absent → no readable cap → no headroom
+    const o = overview({ limits: { users: 10, api_keys: 2, storage_gb: 10 } }) // vehicles omitted below
+    delete o.limits.vehicles
+    expect(canAdd(o, 'vehicles', 1)).toBe(false)
+    expect(isAtLimit(o, 'vehicles')).toBe(true)
+  })
+  it('fails CLOSED for a known metered resource whose cap is unparseable/empty', () => {
+    expect(canAdd(overview({ limits: { api_keys: 'abc' } }), 'api_keys', 1)).toBe(false)
+    expect(canAdd(overview({ limits: { storage_gb: '' } }), 'storage_gb', 1)).toBe(false)
+    expect(canAdd(overview({ limits: { users: -3 } }), 'users', 1)).toBe(false)
+  })
+  it('every KNOWN_METERED resource fails closed with an empty limits map', () => {
+    for (const r of KNOWN_METERED) {
+      expect(canAdd({ limits: {}, usage: {} }, r, 1)).toBe(false)
+    }
   })
 })
 
@@ -92,9 +135,25 @@ describe('planAllows', () => {
   it('false when explicitly disabled', () => {
     expect(planAllows(overview({ plan: { features: { automation_platform: false } } }), 'automation_platform')).toBe(false)
   })
-  it('fails open for unknown key or missing map', () => {
+  it('stays permissive when overview is not loaded yet (null/undefined)', () => {
+    expect(planAllows(null, 'ai_tools')).toBe(true)
+    expect(planAllows(undefined, 'ai_tools')).toBe(true)
+  })
+  it('fails open for an UNKNOWN key even when the map is present/empty', () => {
     expect(planAllows(overview({ plan: { features: {} } }), 'new_feature')).toBe(true)
-    expect(planAllows({ plan: {} }, 'ai_tools')).toBe(true)
+    expect(planAllows(overview({ plan: { features: { ai_tools: true } } }), 'some_future_flag')).toBe(true)
+  })
+  it('fails CLOSED for a KNOWN feature when the plan is present but the key is absent', () => {
+    // present plan, empty feature map → known feature not entitled
+    expect(planAllows(overview({ plan: { features: {} } }), 'ai_tools')).toBe(false)
+    // present plan, no features map at all → known feature not entitled
+    expect(planAllows({ plan: {} }, 'ai_tools')).toBe(false)
+    expect(planAllows({ plan: { code: 'starter' } }, 'automation_platform')).toBe(false)
+  })
+  it('every KNOWN_FEATURES key fails closed against an empty-feature plan', () => {
+    for (const f of KNOWN_FEATURES) {
+      expect(planAllows({ plan: { features: {} } }, f)).toBe(false)
+    }
   })
 })
 

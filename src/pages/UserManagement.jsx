@@ -1013,9 +1013,13 @@ export default function UserManagement() {
                                 </span>
                               ))}
                             </div>
-                          ) : (
+                          ) : (u.is_super_admin === true || u.role === 'Admin') ? (
                             <span className="text-xs text-[var(--text-muted)] flex items-center gap-1">
                               <Globe size={11} /> {t('usermgmt.states.all')}
+                            </span>
+                          ) : (
+                            <span className="text-xs text-[var(--text-dim)] flex items-center gap-1">
+                              {t('usermgmt.states.noCountry')}
                             </span>
                           )}
                         </td>
@@ -1439,7 +1443,9 @@ export default function UserManagement() {
               </div>
               <p className="text-xs text-[var(--text-muted)] mt-2">
                 {(editForm.country ?? []).length === 0
-                  ? t('usermgmt.editModal.noRestriction')
+                  ? (editTarget?.is_super_admin === true || editForm.role === 'Admin')
+                    ? t('usermgmt.editModal.seesAllCountries')
+                    : t('usermgmt.editModal.noCountryAccess')
                   : t('usermgmt.editModal.restrictedTo', { countries: editForm.country.join(', ') })}
               </p>
             </div>

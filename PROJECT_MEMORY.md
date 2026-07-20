@@ -3,7 +3,44 @@
 Durable, committed project knowledge so any session has full context. Keep this
 current. Read it before adding/changing modules. Governing spec: `Tyre pulse enterprise.md`
 
-## Phase-1 multi-tenant SaaS security hardening (V306-V310, 2026-07-20) — migrations through V310, next free **V311**
+## Phase-1 multi-tenant SaaS security hardening (V306-V314, 2026-07-20) — migrations through V314, next free **V315**
+- **BATCH 2 (V311-V314 + code, applied live + verified):**
+  - **V311** `tr_sync_profile_org` BEFORE INS/UPD trigger keeps `profiles.org_id` <-> `organisation_id` in
+    sync (fills a NULL from the other; if both set and differ, org_id wins since app_current_org() reads org_id).
+    Sorts before `trg_guard_profile_privileged`; no-op on today's data (all rows equal). Removes the divergence
+    class of bug. `imports.js currentOrgId` now reads `organisation_id ?? org_id`.
+  - **V312** backfilled `organisation_id` on the workflow/event tables from derivable sources
+    (workflow_instances<-profiles via started_by; step_events/notifications<-instances; domain_events<-actor;
+    rule_executions<-business_rules) and TIGHTENED the SELECT policy (dropped the null-org branch) on
+    workflow_instances/step_events/rule_executions (0 null after) and workflow_notifications (1 orphan row whose
+    instance had no derivable org stays null = now hidden — accepted; an un-attributable row must not leak).
+    NOT tightened (underivable null-org rows remain): workflow_definitions (25, no actor/FK), domain_events
+    (~20 actor-less), report_send_log (158, report_schedules.org_id itself null).
+  - **V313** `enforce_plan_limit()` BEFORE INSERT trigger on vehicle_fleet + api_keys consuming the existing
+    `org_can_add()`. SAFE BY CONSTRUCTION: (1) GRANDFATHER — enforces ONLY for an org that has an
+    org_subscriptions row (0 today) so it is INERT until billing goes live per-org (Company A has 683 vehicles
+    vs a trial cap of 25 and NO subscription -> would be blocked by a naive trigger; grandfather avoids that);
+    (2) service-role/no-JWT bypass (imports/webhooks); (3) fail-OPEN on any decision error. VERIFIED: Company A
+    vehicle insert still allowed. This closes the "limits only client-side" gap for when billing is live.
+  - **V314** cross-org bypass sweep: the ONLY 4 remaining `app_is_org_admin()` (= super OR plain admin) policies
+    outside the V306 set were real cross-tenant leaks -> swapped to `is_super_admin()`: `organisations_select`
+    (tenant registry enumeration), `report_schedules_select`, `report_send_log_read` (kept their null-org
+    branches, all rows null today). `storage.objects/vehicle_photos_delete` had NO org scoping (a plain Admin
+    could delete ANY tenant's photos) -> now `app_is_org_admin() AND storage_object_in_my_org(owner)` (keeps
+    in-tenant admin delete, closes cross-org). VERIFIED: no cross-org app_is_org_admin policy remains (only the
+    now-org-scoped photo-delete).
+  - **entitlements.js fail-CLOSED** (fixed): `canAdd` now returns false for a KNOWN_METERED resource
+    (vehicles/users/api_keys/storage_gb) with a missing/unparseable limit (was unlimited-true); `planAllows`
+    returns false for a KNOWN_FEATURES key (ai_tools/automation_platform/tv_display/erp_sync/report_scheduling)
+    when the plan's feature map/key is absent; both stay permissive when `overview` is null (not-loaded). Explicit
+    unlimited (`isExplicitUnlimited`) preserved. entitlements.test.js 38 green.
+  - **Console gate AUDITED = secure** (no change): only a true `is_super_admin` (MFA-satisfied) enters /console;
+    ConsoleGuard + resolveAdmin + signIn all key on is_super_admin; ConsoleAuthBridge's hardcoded true only
+    renders inside the guard. **Web signup AUDITED = already safe** (Login.jsx writes no role/org/scope; relies
+    on handle_new_user). **UserManagement.jsx** legacy copy fixed (blank country -> "No access" not "All" for
+    non-admins; en+ar keys).
+
+## Phase-1 multi-tenant SaaS security hardening — BATCH 1 (V306-V310, 2026-07-20)
 - User is opening Tyre Pulse to multiple companies/individuals. First security pass to make tenant
   isolation real. All applied live + repo files + live-verified by impersonation; web build + mobile tsc clean.
 - **V306 (A1 + B2) — the critical fix: Company Admins no longer cross the org boundary.** The 45 RESTRICTIVE

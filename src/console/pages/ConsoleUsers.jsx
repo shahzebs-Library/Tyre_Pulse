@@ -15,14 +15,10 @@ import { ACCESS_ROLES, ALL_MODULES } from '../../lib/moduleCatalog'
 import { listCustomRoles } from '../../lib/api/customRoles'
 import { setUserCountry, bulkSetRole, bulkSetGrant, adminSetUserSites, adminSetWebAccess } from '../../lib/api/adminAccess'
 import { listDataSiteOptions } from '../../lib/api/sites'
-
 // Site scope semantics (V309): no sites = NO site-scoped access; an explicit
 // 'ALL' / '*' sentinel = org-wide. Admins/super always see everything.
-const SITE_ALL_TOKENS = ['ALL', '*']
-const isOrgWideSites = arr =>
-  Array.isArray(arr) && arr.some(s => SITE_ALL_TOKENS.includes(String(s ?? '').trim().toUpperCase()))
-const withoutOrgWide = arr =>
-  (Array.isArray(arr) ? arr : []).filter(s => !SITE_ALL_TOKENS.includes(String(s ?? '').trim().toUpperCase()))
+// Single source: src/lib/scopeSentinel.js (shared with the invariant tests).
+import { isOrgWideSites, withoutOrgWide } from '../../lib/scopeSentinel'
 
 // Site options are capped so a runaway fleet register can never flood the
 // editor; anything already stored on a user still renders as a chip.

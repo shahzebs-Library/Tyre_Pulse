@@ -1,15 +1,23 @@
 /**
  * Admin User Management
  *
- * Review and approve pending user registrations.
- * Search, filter by role, and manage all profiles.
- * Admin-only screen - accessed from the Admin tab.
+ * Review and approve pending user registrations. Search, filter by role, and
+ * manage all profiles in the caller's organisation.
+ *
+ * SECURITY (findings #6 / #12): every lifecycle change (approve / lock / unlock /
+ * deactivate / change role) goes through the SECURITY DEFINER RPC
+ * `admin_mobile_user_action`, NOT direct table writes. The server enforces the
+ * organisation boundary, the super-admin requirement for privileged transitions,
+ * the last-admin lockout guard, self-action guards, and writes an immutable
+ * reason-bearing audit row. There is NO client hard-delete: removal is a soft
+ * DEACTIVATION (approved=false + locked=true). True auth-identity deletion is an
+ * Admin-web + service-role action, out of scope for mobile.
  */
 
 import { useState, useCallback, useEffect } from 'react'
 import {
   View, Text, FlatList, TouchableOpacity, StyleSheet,
-  StatusBar, ActivityIndicator, RefreshControl, TextInput, Alert,
+  StatusBar, ActivityIndicator, RefreshControl, TextInput, Alert, Modal,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
@@ -30,6 +38,7 @@ interface UserProfile {
   country: string | null
   approved: boolean
   locked: boolean | null
+  is_super_admin: boolean | null
   created_at: string
   pending_reason: string | null
 }
@@ -44,10 +53,32 @@ const ROLE_COLORS: Record<string, { bg: string; text: string }> = {
 }
 
 type FilterKey = 'all' | 'pending' | 'approved'
+type ActionKey = 'approve' | 'lock' | 'unlock' | 'deactivate' | 'set_role'
+
+// Map normalised keys to the DB role labels the profiles table stores.
+const ROLE_DB_LABELS: Record<string, string> = {
+  admin: 'Admin', manager: 'Manager', director: 'Director',
+  inspector: 'Inspector', tyre_man: 'Tyre Man',
+}
+
+interface ReasonModalState {
+  visible: boolean
+  title: string
+  message: string
+  confirmLabel: string
+  destructive: boolean
+  required: boolean
+  onConfirm: (reason: string) => void
+}
+
+const EMPTY_REASON_MODAL: ReasonModalState = {
+  visible: false, title: '', message: '', confirmLabel: 'Confirm',
+  destructive: false, required: false, onConfirm: () => {},
+}
 
 export default function UserManagementScreen() {
   const { allowed, loading: guardLoading } = useAdminGuard()   // admin only
-  const { profile } = useAuth()
+  const { profile, isSuperAdmin } = useAuth()
   const router = useRouter()
 
   const [users, setUsers]         = useState<UserProfile[]>([])
@@ -57,12 +88,14 @@ export default function UserManagementScreen() {
   const [search, setSearch]       = useState('')
   const [filter, setFilter]       = useState<FilterKey>('pending')
   const [acting, setActing]       = useState<string | null>(null) // userId being actioned
+  const [reasonModal, setReasonModal] = useState<ReasonModalState>(EMPTY_REASON_MODAL)
+  const [reasonText, setReasonText]   = useState('')
 
   const load = useCallback(async () => {
     try {
       const { data, error: qErr } = await supabase
         .from('profiles')
-        .select('id, full_name, username, employee_id, role, site, country, approved, locked, created_at, pending_reason')
+        .select('id, full_name, username, employee_id, role, site, country, approved, locked, is_super_admin, created_at, pending_reason')
         .order('approved', { ascending: true }) // pending first
         .order('created_at', { ascending: false })
         .limit(200)
@@ -81,85 +114,158 @@ export default function UserManagementScreen() {
 
   async function onRefresh() { setRefreshing(true); await load(); setRefreshing(false) }
 
-  async function approve(user: UserProfile) {
+  function openReasonModal(cfg: Omit<ReasonModalState, 'visible'>) {
+    setReasonText('')
+    setReasonModal({ ...cfg, visible: true })
+  }
+  function closeReasonModal() { setReasonModal(EMPTY_REASON_MODAL); setReasonText('') }
+
+  /**
+   * Central server-side action dispatcher. All privileged rules (org boundary,
+   * super-admin requirement, last-admin guard, self-action guard, audit) live
+   * in the RPC. This only relays the result and updates local state.
+   */
+  async function runAction(
+    user: UserProfile,
+    action: ActionKey,
+    opts: { reason?: string; role?: string } = {},
+  ) {
+    setActing(user.id)
+    try {
+      const { data, error: rpcErr } = await supabase.rpc('admin_mobile_user_action', {
+        p_user_id: user.id,
+        p_action: action,
+        p_reason: opts.reason ?? null,
+        p_role: opts.role ?? null,
+      })
+      if (rpcErr) {
+        // Migration not applied yet -> degrade cleanly instead of crashing.
+        const code = String((rpcErr as any).code ?? '')
+        const msg  = String((rpcErr as any).message ?? '').toLowerCase()
+        if (code === 'PGRST202' || code === '42883' || msg.includes('admin_mobile_user_action')) {
+          Alert.alert('Update needed', 'This action requires a server update. Please try again later.')
+          return
+        }
+        throw rpcErr
+      }
+      if (data && (data as any).success === false) {
+        Alert.alert('Not allowed', (data as any).error || 'That action could not be completed.')
+        return
+      }
+      // Reflect the change locally (matches the server-side effect).
+      setUsers(prev => prev.map(u => {
+        if (u.id !== user.id) return u
+        if (action === 'approve')    return { ...u, approved: true }
+        if (action === 'lock')       return { ...u, locked: true }
+        if (action === 'unlock')     return { ...u, locked: false }
+        if (action === 'deactivate') return { ...u, approved: false, locked: true }
+        if (action === 'set_role' && opts.role) return { ...u, role: opts.role }
+        return u
+      }))
+    } catch (e: any) {
+      if (__DEV__) console.warn('[users] action failed', action, e)
+      Alert.alert('Error', toUserMessage(e, 'That action could not be completed.'))
+    } finally {
+      setActing(null)
+    }
+  }
+
+  // ── Permission helpers (client-side gating; the server is authoritative) ──
+  const meId = profile?.id
+  function targetIsPrivileged(user: UserProfile): boolean {
+    return user.is_super_admin === true || normaliseRole(user.role) === 'admin'
+  }
+  function canApprove(user: UserProfile): boolean {
+    return isSuperAdmin || !targetIsPrivileged(user)
+  }
+  function canToggleAccess(user: UserProfile): boolean {
+    if (user.id === meId) return false
+    return isSuperAdmin || !targetIsPrivileged(user)
+  }
+  function canChangeRole(user: UserProfile): boolean {
+    if (user.id === meId) return false
+    return isSuperAdmin || !targetIsPrivileged(user)
+  }
+
+  // ── Action initiators ──────────────────────────────────────────────────
+  function approve(user: UserProfile) {
     Alert.alert(
       'Approve User',
       `Grant ${user.full_name ?? user.username ?? 'this user'} access to TyrePulse?`,
       [
         { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Approve',
-          onPress: async () => {
-            setActing(user.id)
-            const { error } = await supabase
-              .from('profiles')
-              .update({ approved: true })
-              .eq('id', user.id)
-            setActing(null)
-            if (error) Alert.alert('Error', 'Failed to approve user.')
-            else setUsers(prev => prev.map(u => u.id === user.id ? { ...u, approved: true } : u))
-          },
-        },
-      ]
+        { text: 'Approve', onPress: () => runAction(user, 'approve') },
+      ],
     )
   }
 
-  async function reject(user: UserProfile) {
-    Alert.alert(
-      'Reject & Remove',
-      `Remove ${user.full_name ?? user.username ?? 'this user'}? This deletes their profile.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Remove',
-          style: 'destructive',
-          onPress: async () => {
-            setActing(user.id)
-            const { error } = await supabase
-              .from('profiles')
-              .delete()
-              .eq('id', user.id)
-            setActing(null)
-            if (error) Alert.alert('Error', 'Failed to remove user.')
-            else setUsers(prev => prev.filter(u => u.id !== user.id))
-          },
-        },
-      ]
-    )
+  function deactivate(user: UserProfile) {
+    // Soft disable (approved=false + locked=true). NOT a hard delete: the auth
+    // identity stays and can be fully removed later from the web admin console.
+    openReasonModal({
+      title: 'Deactivate User',
+      message: `Revoke all access for ${user.full_name ?? user.username ?? 'this user'}? Their account is disabled, not deleted. A reason is required.`,
+      confirmLabel: 'Deactivate',
+      destructive: true,
+      required: true,
+      onConfirm: (reason) => runAction(user, 'deactivate', { reason }),
+    })
   }
 
-  async function changeRole(user: UserProfile) {
-    const roles = ['admin', 'manager', 'director', 'inspector', 'tyre_man']
-    // Map normalised keys → display labels for the DB
-    const dbLabels: Record<string, string> = {
-      admin: 'Admin', manager: 'Manager', director: 'Director',
-      inspector: 'Inspector', tyre_man: 'Tyre Man',
+  function toggleLock(user: UserProfile) {
+    const willLock = !user.locked
+    if (!willLock) {
+      Alert.alert(
+        'Restore Access',
+        `Restore access for ${user.full_name ?? user.username ?? 'this user'}?`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Restore', onPress: () => runAction(user, 'unlock') },
+        ],
+      )
+      return
     }
+    openReasonModal({
+      title: 'Revoke Access',
+      message: `Disable access for ${user.full_name ?? user.username ?? 'this user'}? They will not be able to use the app until restored. A reason is optional.`,
+      confirmLabel: 'Revoke',
+      destructive: true,
+      required: false,
+      onConfirm: (reason) => runAction(user, 'lock', { reason: reason || undefined }),
+    })
+  }
+
+  function changeRole(user: UserProfile) {
+    // Non-super admins cannot grant the Admin role (server enforced too).
+    const keys = ['manager', 'director', 'inspector', 'tyre_man']
+    if (isSuperAdmin) keys.unshift('admin')
     Alert.alert(
       'Change Role',
-      `Current role: ${user.role ?? 'none'}`,
+      `Current role: ${user.role ?? 'none'}. Pick a new role, then enter a reason.`,
       [
-        ...roles.map(r => ({
-          text: dbLabels[r],
-          onPress: async () => {
-            setActing(user.id)
-            const { error } = await supabase
-              .from('profiles')
-              .update({ role: dbLabels[r] })
-              .eq('id', user.id)
-            setActing(null)
-            if (error) Alert.alert('Error', 'Failed to update role.')
-            else setUsers(prev => prev.map(u => u.id === user.id ? { ...u, role: dbLabels[r] } : u))
+        ...keys.map(k => ({
+          text: ROLE_DB_LABELS[k],
+          onPress: () => {
+            const label = ROLE_DB_LABELS[k]
+            openReasonModal({
+              title: 'Change Role',
+              message: `Set ${user.full_name ?? user.username ?? 'this user'} to ${label}? A reason is required.`,
+              confirmLabel: 'Change Role',
+              destructive: k === 'admin',
+              required: true,
+              onConfirm: (reason) => runAction(user, 'set_role', { role: label, reason }),
+            })
           },
         })),
         { text: 'Cancel', style: 'cancel' },
-      ]
+      ],
     )
   }
 
-  async function changeCountry(user: UserProfile) {
-    // A user's country controls what data they see and stamps their
-    // mobile-created records - keeping countries isolated.
+  function changeCountry(user: UserProfile) {
+    // Country scope is a data-visibility attribute (not one of the two findings).
+    // It is guarded + auto-audited server-side (V307 privileged guard + V228
+    // access_audit trigger); left as a scoped direct update.
     Alert.alert(
       'Set Country',
       `Current: ${user.country ?? 'none'}`,
@@ -173,40 +279,24 @@ export default function UserManagementScreen() {
               .update({ country: c })
               .eq('id', user.id)
             setActing(null)
-            if (error) Alert.alert('Error', 'Failed to update country.')
+            if (error) Alert.alert('Error', toUserMessage(error, 'Failed to update country.'))
             else setUsers(prev => prev.map(u => u.id === user.id ? { ...u, country: c } : u))
           },
         })),
         { text: 'Cancel', style: 'cancel' },
-      ]
+      ],
     )
   }
 
-  async function toggleLock(user: UserProfile) {
-    const willLock = !user.locked
-    Alert.alert(
-      willLock ? 'Revoke Access' : 'Restore Access',
-      willLock
-        ? `Disable access for ${user.full_name ?? user.username ?? 'this user'}? They won't be able to use the app until restored.`
-        : `Restore access for ${user.full_name ?? user.username ?? 'this user'}?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: willLock ? 'Revoke' : 'Restore',
-          style: willLock ? 'destructive' : 'default',
-          onPress: async () => {
-            setActing(user.id)
-            const { error } = await supabase
-              .from('profiles')
-              .update({ locked: willLock })
-              .eq('id', user.id)
-            setActing(null)
-            if (error) Alert.alert('Error', 'Failed to update access.')
-            else setUsers(prev => prev.map(u => u.id === user.id ? { ...u, locked: willLock } : u))
-          },
-        },
-      ]
-    )
+  function submitReason() {
+    const trimmed = reasonText.trim()
+    if (reasonModal.required && !trimmed) {
+      Alert.alert('Reason required', 'Please enter a reason for this action.')
+      return
+    }
+    const fn = reasonModal.onConfirm
+    closeReasonModal()
+    fn(trimmed)
   }
 
   // Filters + search
@@ -240,7 +330,7 @@ export default function UserManagementScreen() {
     <SafeAreaView style={styles.safe}>
       <StatusBar barStyle="light-content" />
 
-      {/* ── Header ─────────────────────────────────────────────────────────── */}
+      {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
           <Ionicons name="chevron-back" size={22} color="#fff" />
@@ -251,7 +341,7 @@ export default function UserManagementScreen() {
         </View>
       </View>
 
-      {/* ── Search ─────────────────────────────────────────────────────────── */}
+      {/* Search */}
       <View style={styles.searchWrap}>
         <Ionicons name="search-outline" size={16} color="#94a3b8" />
         <TextInput
@@ -264,7 +354,7 @@ export default function UserManagementScreen() {
         />
       </View>
 
-      {/* ── Filter tabs ─────────────────────────────────────────────────────── */}
+      {/* Filter tabs */}
       <View style={styles.filterRow}>
         {([
           { key: 'pending',  label: `Pending (${pendingCount})` },
@@ -318,6 +408,8 @@ export default function UserManagementScreen() {
             const norm = normaliseRole(user.role)
             const rc   = ROLE_COLORS[norm] ?? ROLE_COLORS.reporter
             const isActing = acting === user.id
+            const roleEditable = canChangeRole(user)
+            const accessEditable = canToggleAccess(user)
             return (
               <View style={styles.userCard}>
                 {/* Pending indicator strip */}
@@ -352,13 +444,18 @@ export default function UserManagementScreen() {
 
                   {/* Meta row */}
                   <View style={styles.metaRow}>
-                    <TouchableOpacity style={[styles.roleChip, { backgroundColor: rc.bg }]} onPress={() => changeRole(user)}>
+                    <TouchableOpacity
+                      style={[styles.roleChip, { backgroundColor: rc.bg }, !roleEditable && styles.chipDisabled]}
+                      onPress={() => changeRole(user)}
+                      disabled={!roleEditable || isActing}
+                    >
                       <Text style={[styles.roleChipText, { color: rc.text }]}>{user.role ?? 'No role'}</Text>
-                      <Ionicons name="chevron-down" size={10} color={rc.text} />
+                      {roleEditable && <Ionicons name="chevron-down" size={10} color={rc.text} />}
                     </TouchableOpacity>
                     <TouchableOpacity
                       style={[styles.roleChip, { backgroundColor: user.country ? '#ecfeff' : '#fef2f2' }]}
                       onPress={() => changeCountry(user)}
+                      disabled={isActing}
                     >
                       <Ionicons name="earth-outline" size={11} color={user.country ? '#0891b2' : '#dc2626'} />
                       <Text style={[styles.roleChipText, { color: user.country ? '#0891b2' : '#dc2626' }]}>
@@ -395,7 +492,7 @@ export default function UserManagementScreen() {
                     <View style={styles.actionRow}>
                       <TouchableOpacity
                         style={styles.rejectBtn}
-                        onPress={() => reject(user)}
+                        onPress={() => deactivate(user)}
                         disabled={isActing}
                       >
                         {isActing
@@ -404,9 +501,9 @@ export default function UserManagementScreen() {
                         }
                       </TouchableOpacity>
                       <TouchableOpacity
-                        style={styles.approveBtn}
+                        style={[styles.approveBtn, !canApprove(user) && styles.btnDisabled]}
                         onPress={() => approve(user)}
-                        disabled={isActing}
+                        disabled={isActing || !canApprove(user)}
                       >
                         {isActing
                           ? <ActivityIndicator size="small" color="#fff" />
@@ -416,8 +513,8 @@ export default function UserManagementScreen() {
                     </View>
                   )}
 
-                  {/* Access control for approved users (not self) */}
-                  {user.approved && user.id !== profile?.id && (
+                  {/* Access control for approved users (not self, permitted only) */}
+                  {user.approved && accessEditable && (
                     <View style={styles.actionRow}>
                       <TouchableOpacity
                         style={user.locked ? styles.approveBtn : styles.rejectBtn}
@@ -438,6 +535,42 @@ export default function UserManagementScreen() {
             )
         }}
       />
+
+      {/* Reason capture modal */}
+      <Modal
+        visible={reasonModal.visible}
+        transparent
+        animationType="fade"
+        onRequestClose={closeReasonModal}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>{reasonModal.title}</Text>
+            <Text style={styles.modalMessage}>{reasonModal.message}</Text>
+            <TextInput
+              style={styles.reasonInput}
+              placeholder={reasonModal.required ? 'Reason (required)' : 'Reason (optional)'}
+              placeholderTextColor="#94a3b8"
+              value={reasonText}
+              onChangeText={setReasonText}
+              multiline
+              numberOfLines={3}
+              autoFocus
+            />
+            <View style={styles.modalActions}>
+              <TouchableOpacity style={styles.modalCancel} onPress={closeReasonModal}>
+                <Text style={styles.modalCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalConfirm, reasonModal.destructive && styles.modalConfirmDanger]}
+                onPress={submitReason}
+              >
+                <Text style={styles.modalConfirmText}>{reasonModal.confirmLabel}</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   )
 }
@@ -493,6 +626,7 @@ const styles = StyleSheet.create({
   metaRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   roleChip: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 10 },
   roleChipText: { fontSize: 11, fontWeight: '700' },
+  chipDisabled: { opacity: 0.75 },
   metaChip: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, backgroundColor: '#f8fafc' },
   metaChipText: { fontSize: 11, color: '#64748b' },
 
@@ -504,10 +638,27 @@ const styles = StyleSheet.create({
   rejectBtnText:  { fontSize: 13, fontWeight: '700', color: '#dc2626' },
   approveBtn:     { flex: 2, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, paddingVertical: 9, borderRadius: 10, backgroundColor: '#7c3aed' },
   approveBtnText: { fontSize: 13, fontWeight: '700', color: '#fff' },
+  btnDisabled:    { opacity: 0.4 },
 
   empty:      { alignItems: 'center', paddingVertical: 60, gap: 12 },
   emptyTitle: { fontSize: 16, fontWeight: '700', color: '#374151' },
   emptyHint:  { fontSize: 13, color: '#94a3b8', textAlign: 'center', paddingHorizontal: 20 },
   retryBtn:   { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 6, paddingHorizontal: 16, paddingVertical: 9, borderRadius: 10, borderWidth: 1.5, borderColor: '#ddd6fe', backgroundColor: '#f5f3ff' },
   retryBtnText: { fontSize: 13, fontWeight: '700', color: '#7c3aed' },
+
+  // Reason modal
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(15,23,42,0.55)', alignItems: 'center', justifyContent: 'center', padding: 24 },
+  modalCard:    { width: '100%', maxWidth: 440, backgroundColor: '#fff', borderRadius: 16, padding: 20, gap: 12 },
+  modalTitle:   { fontSize: 16, fontWeight: '800', color: '#0f172a' },
+  modalMessage: { fontSize: 13, color: '#475569', lineHeight: 19 },
+  reasonInput:  {
+    minHeight: 72, borderWidth: 1.5, borderColor: '#e2e8f0', borderRadius: 10,
+    padding: 12, fontSize: 13, color: '#0f172a', textAlignVertical: 'top', backgroundColor: '#f8fafc',
+  },
+  modalActions: { flexDirection: 'row', gap: 10, marginTop: 2 },
+  modalCancel:  { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 11, borderRadius: 10, borderWidth: 1.5, borderColor: '#e2e8f0' },
+  modalCancelText: { fontSize: 14, fontWeight: '700', color: '#64748b' },
+  modalConfirm: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 11, borderRadius: 10, backgroundColor: '#7c3aed' },
+  modalConfirmDanger: { backgroundColor: '#dc2626' },
+  modalConfirmText: { fontSize: 14, fontWeight: '700', color: '#fff' },
 })

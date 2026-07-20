@@ -38,6 +38,7 @@ export type CommandType =
   | 'ENGINE_HOURS_LOG'
   | 'REPORT_ACCIDENT'
   | 'WASH_RECORD'
+  | 'WORKSHOP_EVENT'
 
 /** How a command mutates its table. Defaults to 'insert' to preserve v1 behavior. */
 export type CommandOp = 'insert' | 'update'
@@ -54,6 +55,17 @@ interface CommandSpec {
   op?: CommandOp
   /** Column used to locate the row for an 'update' command. Defaults to 'id'. */
   matchField?: string
+  /**
+   * Idempotency mode for INSERT commands. Defaults to `true`: the insert upserts
+   * on a stable `client_uuid` so a lost response / crash never double-inserts
+   * (the target table must carry a `client_uuid` column + unique index).
+   *
+   * Set `false` for an APPEND-ONLY event log whose table has NO `client_uuid`
+   * column (e.g. tech_activity_events): the insert is a plain insert, delivery
+   * is at-least-once, and a duplicated event is harmless because the status
+   * engine only reads the LAST meaningful event per stream.
+   */
+  idempotent?: boolean
 }
 
 /**
@@ -189,6 +201,21 @@ export const COMMANDS: Record<CommandType, CommandSpec> = {
       'odometer_km', 'status', 'notes', 'photos',
     ],
   },
+  // Workshop Live Control - technician activity event log (V291). APPEND-ONLY:
+  // every tap (start/pause/resume/complete/waiting/break/problem + check in/out)
+  // writes ONE row, timestamped server-side (the `at` default now() is never
+  // client-set). organisation_id + created_by are auto-stamped by the DB, so
+  // they are deliberately NOT in the allow-list. V292 added a client_uuid column
+  // + unique index, so this command is idempotent: a lost-response retry can
+  // never double-insert an event (which would inflate completed-task counts).
+  WORKSHOP_EVENT: {
+    table: 'tech_activity_events',
+    fields: [
+      'user_id', 'job_id', 'task_id', 'asset_no', 'event_type', 'reason_code',
+      'note', 'device', 'gps_lat', 'gps_lng', 'site', 'country',
+      'foreman_confirmed', 'confirmed_by',
+    ],
+  },
 }
 
 export interface QueuedRecord {
@@ -242,6 +269,13 @@ const TYPE_TO_MODULE: Record<CommandType, string> = {
   ENGINE_HOURS_LOG: 'meter-log',
   REPORT_ACCIDENT: 'accident',
   WASH_RECORD: 'wash',
+  WORKSHOP_EVENT: 'workshop',
+}
+
+/** True when an INSERT command upserts on a stable client_uuid (default). An
+ * append-only log (idempotent:false) is plain-inserted with no client_uuid. */
+function isIdempotent(type: CommandType): boolean {
+  return COMMANDS[type].idempotent !== false
 }
 
 /** True when a command patches an existing row rather than inserting a new one. */
@@ -389,9 +423,15 @@ export async function saveCommand(
       await enqueueCommand(type, prepared, cuid)
       return { ok: true, offline: true }
     }
-    const { error } = await supabase.from(COMMANDS[type].table)
-      .upsert({ ...prepared, client_uuid: cuid }, { onConflict: 'client_uuid', ignoreDuplicates: true })
-    if (error) throw error
+    if (isIdempotent(type)) {
+      const { error } = await supabase.from(COMMANDS[type].table)
+        .upsert({ ...prepared, client_uuid: cuid }, { onConflict: 'client_uuid', ignoreDuplicates: true })
+      if (error) throw error
+    } else {
+      // Append-only log: plain insert (no client_uuid column on the table).
+      const { error } = await supabase.from(COMMANDS[type].table).insert(prepared)
+      if (error) throw error
+    }
     return { ok: true, offline: false }
   } catch (e: any) {
     await enqueueCommand(type, clean, cuid)
@@ -444,11 +484,17 @@ async function doSyncRecordQueue(): Promise<{ synced: number; failed: number }> 
         const { payload: prepared, pending } = await resolveCommandPhotos(item.type, clean)
         item.payload = prepared
         if (pending) throw new Error('Photos pending upload - will retry')
-        // Upsert on the stable client id: a replayed attempt (after a crash or a
-        // lost response) is ignored instead of inserting a second row.
-        const { error } = await supabase.from(COMMANDS[item.type].table)
-          .upsert({ ...prepared, client_uuid: item.idempotency_key }, { onConflict: 'client_uuid', ignoreDuplicates: true })
-        if (error) throw error
+        if (isIdempotent(item.type)) {
+          // Upsert on the stable client id: a replayed attempt (after a crash or
+          // a lost response) is ignored instead of inserting a second row.
+          const { error } = await supabase.from(COMMANDS[item.type].table)
+            .upsert({ ...prepared, client_uuid: item.idempotency_key }, { onConflict: 'client_uuid', ignoreDuplicates: true })
+          if (error) throw error
+        } else {
+          // Append-only log (no client_uuid): plain insert, at-least-once.
+          const { error } = await supabase.from(COMMANDS[item.type].table).insert(prepared)
+          if (error) throw error
+        }
       }
       item.sync_status = 'synced'
       item.synced_at = new Date().toISOString()

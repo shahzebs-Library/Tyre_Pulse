@@ -813,6 +813,10 @@
         "washing": {
           "label": "Vehicle Washing",
           "sub": "Log a wash"
+        },
+        "workshop": {
+          "label": "My Jobs",
+          "sub": "Record job activity"
         }
       }
     },
@@ -1377,6 +1381,74 @@
       "frameHint": "Point the camera at the asset barcode or QR label.",
       "camUnavailable": "Camera unavailable",
       "camUnavailableMsg": "The camera could not be started. Close this and type the asset code by hand."
+    },
+    "workshop": {
+      "title": "My Jobs",
+      "loading": "Loading your jobs...",
+      "loadError": "Could not load your jobs.",
+      "saveFailTitle": "Could not record",
+      "tryAgain": "Please try again.",
+      "savedLogged": "Activity recorded",
+      "savedPending": "Saved offline - it will sync automatically",
+      "onDuty": "On duty",
+      "offDuty": "Off duty",
+      "noSite": "No site set",
+      "checkIn": "Check In",
+      "checkOut": "Check Out",
+      "saving": "Saving...",
+      "myJobs": "My open jobs",
+      "noJobsTitle": "No open jobs",
+      "noJobsMsg": "You have no jobs assigned right now. Pull down to refresh.",
+      "noAsset": "No asset",
+      "noWo": "No work order number",
+      "wo": "WO",
+      "selectJobTitle": "Select a job",
+      "selectJobMsg": "Pick one of your jobs first.",
+      "checkInFirstTitle": "Check in first",
+      "checkInFirstMsg": "Check in for your shift before recording work.",
+      "checkInHint": "Check in for your shift to enable actions.",
+      "confirmTitle": "Complete task?",
+      "confirmMsg": "This records the task as complete and sends it for inspection.",
+      "reasonLabel": "Reason",
+      "noteLabel": "Note",
+      "notePlaceholder": "Add any detail for the foreman",
+      "record": "Record",
+      "actions": {
+        "start_job": "Start Job",
+        "pause_job": "Pause Job",
+        "resume_job": "Resume Job",
+        "complete_task": "Complete Task",
+        "request_parts": "Request Parts",
+        "request_assistance": "Request Assistance",
+        "waiting_approval": "Waiting for Approval",
+        "waiting_vehicle": "Waiting for Vehicle",
+        "waiting_tools": "Waiting for Tools",
+        "start_break": "Start Break",
+        "end_break": "End Break",
+        "report_problem": "Report Problem"
+      },
+      "reasons": {
+        "parts": "Parts",
+        "tools": "Tools",
+        "approval": "Approval",
+        "vehicle": "Vehicle",
+        "vendor": "Vendor",
+        "support": "Support",
+        "break": "Break"
+      },
+      "status": {
+        "working": "Working",
+        "available": "Available",
+        "waiting_parts": "Waiting for Parts",
+        "waiting_approval": "Waiting for Approval",
+        "waiting_tools": "Waiting for Tools",
+        "waiting_vehicle": "Waiting for Vehicle",
+        "on_break": "On Break",
+        "training": "Training",
+        "awaiting_inspection": "Awaiting Inspection",
+        "off_duty": "Off Duty",
+        "absent": "Absent"
+      }
     }
   },
   "checklists": {

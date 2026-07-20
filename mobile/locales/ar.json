@@ -814,6 +814,10 @@
         "washing": {
           "label": "غسيل المركبات",
           "sub": "تسجيل غسيل"
+        },
+        "workshop": {
+          "label": "مهامي",
+          "sub": "تسجيل نشاط المهمة"
         }
       }
     },
@@ -1378,6 +1382,74 @@
       "frameHint": "وجّه الكاميرا نحو باركود الأصل أو ملصق رمز QR.",
       "camUnavailable": "الكاميرا غير متاحة",
       "camUnavailableMsg": "تعذر تشغيل الكاميرا. أغلق هذا واكتب رمز الأصل يدويا."
+    },
+    "workshop": {
+      "title": "مهامي",
+      "loading": "جارٍ تحميل مهامك...",
+      "loadError": "تعذر تحميل مهامك.",
+      "saveFailTitle": "تعذر التسجيل",
+      "tryAgain": "يرجى المحاولة مرة أخرى.",
+      "savedLogged": "تم تسجيل النشاط",
+      "savedPending": "تم الحفظ دون اتصال - ستتم المزامنة تلقائيًا",
+      "onDuty": "في الخدمة",
+      "offDuty": "خارج الخدمة",
+      "noSite": "لم يتم تحديد موقع",
+      "checkIn": "تسجيل الدخول",
+      "checkOut": "تسجيل الخروج",
+      "saving": "جارٍ الحفظ...",
+      "myJobs": "مهامي المفتوحة",
+      "noJobsTitle": "لا توجد مهام مفتوحة",
+      "noJobsMsg": "لا توجد مهام مسندة إليك حاليًا. اسحب للأسفل للتحديث.",
+      "noAsset": "لا يوجد أصل",
+      "noWo": "لا يوجد رقم أمر عمل",
+      "wo": "أمر عمل",
+      "selectJobTitle": "اختر مهمة",
+      "selectJobMsg": "اختر إحدى مهامك أولًا.",
+      "checkInFirstTitle": "سجّل الدخول أولًا",
+      "checkInFirstMsg": "سجّل الدخول لمناوبتك قبل تسجيل العمل.",
+      "checkInHint": "سجّل الدخول لمناوبتك لتفعيل الإجراءات.",
+      "confirmTitle": "إكمال المهمة؟",
+      "confirmMsg": "سيسجل هذا المهمة كمكتملة ويرسلها للفحص.",
+      "reasonLabel": "السبب",
+      "noteLabel": "ملاحظة",
+      "notePlaceholder": "أضف أي تفاصيل للمشرف",
+      "record": "تسجيل",
+      "actions": {
+        "start_job": "بدء المهمة",
+        "pause_job": "إيقاف مؤقت",
+        "resume_job": "استئناف",
+        "complete_task": "إكمال المهمة",
+        "request_parts": "طلب قطع غيار",
+        "request_assistance": "طلب مساعدة",
+        "waiting_approval": "بانتظار الموافقة",
+        "waiting_vehicle": "بانتظار المركبة",
+        "waiting_tools": "بانتظار الأدوات",
+        "start_break": "بدء استراحة",
+        "end_break": "إنهاء الاستراحة",
+        "report_problem": "الإبلاغ عن مشكلة"
+      },
+      "reasons": {
+        "parts": "قطع غيار",
+        "tools": "أدوات",
+        "approval": "موافقة",
+        "vehicle": "مركبة",
+        "vendor": "مورّد",
+        "support": "دعم",
+        "break": "استراحة"
+      },
+      "status": {
+        "working": "يعمل",
+        "available": "متاح",
+        "waiting_parts": "بانتظار قطع الغيار",
+        "waiting_approval": "بانتظار الموافقة",
+        "waiting_tools": "بانتظار الأدوات",
+        "waiting_vehicle": "بانتظار المركبة",
+        "on_break": "في استراحة",
+        "training": "تدريب",
+        "awaiting_inspection": "بانتظار الفحص",
+        "off_duty": "خارج الخدمة",
+        "absent": "غائب"
+      }
     }
   },
   "checklists": {

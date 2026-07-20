@@ -28,7 +28,7 @@ export type ModuleKey =
   | 'vehicles' | 'workorders' | 'rca' | 'stock' | 'stockManage' | 'overview'
   | 'reports' | 'analytics' | 'ai' | 'admin' | 'users' | 'meter' | 'tasks'
   | 'calendar' | 'reportIssue' | 'checklists' | 'approvals' | 'alerts'
-  | 'history' | 'tyreChange' | 'team' | 'pm' | 'washing'
+  | 'history' | 'tyreChange' | 'team' | 'pm' | 'washing' | 'workshop'
 
 export interface ModuleDef {
   key: ModuleKey
@@ -91,6 +91,11 @@ export const MODULES: ModuleDef[] = [
   M('tasks',          'Tasks',             'list-outline',           'Maintenance',['manager', 'director', 'inspector']),
   M('stock',          'Stock Count',       'cube-outline',           'Maintenance',['manager', 'inspector']),
   M('pm',             'Maintenance Due',   'build-outline',          'Maintenance',['manager', 'director']),
+  // Workshop Live Control - technician records job activity. The app has no
+  // dedicated technician/mechanic/foreman roles (see lib/types.ts), so the shop-
+  // floor roles are tyre_man + inspector; supervisors (manager/director) + admin
+  // see it too. Per-user grants can extend it to anyone.
+  M('workshop',       'My Jobs',           'construct-outline',      'Maintenance',['manager', 'director', 'inspector', 'tyre_man']),
   // Management ----------------------------------------------------------------
   M('overview',       'Overview',          'grid-outline',           'Management', ['manager', 'director']),
   M('reports',        'Reports',           'document-text-outline',  'Management', ['manager', 'director', 'reporter', 'inspector', 'tyre_man']),

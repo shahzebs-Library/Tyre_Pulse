@@ -3,6 +3,53 @@
 Durable, committed project knowledge so any session has full context. Keep this
 current. Read it before adding/changing modules. Governing spec: `Tyre pulse enterprise.md`
 
+## Workshop Live Control & Technician Productivity (V291/V292, 2026-07-20) — P1 shipped
+- NEW module: live workshop dashboard where a foreman/manager sees every technician's real status,
+  assigns job cards, and measures PRODUCTIVE vs BLOCKED vs UNASSIGNED time (the fairness rule: non-working
+  time is classified by REAL reason — waiting parts/tools/approval/vehicle/vendor/support, break, training —
+  never blanket "idle"). Built by 3 agents over one shared engine. Do NOT duplicate — extend these.
+- **Single pure engine `src/lib/workshopLive.js`** (the brain; web + mobile both use its logic): STATUS +
+  STATUS_META (colour tones) + statusColor; EVENT_TYPES (mirror the DB CHECK); TECH_ACTIONS (button config);
+  BLOCKED_REASONS; DELAY_CATEGORIES; `buildSegments` (event log -> classified time segments),
+  `rollupTechnician` (productive/blocked/break/training/unassigned/overtime/availableDuty/utilization),
+  `statusFromEvents` (request_assistance/report_problem are ANNOTATIONS, don't change status; pause_job resolves
+  by reason_code), `buildBoard`, `computeKpis` (the 16-KPI strip), `deriveAlerts` (DEFAULT_THRESHOLDS),
+  `delayBreakdown`. Deterministic (explicit `now`, never Date.now()). Tests `workshopLive.test.js` (13).
+  KEY FORMULA: utilization = productive / (availableDuty - break - training); unassigned = leftover on-duty,
+  never negative; blocked is SEPARATE from unassigned.
+- **V291 tables (applied live + MIGRATIONS_V291...sql):** `tech_activity_events` (append-only core log:
+  user_id, job_id, task_id, asset_no, event_type[15-value CHECK], reason_code, note, device, gps, at,
+  foreman_confirmed), `wo_tasks` (split a job into tasks), `wo_assignments` (tech<->job/task, primary/helper,
+  active), `workshop_attendance` (check_in/out). `work_orders` += est_minutes, assigned_owner_id, qc_status,
+  vor, vor_since. Full RLS: org(restrictive all)+country+site(restrictive select)+member select+elevated write;
+  tech_activity_events adds own-visibility (a tech sees only own events) + self-insert. **V292** added
+  `tech_activity_events.client_uuid` + single-column partial unique index for offline-retry idempotency
+  (mobile queue upserts onConflict:'client_uuid'). Next free migration **V293**.
+- **Web service `src/lib/api/workshopLive.js`** (barrel `workshopLive`): loadLiveBoard({site,country}) orchestrator
+  -> {technicians, eventsByUser, jobs, jobsById, assignments, shiftByUser, presentByUser} (each sub-read
+  []-degrades); recordEvent (validates event_type), confirmEvent, assignJob/reassignJob/releaseAssignment,
+  createTask/updateTask/setTaskStatus, listOpenJobs, listTechnicians (workshop roles OR anyone with a
+  technician_skills row), checkIn/checkOut, setJobStatus/setJobPriority/setVor. Tests (7).
+- **Web dashboard `src/pages/WorkshopLive.jsx`** (route `/workshop-live`, RoleRoute Admin/Manager/Director,
+  nav "Workshop & Downtime" > "Live Control", Activity icon): 16 clickable KPI cards (filter board/kanban) +
+  Technician Live Board (status pill, current job, productive/blocked/unassigned time, utilization, assign/
+  reassign, confirm-complete) + 9-column Job Kanban (New..Overdue; assign/move-status/priority/VOR per card;
+  no drag-drop by choice — dropdowns for reliability) + ECharts delay/root-cause bar (delayBreakdown) +
+  alerts rail. Supabase realtime on tech_activity_events/work_orders/wo_assignments (debounced reload) + 60s
+  poll + 30s clock tick. Main-app theme (var(--*)).
+- **Mobile technician `mobile/app/(app)/workshop.tsx`** + `mobile/lib/workshopLive.ts` (dependency-free mirror
+  of the engine's vocab + statusFromEvents) + `mobile/lib/workshopApi.ts` (listMyJobs, recordWorkshopEvent,
+  checkIn/out): check-in banner, my open jobs, tap a job -> big thumb action buttons -> one event row each,
+  offline-safe via `WORKSHOP_EVENT` recordQueue command (idempotent on client_uuid). ModuleKey `workshop`
+  (roles manager/director/inspector/tyre_man + admin; app has NO literal technician/mechanic/foreman role —
+  mapped to tyre_man/inspector; add them to normaliseRole + the module if real roles are created). i18n en+ar.
+- **KNOWN follow-ups (phase 2, flagged not done):** (a) work_orders.status has NO CHECK; the dashboard writes
+  engine-canonical lowercase tokens (in_progress/quality_inspection) while the legacy /work-orders page uses
+  Title Case — both sides normalize on read, but unify the vocabulary before heavy cross-page status filtering.
+  (b) TV read-only workshop board (reuse report-share token infra). (c) Live TV alerts + advanced root-cause
+  cost impact. (d) plate_number not on work_orders (board shows asset only). (e) attendance-driven "absent"
+  report for managers now surfaces as the Absent KPI + presentByUser; a dedicated absence report is a later add.
+
 ## Supabase dashboard CSV import now VISIBLE (V290, 2026-07-20) — org auto-stamp
 - User wanted the EASIEST reliable bulk-load: Supabase Table Editor "Import data from CSV" (no app screens,
   no timeouts, big files). Blocker: that importer runs as an admin role with NO profile, so the column default

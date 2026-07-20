@@ -18,6 +18,7 @@ import {
   ShieldAlert, Activity, Gauge, Sigma, Percent, Target, TrendingDown,
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
+import EmailPdfButton from '../components/EmailPdfButton'
 import {
   buildPredictions, buildFailureRiskRows, buildCohortModels, computeFleetStats,
   LEGAL_MIN_TREAD_MM, REPLACE_TARGET_MM, PRESSURE_TARGET_PSI, MAX_AGE_YEARS,
@@ -844,7 +845,7 @@ export default function PredictiveMaintenance() {
     )
   }, [filteredPredictions, activeCurrency])
 
-  const handlePdfExport = useCallback(() => {
+  const handlePdfExport = useCallback((opts = {}) => {
     const rows = filteredPredictions.slice(0, 500).map(p => ({
       ...p,
       due_date: fmtDate(p.due_date),
@@ -852,7 +853,7 @@ export default function PredictiveMaintenance() {
       tread_depth: p.tread_depth != null ? `${p.tread_depth} mm` : '-',
       limiting_factor: LIMITING_FACTOR_LABEL[p.limiting_factor] || '-',
     }))
-    exportToPdf(
+    return exportToPdf(
       rows,
       [
         { key: 'asset_no',        header: 'Asset No' },
@@ -871,6 +872,8 @@ export default function PredictiveMaintenance() {
       'Predictive Maintenance: Upcoming Tyre Replacements',
       `Predictive_Maintenance_${new Date().toISOString().slice(0,10)}`,
       'landscape',
+      '',
+      opts,
     )
   }, [filteredPredictions, activeCurrency])
 
@@ -938,9 +941,18 @@ export default function PredictiveMaintenance() {
                 <button onClick={handleExcelExport} className="btn-secondary flex items-center gap-2 text-xs px-3 py-1.5">
                   <Download size={14} /> Excel
                 </button>
-                <button onClick={handlePdfExport} className="btn-secondary flex items-center gap-2 text-xs px-3 py-1.5">
+                <button onClick={() => handlePdfExport()} className="btn-secondary flex items-center gap-2 text-xs px-3 py-1.5">
                   <FileText size={14} /> PDF
                 </button>
+                <EmailPdfButton
+                  className="btn-secondary flex items-center gap-2 text-xs px-3 py-1.5"
+                  getPdf={async () => ({
+                    base64: await handlePdfExport({ returnBase64: true }),
+                    filename: `Predictive_Maintenance_${new Date().toISOString().slice(0,10)}.pdf`,
+                    subject: 'Predictive Maintenance',
+                    bodyHtml: '<p>Attached is the Predictive Maintenance report.</p>',
+                  })}
+                />
               </>
             ) : (
               <button onClick={handleRiskExport} className="btn-secondary flex items-center gap-2 text-xs px-3 py-1.5">

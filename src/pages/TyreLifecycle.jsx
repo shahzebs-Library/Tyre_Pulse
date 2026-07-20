@@ -17,6 +17,7 @@ import { useSettings } from '../contexts/SettingsContext'
 import { exportToPdf, exportToExcel } from '../lib/exportUtils'
 import { toUserMessage } from '../lib/safeError'
 import PageHeader from '../components/ui/PageHeader'
+import EmailPdfButton from '../components/EmailPdfButton'
 import PeriodFilter, { filterByPeriodValue } from '../components/ui/PeriodFilter'
 
 ChartJS.register(
@@ -328,7 +329,7 @@ export default function TyreLifecycle() {
   }
 
   // ── Export ────────────────────────────────────────────────────────────────
-  function handlePdfExport() {
+  function handlePdfExport(opts = {}) {
     const cols = [
       { key: 'serial_number', header: 'Serial' },
       { key: 'brand',         header: 'Brand' },
@@ -350,7 +351,7 @@ export default function TyreLifecycle() {
       _cpk:          cpk(r) != null ? cpk(r).toFixed(4) : '-',
       _stage:        lifecycleStage(r),
     }))
-    exportToPdf(rows, cols, 'Tyre Lifecycle Report', 'TyreLifecycle_Report', 'landscape')
+    return exportToPdf(rows, cols, 'Tyre Lifecycle Report', 'TyreLifecycle_Report', 'landscape', '', opts)
   }
 
   function handleExcelExport() {
@@ -378,9 +379,18 @@ export default function TyreLifecycle() {
         icon={Activity}
         actions={
           <div className="flex items-center gap-2">
-            <button onClick={handlePdfExport} className="flex items-center gap-1.5 px-3 py-1.5 bg-[var(--surface-2)] hover:bg-[var(--surface-3)] border border-[var(--border-bright)] rounded-lg text-sm text-[var(--text-secondary)] transition-colors">
+            <button onClick={() => handlePdfExport()} className="flex items-center gap-1.5 px-3 py-1.5 bg-[var(--surface-2)] hover:bg-[var(--surface-3)] border border-[var(--border-bright)] rounded-lg text-sm text-[var(--text-secondary)] transition-colors">
               <FileText size={14} /> PDF
             </button>
+            <EmailPdfButton
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-[var(--surface-2)] hover:bg-[var(--surface-3)] border border-[var(--border-bright)] rounded-lg text-sm text-[var(--text-secondary)] transition-colors"
+              getPdf={async () => ({
+                base64: await handlePdfExport({ returnBase64: true }),
+                filename: 'TyreLifecycle_Report.pdf',
+                subject: 'Tyre Lifecycle',
+                bodyHtml: '<p>Attached is the Tyre Lifecycle report.</p>',
+              })}
+            />
             <button onClick={handleExcelExport} className="flex items-center gap-1.5 px-3 py-1.5 bg-[var(--surface-2)] hover:bg-[var(--surface-3)] border border-[var(--border-bright)] rounded-lg text-sm text-[var(--text-secondary)] transition-colors">
               <FileSpreadsheet size={14} /> Excel
             </button>

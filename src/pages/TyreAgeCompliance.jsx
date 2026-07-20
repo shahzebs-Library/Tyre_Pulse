@@ -23,6 +23,7 @@ import {
   CalendarX,
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
+import EmailPdfButton from '../components/EmailPdfButton'
 import { useSettings } from '../contexts/SettingsContext'
 import { listTyresForAgeScan } from '../lib/api/tyreAgeCompliance'
 import {
@@ -204,6 +205,16 @@ export default function TyreAgeCompliance() {
             <button onClick={() => exportToPdf(exportRows, EXPORT_COLS.map((k, i) => ({ key: k, header: EXPORT_HEADERS[i] })), 'Tyre Age Compliance', 'tyre_age_compliance', 'landscape')} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!filtered.length}>
               <FileText size={14} /> PDF
             </button>
+            <EmailPdfButton
+              disabled={!filtered.length}
+              className="btn-secondary text-sm inline-flex items-center gap-1.5 disabled:opacity-50"
+              getPdf={async () => ({
+                base64: await exportToPdf(exportRows, EXPORT_COLS.map((k, i) => ({ key: k, header: EXPORT_HEADERS[i] })), 'Tyre Age Compliance', 'tyre_age_compliance', 'landscape', '', { returnBase64: true }),
+                filename: 'tyre_age_compliance.pdf',
+                subject: 'Tyre Age Compliance',
+                bodyHtml: '<p>Attached is the Tyre Age Compliance report.</p>',
+              })}
+            />
           </div>
         }
       />

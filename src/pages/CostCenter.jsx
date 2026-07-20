@@ -15,6 +15,7 @@ import { applyCountry } from '../lib/api/_client'
 import { useAuth } from '../contexts/AuthContext'
 import { toUserMessage } from '../lib/safeError'
 import PageHeader from '../components/ui/PageHeader'
+import EmailPdfButton from '../components/EmailPdfButton'
 import BudgetTabs from '../components/budgets/BudgetTabs'
 import {
   DollarSign, TrendingUp, TrendingDown, BarChart2, PieChart, Target,
@@ -565,10 +566,10 @@ export default function CostCenter() {
     } finally { setExporting(false) }
   }
 
-  async function handlePdfExport() {
+  async function handlePdfExport(opts = {}) {
     setExporting(true)
     try {
-      exportToPdf(
+      return await exportToPdf(
         bySite.map(s => ({
           site:      s.site,
           count:     s.count,
@@ -585,7 +586,7 @@ export default function CostCenter() {
         'CostCenter_Report',
         'landscape',
         '',
-        { currency: activeCurrency },
+        { currency: activeCurrency, ...opts },
       )
     } finally { setExporting(false) }
   }
@@ -654,13 +655,23 @@ export default function CostCenter() {
             {t('costcenter.actions.excel')}
           </button>
           <button
-            onClick={handlePdfExport}
+            onClick={() => handlePdfExport()}
             disabled={exporting}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gray-900 border border-gray-700 text-[var(--panel-ink-3)] hover:text-green-400 hover:border-green-700 transition-all text-xs disabled:opacity-50"
           >
             <FileText size={13} />
             {t('costcenter.actions.pdf')}
           </button>
+          <EmailPdfButton
+            disabled={exporting}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gray-900 border border-gray-700 text-[var(--panel-ink-3)] hover:text-green-400 hover:border-green-700 transition-all text-xs disabled:opacity-50"
+            getPdf={async () => ({
+              base64: await handlePdfExport({ returnBase64: true }),
+              filename: 'CostCenter_Report.pdf',
+              subject: 'Cost Center',
+              bodyHtml: '<p>Attached is the Cost Center report.</p>',
+            })}
+          />
         </>}
       />
 

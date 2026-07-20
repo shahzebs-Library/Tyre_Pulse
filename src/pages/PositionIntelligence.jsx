@@ -7,6 +7,7 @@ import { formatCurrency as _fmtCurrencyBase } from '../lib/formatters'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import { AXLE_GROUPS, GROUP_ICONS, normalizePosition } from '../lib/tyrePositions'
 import PageHeader from '../components/ui/PageHeader'
+import EmailPdfButton from '../components/EmailPdfButton'
 import {
   MapPin, Download, FileText, AlertTriangle, CheckCircle,
   TrendingUp, TrendingDown, Minus, ChevronDown, RefreshCw,
@@ -443,7 +444,7 @@ export default function PositionIntelligence() {
     )
   }
 
-  function handlePdfExport() {
+  function handlePdfExport(opts = {}) {
     const rows = positionMetrics.map(p => ({
       position: p.position,
       count: p.count,
@@ -452,12 +453,14 @@ export default function PositionIntelligence() {
       avgKmLife: p.avgKmLife ? Math.round(p.avgKmLife).toLocaleString() + ' km' : 'N/A',
       totalCost: fmtCurrency(p.totalCost, activeCurrency),
     }))
-    exportToPdf(
+    return exportToPdf(
       rows,
       ['position', 'count', 'failureRate', 'avgCpk', 'avgKmLife', 'totalCost'],
       ['Position', 'Records', 'Failure Rate', 'Avg CPK', 'Avg KM Life', 'Total Cost'],
       'Tyre Position Intelligence Report',
       'position-intelligence',
+      '',
+      opts,
     )
   }
 
@@ -516,9 +519,18 @@ export default function PositionIntelligence() {
             <button className="btn-secondary text-xs flex items-center gap-1" onClick={handleExcelExport}>
               <Download size={14} /> Excel
             </button>
-            <button className="btn-secondary text-xs flex items-center gap-1" onClick={handlePdfExport}>
+            <button className="btn-secondary text-xs flex items-center gap-1" onClick={() => handlePdfExport()}>
               <FileText size={14} /> PDF
             </button>
+            <EmailPdfButton
+              className="btn-secondary text-xs flex items-center gap-1"
+              getPdf={async () => ({
+                base64: await handlePdfExport({ returnBase64: true }),
+                filename: 'Tyre Position Intelligence Report.pdf',
+                subject: 'Position Intelligence',
+                bodyHtml: '<p>Attached is the Position Intelligence report.</p>',
+              })}
+            />
           </div>
         }
       />

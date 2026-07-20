@@ -26,6 +26,7 @@ import {
   PiggyBank, Download, FileText, Loader2, AlertTriangle, ArrowRight, TrendingUp,
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
+import EmailPdfButton from '../components/EmailPdfButton'
 import { useSettings } from '../contexts/SettingsContext'
 import { formatCurrencyCompact, formatCurrency } from '../lib/formatters'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
@@ -257,6 +258,31 @@ function FleetActuals() {
           <div className="flex gap-2">
             <button onClick={handleExcel} className="btn-secondary text-xs inline-flex items-center gap-1.5"><Download size={13} /> Excel</button>
             <button onClick={handlePdf} className="btn-secondary text-xs inline-flex items-center gap-1.5"><FileText size={13} /> PDF</button>
+            <EmailPdfButton
+              className="btn-secondary text-xs inline-flex items-center gap-1.5 disabled:opacity-50"
+              getPdf={async () => ({
+                base64: await exportToPdf(
+                  assets,
+                  [
+                    { key: 'asset_no', header: 'Asset' },
+                    { key: 'vehicle_type', header: 'Vehicle Type' },
+                    { key: 'tyre_procurement', header: 'Tyre Spend' },
+                    { key: 'km', header: 'Km' },
+                    { key: 'cost_per_km', header: 'Cost/km' },
+                    { key: 'percentile', header: 'Percentile' },
+                    { key: 'band', header: 'Band' },
+                  ],
+                  'Fleet Actuals — Per-Asset TCO',
+                  'TyrePulse_FleetActuals_TCO',
+                  'landscape',
+                  '',
+                  { returnBase64: true },
+                ),
+                filename: 'TyrePulse_FleetActuals_TCO.pdf',
+                subject: 'TCO Calculator',
+                bodyHtml: '<p>Attached is the TCO Calculator report.</p>',
+              })}
+            />
           </div>
         </div>
         <div className="overflow-x-auto">

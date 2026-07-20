@@ -10,6 +10,7 @@ import { toUserMessage } from '../lib/safeError'
 import { Download, FileText, Maximize2, GitMerge, AlertTriangle, RefreshCw } from 'lucide-react'
 import { motion } from 'framer-motion'
 import PageHeader from '../components/ui/PageHeader'
+import EmailPdfButton from '../components/EmailPdfButton'
 import PeriodFilter, { filterByPeriodValue } from '../components/ui/PeriodFilter'
 import SegmentedControl from '../components/ui/SegmentedControl'
 import {
@@ -245,6 +246,15 @@ export default function SiteComparison() {
             >
               <FileText size={14} /> {t('sitecomparison.actions.pdf')}
             </button>
+            <EmailPdfButton
+              className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-1.5"
+              getPdf={async () => ({
+                base64: await exportToPdf(allMetrics, SITE_COLS, 'Site Comparison', 'TyrePulse_SiteComparison', 'landscape', '', { returnBase64: true }),
+                filename: 'TyrePulse_SiteComparison.pdf',
+                subject: 'Site Comparison',
+                bodyHtml: '<p>Attached is the Site Comparison report.</p>',
+              })}
+            />
           </div>
         ) : null}
       />

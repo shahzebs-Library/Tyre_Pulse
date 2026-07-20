@@ -9,6 +9,24 @@ import { Ionicons } from '@expo/vector-icons'
 import { useRouter } from 'expo-router'
 import { useAuth } from '../../contexts/AuthContext'
 import { useLanguage, Language } from '../../contexts/LanguageContext'
+import { supabase } from '../../lib/supabase'
+
+// Server-enforced account lockout (System Configuration -> Max Login Attempts,
+// V287). Fail-safe: any RPC error is treated as "not locked" so a transient
+// failure never blocks a real sign-in.
+async function lockStatus(identifier: string): Promise<{ locked: boolean; retry_after_seconds?: number }> {
+  try {
+    const { data } = await supabase.rpc('login_attempt_status', { p_identifier: identifier })
+    return data || { locked: false }
+  } catch { return { locked: false } }
+}
+async function recordFailure(identifier: string): Promise<{ locked: boolean; retry_after_seconds?: number }> {
+  try {
+    const { data } = await supabase.rpc('record_login_failure', { p_identifier: identifier })
+    return data || { locked: false }
+  } catch { return { locked: false } }
+}
+const lockMins = (s?: { retry_after_seconds?: number }) => Math.max(1, Math.ceil((Number(s?.retry_after_seconds) || 0) / 60))
 
 const LANG_OPTIONS: { code: Language; label: string }[] = [
   { code: 'en', label: 'EN' },
@@ -35,12 +53,25 @@ export default function LoginScreen() {
     setError(null)
     setLoading(true)
     try {
+      const gate = await lockStatus(identifier.trim())
+      if (gate.locked) {
+        setError(t('login.errorLocked').replace('{mins}', String(lockMins(gate))))
+        return
+      }
       const { error: signInError } = await signIn(identifier, password)
       if (signInError) {
-        // Never surface raw Supabase error strings - they enable user enumeration
-        const msg = signInError.message ?? ''
-        const isCustom = msg.startsWith('No account found') || msg.startsWith('Account')
-        setError(isCustom ? msg : t('login.errorFailed'))
+        const locked = await recordFailure(identifier.trim())
+        if (locked.locked) {
+          setError(t('login.errorLocked').replace('{mins}', String(lockMins(locked))))
+        } else {
+          // Never surface raw Supabase error strings - they enable user enumeration
+          const msg = signInError.message ?? ''
+          const isCustom = msg.startsWith('No account found') || msg.startsWith('Account')
+          setError(isCustom ? msg : t('login.errorFailed'))
+        }
+      } else {
+        // Success: clear the caller's own server-side counter (authenticated).
+        supabase.rpc('reset_login_attempts').then(() => {}, () => {})
       }
     } finally {
       setLoading(false)

@@ -72,6 +72,14 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
   accidents/tyres/fleet — are NEVER auto-deleted; data-safety decision, badge says "Protected"). User is non-
   technical and delegated the call ("u do it"); chose the safe logs-only option, left business-data deletion off.
   Next free migration **V289**.
+- **Large ERP import cap raised 20k -> 100k (2026-07-19).** User hit "This sheet has 93,923 rows. The browser
+  import saves the first 20,000." The browser importer already chunks + retries inserts (saveImportRows), so the
+  20k was just a conservative cap. Raised `MAX_SAVE_ROWS` (src/lib/api/erpImport.js) + `ROW_CAP` (src/pages/
+  ErpImport.jsx) 20000 -> 100000 and `INSERT_CHUNK` 200 -> 500 (fewer round-trips). ALSO raised the admin
+  `max_upload_rows` policy that would otherwise hard-block first: CONFIG_DEFAULTS.max_upload_rows 10000 -> 100000
+  (systemConfig.js) AND the live system_config.max_upload_rows value 10000 -> 100000. So a ~94k-row sheet now
+  imports fully into the ERP staging tables. RULE: true million-row loads still need the server COPY pipeline; the
+  browser path is now good to ~100k rows/file. The admin can still tune max_upload_rows in the console.
 
 ## Custom roles assignable (V282) + Sentry crash console (V283) (2026-07-19, SHIPPED)
 - **V282 — custom roles could NEVER be assigned to a user (root-caused + fixed).** User: "I add new

@@ -37,11 +37,11 @@ const SELECT_COLS = {
   expense: `id,organisation_id,country,batch_id,source_row,${WRITE_COLS.expense.join(',')},created_by,created_at`,
 }
 
-const MAX_SAVE_ROWS = 20000
+const MAX_SAVE_ROWS = 100000
 // Small chunks keep each POST body well under corporate proxy / antivirus body
 // inspection limits (a common cause of a large bulk POST being silently dropped
 // with a browser "Failed to fetch" even while smaller GET/POST requests work).
-const INSERT_CHUNK = 200
+const INSERT_CHUNK = 500
 const MAX_ATTEMPTS = 4          // 1 try + 3 retries per chunk
 const RETRY_BASE_MS = 400       // exponential backoff base
 

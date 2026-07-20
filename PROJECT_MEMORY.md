@@ -4,6 +4,56 @@ Durable, committed project knowledge so any session has full context. Keep this
 current. Read it before adding/changing modules. Governing spec: `Tyre pulse enterprise.md`
 (consolidation-first: one function = one module = one calculation service).
 
+## System Configuration ENFORCEMENT + custom-role RoleRoute fix (V286, 2026-07-19, SHIPPED)
+- **Custom-role RoleRoute gap CLOSED (PR #130):** `RoleRoute` checked only the hardcoded `allowed` role list
+  and ignored the permission matrix, so a CUSTOM role / per-user grant enabled for a RoleRoute-gated specialty
+  page (Board Overview, ROI/TCO Calculator, Fleet Risk Score, ERP Import, Data Reconciliation, Insurance Claims,
+  Incidents, ...) still hit Access Denied (only ModuleRoute pages honored grants). Fix: `RoleRoute({allowed,
+  moduleKey})` now ADMITS additively when `isSuperAdmin` OR `allowed.includes(role)` OR
+  the governing module. `governingModuleKey(path)` in `src/lib/navAccess.js` = `NAV_MODULE_KEY[path]` else the
+  route slug (byte-identical to moduleCatalog.slugifyModuleKey — the exact key the Access Manager stores).
+  `navItemAllowedForCustomRole` uses the same slug fallback so sidebar + route agree. **CRITICAL (adversarial-
+  review fix, same session):** the fallback admits ONLY on POSITIVE access — an explicit per-user GRANT
+  (grantedModules.has(key)) OR a CUSTOM (non built-in) role whose module is enabled in the matrix. It must NOT
+  call hasPermission for a BUILT-IN role: ROLE_DEFAULTS make Manager/Director permissive (allow-all-except-four),
+  which would have silently widened them onto Admin-only pages (privilege escalation). A built-in role's page
+  access is fully expressed by `allowed`; only an explicit grant extends it. Tests customRolesAccess 20.
+- **System Configuration controls are now ENFORCED, not just saved (PR merged, this session).** User audit:
+  the console System Configuration page (`src/console/pages/ConsoleSystemConfig.jsx`) saved ~24 switches into
+  `system_config` but many were never read. Root fix = ONE central config service + real enforcement + an HONEST
+  per-control status badge.
+  - **Central service `src/lib/api/systemConfig.js` (single reader — do NOT re-query system_config elsewhere):**
+    `parseConfigValue` (handles 'true'/'false', numbers, JSON-quoted "SAR", plain), module cache +
+    `configBool/configNum/configStr` (sync, read the primed cache), `loadSystemConfig()` (authed full read, primes
+    cache, never throws), `getPublicConfig()` (anon-safe pre-auth RPC, public subset only), `assertFeatureEnabled`/
+    `clampToMax`, `CONFIG_DEFAULTS` (fail-SAFE defaults), `PUBLIC_CONFIG_KEYS`, and `ENFORCEMENT_STATUS` (the
+    SINGLE source the console badges read: {key:{status:'active'|'saved', where}}). Tests systemConfig 11.
+  - **`src/contexts/SettingsContext.jsx`** now loads ALL system_config ONCE per authed session, primes the cache,
+    live-refreshes via a realtime channel, applies the report palette from the same fetch, and exposes
+    `systemConfig`/`refreshSystemConfig`/`maintenanceActive`. (Folded the old palette-only read into this.)
+  - **ENFORCED (active) this pass:** maintenance_mode (web `MaintenanceGate` in App.jsx — super/Admin pass; RLS is
+    still the data boundary), registration_open (web `Login.jsx` + mobile `register.tsx` pre-check via
+    get_public_config; legacy `allow_signups` too), require_approval (V286 `handle_new_user` honors it — OFF =
+    auto-approve, default pending), export_enabled + max_export_rows (`exportUtils.js` guardExport on Excel/PDF/
+    PPTX), max_upload_rows (`DataIntakeCenter.jsx` startBatch guard), session_timeout_hours (idle auto sign-out in
+    `AuthContext.jsx`, main app; console already had its own), two_factor_required (admin 2FA enrolment gate in
+    `ProtectedRoute.jsx`, never hard-locks), backup_enabled (V286 `cron_run_backup` skips when off), ai_enabled +
+    ai_monthly_budget_usd + ai_rate_limit_per_min + ai_cache_ttl_hours (edge fns **chat-ai v17** + **ai-orchestrator
+    v4**, deployed — read system_config at request time, fail-SAFE to env defaults; budget = current-month sum of
+    ai_token_logs.cost_usd; block returns 403/402/429 with a clean message).
+  - **HONESTLY still SAVED-ONLY (badge says so — do NOT claim active):** ai_model (model LOCKED server-side for
+    safety), password_min_length + app_version + email_notifications + push_notifications (being wired in a
+    follow-up agent pass), max_login_attempts (needs a failed-login table + lockout RPC), alert_email (Sentry uses
+    its own console-configured email in cron_config, not this key), digest_frequency (schedules carry their own
+    cadence), audit_retention_days + data_retention_months (destructive purge deferred — needs sign-off).
+  - **V286 (applied live + `MIGRATIONS_V286_CONFIG_ENFORCEMENT.sql`):** `get_public_config()` DEFINER (anon+
+    authenticated, pinned search_path, public subset ONLY — never AI/budget/emails/secrets; pre-auth channel since
+    V281 revoked anon table grants); `cron_run_backup()` gated on backup_enabled; `handle_new_user()` honors
+    require_approval. Next free migration **V287**.
+  - RULE: read any global switch through `systemConfig.js` (configBool/Num/Str or getPublicConfig pre-auth) — never
+    re-query system_config. When you wire a saved-only control, flip its ENFORCEMENT_STATUS entry to 'active' with
+    the real site, so the console badge stays TRUE. AI edge fns deploy as `_shared/auth.ts` + `source/index.ts`.
+
 ## Custom roles assignable (V282) + Sentry crash console (V283) (2026-07-19, SHIPPED)
 - **V282 — custom roles could NEVER be assigned to a user (root-caused + fixed).** User: "I add new
   roles, assign to them, it's still same even when I change it." Root cause = TWO hardcoded allowlists of the

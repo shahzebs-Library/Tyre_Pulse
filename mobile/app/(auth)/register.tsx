@@ -53,8 +53,23 @@ export default function RegisterScreen() {
   const [showConfirm, setShowConfirm] = useState(false)
   const [loading, setLoading]       = useState(false)
   const [error, setError]           = useState<string | null>(null)
+  // Registration switch (registration_open / legacy allow_signups). When OFF,
+  // self-service signup is blocked. Read via the anon-safe get_public_config RPC
+  // before any session exists. Defaults to OPEN so a transient read never blocks.
+  const [signupClosed, setSignupClosed] = useState(false)
 
   const textAlign = isRTL ? 'right' : 'left'
+
+  // Pre-auth read of the registration switch on mount. A read miss leaves signup
+  // permissively open (the gate is re-checked authoritatively before signUp).
+  useEffect(() => {
+    let alive = true
+    supabase.rpc('get_public_config').then(({ data }) => {
+      if (!alive) return
+      if (data?.registration_open === 'false' || data?.allow_signups === 'false') setSignupClosed(true)
+    }, () => { /* transient read miss leaves signup open */ })
+    return () => { alive = false }
+  }, [])
 
   // Fetch available sites from fleet so user picks from known sites
   useEffect(() => {
@@ -87,6 +102,23 @@ export default function RegisterScreen() {
     setLoading(true)
 
     try {
+      // Re-check the live registration switch right before creating the account so
+      // a switch flipped off after screen load still blocks the signup.
+      const { data: cfg } = await supabase.rpc('get_public_config')
+      if (cfg?.registration_open === 'false' || cfg?.allow_signups === 'false') {
+        setSignupClosed(true)
+        setError('New account sign-up is currently closed. Please contact your administrator.')
+        return
+      }
+
+      // Enforce the configured minimum password length (system_config.password_min_length,
+      // default 8). Never weaken the existing 8-char floor in validate(): use the stronger.
+      const minLen = Math.max(8, parseInt(cfg?.password_min_length, 10) || 8)
+      if (password.length < minLen) {
+        setError(`Password must be at least ${minLen} characters.`)
+        return
+      }
+
       const uname = username.trim()
       const empId = employeeId.trim()
       // Match the web: users sign up with a username + Employee ID, not an email.
@@ -413,19 +445,29 @@ export default function RegisterScreen() {
               </Text>
             </View>
 
+            {/* Registration closed notice */}
+            {signupClosed && (
+              <View style={styles.closedBox}>
+                <Ionicons name="lock-closed-outline" size={16} color="#b45309" />
+                <Text style={[styles.closedText, { textAlign }]}>
+                  New account sign-up is currently closed. Please contact your administrator.
+                </Text>
+              </View>
+            )}
+
             {/* Submit */}
             <TouchableOpacity
-              style={[styles.submitBtn, loading && styles.submitBtnDisabled]}
+              style={[styles.submitBtn, (loading || signupClosed) && styles.submitBtnDisabled]}
               onPress={handleRegister}
-              disabled={loading}
+              disabled={loading || signupClosed}
               activeOpacity={0.8}
             >
               {loading
                 ? <ActivityIndicator size="small" color="#fff" />
                 : (
                   <>
-                    <Text style={styles.submitBtnText}>Create Account</Text>
-                    <Ionicons name={isRTL ? 'arrow-back' : 'arrow-forward'} size={18} color="#fff" />
+                    <Text style={styles.submitBtnText}>{signupClosed ? 'Sign-up closed' : 'Create Account'}</Text>
+                    {!signupClosed && <Ionicons name={isRTL ? 'arrow-back' : 'arrow-forward'} size={18} color="#fff" />}
                   </>
                 )
               }
@@ -546,6 +588,9 @@ const styles = StyleSheet.create({
 
   infoBox:  { flexDirection: 'row', alignItems: 'flex-start', gap: 8, backgroundColor: 'rgba(59,130,246,0.06)', borderWidth: 1, borderColor: 'rgba(59,130,246,0.2)', borderRadius: 10, padding: 12 },
   infoText: { flex: 1, fontSize: 12, color: '#3b82f6', lineHeight: 18 },
+
+  closedBox:  { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: 'rgba(245,158,11,0.08)', borderWidth: 1, borderColor: 'rgba(245,158,11,0.28)', borderRadius: 10, padding: 12 },
+  closedText: { flex: 1, fontSize: 13, color: '#b45309', fontWeight: '500', lineHeight: 18 },
 
   submitBtn:         { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: '#16a34a', borderRadius: 14, height: 52, marginTop: 4, shadowColor: '#16a34a', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 10, elevation: 6 },
   submitBtnDisabled: { opacity: 0.7 },

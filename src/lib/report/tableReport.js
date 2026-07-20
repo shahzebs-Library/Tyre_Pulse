@@ -15,7 +15,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { buildCsv, downloadCsv } from '../tableExport'
-import { exportToPdf, exportToExcel } from '../exportUtils'
+import { exportToPdf, exportToExcel, applyExportPolicy } from '../exportUtils'
 
 export const EXPORT_MODES = Object.freeze({
   CURRENT: 'current',
@@ -157,8 +157,12 @@ export async function runTableExport({
 
   const keys = cols.map((c) => c.id)
   const headers = cols.map(getColumnHeader)
-  const rowObjs = toObjectRows(getRowsForMode(table, mode), cols)
+  // Export policy (System Configuration): CSV must honor the same export_enabled
+  // switch and max_export_rows cap as Excel/PDF (which enforce it inside
+  // exportUtils). applyExportPolicy throws when export is disabled and caps rows.
+  let rowObjs = toObjectRows(getRowsForMode(table, mode), cols)
   if (rowObjs.length === 0 && format === EXPORT_FORMATS.CSV) {
+    applyExportPolicy([])   // still honor the on/off switch for an empty CSV
     // PDF/Excel render a proper empty-state; CSV would be a bare header only.
     downloadCsv(buildCsv(headers, []), `${fileName}_${mode}`)
     return 0
@@ -169,6 +173,7 @@ export async function runTableExport({
   const fname = `${fileName}_${mode}_${stamp}`
 
   if (format === EXPORT_FORMATS.CSV) {
+    rowObjs = applyExportPolicy(rowObjs)   // enforce switch + row cap for CSV
     const csvRows = rowObjs.map((o) => keys.map((k) => o[k]))
     downloadCsv(buildCsv(headers, csvRows), fname)
     return rowObjs.length

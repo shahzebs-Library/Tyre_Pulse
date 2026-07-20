@@ -1,6 +1,18 @@
 {
-  "extends": "expo/tsconfig.base",
+  "//": "Expo's tsconfig.base is inlined here (instead of `extends: expo/tsconfig.base`) so this file is self-contained. A few WEB vitest suites import real mobile TypeScript (e.g. mobile/lib/permissions.ts) and the web CI job installs root deps only, not the expo tree; an unresolvable package-extends crashed the whole web suite. These options mirror expo/tsconfig.base verbatim; keep them in sync if the Expo SDK base changes.",
   "compilerOptions": {
+    "allowJs": true,
+    "esModuleInterop": true,
+    "jsx": "react-native",
+    "lib": ["DOM", "ESNext"],
+    "module": "preserve",
+    "moduleDetection": "force",
+    "moduleResolution": "bundler",
+    "customConditions": ["react-native"],
+    "noEmit": true,
+    "resolveJsonModule": true,
+    "skipLibCheck": true,
+    "target": "ESNext",
     "strict": true,
     "typeRoots": [
       "./node_modules/@types"
@@ -16,5 +28,13 @@
     "**/*.tsx",
     ".expo/types/**/*.ts",
     "expo-env.d.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "babel.config.js",
+    "metro.config.js",
+    "jest.config.js",
+    "android",
+    "ios"
   ]
 }

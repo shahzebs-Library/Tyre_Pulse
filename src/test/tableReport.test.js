@@ -4,6 +4,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 vi.mock('../lib/exportUtils', () => ({
   exportToPdf: vi.fn(() => Promise.resolve()),
   exportToExcel: vi.fn(() => Promise.resolve()),
+  applyExportPolicy: vi.fn((rows) => rows),
 }))
 vi.mock('../lib/tableExport', () => ({
   buildCsv: vi.fn((headers, rows) => ({ headers, rows })),

@@ -4,6 +4,7 @@ import { Eye, EyeOff } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useLanguage } from '../contexts/LanguageContext'
 import { toUserMessage } from '../lib/safeError'
+import { getPublicConfig } from '../lib/api/systemConfig'
 
 export default function ResetPassword() {
   const navigate = useNavigate()
@@ -33,7 +34,12 @@ export default function ResetPassword() {
     e.preventDefault()
     setError('')
     if (password !== confirm) { setError(t('resetpassword.errors.mismatch')); return }
-    if (password.length < 6)  { setError(t('resetpassword.errors.tooShort')); return }
+    // Enforce the configured minimum password length (system_config.password_min_length,
+    // default 8). Pre-auth read via the anon-safe RPC; never weaken the existing 6-char
+    // floor. getPublicConfig never throws (returns {} on failure -> default applies).
+    const cfg = await getPublicConfig()
+    const minLen = Math.max(6, parseInt(cfg?.password_min_length, 10) || 8)
+    if (password.length < minLen) { setError(`Password must be at least ${minLen} characters.`); return }
     setLoading(true)
     const { error: updateErr } = await supabase.auth.updateUser({ password })
     if (updateErr) {

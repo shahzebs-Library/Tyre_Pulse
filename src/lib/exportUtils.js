@@ -1,4 +1,31 @@
 import { formatCurrencyCompact, formatDate } from './formatters.js'
+import { configBool, configNum } from './api/systemConfig.js'
+
+/**
+ * Central export gate (System Configuration). When an admin turns CSV/Excel
+ * Export OFF, every export path throws a user-safe error instead of downloading.
+ * When Max Export Rows is set, the row set is capped (a note is added by callers
+ * that pass opts.title). Fail-safe: unset/unreadable config keeps exports enabled
+ * and uncapped, matching prior behavior.
+ */
+function guardExport(rows) {
+  if (!configBool('export_enabled', true)) {
+    throw new Error('Exports are disabled by your administrator.')
+  }
+  const arr = Array.isArray(rows) ? rows : []
+  const max = configNum('max_export_rows', 0)
+  return max > 0 && arr.length > max ? arr.slice(0, max) : arr
+}
+
+/**
+ * Public export policy gate for export paths that do NOT go through
+ * exportToExcel/exportToPdf/exportToPptx (e.g. the CSV branch of the table
+ * exporter, or single-document PDF builders). Throws when export is disabled and
+ * caps the row array to max_export_rows. Returns the (possibly capped) rows.
+ */
+export function applyExportPolicy(rows) {
+  return guardExport(rows)
+}
 
 // ── Lazy-loaded heavy libraries ────────────────────────────────────────────────
 // xlsx (~420 KB), jspdf (~400 KB) and pptxgenjs (~385 KB) must never ship with a
@@ -642,7 +669,7 @@ function _drawTyreDiagram(doc, layout, tyreConditions, originX, originY, scale) 
 // ── Excel Export ───────────────────────────────────────────────────────────────
 export async function exportToExcel(rows, columns, headers, filename = 'export', sheetName = 'Data', opts = {}) {
   await ensureXlsx()
-  rows = Array.isArray(rows) ? rows : []
+  rows = guardExport(rows)
   const currency = opts.currency || 'SAR'
   const wb = XLSX.utils.book_new()
 
@@ -778,7 +805,7 @@ export async function exportToPdf(rows, columns, title, filename = 'report', ori
   await ensurePdf()
   const doc = new jsPDF({ orientation, unit: 'mm', format: 'a4' })
   const PW  = doc.internal.pageSize.width
-  rows = Array.isArray(rows) ? rows : []
+  rows = guardExport(rows)
   const currency = opts.currency || 'SAR'
   const brand = await _pdfBrand(opts.branding)
   const hdrOpts = { accent: brand.accent, logoData: brand.logoData }
@@ -974,6 +1001,7 @@ export async function exportToPdf(rows, columns, title, filename = 'report', ori
  * @param {string}  [opts.company]
  */
 export async function exportInspectionDetailPdf(row, opts = {}) {
+  guardExport([])
   await ensurePdf()
   const doc     = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
   const pw      = doc.internal.pageSize.width
@@ -1320,6 +1348,7 @@ export async function exportInspectionDetailPdf(row, opts = {}) {
  *   await exportAccidentCasePdf(acc, { parts, remarks, branding, company, fmtCurrency })
  */
 export async function exportAccidentCasePdf(acc = {}, opts = {}) {
+  guardExport([])
   await ensurePdf()
   const doc     = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
   const pw      = doc.internal.pageSize.width
@@ -1526,6 +1555,7 @@ export async function exportAccidentCasePdf(acc = {}, opts = {}) {
  *   await exportChecklistSubmissionPdf(submission, { company, branding, fields })
  */
 export async function exportChecklistSubmissionPdf(submission = {}, opts = {}) {
+  guardExport([])
   await ensurePdf()
   const doc     = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
   const pw      = doc.internal.pageSize.width
@@ -1924,6 +1954,7 @@ function _fmtThousands(v) {
  * @param {Object} opts  { company, branding, currency, filename }
  */
 export async function exportDailyOpsBriefingPdf(data = {}, opts = {}) {
+  guardExport([])
   await ensurePdf()
   const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
   const PW  = doc.internal.pageSize.width
@@ -2021,6 +2052,7 @@ function _buildRecommendations(riskCounts, totalT, row) {
  * @param {string} [filename]
  */
 export async function exportDailyExecutivePdf(data, filename) {
+  guardExport([])
   await ensurePdf()
   const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
   const PW  = doc.internal.pageSize.width   // 297
@@ -2465,6 +2497,7 @@ export async function exportDailyExecutivePdf(data, filename) {
 
 // ── PowerPoint Export - light executive theme, native editable charts ─────────
 export async function exportToPptx(data, filename = 'TyrePulse_Report') {
+  guardExport([])   // honor the CSV/Excel/Export master switch for PPTX too
   const pptx = await buildPptxDeck(data)
   await pptx.writeFile({ fileName: `${filename}.pptx` })
 }

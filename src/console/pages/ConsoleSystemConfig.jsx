@@ -5,6 +5,7 @@ import {
 } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useConsoleAuth } from '../ConsoleAuthContext'
+import { ENFORCEMENT_STATUS } from '../../lib/api/systemConfig'
 
 const CONFIG_GROUPS = [
   {
@@ -135,6 +136,14 @@ export default function ConsoleSystemConfig() {
         <div>
           <h1 className="text-xl font-bold text-white">System Configuration</h1>
           <p className="text-sm text-gray-500 mt-0.5">Global platform settings and feature flags</p>
+          <p className="text-[10px] text-gray-600 mt-1 flex items-center gap-3 flex-wrap">
+            <span className="inline-flex items-center gap-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-green-400" /> Active and enforced
+            </span>
+            <span className="inline-flex items-center gap-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-gray-500" /> Saved only (stored, not yet enforced)
+            </span>
+          </p>
         </div>
         <div className="flex items-center gap-2">
           <button onClick={load} disabled={loading}
@@ -187,11 +196,29 @@ export default function ConsoleSystemConfig() {
                   <h3 className="text-sm font-semibold text-white">{group.label}</h3>
                 </div>
                 <div className="divide-y divide-gray-800/40">
-                  {group.configs.map(cfg => (
+                  {group.configs.map(cfg => {
+                    const enf = ENFORCEMENT_STATUS[cfg.key]
+                    const active = enf?.status === 'active'
+                    return (
                     <div key={cfg.key} className="flex items-center gap-4 px-5 py-3.5 hover:bg-black/10 transition-colors">
                       <div className="flex-1 min-w-0">
-                        <p className="text-xs font-semibold text-gray-200">{cfg.label}</p>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <p className="text-xs font-semibold text-gray-200">{cfg.label}</p>
+                          <span
+                            title={enf?.where || (active ? 'Enforced' : 'Saved but not yet enforced')}
+                            className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-semibold border ${
+                              active
+                                ? 'text-green-300 border-green-700/40 bg-green-900/20'
+                                : 'text-gray-400 border-gray-700/50 bg-gray-800/40'
+                            }`}>
+                            <span className={`w-1.5 h-1.5 rounded-full ${active ? 'bg-green-400' : 'bg-gray-500'}`} />
+                            {active ? 'Active and enforced' : 'Saved only'}
+                          </span>
+                        </div>
                         <p className="text-[10px] text-gray-600 mt-0.5">{cfg.desc}</p>
+                        {enf?.where && (
+                          <p className="text-[9px] text-gray-700 mt-0.5">Checked at: {enf.where}</p>
+                        )}
                       </div>
                       <div className="flex-shrink-0 w-48">
                         {cfg.type === 'bool' ? (
@@ -221,7 +248,8 @@ export default function ConsoleSystemConfig() {
                         )}
                       </div>
                     </div>
-                  ))}
+                    )
+                  })}
                 </div>
               </div>
             )

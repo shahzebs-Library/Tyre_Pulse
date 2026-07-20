@@ -5,7 +5,7 @@ import { QueryClientProvider } from '@tanstack/react-query'
 import { queryClient } from './lib/queryClient'
 import { AuthProvider } from './contexts/AuthContext'
 import { LanguageProvider } from './contexts/LanguageContext'
-import { SettingsProvider } from './contexts/SettingsContext'
+import { SettingsProvider, useSettings } from './contexts/SettingsContext'
 import { TenantProvider } from './contexts/TenantContext'
 import { CommandPaletteProvider } from './contexts/CommandPaletteContext'
 import ProtectedRoute, { RoleRoute, ModuleRoute, SuperAdminRoute } from './components/ProtectedRoute'
@@ -335,6 +335,35 @@ function ConsoleGuard({ children }) {
   return children
 }
 
+// ── Maintenance gate: when Maintenance Mode is ON (System Configuration), regular
+// users see a calm maintenance screen instead of the app. Super-admins / Admins
+// pass through (they administer the toggle). Data access is unaffected; this is a
+// user-facing pause. Sits inside SettingsProvider so it reads the global config.
+function MaintenanceGate({ children }) {
+  const { maintenanceActive, systemConfig } = useSettings()
+  if (!maintenanceActive) return children
+  let msg = 'System maintenance in progress. We will be back shortly.'
+  const raw = systemConfig?.maintenance_message
+  if (raw) { try { msg = JSON.parse(raw) } catch { msg = String(raw) } }
+  return (
+    <div className="min-h-screen flex items-center justify-center px-4">
+      <div className="text-center max-w-sm">
+        <div className="inline-flex items-center justify-center w-16 h-16 rounded-full mb-5"
+          style={{ background: 'rgba(234,179,8,0.12)', border: '1px solid rgba(234,179,8,0.3)' }}>
+          <span className="text-4xl">🛠️</span>
+        </div>
+        <h2 className="text-xl font-bold text-white mb-3">Under maintenance</h2>
+        <p className="text-gray-400 text-sm leading-relaxed">{msg}</p>
+        <button
+          onClick={() => import('./lib/supabase').then(m => m.supabase.auth.signOut())}
+          className="mt-6 text-sm text-gray-500 hover:text-green-400 transition-colors">
+          Sign out
+        </button>
+      </div>
+    </div>
+  )
+}
+
 // ── Main app wrapped in its own providers (keeps console completely isolated)
 function MainApp() {
   return (
@@ -373,6 +402,7 @@ function MainApp() {
               path="/*"
               element={
                 <ProtectedRoute>
+                  <MaintenanceGate>
                   <Layout>
                     <ChecklistOnlyGate>
                     <Routes>
@@ -603,6 +633,7 @@ function MainApp() {
                     </Routes>
                     </ChecklistOnlyGate>
                   </Layout>
+                  </MaintenanceGate>
                 </ProtectedRoute>
               }
             />

@@ -1,7 +1,9 @@
-import { Navigate, useLocation } from 'react-router-dom'
+import { Navigate, useLocation, Link } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { useLanguage } from '../contexts/LanguageContext'
 import { governingModuleKey } from '../lib/navAccess'
+import { isBuiltInRole } from '../lib/api/customRoles'
+import { configBool } from '../lib/api/systemConfig'
 import LoadingSpinner from './LoadingSpinner'
 
 /**
@@ -21,7 +23,7 @@ export function shouldBlockWeb(profile) {
 }
 
 export default function ProtectedRoute({ children }) {
-  const { user, profile, loading } = useAuth()
+  const { user, profile, loading, mfaEnabled, isSuperAdmin } = useAuth()
   const { t } = useLanguage()
   if (loading) return <LoadingSpinner />
   if (!user) return <Navigate to="/login" replace />
@@ -99,11 +101,51 @@ export default function ProtectedRoute({ children }) {
       </div>
     )
   }
+
+  // Mandatory two-factor authentication for administrators (System Configuration
+  // `two_factor_required`). An Admin-role or super-admin account that has not
+  // enrolled 2FA is blocked from the app until they enrol, but is never hard
+  // locked: they can still reach Settings (where enrolment lives) or sign out.
+  // Fails SAFE: no-op when the toggle is off, when 2FA is enrolled, or for any
+  // non-admin account.
+  const require2fa = (() => { try { return configBool('two_factor_required', false) } catch { return false } })()
+  const isAdminAccount = !!profile && (profile.role === 'Admin' || isSuperAdmin === true || profile.is_super_admin === true)
+  if (require2fa && isAdminAccount && mfaEnabled === false) {
+    return (
+      <div className="min-h-screen flex items-center justify-center px-4">
+        <div className="text-center max-w-sm">
+          <div className="inline-flex items-center justify-center w-16 h-16 rounded-full mb-5"
+            style={{ background: 'rgba(59,130,246,0.12)', border: '1px solid rgba(59,130,246,0.3)' }}>
+            <span className="text-4xl">🔐</span>
+          </div>
+          <h2 className="text-xl font-bold text-white mb-3">Two-factor authentication required</h2>
+          <p className="text-gray-400 text-sm leading-relaxed mb-1">
+            Your organization requires administrators to secure their account with two-factor authentication before continuing.
+          </p>
+          <p className="text-gray-500 text-xs leading-relaxed">
+            Enrol in Settings under Security to unlock access.
+          </p>
+          <Link
+            to="/settings"
+            className="mt-6 inline-block text-sm font-semibold text-green-400 hover:text-green-300 transition-colors">
+            Go to Settings
+          </Link>
+          <div>
+            <button
+              onClick={() => import('../lib/supabase').then(m => m.supabase.auth.signOut())}
+              className="mt-4 text-sm text-gray-500 hover:text-green-400 transition-colors">
+              {t('common.signOut')}
+            </button>
+          </div>
+        </div>
+      </div>
+    )
+  }
   return children
 }
 
 export function RoleRoute({ allowed, moduleKey, children }) {
-  const { profile, isSuperAdmin, hasPermission, loading } = useAuth()
+  const { profile, isSuperAdmin, hasPermission, grantedModules, loading } = useAuth()
   const location = useLocation()
   if (loading) return <RouteLoading />
 
@@ -114,15 +156,21 @@ export function RoleRoute({ allowed, moduleKey, children }) {
   // Primary path: the account's built-in role is on the allow list.
   if (allowed.includes(profile.role)) return children
 
-  // Additive fallback (never removes access): a CUSTOM role or a per-user grant
-  // that an admin explicitly enabled for the governing module reaches the page,
-  // so "give access -> it works" holds for RoleRoute pages too (previously only
-  // ModuleRoute pages honored the matrix). resolvePermission is deny-by-default,
-  // so this only admits accounts that were positively granted the module.
+  // Additive fallback (never removes access, never WIDENS a built-in role):
+  // admit ONLY on POSITIVE, explicit access -
+  //   (a) a CUSTOM (non built-in) role whose governing module is enabled in the
+  //       matrix (hasPermission for a custom role is deny-by-default - it has no
+  //       ROLE_DEFAULTS entry, so it is true only when explicitly granted), OR
+  //   (b) any account (built-in included) with an explicit per-user GRANT for it.
+  // We must NOT fall back to hasPermission for a built-in role: ROLE_DEFAULTS make
+  // Manager/Director permissive (allow-all-except-four), which would silently let
+  // them onto Admin-only pages. A built-in role's page access is fully expressed
+  // by `allowed`; only an explicit grant may extend it.
   const govKey = moduleKey || governingModuleKey(location?.pathname)
-  if (govKey && typeof hasPermission === 'function' && hasPermission(govKey)) {
-    return children
-  }
+  const explicitGrant = govKey && typeof grantedModules?.has === 'function' && grantedModules.has(govKey)
+  const customRoleAllowed = govKey && !isBuiltInRole(profile.role)
+    && typeof hasPermission === 'function' && hasPermission(govKey)
+  if (explicitGrant || customRoleAllowed) return children
 
   return <AccessDenied role={profile.role} allowed={allowed} />
 }

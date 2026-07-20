@@ -1,15 +1,23 @@
 /**
- * Reports - mobile PDF generation & sharing
+ * Reports - mobile report generation & sharing
  *
  * Available to: admin, manager, director, reporter, inspector, tyre_man
- * (see lib/permissions.ts `reports` module). Field roles are scoped to their OWN
- * site: every builder below passes profile.site for non-elevated users, so a
- * field submitter only ever generates and shares reports for their own site.
- * Generates a fleet summary PDF with KPIs, risk breakdown, top sites,
- * and open actions. Shared via expo-sharing or print dialog.
+ * (see lib/permissions.ts `reports` module).
+ *
+ * EXECUTIVE REPORT (authoritative): driven by ONE server-computed snapshot
+ * (lib/reportSnapshot.ts -> get_report_snapshot_authed), the same org-scoped
+ * aggregate the WEB executive report uses. The on-screen preview AND the shared
+ * PDF are rendered from that same snapshot object, so screen == PDF == web (one
+ * dataset, one set of KPI values, one generated_at, one company / branding). If
+ * the live snapshot is unavailable we say so honestly and never fall back to
+ * divergent local numbers.
+ *
+ * OPERATIONAL EXPORTS (live line items): the Risk and Open-Actions exports below
+ * are row-level operational lists (individual records), not aggregate KPIs, so
+ * they legitimately query live data. Field roles are scoped to their OWN site.
  */
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect, useCallback } from 'react'
 import {
   View, ScrollView, StyleSheet, Alert, ActivityIndicator, TouchableOpacity, TextInput,
 } from 'react-native'
@@ -20,9 +28,14 @@ import { supabase } from '../../../lib/supabase'
 import { toUserMessage } from '../../../lib/safeError'
 import { useAuth } from '../../../contexts/AuthContext'
 import { useTheme } from '../../../contexts/ThemeContext'
+import { useLanguage } from '../../../contexts/LanguageContext'
 import { isAdminOrAbove } from '../../../lib/types'
-import { Screen, AppText } from '../../../components/ui'
+import { Screen, AppText, StatTile } from '../../../components/ui'
 import { Theme, spacing, radius } from '../../../lib/theme'
+import {
+  fetchReportSnapshot, type SnapshotResult, type ReportSnapshot,
+} from '../../../lib/reportSnapshot'
+import { buildExecReportHtml } from '../../../lib/execReportPdf'
 
 type TintKey = keyof Theme['tint']
 
@@ -39,36 +52,25 @@ function daysAgo(days: number): string {
 }
 const isDay = (v: string) => /^\d{4}-\d{2}-\d{2}$/.test(v.trim())
 
-const REPORT_TYPES: {
+const money = (n: any) => n == null ? 'N/A' : 'SAR ' + Number(n).toLocaleString(undefined, { maximumFractionDigits: 0 })
+
+// Line-item operational exports (live queries; NOT aggregate KPI snapshots).
+const OPERATIONAL_EXPORTS: {
   id: string; title: string; desc: string; icon: string; tint: TintKey
 }[] = [
   {
-    id: 'fleet_summary',
-    title: 'Fleet Summary Report',
-    desc: 'Overall fleet KPIs, risk breakdown, top sites by cost',
-    icon: 'bar-chart-outline',
-    tint: 'blue',
-  },
-  {
     id: 'risk_report',
     title: 'Risk & Critical Tyres',
-    desc: 'All Critical and High risk tyre records with details',
+    desc: 'Line-item list of Critical and High risk tyre records',
     icon: 'warning-outline',
     tint: 'red',
   },
   {
     id: 'open_actions',
     title: 'Open Corrective Actions',
-    desc: 'All open work orders sorted by priority',
+    desc: 'Line-item list of open work orders by priority',
     icon: 'construct-outline',
     tint: 'amber',
-  },
-  {
-    id: 'site_summary',
-    title: 'Site Breakdown',
-    desc: 'Record count and cost per site',
-    icon: 'location-outline',
-    tint: 'green',
   },
 ]
 
@@ -79,38 +81,76 @@ export default withModuleGuard(ReportsScreen, 'reports')
 function ReportsScreen() {
   const { profile } = useAuth()
   const { theme } = useTheme()
+  const { language } = useLanguage()
   const styles = useMemo(() => makeStyles(theme), [theme])
   const role = profile?.role ?? null
   const elevated = isAdminOrAbove(role)
   const [generating, setGenerating] = useState<string | null>(null)
   // Report date range. Defaults sensibly to the last 30 days; a chosen range
-  // scopes every generated report and is printed on the PDF.
+  // scopes every report and is printed on the PDF.
   const [fromDate, setFromDate] = useState(daysAgo(30))
   const [toDate, setToDate] = useState(isoDay(new Date()))
 
+  // The authoritative server snapshot. Everything in the Executive Report section
+  // (preview + PDF) renders from this ONE object.
+  const [snapshot, setSnapshot] = useState<SnapshotResult | null>(null)
+  const [snapLoading, setSnapLoading] = useState(true)
+
   // Resolve the effective range: fall back to last-30-days when a field is blank
   // or not a complete YYYY-MM-DD, so a report always covers a sensible window.
-  function effectiveRange(): DateRange {
-    return {
-      from: isDay(fromDate) ? fromDate.trim() : daysAgo(30),
-      to: isDay(toDate) ? toDate.trim() : isoDay(new Date()),
-    }
-  }
+  const effectiveRange = useCallback((): DateRange => ({
+    from: isDay(fromDate) ? fromDate.trim() : daysAgo(30),
+    to: isDay(toDate) ? toDate.trim() : isoDay(new Date()),
+  }), [fromDate, toDate])
 
   function setRange(days: number) {
     setFromDate(daysAgo(days)); setToDate(isoDay(new Date()))
   }
 
-  async function generate(reportId: string) {
+  // Fetch the server snapshot for the current range. Field roles pass their site so
+  // the snapshot is scoped exactly like the operational exports below.
+  const loadSnapshot = useCallback(async () => {
+    setSnapLoading(true)
+    const range = effectiveRange()
+    const res = await fetchReportSnapshot({
+      from: range.from,
+      to: range.to,
+      site: elevated ? null : (profile?.site ?? null),
+    })
+    setSnapshot(res)
+    setSnapLoading(false)
+  }, [effectiveRange, elevated, profile?.site])
+
+  useEffect(() => { loadSnapshot() }, [loadSnapshot])
+
+  // Share the executive PDF built from the SAME snapshot rendered on screen.
+  async function shareExecPdf() {
+    if (generating) return
+    if (!snapshot || snapshot.ok !== true) return
+    setGenerating('exec')
+    try {
+      const html = buildExecReportHtml(snapshot, { language, elevated })
+      const { uri } = await Print.printToFileAsync({ html })
+      if (await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync(uri, { mimeType: 'application/pdf', dialogTitle: 'Share Executive Report' })
+      } else {
+        Alert.alert('Saved', 'PDF saved to device.')
+      }
+    } catch (e: any) {
+      Alert.alert('Error', toUserMessage(e, 'Could not generate report.'))
+    } finally {
+      setGenerating(null)
+    }
+  }
+
+  async function generateOperational(reportId: string) {
     if (generating) return
     setGenerating(reportId)
     try {
       const range = effectiveRange()
       let html = ''
-      if (reportId === 'fleet_summary')  html = await buildFleetSummary(profile?.site ?? null, elevated, range)
-      if (reportId === 'risk_report')    html = await buildRiskReport(profile?.site ?? null, elevated, range)
-      if (reportId === 'open_actions')   html = await buildOpenActions(profile?.site ?? null, elevated, range)
-      if (reportId === 'site_summary')   html = await buildSiteSummary(profile?.site ?? null, elevated, range)
+      if (reportId === 'risk_report')  html = await buildRiskReport(profile?.site ?? null, elevated, range)
+      if (reportId === 'open_actions') html = await buildOpenActions(profile?.site ?? null, elevated, range)
 
       const { uri } = await Print.printToFileAsync({ html })
       if (await Sharing.isAvailableAsync()) {
@@ -129,17 +169,10 @@ function ReportsScreen() {
     <Screen edges={['top']}>
       <View style={styles.header}>
         <AppText variant="h2">Reports</AppText>
-        <AppText variant="caption" color="secondary">Generate and share PDF reports</AppText>
+        <AppText variant="caption" color="secondary">Executive snapshot and operational exports</AppText>
       </View>
 
       <ScrollView contentContainerStyle={styles.content}>
-        <View style={styles.infoBox}>
-          <Ionicons name="information-circle-outline" size={16} color={theme.color.info.base} />
-          <AppText variant="caption" color="info" style={styles.infoText}>
-            Reports are generated from live data and exported as PDF.{elevated ? '' : ` Filtered to ${profile?.site ?? 'your site'}.`}
-          </AppText>
-        </View>
-
         {/* Date range - scopes every report; defaults to the last 30 days. */}
         <View style={styles.rangeCard}>
           <AppText variant="label" color="secondary">Date range</AppText>
@@ -194,15 +227,44 @@ function ReportsScreen() {
               />
             </View>
           </View>
+          <TouchableOpacity style={styles.applyBtn} onPress={loadSnapshot} activeOpacity={0.8} disabled={snapLoading}>
+            <Ionicons name="refresh-outline" size={16} color={theme.color.primaryDark} />
+            <AppText variant="caption" style={{ color: theme.color.primaryDark, fontWeight: '700' }}>
+              Refresh live figures
+            </AppText>
+          </TouchableOpacity>
         </View>
 
-        {REPORT_TYPES.map(r => {
+        {/* ── Executive Report: single server snapshot (screen == PDF == web) ── */}
+        <AppText variant="label" color="secondary" style={styles.sectionLabel}>Executive Report</AppText>
+        <ExecutiveReportCard
+          styles={styles}
+          theme={theme}
+          snapshot={snapshot}
+          loading={snapLoading}
+          generating={generating === 'exec'}
+          elevated={elevated}
+          site={profile?.site ?? null}
+          onRetry={loadSnapshot}
+          onShare={shareExecPdf}
+        />
+
+        {/* ── Operational exports: live line-item lists ── */}
+        <AppText variant="label" color="secondary" style={styles.sectionLabel}>Operational exports</AppText>
+        <View style={styles.infoBox}>
+          <Ionicons name="information-circle-outline" size={16} color={theme.color.info.base} />
+          <AppText variant="caption" color="info" style={styles.infoText}>
+            Line-item lists generated from live records at export time.{elevated ? '' : ` Filtered to ${profile?.site ?? 'your site'}.`}
+          </AppText>
+        </View>
+
+        {OPERATIONAL_EXPORTS.map(r => {
           const tint = theme.tint[r.tint]
           return (
             <TouchableOpacity
               key={r.id}
               style={[styles.card, generating === r.id && styles.cardBusy]}
-              onPress={() => generate(r.id)}
+              onPress={() => generateOperational(r.id)}
               activeOpacity={0.8}
               disabled={!!generating}
             >
@@ -223,14 +285,119 @@ function ReportsScreen() {
         })}
 
         <AppText variant="caption" color="muted" center style={styles.hint}>
-          Reports are generated from live data at the time of export. PDF is shared via your device share sheet.
+          The Executive Report matches the web executive report for the same filters. PDFs are shared via your device share sheet.
         </AppText>
       </ScrollView>
     </Screen>
   )
 }
 
-// ── Report builders ────────────────────────────────────────────────────────────
+// ── Executive report card (preview + share, both from the one snapshot) ──────────
+
+function ExecutiveReportCard({
+  styles, theme, snapshot, loading, generating, elevated, site, onRetry, onShare,
+}: {
+  styles: ReturnType<typeof makeStyles>
+  theme: Theme
+  snapshot: SnapshotResult | null
+  loading: boolean
+  generating: boolean
+  elevated: boolean
+  site: string | null
+  onRetry: () => void
+  onShare: () => void
+}) {
+  if (loading) {
+    return (
+      <View style={[styles.card, styles.execCard]}>
+        <ActivityIndicator size="small" color={theme.color.primary} />
+        <AppText variant="caption" color="muted" style={{ marginTop: spacing.sm }}>Loading live figures...</AppText>
+      </View>
+    )
+  }
+
+  if (!snapshot || snapshot.ok !== true) {
+    const reason = snapshot && snapshot.ok === false ? snapshot.reason : 'error'
+    const msg = reason === 'network'
+      ? 'Network problem. Check your connection and try again.'
+      : 'Live report data is unavailable right now. The official figures come from the server; no local estimate is shown to avoid mismatched numbers.'
+    return (
+      <View style={[styles.card, styles.execCard]}>
+        <View style={[styles.iconBox, { backgroundColor: theme.color.danger.soft }]}>
+          <Ionicons name="cloud-offline-outline" size={24} color={theme.color.danger.base} />
+        </View>
+        <AppText variant="title">Executive Report unavailable</AppText>
+        <AppText variant="caption" color="muted" center style={{ marginTop: 4 }}>{msg}</AppText>
+        <TouchableOpacity style={styles.retryBtn} onPress={onRetry} activeOpacity={0.8}>
+          <Ionicons name="refresh" size={16} color={theme.color.onPrimary} />
+          <AppText variant="caption" style={{ color: theme.color.onPrimary, fontWeight: '700' }}>Retry</AppText>
+        </TouchableOpacity>
+      </View>
+    )
+  }
+
+  const snap: ReportSnapshot = snapshot
+  const k = snap.kpis
+  const generated = (() => {
+    const d = new Date(snap.generated_at)
+    return isNaN(d.getTime()) ? snap.generated_at : d.toLocaleString()
+  })()
+
+  return (
+    <View style={[styles.card, styles.execCard]}>
+      <View style={styles.execHead}>
+        <View style={{ flex: 1 }}>
+          <AppText variant="title">{snap.company}</AppText>
+          <AppText variant="micro" color="muted">
+            {elevated ? 'All sites' : (site ?? 'Your site')} | Snapshot {generated}
+          </AppText>
+        </View>
+        <View style={[styles.liveChip, { backgroundColor: theme.color.success.soft }]}>
+          <Ionicons name="server-outline" size={12} color={theme.color.success.base} />
+          <AppText variant="micro" style={{ color: theme.color.success.base, fontWeight: '700' }}>Live server data</AppText>
+        </View>
+      </View>
+
+      <View style={styles.kpiGrid}>
+        <StatTile label="Fleet" value={k.fleet.toLocaleString()} icon="car-outline" tint="blue" />
+        <StatTile label="Tyre records" value={k.tyres.toLocaleString()} icon="ellipse-outline" tint="green" />
+      </View>
+      <View style={styles.kpiGrid}>
+        <StatTile label="Tyre spend" value={money(k.tyre_spend)} icon="cash-outline" tint="amber" />
+        <StatTile label="Open accidents" value={k.open_accidents.toLocaleString()} icon="warning-outline" tint="red" />
+      </View>
+      <View style={styles.kpiGrid}>
+        <StatTile label="Inspections" value={k.inspections.toLocaleString()} icon="clipboard-outline" tint="blue" />
+        <StatTile label="Open work orders" value={k.work_orders_open.toLocaleString()} icon="construct-outline" tint="amber" />
+      </View>
+
+      <View style={styles.costRow}>
+        <AppText variant="caption" color="secondary">Total operating cost</AppText>
+        <AppText variant="title">{money(snap.cost.total_cost)}</AppText>
+      </View>
+      <View style={styles.costRow}>
+        <AppText variant="caption" color="secondary">Cost per km</AppText>
+        <AppText variant="caption">{snap.cost.cost_per_km == null ? 'N/A' : 'SAR ' + snap.cost.cost_per_km.toLocaleString(undefined, { maximumFractionDigits: 2 }) + ' / km'}</AppText>
+      </View>
+
+      <TouchableOpacity
+        style={[styles.shareBtn, generating && styles.cardBusy]}
+        onPress={onShare}
+        activeOpacity={0.85}
+        disabled={generating}
+      >
+        {generating ? (
+          <ActivityIndicator size="small" color={theme.color.onPrimary} />
+        ) : (
+          <Ionicons name="share-outline" size={18} color={theme.color.onPrimary} />
+        )}
+        <AppText variant="title" style={{ color: theme.color.onPrimary }}>Share Executive PDF</AppText>
+      </TouchableOpacity>
+    </View>
+  )
+}
+
+// ── Operational report builders (live line-item lists) ───────────────────────────
 
 const css = `
   * { font-family: -apple-system, Helvetica, Arial, sans-serif; box-sizing: border-box; }
@@ -241,10 +408,6 @@ const css = `
   table { width: 100%; border-collapse: collapse; margin-bottom: 12px; }
   th { background: #f8fafc; padding: 6px 8px; text-align: left; font-size: 11px; color: #64748b; border-bottom: 1px solid #e2e8f0; }
   td { padding: 6px 8px; border-bottom: 1px solid #f1f5f9; font-size: 12px; }
-  .kpis { display: flex; gap: 10px; margin-bottom: 16px; flex-wrap: wrap; }
-  .kpi  { border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px 14px; min-width: 120px; }
-  .kpi-v { font-size: 22px; font-weight: 800; color: #0f172a; }
-  .kpi-l { font-size: 11px; color: #64748b; margin-top: 2px; }
   .badge { display: inline-block; padding: 2px 8px; border-radius: 6px; font-size: 11px; font-weight: 700; }
   .cr { background: #fef2f2; color: #dc2626; } .hi { background: #fff7ed; color: #ea580c; }
   .me { background: #fffbeb; color: #f59e0b; } .lo { background: #f0fdf4; color: #16a34a; }
@@ -257,50 +420,12 @@ function header(title: string, subtitle: string): string {
   return `<!doctype html><html><head><meta charset="utf-8"/><style>${css}</style></head><body>
     <h1>${esc(title)}</h1><p class="sub">${esc(subtitle)}</p>`
 }
-function footer(): string { return `<footer>Generated ${new Date().toLocaleString()} · TyrePulse Inspector</footer></body></html>` }
+function footer(): string { return `<footer>Generated ${new Date().toLocaleString()} | TyrePulse Inspector | live line-item export</footer></body></html>` }
 function esc(v: any): string { return v == null ? '-' : String(v).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c] as string)) }
-function money(n: any): string { return n == null ? '-' : 'SAR ' + Number(n).toLocaleString(undefined, { maximumFractionDigits: 0 }) }
+function moneyHtml(n: any): string { return n == null ? '-' : 'SAR ' + Number(n).toLocaleString(undefined, { maximumFractionDigits: 0 }) }
 function riskBadge(r: string | null): string {
   const cls = r === 'Critical' ? 'cr' : r === 'High' ? 'hi' : r === 'Medium' ? 'me' : 'lo'
   return `<span class="badge ${cls}">${esc(r ?? 'Unknown')}</span>`
-}
-
-async function buildFleetSummary(site: string | null, elevated: boolean, range: DateRange): Promise<string> {
-  let q = supabase.from('tyre_records').select('id,asset_no,brand,site,risk_level,cost_per_tyre,issue_date')
-    .gte('issue_date', range.from).lte('issue_date', range.to)
-    .order('issue_date', { ascending: false }).limit(5000)
-  if (!elevated && site) q = q.eq('site', site)
-  const { data } = await q
-  const records = data ?? []
-
-  const totalCost = records.reduce((s: number, r: any) => s + (Number(r.cost_per_tyre) || 0), 0)
-  const byRisk: Record<string, number> = {}
-  records.forEach((r: any) => { const k = r.risk_level ?? 'Unknown'; byRisk[k] = (byRisk[k] ?? 0) + 1 })
-
-  const bySite: Record<string, { count: number; cost: number }> = {}
-  records.forEach((r: any) => {
-    const s = r.site ?? 'Unknown'
-    if (!bySite[s]) bySite[s] = { count: 0, cost: 0 }
-    bySite[s].count++; bySite[s].cost += Number(r.cost_per_tyre) || 0
-  })
-  const topSites = Object.entries(bySite).sort((a, b) => b[1].cost - a[1].cost).slice(0, 10)
-
-  return header('Fleet Summary Report', `${elevated ? 'All sites' : site ?? 'All'} · ${range.from} to ${range.to}`)
-    + `<div class="kpis">
-        <div class="kpi"><div class="kpi-v">${records.length.toLocaleString()}</div><div class="kpi-l">Total Records</div></div>
-        <div class="kpi"><div class="kpi-v">${money(totalCost)}</div><div class="kpi-l">Total Cost</div></div>
-        <div class="kpi"><div class="kpi-v">${byRisk['Critical'] ?? 0}</div><div class="kpi-l">Critical Risk</div></div>
-        <div class="kpi"><div class="kpi-v">${byRisk['High'] ?? 0}</div><div class="kpi-l">High Risk</div></div>
-      </div>
-      <h2>Risk Breakdown</h2>
-      <table><tr><th>Risk Level</th><th>Count</th><th>% of Total</th></tr>
-        ${['Critical','High','Medium','Low'].map(r => `<tr><td>${riskBadge(r)}</td><td>${byRisk[r] ?? 0}</td><td>${records.length > 0 ? Math.round(((byRisk[r] ?? 0) / records.length) * 100) : 0}%</td></tr>`).join('')}
-      </table>
-      <h2>Top Sites by Cost</h2>
-      <table><tr><th>Site</th><th>Records</th><th>Total Cost</th></tr>
-        ${topSites.map(([s, v]) => `<tr><td>${esc(s)}</td><td>${v.count}</td><td>${money(v.cost)}</td></tr>`).join('')}
-      </table>`
-    + footer()
 }
 
 async function buildRiskReport(site: string | null, elevated: boolean, range: DateRange): Promise<string> {
@@ -313,7 +438,7 @@ async function buildRiskReport(site: string | null, elevated: boolean, range: Da
   const { data } = await q
   const records = data ?? []
 
-  return header('Risk & Critical Tyres Report', `${records.length} Critical/High risk records · ${range.from} to ${range.to}`)
+  return header('Risk & Critical Tyres Report', `${records.length} Critical/High risk records | ${range.from} to ${range.to}`)
     + `<h2>Critical & High Risk Records (${records.length})</h2>
        <table>
          <tr><th>Asset</th><th>Serial</th><th>Brand</th><th>Site</th><th>Risk</th><th>Cost</th><th>Date</th></tr>
@@ -323,7 +448,7 @@ async function buildRiskReport(site: string | null, elevated: boolean, range: Da
            <td>${esc(r.brand)}</td>
            <td>${esc(r.site)}</td>
            <td>${riskBadge(r.risk_level)}</td>
-           <td>${money(r.cost_per_tyre)}</td>
+           <td>${moneyHtml(r.cost_per_tyre)}</td>
            <td>${esc(r.issue_date)}</td>
          </tr>`).join('')}
        </table>`
@@ -343,7 +468,7 @@ async function buildOpenActions(site: string | null, elevated: boolean, range: D
   const prColor: Record<string, string> = { Critical: 'cr', High: 'hi', Medium: 'me', Low: 'lo' }
   const stColor: Record<string, string> = { Open: 'oc', 'In Progress': 'ip', Resolved: 're' }
 
-  return header('Open Corrective Actions', `${actions.length} open action${actions.length !== 1 ? 's' : ''} · ${range.from} to ${range.to}`)
+  return header('Open Corrective Actions', `${actions.length} open action${actions.length !== 1 ? 's' : ''} | ${range.from} to ${range.to}`)
     + `<table>
          <tr><th>Title</th><th>Priority</th><th>Status</th><th>Asset</th><th>Site</th><th>Assigned</th><th>Due</th></tr>
          ${actions.map((a: any) => `<tr>
@@ -359,40 +484,6 @@ async function buildOpenActions(site: string | null, elevated: boolean, range: D
     + footer()
 }
 
-async function buildSiteSummary(site: string | null, elevated: boolean, range: DateRange): Promise<string> {
-  let q = supabase.from('tyre_records').select('site,cost_per_tyre,risk_level')
-    .gte('issue_date', range.from).lte('issue_date', range.to).limit(10000)
-  if (!elevated && site) q = q.eq('site', site)
-  const { data } = await q
-  const records = data ?? []
-
-  const map: Record<string, { count: number; cost: number; critical: number; high: number }> = {}
-  records.forEach((r: any) => {
-    const s = r.site ?? 'Unknown'
-    if (!map[s]) map[s] = { count: 0, cost: 0, critical: 0, high: 0 }
-    map[s].count++
-    map[s].cost += Number(r.cost_per_tyre) || 0
-    if (r.risk_level === 'Critical') map[s].critical++
-    if (r.risk_level === 'High') map[s].high++
-  })
-
-  const rows = Object.entries(map).sort((a, b) => b[1].cost - a[1].cost)
-
-  return header('Site Breakdown Report', `${rows.length} site${rows.length !== 1 ? 's' : ''} · ${range.from} to ${range.to}`)
-    + `<table>
-         <tr><th>Site</th><th>Records</th><th>Total Cost</th><th>Avg Cost</th><th>Critical</th><th>High</th></tr>
-         ${rows.map(([s, v]) => `<tr>
-           <td><b>${esc(s)}</b></td>
-           <td>${v.count}</td>
-           <td>${money(v.cost)}</td>
-           <td>${money(v.count > 0 ? v.cost / v.count : 0)}</td>
-           <td>${v.critical > 0 ? `<span class="badge cr">${v.critical}</span>` : '0'}</td>
-           <td>${v.high > 0 ? `<span class="badge hi">${v.high}</span>` : '0'}</td>
-         </tr>`).join('')}
-       </table>`
-    + footer()
-}
-
 function makeStyles(theme: Theme) {
   const c = theme.color
   return StyleSheet.create({
@@ -400,6 +491,7 @@ function makeStyles(theme: Theme) {
       paddingHorizontal: spacing.lg, paddingTop: spacing.md, paddingBottom: spacing.sm,
     },
     content: { padding: spacing.lg, gap: spacing.md, paddingBottom: spacing['4xl'] },
+    sectionLabel: { marginTop: spacing.md },
     infoBox: {
       flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm,
       backgroundColor: c.info.soft, borderRadius: radius.lg,
@@ -414,6 +506,27 @@ function makeStyles(theme: Theme) {
       shadowOpacity: 1, shadowRadius: 6, elevation: 2,
     },
     cardBusy: { opacity: 0.7 },
+    execCard: { flexDirection: 'column', alignItems: 'stretch', gap: spacing.sm },
+    execHead: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+    liveChip: {
+      flexDirection: 'row', alignItems: 'center', gap: 4,
+      paddingHorizontal: spacing.sm, paddingVertical: 4, borderRadius: radius.md,
+    },
+    kpiGrid: { flexDirection: 'row', gap: spacing.md },
+    costRow: {
+      flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+      paddingVertical: spacing.xs,
+    },
+    shareBtn: {
+      flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.sm,
+      backgroundColor: c.primary, borderRadius: radius.lg, paddingVertical: spacing.md,
+      marginTop: spacing.sm,
+    },
+    retryBtn: {
+      flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.sm,
+      backgroundColor: c.primary, borderRadius: radius.lg,
+      paddingVertical: spacing.sm, paddingHorizontal: spacing.lg, marginTop: spacing.md,
+    },
     iconBox: { width: 48, height: 48, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center' },
     hint: { marginTop: spacing.xs },
     rangeCard: {
@@ -431,6 +544,11 @@ function makeStyles(theme: Theme) {
       height: 42, borderRadius: radius.md, borderWidth: 1.5, borderColor: c.border,
       backgroundColor: c.surfaceAlt, paddingHorizontal: spacing.md,
       fontSize: 14, color: c.text, fontWeight: '600',
+    },
+    applyBtn: {
+      flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.xs,
+      paddingVertical: spacing.sm, borderRadius: radius.md,
+      borderWidth: 1.5, borderColor: c.border, backgroundColor: c.surfaceAlt,
     },
   })
 }

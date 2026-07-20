@@ -95,7 +95,7 @@ export async function listSiteAssets({ country } = {}) {
     if (country && country !== 'All') q = q.or(`country.eq.${country},country.is.null`)
     return q
   })
-  return rows
+  return Array.isArray(rows) ? rows : []
 }
 
 /**
@@ -107,8 +107,12 @@ export async function listSiteAssets({ country } = {}) {
 export function buildSiteRollup(masterSites = [], fleetAssets = []) {
   const map = new Map()
   const keyOf = (name) => norm(name)
+  // Guard against a non-array input (a failed/odd query result) so the page
+  // never crashes with "not iterable".
+  const master = Array.isArray(masterSites) ? masterSites : []
+  const assets = Array.isArray(fleetAssets) ? fleetAssets : []
 
-  for (const s of masterSites) {
+  for (const s of master) {
     const name = String(s.name ?? '').trim()
     if (!name) continue
     map.set(keyOf(name), {
@@ -126,7 +130,7 @@ export function buildSiteRollup(masterSites = [], fleetAssets = []) {
     })
   }
 
-  for (const a of fleetAssets) {
+  for (const a of assets) {
     const name = String(a.site ?? '').trim()
     if (!name) continue
     const k = keyOf(name)
@@ -168,7 +172,8 @@ export async function listSites({ country, activeOnly } = {}) {
     .order('country').order('name')
   if (country && country !== 'All') q = q.eq('country', country)
   if (activeOnly) q = q.eq('active', true)
-  return unwrap(await q)
+  const rows = unwrap(await q)
+  return Array.isArray(rows) ? rows : []
 }
 
 /**

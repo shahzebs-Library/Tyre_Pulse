@@ -4,7 +4,8 @@ Copy these into **Play Console → App content → Data safety**. Answers are ba
 on what the app actually does (auth, GPS-tagged inspections, photos, push
 notifications, Sentry crash reporting). No ads SDK, no third-party analytics.
 
-> Contact, demo login, and hosted URLs are already filled in below. Ready to copy.
+> Contact and hosted URLs are filled in below. Reviewer sign-in credentials are
+> NOT stored in this file; supply them via Play Console "App access" (see section 4).
 
 ---
 
@@ -38,7 +39,12 @@ For every item below: **Processed ephemerally? No. Users can request deletion? Y
 | Email address | Yes | App functionality, Account management | Required |
 | User IDs (username, employee ID, account ID) | Yes | App functionality, Account management | Required |
 
-*(No phone number, address, race, political views, or other personal info collected.)*
+*(No phone number is collected by the app. Sign-in is invite-only with no
+registration form, and no screen captures or uploads a phone number. The team
+directory may display an administrator-entered teammate phone number for
+tap-to-call, but the app does not itself capture, create, or transmit phone
+numbers, so this is not "collection" under Play's definition. Address, race,
+political views, and other personal info are not collected.)*
 
 ### Location
 | Data type | Collected | Purpose | Optional/Required |
@@ -84,16 +90,20 @@ Search history · Installed apps · Ads / marketing IDs (no advertising).
 ---
 
 ## 4. App access (App content → "App access")
-This app **requires sign-in** (no public sign-up — accounts are provisioned by
-the fleet administrator). Google's review team needs working credentials:
+This app **requires sign-in**. It is **invite-only**: there is no public sign-up,
+and accounts are created for users by the fleet administrator. Google's review
+team needs working credentials:
 
 - **All or some functionality is restricted:** choose "All functionality is restricted."
-- Demo login (already created — a low-privilege Inspector account on live data):
-  - Username **or** Employee ID: `playdemo`  (or `DEMO-001`)
-  - Password: `TyreDemo!2026`
+- **Reviewer login:** `<provided separately to Google review via Play Console "App access", NOT stored in source>`
+  - Provide a low-privilege Inspector account (username or employee ID + password)
+    directly in the Play Console "App access" fields.
   - Instructions: "Enter the username and password on the login screen. The Home
     screen exposes New Inspection, Scan Asset, Checklists, Meter Log, Tyre
     Records and Accident reporting."
+
+> Reviewer credentials are supplied through Play Console "App access" only. They are
+> rotated periodically and are never committed to source control.
 
 ---
 

@@ -86,7 +86,8 @@ captured from the app itself (I can't launch the native Android app in this
 environment to grab genuine screens, and faked screenshots risk rejection).
 
 Good news: you already have the app on the **internal testing** track, so this
-takes ~5 minutes on your phone with the demo account (`playdemo` / `TyreDemo!2026`).
+takes ~5 minutes on your phone with the reviewer account whose credentials you
+enter in Play Console "App access" (kept out of source control and rotated).
 
 ### Required sizes (Play rules)
 - **Phone:** 2–8 images, ratio between 16:9 and 9:16, each side 320–3840 px.

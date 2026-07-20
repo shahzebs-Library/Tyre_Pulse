@@ -10,7 +10,7 @@ App identity (from `app.json` / `eas.json`):
 |---|---|
 | App name | TyrePulse Inspector |
 | Android package | `com.shahzebrahman.tyrepulseinspector` |
-| Current `version` (semver) | `1.2.0` |
+| Current `version` (semver) | `1.3.0` |
 | Current `versionCode` | `2` (note: `appVersionSource: remote` - EAS manages the authoritative value) |
 | EAS project ID | `3ed4e62f-e91f-4c78-b1eb-9b7310c08255` |
 | Production build type | `app-bundle` (AAB) ✅ required by Play |
@@ -156,7 +156,7 @@ Part of the TyrePulse fleet intelligence platform. Requires a TyrePulse account.
 |---|---|---|---|
 | App icon (store) | **512 × 512** | 32-bit PNG | No alpha rounding needed; Play applies the mask. |
 | Feature graphic | **1024 × 500** | PNG/JPG | Shown at top of listing; no critical text near edges. |
-| Phone screenshots | **min 2, up to 8** | PNG/JPG | 16:9 or 9:16; 320-3840 px per side. App uses portrait → 9:16. |
+| Phone screenshots | **min 2, up to 8** | PNG/JPG | 16:9 or 9:16; 320-3840 px per side. Orientation is unlocked (`app.json` `orientation: "default"`); capture portrait 9:16 screenshots for the listing. |
 | (Optional) 7" / 10" tablet shots | per Play spec | - | App is phone-only (`supportsTablet: false`); skip. |
 
 **Screenshots can be generated automatically.** The repo includes
@@ -174,19 +174,28 @@ Download that artifact and upload the PNGs directly to the Play listing.
 Based on the **actual** Android permissions and SDKs declared in `app.json`,
 declare the following in Play Console → *App content → Data safety*:
 
-Permissions declared: `CAMERA`, `INTERNET`, `ACCESS_NETWORK_STATE`,
-`POST_NOTIFICATIONS`, `RECEIVE_BOOT_COMPLETED`, `SCHEDULE_EXACT_ALARM`,
-`USE_EXACT_ALARM`. **No location permission is declared** - do not claim location
-collection.
+Permissions declared in `app.json` (verify against the file before submitting):
+`CAMERA`, `INTERNET`, `ACCESS_NETWORK_STATE`, `POST_NOTIFICATIONS`,
+`RECEIVE_BOOT_COMPLETED`, `ACCESS_FINE_LOCATION`, `ACCESS_COARSE_LOCATION`.
+**No exact-alarm permission is declared** (`SCHEDULE_EXACT_ALARM` /
+`USE_EXACT_ALARM` were removed - see §7). **Location IS declared** (foreground /
+when-in-use) to geo-tag inspections, so declare precise location as collected
+(optional). This section is the summary; `PLAY_DATA_SAFETY.md` holds the
+authoritative, copy-paste Data safety answers - keep the two consistent.
 
 | Data type | Collected? | Purpose | Notes |
 |---|---|---|---|
+| **Name** | Yes | App functionality, account management | Displayed and attributed to records. |
 | **Email address / account** | Yes | App functionality, account management | Supabase auth login. |
-| **Photos** | Yes | App functionality | Inspection photos via camera / image picker. |
-| **App activity / inspection data** | Yes | App functionality, analytics | Tyre readings, vehicle records. |
-| **Device / push identifiers** | Yes | App functionality (push) | Expo/FCM push token for notifications. |
-| **Precise/approximate location** | **No** | - | No location permission requested. |
+| **User IDs** (username, employee ID) | Yes | App functionality, account management | Identify the signed-in user. |
+| **Precise location** | **Yes** | App functionality (geo-tag inspection site) | **Optional** - inspection still saves if location is denied/unavailable. |
+| **Photos** | Yes | App functionality | Inspection / accident / gauge photos + signatures via camera / image picker. |
+| **App activity / inspection data** | Yes | App functionality, analytics | Tyre readings, checklists, accidents, meter/stock records. |
+| **Crash logs / diagnostics** | Yes | App functionality, analytics | Sentry crash and performance reporting. |
+| **Device / push identifiers** | Yes | App functionality (push) | Expo/FCM push token; Sentry install id. |
+| **Phone number** | **No** | - | Not collected: invite-only sign-in has no registration form and no screen captures/uploads a phone number. The team directory only displays an admin-entered teammate number for tap-to-call. |
 | **Financial / contacts / messages** | No | - | Not collected. |
+| **Approximate location** | No | - | Only precise (foreground) location is used. |
 
 Also declare:
 - **Data encrypted in transit:** Yes (HTTPS to Supabase / Expo).
@@ -227,8 +236,8 @@ declare it under Data safety (§6) but no separate permission form is required.
   `versionCode` by 1 on every build automatically. No manual edit needed per
   submission.
 - Bump the human-facing **`version`** (`app.json` → `expo.version`, currently
-  `1.2.0`) manually using semver when shipping a meaningful release.
-  `package.json` version is now aligned to `1.2.0` (done 2026-07-17).
+  `1.3.0`) manually using semver when shipping a meaningful release.
+  `package.json` version is aligned to `1.3.0` (matches `app.json`).
 - Play rejects an upload whose `versionCode` is ≤ a previously uploaded one;
   `autoIncrement` prevents this.
 

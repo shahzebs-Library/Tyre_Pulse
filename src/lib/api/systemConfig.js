@@ -212,6 +212,8 @@ export const ENFORCEMENT_STATUS = Object.freeze({
   ai_model:              { status: 'saved', where: 'Model is locked server-side for safety; this value is not used' },
   alert_email:           { status: 'saved', where: 'Sentry alerts use their own console-configured email, not this key' },
   digest_frequency:      { status: 'saved', where: 'Scheduled reports use each schedule own cadence' },
-  audit_retention_days:  { status: 'saved', where: 'Retention purge job deferred (destructive - needs sign-off)' },
-  data_retention_months: { status: 'saved', where: 'Retention / archive job deferred (destructive - needs sign-off)' },
+  audit_retention_days:  { status: 'active', where: 'Nightly purge of old audit / error logs only (V288); 0 = keep forever' },
+  // Deliberately saved-only: never auto-deletes operational business data
+  // (accidents / tyres / fleet). Enabling that needs a reviewed, backed-up action.
+  data_retention_months: { status: 'saved', where: 'Protected: business records are never auto-deleted (data safety)' },
 })

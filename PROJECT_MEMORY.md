@@ -63,8 +63,15 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
   `login.tsx` (check before signIn, record on failure, reset on success). New i18n key errAccountLocked/errorLocked
   (en+ar). Verified live: 5 fails -> locked 900s, non-existent never locks, cleaned up. Badge flipped to active.
   Tests loginGuard 6, systemConfig 11. KNOWN tradeoff (documented): identifier lockout is DoS-able by someone who
-  knows a valid username, bounded by the auto-expiring window. Next free migration **V288**. STILL saved-only (honest):
-  ai_model (model locked server-side), audit_retention_days + data_retention_months (destructive purge, needs sign-off).
+  knows a valid username, bounded by the auto-expiring window.
+- **audit_retention_days now ENFORCED (V288) — SAFE logs-only purge.** `cron_purge_audit_logs()` (DEFINER) +
+  pg_cron `audit-log-retention` daily 01:15 UTC deletes ONLY old audit/error LOG rows (audit_log_v2.created_at,
+  system_logs.created_at, access_audit.at) older than audit_retention_days; 0/unset = keep forever; each table
+  purged independently; writes a summary row to system_logs. NEVER touches business data. Verified: 0 rows would
+  purge now (all logs recent). **data_retention_months stays DELIBERATELY saved-only** (business records —
+  accidents/tyres/fleet — are NEVER auto-deleted; data-safety decision, badge says "Protected"). User is non-
+  technical and delegated the call ("u do it"); chose the safe logs-only option, left business-data deletion off.
+  Next free migration **V289**.
 
 ## Custom roles assignable (V282) + Sentry crash console (V283) (2026-07-19, SHIPPED)
 - **V282 — custom roles could NEVER be assigned to a user (root-caused + fixed).** User: "I add new

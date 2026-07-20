@@ -3,6 +3,22 @@
 Durable, committed project knowledge so any session has full context. Keep this
 current. Read it before adding/changing modules. Governing spec: `Tyre pulse enterprise.md`
 
+## Supabase dashboard CSV import now VISIBLE (V290, 2026-07-20) — org auto-stamp
+- User wanted the EASIEST reliable bulk-load: Supabase Table Editor "Import data from CSV" (no app screens,
+  no timeouts, big files). Blocker: that importer runs as an admin role with NO profile, so the column default
+  `app_current_org()` returns NULL -> imported rows hidden by org-isolation RLS ("uploaded but nothing shows").
+- **V290 (applied live + MIGRATIONS_V290_STAMP_IMPORT_DEFAULT_ORG.sql):** BEFORE INSERT trigger
+  `trg_stamp_import_default_org` (fn `stamp_import_default_org`) on the 10 import target tables (vehicle_fleet,
+  tyre_records, stock_records, accidents, inspections, work_orders, warranty_claims, gate_passes, suppliers,
+  drivers) fills `organisation_id` = Company A (00000000-0000-0000-0000-000000000001) ONLY when it arrives NULL.
+  Authenticated inserts already carry app_current_org() (non-null) so they are UNTOUCHED; only service-role/
+  dashboard CSV imports get stamped. Verified live (rolled back): null-org insert -> Company A. country left
+  null is fine (app_can_see_country(null) = visible to all). SINGLE-ORG assumption: all data + users are in
+  Company A today; if a 2nd tenant is added, swap the constant for a per-context resolver before their staff use
+  the dashboard importer. Next free migration **V291**.
+- RULE: the two supported bulk-load paths are (a) in-app Smart Import/Data Intake (auto org via the signed-in
+  user) and (b) Supabase Table Editor CSV import (auto org via V290 trigger). Both now land visible.
+
 ## Console Smart Import (2026-07-20) — super-admin "upload a file, it auto-adjusts by columns"
 - User asked for a BACKEND CONSOLE place where a super-admin just uploads any Excel/CSV and it maps itself
   (the frontpage /data-intake + /erp-import exist but user wanted it in /console and fully automatic). Built

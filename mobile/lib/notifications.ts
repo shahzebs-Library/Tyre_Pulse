@@ -10,6 +10,7 @@
 
 import * as Notifications from 'expo-notifications'
 import * as Device from 'expo-device'
+import Constants from 'expo-constants'
 import { Platform } from 'react-native'
 import { supabase } from './supabase'
 
@@ -69,6 +70,29 @@ export async function requestNotificationPermission(): Promise<boolean> {
 
 // ── Push token registration ───────────────────────────────────────────────────
 
+/** True when a Supabase RPC error means the function itself is not deployed yet
+ *  (pre-V321 apply). In that case we degrade to the profiles.push_token path
+ *  rather than treating it as a real persistence failure. */
+function isMissingRpc(err: { code?: string; message?: string } | null): boolean {
+  if (!err) return false
+  if (err.code === 'PGRST202' || err.code === '404') return true
+  const m = (err.message || '').toLowerCase()
+  return m.includes('could not find') || m.includes('does not exist')
+}
+
+/**
+ * Register this device's Expo push token.
+ *
+ * Multi-device (V321): the token is upserted into `user_devices` via the
+ * `register_user_device` RPC (one row per physical device, so a second phone no
+ * longer overwrites the first). The legacy `profiles.push_token` column is ALSO
+ * written for backward compatibility with the existing server push consumers
+ * that still read it. Persistence is verified: if neither path stored the token
+ * we return null so the caller sees the failure instead of a false success.
+ *
+ * Returns the Expo token on success, or null if permission was denied, the
+ * token could not be obtained, or it could not be persisted anywhere.
+ */
 export async function registerPushToken(userId: string): Promise<string | null> {
   try {
     const granted = await requestNotificationPermission()
@@ -78,11 +102,50 @@ export async function registerPushToken(userId: string): Promise<string | null> 
       projectId: '3ed4e62f-e91f-4c78-b1eb-9b7310c08255',
     })).data
 
-    // Persist to profiles so the server can send targeted pushes later.
-    await supabase
+    if (!token) return null
+
+    // 1. Multi-device registry (authoritative going forward). Best-effort:
+    //    a missing RPC (pre-apply) degrades to the profiles path below.
+    let devicePersisted = false
+    let rpcMissing = false
+    try {
+      const { error: rpcErr } = await supabase.rpc('register_user_device', {
+        p_push_token: token,
+        p_platform: Platform.OS,
+        p_device_id: Device.modelName ?? null,
+        p_app_version: Constants.expoConfig?.version ?? null,
+      })
+      if (rpcErr) {
+        rpcMissing = isMissingRpc(rpcErr)
+        if (!rpcMissing && __DEV__) {
+          console.warn('[Notifications] register_user_device failed:', rpcErr)
+        }
+      } else {
+        devicePersisted = true
+      }
+    } catch (rpcEx) {
+      if (__DEV__) console.warn('[Notifications] register_user_device threw:', rpcEx)
+    }
+
+    // 2. Legacy compatibility write (server consumers still read this column).
+    //    Verify the result - a silent error must not read as success.
+    let profilePersisted = false
+    const { error: profileErr } = await supabase
       .from('profiles')
       .update({ push_token: token, push_token_updated_at: new Date().toISOString() })
       .eq('id', userId)
+    if (profileErr) {
+      if (__DEV__) console.warn('[Notifications] profiles.push_token write failed:', profileErr)
+    } else {
+      profilePersisted = true
+    }
+
+    // The RPC also stamps profiles.push_token itself, so a successful device
+    // registration counts as persisted even if the direct profiles write failed.
+    if (!devicePersisted && !profilePersisted) {
+      if (__DEV__) console.warn('[Notifications] push token was not persisted to any store')
+      return null
+    }
 
     return token
   } catch (err) {
@@ -92,11 +155,33 @@ export async function registerPushToken(userId: string): Promise<string | null> 
 }
 
 /**
- * Clear this user's push token from their profile on logout, so pushes targeted
- * at them are not delivered to a shared device now used by another account.
- * Best-effort - must be called while still authenticated (RLS-scoped update).
+ * Clear this user's push token on logout, so pushes targeted at them are not
+ * delivered to a shared device now used by another account. Soft-revokes this
+ * device's row in `user_devices` (V321) AND clears the legacy
+ * `profiles.push_token` column. Best-effort - must be called while still
+ * authenticated (RLS-scoped writes). Signature kept: clearPushToken(userId).
  */
 export async function clearPushToken(userId: string): Promise<void> {
+  // 1. Soft-revoke this device's row in the multi-device registry. Best-effort:
+  //    a missing RPC (pre-apply) or an unobtainable token is a no-op here.
+  try {
+    const token = (await Notifications.getExpoPushTokenAsync({
+      projectId: '3ed4e62f-e91f-4c78-b1eb-9b7310c08255',
+    })).data
+    if (token) {
+      const { error: rpcErr } = await supabase.rpc('revoke_user_device', {
+        p_push_token: token,
+      })
+      if (rpcErr && !isMissingRpc(rpcErr) && __DEV__) {
+        console.warn('[Notifications] revoke_user_device failed:', rpcErr)
+      }
+    }
+  } catch (err) {
+    if (__DEV__) console.warn('[Notifications] revoke_user_device skipped:', err)
+  }
+
+  // 2. Legacy compatibility: clear profiles.push_token so single-column
+  //    consumers stop targeting this handset for the signed-out user.
   try {
     await supabase
       .from('profiles')

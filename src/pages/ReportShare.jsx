@@ -17,7 +17,7 @@
  *  - Honest loading / error(by reason) / per-chart empty states. No fabrication.
  *  - Copy contains NO em or en dashes, arrows, middle dots or curly quotes.
  */
-import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
+import { useState, useEffect, useMemo, useCallback, useRef, Component } from 'react'
 import { useParams } from 'react-router-dom'
 import {
   Maximize2, Minimize2, RefreshCw, AlertTriangle, Lock, Clock, KeyRound,
@@ -613,6 +613,39 @@ const REASON_COPY = {
   unavailable: { title: 'Report sharing is not available right now.', body: 'Please try again in a few minutes.' },
 }
 
+// ── Per-board error isolation ─────────────────────────────────────────────────
+// A single board that throws during render must NOT take down the whole public
+// viewer. This boundary catches a board-level render error and shows a calm
+// message so rotation continues to the next board. The rotating body wraps its
+// active board in this; the parent `key` remounts it each board change, so a
+// transient bad board recovers automatically on the next rotation.
+class BoardBoundary extends Component {
+  constructor(props) {
+    super(props)
+    this.state = { failed: false }
+  }
+
+  static getDerivedStateFromError() {
+    return { failed: true }
+  }
+
+  componentDidCatch() {
+    // Swallow: the message below is the user-facing outcome. No raw error or
+    // internals are shown on a public link.
+  }
+
+  render() {
+    if (this.state.failed) {
+      return (
+        <div className="rs-page" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <p style={{ opacity: 0.6, fontSize: '1rem' }}>This board is temporarily unavailable.</p>
+        </div>
+      )
+    }
+    return this.props.children
+  }
+}
+
 // ── Main component ────────────────────────────────────────────────────────────
 
 export default function ReportShare() {
@@ -1030,9 +1063,14 @@ export default function ReportShare() {
       </div>
 
       {/* Rotating body (key drives the fade / slide transition). Custom layouts
-          render a one-screen block grid; otherwise the fixed page catalog. */}
+          render a one-screen block grid; otherwise the fixed page catalog.
+          Each board is isolated in a BoardBoundary so a single problematic board
+          degrades to a graceful message and rotation continues, instead of the
+          whole share crashing to the error page. The parent `key` remounts the
+          subtree (and thus resets the boundary) on every board change. */}
       <main className="rs-body">
         <div key={`${isCustom ? activeBoard?.id : activeKey}-${safeIndex}`} className="rs-page-anim">
+          <BoardBoundary>
           {isCustom ? (
             <CustomBoard board={activeBoard} snapshot={snapshot} />
           ) : (
@@ -1052,6 +1090,7 @@ export default function ReportShare() {
               {activeKey === 'pm_due' && <PmDuePage snapshot={snapshot} />}
             </>
           )}
+          </BoardBoundary>
         </div>
       </main>
     </div>

@@ -15,6 +15,7 @@ import { useCallback } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import * as billing from '../lib/api/billing'
 import { canAdd, isAtLimit, planAllows, usageRows, trialDaysLeft } from '../lib/entitlements'
+import { subscriptionAccess } from '../lib/subscriptionAccess'
 
 const OVERVIEW_KEY = ['billing', 'overview']
 const PLANS_KEY = ['billing', 'plans']
@@ -52,6 +53,9 @@ export function useBilling() {
     invoices: invoicesQ.data ?? [],
     rows: usageRows(overview),
     trialDaysLeft: trialDaysLeft(overview),
+    // Derived subscription-STATE access policy (read-only; not wired to block
+    // routing/writes yet). Fails open when overview is null/not-loaded.
+    subscriptionAccess: subscriptionAccess(overview),
     loading: overviewQ.isLoading || plansQ.isLoading,
     invoicesLoading: invoicesQ.isLoading,
     error: overviewQ.error || plansQ.error || null,

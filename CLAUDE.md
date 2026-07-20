@@ -23,6 +23,14 @@ Always optimize for:
 
 \---
 
+# Reply Style (user preference)
+
+* Bullet points only.
+* No long explanations or stories.
+* Keep it short.
+
+---
+
 # Default Behavior
 
 Do not explain what you are about to do.

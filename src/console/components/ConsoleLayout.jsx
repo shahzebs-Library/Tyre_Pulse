@@ -5,7 +5,7 @@ import {
   ClipboardList, Zap, Megaphone, Lock, LogOut, ChevronDown,
   Globe, Menu, X, AlertTriangle, Layers, Smartphone, Palette, Activity,
   DatabaseBackup, UserCog, History, BellRing, Boxes, HeartPulse, Search, Truck, Trash2,
-  LayoutList, Bug, Wand2, LifeBuoy, Eye,
+  LayoutList, Bug, Wand2, LifeBuoy, Eye, UserX,
 } from 'lucide-react'
 import { useConsoleAuth } from '../ConsoleAuthContext'
 import Console2FAModal from './Console2FAModal'
@@ -26,6 +26,7 @@ const NAV = [
   { to: '/console/automation',   label: 'Automation Health',  icon: Activity },
   { to: '/console/delivery',     label: 'Delivery & Alerts',  icon: BellRing },
   { to: '/console/support-sessions', label: 'Support Sessions', icon: LifeBuoy },
+  { to: '/console/account-deletions', label: 'Account Deletions', icon: UserX },
   { to: '/console/smart-import', label: 'Smart Import',   icon: Wand2 },
   { to: '/console/data-browser', label: 'Data Browser',   icon: Search },
   { to: '/console/data-cleanup', label: 'Data Cleanup',   icon: Trash2 },

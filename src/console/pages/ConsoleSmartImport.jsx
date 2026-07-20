@@ -41,6 +41,13 @@ const MODULE_LABELS = {
 const moduleLabel = (m) => MODULE_LABELS[m] || m
 const fmtNum = (n) => (Number.isFinite(Number(n)) ? Number(n).toLocaleString() : '0')
 const PREVIEW_ROWS = 12
+// The on-screen preview counts are estimated from a bounded SAMPLE so a 50k-100k
+// row sheet never freezes the main thread. The commit path still processes every
+// row via the resilient staging pipeline.
+const PREVIEW_SAMPLE = 2000
+// Above this many rows, suggest the Supabase Table Editor CSV import as the
+// fastest path (the in-app import still works, just slower for very large files).
+const LARGE_FILE_ROWS = 50000
 
 function confBadge(conf) {
   if (conf >= 90) return { text: 'Auto', cls: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30' }
@@ -131,13 +138,18 @@ export default function ConsoleSmartImport() {
         : m))
   }
 
-  // Transformed + validated preview over the whole sheet (counts) + first rows.
+  // Transformed + validated preview over a bounded SAMPLE (first PREVIEW_SAMPLE
+  // rows) so a very large sheet cannot freeze the UI. Counts are exact when the
+  // sheet fits inside the sample and clearly labelled as an estimate otherwise.
+  // The commit path (below) always processes EVERY row.
   const previewInfo = useMemo(() => {
     if (!sheet || !module || !mapping.length) return null
     let ready = 0, warning = 0, errorRows = 0
     const sampleOut = []
     const activeTargets = mapping.filter((m) => m.target).map((m) => m.target)
-    for (let i = 0; i < sheet.rows.length; i++) {
+    const total = sheet.rows.length
+    const scan = Math.min(total, PREVIEW_SAMPLE)
+    for (let i = 0; i < scan; i++) {
       const raw = sheet.rows[i]
       let t
       try {
@@ -150,7 +162,7 @@ export default function ConsoleSmartImport() {
       else ready++
       if (sampleOut.length < PREVIEW_ROWS) sampleOut.push({ t, status: v.status })
     }
-    return { ready, warning, errorRows, total: sheet.rows.length, activeTargets, sampleOut }
+    return { ready, warning, errorRows, total, scanned: scan, isEstimate: total > scan, activeTargets, sampleOut }
   }, [sheet, module, mapping])
 
   const requiredMissing = useMemo(() => {
@@ -161,7 +173,12 @@ export default function ConsoleSmartImport() {
 
   async function commit() {
     if (!sheet || !module) return
-    setPhase('committing'); setError(''); setResult(null); setProgress(null)
+    setPhase('committing'); setError(''); setResult(null)
+    // Reflect the pre-staging work in the button before the (synchronous) heavy
+    // transform loop, so a large file does not look frozen.
+    setProgress({ phase: 'preparing', inserted: 0 })
+    // Yield one frame so the "Preparing rows..." state can paint first.
+    await new Promise((r) => setTimeout(r, 0))
     try {
       const scopeCountry = country.trim() || null
       const batchId = await imports.createBatch({ country: scopeCountry, module, sheet: sheet.name, sourceSystem: 'console-smart-import' })
@@ -287,6 +304,16 @@ export default function ConsoleSmartImport() {
             </div>
           </div>
 
+          {/* Very large file guidance (non-blocking) */}
+          {sheet.rows.length > LARGE_FILE_ROWS && (
+            <div className="flex items-start gap-2 rounded-lg border border-sky-500/30 bg-sky-500/10 px-4 py-3 text-sm text-sky-200">
+              <Info size={16} className="mt-0.5 shrink-0" />
+              <span>
+                This sheet has {fmtNum(sheet.rows.length)} rows. You can import it here, but for very large files the fastest path is the Supabase Table Editor "Import data from CSV" option, which streams the whole file and stamps your organisation automatically. The in-app import below will still work; it just takes longer.
+              </span>
+            </div>
+          )}
+
           {/* Mapping table */}
           <div className="rounded-xl border border-gray-800 bg-gray-900/50 overflow-hidden">
             <div className="px-4 py-3 border-b border-gray-800 flex items-center gap-2">
@@ -337,6 +364,9 @@ export default function ConsoleSmartImport() {
                 <span className="inline-flex items-center gap-1.5 text-amber-300"><Info size={15} /> {fmtNum(previewInfo.warning)} needs review</span>
                 <span className="inline-flex items-center gap-1.5 text-red-300"><AlertTriangle size={15} /> {fmtNum(previewInfo.errorRows)} would fail</span>
               </div>
+              {previewInfo.isEstimate && (
+                <p className="mt-2 text-xs text-gray-500">Estimate based on the first {fmtNum(previewInfo.scanned)} of {fmtNum(previewInfo.total)} rows. Every row is checked when you import.</p>
+              )}
               {requiredMissing.length > 0 && (
                 <div className="mt-3 flex items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
                   <AlertTriangle size={14} className="mt-0.5 shrink-0" />
@@ -378,8 +408,10 @@ export default function ConsoleSmartImport() {
               <button onClick={commit} disabled={phase === 'committing' || !previewInfo || previewInfo.ready + previewInfo.warning === 0}
                 className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-orange-500 hover:bg-orange-600 text-white font-medium disabled:opacity-50">
                 {phase === 'committing'
-                  ? <><Loader2 className="animate-spin" size={16} /> Importing{progress ? ` ${fmtNum(progress.inserted)} saved...` : '...'}</>
-                  : <><Database size={16} /> Import {fmtNum((previewInfo?.ready || 0) + (previewInfo?.warning || 0))} rows <ArrowRight size={15} /></>}
+                  ? (progress?.phase === 'preparing'
+                    ? <><Loader2 className="animate-spin" size={16} /> Preparing rows...</>
+                    : <><Loader2 className="animate-spin" size={16} /> Importing{progress ? ` ${fmtNum(progress.inserted)} saved...` : '...'}</>)
+                  : <><Database size={16} /> Import {previewInfo?.isEstimate ? `up to ${fmtNum(previewInfo?.total || 0)}` : fmtNum((previewInfo?.ready || 0) + (previewInfo?.warning || 0))} rows <ArrowRight size={15} /></>}
               </button>
               <span className="text-xs text-gray-500">Rows that would fail are skipped automatically.</span>
             </div>

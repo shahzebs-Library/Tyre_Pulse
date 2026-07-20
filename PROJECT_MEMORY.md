@@ -40,6 +40,16 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
 - RULE: to add a routable module, it just needs a MODULE_FIELDS + MODULE_TABLES entry (detectModule + the
   page pick it up automatically). This is the console counterpart to /data-intake; the browser path still caps
   ~100k rows/file — true million-row loads still need the server COPY pipeline.
+- **Big-file hardening (same day):** ConsoleSmartImport preview counts now compute over a bounded SAMPLE
+  (`PREVIEW_SAMPLE=2000`) instead of every row (a full-sheet transform in the useMemo froze the UI on 50k-100k
+  files — looked like "not uploading"); counts are labelled an estimate when total>sample, commit still
+  processes EVERY row via the resilient stageRows/commitBatch. Added a non-blocking "very large file -> use the
+  Supabase CSV import" banner over `LARGE_FILE_ROWS=50000`, and a "Preparing rows..." state (real frame yield)
+  before the synchronous commit-time transform loop.
+- **Zero-mapping templates delivered (scratchpad, not a repo file):** `TyrePulse_Import_Templates.xlsx`
+  (11 sheets: READ ME + 10 modules) + 10 CSVs whose HEADERS ARE THE EXACT DB COLUMN NAMES per table, so the
+  Supabase Table Editor CSV import auto-maps 1:1 with zero clicking. Column sets pulled live from
+  information_schema. Regenerate the same way if the schema changes.
 
 ## Report email "edge function missing" FIXED (2026-07-20)
 - User: emailing a report failed with an "edge function missing" error. Root cause: `send-email` was

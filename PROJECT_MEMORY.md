@@ -53,6 +53,18 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
   - RULE: read any global switch through `systemConfig.js` (configBool/Num/Str or getPublicConfig pre-auth) — never
     re-query system_config. When you wire a saved-only control, flip its ENFORCEMENT_STATUS entry to 'active' with
     the real site, so the console badge stays TRUE. AI edge fns deploy as `_shared/auth.ts` + `source/index.ts`.
+- **max_login_attempts now ENFORCED (V287 account lockout).** Table `public.login_attempts` (deny-all; only DEFINER
+  RPCs touch it) + RPCs `login_attempt_status(p_identifier)` (anon pre-auth probe), `record_login_failure(p_identifier)`
+  (anon; counts ONLY against a real account — no enumeration; locks after max within a 15-min rolling window, 15-min
+  lock) and `reset_login_attempts()` (**authenticated only** — clears the caller's OWN counter, so an attacker who
+  cannot sign in can never reset to bypass the lock — this is what makes it real). All FAIL-SAFE: max=0/unset disables;
+  any error returns not-locked so a bug can never block a legit login. Client: `src/lib/api/loginGuard.js`
+  (loginAttemptStatus/recordLoginFailure/resetLoginAttempts/lockMinutes) wired into web `Login.jsx` + mobile
+  `login.tsx` (check before signIn, record on failure, reset on success). New i18n key errAccountLocked/errorLocked
+  (en+ar). Verified live: 5 fails -> locked 900s, non-existent never locks, cleaned up. Badge flipped to active.
+  Tests loginGuard 6, systemConfig 11. KNOWN tradeoff (documented): identifier lockout is DoS-able by someone who
+  knows a valid username, bounded by the auto-expiring window. Next free migration **V288**. STILL saved-only (honest):
+  ai_model (model locked server-side), audit_retention_days + data_retention_months (destructive purge, needs sign-off).
 
 ## Custom roles assignable (V282) + Sentry crash console (V283) (2026-07-19, SHIPPED)
 - **V282 — custom roles could NEVER be assigned to a user (root-caused + fixed).** User: "I add new

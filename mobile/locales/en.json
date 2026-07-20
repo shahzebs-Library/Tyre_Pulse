@@ -51,6 +51,7 @@
     "signIn": "Sign In",
     "errorRequired": "Please enter your login and password.",
     "errorFailed": "Login failed. Please check your credentials.",
+    "errorLocked": "Too many failed attempts. This account is locked. Please try again in {mins} minutes.",
     "errorNoAccount": "No account found with that username or Employee ID."
   },
   "tabs": {

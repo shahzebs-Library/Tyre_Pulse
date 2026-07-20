@@ -12,6 +12,7 @@ import { useLanguage } from '../contexts/LanguageContext'
 import LanguageSwitcher from '../components/LanguageSwitcher'
 import { supabase } from '../lib/supabase'
 import { getPublicConfig } from '../lib/api/systemConfig'
+import { loginAttemptStatus, recordLoginFailure, resetLoginAttempts, lockMinutes } from '../lib/api/loginGuard'
 import TpLogo from '../assets/logo.svg'
 import { readCachedLogo } from '../lib/brand/library'
 import TwoFactorChallenge from '../components/TwoFactorChallenge'
@@ -271,6 +272,14 @@ export default function Login() {
       return
     }
     setError(''); setLoading(true)
+    // Server-enforced lockout (System Configuration -> Max Login Attempts, V287).
+    // Fail-safe: a not-locked / errored probe never blocks a real sign-in.
+    const gate = await loginAttemptStatus(identifier)
+    if (gate?.locked) {
+      setError(t('auth.login.errAccountLocked', { mins: lockMinutes(gate) }))
+      setLoading(false)
+      return
+    }
     let result
     try {
       result = await signIn(identifier, password)
@@ -311,13 +320,20 @@ export default function Login() {
       if (next >= 7)      setCooldownUntil(Date.now() + 60_000)
       else if (next >= 5) setCooldownUntil(Date.now() + 15_000)
       else if (next >= 3) setCooldownUntil(Date.now() +  5_000)
-      setError(result.message || t('auth.login.errLoginFailed'))
+      // Record against the server-side lockout; if it just locked, say so clearly.
+      const locked = await recordLoginFailure(identifier)
+      if (locked?.locked) {
+        setError(t('auth.login.errAccountLocked', { mins: lockMinutes(locked) }))
+      } else {
+        setError(result.message || t('auth.login.errLoginFailed'))
+      }
       setLoading(false)
       return
     }
-    // Success - reset counters
+    // Success - reset local + server counters
     setLoginAttempts(0)
     setCooldownUntil(0)
+    resetLoginAttempts()
     // on success: useEffect above handles navigation once AuthContext resolves user + profile
   }
 

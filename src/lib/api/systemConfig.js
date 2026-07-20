@@ -207,9 +207,9 @@ export const ENFORCEMENT_STATUS = Object.freeze({
   app_version:           { status: 'active', where: 'Sidebar footer label (Layout)' },
   email_notifications:   { status: 'active', where: 'send-email edge function (skips when off)' },
   push_notifications:    { status: 'active', where: 'workflow-notify edge push channel (skips when off)' },
+  max_login_attempts:    { status: 'active', where: 'Account lockout on repeated failed logins (login guard, V287)' },
   // Honestly still SAVED ONLY (stored; not yet enforced) - never claimed active:
   ai_model:              { status: 'saved', where: 'Model is locked server-side for safety; this value is not used' },
-  max_login_attempts:    { status: 'saved', where: 'Needs a failed-login tracking table + lockout RPC' },
   alert_email:           { status: 'saved', where: 'Sentry alerts use their own console-configured email, not this key' },
   digest_frequency:      { status: 'saved', where: 'Scheduled reports use each schedule own cadence' },
   audit_retention_days:  { status: 'saved', where: 'Retention purge job deferred (destructive - needs sign-off)' },

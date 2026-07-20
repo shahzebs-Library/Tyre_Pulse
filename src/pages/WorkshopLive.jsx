@@ -32,9 +32,14 @@ import {
 } from '../lib/workshopLive'
 import EChart from '../components/charts/EChart'
 import PageHeader from '../components/ui/PageHeader'
+import WorkshopTvShareButton from '../components/workshop/WorkshopTvShareButton'
 import { colorAt, withAlpha } from '../lib/reportColors'
 import { safeImageSrc } from '../lib/safeUrl'
 import { toUserMessage } from '../lib/safeError'
+import {
+  normalizeWoStatus, woKanbanColumn, WO_STATUSES,
+  KANBAN_COLUMNS as WO_KANBAN_COLUMNS,
+} from '../lib/workOrderStatus'
 
 // ── Small pure helpers ─────────────────────────────────────────────────────────
 
@@ -69,25 +74,16 @@ function relTime(tsMs) {
 
 const pct = (v) => (v == null ? 'N/A' : `${v}%`)
 
-// ── Vocabulary the page controls map onto (engine-canonical tokens) ────────────
-// work_orders.status is free text (no DB CHECK); the engine normalises any casing.
-// We write these lowercase_underscore tokens so the kanban columns and the engine
-// KPI buckets stay consistent (the engine's open-status set uses these exact keys).
+// ── Work-order status vocabulary (canonical Title Case) ────────────────────────
+// work_orders.status is free text (no DB CHECK). The kanban + the Move control
+// READ and WRITE the ONE canonical Title Case vocabulary from workOrderStatus.js,
+// so this dashboard and the legacy Work Orders page speak the same language.
 
-const KANBAN_COLUMNS = [
-  { key: 'new',                 label: 'New',                match: ['new'] },
-  { key: 'awaiting_assignment', label: 'Awaiting Assignment', match: ['awaiting_assignment', 'open', ''] },
-  { key: 'assigned',            label: 'Assigned',           match: ['assigned'] },
-  { key: 'in_progress',         label: 'In Progress',        match: ['in_progress'] },
-  { key: 'waiting_parts',       label: 'Waiting Parts',      match: ['waiting_parts', 'awaiting_parts'] },
-  { key: 'waiting_approval',    label: 'Waiting Approval',   match: ['waiting_approval'] },
-  { key: 'quality_inspection',  label: 'Quality Inspection', match: ['quality_inspection', 'qc'] },
-  { key: 'completed',           label: 'Completed',          match: ['completed', 'closed', 'done'] },
-  { key: 'overdue',             label: 'Overdue',            match: [] }, // derived
-]
+// Kanban columns rendered on the board (canonical Title Case = key + label).
+const KANBAN_COLUMNS = WO_KANBAN_COLUMNS.map((s) => ({ key: s, label: s }))
 
 // Statuses offered in the per-card "Move" control (Overdue is derived, not set).
-const STATUS_MOVES = KANBAN_COLUMNS.filter((c) => c.key !== 'overdue')
+const STATUS_MOVES = WO_STATUSES.filter((s) => s !== 'Overdue')
 
 const PRIORITY_OPTS = ['Critical', 'High', 'Medium', 'Low']
 
@@ -99,12 +95,10 @@ const ALERT_TONE = { critical: TONE_COLOR.red, warning: TONE_COLOR.amber, info: 
 
 /** Column a job belongs to (overdue derived from target_completion). */
 function jobColumnKey(job, now) {
-  const st = normStatus(job.status)
+  const canonical = normalizeWoStatus(job.status)
   const tgt = toTs(job.target_completion)
-  const completed = st === 'completed' || st === 'closed' || st === 'done'
-  if (!completed && Number.isFinite(tgt) && tgt < now) return 'overdue'
-  for (const c of KANBAN_COLUMNS) if (c.key !== 'overdue' && c.match.includes(st)) return c.key
-  return completed ? 'completed' : 'awaiting_assignment'
+  const overdue = canonical !== 'Completed' && canonical !== 'Cancelled' && Number.isFinite(tgt) && tgt < now
+  return woKanbanColumn(canonical, { overdue })
 }
 
 // ── KPI strip config (values come straight from the engine `kpis`) ─────────────
@@ -120,9 +114,9 @@ function buildKpiDefs(kpis) {
     { key: 'onBreak',          label: 'On Break',       value: kpis.onBreak,          icon: Coffee,       scope: 'tech', pred: (x) => x.status === STATUS.ON_BREAK },
     { key: 'absent',           label: 'Absent',         value: kpis.absent,           icon: UserX,        scope: 'tech', pred: (x) => x.status === STATUS.ABSENT },
     { key: 'openJobs',         label: 'Open Job Cards', value: kpis.openJobs,         icon: Wrench,       scope: 'job',  jobCol: null },
-    { key: 'overdueJobs',      label: 'Overdue',        value: kpis.overdueJobs,      icon: AlertTriangle, scope: 'job', jobCol: 'overdue' },
+    { key: 'overdueJobs',      label: 'Overdue',        value: kpis.overdueJobs,      icon: AlertTriangle, scope: 'job', jobCol: 'Overdue' },
     { key: 'vehiclesOffRoad',  label: 'Vehicles Off Road', value: kpis.vehiclesOffRoad, icon: Car,        scope: 'job',  jobPred: (j) => j.vor === true },
-    { key: 'jobsCompletedToday', label: 'Completed Today', value: kpis.jobsCompletedToday, icon: CheckCircle2, scope: 'job', jobCol: 'completed' },
+    { key: 'jobsCompletedToday', label: 'Completed Today', value: kpis.jobsCompletedToday, icon: CheckCircle2, scope: 'job', jobCol: 'Completed' },
     { key: 'utilization',      label: 'Utilization',    value: pct(kpis.utilization), icon: Gauge,        scope: null },
     { key: 'productiveHours',  label: 'Productive Hours', value: kpis.productiveHours, icon: TrendingUp,  scope: null },
     { key: 'lostHours',        label: 'Lost Hours',     value: kpis.lostHours,        icon: Timer,        scope: null },
@@ -311,13 +305,13 @@ function TimeCell({ label, value, color }) {
 // ── Job card (kanban) ─────────────────────────────────────────────────────────
 
 function JobCard({ job, now, technicians, techById, busy, onAssign, onReassign, onStatus, onPriority, onVor, onComplete, highlight }) {
-  const st = normStatus(job.status)
+  const canonicalStatus = normalizeWoStatus(job.status)
   const tgt = toTs(job.target_completion)
-  const overdue = st !== 'completed' && st !== 'closed' && st !== 'done' && Number.isFinite(tgt) && tgt < now
+  const overdue = canonicalStatus !== 'Completed' && canonicalStatus !== 'Cancelled' && Number.isFinite(tgt) && tgt < now
   const prio = normStatus(job.priority)
   const prioColor = PRIORITY_TONE[prio] || TONE_COLOR.grey
   const ownerName = job.assigned_owner_id ? (techById[job.assigned_owner_id]?.name || job.technician_name || null) : job.technician_name || null
-  const isQc = st === 'quality_inspection' || st === 'qc'
+  const isQc = canonicalStatus === 'Quality Inspection'
 
   return (
     <div
@@ -379,13 +373,13 @@ function JobCard({ job, now, technicians, techById, busy, onAssign, onReassign, 
         <select
           aria-label="Move status"
           disabled={busy}
-          value={STATUS_MOVES.some((s) => s.key === jobColumnKey(job, now)) ? jobColumnKey(job, now) : ''}
+          value={STATUS_MOVES.includes(canonicalStatus) ? canonicalStatus : ''}
           onChange={(e) => e.target.value && onStatus(job.id, e.target.value)}
           className="text-[11px] rounded-lg px-1.5 py-1 border truncate"
           style={{ background: 'var(--surface-2)', borderColor: 'var(--border-dim)', color: 'var(--panel-ink)' }}
         >
           <option value="">Move to...</option>
-          {STATUS_MOVES.map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}
+          {STATUS_MOVES.map((s) => <option key={s} value={s}>{s}</option>)}
         </select>
 
         <select
@@ -463,12 +457,44 @@ function DelayPanel({ delays }) {
       </div>
     )
   }
+  const priTone = { high: TONE_COLOR.red, medium: TONE_COLOR.amber, low: TONE_COLOR.grey }
   return (
     <div className="card p-4">
       <h3 className="text-sm font-semibold text-white mb-1">Delay and Root Cause</h3>
       <p className="text-[11px] text-muted mb-3">Hours lost to blocked time, by cause (today).</p>
       <div style={{ height: Math.max(160, delays.length * 42) }}>
         <EChart option={option} ariaLabel="Delay hours by cause" />
+      </div>
+      <div className="mt-3 overflow-x-auto">
+        <table className="w-full text-[11px]">
+          <thead className="text-muted">
+            <tr className="text-left">
+              <th className="py-1 pr-2">Cause</th>
+              <th className="py-1 pr-2">Hours</th>
+              <th className="py-1 pr-2">Cost impact</th>
+              <th className="py-1 pr-2">Responsible</th>
+              <th className="py-1 pr-2">Action</th>
+              <th className="py-1">Priority</th>
+            </tr>
+          </thead>
+          <tbody className="text-white">
+            {delays.map((d) => (
+              <tr key={d.reason} className="border-t border-[var(--border)]">
+                <td className="py-1 pr-2">{labelReason(d.reason)}</td>
+                <td className="py-1 pr-2 tabular-nums">{d.hoursLost}</td>
+                <td className="py-1 pr-2 tabular-nums">{d.costImpact != null ? Number(d.costImpact).toLocaleString() : 'N/A'}</td>
+                <td className="py-1 pr-2">{d.responsibleDept || 'N/A'}</td>
+                <td className="py-1 pr-2 text-muted">{d.suggestedAction || 'N/A'}</td>
+                <td className="py-1">
+                  <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold"
+                    style={{ background: `${priTone[d.priority] || TONE_COLOR.grey}22`, color: priTone[d.priority] || TONE_COLOR.grey }}>
+                    {d.priority || 'low'}
+                  </span>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
     </div>
   )
@@ -629,8 +655,11 @@ export default function WorkshopLive() {
   }, [raw, nowTs])
 
   const kpis = useMemo(() => computeKpis(board, raw?.jobs || [], { now: nowTs, todayStart }), [board, raw, nowTs, todayStart])
-  const alerts = useMemo(() => deriveAlerts(board, raw?.jobs || [], { now: nowTs }), [board, raw, nowTs])
-  const delays = useMemo(() => delayBreakdown(board), [board])
+  const alerts = useMemo(
+    () => deriveAlerts(board, raw?.jobs || [], { now: nowTs, assignments: raw?.assignments || [], presentByUser: raw?.presentByUser || {} }),
+    [board, raw, nowTs],
+  )
+  const delays = useMemo(() => delayBreakdown(board, { jobs: raw?.jobs || [] }), [board, raw])
 
   const kpiDefs = useMemo(() => buildKpiDefs(kpis), [kpis])
 
@@ -671,7 +700,7 @@ export default function WorkshopLive() {
     const buckets = Object.fromEntries(KANBAN_COLUMNS.map((c) => [c.key, []]))
     for (const j of filteredJobs) {
       const key = jobColumnKey(j, nowTs)
-      ;(buckets[key] || buckets.awaiting_assignment).push(j)
+      ;(buckets[key] || buckets['Awaiting Assignment']).push(j)
     }
     return buckets
   }, [filteredJobs, nowTs])
@@ -702,7 +731,7 @@ export default function WorkshopLive() {
   const onStatus = (jobId, status) => mutate(workshop.setJobStatus(jobId, status), 'Status updated.')
   const onPriority = (jobId, priority) => mutate(workshop.setJobPriority(jobId, priority), 'Priority updated.')
   const onVor = (jobId, on) => mutate(workshop.setVor(jobId, on), on ? 'Marked Vehicle Off Road.' : 'Cleared Vehicle Off Road.')
-  const onComplete = (jobId) => mutate(workshop.setJobStatus(jobId, 'completed'), 'Job marked complete.')
+  const onComplete = (jobId) => mutate(workshop.setJobStatus(jobId, 'Completed'), 'Job marked complete.')
   const onConfirm = (eventId) => mutate(workshop.confirmEvent(eventId), 'Task confirmed.')
 
   const focusRef = (ref) => {
@@ -756,17 +785,20 @@ export default function WorkshopLive() {
         refreshing={refreshing}
         updatedAt={updatedAt}
         actions={
-          siteOptions.length > 1 ? (
-            <select
-              value={siteFilter}
-              onChange={(e) => setSiteFilter(e.target.value)}
-              className="btn-secondary text-xs px-3 py-1.5"
-              style={{ color: 'var(--panel-ink)' }}
-              aria-label="Filter by site"
-            >
-              {siteOptions.map((s) => <option key={s} value={s}>{s === 'All' ? 'All sites' : s}</option>)}
-            </select>
-          ) : null
+          <div className="flex items-center gap-2">
+            {siteOptions.length > 1 && (
+              <select
+                value={siteFilter}
+                onChange={(e) => setSiteFilter(e.target.value)}
+                className="btn-secondary text-xs px-3 py-1.5"
+                style={{ color: 'var(--panel-ink)' }}
+                aria-label="Filter by site"
+              >
+                {siteOptions.map((s) => <option key={s} value={s}>{s === 'All' ? 'All sites' : s}</option>)}
+              </select>
+            )}
+            <WorkshopTvShareButton />
+          </div>
         }
       />
 
@@ -854,7 +886,7 @@ export default function WorkshopLive() {
               <div className="flex gap-3 overflow-x-auto pb-2">
                 {KANBAN_COLUMNS.map((col) => {
                   const items = columns[col.key] || []
-                  const isOverdue = col.key === 'overdue'
+                  const isOverdue = col.key === 'Overdue'
                   return (
                     <div key={col.key} className="shrink-0 w-64 rounded-xl p-2" style={{ background: 'var(--surface-2)', border: '1px solid var(--border-dim)' }}>
                       <div className="flex items-center justify-between px-1.5 py-1 mb-2">

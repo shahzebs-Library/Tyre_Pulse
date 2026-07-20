@@ -1,0 +1,11 @@
+-- V293: read-only Workshop TV board over the existing report_shares token infra.
+-- SECURITY DEFINER RPC get_workshop_snapshot(p_token, p_password) (anon+auth,
+-- REVOKE PUBLIC, pinned search_path 'public','extensions'): validates the token
+-- against report_shares exactly like get_report_snapshot (active/expiry/bcrypt),
+-- derives org from the token row, bumps view_count, and returns PII-FREE org
+-- workshop aggregates (kpis, jobs_by_status, open_job_cards, vor_list,
+-- safety_alerts). Technician status derived from the latest non-annotation
+-- tech_activity_events per user today; absent = rostered workshop-role profiles
+-- with no check-in today; utilization = productive vs on-duty (null when no
+-- data). Every sub-aggregate degrades to 0/[]. Applied live via Supabase MCP.
+-- Full statement text in the Supabase migration history (v293_workshop_share_snapshot).

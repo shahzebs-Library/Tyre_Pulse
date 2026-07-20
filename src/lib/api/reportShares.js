@@ -126,3 +126,54 @@ export function buildShareUrl(token) {
   const base = typeof window !== 'undefined' ? window.location.origin : ''
   return `${base}/report/${token}`
 }
+
+// ── Workshop live TV board (V293) ─────────────────────────────────────────────
+// Reuses the SAME report_shares token infrastructure (token + bcrypt password +
+// expiry + active/revoke + rotate/refresh + view_count). A workshop board is a
+// report_shares row tagged with pages = ['workshop_live']; its anon viewer reads
+// PII-free org-scoped workshop aggregates via the get_workshop_snapshot RPC.
+
+/** The single page key that tags a share as a workshop live TV board. */
+export const WORKSHOP_PAGE = 'workshop_live'
+
+/**
+ * PUBLIC read: workshop aggregate snapshot for a share token (callable by anon).
+ * Returns { ok, company, generated_at, rotate_seconds, refresh_seconds, kpis,
+ * jobs_by_status, open_job_cards, vor_list, safety_alerts } or { ok:false, reason }.
+ * Degrades to an "unavailable" reason before the migration is applied.
+ * @param {string} token
+ * @param {string|null} password
+ */
+export async function getWorkshopSnapshot(token, password = null) {
+  const { data, error } = await supabase.rpc('get_workshop_snapshot', {
+    p_token: token,
+    p_password: password,
+  })
+  if (error) { if (isBackendMissing(error)) return { ok: false, reason: 'unavailable' }; throw error }
+  return data || { ok: false, reason: 'invalid' }
+}
+
+/**
+ * Mint a workshop TV board share. Reuses create_report_share with pages fixed to
+ * ['workshop_live'] so the row is tagged as a workshop board. Returns { id, token }
+ * (the plaintext token is shown ONCE).
+ * @param {{name?:string, password?:string, expires?:string, rotate?:number, refresh?:number}} o
+ */
+export async function createWorkshopShare(o = {}) {
+  const { data, error } = await supabase.rpc('create_report_share', {
+    p_name: o.name || 'Workshop live board',
+    p_pages: [WORKSHOP_PAGE],
+    p_rotate: o.rotate ?? 30,
+    p_refresh: o.refresh ?? 60,
+    p_password: o.password || null,
+    p_expires: o.expires || null,
+  })
+  if (error) throw error
+  return data
+}
+
+/** Absolute public workshop TV URL for a token. */
+export function buildWorkshopTvUrl(token) {
+  const base = typeof window !== 'undefined' ? window.location.origin : ''
+  return `${base}/workshop-tv/${token}`
+}

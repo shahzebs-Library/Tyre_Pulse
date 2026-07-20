@@ -224,6 +224,8 @@ const ContinuousImprovement  = lazy(() => import('./pages/ContinuousImprovement'
 const ErpSync                = lazy(() => import('./pages/ErpSync'))
 const WorkOrders             = lazy(() => import('./pages/WorkOrders'))
 const WorkshopLive           = lazy(() => import('./pages/WorkshopLive'))
+const WorkshopAbsence        = lazy(() => import('./pages/WorkshopAbsence'))
+const WorkshopTv             = lazy(() => import('./pages/WorkshopTv'))
 const MaintenanceCalendar    = lazy(() => import('./pages/MaintenanceCalendar'))
 const DriverManagement       = lazy(() => import('./pages/DriverManagement'))
 const SafetyCompliance       = lazy(() => import('./pages/SafetyCompliance'))
@@ -392,6 +394,7 @@ function MainApp() {
                 get_report_snapshot RPC is anon-granted and org-scoped by the token
                 row; the page degrades gracefully until the migrations are applied. */}
             <Route path="/report/:token" element={<Safe><ReportShare /></Safe>} />
+            <Route path="/workshop-tv/:token" element={<Safe><WorkshopTv /></Safe>} />
             {/* TV display mode: authed, but rendered WITHOUT the Layout chrome */}
             <Route
               path="/display"
@@ -442,6 +445,7 @@ function MainApp() {
                       <Route path="/serial-tracker"       element={<Safe><RoleRoute allowed={['Admin']}><SerialTracker /></RoleRoute></Safe>} />
                       <Route path="/work-orders"          element={<Safe><ModuleRoute moduleKey="work_orders"><WorkOrders /></ModuleRoute></Safe>} />
                       <Route path="/workshop-live"        element={<Safe><RoleRoute allowed={['Admin','Manager','Director']}><WorkshopLive /></RoleRoute></Safe>} />
+                      <Route path="/workshop-absence"     element={<Safe><RoleRoute allowed={['Admin','Manager','Director']}><WorkshopAbsence /></RoleRoute></Safe>} />
                       <Route path="/maintenance-calendar" element={<Safe><RoleRoute allowed={['Admin']}><MaintenanceCalendar /></RoleRoute></Safe>} />
                       <Route path="/safety-compliance"    element={<Safe><RoleRoute allowed={['Admin']}><SafetyCompliance /></RoleRoute></Safe>} />
                       <Route path="/assets"               element={<Safe><ModuleRoute moduleKey="fleet_master"><AssetManagement /></ModuleRoute></Safe>} />

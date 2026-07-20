@@ -387,14 +387,21 @@ export function computeKpis(board, jobs, ctx = {}) {
   const b = arr(board)
   const j = arr(jobs)
   const isToday = (v) => todayStart != null && ts(v) >= todayStart
-  const openStatuses = new Set(['new', 'awaiting_assignment', 'assigned', 'in_progress', 'waiting_parts', 'waiting_approval', 'quality_inspection', 'open'])
+  // Recognize BOTH the legacy lowercase tokens and the canonical Title Case
+  // vocabulary (normalized): "Waiting for Parts" -> waiting_for_parts, etc.
+  const openStatuses = new Set([
+    'new', 'awaiting_assignment', 'assigned', 'in_progress',
+    'waiting_parts', 'waiting_for_parts', 'waiting_approval', 'waiting_for_approval',
+    'quality_inspection', 'on_hold', 'open',
+  ])
   const norm = (s) => String(s || '').toLowerCase().replace(/\s+/g, '_')
 
   const countStatus = (st) => b.filter((x) => x.status === st).length
   const openJobs = j.filter((x) => openStatuses.has(norm(x.status)))
   const overdue = j.filter((x) => {
     const tgt = ts(x.target_completion)
-    return Number.isFinite(tgt) && tgt < now && !openStatuses.has('completed') && norm(x.status) !== 'completed'
+    const s = norm(x.status)
+    return Number.isFinite(tgt) && tgt < now && s !== 'completed' && s !== 'cancelled' && s !== 'canceled'
   })
 
   const sum = (f) => b.reduce((s, x) => s + num(f(x)), 0)
@@ -430,6 +437,30 @@ export const DEFAULT_THRESHOLDS = Object.freeze({
   noActivityMin: 45,        // job started but no activity recorded
   overSafeOvertimeMin: 120, // working beyond safe overtime
   vorSlaHours: 48,          // vehicle off road beyond SLA
+  blockedPendingMin: 60,    // stuck waiting for parts / approval beyond this -> alert
+})
+
+/** Default hourly labour rate (currency units) when none can be derived. */
+export const DEFAULT_LABOUR_RATE = 120
+
+/** Which department owns each blocked reason (accountability). */
+export const REASON_DEPT = Object.freeze({
+  parts: 'Stores / Procurement',
+  tools: 'Workshop',
+  approval: 'Management',
+  vehicle: 'Operations',
+  vendor: 'Vendor',
+  support: 'Engineering',
+})
+
+/** Short corrective action suggested for each blocked reason. */
+export const REASON_ACTION = Object.freeze({
+  parts: 'Expedite parts request / check stock',
+  tools: 'Provision / calibrate tools',
+  approval: 'Escalate approval',
+  vehicle: 'Free up or swap the vehicle',
+  vendor: 'Chase vendor SLA',
+  support: 'Assign a senior technician',
 })
 
 /**
@@ -437,32 +468,95 @@ export const DEFAULT_THRESHOLDS = Object.freeze({
  */
 export function deriveAlerts(board, jobs, ctx = {}) {
   const { now, thresholds = DEFAULT_THRESHOLDS } = ctx
+  const th = { ...DEFAULT_THRESHOLDS, ...(thresholds || {}) }
+  const assignments = arr(ctx.assignments)
+  const presentByUser = ctx.presentByUser || {}
   const out = []
   const b = arr(board)
   const j = arr(jobs)
 
   for (const x of b) {
-    if (x.status === STATUS.AVAILABLE && !x.currentJobId && x.unassignedMin >= thresholds.unassignedMin) {
+    if (x.status === STATUS.AVAILABLE && !x.currentJobId && x.unassignedMin >= th.unassignedMin) {
       out.push({ level: 'warning', type: 'unassigned', message: `${x.name} unassigned for ${Math.round(x.unassignedMin)} min`, ref: x.userId })
     }
-    if (x.status === STATUS.WORKING && x.lastActivityAt && (now - x.lastActivityAt) / MIN >= thresholds.noActivityMin) {
+    if (x.status === STATUS.WORKING && x.lastActivityAt && (now - x.lastActivityAt) / MIN >= th.noActivityMin) {
       out.push({ level: 'warning', type: 'no_activity', message: `${x.name} on a job with no update for ${Math.round((now - x.lastActivityAt) / MIN)} min`, ref: x.userId })
     }
-    if (x.overtimeMin >= thresholds.overSafeOvertimeMin) {
+    if (x.overtimeMin >= th.overSafeOvertimeMin) {
       out.push({ level: 'critical', type: 'overtime', message: `${x.name} working beyond safe overtime (${Math.round(x.overtimeMin)} min)`, ref: x.userId })
     }
+    // Stuck waiting for parts / approval beyond the pending threshold.
+    if (x.status === STATUS.WAITING_PARTS && x.lastActivityAt && (now - x.lastActivityAt) / MIN >= th.blockedPendingMin) {
+      out.push({ level: 'warning', type: 'parts_pending', message: `${x.name} waiting for parts for ${Math.round((now - x.lastActivityAt) / MIN)} min`, ref: x.userId })
+    }
+    if (x.status === STATUS.WAITING_APPROVAL && x.lastActivityAt && (now - x.lastActivityAt) / MIN >= th.blockedPendingMin) {
+      out.push({ level: 'warning', type: 'approval_pending', message: `${x.name} waiting for approval for ${Math.round((now - x.lastActivityAt) / MIN)} min`, ref: x.userId })
+    }
   }
+
+  // Assignment-driven alerts (only when assignment context is supplied).
+  if (assignments.length) {
+    const activeByUser = {}   // userId -> Set(jobId)
+    for (const a of assignments) {
+      if (a.active === false) continue
+      const uid = a.user_id ?? a.userId
+      if (uid == null) continue
+      const jid = a.job_id ?? a.jobId ?? a.task_id ?? a.taskId
+      if (jid == null) continue
+      ;(activeByUser[uid] = activeByUser[uid] || new Set()).add(jid)
+    }
+    const nameFor = (uid) => (b.find((x) => x.userId === uid)?.name) || 'Technician'
+    for (const [uid, jset] of Object.entries(activeByUser)) {
+      if (jset.size > 1) {
+        out.push({ level: 'critical', type: 'overlapping_jobs', message: `${nameFor(uid)} is the active owner of ${jset.size} jobs at once`, ref: uid })
+      }
+      if (presentByUser[uid] !== true) {
+        out.push({ level: 'warning', type: 'not_checked_in', message: `${nameFor(uid)} has assigned work but has not checked in`, ref: uid })
+      }
+    }
+  }
+
+  // Job-level owner gap: an open job with no owner and no active assignment.
+  const jobsWithActiveAssignment = new Set()
+  for (const a of assignments) {
+    if (a.active === false) continue
+    const jid = a.job_id ?? a.jobId
+    if (jid != null) jobsWithActiveAssignment.add(jid)
+  }
+  const closedStatus = (s) => {
+    const n = String(s || '').toLowerCase().replace(/\s+/g, '_')
+    return n === 'completed' || n === 'cancelled' || n === 'canceled'
+  }
+
   for (const job of j) {
     const tgt = ts(job.target_completion)
-    if (Number.isFinite(tgt) && tgt < now && String(job.status || '').toLowerCase() !== 'completed') {
+    const js = String(job.status || '').toLowerCase().replace(/\s+/g, '_')
+    if (Number.isFinite(tgt) && tgt < now && js !== 'completed' && js !== 'cancelled' && js !== 'canceled') {
       out.push({ level: 'warning', type: 'overdue', message: `Job ${job.work_order_no || ''} exceeded target time`, ref: job.id })
     }
-    if (job.vor === true && Number.isFinite(ts(job.vor_since)) && (now - ts(job.vor_since)) / 3_600_000 >= thresholds.vorSlaHours) {
+    if (job.vor === true && Number.isFinite(ts(job.vor_since)) && (now - ts(job.vor_since)) / 3_600_000 >= th.vorSlaHours) {
       out.push({ level: 'critical', type: 'vor_sla', message: `Vehicle ${job.asset_no || ''} off road beyond SLA`, ref: job.id })
     }
     if (String(job.status || '').toLowerCase().replace(/\s+/g, '_') === 'quality_inspection') {
       out.push({ level: 'info', type: 'qc_pending', message: `Job ${job.work_order_no || ''} completed, awaiting inspection`, ref: job.id })
     }
+    if (!closedStatus(job.status) && !job.assigned_owner_id && !jobsWithActiveAssignment.has(job.id)) {
+      out.push({ level: 'warning', type: 'job_no_owner', message: `Job ${job.work_order_no || ''} has no assigned owner`, ref: job.id })
+    }
+  }
+  return out
+}
+
+/**
+ * Summarize a list of alerts into counts by level for the dashboard rail.
+ * @param {Array} alerts  deriveAlerts() output
+ * @returns {{critical:number, warning:number, info:number, total:number}}
+ */
+export function alertSummary(alerts) {
+  const a = arr(alerts)
+  const out = { critical: 0, warning: 0, info: 0, total: a.length }
+  for (const x of a) {
+    if (x && Object.prototype.hasOwnProperty.call(out, x.level)) out[x.level] += 1
   }
   return out
 }
@@ -475,6 +569,7 @@ export function deriveAlerts(board, jobs, ctx = {}) {
  */
 export function delayBreakdown(board, ctx = {}) {
   const b = arr(board)
+  const labourRate = resolveLabourRate(ctx)
   const byReason = {}
   const jobsByReason = {}
   for (const x of b) {
@@ -485,6 +580,36 @@ export function delayBreakdown(board, ctx = {}) {
     }
   }
   return Object.entries(byReason)
-    .map(([reason, min]) => ({ reason, hoursLost: round(min / 60), affectedJobs: (jobsByReason[reason]?.size) || 0 }))
+    .map(([reason, min]) => {
+      const hoursLost = round(min / 60)
+      const costImpact = Math.round(hoursLost * labourRate)
+      return {
+        reason,
+        hoursLost,
+        affectedJobs: (jobsByReason[reason]?.size) || 0,
+        costImpact,
+        responsibleDept: REASON_DEPT[reason] || 'Workshop',
+        suggestedAction: REASON_ACTION[reason] || 'Investigate and clear the blocker',
+        priority: delayPriority(hoursLost, costImpact),
+      }
+    })
     .sort((a, z) => z.hoursLost - a.hoursLost)
+}
+
+/** Resolve an hourly labour rate from ctx.labourRate, else ctx.jobs, else default. */
+function resolveLabourRate(ctx = {}) {
+  if (Number.isFinite(Number(ctx.labourRate)) && Number(ctx.labourRate) > 0) return Number(ctx.labourRate)
+  const jobs = arr(ctx.jobs)
+  if (jobs.length) {
+    const rates = jobs.map((jb) => Number(jb.labour_rate)).filter((r) => Number.isFinite(r) && r > 0)
+    if (rates.length) return rates.reduce((s, r) => s + r, 0) / rates.length
+  }
+  return DEFAULT_LABOUR_RATE
+}
+
+/** Priority band for a delay row from its lost hours + cost impact. */
+function delayPriority(hoursLost, costImpact) {
+  if (hoursLost >= 8 || costImpact >= 1000) return 'high'
+  if (hoursLost >= 3) return 'medium'
+  return 'low'
 }

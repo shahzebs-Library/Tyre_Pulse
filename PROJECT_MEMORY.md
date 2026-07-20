@@ -43,12 +43,31 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
   offline-safe via `WORKSHOP_EVENT` recordQueue command (idempotent on client_uuid). ModuleKey `workshop`
   (roles manager/director/inspector/tyre_man + admin; app has NO literal technician/mechanic/foreman role —
   mapped to tyre_man/inspector; add them to normaliseRole + the module if real roles are created). i18n en+ar.
-- **KNOWN follow-ups (phase 2, flagged not done):** (a) work_orders.status has NO CHECK; the dashboard writes
-  engine-canonical lowercase tokens (in_progress/quality_inspection) while the legacy /work-orders page uses
-  Title Case — both sides normalize on read, but unify the vocabulary before heavy cross-page status filtering.
-  (b) TV read-only workshop board (reuse report-share token infra). (c) Live TV alerts + advanced root-cause
-  cost impact. (d) plate_number not on work_orders (board shows asset only). (e) attendance-driven "absent"
-  report for managers now surfaces as the Absent KPI + presentByUser; a dedicated absence report is a later add.
+- **Phase 2 SHIPPED (V293/V294, 4-agent batch, 2026-07-20):**
+  - **Work-order status UNIFIED** (V294): single source `src/lib/workOrderStatus.js` (WO_STATUSES canonical
+    Title Case, normalizeWoStatus folds legacy lowercase tokens + variants both ways, KANBAN_COLUMNS +
+    woKanbanColumn, isOpen/isClosedWoStatus). WorkshopLive.jsx kanban + WorkOrders.jsx both read/write canonical.
+    Engine computeKpis/deriveAlerts open-status detection widened to accept BOTH tokenizations (waiting_for_parts
+    + waiting_parts + on_hold). V294 = safe reversible UPDATE, NO CHECK. RULE: route any WO status through
+    workOrderStatus.js; never hardcode a status string.
+  - **Workshop TV board** (V293): read-only shareable board reusing report_shares token infra. Anon DEFINER RPC
+    `get_workshop_snapshot(token,password)` returns PII-FREE aggregates; viewer `src/pages/WorkshopTv.jsx` at
+    anon route `/workshop-tv/:token` (fullscreen, PIN, expiry, auto-refresh); `WorkshopTvShareButton` mounted in
+    the WorkshopLive header; service `getWorkshopSnapshot`/`createWorkshopShare`/`buildWorkshopTvUrl` in
+    reportShares.js (share row tagged pages=['workshop_live']). No new share surface/table — reuses report_shares.
+  - **Absence & Attendance report**: `src/pages/WorkshopAbsence.jsx` (route `/workshop-absence`, nav
+    "Absence & Attendance", CalendarCheck2) + pure `src/lib/workshopAbsence.js` (summarizeAttendance/classifyShift
+    — a FUTURE rostered shift with no check-in = 'scheduled' NOT absent; late = check-in after start_time; rate
+    null when no data) + service `src/lib/api/workshopAbsence.js` (loadAbsenceData). Evidence-based: absence only
+    for a rostered shift whose start passed with no matching check-in. Tests (22).
+  - **Advanced alerts + delay COST-IMPACT** (engine): delayBreakdown rows now carry costImpact (hoursLost x
+    labourRate; rate from ctx.labourRate > avg job labour_rate > DEFAULT_LABOUR_RATE 120), responsibleDept
+    (REASON_DEPT), suggestedAction (REASON_ACTION), priority. deriveAlerts adds overlapping_jobs/not_checked_in/
+    job_no_owner/parts_pending/approval_pending (needs ctx.assignments + presentByUser, passed by the dashboard);
+    alertSummary helper. DEFAULT_THRESHOLDS.blockedPendingMin=60. Surfaced in the dashboard delay panel (cost/
+    dept/action/priority table). Engine tests 13 -> 22.
+  - Migrations now through **V294**; next free **V295**. Remaining nice-to-haves: plate_number on work_orders
+    (board shows asset only); mobile does not read the TV board (web-only, by design).
 
 ## Supabase dashboard CSV import now VISIBLE (V290, 2026-07-20) — org auto-stamp
 - User wanted the EASIEST reliable bulk-load: Supabase Table Editor "Import data from CSV" (no app screens,

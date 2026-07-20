@@ -31,6 +31,7 @@ import { resolvePdfBrand, pdfHeader, pdfFooter, pdfTableTheme } from '../lib/exp
 import { useLanguage } from '../contexts/LanguageContext'
 import { formatCurrency as _fmtCurrencyBase, formatDate, formatDateTime } from '../lib/formatters'
 import { toUserMessage } from '../lib/safeError'
+import { WO_STATUSES, normalizeWoStatus, isClosedWoStatus } from '../lib/workOrderStatus'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Title, Tooltip, Legend)
 
@@ -47,13 +48,20 @@ const CHART_OPTS = {
   },
 }
 
+// Canonical Title Case statuses (shared vocabulary via workOrderStatus.js). Order
+// here also drives the create/edit form's status dropdown. 'Overdue' is a derived
+// display bucket, not a stored status, so it is intentionally absent.
 const STATUS_CONFIG = {
-  'Open':            { color: 'text-blue-400',   bg: 'bg-blue-900/30',   border: 'border-blue-700',   icon: Clock },
-  'In Progress':     { color: 'text-yellow-400', bg: 'bg-yellow-900/30', border: 'border-yellow-700', icon: Play },
-  'Awaiting Parts':  { color: 'text-orange-400', bg: 'bg-orange-900/30', border: 'border-orange-700', icon: Package },
-  'Completed':       { color: 'text-green-400',  bg: 'bg-green-900/30',  border: 'border-green-700',  icon: CheckCircle },
-  'Closed':          { color: 'text-[var(--text-secondary)]',   bg: 'bg-[var(--surface-2)]',      border: 'border-[var(--border-bright)]',   icon: CheckCircle },
-  'Cancelled':       { color: 'text-red-400',    bg: 'bg-red-900/20',    border: 'border-red-700',    icon: XCircle },
+  'New':                  { color: 'text-blue-400',   bg: 'bg-blue-900/30',   border: 'border-blue-700',   icon: Clock },
+  'Awaiting Assignment':  { color: 'text-sky-400',    bg: 'bg-sky-900/30',    border: 'border-sky-700',    icon: User },
+  'Assigned':             { color: 'text-cyan-400',   bg: 'bg-cyan-900/30',   border: 'border-cyan-700',   icon: User },
+  'In Progress':          { color: 'text-yellow-400', bg: 'bg-yellow-900/30', border: 'border-yellow-700', icon: Play },
+  'Waiting for Parts':    { color: 'text-orange-400', bg: 'bg-orange-900/30', border: 'border-orange-700', icon: Package },
+  'Waiting for Approval': { color: 'text-amber-400',  bg: 'bg-amber-900/30',  border: 'border-amber-700',  icon: AlertOctagon },
+  'Quality Inspection':   { color: 'text-purple-400', bg: 'bg-purple-900/30', border: 'border-purple-700', icon: Eye },
+  'Completed':            { color: 'text-green-400',  bg: 'bg-green-900/30',  border: 'border-green-700',  icon: CheckCircle },
+  'Cancelled':            { color: 'text-red-400',    bg: 'bg-red-900/20',    border: 'border-red-700',    icon: XCircle },
+  'On Hold':              { color: 'text-[var(--text-secondary)]', bg: 'bg-[var(--surface-2)]', border: 'border-[var(--border-bright)]', icon: Lock },
 }
 
 const PRIORITY_CONFIG = {
@@ -80,18 +88,22 @@ const WORK_TYPES = [
 ]
 
 const STATUS_FLOW = {
-  'Open':           ['In Progress', 'Cancelled'],
-  'In Progress':    ['Awaiting Parts', 'Completed', 'Cancelled'],
-  'Awaiting Parts': ['In Progress', 'Cancelled'],
-  'Completed':      ['Closed'],
-  'Closed':         [],
-  'Cancelled':      [],
+  'New':                  ['Awaiting Assignment', 'Assigned', 'In Progress', 'Cancelled'],
+  'Awaiting Assignment':  ['Assigned', 'In Progress', 'Cancelled'],
+  'Assigned':             ['In Progress', 'On Hold', 'Cancelled'],
+  'In Progress':          ['Waiting for Parts', 'Waiting for Approval', 'Quality Inspection', 'On Hold', 'Completed', 'Cancelled'],
+  'Waiting for Parts':    ['In Progress', 'Cancelled'],
+  'Waiting for Approval': ['In Progress', 'Cancelled'],
+  'Quality Inspection':   ['In Progress', 'Completed', 'Cancelled'],
+  'On Hold':              ['In Progress', 'Cancelled'],
+  'Completed':            [],
+  'Cancelled':            [],
 }
 
 const EMPTY_FORM = {
   work_order_no: '',
   asset_no: '', tyre_serial: '', tyre_position: '',
-  status: 'Open', priority: 'Medium', work_type: 'Tyre Change',
+  status: 'New', priority: 'Medium', work_type: 'Tyre Change',
   description: '', technician_name: '', workshop_name: '',
   site: '', country: '',
   opened_at: new Date().toISOString().slice(0, 16),
@@ -106,7 +118,7 @@ const fmtDate = (d) => formatDate(d)
 const fmtDateTime = (d) => formatDateTime(d)
 function isOverdue(wo) {
   if (!wo.target_completion) return false
-  if (['Completed','Closed','Cancelled'].includes(wo.status)) return false
+  if (isClosedWoStatus(wo.status)) return false
   return new Date(wo.target_completion) < new Date()
 }
 function daysOpen(wo) {
@@ -164,7 +176,9 @@ export default function WorkOrders() {
     setError(null)
     try {
       const data = await workOrders.listWorkOrdersForPage({ country: activeCountry })
-      setOrders(data || [])
+      // Normalise status to the shared canonical vocabulary on read so filters,
+      // badges and stats agree with the Workshop Live dashboard.
+      setOrders((data || []).map((o) => ({ ...o, status: normalizeWoStatus(o.status) })))
     } catch (e) {
       setError(toUserMessage(e))
     } finally {
@@ -210,16 +224,16 @@ export default function WorkOrders() {
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
 
   const stats = useMemo(() => {
-    const open        = orders.filter(o => o.status === 'Open').length
+    const open        = orders.filter(o => o.status === 'New').length
     const inProgress  = orders.filter(o => o.status === 'In Progress').length
-    const awaitParts  = orders.filter(o => o.status === 'Awaiting Parts').length
+    const awaitParts  = orders.filter(o => o.status === 'Waiting for Parts').length
     const overdue     = orders.filter(o => isOverdue(o)).length
     const today       = new Date().toISOString().slice(0, 10)
     const completedToday = orders.filter(o => o.completed_at?.startsWith(today)).length
     const totalCost   = orders.reduce((s, o) => s + (parseFloat(o.total_cost) || 0), 0)
     const avgDaysOpen = orders.length
-      ? Math.round(orders.filter(o => !['Closed','Cancelled'].includes(o.status))
-          .reduce((s, o) => s + daysOpen(o), 0) / Math.max(1, orders.filter(o => !['Closed','Cancelled'].includes(o.status)).length))
+      ? Math.round(orders.filter(o => !isClosedWoStatus(o.status))
+          .reduce((s, o) => s + daysOpen(o), 0) / Math.max(1, orders.filter(o => !isClosedWoStatus(o.status)).length))
       : 0
     return { open, inProgress, awaitParts, overdue, completedToday, totalCost, avgDaysOpen }
   }, [orders])
@@ -240,7 +254,11 @@ export default function WorkOrders() {
   }, [orders])
 
   const statusChartData = useMemo(() => {
-    const colors = { Open: '#3b82f6', 'In Progress': '#f59e0b', 'Awaiting Parts': '#f97316', Completed: '#10b981', Closed: '#6b7280', Cancelled: '#ef4444' }
+    const colors = {
+      'New': '#3b82f6', 'Awaiting Assignment': '#0ea5e9', 'Assigned': '#06b6d4',
+      'In Progress': '#f59e0b', 'Waiting for Parts': '#f97316', 'Waiting for Approval': '#eab308',
+      'Quality Inspection': '#8b5cf6', 'Completed': '#10b981', 'Cancelled': '#ef4444', 'On Hold': '#6b7280',
+    }
     const counts = {}
     orders.forEach(o => { counts[o.status] = (counts[o.status] || 0) + 1 })
     const entries = Object.entries(counts)
@@ -371,7 +389,7 @@ export default function WorkOrders() {
         asset_no:           formData.asset_no.trim(),
         tyre_serial:        formData.tyre_serial?.trim() || null,
         tyre_position:      formData.tyre_position?.trim() || null,
-        status:             formData.status,
+        status:             normalizeWoStatus(formData.status),
         priority:           formData.priority,
         work_type:          formData.work_type,
         description:        formData.description?.trim() || null,
@@ -629,7 +647,7 @@ export default function WorkOrders() {
             />
           </div>
           {[
-            { label: 'Status', value: statusFilter, setter: setStatus, opts: ['All','Open','In Progress','Awaiting Parts','Completed','Closed','Cancelled'] },
+            { label: 'Status', value: statusFilter, setter: setStatus, opts: ['All', ...WO_STATUSES.filter(s => s !== 'Overdue')] },
             { label: 'Priority', value: priorityFilter, setter: setPriority, opts: ['All','Critical','High','Medium','Low'] },
             { label: 'Type', value: typeFilter, setter: setType, opts: ['All', ...WORK_TYPES] },
           ].map(({ label, value, setter, opts }) => (

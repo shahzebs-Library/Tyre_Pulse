@@ -177,6 +177,7 @@ export default function AppLayout() {
       <Tabs.Screen name="maintenance"     options={{ href: null }} />
       <Tabs.Screen name="tasks"           options={{ href: null }} />
       <Tabs.Screen name="alerts"          options={{ href: null }} />
+      <Tabs.Screen name="notifications"   options={{ href: null }} />
       <Tabs.Screen name="vehicles"        options={{ href: null }} />
       <Tabs.Screen name="team"            options={{ href: null }} />
       <Tabs.Screen name="work-orders"     options={{ href: null }} />

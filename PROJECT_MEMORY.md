@@ -124,6 +124,19 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
     DATASET_DIGEST.workshop branch + redeploy for a workshop-specific email body (falls back to exec digest;
     on-demand Generate-now PDF/Excel already works).
   - Migrations now through **V298**; next free **V299**. Full workshop suite 111 tests green; web build clean.
+- **Mobile notifications inbox + coverage (V299, 2026-07-20):** the in-app `notifications` table (own-read/
+  update RLS, server-inserted) already fed approvals/assignments/alerts/accidents; web had NotificationCenter,
+  mobile had none. Added mobile `lib/notificationsInbox.ts` (list/unreadCount/markRead/markAllRead/
+  notificationRoute/notificationIcon) + screen `mobile/app/(app)/notifications.tsx` (list, unread dot, mark-all,
+  realtime on notifications filtered to user, focus + pull refresh, tap marks read + routes to workshop/
+  inspection/accident/alerts) + a Home header BELL with a live unread badge (UNREAD_EVENT via DeviceEventEmitter,
+  focus refresh). i18n en+ar; tsc clean. **V299** adds fail-safe triggers `trg_notify_workshop_parts`
+  (new parts request -> elevated; status->approved/issued/fulfilled/rejected -> requester) +
+  `trg_notify_workshop_qc` (qc_status->failed -> assigned owner), reusing notify_elevated_users; live-verified
+  rolled back. RULE: the inbox only READS/marks-read; all inserts are server-side (DEFINER consumers/triggers).
+  STILL OPEN (agents hit session limit): send-scheduled-reports edge fn workshop DATASET_DIGEST branch +
+  redeploy for a workshop-specific email body (scheduled 'workshop' report still falls back to exec digest;
+  on-demand PDF/Excel works). Next free migration **V300**.
 
 ## Supabase dashboard CSV import now VISIBLE (V290, 2026-07-20) — org auto-stamp
 - User wanted the EASIEST reliable bulk-load: Supabase Table Editor "Import data from CSV" (no app screens,

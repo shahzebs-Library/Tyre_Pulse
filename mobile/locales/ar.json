@@ -1462,6 +1462,14 @@
       "selectTaskMsg": "اختر المهمة التي تعمل عليها أولا.",
       "photoLabel": "صورة",
       "addPhoto": "إضافة صورة"
+    },
+    "notifications": {
+      "title": "الإشعارات",
+      "markAll": "تعليم الكل كمقروء",
+      "loading": "جارٍ تحميل الإشعارات...",
+      "loadFail": "تعذر تحميل الإشعارات.",
+      "emptyTitle": "لا يوجد جديد",
+      "emptyBody": "ستظهر إشعارات العمل هنا."
     }
   },
   "checklists": {

@@ -1,0 +1,7 @@
+-- V294: canonicalize work_orders.status to the single Title Case vocabulary
+-- (src/lib/workOrderStatus.js): folds legacy lowercase tokens + variants to
+-- New / Awaiting Assignment / Assigned / In Progress / Waiting for Parts /
+-- Waiting for Approval / Quality Inspection / Completed / Cancelled / On Hold.
+-- Reversible UPDATE, only rows differing from canonical; NO CHECK constraint
+-- added (never hard-rejects a legacy value). Applied live via Supabase MCP.
+-- At apply time 0 rows needed changing (the one existing row was 'Completed').

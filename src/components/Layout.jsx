@@ -187,6 +187,7 @@ const NAV_GROUPS = [
     items: [
       { to: '/work-orders',     label: 'Work Orders',        icon: WorkOrderIc },
       { to: '/workshop-live',   label: 'Live Control',       icon: Activity, roles: ['Admin', 'Manager', 'Director'] },
+      { to: '/workshop-absence', label: 'Absence & Attendance', icon: CalendarCheck2, roles: ['Admin', 'Manager', 'Director'] },
       { to: '/gate-pass',       label: 'Gate Pass',          icon: GatePassIc },
       { to: '/workshop',        label: 'Workshop Management', icon: WorkshopIc, adminOnly: A },
       { to: '/technician-scorecard', label: 'Technician Scorecard', icon: Award, adminOnly: A },

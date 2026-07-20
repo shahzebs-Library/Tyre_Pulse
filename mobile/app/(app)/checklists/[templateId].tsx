@@ -75,7 +75,11 @@ function fieldIcon(f: ChecklistField): IconName {
   }
 }
 
-export default function ChecklistFillScreen() {
+import { withModuleGuard } from '../../../components/ModuleGuard'
+
+export default withModuleGuard(ChecklistFillScreen, 'checklists')
+
+function ChecklistFillScreen() {
   const { profile } = useAuth()
   const { t, isRTL } = useLanguage()
   const { theme } = useTheme()

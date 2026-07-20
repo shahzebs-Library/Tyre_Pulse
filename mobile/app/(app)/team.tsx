@@ -48,7 +48,11 @@ function norm(role: string | null): string {
   return (role ?? '').toLowerCase().replace(/\s+/g, '_')
 }
 
-export default function TeamScreen() {
+import { withModuleGuard } from '../../components/ModuleGuard'
+
+export default withModuleGuard(TeamScreen, 'team')
+
+function TeamScreen() {
   const { profile } = useAuth()
   const { t, isRTL } = useLanguage()
   const { theme } = useTheme()

@@ -221,6 +221,62 @@ export function resolveModuleAccess(
   return moduleAllowedByRole(key, role)
 }
 
+// ── Sensitive modules — fail CLOSED when permission data is unreliable ───────
+//
+// Finding #4/#10: the default `resolveModuleAccess` FAILS OPEN (an empty grants
+// map / role matrix falls back to the client role default) so that a transient
+// permission-RPC failure never strands a FIELD user mid-shift. That leniency is
+// acceptable for low-risk operational modules, but NOT for administration
+// surfaces: a non-admin must never reach user management / access control /
+// approvals / the admin console just because the permission maps failed to load
+// and the empty matrix quietly fell through to a permissive role default.
+//
+// SENSITIVE_MODULES therefore fail CLOSED under `permissionsError`: access is
+// granted only on a signal that SURVIVES the failure — super-admin, the hard
+// `admin` role, or an explicit per-user `grant` — never a role default or an
+// (unreliable, empty) role matrix. Keys map to the real admin surfaces in the
+// MODULES registry above (Admin Console, User Management, Approvals). No new
+// role names are introduced.
+export const SENSITIVE_MODULES: ReadonlySet<ModuleKey> = new Set<ModuleKey>([
+  'admin', 'users', 'approvals',
+])
+
+/** True when the module is an administration surface that must fail closed. */
+export function isSensitiveModule(key: ModuleKey): boolean {
+  return SENSITIVE_MODULES.has(key)
+}
+
+/**
+ * Guarded resolver used by <ModuleGuard>. Identical to `resolveModuleAccess`
+ * for low-risk modules and whenever the permission data is healthy. When
+ * `permissionsError` is true AND the module is sensitive, it fails CLOSED:
+ * only a super-admin, the hard `admin` role, or an explicit per-user `grant`
+ * passes. It never lets a role default or an empty/stale role matrix grant a
+ * sensitive module while the permission maps are known to be unreliable.
+ *
+ * The client guard is UX + defense-in-depth only; the server (RLS + RPCs) is
+ * the real authorization boundary.
+ */
+export function resolveGuardedAccess(
+  key: ModuleKey,
+  role: UserRole | null | undefined,
+  grants: GrantMap | null | undefined,
+  isSuper: boolean | undefined,
+  roleMatrix: RoleMatrix | null | undefined,
+  permissionsError: boolean | undefined,
+): boolean {
+  if (isSuper) return true
+  // An explicit per-user revoke always denies, regardless of everything else.
+  if (grants?.[key] === 'revoke') return false
+  if (permissionsError && isSensitiveModule(key) && !isAdmin(role)) {
+    // Permission data is untrustworthy: require a positive signal that does not
+    // depend on it. Only an explicit grant (loaded before the failure) passes;
+    // role default and role matrix are deliberately ignored here.
+    return grants?.[key] === 'grant'
+  }
+  return resolveModuleAccess(key, role, grants, isSuper, roleMatrix)
+}
+
 // ── Capability predicates (role default; back-compat wrappers over the registry)
 // Existing screens import these by name - keep them. Each maps to a module so the
 // role matrix stays the single source of truth.

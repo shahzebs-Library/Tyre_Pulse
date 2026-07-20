@@ -72,7 +72,11 @@ const REPORT_TYPES: {
   },
 ]
 
-export default function ReportsScreen() {
+import { withModuleGuard } from '../../../components/ModuleGuard'
+
+export default withModuleGuard(ReportsScreen, 'reports')
+
+function ReportsScreen() {
   const { profile } = useAuth()
   const { theme } = useTheme()
   const styles = useMemo(() => makeStyles(theme), [theme])

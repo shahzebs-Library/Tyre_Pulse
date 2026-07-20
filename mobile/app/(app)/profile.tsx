@@ -41,7 +41,11 @@ const APPEARANCE_OPTIONS: {
   { key: 'system', labelKey: 'profile.themeSystem', icon: 'phone-portrait-outline' },
 ]
 
-export default function ProfileScreen() {
+import { withModuleGuard } from '../../components/ModuleGuard'
+
+export default withModuleGuard(ProfileScreen, null)
+
+function ProfileScreen() {
   const { profile, signOut } = useAuth()
   const { t, language, setLanguage, isRTL } = useLanguage()
   const { theme, preference, setPreference } = useTheme()

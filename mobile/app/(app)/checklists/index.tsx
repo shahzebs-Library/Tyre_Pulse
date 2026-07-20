@@ -37,7 +37,11 @@ import { lookupAssetByCode } from '../../../lib/assetLookup'
  * then pick its checklist) instead of scrolling the full "Due + All templates"
  * hub. Every other role keeps the existing hub verbatim.
  */
-export default function ChecklistsRoute() {
+import { withModuleGuard } from '../../../components/ModuleGuard'
+
+export default withModuleGuard(ChecklistsRoute, 'checklists')
+
+function ChecklistsRoute() {
   const { profile } = useAuth()
   if (profile?.role === 'tyre_man') return <TyreManChecklistFlow />
   return <ChecklistsScreen />

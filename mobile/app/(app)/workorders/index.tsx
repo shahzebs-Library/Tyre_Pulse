@@ -62,7 +62,11 @@ const STATUS_LABEL_KEY: Record<string, string> = {
   Closed: 'modules.workOrdersList.statusClosed',
 }
 
-export default function WorkOrdersScreen() {
+import { withModuleGuard } from '../../../components/ModuleGuard'
+
+export default withModuleGuard(WorkOrdersScreen, 'workorders')
+
+function WorkOrdersScreen() {
   const { profile } = useAuth()
   const { t } = useLanguage()
   const insets = useSafeAreaInsets()

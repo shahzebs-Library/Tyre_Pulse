@@ -89,7 +89,11 @@ function extractTyreSize(desc: string | null): string | null {
   return null
 }
 
-export default function StockScreen() {
+import { withModuleGuard } from '../../components/ModuleGuard'
+
+export default withModuleGuard(StockScreen, 'stock')
+
+function StockScreen() {
   const { profile, isSuperAdmin } = useAuth()
   const { t, isRTL } = useLanguage()
   const { theme } = useTheme()

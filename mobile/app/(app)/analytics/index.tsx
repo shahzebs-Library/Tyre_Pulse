@@ -44,7 +44,11 @@ const RISK_COLOR: Record<string, string> = {
   Critical: '#dc2626', High: '#ea580c', Medium: '#f59e0b', Low: '#16a34a',
 }
 
-export default function AnalyticsScreen() {
+import { withModuleGuard } from '../../../components/ModuleGuard'
+
+export default withModuleGuard(AnalyticsScreen, 'analytics')
+
+function AnalyticsScreen() {
   const { allowed, loading: guardLoading } = useElevatedGuard()
 
   const [loading, setLoading]     = useState(true)

@@ -23,7 +23,11 @@ import { extractScanCode } from '../../lib/assetLookup'
 
 type SearchState = 'idle' | 'searching' | 'found' | 'empty' | 'error'
 
-export default function SerialSearchScreen() {
+import { withModuleGuard } from '../../components/ModuleGuard'
+
+export default withModuleGuard(SerialSearchScreen, 'serial')
+
+function SerialSearchScreen() {
   const router = useRouter()
   const { t, isRTL } = useLanguage()
   const { allowed } = useRoleGuard(['inspector', 'tyre_man', 'admin', 'manager', 'director'])

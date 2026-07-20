@@ -53,7 +53,11 @@ const closed = (s: string | null | undefined) => {
   return v === 'closed' || v === 'completed' || v === 'cancelled' || v === 'done'
 }
 
-export default function CalendarScreen() {
+import { withModuleGuard } from '../../components/ModuleGuard'
+
+export default withModuleGuard(CalendarScreen, 'calendar')
+
+function CalendarScreen() {
   const { profile } = useAuth()
   const { t, isRTL } = useLanguage()
   const { theme } = useTheme()

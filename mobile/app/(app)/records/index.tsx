@@ -58,7 +58,11 @@ interface TyreRecord {
   country: string | null
 }
 
-export default function RecordsScreen() {
+import { withModuleGuard } from '../../../components/ModuleGuard'
+
+export default withModuleGuard(RecordsScreen, 'records')
+
+function RecordsScreen() {
   const { profile } = useAuth()
   const { t } = useLanguage()
   const { theme } = useTheme()

@@ -39,7 +39,11 @@ const WO_STATUS_KIND: Record<string, StatusKind> = {
 }
 const NEXT_STATUS: Record<string, string> = { open: 'In Progress', 'in progress': 'Completed' }
 
-export default function WorkOrdersScreen() {
+import { withModuleGuard } from '../../components/ModuleGuard'
+
+export default withModuleGuard(WorkOrdersScreen, 'workorders')
+
+function WorkOrdersScreen() {
   const { profile } = useAuth()
   const { t, isRTL } = useLanguage()
   const { theme } = useTheme()

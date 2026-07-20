@@ -55,7 +55,11 @@ const STATUS_KIND: Record<string, StatusKind> = {
 
 type StatusFilter = 'all' | 'open' | 'closed'
 
-export default function AccidentDashboardScreen() {
+import { withModuleGuard } from '../../../components/ModuleGuard'
+
+export default withModuleGuard(AccidentDashboardScreen, 'accidents')
+
+function AccidentDashboardScreen() {
   const { allowed, loading: guardLoading } = useRoleGuard(['admin', 'manager', 'director', 'inspector'])
   const { profile } = useAuth()
   const { t, isRTL } = useLanguage()

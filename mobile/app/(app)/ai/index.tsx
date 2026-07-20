@@ -368,7 +368,11 @@ function TypingDots() {
 
 // ── Main Screen ───────────────────────────────────────────────────────────────
 
-export default function AICommandCenter() {
+import { withModuleGuard } from '../../../components/ModuleGuard'
+
+export default withModuleGuard(AICommandCenter, 'ai')
+
+function AICommandCenter() {
   const { profile } = useAuth()
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [input, setInput] = useState('')

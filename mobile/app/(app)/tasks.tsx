@@ -38,7 +38,11 @@ const FILTERS: { key: FilterKey; labelKey: string }[] = [
   { key: 'all', labelKey: 'modules.tasks.filterAll' },
 ]
 
-export default function TasksScreen() {
+import { withModuleGuard } from '../../components/ModuleGuard'
+
+export default withModuleGuard(TasksScreen, 'tasks')
+
+function TasksScreen() {
   const { profile } = useAuth()
   const { t, isRTL } = useLanguage()
   const router = useRouter()

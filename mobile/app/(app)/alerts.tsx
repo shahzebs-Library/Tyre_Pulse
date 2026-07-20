@@ -36,7 +36,11 @@ function riskKind(level?: string | null): StatusKind {
   return RISK_KIND[level ?? ''] ?? 'neutral'
 }
 
-export default function AlertsScreen() {
+import { withModuleGuard } from '../../components/ModuleGuard'
+
+export default withModuleGuard(AlertsScreen, 'alerts')
+
+function AlertsScreen() {
   const { profile } = useAuth()
   const { t, isRTL } = useLanguage()
   const { theme } = useTheme()

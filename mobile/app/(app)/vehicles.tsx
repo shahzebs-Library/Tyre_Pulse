@@ -50,7 +50,11 @@ function statusKind(status?: string | null): StatusKind {
   return STATUS_KIND[(status ?? '').toLowerCase()] ?? 'neutral'
 }
 
-export default function VehiclesScreen() {
+import { withModuleGuard } from '../../components/ModuleGuard'
+
+export default withModuleGuard(VehiclesScreen, 'vehicles')
+
+function VehiclesScreen() {
   const { profile } = useAuth()
   const { t, isRTL } = useLanguage()
   const { theme } = useTheme()

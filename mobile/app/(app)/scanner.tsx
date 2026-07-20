@@ -26,7 +26,11 @@ type ScanState = 'scanning' | 'searching' | 'result'
 // times per second while the frame is held on the label).
 const RESCAN_COOLDOWN_MS = 2500
 
-export default function ScannerScreen() {
+import { withModuleGuard } from '../../components/ModuleGuard'
+
+export default withModuleGuard(ScannerScreen, 'scan')
+
+function ScannerScreen() {
   const router = useRouter()
   const { t, isRTL } = useLanguage()
   const { theme } = useTheme()

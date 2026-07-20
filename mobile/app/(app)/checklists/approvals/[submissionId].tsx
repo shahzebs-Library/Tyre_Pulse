@@ -37,7 +37,11 @@ function formatAnswer(field: ChecklistField, value: any): string {
   return String(value)
 }
 
-export default function ChecklistApprovalReviewScreen() {
+import { withModuleGuard } from '../../../../components/ModuleGuard'
+
+export default withModuleGuard(ChecklistApprovalReviewScreen, 'approvals')
+
+function ChecklistApprovalReviewScreen() {
   const { profile } = useAuth()
   const { isRTL } = useLanguage()
   const router = useRouter()

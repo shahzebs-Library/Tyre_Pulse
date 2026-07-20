@@ -3,7 +3,7 @@
 Durable, committed project knowledge so any session has full context. Keep this
 current. Read it before adding/changing modules. Governing spec: `Tyre pulse enterprise.md`
 
-## Phase-1 multi-tenant SaaS security hardening (V306-V309, 2026-07-20) — migrations through V309, next free **V310**
+## Phase-1 multi-tenant SaaS security hardening (V306-V310, 2026-07-20) — migrations through V310, next free **V311**
 - User is opening Tyre Pulse to multiple companies/individuals. First security pass to make tenant
   isolation real. All applied live + repo files + live-verified by impersonation; web build + mobile tsc clean.
 - **V306 (A1 + B2) — the critical fix: Company Admins no longer cross the org boundary.** The 45 RESTRICTIVE
@@ -38,9 +38,33 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
   (No access / All sites org-wide / specific sites). "Grant all sites (org-wide)" writes the `['ALL']` sentinel;
   picking a specific site drops the sentinel; helper `isOrgWideSites`/`withoutOrgWide` at top of ConsoleUsers.
   Copy fixed (the old "clear = all sites" was now backwards). `adminSetUserSites` empty still = null = no access.
-- **OPEN / follow-ups (flagged, NOT done — need decision):** (1) the 16 PERMISSIVE null-org billing/workflow
-  policies (invoices/org_subscriptions/business_rules/workflow_*/report_*) still carry `organisation_id IS NULL`
-  — different semantics, need per-policy review before tightening. (2) `org_id` vs `organisation_id` split
+- **CONTINUATION (same session) — V310 + billing + UI copy:**
+  - **V310** billing RLS: `invoices` + `org_subscriptions` read/write policies dropped the `organisation_id IS
+    NULL` cross-org branch (0 rows, 0 null-org; a billing row always has an org). The OTHER null-org policies are
+    the WORKFLOW ENGINE + report_send_log tables which legitimately hold null-org/system rows (report_send_log
+    158/158 null, workflow_definitions/instances/step_events all-null, domain_events 82 null) — left AS-IS; they
+    need an org backfill before they can be scoped. So the "16 null-org policies" item is PARTIALLY closed
+    (billing done; engine tables deferred with reason).
+  - **Billing free-activation hole CLOSED** (client code): `src/lib/api/billing.js` `changePlan` now THROWS for
+    any paid plan (planCode != trial/free) — a paid plan can only be activated by the signature-verified Stripe
+    webhook, never a direct client write (previously any org Admin could self-set status='active' for free).
+    `canAddResource` now fails CLOSED (returns false on RPC error, was true). `src/pages/Billing.jsx` no longer
+    falls back to `changePlan` when checkout is unconfigured — it shows "checkout not set up, contact admin".
+  - **billing-webhook edge fn REDEPLOYED v2** (verify_jwt=false): on a handler/reconciliation error it now returns
+    500 (Stripe retries) instead of 200 {received:true} (which silently dropped failed activations/cancellations).
+  - **Access-preview UI aligned to the V309 semantics** (display only, no DB/write change): `CountryScope.jsx`,
+    `EffectivePermissions.jsx`, `AccessPreviewOverride.jsx` now render a blank scope as "No access" (was "All"),
+    an 'ALL'/'*' sentinel as org-wide, and CORRECTED the country sees-all set to super/Admin only (Director is
+    country-scoped by the DB `app_can_see_country` = app_is_org_admin; the old UI wrongly showed Director as
+    all-countries). `AccessManager.jsx` needed no change (module/capability editor, no scope display).
+  - **STILL fail-open (deliberately NOT changed, flagged):** the PURE `entitlements.js` `canAdd`/`planAllows`
+    still treat a missing limit/feature map as unlimited/allowed — the null-vs-unlimited ambiguity makes a blind
+    fail-closed risky, and plan limits have NO server-side enforcement anyway (no trigger/RLS consumes
+    `org_can_add`; e.g. Company A is already over its trial vehicle cap). Real fix = a BEFORE-INSERT enforcement
+    trigger, deferred (would need per-org limit verification to avoid blocking existing over-cap fleets).
+- **OPEN / follow-ups (flagged, NOT done — need decision):** (1) the WORKFLOW-ENGINE + report_send_log null-org
+  policies still carry `organisation_id IS NULL` — need an org backfill before scoping (billing ones already
+  tightened in V310). (2) `org_id` vs `organisation_id` split
   (profiles/billing/module_permissions use org_id; data tables use organisation_id — identical on all 33
   profiles today, fragile) — standardize later. (3) other access preview surfaces (CountryScope.jsx /
   EffectivePermissions.jsx / AccessPreviewOverride.jsx / AccessManager.jsx) still say empty-scope = "all" — copy

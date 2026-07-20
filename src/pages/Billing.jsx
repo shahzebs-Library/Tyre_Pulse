@@ -131,18 +131,21 @@ export default function Billing() {
     try {
       const paid = target.code !== 'trial' && (target.price_monthly > 0 || target.price_annual > 0)
       if (paid) {
-        try {
-          const res = await billing.startCheckout({ planCode: target.code, interval })
-          if (res?.configured && res.url) {
-            // Only ever redirect the browser to an https checkout endpoint —
-            // never a javascript:/data: or plain-http URL smuggled in the response.
-            if (typeof res.url !== 'string' || !res.url.trim().toLowerCase().startsWith('https://')) {
-              throw new Error('Checkout returned an invalid redirect URL.')
-            }
-            window.location.href = res.url
-            return
+        // A paid plan can ONLY be activated through Stripe checkout + the
+        // signature-verified webhook. Never fall back to a direct changePlan
+        // (that would grant the paid plan for free).
+        const res = await billing.startCheckout({ planCode: target.code, interval })
+        if (res?.configured && res.url) {
+          // Only ever redirect the browser to an https checkout endpoint —
+          // never a javascript:/data: or plain-http URL smuggled in the response.
+          if (typeof res.url !== 'string' || !res.url.trim().toLowerCase().startsWith('https://')) {
+            throw new Error('Checkout returned an invalid redirect URL.')
           }
-        } catch { /* fall through */ }
+          window.location.href = res.url
+          return
+        }
+        setActionErr('Online checkout is not set up yet. Please contact your administrator to activate a paid plan.')
+        return
       }
       await billing.changePlan({ planCode: target.code, interval })
       setActionMsg(`Switched to the ${target.name} plan.`)

@@ -61,18 +61,26 @@ export async function getSubscription() {
 
 /**
  * Change the org's plan / billing interval. Provisions the row first (so a
- * brand-new org can subscribe), then upserts on organisation_id. Moving onto a
- * paid plan flips status trialing → active and opens a fresh period window; the
- * DB still enforces Admin-only via RLS.
+ * brand-new org can subscribe), then upserts on organisation_id.
+ *
+ * SECURITY: a PAID plan can only be activated by the signature-verified Stripe
+ * webhook after real payment (see billing-webhook). The client may only move to
+ * the free/trial tier here (a downgrade or cancellation) — it must NEVER set a
+ * paid subscription to 'active', which would hand out paid plans for free.
+ * Use startCheckout() to begin a paid subscription. The DB still enforces
+ * Admin-only writes via RLS.
  *
  * @param {{planCode:string, interval?:'monthly'|'annual', seats?:number}} opts
  */
 export async function changePlan({ planCode, interval = 'monthly', seats } = {}) {
   if (!planCode) throw new Error('A plan code is required.')
+  const isPaidPlan = planCode !== 'trial' && planCode !== 'free'
+  if (isPaidPlan) {
+    throw new Error('Paid plans must be activated through secure checkout, not applied directly.')
+  }
   // Guarantee a row exists and capture its org so the upsert targets it.
   const current = await ensureSubscription()
   const orgId = current?.organisation_id ?? null
-  const isPaidPlan = planCode !== 'trial'
   const now = new Date()
   const periodEnd = new Date(now)
   if (interval === 'annual') periodEnd.setFullYear(periodEnd.getFullYear() + 1)
@@ -81,7 +89,7 @@ export async function changePlan({ planCode, interval = 'monthly', seats } = {})
   const patch = {
     plan_code: planCode,
     billing_interval: interval,
-    status: isPaidPlan ? 'active' : 'trialing',
+    status: 'trialing',
     cancel_at_period_end: false,
     current_period_start: now.toISOString(),
     current_period_end: periodEnd.toISOString(),
@@ -141,14 +149,15 @@ export async function listInvoices({ limit = 50 } = {}) {
 
 /**
  * Server-side entitlement check ("can this org add one more <resource>?").
- * Returns boolean; falls back to true (fail open) on any RPC error so a
- * transient failure never hard-stops a legitimate action.
+ * Returns boolean; fails CLOSED (false) on any RPC error so a plan cap can
+ * never be bypassed by triggering a transient failure. The UI shows a clean
+ * "could not verify your plan limit" message rather than silently allowing.
  */
 export async function canAddResource(resource) {
   try {
     return unwrap(await supabase.rpc('org_can_add', { p_resource: resource })) === true
   } catch {
-    return true
+    return false
   }
 }
 

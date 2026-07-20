@@ -85,6 +85,20 @@ export async function generateReportPdf(title, subtitle, columns, rows, summaryR
  * @returns {Promise<{success: boolean, id: string}>}
  */
 export async function sendReportEmail({ to, subject, bodyHtml, pdfBase64 = null, pdfName = 'tyrepulse-report.pdf' }) {
+  // Require an authenticated session so the caller passes a valid bearer token to
+  // the (self-validating) send-email function. Without this the invoke would fail
+  // with an opaque transport error; surface a clear, safe message instead.
+  const { data: sessionData } = await supabase.auth.getSession()
+  if (!sessionData?.session) {
+    throw new Error('Your session has expired. Please sign in again and retry.')
+  }
+
+  // Guard against an oversized attachment before the network round-trip. Base64 is
+  // ~1.37x the binary size; keep a safe ceiling well under the edge payload limit.
+  if (pdfBase64 && pdfBase64.length > 7_000_000) {
+    throw new Error('This report is too large to email. Narrow the date range or filters and try again.')
+  }
+
   const { data, error } = await supabase.functions.invoke('send-email', {
     body: {
       to,
@@ -98,10 +112,36 @@ export async function sendReportEmail({ to, subject, bodyHtml, pdfBase64 = null,
     },
   })
 
-  if (error) throw new Error(error.message || 'Edge Function invocation failed')
+  // supabase-js wraps a non-2xx as FunctionsHttpError whose `.context` is the raw
+  // Response. Read the function's own JSON `{ error }` so the user sees the real,
+  // already-sanitized reason (never a raw transport/internal string).
+  if (error) {
+    const serverMsg = await readFunctionError(error)
+    throw new Error(serverMsg || 'Could not reach the email service. Please try again in a moment.')
+  }
   if (data?.error) throw new Error(data.error)
 
   return data
+}
+
+/**
+ * Extract the human-readable `error` string a Supabase Edge Function returned in
+ * its JSON body. Returns null when the body is unavailable (e.g. a transport-level
+ * FunctionsFetchError), so the caller can fall back to a generic safe message.
+ * @param {any} err - the error object from functions.invoke
+ * @returns {Promise<string|null>}
+ */
+async function readFunctionError(err) {
+  try {
+    const res = err?.context
+    if (res && typeof res.json === 'function') {
+      const parsed = await res.clone().json().catch(() => null)
+      if (parsed?.error && typeof parsed.error === 'string') return parsed.error
+    }
+  } catch {
+    /* fall through to generic message */
+  }
+  return null
 }
 
 /**

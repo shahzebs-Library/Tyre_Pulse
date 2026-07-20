@@ -58,7 +58,7 @@ serve(async (req) => {
     const FROM_EMAIL = Deno.env.get('FROM_EMAIL') || 'reports@tyrepulse.app'
 
     if (!RESEND_API_KEY) {
-      return jsonResponse(req, { error: 'RESEND_API_KEY not configured' }, 500)
+      return jsonResponse(req, { error: 'Email delivery is not configured. Please contact an administrator.' }, 503)
     }
 
     const payload: Record<string, unknown> = {

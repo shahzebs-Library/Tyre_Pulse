@@ -60,7 +60,23 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
   (mobile still writes legacy `status`; the derive trigger backfills stage so mobile is NOT broken) + wiring
   workflow_stage into reports/PDF/PPTX/exec dashboard + a formal accident PDF attachment on the case email.
 
-## SESSION 2026-07-20 CLOSED — all merged to main; migrations through V299, next free V300
+## SESSION 2026-07-20 CLOSED (final) — all merged to main; migrations through V305, next free V306
+- FULLY RECONCILED: branch `claude/accident-builder-report-ui-2bkwb5` == origin/main (0 ahead/0 behind, nothing
+  uncommitted). A PARALLEL session's **Accident Management** feature (V300-V305, engine + settings page + gated
+  notification engine) was stranded on the shared branch; verified (build clean, accidentWorkflow.test 14 green,
+  DB V300-V305 already applied live) and merged to main via **#153**. See the Accident Management section at the
+  TOP of this file for the full detail. My workshop/notifications work this session merged via #139-#152.
+- **TWO OPEN OPS ITEMS (not blocking, not code-complete):**
+  1. `send-scheduled-reports` edge fn NOT redeployed — the `DATASET_DIGEST.workshop` branch is in the merged repo
+     source (#151) but not live; run `supabase functions deploy send-scheduled-reports --project-ref tyrepulse`
+     (keep verify_jwt=true) or deploy + byte-diff vs repo. Scheduled 'workshop' report emails the exec-digest
+     fallback until then; on-demand Workshop PDF/Excel works. Do NOT hand-inline-reproduce that 1103-line shared fn.
+  2. **Repo migration files V301-V305 are MISSING** — the parallel session applied V300-V305 live but only committed
+     `MIGRATIONS_V300_ACCIDENT_WORKFLOW.sql`. DB is the source of truth and IS applied; backfill V301-V305 repo
+     stub files from supabase_migrations.schema_migrations if repo completeness is wanted.
+- Also OPEN from Accident Management (per that section): accident emails are intentionally OFF — flip
+  `system_config.accident_emails_enabled='true'` (Email Delivery tab) to go live; needs RESEND_API_KEY (present).
+- Original session-shipped list (workshop suite etc.) below is retained for detail.
 - Everything this session is MERGED to main and the branch `claude/accident-builder-report-ui-2bkwb5` is
   realigned to origin/main. Shipped, in order: report-email edge-fn fix (send-email verify_jwt=false, #139);
   Console Smart Import auto-detect module + zero-mapping CSV/Excel templates + V290 CSV-import org auto-stamp

@@ -16,6 +16,14 @@ import { listCustomRoles } from '../../lib/api/customRoles'
 import { setUserCountry, bulkSetRole, bulkSetGrant, adminSetUserSites, adminSetWebAccess } from '../../lib/api/adminAccess'
 import { listDataSiteOptions } from '../../lib/api/sites'
 
+// Site scope semantics (V309): no sites = NO site-scoped access; an explicit
+// 'ALL' / '*' sentinel = org-wide. Admins/super always see everything.
+const SITE_ALL_TOKENS = ['ALL', '*']
+const isOrgWideSites = arr =>
+  Array.isArray(arr) && arr.some(s => SITE_ALL_TOKENS.includes(String(s ?? '').trim().toUpperCase()))
+const withoutOrgWide = arr =>
+  (Array.isArray(arr) ? arr : []).filter(s => !SITE_ALL_TOKENS.includes(String(s ?? '').trim().toUpperCase()))
+
 // Site options are capped so a runaway fleet register can never flood the
 // editor; anything already stored on a user still renders as a chip.
 const SITE_OPTIONS_CAP = 100
@@ -235,15 +243,20 @@ export default function ConsoleUsers() {
 
   function toggleEditSite(s) {
     setEditForm(f => {
-      const has = f.sites.includes(s)
-      return { ...f, sites: has ? f.sites.filter(x => x !== s) : [...f.sites, s] }
+      // Picking a specific site drops the org-wide sentinel (they are exclusive).
+      const base = withoutOrgWide(f.sites)
+      const has = base.includes(s)
+      return { ...f, sites: has ? base.filter(x => x !== s) : [...base, s] }
     })
   }
 
   function addFreeTextSite() {
     const s = siteAdd.trim().toUpperCase()
     if (!s) return
-    setEditForm(f => (f.sites.includes(s) ? f : { ...f, sites: [...f.sites, s] }))
+    setEditForm(f => {
+      const base = withoutOrgWide(f.sites)
+      return base.includes(s) ? f : { ...f, sites: [...base, s] }
+    })
     setSiteAdd('')
   }
 
@@ -547,6 +560,12 @@ export default function ConsoleUsers() {
                         title="Edit site access" className="text-left">
                         {userSites.length === 0
                           ? (
+                            <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-red-900/25 border border-red-700/40 text-red-300">
+                              <MapPin size={9} /> No access
+                            </span>
+                          )
+                          : isOrgWideSites(userSites)
+                          ? (
                             <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-orange-900/25 border border-orange-700/40 text-orange-300">
                               <MapPin size={9} /> All sites
                             </span>
@@ -679,11 +698,17 @@ export default function ConsoleUsers() {
                     )
                   })}
                 </div>
-                <p className="text-[10px] text-gray-600 mt-1.5">No selection = access to all countries.</p>
+                <p className="text-[10px] text-gray-600 mt-1.5">Admins and super-admins see all countries. Other roles see only the countries listed here.</p>
               </Field>
               <Field label={<span className="flex items-center gap-1.5"><MapPin size={11} /> Site Access</span>}>
                 <div className="flex items-center justify-between mb-1.5">
-                  {editForm.sites?.length > 0
+                  {isOrgWideSites(editForm.sites)
+                    ? (
+                      <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-orange-900/25 border border-orange-700/40 text-orange-300">
+                        <MapPin size={9} /> All sites (org-wide)
+                      </span>
+                    )
+                    : editForm.sites?.length > 0
                     ? (
                       <div className="flex flex-wrap gap-1 mr-2">
                         {editForm.sites.map(s => (
@@ -697,16 +722,23 @@ export default function ConsoleUsers() {
                       </div>
                     )
                     : (
-                      <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-orange-900/25 border border-orange-700/40 text-orange-300">
-                        <MapPin size={9} /> All sites
+                      <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-red-900/25 border border-red-700/40 text-red-300">
+                        <MapPin size={9} /> No site access
                       </span>
                     )}
-                  {editForm.sites?.length > 0 && (
-                    <button type="button" onClick={() => setEditForm(f => ({ ...f, sites: [] }))}
-                      className="flex-shrink-0 text-[10px] px-2 py-1 rounded-lg bg-gray-800 border border-gray-700 text-gray-400 hover:text-white transition-colors">
-                      All sites (clear)
-                    </button>
-                  )}
+                  {isOrgWideSites(editForm.sites)
+                    ? (
+                      <button type="button" onClick={() => setEditForm(f => ({ ...f, sites: [] }))}
+                        className="flex-shrink-0 text-[10px] px-2 py-1 rounded-lg bg-gray-800 border border-gray-700 text-gray-400 hover:text-white transition-colors">
+                        Restrict to specific sites
+                      </button>
+                    )
+                    : (
+                      <button type="button" onClick={() => setEditForm(f => ({ ...f, sites: ['ALL'] }))}
+                        className="flex-shrink-0 text-[10px] px-2 py-1 rounded-lg bg-gray-800 border border-gray-700 text-gray-400 hover:text-white transition-colors">
+                        Grant all sites (org-wide)
+                      </button>
+                    )}
                 </div>
                 {siteOptsLoading ? (
                   <div className="flex items-center gap-2 py-2 text-[11px] text-gray-500">
@@ -719,8 +751,8 @@ export default function ConsoleUsers() {
                   <p className="text-[10px] text-gray-600 py-1">No operational sites found yet. Add a site by name below.</p>
                 ) : (
                   <div className="max-h-40 overflow-y-auto rounded-lg border border-gray-700 bg-gray-800/60 divide-y divide-gray-800">
-                    {[...new Set([...siteOpts, ...(editForm.sites ?? [])])].sort((a, b) => a.localeCompare(b)).map(s => {
-                      const on = editForm.sites?.includes(s)
+                    {[...new Set([...siteOpts, ...withoutOrgWide(editForm.sites)])].sort((a, b) => a.localeCompare(b)).map(s => {
+                      const on = withoutOrgWide(editForm.sites).includes(s)
                       return (
                         <label key={s} className="flex items-center gap-2 px-2.5 py-1.5 text-[11px] text-gray-300 hover:bg-gray-700/50 cursor-pointer">
                           <input type="checkbox" checked={!!on} onChange={() => toggleEditSite(s)}
@@ -741,7 +773,7 @@ export default function ConsoleUsers() {
                     <Plus size={11} /> Add
                   </button>
                 </div>
-                <p className="text-[10px] text-gray-600 mt-1.5">Users with no sites assigned see every site. Site visibility is enforced by the database.</p>
+                <p className="text-[10px] text-gray-600 mt-1.5">No sites assigned = no site-scoped access. Use All sites for org-wide, or list specific sites. Enforced by the database.</p>
               </Field>
             </div>
             <div className="flex gap-2 px-6 pb-5">

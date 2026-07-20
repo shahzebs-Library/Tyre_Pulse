@@ -25,14 +25,10 @@ const LANG_OPTIONS: { code: Language; label: string }[] = [
   { code: 'ur', label: 'اردو' },
 ]
 
-// Roles available for self-registration (management roles created by admin only)
-const SELECTABLE_ROLES = [
-  { db: 'Inspector',  label: 'Inspector',  desc: 'Conducts tyre inspections' },
-  { db: 'Tyre Man',   label: 'Tyre Man',   desc: 'Workshop tyre technician' },
-  { db: 'Reporter',   label: 'Reporter',   desc: 'Reports accidents & incidents' },
-  { db: 'Driver',     label: 'Driver',     desc: 'Vehicle driver / operator' },
-]
-
+// Self-registration no longer lets the applicant pick their own role or site.
+// A new account is always created as a pending 'Reporter' with no data scope
+// (server-enforced by the handle_new_user trigger). An administrator assigns the
+// real role, organisation, country and site scope when approving the account.
 type Step = 'form' | 'pending'
 
 export default function RegisterScreen() {
@@ -46,9 +42,6 @@ export default function RegisterScreen() {
   const [phone, setPhone]           = useState('')
   const [password, setPassword]     = useState('')
   const [confirm, setConfirm]       = useState('')
-  const [role, setRole]             = useState(SELECTABLE_ROLES[0].db)
-  const [site, setSite]             = useState('')
-  const [sites, setSites]           = useState<string[]>([])
   const [showPass, setShowPass]     = useState(false)
   const [showConfirm, setShowConfirm] = useState(false)
   const [loading, setLoading]       = useState(false)
@@ -71,19 +64,6 @@ export default function RegisterScreen() {
     return () => { alive = false }
   }, [])
 
-  // Fetch available sites from fleet so user picks from known sites
-  useEffect(() => {
-    supabase
-      .from('vehicle_fleet')
-      .select('site')
-      .then(({ data }) => {
-        if (data) {
-          const unique = [...new Set(data.map(r => r.site).filter(Boolean))] as string[]
-          setSites(unique.sort())
-        }
-      })
-  }, [])
-
   function validate(): string | null {
     if (!fullName.trim())        return 'Full name is required.'
     if (username.trim().length < 3) return 'Username must be at least 3 characters.'
@@ -91,7 +71,6 @@ export default function RegisterScreen() {
     if (!employeeId.trim())      return 'Employee ID is required.'
     if (password.length < 8)    return 'Password must be at least 8 characters.'
     if (password !== confirm)    return 'Passwords do not match.'
-    if (!site.trim())            return 'Please enter your site / work location.'
     return null
   }
 
@@ -155,9 +134,10 @@ export default function RegisterScreen() {
         return
       }
 
-      // 2. Upsert the pending profile with the mobile-specific fields (role/site).
-      //    A DB trigger already created the base row (username, employee_id,
-      //    approved:false); this stamps the chosen role and site.
+      // 2. Upsert only the applicant-supplied contact fields. A DB trigger
+      //    already created the base row as a pending 'Reporter' with no scope;
+      //    role, organisation, country and site are assigned by an admin on
+      //    approval and must NOT be self-selected here.
       const { error: profileErr } = await supabase.from('profiles').upsert({
         id:          userId,
         full_name:   fullName.trim(),
@@ -165,8 +145,6 @@ export default function RegisterScreen() {
         employee_id: empId,
         email:       syntheticEmail,
         phone:       phone.trim() || null,
-        role,
-        site:        site.trim(),
         approved:    false,
       }, { onConflict: 'id' })
 
@@ -203,8 +181,6 @@ export default function RegisterScreen() {
             <Row label="Name"        value={fullName} />
             <Row label="Username"    value={username} />
             <Row label="Employee ID" value={employeeId} />
-            <Row label="Role"        value={role} />
-            <Row label="Site"        value={site} />
           </View>
           <TouchableOpacity style={styles.goLoginBtn} onPress={() => router.replace('/(auth)/login')}>
             <Text style={styles.goLoginText}>Back to Sign In</Text>
@@ -367,7 +343,8 @@ export default function RegisterScreen() {
                   placeholder="Re-enter password"
                   placeholderTextColor="#94a3b8"
                   secureTextEntry={!showConfirm}
-                  returnKeyType="next"
+                  returnKeyType="done"
+                  onSubmitEditing={handleRegister}
                 />
                 <TouchableOpacity onPress={() => setShowConfirm(s => !s)} style={styles.eyeBtn}>
                   <Ionicons name={showConfirm ? 'eye-off-outline' : 'eye-outline'} size={18} color="#94a3b8" />
@@ -378,70 +355,11 @@ export default function RegisterScreen() {
               )}
             </Field>
 
-            {/* Role selection */}
-            <Field label="Your Role *" textAlign={textAlign}>
-              <View style={styles.roleGrid}>
-                {SELECTABLE_ROLES.map(r => (
-                  <TouchableOpacity
-                    key={r.db}
-                    style={[styles.roleChip, role === r.db && styles.roleChipActive]}
-                    onPress={() => setRole(r.db)}
-                    activeOpacity={0.7}
-                  >
-                    <Text style={[styles.roleChipLabel, role === r.db && styles.roleChipLabelActive]}>
-                      {r.label}
-                    </Text>
-                    <Text style={[styles.roleChipDesc, role === r.db && styles.roleChipDescActive]}>
-                      {r.desc}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </Field>
-
-            {/* Site / Location */}
-            <Field label="Site / Work Location *" textAlign={textAlign}>
-              {sites.length > 0 ? (
-                <>
-                  <ScrollView
-                    horizontal
-                    showsHorizontalScrollIndicator={false}
-                    style={styles.siteScroll}
-                    contentContainerStyle={{ gap: 8, paddingRight: 4 }}
-                  >
-                    {sites.map(s => (
-                      <TouchableOpacity
-                        key={s}
-                        style={[styles.siteChip, site === s && styles.siteChipActive]}
-                        onPress={() => setSite(s)}
-                      >
-                        <Text style={[styles.siteChipText, site === s && styles.siteChipTextActive]}>{s}</Text>
-                      </TouchableOpacity>
-                    ))}
-                  </ScrollView>
-                  <Text style={styles.siteOrLabel}>- or type your site -</Text>
-                </>
-              ) : null}
-              <View style={[styles.inputWrapper, isRTL && styles.inputWrapperRTL]}>
-                <Ionicons name="location-outline" size={18} color="#94a3b8" style={styles.inputIcon} />
-                <TextInput
-                  style={[styles.input, { textAlign }]}
-                  value={site}
-                  onChangeText={setSite}
-                  placeholder="e.g. Riyadh, Site A, Camp 3"
-                  placeholderTextColor="#94a3b8"
-                  autoCapitalize="words"
-                  returnKeyType="done"
-                  onSubmitEditing={handleRegister}
-                />
-              </View>
-            </Field>
-
             {/* Info note */}
             <View style={styles.infoBox}>
               <Ionicons name="information-circle-outline" size={16} color="#3b82f6" />
               <Text style={styles.infoText}>
-                Your account will be pending until an administrator reviews and approves it. You will not be able to sign in until approved.
+                Your account will be pending until an administrator reviews and approves it, and assigns your role and access. You will not be able to sign in until approved.
               </Text>
             </View>
 
@@ -570,21 +488,6 @@ const styles = StyleSheet.create({
   strengthBars:{ flexDirection: 'row', gap: 4, flex: 1 },
   strengthSeg: { flex: 1, height: 4, borderRadius: 2 },
   strengthLabel:{ fontSize: 11, fontWeight: '600' },
-
-  roleGrid:           { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  roleChip:           { flex: 1, minWidth: '47%', borderWidth: 1.5, borderColor: '#e2e8f0', borderRadius: 12, padding: 12, backgroundColor: '#f8fafc', gap: 3 },
-  roleChipActive:     { borderColor: '#16a34a', backgroundColor: 'rgba(22,163,74,0.07)' },
-  roleChipLabel:      { fontSize: 13, fontWeight: '700', color: '#374151' },
-  roleChipLabelActive:{ color: '#16a34a' },
-  roleChipDesc:       { fontSize: 11, color: '#94a3b8' },
-  roleChipDescActive: { color: '#16a34a' },
-
-  siteScroll:         { marginBottom: 8 },
-  siteChip:           { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, borderWidth: 1.5, borderColor: '#e2e8f0', backgroundColor: '#f8fafc' },
-  siteChipActive:     { borderColor: '#16a34a', backgroundColor: 'rgba(22,163,74,0.07)' },
-  siteChipText:       { fontSize: 13, fontWeight: '600', color: '#64748b' },
-  siteChipTextActive: { color: '#16a34a' },
-  siteOrLabel:        { fontSize: 11, color: '#94a3b8', textAlign: 'center', marginBottom: 6 },
 
   infoBox:  { flexDirection: 'row', alignItems: 'flex-start', gap: 8, backgroundColor: 'rgba(59,130,246,0.06)', borderWidth: 1, borderColor: 'rgba(59,130,246,0.2)', borderRadius: 10, padding: 12 },
   infoText: { flex: 1, fontSize: 12, color: '#3b82f6', lineHeight: 18 },

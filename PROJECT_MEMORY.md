@@ -3,6 +3,50 @@
 Durable, committed project knowledge so any session has full context. Keep this
 current. Read it before adding/changing modules. Governing spec: `Tyre pulse enterprise.md`
 
+## Phase-1 multi-tenant SaaS security hardening (V306-V309, 2026-07-20) — migrations through V309, next free **V310**
+- User is opening Tyre Pulse to multiple companies/individuals. First security pass to make tenant
+  isolation real. All applied live + repo files + live-verified by impersonation; web build + mobile tsc clean.
+- **V306 (A1 + B2) — the critical fix: Company Admins no longer cross the org boundary.** The 45 RESTRICTIVE
+  `*_org_isolation` policies bypassed isolation via `app_is_org_admin()` (= `is_super_admin() OR role='admin'`),
+  so ANY plain `Admin` could read/write EVERY organisation's data (the V67 hole). Regenerated each policy
+  (preserving cmd + roles) to `((organisation_id = (select app_current_org())) or (select is_super_admin()))`
+  — only a true super-admin crosses orgs — and dropped the `organisation_id IS NULL` cross-org branch.
+  `system_logs_org_isolation` DELIBERATELY excluded (its null-org branch is intentional early-boot logging and
+  it never used the admin bypass). VERIFIED: plain Admin (Company A) still sees all 1419 tyres / 683 fleet
+  (all data is Company A, both admins are Company A, so ZERO current regression); 0 policies still bypassed.
+- **V307 (A2) — no self-escalation.** `guard_profile_privileged_cols` authorized any privileged profile change
+  (role/approved/locked/is_super_admin/country/site/org) on `role='Admin'`, letting a plain Admin set
+  `is_super_admin=true` on themselves, move a user to another org, or edit a profile in another org. Rewritten:
+  no-op passes; super-admin passes; a non-super Admin may manage role/approve/lock/country/site of users IN
+  THEIR OWN ORG only, and can NEVER change super-admin status or org membership. VERIFIED live: self-escalate
+  BLOCKED, org-move BLOCKED, same-org manage ALLOWED.
+- **V308 (C2) — last-admin lockout guard.** New `guard_last_admin()` + BEFORE UPDATE/DELETE triggers on
+  profiles block demote/lock/unapprove/delete of the last active super-admin, and the last active `Admin` of an
+  org (checks for ANOTHER active holder, so a promote-then-demote SWAP still works). VERIFIED: last-super
+  demote/delete BLOCKED, non-last admin demote ALLOWED.
+- **V309 (B1) — blank scope = NO access (was "see all").** `app_can_see_site`/`app_can_see_country` treated an
+  empty `sites`/`country` as "see everything", so a newly-approved user with no scope saw all data. Now blank =
+  no scoped access; org-wide is EXPLICIT via an `'ALL'`/`'*'` sentinel (admins/super still see all). BACKFILLED
+  all 33 users (every one had blank `sites`) to `ARRAY['ALL']` so nobody is blacked out; new users
+  (handle_new_user leaves sites null) get no scope until an admin assigns. VERIFIED: `ALL` sentinel sees 1419;
+  narrowing to `['NHC']` sees exactly 549 (the real NHC rows); blank sees 0. NOTE: `guard_profile_privileged`
+  checks the scalar `site`/`country` columns, NOT the `sites[]` scope array, so the backfill did not hit it.
+- **C1 mobile register hardened** (`mobile/app/(auth)/register.tsx`): removed the role picker + site picker/
+  requirement; the client upsert no longer sends role/site (it used to OVERWRITE the trigger's `Reporter`). New
+  signups are always pending `Reporter` with no scope; admin assigns role + scope on approval. tsc clean.
+- **Web admin reconciliation** (`ConsoleUsers.jsx` + `adminAccess.js`): site access is now an honest three-state
+  (No access / All sites org-wide / specific sites). "Grant all sites (org-wide)" writes the `['ALL']` sentinel;
+  picking a specific site drops the sentinel; helper `isOrgWideSites`/`withoutOrgWide` at top of ConsoleUsers.
+  Copy fixed (the old "clear = all sites" was now backwards). `adminSetUserSites` empty still = null = no access.
+- **OPEN / follow-ups (flagged, NOT done — need decision):** (1) the 16 PERMISSIVE null-org billing/workflow
+  policies (invoices/org_subscriptions/business_rules/workflow_*/report_*) still carry `organisation_id IS NULL`
+  — different semantics, need per-policy review before tightening. (2) `org_id` vs `organisation_id` split
+  (profiles/billing/module_permissions use org_id; data tables use organisation_id — identical on all 33
+  profiles today, fragile) — standardize later. (3) other access preview surfaces (CountryScope.jsx /
+  EffectivePermissions.jsx / AccessPreviewOverride.jsx / AccessManager.jsx) still say empty-scope = "all" — copy
+  needs the same three-state treatment. (4) Later phases from the roadmap: Platform-Owner vs Company-Admin
+  identity split, one permission engine, org-required business rows (NOT NULL), billing enforcement.
+
 ## Accident Management — one controlled end-to-end workflow (V300-V305, 2026-07-20) — migrations through V305, next free **V306**
 - Rebuilt Accident Management into a SINGLE configurable multi-department workflow + a backend email/notification
   engine (NOT frontend email). All DB changes ADDITIVE/non-destructive — no historical accident row/column dropped;

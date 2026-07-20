@@ -227,6 +227,7 @@ const WorkshopLive           = lazy(() => import('./pages/WorkshopLive'))
 const WorkshopAbsence        = lazy(() => import('./pages/WorkshopAbsence'))
 const WorkshopAnalytics      = lazy(() => import('./pages/WorkshopAnalytics'))
 const WorkshopSettings       = lazy(() => import('./pages/WorkshopSettings'))
+const PartsRequests          = lazy(() => import('./pages/PartsRequests'))
 const WorkshopTv             = lazy(() => import('./pages/WorkshopTv'))
 const MaintenanceCalendar    = lazy(() => import('./pages/MaintenanceCalendar'))
 const DriverManagement       = lazy(() => import('./pages/DriverManagement'))
@@ -450,6 +451,7 @@ function MainApp() {
                       <Route path="/workshop-absence"     element={<Safe><RoleRoute allowed={['Admin','Manager','Director']}><WorkshopAbsence /></RoleRoute></Safe>} />
                       <Route path="/workshop-analytics"   element={<Safe><RoleRoute allowed={['Admin','Manager','Director']}><WorkshopAnalytics /></RoleRoute></Safe>} />
                       <Route path="/workshop-settings"    element={<Safe><RoleRoute allowed={['Admin','Manager','Director']}><WorkshopSettings /></RoleRoute></Safe>} />
+                      <Route path="/parts-requests"       element={<Safe><RoleRoute allowed={['Admin','Manager','Director']}><PartsRequests /></RoleRoute></Safe>} />
                       <Route path="/maintenance-calendar" element={<Safe><RoleRoute allowed={['Admin']}><MaintenanceCalendar /></RoleRoute></Safe>} />
                       <Route path="/safety-compliance"    element={<Safe><RoleRoute allowed={['Admin']}><SafetyCompliance /></RoleRoute></Safe>} />
                       <Route path="/assets"               element={<Safe><ModuleRoute moduleKey="fleet_master"><AssetManagement /></ModuleRoute></Safe>} />

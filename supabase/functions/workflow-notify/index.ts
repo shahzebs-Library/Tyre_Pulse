@@ -59,6 +59,7 @@ function buildMessage(p: NotifyPayload): { title: string; body: string } {
     case 'workflow.approved': return { title: `Approved: ${def}`, body: `${label} ${def} completed all approval steps.` }
     case 'workflow.rejected': return { title: `Rejected: ${def}`, body: `${label} ${def} was rejected at step ${step}.${comment}` }
     case 'workflow.returned': return { title: `Returned for correction: ${def}`, body: `${label} ${def} was returned at step ${step}.${comment}` }
+    case 'workflow.assigned': return { title: `New job assigned`, body: `You have been assigned ${label}.` }
     default: return { title: `Approval required: ${def}`, body: `${label} ${def} is awaiting your approval at step ${step}.${comment}` }
   }
 }

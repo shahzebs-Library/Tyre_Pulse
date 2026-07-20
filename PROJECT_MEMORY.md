@@ -98,6 +98,32 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
   - Migrations now through **V295**; next free **V296**. Workshop nav group now: Live Control, Absence &
     Attendance, Workshop Analytics, Workshop Settings (+ existing Work Orders / Workshop Management / PM /
     Technician Scorecard). All workshop tests green (88 across 8 files); mobile tsc clean.
+- **Phase 4 SHIPPED (V296/V297/V298, 4-agent batch, 2026-07-20):**
+  - **Job creation + QC sign-off** (WorkshopLive.jsx + `src/components/workshop/WorkshopNewJobModal.jsx`):
+    "New Job" header button -> modal (Manual tab: asset_no debounced getAssetByNo auto-fill site/plate/type,
+    work_type/priority/description/est_minutes/target/assign-to; From-PM tab: listPmPrograms due<=30d prefills);
+    createJob (service, canonical 'New' + generateWorkOrderNo, then optional assignJob). QC on a Quality
+    Inspection job = QC Pass (->Completed, qc_status passed) / QC Fail (->In Progress, qc_status failed +
+    report_problem rework event so first-time-fix stays honest). Service += createJob/setQcStatus; pure
+    qcOutcome/QC_STATUSES in workshopTasks.js. breakdown_callouts prefill deliberately skipped.
+  - **Parts requests** (V296 `parts_requests` table, RLS live-tested: org+country+site + member self-insert +
+    elevated manage): pure `src/lib/partsRequests.js` (status flow requested->approved->issued->fulfilled,
+    reject/cancel terminal; summarizeParts overdue/avgFulfil/byPart; 15 tests) + service
+    `src/lib/api/partsRequests.js` + page `src/pages/PartsRequests.jsx` (route `/parts-requests`, nav "Parts
+    Requests", Boxes; KPIs/filters/new-request modal from parts_catalog + open work_orders/status-advance/export).
+  - **Assignment push** (V297): AFTER INSERT trigger on wo_assignments -> generic trg_emit_domain_event
+    ('workshop.job_assigned') -> NEW consumer `consume_event_assignment_push` (mirrors V267, enqueues
+    workflow_notifications to the assignee's push_token, org+country scoped, skip when 0 token) -> existing V119
+    cron -> **workflow-notify v4** (added one 'workflow.assigned' case: "New job assigned"; verify_jwt=false
+    preserved; repo source synced). INSERT-only so a reassign (release=UPDATE + new INSERT) notifies once. Live-
+    verified (with-token=1 enqueued, without=skipped). NOTE: 0 profiles carry a push_token today -> real
+    deliveries start once technicians register their device (mobile already registers on login).
+  - **Executive workshop KPIs** (Dashboard.jsx "Workshop Today" tile + DisplayDashboard.jsx TV "Workshop" board +
+    scheduledReports.js 'workshop' type; service += `loadWorkshopKpis` reusing computeKpis, PII-free). **V298**
+    widened report_schedules CHECK to allow 'workshop'. CAVEAT: send-scheduled-reports edge fn still needs a
+    DATASET_DIGEST.workshop branch + redeploy for a workshop-specific email body (falls back to exec digest;
+    on-demand Generate-now PDF/Excel already works).
+  - Migrations now through **V298**; next free **V299**. Full workshop suite 111 tests green; web build clean.
 
 ## Supabase dashboard CSV import now VISIBLE (V290, 2026-07-20) — org auto-stamp
 - User wanted the EASIEST reliable bulk-load: Supabase Table Editor "Import data from CSV" (no app screens,

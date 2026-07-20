@@ -1,0 +1,5 @@
+-- V298: allow the 'workshop' scheduled report type (Phase 4 exec workshop KPIs).
+-- Widened report_schedules_report_type_check to add 'workshop' (same pattern as
+-- V244/V254). NOTE: send-scheduled-reports edge fn needs a DATASET_DIGEST.workshop
+-- branch + redeploy for a workshop-specific email body; until then a saved
+-- workshop schedule falls back to the executive digest. Applied live via MCP.

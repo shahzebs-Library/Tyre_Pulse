@@ -37,6 +37,7 @@ export const REPORT_TYPES = [
   { value: 'stock',      label: 'Stock & Receipts' },
   { value: 'vendor',     label: 'Vendor / Procurement' },
   { value: 'pm',         label: 'Preventive Maintenance' },
+  { value: 'workshop',   label: 'Workshop Summary' },
 ]
 
 export const FREQUENCIES = [
@@ -124,6 +125,16 @@ const DATASETS = {
     eqFilter: { status: 'active' },
     // next_due is forward-looking, so soonest-first (overdue -> upcoming).
     orderAscending: true,
+  },
+  workshop: {
+    table: 'work_orders', dateCol: 'opened_at', title: 'Workshop Summary',
+    // Workshop activity work list: the job cards, who owns them, their status /
+    // priority and whether the vehicle is off road, most-recent first. This is
+    // the tabular backbone; the technician-productivity KPIs (utilization,
+    // lost hours) live on the live board / dashboard tile, computed by the
+    // shared workshopLive engine.
+    cols:    ['opened_at', 'work_order_no', 'asset_no', 'site', 'work_type', 'status', 'priority', 'technician_name', 'target_completion', 'vor'],
+    headers: ['Opened', 'WO No', 'Asset', 'Site', 'Work Type', 'Status', 'Priority', 'Technician', 'Target', 'VOR'],
   },
 }
 

@@ -41,6 +41,7 @@ import {
   computeApprovalsBoard, daysBetween,
 } from '../lib/displayBoard'
 import { loadPmDashboard } from '../lib/api/pmPrograms'
+import { loadWorkshopKpis } from '../lib/api/workshopLive'
 import { summarizePmCompliance } from '../lib/pmSchedule'
 import EChart from '../components/charts/EChart'
 import {
@@ -57,6 +58,7 @@ const BOARDS = [
   { key: 'fleet',        label: 'Fleet Overview' },
   { key: 'tyre',         label: 'Tyre & Maintenance' },
   { key: 'jobcards',     label: 'Open Job Cards' },
+  { key: 'workshop',     label: 'Workshop' },
   { key: 'replacements', label: 'Tyre Replacements' },
   { key: 'accidents',    label: 'Accidents' },
   { key: 'pm',           label: 'Preventive Maintenance' },
@@ -228,6 +230,9 @@ export default function DisplayDashboard() {
   const [replacements, setReplacements] = useState(EMPTY_SLICE)
   const [incidents,    setIncidents]    = useState(EMPTY_SLICE)
   const [approvals,    setApprovals]    = useState(EMPTY_SLICE)
+  // Workshop slice carries the engine-computed KPI bundle (kpis + job-status
+  // distribution + hasData), PII-free, from loadWorkshopKpis.
+  const [workshop,     setWorkshop]     = useState(EMPTY_SLICE)
   // PM slice carries a bundle (plans + per-asset meter maps) rather than a flat
   // row array, so date AND meter due bands can be resolved on the board.
   const [pm,           setPm]           = useState({ rows: { plans: [], kmByAsset: {}, hoursByAsset: {} }, error: null, loaded: false })
@@ -471,6 +476,15 @@ export default function DisplayDashboard() {
           }
         },
       },
+      {
+        set: setWorkshop,
+        run: async () => {
+          // Live workshop KPIs (technician status + job-card health) straight
+          // from the shared workshopLive engine. PII-free aggregates only; never
+          // throws (degrades to zeros / hasData false for an honest empty board).
+          return await loadWorkshopKpis({})
+        },
+      },
     ]
 
     await Promise.allSettled(tasks.map(async t => {
@@ -571,6 +585,23 @@ export default function DisplayDashboard() {
     }),
     [pm.rows, dayRef],
   )
+
+  // ── Workshop board (engine-computed KPIs, PII-free). workshop.rows is the
+  //    loadWorkshopKpis bundle once loaded; the initial EMPTY_SLICE array yields
+  //    null kpis so guards below fall back to an honest empty state.
+  const wsKpis     = workshop.rows?.kpis || null
+  const wsHasData  = workshop.rows?.hasData === true
+  const wsTechItems = useMemo(() => {
+    if (!wsKpis) return []
+    return [
+      { label: 'Working',          value: Number(wsKpis.working) || 0,         color: '#22c55e' },
+      { label: 'Available',        value: Number(wsKpis.available) || 0,       color: '#38bdf8' },
+      { label: 'Waiting Parts',    value: Number(wsKpis.waitingParts) || 0,    color: '#f97316' },
+      { label: 'Waiting Approval', value: Number(wsKpis.waitingApproval) || 0, color: '#eab308' },
+      { label: 'On Break',         value: Number(wsKpis.onBreak) || 0,         color: '#a78bfa' },
+    ].filter((x) => x.value > 0)
+  }, [wsKpis])
+  const wsJobStatusItems = useMemo(() => (workshop.rows?.jobsByStatus || []).slice(0, 7), [workshop.rows])
 
   // ── Chart data (ECharts) derived from the same slices, so a wall display gets
   //    a report-grade visual view alongside the number tiles. All honest: empty
@@ -1063,6 +1094,98 @@ export default function DisplayDashboard() {
                 </SliceGuard>
               </Panel>
             </div>
+          </div>
+        )}
+
+        {/* ── (c2) Workshop — technician status + job-card health ── */}
+        {board.key === 'workshop' && (
+          <div className="grid grid-cols-12 gap-6 h-full">
+            {!wsHasData ? (
+              <div className="col-span-12">
+                <SliceGuard slice={workshop} lines={6}>
+                  <BoardEmpty icon={Wrench} label="No workshop activity recorded" />
+                </SliceGuard>
+              </div>
+            ) : (
+              <>
+                {/* Primary tiles */}
+                <div className="col-span-12 grid grid-cols-2 xl:grid-cols-4 gap-6">
+                  <SliceGuard slice={workshop} lines={2}>
+                    <BigStat label="Technicians Working" value={wsKpis.working}
+                      color={wsKpis.working > 0 ? '#22c55e' : '#64748b'} icon={Wrench}
+                      sub={`${wsKpis.available} available : ${wsKpis.onDuty} on duty`} />
+                  </SliceGuard>
+                  <SliceGuard slice={workshop} lines={2}>
+                    <BigStat label="Open Job Cards" value={wsKpis.openJobs}
+                      color={wsKpis.openJobs > 0 ? '#38bdf8' : '#22c55e'} icon={ClipboardList}
+                      sub="Active workshop jobs" />
+                  </SliceGuard>
+                  <SliceGuard slice={workshop} lines={2}>
+                    <BigStat label="Overdue Jobs" value={wsKpis.overdueJobs}
+                      color={wsKpis.overdueJobs > 0 ? '#ef4444' : '#22c55e'} icon={Timer}
+                      sub="Past target completion" />
+                  </SliceGuard>
+                  <SliceGuard slice={workshop} lines={2}>
+                    <BigStat label="Vehicles Off Road" value={wsKpis.vehiclesOffRoad}
+                      color={wsKpis.vehiclesOffRoad > 0 ? '#ef4444' : '#22c55e'} icon={Car}
+                      sub="Awaiting return to service" />
+                  </SliceGuard>
+                </div>
+
+                {/* Technician status donut */}
+                <div className="col-span-12 xl:col-span-4">
+                  <Panel title="Technician Status" icon={Activity} className="h-full">
+                    <SliceGuard slice={workshop} lines={4}>
+                      {wsTechItems.length ? (
+                        <div className="h-full min-h-[220px]">
+                          <EChart option={donutOption(wsTechItems)} ariaLabel="Technician status"
+                            style={{ height: '100%', width: '100%' }} />
+                        </div>
+                      ) : (
+                        <BoardEmpty icon={Activity} label="No technicians on duty" />
+                      )}
+                    </SliceGuard>
+                  </Panel>
+                </div>
+
+                {/* Jobs by status bar */}
+                <div className="col-span-12 xl:col-span-4">
+                  <Panel title="Jobs by Status" icon={ClipboardList} className="h-full">
+                    <SliceGuard slice={workshop} lines={4}>
+                      {wsJobStatusItems.length ? (
+                        <div className="h-full min-h-[220px]">
+                          <EChart option={hBarOption(wsJobStatusItems)} ariaLabel="Jobs by status"
+                            style={{ height: '100%', width: '100%' }} />
+                        </div>
+                      ) : (
+                        <BoardEmpty icon={ClipboardList} label="No open job cards" />
+                      )}
+                    </SliceGuard>
+                  </Panel>
+                </div>
+
+                {/* Utilization gauge + completed today */}
+                <div className="col-span-12 xl:col-span-4 grid grid-rows-2 gap-6">
+                  <Panel title="Utilization" icon={GaugeIcon} className="h-full">
+                    <SliceGuard slice={workshop} lines={3}>
+                      {wsKpis.utilization == null ? (
+                        <BoardEmpty icon={GaugeIcon} label="Utilization N/A" />
+                      ) : (
+                        <div className="h-full min-h-[160px]">
+                          <EChart option={gaugeOption(wsKpis.utilization, { label: 'Utilization' })}
+                            ariaLabel="Workshop utilization" style={{ height: '100%', width: '100%' }} />
+                        </div>
+                      )}
+                    </SliceGuard>
+                  </Panel>
+                  <SliceGuard slice={workshop} lines={2}>
+                    <BigStat label="Jobs Completed Today" value={wsKpis.jobsCompletedToday}
+                      color={wsKpis.jobsCompletedToday > 0 ? '#22c55e' : '#64748b'} icon={ShieldCheck}
+                      sub="Signed off today" />
+                  </SliceGuard>
+                </div>
+              </>
+            )}
           </div>
         )}
 

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { taskRollup, jobTaskSummary, minutesByTask, TASK_STATUS } from '../lib/workshopTasks.js'
+import { taskRollup, jobTaskSummary, minutesByTask, qcOutcome, QC_STATUSES, TASK_STATUS } from '../lib/workshopTasks.js'
 
 const T0 = new Date('2026-07-20T06:00:00Z').getTime()
 const at = (min) => new Date(T0 + min * 60000).toISOString()
@@ -79,5 +79,36 @@ describe('workshopTasks engine', () => {
   it('exposes the task status vocabulary', () => {
     expect(TASK_STATUS).toContain('in_progress')
     expect(TASK_STATUS).toContain('done')
+  })
+})
+
+describe('qcOutcome (QC sign-off transition)', () => {
+  it('pass -> canonical Completed, qc_status passed, no rework', () => {
+    const t = qcOutcome('pass')
+    expect(t).toEqual({ status: 'Completed', qc_status: 'passed', rework: false, note: null })
+  })
+
+  it('fail -> canonical In Progress, qc_status failed, rework signal + note', () => {
+    const t = qcOutcome('fail')
+    expect(t.status).toBe('In Progress')
+    expect(t.qc_status).toBe('failed')
+    expect(t.rework).toBe(true)
+    expect(t.note).toBe('QC failed: rework required')
+  })
+
+  it('is case-insensitive and returns null for an unknown action', () => {
+    expect(qcOutcome('PASS').qc_status).toBe('passed')
+    expect(qcOutcome('Fail').qc_status).toBe('failed')
+    expect(qcOutcome('maybe')).toBeNull()
+    expect(qcOutcome('')).toBeNull()
+    expect(qcOutcome(null)).toBeNull()
+  })
+
+  it('emits only valid qc_status values', () => {
+    expect(QC_STATUSES).toContain('passed')
+    expect(QC_STATUSES).toContain('failed')
+    expect(QC_STATUSES).toContain('pending')
+    expect(QC_STATUSES).toContain(qcOutcome('pass').qc_status)
+    expect(QC_STATUSES).toContain(qcOutcome('fail').qc_status)
   })
 })

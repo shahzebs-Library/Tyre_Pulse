@@ -22,7 +22,7 @@ import {
   Coffee, UserX, X, Gauge, Timer, TrendingUp, CheckCircle2, Car, UserCheck,
   Bell, User, Zap, ExternalLink, ListChecks, Plus, ChevronDown, ChevronUp,
   Phone, Send, GraduationCap, PauseCircle, Sparkles, Settings2, Layers,
-  ClipboardList,
+  ClipboardList, XCircle,
 } from 'lucide-react'
 
 import { supabase } from '../lib/supabase'
@@ -33,11 +33,12 @@ import {
   buildBoard, computeKpis, deriveAlerts, delayBreakdown,
   STATUS, STATUS_META, statusColor, TONE_COLOR,
 } from '../lib/workshopLive'
-import { taskRollup, jobTaskSummary, TASK_STATUS, TASK_STATUS_LABEL } from '../lib/workshopTasks'
+import { taskRollup, jobTaskSummary, qcOutcome, TASK_STATUS, TASK_STATUS_LABEL } from '../lib/workshopTasks'
 import { recommendTechnicians } from '../lib/workshopAssign'
 import EChart from '../components/charts/EChart'
 import PageHeader from '../components/ui/PageHeader'
 import WorkshopTvShareButton from '../components/workshop/WorkshopTvShareButton'
+import WorkshopNewJobModal from '../components/workshop/WorkshopNewJobModal'
 import { colorAt, withAlpha } from '../lib/reportColors'
 import { safeImageSrc, safeHref } from '../lib/safeUrl'
 import { toUserMessage } from '../lib/safeError'
@@ -326,7 +327,7 @@ function TimeCell({ label, value, color }) {
 // ── Job card (kanban) ─────────────────────────────────────────────────────────
 
 function JobCard({
-  job, now, technicians, techById, busy, onAssign, onReassign, onStatus, onPriority, onVor, onComplete, highlight,
+  job, now, technicians, techById, busy, onAssign, onReassign, onStatus, onPriority, onVor, onQcPass, onQcFail, highlight,
   tasks, taskSummary, expanded, onToggleTasks, onManageTasks, onSmartAssign, onSetTaskStatus,
 }) {
   const canonicalStatus = normalizeWoStatus(job.status)
@@ -525,9 +526,28 @@ function JobCard({
 
       <div className="flex items-center justify-between gap-2">
         {isQc ? (
-          <button type="button" disabled={busy} onClick={() => onComplete(job.id)} className="btn-primary text-[11px] px-2.5 py-1 disabled:opacity-40">
-            <CheckCircle2 className="w-3 h-3 inline mr-1" /> Confirm complete
-          </button>
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => onQcPass(job)}
+              className="text-[11px] rounded-lg px-2.5 py-1 border font-semibold inline-flex items-center gap-1 disabled:opacity-40"
+              style={{ background: withAlpha(TONE_COLOR.green, 0.16), borderColor: withAlpha(TONE_COLOR.green, 0.4), color: TONE_COLOR.green }}
+              title="QC pass: complete the job"
+            >
+              <CheckCircle2 className="w-3 h-3" /> QC Pass
+            </button>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => onQcFail(job)}
+              className="text-[11px] rounded-lg px-2.5 py-1 border font-semibold inline-flex items-center gap-1 disabled:opacity-40"
+              style={{ background: withAlpha(TONE_COLOR.red, 0.16), borderColor: withAlpha(TONE_COLOR.red, 0.4), color: TONE_COLOR.red }}
+              title="QC fail: send back for rework"
+            >
+              <XCircle className="w-3 h-3" /> QC Fail
+            </button>
+          </div>
         ) : <span />}
         <Link to="/work-orders" className="text-[11px] text-muted hover:text-white inline-flex items-center gap-1">
           Open <ExternalLink className="w-3 h-3" />
@@ -1002,6 +1022,7 @@ export default function WorkshopLive() {
   const [smartAssignJob, setSmartAssignJob] = useState(null)
   const [taskModalJob, setTaskModalJob] = useState(null)
   const [drawerTech, setDrawerTech] = useState(null)
+  const [newJobOpen, setNewJobOpen] = useState(false)
 
   const reloadTimer = useRef(null)
   const flashTimer = useRef(null)
@@ -1180,8 +1201,44 @@ export default function WorkshopLive() {
   const onStatus = (jobId, status) => mutate(workshop.setJobStatus(jobId, status), 'Status updated.')
   const onPriority = (jobId, priority) => mutate(workshop.setJobPriority(jobId, priority), 'Priority updated.')
   const onVor = (jobId, on) => mutate(workshop.setVor(jobId, on), on ? 'Marked Vehicle Off Road.' : 'Cleared Vehicle Off Road.')
-  const onComplete = (jobId) => mutate(workshop.setJobStatus(jobId, 'Completed'), 'Job marked complete.')
   const onConfirm = (eventId) => mutate(workshop.confirmEvent(eventId), 'Task confirmed.')
+
+  // ── QC sign-off (pure transition from workshopTasks.qcOutcome) ────────────────
+  const onQcPass = (job) => {
+    const t = qcOutcome('pass') // { status:'Completed', qc_status:'passed' }
+    mutate(
+      workshop.setJobStatus(job.id, t.status).then(() => workshop.setQcStatus(job.id, t.qc_status)),
+      'QC passed. Job completed.',
+    )
+  }
+  const onQcFail = (job) => {
+    const t = qcOutcome('fail') // { status:'In Progress', qc_status:'failed', rework:true, note }
+    // Record a rework signal against the job (attributed to its owner when known)
+    // so first-time-fix analytics stay honest - a QC failure is not a clean fix.
+    const run = workshop.setJobStatus(job.id, t.status)
+      .then(() => workshop.setQcStatus(job.id, t.qc_status))
+      .then(() => workshop.recordEvent({
+        user_id: job.assigned_owner_id || undefined,
+        job_id: job.id,
+        asset_no: job.asset_no || undefined,
+        event_type: 'report_problem',
+        reason_code: 'support',
+        note: t.note,
+      }))
+    mutate(run, 'QC failed. Job sent back for rework.')
+  }
+
+  // ── New job creation ─────────────────────────────────────────────────────────
+  const onCreateJob = (values) => {
+    const run = workshop.createJob(values).then(async (row) => {
+      if (values.assignee && row?.id) {
+        await workshop.assignJob({ job_id: row.id, user_id: values.assignee })
+      }
+      return row
+    })
+    mutate(run, values.assignee ? 'Job created and assigned.' : 'Job created.')
+    setNewJobOpen(false)
+  }
 
   // ── Tasks ──────────────────────────────────────────────────────────────────
   const refreshTasks = useCallback(async (jobId) => {
@@ -1296,6 +1353,13 @@ export default function WorkshopLive() {
                 {siteOptions.map((s) => <option key={s} value={s}>{s === 'All' ? 'All sites' : s}</option>)}
               </select>
             )}
+            <button
+              type="button"
+              onClick={() => setNewJobOpen(true)}
+              className="inline-flex items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm font-semibold text-slate-100 hover:bg-white/10"
+            >
+              <Plus className="w-4 h-4" /> New Job
+            </button>
             <WorkshopTvShareButton />
           </div>
         }
@@ -1409,7 +1473,8 @@ export default function WorkshopLive() {
                             onStatus={onStatus}
                             onPriority={onPriority}
                             onVor={onVor}
-                            onComplete={onComplete}
+                            onQcPass={onQcPass}
+                            onQcFail={onQcFail}
                             tasks={taskRollupByJob[job.id]}
                             taskSummary={taskSummaryByJob[job.id]}
                             expanded={!!expandedJobs[job.id]}
@@ -1476,6 +1541,15 @@ export default function WorkshopLive() {
           onEvent={onForemanEvent}
           onNotify={onForemanNotify}
           onOpenJob={openJobById}
+        />
+      )}
+
+      {newJobOpen && (
+        <WorkshopNewJobModal
+          technicians={board}
+          busy={busy}
+          onClose={() => setNewJobOpen(false)}
+          onCreate={onCreateJob}
         />
       )}
     </div>

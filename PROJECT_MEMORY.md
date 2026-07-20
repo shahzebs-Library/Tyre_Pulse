@@ -80,6 +80,25 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
   (systemConfig.js) AND the live system_config.max_upload_rows value 10000 -> 100000. So a ~94k-row sheet now
   imports fully into the ERP staging tables. RULE: true million-row loads still need the server COPY pipeline; the
   browser path is now good to ~100k rows/file. The admin can still tune max_upload_rows in the console.
+- **ERP import hardened for MOBILE data (2026-07-19).** Large imports failed on mobile with a network error and
+  forced a restart. Fix in `src/lib/api/erpImport.js` saveImportRows: chunk 500 -> 250 rows/POST (a big POST is
+  the first thing a weak signal / proxy drops), per-chunk retries 4 -> 6 with jittered exponential backoff (cap
+  8s), and transient chunk failures are DEFERRED + retried in a final sweep after a pause instead of aborting the
+  whole upload (a real permission/validation error still aborts immediately). So a ~94k-row file completes in one
+  action despite intermittent drops. Tests erpImportResilience 3 (fake-timer fast).
+- **Console Data Cleanup module (V289) — super-admin "clean old data" with full control + safety.** User asked for
+  a console button/module to delete old data. `/console/data-cleanup` (`src/console/pages/ConsoleDataCleanup.jsx`,
+  nav "Data Cleanup", Trash2). Super-admin picks a target, chooses "older than" (age preset or date), PREVIEWS the
+  exact count, then deletes behind a typed CLEAN confirmation. **Safe by construction:** SECURITY DEFINER RPCs
+  (`admin_data_cleanup_targets/preview/run`, is_super_admin gated) resolve the table from a fixed server-side
+  SAFELIST via `_data_cleanup_spec` (key -> table+date_col+kind, NO injection); run() takes a `create_backup_snapshot`
+  FIRST (recoverable from Console -> Backups) then deletes, and logs to system_logs + access_audit. Safelist = 7 LOG
+  targets (audit_log_v2/system_logs/access_audit/ai_token_logs/ai_usage_log/odometer_logs/engine_hours_logs) + 4
+  BUSINESS targets (accidents/tyre_records/inspections/work_orders) flagged red with an extra warning. Service
+  `src/lib/api/dataCleanup.js` (listCleanupTargets/previewCleanup/runCleanup/monthsAgoISO/AGE_PRESETS). This is the
+  MANUAL, snapshot-protected counterpart to the deliberately-off automatic `data_retention_months` (automatic
+  business-data deletion stays off; a super-admin can now do it manually with preview + snapshot + typed confirm).
+  Tests dataCleanup 6. Next free migration **V290**.
 
 ## Custom roles assignable (V282) + Sentry crash console (V283) (2026-07-19, SHIPPED)
 - **V282 — custom roles could NEVER be assigned to a user (root-caused + fixed).** User: "I add new

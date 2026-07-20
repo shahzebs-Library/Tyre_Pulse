@@ -39,6 +39,7 @@ const ConsoleAlertRules    = lazy(() => import('./console/pages/ConsoleAlertRule
 const ConsoleModuleControl = lazy(() => import('./console/pages/ConsoleModuleControl'))
 const ConsoleSelfHealing   = lazy(() => import('./console/pages/ConsoleSelfHealing'))
 const ConsoleDataBrowser   = lazy(() => import('./console/pages/ConsoleDataBrowser'))
+const ConsoleDataCleanup   = lazy(() => import('./console/pages/ConsoleDataCleanup'))
 const ConsoleVehicleDesigner = lazy(() => import('./console/pages/ConsoleVehicleDesigner'))
 const ConsoleNavigation    = lazy(() => import('./console/pages/ConsoleNavigation'))
 const ConsoleCrashReports  = lazy(() => import('./console/pages/ConsoleCrashReports'))
@@ -684,6 +685,7 @@ export default function App() {
           <Route path="module-control" element={<ConsoleModuleControl />} />
           <Route path="self-healing"  element={<ConsoleSelfHealing />} />
           <Route path="data-browser"  element={<ConsoleDataBrowser />} />
+          <Route path="data-cleanup"  element={<ConsoleDataCleanup />} />
           <Route path="vehicle-designer" element={<ConsoleVehicleDesigner />} />
           <Route path="navigation"    element={<ConsoleNavigation />} />
           <Route path="crash-reports" element={<ConsoleCrashReports />} />

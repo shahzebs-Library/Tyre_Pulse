@@ -3,16 +3,47 @@
 Durable, committed project knowledge so any session has full context. Keep this
 current. Read it before adding/changing modules. Governing spec: `Tyre pulse enterprise.md`
 
-## Marketing website (2026-07-20) — `marketing/` (separate Next.js app)
-- Standalone **Next.js 16 App-Router** marketing site added at repo `marketing/` (self-contained; NOT part of the
+## Marketing website (2026-07-20) — `marketing/` (separate Next.js app) — DEPLOYED LIVE
+- Standalone **Next.js 16 App-Router** marketing site at repo `marketing/` (self-contained; NOT part of the
   Vite main app). Pages: home/product/pricing/industries/security/contact + `/ar` (Arabic) + `app/api/contact`
-  route + robots/sitemap. Stack: React 19, three.js/@react-three (3D hero), framer-motion, tailwind/postcss, zod.
-- Deploy as its OWN Vercel project with **Root Directory = `marketing`** (build `next build`); do NOT mix with the
-  main app's vercel.json. `node_modules/.next/.env*` are gitignored; copy `.env.example`. NOTE: deps (Next16+three)
-  were NOT installed/built in the agent environment (heavy install timed out) — run `cd marketing && npm install
-  && npm run build` locally/CI to verify before first deploy.
+  route + robots/sitemap. Stack: React 19, three.js/@react-three (3D hero), framer-motion, plain CSS (globals.css,
+  NO tailwind), zod. Merged to main via #154.
+- **LIVE (2026-07-20):** user deployed it as its OWN Vercel project (separate from the app project `tyre-pulse`),
+  **Root Directory = `marketing`**, framework auto-detected Next.js, `next build`. Do NOT mix with the main app's
+  vercel.json. `node_modules/.next/.env*` are gitignored.
+- Intended domain model (per the site's own links): marketing on `www.tyrepulse.app` / `tyrepulse.app`, the APP on
+  `app.tyrepulse.app`, admin on `admin.tyrepulse.app`. Header Login button = `NEXT_PUBLIC_APP_URL`
+  (default `https://app.tyrepulse.app`); metadata/robots/sitemap base = `NEXT_PUBLIC_SITE_URL`
+  (default `https://www.tyrepulse.app`). Set those two env vars on the marketing Vercel project.
+- RULE: to edit the marketing site, change files under `marketing/` and its own Vercel project redeploys; the main
+  Vite app (login on `tyrepulse.app`) is a DIFFERENT deploy and is unaffected.
 
-## Phase-1 multi-tenant SaaS security hardening (V306-V318 applied; V316 STAGED, 2026-07-20) — next free **V319** (V316 file exists, NOT applied)
+## SESSION 2026-07-20 CLOSED (final v2) — #154 merged; migrations V306-V318 applied; V316 KEPT OFF; marketing site LIVE; next free **V319**
+- FULLY RECONCILED: branch `claude/accident-builder-report-ui-2bkwb5` realigned to origin/main (== `0931de9`, #154),
+  nothing uncommitted. #154 = **Phase-1 multi-tenant security hardening (V306-V318)** + the **marketing site** (both
+  above). CI green (Web tests+build, Mobile typecheck, CodeQL js-ts+python); squash-merged; PR unsubscribed.
+- **Migration state VERIFIED in DB (supabase_migrations.schema_migrations):** V300-V318 ALL applied EXCEPT **V316**.
+  V305 + V306 explicitly re-confirmed applied (user asked). **V316 (`create_workspace_owner`, open self-serve org
+  signup) DELIBERATELY KEPT OFF** — user chose invite-only (AskUserQuestion 2026-07-20: "Keep OFF"). It is NOT a
+  bug/pending item; apply ONLY on an explicit future go-ahead (it lets any authenticated user create an org +
+  become its Admin). Its migration file exists in-repo, unapplied.
+- **Account creation with V316 off (answered for user):** signup still works — a new user self-registers via the
+  app/website login form and lands as a **pending `Reporter`** inside the existing org with NO access until an admin
+  approves. Admin manages/approves in **Console -> Users** (`/console/users`: approve, set role/country/sites, lock,
+  bulk role). Gated by `system_config.registration_open` (form on/off) + `require_approval` (default on). Creating a
+  NEW separate company is the only thing V316-off blocks.
+- **Website live:** `tyrepulse.app` = the Vite APP (opens to login, by design). The public marketing site is now a
+  SEPARATE live Vercel project from `marketing/` (see the Marketing website section). tyrepulse.app returns 403 to
+  automated fetchers (bot protection) — that is NOT "down".
+- **OPEN OPS (unchanged, user/CLI only, NOT code):** (1) `send-scheduled-reports` edge fn still needs the workshop
+  DATASET_DIGEST redeploy (`supabase functions deploy send-scheduled-reports --project-ref tyrepulse`, keep
+  verify_jwt=true) — scheduled 'workshop' report emails the exec fallback until then. (2) enable Supabase
+  leaked-password protection. (3) support_sessions record/authorize/audit only — RLS retargeting into the inspected
+  org is a deliberate follow-up. (4) set `NEXT_PUBLIC_SITE_URL` + `NEXT_PUBLIC_APP_URL` on the marketing project and
+  (if wanted) move the app to `app.tyrepulse.app`, marketing to `www`/root.
+- For NEW work restart the branch from latest main (merged PRs are terminal).
+
+## Phase-1 multi-tenant SaaS security hardening (V306-V318 applied; V316 KEPT OFF by user, 2026-07-20) — next free **V319** (V316 file exists, deliberately NOT applied)
 - **BATCH 4 (V317/V318 applied + code):**
   - **V317 (applied+verified)** `account_deletion_requests` — in-app self-service deletion REQUEST (Settings
     "Delete my account", typed DELETE gate, records intent only, never a client hard-delete); user files/reads own,

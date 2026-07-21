@@ -2,8 +2,15 @@
  * Admin Approvals hub (mobile, admin-only)
  *
  * A unified queue for the approval types an admin can action from the phone:
- *   • Uploads   — the shared `pending_uploads` queue (approve inserts the staged
- *                 rows into their target table; reject marks the batch rejected).
+ *   • Uploads   — the shared `pending_uploads` queue. The phone ONLY submits
+ *                 Approve / Reject via the SECURITY DEFINER RPCs
+ *                 `approve_pending_upload` / `reject_pending_upload` (V320). The
+ *                 staged rows are imported SERVER-SIDE inside a single
+ *                 transaction (all-or-nothing), so a partial/duplicated import
+ *                 can no longer happen and a retry is always safe. The approver
+ *                 id + timestamp are derived server-side; the client never
+ *                 supplies them. An optimistic-concurrency guard means a second
+ *                 manager gets a clean "already decided" message.
  *   • Closures  — accident closure requests (`accidents.closure_status =
  *                 'pending_closure'`), decided by the SECURITY DEFINER RPCs
  *                 `approve_accident_closure` / `reject_accident_closure`, both of
@@ -65,14 +72,23 @@ const TYPE_META: Record<string, { label: string; icon: string; color: string }> 
   stock: { label: 'Stock',        icon: 'cube-outline',          color: '#0891b2' },
 }
 
-// Security: never write to a table name taken from the DB row. Approval inserts
-// are restricted to this hardcoded allow-list, keyed by the batch `upload_type`.
-const APPROVE_TABLE: Record<string, string> = {
-  tyres: 'tyre_records',
-  stock: 'stock_records',
-}
+// Upload types the phone can action. The SERVER (approve_pending_upload RPC)
+// owns the real allow-list of target tables; this is only a UX guard so we do
+// not offer Approve on a batch the backend will refuse.
+const SUPPORTED_UPLOAD_TYPES = new Set(['tyres', 'stock'])
 
-const BATCH = 500
+// A missing RPC (screen shipped before the V320 migration is applied) surfaces as
+// a PostgREST "function not found" - degrade gracefully instead of crashing.
+function isMissingRpc(err: any): boolean {
+  const code = String(err?.code ?? '')
+  const msg = String(err?.message ?? '').toLowerCase()
+  return code === 'PGRST202' || code === '404' ||
+    msg.includes('could not find the function') ||
+    msg.includes('function public.') ||
+    (msg.includes('does not exist') && msg.includes('function'))
+}
+const RPC_UNAVAILABLE = 'Approvals require a server update. Please try again later.'
+
 const CLOSURE_COLS =
   'id,asset_no,driver_name,accident_type,severity,incident_date,site,country,' +
   'estimated_damage_cost,close_request_note,close_requested_at'
@@ -155,36 +171,36 @@ export default function AdminApprovalsScreen() {
     setRefreshing(false)
   }
 
-  // ── Upload actions ───────────────────────────────────────────────────────────
+  // ── Upload actions (SERVER-SIDE, transactional, concurrency-guarded) ──────────
+  // The phone never inserts rows or stamps the approver itself. It calls the V320
+  // RPCs, which import the whole batch in ONE transaction (no partial/duplicate
+  // import) and derive approver id + time server-side. A losing manager gets an
+  // "already decided" error; we refresh so they see the current state.
   function approve(p: PendingUpload) {
+    if (!SUPPORTED_UPLOAD_TYPES.has(p.upload_type)) {
+      Alert.alert(
+        'Cannot approve',
+        `Unsupported upload type "${p.upload_type}". This batch cannot be imported from mobile.`,
+      )
+      return
+    }
     Alert.alert(
       'Approve Upload',
-      `Insert ${p.row_count} ${TYPE_META[p.upload_type]?.label ?? 'records'} into ${p.country ?? '-'}?`,
+      `Import ${p.row_count} ${TYPE_META[p.upload_type]?.label ?? 'records'} into ${p.country ?? '-'}?`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Approve',
           onPress: async () => {
-            const targetTable = APPROVE_TABLE[p.upload_type]
-            if (!targetTable) {
-              Alert.alert(
-                'Cannot approve',
-                `Unsupported upload type "${p.upload_type}". This batch cannot be imported from mobile.`,
-              )
+            setActing(p.id)
+            const { error } = await supabase.rpc('approve_pending_upload', { p_upload_id: p.id })
+            setActing(null)
+            if (error) {
+              Alert.alert('Cannot approve', isMissingRpc(error) ? RPC_UNAVAILABLE : toUserMessage(error))
+              await load()  // pull current state (winner's decision, if any)
               return
             }
-            setActing(p.id)
-            const rows = Array.isArray(p.rows) ? p.rows : []
-            for (let i = 0; i < rows.length; i += BATCH) {
-              const { error } = await supabase.from(targetTable).insert(rows.slice(i, i + BATCH))
-              if (error) { setActing(null); Alert.alert('Insert failed', toUserMessage(error)); return }
-            }
-            const { error: updErr } = await supabase.from('pending_uploads')
-              .update({ status: 'approved', reviewed_by: profile?.id, reviewed_at: new Date().toISOString() })
-              .eq('id', p.id)
-            setActing(null)
-            if (updErr) Alert.alert('Error', toUserMessage(updErr))
-            else { setItems(prev => prev.map(x => x.id === p.id ? { ...x, status: 'approved' } : x)) }
+            setItems(prev => prev.map(x => x.id === p.id ? { ...x, status: 'approved' } : x))
           },
         },
       ]
@@ -192,7 +208,7 @@ export default function AdminApprovalsScreen() {
   }
 
   // Quick correction on mobile: re-stamp the whole batch (and every row) to the
-  // right country before approving. Detailed per-cell edits are on the web.
+  // right country before approving. Done server-side via RPC (still-pending only).
   function correctCountry(p: PendingUpload) {
     Alert.alert(
       'Set Country for Batch',
@@ -202,12 +218,17 @@ export default function AdminApprovalsScreen() {
           text: c,
           onPress: async () => {
             setActing(p.id)
-            const newRows = (Array.isArray(p.rows) ? p.rows : []).map(r => ({ ...r, country: c }))
-            const { error } = await supabase.from('pending_uploads')
-              .update({ rows: newRows, country: c }).eq('id', p.id)
+            const { error } = await supabase.rpc('restamp_pending_upload_country', {
+              p_upload_id: p.id, p_country: c,
+            })
             setActing(null)
-            if (error) Alert.alert('Error', toUserMessage(error))
-            else setItems(prev => prev.map(x => x.id === p.id ? { ...x, rows: newRows, country: c } : x))
+            if (error) {
+              Alert.alert('Cannot update', isMissingRpc(error) ? RPC_UNAVAILABLE : toUserMessage(error))
+              await load()
+              return
+            }
+            const newRows = (Array.isArray(p.rows) ? p.rows : []).map(r => ({ ...r, country: c }))
+            setItems(prev => prev.map(x => x.id === p.id ? { ...x, rows: newRows, country: c } : x))
           },
         })),
         { text: 'Cancel', style: 'cancel' as const },
@@ -226,12 +247,14 @@ export default function AdminApprovalsScreen() {
           style: 'destructive',
           onPress: async () => {
             setActing(p.id)
-            const { error } = await supabase.from('pending_uploads')
-              .update({ status: 'rejected', reviewed_by: profile?.id, reviewed_at: new Date().toISOString() })
-              .eq('id', p.id)
+            const { error } = await supabase.rpc('reject_pending_upload', { p_upload_id: p.id, p_reason: null })
             setActing(null)
-            if (error) Alert.alert('Error', toUserMessage(error))
-            else setItems(prev => prev.map(x => x.id === p.id ? { ...x, status: 'rejected' } : x))
+            if (error) {
+              Alert.alert('Cannot reject', isMissingRpc(error) ? RPC_UNAVAILABLE : toUserMessage(error))
+              await load()
+              return
+            }
+            setItems(prev => prev.map(x => x.id === p.id ? { ...x, status: 'rejected' } : x))
           },
         },
       ]
@@ -251,7 +274,7 @@ export default function AdminApprovalsScreen() {
             setActing(c.id)
             const { error } = await supabase.rpc('approve_accident_closure', { p_accident_id: c.id })
             setActing(null)
-            if (error) Alert.alert('Cannot approve', toUserMessage(error))
+            if (error) { Alert.alert('Cannot approve', toUserMessage(error)); await loadClosures() }
             else setClosures(prev => prev.filter(x => x.id !== c.id))
           },
         },
@@ -263,7 +286,7 @@ export default function AdminApprovalsScreen() {
     setActing(id)
     const { error } = await supabase.rpc('reject_accident_closure', { p_accident_id: id, p_reason: reason })
     setActing(null)
-    if (error) Alert.alert('Cannot reject', toUserMessage(error))
+    if (error) { Alert.alert('Cannot reject', toUserMessage(error)); await loadClosures() }
     else setClosures(prev => prev.filter(x => x.id !== id))
   }
 

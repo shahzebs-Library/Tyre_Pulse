@@ -30,7 +30,11 @@ import {
   getInspectionForApproval, decideInspection, InspectionApprovalItem,
 } from '../../../../lib/inspectionApprovals'
 
-export default function InspectionApprovalReviewScreen() {
+import { withModuleGuard } from '../../../../components/ModuleGuard'
+
+export default withModuleGuard(InspectionApprovalReviewScreen, 'approvals')
+
+function InspectionApprovalReviewScreen() {
   const { profile, canAccess } = useAuth()
   const { isRTL } = useLanguage()
   const { theme } = useTheme()

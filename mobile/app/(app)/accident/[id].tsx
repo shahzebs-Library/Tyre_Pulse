@@ -62,7 +62,11 @@ const TYPE_ICONS: Record<string, IconName> = {
   other:           'ellipsis-horizontal-circle-outline',
 }
 
-export default function AccidentDetailScreen() {
+import { withModuleGuard } from '../../../components/ModuleGuard'
+
+export default withModuleGuard(AccidentDetailScreen, 'accidents')
+
+function AccidentDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>()
   const { allowed, loading: guardLoading } = useRoleGuard(['admin', 'manager', 'director', 'inspector'])
   const { profile, isSuperAdmin } = useAuth()

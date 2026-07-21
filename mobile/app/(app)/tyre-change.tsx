@@ -18,7 +18,11 @@ import { UserRole } from '../../lib/types'
 const ROLES: UserRole[] = ['tyre_man', 'inspector', 'admin', 'manager', 'director']
 const POSITIONS = ['FL', 'FR', 'RL', 'RR', 'RLO', 'RLI', 'RRO', 'RRI', 'Spare']
 
-export default function TyreChangeScreen() {
+import { withModuleGuard } from '../../components/ModuleGuard'
+
+export default withModuleGuard(TyreChangeScreen, 'tyreChange')
+
+function TyreChangeScreen() {
   const { profile } = useAuth()
   const { t, isRTL } = useLanguage()
   const { theme } = useTheme()

@@ -73,7 +73,11 @@ function priorityKind(p: string | null): 'danger' | 'warning' | 'info' | 'neutra
   return 'neutral'
 }
 
-export default function WorkshopScreen() {
+import { withModuleGuard } from '../../components/ModuleGuard'
+
+export default withModuleGuard(WorkshopScreen, 'workshop')
+
+function WorkshopScreen() {
   const { user, profile, canAccess } = useAuth()
   const { t, isRTL } = useLanguage()
   const { theme } = useTheme()

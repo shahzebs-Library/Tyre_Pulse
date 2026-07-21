@@ -42,5 +42,6 @@ const styles = StyleSheet.create({
     paddingVertical: 5,
     borderRadius: radius.pill,
   },
-  icon: { marginRight: 4 },
+  // Logical end margin: keeps the icon-to-label gap on the correct side in RTL.
+  icon: { marginEnd: 4 },
 })

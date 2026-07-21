@@ -28,7 +28,9 @@ export function Card({
     borderWidth: 1,
     borderColor: theme.color.border,
     ...(padded ? { padding: spacing.lg } : null),
-    ...(accent ? { borderLeftWidth: 4, borderLeftColor: accent } : null),
+    // Logical start edge so the accent bar sits on the reading side (left in
+    // LTR, right in RTL). No-op change for LTR (start == left).
+    ...(accent ? { borderStartWidth: 4, borderStartColor: accent } : null),
     ...elevation(theme, level),
   }
   if (onPress) {

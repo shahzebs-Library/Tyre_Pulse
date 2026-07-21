@@ -21,7 +21,11 @@ import { Screen, AppText, Badge, EmptyState, ErrorState, Loading } from '../../.
 import { listPendingInspectionApprovals, InspectionApprovalItem } from '../../../../lib/inspectionApprovals'
 import { toUserMessage } from '../../../../lib/safeError'
 
-export default function InspectionApprovalsScreen() {
+import { withModuleGuard } from '../../../../components/ModuleGuard'
+
+export default withModuleGuard(InspectionApprovalsScreen, 'approvals')
+
+function InspectionApprovalsScreen() {
   const { profile, canAccess } = useAuth()
   const { isRTL } = useLanguage()
   const { theme } = useTheme()

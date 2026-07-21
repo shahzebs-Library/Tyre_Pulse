@@ -29,7 +29,11 @@ const DUE_LABEL_KEY: Record<string, string> = {
   '2 weeks': 'modules.reportIssue.due2w',
 }
 
-export default function ReportIssueScreen() {
+import { withModuleGuard } from '../../components/ModuleGuard'
+
+export default withModuleGuard(ReportIssueScreen, 'reportIssue')
+
+function ReportIssueScreen() {
   const { profile } = useAuth()
   const { t, isRTL } = useLanguage()
   const router = useRouter()

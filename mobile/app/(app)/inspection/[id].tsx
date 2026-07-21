@@ -29,7 +29,11 @@ interface Inspection {
   tyre_conditions: Record<string, TyrePositionData> | null
 }
 
-export default function InspectionDetailScreen() {
+import { withModuleGuard } from '../../../components/ModuleGuard'
+
+export default withModuleGuard(InspectionDetailScreen, 'inspect')
+
+function InspectionDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>()
   const { t, isRTL } = useLanguage()
   const { theme } = useTheme()

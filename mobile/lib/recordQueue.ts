@@ -11,10 +11,35 @@
  * Mechanics preserved from v1: immediate insert, offline enqueue, auto-flush on
  * reconnect, retry. Added: per-command idempotency key + retry-with-backoff and
  * retry_count so transient failures self-heal.
+ *
+ * ----------------------------------------------------------------------------
+ * STORAGE BACKEND SEAM (finding #13 - future work, intentionally NOT done here):
+ *   The queue METADATA (this list of QueuedRecord rows) is persisted by rewriting
+ *   a single JSON blob into SecureStore (see save()/getRecordQueue()). SecureStore
+ *   chunks large values across several keychain entries, which is poor for
+ *   durability, concurrency and large queues. The intended future backend for the
+ *   queue rows, inspections, sync-jobs and a dead-letter table is expo-sqlite
+ *   (transactional, indexable, no chunking). To migrate, replace ONLY the
+ *   save()/getRecordQueue() persistence pair with a SQLite-backed implementation;
+ *   the command registry, idempotency and photo pipeline above/below stay as-is.
+ *
+ *   Photo BLOBS are already OUT of this store: as of finding #14 they live as
+ *   files in the durable document folder (see lib/durablePhotos.ts) and only
+ *   their file:// paths + integrity descriptors travel through the queue, so a
+ *   SQLite migration never has to move image bytes.
+ * ----------------------------------------------------------------------------
  */
 import { supabase } from './supabase'
 import { secureStorage } from './secureStorage'
 import { uploadModulePhoto } from './photoUpload'
+import {
+  persistPhotoForQueue,
+  resolveDurablePath,
+  deleteDurablePhoto,
+  cleanupOrphanDurablePhotos,
+  isDurablePhotoPath,
+  type DurablePhoto,
+} from './durablePhotos'
 
 const KEY = 'tp_record_queue_v2'
 const MAX_RETRIES = 8
@@ -232,6 +257,13 @@ export interface QueuedRecord {
   created_at: string
   synced_at: string | null
   error: string | null
+  /**
+   * Integrity descriptors for any queued photos that were copied into durable
+   * document storage before this record was enqueued (finding #14). Diagnostics
+   * only - the upload reads from payload.photos; this records size/checksum for
+   * verification and is never sent to the database.
+   */
+  photos_meta?: DurablePhoto[]
 }
 
 function isCommandType(t: string): t is CommandType {
@@ -302,11 +334,49 @@ function buildUpdateParts(
 }
 
 /**
+ * Copy any raw local (cache) file:// photo in a command payload into the DURABLE
+ * document folder BEFORE the command is queued (finding #14: OS cache files can
+ * be evicted before the queued upload runs, losing the photo). Already-durable
+ * paths and already-uploaded refs (tp-storage:// / http) pass through untouched.
+ *
+ * A photo that cannot be persisted (e.g. the device is out of space) is DROPPED
+ * from the array so the data row is still queued rather than losing the whole
+ * record - this matches the pre-existing "keep the event, drop the un-persistable
+ * photo" behavior, but it is now rare because we persist immediately to durable
+ * storage instead of relying on a cache path surviving until sync.
+ */
+async function persistPayloadPhotos(
+  payload: Record<string, any>,
+): Promise<{ payload: Record<string, any>; meta: DurablePhoto[] }> {
+  const photos = payload.photos
+  if (!Array.isArray(photos) || photos.length === 0) return { payload, meta: [] }
+
+  const out: string[] = []
+  const meta: DurablePhoto[] = []
+  for (const p of photos) {
+    if (typeof p === 'string' && p.startsWith('file://')) {
+      if (isDurablePhotoPath(p)) { out.push(p); continue } // already durable
+      const d = await persistPhotoForQueue(p)
+      if (d) { out.push(d.localPath); meta.push(d) }
+      // else: could not persist (no space) -> drop this one photo, keep the record
+    } else if (p) {
+      out.push(p) // already-uploaded ref / non-file entry
+    }
+  }
+  return { payload: { ...payload, photos: out.length ? out : null }, meta }
+}
+
+/**
  * Resolve a command's `photos` array before insert: upload any local file://
  * URIs to storage and replace them with permanent tp-storage:// refs. Already-
  * uploaded refs pass through. A file:// that can't be uploaded (offline / file
  * gone) is KEPT so the next sync attempt retries it, and `pending` is set true
  * so the caller keeps the record queued rather than inserting without photos.
+ *
+ * A durable (document-folder) path is re-resolved first to heal any iOS container
+ * path drift, and its durable copy is deleted ONLY after the upload is confirmed
+ * (deleteDurablePhoto is a no-op for a plain cache path, so the immediate-upload
+ * path is unaffected).
  */
 async function resolveCommandPhotos(
   type: CommandType,
@@ -320,15 +390,39 @@ async function resolveCommandPhotos(
   let i = 0
   for (const p of photos) {
     if (typeof p === 'string' && p.startsWith('file://')) {
-      const ref = await uploadModulePhoto(p, TYPE_TO_MODULE[type], i)
-      if (ref) out.push(ref)
-      else { out.push(p); pending = true } // keep local URI for a later retry
+      const src = resolveDurablePath(p) // heal container path drift for durable copies
+      const ref = await uploadModulePhoto(src, TYPE_TO_MODULE[type], i)
+      if (ref) {
+        out.push(ref)
+        deleteDurablePhoto(src) // remove durable copy only after a confirmed upload
+      } else {
+        out.push(p) // keep the (durable) path for a later retry
+        pending = true
+      }
     } else if (p) {
       out.push(p)
     }
     i++
   }
   return { payload: { ...payload, photos: out.length ? out : null }, pending }
+}
+
+/**
+ * Opportunistic orphan sweep: delete any durable photo file that no live queue
+ * entry references (its record synced, failed-and-cleared, or was wiped). Safe to
+ * call after any sync or on app start; only files this app wrote live there.
+ */
+export async function sweepOrphanQueuedPhotos(queue?: QueuedRecord[]): Promise<void> {
+  const q = queue ?? (await getRecordQueue())
+  const active = new Set<string>()
+  for (const it of q) {
+    if (it.sync_status === 'synced') continue
+    const ph = it.payload?.photos
+    if (Array.isArray(ph)) {
+      for (const p of ph) if (typeof p === 'string' && isDurablePhotoPath(p)) active.add(p)
+    }
+  }
+  cleanupOrphanDurablePhotos(active)
 }
 
 export async function getRecordQueue(): Promise<QueuedRecord[]> {
@@ -352,12 +446,16 @@ export async function enqueueCommand(
 ): Promise<string> {
   if (!isCommandType(type)) throw new Error(`Unknown command type: ${type}`)
   const id = `rec_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
+  // Persist any raw cache photo into durable document storage BEFORE it is queued,
+  // so an OS cache eviction before sync can never lose it (finding #14). This is
+  // the single durability seam: every path that queues a command routes here.
+  const { payload: durablePayload, meta } = await persistPayloadPhotos(sanitize(type, payload))
   const queue = await getRecordQueue()
   queue.unshift({
     id,
     type,
     table: COMMANDS[type].table,
-    payload: sanitize(type, payload),
+    payload: durablePayload,
     idempotency_key: idempotencyKey ?? id,
     sync_status: 'pending',
     retry_count: 0,
@@ -365,6 +463,7 @@ export async function enqueueCommand(
     created_at: new Date().toISOString(),
     synced_at: null,
     error: null,
+    photos_meta: meta.length ? meta : undefined,
   })
   await save(queue)
   return id
@@ -521,6 +620,10 @@ async function doSyncRecordQueue(): Promise<{ synced: number; failed: number }> 
   // so retries and manual "retry failed" still work.
   const remaining = queue.filter(i => i.sync_status !== 'synced')
   if (remaining.length !== queue.length) await save(remaining)
+  // Opportunistic cleanup: drop durable photo files no remaining entry references
+  // (synced records already deleted their copies on confirmed upload). Runs on the
+  // reconnect/poll-driven sync, so the folder can never grow without bound.
+  await sweepOrphanQueuedPhotos(remaining)
   return { synced, failed }
 }
 
@@ -549,6 +652,9 @@ export async function clearSyncedRecords(): Promise<void> {
  */
 export async function clearRecordQueue(): Promise<void> {
   await secureStorage.removeItem(KEY)
+  // The queue is gone, so every durable queued-photo file is now an orphan; purge
+  // them (empty active set) so a shared device does not retain this user's images.
+  cleanupOrphanDurablePhotos([])
 }
 
 /** Legacy table names → command types, so any un-migrated call site still routes

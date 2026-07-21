@@ -9,7 +9,7 @@ Status legend: [x] done in code (this repo) · [ ] action needed by you.
 ---
 
 ## A. Code / app config - DONE (verified `npx tsc --noEmit` = 0 errors)
-- [x] Package id `com.shahzebrahman.tyrepulseinspector`, version `1.2.0`, target SDK 35, minSdk 24.
+- [x] Package id `com.shahzebrahman.tyrepulseinspector`, version `1.3.0`, target SDK 35, minSdk 24.
 - [x] Permissions minimised: camera, location (when-in-use), notifications, network, boot-completed. **Exact-alarm permissions removed** (only inexact daily reminders) - no exact-alarm declaration form needed.
 - [x] Every permission has a plain-English rationale string (camera / photos / location plugin config).
 - [x] Crash capture: ErrorBoundary + Sentry global handlers wrap the app; DSN wired via EAS env.
@@ -43,7 +43,7 @@ Status legend: [x] done in code (this repo) · [ ] action needed by you.
   - NOT collected: financial, health, contacts, messages, browsing, ads/marketing id (no ads SDK).
 - [ ] **Privacy policy URL** (must load without login) - host `PRIVACY_POLICY.md` (e.g. GitHub Pages) and paste into Store settings + Data safety.
 - [ ] **Account/data deletion URL** - paste into Data safety deletion field.
-- [ ] **App access** - choose "All functionality is restricted", provide the demo login (Inspector account) so reviewers can sign in.
+- [ ] **App access** - choose "All functionality is restricted". Provide a low-privilege Inspector reviewer login directly in Play Console "App access" (invite-only app; accounts are admin-created). Credentials are entered in Play Console and rotated, never committed to source.
 - [ ] **Content rating** questionnaire - Business/Productivity, 18+ workforce tool, no ads.
 - [ ] **Target audience** - 18+ (do NOT target children).
 - [ ] **Ads** - Contains ads = No.
@@ -67,7 +67,7 @@ Smoke-test each role and the core flows:
 - [ ] Records / History / Vehicles: long lists scroll smoothly (FlatList), pull-to-refresh, error + Retry on a forced network drop.
 - [ ] Access: sign in as director / inspector / tyre_man and confirm the removed modules are hidden; super-admin Access Console grant/revoke updates the target user's tabs on their next refresh.
 - [ ] Notifications: permission prompt, a daily reminder fires, tapping opens the app.
-- [ ] Kill/relaunch, background/foreground, rotate (portrait-locked), low battery - no crash; Sentry shows no new fatal issues.
+- [ ] Kill/relaunch, background/foreground, rotate (orientation is unlocked - `app.json` `orientation: "default"`, so the UI must handle both portrait and landscape), low battery - no crash; Sentry shows no new fatal issues.
 
 ## G. First release order
 1. Add the B assets/secrets. 2. Build production `.aab`. 3. Internal testing upload +

@@ -73,7 +73,11 @@ function shortMonth(monthKey: string): string {
   return d.toLocaleDateString('en', { month: 'short' })
 }
 
-export default function OverviewScreen() {
+import { withModuleGuard } from '../../components/ModuleGuard'
+
+export default withModuleGuard(OverviewScreen, 'overview')
+
+function OverviewScreen() {
   const { profile } = useAuth()
   const { t, isRTL } = useLanguage()
   const { theme } = useTheme()

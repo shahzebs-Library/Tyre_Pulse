@@ -34,7 +34,10 @@ function TabIcon({
 }
 
 export default function AppLayout() {
-  const { user, loading, profile, signOut, canAccess } = useAuth()
+  const {
+    user, loading, profile, profileLoading, profileError, retryProfile,
+    signOut, canAccess,
+  } = useAuth()
   const { t } = useLanguage()
   const { theme } = useTheme()
   const insets = useSafeAreaInsets()
@@ -92,7 +95,10 @@ export default function AppLayout() {
     return () => clearInterval(id)
   }, [hasPendingBadge, refreshPendingBadge])
 
-  if (loading) {
+  // Finding #3: do NOT render protected routes until the profile is loaded and
+  // validated. While the auth session OR the profile is still resolving, show
+  // the splash - never redirect to login yet, never flash app content.
+  if (loading || profileLoading) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: theme.color.bg }}>
         <ActivityIndicator size="large" color={theme.color.primary} />
@@ -101,6 +107,13 @@ export default function AppLayout() {
   }
 
   if (!user) return <Redirect href="/(auth)/login" />
+
+  // Authenticated but the profile could not be verified (hard fetch error).
+  // FAIL CLOSED: block all protected content behind a safe retry screen; a
+  // Sign out escape hatch is always offered.
+  if (profileError) {
+    return <ProfileErrorGate onRetry={retryProfile} onSignOut={signOut} />
+  }
 
   // Access gate - admin controls entry. A locked or not-yet-approved account
   // cannot use the app until an admin grants/restores access.
@@ -228,6 +241,30 @@ function AccessGate({ locked, onSignOut }: { locked: boolean; onSignOut: () => v
   )
 }
 
+// Shown when the signed-in user's profile could not be verified. Blocks all
+// protected content (fail closed) and offers Retry + Sign out.
+function ProfileErrorGate({ onRetry, onSignOut }: { onRetry: () => void; onSignOut: () => void }) {
+  return (
+    <View style={styles.gate}>
+      <View style={[styles.gateIcon, { backgroundColor: 'rgba(220,38,38,0.1)' }]}>
+        <Ionicons name="cloud-offline-outline" size={34} color="#dc2626" />
+      </View>
+      <Text style={styles.gateTitle}>Could not verify your account</Text>
+      <Text style={styles.gateMsg}>
+        We could not verify your account. Check your connection and retry.
+      </Text>
+      <TouchableOpacity style={styles.gateBtn} onPress={onRetry}>
+        <Ionicons name="refresh" size={18} color="#fff" />
+        <Text style={styles.gateBtnText}>Retry</Text>
+      </TouchableOpacity>
+      <TouchableOpacity style={styles.gateBtnGhost} onPress={onSignOut}>
+        <Ionicons name="log-out-outline" size={18} color="#dc2626" />
+        <Text style={styles.gateBtnGhostText}>Sign Out</Text>
+      </TouchableOpacity>
+    </View>
+  )
+}
+
 const styles = StyleSheet.create({
   gate: { flex: 1, backgroundColor: '#f0f5f1', alignItems: 'center', justifyContent: 'center', padding: 32, gap: 14 },
   gateIcon: { width: 76, height: 76, borderRadius: 38, alignItems: 'center', justifyContent: 'center' },
@@ -235,6 +272,8 @@ const styles = StyleSheet.create({
   gateMsg: { fontSize: 14, color: '#64748b', textAlign: 'center', lineHeight: 21 },
   gateBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#16a34a', borderRadius: 14, paddingHorizontal: 22, paddingVertical: 13, marginTop: 8 },
   gateBtnText: { fontSize: 15, fontWeight: '800', color: '#fff' },
+  gateBtnGhost: { flexDirection: 'row', alignItems: 'center', gap: 8, borderRadius: 14, paddingHorizontal: 22, paddingVertical: 11 },
+  gateBtnGhostText: { fontSize: 15, fontWeight: '800', color: '#dc2626' },
   tabBar: {
     backgroundColor: '#fff',
     borderTopColor: 'rgba(0,0,0,0.06)',

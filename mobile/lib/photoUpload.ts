@@ -6,7 +6,7 @@
  * Used by the offline queue sync loop before inserting inspection records.
  */
 
-import * as FileSystem from 'expo-file-system'
+import { File } from 'expo-file-system'
 import { ImageManipulator, SaveFormat } from 'expo-image-manipulator'
 import { supabase } from './supabase'
 import { storageRef } from './storageRefs'
@@ -74,19 +74,14 @@ export async function uploadInspectionPhoto(
     const ext = rawExt === 'heic' || rawExt === 'heif' ? 'jpg' : rawExt
     const contentType = ext === 'png' ? 'image/png' : 'image/jpeg'
 
-    const info = await FileSystem.getInfoAsync(uploadUri)
-    if (info.exists && (info as any).size > MAX_DECODE_BYTES) return null
+    if (fileSizeBytes(uploadUri) > MAX_DECODE_BYTES) return null
 
     // Build deterministic storage path:  inspections/<id>/<position>_<timestamp>.<ext>
     const sanitisedPosition = tyrePosition.replace(/[^a-zA-Z0-9_-]/g, '_')
     const path = `inspections/${inspectionId}/${sanitisedPosition}_${Date.now()}.${ext}`
 
-    // Read file as base64 - required for RN where Blob is not a true File
-    const base64 = await FileSystem.readAsStringAsync(uploadUri, {
-      encoding: 'base64',
-    })
-
-    const bytes = decodeBase64(base64)
+    // Read file as raw bytes (SDK 54 File API) - RN Blob is not a true File
+    const bytes = await readFileBytes(uploadUri)
 
     const { error } = await supabase.storage
       .from('tyre-photos')
@@ -126,8 +121,7 @@ export async function uploadAccidentPhoto(localUri: string, index = 0): Promise<
     const ext = rawExt === 'heic' || rawExt === 'heif' ? 'jpg' : rawExt
     const contentType = ext === 'png' ? 'image/png' : 'image/jpeg'
 
-    const info = await FileSystem.getInfoAsync(uploadUri)
-    if (info.exists && (info as any).size > MAX_DECODE_BYTES) return null
+    if (fileSizeBytes(uploadUri) > MAX_DECODE_BYTES) return null
 
     // Collision-resistant path: include user uid + timestamp + random suffix
     const { data: { user } } = await supabase.auth.getUser()
@@ -135,8 +129,7 @@ export async function uploadAccidentPhoto(localUri: string, index = 0): Promise<
     const rand = Math.random().toString(36).slice(2, 6)
     const path = `accidents/${uid}/${Date.now()}_${index}_${rand}.${ext}`
 
-    const base64 = await FileSystem.readAsStringAsync(uploadUri, { encoding: 'base64' })
-    const bytes = decodeBase64(base64)
+    const bytes = await readFileBytes(uploadUri)
 
     const { error } = await supabase.storage
       .from('accident-photos')
@@ -177,8 +170,7 @@ export async function uploadModulePhoto(
     const ext = rawExt === 'heic' || rawExt === 'heif' ? 'jpg' : rawExt
     const contentType = ext === 'png' ? 'image/png' : 'image/jpeg'
 
-    const info = await FileSystem.getInfoAsync(uploadUri)
-    if (info.exists && (info as any).size > MAX_DECODE_BYTES) return null
+    if (fileSizeBytes(uploadUri) > MAX_DECODE_BYTES) return null
 
     const { data: { user } } = await supabase.auth.getUser()
     const uid = user?.id?.slice(0, 8) ?? 'anon'
@@ -186,8 +178,7 @@ export async function uploadModulePhoto(
     const safeModule = (module || 'module').replace(/[^a-zA-Z0-9_-]/g, '-')
     const path = `modules/${safeModule}/${uid}/${Date.now()}_${index}_${rand}.${ext}`
 
-    const base64 = await FileSystem.readAsStringAsync(uploadUri, { encoding: 'base64' })
-    const bytes = decodeBase64(base64)
+    const bytes = await readFileBytes(uploadUri)
 
     const { error } = await supabase.storage
       .from('tyre-photos')
@@ -237,16 +228,24 @@ export async function uploadPendingPhotos(
 }
 
 /**
- * Decode a base64 string into a Uint8Array.
- * atob is available globally in React Native via hermes.
+ * Read a local file as raw bytes for upload using the SDK 54 File API.
+ *
+ * The legacy FileSystem.readAsStringAsync throws at runtime in expo-file-system
+ * 19, so we read via new File(uri).bytes(), which also skips the intermediate
+ * base64 string (less peak memory than atob decoding).
  */
-function decodeBase64(base64: string): Uint8Array {
-  const binaryString = atob(base64)
-  const bytes = new Uint8Array(binaryString.length)
-  for (let i = 0; i < binaryString.length; i++) {
-    bytes[i] = binaryString.charCodeAt(i)
+async function readFileBytes(uri: string): Promise<Uint8Array> {
+  return await new File(uri).bytes()
+}
+
+/** File size in bytes via the SDK 54 File API; 0 when unreadable. */
+function fileSizeBytes(uri: string): number {
+  try {
+    const f = new File(uri)
+    return f.exists ? f.size : 0
+  } catch {
+    return 0
   }
-  return bytes
 }
 
 /**

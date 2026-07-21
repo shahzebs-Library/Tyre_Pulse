@@ -97,7 +97,11 @@ const toNum = (s: string): number | null => {
 
 // ── Screen ───────────────────────────────────────────────────────────────────
 
-export default function MaintenanceScreen() {
+import { withModuleGuard } from '../../components/ModuleGuard'
+
+export default withModuleGuard(MaintenanceScreen, 'pm')
+
+function MaintenanceScreen() {
   const { profile } = useAuth()
   const { t } = useLanguage()
   const { theme } = useTheme()

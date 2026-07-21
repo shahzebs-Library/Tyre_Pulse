@@ -18,6 +18,7 @@ import { Ionicons } from '@expo/vector-icons'
 import { useAuth } from '../../../contexts/AuthContext'
 import { useLanguage } from '../../../contexts/LanguageContext'
 import { supabase } from '../../../lib/supabase'
+import { orIlike } from '../../../lib/queryFilters'
 import { saveCommand } from '../../../lib/recordQueue'
 import { isAdminOrAbove } from '../../../lib/types'
 import { canUpdateWorkOrders } from '../../../lib/permissions'
@@ -62,7 +63,11 @@ const STATUS_LABEL_KEY: Record<string, string> = {
   Closed: 'modules.workOrdersList.statusClosed',
 }
 
-export default function WorkOrdersScreen() {
+import { withModuleGuard } from '../../../components/ModuleGuard'
+
+export default withModuleGuard(WorkOrdersScreen, 'workorders')
+
+function WorkOrdersScreen() {
   const { profile } = useAuth()
   const { t } = useLanguage()
   const insets = useSafeAreaInsets()
@@ -94,7 +99,8 @@ export default function WorkOrdersScreen() {
 
       if (statusFilter !== 'all') q = q.eq('status', statusFilter)
       if (!elevated && profile?.site) q = q.eq('site', profile.site)
-      if (search.trim()) q = q.or(`title.ilike.%${search}%,asset_no.ilike.%${search}%,tyre_serial.ilike.%${search}%`)
+      const searchOr = orIlike(['title', 'asset_no', 'tyre_serial'], search)
+      if (searchOr) q = q.or(searchOr)
 
       const { data, error: qErr } = await q
       if (qErr) throw qErr

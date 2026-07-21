@@ -28,7 +28,11 @@ function looksLikeMissingTable(msg: string): boolean {
   return m.includes('does not exist') || m.includes('relation') || m.includes('schema cache')
 }
 
-export default function ChecklistApprovalsScreen() {
+import { withModuleGuard } from '../../../../components/ModuleGuard'
+
+export default withModuleGuard(ChecklistApprovalsScreen, 'approvals')
+
+function ChecklistApprovalsScreen() {
   const { profile } = useAuth()
   const { isRTL } = useLanguage()
   const { theme } = useTheme()

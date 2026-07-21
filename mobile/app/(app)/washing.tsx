@@ -40,7 +40,11 @@ type WashType = typeof WASH_TYPES[number]
 // Swallow the same code re-firing many times per second while held on a label.
 const RESCAN_COOLDOWN_MS = 2500
 
-export default function WashingScreen() {
+import { withModuleGuard } from '../../components/ModuleGuard'
+
+export default withModuleGuard(WashingScreen, 'washing')
+
+function WashingScreen() {
   const { profile, canAccess } = useAuth()
   const { t, isRTL } = useLanguage()
   const { theme } = useTheme()

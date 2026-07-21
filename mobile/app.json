@@ -81,7 +81,14 @@
           }
         }
       ],
-      "@sentry/react-native",
+      [
+        "@sentry/react-native",
+        {
+          "organization": "shah-profile",
+          "project": "javascript-nextjs",
+          "url": "https://de.sentry.io"
+        }
+      ],
       "./plugins/withLargeScreen"
     ],
     "experiments": {

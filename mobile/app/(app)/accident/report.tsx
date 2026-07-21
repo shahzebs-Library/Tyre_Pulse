@@ -246,7 +246,11 @@ interface FleetVehicle {
 const isUploadedPhoto = (u?: string | null): boolean =>
   !!u && (u.startsWith('tp-storage://') || u.startsWith('http'))
 
-export default function AccidentReportScreen() {
+import { withModuleGuard } from '../../../components/ModuleGuard'
+
+export default withModuleGuard(AccidentReportScreen, 'reportAccident')
+
+function AccidentReportScreen() {
   const { allowed, loading: guardLoading } = useRoleGuard(['admin', 'manager', 'director', 'inspector', 'tyre_man'])
   const { profile } = useAuth()
   const { t, isRTL } = useLanguage()

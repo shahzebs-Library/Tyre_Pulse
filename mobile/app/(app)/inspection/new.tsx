@@ -33,7 +33,11 @@ const INSPECT_ROLES: UserRole[] = ['inspector', 'tyre_man', 'admin', 'manager', 
 
 type Step = 'header' | 'tyres' | 'review' | 'submit'
 
-export default function NewInspectionScreen() {
+import { withModuleGuard } from '../../../components/ModuleGuard'
+
+export default withModuleGuard(NewInspectionScreen, 'inspect')
+
+function NewInspectionScreen() {
   const { profile } = useAuth()
   const { t, isRTL } = useLanguage()
   const { theme } = useTheme()

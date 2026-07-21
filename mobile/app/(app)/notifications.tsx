@@ -35,7 +35,11 @@ function timeAgo(iso: string): string {
   return `${d}d ago`
 }
 
-export default function NotificationsScreen() {
+import { withModuleGuard } from '../../components/ModuleGuard'
+
+export default withModuleGuard(NotificationsScreen, null)
+
+function NotificationsScreen() {
   const { theme } = useTheme()
   const { profile } = useAuth()
   const { t } = useLanguage()

@@ -44,7 +44,11 @@ const STATUS_META: Record<SyncStatus, { kind: StatusKind; icon: string }> = {
   failed:  { kind: 'danger',  icon: 'cloud-offline-outline' },
 }
 
-export default function HistoryScreen() {
+import { withModuleGuard } from '../../components/ModuleGuard'
+
+export default withModuleGuard(HistoryScreen, 'history')
+
+function HistoryScreen() {
   const { profile } = useAuth()
   const { t, isRTL } = useLanguage()
   const { theme } = useTheme()

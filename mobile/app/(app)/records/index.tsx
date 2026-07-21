@@ -19,6 +19,7 @@ import { useAuth } from '../../../contexts/AuthContext'
 import { useLanguage } from '../../../contexts/LanguageContext'
 import { useTheme } from '../../../contexts/ThemeContext'
 import { supabase } from '../../../lib/supabase'
+import { orIlike } from '../../../lib/queryFilters'
 import { isAdminOrAbove } from '../../../lib/types'
 import {
   spacing, radius, typography, statusColor, StatusKind,
@@ -58,7 +59,11 @@ interface TyreRecord {
   country: string | null
 }
 
-export default function RecordsScreen() {
+import { withModuleGuard } from '../../../components/ModuleGuard'
+
+export default withModuleGuard(RecordsScreen, 'records')
+
+function RecordsScreen() {
   const { profile } = useAuth()
   const { t } = useLanguage()
   const { theme } = useTheme()
@@ -116,9 +121,8 @@ export default function RecordsScreen() {
       .order('issue_date', { ascending: false })
       .range(p * PAGE, (p + 1) * PAGE - 1)
 
-    if (search.trim()) {
-      q = q.or(`asset_no.ilike.%${search}%,serial_no.ilike.%${search}%,brand.ilike.%${search}%`)
-    }
+    const searchOr = orIlike(['asset_no', 'serial_no', 'brand'], search)
+    if (searchOr) q = q.or(searchOr)
     if (siteFilter) q = q.eq('site', siteFilter)
     else if (!elevated && profile?.site) q = q.eq('site', profile.site)
     if (riskFilter) q = q.eq('risk_level', riskFilter)

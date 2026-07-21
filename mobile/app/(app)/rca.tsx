@@ -36,7 +36,11 @@ const FACTORS = [
   'Road hazard', 'Manufacturing defect', 'Driver behaviour', 'Worn out', 'Brake issue',
 ]
 
-export default function RcaScreen() {
+import { withModuleGuard } from '../../components/ModuleGuard'
+
+export default withModuleGuard(RcaScreen, 'rca')
+
+function RcaScreen() {
   const { profile } = useAuth()
   const { t, isRTL } = useLanguage()
   const { theme } = useTheme()

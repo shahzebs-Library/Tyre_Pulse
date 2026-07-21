@@ -29,7 +29,9 @@
         "EXPO_PUBLIC_SENTRY_DSN": "https://530f25f43a3bbbff1679122847a0d3ec@o4511151917301760.ingest.de.sentry.io/4511237697568848",
         "SENTRY_ORG": "shah-profile",
         "SENTRY_PROJECT": "javascript-nextjs",
-        "SENTRY_URL": "https://de.sentry.io"
+        "SENTRY_URL": "https://de.sentry.io",
+        "SENTRY_DISABLE_AUTO_UPLOAD": "true",
+        "SENTRY_DISABLE_NATIVE_DEBUG_UPLOAD": "true"
       }
     },
     "production": {
@@ -45,7 +47,9 @@
         "EXPO_PUBLIC_SENTRY_DSN": "https://530f25f43a3bbbff1679122847a0d3ec@o4511151917301760.ingest.de.sentry.io/4511237697568848",
         "SENTRY_ORG": "shah-profile",
         "SENTRY_PROJECT": "javascript-nextjs",
-        "SENTRY_URL": "https://de.sentry.io"
+        "SENTRY_URL": "https://de.sentry.io",
+        "SENTRY_DISABLE_AUTO_UPLOAD": "true",
+        "SENTRY_DISABLE_NATIVE_DEBUG_UPLOAD": "true"
       }
     },
     "production-apk": {

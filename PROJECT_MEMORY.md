@@ -3,6 +3,50 @@
 Durable, committed project knowledge so any session has full context. Keep this
 current. Read it before adding/changing modules. Governing spec: `Tyre pulse enterprise.md`
 
+## SESSION 2026-07-21 CLOSED — mobile V319-V322 applied live + shipped to Play CLOSED testing; marketing NOT yet deployed; next free **V323**
+- **Mobile batch (11 commits) merged to main + shipped.** The unmerged mobile work stranded on branch
+  `claude/accident-builder-report-ui-2bkwb5` (invite-only auth, ModuleGuard route registry, multi-device push,
+  server-RPC admin/approval, durable offline photos SDK-54, Sentry sanitize, exec snapshot, RTL kit, build-health
+  tests) was merged via **#155**. Then 3 build blockers fixed in sequence: **#156** mobile/package-lock.json was
+  out of sync with package.json (jest/ts-jest devDeps missing) -> `npm ci` aborted; regenerated the lockfile.
+  **#157** Sentry build-time symbol upload was enabled without a SENTRY_AUTH_TOKEN EAS secret -> Android **Gradle**
+  build failed; re-disabled the upload (`SENTRY_DISABLE_AUTO_UPLOAD`/`SENTRY_DISABLE_NATIVE_DEBUG_UPLOAD` on
+  preview+production eas.json profiles). **#158** switched eas.json `submit.production.android.track` from
+  `internal` -> **`alpha`** (Play Closed testing) so release builds now auto-submit STRAIGHT to Closed testing.
+  Final build = versionCode **33**, completed/success, auto-submitted to Closed. release-play.yml uses
+  `eas build --auto-submit` (reads eas.json submit config).
+- **Migrations V319-V322 APPLIED LIVE this session (verified via Supabase MCP, project jhssdmeruxtrlqnwfksc).** None
+  were applied before this session (all 4 checked false first). **V319** `admin_mobile_user_action(uuid,text,text,
+  text)` RPC (approve/lock/unlock/deactivate/set_role; super-admin gated for privileged transitions; last-admin +
+  self-action guards; adds `access_audit.reason` col; soft-deactivate only, never client hard-delete of auth
+  identity). **V320** transactional approval RPCs: `approve_pending_upload`/`reject_pending_upload`/
+  `restamp_pending_upload_country` (adds pending_uploads.organisation_id/import_status/imported_count/import_error/
+  imported_at + import_status CHECK) + `decide_inspection_approval`/`decide_checklist_approval` (server-derived
+  approver+timestamp, optimistic-concurrency "already decided" guard). **V321** `user_devices` table (multi-device
+  push, unique on push_token, RLS own-rows + org isolation) + `register_user_device`/`revoke_user_device` RPCs;
+  STILL writes profiles.push_token for back-compat (server push consumers V267/V297 + workflow-notify still read
+  the single column). **V322** `get_report_snapshot_authed(text,text,text,text)` = authenticated (no share-token)
+  org-scoped sibling of get_report_snapshot for the mobile exec report. Verified all objects exist +
+  profiles.push_token_updated_at present + snapshot RPC runs. Next free migration **V323**.
+- **OPEN follow-ups from this session (flagged, NOT done):**
+  1. **MARKETING SITE IS NOT DEPLOYED** (the "separate live Vercel project" note below is WRONG for this account).
+     There is only ONE Vercel project (`tyre-pulse`, framework vite = the APP) on team
+     `team_Y0LVromY4EL05QQkXQvb55uN`; it serves BOTH tyrepulse.app AND www.tyrepulse.app and every deployment is
+     the Vite app built from repo root. No marketing project exists. To deploy marketing: create a NEW
+     git-connected Vercel project importing the SAME repo with **Root Directory = `marketing`** (auto-detects
+     Next.js). **User decision captured: website -> tyrepulse.app, app -> app.tyrepulse.app** (so the app project's
+     tyrepulse.app + www must move to the new marketing project, and the app project gets app.tyrepulse.app). NOT
+     executed yet (needs the user to create the project; MCP deploy_to_vercel is file-upload only, not
+     git-connected). `marketing/.npmrc` (legacy-peer-deps) already on main.
+  2. **Sentry mobile symbol upload disabled** (#157). To re-enable: set `SENTRY_AUTH_TOKEN` as an EAS secret AND
+     fix `SENTRY_PROJECT` in eas.json (currently `javascript-nextjs` = the WEB project, should be the mobile
+     project), then remove the two SENTRY_DISABLE_* flags. Crash reporting still works; only build-time symbol
+     upload is deferred.
+  3. **Multi-device push fan-out** (V321 follow-up): push consumers still deliver to profiles.push_token (latest
+     device only); fanning out over user_devices (WHERE revoked=false) is not wired server-side yet.
+- STANDING user/ops items unchanged: enable Supabase leaked-password protection; per-unit report costs need meter/
+  m3 data; true million-row ERP loads need the server COPY pipeline.
+
 ## Marketing website (2026-07-20) — `marketing/` (separate Next.js app) — DEPLOYED LIVE
 - Standalone **Next.js 16 App-Router** marketing site at repo `marketing/` (self-contained; NOT part of the
   Vite main app). Pages: home/product/pricing/industries/security/contact + `/ar` (Arabic) + `app/api/contact`

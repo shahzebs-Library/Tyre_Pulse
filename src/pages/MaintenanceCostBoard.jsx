@@ -179,7 +179,7 @@ export default function MaintenanceCostBoard() {
       const ch = 55
       const col = placed % 2
       let rowY = y + Math.floor(placed / 2) * (ch + 6)
-      if (rowY + ch > doc.internal.pageSize.getHeight() - 10) { doc.addPage('a4', 'landscape'); y = 14; placed = 0; rowY = y }
+      if (rowY + ch > doc.internal.pageSize.getHeight() - 10) { doc.addPage('a4', 'landscape'); y = 14; placed = 0 }
       const x = M + col * (cw + 8)
       const yy = y + Math.floor(placed / 2) * (ch + 6)
       doc.addImage(img, 'PNG', x, yy, cw, ch)

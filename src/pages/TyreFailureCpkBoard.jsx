@@ -10,7 +10,7 @@
  * renders an honest "N/A" / empty state. Colours use the single shared palette
  * (reportColors) so it reads as one system. No em/en dashes.
  */
-import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import {
   Chart as ChartJS, CategoryScale, LinearScale, BarElement, ArcElement,
   Title, Tooltip, Legend,

@@ -205,6 +205,8 @@ export const NAV_COMMANDS = [
   { id: 'board-overview', label: 'Board Overview', path: '/board-overview', icon: 'BarChartBig', roles: ANALYTICS_ROLES },
   { id: 'tyre-failure-cpk', label: 'Tyre Failure & CPK', path: '/tyre-failure-cpk', icon: 'AlertTriangle', roles: ANALYTICS_ROLES },
   { id: 'maintenance-cost-board', label: 'Maintenance Cost & Tasks', path: '/maintenance-cost-board', icon: 'Wrench', roles: ANALYTICS_ROLES },
+  { id: 'expense-report', label: 'Expense Report', path: '/expense-report', icon: 'Wallet', roles: ANALYTICS_ROLES },
+  { id: 'expense-import', label: 'Expense Import', path: '/expense-import', icon: 'Receipt', roles: ANALYTICS_ROLES },
   { id: 'roi-calculator', label: 'ROI Calculator', path: '/roi-calculator', icon: 'DollarSign', roles: ANALYTICS_ROLES },
   { id: 'fleet-renewal', label: 'Fleet Renewal', path: '/fleet-renewal', icon: 'Truck', roles: ANALYTICS_ROLES },
   { id: 'tco-calculator', label: 'TCO Calculator', path: '/tco-calculator', icon: 'Calculator', roles: ANALYTICS_ROLES },

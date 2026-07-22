@@ -82,7 +82,8 @@ describe('intakeSheet - assets', () => {
     expect(r.site).toBe('AMAALA')
     expect(r.status).toBe('Active')
     expect(r.current_km).toBe('12000')
-    expect('serial_no' in r).toBe(false) // not a vehicle_fleet column - dropped
+    expect(r.serial_no).toBe('SER1')            // now a real vehicle_fleet column
+    expect(r.asset_extra['Asset No.']).toBe('FL001') // full raw row kept
   })
 })
 

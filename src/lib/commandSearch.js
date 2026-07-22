@@ -203,6 +203,8 @@ export const NAV_COMMANDS = [
   { id: 'workshop-settings', label: 'Workshop Settings', path: '/workshop-settings', icon: 'SlidersHorizontal', roles: ANALYTICS_ROLES },
   { id: 'parts-requests', label: 'Parts Requests', path: '/parts-requests', icon: 'Boxes', roles: ANALYTICS_ROLES },
   { id: 'board-overview', label: 'Board Overview', path: '/board-overview', icon: 'BarChartBig', roles: ANALYTICS_ROLES },
+  { id: 'tyre-failure-cpk', label: 'Tyre Failure & CPK', path: '/tyre-failure-cpk', icon: 'AlertTriangle', roles: ANALYTICS_ROLES },
+  { id: 'maintenance-cost-board', label: 'Maintenance Cost & Tasks', path: '/maintenance-cost-board', icon: 'Wrench', roles: ANALYTICS_ROLES },
   { id: 'roi-calculator', label: 'ROI Calculator', path: '/roi-calculator', icon: 'DollarSign', roles: ANALYTICS_ROLES },
   { id: 'fleet-renewal', label: 'Fleet Renewal', path: '/fleet-renewal', icon: 'Truck', roles: ANALYTICS_ROLES },
   { id: 'tco-calculator', label: 'TCO Calculator', path: '/tco-calculator', icon: 'Calculator', roles: ANALYTICS_ROLES },

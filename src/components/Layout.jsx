@@ -282,6 +282,8 @@ const NAV_GROUPS = [
     label: 'Reports & Executive',
     items: [
       { to: '/board-overview',    label: 'Board Overview',    icon: BarChartBig, roles: ANALYTICS_ROLES },
+      { to: '/tyre-failure-cpk',  label: 'Tyre Failure & CPK', icon: AlertTriangle, roles: ANALYTICS_ROLES },
+      { to: '/maintenance-cost-board', label: 'Maintenance Cost & Tasks', icon: Wrench, roles: ANALYTICS_ROLES },
       { to: '/reports',           label: 'Reports',           icon: FileText },
       { to: '/dashboard-builder', label: 'Dashboard Builder', icon: LayoutGrid },
       { to: '/scheduled-reports', label: 'Scheduled Reports', icon: CalendarCheck2 },

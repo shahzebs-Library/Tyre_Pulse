@@ -15,7 +15,7 @@
 import { useMemo } from 'react'
 import {
   Truck, CircleDot, AlertTriangle, DollarSign, ClipboardList,
-  Inbox, Bell, ShieldCheck,
+  Inbox, Bell, ShieldCheck, Wrench, ListChecks,
 } from 'lucide-react'
 import { Bar, Doughnut, Line } from 'react-chartjs-2'
 import {
@@ -100,6 +100,25 @@ const SOURCE_FETCHERS = {
     }, { max: 20000 })
     if (error) throw error
     return data ?? []
+  },
+  // Tyre lifecycle rows (status + failure reason) for the Active/Removed + failure widgets.
+  tyreLifecycle: async ({ site, country } = {}) => {
+    const { data, error } = await fetchAllPages((lo, hi) => {
+      let q = supabase.from('tyre_records').select('status,removal_reason')
+      q = withSite(q, site)
+      q = applyCountry(q, country)
+      return q.range(lo, hi)
+    }, { max: 20000 })
+    if (error) throw error
+    return data ?? []
+  },
+  // Server-aggregated maintenance snapshot (work_orders + line items, org-scoped).
+  maintenanceSnapshot: async ({ site, country } = {}) => {
+    const { data, error } = await supabase.rpc('get_maintenance_snapshot', {
+      p_site: site || null, p_country: country || null, p_from: null, p_to: null,
+    })
+    if (error) throw error
+    return data && data.ok ? data : { ok: false }
   },
   monthTyres: async ({ site, country } = {}) => {
     const monthStart = new Date()
@@ -406,6 +425,41 @@ function RecentAlertsWidget({ rows }) {
 /**
  * @param {{ widgetId:string, slice:{rows:any[], error:string|null, loaded:boolean}, currency?:string }} props
  */
+function TyreStatusWidget({ rows }) {
+  const list = Array.isArray(rows) ? rows : []
+  const active = list.filter(r => (r.status || '') === 'Active').length
+  const removed = list.filter(r => (r.status || '') === 'Removed').length
+  if (!active && !removed) return <ChartShell title="Tyre Status" icon={CircleDot}><EmptyNote text="No tyre records" /></ChartShell>
+  const data = { labels: ['Active', 'Removed'], datasets: [{ data: [active, removed], backgroundColor: ['#22c55e', '#ef4444'], borderWidth: 0, hoverOffset: 6 }] }
+  return <ChartShell title={`Tyre Status · ${active + removed}`} icon={CircleDot}><Doughnut data={data} options={DONUT_OPTS} /></ChartShell>
+}
+
+function TyreFailureWidget({ rows }) {
+  const list = Array.isArray(rows) ? rows : []
+  const counts = {}
+  list.forEach(r => { if ((r.status || '') === 'Removed' && r.removal_reason) counts[r.removal_reason] = (counts[r.removal_reason] || 0) + 1 })
+  const entries = Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 8)
+  if (!entries.length) return <ChartShell title="Tyre Failure Reasons" icon={AlertTriangle}><EmptyNote text="No removed tyres" /></ChartShell>
+  const data = { labels: entries.map(e => e[0]), datasets: [{ data: entries.map(e => e[1]), backgroundColor: entries.map((_, i) => STATUS_PALETTE[i % STATUS_PALETTE.length]), borderWidth: 0, hoverOffset: 6 }] }
+  return <ChartShell title="Tyre Failure Reasons" icon={AlertTriangle}><Doughnut data={data} options={DONUT_OPTS} /></ChartShell>
+}
+
+function MaintenanceByTypeWidget({ rows }) {
+  const snap = rows && rows.ok ? rows : null
+  const list = snap?.by_work_type || []
+  if (!list.length) return <ChartShell title="Maintenance Spend by Type" icon={Wrench}><EmptyNote text="No maintenance data" /></ChartShell>
+  const data = { labels: list.map(x => x.label), datasets: [{ data: list.map(x => Number(x.spend) || 0), backgroundColor: 'rgba(99,102,241,0.75)', borderRadius: 4 }] }
+  return <ChartShell title="Maintenance Spend by Type" icon={Wrench}><Bar data={data} options={BASE_OPTS} /></ChartShell>
+}
+
+function TopTasksWidget({ rows }) {
+  const snap = rows && rows.ok ? rows : null
+  const list = (snap?.top_tasks || []).slice(0, 8)
+  if (!list.length) return <ChartShell title="Top Maintenance Tasks" icon={ListChecks}><EmptyNote text="No task data" /></ChartShell>
+  const data = { labels: list.map(x => x.label), datasets: [{ data: list.map(x => Number(x.n) || 0), backgroundColor: 'rgba(6,182,212,0.75)', borderRadius: 4 }] }
+  return <ChartShell title="Top Maintenance Tasks" icon={ListChecks}><Bar data={data} options={{ ...BASE_OPTS, indexAxis: 'y' }} /></ChartShell>
+}
+
 export default function WidgetRenderer({ widgetId, slice, currency }) {
   const def = WIDGET_BY_ID[widgetId]
 
@@ -449,6 +503,15 @@ export default function WidgetRenderer({ widgetId, slice, currency }) {
           sub: 'Imports awaiting review',
           tone: rows.length > 0 ? 'warn' : 'accent',
         }
+      case 'maintenance-spend': {
+        const snap = rows && rows.ok ? rows : null
+        const v = snap?.kpis?.total_spend
+        return {
+          value: v != null ? formatCompactMoney(Number(v)) : 'N/A',
+          unit: currency,
+          sub: snap?.kpis?.job_cards != null ? `${Number(snap.kpis.job_cards).toLocaleString()} job cards` : '',
+        }
+      }
       default: return null
     }
   }, [def, slice, widgetId, currency])
@@ -480,6 +543,12 @@ export default function WidgetRenderer({ widgetId, slice, currency }) {
       return <StatTile label={def.label} value={derived.value} icon={ClipboardList} tone={derived.tone} sub={derived.sub} />
     case 'pending-approvals':
       return <StatTile label={def.label} value={derived.value} icon={Inbox} tone={derived.tone} sub={derived.sub} />
+    case 'tyre-status-split':     return <TyreStatusWidget rows={rows} />
+    case 'tyre-failure-reasons':  return <TyreFailureWidget rows={rows} />
+    case 'maintenance-by-type':   return <MaintenanceByTypeWidget rows={rows} />
+    case 'top-maintenance-tasks': return <TopTasksWidget rows={rows} />
+    case 'maintenance-spend':
+      return <StatTile label={def.label} value={derived.value} unit={derived.unit} icon={Wrench} tone="accent" sub={derived.sub} />
     default:
       return <WidgetErrorTile label={def.label} message="No renderer for this widget" />
   }

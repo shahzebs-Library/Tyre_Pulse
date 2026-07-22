@@ -145,6 +145,41 @@ export const WIDGET_CATALOG = Object.freeze([
     category: 'Operations', kind: 'donut', defaultW: 2, defaultH: 'md',
     data: { source: 'workOrders', shape: 'byStatus' },
   },
+  {
+    id: 'tyre-status-split',
+    label: 'Tyre Status (Active/Removed)',
+    description: 'Active vs removed tyres across the fleet.',
+    category: 'Tyres', kind: 'donut', defaultW: 2, defaultH: 'md',
+    data: { source: 'tyreLifecycle', shape: 'statusSplit' },
+  },
+  {
+    id: 'tyre-failure-reasons',
+    label: 'Tyre Failure Reasons',
+    description: 'Why removed tyres came off: puncture, worn, blast, damage.',
+    category: 'Tyres', kind: 'donut', defaultW: 2, defaultH: 'md',
+    data: { source: 'tyreLifecycle', shape: 'failure' },
+  },
+  {
+    id: 'maintenance-spend',
+    label: 'Maintenance Spend',
+    description: 'Total workshop spend (labour + parts) for the scope.',
+    category: 'Cost', kind: 'stat', defaultW: 1, defaultH: 'sm',
+    data: { source: 'maintenanceSnapshot', shape: 'spend' },
+  },
+  {
+    id: 'maintenance-by-type',
+    label: 'Maintenance Spend by Type',
+    description: 'Spend split by work type: repair, PM, tyre change, service.',
+    category: 'Cost', kind: 'bar', defaultW: 2, defaultH: 'md',
+    data: { source: 'maintenanceSnapshot', shape: 'byType' },
+  },
+  {
+    id: 'top-maintenance-tasks',
+    label: 'Top Maintenance Tasks',
+    description: 'Most frequent workshop tasks from job-card line items.',
+    category: 'Operations', kind: 'bar', defaultW: 2, defaultH: 'md',
+    data: { source: 'maintenanceSnapshot', shape: 'topTasks' },
+  },
 ])
 
 /** Fast lookup: widgetId → catalog entry. */

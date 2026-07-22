@@ -111,6 +111,19 @@ function indexByToken(headerRow = []) {
 
 const cellAt = (row, i) => (i >= 0 && row ? clean(row[i]) : '')
 
+/** Full raw row as { header: value } for every non-empty cell - kept in a jsonb column
+ * so no field is ever lost and any future report can read it. */
+function rawObject(headerRow, row) {
+  const out = {}
+  ;(headerRow || []).forEach((h, i) => {
+    const key = clean(h)
+    const val = clean(row ? row[i] : '')
+    if (key && val) out[key] = val
+  })
+  return out
+}
+const intVal = (v) => { const s = numStr(v); return s ? String(parseInt(s, 10)) : '' }
+
 /** Map a monthly tyre-consumption sheet to tyre_records rows. Cost is NOT taken. */
 function mapMonthlyTyres(dataRows, headerRow, country) {
   const h = indexByToken(headerRow)
@@ -139,6 +152,7 @@ function mapMonthlyTyres(dataRows, headerRow, country) {
       total_km: numStr(cellAt(r, c.tkm)) || null, total_hrs: numStr(cellAt(r, c.thr)) || null,
       removal_reason: cellAt(r, c.reason) || null,
       status: removal_date ? 'Removed' : 'Active',
+      extra_fields: rawObject(headerRow, r),
       country,
     })
   }
@@ -170,6 +184,7 @@ function mapComplaints(dataRows, headerRow, country) {
       technician_name: cellAt(r, c.driver) || null,
       odometer: numStr(cellAt(r, c.kmhr)) || null,
       opened_at: parseDate(cellAt(r, c.indt)) || null, completed_at: outDate || null,
+      custom_data: { source: 'Vehicle Complaints History', ...rawObject(headerRow, r) },
       country,
     })
   }
@@ -207,8 +222,20 @@ function mapAssets(dataRows, headerRow, country) {
   const c = {
     asset: h.find('asset no.', 'asset no'), desc: h.find('asset desc.', 'asset desc'),
     plate: h.find('plate no.', 'plate no'), chassis: h.find('chassis no.', 'chassis no'),
-    atype: h.find('asset type'), loc: h.find('asset location', 'location'),
-    status: h.find('asset status', 'status'), km: h.find('km'), brand: h.find('brand'),
+    serial: h.find('serial no'), atype: h.find('asset type'), loc: h.find('asset location', 'location'),
+    arloc: h.find('arabic location'), status: h.find('asset status', 'status'), shift: h.find('asset shift'),
+    km: h.find('km'), brand: h.find('brand'), hour: h.find('hour'),
+    dli: h.find('driver issue date'), dle: h.find('driver expiry date'),
+    mvi: h.find('mvip issue date'), mve: h.find('mvip expiry date'),
+    u1c: h.find('user 1 - code', 'user 1 code'), u1n: h.find('user 1 - name', 'user 1 name'),
+    u2c: h.find('user 2 - code', 'user 2 code'), u2n: h.find('user 2 - name', 'user 2 name'),
+    itype: h.find('insurance type 1', 'insurance type'), iname: h.find('insurance name'),
+    istart: h.find('insurance start date'), iexp: h.find('insurance expire date', 'insurance expiry date'),
+    ival: h.find('insurance value'), ocno: h.find('operating card no.', 'operating card no'),
+    oci: h.find('operating card issue date'), oce: h.find('operating card expiry date'),
+    myear: h.find('model year'), ulife: h.find('useful life'), ostart: h.find('operation start date'),
+    pval: h.find('purchase value'), nbv: h.find('net book value'), dep: h.find('monthly depreciation value'),
+    fano: h.find('fa asset number'), remarks: h.find('remarks'),
   }
   const out = []
   for (const r of dataRows) {
@@ -216,14 +243,27 @@ function mapAssets(dataRows, headerRow, country) {
     if (!asset) continue
     out.push({
       asset_no: asset,
-      model: cellAt(r, c.desc) || null,
-      make: cellAt(r, c.brand) || null,
-      registration_no: cellAt(r, c.plate) || null,
-      chassis_no: cellAt(r, c.chassis) || null,
-      vehicle_type: cellAt(r, c.atype) || null,
-      site: cellAt(r, c.loc) || null,
-      status: cellAt(r, c.status) || null,
-      current_km: numStr(cellAt(r, c.km)) || null,
+      model: cellAt(r, c.desc) || null, make: cellAt(r, c.brand) || null,
+      registration_no: cellAt(r, c.plate) || null, chassis_no: cellAt(r, c.chassis) || null,
+      serial_no: cellAt(r, c.serial) || null, vehicle_type: cellAt(r, c.atype) || null,
+      site: cellAt(r, c.loc) || null, arabic_location: cellAt(r, c.arloc) || null,
+      status: cellAt(r, c.status) || null, asset_shift: cellAt(r, c.shift) || null,
+      current_km: numStr(cellAt(r, c.km)) || null, current_hours: numStr(cellAt(r, c.hour)) || null,
+      driver_licence_issue: parseDate(cellAt(r, c.dli)) || null, driver_licence_expiry: parseDate(cellAt(r, c.dle)) || null,
+      mvip_issue: parseDate(cellAt(r, c.mvi)) || null, mvip_expiry: parseDate(cellAt(r, c.mve)) || null,
+      user1_code: cellAt(r, c.u1c) || null, user1_name: cellAt(r, c.u1n) || null,
+      user2_code: cellAt(r, c.u2c) || null, user2_name: cellAt(r, c.u2n) || null,
+      insurance_type: cellAt(r, c.itype) || null, insurance_name: cellAt(r, c.iname) || null,
+      insurance_start: parseDate(cellAt(r, c.istart)) || null, insurance_expiry: parseDate(cellAt(r, c.iexp)) || null,
+      insurance_value: numStr(cellAt(r, c.ival)) || null,
+      operating_card_no: cellAt(r, c.ocno) || null, operating_card_issue: parseDate(cellAt(r, c.oci)) || null,
+      operating_card_expiry: parseDate(cellAt(r, c.oce)) || null,
+      model_year: intVal(cellAt(r, c.myear)) || null, useful_life: cellAt(r, c.ulife) || null,
+      operation_start_date: parseDate(cellAt(r, c.ostart)) || null,
+      purchase_value: numStr(cellAt(r, c.pval)) || null, net_book_value: numStr(cellAt(r, c.nbv)) || null,
+      monthly_depreciation: numStr(cellAt(r, c.dep)) || null, fa_asset_number: cellAt(r, c.fano) || null,
+      asset_remarks: cellAt(r, c.remarks) || null,
+      asset_extra: rawObject(headerRow, r),
       country,
     })
   }

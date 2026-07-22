@@ -28,6 +28,8 @@ export const REPORT_PAGES = [
   { key: 'board_charts',   group: 'Breakdowns', label: 'Breakdowns',      desc: 'Severity, claim status and by-site breakdown charts.' },
   { key: 'ops_today',      group: 'Operations', label: 'Open Job Cards',  desc: 'Live open job cards plus today activity: job cards, tyre changes, inspections, accidents.' },
   { key: 'pm_due',         group: 'Operations', label: 'Maintenance Due', desc: 'Overdue and upcoming preventive-maintenance plans.' },
+  { key: 'tyre_failure',    group: 'Tyres',       label: 'Tyre Failure & CPK',      desc: 'Active vs removed tyres, failure reasons, average CPK and tyre life.' },
+  { key: 'maintenance_cost', group: 'Maintenance', label: 'Maintenance Cost & Tasks', desc: 'Workshop spend by type and site, top tasks and the 12-month spend trend.' },
 ]
 // Ordered list of the group labels, for a grouped picker UI.
 export const PAGE_GROUPS = REPORT_PAGES.reduce((acc, p) => {
@@ -110,6 +112,33 @@ export async function updateReportShare(id, patch = {}) {
  */
 export async function getReportSnapshot(token, password = null, opts = {}) {
   const { data, error } = await supabase.rpc('get_report_snapshot', {
+    p_token: token,
+    p_password: password,
+    p_site: opts.site || null,
+    p_country: opts.country || null,
+    p_from: opts.from || null,
+    p_to: opts.to || null,
+  })
+  if (error) { if (isBackendMissing(error)) return { ok: false, reason: 'unavailable' }; throw error }
+  return data || { ok: false, reason: 'invalid' }
+}
+
+/**
+ * PUBLIC read: tyre-failure + maintenance-cost aggregate snapshot for a share
+ * token (callable by anon). Powers the 'tyre_failure' and 'maintenance_cost'
+ * report pages. Returns the RPC payload
+ * `{ ok, generated_at, company, name, tyre_failure:{...}, maintenance:{...} }`
+ * or `{ ok:false, reason }`. Mirrors getReportSnapshot's opts + missing-backend
+ * guard so the viewer degrades gracefully before the RPC is deployed.
+ *
+ * @param {string} token         share token from the URL
+ * @param {string|null} password optional viewer password
+ * @param {{site?:string, country?:string, from?:string, to?:string}} opts server-side
+ *   filters (same site / country / from / to as getReportSnapshot). Empty / omitted
+ *   values mean "all" and are sent as null.
+ */
+export async function getReportTyreMaintenance(token, password = null, opts = {}) {
+  const { data, error } = await supabase.rpc('get_report_tyre_maintenance', {
     p_token: token,
     p_password: password,
     p_site: opts.site || null,

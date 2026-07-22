@@ -120,4 +120,13 @@ describe('intakeSheet', () => {
     expect('parts_cost' in r).toBe(false)
     expect('labour_cost' in r).toBe(false)
   })
+  it('accounts for every body row so nothing slips (read = mapped + noKey; body = read + footer + blank)', () => {
+    const res = intakeSheet(COMPLAINTS_AOA, { country: 'KSA' })
+    // body below the header row = 3 (data + GRAND TOTAL + Printed By)
+    expect(res.read + res.footerRows + res.blankRows).toBe(3)
+    expect(res.read).toBe(res.rows.length + res.noKey) // every content row mapped or flagged
+    expect(res.footerRows).toBe(2)
+    expect(res.blankRows).toBe(0)
+    expect(res.noKey).toBe(0)
+  })
 })

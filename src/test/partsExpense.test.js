@@ -100,6 +100,14 @@ describe('rowsFromSheet / rowsFromParsedSheet', () => {
     expect(rows[0].country).toBe('KSA')
     for (const f of PARTS_FIELDS) expect(f in rows[0]).toBe(true)
   })
+  it('accounts for every body row (read = mapped + noKey; body = read + blank)', () => {
+    const { rows, read, blankRows, noKey } = rowsFromSheet(aoa, { country: 'KSA' })
+    // body below the header = 2 rows (one data + one fully-blank)
+    expect(read + blankRows).toBe(2)
+    expect(read).toBe(rows.length + noKey)
+    expect(blankRows).toBe(1)
+    expect(noKey).toBe(0)
+  })
   it('adapts a parseWorkbook sheet (header-keyed rows)', () => {
     const sheet = {
       columns: [{ index: 0, header: 'Item Description' }, { index: 1, header: 'Values' }, { index: 2, header: 'Spare Parts' }],

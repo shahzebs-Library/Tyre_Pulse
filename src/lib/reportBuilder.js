@@ -74,8 +74,13 @@ function columnsFromModule(module) {
  */
 export const DATASETS = Object.freeze({
   tyres: {
-    key: 'tyres', label: 'Tyre Records', table: 'tyre_records',
-    columns: columnsFromModule('tyre'),
+    key: 'tyres', label: 'Tyre Records (Lifecycle)', table: 'tyre_records',
+    // Lifecycle status appended (real column) so Active-vs-Removed, failure-reason
+    // and CPK reports are fully filterable and groupable in the builder.
+    columns: [
+      ...columnsFromModule('tyre'),
+      { key: 'status', label: 'Status (Active/Removed)', type: 'enum' },
+    ],
     defaultSort: { col: 'issue_date', dir: 'desc' },
   },
   fleet: {
@@ -92,6 +97,25 @@ export const DATASETS = Object.freeze({
     key: 'work_orders', label: 'Work Orders', table: 'work_orders',
     columns: columnsFromModule('workorder'),
     defaultSort: { col: 'opened_at', dir: 'desc' },
+  },
+  work_order_line_items: {
+    key: 'work_order_line_items', label: 'Maintenance Line Items (detail)',
+    table: 'work_order_line_items',
+    // Task-level detail behind every job card (task / detail / action / qty). Real
+    // columns on public.work_order_line_items — group by task/action/work_type to
+    // find top repairs, most-changed parts and cost drivers per asset or site.
+    columns: [
+      { key: 'work_order_no', label: 'Work Order No', type: 'text' },
+      { key: 'asset_no', label: 'Asset No', type: 'text' },
+      { key: 'site', label: 'Site', type: 'enum' },
+      { key: 'opened_date', label: 'Date', type: 'date' },
+      { key: 'work_type', label: 'Work Type', type: 'enum' },
+      { key: 'task', label: 'Task', type: 'text' },
+      { key: 'detail', label: 'Detail', type: 'text' },
+      { key: 'action', label: 'Action Taken', type: 'text' },
+      { key: 'qty', label: 'Quantity', type: 'number' },
+    ],
+    defaultSort: { col: 'opened_date', dir: 'desc' },
   },
   accidents: {
     key: 'accidents', label: 'Accidents & Insurance', table: 'accidents',

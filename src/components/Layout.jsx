@@ -323,6 +323,7 @@ const NAV_GROUPS = [
       { to: '/data-reconciliation', label: 'Data Reconciliation', icon: GitCompare, adminOnly: true },
       { to: '/data-intake',      label: 'Data Intake Center', icon: Database },
       { to: '/erp-import',       label: 'ERP Data Import',    icon: Upload, roles: ANALYTICS_ROLES },
+      { to: '/erp-intake',       label: 'Data Intake (ERP)', icon: Layers, roles: ANALYTICS_ROLES },
       { to: '/expense-import',   label: 'Expense Import',     icon: Receipt, roles: ANALYTICS_ROLES },
       { to: '/upload-approvals', label: 'Upload Approvals',   icon: ClipboardList, roles: UPLOAD_ROLES },
       { to: '/custom-data',      label: 'Custom Data',        icon: Database },

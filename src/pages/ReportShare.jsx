@@ -26,7 +26,7 @@ import {
   Wrench, CalendarClock, ListChecks, Timer, Bell, Gauge,
   ChevronLeft, ChevronRight, RotateCw, Filter, Globe, Building2, Grid, Percent,
 } from 'lucide-react'
-import { getReportSnapshot, REPORT_PAGES } from '../lib/api/reportShares'
+import { getReportSnapshot, getReportTyreMaintenance, REPORT_PAGES } from '../lib/api/reportShares'
 import { categorical, colorAt, withAlpha } from '../lib/reportColors'
 import { safeImageSrc } from '../lib/safeUrl'
 import { normalizeLayout, hasCustomLayout } from '../lib/reportShareLayout'
@@ -462,6 +462,47 @@ function trendLineOption(labels, data, name, idx = 2) {
   }
 }
 
+// Money trend line (compact currency y-axis, no minInterval): monthly spend etc.
+function moneyLineOption(labels, data, name, idx = 6) {
+  const color = colorAt(idx)
+  return {
+    backgroundColor: 'transparent',
+    tooltip: { ...TOOLTIP, trigger: 'axis', valueFormatter: (v) => fmtInt(v) },
+    grid: { left: 10, right: 14, top: 16, bottom: 8, containLabel: true },
+    xAxis: {
+      type: 'category', data: labels,
+      axisLabel: { color: P.muted, fontSize: 13 },
+      axisLine: { lineStyle: { color: P.axisLine } }, axisTick: { show: false },
+    },
+    yAxis: {
+      type: 'value',
+      axisLabel: { color: P.muted, fontSize: 12, formatter: (v) => fmtCompact(v) },
+      splitLine: { lineStyle: { color: P.splitLine } },
+    },
+    series: [{
+      name, type: 'line', data: data || [], smooth: true, symbol: 'circle', symbolSize: 7,
+      lineStyle: { width: 3, color }, itemStyle: { color }, areaStyle: { color: withAlpha(color, 0.14) },
+    }],
+  }
+}
+
+// 'YYYY-MM' month key to a short 'Mon YY' label. Passes through anything else.
+function fmtMonthLabel(m) {
+  if (!m || typeof m !== 'string') return safeStr(m)
+  const parts = m.split('-')
+  if (parts.length < 2) return m
+  const mo = Number(parts[1])
+  const NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+  if (!(mo >= 1 && mo <= 12)) return m
+  return `${NAMES[mo - 1]} ${String(parts[0]).slice(2)}`
+}
+
+// Map an aggregate list [{label, <key>}] to the {label, value} shape the chart
+// option builders (doughnut / bar) expect.
+function toChartItems(list, valueKey) {
+  return arr(list).map((r) => ({ label: safeStr(r?.label), value: Number(r?.[valueKey]) || 0 }))
+}
+
 // Client-side percentage from a numerator / denominator, null when undefined.
 function pct(num, den) {
   const d = Number(den) || 0
@@ -654,6 +695,9 @@ export default function ReportShare() {
   const [status, setStatus] = useState('loading') // loading | ok | error | password
   const [reason, setReason] = useState('invalid')
   const [snapshot, setSnapshot] = useState(null)
+  // Extra tyre-failure + maintenance-cost aggregates, fetched from a SEPARATE
+  // token-gated RPC only when the share's pages include one of those two boards.
+  const [tm, setTm] = useState(null)
   const [pageIndex, setPageIndex] = useState(0)
   const [isFs, setIsFs] = useState(false)
   const [paused, setPaused] = useState(false)
@@ -685,6 +729,21 @@ export default function ReportShare() {
 
   const bumpTimer = useCallback(() => setTimerNonce((n) => n + 1), [])
 
+  // Fetch the tyre-failure + maintenance-cost aggregates for a resolved snapshot,
+  // but ONLY when the share actually rotates through one of those boards. Uses the
+  // same token / password / filters as the snapshot. On failure it stores an
+  // ok:false marker so those pages render an honest empty state (never a crash).
+  const fetchTm = useCallback(async (pw, res) => {
+    const needsTm = arr(res?.pages).some((k) => k === 'tyre_failure' || k === 'maintenance_cost')
+    if (!res?.ok || !needsTm) { setTm(null); return }
+    try {
+      const t = await getReportTyreMaintenance(token, pw, filtersRef.current)
+      setTm(t && t.ok ? t : { ok: false })
+    } catch {
+      setTm({ ok: false })
+    }
+  }, [token])
+
   // ── Initial / password-driven load (full state machine; resets page) ─────────
   const load = useCallback(async (pw = null) => {
     if (!token) { setStatus('error'); setReason('invalid'); return false }
@@ -702,6 +761,7 @@ export default function ReportShare() {
       setPageIndex(0)
       setStatus('ok')
       setLastRefresh(new Date())
+      fetchTm(pw, res)
       return true
     }
     const r = res?.reason || 'invalid'
@@ -713,7 +773,7 @@ export default function ReportShare() {
     setStatus('error')
     setReason(r)
     return false
-  }, [token])
+  }, [token, fetchTm])
 
   useEffect(() => { load() }, [load])
 
@@ -727,9 +787,10 @@ export default function ReportShare() {
         setSnapshot(res)
         setLastRefresh(new Date())
         if (resetPage) setPageIndex(0)
+        fetchTm(pwRef.current, res)
       }
     } catch { /* keep showing the last good snapshot */ }
-  }, [token])
+  }, [token, fetchTm])
 
   // Manual, on-demand refresh (button) with a brief busy indicator + timer reset.
   const manualRefresh = useCallback(async () => {
@@ -1088,6 +1149,8 @@ export default function ReportShare() {
               {activeKey === 'board_charts' && <ChartsPage snapshot={snapshot} />}
               {activeKey === 'ops_today' && <OpsTodayPage snapshot={snapshot} />}
               {activeKey === 'pm_due' && <PmDuePage snapshot={snapshot} />}
+              {activeKey === 'tyre_failure' && <TyreFailurePage data={tm} />}
+              {activeKey === 'maintenance_cost' && <MaintenanceCostPage data={tm} />}
             </>
           )}
           </BoardBoundary>
@@ -1641,6 +1704,103 @@ function PmDuePage({ snapshot }) {
           </div>
         )}
       </section>
+    </div>
+  )
+}
+
+// ── Full-board honest empty state (when the extra RPC has no data) ────────────
+function EmptyBoard({ text }) {
+  return (
+    <div className="rs-page">
+      <div className="rs-empty" style={{ flex: '1 1 auto', height: '100%' }}>
+        <p>{text || 'No data for this period.'}</p>
+      </div>
+    </div>
+  )
+}
+
+// ── Page: Tyre Failure & CPK ──────────────────────────────────────────────────
+// Active vs removed tyres, failure reasons, average CPK and tyre life. Built from
+// the token-gated get_report_tyre_maintenance RPC (`data.tyre_failure`). Honest
+// empty when the total tyre count is 0 or the data is unavailable.
+function TyreFailurePage({ data }) {
+  const tf = (data && data.ok) ? (data.tyre_failure || {}) : null
+  const total = Number(tf?.total) || 0
+  if (!tf || total === 0) {
+    return <EmptyBoard text="No tyre data for this period." />
+  }
+  const active = Number(tf.active) || 0
+  const removed = Number(tf.removed) || 0
+  const split = [{ label: 'Active', value: active }, { label: 'Removed', value: removed }]
+  const reasons = toChartItems(tf.reasons, 'n')
+  const positions = toChartItems(tf.by_position, 'n')
+  const splitEmpty = active === 0 && removed === 0
+  return (
+    <div className="rs-page">
+      <div className="rs-stat-strip" style={{ gridTemplateColumns: 'repeat(5,minmax(0,1fr))' }}>
+        <CostTile label="Active Tyres" value={active} icon={CircleDot} tone="green" />
+        <CostTile label="Removed Tyres" value={removed} icon={AlertTriangle} tone="red" />
+        <CostTile label="Total Tyres" value={total} icon={LayoutGrid} tone="indigo" />
+        <CostTile label="Avg CPK" value={tf.avg_cpk} decimals={2} suffix="per km" icon={Wallet} tone="amber" />
+        <CostTile label="Avg Tyre Life" value={tf.avg_life_km} decimals={0} suffix="km" icon={Activity} tone="teal" />
+      </div>
+      <div className="rs-page-row">
+        <ChartCard title="Active vs removed" subtitle="Share of tyres still fitted against those removed" icon={PieChart} empty={splitEmpty} height="30vh">
+          <EChart option={doughnutOption(split)} ariaLabel="Active versus removed tyres" />
+        </ChartCard>
+        <ChartCard title="Removal reasons" subtitle="Why tyres were taken out of service" icon={BarChart3} empty={!reasons.length} height="30vh">
+          <EChart option={hbarOption(reasons)} ariaLabel="Tyre removal reasons" />
+        </ChartCard>
+      </div>
+      <ChartCard wide title="Tyres by position" subtitle="Fitment count across wheel positions" icon={LayoutGrid} empty={!positions.length} height="30vh">
+        <EChart option={vbarOption(positions)} ariaLabel="Tyres by position" />
+      </ChartCard>
+    </div>
+  )
+}
+
+// ── Page: Maintenance Cost & Tasks ────────────────────────────────────────────
+// Workshop spend by type and site, top tasks and the 12-month spend trend. Built
+// from the get_report_tyre_maintenance RPC (`data.maintenance`). Honest empty
+// when there is no spend and no job cards, or the data is unavailable.
+function MaintenanceCostPage({ data }) {
+  const mn = (data && data.ok) ? (data.maintenance || {}) : null
+  const totalSpend = Number(mn?.total_spend) || 0
+  const jobCards = Number(mn?.job_cards) || 0
+  if (!mn || (totalSpend === 0 && jobCards === 0)) {
+    return <EmptyBoard text="No maintenance data for this period." />
+  }
+  const byType = toChartItems(mn.by_work_type, 'spend')
+  const bySite = toChartItems(mn.spend_by_site, 'spend')
+  const topTasks = toChartItems(mn.top_tasks, 'n')
+  const monthly = arr(mn.monthly_spend)
+  const monthLabels = monthly.map((r) => fmtMonthLabel(r?.m))
+  const monthData = monthly.map((r) => Number(r?.spend) || 0)
+  const trendEmpty = !monthLabels.length || !someNonZero(monthData)
+  return (
+    <div className="rs-page">
+      <div className="rs-stat-strip" style={{ gridTemplateColumns: 'repeat(4,minmax(0,1fr))' }}>
+        <CostTile label="Job Cards" value={jobCards} icon={ClipboardCheck} tone="indigo" />
+        <CostTile label="Line Items" value={mn.line_items} icon={ListChecks} tone="blue" />
+        <CostTile label="Total Spend" value={totalSpend} icon={Wallet} tone="amber" />
+        <CostTile label="Open Jobs" value={mn.open_jobs} icon={Wrench} tone="red" />
+      </div>
+      <div className="rs-page-row">
+        <ChartCard title="Spend by work type" subtitle="Workshop spend grouped by work type" icon={BarChart3} empty={!byType.length} height="30vh">
+          <EChart option={vbarOption(byType)} ariaLabel="Maintenance spend by work type" />
+        </ChartCard>
+        <ChartCard title="Spend by site" subtitle="Workshop spend distribution across sites" icon={MapPin} empty={!bySite.length} height="30vh">
+          <EChart option={hbarOption(bySite)} ariaLabel="Maintenance spend by site" />
+        </ChartCard>
+      </div>
+      <div className="rs-page-row">
+        <ChartCard title="Top tasks" subtitle="Most frequent maintenance tasks" icon={ListChecks} empty={!topTasks.length} height="30vh">
+          <EChart option={hbarOption(topTasks)} ariaLabel="Top maintenance tasks" />
+        </ChartCard>
+        <ChartCard title="Monthly spend" subtitle="Workshop spend over the last 12 months" icon={TrendingUp} empty={trendEmpty} height="30vh">
+          <EChart option={moneyLineOption(monthLabels, monthData, 'Spend', 0)} ariaLabel="Monthly maintenance spend trend" />
+        </ChartCard>
+      </div>
     </div>
   )
 }

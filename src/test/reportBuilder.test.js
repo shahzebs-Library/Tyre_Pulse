@@ -59,15 +59,17 @@ beforeEach(() => {
 // DATASETS registry
 // ─────────────────────────────────────────────────────────────────────────────
 describe('DATASETS registry', () => {
-  it('covers all eight required datasets with real tables', () => {
+  it('covers all required datasets with real tables', () => {
     expect(Object.keys(DATASETS).sort()).toEqual([
       'accidents', 'fleet', 'gate_passes', 'inspections',
-      'suppliers', 'tyres', 'warranty', 'work_orders',
+      'suppliers', 'tyres', 'warranty', 'work_order_line_items', 'work_orders',
     ])
     expect(DATASETS.tyres.table).toBe('tyre_records')
     expect(DATASETS.fleet.table).toBe('vehicle_fleet')
     expect(DATASETS.warranty.table).toBe('warranty_claims')
     expect(DATASETS.gate_passes.table).toBe('gate_passes')
+    expect(DATASETS.work_order_line_items.table).toBe('work_order_line_items')
+    expect(DATASETS.tyres.columns.some(c => c.key === 'status')).toBe(true)
   })
 
   it('every dataset has typed columns and a valid default sort', () => {

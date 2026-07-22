@@ -112,6 +112,23 @@ export default function ErpIntake() {
     [detected],
   )
 
+  // Whole-file reconciliation so nothing is ever silently lost: every row below each
+  // header is either mapped, flagged as no-key (needs review), or dropped as footer/blank.
+  const recon = useMemo(() => {
+    return detected.reduce(
+      (acc, d) => {
+        const a = d.accounting || {}
+        acc.read += a.read || 0
+        acc.mapped += a.mapped || 0
+        acc.noKey += a.noKey || 0
+        acc.footer += a.footer || 0
+        acc.blank += a.blank || 0
+        return acc
+      },
+      { read: 0, mapped: 0, noKey: 0, footer: 0, blank: 0 },
+    )
+  }, [detected])
+
   const handleFile = useCallback(async (file) => {
     if (!file) return
     setError(null)
@@ -129,8 +146,17 @@ export default function ErpIntake() {
         if (!det) continue
         const meta = REPORT_META[det.type] || { label: det.type, target: det.target, targetLabel: det.target }
         if (det.type === 'grid') {
-          const { rows } = rowsFromSheet(aoa.slice(det.headerIndex), { country })
-          const bodyCount = Math.max(0, aoa.length - (det.headerIndex + 1))
+          const g = rowsFromSheet(aoa.slice(det.headerIndex), { country })
+          const rows = g.rows || []
+          // Grid path: rowsFromSheet strips blank + no-key rows only; footer totals that
+          // still carry a value are kept and classified server-side (no footer strip here).
+          const accounting = {
+            read: g.read || 0,
+            mapped: rows.length,
+            noKey: g.noKey || 0,
+            footer: 0,
+            blank: g.blankRows || 0,
+          }
           found.push({
             sheetName: sheet.name || '',
             type: det.type,
@@ -138,19 +164,29 @@ export default function ErpIntake() {
             targetLabel: meta.targetLabel,
             label: meta.label,
             rows,
-            dropped: Math.max(0, bodyCount - rows.length),
+            dropped: accounting.footer + accounting.blank,
+            accounting,
             summary: summarizeRows(rows),
           })
         } else {
           const res = intakeSheet(aoa, { country }) || { type: det.type, target: det.target, rows: [], dropped: 0 }
+          const rows = res.rows || []
+          const accounting = {
+            read: res.read || 0,
+            mapped: rows.length,
+            noKey: res.noKey || 0,
+            footer: res.footerRows || 0,
+            blank: res.blankRows || 0,
+          }
           found.push({
             sheetName: sheet.name || '',
             type: res.type,
             target: res.target,
             targetLabel: meta.targetLabel,
             label: meta.label,
-            rows: res.rows || [],
+            rows,
             dropped: res.dropped || 0,
+            accounting,
             summary: null,
           })
         }
@@ -374,6 +410,25 @@ export default function ErpIntake() {
                   </div>
                 </div>
 
+                {/* Row reconciliation - every row below the header is accounted for */}
+                {d.accounting && (
+                  <div className="px-4 py-2 border-b border-[var(--border)] bg-[var(--surface-2,#0f172a)]/40 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-[var(--text-tertiary)]">
+                    <span className="inline-flex items-center gap-1">
+                      <span className="font-semibold text-[var(--text-primary)]">{num(d.accounting.read)}</span> rows read
+                    </span>
+                    <span aria-hidden>=</span>
+                    <span><span className="font-semibold text-[var(--text-primary)]">{num(d.accounting.mapped)}</span> mapped</span>
+                    {d.accounting.noKey > 0 && (
+                      <span className="text-[var(--warning,#f59e0b)]">
+                        + {num(d.accounting.noKey)} without an ID (review)
+                      </span>
+                    )}
+                    <span className="text-[var(--text-tertiary)]">
+                      | {num(d.accounting.footer)} footer + {num(d.accounting.blank)} blank dropped
+                    </span>
+                  </div>
+                )}
+
                 <div className="p-4 space-y-4">
                   {/* GRID: cost totals + intelligence */}
                   {d.type === 'grid' && d.summary && (
@@ -469,6 +524,25 @@ export default function ErpIntake() {
               </div>
             )
           })}
+
+          {/* Whole-file reconciliation - proof that no row slipped */}
+          <div className="card p-4 space-y-1">
+            <p className="text-sm font-semibold text-[var(--text-primary)]">Every row accounted for</p>
+            <p className="text-sm text-[var(--text-secondary)]">
+              {num(recon.read)} rows read = {num(recon.mapped)} mapped
+              {recon.noKey > 0 ? ` + ${num(recon.noKey)} without an ID (review below)` : ''}
+              {(recon.footer + recon.blank) > 0
+                ? `, plus ${num(recon.footer)} footer and ${num(recon.blank)} blank rows dropped`
+                : ''}.
+            </p>
+            {recon.noKey > 0 && (
+              <p className="text-xs text-[var(--warning,#f59e0b)] inline-flex items-start gap-1">
+                <AlertTriangle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+                {num(recon.noKey)} row(s) had data but no serial / work order / item to key on and will be skipped.
+                Check the source file if these should import.
+              </p>
+            )}
+          </div>
 
           {/* Merge note */}
           <p className="text-xs text-[var(--text-tertiary)]">

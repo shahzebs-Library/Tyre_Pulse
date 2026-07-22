@@ -282,10 +282,11 @@ export function intakeSheet(aoa = [], { country = 'KSA' } = {}) {
   if (!det) return null
   const body = aoa.slice(det.headerIndex + 1)
   const kept = []
-  let dropped = 0
+  let blankRows = 0
+  let footerRows = 0
   for (const r of body) {
-    if (!r || r.every((c) => c == null || String(c).trim() === '')) { dropped += 1; continue }
-    if (isFooterRow(r)) { dropped += 1; continue }
+    if (!r || r.every((c) => c == null || String(c).trim() === '')) { blankRows += 1; continue }
+    if (isFooterRow(r)) { footerRows += 1; continue }
     kept.push(r)
   }
   let rows = []
@@ -295,5 +296,11 @@ export function intakeSheet(aoa = [], { country = 'KSA' } = {}) {
   else if (det.type === REPORT_TYPES.ASSETS) rows = mapAssets(kept, det.headerRow, country)
   // GRID rows are handled by the parts-expense engine (cost source) - the importer
   // routes type === 'grid' there; intakeSheet returns the detection so the caller knows.
-  return { type: det.type, target: det.target, rows, dropped }
+  // FULL ROW ACCOUNTING so nothing is ever silently lost:
+  //   read (content rows) = mapped (rows.length) + noKey (had content but no identifier)
+  //   total file body     = read + footerRows + blankRows
+  const read = kept.length
+  const noKey = Math.max(0, read - rows.length)
+  const dropped = footerRows + blankRows // back-compat (footer/blank only)
+  return { type: det.type, target: det.target, rows, dropped, read, footerRows, blankRows, noKey }
 }

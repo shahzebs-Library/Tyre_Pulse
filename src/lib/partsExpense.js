@@ -148,18 +148,24 @@ export function summarizeRows(rows = []) {
  * Turn a parsed sheet (array-of-arrays, first row headers) into destination row
  * objects, dropping fully-empty rows. Amount/text values are kept as trimmed strings
  * (the DB trigger casts + classifies). `country` stamps every row.
+ * FULL ROW ACCOUNTING so nothing is ever silently lost: `read` (content rows below the
+ * header) = mapped (`rows.length`) + `noKey` (rows that had content but no item/value/WO
+ * identifier); the file body = read + blankRows.
  * @param {Array<Array<any>>} aoa
  * @param {{ country?:string }} [opts]
- * @returns {{ rows: Array<Object>, headerMap: Record<string,number>, missing: string[] }}
+ * @returns {{ rows: Array<Object>, headerMap: Record<string,number>, missing: string[], read:number, blankRows:number, noKey:number }}
  */
 export function rowsFromSheet(aoa = [], { country = null } = {}) {
-  if (!Array.isArray(aoa) || aoa.length < 2) return { rows: [], headerMap: {}, missing: ['item_description', 'value_amount'] }
+  if (!Array.isArray(aoa) || aoa.length < 2) return { rows: [], headerMap: {}, missing: ['item_description', 'value_amount'], read: 0, blankRows: 0, noKey: 0 }
   const { map, missing } = buildHeaderMap(aoa[0])
   const clean = (v) => String(v == null ? '' : v).replace(/["\r\n\t]/g, ' ').replace(/&#[0-9]+;/g, ' ').replace(/ {2,}/g, ' ').trim()
   const rows = []
+  let blankRows = 0
+  let read = 0
   for (let i = 1; i < aoa.length; i += 1) {
     const src = aoa[i]
-    if (!src || src.every((c) => c == null || String(c).trim() === '')) continue
+    if (!src || src.every((c) => c == null || String(c).trim() === '')) { blankRows += 1; continue }
+    read += 1
     const row = {}
     for (const f of PARTS_FIELDS) {
       const idx = map[f]
@@ -169,7 +175,8 @@ export function rowsFromSheet(aoa = [], { country = null } = {}) {
     if (country) row.country = country
     rows.push(row)
   }
-  return { rows, headerMap: map, missing }
+  const noKey = Math.max(0, read - rows.length)
+  return { rows, headerMap: map, missing, read, blankRows, noKey }
 }
 
 /**

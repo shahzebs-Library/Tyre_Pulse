@@ -118,6 +118,40 @@ export async function loadCostSplit({ country, now, from, to, site } = {}) {
     if (key && inWindow.has(key)) bucket[key] += num(amount)
   }
 
+  // AUTHORITATIVE EXPENSE SOURCE: the parts_consumption grid (the Ramco expense
+  // export), via the server-aggregated get_parts_expense_snapshot RPC. When the
+  // grid holds spend for this scope it is the single source for the Tyres vs
+  // Maintenance split everywhere this service feeds (Dashboard, Analytics, Board
+  // Overview, Executive, Cost Center, PM, Engineering KPI) - tyre = tyre_cost,
+  // maintenance = spare_cost + oil_cost. It is applied org-wide only: the grid's
+  // store codes differ from the app's site vocabulary, so a site-scoped call keeps
+  // the legacy per-site sources. Any miss (no grid data, unknown country, RPC
+  // absent) falls through to the legacy tyre_records / work_orders / PM sources.
+  if (!siteEq) {
+    try {
+      const first = keys[0]
+      const [ly, lm] = keys[keys.length - 1].split('-').map(Number)
+      const from = `${first}-01`
+      const to = new Date(Date.UTC(ly, lm, 0)).toISOString().slice(0, 10)
+      const { data } = await supabase.rpc('get_parts_expense_snapshot', {
+        p_site: null,
+        p_country: country && country !== 'All' ? country : null,
+        p_from: from,
+        p_to: to,
+      })
+      if (data && data.ok && Array.isArray(data.monthly) && num(data.kpis?.total_expense) > 0) {
+        for (const m of data.monthly) {
+          add(tyreByMonth, m.m, m.tyre)
+          add(maintByMonth, m.m, num(m.spare) + num(m.oil))
+        }
+        const byMonth = keys.map((k) => ({ month: k, tyre: tyreByMonth[k], maintenance: maintByMonth[k] }))
+        const tyre = byMonth.reduce((s, m) => s + m.tyre, 0)
+        const maintenance = byMonth.reduce((s, m) => s + m.maintenance, 0)
+        return { tyre, maintenance, totals: { tyre, maintenance }, byMonth, source: 'parts_consumption' }
+      }
+    } catch { /* grid unavailable for this scope - fall through to legacy sources */ }
+  }
+
   // TYRE spend: cost_per_tyre x (qty || 1), bucketed by issue_date.
   try {
     const { data, error } = await fetchAllPages((f, t) => {

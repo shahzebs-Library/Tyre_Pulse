@@ -3,6 +3,109 @@
 Durable, committed project knowledge so any session has full context. Keep this
 current. Read it before adding/changing modules. Governing spec: `Tyre pulse enterprise.md`
 
+## SESSION 2026-07-22 — Real ERP data load + customizable expense/tyre dashboards + Smart Data Intake + multi-country. Migrations through **V332**, next free **V333**. All merged to main (PRs #160-#165).
+Big data + reporting session. Everything below is MERGED to main and the branch
+`claude/accident-builder-report-ui-2bkwb5` was rebased onto main after each PR (squash merges diverge history;
+use `git rebase --onto origin/main <prev-commit>` to replay only the new commit, then force-with-lease — verified
+each time). Vercel deploys from main. Migrations applied live via Supabase MCP (project jhssdmeruxtrlqnwfksc).
+
+### Customer real data (Green Concrete Company, org Company A `00000000-...-0001`, country **KSA**)
+- **parts_consumption LOADED = 106,380 rows / SAR 40.54M** (Tyres 10.31M, Spare 24.90M, Oil 5.33M; 2018-2026).
+  This is the Ramco "grid details" parts/materials EXPENSE export and is now **THE authoritative cost source**.
+- work_orders = 59,446 (from the earlier Tyredata load); tyre_records = 6,016. open_work_orders currently a snapshot.
+- The big grid was loaded by the USER via the in-app importer (the Supabase Table Editor CSV import FAILS on these
+  Ramco files: embedded `"` inch-marks in item descriptions + size stalls -> "incompatible data"). RULE: for BIG
+  Ramco files use the in-app Data Intake page (parses raw .xls, chunked+retry), NOT the dashboard CSV importer.
+
+### THE COST/EXPENSE RULE (customer, enforced everywhere)
+- Cost is taken ONLY from the parts grid (parts_consumption). Every other file's cost columns are IGNORED.
+- Per line: **line_cost = `Values`** (col 12), taken ONCE (Spare/Trye/Oil/Total are the ERP's split; `Total Parts
+  Consumption` == Spare+Trye+Oil exactly, but 33% of rows have Total=0 while Values holds the real amount, so
+  Values is authoritative). Category is decided by the ITEM ITSELF, not the ERP column: a real tyre (desc has
+  tyre/tire + a size like 315/80 R22.5) -> tyre bucket even if the ERP filed the cost under Spare/Oil; a non-tyre
+  the ERP dumped in the Trye column (air hose, epoxy glitch) -> moved OUT to spare. Tyre consumables (patch/glue/
+  valve pin, no size) stay spare. On the full data this reclassified 1,518 misfiled tyre amounts (~SAR 2.0M).
+- **Single classifier trigger `classify_parts_consumption()`** on parts_consumption (V326, refined V328) does this
+  server-side on every insert (dashboard OR app OR staging). Pure JS mirror = `src/lib/partsExpense.js`
+  (classifyLine/summarizeRows/rowsFromSheet/rowsFromParsedSheet + PARTS_FIELDS). NEVER re-derive cost elsewhere.
+
+### Expenses sourced from the grid EVERYWHERE (#162)
+- Central `src/lib/api/costSummary.js` `loadCostSplit` now pulls the Tyres-vs-Maintenance split from
+  parts_consumption via `get_parts_expense_snapshot` (tyre = tyre_cost, maintenance = spare_cost+oil_cost) when the
+  grid has data org-wide; FALLS BACK to the legacy tyre_records/work_orders/pm sources for a site-scoped call,
+  empty grid, unknown country, or absent RPC. This propagates the authoritative expense to Dashboard, Analytics,
+  Board Overview, Executive, Cost Center, PM, Engineering KPI in ONE place. (Site-scoped views still legacy because
+  the grid's store_code vocab != app site vocab; a store->site map is a deliberate follow-up.)
+
+### New customizable dashboards over the loaded data (#160/#161)
+- **Report Builder datasets** (`src/lib/reportBuilder.js`): added `work_order_line_items` (144k task lines) +
+  tyre `status` column to the tyres dataset. (V323 `work_order_line_items` table + stamp trigger.)
+- **Tyre Failure & CPK board** `/tyre-failure-cpk` (`src/pages/TyreFailureCpkBoard.jsx` + engine
+  `src/lib/tyreFailureBoard.js`, reuses kpiEngine): failure reasons, CPK by brand/site, life, worst assets;
+  toggle sections + PDF/Excel + saved layout.
+- **Maintenance Cost & Tasks board** `/maintenance-cost-board` (`src/pages/MaintenanceCostBoard.jsx` + engine
+  `src/lib/maintenanceBoard.js` + service `src/lib/api/maintenanceAnalytics.js`): over RPC **V324
+  `get_maintenance_snapshot`** (aggregates work_orders + line items org-scoped). spend by type/site/asset, top
+  tasks, monthly trend.
+- **Expense Report** `/expense-report` (`src/pages/ExpenseReport.jsx`) over **V327 `get_parts_expense_snapshot`**
+  (parts_consumption tyre/spare/oil by asset/store/month) - the authoritative expense board.
+- **Dashboard Builder**: 5 new widgets (Tyre Status, Failure Reasons, Maintenance Spend, Spend by Type, Top Tasks)
+  in `WIDGET_CATALOG` + `WidgetRenderer.jsx` SOURCE_FETCHERS (tyreLifecycle, maintenanceSnapshot).
+- **Public/TV shareable board**: 2 rotatable light-theme pages `tyre_failure` + `maintenance_cost` added to
+  ReportShare (`src/pages/ReportShare.jsx` + reportShares.js REPORT_PAGES) via anon token RPC **V325
+  `get_report_tyre_maintenance`** (org derived from report_shares token; VOLATILE - it bumps view_count).
+- Backfill: **V327 `backfill_tyre_prices_from_grid()`** fills tyre_records.cost_per_tyre from grid tyre lines by
+  job_card + asset (only null/0, never overwrites).
+
+### Smart ERP Data Intake - multi-file self-routing (#163/#164/#165)
+- **Page `/erp-intake`** (`src/pages/ErpIntake.jsx`, Administration & Data nav): upload ANY Ramco export; it
+  auto-detects the report by header (even when the header is on ROW 3 under a title band), drops footer noise
+  (GRAND TOTAL / Printed By / employee id / Applied filters), maps columns, and routes each sheet:
+  - grid -> parts_consumption (cost; classifier runs) - Monthly Tyres Consumption -> tyre_records (no cost)
+  - Vehicle Complaints History -> work_orders (no cost) - Open Job Cards -> open_work_orders (V329, snapshot)
+  - Asset master (aeqp equipment grid) -> vehicle_fleet.
+- **Pure engine `src/lib/erpIntake.js`**: detectReport/intakeSheet + parseDate (YYYY-MM-DD, DD-MM-YYYY, DD-Mon-YY)
+  + isFooterRow + per-type mappers (mapMonthlyTyres/mapComplaints/mapAssets/mapOpenWo) + rawObject (keeps the FULL
+  raw row in a jsonb col: assets->asset_extra, tyres->extra_fields, complaints->work_orders.custom_data). Service
+  `src/lib/api/erpIntake.js` (insertTyreRecords/insertWorkOrders/insertVehicleFleet/replaceOpenWorkOrders/
+  loadIntake). Tests erpIntake(11)+partsExpense(14).
+- **`parseWorkbookRaw`** added to `src/lib/import/parseWorkbook.js` (returns raw aoa, no header detection) + a fix
+  so SpreadsheetML/HTML `.xls` (Ramco XML exports) route to the markup parser (they read as EMPTY via the binary
+  path otherwise). RULE: these Ramco `.xls` are actually SpreadsheetML 2003 / HTML wrapped `<Workbook>`.
+- **Merge, never duplicate + multi-country**: per-country dedup (tyre_records by serial, work_orders by WO no,
+  vehicle_fleet by asset_no) so the SAME key can exist in KSA and UAE independently; open_work_orders replaced
+  per-country. The page has a **Country picker** (COUNTRIES = ['KSA','UAE','Egypt'] from SettingsContext); every
+  row stamped with the chosen country (org > country > site scoping). To add a country, extend COUNTRIES.
+- **V330** extended `vehicle_fleet` with the full ERP asset master (serial, hours, driver-licence + MVIP +
+  operating-card + insurance issue/expiry dates, insurance type/name/value, model_year, useful_life,
+  operation_start_date, purchase_value, net_book_value, monthly_depreciation, fa_asset_number, users, arabic_
+  location, shift, remarks) + `asset_extra jsonb` (whole 48-col raw row). Indexed the expiry+value cols. So CEO
+  reports (fleet value/depreciation, insurance/licence/operating-card expiry compliance) are data-ready. RULE:
+  vehicle_fleet has make/model but NO brand/serial historically - asset master Brand->make, Asset Desc->model.
+
+### Supabase STAGING + auto-process (V331/V332) - the "import from Supabase dashboard" path the user chose
+- 5 staging tables the user imports a raw CSV into (Table Editor), each with a BEFORE INSERT trigger that maps/
+  classifies/de-dupes/routes the row into the real table then RETURNS NULL (pure pipe - staging stays empty):
+  `stg_parts_grid`->parts_consumption, `stg_monthly_tyres`->tyre_records, `stg_complaints`->work_orders,
+  `stg_assets`->vehicle_fleet, `stg_open_wo`->open_work_orders. Helpers `erp_parse_date()` + `erp_is_footer()`.
+  Each staging row carries a `country` column (the user adds it to the CSV). Footers auto-skipped; per-country
+  merge. RLS = RESTRICTIVE org isolation + elevated (do NOT use USING(true) - the classifier blocks it).
+- USER WORKFLOW for staging: save Ramco file as CSV -> delete rows ABOVE the header -> add a `country` column ->
+  Table Editor import into the matching stg_ table -> map columns (most auto-match; Values->value_amt,
+  Total Parts Consumption->total_parts, #->source_row). Big files still stall the dashboard importer (embedded
+  quotes + size) -> use the in-app /erp-intake page instead.
+- Reference guide artifact (staging tables + steps + full column maps) published for the user (not a repo file).
+
+### Also this session
+- **Work Orders admin delete** (#163): `src/pages/WorkOrders.jsx` per-row + bulk delete gated to Admin OR
+  super-admin (`isSuperAdmin` from useAuth), confirm-modal; service workOrders.deleteWorkOrder/deleteWorkOrders.
+- **OPEN follow-ups (flagged):** (1) the EGYPT (and UAE) data is NOT loaded yet - the user will upload Egypt's
+  own export and asked for it split into ~4 clean, quote-sanitized, country='Egypt' files for the stg_ tables
+  (DO NOT tag the existing KSA grid as Egypt - that would duplicate ~40M under a 2nd country). (2) per-site
+  expense still legacy (needs a store_code->app-site map). (3) asset master merge INSERTS new assets only, does
+  not refresh existing (offered as a follow-up). (4) repo migration stub files for V323-V332 not backfilled (DB
+  is source of truth, all applied live).
+
 ## SESSION 2026-07-21 CLOSED — mobile V319-V322 applied live + shipped to Play CLOSED testing; marketing NOT yet deployed; next free **V323**
 - **Mobile batch (11 commits) merged to main + shipped.** The unmerged mobile work stranded on branch
   `claude/accident-builder-report-ui-2bkwb5` (invite-only auth, ModuleGuard route registry, multi-device push,

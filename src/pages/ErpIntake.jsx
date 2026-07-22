@@ -24,7 +24,7 @@ import {
   ArrowRight, Layers,
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
-import { useSettings } from '../contexts/SettingsContext'
+import { useSettings, COUNTRIES } from '../contexts/SettingsContext'
 import { formatCurrency } from '../lib/formatters'
 import { toUserMessage } from '../lib/safeError'
 import { parseWorkbookRaw } from '../lib/import/parseWorkbook'
@@ -87,7 +87,13 @@ function KpiTile({ label, value, sub }) {
 export default function ErpIntake() {
   const { activeCountry, activeCurrency } = useSettings()
   const currency = activeCurrency || 'SAR'
-  const country = activeCountry && activeCountry !== 'All' ? activeCountry : null
+  // Which country this upload belongs to. Defaults to the active country when a specific
+  // one is selected, else KSA. Every imported row is stamped with it so multi-country
+  // data stays correctly scoped (org > country > site).
+  const [countryChoice, setCountryChoice] = useState(
+    activeCountry && activeCountry !== 'All' ? activeCountry : (COUNTRIES[0] || 'KSA'),
+  )
+  const country = countryChoice || null
 
   const [phase, setPhase] = useState('idle') // idle | parsing | preview | importing | done
   const [fileName, setFileName] = useState('')
@@ -186,11 +192,14 @@ export default function ErpIntake() {
         const d = detected[i]
         setProgress({ sheetIdx: i, d: 0, t: d.rows.length })
         const onProgress = (done, total) => setProgress({ sheetIdx: i, d: done, t: total })
+        // Stamp the chosen country on every row at import time (so changing the picker
+        // after parsing still applies), overriding whatever was set during mapping.
+        const rows = d.rows.map((r) => ({ ...r, country }))
         let res
         if (d.target === 'parts_consumption') {
-          res = await insertPartsConsumption(d.rows, { country, onProgress })
+          res = await insertPartsConsumption(rows, { country, onProgress })
         } else {
-          res = await loadIntake(d.target, d.rows, { onProgress })
+          res = await loadIntake(d.target, rows, { onProgress, country })
         }
         out.push({ ...d, inserted: res?.inserted ?? d.rows.length, skipped: res?.skipped ?? 0 })
         setResults([...out])
@@ -221,6 +230,24 @@ export default function ErpIntake() {
         subtitle="Upload any Ramco ERP report export and it is auto-routed to the right table"
         icon={Layers}
       />
+
+      <div className="card flex flex-wrap items-center gap-3 !py-3">
+        <label htmlFor="intake-country" className="text-sm font-medium text-[var(--text-secondary)]">
+          Country for this upload
+        </label>
+        <select
+          id="intake-country"
+          value={countryChoice}
+          onChange={(e) => setCountryChoice(e.target.value)}
+          disabled={busy}
+          className="rounded-md border border-[var(--border)] bg-[var(--surface)] px-3 py-1.5 text-sm text-[var(--text-primary)] disabled:opacity-50"
+        >
+          {(COUNTRIES || []).map((c) => <option key={c} value={c}>{c}</option>)}
+        </select>
+        <span className="text-xs text-[var(--text-tertiary)]">
+          Every row in this file is tagged to {countryChoice}. Upload each country&apos;s files with its country selected here.
+        </span>
+      </div>
 
       {/* Explainer */}
       <div className="card p-5 space-y-3">

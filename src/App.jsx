@@ -225,6 +225,7 @@ const BoardOverview          = lazy(() => import('./pages/BoardOverview'))
 const TyreFailureCpkBoard    = lazy(() => import('./pages/TyreFailureCpkBoard'))
 const MaintenanceCostBoard   = lazy(() => import('./pages/MaintenanceCostBoard'))
 const ExpenseReport          = lazy(() => import('./pages/ExpenseReport'))
+const ErpIntake             = lazy(() => import('./pages/ErpIntake'))
 const ExpenseImport          = lazy(() => import('./pages/ExpenseImport'))
 const ReportSharing          = lazy(() => import('./pages/ReportSharing'))
 const ForecastingEngine      = lazy(() => import('./pages/ForecastingEngine'))
@@ -497,6 +498,7 @@ function MainApp() {
                       <Route path="/tyre-failure-cpk"        element={<Safe><RoleRoute allowed={['Admin', 'Manager', 'Director']}><TyreFailureCpkBoard /></RoleRoute></Safe>} />
                       <Route path="/maintenance-cost-board"  element={<Safe><RoleRoute allowed={['Admin', 'Manager', 'Director']}><MaintenanceCostBoard /></RoleRoute></Safe>} />
                       <Route path="/expense-report"          element={<Safe><RoleRoute allowed={['Admin', 'Manager', 'Director']}><ExpenseReport /></RoleRoute></Safe>} />
+                      <Route path="/erp-intake"             element={<Safe><RoleRoute allowed={['Admin', 'Manager', 'Director']}><ErpIntake /></RoleRoute></Safe>} />
                       <Route path="/expense-import"          element={<Safe><RoleRoute allowed={['Admin', 'Manager', 'Director']}><ExpenseImport /></RoleRoute></Safe>} />
                       <Route path="/report-sharing"          element={<Safe><RoleRoute allowed={['Admin', 'Manager', 'Director']}><ReportSharing /></RoleRoute></Safe>} />
                       <Route path="/forecasting"             element={<Safe><ModuleRoute moduleKey="forecasting"><ForecastingEngine /></ModuleRoute></Safe>} />

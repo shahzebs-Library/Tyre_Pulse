@@ -406,6 +406,54 @@ export async function parseWorkbook(arrayBufferOrFile, opts = {}) {
   }
 }
 
+/**
+ * Like parseWorkbook, but returns each sheet as a RAW array-of-arrays (header:1) with
+ * NO header detection / footer stripping - the caller (ERP intake) owns that, because
+ * these exports put the header on the 3rd row under a title band. Handles the same
+ * formats (Ramco SpreadsheetML/HTML .xls, real .xlsx, delimited text).
+ * @param {ArrayBuffer|File|Blob} arrayBufferOrFile @param {{ fileName?:string }} [opts]
+ * @returns {Promise<{ sheets: Array<{ name:string, aoa:Array<Array<any>> }> }>}
+ */
+export async function parseWorkbookRaw(arrayBufferOrFile, opts = {}) {
+  await ensureXlsx()
+  const fileName = opts.fileName || (arrayBufferOrFile && arrayBufferOrFile.name) || ''
+  const buf = await toArrayBuffer(arrayBufferOrFile)
+  const bytes = new Uint8Array(buf)
+  const preferText = TEXT_EXT_HINT.test(fileName) || (!fileName && looksLikeText(bytes))
+
+  const wbToSheets = (wb) => (wb.SheetNames || []).map((name) => ({
+    name,
+    aoa: XLSX.utils.sheet_to_json(wb.Sheets[name], { header: 1, defval: '', raw: false, blankrows: true }),
+  }))
+  const asMarkup = (text) => {
+    let payload = text
+    if (SPREADSHEETML_RE.test(text) && !/^\s*<\?xml/i.test(text)) {
+      const m = text.match(/<(?:\w+:)?Workbook[\s\S]*<\/(?:\w+:)?Workbook>/i)
+      if (m) payload = `<?xml version="1.0"?>\n${m[0]}`
+    }
+    return wbToSheets(XLSX.read(payload, { type: 'string', cellDates: false, raw: false }))
+  }
+  const asText = () => {
+    const text = new TextDecoder('utf-8').decode(bytes).replace(/^﻿/, '')
+    if (!text.trim()) throw new Error('no text content')
+    if (MARKUP_START_RE.test(text.slice(0, 512)) || SPREADSHEETML_RE.test(text.slice(0, 4096))) return asMarkup(text)
+    return [{ name: 'Sheet1', aoa: parseDelimitedText(text) }]
+  }
+  const asBinary = () => wbToSheets(XLSX.read(bytes, { type: 'array', cellDates: false, raw: false }))
+
+  // A .xls that is really SpreadsheetML 2003 / HTML markup must route to the markup
+  // parser: the binary array-read yields a workbook with empty sheets instead of
+  // throwing, so extension/looksLikeText alone would silently drop all rows.
+  let headText = ''
+  try { headText = new TextDecoder('utf-8').decode(bytes.slice(0, 4096)) } catch { headText = '' }
+  const isMarkup = MARKUP_START_RE.test(headText.slice(0, 512)) || SPREADSHEETML_RE.test(headText)
+
+  let sheets
+  if (preferText || isMarkup) { try { sheets = asText() } catch { sheets = asBinary() } }
+  else { try { sheets = asBinary() } catch { sheets = asText() } }
+  return { sheets }
+}
+
 /* ── Hashing helpers ────────────────────────────────────────────────────────── */
 
 /**

@@ -133,10 +133,11 @@ export default function WorkOrders() {
   const { branding } = useTenant()
   const company = branding?.legal_name || branding?.display_name || appSettings?.company_name || 'TyrePulse'
   const fmtCurrency = (v) => _fmtCurrencyBase(v, activeCurrency)
-  const { user, profile } = useAuth()
+  const { user, profile, isSuperAdmin } = useAuth()
   const { t } = useLanguage()
   // Deleting a work order is an Admin-only action (matches the RLS policy).
-  const isAdmin = (profile?.role || '').toLowerCase() === 'admin'
+  // Super-admins are always admitted (break-glass), consistent with the rest of the app.
+  const isAdmin = isSuperAdmin || (profile?.role || '').toLowerCase() === 'admin'
   const [deleteTarget, setDeleteTarget] = useState(null)
   const [deleteError, setDeleteError] = useState('')
   // Multi-select delete (Admin-only). Holds selected work-order ids.

@@ -122,3 +122,30 @@ export async function getPartsExpenseSnapshot({ site, country, from, to } = {}) 
   }
   return data && data.ok ? data : { ok: false }
 }
+
+/**
+ * Per-country expense totals (each in its OWN currency, not blended). Used by the
+ * "All countries" view so SAR / AED / EGP are shown side by side rather than summed.
+ * @param {{ from?:string, to?:string }} [opts]
+ * @returns {Promise<Array<{country:string, tyre:number, spare:number, oil:number, total:number, lines:number}>>}
+ */
+export async function getExpenseByCountry({ from, to } = {}) {
+  const { data, error } = await supabase.rpc('get_expense_by_country', {
+    p_from: from || null, p_to: to || null,
+  })
+  if (error) {
+    const m = String(error.message || error.code || '').toLowerCase()
+    if (m.includes('does not exist') || m.includes('could not find') || m.includes('schema cache') || m === 'pgrst202') {
+      return []
+    }
+    throw error
+  }
+  return Array.isArray(data) ? data.map((r) => ({
+    country: r.country,
+    tyre: Number(r.tyre) || 0,
+    spare: Number(r.spare) || 0,
+    oil: Number(r.oil) || 0,
+    total: Number(r.total) || 0,
+    lines: Number(r.lines) || 0,
+  })) : []
+}

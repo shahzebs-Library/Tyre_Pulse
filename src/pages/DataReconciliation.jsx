@@ -4,6 +4,8 @@ import { toUserMessage } from '../lib/safeError'
 import PageHeader from '../components/ui/PageHeader'
 import EmptyState from '../components/EmptyState'
 import { SkeletonTable } from '../components/ui/Skeleton'
+import BrandGapSection from '../components/reconciliation/BrandGapSection'
+import JobcardDateSection from '../components/reconciliation/JobcardDateSection'
 import {
   GitCompare, Building2, Copy, ArrowLeftRight, AlertTriangle, CheckCircle2,
   X, Check, RefreshCw, ChevronDown, ChevronRight, Info, Layers, ShieldCheck,
@@ -541,6 +543,12 @@ export default function DataReconciliation() {
           </div>
         )}
       </Section>
+
+      {/* ── Completeness: tyres missing a brand ──────────────────────────────── */}
+      <BrandGapSection />
+
+      {/* ── Integrity: job card date mismatches ──────────────────────────────── */}
+      <JobcardDateSection />
 
       {/* ── Confirm modals ───────────────────────────────────────────────────── */}
       {confirm?.type === 'backfillAll' && (

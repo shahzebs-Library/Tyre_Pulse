@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Tag, Save, AlertTriangle, RefreshCw, Search } from 'lucide-react'
+import { Tag, Save, AlertTriangle, RefreshCw, Search, Download } from 'lucide-react'
 import {
   listBrandGapSummary,
   listBrandGapTyres,
+  listBrandGapTyresAll,
   setTyreBrand,
 } from '../../lib/api/reconBrand'
 import { toUserMessage } from '../../lib/safeError'
 import { formatDate } from '../../lib/formatters'
+import { exportToExcel, reportFileName } from '../../lib/exportUtils'
 import { APPROVED_BRANDS, CHINESE_BRANDS } from '../../lib/tyreSpecCatalog'
 
 // Maximum rows rendered in the table (the query already caps at this).
@@ -46,6 +48,10 @@ export default function BrandGapSection({ activeCountry } = {}) {
   const [drafts, setDrafts] = useState({}) // { id: brand }
   const [rowBusy, setRowBusy] = useState({}) // { id: true }
   const [rowError, setRowError] = useState({}) // { id: message }
+
+  // Download fill list state.
+  const [downloading, setDownloading] = useState(false)
+  const [downloadError, setDownloadError] = useState(null)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -132,6 +138,36 @@ export default function BrandGapSection({ activeCountry } = {}) {
     }
   }
 
+  async function downloadFillList() {
+    setDownloadError(null)
+    setDownloading(true)
+    try {
+      const all = await listBrandGapTyresAll({
+        country: country === 'All' ? undefined : country,
+      })
+      const exportRows = all.map((r) => ({
+        country: r.country || '',
+        serial: r.serial_no || '',
+        asset_no: r.asset_no || '',
+        size: r.size || '',
+        site: r.site || '',
+        issue_date: r.issue_date || '',
+        brand: '',
+      }))
+      const colKeys = ['country', 'serial', 'asset_no', 'size', 'site', 'issue_date', 'brand']
+      const headers = ['Country', 'Serial', 'Asset No', 'Size', 'Site', 'Issue Date', 'Brand']
+      const filename = reportFileName(
+        'TyrePulse Brand Fill List',
+        country === 'All' ? '' : country,
+      )
+      await exportToExcel(exportRows, colKeys, headers, filename, 'Brand Fill List')
+    } catch (e) {
+      setDownloadError(toUserMessage(e))
+    } finally {
+      setDownloading(false)
+    }
+  }
+
   const truncated = rows.length >= TABLE_CAP
 
   return (
@@ -146,7 +182,16 @@ export default function BrandGapSection({ activeCountry } = {}) {
             <span className="text-[11px] px-2 py-0.5 rounded-full bg-gray-800/70 border border-gray-700/50 text-[var(--text-secondary)]">{totalMissing}</span>
           </div>
           <p className="text-xs text-[var(--text-muted)] mt-0.5">Brand drives CPK, warranty and vendor analysis. Fill it in below, or bulk-load via the stg_tyre_brand staging import for UAE and Egypt.</p>
+          <p className="text-xs text-[var(--text-muted)] mt-0.5">Download the fill list, add each brand, then import country + serial + brand into the stg_tyre_brand table to backfill automatically.</p>
         </div>
+        <button
+          onClick={downloadFillList}
+          disabled={loading || downloading}
+          className="btn-secondary text-xs flex items-center gap-1.5 shrink-0 disabled:opacity-40"
+        >
+          {downloading ? <RefreshCw size={13} className="animate-spin" /> : <Download size={13} />}
+          {downloading ? 'Preparing...' : 'Download fill list'}
+        </button>
         <button
           onClick={load}
           disabled={loading}
@@ -157,6 +202,14 @@ export default function BrandGapSection({ activeCountry } = {}) {
       </div>
 
       <div className="px-5 py-4 space-y-4">
+        {/* Download error */}
+        {downloadError && (
+          <div className="rounded-lg border border-red-800/50 bg-red-950/30 px-4 py-2.5 flex items-start gap-2">
+            <AlertTriangle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
+            <p className="text-xs text-red-300/90 break-words flex-1">Could not build the fill list: {downloadError}</p>
+          </div>
+        )}
+
         {/* Error + Retry */}
         {error ? (
           <div className="rounded-lg border border-red-800/50 bg-red-950/30 px-4 py-3 flex items-start gap-3">

@@ -16,6 +16,7 @@ import { ChartModal } from '../components/ChartModal'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import { formatCurrencyCompact } from '../lib/formatters'
 import { fetchAllPages } from '../lib/fetchAll'
+import { loadCostSplit } from '../lib/api/costSummary'
 import EnterpriseTable from '../components/ui/EnterpriseTable'
 import { useReportMeta } from '../hooks/useReportMeta'
 import { toUserMessage } from '../lib/safeError'
@@ -42,6 +43,8 @@ export default function BrandPerformance() {
   const [error, setError]     = useState(null)
   const [selected, setSelected]   = useState(null)
   const [tableSearch, setTableSearch] = useState('')
+  // Authoritative fleet-level tyre cost from the classified expense grid.
+  const [fleetTyreCost, setFleetTyreCost] = useState(null)
 
   // Filters
   const [period, setPeriod]             = useState({ mode: 'all' })
@@ -74,6 +77,16 @@ export default function BrandPerformance() {
   }, [activeCountry])
 
   useEffect(() => { load() }, [load])
+
+  // Fleet-level total tyre cost comes from the authoritative expense grid
+  // (loadCostSplit.tyre), not from summing per-brand cost_per_tyre.
+  useEffect(() => {
+    let alive = true
+    loadCostSplit({ country: activeCountry })
+      .then(r => { if (alive) setFleetTyreCost(r?.tyre ?? null) })
+      .catch(() => { if (alive) setFleetTyreCost(null) })
+    return () => { alive = false }
+  }, [activeCountry])
 
   const uniqueSites = useMemo(() => {
     const s = new Set(records.map(r => r.site).filter(Boolean))
@@ -200,7 +213,7 @@ export default function BrandPerformance() {
           <p className="text-xs text-gray-500 mt-1">Brands Tracked</p>
         </div>
         <div className="card text-center">
-          <p className="text-2xl font-bold text-blue-400">{formatCurrencyCompact(totalCostAll, activeCurrency)}</p>
+          <p className="text-2xl font-bold text-blue-400">{formatCurrencyCompact(fleetTyreCost != null ? fleetTyreCost : totalCostAll, activeCurrency)}</p>
           <p className="text-xs text-gray-500 mt-1">Total Fleet Cost</p>
         </div>
         {bestBrand && (
@@ -326,6 +339,7 @@ export default function BrandPerformance() {
       </div>
 
       {/* Ranking table - EnterpriseTable */}
+      <p className="text-[11px] text-gray-500">Cost by brand is from tyre records; the authoritative fleet total is from the expense grid.</p>
       {(() => {
         const brandColumns = [
           {

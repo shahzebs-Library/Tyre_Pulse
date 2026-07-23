@@ -14,6 +14,7 @@ import {
   computeFailureRate,
 } from '../lib/kpiEngine'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
+import { loadCostSplit } from '../lib/api/costSummary'
 import { toUserMessage } from '../lib/safeError'
 import {
   Trophy, Download, FileText, AlertTriangle, CheckCircle,
@@ -188,6 +189,8 @@ export default function VendorIntelligence() {
   const [actions, setActions] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  // Authoritative fleet-level tyre cost from the classified expense grid.
+  const [fleetTyreCost, setFleetTyreCost] = useState(null)
 
   // Filters
   const [period, setPeriod] = useState({ mode: 'all' })
@@ -230,6 +233,16 @@ export default function VendorIntelligence() {
   }, [activeCountry, t])
 
   useEffect(() => { load() }, [load])
+
+  // Fleet-level total tyre spend comes from the authoritative expense grid
+  // (loadCostSplit.tyre), not from summing per-vendor cost_per_tyre.
+  useEffect(() => {
+    let alive = true
+    loadCostSplit({ country: activeCountry })
+      .then(r => { if (alive) setFleetTyreCost(r?.tyre ?? null) })
+      .catch(() => { if (alive) setFleetTyreCost(null) })
+    return () => { alive = false }
+  }, [activeCountry])
 
   // ── Unique filter values ───────────────────────────────────────────────────
   const uniqueSites = useMemo(() => {
@@ -1120,6 +1133,7 @@ export default function VendorIntelligence() {
                 <h2 className="text-sm font-semibold text-[var(--text-primary)] mb-3 flex items-center gap-2">
                   <Target size={15} className="text-green-400" /> {t('vendorintel.vendor.fullTableTitle')}
                 </h2>
+                <p className="text-[11px] text-[var(--text-muted)] mb-3">Cost by vendor is from tyre records; the authoritative fleet total is from the expense grid.</p>
                 <div className="bg-[var(--surface-1)] border border-[var(--border-dim)] rounded-xl p-4 overflow-x-auto">
                   <table className="min-w-full text-xs">
                     <thead>
@@ -1640,7 +1654,7 @@ export default function VendorIntelligence() {
                 <Wrench size={14} className="text-purple-400" />
                 <span className="text-xs font-semibold text-purple-300">{t('vendorintel.execSummary.totalFleetInvestment')}</span>
               </div>
-              <p className="text-lg font-black text-[var(--text-primary)]">{fmtCurrency(execSummary.totalFleetInvestment, activeCurrency)}</p>
+              <p className="text-lg font-black text-[var(--text-primary)]">{fmtCurrency(fleetTyreCost != null ? fleetTyreCost : execSummary.totalFleetInvestment, activeCurrency)}</p>
               <p className="text-xs text-[var(--text-secondary)] mt-0.5">
                 {t('vendorintel.execSummary.acrossRecords', { count: filteredRecords.filter(r => Number(r.cost_per_tyre) > 0).length.toLocaleString() })}
               </p>
@@ -1673,7 +1687,7 @@ export default function VendorIntelligence() {
           'Best Value Brand': execSummary.bestBrand?.brand ?? '-',
           'Best Brand CPK': execSummary.bestBrand?.avgCpk != null ? fmtCpk(execSummary.bestBrand.avgCpk, activeCurrency) : '-',
           'Highest Cost Brand': execSummary.worstBrand?.brand ?? '-',
-          'Total Fleet Investment': fmtCurrency(execSummary.totalFleetInvestment, activeCurrency),
+          'Total Fleet Investment': fmtCurrency(fleetTyreCost != null ? fleetTyreCost : execSummary.totalFleetInvestment, activeCurrency),
           'Potential Annual Saving': execSummary.estAnnualSaving > 0 ? fmtCurrency(execSummary.estAnnualSaving, activeCurrency) : '-',
           'Best Performing Site': execSummary.bestSite?.site ?? '-',
           'Total Records Analysed': String(filteredRecords.length),

@@ -6,6 +6,7 @@ import EmptyState from '../components/EmptyState'
 import { SkeletonTable } from '../components/ui/Skeleton'
 import BrandGapSection from '../components/reconciliation/BrandGapSection'
 import JobcardDateSection from '../components/reconciliation/JobcardDateSection'
+import DupKeyTyresSection from '../components/reconciliation/DupKeyTyresSection'
 import {
   GitCompare, Building2, Copy, ArrowLeftRight, AlertTriangle, CheckCircle2,
   X, Check, RefreshCw, ChevronDown, ChevronRight, Info, Layers, ShieldCheck,
@@ -549,6 +550,9 @@ export default function DataReconciliation() {
 
       {/* ── Integrity: job card date mismatches ──────────────────────────────── */}
       <JobcardDateSection />
+
+      {/* ── Integrity: possible duplicate tyres (same serial+asset+date) ──────── */}
+      <DupKeyTyresSection />
 
       {/* ── Confirm modals ───────────────────────────────────────────────────── */}
       {confirm?.type === 'backfillAll' && (

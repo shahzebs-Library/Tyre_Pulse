@@ -3,6 +3,60 @@
 Durable, committed project knowledge so any session has full context. Keep this
 current. Read it before adding/changing modules. Governing spec: `Tyre pulse enterprise.md`
 
+## SESSION 2026-07-23 — Multi-country data cleanup (UAE/Egypt) + tyre scrap workflow. Migrations through **V345**, next free **V346**. All merged to main (PRs #166-#174).
+Green Concrete Company (org Company A), ONE tenant, 3 countries kept SEPARATE by a `country` column
+(KSA/UAE/Egypt) — same users, per-country dedup. All migrations applied live via Supabase MCP (project
+jhssdmeruxtrlqnwfksc). Branch `claude/accident-builder-report-ui-2bkwb5`: after each squash-merge, realign with
+`git checkout -B <branch> origin/main` (do NOT stack on merged history); a force-with-lease push is fine when the
+remote branch carries only already-merged commits. NOTE: GitHub's squash-merge commit shows Unverified
+(committer noreply@github.com) — that is GitHub's own merge, NOT a local commit; never amend/force-push merged main history to "fix" it.
+
+### Data loaded / corrected this session (customer real data)
+- **UAE + Egypt loaded** (tyre_records, work_orders, work_order_line_items) from the customer zip, chunked,
+  per-country dedup (same key can exist in KSA + UAE + Egypt independently). Restored 75 KSA tyres deleted by mistake.
+- **Expense totals now: KSA 106,398 rows / SAR 40.55M; UAE 70,696 / AED 19.24M; Egypt 47,446 / EGP 96.36M.**
+  Egypt is in EGP (≈12M SAR) — NOT inflated; each country uses its OWN currency.
+- **V334** stg_wo_lines -> work_order_line_items. **V335** sharpened expense classifier (broader tyre-size regex
+  incl. 23.5R25/1200R24/12.00R24, brand signal, oil=lubricant-only, brand extraction) + `parts_brand` col + backfill
+  (KSA tyre spend 10.3M->13.0M, total preserved 40.5M). JS mirror = `src/lib/partsExpense.js` (isTyreItem/isOilItem/
+  brandOf). **V336** staging trigger fix for reversed fit/remove.
+- **V337** asset_no/asset_code normalized UPPER(TRIM()) across fleet/tyres/WO/line-items/parts + guard triggers
+  (deleted 79 case-dup fleet rows first). **V338** site master backfilled into the EXISTING `sites` table (KSA 41/UAE
+  18/Egypt 4) — do NOT create a second site surface (Site Management already exists). **V339** `jobCardDate.js` engine
+  + `v_jobcard_date_mismatch` view (786 mismatches flagged). **V340** meter regression = accept-but-FLAG (never block;
+  odometer/engine_hours flagged columns + `flag_meter_regression` trigger). **V341** tyre brand carried through the
+  load pipeline + `stg_tyre_brand` backfill pipe (UAE 982 + Egypt 469 still need the CSV uploaded — OPEN).
+- **Fit/remove auto-correct (V336 + `orderFitRemove` in erpIntake.js)**: some ERP exports swap fitment/removal;
+  each axis (date/km/hours) normalized independently so fitment<=removal. Corrected 665 reversed dates (UAE 572/Egypt 93).
+- **Data Intake duplicate flag** (`countExistingRows` in `src/lib/api/erpIntake.js`): preview shows new-vs-already-in-
+  system per file so re-uploading the same file adds only the remaining new rows, never duplicates.
+- **Per-country expense self-service tables** `expenses_ksa`/`expenses_uae`/`expenses_egypt` (V343, headers match the
+  exact Ramco grid so Supabase Table Editor CSV import auto-maps; `country` column) + `process_expenses_country`
+  trigger routes into parts_consumption. **V344 `get_expense_by_country` RPC** — Expense Report "All" view now shows a
+  per-country panel each in its OWN currency (KSA=SAR/UAE=AED/Egypt=EGP) instead of a meaningless blended total
+  (`getExpenseByCountry` in api/partsConsumption.js; `COUNTRY_CURRENCY` map). Fixed a mistaken UAE-in-KSA load (deleted
+  34,543 `RM/%` rows tagged KSA).
+
+### Tyre SCRAP workflow — Serial Tracker (V345, PRs #173/#174)
+- Serial Tracker (`/serial-tracker`, **route is Admin-only**) is THE place to search a serial and scrap a tyre — no
+  new page (single-surface rule). Search a serial -> **Mark as Scrap** (reason modal) flags the tyre + all its records
+  and shows a red Scrapped badge; **Undo scrap** reverses it. Bulk lookup auto-detects scrapped serials (chip+badge).
+  New **Scrapped tab** lists every scrapped tyre (serial/reason/date) with filter+refresh + per-row **Undo scrap** /
+  **Edit reason**. All scrap mutations (mark/undo/edit) gated to **Admin/super-admin** in-component (defense-in-depth).
+- **V345** widened `tyre_status_marks.mark_type` CHECK to allow `'scrap'` (was returned/written_off only) + added a
+  `reason` column. Scrap upserts an authoritative `tyre_status_marks` row (mark_type 'scrap' + reason + created_by)
+  AND stamps `tyre_records.status='Scrapped'` so existing pool/lifecycle logic (`isRemovedOrScrapped` in
+  `src/lib/tyrePool.js` — matches /scrap|removed|.../i) treats it as out of service. Undo removes the mark + reverts
+  status to 'Active' (lifecycle removal_date/km untouched). Service = `scrapTyreBySerial`/`unscrapTyreBySerial`/
+  `getScrapMark`/`listScrapMarks`/`updateScrapReason` in `src/lib/api/tyreExchange.js`. `tyre_records.status` has NO
+  CHECK constraint (free text) so 'Scrapped' is valid.
+
+### OPEN follow-ups (flagged, not blocking)
+- Tyre brand backfill: upload `stg_tyre_brand` CSV (UAE 982 + Egypt 469 brand fill) — not yet done.
+- No admin review screen yet for the 786 job-card date mismatches (V339) or the flagged meter regressions (V340).
+- Customer has MANY more expense files to self-upload via `expenses_ksa`/`expenses_uae`/`expenses_egypt`.
+- Repo migration stub files for V333-V345 not all backfilled (DB is source of truth; V345 stub committed).
+
 ## SESSION 2026-07-22 — Real ERP data load + customizable expense/tyre dashboards + Smart Data Intake + multi-country. Migrations through **V332**, next free **V333**. All merged to main (PRs #160-#165).
 Big data + reporting session. Everything below is MERGED to main and the branch
 `claude/accident-builder-report-ui-2bkwb5` was rebased onto main after each PR (squash merges diverge history;

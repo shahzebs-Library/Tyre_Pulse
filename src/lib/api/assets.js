@@ -43,9 +43,15 @@ export async function getAsset(id) {
   return unwrap(await supabase.from('vehicle_fleet').select(COLS).eq('id', id).maybeSingle())
 }
 
-/** Get one asset by asset number (or null). */
-export async function getAssetByNo(assetNo) {
-  return unwrap(
-    await supabase.from('vehicle_fleet').select(COLS).eq('asset_no', assetNo).maybeSingle(),
-  )
+/**
+ * Get one asset by asset number (or null). The same asset number can now exist in
+ * more than one country (per-country fleet, V348), so an optional `country` scopes
+ * the lookup; `limit(1)` keeps it single-row-safe for a super-admin who can see
+ * every country. RLS already scopes a country-restricted user to their own row.
+ */
+export async function getAssetByNo(assetNo, country) {
+  let q = supabase.from('vehicle_fleet').select(COLS).eq('asset_no', assetNo)
+  if (country && country !== 'All') q = q.eq('country', country)
+  const rows = unwrap(await q.order('country', { ascending: true }).limit(1))
+  return Array.isArray(rows) ? rows[0] || null : rows || null
 }

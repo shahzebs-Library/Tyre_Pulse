@@ -123,13 +123,12 @@ export async function listInspectionVehicles() {
   return unwrap(await supabase.from('vehicle_fleet').select(VEHICLE_COLS))
 }
 
-/** Look up a single fleet vehicle by asset number (or null if not found). */
-export async function findVehicleByAsset(assetNo) {
-  return unwrap(
-    await supabase
-      .from('vehicle_fleet')
-      .select('vehicle_type,asset_no,site')
-      .eq('asset_no', assetNo)
-      .maybeSingle(),
-  )
+/** Look up a single fleet vehicle by asset number (or null if not found). The same
+ * asset number can exist per country (V348), so limit(1) keeps this single-row-safe
+ * for a super-admin; RLS scopes a country-restricted user to their own row. */
+export async function findVehicleByAsset(assetNo, country) {
+  let q = supabase.from('vehicle_fleet').select('vehicle_type,asset_no,site,country').eq('asset_no', assetNo)
+  if (country && country !== 'All') q = q.eq('country', country)
+  const rows = unwrap(await q.order('country', { ascending: true }).limit(1))
+  return Array.isArray(rows) ? rows[0] || null : rows || null
 }

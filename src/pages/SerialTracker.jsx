@@ -6,7 +6,8 @@ import { ScanLine, Search, Download, FileText, Upload, AlertTriangle, Trash2, Ro
 import PageHeader from '../components/ui/PageHeader'
 import EmptyState from '../components/EmptyState'
 import { toUserMessage } from '../lib/safeError'
-import { scrapTyreBySerial, unscrapTyreBySerial, getScrapMark } from '../lib/api/tyreExchange'
+import { useAuth } from '../contexts/AuthContext'
+import { scrapTyreBySerial, unscrapTyreBySerial, getScrapMark, listScrapMarks, updateScrapReason } from '../lib/api/tyreExchange'
 
 function SearchSkeleton() {
   return (
@@ -66,6 +67,9 @@ function SearchSkeleton() {
 }
 
 export default function SerialTracker() {
+  const { profile, isSuperAdmin } = useAuth()
+  const isAdmin = isSuperAdmin === true || profile?.role === 'Admin'
+
   const [activeTab, setActiveTab] = useState('single')
 
   // ── Single Search state ───────────────────────────────────────────────────
@@ -92,6 +96,66 @@ export default function SerialTracker() {
   const [bulkSearch, setBulkSearch]     = useState('')
   const [statusFilter, setStatusFilter] = useState(null)
   const bulkFileRef = useRef(null)
+
+  // ── Scrapped register (list) state ────────────────────────────────────────
+  const [scrapList, setScrapList]       = useState([])
+  const [scrapListLoad, setScrapListLoad] = useState(false)
+  const [scrapListErr, setScrapListErr] = useState(null)
+  const [scrapListSearch, setScrapListSearch] = useState('')
+  const [editSerial, setEditSerial]     = useState(null)   // serial being reason-edited
+  const [editReason, setEditReason]     = useState('')
+  const [rowBusy, setRowBusy]           = useState(null)    // serial with an in-flight action
+
+  async function loadScrapList() {
+    setScrapListLoad(true)
+    setScrapListErr(null)
+    try {
+      setScrapList(await listScrapMarks())
+    } catch (err) {
+      setScrapListErr(toUserMessage(err, 'Could not load scrapped tyres.'))
+      setScrapList([])
+    } finally {
+      setScrapListLoad(false)
+    }
+  }
+
+  async function undoScrapRow(serial) {
+    setRowBusy(serial)
+    setScrapListErr(null)
+    try {
+      await unscrapTyreBySerial(serial)
+      setScrapList(prev => prev.filter(r => r.serial !== serial))
+      if (lastQuery === serial) setScrapMark(null)
+    } catch (err) {
+      setScrapListErr(toUserMessage(err, 'Could not remove the scrap mark.'))
+    } finally {
+      setRowBusy(null)
+    }
+  }
+
+  async function saveEditReason(serial) {
+    setRowBusy(serial)
+    setScrapListErr(null)
+    try {
+      await updateScrapReason(serial, editReason)
+      const clean = editReason.trim() || null
+      setScrapList(prev => prev.map(r => (r.serial === serial ? { ...r, reason: clean } : r)))
+      if (lastQuery === serial && scrapMark) setScrapMark({ ...scrapMark, reason: clean })
+      setEditSerial(null)
+      setEditReason('')
+    } catch (err) {
+      setScrapListErr(toUserMessage(err, 'Could not update the reason.'))
+    } finally {
+      setRowBusy(null)
+    }
+  }
+
+  const filteredScrapList = useMemo(() => {
+    const q = scrapListSearch.trim().toLowerCase()
+    if (!q) return scrapList
+    return scrapList.filter(r =>
+      r.serial.toLowerCase().includes(q) || (r.reason || '').toLowerCase().includes(q))
+  }, [scrapList, scrapListSearch])
 
   // ── Single search ─────────────────────────────────────────────────────────
   async function search() {
@@ -371,10 +435,10 @@ export default function SerialTracker() {
       />
 
       <div className="flex gap-1 p-1 bg-[var(--surface-2)] rounded-lg w-fit">
-        {[['single', 'Single Search'], ['bulk', 'Bulk Lookup']].map(([key, label]) => (
+        {[['single', 'Single Search'], ['bulk', 'Bulk Lookup'], ['scrapped', 'Scrapped']].map(([key, label]) => (
           <button
             key={key}
-            onClick={() => setActiveTab(key)}
+            onClick={() => { setActiveTab(key); if (key === 'scrapped') loadScrapList() }}
             className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
               activeTab === key ? 'bg-[var(--surface-3)] text-[var(--text-primary)] shadow' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
             }`}
@@ -456,7 +520,7 @@ export default function SerialTracker() {
                     )}
                   </div>
                   <div className="flex gap-2 flex-wrap">
-                    {scrapMark ? (
+                    {isAdmin && (scrapMark ? (
                       <button onClick={undoScrap} disabled={scrapBusy}
                         className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-1.5 disabled:opacity-50">
                         <RotateCcw size={14} /> {scrapBusy ? 'Working...' : 'Undo scrap'}
@@ -466,7 +530,7 @@ export default function SerialTracker() {
                         className="flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-md font-medium border border-red-700/50 bg-red-900/20 text-red-300 hover:bg-red-900/40 transition-colors">
                         <Trash2 size={14} /> Mark as Scrap
                       </button>
-                    )}
+                    ))}
                     <button onClick={exportLifecycleExcel} className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-1.5">
                       <Download size={14} /> Excel
                     </button>
@@ -705,6 +769,134 @@ export default function SerialTracker() {
                 </div>
               )}
             </>
+          )}
+        </div>
+      )}
+
+      {/* ── Scrapped register tab ──────────────────────────────────────────── */}
+      {activeTab === 'scrapped' && (
+        <div className="space-y-4">
+          <div className="card">
+            <div className="flex items-center justify-between flex-wrap gap-3">
+              <div>
+                <h3 className="text-base font-semibold text-[var(--text-primary)]">Scrapped tyres</h3>
+                <p className="text-sm text-[var(--text-secondary)]">
+                  {scrapListLoad ? 'Loading...' : `${scrapList.length} tyre${scrapList.length !== 1 ? 's' : ''} marked as scrap`}
+                  {isAdmin ? ' · edit the reason or undo a mistaken scrap' : ''}
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="relative">
+                  <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
+                  <input
+                    className="input text-sm pl-7 pr-3 py-1.5 w-48"
+                    placeholder="Filter serial / reason..."
+                    value={scrapListSearch}
+                    onChange={e => setScrapListSearch(e.target.value)}
+                  />
+                </div>
+                <button onClick={loadScrapList} disabled={scrapListLoad}
+                  className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-1.5 disabled:opacity-50">
+                  <RotateCcw size={14} /> Refresh
+                </button>
+              </div>
+            </div>
+            {!isAdmin && (
+              <p className="text-xs text-[var(--text-muted)] mt-2 flex items-center gap-1.5">
+                <AlertTriangle size={12} /> Only an Admin can undo a scrap or edit its reason.
+              </p>
+            )}
+          </div>
+
+          {scrapListErr && (
+            <div className="card border border-red-500/30 flex items-center gap-3">
+              <AlertTriangle size={18} className="text-red-400 shrink-0" />
+              <p className="text-sm text-red-300 flex-1">{scrapListErr}</p>
+              <button onClick={loadScrapList} className="btn-secondary text-xs px-3 py-1.5">Retry</button>
+            </div>
+          )}
+
+          {scrapListLoad ? (
+            <div className="card text-center py-10">
+              <div className="inline-block w-8 h-8 border-2 border-green-500 border-t-transparent rounded-full animate-spin mb-3" />
+              <p className="text-[var(--text-secondary)]">Loading scrapped tyres...</p>
+            </div>
+          ) : scrapList.length === 0 ? (
+            <div className="card">
+              <EmptyState
+                illustration="state/search-empty"
+                icon={Trash2}
+                title="No scrapped tyres"
+                description="Tyres you mark as scrap from Single Search will appear here."
+              />
+            </div>
+          ) : filteredScrapList.length === 0 ? (
+            <div className="card text-center py-10">
+              <p className="text-[var(--text-secondary)]">No scrapped tyres match "{scrapListSearch}".</p>
+              <button onClick={() => setScrapListSearch('')} className="text-sm text-[var(--text-muted)] hover:text-[var(--text-secondary)] underline mt-1">Clear filter</button>
+            </div>
+          ) : (
+            <div className="card overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-left text-[var(--text-secondary)] border-b border-[var(--border-dim)]">
+                    <th className="pb-2 pr-4">Serial No</th>
+                    <th className="pb-2 pr-4">Reason</th>
+                    <th className="pb-2 pr-4">Scrapped On</th>
+                    <th className="pb-2 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredScrapList.map(r => (
+                    <tr key={r.serial} className="border-b border-[var(--border-dim)] hover:bg-[var(--surface-2)] align-top">
+                      <td className="py-2 pr-4 font-mono text-[var(--text-primary)]">{r.serial}</td>
+                      <td className="py-2 pr-4 text-[var(--text-secondary)] min-w-[220px]">
+                        {editSerial === r.serial ? (
+                          <div className="flex flex-col gap-2">
+                            <textarea
+                              className="input w-full text-sm min-h-[52px]"
+                              value={editReason}
+                              onChange={e => setEditReason(e.target.value)}
+                              placeholder="Reason (optional)"
+                            />
+                            <div className="flex gap-2">
+                              <button onClick={() => saveEditReason(r.serial)} disabled={rowBusy === r.serial}
+                                className="btn-primary text-xs px-3 py-1 disabled:opacity-50">
+                                {rowBusy === r.serial ? 'Saving...' : 'Save'}
+                              </button>
+                              <button onClick={() => { setEditSerial(null); setEditReason('') }} disabled={rowBusy === r.serial}
+                                className="btn-secondary text-xs px-3 py-1 disabled:opacity-50">Cancel</button>
+                            </div>
+                          </div>
+                        ) : (
+                          <span className={r.reason ? '' : 'text-[var(--text-muted)] italic'}>{r.reason || 'No reason given'}</span>
+                        )}
+                      </td>
+                      <td className="py-2 pr-4 text-[var(--text-secondary)] text-xs whitespace-nowrap">{formatDate(r.created_at)}</td>
+                      <td className="py-2 text-right whitespace-nowrap">
+                        {isAdmin ? (
+                          editSerial === r.serial ? (
+                            <span className="text-xs text-[var(--text-muted)]">Editing...</span>
+                          ) : (
+                            <div className="inline-flex gap-2">
+                              <button onClick={() => { setEditSerial(r.serial); setEditReason(r.reason || '') }}
+                                disabled={rowBusy === r.serial}
+                                className="btn-secondary text-xs px-2.5 py-1 disabled:opacity-50">Edit reason</button>
+                              <button onClick={() => undoScrapRow(r.serial)} disabled={rowBusy === r.serial}
+                                className="flex items-center gap-1 text-xs px-2.5 py-1 rounded-md font-medium border border-green-700/50 bg-green-900/20 text-green-300 hover:bg-green-900/40 transition-colors disabled:opacity-50">
+                                <RotateCcw size={12} /> {rowBusy === r.serial ? 'Working...' : 'Undo scrap'}
+                              </button>
+                            </div>
+                          )
+                        ) : (
+                          <span className="text-xs text-[var(--text-muted)]">Admin only</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
         </div>
       )}

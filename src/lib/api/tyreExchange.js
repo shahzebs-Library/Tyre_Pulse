@@ -92,6 +92,17 @@ export async function unscrapTyreBySerial(serial) {
   return { ok: true }
 }
 
+/** Update the reason on an existing 'scrap' mark (in-place edit). */
+export async function updateScrapReason(serial, reason) {
+  const s = String(serial || '').trim()
+  if (!s) throw new Error('Serial number is required.')
+  const { error } = await supabase.from('tyre_status_marks')
+    .update({ reason: reason ? String(reason).trim() : null })
+    .eq('serial', s).eq('mark_type', 'scrap')
+  if (error) throw error
+  return { ok: true }
+}
+
 /** The 'scrap' mark for a serial ({serial, reason, created_at}) or null. */
 export async function getScrapMark(serial) {
   const s = String(serial || '').trim()

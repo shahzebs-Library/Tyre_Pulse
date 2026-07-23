@@ -40,6 +40,7 @@ const REPORT_META = {
   grid: { label: 'Work Order Details / grid', target: 'parts_consumption', targetLabel: 'Parts Consumption (cost)' },
   monthly_tyres: { label: 'Monthly Tyres Consumption', target: 'tyre_records', targetLabel: 'Tyre Records (lifecycle)' },
   complaints: { label: 'Vehicle Complaints History', target: 'work_orders', targetLabel: 'Work Orders (no cost)' },
+  combined: { label: 'Job Cards + Tyre Changes', target: 'work_orders', targetLabel: 'Work Orders + Tyre Records (no cost)' },
   open_wo: { label: 'Open Job Cards', target: 'open_work_orders', targetLabel: 'Open Work Orders (snapshot)' },
 }
 
@@ -185,6 +186,7 @@ export default function ErpIntake() {
             targetLabel: meta.targetLabel,
             label: meta.label,
             rows,
+            tyreRows: res.tyreRows || [], // combined export: tyre_records loaded alongside
             dropped: res.dropped || 0,
             accounting,
             summary: null,
@@ -192,7 +194,7 @@ export default function ErpIntake() {
         }
       }
       if (!found.length) {
-        setError('Not a recognised ERP report (checked headers). Supported: grid / monthly tyres / complaints / open job cards.')
+        setError('Not a recognised ERP report (checked headers). Supported: grid / monthly tyres / complaints / job cards + tyre changes / open job cards / asset list.')
         setPhase('idle')
         return
       }
@@ -237,7 +239,19 @@ export default function ErpIntake() {
         } else {
           res = await loadIntake(d.target, rows, { onProgress, country })
         }
-        out.push({ ...d, inserted: res?.inserted ?? d.rows.length, skipped: res?.skipped ?? 0 })
+        // Combined job-card + tyre export: also load the tyre_records carried alongside.
+        let tyreRes = null
+        if (d.type === 'combined' && Array.isArray(d.tyreRows) && d.tyreRows.length) {
+          const tyres = d.tyreRows.map((r) => ({ ...r, country }))
+          tyreRes = await loadIntake('tyre_records', tyres, { country })
+        }
+        out.push({
+          ...d,
+          inserted: res?.inserted ?? d.rows.length,
+          skipped: res?.skipped ?? 0,
+          failed: res?.failed ?? 0,
+          tyresInserted: tyreRes?.inserted ?? 0,
+        })
         setResults([...out])
       }
       setPhase('done')
@@ -406,6 +420,9 @@ export default function ErpIntake() {
                   </div>
                   <div className="text-right text-xs text-[var(--text-tertiary)]">
                     <p><span className="font-semibold text-[var(--text-primary)]">{num(d.rows.length)}</span> data rows</p>
+                    {Array.isArray(d.tyreRows) && d.tyreRows.length > 0 && (
+                      <p><span className="font-semibold text-[var(--text-primary)]">{num(d.tyreRows.length)}</span> tyre changes</p>
+                    )}
                     <p>{num(d.dropped)} footer/blank rows dropped</p>
                   </div>
                 </div>
@@ -498,14 +515,23 @@ export default function ErpIntake() {
 
                   {/* Per-sheet import status */}
                   {done ? (
-                    <div className="flex items-center gap-2 text-sm text-[var(--text-secondary)]">
-                      <CheckCircle2 className="h-4 w-4 text-[var(--accent,#22c55e)]" />
-                      <span>
-                        Imported {num(done.inserted)}
-                        {d.target === 'open_work_orders'
-                          ? ' (list replaced)'
-                          : `, merged/skipped ${num(done.skipped)} duplicates`}
-                      </span>
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2 text-sm text-[var(--text-secondary)]">
+                        <CheckCircle2 className="h-4 w-4 text-[var(--accent,#22c55e)]" />
+                        <span>
+                          Imported {num(done.inserted)}
+                          {done.tyresInserted ? ` + ${num(done.tyresInserted)} tyres` : ''}
+                          {d.target === 'open_work_orders'
+                            ? ' (list replaced)'
+                            : `, merged/skipped ${num(done.skipped)} duplicates`}
+                        </span>
+                      </div>
+                      {done.failed > 0 && (
+                        <div className="flex items-start gap-2 text-sm text-[var(--warning,#f59e0b)]">
+                          <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
+                          <span>{num(done.failed)} row(s) could not be saved after retries (network). Re-run the import to retry just these.</span>
+                        </div>
+                      )}
                     </div>
                   ) : active ? (
                     <div className="space-y-2">
@@ -543,6 +569,19 @@ export default function ErpIntake() {
               </p>
             )}
           </div>
+
+          {/* Big-file guidance */}
+          {totalRows > 40000 && (
+            <div className="card p-4 flex items-start gap-2 border border-[var(--warning,#f59e0b)]/40">
+              <AlertTriangle className="h-5 w-5 mt-0.5 text-[var(--warning,#f59e0b)] shrink-0" />
+              <p className="text-sm text-[var(--text-secondary)]">
+                Large file ({num(totalRows)} rows). The import now retries automatically over a weak
+                connection and never loses a row, but keep this tab open and awake until it finishes.
+                For very large files you can also import the matching CSV directly from the Supabase
+                Table Editor.
+              </p>
+            </div>
+          )}
 
           {/* Merge note */}
           <p className="text-xs text-[var(--text-tertiary)]">

@@ -9,27 +9,56 @@
  */
 import { supabase } from './_client'
 
-const CHUNK = 400
+const CHUNK = 200
+const MAX_ATTEMPTS = 6
+const BASE_BACKOFF_MS = 700
+const MAX_BACKOFF_MS = 8000
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 
+/** Fatal (won't-fix-itself) vs transient. Transient chunk failures are deferred and
+ * retried in a final sweep so a network blip never aborts a big load. */
+function isFatalInsertError(error) {
+  const m = String(error?.message || '').toLowerCase()
+  const code = String(error?.code || '').toLowerCase()
+  return (
+    m.includes('permission') || m.includes('policy') || m.includes('violates') ||
+    m.includes('duplicate key') || m.includes('invalid input') || m.includes('check constraint') ||
+    code === '42501' || code === '23505' || code === '22p02' || code === '23514'
+  )
+}
+
+/** Resilient chunked insert: small chunks, jittered backoff, defer-and-retry sweep.
+ * Returns { inserted, failed } - rows that still fail after the sweep are never lost. */
 async function insertChunked(table, rows, onProgress) {
   let inserted = 0
+  const deferred = []
+  const tryChunk = async (chunk) => {
+    let lastErr = null
+    for (let a = 1; a <= MAX_ATTEMPTS; a += 1) {
+      const res = await supabase.from(table).insert(chunk)
+      if (!res.error) return { ok: true }
+      lastErr = res.error
+      if (isFatalInsertError(res.error)) throw res.error
+      await sleep(Math.min(BASE_BACKOFF_MS * 2 ** (a - 1), MAX_BACKOFF_MS) + Math.random() * 300)
+    }
+    return { ok: false, error: lastErr }
+  }
   for (let i = 0; i < rows.length; i += CHUNK) {
     const chunk = rows.slice(i, i + CHUNK)
-    let err = null
-    for (let a = 1; a <= 4; a += 1) {
-      const res = await supabase.from(table).insert(chunk)
-      if (!res.error) { err = null; break }
-      err = res.error
-      const m = String(err.message || '').toLowerCase()
-      if (m.includes('permission') || m.includes('policy') || m.includes('violates')) break
-      await sleep(600 * a)
-    }
-    if (err) throw err
-    inserted += chunk.length
+    const res = await tryChunk(chunk)
+    if (res.ok) { inserted += chunk.length } else { deferred.push(chunk) }
     if (onProgress) onProgress(inserted, rows.length)
   }
-  return inserted
+  let failed = 0
+  if (deferred.length) {
+    await sleep(2500)
+    for (const chunk of deferred) {
+      const res = await tryChunk(chunk)
+      if (res.ok) { inserted += chunk.length } else { failed += chunk.length }
+      if (onProgress) onProgress(inserted, rows.length)
+    }
+  }
+  return { inserted, failed }
 }
 
 /** Existing values of a column (paged) as a lowercase Set, for merge dedup. When a
@@ -57,8 +86,8 @@ export async function insertTyreRecords(rows = [], { onProgress, country } = {})
   const seen = await existingKeys('tyre_records', 'serial_no', country).catch(() => new Set())
   const fresh = rows.filter((r) => r.serial_no && !seen.has(String(r.serial_no).trim().toLowerCase()))
   const skipped = rows.length - fresh.length
-  const inserted = fresh.length ? await insertChunked('tyre_records', fresh, onProgress) : 0
-  return { inserted, skipped }
+  const res = fresh.length ? await insertChunked('tyre_records', fresh, onProgress) : { inserted: 0, failed: 0 }
+  return { inserted: res.inserted, failed: res.failed || 0, skipped }
 }
 
 /** Complaints/repair rows -> work_orders. Skips work_order_no already stored (merge). */
@@ -66,8 +95,8 @@ export async function insertWorkOrders(rows = [], { onProgress, country } = {}) 
   const seen = await existingKeys('work_orders', 'work_order_no', country).catch(() => new Set())
   const fresh = rows.filter((r) => r.work_order_no && !seen.has(String(r.work_order_no).trim().toLowerCase()))
   const skipped = rows.length - fresh.length
-  const inserted = fresh.length ? await insertChunked('work_orders', fresh, onProgress) : 0
-  return { inserted, skipped }
+  const res = fresh.length ? await insertChunked('work_orders', fresh, onProgress) : { inserted: 0, failed: 0 }
+  return { inserted: res.inserted, failed: res.failed || 0, skipped }
 }
 
 /** Open-job-card snapshot -> open_work_orders. REPLACES this country's list only (so
@@ -77,8 +106,8 @@ export async function replaceOpenWorkOrders(rows = [], { onProgress, country } =
   del = country ? del.eq('country', country) : del.not('id', 'is', null)
   const { error } = await del
   if (error) throw error
-  const inserted = rows.length ? await insertChunked('open_work_orders', rows, onProgress) : 0
-  return { inserted, skipped: 0 }
+  const res = rows.length ? await insertChunked('open_work_orders', rows, onProgress) : { inserted: 0, failed: 0 }
+  return { inserted: res.inserted, failed: res.failed || 0, skipped: 0 }
 }
 
 /** Asset master rows -> vehicle_fleet. Inserts assets not already stored (merge by
@@ -87,8 +116,8 @@ export async function insertVehicleFleet(rows = [], { onProgress, country } = {}
   const seen = await existingKeys('vehicle_fleet', 'asset_no', country).catch(() => new Set())
   const fresh = rows.filter((r) => r.asset_no && !seen.has(String(r.asset_no).trim().toLowerCase()))
   const skipped = rows.length - fresh.length
-  const inserted = fresh.length ? await insertChunked('vehicle_fleet', fresh, onProgress) : 0
-  return { inserted, skipped }
+  const res = fresh.length ? await insertChunked('vehicle_fleet', fresh, onProgress) : { inserted: 0, failed: 0 }
+  return { inserted: res.inserted, failed: res.failed || 0, skipped }
 }
 
 /** Route a mapped intake result to the right loader. */

@@ -12,11 +12,24 @@
 import { supabase } from './_client'
 import { PARTS_FIELDS } from '../partsExpense'
 
-const INSERT_CHUNK = 400
-const MAX_ATTEMPTS = 5
-const BASE_BACKOFF_MS = 800
+const INSERT_CHUNK = 200
+const MAX_ATTEMPTS = 6
+const BASE_BACKOFF_MS = 700
+const MAX_BACKOFF_MS = 8000
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
+
+/** A fatal (won't-fix-itself) error: permission / RLS / validation. Everything else
+ * (network drop, timeout, 5xx, proxy reset) is transient and worth deferring + retrying. */
+function isFatalInsertError(error) {
+  const msg = String(error?.message || '').toLowerCase()
+  const code = String(error?.code || '').toLowerCase()
+  return (
+    msg.includes('permission') || msg.includes('violates') || msg.includes('policy') ||
+    msg.includes('duplicate key') || msg.includes('invalid input') || msg.includes('check constraint') ||
+    code === '42501' || code === '23505' || code === '22p02' || code === '23514'
+  )
+}
 
 /** Count of rows currently stored (org-scoped by RLS). */
 export async function countPartsConsumption() {
@@ -37,9 +50,15 @@ export async function clearPartsConsumption() {
 /**
  * Insert parsed grid rows in resilient chunks. Each row is projected to the raw
  * PARTS_FIELDS (+ country); unknown keys are dropped. The trigger classifies on insert.
+ * Resilience: small chunks with jittered exponential backoff; a chunk that keeps
+ * failing on a TRANSIENT error (network/timeout/5xx) is DEFERRED and retried in a
+ * final sweep instead of aborting the whole load - so one weak-signal blip never
+ * sinks a big import. A FATAL error (permission/validation) still aborts immediately.
+ * Rows that still fail after the sweep are returned as `failed` (never silently lost).
+ *
  * @param {Array<Object>} rows
  * @param {{ country?:string, onProgress?:(done:number,total:number)=>void }} [opts]
- * @returns {Promise<{ inserted:number }>}
+ * @returns {Promise<{ inserted:number, failed:number }>}
  */
 export async function insertPartsConsumption(rows = [], { country = null, onProgress } = {}) {
   const clean = rows.map((r) => {
@@ -50,23 +69,38 @@ export async function insertPartsConsumption(rows = [], { country = null, onProg
   })
 
   let inserted = 0
+  const deferred = [] // chunks that hit a transient error - retried after the main pass
+
+  const tryChunk = async (chunk, attempts) => {
+    let lastErr = null
+    for (let attempt = 1; attempt <= attempts; attempt += 1) {
+      const { error } = await supabase.from('parts_consumption').insert(chunk)
+      if (!error) return { ok: true }
+      lastErr = error
+      if (isFatalInsertError(error)) throw error // won't fix itself - abort
+      await sleep(Math.min(BASE_BACKOFF_MS * 2 ** (attempt - 1), MAX_BACKOFF_MS) + Math.random() * 300)
+    }
+    return { ok: false, error: lastErr }
+  }
+
   for (let i = 0; i < clean.length; i += INSERT_CHUNK) {
     const chunk = clean.slice(i, i + INSERT_CHUNK)
-    let lastErr = null
-    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) {
-      const { error } = await supabase.from('parts_consumption').insert(chunk)
-      if (!error) { lastErr = null; break }
-      lastErr = error
-      // A permission / validation error will not fix itself - fail fast.
-      const msg = String(error.message || '').toLowerCase()
-      if (msg.includes('permission') || msg.includes('violates') || msg.includes('policy')) break
-      await sleep(BASE_BACKOFF_MS * 2 ** (attempt - 1) + Math.random() * 250)
-    }
-    if (lastErr) throw lastErr
-    inserted += chunk.length
+    const res = await tryChunk(chunk, MAX_ATTEMPTS)
+    if (res.ok) { inserted += chunk.length } else { deferred.push(chunk) }
     if (onProgress) onProgress(inserted, clean.length)
   }
-  return { inserted }
+
+  // Final sweep: pause to let a flaky connection settle, then retry deferred chunks.
+  let failed = 0
+  if (deferred.length) {
+    await sleep(2500)
+    for (const chunk of deferred) {
+      const res = await tryChunk(chunk, MAX_ATTEMPTS)
+      if (res.ok) { inserted += chunk.length } else { failed += chunk.length }
+      if (onProgress) onProgress(inserted, clean.length)
+    }
+  }
+  return { inserted, failed }
 }
 
 /**

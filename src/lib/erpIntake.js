@@ -139,6 +139,17 @@ function rawObject(headerRow, row) {
 }
 const intVal = (v) => { const s = numStr(v); return s ? String(parseInt(s, 10)) : '' }
 
+/** Ensure fitment <= removal on one axis. Some ERP exports swap the fit/remove date or
+ * hours (removal earlier than fitment) while km stays forward; swap a reversed pair so
+ * tyre life is computed correctly. Values are ISO date strings or numeric strings. */
+function orderFitRemove(fit, rem, numeric) {
+  if (fit == null || rem == null || fit === '' || rem === '') return [fit, rem]
+  const a = numeric ? Number(fit) : fit
+  const b = numeric ? Number(rem) : rem
+  if (numeric && (!Number.isFinite(a) || !Number.isFinite(b))) return [fit, rem]
+  return b < a ? [rem, fit] : [fit, rem]
+}
+
 /** Map a monthly tyre-consumption sheet to tyre_records rows. Cost is NOT taken. */
 function mapMonthlyTyres(dataRows, headerRow, country) {
   const h = indexByToken(headerRow)
@@ -155,18 +166,20 @@ function mapMonthlyTyres(dataRows, headerRow, country) {
     const serial = cellAt(r, c.serial)
     const asset = cellAt(r, c.veh)
     if (!serial && !asset) continue
-    const removal_date = parseDate(cellAt(r, c.remd))
+    let [issue, removal] = orderFitRemove(parseDate(cellAt(r, c.fixd)) || null, parseDate(cellAt(r, c.remd)) || null, false)
+    const [fkm, rkm] = orderFitRemove(numStr(cellAt(r, c.fixkm)) || null, numStr(cellAt(r, c.remkm)) || null, true)
+    const [fhr, rhr] = orderFitRemove(numStr(cellAt(r, c.fixhr)) || null, numStr(cellAt(r, c.remhr)) || null, true)
     out.push({
       serial_no: serial, asset_no: asset, job_card: cellAt(r, c.job),
       vehicle_type: cellAt(r, c.vtype), size: cellAt(r, c.item),
       position: cellAt(r, c.pos), tyre_position: cellAt(r, c.pos),
-      issue_date: parseDate(cellAt(r, c.fixd)) || null,
-      km_at_fitment: numStr(cellAt(r, c.fixkm)) || null, hrs_at_fitment: numStr(cellAt(r, c.fixhr)) || null,
-      removal_date: removal_date || null,
-      km_at_removal: numStr(cellAt(r, c.remkm)) || null, hrs_at_removal: numStr(cellAt(r, c.remhr)) || null,
+      issue_date: issue,
+      km_at_fitment: fkm, hrs_at_fitment: fhr,
+      removal_date: removal,
+      km_at_removal: rkm, hrs_at_removal: rhr,
       total_km: numStr(cellAt(r, c.tkm)) || null, total_hrs: numStr(cellAt(r, c.thr)) || null,
       removal_reason: cellAt(r, c.reason) || null,
-      status: removal_date ? 'Removed' : 'Active',
+      status: removal ? 'Removed' : 'Active',
       extra_fields: rawObject(headerRow, r),
       country,
     })
@@ -245,17 +258,19 @@ function mapCombined(dataRows, headerRow, country) {
     }
     const serial = cellAt(r, c.srno)
     if (serial) {
-      const removal_date = parseDate(cellAt(r, c.remd))
+      const [issue, removal] = orderFitRemove(parseDate(cellAt(r, c.fixd)) || null, parseDate(cellAt(r, c.remd)) || null, false)
+      const [fkm, rkm] = orderFitRemove(numStr(cellAt(r, c.fixkm)) || null, numStr(cellAt(r, c.remkm)) || null, true)
+      const [fhr, rhr] = orderFitRemove(numStr(cellAt(r, c.fixhm)) || null, numStr(cellAt(r, c.remhm)) || null, true)
       tyres.push({
         serial_no: serial, asset_no: asset, job_card: cellAt(r, c.jc),
         size: cellAt(r, c.size), position: cellAt(r, c.pos), tyre_position: cellAt(r, c.pos),
         brand: cellAt(r, c.brand) || null,
-        issue_date: parseDate(cellAt(r, c.fixd)) || null,
-        km_at_fitment: numStr(cellAt(r, c.fixkm)) || null, hrs_at_fitment: numStr(cellAt(r, c.fixhm)) || null,
-        removal_date: removal_date || null,
-        km_at_removal: numStr(cellAt(r, c.remkm)) || null, hrs_at_removal: numStr(cellAt(r, c.remhm)) || null,
+        issue_date: issue,
+        km_at_fitment: fkm, hrs_at_fitment: fhr,
+        removal_date: removal,
+        km_at_removal: rkm, hrs_at_removal: rhr,
         total_km: numStr(cellAt(r, c.tkm)) || null,
-        status: removal_date ? 'Removed' : 'Active',
+        status: removal ? 'Removed' : 'Active',
         extra_fields: rawObject(headerRow, r),
         country,
       })

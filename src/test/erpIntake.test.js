@@ -96,11 +96,12 @@ describe('intakeSheet', () => {
     const r = res.rows[0]
     expect(r.serial_no).toBe('K507B403553')
     expect(r.asset_no).toBe('TM556')
-    expect(r.issue_date).toBe('2026-07-02')
-    expect(r.removal_date).toBe('2026-06-08')
+    // fixture has fix Jul-02 / remove Jun-08 (reversed) -> auto-corrected to fitment<=removal
+    expect(r.issue_date).toBe('2026-06-08')
+    expect(r.removal_date).toBe('2026-07-02')
     expect(r.status).toBe('Removed')
     expect(r.removal_reason).toBe('MISUSE')
-    expect(r.km_at_fitment).toBe('143067.00')
+    expect(r.km_at_fitment).toBe('138233.00')
     expect(r.country).toBe('KSA')
   })
   it('maps complaints to work_orders with NO cost fields, dropping totals + stamp', () => {
@@ -145,6 +146,21 @@ describe('intakeSheet', () => {
     expect(res.tyreRows[0].status).toBe('Removed')
     expect(res.tyreRows[0].brand).toBe('Double Coin')
     expect(res.tyreRows[0].country).toBe('UAE')
+  })
+  it('corrects reversed fit/remove (date + hours) so fitment comes before removal', () => {
+    // removal date earlier than fix date, hours reversed, km forward (as seen in UAE data)
+    const aoa = [TYRE_AOA[2], // header row from TYRE_AOA
+      ['GCKR/JC/9/0726', '02-07-2026', 'TM573', 'TR-MIXER', '315/80 R 22.5', 'RHF1', 'ZZREV1',
+        '2026-05-01', '181007', '13630', '2026-02-03', '211552', '11759', 'MISUSE', '30545', '']]
+    const res = intakeSheet(aoa, { country: 'UAE' })
+    const r = res.rows[0]
+    expect(r.issue_date).toBe('2026-02-03')      // earlier date becomes fitment
+    expect(r.removal_date).toBe('2026-05-01')    // later date becomes removal
+    expect(r.hrs_at_fitment).toBe('11759')       // lower hours = fitment
+    expect(r.hrs_at_removal).toBe('13630')
+    expect(r.km_at_fitment).toBe('181007')       // km already forward, unchanged
+    expect(r.km_at_removal).toBe('211552')
+    expect(r.status).toBe('Removed')
   })
   it('accounts for every body row so nothing slips (read = mapped + noKey; body = read + footer + blank)', () => {
     const res = intakeSheet(COMPLAINTS_AOA, { country: 'KSA' })

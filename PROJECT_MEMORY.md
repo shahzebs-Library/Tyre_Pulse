@@ -3,13 +3,65 @@
 Durable, committed project knowledge so any session has full context. Keep this
 current. Read it before adding/changing modules. Governing spec: `Tyre pulse enterprise.md`
 
-## SESSION 2026-07-23 — Multi-country data cleanup (UAE/Egypt) + tyre scrap workflow. Migrations through **V345**, next free **V346**. All merged to main (PRs #166-#174).
+## SESSION 2026-07-23 — Multi-country data cleanup + tyre scrap + tyre-cost single source + multi-country fleet. Migrations through **V348**, next free **V349**. All merged to main (PRs #166-#178).
 Green Concrete Company (org Company A), ONE tenant, 3 countries kept SEPARATE by a `country` column
 (KSA/UAE/Egypt) — same users, per-country dedup. All migrations applied live via Supabase MCP (project
 jhssdmeruxtrlqnwfksc). Branch `claude/accident-builder-report-ui-2bkwb5`: after each squash-merge, realign with
 `git checkout -B <branch> origin/main` (do NOT stack on merged history); a force-with-lease push is fine when the
 remote branch carries only already-merged commits. NOTE: GitHub's squash-merge commit shows Unverified
 (committer noreply@github.com) — that is GitHub's own merge, NOT a local commit; never amend/force-push merged main history to "fix" it.
+
+### Tyre scrap edit/undo + Data Reconciliation deepened (PRs #174/#176)
+- Serial Tracker (`/serial-tracker`, Admin-only) has a **Scrapped tab** listing every scrapped tyre with per-row
+  **Undo scrap** / **Edit reason**; all scrap mutations (mark/undo/edit) gated to Admin/super-admin in-component.
+  Service `updateScrapReason` added alongside scrap/unscrap in `src/lib/api/tyreExchange.js`.
+- **Data Reconciliation** (`/data-reconciliation`) gained two sections (built by 2 agents, new files only, wired in):
+  **Tyres missing a brand** (`reconBrand.js` + BrandGapSection: per-country counts + inline brand fix via datalist +
+  points to the stg_tyre_brand bulk path) and **Job card date mismatches** (`reconJobcard.js` + JobcardDateSection,
+  read-only review of the 786 v_jobcard_date_mismatch typos + Excel export). **V346** = elevated/org-scoped RPCs
+  `recon_jobcard_mismatches(p_limit)` + `recon_jobcard_mismatch_summary()` (Egypt 287/KSA 232/UAE 267 = 786).
+
+### THE COST/EXPENSE RULE reaffirmed + tyre cost now ONE source everywhere (PR #177) — user-critical
+- User found the tyre-cost figure DIFFERED by screen. Root cause: the Expense module reads the classified parts grid
+  (`parts_consumption.tyre_cost` = **SAR 13.0M KSA**, authoritative) but the Tyre/Engineering module summed
+  `tyre_records.cost_per_tyre` = **4.2M** (36% of tyre_records have NO price). The grid classifier is CORRECT and
+  matches the user's own rule (any line whose item DESCRIPTION has a tyre brand/size/tyre-or-tire word -> tyre; tyre
+  consumables patch/valve/fender stay spare). The ERP's own `tyre_amount` column (8.7M) UNDERSTATES (real tyres it
+  left in Values). RULE: tyre cost = grid classified, item DESCRIPTION drives the bucket, amount = Values. NOT item_code
+  (user rejected codes), NOT the ERP tyre_amount column.
+- **V347** `get_tyre_cost_by_asset(country,from,to)` RPC (grid tyre cost per asset, all assets, security-definer,
+  org-scoped) + helper `loadGridTyreByAsset` in `src/lib/api/costSummary.js` (asset->cost Map, null-fallback).
+  EngineeringKpi/AssetDetail/VehicleHistory/FleetAnalytics/TyreFailureCpkBoard now source per-asset + fleet TYRE COST
+  totals from the grid (`loadCostSplit.tyre` for fleet, the by-asset map for per-asset, fall back to tyre_records when
+  the grid has no row). **CPK (cost per KM) is UNCHANGED everywhere** (legitimately per-tyre on tyre_records). Per
+  brand/category/position/month cost stays on tyre_records (grid can't attribute) + labelled "authoritative total from
+  the expense grid". Dashboard/Analytics/Board/Executive/CostCenter/PM already used loadCostSplit (grid). RULE: for any
+  NEW tyre-cost total use loadCostSplit / loadGridTyreByAsset; never sum cost_per_tyre for a total.
+- OPEN (data-load, not code): app's KSA 2026 ERP-tyre-column is ~75k (4.6%) BELOW the customer's own chart (their
+  "Sum of Trye" per-month) - a handful of source rows/amounts didn't load (biggest gaps Apr + Jul). Needs the missing
+  source lines to reconcile to their books exactly. The app's classified 2026 tyre = 1.68M vs their chart 1.64M.
+
+### Multi-country fleet + UAE/Egypt cross-module relations (PR #178) — V348
+- UAE/Egypt asset masters were never loaded, so their tyres/work-orders linked 0% to a fleet record; and
+  `vehicle_fleet.asset_no` was GLOBALLY unique (blocks a multi-country tenant - 77 asset numbers exist in >1 country).
+  **V348**: switched fleet uniqueness to per **(organisation_id, country, asset_no)** (unique index
+  `vehicle_fleet_org_country_asset_uidx`; dropped `vehicle_fleet_asset_no_key`), then DERIVED a fleet register for UAE +
+  Egypt from the DISTINCT asset numbers already in their tyres+work_orders (vehicle_type = mode from tyre_records, site =
+  mode from tyres+WO, status Active, org Company A). Non-destructive. Result: fleet **KSA 604 / UAE 371 / Egypt 133**;
+  UAE+Egypt tyres (1007/475) and work orders (14190/12250) now link 100% (were 0). `getAssetByNo`/`findVehicleByAsset`
+  made country-aware + `limit(1)` so a super-admin who sees every country never hits a multi-row error (RLS scopes
+  normal users). Customer can later enrich these derived rows via the importer (merge inserts only new).
+
+### Data-quality snapshot at session close (live audit)
+- Tyres 7,498 (KSA 6016/UAE 1007/Egypt 475); work_orders 85,886; wo_line_items 184,025; expense lines 224,540 (all
+  costed, 0 null). Serial + asset 100% present. Line-items->work-orders 100% linked all countries. Grade B+.
+  OPEN: brand blank UAE 1007/Egypt 475/KSA 149 (needs stg_tyre_brand CSV - Egypt grid yields 0 brand, UAE only 1132
+  lines, so cannot auto-derive; give the customer a fill CSV: country/serial/brand, uploaded to stg_tyre_brand which
+  auto-backfills tyre_records.brand); 786 job-card date typos (now reviewable on Data Reconciliation, no auto-fix); 48
+  possible duplicate-key tyres.
+- INFRA (user asked): no self-managed load balancer - app is serverless (Vercel edge auto-LB + autoscale; Supabase
+  Supavisor connection pooler + horizontally-scaled API). Nothing to manage; scale lever = Supabase compute tier +
+  transaction pooler.
 
 ### Data loaded / corrected this session (customer real data)
 - **UAE + Egypt loaded** (tyre_records, work_orders, work_order_line_items) from the customer zip, chunked,

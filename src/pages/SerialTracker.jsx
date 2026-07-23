@@ -2,10 +2,11 @@ import { useState, useMemo, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 import { exportToPdf, exportToExcel, reportFileName } from '../lib/exportUtils'
 import { formatCurrencyCompact, formatDate } from '../lib/formatters'
-import { ScanLine, Search, Download, FileText, Upload, AlertTriangle } from 'lucide-react'
+import { ScanLine, Search, Download, FileText, Upload, AlertTriangle, Trash2, RotateCcw, X } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
 import EmptyState from '../components/EmptyState'
 import { toUserMessage } from '../lib/safeError'
+import { scrapTyreBySerial, unscrapTyreBySerial, getScrapMark } from '../lib/api/tyreExchange'
 
 function SearchSkeleton() {
   return (
@@ -75,6 +76,13 @@ export default function SerialTracker() {
   const [lastQuery, setLastQuery]     = useState('')
   const [error, setError]             = useState(null)
 
+  // ── Scrap workflow state ──────────────────────────────────────────────────
+  const [scrapMark, setScrapMark]     = useState(null)   // { serial, reason, created_at } | null
+  const [scrapOpen, setScrapOpen]     = useState(false)
+  const [scrapReason, setScrapReason] = useState('')
+  const [scrapBusy, setScrapBusy]     = useState(false)
+  const [scrapErr, setScrapErr]       = useState(null)
+
   // ── Bulk Lookup state ─────────────────────────────────────────────────────
   const [bulkResults, setBulkResults]   = useState([])
   const [bulkLoading, setBulkLoading]   = useState(false)
@@ -92,6 +100,8 @@ export default function SerialTracker() {
     setSearched(false)
     setError(null)
     const q = serialInput.trim()
+    setScrapMark(null)
+    setScrapErr(null)
     try {
       const { data, error: qErr } = await supabase
         .from('tyre_records')
@@ -100,6 +110,9 @@ export default function SerialTracker() {
         .order('issue_date', { ascending: true })
       if (qErr) throw qErr
       setRecords(data || [])
+      if ((data || []).length) {
+        try { setScrapMark(await getScrapMark(q)) } catch { /* scrap flag is best-effort */ }
+      }
     } catch (err) {
       setError(toUserMessage(err, 'Could not search for that serial.'))
       setRecords([])
@@ -107,6 +120,38 @@ export default function SerialTracker() {
       setLastQuery(q)
       setSearched(true)
       setLoading(false)
+    }
+  }
+
+  // ── Mark / unmark scrap ────────────────────────────────────────────────────
+  async function confirmScrap() {
+    setScrapBusy(true)
+    setScrapErr(null)
+    try {
+      const country = records[0]?.country || null
+      await scrapTyreBySerial(lastQuery, { reason: scrapReason, country })
+      setRecords(prev => prev.map(r => ({ ...r, status: 'Scrapped' })))
+      setScrapMark({ serial: lastQuery, reason: scrapReason.trim() || null, created_at: new Date().toISOString() })
+      setScrapOpen(false)
+      setScrapReason('')
+    } catch (err) {
+      setScrapErr(toUserMessage(err, 'Could not mark this tyre as scrap.'))
+    } finally {
+      setScrapBusy(false)
+    }
+  }
+
+  async function undoScrap() {
+    setScrapBusy(true)
+    setScrapErr(null)
+    try {
+      await unscrapTyreBySerial(lastQuery)
+      setRecords(prev => prev.map(r => (r.status === 'Scrapped' ? { ...r, status: 'Active' } : r)))
+      setScrapMark(null)
+    } catch (err) {
+      setScrapErr(toUserMessage(err, 'Could not remove the scrap mark.'))
+    } finally {
+      setScrapBusy(false)
     }
   }
 
@@ -233,7 +278,7 @@ export default function SerialTracker() {
           batch.map(async serial => {
             const { data, error: qErr } = await supabase
               .from('tyre_records')
-              .select('serial_no, issue_date, asset_no, cost:cost_per_tyre')
+              .select('serial_no, issue_date, asset_no, status, cost:cost_per_tyre')
               .eq('serial_no', serial)
               .order('issue_date', { ascending: true })
             if (qErr) throw qErr
@@ -242,6 +287,7 @@ export default function SerialTracker() {
             }
             const first = data[0]
             const last  = data[data.length - 1]
+            const scrapped = data.some(r => /scrap/i.test(r.status || ''))
             const isActive = last.issue_date && last.issue_date >= cutoffStr
             const cost = data.reduce((s, r) => s + (parseFloat(r.cost) || 0), 0)
             return {
@@ -250,7 +296,7 @@ export default function SerialTracker() {
               last_asset: last.asset_no || null,
               total_records: data.length,
               cost,
-              status: isActive ? 'Active' : 'Retired',
+              status: scrapped ? 'Scrapped' : isActive ? 'Active' : 'Retired',
             }
           })
         )
@@ -297,8 +343,9 @@ export default function SerialTracker() {
     const found   = bulkResults.filter(r => r.status !== 'Not Found').length
     const active  = bulkResults.filter(r => r.status === 'Active').length
     const retired = bulkResults.filter(r => r.status === 'Retired').length
+    const scrapped = bulkResults.filter(r => r.status === 'Scrapped').length
     const notFound = bulkResults.filter(r => r.status === 'Not Found').length
-    return { total: found, active, retired, notFound }
+    return { total: found, active, retired, scrapped, notFound }
   }, [bulkResults])
 
   const filteredBulkResults = useMemo(() => {
@@ -319,7 +366,7 @@ export default function SerialTracker() {
     <div className="space-y-6">
       <PageHeader
         title="Serial Tracker"
-        subtitle="Track a tyre's complete service history by serial number"
+        subtitle="Search a tyre by serial number, trace its history, and mark it as scrap"
         icon={ScanLine}
       />
 
@@ -383,21 +430,43 @@ export default function SerialTracker() {
               <div className="card">
                 <div className="flex items-start justify-between flex-wrap gap-4 mb-4">
                   <div>
-                    <div className="flex items-center gap-3 mb-1">
+                    <div className="flex items-center gap-3 mb-1 flex-wrap">
                       <span className="text-2xl font-bold font-mono text-[var(--text-primary)]">{lastQuery}</span>
-                      <span className={`text-xs px-2.5 py-1 rounded-full font-medium border ${
-                        stats.active
-                          ? 'bg-green-900/30 text-green-400 border-green-700/50'
-                          : 'bg-[var(--surface-2)] text-[var(--text-secondary)] border-[var(--border-bright)]'
-                      }`}>
-                        {stats.active ? 'Active' : 'Retired'}
-                      </span>
+                      {scrapMark ? (
+                        <span className="text-xs px-2.5 py-1 rounded-full font-medium border bg-red-900/30 text-red-400 border-red-700/50 flex items-center gap-1">
+                          <Trash2 size={12} /> Scrapped
+                        </span>
+                      ) : (
+                        <span className={`text-xs px-2.5 py-1 rounded-full font-medium border ${
+                          stats.active
+                            ? 'bg-green-900/30 text-green-400 border-green-700/50'
+                            : 'bg-[var(--surface-2)] text-[var(--text-secondary)] border-[var(--border-bright)]'
+                        }`}>
+                          {stats.active ? 'Active' : 'Retired'}
+                        </span>
+                      )}
                     </div>
                     {(stats.brand || stats.description) && (
                       <p className="text-[var(--text-secondary)] text-sm">{[stats.brand, stats.description].filter(Boolean).join(' · ')}</p>
                     )}
+                    {scrapMark && (
+                      <p className="text-xs text-red-300/80 mt-1">
+                        Scrapped {formatDate(scrapMark.created_at)}{scrapMark.reason ? ` · ${scrapMark.reason}` : ''}
+                      </p>
+                    )}
                   </div>
-                  <div className="flex gap-2">
+                  <div className="flex gap-2 flex-wrap">
+                    {scrapMark ? (
+                      <button onClick={undoScrap} disabled={scrapBusy}
+                        className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-1.5 disabled:opacity-50">
+                        <RotateCcw size={14} /> {scrapBusy ? 'Working...' : 'Undo scrap'}
+                      </button>
+                    ) : (
+                      <button onClick={() => { setScrapErr(null); setScrapReason(''); setScrapOpen(true) }}
+                        className="flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-md font-medium border border-red-700/50 bg-red-900/20 text-red-300 hover:bg-red-900/40 transition-colors">
+                        <Trash2 size={14} /> Mark as Scrap
+                      </button>
+                    )}
                     <button onClick={exportLifecycleExcel} className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-1.5">
                       <Download size={14} /> Excel
                     </button>
@@ -406,6 +475,11 @@ export default function SerialTracker() {
                     </button>
                   </div>
                 </div>
+                {scrapErr && (
+                  <div className="mb-3 -mt-1 flex items-center gap-2 text-sm text-red-300">
+                    <AlertTriangle size={14} className="shrink-0" /> {scrapErr}
+                  </div>
+                )}
 
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                   {[
@@ -527,6 +601,7 @@ export default function SerialTracker() {
                         { label: 'Found',   value: bulkSummary.total,    key: null,         active: statusFilter === null, color: 'green' },
                         { label: 'Active',  value: bulkSummary.active,   key: 'Active',     active: statusFilter === 'Active',   color: 'emerald' },
                         { label: 'Retired', value: bulkSummary.retired,  key: 'Retired',    active: statusFilter === 'Retired',  color: 'gray' },
+                        { label: 'Scrapped', value: bulkSummary.scrapped, key: 'Scrapped',  active: statusFilter === 'Scrapped',  color: 'red' },
                         { label: 'Missing', value: bulkSummary.notFound, key: 'Not Found',  active: statusFilter === 'Not Found', color: 'red' },
                       ].map(chip => (
                         <button
@@ -543,7 +618,7 @@ export default function SerialTracker() {
                           <span className={`text-base font-bold ${
                             chip.label === 'Found'   ? 'text-green-400' :
                             chip.label === 'Active'  ? 'text-emerald-400' :
-                            chip.label === 'Missing' ? 'text-red-400' : 'text-[var(--text-secondary)]'
+                            chip.label === 'Missing' || chip.label === 'Scrapped' ? 'text-red-400' : 'text-[var(--text-secondary)]'
                           }`}>{chip.value}</span>
                           <span>{chip.label}</span>
                         </button>
@@ -617,6 +692,8 @@ export default function SerialTracker() {
                               <span className="text-xs px-2 py-0.5 rounded-full border bg-[var(--surface-2)] text-[var(--text-muted)] border-[var(--border-bright)]">Not Found</span>
                             ) : r.status === 'Active' ? (
                               <span className="text-xs px-2 py-0.5 rounded-full border bg-green-900/30 text-green-400 border-green-700/50">Active</span>
+                            ) : r.status === 'Scrapped' ? (
+                              <span className="text-xs px-2 py-0.5 rounded-full border bg-red-900/30 text-red-400 border-red-700/50">Scrapped</span>
                             ) : (
                               <span className="text-xs px-2 py-0.5 rounded-full border bg-[var(--surface-2)] text-[var(--text-secondary)] border-[var(--border-bright)]">Retired</span>
                             )}
@@ -629,6 +706,49 @@ export default function SerialTracker() {
               )}
             </>
           )}
+        </div>
+      )}
+
+      {/* ── Scrap confirmation modal ───────────────────────────────────────── */}
+      {scrapOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+          onClick={() => !scrapBusy && setScrapOpen(false)}>
+          <div className="card w-full max-w-md" onClick={e => e.stopPropagation()}>
+            <div className="flex items-start justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <div className="p-2 rounded-lg bg-red-900/30 text-red-400"><Trash2 size={18} /></div>
+                <div>
+                  <h3 className="text-base font-semibold text-[var(--text-primary)]">Mark tyre as scrap</h3>
+                  <p className="text-xs text-[var(--text-muted)] font-mono">{lastQuery}</p>
+                </div>
+              </div>
+              <button onClick={() => !scrapBusy && setScrapOpen(false)} className="text-[var(--text-muted)] hover:text-[var(--text-primary)]">
+                <X size={18} />
+              </button>
+            </div>
+            <p className="text-sm text-[var(--text-secondary)] mb-3">
+              This flags the tyre and all {records.length} of its record{records.length !== 1 ? 's' : ''} as Scrapped, removing it from active and pool counts. You can undo this later.
+            </p>
+            <label className="block text-xs font-medium text-[var(--text-secondary)] mb-1">Reason (optional)</label>
+            <textarea
+              className="input w-full text-sm min-h-[72px]"
+              placeholder="e.g. Worn beyond limit, sidewall damage, retread failed..."
+              value={scrapReason}
+              onChange={e => setScrapReason(e.target.value)}
+            />
+            {scrapErr && (
+              <div className="mt-2 flex items-center gap-2 text-sm text-red-300">
+                <AlertTriangle size={14} className="shrink-0" /> {scrapErr}
+              </div>
+            )}
+            <div className="flex justify-end gap-2 mt-4">
+              <button onClick={() => setScrapOpen(false)} disabled={scrapBusy} className="btn-secondary text-sm px-4 py-1.5 disabled:opacity-50">Cancel</button>
+              <button onClick={confirmScrap} disabled={scrapBusy}
+                className="flex items-center gap-1.5 text-sm px-4 py-1.5 rounded-md font-medium border border-red-700/50 bg-red-600/80 text-white hover:bg-red-600 transition-colors disabled:opacity-50">
+                <Trash2 size={14} /> {scrapBusy ? 'Marking...' : 'Confirm scrap'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

@@ -52,18 +52,33 @@ export const REPORT_TYPES = Object.freeze({
   GRID: 'grid',
   MONTHLY_TYRES: 'monthly_tyres',
   COMPLAINTS: 'complaints',
+  COMBINED: 'combined',
   OPEN_WO: 'open_wo',
   ASSETS: 'assets',
 })
 
-/** Header signatures: a set of tokens that must all be present on the header row. */
+/** Header signatures: a set of tokens that must all be present on the header row.
+ * Order matters - the first full match wins, so the more specific COMBINED job-card +
+ * tyre export is checked before the plain OPEN_WO follow-up list. */
 const SIGNATURES = [
   { type: REPORT_TYPES.GRID, need: ['work order number', 'item description', 'values', 'spare parts'], target: 'parts_consumption' },
   { type: REPORT_TYPES.MONTHLY_TYRES, need: ['tyre position', 'tyre fix date', 'removed km', 'reason'], target: 'tyre_records' },
   { type: REPORT_TYPES.COMPLAINTS, need: ['complaints', 'job done description', 'vehicle in date'], target: 'work_orders' },
+  // Combined job-card + tyre-change export (one sheet carries the work order AND the
+  // tyre fitment columns). Distinctive: a job card, complaints, and a "job card in date".
+  { type: REPORT_TYPES.COMBINED, need: ['job card no', 'complaints', 'job card in date'], target: 'work_orders' },
   { type: REPORT_TYPES.OPEN_WO, need: ['job card no', 'j c status', 'no of days jc open'], target: 'open_work_orders' },
   { type: REPORT_TYPES.ASSETS, need: ['asset desc', 'plate no', 'chassis no'], target: 'vehicle_fleet' },
 ]
+
+/** Map the free-text ERP work category to a canonical work_orders.work_type token. */
+function canonWorkType(v) {
+  const s = String(v || '').toLowerCase()
+  if (s.includes('preventive')) return 'Preventive Maintenance'
+  if (s.includes('service')) return 'Service'
+  if (s.includes('inspect')) return 'Inspection'
+  return 'Repair'
+}
 
 /**
  * Find the header row + report type by scanning the first `scan` rows for a known
@@ -191,6 +206,64 @@ function mapComplaints(dataRows, headerRow, country) {
   return out
 }
 
+/** Map a COMBINED job-card + tyre export. Each row is a job-card line; some rows also
+ * carry a tyre change (srno). Returns BOTH the work_orders rows (deduped downstream by
+ * work_order_no) and the tyre_records rows (only where a tyre serial is present). Cost
+ * is NOT taken from this file. */
+function mapCombined(dataRows, headerRow, country) {
+  const h = indexByToken(headerRow)
+  const c = {
+    loc: h.find('asset location'), cat: h.find('category'), jtype: h.find('job type'),
+    jc: h.find('job card no'), indt: h.find('job card in date'), outdt: h.find('job card out date'),
+    asset: h.find('asset no'), km: h.find('kilometer'), comp: h.find('complaints'),
+    qc: h.find('qc_remarks', 'qc remarks'), done: h.find('work_done_desc', 'work done desc'),
+    wshop: h.find('workshop location'), jcrem: h.find('jc remarks'),
+    pos: h.find('tire_pos', 'tire pos'), srno: h.find('srno'), size: h.find('tire_size', 'tire size'),
+    fixd: h.find('fix_date', 'fix date'), fixkm: h.find('fix_km', 'fix km'), fixhm: h.find('fix_hm', 'fix hm'),
+    remd: h.find('remove_date', 'remove date'), remkm: h.find('remove_km', 'remove km'),
+    remhm: h.find('remove_hm', 'remove hm'), tkm: h.find('total_km', 'total km'), brand: h.find('tyre_brand', 'tyre brand'),
+  }
+  const workOrders = []
+  const tyres = []
+  for (const r of dataRows) {
+    const wo = cellAt(r, c.jc)
+    const asset = cellAt(r, c.asset)
+    if (wo || asset) {
+      const outDate = parseDate(cellAt(r, c.outdt))
+      const notes = [cellAt(r, c.done), cellAt(r, c.qc), cellAt(r, c.jcrem)].filter(Boolean).join(' | ').slice(0, 1500)
+      workOrders.push({
+        work_order_no: wo || null, asset_no: asset || null,
+        work_type: canonWorkType(cellAt(r, c.cat) || cellAt(r, c.jtype)),
+        status: outDate ? 'Completed' : 'In Progress', priority: 'Medium', vor: 'false',
+        description: (cellAt(r, c.comp) || '').slice(0, 1000),
+        notes: notes || null, site: cellAt(r, c.loc) || null, workshop_name: cellAt(r, c.wshop) || null,
+        odometer: numStr(cellAt(r, c.km)) || null,
+        opened_at: parseDate(cellAt(r, c.indt)) || null, completed_at: outDate || null,
+        custom_data: { source: 'Combined Job Card + Tyre', ...rawObject(headerRow, r) },
+        country,
+      })
+    }
+    const serial = cellAt(r, c.srno)
+    if (serial) {
+      const removal_date = parseDate(cellAt(r, c.remd))
+      tyres.push({
+        serial_no: serial, asset_no: asset, job_card: cellAt(r, c.jc),
+        size: cellAt(r, c.size), position: cellAt(r, c.pos), tyre_position: cellAt(r, c.pos),
+        brand: cellAt(r, c.brand) || null,
+        issue_date: parseDate(cellAt(r, c.fixd)) || null,
+        km_at_fitment: numStr(cellAt(r, c.fixkm)) || null, hrs_at_fitment: numStr(cellAt(r, c.fixhm)) || null,
+        removal_date: removal_date || null,
+        km_at_removal: numStr(cellAt(r, c.remkm)) || null, hrs_at_removal: numStr(cellAt(r, c.remhm)) || null,
+        total_km: numStr(cellAt(r, c.tkm)) || null,
+        status: removal_date ? 'Removed' : 'Active',
+        extra_fields: rawObject(headerRow, r),
+        country,
+      })
+    }
+  }
+  return { workOrders, tyres }
+}
+
 /** Map an open-job-card follow-up sheet to open_work_orders rows (a replaceable snapshot). */
 function mapOpenWo(dataRows, headerRow, country) {
   const h = indexByToken(headerRow)
@@ -290,9 +363,14 @@ export function intakeSheet(aoa = [], { country = 'KSA' } = {}) {
     kept.push(r)
   }
   let rows = []
+  let tyreRows = [] // combined export: tyre_records rows carried alongside the work orders
   if (det.type === REPORT_TYPES.MONTHLY_TYRES) rows = mapMonthlyTyres(kept, det.headerRow, country)
   else if (det.type === REPORT_TYPES.COMPLAINTS) rows = mapComplaints(kept, det.headerRow, country)
-  else if (det.type === REPORT_TYPES.OPEN_WO) rows = mapOpenWo(kept, det.headerRow, country)
+  else if (det.type === REPORT_TYPES.COMBINED) {
+    const combined = mapCombined(kept, det.headerRow, country)
+    rows = combined.workOrders
+    tyreRows = combined.tyres
+  } else if (det.type === REPORT_TYPES.OPEN_WO) rows = mapOpenWo(kept, det.headerRow, country)
   else if (det.type === REPORT_TYPES.ASSETS) rows = mapAssets(kept, det.headerRow, country)
   // GRID rows are handled by the parts-expense engine (cost source) - the importer
   // routes type === 'grid' there; intakeSheet returns the detection so the caller knows.
@@ -302,5 +380,5 @@ export function intakeSheet(aoa = [], { country = 'KSA' } = {}) {
   const read = kept.length
   const noKey = Math.max(0, read - rows.length)
   const dropped = footerRows + blankRows // back-compat (footer/blank only)
-  return { type: det.type, target: det.target, rows, dropped, read, footerRows, blankRows, noKey }
+  return { type: det.type, target: det.target, rows, tyreRows, dropped, read, footerRows, blankRows, noKey }
 }

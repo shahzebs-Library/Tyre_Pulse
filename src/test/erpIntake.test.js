@@ -120,6 +120,32 @@ describe('intakeSheet', () => {
     expect('parts_cost' in r).toBe(false)
     expect('labour_cost' in r).toBe(false)
   })
+  it('detects + maps a COMBINED job-card + tyre export to work orders and tyres', () => {
+    const header = ['Asset Location', 'Category', 'Job Card No', 'Job Card In Date', 'Job Card Out Date',
+      'Asset No', 'Kilometer', 'complaints', 'qc_remarks', 'work_done_desc', 'Workshop Location', 'JC Remarks',
+      'tire_pos', 'srno', 'tire_size', 'fix_date', 'fix_km', 'fix_hm', 'remove_date', 'remove_km', 'remove_hm', 'total_km', 'tyre_brand']
+    const row = ['DUBAI', 'Running Repair', 'RM/JC/1', '2026-02-01', '2026-02-01', 'TM536', '214554',
+      'Brake Light', 'ok', 'replaced light', 'GC_JEB', 'note', 'RHF1', 'ZZ123', '315/80 R22.5',
+      '2026-01-01', '1000', '', '2026-02-01', '5000', '', '4000', 'Double Coin']
+    const aoa = [header, row]
+    expect(detectReport(aoa).type).toBe(REPORT_TYPES.COMBINED)
+    const res = intakeSheet(aoa, { country: 'UAE' })
+    expect(res.target).toBe('work_orders')
+    expect(res.rows).toHaveLength(1)
+    expect(res.tyreRows).toHaveLength(1)
+    expect(res.rows[0].work_order_no).toBe('RM/JC/1')
+    expect(res.rows[0].asset_no).toBe('TM536')
+    expect(res.rows[0].status).toBe('Completed')
+    expect(res.rows[0].work_type).toBe('Repair')
+    expect(res.rows[0].site).toBe('DUBAI')
+    expect(res.tyreRows[0].serial_no).toBe('ZZ123')
+    expect(res.tyreRows[0].position).toBe('RHF1')
+    expect(res.tyreRows[0].issue_date).toBe('2026-01-01')
+    expect(res.tyreRows[0].removal_date).toBe('2026-02-01')
+    expect(res.tyreRows[0].status).toBe('Removed')
+    expect(res.tyreRows[0].brand).toBe('Double Coin')
+    expect(res.tyreRows[0].country).toBe('UAE')
+  })
   it('accounts for every body row so nothing slips (read = mapped + noKey; body = read + footer + blank)', () => {
     const res = intakeSheet(COMPLAINTS_AOA, { country: 'KSA' })
     // body below the header row = 3 (data + GRAND TOTAL + Printed By)

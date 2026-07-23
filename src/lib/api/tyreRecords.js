@@ -119,32 +119,35 @@ export async function moveTyre({ tyre, toAssetNo, toPosition, km, date } = {}) {
   if (!tyre?.id) return { error: new Error('A tyre record id is required.') }
   const targetAsset = (toAssetNo || '').toString().trim().toUpperCase()
   const crossVehicle = targetAsset && targetAsset !== String(tyre.asset_no || '').toUpperCase()
-  const kmNum = numOrNull(km)
+  const newPos = (toPosition || '').toString().trim()
 
-  const payload = { position: (toPosition || '').toString().trim() || null }
-  if (kmNum != null) payload.km_at_fitment = kmNum
-  if (crossVehicle) {
-    payload.asset_no = targetAsset
-    payload.status = 'Active'
-    payload.removal_date = null
-    payload.km_at_removal = null
-  }
-
-  const { error } = await updateRecord(tyre.id, payload)
+  // Route through the transactional tyre_move RPC: it locks the source and the
+  // destination slot, atomically SWAPS an active tyre already at the destination
+  // instead of silently creating a duplicate fitment, is capability-gated, and
+  // records an audit event. A bare position update cannot do this safely and is
+  // rejected by the V349 active-fitment guard when the target slot is occupied.
+  const { error } = await supabase.rpc('tyre_move', {
+    p: {
+      tyre_id: tyre.id,
+      to_asset_no: crossVehicle ? targetAsset : null,
+      to_position: newPos || null,
+      km: numOrNull(km),
+    },
+  })
   if (error) return { error }
 
   try {
     await createServiceEvent({
       tyre_serial: serialOf(tyre),
-      asset_no: payload.asset_no || tyre.asset_no || null,
-      position: payload.position,
+      asset_no: (crossVehicle ? targetAsset : tyre.asset_no) || null,
+      position: newPos || null,
       event_type: 'rotation',
       event_date: date || todayISO(),
       site: tyre.site || null,
       country: tyre.country || null,
       notes: crossVehicle
-        ? `Moved from ${tyre.asset_no || 'asset'} ${tyre.position || ''} to ${targetAsset} ${payload.position || ''}`.trim()
-        : `Swapped to position ${payload.position || ''}`.trim(),
+        ? `Moved from ${tyre.asset_no || 'asset'} ${tyre.position || ''} to ${targetAsset} ${newPos}`.trim()
+        : `Swapped to position ${newPos}`.trim(),
     })
   } catch { /* service-event log is best-effort */ }
 

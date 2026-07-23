@@ -1290,7 +1290,18 @@
       "errorSub": "Searching a serial needs a connection. Check your network and try again.",
       "retry": "Retry",
       "idleTitle": "Search a tyre serial",
-      "idleSub": "Enter a serial number above to see the tyre's brand, size, fitted position and last reading."
+      "idleSub": "Enter a serial number above to see the tyre's brand, size, fitted position and last reading.",
+      "scrappedBadge": "Scrapped",
+      "scrapReasonLabel": "Reason",
+      "scrapReasonPlaceholder": "Why is this tyre being scrapped?",
+      "markScrap": "Mark as Scrap",
+      "undoScrap": "Undo scrap",
+      "scrapModalTitle": "Scrap this tyre",
+      "confirmScrap": "Confirm scrap",
+      "cancel": "Cancel",
+      "undoConfirmTitle": "Undo scrap?",
+      "undoConfirmBody": "This tyre will be marked Active again.",
+      "scrapErrorTitle": "Could not update"
     },
     "workOrdersList": {
       "title": "Work Orders",

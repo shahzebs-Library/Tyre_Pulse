@@ -104,6 +104,58 @@ export async function listBrandGapTyres({ country, limit = 500 } = {}) {
 }
 
 /**
+ * List ALL tyre_records with a blank brand for the given scope, for a bulk
+ * "fill list" export the customer completes and re-imports into stg_tyre_brand.
+ * Pages the full result set (there are ~1600 rows) via range so nothing is
+ * truncated by PostgREST's default row cap. Ordered by country, asset, serial.
+ * Never throws - returns [] on any error.
+ *
+ * @param {object}  [opts]
+ * @param {string}  [opts.country]  a specific country, or omit / 'All' for all
+ * @returns {Promise<Array<{
+ *   country: string,
+ *   serial_no: string,
+ *   asset_no: string,
+ *   size: string,
+ *   site: string,
+ *   issue_date: string
+ * }>>}
+ */
+export async function listBrandGapTyresAll({ country } = {}) {
+  try {
+    const PAGE = 1000
+    const out = []
+    for (let from = 0; ; from += PAGE) {
+      let query = supabase
+        .from('tyre_records')
+        .select('country,serial_no,asset_no,size,site,issue_date')
+        .or(BLANK_BRAND_FILTER)
+        .not('serial_no', 'is', null)
+        .neq('serial_no', '')
+
+      if (country && country !== 'All') {
+        query = query.eq('country', country)
+      }
+
+      query = query
+        .order('country', { ascending: true })
+        .order('asset_no', { ascending: true })
+        .order('serial_no', { ascending: true })
+        .range(from, from + PAGE - 1)
+
+      const { data, error } = await query
+      if (error) return out
+      const batch = Array.isArray(data) ? data : []
+      out.push(...batch)
+      if (batch.length < PAGE) break
+    }
+    return out
+  } catch {
+    return []
+  }
+}
+
+/**
  * Set the brand on a single tyre_records row. Trims the value; an empty brand is
  * a client-side validation error. Surfaces a ServiceError on an RLS/DB failure
  * so the UI can report the failed write.

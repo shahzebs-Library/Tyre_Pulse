@@ -790,7 +790,8 @@ export default function PositionIntelligence() {
 
           {/* Chart 4: Cost Distribution (doughnut) */}
           <div className="card">
-            <p className="text-xs font-semibold text-[var(--text-primary)] mb-3">Cost Distribution by Position</p>
+            <p className="text-xs font-semibold text-[var(--text-primary)] mb-1">Cost Distribution by Position</p>
+            <p className="text-[10px] text-gray-600 mb-3">Cost by position is from tyre records; the authoritative fleet total is from the expense grid.</p>
             {costDoughnutData.labels.length === 0 ? (
               <div className="flex items-center justify-center h-[260px] text-gray-600 text-xs">No cost data available</div>
             ) : (

@@ -31,7 +31,7 @@ import { parseWorkbookRaw } from '../lib/import/parseWorkbook'
 import { detectReport, intakeSheet } from '../lib/erpIntake'
 import { rowsFromSheet, summarizeRows } from '../lib/partsExpense'
 import { insertPartsConsumption } from '../lib/api/partsConsumption'
-import { loadIntake } from '../lib/api/erpIntake'
+import { loadIntake, countExistingRows } from '../lib/api/erpIntake'
 
 const SAMPLE_LIMIT = 15
 
@@ -197,6 +197,16 @@ export default function ErpIntake() {
         setError('Not a recognised ERP report (checked headers). Supported: grid / monthly tyres / complaints / job cards + tyre changes / open job cards / asset list.')
         setPhase('idle')
         return
+      }
+      // Flag duplicates BEFORE import: how many rows already exist (by natural key)
+      // so re-uploading the same file adds only the new rows, never duplicates.
+      for (const d of found) {
+        try {
+          d.dup = await countExistingRows(d.target, d.rows, { country })
+          if (Array.isArray(d.tyreRows) && d.tyreRows.length) {
+            d.dupTyre = await countExistingRows('tyre_records', d.tyreRows, { country })
+          }
+        } catch { d.dup = null }
       }
       setDetected(found)
       setPhase('preview')
@@ -422,6 +432,14 @@ export default function ErpIntake() {
                     <p><span className="font-semibold text-[var(--text-primary)]">{num(d.rows.length)}</span> data rows</p>
                     {Array.isArray(d.tyreRows) && d.tyreRows.length > 0 && (
                       <p><span className="font-semibold text-[var(--text-primary)]">{num(d.tyreRows.length)}</span> tyre changes</p>
+                    )}
+                    {d.dup && d.dup.keyed && (
+                      <p>
+                        <span className="font-semibold text-[var(--accent,#22c55e)]">{num(d.dup.fresh)}</span> new
+                        {d.dup.existing > 0 && (
+                          <span className="text-[var(--warning,#f59e0b)]"> · {num(d.dup.existing)} already in system (skipped)</span>
+                        )}
+                      </p>
                     )}
                     <p>{num(d.dropped)} footer/blank rows dropped</p>
                   </div>

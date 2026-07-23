@@ -5,6 +5,12 @@
  * typed, offline-safe record queue so a reading captured with no signal is
  * never lost. Odometer readings feed vehicle_fleet.current_km via a V213
  * trigger, so "actual current km" stays authoritative.
+ *
+ * Regression policy (V340): a reading LOWER than the asset's last/current meter
+ * is NEVER rejected here. It is submitted and ACCEPTED; a server BEFORE-INSERT
+ * trigger (flag_meter_regression) stamps flagged=true + flag_reason for admin
+ * review. The client only WARNS the driver ("saved, flagged for admin review").
+ * The flag columns are server-set, so the write payload never carries them.
  */
 import { supabase } from './supabase'
 import { saveCommand } from './recordQueue'

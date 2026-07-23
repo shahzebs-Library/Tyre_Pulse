@@ -5,9 +5,10 @@
  * reading each day and photograph the gauge as proof. The odometer reading
  * advances vehicle_fleet.current_km via a server trigger (V213), so "current
  * km" stays real. The write is offline-safe (record queue), and a live "last
- * reading" panel plus a HARD monotonic guard stops fat-finger rollbacks before
- * they enter the fleet's distance history. The asset can be picked by scan
- * (QR / barcode) and its site is auto-filled from the fleet master.
+ * reading" panel warns on rollbacks. A reading BELOW the last one is NOT
+ * blocked (V340): it is accepted and the server flags it for admin review, so
+ * genuine corrections and meter swaps are never lost. The asset can be picked
+ * by scan (QR / barcode) and its site is auto-filled from the fleet master.
  */
 import { useEffect, useState, useCallback, useMemo, useRef } from 'react'
 import {
@@ -73,7 +74,7 @@ function MeterLogScreen() {
   const [reviewOpen, setReviewOpen] = useState(false)
   // Subtle, self-dismissing inline banner after a save. 'pending' = queued for
   // silent auto-sync (no scary offline modal); 'synced' = written straight away.
-  const [savedFlash, setSavedFlash] = useState<'synced' | 'pending' | null>(null)
+  const [savedFlash, setSavedFlash] = useState<'synced' | 'pending' | 'flagged' | null>(null)
 
   // Site is auto-filled from the fleet master, but never over a value the user
   // typed / picked. Once the user edits site, we stop overwriting it.
@@ -146,7 +147,8 @@ function MeterLogScreen() {
   const kmNum = Number(odometer)
   const hasKm = odometer.trim() !== '' && !Number.isNaN(kmNum)
   const dailyDelta = hasKm && last?.odometer_km != null ? kmNum - last.odometer_km : null
-  // HARD guard: a reading below the last one is rejected outright (equal is ok).
+  // SOFT guard (V340): a reading below the last one is NOT rejected. It is
+  // accepted and the server flags it for admin review; we only warn the driver.
   const belowLast = hasKm && last?.odometer_km != null && kmNum < last.odometer_km
   const bigJump = dailyDelta != null && dailyDelta > IMPLAUSIBLE_DAILY_KM
   const lastKmLabel = last?.odometer_km?.toLocaleString() ?? ''
@@ -205,6 +207,9 @@ function MeterLogScreen() {
 
   const doSubmit = useCallback(async () => {
     setSubmitting(true)
+    // Remember (before the form resets) whether this reading rolled back, so the
+    // post-save chip can tell the driver it was flagged for admin review.
+    const wasFlagged = belowLast
     try {
       const hrsRaw = engineHours.trim()
       const hrsNum = hrsRaw === '' ? null : Number(hrsRaw)
@@ -226,13 +231,13 @@ function MeterLogScreen() {
       // to a fresh blank entry, and show a subtle self-dismissing chip.
       setReviewOpen(false)
       resetForm()
-      setSavedFlash(res.offline ? 'pending' : 'synced')
+      setSavedFlash(wasFlagged ? 'flagged' : res.offline ? 'pending' : 'synced')
     } catch (e: any) {
       Alert.alert(t('modules.meter.logFailTitle'), toUserMessage(e, t('modules.meter.tryAgain')))
     } finally {
       setSubmitting(false)
     }
-  }, [assetNo, site, profile, today, kmNum, odoPhoto, engineHours, hoursPhoto, notes, signature, resetForm, t])
+  }, [assetNo, site, profile, today, kmNum, odoPhoto, engineHours, hoursPhoto, notes, signature, belowLast, resetForm, t])
 
   // Validate the reading itself, then move to the review + photo step. The
   // gauge photo is captured there, not on the main entry form.
@@ -241,9 +246,17 @@ function MeterLogScreen() {
     if (!assetNo.trim()) { Alert.alert(t('modules.meter.assetRequiredTitle'), t('modules.meter.assetRequiredMsg')); return }
     if (!hasKm) { Alert.alert(t('modules.meter.readingRequiredTitle'), t('modules.meter.readingRequiredMsg')); return }
     if (kmNum < 0) { Alert.alert(t('modules.meter.invalidReadingTitle'), t('modules.meter.invalidReadingMsg')); return }
-    // Hard reject: never allow a reading below the last recorded one.
+    // Below the last reading: ACCEPT it (never block) but confirm, and warn that
+    // it will be flagged for admin review. The server sets the flag on insert.
     if (belowLast) {
-      Alert.alert(t('modules.meter.tooLowTitle'), `${t('modules.meter.belowLastPrefix')} ${lastKmLabel} ${t('modules.meter.kmDot')}`)
+      Alert.alert(
+        t('modules.meter.belowLastWarnTitle'),
+        `${t('modules.meter.belowLastWarnPrefix')} ${lastKmLabel} ${t('modules.meter.belowLastWarnSuffix')}`,
+        [
+          { text: t('modules.meter.recheck'), style: 'cancel' },
+          { text: t('modules.meter.saveAndFlag'), onPress: () => setReviewOpen(true) },
+        ],
+      )
       return
     }
     if (bigJump) {
@@ -285,14 +298,18 @@ function MeterLogScreen() {
         </View>
 
         {savedFlash && (
-          <View style={[styles.flash, savedFlash === 'pending' ? styles.flashPending : styles.flashSynced, isRTL && styles.rowR]}>
+          <View style={[styles.flash, savedFlash === 'synced' ? styles.flashSynced : styles.flashPending, isRTL && styles.rowR]}>
             <Ionicons
-              name={savedFlash === 'pending' ? 'cloud-upload-outline' : 'checkmark-circle'}
+              name={savedFlash === 'flagged' ? 'flag' : savedFlash === 'pending' ? 'cloud-upload-outline' : 'checkmark-circle'}
               size={16}
-              color={savedFlash === 'pending' ? theme.color.warning.base : theme.color.success.base}
+              color={savedFlash === 'synced' ? theme.color.success.base : theme.color.warning.base}
             />
-            <Text style={[styles.flashText, { color: savedFlash === 'pending' ? theme.color.warning.on : theme.color.success.on, textAlign }]}>
-              {savedFlash === 'pending' ? 'Reading saved. Pending sync.' : 'Reading logged.'}
+            <Text style={[styles.flashText, { color: savedFlash === 'synced' ? theme.color.success.on : theme.color.warning.on, textAlign }]}>
+              {savedFlash === 'flagged'
+                ? t('modules.meter.flaggedFlash')
+                : savedFlash === 'pending'
+                  ? t('modules.meter.pendingFlash')
+                  : t('modules.meter.loggedFlash')}
             </Text>
           </View>
         )}
@@ -337,9 +354,9 @@ function MeterLogScreen() {
           {!!assetNo.trim() && (
             <View style={[styles.lastCard, belowLast && styles.lastCardWarn]}>
               <Ionicons
-                name={loadingLast ? 'time-outline' : last ? 'speedometer-outline' : 'help-circle-outline'}
+                name={loadingLast ? 'time-outline' : belowLast ? 'flag-outline' : last ? 'speedometer-outline' : 'help-circle-outline'}
                 size={18}
-                color={belowLast ? theme.color.danger.base : theme.color.info.base}
+                color={belowLast ? theme.color.warning.base : theme.color.info.base}
               />
               <View style={{ flex: 1 }}>
                 {loadingLast ? (
@@ -351,7 +368,7 @@ function MeterLogScreen() {
                       {last.reading_date ? ` · ${new Date(last.reading_date + 'T00:00:00').toLocaleDateString(dateLocale, { day: 'numeric', month: 'short' })}` : ''}
                     </Text>
                     {dailyDelta != null && (
-                      <Text style={[styles.deltaText, belowLast && { color: theme.color.danger.base }, bigJump && { color: theme.color.warning.base }, { textAlign }]}>
+                      <Text style={[styles.deltaText, (belowLast || bigJump) && { color: theme.color.warning.base }, { textAlign }]}>
                         {belowLast
                           ? `${dailyDelta.toLocaleString()} ${t('modules.meter.lowerThanLast')}`
                           : `+${dailyDelta.toLocaleString()} ${t('modules.meter.sinceLast')}`}
@@ -369,7 +386,7 @@ function MeterLogScreen() {
           <View style={styles.card}>
             <Text style={[styles.label, { textAlign }]}>{t('modules.meter.odometerLabel')}</Text>
             <TextInput
-              style={[styles.input, styles.bigInput, belowLast && styles.inputError, { textAlign }]}
+              style={[styles.input, styles.bigInput, belowLast && styles.inputWarn, { textAlign }]}
               value={odometer}
               onChangeText={v => setOdometer(v.replace(/[^0-9.]/g, ''))}
               placeholder={t('modules.meter.odometerPlaceholder')}
@@ -377,8 +394,8 @@ function MeterLogScreen() {
               keyboardType="numeric"
             />
             {belowLast && (
-              <Text style={[styles.errorText, { textAlign }]}>
-                {t('modules.meter.belowLastPrefix')} {lastKmLabel} {t('modules.meter.kmDot')}
+              <Text style={[styles.warnText, { textAlign }]}>
+                {t('modules.meter.belowLastWarnPrefix')} {lastKmLabel} {t('modules.meter.belowLastWarnSuffix')}
               </Text>
             )}
           </View>
@@ -458,7 +475,7 @@ function MeterLogScreen() {
             label="Review & Save"
             icon="arrow-forward"
             onPress={handleContinue}
-            disabled={submitting || belowLast}
+            disabled={submitting}
             size="lg"
             full
             style={{ marginTop: spacing.xs }}
@@ -639,16 +656,18 @@ function makeStyles(theme: Theme) {
       borderRadius: radius.md, paddingHorizontal: spacing.md, paddingVertical: 11, fontSize: 14, color: c.text,
     },
     inputError: { borderColor: c.danger.base },
+    inputWarn: { borderColor: c.warning.base },
     bigInput: { fontSize: 20, fontWeight: '800', paddingVertical: 13, letterSpacing: 0.5 },
     textArea: { minHeight: 76, textAlignVertical: 'top' },
     errorText: { ...typography.caption, fontWeight: '700', color: c.danger.base, marginTop: spacing.sm },
+    warnText: { ...typography.caption, fontWeight: '700', color: c.warning.on, marginTop: spacing.sm },
 
     lastCard: {
       flexDirection: 'row', alignItems: 'center', gap: spacing.sm,
       backgroundColor: c.info.soft, borderRadius: radius.md, padding: spacing.md,
       borderWidth: 1, borderColor: c.info.base,
     },
-    lastCardWarn: { backgroundColor: c.danger.soft, borderColor: c.danger.base },
+    lastCardWarn: { backgroundColor: c.warning.soft, borderColor: c.warning.base },
     lastText: { ...typography.body, fontWeight: '700', color: c.text },
     deltaText: { ...typography.caption, fontWeight: '700', color: c.info.on, marginTop: 2 },
 

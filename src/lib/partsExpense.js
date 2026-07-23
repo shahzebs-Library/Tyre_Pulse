@@ -81,18 +81,44 @@ export function toNum(v) {
   return Number.isFinite(n) ? n : null
 }
 
-const TYRE_WORD = /(tyre|tire)/i
-const TYRE_SIZE = /[0-9]{3}\s*[/x-]?\s*[0-9]{2}\s*r\s*[0-9]{2}|[0-9]{3}\/[0-9]{2}r|r\s?[0-9]{2}\.5/i
-const OIL_WORD = /(engine oil|gear oil|hydraulic oil|lubric|grease|coolant|\batf\b|brake fluid)/i
+// Mirrors the SQL classifier (V335). Classification is by the ITEM DESCRIPTION.
+const TYRE_SIZE = /[0-9]{3}\s*\/\s*[0-9]{2}\s*r?\s*[0-9]{2}(\.[0-9])?|[0-9]{4}\s*r\s*[0-9]{2}|[0-9]{2}\.[0-9]{1,2}\s*[-r]\s*[0-9]{2}/i
+const TYRE_WORD = /\b(tyre|tire)\b/i
+const TYRE_CONSUMABLE = /(valve|patch|glue|tube|flap|solution|repair kit|wax|soap|paste|cement|remover|lever|gauge|protector|marker|chalk|spray|\brim\b|wheel nut|\bstud\b)/i
+const TYRE_BRAND = /\b(double coin|triangle|ling ?long|aeolus|jinyu|bridgestone|firestone|michelin|goodyear|hankook|dunlop|yokohama|pirelli|continental|kumho|maxxis|infinity|otani|advance|annaite|sailun|westlake|windforce|skyfire|century|rock buster|diamond back|gold dove|bkt|itr|amberstone|kapsen|techking|boto|hilo|apollo|mrf|ceat|giti|gt radial|roadlux|long ?march|double ?star|samson|armour|deestone|camso|solideal|marcher|superhawk|fullrun|transking|copartner|hifly|goform|rockstone)\b/i
+const OIL_WORD = /(engine oil|gear oil|hydraulic oil|hyd oil|transmission oil|\batf\b|brake fluid|grease|coolant|anti ?freeze|adblue|lubric|\bdef\b)/i
+const OIL_PART = /(filter|\bseal\b|\bpump\b|cooler|\bpipe\b|gasket|element|\bhose\b|pressure|sensor|switch)/i
+
+/** True when the item description names an actual tyre (size, or the tyre word without
+ * being a consumable, or a known tyre brand). Mirrors public.parts_is_tyre. */
+export function isTyreItem(description) {
+  const d = String(description ?? '')
+  if (!d) return false
+  if (TYRE_SIZE.test(d)) return true
+  if (TYRE_WORD.test(d) && !TYRE_CONSUMABLE.test(d)) return true
+  return TYRE_BRAND.test(d)
+}
+
+/** True when the item is a lubricant (not an oil filter/seal/etc). Mirrors parts_is_oil. */
+export function isOilItem(description) {
+  const d = String(description ?? '')
+  return OIL_WORD.test(d) && !OIL_PART.test(d)
+}
+
+/** Extract a known tyre brand from the description, Title-cased, or null. */
+export function brandOf(description) {
+  const m = String(description ?? '').match(TYRE_BRAND)
+  if (!m) return null
+  return m[1].toLowerCase().replace(/\b\w/g, (ch) => ch.toUpperCase())
+}
 
 /**
- * Classify one line. Mirrors the SQL trigger:
+ * Classify one line. Mirrors the SQL trigger (V335):
  *   lineCost = Values || Total || max(split) || 0  (a zero falls through)
- *   category = tyre when the item names a tyre AND carries a tyre size,
- *              oil when oil amount present (and not a tyre) or an oil keyword,
- *              else spare. The amount is placed in that one bucket.
+ *   category = tyre when the item names a tyre (size / word / brand),
+ *              else oil when it is a lubricant, else spare.
  * @param {{description:string, value:*, spare:*, tyre:*, oil:*, total:*}} row
- * @returns {{ category:'tyre'|'spare'|'oil', lineCost:number, tyreCost:number, spareCost:number, oilCost:number }}
+ * @returns {{ category:'tyre'|'spare'|'oil', lineCost:number, tyreCost:number, spareCost:number, oilCost:number, brand:(string|null) }}
  */
 export function classifyLine({ description, value, spare, tyre, oil, total } = {}) {
   const v = toNum(value) || 0
@@ -101,9 +127,8 @@ export function classifyLine({ description, value, spare, tyre, oil, total } = {
   const ty = toNum(tyre) || 0
   const oi = toNum(oil) || 0
   const lineCost = v || t || Math.max(sp, ty, oi) || 0
-  const d = String(description ?? '')
-  const isTyre = TYRE_WORD.test(d) && TYRE_SIZE.test(d)
-  const isOil = (oi > 0 && !TYRE_WORD.test(d)) || OIL_WORD.test(d)
+  const isTyre = isTyreItem(description)
+  const isOil = !isTyre && isOilItem(description)
   let category = 'spare'
   if (isTyre) category = 'tyre'
   else if (isOil) category = 'oil'
@@ -113,6 +138,7 @@ export function classifyLine({ description, value, spare, tyre, oil, total } = {
     tyreCost: category === 'tyre' ? lineCost : 0,
     spareCost: category === 'spare' ? lineCost : 0,
     oilCost: category === 'oil' ? lineCost : 0,
+    brand: brandOf(description),
   }
 }
 

@@ -563,6 +563,7 @@ export default function TyreLifecycle() {
         {/* Cost Doughnut */}
         <div className="card p-5">
           <h2 className="text-sm font-semibold text-[var(--text-primary)] mb-4">Cost per Lifecycle Stage</h2>
+          <p className="text-xs text-[var(--text-dim)] mb-3">Breakdown from tyre records; authoritative total from the expense grid.</p>
           <div style={{ height: 280 }}>
             {costDonut.datasets[0].data.some(v => v > 0) ? (
               <Doughnut data={costDonut} options={DONUT_OPTS} />

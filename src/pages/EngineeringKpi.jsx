@@ -3,7 +3,7 @@ import * as engKpiApi from '../lib/api/engineeringKpi'
 import { fetchAllPages } from '../lib/fetchAll'
 import { toUserMessage } from '../lib/safeError'
 import { useSettings, COUNTRIES } from '../contexts/SettingsContext'
-import { loadCostSplit } from '../lib/api/costSummary'
+import { loadCostSplit, loadGridTyreByAsset } from '../lib/api/costSummary'
 import { COST_MODES, pickCost } from '../lib/costSources'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import {
@@ -202,6 +202,11 @@ export default function EngineeringKpi() {
   const [costMode, setCostMode] = useState('tyres')
   const [costSplit, setCostSplit] = useState(null)
   const [costSplitLoading, setCostSplitLoading] = useState(true)
+  // Authoritative per-asset tyre cost from the expense grid (V347 RPC). Null when
+  // the grid is unavailable for this scope -> the worst-assets table then falls
+  // back to its tyre_records cost_per_tyre sum. Keyed on country + date range so
+  // it matches the page filters.
+  const [gridByAsset, setGridByAsset] = useState(null)
 
   const effectiveCountry = countryChip !== 'All' ? countryChip : (activeCountry !== 'All' ? activeCountry : undefined)
 
@@ -219,6 +224,18 @@ export default function EngineeringKpi() {
       .finally(() => { if (!cancelled) setCostSplitLoading(false) })
     return () => { cancelled = true }
   }, [effectiveCountry, dateFrom, dateTo, siteFilter])
+
+  useEffect(() => {
+    let cancelled = false
+    loadGridTyreByAsset({
+      country: effectiveCountry,
+      from: dateFrom || undefined,
+      to: dateTo || undefined,
+    })
+      .then(res => { if (!cancelled) setGridByAsset(res) })
+      .catch(() => { if (!cancelled) setGridByAsset(null) })
+    return () => { cancelled = true }
+  }, [effectiveCountry, dateFrom, dateTo])
 
   const costFigure = costSplit ? pickCost(costMode, { tyre: costSplit.tyre, maintenance: costSplit.maintenance }) : 0
   const costModeOptions = COST_MODES.map(m => ({ ...m, label: m.key === 'maintenance' ? 'General' : m.label }))
@@ -422,7 +439,13 @@ export default function EngineeringKpi() {
     return kpis.cpkByAsset.slice(0, 10).map(a => {
       const assetRecs = records.filter(r => r.asset_no === a.asset_no)
       const failures = assetRecs.filter(r => ['Critical', 'High'].includes(r.risk_level)).length
-      const totalCost = assetRecs.reduce((s, r) => s + (r.cost_per_tyre || 0) * (r.qty || 1), 0)
+      // Total tyre cost = authoritative expense-grid amount for this asset when the
+      // grid is available and carries it; otherwise fall back to the tyre_records
+      // cost_per_tyre sum (never show 0 where a real number existed before).
+      const gridCost = gridByAsset?.map?.get(String(a.asset_no ?? '').trim().toUpperCase())
+      const totalCost = gridCost != null
+        ? gridCost
+        : assetRecs.reduce((s, r) => s + (r.cost_per_tyre || 0) * (r.qty || 1), 0)
       const withKm = assetRecs.filter(r => {
         const fit = Number(r.km_at_fitment), rem = Number(r.km_at_removal)
         return isFinite(fit) && isFinite(rem) && rem > fit
@@ -439,7 +462,7 @@ export default function EngineeringKpi() {
         replacements: assetRecs.length,
       }
     })
-  }, [kpis, records])
+  }, [kpis, records, gridByAsset])
 
   // Brand scorecard
   const brandScorecard = useMemo(() => {

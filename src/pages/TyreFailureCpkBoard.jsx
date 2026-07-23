@@ -24,6 +24,7 @@ import PageHeader from '../components/ui/PageHeader'
 import { useSettings } from '../contexts/SettingsContext'
 import { formatCurrency } from '../lib/formatters'
 import { listAllRecords } from '../lib/api/tyreRecords'
+import { loadGridTyreByAsset } from '../lib/api/costSummary'
 import { buildTyreFailureBoard } from '../lib/tyreFailureBoard'
 import { stylize, ACCENTS } from '../lib/reportColors'
 import { reportFileName, reportDateLabel, exportToExcel } from '../lib/exportUtils'
@@ -109,8 +110,21 @@ export default function TyreFailureCpkBoard() {
   const load = useCallback(async () => {
     setRefreshing(true); setError('')
     try {
-      const { data } = await listAllRecords({ country: activeCountry })
-      setBoard(buildTyreFailureBoard(data || []))
+      const [{ data }, grid] = await Promise.all([
+        listAllRecords({ country: activeCountry }),
+        loadGridTyreByAsset({ country: activeCountry }),
+      ])
+      const built = buildTyreFailureBoard(data || [])
+      // Reconcile the per-asset "Total cost" column to the authoritative expense
+      // grid (key = asset_no UPPER/trim); ranking + Avg CPK stay on tyre_records.
+      // Absent grid, or an asset it does not carry, keeps the tyre_records total.
+      if (grid && grid.map && Array.isArray(built.worstAssets)) {
+        built.worstAssets = built.worstAssets.map((a) => {
+          const key = String(a.asset_no ?? '').trim().toUpperCase()
+          return grid.map.has(key) ? { ...a, totalCost: grid.map.get(key) } : a
+        })
+      }
+      setBoard(built)
       setUpdatedAt(new Date())
     } catch (e) {
       setError(toUserMessage(e, 'Could not load the tyre failure and CPK board.'))
@@ -332,6 +346,7 @@ export default function TyreFailureCpkBoard() {
           {sections.assets && board && (
             <section className="space-y-3">
               <h2 className="text-sm font-bold uppercase tracking-wider text-[var(--text-secondary)] flex items-center gap-2"><Table size={15} /> Worst-cost assets</h2>
+              <p className="text-xs text-[var(--text-muted)]">Avg CPK from tyre records; total cost from the expense grid.</p>
               <div className="card overflow-x-auto">
                 {board.worstAssets.length === 0 ? (
                   <div className="text-center text-[var(--text-muted)] py-6 text-sm">Not enough priced records to rank assets by CPK.</div>

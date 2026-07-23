@@ -213,3 +213,40 @@ export async function loadCostSplit({ country, now, from, to, site } = {}) {
   const maintenance = byMonth.reduce((s, m) => s + m.maintenance, 0)
   return { tyre, maintenance, totals: { tyre, maintenance }, byMonth }
 }
+
+/**
+ * Authoritative per-asset TYRE cost from the parts_consumption grid (the classified
+ * expense export), via the get_tyre_cost_by_asset RPC (V347). This is THE source for
+ * any per-asset tyre-cost total, so the Tyre module reconciles to the Expense module
+ * instead of summing tyre_records.cost_per_tyre (null on ~36% of rows). Asset keys are
+ * canonical UPPER(TRIM()) (V337), matching tyre_records.asset_no.
+ *
+ * Returns null when the grid is unavailable for this scope (RPC absent, empty, or org
+ * not migrated) so callers can fall back to their legacy tyre_records sum.
+ *
+ * @param {{ country?:string, from?:string, to?:string }} [opts]
+ * @returns {Promise<{ map: Map<string, number>, total:number } | null>}
+ */
+export async function loadGridTyreByAsset({ country, from, to } = {}) {
+  try {
+    const { data, error } = await supabase.rpc('get_tyre_cost_by_asset', {
+      p_country: country && country !== 'All' ? country : null,
+      p_from: from || null,
+      p_to: to || null,
+    })
+    if (error) return null
+    if (!Array.isArray(data) || data.length === 0) return null
+    const map = new Map()
+    let total = 0
+    for (const r of data) {
+      const key = String(r.asset_code || '').trim().toUpperCase()
+      const cost = num(r.tyre_cost)
+      if (!key) continue
+      map.set(key, cost)
+      total += cost
+    }
+    return { map, total }
+  } catch {
+    return null
+  }
+}

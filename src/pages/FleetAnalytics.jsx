@@ -3,6 +3,7 @@ import { useLanguage } from '../contexts/LanguageContext'
 import * as analytics from '../lib/api/analyticsReads'
 import { useSettings } from '../contexts/SettingsContext'
 import { bucketByMonth, linearRegression, recordCost } from '../lib/analyticsEngine'
+import { loadGridTyreByAsset } from '../lib/api/costSummary'
 import { BarChart2, Download, FileText, AlertTriangle, RefreshCw } from 'lucide-react'
 import { SkeletonCards, SkeletonChart } from '../components/ui/Skeleton'
 import { motion } from 'framer-motion'
@@ -32,6 +33,9 @@ export default function FleetAnalytics() {
   const { t } = useLanguage()
   const { activeCountry, activeCurrency } = useSettings()
   const [assetMetrics, setAssetMetrics] = useState([])
+  // Authoritative per-asset tyre cost from the expense grid (V347). null when the
+  // grid is unavailable for this scope -> per-asset totals fall back to tyre_records.
+  const [gridCost, setGridCost] = useState(null)
   const [totalRecords, setTotalRecords] = useState(0)
   const [selectedRecords, setSelectedRecords] = useState([])
   const [loading, setLoading]   = useState(true)
@@ -51,11 +55,15 @@ export default function FleetAnalytics() {
     const myReq = ++reqIdRef.current
     setLoading(true); setError(null)
     try {
-      const { data, error: e } = await analytics.reportAssetMetrics({ country: activeCountry })
+      const [{ data, error: e }, grid] = await Promise.all([
+        analytics.reportAssetMetrics({ country: activeCountry }),
+        loadGridTyreByAsset({ country: activeCountry }),
+      ])
       if (myReq !== reqIdRef.current) return
       if (e) throw new Error(e.message || e)
       const m = data || []
       setAssetMetrics(m)
+      setGridCost(grid && grid.map ? grid.map : null)
       setTotalRecords(m.reduce((s, a) => s + (a.count || 0), 0))
     } catch (e) {
       if (myReq === reqIdRef.current) setError(toUserMessage(e, t('fleetanalytics.loadErrorFallback')))
@@ -76,19 +84,32 @@ export default function FleetAnalytics() {
     return () => { cancelled = true }
   }, [selected, activeCountry])
 
+  // Overlay the authoritative expense-grid tyre cost onto each asset's totalCost
+  // (key = asset_no UPPER/trim). Absent grid, or an asset the grid does not carry,
+  // keeps the tyre_records total (honest fallback). Every downstream per-asset and
+  // fleet total (summary, table, sort, export, drill header) then reconciles to
+  // the Expense module.
+  const assetMetricsView = useMemo(() => {
+    if (!gridCost) return assetMetrics
+    return assetMetrics.map(a => {
+      const key = String(a.assetNo ?? '').trim().toUpperCase()
+      return gridCost.has(key) ? { ...a, totalCost: gridCost.get(key) } : a
+    })
+  }, [assetMetrics, gridCost])
+
   const sorted = useMemo(() => {
-    const arr = [...assetMetrics]
+    const arr = [...assetMetricsView]
     if (sortBy === 'count')    return arr.sort((a, b) => b.count - a.count)
     if (sortBy === 'cost')     return arr.sort((a, b) => b.totalCost - a.totalCost)
     if (sortBy === 'risk')     return arr.sort((a, b) => b.highRiskCount - a.highRiskCount)
     if (sortBy === 'freq')     return arr.sort((a, b) => b.failureFreqPerMonth - a.failureFreqPerMonth)
     return arr
-  }, [assetMetrics, sortBy])
+  }, [assetMetricsView, sortBy])
 
   // Unique sites derived from per-asset metrics
   const allSites = useMemo(() =>
-    [...new Set(assetMetrics.flatMap(a => a.sites || []))].sort(),
-    [assetMetrics]
+    [...new Set(assetMetricsView.flatMap(a => a.sites || []))].sort(),
+    [assetMetricsView]
   )
 
   const filtered = useMemo(() => {
@@ -124,7 +145,7 @@ export default function FleetAnalytics() {
   )
 
   const selectedAsset = selected
-    ? { ...assetMetrics.find(a => a.assetNo === selected), records: selectedRecords }
+    ? { ...assetMetricsView.find(a => a.assetNo === selected), records: selectedRecords }
     : null
 
   return (
@@ -153,8 +174,8 @@ export default function FleetAnalytics() {
             value: assetMetrics.filter(a => a.failureFreqPerMonth > 2).length,
             color: 'text-red-400' },
           { label: t('fleetanalytics.summary.avgCostPerAsset'),
-            value: assetMetrics.length
-              ? formatCurrencyCompact(assetMetrics.reduce((s, a) => s + a.totalCost, 0) / assetMetrics.length, activeCurrency)
+            value: assetMetricsView.length
+              ? formatCurrencyCompact(assetMetricsView.reduce((s, a) => s + a.totalCost, 0) / assetMetricsView.length, activeCurrency)
               : '-',
             color: 'text-green-400' },
         ].map(({ label, value, color }, i) => (
@@ -451,6 +472,7 @@ function AssetDrillDown({ asset, currency }) {
           <div style={{ height: 200 }}>
             <Bar data={costData} options={barOpts} />
           </div>
+          <p className="text-xs text-gray-500 mt-1">Breakdown from tyre records; authoritative total from the expense grid.</p>
         </div>
         <div>
           <p className="text-xs text-gray-400 mb-2">{t('fleetanalytics.drill.failureFrequency')}</p>

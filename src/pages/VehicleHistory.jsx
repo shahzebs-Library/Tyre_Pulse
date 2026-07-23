@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { motion } from 'framer-motion'
 import * as vehicleHistoryApi from '../lib/api/vehicleHistory'
+import { loadCostSplit, loadGridTyreByAsset } from '../lib/api/costSummary'
 import { useSettings } from '../contexts/SettingsContext'
 import { computeAssetMetrics, bucketByMonth, countBy, sum } from '../lib/analyticsEngine'
 import { detectAnomalies, ANOMALY_TYPES } from '../lib/anomalyEngine'
@@ -246,6 +247,12 @@ export default function VehicleHistory() {
   // Fleet master data
   const [fleetMap, setFleetMap] = useState({})   // asset_no -> vehicle_fleet row
 
+  // Authoritative tyre spend from the expense grid. costTyreTotal = fleet/country
+  // total (loadCostSplit.tyre, legacy-fallback baked in). gridByAsset = per-asset
+  // map for reconciling each row's Total Cost; null when the grid is unavailable.
+  const [costTyreTotal, setCostTyreTotal] = useState(null)
+  const [gridByAsset, setGridByAsset]     = useState(null)
+
   // Filters
   const [search, setSearch]               = useState('')
   const [siteFilter, setSiteFilter]       = useState('')
@@ -283,6 +290,16 @@ export default function VehicleHistory() {
         const map = {}
         ;(fleetData || []).forEach(v => { map[v.asset_no] = v })
         setFleetMap(map)
+
+        // Authoritative tyre spend (fleet total + per-asset) from the expense grid.
+        // Both helpers never throw and fall back internally; scoped to the country.
+        const [splitRes, gridRes] = await Promise.all([
+          loadCostSplit({ country: activeCountry }).catch(() => null),
+          loadGridTyreByAsset({ country: activeCountry }).catch(() => null),
+        ])
+        if (cancelled) return
+        setCostTyreTotal(splitRes ? splitRes.tyre : null)
+        setGridByAsset(gridRes)
       } catch (err) {
         if (!cancelled) setError(toUserMessage(err, 'Could not load vehicle history.'))
       } finally {
@@ -319,8 +336,14 @@ export default function VehicleHistory() {
       const misuseScore   = computeMisuseScore(assetAnomalies, asset.highRiskCount, asset.count, asset.spanMonths)
       const avgDays       = asset.count > 1 ? Math.round((asset.spanMonths * 30) / asset.count) : null
 
+      // Per-asset Total Cost = authoritative expense-grid tyre spend for this asset
+      // when the grid has it; otherwise keep the tyre_records-derived total.
+      const gridCost      = gridByAsset?.map?.get(String(asset.assetNo ?? '').trim().toUpperCase())
+      const totalCost     = gridCost != null ? gridCost : asset.totalCost
+
       return {
         ...asset,
+        totalCost,
         anomalies: assetAnomalies,
         localFlags,
         policyFlags,
@@ -330,7 +353,7 @@ export default function VehicleHistory() {
         fleetRecord,
       }
     })
-  }, [assetMetrics, allAnomalies, fleetMap])
+  }, [assetMetrics, allAnomalies, fleetMap, gridByAsset])
 
   // ── Filter + sort ────────────────────────────────────────────────────────────
   const filteredRows = useMemo(() => {
@@ -428,7 +451,9 @@ export default function VehicleHistory() {
           { label: t('vehiclehistory.summary.highMisuseRisk'), value: vehicleRows.filter(r => r.misuseScore >= 51).length,              color: 'text-red-400' },
           {
             label: t('vehiclehistory.summary.totalFleetCost'),
-            value: `${activeCurrency} ${Math.round(vehicleRows.reduce((s, r) => s + r.totalCost, 0)).toLocaleString()}`,
+            // Authoritative fleet tyre spend from the expense grid; falls back to
+            // the sum of per-asset totals when the grid is unavailable.
+            value: `${activeCurrency} ${Math.round(costTyreTotal != null ? costTyreTotal : vehicleRows.reduce((s, r) => s + r.totalCost, 0)).toLocaleString()}`,
             color: 'text-green-400',
           },
         ].map(({ label, value, color }, i) => (

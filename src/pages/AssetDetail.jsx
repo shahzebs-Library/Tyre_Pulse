@@ -18,6 +18,7 @@ import {
 import { supabase } from '../lib/supabase'
 import * as assetApi from '../lib/api/assetManagement'
 import { listPmPrograms, listPmServiceRecords } from '../lib/api/pmPrograms'
+import { loadGridTyreByAsset } from '../lib/api/costSummary'
 import { toUserMessage } from '../lib/safeError'
 import { pmAssetDueStatus } from '../lib/pmSchedule'
 import { PM_DUE_META } from '../lib/pmPrograms'
@@ -291,6 +292,10 @@ export default function AssetDetail() {
   const [pmPlans, setPmPlans] = useState([])
   const [pmServices, setPmServices] = useState([])
   const [overview, setOverview] = useState(null)
+  // Authoritative tyre cost for THIS asset from the expense grid (V347 RPC). Null
+  // means the grid is unavailable or has no tyre spend for this asset -> the cost
+  // tile then falls back to the tyre_records cost_per_tyre sum.
+  const [gridAssetCost, setGridAssetCost] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [refreshKey, setRefreshKey] = useState(0)
@@ -372,12 +377,31 @@ export default function AssetDetail() {
 
   useEffect(() => { load() }, [load, refreshKey])
 
+  // Resolve this asset's authoritative tyre cost from the expense grid (scoped to
+  // the asset's country). Stores a number only when the grid is available AND
+  // carries this asset; otherwise stays null so the tile falls back to legacy.
+  useEffect(() => {
+    let cancelled = false
+    const key = String(assetNo ?? '').trim().toUpperCase()
+    if (!key) { setGridAssetCost(null); return }
+    loadGridTyreByAsset({ country: asset?.country || undefined })
+      .then(res => {
+        if (cancelled) return
+        setGridAssetCost(res && res.map.has(key) ? res.map.get(key) : null)
+      })
+      .catch(() => { if (!cancelled) setGridAssetCost(null) })
+    return () => { cancelled = true }
+  }, [assetNo, asset?.country, refreshKey])
+
   // ── derived ────────────────────────────────────────────────────────────────
   const activeTyres = useMemo(() => tyres.filter(t => !t.km_at_removal), [tyres])
-  const totalCost = useMemo(
+  // Total lifetime tyre cost: authoritative expense-grid amount for this asset
+  // when available, else the tyre_records cost_per_tyre sum (honest fallback).
+  const legacyTotalCost = useMemo(
     () => tyres.reduce((s, t) => s + (parseFloat(t.cost_per_tyre) || 0) * (Number(t.qty) || 1), 0),
     [tyres],
   )
+  const totalCost = gridAssetCost != null ? gridAssetCost : legacyTotalCost
   const derivedWorstRisk = useMemo(() => overview?.worst_risk ?? worstRisk(activeTyres), [overview, activeTyres])
   const ytdCost = Number(overview?.ytd_cost) || 0
   const openWorkOrders = useMemo(
@@ -698,6 +722,11 @@ export default function AssetDetail() {
                 <div className="h-56">
                   <Line data={chartData} options={{ ...CHART_OPTS, plugins: { ...CHART_OPTS.plugins, legend: { display: false } } }} />
                 </div>
+                {gridAssetCost != null && (
+                  <p className="text-[11px] text-[var(--text-muted)] mt-2">
+                    Monthly breakdown from tyre records; authoritative lifetime total from the expense grid.
+                  </p>
+                )}
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

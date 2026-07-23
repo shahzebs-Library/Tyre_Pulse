@@ -1,8 +1,37 @@
 import { describe, it, expect } from 'vitest'
 import {
   fieldForHeader, buildHeaderMap, toNum, classifyLine, summarizeRows,
-  rowsFromSheet, rowsFromParsedSheet, PARTS_FIELDS,
+  rowsFromSheet, rowsFromParsedSheet, PARTS_FIELDS, isTyreItem, isOilItem, brandOf,
 } from '../lib/partsExpense'
+
+describe('sharpened classification (V335)', () => {
+  it('detects OTR/TBR tyre size formats the old rule missed', () => {
+    expect(isTyreItem('TIRE 23.5R25 WESTLAKE')).toBe(true)
+    expect(isTyreItem('TIRE 1200R24 INFINITY')).toBe(true)
+    expect(isTyreItem('TIRE 12.00R24TT 20PR')).toBe(true)
+    expect(isTyreItem('TIRE 315/80 22.5 CENTURY')).toBe(true)
+  })
+  it('treats a known tyre brand as a tyre even without the word', () => {
+    expect(isTyreItem('DOUBLE COIN 385/65')).toBe(true)
+    expect(isTyreItem('SOME PART')).toBe(false)
+  })
+  it('keeps tyre consumables as spare', () => {
+    expect(isTyreItem('TYRE VALVE PIN')).toBe(false)
+    expect(isTyreItem('TYRE PUNCH GLUE')).toBe(false)
+  })
+  it('oil = lubricant, not an oil filter/seal', () => {
+    expect(isOilItem('ENGINE OIL 15W40')).toBe(true)
+    expect(isOilItem('HYDRAULIC OIL')).toBe(true)
+    expect(isOilItem('ENGINE OIL FILTER')).toBe(false)
+    expect(isOilItem('OIL SEAL')).toBe(false)
+  })
+  it('extracts the brand', () => {
+    expect(brandOf('TIRE 23.5R25 WESTLAKE')).toBe('Westlake')
+    expect(brandOf('TIRE 1200R24 INFINITY')).toBe('Infinity')
+    expect(brandOf('BOLT M12')).toBeNull()
+    expect(classifyLine({ description: 'TIRE 23.5R25 WESTLAKE', value: '11400' }).brand).toBe('Westlake')
+  })
+})
 
 describe('fieldForHeader', () => {
   it('maps the Ramco grid headers (incl. truncated / misspelt)', () => {

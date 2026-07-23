@@ -120,6 +120,37 @@ export async function insertVehicleFleet(rows = [], { onProgress, country } = {}
   return { inserted: res.inserted, failed: res.failed || 0, skipped }
 }
 
+/** The natural-key column used to merge/dedup each target on re-import. */
+const KEY_COL = {
+  tyre_records: 'serial_no',
+  work_orders: 'work_order_no',
+  vehicle_fleet: 'asset_no',
+}
+
+/**
+ * Preview-time duplicate check: given mapped rows for a target, count how many
+ * already exist in this country (by the target's natural key) and how many are new.
+ * Lets the Data Intake screen FLAG duplicates before importing rather than silently
+ * merging. open_work_orders is a replaceable snapshot (no per-row dup concept).
+ * @returns {Promise<{ total:number, existing:number, fresh:number, keyed:boolean }>}
+ */
+export async function countExistingRows(target, rows = [], { country } = {}) {
+  const col = KEY_COL[target]
+  const total = rows.length
+  if (!col) return { total, existing: 0, fresh: total, keyed: false }
+  const seen = await existingKeys(target, col, country).catch(() => new Set())
+  let existing = 0
+  const inFile = new Set()
+  for (const r of rows) {
+    const v = r[col]
+    if (v == null || v === '') continue
+    const k = String(v).trim().toLowerCase()
+    if (seen.has(k) || inFile.has(k)) existing += 1
+    else inFile.add(k)
+  }
+  return { total, existing, fresh: total - existing, keyed: true }
+}
+
 /** Route a mapped intake result to the right loader. */
 export async function loadIntake(target, rows, opts = {}) {
   if (target === 'tyre_records') return insertTyreRecords(rows, opts)

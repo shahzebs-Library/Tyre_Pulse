@@ -1179,7 +1179,14 @@
       "scanAsset": "Scan Asset",
       "frameHint": "Point the camera at the asset barcode or QR label.",
       "camUnavailable": "Camera unavailable",
-      "camUnavailableMsg": "The camera could not be started. Close this and type the asset code by hand."
+      "camUnavailableMsg": "The camera could not be started. Close this and type the asset code by hand.",
+      "flaggedFlash": "Reading saved. Flagged for admin review.",
+      "pendingFlash": "Reading saved. Pending sync.",
+      "loggedFlash": "Reading logged.",
+      "belowLastWarnTitle": "Below last reading",
+      "belowLastWarnPrefix": "This is below the last reading of",
+      "belowLastWarnSuffix": "km. It will be saved and flagged for admin review.",
+      "saveAndFlag": "Save & flag"
     },
     "checklists": {
       "title": "Checklists",

@@ -19,9 +19,9 @@ import {
   Wallet, TrendingUp, PieChart, Download, RefreshCw, Eye, EyeOff, Boxes, Building2, Truck, Package,
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
-import { useSettings } from '../contexts/SettingsContext'
+import { useSettings, COUNTRY_CURRENCY } from '../contexts/SettingsContext'
 import { formatCurrency } from '../lib/formatters'
-import { getPartsExpenseSnapshot } from '../lib/api/partsConsumption'
+import { getPartsExpenseSnapshot, getExpenseByCountry } from '../lib/api/partsConsumption'
 import { stylize, ACCENTS } from '../lib/reportColors'
 import { reportFileName, reportDateLabel, exportToExcel } from '../lib/exportUtils'
 import { toUserMessage } from '../lib/safeError'
@@ -102,6 +102,8 @@ export default function ExpenseReport() {
   const [exporting, setExporting] = useState(false)
   const [from, setFrom] = useState('')
   const [to, setTo] = useState('')
+  const [byCountry, setByCountry] = useState([])
+  const isAll = !activeCountry || activeCountry === 'All'
 
   const [sections, setSections] = useState(() => {
     try {
@@ -126,6 +128,14 @@ export default function ExpenseReport() {
         to: to || undefined,
       })
       setSnap(res && res.ok ? res : { ok: false })
+      // On the "All countries" view, also load each country's total in its OWN
+      // currency (SAR / AED / EGP) so they are shown side by side, never blended.
+      if (isAll) {
+        const rows = await getExpenseByCountry({ from: from || undefined, to: to || undefined }).catch(() => [])
+        setByCountry(rows)
+      } else {
+        setByCountry([])
+      }
       setUpdatedAt(new Date())
     } catch (e) {
       setError(toUserMessage(e, 'Could not load the expense report.'))
@@ -314,8 +324,9 @@ export default function ExpenseReport() {
         </div>
       ) : (
         <>
-          {/* KPIs */}
-          {sections.kpis && k && (
+          {/* KPIs - hidden on the All-countries view (the per-country panel below
+              shows each currency separately instead of a blended total). */}
+          {sections.kpis && k && !isAll && (
             <section className="space-y-3">
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
                 <Kpi label="Total expense" value={money(k.total_expense)} accent={ACCENTS.primary} />
@@ -324,6 +335,40 @@ export default function ExpenseReport() {
                 <Kpi label="Oil" value={money(k.oil_expense)} accent={ACCENTS.good} />
                 <Kpi label="Lines" value={num(k.lines)} accent={ACCENTS.neutral} />
                 <Kpi label="Tyres issued" value={num(k.tyres_issued)} accent={ACCENTS.risk} sub={`${num(k.reassigned_tyres)} reassigned`} />
+              </div>
+            </section>
+          )}
+
+          {/* Per-country totals in each own currency (All-countries view only, so
+              SAR / AED / EGP are never blended into one meaningless sum). */}
+          {isAll && byCountry.length > 0 && (
+            <section className="space-y-3">
+              <h2 className="text-sm font-bold uppercase tracking-wider text-[var(--text-secondary)] flex items-center gap-2">
+                <Wallet size={15} /> By country (own currency)
+              </h2>
+              <p className="text-xs text-[var(--text-tertiary)]">
+                Each country is shown in its own currency and is not summed together (SAR, AED and EGP are different currencies).
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                {byCountry.map((c) => {
+                  const cur = COUNTRY_CURRENCY[c.country] || 'SAR'
+                  const fmt = (v) => formatCurrency(Number(v) || 0, cur, 0)
+                  return (
+                    <div key={c.country} className="card p-4">
+                      <div className="flex items-center justify-between">
+                        <p className="text-sm font-semibold text-[var(--text-primary)]">{c.country}</p>
+                        <span className="text-xs px-2 py-0.5 rounded bg-[var(--surface-2,#1e293b)] text-[var(--text-secondary)]">{cur}</span>
+                      </div>
+                      <p className="mt-1 text-xl font-bold text-[var(--text-primary)]">{fmt(c.total)}</p>
+                      <div className="mt-2 grid grid-cols-3 gap-2 text-xs text-[var(--text-secondary)]">
+                        <div><span className="block text-[var(--text-tertiary)]">Tyres</span>{fmt(c.tyre)}</div>
+                        <div><span className="block text-[var(--text-tertiary)]">Spare</span>{fmt(c.spare)}</div>
+                        <div><span className="block text-[var(--text-tertiary)]">Oil</span>{fmt(c.oil)}</div>
+                      </div>
+                      <p className="mt-2 text-xs text-[var(--text-tertiary)]">{num(c.lines)} lines</p>
+                    </div>
+                  )
+                })}
               </div>
             </section>
           )}

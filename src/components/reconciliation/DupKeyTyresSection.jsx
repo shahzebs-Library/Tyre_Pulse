@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Copy, RefreshCw, Download, Search, AlertTriangle } from 'lucide-react'
-import { listDuplicateKeyTyres } from '../../lib/api/reconDupKeys'
+import { Copy, RefreshCw, Download, Search, AlertTriangle, Trash2, Check } from 'lucide-react'
+import { listDuplicateKeyTyres, resolveDuplicateKey } from '../../lib/api/reconDupKeys'
 import { toUserMessage } from '../../lib/safeError'
 import { formatDate } from '../../lib/formatters'
 import { exportToExcel, reportFileName } from '../../lib/exportUtils'
@@ -32,9 +32,24 @@ export default function DupKeyTyresSection({ activeCountry } = {}) {
   const [country, setCountry] = useState(initialCountry)
   const [search, setSearch] = useState('')
 
+  // Per-row resolve state. busyKey = the row being resolved; rowNotes maps a
+  // row key to an inline note left in place when the group could not be
+  // auto-removed. resultNote is a dismissable success line for the section.
+  const [busyKey, setBusyKey] = useState(null)
+  const [rowNotes, setRowNotes] = useState({})
+  const [resultNote, setResultNote] = useState(null)
+
+  const rowKey = useCallback(
+    (r) =>
+      `${r.serial_no || 'x'}|${r.asset_no || 'x'}|${r.issue_date || 'x'}|${r.country || 'x'}`,
+    [],
+  )
+
   const load = useCallback(async () => {
     setLoading(true)
     setError(null)
+    setRowNotes({})
+    setResultNote(null)
     try {
       const data = await listDuplicateKeyTyres()
       setRows(Array.isArray(data) ? data : [])
@@ -45,6 +60,57 @@ export default function DupKeyTyresSection({ activeCountry } = {}) {
       setLoading(false)
     }
   }, [])
+
+  // Resolve ONE group. Confirms first (this deletes rows), then calls the
+  // byte-identical-only server RPC. resolved:true removes the row locally and
+  // shows a success line; resolved:false leaves the row with an inline note.
+  const handleResolve = useCallback(
+    async (r) => {
+      const key = rowKey(r)
+      const label = `${r.serial_no || 'N/A'} / ${r.asset_no || 'N/A'}`
+      const ok = window.confirm(
+        `Resolve possible duplicate for ${label}?\n\n` +
+          'Byte-identical copies will be removed and the newest record kept. ' +
+          'If the records differ, nothing is deleted and the group is kept for manual review.',
+      )
+      if (!ok) return
+      setBusyKey(key)
+      setResultNote(null)
+      setRowNotes((n) => {
+        const next = { ...n }
+        delete next[key]
+        return next
+      })
+      try {
+        const res = await resolveDuplicateKey(r.serial_no, r.asset_no, r.issue_date)
+        if (res && res.resolved) {
+          const deleted = Number(res.deleted) || 0
+          setRows((prev) => prev.filter((x) => rowKey(x) !== key))
+          setResultNote(
+            `Resolved ${label}: removed ${deleted} duplicate copy${deleted === 1 ? '' : 'ies'}, kept the newest record.`,
+          )
+        } else if (res && res.reason === 'differs') {
+          setRowNotes((n) => ({
+            ...n,
+            [key]: { kind: 'differs', text: 'Rows differ - review manually' },
+          }))
+        } else {
+          setRowNotes((n) => ({
+            ...n,
+            [key]: { kind: 'differs', text: 'Group no longer present - refresh' },
+          }))
+        }
+      } catch (e) {
+        setRowNotes((n) => ({
+          ...n,
+          [key]: { kind: 'error', text: toUserMessage(e) },
+        }))
+      } finally {
+        setBusyKey(null)
+      }
+    },
+    [rowKey],
+  )
 
   useEffect(() => {
     load()
@@ -214,6 +280,20 @@ export default function DupKeyTyresSection({ activeCountry } = {}) {
               </div>
             </div>
 
+            {/* Success note after a resolve */}
+            {resultNote ? (
+              <div className="rounded-lg border border-green-800/50 bg-green-950/30 px-4 py-3 flex items-start gap-3">
+                <Check className="w-5 h-5 text-green-400 shrink-0 mt-0.5" />
+                <p className="text-sm text-green-200 flex-1 min-w-0 break-words">{resultNote}</p>
+                <button
+                  onClick={() => setResultNote(null)}
+                  className="text-xs text-green-300/80 hover:text-green-200 shrink-0"
+                >
+                  Dismiss
+                </button>
+              </div>
+            ) : null}
+
             {/* Table / empty state */}
             {filteredRows.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-10 text-center">
@@ -239,23 +319,56 @@ export default function DupKeyTyresSection({ activeCountry } = {}) {
                       <th className="px-3 py-3 font-medium">Fitment date</th>
                       <th className="px-3 py-3 font-medium">Country</th>
                       <th className="px-3 py-3 font-medium text-right">Copies</th>
+                      <th className="px-3 py-3 font-medium text-right">Action</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {filteredRows.map((r, i) => (
-                      <tr
-                        key={`${r.serial_no || 'x'}|${r.asset_no || 'x'}|${r.issue_date || 'x'}|${r.country || 'x'}|${i}`}
-                        className="border-b border-[var(--card-border)]/60 hover:bg-white/[0.02]"
-                      >
-                        <td className="px-3 py-3 font-medium text-[var(--text-primary)]">{r.serial_no || 'N/A'}</td>
-                        <td className="px-3 py-3 text-[var(--text-secondary)]">{r.asset_no || 'N/A'}</td>
-                        <td className="px-3 py-3 text-[var(--text-muted)] tabular-nums">
-                          {r.issue_date ? formatDate(r.issue_date, r.country || 'All') : 'N/A'}
-                        </td>
-                        <td className="px-3 py-3 text-[var(--text-secondary)]">{r.country || 'N/A'}</td>
-                        <td className="px-3 py-3 text-right text-[var(--text-secondary)] tabular-nums">{(Number(r.copies) || 0).toLocaleString()}</td>
-                      </tr>
-                    ))}
+                    {filteredRows.map((r, i) => {
+                      const key = rowKey(r)
+                      const note = rowNotes[key]
+                      const busy = busyKey === key
+                      return (
+                        <tr
+                          key={`${key}|${i}`}
+                          className="border-b border-[var(--card-border)]/60 hover:bg-white/[0.02]"
+                        >
+                          <td className="px-3 py-3 font-medium text-[var(--text-primary)]">{r.serial_no || 'N/A'}</td>
+                          <td className="px-3 py-3 text-[var(--text-secondary)]">{r.asset_no || 'N/A'}</td>
+                          <td className="px-3 py-3 text-[var(--text-muted)] tabular-nums">
+                            {r.issue_date ? formatDate(r.issue_date, r.country || 'All') : 'N/A'}
+                          </td>
+                          <td className="px-3 py-3 text-[var(--text-secondary)]">{r.country || 'N/A'}</td>
+                          <td className="px-3 py-3 text-right text-[var(--text-secondary)] tabular-nums">{(Number(r.copies) || 0).toLocaleString()}</td>
+                          <td className="px-3 py-3 text-right">
+                            <div className="flex flex-col items-end gap-1">
+                              <button
+                                onClick={() => handleResolve(r)}
+                                disabled={busy}
+                                className="btn-secondary text-xs inline-flex items-center gap-1.5 disabled:opacity-40"
+                              >
+                                {busy ? (
+                                  <RefreshCw size={13} className="animate-spin" />
+                                ) : (
+                                  <Trash2 size={13} />
+                                )}
+                                Resolve
+                              </button>
+                              {note ? (
+                                <span
+                                  className={`text-[11px] ${
+                                    note.kind === 'error'
+                                      ? 'text-red-300/90'
+                                      : 'text-amber-300/90'
+                                  } max-w-[220px] text-right break-words`}
+                                >
+                                  {note.text}
+                                </span>
+                              ) : null}
+                            </div>
+                          </td>
+                        </tr>
+                      )
+                    })}
                   </tbody>
                 </table>
               </div>

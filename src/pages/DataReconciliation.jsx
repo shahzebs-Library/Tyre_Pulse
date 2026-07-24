@@ -7,6 +7,8 @@ import { SkeletonTable } from '../components/ui/Skeleton'
 import BrandGapSection from '../components/reconciliation/BrandGapSection'
 import JobcardDateSection from '../components/reconciliation/JobcardDateSection'
 import DupKeyTyresSection from '../components/reconciliation/DupKeyTyresSection'
+import SerialMultiAssetSection from '../components/reconciliation/SerialMultiAssetSection'
+import DataQualityScorecard from '../components/reconciliation/DataQualityScorecard'
 import {
   GitCompare, Building2, Copy, ArrowLeftRight, AlertTriangle, CheckCircle2,
   X, Check, RefreshCw, ChevronDown, ChevronRight, Info, Layers, ShieldCheck,
@@ -292,6 +294,9 @@ export default function DataReconciliation() {
         updatedAt={updatedAt}
       />
 
+      {/* Data-quality scorecard (per country) */}
+      <DataQualityScorecard />
+
       {/* Summary strip */}
       <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
         <SummaryTile
@@ -553,6 +558,9 @@ export default function DataReconciliation() {
 
       {/* ── Integrity: possible duplicate tyres (same serial+asset+date) ──────── */}
       <DupKeyTyresSection />
+
+      {/* ── Integrity: serial on multiple assets (moved tyre or data error) ────── */}
+      <SerialMultiAssetSection />
 
       {/* ── Confirm modals ───────────────────────────────────────────────────── */}
       {confirm?.type === 'backfillAll' && (

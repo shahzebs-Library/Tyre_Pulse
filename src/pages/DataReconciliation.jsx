@@ -9,6 +9,7 @@ import JobcardDateSection from '../components/reconciliation/JobcardDateSection'
 import DupKeyTyresSection from '../components/reconciliation/DupKeyTyresSection'
 import SerialMultiAssetSection from '../components/reconciliation/SerialMultiAssetSection'
 import DataQualityScorecard from '../components/reconciliation/DataQualityScorecard'
+import AssetMasterSection from '../components/reconciliation/AssetMasterSection'
 import {
   GitCompare, Building2, Copy, ArrowLeftRight, AlertTriangle, CheckCircle2,
   X, Check, RefreshCw, ChevronDown, ChevronRight, Info, Layers, ShieldCheck,
@@ -561,6 +562,9 @@ export default function DataReconciliation() {
 
       {/* ── Integrity: serial on multiple assets (moved tyre or data error) ────── */}
       <SerialMultiAssetSection />
+
+      {/* ── Asset master: one row per vehicle across all countries ──────────────── */}
+      <AssetMasterSection />
 
       {/* ── Confirm modals ───────────────────────────────────────────────────── */}
       {confirm?.type === 'backfillAll' && (

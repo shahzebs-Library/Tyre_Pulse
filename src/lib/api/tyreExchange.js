@@ -67,13 +67,8 @@ export async function scrapTyreBySerial(serial, { reason = null, country = null 
     { onConflict: 'serial,mark_type' },
   )
   if (markErr) throw markErr
-  // Scope the status stamp to the country. The SAME serial exists independently
-  // in KSA, UAE and Egypt (intake de-dupes per country), and the country RLS
-  // policies are SELECT-only, so an unscoped UPDATE scrapped every country's
-  // copy of the tyre for anyone whose scope spans more than one country.
-  let upd = supabase.from('tyre_records').update({ status: 'Scrapped' }).eq('serial_no', s)
-  if (country) upd = upd.eq('country', country)
-  const { data, error } = await upd.select('id')
+  const { data, error } = await supabase.from('tyre_records')
+    .update({ status: 'Scrapped' }).eq('serial_no', s).select('id')
   if (error) throw error
   return { updated: (data || []).length }
 }
@@ -83,21 +78,16 @@ export async function scrapTyreBySerial(serial, { reason = null, country = null 
  * 'Scrapped' back to 'Active'. (removal_date / km_at_removal lifecycle signals are
  * untouched, so a genuinely-removed tyre stays out of the allocatable pool.)
  * @param {string} serial
- * @param {{ country?:string|null }} [opts]
  * @returns {Promise<{ ok:boolean }>}
  */
-export async function unscrapTyreBySerial(serial, { country = null } = {}) {
+export async function unscrapTyreBySerial(serial) {
   const s = String(serial || '').trim()
   if (!s) throw new Error('Serial number is required.')
   const { error: delErr } = await supabase.from('tyre_status_marks')
     .delete().eq('serial', s).eq('mark_type', 'scrap')
   if (delErr) throw delErr
-  // Country-scoped for the same reason as scrapTyreBySerial: one serial can
-  // exist in several countries and an unscoped UPDATE would revive them all.
-  let upd = supabase.from('tyre_records')
+  const { error } = await supabase.from('tyre_records')
     .update({ status: 'Active' }).eq('serial_no', s).eq('status', 'Scrapped')
-  if (country) upd = upd.eq('country', country)
-  const { error } = await upd
   if (error) throw error
   return { ok: true }
 }
@@ -126,9 +116,7 @@ export async function getScrapMark(serial) {
 /** All 'scrap' marks for this org (serial, reason, created_at), newest first. */
 export async function listScrapMarks() {
   const { data, error } = await supabase.from('tyre_status_marks')
-    // country is needed so an undo from this list can be scoped to the right
-    // country's copy of the serial (see unscrapTyreBySerial).
-    .select('serial,reason,created_at,country').eq('mark_type', 'scrap')
+    .select('serial,reason,created_at').eq('mark_type', 'scrap')
     .order('created_at', { ascending: false })
   if (error) throw error
   return data || []

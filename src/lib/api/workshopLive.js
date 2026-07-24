@@ -192,9 +192,49 @@ export async function listOpenJobs({ site, country, limit = 500 } = {}) {
     let q = supabase.from('work_orders').select(WO_COLS)
     if (site) q = q.eq('site', site)
     q = applyCountry(q, country)
+    // Exclude the terminal statuses SERVER-side. The limit is applied by the
+    // server BEFORE any client-side filtering, and the overwhelming majority of
+    // work orders are completed, so filtering after the fetch meant the newest
+    // `limit` rows were nearly all discarded and the live board showed a
+    // fraction of the genuinely open jobs (often almost none). status has no DB
+    // CHECK, so exclude both the Title Case and lowercase tokenisations; the
+    // client-side filter below stays as a net for any other variant.
+    q = q.not('status', 'in', '("Completed","Cancelled","completed","cancelled")')
     const rows = unwrap(await q.order('opened_at', { ascending: false, nullsFirst: false }).limit(limit)) || []
     const closed = new Set(['completed', 'cancelled'])
-    return rows.filter((r) => !closed.has(normStatus(r.status)))
+    const open = rows.filter((r) => !closed.has(normStatus(r.status)))
+
+    // Jobs COMPLETED TODAY belong on a live board too: they fill the kanban's
+    // 'Completed' column and they are the only source for the "Completed Today"
+    // KPI. computeKpis derives that KPI from this very list, so while the list
+    // excluded every completed job the tile was structurally always 0.
+    // Fetched separately (and bounded by completed_at) so history never floods
+    // the board.
+    const done = await listJobsCompletedToday({ site, country, limit })
+    const seen = new Set(open.map((r) => r.id))
+    return open.concat(done.filter((r) => !seen.has(r.id)))
+  } catch (err) {
+    if (isMissingRelation(err)) return []
+    throw err
+  }
+}
+
+/**
+ * Jobs completed since local midnight. Separate from listOpenJobs so the
+ * "Completed Today" KPI and the kanban's Completed column have a bounded,
+ * explicitly-dated source instead of scanning completed history. []-degrades.
+ * @param {{ site?:string, country?:string, limit?:number }} [opts]
+ */
+export async function listJobsCompletedToday({ site, country, limit = 500 } = {}) {
+  try {
+    const start = new Date()
+    start.setHours(0, 0, 0, 0)
+    let q = supabase.from('work_orders').select(WO_COLS)
+    if (site) q = q.eq('site', site)
+    q = applyCountry(q, country)
+    q = q.in('status', ['Completed', 'completed']).gte('completed_at', start.toISOString())
+    const rows = unwrap(await q.order('completed_at', { ascending: false }).limit(limit)) || []
+    return rows
   } catch (err) {
     if (isMissingRelation(err)) return []
     throw err
@@ -371,7 +411,12 @@ async function stampJobOwner(jobId, userId) {
   try {
     const job = unwrap(await supabase.from('work_orders').select('status').eq('id', jobId).maybeSingle())
     const st = normStatus(job?.status)
-    if (st === '' || st === 'new' || st === 'awaiting_assignment' || st === 'open') patch.status = 'assigned'
+    // Write the CANONICAL Title Case value. work_orders.status has no DB CHECK,
+    // so a raw lowercase 'assigned' persisted as-is and then fell outside the
+    // canonical vocabulary every kanban column, count and report keys on.
+    if (st === '' || st === 'new' || st === 'awaiting_assignment' || st === 'open') {
+      patch.status = normalizeWoStatus('assigned')
+    }
   } catch {
     // If the status read fails we still set the owner without moving status.
   }

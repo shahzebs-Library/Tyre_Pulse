@@ -20,6 +20,12 @@
  *
  * The read path NEVER throws: it returns [] on a null payload or any RPC error
  * so the section can degrade to an honest empty state.
+ *
+ * The WRITE path (resolveDuplicateKey) is the opposite: it DOES throw on any
+ * RPC error so the UI can surface a real failure, and it only ever removes rows
+ * the database itself confirmed are byte-identical (the V357
+ * recon_resolve_duplicate_key RPC keeps the newest row and deletes exact copies
+ * only; a group whose rows differ is left untouched and reported as such).
  */
 import { supabase } from './_client'
 
@@ -45,4 +51,30 @@ export async function listDuplicateKeyTyres() {
   } catch {
     return []
   }
+}
+
+/**
+ * Resolve ONE possible-duplicate group via the `recon_resolve_duplicate_key`
+ * RPC (V357). The server keeps the newest row and deletes the exact copies ONLY
+ * when every row in the group is byte-identical; a group whose rows differ is
+ * left untouched. This is a MUTATION - unlike listDuplicateKeyTyres it THROWS
+ * on any RPC error so the caller can report the failure.
+ *
+ * @param {string} serial     the group serial_no (p_serial)
+ * @param {string} asset      the group asset_no (p_asset)
+ * @param {string|null} issueDate  the group issue_date (p_issue_date, may be null)
+ * @returns {Promise<{ resolved: boolean, deleted?: number, reason?: string }>}
+ *   { resolved: true, deleted: n } when byte-identical copies were removed;
+ *   { resolved: false, reason: 'differs' } when the rows differ (nothing deleted);
+ *   { resolved: false, reason: 'not_found' } when the group no longer exists.
+ * @throws when the RPC returns an error (e.g. not permitted).
+ */
+export async function resolveDuplicateKey(serial, asset, issueDate) {
+  const { data, error } = await supabase.rpc('recon_resolve_duplicate_key', {
+    p_serial: serial,
+    p_asset: asset,
+    p_issue_date: issueDate ?? null,
+  })
+  if (error) throw error
+  return data || { resolved: false, reason: 'not_found' }
 }

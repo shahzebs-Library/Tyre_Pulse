@@ -16,12 +16,14 @@ import {
 } from 'chart.js'
 import { Bar, Doughnut, Line } from 'react-chartjs-2'
 import {
-  Wallet, TrendingUp, PieChart, Download, RefreshCw, Eye, EyeOff, Boxes, Building2, Truck, Package,
+  Wallet, TrendingUp, PieChart, Download, RefreshCw, Eye, EyeOff, Boxes, Building2, Truck, Package, MapPin, Save,
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
 import { useSettings, COUNTRY_CURRENCY } from '../contexts/SettingsContext'
+import { useAuth } from '../contexts/AuthContext'
 import { formatCurrency } from '../lib/formatters'
 import { getPartsExpenseSnapshot, getExpenseByCountry } from '../lib/api/partsConsumption'
+import { getExpenseBySite, setStoreSiteMap, listSites } from '../lib/api/storeSiteExpense'
 import { stylize, ACCENTS } from '../lib/reportColors'
 import { reportFileName, reportDateLabel, exportToExcel } from '../lib/exportUtils'
 import { toUserMessage } from '../lib/safeError'
@@ -36,11 +38,12 @@ const SECTIONS = [
   ['kpis', 'KPIs', Wallet],
   ['categories', 'Categories', PieChart],
   ['sites', 'Stores', Building2],
+  ['bysite', 'By Site', MapPin],
   ['assets', 'Assets', Truck],
   ['items', 'Top Items', Package],
   ['trend', 'Trend', TrendingUp],
 ]
-const SECTION_DEFAULTS = { kpis: true, categories: true, sites: true, assets: true, items: true, trend: true }
+const SECTION_DEFAULTS = { kpis: true, categories: true, sites: true, bysite: true, assets: true, items: true, trend: true }
 
 /** 'YYYY-MM' -> 'Mon YY' month label (passthrough for non date keys). */
 const monthLabel = (key) => {
@@ -92,9 +95,116 @@ function ChartCard({ title, children, refCb }) {
   )
 }
 
+/**
+ * Per-site expense table. Rows whose site starts with "Unmapped: " expose an
+ * inline site picker + Save (elevated users) so an admin can map the store_code
+ * to a governed site; the total then rolls up under that site on refresh.
+ */
+function BySitePanel({ rows, money, canMap, siteOptions, onSave, error }) {
+  const list = Array.isArray(rows) ? rows : []
+  return (
+    <section className="space-y-3">
+      <h2 className="text-sm font-bold uppercase tracking-wider text-[var(--text-secondary)] flex items-center gap-2">
+        <MapPin size={15} /> Spend by site
+      </h2>
+      <p className="text-xs text-[var(--text-tertiary)]">
+        Store codes from the expense grid are mapped to sites. Rows marked "Unmapped" are store codes without a site mapping yet
+        {canMap ? '; pick a site and Save to map them.' : '.'}
+      </p>
+      {error && <div className="card border border-red-700/50 text-red-300 text-sm">{error}</div>}
+      {list.length === 0 ? (
+        <div className="card text-center text-[var(--text-muted)] py-8">No per-site expense for the selected filters.</div>
+      ) : (
+        <div className="card overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-left text-[var(--text-muted)] border-b border-[var(--hairline)]">
+                <th className="py-2 pr-3 font-semibold">Site</th>
+                <th className="py-2 px-3 font-semibold text-right">Tyre</th>
+                <th className="py-2 px-3 font-semibold text-right">Spare</th>
+                <th className="py-2 px-3 font-semibold text-right">Oil</th>
+                <th className="py-2 px-3 font-semibold text-right">Total</th>
+                <th className="py-2 pl-3 font-semibold text-right">Lines</th>
+              </tr>
+            </thead>
+            <tbody>
+              {list.map((r, i) => {
+                const site = String(r.site || '')
+                const unmapped = site.startsWith('Unmapped: ')
+                const storeCode = unmapped ? site.slice('Unmapped: '.length) : null
+                return (
+                  <tr key={`${site}-${i}`} className="border-b border-[var(--hairline)]/60">
+                    <td className="py-2 pr-3">
+                      {unmapped ? (
+                        <UnmappedCell storeCode={storeCode} canMap={canMap} siteOptions={siteOptions} onSave={onSave} />
+                      ) : (
+                        <span className="text-[var(--text-primary)] font-medium">{site}</span>
+                      )}
+                    </td>
+                    <td className="py-2 px-3 text-right text-[var(--text-secondary)]">{money(r.tyre)}</td>
+                    <td className="py-2 px-3 text-right text-[var(--text-secondary)]">{money(r.spare)}</td>
+                    <td className="py-2 px-3 text-right text-[var(--text-secondary)]">{money(r.oil)}</td>
+                    <td className="py-2 px-3 text-right font-semibold text-[var(--text-primary)]">{money(r.total)}</td>
+                    <td className="py-2 pl-3 text-right text-[var(--text-muted)]">{num(r.lines)}</td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </section>
+  )
+}
+
+/** Inline "Unmapped: <store_code>" cell with a site picker + Save (elevated only). */
+function UnmappedCell({ storeCode, canMap, siteOptions, onSave }) {
+  const [value, setValue] = useState('')
+  const [saving, setSaving] = useState(false)
+  const listId = `sites-${storeCode}`
+  const save = async () => {
+    if (!value.trim()) return
+    setSaving(true)
+    try { await onSave(storeCode, value.trim()) } finally { setSaving(false) }
+  }
+  return (
+    <div className="flex items-center gap-2 flex-wrap">
+      <span className="text-xs px-2 py-0.5 rounded bg-amber-500/15 text-amber-300 border border-amber-500/30">Unmapped</span>
+      <span className="text-[var(--text-secondary)]">{storeCode}</span>
+      {canMap && (
+        <>
+          <input
+            list={listId}
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
+            placeholder="Map to site"
+            className="bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg text-xs px-2 py-1 text-[var(--text-secondary)] w-40"
+            aria-label={`Map ${storeCode} to a site`}
+          />
+          <datalist id={listId}>
+            {(siteOptions || []).map((s) => <option key={s} value={s} />)}
+          </datalist>
+          <button
+            onClick={save}
+            disabled={saving || !value.trim()}
+            className="btn-secondary text-xs px-2 py-1 inline-flex items-center gap-1 disabled:opacity-50"
+          >
+            <Save size={12} /> {saving ? 'Saving...' : 'Save'}
+          </button>
+        </>
+      )}
+    </div>
+  )
+}
+
 export default function ExpenseReport() {
   const { activeCountry, appSettings, activeCurrency } = useSettings()
+  const { profile, isSuperAdmin } = useAuth()
+  const canMap = isSuperAdmin === true || ['Admin', 'Manager', 'Director'].includes(profile?.role)
   const [snap, setSnap] = useState(null)
+  const [bySite, setBySite] = useState([])
+  const [bySiteErr, setBySiteErr] = useState('')
+  const [siteOptions, setSiteOptions] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [refreshing, setRefreshing] = useState(false)
@@ -136,6 +246,16 @@ export default function ExpenseReport() {
       } else {
         setByCountry([])
       }
+      // Per-site expense (store_code -> site map). Never throws -> [].
+      setBySiteErr('')
+      const siteRows = await getExpenseBySite({
+        country: activeCountry && activeCountry !== 'All' ? activeCountry : undefined,
+        from: from || undefined,
+        to: to || undefined,
+      })
+      setBySite(siteRows)
+      const opts = await listSites({ country: activeCountry && activeCountry !== 'All' ? activeCountry : undefined }).catch(() => [])
+      setSiteOptions(opts)
       setUpdatedAt(new Date())
     } catch (e) {
       setError(toUserMessage(e, 'Could not load the expense report.'))
@@ -270,6 +390,22 @@ export default function ExpenseReport() {
 
   const hasAny = !!(k && (Number(k.total_expense) || Number(k.lines)))
 
+  // Save one store_code -> site mapping then refresh the by-site panel.
+  const saveMapping = useCallback(async (storeCode, site) => {
+    if (!site) return
+    setBySiteErr('')
+    try {
+      await setStoreSiteMap({
+        country: activeCountry && activeCountry !== 'All' ? activeCountry : undefined,
+        store_code: storeCode,
+        site,
+      })
+      await load()
+    } catch (e) {
+      setBySiteErr(toUserMessage(e, 'Could not save the site mapping.'))
+    }
+  }, [activeCountry, load])
+
   return (
     <div className="space-y-5">
       <PageHeader title="Expense Report" subtitle="Maintenance and parts expense: tyres, spare parts and oil" icon={Wallet} />
@@ -392,6 +528,18 @@ export default function ExpenseReport() {
                 {sections.assets && <ChartCard title="Top assets by spend" refCb={setRef('asset')}><Bar data={stylize(assetChart, 'bar')} options={chartBase(false)} /></ChartCard>}
               </div>
             </section>
+          )}
+
+          {/* By site (store_code -> site map) */}
+          {sections.bysite && (
+            <BySitePanel
+              rows={bySite}
+              money={money}
+              canMap={canMap}
+              siteOptions={siteOptions}
+              onSave={saveMapping}
+              error={bySiteErr}
+            />
           )}
 
           {/* Top Items */}

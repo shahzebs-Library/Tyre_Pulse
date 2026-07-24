@@ -51,4 +51,54 @@ describe('service layer - possible duplicate tyres', () => {
     h.state.rpc = { data: { not: 'an array' }, error: null }
     expect(await recon.listDuplicateKeyTyres()).toEqual([])
   })
+
+  it('resolveDuplicateKey calls recon_resolve_duplicate_key with the mapped args', async () => {
+    h.state.rpc = { data: { resolved: true, deleted: 2 }, error: null }
+    await recon.resolveDuplicateKey('S1', 'A1', '2026-01-01')
+    expect(h.state.lastRpc.name).toBe('recon_resolve_duplicate_key')
+    expect(h.state.lastRpc.args).toEqual({
+      p_serial: 'S1',
+      p_asset: 'A1',
+      p_issue_date: '2026-01-01',
+    })
+  })
+
+  it('resolveDuplicateKey passes a null issue_date through', async () => {
+    h.state.rpc = { data: { resolved: false, reason: 'not_found' }, error: null }
+    await recon.resolveDuplicateKey('S1', 'A1', undefined)
+    expect(h.state.lastRpc.args).toEqual({
+      p_serial: 'S1',
+      p_asset: 'A1',
+      p_issue_date: null,
+    })
+  })
+
+  it('resolveDuplicateKey returns the resolved payload', async () => {
+    h.state.rpc = { data: { resolved: true, deleted: 3 }, error: null }
+    expect(await recon.resolveDuplicateKey('S1', 'A1', '2026-01-01')).toEqual({
+      resolved: true,
+      deleted: 3,
+    })
+  })
+
+  it('resolveDuplicateKey returns the differs payload without throwing', async () => {
+    h.state.rpc = { data: { resolved: false, reason: 'differs' }, error: null }
+    expect(await recon.resolveDuplicateKey('S1', 'A1', '2026-01-01')).toEqual({
+      resolved: false,
+      reason: 'differs',
+    })
+  })
+
+  it('resolveDuplicateKey THROWS on an RPC error', async () => {
+    h.state.rpc = { data: null, error: { message: 'Not permitted.', code: '42501' } }
+    await expect(recon.resolveDuplicateKey('S1', 'A1', '2026-01-01')).rejects.toBeTruthy()
+  })
+
+  it('resolveDuplicateKey falls back to not_found on a null payload', async () => {
+    h.state.rpc = { data: null, error: null }
+    expect(await recon.resolveDuplicateKey('S1', 'A1', '2026-01-01')).toEqual({
+      resolved: false,
+      reason: 'not_found',
+    })
+  })
 })

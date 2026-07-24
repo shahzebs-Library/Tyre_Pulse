@@ -152,6 +152,8 @@ const ACC_TYPE_ICONS: Record<string, IconName> = {
 interface ExtraForm {
   plate_number: string
   vehicle_type: string
+  make: string
+  model: string
   severityLabel: SeverityLabel
   typeLabel: string
   statusLabel: string
@@ -189,7 +191,7 @@ interface ExtraForm {
 
 function emptyExtra(): ExtraForm {
   return {
-    plate_number: '', vehicle_type: '',
+    plate_number: '', vehicle_type: '', make: '', model: '',
     severityLabel: 'Minor', typeLabel: 'Collision', statusLabel: 'Reported',
     current_status: '', damage_condition: '',
     fault_status: '', gcc_liability_ratio: '', najm_status: '', najm_fault: '',
@@ -238,6 +240,8 @@ interface FleetVehicle {
   site: string
   asset_no: string
   vehicle_type: string
+  make?: string | null
+  model?: string | null
   registration_no?: string | null
   fleet_number?: string | null
   country?: string | null
@@ -345,7 +349,7 @@ function AccidentReportScreen() {
     try {
       const { data } = await supabase
         .from('vehicle_fleet')
-        .select('id, site, asset_no, vehicle_type, registration_no, fleet_number, country')
+        .select('id, site, asset_no, vehicle_type, make, model, registration_no, fleet_number, country')
         .order('asset_no')
       if (data) setVehicles(data as FleetVehicle[])
     } catch (e: any) {
@@ -364,6 +368,7 @@ function AccidentReportScreen() {
   // (re-picking a different asset refreshes them).
   function applyAsset(v: {
     asset_no: string; id?: string | null; vehicle_type?: string | null; site?: string | null
+    make?: string | null; model?: string | null
     registration_no?: string | null; fleet_number?: string | null; country?: string | null
   }) {
     setBase(prev => ({
@@ -375,6 +380,8 @@ function AccidentReportScreen() {
     }))
     setX({
       vehicle_type: v.vehicle_type || '',
+      make: v.make || '',
+      model: v.model || '',
       plate_number: v.fleet_number || v.registration_no || '',
     })
   }
@@ -586,7 +593,7 @@ function AccidentReportScreen() {
                 <View style={{ gap: spacing.sm }}>
                   <TextInput style={[inputStyle, { textAlign }]} value={manualAsset} onChangeText={setManualAsset}
                     placeholder={t('accident.report.phEnterAsset')} placeholderTextColor={c.textMuted} autoCapitalize="characters" />
-                  <TouchableOpacity onPress={() => { setUseManualEntry(false); setManualAsset(''); setX({ plate_number: '', vehicle_type: '' }) }} style={styles.manualToggle}>
+                  <TouchableOpacity onPress={() => { setUseManualEntry(false); setManualAsset(''); setX({ plate_number: '', vehicle_type: '', make: '', model: '' }) }} style={styles.manualToggle}>
                     <Ionicons name="list-outline" size={14} color={c.danger.base} />
                     <AppText variant="caption" style={{ color: c.danger.base }}>{t('accident.report.phSelectFromList')}</AppText>
                   </TouchableOpacity>
@@ -606,7 +613,7 @@ function AccidentReportScreen() {
                   </View>
                   <TouchableOpacity
                     style={[styles.changeAssetBtn, { borderColor: c.danger.base }]}
-                    onPress={() => { setB({ asset_no: '', vehicle_id: null }); setX({ plate_number: '', vehicle_type: '' }); setVehicleQuery('') }}
+                    onPress={() => { setB({ asset_no: '', vehicle_id: null }); setX({ plate_number: '', vehicle_type: '', make: '', model: '' }); setVehicleQuery('') }}
                     hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                   >
                     <Ionicons name="swap-horizontal-outline" size={14} color={c.danger.base} />
@@ -676,16 +683,16 @@ function AccidentReportScreen() {
                     )
                   })()}
 
-                  <TouchableOpacity onPress={() => { setUseManualEntry(true); setB({ asset_no: '', vehicle_id: null }); setX({ plate_number: '', vehicle_type: '' }) }} style={styles.manualToggle}>
+                  <TouchableOpacity onPress={() => { setUseManualEntry(true); setB({ asset_no: '', vehicle_id: null }); setX({ plate_number: '', vehicle_type: '', make: '', model: '' }) }} style={styles.manualToggle}>
                     <Ionicons name="create-outline" size={14} color={c.danger.base} />
                     <AppText variant="caption" style={{ color: c.danger.base }}>{t('accident.report.phEnterAssetManually')}</AppText>
                   </TouchableOpacity>
                 </View>
               )}
-              {/* Master context line (web "Master:" parity): type + fleet/plate no */}
-              {(extra.plate_number || extra.vehicle_type) ? (
+              {/* Master context line (web "Master:" parity): type + make/model + fleet/plate no */}
+              {(extra.plate_number || extra.vehicle_type || extra.make || extra.model) ? (
                 <AppText variant="micro" color="muted" style={{ marginTop: 4 }}>
-                  {t('accident.report.phMaster')} {extra.vehicle_type || t('accident.report.phTypeNa')}{extra.plate_number ? ` - ${t('accident.report.phFleetNo')} ${extra.plate_number}` : ''}
+                  {t('accident.report.phMaster')} {extra.vehicle_type || t('accident.report.phTypeNa')}{[extra.make, extra.model].filter(Boolean).join(' ') ? ` - ${[extra.make, extra.model].filter(Boolean).join(' ')}` : ''}{extra.plate_number ? ` - ${t('accident.report.phFleetNo')} ${extra.plate_number}` : ''}
                 </AppText>
               ) : null}
             </Field>

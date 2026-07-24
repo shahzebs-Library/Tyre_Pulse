@@ -568,7 +568,7 @@ function NewInspectionScreen() {
                       <View style={{ flex: 1 }}>
                         <Text style={[styles.selectedVehicleAsset, { textAlign }]} numberOfLines={1}>{selectedVehicle.asset_no}</Text>
                         <Text style={[styles.selectedVehicleType, { textAlign }]} numberOfLines={1}>
-                          {[selectedVehicle.vehicle_type, selectedVehicle.make].filter(Boolean).join(' · ')}
+                          {[selectedVehicle.vehicle_type, selectedVehicle.make, selectedVehicle.model].filter(Boolean).join(' · ')}
                         </Text>
                       </View>
                       <TouchableOpacity
@@ -749,7 +749,7 @@ function NewInspectionScreen() {
                 <Ionicons name="bus-outline" size={18} color={theme.color.primary} />
                 <Text style={[styles.vehicleInfoText, { textAlign }]}>
                   {selectedVehicle
-                    ? `${selectedVehicle.asset_no} · ${selectedVehicle.vehicle_type}${selectedVehicle.make ? ` · ${selectedVehicle.make}` : ''}`
+                    ? `${selectedVehicle.asset_no} · ${selectedVehicle.vehicle_type}${[selectedVehicle.make, selectedVehicle.model].filter(Boolean).join(' ') ? ` · ${[selectedVehicle.make, selectedVehicle.model].filter(Boolean).join(' ')}` : ''}`
                     : `${manualAsset.trim().toUpperCase()} · ${manualVehicleType} (manual)`}
                 </Text>
                 <Text style={styles.vehiclePositionCount}>

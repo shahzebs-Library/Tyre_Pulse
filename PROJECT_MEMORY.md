@@ -3,13 +3,54 @@
 Durable, committed project knowledge so any session has full context. Keep this
 current. Read it before adding/changing modules. Governing spec: `Tyre pulse enterprise.md`
 
-## SESSION 2026-07-23 — Multi-country data cleanup + tyre scrap + tyre-cost single source + multi-country fleet. Migrations through **V348**, next free **V349**. All merged to main (PRs #166-#178).
+## SESSION 2026-07-23 — Multi-country data cleanup + tyre scrap + tyre-cost single source + multi-country fleet + Data-Quality hub. Migrations through **V359** (V357/V358 in flight at write time; next free after those), all applied live via Supabase MCP (project jhssdmeruxtrlqnwfksc). All merged to main (PRs #166-#183+).
 Green Concrete Company (org Company A), ONE tenant, 3 countries kept SEPARATE by a `country` column
-(KSA/UAE/Egypt) — same users, per-country dedup. All migrations applied live via Supabase MCP (project
-jhssdmeruxtrlqnwfksc). Branch `claude/accident-builder-report-ui-2bkwb5`: after each squash-merge, realign with
-`git checkout -B <branch> origin/main` (do NOT stack on merged history); a force-with-lease push is fine when the
-remote branch carries only already-merged commits. NOTE: GitHub's squash-merge commit shows Unverified
-(committer noreply@github.com) — that is GitHub's own merge, NOT a local commit; never amend/force-push merged main history to "fix" it.
+(KSA/UAE/Egypt) — same users, per-country dedup. Branch `claude/accident-builder-report-ui-2bkwb5`: after each
+squash-merge, realign with `git checkout -B <branch> origin/main` (do NOT stack on merged history); a
+force-with-lease push is fine when the remote branch carries only already-merged commits. NOTE: GitHub's
+squash-merge commit shows Unverified (committer noreply@github.com) — that is GitHub's own merge, NOT a local
+commit; never amend/force-push merged main history to "fix" it. NOTE: the Supabase MCP server flapped several
+times this session; when down, run code-only agents and defer migration work until it reconnects.
+
+### Data-Quality hub + asset-master + fleet backfills (PRs #180-#183, V346-V359) — the big data-integrity push
+- **Data Reconciliation (`/data-reconciliation`) is THE data-quality hub** — now grouped into tabs Overview /
+  Completeness / Integrity / Assets. Sections + their RPCs (all elevated + org-scoped, security-definer):
+  brand-gap (reconBrand + BrandGapSection, has a "Download fill list" Excel export of blank-brand tyres for the
+  stg_tyre_brand upload) - job-card date typos (V346 recon_jobcard_mismatches/_summary, 786) - duplicate-key
+  tyres (V349 recon_duplicate_key_tyres, 40 groups, + V357 recon_resolve_duplicate_key = SAFE resolve, deletes
+  ONLY byte-identical extras keeping newest, else 'differs' and leaves it) - serial-on-multiple-assets (V353
+  recon_serial_multi_asset, 178 groups, read-only = normal tyre movement) - Data-Quality scorecard (V354
+  recon_data_quality_summary, per-country grade) - Asset Master (V356 get_asset_master).
+- **Asset Master (V356 `get_asset_master(search,limit)`)** = ONE row per physical vehicle across ALL countries
+  (the same vehicle TRANSFERS between countries, so an asset_no legitimately appears in >1 country — 183 of 1,340
+  vehicles). Rolls up tyres/work-orders; tyre expense kept PER COUNTRY (each in its own currency, NEVER blended)
+  in a by_country jsonb. Surfaced as an AssetMasterSection on Data Reconciliation AND a "This vehicle across
+  countries" panel on AssetDetail. Service `src/lib/api/assetMaster.js` + COUNTRY_CURRENCY. USER RULE: keep ONE
+  master for checking assets; cross-country expenses are NORMAL. Per-country vehicle_fleet rows were LEFT INTACT
+  (non-destructive) so country-scoped visibility is unchanged — the master is a read-only unified view on top.
+- **Fleet backfills to 100% cross-module linkage:** V351 derived the 415 KSA asset numbers referenced by work
+  orders but missing from the register (KSA fleet 604->1019; KSA WO link 84.8%->100%). Combined with V348 (UAE/
+  Egypt), ALL 3 countries now link 100% of tyres + work orders to a fleet record.
+- **UAE brand auto-derive (V352):** filled tyre_records.brand for UAE assets with EXACTLY ONE distinct grid brand
+  (non-fabricating) — 889 filled, UAE blanks 1007->118. Remaining brand blanks (UAE 118 + Egypt 475 + KSA 149)
+  need the customer stg_tyre_brand CSV (Egypt grid yields 0 brand, cannot auto-derive).
+- **Derived-fleet enrichment (V350):** filled make/model on the derived UAE/Egypt fleet from the ERP
+  asset_description (non-destructive): UAE model 355/make 133, Egypt model 132/make 31. Mobile shows make/model.
+- **Store->site expense mapping (V358, in flight):** store_site_map table + seed exact store_code=site matches
+  (12/19 KSA) + get_expense_by_site / set_store_site_map RPCs + a "By site" panel on ExpenseReport (unmapped
+  stores get an inline site picker). Closes the long-standing per-site-expense legacy fallback.
+- **Advisor hygiene (V355+V359):** pinned search_path on all our recon_/get_ + helper functions +
+  accident/login/cleanup helpers -> function_search_path_mutable 13->0.
+- **Mobile scrap parity (PR #180):** serial-search screen gains admin-gated Mark-as-Scrap + Undo + badge
+  (mobile/lib/tyreScrap.ts), mirroring web scrapTyreBySerial.
+- **Tyre-cost single source finished (PR #177/#180):** every fleet/per-asset tyre-COST total reads the grid
+  (loadCostSplit.tyre for fleet, V347 get_tyre_cost_by_asset -> loadGridTyreByAsset map for per-asset) across
+  EngineeringKpi/AssetDetail/VehicleHistory/FleetAnalytics/TyreFailureCpkBoard/BrandPerformance/VendorIntelligence
+  /PositionIntelligence; CPK (per-km) stays on tyre_records; brand/position/vendor cost stays on tyre_records with
+  an "authoritative total from the expense grid" note. RULE: NEVER sum cost_per_tyre for a tyre-cost total.
+- INFRA (user asked): no self-managed load balancer — serverless (Vercel edge auto-LB + Supabase Supavisor pooler).
+- OPEN (data-load, needs customer input): ~75k (4.6%) 2026 KSA tyre_amount gap vs the customer's own "Sum of Trye"
+  chart (biggest Apr+Jul) = a few source rows didn't load; brand-fill CSV for the remaining blanks.
 
 ### Tyre scrap edit/undo + Data Reconciliation deepened (PRs #174/#176)
 - Serial Tracker (`/serial-tracker`, Admin-only) has a **Scrapped tab** listing every scrapped tyre with per-row

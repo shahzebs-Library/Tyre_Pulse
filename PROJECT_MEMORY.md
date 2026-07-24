@@ -32,8 +32,14 @@ times this session; when down, run code-only agents and defer migration work unt
   orders but missing from the register (KSA fleet 604->1019; KSA WO link 84.8%->100%). Combined with V348 (UAE/
   Egypt), ALL 3 countries now link 100% of tyres + work orders to a fleet record.
 - **UAE brand auto-derive (V352):** filled tyre_records.brand for UAE assets with EXACTLY ONE distinct grid brand
-  (non-fabricating) — 889 filled, UAE blanks 1007->118. Remaining brand blanks (UAE 118 + Egypt 475 + KSA 149)
-  need the customer stg_tyre_brand CSV (Egypt grid yields 0 brand, cannot auto-derive).
+  (non-fabricating) — 889 filled, UAE blanks 1007->118.
+- **BRAND (+other fields) WAS IN THE SOURCE FILES — this is a LOAD/MAPPING gap, NOT a customer-input gap (user
+  confirmed 2026-07-23).** The customer's original tyre/ERP exports DID carry brand (and other columns that landed
+  blank); the intake pipeline just did not MAP those columns on the load, so tyre_records.brand (UAE 118 + Egypt
+  475 + KSA 149) and other fields came in empty. FIX = re-import from the ORIGINAL source files with brand +
+  the other columns mapped (extend the erpIntake/stg_ mappers to capture brand and any other dropped fields, then
+  re-run per country) — do NOT ask the customer for a fill CSV. Audit the source-to-column mapping for every
+  field that is blank in the app but present in the source (brand first, then the rest).
 - **Derived-fleet enrichment (V350):** filled make/model on the derived UAE/Egypt fleet from the ERP
   asset_description (non-destructive): UAE model 355/make 133, Egypt model 132/make 31. Mobile shows make/model.
 - **Store->site expense mapping (V358, in flight):** store_site_map table + seed exact store_code=site matches
@@ -49,8 +55,10 @@ times this session; when down, run code-only agents and defer migration work unt
   /PositionIntelligence; CPK (per-km) stays on tyre_records; brand/position/vendor cost stays on tyre_records with
   an "authoritative total from the expense grid" note. RULE: NEVER sum cost_per_tyre for a tyre-cost total.
 - INFRA (user asked): no self-managed load balancer — serverless (Vercel edge auto-LB + Supabase Supavisor pooler).
-- OPEN (data-load, needs customer input): ~75k (4.6%) 2026 KSA tyre_amount gap vs the customer's own "Sum of Trye"
-  chart (biggest Apr+Jul) = a few source rows didn't load; brand-fill CSV for the remaining blanks.
+- OPEN (data-load, re-import from source — NOT customer input): (1) ~75k (4.6%) 2026 KSA tyre_amount gap vs the
+  customer's own "Sum of Trye" chart (biggest Apr+Jul) = a few source rows didn't load; (2) brand + other blank
+  fields ARE in the customer's original files but were not mapped by the intake pipeline — re-import mapping those
+  columns (extend the mappers), do NOT ask for a fill CSV.
 
 ### Tyre scrap edit/undo + Data Reconciliation deepened (PRs #174/#176)
 - Serial Tracker (`/serial-tracker`, Admin-only) has a **Scrapped tab** listing every scrapped tyre with per-row
@@ -96,10 +104,9 @@ times this session; when down, run code-only agents and defer migration work unt
 ### Data-quality snapshot at session close (live audit)
 - Tyres 7,498 (KSA 6016/UAE 1007/Egypt 475); work_orders 85,886; wo_line_items 184,025; expense lines 224,540 (all
   costed, 0 null). Serial + asset 100% present. Line-items->work-orders 100% linked all countries. Grade B+.
-  OPEN: brand blank UAE 1007/Egypt 475/KSA 149 (needs stg_tyre_brand CSV - Egypt grid yields 0 brand, UAE only 1132
-  lines, so cannot auto-derive; give the customer a fill CSV: country/serial/brand, uploaded to stg_tyre_brand which
-  auto-backfills tyre_records.brand); 786 job-card date typos (now reviewable on Data Reconciliation, no auto-fix); 48
-  possible duplicate-key tyres.
+  OPEN: brand blank (after V352 UAE 118/Egypt 475/KSA 149) — the SOURCE FILES HAVE brand; it was NOT mapped on
+  load (re-import from the original files with brand + other dropped columns mapped, NOT a customer CSV); 786
+  job-card date typos (now reviewable on Data Reconciliation, no auto-fix); 40 possible duplicate-key tyres.
 - INFRA (user asked): no self-managed load balancer - app is serverless (Vercel edge auto-LB + autoscale; Supabase
   Supavisor connection pooler + horizontally-scaled API). Nothing to manage; scale lever = Supabase compute tier +
   transaction pooler.

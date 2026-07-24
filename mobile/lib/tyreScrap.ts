@@ -46,11 +46,12 @@ export async function scrapTyreBySerial(
     { onConflict: 'serial,mark_type' },
   )
   if (markErr) throw markErr
-  const { data, error } = await supabase
-    .from('tyre_records')
-    .update({ status: 'Scrapped' })
-    .eq('serial_no', s)
-    .select('id')
+  // Scope to the country: the SAME serial exists independently in KSA, UAE and
+  // Egypt (intake de-dupes per country) and the country RLS policies are
+  // SELECT-only, so an unscoped UPDATE scrapped every country's copy.
+  let upd = supabase.from('tyre_records').update({ status: 'Scrapped' }).eq('serial_no', s)
+  if (country) upd = upd.eq('country', country)
+  const { data, error } = await upd.select('id')
   if (error) throw error
   return { updated: (data ?? []).length }
 }
@@ -59,7 +60,10 @@ export async function scrapTyreBySerial(
  * Undo a scrap: remove the 'scrap' mark and revert any row still flagged
  * 'Scrapped' back to 'Active' (lifecycle removal signals untouched).
  */
-export async function unscrapTyreBySerial(serial: string): Promise<{ ok: boolean }> {
+export async function unscrapTyreBySerial(
+  serial: string,
+  country: string | null = null,
+): Promise<{ ok: boolean }> {
   const s = String(serial || '').trim()
   if (!s) throw new Error('Serial number is required.')
   const { error: delErr } = await supabase
@@ -68,11 +72,14 @@ export async function unscrapTyreBySerial(serial: string): Promise<{ ok: boolean
     .eq('serial', s)
     .eq('mark_type', 'scrap')
   if (delErr) throw delErr
-  const { error } = await supabase
+  // Country-scoped for the same reason as scrapTyreBySerial.
+  let upd = supabase
     .from('tyre_records')
     .update({ status: 'Active' })
     .eq('serial_no', s)
     .eq('status', 'Scrapped')
+  if (country) upd = upd.eq('country', country)
+  const { error } = await upd
   if (error) throw error
   return { ok: true }
 }

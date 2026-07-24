@@ -108,7 +108,7 @@ function SerialSearchScreen() {
     if (!s || scrapBusy) return
     setScrapBusy(true)
     try {
-      await scrapTyreBySerial(s, scrapReason.trim() || null)
+      await scrapTyreBySerial(s, scrapReason.trim() || null, tyre?.country ?? null)
       setScrapMark(await getScrapMark(s))
       setScrapModal(false)
       setScrapReason('')
@@ -133,7 +133,7 @@ function SerialSearchScreen() {
           onPress: async () => {
             setScrapBusy(true)
             try {
-              await unscrapTyreBySerial(s)
+              await unscrapTyreBySerial(s, tyre?.country ?? null)
               setScrapMark(null)
             } catch (err: any) {
               Alert.alert(t('modules.serialSearch.scrapErrorTitle'), toUserMessage(err))

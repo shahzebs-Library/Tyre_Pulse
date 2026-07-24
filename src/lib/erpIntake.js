@@ -157,6 +157,11 @@ function mapMonthlyTyres(dataRows, headerRow, country) {
     job: h.find('job card no.', 'job card no', 'job card'), veh: h.find('veh.no', 'veh no', 'veh no.'),
     vtype: h.find('veh type/category', 'veh type', 'category'), item: h.find('item/tyre', 'item tyre', 'item'),
     pos: h.find('tyre position', 'position'), serial: h.find('tyre no.', 'tyre no'),
+    // The source sheets DO carry a brand column; this mapper simply never read
+    // it, which is why tyre_records.brand came in blank for everything loaded
+    // through the Monthly Tyres path (mapCombined already maps it). Safe when
+    // absent: find() returns -1 and cellAt() yields '' -> null, as before.
+    brand: h.find('tyre brand', 'tyre_brand', 'brand'),
     fixd: h.find('tyre fix date', 'fix date'), fixkm: h.find('fixed km'), fixhr: h.find('fixed hrs'),
     remd: h.find('tyre removed date', 'removed date'), remkm: h.find('removed km'), remhr: h.find('removed hrs'),
     reason: h.find('reason'), tkm: h.find('total km'), thr: h.find('total hrs'),
@@ -172,6 +177,7 @@ function mapMonthlyTyres(dataRows, headerRow, country) {
     out.push({
       serial_no: serial, asset_no: asset, job_card: cellAt(r, c.job),
       vehicle_type: cellAt(r, c.vtype), size: cellAt(r, c.item),
+      brand: cellAt(r, c.brand) || null,
       position: cellAt(r, c.pos), tyre_position: cellAt(r, c.pos),
       issue_date: issue,
       km_at_fitment: fkm, hrs_at_fitment: fhr,

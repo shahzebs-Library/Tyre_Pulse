@@ -130,8 +130,8 @@ export default function BoardOverview() {
       const [tyresRes, inspRes, actionsQ, fleetQ, accRes, workOrders, stock] = await Promise.all([
         fetchAllPages((from, to) => listKpiTyreRecords({ country: activeCountry, from, to })),
         fetchAllPages((from, to) => listKpiInspections({ country: activeCountry, from, to })),
-        listKpiCorrectiveActions({ country: activeCountry }),
-        listKpiFleet(),
+        fetchAllPages((from, to) => listKpiCorrectiveActions({ country: activeCountry, from, to })),
+        fetchAllPages((from, to) => listKpiFleet({ country: activeCountry, from, to })),
         listAllAccidentsForPage({ country: activeCountry }),
         listWorkOrdersForPage({ country: activeCountry }).catch(() => []),
         listStockRecords({ country: activeCountry }).catch(() => []),

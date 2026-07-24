@@ -119,11 +119,11 @@ export default function SerialTracker() {
     }
   }
 
-  async function undoScrapRow(serial) {
+  async function undoScrapRow(serial, country = null) {
     setRowBusy(serial)
     setScrapListErr(null)
     try {
-      await unscrapTyreBySerial(serial)
+      await unscrapTyreBySerial(serial, { country })
       setScrapList(prev => prev.filter(r => r.serial !== serial))
       if (lastQuery === serial) setScrapMark(null)
     } catch (err) {
@@ -209,7 +209,7 @@ export default function SerialTracker() {
     setScrapBusy(true)
     setScrapErr(null)
     try {
-      await unscrapTyreBySerial(lastQuery)
+      await unscrapTyreBySerial(lastQuery, { country: records[0]?.country || null })
       setRecords(prev => prev.map(r => (r.status === 'Scrapped' ? { ...r, status: 'Active' } : r)))
       setScrapMark(null)
     } catch (err) {
@@ -882,7 +882,7 @@ export default function SerialTracker() {
                               <button onClick={() => { setEditSerial(r.serial); setEditReason(r.reason || '') }}
                                 disabled={rowBusy === r.serial}
                                 className="btn-secondary text-xs px-2.5 py-1 disabled:opacity-50">Edit reason</button>
-                              <button onClick={() => undoScrapRow(r.serial)} disabled={rowBusy === r.serial}
+                              <button onClick={() => undoScrapRow(r.serial, r.country || null)} disabled={rowBusy === r.serial}
                                 className="flex items-center gap-1 text-xs px-2.5 py-1 rounded-md font-medium border border-green-700/50 bg-green-900/20 text-green-300 hover:bg-green-900/40 transition-colors disabled:opacity-50">
                                 <RotateCcw size={12} /> {rowBusy === r.serial ? 'Working...' : 'Undo scrap'}
                               </button>

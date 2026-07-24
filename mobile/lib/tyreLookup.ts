@@ -16,6 +16,9 @@ export interface TyreLookupRecord {
   tyre_position: string | null
   asset_no: string | null
   site: string | null
+  // Needed to scope a scrap/undo to the right country: the same serial exists
+  // independently in KSA, UAE and Egypt.
+  country: string | null
   tread_depth: string | number | null
   pressure_reading: string | number | null
 }
@@ -31,7 +34,7 @@ export async function lookupTyreBySerial(raw: string): Promise<TyreLookupRecord 
   if (!code) return null
   const { data, error } = await supabase
     .from('tyre_records')
-    .select('id, brand, size, position, tyre_position, asset_no, site, tread_depth, pressure_reading')
+    .select('id, brand, size, position, tyre_position, asset_no, site, country, tread_depth, pressure_reading')
     .or(`serial_no.eq.${code},serial_number.eq.${code},tyre_serial.eq.${code}`)
     .limit(1)
   if (error || !data || data.length === 0) return null

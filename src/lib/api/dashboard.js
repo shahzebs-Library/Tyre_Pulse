@@ -13,9 +13,16 @@ import { supabase, applyCountry } from './_client'
 /**
  * KPI/analytics tyre rows for the dashboard, country-scoped (null-safe) with an
  * optional issue_date window.
- * @param {{country?:string, from?:string, to?:string}} [opts]
+ *
+ * `rangeFrom`/`rangeTo` are optional row offsets (NOT the issue_date window)
+ * that let the caller drive this through `fetchAllPages`. They are required in
+ * practice: tyre_records is well past the PostgREST 1000-row cap, so an
+ * un-ranged read silently returned the first 1000 rows and every dashboard
+ * total, chart and cost KPI was computed over a fraction of the fleet. Omitting
+ * them preserves the original single-shot pass-through.
+ * @param {{country?:string, from?:string, to?:string, rangeFrom?:number, rangeTo?:number}} [opts]
  */
-export function listDashboardTyres({ country, from, to } = {}) {
+export function listDashboardTyres({ country, from, to, rangeFrom, rangeTo } = {}) {
   let q = applyCountry(
     supabase
       .from('tyre_records')
@@ -24,6 +31,7 @@ export function listDashboardTyres({ country, from, to } = {}) {
   )
   if (from) q = q.gte('issue_date', from)
   if (to) q = q.lte('issue_date', to)
+  if (Number.isFinite(rangeFrom) && Number.isFinite(rangeTo)) q = q.range(rangeFrom, rangeTo)
   return q
 }
 

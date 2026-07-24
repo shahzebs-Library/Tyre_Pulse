@@ -14,7 +14,7 @@ import {
 } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import * as ImagePicker from 'expo-image-picker'
-import * as FileSystem from 'expo-file-system'
+import { File } from 'expo-file-system'
 import { TyrePositionData } from '../lib/types'
 import { CONDITION_META, CONDITIONS, SHOW_TREAD_DEPTH } from '../lib/tyreConditions'
 import { lookupTyreBySerial, TyreLookupRecord } from '../lib/tyreLookup'
@@ -23,6 +23,7 @@ import { useTheme } from '../contexts/ThemeContext'
 import { radius, spacing, typography, Theme } from '../lib/theme'
 import { supabase } from '../lib/supabase'
 import { storageRef } from '../lib/storageRefs'
+import { prepareForUpload } from '../lib/photoUpload'
 import { safeImageSrc } from '../lib/safeUrl'
 
 type UploadState = 'idle' | 'uploading' | 'done' | 'error'
@@ -90,17 +91,22 @@ export default function TyreEditor({ data, onChange }: Props) {
   async function uploadPhoto(localUri: string) {
     setUploadState('uploading')
     try {
-      const rawExt = localUri.split('.').pop()?.toLowerCase() ?? 'jpg'
+      // Resize/compress first (shared helper), matching every other upload path
+      // in the app - a full-resolution camera image otherwise risks an OOM kill
+      // on low-end devices.
+      const uploadUri = await prepareForUpload(localUri)
+
+      const rawExt = uploadUri.split('.').pop()?.toLowerCase() ?? 'jpg'
       const ext = rawExt === 'heic' || rawExt === 'heif' ? 'jpg' : rawExt
       const contentType = ext === 'png' ? 'image/png' : 'image/jpeg'
 
       const safePosId = data.position.replace(/[^a-zA-Z0-9_-]/g, '_')
       const path = `photos/${Date.now()}_${safePosId}.${ext}`
 
-      const base64 = await FileSystem.readAsStringAsync(localUri, { encoding: 'base64' })
-      const binaryString = atob(base64)
-      const bytes = new Uint8Array(binaryString.length)
-      for (let i = 0; i < binaryString.length; i++) bytes[i] = binaryString.charCodeAt(i)
+      // SDK 54 File API. The legacy FileSystem.readAsStringAsync THROWS at
+      // runtime in expo-file-system 19 (see lib/photoUpload.ts readFileBytes),
+      // so every in-inspection tyre photo failed to upload.
+      const bytes = await new File(uploadUri).bytes()
 
       const { error: uploadError } = await supabase.storage
         .from('tyre-photos')

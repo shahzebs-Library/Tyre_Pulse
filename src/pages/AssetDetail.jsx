@@ -13,12 +13,13 @@ import {
   DollarSign, TrendingUp, MapPin, Zap, Target, Layers, Lock,
   ToggleLeft, ToggleRight, Truck, Wrench, ClipboardCheck, History,
   Shield, Gauge, ShieldAlert, User, Hash, Calendar, Building2, Fuel,
-  CalendarClock, ExternalLink,
+  CalendarClock, ExternalLink, Globe,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import * as assetApi from '../lib/api/assetManagement'
 import { listPmPrograms, listPmServiceRecords } from '../lib/api/pmPrograms'
 import { loadGridTyreByAsset } from '../lib/api/costSummary'
+import { getAssetMaster, COUNTRY_CURRENCY } from '../lib/api/assetMaster'
 import { toUserMessage } from '../lib/safeError'
 import { pmAssetDueStatus } from '../lib/pmSchedule'
 import { PM_DUE_META } from '../lib/pmPrograms'
@@ -296,6 +297,9 @@ export default function AssetDetail() {
   // means the grid is unavailable or has no tyre spend for this asset -> the cost
   // tile then falls back to the tyre_records cost_per_tyre sum.
   const [gridAssetCost, setGridAssetCost] = useState(null)
+  // Cross-country "one vehicle" rollup for this asset_no (V356 RPC via
+  // getAssetMaster). Null = not found / RPC unavailable -> the panel stays hidden.
+  const [masterRow, setMasterRow] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [refreshKey, setRefreshKey] = useState(0)
@@ -392,6 +396,25 @@ export default function AssetDetail() {
       .catch(() => { if (!cancelled) setGridAssetCost(null) })
     return () => { cancelled = true }
   }, [assetNo, asset?.country, refreshKey])
+
+  // Cross-country master rollup: fetch the single master row that matches this
+  // asset_no (case-insensitive/trim). getAssetMaster never throws (returns []),
+  // so a missing/empty result simply clears the row and hides the panel.
+  useEffect(() => {
+    let cancelled = false
+    const key = String(assetNo ?? '').trim().toUpperCase()
+    if (!key) { setMasterRow(null); return }
+    getAssetMaster({ search: assetNo, limit: 5 })
+      .then(rows => {
+        if (cancelled) return
+        const match = (Array.isArray(rows) ? rows : []).find(
+          r => String(r?.asset_no ?? '').trim().toUpperCase() === key,
+        )
+        setMasterRow(match ?? null)
+      })
+      .catch(() => { if (!cancelled) setMasterRow(null) })
+    return () => { cancelled = true }
+  }, [assetNo, refreshKey])
 
   // ── derived ────────────────────────────────────────────────────────────────
   const activeTyres = useMemo(() => tyres.filter(t => !t.km_at_removal), [tyres])
@@ -605,6 +628,66 @@ export default function AssetDetail() {
           <StatTile icon={ShieldAlert} label="Incidents" value={accidents.length}
             sub={accidents.length ? 'recorded' : 'none recorded'} color={accidents.length ? 'red' : 'green'} />
         </div>
+
+        {/* This vehicle across countries — cross-country "one vehicle" rollup.
+            Rendered only when a master row is found; expense is shown PER COUNTRY
+            in each country's own currency (never summed across currencies). */}
+        {masterRow && Array.isArray(masterRow.by_country) && masterRow.by_country.length > 0 && (
+          <div className="card">
+            <h3 className="text-sm font-semibold text-[var(--text-secondary)] mb-3 flex items-center gap-2">
+              <Globe className="w-4 h-4 text-blue-400" /> This vehicle across countries
+            </h3>
+
+            {/* Country chips + identity */}
+            <div className="flex flex-wrap items-center gap-2 mb-4">
+              {String(masterRow.countries ?? '')
+                .split(',')
+                .map(c => c.trim())
+                .filter(Boolean)
+                .map(c => (
+                  <span key={c} className="px-2 py-1 rounded-full text-xs font-semibold bg-blue-900/40 text-blue-300 inline-flex items-center gap-1">
+                    <MapPin className="w-3 h-3" /> {c}
+                  </span>
+                ))}
+              {[masterRow.vehicle_type, [masterRow.make, masterRow.model].filter(Boolean).join(' ')]
+                .filter(Boolean)
+                .map((v, i) => (
+                  <span key={`id-${i}`} className="text-xs text-[var(--text-muted)]">{v}</span>
+                ))}
+            </div>
+
+            {/* Per-country activity + expense (each in its own currency) */}
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="border-b border-[var(--border-dim)]">
+                    {['Country', 'Tyres', 'Work Orders', 'Tyre Expense'].map(h => (
+                      <th key={h} className="px-3 py-2 text-left text-[var(--text-muted)] font-medium whitespace-nowrap">{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {masterRow.by_country.map((bc, i) => (
+                    <tr key={bc.country ?? i} className="border-b border-[var(--border-dim)]">
+                      <td className="px-3 py-2 text-[var(--text-primary)] font-medium whitespace-nowrap">{bc.country ?? '-'}</td>
+                      <td className="px-3 py-2 text-[var(--text-secondary)]">{fmtNum(bc.tyres)}</td>
+                      <td className="px-3 py-2 text-[var(--text-secondary)]">{fmtNum(bc.work_orders)}</td>
+                      <td className="px-3 py-2 text-[var(--text-secondary)] whitespace-nowrap">
+                        {formatCurrencyCompact(bc.tyre_expense || 0, COUNTRY_CURRENCY[bc.country] || 'SAR')}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {Number(masterRow.country_count) > 1 && (
+              <p className="text-[11px] text-[var(--text-muted)] mt-3 leading-relaxed">
+                This vehicle operated in more than one country; expenses are shown per country in each currency, which is normal.
+              </p>
+            )}
+          </div>
+        )}
 
         {/* Tabs */}
         <div className="flex flex-wrap gap-1 bg-[var(--surface-1)] rounded-xl p-1 border border-[var(--border-dim)] w-fit">

@@ -166,6 +166,16 @@ export default function DataReconciliation() {
   const [rowBusy, setRowBusy] = useState({}) // { key: true }
   const [expanded, setExpanded] = useState({}) // conflict serial -> bool
 
+  // Presentation-only category switcher. Every section stays mounted (inactive
+  // groups are hidden via CSS) so no child re-fetches when the group changes.
+  const [group, setGroup] = useState('overview')
+  const GROUPS = [
+    ['overview', 'Overview'],
+    ['completeness', 'Completeness'],
+    ['integrity', 'Integrity'],
+    ['assets', 'Assets'],
+  ]
+
   const notify = (message, type = 'success') => setToast({ message, type })
 
   // ── Loaders (each isolated so one failure never blanks the others) ──────────
@@ -295,6 +305,23 @@ export default function DataReconciliation() {
         updatedAt={updatedAt}
       />
 
+      {/* Category switcher (presentation only) */}
+      <div className="flex flex-wrap gap-1 p-1 bg-[var(--surface-2)] rounded-lg w-fit">
+        {GROUPS.map(([key, label]) => (
+          <button
+            key={key}
+            onClick={() => setGroup(key)}
+            className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
+              group === key ? 'bg-[var(--surface-3)] text-[var(--text-primary)] shadow' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {/* ═══ Overview group ══════════════════════════════════════════════════ */}
+      <div className={group === 'overview' ? 'space-y-5' : 'hidden'}>
       {/* Data-quality scorecard (per country) */}
       <DataQualityScorecard />
 
@@ -325,7 +352,11 @@ export default function DataReconciliation() {
           loading={conflicts.loading}
         />
       </div>
+      </div>
+      {/* ═══ End Overview group ══════════════════════════════════════════════ */}
 
+      {/* ═══ Completeness group ══════════════════════════════════════════════ */}
+      <div className={group === 'completeness' ? 'space-y-5' : 'hidden'}>
       {/* ── Section A: Orphan assets ─────────────────────────────────────────── */}
       <Section
         icon={Building2}
@@ -398,6 +429,13 @@ export default function DataReconciliation() {
         )}
       </Section>
 
+      {/* ── Completeness: tyres missing a brand ──────────────────────────────── */}
+      <BrandGapSection />
+      </div>
+      {/* ═══ End Completeness group ══════════════════════════════════════════ */}
+
+      {/* ═══ Integrity group ═════════════════════════════════════════════════ */}
+      <div className={group === 'integrity' ? 'space-y-5' : 'hidden'}>
       {/* ── Section B: Exact duplicates ──────────────────────────────────────── */}
       <Section
         icon={Copy}
@@ -551,9 +589,6 @@ export default function DataReconciliation() {
         )}
       </Section>
 
-      {/* ── Completeness: tyres missing a brand ──────────────────────────────── */}
-      <BrandGapSection />
-
       {/* ── Integrity: job card date mismatches ──────────────────────────────── */}
       <JobcardDateSection />
 
@@ -562,9 +597,15 @@ export default function DataReconciliation() {
 
       {/* ── Integrity: serial on multiple assets (moved tyre or data error) ────── */}
       <SerialMultiAssetSection />
+      </div>
+      {/* ═══ End Integrity group ═════════════════════════════════════════════ */}
 
+      {/* ═══ Assets group ════════════════════════════════════════════════════ */}
+      <div className={group === 'assets' ? 'space-y-5' : 'hidden'}>
       {/* ── Asset master: one row per vehicle across all countries ──────────────── */}
       <AssetMasterSection />
+      </div>
+      {/* ═══ End Assets group ════════════════════════════════════════════════ */}
 
       {/* ── Confirm modals ───────────────────────────────────────────────────── */}
       {confirm?.type === 'backfillAll' && (

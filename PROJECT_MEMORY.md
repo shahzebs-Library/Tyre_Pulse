@@ -11,6 +11,13 @@ force-with-lease push is fine when the remote branch carries only already-merged
 squash-merge commit shows Unverified (committer noreply@github.com) — that is GitHub's own merge, NOT a local
 commit; never amend/force-push merged main history to "fix" it. NOTE: the Supabase MCP server flapped several
 times this session; when down, run code-only agents and defer migration work until it reconnects.
+- **SESSION CLOSED CLEAN.** Everything is MERGED to main (last PR #185) and the branch is realigned to
+  origin/main (0 ahead / 0 behind, nothing uncommitted). Migrations applied live through **V359** (next free
+  **V360**). Web build clean, all tests green, mobile tsc 0. OPEN (all data-load / customer-side, NOT code):
+  (1) re-import brand + other blank columns from the ORIGINAL source files — the data HAS them, the intake just
+  didn't map them (extend the erpIntake/stg_ mappers, re-run per country); (2) the ~75k 2026 KSA tyre_amount
+  load gap; (3) map the 7 unmapped KSA store codes to sites on the Expense Report "By Site" panel. For NEW work,
+  restart the branch from latest main (merged PRs are terminal).
 
 ### Data-Quality hub + asset-master + fleet backfills (PRs #180-#183, V346-V359) — the big data-integrity push
 - **Data Reconciliation (`/data-reconciliation`) is THE data-quality hub** — now grouped into tabs Overview /

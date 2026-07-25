@@ -92,14 +92,22 @@ export function computeCpkFleet(records = []) {
   const valid = records.filter(_isValidRecord)
   const cpks  = valid.map(_cpkOf)
 
+  // HONEST NULLS: _mean/_median/_percentile return 0 for an empty array, which
+  // is indistinguishable from a real CPK of zero. When no record has usable
+  // cost+km the fleet CPK is NOT computable, and reporting 0 makes a data gap
+  // look like a perfect result. Consumers already expect this (tyreFailureBoard
+  // guards on validCount, boardOverview passes the value through `?? null`,
+  // which cannot catch a 0).
+  const has = cpks.length > 0
+
   return {
-    fleetAvgCpk:  _mean(cpks),
-    medianCpk:    _median(cpks),
+    fleetAvgCpk:  has ? _mean(cpks) : null,
+    medianCpk:    has ? _median(cpks) : null,
     validCount:   valid.length,
     totalCount:   total,
     coveragePct:  total > 0 ? (valid.length / total) * 100 : 0,
-    p10Cpk:       _percentile(cpks, 10),
-    p90Cpk:       _percentile(cpks, 90),
+    p10Cpk:       has ? _percentile(cpks, 10) : null,
+    p90Cpk:       has ? _percentile(cpks, 90) : null,
   }
 }
 
@@ -246,7 +254,14 @@ export function computeRemovalRate(records = [], fleetKmTotal) {
     return isFinite(fit) && isFinite(rem) && rem > fit
   })
 
-  const totalRemovals    = records.length
+  // Numerator and denominator MUST cover the same population. When the fleet km
+  // is derived here it is summed from `valid` only, so counting every record as
+  // a removal divided the full removal count by a partial distance - a large
+  // share of records carry no usable km - and inflated the rate. A caller that
+  // supplies a real fleetKmTotal is measuring the whole fleet, so there every
+  // removal legitimately counts.
+  const derived          = fleetKmTotal == null
+  const totalRemovals    = derived ? valid.length : records.length
   const estimatedFleetKm = fleetKmTotal ?? valid.reduce((s, r) => s + _kmRun(r), 0)
   const removalPer1000Km = estimatedFleetKm > 0
     ? (totalRemovals / estimatedFleetKm) * 1000

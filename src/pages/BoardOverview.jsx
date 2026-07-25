@@ -177,6 +177,18 @@ export default function BoardOverview() {
 
   const costTotals = useMemo(() => splitTotals(cost?.byMonth || []), [cost])
   const costHeadline = useMemo(() => pickCost(costMode, costTotals), [costMode, costTotals])
+
+  // AUTHORITATIVE tyre spend = the classified expense grid (loadCostSplit),
+  // never a sum of tyre_records.cost_per_tyre: a large share of tyre rows carry
+  // no price, so that sum understates real tyre spend several-fold. This page
+  // already renders the grid figure in its Tyres-vs-Maintenance panel, so using
+  // the engine's cost_per_tyre fallback for the headline KPI put two different
+  // numbers for the SAME fact on one screen. Falls back to the engine value only
+  // when the grid has nothing for this scope.
+  const tyreSpendValue = useMemo(
+    () => (costTotals.tyre > 0 ? costTotals.tyre : (data?.kpis?.tyreSpend ?? null)),
+    [costTotals, data],
+  )
   const costChart = useMemo(() => {
     const rows = cost?.byMonth || []
     return {
@@ -204,7 +216,7 @@ export default function BoardOverview() {
       const k = data.kpis
       const tiles = [
         ['Fleet vehicles', num(k.fleetSize)], ['Tyres tracked', num(k.tyresTracked)],
-        ['Fleet avg CPK', money(k.fleetAvgCpk)], ['Tyre spend', money(k.tyreSpend)],
+        ['Fleet avg CPK', money(k.fleetAvgCpk)], ['Tyre spend', money(tyreSpendValue)],
         ['Accidents', num(k.accidents)], ['Open accidents', num(k.openAccidents)],
         ['Claims value', money(k.claimed)], ['Recovered', money(k.recovered)],
         ['Inspections', num(k.inspections)], ['Work orders open', num(k.workOrdersOpen)],
@@ -314,7 +326,8 @@ export default function BoardOverview() {
                 <Kpi label="Fleet vehicles" value={num(k.fleetSize)} accent={ACCENTS.primary} />
                 <Kpi label="Tyres tracked" value={num(k.tyresTracked)} accent={ACCENTS.info} />
                 <Kpi label="Fleet avg CPK" value={money(k.fleetAvgCpk)} accent={ACCENTS.good} />
-                <Kpi label="Tyre spend" value={money(k.tyreSpend)} accent={ACCENTS.watch} />
+                <Kpi label="Tyre spend" value={money(tyreSpendValue)} accent={ACCENTS.watch}
+                  sub={costTotals.tyre > 0 ? 'expense grid, last 12 mo' : 'from tyre records'} />
                 <Kpi label="Failure rate" value={pct(k.failureRatePct)} accent={ACCENTS.risk} />
                 <Kpi label="Accidents" value={num(k.accidents)} accent={ACCENTS.risk} sub={`${num(k.openAccidents)} open`} />
                 <Kpi label="Claims value" value={money(k.claimed)} accent={ACCENTS.primary} sub={`${money(k.recovered)} recovered`} />

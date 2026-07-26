@@ -3,7 +3,7 @@
 Durable, committed project knowledge so any session has full context. Keep this
 current. Read it before adding/changing modules. Governing spec: `Tyre pulse enterprise.md`
 
-## SESSION 2026-07-26 — CLOSED CLEAN. Audit-lead verification + Play API-36 compliance + mobile scope/crash fixes + measured performance + **duplicate control (V362) + import guard / history / row editing (V363-V364)**. Migrations through **V364**, next free **V365**. ALL MERGED to main (PRs #187, #189, #190, #191, #192, #193); branch realigned 0/0. Play build SHIPPED to Closed testing.
+## SESSION 2026-07-26 — CLOSED CLEAN. Audit-lead verification + Play API-36 compliance + mobile scope/crash fixes + measured performance + **duplicate control (V362) + import guard / history / row editing (V363-V364)**. Migrations through **V364**, next free **V365**. ALL MERGED to main (PRs #187, #189, #190, #191, #192, #193, #194; main tip `d8d70a7`); branch realigned 0/0. Play build SHIPPED to Closed testing.
 Everything below is on main and verified: web build clean, **5230/5230 web tests**, mobile `tsc` 0, mobile jest 50.
 The 2026-07-24/25 audit's 7 unmerged commits (next section) were merged as part of this work.
 

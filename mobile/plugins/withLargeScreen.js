@@ -9,17 +9,39 @@
  *   2. sets android:resizeableActivity="true" on <application>,
  *   3. removes any android:screenOrientation lock from the app's MainActivity,
  *   4. injects a manifest-merge override that strips the PORTRAIT lock the
- *      ML Kit code-scanner ships on its GmsBarcodeScanningDelegateActivity.
+ *      ML Kit code-scanner ships on its GmsBarcodeScanningDelegateActivity,
+ *   5. declares the hardware this app uses as OPTIONAL (see below).
  *
  * Phone portrait-first UX is unaffected at rest; screens simply become
  * rotatable. If phones must stay portrait, add a runtime lock with
  * expo-screen-orientation (optional follow-up).
+ *
+ * WHY (5) MATTERS: requesting CAMERA / ACCESS_FINE_LOCATION makes Android imply
+ * android.hardware.camera, camera.autofocus and location.gps as REQUIRED
+ * features, and Google Play then hides the listing from every device that lacks
+ * them - notably Wi-Fi-only tablets, i.e. exactly the large-screen audience the
+ * rest of this plugin exists to support. Declaring them required="false" keeps
+ * the app installable there. This is safe because the app already degrades:
+ * the scanner has a mount-error fallback with manual entry, and the location
+ * lookup times out and never blocks an inspection.
  */
 const { withAndroidManifest, AndroidConfig } = require('@expo/config-plugins')
 
 const TOOLS_NS = 'http://schemas.android.com/tools'
 const MLKIT_SCANNER_ACTIVITY =
   'com.google.mlkit.vision.codescanner.internal.GmsBarcodeScanningDelegateActivity'
+
+/** Hardware the app uses but can live without; keeps tablets eligible. */
+const OPTIONAL_FEATURES = [
+  'android.hardware.camera',
+  'android.hardware.camera.any',
+  'android.hardware.camera.autofocus',
+  'android.hardware.camera.flash',
+  'android.hardware.location',
+  'android.hardware.location.gps',
+  'android.hardware.microphone',
+  'android.hardware.touchscreen',
+]
 
 function withLargeScreen(config) {
   return withAndroidManifest(config, (cfg) => {
@@ -58,6 +80,20 @@ function withLargeScreen(config) {
         },
       })
     }
+
+    // 5. declare implied hardware as OPTIONAL so Play does not filter the app
+    //    off tablets and other devices without a camera / GPS. Idempotent: an
+    //    existing entry is forced to required="false" rather than duplicated.
+    const features = Array.isArray(manifest['uses-feature']) ? manifest['uses-feature'] : []
+    for (const name of OPTIONAL_FEATURES) {
+      const existing = features.find((f) => f && f.$ && f.$['android:name'] === name)
+      if (existing) {
+        existing.$['android:required'] = 'false'
+      } else {
+        features.push({ $: { 'android:name': name, 'android:required': 'false' } })
+      }
+    }
+    manifest['uses-feature'] = features
 
     return cfg
   })

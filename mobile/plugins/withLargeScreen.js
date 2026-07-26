@@ -59,6 +59,19 @@ function withLargeScreen(config) {
     application.$ = application.$ || {}
     application.$['android:resizeableActivity'] = 'true'
 
+    // 2b. Keep the LEGACY back behaviour for now.
+    //
+    // Targeting API 36 (Android 16) turns the predictive back gesture ON by
+    // default. Nothing in this app implements the OnBackInvokedCallback contract,
+    // and the screens most likely to break under it are the ones field staff rely
+    // on - camera, barcode scanner and the modal capture forms - where a
+    // mishandled back can drop half-entered work. Opting out is still supported
+    // and keeps this release's only job as Play API-36 compliance.
+    //
+    // TO ENABLE LATER: delete this line, then hand-test the back gesture on every
+    // screen (camera, scanner, every modal) before shipping.
+    application.$['android:enableOnBackInvokedCallback'] = 'false'
+
     // 3. drop any screenOrientation lock from MainActivity
     const activities = Array.isArray(application.activity) ? application.activity : []
     const mainActivity = AndroidConfig.Manifest.getMainActivityOrThrow(cfg.modResults)

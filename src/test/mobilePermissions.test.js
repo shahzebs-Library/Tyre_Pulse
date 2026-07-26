@@ -14,12 +14,17 @@ import {
   resolveModuleAccess, moduleAllowedByRole, mobileRoleMatrixFromRaw,
 } from '../../mobile/lib/permissions'
 
+// NOTE: these exercise the RESOLVER MECHANICS (matrix layer, grant precedence,
+// fail-open, back-compat), not any particular policy. The "role default allows"
+// fixture is `inspect` + manager: `records` used to serve that purpose but is now
+// admin-only (mobile is a field-capture app and records pulled whole tables onto
+// the handset), so it no longer demonstrates a role default of true.
 describe('resolveModuleAccess role matrix layer', () => {
   it('role matrix denies a module the role default allows (mobile only)', () => {
-    // manager sees `records` by default...
-    expect(moduleAllowedByRole('records', 'manager')).toBe(true)
+    // manager sees `inspect` by default...
+    expect(moduleAllowedByRole('inspect', 'manager')).toBe(true)
     // ...but an explicit role mobile Deny hides it.
-    expect(resolveModuleAccess('records', 'manager', null, false, { records: false })).toBe(false)
+    expect(resolveModuleAccess('inspect', 'manager', null, false, { inspect: false })).toBe(false)
   })
 
   it('role matrix enables a module the role default denies', () => {
@@ -38,8 +43,8 @@ describe('resolveModuleAccess role matrix layer', () => {
   })
 
   it('fails OPEN: empty / undefined matrix falls back to the role default', () => {
-    expect(resolveModuleAccess('records', 'manager', null, false, {})).toBe(true)
-    expect(resolveModuleAccess('records', 'manager', null, false, undefined)).toBe(true)
+    expect(resolveModuleAccess('inspect', 'manager', null, false, {})).toBe(true)
+    expect(resolveModuleAccess('inspect', 'manager', null, false, undefined)).toBe(true)
     // and a role-denied module stays denied when the matrix is empty
     expect(resolveModuleAccess('analytics', 'director', null, false, {})).toBe(false)
   })
@@ -50,7 +55,7 @@ describe('resolveModuleAccess role matrix layer', () => {
   })
 
   it('back-compat: existing 4-arg callers behave exactly as before', () => {
-    expect(resolveModuleAccess('records', 'manager', null, false)).toBe(true)
+    expect(resolveModuleAccess('inspect', 'manager', null, false)).toBe(true)
     expect(resolveModuleAccess('analytics', 'director', null, false)).toBe(false)
   })
 })

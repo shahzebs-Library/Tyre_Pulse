@@ -3,7 +3,7 @@
 Durable, committed project knowledge so any session has full context. Keep this
 current. Read it before adding/changing modules. Governing spec: `Tyre pulse enterprise.md`
 
-## SESSION 2026-07-26 — CLOSED CLEAN. Audit-lead verification + Play API-36 compliance + mobile scope/crash fixes + measured performance + **duplicate control (V362) + import guard / history / row editing (V363-V364) + site-aware identity and the 8,248 duplicates DELETED (V365)**. Migrations through **V365**, next free **V366**. ALL MERGED to main (PRs #187, #189, #190, #191, #192, #193, #194; main tip `d8d70a7`); branch realigned 0/0. Play build SHIPPED to Closed testing.
+## SESSION 2026-07-26 — CLOSED CLEAN. Audit-lead verification + Play API-36 compliance + mobile scope/crash fixes + measured performance + **duplicate control (V362) + import guard / history / row editing (V363-V364) + site-aware identity and the 8,248 duplicates DELETED (V365)**. Migrations through **V368**, next free **V369**. ALL MERGED to main (PRs #187, #189, #190, #191, #192, #193, #194; main tip `d8d70a7`); branch realigned 0/0. Play build SHIPPED to Closed testing.
 Everything below is on main and verified: web build clean, **5230/5230 web tests**, mobile `tsc` 0, mobile jest 50.
 The 2026-07-24/25 audit's 7 unmerged commits (next section) were merged as part of this work.
 
@@ -214,7 +214,7 @@ resolved. 3 I verified by hand, 8 by a workflow with an adversarial reviewer:
   interpolated (via %I) and only after the editable-column check. `admin_db_revert_change` builds an explicit
   column list EXCLUDING generated cols (the V320 lesson). VERIFIED live rolled back: edit applied -> reverted to
   the exact original text; row deleted -> restored with serial intact; editing organisation_id REFUSED.
-- Tests importHistory 18 + duplicateControl 13. Migrations through **V365**, next free **V366**.
+- Tests importHistory 18 + duplicateControl 13. Migrations through **V368**, next free **V369**.
 
 ### V365 — site-aware expense identity + the 8,248 duplicates DELETED (user instruction)
 - **The duplicates are GONE.** User instruction: "these duplications exact match delete it". Removed in 3
@@ -231,6 +231,58 @@ resolved. 3 I verified by hand, 8 by a workflow with an adversarial reviewer:
   wo_lines/work_orders/tyre_records/odometer_logs keys too. Counts unchanged after the change (8,248/47,693),
   proving no site merging was occurring. `parts_import_uid` gained 2 trailing DEFAULT NULL params so 10-arg
   callers still resolve; stamped uids recomputed and the unique index rebuilt.
+
+### OPERATIONAL COST MODEL — currency, dimensions, material master (V366-V368, PRs #197/#198)
+- User pushed back that a huge architecture spec had been answered with two small fixes plus a plan. Correct.
+  This is the first real tranche. **Migrations through V368, next free V369.**
+- **V366 CURRENCY FIRST, because it gates the whole intelligence layer.** Every cross-country figure was illegal
+  arithmetic (SAR+AED+EGP summed); that ONE defect was patched at FOUR separate reader sites in a single session.
+  Patching readers does not fix it. `parts_consumption` now carries **currency, fx_rate_to_base, region, branch,
+  project, department, site, uom, unit_cost, supplier, source_system, approved_by** (all nullable). New
+  **`country_currency`** table + `currency_for_country()` = the country->currency decision in ONE place (KSA=SAR
+  base / UAE=AED / Egypt=EGP), so a new country is a row not a code edit.
+  BACKFILLED + VERIFIED: currency 216,792/216,792 · site 216,792/216,792 · source_system 216,792/216,792 ·
+  unit_cost 216,790/216,792 (the 2 exceptions have no usable qty, so it is NULL not a fabricated divisor).
+  The EXISTING classify trigger was extended (not joined by a 2nd one) so there is still ONE place deriving cost
+  fields; a new UAE row self-stamps AED / its site / unit_cost 1000 from 4000 over qty 4.
+  **NO FX CONVERSION on purpose** - needs a rate table with effective dates + a policy choice (txn-date vs
+  monthly-average vs closing). fx_rate_to_base is stored so a policy can be layered on later. NEVER invent a
+  rate: a wrong one looks authoritative and is worse than 3 honest per-country figures. **OPEN: the user still
+  has to choose the rate policy before any combined-country total can be shown.**
+- **V367 MATERIAL MASTER, keyed PER COUNTRY.** `material_master` (category + subcategory + brand + uom + 6
+  boolean flags + review state + txn_rows/txn_value). RPCs `material_master_derive/_set/_coverage`,
+  `material_category_bucket()`. Flags kept in step with category by a trigger so a hand edit cannot leave them
+  lying. **22,089 codes derived, 0 conflicts; value behind the master matches the per-country totals exactly
+  (Egypt 79,341,428 / KSA 40,608,350 / UAE 18,493,541) = it accounts for 100% of the money.**
+- **THE BIG FINDING: item codes are NOT globally unique.** `450115-O` = "COMPRESSOR OIL 68" in KSA (32 rows,
+  61,819) but "GREASE MISC ITEMS" in UAE; `450119-O` = "Grease EP0" KSA / "ADNOC VOYAGER BRONZE" UAE. My first
+  derive keyed on item_code ALONE and merged them - the SAME cross-boundary merge V365 had just hardened the
+  expense identity against. Caught on the first derive, before any UI shipped. Re-keyed to
+  **(organisation_id, country, item_code)** -> 22,089 rows, 0 conflicts, proving BOTH reported "conflicts" were
+  that collision and not a classification disagreement. RULE: never key anything in this system on a code alone.
+- **V368 classification READS THE MASTER.** Precedence = REVIEWED master row > description patterns. An
+  UNREVIEWED row is deliberately NOT authoritative (it was derived from those same patterns; honouring it would
+  dress a guess as a decision and make the coverage figure a lie). **Ships inert: nothing is reviewed, so not one
+  number moved on deploy** - the switch activates item by item as a human confirms each one.
+  `reclassify_from_master(p_dry_run DEFAULT TRUE)` re-applies reviewed decisions to EXISTING rows; the dry run
+  reports exactly which rows and how much money move per country/bucket and touches nothing. It is the ONLY path
+  that moves historical money. v368a fix: it used `on commit drop` for its temp table, which only fires at
+  COMMIT, so dry-run-then-apply in one txn failed - it now drops first.
+- **PROVEN live (rolled back) on a REAL error the master surfaced**: before review 0 rows change; after reviewing
+  450115-O as lubricant 32 rows change = SAR 61,819 spare->oil KSA; and a NEW row with that code lands in OIL
+  even though "COMPRESSOR OIL 68" does not match the oil regex. So the master genuinely finds money in the wrong
+  bucket - which SOFTENS (does not overturn) the "only 2 of 20,465 codes are inconsistent" finding below:
+  consistent is not correct, and review is what finds the consistently-wrong ones.
+- Surfaces: **`/console/material-master`** (ConsoleMaterialMaster.jsx, nav "Material Master", Boxes) - ordered by
+  VALUE so review covers the most spend first, headline = share of MONEY reviewed not share of rows, and each
+  item shows how the code was ACTUALLY used across its transactions so a reviewer decides on evidence.
+  Pure engine `src/lib/materialMaster.js` (33 tests) is the SPEC the SQL mirrors; service
+  `src/lib/api/materialMaster.js`. RULE: SQL `classify_parts_consumption` + `material_category_bucket` and the JS
+  `classifyByMaster`/`costBucketFor` must change TOGETHER.
+- STILL NOT BUILT from the user's spec: the universal event ledger (domain_events exists but is not the single
+  cost ledger), Data Trust Centre checks attached to KPIs as a confidence %, cross-country asset ownership vs
+  cost-bearing country, one governed cost view replacing the ~30 inline calc sites, and the
+  "why did Riyadh increase" answer engine.
 
 ### CLASSIFICATION: measured, and NOT as broken as assumed — read before "fixing" it
 - User believes spare parts are landing in the tyre column and wants an ITEM MASTER to drive classification

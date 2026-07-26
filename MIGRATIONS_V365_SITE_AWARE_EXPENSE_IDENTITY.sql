@@ -1,0 +1,45 @@
+-- V365 - Make expense row identity SITE AWARE (store_code + cost_center).
+--
+-- APPLIED LIVE. This file is the record; the DB is the source of truth.
+--
+-- WHY (user instruction: "in expenses do not merge assets from all sites, keep their
+-- own"). Both the duplicate key (V362) and the write-time import_uid (V363) ignored
+-- store_code and cost_center. Two consequences, one latent and one active:
+--
+--   1. DUPLICATE SCAN (latent): a repeated business key spanning two different stores
+--      would have been offered for deletion, merging two sites' costs into one.
+--      VERIFIED this did not actually occur - all 8,248 duplicate groups shared a
+--      single store and cost centre - but the key permitted it.
+--   2. IMPORT GUARD (worse, silent data loss): if site A and site B are uploaded as
+--      separate files and both carry a line 10 with otherwise identical content, the
+--      second file's row collided on import_uid and was SKIPPED. A real expense would
+--      have vanished with no error. This had not yet bitten because the "#" column
+--      only became mappable in V363.
+--
+-- Both now include store_code and cost_center. `site` was likewise added to the
+-- wo_lines / work_orders / tyre_records / odometer_logs duplicate keys so the same
+-- protection applies across the board.
+--
+-- VERIFIED after applying: duplicate counts unchanged (8,248 deletable / 47,693
+-- protected), i.e. no site merging was happening, and it is now structurally
+-- impossible.
+--
+-- NOTE: parts_import_uid gained two trailing DEFAULT NULL params rather than a new
+-- name, so existing 10-arg callers still resolve. Existing stamped uids were
+-- recomputed under the new formula and the unique index rebuilt.
+--
+-- SAME MIGRATION, separate action (recorded here for traceability): the 8,248
+-- exact-match duplicate expense rows were REMOVED on explicit user instruction,
+-- in 3 per-country batches, all archived in dup_resolve_archive and undoable:
+--     Egypt 4,993 rows  EGP 96,756,275.49 -> 79,341,428.04  (-17,414,847.45)
+--     UAE   3,120 rows  AED 19,247,740.26 -> 18,493,541.38  (-754,198.88)
+--     KSA     135 rows  SAR 40,644,687.31 -> 40,608,349.65  (-36,337.66)
+-- parts_consumption 225,040 -> 216,792 rows; 0 duplicates remain.
+--
+-- ---------------------------------------------------------------------------
+-- REVERSIBLE
+--   Restore the 10-arg parts_import_uid body and the V362 _dup_scan_spec key list.
+--   Do NOT: it reopens the cross-site merge and silent-skip holes.
+--   To restore the deleted rows: admin_dup_restore(<batch_id>) for each of the 3
+--   batches in dup_resolve_archive.
+-- ---------------------------------------------------------------------------

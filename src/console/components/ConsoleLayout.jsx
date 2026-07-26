@@ -4,7 +4,7 @@ import {
   Shield, LayoutDashboard, Building2, Users, Settings2,
   ClipboardList, Zap, Megaphone, Lock, LogOut, ChevronDown,
   Globe, Menu, X, AlertTriangle, Layers, Smartphone, Palette, Activity,
-  DatabaseBackup, UserCog, History, BellRing, Boxes, HeartPulse, Search, Truck, Trash2,
+  DatabaseBackup, UserCog, History, BellRing, Boxes, HeartPulse, Search, Truck, Trash2, CopyX,
   LayoutList, Bug, Wand2, LifeBuoy, Eye, UserX,
 } from 'lucide-react'
 import { useConsoleAuth } from '../ConsoleAuthContext'
@@ -30,6 +30,7 @@ const NAV = [
   { to: '/console/smart-import', label: 'Smart Import',   icon: Wand2 },
   { to: '/console/data-browser', label: 'Data Browser',   icon: Search },
   { to: '/console/data-cleanup', label: 'Data Cleanup',   icon: Trash2 },
+  { to: '/console/duplicates',   label: 'Duplicate Control', icon: CopyX },
   { to: '/console/organisations', label: 'Organisations',  icon: Building2 },
   { to: '/console/users',        label: 'Users',          icon: Users },
   { to: '/console/access',       label: 'Access Control', icon: Lock },

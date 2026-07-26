@@ -1,0 +1,54 @@
+-- V367 - The controlled material and service master.
+-- APPLIED LIVE (v367a schema + v367b derive/review + v367c per-country key).
+--
+-- WHY: cost category was decided by pattern-matching the free-text item DESCRIPTION on
+-- every transaction. Unauditable, no way to override one item, and changing a pattern
+-- silently re-buckets historical money. Category should come from a controlled master
+-- keyed on the ITEM CODE, with the text patterns kept only as a proposal for codes
+-- nobody has reviewed. Mirrors src/lib/materialMaster.js exactly.
+--
+-- KEYED PER COUNTRY - found on the FIRST derive, before any UI shipped. Item codes are
+-- NOT globally unique; each country's ERP assigns its own and two countries reuse the
+-- same code for different materials:
+--     450115-O = "COMPRESSOR OIL 68"    KSA, 32 rows,  61,819
+--              = "GREASE MISC ITEMS"    UAE,  1 row,    1,560
+--     450119-O = "Grease EP0 (180 Kg)"  KSA,  3 rows,   5,940
+--              = "ADNOC VOYAGER BRONZE" UAE,  1 row,       95
+-- Keying on item_code alone merged those into one row - the same cross-boundary merge
+-- V365 had just hardened the expense identity against. BOTH "conflicts" the first
+-- derive reported were this collision, not a classification disagreement: re-deriving
+-- with (organisation_id, country, item_code) gave 22,089 rows and ZERO conflicts.
+--
+-- MEASURED, so nobody over-promises: of 20,465 distinct codes across 216,792 rows,
+-- only 2 classified inconsistently, and both were the collision above. Description
+-- classification is 99.99% self-CONSISTENT. The master's value is CONTROL and
+-- AUDITABILITY - a place to review and override every code and prove why an item is a
+-- tyre or a spare - NOT the correction of widespread drift. Consistent is not correct:
+-- a code can be consistently mis-bucketed. The first derive did surface one real
+-- example, "COMPRESSOR OIL 68" sitting in spare_part (KSA, 32 rows, 61,819), which the
+-- oil patterns miss. Reviewing the master is what finds those.
+--
+-- OBJECTS
+--   material_master              category + subcategory + brand + uom + the six
+--                                boolean flags + review state + txn_rows/txn_value so
+--                                review can start where the money is. Org-isolated
+--                                RESTRICTIVE, elevated write. Flags are kept in step
+--                                with category by trg_material_master_sync_flags, so a
+--                                hand edit that sets only category cannot leave them lying.
+--   material_category_bucket()   category -> tyre|spare|oil, unknown falls to spare so
+--                                cost can never silently vanish from a total.
+--   material_master_derive()     server-side proposal from the transactions: majority
+--                                category per (country, code), most common description
+--                                as the name, conflicts flagged. A REVIEWED row is
+--                                never overwritten by a re-run; only counts refresh.
+--   material_master_set()        review / override one item. Country is REQUIRED.
+--   material_master_coverage()   share of MONEY classified by a human decision, null
+--                                rather than 0 when there is nothing to divide by.
+--
+-- LIVE RESULT: 22,089 codes, 0 conflicts. Value behind the master matches the
+-- post-cleanup country totals exactly (Egypt 79,341,428 / KSA 40,608,350 /
+-- UAE 18,493,541), i.e. it accounts for 100% of the money.
+--
+-- NOT DONE YET: classify_parts_consumption still uses the description patterns. The
+-- switch-over to read the master first, and the review UI, are the next step. Nothing
+-- in this migration changes how any existing number is calculated.

@@ -3,6 +3,55 @@
 Durable, committed project knowledge so any session has full context. Keep this
 current. Read it before adding/changing modules. Governing spec: `Tyre pulse enterprise.md`
 
+## SESSION 2026-07-26 (part 2) — CLASSIFICATION BRAIN. Migrations through **V372**, next free **V373**. Merged to main (PRs #199-#202, tip `544c5f5`).
+User: "some maybe tyre size some maybe tire ans some tyre many things can be in item description so it can be
+corrected / Make this as a brain as a engine as a mchine on each uploads data ots applied and fxied."
+
+### `src/lib/classificationBrain.js` = THE classifier. SQL `classify_parts_consumption` MIRRORS it — change BOTH.
+- Layered evidence, highest wins: **1 reviewed master row** (a human decision, confidence 1) > **2 accessory
+  guard** > **3 lubricant** > **4 ERP code range** > **5 description (tyre word / brand+size)** > **6 job card** >
+  **7 default spare @ 0.3**. Every row now carries `classified_by` + `classify_confidence` (V371) so any figure
+  can be traced to the evidence that produced it.
+- **THE ERP CODE RANGE IS THE STRONGEST SIGNAL and I found it only by reading the data, not the code**
+  (`CODE_RANGES`): `310xxx` + `TI-GE-*` = tyre, `OL-*` = lubricant, `15[0-3]xxx` = filter, `400xxx`/`430xxx`/
+  `050xxx`/`420xxx` = spare. Outside every range it returns **null, not a guess** — the description layers then
+  decide. This is what a description regex can never do: `310504-O "TIRE 10-16.5TL (BOBCAT TIRE)"` is a tyre even
+  though "BOBCAT TIRE" reads like an accessory.
+- **The job card CORROBORATES, it never overrides.** Tyre job cards also carry BATTERY 200 AMP, GEAR BOX COMPLETE,
+  ENGINE CYLINDER — **601,916 across 550 codes**. Treating "on a tyre job card" as proof would book all of that as
+  tyre spend. So the card only promotes a row that is otherwise UNIDENTIFIED *and* carries a tyre size. Verified
+  live: the identical line `315/80 R22.5 20PR` lands in spare alone, tyre on a tyre card; BATTERY stays spare.
+
+### TWO REAL BUGS THIS ENGINE EXISTS TO PREVENT — both were live, both were mine
+- **`includes('rim')` matched "Shell RIMula"** and filed Egypt's engine oil as a wheel rim. Every token test is now
+  whole-word via `hasWord` (regex-escaped, `(^|[^a-z0-9])token([^a-z0-9]|$)`). NEVER use substring `includes` on a
+  description token.
+- **Three-valued logic (V370a):** `v_code_cat = 'tyre'` is **NULL** when the code sits outside every range, so
+  `not (NULL and true)` is NULL and the accessory guard silently never fired. Fixed with `coalesce(v_code_cat,'')`.
+  RULE: in these guards always coalesce a nullable text before comparing — a NULL reads as "no" to a human and as
+  "unknown" to Postgres, and the branch just vanishes.
+- Also caught: a part number `500103705/05474876` matched a tyre-size pattern (`705/054`), which is how a BRAKE
+  DISC survived an earlier "fix". Size detection now requires real tyre-size shape, not any digit run.
+
+### Method note — the user was right to reject the code-first approach
+"Dont go through the code go through items description." My first measurement claimed **42% of the UAE tyre column
+was wrong**; the real figure was **2.6%**. The gap was unrecognised tyre BRANDS (ROADX, ROCKHOLDER, DRIVE MASTER,
+LONGMARCH, V-GLORY, TAIHO) that carry no tyre word at all. Acting on 42% would have moved ~AED 2.6M of genuine
+tyres into spare. `TYRE_BRANDS` exists for exactly this. **Measure against the data before trusting a pattern.**
+- Two correction passes moved 4,621 + 4,081 rows. Final, all reconciling to 0.00 variance against the country
+  totals: KSA tyre 11,278,673 / spare 23,999,342 / oil 5,330,335 · UAE 6,012,802 / 10,558,938 / 1,921,801 ·
+  Egypt 16,684,271 / 48,732,563 / 13,924,594.
+- `src/test/classificationBrain.test.js` (22) — **every case is a real row that previously classified wrongly**.
+  Keep it that way: when the brain gets one wrong, the fix is a new row in this file first.
+
+### V372 — 68 inert `mobile:` permission keys deleted (archived to `module_permissions_archive`)
+- They were WEB module keys with a `mobile:` prefix (`mobile:tyre_records`); the phone reads its OWN key
+  (`records`), so not one of them ever gated anything. Use the Mobile App panel (real keys from
+  `src/lib/mobileModules.js`), never the web tree's scope control, to close a mobile module.
+- **CHECKED AND FALSE — do not re-raise:** the suspicion that `normaliseRole` locked out the 6 "Tyre Data
+  Collector" users. Tested live: the role matrix is consulted BEFORE the role default, and it correctly returns
+  their modules. Custom roles work.
+
 ## SESSION 2026-07-26 — CLOSED CLEAN. Audit-lead verification + Play API-36 compliance + mobile scope/crash fixes + measured performance + **duplicate control (V362) + import guard / history / row editing (V363-V364) + site-aware identity and the 8,248 duplicates DELETED (V365)**. Migrations through **V368**, next free **V369**. ALL MERGED to main (PRs #187, #189, #190, #191, #192, #193, #194; main tip `d8d70a7`); branch realigned 0/0. Play build SHIPPED to Closed testing.
 Everything below is on main and verified: web build clean, **5230/5230 web tests**, mobile `tsc` 0, mobile jest 50.
 The 2026-07-24/25 audit's 7 unmerged commits (next section) were merged as part of this work.

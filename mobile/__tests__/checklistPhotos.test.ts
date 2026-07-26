@@ -74,18 +74,25 @@ describe('submitChecklist photo resolution', () => {
     })
   })
 
-  it('never submits a raw device-local cache path: an un-uploadable photo is made durable', async () => {
-    // Offline: upload fails, so the bytes must be copied out of the OS cache.
-    persistPhotoForQueue.mockResolvedValue({ localPath: 'file:///docs/queued-photos/q_1.jpg' })
-
+  it('keeps the local path when the upload fails, and never copies it into durable storage', async () => {
+    // Still offline at submit: the upload cannot succeed. The answer must not be
+    // dropped, so the local path is kept and the residual gap is honest.
+    //
+    // It must NOT be routed through persistPhotoForQueue: sweepOrphanQueuedPhotos
+    // (recordQueue.ts, run after EVERY sync) builds its active set with the same
+    // Array.isArray guard that causes this gap, so a keyed map never marks its
+    // durable files as referenced and the sweep would delete them as orphans -
+    // turning a likely loss into a guaranteed one. Closing this properly means
+    // teaching recordQueue to walk Record<string, string[]>.
     await submitChecklist({
       template,
       answers: {},
       photos: { engine: ['file:///cache/ImagePicker/shot.jpg'] },
     })
 
-    expect(persistPhotoForQueue).toHaveBeenCalledWith('file:///cache/ImagePicker/shot.jpg')
-    expect(submittedPayload().photos).toEqual({ engine: ['file:///docs/queued-photos/q_1.jpg'] })
+    expect(uploadModulePhoto).toHaveBeenCalledWith('file:///cache/ImagePicker/shot.jpg', 'checklist', 0)
+    expect(persistPhotoForQueue).not.toHaveBeenCalled()
+    expect(submittedPayload().photos).toEqual({ engine: ['file:///cache/ImagePicker/shot.jpg'] })
   })
 
   it('passes already-permanent refs through untouched and never re-uploads them', async () => {

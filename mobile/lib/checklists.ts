@@ -7,7 +7,6 @@
 import { supabase } from './supabase'
 import { saveCommand } from './recordQueue'
 import { uploadModulePhoto } from './photoUpload'
-import { persistPhotoForQueue } from './durablePhotos'
 import { safeUuid } from './ids'
 import type { ChecklistField } from './checklistFields'
 
@@ -158,12 +157,21 @@ const PHOTO_MODULE = 'checklist'
  * unreachable for everyone and the bytes sit in an OS cache the device may purge.
  *
  * Entries that are already permanent refs pass straight through, so the ONLINE
- * path (PhotoCapture uploads on capture) costs nothing extra. A file:// that
- * still cannot be uploaded is copied into durable document storage so the bytes
- * survive cache eviction until an upload succeeds.
+ * path (PhotoCapture uploads on capture) costs nothing extra.
  *
- * Never throws: uploadModulePhoto and persistPhotoForQueue both return null on
- * failure, so photo handling can never block a submit.
+ * KNOWN RESIDUAL GAP (needs a recordQueue.ts change, not fixable from here): if
+ * the device is STILL offline at submit time the upload cannot succeed, so the
+ * local path is enqueued and the queue's later retry skips it for the same
+ * Array.isArray reason. Do NOT "improve" this by copying the file into durable
+ * storage via persistPhotoForQueue: sweepOrphanQueuedPhotos (recordQueue.ts,
+ * run after EVERY sync) builds its active set with the same array-only guard, so
+ * a keyed map never marks its durable files as referenced and the sweep deletes
+ * them as orphans - that makes the loss deterministic instead of merely likely.
+ * The real fix is to teach persistPayloadPhotos, resolveCommandPhotos AND
+ * sweepOrphanQueuedPhotos to walk a Record<string, string[]> as well as string[].
+ *
+ * Never throws: uploadModulePhoto returns null on failure, so photo handling can
+ * never block a submit.
  */
 async function resolveSubmissionPhotos(
   photos: Record<string, string[]> | null | undefined,
@@ -179,11 +187,10 @@ async function resolveSubmissionPhotos(
       if (typeof raw !== 'string' || !raw) continue
       if (!raw.startsWith('file://')) { resolved.push(raw); continue } // already a permanent ref
       const ref = await uploadModulePhoto(raw, PHOTO_MODULE, index++)
-      if (ref) { resolved.push(ref); continue }
-      // Upload failed (offline, or the file is gone). Copy the bytes out of the
-      // evictable OS cache so a later attempt still has them, and keep that path.
-      const durable = await persistPhotoForQueue(raw)
-      resolved.push(durable ? durable.localPath : raw)
+      // Upload failed (offline, or the file is gone): keep the local path so the
+      // answer is not silently dropped. See the residual gap noted above - it
+      // must NOT be "fixed" with persistPhotoForQueue here.
+      resolved.push(ref || raw)
     }
     if (resolved.length) out[fieldId] = resolved
   }

@@ -289,6 +289,62 @@ export function computeRoleViewChanges({
   return changes
 }
 
+// ── Per-user override reconciliation (exactly one effective row per module) ──
+//
+// `user_access_grants` is UNIQUE (user_id, module_key, capability, effect) and
+// `set_user_access_grant` upserts on that SAME four-column key (V225), so the
+// EFFECT is part of the conflict target: writing a 'grant' does NOT overwrite an
+// existing 'revoke', it inserts a second row alongside it. Every reader then
+// resolves that pair as REVOKE (get_my_access_grants and user_has_capability in
+// V225, admin_get_effective_access in V230, and resolveAccess step 2 in
+// src/lib/accessResolver.js all put revoke ahead of grant), so a leftover revoke
+// silently wins and the allow looks like it did nothing.
+//
+// Any surface that flips a per-user override must therefore delete the opposite
+// effect itself. This is the pure planner for that reconciliation, so the rule
+// lives in one place instead of being re-derived on every screen.
+
+/**
+ * Plan the row writes that make a per-user override authoritative for one
+ * module + capability, leaving exactly ONE effective row behind.
+ *
+ *   action 'grant'  -> write 'grant',  delete every existing 'revoke' row
+ *   action 'revoke' -> write 'revoke', delete every existing 'grant' row
+ *   action 'clear'  -> write nothing,  delete EVERY matching row
+ *
+ * Matching is an exact `module_key` comparison, so a `mobile:` prefixed row can
+ * never match a plain web key: the mobile surface is left untouched.
+ *
+ * `deleteIds` lists grant rows before revoke rows, so if a caller's delete loop
+ * fails part way through, the row left behind is the MORE restrictive one (the
+ * plan degrades closed, never open).
+ *
+ * Callers should write the wanted effect BEFORE running the deletes: a
+ * grant/revoke pair always resolves to revoke, so writing first can never open
+ * access mid-flight if a later call fails.
+ *
+ * @param {Array<object>} grants   the user's grant rows (from listUserGrants)
+ * @param {string} moduleKey       the module key the override is about
+ * @param {object} params
+ * @param {string} [params.capability='view']  capability being overridden
+ * @param {('grant'|'revoke'|'clear')} params.action
+ * @returns {{ effect: ('grant'|'revoke'|null), deleteIds: string[] }}
+ */
+export function planUserOverrideWrite(grants, moduleKey, { capability = 'view', action } = {}) {
+  const matches = (Array.isArray(grants) ? grants : []).filter(
+    (g) => g && g.id && g.module_key === moduleKey && (g.capability || 'view') === capability,
+  )
+  const idsWith = (effect) => matches.filter((g) => g.effect === effect).map((g) => g.id)
+
+  if (action === 'clear') {
+    return { effect: null, deleteIds: [...idsWith('grant'), ...idsWith('revoke')] }
+  }
+  if (action !== 'grant' && action !== 'revoke') {
+    return { effect: null, deleteIds: [] } // unknown action: plan nothing
+  }
+  return { effect: action, deleteIds: idsWith(action === 'grant' ? 'revoke' : 'grant') }
+}
+
 /**
  * Set/upsert an access grant for a user across a SURFACE SCOPE (web | mobile |
  * both). Thin scope-aware wrapper over `setUserAccessGrant`: it writes the same

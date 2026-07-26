@@ -214,8 +214,12 @@ export default defineConfig({
     // Heavy jsdom render tests (e.g. the workflow panels) can exceed the 5s
     // default under parallel CPU load — give them headroom to avoid flakiness.
     testTimeout: 20000,
-    // services/** has its own Node (node:test) suite — keep it out of vitest.
-    exclude: ['**/.claude/**', '**/node_modules/**', '**/dist/**', '**/services/**'],
+    // services/** has its own Node (node:test) suite, and mobile/** has its own
+    // jest project (both run as separate CI jobs) — keep them out of vitest.
+    // mobile tests use jest.mock to stub react-native at the module boundary,
+    // which vitest does not honour, so collecting them here fails on parsing
+    // react-native itself. They are NOT skipped: the mobile CI job runs them.
+    exclude: ['**/.claude/**', '**/node_modules/**', '**/dist/**', '**/services/**', '**/mobile/**'],
     // Hermetic test env: modules that construct the Supabase client at import
     // time (src/lib/supabase.js) need the two public vars present. These are
     // dummy placeholders — no real project is contacted in unit tests. Only

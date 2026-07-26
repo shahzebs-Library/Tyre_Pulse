@@ -7,6 +7,7 @@ import { fetchAllPages } from '../lib/fetchAll'
 import { toUserMessage } from '../lib/safeError'
 import { useSettings } from '../contexts/SettingsContext'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
+import { WO_STATUSES, normalizeWoStatus, isClosedWoStatus } from '../lib/workOrderStatus'
 import { formatDate } from '../lib/formatters'
 import PageHeader from '../components/ui/PageHeader'
 import {
@@ -63,9 +64,18 @@ const NO_SCALE = {
 }
 
 const WORK_TYPES = ['Tyre Change','Inspection','Repair','Rotation','Balancing','Alignment','Retread','Other']
-const STATUSES   = ['Open','In Progress','Awaiting Parts','Completed','Cancelled']
+// Status vocabulary comes from workOrderStatus.js (the single source of truth).
+// 'Overdue' is a derived display bucket, never a stored status, so the filter
+// omits it - same rule as the Work Orders page.
+const STATUSES   = WO_STATUSES.filter(s => s !== 'Overdue')
+// Canonical non-terminal statuses, derived so this can never drift from the
+// vocabulary. Blank / unrecognised values are not counted as open.
+const OPEN_STATUSES = new Set(WO_STATUSES.filter(s => !isClosedWoStatus(s)))
 const PRIORITIES = ['Critical','High','Medium','Low']
 const PAGE_SIZE  = 20
+
+/** True when a job is in a canonical non-terminal (still open) state. */
+const isOpenJob = (o) => OPEN_STATUSES.has(normalizeWoStatus(o?.status))
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 function fmtCurrency(v, currency) {
@@ -136,15 +146,25 @@ function scoreBg(s) {
   return 'bg-red-500/20 border-red-500/30'
 }
 
+// Keyed on the canonical vocabulary so every stored status gets a meaningful
+// colour instead of all the newer ones collapsing into the grey default.
+const STATUS_BADGE_CLASS = {
+  'New':                  'bg-blue-500/20 text-blue-400 border-blue-500/30',
+  'Awaiting Assignment':  'bg-sky-500/20 text-sky-400 border-sky-500/30',
+  'Assigned':             'bg-cyan-500/20 text-cyan-400 border-cyan-500/30',
+  'In Progress':          'bg-yellow-500/20 text-yellow-400 border-yellow-500/30',
+  'Waiting for Parts':    'bg-orange-500/20 text-orange-400 border-orange-500/30',
+  'Waiting for Approval': 'bg-amber-500/20 text-amber-400 border-amber-500/30',
+  'Quality Inspection':   'bg-purple-500/20 text-purple-400 border-purple-500/30',
+  'Completed':            'bg-green-500/20 text-green-400 border-green-500/30',
+  'Overdue':              'bg-red-500/20 text-red-400 border-red-500/30',
+  'Cancelled':            'bg-gray-500/20 text-[var(--text-muted)] border-gray-500/30',
+  'On Hold':              'bg-gray-500/20 text-[var(--text-muted)] border-gray-500/30',
+}
+
 function statusBadgeClass(status) {
-  switch ((status || '').toLowerCase()) {
-    case 'open':            return 'bg-blue-500/20 text-blue-400 border-blue-500/30'
-    case 'in progress':     return 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30'
-    case 'awaiting parts':  return 'bg-orange-500/20 text-orange-400 border-orange-500/30'
-    case 'completed':       return 'bg-green-500/20 text-green-400 border-green-500/30'
-    case 'cancelled':       return 'bg-gray-500/20 text-[var(--text-muted)] border-gray-500/30'
-    default:                return 'bg-gray-500/20 text-[var(--text-muted)] border-gray-500/30'
-  }
+  return STATUS_BADGE_CLASS[normalizeWoStatus(status)]
+    || 'bg-gray-500/20 text-[var(--text-muted)] border-gray-500/30'
 }
 
 function priorityBadgeClass(priority) {
@@ -232,7 +252,7 @@ export default function WorkshopManagement() {
   const { activeCurrency, activeCountry } = useSettings()
   const navigate = useNavigate()
 
-  const [orders, setOrders]       = useState([])
+  const [allOrders, setAllOrders] = useState([])
   const [loading, setLoading]     = useState(true)
   const [tableExists, setTableExists] = useState(true)
   const [error, setError]         = useState(null)
@@ -260,9 +280,11 @@ export default function WorkshopManagement() {
           .order('created_at', { ascending: false })
           .order('id', { ascending: false })
 
+        // Status is deliberately NOT filtered server-side: the stored value can
+        // be a legacy token ("Open", "Awaiting Parts", "Closed") that an exact
+        // match would miss. It is applied client-side on the canonical value.
         if (site)     q = q.eq('site', site)
         if (workType) q = q.eq('work_type', workType)
-        if (status)   q = q.eq('status', status)
         if (priority) q = q.eq('priority', priority)
         if (dateFrom) q = q.gte('created_at', dateFrom)
         if (dateTo)   q = q.lte('created_at', dateTo + 'T23:59:59')
@@ -273,26 +295,37 @@ export default function WorkshopManagement() {
       if (err) {
         if (err.code === '42P01' || err.message?.toLowerCase().includes('does not exist')) {
           setTableExists(false)
-          setOrders([])
+          setAllOrders([])
         } else {
           setError(toUserMessage(err, 'Could not load work orders.'))
         }
       } else {
         setTableExists(true)
-        setOrders(data || [])
+        // Canonicalise status at the read boundary (same as the Work Orders
+        // page) so every count, chart, badge and filter below speaks the one
+        // vocabulary regardless of which loader wrote the row.
+        setAllOrders((data || []).map(o => ({ ...o, status: normalizeWoStatus(o.status) })))
       }
     } catch (e) {
       setError(toUserMessage(e, 'Could not load work orders.'))
     } finally {
       setLoading(false)
     }
-  }, [site, workType, status, priority, dateFrom, dateTo, activeCountry])
+  }, [site, workType, priority, dateFrom, dateTo, activeCountry])
 
   useEffect(() => { fetchData() }, [fetchData])
 
   // ── Derived data ─────────────────────────────────────────────────────────────
   const now  = new Date()
   const thisMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+
+  // Status filter, applied on the canonical value. Everything downstream reads
+  // `orders`, so the filter narrows the KPIs, charts and tables exactly as the
+  // server-side filter used to.
+  const orders = useMemo(
+    () => (status ? allOrders.filter(o => o.status === status) : allOrders),
+    [allOrders, status],
+  )
 
   const filteredOrders = useMemo(() => {
     return orders.filter(o => {
@@ -314,7 +347,7 @@ export default function WorkshopManagement() {
   const kpis = useMemo(() => {
     const thisMonthOrders = orders.filter(o => monthKey(o.created_at) === thisMonth)
     const completed = orders.filter(o => o.status === 'Completed')
-    const openJobs  = orders.filter(o => ['Open','In Progress','Awaiting Parts'].includes(o.status))
+    const openJobs  = orders.filter(isOpenJob)
 
     const taTimes = completed.map(turnaroundHours).filter(h => h != null)
     const avgTA   = taTimes.length ? taTimes.reduce((a, b) => a + b, 0) / taTimes.length : null
@@ -353,7 +386,7 @@ export default function WorkshopManagement() {
         if (ta != null) map[s].taTimes.push(ta)
         if (o.scheduled_date) map[s].onTimePairs.push(isOnTime(o))
       }
-      if (['Open','In Progress','Awaiting Parts'].includes(o.status)) map[s].openJobs++
+      if (isOpenJob(o)) map[s].openJobs++
       map[s].jobs += o.total_cost || 0
     })
 
@@ -790,7 +823,7 @@ export default function WorkshopManagement() {
                 icon={AlertTriangle}
                 label="Open Jobs"
                 value={kpis.openJobs.toLocaleString()}
-                sub="open / in progress / waiting"
+                sub="not completed or cancelled"
                 color={kpis.openJobs > 20 ? 'red' : kpis.openJobs > 10 ? 'orange' : 'blue'}
               />
               <KpiCard

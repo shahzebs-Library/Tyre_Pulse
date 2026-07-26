@@ -46,3 +46,44 @@
 -- a part number as a tyre size. The master now overrides it for every reviewed code, but
 -- tightening that regex (require a tyre word or a brand alongside the size) is the
 -- permanent fix.
+
+-- ================= SECOND PASS: read the descriptions, not the regex =================
+-- The user's instruction: "dont go through the code, go through items description".
+-- Correct - my regex pass had missed a lot, and had also mis-fired on itself: the
+-- "is it a real tyre" test matched 705/054 inside the part number 500103705/05474876,
+-- so a BRAKE DISC COMPLETE (AED 83,473) survived the first correction as a "tyre".
+--
+-- So all 494 distinct items in the tyre bucket were READ. Two clean groups emerged, and
+-- one much better signal than any description pattern: THE ERP'S OWN ITEM CODE RANGES.
+--   310xxx  = tyres (KSA / UAE)        TI-GE = tyres (Egypt)
+--   400xxx  = concrete pump parts      050xxx = brakes        150-153xxx = filters
+--   420xxx / 200xxx = bearings         030xxx = clutch        010xxx = engine
+--   140xxx  = wheels, rims, tubes      430-434xxx = mixer/plant
+-- Verified across the whole table: the 310xxx range holds 142 codes, all tyres; tyres
+-- outside it always say "TYRE" or "TIRE" in the description.
+--
+-- RULE APPLIED (batch 7bcd7304-d0d0-42c7-9cfd-20b1d306d0a7, 4,081 further rows):
+--   a genuine tyre is in the 310xxx / TI-GE code range, OR literally says tyre/tire.
+--   Everything else in the tyre bucket became spare_part. Wheel and tyre ACCESSORIES
+--   (rim, inner tube, flap, nozzle, valve, repair tool, welding machine, wheel barrow,
+--   kilomitter, spill kit, wheel bolt/nut/stud/clamp, spacer ring, spider hub) also
+--   became spare, per the standing rule that a tyre consumable is not a tyre.
+--     KSA    2,360 rows  SAR 752,298
+--     UAE    1,715 rows  AED 394,083
+--     Egypt      6 rows  EGP  14,375
+--
+-- FINAL per-country split, buckets reconciling to the total with 0.00 variance:
+--   Egypt  tyre 16,684,271  spare 48,732,563  oil 13,924,594  = 79,341,428
+--   KSA    tyre 11,278,673  spare 23,999,342  oil  5,330,335  = 40,608,350
+--   UAE    tyre  6,012,802  spare 10,558,938  oil  1,921,801  = 18,493,541
+--
+-- VERIFIED: zero items remain in the tyre column that are not tyres, and zero wheel or
+-- tyre accessories remain there either.
+--
+-- REVERSIBLE: reclassify_revert('7bcd7304-d0d0-42c7-9cfd-20b1d306d0a7') for this pass,
+-- reclassify_revert('57b2b81a-9b99-4c86-8068-884fce4c46fd') for the first.
+--
+-- LESSON, recorded because it cost two wrong measurements: do not classify these items
+-- with a regex over the description. Part numbers contain digit runs that look exactly
+-- like tyre sizes. The item code RANGE is the reliable signal, and the description is
+-- for a human to read.

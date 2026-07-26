@@ -82,6 +82,10 @@ function RecordsScreen() {
   const [error, setError]         = useState<string | null>(null)
 
   const [search, setSearch]       = useState('')
+  // Debounced copy of `search`: the query keys off THIS, not the raw input, so a
+  // 10-character serial fires one request instead of ten. Typing stays instant
+  // because the TextInput is still driven by `search`.
+  const [debouncedSearch, setDebouncedSearch] = useState('')
   const [siteFilter, setSiteFilter] = useState('')
   const [riskFilter, setRiskFilter] = useState('')
   const [sites, setSites]         = useState<string[]>([])
@@ -91,7 +95,16 @@ function RecordsScreen() {
   const RISKS = ['Critical', 'High', 'Medium', 'Low']
 
   useEffect(() => { loadSites() }, [])
-  useEffect(() => { reset() }, [search, siteFilter, riskFilter])
+
+  // Wait for a pause in typing before querying (350 ms is below the threshold
+  // where a search feels laggy, and collapses a burst of keystrokes into one
+  // request on a weak link).
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(search), 350)
+    return () => clearTimeout(t)
+  }, [search])
+
+  useEffect(() => { reset() }, [debouncedSearch, siteFilter, riskFilter])
 
   async function loadSites() {
     try {
@@ -121,7 +134,7 @@ function RecordsScreen() {
       .order('issue_date', { ascending: false })
       .range(p * PAGE, (p + 1) * PAGE - 1)
 
-    const searchOr = orIlike(['asset_no', 'serial_no', 'brand'], search)
+    const searchOr = orIlike(['asset_no', 'serial_no', 'brand'], debouncedSearch)
     if (searchOr) q = q.or(searchOr)
     if (siteFilter) q = q.eq('site', siteFilter)
     else if (!elevated && profile?.site) q = q.eq('site', profile.site)
@@ -146,7 +159,7 @@ function RecordsScreen() {
       setLoadingMore(false)
       setRefreshing(false)
     }
-  }, [search, siteFilter, riskFilter, elevated, profile?.site])
+  }, [debouncedSearch, siteFilter, riskFilter, elevated, profile?.site])
 
   useEffect(() => { loadPage(page) }, [page])
 

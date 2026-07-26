@@ -43,6 +43,7 @@ const ConsoleDataBrowser   = lazy(() => import('./console/pages/ConsoleDataBrows
 const ConsoleDataCleanup   = lazy(() => import('./console/pages/ConsoleDataCleanup'))
 const ConsoleDuplicateControl = lazy(() => import('./console/pages/ConsoleDuplicateControl'))
 const ConsoleImportHistory = lazy(() => import('./console/pages/ConsoleImportHistory'))
+const ConsoleMaterialMaster = lazy(() => import('./console/pages/ConsoleMaterialMaster'))
 const ConsoleSmartImport   = lazy(() => import('./console/pages/ConsoleSmartImport'))
 const ConsoleVehicleDesigner = lazy(() => import('./console/pages/ConsoleVehicleDesigner'))
 const ConsoleNavigation    = lazy(() => import('./console/pages/ConsoleNavigation'))
@@ -720,6 +721,7 @@ export default function App() {
           <Route path="data-cleanup"  element={<ConsoleDataCleanup />} />
           <Route path="duplicates"    element={<ConsoleDuplicateControl />} />
           <Route path="import-history" element={<ConsoleImportHistory />} />
+          <Route path="material-master" element={<ConsoleMaterialMaster />} />
           <Route path="smart-import"  element={<ConsoleSmartImport />} />
           <Route path="vehicle-designer" element={<ConsoleVehicleDesigner />} />
           <Route path="navigation"    element={<ConsoleNavigation />} />

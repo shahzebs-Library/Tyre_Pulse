@@ -1,0 +1,41 @@
+-- V368 - Classification reads the material master FIRST.
+-- APPLIED LIVE (v368 + v368a re-entrancy fix). This file is the record.
+--
+-- IMPLEMENTS the rule as stated: an item "must never appear in the tyre cost column
+-- because the item master identifies it as a spare part". A REVIEWED master decision
+-- now overrides the description patterns on every write.
+--
+-- PRECEDENCE, mirroring classifyByMaster in src/lib/materialMaster.js:
+--   1. a REVIEWED master row for (org, country, item code) - a human decided it
+--   2. the description patterns                            - everything else
+--
+-- An UNREVIEWED master row is deliberately NOT authoritative, even though it exists.
+-- It was itself derived from those same description patterns, so honouring it would
+-- dress a guess up as a decision and make the coverage figure a lie.
+--
+-- WHY THIS SHIPS SAFELY: no master row is reviewed yet, so every transaction still
+-- classifies exactly as before and not one reported number moves on deploy. The switch
+-- takes effect item by item as a human confirms each one. The behaviour change is gated
+-- behind a deliberate action instead of landing on 216,792 rows at deploy time.
+--
+-- reclassify_from_master(p_dry_run default TRUE) re-applies reviewed decisions to
+-- EXISTING transactions. It defaults to a dry run that reports exactly which rows and
+-- how much money would move, per country and per bucket, and touches nothing. This is
+-- the ONLY path that changes historical money, and it always shows its work first.
+--
+-- VERIFIED live in a rolled-back transaction, using the real misclassification the
+-- master surfaced:
+--   before any review              -> 0 rows would change   (inert, as designed)
+--   review 450115-O as lubricant   -> 32 rows would change
+--   dry run detail                 -> 32 rows, SAR 61,819, spare -> oil, KSA
+--   a NEW row with that item code  -> lands in OIL (oil=500, spare=0) even though its
+--                                     description "COMPRESSOR OIL 68" does not match
+--                                     the oil patterns
+--
+-- v368a: reclassify_from_master drops its temp table before creating it. `on commit
+-- drop` only fires at COMMIT, so a dry run followed by an apply inside one transaction
+-- (the expected usage) failed with "relation _recl already exists".
+--
+-- REVERSIBLE: restore the pre-V368 classify_parts_consumption body and drop
+-- material_category_for / reclassify_from_master. Reviewed decisions in
+-- material_master are data and survive.

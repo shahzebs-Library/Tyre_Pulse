@@ -32,6 +32,7 @@ const NAV = [
   { to: '/console/data-cleanup', label: 'Data Cleanup',   icon: Trash2 },
   { to: '/console/duplicates',   label: 'Duplicate Control', icon: CopyX },
   { to: '/console/import-history', label: 'Import History', icon: FileClock },
+  { to: '/console/material-master', label: 'Material Master', icon: Boxes },
   { to: '/console/organisations', label: 'Organisations',  icon: Building2 },
   { to: '/console/users',        label: 'Users',          icon: Users },
   { to: '/console/access',       label: 'Access Control', icon: Lock },

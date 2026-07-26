@@ -14,6 +14,7 @@
  *
  * @module partsExpense
  */
+import { isFooterRow } from './erpIntake'
 
 /** Canonical destination columns on public.parts_consumption (raw import columns). */
 export const PARTS_FIELDS = Object.freeze([
@@ -172,25 +173,31 @@ export function summarizeRows(rows = []) {
 
 /**
  * Turn a parsed sheet (array-of-arrays, first row headers) into destination row
- * objects, dropping fully-empty rows. Amount/text values are kept as trimmed strings
- * (the DB trigger casts + classifies). `country` stamps every row.
+ * objects, dropping fully-empty rows and the Ramco report footer. Amount/text values are
+ * kept as trimmed strings (the DB trigger casts + classifies). `country` stamps every row.
+ * FOOTER RULE: these exports end in noise (GRAND TOTAL, Printed By / employee id, Applied
+ * filters). A GRAND TOTAL line carries the file's OWN total in Values, so importing it
+ * would count every amount twice and double the expense. Dropped with the same
+ * `isFooterRow` helper every other intake branch uses (erpIntake.intakeSheet).
  * FULL ROW ACCOUNTING so nothing is ever silently lost: `read` (content rows below the
  * header) = mapped (`rows.length`) + `noKey` (rows that had content but no item/value/WO
- * identifier); the file body = read + blankRows.
+ * identifier); the file body = read + footerRows + blankRows.
  * @param {Array<Array<any>>} aoa
  * @param {{ country?:string }} [opts]
- * @returns {{ rows: Array<Object>, headerMap: Record<string,number>, missing: string[], read:number, blankRows:number, noKey:number }}
+ * @returns {{ rows: Array<Object>, headerMap: Record<string,number>, missing: string[], read:number, blankRows:number, footerRows:number, noKey:number }}
  */
 export function rowsFromSheet(aoa = [], { country = null } = {}) {
-  if (!Array.isArray(aoa) || aoa.length < 2) return { rows: [], headerMap: {}, missing: ['item_description', 'value_amount'], read: 0, blankRows: 0, noKey: 0 }
+  if (!Array.isArray(aoa) || aoa.length < 2) return { rows: [], headerMap: {}, missing: ['item_description', 'value_amount'], read: 0, blankRows: 0, footerRows: 0, noKey: 0 }
   const { map, missing } = buildHeaderMap(aoa[0])
   const clean = (v) => String(v == null ? '' : v).replace(/["\r\n\t]/g, ' ').replace(/&#[0-9]+;/g, ' ').replace(/ {2,}/g, ' ').trim()
   const rows = []
   let blankRows = 0
+  let footerRows = 0
   let read = 0
   for (let i = 1; i < aoa.length; i += 1) {
     const src = aoa[i]
     if (!src || src.every((c) => c == null || String(c).trim() === '')) { blankRows += 1; continue }
+    if (isFooterRow(src)) { footerRows += 1; continue }
     read += 1
     const row = {}
     for (const f of PARTS_FIELDS) {
@@ -202,7 +209,7 @@ export function rowsFromSheet(aoa = [], { country = null } = {}) {
     rows.push(row)
   }
   const noKey = Math.max(0, read - rows.length)
-  return { rows, headerMap: map, missing, read, blankRows, noKey }
+  return { rows, headerMap: map, missing, read, blankRows, footerRows, noKey }
 }
 
 /**

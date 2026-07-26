@@ -30,6 +30,7 @@ export const MODULE_GROUPS = [
     modules: [
       { key: 'tyre_records', label: 'Tyre Records' },
       { key: 'inspections', label: 'Inspections' },
+      { key: 'serial_tracker', label: 'Serial Tracker' },
       { key: 'gate_pass', label: 'Gate Pass' },
       { key: 'rca', label: 'Root Cause (RCA)' },
     ],
@@ -137,6 +138,14 @@ export const SUBMODULES = {
     { key: 'accidents:incidents', label: 'Incidents' },
     { key: 'accidents:analytics', label: 'Analytics' },
     { key: 'accidents:builder', label: 'Report Builder' },
+  ],
+  // Serial Tracker splits READ from the destructive scrap action, so a data
+  // collector (e.g. a tyre man) can be given serial search on its own, and
+  // "Mark as Scrap" only if that is separately granted. Both are ENFORCED in
+  // src/pages/SerialTracker.jsx, not merely stored.
+  serial_tracker: [
+    { key: 'serial_tracker:search', label: 'Search serials' },
+    { key: 'serial_tracker:scrap', label: 'Mark as Scrap / Undo' },
   ],
   ai_analytics: [
     { key: 'ai_analytics:operations', label: 'Operations' },

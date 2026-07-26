@@ -3,7 +3,7 @@ import { NavLink, useNavigate, useLocation } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useAuth } from '../contexts/AuthContext'
 import { isChecklistOnlyRole, isChecklistPathAllowed } from '../lib/checklistAccess'
-import { navItemAllowedForCustomRole, NAV_MODULE_KEY } from '../lib/navAccess'
+import { navItemAllowedForCustomRole, NAV_MODULE_KEY, governingModuleKey } from '../lib/navAccess'
 import { ACCESS_ROLES } from '../lib/moduleCatalog'
 import { applyNavLayout } from '../lib/navLayout'
 import { getNavLayout } from '../lib/api/navLayout'
@@ -368,7 +368,14 @@ function shouldShowNavItem(item, profile, isFlagEnabled, hasPermission, grantedM
   // reject it. (Revoke is enforced by hasPermission/route guards; this only
   // opens visibility, so we do not hide here.)
   const grantKey = NAV_MODULE_KEY[item.to]
-  if (grantKey && grantedModules && grantedModules.has(grantKey)) return true
+  // The GRANT check uses the same key the route guard resolves (NAV_MODULE_KEY,
+  // else the route slug), so a page that has no NAV_MODULE_KEY entry - e.g.
+  // /serial-tracker -> 'serial_tracker' - still becomes visible once an admin
+  // grants it. The matrix check below deliberately stays NAV_MODULE_KEY-only:
+  // widening it to the slug would make permissive built-in roles (Manager,
+  // Director) SEE admin-only items they would then be denied at the route.
+  const routeGrantKey = governingModuleKey(item.to)
+  if (routeGrantKey && grantedModules && grantedModules.has(routeGrantKey)) return true
   if (profile?.role === 'Inspector') {
     return item.to === '/inspections' || item.to === '/settings'
   }

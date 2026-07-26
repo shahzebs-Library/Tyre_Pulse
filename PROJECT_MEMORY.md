@@ -3,7 +3,7 @@
 Durable, committed project knowledge so any session has full context. Keep this
 current. Read it before adding/changing modules. Governing spec: `Tyre pulse enterprise.md`
 
-## SESSION 2026-07-26 — CLOSED CLEAN. Audit-lead verification + Play API-36 compliance + mobile scope/crash fixes + measured performance + **duplicate control (V362)**. Migrations through **V362**, next free **V363**. ALL MERGED to main (PRs #187, #189, #190, #191); branch realigned 0/0. Play build SHIPPED to Closed testing.
+## SESSION 2026-07-26 — CLOSED CLEAN. Audit-lead verification + Play API-36 compliance + mobile scope/crash fixes + measured performance + **duplicate control (V362) + import guard / history / row editing (V363-V364)**. Migrations through **V364**, next free **V365**. ALL MERGED to main (PRs #187, #189, #190, #191, #192, #193); branch realigned 0/0. Play build SHIPPED to Closed testing.
 Everything below is on main and verified: web build clean, **5230/5230 web tests**, mobile `tsc` 0, mobile jest 50.
 The 2026-07-24/25 audit's 7 unmerged commits (next section) were merged as part of this work.
 
@@ -172,15 +172,57 @@ resolved. 3 I verified by hand, 8 by a workflow with an adversarial reviewer:
   re-import is safe because it replaces the snapshot; `stg_wo_lines` MUST map source_row or genuine repeats
   become indistinguishable from duplicates). Excel-exportable. Tests duplicateControl 13.
 
+### IMPORT ROOT CAUSE CLOSED (V363) + Import History + row editing (V364, PR #193)
+- **CORRECTION to the V362 note above: it is NOT true that no staging trigger de-duplicated.** A full audit of
+  all 8 found **4 already guarded** (process_stg_assets / _complaints / _monthly_tyres / _wo_lines, each via an
+  `if exists ... return null` - my earlier grep only looked for `NOT EXISTS`/`ON CONFLICT` and missed that form),
+  and `process_daily_km` merges on (org, asset, date). `process_stg_tyre_brand` is UPDATE-only so it cannot
+  duplicate. Only **TWO** were bare INSERTs: `process_expenses_country` (the 8,248-row cause) and
+  `process_stg_open_wo`.
+- **V363 makes re-import idempotent.** The discriminator is the ERP's OWN line number, the same signal V362 uses
+  for detection, now applied at write time: `parts_consumption.import_uid` = md5(country|source_row|business key),
+  partial UNIQUE index where not null, and the trigger does `on conflict do nothing`. A retried chunk resends the
+  same line number and is skipped; two genuinely identical source lines have DIFFERENT line numbers so both
+  survive. **The `expenses_*` staging tables gained a `"#"` column** (the literal Ramco header) plus `source_row`
+  as an alias. **USER-CRITICAL: the `#` column MUST be mapped on import** - without it import_uid is NULL, no
+  write-time dedupe is possible, and a re-run still duplicates. Backfill only stamped rows whose uid was already
+  unique, so the index could be created without deleting anything (the 8,248 keep NULL uid).
+  VERIFIED live rolled back: 3 lines -> +3; the identical file again -> **+0**; a genuine pair (line numbers 10
+  and 11) -> **both kept**.
+- **`process_stg_open_wo` was NOT a snapshot replace** - it was a bare INSERT. **My importTargets.js shipped a
+  WRONG claim** ("REPLACES the whole snapshot ... the one target where a re-import cannot create duplicates").
+  The table was empty so there was no damage. V363 makes it match the documented intent: match each card on
+  (org, country, job_card_no) and UPDATE in place. Verified: re-upload kept 1 row, status Open -> In Progress,
+  days 3 -> 5. **Each importTargets entry now carries a `reimportSafe: 'safe'|'needs-key'` flag and
+  SAFE_TO_REIMPORT is DERIVED from that flag, not from matching prose**, so the doc cannot drift from reality
+  again. LESSON: never encode a safety claim as a regex over prose.
+- **Import History = `/console/import-history`** (`ConsoleImportHistory.jsx`, nav "Import History", FileClock;
+  service `src/lib/api/importHistory.js`). `import_files.sha256` + `import_batches.duplicate_rows` ALREADY
+  EXISTED and were never surfaced: 10 files, all 10 hashed, and ONE already uploaded twice
+  (fleet_import_template.csv, first seen 2026-07-08, 602 rows read / 0 imported) with nobody warned. Uploads tab
+  flags a repeat by content hash. **Load activity tab covers the real blind spot: the Table Editor path writes NO
+  batch row**, so `admin_unlogged_imports` reconstructs loads from insertion-time clusters on the destination
+  table (safelisted via `_dup_scan_spec`), and pure `flagSuspiciousClusters` marks the resent-chunk signature -
+  two clusters of the SAME row count, same country, within 600s (live: KSA 136 rows at 12:26:35 AND 12:27:45;
+  UAE 619 twice). `checkImportFingerprint` + `fileSha256` are available for a pre-upload warning.
+- **Data Browser can now EDIT + DELETE one row** (V364, was read+export only). `admin_db_update_row` /
+  `admin_db_delete_row` / `admin_db_revert_change` over the SAME `_admin_db_safelist()` (14 tables).
+  `_admin_editable_cols` refuses id/organisation_id/created_at/created_by + every GENERATED or IDENTITY column,
+  so a row can never be re-keyed or moved to another tenant. Only changed fields are sent. Every change writes
+  the FULL before+after row to `admin_row_changes` (super-admin read only, DEFINER writes) and is one-click
+  undoable, including restoring a deleted row. The patch VALUE is bound as a parameter; only the column NAME is
+  interpolated (via %I) and only after the editable-column check. `admin_db_revert_change` builds an explicit
+  column list EXCLUDING generated cols (the V320 lesson). VERIFIED live rolled back: edit applied -> reverted to
+  the exact original text; row deleted -> restored with serial intact; editing organisation_id REFUSED.
+- Tests importHistory 18 + duplicateControl 13. Migrations through **V364**, next free **V365**.
+
 ### OPEN — NOT DONE (honest list for the next session)
-0. **THE IMPORT ROOT CAUSE IS STILL OPEN.** The staging triggers still have no dedupe guard, so a re-upload can
-   still create duplicates - V362 only detects and undoes them after the fact. The proper fix is an import
-   FINGERPRINT: hash the file content + row index into a deterministic `import_uid`, unique-index it, and
-   ON CONFLICT DO NOTHING, so a retried chunk is skipped while two genuinely identical source lines (different
-   row index) both survive. A file-level ledger should also reject "you already imported this exact file on
-   <date>". Note the expenses_* path has NO app code at all (Supabase Table Editor CSV import), so that guard
-   must live in the DB trigger, not the client. Also: the 8,248 known bad rows are STILL LIVE and awaiting the
-   user's decision in Console -> Duplicate Control.
+0. **The 8,248 duplicate expense rows are STILL LIVE** and awaiting the user's decision in Console -> Duplicate
+   Control (Egypt 96.76M -> 79.34M when pressed). V363 stops NEW ones; it does not clean the old.
+   Also still open on the prevention side: there is no pre-upload BLOCK on a repeat file. The sha256 check
+   (`checkImportFingerprint`) is exposed and Import History flags a repeat after the fact, but no upload path
+   calls it yet to warn before committing. Wiring it into DataIntakeCenter / ErpIntake / ConsoleSmartImport is
+   the next step. And a re-import of an expense file with the `#` column UNMAPPED still duplicates by design.
 1. **`google-services.json` is MISSING, so Android push notifications have NEVER worked on any device.** Cannot be
    generated here - it must come from the customer's Firebase console for package
    `com.shahzebrahman.tyrepulseinspector`, then be referenced from app.json. Matches the zero registered push

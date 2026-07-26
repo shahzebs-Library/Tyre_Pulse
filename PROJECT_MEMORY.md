@@ -3,7 +3,153 @@
 Durable, committed project knowledge so any session has full context. Keep this
 current. Read it before adding/changing modules. Governing spec: `Tyre pulse enterprise.md`
 
-## SESSION 2026-07-24/25 — System-wide defect audit + security/toolchain upgrade. CODE ONLY, **no migration applied** (next free still **V360**). 7 commits on `claude/accident-builder-report-ui-2bkwb5`, pushed, NOT yet merged.
+## SESSION 2026-07-26 — CLOSED CLEAN. Audit-lead verification + Play API-36 compliance + mobile scope/crash fixes + measured performance. Migrations through **V361**, next free **V362**. ALL MERGED to main (PRs #187, #189); branch realigned 0/0. Play build SHIPPED to Closed testing.
+Everything below is on main and verified: web build clean, **5230/5230 web tests**, mobile `tsc` 0, mobile jest 50.
+The 2026-07-24/25 audit's 7 unmerged commits (next section) were merged as part of this work.
+
+### PLAY STORE: 31 Aug 2026 API-36 deadline CLEARED (shipped)
+- From 31 Aug 2026 Play blocks new apps AND **updates** that target below API 36. The app targeted **35**, so it
+  would have been frozen (NOT delisted - it stays installable, you just cannot ship anything).
+- ROOT CAUSE was three stale manual pins in `mobile/app.json` expo-build-properties (added 2026-07-13 when 35 was
+  that year's bar): `compileSdkVersion 35`, `targetSdkVersion 35`, `buildToolsVersion 35.0.0`. RN 0.81.5 and Expo
+  SDK 54 ALREADY default to 36/36/36.0.0, so the pins were the only thing holding it back. **DELETED** them (plus
+  the kotlinVersion/ndkVersion pins, byte-identical to RN defaults) so the project inherits the toolchain default
+  and can never silently lag again. `minSdkVersion 24` kept. NO dependency upgrade was needed.
+- **VERIFIED BY A REAL BUILD**: workflow run `30200824104` on main commit `0de6490`, ~11 min, conclusion SUCCESS,
+  auto-submitted (the "build only, no submit" fallback shows `skipped`). So build-tools 36 IS available on the EAS
+  image - that was the one unknown and it is now settled. `eas.json` submit track is **`alpha` = Play CLOSED
+  testing**; promote Closed -> Production manually in Play Console. RULE: targetSdk is native - an expo-updates
+  OTA can NEVER change it, always a fresh EAS build.
+- **Predictive back gesture DELIBERATELY OPTED OUT** (`android:enableOnBackInvokedCallback="false"` in
+  `mobile/plugins/withLargeScreen.js`). Android 16 turns it ON by default at targetSdk 36; nothing in this app
+  implements OnBackInvokedCallback and the at-risk screens are camera / barcode scanner / modal capture forms
+  where a mishandled back drops half-entered work. TO ENABLE LATER: delete that line, then hand-test back on
+  EVERY screen first. Edge-to-edge + large-screen resizability were already handled in the same plugin.
+- **Tablets were being hidden by Play**: requesting CAMERA + ACCESS_FINE_LOCATION implies camera/autofocus/GPS as
+  REQUIRED hardware. The plugin now declares camera, camera.any, autofocus, flash, location, location.gps,
+  microphone, touchscreen as `required="false"`. Safe because the scanner already has a manual-entry fallback and
+  the location lookup times out without blocking an inspection.
+- 16 KB page size: believed already compliant (NDK r27 + AGP 8.11.0 + RN>=0.77 + sentry-android 8.x, and the app
+  already targeted Android 15 so the rule already applied) - verify once in Play Console, add NO linker flags.
+
+### MOBILE IS NOW FIELD-CAPTURE ONLY (fixes the customer's crash/slowness report) — user-critical
+- Customer reported the app crashing and feeling slow and suspected "my whole database is accessed by mobile".
+  THEY WERE RIGHT. Mobile Analytics paged through EVERY `tyre_record` (7,498 rows and growing) into device memory,
+  and Records/Overview/Reports/Vehicles/History/WorkOrders/Team/StockManage/AI are desktop-shaped bulk listings.
+- **`mobile/lib/permissions.ts` MODULES is the single source of truth.** Data-heavy modules now carry `roles: []`
+  = admin/super-admin only (`resolveModuleAccess` always admits admin): records, vehicles, history, workorders,
+  overview, reports, analytics, stockManage, ai, team. Per-user grants still extend any of them to one person.
+- KEPT for field roles: accidents (view+file), inspect, washing, plus cheap single-record lookups - scan, serial,
+  meter, checklists, tyreChange, reportIssue, alerts, calendar, tasks, rca, workshop.
+- **`serial` (Serial Search) WIDENED** to manager/director/inspector/**tyre_man/reporter/driver** at the user's
+  explicit request - it is ONE indexed lookup by serial, not a bulk load. `washing` widened to tyre_man and
+  PROMOTED to a primary tab; `records` demoted from the tab bar (admin-only, reachable from the Home hub). Field
+  staff now see: Home / Inspect / Accidents / Washing / Profile.
+- Adding the washing tab required a new `canWash` predicate AND a `tabs.washing` label in en+ar - neither existed,
+  and without them the tab renders its RAW KEY on screen. RULE: a new TAB_BAR entry needs a visible predicate + an
+  i18n key in BOTH locales.
+- **DOCUMENTED RULE now sits on the MODULES registry: do NOT give a bulk-listing or reporting module a role
+  default.** If a field role truly needs one, add a server-side aggregate so the phone fetches one row instead of
+  a table, or grant it per user. Keep `src/lib/mobileModules.js` (the web Access Manager mirror) + its test in sync.
+- **Photo OOM crash FIXED** (worst field bug): `photoUpload.uploadAllPositionPhotos` ran `Promise.all` over every
+  tyre position, so a Tr-Mixer decoded 13 full-size bitmaps at once (~600 MB peak) = hard native crash on a 2 GB
+  handset, work lost, and the offline queue REPLAYED it into the same crash. Now bounded to `UPLOAD_CONCURRENCY = 2`.
+  Photos were already resized (1600px); only the fan-out was wrong.
+
+### MOBILE RESILIENCE + SPEED (all on main)
+- **The app would not open with no signal** (worst for a field app): startup awaited a live `profiles` fetch and
+  FAILED CLOSED on any error, locking an inspector out of the app - including the offline inspections queued on
+  their own phone. `mobile/contexts/AuthContext.tsx` now caches the last SERVER-VERIFIED profile
+  (`PROFILE_CACHE_KEY`, AsyncStorage - confirmed a real installed dep, v2.2.0) and falls back to it.
+  SAFE BY CONSTRUCTION: written only from a successful fetch of a non-locked/approved account; bound to one
+  user_id; **14-day expiry** so staying offline cannot preserve a revoked account; cleared on sign-out; grants NO
+  data access (every read still needs a live session + passes RLS). The realtime profile listener and the next
+  successful fetch still sign out a locked/unapproved account. With no cache the old fail-closed path is
+  unchanged. Exposes `profileStale` for a "working offline" hint.
+- **Request timeouts** (`mobile/lib/supabase.ts` `global.fetch`): RN fetch has NO default timeout, so a half-dead
+  link held a request - and the screen - open for minutes. Reads now abort at **12s**. NOTE THE ACTUAL SEMANTICS:
+  the split is by method, so GET reads get 12s while **RPCs and writes (POST with a body) get 120s** - that is
+  deliberate-by-accident but correct, because aborting a write mid-flight can leave it applied server-side while
+  the client retries. A caller's own AbortSignal is still honoured.
+- **Sync loop**: a 10-second `setInterval` woke the device ~6x/minute all shift, rewriting encrypted storage and
+  sweeping the filesystem even with an EMPTY queue. Now event-driven via `addNetworkStateListener` - which DOES
+  exist in the installed expo-network 8.0.8, contrary to the code comment that justified the poll, and which
+  `components/SyncBanner.tsx` already used - plus a 2-minute safety interval, and an early return when nothing is
+  queued.
+- **Records search** debounced 350ms (was one DB query per keystroke).
+
+### MEASURED PERFORMANCE (do not re-guess these — they were profiled)
+- **V361 hot-path indexes.** Every cost surface aggregates `parts_consumption` by organisation_id + country +
+  event_date. The table had indexes on organisation_id and on the TEXT `txn_date`, but NONE on `country` and none
+  on the DATE `event_date` the RPCs actually filter, so the planner ran a Parallel Seq Scan over all 224k rows:
+  **BEFORE 219 ms** (Rows Removed by Filter 104,284 x2) -> **AFTER 26 ms** index scan = **8.4x**, and several of
+  those run per screen. Also added org+country indexes to work_order_line_items (182k), work_orders (84k) and
+  tyre_records. RULE: before "optimising" anything here, run EXPLAIN ANALYZE first - most of the schema is already
+  well indexed and the wins are specific.
+- **Startup bundle**: `LanguageContext` eagerly imported BOTH dictionaries (~764 KB of JSON over 114 files), so
+  every user downloaded and parsed a language they were not using before first render. English stays EAGER (it is
+  the default and the fallback for every missing key); **Arabic is now lazy** (`loadArabic`, fetched when
+  selected). Chunk **428 KB -> 180 KB**. Until Arabic resolves `translate()` falls back to English exactly as it
+  does for a missing key, so nothing renders blank; a `dictVersion` counter re-creates `t` when it lands.
+  `setLanguage`/`detectInitial` key off `KNOWN_LANGS`, NOT the loaded dict, or Arabic would be unselectable.
+  The languageContext test now AWAITS the Arabic strings (language/dir/persistence still flip synchronously).
+- Dropped the unused `extra_fields` jsonb from bulk analytics reads.
+
+### AUDIT LEADS: all 8 remaining were verified — NONE was false
+The 2026-07-24/25 audit left ~11 UNVERIFIED leads (its verifier agents died on a usage limit). All are now
+resolved. 3 I verified by hand, 8 by a workflow with an adversarial reviewer:
+- **CONFIRMED + FIXED**: `coerceDate` read an ambiguous d/m/Y as MONTH-first while the source is Ramco/GCC
+  DD-MM-YYYY, so `07/09/2026` (7 Sep) imported as 9 July - **silent corruption on ~39% of dates**, hitting tyre
+  fix/remove dates (tyre life + CPK) and insurance/licence expiries; the old test asserted the WRONG behaviour in
+  its own comment. Now day-first, month-first only when the second part cannot be a month.
+- **CONFIRMED + FIXED**: `src/lib/mobileModules.js` was missing the `workshop` module (30 mobile vs 29 mirrored),
+  so mobile Workshop could never be allowed/denied from the web.
+- **CONFIRMED + FIXED**: BoardOverview `money()` dropped the currency arg, labelling UAE (AED) and Egypt (EGP)
+  figures as **SAR** on screen AND in the PDF.
+- **CONFIRMED + FIXED**: ExpenseReport BLENDED SAR+AED+EGP on the All scope in charts, Spend-by-site, Excel and
+  PDF (~156M nonsense) while only the per-country KPI panel was right; Analytics monthly-trend omitted the `qty`
+  multiplier; mobile analytics un-paged; **AccessPreviewOverride could never restore a denied module** (Allow
+  wrote a grant but left the revoke row, and V225's unique key includes `effect` so it cannot overwrite - revoke
+  wins at every reader while the UI said "Allowed"); Workshop/technicianScorecard used retired status vocab so a
+  technician's "Open" column read 0.
+- **PARTIAL**: ErpIntake grid branch had no footer filtering (real gap, but LATENT - the customer's actual grid
+  export carries no footer band, proven against the committed sample); mobile offline queue marked an item failed
+  with no retry counter (not data loss, but badges read 0 = a false "all synced"); checklist photos never uploaded.
+- **THE REVIEWER CAUGHT A HARMFUL "FIX"**: the checklist-photo agent added a durable-storage fallback claiming it
+  was safer. It was the opposite - `sweepOrphanQueuedPhotos` (recordQueue.ts) builds its active set with
+  `if (Array.isArray(ph))`, the SAME guard that causes the bug, so a checklist's keyed photo map never marks its
+  durable files as referenced and `cleanupOrphanDurablePhotos` DELETES them, turning a likely loss into a
+  guaranteed one. Reverted that half. **Before fixing keyed checklist photos properly, three recordQueue.ts
+  functions must first learn to walk a `Record<string, string[]>`.**
+- Root vitest config now excludes `mobile/**` (the new mobile jest tests `jest.mock` react-native and were
+  breaking the web suite); the separate mobile CI job still runs them.
+
+### OPEN — NOT DONE (honest list for the next session)
+1. **`google-services.json` is MISSING, so Android push notifications have NEVER worked on any device.** Cannot be
+   generated here - it must come from the customer's Firebase console for package
+   `com.shahzebrahman.tyrepulseinspector`, then be referenced from app.json. Matches the zero registered push
+   tokens on record. Test on an internal build first: a mismatched config file crashes the app at startup.
+2. **Mobile Analytics still fetches every row when an ADMIN opens it.** It is off field phones now (the crash is
+   fixed) but the real fix is a server-side aggregate RPC so the phone fetches one row instead of the table.
+3. **Brand + other blank columns must be RE-IMPORTED from the customer's ORIGINAL source files** - the data HAS
+   them, the intake pipeline simply did not MAP them (user confirmed). Do NOT ask for a fill CSV. After V352
+   auto-derive: UAE 118 / Egypt 475 / KSA 149 still blank.
+4. **~75k (4.6%) 2026 KSA tyre_amount load gap** vs the customer's own "Sum of Trye" chart (biggest Apr + Jul) -
+   a few source rows/amounts never loaded. On the SAME measure the app reads 1,562,842 vs their 1,637,776.
+5. 7 unmapped KSA store codes still need mapping to sites on the Expense Report "By site" panel.
+6. Arabic RTL has never been checked on a device - `RTL_QA_CHECKLIST.md` has 43 screens, every box blank.
+7. NOTHING IN THIS SESSION RAN ON REAL HARDWARE. The Play build compiled and submitted, but device behaviour is
+   unverified. Test on a cheap 2 GB phone: a 13-photo inspection, airplane-mode cold start, the Washing tab label,
+   back on every screen, and a tyre_man login. Testers must UPDATE from the Play track (versionName is unchanged,
+   only versionCode moves, so the update is easy to miss).
+8. Managers LOST mobile Analytics/Records/Overview/Reports by design - restore per person via Access Control if
+   they complain.
+9. Commit signing is still broken in this environment (`user.signingkey` -> 0-byte file, session runs as root
+   while the key path is under /home/claude), so commits are correctly authored but UNSIGNED. GitHub's own
+   squash-merge commits also show Unverified (committer noreply@github.com) - that is GitHub's merge, NOT a local
+   commit. NEVER amend/force-push merged main history to "fix" either.
+
+## SESSION 2026-07-24/25 — System-wide defect audit + security/toolchain upgrade. CODE ONLY, **no migration applied** (next free was V360 at the time). 7 commits on `claude/accident-builder-report-ui-2bkwb5` — SINCE MERGED to main in the 2026-07-26 session above.
 **NO LIVE DB THIS SESSION** — `mcp.supabase.com` is blocked by the environment network policy and the Supabase MCP was unauthenticated, so nothing was applied or verified against Postgres. Every SQL-side finding below is REPORTED, not fixed.
 Method: a 12-slice parallel audit of every module cluster (calc engines, services, tyre/accident/workshop/report pages, access control, intake, mobile, SQL, routing, cross-module consistency) with **adversarial verification of every candidate**. 53 candidates -> 14 CONFIRMED, 42 REFUTED. The refutation rate is the point: several plausible-looking findings were false. 35 verifier agents died on a session usage limit, so a subset of candidates is UNVERIFIED (listed below) — treat those as leads, not facts.
 

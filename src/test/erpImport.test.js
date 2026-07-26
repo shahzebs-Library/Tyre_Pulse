@@ -43,12 +43,22 @@ describe('coerceNum / coerceInt', () => {
 })
 
 describe('coerceDate', () => {
-  it('accepts ISO, period YYYY-MM, and day/month-first exports', () => {
+  it('accepts ISO, period YYYY-MM, and day-first exports', () => {
     expect(coerceDate('2026-07-14')).toBe('2026-07-14')
     expect(coerceDate('2026-07')).toBe('2026-07-01')
     expect(coerceDate('14/07/2026')).toBe('2026-07-14') // day-first (14 > 12)
-    expect(coerceDate('07/09/2026')).toBe('2026-07-09') // ambiguous -> month-first
     expect(coerceDate(new Date('2026-03-05T00:00:00Z'))).toMatch(/^2026-03-0[45]$/)
+  })
+  // The source data is Ramco / GCC (DD-MM-YYYY). An ambiguous pair must read
+  // day-first, matching parseDate in src/lib/erpIntake.js. Reading it
+  // month-first silently shifted every date whose day is 12 or lower.
+  it('resolves an ambiguous D/M pair as DAY-first', () => {
+    expect(coerceDate('07/09/2026')).toBe('2026-09-07') // 7 September, not 9 July
+    expect(coerceDate('01/02/2026')).toBe('2026-02-01') // 1 February
+    expect(coerceDate('12/12/2026')).toBe('2026-12-12') // symmetric, unchanged
+  })
+  it('falls back to month-first only when the second part cannot be a month', () => {
+    expect(coerceDate('07/25/2026')).toBe('2026-07-25') // 25 cannot be a month
   })
   it('returns null for NULL / junk', () => {
     expect(coerceDate('NULL')).toBeNull()

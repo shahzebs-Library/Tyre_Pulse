@@ -55,6 +55,10 @@ export const MOBILE_MODULES = [
   { key: 'tasks',          label: 'Tasks',            group: 'Maintenance', roles: ['manager', 'director', 'inspector'] },
   { key: 'stock',          label: 'Stock Count',      group: 'Maintenance', roles: ['manager', 'inspector'] },
   { key: 'pm',             label: 'Maintenance Due',  group: 'Maintenance', roles: ['manager', 'director'] },
+  // The app has no dedicated technician/mechanic/foreman role, so the shop-floor
+  // roles for My Jobs are tyre_man + inspector, with supervisors (manager,
+  // director) and admin also seeing it. Per-user grants can extend it.
+  { key: 'workshop',       label: 'My Jobs',          group: 'Maintenance', roles: ['manager', 'director', 'inspector', 'tyre_man'] },
   // Management ----------------------------------------------------------------
   { key: 'overview',       label: 'Overview',         group: 'Management',  roles: ['manager', 'director'] },
   { key: 'reports',        label: 'Reports',          group: 'Management',  roles: ['manager', 'director', 'reporter', 'inspector', 'tyre_man'] },

@@ -184,9 +184,15 @@ export function coerceInt(v) {
 
 /**
  * Coerce to a YYYY-MM-DD date string, or null. Accepts Date objects, ISO
- * strings, YYYY-MM (period) which becomes the 1st, and common D/M/Y or M/D/Y
- * separators. Ambiguous D/M vs M/D is resolved by preferring day-first only
- * when the first part is > 12 (otherwise ISO / month-first is assumed).
+ * strings, YYYY-MM (period) which becomes the 1st, and common D/M/Y separators.
+ *
+ * DAY-FIRST for an ambiguous D/M vs M/D (e.g. 07/09/2026 is 7 September, not
+ * 9 July). The source data is Ramco / GCC, which exports DD-MM-YYYY, and this
+ * matches the sibling intake parser `parseDate` in src/lib/erpIntake.js. A
+ * month-first reading silently shifted every date whose day is 12 or lower
+ * (about 39 percent of dates), corrupting tyre fitment/removal dates and
+ * insurance/licence expiries. Month-first is used only when the SECOND part
+ * cannot be a month (e.g. 07/25/2026), which is unambiguous.
  * @param {*} v
  * @returns {string|null}
  */
@@ -208,10 +214,11 @@ export function coerceDate(v) {
     let b = +m[2]
     let y = +m[3]
     if (y < 100) y += y >= 70 ? 1900 : 2000
-    // If first part cannot be a month, treat it as the day (day-first export).
+    // Day-first (DD-MM-YYYY) is the source convention; fall back to month-first
+    // only when the second part cannot be a month, which is unambiguous.
     let day
     let month
-    if (a > 12) { day = a; month = b } else { month = a; day = b }
+    if (b > 12 && a <= 12) { month = a; day = b } else { day = a; month = b }
     return clampIso(y, month, day)
   }
   // Last resort: let Date try, but only accept a real parse.

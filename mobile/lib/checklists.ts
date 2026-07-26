@@ -6,6 +6,8 @@
  */
 import { supabase } from './supabase'
 import { saveCommand } from './recordQueue'
+import { uploadModulePhoto } from './photoUpload'
+import { persistPhotoForQueue } from './durablePhotos'
 import { safeUuid } from './ids'
 import type { ChecklistField } from './checklistFields'
 
@@ -138,6 +140,56 @@ export interface SubmitInput {
   assignmentId?: string | null
 }
 
+/** Storage module slug for checklist photos (matches recordQueue TYPE_TO_MODULE). */
+const PHOTO_MODULE = 'checklist'
+
+/**
+ * Resolve the per-field photo map to permanent tp-storage:// refs BEFORE the
+ * submission is handed to the record queue.
+ *
+ * WHY THIS EXISTS: the queue's photo pipeline (persistPayloadPhotos and
+ * resolveCommandPhotos in recordQueue.ts) both begin with `Array.isArray(photos)`,
+ * so they only understand a FLAT string[]. A checklist submits
+ * Record<fieldId, string[]> - the shape checklist_submissions.photos stores and
+ * the approval screen reads - so both queue steps skip it entirely. Without this
+ * resolver, a photo that PhotoCapture could not upload at capture time (offline)
+ * keeps its device-local file:// cache URI, is never uploaded, and is written
+ * verbatim into the database: the submit looks successful while the evidence is
+ * unreachable for everyone and the bytes sit in an OS cache the device may purge.
+ *
+ * Entries that are already permanent refs pass straight through, so the ONLINE
+ * path (PhotoCapture uploads on capture) costs nothing extra. A file:// that
+ * still cannot be uploaded is copied into durable document storage so the bytes
+ * survive cache eviction until an upload succeeds.
+ *
+ * Never throws: uploadModulePhoto and persistPhotoForQueue both return null on
+ * failure, so photo handling can never block a submit.
+ */
+async function resolveSubmissionPhotos(
+  photos: Record<string, string[]> | null | undefined,
+): Promise<Record<string, string[]>> {
+  const out: Record<string, string[]> = {}
+  if (!photos || typeof photos !== 'object') return out
+
+  let index = 0
+  for (const [fieldId, list] of Object.entries(photos)) {
+    if (!Array.isArray(list) || list.length === 0) continue
+    const resolved: string[] = []
+    for (const raw of list) {
+      if (typeof raw !== 'string' || !raw) continue
+      if (!raw.startsWith('file://')) { resolved.push(raw); continue } // already a permanent ref
+      const ref = await uploadModulePhoto(raw, PHOTO_MODULE, index++)
+      if (ref) { resolved.push(ref); continue }
+      // Upload failed (offline, or the file is gone). Copy the bytes out of the
+      // evictable OS cache so a later attempt still has them, and keep that path.
+      const durable = await persistPhotoForQueue(raw)
+      resolved.push(durable ? durable.localPath : raw)
+    }
+    if (resolved.length) out[fieldId] = resolved
+  }
+  return out
+}
+
 /**
  * Submit a completed checklist. Generates the submission id up-front so it is
  * known even offline (for navigation + linking the assignment). Enqueues through
@@ -147,6 +199,9 @@ export interface SubmitInput {
 export async function submitChecklist(input: SubmitInput): Promise<{ id: string; offline: boolean }> {
   const id = safeUuid()
   const t = input.template
+  // Uploaded here, not by the queue: the queue's photo pipeline only handles a
+  // flat string[] and would skip this keyed map (see resolveSubmissionPhotos).
+  const photos = await resolveSubmissionPhotos(input.photos)
   const res = await saveCommand('CHECKLIST_SUBMISSION', {
     id,
     template_id: t.id,
@@ -158,7 +213,7 @@ export async function submitChecklist(input: SubmitInput): Promise<{ id: string;
     title: input.title ?? t.name ?? null,
     status: 'submitted',
     answers: input.answers ?? {},
-    photos: input.photos ?? {},
+    photos,
     signature_data: input.signature_data ?? null,
     printed_name: input.printed_name ?? null,
     score_pct: input.score_pct ?? null,

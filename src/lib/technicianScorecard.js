@@ -6,10 +6,14 @@
  * numbers only (the page formats for display) and never read the wall clock,
  * so the ranking logic lives in exactly one unit-tested place.
  *
+ * Every status comparison goes through `workOrderStatus.js` (the single work-order
+ * status vocabulary), so a row stored with a legacy token ("Open", "Awaiting
+ * Parts", "Closed") is bucketed exactly like its canonical equivalent.
+ *
  * Metrics per technician:
  *   - jobs            total work orders assigned
- *   - completed       work orders with status "Completed"
- *   - open            active work orders (Open / In Progress / Awaiting Parts)
+ *   - completed       work orders with canonical status "Completed"
+ *   - open            active work orders (any canonical non-terminal status)
  *   - cancelled       cancelled work orders
  *   - completionRate  completed / jobs  (%)
  *   - avgTurnaround   mean (completed_at - created_at) in DAYS over completed jobs
@@ -19,8 +23,15 @@
  *   - rank            1-based position after sorting by score desc
  */
 
+import { WO_STATUSES, normalizeWoStatus, isClosedWoStatus } from './workOrderStatus'
+
 const UNASSIGNED = 'Unassigned'
-const OPEN_STATUSES = new Set(['open', 'in progress', 'awaiting parts'])
+/**
+ * Canonical non-terminal statuses, derived from the single status vocabulary so
+ * this never drifts when a status is added there. Blank / unrecognised values
+ * stay out of every bucket (counted in `jobs` only) rather than being guessed at.
+ */
+const OPEN_STATUSES = new Set(WO_STATUSES.filter((s) => !isClosedWoStatus(s)))
 const MS_PER_DAY = 24 * 3600 * 1000
 
 /**
@@ -42,7 +53,8 @@ export function turnaroundDays(order) {
   return diff < 0 ? null : round1(diff)
 }
 
-const statusKey = (o) => (o?.status || '').toString().trim().toLowerCase()
+/** Canonical Title Case status for a work order (folds every legacy token). */
+const canonicalStatus = (o) => normalizeWoStatus(o?.status)
 
 /**
  * Group work orders by technician and compute per-technician KPIs, a composite
@@ -74,12 +86,12 @@ export function summarizeTechnicians(workOrders) {
     t.jobs += 1
     t.totalCost += num(o?.total_cost)
 
-    const s = statusKey(o)
-    if (s === 'completed') {
+    const s = canonicalStatus(o)
+    if (s === 'Completed') {
       t.completed += 1
       const ta = turnaroundDays(o)
       if (ta != null) { t._taSum += ta; t._taN += 1 }
-    } else if (s === 'cancelled') {
+    } else if (s === 'Cancelled') {
       t.cancelled += 1
     } else if (OPEN_STATUSES.has(s)) {
       t.open += 1

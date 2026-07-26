@@ -11,6 +11,10 @@
  *   - USER subject  -> per-user grant/revoke via accessGrants
  *     (set_user_access_grant / revoke_user_access_grant). Allow = grant,
  *     Deny = revoke, Clear = remove the override (falls back to the role).
+ *     A grant and a revoke row for one module can coexist and always resolve to
+ *     revoke, so every flip is reconciled through planUserOverrideWrite: it
+ *     deletes the opposite effect on Allow/Deny and every matching row on Clear,
+ *     leaving exactly one effective row.
  *   - ROLE subject  -> the role x module baseline via saveModulePermissions
  *     (set_module_permissions). Allow/Deny flips module_permissions.enabled.
  *
@@ -31,7 +35,9 @@ import {
 import { MODULE_GROUPS, ALL_MODULES, MODULE_LABEL, ACCESS_ROLES } from '../../../lib/moduleCatalog'
 import { listProfiles } from '../../../lib/api/users'
 import { getEffectiveAccess } from '../../../lib/api/adminAccess'
-import { listUserGrants, setUserAccessGrant, revokeUserAccessGrant } from '../../../lib/api/accessGrants'
+import {
+  listUserGrants, setUserAccessGrant, revokeUserAccessGrant, planUserOverrideWrite,
+} from '../../../lib/api/accessGrants'
 import { listGlobalPermissions, saveModulePermissions } from '../../../lib/api/modulePermissions'
 import { toUserMessage } from '../../../lib/safeError'
 
@@ -266,12 +272,21 @@ export default function AccessPreviewOverride() {
     if (!selectedUserId || overridesLocked) return
     setBusyKey(row.key)
     try {
+      // A grant and a revoke row for the same module can coexist (the grant table
+      // is unique on user+module+capability+EFFECT, and set_user_access_grant
+      // upserts on that same key), and every reader resolves such a pair as
+      // revoke. So flipping an override must also delete the opposite effect,
+      // and Clear must delete EVERY matching row, not just the first one.
+      const { effect, deleteIds } = planUserOverrideWrite(grants, row.key, { capability: 'view', action })
       if (action === 'clear') {
-        const g = grants.find((x) => x.module_key === row.key && (x.capability || 'view') === 'view')
-        if (g?.id) await revokeUserAccessGrant(g.id)
+        for (const id of deleteIds) await revokeUserAccessGrant(id)
         pushToast('success', `Cleared the override on ${row.label}. It now follows the role.`)
       } else {
-        await setUserAccessGrant({ userId: selectedUserId, moduleKey: row.key, capability: 'view', effect: action })
+        // Write the wanted effect BEFORE dropping the opposite one: a grant plus
+        // revoke pair resolves to revoke, so this order can never open access
+        // mid-flight if a later call fails.
+        await setUserAccessGrant({ userId: selectedUserId, moduleKey: row.key, capability: 'view', effect })
+        for (const id of deleteIds) await revokeUserAccessGrant(id)
         pushToast('success', `${action === 'grant' ? 'Allowed' : 'Denied'} ${row.label} for ${displayName(selectedUser)}.`)
       }
       await loadAccess(selectedUserId)

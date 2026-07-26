@@ -38,9 +38,21 @@ export async function enqueueInspection(payload: InspectionPayload, clientUuid?:
   return id
 }
 
+/**
+ * Count of queued inspections that are NOT yet in the database: 'pending' AND
+ * 'failed'. A failed item is still unsent field work the user must be told
+ * about. Counting only 'pending' made every indicator (tab-bar badge, Home
+ * pending tile, Profile "Pending", SyncBanner) read 0 the moment an inspection
+ * failed, so the banner - and with it the in-context "Sync now" that calls
+ * retryFailed() first - disappeared and the technician was shown "all synced"
+ * while an inspection sat unsent. The row was never lost (retryFailed + the
+ * Profile "Sync now" button still recover it), but it was invisible.
+ * Mirrors getPendingRecordCount() in recordQueue.ts, which already counts
+ * everything that is not 'synced'.
+ */
 export async function getPendingCount(): Promise<number> {
   const queue = await getQueue()
-  return queue.filter(i => i.sync_status === 'pending').length
+  return queue.filter(i => i.sync_status !== 'synced').length
 }
 
 // Global in-flight guard — a manual sync overlapping the 10s poll / pull-to-refresh

@@ -13,6 +13,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons'
 import { supabase } from '../../../lib/supabase'
+import { fetchAllPages } from '../../../lib/fetchAll'
 import { useElevatedGuard } from '../../../hooks/useRoleGuard'
 import { toUserMessage } from '../../../lib/safeError'
 
@@ -39,6 +40,14 @@ interface KPI {
 interface SiteStat { site: string; count: number; cost: number }
 interface BrandStat { brand: string; count: number; cost: number }
 interface RiskStat  { risk: string; count: number }
+
+/** The tyre_records projection every KPI on this screen is derived from. */
+interface TyreRow {
+  cost_per_tyre: number | null
+  risk_level: string | null
+  brand: string | null
+  site: string | null
+}
 
 const RISK_COLOR: Record<string, string> = {
   Critical: '#dc2626', High: '#ea580c', Medium: '#f59e0b', Low: '#16a34a',
@@ -72,12 +81,25 @@ function AnalyticsScreen() {
   useEffect(() => {
     if (!allowed) return
     let cancelled = false
-    supabase.from('vehicle_fleet').select('site').then(({ data }) => {
-      if (cancelled) return
-      const sites = [...new Set(((data ?? []) as { site: string | null }[])
-        .map(r => r.site).filter(Boolean) as string[])].sort()
-      setSiteOptions(sites)
-    })
+    ;(async () => {
+      try {
+        // Paged: the fleet register exceeds the PostgREST row cap, and an
+        // un-paged read would silently drop whole sites from this list, making
+        // them unfilterable. Best-effort: on error we keep whatever pages
+        // succeeded rather than failing the screen.
+        const { data } = await fetchAllPages<{ site: string | null }>(
+          (rangeFrom, rangeTo) => supabase.from('vehicle_fleet')
+            .select('site')
+            .order('id', { ascending: true })
+            .range(rangeFrom, rangeTo),
+        )
+        if (cancelled) return
+        const sites = [...new Set(data.map(r => r.site).filter(Boolean) as string[])].sort()
+        setSiteOptions(sites)
+      } catch (e: any) {
+        if (__DEV__) console.warn('[analytics] site options failed:', e?.message)
+      }
+    })()
     return () => { cancelled = true }
   }, [allowed])
 
@@ -99,11 +121,21 @@ function AnalyticsScreen() {
     try {
     const { from, to } = resolveRange()
 
-    let recordsQ = supabase.from('tyre_records')
-      .select('id,cost_per_tyre,risk_level,brand,site')
-    if (from) recordsQ = recordsQ.gte('issue_date', from)
-    if (to)   recordsQ = recordsQ.lte('issue_date', to)
-    if (site) recordsQ = recordsQ.eq('site', site)
+    // PAGED read. Every KPI, percentage and ranking below is derived from these
+    // rows, so an un-paged query would be silently capped by PostgREST at 1000
+    // rows and understate all of them. The window can legitimately cover the
+    // whole table (the Custom preset with both dates blank applies no date
+    // filter at all), so this must never rely on the filter to stay under the
+    // cap. Ordered by primary key to keep page boundaries stable.
+    const buildRecords = (rangeFrom: number, rangeTo: number) => {
+      let q = supabase.from('tyre_records')
+        .select('id,cost_per_tyre,risk_level,brand,site')
+        .order('id', { ascending: true })
+      if (from) q = q.gte('issue_date', from)
+      if (to)   q = q.lte('issue_date', to)
+      if (site) q = q.eq('site', site)
+      return q.range(rangeFrom, rangeTo)
+    }
 
     let vehiclesQ = supabase.from('vehicle_fleet').select('id', { count: 'exact', head: true })
     if (site) vehiclesQ = vehiclesQ.eq('site', site)
@@ -114,11 +146,11 @@ function AnalyticsScreen() {
     if (site) actionsQ = actionsQ.eq('site', site)
 
     const [recordsRes, vehiclesRes, actionsRes] = await Promise.all([
-      recordsQ, vehiclesQ, actionsQ,
+      fetchAllPages<TyreRow>(buildRecords), vehiclesQ, actionsQ,
     ])
     if (recordsRes.error) throw recordsRes.error
 
-    const records = (recordsRes.data ?? []) as { cost_per_tyre: number | null; risk_level: string | null; brand: string | null; site: string | null }[]
+    const records = recordsRes.data
 
     const totalCost = records.reduce((s, r) => s + (Number(r.cost_per_tyre) || 0), 0)
     const critical  = records.filter(r => r.risk_level === 'Critical').length

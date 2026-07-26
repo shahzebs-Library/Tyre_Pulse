@@ -3,7 +3,7 @@
 Durable, committed project knowledge so any session has full context. Keep this
 current. Read it before adding/changing modules. Governing spec: `Tyre pulse enterprise.md`
 
-## SESSION 2026-07-26 — CLOSED CLEAN. Audit-lead verification + Play API-36 compliance + mobile scope/crash fixes + measured performance + **duplicate control (V362) + import guard / history / row editing (V363-V364)**. Migrations through **V364**, next free **V365**. ALL MERGED to main (PRs #187, #189, #190, #191, #192, #193, #194; main tip `d8d70a7`); branch realigned 0/0. Play build SHIPPED to Closed testing.
+## SESSION 2026-07-26 — CLOSED CLEAN. Audit-lead verification + Play API-36 compliance + mobile scope/crash fixes + measured performance + **duplicate control (V362) + import guard / history / row editing (V363-V364) + site-aware identity and the 8,248 duplicates DELETED (V365)**. Migrations through **V365**, next free **V366**. ALL MERGED to main (PRs #187, #189, #190, #191, #192, #193, #194; main tip `d8d70a7`); branch realigned 0/0. Play build SHIPPED to Closed testing.
 Everything below is on main and verified: web build clean, **5230/5230 web tests**, mobile `tsc` 0, mobile jest 50.
 The 2026-07-24/25 audit's 7 unmerged commits (next section) were merged as part of this work.
 
@@ -214,10 +214,44 @@ resolved. 3 I verified by hand, 8 by a workflow with an adversarial reviewer:
   interpolated (via %I) and only after the editable-column check. `admin_db_revert_change` builds an explicit
   column list EXCLUDING generated cols (the V320 lesson). VERIFIED live rolled back: edit applied -> reverted to
   the exact original text; row deleted -> restored with serial intact; editing organisation_id REFUSED.
-- Tests importHistory 18 + duplicateControl 13. Migrations through **V364**, next free **V365**.
+- Tests importHistory 18 + duplicateControl 13. Migrations through **V365**, next free **V366**.
+
+### V365 — site-aware expense identity + the 8,248 duplicates DELETED (user instruction)
+- **The duplicates are GONE.** User instruction: "these duplications exact match delete it". Removed in 3
+  per-country batches, all 8,248 rows archived in `dup_resolve_archive` and still one-click undoable:
+  Egypt 4,993 (**EGP 96,756,275.49 -> 79,341,428.04**), UAE 3,120 (AED 19,247,740.26 -> 18,493,541.38),
+  KSA 135 (SAR 40,644,687.31 -> 40,608,349.65). parts_consumption 225,040 -> **216,792 rows, 0 duplicates left**.
+- **V365 first, because the user's second instruction exposed a real hole**: "in expenses dont merge assest from
+  all site keep their own". Both the V362 dup key AND the V363 `import_uid` ignored `store_code`/`cost_center`.
+  (a) LATENT: a dup group spanning two stores would have been offered for deletion, merging two sites' costs -
+  verified it had NOT happened (all 8,248 groups shared one store + one cost centre) but the key allowed it.
+  (b) WORSE, silent data loss: two sites uploaded as separate files each carrying a line "10" with otherwise
+  identical content would COLLIDE on import_uid and the second would be SKIPPED with no error. Not yet triggered
+  only because `#` became mappable in V363. Both now include store_code + cost_center; `site` added to the
+  wo_lines/work_orders/tyre_records/odometer_logs keys too. Counts unchanged after the change (8,248/47,693),
+  proving no site merging was occurring. `parts_import_uid` gained 2 trailing DEFAULT NULL params so 10-arg
+  callers still resolve; stamped uids recomputed and the unique index rebuilt.
+
+### CLASSIFICATION: measured, and NOT as broken as assumed — read before "fixing" it
+- User believes spare parts are landing in the tyre column and wants an ITEM MASTER to drive classification
+  instead of the description regex. The governance point is right, but the DATA DOES NOT support widespread
+  misclassification: of **20,465 distinct item_codes / 216,792 rows, only 2 codes (37 rows) classify
+  inconsistently** across rows. Description-driven classification is 99.99% self-consistent.
+- CONSISTENT IS NOT CORRECT: a code can be consistently mis-bucketed, and V335 did previously reclassify 1,518
+  misfiled tyre amounts (~SAR 2.0M). So the real value of a master is CONTROL + AUDITABILITY (a place to review
+  and override 20,465 codes) - NOT fixing drift. Do not promise a big number from it.
+- **`parts_catalog` is EMPTY (0 rows)** so no item master exists in practice, and **every one of the 216,792
+  expense rows HAS an item_code**. So a master is derivable from the data: 20,465 codes + descriptions + the
+  current auto-category as the starting proposal, then human override, then classification reads the master
+  first and the regex only as a fallback for unseen codes. Current split: tyre 20,354 / spare 175,338 / oil 21,100.
+- REMEMBER both sides must change together: SQL `classify_parts_consumption` AND its JS mirror
+  `src/lib/partsExpense.js`.
 
 ### OPEN — NOT DONE (honest list for the next session)
-0. **The 8,248 duplicate expense rows are STILL LIVE** and awaiting the user's decision in Console -> Duplicate
+0. ~~The 8,248 duplicate expense rows~~ DONE (V365, see above). Still open on prevention: no upload path calls
+   `checkImportFingerprint` yet to WARN before committing a repeat file, and an expense re-import with the `#`
+   column UNMAPPED still duplicates by design.
+0b. **The 8,248 duplicate expense rows WERE STILL LIVE and awaiting the user's decision in Console -> Duplicate
    Control (Egypt 96.76M -> 79.34M when pressed). V363 stops NEW ones; it does not clean the old.
    Also still open on the prevention side: there is no pre-upload BLOCK on a repeat file. The sha256 check
    (`checkImportFingerprint`) is exposed and Import History flags a repeat after the fact, but no upload path

@@ -1,0 +1,48 @@
+-- V369 - Make a re-classification reversible, then correct the buckets.
+-- APPLIED LIVE. This file is the record.
+--
+-- WHY: reclassify_from_master moves money between the tyre / spare / oil buckets, but
+-- V368 logged only a SUMMARY. The previous category of each row was recorded nowhere, so
+-- a batch could not be put back. That is not acceptable for an operation that changes
+-- reported financials, so this adds a per-row before-state and a revert.
+--
+-- NEW: reclassify_log (super-admin read; DEFINER writes) + reclassify_revert(batch_id).
+-- reclassify_from_master now writes the before-state BEFORE updating, and returns the
+-- batch_id.
+--
+-- ================= THE CORRECTION THIS ENABLED =================
+-- A full scan of all 216,792 rows for items sitting in the wrong column found three
+-- distinct problems. ROOT CAUSE of the tyre one: parts_is_tyre() matches tyre-size
+-- patterns against DIGIT SEQUENCES INSIDE PART NUMBERS, so "PLATE KIT, PRESSURE
+-- 3400121501", "END HOSE ... 98089983", "GEARBOX SICOMA ... MAO4500/3000" and
+-- "SPONGE BALL ... 1010183215" all classified as TYRE.
+--
+-- Applied via the master (batch 57b2b81a-9b99-4c86-8068-884fce4c46fd), 4,621 rows:
+--   Egypt  spare -> oil    2,486 rows  EGP 7,208,978   (Mobil Delvac 15W40, Shell
+--                                                       Rimula R6L + R4X, Fuchs 10w40)
+--   KSA    tyre  -> spare    958 rows  SAR 1,017,013   (brake discs, hoses, gearboxes,
+--                                                       clutch parts, sponge balls)
+--   UAE    tyre  -> spare    434 rows  AED   173,867
+--   KSA    spare -> oil      640 rows  SAR   172,302   (compressor + brake oil)
+--   UAE    spare -> oil      100 rows  AED     8,454
+--   Egypt  tyre  -> oil        3 rows  EGP       175
+--
+-- RESULTING per-country split (buckets reconcile to the total exactly, 0.00 variance):
+--   Egypt  tyre 16,698,646  spare 48,718,188  oil 13,924,594  = 79,341,428
+--   KSA    tyre 12,030,971  spare 23,247,044  oil  5,330,335  = 40,608,350
+--   UAE    tyre  6,406,885  spare 10,164,855  oil  1,921,801  = 18,493,541
+--
+-- VERIFIED AFTER: re-running all three scans returns 0 oil-looking items outside oil,
+-- 0 non-tyre items in the tyre bucket, and 0 real tyres in spare. The only rows still
+-- matching a tyre word in spare are 7 "TYRE PATCHES" lines (AED 490), which are
+-- consumables and correctly stay spare per the standing rule that patch / valve / glue /
+-- fender are not tyres.
+--
+-- REVERSIBLE: select public.reclassify_revert('57b2b81a-9b99-4c86-8068-884fce4c46fd');
+-- The master rows also carry reviewed=true with a note, so the decisions are visible and
+-- individually editable in Console -> Material Master.
+--
+-- STILL OPEN: parts_is_tyre() itself is unchanged, so a NEW import can still mis-detect
+-- a part number as a tyre size. The master now overrides it for every reviewed code, but
+-- tightening that regex (require a tyre word or a brand alongside the size) is the
+-- permanent fix.

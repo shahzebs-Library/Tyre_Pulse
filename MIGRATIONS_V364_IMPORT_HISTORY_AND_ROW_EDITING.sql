@@ -1,0 +1,62 @@
+-- V364 - Import History visibility + audited row edit / delete for the console.
+--
+-- APPLIED LIVE. This file is the record; the DB is the source of truth.
+--
+-- PART A: import_files / import_batches already recorded every in-app upload,
+-- including a sha256 of the file content, and import_batches even had a
+-- `duplicate_rows` column. None of it was ever surfaced or acted on. At the time of
+-- writing there were 10 files, all 10 hashed, and ONE of them had already been
+-- uploaded twice (fleet_import_template.csv, first seen 2026-07-08) with nobody
+-- warned. These RPCs expose that history and flag a repeat upload.
+--
+-- They also expose the real blind spot: the Supabase Table Editor path writes NO
+-- batch row at all, so those loads were completely invisible.
+-- admin_unlogged_imports reconstructs them from insertion-time clusters on the
+-- destination table. The client-side flagSuspiciousClusters then marks the tell-tale
+-- pattern - two clusters of the SAME row count for the same country within minutes,
+-- e.g. the live KSA pair of 136 rows at 12:26:35 and 12:27:45.
+--
+-- PART B: the Data Browser was read + export only. These add single-row update and
+-- delete against the SAME fixed safelist (_admin_db_safelist), with a full
+-- before/after record and a one-click revert, so a correction can never be silent
+-- or permanent.
+--
+-- SAFETY
+--   * every function is super-admin gated and org-scoped.
+--   * _admin_editable_cols refuses id / organisation_id / created_at / created_by
+--     and every GENERATED or IDENTITY column, so a row can never be re-keyed or
+--     moved to another tenant.
+--   * the patch value is bound as a parameter; only the column NAME is interpolated,
+--     via %I, and only after it is checked against the editable-column list.
+--   * admin_db_revert_change builds an explicit column list EXCLUDING generated
+--     columns - a positional insert is exactly how V320 approve_pending_upload broke.
+--   * admin_unlogged_imports resolves its table from the V362 safelist, so it cannot
+--     be pointed at an arbitrary table.
+--
+-- VERIFIED live in a rolled-back transaction: edit applied, reverted to the exact
+-- original text, row deleted, row restored with its serial intact, and an attempt to
+-- edit organisation_id correctly refused.
+--
+-- Objects created:
+--   admin_import_history(int)
+--   admin_unlogged_imports(text, int)
+--   admin_check_import_fingerprint(text)
+--   admin_row_changes                      (table, super-admin read only)
+--   _admin_editable_cols(text)
+--   admin_db_update_row(text, uuid, jsonb)
+--   admin_db_delete_row(text, uuid)
+--   admin_db_revert_change(uuid)
+--
+-- See the live definitions for the authoritative bodies.
+--
+-- ---------------------------------------------------------------------------
+-- REVERSIBLE
+--   drop function if exists public.admin_db_revert_change(uuid);
+--   drop function if exists public.admin_db_delete_row(text, uuid);
+--   drop function if exists public.admin_db_update_row(text, uuid, jsonb);
+--   drop function if exists public._admin_editable_cols(text);
+--   drop function if exists public.admin_check_import_fingerprint(text);
+--   drop function if exists public.admin_unlogged_imports(text, int);
+--   drop function if exists public.admin_import_history(int);
+--   -- keep admin_row_changes: it is the undo record for anything already changed.
+-- ---------------------------------------------------------------------------

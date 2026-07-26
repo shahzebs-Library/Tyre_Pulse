@@ -100,7 +100,8 @@ describe('importTargets reference', () => {
     expect(rows).toHaveLength(IMPORT_TARGETS.length)
     expect(Object.keys(rows[0])).toEqual([
       'import_into_table', 'what_it_is', 'ends_up_in', 'source_file',
-      'add_country_column', 'headers_must_match_exactly', 'columns', 'notes',
+      'add_country_column', 'headers_must_match_exactly', 'safe_to_upload_twice',
+      'columns', 'notes',
     ])
   })
 })

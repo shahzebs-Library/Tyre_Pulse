@@ -1,0 +1,78 @@
+-- V370 / V371 / V372 - the classification brain, applied on every upload.
+-- APPLIED LIVE. This file is the record; the DB is the source of truth.
+--
+-- V370  brain_classify() + helpers, byte-mirroring src/lib/classificationBrain.js.
+-- V370a fixes a three-valued-logic bug in it (below).
+-- V371  classify_parts_consumption delegates to the brain on every insert, and records
+--       WHICH EVIDENCE decided, so any figure can be traced to its reason.
+-- V372  removes `mobile:` permission rows that the mobile app can never read.
+--
+-- ===================== WHY A BRAIN AND NOT MORE REGEX =====================
+-- Two failures were measured on the live 216,792-row expense table:
+--   1. Part numbers look like tyre sizes. "PLATE KIT, PRESSURE 3400121501" and
+--      "GEARBOX SICOMA MAO4500/3000" classified as TYRE. SAR 1.77M of spares sat in
+--      the KSA tyre column.
+--   2. Real lubricants were missed - "COMPRESSOR OIL 68", and Egypt's engine oils
+--      (Mobil Delvac, Shell Rimula) worth EGP 7.2M sat in spare parts.
+-- No description regex can fix that, because the description is written by humans in
+-- three countries and two languages and contains part numbers.
+--
+-- THE EVIDENCE LADDER, strongest first, and every decision records which rung decided:
+--   1. reviewed-master        a human decided this item code. Absolute.
+--   2. code-range             the ERP's OWN taxonomy. Verified live: all 142 codes in
+--                             310xxx are tyres, 400xxx pump parts, 050xxx brakes,
+--                             150-153xxx filters, OL-* lubricants, TI-GE Egypt tyres.
+--   3. accessory / lubricant  a wheel or tyre accessory is never a tyre; a real
+--                             lubricant beats a code range that only knows "a part".
+--   4. description-tyre       says tyre/tire, or a tyre brand next to a tyre size.
+--   5. job-card               the work order appears in monthly tyre consumption.
+--   6. default                spare, 0.30 confidence, flagged for review.
+--
+-- ============ WHY THE JOB CARD IS CORROBORATION, NOT AN OVERRIDE ============
+-- "A job card in the monthly tyre consumption means it is a tyre expense" is a strong
+-- instinct and the signal is real - 4,302 expense lines sit on such a card. But those
+-- cards are workshop VISITS, not tyre-only jobs. Their spare lines on live data include
+-- BATTERY 200 AMP, GEAR BOX COMPLETE, ENGINE CYLINDER, BRAKE PADS, BRAKE CALIPER and
+-- CONCRETE HOSE - about 601,916 across 550 distinct codes. As an override it would book
+-- batteries as tyre cost. So it promotes ONLY an item that is otherwise unidentified AND
+-- carries a tyre size. VERIFIED live: the identical line "315/80 R22.5 20PR" lands in
+-- SPARE with no tyre job card and in TYRE with one, while a BATTERY on a tyre job card
+-- stays spare.
+--
+-- ===================== TWO BUGS FOUND WHILE BUILDING IT =====================
+-- 1. SUBSTRING MATCHING. A naive includes('rim') matched "Shell RIMula", so Egypt's
+--    engine oil read as a wheel rim. Every token test now matches WHOLE WORDS via
+--    (^|[^a-z0-9]) token ([^a-z0-9]|$). Caught by the test suite, not in production.
+-- 2. THREE-VALUED LOGIC (V370a). `v_code_cat = 'tyre'` is NULL, not false, when the
+--    item code is outside every known range - which is most codes. So
+--    `not (NULL and true)` was NULL and the accessory guard silently never fired for an
+--    accessory that also carried a tyre size. Caught by diffing the SQL against the JS,
+--    which uses `?.category === 'tyre'` and is therefore false rather than null.
+--    RULE: never compare a nullable text to a literal inside a boolean guard here.
+--
+-- NEW COLUMNS on parts_consumption: classified_by, classify_confidence. Anything
+-- decided by 'default' was not identified and should be reviewed in Material Master.
+--
+-- ===================== V372: PERMISSION KEYS THAT LIED =====================
+-- Found by calling get_user_module_permissions as a real Tyre Data Collector. The web
+-- Access Manager's Web/Mobile/Both control writes `mobile:<WEB key>`, but mobile matches
+-- its OWN ModuleKey, so ~70 stored keys were never read by the phone. Not harmless:
+-- an admin had enabled `mobile:inspections` for Driver, Fleet Supervisor, Manager and
+-- Tyre Man believing they had granted mobile inspections - mobile's key is `inspect`, so
+-- it did nothing and the UI reported success.
+-- 68 inert rows archived to module_permissions_archive and deleted. Because they were
+-- inert, NO user's real access changed; the console simply stops showing switches that
+-- do nothing. Deliberately NOT auto-translated to the real keys, since that would grant
+-- Driver and others genuine mobile access on the strength of a guess. Intents found,
+-- to be re-applied deliberately in the Mobile App access panel:
+--     mobile:inspections -> Driver, Fleet Supervisor, Manager, Tyre Man
+--     mobile:work_orders -> Manager        mobile:dashboard -> Driver, Manager
+--
+-- VERIFIED: the custom roles work correctly. A live Tyre Data Collector's role matrix
+-- returns mobile:inspect, scan, checklists, serial, records, history, alerts, tasks,
+-- stock, approvals and reportAccident as true. The suspicion that mobile's
+-- normaliseRole (which collapses an unknown role to 'reporter') was locking them out
+-- was TESTED AND FOUND FALSE - the role matrix is consulted before the role default.
+--
+-- REVERSIBLE: restore the pre-V371 classify_parts_consumption body; re-insert from
+-- module_permissions_archive; drop the brain_* functions.

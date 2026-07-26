@@ -39,15 +39,31 @@ export function listKpiInspections({ country, from, to } = {}) {
   ).range(from, to)
 }
 
-/** Corrective actions for KPI computation, strict country scope. */
-export function listKpiCorrectiveActions({ country } = {}) {
-  return scopeCountry(
+/**
+ * Corrective actions for KPI computation, strict country scope.
+ * `from`/`to` are optional: when supplied the query is ranged so callers can
+ * drive it through `fetchAllPages` past the PostgREST 1000-row cap. Omitting
+ * them preserves the original single-shot pass-through exactly.
+ */
+export function listKpiCorrectiveActions({ country, from, to } = {}) {
+  const q = scopeCountry(
     supabase.from('corrective_actions').select('id,status,site,country,due_date,created_at'),
     country,
   )
+  return Number.isFinite(from) && Number.isFinite(to) ? q.range(from, to) : q
 }
 
-/** Fleet roster (id/asset_no) for fleet-size denominators. */
-export function listKpiFleet() {
-  return supabase.from('vehicle_fleet').select('id,asset_no')
+/**
+ * Fleet roster (id/asset_no) for fleet-size denominators.
+ *
+ * Takes `country` because this feeds a DENOMINATOR: on a country-scoped screen
+ * every numerator (tyres, inspections, accidents) is filtered to that country,
+ * so an unscoped fleet count mixes in other countries' vehicles and understates
+ * every per-vehicle ratio and the Fleet Availability KPI.
+ * `from`/`to` are optional and drive `fetchAllPages` - the fleet register is
+ * over 1000 rows, so an un-ranged read silently truncated the count.
+ */
+export function listKpiFleet({ country, from, to } = {}) {
+  const q = scopeCountry(supabase.from('vehicle_fleet').select('id,asset_no'), country)
+  return Number.isFinite(from) && Number.isFinite(to) ? q.range(from, to) : q
 }

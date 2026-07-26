@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
 import { useSettings } from '../contexts/SettingsContext'
 import { useLanguage } from '../contexts/LanguageContext'
-import { computeBrandMetrics, computeSiteMetrics } from '../lib/analyticsEngine'
+import { computeBrandMetrics, computeSiteMetrics, recordCost } from '../lib/analyticsEngine'
 import {
   Chart as ChartJS, CategoryScale, LinearScale, BarElement, LineElement,
   PointElement, Title, Tooltip, Legend,
@@ -21,6 +21,29 @@ import { COST_MODES, pickCost, costModeLabel, pickMonthly, splitTotals } from '.
 import { loadCostSplit } from '../lib/api/costSummary'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, LineElement, PointElement, Title, Tooltip, Legend)
+
+/**
+ * Monthly record-count + cost buckets behind the Monthly Trend chart.
+ *
+ * Cost must be the ROW total, never the unit price: cost_per_tyre is the
+ * "Unit Cost / Tyre" and one tyre_records row can cover several tyres (qty).
+ * This bucket used to add cost_per_tyre alone, so every month containing a
+ * row with qty > 1 was understated and the chart disagreed with the Total
+ * Cost KPI and the site/brand tables rendered on this same page. recordCost
+ * is the shared cost_per_tyre x (qty || 1) helper those tables already use.
+ */
+export function buildMonthlyTrend(records = []) {
+  const rows = Array.isArray(records) ? records : []
+  const map = {}
+  rows.forEach((r) => {
+    if (!r?.issue_date) return
+    const m = String(r.issue_date).slice(0, 7)
+    if (!map[m]) map[m] = { month: m, count: 0, cost: 0 }
+    map[m].count++
+    map[m].cost += recordCost(r)
+  })
+  return Object.values(map).sort((a, b) => a.month.localeCompare(b.month))
+}
 
 export default function Analytics() {
   const reportMeta = useReportMeta('Fleet Analytics')
@@ -120,17 +143,7 @@ export default function Analytics() {
   const brandMetrics = useMemo(() => computeBrandMetrics(filtered), [filtered])
 
   // Monthly trend chart
-  const monthlyData = useMemo(() => {
-    const map = {}
-    filtered.forEach(r => {
-      if (!r.issue_date) return
-      const m = r.issue_date.slice(0, 7)
-      if (!map[m]) map[m] = { month: m, count: 0, cost: 0 }
-      map[m].count++
-      map[m].cost += parseFloat(r.cost_per_tyre) || 0
-    })
-    return Object.values(map).sort((a, b) => a.month.localeCompare(b.month))
-  }, [filtered])
+  const monthlyData = useMemo(() => buildMonthlyTrend(filtered), [filtered])
 
   const chartData = useMemo(() => ({
     labels: monthlyData.map(d => d.month),

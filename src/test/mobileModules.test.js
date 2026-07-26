@@ -5,12 +5,14 @@ import {
 } from '../lib/mobileModules'
 
 describe('mobileModules catalog', () => {
-  it('mirrors the mobile registry: 29 modules, unique keys, grouped', () => {
-    expect(MOBILE_MODULES).toHaveLength(29)
+  it('mirrors the mobile registry: 30 modules, unique keys, grouped', () => {
+    expect(MOBILE_MODULES).toHaveLength(30)
     const keys = MOBILE_MODULES.map((m) => m.key)
     expect(new Set(keys).size).toBe(keys.length)
-    // the key strings that mobile matches on must be present verbatim
-    for (const k of ['inspect', 'scan', 'records', 'checklists', 'meter', 'washing', 'reportAccident', 'workorders', 'pm', 'approvals', 'admin']) {
+    // the key strings that mobile matches on must be present verbatim.
+    // 'workshop' (My Jobs) was missing from this mirror, so the web Access
+    // Manager could not allow or deny the mobile Workshop module at all.
+    for (const k of ['inspect', 'scan', 'records', 'checklists', 'meter', 'washing', 'reportAccident', 'workorders', 'pm', 'workshop', 'approvals', 'admin']) {
       expect(keys).toContain(k)
     }
     // groups preserved in order

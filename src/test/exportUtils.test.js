@@ -41,7 +41,12 @@ vi.mock('jspdf', () => {
       },
     })
   }
-  return { default: vi.fn(() => makeDoc()) }
+  // NOTE: must be a `function`, not an arrow. The real jsPDF default export is a
+  // class and exportUtils calls `new jsPDF(...)`. Vitest 4 forwards `new` through
+  // to the mock implementation, so an arrow function (not constructable) throws
+  // "is not a constructor". A function constructor that returns an object yields
+  // that object, so `new jsPDF()` is still the proxy doc stub.
+  return { default: vi.fn(function () { return makeDoc() }) }
 })
 
 vi.mock('jspdf-autotable', () => ({
@@ -62,7 +67,13 @@ vi.mock('pptxgenjs', () => {
     addSlide:    vi.fn(() => ({ ...mockSlide, background: {} })),
     writeFile:   vi.fn(() => Promise.resolve()),
   }
-  return { default: vi.fn(() => mockPptx) }
+  // NOTE: must be a `function`, not an arrow. The real pptxgenjs default export
+  // is a class and exportUtils calls `new pptxgen()`. Vitest 4 forwards `new`
+  // through to the mock implementation, so an arrow function (which is not
+  // constructable) throws "is not a constructor". Returning an object from a
+  // function constructor yields that object, so `new pptxgen()` === mockPptx
+  // and `.mock.results[].value` is still mockPptx.
+  return { default: vi.fn(function () { return mockPptx }) }
 })
 
 // Import after mocks are set up

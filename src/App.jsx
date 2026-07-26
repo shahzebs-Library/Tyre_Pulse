@@ -456,7 +456,7 @@ function MainApp() {
                       <Route path="/ai-cost-monitor"      element={<Safe><FlagRoute flag="ai_tools"><AiCostMonitor /></FlagRoute></Safe>} />
                       <Route path="/ai-administration"    element={<Navigate to="/console/ai-admin" replace />} />
                       <Route path="/gate-pass"            element={<Safe><ModuleRoute moduleKey="gate_pass"><GatePass /></ModuleRoute></Safe>} />
-                      <Route path="/serial-tracker"       element={<Safe><RoleRoute allowed={['Admin']}><SerialTracker /></RoleRoute></Safe>} />
+                      <Route path="/serial-tracker"       element={<Safe><RoleRoute allowed={['Admin']} moduleKey="serial_tracker"><SerialTracker /></RoleRoute></Safe>} />
                       <Route path="/work-orders"          element={<Safe><ModuleRoute moduleKey="work_orders"><WorkOrders /></ModuleRoute></Safe>} />
                       <Route path="/workshop-live"        element={<Safe><RoleRoute allowed={['Admin','Manager','Director']}><WorkshopLive /></RoleRoute></Safe>} />
                       <Route path="/workshop-absence"     element={<Safe><RoleRoute allowed={['Admin','Manager','Director']}><WorkshopAbsence /></RoleRoute></Safe>} />

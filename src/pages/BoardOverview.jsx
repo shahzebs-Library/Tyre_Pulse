@@ -62,7 +62,11 @@ const monthLabel = (key) => {
 }
 
 const num = (v) => (v == null || !Number.isFinite(Number(v)) ? 'N/A' : Number(v).toLocaleString('en-US'))
-const money = (v) => (v == null || !Number.isFinite(Number(v)) ? 'N/A' : formatCurrency(Number(v)))
+// Takes the ACTIVE currency: the fleet spans countries with different currencies
+// (KSA SAR, UAE AED, Egypt EGP), so omitting it silently labelled every figure SAR.
+const money = (v, currency) => (
+  v == null || !Number.isFinite(Number(v)) ? 'N/A' : formatCurrency(Number(v), currency)
+)
 const pct = (v) => (v == null || !Number.isFinite(Number(v)) ? 'N/A' : `${Number(v)}%`)
 
 const chartBase = (legend = false) => ({
@@ -130,8 +134,8 @@ export default function BoardOverview() {
       const [tyresRes, inspRes, actionsQ, fleetQ, accRes, workOrders, stock] = await Promise.all([
         fetchAllPages((from, to) => listKpiTyreRecords({ country: activeCountry, from, to })),
         fetchAllPages((from, to) => listKpiInspections({ country: activeCountry, from, to })),
-        listKpiCorrectiveActions({ country: activeCountry }),
-        listKpiFleet(),
+        fetchAllPages((from, to) => listKpiCorrectiveActions({ country: activeCountry, from, to })),
+        fetchAllPages((from, to) => listKpiFleet({ country: activeCountry, from, to })),
         listAllAccidentsForPage({ country: activeCountry }),
         listWorkOrdersForPage({ country: activeCountry }).catch(() => []),
         listStockRecords({ country: activeCountry }).catch(() => []),
@@ -177,6 +181,18 @@ export default function BoardOverview() {
 
   const costTotals = useMemo(() => splitTotals(cost?.byMonth || []), [cost])
   const costHeadline = useMemo(() => pickCost(costMode, costTotals), [costMode, costTotals])
+
+  // AUTHORITATIVE tyre spend = the classified expense grid (loadCostSplit),
+  // never a sum of tyre_records.cost_per_tyre: a large share of tyre rows carry
+  // no price, so that sum understates real tyre spend several-fold. This page
+  // already renders the grid figure in its Tyres-vs-Maintenance panel, so using
+  // the engine's cost_per_tyre fallback for the headline KPI put two different
+  // numbers for the SAME fact on one screen. Falls back to the engine value only
+  // when the grid has nothing for this scope.
+  const tyreSpendValue = useMemo(
+    () => (costTotals.tyre > 0 ? costTotals.tyre : (data?.kpis?.tyreSpend ?? null)),
+    [costTotals, data],
+  )
   const costChart = useMemo(() => {
     const rows = cost?.byMonth || []
     return {
@@ -204,9 +220,9 @@ export default function BoardOverview() {
       const k = data.kpis
       const tiles = [
         ['Fleet vehicles', num(k.fleetSize)], ['Tyres tracked', num(k.tyresTracked)],
-        ['Fleet avg CPK', money(k.fleetAvgCpk)], ['Tyre spend', money(k.tyreSpend)],
+        ['Fleet avg CPK', money(k.fleetAvgCpk, activeCurrency)], ['Tyre spend', money(tyreSpendValue, activeCurrency)],
         ['Accidents', num(k.accidents)], ['Open accidents', num(k.openAccidents)],
-        ['Claims value', money(k.claimed)], ['Recovered', money(k.recovered)],
+        ['Claims value', money(k.claimed, activeCurrency)], ['Recovered', money(k.recovered, activeCurrency)],
         ['Inspections', num(k.inspections)], ['Work orders open', num(k.workOrdersOpen)],
       ]
       let y = 30
@@ -313,12 +329,13 @@ export default function BoardOverview() {
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
                 <Kpi label="Fleet vehicles" value={num(k.fleetSize)} accent={ACCENTS.primary} />
                 <Kpi label="Tyres tracked" value={num(k.tyresTracked)} accent={ACCENTS.info} />
-                <Kpi label="Fleet avg CPK" value={money(k.fleetAvgCpk)} accent={ACCENTS.good} />
-                <Kpi label="Tyre spend" value={money(k.tyreSpend)} accent={ACCENTS.watch} />
+                <Kpi label="Fleet avg CPK" value={money(k.fleetAvgCpk, activeCurrency)} accent={ACCENTS.good} />
+                <Kpi label="Tyre spend" value={money(tyreSpendValue, activeCurrency)} accent={ACCENTS.watch}
+                  sub={costTotals.tyre > 0 ? 'expense grid, last 12 mo' : 'from tyre records'} />
                 <Kpi label="Failure rate" value={pct(k.failureRatePct)} accent={ACCENTS.risk} />
                 <Kpi label="Accidents" value={num(k.accidents)} accent={ACCENTS.risk} sub={`${num(k.openAccidents)} open`} />
-                <Kpi label="Claims value" value={money(k.claimed)} accent={ACCENTS.primary} sub={`${money(k.recovered)} recovered`} />
-                <Kpi label="Net exposure" value={money(k.netExposure)} accent={ACCENTS.watch} />
+                <Kpi label="Claims value" value={money(k.claimed, activeCurrency)} accent={ACCENTS.primary} sub={`${money(k.recovered, activeCurrency)} recovered`} />
+                <Kpi label="Net exposure" value={money(k.netExposure, activeCurrency)} accent={ACCENTS.watch} />
                 <Kpi label="Inspections" value={num(k.inspections)} accent={ACCENTS.info} sub={k.inspectionCompliancePct != null ? `${pct(k.inspectionCompliancePct)} compliant` : undefined} />
                 <Kpi label="Work orders open" value={num(k.workOrdersOpen)} accent={ACCENTS.good} sub={`${num(k.workOrdersOverdue)} overdue`} />
               </div>

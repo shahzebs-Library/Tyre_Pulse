@@ -67,8 +67,18 @@ function SearchSkeleton() {
 }
 
 export default function SerialTracker() {
-  const { profile, isSuperAdmin } = useAuth()
-  const isAdmin = isSuperAdmin === true || profile?.role === 'Admin'
+  const { profile, isSuperAdmin, grantedModules } = useAuth()
+  // Scrap is a destructive action, so it stays separate from merely reaching this
+  // page. Admin and super-admin always have it; anyone else needs the explicit
+  // 'serial_tracker:scrap' grant, which an admin gives in Console > Access Control
+  // (Serial Tracker > Mark as Scrap / Undo). That lets a data collector such as a
+  // tyre man be given serial SEARCH without the ability to scrap, or both.
+  // Note the database is still the real boundary: the scrap write also has to pass
+  // the tyre_records RLS policies for that user.
+  const canScrap = isSuperAdmin === true
+    || profile?.role === 'Admin'
+    || (typeof grantedModules?.has === 'function' && grantedModules.has('serial_tracker:scrap'))
+  const isAdmin = canScrap
 
   const [activeTab, setActiveTab] = useState('single')
 
@@ -803,7 +813,7 @@ export default function SerialTracker() {
             </div>
             {!isAdmin && (
               <p className="text-xs text-[var(--text-muted)] mt-2 flex items-center gap-1.5">
-                <AlertTriangle size={12} /> Only an Admin can undo a scrap or edit its reason.
+                <AlertTriangle size={12} /> You can view scrapped tyres. Marking, undoing or editing a scrap needs the Mark as Scrap access, which an admin grants in Access Control.
               </p>
             )}
           </div>

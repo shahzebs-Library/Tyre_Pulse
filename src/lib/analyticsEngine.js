@@ -188,7 +188,22 @@ export function recordCost(r) {
   return (r.cost_per_tyre || 0) * (r.qty || 1)
 }
 
-const RISK_WEIGHT = { High: 3, Medium: 1.5, Low: 1, Unknown: 0.5 }
+// 'Critical' is a real persisted risk_level - tyreClassifier assigns it to the
+// WORST failures (blowout, separation). It was missing from this map, so
+// RISK_WEIGHT[r.risk_level] fell through to the `|| 1` default and scored a
+// critical tyre below a Medium one (1.5). It must outrank High.
+const RISK_WEIGHT = { Critical: 4, High: 3, Medium: 1.5, Low: 1, Unknown: 0.5 }
+
+/**
+ * High-risk test used by every failure-rate metric here.
+ *
+ * Failure rate is "High + Critical" (the definition kpiEngine.computeFailureRate
+ * documents and uses). Several metrics in this file previously tested
+ * `risk_level === 'High'` alone, which silently EXCLUDED the most severe
+ * failures - a brand whose tyres all blew out reported a 0% failure rate - and
+ * disagreed with the sibling metrics further down this same file.
+ */
+const isHighRisk = (r) => r?.risk_level === 'High' || r?.risk_level === 'Critical'
 
 /**
  * Compute per-brand metrics from tyre_records
@@ -202,7 +217,7 @@ export function computeBrandMetrics(records, _defaultCost) {
     const count      = recs.length
     const totalCost  = sum(recs.map(r => (r.cost_per_tyre || 0) * (r.qty || 1)))
     const avgCost    = count ? totalCost / count : 0
-    const highRisk   = recs.filter(r => r.risk_level === 'High').length
+    const highRisk   = recs.filter(isHighRisk).length
     const failureRate = count ? (highRisk / count) * 100 : 0
 
     // Top failure category
@@ -243,7 +258,7 @@ export function computeSiteMetrics(records, _defaultCost) {
     const count     = recs.length
     const totalCost = sum(recs.map(r => (r.cost_per_tyre || 0) * (r.qty || 1)))
     const avgCost   = count ? totalCost / count : 0
-    const highRisk  = recs.filter(r => r.risk_level === 'High').length
+    const highRisk  = recs.filter(isHighRisk).length
     const highRiskPct = count ? (highRisk / count) * 100 : 0
 
     const catCounts  = countBy(recs.filter(r => r.category), r => r.category)
@@ -277,7 +292,7 @@ export function computeAssetMetrics(records, _defaultCost) {
   return Object.entries(byAsset).map(([assetNo, recs]) => {
     const count     = recs.length
     const totalCost = sum(recs.map(r => (r.cost_per_tyre || 0) * (r.qty || 1)))
-    const highRisk  = recs.filter(r => r.risk_level === 'High').length
+    const highRisk  = recs.filter(isHighRisk).length
 
     const dates = recs
       .map(r => r.issue_date ? new Date(r.issue_date) : null)
@@ -332,7 +347,7 @@ export function computeMonthlyKpiActuals(records, actions, month, _defaultCost) 
   })
 
   const totalCost    = sum(monthRecs.map(r => (r.cost_per_tyre || 0) * (r.qty || 1)))
-  const highRiskCount = monthRecs.filter(r => r.risk_level === 'High').length
+  const highRiskCount = monthRecs.filter(isHighRisk).length
   const count        = monthRecs.length
 
   const overdueActions = actions.filter(a => {
@@ -372,8 +387,8 @@ export function detectRiskSpike(records, windowSize = 50) {
   const recent = sorted.slice(0, windowSize)
   const prior  = sorted.slice(windowSize, windowSize * 2)
 
-  const recentHR = recent.filter(r => r.risk_level === 'High').length / windowSize * 100
-  const priorHR  = prior.filter(r => r.risk_level === 'High').length / windowSize * 100
+  const recentHR = recent.filter(isHighRisk).length / windowSize * 100
+  const priorHR  = prior.filter(isHighRisk).length / windowSize * 100
   const deltaPct = priorHR === 0 ? recentHR : ((recentHR - priorHR) / priorHR) * 100
 
   return {
@@ -442,7 +457,7 @@ export function computeCountryMetrics(records, actions = [], _defaultCost) {
     const recs      = records.filter(r => (r.country || 'KSA') === country)
     const count     = recs.length
     const totalCost = sum(recs.map(r => (r.cost_per_tyre || 0) * (r.qty || 1)))
-    const highRisk  = recs.filter(r => r.risk_level === 'High' || r.risk_level === 'Critical').length
+    const highRisk  = recs.filter(isHighRisk).length
     const highRiskPct = count ? (highRisk / count) * 100 : 0
 
     const cpkValues = recs.map(r => recordCpk(r)).filter(v => v !== null)
@@ -495,7 +510,7 @@ export function computeCpkAnalysis(records) {
 
 export function computeFleetHealthScore(records) {
   if (!records.length) return 0
-  const highRiskRate = records.filter(r => r.risk_level==='High'||r.risk_level==='Critical').length / records.length
+  const highRiskRate = records.filter(isHighRisk).length / records.length
   const blowoutRate = records.filter(r => r.category==='Blowout').length / records.length
   return Math.max(0, Math.min(100, Math.round(100 - highRiskRate*40 - blowoutRate*30)))
 }
@@ -509,7 +524,7 @@ export function computeSeasonalTrends(records) {
     if (!byMonth[m]) byMonth[m] = { count:0, cost:0, highRisk:0, blowouts:0 }
     byMonth[m].count++
     byMonth[m].cost += recordCost(r)
-    if (r.risk_level==='High'||r.risk_level==='Critical') byMonth[m].highRisk++
+    if (isHighRisk(r)) byMonth[m].highRisk++
     if (r.category==='Blowout') byMonth[m].blowouts++
   })
   return Array.from({length:12},(_,i) => {

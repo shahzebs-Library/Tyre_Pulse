@@ -56,6 +56,72 @@ const monthLabel = (key) => {
 
 const num = (v) => (v == null || !Number.isFinite(Number(v)) ? 'N/A' : Number(v).toLocaleString('en-US'))
 
+/**
+ * Currency for one country (KSA=SAR, UAE=AED, Egypt=EGP), falling back to the
+ * app currency for anything unmapped. Single source: COUNTRY_CURRENCY.
+ */
+export function currencyForCountry(country, fallback = 'SAR') {
+  return COUNTRY_CURRENCY[country] || fallback
+}
+
+/** Currency-aware money formatter; a missing or non-numeric value renders "N/A". */
+export const moneyIn = (currency) => (v) => (
+  v == null || !Number.isFinite(Number(v)) ? 'N/A' : formatCurrency(Number(v), currency, 0)
+)
+
+/**
+ * Rows + columns for the Excel export.
+ *
+ * Single country: the legacy Store / Top Item / Month rows with one Spend column,
+ * in that country's currency (unchanged).
+ * All countries: per-country rows only (country total, category split and the
+ * per-site spend), with ONE COLUMN PER CURRENCY, so SAR, AED and EGP never land
+ * in the same column and can never be added into one meaningless total.
+ *
+ * @param {{isAll:boolean, currency?:string, snap?:Object|null,
+ *          byCountry?:Array<Object>, siteGroups?:Array<Object>}} args
+ * @returns {{rows:Array<Object>, columns:string[], headers:string[]}}
+ */
+export function buildExpenseExport({ isAll, currency = 'SAR', snap = null, byCountry = [], siteGroups = [] } = {}) {
+  if (!isAll) {
+    const s = snap && snap.ok ? snap : null
+    const rows = []
+    ;(s?.by_store || []).forEach((r) => rows.push({ section: 'Store', name: r.label, spend: Number(r.spend) || 0, count: '' }))
+    ;(s?.top_items || []).forEach((r) => rows.push({ section: 'Top Item', name: r.label, spend: Number(r.spend) || 0, count: Number(r.n) || '' }))
+    ;(s?.monthly || []).forEach((r) => rows.push({ section: 'Month', name: monthLabel(r.m), spend: Number(r.total) || 0, count: '' }))
+    return { rows, columns: ['section', 'name', 'spend', 'count'], headers: ['Section', 'Name', 'Spend', 'Count'] }
+  }
+
+  const currencies = []
+  const trackCurrency = (cur) => { if (cur && !currencies.includes(cur)) currencies.push(cur); return cur }
+  const rows = []
+  const push = (country, cur, section, name, amount, lines) => rows.push({
+    country: country || 'N/A',
+    section,
+    name: name == null || name === '' ? 'N/A' : name,
+    [cur]: Number(amount) || 0,
+    count: lines == null || lines === '' ? '' : Number(lines) || 0,
+  })
+
+  ;(byCountry || []).forEach((c) => {
+    const cur = trackCurrency(currencyForCountry(c.country, currency))
+    push(c.country, cur, 'Country total', c.country, c.total, c.lines)
+    push(c.country, cur, 'Category', 'Tyres', c.tyre, '')
+    push(c.country, cur, 'Category', 'Spare parts', c.spare, '')
+    push(c.country, cur, 'Category', 'Oil', c.oil, '')
+  })
+  ;(siteGroups || []).forEach((g) => {
+    const cur = trackCurrency(g.currency || currencyForCountry(g.country, currency))
+    ;(g.rows || []).forEach((r) => push(g.country, cur, 'Site', r.site, r.total, r.lines))
+  })
+
+  return {
+    rows,
+    columns: ['country', 'section', 'name', ...currencies, 'count'],
+    headers: ['Country', 'Section', 'Name', ...currencies, 'Count'],
+  }
+}
+
 const chartBase = (legend = false) => ({
   responsive: true,
   maintainAspectRatio: false,
@@ -95,13 +161,67 @@ function ChartCard({ title, children, refCb }) {
   )
 }
 
+/** One country's (or the single active scope's) per-site expense table. */
+function SiteTable({ group, canMap, onSave }) {
+  const money = moneyIn(group.currency)
+  return (
+    <div className="card overflow-x-auto">
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="text-left text-[var(--text-muted)] border-b border-[var(--hairline)]">
+            <th className="py-2 pr-3 font-semibold">Site</th>
+            <th className="py-2 px-3 font-semibold text-right">Tyre</th>
+            <th className="py-2 px-3 font-semibold text-right">Spare</th>
+            <th className="py-2 px-3 font-semibold text-right">Oil</th>
+            <th className="py-2 px-3 font-semibold text-right">Total</th>
+            <th className="py-2 pl-3 font-semibold text-right">Lines</th>
+          </tr>
+        </thead>
+        <tbody>
+          {(group.rows || []).map((r, i) => {
+            const site = String(r.site || '')
+            const unmapped = site.startsWith('Unmapped: ')
+            const storeCode = unmapped ? site.slice('Unmapped: '.length) : null
+            return (
+              <tr key={`${site}-${i}`} className="border-b border-[var(--hairline)]/60">
+                <td className="py-2 pr-3">
+                  {unmapped ? (
+                    <UnmappedCell
+                      storeCode={storeCode}
+                      country={group.country}
+                      canMap={canMap}
+                      siteOptions={group.siteOptions}
+                      onSave={onSave}
+                    />
+                  ) : (
+                    <span className="text-[var(--text-primary)] font-medium">{site}</span>
+                  )}
+                </td>
+                <td className="py-2 px-3 text-right text-[var(--text-secondary)]">{money(r.tyre)}</td>
+                <td className="py-2 px-3 text-right text-[var(--text-secondary)]">{money(r.spare)}</td>
+                <td className="py-2 px-3 text-right text-[var(--text-secondary)]">{money(r.oil)}</td>
+                <td className="py-2 px-3 text-right font-semibold text-[var(--text-primary)]">{money(r.total)}</td>
+                <td className="py-2 pl-3 text-right text-[var(--text-muted)]">{num(r.lines)}</td>
+              </tr>
+            )
+          })}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
 /**
- * Per-site expense table. Rows whose site starts with "Unmapped: " expose an
- * inline site picker + Save (elevated users) so an admin can map the store_code
- * to a governed site; the total then rolls up under that site on refresh.
+ * Per-site expense. One table per scope group: a single country scope has one
+ * group, the "All countries" scope has one group PER COUNTRY, each in its own
+ * currency, because SAR, AED and EGP cannot be summed into one column.
+ * Rows whose site starts with "Unmapped: " expose an inline site picker + Save
+ * (elevated users) so an admin can map the store_code to a governed site; the
+ * total then rolls up under that site on refresh.
  */
-function BySitePanel({ rows, money, canMap, siteOptions, onSave, error }) {
-  const list = Array.isArray(rows) ? rows : []
+function BySitePanel({ groups, canMap, onSave, error }) {
+  const list = (Array.isArray(groups) ? groups : []).filter((g) => (g?.rows || []).length > 0)
+  const multi = list.length > 1
   return (
     <section className="space-y-3">
       <h2 className="text-sm font-bold uppercase tracking-wider text-[var(--text-secondary)] flex items-center gap-2">
@@ -110,62 +230,37 @@ function BySitePanel({ rows, money, canMap, siteOptions, onSave, error }) {
       <p className="text-xs text-[var(--text-tertiary)]">
         Store codes from the expense grid are mapped to sites. Rows marked "Unmapped" are store codes without a site mapping yet
         {canMap ? '; pick a site and Save to map them.' : '.'}
+        {multi ? ' Each country is listed separately in its own currency and is never summed with another country.' : ''}
       </p>
       {error && <div className="card border border-red-700/50 text-red-300 text-sm">{error}</div>}
       {list.length === 0 ? (
         <div className="card text-center text-[var(--text-muted)] py-8">No per-site expense for the selected filters.</div>
       ) : (
-        <div className="card overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="text-left text-[var(--text-muted)] border-b border-[var(--hairline)]">
-                <th className="py-2 pr-3 font-semibold">Site</th>
-                <th className="py-2 px-3 font-semibold text-right">Tyre</th>
-                <th className="py-2 px-3 font-semibold text-right">Spare</th>
-                <th className="py-2 px-3 font-semibold text-right">Oil</th>
-                <th className="py-2 px-3 font-semibold text-right">Total</th>
-                <th className="py-2 pl-3 font-semibold text-right">Lines</th>
-              </tr>
-            </thead>
-            <tbody>
-              {list.map((r, i) => {
-                const site = String(r.site || '')
-                const unmapped = site.startsWith('Unmapped: ')
-                const storeCode = unmapped ? site.slice('Unmapped: '.length) : null
-                return (
-                  <tr key={`${site}-${i}`} className="border-b border-[var(--hairline)]/60">
-                    <td className="py-2 pr-3">
-                      {unmapped ? (
-                        <UnmappedCell storeCode={storeCode} canMap={canMap} siteOptions={siteOptions} onSave={onSave} />
-                      ) : (
-                        <span className="text-[var(--text-primary)] font-medium">{site}</span>
-                      )}
-                    </td>
-                    <td className="py-2 px-3 text-right text-[var(--text-secondary)]">{money(r.tyre)}</td>
-                    <td className="py-2 px-3 text-right text-[var(--text-secondary)]">{money(r.spare)}</td>
-                    <td className="py-2 px-3 text-right text-[var(--text-secondary)]">{money(r.oil)}</td>
-                    <td className="py-2 px-3 text-right font-semibold text-[var(--text-primary)]">{money(r.total)}</td>
-                    <td className="py-2 pl-3 text-right text-[var(--text-muted)]">{num(r.lines)}</td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
-        </div>
+        list.map((g) => (
+          <div key={g.country || 'scope'} className="space-y-2">
+            {multi && (
+              <h3 className="text-xs font-semibold text-[var(--text-secondary)] flex items-center gap-2">
+                {g.country || 'N/A'}
+                <span className="text-[11px] px-2 py-0.5 rounded bg-[var(--surface-2,#1e293b)] text-[var(--text-tertiary)]">{g.currency}</span>
+              </h3>
+            )}
+            <SiteTable group={g} canMap={canMap} onSave={onSave} />
+          </div>
+        ))
       )}
     </section>
   )
 }
 
 /** Inline "Unmapped: <store_code>" cell with a site picker + Save (elevated only). */
-function UnmappedCell({ storeCode, canMap, siteOptions, onSave }) {
+function UnmappedCell({ storeCode, country, canMap, siteOptions, onSave }) {
   const [value, setValue] = useState('')
   const [saving, setSaving] = useState(false)
-  const listId = `sites-${storeCode}`
+  const listId = `sites-${country || 'all'}-${storeCode}`
   const save = async () => {
     if (!value.trim()) return
     setSaving(true)
-    try { await onSave(storeCode, value.trim()) } finally { setSaving(false) }
+    try { await onSave(storeCode, value.trim(), country) } finally { setSaving(false) }
   }
   return (
     <div className="flex items-center gap-2 flex-wrap">
@@ -202,9 +297,8 @@ export default function ExpenseReport() {
   const { profile, isSuperAdmin } = useAuth()
   const canMap = isSuperAdmin === true || ['Admin', 'Manager', 'Director'].includes(profile?.role)
   const [snap, setSnap] = useState(null)
-  const [bySite, setBySite] = useState([])
+  const [siteGroups, setSiteGroups] = useState([])
   const [bySiteErr, setBySiteErr] = useState('')
-  const [siteOptions, setSiteOptions] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [refreshing, setRefreshing] = useState(false)
@@ -227,7 +321,7 @@ export default function ExpenseReport() {
   const chartRefs = useRef({})
   const setRef = (key) => (el) => { chartRefs.current[key] = el }
 
-  const money = useCallback((v) => (v == null || !Number.isFinite(Number(v)) ? 'N/A' : formatCurrency(Number(v), activeCurrency, 0)), [activeCurrency])
+  const money = useMemo(() => moneyIn(activeCurrency), [activeCurrency])
 
   const load = useCallback(async () => {
     setRefreshing(true); setError('')
@@ -240,29 +334,37 @@ export default function ExpenseReport() {
       setSnap(res && res.ok ? res : { ok: false })
       // On the "All countries" view, also load each country's total in its OWN
       // currency (SAR / AED / EGP) so they are shown side by side, never blended.
+      let countries = []
       if (isAll) {
         const rows = await getExpenseByCountry({ from: from || undefined, to: to || undefined }).catch(() => [])
         setByCountry(rows)
+        countries = rows.map((r) => r.country).filter(Boolean)
       } else {
         setByCountry([])
       }
       // Per-site expense (store_code -> site map). Never throws -> [].
+      // On the All view this is loaded ONCE PER COUNTRY so each table carries its
+      // own currency; a single un-scoped call would sum SAR + AED + EGP per site.
       setBySiteErr('')
-      const siteRows = await getExpenseBySite({
-        country: activeCountry && activeCountry !== 'All' ? activeCountry : undefined,
-        from: from || undefined,
-        to: to || undefined,
-      })
-      setBySite(siteRows)
-      const opts = await listSites({ country: activeCountry && activeCountry !== 'All' ? activeCountry : undefined }).catch(() => [])
-      setSiteOptions(opts)
+      const scopes = isAll
+        ? countries.map((c) => ({ country: c, currency: currencyForCountry(c, activeCurrency) }))
+        : [{ country: activeCountry, currency: activeCurrency }]
+      const groups = await Promise.all(scopes.map(async (s) => {
+        const scoped = s.country && s.country !== 'All' ? s.country : undefined
+        const [rows, opts] = await Promise.all([
+          getExpenseBySite({ country: scoped, from: from || undefined, to: to || undefined }),
+          listSites({ country: scoped }).catch(() => []),
+        ])
+        return { ...s, rows, siteOptions: opts }
+      }))
+      setSiteGroups(groups)
       setUpdatedAt(new Date())
     } catch (e) {
       setError(toUserMessage(e, 'Could not load the expense report.'))
     } finally {
       setLoading(false); setRefreshing(false)
     }
-  }, [activeCountry, from, to])
+  }, [activeCountry, activeCurrency, from, to])
 
   useEffect(() => { load() }, [load])
 
@@ -301,9 +403,13 @@ export default function ExpenseReport() {
     }
   }, [snap])
 
+  // Any expense to show/export at all: a country-scoped snapshot with a value, or
+  // (All view) at least one country total. Drives the empty state + export buttons.
+  const hasAny = !!(k && (Number(k.total_expense) || Number(k.lines))) || (isAll && byCountry.length > 0)
+
   // Build the Expense Report PDF doc (mirrors BoardOverview.buildBoardDoc).
   async function buildExpenseDoc() {
-    if (!snap?.ok) return null
+    if (!snap?.ok && !(isAll && byCountry.length)) return null
     const { captureChartOnPaper } = await import('../lib/chartCapture')
     const { default: jsPDF } = await import('jspdf')
     const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
@@ -316,19 +422,41 @@ export default function ExpenseReport() {
     doc.setFontSize(9); doc.setTextColor(100, 116, 139)
     doc.text(`${scope}  |  ${reportDateLabel(new Date())}`, M, 22)
 
-    const tiles = [
-      ['Total expense', money(k.total_expense)], ['Tyres', money(k.tyre_expense)],
-      ['Spare parts', money(k.spare_expense)], ['Oil', money(k.oil_expense)],
-      ['Lines', num(k.lines)], ['Tyres issued', num(k.tyres_issued)],
-    ]
     let y = 30
-    tiles.forEach((tl, i) => {
-      const col = i % 6
-      const x = M + col * ((W - 2 * M) / 6)
-      doc.setTextColor(15, 23, 42); doc.setFontSize(11); doc.text(String(tl[1]), x, y + 6)
-      doc.setTextColor(100, 116, 139); doc.setFontSize(7.5); doc.text(String(tl[0]), x, y + 11)
-    })
-    y += 20
+    if (isAll) {
+      // Never print one blended total: KSA (SAR), UAE (AED) and Egypt (EGP) are
+      // listed separately, each in its own currency.
+      doc.setFontSize(8); doc.setTextColor(100, 116, 139)
+      doc.text('Each country is shown in its own currency. Different currencies are not summed.', M, y)
+      y += 7
+      if (byCountry.length === 0) {
+        doc.setFontSize(9); doc.setTextColor(15, 23, 42)
+        doc.text('Per-country totals are not available for the selected filters.', M, y)
+        y += 8
+      }
+      byCountry.forEach((c) => {
+        const fmt = moneyIn(currencyForCountry(c.country, activeCurrency))
+        doc.setTextColor(15, 23, 42); doc.setFontSize(11)
+        doc.text(`${c.country || 'N/A'}: ${fmt(c.total)}`, M, y)
+        doc.setTextColor(100, 116, 139); doc.setFontSize(7.5)
+        doc.text(`Tyres ${fmt(c.tyre)}  |  Spare ${fmt(c.spare)}  |  Oil ${fmt(c.oil)}  |  ${num(c.lines)} lines`, M, y + 5)
+        y += 13
+      })
+      y += 3
+    } else if (k) {
+      const tiles = [
+        ['Total expense', money(k.total_expense)], ['Tyres', money(k.tyre_expense)],
+        ['Spare parts', money(k.spare_expense)], ['Oil', money(k.oil_expense)],
+        ['Lines', num(k.lines)], ['Tyres issued', num(k.tyres_issued)],
+      ]
+      tiles.forEach((tl, i) => {
+        const col = i % 6
+        const x = M + col * ((W - 2 * M) / 6)
+        doc.setTextColor(15, 23, 42); doc.setFontSize(11); doc.text(String(tl[1]), x, y + 6)
+        doc.setTextColor(100, 116, 139); doc.setFontSize(7.5); doc.text(String(tl[0]), x, y + 11)
+      })
+      y += 20
+    }
 
     const order = ['category', 'store', 'asset', 'item', 'trend']
     let placed = 0
@@ -352,7 +480,7 @@ export default function ExpenseReport() {
   }
 
   async function exportPdf() {
-    if (!snap?.ok) return
+    if (!hasAny) return
     setExporting(true)
     try {
       const built = await buildExpenseDoc()
@@ -365,21 +493,28 @@ export default function ExpenseReport() {
   }
 
   async function exportExcel() {
-    if (!snap?.ok) return
+    if (!hasAny) return
     setExporting(true)
     try {
       const company = appSettings?.company_name || 'TyrePulse'
-      const rows = []
-      ;(snap.by_store || []).forEach((r) => rows.push({ section: 'Store', name: r.label, spend: Number(r.spend) || 0, count: '' }))
-      ;(snap.top_items || []).forEach((r) => rows.push({ section: 'Top Item', name: r.label, spend: Number(r.spend) || 0, count: Number(r.n) || '' }))
-      ;(snap.monthly || []).forEach((r) => rows.push({ section: 'Month', name: monthLabel(r.m), spend: Number(r.total) || 0, count: '' }))
+      // On the All view the export carries a Country column and one amount column
+      // per currency, so SAR / AED / EGP are never added into a single total.
+      const { rows, columns, headers } = buildExpenseExport({
+        isAll, currency: activeCurrency, snap, byCountry, siteGroups,
+      })
       await exportToExcel(
         rows,
-        ['section', 'name', 'spend', 'count'],
-        ['Section', 'Name', 'Spend', 'Count'],
+        columns,
+        headers,
         reportFileName(company, 'Expense Report', reportDateLabel()),
         'Expenses',
-        { currency: activeCurrency, company, title: `${company} Expense Report` },
+        {
+          currency: activeCurrency,
+          company,
+          title: `${company} Expense Report`,
+          // Single-country export is unchanged; the All view states its scope.
+          ...(isAll ? { meta: { Scope: 'All countries - each country in its own currency, not summed' } } : {}),
+        },
       )
     } catch (e) {
       setError(toUserMessage(e, 'Export failed. Please try again.'))
@@ -388,15 +523,16 @@ export default function ExpenseReport() {
     }
   }
 
-  const hasAny = !!(k && (Number(k.total_expense) || Number(k.lines)))
-
-  // Save one store_code -> site mapping then refresh the by-site panel.
-  const saveMapping = useCallback(async (storeCode, site) => {
+  // Save one store_code -> site mapping then refresh the by-site panel. The
+  // country comes from the row's own group so an All-view mapping is still
+  // stored against the right country (store_site_map is keyed per country).
+  const saveMapping = useCallback(async (storeCode, site, country) => {
     if (!site) return
     setBySiteErr('')
     try {
+      const scope = country || activeCountry
       await setStoreSiteMap({
-        country: activeCountry && activeCountry !== 'All' ? activeCountry : undefined,
+        country: scope && scope !== 'All' ? scope : undefined,
         store_code: storeCode,
         site,
       })
@@ -413,7 +549,9 @@ export default function ExpenseReport() {
       {/* Section toggles + actions */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-2 flex-wrap">
-          {SECTIONS.map(([key, label, Icon]) => (
+          {/* On the All view only the per-site section renders (see the note
+              below), so the chart/KPI toggles would be dead controls. */}
+          {SECTIONS.filter(([key]) => !isAll || key === 'bysite').map(([key, label, Icon]) => (
             <button
               key={key}
               onClick={() => toggle(key)}
@@ -487,7 +625,7 @@ export default function ExpenseReport() {
               </p>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                 {byCountry.map((c) => {
-                  const cur = COUNTRY_CURRENCY[c.country] || 'SAR'
+                  const cur = currencyForCountry(c.country, activeCurrency)
                   const fmt = (v) => formatCurrency(Number(v) || 0, cur, 0)
                   return (
                     <div key={c.country} className="card p-4">
@@ -509,8 +647,23 @@ export default function ExpenseReport() {
             </section>
           )}
 
+          {/* Why the charts are not drawn on the All-countries view. Every chart
+              below sums line_cost across countries, which would put SAR, AED and
+              EGP on one axis - so they are shown per country instead. */}
+          {isAll && (
+            <div className="card">
+              <p className="text-sm font-semibold text-[var(--text-primary)]">Charts are shown per country</p>
+              <p className="mt-1 text-xs text-[var(--text-tertiary)]">
+                KSA (SAR), UAE (AED) and Egypt (EGP) use different currencies, so spend cannot be summed into one
+                chart or one total. Pick a single country in the country selector to see spend by category, store,
+                asset, item and month. The per-country totals above and the spend by site below are each shown in
+                their own currency.
+              </p>
+            </div>
+          )}
+
           {/* Categories */}
-          {sections.categories && (
+          {sections.categories && !isAll && (
             <section className="space-y-3">
               <h2 className="text-sm font-bold uppercase tracking-wider text-[var(--text-secondary)] flex items-center gap-2"><PieChart size={15} /> Spend by category</h2>
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -520,7 +673,7 @@ export default function ExpenseReport() {
           )}
 
           {/* Stores + Assets */}
-          {(sections.sites || sections.assets) && (
+          {(sections.sites || sections.assets) && !isAll && (
             <section className="space-y-3">
               <h2 className="text-sm font-bold uppercase tracking-wider text-[var(--text-secondary)] flex items-center gap-2"><Building2 size={15} /> Spend by store and asset</h2>
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -530,20 +683,18 @@ export default function ExpenseReport() {
             </section>
           )}
 
-          {/* By site (store_code -> site map) */}
+          {/* By site (store_code -> site map). One table per country on the All view. */}
           {sections.bysite && (
             <BySitePanel
-              rows={bySite}
-              money={money}
+              groups={siteGroups}
               canMap={canMap}
-              siteOptions={siteOptions}
               onSave={saveMapping}
               error={bySiteErr}
             />
           )}
 
           {/* Top Items */}
-          {sections.items && (
+          {sections.items && !isAll && (
             <section className="space-y-3">
               <h2 className="text-sm font-bold uppercase tracking-wider text-[var(--text-secondary)] flex items-center gap-2"><Package size={15} /> Top items</h2>
               <div className="grid grid-cols-1 gap-4">
@@ -553,7 +704,7 @@ export default function ExpenseReport() {
           )}
 
           {/* Trend */}
-          {sections.trend && (
+          {sections.trend && !isAll && (
             <section className="space-y-3">
               <h2 className="text-sm font-bold uppercase tracking-wider text-[var(--text-secondary)] flex items-center gap-2"><TrendingUp size={15} /> Monthly expense trend</h2>
               <div className="grid grid-cols-1 gap-4">

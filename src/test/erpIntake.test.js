@@ -172,3 +172,32 @@ describe('intakeSheet', () => {
     expect(res.noKey).toBe(0)
   })
 })
+
+// The customer's source sheets DO carry a tyre brand column, but the Monthly
+// Tyres mapper never read it, so tyre_records.brand landed blank for every tyre
+// loaded through that path (mapCombined already mapped it). These lock the fix
+// in, including the no-op behaviour when the column is genuinely absent.
+describe('intakeSheet - monthly tyres brand mapping', () => {
+  const withBrand = (headerCell) => ([
+    ['', '', '', '', '', 'MONTHLY TYRES ', '', ''],
+    ['', 'DATE FROM', ': 02 July 2026', '', '', '', '', ''],
+    ['Job Card No.', 'VEH.NO', 'VEH TYPE/CATEGORY', 'ITEM/TYRE', 'TYRE POSITION', 'TYRE No.',
+      headerCell, 'TYRE FIX DATE', 'FIXED KM', 'TYRE REMOVED DATE', 'REMOVED KM', 'REASON'],
+    ['GCKR/JC/0131/0726', 'TM556', 'TR-MIXER', '315/80 R 22.5', 'RHF1', 'K507B403553',
+      'Double Coin', '02-07-2026', '143067.00', '', '', ''],
+  ])
+
+  it('maps the brand column under each accepted header spelling', () => {
+    for (const header of ['TYRE BRAND', 'tyre_brand', 'Brand']) {
+      const res = intakeSheet(withBrand(header), { country: 'KSA' })
+      expect(res.type).toBe(REPORT_TYPES.MONTHLY_TYRES)
+      expect(res.rows[0].brand).toBe('Double Coin')
+    }
+  })
+
+  it('leaves brand null (never throws) when the sheet has no brand column', () => {
+    const res = intakeSheet(TYRE_AOA, { country: 'KSA' })
+    expect(res.type).toBe(REPORT_TYPES.MONTHLY_TYRES)
+    expect(res.rows[0].brand).toBeNull()
+  })
+})

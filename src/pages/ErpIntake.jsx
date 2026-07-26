@@ -149,13 +149,14 @@ export default function ErpIntake() {
         if (det.type === 'grid') {
           const g = rowsFromSheet(aoa.slice(det.headerIndex), { country })
           const rows = g.rows || []
-          // Grid path: rowsFromSheet strips blank + no-key rows only; footer totals that
-          // still carry a value are kept and classified server-side (no footer strip here).
+          // Grid path: rowsFromSheet drops blank + footer rows (same isFooterRow helper as
+          // every other branch) and flags no-key rows, so a GRAND TOTAL line can never be
+          // imported as an expense line and counted a second time.
           const accounting = {
             read: g.read || 0,
             mapped: rows.length,
             noKey: g.noKey || 0,
-            footer: 0,
+            footer: g.footerRows || 0,
             blank: g.blankRows || 0,
           }
           found.push({

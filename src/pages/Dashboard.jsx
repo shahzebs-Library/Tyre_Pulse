@@ -2,6 +2,7 @@ import { useEffect, useState, useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { dashboard } from '../lib/api'
+import { fetchAllPages } from '../lib/fetchAll'
 import { loadPmDashboard } from '../lib/api/pmPrograms'
 import { loadWorkshopKpis } from '../lib/api/workshopLive'
 import { loadCostSplit } from '../lib/api/costSummary'
@@ -279,7 +280,9 @@ export default function Dashboard() {
       // Null-safe country filter (behind the service layer) never silently
       // drops uncategorised rows; full-fleet aggregates come from the RPC.
       const [tyreRes, stockRes, actionRes, recentRes, openActRes, summaryRes] = await Promise.all([
-        dashboard.listDashboardTyres({ country: activeCountry, from: dateFrom, to: dateTo }),
+        fetchAllPages((rangeFrom, rangeTo) =>
+          dashboard.listDashboardTyres({ country: activeCountry, from: dateFrom, to: dateTo, rangeFrom, rangeTo })
+        , { max: 200000 }),
         dashboard.listDashboardStock({ country: activeCountry }),
         dashboard.listDashboardActions({ country: activeCountry }),
         dashboard.listDashboardRecentTyres({ country: activeCountry }),

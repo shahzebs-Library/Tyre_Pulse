@@ -3,7 +3,7 @@
  * (no SELECT *); null-safe country scoping. Additive only - mirrors
  * assets.js / tyres.js.
  */
-import { supabase, unwrap, applyCountry, ServiceError } from './_client'
+import { supabase, unwrap, applyCountry, fetchAllPages, ServiceError } from './_client'
 
 const COLS =
   'id,work_order_no,asset_no,tyre_serial,tyre_position,status,priority,work_type,description,technician_name,workshop_name,site,country,opened_at,started_at,completed_at,target_completion,labour_hours,labour_rate,labour_cost,parts_cost,total_cost,created_at'
@@ -51,19 +51,41 @@ export async function updateWorkOrder(id, patch) {
 }
 
 /**
- * List work orders for the Work Orders page. Returns the full detail-drawer
- * column set (PAGE_COLS), ordered by opened_at (newest first), country-scoped
- * with a strict match ("All" = no filter). No row cap - the page filters,
- * sorts and paginates client-side.
- * @param {{country?:string}} [opts]
+ * Fetch ONE page of work orders for the Work Orders page, newest opened_at
+ * first, country-scoped with a strict match ("All" = no filter). Returns the
+ * raw Supabase `{ data, error }` so it drops straight into `fetchAllPages`.
+ * @param {{country?:string, from:number, to:number}} opts
  */
-export async function listWorkOrdersForPage({ country } = {}) {
+export function listWorkOrdersPage({ country, from, to } = {}) {
   let q = supabase
     .from('work_orders')
     .select(PAGE_COLS)
     .order('opened_at', { ascending: false })
+    .range(from, to)
   if (country && country !== 'All') q = q.eq('country', country)
-  return unwrap(await q)
+  return q
+}
+
+/**
+ * List ALL work orders for the Work Orders page and Board Overview.
+ *
+ * MUST page: PostgREST caps a single response at 1000 rows, and work_orders is
+ * the largest operational table (tens of thousands of rows), so the previous
+ * single un-ranged select silently returned only the newest 1000. Every
+ * consumer treats the result as the complete set - the Work Orders page filters
+ * and sorts it client-side, and Board Overview derives executive KPIs from it -
+ * so the truncation showed management understated counts and costs with no
+ * indication anything was missing.
+ * @param {{country?:string, max?:number}} [opts]
+ * @returns {Promise<any[]>}
+ */
+export async function listWorkOrdersForPage({ country, max = 200000 } = {}) {
+  const { data, error } = await fetchAllPages(
+    (from, to) => listWorkOrdersPage({ country, from, to }),
+    { max },
+  )
+  if (error) throw new ServiceError(error.message, error.code, error)
+  return data
 }
 
 /** Insert a work order (page mutation - no row returned). */

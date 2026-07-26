@@ -81,10 +81,60 @@ async function existingKeys(table, column, country) {
   return keys
 }
 
-/** Tyre lifecycle rows -> tyre_records. Skips serials already stored in this country (merge). */
+/**
+ * Natural key of ONE tyre lifecycle event.
+ *
+ * A tyre is NOT one row: the same serial is fitted, removed and refitted, so it
+ * legitimately appears many times across assets and positions over its life
+ * (the reconciliation RPCs treat "serial on multiple assets" as normal tyre
+ * movement, not a duplicate). Deduping on serial alone therefore discarded
+ * every lifecycle row after the first for any serial already in the table, so
+ * incremental re-imports silently lost fitment history.
+ *
+ * A fitment event is uniquely identified by serial + asset + position + fix
+ * date. Rows carrying an asset but no serial are still keyed (and imported) -
+ * the mapper deliberately emits them, and the old serial-only filter dropped
+ * them on the floor.
+ */
+function tyreLifecycleKey(row) {
+  const norm = (v) => String(v ?? '').trim().toLowerCase()
+  const day = (v) => norm(v).slice(0, 10)
+  return [norm(row.serial_no), norm(row.asset_no), norm(row.position), day(row.issue_date)].join('|')
+}
+
+/** Existing tyre lifecycle keys for this country, paged. */
+async function existingTyreKeys(country) {
+  const keys = new Set()
+  let from = 0
+  const size = 1000
+  for (let guard = 0; guard < 500; guard += 1) {
+    let q = supabase.from('tyre_records').select('serial_no,asset_no,position,issue_date')
+    if (country) q = q.eq('country', country)
+    const { data, error } = await q.range(from, from + size - 1)
+    if (error) throw error
+    if (!data || data.length === 0) break
+    for (const r of data) keys.add(tyreLifecycleKey(r))
+    if (data.length < size) break
+    from += size
+  }
+  return keys
+}
+
+/**
+ * Tyre lifecycle rows -> tyre_records. Merge on the full fitment key, so a
+ * re-uploaded file adds only genuinely new lifecycle events and never
+ * duplicates one, while later fitments of an already-known serial still load.
+ */
 export async function insertTyreRecords(rows = [], { onProgress, country } = {}) {
-  const seen = await existingKeys('tyre_records', 'serial_no', country).catch(() => new Set())
-  const fresh = rows.filter((r) => r.serial_no && !seen.has(String(r.serial_no).trim().toLowerCase()))
+  const seen = await existingTyreKeys(country).catch(() => new Set())
+  const batch = new Set()
+  const fresh = rows.filter((r) => {
+    if (!r.serial_no && !r.asset_no) return false
+    const k = tyreLifecycleKey(r)
+    if (seen.has(k) || batch.has(k)) return false
+    batch.add(k)
+    return true
+  })
   const skipped = rows.length - fresh.length
   const res = fresh.length ? await insertChunked('tyre_records', fresh, onProgress) : { inserted: 0, failed: 0 }
   return { inserted: res.inserted, failed: res.failed || 0, skipped }

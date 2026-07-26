@@ -272,8 +272,12 @@ export default function EngineeringKpi() {
         fetchAllPages((from, to) =>
           engKpiApi.listKpiInspections({ country, from, to })
         , { max: 200000 }),
-        engKpiApi.listKpiCorrectiveActions({ country }),
-        engKpiApi.listKpiFleet(),
+        fetchAllPages((from, to) =>
+          engKpiApi.listKpiCorrectiveActions({ country, from, to })
+        , { max: 200000 }),
+        fetchAllPages((from, to) =>
+          engKpiApi.listKpiFleet({ country, from, to })
+        , { max: 200000 }),
       ])
 
       if (myReq !== reqIdRef.current) return

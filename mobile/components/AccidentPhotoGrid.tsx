@@ -24,7 +24,7 @@ import {
 } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import * as ImagePicker from 'expo-image-picker'
-import * as FileSystem from 'expo-file-system'
+import { File } from 'expo-file-system'
 import { supabase } from '../lib/supabase'
 import { storageRef } from '../lib/storageRefs'
 import { prepareForUpload } from '../lib/photoUpload'
@@ -88,16 +88,21 @@ async function uploadCategorizedPhoto(
     const ext = rawExt === 'heic' || rawExt === 'heif' ? 'jpg' : rawExt
     const contentType = ext === 'png' ? 'image/png' : 'image/jpeg'
 
-    const info = await FileSystem.getInfoAsync(uploadUri)
-    if (info.exists && (info as any).size > MAX_DECODE_BYTES) return null
+    // SDK 54 File API. The legacy FileSystem.getInfoAsync/readAsStringAsync
+    // function API THROWS at runtime in expo-file-system 19 (see
+    // lib/photoUpload.ts readFileBytes) - and because the throw is swallowed by
+    // the catch below, every accident photo was silently dropped instead of
+    // uploaded. Reading bytes directly also skips the intermediate base64
+    // string, so peak memory is lower on low-end devices.
+    const file = new File(uploadUri)
+    if (file.exists && file.size > MAX_DECODE_BYTES) return null
 
     const { data: { user } } = await supabase.auth.getUser()
     const uid = user?.id?.slice(0, 8) ?? 'anon'
     const rand = Math.random().toString(36).slice(2, 6)
     const path = `accidents/${uid}/${CATEGORY_PREFIX[category]}_${Date.now()}_${rand}.${ext}`
 
-    const base64 = await FileSystem.readAsStringAsync(uploadUri, { encoding: 'base64' })
-    const bytes = decodeBase64(base64)
+    const bytes = await file.bytes()
 
     const { error } = await supabase.storage
       .from('accident-photos')
@@ -111,13 +116,6 @@ async function uploadCategorizedPhoto(
     if (__DEV__) console.warn('[AccidentPhotoGrid] upload failed:', err?.message)
     return null
   }
-}
-
-function decodeBase64(base64: string): Uint8Array {
-  const binaryString = atob(base64)
-  const bytes = new Uint8Array(binaryString.length)
-  for (let i = 0; i < binaryString.length; i++) bytes[i] = binaryString.charCodeAt(i)
-  return bytes
 }
 
 function sortEntries(list: AccidentPhotoEntry[]): AccidentPhotoEntry[] {

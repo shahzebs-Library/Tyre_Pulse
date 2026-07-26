@@ -24,7 +24,7 @@ jobs:
       - run: npx vite build
 
   mobile:
-    name: Mobile — typecheck
+    name: Mobile — typecheck + tests
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -38,3 +38,18 @@ jobs:
           cache-dependency-path: mobile/package-lock.json
       - run: npm ci
       - run: npm run typecheck
+      - run: npm test
+
+  analytics:
+    name: Analytics service — tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/analytics
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install -e '.[dev]'
+      - run: python -m pytest -q

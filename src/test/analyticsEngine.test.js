@@ -920,3 +920,40 @@ describe('computeCountryMetrics', () => {
     expect(result[0].avgCpk).toBeNull()
   })
 })
+
+// ── 'Critical' must count as a failure ───────────────────────────────────────
+// tyreClassifier assigns risk_level 'Critical' to the WORST failures (blowout,
+// separation). These metrics used to test `risk_level === 'High'` alone, so the
+// most severe failures were excluded from every failure rate - a brand whose
+// tyres all blew out reported 0%. kpiEngine.computeFailureRate defines failure
+// rate as High + Critical; these lock this file to the same definition.
+describe('risk classification includes Critical', () => {
+  const recs = (level, n) =>
+    Array.from({ length: n }, () => ({
+      brand: 'Double Coin', site: 'NHC', risk_level: level, cost_per_tyre: 100, qty: 1,
+    }))
+
+  it('computeBrandMetrics counts Critical as high risk', () => {
+    const [row] = computeBrandMetrics([...recs('Critical', 2), ...recs('Low', 2)])
+    expect(row.highRiskCount).toBe(2)
+    expect(row.failureRate).toBe(50)
+  })
+
+  it('computeSiteMetrics counts Critical as high risk', () => {
+    const [row] = computeSiteMetrics([...recs('Critical', 1), ...recs('Low', 3)])
+    expect(row.highRiskCount).toBe(1)
+  })
+
+  it('a fleet of blowouts is not reported as a 0% failure rate', () => {
+    const [row] = computeBrandMetrics(recs('Critical', 5))
+    expect(row.failureRate).toBe(100)
+  })
+
+  it('weights Critical above High, not below Medium', () => {
+    const crit = computeBrandMetrics(recs('Critical', 1))[0].riskScore
+    const high = computeBrandMetrics(recs('High', 1))[0].riskScore
+    const med  = computeBrandMetrics(recs('Medium', 1))[0].riskScore
+    expect(crit).toBeGreaterThan(high)
+    expect(high).toBeGreaterThan(med)
+  })
+})

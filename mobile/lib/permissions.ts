@@ -67,26 +67,43 @@ const M = (
  * their responsibility and their History would be empty - surfacing either would
  * be dishonest padding rather than a real capability.
  */
+// MOBILE IS A FIELD-CAPTURE APP, NOT A REPORTING CLIENT.
+//
+// The phone is for ACCIDENTS, INSPECTIONS and WASHING, plus the cheap lookups
+// that support them (scan, serial search, meter log, checklists). Those are all
+// single-record reads or writes.
+//
+// The data-HEAVY modules below carry `roles: []`, which means admin and
+// super-admin only (resolveModuleAccess always admits them). They were pulling
+// whole tables onto the handset - mobile Analytics paged through every
+// tyre_record, 7,498 rows and climbing - which is slow on a good phone and an
+// out-of-memory crash on a cheap one. Restricting them keeps that load off the
+// devices doing real field work, while an admin can still open them, and a
+// per-user grant can still extend any of them to a specific person.
+//
+// RULE: do not give a bulk-listing or reporting module a role default here. If a
+// field role genuinely needs one, either add a server-side aggregate so the
+// phone fetches one row instead of the table, or grant it per user.
 export const MODULES: ModuleDef[] = [
   // Field ---------------------------------------------------------------------
   M('inspect',        'New Inspection',    'clipboard-outline',      'Field',      ['manager', 'director', 'inspector', 'tyre_man']),
   M('scan',           'Scan',              'scan-outline',           'Field',      ['manager', 'director', 'inspector', 'tyre_man']),
-  M('serial',         'Serial Search',     'search-outline',         'Field',      ['manager', 'director', 'inspector']),
+  M('serial',         'Serial Search',     'search-outline',         'Field',      ['manager', 'director', 'inspector', 'tyre_man', 'reporter', 'driver']),
   M('tyreChange',     'Tyre Change',       'swap-horizontal-outline','Field',      ['manager', 'director', 'inspector']),
   M('checklists',     'Checklists',        'checkbox-outline',       'Field',      ['manager', 'director', 'inspector', 'tyre_man']),
   M('meter',          'Meter Log',         'speedometer-outline',    'Field',      ['manager', 'director', 'inspector', 'tyre_man', 'reporter', 'driver']),
-  M('washing',        'Vehicle Washing',   'water-outline',          'Field',      ['manager', 'director', 'inspector', 'driver']),
+  M('washing',        'Vehicle Washing',   'water-outline',          'Field',      ['manager', 'director', 'inspector', 'driver', 'tyre_man']),
   M('reportIssue',    'Report Issue',      'megaphone-outline',      'Field',      ['manager', 'director', 'reporter', 'driver']),
   // Fleet ---------------------------------------------------------------------
-  M('records',        'Tyre Records',      'layers-outline',         'Fleet',      ['manager', 'director', 'inspector', 'reporter']),
-  M('vehicles',       'Vehicles',          'car-outline',            'Fleet',      ['manager', 'director']),
-  M('history',        'History',           'time-outline',           'Fleet',      ['manager', 'director', 'inspector', 'reporter', 'tyre_man']),
+  M('records',        'Tyre Records',      'layers-outline',         'Fleet',      []),
+  M('vehicles',       'Vehicles',          'car-outline',            'Fleet',      []),
+  M('history',        'History',           'time-outline',           'Fleet',      []),
   M('alerts',         'Alerts',            'notifications-outline',  'Fleet',      ['manager', 'director', 'inspector']),
   M('calendar',       'Calendar',          'calendar-outline',       'Fleet',      ['manager', 'director', 'tyre_man', 'reporter']),
   // Maintenance ---------------------------------------------------------------
   M('accidents',      'Accidents',         'warning-outline',        'Maintenance',['manager', 'director', 'inspector']),
   M('reportAccident', 'File Accident',     'alert-circle-outline',   'Maintenance',['manager', 'director', 'inspector']),
-  M('workorders',     'Work Orders',       'construct-outline',      'Maintenance',['manager', 'director']),
+  M('workorders',     'Work Orders',       'construct-outline',      'Maintenance',[]),
   M('rca',            'Root Cause',        'git-branch-outline',     'Maintenance',['manager', 'director', 'inspector']),
   M('tasks',          'Tasks',             'list-outline',           'Maintenance',['manager', 'director', 'inspector']),
   M('stock',          'Stock Count',       'cube-outline',           'Maintenance',['manager', 'inspector']),
@@ -97,12 +114,12 @@ export const MODULES: ModuleDef[] = [
   // see it too. Per-user grants can extend it to anyone.
   M('workshop',       'My Jobs',           'construct-outline',      'Maintenance',['manager', 'director', 'inspector', 'tyre_man']),
   // Management ----------------------------------------------------------------
-  M('overview',       'Overview',          'grid-outline',           'Management', ['manager', 'director']),
-  M('reports',        'Reports',           'document-text-outline',  'Management', ['manager', 'director', 'reporter', 'inspector', 'tyre_man']),
-  M('analytics',      'Analytics',         'bar-chart-outline',      'Management', ['manager']),
-  M('stockManage',    'Stock Management',  'file-tray-full-outline', 'Management', ['manager']),
-  M('ai',             'Fleet AI',          'sparkles-outline',       'Management', ['manager']),
-  M('team',           'Team',              'people-outline',         'Management', ['manager', 'director']),
+  M('overview',       'Overview',          'grid-outline',           'Management', []),
+  M('reports',        'Reports',           'document-text-outline',  'Management', []),
+  M('analytics',      'Analytics',         'bar-chart-outline',      'Management', []),
+  M('stockManage',    'Stock Management',  'file-tray-full-outline', 'Management', []),
+  M('ai',             'Fleet AI',          'sparkles-outline',       'Management', []),
+  M('team',           'Team',              'people-outline',         'Management', []),
   // Admin ---------------------------------------------------------------------
   M('approvals',      'Approvals',         'checkmark-done-outline', 'Admin',      ['manager', 'director']),
   M('admin',          'Admin Console',     'shield-outline',         'Admin',      ['manager', 'director']),
@@ -284,6 +301,7 @@ export const canInspect          = (r: UserRole | null | undefined) => moduleAll
 export const canReportAccident   = (r: UserRole | null | undefined) => moduleAllowedByRole('reportAccident', r)
 export const canSearchSerial     = (r: UserRole | null | undefined) => moduleAllowedByRole('serial', r)
 export const canViewAccidents    = (r: UserRole | null | undefined) => moduleAllowedByRole('accidents', r)
+export const canWash             = (r: UserRole | null | undefined) => moduleAllowedByRole('washing', r)
 export const canViewFleet        = (r: UserRole | null | undefined) => moduleAllowedByRole('vehicles', r)
 export const canManageWorkOrders = (r: UserRole | null | undefined) => moduleAllowedByRole('workorders', r)
 export const canDoRca            = (r: UserRole | null | undefined) => moduleAllowedByRole('rca', r)
@@ -339,9 +357,12 @@ export interface TabDescriptor {
 export const TAB_BAR: TabDescriptor[] = [
   { name: 'index',              labelKey: 'tabs.home',       icon: 'home-outline',        visible: () => true,                 primary: true },
   { name: 'inspection/new',     labelKey: 'tabs.inspect',    icon: 'clipboard-outline',   moduleKey: 'inspect',   visible: canInspect,        primary: true },
-  { name: 'records/index',      labelKey: 'tabs.records',    icon: 'layers-outline',      moduleKey: 'records',   visible: canViewRecords,    primary: true },
+  // Records is admin-only now and is reached from the Home hub, so it no longer
+  // occupies one of the five primary slots that field staff see.
+  { name: 'records/index',      labelKey: 'tabs.records',    icon: 'layers-outline',      moduleKey: 'records',   visible: canViewRecords },
   { name: 'accident/dashboard', labelKey: 'tabs.accident',   icon: 'warning-outline',     activeTint: '#dc2626', moduleKey: 'accidents', visible: canViewAccidents, primary: true },
   { name: 'meter-logs',         labelKey: 'tabs.meter',      icon: 'speedometer-outline', activeTint: '#0369a1', moduleKey: 'meter',     visible: (r) => r === 'driver', primary: true },
+  { name: 'washing',            labelKey: 'tabs.washing',    icon: 'water-outline',       activeTint: '#0284c7', moduleKey: 'washing',   visible: canWash,           primary: true },
   { name: 'workorders/index',   labelKey: 'tabs.workorders', icon: 'construct-outline',   moduleKey: 'workorders', visible: canViewWorkOrders },
   { name: 'analytics/index',    labelKey: 'tabs.analytics',  icon: 'bar-chart-outline',   activeTint: '#3b82f6', moduleKey: 'analytics', visible: canViewAnalytics },
   { name: 'reports/index',      labelKey: 'tabs.reports',    icon: 'document-text-outline', moduleKey: 'reports', visible: canViewReports },

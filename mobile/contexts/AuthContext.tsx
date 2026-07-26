@@ -14,6 +14,43 @@ import {
 } from '../lib/recordQueue'
 import { clearPushToken, cancelDailyInspectionReminder } from '../lib/notifications'
 import { setSentryUser } from '../lib/sentry'
+import AsyncStorage from '@react-native-async-storage/async-storage'
+
+/** Last server-verified profile, so a cold start with no signal is not a lockout.
+ *  Written ONLY from a successful fetch of a non-locked, approved account. */
+const PROFILE_CACHE_KEY = 'tp_profile_cache_v1'
+/** Beyond this the cached profile is refused and the app fails closed again, so a
+ *  revoked account cannot stay usable indefinitely by staying offline. */
+const PROFILE_CACHE_MAX_AGE_MS = 14 * 24 * 60 * 60 * 1000 // 14 days
+
+async function cacheProfile(userId: string, profile: Profile) {
+  try {
+    await AsyncStorage.setItem(
+      PROFILE_CACHE_KEY,
+      JSON.stringify({ userId, at: Date.now(), profile }),
+    )
+  } catch { /* cache is best effort; never block sign-in on it */ }
+}
+
+/** The cached profile, but only for THIS user and only while still fresh. */
+async function readCachedProfile(userId: string): Promise<Profile | null> {
+  try {
+    const raw = await AsyncStorage.getItem(PROFILE_CACHE_KEY)
+    if (!raw) return null
+    const parsed = JSON.parse(raw) as { userId?: string; at?: number; profile?: Profile }
+    if (!parsed?.profile || parsed.userId !== userId) return null
+    if (!parsed.at || Date.now() - parsed.at > PROFILE_CACHE_MAX_AGE_MS) return null
+    // Defence in depth: never resurrect an account that was locked/unapproved.
+    if (parsed.profile.locked === true || parsed.profile.approved === false) return null
+    return parsed.profile
+  } catch {
+    return null
+  }
+}
+
+async function clearCachedProfile() {
+  try { await AsyncStorage.removeItem(PROFILE_CACHE_KEY) } catch { /* best effort */ }
+}
 
 /** Clear device-local, user-scoped state on sign-out WITHOUT destroying unsynced
  *  field work. We remove only SUCCESSFULLY SYNCED queue rows (clearSynced /
@@ -44,6 +81,9 @@ interface AuthContextType {
    *  must FAIL CLOSED on this: render a blocking retry screen, deny protected
    *  routes. `profile` stays null in this state. */
   profileError: boolean
+  /** True when the profile was served from the offline cache instead of the
+   *  server (no signal). Access is unchanged; the UI may show a subtle hint. */
+  profileStale: boolean
   /** Re-run the profile fetch for the current user (retry after profileError). */
   retryProfile: () => Promise<void>
   /** True when the grants OR role-matrix RPC threw. The permission maps still
@@ -77,6 +117,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true)
   const [profileLoading, setProfileLoading] = useState(false)
   const [profileError, setProfileError]     = useState(false)
+  /** True when `profile` came from the offline cache rather than the server, so
+   *  the UI can show a quiet "working offline" hint. Cleared on a live fetch. */
+  const [profileStale, setProfileStale]     = useState(false)
   const [permissionsError, setPermissionsError] = useState(false)
   const [grants, setGrants]   = useState<GrantMap>({})
   const [roleMatrix, setRoleMatrix] = useState<RoleMatrix>({})
@@ -274,13 +317,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (data) {
         // Enforce locked / unapproved accounts on the client immediately
         if (data.locked === true || data.approved === false) {
+          await clearCachedProfile()
           await supabase.auth.signOut()
           return
         }
-        setProfile({ ...data, role: normaliseRole(data.role), country: normaliseCountry(data.country) } as Profile)
+        const resolved = { ...data, role: normaliseRole(data.role), country: normaliseCountry(data.country) } as Profile
+        setProfile(resolved)
+        // Cache the AUTHORITATIVE profile so the next cold start works offline.
+        await cacheProfile(userId, resolved)
         // Tag field crash reports with the operator behind them.
         setSentryUser({ id: data.id, username: data.username })
         setProfileError(false)
+        setProfileStale(false)
       } else {
         // No profile row for an authenticated user is not a hard error (a fresh
         // signup may not be provisioned yet); leave profile null, no error.
@@ -289,10 +337,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
       setProfileLoading(false)
     } catch (e) {
-      // Hard failure resolving the profile: FAIL CLOSED. Do NOT set profile;
-      // signal the gate to block protected routes and show a retry screen.
+      // The fetch failed. This is normally a DEAD NETWORK, which is the everyday
+      // case for this app: an inspector opens it in a yard with no bars. Failing
+      // closed here locked them out of the app entirely - including the offline
+      // inspections already queued on their own phone, which is the one thing
+      // they most need to reach. So fall back to the last profile we ourselves
+      // verified for THIS user id.
+      //
+      // Why this is safe: it unlocks only the LOCAL shell and their own queued
+      // work. It grants no data access - every read still needs a live session
+      // and passes RLS server-side. The cache is only ever written from a
+      // successful server fetch (never from a locked or unapproved account), is
+      // bound to one user id, and expires. The moment connectivity returns, the
+      // realtime profile listener and the next fetch re-assert the truth and
+      // sign out an account that has since been locked or unapproved.
       if (__DEV__) console.warn('fetchProfile failed', e)
-      setProfileError(true)
+      const cached = await readCachedProfile(userId)
+      if (cached) {
+        setProfile(cached)
+        setSentryUser({ id: cached.id, username: cached.username })
+        setProfileError(false)
+        setProfileStale(true)
+      } else {
+        // No verified cache for this user: FAIL CLOSED exactly as before.
+        setProfileError(true)
+      }
       setProfileLoading(false)
     }
   }
@@ -354,6 +423,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // push token so pushes aren't delivered to the next account on this device.
     try { await Promise.allSettled([syncQueue(), syncRecordQueue()]) } catch { /* best-effort */ }
     if (uid) { try { await clearPushToken(uid) } catch { /* best-effort */ } }
+    // Drop the offline profile cache so the next account on this device can never
+    // inherit it. Pending FIELD WORK is deliberately NOT touched here.
+    await clearCachedProfile()
     // Synced-only local cleanup happens in the SIGNED_OUT handler below; pending
     // (unsynced) field work is preserved for this user's next sign-in.
     await supabase.auth.signOut()
@@ -361,7 +433,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   return (
     <AuthContext.Provider value={{
-      user, profile, loading, profileLoading, profileError, retryProfile,
+      user, profile, loading, profileLoading, profileError, profileStale, retryProfile,
       permissionsError, isSuperAdmin, grants, roleMatrix, canAccess,
       refreshGrants: refreshAccess, hasUnsyncedWork, signIn, signOut,
     }}>

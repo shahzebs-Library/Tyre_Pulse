@@ -265,19 +265,30 @@ export async function uploadAllPositionPhotos(
 ): Promise<typeof tyreConditions> {
   const positions = Object.keys(tyreConditions)
 
-  await Promise.all(
-    positions.map(async pos => {
-      const entry = tyreConditions[pos]
-      // Only upload if there is a local URI and no permanent URL yet
-      if (entry.photo_uri && !entry.photo_url) {
-        const remoteUrl = await uploadInspectionPhoto(entry.photo_uri, inspectionId, pos)
-        if (remoteUrl) {
-          entry.photo_url = remoteUrl
-          entry.photo_uri = null // clear local reference
-        }
+  // Uploads run at most UPLOAD_CONCURRENCY at a time, NEVER all at once.
+  // A Promise.all over every position decoded one full-size bitmap per tyre
+  // simultaneously - 13 on a Tr-Mixer, roughly 600 MB peak - which is a hard
+  // native out-of-memory crash on a 2 GB handset. The inspector lost the work
+  // with no error, and the offline queue replayed it into the same crash. The
+  // photos are already resized (prepareForUpload, 1600px); only the fan-out was
+  // wrong. Keep this bounded.
+  const UPLOAD_CONCURRENCY = 2
+
+  const uploadOne = async (pos: string) => {
+    const entry = tyreConditions[pos]
+    // Only upload if there is a local URI and no permanent URL yet
+    if (entry.photo_uri && !entry.photo_url) {
+      const remoteUrl = await uploadInspectionPhoto(entry.photo_uri, inspectionId, pos)
+      if (remoteUrl) {
+        entry.photo_url = remoteUrl
+        entry.photo_uri = null // clear local reference
       }
-    })
-  )
+    }
+  }
+
+  for (let i = 0; i < positions.length; i += UPLOAD_CONCURRENCY) {
+    await Promise.all(positions.slice(i, i + UPLOAD_CONCURRENCY).map(uploadOne))
+  }
 
   return tyreConditions
 }

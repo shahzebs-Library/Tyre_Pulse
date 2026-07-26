@@ -11,8 +11,9 @@
 
 import { useEffect, useRef } from 'react'
 import * as Network from 'expo-network'
-import { syncQueue } from '../lib/offlineQueue'
-import { syncRecordQueue } from '../lib/recordQueue'
+import { addNetworkStateListener } from 'expo-network'
+import { syncQueue, getPendingCount } from '../lib/offlineQueue'
+import { syncRecordQueue, getPendingRecordCount } from '../lib/recordQueue'
 
 /** Minimum ms between auto-sync attempts to avoid hammering the API */
 const DEBOUNCE_MS = 3_000
@@ -25,6 +26,16 @@ export function useNetworkSync(): void {
     if (syncing.current) return
     const now = Date.now()
     if (now - lastSync.current < DEBOUNCE_MS) return
+
+    // Skip the whole pass when there is nothing queued. Both sync functions
+    // rewrite encrypted storage and sweep the filesystem, so running them on an
+    // empty queue was pure battery burn for the majority of a shift.
+    try {
+      const [a, b] = await Promise.all([getPendingCount(), getPendingRecordCount()])
+      if ((a || 0) + (b || 0) === 0) return
+    } catch {
+      // Counting failed; fall through and attempt the sync rather than skip it.
+    }
 
     syncing.current = true
     lastSync.current = now
@@ -41,12 +52,21 @@ export function useNetworkSync(): void {
   useEffect(() => {
     let mounted = true
 
-    // expo-network does not ship a built-in state listener like NetInfo,
-    // so we poll on a short interval and check connectivity imperatively.
-    // This keeps the dependency surface minimal (no extra native module) and
-    // is consistent with the expo-network version already installed.
-    const POLL_INTERVAL_MS = 10_000
+    // Event-driven: sync when connectivity is actually RESTORED. This replaces a
+    // 10-second setInterval that woke the device roughly 6 times a minute for a
+    // whole shift, each tick rewriting encrypted storage and sweeping the
+    // filesystem even with an empty queue. The old comment claimed expo-network
+    // had no listener - that is not true of the installed version (8.0.8), and
+    // components/SyncBanner.tsx already uses addNetworkStateListener.
+    const sub = addNetworkStateListener(state => {
+      if (!mounted) return
+      if (state.isConnected && state.isInternetReachable) attemptSync()
+    })
 
+    // Safety net: a long, slow interval so a missed event can never strand queued
+    // work forever. Two minutes instead of ten seconds is a 12x reduction in
+    // wakeups while still draining the queue on its own if an event is dropped.
+    const SAFETY_INTERVAL_MS = 120_000
     const poll = setInterval(async () => {
       if (!mounted) return
       try {
@@ -57,7 +77,7 @@ export function useNetworkSync(): void {
       } catch {
         // Network check failed - device is likely offline; ignore
       }
-    }, POLL_INTERVAL_MS)
+    }, SAFETY_INTERVAL_MS)
 
     // Also attempt a sync immediately on mount in case there is already
     // connectivity and items are queued from a previous offline session.
@@ -72,6 +92,7 @@ export function useNetworkSync(): void {
     return () => {
       mounted = false
       clearInterval(poll)
+      try { sub?.remove() } catch { /* listener already gone */ }
     }
   }, [])
 }

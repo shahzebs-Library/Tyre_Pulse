@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
-import { render, screen, fireEvent, cleanup, act } from '@testing-library/react'
+import { render, screen, fireEvent, cleanup, act, waitFor } from '@testing-library/react'
 import { LanguageProvider, useLanguage } from '../contexts/LanguageContext'
 
 function Probe() {
@@ -37,14 +37,24 @@ describe('LanguageContext', () => {
     expect(screen.getByTestId('missing').textContent).toBe('nope.not.here')
   })
 
-  it('switches to Arabic, sets RTL, and translates', () => {
+  // The Arabic dictionary is loaded on demand (it is ~412 KB and must not sit on
+  // the startup path), so the language, direction and persistence flip
+  // synchronously while the STRINGS arrive a tick later. Until then t() falls
+  // back to English exactly as it does for any missing key - never blank.
+  it('switches to Arabic, sets RTL, and translates once the dictionary loads', async () => {
     render(<LanguageProvider><Probe /></LanguageProvider>)
     act(() => { fireEvent.click(screen.getByText('ar')) })
+
+    // Immediate, synchronous effects.
     expect(screen.getByTestId('lang').textContent).toBe('ar')
     expect(screen.getByTestId('rtl').textContent).toBe('true')
-    expect(screen.getByTestId('save').textContent).toBe('حفظ')
     expect(document.documentElement.getAttribute('dir')).toBe('rtl')
     expect(localStorage.getItem('tp_language')).toBe('ar')
+
+    // Arabic strings appear as soon as the lazy dictionary resolves.
+    await waitFor(() => {
+      expect(screen.getByTestId('save').textContent).toBe('حفظ')
+    })
   })
 
   it('restores document direction to LTR when switching back to English', () => {

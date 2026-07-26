@@ -44,9 +44,18 @@ describe('mobileModules catalog', () => {
     expect(mobileModuleDefaultAllows('scan', 'Tyre Man')).toBe(true)
     expect(mobileModuleDefaultAllows('scan', 'Reporter')).toBe(false)
     expect(mobileModuleDefaultAllows('scan', 'Driver')).toBe(false)
-    // analytics is manager-only
-    expect(mobileModuleDefaultAllows('analytics', 'Manager')).toBe(true)
+    // Data-heavy modules are ADMIN-ONLY (roles: []): mobile is a field-capture
+    // app, and these pulled whole tables onto the handset. Manager no longer
+    // gets Analytics by default; an admin can still grant it per user.
+    expect(mobileModuleDefaultAllows('analytics', 'Admin')).toBe(true)
+    expect(mobileModuleDefaultAllows('analytics', 'Manager')).toBe(false)
     expect(mobileModuleDefaultAllows('analytics', 'Director')).toBe(false)
+    expect(mobileModuleDefaultAllows('records', 'Manager')).toBe(false)
+    expect(mobileModuleDefaultAllows('overview', 'Manager')).toBe(false)
+    // Serial search stays open to the field roles: it is one indexed lookup,
+    // not a bulk load, and the yard needs it.
+    expect(mobileModuleDefaultAllows('serial', 'Tyre Man')).toBe(true)
+    expect(mobileModuleDefaultAllows('serial', 'Driver')).toBe(true)
     // Admin always allowed even on a roles:[] module (users)
     expect(mobileModuleDefaultAllows('users', 'Admin')).toBe(true)
     expect(mobileModuleDefaultAllows('users', 'Manager')).toBe(false)

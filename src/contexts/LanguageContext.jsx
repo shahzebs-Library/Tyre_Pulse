@@ -32,10 +32,43 @@ function loadDict(glob) {
   return out
 }
 
+// English is EAGER: it is the default language and the fallback for every
+// missing key, so it must be resolvable synchronously from the first render.
 const EN = loadDict(import.meta.glob('../locales/en/*.json', { eager: true, import: 'default' }))
-const AR = loadDict(import.meta.glob('../locales/ar/*.json', { eager: true, import: 'default' }))
 
-const DICTS = { en: EN, ar: AR }
+// Arabic is LAZY. Both dictionaries together are ~764 KB of JSON across 114
+// files; shipping and parsing both on every startup cost every user the weight
+// of a language they are not using. Arabic now loads only when it is actually
+// selected, which takes that off the critical path for the default case.
+// Until it resolves, translate() falls back to English exactly as it already
+// does for a missing key, so nothing renders blank.
+const AR_MODULES = import.meta.glob('../locales/ar/*.json', { import: 'default' })
+
+const DICTS = { en: EN }
+/** Languages that exist but may not be loaded yet (drives setLanguage + detect). */
+const KNOWN_LANGS = new Set(LANGUAGES.map((l) => l.code))
+
+let arLoading = null
+/** Load the Arabic dictionary once; resolves to true when it becomes available. */
+function loadArabic() {
+  if (DICTS.ar) return Promise.resolve(true)
+  if (!arLoading) {
+    arLoading = Promise.all(
+      Object.entries(AR_MODULES).map(([path, load]) =>
+        load().then((mod) => [path.split('/').pop().replace('.json', ''), mod])),
+    )
+      .then((pairs) => {
+        DICTS.ar = Object.fromEntries(pairs)
+        return true
+      })
+      .catch(() => {
+        // Keep English rather than breaking the UI if a chunk fails to load.
+        arLoading = null
+        return false
+      })
+  }
+  return arLoading
+}
 
 function resolve(obj, key) {
   return key.split('.').reduce((o, k) => (o == null ? undefined : o[k]), obj)
@@ -62,7 +95,8 @@ const LanguageContext = createContext(null)
 function detectInitial() {
   try {
     const saved = localStorage.getItem(STORAGE_KEY)
-    if (saved && DICTS[saved]) return saved
+    // KNOWN_LANGS, not DICTS: Arabic is a valid saved choice before it loads.
+    if (saved && KNOWN_LANGS.has(saved)) return saved
   } catch { /* ignore */ }
   const nav = (typeof navigator !== 'undefined' && navigator.language) || 'en'
   return nav.toLowerCase().startsWith('ar') ? 'ar' : 'en'
@@ -70,8 +104,19 @@ function detectInitial() {
 
 export function LanguageProvider({ children }) {
   const [language, setLanguageState] = useState(detectInitial)
+  // Bumped when a lazily-loaded dictionary arrives, so `t` is recreated and the
+  // tree re-renders with the real strings instead of the English fallback.
+  const [dictVersion, setDictVersion] = useState(0)
 
   const isRTL = RTL_LANGS.has(language)
+
+  // Pull in the Arabic dictionary whenever Arabic is active and not yet loaded.
+  useEffect(() => {
+    if (language !== 'ar' || DICTS.ar) return
+    let cancelled = false
+    loadArabic().then((ok) => { if (ok && !cancelled) setDictVersion((v) => v + 1) })
+    return () => { cancelled = true }
+  }, [language])
 
   // Reflect language + direction on the document so global CSS and the browser
   // apply correct text direction and Arabic-capable typography.
@@ -84,11 +129,15 @@ export function LanguageProvider({ children }) {
   }, [language, isRTL])
 
   const setLanguage = useCallback((lang) => {
-    if (DICTS[lang]) setLanguageState(lang)
+    // Accept any KNOWN language, not only a loaded one: Arabic is fetched on
+    // demand by the effect above and would otherwise be unselectable.
+    if (KNOWN_LANGS.has(lang)) setLanguageState(lang)
   }, [])
 
   // t('ns.key', { vars }) → localized string; falls back to English, then the key.
-  const t = useCallback((key, vars) => translate(language, key, vars), [language])
+  // dictVersion is a dependency so `t` is re-created once a lazy dictionary
+  // lands and consumers re-render with the translated strings.
+  const t = useCallback((key, vars) => translate(language, key, vars), [language, dictVersion])
 
   const value = useMemo(() => ({ language, isRTL, setLanguage, t, languages: LANGUAGES }),
     [language, isRTL, setLanguage, t])

@@ -1,0 +1,39 @@
+-- V366 - Currency + the missing transaction dimensions on the canonical cost record.
+-- APPLIED LIVE (as v366a DDL + backfills + v366b trigger). This file is the record.
+--
+-- WHY THIS CAME FIRST. Every cross-country figure in the product was illegal
+-- arithmetic: SAR, AED and EGP added together. That single defect was found and
+-- patched at FOUR separate reader sites in one session (BoardOverview money labels,
+-- ExpenseReport charts/export, Duplicate Control money, the per-country panel).
+-- Patching readers does not fix it. The transaction has to carry its own currency so
+-- a reader can tell when a sum is legal and refuse it when it is not.
+--
+-- ADDED to parts_consumption (all NULLABLE, nothing required, no write path broken):
+--   currency, fx_rate_to_base, region, branch, project, department, site, uom,
+--   unit_cost, supplier, source_system, approved_by
+--
+-- NEW TABLE country_currency: the country -> currency map in ONE place, so adding a
+-- country is a row rather than a code edit. KSA=SAR (base), UAE=AED, Egypt=EGP.
+-- Helper currency_for_country(text).
+--
+-- BACKFILLED on the live 216,792 rows (verified):
+--   currency       216,792 / 216,792
+--   site           216,792 / 216,792  (store_code, resolved via store_site_map where mapped)
+--   source_system  216,792 / 216,792
+--   unit_cost      216,790 / 216,792  - the 2 exceptions have no usable qty, so unit
+--                  cost is correctly NULL rather than a fabricated divisor.
+--
+-- WRITE PATH: classify_parts_consumption (the EXISTING trigger, extended rather than
+-- joined by a second one) now stamps currency, site, unit_cost and source_system on
+-- every new row. Classification logic above that block is byte-identical to before.
+-- VERIFIED rolled back: a new UAE row self-stamped AED / RM-DXB / unit_cost 1000 from
+-- 4000 over qty 4 / cost_category tyre.
+--
+-- NO FX CONVERSION, deliberately. Converting needs a rate table with effective dates
+-- and a policy decision (transaction date vs monthly average vs period closing).
+-- fx_rate_to_base is stored so a real policy can be layered on without revisiting
+-- this. NEVER invent a rate: a wrong one looks authoritative and is worse than three
+-- honest per-country figures.
+--
+-- REVERSIBLE: drop the added columns, country_currency, currency_for_country, and
+-- restore the pre-V366 classify_parts_consumption body.

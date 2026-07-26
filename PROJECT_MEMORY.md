@@ -3,7 +3,7 @@
 Durable, committed project knowledge so any session has full context. Keep this
 current. Read it before adding/changing modules. Governing spec: `Tyre pulse enterprise.md`
 
-## SESSION 2026-07-26 — CLOSED CLEAN. Audit-lead verification + Play API-36 compliance + mobile scope/crash fixes + measured performance. Migrations through **V361**, next free **V362**. ALL MERGED to main (PRs #187, #189); branch realigned 0/0. Play build SHIPPED to Closed testing.
+## SESSION 2026-07-26 — CLOSED CLEAN. Audit-lead verification + Play API-36 compliance + mobile scope/crash fixes + measured performance + **duplicate control (V362)**. Migrations through **V362**, next free **V363**. ALL MERGED to main (PRs #187, #189, #190, #191); branch realigned 0/0. Play build SHIPPED to Closed testing.
 Everything below is on main and verified: web build clean, **5230/5230 web tests**, mobile `tsc` 0, mobile jest 50.
 The 2026-07-24/25 audit's 7 unmerged commits (next section) were merged as part of this work.
 
@@ -124,7 +124,63 @@ resolved. 3 I verified by hand, 8 by a workflow with an adversarial reviewer:
 - Root vitest config now excludes `mobile/**` (the new mobile jest tests `jest.mock` react-native and were
   breaking the web suite); the separate mobile CI job still runs them.
 
+### DUPLICATE CONTROL (V362, PR #191) — the import re-run problem, measured
+- Customer: "I upload files, it does not tell me if a file is the same, it still accepts it." CORRECT and worse
+  than they thought. **Every staging trigger does a bare INSERT with NO dedupe guard** (verified: not one of
+  process_expenses_country / process_stg_* / process_daily_km contains a NOT EXISTS or ON CONFLICT). My earlier
+  memory claiming "per-country dedup" was WRONG for the staging pipe - that only ever applied to the in-app
+  /erp-intake path (JS `countExistingRows`).
+- **LIVE DAMAGE FOUND: parts_consumption carries 8,248 duplicate rows.** Egypt 4,993 = **EGP 17,414,847 (18% of
+  the country's reported spend)**; UAE 3,120 = AED 754,199; KSA 135 = SAR 36,338. Egypt's real total is
+  **79.34M, not 96.76M**. NOT YET DELETED - left for the user to press, since it moves reported financials.
+- **HOW I PROVED they are re-inserts, not repeated source lines** (reuse this method): the dupes fall into ~11
+  clusters of ~470 rows where both copies share an IDENTICAL PAIR of created_at microsecond timestamps ~110s
+  apart, with **100% business-key set overlap between that pair and 0% against every other chunk**. That is a
+  retried upload chunk (saveImportRows retries a chunk whose response was lost). `source_row` is only populated
+  on 78 of 47,524 Egypt rows so it could NOT be used here - do not trust a source_row test on this table.
+- **THE RULE, now encoded in `_dup_scan_spec`: a repeated business key is NOT a duplicate.** Discriminator is
+  `source_row`: >1 distinct = GENUINE repeated source lines, never deletable; 0-or-1 distinct = re-insert.
+  work_order_line_items has **47,693 rows that are correctly PROTECTED** by this (4,604 groups, ALL with distinct
+  source_row, worst group 30 copies) - a naive "delete identical rows" would have destroyed them.
+- **THREE tables were TRIED AND REJECTED on evidence. Do NOT add them:**
+  - `production_logs` - PER-TRIP log. TM514 -> Diriyah-G2, 2026-07-05, 12 m3, **10 rows = 10 real deliveries**.
+    2,337 rows would have been deleted, destroying the m3 denominator behind cost-per-m3.
+  - `inspections` - repeats carry DIFFERENT tyre_conditions (TM393 / 2026-07-20 / one inspector / 3 rows /
+    3 condition sets). Deleting the later row discards CORRECTED readings. A repeated key = a conflict to
+    review, not a duplicate.
+  - `accidents` - two similar same-day records still differ in claim/fault/repair fields.
+  Inclusion test to apply to any future target: **a repeated key must mean the extra row carries NO new info.**
+- **tyre_records needs `tyre_position` in the key.** `serial_no` is NOT a unique tyre id in this data - it often
+  holds a DOT batch code (DOT18E56) or even a size string ("235/70 R 16"). BH021 / 2025-12-01 / DOT18EWHMAFL =
+  **4 real tyres on LHF1/LHF2/RHF1/RHF2**. Without position the tool offered to delete 3 of every 4 tyres (48
+  false positives). **The older `recon_duplicate_key_tyres()` RPC HAS THE SAME BLIND SPOT** (serial+asset+
+  issue_date+country, no position) and is only safe because `recon_resolve_duplicate_key` refuses anything not
+  byte-identical - do not loosen that resolver.
+- Surface = `/console/duplicates` (`ConsoleDuplicateControl.jsx`, nav "Duplicate Control", CopyX) + service
+  `src/lib/api/duplicateControl.js`. RPCs `admin_dup_targets/_preview/_scan/_resolve/_restore`, super-admin
+  gated, table+key columns from the IMMUTABLE safelist so the dynamic SQL has no injection surface. Every
+  removal archives the FULL row to `dup_resolve_archive` and is one-click undoable - deliberately NOT relying on
+  `create_backup_snapshot`, whose curated table list does not include parts_consumption or wo_line_items.
+  `admin_dup_restore` builds an explicit column list EXCLUDING generated cols (tyre_records.fitment_date,
+  work_orders.total_cost) - a positional insert is exactly how V320 approve_pending_upload broke.
+  Verified live in a rolled-back txn: 47,524 / 96,756,275.49 -> 42,531 / 79,341,428.04 -> restored byte-exact.
+- Money is shown per-country ONLY (each country reports in its own currency; the all-countries figure 18,205,384
+  blends SAR+AED+EGP and is meaningless - same bug class as the ExpenseReport blend fixed earlier).
+- **`src/lib/importTargets.js` + the page's "Where to import" tab = THE reference** for which Supabase table each
+  ERP file goes into (8 staging tables, real column lists from the live schema, country-column requirement,
+  gotchas: expense grid keeps the ERP's misspelled `Trye` verbatim; `stg_open_wo` is the ONLY target where a
+  re-import is safe because it replaces the snapshot; `stg_wo_lines` MUST map source_row or genuine repeats
+  become indistinguishable from duplicates). Excel-exportable. Tests duplicateControl 13.
+
 ### OPEN — NOT DONE (honest list for the next session)
+0. **THE IMPORT ROOT CAUSE IS STILL OPEN.** The staging triggers still have no dedupe guard, so a re-upload can
+   still create duplicates - V362 only detects and undoes them after the fact. The proper fix is an import
+   FINGERPRINT: hash the file content + row index into a deterministic `import_uid`, unique-index it, and
+   ON CONFLICT DO NOTHING, so a retried chunk is skipped while two genuinely identical source lines (different
+   row index) both survive. A file-level ledger should also reject "you already imported this exact file on
+   <date>". Note the expenses_* path has NO app code at all (Supabase Table Editor CSV import), so that guard
+   must live in the DB trigger, not the client. Also: the 8,248 known bad rows are STILL LIVE and awaiting the
+   user's decision in Console -> Duplicate Control.
 1. **`google-services.json` is MISSING, so Android push notifications have NEVER worked on any device.** Cannot be
    generated here - it must come from the customer's Firebase console for package
    `com.shahzebrahman.tyrepulseinspector`, then be referenced from app.json. Matches the zero registered push

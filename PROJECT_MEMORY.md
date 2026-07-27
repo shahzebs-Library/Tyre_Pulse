@@ -3,7 +3,7 @@
 Durable, committed project knowledge so any session has full context. Keep this
 current. Read it before adding/changing modules. Governing spec: `Tyre pulse enterprise.md`
 
-## SESSION 2026-07-27 (part 5) — SCRAP REGISTER + SPLIT SCRAP/UNDO RIGHTS. Migrations through **V383**, next free **V384**.
+## SESSION 2026-07-27 (part 5) — SCRAP REGISTER + SPLIT SCRAP/UNDO RIGHTS. Migrations through **V383b**, next free **V384**.
 
 ### **SCRAP MANAGEMENT NEVER SHOWED THE SCRAPPED TYRES — it was reading a heuristic, not the marks**
 User: "Scrapped management is not linked with scrapped tyres, when we click into it it must show those marked
@@ -48,10 +48,42 @@ User: "Undo must be with only admin, and remember who made it scrap so we can tr
 - **FULL ROUND TRIP VERIFIED LIVE (rolled back)** on serial EP060420711 / asset TM527: collector scraps ->
   register shows "by IJAZ ALI SHAH" -> collector undo BLOCKED -> collector direct DELETE blocked ->
   admin undo -> **restored to `Removed`, not `Active`**.
-- **DATA ISSUE, NOT CODE:** 5 of the 6 Tyre Data Collectors are in Company A (7,498 tyres visible); user
-  `0bdeeb0d` is in the Egypt org `e340fa7a` which holds **0 tyre_records**, so that one sees nothing and a
-  scrap stamps 0 rows. Same class as the already-recorded "9 KSA users in the wrong org" finding. Moving a user
-  between orgs is a data decision — left for the customer.
+### THE WEB HAD NO PLACE FOR A COLLECTOR TO SCRAP — the register alone was not enough
+`/serial-tracker` is `RoleRoute allowed={['Admin']}`, so a Tyre Data Collector cannot reach the only web surface
+with a Scrap button. Showing them the register would have let them SEE scrapped tyres and do nothing. The
+register carries **"Mark a tyre as scrap"** (same server-answered permission), with `findTyreBySerial` confirming
+the serial is a real tyre and showing WHICH one before committing — scrapping is keyed on the serial alone, so
+a typo would otherwise create a mark against a tyre that does not exist.
+
+### `TyreRecords` BULK SCRAP now writes a mark — it was the source of every unattributed row
+`handleBulkScrap` wrote `status='Scrapped'` and nothing else: no mark, no reason, no actor, so those tyres never
+reached the scrapped register and could not be undone. It now goes through `scrap_tyre_by_serial` per distinct
+serial (pool of 5), so bulk and single scrap produce the SAME record. **A row with no serial still cannot be
+marked** — the mark is keyed on the serial — so those keep the plain status write and the operator is TOLD how
+many were left untraceable rather than it happening silently.
+
+### **THE LAST BLOCKER WAS THE SIDEBAR, NOT THE PERMISSION** — `scrap` enabled for Tyre Data Collector
+Everything above could be right and the collector would still never reach it: **Tyre Data Collector is a CUSTOM
+role, and `shouldShowNavItem` routes custom roles through `navItemAllowedForCustomRole`, which is
+deny-by-default** (ROLE_DEFAULTS has no custom-role entry). `/scrap` had no `module_permissions` row for that
+role, so Scrap Management was invisible to the exact people the work was for. Added `('Tyre Data Collector',
+'scrap', true, org_id null)`, consistent with the tyre_records / stock / inspections / fleet_master set the role
+already carries. Reversible from Console -> Access Control.
+**RULE: shipping a page for a CUSTOM role is not finished until that role has the module enabled** - the code
+change alone leaves it unreachable, and the symptom looks identical to "the feature was not built".
+
+### Egypt org: `mohamed` (Tyre Data Collector) MOVED to Company A — user-approved
+**PARTIALLY SUPERSEDES the 2026-07-14 note "Egypt users (org e340fa7a) intentionally left isolated."** That org
+holds **0 tyre_records** while Egypt's 475 tyres live in Company A, so its members could see nothing at all.
+With the user's explicit approval, `0bdeeb0d` (mohamed / bassiouni) had `org_id` + `organisation_id` set to
+Company A. **Verified live after the move: 475 tyres, 133 fleet, country = Egypt ONLY** — `country=['Egypt']`
+plus the RESTRICTIVE country isolation bounds it, so no KSA or UAE data is exposed. Same remedy as the
+already-recorded "9 KSA users in the wrong org" fix. The guard trigger was disabled and **re-enabled in the same
+statement (verified `tgenabled='O'`)** — that bypass is required because the MCP session has no profile so
+`get_my_role()` is NULL and `trg_guard_profile_privileged` blocks the org change.
+- **STILL OPEN, user chose not to move them:** `a4fd5401` **Mahmoud Taher, Director, Egypt** is the last member
+  of org `e340fa7a` and has the same problem (sees 0 of everything). One `admin_update_profile` or the same org
+  move fixes it whenever the customer wants.
 
 ## SESSION 2026-07-27 (part 4) — JOB CARD INTAKE + SCRAP FOR TYRE ROLES. Migrations through **V382b**, next free **V383**.
 

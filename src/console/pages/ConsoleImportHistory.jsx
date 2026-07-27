@@ -19,6 +19,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   History, RefreshCw, AlertTriangle, FileUp, Loader2, Info, Activity, Download, CopyX,
+  CalendarDays,
 } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import {
@@ -26,6 +27,7 @@ import {
 } from '../../lib/api/importHistory'
 import { listDuplicateTargets } from '../../lib/api/duplicateControl'
 import { exportToExcel, reportFileName } from '../../lib/exportUtils'
+import UploadCoveragePanel from './importHistory/UploadCoveragePanel'
 
 const fmtNum = (n) => (Number.isFinite(Number(n)) ? Number(n).toLocaleString() : 'N/A')
 const fmtTime = (v) => {
@@ -124,7 +126,8 @@ export default function ConsoleImportHistory() {
       </div>
 
       <div className="flex gap-1.5 border-b border-gray-800">
-        {[['uploads', 'Uploads', FileUp], ['activity', 'Load activity', Activity]].map(([k, label, Icon]) => (
+        {[['uploads', 'Uploads', FileUp], ['activity', 'Load activity', Activity],
+          ['coverage', 'Daily coverage', CalendarDays]].map(([k, label, Icon]) => (
           <button key={k} onClick={() => setTab(k)}
             className={`px-3 py-2 text-xs font-semibold flex items-center gap-1.5 border-b-2 -mb-px transition-colors ${
               tab === k ? 'border-orange-500 text-orange-300' : 'border-transparent text-gray-500 hover:text-gray-300'
@@ -141,7 +144,10 @@ export default function ConsoleImportHistory() {
         </div>
       )}
 
-      {loading ? (
+      {/* Coverage loads its own data, so it renders before the shared spinner. */}
+      {tab === 'coverage' ? (
+        <UploadCoveragePanel />
+      ) : loading ? (
         <div className="flex items-center justify-center h-48">
           <Loader2 className="w-7 h-7 text-orange-500 animate-spin" />
         </div>

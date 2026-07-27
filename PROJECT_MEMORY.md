@@ -3,6 +3,46 @@
 Durable, committed project knowledge so any session has full context. Keep this
 current. Read it before adding/changing modules. Governing spec: `Tyre pulse enterprise.md`
 
+## SESSION 2026-07-27 (part 8) — V388 DATE PARSING + V389 UPLOAD COVERAGE. Migrations through **V389c**, next free **V390**.
+
+### **V388 — TWO DATE BUGS FOUND ON THE CUSTOMER'S REAL 55,606 CARD IMPORT. Both corrupted silently.**
+The load looked successful. It was not.
+- **V388: a two-digit year was read as the year itself.** The export mixes formats and `to_timestamp` with a
+  YYYY pattern reads `'26'` as year **0026**. **33,626 of 55,606 cards (60%)** landed two thousand years ago
+  (yr 22:1561 · 23:3028 · 24:5949 · 25:12105 · 26:10983 vs yr 2022:1092 · 2023:1926 · 2024:3700 · 2025:7272 ·
+  2026:7990). Fixed with a pivot applied AFTER parsing — adding a `DD-MM-YY` pattern would also change how
+  four-digit years parse.
+- **V388b: the ISO cast read ambiguous dates MONTH-FIRST.** V381b put `s::timestamptz` first as a "harmless
+  fast path"; DateStyle here is **MDY**, so it also swallows `'07-09-2026'` and returns **9 July** when the
+  Ramco/GCC export means **7 September**. The day-first patterns below it were never reached for any date with
+  a day <= 12 — **21,980 rows**. Now the cast runs ONLY for `^\d{4}-\d{2}-\d{2}`.
+- **THIS IS A REPEAT OF A FIXED BUG.** The 2026-07-26 session fixed exactly this class in the JS `coerceDate`
+  (~39% of dates corrupted). It came back because a bare cast looks innocent.
+  **RULE: never hand a dd-mm-yyyy string to a bare `::timestamptz` cast.**
+- **The imported rows were NOT repaired in place.** Both groups are mechanically recoverable, but that means
+  inferring the customer's source data when the file is right there and the pipe refreshes each card in place.
+  **Re-uploading the same file is exact; inference is not.** Verified live: a planted `0022-01-13` card
+  re-imported to `2022-01-13`, one row, no duplicate.
+
+### V389 — UPLOAD COVERAGE: "did I forget yesterday's file?"
+User asked for a console area showing which days are empty, plus a notification. Built as a **third tab on the
+existing `/console/import-history`** (`Daily coverage`), NOT a new page.
+- **Expectation is DERIVED, never assumed.** A source is policed only if it actually arrived on >=50% of recent
+  days. Live: watches **Job cards (25/29)** and **Expenses (29/29)**; leaves **Tyre records (5/29)** and
+  **Production m3 (8/29)** alone. Flagging an occasional feed every morning is how an alert gets ignored.
+- **Weekends are derived per source** from which weekdays historically carry data (>=30% hit rate). Assuming
+  Mon-Fri would cry wolf twice a week in a Fri/Sat weekend region.
+- Counted by the row's **BUSINESS date**, not insert time, so a late upload still fills its own day and stops
+  being reported missing. **Today is never flagged.**
+- `_upload_coverage_for_org(uuid,int,text)` is the shared core and is **REVOKED from `authenticated`** (the
+  V378 cross-tenant lesson); `get_upload_coverage(int,text)` takes no org and resolves it from the session.
+  The cron notice reads the SAME function, so the alert cannot disagree with the page.
+- **One notice per gap, not per morning** — `upload_gap_notices` keyed (org, src). Verified: first run 1 notice
+  to 5 elevated users, second run 0. pg_cron **`upload-gap-check` 05:30 UTC = 08:30 Riyadh**.
+- Live at build time it immediately caught the real gap: **Job cards last data 22 Jul, 5 days ago, 4 empty days.**
+- Files: `src/lib/api/uploadCoverage.js`, `src/console/pages/importHistory/UploadCoveragePanel.jsx`,
+  tests `uploadCoverage.test.js` (10).
+
 ## SESSION 2026-07-27 (part 7) — IMPORT SPEED, PROFILED. Migrations through **V387**, next free **V388**.
 Three agents profiled the import path (client / database / post-import visibility). **Read the corrections
 before acting on any of it.**

@@ -3,6 +3,65 @@
 Durable, committed project knowledge so any session has full context. Keep this
 current. Read it before adding/changing modules. Governing spec: `Tyre pulse enterprise.md`
 
+## SESSION 2026-07-27 (part 9) — V390 NON-TYRE GUARD + V391 COLUMN-CHANGE DECISIONS. Migrations through **V391**, next free **V392**.
+
+### V390 — **A GEARBOX WAS SITTING IN THE TYRE COLUMN.** User reported it; it was real.
+All four were in the TYRE bucket at confidence **0.95 via `code-range`**, the strongest machine signal:
+`TI-GE-0050` Power Steering Pump 12,000.00 EGP · `TI-GE-0036` NISSAN PICK UP TRANSMISSION GEAR BOX
+10,300.00 EGP · `TI-GE-0049` RUBBER ROLL 353.75 · `310180-O` ORING 23.5*25 47.62 AED.
+- **WHY THE EXISTING GUARDS MISSED THEM, and this is the interesting part.** The accessory guard WOULD have
+  caught the o-ring, except it carries a deliberate escape hatch — *code-says-tyre AND the text has a size* —
+  which exists so a real tyre whose description mentions a rim or flap is not demoted. **"ORING 23.5*25"
+  satisfies both halves of that hatch.** So the fix could not be a new accessory token; it had to be a
+  SEPARATE guard with **no escape hatch**: a size in the text does not make a gearbox a tyre, it is the size
+  of the thing the part fits.
+- **ORDER MATTERS AND IS LOAD-BEARING**: the new guard runs AFTER the lubricant test, so `COMPRESSOR OIL 68`
+  and `TRANSMISSION OIL` stay lubricants. Putting it before would have moved Egypt's oil spend into spare.
+- Deliberately TIGHT (the 42%-that-was-really-2.6% lesson): BLACK HAWK, ROADWEST, APLUS, TAIHO, ALLIANZ,
+  SPEEDWAY and ALLIANCE all live in that same code range and are genuine tyres. Tokens are named assemblies
+  only: gear box/gearbox/transmission/steering pump/water pump/hydraulic pump/radiator/alternator/starter
+  motor/cylinder head/oring/o ring/o-ring/rubber roll.
+- **`brain_rules_version()` bumped 3 -> 4 IN THE SAME MIGRATION** — that is what retires the cache.
+- Result: **7 rows moved out of tyre, every country TOTAL unchanged** (Egypt 79,341,428.04 / KSA
+  40,608,349.65 / UAE 18,493,541.38, variance 0.00), 602 coolant lines untouched, 0 non-tyre items left in
+  the tyre bucket. Snapshot `_bucket_snapshot_v390`. JS mirror `NON_TYRE_PART_TOKENS`/`isNonTyrePart` in
+  `src/lib/classificationBrain.js` (31 tests).
+
+### V391 — **THE FINGERPRINT MISS WAS SILENT, and that was the real defect**
+User: "when i upload a file and they find a diffrence in coulmn asked me to keep or chnae give me thr
+decision power". Investigated: on a fingerprint HIT the saved mapping applies with zero clicks (correct). On
+a **MISS the saved mapping was simply ignored** and a fresh guess took its place with **nothing said** — so a
+column renamed upstream quietly stopped feeding the field it used to feed. 12 real profiles are in live use,
+so this fires on actual formats.
+- **`src/lib/import/headerDiff.js`** is the engine (pure, 24 tests): `normHeader` (folds case, doubled
+  spaces and the **NBSP** that blocked the job card import), `similarity` (token overlap + containment,
+  threshold 0.5), `diffHeaders` -> unchanged/added/removed/**renames**, `defaultDecisions`,
+  `applyHeaderDecisions`, `profileHeaders`, `overlapRatio`, `pickComparableProfile`.
+- **A rename is only SUGGESTED, never assumed**, and each side is used once — a suggestion that reused a
+  column would hand the user a contradiction. Unrelated columns stay a separate add + remove, because a wrong
+  rename silently maps the wrong data into a field.
+- **`MIN_OVERLAP = 0.5` is what stops the dialog crying wolf**: below it the upload is a DIFFERENT report,
+  not a changed one, and comparing them would invent a page of renames about a format nobody claimed was the
+  same. `pickComparableProfile` returns null and the auto-mapper just works.
+- **Only the rename is presented as a DECISION.** Missing and new columns are shown as facts: a column that
+  is not in the file cannot be mapped whatever anyone picks, and a new one is the auto-mapper's job and stays
+  editable on the next step. Offering a toggle that does nothing would be theatre.
+- **THE BUG MY OWN TEST CAUGHT**: rejecting a rename left the old rule pointing at a column that is not in
+  the file — the exact failure this engine exists to prevent. Now the rule is dropped and the new column is
+  left to the auto-mapper.
+- **V391 `import_mapping_profiles.header_columns jsonb`** stores the file's FULL column list. Without it we
+  could only ever diff against the columns that happened to be MAPPED, so a column deliberately left unmapped
+  reads as new. Nullable: pre-V391 profiles fall back to rule headers and `profileHeaders` returns
+  `complete:false`, which the dialog **says out loud** rather than quietly overstating.
+- Surfaces: `src/components/intake/HeaderChangeDialog.jsx` + `imports.listProfileCandidates` (best-effort,
+  `[]` on failure — a comparison must never block an import). `applyProfileRules` in DataIntakeCenter now
+  matches headers by `normHeader`, so an export that starts writing `JOB CARD NO` still finds its rule.
+  `blankUnknown` is the difference between the two callers: on an exact fingerprint hit the profile is the
+  whole truth so an unmentioned column stays unmapped; on a CHANGED format a column the profile never saw is
+  genuinely new and keeps its auto-suggestion.
+- After accepting changes `appliedProfile` stays null on purpose, so the NEW shape is auto-remembered under
+  its own fingerprint instead of overwriting the old profile.
+
 ## SESSION 2026-07-27 (part 8) — V388 DATE PARSING + V389 UPLOAD COVERAGE. Migrations through **V389c**, next free **V390**.
 
 ### **V388 — TWO DATE BUGS FOUND ON THE CUSTOMER'S REAL 55,606 CARD IMPORT. Both corrupted silently.**

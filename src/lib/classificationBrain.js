@@ -129,6 +129,29 @@ export const ACCESSORY_TOKENS = Object.freeze([
   'spider hub', 'repair kit',
 ])
 
+/**
+ * Mechanical assemblies that are NEVER a tyre, whatever the item code says.
+ *
+ * The ERP code range is the strongest machine signal available and is trusted
+ * at 0.95, but a code range only means "someone filed this under tyres" - and
+ * on real data that range contains a power steering pump, a gearbox and an
+ * o-ring. A description that names a whole assembly beats a filing decision.
+ *
+ * SEPARATE from ACCESSORY_TOKENS on purpose: the accessory guard has an escape
+ * hatch for a code-says-tyre item that also carries a size, which is how
+ * "ORING 23.5*25" stayed in the tyre bucket. These have no escape hatch,
+ * because a size in the text does not make a gearbox a tyre - it is the size of
+ * the thing the part fits.
+ *
+ * CHECKED AFTER the lubricant test, so "COMPRESSOR OIL" and "TRANSMISSION OIL"
+ * are still lubricants rather than being caught here as assemblies.
+ */
+export const NON_TYRE_PART_TOKENS = Object.freeze([
+  'gear box', 'gearbox', 'transmission', 'steering pump', 'water pump',
+  'hydraulic pump', 'radiator', 'alternator', 'starter motor', 'cylinder head',
+  'oring', 'o ring', 'o-ring', 'rubber roll',
+])
+
 /** Phrases that make something a lubricant. Order matters: checked after exclusions. */
 export const LUBRICANT_TOKENS = Object.freeze([
   'engine oil', 'gear oil', 'hydraulic oil', 'compressor oil', 'transmission oil',
@@ -197,6 +220,16 @@ export function hasTyreBrand(description) {
   const d = norm(description)
   if (!d) return false
   return hasAnyWord(d, TYRE_BRANDS)
+}
+
+/**
+ * Pure: does this name a mechanical assembly that cannot be a tyre?
+ * Whole-word matching, so "transmission" never fires on a substring.
+ */
+export function isNonTyrePart(text) {
+  const d = norm(text)
+  if (!d) return false
+  return hasAnyWord(d, NON_TYRE_PART_TOKENS)
 }
 
 /** Pure: is this a wheel or tyre accessory rather than a tyre? */
@@ -284,6 +317,13 @@ export function classifyLine(line = {}, evidence = {}) {
   if (isLubricant(desc)) {
     return out('lubricant', 0.9, 'description-lubricant',
       'Names a lubricant, and is not a part that merely mentions oil')
+  }
+
+  // A named mechanical assembly beats the code range. The range says where the
+  // ERP filed the item; the description says what it actually is.
+  if (isNonTyrePart(desc)) {
+    return out('spare_part', 0.92, 'non-tyre-part',
+      'Names a mechanical assembly, which is not a tyre whatever its item code')
   }
 
   if (byCode) {

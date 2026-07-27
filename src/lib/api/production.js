@@ -105,6 +105,54 @@ export async function createProduction(values = {}) {
   return unwrap(await supabase.from('production_logs').insert(payload).select(COLS).single())
 }
 
+/**
+ * Create many production rows in chunks.
+ *
+ * The import used to call createProduction once PER ROW, so a 10,000 row m3
+ * file was 10,000 sequential round trips - roughly 27 minutes on a normal
+ * connection, and far worse on a weak one. Chunking sends the same rows in 40
+ * requests instead.
+ *
+ * Validation stays per row and is done BEFORE any insert, so one bad row is
+ * reported by its own line number rather than failing a whole chunk. The insert
+ * deliberately omits .select(): asking the server to echo 250 rows back doubles
+ * the payload for data the caller does not read.
+ *
+ * @param {Array<object>} rows
+ * @param {{ chunk?:number, onProgress?:(done:number,total:number)=>void }} [opts]
+ * @returns {Promise<{ saved:number, failures:string[] }>}
+ */
+export async function createProductionBulk(rows = [], { chunk = 250, onProgress } = {}) {
+  const valid = []
+  const failures = []
+  for (const r of Array.isArray(rows) ? rows : []) {
+    const payload = buildPayload(r)
+    const label = r?.source_row != null ? `Row ${r.source_row}` : `Site ${payload.site || '?'}`
+    if (!payload.site) { failures.push(`${label}: a site is required.`); continue }
+    if (!payload.period_date) { failures.push(`${label}: a period date is required.`); continue }
+    if (payload.m3 == null) { failures.push(`${label}: a numeric production value (m3) is required.`); continue }
+    if (payload.m3 < 0) { failures.push(`${label}: production (m3) cannot be negative.`); continue }
+    valid.push(payload)
+  }
+
+  let saved = 0
+  for (let i = 0; i < valid.length; i += chunk) {
+    const slice = valid.slice(i, i + chunk)
+    const { error } = await supabase.from('production_logs').insert(slice)
+    if (error) {
+      // Report the range rather than pretending a single row failed - the
+      // server rejected the batch and does not say which member caused it.
+      const first = i + 1
+      const last = i + slice.length
+      failures.push(`Rows ${first} to ${last}: ${error.message || 'save failed'}`)
+    } else {
+      saved += slice.length
+    }
+    onProgress?.(Math.min(i + slice.length, valid.length), valid.length)
+  }
+  return { saved, failures }
+}
+
 /** Patch a production row. Only keys present in the patch are sent. */
 export async function updateProduction(id, patch = {}) {
   if (!id) throw new Error('A record id is required.')

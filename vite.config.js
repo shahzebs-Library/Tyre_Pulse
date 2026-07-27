@@ -94,12 +94,17 @@ export default defineConfig({
         cleanupOutdatedCaches: true,
         // prompt mode: the new SW must WAIT (do NOT skipWaiting) so the running
         // tab keeps its current build - and its already-loaded lazy chunks stay
-        // served from the old precache - until the user (or the hidden-tab
-        // auto-apply in PwaUpdatePrompt) chooses to activate it. This is what
-        // stops the abrupt mid-work reload. clientsClaim stays so that once the
-        // new SW DOES activate it controls the page immediately.
+        // served from the old precache - until the USER chooses to activate it.
+        // This is what stops the abrupt mid-work reload.
         skipWaiting: false,
-        clientsClaim: true,
+        // clientsClaim MUST stay false in prompt mode. When it was true, an
+        // activating worker seized control of a page that was still running the
+        // PREVIOUS build, immediately after cleanupOutdatedCaches had deleted
+        // that build's chunks - so the page's next lazy import resolved to
+        // nothing and rendered blank. In prompt mode the update path already
+        // reloads explicitly, so claiming a live page buys nothing and only
+        // creates that window.
+        clientsClaim: false,
         runtimeCaching: [
           // SECURITY: authenticated Supabase traffic is NEVER cached in the
           // generic browser/SW cache. Previously /rest/ (data), /auth/, and
@@ -199,7 +204,12 @@ export default defineConfig({
           if (id.includes('/@supabase/')) return 'vendor-supabase'
           if (id.includes('/@anthropic-ai/')) return 'vendor-ai'
           if (id.includes('/lucide-react/')) return 'vendor-icons'
-          // TanStack (table/query/virtual) — shared across data-grid pages.
+          // TanStack, split by role rather than by scope. react-query is
+          // imported by the app shell (QueryClientProvider), so grouping ALL of
+          // @tanstack together dragged react-table and react-virtual into the
+          // eager first paint even though only three data-grid pages - all of
+          // them lazy - ever use them.
+          if (id.includes('/@tanstack/react-query')) return 'vendor-query'
           if (id.includes('/@tanstack/')) return 'vendor-table'
           // Remaining packages: Rollup assigns them automatically, no forced grouping
         },

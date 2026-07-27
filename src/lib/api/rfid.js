@@ -6,7 +6,7 @@
  * support.js / tyreAgeCompliance.js. Tag-id normalisation lives in the pure
  * `src/lib/rfid.js` so the service and UI agree on identity.
  */
-import { supabase, unwrap, applyCountry } from './_client'
+import { supabase, unwrap, applyCountry, isMissingRelation } from './_client'
 import { normalizeTagId, RFID_STATUSES } from '../rfid'
 
 export const COLS =
@@ -15,16 +15,6 @@ export const COLS =
 
 export { RFID_STATUSES }
 
-/** True when the failure is "table does not exist yet" (pre-migration). */
-function isMissingRelation(err) {
-  const m = String(err?.message || '').toLowerCase()
-  return (
-    m.includes('does not exist') ||
-    m.includes('relation') ||
-    m.includes('schema cache') ||
-    m.includes('could not find the table')
-  )
-}
 
 /**
  * List registry tags (newest first). Optional status + country filters.

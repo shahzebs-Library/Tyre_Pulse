@@ -10,7 +10,7 @@
  * missing it resolves to [] so the page can prompt the operator to apply
  * MIGRATIONS_V145_RETREAD_CLAIMS.sql instead of crashing.
  */
-import { supabase, unwrap, applyCountry } from './_client'
+import { supabase, unwrap, applyCountry, isMissingRelation } from './_client'
 
 export const COLS =
   'id,organisation_id,country,claim_no,tyre_serial,asset_no,vendor,reason,' +
@@ -20,15 +20,6 @@ export const RETREAD_CLAIM_STATUSES = [
   'open', 'submitted', 'approved', 'rejected', 'settled',
 ]
 
-function isMissingRelation(err) {
-  const m = String(err?.message || '').toLowerCase()
-  return (
-    m.includes('does not exist') ||
-    m.includes('could not find the table') ||
-    m.includes('schema cache') ||
-    (m.includes('relation') && m.includes('retread_claims'))
-  )
-}
 
 const toNumberOrNull = (v) => {
   if (v === '' || v == null) return null

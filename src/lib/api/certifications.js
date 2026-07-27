@@ -9,7 +9,7 @@
  * can surface an "apply MIGRATIONS_V136_CERTIFICATIONS.sql" hint instead of
  * throwing.
  */
-import { supabase, unwrap, applyCountry } from './_client'
+import { supabase, unwrap, applyCountry, isMissingRelation } from './_client'
 
 const COLS =
   'id,organisation_id,country,subject_type,subject_name,cert_type,cert_number,' +
@@ -18,16 +18,6 @@ const COLS =
 export const CERT_SUBJECT_TYPES = ['driver', 'vehicle', 'technician', 'site']
 export const CERT_STATUS_VALUES = ['valid', 'expiring', 'expired', 'revoked']
 
-/** True when a Supabase error means the table/relation is not deployed yet. */
-function isMissingRelation(err) {
-  const m = String(err?.message || '').toLowerCase()
-  return (
-    m.includes('does not exist') ||
-    m.includes('relation') ||
-    m.includes('schema cache') ||
-    m.includes('could not find the table')
-  )
-}
 
 /**
  * List certifications (newest first). Optional country / status / subjectType

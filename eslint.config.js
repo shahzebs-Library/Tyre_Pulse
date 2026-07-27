@@ -1,0 +1,89 @@
+import globals from 'globals'
+import reactHooks from 'eslint-plugin-react-hooks'
+
+/**
+ * Minimal, deliberately narrow lint config.
+ *
+ * Its job is to catch the class of defect that a clean `vite build` and a green
+ * test suite both miss: a variable that does not exist at runtime. That is a
+ * ReferenceError, which in React unmounts the whole tree and renders a blank
+ * page. Rules that are only about style are left off on purpose so this stays
+ * fast and so a real error is never buried in noise.
+ */
+export default [
+  {
+    ignores: [
+      'dist/**',
+      'dev-dist/**',
+      'coverage/**',
+      'node_modules/**',
+      'mobile/**',
+      'marketing/**',
+      'supabase/**',
+      'services/**',
+      'store-assets/**',
+      'scripts/**',
+      '**/*.min.js',
+    ],
+  },
+  {
+    files: ['src/**/*.{js,jsx}'],
+    languageOptions: {
+      ecmaVersion: 2023,
+      sourceType: 'module',
+      globals: {
+        ...globals.browser,
+        ...globals.es2021,
+        process: 'readonly',
+        __APP_VERSION__: 'readonly',
+      },
+      parserOptions: {
+        ecmaFeatures: { jsx: true },
+      },
+    },
+    plugins: { 'react-hooks': reactHooks },
+    rules: {
+      // The one that matters: a name used but never defined. This is the rule
+      // that would have caught the ReferenceError that shipped past a clean
+      // build and a green suite, rendering its page blank.
+      'no-undef': 'error',
+      // Deliberately NOT checking variables here. A `const` declared at the
+      // bottom of a module and read inside a component body or a click handler
+      // is initialised long before anything reads it, and flagging those buries
+      // the real errors under ~70 false positives. Function/class hoisting is
+      // likewise fine.
+      'no-use-before-define': ['error', { functions: false, classes: false, variables: false }],
+      // These are always bugs, never intent.
+      'no-dupe-keys': 'error',
+      'no-dupe-args': 'error',
+      'no-dupe-class-members': 'error',
+      'no-unsafe-negation': 'error',
+      'no-unreachable': 'error',
+      'no-const-assign': 'error',
+      'no-self-assign': 'error',
+      'valid-typeof': 'error',
+      // A stale closure over missing deps is the second most common source of a
+      // screen that renders the wrong thing until you refresh it.
+      'react-hooks/rules-of-hooks': 'error',
+      'react-hooks/exhaustive-deps': 'warn',
+    },
+  },
+  {
+    files: ['src/test/**/*.{js,jsx}', '**/*.test.{js,jsx}'],
+    languageOptions: {
+      globals: {
+        ...globals.browser,
+        ...globals.node,
+        vi: 'readonly',
+        describe: 'readonly',
+        it: 'readonly',
+        test: 'readonly',
+        expect: 'readonly',
+        beforeEach: 'readonly',
+        afterEach: 'readonly',
+        beforeAll: 'readonly',
+        afterAll: 'readonly',
+      },
+    },
+  },
+]

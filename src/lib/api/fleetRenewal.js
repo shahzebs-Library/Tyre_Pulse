@@ -9,7 +9,7 @@
  * it resolves to [] so the page can prompt the operator to apply
  * MIGRATIONS_V159_FLEET_RENEWAL.sql instead of crashing.
  */
-import { supabase, unwrap, applyCountry } from './_client'
+import { supabase, unwrap, applyCountry, isMissingRelation } from './_client'
 
 export const COLS =
   'id,organisation_id,country,asset_no,current_km,age_years,recommendation,' +
@@ -19,15 +19,6 @@ export const COLS =
 export const RENEWAL_STATUSES = ['planned', 'approved', 'deferred', 'completed']
 export const RENEWAL_PRIORITIES = ['low', 'medium', 'high']
 
-function isMissingRelation(err) {
-  const m = String(err?.message || '').toLowerCase()
-  return (
-    m.includes('does not exist') ||
-    m.includes('could not find the table') ||
-    m.includes('schema cache') ||
-    (m.includes('relation') && m.includes('fleet_renewal_plans'))
-  )
-}
 
 const toNumberOrNull = (v) => {
   if (v === '' || v == null) return null

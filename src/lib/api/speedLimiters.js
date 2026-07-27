@@ -11,7 +11,7 @@
  * page can surface an "apply MIGRATIONS_V153_SPEED_LIMITERS.sql" hint instead
  * of throwing.
  */
-import { supabase, unwrap, applyCountry } from './_client'
+import { supabase, unwrap, applyCountry, isMissingRelation } from './_client'
 
 export const COLS =
   'id,organisation_id,country,asset_no,limit_kph,device_id,last_verified_at,' +
@@ -19,16 +19,6 @@ export const COLS =
 
 export const SPEED_LIMITER_STATUS_VALUES = ['active', 'disabled', 'fault']
 
-/** True when a Supabase error means the table/relation is not deployed yet. */
-function isMissingRelation(err) {
-  const m = String(err?.message || '').toLowerCase()
-  return (
-    m.includes('does not exist') ||
-    m.includes('relation') ||
-    m.includes('schema cache') ||
-    m.includes('could not find the table')
-  )
-}
 
 /** Coerce a value to a finite number, or null. */
 function num(value) {

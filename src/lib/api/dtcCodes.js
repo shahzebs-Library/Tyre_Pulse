@@ -8,7 +8,7 @@
  * migrated yet, so the page can surface an "apply migration" hint instead of
  * throwing.
  */
-import { supabase, unwrap, applyCountry } from './_client'
+import { supabase, unwrap, applyCountry, isMissingRelation } from './_client'
 
 export const COLS =
   'id,organisation_id,country,asset_no,code,description,system,severity,' +
@@ -17,15 +17,6 @@ export const COLS =
 export const DTC_SEVERITIES = ['info', 'warning', 'critical']
 export const DTC_STATUSES = ['active', 'acknowledged', 'cleared']
 
-function isMissingRelation(err) {
-  const m = String(err?.message || '').toLowerCase()
-  return (
-    m.includes('does not exist') ||
-    m.includes('relation') ||
-    m.includes('schema cache') ||
-    m.includes('could not find the table')
-  )
-}
 
 /**
  * List DTC codes (newest detected first). Optional status/severity filters and

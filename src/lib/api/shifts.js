@@ -10,7 +10,7 @@
  * page can surface an "apply MIGRATIONS_V149_SHIFTS.sql" hint instead of
  * throwing.
  */
-import { supabase, unwrap, applyCountry } from './_client'
+import { supabase, unwrap, applyCountry, isMissingRelation } from './_client'
 
 export const COLS =
   'id,organisation_id,country,person_name,role,shift_date,start_time,end_time,' +
@@ -18,16 +18,6 @@ export const COLS =
 
 export const SHIFT_STATUS_VALUES = ['scheduled', 'completed', 'absent', 'cancelled']
 
-/** True when a Supabase error means the table/relation is not deployed yet. */
-function isMissingRelation(err) {
-  const m = String(err?.message || '').toLowerCase()
-  return (
-    m.includes('does not exist') ||
-    m.includes('relation') ||
-    m.includes('schema cache') ||
-    m.includes('could not find the table')
-  )
-}
 
 /**
  * List shifts (upcoming first: by shift_date desc, then created_at desc).

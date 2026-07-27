@@ -16,7 +16,7 @@
  * - RLS is the authoritative country boundary for staff. We reuse listTechnicians
  * from the live service (single source for the roster).
  */
-import { supabase, unwrap, applyCountry, fetchAllPages } from './_client'
+import { supabase, unwrap, applyCountry, fetchAllPages, isMissingRelation } from './_client'
 import { listTechnicians } from './workshopLive'
 
 export const EVENT_COLS =
@@ -30,16 +30,6 @@ export const WO_COLS =
 export const SHIFT_COLS =
   'id,person_name,role,shift_date,start_time,end_time,site,status,country'
 
-/** True when a Supabase error means the table/relation is not deployed yet. */
-function isMissingRelation(err) {
-  const m = String(err?.message || '').toLowerCase()
-  return (
-    m.includes('does not exist') ||
-    m.includes('relation') ||
-    m.includes('schema cache') ||
-    m.includes('could not find the table')
-  )
-}
 
 /** Exclusive upper bound (day after `to`, YYYY-MM-DD) for an inclusive [from,to]. */
 function dayAfter(to) {

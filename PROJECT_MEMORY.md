@@ -109,6 +109,17 @@ Excel emits a **non-breaking space U+00A0** that is pixel-identical to a space.
   differs by one invisible character otherwise fails the import, or worse imports and silently drops the value.
 - NOTE: the `_stg_pick` + trigger rewrite were applied via `execute_sql`, so they carry no
   `supabase_migrations` row; the complete SQL is in `MIGRATIONS_V386_HEADER_WHITESPACE_TOLERANCE.sql`.
+- **CORRECTION — the tolerant-COLUMN half was REVERTED, and DO NOT RETRY IT.** The variant columns did not
+  fix the import; the same two headers still failed. I then brute-forced every space / NBSP / tab /
+  zero-width combination, which grew `stg_job_cards` to **946 columns** and still did not match. All variants
+  were dropped; the table is back to its **46 real columns** (verified, pipe re-tested working after cleanup).
+  **THE CONSTRAINT IS UNBEATABLE SERVER-SIDE: Supabase's Table Editor matches the CSV header BYTE FOR BYTE
+  against the column name.** No server-side tolerance can satisfy a header whose bytes are unknown. The fix
+  lives on the FILE side — delete or retype the offending headers — or read the actual bytes from the header
+  row and add exactly one correct column. **Guessing at invisible characters is a dead end; stop after one
+  attempt and ask for the header row.**
+- `_stg_pick` + the trigger rewrite SURVIVE the revert and remain the valuable half: every field is read by
+  normalised header name, so a variant column that does exist is still read correctly.
 
 ## SESSION 2026-07-27 (part 6) — V385 JOB CARD EXPORT HAS 11 MORE COLUMNS.
 

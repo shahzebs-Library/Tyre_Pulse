@@ -17,29 +17,31 @@
 --      NORMALISED header name, so any casing or whitespace difference works,
 --      including variants nobody has seen yet.
 
-do $mig$
-declare
-  base text; v text; nbsp text := chr(160);
-  bases text[] := array['Job Card Created By', 'Job Card Created Date'];
-  variants text[];
-begin
-  foreach base in array bases loop
-    variants := array[
-      base || ' ', ' ' || base,
-      replace(base, ' ', '  '),
-      replace(base, ' ', nbsp),
-      replace(base, 'Job Card', 'Job card'),
-      replace(base, 'Created', 'created')
-    ];
-    foreach v in array variants loop
-      if not exists (select 1 from information_schema.columns
-                      where table_schema='public' and table_name='stg_job_cards'
-                        and column_name = v) then
-        execute format('alter table public.stg_job_cards add column %I text', v);
-      end if;
-    end loop;
-  end loop;
-end $mig$;
+-- ---------------------------------------------------------------------------
+-- REVERTED: the tolerant-COLUMN half of this migration.
+--
+-- The variant columns below were added, and the import STILL failed with the
+-- same two headers. I then brute-forced every space / non-breaking-space / tab
+-- / zero-width combination, which grew stg_job_cards to 946 columns and STILL
+-- did not match. That was the wrong approach: guessing at bytes I cannot see,
+-- at the cost of a table the customer browses. All variant columns were dropped
+-- and the table is back to its 46 real columns.
+--
+-- WHAT REMAINS AND IS WORTH KEEPING is the tolerant-READING half: _stg_pick
+-- below, and process_stg_job_cards reading every field through it. That is
+-- genuinely useful and is unaffected by the revert - if a variant column ever
+-- does exist, its value is still read correctly.
+--
+-- THE REAL CONSTRAINT: Supabase's Table Editor requires the column name to
+-- match the CSV header byte for byte. No amount of server-side tolerance can
+-- satisfy that for a header whose bytes are unknown. The fix is on the file
+-- side - delete or retype the two offending headers - or send the header row so
+-- the exact bytes can be read and one correct column added.
+--
+-- Kept here, commented out, as the record of what was tried and why it failed.
+--
+-- do $mig$ ... variant column generation ... end $mig$;
+-- ---------------------------------------------------------------------------
 
 -- Read a staging column by header NAME, ignoring case and any whitespace
 -- difference. This is what makes the fix general: listing variants by literal

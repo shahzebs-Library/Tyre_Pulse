@@ -3,6 +3,56 @@
 Durable, committed project knowledge so any session has full context. Keep this
 current. Read it before adding/changing modules. Governing spec: `Tyre pulse enterprise.md`
 
+## SESSION 2026-07-27 (part 5) — SCRAP REGISTER + SPLIT SCRAP/UNDO RIGHTS. Migrations through **V383**, next free **V384**.
+
+### **SCRAP MANAGEMENT NEVER SHOWED THE SCRAPPED TYRES — it was reading a heuristic, not the marks**
+User: "Scrapped management is not linked with scrapped tyres, when we click into it it must show those marked
+scrapped items." Verified true and worse than reported. **`/scrap` (`TyreScrapManagement.jsx`) does not import
+`tyreExchange` at all** and never touches `tyre_status_marks`. Its entire definition of scrapped is
+`isScrap(t) = t.risk_level === 'Critical' || t.category === 'Scrap'` — an ANALYSIS of tyres that look
+scrap-worthy, which has nothing to do with anyone pressing Scrap. So every tyre scrapped from Serial Tracker or
+the phone was invisible on the page named Scrap Management.
+- **NEW first tab "Scrapped Register"** (`src/components/tyre/ScrappedRegister.jsx`) over
+  **V383 `list_scrapped_tyres(p_search, p_country, p_limit)`**. The other 4 tabs keep the heuristic (they are
+  genuine scrap-rate analysis) and the TABS comment now says which is which. Do NOT merge the two definitions.
+- **The RPC returns BOTH sources and labels them**, because they genuinely differ: a tyre scrapped via the
+  button carries a mark and an actor; a tyre bulk-scrapped from the Tyre Records grid
+  (`TyreRecords.jsx handleBulkScrap`) only ever got `status='Scrapped'` with NO mark and NO attribution.
+  Showing only marked ones hides real scrapped stock; merging silently would invent an accountability that was
+  never captured. Unmarked rows come back `marked:false` and render **"Not recorded"**, and the KPI strip
+  publishes `unattributed_total` as its own number.
+- **FOUR competing definitions of "scrapped" exist in src/** and this only unifies the reporting surface:
+  `tyre_status_marks.mark_type='scrap'` (Serial Tracker + mobile), `REMOVED_STATUS_RE` on status
+  (tyrePool/fleetRisk/tco), `risk_level Critical || category Scrap` (TyreScrapManagement), and
+  `category Scrap || (risk_level Critical && km_at_removal != null)` (TyreLifecycle:79).
+
+### V383 — MARKING and UNDOING are now SEPARATE rights, both answered by the server
+User: "Undo must be with only admin, and remember who made it scrap so we can trace."
+- **`tyre_unscrap_allowed()`** = approved+unlocked AND (super OR `app_role()='admin'`), deliberately narrower
+  than `tyre_scrap_allowed()`. Marking a scrap is a field observation; reversing one is a correction to the
+  record. Verified live: collector scrap=true/undo=false, admin both, reporter neither.
+- **The direct-table bypass was open and is now closed.** `tyre_status_marks_write` was PERMISSIVE FOR ALL on
+  `is_approved_and_unlocked()`, so any approved user could simply DELETE a scrap mark and sidestep an
+  admin-only undo entirely. Split into insert/update (unchanged) + **delete requires admin for a `scrap` mark**;
+  `returned`/`written_off` (Tyre Exchange) untouched. Proven live: collector direct DELETE removes 0 rows.
+- **TRACE SURVIVES THE UNDO, which is the whole point.** The undo DELETES the mark, taking `created_by` with it,
+  so a trace living only on the mark is destroyed by the very action it must record. `_log_scrap_action` writes
+  to **`audit_log_v2`** (no new table) and the undo audits BEFORE it deletes. Live: after a full round trip the
+  trail reads `tyre_scrap by Tyre Data Collector, tyre_unscrap by Admin`.
+- **A repeat scrap used to record the newest person against the oldest date** — `created_by` was updated on
+  conflict while `created_at` was not. They now move together.
+- `set_scrap_reason` RPC replaces the direct table update (the policy let any approved user rewrite any mark's
+  reason with no record). Clients: `getScrapPermissions()` (web) / `canScrapTyre()`+`canUnscrapTyre()` (mobile),
+  both **fail closed**. SerialTracker's `isAdmin = canScrap` alias is gone; the Scrapped tab now shows Edit
+  reason and Undo independently. Tests `scrapRegister.test.js` (12).
+- **FULL ROUND TRIP VERIFIED LIVE (rolled back)** on serial EP060420711 / asset TM527: collector scraps ->
+  register shows "by IJAZ ALI SHAH" -> collector undo BLOCKED -> collector direct DELETE blocked ->
+  admin undo -> **restored to `Removed`, not `Active`**.
+- **DATA ISSUE, NOT CODE:** 5 of the 6 Tyre Data Collectors are in Company A (7,498 tyres visible); user
+  `0bdeeb0d` is in the Egypt org `e340fa7a` which holds **0 tyre_records**, so that one sees nothing and a
+  scrap stamps 0 rows. Same class as the already-recorded "9 KSA users in the wrong org" finding. Moving a user
+  between orgs is a data decision — left for the customer.
+
 ## SESSION 2026-07-27 (part 4) — JOB CARD INTAKE + SCRAP FOR TYRE ROLES. Migrations through **V382b**, next free **V383**.
 
 ### V381 JOB CARD INTAKE — `stg_job_cards`, and it brings the AVAILABILITY CYCLE the app never had

@@ -16,6 +16,7 @@ import {
 } from 'lucide-react'
 import { SkeletonTable } from '../components/ui/Skeleton'
 import EntityApprovalPanel from '../components/workflow/EntityApprovalPanel'
+import ScrappedRegister from '../components/tyre/ScrappedRegister'
 import * as scrapApi from '../lib/api/tyreScrap'
 import { fetchAllPages } from '../lib/fetchAll'
 import { useAuth } from '../contexts/AuthContext'
@@ -35,7 +36,12 @@ ChartJS.register(
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 
-const TABS = ['Overview', 'By Brand', 'By Site', 'Disposal Log']
+// "Scrapped Register" is first because it is the literal answer to "show me the
+// scrapped tyres". Every other tab on this page works off the isScrap heuristic
+// below (risk_level Critical / category Scrap), which is an ANALYSIS of tyres
+// that look scrap-worthy - it is not the list of tyres anybody actually
+// scrapped, and it never was.
+const TABS = ['Scrapped Register', 'Overview', 'By Brand', 'By Site', 'Disposal Log']
 
 const DATE_RANGE_OPTS = [
   { label: 'Last 30 Days', days: 30 },
@@ -871,6 +877,13 @@ export default function TyreScrapManagement() {
               </button>
             ))}
           </div>
+
+          {/* ══════════════════════════════════════════════════════════════════════
+              Tab: Scrapped Register - the tyres someone actually marked scrap
+          ════════════════════════════════════════════════════════════════════════ */}
+          {activeTab === 'Scrapped Register' && (
+            <ScrappedRegister country={activeCountry} currency={activeCurrency} />
+          )}
 
           {/* ══════════════════════════════════════════════════════════════════════
               Tab: Overview

@@ -70,11 +70,16 @@ export async function scrapTyreBySerial(serial, { reason = null, country = null 
 }
 
 /**
- * Undo a scrap: removes the 'scrap' mark and reverts any row still flagged
- * 'Scrapped' back to 'Active'. (removal_date / km_at_removal lifecycle signals are
- * untouched, so a genuinely-removed tyre stays out of the allocatable pool.)
+ * Undo a scrap. ADMIN ONLY (V383) - deliberately a narrower right than
+ * scrapping, because marking a scrap is a field observation while reversing one
+ * is a correction to the record.
+ *
+ * Each row goes back to the status it held BEFORE the scrap, which the mark
+ * recorded. It does NOT blanket-set 'Active': that used to bring a 'Removed'
+ * tyre back into the allocatable pool, and where the position had since been
+ * refilled the update was refused outright by guard_tyre_active_fitment.
  * @param {string} serial
- * @returns {Promise<{ ok:boolean }>}
+ * @returns {Promise<{ ok:boolean, restoredExactly:boolean }>}
  */
 export async function unscrapTyreBySerial(serial) {
   const s = String(serial || '').trim()
@@ -84,13 +89,18 @@ export async function unscrapTyreBySerial(serial) {
   return { ok: true, restoredExactly: data?.restored_exactly === true }
 }
 
-/** Update the reason on an existing 'scrap' mark (in-place edit). */
+/**
+ * Edit the reason on an existing scrap mark. Through the RPC so it is gated and
+ * audited: the table policy alone lets any approved user rewrite any mark's
+ * reason with no record of the change.
+ */
 export async function updateScrapReason(serial, reason) {
   const s = String(serial || '').trim()
   if (!s) throw new Error('Serial number is required.')
-  const { error } = await supabase.from('tyre_status_marks')
-    .update({ reason: reason ? String(reason).trim() : null })
-    .eq('serial', s).eq('mark_type', 'scrap')
+  const { error } = await supabase.rpc('set_scrap_reason', {
+    p_serial: s,
+    p_reason: reason ? String(reason).trim() : null,
+  })
   if (error) throw error
   return { ok: true }
 }
@@ -105,6 +115,39 @@ export async function getScrapMark(serial) {
   return data || null
 }
 
+/**
+ * The scrapped register: every tyre this org has scrapped, WHO scrapped it and
+ * when, with the tyre's own detail (asset, position, brand, size, cost).
+ *
+ * Goes through `list_scrapped_tyres` rather than reading the marks directly for
+ * two reasons. It resolves created_by to a person, which a plain select cannot
+ * do. And it also returns tyres carrying status='Scrapped' with NO mark - the
+ * ones bulk-scrapped from the Tyre Records grid, which never wrote a mark and
+ * were therefore invisible to every scrap surface. Those come back flagged
+ * `marked:false` and with no actor, because there genuinely is none; merging
+ * them silently would invent an accountability that was never recorded.
+ *
+ * @param {{ search?:string, country?:string, limit?:number }} [opts]
+ * @returns {Promise<{ok:boolean, rows:Array, total:number, marked_total:number, unattributed_total:number}>}
+ */
+export async function listScrappedTyres({ search, country, limit } = {}) {
+  const { data, error } = await supabase.rpc('list_scrapped_tyres', {
+    p_search: search ? String(search).trim() : null,
+    p_country: country && country !== 'All' ? country : null,
+    p_limit: limit || 500,
+  })
+  if (error) {
+    const m = String(error.message || error.code || '').toLowerCase()
+    // pre-V383 backend: degrade to an empty register rather than an error page
+    if (m.includes('does not exist') || m.includes('could not find') || m.includes('schema cache')) {
+      return { ok: false, rows: [], total: 0, marked_total: 0, unattributed_total: 0 }
+    }
+    throw error
+  }
+  if (!data || data.ok !== true) return { ok: false, rows: [], total: 0, marked_total: 0, unattributed_total: 0 }
+  return { ...data, rows: Array.isArray(data.rows) ? data.rows : [] }
+}
+
 /** All 'scrap' marks for this org (serial, reason, created_at), newest first. */
 export async function listScrapMarks() {
   const { data, error } = await supabase.from('tyre_status_marks')
@@ -112,4 +155,26 @@ export async function listScrapMarks() {
     .order('created_at', { ascending: false })
   if (error) throw error
   return data || []
+}
+
+/**
+ * May THIS user scrap / undo? Asked of the server, never inferred from the role
+ * string on the client.
+ *
+ * Two separate answers because they are two separate rights: a Tyre Data
+ * Collector may scrap but not undo. Guessing either from `role === 'Admin'`
+ * misses a per-user capability grant entirely, and would show a collector a
+ * button the server will refuse. Both FAIL CLOSED - an action we cannot confirm
+ * is not offered.
+ * @returns {Promise<{ canScrap:boolean, canUndo:boolean }>}
+ */
+export async function getScrapPermissions() {
+  const [scrap, undo] = await Promise.all([
+    supabase.rpc('tyre_scrap_allowed'),
+    supabase.rpc('tyre_unscrap_allowed'),
+  ])
+  return {
+    canScrap: !scrap.error && scrap.data === true,
+    canUndo: !undo.error && undo.data === true,
+  }
 }

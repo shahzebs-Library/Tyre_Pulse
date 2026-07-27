@@ -23,7 +23,7 @@ import { useRoleGuard } from '../../hooks/useRoleGuard'
 import { MODULES } from '../../lib/permissions'
 import { lookupTyreBySerial, sanitizeSerial, TyreLookupRecord } from '../../lib/tyreLookup'
 import { extractScanCode } from '../../lib/assetLookup'
-import { scrapTyreBySerial, unscrapTyreBySerial, getScrapMark, canScrapTyre, ScrapMark } from '../../lib/tyreScrap'
+import { scrapTyreBySerial, unscrapTyreBySerial, getScrapMark, canScrapTyre, canUnscrapTyre, ScrapMark } from '../../lib/tyreScrap'
 import { toUserMessage } from '../../lib/safeError'
 
 type SearchState = 'idle' | 'searching' | 'found' | 'empty' | 'error'
@@ -42,14 +42,20 @@ function SerialSearchScreen() {
   const { allowed } = useRoleGuard(
     MODULES.find((m) => m.key === 'serial')?.roles ?? ['inspector', 'tyre_man', 'admin', 'manager', 'director'],
   )
-  // Whether this user may scrap is answered by the SERVER (V382), because the
-  // phone cannot tell: normaliseRole collapses unknown custom roles to
-  // 'reporter', and per-user capability grants are invisible here. Asking the
-  // same function the RPC enforces keeps the button and the permission in step.
+  // Both rights are answered by the SERVER, because the phone cannot tell:
+  // normaliseRole collapses unknown custom roles to 'reporter', and per-user
+  // capability grants are invisible here. Asking the same functions the RPCs
+  // enforce keeps each button and its permission in step.
+  //
+  // Two questions, not one (V383). Marking a scrap reaches the tyre roles
+  // including Tyre Data Collector; undoing one is an administrator action. A
+  // single flag would have handed the collector both or neither.
   const [canScrap, setCanScrap] = useState(false)
+  const [canUndo, setCanUndo] = useState(false)
   useEffect(() => {
     let cancelled = false
     canScrapTyre().then((ok) => { if (!cancelled) setCanScrap(ok) })
+    canUnscrapTyre().then((ok) => { if (!cancelled) setCanUndo(ok) })
     return () => { cancelled = true }
   }, [profile?.id, isSuperAdmin])
   // Prefill from a scan handoff (scanner "Search manually" passes ?q=<code>).
@@ -300,34 +306,33 @@ function SerialSearchScreen() {
                 </View>
               )}
 
-              {/* Scrap controls — Admin / super-admin only */}
-              {canScrap && (
-                scrapMark ? (
-                  <TouchableOpacity
-                    style={styles.undoBtn}
-                    onPress={undoScrap}
-                    disabled={scrapBusy}
-                    activeOpacity={0.88}
-                  >
-                    {scrapBusy ? (
-                      <ActivityIndicator size="small" color="#dc2626" />
-                    ) : (
-                      <Ionicons name="arrow-undo-outline" size={18} color="#dc2626" />
-                    )}
-                    <Text style={styles.undoBtnText}>{t('modules.serialSearch.undoScrap')}</Text>
-                  </TouchableOpacity>
-                ) : (
-                  <TouchableOpacity
-                    style={styles.scrapBtn}
-                    onPress={() => { setScrapReason(''); setScrapModal(true) }}
-                    disabled={scrapBusy}
-                    activeOpacity={0.88}
-                  >
-                    <Ionicons name="ban-outline" size={18} color="#fff" />
-                    <Text style={styles.scrapBtnText}>{t('modules.serialSearch.markScrap')}</Text>
-                  </TouchableOpacity>
-                )
-              )}
+              {/* Gated per action by the server: mark for the tyre roles,
+                  undo for administrators. */}
+              {scrapMark ? (canUndo && (
+                <TouchableOpacity
+                  style={styles.undoBtn}
+                  onPress={undoScrap}
+                  disabled={scrapBusy}
+                  activeOpacity={0.88}
+                >
+                  {scrapBusy ? (
+                    <ActivityIndicator size="small" color="#dc2626" />
+                  ) : (
+                    <Ionicons name="arrow-undo-outline" size={18} color="#dc2626" />
+                  )}
+                  <Text style={styles.undoBtnText}>{t('modules.serialSearch.undoScrap')}</Text>
+                </TouchableOpacity>
+              )) : (canScrap && (
+                <TouchableOpacity
+                  style={styles.scrapBtn}
+                  onPress={() => { setScrapReason(''); setScrapModal(true) }}
+                  disabled={scrapBusy}
+                  activeOpacity={0.88}
+                >
+                  <Ionicons name="ban-outline" size={18} color="#fff" />
+                  <Text style={styles.scrapBtnText}>{t('modules.serialSearch.markScrap')}</Text>
+                </TouchableOpacity>
+              ))}
             </View>
           )}
 

@@ -92,3 +92,19 @@ export async function canScrapTyre(): Promise<boolean> {
     return false  // never show an action we cannot confirm
   }
 }
+
+/**
+ * May THIS user UNDO a scrap? A separate and narrower right (V383): marking a
+ * scrap is a field observation, reversing one is a correction to the record and
+ * belongs to an administrator. Asking separately means a Tyre Data Collector
+ * gets the Scrap button without the Undo button, instead of both or neither.
+ */
+export async function canUnscrapTyre(): Promise<boolean> {
+  try {
+    const { data, error } = await supabase.rpc('tyre_unscrap_allowed')
+    if (error) return false
+    return data === true
+  } catch {
+    return false
+  }
+}

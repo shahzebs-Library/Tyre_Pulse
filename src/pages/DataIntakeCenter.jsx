@@ -17,6 +17,7 @@ import {
   headerFingerprint, aggregateStagedRows, COST_FIELDS,
 } from '../lib/import'
 import * as imports from '../lib/api/imports'
+import { checkImportFingerprint, fileSha256 } from '../lib/api/importHistory'
 import { configNum } from '../lib/api/systemConfig'
 import { summarizeValidation, summarizeCommitResult, diagnoseBatchHealth, formatDiagnosticsReport } from '../lib/import/diagnostics'
 import { getBatchDiagnostics } from '../lib/api/importDiagnostics'
@@ -80,6 +81,10 @@ export default function DataIntakeCenter() {
   const [step, setStep] = useState(0)
   const [module, setModule] = useState(initialModule)
   const [file, setFile] = useState(null)
+  // Set when this exact file content has been imported before. Holds the commit
+  // button until the operator confirms a repeat is intended.
+  const [fingerprint, setFingerprint] = useState(null)
+  const [repeatAck, setRepeatAck] = useState(false)
   const [fileQueue, setFileQueue] = useState([])   // extra files picked in one go, imported one-by-one
   const [appliedProfile, setAppliedProfile] = useState(null) // fingerprint-matched saved mapping
   const autoSavedFp = useRef(null) // fingerprint we've already auto-remembered this session
@@ -267,8 +272,20 @@ export default function DataIntakeCenter() {
   // ── Step 1: parse a chosen file ──────────────────────────────────────────────
   async function loadFile(f) {
     setError(''); setBusy(true)
+    setFingerprint(null); setRepeatAck(false)
     try {
       const buf = await f.arrayBuffer()
+      // Content fingerprint first. The expense grid can only recognise an
+      // already-loaded LINE when the ERP line number was mapped, which is true
+      // for KSA and almost nothing else, so for Egypt and UAE this hash is the
+      // only thing standing between a re-upload and doubled spend.
+      try {
+        const sha = await fileSha256(buf)
+        if (sha) {
+          const seen = await checkImportFingerprint(sha)
+          if (seen?.seen) setFingerprint({ ...seen, sha256: sha })
+        }
+      } catch { /* an aid, never a gate on parsing */ }
       const wb = await parseWorkbook(buf)
       setFile(f); setParsed(wb); setSheetIdx(0)
     } catch (err) {
@@ -1086,7 +1103,22 @@ export default function DataIntakeCenter() {
                 <p className="text-sm text-emerald-300 border-t border-[var(--border-dim)] pt-3">Total tyre amount to be recorded: <span className="font-bold">{fmtMoney(counts.amount)}</span> across {counts.qty || counts.total} tyres.</p>
               )}
               {!isElevated && <p className="text-xs text-amber-400">Your role can stage but not approve, this will be submitted for approval.</p>}
-              <button onClick={commit} disabled={busy} className="px-4 py-2 rounded-lg bg-green-600 hover:bg-green-500 text-white text-sm flex items-center gap-2 disabled:opacity-50">{busy ? <Loader2 size={15} className="animate-spin" /> : <CheckCircle2 size={15} />} {isElevated ? 'Approve & commit' : 'Submit for approval'}</button>
+              {fingerprint && (
+                <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 space-y-2">
+                  <p className="text-sm font-semibold text-amber-300">This file has been imported before</p>
+                  <p className="text-xs text-amber-200">
+                    The same file content was loaded
+                    {fingerprint.first_seen_at ? ` on ${String(fingerprint.first_seen_at).slice(0, 10)}` : ' previously'}
+                    {fingerprint.filename ? ` as "${fingerprint.filename}"` : ''}.
+                    Committing it again adds those rows a second time and overstates your totals.
+                  </p>
+                  <label className="flex items-center gap-2 text-xs text-amber-200 cursor-pointer">
+                    <input type="checkbox" checked={repeatAck} onChange={(e) => setRepeatAck(e.target.checked)} />
+                    I know this is a repeat and I want to import it anyway
+                  </label>
+                </div>
+              )}
+              <button onClick={commit} disabled={busy || (!!fingerprint && !repeatAck)} className="px-4 py-2 rounded-lg bg-green-600 hover:bg-green-500 text-white text-sm flex items-center gap-2 disabled:opacity-50">{busy ? <Loader2 size={15} className="animate-spin" /> : <CheckCircle2 size={15} />} {isElevated ? 'Approve & commit' : 'Submit for approval'}</button>
               {busy && commitProgress && (
                 <div className="space-y-1.5">
                   {commitProgress.phase === 'commit' ? (

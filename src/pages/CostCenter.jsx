@@ -5,8 +5,10 @@ import { fetchAllPages } from '../lib/fetchAll'
 import { useSettings } from '../contexts/SettingsContext'
 import { useLanguage } from '../contexts/LanguageContext'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
-import { COST_MODES, pickCost, costModeLabel, pickMonthly, splitTotals } from '../lib/costSources'
-import { loadCostSplit } from '../lib/api/costSummary'
+import { COST_MODES, costModeLabel, pickMonthly, splitTotals } from '../lib/costSources'
+
+import { loadGovernedCostSplit } from '../lib/api/governedCost'
+import CostValue from '../components/cost/CostValue'
 import { buildCostIntelligence, UNIT_META } from '../lib/costIntelligence'
 import { listProduction, createProduction, updateProduction, deleteProduction, sumProductionM3 } from '../lib/api/production'
 import { parseWorkbook } from '../lib/import'
@@ -160,7 +162,7 @@ export default function CostCenter() {
     let cancelled = false
     setSplitLoading(true)
     setSplitError(null)
-    loadCostSplit({ country: activeCountry })
+    loadGovernedCostSplit({ country: activeCountry })
       .then(res => { if (!cancelled) setSplit(res) })
       .catch(e => { if (!cancelled) setSplitError(toUserMessage(e, 'Failed to load cost split')) })
       .finally(() => { if (!cancelled) setSplitLoading(false) })
@@ -409,7 +411,6 @@ export default function CostCenter() {
 
   const splitAgg = useMemo(() => splitTotals(splitByMonth), [split])
 
-  const splitHeadline = pickCost(costMode, splitAgg)
 
   const splitSeries = useMemo(() => pickMonthly(costMode, splitByMonth), [costMode, split])
 
@@ -787,8 +788,11 @@ export default function CostCenter() {
                     style={{ borderColor: `${MODE_COLOR[costMode]}55`, background: `linear-gradient(135deg, ${MODE_COLOR[costMode]}12 0%, rgba(8,15,10,0.9) 100%)` }}
                   >
                     <p className="text-xs text-[var(--panel-ink-4)] font-medium">{costModeLabel(costMode)} spend (12 months)</p>
+                    {/* GOVERNED: one figure per currency. The old render used
+                        activeCurrency, which is SAR on the All-countries view,
+                        so a SAR+AED+EGP blend was labelled SAR. */}
                     <p className="text-2xl font-bold mt-1" style={{ color: MODE_COLOR[costMode] }}>
-                      {fmtCurrency(splitHeadline, activeCurrency)}
+                      <CostValue split={split} mode={costMode} />
                     </p>
                   </div>
                   <div className="grid grid-cols-2 gap-3">
@@ -797,14 +801,14 @@ export default function CostCenter() {
                       className={`p-3 rounded-lg border text-left transition-colors ${costMode === 'tyres' ? 'border-green-700' : 'border-gray-700 hover:border-gray-600'}`}
                     >
                       <p className="text-[11px] text-[var(--panel-ink-4)]">Tyres</p>
-                      <p className="text-sm font-bold text-green-400 mt-0.5">{fmtCurrency(splitAgg.tyre, activeCurrency)}</p>
+                      <p className="text-sm font-bold text-green-400 mt-0.5"><CostValue split={split} mode="tyres" /></p>
                     </button>
                     <button
                       onClick={() => setCostMode('maintenance')}
                       className={`p-3 rounded-lg border text-left transition-colors ${costMode === 'maintenance' ? 'border-orange-700' : 'border-gray-700 hover:border-gray-600'}`}
                     >
                       <p className="text-[11px] text-[var(--panel-ink-4)]">Maintenance</p>
-                      <p className="text-sm font-bold text-orange-400 mt-0.5">{fmtCurrency(splitAgg.maintenance, activeCurrency)}</p>
+                      <p className="text-sm font-bold text-orange-400 mt-0.5"><CostValue split={split} mode="maintenance" /></p>
                     </button>
                   </div>
                   <div className="p-3 rounded-lg bg-gray-800/50 border border-gray-700">
@@ -1426,7 +1430,7 @@ function CostPerUnitSection({ currency, country, siteOptions = [] }) {
     try {
       const siteArg = site && site !== 'All' ? site : undefined
       const [split, m3, km, hours, rows] = await Promise.all([
-        loadCostSplit({ country, from: from || undefined, to: to || undefined, site: siteArg }),
+        loadGovernedCostSplit({ country, from: from || undefined, to: to || undefined, site: siteArg }),
         sumProductionM3({ country, site: siteArg, from: from || undefined, to: to || undefined }),
         sumMeterDeltas('odometer_logs', 'odometer_km', { country, site: siteArg, from, to }),
         sumMeterDeltas('engine_hours_logs', 'engine_hours', { country, site: siteArg, from, to }),

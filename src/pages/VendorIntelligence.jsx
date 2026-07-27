@@ -14,7 +14,7 @@ import {
   computeFailureRate,
 } from '../lib/kpiEngine'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
-import { loadCostSplit } from '../lib/api/costSummary'
+import { loadGovernedCostSplit } from '../lib/api/governedCost'
 import { toUserMessage } from '../lib/safeError'
 import {
   Trophy, Download, FileText, AlertTriangle, CheckCircle,
@@ -238,7 +238,7 @@ export default function VendorIntelligence() {
   // (loadCostSplit.tyre), not from summing per-vendor cost_per_tyre.
   useEffect(() => {
     let alive = true
-    loadCostSplit({ country: activeCountry })
+    loadGovernedCostSplit({ country: activeCountry })
       .then(r => { if (alive) setFleetTyreCost(r?.tyre ?? null) })
       .catch(() => { if (alive) setFleetTyreCost(null) })
     return () => { alive = false }

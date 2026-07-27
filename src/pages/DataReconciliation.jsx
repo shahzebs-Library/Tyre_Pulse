@@ -10,6 +10,7 @@ import DupKeyTyresSection from '../components/reconciliation/DupKeyTyresSection'
 import SerialMultiAssetSection from '../components/reconciliation/SerialMultiAssetSection'
 import DataQualityScorecard from '../components/reconciliation/DataQualityScorecard'
 import AssetMasterSection from '../components/reconciliation/AssetMasterSection'
+import DataTrustSection from '../components/reconciliation/DataTrustSection'
 import {
   GitCompare, Building2, Copy, ArrowLeftRight, AlertTriangle, CheckCircle2,
   X, Check, RefreshCw, ChevronDown, ChevronRight, Info, Layers, ShieldCheck,
@@ -171,6 +172,7 @@ export default function DataReconciliation() {
   const [group, setGroup] = useState('overview')
   const GROUPS = [
     ['overview', 'Overview'],
+    ['trust', 'Trust'],
     ['completeness', 'Completeness'],
     ['integrity', 'Integrity'],
     ['assets', 'Assets'],
@@ -354,6 +356,15 @@ export default function DataReconciliation() {
       </div>
       </div>
       {/* ═══ End Overview group ══════════════════════════════════════════════ */}
+
+      {/* ═══ Trust group ═════════════════════════════════════════════════════ */}
+      {/* Data Trust Centre: the confidence layer that attaches a 0-100 score
+          and its reasons to every KPI domain. Self-loading and self-degrading,
+          so it never blocks the reconciliation sections above. */}
+      <div className={group === 'trust' ? 'space-y-5' : 'hidden'}>
+        <DataTrustSection />
+      </div>
+      {/* ═══ End Trust group ═════════════════════════════════════════════════ */}
 
       {/* ═══ Completeness group ══════════════════════════════════════════════ */}
       <div className={group === 'completeness' ? 'space-y-5' : 'hidden'}>

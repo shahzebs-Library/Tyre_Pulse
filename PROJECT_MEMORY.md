@@ -3,6 +3,144 @@
 Durable, committed project knowledge so any session has full context. Keep this
 current. Read it before adding/changing modules. Governing spec: `Tyre pulse enterprise.md`
 
+## SESSION 2026-07-27 (part 3) — CLOSING THE OPEN ITEMS. Migrations through **V380**, next free **V381**.
+
+### ALL 10 `loadCostSplit` CONSUMERS NOW GOVERNED — the blended total is gone everywhere
+ExecutiveReport, VendorIntelligence, EngineeringKpi, PmPrograms, BrandPerformance, VehicleHistory migrated to
+`loadGovernedCostSplit`, plus a SECOND call site in CostCenter (line 1433, site-scoped) the first pass missed.
+**`grep loadCostSplit(` over src/pages and src/console now returns nothing.** Only `costSummary.js` itself and
+three explanatory comments still name it.
+
+### **THE "6 DOUBLE-COUNT SITES" ARE NOT DOUBLE-COUNTING — measured, not assumed**
+`work_orders.tyre_cost` is **NULL on all 85,886 rows** and sums to 0, and `total_cost` (35,060,742) equals
+labour+parts+lubricant+outside_repair exactly. So WorkOrders.jsx / WorkshopManagement.jsx / technicianScorecard
+are NOT inflating anything today. The exclusion is still correct and is encoded in `governedCost.EXCLUSIONS`,
+which is where it protects the future. **Do not "fix" those 6 sites; there is nothing live to fix.**
+
+### V380 FX CONVERSION — built, verified, and deliberately INERT
+`currency_rates` already existed and was EMPTY, which is the only reason no combined-country total was ever
+possible. Now: `fx_rate_for` / `fx_convert` / `fx_coverage` + a stored `system_config.fx_policy`
+(transaction | monthly_avg | closing; default monthly_avg) + `src/lib/api/currencyRates.js` +
+`FxRatesPanel` mounted on Console System Configuration.
+- **NO RATE IS INVENTED.** With the table empty `fx_coverage('SAR')` returns `complete:false` with AED and EGP
+  null, callers say "not available", and per-country figures are unchanged. Verified live rolled back: with two
+  test rates it returns AED 1.0211 / EGP 0.0777, converts 1000 AED to 1021.10, gives NULL for an unknown
+  currency, 1 for same-currency, and **NULL for a date before the first rate** (no backwards extrapolation).
+- **ENTER vs APPROVE is enforced server-side** (V380b). `currency_rates_write` was `is_approved_and_unlocked()`
+  = any approved user, far too loose for something that rescales all reported money. Now elevated may ENTER
+  (lands unapproved, used by nothing) and only Admin/super-admin may APPROVE. Verified by impersonation:
+  Manager can enter, Manager approve is BLOCKED, **and Manager inserting a row already flagged approved is also
+  BLOCKED** - the guard is BEFORE INSERT OR UPDATE so the obvious bypass is closed.
+- **REMAINING is not code**: an administrator must enter and approve AED->SAR and EGP->SAR. Until then the
+  system correctly declines a combined total.
+
+### `store_site_map` — 18 UNMAPPED CODES, and it is blocked on CUSTOMER KNOWLEDGE, not effort
+All 18 are Egypt/UAE (every KSA code is mapped). Biggest: `SP_EG_MRIL` 21,572,284 EGP · `GC_JEB_ST` 16,145,348
+AED · `SP_EG_EAST` 15,972,363 · `SP_EG_GML4` 13,914,211. Three carry a stray space (`SP_EG_ MID`, `SP_EG_ RH`,
+`SP_EG_ MAK`) and are probably entry variants. **I did NOT map these**: `site` already falls back to the store
+code itself, so nothing is lost, and inventing "Jebel Ali" from `GC_JEB_ST` would be a guess about the
+customer's own site names. The ExpenseReport "By site" panel already has an inline picker for this - it is a
+short session with someone who knows the sites, not a code change.
+
+## SESSION 2026-07-27 (part 2) — ARCHITECTURE PASS. Migrations through **V379**, next free **V380**.
+Four agents on the remaining architecture spec. **Every claim below I re-verified myself against the live DB.**
+
+### **V379 — `authenticated` held TRUNCATE on 248 tables, and TRUNCATE IS NOT COVERED BY RLS**
+Proven live in a rolled-back txn: as `authenticated`, with the RESTRICTIVE org-isolation policy in force,
+`truncate public.stg_tyre_brand` **SUCCEEDED**. Postgres never consults row policies for TRUNCATE, so the entire
+tenant boundary stops at that one statement, and `parts_consumption` (216,792 rows of financial history) was in
+the set. LATENT not live: PostgREST never issues TRUNCATE and nothing runs user-influenced SQL as that role.
+Revoked TRUNCATE + TRIGGER from authenticated/anon + `alter default privileges` so new tables cannot inherit them.
+Safe: zero TRUNCATE statements in src/ or supabase/, zero functions containing one; the app uses DELETE.
+**RULE: RLS governs SELECT/INSERT/UPDATE/DELETE only. It does NOT govern TRUNCATE or DDL.**
+
+### **THE ALL-COUNTRIES VIEW WAS RENDERING A BLENDED TOTAL — live, user-visible, now fixed**
+`SettingsContext` `activeCurrency` falls back to `appSettings.currency` when country is 'All', and `applyCountry`
+applies NO filter there, so all 10 `loadCostSplit` consumers rendered **"SAR 138,443,319"** = literally
+79,341,428 EGP + 40,608,350 SAR + 18,493,541 AED (I checked the arithmetic - it is exact).
+**`src/lib/governedCost.js` is now THE cost definition** and makes this impossible BY CONSTRUCTION, not by
+discipline: `Money` is frozen `{amount,currency}`, `addMoney` THROWS on mismatch, and `CountryCostSet` exposes
+**no scalar total** so there is nothing a template can render as one number. Migrated: Dashboard, Analytics,
+CostCenter, BoardOverview. **Still to migrate: ExecutiveReport, VendorIntelligence, BrandPerformance,
+EngineeringKpi, PmPrograms, VehicleHistory** (same one-line swap).
+- **The audit found 361 inline cost-derivation sites, NOT the ~30 the spec estimated** (pages 181 / lib 162 /
+  api 7 / analytics 5 / console 3 / components 2; 14 governed, 226 trivial, 121 need a decision).
+- **49% of tyre_records have no price, not 36%**, and UAE + Egypt are 100% null - so the ~105 sites that sum
+  `cost_per_tyre` for a TOTAL read 0.00 for those countries while the grid holds AED 6.15M and EGP 16.72M.
+- 6 sites add `work_orders.total_cost` which INCLUDES tyre_cost = double count (WorkOrders.jsx:234,502,538;
+  WorkshopManagement.jsx:357,390,1277-1296; technicianScorecard.js:87,152).
+- Simply broken: `SerialTracker.jsx:237,366` sums a `cost` column **that does not exist**; `CostCenter.jsx:207`
+  drops `qty`. 3 sites fabricate a denominator of 1 (RotationSchedule:265, ForecastingEngine:691,
+  TyreScrapManagement:404).
+- **BLOCKED:** per-site cost cannot move to the grid - only **7 of 38** grid sites match the 22 tyre_records
+  sites. Complete `store_site_map` first or ~20 figures silently change which site they belong to.
+
+### **RE-IMPORT PROTECTION WAS KSA-ONLY — the `#` column was never mapped for Egypt/UAE**
+`source_row` is present on **106,646/106,646 KSA** rows but only **78/42,531 Egypt** and **39/67,615 UAE**, so
+`import_uid` could never be computed there (V363's backfill was not the cause - the source data simply had no
+line number). A re-upload of an Egypt or UAE expense file would duplicate the money again, the exact failure
+that produced the 8,248 duplicates. **FIX: `checkImportFingerprint` (sha256 of the file) is now wired into
+`ErpIntake.jsx` and `ConsoleSmartImport.jsx`** - hashes before parsing, warns when the content has been seen,
+and DISABLES the commit button until the operator ticks an acknowledgement. Covers all 3 countries regardless of
+source_row. **STILL OPEN: `DataIntakeCenter.jsx` is not yet wired.**
+
+### V375 Data Trust Centre — `/data-reconciliation` Trust tab (no new page, no new route)
+`get_data_trust_overview` + pure `src/lib/dataTrust.js` (17 checks, 5 dimensions, 5 KPI domains, 30 tests) +
+reusable `src/components/trust/TrustBadge.jsx`. Live scores: tyre+parts spend 67 · cost per km 54 · tyre life 69
+· brand performance 44 · fleet register 52. Every score carries its REASONS; a domain with nothing measurable
+returns **null, not a flattering zero**. Deliberate omissions stated in the UI: `meter_source` scores 0 because
+the odometer tables are empty, and the never-populated columns get NO checks, since scoring them would imply
+they were expected.
+
+### V376 ASSET OWNERSHIP — **a shared asset number is NOT proof of a transferred vehicle**
+**CORRECTS THE STANDING V356 CLAIM** that "183 vehicles transferred between countries". Verified: of 1,300
+asset codes carrying spend, **221 appear in two countries, but 57 of them bill CONCURRENTLY in 2+ months** and
+one machine cannot be in two places at once. Identity confirms it: **GN103 is a "GENERATOR" in KSA and a
+"GENERATOR SANY" in UAE; BP041 is "BATCHING PLANT 41" in KSA and a different "BATCH PLANT" in Egypt.** The
+numbering is a per-country sequence per asset class (BP/GN/MP/TM), so collisions are expected.
+- True foreign-borne cost is small: KSA 1,628,998 SAR (4.0%) · Egypt 571,705 EGP (0.7%) · UAE 92,145 AED (0.5%).
+  The bigger exposure is **contested codes (2.9-6.4%)**, which is a data-identity problem, not a transfer one.
+- **THE OWNERSHIP RULE IS OPERATING-EVIDENCE ONLY, and the obvious signals had to be REJECTED because they are
+  artifacts that would have handed KSA every contested asset:** `purchase_value`, `net_book_value`,
+  `fa_asset_number`, `serial_no`, `chassis_no` are **NULL on all 1,523 fleet rows**; `registration_no` exists on
+  391 rows and **every one is KSA** (0 UAE, 0 Egypt); `vehicle_fleet.created_at` is the V348/V351 derivation
+  date, not asset age. Both rejected signals are still SHOWN to a reviewer but never decide.
+- Rule: sole operator, or >=90% of active months and cost lines, or holder after a clean handover; when two
+  countries bill the same code in the same month more than once, ownership is **unknown, not guessed**.
+- `get_asset_ownership(p_search,p_limit,p_cross_only,p_asset)`. Surfaced on AssetDetail + AssetMasterSection.
+  **The right long-term fix is a country-qualified asset key** - the same V367 lesson that nothing is keyed on
+  a code alone. 56 contested codes + 10 identity conflicts need a review workflow.
+
+### V378 COST VARIANCE — the "why did Riyadh increase" engine
+`get_cost_variance(country,site,from,to,limit)` + `src/lib/costVariance.js` + `CostVariancePanel`, wired into
+`/expense-report` as the "Why It Changed" section. **Contributions close EXACTLY** (verified live: KSA H1-2026
+price -129,553.89 + volume -386,556.18 + new 649,833.99 + stopped -723,540.76 + leftover 0.00 = -589,816.84,
+the exact total delta; by_site rows + tail likewise exact).
+- **The textbook price/volume split was REJECTED on measurement.** `volume=Δq·p₀, price=q₀·Δp` leaves an
+  interaction term `Δq·Δp` that on real KSA data was **-526,245 SAR, larger than either named effect** - the
+  "explanation" would have been mostly an unactionable residual. Uses the **Bennet (symmetric)** decomposition
+  `volume=Δq·(p₀+p₁)/2, price=Δp·(q₀+q₁)/2`, which sums exactly with **no third term**.
+- **A cross-tenant hole was introduced and closed during the work**: `_cost_var_dim` takes `p_org` and is
+  DEFINER, and the first migration granted EXECUTE to `authenticated` - proven exploitable with an arbitrary
+  org id, then revoked. **RULE: a DEFINER helper that accepts an org id must NEVER be executable by
+  `authenticated`.** All four `_cost_*` helpers verified `auth_exec=false`; all four entry points take no org
+  argument at all.
+- Honest limits it states rather than hides: the long tail is netted so concentration is a LOWER BOUND; UAE
+  shows 1,871 item lines starting and 1,929 stopping against a net of only -934,749, consistent with the same
+  part reissued under a new code, and the engine flags it `offsetting` without deciding; and a test asserts the
+  narrative never contains "because", "decided", "switched supplier", "negotiated", "chose" or "strategy" -
+  the data records what changed, never why anyone chose it.
+
+### More verified data facts
+- **UAE: AED 5,437,916 (29.4% of all UAE spend) sits on 69 assets missing from `vehicle_fleet`**, so it drops out
+  of every per-asset and per-type view. Egypt 2,325; KSA 51,094.
+- **`vehicle_fleet.vehicle_type` is 100% blank for UAE (371/371) and Egypt (133/133)**, blank on 417/1,019 KSA.
+  **This CONTRADICTS the V348 note below claiming vehicle_type was derived from tyre_records** - it is not in the
+  data now. Do not trust that line; re-derive if the fleet register matters.
+- 3 UAE tyre_records carry a **future** removal_date (max 2026-11-10). `fleet_km_by_asset` already excludes them.
+- Material Master review covers only **1.3% (UAE) to 6.5% (Egypt)** of spend, so the strongest evidence layer is
+  barely load-bearing yet.
+
 ## SESSION 2026-07-27 — UPLOAD WORKBOOK + BRAIN CACHE + EXPENSES & CPK ON ONE PAGE. Migrations through **V374**, next free **V375**.
 
 ### `/expense-report` is THE real-expense home, now renamed "Expenses & CPK" in the nav

@@ -31,7 +31,8 @@ import {
   buildBoardKpis, buildTrends, buildBreakdowns, buildBoardRecommendations,
 } from '../lib/boardOverview'
 import { COST_MODES, pickCost, pickMonthly, splitTotals, costModeLabel } from '../lib/costSources'
-import { loadCostSplit } from '../lib/api/costSummary'
+import { loadGovernedCostSplit } from '../lib/api/governedCost'
+import CostValue from '../components/cost/CostValue'
 import { stylize, ACCENTS } from '../lib/reportColors'
 import { reportFileName, reportDateLabel } from '../lib/exportUtils'
 import EmailPdfButton from '../components/EmailPdfButton'
@@ -172,7 +173,7 @@ export default function BoardOverview() {
   useEffect(() => {
     let cancelled = false
     setCostLoading(true); setCostError('')
-    loadCostSplit({ country: activeCountry })
+    loadGovernedCostSplit({ country: activeCountry })
       .then((res) => { if (!cancelled) setCost(res) })
       .catch((e) => { if (!cancelled) setCostError(toUserMessage(e, 'Could not load the cost split.')) })
       .finally(() => { if (!cancelled) setCostLoading(false) })
@@ -330,7 +331,13 @@ export default function BoardOverview() {
                 <Kpi label="Fleet vehicles" value={num(k.fleetSize)} accent={ACCENTS.primary} />
                 <Kpi label="Tyres tracked" value={num(k.tyresTracked)} accent={ACCENTS.info} />
                 <Kpi label="Fleet avg CPK" value={money(k.fleetAvgCpk, activeCurrency)} accent={ACCENTS.good} />
-                <Kpi label="Tyre spend" value={money(tyreSpendValue, activeCurrency)} accent={ACCENTS.watch}
+                {/* GOVERNED: renders one figure per currency when the scope
+                    spans countries, instead of labelling a blend as SAR. */}
+                <Kpi label="Tyre spend"
+                  value={costTotals.tyre > 0
+                    ? <CostValue split={cost} mode="tyres" />
+                    : money(tyreSpendValue, activeCurrency)}
+                  accent={ACCENTS.watch}
                   sub={costTotals.tyre > 0 ? 'expense grid, last 12 mo' : 'from tyre records'} />
                 <Kpi label="Failure rate" value={pct(k.failureRatePct)} accent={ACCENTS.risk} />
                 <Kpi label="Accidents" value={num(k.accidents)} accent={ACCENTS.risk} sub={`${num(k.openAccidents)} open`} />

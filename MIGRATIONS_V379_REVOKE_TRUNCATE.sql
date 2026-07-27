@@ -1,0 +1,59 @@
+-- V379 - revoke TRUNCATE and TRIGGER from the signed-in roles.
+--
+-- Applied live 2026-07-27.
+--
+-- HOW IT WAS FOUND
+-- While checking the grants on a table added this session, `authenticated` was
+-- holding TRUNCATE on 248 public tables. That is the Supabase default, and it
+-- matters more than it looks:
+--
+--     **TRUNCATE IS NOT COVERED BY ROW LEVEL SECURITY.**
+--
+-- Proven live in a rolled-back transaction. As the `authenticated` role, with
+-- the table's RESTRICTIVE org-isolation policy in force:
+--
+--     truncate public.stg_tyre_brand;   -->   TRUNCATE SUCCEEDED
+--
+-- Postgres does not consult row policies for TRUNCATE at all. So every
+-- org-isolation policy in this database - the entire tenant boundary, the thing
+-- V306 was written to enforce - stops at that one statement. parts_consumption
+-- was in the set: 216,792 rows of financial history, removable by one command,
+-- with RLS looking on and no audit row written.
+--
+-- HOW EXPLOITABLE IT ACTUALLY WAS: not very, and it is worth being accurate
+-- rather than alarming. PostgREST never issues TRUNCATE, so a user JWT going
+-- through the REST API could not reach it, and nothing in this system runs
+-- user-influenced SQL as `authenticated` (admin_db_query is SELECT-only over a
+-- fixed safelist and is SECURITY DEFINER). It was a latent misconfiguration, not
+-- a live hole. It is closed here because it costs nothing to close and because
+-- it becomes catastrophic the first time any code path executes dynamic SQL as
+-- this role.
+--
+-- WHY IT IS SAFE TO REVOKE - checked on both sides:
+--   * zero TRUNCATE statements anywhere in src/ or supabase/
+--   * zero functions in the public schema whose body contains one
+--   The app empties tables with DELETE (clearPartsConsumption), which RLS does
+--   govern and which the audit triggers do see.
+--
+-- TRIGGER is revoked with it: it lets a user attach their own trigger function
+-- to a table they can otherwise only read, which is unnecessary surface for an
+-- application role. REFERENCES is deliberately left alone - it is harmless and
+-- is used by ordinary foreign-key work.
+revoke truncate, trigger on all tables in schema public from authenticated, anon;
+
+-- so that a table created tomorrow does not quietly get them back
+alter default privileges in schema public
+  revoke truncate, trigger on tables from authenticated, anon;
+
+-- VERIFIED AFTER APPLYING, all as the authenticated role in a rolled-back txn:
+--   truncate stg_tyre_brand      -> BLOCKED: permission denied
+--   read parts_consumption       -> 216,792 rows
+--   insert a line                -> classified 'tyre by code-range' (trigger intact)
+--   delete that line             -> 0 rows remain
+--   read tyre_records            -> 7,498 rows
+--   read vehicle_fleet           -> 1,523 rows
+-- Nothing the application does was affected.
+--
+-- RULE GOING FORWARD: RLS governs SELECT, INSERT, UPDATE and DELETE. It does NOT
+-- govern TRUNCATE, and it does not govern DDL. Table-level GRANTs are the only
+-- control for those, so never grant TRUNCATE to a role a user can assume.

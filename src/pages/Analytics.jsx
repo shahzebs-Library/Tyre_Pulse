@@ -17,8 +17,9 @@ import EnterpriseTable from '../components/ui/EnterpriseTable'
 import { useReportMeta } from '../hooks/useReportMeta'
 import { toUserMessage } from '../lib/safeError'
 import { colorAt, withAlpha } from '../lib/reportColors'
-import { COST_MODES, pickCost, costModeLabel, pickMonthly, splitTotals } from '../lib/costSources'
-import { loadCostSplit } from '../lib/api/costSummary'
+import { COST_MODES, costModeLabel, pickMonthly, splitTotals } from '../lib/costSources'
+import { loadGovernedCostSplit } from '../lib/api/governedCost'
+import CostValue from '../components/cost/CostValue'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, LineElement, PointElement, Title, Tooltip, Legend)
 
@@ -88,7 +89,7 @@ export default function Analytics() {
   useEffect(() => {
     let cancelled = false
     setCostLoading(true); setCostError(null)
-    loadCostSplit({ country: activeCountry === 'All' ? undefined : activeCountry })
+    loadGovernedCostSplit({ country: activeCountry === 'All' ? undefined : activeCountry })
       .then((res) => { if (!cancelled) setCostSplit(res) })
       .catch((err) => {
         if (cancelled) return
@@ -101,7 +102,6 @@ export default function Analytics() {
 
   const costByMonth = costSplit?.byMonth || []
   const costTotals = useMemo(() => splitTotals(costByMonth), [costByMonth])
-  const costHeadline = pickCost(costMode, costTotals)
   const costModeColor = useMemo(() => {
     const idx = Math.max(0, COST_MODES.findIndex((m) => m.key === costMode))
     return colorAt(idx)
@@ -274,8 +274,10 @@ export default function Analytics() {
         ) : (
           <>
             <div className="mb-4">
+              {/* GOVERNED: per-currency figures. activeCurrency is SAR on the
+                  All-countries view, which mislabelled a SAR+AED+EGP blend. */}
               <p className="text-2xl font-bold" style={{ color: costModeColor }}>
-                {formatCurrencyCompact(costHeadline, activeCurrency)}
+                <CostValue split={costSplit} mode={costMode} />
               </p>
               <p className="text-xs text-gray-500 mt-1">{costModeLabel(costMode)} spend, last 12 months</p>
             </div>

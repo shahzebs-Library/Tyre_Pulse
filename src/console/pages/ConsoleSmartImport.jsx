@@ -31,6 +31,7 @@ import {
   validateRow, rowFingerprint, MODULE_FIELDS, MODULE_TABLES,
 } from '../../lib/import'
 import * as imports from '../../lib/api/imports'
+import { checkImportFingerprint, fileSha256 } from '../../lib/api/importHistory'
 import { toUserMessage } from '../../lib/safeError'
 
 const MODULE_LABELS = {
@@ -82,6 +83,10 @@ export default function ConsoleSmartImport() {
   const [phase, setPhase] = useState('idle') // idle | parsing | ready | committing | done
   const [error, setError] = useState('')
   const [fileName, setFileName] = useState('')
+  // Set when this exact file content has been loaded before. The commit button
+  // stays disabled until the operator says they meant to repeat it.
+  const [fingerprint, setFingerprint] = useState(null)
+  const [repeatAck, setRepeatAck] = useState(false)
   const [parsed, setParsed] = useState(null)  // { sheets }
   const [sheetIdx, setSheetIdx] = useState(0)
   const [module, setModule] = useState('')
@@ -112,8 +117,19 @@ export default function ConsoleSmartImport() {
     if (!file) return
     setPhase('parsing'); setError(''); setResult(null); setProgress(null)
     setFileName(file.name)
+    setFingerprint(null); setRepeatAck(false)
     try {
       const buf = await file.arrayBuffer()
+      // Content fingerprint before anything else. This is the only check that
+      // catches a repeat upload of a file whose rows carry no ERP line number,
+      // which is almost every Egypt and UAE expense row.
+      try {
+        const sha = await fileSha256(buf)
+        if (sha) {
+          const seen = await checkImportFingerprint(sha)
+          if (seen?.seen) setFingerprint({ ...seen, sha256: sha })
+        }
+      } catch { /* an aid, never a gate */ }
       const p = await parseWorkbook(buf)
       const sheets = (p?.sheets || []).filter((s) => (s.rows?.length || 0) > 0)
       if (!sheets.length) throw new Error('This file has no data rows to import.')
@@ -431,10 +447,27 @@ export default function ConsoleSmartImport() {
             </div>
           )}
 
+          {/* This exact file has been loaded before */}
+          {fingerprint && (
+            <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-4 space-y-2">
+              <p className="text-sm font-semibold text-amber-300">This file has been uploaded before</p>
+              <p className="text-xs text-amber-200">
+                The same file content was loaded
+                {fingerprint.first_seen_at ? ` on ${String(fingerprint.first_seen_at).slice(0, 10)}` : ' previously'}
+                {fingerprint.filename ? ` as "${fingerprint.filename}"` : ''}.
+                Committing it again adds those rows a second time.
+              </p>
+              <label className="flex items-center gap-2 text-xs text-amber-200 cursor-pointer">
+                <input type="checkbox" checked={repeatAck} onChange={(e) => setRepeatAck(e.target.checked)} />
+                I know this is a repeat and I want to import it anyway
+              </label>
+            </div>
+          )}
+
           {/* Commit */}
           {phase !== 'done' && (
             <div className="flex items-center gap-3">
-              <button onClick={commit} disabled={phase === 'committing' || !previewInfo || previewInfo.ready + previewInfo.warning === 0}
+              <button onClick={commit} disabled={phase === 'committing' || !previewInfo || previewInfo.ready + previewInfo.warning === 0 || (!!fingerprint && !repeatAck)}
                 className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-orange-500 hover:bg-orange-600 text-white font-medium disabled:opacity-50">
                 {phase === 'committing'
                   ? (progress?.phase === 'preparing'

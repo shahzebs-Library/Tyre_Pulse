@@ -20,6 +20,8 @@ import * as assetApi from '../lib/api/assetManagement'
 import { listPmPrograms, listPmServiceRecords } from '../lib/api/pmPrograms'
 import { loadGridTyreByAsset } from '../lib/api/costSummary'
 import { getAssetMaster, COUNTRY_CURRENCY } from '../lib/api/assetMaster'
+import { getAssetOwnershipFor } from '../lib/api/assetOwnership'
+import { basisMeta, ownershipExplanation, UNKNOWN_OWNER } from '../lib/assetOwnership'
 import { toUserMessage } from '../lib/safeError'
 import { pmAssetDueStatus } from '../lib/pmSchedule'
 import { PM_DUE_META } from '../lib/pmPrograms'
@@ -300,6 +302,10 @@ export default function AssetDetail() {
   // Cross-country "one vehicle" rollup for this asset_no (V356 RPC via
   // getAssetMaster). Null = not found / RPC unavailable -> the panel stays hidden.
   const [masterRow, setMasterRow] = useState(null)
+  // Which country OWNS this asset vs which bore its cost (V376 RPC). Null = no
+  // expense history or the RPC is unavailable -> the ownership header is skipped
+  // while the rest of the cross-country panel still renders.
+  const [ownership, setOwnership] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [refreshKey, setRefreshKey] = useState(0)
@@ -416,7 +422,48 @@ export default function AssetDetail() {
     return () => { cancelled = true }
   }, [assetNo, refreshKey])
 
+  // Ownership vs cost-bearing country. Uses the RPC's indexed single-asset fast
+  // path; never throws (resolves null), so a failure just hides the header.
+  useEffect(() => {
+    let cancelled = false
+    if (!String(assetNo ?? '').trim()) { setOwnership(null); return }
+    getAssetOwnershipFor(assetNo)
+      .then(row => { if (!cancelled) setOwnership(row) })
+      .catch(() => { if (!cancelled) setOwnership(null) })
+    return () => { cancelled = true }
+  }, [assetNo, refreshKey])
+
   // ── derived ────────────────────────────────────────────────────────────────
+  // One row per country for the cross-country panel, merging the fleet rollup
+  // (tyres / work orders / tyre expense, V356) with the ownership view (total
+  // cost borne + who owns it, V376). Either source may be missing; a country
+  // appearing in only one of them is still shown, with N/A for the other side.
+  const crossCountryRows = useMemo(() => {
+    const byCountry = new Map()
+    for (const bc of Array.isArray(masterRow?.by_country) ? masterRow.by_country : []) {
+      const key = String(bc?.country ?? '')
+      if (!key) continue
+      byCountry.set(key, {
+        country: key,
+        tyres: bc.tyres, workOrders: bc.work_orders, tyreExpense: bc.tyre_expense,
+        borne: null, currency: COUNTRY_CURRENCY[key] || null, role: null,
+      })
+    }
+    for (const c of Array.isArray(ownership?.countries) ? ownership.countries : []) {
+      const key = c.country
+      if (!key) continue
+      const prev = byCountry.get(key) || {
+        country: key, tyres: null, workOrders: null, tyreExpense: null,
+        borne: null, currency: null, role: null,
+      }
+      prev.borne = c.cost
+      prev.currency = c.currency || prev.currency
+      prev.role = !ownership?.owningCountry ? 'contested' : c.isOwner ? 'owner' : 'bears'
+      byCountry.set(key, prev)
+    }
+    return [...byCountry.values()].sort((a, b) => a.country.localeCompare(b.country))
+  }, [masterRow, ownership])
+
   const activeTyres = useMemo(() => tyres.filter(t => !t.km_at_removal), [tyres])
   // Total lifetime tyre cost: authoritative expense-grid amount for this asset
   // when available, else the tyre_records cost_per_tyre sum (honest fallback).
@@ -632,24 +679,66 @@ export default function AssetDetail() {
         {/* This vehicle across countries — cross-country "one vehicle" rollup.
             Rendered only when a master row is found; expense is shown PER COUNTRY
             in each country's own currency (never summed across currencies). */}
-        {masterRow && Array.isArray(masterRow.by_country) && masterRow.by_country.length > 0 && (
+        {crossCountryRows.length > 0 && (
           <div className="card">
             <h3 className="text-sm font-semibold text-[var(--text-secondary)] mb-3 flex items-center gap-2">
               <Globe className="w-4 h-4 text-blue-400" /> This vehicle across countries
             </h3>
 
-            {/* Country chips + identity */}
+            {/* Ownership vs cost bearing. An asset whose evidence does not name an
+                owner reads "N/A" with the reason, never a guessed country. */}
+            {ownership && (
+              <div className="mb-4 rounded-lg border border-[var(--border-dim)] bg-[var(--surface-1)] px-3 py-3">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-xs text-[var(--text-muted)]">Owned by</span>
+                  <span className={`px-2 py-1 rounded-full text-xs font-semibold inline-flex items-center gap-1 ${
+                    ownership.owningCountry
+                      ? 'bg-emerald-900/40 text-emerald-300'
+                      : 'bg-amber-900/40 text-amber-300'
+                  }`}>
+                    {ownership.owningCountry ? <Building2 className="w-3 h-3" /> : <AlertTriangle className="w-3 h-3" />}
+                    {ownership.owningCountryLabel || UNKNOWN_OWNER}
+                  </span>
+                  <span className={`px-2 py-0.5 rounded-full text-[11px] border ${
+                    basisMeta(ownership.basis).tone === 'warn'
+                      ? 'bg-amber-900/20 text-amber-300 border-amber-700/50'
+                      : 'bg-[var(--surface-2)] text-[var(--text-secondary)] border-[var(--border-bright)]'
+                  }`}>{ownership.basisLabel}</span>
+                  {ownership.identityConflict && (
+                    <span className="px-2 py-0.5 rounded-full text-[11px] bg-red-900/30 text-red-300 border border-red-700/50">
+                      Make or type differs by country
+                    </span>
+                  )}
+                </div>
+                <p className="text-[11px] text-[var(--text-muted)] mt-2 leading-relaxed">
+                  {ownershipExplanation(ownership)}
+                </p>
+                {ownership.registrationCountry && !ownership.owningCountry && (
+                  <p className="text-[11px] text-[var(--text-muted)] mt-1 leading-relaxed">
+                    Registration is recorded in {ownership.registrationCountry}, but registration exists for KSA
+                    assets only in this data, so it is shown as context and does not decide ownership.
+                  </p>
+                )}
+              </div>
+            )}
+
+            {/* Country chips + identity. The panel can render from the ownership
+                source alone, so masterRow may be absent; chips then come from the
+                merged country rows. */}
             <div className="flex flex-wrap items-center gap-2 mb-4">
-              {String(masterRow.countries ?? '')
+              {(String(masterRow?.countries ?? '')
                 .split(',')
                 .map(c => c.trim())
                 .filter(Boolean)
-                .map(c => (
-                  <span key={c} className="px-2 py-1 rounded-full text-xs font-semibold bg-blue-900/40 text-blue-300 inline-flex items-center gap-1">
-                    <MapPin className="w-3 h-3" /> {c}
-                  </span>
-                ))}
-              {[masterRow.vehicle_type, [masterRow.make, masterRow.model].filter(Boolean).join(' ')]
+                .length
+                ? String(masterRow.countries).split(',').map(c => c.trim()).filter(Boolean)
+                : crossCountryRows.map(r => r.country).filter(Boolean)
+              ).map(c => (
+                <span key={c} className="px-2 py-1 rounded-full text-xs font-semibold bg-blue-900/40 text-blue-300 inline-flex items-center gap-1">
+                  <MapPin className="w-3 h-3" /> {c}
+                </span>
+              ))}
+              {[masterRow?.vehicle_type, [masterRow?.make, masterRow?.model].filter(Boolean).join(' ')]
                 .filter(Boolean)
                 .map((v, i) => (
                   <span key={`id-${i}`} className="text-xs text-[var(--text-muted)]">{v}</span>
@@ -661,19 +750,40 @@ export default function AssetDetail() {
               <table className="w-full text-xs">
                 <thead>
                   <tr className="border-b border-[var(--border-dim)]">
-                    {['Country', 'Tyres', 'Work Orders', 'Tyre Expense'].map(h => (
+                    {['Country', 'Role', 'Tyres', 'Work Orders', 'Tyre Expense', 'Total Cost Borne'].map(h => (
                       <th key={h} className="px-3 py-2 text-left text-[var(--text-muted)] font-medium whitespace-nowrap">{h}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
-                  {masterRow.by_country.map((bc, i) => (
-                    <tr key={bc.country ?? i} className="border-b border-[var(--border-dim)]">
-                      <td className="px-3 py-2 text-[var(--text-primary)] font-medium whitespace-nowrap">{bc.country ?? '-'}</td>
-                      <td className="px-3 py-2 text-[var(--text-secondary)]">{fmtNum(bc.tyres)}</td>
-                      <td className="px-3 py-2 text-[var(--text-secondary)]">{fmtNum(bc.work_orders)}</td>
+                  {crossCountryRows.map((r, i) => (
+                    <tr key={r.country ?? i} className="border-b border-[var(--border-dim)]">
+                      <td className="px-3 py-2 text-[var(--text-primary)] font-medium whitespace-nowrap">{r.country || 'N/A'}</td>
+                      <td className="px-3 py-2 whitespace-nowrap">
+                        {r.role === 'owner' ? (
+                          <span className="px-2 py-0.5 rounded-full text-[11px] bg-emerald-900/30 text-emerald-300">Owner</span>
+                        ) : r.role === 'bears' ? (
+                          <span className="px-2 py-0.5 rounded-full text-[11px] bg-blue-900/30 text-blue-300">
+                            Bears cost for {ownership?.owningCountry}
+                          </span>
+                        ) : r.role === 'contested' ? (
+                          <span className="px-2 py-0.5 rounded-full text-[11px] bg-amber-900/30 text-amber-300">Contested</span>
+                        ) : (
+                          <span className="text-[var(--text-muted)]">N/A</span>
+                        )}
+                      </td>
+                      <td className="px-3 py-2 text-[var(--text-secondary)]">{r.tyres == null ? 'N/A' : fmtNum(r.tyres)}</td>
+                      <td className="px-3 py-2 text-[var(--text-secondary)]">{r.workOrders == null ? 'N/A' : fmtNum(r.workOrders)}</td>
                       <td className="px-3 py-2 text-[var(--text-secondary)] whitespace-nowrap">
-                        {formatCurrencyCompact(bc.tyre_expense || 0, COUNTRY_CURRENCY[bc.country] || 'SAR')}
+                        {r.tyreExpense == null
+                          ? 'N/A'
+                          : formatCurrencyCompact(r.tyreExpense || 0, r.currency || COUNTRY_CURRENCY[r.country] || 'SAR')}
+                      </td>
+                      {/* each country in its OWN currency; deliberately no total row */}
+                      <td className="px-3 py-2 text-[var(--text-primary)] whitespace-nowrap">
+                        {r.borne == null
+                          ? 'N/A'
+                          : formatCurrencyCompact(r.borne, r.currency || COUNTRY_CURRENCY[r.country] || 'SAR')}
                       </td>
                     </tr>
                   ))}
@@ -681,9 +791,10 @@ export default function AssetDetail() {
               </table>
             </div>
 
-            {Number(masterRow.country_count) > 1 && (
+            {crossCountryRows.length > 1 && (
               <p className="text-[11px] text-[var(--text-muted)] mt-3 leading-relaxed">
-                This vehicle operated in more than one country; expenses are shown per country in each currency, which is normal.
+                This asset number appears in more than one country. Each country is shown in its own currency and the
+                amounts are never added together.
               </p>
             )}
           </div>

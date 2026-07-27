@@ -32,6 +32,7 @@ import { detectReport, intakeSheet } from '../lib/erpIntake'
 import { rowsFromSheet, summarizeRows } from '../lib/partsExpense'
 import { insertPartsConsumption } from '../lib/api/partsConsumption'
 import { loadIntake, countExistingRows } from '../lib/api/erpIntake'
+import { checkImportFingerprint, fileSha256 } from '../lib/api/importHistory'
 
 const SAMPLE_LIMIT = 15
 
@@ -103,6 +104,13 @@ export default function ErpIntake() {
   const [dragging, setDragging] = useState(false)
   const [progress, setProgress] = useState({ sheetIdx: 0, d: 0, t: 0 })
   const [results, setResults] = useState([]) // [{ ...detected, inserted, skipped }]
+  // Content fingerprint of the chosen file. `seen` means this exact file has been
+  // loaded before, which is the one failure this page cannot otherwise detect:
+  // the expense grid only recognises an already-loaded LINE when the ERP line
+  // number was mapped, and today that is true for KSA and almost nothing else
+  // (Egypt carries a line number on 78 of 42,531 rows, UAE on 39 of 67,615).
+  const [fingerprint, setFingerprint] = useState(null)
+  const [repeatAck, setRepeatAck] = useState(false)
 
   const inputRef = useRef(null)
 
@@ -137,7 +145,19 @@ export default function ErpIntake() {
     setFileName(file.name || '')
     setDetected([])
     setResults([])
+    setFingerprint(null)
+    setRepeatAck(false)
     try {
+      // Ask before parsing: hashing the bytes is cheap and the answer changes
+      // whether the operator should commit at all. Never blocks on failure -
+      // checkImportFingerprint returns not-seen if the RPC is missing.
+      try {
+        const sha = await fileSha256(file)
+        if (sha) {
+          const seen = await checkImportFingerprint(sha)
+          if (seen?.seen) setFingerprint({ ...seen, sha256: sha })
+        }
+      } catch { /* a fingerprint is an aid, never a gate on parsing */ }
       const parsed = await parseWorkbookRaw(file)
       const sheets = Array.isArray(parsed?.sheets) ? parsed.sheets : []
       const found = []
@@ -608,6 +628,34 @@ export default function ErpIntake() {
             job-card list is replaced.
           </p>
 
+          {/* This exact file has been loaded before. Say so before the money moves. */}
+          {fingerprint && phase === 'preview' && (
+            <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-4 space-y-2">
+              <p className="text-sm font-semibold text-amber-300">
+                This file has been uploaded before
+              </p>
+              <p className="text-xs text-amber-200">
+                The exact same file content was loaded
+                {fingerprint.first_seen_at
+                  ? ` on ${String(fingerprint.first_seen_at).slice(0, 10)}`
+                  : ' previously'}
+                {fingerprint.filename ? ` as "${fingerprint.filename}"` : ''}
+                {Number.isFinite(Number(fingerprint.rows_imported))
+                  ? `, importing ${num(Number(fingerprint.rows_imported))} rows` : ''}.
+                Importing it again adds those rows a second time and overstates your spend,
+                unless every line carries the ERP line number so the system can recognise it.
+              </p>
+              <label className="flex items-center gap-2 text-xs text-amber-200 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={repeatAck}
+                  onChange={(e) => setRepeatAck(e.target.checked)}
+                />
+                I know this is a repeat and I want to import it anyway
+              </label>
+            </div>
+          )}
+
           {/* Import button */}
           {phase === 'preview' && (
             <div className="flex justify-end">
@@ -615,7 +663,7 @@ export default function ErpIntake() {
                 type="button"
                 className="btn-primary inline-flex items-center gap-2"
                 onClick={runImport}
-                disabled={busy || !totalRows}
+                disabled={busy || !totalRows || (!!fingerprint && !repeatAck)}
               >
                 <ArrowRight className="h-4 w-4" />
                 Import {num(totalRows)} rows

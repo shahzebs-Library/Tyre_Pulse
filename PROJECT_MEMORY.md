@@ -3,6 +3,46 @@
 Durable, committed project knowledge so any session has full context. Keep this
 current. Read it before adding/changing modules. Governing spec: `Tyre pulse enterprise.md`
 
+## SESSION 2026-07-27 CLOSED CLEAN — parts 8-10 MERGED to main (**PR #207**, tip `282ad6c`). Migrations through **V393b**, next free **V394**.
+Branch `claude/accident-builder-report-ui-2bkwb5` realigned to origin/main (empty code diff; only this memory entry
+follows). Web build clean, **5,616 tests green** (was 5,550). For NEW work restart the branch from latest main.
+
+### WHERE THE NEW SURFACES ARE (asked at session close, record it once)
+- **"What we changed"** = `/console/import-history`, **4th tab** (`ConsoleImportHistory.jsx` ->
+  `importHistory/DecisionsPanel.jsx`). Super-admin, since the whole `/console` is gated. Deliberately a TAB, not a
+  new nav item: it belongs beside the uploads it explains, and a second cost-review surface would violate the
+  single-surface rule. **If the customer asks for it in the main nav, that is a nav decision, not a rebuild.**
+- **"Daily coverage"** = the 3rd tab on the same page. **The column-change dialog** fires inside
+  `/data-intake` on a fingerprint MISS; there is nothing to open on its own.
+
+### WHAT SHIPPED IN #207 (V388-V393)
+- **V388/V388b** two silent date-corruption bugs on the real 55,606-card import (2-digit year -> year 0026 on
+  33,626 rows; MDY `::timestamptz` cast reading day-first dates month-first on 21,980 rows).
+- **V389** daily upload coverage tab + one-notice-per-gap cron. Expectation DERIVED, never assumed.
+- **V390** non-tyre-part guard (a gearbox in the tyre column). **V391** column-change decision dialog + the
+  profile's full header list.
+- **V392** "What we changed" — moved / kept / not-stated, with the override + apply + undo loop wired up.
+- **V393/V393b** two classifier corrections the V392 view found within minutes of existing.
+
+### STILL OPEN (carried forward, none of it blocking)
+1. **THE 55,606 JOB CARDS STILL CARRY WRONG DATES.** The parser is fixed; the loaded rows are not. **The customer
+   must RE-UPLOAD the same file** — re-import is exact and refreshes each card in place; inference is not.
+2. **A job card with no Production Out AND no Workshop In violates NOT NULL on `opened_at` and aborts the whole
+   batch.** Open bug, found while profiling, not yet fixed.
+3. **The repo has NO eslint config**, so `no-undef` never runs. A ReferenceError shipped past a clean build and
+   5,550 tests this session. Single highest-value hygiene change available.
+4. **Dashboard defaults to "This Month" and the window is applied SERVER-SIDE**, so a historic ERP file is never
+   fetched — the likely cause of "it did not upload". Dashboard also has no refresh button.
+5. **`/erp-import` has NO promotion step in the code** — asset master / tyre change / tyre expense uploads land in
+   `erp_*_import` and can never reach the master tables. The UI promises a step that was never built.
+6. `work_orders` audit + domain-event triggers are 71% of every insert; gating them on a bulk-import flag needs
+   sign-off because it alters the audit contract.
+7. **18 unmapped `store_site_map` codes** (all Egypt/UAE) — blocked on customer knowledge, not effort.
+8. **Mahmoud Taher (Director, Egypt)** is the last member of the empty org `e340fa7a` and sees 0 of everything.
+   One `admin_update_profile` fixes it whenever the customer wants.
+9. FX rates still need an administrator to ENTER and APPROVE AED->SAR and EGP->SAR before any combined total.
+10. Mobile needs a fresh EAS build for this session's native-adjacent work; nothing here ran on real hardware.
+
 ## SESSION 2026-07-27 (part 10) — V392 "WHAT WE CHANGED" + V393 TWO CLASSIFIER FIXES IT FOUND. Migrations through **V393b**, next free **V394**.
 
 ### V392 — **THE CLASSIFIER'S DECISIONS WERE INVISIBLE**, so the numbers just differed from the file

@@ -3,6 +3,34 @@
 Durable, committed project knowledge so any session has full context. Keep this
 current. Read it before adding/changing modules. Governing spec: `Tyre pulse enterprise.md`
 
+## SESSION 2026-07-27 (part 6) — V385 JOB CARD EXPORT HAS 11 MORE COLUMNS. Next free **V386**.
+
+### The customer's REAL export is 40 columns, not the 29 in the sample
+Supabase refuses a CSV import when a header has no matching column, so the load failed on:
+`Waiting Part Hrs`, `Waiting Manpower Hrs`, `Manpower H`, `Manpower Cost`, `Total Parts Consumption`,
+`Total Repair Cost`, `JCD_ML_hidden10`, `RFR Created By`, `RFR Created Date`, `Job Card Created By`,
+`Job Card Created Date`. All added to `stg_job_cards` **verbatim** (the importer matches the literal header,
+so `Manpower H` is created as `Manpower H`, not "corrected" to Manpower Hrs). Three alias spellings
+(`Manpower Hrs`, `Waiting Parts Hrs`, `Waiting Manpower Hours`) were added too so a slightly different export
+does not need another migration; the trigger `coalesce`s each pair.
+- **`Waiting Part Hrs` + `Waiting Manpower Hrs` are the most valuable columns in the file after the four
+  timestamps.** The timestamps give the LENGTH of a wait; these give the CAUSE — no part versus no technician.
+  That separates a procurement problem from a workshop one. New typed columns on `work_orders`:
+  `waiting_parts_hours`, `waiting_manpower_hours`, `manpower_hours`.
+- **The closed-card guard was extended to all three hour columns.** `Total Breakdown hours` was PROVEN to run
+  to today on an open card (40,028 hours for an asset out since 2022); these come from the same report and the
+  sample file did NOT carry them, so there was no way to measure whether they behave the same. Typed columns
+  are populated only when the card closed; the raw value is always kept in `custom_data.erp_hours` beside
+  `still_open`, so nothing is lost and an open card can still be read. **If someone later measures that the
+  waiting figures are final on an open card, relax the guard for those two only.**
+- `Manpower Cost` / `Total Parts Consumption` / `Total Repair Cost` join the other four in
+  `custom_data.erp_reported_cost`. THE EXPENSE GRID IS STILL THE COST SOURCE.
+- `RFR Created By/Date` + `Job Card Created By/Date` -> `custom_data` as provenance (who raised it).
+  `JCD_ML_hidden10` is an ERP internal artifact: accepted so the import passes, then ignored.
+- Verified live (rolled back): a closed card populates all three hour columns and parses `1,250.00` -> 1250.00;
+  an open card from 2022 leaves them NULL while keeping the raw 39,000 with `still_open:true`; re-importing the
+  same card leaves ONE row and refreshes the value.
+
 ## SESSION 2026-07-27 (part 5) — SCRAP REGISTER + SPLIT SCRAP/UNDO RIGHTS. Migrations through **V384**, next free **V385**.
 
 ### **SCRAP MANAGEMENT NEVER SHOWED THE SCRAPPED TYRES — it was reading a heuristic, not the marks**

@@ -90,6 +90,13 @@ create trigger trg_guard_currency_rate_approval
   before insert or update on public.currency_rates
   for each row execute function public.guard_currency_rate_approval();
 
+-- Postgres grants EXECUTE on a new function to PUBLIC by default, and that
+-- included this trigger function. Calling it directly raises "trigger functions
+-- can only be called as triggers", so there was no exploit here, but an
+-- ungranted trigger function is one less thing on the API surface and one less
+-- advisor entry to read past.
+revoke all on function public.guard_currency_rate_approval() from public, anon, authenticated;
+
 -- =========================================================================
 -- VERIFIED LIVE, every check in a rolled-back transaction
 --

@@ -3,6 +3,137 @@
 Durable, committed project knowledge so any session has full context. Keep this
 current. Read it before adding/changing modules. Governing spec: `Tyre pulse enterprise.md`
 
+## SESSION 2026-07-27 (part 11) — THE BLANK FIRST SCREEN, RAW ERROR LEAKS, DEAD SERIAL COLUMNS. No migration (code only).
+User: "whenever i open app its screen is blank when i refresh then only start showing screen ... each thing is
+taking so long ... find leaked apis and kpis showing its original state ... all data should be linked". Nine
+investigation agents; every claim below re-verified against the code or the live DB before acting.
+
+### **THE BLANK SCREEN HAD THREE INDEPENDENT CAUSES — each one sufficient on its own**
+1. **`fetchProfile` was the ONLY thing clearing the boot `loading` flag and had no `try/finally`.** Three of the
+   five reads in its `Promise.all` carried no rejection handler (`profiles.single()`, the perms RPC, and
+   `mfa.listFactors()`, which supabase-js does NOT wrap in try/catch and can throw a non-AuthError). One reject
+   and `setLoading(false)` was never reached, so `ProtectedRoute` rendered a bare spinner **forever**. Now a
+   `finally` clears it and every member settles, so the `Promise.all` cannot reject at all.
+2. **The service worker applied a waiting update on `visibilitychange -> hidden`.** That posts SKIP_WAITING; the
+   new worker activates, Workbox **deletes the previous build's precached chunks**, and `clientsClaim` then hands
+   it the still-live old page and reloads it **while the tab is frozen**. The user reopened to a half-torn-down
+   document whose chunks no longer existed. Hidden-tab apply DELETED; **`clientsClaim: false`** in prompt mode.
+   Nothing is lost - a waiting worker activates by itself once every tab is closed. `skipWaiting:false` unchanged.
+3. **`<Safe>` had no `key`.** `<Routes>` renders one element at a time and react-router does not key it by path,
+   so React reused the ErrorBoundary instance across navigations **carrying `hasError` with it** - one page
+   throwing left every later route on the error screen until a hard refresh. Now `key={pathname}`.
+- **`src/lib/chunkRecovery.js`** is the rescue for clients ALREADY stuck: one-shot per tab, purges caches +
+  unregisters workers + reloads. Guard written BEFORE the reload and released by `markAppRendered()`, so a boot
+  loop is impossible. **RULE: never make this retry more than once.**
+- **THE `handleSession` GUARD WAS DEFEATED BY AN `await`.** `getSession()` and `INITIAL_SESSION` both call it
+  concurrently on every cold start; `currentUserIdRef` was assigned only AFTER `await hasUnmetMfa()`, so BOTH
+  passed the guard - doubling `fetchProfile` and the realtime subscribe, and letting a second `setLoading(true)`
+  re-blank an app that had already painted. Ref is now claimed BEFORE the await.
+
+### "SO LAZY" — the Suspense boundary was ABOVE `Layout`
+Loading any lazy page unmounted the sidebar, header and whole frame down to a full-screen spinner, so every
+navigation looked like the app restarting. Moved INSIDE the shell (`ConsoleLayout` already did this correctly).
+`RouteLoading` is now exported from ProtectedRoute and is the shared content-area loader - it must stay `h-64`,
+never `min-h-screen`, or the page jumps on every navigation.
+- **chart.js was on the LOGIN screen**: a global plugin registration in `main.jsx` pulled all 213 kB into the
+  eager graph for every user. Now a dynamic import fired at module scope (starts long before any chart page can
+  be reached). **react-query being eager also dragged react-table + react-virtual into first paint** - manualChunks
+  now splits `vendor-query` from `vendor-table`. Measured eager graph: **612 kB gzip / 27 files** - still heavy;
+  the remaining eager weight is vendor-react 118, index 105, AuthContext 72 (posthog+sentry), LanguageContext 59.
+
+### **RAW POSTGRES ERRORS WERE REACHING USERS AT ~56 SITES — fixed at the boundary, not per page**
+`unwrap()` threw `new ServiceError(error.message)`, so constraint / column / relation / RLS text rendered straight
+into the UI. Now `toUserMessage(error)`, with the untouched original kept on `.cause` for Sentry.
+- **THIS BROKE THE "missing table -> []" CONVENTION IN 21 MODULES** whose detector sniffed only `err.message`.
+  Caught by one test. Fixed properly: **ONE shared `isMissingRelation` in `_client.js`** reading the CODE first
+  (42P01 / PGRST205 / 42883 / PGRST202) and falling back to the raw text on `.cause`; the 21 duplicated copies
+  were deleted. ~80 other modules already checked the code and were unaffected.
+  **RULE: a real missing relation ALWAYS carries a code - never detect it by message text alone.**
+
+### **DEAD SERIAL COLUMNS — measured live: `serial_number` 0/7,504, `asset_number` 0/7,504; canonical 7,504/7,504**
+Twelve screens still selected the dead names and were rendering the ABSENCE of data as the data: Tyre Lifecycle's
+"Tyres Tracked" tile read **0** and its history drawer could never open (it filtered `.eq('serial_number',...)`,
+matching no row); **QR Labels encoded an EMPTY string into every printed tyre label** while the caption looked
+right; Global Search found no tyre by serial and no asset by number. Fixed with a PostgREST alias
+(**`serial_number:serial_no`**) so the real column is served under the name each file already reads - one token
+per query instead of rewriting every reference. Pattern already proven in-repo at `dailyOps.js:26`.
+
+### **ESLint added — the repo had NO config, so `no-undef` never ran** (the standing item 3, now closed)
+`eslint.config.js` is deliberately narrow: `no-undef` plus a few always-bug rules and rules-of-hooks. **0 errors
+today** (122 warnings, all exhaustive-deps). `npm run lint`. Two `no-use-before-define` hits were verified SAFE
+(referenced only inside effect/click callbacks) and that rule is off for variables - it produced ~70 false
+positives and zero true ones.
+
+### **STILL OPEN — needs the customer's decision, deliberately NOT applied**
+1. **64% of job cards (55,606 of 86,539) have `country = NULL`** and `listWorkOrdersPage` uses a STRICT
+   `.eq('country', ...)` against the codebase's own null-safe `applyCountry` convention - so **selecting any
+   country hid every one of them.** **APPLIED + VERIFIED LIVE 2026-07-27** via
+   **`MIGRATIONS_V394_JOB_CARD_COUNTRY_BACKFILL.sql`**: **KSA 60,099 · UAE 14,190 · Egypt 12,250 · zero NULL
+   rows left.** Snapshot `_wo_country_snapshot_v394` holds all 55,606 ids; undo =
+   `update work_orders set country=null where id in (select id from _wo_country_snapshot_v394)`.
+   **Audit cost measured and my estimate was too high**: `audit_log_v2` grew 261,243 -> 316,849 rows (exactly
+   +55,606) but only **443 MB -> 448 MB (+5 MB)**, not the ~97 MB predicted.
+   - **THE JOB CARD NUMBER CARRIES THE COUNTRY - the user pointed this out and was right.** The `work_order_no`
+     prefix maps 1:1 to a country with ZERO conflicts: **AFKR=KSA** (4,493 labelled +185 unlabelled),
+     **EG=Egypt** (12,250), **RM=UAE** (14,190), **GCKR** (55,421, all unlabelled). GCKR confirmed KSA by two
+     independent signals: of its rows whose site appears on a labelled card, **25,999 resolve to KSA and ZERO to
+     UAE or Egypt**, and **55,418 of 55,421 name an asset registered in the KSA fleet**. Every GCKR site is a
+     Saudi location (NHC, AMAALA, KSP, MALHAM, RUMAH, DIRIYAH, MISK, QIDDIYA, NEOM, JEDDAH, JIZAN, YANBU).
+     So **all 55,606 are KSA**, and the KSA count correctly moves 4,493 -> 60,099.
+   - **MY FIRST PASS USED THE WRONG SIGNAL AND MUST NOT BE REPEATED.** Keying on `asset_no` alone reported
+     "7,241 ambiguous"; that is the V376 collision artifact (asset numbers are a PER-COUNTRY sequence per class,
+     so the same code in two countries is usually a DIFFERENT machine). The UAE 6,796 / Egypt 442 asset matches
+     for GCKR rows are exactly that. **RULE: derive a job card's country from the work_order_no prefix, never
+     from the asset code.**
+   - Do NOT instead loosen the filter to `applyCountry`: that shows all 55,606 under EVERY country.
+   - **SITE SIDE CLOSED BY V395 — 99.94% (60,065 of 60,099).** The customer answered each name individually.
+     **`MIGRATIONS_V395_SITE_ALIASES_CONFIRMED.sql`, APPLIED + VERIFIED LIVE**; snapshot
+     `_site_alias_snapshot_v395` (531 work_orders + 56 vehicle_fleet + 2 accidents).
+     - **I MEASURED AGAINST THE WRONG TABLE FIRST.** The "5,207 unmatched / 8.7%" figure compared job card
+       sites to **`vehicle_fleet`**, which only lists sites that have vehicles based there. The correct
+       reference is the **`sites` registry** - against it, `KSP-T3`, `MALHAM-ST` and `EMC WORKSHOP` were
+       already valid all along and needed nothing. **RULE: "is this a real site" is answered by `sites`, not by
+       `vehicle_fleet`.**
+     - Customer rulings: **`KSP-T3` is a SEPARATE terminal from `KSP1-T3`** (kept distinct). **`METRO` and
+       `RIY-MET-ST` are ONE site** - this REVERSES the V247 decision to hold them apart, on their explicit
+       instruction. `DIRIYAH-G1-ST` is a naming variant of the registered `DIRIYAH-G1` (**G1/G2/DIRIYAH-ST stay
+       distinct gates** - that part of V247 stands). Everything else is KSA.
+     - 9 aliases added (AMALLA/DAHBAN/DHABAN/SALBOUK/RIYADH - SALBOKH/JIZAN/RIYADH - METRO/METRO/DIRIYAH-G1-ST)
+       so **a re-import self-corrects via `normalize_site()`** and this never needs running twice.
+     - 3 real sites registered that carried job cards but were never in `sites`: **NEOM_CP_14, RIY-TWG-ST,
+       YANBU**. **`sites.organisation_id` defaults to `app_current_org()`, which is NULL outside a user session
+       - it MUST be set explicitly or the new site is invisible to everyone.**
+     - **34 job cards literally named site = "KSA"** - a country used as a site placeholder. NOT registered as
+       a site. All 34 DO carry a real `work_location` (JED-ST 9, KSP-T1 8, NHC-ST 7, RIY-SAL-ST 3, REDSEA-ST 3,
+       KSP_TP-ST 2, JIZAN-ST 1, AMALA-ST 1), **but do NOT fill `site` from it**: measured across the 55,572 KSA
+       cards that carry both, `site` and `work_location` agree only **31.4%** of the time. They are different
+       facts - where the asset belongs vs where the work happened - so work_location is not a proxy for site and
+       using it would plant a wrong site on roughly two rows in three. Needs the customer to name the site;
+       impact is 0.06% of KSA job cards.
+2. **RLS is the real cause of app-wide slowness, and it needs security sign-off.** `app_can_see_country(country)`
+   and `app_can_see_site(site)` are row-dependent so they re-query `profiles` PER ROW: a bare
+   `count(*) on work_orders` measured **11,994 ms (Manager) / 8,598 ms (super-admin)** vs **124 ms** with the
+   predicate rewritten as an InitPlan - **97x**, identical row counts. Spans 44 country + 30 site policies and IS
+   the tenant boundary, so it must not be changed casually. Also: all 11 RLS helpers are PARALLEL UNSAFE, and
+   `app_current_org` alone gates 198 tables, disabling parallel plans database-wide (one-line ALTER, unmeasured).
+   **There is NO missing index** - every seq scan was the correct plan choice; do not go index-hunting.
+3. Cheaper measured DB wins: `get_parts_expense_snapshot` single-pass rewrite **771 -> 233 ms** (identical
+   checksum); `get_daily_job_cards` column projection **431 -> 196 ms**. `get_maintenance_snapshot` already
+   projects correctly and is the in-repo example of the right shape.
+4. **`fetchAllPages` is strictly SEQUENTIAL** (1000/page) across 135 call sites - `work_orders` = 86 serial round
+   trips. Windowing 4-5 pages concurrently accelerates every caller at once.
+5. **The react-query layer is confirmed dead**: 231 pages, 0 call `useQuery`, so every page refetches everything
+   on every mount. `useRealtimeSync` holds 12 websocket subscriptions invalidating a cache nothing reads.
+6. Other measured KPI defects NOT yet fixed: `SafetyCompliance` scores a missing measurement as **100** and
+   prints "EXCELLENT"; `TyreScrapManagement:309` returns a **fabricated 100,000 km** fleet average; `RootCauseEngine`
+   defaults currency to **'ZAR'**; `formatters.js` defaults currency to `'SAR'`, which is why currency bugs keep
+   recurring silently; `PredictiveMaintenance`/`DailyOps`/`WarrantyTracker` have **no country filter at all** so
+   they blend SAR+AED+EGP. `ExecutiveReport` totalSpend still sums `cost_per_tyre` (null on 100% of UAE+Egypt).
+7. Leak audit: **no hardcoded secrets, no source maps, both error boundaries correctly dev-gate details.** Real
+   items left: `get_email_by_identifier` is an anon account-enumeration oracle returning a real email;
+   `record_login_failure` leaks `remaining` only for existing accounts; `get_report_snapshot` ignores the share
+   token's `pages` list server-side so a KPI-only token still returns job cards and cost.
+
 ## SESSION 2026-07-27 CLOSED CLEAN — parts 8-10 MERGED to main (**PR #207**, tip `282ad6c`). Migrations through **V393b**, next free **V394**.
 Branch `claude/accident-builder-report-ui-2bkwb5` realigned to origin/main (empty code diff; only this memory entry
 follows). Web build clean, **5,616 tests green** (was 5,550). For NEW work restart the branch from latest main.

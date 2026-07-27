@@ -247,7 +247,11 @@ function ModuleUnavailable({ status, until, note }) {
   )
 }
 
-function RouteLoading() {
+// Exported so the in-shell Suspense in App.jsx uses the SAME content-area
+// loader as the route gates. It must stay content-sized (h-64), never
+// min-h-screen: it renders inside Layout, and a full-viewport loader there
+// makes the page jump on every navigation.
+export function RouteLoading() {
   const { t } = useLanguage()
   return (
     <div className="flex items-center justify-center h-64 text-gray-400">{t('common.loading')}</div>

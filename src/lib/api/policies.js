@@ -6,7 +6,7 @@
  * keeps an explicit column list and null-safe country scoping, mirroring
  * support.js / stock.js.
  */
-import { supabase, unwrap, applyCountry } from './_client'
+import { supabase, unwrap, applyCountry, isMissingRelation } from './_client'
 
 const COLS =
   'id,organisation_id,country,title,category,version,owner,effective_date,' +
@@ -14,16 +14,6 @@ const COLS =
 
 export const POLICY_STATUSES = ['draft', 'active', 'under_review', 'archived']
 
-/** True when a Supabase error indicates the table has not been created yet. */
-function isMissingRelation(err) {
-  const m = String(err?.message || '').toLowerCase()
-  return (
-    m.includes('does not exist') ||
-    m.includes('relation') ||
-    m.includes('schema cache') ||
-    m.includes('could not find the table')
-  )
-}
 
 /**
  * List policies (newest first). Optional status/country filters. Returns [] when

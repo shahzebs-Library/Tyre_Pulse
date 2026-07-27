@@ -216,7 +216,7 @@ export default function PressureIntelligence() {
             .range(from, to)),
           fetchAllPages((from, to) => supabase
             .from('tyre_records')
-            .select('id,asset_no,serial_number,position,pressure_reading,brand,size,site,country,issue_date,risk_level')
+            .select('id,asset_no,serial_number:serial_no,position,pressure_reading,brand,size,site,country,issue_date,risk_level')
             .order('issue_date', { ascending: false })
             .range(from, to)),
         ])

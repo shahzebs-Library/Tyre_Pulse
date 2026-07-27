@@ -12,7 +12,7 @@
  * degrades to [] on a missing relation so the page can prompt for the migration
  * instead of throwing.
  */
-import { supabase, unwrap, applyCountry, ServiceError } from './_client'
+import { supabase, unwrap, applyCountry, ServiceError, isMissingRelation } from './_client'
 import { EVENT_TYPES, buildBoard, computeKpis } from '../workshopLive'
 import { normalizeWoStatus } from '../workOrderStatus'
 import { generateWorkOrderNo } from './workOrders'
@@ -52,16 +52,6 @@ export const ASSIGNMENT_ROLES = Object.freeze(['primary', 'helper'])
 
 // ── Internal helpers ───────────────────────────────────────────────────────────
 
-/** True when a Supabase error means the table/relation is not deployed yet. */
-function isMissingRelation(err) {
-  const m = String(err?.message || '').toLowerCase()
-  return (
-    m.includes('does not exist') ||
-    m.includes('relation') ||
-    m.includes('schema cache') ||
-    m.includes('could not find the table')
-  )
-}
 
 /** Coerce a value to a finite number or null (empty string / null / NaN -> null). */
 function numOrNull(v) {

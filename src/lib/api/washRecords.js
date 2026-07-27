@@ -8,7 +8,7 @@
  * Before the migration is applied the lister degrades to [] so the page can
  * surface an "apply MIGRATIONS_V270_WASH_MODULE.sql" hint instead of throwing.
  */
-import { supabase, unwrap, applyCountry, fetchAllPages } from './_client'
+import { supabase, unwrap, applyCountry, fetchAllPages, isMissingRelation } from './_client'
 
 export const COLS =
   'id,organisation_id,country,site,area,asset_no,vehicle_type,wash_date,wash_time,' +
@@ -79,16 +79,6 @@ function textOrNull(v, max = 200) {
   return s ? s.slice(0, max) : null
 }
 
-/** True when a Supabase error means the table/relation is not deployed yet. */
-function isMissingRelation(err) {
-  const m = String(err?.message || '').toLowerCase()
-  return (
-    m.includes('does not exist') ||
-    m.includes('relation') ||
-    m.includes('schema cache') ||
-    m.includes('could not find the table')
-  )
-}
 
 /**
  * List wash records (newest wash first). All filters optional. Country-scoped

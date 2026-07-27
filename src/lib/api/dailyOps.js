@@ -9,7 +9,7 @@ import { supabase, fetchAllPages } from './_client'
 /** Tyre records fitted within [thirtyDaysAgo, wEnd] (paged). */
 export function listDailyTyreRecords({ thirtyDaysAgo, wEnd } = {}) {
   return fetchAllPages((from, to) => supabase.from('tyre_records')
-    .select('id,asset_no,serial_number,position,risk_level,tread_depth,issue_date,cost_per_tyre,site,country,brand,km_at_fitment,km_at_removal,created_at')
+    .select('id,asset_no,serial_number:serial_no,position,risk_level,tread_depth,issue_date,cost_per_tyre,site,country,brand,km_at_fitment,km_at_removal,created_at')
     .gte('issue_date', thirtyDaysAgo).lte('issue_date', wEnd).range(from, to), { max: 200000 })
 }
 

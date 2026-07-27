@@ -9,7 +9,7 @@
  * page can surface an "apply MIGRATIONS_V163_PM_PROGRAMS.sql" hint instead of
  * throwing.
  */
-import { supabase, unwrap, applyCountry } from './_client'
+import { supabase, unwrap, applyCountry, isMissingRelation } from './_client'
 
 export const COLS =
   'id,organisation_id,country,name,asset_no,asset_type,interval_type,interval_value,' +
@@ -43,16 +43,6 @@ function chunk(arr, size) {
   return out
 }
 
-/** True when a Supabase error means the table/relation is not deployed yet. */
-function isMissingRelation(err) {
-  const m = String(err?.message || '').toLowerCase()
-  return (
-    m.includes('does not exist') ||
-    m.includes('relation') ||
-    m.includes('schema cache') ||
-    m.includes('could not find the table')
-  )
-}
 
 /**
  * List PM programs (soonest next_due first). Optional country / status filters.

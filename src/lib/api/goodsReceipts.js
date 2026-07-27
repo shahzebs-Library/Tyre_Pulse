@@ -11,7 +11,7 @@
  * can surface an "apply MIGRATIONS_V157_GOODS_RECEIPTS.sql" hint instead of
  * throwing.
  */
-import { supabase, unwrap, applyCountry } from './_client'
+import { supabase, unwrap, applyCountry, isMissingRelation } from './_client'
 
 const COLS =
   'id,organisation_id,country,grn_no,po_ref,supplier,item,qty_ordered,qty_received,' +
@@ -19,16 +19,6 @@ const COLS =
 
 export const GOODS_RECEIPT_STATUS_VALUES = ['pending', 'partial', 'received', 'rejected']
 
-/** True when a Supabase error means the table/relation is not deployed yet. */
-function isMissingRelation(err) {
-  const m = String(err?.message || '').toLowerCase()
-  return (
-    m.includes('does not exist') ||
-    m.includes('relation') ||
-    m.includes('schema cache') ||
-    m.includes('could not find the table')
-  )
-}
 
 /** Coerce a value to a finite number, or null. */
 function num(value) {

@@ -11,7 +11,8 @@
     "test:run": "vitest run",
     "test:coverage": "vitest run --coverage",
     "screenshots": "node scripts/capture-screenshots.mjs",
-    "generate-icons": "node scripts/generate-icons.js"
+    "generate-icons": "node scripts/generate-icons.js",
+    "lint": "eslint src"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.100.1",
@@ -50,6 +51,9 @@
     "@vitejs/plugin-react": "^6.0.4",
     "@vitest/coverage-v8": "^4.1.10",
     "autoprefixer": "^10.4.16",
+    "eslint": "^9.39.5",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "globals": "^17.8.0",
     "jsdom": "^23.0.0",
     "playwright": "^1.61.1",
     "postcss": "^8.4.32",

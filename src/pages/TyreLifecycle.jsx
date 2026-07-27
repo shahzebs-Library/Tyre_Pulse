@@ -117,7 +117,7 @@ export default function TyreLifecycle() {
       const { data, error: qErr } = await fetchAllPages((from, to) => {
         let q = supabase
           .from('tyre_records')
-          .select('id,asset_no,serial_number,position,brand,size,tread_depth,cost_per_tyre,issue_date,km_at_fitment,km_at_removal,risk_level,site,country,category')
+          .select('id,asset_no,serial_number:serial_no,position,brand,size,tread_depth,cost_per_tyre,issue_date,km_at_fitment,km_at_removal,risk_level,site,country,category')
           .order('issue_date', { ascending: false })
         if (activeCountry !== 'All') q = q.eq('country', activeCountry)
         return q.range(from, to)
@@ -322,8 +322,8 @@ export default function TyreLifecycle() {
     if (serialHistory[serial]) return
     const { data } = await supabase
       .from('tyre_records')
-      .select('id,asset_no,serial_number,position,brand,size,issue_date,km_at_fitment,km_at_removal,category,risk_level,cost_per_tyre,site')
-      .eq('serial_number', serial)
+      .select('id,asset_no,serial_number:serial_no,position,brand,size,issue_date,km_at_fitment,km_at_removal,category,risk_level,cost_per_tyre,site')
+      .eq('serial_no', serial)
       .order('issue_date')
     setSerialHistory(prev => ({ ...prev, [serial]: data || [] }))
   }

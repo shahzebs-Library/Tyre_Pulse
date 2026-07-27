@@ -15,7 +15,7 @@ export function listSupplierTyres({ from, to, country } = {}) {
   return applyCountry(
     supabase
       .from('tyre_records')
-      .select('id, brand, supplier, qty, cost_per_tyre, issue_date, site, country, position, km_at_fitment, km_at_removal, risk_level, size, serial_number, asset_no'),
+      .select('id, brand, supplier, qty, cost_per_tyre, issue_date, site, country, position, km_at_fitment, km_at_removal, risk_level, size, serial_number:serial_no, asset_no'),
     country,
   ).range(from, to)
 }

@@ -222,7 +222,7 @@ export default function DowntimeTracker() {
       const { data: tyreData, error: tyreErr } = await fetchAllPages((from, to) => {
         let q = supabase
           .from('tyre_records')
-          .select('id,asset_no,serial_number,risk_level,issue_date,km_at_fitment,km_at_removal,cost_per_tyre,site,country,brand,position,reason_for_removal')
+          .select('id,asset_no,serial_number:serial_no,risk_level,issue_date,km_at_fitment,km_at_removal,cost_per_tyre,site,country,brand,position,reason_for_removal')
           .order('issue_date', { ascending: false })
         if (activeCountry !== 'All') q = q.eq('country', activeCountry)
         return q.range(from, to)

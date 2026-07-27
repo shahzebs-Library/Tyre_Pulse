@@ -9,11 +9,6 @@ export default function PwaUpdatePrompt() {
   const { t } = useLanguage()
   const registrationRef = useRef(null)
 
-  // Latest updater + pending-update flag, read from the hidden-tab auto-apply
-  // handler without re-subscribing it on every render.
-  const updateFnRef = useRef(null)
-  const needRefreshRef = useRef(false)
-
   const {
     offlineReady:  [offlineReady,  setOfflineReady],
     needRefresh:   [needRefresh,   setNeedRefresh],
@@ -30,18 +25,24 @@ export default function PwaUpdatePrompt() {
         registration.update().catch(() => {})
       }, UPDATE_INTERVAL_MS)
 
-      // Visibility handler, two jobs:
-      //  - VISIBLE: check for a new deploy (iOS suspends background timers, so a
-      //    refocus is the reliable trigger).
-      //  - HIDDEN: if an update is already waiting, apply it QUIETLY now. The
-      //    reload happens while nobody is looking, so a kiosk / TV / backgrounded
-      //    tab self-heals to the latest build without ever interrupting work.
+      // Visibility handler. On VISIBLE, check for a new deploy (iOS suspends
+      // background timers, so a refocus is the reliable trigger).
+      //
+      // There used to be a HIDDEN branch that quietly applied a waiting update
+      // so kiosks self-healed. It was the cause of the blank first screen and
+      // is deliberately gone. Applying an update posts SKIP_WAITING; the new
+      // worker activates, Workbox deletes the previous build's precached chunks,
+      // and clientsClaim hands it the still-live old page - which is then told
+      // to reload while the tab is hidden and therefore frozen. The user came
+      // back to a half-torn-down document whose chunks no longer existed.
+      //
+      // Nothing is lost: a waiting worker activates on its own once every
+      // controlled tab is gone, so the next real launch is already up to date,
+      // and a visible tab still gets the explicit "New version available"
+      // prompt below.
       const onVisibility = () => {
-        if (document.visibilityState === 'visible') {
-          if (navigator.onLine) registration.update().catch(() => {})
-        } else if (needRefreshRef.current && typeof updateFnRef.current === 'function') {
-          updateFnRef.current(true) // activate the waiting SW -> reload while hidden
-        }
+        if (document.visibilityState !== 'visible') return
+        if (navigator.onLine) registration.update().catch(() => {})
       }
       document.addEventListener('visibilitychange', onVisibility)
 
@@ -56,9 +57,6 @@ export default function PwaUpdatePrompt() {
     },
   })
 
-  // Keep the refs the visibility handler reads in sync with the live hook state.
-  useEffect(() => { updateFnRef.current = updateServiceWorker }, [updateServiceWorker])
-  useEffect(() => { needRefreshRef.current = needRefresh }, [needRefresh])
 
   useEffect(() => {
     return () => {

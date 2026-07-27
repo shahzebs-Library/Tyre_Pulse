@@ -15,7 +15,7 @@
  * here - RLS is the authoritative country boundary for staff. We scope shifts /
  * attendance by their scalar country column only.
  */
-import { supabase, unwrap, applyCountry, fetchAllPages } from './_client'
+import { supabase, unwrap, applyCountry, fetchAllPages, isMissingRelation } from './_client'
 
 export const SHIFT_COLS =
   'id,person_name,role,shift_date,start_time,end_time,site,status,country'
@@ -25,16 +25,6 @@ export const ATTENDANCE_COLS =
 
 export const STAFF_COLS = 'id,full_name,employee_id,role,site'
 
-/** True when a Supabase error means the table/relation is not deployed yet. */
-function isMissingRelation(err) {
-  const m = String(err?.message || '').toLowerCase()
-  return (
-    m.includes('does not exist') ||
-    m.includes('relation') ||
-    m.includes('schema cache') ||
-    m.includes('could not find the table')
-  )
-}
 
 /** Load rostered shifts in [from,to], optionally scoped by site + country. */
 async function loadShifts({ from, to, site, country }) {

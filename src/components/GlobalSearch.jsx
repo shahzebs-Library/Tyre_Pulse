@@ -70,7 +70,7 @@ async function searchAll(query) {
   const [tyres, vehicles, inspections, workOrders, stock] = await Promise.allSettled([
     // Tyre records
     supabase.from('tyre_records')
-      .select('id, serial_number, asset_number, brand, risk_level')
+      .select('id, serial_number:serial_no, asset_number:asset_no, brand, risk_level')
       .or(`serial_number.ilike.%${q}%,asset_number.ilike.%${q}%,brand.ilike.%${q}%`)
       .limit(6),
     // Vehicles

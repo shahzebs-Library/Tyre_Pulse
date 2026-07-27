@@ -278,7 +278,7 @@ export default function ComplianceDashboard() {
       const [{ data: tr }, { data: ins }, { data: fm }] = await Promise.all([
         fetchAllPages((from, to) => supabase
           .from('tyre_records')
-          .select('id,asset_no,serial_number,brand,size,position,site,country,tread_depth,pressure_reading,risk_level,issue_date,removal_date,category')
+          .select('id,asset_no,serial_number:serial_no,brand,size,position,site,country,tread_depth,pressure_reading,risk_level,issue_date,removal_date,category')
           .order('issue_date', { ascending: false })
           .range(from, to)),
         fetchAllPages((from, to) => supabase

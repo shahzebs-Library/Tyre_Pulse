@@ -233,7 +233,7 @@ export default function FleetHealthBoard() {
       const { data, error: err } = await fetchAllPages((from, to) => {
         let q = supabase
           .from('tyre_records')
-          .select('id,asset_no,serial_number,position,tread_depth,pressure_reading,risk_level,issue_date,km_at_fitment,km_at_removal,cost_per_tyre,site,country,brand,size')
+          .select('id,asset_no,serial_number:serial_no,position,tread_depth,pressure_reading,risk_level,issue_date,km_at_fitment,km_at_removal,cost_per_tyre,site,country,brand,size')
           .is('km_at_removal', null)
         if (activeCountry !== 'All') q = q.eq('country', activeCountry)
         return q.range(from, to)

@@ -5,7 +5,7 @@
  * country scoping, and tolerates a missing table (returns [] until the migration
  * is applied). Mirrors accidents.js / support.js.
  */
-import { supabase, unwrap, applyCountry } from './_client'
+import { supabase, unwrap, applyCountry, isMissingRelation } from './_client'
 
 const COLS =
   'id,organisation_id,country,incident_no,incident_type,asset_no,site,incident_date,' +
@@ -15,16 +15,6 @@ export const INCIDENT_TYPES = ['near_miss', 'damage', 'breakdown', 'safety', 'th
 export const INCIDENT_SEVERITIES = ['low', 'medium', 'high', 'critical']
 export const INCIDENT_STATUSES = ['open', 'investigating', 'resolved', 'closed']
 
-/** True for "relation/table does not exist" errors — the migration isn't applied yet. */
-function isMissingRelation(err) {
-  const m = String(err?.message || '').toLowerCase()
-  return (
-    m.includes('does not exist') ||
-    m.includes('relation') ||
-    m.includes('schema cache') ||
-    m.includes('could not find the table')
-  )
-}
 
 /**
  * List incidents, newest first. Country-scoped (null-safe) and optionally

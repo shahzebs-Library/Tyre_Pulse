@@ -225,16 +225,25 @@ export function AuthProvider({ children }) {
     // but never sign out here: the same session is shared with the tab that is
     // completing MFA. Once the second factor is verified the session upgrades to
     // AAL2 and the next auth event admits it.
+    // Claim the identity BEFORE the await below. getSession() and the
+    // INITIAL_SESSION event both call handleSession concurrently on every cold
+    // start; the guard above reads this ref, so arming it only after an await
+    // let BOTH callers through - doubling fetchProfile, doubling the realtime
+    // subscribe, and letting a second setLoading(true) re-blank an app that had
+    // already painted.
+    currentUserIdRef.current = newUserId
+
     if (await hasUnmetMfa()) {
       setUser(null)
-      if (currentUserIdRef.current !== null) clearUserScopedState()
+      // clearUserScopedState resets the ref to null, so a later AAL2 event is
+      // still treated as a new identity and loads normally.
+      clearUserScopedState()
       setLoading(false)
       return
     }
 
     // A genuinely different (or first) fully-authenticated user → full load.
     setUser(session.user)
-    currentUserIdRef.current = newUserId
     setLoading(true)
     fetchProfile(newUserId)
     subscribeToProfile(newUserId)
@@ -243,7 +252,12 @@ export function AuthProvider({ children }) {
   useEffect(() => {
     // Belt-and-suspenders initial read (in case INITIAL_SESSION is delayed);
     // handleSession is idempotent via the ref, so this never double-loads.
-    supabase.auth.getSession().then(({ data: { session } }) => handleSession(session))
+    // Safe-destructured and rejection-handled: a failed session read must land
+    // the user on /login, never on a permanent spinner.
+    supabase.auth.getSession().then(
+      ({ data }) => handleSession(data?.session ?? null),
+      () => handleSession(null),
+    )
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (_event, session) => handleSession(session),
@@ -256,16 +270,37 @@ export function AuthProvider({ children }) {
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   async function fetchProfile(userId) {
+    try {
+      await loadProfile(userId)
+    } catch {
+      // Never leave the app on the boot spinner. A profile we could not read is
+      // an unknown profile, so keep the fail-closed defaults: modulePerms {}
+      // makes hasPermission deny by default rather than crash.
+      setModulePerms({})
+    } finally {
+      // THE reason this is a finally: setLoading(false) used to sit after five
+      // awaits, so any one of them rejecting stranded `loading` at true forever
+      // and ProtectedRoute rendered a bare spinner for the rest of the session.
+      // That is the "blank on open, fine after refresh" report.
+      setLoading(false)
+    }
+  }
+
+  async function loadProfile(userId) {
+    // Every member carries its own rejection handler, so Promise.all cannot
+    // reject and one failing read can never discard the other four. listFactors
+    // in particular is documented as able to throw a non-AuthError.
+    const settle = () => ({ data: null, error: true })
     const [profileRes, permsRes, factorsRes, grantsRes, capsRes] = await Promise.all([
-      supabase.from('profiles').select('id,full_name,username,role,email,employee_id,site,country,approved,locked,is_super_admin,web_access,created_at').eq('id', userId).single(),
-      supabase.rpc('get_user_module_permissions'),
-      supabase.auth.mfa.listFactors(),
+      supabase.from('profiles').select('id,full_name,username,role,email,employee_id,site,country,approved,locked,is_super_admin,web_access,created_at').eq('id', userId).single().then(r => r, settle),
+      supabase.rpc('get_user_module_permissions').then(r => r, settle),
+      supabase.auth.mfa.listFactors().then(r => r, settle),
       // Per-user access grants. Fail-closed: on any error keep {} — never throw
       // and never block login on this optional overlay.
-      supabase.rpc('get_my_access_grants').then(r => r, () => ({ data: null, error: true })),
+      supabase.rpc('get_my_access_grants').then(r => r, settle),
       // Per-user capability overrides. Same fail-closed contract: any error keeps
       // {} and never blocks login. UI-gating only (server is the real boundary).
-      supabase.rpc('get_my_capabilities').then(r => r, () => ({ data: null, error: true })),
+      supabase.rpc('get_my_capabilities').then(r => r, settle),
     ])
 
     const p = profileRes.data
@@ -279,18 +314,19 @@ export function AuthProvider({ children }) {
         setModulePerms({})
         setGrantOverrides({})
         setCapabilities({})
-        setLoading(false)
         return
       }
       // Mid-session change (e.g. an admin revokes approval while active):
-      // sign out and flag the correct banner for the next page load.
-      await supabase.auth.signOut()
+      // sign out and flag the correct banner for the next page load. The
+      // sign-out is guarded so a network failure still records the banner and
+      // still clears the profile - a revoked account must never stay rendered
+      // just because the sign-out call could not be delivered.
+      try { await supabase.auth.signOut() } catch { /* clear locally regardless */ }
       localStorage.setItem(p.locked === true ? 'tp_access_revoked' : 'tp_pending_approval', '1')
       setProfile(null)
       setModulePerms({})
       setGrantOverrides({})
       setCapabilities({})
-      setLoading(false)
       return
     }
 
@@ -314,7 +350,6 @@ export function AuthProvider({ children }) {
     const caps = capsRes?.data
     setCapabilities(caps && typeof caps === 'object' && !Array.isArray(caps) ? caps : {})
     setMfaEnabled((factorsRes.data?.totp?.length ?? 0) > 0)
-    setLoading(false)
     // Module lifecycle statuses - best-effort, never blocks login, always {}-safe.
     listModuleStatuses().then(setModuleStatuses)
   }

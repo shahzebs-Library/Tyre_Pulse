@@ -5,7 +5,7 @@
  * isolation; this layer keeps explicit column lists and null-safe country
  * scoping, mirroring support.js / stock.js.
  */
-import { supabase, unwrap, applyCountry } from './_client'
+import { supabase, unwrap, applyCountry, isMissingRelation } from './_client'
 
 const COLS =
   'id,organisation_id,country,load_no,asset_no,driver_name,origin,destination,' +
@@ -13,16 +13,6 @@ const COLS =
 
 export const LOAD_STATUSES = ['planned', 'dispatched', 'in_transit', 'delivered', 'cancelled']
 
-/** A relation-missing error means the migration hasn't been applied yet. */
-function isMissingRelation(err) {
-  const m = String(err?.message || '').toLowerCase()
-  return (
-    m.includes('does not exist') ||
-    m.includes('relation') ||
-    m.includes('schema cache') ||
-    m.includes('could not find the table')
-  )
-}
 
 /**
  * List dispatch loads (newest scheduled first). Optional status/country

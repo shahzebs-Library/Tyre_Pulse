@@ -8,7 +8,7 @@ import { LanguageProvider } from './contexts/LanguageContext'
 import { SettingsProvider, useSettings } from './contexts/SettingsContext'
 import { TenantProvider } from './contexts/TenantContext'
 import { CommandPaletteProvider } from './contexts/CommandPaletteContext'
-import ProtectedRoute, { RoleRoute, ModuleRoute, SuperAdminRoute } from './components/ProtectedRoute'
+import ProtectedRoute, { RoleRoute, ModuleRoute, RouteLoading } from './components/ProtectedRoute'
 import { useAuth } from './contexts/AuthContext'
 import Layout from './components/Layout'
 import LoadingSpinner from './components/LoadingSpinner'
@@ -308,8 +308,15 @@ const RuleBuilder            = lazy(() => import('./pages/RuleBuilder'))
 const RecallDetail           = lazy(() => import('./pages/RecallDetail'))
 
 // ── Per-page error boundary ───────────────────────────────────────────────
+// Keyed on the pathname on purpose. <Routes> renders one matched element at a
+// time, and react-router does not key that element by path, so React sees the
+// same component in the same position across a navigation and REUSES the
+// boundary instance - carrying hasError with it. Without the key, one page
+// that throws leaves every later route showing the error screen until a hard
+// refresh, which reads to the user as "the app went blank".
 function Safe({ children }) {
-  return <ErrorBoundary>{children}</ErrorBoundary>
+  const { pathname } = useLocation()
+  return <ErrorBoundary key={pathname}>{children}</ErrorBoundary>
 }
 
 // ── Feature-flag gate (org-level toggles from Settings → Feature flags) ───
@@ -427,6 +434,14 @@ function MainApp() {
                   <Layout>
                     <SubscriptionGate>
                     <ChecklistOnlyGate>
+                    {/* Suspense INSIDE the shell. The outer boundary (above
+                        Layout) is still there for the public routes, but if it
+                        also caught in-app navigation then loading any lazy page
+                        unmounted the sidebar, header and the whole frame down
+                        to a full-screen spinner - which is why moving between
+                        screens felt like the app restarting each time. Scoped
+                        here, only the content area swaps. */}
+                    <Suspense fallback={<RouteLoading />}>
                     <Routes>
                       <Route path="/"            element={<Safe><HomeRoute /></Safe>} />
                       <Route path="/tyres"       element={<Safe><ModuleRoute moduleKey="tyre_records"><TyreRecords /></ModuleRoute></Safe>} />
@@ -664,6 +679,7 @@ function MainApp() {
                       <Route path="/automation-rules/builder/:ruleId"  element={<Safe><FlagRoute flag="automation_platform"><RuleBuilder /></FlagRoute></Safe>} />
                       <Route path="*"            element={<NotFound />} />
                     </Routes>
+                    </Suspense>
                     </ChecklistOnlyGate>
                     </SubscriptionGate>
                   </Layout>

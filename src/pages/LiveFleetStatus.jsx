@@ -464,7 +464,7 @@ export default function LiveFleetStatus() {
 
         fetchAllPages((from, to) => supabase
           .from('tyre_records')
-          .select('asset_no,risk_level,tread_depth,pressure_reading,position,site,issue_date,removal_date,brand,serial_number,size')
+          .select('asset_no,risk_level,tread_depth,pressure_reading,position,site,issue_date,removal_date,brand,serial_number:serial_no,size')
           .is('removal_date', null)
           .range(from, to)),
 

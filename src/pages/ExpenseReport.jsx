@@ -17,7 +17,7 @@ import {
 import { Bar, Doughnut, Line } from 'react-chartjs-2'
 import {
   Wallet, TrendingUp, PieChart, Download, RefreshCw, Eye, EyeOff, Boxes, Building2, Truck,
-  Package, MapPin, Save, ArrowRight, Gauge, ShieldCheck,
+  Package, MapPin, Save, ArrowRight, Gauge, ShieldCheck, Sparkles,
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
 import { useSettings, COUNTRY_CURRENCY } from '../contexts/SettingsContext'
@@ -28,6 +28,8 @@ import { periodWindow, buildCostCpkExport } from '../lib/costCpk'
 import {
   PeriodBar, ComparisonStrip, CpkPanel, MoversPanel, EvidencePanel,
 } from '../components/expense/CostCpkPanels'
+import CostVariancePanel from '../components/expense/CostVariancePanel'
+import { getCostVariance } from '../lib/api/costVariance'
 import { getExpenseBySite, setStoreSiteMap, listSites } from '../lib/api/storeSiteExpense'
 import { stylize, ACCENTS } from '../lib/reportColors'
 import { reportFileName, reportDateLabel, exportToExcel } from '../lib/exportUtils'
@@ -43,6 +45,7 @@ const SECTIONS = [
   ['kpis', 'KPIs', Wallet],
   ['compare', 'vs Last Period', ArrowRight],
   ['cpk', 'Cost per km', Gauge],
+  ['why', 'Why It Changed', Sparkles],
   ['movers', 'What Moved', TrendingUp],
   ['categories', 'Categories', PieChart],
   ['sites', 'Stores', Building2],
@@ -53,7 +56,7 @@ const SECTIONS = [
   ['evidence', 'Certainty', ShieldCheck],
 ]
 const SECTION_DEFAULTS = {
-  kpis: true, compare: true, cpk: true, movers: true, categories: true, sites: true,
+  kpis: true, compare: true, cpk: true, why: true, movers: true, categories: true, sites: true,
   bysite: true, assets: true, items: true, trend: true, evidence: true,
 }
 
@@ -326,6 +329,10 @@ export default function ExpenseReport() {
   const [period, setPeriod] = useState('last_12')
   const [overview, setOverview] = useState(null)
   const [moverDim, setMoverDim] = useState('by_asset')
+  // The variance decomposition: what the change is made of, and a plain-language
+  // account of it. Its own state so a backend without V378 leaves the section
+  // out rather than failing the page.
+  const [variance, setVariance] = useState(null)
 
   const [sections, setSections] = useState(() => {
     try {
@@ -352,6 +359,9 @@ export default function ExpenseReport() {
         getCostCpkOverview({ country: scopedCountry, from: from || undefined, to: to || undefined })
           .catch(() => ({ ok: false })),
       ])
+      getCostVariance({
+        country: scopedCountry, from: from || undefined, to: to || undefined, limit: 25,
+      }).then((v) => setVariance(v && v.ok ? v : null)).catch(() => setVariance(null))
       setSnap(res && res.ok ? res : { ok: false })
       setOverview(ov && ov.ok ? ov : null)
       // On the "All countries" view, also load each country's total in its OWN
@@ -716,6 +726,11 @@ export default function ExpenseReport() {
           {/* Cost per kilometre, with the coverage that makes it readable */}
           {sections.cpk && overview && !isAll && (
             <CpkPanel snap={overview} money={money} />
+          )}
+
+          {/* Why the total changed: price against volume, what started, what stopped */}
+          {sections.why && variance && !isAll && (
+            <CostVariancePanel variance={variance} snapshot={overview} loading={refreshing} />
           )}
 
           {/* What moved, which is the answer to why the total changed */}

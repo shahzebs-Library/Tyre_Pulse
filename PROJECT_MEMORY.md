@@ -53,6 +53,45 @@ returns **null, not a flattering zero**. Deliberate omissions stated in the UI: 
 the odometer tables are empty, and the never-populated columns get NO checks, since scoring them would imply
 they were expected.
 
+### V376 ASSET OWNERSHIP — **a shared asset number is NOT proof of a transferred vehicle**
+**CORRECTS THE STANDING V356 CLAIM** that "183 vehicles transferred between countries". Verified: of 1,300
+asset codes carrying spend, **221 appear in two countries, but 57 of them bill CONCURRENTLY in 2+ months** and
+one machine cannot be in two places at once. Identity confirms it: **GN103 is a "GENERATOR" in KSA and a
+"GENERATOR SANY" in UAE; BP041 is "BATCHING PLANT 41" in KSA and a different "BATCH PLANT" in Egypt.** The
+numbering is a per-country sequence per asset class (BP/GN/MP/TM), so collisions are expected.
+- True foreign-borne cost is small: KSA 1,628,998 SAR (4.0%) · Egypt 571,705 EGP (0.7%) · UAE 92,145 AED (0.5%).
+  The bigger exposure is **contested codes (2.9-6.4%)**, which is a data-identity problem, not a transfer one.
+- **THE OWNERSHIP RULE IS OPERATING-EVIDENCE ONLY, and the obvious signals had to be REJECTED because they are
+  artifacts that would have handed KSA every contested asset:** `purchase_value`, `net_book_value`,
+  `fa_asset_number`, `serial_no`, `chassis_no` are **NULL on all 1,523 fleet rows**; `registration_no` exists on
+  391 rows and **every one is KSA** (0 UAE, 0 Egypt); `vehicle_fleet.created_at` is the V348/V351 derivation
+  date, not asset age. Both rejected signals are still SHOWN to a reviewer but never decide.
+- Rule: sole operator, or >=90% of active months and cost lines, or holder after a clean handover; when two
+  countries bill the same code in the same month more than once, ownership is **unknown, not guessed**.
+- `get_asset_ownership(p_search,p_limit,p_cross_only,p_asset)`. Surfaced on AssetDetail + AssetMasterSection.
+  **The right long-term fix is a country-qualified asset key** - the same V367 lesson that nothing is keyed on
+  a code alone. 56 contested codes + 10 identity conflicts need a review workflow.
+
+### V378 COST VARIANCE — the "why did Riyadh increase" engine
+`get_cost_variance(country,site,from,to,limit)` + `src/lib/costVariance.js` + `CostVariancePanel`, wired into
+`/expense-report` as the "Why It Changed" section. **Contributions close EXACTLY** (verified live: KSA H1-2026
+price -129,553.89 + volume -386,556.18 + new 649,833.99 + stopped -723,540.76 + leftover 0.00 = -589,816.84,
+the exact total delta; by_site rows + tail likewise exact).
+- **The textbook price/volume split was REJECTED on measurement.** `volume=Δq·p₀, price=q₀·Δp` leaves an
+  interaction term `Δq·Δp` that on real KSA data was **-526,245 SAR, larger than either named effect** - the
+  "explanation" would have been mostly an unactionable residual. Uses the **Bennet (symmetric)** decomposition
+  `volume=Δq·(p₀+p₁)/2, price=Δp·(q₀+q₁)/2`, which sums exactly with **no third term**.
+- **A cross-tenant hole was introduced and closed during the work**: `_cost_var_dim` takes `p_org` and is
+  DEFINER, and the first migration granted EXECUTE to `authenticated` - proven exploitable with an arbitrary
+  org id, then revoked. **RULE: a DEFINER helper that accepts an org id must NEVER be executable by
+  `authenticated`.** All four `_cost_*` helpers verified `auth_exec=false`; all four entry points take no org
+  argument at all.
+- Honest limits it states rather than hides: the long tail is netted so concentration is a LOWER BOUND; UAE
+  shows 1,871 item lines starting and 1,929 stopping against a net of only -934,749, consistent with the same
+  part reissued under a new code, and the engine flags it `offsetting` without deciding; and a test asserts the
+  narrative never contains "because", "decided", "switched supplier", "negotiated", "chose" or "strategy" -
+  the data records what changed, never why anyone chose it.
+
 ### More verified data facts
 - **UAE: AED 5,437,916 (29.4% of all UAE spend) sits on 69 assets missing from `vehicle_fleet`**, so it drops out
   of every per-asset and per-type view. Egypt 2,325; KSA 51,094.

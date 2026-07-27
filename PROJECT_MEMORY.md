@@ -103,8 +103,13 @@ positives and zero true ones.
      - 3 real sites registered that carried job cards but were never in `sites`: **NEOM_CP_14, RIY-TWG-ST,
        YANBU**. **`sites.organisation_id` defaults to `app_current_org()`, which is NULL outside a user session
        - it MUST be set explicitly or the new site is invisible to everyone.**
-     - **STILL OPEN, 34 job cards literally named site = "KSA"** - a country used as a site placeholder.
-       Deliberately NOT registered as a site; needs the customer to say which site those 34 belong to.
+     - **34 job cards literally named site = "KSA"** - a country used as a site placeholder. NOT registered as
+       a site. All 34 DO carry a real `work_location` (JED-ST 9, KSP-T1 8, NHC-ST 7, RIY-SAL-ST 3, REDSEA-ST 3,
+       KSP_TP-ST 2, JIZAN-ST 1, AMALA-ST 1), **but do NOT fill `site` from it**: measured across the 55,572 KSA
+       cards that carry both, `site` and `work_location` agree only **31.4%** of the time. They are different
+       facts - where the asset belongs vs where the work happened - so work_location is not a proxy for site and
+       using it would plant a wrong site on roughly two rows in three. Needs the customer to name the site;
+       impact is 0.06% of KSA job cards.
 2. **RLS is the real cause of app-wide slowness, and it needs security sign-off.** `app_can_see_country(country)`
    and `app_can_see_site(site)` are row-dependent so they re-query `profiles` PER ROW: a bare
    `count(*) on work_orders` measured **11,994 ms (Manager) / 8,598 ms (super-admin)** vs **124 ms** with the

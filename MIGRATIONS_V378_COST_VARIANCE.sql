@@ -286,7 +286,13 @@ end $function$;
 comment on function public.get_cost_variance(text,text,date,date,int) is
   'V378. Decomposes the change in parts spend between a window and the window before it into price, volume, new lines, stopped lines and an undecomposable remainder that sum exactly to the total change, plus every dimension ranked by size of swing. Returns no money when the scope spans more than one currency.';
 
-revoke all on function public._cost_var_dim(uuid,text,text,date,date,date,date,text,int) from public, anon;
+-- THE HELPER IS NEVER GRANTED TO authenticated, AND THAT IS LOAD BEARING.
+-- _cost_var_dim takes p_org as an ARGUMENT and is SECURITY DEFINER, so a caller
+-- who could execute it directly would simply pass another tenant's org id and
+-- read their spend - app_current_org() is only consulted by the outer function.
+-- get_cost_variance runs as the owner, so it can still call the helper with no
+-- grant to the caller. This mirrors V374's _cost_dim, which is correctly
+-- restricted the same way. NEVER add a grant here.
+revoke all on function public._cost_var_dim(uuid,text,text,date,date,date,date,text,int) from public, anon, authenticated;
 revoke all on function public.get_cost_variance(text,text,date,date,int) from public, anon;
-grant execute on function public._cost_var_dim(uuid,text,text,date,date,date,date,text,int) to authenticated;
 grant execute on function public.get_cost_variance(text,text,date,date,int) to authenticated;

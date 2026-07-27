@@ -3,6 +3,66 @@
 Durable, committed project knowledge so any session has full context. Keep this
 current. Read it before adding/changing modules. Governing spec: `Tyre pulse enterprise.md`
 
+## SESSION 2026-07-27 (part 2) — ARCHITECTURE PASS. Migrations through **V379**, next free **V380**.
+Four agents on the remaining architecture spec. **Every claim below I re-verified myself against the live DB.**
+
+### **V379 — `authenticated` held TRUNCATE on 248 tables, and TRUNCATE IS NOT COVERED BY RLS**
+Proven live in a rolled-back txn: as `authenticated`, with the RESTRICTIVE org-isolation policy in force,
+`truncate public.stg_tyre_brand` **SUCCEEDED**. Postgres never consults row policies for TRUNCATE, so the entire
+tenant boundary stops at that one statement, and `parts_consumption` (216,792 rows of financial history) was in
+the set. LATENT not live: PostgREST never issues TRUNCATE and nothing runs user-influenced SQL as that role.
+Revoked TRUNCATE + TRIGGER from authenticated/anon + `alter default privileges` so new tables cannot inherit them.
+Safe: zero TRUNCATE statements in src/ or supabase/, zero functions containing one; the app uses DELETE.
+**RULE: RLS governs SELECT/INSERT/UPDATE/DELETE only. It does NOT govern TRUNCATE or DDL.**
+
+### **THE ALL-COUNTRIES VIEW WAS RENDERING A BLENDED TOTAL — live, user-visible, now fixed**
+`SettingsContext` `activeCurrency` falls back to `appSettings.currency` when country is 'All', and `applyCountry`
+applies NO filter there, so all 10 `loadCostSplit` consumers rendered **"SAR 138,443,319"** = literally
+79,341,428 EGP + 40,608,350 SAR + 18,493,541 AED (I checked the arithmetic - it is exact).
+**`src/lib/governedCost.js` is now THE cost definition** and makes this impossible BY CONSTRUCTION, not by
+discipline: `Money` is frozen `{amount,currency}`, `addMoney` THROWS on mismatch, and `CountryCostSet` exposes
+**no scalar total** so there is nothing a template can render as one number. Migrated: Dashboard, Analytics,
+CostCenter, BoardOverview. **Still to migrate: ExecutiveReport, VendorIntelligence, BrandPerformance,
+EngineeringKpi, PmPrograms, VehicleHistory** (same one-line swap).
+- **The audit found 361 inline cost-derivation sites, NOT the ~30 the spec estimated** (pages 181 / lib 162 /
+  api 7 / analytics 5 / console 3 / components 2; 14 governed, 226 trivial, 121 need a decision).
+- **49% of tyre_records have no price, not 36%**, and UAE + Egypt are 100% null - so the ~105 sites that sum
+  `cost_per_tyre` for a TOTAL read 0.00 for those countries while the grid holds AED 6.15M and EGP 16.72M.
+- 6 sites add `work_orders.total_cost` which INCLUDES tyre_cost = double count (WorkOrders.jsx:234,502,538;
+  WorkshopManagement.jsx:357,390,1277-1296; technicianScorecard.js:87,152).
+- Simply broken: `SerialTracker.jsx:237,366` sums a `cost` column **that does not exist**; `CostCenter.jsx:207`
+  drops `qty`. 3 sites fabricate a denominator of 1 (RotationSchedule:265, ForecastingEngine:691,
+  TyreScrapManagement:404).
+- **BLOCKED:** per-site cost cannot move to the grid - only **7 of 38** grid sites match the 22 tyre_records
+  sites. Complete `store_site_map` first or ~20 figures silently change which site they belong to.
+
+### **RE-IMPORT PROTECTION WAS KSA-ONLY — the `#` column was never mapped for Egypt/UAE**
+`source_row` is present on **106,646/106,646 KSA** rows but only **78/42,531 Egypt** and **39/67,615 UAE**, so
+`import_uid` could never be computed there (V363's backfill was not the cause - the source data simply had no
+line number). A re-upload of an Egypt or UAE expense file would duplicate the money again, the exact failure
+that produced the 8,248 duplicates. **FIX: `checkImportFingerprint` (sha256 of the file) is now wired into
+`ErpIntake.jsx` and `ConsoleSmartImport.jsx`** - hashes before parsing, warns when the content has been seen,
+and DISABLES the commit button until the operator ticks an acknowledgement. Covers all 3 countries regardless of
+source_row. **STILL OPEN: `DataIntakeCenter.jsx` is not yet wired.**
+
+### V375 Data Trust Centre — `/data-reconciliation` Trust tab (no new page, no new route)
+`get_data_trust_overview` + pure `src/lib/dataTrust.js` (17 checks, 5 dimensions, 5 KPI domains, 30 tests) +
+reusable `src/components/trust/TrustBadge.jsx`. Live scores: tyre+parts spend 67 · cost per km 54 · tyre life 69
+· brand performance 44 · fleet register 52. Every score carries its REASONS; a domain with nothing measurable
+returns **null, not a flattering zero**. Deliberate omissions stated in the UI: `meter_source` scores 0 because
+the odometer tables are empty, and the never-populated columns get NO checks, since scoring them would imply
+they were expected.
+
+### More verified data facts
+- **UAE: AED 5,437,916 (29.4% of all UAE spend) sits on 69 assets missing from `vehicle_fleet`**, so it drops out
+  of every per-asset and per-type view. Egypt 2,325; KSA 51,094.
+- **`vehicle_fleet.vehicle_type` is 100% blank for UAE (371/371) and Egypt (133/133)**, blank on 417/1,019 KSA.
+  **This CONTRADICTS the V348 note below claiming vehicle_type was derived from tyre_records** - it is not in the
+  data now. Do not trust that line; re-derive if the fleet register matters.
+- 3 UAE tyre_records carry a **future** removal_date (max 2026-11-10). `fleet_km_by_asset` already excludes them.
+- Material Master review covers only **1.3% (UAE) to 6.5% (Egypt)** of spend, so the strongest evidence layer is
+  barely load-bearing yet.
+
 ## SESSION 2026-07-27 — UPLOAD WORKBOOK + BRAIN CACHE + EXPENSES & CPK ON ONE PAGE. Migrations through **V374**, next free **V375**.
 
 ### `/expense-report` is THE real-expense home, now renamed "Expenses & CPK" in the nav

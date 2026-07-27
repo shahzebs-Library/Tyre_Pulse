@@ -3,6 +3,45 @@
 Durable, committed project knowledge so any session has full context. Keep this
 current. Read it before adding/changing modules. Governing spec: `Tyre pulse enterprise.md`
 
+## SESSION 2026-07-27 (part 3) — CLOSING THE OPEN ITEMS. Migrations through **V380**, next free **V381**.
+
+### ALL 10 `loadCostSplit` CONSUMERS NOW GOVERNED — the blended total is gone everywhere
+ExecutiveReport, VendorIntelligence, EngineeringKpi, PmPrograms, BrandPerformance, VehicleHistory migrated to
+`loadGovernedCostSplit`, plus a SECOND call site in CostCenter (line 1433, site-scoped) the first pass missed.
+**`grep loadCostSplit(` over src/pages and src/console now returns nothing.** Only `costSummary.js` itself and
+three explanatory comments still name it.
+
+### **THE "6 DOUBLE-COUNT SITES" ARE NOT DOUBLE-COUNTING — measured, not assumed**
+`work_orders.tyre_cost` is **NULL on all 85,886 rows** and sums to 0, and `total_cost` (35,060,742) equals
+labour+parts+lubricant+outside_repair exactly. So WorkOrders.jsx / WorkshopManagement.jsx / technicianScorecard
+are NOT inflating anything today. The exclusion is still correct and is encoded in `governedCost.EXCLUSIONS`,
+which is where it protects the future. **Do not "fix" those 6 sites; there is nothing live to fix.**
+
+### V380 FX CONVERSION — built, verified, and deliberately INERT
+`currency_rates` already existed and was EMPTY, which is the only reason no combined-country total was ever
+possible. Now: `fx_rate_for` / `fx_convert` / `fx_coverage` + a stored `system_config.fx_policy`
+(transaction | monthly_avg | closing; default monthly_avg) + `src/lib/api/currencyRates.js` +
+`FxRatesPanel` mounted on Console System Configuration.
+- **NO RATE IS INVENTED.** With the table empty `fx_coverage('SAR')` returns `complete:false` with AED and EGP
+  null, callers say "not available", and per-country figures are unchanged. Verified live rolled back: with two
+  test rates it returns AED 1.0211 / EGP 0.0777, converts 1000 AED to 1021.10, gives NULL for an unknown
+  currency, 1 for same-currency, and **NULL for a date before the first rate** (no backwards extrapolation).
+- **ENTER vs APPROVE is enforced server-side** (V380b). `currency_rates_write` was `is_approved_and_unlocked()`
+  = any approved user, far too loose for something that rescales all reported money. Now elevated may ENTER
+  (lands unapproved, used by nothing) and only Admin/super-admin may APPROVE. Verified by impersonation:
+  Manager can enter, Manager approve is BLOCKED, **and Manager inserting a row already flagged approved is also
+  BLOCKED** - the guard is BEFORE INSERT OR UPDATE so the obvious bypass is closed.
+- **REMAINING is not code**: an administrator must enter and approve AED->SAR and EGP->SAR. Until then the
+  system correctly declines a combined total.
+
+### `store_site_map` — 18 UNMAPPED CODES, and it is blocked on CUSTOMER KNOWLEDGE, not effort
+All 18 are Egypt/UAE (every KSA code is mapped). Biggest: `SP_EG_MRIL` 21,572,284 EGP · `GC_JEB_ST` 16,145,348
+AED · `SP_EG_EAST` 15,972,363 · `SP_EG_GML4` 13,914,211. Three carry a stray space (`SP_EG_ MID`, `SP_EG_ RH`,
+`SP_EG_ MAK`) and are probably entry variants. **I did NOT map these**: `site` already falls back to the store
+code itself, so nothing is lost, and inventing "Jebel Ali" from `GC_JEB_ST` would be a guess about the
+customer's own site names. The ExpenseReport "By site" panel already has an inline picker for this - it is a
+short session with someone who knows the sites, not a code change.
+
 ## SESSION 2026-07-27 (part 2) — ARCHITECTURE PASS. Migrations through **V379**, next free **V380**.
 Four agents on the remaining architecture spec. **Every claim below I re-verified myself against the live DB.**
 

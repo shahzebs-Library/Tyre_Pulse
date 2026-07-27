@@ -3,7 +3,8 @@ import * as engKpiApi from '../lib/api/engineeringKpi'
 import { fetchAllPages } from '../lib/fetchAll'
 import { toUserMessage } from '../lib/safeError'
 import { useSettings, COUNTRIES } from '../contexts/SettingsContext'
-import { loadCostSplit, loadGridTyreByAsset } from '../lib/api/costSummary'
+import { loadGridTyreByAsset } from '../lib/api/costSummary'
+import { loadGovernedCostSplit } from '../lib/api/governedCost'
 import { COST_MODES, pickCost } from '../lib/costSources'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import {
@@ -213,7 +214,7 @@ export default function EngineeringKpi() {
   useEffect(() => {
     let cancelled = false
     setCostSplitLoading(true)
-    loadCostSplit({
+    loadGovernedCostSplit({
       country: effectiveCountry,
       from: dateFrom || undefined,
       to: dateTo || undefined,

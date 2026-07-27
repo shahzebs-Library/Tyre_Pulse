@@ -38,7 +38,7 @@ import { applyCountry } from '../lib/countryFilter'
 import { formatDate } from '../lib/formatters'
 import { fetchAllPages } from '../lib/fetchAll'
 import { recordCost } from '../lib/analyticsEngine'
-import { loadCostSplit } from '../lib/api/costSummary'
+import { loadGovernedCostSplit } from '../lib/api/governedCost'
 import { COST_MODES, pickCost, costModeLabel, pickMonthly, splitTotals } from '../lib/costSources'
 import { resolvePdfBrand, pdfHeader, pdfFooter, pdfTableTheme, reportFileName, reportDateLabel } from '../lib/exportUtils'
 import { captureChartOnPaper, paperChartOptions } from '../lib/chartCapture'
@@ -510,7 +510,7 @@ export default function ExecutiveReport() {
   useEffect(() => {
     let cancelled = false
     setCostSplitState('loading')
-    loadCostSplit({ country: activeCountry })
+    loadGovernedCostSplit({ country: activeCountry })
       .then((res) => {
         if (cancelled) return
         setCostSplit(res || { tyre: 0, maintenance: 0, byMonth: [] })

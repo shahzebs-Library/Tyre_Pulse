@@ -1,7 +1,8 @@
 import { useState, useEffect, useMemo } from 'react'
 import { motion } from 'framer-motion'
 import * as vehicleHistoryApi from '../lib/api/vehicleHistory'
-import { loadCostSplit, loadGridTyreByAsset } from '../lib/api/costSummary'
+import { loadGridTyreByAsset } from '../lib/api/costSummary'
+import { loadGovernedCostSplit } from '../lib/api/governedCost'
 import { useSettings } from '../contexts/SettingsContext'
 import { computeAssetMetrics, bucketByMonth, countBy, sum } from '../lib/analyticsEngine'
 import { detectAnomalies, ANOMALY_TYPES } from '../lib/anomalyEngine'
@@ -294,7 +295,7 @@ export default function VehicleHistory() {
         // Authoritative tyre spend (fleet total + per-asset) from the expense grid.
         // Both helpers never throw and fall back internally; scoped to the country.
         const [splitRes, gridRes] = await Promise.all([
-          loadCostSplit({ country: activeCountry }).catch(() => null),
+          loadGovernedCostSplit({ country: activeCountry }).catch(() => null),
           loadGridTyreByAsset({ country: activeCountry }).catch(() => null),
         ])
         if (cancelled) return

@@ -6,6 +6,7 @@ import {
 import { supabase } from '../../lib/supabase'
 import { useConsoleAuth } from '../ConsoleAuthContext'
 import { ENFORCEMENT_STATUS } from '../../lib/api/systemConfig'
+import FxRatesPanel from './config/FxRatesPanel'
 
 const CONFIG_GROUPS = [
   {
@@ -256,6 +257,9 @@ export default function ConsoleSystemConfig() {
           })}
         </div>
       )}
+
+      {/* Exchange rates: the gate on any combined-country figure. */}
+      <FxRatesPanel />
     </div>
   )
 }

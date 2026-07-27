@@ -6,7 +6,7 @@ import { useSettings } from '../contexts/SettingsContext'
 import { useLanguage } from '../contexts/LanguageContext'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import { COST_MODES, costModeLabel, pickMonthly, splitTotals } from '../lib/costSources'
-import { loadCostSplit } from '../lib/api/costSummary'
+
 import { loadGovernedCostSplit } from '../lib/api/governedCost'
 import CostValue from '../components/cost/CostValue'
 import { buildCostIntelligence, UNIT_META } from '../lib/costIntelligence'
@@ -1430,7 +1430,7 @@ function CostPerUnitSection({ currency, country, siteOptions = [] }) {
     try {
       const siteArg = site && site !== 'All' ? site : undefined
       const [split, m3, km, hours, rows] = await Promise.all([
-        loadCostSplit({ country, from: from || undefined, to: to || undefined, site: siteArg }),
+        loadGovernedCostSplit({ country, from: from || undefined, to: to || undefined, site: siteArg }),
         sumProductionM3({ country, site: siteArg, from: from || undefined, to: to || undefined }),
         sumMeterDeltas('odometer_logs', 'odometer_km', { country, site: siteArg, from, to }),
         sumMeterDeltas('engine_hours_logs', 'engine_hours', { country, site: siteArg, from, to }),

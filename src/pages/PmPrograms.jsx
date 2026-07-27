@@ -59,7 +59,7 @@ import { colorAt, categorical, withAlpha } from '../lib/reportColors'
 import {
   COST_MODES, pickCost, costModeLabel, pickMonthly, splitTotals,
 } from '../lib/costSources'
-import { loadCostSplit } from '../lib/api/costSummary'
+import { loadGovernedCostSplit } from '../lib/api/governedCost'
 import { generateWorkOrderNo, insertWorkOrder } from '../lib/api/workOrders'
 import { listParts } from '../lib/api/partsCatalog'
 import { exportToExcel, exportToPdf, reportFileName, reportDateLabel } from '../lib/exportUtils'
@@ -222,7 +222,7 @@ export default function PmPrograms() {
       const [dash, hist, split] = await Promise.all([
         loadPmDashboard({ country: activeCountry }),
         listPmServiceRecords({ country: activeCountry }).catch(() => []),
-        loadCostSplit({ country: activeCountry }).catch(() => ({ tyre: 0, maintenance: 0, byMonth: [] })),
+        loadGovernedCostSplit({ country: activeCountry }).catch(() => ({ tyre: 0, maintenance: 0, byMonth: [] })),
       ])
       setDashboard(dash || { plans: [], kmByAsset: {}, hoursByAsset: {} })
       setHistory(Array.isArray(hist) ? hist : [])

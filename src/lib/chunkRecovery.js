@@ -24,12 +24,12 @@ const CHUNK_ERROR_RE =
 
 export function isChunkLoadError(reason) {
   if (!reason) return false
-  const name = typeof reason === 'object' && reason !== null ? String(reason.name ?? '') : ''
+  // Guaranteed truthy from here, so no further null guards - they would be
+  // dead branches, and `typeof null === 'object'` is already excluded above.
+  const name = typeof reason === 'object' ? String(reason.name ?? '') : ''
   if (name === 'ChunkLoadError') return true
   const message =
-    typeof reason === 'string'
-      ? reason
-      : String((reason && (reason.message ?? reason.reason)) ?? '')
+    typeof reason === 'string' ? reason : String(reason.message ?? reason.reason ?? '')
   return CHUNK_ERROR_RE.test(message)
 }
 

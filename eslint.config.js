@@ -47,6 +47,13 @@ export default [
       // that would have caught the ReferenceError that shipped past a clean
       // build and a green suite, rendering its page blank.
       'no-undef': 'error',
+      // NOTE on `no-unused-vars`, which would catch an orphaned import (the
+      // symptom of a half-finished refactor): it is OFF because the base rule
+      // does not count a JSX reference as a use. Without eslint-plugin-react's
+      // `react/jsx-uses-vars` it reports 6,736 hits here, nearly all false -
+      // it flags Routes, Route and Suspense in App.jsx as unused. Turning it on
+      // would bury the real errors. Add eslint-plugin-react first, then enable.
+      //
       // Deliberately NOT checking variables here. A `const` declared at the
       // bottom of a module and read inside a component body or a click handler
       // is initialised long before anything reads it, and flagging those buries

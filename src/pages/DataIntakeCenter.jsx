@@ -15,6 +15,7 @@ import {
   buildAliasMap, applyAliasesToRow,
   extractZip, matchAttachment, buildMatchRows,
   headerFingerprint, aggregateStagedRows, COST_FIELDS,
+  pickComparableProfile, applyHeaderDecisions, normHeader,
 } from '../lib/import'
 import * as imports from '../lib/api/imports'
 import { checkImportFingerprint, fileSha256 } from '../lib/api/importHistory'
@@ -26,6 +27,7 @@ import DataLinkPanel from '../components/intake/DataLinkPanel'
 import CostControlPanel from '../components/intake/CostControlPanel'
 import DataCompletenessPanel from '../components/intake/DataCompletenessPanel'
 import ImportTemplatePanel from '../components/intake/ImportTemplatePanel'
+import HeaderChangeDialog from '../components/intake/HeaderChangeDialog'
 import IntakeDiagnosticsPanel from '../components/intake/IntakeDiagnosticsPanel'
 import { toUserMessage } from '../lib/safeError'
 
@@ -54,6 +56,34 @@ const MODULES = [
   { key: 'driver', label: 'Drivers' },
 ]
 const MODULE_LABELS = Object.fromEntries(MODULES.map((m) => [m.key, m.label]))
+
+/**
+ * Lay a saved mapping's rules over the auto-suggestions.
+ *
+ * Headers are matched the way a person reads them (case and spacing folded), so
+ * an export that starts writing "JOB CARD NO" still finds its rule.
+ *
+ * `blankUnknown` is the difference between the two callers. On an EXACT
+ * fingerprint match the profile is the whole truth for that format, so a column
+ * it does not mention was deliberately left unmapped and must stay that way.
+ * When the format has CHANGED, a column the profile never saw is genuinely new
+ * and keeps its auto-suggestion, which is the only sensible starting point.
+ */
+function applyProfileRules(suggestions, rules, { blankUnknown = true } = {}) {
+  const byHeader = new Map(
+    (rules || [])
+      .filter((r) => r && (r.source_header || r.sourceHeader))
+      .map((r) => [normHeader(r.source_header ?? r.sourceHeader), r.target_field ?? r.target ?? null]),
+  )
+  return suggestions.map((m) => {
+    const n = normHeader(m.sourceHeader)
+    if (byHeader.has(n)) {
+      const target = byHeader.get(n) || null
+      return { ...m, target, action: target ? 'mapped' : 'preserve_custom', confidence: 100, reason: 'profile' }
+    }
+    return blankUnknown ? { ...m, target: null, action: 'preserve_custom' } : m
+  })
+}
 const ELEVATED = ['admin', 'manager', 'director']
 const STEP_KEYS = ['upload', 'mapColumns', 'validate', 'approve']
 
@@ -87,6 +117,9 @@ export default function DataIntakeCenter() {
   const [repeatAck, setRepeatAck] = useState(false)
   const [fileQueue, setFileQueue] = useState([])   // extra files picked in one go, imported one-by-one
   const [appliedProfile, setAppliedProfile] = useState(null) // fingerprint-matched saved mapping
+  // A saved mapping exists for a file that LOOKS like this one but the columns
+  // moved. Held here until the operator decides; nothing is applied meanwhile.
+  const [headerChange, setHeaderChange] = useState(null)
   const autoSavedFp = useRef(null) // fingerprint we've already auto-remembered this session
   const [parsed, setParsed] = useState(null)
   const [sheetIdx, setSheetIdx] = useState(0)
@@ -350,21 +383,38 @@ export default function DataIntakeCenter() {
       // this upload, apply its remembered mapping automatically (zero clicks for
       // known report formats). Fingerprint mismatch → normal suggestions.
       setAppliedProfile(null)
+      setHeaderChange(null)
       let applied = false
       try {
         const fp = headerFingerprint(sheet.columns)
         const prof = await imports.findProfileByFingerprint({ module, fingerprint: fp })
         if (prof?.rules?.length) {
-          const byHeader = new Map(prof.rules.map((r) => [r.source_header, r.target_field]))
-          setMapping(suggestions.map((m) => byHeader.has(m.sourceHeader)
-            ? { ...m, target: byHeader.get(m.sourceHeader) || null, action: byHeader.get(m.sourceHeader) ? 'mapped' : 'preserve_custom', confidence: 100, reason: 'profile' }
-            : { ...m, target: null, action: 'preserve_custom' }))
+          setMapping(applyProfileRules(suggestions, prof.rules))
           setAppliedProfile(prof)
           imports.touchProfile(prof.id).catch(() => {})
           applied = true
         }
       } catch { /* fall back to suggestions */ }
       if (!applied) setMapping(suggestions)
+      // Fingerprint MISS. Before settling for a fresh guess, ask whether this is
+      // a file we already know whose columns have moved - and if it is, hand the
+      // decision to the operator rather than silently re-mapping their daily
+      // report. Best-effort: any failure here just leaves the guess in place.
+      if (!applied) {
+        imports.listProfileCandidates({ module, country: activeCountry })
+          .then((cands) => {
+            const match = pickComparableProfile(sheet.columns, cands)
+            if (match) {
+              setHeaderChange({
+                profile: match.profile,
+                previousHeaders: match.headers,
+                complete: match.complete,
+                suggestions,
+              })
+            }
+          })
+          .catch(() => {})
+      }
       // offer reusable mapping profiles for this module/country (non-blocking)
       imports.listProfiles({ module, country: activeCountry }).then(setProfiles).catch(() => setProfiles([]))
       // load master-data aliases once so the validate pass can normalise spellings
@@ -386,6 +436,23 @@ export default function DataIntakeCenter() {
     setMapping((m) => m.map((row) => row.sourceHeader === sourceHeader
       ? { ...row, target: target || null, action: target ? 'mapped' : 'preserve_custom' }
       : row))
+  }
+
+  // The operator has answered the column-change dialog. Carry the rules they
+  // chose to keep onto the columns this file actually has, and leave everything
+  // else to the auto-mapper. `appliedProfile` is deliberately NOT set: this file
+  // is not that saved format any more, so the next upload of THIS shape should
+  // be remembered on its own rather than overwriting the old profile.
+  function acceptHeaderChange(decisions, diff) {
+    const hc = headerChange
+    if (!hc) return
+    const carried = applyHeaderDecisions(
+      (hc.profile?.rules || []).map((r) => ({ sourceHeader: r.source_header, target: r.target_field })),
+      diff,
+      decisions,
+    )
+    setMapping(applyProfileRules(hc.suggestions, carried, { blankUnknown: false }))
+    setHeaderChange(null)
   }
 
   // Apply a saved mapping profile: re-map source headers to its remembered targets.
@@ -418,6 +485,9 @@ export default function DataIntakeCenter() {
       await imports.saveProfile({
         name: name.trim(), module, country: activeCountry,
         headerFingerprint: sheet ? headerFingerprint(sheet.columns) : null,
+        // remember EVERY column, not only the mapped ones, so a later file can
+        // be told what actually changed
+        headerColumns: sheet?.columns || null,
       }, rules)
       const next = await imports.listProfiles({ module, country: activeCountry })
       setProfiles(next)
@@ -442,7 +512,7 @@ export default function DataIntakeCenter() {
       if (rules.length < 2) return                      // nothing worth remembering
       const base = (file?.name || '').replace(/\.[^.]+$/, '').trim()
       const name = `${MODULE_LABELS[module] || module}${base ? `: ${base}` : ''} (auto)`
-      await imports.saveProfile({ name, module, country: activeCountry, headerFingerprint: fp }, rules)
+      await imports.saveProfile({ name, module, country: activeCountry, headerFingerprint: fp, headerColumns: sheet.columns }, rules)
       autoSavedFp.current = fp
       imports.listProfiles({ module, country: activeCountry }).then(setProfiles).catch(() => {})
     } catch { /* auto-save is best-effort; never surface to the user */ }
@@ -723,6 +793,15 @@ export default function DataIntakeCenter() {
 
   return (
     <div className="p-6 max-w-[1800px] mx-auto text-[var(--text-primary)]">
+      <HeaderChangeDialog
+        open={!!headerChange}
+        profile={headerChange?.profile}
+        previousHeaders={headerChange?.previousHeaders}
+        complete={headerChange?.complete}
+        currentHeaders={sheet?.columns}
+        onApply={acceptHeaderChange}
+        onDismiss={() => setHeaderChange(null)}
+      />
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-bold text-[var(--text-primary)] flex items-center gap-2"><Database size={22} /> Data Intake Center</h1>

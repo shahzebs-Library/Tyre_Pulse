@@ -1,8 +1,10 @@
 /**
  * ConsoleImportHistory - super-admin view of every data load (V364).
  *
- * Two tabs, because there are genuinely two kinds of import and only one of them
- * was ever recorded:
+ * Four tabs. The first two exist because there are genuinely two kinds of
+ * import and only one of them was ever recorded; the last two answer the two
+ * questions people actually ask after uploading - did I miss a day, and what
+ * did the system change about my file:
  *
  *   Uploads   - files loaded through the app. import_files already stored a sha256
  *               of every file, so a repeat upload of identical content is flagged
@@ -14,11 +16,20 @@
  *               a few minutes is the signature of a resent chunk, and those are
  *               called out in amber.
  *
- * Read-only. No raw SQL, no em/en dashes. Super-admin only (the whole /console is gated).
+ *   Coverage  - which days have data and which are empty, for the sources that
+ *               have actually behaved like a daily feed.
+ *   Decisions - where the classifier disagreed with the file's own Spare/Tyre/
+ *               Oil columns, with the money attached and an override per item.
+ *
+ * The first three are read-only. The decisions tab is the one place that can
+ * change a category, and it writes through the material master rather than
+ * touching transactions directly. No raw SQL, no em/en dashes. Super-admin only
+ * (the whole /console is gated).
  */
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   History, RefreshCw, AlertTriangle, FileUp, Loader2, Info, Activity, Download, CopyX,
+  CalendarDays, Shuffle,
 } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import {
@@ -26,6 +37,8 @@ import {
 } from '../../lib/api/importHistory'
 import { listDuplicateTargets } from '../../lib/api/duplicateControl'
 import { exportToExcel, reportFileName } from '../../lib/exportUtils'
+import UploadCoveragePanel from './importHistory/UploadCoveragePanel'
+import DecisionsPanel from './importHistory/DecisionsPanel'
 
 const fmtNum = (n) => (Number.isFinite(Number(n)) ? Number(n).toLocaleString() : 'N/A')
 const fmtTime = (v) => {
@@ -124,7 +137,9 @@ export default function ConsoleImportHistory() {
       </div>
 
       <div className="flex gap-1.5 border-b border-gray-800">
-        {[['uploads', 'Uploads', FileUp], ['activity', 'Load activity', Activity]].map(([k, label, Icon]) => (
+        {[['uploads', 'Uploads', FileUp], ['activity', 'Load activity', Activity],
+          ['coverage', 'Daily coverage', CalendarDays],
+          ['decisions', 'What we changed', Shuffle]].map(([k, label, Icon]) => (
           <button key={k} onClick={() => setTab(k)}
             className={`px-3 py-2 text-xs font-semibold flex items-center gap-1.5 border-b-2 -mb-px transition-colors ${
               tab === k ? 'border-orange-500 text-orange-300' : 'border-transparent text-gray-500 hover:text-gray-300'
@@ -141,7 +156,12 @@ export default function ConsoleImportHistory() {
         </div>
       )}
 
-      {loading ? (
+      {/* These two load their own data, so they render before the shared spinner. */}
+      {tab === 'coverage' ? (
+        <UploadCoveragePanel />
+      ) : tab === 'decisions' ? (
+        <DecisionsPanel />
+      ) : loading ? (
         <div className="flex items-center justify-center h-48">
           <Loader2 className="w-7 h-7 text-orange-500 animate-spin" />
         </div>

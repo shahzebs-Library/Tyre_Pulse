@@ -3,6 +3,160 @@
 Durable, committed project knowledge so any session has full context. Keep this
 current. Read it before adding/changing modules. Governing spec: `Tyre pulse enterprise.md`
 
+## SESSION 2026-07-27 (part 10) — V392 "WHAT WE CHANGED" + V393 TWO CLASSIFIER FIXES IT FOUND. Migrations through **V393b**, next free **V394**.
+
+### V392 — **THE CLASSIFIER'S DECISIONS WERE INVISIBLE**, so the numbers just differed from the file
+User: "I should be able to see what data was moved and what kept in one place after upload, from my data I can
+change those directly." The ERP export files every line under its OWN Spare/Trye/Oil column; those raw columns
+are preserved on `parts_consumption` and the app deliberately does not trust them (the ITEM decides). That rule
+is right and is why the V390 gearbox was findable — but nobody could ever SEE it.
+- **`get_classification_decisions(country, from, to, view, search, limit)`** → per-country summary + items
+  grouped by **(country, item_code, what the ERP said, what we said)** = one movement FACT. A code partly moved
+  and partly kept appears twice ON PURPOSE; collapsing it would hide the inconsistency.
+- Three groups, and the third is the honest one: **moved** / **kept** / **unlabelled** (the file left all three
+  columns blank, so there was nothing to agree with). **A blank is NEVER read as "spare"** — that would invent
+  an agreement that was never expressed.
+- **Measured live, reconciles exactly** (moved+kept+unlabelled = country total): Egypt **1,368 moved / EGP
+  3,511,287.57**, KSA **1,961 / SAR 937,093.44**, UAE **579 / AED 28,199.98**. KSA has **36,299 unlabelled** —
+  the file said nothing at all for a third of its lines.
+- **V392c `parts_consumption.erp_bucket` is a STORED GENERATED column** and that is the whole performance story:
+  the scan is 158 ms but ONE `_to_num()` call over 216,792 rows is **1,943 ms**, and the view needed three.
+  **4,245 ms -> 508 ms.** Verified **0 disagreements** with the live derivation before switching the RPC to read
+  it. Checked first that all three functions inserting into the table use an explicit column list (V320 lesson);
+  the existing dup-restore / row-revert / editable-cols guards already exclude generated columns.
+  **CAVEAT: a generated column freezes `_to_num` in place — if its parsing changes, rebuild this column.**
+- A STABLE function **may not create a temp table** (first cut did); one CTE referenced twice is materialised
+  once, so the scan still happens only once. Ordering carried by an explicit rank — ordering json text would put
+  9 above 1,000,000.
+- **The override writes through the material master**, the existing single lever, not a second path.
+  **`reclassify_from_master` and `reclassify_revert` have existed since V368 and were callable from NOWHERE in
+  the app** — so reviewing an item only ever fixed future rows and left the loaded money where it was. Now:
+  pick a category → dry-run preview (per country, per direction) → apply → **undo by batch**.
+- Surfaces: `src/lib/classificationDecisions.js` (pure, flagging rule), `src/lib/api/classificationDecisions.js`,
+  **`/console/import-history` 4th tab "What we changed"**. Tests `classificationDecisions.test.js` (24).
+- **THE FLAGGING RULE IS THE PRODUCT**: flag only when nothing identified the item, or a MOVE was made on
+  weaker-than-usual evidence. A **high-confidence move is deliberately NOT flagged** — the item code is the
+  strongest signal there is and flagging those would bury the real problems under 1,300 correct rows. A weak
+  decision that AGREED with the file is not flagged either: agreeing is not a change.
+
+### V393 / V393b — **THE VIEW FOUND A DEFECT IN MY OWN V390 GUARD WITHIN MINUTES**
+- **`GEARBOX OIL 140` was being filed as a mechanical part at 0.92 confidence.** V390's assembly guard has the
+  token `gearbox`; the lubricant test runs FIRST and knew `transmission oil` and `gear oil` but **not
+  `gearbox oil`**. So TRANSMISSION OIL was right and GEARBOX OIL fell past into the assembly guard —
+  **confidently wrong instead of honestly unsure** (it had been 0.30 'default' before V390).
+  Added `gearbox oil`/`gear box oil`/`axle oil`/`differential oil`/`diff oil`/`cooling oil`/`refrigerant oil`.
+  Safe because `brain_is_lubricant` already refuses a description that also names a PART.
+- **V393b: `oil_part` was all singular and the matcher is whole-word**, so "GEAR BOX OIL COOLING **HOSES**"
+  matched no part word and my own fix above pushed a hose into oil. Plurals added. **Whole-word matching is
+  deliberate (the 'Shell RIMula matched rim' lesson) — plurals are NOT implied and must be listed.**
+- Both measured BEFORE acting (42%-that-was-really-2.6% rule): 10 lines ~23,100, and 1 line EGP 1,100.
+  One axle oil already human-reviewed as oil **confirmed the intended answer** rather than it being assumed.
+- Result: **7 lines moved spare -> oil**; the seal, the hoses and the axle oil seal correctly stayed spare; the
+  human-reviewed row untouched (**a reviewed decision outranks every token** — correct precedence); every
+  country TOTAL unchanged, variance 0.00. Snapshot `_bucket_snapshot_v393`.
+- `brain_rules_version()` **4 -> 5 -> 6**. JS mirror updated; `classificationBrain.test.js` now 35.
+- **HYDROCHLORIC ACID is filed under the ERP's Oil column and we correctly keep it in spare** — a clean example
+  of the file being wrong and the system being right, which is exactly what the new view is for.
+
+## SESSION 2026-07-27 (part 9) — V390 NON-TYRE GUARD + V391 COLUMN-CHANGE DECISIONS. Migrations through **V391**, next free **V392**.
+
+### V390 — **A GEARBOX WAS SITTING IN THE TYRE COLUMN.** User reported it; it was real.
+All four were in the TYRE bucket at confidence **0.95 via `code-range`**, the strongest machine signal:
+`TI-GE-0050` Power Steering Pump 12,000.00 EGP · `TI-GE-0036` NISSAN PICK UP TRANSMISSION GEAR BOX
+10,300.00 EGP · `TI-GE-0049` RUBBER ROLL 353.75 · `310180-O` ORING 23.5*25 47.62 AED.
+- **WHY THE EXISTING GUARDS MISSED THEM, and this is the interesting part.** The accessory guard WOULD have
+  caught the o-ring, except it carries a deliberate escape hatch — *code-says-tyre AND the text has a size* —
+  which exists so a real tyre whose description mentions a rim or flap is not demoted. **"ORING 23.5*25"
+  satisfies both halves of that hatch.** So the fix could not be a new accessory token; it had to be a
+  SEPARATE guard with **no escape hatch**: a size in the text does not make a gearbox a tyre, it is the size
+  of the thing the part fits.
+- **ORDER MATTERS AND IS LOAD-BEARING**: the new guard runs AFTER the lubricant test, so `COMPRESSOR OIL 68`
+  and `TRANSMISSION OIL` stay lubricants. Putting it before would have moved Egypt's oil spend into spare.
+- Deliberately TIGHT (the 42%-that-was-really-2.6% lesson): BLACK HAWK, ROADWEST, APLUS, TAIHO, ALLIANZ,
+  SPEEDWAY and ALLIANCE all live in that same code range and are genuine tyres. Tokens are named assemblies
+  only: gear box/gearbox/transmission/steering pump/water pump/hydraulic pump/radiator/alternator/starter
+  motor/cylinder head/oring/o ring/o-ring/rubber roll.
+- **`brain_rules_version()` bumped 3 -> 4 IN THE SAME MIGRATION** — that is what retires the cache.
+- Result: **7 rows moved out of tyre, every country TOTAL unchanged** (Egypt 79,341,428.04 / KSA
+  40,608,349.65 / UAE 18,493,541.38, variance 0.00), 602 coolant lines untouched, 0 non-tyre items left in
+  the tyre bucket. Snapshot `_bucket_snapshot_v390`. JS mirror `NON_TYRE_PART_TOKENS`/`isNonTyrePart` in
+  `src/lib/classificationBrain.js` (31 tests).
+
+### V391 — **THE FINGERPRINT MISS WAS SILENT, and that was the real defect**
+User: "when i upload a file and they find a diffrence in coulmn asked me to keep or chnae give me thr
+decision power". Investigated: on a fingerprint HIT the saved mapping applies with zero clicks (correct). On
+a **MISS the saved mapping was simply ignored** and a fresh guess took its place with **nothing said** — so a
+column renamed upstream quietly stopped feeding the field it used to feed. 12 real profiles are in live use,
+so this fires on actual formats.
+- **`src/lib/import/headerDiff.js`** is the engine (pure, 24 tests): `normHeader` (folds case, doubled
+  spaces and the **NBSP** that blocked the job card import), `similarity` (token overlap + containment,
+  threshold 0.5), `diffHeaders` -> unchanged/added/removed/**renames**, `defaultDecisions`,
+  `applyHeaderDecisions`, `profileHeaders`, `overlapRatio`, `pickComparableProfile`.
+- **A rename is only SUGGESTED, never assumed**, and each side is used once — a suggestion that reused a
+  column would hand the user a contradiction. Unrelated columns stay a separate add + remove, because a wrong
+  rename silently maps the wrong data into a field.
+- **`MIN_OVERLAP = 0.5` is what stops the dialog crying wolf**: below it the upload is a DIFFERENT report,
+  not a changed one, and comparing them would invent a page of renames about a format nobody claimed was the
+  same. `pickComparableProfile` returns null and the auto-mapper just works.
+- **Only the rename is presented as a DECISION.** Missing and new columns are shown as facts: a column that
+  is not in the file cannot be mapped whatever anyone picks, and a new one is the auto-mapper's job and stays
+  editable on the next step. Offering a toggle that does nothing would be theatre.
+- **THE BUG MY OWN TEST CAUGHT**: rejecting a rename left the old rule pointing at a column that is not in
+  the file — the exact failure this engine exists to prevent. Now the rule is dropped and the new column is
+  left to the auto-mapper.
+- **V391 `import_mapping_profiles.header_columns jsonb`** stores the file's FULL column list. Without it we
+  could only ever diff against the columns that happened to be MAPPED, so a column deliberately left unmapped
+  reads as new. Nullable: pre-V391 profiles fall back to rule headers and `profileHeaders` returns
+  `complete:false`, which the dialog **says out loud** rather than quietly overstating.
+- Surfaces: `src/components/intake/HeaderChangeDialog.jsx` + `imports.listProfileCandidates` (best-effort,
+  `[]` on failure — a comparison must never block an import). `applyProfileRules` in DataIntakeCenter now
+  matches headers by `normHeader`, so an export that starts writing `JOB CARD NO` still finds its rule.
+  `blankUnknown` is the difference between the two callers: on an exact fingerprint hit the profile is the
+  whole truth so an unmentioned column stays unmapped; on a CHANGED format a column the profile never saw is
+  genuinely new and keeps its auto-suggestion.
+- After accepting changes `appliedProfile` stays null on purpose, so the NEW shape is auto-remembered under
+  its own fingerprint instead of overwriting the old profile.
+
+## SESSION 2026-07-27 (part 8) — V388 DATE PARSING + V389 UPLOAD COVERAGE. Migrations through **V389c**, next free **V390**.
+
+### **V388 — TWO DATE BUGS FOUND ON THE CUSTOMER'S REAL 55,606 CARD IMPORT. Both corrupted silently.**
+The load looked successful. It was not.
+- **V388: a two-digit year was read as the year itself.** The export mixes formats and `to_timestamp` with a
+  YYYY pattern reads `'26'` as year **0026**. **33,626 of 55,606 cards (60%)** landed two thousand years ago
+  (yr 22:1561 · 23:3028 · 24:5949 · 25:12105 · 26:10983 vs yr 2022:1092 · 2023:1926 · 2024:3700 · 2025:7272 ·
+  2026:7990). Fixed with a pivot applied AFTER parsing — adding a `DD-MM-YY` pattern would also change how
+  four-digit years parse.
+- **V388b: the ISO cast read ambiguous dates MONTH-FIRST.** V381b put `s::timestamptz` first as a "harmless
+  fast path"; DateStyle here is **MDY**, so it also swallows `'07-09-2026'` and returns **9 July** when the
+  Ramco/GCC export means **7 September**. The day-first patterns below it were never reached for any date with
+  a day <= 12 — **21,980 rows**. Now the cast runs ONLY for `^\d{4}-\d{2}-\d{2}`.
+- **THIS IS A REPEAT OF A FIXED BUG.** The 2026-07-26 session fixed exactly this class in the JS `coerceDate`
+  (~39% of dates corrupted). It came back because a bare cast looks innocent.
+  **RULE: never hand a dd-mm-yyyy string to a bare `::timestamptz` cast.**
+- **The imported rows were NOT repaired in place.** Both groups are mechanically recoverable, but that means
+  inferring the customer's source data when the file is right there and the pipe refreshes each card in place.
+  **Re-uploading the same file is exact; inference is not.** Verified live: a planted `0022-01-13` card
+  re-imported to `2022-01-13`, one row, no duplicate.
+
+### V389 — UPLOAD COVERAGE: "did I forget yesterday's file?"
+User asked for a console area showing which days are empty, plus a notification. Built as a **third tab on the
+existing `/console/import-history`** (`Daily coverage`), NOT a new page.
+- **Expectation is DERIVED, never assumed.** A source is policed only if it actually arrived on >=50% of recent
+  days. Live: watches **Job cards (25/29)** and **Expenses (29/29)**; leaves **Tyre records (5/29)** and
+  **Production m3 (8/29)** alone. Flagging an occasional feed every morning is how an alert gets ignored.
+- **Weekends are derived per source** from which weekdays historically carry data (>=30% hit rate). Assuming
+  Mon-Fri would cry wolf twice a week in a Fri/Sat weekend region.
+- Counted by the row's **BUSINESS date**, not insert time, so a late upload still fills its own day and stops
+  being reported missing. **Today is never flagged.**
+- `_upload_coverage_for_org(uuid,int,text)` is the shared core and is **REVOKED from `authenticated`** (the
+  V378 cross-tenant lesson); `get_upload_coverage(int,text)` takes no org and resolves it from the session.
+  The cron notice reads the SAME function, so the alert cannot disagree with the page.
+- **One notice per gap, not per morning** — `upload_gap_notices` keyed (org, src). Verified: first run 1 notice
+  to 5 elevated users, second run 0. pg_cron **`upload-gap-check` 05:30 UTC = 08:30 Riyadh**.
+- Live at build time it immediately caught the real gap: **Job cards last data 22 Jul, 5 days ago, 4 empty days.**
+- Files: `src/lib/api/uploadCoverage.js`, `src/console/pages/importHistory/UploadCoveragePanel.jsx`,
+  tests `uploadCoverage.test.js` (10).
+
 ## SESSION 2026-07-27 (part 7) — IMPORT SPEED, PROFILED. Migrations through **V387**, next free **V388**.
 Three agents profiled the import path (client / database / post-import visibility). **Read the corrections
 before acting on any of it.**
@@ -109,6 +263,17 @@ Excel emits a **non-breaking space U+00A0** that is pixel-identical to a space.
   differs by one invisible character otherwise fails the import, or worse imports and silently drops the value.
 - NOTE: the `_stg_pick` + trigger rewrite were applied via `execute_sql`, so they carry no
   `supabase_migrations` row; the complete SQL is in `MIGRATIONS_V386_HEADER_WHITESPACE_TOLERANCE.sql`.
+- **CORRECTION — the tolerant-COLUMN half was REVERTED, and DO NOT RETRY IT.** The variant columns did not
+  fix the import; the same two headers still failed. I then brute-forced every space / NBSP / tab /
+  zero-width combination, which grew `stg_job_cards` to **946 columns** and still did not match. All variants
+  were dropped; the table is back to its **46 real columns** (verified, pipe re-tested working after cleanup).
+  **THE CONSTRAINT IS UNBEATABLE SERVER-SIDE: Supabase's Table Editor matches the CSV header BYTE FOR BYTE
+  against the column name.** No server-side tolerance can satisfy a header whose bytes are unknown. The fix
+  lives on the FILE side — delete or retype the offending headers — or read the actual bytes from the header
+  row and add exactly one correct column. **Guessing at invisible characters is a dead end; stop after one
+  attempt and ask for the header row.**
+- `_stg_pick` + the trigger rewrite SURVIVE the revert and remain the valuable half: every field is read by
+  normalised header name, so a variant column that does exist is still read correctly.
 
 ## SESSION 2026-07-27 (part 6) — V385 JOB CARD EXPORT HAS 11 MORE COLUMNS.
 

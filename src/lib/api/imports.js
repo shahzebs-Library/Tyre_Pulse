@@ -675,6 +675,10 @@ export async function saveProfile(profile, rules = []) {
     source_system: profile.sourceSystem ?? null,
     country: profile.country ?? null,
     header_fingerprint: profile.headerFingerprint ?? null,
+    // The full column list of the file this was built on (V391). Without it we
+    // could only ever compare against the columns that happened to be mapped.
+    header_columns: Array.isArray(profile.headerColumns) && profile.headerColumns.length
+      ? profile.headerColumns : null,
     date_format: profile.dateFormat ?? null,
     source_currency: profile.sourceCurrency ?? null,
     unit_settings: profile.unitSettings ?? {},
@@ -708,6 +712,29 @@ export async function findProfileByFingerprint({ module, fingerprint }) {
   if (error || !data) return null
   const rules = await getProfileRules(data.id).catch(() => [])
   return { ...data, rules }
+}
+
+/**
+ * Candidate profiles to compare a CHANGED file against, newest use first, each
+ * carrying the columns it was built on plus its rules.
+ *
+ * This is the miss-path sibling of findProfileByFingerprint: the fingerprint
+ * did not match, so before falling back to a fresh guess we ask whether this is
+ * a file we already know that has simply changed shape. Bounded to a handful -
+ * comparing against an old format the user abandoned would only add noise.
+ * Best-effort: a failure here must never stop an import, so it returns [].
+ */
+export async function listProfileCandidates({ module, country, limit = 6 } = {}) {
+  let q = supabase.from('import_mapping_profiles')
+    .select('id,name,module,country,header_columns,unit_settings,last_used_at')
+    .eq('active', true)
+    .order('last_used_at', { ascending: false, nullsFirst: false })
+    .limit(limit)
+  if (module) q = q.eq('module', module)
+  if (country && country !== 'All') q = q.or(`country.eq.${country},country.is.null`)
+  const { data, error } = await q
+  if (error || !Array.isArray(data)) return []
+  return Promise.all(data.map(async (p) => ({ ...p, rules: await getProfileRules(p.id).catch(() => []) })))
 }
 
 /** Mapping rules for a saved profile (source_header → target_field). */

@@ -183,6 +183,92 @@ describe('accessories are never tyres', () => {
   })
 })
 
+describe('a mechanical assembly is never a tyre, whatever its item code says', () => {
+  // Every case below is a REAL row that was sitting in the tyre column at
+  // confidence 0.95, because its item code is in a tyre range. A code range
+  // only records where the ERP filed something; the description says what it is.
+  it('moves the reported items out of the tyre bucket', () => {
+    for (const [code, d] of [
+      ['TI-GE-0050', 'Power Steering Pump for the trailer  (Quanxing)'],
+      ['TI-GE-0036', 'NISSAN PICK UP TRANSMISSION GEAR BOX'],
+      ['TI-GE-0049', 'RUBBER ROLL'],
+      ['310180-O',   'ORING 23.5*25'],
+    ]) {
+      const r = classifyLine({ itemCode: code, description: d })
+      expect(r.bucket, d).toBe('spare')
+      expect(r.decidedBy, d).toBe('non-tyre-part')
+    }
+  })
+
+  it('has NO size escape hatch - a size does not make a gearbox a tyre', () => {
+    // This is what separates it from the accessory guard. "ORING 23.5*25" has a
+    // tyre-range code AND a size, which satisfies the accessory hatch, so it
+    // survived as a tyre until this rule existed. The size belongs to the thing
+    // the part fits.
+    expect(classifyLine({ itemCode: '310180-O', description: 'ORING 23.5*25' }).bucket).toBe('spare')
+  })
+
+  it('does NOT touch genuine tyres sharing the same code range', () => {
+    // These all live in the same 310xxx / TI-GE range and are real tyres. A
+    // broader rule here would have moved millions of real tyre spend.
+    for (const [code, d] of [
+      ['310682-O', 'BLACK HAWK(BFR55)- CHINA'],
+      ['310672-O', 'ROADWEST 23.5-25'],
+      ['310655-O', 'APLUS 385/65/R22.5 20PR'],
+      ['310674-O', 'TAIHO E3/L3 23.5-25'],
+      ['310637-O', 'ALLINACE 10-16.5 12PR'],
+      ['310504-O', 'TIRE 10-16.5TL (BOBCAT TIRE)'],
+    ]) {
+      expect(classifyLine({ itemCode: code, description: d }).bucket, d).toBe('tyre')
+    }
+  })
+
+  it('is checked AFTER the lubricant test, so oils are not swept into spare', () => {
+    // ORDER MATTERS. 'transmission' and 'radiator' appear in both lists; if this
+    // guard ran first it would move 602 live oil lines into spare.
+    for (const d of ['COMPRESSOR OIL 68', 'TRANSMISSION OIL 80W90',
+                     'ARF - 333 TRANSMISSION OIL', 'RADIATOR COOLANT']) {
+      expect(classifyLine({ description: d }).bucket, d).toBe('oil')
+    }
+  })
+})
+
+describe('an oil is still an oil when its name contains an assembly', () => {
+  // The V390 assembly guard and the lubricant test overlap on words like
+  // "gearbox". The lubricant test runs FIRST, and these cases are why: without
+  // the matching lubricant token, GEARBOX OIL was filed as a mechanical part at
+  // 0.92 confidence, which is worse than the honest 0.30 it had before.
+  it('files a named gearbox or cooling oil as oil', () => {
+    for (const d of ['GEARBOX OIL 140 (208LTR', 'GEAR BOX OIL 90', 'COOLING OIL 300',
+      'Refrigerant Oil BlueC F100 10 L/Can', 'DIFFERENTIAL OIL MOBIL 424- 10W 30']) {
+      const r = classifyLine({ itemCode: 'X', description: d })
+      expect(r.bucket, d).toBe('oil')
+      expect(r.decidedBy, d).toBe('description-lubricant')
+    }
+  })
+
+  it('still refuses a PART that merely names one of those oils', () => {
+    // a seal is a seal and a hose is a hose, however the oil is described
+    for (const d of ['GEARBOX OIL SEAL', 'KIT TRUCK MIXER GEAR BOX OIL SEAL 235*265*15',
+      'MERCEDES - GEAR BOX OIL COOLING HOSES ACTROS MP3', 'ENGINE OIL FILTER',
+      'GEAR OIL SEAL', 'HYDRAULIC OIL HOSE']) {
+      expect(classifyLine({ itemCode: 'X', description: d }).bucket, d).toBe('spare')
+    }
+  })
+
+  it('matches a plural part word, which whole-word matching does not imply', () => {
+    // "COOLING HOSES" matched no token and put a hose into oil spend
+    expect(classifyLine({ itemCode: 'X', description: 'ENGINE OIL COOLING HOSES' }).bucket).toBe('spare')
+    expect(classifyLine({ itemCode: 'X', description: 'ENGINE OIL FILTERS' }).bucket).toBe('spare')
+  })
+
+  it('does not turn a non-oil the file called oil into oil', () => {
+    // the ERP filed this under its Oil column; it is acid, and we keep it spare
+    expect(classifyLine({ itemCode: '290064-O', description: 'HYDROCHLORIC ACID 20LTR/25KG' }).bucket)
+      .toBe('spare')
+  })
+})
+
 describe('the job card is corroboration, never an override', () => {
   it('does NOT turn a battery on a tyre job card into a tyre cost', () => {
     // Live data: tyre job cards carry BATTERY 200 AMP, GEAR BOX COMPLETE, ENGINE

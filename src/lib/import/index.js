@@ -47,6 +47,20 @@ export {
 
 export { buildAliasMap, applyAliases, applyAliasesToRow } from './aliases'
 
+export {
+  diffHeaders,
+  defaultDecisions,
+  applyHeaderDecisions,
+  summariseDiff,
+  profileHeaders,
+  overlapRatio,
+  pickComparableProfile,
+  normHeader,
+  DECISION,
+  MIN_OVERLAP,
+  RENAME_THRESHOLD,
+} from './headerDiff'
+
 export { aggregateStagedRows } from './aggregate'
 
 export { mergeCrossFileRows, COST_FIELDS } from './mergeCrossFile'

@@ -4,8 +4,16 @@ Durable, committed project knowledge so any session has full context. Keep this
 current. Read it before adding/changing modules. Governing spec: `Tyre pulse enterprise.md`
 
 ## SESSION 2026-07-27 CLOSED CLEAN — parts 8-10 MERGED to main (**PR #207**, tip `282ad6c`). Migrations through **V393b**, next free **V394**.
-Branch `claude/accident-builder-report-ui-2bkwb5` realigned to origin/main (0 ahead / 0 behind, empty diff, nothing
-uncommitted). Web build clean, **5,616 tests green** (was 5,550). For NEW work restart the branch from latest main.
+Branch `claude/accident-builder-report-ui-2bkwb5` realigned to origin/main (empty code diff; only this memory entry
+follows). Web build clean, **5,616 tests green** (was 5,550). For NEW work restart the branch from latest main.
+
+### WHERE THE NEW SURFACES ARE (asked at session close, record it once)
+- **"What we changed"** = `/console/import-history`, **4th tab** (`ConsoleImportHistory.jsx` ->
+  `importHistory/DecisionsPanel.jsx`). Super-admin, since the whole `/console` is gated. Deliberately a TAB, not a
+  new nav item: it belongs beside the uploads it explains, and a second cost-review surface would violate the
+  single-surface rule. **If the customer asks for it in the main nav, that is a nav decision, not a rebuild.**
+- **"Daily coverage"** = the 3rd tab on the same page. **The column-change dialog** fires inside
+  `/data-intake` on a fingerprint MISS; there is nothing to open on its own.
 
 ### WHAT SHIPPED IN #207 (V388-V393)
 - **V388/V388b** two silent date-corruption bugs on the real 55,606-card import (2-digit year -> year 0026 on

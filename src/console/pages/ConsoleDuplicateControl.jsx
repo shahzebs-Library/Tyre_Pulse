@@ -28,7 +28,7 @@ import {
   listDuplicateTargets, previewDuplicates, scanDuplicates, resolveDuplicates,
   restoreDuplicateBatch, listDuplicateBatches, previewSummary,
 } from '../../lib/api/duplicateControl'
-import { IMPORT_TARGETS, importTargetRows } from '../../lib/importTargets'
+import { IMPORT_TARGETS, importTargetRows, uploadWorkbookSheets } from '../../lib/importTargets'
 import { exportToExcel, reportFileName } from '../../lib/exportUtils'
 
 const COUNTRIES = ['KSA', 'UAE', 'Egypt']
@@ -456,6 +456,26 @@ function ImportReference() {
       reportFileName('TyrePulse Import Reference'))
   }
 
+  /**
+   * The blank workbook: one sheet per destination table, headers already the
+   * exact column names, so a filled sheet imports with nothing to map. Built
+   * from the same IMPORT_TARGETS the table below renders, so it cannot drift.
+   */
+  async function downloadTemplates() {
+    const XLSX = await import('xlsx')
+    const wb = XLSX.utils.book_new()
+    for (const { name, rows } of uploadWorkbookSheets()) {
+      const ws = XLSX.utils.aoa_to_sheet(rows)
+      const widest = rows.reduce((w, r) => Math.max(w, r.length), 0)
+      ws['!cols'] = Array.from({ length: widest }, (_, i) => {
+        const longest = rows.reduce((w, r) => Math.max(w, String(r[i] ?? '').length), 0)
+        return { wch: Math.max(14, Math.min(34, longest + 4)) }
+      })
+      XLSX.utils.book_append_sheet(wb, ws, name)
+    }
+    XLSX.writeFile(wb, `${reportFileName('TyrePulse Upload Workbook')}.xlsx`)
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex items-start justify-between gap-3 flex-wrap">
@@ -467,10 +487,17 @@ function ImportReference() {
             rows into the live table, then clears itself.
           </p>
         </div>
-        <button onClick={download}
-          className="h-9 px-3 rounded-lg bg-gray-800 border border-gray-700 text-xs text-gray-300 hover:text-white flex items-center gap-2">
-          <Download size={13} /> Excel
-        </button>
+        <div className="flex items-center gap-2">
+          <button onClick={downloadTemplates}
+            className="h-9 px-3 rounded-lg bg-orange-600 hover:bg-orange-500 text-xs text-white font-medium flex items-center gap-2"
+            title="A blank workbook, one sheet per table, headers already correct">
+            <Download size={13} /> Blank upload workbook
+          </button>
+          <button onClick={download}
+            className="h-9 px-3 rounded-lg bg-gray-800 border border-gray-700 text-xs text-gray-300 hover:text-white flex items-center gap-2">
+            <Download size={13} /> This reference
+          </button>
+        </div>
       </div>
 
       <div className="flex items-start gap-2 px-4 py-2.5 rounded-xl bg-amber-950/30 border border-amber-800/40">

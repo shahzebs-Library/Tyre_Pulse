@@ -124,6 +124,30 @@ export async function getPartsExpenseSnapshot({ site, country, from, to } = {}) 
 }
 
 /**
+ * Everything the Expenses and CPK page needs, in one call: spend split, cost per
+ * kilometre with its coverage, the previous period and the same period a year
+ * earlier, a 36-month series, and the per-dimension movements behind the change.
+ *
+ * Degrades to { ok:false } when the backend is not provisioned, so the page shows
+ * an honest empty state rather than an error.
+ * @param {{ country?:string, site?:string, from?:string, to?:string }} [opts]
+ */
+export async function getCostCpkOverview({ country, site, from, to } = {}) {
+  const { data, error } = await supabase.rpc('get_cost_cpk_overview', {
+    p_country: country || null, p_site: site || null, p_from: from || null, p_to: to || null,
+  })
+  if (error) {
+    const m = String(error.message || error.code || '').toLowerCase()
+    if (m.includes('does not exist') || m.includes('could not find')
+      || m.includes('schema cache') || m === 'pgrst202') {
+      return { ok: false }
+    }
+    throw error
+  }
+  return data && data.ok ? data : { ok: false }
+}
+
+/**
  * Per-country expense totals (each in its OWN currency, not blended). Used by the
  * "All countries" view so SAR / AED / EGP are shown side by side rather than summed.
  * @param {{ from?:string, to?:string }} [opts]

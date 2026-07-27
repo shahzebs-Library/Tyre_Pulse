@@ -3,6 +3,79 @@
 Durable, committed project knowledge so any session has full context. Keep this
 current. Read it before adding/changing modules. Governing spec: `Tyre pulse enterprise.md`
 
+## SESSION 2026-07-27 — UPLOAD WORKBOOK + BRAIN CACHE + EXPENSES & CPK ON ONE PAGE. Migrations through **V374**, next free **V375**.
+
+### `/expense-report` is THE real-expense home, now renamed "Expenses & CPK" in the nav
+User could not find their expenses and wanted trending CPK with last-month / last-year comparison on ONE
+page. Deepened the existing page rather than adding a second cost surface. New sections, all toggleable:
+period bar (This month / Last month / 3 / 6 / YTD / 12) driving the WHOLE page, comparison strip, cost per
+km, what moved, certainty. Engine `src/lib/costCpk.js` (28 tests) + panels
+`src/components/expense/CostCpkPanels.jsx` + one RPC `get_cost_cpk_overview` (1.09 s).
+
+### **odometer_logs AND engine_hours_logs ARE EMPTY (0 rows) — every cost-per-km in the app has always read N/A**
+- The fleet HAS been recording odometers all along in a column nobody read for this: `tyre_records.km_at_fitment`
+  / `km_at_removal` are the asset's odometer at fit and at removal. **10,390 readings, 516 assets, 22 months.**
+  **V374 `fleet_km_by_asset()`** turns that into measured km. KSA 12 months = 341 assets / 18.2M km.
+- It is SPARSE, so it is honest about it: an asset counts only with TWO readings in the window; a future-dated
+  reading is dropped (there is a 2026-11-10 typo); a backwards/implausible run is DROPPED not clamped (a meter
+  reset is not distance); it returns the ASSET LIST so callers report coverage.
+- **CPK is computed on the MATCHED SET only** (assets with measured km), never whole-fleet spend over
+  part-fleet distance, and `coverage_pct` ships beside every figure.
+
+### THE TRAP THIS PAGE EXISTS TO AVOID — read before touching CPK
+First live run showed KSA cost/km falling **1.893 -> 0.225**, an apparent 8x improvement. It is entirely
+coverage: the tyre records hold **14 odometer readings from 2024 against 5,712 from 2025**, so the old window
+measured 5 assets and the new one 341. Every cpk block now carries `comparable` (coverage >= 25%) and the UI
+WITHHOLDS the comparison with a reason. **Never show a cpk delta without checking `comparable`.**
+- Also fixed: the three windows were classified in ONE `case`, so on the default 12-month range - where
+  previous and same-period-last-year are the SAME dates - the case matched 'prev' first and last year reported
+  0 beside an identical previous window reporting 55,216. Each window is aggregated independently now;
+  `previous_is_last_year` tells the page to collapse the duplicate column.
+
+### V373 CLASSIFICATION CACHE — uploads were spending ~7 minutes per 100k rows in the brain
+- `brain_classify` measured **4.1 ms/row** (about thirty regex probes). 216,792 rows hold only **22,128 distinct
+  (country, item code, description)** combinations = 9.8x repetition, and a re-import repeats it exactly.
+  `brain_cache` + `brain_classify_cached` -> **0.22 ms/row, 18.4x** (20,430 ms -> 1,109 ms per 5,000).
+  Also marked all 7 `brain_*` functions PARALLEL SAFE (they were the default UNSAFE, blocking parallel plans).
+- **THE CACHE KEY IS THE CONTRACT**: org + country + item code + description hash + reviewed + jobcard +
+  `brain_rules_version()`. **BUMP `brain_rules_version()` IN THE SAME MIGRATION AS ANY brain_* CHANGE** - that
+  is what retires stale answers, and forgetting it is the only way this cache can lie.
+
+### THREE MORE LIVE CLASSIFIER DEFECTS, found by checking the brain against all 216,792 stored buckets
+1. **COOLANT went to the spare default.** That would have moved KSA's 622 coolant lines OUT of oil while
+   Egypt's `OL-` code range kept its 113 IN. The stored data was ALREADY consistent (every coolant line in all
+   3 countries booked as oil), so the engine was about to introduce an inconsistency the data did not have.
+   `cooliant` is Egypt's own spelling, matched verbatim. COOLANT FILTER / COOLANT LINE stay parts.
+2. **A bare "number W number" read as a viscosity grade** - `REAR U BOLT 6W 24*92*500` and `LED LIGHT 50 W 60*60`
+   put 64 lines of bolts and lamps into oil. Spacing cannot separate them (`Shell Spirax S2 A 85 W - 140` is
+   genuine); what does is what FOLLOWS - a dimension continues into another measurement (`*`/`x`), a grade does not.
+3. **`lubricant` is whole-word so it never reached "LUBRICATING OIL"**; AdBlue/diesel exhaust fluid added.
+- Result: **3,419 lines re-bucketed, every country TOTAL unchanged** (Egypt 79,341,428 / KSA 40,608,350 /
+  UAE 18,493,541). Biggest: EGP 5.6M of Shell Tellus/Gadus/Spirax out of spare into oil; AED 135,859 of real
+  tyres (BLACK HAWK, APLUS, ROADWEST) out of spare into tyre. Pre-change buckets kept in
+  `_bucket_snapshot_20260727` (deny-all) so it is reversible. Final split:
+  Egypt 16,718,706 / 43,099,318 / 19,523,404 · KSA 11,297,676 / 23,987,502 / 5,323,172 ·
+  UAE 6,148,661 / 10,424,299 / 1,920,582.
+- **`trg_classify_parts_consumption` is BEFORE INSERT *OR UPDATE*.** Updating ANY column re-runs classification
+  and can re-bucket the row. That is how the Egypt re-bucketing actually happened - I updated `classify_confidence`
+  to backfill provenance and the trigger re-derived every bucket. Deliberate for a correction pass, a trap for
+  anything else. **Know this before you UPDATE parts_consumption.**
+- **Provenance now on 216,792/216,792 rows** (V371 left them all NULL): default 131,901 @0.30 · code-range 37,796
+  @0.95 · description-lubricant 21,177 · accessory 13,680 · reviewed-master 8,702 @1.00 · description-tyre 3,536.
+  **131,901 lines were filed by the FALLBACK** - that is the honest measure of how much of this spend nothing
+  identified, and the Certainty panel publishes it. Reviewing those codes in Material Master is what shrinks it.
+
+### Upload workbook — `uploadWorkbookSheets()` in `src/lib/importTargets.js`
+- Blank .xlsx, one sheet per destination table, **headers ARE the live column names** so the Supabase CSV
+  import maps itself. Download button on Console -> Duplicate Control -> Where to import. Derived from
+  IMPORT_TARGETS so it cannot drift; 4 tests pin that the header row equals the table's real column list.
+- The re-import warning is printed ON EACH SHEET, not only the README - a warning nobody opens is not a warning.
+
+### DIMENSIONS THAT ACTUALLY HAVE DATA (do not build UI on the empty ones)
+`site` 216,792 · `store_code` 216,792 · `cost_center` 216,792 · `asset_type` 44 distinct · `asset_code` 1,300 ·
+`currency` 216,792 · `unit_cost` 216,790 · `brand` 4,869. **EMPTY: project, department, supplier, region,
+branch, uom** - the ERP export does not carry them. V366 added the columns; the data never came.
+
 ## SESSION 2026-07-26 (part 2) — CLASSIFICATION BRAIN. Migrations through **V372**, next free **V373**. Merged to main (PRs #199-#202, tip `544c5f5`).
 User: "some maybe tyre size some maybe tire ans some tyre many things can be in item description so it can be
 corrected / Make this as a brain as a engine as a mchine on each uploads data ots applied and fxied."

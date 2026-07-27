@@ -210,6 +210,89 @@ export function importTargetFor(table) {
 }
 
 /**
+ * The three per-country expense tables share one column list, so the combined
+ * entry above is expanded into a sheet each. Everything else is one to one.
+ * @type {ReadonlyArray<{sheet:string, table:string}>}
+ */
+export const UPLOAD_SHEETS = Object.freeze([
+  { sheet: '1 Expenses KSA', table: 'expenses_ksa' },
+  { sheet: '1 Expenses UAE', table: 'expenses_uae' },
+  { sheet: '1 Expenses Egypt', table: 'expenses_egypt' },
+  { sheet: '2 Tyre changes', table: 'stg_monthly_tyres' },
+  { sheet: '3 Job card task lines', table: 'stg_wo_lines' },
+  { sheet: '4 Job card history', table: 'stg_complaints' },
+  { sheet: '5 Asset master', table: 'stg_assets' },
+  { sheet: '6 Open job cards', table: 'stg_open_wo' },
+  { sheet: '7 Daily km', table: 'daily_km' },
+  { sheet: '8 Tyre brand fill', table: 'stg_tyre_brand' },
+])
+
+/**
+ * Pure: the blank upload workbook, as sheets of rows-of-cells.
+ *
+ * Each sheet is named for the table it is imported into and its header row is
+ * the table's real column list, so the Supabase Table Editor CSV import maps
+ * every column by itself. Three banner lines sit above the header carrying the
+ * destination table and the re-import warning, because that warning is useless
+ * if it only lives in a README nobody opens.
+ *
+ * Derived from IMPORT_TARGETS, so adding a target here puts it in the workbook.
+ * @returns {Array<{name:string, rows:Array<Array<string>>}>}
+ */
+export function uploadWorkbookSheets() {
+  const readme = [
+    ['TYRE PULSE - DATA UPLOAD WORKBOOK'],
+    [],
+    ['HOW TO USE'],
+    ['1', 'Open the sheet for the data you have. Do not rename or reorder the headers.'],
+    ['2', 'Paste your rows under the headers. Leave a column blank if you do not have it.'],
+    ['3', 'Save that ONE sheet as CSV.'],
+    ['4', 'Supabase, Table Editor, open the table named on the sheet, Import data from CSV.'],
+    ['5', 'The columns match the table exactly, so every one maps itself.'],
+    [],
+    ['THE ONE RULE THAT MATTERS'],
+    ['', 'On the Expenses sheets, always fill the "#" column with the ERP line number.'],
+    ['', 'It is how the system recognises a line it has already loaded. With it, uploading'],
+    ['', 'the same file twice changes nothing. Without it every row loads again and your'],
+    ['', 'spend is overstated.'],
+    [],
+    ['Sheet', 'Import into', 'What it is', 'Ends up in', 'Upload twice?'],
+  ]
+  for (const { sheet, table } of UPLOAD_SHEETS) {
+    const t = importTargetFor(table)
+    readme.push([sheet, table, t?.label || '', t?.feeds || '',
+      t?.reimportSafe === 'safe' ? 'Safe, nothing duplicates' : 'Only safe when "#" is filled'])
+  }
+  readme.push([], ['NOTES PER SHEET'])
+  for (const { sheet, table } of UPLOAD_SHEETS) {
+    const t = importTargetFor(table)
+    if (t) readme.push([sheet, t.notes])
+  }
+  readme.push([], ['IF YOU UPLOAD SOMETHING TWICE BY MISTAKE'],
+    ['', 'Console, Duplicate Control finds it, prices it and undoes it in one click.'],
+    ['', 'Console, Import History lists every file already loaded, matched on content.'])
+
+  const sheets = [{ name: 'READ ME', rows: readme }]
+  for (const { sheet, table } of UPLOAD_SHEETS) {
+    const t = importTargetFor(table)
+    if (!t) continue
+    sheets.push({
+      name: sheet.slice(0, 31),
+      rows: [
+        [`Import into: ${table}`],
+        [t.label],
+        [t.reimportSafe === 'safe'
+          ? 'Uploading this file twice is safe.'
+          : 'Fill the "#" column, or a second upload duplicates every row.'],
+        [],
+        [...t.columns],
+      ],
+    })
+  }
+  return sheets
+}
+
+/**
  * Pure: flat rows for an Excel/CSV export of this reference, so the reference can
  * leave the app and sit next to the files being prepared.
  * @returns {Array<object>}

@@ -3,6 +3,81 @@
 Durable, committed project knowledge so any session has full context. Keep this
 current. Read it before adding/changing modules. Governing spec: `Tyre pulse enterprise.md`
 
+## SESSION 2026-07-27 (part 4) — JOB CARD INTAKE + SCRAP FOR TYRE ROLES. Migrations through **V382b**, next free **V383**.
+
+### V381 JOB CARD INTAKE — `stg_job_cards`, and it brings the AVAILABILITY CYCLE the app never had
+The customer's "Format job card" export carries **Production Out / Workshop In / Workshop Out / Production In**.
+Those four are what separate the two halves of downtime, which nothing in this system could distinguish before:
+**waiting = Production Out -> Workshop In** (asset is down, nobody has started; a scheduling problem) versus
+**repair = Workshop In -> Workshop Out** (a workshop problem). A single "downtime" number hides which one is
+actually costing availability. New `work_orders` columns: rfr_no, production_out_at, production_in_at, plate_no,
+asset_category, work_location, scope, source_row.
+- **`stg_job_cards` headers are the export's own, VERBATIM** - including `"Excepted Job Date/Time"` and
+  `"STD. Hours"` misspellings - so the Table Editor CSV import maps itself. Trigger `process_stg_job_cards()` is
+  a pure pipe (returns NULL, staging stays empty), and **re-import REFRESHES a card in place**
+  (`on conflict (work_order_no) do update`) so the file can be uploaded as often as the customer likes. That is
+  what makes the daily view current, and it is why this target is `reimportSafe: 'safe'`.
+- **THE EXPORT'S OWN "Total Breakdown hours" IS A TRAP AND IS NOT IMPORTED VERBATIM.** Verified against the
+  data: for a CLOSED card the figure equals Production Out -> Workshop Out exactly, but for an OPEN one it
+  counts **to today**, so an asset out since 2022 reads **40,028 hours**. Taking it as-is would put a four-year
+  "downtime" into every average. `breakdown_hours` is only populated when the card actually closed
+  (`v_closed := production_in is not null or workshop_out is not null`); the raw ERP figure is preserved in
+  `custom_data.erp_breakdown_hours` beside `still_open`.
+- **The four cost columns (Spare Parts / Tyre / Oil / Others) go to `custom_data.erp_reported_cost`, NEVER to
+  `labour_cost`/`parts_cost`.** THE EXPENSE GRID IS THE COST SOURCE. Writing them would both move every existing
+  workshop figure and create a second competing cost source.
+- Type mapping into the EXISTING vocabulary so this export cannot fragment it: Break Down -> **Emergency**
+  (an unplanned stoppage is exactly that, and losing the breakdown-vs-scheduled split would discard the single
+  most useful maintenance signal in the file), Schedule -> Preventive Maintenance, General/repair -> Repair.
+  The ERP's own wording is kept in `custom_data.erp_type`.
+- **V381b `erp_parse_ts(text)`** exists because `erp_parse_date` returns a DATE and **silently discards the
+  time**, which is fatal here: Production Out 06-01-2026 05:42 and Workshop In 06-01-2026 08:15 are the same
+  date, so a date parser measures the wait as ZERO. Day-first (the V-audit DD-MM-YYYY finding), falls through
+  to `erp_parse_date` for date-only values so the two never disagree about valid shapes.
+- **V381c `get_daily_job_cards(p_country, p_on)`** -> kpis (still_out, still_out_assets, opened/closed/
+  breakdowns/scheduled today, avg_wait_hours, avg_repair_hours, longest_out_hours) + still_out_list +
+  today_list + by_type + by_site. Averages return **null, not zero**, when nothing closed that day - zero would
+  read as instant turnaround. Surfaced by `src/lib/api/jobCards.js` + `src/components/dashboard/DailyJobCards.jsx`,
+  mounted on **Dashboard** above the fleet gauges. "Still out" carries NO date filter on purpose: an asset out
+  since March is exactly what the panel exists to surface. `importTargets.js` + the upload workbook carry the
+  new sheet `0 Job cards`.
+
+### V382/V382b SCRAP — a Tyre Data Collector can now scrap a tyre, and undo no longer corrupts status
+User: the tyre data collector can see serials but has no scrap button. **Simply showing the button would have
+produced a PARTIAL SCRAP.** Measured on a real Tyre Data Collector account: `is_approved_and_unlocked()` true
+(CAN write `tyre_status_marks`) but `role_update_tyre_records` is admin|manager only (CANNOT stamp
+`tyre_records.status`). The mark would land, the tyre would keep reading Active in the pool, and the two
+sources would disagree - the exact failure mode this codebase already reverted a change for once.
+- **`scrap_tyre_by_serial` / `unscrap_tyre_by_serial` (DEFINER) do both writes or neither.** Gate is
+  `tyre_scrap_allowed()` = approved+unlocked AND (super OR role in admin/manager/director/inspector/tyre_man/
+  **tyre_data_collector** OR `app_user_can('tyre_records','edit')`), so an admin can authorise ONE person by
+  capability grant without a migration. **NOT** done by widening `role_update_tyre_records`, which would let a
+  collector edit any column on any tyre record; these functions write exactly two things.
+- **V382b: undo used to set `status='Active'` blindly, and that was broken for ADMINS too, not just new roles.**
+  Proven live on serial A206286507: reverting to Active raised `guard_tyre_active_fitment` ("Position RHCI on
+  asset MP081 already has an active tyre") because the position was refilled while the tyre was scrapped - the
+  undo button simply errored. And a tyre that was **'Removed'** before scrapping came back **'Active'**,
+  silently promoting a dead tyre into the allocatable pool. Fix: `tyre_status_marks.prior_status jsonb` records
+  each row's status at mark time and the undo restores exactly that (restoring a row to what it already was
+  cannot trip the fitment guard). A repeat scrap keeps the ORIGINAL capture. Pre-column marks fall back to
+  'Active' and are still refused by the guard rather than double-fitting; the response carries
+  `restored_exactly`.
+- Verified live as a Tyre Data Collector: `Removed -> Scrapped -> Removed`, `restored_exactly: true`;
+  as a Reporter: blocked with "You do not have permission to scrap a tyre".
+- Clients: `src/lib/api/tyreExchange.js` and `mobile/lib/tyreScrap.ts` both go through the RPCs now (no direct
+  table writes). Mobile `canScrapTyre()` asks the SERVER (`tyre_scrap_allowed`) rather than guessing from the
+  role string, and **fails closed** - an action we cannot confirm is not shown. `serial-search.tsx`'s route
+  guard now derives its roles from the MODULES registry instead of a hardcoded duplicate list.
+- **`tyre_data_collector` was missing from mobile `UserRole`/`normaliseRole`**, so the app coerced those 6 users
+  to Reporter locally. Added there and to the `serial` module's roles. (This is the mobile mirror of the
+  already-recorded finding that the WEB `normaliseRole` handles custom roles correctly.)
+
+### CORRECTION to part 3: `work_orders.total_cost` is GENERATED from labour + parts ONLY
+Part 3 says "total_cost (35,060,742) equals labour+parts+lubricant+outside_repair exactly". That was
+accidentally right: `total_cost` is a GENERATED column of `labour_cost + parts_cost` alone, and lubricant +
+outside_repair are zero on every row. The conclusion (the 6 sites are not double-counting) still holds, but do
+not treat that equality as evidence about lubricant/outside_repair.
+
 ## SESSION 2026-07-27 (part 3) — CLOSING THE OPEN ITEMS. Migrations through **V380**, next free **V381**.
 
 ### ALL 10 `loadCostSplit` CONSUMERS NOW GOVERNED — the blended total is gone everywhere

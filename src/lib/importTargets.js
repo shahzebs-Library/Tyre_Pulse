@@ -68,6 +68,31 @@ export const IMPORT_TARGETS = Object.freeze([
       + 'use the in-app Data Intake page for those.',
   },
   {
+    table: 'stg_job_cards',
+    label: 'Job cards (the full workshop cycle)',
+    feeds: 'work_orders',
+    sourceFile: 'Format job card export',
+    verbatimHeaders: true,
+    needsCountry: true,
+    reimportSafe: 'safe',
+    columns: ['country', '#', 'RFR Number', 'Job Card No', 'MR NO', 'SCO NO', 'Location',
+      'Status', 'Type', 'Work Location', 'Production Complaint', 'Job Repair Description',
+      'Asset Code', 'Asset Description', 'Plate No', 'Truck Category', 'Head/Tail', 'Scope',
+      'Asset Category', 'Excepted Job Date/Time', 'Production Out', 'Workshop In',
+      'Workshop Out', 'Production In', 'Total Breakdown hours', 'STD. Hours',
+      'Spare Parts', 'Tyre', 'Oil', 'Others'],
+    notes: 'Upload this DAILY. Each job card is matched on its number and REFRESHED in '
+      + 'place, so re-uploading the same export as often as you like never stacks a copy, '
+      + 'and a card that closed since yesterday simply updates. It drives the "Job cards '
+      + 'today" panel on the front page. The four time columns are what make that panel '
+      + 'work: Production Out to Workshop In is how long the asset waited before anyone '
+      + 'started, Workshop In to Workshop Out is the actual repair. "Total Breakdown '
+      + 'hours" is only kept when the card has closed, because the export counts it up to '
+      + 'today for a card that never closed, which is why an asset down since 2022 reads '
+      + '40,000 hours. The Spare Parts, Tyre, Oil and Others columns are stored for '
+      + 'reference only: cost still comes from the expense grid, never from here.',
+  },
+  {
     table: 'stg_monthly_tyres',
     label: 'Monthly tyre consumption / tyre changes',
     feeds: 'tyre_records',
@@ -215,6 +240,7 @@ export function importTargetFor(table) {
  * @type {ReadonlyArray<{sheet:string, table:string}>}
  */
 export const UPLOAD_SHEETS = Object.freeze([
+  { sheet: '0 Job cards', table: 'stg_job_cards' },
   { sheet: '1 Expenses KSA', table: 'expenses_ksa' },
   { sheet: '1 Expenses UAE', table: 'expenses_uae' },
   { sheet: '1 Expenses Egypt', table: 'expenses_egypt' },

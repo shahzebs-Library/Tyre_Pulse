@@ -20,10 +20,10 @@ import { Ionicons } from '@expo/vector-icons'
 import { useLanguage } from '../../contexts/LanguageContext'
 import { useAuth } from '../../contexts/AuthContext'
 import { useRoleGuard } from '../../hooks/useRoleGuard'
-import { isAdmin } from '../../lib/types'
+import { MODULES } from '../../lib/permissions'
 import { lookupTyreBySerial, sanitizeSerial, TyreLookupRecord } from '../../lib/tyreLookup'
 import { extractScanCode } from '../../lib/assetLookup'
-import { scrapTyreBySerial, unscrapTyreBySerial, getScrapMark, ScrapMark } from '../../lib/tyreScrap'
+import { scrapTyreBySerial, unscrapTyreBySerial, getScrapMark, canScrapTyre, ScrapMark } from '../../lib/tyreScrap'
 import { toUserMessage } from '../../lib/safeError'
 
 type SearchState = 'idle' | 'searching' | 'found' | 'empty' | 'error'
@@ -36,9 +36,22 @@ function SerialSearchScreen() {
   const router = useRouter()
   const { t, isRTL } = useLanguage()
   const { profile, isSuperAdmin } = useAuth()
-  const { allowed } = useRoleGuard(['inspector', 'tyre_man', 'admin', 'manager', 'director'])
-  // Only Admin / super-admin may mark or undo a scrap (mirrors the web gate).
-  const canScrap = isAdmin(profile?.role) || isSuperAdmin === true
+  // Guard from the module registry rather than a second hardcoded list: the two
+  // had already drifted, with `serial` allowing reporter and driver while this
+  // screen turned them away.
+  const { allowed } = useRoleGuard(
+    MODULES.find((m) => m.key === 'serial')?.roles ?? ['inspector', 'tyre_man', 'admin', 'manager', 'director'],
+  )
+  // Whether this user may scrap is answered by the SERVER (V382), because the
+  // phone cannot tell: normaliseRole collapses unknown custom roles to
+  // 'reporter', and per-user capability grants are invisible here. Asking the
+  // same function the RPC enforces keeps the button and the permission in step.
+  const [canScrap, setCanScrap] = useState(false)
+  useEffect(() => {
+    let cancelled = false
+    canScrapTyre().then((ok) => { if (!cancelled) setCanScrap(ok) })
+    return () => { cancelled = true }
+  }, [profile?.id, isSuperAdmin])
   // Prefill from a scan handoff (scanner "Search manually" passes ?q=<code>).
   const params = useLocalSearchParams<{ q?: string }>()
 

@@ -60,17 +60,13 @@ export function upsertTyreStatusMark(serial, markType) {
 export async function scrapTyreBySerial(serial, { reason = null, country = null } = {}) {
   const s = String(serial || '').trim()
   if (!s) throw new Error('Serial number is required.')
-  let userId = null
-  try { userId = (await supabase.auth.getUser()).data?.user?.id || null } catch { /* best effort */ }
-  const { error: markErr } = await supabase.from('tyre_status_marks').upsert(
-    { serial: s, mark_type: 'scrap', reason: reason ? String(reason).trim() : null, country: country || null, created_by: userId },
-    { onConflict: 'serial,mark_type' },
-  )
-  if (markErr) throw markErr
-  const { data, error } = await supabase.from('tyre_records')
-    .update({ status: 'Scrapped' }).eq('serial_no', s).select('id')
+  const { data, error } = await supabase.rpc('scrap_tyre_by_serial', {
+    p_serial: s,
+    p_reason: reason ? String(reason).trim() : null,
+    p_country: country || null,
+  })
   if (error) throw error
-  return { updated: (data || []).length }
+  return { updated: Number(data?.updated ?? 0) }
 }
 
 /**
@@ -83,13 +79,9 @@ export async function scrapTyreBySerial(serial, { reason = null, country = null 
 export async function unscrapTyreBySerial(serial) {
   const s = String(serial || '').trim()
   if (!s) throw new Error('Serial number is required.')
-  const { error: delErr } = await supabase.from('tyre_status_marks')
-    .delete().eq('serial', s).eq('mark_type', 'scrap')
-  if (delErr) throw delErr
-  const { error } = await supabase.from('tyre_records')
-    .update({ status: 'Active' }).eq('serial_no', s).eq('status', 'Scrapped')
+  const { data, error } = await supabase.rpc('unscrap_tyre_by_serial', { p_serial: s })
   if (error) throw error
-  return { ok: true }
+  return { ok: true, restoredExactly: data?.restored_exactly === true }
 }
 
 /** Update the reason on an existing 'scrap' mark (in-place edit). */

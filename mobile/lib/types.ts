@@ -1,4 +1,5 @@
-export type UserRole = 'admin' | 'manager' | 'director' | 'inspector' | 'tyre_man' | 'reporter' | 'driver'
+export type UserRole = 'admin' | 'manager' | 'director' | 'inspector' | 'tyre_man'
+  | 'tyre_data_collector' | 'reporter' | 'driver'
 
 /** Countries the platform operates in - mirrors the web SettingsContext list.
  *  A user's country drives data isolation and stamps their mobile-created rows. */
@@ -24,7 +25,12 @@ export interface Profile {
  */
 export function normaliseRole(raw: string | null | undefined): UserRole {
   const key = (raw ?? 'reporter').trim().toLowerCase().replace(/\s+/g, '_')
-  const valid: UserRole[] = ['admin', 'manager', 'director', 'inspector', 'tyre_man', 'reporter', 'driver']
+  // A role missing from this list silently becomes 'reporter', which is how
+  // "Tyre Data Collector" ended up with a reporter's permissions on the phone
+  // while the server correctly saw tyre_data_collector. Any custom role that
+  // needs its own mobile permissions has to be listed here.
+  const valid: UserRole[] = ['admin', 'manager', 'director', 'inspector', 'tyre_man',
+    'tyre_data_collector', 'reporter', 'driver']
   return valid.includes(key as UserRole) ? (key as UserRole) : 'reporter'
 }
 

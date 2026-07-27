@@ -1,14 +1,17 @@
 /**
- * Tyre scrap service - mobile mirror of the web `src/lib/api/tyreExchange.js`
- * scrap workflow. An Admin / super-admin searches a serial and marks the tyre as
- * scrap with a reason: an authoritative 'scrap' row is upserted into
- * `tyre_status_marks` (mark_type 'scrap', reason, acting user) AND every
- * `tyre_records` row for that serial is flagged status='Scrapped' so pool /
- * analytics logic treats it as out of service. Undo removes the mark and reverts
- * any still-flagged row back to 'Active'.
+ * Tyre scrap service - mobile mirror of the web `src/lib/api/tyreExchange.js`.
+ * A field user searches a serial and marks the tyre scrapped with a reason.
  *
- * Reads/writes go direct to Supabase; org isolation + approval RLS are enforced
- * server-side. Online-only by design (transactional, no offline queue).
+ * BOTH WRITES GO THROUGH ONE RPC (V382), and they have to. Scrapping touches
+ * two tables with different RLS: any approved user may write the mark in
+ * `tyre_status_marks`, but stamping `tyre_records.status` needs admin or
+ * manager. Doing them as two client calls means a tyre collector writes the
+ * mark, is refused the stamp, and leaves a PARTIAL SCRAP - the tyre reads
+ * Scrapped in one place and Active in the pool. `scrap_tyre_by_serial` does
+ * both or neither, and self-gates on the server so the button and the
+ * permission cannot drift apart.
+ *
+ * Online-only by design (transactional, no offline queue).
  */
 import { supabase } from './supabase'
 
@@ -29,50 +32,28 @@ export async function scrapTyreBySerial(
 ): Promise<{ updated: number }> {
   const s = String(serial || '').trim()
   if (!s) throw new Error('Serial number is required.')
-  let userId: string | null = null
-  try {
-    userId = (await supabase.auth.getUser()).data?.user?.id ?? null
-  } catch {
-    /* best effort - RLS still gates the write */
-  }
-  const { error: markErr } = await supabase.from('tyre_status_marks').upsert(
-    {
-      serial: s,
-      mark_type: 'scrap',
-      reason: reason ? String(reason).trim() : null,
-      country: country || null,
-      created_by: userId,
-    },
-    { onConflict: 'serial,mark_type' },
-  )
-  if (markErr) throw markErr
-  const { data, error } = await supabase
-    .from('tyre_records')
-    .update({ status: 'Scrapped' })
-    .eq('serial_no', s)
-    .select('id')
+  const { data, error } = await supabase.rpc('scrap_tyre_by_serial', {
+    p_serial: s,
+    p_reason: reason ? String(reason).trim() : null,
+    p_country: country || null,
+  })
   if (error) throw error
-  return { updated: (data ?? []).length }
+  return { updated: Number((data as { updated?: number } | null)?.updated ?? 0) }
 }
 
 /**
- * Undo a scrap: remove the 'scrap' mark and revert any row still flagged
- * 'Scrapped' back to 'Active' (lifecycle removal signals untouched).
+ * Undo a scrap: remove the mark and put each row back to the status it held
+ * BEFORE the scrap, which the mark recorded (V382b).
+ *
+ * The old client code set every row to 'Active', which was wrong twice: a tyre
+ * that was 'Removed' before scrapping came back Active and rejoined the
+ * allocatable pool, and if its position had since been refilled the update was
+ * refused outright by guard_tyre_active_fitment, so Undo just errored.
  */
 export async function unscrapTyreBySerial(serial: string): Promise<{ ok: boolean }> {
   const s = String(serial || '').trim()
   if (!s) throw new Error('Serial number is required.')
-  const { error: delErr } = await supabase
-    .from('tyre_status_marks')
-    .delete()
-    .eq('serial', s)
-    .eq('mark_type', 'scrap')
-  if (delErr) throw delErr
-  const { error } = await supabase
-    .from('tyre_records')
-    .update({ status: 'Active' })
-    .eq('serial_no', s)
-    .eq('status', 'Scrapped')
+  const { error } = await supabase.rpc('unscrap_tyre_by_serial', { p_serial: s })
   if (error) throw error
   return { ok: true }
 }
@@ -89,4 +70,25 @@ export async function getScrapMark(serial: string): Promise<ScrapMark | null> {
     .maybeSingle()
   if (error && (error as { code?: string }).code !== 'PGRST116') throw error
   return (data as ScrapMark) ?? null
+}
+
+/**
+ * May THIS user scrap a tyre? Answered by the server, not guessed on the phone.
+ *
+ * The button used to be gated on `isAdmin(profile.role)`, which is wrong in both
+ * directions here. normaliseRole collapses any role it does not know to
+ * 'reporter', so a Tyre Data Collector looked like a reporter on the phone while
+ * the server saw tyre_data_collector and would have allowed the write; and a
+ * per-user capability grant was invisible to the client entirely. Asking the
+ * same function the RPC enforces means what the user sees is exactly what they
+ * are allowed to do.
+ */
+export async function canScrapTyre(): Promise<boolean> {
+  try {
+    const { data, error } = await supabase.rpc('tyre_scrap_allowed')
+    if (error) return false
+    return data === true
+  } catch {
+    return false  // never show an action we cannot confirm
+  }
 }

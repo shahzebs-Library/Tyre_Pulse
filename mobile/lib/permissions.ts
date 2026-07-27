@@ -88,7 +88,7 @@ export const MODULES: ModuleDef[] = [
   // Field ---------------------------------------------------------------------
   M('inspect',        'New Inspection',    'clipboard-outline',      'Field',      ['manager', 'director', 'inspector', 'tyre_man']),
   M('scan',           'Scan',              'scan-outline',           'Field',      ['manager', 'director', 'inspector', 'tyre_man']),
-  M('serial',         'Serial Search',     'search-outline',         'Field',      ['manager', 'director', 'inspector', 'tyre_man', 'reporter', 'driver']),
+  M('serial',         'Serial Search',     'search-outline',         'Field',      ['manager', 'director', 'inspector', 'tyre_man', 'tyre_data_collector', 'reporter', 'driver']),
   M('tyreChange',     'Tyre Change',       'swap-horizontal-outline','Field',      ['manager', 'director', 'inspector']),
   M('checklists',     'Checklists',        'checkbox-outline',       'Field',      ['manager', 'director', 'inspector', 'tyre_man']),
   M('meter',          'Meter Log',         'speedometer-outline',    'Field',      ['manager', 'director', 'inspector', 'tyre_man', 'reporter', 'driver']),

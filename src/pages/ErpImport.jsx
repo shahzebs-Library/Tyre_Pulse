@@ -245,6 +245,7 @@ export default function ErpImport() {
             sheetIdx={sheetIdx}
             setSheetIdx={setSheetIdx}
             busy={busy}
+            progress={progress}
             mapped={mapped}
             derived={derived}
             activeCount={activeCount}
@@ -266,7 +267,8 @@ export default function ErpImport() {
 
 function ImportPanel({
   dataset, datasetKey, canWrite, countryTag, fileRef, fileName, parsed, sheet, sheetIdx,
-  setSheetIdx, busy, mapped, derived, activeCount, warnCount, saveResult, onFile, onSave, onReset,
+  setSheetIdx, busy, progress, mapped, derived, activeCount, warnCount, onFile, onSave, onReset,
+  saveResult,
 }) {
   const displayCols = dataset.columns.map((c) => c.key)
   const previewRows = derived.slice(0, PREVIEW_LIMIT)

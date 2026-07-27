@@ -89,6 +89,37 @@ describe('listScrappedTyres', () => {
     expect(out.rows[0].scrapped_by_name).toBe('IJAZ ALI SHAH')
   })
 
+  it('passes through the linked-record detail and its completeness counts', async () => {
+    // The register is only useful if it carries the rest of the record. The job
+    // card is the strong link (present on every scrapped tyre and matching a
+    // real work order); cost and distance are frequently missing, which is why
+    // the counts are published rather than left for the reader to infer.
+    rpc.mockResolvedValue({
+      data: {
+        ok: true,
+        total: 18,
+        linked: { with_job_card: 18, with_cost: 7, with_km: 3, with_disposal: 0 },
+        rows: [{
+          serial: 'FP03042S609', asset_no: 'TM606', job_card: 'GCKR/JC/1957/1025',
+          job_card_type: 'Tyre Change', job_card_status: 'Completed',
+          job_card_complaint: 'PREVENTIVE MAINTENANCE',
+          vehicle_type: 'TR-MIXER', make: 'Sany',
+          km_run: null, cost_per_tyre: null, disposal_status: null, marked: true,
+        }],
+      },
+      error: null,
+    })
+    const out = await api.listScrappedTyres({})
+    expect(out.linked).toEqual({ with_job_card: 18, with_cost: 7, with_km: 3, with_disposal: 0 })
+    const r = out.rows[0]
+    expect(r.job_card).toBe('GCKR/JC/1957/1025')
+    expect(r.job_card_complaint).toBe('PREVENTIVE MAINTENANCE')
+    expect(r.vehicle_type).toBe('TR-MIXER')
+    // unknown stays null so the UI can say N/A; a 0 here would be read as fact
+    expect(r.km_run).toBeNull()
+    expect(r.cost_per_tyre).toBeNull()
+  })
+
   it('degrades to an empty register on a backend without the RPC', async () => {
     rpc.mockResolvedValue({ data: null, error: { message: 'Could not find the function' } })
     const out = await api.listScrappedTyres({})

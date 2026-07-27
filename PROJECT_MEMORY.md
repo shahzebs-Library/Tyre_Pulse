@@ -3,7 +3,7 @@
 Durable, committed project knowledge so any session has full context. Keep this
 current. Read it before adding/changing modules. Governing spec: `Tyre pulse enterprise.md`
 
-## SESSION 2026-07-27 (part 5) — SCRAP REGISTER + SPLIT SCRAP/UNDO RIGHTS. Migrations through **V383b**, next free **V384**.
+## SESSION 2026-07-27 (part 5) — SCRAP REGISTER + SPLIT SCRAP/UNDO RIGHTS. Migrations through **V384**, next free **V385**.
 
 ### **SCRAP MANAGEMENT NEVER SHOWED THE SCRAPPED TYRES — it was reading a heuristic, not the marks**
 User: "Scrapped management is not linked with scrapped tyres, when we click into it it must show those marked
@@ -61,6 +61,29 @@ reached the scrapped register and could not be undone. It now goes through `scra
 serial (pool of 5), so bulk and single scrap produce the SAME record. **A row with no serial still cannot be
 marked** — the mark is keyed on the serial — so those keep the plain status write and the operator is TOLD how
 many were left untraceable rather than it happening silently.
+
+### V384 — THE REGISTER NOW READS THE LINKED RECORD. **`job_card` is the strong link: 100%**
+User asked whether Scrap Management is linked to the other tables (job card etc). It was not — the register
+showed only what sat on `tyre_records`. **Measured on the live scrapped set BEFORE building anything:**
+`job_card` present **19/19 and every one matches a `work_orders` row**; `asset_no` in `vehicle_fleet` 19/19;
+`cost_per_tyre` only **8/19**; grid tyre cost via job card only **3/19**; a `tyre_disposals` row **0/19**.
+- Joined in: job card + its work-order **status / type / complaint / opened date**, and the vehicle's
+  **type / make / model**. Both were fully available and simply unread.
+- **THE FLEET JOIN MUST BE COUNTRY-SCOPED AND `limit 1`.** `vehicle_fleet` is unique per
+  (org, **country**, asset_no), so the same asset number exists in more than one country and a naive join
+  DUPLICATES the tyre — observed live: TM606 returned twice, once as TR-MIXER/Sany and once as
+  model 'TRANSIT MIXER'. Done with a `left join lateral ... order by (f.country = j.country) desc limit 1`.
+  Verified `rows_returned == total` after the change.
+- **km and cost stay NULL, never 0.** A scrapped tyre reading "0 km" or cost 0 would be taken as fact when it
+  only means the import never carried the figure. `km_run` = `total_km` else `km_at_removal - km_at_fitment`.
+- The response carries a **`linked` block** (with_job_card / with_cost / with_km / with_disposal) and the UI
+  prints it, so a blank column reads as the known data gap it is instead of looking like a bug.
+- **`tyre_disposals` has 0 rows for every scrapped tyre**, i.e. Scrap Management's own Disposal Log tab and its
+  scrapped tyres are still two disconnected halves. The register now SHOWS "Not started" per row. Deliberately
+  NOT auto-creating a disposal row on scrap: that tab is approval-gated (`EntityApprovalPanel
+  entityType="tyre_scrap"`) and pushing rows into a workflow is a process decision, not a display fix.
+- Register total verified against ground truth: 18 = 18 (union of marked serials and status='Scrapped'
+  serials). **The feature is in live use — 7 real scraps landed between 09:53 and 09:59 while this was built.**
 
 ### **THE LAST BLOCKER WAS THE SIDEBAR, NOT THE PERMISSION** — `scrap` enabled for Tyre Data Collector
 Everything above could be right and the collector would still never reach it: **Tyre Data Collector is a CUSTOM

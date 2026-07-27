@@ -43,10 +43,14 @@ const money = (v, cur) => (v == null || !Number.isFinite(Number(v))
   ? 'N/A'
   : `${cur || ''} ${Number(v).toLocaleString('en-US', { maximumFractionDigits: 0 })}`.trim())
 
-const EXPORT_COLS = ['serial', 'asset_no', 'tyre_position', 'brand', 'size', 'site', 'country',
-  'reason', 'scrapped_by_name', 'scrapped_at', 'cost_per_tyre', 'marked']
-const EXPORT_HEADERS = ['Serial', 'Asset', 'Position', 'Brand', 'Size', 'Site', 'Country',
-  'Reason', 'Scrapped by', 'Scrapped on', 'Cost', 'Recorded']
+const EXPORT_COLS = ['serial', 'asset_no', 'tyre_position', 'vehicle_type', 'make', 'brand', 'size',
+  'site', 'country', 'job_card', 'job_card_type', 'job_card_status', 'job_card_complaint',
+  'km_run', 'tread_depth', 'reason', 'scrapped_by_name', 'scrapped_at', 'cost_per_tyre',
+  'disposal_status', 'marked']
+const EXPORT_HEADERS = ['Serial', 'Asset', 'Position', 'Vehicle type', 'Make', 'Brand', 'Size',
+  'Site', 'Country', 'Job card', 'Job card type', 'Job card status', 'Job card complaint',
+  'Km run', 'Tread depth', 'Reason', 'Scrapped by', 'Scrapped on', 'Cost',
+  'Disposal', 'Recorded']
 
 export default function ScrappedRegister({ country, currency }) {
   const [rows, setRows] = useState([])
@@ -55,6 +59,7 @@ export default function ScrappedRegister({ country, currency }) {
   const [error, setError] = useState('')
   const [search, setSearch] = useState('')
   const [query, setQuery] = useState('')
+  const [linked, setLinked] = useState(null)
   const [perms, setPerms] = useState({ canScrap: false, canUndo: false })
   const [busy, setBusy] = useState('')
   const [editing, setEditing] = useState(null)   // serial being re-reasoned
@@ -91,6 +96,7 @@ export default function ScrappedRegister({ country, currency }) {
         unattributed_total: res.unattributed_total || 0,
         truncated: res.truncated === true,
       })
+      setLinked(res.linked || null)
     } catch (e) {
       setError(toUserMessage(e, 'Could not load the scrapped register.'))
     } finally { setLoading(false) }
@@ -165,7 +171,8 @@ export default function ScrappedRegister({ country, currency }) {
   const exportRows = useMemo(() => rows.map((r) => ({
     ...r,
     scrapped_at: r.scrapped_at ? fmtDate(r.scrapped_at) : 'N/A',
-    scrapped_by_name: r.scrapped_by_name || 'Not recorded',
+    scrapped_by_name: r.marked ? (r.scrapped_by_name || 'Unknown user') : 'Not recorded',
+    disposal_status: r.disposal_status || 'Not started',
     marked: r.marked ? 'Scrap button' : 'Bulk status change (no record)',
   })), [rows])
 
@@ -304,6 +311,17 @@ export default function ScrappedRegister({ country, currency }) {
           </p>
         )}
 
+        {/* What the linked record actually contains. Published rather than
+            implied, because a blank column reads as a bug while a stated
+            "cost known on 7 of 18" reads as the data gap it is. */}
+        {totals.total > 0 && linked && (
+          <p className="text-[11px] text-[var(--text-dim)]">
+            Linked to source records: job card on {linked.with_job_card} of {totals.total}
+            {' · '}cost on {linked.with_cost}
+            {' · '}distance on {linked.with_km}
+            {' · '}disposal started on {linked.with_disposal}
+          </p>
+        )}
         {totals.truncated && (
           // Never let a capped list read as the whole list.
           <p className="text-[11px] text-amber-400">
@@ -329,12 +347,14 @@ export default function ScrappedRegister({ country, currency }) {
               <thead>
                 <tr className="text-left text-[var(--text-muted)] border-b border-[var(--hairline)]">
                   <th className="py-2 pr-3 font-semibold">Serial</th>
-                  <th className="py-2 px-3 font-semibold">Asset</th>
+                  <th className="py-2 px-3 font-semibold">Vehicle</th>
                   <th className="py-2 px-3 font-semibold">Tyre</th>
-                  <th className="py-2 px-3 font-semibold">Site</th>
+                  <th className="py-2 px-3 font-semibold">Job card</th>
                   <th className="py-2 px-3 font-semibold">Reason</th>
                   <th className="py-2 px-3 font-semibold">Scrapped by</th>
+                  <th className="py-2 px-3 font-semibold text-right">Km run</th>
                   <th className="py-2 px-3 font-semibold text-right">Cost</th>
+                  <th className="py-2 px-3 font-semibold">Disposal</th>
                   <th className="py-2 pl-3 font-semibold text-right">Actions</th>
                 </tr>
               </thead>
@@ -352,12 +372,30 @@ export default function ScrappedRegister({ country, currency }) {
                         <Link to={`/assets/${encodeURIComponent(r.asset_no)}`}
                           className="text-[var(--text-secondary)] hover:text-[var(--accent)]">{r.asset_no}</Link>
                       ) : <span className="text-[var(--text-dim)]">N/A</span>}
-                      {r.tyre_position ? <span className="text-[11px] text-[var(--text-dim)] ml-1.5">{r.tyre_position}</span> : null}
+                      <span className="block text-[11px] text-[var(--text-dim)]">
+                        {[r.vehicle_type, r.make, r.site].filter(Boolean).join(' · ') || 'No vehicle detail'}
+                      </span>
                     </td>
                     <td className="py-2 px-3 text-[var(--text-secondary)]">
                       {r.brand || 'N/A'}{r.size ? <span className="text-[var(--text-dim)]"> {r.size}</span> : null}
+                      <span className="block text-[11px] text-[var(--text-dim)]">
+                        {r.tyre_position || 'No position'}
+                        {r.tread_depth != null ? ` · ${r.tread_depth} mm` : ''}
+                      </span>
                     </td>
-                    <td className="py-2 px-3 text-[var(--text-secondary)]">{r.site || 'N/A'}</td>
+                    {/* The job card is on every scrapped tyre and matches a real
+                        work order, so it can show what the vehicle was in for. */}
+                    <td className="py-2 px-3">
+                      {r.job_card ? (
+                        <>
+                          <span className="text-[var(--text-secondary)] font-mono text-xs">{r.job_card}</span>
+                          <span className="block text-[11px] text-[var(--text-dim)] max-w-[190px] truncate"
+                            title={[r.job_card_type, r.job_card_status, r.job_card_complaint].filter(Boolean).join(' · ')}>
+                            {[r.job_card_type, r.job_card_complaint].filter(Boolean).join(' · ') || 'No detail'}
+                          </span>
+                        </>
+                      ) : <span className="text-[var(--text-dim)]">N/A</span>}
+                    </td>
                     <td className="py-2 px-3 text-[var(--text-tertiary)] max-w-[220px]">
                       {editing === r.serial ? (
                         <div className="flex items-center gap-1">
@@ -385,7 +423,21 @@ export default function ScrappedRegister({ country, currency }) {
                         </span>
                       )}
                     </td>
+                    {/* Km and cost are frequently missing on these records, so
+                        both read N/A rather than 0 - a scrapped tyre showing
+                        "0 km" or "0" cost would be taken as fact. */}
+                    <td className="py-2 px-3 text-right text-[var(--text-secondary)]">
+                      {r.km_run == null ? <span className="text-[var(--text-dim)]">N/A</span>
+                        : Number(r.km_run).toLocaleString('en-US')}
+                    </td>
                     <td className="py-2 px-3 text-right text-[var(--text-secondary)]">{money(r.cost_per_tyre, currency)}</td>
+                    <td className="py-2 px-3">
+                      {r.disposal_status ? (
+                        <span className="text-[11px] px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-400">{r.disposal_status}</span>
+                      ) : (
+                        <span className="text-[11px] text-[var(--text-dim)]">Not started</span>
+                      )}
+                    </td>
                     <td className="py-2 pl-3 text-right whitespace-nowrap">
                       {/* Editing a reason and undoing are separate rights, so
                           they are shown separately. */}

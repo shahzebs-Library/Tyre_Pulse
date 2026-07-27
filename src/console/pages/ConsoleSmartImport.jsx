@@ -177,6 +177,14 @@ export default function ConsoleSmartImport() {
   // rows) so a very large sheet cannot freeze the UI. Counts are exact when the
   // sheet fits inside the sample and clearly labelled as an estimate otherwise.
   // The commit path (below) always processes EVERY row.
+  // Memoised: this was called inline in the JSX, so it re-scored all ten module
+  // definitions on every render - measured at 84 ms, paid on every keystroke in
+  // the fields beside it.
+  const rankedModules = useMemo(
+    () => (sheet ? rankModules(sheet.columns, (sheet.rows || []).slice(0, 20)) : []),
+    [sheet],
+  )
+
   const previewInfo = useMemo(() => {
     if (!sheet || !module || !mapping.length) return null
     let ready = 0, warning = 0, errorRows = 0
@@ -242,7 +250,10 @@ export default function ConsoleSmartImport() {
         }
       })
 
-      await imports.stageRows(batchId, staged)
+      await imports.stageRows(batchId, staged, {
+        // uploading is the long phase; report it through the existing indicator
+        onProgress: (done, total) => setProgress({ phase: 'uploading', inserted: done, total }),
+      })
       const counts = staged.reduce((a, r) => {
         a.total++
         if (r.validationStatus === 'error') a.error++
@@ -330,7 +341,7 @@ export default function ConsoleSmartImport() {
                 <div className="mt-1 flex items-center gap-2">
                   <select value={module} onChange={(e) => changeModule(e.target.value)}
                     className="flex-1 bg-gray-800 border border-gray-700 rounded-lg text-sm px-3 py-2">
-                    {rankModules(sheet.columns, (sheet.rows || []).slice(0, 20)).map((r) => (
+                    {rankedModules.map((r) => (
                       <option key={r.module} value={r.module}>{moduleLabel(r.module)} ({r.score}% match)</option>
                     ))}
                   </select>
@@ -472,7 +483,9 @@ export default function ConsoleSmartImport() {
                 {phase === 'committing'
                   ? (progress?.phase === 'preparing'
                     ? <><Loader2 className="animate-spin" size={16} /> Preparing rows...</>
-                    : <><Loader2 className="animate-spin" size={16} /> Importing{progress ? ` ${fmtNum(progress.inserted)} saved...` : '...'}</>)
+                    : progress?.phase === 'uploading'
+                      ? <><Loader2 className="animate-spin" size={16} /> Uploading {fmtNum(progress.inserted)} of {fmtNum(progress.total)}...</>
+                      : <><Loader2 className="animate-spin" size={16} /> Importing{progress ? ` ${fmtNum(progress.inserted)} saved...` : '...'}</>)
                   : <><Database size={16} /> Import {previewInfo?.isEstimate ? `up to ${fmtNum(previewInfo?.total || 0)}` : fmtNum((previewInfo?.ready || 0) + (previewInfo?.warning || 0))} rows <ArrowRight size={15} /></>}
               </button>
               <span className="text-xs text-gray-500">Rows that would fail are skipped automatically.</span>

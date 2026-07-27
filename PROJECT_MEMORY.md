@@ -3,6 +3,141 @@
 Durable, committed project knowledge so any session has full context. Keep this
 current. Read it before adding/changing modules. Governing spec: `Tyre pulse enterprise.md`
 
+## SESSION 2026-07-27 (part 7) — IMPORT SPEED, PROFILED. Migrations through **V387**, next free **V388**.
+Three agents profiled the import path (client / database / post-import visibility). **Read the corrections
+before acting on any of it.**
+
+### **CORRECTION: the "biggest server-side win" DID NOT REPRODUCE. Do not re-raise it.**
+An agent reported `mm_reviewed_lookup` on `material_master` as **2.89x** end-to-end (0.9027 -> 0.3120 ms/row)
+and predicted imports getting **40x slower** as Material Master review progresses. I applied it and then tried
+to confirm the number:
+- same-transaction A/B, 3,000 rows each: with **0.3467** vs without **0.3681** = **1.06x**
+- same transaction, master forced FULLY reviewed (all 22,089 codes), varied item codes, warm-up discarded:
+  without **0.2753** vs with **0.3001** — **no gain, marginally worse**, and the 40x scaling trap **did not
+  materialise**.
+Both gaps are inside this instance's own 5-7x call-to-call variance. **WHY the plan win is not a time win:**
+`material_master` is 17 MB and fully cached, so the 513 buffers were shared *hits*, tens of microseconds
+against a ~0.3 ms/row insert. **The index IS kept** — the plan fix is real and objective (513 buffers -> 2,
+Rows Removed by Filter 536 -> 0), it is the semantically correct index, and it bounds a lookup that was
+otherwise bounded by nothing — but **never cite it as an import speed fix**. Full measurements in
+`MIGRATIONS_V387_MATERIAL_MASTER_LOOKUP_INDEX.sql`.
+**METHOD LESSON: on this instance only SAME-TRANSACTION, warm-up-discarded, order-reversed comparisons mean
+anything.** My own first run (0.6088 ms/row) and second (0.3467) differed 1.75x on identical SQL.
+
+### What IS true server-side (verified, and worth acting on)
+- **`classify_parts_consumption` is ~90% of every `parts_consumption` insert**: all triggers 0.9027 vs
+  classify-off 0.0566 vs all-off 0.0422 ms/row. Raw heap + 10 indexes is only 0.042.
+- **The classification cache is HEALTHY — do not touch it.** The trigger calls `brain_classify_cached`, not the
+  uncached `brain_classify`; measured **0.0377 ms/row** warm, `brain_cache` 22,715 rows vs 22,128 distinct keys,
+  290,043 index scans on its PK. The suspected 19x regression does not exist.
+- **`work_orders`: audit + domain-event triggers are 71% of the insert** (`trg_audit_row` 0.198 ms/row,
+  `trg_ev_workorder_created` 0.167, of 0.512 total). A full 85,886-row ERP load writes ~172k rows of
+  "someone changed this". `trg_audit_row_change` also runs `select email, role from profiles where id=auth.uid()`
+  PER ROW, and `auth.uid()` is NULL for an import. **NOT changed — gating these alters the audit contract and
+  needs sign-off.** Suggested shape if wanted: a `WHEN (current_setting('app.bulk_import',true) is distinct
+  from 'on')` clause plus `SET LOCAL app.bulk_import='on'` in the import path.
+- `stg_job_cards` costs **6.5-7.0 ms/row** and an instrumented verbatim copy of the trigger accounts for only
+  **1.28**. ~5.3 ms/row is UNATTRIBUTED; the agent explicitly ruled out trigger invocation, DEFINER+search_path,
+  field reads, the ON CONFLICT clause and jsonb build. Needs `pg_stat_statements track=all` to chase.
+- **`erp_parse_ts` is IMMUTABLE, so constant-argument benchmarks CONSTANT-FOLD TO ZERO.** This invalidated one
+  measurement. Always benchmark it with a non-constant input.
+- **A job card with no Production Out AND no Workshop In violates NOT NULL on `opened_at` and aborts the whole
+  batch.** Open bug, not yet fixed.
+- Unused indexes: `work_order_line_items` **5 of 6 unused (18 MB of 19 MB)**, `work_orders` 9 of 18 (14 MB),
+  `tyre_records` 8 of 25. `parts_consumption` **0 unused** — it is clean. Not dropped: `idx_scan=0` means
+  "not since the last stats reset", which is not proof.
+- RLS: the RESTRICTIVE org policies ARE `(select ...)`-wrapped (V234/V236 held). Three PERMISSIVE INSERT
+  policies are not (`tyre_records_cap_insert`, `work_orders_cap_insert`, `vehicle_fleet_cap_insert`), costing
+  ~0.021 ms/row. All server timings EXCLUDE RLS (the MCP role has `rolbypassrls`), so they are a lower bound.
+
+### CLIENT-SIDE — shipped, and this is where the real time was
+- **`/erp-import` production sent ONE http request PER ROW.** 10,000 rows ≈ **27 minutes**. Now chunked
+  (`createProductionBulk`, 250/request, validation per row BEFORE insert, no `.select()` echo) ≈ 9 s.
+- **Every chunk loop was strictly sequential** — no `Promise.all` anywhere in the write path — so a 50k file was
+  latency-bound: ~250 round trips. Worker pool of **4** on both `/erp-intake` writers. Safe because order is
+  irrelevant on both (`parts_consumption` de-dupes on a content-derived `import_uid`; intake merges on the
+  row's natural key). **Bounded at 4 deliberately: every row fires the classify trigger, so concurrency
+  multiplies peak write load.** Verified `isFatalInsertError` does NOT classify 429, so a rate limit retries.
+- Two retry ladders slept **after the final attempt** — 8 s of dead time per exhausted chunk.
+- **The longest phase reported nothing**: `stageRows` (~122 s for 50k) showed a static spinner. Progress now
+  threaded through `stageRows` / `saveImportRows` / `createProductionBulk` and rendered on all three surfaces.
+- `DataIntakeCenter.runValidation` held the main thread for seconds **with no busy flag at all** — now sliced
+  with a yield and a live count. `rankModules` (84 ms) ran inside the JSX on every keystroke — memoised.
+- Tests `importThroughput.test.js` (10).
+
+### **A ReferenceError shipped past a clean build and 5,550 tests — the repo has NO eslint config**
+I put `progress` state in `ErpImport` and rendered it inside `ImportPanel`, a different component that never
+received it as a prop. That crashes the page on render. Vite does no undefined-variable analysis, `no-undef`
+never runs (there is no `eslint.config.js`), and no test renders that page. Caught only by the PR bot flagging
+the variable as "unused" in the declaring component. **Adding an eslint config would catch this class outright
+and is the single highest-value hygiene change available.**
+
+### POST-IMPORT VISIBILITY — mostly NOT a speed problem (fixes not yet applied)
+- **The whole react-query layer is dead code**: only `useBilling.js` and `useSupabaseQuery.js` call `useQuery`;
+  no page does. `useRealtimeSync` is mounted and subscribes to 12 tables but only invalidates keys nothing
+  reads. So the documented staleTimes govern NOTHING, and `invalidate(['tyres'])` in TyreRecords is a no-op.
+- **THE LIKELY CAUSE OF "IT DID NOT UPLOAD": `Dashboard.jsx:240` defaults to "This Month" and the window is
+  applied SERVER-SIDE**, so a historic ERP file is never fetched. The `dataAnchor` logic cannot help — it
+  re-buckets rows `load()` never requested.
+- **Dashboard has NO refresh button** despite a code comment promising one, and `refetchOnWindowFocus:false`.
+- **`/erp-import` has NO promotion step in the code** — `grep promot` finds only prose. Asset master / tyre
+  change / tyre expense uploads land in `erp_*_import` and can never reach the master tables. The UI promises
+  a step that was never built.
+- `parts_consumption` is NOT in the realtime publication and **should not be added** — a 40k-row import would
+  emit 40k messages per client into an unconditional invalidate.
+- Service worker RULED OUT: it caches no Supabase response (`vite.config.js` runtimeCaching is icons, fonts,
+  and a NetworkOnly write queue).
+
+## SESSION 2026-07-27 (part 6) — V385/V386 JOB CARD EXPORT: MORE COLUMNS + HEADER TOLERANCE.
+
+### V386 — **INVISIBLE HEADER WHITESPACE**, and why listing variants is not enough
+After V385 added the 11 missing columns, the importer STILL rejected exactly two:
+`Job Card Created By` / `Job Card Created Date`. Both existed **verbatim** (verified 19 and 21 chars, no
+padding), and the other nine matched — so the file's copy of those two differed by characters the error
+message does not render. They are the LAST two columns in the export, where trailing whitespace collects, and
+Excel emits a **non-breaking space U+00A0** that is pixel-identical to a space.
+- **Half one, tolerant COLUMNS** so the CSV is accepted at all (Supabase matches the literal header): 6
+  variants each - trailing space, leading space, doubled spaces, NBSP, `Job card`, `created`.
+- **Half two, tolerant READING, and this is the part that matters.** Listing variants by literal identifier
+  CANNOT capture the NBSP case: the function body would have to contain the invisible character. Proven live -
+  the NBSP file imported fine but `card_by` came back NULL. Fixed with **`_stg_pick(to_jsonb(NEW), 'Header
+  Name')`**, which normalises both sides (NBSP -> space, collapse runs, trim, lower) and reads the value
+  whatever the spelling. `process_stg_job_cards` now reads EVERY field through it.
+- Verified live (rolled back), all four capture `card_by`: canonical `M.SALEH`, NBSP `A.KHAN`, trailing-space +
+  odd casing `R.ALI`, doubled spaces `S.OMAR`; staging left at 0 each time.
+- **RULE for any future stg_ table: read fields with `_stg_pick`, never `NEW."Exact Header"`.** A header that
+  differs by one invisible character otherwise fails the import, or worse imports and silently drops the value.
+- NOTE: the `_stg_pick` + trigger rewrite were applied via `execute_sql`, so they carry no
+  `supabase_migrations` row; the complete SQL is in `MIGRATIONS_V386_HEADER_WHITESPACE_TOLERANCE.sql`.
+
+## SESSION 2026-07-27 (part 6) — V385 JOB CARD EXPORT HAS 11 MORE COLUMNS.
+
+### The customer's REAL export is 40 columns, not the 29 in the sample
+Supabase refuses a CSV import when a header has no matching column, so the load failed on:
+`Waiting Part Hrs`, `Waiting Manpower Hrs`, `Manpower H`, `Manpower Cost`, `Total Parts Consumption`,
+`Total Repair Cost`, `JCD_ML_hidden10`, `RFR Created By`, `RFR Created Date`, `Job Card Created By`,
+`Job Card Created Date`. All added to `stg_job_cards` **verbatim** (the importer matches the literal header,
+so `Manpower H` is created as `Manpower H`, not "corrected" to Manpower Hrs). Three alias spellings
+(`Manpower Hrs`, `Waiting Parts Hrs`, `Waiting Manpower Hours`) were added too so a slightly different export
+does not need another migration; the trigger `coalesce`s each pair.
+- **`Waiting Part Hrs` + `Waiting Manpower Hrs` are the most valuable columns in the file after the four
+  timestamps.** The timestamps give the LENGTH of a wait; these give the CAUSE — no part versus no technician.
+  That separates a procurement problem from a workshop one. New typed columns on `work_orders`:
+  `waiting_parts_hours`, `waiting_manpower_hours`, `manpower_hours`.
+- **The closed-card guard was extended to all three hour columns.** `Total Breakdown hours` was PROVEN to run
+  to today on an open card (40,028 hours for an asset out since 2022); these come from the same report and the
+  sample file did NOT carry them, so there was no way to measure whether they behave the same. Typed columns
+  are populated only when the card closed; the raw value is always kept in `custom_data.erp_hours` beside
+  `still_open`, so nothing is lost and an open card can still be read. **If someone later measures that the
+  waiting figures are final on an open card, relax the guard for those two only.**
+- `Manpower Cost` / `Total Parts Consumption` / `Total Repair Cost` join the other four in
+  `custom_data.erp_reported_cost`. THE EXPENSE GRID IS STILL THE COST SOURCE.
+- `RFR Created By/Date` + `Job Card Created By/Date` -> `custom_data` as provenance (who raised it).
+  `JCD_ML_hidden10` is an ERP internal artifact: accepted so the import passes, then ignored.
+- Verified live (rolled back): a closed card populates all three hour columns and parses `1,250.00` -> 1250.00;
+  an open card from 2022 leaves them NULL while keeping the raw 39,000 with `still_open:true`; re-importing the
+  same card leaves ONE row and refreshes the value.
+
 ## SESSION 2026-07-27 (part 5) — SCRAP REGISTER + SPLIT SCRAP/UNDO RIGHTS. Migrations through **V384**, next free **V385**.
 
 ### **SCRAP MANAGEMENT NEVER SHOWED THE SCRAPPED TYRES — it was reading a heuristic, not the marks**

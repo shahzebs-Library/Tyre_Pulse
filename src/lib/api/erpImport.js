@@ -165,7 +165,7 @@ export async function listImportRows(dataset, { batch_id, country, limit = 20000
  * @param {{ country?:string }} [opts]
  * @returns {Promise<{ saved:number, requested:number, capped:number, batch_id:string }>}
  */
-export async function saveImportRows(dataset, rows, batch_id, { country } = {}) {
+export async function saveImportRows(dataset, rows, batch_id, { country, onProgress } = {}) {
   const table = tableFor(dataset)
   if (!batch_id) throw new Error('A batch id is required.')
   const src = Array.isArray(rows) ? rows : []
@@ -212,9 +212,12 @@ export async function saveImportRows(dataset, rows, batch_id, { country } = {}) 
   for (let i = 0; i < payload.length; i += INSERT_CHUNK) {
     const chunk = payload.slice(i, i + INSERT_CHUNK)
     const err = await insertChunk(chunk)
-    if (!err) { saved += chunk.length; continue }
-    if (!isTransient(err)) { err.saved = saved; err.batch_id = batch_id; throw err }
-    deferred.push(chunk)
+    // Report after every chunk, success or deferral. A long upload with a
+    // static spinner is indistinguishable from a hung one.
+    if (!err) saved += chunk.length
+    else if (!isTransient(err)) { err.saved = saved; err.batch_id = batch_id; throw err }
+    else deferred.push(chunk)
+    onProgress?.(Math.min(i + chunk.length, payload.length), payload.length)
   }
 
   // Pass 2: after a short pause (let the connection recover), retry the chunks

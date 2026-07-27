@@ -14,7 +14,7 @@ import {
 import {
   listImportBatches, listImportRows, saveImportRows, deleteImportBatch,
 } from '../lib/api/erpImport'
-import { createProduction } from '../lib/api/production'
+import { createProductionBulk } from '../lib/api/production'
 import { exportToExcel } from '../lib/exportUtils'
 import { configNum } from '../lib/api/systemConfig'
 import { downloadErpTemplates } from '../lib/erpTemplates'
@@ -61,6 +61,8 @@ export default function ErpImport() {
   const [parsed, setParsed] = useState(null)   // { sheets: [...] }
   const [sheetIdx, setSheetIdx] = useState(0)
   const [busy, setBusy] = useState(false)
+  // {done,total} while a long save runs, so the button is not a dead spinner
+  const [progress, setProgress] = useState(null)
   const [error, setError] = useState('')
   const [saveResult, setSaveResult] = useState(null)
 
@@ -140,21 +142,18 @@ export default function ErpImport() {
     try {
       if (datasetKey === 'production') {
         // m3 loads into the LIVE production_logs table (not a staging table).
+        // Chunked, not one request per row. The per-row loop this replaces cost
+        // a round trip per line, so a 10,000 row file took about 27 minutes.
         const kept = mapped.slice(0, ROW_CAP)
-        let saved = 0
-        const failures = []
-        for (const r of kept) {
-          try {
-            await createProduction({
-              site: r.site, asset_no: r.asset_no, period_date: r.period_date,
-              m3: r.m3, source: r.source || 'ERP import', notes: r.notes,
-              country: countryTag,
-            })
-            saved += 1
-          } catch (e2) {
-            failures.push(`Row ${r.source_row}: ${toUserMessage(e2, 'save failed')}`)
-          }
-        }
+        const { saved, failures } = await createProductionBulk(
+          kept.map((r) => ({
+            site: r.site, asset_no: r.asset_no, period_date: r.period_date,
+            m3: r.m3, source: r.source || 'ERP import', notes: r.notes,
+            country: countryTag, source_row: r.source_row,
+          })),
+          { onProgress: (done, total) => setProgress({ done, total }) },
+        )
+        setProgress(null)
         setSaveResult({
           dataset: 'production', saved, requested: mapped.length,
           capped: Math.max(0, mapped.length - ROW_CAP), failures,
@@ -162,7 +161,11 @@ export default function ErpImport() {
         })
       } else {
         const batchId = newBatchId()
-        const res = await saveImportRows(datasetKey, mapped, batchId, { country: countryTag })
+        const res = await saveImportRows(datasetKey, mapped, batchId, {
+          country: countryTag,
+          onProgress: (done, total) => setProgress({ done, total }),
+        })
+        setProgress(null)
         setSaveResult({ ...res, dataset: datasetKey, failures: [] })
       }
     } catch (err) {
@@ -175,7 +178,7 @@ export default function ErpImport() {
           ? `${base} Saved ${partial.toLocaleString()} row(s) before the connection dropped. Open the Review tab to check that batch, then re-upload the file to save the rest (delete the partial batch first to avoid duplicates).`
           : `${base} If you are on a corporate or VPN network, a firewall may be blocking large uploads. Try again, or split the file into smaller parts.`,
       )
-    } finally { setBusy(false) }
+    } finally { setBusy(false); setProgress(null) }
   }
 
   return (
@@ -242,6 +245,7 @@ export default function ErpImport() {
             sheetIdx={sheetIdx}
             setSheetIdx={setSheetIdx}
             busy={busy}
+            progress={progress}
             mapped={mapped}
             derived={derived}
             activeCount={activeCount}
@@ -263,7 +267,8 @@ export default function ErpImport() {
 
 function ImportPanel({
   dataset, datasetKey, canWrite, countryTag, fileRef, fileName, parsed, sheet, sheetIdx,
-  setSheetIdx, busy, mapped, derived, activeCount, warnCount, saveResult, onFile, onSave, onReset,
+  setSheetIdx, busy, progress, mapped, derived, activeCount, warnCount, onFile, onSave, onReset,
+  saveResult,
 }) {
   const displayCols = dataset.columns.map((c) => c.key)
   const previewRows = derived.slice(0, PREVIEW_LIMIT)
@@ -447,7 +452,11 @@ function ImportPanel({
           className="px-4 py-2 rounded-lg bg-green-600 hover:bg-green-500 text-white text-sm flex items-center gap-2 disabled:opacity-50"
         >
           {busy ? <Loader2 size={15} className="animate-spin" /> : <ArrowRight size={15} />}
-          {datasetKey === 'production' ? 'Save to production log' : 'Save to review table'}
+          {/* Show real counts while saving. A spinner alone on a multi-minute
+              upload is indistinguishable from a hung tab. */}
+          {progress
+            ? `Saving ${progress.done.toLocaleString()} of ${progress.total.toLocaleString()}`
+            : datasetKey === 'production' ? 'Save to production log' : 'Save to review table'}
         </button>
         {(parsed || saveResult) && (
           <button onClick={onReset} className="px-4 py-2 rounded-lg bg-[var(--surface-2)] hover:bg-[var(--surface-3)] text-sm flex items-center gap-2">

@@ -279,7 +279,7 @@ async function insertRowChunk(chunk, { attempts = 5, depth = 0 } = {}) {
   }
 }
 
-export async function stageRows(batchId, rows) {
+export async function stageRows(batchId, rows, { onProgress } = {}) {
   // Conservative initial request size — small enough to clear gateway limits and
   // finish well inside the statement timeout on the first try. If a chunk still
   // fails transiently, insertRowChunk bisects it further, so these are ceilings,
@@ -314,6 +314,10 @@ export async function stageRows(batchId, rows) {
     }
     await insertRowChunk(payload.slice(i, end))
     i = end
+    // This is the longest phase of a large import by a wide margin. Reporting
+    // it is what turns a multi-minute static spinner into something a person
+    // can tell apart from a hang.
+    onProgress?.(i, payload.length)
   }
 }
 

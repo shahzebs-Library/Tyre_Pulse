@@ -10,6 +10,10 @@
 import { supabase } from './_client'
 
 const CHUNK = 200
+// Chunks in flight at once. This path is latency-bound - a 50,000 row load was
+// ~250 sequential round trips - so this is the biggest lever on upload time.
+// Kept low because concurrency multiplies peak database write load.
+const CONCURRENCY = 4
 const MAX_ATTEMPTS = 6
 const BASE_BACKOFF_MS = 700
 const MAX_BACKOFF_MS = 8000
@@ -39,16 +43,41 @@ async function insertChunked(table, rows, onProgress) {
       if (!res.error) return { ok: true }
       lastErr = res.error
       if (isFatalInsertError(res.error)) throw res.error
-      await sleep(Math.min(BASE_BACKOFF_MS * 2 ** (a - 1), MAX_BACKOFF_MS) + Math.random() * 300)
+      // Only wait if another attempt follows. Sleeping after the LAST one adds
+      // 8 seconds of dead time per exhausted chunk before the deferred sweep
+      // that was going to run anyway.
+      if (a < MAX_ATTEMPTS) {
+        await sleep(Math.min(BASE_BACKOFF_MS * 2 ** (a - 1), MAX_BACKOFF_MS) + Math.random() * 300)
+      }
     }
     return { ok: false, error: lastErr }
   }
-  for (let i = 0; i < rows.length; i += CHUNK) {
-    const chunk = rows.slice(i, i + CHUNK)
-    const res = await tryChunk(chunk)
-    if (res.ok) { inserted += chunk.length } else { deferred.push(chunk) }
-    if (onProgress) onProgress(inserted, rows.length)
-  }
+  // Worker pool rather than one chunk at a time. Insert order is irrelevant
+  // here: the merge guards de-duplicate on the row's own natural key, not on
+  // the order rows arrive in.
+  const chunks = []
+  for (let i = 0; i < rows.length; i += CHUNK) chunks.push(rows.slice(i, i + CHUNK))
+  let cursor = 0
+  let fatal = null
+  await Promise.all(Array.from({ length: Math.min(CONCURRENCY, chunks.length) }, async () => {
+    for (;;) {
+      const idx = cursor
+      cursor += 1
+      if (idx >= chunks.length || fatal) return
+      try {
+        const res = await tryChunk(chunks[idx])
+        if (res.ok) inserted += chunks[idx].length
+        else deferred.push(chunks[idx])
+      } catch (err) {
+        // Hold the first fatal error and let the pool drain, so the reported
+        // count is not a lie about work still in flight.
+        fatal = fatal || err
+        return
+      }
+      if (onProgress) onProgress(inserted, rows.length)
+    }
+  }))
+  if (fatal) { fatal.inserted = inserted; throw fatal }
   let failed = 0
   if (deferred.length) {
     await sleep(2500)

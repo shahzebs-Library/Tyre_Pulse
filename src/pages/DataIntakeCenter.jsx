@@ -97,6 +97,11 @@ export default function DataIntakeCenter() {
   const [profiles, setProfiles] = useState([])
   const [mapping, setMapping] = useState([])
   const [annotated, setAnnotated] = useState([])
+  // {done,total} while rows are being transformed, so a big file shows
+  // movement instead of a frozen tab
+  const [validating, setValidating] = useState(null)
+  // {done,total} while staged rows upload
+  const [staging, setStaging] = useState(null)
   const [counts, setCounts] = useState(null)
   const [result, setResult] = useState(null)
   // Live per-chunk totals while a large (50k+) batch commits/enriches (V93).
@@ -446,7 +451,24 @@ export default function DataIntakeCenter() {
   // ── Step 3: validate + classify (in-batch + live-table dedup) ────────────────
   async function runValidation(opts = {}) {
     const useManualAggregate = 'aggregate' in opts ? opts.aggregate : manualAggregate
-    let rows = sheet.rows.map((raw, i) => {
+    // Transform in slices with a yield between them. This loop runs over EVERY
+    // row and used to hold the main thread for seconds with no busy flag at
+    // all, so clicking Continue on a large file froze the tab with nothing on
+    // screen changing - indistinguishable from a crash.
+    setValidating({ done: 0, total: sheet.rows.length })
+    const YIELD_EVERY = 2000
+    const rowsSrc = sheet.rows
+    const built = []
+    for (let start = 0; start < rowsSrc.length; start += YIELD_EVERY) {
+      const slice = rowsSrc.slice(start, start + YIELD_EVERY)
+      built.push(...slice.map((raw, j) => buildAnnotatedRow(raw, start + j)))
+      setValidating({ done: Math.min(start + slice.length, rowsSrc.length), total: rowsSrc.length })
+      // hand the browser a frame so the counter paints
+      await new Promise((r) => setTimeout(r, 0))
+    }
+    let rows = built
+
+    function buildAnnotatedRow(raw, i) {
       const { mapped, transformed: t0, custom } = transformRow(raw, mapping, { module, baseCurrency: activeCurrency, fxRates: fxRatesMap })
       // Normalise master-data spellings via saved aliases (site/supplier/brand).
       let transformed = t0
@@ -473,7 +495,7 @@ export default function DataIntakeCenter() {
         validationStatus: v.status, issues: v.issues || [],
         fingerprint: rowFingerprint(raw),
       }
-    })
+    }
 
     // Line-item aggregation: a profile can declare that this format carries
     // several rows per business record (e.g. store-issue lines per work order).
@@ -550,7 +572,7 @@ export default function DataIntakeCenter() {
     })
     c.amount = Math.round(c.amount * 100) / 100
     setRowActionOverride({}) // fresh validation ⇒ back to smart defaults
-    setAnnotated(rows); setCounts(c)
+    setAnnotated(rows); setCounts(c); setValidating(null)
     setManualAggregate(useManualAggregate)
     setCombinedNotice(!!(useManualAggregate && aggKeyField))
     if (useManualAggregate && aggKeyField) setCombinedKeyLabel(naturalKeyLabel(module) || aggKeyField)
@@ -581,7 +603,11 @@ export default function DataIntakeCenter() {
           action,
           fingerprint: r.fingerprint,
         }
-      }))
+      }), {
+        // the upload is the long phase of a big import; show it moving
+        onProgress: (done, total) => setStaging({ done, total }),
+      })
+      setStaging(null)
       await imports.setBatchCounts(batchId, counts)
       await autoSaveProfile() // remember this format for next time (best-effort)
       setStep(3)
@@ -841,6 +867,19 @@ export default function DataIntakeCenter() {
       {/* STEP 3 */}
       {step === 2 && (
         <div className="space-y-4">
+          {/* Checking a large file takes seconds of real CPU. Show the count
+              moving, or the tab looks frozen and people reload mid-import. */}
+          {validating && (
+            <div className="bg-[var(--surface-1)] border border-[var(--border-dim)] rounded-xl p-4">
+              <p className="text-sm text-[var(--text-secondary)]">
+                Checking rows: {validating.done.toLocaleString()} of {validating.total.toLocaleString()}
+              </p>
+              <div className="mt-2 h-1.5 bg-[var(--surface-2)] rounded overflow-hidden">
+                <div className="h-full bg-green-500 transition-all"
+                  style={{ width: `${validating.total ? Math.round((validating.done / validating.total) * 100) : 0}%` }} />
+              </div>
+            </div>
+          )}
           {counts && (
             <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
               {[['Total', counts.total, 'text-[var(--text-primary)]'], ['Ready', counts.ready, 'text-green-400'], ['Warning', counts.warning, 'text-amber-400'], ['Error', counts.error, 'text-red-400'], ['Duplicate', counts.duplicate, 'text-purple-400'], ['Already live', counts.liveDuplicate || 0, 'text-sky-400']].map(([l, v, c]) => (
@@ -1119,6 +1158,19 @@ export default function DataIntakeCenter() {
                 </div>
               )}
               <button onClick={commit} disabled={busy || (!!fingerprint && !repeatAck)} className="px-4 py-2 rounded-lg bg-green-600 hover:bg-green-500 text-white text-sm flex items-center gap-2 disabled:opacity-50">{busy ? <Loader2 size={15} className="animate-spin" /> : <CheckCircle2 size={15} />} {isElevated ? 'Approve & commit' : 'Submit for approval'}</button>
+              {/* Uploading runs BEFORE the commit and is the longer of the two
+                  on a large file. It reported nothing at all until now. */}
+              {busy && staging && !commitProgress && (
+                <div className="space-y-1.5">
+                  <div className="w-full bg-[var(--surface-2)] rounded h-1.5 overflow-hidden">
+                    <div className="bg-sky-500 h-1.5 rounded transition-all"
+                      style={{ width: `${staging.total ? Math.round((staging.done / staging.total) * 100) : 0}%` }} />
+                  </div>
+                  <p className="text-xs text-[var(--text-secondary)]">
+                    Uploading rows… {staging.done.toLocaleString('en-US')} of {staging.total.toLocaleString('en-US')}
+                  </p>
+                </div>
+              )}
               {busy && commitProgress && (
                 <div className="space-y-1.5">
                   {commitProgress.phase === 'commit' ? (

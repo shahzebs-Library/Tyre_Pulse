@@ -80,6 +80,9 @@ export const IMPORT_TARGETS = Object.freeze([
       'Asset Code', 'Asset Description', 'Plate No', 'Truck Category', 'Head/Tail', 'Scope',
       'Asset Category', 'Excepted Job Date/Time', 'Production Out', 'Workshop In',
       'Workshop Out', 'Production In', 'Total Breakdown hours', 'STD. Hours',
+      'Waiting Part Hrs', 'Waiting Manpower Hrs', 'Manpower H', 'Manpower Cost',
+      'Total Parts Consumption', 'Total Repair Cost', 'JCD_ML_hidden10',
+      'RFR Created By', 'RFR Created Date', 'Job Card Created By', 'Job Card Created Date',
       'Spare Parts', 'Tyre', 'Oil', 'Others'],
     notes: 'Upload this DAILY. Each job card is matched on its number and REFRESHED in '
       + 'place, so re-uploading the same export as often as you like never stacks a copy, '
@@ -89,7 +92,11 @@ export const IMPORT_TARGETS = Object.freeze([
       + 'started, Workshop In to Workshop Out is the actual repair. "Total Breakdown '
       + 'hours" is only kept when the card has closed, because the export counts it up to '
       + 'today for a card that never closed, which is why an asset down since 2022 reads '
-      + '40,000 hours. The Spare Parts, Tyre, Oil and Others columns are stored for '
+      + '40,000 hours. The same guard applies to Waiting Part Hrs, Waiting Manpower Hrs '
+      + 'and Manpower H; the raw figure is always kept either way. Waiting Part Hrs and '
+      + 'Waiting Manpower Hrs are the most useful columns in the file after the four '
+      + 'timestamps: they say WHY a job waited, no part or no technician, which is a '
+      + 'procurement problem rather than a workshop one. All cost columns are stored for '
       + 'reference only: cost still comes from the expense grid, never from here.',
   },
   {

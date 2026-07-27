@@ -13,6 +13,12 @@ import { supabase } from './_client'
 import { PARTS_FIELDS } from '../partsExpense'
 
 const INSERT_CHUNK = 200
+// Chunks in flight at once. This path is latency-bound, so this is the single
+// biggest lever on upload time. Kept deliberately low: each row fires the
+// classification trigger, so concurrency multiplies peak database write load by
+// the same factor. Raise only with a measurement, and check that a 429 is
+// classified transient before doing so.
+const INSERT_CONCURRENCY = 4
 const MAX_ATTEMPTS = 6
 const BASE_BACKOFF_MS = 700
 const MAX_BACKOFF_MS = 8000
@@ -78,17 +84,52 @@ export async function insertPartsConsumption(rows = [], { country = null, onProg
       if (!error) return { ok: true }
       lastErr = error
       if (isFatalInsertError(error)) throw error // won't fix itself - abort
-      await sleep(Math.min(BASE_BACKOFF_MS * 2 ** (attempt - 1), MAX_BACKOFF_MS) + Math.random() * 300)
+      // Only wait if another attempt follows. Sleeping after the LAST one adds
+      // 8 seconds of dead time per exhausted chunk before the deferred sweep
+      // that was going to run anyway.
+      if (attempt < attempts) {
+        await sleep(Math.min(BASE_BACKOFF_MS * 2 ** (attempt - 1), MAX_BACKOFF_MS) + Math.random() * 300)
+      }
     }
     return { ok: false, error: lastErr }
   }
 
-  for (let i = 0; i < clean.length; i += INSERT_CHUNK) {
-    const chunk = clean.slice(i, i + INSERT_CHUNK)
-    const res = await tryChunk(chunk, MAX_ATTEMPTS)
-    if (res.ok) { inserted += chunk.length } else { deferred.push(chunk) }
-    if (onProgress) onProgress(inserted, clean.length)
-  }
+  // Send chunks through a small worker pool rather than one at a time. The
+  // sequential loop this replaces paid a full round trip per chunk, so a 50,000
+  // row grid was ~250 round trips end to end - latency-bound, not server-bound,
+  // which is exactly the case concurrency fixes.
+  //
+  // Order does not matter here: parts_consumption's only unique index is on
+  // (organisation_id, import_uid), and import_uid is derived from the row's own
+  // content, so idempotency does not depend on insertion order.
+  //
+  // Four, not more: every row runs the classification trigger, so concurrency
+  // multiplies peak write load by the same factor.
+  const chunks = []
+  for (let i = 0; i < clean.length; i += INSERT_CHUNK) chunks.push(clean.slice(i, i + INSERT_CHUNK))
+
+  let cursor = 0
+  let fatal = null
+  await Promise.all(Array.from({ length: Math.min(INSERT_CONCURRENCY, chunks.length) }, async () => {
+    for (;;) {
+      const idx = cursor
+      cursor += 1
+      if (idx >= chunks.length || fatal) return
+      try {
+        const res = await tryChunk(chunks[idx], MAX_ATTEMPTS)
+        if (res.ok) inserted += chunks[idx].length
+        else deferred.push(chunks[idx])
+      } catch (err) {
+        // Hold the first fatal error and let the pool drain. Throwing from
+        // inside a worker would leave the others in flight and make the
+        // reported count meaningless.
+        fatal = fatal || err
+        return
+      }
+      if (onProgress) onProgress(inserted, clean.length)
+    }
+  }))
+  if (fatal) { fatal.inserted = inserted; throw fatal }
 
   // Final sweep: pause to let a flaky connection settle, then retry deferred chunks.
   let failed = 0

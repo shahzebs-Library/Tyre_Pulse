@@ -183,9 +183,10 @@ begin
       sum(line_cost) filter (where event_date between v_pf  and v_pt and not usable) x0,
       count(*)       filter (where event_date between v_from and v_to) lines1,
       count(*)       filter (where event_date between v_pf  and v_pt) lines0,
-      sum(tyre_cost) filter (where event_date between v_from and v_to) tc,
-      sum(spare_cost)filter (where event_date between v_from and v_to) sc,
-      sum(oil_cost)  filter (where event_date between v_from and v_to) oc
+      -- bucket is characterised over BOTH windows, not just the current one:
+      -- a stopped item has no current spend and would otherwise come back with
+      -- no bucket at all, which is exactly the row a reader most wants labelled
+      sum(tyre_cost) tc, sum(spare_cost) sc, sum(oil_cost) oc
       from base group by code
   ),
   calc as (
@@ -195,17 +196,17 @@ begin
       coalesce(x0,0) xx0, coalesce(x1,0) xx1,
       case when coalesce(q0,0) > 0 then s0/q0 end p0,
       case when coalesce(q1,0) > 0 then s1/q1 end p1,
-      (coalesce(q0,0) > 0 and coalesce(q1,0) > 0) both
+      (coalesce(q0,0) > 0 and coalesce(q1,0) > 0) in_both
       from agg a
   ),
   eff as (
     select c.*,
       -- Bennet: each effect weighted by the average of the two periods, so the
       -- two of them sum to the change with nothing left over
-      case when both then (qq1 - qq0) * ((p0 + p1) / 2) else 0 end vol_e,
-      case when both then (p1 - p0) * ((qq0 + qq1) / 2) else 0 end price_e,
-      case when not both and qq0 = 0 and qq1 > 0 then ss1 else 0 end new_e,
-      case when not both and qq1 = 0 and qq0 > 0 then -ss0 else 0 end stop_e,
+      case when in_both then (qq1 - qq0) * ((p0 + p1) / 2) else 0 end vol_e,
+      case when in_both then (p1 - p0) * ((qq0 + qq1) / 2) else 0 end price_e,
+      case when not in_both and qq0 = 0 and qq1 > 0 then ss1 else 0 end new_e,
+      case when not in_both and qq1 = 0 and qq0 > 0 then -ss0 else 0 end stop_e,
       (xx1 - xx0) undec_e,
       (ss1 + xx1) - (ss0 + xx0) delta
       from calc c
@@ -241,9 +242,9 @@ begin
       'new_items',        round(coalesce(sum(new_e), 0), 2),
       'stopped_items',    round(coalesce(sum(stop_e), 0), 2),
       'not_decomposable', round(coalesce(sum(undec_e), 0), 2),
-      'items_both',    count(*) filter (where both),
-      'items_new',     count(*) filter (where not both and qq0 = 0 and qq1 > 0),
-      'items_stopped', count(*) filter (where not both and qq1 = 0 and qq0 > 0),
+      'items_both',    count(*) filter (where in_both),
+      'items_new',     count(*) filter (where not in_both and qq0 = 0 and qq1 > 0),
+      'items_stopped', count(*) filter (where not in_both and qq1 = 0 and qq0 > 0),
       'spend_priced_current',  round(coalesce(sum(ss1), 0), 2),
       'spend_priced_previous', round(coalesce(sum(ss0), 0), 2)),
 
@@ -255,7 +256,7 @@ begin
         'price_effect', round(price_e, 2), 'volume_effect', round(vol_e, 2),
         'delta', round(delta, 2),
         'lines_current', lines1, 'lines_previous', lines0,
-        'kind', case when both then 'both'
+        'kind', case when in_both then 'both'
                      when qq0 = 0 and qq1 > 0 then 'new'
                      when qq1 = 0 and qq0 > 0 then 'stopped'
                      else 'unpriced' end,

@@ -158,6 +158,27 @@ export async function listScrapMarks() {
 }
 
 /**
+ * Find a tyre by serial so a scrap can be confirmed against a real record
+ * before it is written.
+ *
+ * Scrapping is keyed on the serial alone, so without this the operator could
+ * mark a typo and create a mark against a tyre that does not exist. Returns the
+ * newest fitment row for the serial, or null.
+ * @param {string} serial
+ */
+export async function findTyreBySerial(serial) {
+  const s = String(serial || '').trim()
+  if (!s) return null
+  const { data, error } = await supabase.from('tyre_records')
+    .select('serial_no,asset_no,tyre_position,brand,size,site,country,status,cost_per_tyre,issue_date')
+    .eq('serial_no', s)
+    .order('issue_date', { ascending: false, nullsFirst: false })
+    .limit(1)
+  if (error) throw error
+  return (data && data[0]) || null
+}
+
+/**
  * May THIS user scrap / undo? Asked of the server, never inferred from the role
  * string on the client.
  *

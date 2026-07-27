@@ -25,7 +25,8 @@ import {
   FileSpreadsheet, ShieldAlert, X, Check,
 } from 'lucide-react'
 import {
-  listScrappedTyres, unscrapTyreBySerial, updateScrapReason, getScrapPermissions,
+  listScrappedTyres, scrapTyreBySerial, unscrapTyreBySerial, updateScrapReason,
+  getScrapPermissions, findTyreBySerial,
 } from '../../lib/api/tyreExchange'
 import { exportToExcel, reportFileName } from '../../lib/exportUtils'
 import { toUserMessage } from '../../lib/safeError'
@@ -59,6 +60,17 @@ export default function ScrappedRegister({ country, currency }) {
   const [editing, setEditing] = useState(null)   // serial being re-reasoned
   const [editText, setEditText] = useState('')
   const [notice, setNotice] = useState('')
+
+  // Mark-a-scrap flow. It lives here because Serial Tracker, the only other
+  // place with a Scrap button, is an Admin-only route - so without this a Tyre
+  // Data Collector could see the register but had nowhere to actually scrap a
+  // tyre from the web.
+  const [markOpen, setMarkOpen] = useState(false)
+  const [markSerial, setMarkSerial] = useState('')
+  const [markReason, setMarkReason] = useState('')
+  const [markFound, setMarkFound] = useState(null)   // null = not looked up yet
+  const [markLooking, setMarkLooking] = useState(false)
+  const [markErr, setMarkErr] = useState('')
 
   // The server decides what this user may do, so the buttons and the RPC can
   // never disagree. A per-user capability grant is invisible to a role check.
@@ -108,6 +120,36 @@ export default function ScrappedRegister({ country, currency }) {
     } finally { setBusy('') }
   }, [load])
 
+  // Confirm the serial is a real tyre before offering to scrap it. Scrapping is
+  // keyed on the serial alone, so a typo would otherwise create a mark against
+  // a tyre that does not exist.
+  const lookup = useCallback(async () => {
+    const s = markSerial.trim()
+    if (!s) return
+    setMarkLooking(true); setMarkErr(''); setMarkFound(null)
+    try {
+      const t = await findTyreBySerial(s)
+      if (!t) setMarkErr(`No tyre found with serial ${s}. Check the number.`)
+      setMarkFound(t)
+    } catch (e) {
+      setMarkErr(toUserMessage(e, 'Could not look up that serial.'))
+    } finally { setMarkLooking(false) }
+  }, [markSerial])
+
+  const confirmMark = useCallback(async () => {
+    const s = markSerial.trim()
+    if (!s || !markFound) return
+    setBusy(s); setMarkErr('')
+    try {
+      const res = await scrapTyreBySerial(s, { reason: markReason, country: markFound.country || null })
+      setMarkOpen(false); setMarkSerial(''); setMarkReason(''); setMarkFound(null)
+      setNotice(`${s} marked as scrap${res.updated ? ` (${res.updated} record${res.updated === 1 ? '' : 's'} updated)` : ''}.`)
+      await load()
+    } catch (e) {
+      setMarkErr(toUserMessage(e, 'Could not mark this tyre as scrap.'))
+    } finally { setBusy('') }
+  }, [markSerial, markReason, markFound, load])
+
   const saveReason = useCallback(async () => {
     if (!editing) return
     setBusy(editing); setError('')
@@ -129,6 +171,76 @@ export default function ScrappedRegister({ country, currency }) {
 
   return (
     <div className="space-y-4">
+      {/* ── Mark a tyre as scrap ─────────────────────────────────────────── */}
+      {markOpen && (
+        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4"
+          onClick={(e) => { if (e.target === e.currentTarget) setMarkOpen(false) }}>
+          <div className="card w-full max-w-md space-y-3">
+            <div className="flex items-center justify-between">
+              <h3 className="text-base font-semibold text-[var(--text-primary)] flex items-center gap-2">
+                <Trash2 size={16} className="text-red-400" /> Mark a tyre as scrap
+              </h3>
+              <button onClick={() => setMarkOpen(false)} className="text-[var(--text-muted)] hover:text-[var(--text-primary)]">
+                <X size={16} />
+              </button>
+            </div>
+
+            <div>
+              <label className="text-xs text-[var(--text-muted)]">Serial number</label>
+              <div className="flex gap-2 mt-1">
+                <input value={markSerial}
+                  onChange={(e) => { setMarkSerial(e.target.value); setMarkFound(null); setMarkErr('') }}
+                  onKeyDown={(e) => { if (e.key === 'Enter') lookup() }}
+                  placeholder="Type or scan the serial" autoFocus
+                  className="input flex-1 text-sm font-mono" />
+                <button onClick={lookup} disabled={!markSerial.trim() || markLooking}
+                  className="btn-secondary text-sm px-3 disabled:opacity-50">
+                  {markLooking ? 'Finding...' : 'Find'}
+                </button>
+              </div>
+            </div>
+
+            {/* The tyre is shown before the action so the operator confirms the
+                right one, not just the right-looking number. */}
+            {markFound && (
+              <div className="rounded-md border border-[var(--hairline)] bg-[var(--surface-1)] p-2.5 text-xs space-y-1">
+                <p className="text-[var(--text-primary)] font-medium">{markFound.serial_no}</p>
+                <p className="text-[var(--text-secondary)]">
+                  {markFound.asset_no || 'No asset'}{markFound.tyre_position ? ` · ${markFound.tyre_position}` : ''}
+                  {markFound.brand ? ` · ${markFound.brand}` : ''}{markFound.size ? ` ${markFound.size}` : ''}
+                </p>
+                <p className="text-[var(--text-dim)]">
+                  {markFound.site || 'No site'}{markFound.country ? ` · ${markFound.country}` : ''} · currently {markFound.status || 'Active'}
+                </p>
+                {String(markFound.status || '') === 'Scrapped' && (
+                  <p className="text-amber-400">This tyre already reads as scrapped.</p>
+                )}
+              </div>
+            )}
+
+            <div>
+              <label className="text-xs text-[var(--text-muted)]">Reason</label>
+              <textarea value={markReason} onChange={(e) => setMarkReason(e.target.value)}
+                placeholder="Why is it being scrapped? For example: sidewall cut, tread separation"
+                className="input w-full text-sm mt-1 min-h-[64px]" />
+            </div>
+
+            {markErr ? <p className="text-xs text-red-400">{markErr}</p> : null}
+
+            <div className="flex justify-end gap-2 pt-1">
+              <button onClick={() => setMarkOpen(false)} className="btn-secondary text-sm">Cancel</button>
+              <button onClick={confirmMark} disabled={!markFound || busy === markSerial.trim()}
+                className="flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-md font-medium border border-red-700/50 bg-red-900/30 text-red-200 hover:bg-red-900/50 transition-colors disabled:opacity-40">
+                <Trash2 size={14} /> {busy === markSerial.trim() ? 'Marking...' : 'Mark as scrap'}
+              </button>
+            </div>
+            <p className="text-[11px] text-[var(--text-dim)]">
+              Your name and the time are recorded against this scrap. Undoing it is an administrator action.
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* ── Counts. The unattributed figure is the honest one: it is how much
              scrapped stock has nobody's name against it. ── */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -161,6 +273,13 @@ export default function ScrappedRegister({ country, currency }) {
               className="input w-full pl-9 text-sm"
             />
           </div>
+          {perms.canScrap && (
+            <button
+              onClick={() => { setMarkOpen(true); setMarkSerial(''); setMarkReason(''); setMarkFound(null); setMarkErr('') }}
+              className="flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-md font-medium border border-red-700/50 bg-red-900/20 text-red-300 hover:bg-red-900/40 transition-colors">
+              <Trash2 size={14} /> Mark a tyre as scrap
+            </button>
+          )}
           <button onClick={load} disabled={loading}
             className="btn-secondary text-sm inline-flex items-center gap-1.5 disabled:opacity-50">
             <RefreshCw size={13} className={loading ? 'animate-spin' : ''} /> Refresh

@@ -67,11 +67,26 @@ positives and zero true ones.
 ### **STILL OPEN — needs the customer's decision, deliberately NOT applied**
 1. **64% of job cards (55,606 of 86,539) have `country = NULL`** and `listWorkOrdersPage` uses a STRICT
    `.eq('country', ...)` against the codebase's own null-safe `applyCountry` convention - so **selecting any
-   country hides every one of them.** Do NOT just loosen the filter: that would show all 55,606 under EVERY
-   country and jump the KSA job-card count from 4,493 to 60,099. The backfill is only PARTLY safe - measured:
-   **48,362 unambiguous** (asset in exactly one country's register), **7,241 AMBIGUOUS** (asset code in 2+
-   countries, and per V376 those are often genuinely DIFFERENT machines), 3 with no fleet row. Stamping the
-   ambiguous ones would mis-file 7,241 cards. Recommend: backfill the 48,362, leave the rest for review.
+   country hides every one of them.** SQL is written and ready at
+   **`MIGRATIONS_V394_JOB_CARD_COUNTRY_BACKFILL.sql`**; the snapshot table `_wo_country_snapshot_v394` is
+   ALREADY CREATED, the UPDATE was blocked by the environment's permission classifier and still needs running.
+   - **THE JOB CARD NUMBER CARRIES THE COUNTRY - the user pointed this out and was right.** The `work_order_no`
+     prefix maps 1:1 to a country with ZERO conflicts: **AFKR=KSA** (4,493 labelled +185 unlabelled),
+     **EG=Egypt** (12,250), **RM=UAE** (14,190), **GCKR** (55,421, all unlabelled). GCKR confirmed KSA by two
+     independent signals: of its rows whose site appears on a labelled card, **25,999 resolve to KSA and ZERO to
+     UAE or Egypt**, and **55,418 of 55,421 name an asset registered in the KSA fleet**. Every GCKR site is a
+     Saudi location (NHC, AMAALA, KSP, MALHAM, RUMAH, DIRIYAH, MISK, QIDDIYA, NEOM, JEDDAH, JIZAN, YANBU).
+     So **all 55,606 are KSA**, and the KSA count correctly moves 4,493 -> 60,099.
+   - **MY FIRST PASS USED THE WRONG SIGNAL AND MUST NOT BE REPEATED.** Keying on `asset_no` alone reported
+     "7,241 ambiguous"; that is the V376 collision artifact (asset numbers are a PER-COUNTRY sequence per class,
+     so the same code in two countries is usually a DIFFERENT machine). The UAE 6,796 / Egypt 442 asset matches
+     for GCKR rows are exactly that. **RULE: derive a job card's country from the work_order_no prefix, never
+     from the asset code.**
+   - Do NOT instead loosen the filter to `applyCountry`: that shows all 55,606 under EVERY country.
+   - **COST OF RUNNING IT: `trg_audit_row` fires AFTER UPDATE and writes a full before/after image per row**, so
+     expect ~55,606 rows added to `audit_log_v2` (443 MB / 261,243 rows before) and a slow statement
+     (`trg_audit_row_change` does a per-row `profiles` lookup on `auth.uid()`, NULL outside a session).
+     Suppressing the trigger would alter the audit contract - that needs sign-off, it is not a backfill detail.
 2. **RLS is the real cause of app-wide slowness, and it needs security sign-off.** `app_can_see_country(country)`
    and `app_can_see_site(site)` are row-dependent so they re-query `profiles` PER ROW: a bare
    `count(*) on work_orders` measured **11,994 ms (Manager) / 8,598 ms (super-admin)** vs **124 ms** with the

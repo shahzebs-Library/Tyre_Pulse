@@ -67,9 +67,12 @@ positives and zero true ones.
 ### **STILL OPEN — needs the customer's decision, deliberately NOT applied**
 1. **64% of job cards (55,606 of 86,539) have `country = NULL`** and `listWorkOrdersPage` uses a STRICT
    `.eq('country', ...)` against the codebase's own null-safe `applyCountry` convention - so **selecting any
-   country hides every one of them.** SQL is written and ready at
-   **`MIGRATIONS_V394_JOB_CARD_COUNTRY_BACKFILL.sql`**; the snapshot table `_wo_country_snapshot_v394` is
-   ALREADY CREATED, the UPDATE was blocked by the environment's permission classifier and still needs running.
+   country hid every one of them.** **APPLIED + VERIFIED LIVE 2026-07-27** via
+   **`MIGRATIONS_V394_JOB_CARD_COUNTRY_BACKFILL.sql`**: **KSA 60,099 · UAE 14,190 · Egypt 12,250 · zero NULL
+   rows left.** Snapshot `_wo_country_snapshot_v394` holds all 55,606 ids; undo =
+   `update work_orders set country=null where id in (select id from _wo_country_snapshot_v394)`.
+   **Audit cost measured and my estimate was too high**: `audit_log_v2` grew 261,243 -> 316,849 rows (exactly
+   +55,606) but only **443 MB -> 448 MB (+5 MB)**, not the ~97 MB predicted.
    - **THE JOB CARD NUMBER CARRIES THE COUNTRY - the user pointed this out and was right.** The `work_order_no`
      prefix maps 1:1 to a country with ZERO conflicts: **AFKR=KSA** (4,493 labelled +185 unlabelled),
      **EG=Egypt** (12,250), **RM=UAE** (14,190), **GCKR** (55,421, all unlabelled). GCKR confirmed KSA by two
@@ -83,10 +86,15 @@ positives and zero true ones.
      for GCKR rows are exactly that. **RULE: derive a job card's country from the work_order_no prefix, never
      from the asset code.**
    - Do NOT instead loosen the filter to `applyCountry`: that shows all 55,606 under EVERY country.
-   - **COST OF RUNNING IT: `trg_audit_row` fires AFTER UPDATE and writes a full before/after image per row**, so
-     expect ~55,606 rows added to `audit_log_v2` (443 MB / 261,243 rows before) and a slow statement
-     (`trg_audit_row_change` does a per-row `profiles` lookup on `auth.uid()`, NULL outside a session).
-     Suppressing the trigger would alter the audit contract - that needs sign-off, it is not a backfill detail.
+   - **NOW MEASURED, THE SITE SIDE IS THE REMAINING GAP AND IT IS CUSTOMER KNOWLEDGE, NOT EFFORT.** Of the
+     60,099 KSA job cards, **54,892 (91.3%) sit on a site that matches the KSA fleet register**; **5,207 (8.7%)
+     across 15 site names do not**. Biggest: `KSP-T3` 2,450 · `MALHAM-ST` 2,062 · `DIRIYAH-G1-ST` 341 ·
+     `NEOM_CP_14` 101 · `DAHBAN` 97. **DELIBERATELY NOT AUTO-MERGED** - this is the V247 lesson: `KSP-T3` vs the
+     registered `KSP1-T3`, and `RIYADH - METRO` vs both `METRO` and `RIY-MET-ST`, are genuinely ambiguous, and
+     V247 already established that DIRIYAH gate codes (G1/G2) are DISTINCT sites, not variants. Only `AMALLA`
+     (13 cards, vs the registered `AMAALA` 3,163) is a beyond-doubt misspelling. **Ask the customer for the
+     mapping; do NOT collapse -ST codes blindly.** The 5,207 are still correctly linked by country and asset -
+     only the site NAME fails to join the register.
 2. **RLS is the real cause of app-wide slowness, and it needs security sign-off.** `app_can_see_country(country)`
    and `app_can_see_site(site)` are row-dependent so they re-query `profiles` PER ROW: a bare
    `count(*) on work_orders` measured **11,994 ms (Manager) / 8,598 ms (super-admin)** vs **124 ms** with the

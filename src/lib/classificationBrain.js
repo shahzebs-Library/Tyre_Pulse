@@ -134,6 +134,18 @@ export const LUBRICANT_TOKENS = Object.freeze([
   'engine oil', 'gear oil', 'hydraulic oil', 'compressor oil', 'transmission oil',
   'brake oil', 'brake fluid', 'atf', 'grease', 'lubricant', 'delvac', 'rimula',
   'voyager', 'gear fluid', 'hydraulic fluid',
+  // Coolant is a consumable fluid, not a part, and the fleet already books it that
+  // way in all three countries (KSA 622 lines, Egypt 113, UAE 9 - every one of them
+  // already in the oil bucket). Without these tokens the engine sends coolant to the
+  // spare default and breaks a consistency the data already has. 'cooliant' is the
+  // Egypt export's own spelling and is matched verbatim rather than corrected.
+  // A COOLANT FILTER or COOLANT LINE stays a part: OIL_PART_TOKENS is tested first.
+  'coolant', 'cooliant', 'antifreeze', 'anti freeze', 'radiator fluid',
+  // 'lubricant' is whole-word, so it does not reach "LUBRICATING OIL B320SH".
+  'lubricating',
+  // AdBlue / diesel exhaust fluid is a dosed consumable fluid and the fleet
+  // already books it in the oil bucket; without it the engine sent it to spare.
+  'adblue', 'ad blue', 'diesel exhaust fluid', 'def fluid',
 ])
 
 /**
@@ -200,8 +212,24 @@ export function isLubricant(description) {
   if (!d) return false
   if (hasAnyWord(d, OIL_PART_TOKENS)) return false
   if (hasAnyWord(d, LUBRICANT_TOKENS)) return true
-  // a viscosity grade is conclusive on its own: 15W40, 10w-40, 80W90
-  return /\b\d{1,2}\s?w[-\s]?\d{2,3}\b/i.test(d)
+  return hasViscosityGrade(d)
+}
+
+/**
+ * Pure: does the text carry a real viscosity grade (15W40, 10w-40, 85 W - 140)?
+ *
+ * A bare "number W number" is NOT enough. Two live descriptions proved it:
+ * "REAR U BOLT 6W 24*92*500" and "LED LIGHT 50 W 60*60" both read as viscosity
+ * grades and put 64 lines of bolts and lamps into the oil bucket. What separates
+ * them from a real grade is what FOLLOWS: a dimension continues into another
+ * measurement (`*` or `x`), a grade does not. Spacing cannot be used to tell them
+ * apart, because "Shell Spirax S2 A 85 W - 140" is a genuine spaced grade.
+ */
+export function hasViscosityGrade(text) {
+  const d = norm(text)
+  if (!d) return false
+  // the trailing (?![*x\d]) rejects a run that continues into another dimension
+  return /\b\d{1,2}\s?w\s?[-\s]?\s?\d{2,3}\b(?!\s*[*x]\s*\d)/i.test(d)
 }
 
 /** Pure: the ERP code range's opinion, or null when the code is outside every range. */

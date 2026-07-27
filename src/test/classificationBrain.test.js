@@ -48,6 +48,63 @@ describe('the failures that motivated this engine', () => {
     }
   })
 
+  it('books coolant as a fluid, the way all three countries already book it', () => {
+    // Checked against every stored bucket: KSA 622 coolant lines, Egypt 113, UAE 9,
+    // every one of them already in oil. Without these tokens the engine sent KSA's
+    // to the spare default while Egypt's code range kept them in oil, so the engine
+    // would have introduced an inconsistency the data does not have. 'COOLIANT' is
+    // the Egypt export's own spelling.
+    for (const d of [
+      'Coolant 2056613 Cat',
+      'COOLIANT  33% CONSENT.',
+      'Fuchs COOLIANT  50%',
+      'ANTIFREEZE CONCENTRATE 20L',
+    ]) {
+      expect(classifyLine({ description: d }).bucket, d).toBe('oil')
+    }
+  })
+
+  it('keeps a coolant PART in spare', () => {
+    // The part tokens are tested before the fluid tokens, which is what separates
+    // the fluid from the plumbing that carries it.
+    for (const d of [
+      'COOLANT FILTER (SHOVEL) OEM#:20532237',
+      'COOLANT LINE  [O.E.] OEM#:5412003552',
+      'COOLANT TANK CAP',
+    ]) {
+      expect(classifyLine({ description: d }).bucket, d).toBe('spare')
+    }
+  })
+
+  it('does not read a dimension string as a viscosity grade', () => {
+    // Both of these were live: "6W 24" and "50 W 60" matched the viscosity
+    // pattern and put 64 lines of bolts and lamps into the oil bucket.
+    for (const d of [
+      'REAR U BOLT 6W 24*92*500 (SANY MIXER',
+      'LED LIGHT 50 W 60*60',
+      'BRACKET 10W 20x30',
+    ]) {
+      expect(classifyLine({ description: d }).bucket, d).toBe('spare')
+    }
+  })
+
+  it('still reads a real viscosity grade, spaced or not', () => {
+    for (const d of ['Fuchs 10w40', 'MOBILE DELVAC 15W40', 'Shell Spirax S2 A 85 W - 140']) {
+      expect(classifyLine({ description: d }).bucket, d).toBe('oil')
+    }
+  })
+
+  it('catches lubricating oil and diesel exhaust fluid', () => {
+    // 'lubricant' is matched whole-word, so it never reached "LUBRICATING OIL".
+    // AdBlue is a dosed consumable fluid the fleet already books as oil.
+    for (const d of [
+      'BITZER REFRIGERATION LUBRICATING OIL B320SH 20LTR',
+      'ADBLUE (DIESEL EXHAUST FLUID',
+    ]) {
+      expect(classifyLine({ description: d }).bucket, d).toBe('oil')
+    }
+  })
+
   it('still treats a part that merely mentions oil as a part', () => {
     for (const d of [
       'OIL FILTER OEM#:3526311-45001',

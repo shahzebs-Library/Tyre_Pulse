@@ -1,6 +1,9 @@
 import { describe, it, expect } from 'vitest'
 import { groupBatches, previewSummary } from '../lib/api/duplicateControl'
-import { IMPORT_TARGETS, importTargetFor, importTargetRows, SAFE_TO_REIMPORT } from '../lib/importTargets'
+import {
+  IMPORT_TARGETS, importTargetFor, importTargetRows, SAFE_TO_REIMPORT,
+  UPLOAD_SHEETS, uploadWorkbookSheets,
+} from '../lib/importTargets'
 
 describe('groupBatches', () => {
   it('collapses archive rows into one entry per batch and counts rows', () => {
@@ -93,6 +96,47 @@ describe('importTargets reference', () => {
     // Without source_row the server cannot tell a genuine repeated task line from
     // an accidental double import, so the reference has to call it out.
     expect(importTargetFor('stg_wo_lines').notes).toMatch(/source_row/)
+  })
+
+  it('builds a blank workbook sheet for every upload target', () => {
+    const sheets = uploadWorkbookSheets()
+    // READ ME plus one per destination table
+    expect(sheets).toHaveLength(UPLOAD_SHEETS.length + 1)
+    expect(sheets[0].name).toBe('READ ME')
+    // Excel refuses a sheet name over 31 characters, so a long label must be cut
+    for (const s of sheets) expect(s.name.length).toBeLessThanOrEqual(31)
+  })
+
+  it('gives every sheet the destination table its real column list', () => {
+    const sheets = uploadWorkbookSheets()
+    for (const { sheet, table } of UPLOAD_SHEETS) {
+      const built = sheets.find((s) => s.name === sheet)
+      const header = built.rows[4]
+      // header row must BE the table's columns - that is what makes the
+      // Supabase CSV import map itself with nothing to click
+      expect(header, sheet).toEqual([...importTargetFor(table).columns])
+      expect(built.rows[0][0]).toBe(`Import into: ${table}`)
+    }
+  })
+
+  it('puts the re-import warning on the sheet, not only in the README', () => {
+    // A warning nobody opens is not a warning. Every needs-key sheet carries it.
+    const sheets = uploadWorkbookSheets()
+    for (const { sheet, table } of UPLOAD_SHEETS) {
+      const banner = sheets.find((s) => s.name === sheet).rows[2][0]
+      if (importTargetFor(table).reimportSafe === 'safe') {
+        expect(banner, sheet).toMatch(/safe/i)
+      } else {
+        expect(banner, sheet).toMatch(/"#"/)
+      }
+    }
+  })
+
+  it('covers all three expense countries, since each has its own table', () => {
+    const tables = UPLOAD_SHEETS.map((s) => s.table)
+    expect(tables).toEqual(expect.arrayContaining(['expenses_ksa', 'expenses_uae', 'expenses_egypt']))
+    // and the ERP line number is the FIRST column the user meets on those sheets
+    expect(importTargetFor('expenses_uae').columns[0]).toBe('#')
   })
 
   it('exports flat rows with a stable header set', () => {

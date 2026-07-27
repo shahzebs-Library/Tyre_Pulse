@@ -16,13 +16,18 @@ import {
 } from 'chart.js'
 import { Bar, Doughnut, Line } from 'react-chartjs-2'
 import {
-  Wallet, TrendingUp, PieChart, Download, RefreshCw, Eye, EyeOff, Boxes, Building2, Truck, Package, MapPin, Save,
+  Wallet, TrendingUp, PieChart, Download, RefreshCw, Eye, EyeOff, Boxes, Building2, Truck,
+  Package, MapPin, Save, ArrowRight, Gauge, ShieldCheck,
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
 import { useSettings, COUNTRY_CURRENCY } from '../contexts/SettingsContext'
 import { useAuth } from '../contexts/AuthContext'
 import { formatCurrency } from '../lib/formatters'
-import { getPartsExpenseSnapshot, getExpenseByCountry } from '../lib/api/partsConsumption'
+import { getPartsExpenseSnapshot, getExpenseByCountry, getCostCpkOverview } from '../lib/api/partsConsumption'
+import { periodWindow, buildCostCpkExport } from '../lib/costCpk'
+import {
+  PeriodBar, ComparisonStrip, CpkPanel, MoversPanel, EvidencePanel,
+} from '../components/expense/CostCpkPanels'
 import { getExpenseBySite, setStoreSiteMap, listSites } from '../lib/api/storeSiteExpense'
 import { stylize, ACCENTS } from '../lib/reportColors'
 import { reportFileName, reportDateLabel, exportToExcel } from '../lib/exportUtils'
@@ -36,14 +41,21 @@ ChartJS.register(
 const LS_KEY = 'expenseReport.sections.v1'
 const SECTIONS = [
   ['kpis', 'KPIs', Wallet],
+  ['compare', 'vs Last Period', ArrowRight],
+  ['cpk', 'Cost per km', Gauge],
+  ['movers', 'What Moved', TrendingUp],
   ['categories', 'Categories', PieChart],
   ['sites', 'Stores', Building2],
   ['bysite', 'By Site', MapPin],
   ['assets', 'Assets', Truck],
   ['items', 'Top Items', Package],
   ['trend', 'Trend', TrendingUp],
+  ['evidence', 'Certainty', ShieldCheck],
 ]
-const SECTION_DEFAULTS = { kpis: true, categories: true, sites: true, bysite: true, assets: true, items: true, trend: true }
+const SECTION_DEFAULTS = {
+  kpis: true, compare: true, cpk: true, movers: true, categories: true, sites: true,
+  bysite: true, assets: true, items: true, trend: true, evidence: true,
+}
 
 /** 'YYYY-MM' -> 'Mon YY' month label (passthrough for non date keys). */
 const monthLabel = (key) => {
@@ -309,6 +321,12 @@ export default function ExpenseReport() {
   const [byCountry, setByCountry] = useState([])
   const isAll = !activeCountry || activeCountry === 'All'
 
+  // Period comparison + cost per km. The period picker drives BOTH this and the
+  // date inputs below, so the whole page always describes one window.
+  const [period, setPeriod] = useState('last_12')
+  const [overview, setOverview] = useState(null)
+  const [moverDim, setMoverDim] = useState('by_asset')
+
   const [sections, setSections] = useState(() => {
     try {
       const raw = JSON.parse(localStorage.getItem(LS_KEY) || 'null')
@@ -326,12 +344,16 @@ export default function ExpenseReport() {
   const load = useCallback(async () => {
     setRefreshing(true); setError('')
     try {
-      const res = await getPartsExpenseSnapshot({
-        country: activeCountry && activeCountry !== 'All' ? activeCountry : undefined,
-        from: from || undefined,
-        to: to || undefined,
-      })
+      const scopedCountry = activeCountry && activeCountry !== 'All' ? activeCountry : undefined
+      const [res, ov] = await Promise.all([
+        getPartsExpenseSnapshot({ country: scopedCountry, from: from || undefined, to: to || undefined }),
+        // Comparison + cost per km. Its own try/catch so a backend that predates
+        // V374 leaves those sections empty instead of failing the whole page.
+        getCostCpkOverview({ country: scopedCountry, from: from || undefined, to: to || undefined })
+          .catch(() => ({ ok: false })),
+      ])
       setSnap(res && res.ok ? res : { ok: false })
+      setOverview(ov && ov.ok ? ov : null)
       // On the "All countries" view, also load each country's total in its OWN
       // currency (SAR / AED / EGP) so they are shown side by side, never blended.
       let countries = []
@@ -367,6 +389,14 @@ export default function ExpenseReport() {
   }, [activeCountry, activeCurrency, from, to])
 
   useEffect(() => { load() }, [load])
+
+  /** One period control drives the whole page, so every panel describes one window. */
+  const applyPeriod = useCallback((key) => {
+    setPeriod(key)
+    const w = periodWindow(key, new Date())
+    setFrom(w.from)
+    setTo(w.to)
+  }, [])
 
   const k = snap?.ok ? snap.kpis : null
 
@@ -499,9 +529,21 @@ export default function ExpenseReport() {
       const company = appSettings?.company_name || 'TyrePulse'
       // On the All view the export carries a Country column and one amount column
       // per currency, so SAR / AED / EGP are never added into a single total.
-      const { rows, columns, headers } = buildExpenseExport({
+      const base = buildExpenseExport({
         isAll, currency: activeCurrency, snap, byCountry, siteGroups,
       })
+      // On a single country the export also carries the comparison, the cost per
+      // km with its coverage, and the movements - the same figures on screen, so
+      // the file can be read without the app. buildCostCpkExport names its money
+      // columns after the currency, so a blended scope cannot imply one.
+      const extra = !isAll && overview ? buildCostCpkExport(overview) : null
+      const { rows, columns, headers } = extra
+        ? {
+          rows: [...extra.rows, ...base.rows.map((r) => ({ ...r, section: r.section }))],
+          columns: [...new Set([...extra.columns, ...base.columns])],
+          headers: [...extra.headers, ...base.headers.filter((h) => !extra.headers.includes(h))],
+        }
+        : base
       await exportToExcel(
         rows,
         columns,
@@ -546,6 +588,10 @@ export default function ExpenseReport() {
     <div className="space-y-5">
       <PageHeader title="Expense Report" subtitle="Maintenance and parts expense: tyres, spare parts and oil" icon={Wallet} />
 
+      {/* One period control for the whole page. Every panel below describes the
+          same window, so nothing on screen is comparing different spans. */}
+      <PeriodBar value={period} onChange={applyPeriod} windows={overview?.windows} />
+
       {/* Section toggles + actions */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-2 flex-wrap">
@@ -565,14 +611,14 @@ export default function ExpenseReport() {
           <input
             type="date"
             value={from}
-            onChange={(e) => setFrom(e.target.value)}
+            onChange={(e) => { setFrom(e.target.value); setPeriod('') }}
             className="bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg text-xs px-2 py-1.5 text-[var(--text-secondary)]"
             aria-label="From date"
           />
           <input
             type="date"
             value={to}
-            onChange={(e) => setTo(e.target.value)}
+            onChange={(e) => { setTo(e.target.value); setPeriod('') }}
             className="bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg text-xs px-2 py-1.5 text-[var(--text-secondary)]"
             aria-label="To date"
           />
@@ -662,6 +708,21 @@ export default function ExpenseReport() {
             </div>
           )}
 
+          {/* This period against last, and against the same period a year ago */}
+          {sections.compare && overview && (
+            <ComparisonStrip snap={overview} money={money} />
+          )}
+
+          {/* Cost per kilometre, with the coverage that makes it readable */}
+          {sections.cpk && overview && !isAll && (
+            <CpkPanel snap={overview} money={money} />
+          )}
+
+          {/* What moved, which is the answer to why the total changed */}
+          {sections.movers && overview && !isAll && (
+            <MoversPanel snap={overview} money={money} dim={moverDim} onDim={setMoverDim} />
+          )}
+
           {/* Categories */}
           {sections.categories && !isAll && (
             <section className="space-y-3">
@@ -711,6 +772,11 @@ export default function ExpenseReport() {
                 <ChartCard title="Tyres, spare parts and oil by month" refCb={setRef('trend')}><Line data={stylize(trendChart, 'line')} options={chartBase(true)} /></ChartCard>
               </div>
             </section>
+          )}
+
+          {/* How much of the split is a decision rather than a guess */}
+          {sections.evidence && overview && !isAll && (
+            <EvidencePanel snap={overview} money={money} />
           )}
         </>
       )}

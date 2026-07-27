@@ -3,6 +3,128 @@
 Durable, committed project knowledge so any session has full context. Keep this
 current. Read it before adding/changing modules. Governing spec: `Tyre pulse enterprise.md`
 
+## SESSION 2026-07-27 — UPLOAD WORKBOOK + BRAIN CACHE + EXPENSES & CPK ON ONE PAGE. Migrations through **V374**, next free **V375**.
+
+### `/expense-report` is THE real-expense home, now renamed "Expenses & CPK" in the nav
+User could not find their expenses and wanted trending CPK with last-month / last-year comparison on ONE
+page. Deepened the existing page rather than adding a second cost surface. New sections, all toggleable:
+period bar (This month / Last month / 3 / 6 / YTD / 12) driving the WHOLE page, comparison strip, cost per
+km, what moved, certainty. Engine `src/lib/costCpk.js` (28 tests) + panels
+`src/components/expense/CostCpkPanels.jsx` + one RPC `get_cost_cpk_overview` (1.09 s).
+
+### **odometer_logs AND engine_hours_logs ARE EMPTY (0 rows) — every cost-per-km in the app has always read N/A**
+- The fleet HAS been recording odometers all along in a column nobody read for this: `tyre_records.km_at_fitment`
+  / `km_at_removal` are the asset's odometer at fit and at removal. **10,390 readings, 516 assets, 22 months.**
+  **V374 `fleet_km_by_asset()`** turns that into measured km. KSA 12 months = 341 assets / 18.2M km.
+- It is SPARSE, so it is honest about it: an asset counts only with TWO readings in the window; a future-dated
+  reading is dropped (there is a 2026-11-10 typo); a backwards/implausible run is DROPPED not clamped (a meter
+  reset is not distance); it returns the ASSET LIST so callers report coverage.
+- **CPK is computed on the MATCHED SET only** (assets with measured km), never whole-fleet spend over
+  part-fleet distance, and `coverage_pct` ships beside every figure.
+
+### THE TRAP THIS PAGE EXISTS TO AVOID — read before touching CPK
+First live run showed KSA cost/km falling **1.893 -> 0.225**, an apparent 8x improvement. It is entirely
+coverage: the tyre records hold **14 odometer readings from 2024 against 5,712 from 2025**, so the old window
+measured 5 assets and the new one 341. Every cpk block now carries `comparable` (coverage >= 25%) and the UI
+WITHHOLDS the comparison with a reason. **Never show a cpk delta without checking `comparable`.**
+- Also fixed: the three windows were classified in ONE `case`, so on the default 12-month range - where
+  previous and same-period-last-year are the SAME dates - the case matched 'prev' first and last year reported
+  0 beside an identical previous window reporting 55,216. Each window is aggregated independently now;
+  `previous_is_last_year` tells the page to collapse the duplicate column.
+
+### V373 CLASSIFICATION CACHE — uploads were spending ~7 minutes per 100k rows in the brain
+- `brain_classify` measured **4.1 ms/row** (about thirty regex probes). 216,792 rows hold only **22,128 distinct
+  (country, item code, description)** combinations = 9.8x repetition, and a re-import repeats it exactly.
+  `brain_cache` + `brain_classify_cached` -> **0.22 ms/row, 18.4x** (20,430 ms -> 1,109 ms per 5,000).
+  Also marked all 7 `brain_*` functions PARALLEL SAFE (they were the default UNSAFE, blocking parallel plans).
+- **THE CACHE KEY IS THE CONTRACT**: org + country + item code + description hash + reviewed + jobcard +
+  `brain_rules_version()`. **BUMP `brain_rules_version()` IN THE SAME MIGRATION AS ANY brain_* CHANGE** - that
+  is what retires stale answers, and forgetting it is the only way this cache can lie.
+
+### THREE MORE LIVE CLASSIFIER DEFECTS, found by checking the brain against all 216,792 stored buckets
+1. **COOLANT went to the spare default.** That would have moved KSA's 622 coolant lines OUT of oil while
+   Egypt's `OL-` code range kept its 113 IN. The stored data was ALREADY consistent (every coolant line in all
+   3 countries booked as oil), so the engine was about to introduce an inconsistency the data did not have.
+   `cooliant` is Egypt's own spelling, matched verbatim. COOLANT FILTER / COOLANT LINE stay parts.
+2. **A bare "number W number" read as a viscosity grade** - `REAR U BOLT 6W 24*92*500` and `LED LIGHT 50 W 60*60`
+   put 64 lines of bolts and lamps into oil. Spacing cannot separate them (`Shell Spirax S2 A 85 W - 140` is
+   genuine); what does is what FOLLOWS - a dimension continues into another measurement (`*`/`x`), a grade does not.
+3. **`lubricant` is whole-word so it never reached "LUBRICATING OIL"**; AdBlue/diesel exhaust fluid added.
+- Result: **3,419 lines re-bucketed, every country TOTAL unchanged** (Egypt 79,341,428 / KSA 40,608,350 /
+  UAE 18,493,541). Biggest: EGP 5.6M of Shell Tellus/Gadus/Spirax out of spare into oil; AED 135,859 of real
+  tyres (BLACK HAWK, APLUS, ROADWEST) out of spare into tyre. Pre-change buckets kept in
+  `_bucket_snapshot_20260727` (deny-all) so it is reversible. Final split:
+  Egypt 16,718,706 / 43,099,318 / 19,523,404 · KSA 11,297,676 / 23,987,502 / 5,323,172 ·
+  UAE 6,148,661 / 10,424,299 / 1,920,582.
+- **`trg_classify_parts_consumption` is BEFORE INSERT *OR UPDATE*.** Updating ANY column re-runs classification
+  and can re-bucket the row. That is how the Egypt re-bucketing actually happened - I updated `classify_confidence`
+  to backfill provenance and the trigger re-derived every bucket. Deliberate for a correction pass, a trap for
+  anything else. **Know this before you UPDATE parts_consumption.**
+- **Provenance now on 216,792/216,792 rows** (V371 left them all NULL): default 131,901 @0.30 · code-range 37,796
+  @0.95 · description-lubricant 21,177 · accessory 13,680 · reviewed-master 8,702 @1.00 · description-tyre 3,536.
+  **131,901 lines were filed by the FALLBACK** - that is the honest measure of how much of this spend nothing
+  identified, and the Certainty panel publishes it. Reviewing those codes in Material Master is what shrinks it.
+
+### Upload workbook — `uploadWorkbookSheets()` in `src/lib/importTargets.js`
+- Blank .xlsx, one sheet per destination table, **headers ARE the live column names** so the Supabase CSV
+  import maps itself. Download button on Console -> Duplicate Control -> Where to import. Derived from
+  IMPORT_TARGETS so it cannot drift; 4 tests pin that the header row equals the table's real column list.
+- The re-import warning is printed ON EACH SHEET, not only the README - a warning nobody opens is not a warning.
+
+### DIMENSIONS THAT ACTUALLY HAVE DATA (do not build UI on the empty ones)
+`site` 216,792 · `store_code` 216,792 · `cost_center` 216,792 · `asset_type` 44 distinct · `asset_code` 1,300 ·
+`currency` 216,792 · `unit_cost` 216,790 · `brand` 4,869. **EMPTY: project, department, supplier, region,
+branch, uom** - the ERP export does not carry them. V366 added the columns; the data never came.
+
+## SESSION 2026-07-26 (part 2) — CLASSIFICATION BRAIN. Migrations through **V372**, next free **V373**. Merged to main (PRs #199-#202, tip `544c5f5`).
+User: "some maybe tyre size some maybe tire ans some tyre many things can be in item description so it can be
+corrected / Make this as a brain as a engine as a mchine on each uploads data ots applied and fxied."
+
+### `src/lib/classificationBrain.js` = THE classifier. SQL `classify_parts_consumption` MIRRORS it — change BOTH.
+- Layered evidence, highest wins: **1 reviewed master row** (a human decision, confidence 1) > **2 accessory
+  guard** > **3 lubricant** > **4 ERP code range** > **5 description (tyre word / brand+size)** > **6 job card** >
+  **7 default spare @ 0.3**. Every row now carries `classified_by` + `classify_confidence` (V371) so any figure
+  can be traced to the evidence that produced it.
+- **THE ERP CODE RANGE IS THE STRONGEST SIGNAL and I found it only by reading the data, not the code**
+  (`CODE_RANGES`): `310xxx` + `TI-GE-*` = tyre, `OL-*` = lubricant, `15[0-3]xxx` = filter, `400xxx`/`430xxx`/
+  `050xxx`/`420xxx` = spare. Outside every range it returns **null, not a guess** — the description layers then
+  decide. This is what a description regex can never do: `310504-O "TIRE 10-16.5TL (BOBCAT TIRE)"` is a tyre even
+  though "BOBCAT TIRE" reads like an accessory.
+- **The job card CORROBORATES, it never overrides.** Tyre job cards also carry BATTERY 200 AMP, GEAR BOX COMPLETE,
+  ENGINE CYLINDER — **601,916 across 550 codes**. Treating "on a tyre job card" as proof would book all of that as
+  tyre spend. So the card only promotes a row that is otherwise UNIDENTIFIED *and* carries a tyre size. Verified
+  live: the identical line `315/80 R22.5 20PR` lands in spare alone, tyre on a tyre card; BATTERY stays spare.
+
+### TWO REAL BUGS THIS ENGINE EXISTS TO PREVENT — both were live, both were mine
+- **`includes('rim')` matched "Shell RIMula"** and filed Egypt's engine oil as a wheel rim. Every token test is now
+  whole-word via `hasWord` (regex-escaped, `(^|[^a-z0-9])token([^a-z0-9]|$)`). NEVER use substring `includes` on a
+  description token.
+- **Three-valued logic (V370a):** `v_code_cat = 'tyre'` is **NULL** when the code sits outside every range, so
+  `not (NULL and true)` is NULL and the accessory guard silently never fired. Fixed with `coalesce(v_code_cat,'')`.
+  RULE: in these guards always coalesce a nullable text before comparing — a NULL reads as "no" to a human and as
+  "unknown" to Postgres, and the branch just vanishes.
+- Also caught: a part number `500103705/05474876` matched a tyre-size pattern (`705/054`), which is how a BRAKE
+  DISC survived an earlier "fix". Size detection now requires real tyre-size shape, not any digit run.
+
+### Method note — the user was right to reject the code-first approach
+"Dont go through the code go through items description." My first measurement claimed **42% of the UAE tyre column
+was wrong**; the real figure was **2.6%**. The gap was unrecognised tyre BRANDS (ROADX, ROCKHOLDER, DRIVE MASTER,
+LONGMARCH, V-GLORY, TAIHO) that carry no tyre word at all. Acting on 42% would have moved ~AED 2.6M of genuine
+tyres into spare. `TYRE_BRANDS` exists for exactly this. **Measure against the data before trusting a pattern.**
+- Two correction passes moved 4,621 + 4,081 rows. Final, all reconciling to 0.00 variance against the country
+  totals: KSA tyre 11,278,673 / spare 23,999,342 / oil 5,330,335 · UAE 6,012,802 / 10,558,938 / 1,921,801 ·
+  Egypt 16,684,271 / 48,732,563 / 13,924,594.
+- `src/test/classificationBrain.test.js` (22) — **every case is a real row that previously classified wrongly**.
+  Keep it that way: when the brain gets one wrong, the fix is a new row in this file first.
+
+### V372 — 68 inert `mobile:` permission keys deleted (archived to `module_permissions_archive`)
+- They were WEB module keys with a `mobile:` prefix (`mobile:tyre_records`); the phone reads its OWN key
+  (`records`), so not one of them ever gated anything. Use the Mobile App panel (real keys from
+  `src/lib/mobileModules.js`), never the web tree's scope control, to close a mobile module.
+- **CHECKED AND FALSE — do not re-raise:** the suspicion that `normaliseRole` locked out the 6 "Tyre Data
+  Collector" users. Tested live: the role matrix is consulted BEFORE the role default, and it correctly returns
+  their modules. Custom roles work.
+
 ## SESSION 2026-07-26 — CLOSED CLEAN. Audit-lead verification + Play API-36 compliance + mobile scope/crash fixes + measured performance + **duplicate control (V362) + import guard / history / row editing (V363-V364) + site-aware identity and the 8,248 duplicates DELETED (V365)**. Migrations through **V368**, next free **V369**. ALL MERGED to main (PRs #187, #189, #190, #191, #192, #193, #194; main tip `d8d70a7`); branch realigned 0/0. Play build SHIPPED to Closed testing.
 Everything below is on main and verified: web build clean, **5230/5230 web tests**, mobile `tsc` 0, mobile jest 50.
 The 2026-07-24/25 audit's 7 unmerged commits (next section) were merged as part of this work.

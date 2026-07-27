@@ -62,6 +62,10 @@ vi.mock('../contexts/AuthContext', () => ({
 vi.mock('../lib/api/partsConsumption', () => ({
   getPartsExpenseSnapshot: () => Promise.resolve(h.snapshot),
   getExpenseByCountry: () => Promise.resolve(h.byCountry),
+  // The comparison / cost-per-km panels load from their own RPC. These tests
+  // cover the legacy snapshot behaviour, so it returns not-provisioned and those
+  // sections stay unrendered - which is also the real degrade path.
+  getCostCpkOverview: () => Promise.resolve(h.overview ?? { ok: false }),
 }))
 vi.mock('../lib/api/storeSiteExpense', () => ({
   getExpenseBySite: (args) => { h.calls.bySite.push(args); return Promise.resolve(h.SITE_ROWS[args?.country] || []) },

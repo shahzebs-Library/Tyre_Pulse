@@ -61,7 +61,12 @@ export default function QrLabels() {
       if (mode === 'tyres') {
         const { data: rows, error: qErr } = await supabase
           .from('tyre_records')
-          .select('id, serial_number, brand, site, asset_no, risk_level')
+          // serial_number is a DEAD legacy column - empty on all 7,504 tyre
+          // rows; serial_no is the canonical one. Reading the dead name meant
+          // every printed QR label encoded an empty string while the caption
+          // beside it still looked right. Aliased rather than renamed so the
+          // rest of this file keeps working unchanged.
+          .select('id, serial_number:serial_no, brand, site, asset_no, risk_level')
           .order('asset_no')
           .limit(1000)
         if (qErr) throw qErr

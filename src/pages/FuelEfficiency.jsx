@@ -153,7 +153,7 @@ export default function FuelEfficiency() {
       const { data: recs, error: rErr } = await fetchAllPages((from, to) => {
         let q = supabase
           .from('tyre_records')
-          .select('id,asset_no,serial_number,position,tread_depth,pressure_reading,risk_level,km_at_fitment,km_at_removal,site,country,brand,issue_date')
+          .select('id,asset_no,serial_number:serial_no,position,tread_depth,pressure_reading,risk_level,km_at_fitment,km_at_removal,site,country,brand,issue_date')
         // Null-safe country scope - never silently drop uncategorised rows
         if (activeCountry && activeCountry !== 'All') q = q.or(`country.eq.${activeCountry},country.is.null`)
         return q.range(from, to)

@@ -183,7 +183,7 @@ export default function TyreSizeAnalysis() {
     fetchAllPages((from, to) => {
       let q = supabase
         .from('tyre_records')
-        .select('id,asset_no,serial_number,size,brand,position,cost_per_tyre,km_at_fitment,km_at_removal,risk_level,site,country,tread_depth,issue_date')
+        .select('id,asset_no,serial_number:serial_no,size,brand,position,cost_per_tyre,km_at_fitment,km_at_removal,risk_level,site,country,tread_depth,issue_date')
       if (activeCountry !== 'All') q = q.eq('country', activeCountry)
       return q.range(from, to)
     }).then(({ data, error: err }) => {

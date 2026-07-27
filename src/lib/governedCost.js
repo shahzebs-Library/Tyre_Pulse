@@ -324,10 +324,15 @@ export function bucketsOf(rows, { country } = {}) {
   const tyre = costOf(rows, { mode: 'tyres', country })
   const maintenance = costOf(rows, { mode: 'maintenance', country })
   const cur = tyre.currency
-  const spare = money(
-    (Array.isArray(rows) ? rows : []).reduce((s, r) => s + num(r?.spare_cost), 0), cur)
-  const oil = money(
-    (Array.isArray(rows) ? rows : []).reduce((s, r) => s + num(r?.oil_cost), 0), cur)
+  // Scope spare/oil with the SAME country filter costOf applies. Summing them
+  // over the unfiltered list would reintroduce the exact cross-currency blend
+  // this module exists to prevent.
+  const scoped = isSingleCountry(country)
+    ? (Array.isArray(rows) ? rows : []).filter(
+        (r) => !r?.country || currencyForCountry(r.country) === currencyForCountry(country))
+    : (Array.isArray(rows) ? rows : [])
+  const spare = money(scoped.reduce((s, r) => s + num(r?.spare_cost), 0), cur)
+  const oil = money(scoped.reduce((s, r) => s + num(r?.oil_cost), 0), cur)
   return {
     tyre,
     spare,

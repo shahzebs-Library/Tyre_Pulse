@@ -63,10 +63,15 @@ export async function loadCostByCountry({ from, to, mode = 'combined' } = {}) {
     if (error || !Array.isArray(data)) return { ok: false, set: countryCostSetFrom([]), rows: [] }
 
     const buckets = bucketsForMode(mode)
-    // Pick the mode's amount from the server row rather than re-summing:
-    // tyre/spare/oil are already the governed buckets, and `total` is their
-    // sum (verified 0.00 variance), never a fourth addend.
-    const pick = (r) => buckets.reduce((s, b) => s + num(r?.[b]), 0)
+    // For the combined mode read the server's `total` rather than re-adding the
+    // three buckets. The server rounds each bucket independently, so
+    // tyre + spare + oil can land one unit away from round(sum(line_cost))
+    // (live: UAE 18,493,542 vs 18,493,541). `total` is the same money computed
+    // once from the unrounded line_cost, so it is the more accurate figure and
+    // it still satisfies exclusion('total_is_buckets').
+    const pick = (r) => (mode === 'combined' || !mode)
+      ? num(r?.total)
+      : buckets.reduce((s, b) => s + num(r?.[b]), 0)
 
     const set = countryCostSetFrom(data, pick)
     return {
@@ -184,7 +189,9 @@ export async function loadGovernedCost({ country, site, from, to, mode = 'combin
      */
     perUnit: {
       ...perUnitCost(asMoney(cpk.spend_matched), cpk.km, 'km'),
-      km: cpk.km == null ? null : num(cpk.km),
+      // 0 km means UNMEASURED, not "travelled nothing" - report it as unknown
+      // so no screen can present a real-looking per-km figure from it.
+      km: num(cpk.km) > 0 ? num(cpk.km) : null,
       assetsMeasured: num(cpk.assets_measured),
       coverage: cpk.coverage_pct == null ? null : num(cpk.coverage_pct),
       comparable: isComparable(cpk.coverage_pct),
@@ -213,38 +220,68 @@ export async function loadGovernedCost({ country, site, from, to, mode = 'combin
 }
 
 /**
- * Governed Tyres-vs-Maintenance split, byte-compatible with the legacy
- * `loadCostSplit` shape ({ tyre, maintenance, totals, byMonth }) so an existing
- * call site can adopt it without changing its rendering, while additionally
- * getting `currency`, `blended` and the per-country `set`.
+ * The default window used by the legacy loadCostSplit: the last 12 CALENDAR
+ * months ending in the current month.
+ *
+ * This must be pinned explicitly, because get_cost_cpk_overview defaults to a
+ * ROLLING 365 days instead. On live data the two windows disagree (KSA tyre
+ * 2,856,963 calendar vs 2,893,898 rolling), so leaving the default in place
+ * would silently move every migrated figure. Migration must change WHERE a
+ * number comes from, never WHICH number it is.
+ */
+export function calendarMonthWindow(now = new Date()) {
+  const d = now instanceof Date ? now : new Date(now)
+  const y = d.getUTCFullYear()
+  const m = d.getUTCMonth()
+  const start = new Date(Date.UTC(y, m - 11, 1))
+  const end = new Date(Date.UTC(y, m + 1, 0)) // last day of the current month
+  return { from: start.toISOString().slice(0, 10), to: end.toISOString().slice(0, 10) }
+}
+
+/**
+ * Governed Tyres-vs-Maintenance split, shape-compatible with the legacy
+ * `loadCostSplit` ({ tyre, maintenance, totals, byMonth }) so an existing call
+ * site can adopt it without changing any of its arithmetic or rendering, while
+ * additionally getting `currency`, `blended` and the per-country breakdown.
  *
  * Falls back to the legacy loadCostSplit when the grid has nothing for the
  * scope (site-scoped store-code vocabulary, or an un-migrated org).
  */
-export async function loadGovernedCostSplit({ country, site, from, to } = {}) {
-  const g = await loadGovernedCost({ country, site, from, to })
+export async function loadGovernedCostSplit({ country, site, from, to, now } = {}) {
+  // Pin the legacy calendar-month window when the caller did not choose one.
+  const win = from || to ? { from, to } : calendarMonthWindow(now)
+
+  const g = await loadGovernedCost({ country, site, from: win.from, to: win.to })
   if (g.ok && g.totals && g.totals.total.amount > 0) {
+    // Only the months inside the window: get_cost_cpk_overview returns a
+    // 36-month monthly series for trend charts, which is wider than the window.
+    const byMonth = g.monthly
+      .filter((m) => m.month >= String(win.from).slice(0, 7) && m.month <= String(win.to).slice(0, 7))
+      .map((m) => ({ month: m.month, tyre: m.tyre, maintenance: m.maintenance }))
+
     return {
       tyre: g.totals.tyre.amount,
       maintenance: g.totals.maintenance.amount,
       totals: { tyre: g.totals.tyre.amount, maintenance: g.totals.maintenance.amount },
-      byMonth: g.monthly.map((m) => ({
-        month: m.month,
-        tyre: m.tyre,
-        maintenance: m.maintenance,
-      })),
+      byMonth,
       currency: g.currency,
       blended: g.blended,
+      byCountry: g.byCountry,
       set: g.set,
+      window: win,
       source: 'governed:parts_consumption',
     }
   }
+
   const { loadCostSplit } = await import('./costSummary')
-  const legacy = await loadCostSplit({ country, site, from, to })
+  const legacy = await loadCostSplit({ country, site, from, to, now })
+  const single = isSingleCountry(scope(country))
   return {
     ...legacy,
-    currency: isSingleCountry(scope(country)) ? currencyForCountry(country) : MIXED_CURRENCY,
-    blended: !isSingleCountry(scope(country)),
+    currency: single ? currencyForCountry(country) : MIXED_CURRENCY,
+    blended: !single,
+    byCountry: [],
+    window: win,
     source: legacy.source || 'legacy',
   }
 }

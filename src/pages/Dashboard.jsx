@@ -5,7 +5,8 @@ import { dashboard } from '../lib/api'
 import { fetchAllPages } from '../lib/fetchAll'
 import { loadPmDashboard } from '../lib/api/pmPrograms'
 import { loadWorkshopKpis } from '../lib/api/workshopLive'
-import { loadCostSplit } from '../lib/api/costSummary'
+import { loadGovernedCostSplit } from '../lib/api/governedCost'
+import { costScopeLabel } from '../components/cost/CostValue'
 import { COST_MODES, pickCost } from '../lib/costSources'
 import { summarizePmCompliance } from '../lib/pmSchedule'
 import { useAuth } from '../contexts/AuthContext'
@@ -240,7 +241,7 @@ export default function Dashboard() {
   // Load the tyre vs maintenance cost split (last 12 months, country scoped).
   useEffect(() => {
     let cancelled = false
-    loadCostSplit({ country: activeCountry })
+    loadGovernedCostSplit({ country: activeCountry })
       .then(res => { if (!cancelled) setCostSplit(res) })
       .catch(() => { if (!cancelled) setCostSplit(null) })
     return () => { cancelled = true }
@@ -1003,7 +1004,12 @@ export default function Dashboard() {
         <StatTile index={5} to="/analytics" icon={DollarSign} tone="accent"
           label={`${t('dashboard.kpi.totalCost')} (${costMode === 'maintenance' ? 'General' : costMode === 'tyres' ? 'Tyres' : 'Combined'})`}
           value={`${(totalCostFigure / 1000).toFixed(0)}K`}
-          unit={activeCurrency} spark={sparkSeries.cost} />
+          // GOVERNED: the currency comes from the cost split, not from
+          // activeCurrency. activeCurrency falls back to SAR on the "All
+          // countries" view, which labelled a SAR+AED+EGP blend as SAR. When
+          // the scope really does span currencies this now says so.
+          unit={costSplit ? costScopeLabel(costSplit) : activeCurrency}
+          spark={sparkSeries.cost} />
       </div>
 
       {/* ── PRIORITY RECOMMENDATIONS (concise, number-led, real data only) ─── */}

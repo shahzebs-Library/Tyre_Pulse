@@ -7,6 +7,7 @@ import { loadPmDashboard } from '../lib/api/pmPrograms'
 import { loadWorkshopKpis } from '../lib/api/workshopLive'
 import { loadGovernedCostSplit } from '../lib/api/governedCost'
 import { costScopeLabel } from '../components/cost/CostValue'
+import DailyJobCards from '../components/dashboard/DailyJobCards'
 import { COST_MODES, pickCost } from '../lib/costSources'
 import { summarizePmCompliance } from '../lib/pmSchedule'
 import { useAuth } from '../contexts/AuthContext'
@@ -1134,6 +1135,12 @@ export default function Dashboard() {
           </div>
         </div>
       )}
+
+      {/* ── JOB CARDS TODAY (asset availability, from the job card export) ──
+           Distinct from Workshop Today above: that one measures TECHNICIANS,
+           this one measures ASSETS - what is out of production and how long it
+           waited before anyone started. */}
+      <DailyJobCards country={activeCountry} />
 
       {/* ── FLEET GAUGES + NEEDS ATTENTION (instrument row) ──────────────── */}
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">

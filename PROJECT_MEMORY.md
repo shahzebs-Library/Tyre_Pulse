@@ -3,6 +3,186 @@
 Durable, committed project knowledge so any session has full context. Keep this
 current. Read it before adding/changing modules. Governing spec: `Tyre pulse enterprise.md`
 
+## SESSION 2026-07-27 (part 5) — SCRAP REGISTER + SPLIT SCRAP/UNDO RIGHTS. Migrations through **V384**, next free **V385**.
+
+### **SCRAP MANAGEMENT NEVER SHOWED THE SCRAPPED TYRES — it was reading a heuristic, not the marks**
+User: "Scrapped management is not linked with scrapped tyres, when we click into it it must show those marked
+scrapped items." Verified true and worse than reported. **`/scrap` (`TyreScrapManagement.jsx`) does not import
+`tyreExchange` at all** and never touches `tyre_status_marks`. Its entire definition of scrapped is
+`isScrap(t) = t.risk_level === 'Critical' || t.category === 'Scrap'` — an ANALYSIS of tyres that look
+scrap-worthy, which has nothing to do with anyone pressing Scrap. So every tyre scrapped from Serial Tracker or
+the phone was invisible on the page named Scrap Management.
+- **NEW first tab "Scrapped Register"** (`src/components/tyre/ScrappedRegister.jsx`) over
+  **V383 `list_scrapped_tyres(p_search, p_country, p_limit)`**. The other 4 tabs keep the heuristic (they are
+  genuine scrap-rate analysis) and the TABS comment now says which is which. Do NOT merge the two definitions.
+- **The RPC returns BOTH sources and labels them**, because they genuinely differ: a tyre scrapped via the
+  button carries a mark and an actor; a tyre bulk-scrapped from the Tyre Records grid
+  (`TyreRecords.jsx handleBulkScrap`) only ever got `status='Scrapped'` with NO mark and NO attribution.
+  Showing only marked ones hides real scrapped stock; merging silently would invent an accountability that was
+  never captured. Unmarked rows come back `marked:false` and render **"Not recorded"**, and the KPI strip
+  publishes `unattributed_total` as its own number.
+- **FOUR competing definitions of "scrapped" exist in src/** and this only unifies the reporting surface:
+  `tyre_status_marks.mark_type='scrap'` (Serial Tracker + mobile), `REMOVED_STATUS_RE` on status
+  (tyrePool/fleetRisk/tco), `risk_level Critical || category Scrap` (TyreScrapManagement), and
+  `category Scrap || (risk_level Critical && km_at_removal != null)` (TyreLifecycle:79).
+
+### V383 — MARKING and UNDOING are now SEPARATE rights, both answered by the server
+User: "Undo must be with only admin, and remember who made it scrap so we can trace."
+- **`tyre_unscrap_allowed()`** = approved+unlocked AND (super OR `app_role()='admin'`), deliberately narrower
+  than `tyre_scrap_allowed()`. Marking a scrap is a field observation; reversing one is a correction to the
+  record. Verified live: collector scrap=true/undo=false, admin both, reporter neither.
+- **The direct-table bypass was open and is now closed.** `tyre_status_marks_write` was PERMISSIVE FOR ALL on
+  `is_approved_and_unlocked()`, so any approved user could simply DELETE a scrap mark and sidestep an
+  admin-only undo entirely. Split into insert/update (unchanged) + **delete requires admin for a `scrap` mark**;
+  `returned`/`written_off` (Tyre Exchange) untouched. Proven live: collector direct DELETE removes 0 rows.
+- **TRACE SURVIVES THE UNDO, which is the whole point.** The undo DELETES the mark, taking `created_by` with it,
+  so a trace living only on the mark is destroyed by the very action it must record. `_log_scrap_action` writes
+  to **`audit_log_v2`** (no new table) and the undo audits BEFORE it deletes. Live: after a full round trip the
+  trail reads `tyre_scrap by Tyre Data Collector, tyre_unscrap by Admin`.
+- **A repeat scrap used to record the newest person against the oldest date** — `created_by` was updated on
+  conflict while `created_at` was not. They now move together.
+- `set_scrap_reason` RPC replaces the direct table update (the policy let any approved user rewrite any mark's
+  reason with no record). Clients: `getScrapPermissions()` (web) / `canScrapTyre()`+`canUnscrapTyre()` (mobile),
+  both **fail closed**. SerialTracker's `isAdmin = canScrap` alias is gone; the Scrapped tab now shows Edit
+  reason and Undo independently. Tests `scrapRegister.test.js` (12).
+- **FULL ROUND TRIP VERIFIED LIVE (rolled back)** on serial EP060420711 / asset TM527: collector scraps ->
+  register shows "by IJAZ ALI SHAH" -> collector undo BLOCKED -> collector direct DELETE blocked ->
+  admin undo -> **restored to `Removed`, not `Active`**.
+### THE WEB HAD NO PLACE FOR A COLLECTOR TO SCRAP — the register alone was not enough
+`/serial-tracker` is `RoleRoute allowed={['Admin']}`, so a Tyre Data Collector cannot reach the only web surface
+with a Scrap button. Showing them the register would have let them SEE scrapped tyres and do nothing. The
+register carries **"Mark a tyre as scrap"** (same server-answered permission), with `findTyreBySerial` confirming
+the serial is a real tyre and showing WHICH one before committing — scrapping is keyed on the serial alone, so
+a typo would otherwise create a mark against a tyre that does not exist.
+
+### `TyreRecords` BULK SCRAP now writes a mark — it was the source of every unattributed row
+`handleBulkScrap` wrote `status='Scrapped'` and nothing else: no mark, no reason, no actor, so those tyres never
+reached the scrapped register and could not be undone. It now goes through `scrap_tyre_by_serial` per distinct
+serial (pool of 5), so bulk and single scrap produce the SAME record. **A row with no serial still cannot be
+marked** — the mark is keyed on the serial — so those keep the plain status write and the operator is TOLD how
+many were left untraceable rather than it happening silently.
+
+### V384 — THE REGISTER NOW READS THE LINKED RECORD. **`job_card` is the strong link: 100%**
+User asked whether Scrap Management is linked to the other tables (job card etc). It was not — the register
+showed only what sat on `tyre_records`. **Measured on the live scrapped set BEFORE building anything:**
+`job_card` present **19/19 and every one matches a `work_orders` row**; `asset_no` in `vehicle_fleet` 19/19;
+`cost_per_tyre` only **8/19**; grid tyre cost via job card only **3/19**; a `tyre_disposals` row **0/19**.
+- Joined in: job card + its work-order **status / type / complaint / opened date**, and the vehicle's
+  **type / make / model**. Both were fully available and simply unread.
+- **THE FLEET JOIN MUST BE COUNTRY-SCOPED AND `limit 1`.** `vehicle_fleet` is unique per
+  (org, **country**, asset_no), so the same asset number exists in more than one country and a naive join
+  DUPLICATES the tyre — observed live: TM606 returned twice, once as TR-MIXER/Sany and once as
+  model 'TRANSIT MIXER'. Done with a `left join lateral ... order by (f.country = j.country) desc limit 1`.
+  Verified `rows_returned == total` after the change.
+- **km and cost stay NULL, never 0.** A scrapped tyre reading "0 km" or cost 0 would be taken as fact when it
+  only means the import never carried the figure. `km_run` = `total_km` else `km_at_removal - km_at_fitment`.
+- The response carries a **`linked` block** (with_job_card / with_cost / with_km / with_disposal) and the UI
+  prints it, so a blank column reads as the known data gap it is instead of looking like a bug.
+- **`tyre_disposals` has 0 rows for every scrapped tyre**, i.e. Scrap Management's own Disposal Log tab and its
+  scrapped tyres are still two disconnected halves. The register now SHOWS "Not started" per row. Deliberately
+  NOT auto-creating a disposal row on scrap: that tab is approval-gated (`EntityApprovalPanel
+  entityType="tyre_scrap"`) and pushing rows into a workflow is a process decision, not a display fix.
+- Register total verified against ground truth: 18 = 18 (union of marked serials and status='Scrapped'
+  serials). **The feature is in live use — 7 real scraps landed between 09:53 and 09:59 while this was built.**
+
+### **THE LAST BLOCKER WAS THE SIDEBAR, NOT THE PERMISSION** — `scrap` enabled for Tyre Data Collector
+Everything above could be right and the collector would still never reach it: **Tyre Data Collector is a CUSTOM
+role, and `shouldShowNavItem` routes custom roles through `navItemAllowedForCustomRole`, which is
+deny-by-default** (ROLE_DEFAULTS has no custom-role entry). `/scrap` had no `module_permissions` row for that
+role, so Scrap Management was invisible to the exact people the work was for. Added `('Tyre Data Collector',
+'scrap', true, org_id null)`, consistent with the tyre_records / stock / inspections / fleet_master set the role
+already carries. Reversible from Console -> Access Control.
+**RULE: shipping a page for a CUSTOM role is not finished until that role has the module enabled** - the code
+change alone leaves it unreachable, and the symptom looks identical to "the feature was not built".
+
+### Egypt org: `mohamed` (Tyre Data Collector) MOVED to Company A — user-approved
+**PARTIALLY SUPERSEDES the 2026-07-14 note "Egypt users (org e340fa7a) intentionally left isolated."** That org
+holds **0 tyre_records** while Egypt's 475 tyres live in Company A, so its members could see nothing at all.
+With the user's explicit approval, `0bdeeb0d` (mohamed / bassiouni) had `org_id` + `organisation_id` set to
+Company A. **Verified live after the move: 475 tyres, 133 fleet, country = Egypt ONLY** — `country=['Egypt']`
+plus the RESTRICTIVE country isolation bounds it, so no KSA or UAE data is exposed. Same remedy as the
+already-recorded "9 KSA users in the wrong org" fix. The guard trigger was disabled and **re-enabled in the same
+statement (verified `tgenabled='O'`)** — that bypass is required because the MCP session has no profile so
+`get_my_role()` is NULL and `trg_guard_profile_privileged` blocks the org change.
+- **STILL OPEN, user chose not to move them:** `a4fd5401` **Mahmoud Taher, Director, Egypt** is the last member
+  of org `e340fa7a` and has the same problem (sees 0 of everything). One `admin_update_profile` or the same org
+  move fixes it whenever the customer wants.
+
+## SESSION 2026-07-27 (part 4) — JOB CARD INTAKE + SCRAP FOR TYRE ROLES. Migrations through **V382b**, next free **V383**.
+
+### V381 JOB CARD INTAKE — `stg_job_cards`, and it brings the AVAILABILITY CYCLE the app never had
+The customer's "Format job card" export carries **Production Out / Workshop In / Workshop Out / Production In**.
+Those four are what separate the two halves of downtime, which nothing in this system could distinguish before:
+**waiting = Production Out -> Workshop In** (asset is down, nobody has started; a scheduling problem) versus
+**repair = Workshop In -> Workshop Out** (a workshop problem). A single "downtime" number hides which one is
+actually costing availability. New `work_orders` columns: rfr_no, production_out_at, production_in_at, plate_no,
+asset_category, work_location, scope, source_row.
+- **`stg_job_cards` headers are the export's own, VERBATIM** - including `"Excepted Job Date/Time"` and
+  `"STD. Hours"` misspellings - so the Table Editor CSV import maps itself. Trigger `process_stg_job_cards()` is
+  a pure pipe (returns NULL, staging stays empty), and **re-import REFRESHES a card in place**
+  (`on conflict (work_order_no) do update`) so the file can be uploaded as often as the customer likes. That is
+  what makes the daily view current, and it is why this target is `reimportSafe: 'safe'`.
+- **THE EXPORT'S OWN "Total Breakdown hours" IS A TRAP AND IS NOT IMPORTED VERBATIM.** Verified against the
+  data: for a CLOSED card the figure equals Production Out -> Workshop Out exactly, but for an OPEN one it
+  counts **to today**, so an asset out since 2022 reads **40,028 hours**. Taking it as-is would put a four-year
+  "downtime" into every average. `breakdown_hours` is only populated when the card actually closed
+  (`v_closed := production_in is not null or workshop_out is not null`); the raw ERP figure is preserved in
+  `custom_data.erp_breakdown_hours` beside `still_open`.
+- **The four cost columns (Spare Parts / Tyre / Oil / Others) go to `custom_data.erp_reported_cost`, NEVER to
+  `labour_cost`/`parts_cost`.** THE EXPENSE GRID IS THE COST SOURCE. Writing them would both move every existing
+  workshop figure and create a second competing cost source.
+- Type mapping into the EXISTING vocabulary so this export cannot fragment it: Break Down -> **Emergency**
+  (an unplanned stoppage is exactly that, and losing the breakdown-vs-scheduled split would discard the single
+  most useful maintenance signal in the file), Schedule -> Preventive Maintenance, General/repair -> Repair.
+  The ERP's own wording is kept in `custom_data.erp_type`.
+- **V381b `erp_parse_ts(text)`** exists because `erp_parse_date` returns a DATE and **silently discards the
+  time**, which is fatal here: Production Out 06-01-2026 05:42 and Workshop In 06-01-2026 08:15 are the same
+  date, so a date parser measures the wait as ZERO. Day-first (the V-audit DD-MM-YYYY finding), falls through
+  to `erp_parse_date` for date-only values so the two never disagree about valid shapes.
+- **V381c `get_daily_job_cards(p_country, p_on)`** -> kpis (still_out, still_out_assets, opened/closed/
+  breakdowns/scheduled today, avg_wait_hours, avg_repair_hours, longest_out_hours) + still_out_list +
+  today_list + by_type + by_site. Averages return **null, not zero**, when nothing closed that day - zero would
+  read as instant turnaround. Surfaced by `src/lib/api/jobCards.js` + `src/components/dashboard/DailyJobCards.jsx`,
+  mounted on **Dashboard** above the fleet gauges. "Still out" carries NO date filter on purpose: an asset out
+  since March is exactly what the panel exists to surface. `importTargets.js` + the upload workbook carry the
+  new sheet `0 Job cards`.
+
+### V382/V382b SCRAP — a Tyre Data Collector can now scrap a tyre, and undo no longer corrupts status
+User: the tyre data collector can see serials but has no scrap button. **Simply showing the button would have
+produced a PARTIAL SCRAP.** Measured on a real Tyre Data Collector account: `is_approved_and_unlocked()` true
+(CAN write `tyre_status_marks`) but `role_update_tyre_records` is admin|manager only (CANNOT stamp
+`tyre_records.status`). The mark would land, the tyre would keep reading Active in the pool, and the two
+sources would disagree - the exact failure mode this codebase already reverted a change for once.
+- **`scrap_tyre_by_serial` / `unscrap_tyre_by_serial` (DEFINER) do both writes or neither.** Gate is
+  `tyre_scrap_allowed()` = approved+unlocked AND (super OR role in admin/manager/director/inspector/tyre_man/
+  **tyre_data_collector** OR `app_user_can('tyre_records','edit')`), so an admin can authorise ONE person by
+  capability grant without a migration. **NOT** done by widening `role_update_tyre_records`, which would let a
+  collector edit any column on any tyre record; these functions write exactly two things.
+- **V382b: undo used to set `status='Active'` blindly, and that was broken for ADMINS too, not just new roles.**
+  Proven live on serial A206286507: reverting to Active raised `guard_tyre_active_fitment` ("Position RHCI on
+  asset MP081 already has an active tyre") because the position was refilled while the tyre was scrapped - the
+  undo button simply errored. And a tyre that was **'Removed'** before scrapping came back **'Active'**,
+  silently promoting a dead tyre into the allocatable pool. Fix: `tyre_status_marks.prior_status jsonb` records
+  each row's status at mark time and the undo restores exactly that (restoring a row to what it already was
+  cannot trip the fitment guard). A repeat scrap keeps the ORIGINAL capture. Pre-column marks fall back to
+  'Active' and are still refused by the guard rather than double-fitting; the response carries
+  `restored_exactly`.
+- Verified live as a Tyre Data Collector: `Removed -> Scrapped -> Removed`, `restored_exactly: true`;
+  as a Reporter: blocked with "You do not have permission to scrap a tyre".
+- Clients: `src/lib/api/tyreExchange.js` and `mobile/lib/tyreScrap.ts` both go through the RPCs now (no direct
+  table writes). Mobile `canScrapTyre()` asks the SERVER (`tyre_scrap_allowed`) rather than guessing from the
+  role string, and **fails closed** - an action we cannot confirm is not shown. `serial-search.tsx`'s route
+  guard now derives its roles from the MODULES registry instead of a hardcoded duplicate list.
+- **`tyre_data_collector` was missing from mobile `UserRole`/`normaliseRole`**, so the app coerced those 6 users
+  to Reporter locally. Added there and to the `serial` module's roles. (This is the mobile mirror of the
+  already-recorded finding that the WEB `normaliseRole` handles custom roles correctly.)
+
+### CORRECTION to part 3: `work_orders.total_cost` is GENERATED from labour + parts ONLY
+Part 3 says "total_cost (35,060,742) equals labour+parts+lubricant+outside_repair exactly". That was
+accidentally right: `total_cost` is a GENERATED column of `labour_cost + parts_cost` alone, and lubricant +
+outside_repair are zero on every row. The conclusion (the 6 sites are not double-counting) still holds, but do
+not treat that equality as evidence about lubricant/outside_repair.
+
 ## SESSION 2026-07-27 (part 3) — CLOSING THE OPEN ITEMS. Migrations through **V380**, next free **V381**.
 
 ### ALL 10 `loadCostSplit` CONSUMERS NOW GOVERNED — the blended total is gone everywhere

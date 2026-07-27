@@ -6,6 +6,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { tyreRecordFormSchema, RISK_LEVELS } from '../lib/validation/schemas'
 import { FormField, FormSelect, FormDate, FormActions } from '../components/forms'
 import * as tyreRecordsApi from '../lib/api/tyreRecords'
+import { scrapTyreBySerial, getScrapPermissions } from '../lib/api/tyreExchange'
 import { useAuth } from '../contexts/AuthContext'
 import { useSettings } from '../contexts/SettingsContext'
 import { useLanguage } from '../contexts/LanguageContext'
@@ -283,13 +284,59 @@ export default function TyreRecords() {
     clear()
   }
 
+  /**
+   * Bulk scrap.
+   *
+   * This used to write `status = 'Scrapped'` and nothing else - no scrap mark,
+   * no reason, no record of who did it - so the tyres never appeared in the
+   * scrapped register and could not be undone. It goes through the same
+   * scrap_tyre_by_serial RPC as the single Scrap button now, which writes the
+   * mark and the status together and stamps the actor.
+   *
+   * A row with no serial cannot be marked, because the mark is keyed on the
+   * serial. Those fall back to the plain status write and are reported, rather
+   * than being silently left in the old unattributed state.
+   */
   async function handleBulkScrap(rows) {
     if (!window.confirm(t('records.bulk.scrapConfirm', { count: rows.length }))) return
-    const ids = rows.map(r => r.id)
-    const BATCH = 200
-    for (let i = 0; i < ids.length; i += BATCH) {
-      await tyreRecordsApi.updateRecordsByIds(ids.slice(i, i + BATCH), { status: 'Scrapped' })
+
+    const { canScrap } = await getScrapPermissions()
+    if (!canScrap) {
+      window.alert('You do not have permission to scrap a tyre. An admin can grant it in Access Control.')
+      return
     }
+    const reason = window.prompt('Reason for scrapping these tyres (recorded against each one):', '')
+    if (reason === null) return   // cancelled
+
+    const serials = [...new Set(rows.map(r => String(r.serial_no || '').trim()).filter(Boolean))]
+    const noSerial = rows.filter(r => !String(r.serial_no || '').trim())
+    const failed = []
+
+    // modest concurrency: one RPC per serial, but never a flood
+    const POOL = 5
+    for (let i = 0; i < serials.length; i += POOL) {
+      const slice = serials.slice(i, i + POOL)
+      const results = await Promise.allSettled(slice.map(s =>
+        scrapTyreBySerial(s, { reason, country: rows.find(r => r.serial_no === s)?.country || null })))
+      results.forEach((res, j) => { if (res.status === 'rejected') failed.push(slice[j]) })
+    }
+
+    // serial-less rows keep the old behaviour, because nothing else is possible
+    if (noSerial.length) {
+      const ids = noSerial.map(r => r.id)
+      const BATCH = 200
+      for (let i = 0; i < ids.length; i += BATCH) {
+        await tyreRecordsApi.updateRecordsByIds(ids.slice(i, i + BATCH), { status: 'Scrapped' })
+      }
+    }
+
+    if (failed.length || noSerial.length) {
+      window.alert([
+        failed.length ? `${failed.length} could not be scrapped: ${failed.slice(0, 5).join(', ')}${failed.length > 5 ? '...' : ''}` : '',
+        noSerial.length ? `${noSerial.length} row${noSerial.length === 1 ? '' : 's'} had no serial number, so they were marked scrapped without a traceable record.` : '',
+      ].filter(Boolean).join('\n'))
+    }
+
     invalidate(['tyres'])
     loadRecords()
     clear()

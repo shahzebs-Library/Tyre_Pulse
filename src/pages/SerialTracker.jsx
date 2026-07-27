@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef } from 'react'
+import { useState, useMemo, useRef, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 import { exportToPdf, exportToExcel, reportFileName } from '../lib/exportUtils'
 import { formatCurrencyCompact, formatDate } from '../lib/formatters'
@@ -7,7 +7,7 @@ import PageHeader from '../components/ui/PageHeader'
 import EmptyState from '../components/EmptyState'
 import { toUserMessage } from '../lib/safeError'
 import { useAuth } from '../contexts/AuthContext'
-import { scrapTyreBySerial, unscrapTyreBySerial, getScrapMark, listScrapMarks, updateScrapReason } from '../lib/api/tyreExchange'
+import { scrapTyreBySerial, unscrapTyreBySerial, getScrapMark, listScrapMarks, listScrappedTyres, updateScrapReason, getScrapPermissions } from '../lib/api/tyreExchange'
 
 function SearchSkeleton() {
   return (
@@ -68,17 +68,27 @@ function SearchSkeleton() {
 
 export default function SerialTracker() {
   const { profile, isSuperAdmin, grantedModules } = useAuth()
-  // Scrap is a destructive action, so it stays separate from merely reaching this
-  // page. Admin and super-admin always have it; anyone else needs the explicit
-  // 'serial_tracker:scrap' grant, which an admin gives in Console > Access Control
-  // (Serial Tracker > Mark as Scrap / Undo). That lets a data collector such as a
-  // tyre man be given serial SEARCH without the ability to scrap, or both.
-  // Note the database is still the real boundary: the scrap write also has to pass
-  // the tyre_records RLS policies for that user.
-  const canScrap = isSuperAdmin === true
-    || profile?.role === 'Admin'
+  // MARKING a scrap and UNDOING one are two different rights, and the server is
+  // the one that decides both. Marking is a field observation and reaches the
+  // tyre roles (including Tyre Data Collector); undoing is a correction to the
+  // record and stays with an administrator.
+  //
+  // These are asked of the database rather than derived from profile.role,
+  // because a role string cannot see a per-user capability grant, and a button
+  // shown on a guess is a button the RPC then refuses.
+  const [perms, setPerms] = useState({ canScrap: false, canUndo: false })
+  useEffect(() => {
+    let cancelled = false
+    getScrapPermissions()
+      .then((p) => { if (!cancelled) setPerms(p) })
+      .catch(() => { /* fail closed: perms stay false */ })
+    return () => { cancelled = true }
+  }, [profile?.id, isSuperAdmin])
+  // The legacy 'serial_tracker:scrap' grant still opens the mark action, so an
+  // existing grant keeps working; the server gate is the authority either way.
+  const canScrap = perms.canScrap
     || (typeof grantedModules?.has === 'function' && grantedModules.has('serial_tracker:scrap'))
-  const isAdmin = canScrap
+  const canUndo = perms.canUndo
 
   const [activeTab, setActiveTab] = useState('single')
 
@@ -120,7 +130,13 @@ export default function SerialTracker() {
     setScrapListLoad(true)
     setScrapListErr(null)
     try {
-      setScrapList(await listScrapMarks())
+      // Through the register RPC, not the bare marks: it resolves created_by to
+      // a person, which is the trace this list was missing. Falls back to the
+      // plain marks on a backend that predates it so the tab never goes blank.
+      const res = await listScrappedTyres({})
+      setScrapList(res.ok
+        ? res.rows.map((r) => ({ ...r, created_at: r.scrapped_at }))
+        : await listScrapMarks())
     } catch (err) {
       setScrapListErr(toUserMessage(err, 'Could not load scrapped tyres.'))
       setScrapList([])
@@ -164,7 +180,10 @@ export default function SerialTracker() {
     const q = scrapListSearch.trim().toLowerCase()
     if (!q) return scrapList
     return scrapList.filter(r =>
-      r.serial.toLowerCase().includes(q) || (r.reason || '').toLowerCase().includes(q))
+      String(r.serial || '').toLowerCase().includes(q)
+      || (r.reason || '').toLowerCase().includes(q)
+      || (r.asset_no || '').toLowerCase().includes(q)
+      || (r.scrapped_by_name || '').toLowerCase().includes(q))
   }, [scrapList, scrapListSearch])
 
   // ── Single search ─────────────────────────────────────────────────────────
@@ -530,12 +549,14 @@ export default function SerialTracker() {
                     )}
                   </div>
                   <div className="flex gap-2 flex-wrap">
-                    {isAdmin && (scrapMark ? (
+                    {/* Undo is admin only, marking is not, so they are gated
+                        separately rather than by one flag. */}
+                    {scrapMark ? (canUndo && (
                       <button onClick={undoScrap} disabled={scrapBusy}
                         className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-1.5 disabled:opacity-50">
                         <RotateCcw size={14} /> {scrapBusy ? 'Working...' : 'Undo scrap'}
                       </button>
-                    ) : (
+                    )) : (canScrap && (
                       <button onClick={() => { setScrapErr(null); setScrapReason(''); setScrapOpen(true) }}
                         className="flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-md font-medium border border-red-700/50 bg-red-900/20 text-red-300 hover:bg-red-900/40 transition-colors">
                         <Trash2 size={14} /> Mark as Scrap
@@ -792,7 +813,8 @@ export default function SerialTracker() {
                 <h3 className="text-base font-semibold text-[var(--text-primary)]">Scrapped tyres</h3>
                 <p className="text-sm text-[var(--text-secondary)]">
                   {scrapListLoad ? 'Loading...' : `${scrapList.length} tyre${scrapList.length !== 1 ? 's' : ''} marked as scrap`}
-                  {isAdmin ? ' · edit the reason or undo a mistaken scrap' : ''}
+                  {canUndo ? ' · edit the reason or undo a mistaken scrap'
+                    : canScrap ? ' · edit the reason' : ''}
                 </p>
               </div>
               <div className="flex items-center gap-2">
@@ -811,11 +833,15 @@ export default function SerialTracker() {
                 </button>
               </div>
             </div>
-            {!isAdmin && (
+            {!canScrap ? (
               <p className="text-xs text-[var(--text-muted)] mt-2 flex items-center gap-1.5">
-                <AlertTriangle size={12} /> You can view scrapped tyres. Marking, undoing or editing a scrap needs the Mark as Scrap access, which an admin grants in Access Control.
+                <AlertTriangle size={12} /> You can view scrapped tyres. Marking one as scrap needs the tyre scrap permission, which an admin grants in Access Control.
               </p>
-            )}
+            ) : !canUndo ? (
+              <p className="text-xs text-[var(--text-muted)] mt-2 flex items-center gap-1.5">
+                <AlertTriangle size={12} /> You can mark a tyre as scrap and edit the reason. Undoing a scrap is an administrator action.
+              </p>
+            ) : null}
           </div>
 
           {scrapListErr && (
@@ -851,7 +877,9 @@ export default function SerialTracker() {
                 <thead>
                   <tr className="text-left text-[var(--text-secondary)] border-b border-[var(--border-dim)]">
                     <th className="pb-2 pr-4">Serial No</th>
+                    <th className="pb-2 pr-4">Asset</th>
                     <th className="pb-2 pr-4">Reason</th>
+                    <th className="pb-2 pr-4">Scrapped By</th>
                     <th className="pb-2 pr-4">Scrapped On</th>
                     <th className="pb-2 text-right">Actions</th>
                   </tr>
@@ -860,6 +888,10 @@ export default function SerialTracker() {
                   {filteredScrapList.map(r => (
                     <tr key={r.serial} className="border-b border-[var(--border-dim)] hover:bg-[var(--surface-2)] align-top">
                       <td className="py-2 pr-4 font-mono text-[var(--text-primary)]">{r.serial}</td>
+                      <td className="py-2 pr-4 text-[var(--text-secondary)] whitespace-nowrap">
+                        {r.asset_no || <span className="text-[var(--text-muted)]">N/A</span>}
+                        {r.tyre_position ? <span className="text-xs text-[var(--text-muted)] ml-1.5">{r.tyre_position}</span> : null}
+                      </td>
                       <td className="py-2 pr-4 text-[var(--text-secondary)] min-w-[220px]">
                         {editSerial === r.serial ? (
                           <div className="flex flex-col gap-2">
@@ -882,24 +914,36 @@ export default function SerialTracker() {
                           <span className={r.reason ? '' : 'text-[var(--text-muted)] italic'}>{r.reason || 'No reason given'}</span>
                         )}
                       </td>
+                      <td className="py-2 pr-4 text-xs whitespace-nowrap">
+                        {/* A row with marked === false was bulk-scrapped from the
+                            tyre grid, which saves no name. Say so rather than
+                            leave a blank that reads like missing data. */}
+                        {r.marked === false ? (
+                          <span className="text-amber-400">Not recorded</span>
+                        ) : (
+                          <span className="text-[var(--text-secondary)]">{r.scrapped_by_name || 'Unknown user'}</span>
+                        )}
+                      </td>
                       <td className="py-2 pr-4 text-[var(--text-secondary)] text-xs whitespace-nowrap">{formatDate(r.created_at)}</td>
                       <td className="py-2 text-right whitespace-nowrap">
-                        {isAdmin ? (
-                          editSerial === r.serial ? (
-                            <span className="text-xs text-[var(--text-muted)]">Editing...</span>
-                          ) : (
-                            <div className="inline-flex gap-2">
+                        {editSerial === r.serial ? (
+                          <span className="text-xs text-[var(--text-muted)]">Editing...</span>
+                        ) : (canScrap || canUndo) ? (
+                          <div className="inline-flex gap-2">
+                            {canScrap && (
                               <button onClick={() => { setEditSerial(r.serial); setEditReason(r.reason || '') }}
                                 disabled={rowBusy === r.serial}
                                 className="btn-secondary text-xs px-2.5 py-1 disabled:opacity-50">Edit reason</button>
+                            )}
+                            {canUndo && (
                               <button onClick={() => undoScrapRow(r.serial)} disabled={rowBusy === r.serial}
                                 className="flex items-center gap-1 text-xs px-2.5 py-1 rounded-md font-medium border border-green-700/50 bg-green-900/20 text-green-300 hover:bg-green-900/40 transition-colors disabled:opacity-50">
                                 <RotateCcw size={12} /> {rowBusy === r.serial ? 'Working...' : 'Undo scrap'}
                               </button>
-                            </div>
-                          )
+                            )}
+                          </div>
                         ) : (
-                          <span className="text-xs text-[var(--text-muted)]">Admin only</span>
+                          <span className="text-xs text-[var(--text-muted)]">View only</span>
                         )}
                       </td>
                     </tr>

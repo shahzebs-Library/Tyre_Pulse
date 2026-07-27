@@ -86,15 +86,25 @@ positives and zero true ones.
      for GCKR rows are exactly that. **RULE: derive a job card's country from the work_order_no prefix, never
      from the asset code.**
    - Do NOT instead loosen the filter to `applyCountry`: that shows all 55,606 under EVERY country.
-   - **NOW MEASURED, THE SITE SIDE IS THE REMAINING GAP AND IT IS CUSTOMER KNOWLEDGE, NOT EFFORT.** Of the
-     60,099 KSA job cards, **54,892 (91.3%) sit on a site that matches the KSA fleet register**; **5,207 (8.7%)
-     across 15 site names do not**. Biggest: `KSP-T3` 2,450 · `MALHAM-ST` 2,062 · `DIRIYAH-G1-ST` 341 ·
-     `NEOM_CP_14` 101 · `DAHBAN` 97. **DELIBERATELY NOT AUTO-MERGED** - this is the V247 lesson: `KSP-T3` vs the
-     registered `KSP1-T3`, and `RIYADH - METRO` vs both `METRO` and `RIY-MET-ST`, are genuinely ambiguous, and
-     V247 already established that DIRIYAH gate codes (G1/G2) are DISTINCT sites, not variants. Only `AMALLA`
-     (13 cards, vs the registered `AMAALA` 3,163) is a beyond-doubt misspelling. **Ask the customer for the
-     mapping; do NOT collapse -ST codes blindly.** The 5,207 are still correctly linked by country and asset -
-     only the site NAME fails to join the register.
+   - **SITE SIDE CLOSED BY V395 — 99.94% (60,065 of 60,099).** The customer answered each name individually.
+     **`MIGRATIONS_V395_SITE_ALIASES_CONFIRMED.sql`, APPLIED + VERIFIED LIVE**; snapshot
+     `_site_alias_snapshot_v395` (531 work_orders + 56 vehicle_fleet + 2 accidents).
+     - **I MEASURED AGAINST THE WRONG TABLE FIRST.** The "5,207 unmatched / 8.7%" figure compared job card
+       sites to **`vehicle_fleet`**, which only lists sites that have vehicles based there. The correct
+       reference is the **`sites` registry** - against it, `KSP-T3`, `MALHAM-ST` and `EMC WORKSHOP` were
+       already valid all along and needed nothing. **RULE: "is this a real site" is answered by `sites`, not by
+       `vehicle_fleet`.**
+     - Customer rulings: **`KSP-T3` is a SEPARATE terminal from `KSP1-T3`** (kept distinct). **`METRO` and
+       `RIY-MET-ST` are ONE site** - this REVERSES the V247 decision to hold them apart, on their explicit
+       instruction. `DIRIYAH-G1-ST` is a naming variant of the registered `DIRIYAH-G1` (**G1/G2/DIRIYAH-ST stay
+       distinct gates** - that part of V247 stands). Everything else is KSA.
+     - 9 aliases added (AMALLA/DAHBAN/DHABAN/SALBOUK/RIYADH - SALBOKH/JIZAN/RIYADH - METRO/METRO/DIRIYAH-G1-ST)
+       so **a re-import self-corrects via `normalize_site()`** and this never needs running twice.
+     - 3 real sites registered that carried job cards but were never in `sites`: **NEOM_CP_14, RIY-TWG-ST,
+       YANBU**. **`sites.organisation_id` defaults to `app_current_org()`, which is NULL outside a user session
+       - it MUST be set explicitly or the new site is invisible to everyone.**
+     - **STILL OPEN, 34 job cards literally named site = "KSA"** - a country used as a site placeholder.
+       Deliberately NOT registered as a site; needs the customer to say which site those 34 belong to.
 2. **RLS is the real cause of app-wide slowness, and it needs security sign-off.** `app_can_see_country(country)`
    and `app_can_see_site(site)` are row-dependent so they re-query `profiles` PER ROW: a bare
    `count(*) on work_orders` measured **11,994 ms (Manager) / 8,598 ms (super-admin)** vs **124 ms** with the

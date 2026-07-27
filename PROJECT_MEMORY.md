@@ -110,13 +110,36 @@ positives and zero true ones.
        facts - where the asset belongs vs where the work happened - so work_location is not a proxy for site and
        using it would plant a wrong site on roughly two rows in three. Needs the customer to name the site;
        impact is 0.06% of KSA job cards.
-2. **RLS is the real cause of app-wide slowness, and it needs security sign-off.** `app_can_see_country(country)`
-   and `app_can_see_site(site)` are row-dependent so they re-query `profiles` PER ROW: a bare
-   `count(*) on work_orders` measured **11,994 ms (Manager) / 8,598 ms (super-admin)** vs **124 ms** with the
-   predicate rewritten as an InitPlan - **97x**, identical row counts. Spans 44 country + 30 site policies and IS
-   the tenant boundary, so it must not be changed casually. Also: all 11 RLS helpers are PARALLEL UNSAFE, and
-   `app_current_org` alone gates 198 tables, disabling parallel plans database-wide (one-line ALTER, unmeasured).
-   **There is NO missing index** - every seq scan was the correct plan choice; do not go index-hunting.
+2. **RLS WAS the app-wide slowness. FIXED + VERIFIED LIVE by V396** (`MIGRATIONS_V396_RLS_INITPLAN_SCOPE.sql`),
+   user-authorised. **THE ROOT CAUSE, worth understanding before touching any policy:** `app_can_see_country`
+   and `app_can_see_site` take a ROW value so the planner cannot hoist them, AND they are SECURITY DEFINER so
+   Postgres can never INLINE them - a black-box call per row, each running its own `profiles` lookup.
+   - **THE FIX PATTERN:** four ZERO-ARGUMENT scope readers (`app_sees_all_countries`, `app_country_scope`,
+     `app_sees_all_sites`, `app_site_scope`). Taking no row value, a policy calls them as
+     `(select app_country_scope())` = an **InitPlan, evaluated ONCE per query**; the per-row work left is an
+     array membership test with no I/O. 74 policies rewritten (44 country + 30 site) over 40 tables.
+   - **MEASURED, same user / same query / warm-up discarded / 3 iterations:** work_orders
+     **11,994 ms -> 141/141/142 ms (~85x)**, tyre_records **2,570 ms -> 13/12/12 ms (~214x)**. Spread under 1%
+     because the removed work was per-row I/O, not the CPU noise that makes most timings here vary 5-7x.
+   - **EQUIVALENCE WAS PROVEN, NOT ASSUMED** (it is the tenant boundary): algebraically over every real user x
+     every real value plus synthetic edge cases (NULL/''/'   '/'ALL'/'*'/case/padding/unknown) - country
+     **132 combos, 0 mismatches**; site **5,643 combos, 0 mismatches**; then behaviourally by impersonation -
+     vehicle_fleet **all 33 users, 33,234 rows, 0 mismatches**; work_orders super 86,539 / KSA Manager 60,099 /
+     Egypt Director 0, identical before and after.
+   - **QUIRKS DELIBERATELY PRESERVED:** `is_super_admin()` ignores a LOCKED account but `app_can_see_site` reads
+     `profiles.is_super_admin` DIRECTLY with no lock check; site tests `role = 'Admin'` LITERALLY, not
+     `app_role()`; blank/NULL site and NULL country are visible to all; an empty scope grants NOTHING (V309).
+   - **SQL GOTCHA:** `= ANY ((select f()))` parses as the SUBQUERY form of ANY and fails with
+     *operator does not exist: text = text[]*. Use `= ANY (coalesce((select f()), '{}'::text[]))` - still an
+     uncorrelated subquery, so still an InitPlan.
+   - `tyre_procurement_options_country_isolation` is FOR ALL and carries the same expression in **WITH CHECK**;
+     both clauses rewritten together. A guard aborted the first run precisely because of it - **keep that guard
+     in any future sweep**, half a boundary is worse than none.
+   - Rollback: `_rls_policy_backup_v396` holds all 74 original predicates; undo SQL is in the migration header.
+     Old `app_can_see_*` KEPT (other callers) and COMMENTed as superseded.
+   - **STILL OPEN:** all 11 RLS helpers remain PARALLEL UNSAFE and `app_current_org` alone gates 198 tables,
+     disabling parallel plans database-wide (one-line ALTER, unmeasured).
+   - **There is NO missing index** - every seq scan was the correct plan choice; do not go index-hunting.
 3. Cheaper measured DB wins: `get_parts_expense_snapshot` single-pass rewrite **771 -> 233 ms** (identical
    checksum); `get_daily_job_cards` column projection **431 -> 196 ms**. `get_maintenance_snapshot` already
    projects correctly and is the in-repo example of the right shape.

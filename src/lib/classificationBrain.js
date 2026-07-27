@@ -157,6 +157,12 @@ export const LUBRICANT_TOKENS = Object.freeze([
   'engine oil', 'gear oil', 'hydraulic oil', 'compressor oil', 'transmission oil',
   'brake oil', 'brake fluid', 'atf', 'grease', 'lubricant', 'delvac', 'rimula',
   'voyager', 'gear fluid', 'hydraulic fluid',
+  // 'transmission oil' was known but 'gearbox oil' was not, so GEARBOX OIL 140
+  // fell past this test into the mechanical-assembly guard and was filed as a
+  // part at 0.92 confidence - confidently wrong instead of honestly unsure.
+  // Found by the decisions view; see V393.
+  'gearbox oil', 'gear box oil', 'axle oil', 'differential oil', 'diff oil',
+  'cooling oil', 'refrigerant oil',
   // Coolant is a consumable fluid, not a part, and the fleet already books it that
   // way in all three countries (KSA 622 lines, Egypt 113, UAE 9 - every one of them
   // already in the oil bucket). Without these tokens the engine sends coolant to the
@@ -178,6 +184,11 @@ export const LUBRICANT_TOKENS = Object.freeze([
 export const OIL_PART_TOKENS = Object.freeze([
   'filter', 'seal', 'gasket', 'pump', 'cooler', 'line', 'hose', 'pipe', 'gauge',
   'sensor', 'switch', 'cap', 'tank', 'strainer', 'separator', 'baffle', 'injection',
+  // Plurals are NOT implied: every token here is matched whole-word on purpose
+  // (the 'Shell RIMula matched rim' lesson), so "COOLING HOSES" matched nothing
+  // and a hose was filed as oil. See V393b.
+  'filters', 'seals', 'gaskets', 'pumps', 'coolers', 'lines', 'hoses', 'pipes',
+  'gauges', 'sensors', 'switches', 'caps', 'tanks', 'strainers', 'separators',
 ])
 
 /** A tyre size, in every format this fleet's data actually uses. */

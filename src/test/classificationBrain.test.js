@@ -233,6 +233,42 @@ describe('a mechanical assembly is never a tyre, whatever its item code says', (
   })
 })
 
+describe('an oil is still an oil when its name contains an assembly', () => {
+  // The V390 assembly guard and the lubricant test overlap on words like
+  // "gearbox". The lubricant test runs FIRST, and these cases are why: without
+  // the matching lubricant token, GEARBOX OIL was filed as a mechanical part at
+  // 0.92 confidence, which is worse than the honest 0.30 it had before.
+  it('files a named gearbox or cooling oil as oil', () => {
+    for (const d of ['GEARBOX OIL 140 (208LTR', 'GEAR BOX OIL 90', 'COOLING OIL 300',
+      'Refrigerant Oil BlueC F100 10 L/Can', 'DIFFERENTIAL OIL MOBIL 424- 10W 30']) {
+      const r = classifyLine({ itemCode: 'X', description: d })
+      expect(r.bucket, d).toBe('oil')
+      expect(r.decidedBy, d).toBe('description-lubricant')
+    }
+  })
+
+  it('still refuses a PART that merely names one of those oils', () => {
+    // a seal is a seal and a hose is a hose, however the oil is described
+    for (const d of ['GEARBOX OIL SEAL', 'KIT TRUCK MIXER GEAR BOX OIL SEAL 235*265*15',
+      'MERCEDES - GEAR BOX OIL COOLING HOSES ACTROS MP3', 'ENGINE OIL FILTER',
+      'GEAR OIL SEAL', 'HYDRAULIC OIL HOSE']) {
+      expect(classifyLine({ itemCode: 'X', description: d }).bucket, d).toBe('spare')
+    }
+  })
+
+  it('matches a plural part word, which whole-word matching does not imply', () => {
+    // "COOLING HOSES" matched no token and put a hose into oil spend
+    expect(classifyLine({ itemCode: 'X', description: 'ENGINE OIL COOLING HOSES' }).bucket).toBe('spare')
+    expect(classifyLine({ itemCode: 'X', description: 'ENGINE OIL FILTERS' }).bucket).toBe('spare')
+  })
+
+  it('does not turn a non-oil the file called oil into oil', () => {
+    // the ERP filed this under its Oil column; it is acid, and we keep it spare
+    expect(classifyLine({ itemCode: '290064-O', description: 'HYDROCHLORIC ACID 20LTR/25KG' }).bucket)
+      .toBe('spare')
+  })
+})
+
 describe('the job card is corroboration, never an override', () => {
   it('does NOT turn a battery on a tyre job card into a tyre cost', () => {
     // Live data: tyre job cards carry BATTERY 200 AMP, GEAR BOX COMPLETE, ENGINE

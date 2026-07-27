@@ -3,6 +3,61 @@
 Durable, committed project knowledge so any session has full context. Keep this
 current. Read it before adding/changing modules. Governing spec: `Tyre pulse enterprise.md`
 
+## SESSION 2026-07-27 (part 10) — V392 "WHAT WE CHANGED" + V393 TWO CLASSIFIER FIXES IT FOUND. Migrations through **V393b**, next free **V394**.
+
+### V392 — **THE CLASSIFIER'S DECISIONS WERE INVISIBLE**, so the numbers just differed from the file
+User: "I should be able to see what data was moved and what kept in one place after upload, from my data I can
+change those directly." The ERP export files every line under its OWN Spare/Trye/Oil column; those raw columns
+are preserved on `parts_consumption` and the app deliberately does not trust them (the ITEM decides). That rule
+is right and is why the V390 gearbox was findable — but nobody could ever SEE it.
+- **`get_classification_decisions(country, from, to, view, search, limit)`** → per-country summary + items
+  grouped by **(country, item_code, what the ERP said, what we said)** = one movement FACT. A code partly moved
+  and partly kept appears twice ON PURPOSE; collapsing it would hide the inconsistency.
+- Three groups, and the third is the honest one: **moved** / **kept** / **unlabelled** (the file left all three
+  columns blank, so there was nothing to agree with). **A blank is NEVER read as "spare"** — that would invent
+  an agreement that was never expressed.
+- **Measured live, reconciles exactly** (moved+kept+unlabelled = country total): Egypt **1,368 moved / EGP
+  3,511,287.57**, KSA **1,961 / SAR 937,093.44**, UAE **579 / AED 28,199.98**. KSA has **36,299 unlabelled** —
+  the file said nothing at all for a third of its lines.
+- **V392c `parts_consumption.erp_bucket` is a STORED GENERATED column** and that is the whole performance story:
+  the scan is 158 ms but ONE `_to_num()` call over 216,792 rows is **1,943 ms**, and the view needed three.
+  **4,245 ms -> 508 ms.** Verified **0 disagreements** with the live derivation before switching the RPC to read
+  it. Checked first that all three functions inserting into the table use an explicit column list (V320 lesson);
+  the existing dup-restore / row-revert / editable-cols guards already exclude generated columns.
+  **CAVEAT: a generated column freezes `_to_num` in place — if its parsing changes, rebuild this column.**
+- A STABLE function **may not create a temp table** (first cut did); one CTE referenced twice is materialised
+  once, so the scan still happens only once. Ordering carried by an explicit rank — ordering json text would put
+  9 above 1,000,000.
+- **The override writes through the material master**, the existing single lever, not a second path.
+  **`reclassify_from_master` and `reclassify_revert` have existed since V368 and were callable from NOWHERE in
+  the app** — so reviewing an item only ever fixed future rows and left the loaded money where it was. Now:
+  pick a category → dry-run preview (per country, per direction) → apply → **undo by batch**.
+- Surfaces: `src/lib/classificationDecisions.js` (pure, flagging rule), `src/lib/api/classificationDecisions.js`,
+  **`/console/import-history` 4th tab "What we changed"**. Tests `classificationDecisions.test.js` (24).
+- **THE FLAGGING RULE IS THE PRODUCT**: flag only when nothing identified the item, or a MOVE was made on
+  weaker-than-usual evidence. A **high-confidence move is deliberately NOT flagged** — the item code is the
+  strongest signal there is and flagging those would bury the real problems under 1,300 correct rows. A weak
+  decision that AGREED with the file is not flagged either: agreeing is not a change.
+
+### V393 / V393b — **THE VIEW FOUND A DEFECT IN MY OWN V390 GUARD WITHIN MINUTES**
+- **`GEARBOX OIL 140` was being filed as a mechanical part at 0.92 confidence.** V390's assembly guard has the
+  token `gearbox`; the lubricant test runs FIRST and knew `transmission oil` and `gear oil` but **not
+  `gearbox oil`**. So TRANSMISSION OIL was right and GEARBOX OIL fell past into the assembly guard —
+  **confidently wrong instead of honestly unsure** (it had been 0.30 'default' before V390).
+  Added `gearbox oil`/`gear box oil`/`axle oil`/`differential oil`/`diff oil`/`cooling oil`/`refrigerant oil`.
+  Safe because `brain_is_lubricant` already refuses a description that also names a PART.
+- **V393b: `oil_part` was all singular and the matcher is whole-word**, so "GEAR BOX OIL COOLING **HOSES**"
+  matched no part word and my own fix above pushed a hose into oil. Plurals added. **Whole-word matching is
+  deliberate (the 'Shell RIMula matched rim' lesson) — plurals are NOT implied and must be listed.**
+- Both measured BEFORE acting (42%-that-was-really-2.6% rule): 10 lines ~23,100, and 1 line EGP 1,100.
+  One axle oil already human-reviewed as oil **confirmed the intended answer** rather than it being assumed.
+- Result: **7 lines moved spare -> oil**; the seal, the hoses and the axle oil seal correctly stayed spare; the
+  human-reviewed row untouched (**a reviewed decision outranks every token** — correct precedence); every
+  country TOTAL unchanged, variance 0.00. Snapshot `_bucket_snapshot_v393`.
+- `brain_rules_version()` **4 -> 5 -> 6**. JS mirror updated; `classificationBrain.test.js` now 35.
+- **HYDROCHLORIC ACID is filed under the ERP's Oil column and we correctly keep it in spare** — a clean example
+  of the file being wrong and the system being right, which is exactly what the new view is for.
+
 ## SESSION 2026-07-27 (part 9) — V390 NON-TYRE GUARD + V391 COLUMN-CHANGE DECISIONS. Migrations through **V391**, next free **V392**.
 
 ### V390 — **A GEARBOX WAS SITTING IN THE TYRE COLUMN.** User reported it; it was real.

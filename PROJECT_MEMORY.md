@@ -3,7 +3,29 @@
 Durable, committed project knowledge so any session has full context. Keep this
 current. Read it before adding/changing modules. Governing spec: `Tyre pulse enterprise.md`
 
-## SESSION 2026-07-27 (part 6) — V385 JOB CARD EXPORT HAS 11 MORE COLUMNS. Next free **V386**.
+## SESSION 2026-07-27 (part 6) — V385/V386 JOB CARD EXPORT: MORE COLUMNS + HEADER TOLERANCE. Next free **V387**.
+
+### V386 — **INVISIBLE HEADER WHITESPACE**, and why listing variants is not enough
+After V385 added the 11 missing columns, the importer STILL rejected exactly two:
+`Job Card Created By` / `Job Card Created Date`. Both existed **verbatim** (verified 19 and 21 chars, no
+padding), and the other nine matched — so the file's copy of those two differed by characters the error
+message does not render. They are the LAST two columns in the export, where trailing whitespace collects, and
+Excel emits a **non-breaking space U+00A0** that is pixel-identical to a space.
+- **Half one, tolerant COLUMNS** so the CSV is accepted at all (Supabase matches the literal header): 6
+  variants each - trailing space, leading space, doubled spaces, NBSP, `Job card`, `created`.
+- **Half two, tolerant READING, and this is the part that matters.** Listing variants by literal identifier
+  CANNOT capture the NBSP case: the function body would have to contain the invisible character. Proven live -
+  the NBSP file imported fine but `card_by` came back NULL. Fixed with **`_stg_pick(to_jsonb(NEW), 'Header
+  Name')`**, which normalises both sides (NBSP -> space, collapse runs, trim, lower) and reads the value
+  whatever the spelling. `process_stg_job_cards` now reads EVERY field through it.
+- Verified live (rolled back), all four capture `card_by`: canonical `M.SALEH`, NBSP `A.KHAN`, trailing-space +
+  odd casing `R.ALI`, doubled spaces `S.OMAR`; staging left at 0 each time.
+- **RULE for any future stg_ table: read fields with `_stg_pick`, never `NEW."Exact Header"`.** A header that
+  differs by one invisible character otherwise fails the import, or worse imports and silently drops the value.
+- NOTE: the `_stg_pick` + trigger rewrite were applied via `execute_sql`, so they carry no
+  `supabase_migrations` row; the complete SQL is in `MIGRATIONS_V386_HEADER_WHITESPACE_TOLERANCE.sql`.
+
+## SESSION 2026-07-27 (part 6) — V385 JOB CARD EXPORT HAS 11 MORE COLUMNS.
 
 ### The customer's REAL export is 40 columns, not the 29 in the sample
 Supabase refuses a CSV import when a header has no matching column, so the load failed on:

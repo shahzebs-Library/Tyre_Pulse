@@ -3,7 +3,8 @@
  * (no SELECT *); null-safe country scoping. Pages migrate onto these methods
  * instead of inline queries. Additive only - mirrors assets.js / tyres.js.
  */
-import { supabase, unwrap, applyCountry, fetchAllPages } from './_client'
+import { supabase, unwrap, applyCountry, fetchAllPages, ServiceError } from './_client'
+import { toUserMessage } from '../safeError'
 
 const COLS =
   'id,site,description,stock_qty,min_level,critical_level,stock_status,reorder_qty,management_action,region,country,updated_by,updated_at'
@@ -137,12 +138,21 @@ export async function listTyreIssuesSince(sinceDate) {
  * @param {{from:string, to:string, country?:string}} args
  */
 export async function listTyreIssuesInRange({ from, to, country } = {}) {
-  let q = supabase
-    .from('tyre_records')
-    .select(TYRE_ISSUE_COLS)
-    .gte('issue_date', from)
-    .lte('issue_date', to)
-    .order('issue_date', { ascending: true })
-  if (country && country !== 'All') q = q.eq('country', country)
-  return unwrap(await q)
+  // PAGED: a twelve-month window holds 6,535 issues and a bare select stops at
+  // 1,000, so the timeline chart drew the earliest sixth of the range and then
+  // simply stopped - which looks like the fleet went quiet rather than like a cap.
+  const { data, error } = await fetchAllPages((page, last) => {
+    let q = supabase
+      .from('tyre_records')
+      .select(TYRE_ISSUE_COLS)
+      .gte('issue_date', from)
+      .lte('issue_date', to)
+      .order('issue_date', { ascending: true })
+      .order('id')
+      .range(page, last)
+    if (country && country !== 'All') q = q.eq('country', country)
+    return q
+  })
+  if (error) throw new ServiceError(toUserMessage(error), error.code, error)
+  return data || []
 }

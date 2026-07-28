@@ -160,9 +160,17 @@ export default function FleetMaster() {
 
   useEffect(() => {
     async function loadSummary() {
-      let q = supabase.from('vehicle_fleet').select('status,make,model,expected_km_per_tyre,min_days_between_changes')
-      if (activeCountry !== 'All') q = q.eq('country', activeCountry)
-      const { data } = await q
+      // PAGED: these are the headline counts and the register holds 1,523, so an
+      // unpaged read made the "Total" card read 1,000 - a number that is simply
+      // wrong rather than merely incomplete.
+      const { data } = await fetchAllPages((from, to) => {
+        let q = supabase
+          .from('vehicle_fleet')
+          .select('status,make,model,expected_km_per_tyre,min_days_between_changes')
+          .order('asset_no').order('id').range(from, to)
+        if (activeCountry !== 'All') q = q.eq('country', activeCountry)
+        return q
+      })
       const rows = data ?? []
       setSummary({
         total:        rows.length,

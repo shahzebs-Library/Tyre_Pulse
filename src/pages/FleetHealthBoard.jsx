@@ -250,13 +250,22 @@ export default function FleetHealthBoard() {
       for (const r of data ?? []) { if (r.issue_date && (!maxIssue || r.issue_date > maxIssue)) maxIssue = r.issue_date }
       const anchor = maxIssue ? new Date(maxIssue.slice(0, 10) + 'T00:00:00') : new Date()
 
-      // Trend: last 12 months from ALL records (not filtered by km_at_removal)
-      const trendQ = supabase
-        .from('tyre_records')
-        .select('issue_date,risk_level,asset_no')
-        .gte('issue_date', new Date(anchor.getTime() - 365 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10))
-      if (activeCountry !== 'All') trendQ.eq('country', activeCountry)
-      const { data: trendRaw } = await trendQ
+      // Trend: last 12 months from ALL records (not filtered by km_at_removal).
+      // PAGED: the window holds 6,696 rows and a bare select stops at 1,000, so
+      // the trend was drawn from the newest 15% - which bends the shape of the
+      // line, not just its height.
+      const since = new Date(anchor.getTime() - 365 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
+      const { data: trendRaw } = await fetchAllPages((from, to) => {
+        let q = supabase
+          .from('tyre_records')
+          .select('issue_date,risk_level,asset_no')
+          .gte('issue_date', since)
+          .order('issue_date', { ascending: false })
+          .order('id')
+          .range(from, to)
+        if (activeCountry !== 'All') q = q.eq('country', activeCountry)
+        return q
+      })
       if (myReq !== reqIdRef.current) return
       setTrendData(trendRaw ?? [])
     } catch (e) {

@@ -3,6 +3,39 @@
 Durable, committed project knowledge so any session has full context. Keep this
 current. Read it before adding/changing modules. Governing spec: `Tyre pulse enterprise.md`
 
+### **THE REST OF THE ROW-CAP SWEEP — and a GUARD so the class cannot come back**
+Audited every client read against a table over 1000 rows (audit_log_v2 317,477 · parts_consumption 217,083 ·
+work_order_line_items 184,025 · work_orders 86,539 · brain_cache 22,919 · material_master 22,089 ·
+tyre_records 7,508 · production_logs 5,699 · vehicle_fleet 1,523). 73 raw matches -> 23 real multi-row reads
+-> **6 genuinely truncating**, now fixed:
+- **`DowntimeTracker` was the worst: work_orders with NO filter at all — 1,000 of 86,539 = 1.2%**, every
+  country blended. The tyre query DIRECTLY ABOVE IT on the same page already used `fetchAllPages` + country
+  scope; the work-order one was simply missed. Now paged + country-scoped, **and the period cutoff moved
+  SERVER-side** (it was already applied client-side), so a 30-day view fetches thirty days instead of the
+  newest thousand of all time. `WORK_ORDER_CEILING = 20000` with `fetchAllPages({max})`, and **`truncated` is
+  SURFACED as a banner** — a silently-hit ceiling is the same bug one level up.
+- **`FleetMaster` summary cards**: 1,523 -> the "Total" card literally read **1000**.
+- **`InspectionPlanner`**: KSA 6,026 tyres -> planned against 1,000 (17%).
+- **`FleetHealthBoard`** 12-month trend: 6,696 rows -> 1,000, which **bends the SHAPE of the line**, not just
+  its height.
+- **`stock.listTyreIssuesInRange`**: 6,535 issues in a year -> 1,000, so the timeline chart just stopped and
+  looked like the fleet went quiet.
+- **`dataCleaning` — all 8 scans**: 7,508 tyre records -> 1,000 (13%). A data-quality tool reporting problems
+  from an eighth of the rows **makes the data look CLEANER than it is**, the worst direction to be wrong in.
+  One shared `pageAll(build)` keeps the `{data, error}` shape every caller already destructures.
+- **DELIBERATELY NOT CHANGED, with reasons recorded in the test's allowlist**: `eq('serial_no')` /
+  `eq('asset_no')` single-entity reads (SerialTracker, TyreLifecycle, analyticsReads); caller-chunked `in(...)`
+  reads (uploads 1 batch, combinations 100, pmPrograms 200, fleetRenewal); and `useSupabaseQuery.js`, whose
+  react-query hooks are **dead** (only `useInvalidate` is imported anywhere).
+- **`src/test/rowCapGuard.test.js` READS THE SOURCE and fails on any NEW unbounded multi-row read against a
+  large table.** Reviewing for this does not work — the defective line looks identical to the correct one.
+  A second test keeps the ALLOWLIST honest (an entry whose read no longer exists is a stale exemption, which is
+  how a fixed bug creeps back). Verified it fires: reverting FleetMaster produced
+  `src/pages/FleetMaster.jsx:166 reads vehicle_fleet without paging`.
+- **RULE: fix a row cap with `fetchAllPages` AND an `.order(<unique column>)` tiebreak.** Ordering a paged read
+  on a non-unique key still drops or repeats rows at a page boundary — `asset_no` is unique per COUNTRY, not
+  globally (V348).
+
 ### **THE ASSET PICKERS SHOWED THE FIRST 1000 OF 1,523 ASSETS — 523 UNFINDABLE**
 User: "I cant find all assest in accident assets while seaching". Exact, and it was a ROW CAP, not a search bug.
 `listAccidentFleet` read `vehicle_fleet` with a bare select; **PostgREST caps that at 1000 and the fleet holds

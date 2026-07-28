@@ -13,6 +13,7 @@ import {
 } from 'chart.js'
 import { Bar } from 'react-chartjs-2'
 import { supabase } from '../lib/supabase'
+import { fetchAllPages } from '../lib/fetchAll'
 import { formatDate } from '../lib/formatters'
 import { severityRank } from '../lib/severity'
 import { useSettings } from '../contexts/SettingsContext'
@@ -530,16 +531,25 @@ export default function InspectionPlanner() {
         .select('id, asset_no, tyre_serial, inspection_date, inspector, site, country, pressure_reading')
         .order('inspection_date', { ascending: false })
 
-      let tyreQ = supabase
-        .from('tyre_records')
-        .select('id, asset_no, serial_number, site, country, risk_level, tread_depth, issue_date')
-
       if (activeCountry && activeCountry !== 'All') {
         inspQ = inspQ.eq('country', activeCountry)
-        tyreQ = tyreQ.eq('country', activeCountry)
       }
 
-      const [inspRes, tyreRes] = await Promise.all([inspQ, tyreQ])
+      // Tyres are PAGED: KSA alone holds 6,026 and a bare select stops at 1,000,
+      // so the planner was scheduling against a sixth of the fleet's tyres and
+      // simply never saw the rest.
+      const tyreP = fetchAllPages((from, to) => {
+        let q = supabase
+          .from('tyre_records')
+          .select('id, asset_no, serial_number, site, country, risk_level, tread_depth, issue_date')
+          .order('issue_date', { ascending: false })
+          .order('id')
+          .range(from, to)
+        if (activeCountry && activeCountry !== 'All') q = q.eq('country', activeCountry)
+        return q
+      })
+
+      const [inspRes, tyreRes] = await Promise.all([inspQ, tyreP])
       // Normalise DB column `inspector` to the app-wide `inspector_name` shape so
       // every downstream consumer (schedule, exports, analytics) reads one field.
       setInspections((inspRes.data || []).map(r => ({ ...r, inspector_name: r.inspector })))

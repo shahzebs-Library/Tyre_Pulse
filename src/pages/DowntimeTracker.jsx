@@ -41,6 +41,13 @@ const TARGET_AVAILABILITY = 95     // industry benchmark %
 const SEVERITY_HOURS = { Critical: 4, High: 3, Medium: 2, Low: 2 }
 const SEVERITY_WEIGHT = { Critical: 3, High: 2, Medium: 1, Low: 0.5 }
 
+// Ceiling on the work-order fetch. KSA alone holds 60,099, and paging every one
+// into the browser to average them is the wrong shape for this page - the right
+// fix is a server-side aggregate, which is a larger change than this. So the
+// ceiling is generous, the period filter now runs server-side so only the
+// all-time view can approach it, and hitting it is SAID rather than hidden.
+const WORK_ORDER_CEILING = 20000
+
 const PERIOD_PRESETS = [
   { label: '30d',  days: 30  },
   { label: '90d',  days: 90  },
@@ -196,6 +203,7 @@ export default function DowntimeTracker() {
 
   // Filters
   const [period, setPeriod]             = useState('All')
+  const [woTruncated, setWoTruncated]   = useState(false)
   const [siteFilter, setSiteFilter]     = useState('')
   const [countryFilter, setCountryFilter] = useState('')
   const [riskFilter, setRiskFilter]     = useState('')
@@ -213,6 +221,13 @@ export default function DowntimeTracker() {
   const reqIdRef = useRef(0)
 
   // ── Data Load ───────────────────────────────────────────────────────────────
+  // Period cutoff for the SERVER-side filter. Derived here rather than reused
+  // from the `cutoff` memo below, which is declared after this callback.
+  const woCutoff = useMemo(() => {
+    const preset = PERIOD_PRESETS.find(p => p.label === period)
+    return preset ? periodStart(preset.days) : null
+  }, [period])
+
   const load = useCallback(async (isRefresh = false) => {
     const myReq = ++reqIdRef.current
     if (isRefresh) setRefreshing(true)
@@ -233,14 +248,30 @@ export default function DowntimeTracker() {
 
       // Try work_orders (may be empty). opened_at/completed_at give ACTUAL
       // downtime duration; created_at retained for period filtering.
-      const { data: woData, error: woErr } = await supabase
-        .from('work_orders')
-        .select('id,asset_no,work_type,created_at,opened_at,completed_at,status,priority,total_cost,site')
-        .order('created_at', { ascending: false })
+      //
+      // PAGED AND SCOPED, exactly like the tyre query above. This one was neither,
+      // which is how a page about downtime came to compute its KPIs from 1,000 of
+      // 86,539 work orders - 1.2% - and blend every country into one figure.
+      //
+      // The period cutoff is applied SERVER-SIDE now instead of only in the
+      // client filter below. It was always being applied; doing it here as well
+      // means a 30-day view fetches thirty days of rows rather than fetching the
+      // newest thousand of all time and then discarding most of them.
+      const { data: woData, error: woErr, truncated: woTruncated } = await fetchAllPages((from, to) => {
+        let q = supabase
+          .from('work_orders')
+          .select('id,asset_no,work_type,created_at,opened_at,completed_at,status,priority,total_cost,site')
+          .order('created_at', { ascending: false })
+        if (activeCountry !== 'All') q = q.eq('country', activeCountry)
+        if (woCutoff) q = q.gte('created_at', woCutoff)
+        return q.range(from, to)
+      }, { max: WORK_ORDER_CEILING })
       if (myReq !== reqIdRef.current) return
       if (!woErr && woData) {
         setWorkOrders(woData)
         setHasWorkOrders(woData.length > 0)
+        // A ceiling that is hit SILENTLY is the bug this whole change is about.
+        setWoTruncated(!!woTruncated)
       }
     } catch (e) {
       if (myReq === reqIdRef.current) setError(toUserMessage(e, 'Failed to load data'))
@@ -250,7 +281,7 @@ export default function DowntimeTracker() {
         setRefreshing(false)
       }
     }
-  }, [activeCountry])
+  }, [activeCountry, woCutoff])
 
   useEffect(() => { load() }, [load])
 
@@ -865,6 +896,14 @@ export default function DowntimeTracker() {
 
   return (
     <div className="space-y-6 pb-10">
+      {/* A hit ceiling is stated, never hidden - the whole point of this change. */}
+      {woTruncated && (
+        <div className="px-3 py-2 rounded-lg border border-amber-500/40 bg-amber-500/10 text-xs text-amber-200">
+          This view reached its limit of {WORK_ORDER_CEILING.toLocaleString()} work orders, so the figures
+          below cover the most recent ones rather than the whole history. Choose a shorter period to see a
+          complete picture of it.
+        </div>
+      )}
       {/* Header */}
       <PageHeader
         title={t('downtime.title')}

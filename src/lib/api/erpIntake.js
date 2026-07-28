@@ -176,9 +176,16 @@ export async function insertTyreRecords(rows = [], { onProgress, country } = {})
   return { inserted: res.inserted, failed: res.failed || 0, skipped }
 }
 
-/** Complaints/repair rows -> work_orders. Skips work_order_no already stored (merge). */
+/**
+ * Complaints/repair rows -> work_orders. Skips a work_order_no already stored (merge).
+ * Dedupe is GLOBAL, not country-scoped: work_orders.work_order_no is globally unique
+ * (the number's prefix encodes the country 1:1 — AFKR/GCKR=KSA, RM=UAE, EG=Egypt — so a
+ * number can never legitimately belong to two countries). A country-scoped check let a
+ * number already stored under another country slip through and abort the whole batch on
+ * the global unique (23505). `country` is still accepted for signature compatibility.
+ */
 export async function insertWorkOrders(rows = [], { onProgress, country } = {}) {
-  const seen = await existingKeys('work_orders', 'work_order_no', country).catch(() => new Set())
+  const seen = await existingKeys('work_orders', 'work_order_no').catch(() => new Set())
   const fresh = rows.filter((r) => r.work_order_no && !seen.has(String(r.work_order_no).trim().toLowerCase()))
   const skipped = rows.length - fresh.length
   const res = fresh.length ? await insertChunked('work_orders', fresh, onProgress) : { inserted: 0, failed: 0 }

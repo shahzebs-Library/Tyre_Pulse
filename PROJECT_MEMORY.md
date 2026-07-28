@@ -3,6 +3,46 @@
 Durable, committed project knowledge so any session has full context. Keep this
 current. Read it before adding/changing modules. Governing spec: `Tyre pulse enterprise.md`
 
+## SESSION 2026-07-28 (part 7) — AN EGYPT EXPENSE FILE WAS LOADED INTO UAE (V405). Migrations through **V405**, next free **V406**.
+
+### **1,524 rows, EGP 5,392,835, moved UAE -> Egypt**
+**THREE INDEPENDENT SIGNALS AGREED UNANIMOUSLY**, which is what made this a fix rather than a guess:
+1. **Job card prefix** — 1,524 rows begin **EG**; the other **67,713 UAE rows all begin RM**. Not one ambiguous.
+2. **Store code** — every one is **`SP_EG_*`** (SP_EG_ MID 507 · GML4 420 · EAST 321 · RH 161 · H6 115).
+3. **Item code** — 1,502 of 1,524 use Egypt's letter scheme (`XX-XX-nnnn`); **ZERO** use the six-digit numeric
+   scheme UAE and KSA use.
+- Result: Egypt **44,389 rows / EGP 85,863,351.89**; UAE **67,713 / AED 18,517,204.46**; KSA unchanged. Every
+  country now carries exactly ONE currency. Snapshot `_egypt_expense_move_v405`, undo in the migration.
+
+### **THE CURRENCY WAS THE DANGEROUS PART — the trigger will NOT fix it for you**
+The rows carried **AED**. `classify_parts_consumption` only fills currency **`if NEW.currency is null`**, so
+changing the country alone would have left **EGP 5.39M labelled AED — and AED is worth ~13x EGP**, so every
+converted or combined figure would have been out by an order of magnitude. **RULE: when moving rows between
+countries, set `currency` EXPLICITLY; the trigger only fills a NULL.**
+
+### **THE IMPORT KEY MUST BE RECOMPUTED OR THE NEXT UPLOAD DUPLICATES**
+`import_uid` is `md5(COUNTRY | source_row | ...)` — **country is its FIRST component.** Left UAE-derived, a
+correct Egypt re-import computes a different uid, matches nothing, and inserts all 1,524 again — **the exact
+path that produced the 8,248 duplicate expense rows.**
+- **THE RECOMPUTATION WAS PROVEN BEFORE BEING TRUSTED:** feeding the CURRENT country back through
+  `parts_import_uid` reproduces the stored uid on **1,519 of 1,524**, which is what establishes the column
+  mapping is right (`p_txn_date` <- `txn_date`, `p_value` <- `value_amount::text`, plus store + cost centre).
+- **RESIDUAL, stated not hidden: 5 rows do not reproduce** (loaded via the app, not the staging pipe, so their
+  original inputs differ slightly). Those 5 could still duplicate on a re-import. Writing the formula value is
+  no worse than leaving them — a NULL uid never dedupes either — and is strictly right for the other 1,519.
+- Verified BEFORE applying: **0 recomputed keys collide** with an existing row, **0 duplicated within the move**.
+
+### **THE TRIGGER RE-CLASSIFIES ON UPDATE, AND HERE THAT WAS CORRECT**
+Measured in a rolled-back run: exactly **3 rows change bucket, all improvements** — `GREASE NIPPLE 4 PIN` and
+`GREASE GUN` move **oil -> spare**. They move because **the material master is keyed PER COUNTRY**: Egypt has
+those reviewed as spare_part and a row tagged UAE could never see that decision. **`line_cost` changed on 0
+rows**, so no money was created or destroyed.
+
+### **HOW TO SPOT THIS CLASS AGAIN**
+A country whose expense rows carry another country's job card prefix. **AFKR + GCKR = KSA · RM = UAE · EG =
+Egypt.** Derive an expense row's country from that prefix or the `SP_EG_` style store code — **NEVER from the
+asset code**, which is a per-country sequence and collides across countries (V376).
+
 ## SESSION 2026-07-28 (part 6) — "ONLY EXPENSES UPLOAD, EVERYTHING ELSE COMES BACK ZERO" (V404). Migrations through **V404**, next free **V405**.
 
 ### **THE HEADLINE BUG: the commit told the ROW `failed` and the USER `committed`**

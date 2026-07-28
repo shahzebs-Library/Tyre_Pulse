@@ -38,7 +38,12 @@ export const ACCIDENT_TYPE_OPTS = [
 ]
 
 // ── GCC accident case-management vocabularies (V219) ─────────────────────────
-export const DAMAGE_CLASS_OPTS    = ['Major', 'Minor']
+// DAMAGE IS TWO QUESTIONS, and they used to be one. `damage_class` and
+// `damage_condition` were both a Minor/Moderate/Major ladder, which is why they
+// read as duplicates of each other. They are now split: this one is HOW BAD (the
+// headline, used for filtering and reporting), and DAMAGE_CONDITION_OPTS below
+// is WHAT was damaged (the detail a workshop needs to quote from).
+export const DAMAGE_CLASS_OPTS    = ['Major', 'Minor', 'Small']
 export const FAULT_STATUS_OPTS    = ['Faulty', 'Non-faulty', 'Under review']
 export const NAJM_STATUS_OPTS     = ['Najm report', 'No Najm']
 export const NAJM_FAULT_OPTS      = ['Faulty', 'Non-faulty', 'N/A']
@@ -83,13 +88,72 @@ export const CURRENT_CONDITION_OPTS = [
 export const WORKFLOW_STAGE_OPTS = CURRENT_CONDITION_OPTS
 export const CASE_STAGE_OPTS = CURRENT_CONDITION_OPTS
 
-// Damage condition is a DISTINCT axis (how bad the body damage is), not a
-// lifecycle stage. Spec-aligned three-band ladder plus N/A (a proper dropdown).
-export const DAMAGE_CONDITION_OPTS = ['Minor', 'Moderate', 'Major', 'N/A']
-// Fold legacy free-text damage-condition values onto the new ladder so an old
-// record still selects a valid option when edited (honest passthrough otherwise).
+// WHAT was damaged - the detail, not the severity (that is DAMAGE_CLASS_OPTS).
+// Ordered lightest first, because the cosmetic cases are the common ones and
+// belong at the top of the list where they are actually picked from.
+export const DAMAGE_CONDITION_OPTS = [
+  'Scratch',
+  'Minor cosmetic',
+  'Dent',
+  'Panel / body damage',
+  'Glass / windscreen',
+  'Lights / mirrors',
+  'Tyre / wheel',
+  'Mechanical damage',
+  'Structural damage',
+  'Total loss',
+  'N/A',
+]
+
+// Legacy values fold onto the new list so an old record still selects a valid
+// option when edited, and nothing already recorded loses its meaning.
+//
+// THE SEVERITY WORDS MOVE, THEY ARE NOT DISCARDED. 'Minor', 'Moderate' and
+// 'Major' were severities living in the detail field; on the 25 live records
+// carrying one, `damageDetailFromLegacy` maps them to the closest detail and
+// `damageClassFromLegacy` keeps the severity itself on damage_class where it now
+// belongs. Reading 'Minor' as a scratch would be inventing a fact nobody
+// recorded, so it maps to the honest 'Minor cosmetic' instead.
 export const DAMAGE_CONDITION_ALIAS = {
-  'major repair': 'Major', 'total loss': 'Major', 'structural': 'Major', 'cosmetic': 'Minor',
+  'major repair': 'Structural damage',
+  'total loss': 'Total loss',
+  'structural': 'Structural damage',
+  'cosmetic': 'Minor cosmetic',
+  'scratch': 'Scratch',
+  'dent': 'Dent',
+  'minor': 'Minor cosmetic',
+  'moderate': 'Panel / body damage',
+  'major': 'Structural damage',
+}
+
+/** Severity implied by a legacy damage_condition value, for records written
+ *  before the two fields were separated. Returns '' when it implies nothing. */
+export const damageClassFromLegacy = (v) => ({
+  minor: 'Minor', moderate: 'Major', major: 'Major',
+  'major repair': 'Major', 'total loss': 'Major', structural: 'Major', cosmetic: 'Minor',
+})[String(v ?? '').trim().toLowerCase()] || ''
+
+// ── Workshops ───────────────────────────────────────────────────────────────
+// workshop_name was free text and the SAME internal workshop is recorded four
+// ways in the live data: 'GCC Workshop', 'GCC workshop', 'GCC  Workshop' (double
+// space) and 'GCC '. Four spellings of one workshop means four rows in any
+// by-workshop report. A controlled list per repair type fixes that at the point
+// of entry rather than cleaning it up afterwards forever.
+export const INTERNAL_WORKSHOPS = ['GCC Workshop']
+export const EXTERNAL_WORKSHOPS = ['Vision Workshop']
+/** Workshops offered for a repair type. 'Other' keeps a genuinely new workshop
+ *  enterable rather than forcing someone to pick a wrong one. */
+export const workshopsFor = (repairType) => (
+  repairIsInternal(repairType) ? [...INTERNAL_WORKSHOPS] : [...EXTERNAL_WORKSHOPS]
+)
+/** Fold the recorded spellings onto the canonical name. */
+export const canonWorkshop = (v) => {
+  const t = String(v ?? '').trim().replace(/\s+/g, ' ')
+  if (!t) return ''
+  const low = t.toLowerCase()
+  if (low === 'gcc' || low.startsWith('gcc workshop') || low === 'gcc  workshop') return 'GCC Workshop'
+  const hit = [...INTERNAL_WORKSHOPS, ...EXTERNAL_WORKSHOPS].find((w) => w.toLowerCase() === low)
+  return hit || t
 }
 
 // ── Incident Report screen dropdowns + gates (spec-driven) ───────────────────

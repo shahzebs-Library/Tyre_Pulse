@@ -106,7 +106,9 @@ export const STAGE_FIELDS = Object.freeze({
     ],
     optional: [
       { key: 'workshop_name', label: 'Workshop' },
-      { key: 'workshop_location', label: 'Workshop location' },
+      // workshop_location is deliberately absent: it was empty on 30 of the 35
+      // live records and duplicated `site`, so it asked for the same fact twice
+      // and got it once.
       { key: 'expected_release_date', label: 'Expected release date' },
     ],
   },
@@ -188,6 +190,65 @@ export const STAGE_FIELDS = Object.freeze({
   cancelled: { intent: 'Case withdrawn.', required: [], optional: [] },
 })
 
+// ── Which stages apply to THIS case ─────────────────────────────────────────
+/**
+ * A stage can be switched off for a case that does not need it - a scratch in a
+ * car park needs no HSE investigation, and forcing one leaves the case showing an
+ * outstanding stage nobody will ever fill.
+ *
+ * A waived stage is HIDDEN from the ladder and counts as neither missing nor
+ * skipped. The waiver itself is kept on the record (who, when, why), because
+ * hiding a stage from the working view is a display decision, while forgetting
+ * who decided a team was not needed would make the audit trail lie.
+ */
+export function stageApplies(record, stage) {
+  const w = record?.stage_waivers?.[stage]
+  if (!w) return true                       // absent key = the stage applies
+  return w.required !== false
+}
+
+/** The waivers on a record, as a readable list. Used where the OFF switches are
+ *  set, so a hidden stage is still explainable there. */
+export function waivedStages(record) {
+  const w = record?.stage_waivers
+  if (!w || typeof w !== 'object') return []
+  return Object.entries(w)
+    .filter(([, v]) => v && v.required === false)
+    .map(([stage, v]) => ({
+      stage,
+      label: stageLabel(stage),
+      department: stageDepartment(stage),
+      remark: s(v.remark),
+      at: v.at || null,
+      by: v.by || null,
+    }))
+}
+
+/**
+ * The team a signed-in user belongs to, from their role.
+ *
+ * There is no department column on profiles, so the role is the only signal
+ * available. It is a MAPPING, not a guess dressed as data: a role that does not
+ * clearly belong to one team returns '' and that user sees every section, which
+ * is the safe direction to be wrong in - showing too much is a nuisance, hiding
+ * a team's own work from them is a broken workflow.
+ */
+export function teamForRole(role) {
+  const r = s(role).toLowerCase()
+  if (!r) return ''
+  if (/workshop|mechanic|technician|foreman/.test(r)) return 'Workshop'
+  if (/insur|claim/.test(r)) return 'Insurance'
+  if (/hse|safety/.test(r)) return 'HSE / Safety'
+  if (/financ|account/.test(r)) return 'Finance'
+  if (/fleet|pmv/.test(r)) return 'Fleet / PMV'
+  if (/site|supervisor/.test(r)) return 'Site Management'
+  if (/operation|dispatch/.test(r)) return 'Operations'
+  return ''
+}
+
+/** Stages that apply to a case, in pipeline order. */
+export const applicableStages = (record) => STAGE_FLOW.filter((k) => stageApplies(record, k))
+
 /** The team that owns a stage. `stageDept` (accidentWorkflow) is the one source;
  *  this only normalises its null to '' so callers can compare strings. */
 export const stageDepartment = (stage) => stageDept(stage) || ''
@@ -264,7 +325,7 @@ export function caseProgress(record, events = [], now = Date.now()) {
   const current = s(record?.workflow_stage) || 'reported'
   const curIdx = stageIndex(current)
 
-  const rows = STAGE_FLOW.map((stage) => {
+  const rows = applicableStages(record || {}).map((stage) => {
     const idx = stageIndex(stage)
     const occ = (byStage.get(stage) || []).slice()
       .sort((a, b) => new Date(a.entered_at) - new Date(b.entered_at))
@@ -309,6 +370,9 @@ export function caseProgress(record, events = [], now = Date.now()) {
   return {
     stage: current,
     rows,
+    // Waived stages are absent from `rows` by construction; they are surfaced
+    // separately so the place that switches them off can still explain them.
+    waived: waivedStages(record),
     skipped: rows.filter((r) => r.state === 'skipped'),
     // Completeness of the work the case has actually REACHED. Measuring against
     // all eleven stages would make every young case look neglected.

@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import {
   STAGE_FIELDS, STAGE_TEAMS, stageDepartment, fieldFilled, stageCompletion,
   caseProgress, teamPerformance, longestWaiting, skippedStageReport,
-  buildStageIntelligence, median,
+  buildStageIntelligence, median, stageApplies, applicableStages, waivedStages, teamForRole,
 } from '../lib/accidentStages'
 import { STAGE_FLOW, WORKFLOW_STAGES } from '../lib/accidentWorkflow'
 
@@ -330,5 +330,85 @@ describe('median', () => {
     expect(median([1, 2, 3, 100])).toBe(2.5)
     expect(median([])).toBeNull()
     expect(median([null, undefined, 4])).toBe(4)
+  })
+})
+
+describe('stage applicability', () => {
+  const waived = {
+    id: 'a1', workflow_stage: 'workshop_assessment',
+    stage_waivers: { hse_investigation: { required: false, remark: 'Minor scratch, no injury' } },
+  }
+
+  it('hides a waived stage from the ladder entirely', () => {
+    const p = caseProgress(waived, [], NOW)
+    expect(p.rows.some((r) => r.stage === 'hse_investigation')).toBe(false)
+    expect(p.rows.some((r) => r.stage === 'workshop_assessment')).toBe(true)
+  })
+
+  it('does not count a waived stage as missing or skipped', () => {
+    // The whole point: forcing HSE on a car-park scratch leaves an outstanding
+    // stage nobody will ever fill, which is what made the ladder feel like
+    // paperwork rather than a workflow.
+    const p = caseProgress(waived, [], NOW)
+    expect(p.outstanding.some((o) => o.stage === 'hse_investigation')).toBe(false)
+    expect(p.skipped.some((r) => r.stage === 'hse_investigation')).toBe(false)
+  })
+
+  it('keeps the waiver on the record even though the stage is hidden', () => {
+    // Hiding a stage from the working view is a display decision. Forgetting who
+    // decided a team was not needed would make the audit trail lie.
+    const p = caseProgress(waived, [], NOW)
+    expect(p.waived).toHaveLength(1)
+    expect(p.waived[0]).toMatchObject({
+      stage: 'hse_investigation', department: 'HSE / Safety', remark: 'Minor scratch, no injury',
+    })
+  })
+
+  it('treats an absent key as "the stage applies", so nothing changes by default', () => {
+    // Today's 35 live cases have no waivers at all and must be unaffected.
+    const plain = { id: 'a2', workflow_stage: 'reported' }
+    expect(stageApplies(plain, 'hse_investigation')).toBe(true)
+    expect(applicableStages(plain)).toEqual(STAGE_FLOW)
+    expect(caseProgress(plain, [], NOW).waived).toEqual([])
+  })
+
+  it('reinstates a stage when the switch goes back on', () => {
+    const back = { ...waived, stage_waivers: { hse_investigation: { required: true } } }
+    expect(stageApplies(back, 'hse_investigation')).toBe(true)
+    expect(caseProgress(back, [], NOW).rows.some((r) => r.stage === 'hse_investigation')).toBe(true)
+  })
+
+  it('leaves a waived team out of the workload figures', () => {
+    const perf = teamPerformance([waived], [], NOW)
+    const hse = perf.find((t) => t.department === 'HSE / Safety')
+    expect(hse.skippedStages).toBe(0)
+    expect(hse.missingFields).toBe(0)
+  })
+})
+
+describe('teamForRole', () => {
+  it('maps the roles that clearly belong to one team', () => {
+    expect(teamForRole('Workshop Supervisor')).toBe('Workshop')
+    expect(teamForRole('mechanic')).toBe('Workshop')
+    expect(teamForRole('Insurance Officer')).toBe('Insurance')
+    expect(teamForRole('HSE Manager')).toBe('HSE / Safety')
+    expect(teamForRole('Finance Controller')).toBe('Finance')
+    expect(teamForRole('Fleet Supervisor')).toBe('Fleet / PMV')
+  })
+
+  it('returns nothing for a role that does not belong to one team', () => {
+    // Then the user sees EVERY section. Showing too much is a nuisance; hiding a
+    // team's own work from them is a broken workflow, so this fails open.
+    expect(teamForRole('Admin')).toBe('')
+    expect(teamForRole('Director')).toBe('')
+    expect(teamForRole('')).toBe('')
+    expect(teamForRole(null)).toBe('')
+  })
+
+  it('only ever names a team that actually owns a stage', () => {
+    for (const role of ['Workshop', 'Insurance Officer', 'HSE', 'Finance', 'Fleet', 'Site', 'Operations']) {
+      const t = teamForRole(role)
+      if (t) expect(STAGE_TEAMS, role).toContain(t)
+    }
   })
 })

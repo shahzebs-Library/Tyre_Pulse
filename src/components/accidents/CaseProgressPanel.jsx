@@ -3,7 +3,8 @@ import {
   CheckCircle2, Circle, SkipForward, Loader2, ChevronRight, AlertTriangle,
   Clock, Users, Save, ArrowRight,
 } from 'lucide-react'
-import { caseProgress } from '../../lib/accidentStages'
+import { caseProgress, teamForRole } from '../../lib/accidentStages'
+import { useAuth } from '../../contexts/AuthContext'
 import { listCaseStageEvents, saveStageFields, advanceStage } from '../../lib/api/accidentStages'
 import { nextStages } from '../../lib/accidentWorkflow'
 import { toUserMessage } from '../../lib/safeError'
@@ -201,6 +202,12 @@ function StageRow({ row, record, canEdit, onSaved, onAdvance, advancing }) {
 }
 
 export default function CaseProgressPanel({ record, canEdit = false, onChanged }) {
+  const { profile } = useAuth()
+  // The team this user belongs to, so Workshop opens on Workshop rather than on
+  // eleven stages of which two are theirs. Everything stays reachable - this is
+  // a default focus, not a permission.
+  const myTeam = teamForRole(profile?.role)
+  const [mineOnly, setMineOnly] = useState(!!myTeam)
   const [events, setEvents] = useState([])
   const [loading, setLoading] = useState(true)
   const [err, setErr] = useState(null)
@@ -250,6 +257,14 @@ export default function CaseProgressPanel({ record, canEdit = false, onChanged }
         )}
       </div>
 
+      {progress.waived.length > 0 && (
+        <p className="text-xs text-[var(--text-muted)]">
+          {progress.waived.length} stage{progress.waived.length === 1 ? '' : 's'} marked not required for
+          this case and hidden: {progress.waived.map((w) => w.label
+            + (w.remark ? ` (${w.remark})` : '')).join(', ')}. Change that on the incident form.
+        </p>
+      )}
+
       {progress.skipped.length > 0 && (
         <div className="text-xs border border-amber-700/50 bg-amber-950/25 text-amber-200 rounded-lg px-3 py-2">
           <p className="flex items-start gap-1.5">
@@ -288,12 +303,36 @@ export default function CaseProgressPanel({ record, canEdit = false, onChanged }
         </p>
       )}
 
+      {myTeam && (
+        <div className="flex flex-wrap items-center gap-2 text-xs">
+          <button type="button" onClick={() => setMineOnly((v) => !v)}
+            className={`px-2.5 py-1 rounded-md border font-medium transition-colors ${
+              mineOnly
+                ? 'bg-orange-500/15 text-orange-300 border-orange-500/30'
+                : 'bg-[var(--surface-2)] text-[var(--text-secondary)] border-[var(--input-border)]'}`}>
+            {mineOnly ? `Showing ${myTeam} only` : 'Showing every team'}
+          </button>
+          <span className="text-[var(--text-muted)]">
+            {mineOnly
+              ? 'Your team\u2019s stages. Switch to see the whole case.'
+              : `Every stage on the case. ${myTeam} owns the highlighted ones.`}
+          </span>
+        </div>
+      )}
+
       <div className="space-y-1.5">
-        {progress.rows.map((row) => (
+        {progress.rows
+          .filter((row) => !mineOnly || !myTeam || row.department === myTeam)
+          .map((row) => (
           <StageRow key={row.stage} row={row} record={record} canEdit={canEdit}
             onSaved={() => { setTick((t) => t + 1); onChanged?.() }}
             onAdvance={handleAdvance} advancing={advancing} />
-        ))}
+          ))}
+        {mineOnly && myTeam && !progress.rows.some((r) => r.department === myTeam) && (
+          <p className="text-xs text-[var(--text-muted)] px-1">
+            No stage on this case belongs to {myTeam}. Switch to every team to see the rest.
+          </p>
+        )}
       </div>
     </div>
   )

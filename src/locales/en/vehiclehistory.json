@@ -67,6 +67,7 @@
     "year": "Year",
     "type": "Type",
     "operator": "Operator",
+    "currentKm": "Current KM",
     "noFleetRecord": "No fleet record -",
     "addInFleetMaster": "add in Fleet Master",
     "tyrePositionOverview": "Tyre Position Overview",

@@ -67,6 +67,7 @@
     "year": "السنة",
     "type": "النوع",
     "operator": "المشغّل",
+    "currentKm": "الكيلومترات الحالية",
     "noFleetRecord": "لا يوجد سجل أسطول -",
     "addInFleetMaster": "أضفه في إدارة الأسطول",
     "tyrePositionOverview": "نظرة عامة على مواضع الإطارات",

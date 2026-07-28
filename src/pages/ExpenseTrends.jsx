@@ -18,13 +18,14 @@ import {
 import { Bar, Line, Doughnut } from 'react-chartjs-2'
 import {
   TrendingUp, TrendingDown, LineChart, Layers, Calendar, FileSpreadsheet,
-  FileText, RefreshCcw, AlertTriangle, Sparkles, Gauge,
+  FileText, RefreshCcw, AlertTriangle, Sparkles, Gauge, X,
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
 import { useSettings } from '../contexts/SettingsContext'
 import { getExpensePeriodTrend } from '../lib/api/expenseTrends'
 import {
   byCountry, buildCountryTrend, CATEGORIES, CATEGORY_LABEL, num,
+  filterPeriods, availableYears, MONTHS,
 } from '../lib/expenseTrends'
 import { toUserMessage } from '../lib/safeError'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
@@ -205,6 +206,10 @@ const GRAIN_OPTS = [['year', 'Year'], ['quarter', 'Quarter'], ['month', 'Month']
 export default function ExpenseTrends() {
   const { activeCountry } = useSettings()
   const [grain, setGrain] = useState('year')
+  const [fromYear, setFromYear] = useState('')
+  const [fromMonth, setFromMonth] = useState('')
+  const [toYear, setToYear] = useState('')
+  const [toMonth, setToMonth] = useState('')
   const [rows, setRows] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -222,7 +227,20 @@ export default function ExpenseTrends() {
 
   useEffect(() => { load() }, [load])
 
-  const countries = useMemo(() => byCountry(rows), [rows])
+  const allCountries = useMemo(() => byCountry(rows), [rows])
+  const yearOpts = useMemo(() => availableYears(allCountries), [allCountries])
+  const fromYm = fromYear ? `${fromYear}-${fromMonth || '01'}` : null
+  const toYm = toYear ? `${toYear}-${toMonth || '12'}` : null
+
+  // Apply the date-range window to the displayed periods (client-side).
+  const countries = useMemo(
+    () => allCountries
+      .map((c) => ({ ...c, years: filterPeriods(c.years, fromYm, toYm) }))
+      .filter((c) => c.years.length),
+    [allCountries, fromYm, toYm],
+  )
+  const rangeActive = !!(fromYm || toYm)
+  function clearRange() { setFromYear(''); setFromMonth(''); setToYear(''); setToMonth('') }
 
   function exportAll() {
     const out = []
@@ -257,6 +275,35 @@ export default function ExpenseTrends() {
           </div>
         }
       />
+
+      {/* Date-range window (feeds the trend + forecast) */}
+      <div className="card p-3 flex flex-wrap items-center gap-3">
+        <span className="text-xs uppercase tracking-wide text-slate-400 flex items-center gap-1"><Calendar className="w-3.5 h-3.5" /> Date range</span>
+        <div className="flex items-center gap-1.5">
+          <span className="text-xs text-slate-500">From</span>
+          <select value={fromMonth} onChange={(e) => setFromMonth(e.target.value)} className="input py-1 text-xs">
+            <option value="">Any month</option>
+            {MONTHS.map((m, i) => <option key={m} value={String(i + 1).padStart(2, '0')}>{m}</option>)}
+          </select>
+          <select value={fromYear} onChange={(e) => setFromYear(e.target.value)} className="input py-1 text-xs">
+            <option value="">Any year</option>
+            {yearOpts.map((y) => <option key={y} value={y}>{y}</option>)}
+          </select>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <span className="text-xs text-slate-500">To</span>
+          <select value={toMonth} onChange={(e) => setToMonth(e.target.value)} className="input py-1 text-xs">
+            <option value="">Any month</option>
+            {MONTHS.map((m, i) => <option key={m} value={String(i + 1).padStart(2, '0')}>{m}</option>)}
+          </select>
+          <select value={toYear} onChange={(e) => setToYear(e.target.value)} className="input py-1 text-xs">
+            <option value="">Any year</option>
+            {yearOpts.map((y) => <option key={y} value={y}>{y}</option>)}
+          </select>
+        </div>
+        {rangeActive && <button onClick={clearRange} className="btn-ghost text-xs gap-1"><X className="w-3.5 h-3.5" /> Clear</button>}
+        <span className="text-xs text-slate-500 ml-auto">{rangeActive ? 'Forecast is projected from the selected window.' : 'All periods'}</span>
+      </div>
 
       {error && (
         <div className="card p-4 border border-red-500/40 flex items-center justify-between">

@@ -20,7 +20,7 @@ import { Bar } from 'react-chartjs-2'
 import { TrendingUp, TrendingDown, Sparkles, AlertTriangle } from 'lucide-react'
 import { useSettings } from '../../contexts/SettingsContext'
 import { getExpensePeriodTrend } from '../../lib/api/expenseTrends'
-import { byCountry, buildCountryTrend, CATEGORIES, CATEGORY_LABEL, num } from '../../lib/expenseTrends'
+import { byCountry, buildCountryTrend, CATEGORIES, CATEGORY_LABEL, num, filterPeriods, availableYears, MONTHS } from '../../lib/expenseTrends'
 import { toUserMessage } from '../../lib/safeError'
 import { withAlpha } from '../../lib/reportColors'
 
@@ -90,6 +90,10 @@ export default function YearlyTrendPanel({ compact = false, country, title = 'Ex
   const { activeCountry } = useSettings()
   const scope = country ?? activeCountry
   const [grain, setGrain] = useState(defaultGrain)
+  const [fromYear, setFromYear] = useState('')
+  const [fromMonth, setFromMonth] = useState('')
+  const [toYear, setToYear] = useState('')
+  const [toMonth, setToMonth] = useState('')
   const [rows, setRows] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -107,7 +111,14 @@ export default function YearlyTrendPanel({ compact = false, country, title = 'Ex
 
   useEffect(() => { load() }, [load])
 
-  const countries = useMemo(() => byCountry(rows), [rows])
+  const allCountries = useMemo(() => byCountry(rows), [rows])
+  const yearOpts = useMemo(() => availableYears(allCountries), [allCountries])
+  const fromYm = fromYear ? `${fromYear}-${fromMonth || '01'}` : null
+  const toYm = toYear ? `${toYear}-${toMonth || '12'}` : null
+  const countries = useMemo(
+    () => allCountries.map((c) => ({ ...c, years: filterPeriods(c.years, fromYm, toYm) })).filter((c) => c.years.length),
+    [allCountries, fromYm, toYm],
+  )
 
   return (
     <div className="card p-4 space-y-4">
@@ -126,6 +137,31 @@ export default function YearlyTrendPanel({ compact = false, country, title = 'Ex
           ))}
         </div>
       </div>
+      {!compact && yearOpts.length > 0 && (
+        <div className="flex flex-wrap items-center gap-1.5 text-xs" style={{ color: 'var(--text-muted)' }}>
+          <span>From</span>
+          <select value={fromMonth} onChange={(e) => setFromMonth(e.target.value)} className="input py-0.5 text-xs">
+            <option value="">Any</option>
+            {MONTHS.map((m, i) => <option key={m} value={String(i + 1).padStart(2, '0')}>{m}</option>)}
+          </select>
+          <select value={fromYear} onChange={(e) => setFromYear(e.target.value)} className="input py-0.5 text-xs">
+            <option value="">Any</option>
+            {yearOpts.map((y) => <option key={y} value={y}>{y}</option>)}
+          </select>
+          <span>To</span>
+          <select value={toMonth} onChange={(e) => setToMonth(e.target.value)} className="input py-0.5 text-xs">
+            <option value="">Any</option>
+            {MONTHS.map((m, i) => <option key={m} value={String(i + 1).padStart(2, '0')}>{m}</option>)}
+          </select>
+          <select value={toYear} onChange={(e) => setToYear(e.target.value)} className="input py-0.5 text-xs">
+            <option value="">Any</option>
+            {yearOpts.map((y) => <option key={y} value={y}>{y}</option>)}
+          </select>
+          {(fromYm || toYm) && (
+            <button onClick={() => { setFromYear(''); setFromMonth(''); setToYear(''); setToMonth('') }} className="underline">clear</button>
+          )}
+        </div>
+      )}
       {loading ? (
         <div style={{color:'var(--text-muted)'}} className="py-8 text-center text-sm">Loading…</div>
       ) : error ? (

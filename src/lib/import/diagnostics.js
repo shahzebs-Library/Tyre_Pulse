@@ -368,10 +368,17 @@ export function summarizeCommitResult(result) {
   const partial = status === 'partial'
   const stalled = status !== 'committed' && remaining > 0
 
+  // A commit that wrote nothing is never "ok". The server used to return
+  // 'committed' for it, so this graded a zero-row run as a success and the page
+  // drew a green tick reading "Committed - 0 row(s) inserted". V404 gives that
+  // case its own status; treat any zero-insert run as a warning even if an older
+  // backend still calls it committed.
+  const wroteNothing = inserted === 0 && merged === 0
   let level = 'ok'
   if (status === 'failed' || failed > 0) level = 'error'
   else if (partial || stalled || status === 'already_committed') level = 'warn'
-  if (status === 'committed' && failed === 0) level = 'ok'
+  else if (status === 'nothing_to_commit' || wroteNothing) level = 'warn'
+  if (status === 'committed' && failed === 0 && !wroteNothing) level = 'ok'
 
   // Headline: the numbers that matter, in priority order.
   const parts = []
@@ -382,6 +389,12 @@ export function summarizeCommitResult(result) {
   if (enriched > 0) parts.push(`${fmtInt(enriched)} enriched`)
   let headline = parts.join(', ')
   if (status === 'already_committed') headline = headline ? `Already committed (${headline})` : 'Already committed'
+  // NOT for already_committed: that batch DID import its rows, on an earlier
+  // run. Telling the user "nothing was imported" would be the opposite of true.
+  if (status !== 'already_committed'
+      && (status === 'nothing_to_commit' || (wroteNothing && failed === 0 && !partial && !stalled))) {
+    headline = 'Nothing was imported'
+  }
 
   // Group errors by normalised message.
   const groupMap = new Map()
@@ -410,6 +423,28 @@ export function summarizeCommitResult(result) {
   }
   if (partial && !stalled) {
     hints.push('The commit completed only partially - re-run it to process the remaining rows.')
+  }
+  // Say WHY nothing was imported. "0 rows" on its own sends the user round the
+  // same loop; these two cases have opposite fixes and must not read the same.
+  if (wroteNothing && failed === 0 && !partial && !stalled && status !== 'already_committed') {
+    const ne = r.not_eligible && typeof r.not_eligible === 'object' ? r.not_eligible : {}
+    const errored = toNum(ne['insert/error'])
+    const skippedRows = Object.entries(ne)
+      .filter(([k]) => k.startsWith('skip/'))
+      .reduce((s, [, v]) => s + toNum(v), 0)
+    if (errored > 0) {
+      hints.push(
+        `Nothing was imported: ${fmtInt(errored)} row(s) were marked failed by an earlier attempt at this batch and are not tried again. Fix the source data and upload the file as a NEW batch.`
+      )
+    } else if (skippedRows > 0) {
+      hints.push(
+        `Nothing was imported: all ${fmtInt(skippedRows)} row(s) already exist in the system, so there was nothing new to add. That is the correct outcome for a repeat file.`
+      )
+    } else {
+      hints.push(
+        'Nothing was imported and no row failed - every row was either already processed or not marked for insert. Check the row list before uploading again.'
+      )
+    }
   }
   if (status === 'already_committed') {
     hints.push('This batch was already committed - no rows were written again. Reverse it first if you need to re-import.')

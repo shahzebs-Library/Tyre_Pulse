@@ -217,7 +217,10 @@ function mapComplaints(dataRows, headerRow, country) {
       notes: notes || null, site: cellAt(r, c.loc) || null, workshop_name: cellAt(r, c.wshop) || null,
       technician_name: cellAt(r, c.driver) || null,
       odometer: numStr(cellAt(r, c.kmhr)) || null,
-      opened_at: parseDate(cellAt(r, c.indt)) || null, completed_at: outDate || null,
+      // See the note in mapCombined: an explicit null defeats the NOT NULL
+      // column default and kills the whole batch on one blank date.
+      ...(parseDate(cellAt(r, c.indt)) ? { opened_at: parseDate(cellAt(r, c.indt)) } : {}),
+      completed_at: outDate || null,
       custom_data: { source: 'Vehicle Complaints History', ...rawObject(headerRow, r) },
       country,
     })
@@ -257,7 +260,13 @@ function mapCombined(dataRows, headerRow, country) {
         description: (cellAt(r, c.comp) || '').slice(0, 1000),
         notes: notes || null, site: cellAt(r, c.loc) || null, workshop_name: cellAt(r, c.wshop) || null,
         odometer: numStr(cellAt(r, c.km)) || null,
-        opened_at: parseDate(cellAt(r, c.indt)) || null, completed_at: outDate || null,
+        // opened_at is NOT NULL in work_orders with a now() DEFAULT, and a column
+        // default does NOT apply when the client sends an explicit null. A single
+        // blank date used to abort the entire batch at zero rows with a sanitized
+        // message that never mentioned the column. Omitting the key lets the
+        // default do its job; the real value is still preserved in custom_data.
+        ...(parseDate(cellAt(r, c.indt)) ? { opened_at: parseDate(cellAt(r, c.indt)) } : {}),
+        completed_at: outDate || null,
         custom_data: { source: 'Combined Job Card + Tyre', ...rawObject(headerRow, r) },
         country,
       })

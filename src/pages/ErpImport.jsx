@@ -9,7 +9,7 @@ import PageHeader from '../components/ui/PageHeader'
 import { parseWorkbook } from '../lib/import'
 import {
   DATASET_LIST, DATASETS, mapSheetToRows, deriveTyreActivity, validateExpense,
-  isEmptyMappedRow, normHeader,
+  isEmptyMappedRow, rowHasKey, sheetMatchQuality, normHeader,
 } from '../lib/erpImport'
 import {
   listImportBatches, listImportRows, saveImportRows, deleteImportBatch,
@@ -31,11 +31,23 @@ function newBatchId() {
   return 'b-' + Date.now().toString(16) + '-' + Math.random().toString(16).slice(2, 10)
 }
 
-/** Auto-detect the sheet whose name matches a dataset's template tab. */
+/**
+ * Auto-detect the sheet whose name matches a dataset's template tab.
+ *
+ * Falling back to sheet 0 when nothing matches is kept ONLY for a single-sheet
+ * workbook, where there is no other sheet it could mean. In a multi-tab
+ * workbook that fallback silently mapped the wrong tab against the wrong column
+ * set and produced rows in which every business column was null - the user was
+ * told "Saved 18 of 18 rows" for a sheet nothing had been read from. When
+ * several sheets are present and none matches, the user picks.
+ */
 function detectSheetIndex(sheets, dataset) {
+  const list = sheets || []
+  if (!list.length) return -1
   const wanted = new Set((dataset.tabAliases || []).map(normHeader))
-  const idx = (sheets || []).findIndex((s) => wanted.has(normHeader(s.name)))
-  return idx >= 0 ? idx : (sheets?.length ? 0 : -1)
+  const idx = list.findIndex((s) => wanted.has(normHeader(s.name)))
+  if (idx >= 0) return idx
+  return list.length === 1 ? 0 : -1
 }
 
 function fmtDate(v) {
@@ -69,10 +81,21 @@ export default function ErpImport() {
   const sheet = parsed?.sheets?.[sheetIdx] || null
 
   // Mapped rows for the currently selected sheet + dataset.
+  //
+  // A row without the dataset's identifying value is dropped. "Not every column
+  // is null" was the old test and it was far too weak: one incidental alias hit
+  // was enough to save rows carrying no asset, serial, date or job card.
   const mapped = useMemo(() => {
     if (!sheet) return []
     const rows = mapSheetToRows(datasetKey, sheet.rows || [])
-    return rows.filter((r) => !isEmptyMappedRow(datasetKey, r))
+    return rows.filter((r) => rowHasKey(datasetKey, r))
+  }, [sheet, datasetKey])
+
+  // How well this sheet matched, so the page can say so instead of saving
+  // content-free rows and calling it a success.
+  const match = useMemo(() => {
+    if (!sheet) return null
+    return sheetMatchQuality(datasetKey, mapSheetToRows(datasetKey, sheet.rows || []))
   }, [sheet, datasetKey])
 
   // Derived intelligence: active-vs-old for change; expense cross-check.
@@ -185,7 +208,7 @@ export default function ErpImport() {
     <div className="p-6 max-w-[1800px] mx-auto text-[var(--text-primary)]">
       <PageHeader
         title="ERP Data Import"
-        subtitle="Parse a filled ERP template, save rows into review tables, then cross-check every detail before promotion."
+        subtitle="Parse a filled ERP template and save rows into a review table you can check, export and delete."
         icon={Database}
         showBack
       />
@@ -221,7 +244,7 @@ export default function ErpImport() {
           <Info size={13} />
           {datasetKey === 'production'
             ? 'Production m3 loads directly into the live Cost Center production log.'
-            : 'Rows are saved to a review table first. Promotion into the master tables is a separate, deliberate step.'}
+            : 'Rows are saved to a review table only. Moving them into the master tables is NOT built yet, so this page cannot add assets, tyres or costs to the system.'}
         </p>
       </div>
 
@@ -247,6 +270,7 @@ export default function ErpImport() {
             busy={busy}
             progress={progress}
             mapped={mapped}
+            match={match}
             derived={derived}
             activeCount={activeCount}
             warnCount={warnCount}
@@ -267,7 +291,7 @@ export default function ErpImport() {
 
 function ImportPanel({
   dataset, datasetKey, canWrite, countryTag, fileRef, fileName, parsed, sheet, sheetIdx,
-  setSheetIdx, busy, progress, mapped, derived, activeCount, warnCount, onFile, onSave, onReset,
+  setSheetIdx, busy, progress, mapped, match, derived, activeCount, warnCount, onFile, onSave, onReset,
   saveResult,
 }) {
   const displayCols = dataset.columns.map((c) => c.key)
@@ -418,9 +442,33 @@ function ImportPanel({
         </div>
       )}
 
-      {sheet && mapped.length === 0 && (
+      {/* A sheet that produced rows but no IDENTIFIABLE rows is the wrong sheet.
+          Saying so is the whole point: this exact case previously saved 18 rows
+          in which every business column was null and reported it as a success. */}
+      {sheet && match?.unusable && (
+        <div className="bg-amber-900/15 border border-amber-700/40 rounded-xl p-4 text-sm space-y-1">
+          <p className="text-amber-300 flex items-center gap-2">
+            <AlertTriangle size={16} />
+            This does not look like a {dataset.label} sheet.
+          </p>
+          <p className="text-[var(--text-secondary)]">
+            {match.read.toLocaleString()} row(s) were read and none of them has a
+            {' '}<span className="text-[var(--text)]">{match.keyField}</span>, which is the value
+            {' '}{dataset.label} rows are identified by. Nothing will be saved from it.
+            Pick the tab that holds your {dataset.label} data, or switch the type above.
+          </p>
+        </div>
+      )}
+
+      {sheet && mapped.length === 0 && !match?.unusable && (
         <div className="bg-[var(--surface-1)] border border-[var(--border-dim)] rounded-xl p-6 text-center text-sm text-[var(--text-muted)]">
           No rows mapped from this sheet. Check that you selected the right tab for {dataset.label}.
+        </div>
+      )}
+
+      {sheet && sheetIdx < 0 && (
+        <div className="bg-[var(--surface-1)] border border-[var(--border-dim)] rounded-xl p-4 text-sm text-[var(--text-muted)]">
+          No tab in this workbook is named like a {dataset.label} sheet. Choose the right one above.
         </div>
       )}
 
@@ -439,7 +487,7 @@ function ImportPanel({
             <p className="text-amber-300">{saveResult.failures.length} row(s) failed: {saveResult.failures.slice(0, 3).join('; ')}{saveResult.failures.length > 3 ? ' ...' : ''}</p>
           )}
           {saveResult.dataset !== 'production' && (
-            <p className="text-[var(--text-secondary)]">Open the Review tab to cross-check this batch before promotion.</p>
+            <p className="text-[var(--text-secondary)]">Open the Review tab to check the batch. These rows stay in the review table and do NOT reach the master tables.</p>
           )}
         </div>
       )}

@@ -306,6 +306,47 @@ export function isEmptyMappedRow(datasetKey, row) {
   return ds.columns.every((c) => row[c.key] == null)
 }
 
+/**
+ * True when a row carries the one value that identifies it.
+ *
+ * "Not every column is null" is far too weak a test for whether a sheet was
+ * understood. It let 18 rows through in which EVERY business column was null -
+ * no asset, no serial, no position, no date, no job card - purely because the
+ * word "location" happened to match the `site` alias. The user was told
+ * "Saved 18 of 18 rows" with a tick, for a sheet nothing had been read from.
+ *
+ * Every dataset already declares its `keyField`; a row without it cannot be
+ * matched to anything later, so it is not a row.
+ */
+export function rowHasKey(datasetKey, row) {
+  const ds = DATASETS[datasetKey]
+  if (!ds || !row) return false
+  const k = ds.keyField
+  if (!k) return !isEmptyMappedRow(datasetKey, row)
+  const v = row[k]
+  return v != null && String(v).trim() !== ''
+}
+
+/**
+ * How well a mapped sheet matches the dataset it is being loaded as.
+ *
+ * Returned so the page can refuse a sheet rather than saving content-free rows.
+ * `keyed` is the number that matters - rows carrying the identifying value.
+ */
+export function sheetMatchQuality(datasetKey, rows) {
+  const list = Array.isArray(rows) ? rows : []
+  const nonEmpty = list.filter((r) => !isEmptyMappedRow(datasetKey, r))
+  const keyed = nonEmpty.filter((r) => rowHasKey(datasetKey, r))
+  return {
+    read: list.length,
+    nonEmpty: nonEmpty.length,
+    keyed: keyed.length,
+    // Nothing identifiable came out of this sheet, whatever else matched.
+    unusable: nonEmpty.length > 0 && keyed.length === 0,
+    keyField: DATASETS[datasetKey]?.keyField || null,
+  }
+}
+
 /* ── Tyre activity intelligence (current vs old) ────────────────────────── */
 
 function serialEq(a, b) {

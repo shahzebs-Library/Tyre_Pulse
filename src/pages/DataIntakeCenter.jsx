@@ -1274,15 +1274,40 @@ export default function DataIntakeCenter() {
               )}
             </div>
           ) : (
+            /* A run that wrote nothing is NOT a success. It used to render green
+               with a tick reading "Committed - 0 row(s) inserted", because the
+               server returned 'committed' for it. */
             <div className={`rounded-xl p-6 ${result.status === 'failed'
               ? 'bg-red-900/20 border border-red-700/50 text-red-300'
-              : 'bg-green-900/20 border border-green-700/50 text-green-300'}`}>
-              {result.status === 'failed' ? <AlertTriangle className="mb-2" /> : <CheckCircle2 className="mb-2" />}
+              : (result.status === 'nothing_to_commit' || (!result.inserted && !result.merged))
+                ? 'bg-amber-900/20 border border-amber-700/50 text-amber-200'
+                : 'bg-green-900/20 border border-green-700/50 text-green-300'}`}>
+              {(result.status === 'failed' || result.status === 'nothing_to_commit' || (!result.inserted && !result.merged))
+                ? <AlertTriangle className="mb-2" /> : <CheckCircle2 className="mb-2" />}
               <p className="font-semibold">
-                {result.status === 'committed' && `Committed - ${result.inserted} row(s) inserted, ${result.skipped} skipped${result.failed ? `, ${result.failed} failed` : ''}${result.enriched ? `, ${result.enriched} existing record(s) enriched` : ''}.`}
+                {result.status === 'committed' && !!result.inserted && `Committed - ${result.inserted} row(s) inserted, ${result.skipped} skipped${result.failed ? `, ${result.failed} failed` : ''}${result.enriched ? `, ${result.enriched} existing record(s) enriched` : ''}.`}
                 {result.status === 'failed' && `No rows could be committed - ${result.failed} row(s) failed. The reasons are listed below.`}
-                {result.status !== 'committed' && result.status !== 'failed' && `Status: ${result.status}`}
+                {(result.status === 'nothing_to_commit' || (result.status === 'committed' && !result.inserted && !result.merged))
+                  && 'Nothing was imported. No row from this batch was written to the system.'}
+                {result.status !== 'committed' && result.status !== 'failed' && result.status !== 'nothing_to_commit' && `Status: ${result.status}`}
               </p>
+              {/* Name the rows that were not even attempted, so the user is not
+                  sent round the same loop guessing. */}
+              {result.not_eligible && Object.keys(result.not_eligible).length > 0 && (
+                <div className="mt-3 bg-black/25 border border-amber-800/40 rounded-lg p-3 space-y-1">
+                  <p className="text-xs font-semibold uppercase tracking-wide">Rows that were not imported</p>
+                  {Object.entries(result.not_eligible).map(([k, n]) => (
+                    <p key={k} className="text-xs">
+                      <span className="font-mono">{n}</span>{' '}
+                      {k === 'insert/error'
+                        ? 'row(s) were marked failed by an earlier attempt at this batch and are never retried. Fix the file and upload it as a new batch.'
+                        : k.startsWith('skip/')
+                          ? 'row(s) already exist in the system, so there was nothing new to add.'
+                          : `row(s) in state ${k}.`}
+                    </p>
+                  ))}
+                </div>
+              )}
               {Array.isArray(result.errors) && result.errors.length > 0 && (
                 <div className="mt-3 bg-black/25 border border-red-800/40 rounded-lg p-3 space-y-1 max-h-52 overflow-y-auto">
                   <p className="text-xs font-semibold text-red-300 uppercase tracking-wide">Why rows failed</p>

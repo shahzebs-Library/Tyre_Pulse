@@ -4,7 +4,7 @@ import {
   CheckSquare, X, Search, Clock, Inbox, Filter, AlertTriangle,
   ClipboardList, CheckCircle2, XCircle, Undo2, RefreshCw,
   ChevronRight, ServerCrash, Car, ClipboardCheck, Database, Loader2,
-  ExternalLink, GitBranch,
+  ExternalLink, GitBranch, AlertOctagon, Square, Ban,
 } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import * as workflows from '../lib/api/workflows'
@@ -27,12 +27,14 @@ const SOURCE = {
   workflow:         'workflow',
   accident_closure: 'accident_closure',
   checklist:        'checklist',
+  signoff_gap:      'signoff_gap',
 }
 
 const SOURCE_META = {
   workflow:         { label: 'Workflow',          short: 'Workflow',  icon: GitBranch,      tone: 'blue' },
   accident_closure: { label: 'Accident Closure',  short: 'Closure',   icon: Car,            tone: 'red'  },
   checklist:        { label: 'Checklist Sign-off', short: 'Checklist', icon: ClipboardCheck, tone: 'teal' },
+  signoff_gap:      { label: 'Missed sign-off', short: 'Missed', icon: AlertOctagon, tone: 'orange' },
 }
 
 // ─── Bucket + metric definitions ───────────────────────────────────────────────
@@ -43,6 +45,11 @@ const BUCKETS = [
   { key: 'returned',           label: 'Returned',          icon: Undo2,         tone: 'orange' },
   { key: 'rejected',           label: 'Rejected',          icon: XCircle,       tone: 'red'    },
   { key: 'recently_approved',  label: 'Recently Approved', icon: CheckCircle2,  tone: 'green'  },
+  // Not a queue of things to decide - a queue of things that were never asked.
+  // A submission from a template that requires sign-off should have entered the
+  // pending list; one recorded 'not_required' silently skipped it, and an empty
+  // Pending tab reads as "nobody needed to sign anything".
+  { key: 'signoff_gaps',       label: 'Missed sign-off',   icon: AlertOctagon,  tone: 'orange' },
 ]
 
 const EMPTY_BUCKETS = {
@@ -137,6 +144,25 @@ function toClosureItem(a) {
   }
 }
 
+/**
+ * A submission that was supposed to need sign-off and never asked for it.
+ * Shown as a fact to correct, not as a pending decision - the sign-off moment has
+ * passed, so what is on offer is recording one now.
+ */
+function toSignoffGapItem(c) {
+  return {
+    source: SOURCE.signoff_gap,
+    id: c.id,
+    title: c.title || c.template_name || 'Checklist submission',
+    subtitle: `${c.template_name || 'Template requires sign-off'} - submitted without approval`
+      + (c.asset_no ? ` - ${c.asset_no}` : ''),
+    site: c.site || null,
+    country: c.country || null,
+    created_at: c.submitted_at || null,
+    raw: c,
+  }
+}
+
 function toChecklistItem(c) {
   const title = c.title || c.template_name || 'Checklist submission'
   return {
@@ -182,6 +208,7 @@ function MetricStrip({ metrics, loading }) {
     { key: 'workflow_pending',  label: 'Workflows',         tone: 'blue',  icon: GitBranch },
     { key: 'closures_pending',  label: 'Closures',          tone: 'red',   icon: Car },
     { key: 'checklist_pending', label: 'Checklists',        tone: 'teal',  icon: ClipboardCheck },
+    { key: 'signoff_gaps',      label: 'Missed sign-off',   tone: 'orange', icon: AlertOctagon },
     { key: 'overdue',           label: 'Overdue',           tone: 'red',   icon: AlertTriangle },
     { key: 'recently_approved', label: 'Recently Approved', tone: 'green', icon: CheckCircle2 },
   ]
@@ -257,14 +284,28 @@ function InstanceRow({ instance, bucketKey, onOpen }) {
   )
 }
 
-/** Row for a non-workflow approval item (accident closure / checklist). */
-function GenericRow({ item, onOpen }) {
+/** Row for a non-workflow approval item (accident closure / checklist / gap). */
+function GenericRow({ item, onOpen, selectable = false, picked = false, onTogglePick }) {
   const meta = SOURCE_META[item.source] || SOURCE_META.workflow
+  const isGap = item.source === SOURCE.signoff_gap
   return (
-    <button
-      onClick={() => onOpen(item)}
-      className="w-full text-left flex items-center gap-3 px-4 py-3 rounded-xl border border-[var(--border-dim)] bg-[var(--surface-1)] transition-all hover:border-[var(--border-bright)]"
+    <div
+      className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl border bg-[var(--surface-1)] transition-all ${
+        picked ? 'border-orange-500/60 bg-orange-500/[0.04]' : 'border-[var(--border-dim)] hover:border-[var(--border-bright)]'
+      }`}
     >
+      {/* The checkbox is its own control, not part of the row button: clicking it
+          must select without opening the drawer. */}
+      {selectable && (
+        <button
+          onClick={(e) => { e.stopPropagation(); onTogglePick?.(item) }}
+          aria-label={picked ? 'Deselect' : 'Select'}
+          className="shrink-0 text-[var(--text-muted)] hover:text-orange-300"
+        >
+          {picked ? <CheckSquare className="w-4 h-4 text-orange-400" /> : <Square className="w-4 h-4" />}
+        </button>
+      )}
+      <button onClick={() => onOpen(item)} className="flex-1 min-w-0 text-left flex items-center gap-3">
       <div className={`shrink-0 w-9 h-9 rounded-lg flex items-center justify-center ${TONE_BADGE[meta.tone] || TONE_BADGE.blue}`}>
         <meta.icon className="w-4 h-4" />
       </div>
@@ -280,13 +321,21 @@ function GenericRow({ item, onOpen }) {
         </p>
       </div>
       <div className="hidden md:flex flex-col items-end gap-1 shrink-0">
-        <span className="text-xs whitespace-nowrap text-[var(--text-muted)]">{relTime(item.created_at) || '—'}</span>
+        <span className="text-xs whitespace-nowrap text-[var(--text-muted)]">{relTime(item.created_at) || 'N/A'}</span>
       </div>
-      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[11px] font-semibold bg-amber-500/15 text-amber-300 border-amber-500/30">
-        <Clock className="w-3 h-3" /> Pending
-      </span>
+      {/* A gap is not pending anybody's decision - the moment to sign passed. */}
+      {isGap ? (
+        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[11px] font-semibold bg-orange-500/15 text-orange-300 border-orange-500/30">
+          <AlertOctagon className="w-3 h-3" /> Never asked
+        </span>
+      ) : (
+        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[11px] font-semibold bg-amber-500/15 text-amber-300 border-amber-500/30">
+          <Clock className="w-3 h-3" /> Pending
+        </span>
+      )}
       <ChevronRight className="w-4 h-4 text-[var(--text-muted)] shrink-0" />
-    </button>
+      </button>
+    </div>
   )
 }
 
@@ -388,7 +437,9 @@ function SimpleApprovalDrawer({ item, canAct, onClose, onActed }) {
   const [feedback, setFeedback] = useState(null)
   const { profile } = useAuth()
 
-  const rejectNeedsReason = item.source === SOURCE.checklist // checklist return requires a note
+  // A checklist return requires a note (the service enforces it), and a
+  // retrospective sign-off is the same writer, so the same rule applies.
+  const rejectNeedsReason = item.source === SOURCE.checklist || item.source === SOURCE.signoff_gap
 
   async function act(approved) {
     if (!approved && rejectNeedsReason && !reason.trim()) {
@@ -401,7 +452,11 @@ function SimpleApprovalDrawer({ item, canAct, onClose, onActed }) {
       if (item.source === SOURCE.accident_closure) {
         if (approved) await queue.approveAccidentClosure(item.id)
         else await queue.rejectAccidentClosure(item.id, reason)
-      } else if (item.source === SOURCE.checklist) {
+      } else if (item.source === SOURCE.checklist || item.source === SOURCE.signoff_gap) {
+        // A gap goes through the SAME writer: recording the decision now moves it
+        // out of not_required and stamps who signed it. There is no second path,
+        // so a retrospective sign-off is indistinguishable from a timely one in
+        // the record except by its submitted date, which is the honest outcome.
         await queue.decideChecklist(item.id, {
           approved,
           approverName: profile?.full_name || profile?.username || null,
@@ -651,6 +706,10 @@ export default function Approvals() {
   const [siteFilter, setSiteFilter] = useState('all')
   const [selected, setSelected] = useState(null)               // workflow instance
   const [selectedGeneric, setSelectedGeneric] = useState(null) // closure / checklist item
+  const [signoffGaps, setSignoffGaps] = useState([])
+  // Bulk selection. Keyed `source:id` because ids are only unique within a source.
+  const [picked, setPicked] = useState(() => new Set())
+  const [bulk, setBulk] = useState({ busy: false, result: null })
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -658,12 +717,13 @@ export default function Approvals() {
     setWorkflowError(null)
     const country = activeCountry
 
-    const [dashR, mineR, closuresR, checklistR, intakeR] = await Promise.allSettled([
+    const [dashR, mineR, closuresR, checklistR, intakeR, gapsR] = await Promise.allSettled([
       workflows.getApprovalDashboard(),
       workflows.myPendingApprovals(),
       queue.listAccidentClosures({ country }),
       queue.listChecklistApprovals({ country }),
       queue.countDataIntakePending({ country }),
+      queue.listChecklistSignoffGaps({ country }),
     ])
 
     // Workflow engine (non-fatal — the other sources still render).
@@ -681,6 +741,7 @@ export default function Approvals() {
     setClosures(closuresR.status === 'fulfilled' ? (closuresR.value || []).map(toClosureItem) : [])
     setChecklistItems(checklistR.status === 'fulfilled' ? (checklistR.value || []).map(toChecklistItem) : [])
     setIntakeCount(intakeR.status === 'fulfilled' ? (intakeR.value || 0) : 0)
+    setSignoffGaps(gapsR.status === 'fulfilled' ? (gapsR.value || []).map(toSignoffGapItem) : [])
 
     // Fatal only when EVERY primary source failed.
     const anyOk = [dashR, closuresR, checklistR].some(r => r.status === 'fulfilled')
@@ -707,7 +768,8 @@ export default function Approvals() {
     returned:          (buckets.returned || []).length,
     rejected:          (buckets.rejected || []).length,
     recently_approved: (buckets.recently_approved || []).length,
-  }), [buckets, closures, checklistItems, mergedPending])
+    signoff_gaps:      signoffGaps.length,
+  }), [buckets, closures, checklistItems, mergedPending, signoffGaps])
 
   const metrics = useMemo(() => {
     const m = metricsRaw && typeof metricsRaw === 'object' ? metricsRaw : {}
@@ -721,9 +783,9 @@ export default function Approvals() {
   // Site options across the non-workflow items (workflow instances carry no site).
   const siteOptions = useMemo(() => {
     const set = new Set()
-    ;[...closures, ...checklistItems].forEach(i => i.site && set.add(i.site))
+    ;[...closures, ...checklistItems, ...signoffGaps].forEach(i => i.site && set.add(i.site))
     return Array.from(set).sort()
-  }, [closures, checklistItems])
+  }, [closures, checklistItems, signoffGaps])
 
   const q = search.trim().toLowerCase()
 
@@ -753,10 +815,11 @@ export default function Approvals() {
         i.source === SOURCE.workflow ? matchWorkflow(i) : matchGeneric(i),
       )
     }
+    if (activeBucket === 'signoff_gaps') return signoffGaps.filter(matchGeneric)
     return (buckets[activeBucket] || [])
       .map(i => ({ ...i, source: SOURCE.workflow }))
       .filter(matchWorkflow)
-  }, [activeBucket, mergedPending, buckets, matchWorkflow, matchGeneric])
+  }, [activeBucket, mergedPending, buckets, matchWorkflow, matchGeneric, signoffGaps])
 
   const isActionable = useCallback(
     (instance) => actionableIds.has(instance?.id)
@@ -765,6 +828,65 @@ export default function Approvals() {
   )
 
   const hasFilters = q || sourceFilter !== 'all' || siteFilter !== 'all'
+
+  // Only accident closures and checklist sign-offs can be decided in bulk. A
+  // workflow instance cannot: its next step may demand a signature, a cost or a
+  // specific approver, and pressing Approve on a list of them would skip exactly
+  // the requirements the engine exists to enforce. A missed sign-off is a fact to
+  // correct rather than a decision to make, so it is not bulk-decidable either.
+  const BULKABLE = [SOURCE.accident_closure, SOURCE.checklist]
+  const bulkableList = useMemo(
+    () => activeList.filter(i => BULKABLE.includes(i.source)),
+    [activeList],
+  )
+  const keyOf = (i) => `${i.source}:${i.id}`
+  const pickedItems = useMemo(
+    () => bulkableList.filter(i => picked.has(keyOf(i))),
+    [bulkableList, picked],
+  )
+  const allPicked = bulkableList.length > 0 && pickedItems.length === bulkableList.length
+
+  const togglePick = useCallback((item) => {
+    setBulk(b => ({ ...b, result: null }))
+    setPicked(prev => {
+      const next = new Set(prev)
+      const k = `${item.source}:${item.id}`
+      if (next.has(k)) next.delete(k); else next.add(k)
+      return next
+    })
+  }, [])
+
+  // Clear the selection whenever the visible list changes underneath it, so a
+  // bulk action can never hit a row the user can no longer see.
+  useEffect(() => { setPicked(new Set()); setBulk({ busy: false, result: null }) },
+    [activeBucket, q, sourceFilter, siteFilter])
+
+  async function runBulk(action) {
+    if (!pickedItems.length) return
+    let reason = null
+    if (action === 'reject') {
+      // A checklist return REQUIRES a note (the service enforces it), so ask once
+      // for the whole batch rather than failing every row with the same message.
+      reason = window.prompt(
+        `Why are these ${pickedItems.length} item(s) being returned? This note is recorded on each one.`,
+      )
+      if (reason == null) return
+      if (!reason.trim()) { setBulk({ busy: false, result: { failed: [], ok: [], note: 'A reason is required to return items.' } }); return }
+    }
+    setBulk({ busy: true, result: null })
+    try {
+      const res = await queue.bulkDecide(pickedItems, action, {
+        reason,
+        approverName: profile?.full_name || profile?.email || null,
+        approverId: profile?.id || null,
+      })
+      setBulk({ busy: false, result: { ...res, action } })
+      setPicked(new Set())
+      await load()
+    } catch (err) {
+      setBulk({ busy: false, result: { ok: [], failed: [], note: toUserMessage(err, 'the bulk action failed') } })
+    }
+  }
 
   function openRow(row) {
     if (row.source === SOURCE.workflow) setSelected(row)
@@ -912,7 +1034,10 @@ export default function Approvals() {
                       ? 'No workflow approvals have breached their SLA. Nicely on top of it.'
                       : activeBucket === 'pending'
                         ? 'New approvals appear here as they are raised.'
-                        : 'Workflow items will appear here as they move through the engine.'}
+                        : activeBucket === 'signoff_gaps'
+                          ? 'Every submission from a template that requires sign-off actually went through '
+                            + 'the approval queue. Nothing slipped past.'
+                          : 'Workflow items will appear here as they move through the engine.'}
                 </p>
                 {hasFilters && (
                   <button
@@ -926,11 +1051,92 @@ export default function Approvals() {
             </div>
           ) : (
             <div className="space-y-2">
+              {activeBucket === 'signoff_gaps' && (
+                <div className="px-3 py-2 rounded-xl border border-orange-500/30 bg-orange-500/[0.06] text-xs text-orange-200">
+                  These checklists came from a template that requires sign-off, but were recorded as not
+                  needing one, so they never appeared in the Pending queue. Open one to record the sign-off
+                  now. An empty Pending tab does not mean nothing needed signing.
+                </div>
+              )}
+              {/* Bulk bar. Only shown when something in view can actually be
+                  decided in bulk, so it never appears above a list of workflow
+                  instances it cannot act on. */}
+              {canActNonWorkflow && bulkableList.length > 0 && (
+                <div className="flex flex-wrap items-center gap-2 px-3 py-2 rounded-xl border border-[var(--border-dim)] bg-[var(--surface-2)]">
+                  <button
+                    onClick={() => setPicked(allPicked ? new Set() : new Set(bulkableList.map(keyOf)))}
+                    className="inline-flex items-center gap-1.5 text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
+                  >
+                    {allPicked ? <CheckSquare className="w-4 h-4 text-orange-400" /> : <Square className="w-4 h-4" />}
+                    {allPicked ? 'Clear selection' : `Select all ${bulkableList.length}`}
+                  </button>
+                  <span className="text-xs text-[var(--text-muted)]">
+                    {pickedItems.length} selected
+                  </span>
+                  {activeList.length > bulkableList.length && (
+                    <span className="text-[11px] text-[var(--text-muted)]">
+                      {activeList.length - bulkableList.length} item(s) in this list must be opened
+                      individually
+                    </span>
+                  )}
+                  <div className="ml-auto flex items-center gap-2">
+                    <button
+                      onClick={() => runBulk('approve')}
+                      disabled={!pickedItems.length || bulk.busy}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-green-500/15 text-green-300 border border-green-500/30 hover:bg-green-500/25 disabled:opacity-40"
+                    >
+                      {bulk.busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
+                      Approve selected
+                    </button>
+                    <button
+                      onClick={() => runBulk('reject')}
+                      disabled={!pickedItems.length || bulk.busy}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-red-500/15 text-red-300 border border-red-500/30 hover:bg-red-500/25 disabled:opacity-40"
+                    >
+                      <Ban className="w-3.5 h-3.5" /> Return selected
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Per-item outcome. Never "12 approved" unless twelve succeeded:
+                  each approval is separately permissioned and separately stateful,
+                  so a partial result is the normal case and has to be readable. */}
+              {bulk.result && (
+                <div className="px-3 py-2 rounded-xl border border-[var(--border-dim)] bg-[var(--surface-1)] text-xs space-y-1">
+                  {bulk.result.note && <p className="text-amber-300">{bulk.result.note}</p>}
+                  {bulk.result.ok?.length > 0 && (
+                    <p className="text-green-300">
+                      {bulk.result.ok.length} item(s) {bulk.result.action === 'approve' ? 'approved' : 'returned'}.
+                    </p>
+                  )}
+                  {bulk.result.failed?.length > 0 && (
+                    <div className="text-red-300">
+                      <p>{bulk.result.failed.length} could not be actioned:</p>
+                      <ul className="mt-0.5 space-y-0.5">
+                        {bulk.result.failed.slice(0, 6).map(f => (
+                          <li key={`${f.item.source}:${f.item.id}`} className="text-[var(--text-muted)]">
+                            <span className="text-[var(--text-secondary)]">{f.item.title}</span> - {f.error}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              )}
+
               {activeList.map(row => (
                 row.source === SOURCE.workflow ? (
                   <InstanceRow key={`wf-${row.id}`} instance={row} bucketKey={activeBucket} onOpen={openRow} />
                 ) : (
-                  <GenericRow key={`${row.source}-${row.id}`} item={row} onOpen={openRow} />
+                  <GenericRow
+                    key={`${row.source}-${row.id}`}
+                    item={row}
+                    onOpen={openRow}
+                    selectable={canActNonWorkflow && BULKABLE.includes(row.source)}
+                    picked={picked.has(keyOf(row))}
+                    onTogglePick={togglePick}
+                  />
                 )
               ))}
             </div>

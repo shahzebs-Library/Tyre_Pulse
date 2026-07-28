@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useMemo, useRef, lazy, Suspense } fro
 import { useNavigate, useLocation, useSearchParams } from 'react-router-dom'
 
 const AccidentReportBuilder = lazy(() => import('../components/accidents/AccidentReportBuilder'))
-import { AlertOctagon, Plus, Search, X, Save, FileText, Download, BarChart2, Eye, Hourglass, ChevronDown, Trash2, AlertTriangle, TrendingUp, Users, DollarSign, ShieldAlert, Lightbulb, ChevronRight, Clock, ShieldCheck, ArrowLeft, Mail } from 'lucide-react'
+import { AlertOctagon, Plus, Search, X, Save, FileText, Download, BarChart2, Eye, Hourglass, ChevronDown, Trash2, AlertTriangle, TrendingUp, Users, DollarSign, ShieldAlert, Lightbulb, ChevronRight, Clock, ShieldCheck, ArrowLeft, Mail, Presentation } from 'lucide-react'
 import { motion } from 'framer-motion'
 import PageHeader from '../components/ui/PageHeader'
 import EmptyState from '../components/EmptyState'
@@ -30,11 +30,12 @@ import {
   RECOVERY_SOURCE_OPTS, RECOVERY_SOURCE_LABELS, RECOVERY_STATUS_OPTS, RECOVERY_STATUS_LABELS,
   CASE_STAGE_OPTS, DAMAGE_CONDITION_OPTS, WORKFLOW_STAGE_OPTS, STAGE_TO_CLAIM_STATUS,
   canonSeverity, canonStatus, canonAccidentType, toDbSeverity, toDbStatus, toDbAccidentType,
-  canonFaultStatus, canonNajmStatus, canonNajmFault, canonTaqdeerStatus, canonRepairType, canonDamageClass,
+  canonFault, canonFaultStatus, canonNajmStatus, canonNajmFault, canonTaqdeerStatus, canonRepairType, canonDamageClass,
   accidentSeverityPill, accidentStatusPill,
   LIABLE_PARTY_OPTS, PAYER_OPTS, RECOVERY_DECISION_OPTS,
   canonLiableParty, canonPayer, canonDamageCondition,
   najmHasReport, taqdeerHasReport, recoveryIsYes, repairIsInternal, computeRecovered,
+  isIncidentClosed, isCaseSettled,
 } from '../lib/accidentVocab'
 import { makeValueLabelsPlugin, doughnutLegendCounts, summarizeChartData, REPORT_LIBRARY, normalizeConfig } from '../lib/accidentReport'
 import { colorAt, categorical, withAlpha } from '../lib/reportColors'
@@ -43,6 +44,9 @@ import { builderReportType } from '../lib/api/scheduledReports'
 import { toUserMessage } from '../lib/safeError'
 import { hasClaim, isClosed as isClaimClosed, claimNet } from '../lib/claimsAnalytics'
 import { captureChartOnPaper } from '../lib/chartCapture'
+import AccidentIntelligencePanel from '../components/accidents/AccidentIntelligencePanel'
+import ClaimProgressBoard from '../components/accidents/ClaimProgressBoard'
+import { buildAccidentIntelligence, basisNote } from '../lib/accidentAnalytics'
 import { WORKFLOW_STAGES, DEFAULT_DEPARTMENTS, stageOf, stageLabel, buildAccidentKpis } from '../lib/accidentWorkflow'
 import { listDepartments } from '../lib/api/accidentWorkflow'
 
@@ -108,7 +112,10 @@ function BreakdownCard({ title, icon: Icon, rows, valueFmt = (v) => v }) {
 // /accidents/:id detail page render identical colours — do NOT re-declare
 // per-file badge maps here.
 
-const isClosed = (r) => r.closure_status === 'closed' || canonStatus(r.status) === 'Closed'
+// Closure comes from the ONE resolver in accidentVocab, which the Report Builder
+// and its PDF/deck now share. Keeping a second copy here is how the register and
+// the builder came to disagree about how many cases were closed.
+const isClosed = isIncidentClosed
 
 // ── Case-progress / delay intelligence ──────────────────────────────────────
 // New case-tracking columns rendered by the list. They may or may not be part
@@ -126,11 +133,9 @@ const DELAY_THRESHOLD_DAYS = 5
 
 // A case counts as still OPEN unless it is closed (closure_status/status) or its
 // free-text current_status reads Released/Closed.
-const isReleasedOrClosed = (r) => {
-  if (isClosed(r)) return true
-  const cur = String(r.current_status || '').toLowerCase()
-  return /released|closed/.test(cur)
-}
+// Shared with the Report Builder (isCaseSettled, accidentVocab) so the register's
+// Days Open column and the report's cannot drift apart.
+const isReleasedOrClosed = isCaseSettled
 
 // Whole days since the last status movement; falls back to the incident date
 // when no status_update_date is recorded. Returns 0 when neither date parses.
@@ -850,12 +855,13 @@ export default function Accidents() {
 
   // Fault / liability split from the GCC case fields (honest — Unknown when unset).
   const faultDoughnut = useMemo(() => {
+    // canonFault is THE fault resolver (accidentVocab). This chart used to carry
+    // its own regex copy - a fourth classifier that agreed today and would drift
+    // the moment one of them learned a new spelling.
     const c = { Faulty: 0, 'Non-faulty': 0, 'Under review': 0, Unknown: 0 }
     records.forEach(r => {
-      const f = String(r.fault_status || '').toLowerCase()
-      if (/non[-\s]?fault/.test(f)) c['Non-faulty']++
-      else if (/review/.test(f)) c['Under review']++
-      else if (/fault/.test(f)) c.Faulty++
+      const f = canonFault(r.fault_status)
+      if (c[f] !== undefined) c[f]++
       else c.Unknown++
     })
     const entries = Object.entries(c).filter(([, v]) => v > 0)
@@ -979,10 +985,14 @@ export default function Accidents() {
     dlTimerRef.current = setTimeout(() => setDlAnalytics(s => ({ ...s, msg: '' })), 5000)
   }
 
-  // Build the Accident Analytics PDF. Shared by Download + Email so the emailed
-  // report is identical to the downloaded one ("same as it is"). Returns the
-  // jsPDF doc (never saved here) + chart count + company for the caller.
-  async function buildAnalyticsDoc() {
+  /**
+   * Everything the analytics report is made of, computed ONCE.
+   *
+   * The PDF, the emailed copy and the PowerPoint all render from this, which is
+   * the answer to "the pptx is a little different": there is now one description
+   * of the report and three ways of drawing it, rather than three descriptions.
+   */
+  function buildAnalyticsPayload() {
       // Charts in on-screen order; refs are null for charts hidden by their
       // honest "No data" empty state, so those drop out automatically.
       const chartList = [
@@ -1000,14 +1010,39 @@ export default function Accidents() {
         .filter(c => c.chart && c.chart.canvas)
         .slice(0, 12) // hard cap on charts; the page count follows from PER_PAGE
 
-      const { default: jsPDF } = await import('jspdf')
-      const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
-      const W = doc.internal.pageSize.getWidth()
-      const H = doc.internal.pageSize.getHeight()
-      const M = 10
       const company = appSettings?.company_name || 'TyrePulse'
       const stamp = new Date().toISOString().slice(0, 10)
       const scope = activeCountry && activeCountry !== 'All' ? activeCountry : 'All countries'
+      const pendingRelease = records.filter(r => !isClosed(r) && !r.expected_release_date).length
+      // The report states the basis of a money figure for the same reason the
+      // screen does: on the live set the repair total rests on 2 incidents of 35
+      // and printing it bare invites it to be read as the real spend.
+      const intel = buildAccidentIntelligence(records)
+      const kpis = [
+        ['Total incidents', String(stats.total), ''],
+        ['Open', String(stats.open), ''],
+        ['Closed', String(stats.total - stats.open), ''],
+        [`Delayed > ${DELAY_THRESHOLD_DAYS}d`, String(stats.delayed), ''],
+        ['Pending release', String(pendingRelease), ''],
+        ['Repair cost', String(fmtCurrency(stats.cost)), basisNote(intel.basis.repairCost)],
+        ['Claimed', String(fmtCurrency(claimAnalytics.totalClaim)), basisNote(intel.basis.claimed)],
+        ['Recovered', String(fmtCurrency(claimAnalytics.totalRecovered)), basisNote(intel.basis.recovered)],
+      ]
+      return { chartList, kpis, intel, company, stamp, scope, total: records.length }
+  }
+
+  // Build the Accident Analytics PDF. Shared by Download + Email so the emailed
+  // report is identical to the downloaded one. Returns the jsPDF doc (never
+  // saved here) + chart count + company for the caller.
+  async function buildAnalyticsDoc() {
+      const { chartList, kpis, intel, company, stamp, scope } = buildAnalyticsPayload()
+      const { default: jsPDF } = await import('jspdf')
+      // compress deflates the page streams. Without it this report ran to several
+      // megabytes once the chart bitmaps went up in resolution.
+      const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4', compress: true })
+      const W = doc.internal.pageSize.getWidth()
+      const H = doc.internal.pageSize.getHeight()
+      const M = 10
       const INK = [15, 23, 42]
       const MUTED = [100, 116, 139]
 
@@ -1018,17 +1053,6 @@ export default function Accidents() {
       doc.text(`${company} | Generated ${stamp} | ${records.length} incidents | Scope: ${scope}`, M, 20)
 
       // ── KPI number strip (live page aggregates) ──
-      const pendingRelease = records.filter(r => !isClosed(r) && !r.expected_release_date).length
-      const kpis = [
-        ['Total incidents', String(stats.total)],
-        ['Open', String(stats.open)],
-        ['Closed', String(stats.total - stats.open)],
-        [`Delayed > ${DELAY_THRESHOLD_DAYS}d`, String(stats.delayed)],
-        ['Pending release', String(pendingRelease)],
-        ['Repair cost', String(fmtCurrency(stats.cost))],
-        ['Claimed', String(fmtCurrency(claimAnalytics.totalClaim))],
-        ['Recovered', String(fmtCurrency(claimAnalytics.totalRecovered))],
-      ]
       // Eight tiles across A4 landscape left ~34mm each and a 6.3pt label, which
       // is below what prints legibly. Two rows of four doubles the width and lets
       // the label go to 8pt. A long money value is shrunk to fit its own tile
@@ -1037,8 +1061,8 @@ export default function Accidents() {
       const perRow = 4
       const rows = Math.ceil(kpis.length / perRow)
       const kw = (W - 2 * M) / perRow
-      const kh = 12
-      kpis.forEach(([label, value], i) => {
+      const kh = 15
+      kpis.forEach(([label, value, basis], i) => {
         const col = i % perRow
         const row = Math.floor(i / perRow)
         const x = M + col * kw
@@ -1052,6 +1076,10 @@ export default function Accidents() {
         doc.text(value, x + kw / 2, y + 6, { align: 'center' })
         doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(...MUTED)
         doc.text(label.toUpperCase(), x + kw / 2, y + 10.4, { align: 'center' })
+        if (basis) {
+          doc.setFontSize(6.8); doc.setTextColor(180, 83, 9)
+          doc.text(basis, x + kw / 2, y + 13.8, { align: 'center' })
+        }
       })
       const gridTop = stripY + rows * (kh + 1.5) + 3
 
@@ -1071,13 +1099,17 @@ export default function Accidents() {
         const imgH = ch - 15
         doc.setDrawColor(226, 232, 240); doc.setFillColor(255, 255, 255)
         doc.roundedRect(x, imgY, cw, imgH, 1.5, 1.5, 'FD')
-        const img = captureChartOnPaper(c.chart) || c.chart.toBase64Image('image/png', 1)
-        const iw0 = c.chart.width || c.chart.canvas.width
-        const ih0 = c.chart.height || c.chart.canvas.height
-        const scale = Math.min((cw - 4) / iw0, (imgH - 4) / ih0)
-        const iw = iw0 * scale
-        const ih = ih0 * scale
-        doc.addImage(img, 'PNG', x + (cw - iw) / 2, imgY + (imgH - ih) / 2, iw, ih)
+        // Render the chart AT the box it will fill. Capturing at a fixed 1000px
+        // and shrinking to fit is what made every legend unreadable: the font
+        // shrank with the image. mm -> pt is 72/25.4.
+        const boxW = cw - 4
+        const boxH = imgH - 4
+        const img = captureChartOnPaper(c.chart, {
+          widthPt: boxW * (72 / 25.4),
+          aspect: boxH / boxW,
+        }) || c.chart.toBase64Image('image/png', 1)
+        // The capture already matches the box aspect, so it fills it directly.
+        doc.addImage(img, 'PNG', x + 2, imgY + 2, boxW, boxH, undefined, 'FAST')
         // The digest is the fallback for anyone who still cannot read the chart,
         // so it must not be the smallest text on the page. Two lines are allowed.
         const digest = summarizeChartData(c.data)
@@ -1110,7 +1142,81 @@ export default function Accidents() {
           drawGrid(group, 18)
         }
       })
-      return { doc, chartCount: chartList.length, pageCount, company }
+      // A final page for what the figures rest on. The PDF is the copy that gets
+      // forwarded and read out of context, so it has to carry the caveats the
+      // screen shows rather than looking more certain than the screen did.
+      if (intel.caveats.length || intel.repeats.length || intel.duplicates.length) {
+        doc.addPage()
+        doc.setFont('helvetica', 'bold'); doc.setFontSize(13); doc.setTextColor(...INK)
+        doc.text('What these figures rest on', M, 14)
+        doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(...MUTED)
+        doc.text(`${company} | ${stamp} | ${records.length} incidents`, W - M, 14, { align: 'right' })
+        let y = 24
+
+        const para = (text, indent = 0) => {
+          const lines = doc.splitTextToSize(text, W - 2 * M - indent)
+          if (y + lines.length * 4.6 > H - M) return false
+          doc.text(lines, M + indent, y)
+          y += lines.length * 4.6 + 2
+          return true
+        }
+
+        if (intel.caveats.length) {
+          doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.setTextColor(...INK)
+          doc.text('Read these first', M, y); y += 6
+          doc.setFont('helvetica', 'normal'); doc.setFontSize(9.5); doc.setTextColor(...INK)
+          for (const c of intel.caveats) if (!para(`- ${c.text}`)) break
+          y += 3
+        }
+
+        if (intel.repeats.length) {
+          doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.setTextColor(...INK)
+          doc.text('Vehicles in more than one incident', M, y); y += 6
+          doc.setFont('helvetica', 'normal'); doc.setFontSize(9.5)
+          for (const r of intel.repeats.slice(0, 12)) {
+            if (!para(`${r.asset}: ${r.incidents} incidents, ${r.first} to ${r.last}`
+              + (r.meanGapDays != null ? `, about ${r.meanGapDays} days apart` : ''), 2)) break
+          }
+          y += 3
+        }
+
+        if (intel.duplicates.length) {
+          doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.setTextColor(...INK)
+          doc.text('Same vehicle and day, worth a check', M, y); y += 6
+          doc.setFont('helvetica', 'normal'); doc.setFontSize(9.5)
+          para('These are counted in every figure above. They may be genuine repeat events or '
+            + 'the same incident entered twice; nothing was removed automatically.')
+          for (const d of intel.duplicates.slice(0, 12)) {
+            if (!para(`${d.asset} on ${d.date}: ${d.count} records, `
+              + (d.identical ? 'nothing distinguishes them' : `differ on ${d.differingFields.join(', ')}`), 2)) break
+          }
+        }
+      }
+      return { doc, chartCount: chartList.length, pageCount: doc.getNumberOfPages(), company }
+  }
+
+  // The SAME report as a deck. It renders buildAnalyticsPayload(), so the two
+  // cannot describe different things - which is what "the pptx is a little
+  // different" meant. Charts are captured at slide size, not page size.
+  const [dlPptx, setDlPptx] = useState(false)
+  async function downloadAnalyticsPptx() {
+    setDlPptx(true)
+    try {
+      const payload = buildAnalyticsPayload()
+      const { renderAccidentAnalyticsPptx } = await import('../lib/accidentAnalyticsPptx')
+      const company = payload.company
+      await renderAccidentAnalyticsPptx(payload, {
+        // A slide image is about 8.6in wide; captured at that size the legend
+        // lands at the point size it was asked for instead of shrinking.
+        imageFor: (c) => captureChartOnPaper(c.chart, { widthPt: 8.6 * 72, aspect: 0.52 })
+          || (c.chart ? c.chart.toBase64Image('image/png', 1) : null),
+        digestFor: (data) => summarizeChartData(data),
+        filename: reportFileName(company, 'Accident Analytics', reportDateLabel()),
+      })
+      flashDl(`Analytics PowerPoint downloaded (${payload.chartList.length} charts).`, true)
+    } catch (e) {
+      flashDl(`Download failed: ${toUserMessage(e, 'unexpected error')}`, false)
+    } finally { setDlPptx(false) }
   }
 
   async function downloadAnalyticsPdf() {
@@ -1120,7 +1226,7 @@ export default function Accidents() {
       doc.save(`${reportFileName(company, 'Accident Analytics', reportDateLabel())}.pdf`)
       flashDl(`Analytics PDF downloaded (${chartCount} charts over ${pageCount} page${pageCount === 1 ? '' : 's'}).`, true)
     } catch (e) {
-      flashDl(`Download failed: ${e?.message || 'unexpected error'}`, false)
+      flashDl(`Download failed: ${toUserMessage(e, 'unexpected error')}`, false)
     }
   }
 
@@ -2209,12 +2315,22 @@ export default function Accidents() {
             <button
               onClick={downloadAnalyticsPdf}
               disabled={dlAnalytics.busy || records.length === 0}
-              title={records.length === 0 ? 'No incident data to export' : 'Download these charts and KPIs as a compact PDF (max 2 pages)'}
+              title={records.length === 0 ? 'No incident data to export' : 'Download these charts and KPIs as a PDF, four charts a page so the legends stay readable'}
               className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-1.5 disabled:opacity-50"
             >
               {dlAnalytics.busy
                 ? <><span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin inline-block" /> Preparing PDF...</>
                 : <><Download size={14} /> Download Analytics PDF</>}
+            </button>
+            <button
+              onClick={downloadAnalyticsPptx}
+              disabled={dlPptx || records.length === 0}
+              title={records.length === 0 ? 'No incident data to export' : 'The same report as a PowerPoint deck, one chart per slide'}
+              className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-1.5 disabled:opacity-50"
+            >
+              {dlPptx
+                ? <><span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin inline-block" /> Preparing deck...</>
+                : <><Presentation size={14} /> Download PowerPoint</>}
             </button>
             <button
               onClick={() => setEmailModal({ open: true, to: '', busy: false, msg: '', ok: true })}
@@ -2252,6 +2368,15 @@ export default function Accidents() {
               </div>
             </div>
           )}
+
+          {/* Basis first: a reader has to know a figure rests on 2 of 35 records
+              BEFORE they read it, not in a footnote afterwards. */}
+          <AccidentIntelligencePanel records={records} currency={activeCurrency} fmtCurrency={fmtCurrency} />
+
+          {/* Which team is holding each claim, how long, and which stages nobody
+              worked. Sits above the KPI strip because "where is this stuck" is
+              the question the numbers below cannot answer. */}
+          <ClaimProgressBoard records={records} country={activeCountry} />
 
           {/* ===== Accident Workflow KPIs (single engine: buildAccidentKpis) ===== */}
           <div className="card border-l-2 border-l-green-500/60">

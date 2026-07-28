@@ -9,6 +9,7 @@ import {
   canonSeverity, canonStatus, canonAccidentType, toDbSeverity, toDbStatus, toDbAccidentType,
   accidentSeverityPill, accidentStatusPill,
   canonFaultStatus, canonNajmStatus, canonRepairType,
+  isIncidentClosed, isCaseSettled,
   LIABLE_PARTY_OPTS, PAYER_OPTS, RECOVERY_DECISION_OPTS,
   canonLiableParty, canonPayer, canonDamageCondition,
   najmHasReport, taqdeerHasReport, recoveryIsYes, repairIsInternal, computeRecovered,
@@ -230,5 +231,63 @@ describe('accidentVocab — presentation pills (shared list + detail source)', (
     expect(canonStatus('closed')).toBe('Closed')
     expect('closed').not.toBe('Closed')
     expect(canonSeverity('severe')).toBe('Major')
+  })
+
+  // ── The two closure questions ───────────────────────────────────────────────
+  // These exist because the register and the Report Builder each carried their
+  // own answer and disagreed: on the live 35 incidents the register counted 12
+  // closed and the builder 15. Both now import from here, and these tests pin
+  // the three signals that must NOT decide closure on their own.
+  describe('case closure', () => {
+    it('is decided by the incident status, or the column meant for it', () => {
+      expect(isIncidentClosed({ status: 'closed' })).toBe(true)
+      expect(isIncidentClosed({ status: 'Closed' })).toBe(true)
+      expect(isIncidentClosed({ closure_status: 'closed' })).toBe(true)
+      expect(isIncidentClosed({ status: 'reported' })).toBe(false)
+      expect(isIncidentClosed({})).toBe(false)
+    })
+
+    it('does not read a released vehicle as a closed case', () => {
+      // Live: three incidents sit at reported / awaiting_approval with a release
+      // date. The vehicle went back to work; the case did not end.
+      expect(isIncidentClosed({ status: 'reported', release_date: '2026-07-02' })).toBe(false)
+      expect(isIncidentClosed({ status: 'awaiting_approval', release_date: '2026-07-01' })).toBe(false)
+    })
+
+    it('does not read a settled claim as a closed case', () => {
+      // Live: one row is claim_status 'settled'. The insurer paying says nothing
+      // about whether the case is finished. That is claimsAnalytics' question.
+      expect(isIncidentClosed({ status: 'repair_in_progress', claim_status: 'settled' })).toBe(false)
+      expect(isIncidentClosed({ status: 'reported', claim_status: 'approved' })).toBe(false)
+    })
+
+    it('is not vetoed by closure_status, which reads open on every live row', () => {
+      expect(isIncidentClosed({ status: 'closed', closure_status: 'open' })).toBe(true)
+    })
+
+    it('every DB status token except closed leaves the case open', () => {
+      for (const t of ['reported', 'under_review', 'repair_in_progress',
+        'awaiting_parts', 'awaiting_approval', 'insurance_claim']) {
+        expect(isIncidentClosed({ status: t }), t).toBe(false)
+      }
+      expect(isIncidentClosed({ status: 'closed' })).toBe(true)
+    })
+  })
+
+  describe('case settled (has the clock stopped)', () => {
+    it('is a WIDER test than closure, by exactly the workflow column', () => {
+      // A closed case is always settled; the reverse does not hold.
+      expect(isCaseSettled({ status: 'closed' })).toBe(true)
+      expect(isCaseSettled({ current_status: 'Released' })).toBe(true)
+      expect(isCaseSettled({ current_status: 'Closed' })).toBe(true)
+      // ...and that row is NOT counted as a closed case.
+      expect(isIncidentClosed({ current_status: 'Released' })).toBe(false)
+    })
+
+    it('leaves a case that is still moving open', () => {
+      expect(isCaseSettled({ current_status: 'Running' })).toBe(false)
+      expect(isCaseSettled({ current_status: 'Waiting insurance approval' })).toBe(false)
+      expect(isCaseSettled({})).toBe(false)
+    })
   })
 })

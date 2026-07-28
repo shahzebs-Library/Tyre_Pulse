@@ -3,7 +3,117 @@
 Durable, committed project knowledge so any session has full context. Keep this
 current. Read it before adding/changing modules. Governing spec: `Tyre pulse enterprise.md`
 
-## SESSION 2026-07-28 — CONSOLE UI KIT + UPLOAD COVERAGE PER COUNTRY AND AREA + V395 COUNTRY-NAMED STAGING. Migrations through **V395**, next free **V396**.
+## SESSION 2026-07-28 (part 2) — ACCIDENT CLAIMS BY TEAM (V398) + REPORT LEGIBILITY + ONE SET OF NUMBERS. Migrations through **V398c**, next free **V399**. PR #211.
+
+### **V398 — THE STAGE LADDER WAS DECORATIVE, and "it goes to closed on its own" was exact**
+User: "why all goes by its own to close section ... can u fix accident like one claim divided by fleet team
+insurance team and workshop team and final inspection level ... knows who delayed claims".
+**MEASURED FIRST and the pipeline was empty:** `workflow_stage` IS populated and spread (reported 14, closed 12,
+repair_in_progress 5, repair_approval 1, final_inspection 1, insurance_claim 1, initial_review 1) — but EVERY
+per-stage field is 0/35: `root_cause`, `responsible_owner_id`, `approved_repair_amount`, `hse_investigation`,
+`closure_evidence`, `target_date`. And only **11 of 35** cases carry ANY transition in `accident_audit_log`,
+which records status old/new — never the stage, never a duration, never the team.
+- **THE CAUSE OF THE SELF-CLOSING.** `accident_stage_from_status` maps status `'closed'` -> stage `'closed'`, so
+  the register's Status dropdown moves a case from ANYWHERE to closed in ONE write. Proven live: from
+  `insurance_claim` it passes over repair_approval / repair_in_progress / final_inspection / vehicle_release /
+  cost_recovery; from `reported` it skips **NINE** stages and six teams never see it.
+- **`accident_stage_events`** = one row per stage occupancy (entered/exited/by whom/department) PLUS a row
+  marked `skipped` for every stage jumped over. Written ONLY by the DEFINER trigger; **V398c** revoked
+  INSERT/UPDATE/DELETE from `authenticated` so it is unforgeable by grant AND by policy.
+- **DELIBERATELY NOT BLOCKED.** Refusing the jump breaks the Status dropdown and every mobile/import writer.
+  Recording the skip is the honest fix and needs no behaviour change from anyone.
+- **`basis` IS LOAD-BEARING.** The backfill opens one event per case for the stage it genuinely sits at, but
+  `entered_at` is the row's `updated_at` — the earliest defensible moment, NOT a measured transition.
+  `basis='backfilled'` says so and the UI prints "approx". **24 of 35 cases have no transition record anywhere,
+  so their past is genuinely unknown and is NOT invented.**
+
+### **TWO BUGS FOUND BY TESTING, NOT BY READING — both would have shipped silently**
+1. **`AFTER UPDATE OF workflow_stage` RECORDED NOTHING for the case the table exists for.** `UPDATE OF <col>`
+   fires when the column is in the STATEMENT'S SET LIST; the register writes `status` and the BEFORE trigger
+   `accident_derive_fields` derives the stage, and **a column changed by a BEFORE trigger is not in the
+   statement's column list.** Caught by a rolled-back live test (closing a `reported` case produced zero
+   events). **V398b: plain `AFTER INSERT OR UPDATE`** — the `is not distinct from` guard inside makes it cheap.
+   **RULE: never use `UPDATE OF` for a column a BEFORE trigger may set.**
+2. **Only the POLICY was stopping client writes.** Impersonation showed INSERT refused and UPDATE/DELETE
+   matching 0 rows — but Supabase's default privileges had granted `authenticated` INSERT/UPDATE/DELETE, so one
+   policy set was the whole boundary. **V398c** makes it SELECT only.
+
+### `src/lib/accidentStages.js` — the OWNERSHIP MAP (no new columns)
+`STAGE_FIELDS` maps each stage to its owning team and to the **accidents columns that already existed** —
+Fleet/PMV repair_approval, Insurance insurance_claim, Workshop assessment/repair/final_inspection, HSE, Finance
+cost_recovery. Plus `stageCompletion`, `caseProgress` (done / **skipped** / current / pending), `teamPerformance`,
+`longestWaiting`, `skippedStageReport`, `buildStageIntelligence`. 30 tests.
+- **A MONEY FIELD MUST BE NON-ZERO to count** — `parts_cost` is present on all 35 rows and every value is 0.00,
+  so a null check marks the cost side complete while it contributes nothing. Same rule as `coverageOf({money})`.
+- **A stage requiring nothing returns pct `null`, never 100** — 100 reads as "this team finished".
+- **Completeness is measured against the stages REACHED**, not all eleven, or every young case looks neglected.
+- **`skipped` IS NOT `done`.** Showing it as done is what let a case look finished while six teams never
+  touched it.
+- **IT SAYS "HELD", NEVER "CAUSED THE DELAY".** A claim waiting on an insurer's reply counts against Insurance
+  without anyone there being slow. Who is at fault is a judgement a table cannot make. Keep that wording.
+- Surfaces: `CaseProgressPanel` (**Teams & Progress tab** on the accident detail — each team fills ONLY its own
+  fields; `saveStageFields` REFUSES any column the named stage does not own, else it is a general accident
+  writer with a stage name attached) + `ClaimProgressBoard` (Analytics tab, above the KPI strip).
+- Live at build: Fleet/PMV 1 case at repair_approval 7.7d, Workshop 6, Site Management 26, Insurance 1, Ops 1.
+
+### **CHECKLIST APPROVALS "NOT SHOWING" — the queue was RIGHT and genuinely empty**
+The reported symptom was real but the cause was upstream: template **"Predictive Maintenance Checklist" has
+`require_approval = true` and TWO submissions stamped `approval_status='not_required'`**, so they never entered
+any queue. All three live submissions are from **2026-07-12, before V212** ever populated that column, so they
+are historical rather than a live leak — but an empty tab told the reader nobody ever needed to sign anything.
+- New **"Missed sign-off"** bucket (`listChecklistSignoffGaps`, two cheap queries — naming a PostgREST
+  relationship is a guess that breaks silently on a constraint rename). Opening one records the sign-off through
+  the SAME `decideChecklist` writer, so a retrospective signature is indistinguishable from a timely one except
+  by its date, which is the honest outcome.
+- **`bulkDecide`** = multi approve/reject with one shared reason. **Reports EVERY outcome separately** — never
+  "12 approved" unless twelve succeeded, because approvals are individually permissioned and individually
+  stateful, so partial success is the NORMAL case. Sequential on purpose (each write fires notification
+  triggers). **Workflow instances are deliberately NOT bulk-decidable**: a step can demand a signature, a cost
+  or a named approver, and pressing Approve on a list would skip the requirements the engine exists to enforce.
+
+### **THE REPORT BUILDER AND THE REGISTER DISAGREED — 15 closed vs 12, same rows**
+Both read the same `records` array; the arithmetic differed. `accidentReport.isClosedRow` returned true for any
+`release_date` then scanned `claim_status` — it was a copy of the CLAIM closure test applied to the INCIDENT
+CASE. **Three live incidents sit at `reported`/`awaiting_approval` with a released vehicle; one has a `settled`
+claim on an unfinished case.**
+- **ONE definition each, in `accidentVocab`:** `isIncidentClosed` (Open/Closed counts) and **`isCaseSettled`**
+  (has the clock stopped — wider by exactly `current_status`, populated on 31/35, where one row reads 'Released'
+  and another 'Closed' while `status` has not caught up). `claimsAnalytics.isClosed` stays separate — a claim's
+  closure is a genuinely different question. **Do not merge the three.**
+- **Days Open disagreed the other way**: the register returns null for a settled case with no release date
+  (no honest duration); the engine ran the count to today, printing a growing figure on finished cases.
+- **Database spelling was reaching the customer**: status charts grouped by the RAW column, and the detail table
+  FILTERED on canonical values while PRINTING raw ones — a row filtered as Closed printed `closed`, one filtered
+  as Major printed `severe`. Now `canonStatus`/`canonSeverity`/`canonFault` at both ends.
+- Asset ranking now folds case (matches `concentration(..., {fold:true})`). No change today after V397, but the
+  analysis must not depend on a migration having been run.
+- The old test asserted the WRONG behaviour **in its own name** ("honours release_date and closure keywords") and
+  was the bug's alibi. Replaced with the rows that actually diverged.
+
+### **CHART LEGENDS PRINTED AT ~4.6pt — the capture never knew what size it would be**
+`captureChartOnPaper` rendered onto a FIXED 1000px canvas and kept the on-screen ~12px font; placed into a 135mm
+(~383pt) cell that is `12 * 383/1000` = **about 4.6pt on paper**.
+- **`PAPER_FONT_PT`** declares sizes in POINTS (legend 9, tick 8, title 10) and the caller passes `widthPt`; the
+  canvas AND the fonts scale by the same factor, **so the ratio cancels and the printed size is exact in any
+  cell**. `PRINT_SCALE = 3` (216 DPI); `devicePixelRatio` held at 1 (a second multiplier inflates the file
+  without adding detail). Line/point/grid widths scale too or a 3x bitmap draws vanishing hairlines.
+- **The value-label plugin reads its size from `options.plugins.valueLabels.size`** (default 10px = ~3pt at 3x),
+  so that has to travel with the scale too. `makeValueLabelsPlugin(color)` takes ONE argument.
+- PDF size: `compress: true`, each chart captured at its ACTUAL cell size, `addImage(..., 'FAST')`.
+- **`src/test/chartCapture.test.js` pins the printed POINT size as arithmetic** — the cancellation is invisible
+  and would regress silently. Verified it fails on a revert to the old behaviour (3 targeted failures).
+- **The PPTX was a DIFFERENT report** (it came from the Report Builder's block layout). `buildAnalyticsPayload()`
+  now describes the report ONCE and the PDF, the emailed copy and `accidentAnalyticsPptx.js` all render it.
+  One chart per slide — cramming four on a slide repeats the mistake being fixed.
+
+### Files
+NEW: `src/lib/accidentStages.js` (30 tests) · `src/lib/api/accidentStages.js` · `CaseProgressPanel.jsx` ·
+`ClaimProgressBoard.jsx` · `src/lib/accidentAnalyticsPptx.js` · `src/test/chartCapture.test.js` (18) ·
+`src/test/approvalsBulk.test.js` (8) · `MIGRATIONS_V398_ACCIDENT_STAGE_LEDGER.sql`.
+**MIRRORS — change together:** SQL `accident_stage_order`/`accident_stage_department` <-> JS `STAGE_FLOW` /
+`WORKFLOW_STAGES[].dept` (pinned by a test). Tests **5,616 -> 5,750**.
+
+## SESSION 2026-07-28 — CONSOLE UI KIT + COVERAGE PER COUNTRY/AREA + V395 COUNTRY STAGING + ACCIDENT BASIS + V397. Migrations through **V397**, next free **V398**.
 
 ### **V394 — THE COVERAGE PANEL WAS HIDING A TWENTY-DAY HOLE**
 User: "the missing upload section ... which area i am uploading, country wise separate, all with real areas".
@@ -72,6 +182,41 @@ abandoned drafts** that read exactly like failures:
 `importRowSummary` now states which; new `importRowOutcome` + `OUTCOME_META` drive a badge
 (Imported / Undone / Never approved / Nothing imported / **Unknown** — it admits when it cannot tell rather
 than implying success).
+
+### **ACCIDENT ANALYTICS: EVERY FIGURE NOW CARRIES ITS BASIS — because most of them rest on almost nothing**
+User asked for the analytics to be more advanced and corrected. Measured the live 35 incidents FIRST, and the
+data is thin exactly where the page was most confident:
+- **`repair_cost` 2/35** · **`parts_cost` 35/35 BUT EVERY VALUE IS 0.00** — so the "repair cost" headline is
+  really 2 incidents, and a null check counts parts as complete while it contributes nothing. `coverageOf(...,
+  {money:true})` therefore requires a NON-ZERO value; present is not the same as recorded.
+- **`police_report_no` 0/35** — so "Pending Police Reports = 23" just means *we never capture the field*.
+- **`root_cause` 0/35** (also corrective/preventive) — the page can show what and where, never why.
+- `claim_amount` 5/35 · `recovered_amount` 1/35 · `release_date` 11/35 · `driver_name` 7/35 · `vehicle_type` 19/35
+- **NEW `src/lib/accidentAnalytics.js`** (42 tests): `coverageOf`, `basisNote` ("from 2 of 35", "never
+  recorded", and **silent when complete** — saying "35 of 35" on every tile is noise), `METRIC_BASIS`,
+  `analyticsCaveats` (**emits nothing when the data is genuinely complete** — that has to be a statement it can
+  make), plus the analysis the FULL columns do support: `concentration` (+Pareto), `repeatAssets`,
+  `weekdayProfile`, `closureDistribution` (median AND longest, because an average hides the spread),
+  `recoveryRatio`, `possibleDuplicates`.
+- **Real findings it surfaces: NHC holds 20 of 35 incidents (57%)**; 3 vehicles are in repeat incidents.
+- **`possibleDuplicates` REPORTS, NEVER REMOVES** — 3 vehicle-and-date pairs repeat (MP083 2026-07-08 etc.).
+  Two incidents on one vehicle in one day is unusual but possible; only the customer can tell, so the panel
+  lists them, shows what differs, and says every count includes them.
+- Panel `src/components/accidents/AccidentIntelligencePanel.jsx` mounts at the TOP of the Analytics tab —
+  a reader must know a figure rests on 2 of 35 *before* reading it, not in a footnote. The PDF carries the
+  basis on each money tile plus a final "What these figures rest on" page, because the PDF is the copy that
+  gets forwarded and must not look more certain than the screen.
+
+### **V397 — `accidents.asset_no` WAS THE ONE TABLE V337 MISSED**
+V337 normalised asset_no + added a guard trigger to fleet/tyres/work_orders/wo_line_items/parts_consumption.
+`accidents` has `trg_normalize_site` and `trg_normalize_vehicle_type` but **never got the asset_no one**.
+- **4 of 35 incidents carried a lower-case asset number and ALL FOUR failed to join `vehicle_fleet`** — no make,
+  model or register site for those incidents. It also split one asset in two for per-asset analysis (`tm673` vs
+  `TM673`), which is what hid a repeat incident and a probable duplicate.
+- Verified: 4 rows changed, 0 off-canonical, **unjoinable-to-fleet 4 -> 0**. Snapshot
+  `_accident_asset_snapshot_v397`. The function already existed; only the trigger was missing.
+- **RULE: the engine folds case on the asset key anyway** (`concentration(..., {fold:true})`, `repeatAssets`,
+  `possibleDuplicates`) — normalising the column is the fix, but analysis must not depend on it having been run.
 
 ### **ACCIDENTS: A DISPLAY LABEL WAS BEING COMPARED TO A RAW DB TOKEN, IN FIVE PLACES**
 User: "make sure its correct, in open it shows closed and in closed its showing open, charts are not readable".

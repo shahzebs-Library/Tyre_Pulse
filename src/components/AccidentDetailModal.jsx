@@ -19,7 +19,7 @@ import {
   X, Plus, Trash2, Send, Lock, CheckCircle2, XCircle,
   ShieldCheck, Hourglass, FileText, Wrench, MessageSquare, Briefcase, History, User, ClipboardList,
   ArrowLeft, AlertOctagon, ChevronRight, Download, Loader2, ShieldAlert, Clock, Pencil,
-  GitBranch, MapPin, Ban, Hash,
+  GitBranch, MapPin, Ban, Hash, Users,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
@@ -44,6 +44,7 @@ import { resolveStorageUrls } from '../lib/storageRefs'
 import CustomFieldsPanel from './CustomFieldsPanel'
 import CopilotCard from './ai/CopilotCard'
 import EntityApprovalPanel from './workflow/EntityApprovalPanel'
+import CaseProgressPanel from './accidents/CaseProgressPanel'
 import { toUserMessage } from '../lib/safeError'
 
 // Vocabularies + canonicalisation come from the single shared source
@@ -116,6 +117,10 @@ function computeDelay(acc, closure) {
 
 const TABS = [
   { key: 'overview', label: 'Overview', icon: FileText },
+  // The team split lives on its own tab, not folded into Overview: it is where
+  // each department does its work, and Overview is already a summary of five
+  // other sections.
+  { key: 'teams',    label: 'Teams & Progress', icon: Users },
   { key: 'tracker',  label: 'Tracker', icon: ClipboardList },
   { key: 'repair',   label: 'Repair & Insurance', icon: ShieldAlert },
   { key: 'claim',    label: 'Claim & Recovery', icon: Briefcase },
@@ -337,6 +342,13 @@ function AccidentDetail({ accidentId, onBack, onClose, onChanged, variant = 'pag
             <OverviewTab acc={acc} fmtCurrency={fmtCurrency} />
             <CaseTimelineSection acc={acc} />
           </div>
+        )}
+        {tab === 'teams'     && (
+          <CaseProgressPanel
+            record={acc}
+            canEdit={elevated && !editLocked}
+            onChanged={() => { load(); onChanged?.() }}
+          />
         )}
         {tab === 'tracker'   && <TrackerTab acc={acc} elevated={elevated} onEditIncident={editIncident} editLocked={editLocked} />}
         {tab === 'repair'    && <RepairInsuranceTab acc={acc} elevated={elevated} fmtCurrency={fmtCurrency} onEditIncident={editIncident} editLocked={editLocked} />}

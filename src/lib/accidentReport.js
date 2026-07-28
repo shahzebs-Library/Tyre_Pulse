@@ -13,7 +13,7 @@
  * nothing is fabricated; empty data degrades to honest empty states.
  */
 import { analyzeClaims, hasClaim, isClosed } from './claimsAnalytics'
-import { STATUSES, SEVERITIES, FAULT_STATUS_OPTS, canonStatus, canonSeverity, canonFault } from './accidentVocab'
+import { STATUSES, SEVERITIES, FAULT_STATUS_OPTS, canonStatus, canonSeverity, canonFault, isIncidentClosed, isCaseSettled } from './accidentVocab'
 import { getReportPalette } from './reportColors'
 
 // ── WYSIWYG paper theme (dark-on-white so on-screen preview == exported PDF) ──
@@ -145,6 +145,10 @@ export const canonSev = (s) => canonSeverity(s) || 'Unspecified'
 const titleCase = (t) => String(t || '').replace(/[_-]+/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()).trim()
 /** Human-readable label for a CHECK-constrained accident_type token (or a UI label). */
 export const canonType = (t) => { const v = String(t || '').trim(); return v ? titleCase(v) : 'Unspecified' }
+/** Grouping key for a vehicle. Case-folded: an asset number is an identifier, so
+ *  a difference of case is a spelling, not a second vehicle. Matches the
+ *  accidentAnalytics convention (concentration(..., {fold:true})). */
+const assetKey = (r) => String(r?.asset_no || '').trim().toUpperCase()
 
 export function buildReportContext(records, currency = 'SAR') {
   return { records: records || [], claims: analyzeClaims(records || []), currency }
@@ -153,7 +157,10 @@ export function buildReportContext(records, currency = 'SAR') {
 // ── Chart catalog: key → { label, description, kind, build(ctx) → chartjs data } ──
 export const CHARTS = {
   severity: { label: 'Severity distribution', description: 'Minor / Moderate / Major mix', kind: 'doughnut', build: ({ records }) => byCount(records, (r) => canonSeverity(r.severity), { Minor: '#64748b', Moderate: '#ca8a04', Major: '#ea580c' }) },
-  status: { label: 'Status distribution', description: 'Incident workflow status mix', kind: 'doughnut', build: ({ records }) => byCount(records, (r) => r.status || 'Reported') },
+  // canonStatus, not the raw column: the DB stores tokens ('under_review',
+  // 'awaiting_parts') and printing those put database spelling in front of a
+  // customer while the same chart on the Analytics tab read 'Under Investigation'.
+  status: { label: 'Status distribution', description: 'Incident workflow status mix', kind: 'doughnut', build: ({ records }) => byCount(records, (r) => canonStatus(r.status) || 'Reported') },
   fault: {
     label: 'Fault status (GCC)', description: 'Faulty vs non-faulty vs under review', kind: 'doughnut', build: ({ records }) => {
       // Classify via the ONE vocab fault resolver so this chart, the table
@@ -176,7 +183,11 @@ export const CHARTS = {
       return { labels: keys.map(mLabel), datasets: [{ label: 'Incidents', data: keys.map((k) => t[k]), borderColor: '#ea580c', backgroundColor: 'rgba(234,88,12,0.18)', fill: true }] }
     },
   },
-  topAssets: { label: 'Top assets by incidents', description: 'Most incident-prone vehicles', kind: 'bar-h', build: ({ records }) => rank(records, (r) => r.asset_no, 6, '#ea580c') },
+  // assetKey, not the raw column: an asset number is an identifier, so case is
+  // not meaning. V397 normalised the column, but the analysis must not depend on
+  // a migration having run - before it, tm673 and TM673 ranked as two vehicles
+  // and each understated the other.
+  topAssets: { label: 'Top assets by incidents', description: 'Most incident-prone vehicles', kind: 'bar-h', build: ({ records }) => rank(records, assetKey, 6, '#ea580c') },
   bySite: { label: 'Incidents by site', description: 'Site / branch comparison', kind: 'bar-h', build: ({ records }) => rank(records, (r) => r.site, 8, '#2563eb') },
   sevMonthly: {
     label: 'Monthly severity (12 mo)', description: 'Stacked severity mix by month', kind: 'bar-stack', build: ({ records }) => {
@@ -222,7 +233,7 @@ export const CHARTS = {
   // ── Advanced (mixed / radial / floating) chart types ───────────────────────
   paretoAssets: {
     label: 'Asset incident Pareto', description: 'Top assets by incidents with a cumulative % line', kind: 'pareto', build: ({ records }) => {
-      const c = {}; records.forEach((r) => { const k = r.asset_no; if (k) c[k] = (c[k] || 0) + 1 })
+      const c = {}; records.forEach((r) => { const k = assetKey(r); if (k) c[k] = (c[k] || 0) + 1 })
       const sorted = Object.entries(c).sort((a, b) => b[1] - a[1]).slice(0, 8)
       const total = sorted.reduce((s, [, v]) => s + v, 0)
       let run = 0
@@ -260,7 +271,7 @@ export const CHARTS = {
   },
   statusPolar: {
     label: 'Status distribution (polar)', description: 'Incident workflow status as a polar-area chart', kind: 'polar', build: ({ records }) => {
-      const c = {}; records.forEach((r) => { const k = r.status || 'Reported'; c[k] = (c[k] || 0) + 1 })
+      const c = {}; records.forEach((r) => { const k = canonStatus(r.status) || 'Reported'; c[k] = (c[k] || 0) + 1 })
       const entries = Object.entries(c).filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1])
       return { labels: entries.map(([k]) => k), datasets: [{ data: entries.map(([, v]) => v), backgroundColor: entries.map((_, i) => PALETTE[i % PALETTE.length]), borderWidth: 1, borderColor: '#ffffff' }] }
     },
@@ -517,25 +528,41 @@ export const KPIS = {
   avgCaseDuration: { label: 'Avg case duration', get: ({ records }) => avgDays(records, isClosedRow) },
   pendingActions: { label: 'Pending actions', get: ({ records }) => records.filter((r) => !isClosedRow(r) && (!r.expected_release_date || (hasClaim(r) && !r.insurer))).length },
 }
-export function isClosedRow(r) {
-  if (r.release_date) return true
-  const b = `${r.status || ''} ${r.closure_status || ''} ${r.claim_status || ''}`.toLowerCase()
-  return /clos|settl|paid|recovered|complete|resolved/.test(b)
-}
+/**
+ * Is the incident case closed. Delegates to the ONE resolver in accidentVocab so
+ * this report cannot disagree with the register it is reporting on.
+ *
+ * WHAT IT USED TO DO, and why that was the whole bug: it returned true for any
+ * row carrying a `release_date`, then scanned status + closure_status +
+ * claim_status for closure-ish words. Measured on the live 35 incidents that
+ * counted 15 closed against the register's 12 - the three extras are cases still
+ * at `reported` or `awaiting_approval` whose VEHICLE had been released, plus the
+ * trap of a `settled` claim on an unfinished case.
+ */
+export const isClosedRow = (r) => isIncidentClosed(r || {})
 
-/** Whole days a case has been running: incident_date → release_date when closed,
- *  otherwise → now. null when incident_date is missing/invalid — never fabricated.
- *  Same semantics as the Accidents page "Days Open" column. */
+/**
+ * Whole days a case has been running: incident_date to release_date once it has
+ * settled, otherwise to now. null when incident_date is missing or unparseable -
+ * never fabricated.
+ *
+ * IDENTICAL to the register's "Days Open" column, deliberately, including the
+ * awkward part: a SETTLED case with no release date returns null rather than
+ * running on to today. It has no honest duration, and the old behaviour here
+ * printed an ever-growing day count on cases that had finished - the register was
+ * already fixed for that and this copy was not, so the same row read one number
+ * in the table and another in the report.
+ */
 export function caseAgeDays(r, now = Date.now()) {
   if (!r?.incident_date) return null
   const start = new Date(r.incident_date)
   if (isNaN(start)) return null
-  let end = new Date(now)
-  if (isClosedRow(r) && r.release_date) {
+  if (isCaseSettled(r)) {
+    if (!r.release_date) return null
     const rel = new Date(r.release_date)
-    if (!isNaN(rel)) end = rel
+    return isNaN(rel) ? null : Math.max(0, Math.floor((rel - start) / 86400000))
   }
-  return Math.max(0, Math.floor((end - start) / 86400000))
+  return Math.max(0, Math.floor((new Date(now) - start) / 86400000))
 }
 
 function avgDays(records, filterFn) {
@@ -557,6 +584,13 @@ export const TABLE_COLS = {
  *  instead of reading r[col] directly. */
 export function cellValue(col, r, now = Date.now()) {
   if (col === 'days_open') return caseAgeDays(r, now)
+  // The vocabulary columns are canonicalised for DISPLAY, because the table's own
+  // filters already compare canonical values. Reading the raw column here meant a
+  // row filtered as "Closed" printed 'closed', and one filtered as "Major"
+  // printed 'severe' - the register beside it shows the label.
+  if (col === 'status') return canonStatus(r?.status)
+  if (col === 'severity') return canonSeverity(r?.severity)
+  if (col === 'fault_status') return canonFault(r?.fault_status)
   return r[col]
 }
 

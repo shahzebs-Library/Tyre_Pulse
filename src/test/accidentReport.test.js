@@ -63,10 +63,50 @@ describe('accidentReport catalog integrity', () => {
     }
   })
 
-  it('isClosedRow honours release_date and closure keywords', () => {
-    expect(isClosedRow({ release_date: '2026-01-01' })).toBe(true)
-    expect(isClosedRow({ status: 'Settled' })).toBe(true)
-    expect(isClosedRow({ status: 'Open' })).toBe(false)
+  // This test used to assert the OPPOSITE and was itself the bug's alibi: it
+  // pinned "any release_date means closed" and "a settled claim means closed",
+  // which is how the builder came to report 15 closed against the register's 12
+  // on the same 35 live incidents.
+  it('isClosedRow answers case closure only, matching the register', () => {
+    expect(isClosedRow({ status: 'closed' })).toBe(true)          // DB token
+    expect(isClosedRow({ status: 'Closed' })).toBe(true)          // display label
+    expect(isClosedRow({ closure_status: 'closed' })).toBe(true)
+    expect(isClosedRow({ status: 'reported' })).toBe(false)
+
+    // A released VEHICLE is not a closed CASE. All three of these are live rows.
+    expect(isClosedRow({ status: 'awaiting_approval', release_date: '2026-07-01' })).toBe(false)
+    expect(isClosedRow({ status: 'reported', release_date: '2026-07-02' })).toBe(false)
+    // A settled CLAIM is not a closed case either; that is claimsAnalytics' question.
+    expect(isClosedRow({ status: 'repair_in_progress', claim_status: 'settled' })).toBe(false)
+
+    // closure_status reads 'open' on all 35 live rows including the 12 closed
+    // ones, so it must not be able to veto the status.
+    expect(isClosedRow({ status: 'closed', closure_status: 'open' })).toBe(true)
+  })
+
+  it('reports vocabulary as labels, not database tokens', () => {
+    const rows = [
+      { status: 'under_review', severity: 'severe', fault_status: 'not at fault' },
+      { status: 'awaiting_parts', severity: 'minor' },
+    ]
+    // The table filters compare canonical values, so the cells have to as well.
+    expect(cellValue('status', rows[0])).toBe('Under Investigation')
+    expect(cellValue('severity', rows[0])).toBe('Major')
+    expect(cellValue('fault_status', rows[0])).toBe('Non-faulty')
+
+    const chart = CHARTS.status.build({ records: rows })
+    expect(chart.labels).toContain('Under Investigation')
+    expect(chart.labels).toContain('Awaiting Parts')
+    expect(chart.labels).not.toContain('under_review')
+  })
+
+  it('counts one vehicle once whatever the case of its asset number', () => {
+    // V397 normalised the column, but the analysis must not depend on a
+    // migration having run: before it, tm673 and TM673 ranked separately.
+    const rows = [{ asset_no: 'TM673' }, { asset_no: 'tm673' }, { asset_no: ' tm673 ' }]
+    const top = CHARTS.topAssets.build({ records: rows })
+    expect(top.labels).toEqual(['TM673'])
+    expect(top.datasets[0].data).toEqual([3])
   })
 
   it('fmtCell formats money, percents, dates and empties', () => {
@@ -84,8 +124,15 @@ describe('accidentReport catalog integrity', () => {
     // open case: incident → now
     expect(caseAgeDays({ incident_date: '2026-07-04', status: 'Open' }, now)).toBe(10)
     expect(cellValue('days_open', { incident_date: '2026-07-04', status: 'Open' }, now)).toBe(10)
-    // closed case: incident → release_date
-    expect(caseAgeDays({ incident_date: '2026-06-01', release_date: '2026-06-21' }, now)).toBe(20)
+    // A release date alone does NOT stop the clock: the case is still open, so it
+    // is still accruing days. Three live incidents look exactly like this.
+    expect(caseAgeDays({ incident_date: '2026-06-01', release_date: '2026-06-21' }, now)).toBe(43)
+    // Settled case: incident -> release date.
+    expect(caseAgeDays({ incident_date: '2026-06-01', status: 'closed', release_date: '2026-06-21' }, now)).toBe(20)
+    expect(caseAgeDays({ incident_date: '2026-06-01', current_status: 'Released', release_date: '2026-06-21' }, now)).toBe(20)
+    // Settled with no release date has no honest duration - null, never a count
+    // that grows forever on a finished case. Matches the register exactly.
+    expect(caseAgeDays({ incident_date: '2026-06-01', status: 'closed' }, now)).toBeNull()
     // honest null without an incident date; plain columns pass through
     expect(caseAgeDays({ status: 'Open' }, now)).toBeNull()
     expect(cellValue('site', { site: 'Riyadh' }, now)).toBe('Riyadh')

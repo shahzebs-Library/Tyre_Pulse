@@ -100,7 +100,11 @@ async function existingKeys(table, column, country) {
   for (let guard = 0; guard < 500; guard += 1) {
     let q = supabase.from(table).select(column).not(column, 'is', null)
     if (country) q = q.eq('country', country)
-    const { data, error } = await q.range(from, from + size - 1)
+    // Stable order on the primary key: PostgREST does NOT guarantee row order
+    // across .range() pages without an ORDER BY, so a row can be dropped or
+    // repeated at a page boundary. A dropped existing key is not recognised as
+    // a duplicate, gets re-inserted, and aborts the whole batch on 23505.
+    const { data, error } = await q.order('id', { ascending: true }).range(from, from + size - 1)
     if (error) throw error
     if (!data || data.length === 0) break
     for (const r of data) { const v = r[column]; if (v != null) keys.add(String(v).trim().toLowerCase()) }
@@ -139,7 +143,10 @@ async function existingTyreKeys(country) {
   for (let guard = 0; guard < 500; guard += 1) {
     let q = supabase.from('tyre_records').select('serial_no,asset_no,position,issue_date')
     if (country) q = q.eq('country', country)
-    const { data, error } = await q.range(from, from + size - 1)
+    // Stable order on the primary key so paging never drops/repeats a row at a
+    // page boundary (PostgREST does not guarantee order across .range() pages
+    // without an ORDER BY). A missed key otherwise re-inserts and aborts the batch.
+    const { data, error } = await q.order('id', { ascending: true }).range(from, from + size - 1)
     if (error) throw error
     if (!data || data.length === 0) break
     for (const r of data) keys.add(tyreLifecycleKey(r))
@@ -169,9 +176,16 @@ export async function insertTyreRecords(rows = [], { onProgress, country } = {})
   return { inserted: res.inserted, failed: res.failed || 0, skipped }
 }
 
-/** Complaints/repair rows -> work_orders. Skips work_order_no already stored (merge). */
+/**
+ * Complaints/repair rows -> work_orders. Skips a work_order_no already stored (merge).
+ * Dedupe is GLOBAL, not country-scoped: work_orders.work_order_no is globally unique
+ * (the number's prefix encodes the country 1:1 — AFKR/GCKR=KSA, RM=UAE, EG=Egypt — so a
+ * number can never legitimately belong to two countries). A country-scoped check let a
+ * number already stored under another country slip through and abort the whole batch on
+ * the global unique (23505). `country` is still accepted for signature compatibility.
+ */
 export async function insertWorkOrders(rows = [], { onProgress, country } = {}) {
-  const seen = await existingKeys('work_orders', 'work_order_no', country).catch(() => new Set())
+  const seen = await existingKeys('work_orders', 'work_order_no').catch(() => new Set())
   const fresh = rows.filter((r) => r.work_order_no && !seen.has(String(r.work_order_no).trim().toLowerCase()))
   const skipped = rows.length - fresh.length
   const res = fresh.length ? await insertChunked('work_orders', fresh, onProgress) : { inserted: 0, failed: 0 }

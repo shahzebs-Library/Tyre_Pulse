@@ -26,7 +26,7 @@ const n0 = (v) => num(v) ?? 0
 
 export const GRAINS = ['year', 'quarter', 'month']
 
-const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+export const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 /** Human label for a period key: '2024' | '2024-Q1' -> 'Q1 2024' | '2024-01' -> 'Jan 2024'. */
 export function periodLabel(period) {
   const s = String(period || '')
@@ -75,6 +75,42 @@ export function byCountry(rows) {
   }
   for (const e of m.values()) e.years.sort((a, b) => a.period.localeCompare(b.period))
   return [...m.values()].sort((a, b) => a.country.localeCompare(b.country))
+}
+
+/** The [start, end] month bounds ('YYYY-MM') a period key covers. */
+export function periodBounds(period) {
+  const s = String(period || '')
+  const q = s.match(/^(\d{4})-Q([1-4])$/)
+  if (q) { const sm = (Number(q[2]) - 1) * 3 + 1; return { start: `${q[1]}-${String(sm).padStart(2, '0')}`, end: `${q[1]}-${String(sm + 2).padStart(2, '0')}` } }
+  if (/^\d{4}-\d{2}$/.test(s)) return { start: s, end: s }
+  return { start: `${s}-01`, end: `${s}-12` } // year
+}
+
+/**
+ * Keep only the periods that overlap the [fromYm, toYm] range ('YYYY-MM', either
+ * side optional). Filters the DISPLAYED periods so the trend + forecast are built
+ * from the chosen window.
+ */
+export function filterPeriods(years, fromYm, toYm) {
+  if (!fromYm && !toYm) return years || []
+  return (years || []).filter((y) => {
+    const b = periodBounds(y.period ?? y.year)
+    if (fromYm && b.end < fromYm) return false
+    if (toYm && b.start > toYm) return false
+    return true
+  })
+}
+
+/** Distinct calendar years present across the country groups (ascending). */
+export function availableYears(countries) {
+  const set = new Set()
+  for (const c of countries || []) {
+    for (const y of c.years || []) {
+      const m = String(y.period ?? y.year).match(/^(\d{4})/)
+      if (m) set.add(m[1])
+    }
+  }
+  return [...set].sort()
 }
 
 /** Year-over-year table for one country's year series (delta + pct vs prior year). */

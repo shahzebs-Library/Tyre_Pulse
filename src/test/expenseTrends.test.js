@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   byCountry, yoyTable, latestShare, linearFit, cagr, forecast, insights, buildCountryTrend,
-  periodLabel, nextPeriod,
+  periodLabel, nextPeriod, periodBounds, filterPeriods, availableYears,
 } from '../lib/expenseTrends'
 
 const rows = [
@@ -114,5 +114,32 @@ describe('period grain (quarter / month)', () => {
     const f = forecast(years, 2, 'quarter')
     expect(f.map((x) => x.period)).toEqual(['2024-Q3', '2024-Q4'])
     expect(f[0].total).toBe(300)
+  })
+})
+
+describe('date-range window', () => {
+  it('periodBounds covers the right months for each grain', () => {
+    expect(periodBounds('2024')).toEqual({ start: '2024-01', end: '2024-12' })
+    expect(periodBounds('2024-Q2')).toEqual({ start: '2024-04', end: '2024-06' })
+    expect(periodBounds('2024-03')).toEqual({ start: '2024-03', end: '2024-03' })
+  })
+  it('filterPeriods keeps only overlapping periods', () => {
+    const years = ['2023-01', '2023-06', '2024-02', '2024-11'].map((p) => ({ period: p }))
+    expect(filterPeriods(years, '2023-05', '2024-03').map((y) => y.period)).toEqual(['2023-06', '2024-02'])
+    expect(filterPeriods(years, null, null)).toHaveLength(4)
+    expect(filterPeriods(years, '2024-01', null).map((y) => y.period)).toEqual(['2024-02', '2024-11'])
+  })
+  it('year/quarter periods overlap a partial-month window', () => {
+    expect(filterPeriods([{ period: '2024' }], '2024-06', '2024-06')).toHaveLength(1)
+    expect(filterPeriods([{ period: '2024-Q1' }], '2024-03', '2024-03')).toHaveLength(1)
+    expect(filterPeriods([{ period: '2024-Q1' }], '2024-04', '2024-12')).toHaveLength(0)
+  })
+  it('availableYears lists distinct years ascending', () => {
+    const c = byCountry([
+      { country: 'KSA', period: '2024-01', total: 1 },
+      { country: 'KSA', period: '2023-05', total: 1 },
+      { country: 'UAE', period: '2024-07', total: 1 },
+    ])
+    expect(availableYears(c)).toEqual(['2023', '2024'])
   })
 })

@@ -3,6 +3,110 @@
 Durable, committed project knowledge so any session has full context. Keep this
 current. Read it before adding/changing modules. Governing spec: `Tyre pulse enterprise.md`
 
+## SESSION 2026-07-28 (part 7) — AN EGYPT EXPENSE FILE WAS LOADED INTO UAE (V405). Migrations through **V405**, next free **V406**.
+
+### **1,524 rows, EGP 5,392,835, moved UAE -> Egypt**
+**THREE INDEPENDENT SIGNALS AGREED UNANIMOUSLY**, which is what made this a fix rather than a guess:
+1. **Job card prefix** — 1,524 rows begin **EG**; the other **67,713 UAE rows all begin RM**. Not one ambiguous.
+2. **Store code** — every one is **`SP_EG_*`** (SP_EG_ MID 507 · GML4 420 · EAST 321 · RH 161 · H6 115).
+3. **Item code** — 1,502 of 1,524 use Egypt's letter scheme (`XX-XX-nnnn`); **ZERO** use the six-digit numeric
+   scheme UAE and KSA use.
+- Result: Egypt **44,389 rows / EGP 85,863,351.89**; UAE **67,713 / AED 18,517,204.46**; KSA unchanged. Every
+  country now carries exactly ONE currency. Snapshot `_egypt_expense_move_v405`, undo in the migration.
+
+### **THE CURRENCY WAS THE DANGEROUS PART — the trigger will NOT fix it for you**
+The rows carried **AED**. `classify_parts_consumption` only fills currency **`if NEW.currency is null`**, so
+changing the country alone would have left **EGP 5.39M labelled AED — and AED is worth ~13x EGP**, so every
+converted or combined figure would have been out by an order of magnitude. **RULE: when moving rows between
+countries, set `currency` EXPLICITLY; the trigger only fills a NULL.**
+
+### **THE IMPORT KEY MUST BE RECOMPUTED OR THE NEXT UPLOAD DUPLICATES**
+`import_uid` is `md5(COUNTRY | source_row | ...)` — **country is its FIRST component.** Left UAE-derived, a
+correct Egypt re-import computes a different uid, matches nothing, and inserts all 1,524 again — **the exact
+path that produced the 8,248 duplicate expense rows.**
+- **THE RECOMPUTATION WAS PROVEN BEFORE BEING TRUSTED:** feeding the CURRENT country back through
+  `parts_import_uid` reproduces the stored uid on **1,519 of 1,524**, which is what establishes the column
+  mapping is right (`p_txn_date` <- `txn_date`, `p_value` <- `value_amount::text`, plus store + cost centre).
+- **RESIDUAL, stated not hidden: 5 rows do not reproduce** (loaded via the app, not the staging pipe, so their
+  original inputs differ slightly). Those 5 could still duplicate on a re-import. Writing the formula value is
+  no worse than leaving them — a NULL uid never dedupes either — and is strictly right for the other 1,519.
+- Verified BEFORE applying: **0 recomputed keys collide** with an existing row, **0 duplicated within the move**.
+
+### **THE TRIGGER RE-CLASSIFIES ON UPDATE, AND HERE THAT WAS CORRECT**
+Measured in a rolled-back run: exactly **3 rows change bucket, all improvements** — `GREASE NIPPLE 4 PIN` and
+`GREASE GUN` move **oil -> spare**. They move because **the material master is keyed PER COUNTRY**: Egypt has
+those reviewed as spare_part and a row tagged UAE could never see that decision. **`line_cost` changed on 0
+rows**, so no money was created or destroyed.
+
+### **HOW TO SPOT THIS CLASS AGAIN**
+A country whose expense rows carry another country's job card prefix. **AFKR + GCKR = KSA · RM = UAE · EG =
+Egypt.** Derive an expense row's country from that prefix or the `SP_EG_` style store code — **NEVER from the
+asset code**, which is a per-country sequence and collides across countries (V376).
+
+## SESSION 2026-07-28 (part 6) — "ONLY EXPENSES UPLOAD, EVERYTHING ELSE COMES BACK ZERO" (V404). Migrations through **V404**, next free **V405**.
+
+### **THE HEADLINE BUG: the commit told the ROW `failed` and the USER `committed`**
+```
+SET import_status = CASE ... WHEN v_total_ins > 0 THEN 'committed' ELSE 'failed' END,   -- row: FAILED
+RETURN 'status',   CASE ... WHEN v_failed > 0 THEN 'failed'        ELSE 'committed' END -- user: COMMITTED
+```
+With nothing inserted and nothing failed, the database recorded **failed** and the user got a green tick reading
+**"Committed - 0 row(s) inserted, 0 skipped."** **IT IS IN THE PRODUCTION AUDIT LOG as a pair on one batch:**
+`2026-07-12 09:56:39 warranty_claims inserted 0 / failed 22` (honest) then `09:58:30 inserted 0 / failed 0`
+(**green success**).
+- **THE MECHANISM behind that pair matters as much as the CASE.** On a per-row insert error the loop does
+  `UPDATE import_rows SET validation_status='error'`, and the loop only ever selects
+  `validation_status IN ('ready','warning')` — so **a failed row is PERMANENTLY excluded from every later commit
+  of that batch.** The retry finds nothing eligible and the ELSE branch calls it success.
+- **V404: `nothing_to_commit` is its own status**, plus **`not_eligible`** broken down by each row's own
+  action/validation_status — because "every row is already in the system" and "every row failed earlier" are
+  opposite problems with opposite fixes and previously **both rendered as 0**.
+- **Verified live, rolled back:** the real Egypt batch returns
+  `{"status":"nothing_to_commit","not_eligible":{"insert/error":101}}`. It used to return `committed`.
+
+### **THE ERP IMPORT PAGE PROMISED A PROMOTION STEP THAT WAS NEVER BUILT**
+`erp_asset_import` / `erp_tyre_change_import` / `erp_tyre_expense_import` are the **ONLY staging family in the
+whole schema with NO trigger and no RPC that reads them** — every other family (`expenses_*`, all 7 `stg_*`
+plus their 21 country siblings) has a working pipe. **That is exactly why the expense grid looks like the only
+thing that imports.** The page said "before promotion" / "promotion is a deliberate, separate step" in FOUR
+places. Now it says plainly that those rows do not reach the master tables. **Building the promotion is real
+work and is NOT done.**
+
+### **A MISMATCHED SHEET SAVED 18 CONTENT-FREE ROWS AS A SUCCESS**
+`erp_tyre_change_import` holds 18 rows where `asset_no, serial_no, tire_pos, fix_date, job_card, tyre_brand` are
+**ALL null** — only `site` is set, because the word "location" matched the site alias. Two faults combined:
+`detectSheetIndex` **silently fell back to sheet 0** when no tab name matched, and `isEmptyMappedRow` only
+dropped a row when **EVERY** column was null. The user was told **"Saved 18 of 18 rows"** for a sheet nothing
+had been read from. Now a row must carry its dataset's declared `keyField` (`rowHasKey`), and a multi-tab
+workbook with no matching tab asks the user to pick rather than guessing.
+
+### **A BLANK DATE KILLED THE WHOLE BATCH — the in-app twin of a known open bug**
+`work_orders.opened_at` is **NOT NULL with a `now()` default**, and **a column default does NOT apply when the
+client sends an explicit null** — which both work-order mappers did (`parseDate(...) || null`). One blank
+"Vehicle In Date" anywhere in an ERP file aborted the entire import at zero rows, with a sanitized message that
+never named the column. The key is now **omitted** when there is no date so the default applies; the raw value
+still goes to `custom_data`. **This is the same defect already recorded as open for the staging pipe — the two
+were never connected.**
+
+### What the measurement showed (17 batches, 3,555 staged rows)
+- **9 batches staged ZERO rows** and sit in draft forever; the same Egypt asset file was uploaded **SIX times in
+  one day**, each attempt an orphan.
+- **2 Egypt fleet batches DID insert 94 rows each** and were then reversed, so the list shows `0/101` — correct
+  behaviour, misleading display.
+- Batch counters lie independently: several report `total_rows 0` while holding hundreds of staged rows.
+- **The insert itself is fine** — verified live as a real user, the exact staged payload inserts into
+  `vehicle_fleet` without complaint. Neither RLS nor a constraint was blocking it.
+
+### **STILL OPEN — decisions, not patches**
+1. **`work_orders.work_order_no` is GLOBALLY unique** (`work_orders_work_order_no_key`) while the client's
+   duplicate check is **country-scoped**, so a number already stored under another country slips through and
+   **aborts the whole batch** on 23505. Needs a per-country key or a global dedupe scope.
+2. **`erpIntake.existingKeys` pages with `.range()` and NO `.order()`** against 60,099 KSA work orders —
+   violates the repo's own paging rule; one missed row is enough to abort a batch.
+3. The promotion step for the three `erp_*_import` tables.
+4. `synonyms.js` marks `work_orders.asset_no` `required:false` but the column is **NOT NULL**; and
+   `ENUM_DOMAINS.workorder.work_type` lacks `Service` / `Preventive Maintenance`, which V253 added to the DB CHECK.
+
 ## SESSION 2026-07-28 (part 5) — THE BACKFILLS WERE APPLIED FOR REAL (V401c, V403). Migrations through **V403**, next free **V404**.
 
 ### **V403 — THE BRAND WAS NEVER MISSING, IT WAS IN THE WRONG COLUMN. 582 rows moved.**

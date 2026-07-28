@@ -1,9 +1,18 @@
 /**
  * ERP Data Import service - the seam between the ErpImport page and the review
  * (staging) tables (V277: erp_asset_import / erp_tyre_change_import /
- * erp_tyre_expense_import). Rows are SAVED here for cross-checking BEFORE any
- * promotion into the master tables; promotion is a deliberate, separate step
- * (the server pipeline), never a side effect of the upload.
+ * erp_tyre_expense_import).
+ *
+ * THERE IS NO PROMOTION STEP. This header used to describe one as "a deliberate,
+ * separate step (the server pipeline)", and the page repeated that promise in
+ * four places, but it was never built: these three tables are the ONLY staging
+ * family in the schema with no trigger and no RPC that reads them. Rows saved
+ * here are read, exported and deleted - they never reach vehicle_fleet,
+ * tyre_records or parts_consumption.
+ *
+ * That is why the expense grid appears to be the only thing that imports: the
+ * expenses_* and stg_* families all have working pipes, and this one does not.
+ * The page now says so plainly rather than implying the data has landed.
  *
  * RLS enforces org isolation (read for any active member; write for
  * Admin/Manager/Director) plus country + site scoping. This layer keeps an

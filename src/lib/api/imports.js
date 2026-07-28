@@ -486,6 +486,10 @@ export async function commitBatch(batchId, { chunkSize = COMMIT_CHUNK_ROWS, onPr
     totals.target = d.target ?? totals.target
     totals.remaining = d.remaining ?? 0
     totals.status = d.status || totals.status
+    // Why rows were not even attempted. Without this the page can only say "0",
+    // and "everything is already in the system" reads the same as "everything
+    // failed on an earlier attempt" - opposite problems with opposite fixes.
+    if (d.not_eligible && typeof d.not_eligible === 'object') totals.not_eligible = d.not_eligible
     onProgress?.({ ...totals })
     if (d.status !== 'partial' || !(d.remaining > 0)) return totals
     // Every chunk must make progress (rows become processed or errored).

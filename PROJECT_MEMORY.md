@@ -3,6 +3,49 @@
 Durable, committed project knowledge so any session has full context. Keep this
 current. Read it before adding/changing modules. Governing spec: `Tyre pulse enterprise.md`
 
+## SESSION 2026-07-28 (part 5) — THE BACKFILLS WERE APPLIED FOR REAL (V401c, V403). Migrations through **V403**, next free **V404**.
+
+### **V403 — THE BRAND WAS NEVER MISSING, IT WAS IN THE WRONG COLUMN. 582 rows moved.**
+User: "if something is not missing, backfill it if its safe and correct." **This CLOSES the standing open item
+"Egypt 475 blank brand — needs a re-import from the source files" WITHOUT a re-import.**
+- **WHICH VALUES MOVE IS DECIDED BY `brain_tokens('tyre_brand')`**, the catalog the classifier already uses —
+  same principle as V400d's veto reusing `oil_part`. **No second list to drift.**
+- **THE SPLIT IS PERFECTLY CLEAN, and that is what made it safe rather than a judgement call:**
+  **IN the catalog -> 582 rows, EVERY ONE UAE or Egypt** (PIRELLI 454 Egypt · ROADX 67 · FIREMAX 15 ·
+  TRIANGLE 15 · BRIDGESTONE 12 · ROCK HOLDER 7 · LONGMARCH 5 · BLACKHAWK 4 · SAILUN 2 · TEGRYS 1).
+  **NOT in the catalog -> 65 rows, EVERY ONE KSA**, and every one a real reason (WORN OUT 29, PUNCTURE 14,
+  BLAST/BURST 6, DAMAGED 5, THREAD SEPRATION 2, REPLACED 2, SIDE WALL DAMAGE 1, ALIGNMENT 1).
+  The misalignment is UAE/Egypt only; the genuine reasons are KSA only. **Two independent signals agreeing.**
+- **RADIAL DELIBERATELY NOT MOVED** — it IS used as a brand on other rows, so a purely data-driven test would
+  have accepted it, but radial is a CONSTRUCTION type, not a manufacturer. Moving it propagates a bad value
+  rather than recovering a good one. 1 row.
+- **`removal_reason` IS CLEARED on moved rows** — a brand there is not a reason and corrupts the analysis:
+  before this, **ROADX was the SECOND most common "reason a tyre was removed" in the whole fleet.**
+- Verified: blank brand fleet-wide **752 -> 170**, **Egypt 475 -> 6**, brands left in removal_reason **0**,
+  KSA's 2,232 genuine reasons untouched. Snapshot `_brand_from_removal_reason_v403` (undo in the migration).
+
+### **V401c — A FILLED PRICE MUST NEVER BECOME EVIDENCE (my own doc/code mismatch)**
+V401's comment claimed comparables are "never drawn from tyres this process filled". **The code did not do
+that** — `known` took any row with `cost_per_tyre > 0`, which after one run includes the rows it just wrote.
+A second run would have priced from the first run's guesses, a third from guesses about guesses, drifting from
+any measured price **while looking exactly as confident**. **Found by asking what a SECOND run would do, not by
+re-reading the first.** One `NOT EXISTS` against `tyre_price_backfill_log`. It also makes the undo meaningful:
+undoing a batch removes its log rows, so those tyres become eligible evidence again only with a REAL price.
+
+### **THE PRICE BACKFILL WAS APPLIED FOR REAL — 3 batches, each independently undoable**
+- **KSA 63.8% -> 97.2%** priced (2,017 filled, median **SAR 900**) · **UAE 0% -> 56.4%** (568, median
+  **AED 714.71**) · **Egypt 0% -> 85.1%** (404, median **EGP 14,181.29**). own_jobcard 1,001 / comparable
+  1,988 / warranty 0.
+- **VERIFIED AFTER APPLYING: 0 rows that already had a price were overwritten, and 0 filled prices fall
+  outside the range of REAL observed prices in their own country.**
+- **WHAT THIS CHANGES AND WHAT IT DOES NOT.** Tyre SPEND totals are unaffected — they read the expense grid
+  via `loadCostSplit`, and the standing rule is never to sum `cost_per_tyre` for a total. What it changes is
+  **CPK**, which legitimately uses the per-tyre price: 2,989 more tyres can now produce a cost per km.
+- **STILL UNPRICED AND HONESTLY SO: 676** (KSA 166, UAE 439, Egypt 71). UAE and Egypt had NO measured price at
+  all before this, so there is nothing real to compare the remainder against, and V401c refuses to compare
+  them against our own fills. **Egypt's brand fix does NOT unlock more pricing on its own** for the same
+  reason — verified, Egypt stayed at 404.
+
 ## SESSION 2026-07-28 (part 4) — TYRE PRICE BACKFILL (V401) + COVERAGE WINDOW & FILE HELP (V402). Migrations through **V402**, next free **V403**.
 
 ### **V401 — "if a tyre has zero cost, backfill from previous data; a repair is not a price; warranty is zero"**

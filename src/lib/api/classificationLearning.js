@@ -104,6 +104,32 @@ export async function applyLearnedRule(token, category, dryRun = true) {
   return data || {}
 }
 
+/**
+ * What the classifier has been taught, and what has been ruled out.
+ *
+ * This is not only a record. Accepting and applying are two server calls, so a
+ * failure between them leaves a rule accepted but unapplied - and once decided
+ * it never appears in the suggestions again. Without this list that rule would
+ * be stranded with no way to retry it.
+ *
+ * Read directly rather than through an RPC: the table carries an org-isolation
+ * policy plus a read policy for active users, so RLS already scopes it.
+ */
+export async function listLearnedRules() {
+  const { data, error } = await supabase
+    .from('classification_learned_rules')
+    .select('id, token, category, status, support, precision_pct, lift, note, decided_at')
+    .in('status', ['active', 'rejected'])
+    .order('decided_at', { ascending: false })
+  if (error) {
+    if (isMissing(error) || /relation .* does not exist/i.test(error.message || '')) {
+      return { ok: false, rules: [] }
+    }
+    throw new Error(toUserMessage(error, 'Could not load what the classifier has learned.'))
+  }
+  return { ok: true, rules: Array.isArray(data) ? data : [] }
+}
+
 /** Agreement between the machine and the humans, by month. */
 export async function getAccuracy() {
   const { data, error } = await supabase.rpc('classification_accuracy')
@@ -130,17 +156,20 @@ export async function getWeakSpots(limit = 20) {
 
 /** Everything the learning page needs, each part degrading on its own. */
 export async function loadLearningOverview() {
-  const [proposals, accuracy, weak] = await Promise.allSettled([
+  const settled = await Promise.allSettled([
     listRuleProposals(),
     getAccuracy(),
     getWeakSpots(),
+    listLearnedRules(),
   ])
+  const [proposals, accuracy, weak, rules] = settled
   const val = (r, fallback) => (r.status === 'fulfilled' ? r.value : fallback)
   return {
     proposals: val(proposals, { ok: false, proposals: [] }).proposals,
     proposalsOk: val(proposals, { ok: false }).ok,
     periods: val(accuracy, { ok: false, periods: [] }).periods,
     spots: val(weak, { ok: false, spots: [] }).spots,
-    failed: [proposals, accuracy, weak].filter((r) => r.status === 'rejected').length,
+    rules: val(rules, { ok: false, rules: [] }).rules,
+    failed: settled.filter((r) => r.status === 'rejected').length,
   }
 }

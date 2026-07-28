@@ -54,6 +54,7 @@ export default function ConsoleClassificationLearning() {
     [state.data],
   )
   const spots = useMemo(() => rankWeakSpots(state.data?.spots || []), [state.data])
+  const rules = useMemo(() => state.data?.rules || [], [state.data])
   const trend = useMemo(() => accuracyTrend(state.data?.periods || []), [state.data])
   const latest = useMemo(() => {
     const p = [...(state.data?.periods || [])].sort((a, b) =>
@@ -90,6 +91,28 @@ export default function ConsoleClassificationLearning() {
         setFlash({ tone: 'ok', text: `Rejected "${p.token}". It will not be suggested again.` })
       }
       setPreview(null)
+      await load()
+    } catch (e) {
+      // Which half failed changes what the person should do next, so say it.
+      // If the decision landed and only the apply failed, the rule is learned
+      // but not applied and "Apply again" below is the way to finish it.
+      setFlash({ tone: 'bad', text: toUserMessage(e) })
+      await load()
+    } finally {
+      setBusy('')
+    }
+  }
+
+  const reapply = async (r) => {
+    setBusy(`${r.token}:${r.category}:reapply`)
+    try {
+      const res = await applyLearnedRule(r.token, r.category, false)
+      setFlash({
+        tone: 'ok',
+        text: res.items
+          ? `Marked ${res.items} more item code${res.items === 1 ? '' : 's'} for "${r.token}".`
+          : `Nothing left to mark for "${r.token}" - it has already been applied.`,
+      })
       await load()
     } catch (e) {
       setFlash({ tone: 'bad', text: toUserMessage(e) })
@@ -154,7 +177,7 @@ export default function ConsoleClassificationLearning() {
         {d?.failed > 0 && (
           <div className="px-4 pb-4">
             <Note icon={AlertTriangle} tone="warning">
-              {d.failed} of the three sections could not be loaded, so part of this page is missing rather than empty.
+              {d.failed} of the four sections could not be loaded, so part of this page is missing rather than empty.
             </Note>
           </div>
         )}
@@ -247,6 +270,61 @@ export default function ConsoleClassificationLearning() {
               </div>
             ))}
           </div>
+        )}
+      </Panel>
+
+      {/* ── what it has been taught, and what was ruled out ───────────────── */}
+      <Panel>
+        <PanelHeader
+          icon={Check}
+          title="What it has been taught"
+          subtitle="Accepted words and the ones you ruled out. A rejected word is never suggested again."
+        />
+        {rules.length === 0 ? (
+          <EmptyState
+            icon={Brain}
+            title="Nothing decided yet"
+            reason="Accept or reject a suggestion above and it will be recorded here."
+          />
+        ) : (
+          <Table>
+            <THead>
+              <Th>Word</Th>
+              <Th>Means</Th>
+              <Th>Decision</Th>
+              <Th>Why</Th>
+              <Th align="right"></Th>
+            </THead>
+            <tbody>
+              {rules.map((r) => (
+                <Tr key={r.id}>
+                  <Td><span className="font-medium text-gray-100">{r.token}</span></Td>
+                  <Td>{categoryLabel(r.category)}</Td>
+                  <Td>
+                    <Badge tone={r.status === 'active' ? 'good' : 'quiet'}>
+                      {r.status === 'active' ? 'Learned' : 'Ruled out'}
+                    </Badge>
+                  </Td>
+                  <Td>{r.note || 'No reason given'}</Td>
+                  <Td align="right">
+                    {/* Accepting and applying are two calls. If the second fails
+                        the rule is learned but not applied, and it never returns
+                        to the suggestions - so re-applying has to be reachable
+                        from here or it is stranded. Re-applying is safe: it skips
+                        anything already reviewed. */}
+                    {r.status === 'active' && (
+                      <Btn
+                        onClick={() => reapply(r)}
+                        busy={busy === `${r.token}:${r.category}:reapply`}
+                      >
+                        Apply again
+                      </Btn>
+                    )}
+                  </Td>
+                </Tr>
+              ))}
+            </tbody>
+          </Table>
         )}
       </Panel>
 

@@ -3,6 +3,26 @@
 Durable, committed project knowledge so any session has full context. Keep this
 current. Read it before adding/changing modules. Governing spec: `Tyre pulse enterprise.md`
 
+## SESSION 2026-07-28 (part 10) — MATERIAL MASTER EASY/MULTI CONFIRM (V416). Migrations through **V416**, next free **V417**.
+**~21,000 codes sat unreviewed** (KSA 9,078 / UAE 9,009 / Egypt 3,352); the only path to confirm a proposal was
+a one-at-a-time modal. Added two fast paths on **`/console/material-master`** (ConsoleMaterialMaster.jsx):
+- **EASY CONFIRM** — a one-click green Confirm on any unreviewed row accepts its CURRENT category (no modal).
+- **MULTI CONFIRM** — row checkboxes + select-all-on-page + a sticky bottom "Confirm N" bar.
+- **Money-safe by construction:** confirming stamps the item reviewed with the category it ALREADY carries
+  (`coalesce(v_cat, existing)` in the RPC), so nothing is re-bucketed. Historical money still moves ONLY through
+  `reclassify_from_master` (its own dry-run + undo). Verified live: 5 confirmed, all 5 categories unchanged.
+- **The DESCRIPTION-AGREES signal is the safety cue** (`descriptionAgreement(row)` in src/lib/materialMaster.js):
+  compares `costBucketFor(categoryFromDescription(item_name))` vs `costBucketFor(category)` at the BUCKET level
+  (filter vs spare_part both = spare = agree). Green tick "Agrees" = safe to bulk-confirm; amber "Differs" = open
+  and look first. A new Agrees/Differs FILTER + per-row badge. Detail modal gained a `MoneySplit` bucket-split bar
+  (`transactionBucketSplit`) + distinct-description count.
+- **V416 `material_master_set_bulk(p_items jsonb)`** — elevated-gated DEFINER, per-item skip-on-error (max 25
+  reasons returned), country REQUIRED (same code = different item per country), returns `{ok, confirmed, skipped,
+  errors[]}`. Sibling of V367 `material_master_set`; anon revoked / authenticated granted. Service
+  `setMaterialsBulk` in src/lib/api/materialMaster.js. Tests materialMaster.test.js 33 -> 41.
+- **GOTCHA fixed at build:** `CircleCheck`/`CircleHelp` are NOT in this lucide-react version -> used
+  `CheckCircle2`/`HelpCircle`. RULE (already in this file): verify every lucide icon before import.
+
 ## SESSION 2026-07-28 CLOSED CLEAN — parts 3-9 ALL MERGED. Migrations through **V415**, next free **V416**.
 Branch `claude/accident-builder-report-ui-2bkwb5` == `origin/main` == **`5f9e3f7`**, nothing uncommitted.
 PRs **#213-#219** all merged (parts 8-9: #217 telematics/current-km/tyre-merge/dedup/expense-trends,

@@ -112,6 +112,35 @@ export async function setMaterial(entry = {}) {
 }
 
 /**
+ * Confirm many item codes in one call.
+ *
+ * Each item is `{ country, item_code, category? }`. When `category` is omitted the
+ * item is confirmed AS ITS CURRENT category - the one already classifying its
+ * transactions - so nothing is re-bucketed and no money moves on confirm. That is
+ * the point of the bulk action: a reviewer agrees with a batch of proposals at
+ * once. Money moves only through the separate `reclassify_from_master` lever.
+ *
+ * A malformed item is skipped with its reason rather than failing the whole
+ * batch, because confirming hundreds at a time makes partial success normal.
+ *
+ * @param {Array<{country:string, item_code:string, category?:string}>} items
+ * @returns {Promise<{ok:boolean, confirmed:number, skipped:number, errors:Array}>}
+ */
+export async function setMaterialsBulk(items = []) {
+  const list = (Array.isArray(items) ? items : [])
+    .filter((it) => it && it.country && it.item_code)
+    .map((it) => ({
+      country: it.country,
+      item_code: it.item_code,
+      ...(it.category ? { category: it.category } : {}),
+    }))
+  if (list.length === 0) return { ok: true, confirmed: 0, skipped: 0, errors: [] }
+  const { data, error } = await supabase.rpc('material_master_set_bulk', { p_items: list })
+  if (error) throw new Error(toUserMessage(error, 'Could not confirm those items.'))
+  return data || { ok: false, confirmed: 0, skipped: 0, errors: [] }
+}
+
+/**
  * How much of the MONEY is classified by a human decision rather than a text pattern.
  * That is the honest progress figure: reviewing 100 high-value codes moves it far more
  * than reviewing 1,000 trivial ones.

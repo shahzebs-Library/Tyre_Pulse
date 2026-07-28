@@ -25,7 +25,10 @@
   },
   "kpi": {
     "totalRecords": "إجمالي السجلات",
-    "totalCost": "التكلفة الإجمالية ({currency})",
+    "totalTyres": "إجمالي الإطارات",
+    "totalCost": "التكلفة الإجمالية",
+    "avgCost": "متوسط التكلفة / إطار",
+    "highRisk": "مخاطر عالية",
     "sitesActive": "المواقع النشطة",
     "brandsTracked": "العلامات التجارية المتتبعة"
   },

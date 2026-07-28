@@ -1055,6 +1055,69 @@ html.light .text-teal-400   { color: #0d9488 !important; }
 html.light .text-cyan-400   { color: #0891b2 !important; }
 html.light .text-indigo-400 { color: #4f46e5 !important; }
 
+/* ─── Light theme: severity/status hues at deeper tints + the -300 text tier ──
+   The badge rules above only remap the /20 backgrounds and the -400 text tier.
+   Severity surfaces built on deeper tints (bg-*-900/30, /40, /50) with the pale
+   -300 text tier — e.g. a "MEDIUM" pill (bg-yellow-900/30 + text-yellow-300) or
+   the Admin role badge (bg-red-900/40 + text-red-300) — were washing out to an
+   unreadable beige-on-white with near-invisible pale text in light mode. These
+   remap the tint to a clean, faint wash and pull the label/icon back to a
+   saturated, readable ink. Substring selectors catch every opacity variant in
+   one pass; solid *-900 fills (no slash) and solid *-500/600 badge fills are
+   left untouched, and everything here is scoped to html.light so dark mode is
+   byte-for-byte unchanged. */
+html.light [class*="bg-red-900/"]     { background-color: rgba(239,68,68,0.10)  !important; }
+html.light [class*="bg-orange-900/"]  { background-color: rgba(234,88,12,0.10)  !important; }
+html.light [class*="bg-amber-900/"]   { background-color: rgba(217,119,6,0.10)  !important; }
+html.light [class*="bg-yellow-900/"]  { background-color: rgba(202,138,4,0.11)  !important; }
+html.light [class*="bg-lime-900/"]    { background-color: rgba(101,163,13,0.10) !important; }
+html.light [class*="bg-green-900/"]   { background-color: rgba(22,163,74,0.10)  !important; }
+html.light [class*="bg-emerald-900/"] { background-color: rgba(5,150,105,0.10)  !important; }
+html.light [class*="bg-teal-900/"]    { background-color: rgba(13,148,136,0.10) !important; }
+html.light [class*="bg-cyan-900/"]    { background-color: rgba(8,145,178,0.10)  !important; }
+html.light [class*="bg-sky-900/"]     { background-color: rgba(2,132,199,0.10)  !important; }
+html.light [class*="bg-blue-900/"]    { background-color: rgba(37,99,235,0.10)  !important; }
+html.light [class*="bg-indigo-900/"]  { background-color: rgba(79,70,229,0.10)  !important; }
+html.light [class*="bg-violet-900/"]  { background-color: rgba(139,92,246,0.10) !important; }
+html.light [class*="bg-purple-900/"]  { background-color: rgba(147,51,234,0.10) !important; }
+html.light [class*="bg-fuchsia-900/"] { background-color: rgba(192,38,211,0.10) !important; }
+html.light [class*="bg-pink-900/"]    { background-color: rgba(219,39,119,0.10) !important; }
+html.light [class*="bg-rose-900/"]    { background-color: rgba(225,29,72,0.10)  !important; }
+
+/* The pale -300 text tier → saturated, readable ink on the light tint. */
+html.light .text-red-300     { color: #dc2626 !important; }
+html.light .text-orange-300  { color: #ea580c !important; }
+html.light .text-amber-300   { color: #b45309 !important; }
+html.light .text-yellow-300  { color: #b45309 !important; }
+html.light .text-lime-300    { color: #4d7c0f !important; }
+html.light .text-emerald-300 { color: #059669 !important; }
+html.light .text-teal-300    { color: #0d9488 !important; }
+html.light .text-cyan-300    { color: #0891b2 !important; }
+html.light .text-sky-300     { color: #0284c7 !important; }
+html.light .text-blue-300    { color: #2563eb !important; }
+html.light .text-indigo-300  { color: #4f46e5 !important; }
+html.light .text-violet-300  { color: #7c3aed !important; }
+html.light .text-purple-300  { color: #9333ea !important; }
+html.light .text-fuchsia-300 { color: #c026d3 !important; }
+html.light .text-pink-300    { color: #db2777 !important; }
+html.light .text-rose-300    { color: #e11d48 !important; }
+
+/* Severity -700 borders read as heavy dark rules on white; soften to a clean
+   tinted hairline that still delineates the badge/card/button outline. */
+html.light [class*="border-red-700"]     { border-color: rgba(220,38,38,0.32)  !important; }
+html.light [class*="border-orange-700"]  { border-color: rgba(234,88,12,0.32)  !important; }
+html.light [class*="border-amber-700"]   { border-color: rgba(217,119,6,0.32)  !important; }
+html.light [class*="border-yellow-700"]  { border-color: rgba(180,83,9,0.34)   !important; }
+html.light [class*="border-green-700"]   { border-color: rgba(22,163,74,0.30)  !important; }
+html.light [class*="border-emerald-700"] { border-color: rgba(5,150,105,0.30)  !important; }
+html.light [class*="border-teal-700"]    { border-color: rgba(13,148,136,0.30) !important; }
+html.light [class*="border-cyan-700"]    { border-color: rgba(8,145,178,0.30)  !important; }
+html.light [class*="border-blue-700"]    { border-color: rgba(37,99,235,0.30)  !important; }
+html.light [class*="border-indigo-700"]  { border-color: rgba(79,70,229,0.30)  !important; }
+html.light [class*="border-violet-700"]  { border-color: rgba(139,92,246,0.32) !important; }
+html.light [class*="border-purple-700"]  { border-color: rgba(147,51,234,0.32) !important; }
+html.light [class*="border-pink-700"]    { border-color: rgba(219,39,119,0.32) !important; }
+
 html.light .ring-gray-700 { --tw-ring-color: rgba(22,163,74,0.14) !important; }
 html.light [class*="overflow-y-auto"]::-webkit-scrollbar-track { background: rgba(22,163,74,0.03); }
 html.light [class*="from-white"] { --tw-gradient-from: #0f172a; }

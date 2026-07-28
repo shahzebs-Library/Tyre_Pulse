@@ -25,7 +25,10 @@
   },
   "kpi": {
     "totalRecords": "Total Records",
-    "totalCost": "Total Cost ({currency})",
+    "totalTyres": "Total Tyres",
+    "totalCost": "Total Cost",
+    "avgCost": "Avg Cost / Tyre",
+    "highRisk": "High Risk",
     "sitesActive": "Sites Active",
     "brandsTracked": "Brands Tracked"
   },

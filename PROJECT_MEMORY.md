@@ -63,8 +63,11 @@ grid so NOT re-added — would double-count) — the ask was VISIBILITY: compare
 - Page **`/expense-trends`** ("Expense Trends", Reports & Executive nav): per-country stacked bar by year+category
   with dashed forecast, category trend lines, share doughnut, YoY table (+forecast rows), CAGR, insights,
   Excel/PDF. Wired nav + route + commandSearch. KSA verified 2018-2026 reconciles to 40.68M SAR.
-- **STILL TODO (user asked to "spread across every module"):** wire the yearly trend into Dashboard / Board
-  Overview / Executive report — the RPC + engine are reusable; not yet embedded there.
+- **SPREAD ACROSS MODULES (done):** reusable **`src/components/expense/YearlyTrendPanel.jsx`** (self-fetching,
+  theme-neutral via `var(--text-*)` + mid-gray chart colors so it reads on dark app pages AND white report
+  pages) embedded in **Dashboard** (compact), **Cost Center**, **Engineering KPI**, **Board Overview**
+  (toggleable `yearlyTrend` section), **Executive Report** (on-screen block, NOT wired into PDF/PPTX to avoid
+  breaking those renderers). Build clean, lint 0 errors.
 
 
 

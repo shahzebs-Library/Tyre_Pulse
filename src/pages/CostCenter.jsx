@@ -17,6 +17,7 @@ import { applyCountry } from '../lib/api/_client'
 import { useAuth } from '../contexts/AuthContext'
 import { toUserMessage } from '../lib/safeError'
 import PageHeader from '../components/ui/PageHeader'
+import YearlyTrendPanel from '../components/expense/YearlyTrendPanel'
 import EmailPdfButton from '../components/EmailPdfButton'
 import BudgetTabs from '../components/budgets/BudgetTabs'
 import {
@@ -835,6 +836,9 @@ export default function CostCenter() {
               </div>
             )}
           </div>
+
+          {/* ── Multi-year expense trend + forecast ──────────────────────────── */}
+          <YearlyTrendPanel title="Expense trend by year (tyres / spare / lubricant) + forecast" />
 
           {/* ── 1c. Cost per unit (m3 / km / engine-hour) ────────────────────── */}
           <CostPerUnitSection

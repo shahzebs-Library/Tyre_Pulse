@@ -1,68 +1,196 @@
 /**
- * Daily coverage: which days have data and which are empty.
+ * Which uploads are missing, per country and per area.
  *
- * The point of the calendar is that a missing day should be obvious at a
- * glance, without reading numbers. Amber squares are the days to look at.
+ * THE DEFECT THIS REPLACES: the first version aggregated every country into one
+ * row per source, so a country that stops uploading is hidden behind the ones
+ * that did not. Measured when this was written - KSA job cards had been silent
+ * for three weeks while Egypt and UAE both ran to two days earlier, and the
+ * panel reported the newest of the three and called it healthy.
  *
- * Two honesty rules the display keeps:
- *   - Today is never marked missing. The day is not over.
- *   - A source is only policed if it has actually behaved like a daily feed.
- *     Tyre records have had no rows for three weeks; flagging them every
- *     morning would train people to ignore the whole panel.
+ * Everything here is derived from the data itself, never assumed:
+ *   - a feed is judged daily from six months of history, not from the window on
+ *     screen, so three weeks of silence cannot demote it out of being watched
+ *   - a non-daily feed is judged against its OWN typical gap, because "21 days
+ *     silent" is alarming for one feed and completely normal for another
+ *   - an area is only blamed for a day its own country and source actually
+ *     received something
+ *   - today is never counted; the day is not over
  */
-import { useCallback, useEffect, useState } from 'react'
-import { RefreshCw, AlertTriangle, CheckCircle2, Info, CalendarX2 } from 'lucide-react'
-import { getUploadCoverage, cadenceLabel, sortByUrgency } from '../../../lib/api/uploadCoverage'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import {
+  RefreshCw, AlertTriangle, CheckCircle2, Info, CalendarX2, ChevronRight,
+  MapPin, FileUp, Globe, Clock,
+} from 'lucide-react'
+import {
+  getUploadCoverageDetail, feedCadenceLabel, feedProblem, problemAreas, sortCountries,
+} from '../../../lib/api/uploadCoverage'
 import { toUserMessage } from '../../../lib/safeError'
 import {
   Panel, Note, Badge, Btn, Segmented, Toolbar, LoadingState, EmptyState, ErrorState,
 } from '../../components/ui'
 
 const dayNum = (d) => String(d).slice(8, 10)
+const num = (v) => (Number.isFinite(Number(v)) ? Number(v).toLocaleString() : 'N/A')
 const fmtDate = (d) => {
   if (!d) return 'never'
   const dt = new Date(d)
   return Number.isNaN(dt.getTime()) ? String(d)
     : dt.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
 }
+const fmtShort = (d) => {
+  if (!d) return ''
+  const dt = new Date(d)
+  return Number.isNaN(dt.getTime()) ? String(d)
+    : dt.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })
+}
+const ago = (n) => (n == null ? 'never' : n === 0 ? 'today' : n === 1 ? 'yesterday' : `${n} days ago`)
 
 /** One square per day. Colour carries the meaning; the tooltip carries detail. */
 function DayCell({ day, isToday, watched }) {
   const rows = Number(day.rows) || 0
+  const sites = Number(day.sites) || 0
   const empty = rows === 0
   const tone = isToday
     ? 'bg-gray-700 border-gray-500 text-gray-300'
     : empty
-      // only a watched source's empty day is a problem worth colouring amber
       ? (watched ? 'bg-amber-500/25 border-amber-600/60 text-amber-200'
                  : 'bg-gray-800/60 border-gray-700 text-gray-600')
       : 'bg-emerald-600/25 border-emerald-600/50 text-emerald-200'
+  const title = `${day.d}: ${empty ? 'no data' : `${rows.toLocaleString()} rows from ${sites} area${sites === 1 ? '' : 's'}`}`
+    + (isToday ? ' (today, still in progress)' : '')
   return (
-    <div
-      title={`${day.d}: ${empty ? 'no data' : `${rows.toLocaleString()} rows`}${isToday ? ' (today, still in progress)' : ''}`}
-      className={`w-7 h-7 rounded border text-[10px] flex items-center justify-center ${tone}`}
-    >
+    <div title={title}
+      className={`w-7 h-7 rounded border text-[10px] flex items-center justify-center ${tone}`}>
       {dayNum(day.d)}
     </div>
   )
 }
 
-export default function UploadCoveragePanel({ country }) {
+/** The areas inside one feed, worst first. */
+function AreaList({ src }) {
+  const sites = src.sites || []
+  if (!sites.length) {
+    return <p className="text-[11px] text-gray-600">No area reported data for this feed in the window.</p>
+  }
+  const problems = problemAreas(src)
+  const dormant = sites.filter((s) => s.dormant)
+  const fine = sites.filter((s) => !s.dormant && !Number(s.missing_count))
+  return (
+    <div className="space-y-2">
+      {problems.length > 0 && (
+        <div>
+          <p className="text-[10px] uppercase tracking-wide text-amber-400 mb-1">
+            Areas that missed a day the rest of {src.label.toLowerCase()} arrived
+          </p>
+          <div className="space-y-1">
+            {problems.map((s) => (
+              <div key={s.site} className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-[11px]">
+                <MapPin size={10} className="text-amber-500 shrink-0" />
+                <span className="text-gray-200 font-medium">{s.site}</span>
+                <Badge tone="warning">{num(s.missing_count)} missed</Badge>
+                <span className="text-gray-500">last {fmtDate(s.last_data_date)} · {ago(s.days_since_last)}</span>
+                <span className="text-gray-600">{num(s.rows)} rows</span>
+                {(s.missing_days || []).length > 0 && (
+                  <span className="text-gray-600 w-full pl-4">
+                    {(s.missing_days || []).slice(0, 10).map(fmtShort).join(', ')}
+                    {(s.missing_days || []).length > 10 ? ' and more' : ''}
+                  </span>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      {fine.length > 0 && (
+        <p className="text-[11px] text-gray-500">
+          <span className="text-emerald-400">Up to date:</span>{' '}
+          {fine.map((s) => s.site).join(', ')}
+        </p>
+      )}
+      {dormant.length > 0 && (
+        // Not "missing": a site that has sent nothing all window is either
+        // closed or between jobs, and alarming about it forever trains people
+        // to ignore the page.
+        <p className="text-[11px] text-gray-600">
+          <span className="text-gray-500">Nothing all window (not counted as missed):</span>{' '}
+          {dormant.map((s) => `${s.site} (last ${fmtDate(s.last_data_date)})`).join(', ')}
+        </p>
+      )}
+    </div>
+  )
+}
+
+function FeedCard({ src, today }) {
+  const [open, setOpen] = useState(false)
+  const problem = feedProblem(src)
+  const gaps = problemAreas(src).length
+  return (
+    <Panel tone={problem ? 'warning' : undefined} className="space-y-2">
+      <div className="flex items-start justify-between gap-3 flex-wrap">
+        <div className="min-w-0">
+          <p className="text-sm font-semibold text-gray-200 flex items-center gap-2 flex-wrap">
+            {src.label}
+            {src.expect_daily ? <Badge tone="info">daily</Badge> : <Badge tone="quiet">in batches</Badge>}
+            {problem && <Badge tone="warning" icon={AlertTriangle}>{problem}</Badge>}
+          </p>
+          <p className="text-[11px] text-gray-500 mt-0.5">{feedCadenceLabel(src)}</p>
+        </div>
+        <div className="text-right shrink-0">
+          <p className="text-[11px] text-gray-500">Last data</p>
+          <p className={`text-xs font-medium ${problem ? 'text-amber-300' : 'text-gray-300'}`}>
+            {fmtDate(src.last_data_date)}
+            <span className="text-gray-500"> · {ago(src.days_since_last)}</span>
+          </p>
+          <p className="text-[10px] text-gray-600">{num(src.total_rows)} rows in window</p>
+        </div>
+      </div>
+
+      <div className="flex flex-wrap gap-1">
+        {(src.by_day || []).map((d) => (
+          <DayCell key={d.d} day={d} isToday={d.d === today} watched={src.expect_daily} />
+        ))}
+      </div>
+
+      {src.expect_daily && Number(src.missing_count) > 0 && (
+        <p className="text-[11px] text-amber-300/90">
+          No upload covering: {(src.missing_days || []).slice(0, 12).map(fmtShort).join(', ')}
+          {(src.missing_days || []).length > 12 ? ' and more' : ''}
+        </p>
+      )}
+
+      <button onClick={() => setOpen((v) => !v)}
+        className="flex items-center gap-1 text-[11px] text-gray-500 hover:text-gray-300">
+        <ChevronRight size={11} className={`transition-transform ${open ? 'rotate-90' : ''}`} />
+        {open ? 'Hide areas' : `Areas (${(src.sites || []).length})`}
+        {gaps > 0 && !open && <span className="text-amber-400">· {gaps} with gaps</span>}
+      </button>
+      {open && <div className="pl-4 pt-1"><AreaList src={src} /></div>}
+    </Panel>
+  )
+}
+
+export default function UploadCoveragePanel() {
   const [cov, setCov] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [days, setDays] = useState(30)
+  const [country, setCountry] = useState('')
 
   const load = useCallback(async () => {
     setLoading(true); setError('')
     try {
-      setCov(await getUploadCoverage({ days, country }))
+      setCov(await getUploadCoverageDetail({ days }))
     } catch (e) {
       setError(toUserMessage(e, 'Could not load upload coverage.'))
     } finally { setLoading(false) }
-  }, [days, country])
+  }, [days])
 
   useEffect(() => { load() }, [load])
+
+  const countries = useMemo(() => sortCountries(cov?.countries), [cov])
+  const withProblems = countries.filter(
+    (c) => (Number(c.missing_count) || 0) + (Number(c.quiet_count) || 0) > 0)
+  const shown = country ? countries.filter((c) => c.country === country) : countries
 
   if (loading) return <LoadingState label="Checking which days have data" rows={5} />
   if (error) return <ErrorState message={error} onRetry={load} />
@@ -76,90 +204,101 @@ export default function UploadCoveragePanel({ country }) {
     )
   }
 
-  const sources = sortByUrgency(cov.sources)
-  const alerts = cov.alerts || []
-
   return (
     <div className="space-y-4">
       <Toolbar>
-        <Segmented
-          value={days}
-          onChange={setDays}
-          options={[14, 30, 60, 90].map((n) => ({ key: n, label: `${n} days` }))}
-        />
+        <Segmented value={days} onChange={setDays}
+          options={[14, 30, 60, 90].map((n) => ({ key: n, label: `${n} days` }))} />
+        <Segmented value={country} onChange={setCountry}
+          options={[{ key: '', label: 'All countries' },
+            ...countries.map((c) => ({
+              key: c.country,
+              label: c.country,
+              count: (Number(c.missing_count) || 0) + (Number(c.quiet_count) || 0) || undefined,
+            }))]} />
         <div className="flex-1" />
         <Btn icon={RefreshCw} onClick={load}>Refresh</Btn>
       </Toolbar>
 
-      {/* The headline. This is what the morning notification also says. */}
-      {alerts.length > 0 ? (
+      {withProblems.length === 0 ? (
+        <Note icon={CheckCircle2}>
+          <span className="text-emerald-300">Every feed is up to date in all countries.</span>
+        </Note>
+      ) : (
         <Note icon={AlertTriangle} tone="warning">
           <p className="font-semibold mb-1">
-            {alerts.length === 1 ? 'A daily file looks missing' : `${alerts.length} daily files look missing`}
+            {withProblems.length} of {countries.length} countries have an upload gap
           </p>
           <ul className="space-y-0.5">
-            {alerts.map((a) => (
-              <li key={a.src}>
-                <span className="font-medium">{a.label}</span> - last data covers {fmtDate(a.last_data_date)},
-                {' '}{a.days_since_last} day{a.days_since_last === 1 ? '' : 's'} ago.
+            {withProblems.map((c) => (
+              <li key={c.country}>
+                <span className="font-medium">{c.country}</span>
+                {' - '}
+                {(c.sources || []).filter((s) => feedProblem(s))
+                  .map((s) => `${s.label}: ${feedProblem(s)}`).join(' · ')}
               </li>
             ))}
           </ul>
-          <p className="opacity-70 pt-1">
-            Upload the missing file, or ignore this if there was genuinely no activity on those days.
-          </p>
-        </Note>
-      ) : (
-        <Note icon={CheckCircle2} tone="default">
-          <span className="text-emerald-300">Every daily feed is up to date.</span>
         </Note>
       )}
 
-      {sources.map((s) => (
-        <Panel key={s.src} className="space-y-2" tone={s.expect_daily && Number(s.missing_count) > 0 ? 'warning' : undefined}>
-          <div className="flex items-start justify-between gap-3 flex-wrap">
-            <div>
-              <p className="text-sm font-semibold text-gray-200 flex items-center gap-2">
-                {s.label}
-                {s.expect_daily
-                  ? <Badge tone="info">watched daily</Badge>
-                  : <Badge tone="quiet">occasional</Badge>}
-              </p>
-              {/* Say WHY it is or is not watched, so the rule is not a mystery */}
-              <p className="text-[11px] text-gray-500 mt-0.5">{cadenceLabel(s)}</p>
-            </div>
-            <div className="text-right">
-              <p className="text-[11px] text-gray-500">Last data</p>
-              <p className={`text-xs font-medium ${
-                s.expect_daily && s.days_since_last > 1 ? 'text-amber-300' : 'text-gray-300'}`}>
-                {fmtDate(s.last_data_date)}
-                {s.days_since_last != null && (
-                  <span className="text-gray-500"> · {s.days_since_last}d ago</span>
-                )}
-              </p>
-            </div>
+      {shown.length === 0 ? (
+        <EmptyState icon={Globe} title="No data in this window"
+          reason="No country recorded anything in the period you selected. Try a longer window." />
+      ) : shown.map((c) => (
+        <div key={c.country} className="space-y-3">
+          <div className="flex items-center gap-2 pt-1 flex-wrap">
+            <Globe size={14} className="text-orange-400" />
+            <h3 className="text-sm font-semibold text-gray-200">{c.country}</h3>
+            <span className="text-[11px] text-gray-500">
+              {num(c.total_rows)} rows · {c.watched_sources} daily feed{c.watched_sources === 1 ? '' : 's'}
+            </span>
+            {(Number(c.missing_count) || 0) > 0 && (
+              <Badge tone="warning">{num(c.missing_count)} missed day{Number(c.missing_count) === 1 ? '' : 's'}</Badge>
+            )}
+            {(Number(c.quiet_count) || 0) > 0 && (
+              <Badge tone="warning" icon={Clock}>{num(c.quiet_count)} gone quiet</Badge>
+            )}
           </div>
-
-          <div className="flex flex-wrap gap-1">
-            {(s.by_day || []).map((d) => (
-              <DayCell key={d.d} day={d} isToday={d.d === cov.today} watched={s.expect_daily} />
+          <div className="space-y-3">
+            {(c.sources || []).map((s) => (
+              <FeedCard key={`${c.country}-${s.src}`} src={s} today={cov.today} />
             ))}
           </div>
-
-          {s.expect_daily && Number(s.missing_count) > 0 && (
-            <p className="text-[11px] text-amber-300/80">
-              {s.missing_count} empty day{Number(s.missing_count) === 1 ? '' : 's'} in this window:
-              {' '}{(s.missing_days || []).slice(0, 8).map(fmtDate).join(', ')}
-              {(s.missing_days || []).length > 8 ? ' and more' : ''}
-            </p>
-          )}
-        </Panel>
+        </div>
       ))}
+
+      {/* Files. Deliberately honest about how few of these there are. */}
+      <Panel>
+        <p className="text-xs font-semibold text-gray-300 flex items-center gap-1.5 mb-1">
+          <FileUp size={13} className="text-gray-500" /> Files uploaded through the app in this window
+        </p>
+        {(cov.files || []).length === 0 ? (
+          <p className="text-[11px] text-gray-600">
+            None. Loads made straight into the database do not record a file name, so most
+            uploads will never appear here - the day squares above are the reliable record of
+            what arrived.
+          </p>
+        ) : (
+          <ul className="space-y-1">
+            {(cov.files || []).map((f, i) => (
+              <li key={i} className="flex flex-wrap items-baseline gap-2 text-[11px]">
+                <span className="text-gray-200">{f.filename || 'Unnamed file'}</span>
+                {f.country && <Badge tone="quiet">{f.country}</Badge>}
+                <span className="text-gray-500">{fmtDate(f.uploaded_at)}</span>
+                {f.source_system && <span className="text-gray-600">{f.source_system}</span>}
+              </li>
+            ))}
+          </ul>
+        )}
+      </Panel>
 
       <Note icon={Info}>
         Days are counted by the date the work happened, not the date you uploaded, so a file
-        uploaded late still fills its own day. Today is never marked missing. A source is only
-        watched once it has actually arrived on most days, so occasional feeds do not raise alarms.
+        uploaded late still fills its own day. Today is never marked missing. Whether a feed is
+        treated as daily comes from six months of its own history, so a feed that stops does not
+        quietly stop being watched. A feed that arrives in batches is judged against its own
+        normal gap instead of a fixed number of days.
       </Note>
     </div>
   )

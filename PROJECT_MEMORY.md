@@ -3,6 +3,79 @@
 Durable, committed project knowledge so any session has full context. Keep this
 current. Read it before adding/changing modules. Governing spec: `Tyre pulse enterprise.md`
 
+## SESSION 2026-07-28 — CONSOLE UI KIT + UPLOAD COVERAGE PER COUNTRY AND AREA. Migrations through **V394c**, next free **V395**.
+
+### **V394 — THE COVERAGE PANEL WAS HIDING A TWENTY-DAY HOLE**
+User: "the missing upload section ... which area i am uploading, country wise separate, all with real areas".
+Investigated and the complaint was exact. V389 aggregated every country into ONE row per source, so a country
+that stops uploading is invisible behind the ones that did not. **Measured before writing anything: KSA job
+cards last arrived 7 Jul with data on 7 of 30 days, while Egypt and UAE both ran to 22 Jul — the panel showed
+the newest of the three and called the feed healthy.**
+- **`get_upload_coverage_detail(days, country)`** → per country → per source → per **site**, with by_day,
+  missing_days, last seen, rows. `_upload_coverage_detail_for_org(org,...)` is REVOKED from `authenticated`
+  (V378 lesson); the entry point takes no org.
+- **AREA IS REAL DATA**: `site` is populated on effectively every row — expenses 216,792/216,792, job cards
+  86,539/86,539, tyre records 7,498/7,504, production 5,699/5,699. KSA 19-24 sites, Egypt 4-15, UAE 3-18.
+- **THREE RULES, EACH CORRECTED BY MEASUREMENT — do not "simplify" any of them back:**
+  1. **Cadence comes from a 180-DAY baseline, never the window on screen** (V394b). Deriving it from the
+     displayed 30 days meant a feed silent for three weeks fell under the 50% bar, was reclassified
+     "occasional", and **stopped being alarmed about precisely when it mattered most.**
+  2. **A non-daily feed is judged against its OWN p90 gap, never a fixed threshold.** Egypt job cards: p90 gap
+     1 day, 6 days quiet = abnormal. KSA job cards: p90 gap **22** days (bulk uploads), 21 days quiet =
+     completely normal. Any fixed "silent N days" rule calls KSA broken and Egypt fine — wrong on both.
+  3. **The two signals are DISJOINT** (V394c, `_coverage_quiet`). V394b flagged quiet on anything past its
+     typical gap; for a daily feed that gap is 1, so every weekend tripped it and **9 of 10 sources came back
+     quiet**. It also double counted, since a daily feed already lists the days it skipped.
+     **missed days = DAILY feeds only · gone quiet = NON-DAILY feeds only.**
+- **AREA RULE: a site is judged ONLY on days its own country+source actually received something.** "KSA
+  expenses arrived for ten sites but not QID-UP-ST" is actionable; blaming a site for a day nobody uploaded is
+  noise. A site silent across the whole recent half of the window is **dormant, never missing** — a closed
+  site must not alarm forever.
+- Live at build: worst area **KSA expenses QID-UP-ST missed 23** of the days the rest of KSA expenses arrived.
+  455 ms for the 30-day window. Real findings it surfaced immediately: KSA tyre records 24 missed / 26 days
+  silent, UAE tyre records 26 missed, KSA production m3 19 days quiet.
+- **`import_files` holds only 8 rows** because staging and Table Editor loads write no file record. The panel
+  lists what is genuinely there and **says outright that most loads never appear**, so an empty list is not
+  mistaken for "nothing was uploaded".
+- V389's `get_upload_coverage` is KEPT (the morning cron reads it, and the alert must not disagree with the
+  page mid-change). Its **client wrapper was deleted** — nothing in the UI called it any more.
+
+### CONSOLE UI KIT — the reason everything "looked not good"
+**There was no shared UI in `/console` at all**: 34 pages each hand-rolled cards, tables, tabs and empty
+states. **`src/console/components/ui/index.jsx`** is now the vocabulary (Panel, PanelHeader, Note, StatTile,
+ProportionBar, Badge, Code, Btn, Segmented, SearchInput, Select, Toolbar, Table/THead/Th/Tr/Td, LoadingState,
+EmptyState, ErrorState, Modal). Two constraints are load-bearing:
+- **STAY IN THE gray-* AND orange-* CLASS FAMILIES.** The light theme is built from attribute selectors in
+  index.css (`html.light .console-root [class*="bg-gray-900"]`), so a slate or zinc surface **stays dark for
+  every light-mode user**. Dark output is unchanged by those rules, which is why they are safe.
+- **`EmptyState` takes a `reason`** — "no rows matched" and "we could not look" render identically and mean
+  opposite things.
+- **A `*/` inside a comment closed the block and broke the build** — watch that when writing class-family docs.
+
+### CONSOLE NAV — grouped and searchable
+33 flat links became 7 groups (Overview · Data and imports · People and access · Automation and alerts · AI ·
+Audit and security · Configuration) plus a filter box. Grouped by **what you came to do**, not by subsystem.
+Collapsed sidebar renders the ungrouped set — there is no room for headers or a filter at that width.
+
+### DECISIONS PANEL — the interaction was the defect
+**It saved the instant the dropdown moved**, so a mis-click silently rewrote a category with no record of what
+had been touched. Changes are now **staged in a tray** (review, remove, save together). Each row expands to
+show the **real transaction lines** behind it (`listMaterialTransactions`), so a decision is made on evidence
+rather than one sample description. Added sort (value / lines / **least certain first** — an unreadable
+confidence sorts FIRST, it is what we know least about), a country filter, and the weak-evidence count is now
+a **filter** rather than a label.
+
+### **SEVEN CONSOLE PAGES COULD HANG ON A SPINNER FOREVER**
+`setLoading(true)` with no `finally`, so any throw left the page loading with no way out.
+- **`ConsoleLogin` was the worst**: a network blip left the sign-in button disabled and a page reload was the
+  only way back into the console.
+- `ConsoleDashboard` used `Promise.all`, which rejects on the FIRST rejection — one failing panel took the
+  whole page down. Now `allSettled`, with partial data shown and the gap stated.
+- **Several pages destructured `data` and ignored `error`**, so an RLS denial rendered as an empty list: an
+  **audit log that looks like nothing happened**, a **System Config page showing every switch at its default**
+  as though someone had chosen it. Fixed in ConsoleAIUsage / ConsoleAnnouncements / ConsoleAuditLog /
+  ConsoleOrganisations / ConsoleSystemConfig. `ConsoleSystem` was checked and is genuinely fine.
+
 ## SESSION 2026-07-27 (part 11) — THE BLANK FIRST SCREEN, RAW ERROR LEAKS, DEAD SERIAL COLUMNS. No migration (code only).
 User: "whenever i open app its screen is blank when i refresh then only start showing screen ... each thing is
 taking so long ... find leaked apis and kpis showing its original state ... all data should be linked". Nine

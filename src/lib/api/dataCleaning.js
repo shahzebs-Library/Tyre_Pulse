@@ -10,9 +10,26 @@
  * return the raw result (the page checks `.error`). Explicit column lists.
  * Additive only - mirrors dailyOps.js / analyticsReads.js pass-through style.
  */
-import { supabase } from './_client'
+import { supabase, fetchAllPages } from './_client'
 
 /** Apply strict country equality (only for a specific, non-"All" country). */
+/**
+ * Run a scan query across ALL its rows.
+ *
+ * These checks each read a bare select, which PostgREST caps at 1000. There are
+ * 7,508 tyre records, so every quality check was inspecting the first 13% and
+ * reporting how many problems it found there - a data-quality tool that makes the
+ * data look cleaner than it is, which is the worst possible direction for it to
+ * be wrong in.
+ *
+ * Returns the same `{ data, error }` shape the callers already destructure, so
+ * this is a drop-in. `id` is the paging tiebreak: without a unique key a page
+ * boundary inside equal sort values drops or repeats rows.
+ */
+function pageAll(build) {
+  return fetchAllPages((from, to) => build().order('id').range(from, to))
+}
+
 function scope(q, country) {
   return country && country !== 'All' ? q.eq('country', country) : q
 }
@@ -90,80 +107,80 @@ export function listPendingForApproveAll({ site, from, to } = {}) {
 
 /** Serial-integrity source rows, strict country-scoped. */
 export function listSerialRecords({ country } = {}) {
-  return scope(
+  return pageAll(() => scope(
     supabase.from('tyre_records').select('id, tyre_serial, asset_no, site, issue_date'),
     country,
-  )
+  ))
 }
 
 /** Active (km_at_removal IS NULL) records for duplicate-serial detection, country-scoped. */
 export function listActiveSerialRecords({ country } = {}) {
-  return scope(
+  return pageAll(() => scope(
     supabase
       .from('tyre_records')
       .select('id, tyre_serial, asset_no, site, issue_date, km_at_removal')
       .is('km_at_removal', null),
     country,
-  )
+  ))
 }
 
 /** Records carrying a pressure_reading, for invalid-pressure detection, country-scoped. */
 export function listPressureRecords({ country } = {}) {
-  return scope(
+  return pageAll(() => scope(
     supabase
       .from('tyre_records')
       .select('id, tyre_serial, asset_no, site, pressure_reading, issue_date')
       .not('pressure_reading', 'is', null),
     country,
-  )
+  ))
 }
 
 /** Records with tread_depth column, for missing-tread detection, country-scoped. */
 export function listTreadRecords({ country } = {}) {
-  return scope(
+  return pageAll(() => scope(
     supabase.from('tyre_records').select('id, tyre_serial, asset_no, site, tread_depth, issue_date'),
     country,
-  )
+  ))
 }
 
 /** Distinct non-null asset numbers, for missing-inspection detection, country-scoped. */
 export function listAssetNumbers({ country } = {}) {
-  return scope(
+  return pageAll(() => scope(
     supabase.from('tyre_records').select('asset_no').not('asset_no', 'is', null),
     country,
-  )
+  ))
 }
 
 /** Inspections on/after a cutoff date (asset + date only). Not country-scoped. */
 export function listRecentInspections({ cutoff } = {}) {
-  return supabase
+  return pageAll(() => supabase
     .from('inspections')
     .select('asset_no, inspection_date')
-    .gte('inspection_date', cutoff)
+    .gte('inspection_date', cutoff))
 }
 
 /** Fitment/removal odometer rows (both present) for odometer-consistency checks, country-scoped. */
 export function listOdometerRecords({ country } = {}) {
-  return scope(
+  return pageAll(() => scope(
     supabase
       .from('tyre_records')
       .select('id, tyre_serial, asset_no, site, km_at_fitment, km_at_removal, issue_date')
       .not('km_at_removal', 'is', null)
       .not('km_at_fitment', 'is', null),
     country,
-  )
+  ))
 }
 
 /** Fitment/removal + cost rows for unrealistic-tyre-life checks, country-scoped. */
 export function listLifeRecords({ country } = {}) {
-  return scope(
+  return pageAll(() => scope(
     supabase
       .from('tyre_records')
       .select('id, tyre_serial, asset_no, site, km_at_fitment, km_at_removal, cost_per_tyre, issue_date')
       .not('km_at_removal', 'is', null)
       .not('km_at_fitment', 'is', null),
     country,
-  )
+  ))
 }
 
 // ── Bulk fixes / mutations ────────────────────────────────────────────────────

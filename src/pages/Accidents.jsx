@@ -33,7 +33,8 @@ import {
   canonFault, canonFaultStatus, canonNajmStatus, canonNajmFault, canonTaqdeerStatus, canonRepairType, canonDamageClass,
   accidentSeverityPill, accidentStatusPill,
   LIABLE_PARTY_OPTS, PAYER_OPTS, RECOVERY_DECISION_OPTS,
-  canonLiableParty, canonPayer, canonDamageCondition,
+  canonLiableParty, canonPayer, canonDamageCondition, canonWorkshop, workshopsFor,
+  damageClassFromLegacy,
   najmHasReport, taqdeerHasReport, recoveryIsYes, repairIsInternal, computeRecovered,
   isIncidentClosed, isCaseSettled,
 } from '../lib/accidentVocab'
@@ -47,7 +48,8 @@ import { captureChartOnPaper } from '../lib/chartCapture'
 import AccidentIntelligencePanel from '../components/accidents/AccidentIntelligencePanel'
 import ClaimProgressBoard from '../components/accidents/ClaimProgressBoard'
 import { buildAccidentIntelligence, basisNote } from '../lib/accidentAnalytics'
-import { WORKFLOW_STAGES, DEFAULT_DEPARTMENTS, stageOf, stageLabel, buildAccidentKpis } from '../lib/accidentWorkflow'
+import { WORKFLOW_STAGES, DEFAULT_DEPARTMENTS, STAGE_FLOW, stageOf, stageLabel, buildAccidentKpis } from '../lib/accidentWorkflow'
+import { stageDepartment } from '../lib/accidentStages'
 import { listDepartments } from '../lib/api/accidentWorkflow'
 
 ChartJS.register(
@@ -249,6 +251,7 @@ const EMPTY_FORM = {
   repair_type: '',
   workshop_name: '',
   workshop_location: '',
+  stage_waivers: {},
   workshop_quotation: '',
   discount_pct: '',
   final_amount: '',
@@ -425,6 +428,7 @@ export default function Accidents() {
   const assetDropRef                           = useRef(null)
   // Matched vehicle-master row for the currently entered asset (read-only
   // context shown under the Asset field). Auto-populate reads from here.
+  const [workshopIsOther, setWorkshopIsOther] = useState(false)
   const [assetInfo, setAssetInfo]              = useState(null)
   const loadReqRef                             = useRef(0)
 
@@ -548,7 +552,11 @@ export default function Accidents() {
       plate_number: f.plate_number || asset.fleet_number || asset.registration_no || f.plate_number,
       vehicle_type: f.vehicle_type || asset.vehicle_type  || f.vehicle_type,
       site:         f.site         || asset.site          || f.site,
-      country:      f.country      || asset.country       || f.country,
+      // Country FOLLOWS the asset rather than only filling when blank. It is a
+      // fact about the vehicle, not an opinion about the incident, and the
+      // fill-if-empty rule left it null on 3 of 35 records - which then drops
+      // those incidents out of every country-scoped view.
+      country:      asset.country  || f.country,
     }))
   }, [])
 
@@ -1394,7 +1402,6 @@ export default function Accidents() {
       accident_type:         canonAccidentType(row.accident_type),
       severity:              canonSeverity(row.severity) || 'Minor',
       status:                canonStatus(row.status) || 'Reported',
-      damage_class:          canonDamageClass(row.damage_class),
       insurer:               row.insurer ?? '',
       policy_no:             row.policy_no ?? '',
       insurance_claim_no:    row.insurance_claim_no ?? '',
@@ -1418,6 +1425,10 @@ export default function Accidents() {
       taqdeer_status:        canonTaqdeerStatus(row.taqdeer_status),
       taqdeer_no:            row.taqdeer_no ?? '',
       case_stage:            row.case_stage ?? '',
+      // A legacy damage_condition held a SEVERITY ('Minor'/'Moderate'/'Major').
+      // Now that severity lives on damage_class, carry it across rather than
+      // losing it when the detail value is remapped.
+      damage_class:          canonDamageClass(row.damage_class) || damageClassFromLegacy(row.damage_condition),
       damage_condition:      canonDamageCondition(row.damage_condition),
       current_status:        row.current_status ?? '',
       next_step:             row.next_step ?? '',
@@ -1431,6 +1442,7 @@ export default function Accidents() {
       repair_type:           canonRepairType(row.repair_type),
       workshop_name:         row.workshop_name ?? '',
       workshop_location:     row.workshop_location ?? '',
+      stage_waivers:         row.stage_waivers ?? {},
       workshop_quotation:    row.workshop_quotation ?? '',
       discount_pct:          row.discount_pct ?? '',
       final_amount:          row.final_amount ?? '',
@@ -1461,6 +1473,10 @@ export default function Accidents() {
     recoveredTouched.current = true    // respect the stored Recovered on edit
     setShowForm(true)
     window.scrollTo({ top: 0, behavior: 'smooth' })
+    // A stored workshop that is not on the list belongs in "Other" with its
+    // value showing. Without this it renders as "Not set" and a save wipes it.
+    const ws = canonWorkshop(row.workshop_name)
+    setWorkshopIsOther(!!ws && !workshopsFor(row.repair_type).includes(ws))
   }
 
   function handlePhotoFiles(e) {
@@ -1550,8 +1566,11 @@ export default function Accidents() {
       status_update_note:    form.status_update_note || null,
       // Repair
       repair_type:           canonRepairType(form.repair_type) || null,
-      workshop_name:         form.workshop_name || null,
+      // Canonicalised so 'GCC workshop' and 'GCC  Workshop' stop being separate
+      // rows in every by-workshop report.
+      workshop_name:         canonWorkshop(form.workshop_name) || null,
       workshop_location:     form.workshop_location || null,
+      stage_waivers:         form.stage_waivers || {},
       workshop_quotation:    num(form.workshop_quotation),
       discount_pct:          num(form.discount_pct),
       final_amount:          num(form.final_amount),
@@ -2955,12 +2974,73 @@ export default function Accidents() {
                     </select>
                   </div>
                   <div>
-                    <label className="label">Damage Class</label>
+                    <label className="label">Damage Severity</label>
                     <select className="input" value={form.damage_class} onChange={e => setForm(f => ({ ...f, damage_class: e.target.value }))}>
                       <option value="">N/A</option>
                       {DAMAGE_CLASS_OPTS.map(s => <option key={s} value={s}>{s}</option>)}
                     </select>
+                    <p className="text-[11px] text-[var(--text-muted)] mt-1">How bad it is</p>
                   </div>
+                  <div>
+                    <label className="label">Damage Detail</label>
+                    <select className="input" value={form.damage_condition} onChange={e => setForm(f => ({ ...f, damage_condition: e.target.value }))}>
+                      <option value="">Not set</option>
+                      {withValueOption(DAMAGE_CONDITION_OPTS, form.damage_condition).map(s => <option key={s} value={s}>{s}</option>)}
+                    </select>
+                    <p className="text-[11px] text-[var(--text-muted)] mt-1">What is damaged</p>
+                  </div>
+                </div>
+              </FormSection>
+
+              {/* Which teams this case needs */}
+              <FormSection title="Which teams this case needs">
+                <p className="text-xs text-[var(--text-dim)] mb-3">
+                  Switch off any stage this incident does not need - a car park scratch needs no HSE
+                  investigation. A stage that is off is hidden from the case, and its team is not asked for
+                  anything. The reason is kept here so it is clear why.
+                </p>
+                <div className="space-y-2">
+                  {STAGE_FLOW.filter(k => k !== 'reported' && k !== 'closed').map(k => {
+                    const off = form.stage_waivers?.[k]?.required === false
+                    return (
+                      <div key={k} className={`flex flex-wrap items-center gap-2 px-3 py-2 rounded-lg border ${
+                        off ? 'border-[var(--input-border)] bg-[var(--input-bg)]/30' : 'border-[var(--input-border)]'}`}>
+                        <button
+                          type="button"
+                          onClick={() => setForm(f => {
+                            const next = { ...(f.stage_waivers || {}) }
+                            if (off) delete next[k]
+                            else next[k] = { required: false, remark: '', at: new Date().toISOString() }
+                            return { ...f, stage_waivers: next }
+                          })}
+                          className={`px-2.5 py-1 rounded-md text-[11px] font-semibold border transition-colors ${
+                            off
+                              ? 'bg-[var(--surface-2)] text-[var(--text-muted)] border-[var(--input-border)]'
+                              : 'bg-green-500/15 text-green-300 border-green-500/30'}`}
+                        >
+                          {off ? 'Not required' : 'Required'}
+                        </button>
+                        <span className={`text-sm ${off ? 'text-[var(--text-muted)] line-through' : 'text-[var(--text-primary)]'}`}>
+                          {stageLabel(k)}
+                        </span>
+                        <span className="text-xs text-[var(--text-muted)]">{stageDepartment(k)}</span>
+                        {off && (
+                          <input
+                            className="input flex-1 min-w-[180px] !py-1 text-xs"
+                            placeholder="Why is it not needed?"
+                            value={form.stage_waivers?.[k]?.remark || ''}
+                            onChange={e => setForm(f => ({
+                              ...f,
+                              stage_waivers: {
+                                ...(f.stage_waivers || {}),
+                                [k]: { ...(f.stage_waivers?.[k] || { required: false }), remark: e.target.value },
+                              },
+                            }))}
+                          />
+                        )}
+                      </div>
+                    )
+                  })}
                 </div>
               </FormSection>
 
@@ -3043,13 +3123,8 @@ export default function Accidents() {
                       {withValueOption(CASE_STAGE_OPTS, form.case_stage).map(s => <option key={s} value={s}>{s}</option>)}
                     </select>
                   </div>
-                  <div>
-                    <label className="label">Damage Condition</label>
-                    <select className="input" value={form.damage_condition} onChange={e => setForm(f => ({ ...f, damage_condition: e.target.value }))}>
-                      <option value="">N/A</option>
-                      {withValueOption(DAMAGE_CONDITION_OPTS, form.damage_condition).map(s => <option key={s} value={s}>{s}</option>)}
-                    </select>
-                  </div>
+                  {/* Damage detail moved up beside Damage Severity, where the
+                      two halves of the same question belong together. */}
                   <div>
                     <label className="label">Current Workflow Stage</label>
                     <select className="input" value={form.current_status} onChange={e => setForm(f => ({ ...f, current_status: e.target.value }))}>
@@ -3252,19 +3327,38 @@ export default function Accidents() {
                   </div>
                   <div>
                     <label className="label">Workshop</label>
-                    <input className="input" placeholder={repairIsInternal(form.repair_type) ? 'GCC Workshop' : 'External workshop name'} value={form.workshop_name} onChange={e => setForm(f => ({ ...f, workshop_name: e.target.value }))} />
-                  </div>
-                  <div>
-                    <label className="label">Workshop Location</label>
-                    {repairIsInternal(form.repair_type) ? (
-                      <select className="input" value={form.workshop_location} onChange={e => setForm(f => ({ ...f, workshop_location: e.target.value }))}>
-                        <option value="">Select site</option>
-                        {withValueOption(sites, form.workshop_location).map(s => <option key={s} value={s}>{s}</option>)}
-                      </select>
-                    ) : (
-                      <input className="input" placeholder="Workshop location / name" value={form.workshop_location} onChange={e => setForm(f => ({ ...f, workshop_location: e.target.value }))} />
+                    {/* A LIST, not free text. The same internal workshop is
+                        recorded four ways in the live data ("GCC Workshop",
+                        "GCC workshop", "GCC  Workshop", "GCC "), which makes four
+                        rows in any by-workshop report. The list follows the
+                        repair type, so picking Internal offers internal workshops.
+                        "Other" stays available - forcing a wrong pick is worse
+                        than one honest free-text entry. */}
+                    <select
+                      className="input"
+                      value={workshopIsOther ? '__other' : canonWorkshop(form.workshop_name)}
+                      onChange={e => {
+                        const v = e.target.value
+                        setWorkshopIsOther(v === '__other')
+                        setForm(f => ({ ...f, workshop_name: v === '__other' ? '' : v }))
+                      }}
+                    >
+                      <option value="">Not set</option>
+                      {workshopsFor(form.repair_type).map(w => <option key={w} value={w}>{w}</option>)}
+                      <option value="__other">Other...</option>
+                    </select>
+                    {workshopIsOther && (
+                      <input
+                        className="input mt-1.5"
+                        placeholder="Workshop name"
+                        value={form.workshop_name}
+                        onChange={e => setForm(f => ({ ...f, workshop_name: e.target.value }))}
+                      />
                     )}
                   </div>
+                  {/* Workshop Location removed: it was empty on 30 of the 35 live
+                      records and asked for the same fact as Site, so it collected
+                      nothing while making the form longer. */}
                   <div>
                     <label className="label">Workshop Quotation</label>
                     <input type="number" min="0" step="0.01" className="input" value={form.workshop_quotation} onChange={e => setForm(f => ({ ...f, workshop_quotation: e.target.value }))} />

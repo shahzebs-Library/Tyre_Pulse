@@ -11,7 +11,8 @@ import {
   canonFaultStatus, canonNajmStatus, canonRepairType,
   isIncidentClosed, isCaseSettled,
   LIABLE_PARTY_OPTS, PAYER_OPTS, RECOVERY_DECISION_OPTS,
-  canonLiableParty, canonPayer, canonDamageCondition,
+  canonLiableParty, canonPayer, canonDamageCondition, damageClassFromLegacy,
+  canonWorkshop, workshopsFor,
   najmHasReport, taqdeerHasReport, recoveryIsYes, repairIsInternal, computeRecovered,
 } from '../lib/accidentVocab'
 
@@ -160,12 +161,21 @@ describe('accidentVocab — presentation pills (shared list + detail source)', (
     expect(RECOVERY_DECISION_OPTS).toEqual(['Yes', 'No', 'N/A'])
     expect(canonLiableParty('gcc')).toBe('GCC')
     expect(canonPayer('recovery claim')).toBe('Recovery Claim')
-    // legacy damage-condition values fold onto the new ladder; unknown passes through
-    expect(canonDamageCondition('Major Repair')).toBe('Major')
-    expect(canonDamageCondition('Total Loss')).toBe('Major')
-    expect(canonDamageCondition('cosmetic')).toBe('Minor')
-    expect(canonDamageCondition('moderate')).toBe('Moderate')
+    // Damage is now TWO questions: damage_class is how bad, damage_condition is
+    // what was damaged. These used to be the same Minor/Moderate/Major ladder,
+    // which is why they read as duplicates of each other.
+    expect(canonDamageCondition('Major Repair')).toBe('Structural damage')
+    expect(canonDamageCondition('Total Loss')).toBe('Total loss')
+    expect(canonDamageCondition('cosmetic')).toBe('Minor cosmetic')
+    expect(canonDamageCondition('scratch')).toBe('Scratch')
     expect(canonDamageCondition('')).toBe('')
+    // A legacy severity in the detail field maps to the closest DETAIL, and the
+    // severity itself is carried across to damage_class rather than discarded.
+    // Reading 'Minor' as a scratch would invent a fact nobody recorded.
+    expect(canonDamageCondition('minor')).toBe('Minor cosmetic')
+    expect(damageClassFromLegacy('minor')).toBe('Minor')
+    expect(damageClassFromLegacy('Major Repair')).toBe('Major')
+    expect(damageClassFromLegacy('Scratch')).toBe('')
   })
 
   it('report-existence + recovery + repair gates behave correctly', () => {
@@ -289,5 +299,32 @@ describe('accidentVocab — presentation pills (shared list + detail source)', (
       expect(isCaseSettled({ current_status: 'Waiting insurance approval' })).toBe(false)
       expect(isCaseSettled({})).toBe(false)
     })
+  })
+
+  it('offers a damage severity AND a damage detail, and they are different lists', () => {
+    expect(DAMAGE_CLASS_OPTS).toEqual(['Major', 'Minor', 'Small'])
+    expect(DAMAGE_CONDITION_OPTS).toContain('Scratch')
+    expect(DAMAGE_CONDITION_OPTS).toContain('Minor cosmetic')
+    // The detail list must NOT be a severity ladder again - that was the bug.
+    expect(DAMAGE_CONDITION_OPTS).not.toContain('Moderate')
+  })
+
+  it('folds the four recorded spellings of one workshop onto a single name', () => {
+    // Live data holds all four, so a by-workshop report showed one workshop as
+    // four separate rows.
+    expect(canonWorkshop('GCC Workshop')).toBe('GCC Workshop')
+    expect(canonWorkshop('GCC workshop')).toBe('GCC Workshop')
+    expect(canonWorkshop('GCC  Workshop')).toBe('GCC Workshop')
+    expect(canonWorkshop('GCC ')).toBe('GCC Workshop')
+    // A genuinely different workshop is not swallowed.
+    expect(canonWorkshop('Vision Workshop')).toBe('Vision Workshop')
+    expect(canonWorkshop('Al Faris Garage')).toBe('Al Faris Garage')
+    expect(canonWorkshop('')).toBe('')
+  })
+
+  it('offers internal workshops for an internal repair and external for external', () => {
+    expect(workshopsFor('Internal')).toContain('GCC Workshop')
+    expect(workshopsFor('External')).toContain('Vision Workshop')
+    expect(workshopsFor('External')).not.toContain('GCC Workshop')
   })
 })

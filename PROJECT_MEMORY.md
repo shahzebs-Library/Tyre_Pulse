@@ -3,6 +3,135 @@
 Durable, committed project knowledge so any session has full context. Keep this
 current. Read it before adding/changing modules. Governing spec: `Tyre pulse enterprise.md`
 
+## SESSION 2026-07-28 (part 3) — THE CLASSIFIER LEARNS FROM CORRECTIONS (V400). Migrations through **V400j**, next free **V401**.
+
+### **V400 — "each time it should improve with my changes and learn these things"**
+**MEASURED BEFORE BUILDING ANYTHING:** **131,436 lines = 61% of all spend**, across 15,470 item codes, are
+filed by the **DEFAULT at 0.30 confidence** — nothing identifies them. Against that, **646 item codes have
+been reviewed by a human, and the classifier had ALREADY agreed on 597 = 92.4%.** So the **49 disagreements
+are the entire learning signal**, and any design not concentrated on them measures its own echo.
+
+### **THE CLASS-IMBALANCE TRAP — score on LIFT, never frequency**
+**89.6% of reviewed items are spare_part** (579 spare / 50 lubricant / 17 tyre). Mining words by how OFTEN
+they sit beside a category therefore **relearns the majority class and calls it knowledge.** Measured
+directly, a frequency-scored run proposed **`with`, `water`, `rear` and `fuel` all claiming spare_part —
+every one at lift 1.12**, i.e. no better than guessing the commonest answer. Scoring is
+**lift = precision / base rate, floored at 1.5**; the same run then produced exactly ONE candidate,
+`petrol -> lubricant`, precision 100% vs a 7.7% base rate, **lift 12.92**. The floor was chosen after seeing
+both numbers. **RULE: never rank a mined rule by precision or support alone — 90% precision on a class that
+is 89.6% of the data is worth nothing.**
+
+### **THE FIRST PROPOSAL WAS RIGHT ABOUT THE EVIDENCE AND WRONG ABOUT THE WORLD**
+`petrol -> lubricant` had perfect statistics and was still wrong, because all three rows it would have moved
+name a **PART**: `PETROL WATER PUMP 900 L/MIN`, `PETROL HOSE`, `PETROL GUN`. **This is the repo's own V393b
+finding ("GEAR BOX OIL COOLING HOSES") reproduced by the learner within minutes of it existing.** A fluid word
+inside a part name describes what the part CARRIES. Two guards:
+1. **VETO (`learned_rule_vetoed`)** — a fluid rule may not claim a description that names a part. It **reuses
+   the EXISTING `brain_tokens('oil_part')` list** rather than starting a second one, so the veto and the
+   classifier can never drift apart. Measured effect: impact fell **3 lines / 7,539.89 -> 1 / 28.57**
+   because `pump` and `hose` are already in that list.
+2. **MEMORY** — **a token a human REJECTED is never proposed again.** `gun` is not in oil_part, so the veto
+   catches two of those three and the human catches the third **exactly once, forever.** This rejection half
+   is what makes the loop learn from the user rather than nag them.
+
+### **`gun` WAS NOT ADDED TO THE VETO — the data refused it, and my instinct was wrong**
+The obvious move after seeing PETROL GUN was to add `gun` to `oil_part`. The reviewed rows forbid it — humans
+have reviewed three gun items and **DISAGREE**: `GREASE GUN` -> **spare_part**, `LUBRI-HIGH PRESSURE GREASE
+GUN` -> **lubricant**, `TYRE INFLATION GUN` -> spare_part. Across the 63 unreviewed gun rows the ERP is itself
+inconsistent (14 filed lubricant). So `gun` is **genuinely ambiguous in this business**, a veto would overrule
+a decision a human deliberately made, and the honest behaviour is to put it in front of a person.
+**DO NOT add `gun` to oil_part without new evidence.**
+
+### **AN ACCEPTED RULE IS APPLIED THROUGH THE MASTER, NEVER THROUGH `brain_classify`**
+`apply_learned_rule` stamps matched item codes into `material_master` as **REVIEWED** rows. It touches no
+brain_* function and **bumps NO rules version**, because:
+- the classifier **already ranks a reviewed master row above every token (V368)**, so precedence is inherited
+  rather than re-invented;
+- `brain_classify` is **IMMUTABLE and cached** — reading a rules table from it would break both. **`brain_cache`'s
+  key already contains `reviewed`**, so a newly reviewed item invalidates exactly its own entry and nothing else;
+- money moves only via `reclassify_from_master`, the ONE existing lever, which has a dry run and an undo;
+- every learned decision lands as a **per-item row a human can override individually**, not an invisible regex.
+A learned rule also **skips any item a human has already reviewed** — a reviewed decision outranks every token,
+including one the machine learned.
+
+### **WHAT THE LEDGER FOUND IMMEDIATELY — one percentage is not actionable**
+`classification_weak_spots` splits the 49 disagreements by which LAYER fired:
+- **`description-tyre`: tyre -> spare, 22 items = WRONG 56.4% OF THE TIME IT FIRES** ("DUAL TYRE CHUCK
+  W/RUBBER" is a tool). **The single worst layer in the brain.**
+- `default`: spare -> **oil**, 16 items (the default under-finds lubricants).
+- `code-range`: tyre -> spare, 7 items.
+**`share_of_source_pct` is load-bearing**: a layer overruled 22 of 39 firings is broken; one overruled 16 of
+271 is merely imperfect. Ranking by COUNT alone reverses them and points the maintainer at the wrong layer.
+
+### Design rules worth keeping
+- **Feedback is captured by a TRIGGER on `material_master`, not by each caller.** Items get reviewed from the
+  Material Master page, the Decisions panel and `apply_learned_rule`; asking each to also log feedback
+  guarantees one eventually forgets, after which the accuracy figure **quietly flatters itself.**
+- **A row stamped `proposed_from = 'learned:%'` is NOT logged as feedback** — it is the machine's own output,
+  and counting it as human agreement inflates the score with its own echo. Verified: a learned stamp added 0 rows.
+- **The V400i backfill dates each baseline row from `reviewed_at`, never `now()`** — stamping every historical
+  review with today would compress days of decisions into one point and make the trend a fiction.
+- **`accuracyTrend` returns null for a single period, never 0 or "flat"** — one point has no direction.
+- **`Number(null)` is 0 AND 0 IS FINITE.** Caught by my own tests: it turned "not measured" into a real reading
+  of zero, which would label an unmeasured rule "no better than guessing", let an empty month drag the trend,
+  and print "0% of them are lubricant". Everything numeric goes through a `num()` that returns null.
+- **Engine tones must be the console kit's vocabulary** (`good/info/warning/accent/danger/quiet`), not raw
+  colours — the kit falls back to grey for anything unknown, so `emerald` and `rose` would render **identically**
+  and the whole visual signal would vanish silently.
+
+### Bugs caught by testing, not by reading
+1. **`propose_classification_rules` TIMED OUT AT 60s** for a real user — per-candidate subqueries ran a regex
+   over 217k rows once per candidate (~3M evaluations). V400c collapses the unidentified spend to 15,416
+   distinct descriptions ONCE and tokenises that; now well under a second. (It also returns empty in an MCP
+   session for a mundane reason: **`app_current_org()` is NULL there — always impersonate a real user.**)
+2. **V400e wrote status `'accepted'`** into a column whose V400 CHECK allows `proposed|active|rejected`.
+   Aligned the RPCs to the existing word rather than widening the constraint.
+3. **`on commit drop` broke dry-run-then-apply in one transaction** — the **V368a bug verbatim**. V400g drops
+   the temp table first. Each PostgREST call is its own transaction so production never saw it, but every test
+   does. **RULE: never use `on commit drop` in a function that may be called twice in one transaction.**
+
+### Files + verification
+NEW: `src/lib/classificationLearning.js` (31 tests) · `src/lib/api/classificationLearning.js` ·
+`src/console/pages/ConsoleClassificationLearning.jsx` (**/console/classification-learning**, nav
+"Teach the Classifier") · `MIGRATIONS_V400_CLASSIFICATION_LEARNING.sql`.
+**VERIFIED LIVE, ROLLED BACK, AS A REAL USER:** proposed 1 -> apply-before-accept **refused** -> reject
+recorded -> **proposed after reject 0** -> accept -> dry run 1/1/28.57 -> **dry run wrote 0 rows** -> applied
+1 item -> master stamped `UAE 316838-O -> lubricant reviewed=true`; human disagreement logged as
+`spare (default) -> oil, agreed=false`; **learned stamp added 0 feedback rows.**
+
+### **THE REST OF THE ROW-CAP SWEEP — and a GUARD so the class cannot come back**
+Audited every client read against a table over 1000 rows (audit_log_v2 317,477 · parts_consumption 217,083 ·
+work_order_line_items 184,025 · work_orders 86,539 · brain_cache 22,919 · material_master 22,089 ·
+tyre_records 7,508 · production_logs 5,699 · vehicle_fleet 1,523). 73 raw matches -> 23 real multi-row reads
+-> **6 genuinely truncating**, now fixed:
+- **`DowntimeTracker` was the worst: work_orders with NO filter at all — 1,000 of 86,539 = 1.2%**, every
+  country blended. The tyre query DIRECTLY ABOVE IT on the same page already used `fetchAllPages` + country
+  scope; the work-order one was simply missed. Now paged + country-scoped, **and the period cutoff moved
+  SERVER-side** (it was already applied client-side), so a 30-day view fetches thirty days instead of the
+  newest thousand of all time. `WORK_ORDER_CEILING = 20000` with `fetchAllPages({max})`, and **`truncated` is
+  SURFACED as a banner** — a silently-hit ceiling is the same bug one level up.
+- **`FleetMaster` summary cards**: 1,523 -> the "Total" card literally read **1000**.
+- **`InspectionPlanner`**: KSA 6,026 tyres -> planned against 1,000 (17%).
+- **`FleetHealthBoard`** 12-month trend: 6,696 rows -> 1,000, which **bends the SHAPE of the line**, not just
+  its height.
+- **`stock.listTyreIssuesInRange`**: 6,535 issues in a year -> 1,000, so the timeline chart just stopped and
+  looked like the fleet went quiet.
+- **`dataCleaning` — all 8 scans**: 7,508 tyre records -> 1,000 (13%). A data-quality tool reporting problems
+  from an eighth of the rows **makes the data look CLEANER than it is**, the worst direction to be wrong in.
+  One shared `pageAll(build)` keeps the `{data, error}` shape every caller already destructures.
+- **DELIBERATELY NOT CHANGED, with reasons recorded in the test's allowlist**: `eq('serial_no')` /
+  `eq('asset_no')` single-entity reads (SerialTracker, TyreLifecycle, analyticsReads); caller-chunked `in(...)`
+  reads (uploads 1 batch, combinations 100, pmPrograms 200, fleetRenewal); and `useSupabaseQuery.js`, whose
+  react-query hooks are **dead** (only `useInvalidate` is imported anywhere).
+- **`src/test/rowCapGuard.test.js` READS THE SOURCE and fails on any NEW unbounded multi-row read against a
+  large table.** Reviewing for this does not work — the defective line looks identical to the correct one.
+  A second test keeps the ALLOWLIST honest (an entry whose read no longer exists is a stale exemption, which is
+  how a fixed bug creeps back). Verified it fires: reverting FleetMaster produced
+  `src/pages/FleetMaster.jsx:166 reads vehicle_fleet without paging`.
+- **RULE: fix a row cap with `fetchAllPages` AND an `.order(<unique column>)` tiebreak.** Ordering a paged read
+  on a non-unique key still drops or repeats rows at a page boundary — `asset_no` is unique per COUNTRY, not
+  globally (V348).
+
 ### **THE ASSET PICKERS SHOWED THE FIRST 1000 OF 1,523 ASSETS — 523 UNFINDABLE**
 User: "I cant find all assest in accident assets while seaching". Exact, and it was a ROW CAP, not a search bug.
 `listAccidentFleet` read `vehicle_fleet` with a bare select; **PostgREST caps that at 1000 and the fleet holds

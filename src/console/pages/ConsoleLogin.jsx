@@ -34,9 +34,18 @@ export default function ConsoleLogin() {
     if (!email.trim() || !password) { setError('Email and password are required.'); return }
     setLoading(true); setError(null)
 
-    const { error: err, mfaRequired, factorId: fid, challengeId: cid } = await signIn(
-      email.trim().toLowerCase(), password
-    )
+    // signIn RETURNS an error for a bad password but can still THROW on a dead
+    // network. Without this the button stays disabled and the only way back in
+    // is a page reload - the worst possible failure on a login screen.
+    let res
+    try {
+      res = await signIn(email.trim().toLowerCase(), password)
+    } catch (e) {
+      setError(toUserMessage(e, 'Could not reach the server. Check your connection and try again.'))
+      setLoading(false)
+      return
+    }
+    const { error: err, mfaRequired, factorId: fid, challengeId: cid } = res || {}
 
     if (err) {
       setError(toUserMessage(err, 'Could not sign you in. Check your details and try again.')); setLoading(false); return
@@ -57,7 +66,15 @@ export default function ConsoleLogin() {
     if (code.length !== 6) { setError('Enter the full 6-digit code.'); return }
     setLoading(true); setError(null)
 
-    const { error: err } = await verifyMfa(factorId, challengeId, code)
+    let vres
+    try {
+      vres = await verifyMfa(factorId, challengeId, code)
+    } catch (e) {
+      setError(toUserMessage(e, 'Could not reach the server. Check your connection and try again.'))
+      setLoading(false)
+      return
+    }
+    const { error: err } = vres || {}
     if (err) {
       setError('Invalid code. Please try again.')
       setTotpCode(['', '', '', '', '', ''])

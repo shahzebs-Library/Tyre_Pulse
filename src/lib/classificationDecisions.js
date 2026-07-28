@@ -146,6 +146,37 @@ export function overrideMovesMoney(row, category) {
   return categoryBucket(category) !== row.we_said
 }
 
+/**
+ * Orders a reviewer can work in. Value first by default, because reviewing the
+ * top items by money covers far more of the total than reviewing the top items
+ * by count. "Least certain" is the other honest starting point.
+ */
+export const SORTS = Object.freeze([
+  { key: 'value', label: 'Highest value' },
+  { key: 'lines', label: 'Most lines' },
+  { key: 'confidence', label: 'Least certain first' },
+  { key: 'code', label: 'Item code' },
+])
+
+/** Sort a decision list. Never mutates the input. */
+export function sortDecisions(rows = [], key = 'value') {
+  const list = Array.isArray(rows) ? [...rows] : []
+  const numOf = (v) => (Number.isFinite(Number(v)) ? Number(v) : null)
+  switch (key) {
+    case 'lines':
+      return list.sort((a, b) => (numOf(b.rows) ?? -1) - (numOf(a.rows) ?? -1))
+    case 'confidence':
+      // An unreadable confidence sorts FIRST, with the least certain - it is the
+      // one we know least about, so it must not hide at the bottom.
+      return list.sort((a, b) => (numOf(a.confidence) ?? -1) - (numOf(b.confidence) ?? -1))
+    case 'code':
+      return list.sort((a, b) => String(a.item_code || '').localeCompare(String(b.item_code || '')))
+    case 'value':
+    default:
+      return list.sort((a, b) => Math.abs(numOf(b.value) ?? 0) - Math.abs(numOf(a.value) ?? 0))
+  }
+}
+
 /** Stable key for a decision row: one item code can appear under two movements. */
 export const decisionKey = (row) =>
   `${row?.country || ''}|${row?.item_code || ''}|${row?.erp_said || ''}|${row?.we_said || ''}`

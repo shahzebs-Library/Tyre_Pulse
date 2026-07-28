@@ -1,6 +1,8 @@
 import { useEffect, useState, useCallback } from 'react'
 import { ClipboardList, Search, RefreshCw, Filter, Download } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
+import { toUserMessage } from '../../lib/safeError'
+import { ErrorState } from '../components/ui'
 import { useConsoleAuth } from '../ConsoleAuthContext'
 import { sanitizeCell } from '../../lib/exportUtils'
 
@@ -34,6 +36,7 @@ export default function ConsoleAuditLog() {
   const [logs, setLogs]     = useState([])
   const [total, setTotal]   = useState(0)
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState('')
   const [search, setSearch] = useState('')
   const [filterAction, setFilterAction] = useState('')
   const [filterType, setFilterType]     = useState('')
@@ -44,7 +47,7 @@ export default function ConsoleAuditLog() {
   const PAGE_SIZE = 50
 
   const load = useCallback(async () => {
-    setLoading(true)
+    setLoading(true); setLoadError('')
     let q = supabase
       .from('console_sessions')
       .select('id, admin_id, action, target_id, target_type, details, created_at', { count: 'exact' })
@@ -56,10 +59,19 @@ export default function ConsoleAuditLog() {
     if (dateFrom)     q = q.gte('created_at', dateFrom)
     if (dateTo)       q = q.lte('created_at', dateTo + 'T23:59:59Z')
 
-    const { data, count } = await q
-    setLogs(data ?? [])
-    setTotal(count ?? 0)
-    setLoading(false)
+    try {
+      const { data, count, error } = await q
+      // An audit trail that renders empty because the read failed is worse than
+      // one that says it failed: it looks like nothing happened.
+      if (error) throw error
+      setLogs(data ?? [])
+      setTotal(count ?? 0)
+    } catch (e) {
+      setLoadError(toUserMessage(e, 'Could not load the audit log.'))
+      setLogs([]); setTotal(0)
+    } finally {
+      setLoading(false)
+    }
   }, [filterAction, filterType, dateFrom, dateTo, page])
 
   useEffect(() => { load() }, [load])
@@ -110,6 +122,7 @@ export default function ConsoleAuditLog() {
 
   return (
     <div className="space-y-5 max-w-7xl">
+      <ErrorState message={loadError} onRetry={load} />
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>

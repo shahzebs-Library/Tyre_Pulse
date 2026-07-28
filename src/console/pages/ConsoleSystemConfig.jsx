@@ -4,6 +4,8 @@ import {
   Shield, Zap, Bell, Database, Globe, Lock, Mail, Clock,
 } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
+import { toUserMessage } from '../../lib/safeError'
+import { ErrorState } from '../components/ui'
 import { useConsoleAuth } from '../ConsoleAuthContext'
 import { ENFORCEMENT_STATUS } from '../../lib/api/systemConfig'
 import FxRatesPanel from './config/FxRatesPanel'
@@ -81,17 +83,27 @@ export default function ConsoleSystemConfig() {
   const { logAction } = useConsoleAuth()
   const [configs, setConfigs] = useState({})   // key -> value (string)
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState('')
   const [dirty, setDirty]     = useState(false)
   const [saving, setSaving]   = useState(false)
   const [saved, setSaved]     = useState(false)
 
   const load = useCallback(async () => {
-    setLoading(true); setDirty(false); setSaved(false)
-    const { data } = await supabase.from('system_config').select('key, value')
-    const map = {}
-    ;(data ?? []).forEach(row => { map[row.key] = row.value })
-    setConfigs(map)
-    setLoading(false)
+    setLoading(true); setDirty(false); setSaved(false); setLoadError('')
+    try {
+      const { data, error } = await supabase.from('system_config').select('key, value')
+      // Critical here: an unread error would render every switch at its default,
+      // which looks exactly like a deliberate configuration and invites someone
+      // to "fix" settings that were never actually read.
+      if (error) throw error
+      const map = {}
+      ;(data ?? []).forEach(row => { map[row.key] = row.value })
+      setConfigs(map)
+    } catch (e) {
+      setLoadError(toUserMessage(e, 'Could not load the configuration.'))
+    } finally {
+      setLoading(false)
+    }
   }, [])
 
   useEffect(() => { load() }, [load])
@@ -132,6 +144,7 @@ export default function ConsoleSystemConfig() {
 
   return (
     <div className="space-y-5 max-w-4xl">
+      <ErrorState message={loadError} onRetry={load} />
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>

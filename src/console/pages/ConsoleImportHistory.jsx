@@ -39,6 +39,7 @@ import { listDuplicateTargets } from '../../lib/api/duplicateControl'
 import { exportToExcel, reportFileName } from '../../lib/exportUtils'
 import UploadCoveragePanel from './importHistory/UploadCoveragePanel'
 import DecisionsPanel from './importHistory/DecisionsPanel'
+import { Btn, ErrorState } from '../components/ui'
 
 const fmtNum = (n) => (Number.isFinite(Number(n)) ? Number(n).toLocaleString() : 'N/A')
 const fmtTime = (v) => {
@@ -124,23 +125,25 @@ export default function ConsoleImportHistory() {
         </div>
         <div className="flex gap-2">
           {tab === 'uploads' && rows.length > 0 && (
-            <button onClick={downloadUploads}
-              className="h-9 px-3 rounded-lg bg-gray-800 border border-gray-700 text-xs text-gray-300 hover:text-white flex items-center gap-2">
-              <Download size={13} /> Excel
-            </button>
+            <Btn icon={Download} onClick={downloadUploads}>Excel</Btn>
           )}
-          <button onClick={load} disabled={loading}
-            className="h-9 px-3 rounded-lg bg-gray-800 border border-gray-700 text-xs text-gray-300 hover:text-white flex items-center gap-2 disabled:opacity-50">
-            <RefreshCw size={13} className={loading ? 'animate-spin' : ''} /> Refresh
-          </button>
+          {/* Coverage and decisions load their own data and carry their own
+              refresh, so a second one here would be a button that does nothing
+              on two of the four tabs. */}
+          {(tab === 'uploads' || tab === 'activity') && (
+            <Btn icon={RefreshCw} onClick={load} busy={loading}>Refresh</Btn>
+          )}
         </div>
       </div>
 
       <div className="flex gap-1.5 border-b border-gray-800">
-        {[['uploads', 'Uploads', FileUp], ['activity', 'Load activity', Activity],
-          ['coverage', 'Daily coverage', CalendarDays],
-          ['decisions', 'What we changed', Shuffle]].map(([k, label, Icon]) => (
-          <button key={k} onClick={() => setTab(k)}
+        {[
+          ['uploads', 'Uploads', FileUp, 'Files loaded through the app, and repeats of the same file'],
+          ['activity', 'Load activity', Activity, 'Loads done straight through the database, reconstructed'],
+          ['coverage', 'Daily coverage', CalendarDays, 'Which days have data and which are empty'],
+          ['decisions', 'What we changed', Shuffle, 'Where we filed something differently from your file'],
+        ].map(([k, label, Icon, hint]) => (
+          <button key={k} onClick={() => setTab(k)} title={hint}
             className={`px-3 py-2 text-xs font-semibold flex items-center gap-1.5 border-b-2 -mb-px transition-colors ${
               tab === k ? 'border-orange-500 text-orange-300' : 'border-transparent text-gray-500 hover:text-gray-300'
             }`}>
@@ -149,12 +152,7 @@ export default function ConsoleImportHistory() {
         ))}
       </div>
 
-      {error && (
-        <div className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-red-950/40 border border-red-800/50">
-          <AlertTriangle size={13} className="text-red-400 flex-shrink-0" />
-          <p className="text-xs text-red-300">{error}</p>
-        </div>
-      )}
+      <ErrorState message={error} onRetry={load} />
 
       {/* These two load their own data, so they render before the shared spinner. */}
       {tab === 'coverage' ? (

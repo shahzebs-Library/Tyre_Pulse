@@ -223,7 +223,7 @@ export default function ReportCenter() {
             style={{
               background: toast.type === 'ok' ? 'rgba(22,163,74,0.15)' : 'rgba(239,68,68,0.15)',
               border: `1px solid ${toast.type === 'ok' ? 'rgba(22,163,74,0.4)' : 'rgba(239,68,68,0.4)'}`,
-              color: toast.type === 'ok' ? '#4ade80' : '#f87171', backdropFilter: 'blur(8px)',
+              color: toast.type === 'ok' ? '#16a34a' : '#dc2626', backdropFilter: 'blur(8px)',
             }}
             onAnimationComplete={() => { if (toast) setTimeout(() => setToast(null), 4000) }}>
             {toast.type === 'ok' ? <CheckCircle2 size={15} /> : <AlertTriangle size={15} />}

@@ -3,7 +3,8 @@
  * (no SELECT *); null-safe country scoping. Additive only - mirrors
  * assets.js / tyres.js.
  */
-import { supabase, unwrap, applyCountry } from './_client'
+import { supabase, unwrap, applyCountry, fetchAllPages, ServiceError } from './_client'
+import { toUserMessage } from '../safeError'
 
 const COLS =
   'id,title,inspection_type,site,asset_no,tyre_serial,status,findings,severity,inspection_date,scheduled_date,completed_date,inspector,notes,country,created_by,created_at'
@@ -118,9 +119,27 @@ export async function deleteInspection(id) {
 
 const VEHICLE_COLS = 'site,asset_no,vehicle_type'
 
-/** All fleet vehicles (site/asset_no/vehicle_type) for checklist master data. */
-export async function listInspectionVehicles() {
-  return unwrap(await supabase.from('vehicle_fleet').select(VEHICLE_COLS))
+/**
+ * All fleet vehicles (site/asset_no/vehicle_type) for checklist master data.
+ *
+ * PAGED for the same reason as the accident picker: a bare select stops at
+ * PostgREST's 1000-row cap and the fleet holds 1,523, so 523 assets were absent
+ * from the inspection vehicle list with nothing to indicate it. The `id`
+ * tiebreak keeps paging deterministic, because asset_no is unique per country
+ * rather than globally (V348).
+ */
+export async function listInspectionVehicles({ country } = {}) {
+  const { data, error } = await fetchAllPages((from, to) => {
+    let q = supabase
+      .from('vehicle_fleet')
+      .select(VEHICLE_COLS + ',id')
+      .order('asset_no')
+      .order('id')
+      .range(from, to)
+    return applyCountry(q, country)
+  })
+  if (error) throw new ServiceError(toUserMessage(error), error.code, error)
+  return data || []
 }
 
 /** Look up a single fleet vehicle by asset number (or null if not found). The same

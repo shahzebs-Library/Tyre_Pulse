@@ -3,7 +3,8 @@
  * (no SELECT *); null-safe country scoping. Additive only - mirrors
  * assets.js / tyres.js.
  */
-import { supabase, unwrap, applyCountry, fetchAllPages } from './_client'
+import { supabase, unwrap, applyCountry, fetchAllPages, ServiceError } from './_client'
+import { toUserMessage } from '../safeError'
 
 const COLS =
   'id,asset_no,site,country,incident_date,severity,status,accident_type,claim_amount,claim_status,recovered_amount,recovery_status,repair_cost,estimated_damage_cost,driver_name,location,created_at'
@@ -86,15 +87,31 @@ export function listAllAccidentsForPage({ country, max = 100000 } = {}) {
  * Fleet vehicle picker source for the accident form's asset combobox.
  * Replicates the page's `fleet_master` read (select/order) exactly.
  */
-export async function listAccidentFleet() {
+export async function listAccidentFleet({ country } = {}) {
   // Assets live in vehicle_fleet (the legacy fleet_master table is empty), so the
   // accident form's vehicle picker must read from there or it shows nothing.
-  return unwrap(
-    await supabase
+  //
+  // PAGED, and that is the whole point of this function's shape. It used to be a
+  // bare select, which PostgREST caps at 1000 rows. The fleet holds 1,523, so
+  // ordering by asset_no silently cut the list at TM372 and made 523 assets
+  // unfindable - including 19 of the 28 vehicles that have actually had an
+  // accident. The picker looked like it was working; it just never offered them.
+  //
+  // The `id` tiebreak is not decoration: asset_no is unique per COUNTRY, not
+  // globally (V348), so ordering on it alone leaves rows that share a value in an
+  // arbitrary order between requests, and a page boundary landing inside such a
+  // group can drop or repeat rows.
+  const { data, error } = await fetchAllPages((from, to) => {
+    let q = supabase
       .from('vehicle_fleet')
       .select('asset_no, vehicle_type, site, country, registration_no, fleet_number')
-      .order('asset_no'),
-  )
+      .order('asset_no')
+      .order('id')
+      .range(from, to)
+    return applyCountry(q, country)
+  })
+  if (error) throw new ServiceError(toUserMessage(error), error.code, error)
+  return data || []
 }
 
 /**

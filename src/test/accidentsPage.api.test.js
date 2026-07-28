@@ -11,7 +11,7 @@ const h = vi.hoisted(() => {
       _table: table,
       _calls: calls,
       select(cols) { calls.select = cols; return b },
-      order() { return b },
+      order(col) { (calls.order = calls.order || []).push(col); return b },
       limit() { return b },
       range(from, to) { calls.range = [from, to]; return b },
       insert(v) { calls.insert = v; return b },
@@ -21,7 +21,12 @@ const h = vi.hoisted(() => {
       or(e) { calls.or.push(e); return b },
       maybeSingle() { return Promise.resolve(state.result) },
       single() { return Promise.resolve(state.result) },
-      then(onF, onR) { return Promise.resolve(state.result).then(onF, onR) },
+      // A test may set `state.result` to a FUNCTION to answer per request - that
+      // is what makes multi-page fetching testable rather than assumed.
+      then(onF, onR) {
+        const r = typeof state.result === 'function' ? state.result(calls) : state.result
+        return Promise.resolve(r).then(onF, onR)
+      },
     }
     state.last = b
     return b
@@ -100,5 +105,52 @@ describe('accidents owner page - service layer', () => {
     h.state.result = { data: null, error: { message: 'boom', code: '42501' } }
     await expect(accidents.listAccidentFleet()).rejects.toBeInstanceOf(ServiceError)
     await expect(accidents.listAccidentFleet()).rejects.toMatchObject({ code: '42501' })
+  })
+
+  // ── The asset picker must offer the WHOLE fleet ────────────────────────────
+  // PostgREST caps a bare select at 1000 rows. The live fleet holds 1,523, so
+  // the unpaged version cut the list at asset TM372 and made 523 assets
+  // unfindable - including 19 of the 28 vehicles that have actually had an
+  // accident. Nothing in the UI indicated a cap; the search just came back empty.
+  it('listAccidentFleet pages past the 1000-row cap', async () => {
+    const page = (n, size) => Array.from({ length: size }, (_, i) => ({
+      asset_no: `A${String(n * 1000 + i).padStart(5, '0')}`,
+    }))
+    h.state.result = (calls) => {
+      const [from] = calls.range || [0]
+      // Two full pages then a short one, exactly like 1,523 real rows.
+      if (from === 0) return { data: page(0, 1000), error: null }
+      if (from === 1000) return { data: page(1, 523), error: null }
+      return { data: [], error: null }
+    }
+    const rows = await accidents.listAccidentFleet()
+    expect(rows).toHaveLength(1523)
+    // The row that used to fall off the end is present.
+    expect(rows[1522].asset_no).toBe('A01522')
+  })
+
+  it('listAccidentFleet orders by a UNIQUE key so paging cannot drop rows', async () => {
+    // asset_no is unique per COUNTRY, not globally (V348). Ordering on it alone
+    // leaves rows that share a value in an arbitrary order between requests, and
+    // a page boundary inside such a group silently drops or repeats them.
+    const seen = []
+    h.state.result = (calls) => { seen.push(calls); return { data: [], error: null } }
+    await accidents.listAccidentFleet()
+    expect(h.state.last._table).toBe('vehicle_fleet')
+    expect(h.state.last._calls.order).toEqual(['asset_no', 'id'])
+  })
+
+  it('listAccidentFleet scopes to a country when one is active', async () => {
+    // The same asset code in two countries is usually a DIFFERENT machine (V376),
+    // so offering both in one form invites attaching the wrong vehicle.
+    h.state.result = { data: [], error: null }
+    await accidents.listAccidentFleet({ country: 'KSA' })
+    expect(h.state.last._calls.or.length + h.state.last._calls.eq.length).toBeGreaterThan(0)
+  })
+
+  it('listAccidentFleet applies no country filter on the All scope', async () => {
+    h.state.result = { data: [], error: null }
+    await accidents.listAccidentFleet({ country: 'All' })
+    expect(h.state.last._calls.eq).toHaveLength(0)
   })
 })

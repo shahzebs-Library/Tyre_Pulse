@@ -3,6 +3,32 @@
 Durable, committed project knowledge so any session has full context. Keep this
 current. Read it before adding/changing modules. Governing spec: `Tyre pulse enterprise.md`
 
+### **THE ASSET PICKERS SHOWED THE FIRST 1000 OF 1,523 ASSETS — 523 UNFINDABLE**
+User: "I cant find all assest in accident assets while seaching". Exact, and it was a ROW CAP, not a search bug.
+`listAccidentFleet` read `vehicle_fleet` with a bare select; **PostgREST caps that at 1000 and the fleet holds
+1,523**, so ordering by `asset_no` cut the list at **TM372** and everything from TM373 on was missing.
+- **MEASURED IMPACT IS WORSE THAN THE ROUND NUMBER: 19 of the 28 vehicles that have actually had an accident**
+  sit past the cut. Two thirds of the vehicles this form is used on could not be picked from it.
+- **WHY IT SURVIVED SO LONG:** typing a FULL asset number still worked, because `getAssetByNo` is a
+  direct-lookup fallback. The fallback quietly covered for the list being wrong.
+- **`listInspectionVehicles` had the IDENTICAL defect** — same table, same missing 523.
+- **THE `id` TIEBREAK ON THE ORDER IS LOAD-BEARING, not tidiness.** `asset_no` is unique per COUNTRY, not
+  globally (V348), so ordering on it alone leaves rows that share a value in an arbitrary order between
+  requests and a page boundary inside such a group DROPS or REPEATS them. Pattern already correct in
+  `assetManagement.js` (`.order('asset_no').order('id')`) — copy that, never order a paged read on a
+  non-unique key.
+- **COUNTRY SCOPING ADDED** (the picker never had it): the same asset code in two countries is usually a
+  DIFFERENT machine (V376 — GN103 is one generator in KSA, another in UAE), so offering both invited attaching
+  the wrong vehicle to an incident. On the All scope the suggestion now prints the country.
+- **TWO SILENT CAPS MADE VISIBLE**: the dropdown showed 10 matches of however many and said nothing (same
+  mistake one level up) — now "showing 10 of 34"; and a no-match search explains the asset is not in this
+  country's register and that a full number can still be typed, instead of an empty box.
+- Incidental: `stats.fleetSize` = `fleetAssets.length`, so **"accidents per 100 vehicles" divided by 1000
+  instead of 1,523** and overstated the rate by half. Fixed by the same change.
+- **RULE (already in this file for totals, now also for PICKERS): any list a user SEARCHES must page.** A row
+  cap is invisible in the UI and in code review — pinned by tests that fail on the unpaged version (verified,
+  3 targeted failures) in `accidentsPage.api.test.js` + `inspectionsPage.api.test.js`.
+
 ## SESSION 2026-07-28 (part 2) — ACCIDENT CLAIMS BY TEAM (V398) + REPORT LEGIBILITY + ONE SET OF NUMBERS. Migrations through **V398c**, next free **V399**. PR #211.
 
 ### **V398 — THE STAGE LADDER WAS DECORATIVE, and "it goes to closed on its own" was exact**

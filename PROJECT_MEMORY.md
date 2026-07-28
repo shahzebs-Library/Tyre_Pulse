@@ -51,7 +51,24 @@ a force-with-lease — safe here, and verify it first with
   signing is broken in this environment (`user.signingkey` -> 0-byte file), so it would flag EVERY Claude commit
   instead of one merge commit. It would make the problem worse, not better.
 
-## SESSION 2026-07-28 (part 8) — TELEMATICS UTILIZATION + CURRENT KM + KSA TYRE MERGE (V406-V410). Migrations through **V410**, next free **V411**.
+## SESSION 2026-07-28 (part 8) — TELEMATICS UTILIZATION + CURRENT KM + KSA TYRE MERGE (V406-V411). Migrations through **V411**, next free **V412**.
+
+### **V411 — REPLACED (OLD) TYRE REMOVALS APPLIED DIRECTLY (no re-upload)**
+The staging change-row's `remove_date`/`remove_KM` is a MISLABELED heading = the OLD tyre's fitment; the new
+tyre's `fix_date`/`fix_KM` is when the old tyre came off. That removal was never applied, so **1,585 replaced
+KSA tyres still showed NO removal** (looked on-vehicle). User: don't re-upload (slow), fix it in place.
+- **1,497** open old-tyre rows filled with removal_date/km_at_removal/total_km/status='Removed', matched by
+  asset+position+old-serial, using the EARLIEST replacement fitment >= the tyre's own fitment. No-reversed-date
+  guard skipped the 88 whose replacement predates their fitment (ambiguous, left alone).
+- **7** rows with wrong-signed total_km (km ordered right, total stored negative) recomputed = removal - fitment.
+- **12** replaced tyres entirely missing from tyre_records inserted as Removed (old fit = the mislabeled
+  remove_* cols, removal = new fix_*, brand = old_tyrebrand).
+- Verified: KSA reversed dates **0**, reversed km **0**, negative total_km **0**. Snapshots
+  `_bak.old_tyre_removal_v411` / `_bak.total_km_fix_v411`; inserts tagged `extra_fields->>'import'`. Surfaces
+  automatically in tyre records/lifecycle (removal_date/km/status already rendered). **KM_AT_FITMENT=1 is a
+  SOURCE placeholder on some rows -> life overstated; NOT invented, left honest.**
+
+
 User uploaded three raw tables and asked to "link this all", set "last old meter = current km" (telematics only),
 merge the tyre data (new/old serial changes), add policies, and surface it in the frontend.
 

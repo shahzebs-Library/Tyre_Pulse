@@ -3,7 +3,7 @@
 Durable, committed project knowledge so any session has full context. Keep this
 current. Read it before adding/changing modules. Governing spec: `Tyre pulse enterprise.md`
 
-## SESSION 2026-07-28 — CONSOLE UI KIT + UPLOAD COVERAGE PER COUNTRY AND AREA. Migrations through **V394c**, next free **V395**.
+## SESSION 2026-07-28 — CONSOLE UI KIT + UPLOAD COVERAGE PER COUNTRY AND AREA + V395 COUNTRY-NAMED STAGING. Migrations through **V395**, next free **V396**.
 
 ### **V394 — THE COVERAGE PANEL WAS HIDING A TWENTY-DAY HOLE**
 User: "the missing upload section ... which area i am uploading, country wise separate, all with real areas".
@@ -39,6 +39,39 @@ the newest of the three and called the feed healthy.**
   mistaken for "nothing was uploaded".
 - V389's `get_upload_coverage` is KEPT (the morning cron reads it, and the alert must not disagree with the
   page mid-change). Its **client wrapper was deleted** — nothing in the UI called it any more.
+
+### **V395 — A STAGING TABLE PER COUNTRY, so the country cannot be forgotten**
+User: "each table must be with country name ... where i needs to upload what, country wise". The expense pipes
+were ALREADY named per country and that is the pattern that works — you pick the table and the country is
+decided. **Every other staging table was shared with a `country` COLUMN the uploader had to remember to add to
+the CSV and fill on every row**; forget it and the rows land with no country, which is how data becomes
+invisible to a country-scoped user.
+- **21 tables generated** = 7 staging tables x KSA/UAE/Egypt: `stg_job_cards_ksa`, `stg_monthly_tyres_uae`, …
+  Same columns as the base **minus `country`**.
+- **`_stg_country_pipe()` is generic** (country + target table come from `TG_ARGV`), forwards via
+  `jsonb_populate_record`, and **returns NULL** so the country table stays empty — exactly like the base
+  staging tables. **There is NO second copy of any processing logic**; the shared tables and their triggers are
+  untouched and still work for anything already pointed at them.
+- Verified live (each rolled back): `stg_job_cards_uae` → work_orders **UAE**, Break Down → Emergency;
+  `stg_job_cards_egypt` → **Egypt**, Schedule → Preventive Maintenance; `stg_monthly_tyres_ksa` → **KSA**.
+  So the country argument is per table and not cross-wired.
+- **REGENERATE by re-running the DO block** if a base table gains a column — the country tables hold no data.
+- `importTargets.js` now names the country tables and `needsCountry` is false for all of them;
+  **`daily_km` is the only target still asking for a country column.** `importTargetFor` strips the
+  `_ksa|_uae|_egypt` suffix so the SHARED table still resolves (the triggers are attached to it).
+  `UPLOAD_SHEETS` is **derived** from IMPORT_TARGETS and expands to **25 sheets**, one per country table.
+- **NOT DONE: `production_logs` has no staging table at all**, so no country sibling. Adding one is separate
+  work, not a rename.
+
+### **"0 IMPORTED" MEANT THREE DIFFERENT THINGS AND SAID THE SAME WORDS**
+User asked what a 0 means — "is it complete or no". It was genuinely ambiguous, and **9 of the live batches are
+abandoned drafts** that read exactly like failures:
+- **`staged` / approval `draft`** → uploaded and previewed, **never approved. Nothing was written. NOT done.**
+- **`reversed`** → it WAS imported and then deliberately undone; 0 is correct (2 live rows, Egypt_Asset_details).
+- **`committed` with 0** → it ran and every row was rejected or skipped.
+`importRowSummary` now states which; new `importRowOutcome` + `OUTCOME_META` drive a badge
+(Imported / Undone / Never approved / Nothing imported / **Unknown** — it admits when it cannot tell rather
+than implying success).
 
 ### CONSOLE UI KIT — the reason everything "looked not good"
 **There was no shared UI in `/console` at all**: 34 pages each hand-rolled cards, tables, tabs and empty

@@ -34,12 +34,13 @@ import {
 import { Link } from 'react-router-dom'
 import {
   listImportHistory, listUnloggedImports, flagSuspiciousClusters, importRowSummary,
+  importRowOutcome, OUTCOME_META,
 } from '../../lib/api/importHistory'
 import { listDuplicateTargets } from '../../lib/api/duplicateControl'
 import { exportToExcel, reportFileName } from '../../lib/exportUtils'
 import UploadCoveragePanel from './importHistory/UploadCoveragePanel'
 import DecisionsPanel from './importHistory/DecisionsPanel'
-import { Btn, ErrorState } from '../components/ui'
+import { Btn, ErrorState, Badge } from '../components/ui'
 
 const fmtNum = (n) => (Number.isFinite(Number(n)) ? Number(n).toLocaleString() : 'N/A')
 const fmtTime = (v) => {
@@ -213,7 +214,15 @@ export default function ConsoleImportHistory() {
                           {fmtTime(r.uploaded_at)}
                         </td>
                         <td className="px-3 py-2.5">
-                          <p className="text-[11px] text-gray-300">{importRowSummary(r)}</p>
+                          {/* The badge answers "is this finished?" at a glance.
+                              A staged draft and a completed load both showed
+                              0 imported and were impossible to tell apart. */}
+                          <p className="text-[11px] text-gray-300 flex items-center gap-1.5 flex-wrap">
+                            <Badge tone={OUTCOME_META[importRowOutcome(r)].tone}>
+                              {OUTCOME_META[importRowOutcome(r)].label}
+                            </Badge>
+                            {importRowSummary(r)}
+                          </p>
                           {Number(r.duplicate_rows) > 0 && (
                             <p className="text-[10px] text-amber-400">
                               {fmtNum(r.duplicate_rows)} flagged as duplicate

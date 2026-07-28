@@ -107,7 +107,18 @@ export function flagSuspiciousClusters(clusters, windowSeconds = CLUSTER_WINDOW_
 }
 
 /**
- * Pure: one-line summary of an import-history row for the UI.
+ * Pure: what actually happened to an upload, in one line.
+ *
+ * "0 imported" was the single most confusing thing on this page, because it
+ * means three completely different things and the old summary said the same
+ * words for all of them:
+ *
+ *   staged / draft   the file was uploaded and previewed but never approved, so
+ *                    nothing was ever written. NOT finished - the commonest case
+ *                    by far, and the one people read as "it failed".
+ *   reversed         it WAS imported and then deliberately undone. 0 is correct.
+ *   committed with 0 it ran, and every row was rejected or skipped.
+ *
  * @param {object} r row from listImportHistory
  * @returns {string}
  */
@@ -115,8 +126,54 @@ export function importRowSummary(r) {
   if (!r) return ''
   const total = Number(r.total_rows) || 0
   const done = Number(r.imported_rows) || 0
-  if (!total && !done) return 'No rows recorded'
+  const status = String(r.import_status || '').toLowerCase()
+  const approval = String(r.approval_status || '').toLowerCase()
+
   if (done && total && done < total) return `${done.toLocaleString()} of ${total.toLocaleString()} rows imported`
   if (done) return `${done.toLocaleString()} rows imported`
+
+  // From here everything imported nothing, so say WHY rather than repeating 0.
+  if (status === 'reversed') {
+    return total
+      ? `Imported then undone, ${total.toLocaleString()} rows removed again`
+      : 'Imported then undone'
+  }
+  if (status === 'staged' || approval === 'draft' || approval === 'pending') {
+    return total
+      ? `Not imported: ${total.toLocaleString()} rows are waiting for approval`
+      : 'Not imported: uploaded but never approved'
+  }
+  if (status === 'committed') {
+    return total
+      ? `Finished, but none of the ${total.toLocaleString()} rows could be imported`
+      : 'Finished with nothing to import'
+  }
+  if (!total) return 'No rows recorded'
   return `${total.toLocaleString()} rows read, none imported`
 }
+
+/**
+ * Pure: is this upload actually done? Drives the badge beside the summary, so a
+ * half-finished draft cannot look the same as a completed load.
+ * @returns {'done'|'undone'|'unfinished'|'nothing'|'unknown'}
+ */
+export function importRowOutcome(r) {
+  if (!r) return 'unknown'
+  const done = Number(r.imported_rows) || 0
+  const status = String(r.import_status || '').toLowerCase()
+  const approval = String(r.approval_status || '').toLowerCase()
+  if (done > 0) return 'done'
+  if (status === 'reversed') return 'undone'
+  if (status === 'staged' || approval === 'draft' || approval === 'pending') return 'unfinished'
+  if (status === 'committed') return 'nothing'
+  return 'unknown'
+}
+
+/** Label and tone for each outcome, so the two never drift apart. */
+export const OUTCOME_META = Object.freeze({
+  done: { label: 'Imported', tone: 'good' },
+  undone: { label: 'Undone', tone: 'info' },
+  unfinished: { label: 'Never approved', tone: 'warning' },
+  nothing: { label: 'Nothing imported', tone: 'danger' },
+  unknown: { label: 'Unknown', tone: 'quiet' },
+})

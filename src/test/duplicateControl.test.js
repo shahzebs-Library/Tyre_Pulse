@@ -67,9 +67,11 @@ describe('importTargets reference', () => {
     }
   })
 
-  it('the expense tables are the only ones that do not need a country column', () => {
-    const noCountry = IMPORT_TARGETS.filter((t) => !t.needsCountry).map((t) => t.table)
-    expect(noCountry).toEqual(['expenses_ksa / expenses_uae / expenses_egypt'])
+  it('daily km is the only target still asking for a country column', () => {
+    // Every other staging table is now named for its country (V395), so the
+    // country comes from which table you import into and cannot be forgotten.
+    const needsCountry = IMPORT_TARGETS.filter((t) => t.needsCountry).map((t) => t.table)
+    expect(needsCountry).toEqual(['daily_km'])
   })
 
   it('the expense grid keeps the ERP header spelling verbatim, including "Trye"', () => {
@@ -88,14 +90,29 @@ describe('importTargets reference', () => {
   })
 
   it('flags open job cards as the one target where re-importing is safe', () => {
-    expect(SAFE_TO_REIMPORT).toContain('stg_open_wo')
+    expect(SAFE_TO_REIMPORT).toContain('stg_open_wo_ksa / stg_open_wo_uae / stg_open_wo_egypt')
     expect(SAFE_TO_REIMPORT).not.toContain('expenses_ksa / expenses_uae / expenses_egypt')
+  })
+
+  it('resolves both the per-country upload table and the shared staging table', () => {
+    // The country tables are where you upload; the shared table is what every
+    // processing trigger is still attached to. Both must find the reference.
+    expect(importTargetFor('stg_job_cards_uae')?.feeds).toBe('work_orders')
+    expect(importTargetFor('stg_job_cards')?.feeds).toBe('work_orders')
+  })
+
+  it('never asks for a country column on a table that is named for one', () => {
+    for (const t of IMPORT_TARGETS) {
+      if (!/_(ksa|uae|egypt)\b/.test(t.table)) continue
+      expect(t.needsCountry, t.table).toBe(false)
+      expect(t.columns.map((c) => String(c).toLowerCase()), t.table).not.toContain('country')
+    }
   })
 
   it('the wo-lines target tells the user to map source_row', () => {
     // Without source_row the server cannot tell a genuine repeated task line from
     // an accidental double import, so the reference has to call it out.
-    expect(importTargetFor('stg_wo_lines').notes).toMatch(/source_row/)
+    expect(importTargetFor('stg_wo_lines_ksa').notes).toMatch(/source_row/)
   })
 
   it('builds a blank workbook sheet for every upload target', () => {

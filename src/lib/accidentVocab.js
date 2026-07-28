@@ -127,6 +127,48 @@ export const STATUS_ALIAS = {
 export const canonSeverity = (s) => SEVERITY_ALIAS[String(s || '').toLowerCase()] || s || ''
 export const canonStatus = (s) => STATUS_ALIAS[String(s || '').toLowerCase().replace(/\s+/g, '_')] || s || ''
 
+/**
+ * Is the INCIDENT CASE closed. THE one answer - the register, the KPI tiles, the
+ * analytics tab, the Report Builder, its PDF and its deck all ask this.
+ *
+ * WHY IT LIVES HERE. The Report Builder used to carry its own version that read
+ * `release_date` and scanned `claim_status`, so on the live 35 incidents it
+ * reported 15 closed while the register reported 12. Same rows, same array,
+ * different answer - which is what "the builder shows different data" was.
+ *
+ * TWO SIGNALS ARE DELIBERATELY REFUSED, both measured:
+ *  - `release_date` is when the VEHICLE went back to work, not when the case
+ *    ended. Three live incidents carry one while still sitting at `reported` or
+ *    `awaiting_approval`. Treating it as closure retires cases nobody closed.
+ *  - `claim_status` describes the CLAIM. One live row is `settled` - the insurer
+ *    has paid, which says nothing about whether the case is finished.
+ * A claim's own closure is a genuinely different question and keeps its own
+ * resolver in claimsAnalytics. Do not merge the two.
+ *
+ * `closure_status` is included because it is the column meant for this, but it
+ * cannot carry the answer alone: it reads 'open' on all 35 rows including the 12
+ * that are closed. The status half is what actually works.
+ */
+export const isIncidentClosed = (r) => (
+  canonStatus(r?.status) === 'Closed'
+  || ['closed', 'close'].includes(String(r?.closure_status || '').toLowerCase().trim())
+)
+
+/**
+ * Has the case stopped moving. A DIFFERENT question from isIncidentClosed, and
+ * both are needed: closure decides the Open/Closed counts, this decides whether
+ * a clock is still running (days open, and whether a case counts as delayed).
+ *
+ * The extra signal is `current_status`, which the workflow screens drive and
+ * which is populated on 31 of the 35 live incidents: one row reads 'Released'
+ * and another 'Closed' while `status` has not caught up. A vehicle that is back
+ * on the road is not accruing days open even if nobody has formally closed the
+ * case, so counting it forward would overstate the backlog.
+ */
+export const isCaseSettled = (r) => (
+  isIncidentClosed(r) || /released|closed/.test(String(r?.current_status || '').toLowerCase())
+)
+
 // ── Write-side reverse maps (DB CHECK-constraint tokens) ─────────────────────
 export const toDbSeverity = (s) => {
   const v = String(s || '').toLowerCase().trim()

@@ -30,11 +30,12 @@ import {
   RECOVERY_SOURCE_OPTS, RECOVERY_SOURCE_LABELS, RECOVERY_STATUS_OPTS, RECOVERY_STATUS_LABELS,
   CASE_STAGE_OPTS, DAMAGE_CONDITION_OPTS, WORKFLOW_STAGE_OPTS, STAGE_TO_CLAIM_STATUS,
   canonSeverity, canonStatus, canonAccidentType, toDbSeverity, toDbStatus, toDbAccidentType,
-  canonFaultStatus, canonNajmStatus, canonNajmFault, canonTaqdeerStatus, canonRepairType, canonDamageClass,
+  canonFault, canonFaultStatus, canonNajmStatus, canonNajmFault, canonTaqdeerStatus, canonRepairType, canonDamageClass,
   accidentSeverityPill, accidentStatusPill,
   LIABLE_PARTY_OPTS, PAYER_OPTS, RECOVERY_DECISION_OPTS,
   canonLiableParty, canonPayer, canonDamageCondition,
   najmHasReport, taqdeerHasReport, recoveryIsYes, repairIsInternal, computeRecovered,
+  isIncidentClosed, isCaseSettled,
 } from '../lib/accidentVocab'
 import { makeValueLabelsPlugin, doughnutLegendCounts, summarizeChartData, REPORT_LIBRARY, normalizeConfig } from '../lib/accidentReport'
 import { colorAt, categorical, withAlpha } from '../lib/reportColors'
@@ -110,7 +111,10 @@ function BreakdownCard({ title, icon: Icon, rows, valueFmt = (v) => v }) {
 // /accidents/:id detail page render identical colours — do NOT re-declare
 // per-file badge maps here.
 
-const isClosed = (r) => r.closure_status === 'closed' || canonStatus(r.status) === 'Closed'
+// Closure comes from the ONE resolver in accidentVocab, which the Report Builder
+// and its PDF/deck now share. Keeping a second copy here is how the register and
+// the builder came to disagree about how many cases were closed.
+const isClosed = isIncidentClosed
 
 // ── Case-progress / delay intelligence ──────────────────────────────────────
 // New case-tracking columns rendered by the list. They may or may not be part
@@ -128,11 +132,9 @@ const DELAY_THRESHOLD_DAYS = 5
 
 // A case counts as still OPEN unless it is closed (closure_status/status) or its
 // free-text current_status reads Released/Closed.
-const isReleasedOrClosed = (r) => {
-  if (isClosed(r)) return true
-  const cur = String(r.current_status || '').toLowerCase()
-  return /released|closed/.test(cur)
-}
+// Shared with the Report Builder (isCaseSettled, accidentVocab) so the register's
+// Days Open column and the report's cannot drift apart.
+const isReleasedOrClosed = isCaseSettled
 
 // Whole days since the last status movement; falls back to the incident date
 // when no status_update_date is recorded. Returns 0 when neither date parses.
@@ -852,12 +854,13 @@ export default function Accidents() {
 
   // Fault / liability split from the GCC case fields (honest — Unknown when unset).
   const faultDoughnut = useMemo(() => {
+    // canonFault is THE fault resolver (accidentVocab). This chart used to carry
+    // its own regex copy - a fourth classifier that agreed today and would drift
+    // the moment one of them learned a new spelling.
     const c = { Faulty: 0, 'Non-faulty': 0, 'Under review': 0, Unknown: 0 }
     records.forEach(r => {
-      const f = String(r.fault_status || '').toLowerCase()
-      if (/non[-\s]?fault/.test(f)) c['Non-faulty']++
-      else if (/review/.test(f)) c['Under review']++
-      else if (/fault/.test(f)) c.Faulty++
+      const f = canonFault(r.fault_status)
+      if (c[f] !== undefined) c[f]++
       else c.Unknown++
     })
     const entries = Object.entries(c).filter(([, v]) => v > 0)

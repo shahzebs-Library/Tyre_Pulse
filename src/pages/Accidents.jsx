@@ -45,6 +45,7 @@ import { toUserMessage } from '../lib/safeError'
 import { hasClaim, isClosed as isClaimClosed, claimNet } from '../lib/claimsAnalytics'
 import { captureChartOnPaper } from '../lib/chartCapture'
 import AccidentIntelligencePanel from '../components/accidents/AccidentIntelligencePanel'
+import ClaimProgressBoard from '../components/accidents/ClaimProgressBoard'
 import { buildAccidentIntelligence, basisNote } from '../lib/accidentAnalytics'
 import { WORKFLOW_STAGES, DEFAULT_DEPARTMENTS, stageOf, stageLabel, buildAccidentKpis } from '../lib/accidentWorkflow'
 import { listDepartments } from '../lib/api/accidentWorkflow'
@@ -2371,6 +2372,11 @@ export default function Accidents() {
           {/* Basis first: a reader has to know a figure rests on 2 of 35 records
               BEFORE they read it, not in a footnote afterwards. */}
           <AccidentIntelligencePanel records={records} currency={activeCurrency} fmtCurrency={fmtCurrency} />
+
+          {/* Which team is holding each claim, how long, and which stages nobody
+              worked. Sits above the KPI strip because "where is this stuck" is
+              the question the numbers below cannot answer. */}
+          <ClaimProgressBoard records={records} country={activeCountry} />
 
           {/* ===== Accident Workflow KPIs (single engine: buildAccidentKpis) ===== */}
           <div className="card border-l-2 border-l-green-500/60">

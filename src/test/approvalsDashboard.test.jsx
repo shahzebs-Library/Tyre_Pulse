@@ -20,6 +20,8 @@ vi.mock('../lib/api/approvalsQueue', () => ({
   approveAccidentClosure: vi.fn(),
   rejectAccidentClosure: vi.fn(),
   decideChecklist: vi.fn(),
+  listChecklistSignoffGaps: vi.fn(),
+  bulkDecide: vi.fn(),
 }))
 
 // Auth is org-scoped server-side; the page only needs a session-shaped stub.
@@ -101,6 +103,8 @@ beforeEach(() => {
   queue.approveAccidentClosure.mockResolvedValue(undefined)
   queue.rejectAccidentClosure.mockResolvedValue(undefined)
   queue.decideChecklist.mockResolvedValue({ id: 'cl-1', approval_status: 'approved' })
+  queue.listChecklistSignoffGaps.mockResolvedValue([])
+  queue.bulkDecide.mockResolvedValue({ ok: [], failed: [] })
 })
 
 afterEach(() => cleanup())
@@ -217,5 +221,65 @@ describe('Unified approval dashboard', () => {
 
     await waitFor(() => expect(screen.getByText(/Approval services unavailable/i)).toBeInTheDocument())
     expect(screen.getByRole('button', { name: /Retry/i })).toBeInTheDocument()
+  })
+
+  // ── Bulk decisions ─────────────────────────────────────────────────────────
+  it('offers bulk approve for the items that can be decided in bulk', async () => {
+    renderPage()
+    await waitFor(() => expect(screen.getByText(/Select all/)).toBeInTheDocument())
+    // The closure and the checklist are bulkable; the workflow instance is not.
+    expect(screen.getByText('Select all 2')).toBeInTheDocument()
+    expect(screen.getByText(/must be opened\s+individually/)).toBeInTheDocument()
+  })
+
+  it('does not offer to bulk-decide workflow instances', async () => {
+    // A workflow step can demand a signature, a cost or a named approver.
+    // Approving a list of them would skip the very requirements the engine exists
+    // to enforce, so they are never selectable.
+    queue.listAccidentClosures.mockResolvedValue([])
+    queue.listChecklistApprovals.mockResolvedValue([])
+    renderPage()
+    await waitFor(() => expect(screen.getAllByText(/Pending/).length).toBeGreaterThan(0))
+    expect(screen.queryByText(/Select all/)).not.toBeInTheDocument()
+  })
+
+  it('reports a PARTIAL bulk result honestly rather than claiming success', async () => {
+    // Each approval is separately permissioned and separately stateful, so some
+    // succeeding and some failing is the normal case, not an edge case.
+    queue.bulkDecide.mockResolvedValue({
+      ok: [{ source: 'checklist', id: 'cl-1', title: 'Brake check' }],
+      failed: [{ item: { source: 'accident_closure', id: 'ac-1', title: 'TM704 closure' }, error: 'already decided' }],
+    })
+    renderPage()
+    await waitFor(() => expect(screen.getByText('Select all 2')).toBeInTheDocument())
+    fireEvent.click(screen.getByText('Select all 2'))
+    fireEvent.click(screen.getByText('Approve selected'))
+    await waitFor(() => expect(screen.getByText(/1 item\(s\) approved/)).toBeInTheDocument())
+    expect(screen.getByText(/1 could not be actioned/)).toBeInTheDocument()
+    expect(screen.getByText(/already decided/)).toBeInTheDocument()
+  })
+
+  // ── Missed sign-offs ───────────────────────────────────────────────────────
+  it('surfaces checklists that skipped a sign-off they were meant to have', async () => {
+    // The reported symptom was an empty checklist queue. It was empty because two
+    // live submissions from a require_approval template were stamped
+    // not_required and never entered it - which an empty tab hides.
+    queue.listChecklistSignoffGaps.mockResolvedValue([{
+      id: 'gap-1', title: 'Predictive Maintenance Checklist', template_name: 'Predictive Maintenance Checklist',
+      asset_no: 'TM527', site: 'NHC', country: 'KSA', submitted_at: '2026-07-12T10:21:03Z',
+      approval_status: 'not_required',
+    }])
+    renderPage()
+    await waitFor(() => expect(screen.getAllByText('Missed sign-off').length).toBeGreaterThan(1))
+    fireEvent.click(screen.getAllByText('Missed sign-off').at(-1))
+    await waitFor(() => expect(screen.getByText(/never appeared in the Pending queue/)).toBeInTheDocument())
+    expect(screen.getByText('Never asked')).toBeInTheDocument()
+  })
+
+  it('says nothing slipped past when there are no sign-off gaps', async () => {
+    renderPage()
+    await waitFor(() => expect(screen.getAllByText('Missed sign-off').length).toBeGreaterThan(1))
+    fireEvent.click(screen.getAllByText('Missed sign-off').at(-1))
+    await waitFor(() => expect(screen.getByText(/Nothing slipped past/)).toBeInTheDocument())
   })
 })

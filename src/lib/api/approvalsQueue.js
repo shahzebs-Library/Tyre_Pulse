@@ -202,3 +202,99 @@ export async function countDataIntakePending({ country } = {}) {
 
   return batches + uploads
 }
+
+// ─── Checklists that skipped the sign-off they were supposed to have ────────────
+
+/**
+ * Submissions from a template flagged `require_approval` that were nonetheless
+ * recorded `approval_status = 'not_required'`, so they never entered any queue.
+ *
+ * WHY THIS EXISTS. The reported symptom was "checklist approvals do not show in
+ * the dashboard". The queue was reading correctly and was genuinely empty - but
+ * measured on the live data, the template "Predictive Maintenance Checklist" has
+ * require_approval = true and TWO submissions against it, both stamped
+ * not_required. Those predate the V212 approval lifecycle (all three live
+ * submissions are from 2026-07-12, before the column was ever populated by the
+ * submit path), so they are historical rather than a live leak - but an empty
+ * queue that hides them tells the reader nobody ever needed to sign anything.
+ *
+ * Two cheap queries rather than an embedded join: the template list is tiny, and
+ * naming a PostgREST relationship is a guess that breaks silently when the
+ * constraint is renamed.
+ *
+ * @returns {Promise<Array<object>>}
+ */
+export async function listChecklistSignoffGaps({ country } = {}) {
+  try {
+    const templates = unwrap(await supabase
+      .from('checklist_templates')
+      .select('id,name')
+      .eq('require_approval', true)
+      .limit(500)) || []
+    const ids = templates.map((t) => t.id).filter(Boolean)
+    if (!ids.length) return []
+
+    const nameById = new Map(templates.map((t) => [t.id, t.name]))
+    let q = supabase
+      .from('checklist_submissions')
+      .select(CHECKLIST_COLS + ',template_id')
+      .in('template_id', ids)
+      .eq('approval_status', 'not_required')
+      .order('submitted_at', { ascending: false })
+      .limit(500)
+    q = applyCountry(q, country)
+    const rows = unwrap(await q) || []
+    return rows.map((r) => ({ ...r, template_name: r.template_name || nameById.get(r.template_id) || null }))
+  } catch (err) {
+    if (isMissingRelation(err)) return []
+    throw err
+  }
+}
+
+// ─── Deciding several at once ───────────────────────────────────────────────────
+
+/**
+ * Decide many items in one action, reporting each result separately.
+ *
+ * THE CONTRACT IS PARTIAL HONESTY. Approvals are individually permissioned and
+ * individually stateful: one item may have been decided by someone else a second
+ * ago, or fall outside this user's country scope. So this never reports "12
+ * approved" unless twelve actually succeeded - it returns every outcome and lets
+ * the caller say "10 approved, 2 could not be". Rejecting the whole batch because
+ * one item failed would be worse: the other eleven were legitimate.
+ *
+ * Runs sequentially on purpose. Each decision writes and may fire notification
+ * triggers; a burst of parallel writes buys a second and risks rate limiting on
+ * a queue that is normally a handful of rows.
+ *
+ * @param {Array<object>} items  approval items carrying { id, source }
+ * @param {'approve'|'reject'} action
+ * @param {{ reason?:string, approverName?:string, approverId?:string }} [opts]
+ * @returns {Promise<{ ok:Array, failed:Array<{item:object, error:string}> }>}
+ */
+export async function bulkDecide(items, action, opts = {}) {
+  const approve = action === 'approve'
+  const ok = []
+  const failed = []
+  for (const item of (Array.isArray(items) ? items : [])) {
+    try {
+      if (item.source === 'accident_closure') {
+        if (approve) await approveAccidentClosure(item.id)
+        else await rejectAccidentClosure(item.id, opts.reason || null)
+      } else if (item.source === 'checklist') {
+        await decideChecklist(item.id, {
+          approved: approve,
+          approverName: opts.approverName || null,
+          approverId: opts.approverId || null,
+          reviewNote: approve ? null : (opts.reason || null),
+        })
+      } else {
+        throw new Error('This approval type cannot be decided in bulk.')
+      }
+      ok.push(item)
+    } catch (err) {
+      failed.push({ item, error: err?.message || 'could not be decided' })
+    }
+  }
+  return { ok, failed }
+}

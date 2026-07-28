@@ -24,12 +24,20 @@
  */
 import { supabase, unwrap, applyCountry, fetchAllPages } from './_client'
 import { DATASETS } from '../erpImport'
+import { toUserMessage } from '../safeError'
 
 /** Dataset key -> staging table name (production is intentionally excluded). */
 const TABLE = {
   asset: 'erp_asset_import',
   change: 'erp_tyre_change_import',
   expense: 'erp_tyre_expense_import',
+}
+
+/** Dataset key -> promotion RPC (production is loaded live, never promoted). */
+const PROMOTE_RPC = {
+  asset: 'promote_erp_assets',
+  change: 'promote_erp_tyre_changes',
+  expense: 'promote_erp_tyre_expense',
 }
 
 /** Column keys persisted per dataset (excludes generated id/created_at). */
@@ -261,4 +269,79 @@ export async function deleteImportBatch(dataset, batch_id) {
   const table = tableFor(dataset)
   if (!batch_id) throw new Error('A batch id is required.')
   return unwrap(await supabase.from(table).delete().eq('batch_id', batch_id))
+}
+
+/* ── Promotion (staging -> master tables) ─────────────────────────────────────
+ * V415: the missing step. These call the SECURITY DEFINER promotion RPCs that
+ * move a reviewed batch into the master tables:
+ *   asset   -> vehicle_fleet     (dedupe on org+country+asset_no; insert missing)
+ *   change  -> tyre_records      (fitment-key dedupe; active/old lifecycle logic)
+ *   expense -> parts_consumption (import_uid dedupe; classify trigger buckets it)
+ * Every promotion is idempotent, dry-run by default, snapshotted and reversible.
+ * ------------------------------------------------------------------------- */
+
+function promoteRpcFor(dataset) {
+  const fn = PROMOTE_RPC[dataset]
+  if (!fn) throw new Error('This dataset cannot be promoted from here.')
+  return fn
+}
+
+/**
+ * Preview what a promotion WOULD do without writing anything (p_dry_run=true).
+ * Returns the RPC's per-country / per-bucket counts (+ money for expense).
+ * @param {'asset'|'change'|'expense'} dataset
+ * @param {string} batch_id
+ */
+export async function previewPromotion(dataset, batch_id) {
+  if (!batch_id) throw new Error('A batch id is required.')
+  const { data, error } = await supabase.rpc(promoteRpcFor(dataset), { p_batch: batch_id, p_dry_run: true })
+  if (error) throw new Error(toUserMessage(error, 'Could not preview the promotion.'))
+  return data || {}
+}
+
+/**
+ * Apply a promotion: move the batch's rows into the master tables (p_dry_run=false).
+ * Idempotent - rows already promoted are skipped. Returns the same shape as the
+ * preview with the real inserted counts.
+ * @param {'asset'|'change'|'expense'} dataset
+ * @param {string} batch_id
+ */
+export async function applyPromotion(dataset, batch_id) {
+  if (!batch_id) throw new Error('A batch id is required.')
+  const { data, error } = await supabase.rpc(promoteRpcFor(dataset), { p_batch: batch_id, p_dry_run: false })
+  if (error) throw new Error(toUserMessage(error, 'Could not promote the batch.'))
+  return data || {}
+}
+
+/**
+ * Undo a promoted batch: delete exactly the master rows this process inserted and
+ * clear the staging promoted flag so the batch can be promoted again cleanly.
+ * @param {'asset'|'change'|'expense'} dataset
+ * @param {string} batch_id
+ */
+export async function undoPromotion(dataset, batch_id) {
+  if (!batch_id) throw new Error('A batch id is required.')
+  const { data, error } = await supabase.rpc('promote_erp_undo', { p_dataset: dataset, p_batch: batch_id })
+  if (error) throw new Error(toUserMessage(error, 'Could not undo the promotion.'))
+  return data || {}
+}
+
+/**
+ * Current promotion status of a batch: how many rows reached the master tables
+ * (inserted vs already present) and when. Degrades to a not-promoted shape on any
+ * error so the review grid never breaks over it.
+ * @param {'asset'|'change'|'expense'} dataset
+ * @param {string} batch_id
+ * @returns {Promise<{inserted:number, existing:number, total:number, promoted:boolean, promoted_at:?string}>}
+ */
+export async function promotionStatus(dataset, batch_id) {
+  const fallback = { inserted: 0, existing: 0, total: 0, promoted: false, promoted_at: null }
+  if (!batch_id || !PROMOTE_RPC[dataset]) return fallback
+  try {
+    const { data, error } = await supabase.rpc('erp_batch_promotion_status', { p_dataset: dataset, p_batch: batch_id })
+    if (error) throw error
+    return { ...fallback, ...(data || {}) }
+  } catch {
+    return fallback
+  }
 }

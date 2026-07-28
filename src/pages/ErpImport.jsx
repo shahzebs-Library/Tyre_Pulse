@@ -1,7 +1,7 @@
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react'
 import {
   Upload, FileSpreadsheet, Database, Loader2, AlertTriangle, CheckCircle2,
-  Trash2, Download, Search, ArrowRight, RefreshCw, Info,
+  Trash2, Download, Search, ArrowRight, RefreshCw, Info, Rocket, Undo2, ShieldCheck,
 } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { useSettings } from '../contexts/SettingsContext'
@@ -13,6 +13,7 @@ import {
 } from '../lib/erpImport'
 import {
   listImportBatches, listImportRows, saveImportRows, deleteImportBatch,
+  previewPromotion, applyPromotion, undoPromotion, promotionStatus,
 } from '../lib/api/erpImport'
 import { createProductionBulk } from '../lib/api/production'
 import { exportToExcel } from '../lib/exportUtils'
@@ -244,7 +245,7 @@ export default function ErpImport() {
           <Info size={13} />
           {datasetKey === 'production'
             ? 'Production m3 loads directly into the live Cost Center production log.'
-            : 'Rows are saved to a review table only. Moving them into the master tables is NOT built yet, so this page cannot add assets, tyres or costs to the system.'}
+            : 'Rows are saved to a review table first. When you are happy with the batch, open the Review tab and Promote it into the master tables (assets, tyres or costs). Promotion is reversible.'}
         </p>
       </div>
 
@@ -487,7 +488,7 @@ function ImportPanel({
             <p className="text-amber-300">{saveResult.failures.length} row(s) failed: {saveResult.failures.slice(0, 3).join('; ')}{saveResult.failures.length > 3 ? ' ...' : ''}</p>
           )}
           {saveResult.dataset !== 'production' && (
-            <p className="text-[var(--text-secondary)]">Open the Review tab to check the batch. These rows stay in the review table and do NOT reach the master tables.</p>
+            <p className="text-[var(--text-secondary)]">Open the Review tab to check the batch, then Promote it into the master tables when it looks right.</p>
           )}
         </div>
       )}
@@ -509,6 +510,185 @@ function ImportPanel({
         {(parsed || saveResult) && (
           <button onClick={onReset} className="px-4 py-2 rounded-lg bg-[var(--surface-2)] hover:bg-[var(--surface-3)] text-sm flex items-center gap-2">
             <RefreshCw size={15} /> New file
+          </button>
+        )}
+      </div>
+    </div>
+  )
+}
+
+/* ── Promotion panel (staging -> master tables) ──────────────────────────────
+ * The step the page used to be missing. Preview (dry run) the exact counts a
+ * promotion would move, apply it into the master tables, and undo it - all
+ * reversible and idempotent (server side V415).
+ */
+function fmtPromoMoney(byCountry) {
+  if (!byCountry || typeof byCountry !== 'object') return null
+  const parts = Object.entries(byCountry).map(([c, v]) => {
+    if (v && typeof v === 'object') {
+      const n = Number(v.count || 0)
+      const val = Number(v.value || 0)
+      return `${c}: ${n.toLocaleString()} line(s), ${val.toLocaleString()} ${v.currency || ''}`.trim()
+    }
+    return `${c}: ${Number(v || 0).toLocaleString()}`
+  })
+  return parts.length ? parts.join(' | ') : null
+}
+
+function PromoteSummary({ datasetKey, res, applied }) {
+  if (!res) return null
+  const verb = applied ? 'Promoted' : 'Would promote'
+  if (datasetKey === 'asset') {
+    return (
+      <div className="text-sm space-y-0.5">
+        <p>{verb} <b>{Number(res.to_insert_total || 0).toLocaleString()}</b> new asset(s) into the fleet register.</p>
+        {fmtPromoMoney(res.to_insert_by_country) && <p className="text-[var(--text-muted)]">By country: {fmtPromoMoney(res.to_insert_by_country)}</p>}
+        {Number(Object.values(res.already_present_by_country || {}).reduce((a, b) => a + Number(b || 0), 0)) > 0 && (
+          <p className="text-[var(--text-muted)]">{fmtPromoMoney(res.already_present_by_country)} already in the fleet (left unchanged).</p>
+        )}
+        {res.skipped_no_asset_no > 0 && <p className="text-amber-400">{res.skipped_no_asset_no.toLocaleString()} row(s) skipped - no asset number.</p>}
+      </div>
+    )
+  }
+  if (datasetKey === 'change') {
+    return (
+      <div className="text-sm space-y-0.5">
+        <p>{verb} <b>{Number(res.to_insert_total || 0).toLocaleString()}</b> tyre record(s) ({Number(res.to_insert_active || 0).toLocaleString()} current, {Number(res.to_insert_old || 0).toLocaleString()} history).</p>
+        {fmtPromoMoney(res.to_insert_by_country) && <p className="text-[var(--text-muted)]">By country: {fmtPromoMoney(res.to_insert_by_country)}</p>}
+        {res.already_present > 0 && <p className="text-[var(--text-muted)]">{res.already_present.toLocaleString()} already in the system (skipped).</p>}
+        {res.skipped_no_key > 0 && <p className="text-amber-400">{res.skipped_no_key.toLocaleString()} row(s) skipped - missing serial or asset.</p>}
+        {res.active_position_conflicts > 0 && <p className="text-amber-400">{res.active_position_conflicts.toLocaleString()} landed as history - that asset/position already had an active tyre.</p>}
+      </div>
+    )
+  }
+  return (
+    <div className="text-sm space-y-0.5">
+      <p>{verb} <b>{Number(res.to_insert_total || 0).toLocaleString()}</b> tyre cost line(s) into the expense grid.</p>
+      {fmtPromoMoney(res.by_country) && <p className="text-[var(--text-muted)]">{fmtPromoMoney(res.by_country)}</p>}
+      {res.already_present > 0 && <p className="text-[var(--text-muted)]">{res.already_present.toLocaleString()} already in the grid (skipped).</p>}
+      {res.skipped_no_cost > 0 && <p className="text-amber-400">{res.skipped_no_cost.toLocaleString()} row(s) skipped - no cost.</p>}
+    </div>
+  )
+}
+
+const MASTER_LABEL = { asset: 'fleet register', change: 'tyre records', expense: 'expense grid' }
+
+function PromotePanel({ datasetKey, batchId, canWrite, onChanged }) {
+  const [status, setStatus] = useState(null)
+  const [preview, setPreview] = useState(null)
+  const [applied, setApplied] = useState(null)
+  const [busy, setBusy] = useState('')   // '', 'status', 'preview', 'apply', 'undo'
+  const [error, setError] = useState('')
+
+  const loadStatus = useCallback(async () => {
+    if (!batchId) { setStatus(null); return }
+    setBusy('status'); setError('')
+    try { setStatus(await promotionStatus(datasetKey, batchId)) }
+    catch (err) { setError(toUserMessage(err, 'Could not read promotion status.')) }
+    finally { setBusy('') }
+  }, [datasetKey, batchId])
+
+  // Reset the panel whenever the selected batch or dataset changes.
+  useEffect(() => { setPreview(null); setApplied(null); setError(''); loadStatus() }, [loadStatus])
+
+  async function onPreview() {
+    setBusy('preview'); setError(''); setApplied(null)
+    try { setPreview(await previewPromotion(datasetKey, batchId)) }
+    catch (err) { setError(toUserMessage(err, 'Could not preview the promotion.')) }
+    finally { setBusy('') }
+  }
+
+  async function onApply() {
+    if (!window.confirm(`Promote this batch into the ${MASTER_LABEL[datasetKey]}? You can undo it afterwards.`)) return
+    setBusy('apply'); setError('')
+    try {
+      const res = await applyPromotion(datasetKey, batchId)
+      setApplied(res); setPreview(null)
+      await loadStatus()
+      onChanged?.()
+    } catch (err) { setError(toUserMessage(err, 'Could not promote the batch.')) }
+    finally { setBusy('') }
+  }
+
+  async function onUndo() {
+    if (!window.confirm(`Undo this promotion? Every row this batch added to the ${MASTER_LABEL[datasetKey]} is removed.`)) return
+    setBusy('undo'); setError('')
+    try {
+      const res = await undoPromotion(datasetKey, batchId)
+      setApplied(null); setPreview(null)
+      setError('')
+      await loadStatus()
+      onChanged?.()
+      window.alert(`Undone. ${Number(res?.deleted || 0).toLocaleString()} row(s) removed from the ${MASTER_LABEL[datasetKey]}.`)
+    } catch (err) { setError(toUserMessage(err, 'Could not undo the promotion.')) }
+    finally { setBusy('') }
+  }
+
+  if (!batchId) return null
+  const isPromoted = status?.promoted
+  const anyBusy = !!busy
+
+  return (
+    <div className="bg-[var(--surface-1)] border border-[var(--border-dim)] rounded-xl p-4 space-y-3">
+      <div className="flex items-start gap-3">
+        <ShieldCheck size={18} className="shrink-0 text-green-400 mt-0.5" />
+        <div className="flex-1">
+          <p className="text-sm font-medium text-[var(--text-primary)]">Promote to the {MASTER_LABEL[datasetKey]}</p>
+          <p className="text-xs text-[var(--text-muted)] mt-0.5">
+            Move the reviewed rows of this batch into the master tables. Preview the exact counts first. Promotion is idempotent (re-running adds nothing new) and can be undone.
+          </p>
+          {isPromoted && (
+            <p className="text-xs text-green-300 mt-1.5 flex items-center gap-1.5">
+              <CheckCircle2 size={13} />
+              Already promoted: {Number(status.inserted || 0).toLocaleString()} added, {Number(status.existing || 0).toLocaleString()} already present.
+            </p>
+          )}
+        </div>
+      </div>
+
+      {error && (
+        <div className="bg-red-900/20 border border-red-700/50 rounded-lg p-2.5 text-red-300 text-xs flex gap-2">
+          <AlertTriangle size={14} /> {error}
+        </div>
+      )}
+
+      {preview && !applied && (
+        <div className="bg-sky-900/15 border border-sky-700/40 rounded-lg p-3 text-[var(--text-secondary)]">
+          <p className="text-sky-300 text-xs font-medium mb-1">Preview (nothing written yet)</p>
+          <PromoteSummary datasetKey={datasetKey} res={preview} applied={false} />
+        </div>
+      )}
+      {applied && (
+        <div className="bg-green-900/15 border border-green-700/40 rounded-lg p-3 text-[var(--text-secondary)]">
+          <p className="text-green-300 text-xs font-medium mb-1 flex items-center gap-1.5"><CheckCircle2 size={13} /> Promoted</p>
+          <PromoteSummary datasetKey={datasetKey} res={applied} applied />
+        </div>
+      )}
+
+      <div className="flex flex-wrap gap-2">
+        <button
+          onClick={onPreview}
+          disabled={anyBusy}
+          className="px-3 py-2 rounded-lg bg-[var(--surface-2)] hover:bg-[var(--surface-3)] text-sm flex items-center gap-2 disabled:opacity-50"
+        >
+          {busy === 'preview' ? <Loader2 size={14} className="animate-spin" /> : <Search size={14} />} Preview promotion
+        </button>
+        <button
+          onClick={onApply}
+          disabled={anyBusy || !canWrite}
+          title={canWrite ? 'Promote into the master tables' : 'Requires Admin / Manager / Director'}
+          className="px-3 py-2 rounded-lg bg-green-600 hover:bg-green-500 text-white text-sm flex items-center gap-2 disabled:opacity-50"
+        >
+          {busy === 'apply' ? <Loader2 size={14} className="animate-spin" /> : <Rocket size={14} />} Promote to system
+        </button>
+        {isPromoted && (
+          <button
+            onClick={onUndo}
+            disabled={anyBusy || !canWrite}
+            title={canWrite ? 'Remove the rows this batch added' : 'Requires Admin / Manager / Director'}
+            className="px-3 py-2 rounded-lg bg-red-900/40 hover:bg-red-900/60 text-red-200 text-sm flex items-center gap-2 disabled:opacity-50"
+          >
+            {busy === 'undo' ? <Loader2 size={14} className="animate-spin" /> : <Undo2 size={14} />} Undo promotion
           </button>
         )}
       </div>
@@ -684,6 +864,15 @@ function ReviewPanel({ datasetKey, dataset, canWrite, countryTag }) {
           {deleting ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />} Delete batch
         </button>
       </div>
+
+      {batchId && (
+        <PromotePanel
+          datasetKey={datasetKey}
+          batchId={batchId}
+          canWrite={canWrite}
+          onChanged={() => { loadRows(); loadBatches() }}
+        />
+      )}
 
       {loading
         ? (

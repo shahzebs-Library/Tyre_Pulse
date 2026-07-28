@@ -18,16 +18,23 @@ For NEW work restart the branch from latest main — merged PRs are terminal.
   per-feed "what file fills this".
 - **V400 (through V400k)** the classifier learns from human corrections.
 
-### **THE STANDING OPEN ITEMS — carried forward, none of it blocking**
-1. **`/erp-import` PROMOTION STEP STILL DOES NOT EXIST.** The page no longer claims it does, but
-   `erp_asset_import` / `erp_tyre_change_import` / `erp_tyre_expense_import` remain the ONLY staging family in
-   the schema with no trigger and nothing reading them. **That page still cannot put assets, tyres or costs into
-   the system.** This is the real remaining gap behind "only expenses upload".
-2. **`work_orders.work_order_no` is GLOBALLY unique while the client dedupe is COUNTRY-scoped** — a number
-   already stored under another country slips through and aborts the whole batch on 23505. Needs a per-country
-   key or a global dedupe scope: a decision, not a patch.
-3. **`erpIntake.existingKeys` pages with `.range()` and NO `.order()`** against 60,099 KSA work orders —
-   violates the repo's own paging rule; one missed row is enough to abort a batch.
+### **THE STANDING OPEN ITEMS — items 1-3 RESOLVED (part 9, V415), rest carried forward**
+1. **RESOLVED (V415) — `/erp-import` PROMOTION STEP BUILT.** SECURITY DEFINER, elevated-gated, org-scoped RPCs
+   `promote_erp_assets` / `promote_erp_tyre_changes` / `promote_erp_tyre_expense` move reviewed rows from the
+   three `erp_*_import` staging tables into `vehicle_fleet` / `tyre_records` / `parts_consumption`, each with
+   `p_dry_run default true`, natural-key dedupe (idempotent), `promote_erp_undo`, `erp_batch_promotion_status`,
+   and a `erp_promote_bak.promotion_log` ledger. Frontend `PromotePanel` in ErpImport.jsx Review tab (preview
+   counts -> promote w/ confirm -> undo). Expense promotion computes `import_uid` + on-conflict-do-nothing and
+   lets the classify trigger bucket/currency. Verified live rolled back (asset/change/expense apply+idempotent
+   re-run+undo, 0 rows persisted). INSERT-missing only (no null-backfill of live rows, keeps undo clean).
+2. **RESOLVED (code, no migration) — `work_orders.work_order_no` dedupe is now GLOBAL.** Measured: the number is
+   globally unique (prefix encodes country 1:1, 0 cross-country collisions), so the global constraint is CORRECT
+   and a per-country key would reintroduce the V405 cross-country contamination + break `on conflict
+   (work_order_no)` in `process_stg_job_cards`. Fix = `insertWorkOrders` dedupe reads ALL countries (drop the
+   country arg), so a number stored under any country is merged instead of aborting on 23505.
+3. **RESOLVED (code) — `erpIntake.existingKeys` + `existingTyreKeys` now `.order('id')`** before `.range()`, so
+   paging never drops/repeats a row at a boundary. Pinned by `erpIntakePagingOrder.test.js` (5 tests). Load-bearing
+   now that #2 pages all 86,539 work orders globally.
 4. `synonyms.js` marks `work_orders.asset_no` `required:false` but the column is **NOT NULL**; and
    `ENUM_DOMAINS.workorder.work_type` lacks `Service` / `Preventive Maintenance`, which V253 added to the CHECK.
 5. **`removal_reason` still holds a brand on 858 rows — ALL UAE — where `brand` was already populated** (V403
@@ -51,7 +58,9 @@ a force-with-lease — safe here, and verify it first with
   signing is broken in this environment (`user.signingkey` -> 0-byte file), so it would flag EVERY Claude commit
   instead of one merge commit. It would make the problem worse, not better.
 
-## SESSION 2026-07-28 (part 8) — TELEMATICS + CURRENT KM + KSA TYRE MERGE + EXACT DEDUP + EXPENSE TRENDS (V406-V413). Migrations through **V413**, next free **V414**.
+## SESSION 2026-07-28 (part 9) — ERP-IMPORT PROMOTION + 2 IMPORT DEDUPE FIXES (V415, 3 agents). Migrations through **V415**, next free **V416**. See "STANDING OPEN ITEMS 1-3 RESOLVED" above.
+
+## SESSION 2026-07-28 (part 8) — TELEMATICS + CURRENT KM + KSA TYRE MERGE + EXACT DEDUP + EXPENSE TRENDS (V406-V414). Migrations through **V414**, next free **V415**.
 
 ### **V413 — EXPENSE TRENDS & FORECAST (multi-year, YoY, tyre/spare/lubricant, currency-safe)**
 User: earlier-year expenses ARE in the system (2018-2026 all present; the file's job-card values matched the

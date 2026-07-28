@@ -3,6 +3,137 @@
 Durable, committed project knowledge so any session has full context. Keep this
 current. Read it before adding/changing modules. Governing spec: `Tyre pulse enterprise.md`
 
+## SESSION 2026-07-28 — CONSOLE UI KIT + UPLOAD COVERAGE PER COUNTRY AND AREA + V395 COUNTRY-NAMED STAGING. Migrations through **V395**, next free **V396**.
+
+### **V394 — THE COVERAGE PANEL WAS HIDING A TWENTY-DAY HOLE**
+User: "the missing upload section ... which area i am uploading, country wise separate, all with real areas".
+Investigated and the complaint was exact. V389 aggregated every country into ONE row per source, so a country
+that stops uploading is invisible behind the ones that did not. **Measured before writing anything: KSA job
+cards last arrived 7 Jul with data on 7 of 30 days, while Egypt and UAE both ran to 22 Jul — the panel showed
+the newest of the three and called the feed healthy.**
+- **`get_upload_coverage_detail(days, country)`** → per country → per source → per **site**, with by_day,
+  missing_days, last seen, rows. `_upload_coverage_detail_for_org(org,...)` is REVOKED from `authenticated`
+  (V378 lesson); the entry point takes no org.
+- **AREA IS REAL DATA**: `site` is populated on effectively every row — expenses 216,792/216,792, job cards
+  86,539/86,539, tyre records 7,498/7,504, production 5,699/5,699. KSA 19-24 sites, Egypt 4-15, UAE 3-18.
+- **THREE RULES, EACH CORRECTED BY MEASUREMENT — do not "simplify" any of them back:**
+  1. **Cadence comes from a 180-DAY baseline, never the window on screen** (V394b). Deriving it from the
+     displayed 30 days meant a feed silent for three weeks fell under the 50% bar, was reclassified
+     "occasional", and **stopped being alarmed about precisely when it mattered most.**
+  2. **A non-daily feed is judged against its OWN p90 gap, never a fixed threshold.** Egypt job cards: p90 gap
+     1 day, 6 days quiet = abnormal. KSA job cards: p90 gap **22** days (bulk uploads), 21 days quiet =
+     completely normal. Any fixed "silent N days" rule calls KSA broken and Egypt fine — wrong on both.
+  3. **The two signals are DISJOINT** (V394c, `_coverage_quiet`). V394b flagged quiet on anything past its
+     typical gap; for a daily feed that gap is 1, so every weekend tripped it and **9 of 10 sources came back
+     quiet**. It also double counted, since a daily feed already lists the days it skipped.
+     **missed days = DAILY feeds only · gone quiet = NON-DAILY feeds only.**
+- **AREA RULE: a site is judged ONLY on days its own country+source actually received something.** "KSA
+  expenses arrived for ten sites but not QID-UP-ST" is actionable; blaming a site for a day nobody uploaded is
+  noise. A site silent across the whole recent half of the window is **dormant, never missing** — a closed
+  site must not alarm forever.
+- Live at build: worst area **KSA expenses QID-UP-ST missed 23** of the days the rest of KSA expenses arrived.
+  455 ms for the 30-day window. Real findings it surfaced immediately: KSA tyre records 24 missed / 26 days
+  silent, UAE tyre records 26 missed, KSA production m3 19 days quiet.
+- **`import_files` holds only 8 rows** because staging and Table Editor loads write no file record. The panel
+  lists what is genuinely there and **says outright that most loads never appear**, so an empty list is not
+  mistaken for "nothing was uploaded".
+- V389's `get_upload_coverage` is KEPT (the morning cron reads it, and the alert must not disagree with the
+  page mid-change). Its **client wrapper was deleted** — nothing in the UI called it any more.
+
+### **V395 — A STAGING TABLE PER COUNTRY, so the country cannot be forgotten**
+User: "each table must be with country name ... where i needs to upload what, country wise". The expense pipes
+were ALREADY named per country and that is the pattern that works — you pick the table and the country is
+decided. **Every other staging table was shared with a `country` COLUMN the uploader had to remember to add to
+the CSV and fill on every row**; forget it and the rows land with no country, which is how data becomes
+invisible to a country-scoped user.
+- **21 tables generated** = 7 staging tables x KSA/UAE/Egypt: `stg_job_cards_ksa`, `stg_monthly_tyres_uae`, …
+  Same columns as the base **minus `country`**.
+- **`_stg_country_pipe()` is generic** (country + target table come from `TG_ARGV`), forwards via
+  `jsonb_populate_record`, and **returns NULL** so the country table stays empty — exactly like the base
+  staging tables. **There is NO second copy of any processing logic**; the shared tables and their triggers are
+  untouched and still work for anything already pointed at them.
+- Verified live (each rolled back): `stg_job_cards_uae` → work_orders **UAE**, Break Down → Emergency;
+  `stg_job_cards_egypt` → **Egypt**, Schedule → Preventive Maintenance; `stg_monthly_tyres_ksa` → **KSA**.
+  So the country argument is per table and not cross-wired.
+- **REGENERATE by re-running the DO block** if a base table gains a column — the country tables hold no data.
+- `importTargets.js` now names the country tables and `needsCountry` is false for all of them;
+  **`daily_km` is the only target still asking for a country column.** `importTargetFor` strips the
+  `_ksa|_uae|_egypt` suffix so the SHARED table still resolves (the triggers are attached to it).
+  `UPLOAD_SHEETS` is **derived** from IMPORT_TARGETS and expands to **25 sheets**, one per country table.
+- **NOT DONE: `production_logs` has no staging table at all**, so no country sibling. Adding one is separate
+  work, not a rename.
+
+### **"0 IMPORTED" MEANT THREE DIFFERENT THINGS AND SAID THE SAME WORDS**
+User asked what a 0 means — "is it complete or no". It was genuinely ambiguous, and **9 of the live batches are
+abandoned drafts** that read exactly like failures:
+- **`staged` / approval `draft`** → uploaded and previewed, **never approved. Nothing was written. NOT done.**
+- **`reversed`** → it WAS imported and then deliberately undone; 0 is correct (2 live rows, Egypt_Asset_details).
+- **`committed` with 0** → it ran and every row was rejected or skipped.
+`importRowSummary` now states which; new `importRowOutcome` + `OUTCOME_META` drive a badge
+(Imported / Undone / Never approved / Nothing imported / **Unknown** — it admits when it cannot tell rather
+than implying success).
+
+### **ACCIDENTS: A DISPLAY LABEL WAS BEING COMPARED TO A RAW DB TOKEN, IN FIVE PLACES**
+User: "make sure its correct, in open it shows closed and in closed its showing open, charts are not readable".
+The counts were fine (verified live: 35 total, 23 open, 12 closed, and `stats.open` and `wfKpis.open` agree).
+The real defect was a whole FAMILY of the same mistake — the UI hands over a **display label** while the row
+carries a **raw DB token**, so the comparison matched nothing:
+- **`statusCounts` keyed on `STATUSES` ('Reported', 'Closed') but incremented `c[r.status]` ('reported',
+  'closed')** → the **Status Funnel drew 0 for every status**.
+- **`severityMonthlyChart`** same shape → **Monthly Severity Breakdown was all zeros**.
+- **`filterStatus` / `statusFunnel` / `filterSeverity`** compared the dropdown's label to the raw token →
+  **picking any status or severity EMPTIED the register** instead of filtering it.
+- **`r.status !== 'Closed'`** is always true against `'closed'` → "Raise CA" showed on closed cases.
+All fixed by canonicalising at the comparison point (`canonStatus` / `canonSeverity` / `isClosed`).
+- **LIVE VALUES THAT MAKE THIS BITE:** status is `reported|under_review|repair_in_progress|awaiting_parts|
+  awaiting_approval|insurance_claim|closed`; severity is **`minor|moderate|severe`** while the dropdown offers
+  **Minor/Moderate/Major** — `severe` folds to `Major`, so a literal compare can never match.
+- **`accidents.closure_status` is `'open'` on ALL 35 rows, including the 12 that are closed.** It is a dead
+  column; `isClosed` only works because of its `canonStatus(status)==='Closed'` half. Do not trust it alone.
+- **Guarded by tests in `accidentVocab.test.js`**: every DB token must canonicalise INTO the display list, and
+  a label must survive `toDb*` -> `canon*` round trip. That is the invariant that was violated.
+
+### ACCIDENT ANALYTICS PDF — it was unreadable because six charts fit on one page
+A4 landscape / 6 charts gave each ~90mm with a 7.2pt digest and 6.3pt KPI labels. Now **4 per page (2x2,
+~135mm each)**, title 8.5 -> 11pt, digest 7.2 -> 9pt (2 lines allowed), KPI labels 6.3 -> 8pt on **two rows of
+four** with the value auto-shrunk to fit its own tile. Page count is derived rather than capped at 2.
+
+### CONSOLE UI KIT — the reason everything "looked not good"
+**There was no shared UI in `/console` at all**: 34 pages each hand-rolled cards, tables, tabs and empty
+states. **`src/console/components/ui/index.jsx`** is now the vocabulary (Panel, PanelHeader, Note, StatTile,
+ProportionBar, Badge, Code, Btn, Segmented, SearchInput, Select, Toolbar, Table/THead/Th/Tr/Td, LoadingState,
+EmptyState, ErrorState, Modal). Two constraints are load-bearing:
+- **STAY IN THE gray-* AND orange-* CLASS FAMILIES.** The light theme is built from attribute selectors in
+  index.css (`html.light .console-root [class*="bg-gray-900"]`), so a slate or zinc surface **stays dark for
+  every light-mode user**. Dark output is unchanged by those rules, which is why they are safe.
+- **`EmptyState` takes a `reason`** — "no rows matched" and "we could not look" render identically and mean
+  opposite things.
+- **A `*/` inside a comment closed the block and broke the build** — watch that when writing class-family docs.
+
+### CONSOLE NAV — grouped and searchable
+33 flat links became 7 groups (Overview · Data and imports · People and access · Automation and alerts · AI ·
+Audit and security · Configuration) plus a filter box. Grouped by **what you came to do**, not by subsystem.
+Collapsed sidebar renders the ungrouped set — there is no room for headers or a filter at that width.
+
+### DECISIONS PANEL — the interaction was the defect
+**It saved the instant the dropdown moved**, so a mis-click silently rewrote a category with no record of what
+had been touched. Changes are now **staged in a tray** (review, remove, save together). Each row expands to
+show the **real transaction lines** behind it (`listMaterialTransactions`), so a decision is made on evidence
+rather than one sample description. Added sort (value / lines / **least certain first** — an unreadable
+confidence sorts FIRST, it is what we know least about), a country filter, and the weak-evidence count is now
+a **filter** rather than a label.
+
+### **SEVEN CONSOLE PAGES COULD HANG ON A SPINNER FOREVER**
+`setLoading(true)` with no `finally`, so any throw left the page loading with no way out.
+- **`ConsoleLogin` was the worst**: a network blip left the sign-in button disabled and a page reload was the
+  only way back into the console.
+- `ConsoleDashboard` used `Promise.all`, which rejects on the FIRST rejection — one failing panel took the
+  whole page down. Now `allSettled`, with partial data shown and the gap stated.
+- **Several pages destructured `data` and ignored `error`**, so an RLS denial rendered as an empty list: an
+  **audit log that looks like nothing happened**, a **System Config page showing every switch at its default**
+  as though someone had chosen it. Fixed in ConsoleAIUsage / ConsoleAnnouncements / ConsoleAuditLog /
+  ConsoleOrganisations / ConsoleSystemConfig. `ConsoleSystem` was checked and is genuinely fine.
+
 ## SESSION 2026-07-27 (part 11) — THE BLANK FIRST SCREEN, RAW ERROR LEAKS, DEAD SERIAL COLUMNS. No migration (code only).
 User: "whenever i open app its screen is blank when i refresh then only start showing screen ... each thing is
 taking so long ... find leaked apis and kpis showing its original state ... all data should be linked". Nine
@@ -110,13 +241,36 @@ positives and zero true ones.
        facts - where the asset belongs vs where the work happened - so work_location is not a proxy for site and
        using it would plant a wrong site on roughly two rows in three. Needs the customer to name the site;
        impact is 0.06% of KSA job cards.
-2. **RLS is the real cause of app-wide slowness, and it needs security sign-off.** `app_can_see_country(country)`
-   and `app_can_see_site(site)` are row-dependent so they re-query `profiles` PER ROW: a bare
-   `count(*) on work_orders` measured **11,994 ms (Manager) / 8,598 ms (super-admin)** vs **124 ms** with the
-   predicate rewritten as an InitPlan - **97x**, identical row counts. Spans 44 country + 30 site policies and IS
-   the tenant boundary, so it must not be changed casually. Also: all 11 RLS helpers are PARALLEL UNSAFE, and
-   `app_current_org` alone gates 198 tables, disabling parallel plans database-wide (one-line ALTER, unmeasured).
-   **There is NO missing index** - every seq scan was the correct plan choice; do not go index-hunting.
+2. **RLS WAS the app-wide slowness. FIXED + VERIFIED LIVE by V396** (`MIGRATIONS_V396_RLS_INITPLAN_SCOPE.sql`),
+   user-authorised. **THE ROOT CAUSE, worth understanding before touching any policy:** `app_can_see_country`
+   and `app_can_see_site` take a ROW value so the planner cannot hoist them, AND they are SECURITY DEFINER so
+   Postgres can never INLINE them - a black-box call per row, each running its own `profiles` lookup.
+   - **THE FIX PATTERN:** four ZERO-ARGUMENT scope readers (`app_sees_all_countries`, `app_country_scope`,
+     `app_sees_all_sites`, `app_site_scope`). Taking no row value, a policy calls them as
+     `(select app_country_scope())` = an **InitPlan, evaluated ONCE per query**; the per-row work left is an
+     array membership test with no I/O. 74 policies rewritten (44 country + 30 site) over 40 tables.
+   - **MEASURED, same user / same query / warm-up discarded / 3 iterations:** work_orders
+     **11,994 ms -> 141/141/142 ms (~85x)**, tyre_records **2,570 ms -> 13/12/12 ms (~214x)**. Spread under 1%
+     because the removed work was per-row I/O, not the CPU noise that makes most timings here vary 5-7x.
+   - **EQUIVALENCE WAS PROVEN, NOT ASSUMED** (it is the tenant boundary): algebraically over every real user x
+     every real value plus synthetic edge cases (NULL/''/'   '/'ALL'/'*'/case/padding/unknown) - country
+     **132 combos, 0 mismatches**; site **5,643 combos, 0 mismatches**; then behaviourally by impersonation -
+     vehicle_fleet **all 33 users, 33,234 rows, 0 mismatches**; work_orders super 86,539 / KSA Manager 60,099 /
+     Egypt Director 0, identical before and after.
+   - **QUIRKS DELIBERATELY PRESERVED:** `is_super_admin()` ignores a LOCKED account but `app_can_see_site` reads
+     `profiles.is_super_admin` DIRECTLY with no lock check; site tests `role = 'Admin'` LITERALLY, not
+     `app_role()`; blank/NULL site and NULL country are visible to all; an empty scope grants NOTHING (V309).
+   - **SQL GOTCHA:** `= ANY ((select f()))` parses as the SUBQUERY form of ANY and fails with
+     *operator does not exist: text = text[]*. Use `= ANY (coalesce((select f()), '{}'::text[]))` - still an
+     uncorrelated subquery, so still an InitPlan.
+   - `tyre_procurement_options_country_isolation` is FOR ALL and carries the same expression in **WITH CHECK**;
+     both clauses rewritten together. A guard aborted the first run precisely because of it - **keep that guard
+     in any future sweep**, half a boundary is worse than none.
+   - Rollback: `_rls_policy_backup_v396` holds all 74 original predicates; undo SQL is in the migration header.
+     Old `app_can_see_*` KEPT (other callers) and COMMENTed as superseded.
+   - **STILL OPEN:** all 11 RLS helpers remain PARALLEL UNSAFE and `app_current_org` alone gates 198 tables,
+     disabling parallel plans database-wide (one-line ALTER, unmeasured).
+   - **There is NO missing index** - every seq scan was the correct plan choice; do not go index-hunting.
 3. Cheaper measured DB wins: `get_parts_expense_snapshot` single-pass rewrite **771 -> 233 ms** (identical
    checksum); `get_daily_job_cards` column projection **431 -> 196 ms**. `get_maintenance_snapshot` already
    projects correctly and is the in-repo example of the right shape.

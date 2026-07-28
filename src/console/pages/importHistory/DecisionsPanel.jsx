@@ -18,21 +18,33 @@
  * Master page uses - and then re-applies every reviewed decision to the
  * transactions already loaded. That last step previews first, because it is the
  * only path in the system that moves money that is already reported.
+ *
+ * THE INTERACTION THAT MATTERS: a change is STAGED, not fired on select. The
+ * first build saved the moment the dropdown moved, so a mis-click silently
+ * rewrote a category and there was no list of what you had touched. Now choices
+ * collect in a tray you can review, undo individually, and save together.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
-  Shuffle, RefreshCw, AlertTriangle, Search, Check, Loader2, Info, Undo2, Download,
+  Shuffle, RefreshCw, AlertTriangle, Check, Undo2, Download, Info, ArrowRight,
+  ListChecks, Inbox, ChevronRight, Layers, Trash2, Sparkles,
 } from 'lucide-react'
 import {
   getClassificationDecisions, applyReviewedDecisions, revertDecisionBatch,
 } from '../../../lib/api/classificationDecisions'
-import { setMaterial } from '../../../lib/api/materialMaster'
+import { setMaterial, listMaterialTransactions } from '../../../lib/api/materialMaster'
 import {
   bucketLabel, reasonLabel, needsAttention, attentionReason, movementSentence,
-  summariseCountries, OVERRIDE_CATEGORIES, overrideMovesMoney, decisionKey, MOVEMENTS,
+  summariseCountries, OVERRIDE_CATEGORIES, overrideMovesMoney, decisionKey,
+  sortDecisions, SORTS,
 } from '../../../lib/classificationDecisions'
 import { exportToExcel, reportFileName } from '../../../lib/exportUtils'
 import { toUserMessage } from '../../../lib/safeError'
+import {
+  Panel, PanelHeader, Note, StatTile, ProportionBar, Badge, Code, Btn, Segmented,
+  SearchInput, Select, Toolbar, Table, THead, Th, Tr, Td, LoadingState, EmptyState,
+  ErrorState, Modal,
+} from '../../components/ui'
 
 const VIEWS = [
   { key: 'moved', label: 'Moved', hint: 'We put these somewhere other than your file did' },
@@ -47,34 +59,64 @@ const money = (v, ccy) => (Number.isFinite(Number(v))
 const num = (v) => (Number.isFinite(Number(v)) ? Number(v).toLocaleString() : 'N/A')
 const pct = (v) => (Number.isFinite(Number(v)) ? `${(Number(v) * 100).toFixed(1)}%` : 'N/A')
 
-const BUCKET_TONE = {
-  tyre: 'bg-sky-500/20 text-sky-200 border-sky-600/50',
-  oil: 'bg-amber-500/20 text-amber-200 border-amber-600/50',
-  spare: 'bg-gray-600/30 text-gray-300 border-gray-600',
-  'not stated': 'bg-gray-800 text-gray-500 border-gray-700',
-}
-const Bucket = ({ b }) => (
-  <span className={`px-1.5 py-0.5 rounded border text-[10px] whitespace-nowrap ${BUCKET_TONE[b] || BUCKET_TONE.spare}`}>
-    {bucketLabel(b)}
-  </span>
-)
+const BUCKET_TONE = { tyre: 'info', oil: 'warning', spare: 'default', 'not stated': 'quiet' }
+const Bucket = ({ b }) => <Badge tone={BUCKET_TONE[b] || 'default'}>{bucketLabel(b)}</Badge>
 
-export default function DecisionsPanel({ country }) {
+/** The real transaction lines behind one item, so a decision is made on evidence. */
+function LineEvidence({ country, itemCode }) {
+  const [rows, setRows] = useState(null)
+  const [err, setErr] = useState('')
+  useEffect(() => {
+    let live = true
+    listMaterialTransactions(country, itemCode, 8)
+      .then((r) => { if (live) setRows(r) })
+      .catch((e) => { if (live) setErr(toUserMessage(e, 'Could not read the lines.')) })
+    return () => { live = false }
+  }, [country, itemCode])
+
+  if (err) return <p className="text-[11px] text-red-300">{err}</p>
+  if (!rows) return <p className="text-[11px] text-gray-600">Reading the lines behind this item...</p>
+  if (!rows.length) return <p className="text-[11px] text-gray-600">No individual lines could be read for this item.</p>
+  return (
+    <div className="space-y-1">
+      <p className="text-[10px] uppercase tracking-wide text-gray-600">
+        Lines behind this item {rows.length >= 8 ? '(highest value first, first 8)' : ''}
+      </p>
+      {rows.map((r, i) => (
+        <div key={i} className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5 text-[11px] text-gray-500">
+          <span className="text-gray-300 flex-1 min-w-[200px]">{r.item_description || 'No description'}</span>
+          {r.site && <span>{r.site}</span>}
+          {r.event_date && <span>{String(r.event_date).slice(0, 10)}</span>}
+          {r.work_order_no && <span>Job {r.work_order_no}</span>}
+          <span className="text-gray-300 tabular-nums">{money(r.line_cost, r.currency)}</span>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+export default function DecisionsPanel() {
   const [view, setView] = useState('moved')
   const [search, setSearch] = useState('')
   const [term, setTerm] = useState('')
+  const [country, setCountry] = useState('')
+  const [onlyFlagged, setOnlyFlagged] = useState(false)
+  const [sort, setSort] = useState('value')
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
-  const [saving, setSaving] = useState('')       // decisionKey being saved
-  const [pending, setPending] = useState({})     // decisionKey -> chosen category
-  const [preview, setPreview] = useState(null)   // dry-run result awaiting confirmation
+  const [expanded, setExpanded] = useState(null)   // decisionKey with evidence open
+
+  // Staged changes: {decisionKey: {row, category}}. Nothing is written until save.
+  const [staged, setStaged] = useState({})
+  const [savingAll, setSavingAll] = useState(false)
+  const [preview, setPreview] = useState(null)
   const [applying, setApplying] = useState(false)
   const [lastBatch, setLastBatch] = useState(null)
 
-  // Debounced search: this reads every expense row, so a query per keystroke
-  // would be a scan per keystroke.
+  // Debounced: this reads every expense row, so a query per keystroke would be
+  // a full scan per keystroke.
   useEffect(() => {
     const t = setTimeout(() => setTerm(search), 400)
     return () => clearTimeout(t)
@@ -92,21 +134,56 @@ export default function DecisionsPanel({ country }) {
   useEffect(() => { load() }, [load])
 
   const countries = useMemo(() => summariseCountries(data?.countries), [data])
-  const items = data?.items || []
-  const flagged = useMemo(() => items.filter(needsAttention).length, [items])
+  const allItems = data?.items || []
+  const flaggedCount = useMemo(() => allItems.filter(needsAttention).length, [allItems])
+  const items = useMemo(() => {
+    const base = onlyFlagged ? allItems.filter(needsAttention) : allItems
+    return sortDecisions(base, sort)
+  }, [allItems, onlyFlagged, sort])
 
-  async function saveOverride(row, category) {
+  const stagedList = Object.values(staged)
+  const stagedThatMove = stagedList.filter((s) => overrideMovesMoney(s.row, s.category)).length
+
+  // Counts on the tabs come from the country summary, which covers the whole
+  // window rather than the page of rows currently on screen.
+  const viewCounts = useMemo(() => {
+    const t = countries.reduce((a, c) => ({
+      moved: a.moved + (Number(c.moved_rows) || 0),
+      kept: a.kept + (Number(c.kept_rows) || 0),
+      unlabelled: a.unlabelled + (Number(c.unlabelled_rows) || 0),
+      all: a.all + (Number(c.total_rows) || 0),
+    }), { moved: 0, kept: 0, unlabelled: 0, all: 0 })
+    return t
+  }, [countries])
+
+  function stage(row, category) {
     const key = decisionKey(row)
-    setSaving(key); setError(''); setNotice('')
+    setStaged((s) => {
+      const next = { ...s }
+      if (!category) delete next[key]
+      else next[key] = { row, category }
+      return next
+    })
+    setNotice('')
+  }
+
+  async function saveStaged() {
+    if (!stagedList.length) return
+    setSavingAll(true); setError(''); setNotice('')
+    let ok = 0
     try {
-      await setMaterial({ country: row.country, item_code: row.item_code, category, reviewed: true })
-      setPending((p) => ({ ...p, [key]: category }))
-      setNotice(overrideMovesMoney(row, category)
-        ? `Saved. ${row.item_code} is now a ${category.replace('_', ' ')}. Use "Apply to my data" to move the ${num(row.rows)} line(s) already loaded.`
-        : `Saved. ${row.item_code} is now recorded as a ${category.replace('_', ' ')}. This does not change any total, because it stays in the same cost bucket.`)
+      for (const { row, category } of stagedList) {
+        await setMaterial({ country: row.country, item_code: row.item_code, category, reviewed: true })
+        ok += 1
+      }
+      setStaged({})
+      setNotice(stagedThatMove
+        ? `${ok} decision(s) saved. ${stagedThatMove} of them change a cost bucket - use "Apply to my data" to move the lines already loaded.`
+        : `${ok} decision(s) saved. None of them change a cost bucket, so no total moves.`)
+      await load()
     } catch (e) {
-      setError(toUserMessage(e, 'Could not save that decision.'))
-    } finally { setSaving('') }
+      setError(toUserMessage(e, `Saved ${ok} of ${stagedList.length}. The rest were not saved.`))
+    } finally { setSavingAll(false) }
   }
 
   async function runPreview() {
@@ -125,7 +202,6 @@ export default function DecisionsPanel({ country }) {
       setPreview(null)
       setLastBatch(res?.batch_id || null)
       setNotice(`${num(res?.rows_updated)} line(s) moved. You can undo this while you are on this page.`)
-      setPending({})
       await load()
     } catch (e) {
       setError(toUserMessage(e, 'Could not apply the change.'))
@@ -164,203 +240,281 @@ export default function DecisionsPanel({ country }) {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-start gap-2 text-xs text-gray-400 bg-gray-900/50 border border-gray-800 rounded-lg p-3">
-        <Info size={14} className="text-orange-400 mt-0.5 shrink-0" />
-        <p>
-          Your file files every line under its own Spare, Tyre or Oil column. The system decides
-          from the item itself, so the two can disagree. This is every disagreement, with the money
-          attached, and you can change any of them.
-        </p>
-      </div>
+      <Note icon={Info} tone="accent">
+        Your file files every line under its own Spare, Tyre or Oil column. The system decides from
+        the item itself, so the two can disagree. This is every disagreement, with the money
+        attached, and you can change any of them.
+      </Note>
 
       {/* Per country, never added together: each reports in its own currency. */}
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
         {countries.map((c) => (
-          <div key={c.country} className="bg-gray-900/50 border border-gray-800 rounded-lg p-3">
-            <p className="text-sm font-semibold text-gray-200">{c.country}</p>
-            <p className="text-[11px] text-gray-500 mb-2">{num(c.total_rows)} lines - {money(c.total_value, c.currency)}</p>
-            <dl className="space-y-1 text-xs">
+          <Panel key={c.country}>
+            <div className="flex items-baseline justify-between gap-2 mb-2">
+              <h3 className="text-sm font-semibold text-gray-200">{c.country}</h3>
+              <span className="text-[11px] text-gray-500 tabular-nums">{money(c.total_value, c.currency)}</span>
+            </div>
+            <ProportionBar
+              total={c.total_rows}
+              segments={[
+                { label: 'Moved', value: c.moved_rows, tone: 'warning' },
+                { label: 'Kept', value: c.kept_rows, tone: 'good' },
+                { label: 'Not stated', value: c.unlabelled_rows, tone: 'muted' },
+              ]}
+            />
+            <dl className="mt-2.5 space-y-1 text-xs">
               <div className="flex justify-between gap-2">
-                <dt className="text-amber-300">Moved</dt>
-                <dd className="text-gray-300">{num(c.moved_rows)} ({pct(c.moved_share)}) - {money(c.moved_value, c.currency)}</dd>
+                <dt className="text-amber-300 inline-flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-sm bg-amber-500" /> Moved
+                </dt>
+                <dd className="text-gray-300 tabular-nums">
+                  {num(c.moved_rows)} <span className="text-gray-600">({pct(c.moved_share)})</span> · {money(c.moved_value, c.currency)}
+                </dd>
               </div>
               <div className="flex justify-between gap-2">
-                <dt className="text-emerald-300">Kept</dt>
-                <dd className="text-gray-300">{num(c.kept_rows)} - {money(c.kept_value, c.currency)}</dd>
+                <dt className="text-emerald-300 inline-flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-sm bg-emerald-500" /> Kept
+                </dt>
+                <dd className="text-gray-300 tabular-nums">{num(c.kept_rows)} · {money(c.kept_value, c.currency)}</dd>
               </div>
               <div className="flex justify-between gap-2">
-                <dt className="text-gray-400">Not stated</dt>
-                <dd className="text-gray-300">{num(c.unlabelled_rows)} - {money(c.unlabelled_value, c.currency)}</dd>
+                <dt className="text-gray-400 inline-flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-sm bg-gray-600" /> Not stated
+                </dt>
+                <dd className="text-gray-300 tabular-nums">{num(c.unlabelled_rows)} · {money(c.unlabelled_value, c.currency)}</dd>
               </div>
             </dl>
-          </div>
+          </Panel>
         ))}
       </div>
 
-      <div className="flex flex-wrap items-center gap-2">
-        {VIEWS.map((v) => (
-          <button
-            key={v.key} onClick={() => setView(v.key)} title={v.hint}
-            className={`px-3 py-1.5 rounded-lg text-xs border ${view === v.key
-              ? 'bg-orange-500/20 border-orange-500/60 text-orange-200'
-              : 'border-gray-800 text-gray-400 hover:bg-gray-800/60'}`}
-          >
-            {v.label}
-          </button>
-        ))}
-        <div className="relative flex-1 min-w-[180px]">
-          <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-600" />
-          <input
-            value={search} onChange={(e) => setSearch(e.target.value)}
-            placeholder="Item code or description"
-            className="w-full pl-8 pr-3 py-1.5 rounded-lg bg-gray-900 border border-gray-800 text-xs text-gray-200 placeholder-gray-600"
-          />
-        </div>
-        <button onClick={load} disabled={loading}
-          className="px-3 py-1.5 rounded-lg border border-gray-800 text-xs text-gray-400 hover:bg-gray-800/60 flex items-center gap-1.5 disabled:opacity-50">
-          <RefreshCw size={13} className={loading ? 'animate-spin' : ''} /> Refresh
-        </button>
-        <button onClick={exportRows} disabled={!items.length}
-          className="px-3 py-1.5 rounded-lg border border-gray-800 text-xs text-gray-400 hover:bg-gray-800/60 flex items-center gap-1.5 disabled:opacity-50">
-          <Download size={13} /> Excel
-        </button>
-      </div>
+      <Toolbar>
+        <Segmented
+          value={view}
+          onChange={(v) => { setView(v); setExpanded(null) }}
+          options={VIEWS.map((v) => ({ ...v, count: v.key === 'all' ? viewCounts.all : viewCounts[v.key] }))}
+        />
+        <div className="flex-1" />
+        <Select
+          value={country} onChange={setCountry} placeholder="All countries" className="w-36"
+          options={countries.map((c) => ({ value: c.country, label: c.country }))}
+        />
+        <Select
+          value={sort} onChange={setSort} className="w-40"
+          options={SORTS.map((s) => ({ value: s.key, label: s.label }))}
+        />
+        <SearchInput value={search} onChange={setSearch} placeholder="Item code or description" className="w-56" />
+        <Btn icon={RefreshCw} onClick={load} busy={loading}>Refresh</Btn>
+        <Btn icon={Download} onClick={exportRows} disabled={!items.length}>Excel</Btn>
+      </Toolbar>
 
-      {flagged > 0 && (
-        <p className="text-xs text-amber-300 flex items-center gap-1.5">
-          <AlertTriangle size={13} /> {flagged} of these were decided on weak evidence. They are marked below.
-        </p>
+      {flaggedCount > 0 && (
+        <button
+          onClick={() => setOnlyFlagged((v) => !v)}
+          className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg border text-xs transition-colors ${
+            onlyFlagged ? 'bg-amber-500/15 border-amber-600/60 text-amber-200'
+                        : 'bg-amber-950/20 border-amber-800/40 text-amber-300 hover:bg-amber-950/40'}`}
+        >
+          <AlertTriangle size={13} />
+          <span className="flex-1 text-left">
+            {flaggedCount} of these were decided on weak evidence
+          </span>
+          <span className="text-[11px] opacity-80">{onlyFlagged ? 'Showing only these - clear' : 'Show only these'}</span>
+        </button>
       )}
-      {notice && <p className="text-xs text-emerald-300">{notice}</p>}
-      {error && <p className="text-xs text-red-300">{error}</p>}
+
+      {notice && (
+        <Note icon={Check} tone="default"><span className="text-emerald-300">{notice}</span></Note>
+      )}
+      <ErrorState message={error} onRetry={load} />
+
+      {/* Staged changes. Nothing has been written yet at this point. */}
+      {stagedList.length > 0 && (
+        <Panel tone="accent">
+          <PanelHeader
+            icon={ListChecks}
+            title={`${stagedList.length} change${stagedList.length === 1 ? '' : 's'} ready to save`}
+            subtitle={stagedThatMove
+              ? `${stagedThatMove} of them move money between buckets. Nothing is written until you save.`
+              : 'None of these change a cost bucket, so no total will move. Nothing is written until you save.'}
+            actions={<>
+              <Btn icon={Trash2} onClick={() => setStaged({})} disabled={savingAll}>Discard</Btn>
+              <Btn variant="primary" icon={Check} onClick={saveStaged} busy={savingAll}>Save these</Btn>
+            </>}
+          />
+          <ul className="space-y-1">
+            {stagedList.map(({ row, category }) => {
+              const cat = OVERRIDE_CATEGORIES.find((c) => c.value === category)
+              return (
+                <li key={decisionKey(row)} className="flex flex-wrap items-center gap-2 text-xs">
+                  <Code>{row.item_code}</Code>
+                  <span className="text-gray-600">{row.country}</span>
+                  <Bucket b={row.we_said} />
+                  <ArrowRight size={12} className="text-gray-600" />
+                  <Badge tone="accent">{cat?.label || category}</Badge>
+                  {!overrideMovesMoney(row, category) && (
+                    <span className="text-[10px] text-gray-600">same bucket, no total changes</span>
+                  )}
+                  <button onClick={() => stage(row, '')} className="ml-auto text-gray-600 hover:text-gray-300" title="Remove">
+                    <Undo2 size={12} />
+                  </button>
+                </li>
+              )
+            })}
+          </ul>
+        </Panel>
+      )}
 
       {/* Applying is the only path that moves money already reported, so it
           previews first and stays undoable afterwards. */}
-      <div className="flex flex-wrap items-center gap-2 bg-gray-900/50 border border-gray-800 rounded-lg p-3">
-        <p className="text-xs text-gray-400 flex-1 min-w-[200px]">
-          Your decisions apply to new uploads immediately. Lines already loaded only move when you apply them.
-        </p>
-        {lastBatch && (
-          <button onClick={undoLast} disabled={applying}
-            className="px-3 py-1.5 rounded-lg border border-gray-700 text-xs text-gray-300 hover:bg-gray-800 flex items-center gap-1.5 disabled:opacity-50">
-            <Undo2 size={13} /> Undo last apply
-          </button>
-        )}
-        <button onClick={runPreview} disabled={applying}
-          className="px-3 py-1.5 rounded-lg bg-orange-500 hover:bg-orange-400 text-black text-xs font-medium flex items-center gap-1.5 disabled:opacity-50">
-          {applying ? <Loader2 size={13} className="animate-spin" /> : <Shuffle size={13} />} Apply to my data
-        </button>
-      </div>
-
-      {preview && (
-        <div className="bg-gray-900 border border-orange-600/50 rounded-lg p-4 space-y-2">
-          <p className="text-sm text-gray-200 font-semibold">
-            {num(preview.rows_that_change)} line(s) would move
+      <Panel>
+        <div className="flex flex-wrap items-center gap-2">
+          <Layers size={15} className="text-gray-600 shrink-0" />
+          <p className="text-xs text-gray-400 flex-1 min-w-[220px]">
+            Saved decisions apply to new uploads immediately. Lines already loaded only move when you apply them.
           </p>
-          {(preview.moves || []).length === 0 ? (
-            <p className="text-xs text-gray-500">
-              Nothing would change. Every reviewed item is already in the bucket you chose.
-            </p>
-          ) : (
-            <ul className="text-xs text-gray-400 space-y-1">
-              {(preview.moves || []).map((m, i) => (
-                <li key={i}>
-                  {m.country}: {num(m.rows)} line(s) from {bucketLabel(m.from_bucket)} to {bucketLabel(m.to_bucket)}, {num(m.value)}
-                </li>
-              ))}
-            </ul>
-          )}
-          <div className="flex gap-2 pt-1">
-            <button onClick={confirmApply} disabled={applying || !preview.rows_that_change}
-              className="px-3 py-1.5 rounded-lg bg-orange-500 hover:bg-orange-400 text-black text-xs font-medium disabled:opacity-50">
-              {applying ? 'Applying...' : 'Yes, move them'}
-            </button>
-            <button onClick={() => setPreview(null)} disabled={applying}
-              className="px-3 py-1.5 rounded-lg border border-gray-700 text-xs text-gray-400 hover:bg-gray-800">
-              Cancel
-            </button>
-          </div>
+          {lastBatch && <Btn icon={Undo2} onClick={undoLast} busy={applying}>Undo last apply</Btn>}
+          <Btn variant="primary" icon={Shuffle} onClick={runPreview} busy={applying}>Apply to my data</Btn>
         </div>
-      )}
+      </Panel>
+
+      <Modal
+        open={!!preview}
+        title={`${num(preview?.rows_that_change)} line(s) would move`}
+        subtitle="Nothing has changed yet. This is what applying would do."
+        onClose={() => setPreview(null)}
+        width="max-w-xl"
+        footer={<>
+          <Btn onClick={() => setPreview(null)} disabled={applying}>Cancel</Btn>
+          <Btn variant="primary" onClick={confirmApply} busy={applying} disabled={!preview?.rows_that_change}>
+            Yes, move them
+          </Btn>
+        </>}
+      >
+        {(preview?.moves || []).length === 0 ? (
+          <EmptyState
+            icon={Check}
+            title="Nothing would change"
+            reason="Every reviewed item is already in the bucket you chose for it."
+          />
+        ) : (
+          <ul className="space-y-2">
+            {(preview?.moves || []).map((m, i) => (
+              <li key={i} className="flex flex-wrap items-center gap-2 text-xs text-gray-300">
+                <Badge tone="quiet">{m.country}</Badge>
+                <span className="tabular-nums">{num(m.rows)} line(s)</span>
+                <Bucket b={m.from_bucket} />
+                <ArrowRight size={12} className="text-gray-600" />
+                <Bucket b={m.to_bucket} />
+                <span className="ml-auto tabular-nums text-gray-400">{num(m.value)}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Modal>
 
       {loading ? (
-        <p className="text-xs text-gray-500 py-8 text-center">Reading the decisions behind your data...</p>
+        <LoadingState label="Reading the decisions behind your data" rows={6} />
       ) : !data || data.ok === false ? (
-        <p className="text-xs text-gray-500 py-8 text-center">
-          This view is not available on this database yet.
-        </p>
+        <EmptyState
+          icon={Inbox}
+          title="This view is not available yet"
+          reason="The database this app is pointed at does not have the decisions view installed."
+        />
       ) : !items.length ? (
-        <p className="text-xs text-gray-500 py-8 text-center">
-          {term ? 'No item matches that search in this view.'
-            : view === MOVEMENTS.MOVED ? 'Nothing was moved. Every line is where your file put it.'
-              : 'Nothing to show in this view.'}
-        </p>
+        <EmptyState
+          icon={onlyFlagged ? Sparkles : Inbox}
+          title={
+            onlyFlagged ? 'Nothing here was decided on weak evidence'
+              : term ? 'No item matches that search in this view'
+                : view === 'moved' ? 'Nothing was moved'
+                  : 'Nothing to show in this view'
+          }
+          reason={
+            onlyFlagged ? 'Every decision in this view was made on a strong signal.'
+              : term ? 'Try a shorter search, or a different view.'
+                : view === 'moved' ? 'Every line is filed exactly where your file put it.'
+                  : undefined
+          }
+          action={onlyFlagged ? <Btn onClick={() => setOnlyFlagged(false)}>Show everything</Btn> : undefined}
+        />
       ) : (
-        <div className="overflow-x-auto border border-gray-800 rounded-lg">
-          <table className="w-full text-xs">
-            <thead className="bg-gray-900/80 text-gray-500">
-              <tr>
-                <th className="text-left px-3 py-2 font-medium">Item</th>
-                <th className="text-left px-3 py-2 font-medium">Your file said</th>
-                <th className="text-left px-3 py-2 font-medium">We filed it as</th>
-                <th className="text-left px-3 py-2 font-medium">Why</th>
-                <th className="text-right px-3 py-2 font-medium">Lines</th>
-                <th className="text-right px-3 py-2 font-medium">Value</th>
-                <th className="text-left px-3 py-2 font-medium">Change it to</th>
-              </tr>
-            </thead>
-            <tbody>
-              {items.map((r) => {
-                const key = decisionKey(r)
-                const flag = needsAttention(r)
-                const chosen = pending[key] || r.reviewed_category || ''
-                return (
-                  <tr key={key} className="border-t border-gray-800/70 hover:bg-gray-900/40 align-top">
-                    <td className="px-3 py-2">
-                      <p className="text-gray-200 font-mono">{r.item_code}</p>
-                      <p className="text-gray-500 max-w-[280px] truncate" title={r.item_name}>{r.item_name}</p>
-                      <p className="text-[10px] text-gray-600">{r.country}</p>
-                      {flag && (
-                        <p className="text-[10px] text-amber-400 flex items-start gap-1 mt-0.5 max-w-[280px]">
-                          <AlertTriangle size={10} className="mt-0.5 shrink-0" /> {attentionReason(r)}
-                        </p>
-                      )}
-                    </td>
-                    <td className="px-3 py-2"><Bucket b={r.erp_said} /></td>
-                    <td className="px-3 py-2"><Bucket b={r.we_said} /></td>
-                    <td className="px-3 py-2 text-gray-400">
-                      {reasonLabel(r.decided_by)}
-                      {r.reviewed && (
-                        <span className="ml-1 text-emerald-400 inline-flex items-center gap-0.5">
-                          <Check size={10} /> reviewed
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-3 py-2 text-right text-gray-300">{num(r.rows)}</td>
-                    <td className="px-3 py-2 text-right text-gray-300 whitespace-nowrap">{money(r.value, r.currency)}</td>
-                    <td className="px-3 py-2">
-                      <select
-                        value={chosen}
-                        disabled={saving === key}
-                        onChange={(e) => e.target.value && saveOverride(r, e.target.value)}
-                        className="px-2 py-1 rounded bg-gray-900 border border-gray-700 text-xs text-gray-200 disabled:opacity-50"
-                      >
-                        <option value="">Leave as it is</option>
-                        {OVERRIDE_CATEGORIES.map((c) => (
-                          <option key={c.value} value={c.value}>{c.label}</option>
-                        ))}
-                      </select>
-                      {saving === key && <Loader2 size={12} className="inline ml-1.5 animate-spin text-gray-500" />}
-                    </td>
+        <Table>
+          <THead>
+            <Th>Item</Th>
+            <Th>Your file said</Th>
+            <Th>We filed it as</Th>
+            <Th>Why</Th>
+            <Th align="right">Lines</Th>
+            <Th align="right">Value</Th>
+            <Th>Change it to</Th>
+          </THead>
+          <tbody>
+            {items.map((r) => {
+              const key = decisionKey(r)
+              const flag = needsAttention(r)
+              const chosen = staged[key]?.category ?? (r.reviewed_category || '')
+              const isOpen = expanded === key
+              return [
+                <Tr key={key} tone={flag ? 'warning' : undefined}>
+                  <Td>
+                    <button onClick={() => setExpanded(isOpen ? null : key)}
+                      className="flex items-start gap-1.5 text-left group">
+                      <ChevronRight size={12}
+                        className={`mt-1 text-gray-600 transition-transform ${isOpen ? 'rotate-90' : ''}`} />
+                      <span className="min-w-0">
+                        <span className="block font-mono text-gray-200 group-hover:text-orange-300">{r.item_code}</span>
+                        <span className="block text-gray-500 max-w-[300px] truncate" title={r.item_name}>{r.item_name}</span>
+                        <span className="block text-[10px] text-gray-600">{r.country}</span>
+                      </span>
+                    </button>
+                    {flag && (
+                      <p className="text-[10px] text-amber-400 flex items-start gap-1 mt-1 max-w-[300px] pl-5">
+                        <AlertTriangle size={10} className="mt-0.5 shrink-0" /> {attentionReason(r)}
+                      </p>
+                    )}
+                  </Td>
+                  <Td><Bucket b={r.erp_said} /></Td>
+                  <Td>
+                    <div className="flex items-center gap-1.5">
+                      <Bucket b={r.we_said} />
+                      {r.movement === 'moved' && <ArrowRight size={11} className="text-amber-500" />}
+                    </div>
+                  </Td>
+                  <Td className="text-gray-400">
+                    {reasonLabel(r.decided_by)}
+                    {r.reviewed && <div className="mt-0.5"><Badge tone="good" icon={Check}>reviewed</Badge></div>}
+                  </Td>
+                  <Td align="right" className="text-gray-300 tabular-nums">{num(r.rows)}</Td>
+                  <Td align="right" nowrap className="text-gray-300 tabular-nums">{money(r.value, r.currency)}</Td>
+                  <Td>
+                    <Select
+                      value={chosen}
+                      onChange={(v) => stage(r, v)}
+                      placeholder="Leave as it is"
+                      className="w-36"
+                      options={OVERRIDE_CATEGORIES.map((c) => ({ value: c.value, label: c.label }))}
+                    />
+                    {staged[key] && <p className="text-[10px] text-orange-400 mt-1">Staged, not saved</p>}
+                  </Td>
+                </Tr>,
+                isOpen && (
+                  <tr key={`${key}-ev`} className="border-t border-gray-800/40 bg-gray-950/60">
+                    <Td colSpan={7}>
+                      <div className="pl-5 py-1 space-y-2">
+                        <p className="text-xs text-gray-400">{movementSentence(r)}</p>
+                        <LineEvidence country={r.country} itemCode={r.item_code} />
+                      </div>
+                    </Td>
                   </tr>
-                )
-              })}
-            </tbody>
-          </table>
-        </div>
+                ),
+              ]
+            })}
+          </tbody>
+        </Table>
       )}
 
-      {items.length >= (data?.limit || 300) && (
+      {allItems.length >= (data?.limit || 300) && (
         <p className="text-[11px] text-gray-500">
           Showing the {num(data.limit)} highest-value items. Search to reach the rest.
         </p>

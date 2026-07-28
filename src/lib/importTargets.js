@@ -68,14 +68,14 @@ export const IMPORT_TARGETS = Object.freeze([
       + 'use the in-app Data Intake page for those.',
   },
   {
-    table: 'stg_job_cards',
+    table: 'stg_job_cards_ksa / stg_job_cards_uae / stg_job_cards_egypt',
     label: 'Job cards (the full workshop cycle)',
     feeds: 'work_orders',
     sourceFile: 'Format job card export',
     verbatimHeaders: true,
-    needsCountry: true,
+    needsCountry: false,
     reimportSafe: 'safe',
-    columns: ['country', '#', 'RFR Number', 'Job Card No', 'MR NO', 'SCO NO', 'Location',
+    columns: ['#', 'RFR Number', 'Job Card No', 'MR NO', 'SCO NO', 'Location',
       'Status', 'Type', 'Work Location', 'Production Complaint', 'Job Repair Description',
       'Asset Code', 'Asset Description', 'Plate No', 'Truck Category', 'Head/Tail', 'Scope',
       'Asset Category', 'Excepted Job Date/Time', 'Production Out', 'Workshop In',
@@ -100,14 +100,14 @@ export const IMPORT_TARGETS = Object.freeze([
       + 'reference only: cost still comes from the expense grid, never from here.',
   },
   {
-    table: 'stg_monthly_tyres',
+    table: 'stg_monthly_tyres_ksa / stg_monthly_tyres_uae / stg_monthly_tyres_egypt',
     label: 'Monthly tyre consumption / tyre changes',
     feeds: 'tyre_records',
     sourceFile: 'Monthly Tyres Consumption export',
     verbatimHeaders: false,
-    needsCountry: true,
+    needsCountry: false,
     reimportSafe: 'safe',
-    columns: ['country', 'job_card_no', 'job_card_date', 'veh_no', 'veh_type', 'item_tyre',
+    columns: ['job_card_no', 'job_card_date', 'veh_no', 'veh_type', 'item_tyre',
       'tyre_position', 'tyre_no', 'tyre_fix_date', 'fixed_km', 'fixed_hrs',
       'tyre_removed_date', 'removed_km', 'removed_hrs', 'reason', 'total_km', 'total_hrs',
       'brand'],
@@ -116,28 +116,28 @@ export const IMPORT_TARGETS = Object.freeze([
       + 'Reversed fix/remove dates are auto-corrected on load.',
   },
   {
-    table: 'stg_wo_lines',
+    table: 'stg_wo_lines_ksa / stg_wo_lines_uae / stg_wo_lines_egypt',
     label: 'Work order task lines',
     feeds: 'work_order_line_items',
     sourceFile: 'Job card task/line detail export',
     verbatimHeaders: false,
-    needsCountry: true,
+    needsCountry: false,
     reimportSafe: 'safe',
-    columns: ['country', 'work_order_no', 'asset_no', 'site', 'opened_date', 'work_type',
+    columns: ['work_order_no', 'asset_no', 'site', 'opened_date', 'work_type',
       'task', 'detail', 'action', 'qty', 'source_row'],
     notes: 'Always map `source_row` (the file\'s own line number). It is what lets the '
       + 'system tell a genuinely repeated task line apart from an accidental double '
       + 'import - without it, real lines look like duplicates.',
   },
   {
-    table: 'stg_complaints',
+    table: 'stg_complaints_ksa / stg_complaints_uae / stg_complaints_egypt',
     label: 'Vehicle complaints / job card history',
     feeds: 'work_orders',
     sourceFile: 'Vehicle Complaints History export',
     verbatimHeaders: false,
-    needsCountry: true,
+    needsCountry: false,
     reimportSafe: 'safe',
-    columns: ['country', 'veh_no', 'driver_name', 'tracking_category', 'location',
+    columns: ['veh_no', 'driver_name', 'tracking_category', 'location',
       'workshop_location', 'make', 'capacity', 'jc_no', 'km_hr', 'complaints', 'qc_remarks',
       'job_done_description', 'std_hrs', 'manpow_hrs', 'vehicle_in_date', 'vehicle_out_date',
       'total_bd_hrs', 'reason_of_repair'],
@@ -145,14 +145,14 @@ export const IMPORT_TARGETS = Object.freeze([
       + 'independently in KSA, UAE and Egypt. Carries no cost.',
   },
   {
-    table: 'stg_assets',
+    table: 'stg_assets_ksa / stg_assets_uae / stg_assets_egypt',
     label: 'Asset master (the vehicle register)',
     feeds: 'vehicle_fleet',
     sourceFile: 'aeqp equipment grid / asset_details export',
     verbatimHeaders: false,
-    needsCountry: true,
+    needsCountry: false,
     reimportSafe: 'safe',
-    columns: ['country', 'asset_no', 'asset_desc', 'plate_no', 'chassis_no', 'serial_no',
+    columns: ['asset_no', 'asset_desc', 'plate_no', 'chassis_no', 'serial_no',
       'asset_type', 'asset_location', 'arabic_location', 'asset_status', 'asset_shift', 'km',
       'brand', 'hour', 'driver_issue_date', 'driver_expiry_date', 'mvip_issue_date',
       'mvip_expiry_date', 'insurance_type', 'insurance_name', 'insurance_start_date',
@@ -165,14 +165,14 @@ export const IMPORT_TARGETS = Object.freeze([
       + 'licence dates) are what the fleet-value and compliance reports read, so map them.',
   },
   {
-    table: 'stg_open_wo',
+    table: 'stg_open_wo_ksa / stg_open_wo_uae / stg_open_wo_egypt',
     label: 'Open job cards (current snapshot)',
     feeds: 'open_work_orders',
     sourceFile: 'Open Job Cards export',
     verbatimHeaders: false,
-    needsCountry: true,
+    needsCountry: false,
     reimportSafe: 'safe',
-    columns: ['country', 'location', 'job_card_type', 'job_card_no', 'jc_status',
+    columns: ['location', 'job_card_type', 'job_card_no', 'jc_status',
       'job_card_date', 'jc_open_time', 'asset_type', 'asset_no', 'no_of_days_jc_open',
       'complaint'],
     notes: 'A live picture of what is open, not history. Each job card number is matched '
@@ -197,14 +197,14 @@ export const IMPORT_TARGETS = Object.freeze([
       + 'dropped. Advancing the odometer also updates the vehicle\'s current km.',
   },
   {
-    table: 'stg_tyre_brand',
+    table: 'stg_tyre_brand_ksa / stg_tyre_brand_uae / stg_tyre_brand_egypt',
     label: 'Tyre brand backfill',
     feeds: 'tyre_records.brand',
     sourceFile: 'Serial-to-brand list (fill sheet)',
     verbatimHeaders: false,
-    needsCountry: true,
+    needsCountry: false,
     reimportSafe: 'safe',
-    columns: ['country', 'serial', 'brand'],
+    columns: ['serial', 'brand'],
     notes: 'Only fills a brand that is currently blank; it never overwrites one that is '
       + 'already set. Prefer re-importing the original tyre file with brand mapped - the '
       + 'source files do carry brand, it simply was not mapped on the original load.',
@@ -234,31 +234,60 @@ export const REIMPORT_NEEDS_KEY = Object.freeze(
 export function importTargetFor(table) {
   const needle = String(table || '').trim().toLowerCase()
   if (!needle) return null
+  const listed = (t) => t.table.toLowerCase().split(' / ')
+  // Strip the country suffix so the SHARED staging table still resolves. Those
+  // tables still exist and are what every processing trigger is attached to -
+  // only the recommended upload target moved to the per-country name.
+  const baseOf = (n) => n.replace(/_(ksa|uae|egypt)$/, '')
   return (
     IMPORT_TARGETS.find((t) => t.table.toLowerCase() === needle)
-    || IMPORT_TARGETS.find((t) => t.table.toLowerCase().split(' / ').includes(needle))
+    || IMPORT_TARGETS.find((t) => listed(t).includes(needle))
+    || IMPORT_TARGETS.find((t) => listed(t).some((n) => baseOf(n) === needle))
     || null
   )
 }
 
 /**
- * The three per-country expense tables share one column list, so the combined
- * entry above is expanded into a sheet each. Everything else is one to one.
+ * One sheet per destination TABLE, and every staging table is now per country
+ * (V395), so a source with three countries produces three sheets.
+ *
+ * This is deliberate rather than a sheet with a country column: the whole point
+ * of the country-named tables is that the country is decided by which table you
+ * import into, so the workbook has to make the same choice explicit. A single
+ * shared sheet would put the decision back on the person filling it in.
+ *
+ * Derived from IMPORT_TARGETS, so a target that lists three tables expands to
+ * three sheets by itself and this list cannot drift from the registry.
  * @type {ReadonlyArray<{sheet:string, table:string}>}
  */
-export const UPLOAD_SHEETS = Object.freeze([
-  { sheet: '0 Job cards', table: 'stg_job_cards' },
-  { sheet: '1 Expenses KSA', table: 'expenses_ksa' },
-  { sheet: '1 Expenses UAE', table: 'expenses_uae' },
-  { sheet: '1 Expenses Egypt', table: 'expenses_egypt' },
-  { sheet: '2 Tyre changes', table: 'stg_monthly_tyres' },
-  { sheet: '3 Job card task lines', table: 'stg_wo_lines' },
-  { sheet: '4 Job card history', table: 'stg_complaints' },
-  { sheet: '5 Asset master', table: 'stg_assets' },
-  { sheet: '6 Open job cards', table: 'stg_open_wo' },
-  { sheet: '7 Daily km', table: 'daily_km' },
-  { sheet: '8 Tyre brand fill', table: 'stg_tyre_brand' },
-])
+const SHEET_LABELS = Object.freeze({
+  'expenses_ksa / expenses_uae / expenses_egypt': '1 Expenses',
+  'stg_job_cards_ksa / stg_job_cards_uae / stg_job_cards_egypt': '0 Job cards',
+  'stg_monthly_tyres_ksa / stg_monthly_tyres_uae / stg_monthly_tyres_egypt': '2 Tyre changes',
+  'stg_wo_lines_ksa / stg_wo_lines_uae / stg_wo_lines_egypt': '3 Job card task lines',
+  'stg_complaints_ksa / stg_complaints_uae / stg_complaints_egypt': '4 Job card history',
+  'stg_assets_ksa / stg_assets_uae / stg_assets_egypt': '5 Asset master',
+  'stg_open_wo_ksa / stg_open_wo_uae / stg_open_wo_egypt': '6 Open job cards',
+  daily_km: '7 Daily km',
+  'stg_tyre_brand_ksa / stg_tyre_brand_uae / stg_tyre_brand_egypt': '8 Tyre brand fill',
+})
+
+/** Sheet names must stay short: Excel refuses a sheet name over 31 characters. */
+const countryOf = (table) => {
+  const m = /_(ksa|uae|egypt)$/.exec(table)
+  return m ? m[1].toUpperCase().replace('EGYPT', 'Egypt') : ''
+}
+
+export const UPLOAD_SHEETS = Object.freeze(
+  IMPORT_TARGETS.flatMap((t) => {
+    const base = SHEET_LABELS[t.table] || t.table
+    return t.table.split(' / ').map((table) => {
+      const c = countryOf(table)
+      return { sheet: (c ? `${base} ${c}` : base).slice(0, 31), table }
+    })
+  }),
+)
+
 
 /**
  * Pure: the blank upload workbook, as sheets of rows-of-cells.

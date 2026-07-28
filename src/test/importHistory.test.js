@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
-  flagSuspiciousClusters, importRowSummary, CLUSTER_WINDOW_SECONDS,
+  flagSuspiciousClusters, importRowSummary, importRowOutcome, OUTCOME_META,
+  CLUSTER_WINDOW_SECONDS,
 } from '../lib/api/importHistory'
 import { isEditableColumn, LOCKED_COLUMNS } from '../lib/api/dataBrowser'
 import {
@@ -76,16 +77,49 @@ describe('importRowSummary', () => {
       .toBe('100 of 602 rows imported')
   })
 
-  it('calls out a file that was read but imported nothing', () => {
-    // The live re-upload of fleet_import_template.csv read 602 rows and imported 0.
-    expect(importRowSummary({ total_rows: 602, imported_rows: 0 }))
-      .toBe('602 rows read, none imported')
+  it('says WHY nothing was imported instead of just reporting zero', () => {
+    // "0 imported" meant three different things and read identically for all of
+    // them. Nine of the live batches are abandoned drafts that people took for
+    // failures.
+    expect(importRowSummary({ total_rows: 101, imported_rows: 0, import_status: 'staged' }))
+      .toBe('Not imported: 101 rows are waiting for approval')
+    expect(importRowSummary({ total_rows: 101, imported_rows: 0, import_status: 'reversed' }))
+      .toBe('Imported then undone, 101 rows removed again')
+    expect(importRowSummary({ total_rows: 602, imported_rows: 0, import_status: 'committed' }))
+      .toBe('Finished, but none of the 602 rows could be imported')
+  })
+
+  it('treats a draft with no import status as unfinished, not as a failure', () => {
+    expect(importRowSummary({ total_rows: 0, imported_rows: 0, approval_status: 'draft' }))
+      .toBe('Not imported: uploaded but never approved')
   })
 
   it('handles a clean full import and empty input', () => {
     expect(importRowSummary({ total_rows: 11, imported_rows: 11 })).toBe('11 rows imported')
     expect(importRowSummary({ total_rows: 0, imported_rows: 0 })).toBe('No rows recorded')
     expect(importRowSummary(null)).toBe('')
+  })
+})
+
+describe('importRowOutcome', () => {
+  it('separates finished from never-finished from undone', () => {
+    expect(importRowOutcome({ imported_rows: 602 })).toBe('done')
+    expect(importRowOutcome({ imported_rows: 0, import_status: 'reversed' })).toBe('undone')
+    expect(importRowOutcome({ imported_rows: 0, import_status: 'staged' })).toBe('unfinished')
+    expect(importRowOutcome({ imported_rows: 0, approval_status: 'draft' })).toBe('unfinished')
+    expect(importRowOutcome({ imported_rows: 0, import_status: 'committed' })).toBe('nothing')
+  })
+
+  it('admits when it cannot tell, rather than guessing success', () => {
+    expect(importRowOutcome({ imported_rows: 0 })).toBe('unknown')
+    expect(importRowOutcome(null)).toBe('unknown')
+  })
+
+  it('has a label and tone for every outcome it can return', () => {
+    for (const k of ['done', 'undone', 'unfinished', 'nothing', 'unknown']) {
+      expect(OUTCOME_META[k]?.label, k).toBeTruthy()
+      expect(OUTCOME_META[k]?.tone, k).toBeTruthy()
+    }
   })
 })
 
@@ -136,7 +170,7 @@ describe('importTargets re-import safety', () => {
     expect(t.reimportSafe).toBe('safe')
     expect(t.notes).toMatch(/REFRESHED in place/)
     expect(t.notes).not.toMatch(/REPLACES the whole snapshot/)
-    expect(SAFE_TO_REIMPORT).toContain('stg_open_wo')
+    expect(SAFE_TO_REIMPORT).toContain('stg_open_wo_ksa / stg_open_wo_uae / stg_open_wo_egypt')
   })
 
   it('SAFE_TO_REIMPORT is derived from the flag, not from prose', () => {

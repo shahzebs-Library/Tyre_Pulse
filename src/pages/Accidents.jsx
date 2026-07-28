@@ -639,10 +639,13 @@ export default function Accidents() {
     }
   }, [records])
 
+  // The DB stores raw tokens ('closed', 'under_review') while STATUSES holds the
+  // display labels. Counting by the raw value never matched a key, so the whole
+  // Status Funnel read 0 for every row. Canonicalise before counting.
   const statusCounts = useMemo(() => {
     const c = {}
     STATUSES.forEach(s => { c[s] = 0 })
-    records.forEach(r => { if (c[r.status] !== undefined) c[r.status]++ })
+    records.forEach(r => { const k = canonStatus(r.status); if (c[k] !== undefined) c[k]++ })
     return c
   }, [records])
 
@@ -678,7 +681,10 @@ export default function Accidents() {
     })
     records.forEach(r => {
       const k = monthKey(r.incident_date)
-      if (k && bySev[r.severity] && bySev[r.severity][k] !== undefined) bySev[r.severity][k]++
+      // canonSeverity folds the DB's 'severe' onto the 'Major' band; keying by
+      // the raw value matched nothing and this chart drew all zeros.
+      const sev = canonSeverity(r.severity)
+      if (k && bySev[sev] && bySev[sev][k] !== undefined) bySev[sev][k]++
     })
     const colors = { Minor: 'rgba(107,114,128,0.7)', Moderate: 'rgba(234,179,8,0.7)', Major: 'rgba(234,88,12,0.7)' }
     const borders = { Minor: '#6b7280', Moderate: '#eab308', Major: '#ea580c' }
@@ -992,7 +998,7 @@ export default function Accidents() {
       ]
         .map(c => ({ ...c, chart: chartRefs.current[c.key] }))
         .filter(c => c.chart && c.chart.canvas)
-        .slice(0, 12) // HARD CAP: 6 per page x max 2 pages
+        .slice(0, 12) // hard cap on charts; the page count follows from PER_PAGE
 
       const { default: jsPDF } = await import('jspdf')
       const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
@@ -1023,26 +1029,46 @@ export default function Accidents() {
         ['Claimed', String(fmtCurrency(claimAnalytics.totalClaim))],
         ['Recovered', String(fmtCurrency(claimAnalytics.totalRecovered))],
       ]
+      // Eight tiles across A4 landscape left ~34mm each and a 6.3pt label, which
+      // is below what prints legibly. Two rows of four doubles the width and lets
+      // the label go to 8pt. A long money value is shrunk to fit its own tile
+      // rather than being allowed to run into the next one.
       const stripY = 24
-      const kw = (W - 2 * M) / kpis.length
+      const perRow = 4
+      const rows = Math.ceil(kpis.length / perRow)
+      const kw = (W - 2 * M) / perRow
+      const kh = 12
       kpis.forEach(([label, value], i) => {
-        const x = M + i * kw
+        const col = i % perRow
+        const row = Math.floor(i / perRow)
+        const x = M + col * kw
+        const y = stripY + row * (kh + 1.5)
         doc.setDrawColor(226, 232, 240); doc.setFillColor(248, 250, 252)
-        doc.roundedRect(x + 0.8, stripY, kw - 1.6, 14, 1.5, 1.5, 'FD')
-        doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.setTextColor(...INK)
-        doc.text(value, x + kw / 2, stripY + 6.4, { align: 'center' })
-        doc.setFont('helvetica', 'normal'); doc.setFontSize(6.3); doc.setTextColor(...MUTED)
-        doc.text(label.toUpperCase(), x + kw / 2, stripY + 11.2, { align: 'center' })
+        doc.roundedRect(x + 0.8, y, kw - 1.6, kh, 1.5, 1.5, 'FD')
+        doc.setFont('helvetica', 'bold'); doc.setTextColor(...INK)
+        let size = 12
+        doc.setFontSize(size)
+        while (size > 7 && doc.getTextWidth(value) > kw - 6) { size -= 0.5; doc.setFontSize(size) }
+        doc.text(value, x + kw / 2, y + 6, { align: 'center' })
+        doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(...MUTED)
+        doc.text(label.toUpperCase(), x + kw / 2, y + 10.4, { align: 'center' })
       })
+      const gridTop = stripY + rows * (kh + 1.5) + 3
 
       // ── Chart grid: 3 x 2 per page, at most 2 pages, never a 3rd ──
+      // FOUR charts a page, not six. Six on an A4 landscape leaves each one about
+      // 90mm wide, and a doughnut legend rendered into that is genuinely
+      // unreadable on paper - which is what was reported. Two columns give each
+      // chart roughly 135mm and let every font size go up with it. More pages is
+      // the right trade: a report nobody can read saves nothing.
+      const PER_PAGE = 4
       const drawChartCell = (c, x, y, cw, ch) => {
-        doc.setFont('helvetica', 'bold'); doc.setFontSize(8.5); doc.setTextColor(...INK)
-        doc.text(c.title, x, y + 3.2, { maxWidth: cw })
+        doc.setFont('helvetica', 'bold'); doc.setFontSize(11); doc.setTextColor(...INK)
+        doc.text(c.title, x, y + 4.2, { maxWidth: cw })
         // White card behind the capture: charts are re-rendered on a paper theme
-        // (dark ink on white) so they print cleanly — no black background.
-        const imgY = y + 5.2
-        const imgH = ch - 11
+        // (dark ink on white) so they print cleanly - no black background.
+        const imgY = y + 6.6
+        const imgH = ch - 15
         doc.setDrawColor(226, 232, 240); doc.setFillColor(255, 255, 255)
         doc.roundedRect(x, imgY, cw, imgH, 1.5, 1.5, 'FD')
         const img = captureChartOnPaper(c.chart) || c.chart.toBase64Image('image/png', 1)
@@ -1052,38 +1078,47 @@ export default function Accidents() {
         const iw = iw0 * scale
         const ih = ih0 * scale
         doc.addImage(img, 'PNG', x + (cw - iw) / 2, imgY + (imgH - ih) / 2, iw, ih)
+        // The digest is the fallback for anyone who still cannot read the chart,
+        // so it must not be the smallest text on the page. Two lines are allowed.
         const digest = summarizeChartData(c.data)
-        doc.setFont('helvetica', 'normal'); doc.setFontSize(7.2); doc.setTextColor(...MUTED)
-        doc.text(digest || 'No data in scope', x, y + ch - 1.6, { maxWidth: cw })
+        doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(...MUTED)
+        const lines = doc.splitTextToSize(digest || 'No data in scope', cw).slice(0, 2)
+        doc.text(lines, x, y + ch - (lines.length > 1 ? 5.4 : 1.8))
       }
       const drawGrid = (charts, y0) => {
-        const gap = 5
-        const cw = (W - 2 * M - 2 * gap) / 3
+        const gap = 6
+        const cw = (W - 2 * M - gap) / 2
         const ch = (H - y0 - M - gap) / 2
         charts.forEach((c, i) => {
-          const col = i % 3
-          const row = Math.floor(i / 3)
+          const col = i % 2
+          const row = Math.floor(i / 2)
           drawChartCell(c, M + col * (cw + gap), y0 + row * (ch + gap), cw, ch)
         })
       }
-      drawGrid(chartList.slice(0, 6), 43)
-      if (chartList.length > 6) {
-        doc.addPage()
-        doc.setFont('helvetica', 'bold'); doc.setFontSize(11); doc.setTextColor(...INK)
-        doc.text('Accident Analytics Summary (continued)', M, 12)
-        doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(...MUTED)
-        doc.text(`${company} | ${stamp} | page 2 of 2`, W - M, 12, { align: 'right' })
-        drawGrid(chartList.slice(6, 12), 16)
-      }
-      return { doc, chartCount: chartList.length, company }
+      const pages = []
+      for (let i = 0; i < chartList.length; i += PER_PAGE) pages.push(chartList.slice(i, i + PER_PAGE))
+      const pageCount = Math.max(pages.length, 1)
+      pages.forEach((group, idx) => {
+        if (idx === 0) {
+          drawGrid(group, gridTop)
+        } else {
+          doc.addPage()
+          doc.setFont('helvetica', 'bold'); doc.setFontSize(13); doc.setTextColor(...INK)
+          doc.text('Accident Analytics Summary (continued)', M, 13)
+          doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(...MUTED)
+          doc.text(`${company} | ${stamp} | page ${idx + 1} of ${pageCount}`, W - M, 13, { align: 'right' })
+          drawGrid(group, 18)
+        }
+      })
+      return { doc, chartCount: chartList.length, pageCount, company }
   }
 
   async function downloadAnalyticsPdf() {
     setDlAnalytics({ busy: true, msg: '', ok: true })
     try {
-      const { doc, chartCount, company } = await buildAnalyticsDoc()
+      const { doc, chartCount, pageCount, company } = await buildAnalyticsDoc()
       doc.save(`${reportFileName(company, 'Accident Analytics', reportDateLabel())}.pdf`)
-      flashDl(`Analytics PDF downloaded (${chartCount} charts, ${chartCount > 6 ? 2 : 1} page${chartCount > 6 ? 's' : ''}).`, true)
+      flashDl(`Analytics PDF downloaded (${chartCount} charts over ${pageCount} page${pageCount === 1 ? '' : 's'}).`, true)
     } catch (e) {
       flashDl(`Download failed: ${e?.message || 'unexpected error'}`, false)
     }
@@ -1155,8 +1190,11 @@ export default function Accidents() {
     if (onlyPendingClosure) arr = arr.filter(r => r.closure_status === 'pending_closure')
     if (filterOpenClaims) arr = arr.filter(isOpenClaim)
     if (filterDelayed)  arr = arr.filter(isDelayed)
-    if (statusFunnel)   arr = arr.filter(r => r.status === statusFunnel)
-    if (filterStatus)   arr = arr.filter(r => r.status === filterStatus)
+    // The dropdown and the funnel both hand over a DISPLAY label; the row holds
+    // a raw token. Comparing them directly matched no row, so choosing a status
+    // emptied the table instead of filtering it.
+    if (statusFunnel)   arr = arr.filter(r => canonStatus(r.status) === statusFunnel)
+    if (filterStatus)   arr = arr.filter(r => canonStatus(r.status) === filterStatus)
     if (filterWfStage)  arr = arr.filter(r => stageOf(r) === filterWfStage)
     if (filterVor)      arr = arr.filter(r => r.vor === true || r.vor === 'true')
     if (filterStage)    arr = arr.filter(r => r.current_status === filterStage || r.case_stage === filterStage)
@@ -1172,7 +1210,7 @@ export default function Accidents() {
         return d > CASE_AGE_AMBER_DAYS // '30+'
       })
     }
-    if (filterSeverity) arr = arr.filter(r => r.severity === filterSeverity)
+    if (filterSeverity) arr = arr.filter(r => canonSeverity(r.severity) === filterSeverity)
     if (filterSite)     arr = arr.filter(r => r.site === filterSite)
     if (filterFrom)     arr = arr.filter(r => String(r.incident_date || '').slice(0, 10) >= filterFrom)
     if (filterTo)       arr = arr.filter(r => String(r.incident_date || '').slice(0, 10) <= filterTo)
@@ -1746,7 +1784,7 @@ export default function Accidents() {
               >
                 Edit
               </button>
-              {r.status !== 'Closed' && (
+              {!isClosed(r) && (
                 <button
                   onClick={() => raiseAction(r)}
                   className="text-[var(--text-muted)] hover:text-orange-400 text-xs transition-colors whitespace-nowrap"

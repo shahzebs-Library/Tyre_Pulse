@@ -6,6 +6,8 @@ import {
 } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useConsoleAuth } from '../ConsoleAuthContext'
+import { toUserMessage } from '../../lib/safeError'
+import { ErrorState } from '../components/ui'
 
 export default function ConsoleDashboard() {
   const { activeOrg } = useConsoleAuth()
@@ -15,17 +17,33 @@ export default function ConsoleDashboard() {
   const [recentActions, setRecentActions] = useState([])
   const [recentUsers, setRecentUsers]     = useState([])
   const [aiTrend, setAiTrend]             = useState([])
+  const [error, setError]                 = useState('')
 
   useEffect(() => { loadAll() }, [activeOrg])
 
+  // Every reader settles on its own and the flag is cleared in a finally, so a
+  // single failing panel can never leave the whole page spinning. Promise.all
+  // rejects on the first rejection, which is exactly how a console page ends up
+  // stuck on a loader forever.
   async function loadAll() {
-    setLoading(true)
-    await Promise.all([loadStats(), loadRecentActions(), loadRecentUsers(), loadAiTrend()])
+    setLoading(true); setError('')
+    const results = await Promise.allSettled([
+      loadStats(), loadRecentActions(), loadRecentUsers(), loadAiTrend(),
+    ])
+    const failed = results.filter((r) => r.status === 'rejected')
+    if (failed.length === results.length) {
+      setError(toUserMessage(failed[0].reason, 'Could not load the overview.'))
+    } else if (failed.length) {
+      // Partial data is still worth showing; say which part is missing rather
+      // than presenting a hole as a zero.
+      setError('Some panels could not be loaded. The figures shown are incomplete.')
+    }
     setLoading(false)
   }
 
   async function loadStats() {
-    const { data } = await supabase.rpc('get_console_stats')
+    const { data, error: err } = await supabase.rpc('get_console_stats')
+    if (err) throw err
     setStats(data)
   }
 
@@ -90,6 +108,8 @@ export default function ConsoleDashboard() {
           <RefreshCw size={12} className={loading ? 'animate-spin' : ''} /> Refresh
         </button>
       </div>
+
+      <ErrorState message={error} onRetry={loadAll} />
 
       {/* ── KPI grid ── */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">

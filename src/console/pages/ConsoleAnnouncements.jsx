@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback } from 'react'
 import { Megaphone, Plus, Edit2, Trash2, RefreshCw, Save, X, Eye, EyeOff, AlertTriangle, CheckCircle } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { toUserMessage } from '../../lib/safeError'
+import { ErrorState } from '../components/ui'
 import { useConsoleAuth } from '../ConsoleAuthContext'
 
 const ROLES = ['Admin', 'Manager', 'Director', 'Inspector', 'Tyre Man', 'Reporter', 'Driver']
@@ -23,6 +24,7 @@ export default function ConsoleAnnouncements() {
   const { logAction, activeOrg } = useConsoleAuth()
   const [list, setList]     = useState([])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState('')
   const [modal, setModal]   = useState(null)
   const [form, setForm]     = useState(EMPTY)
   const [saving, setSaving] = useState(false)
@@ -36,13 +38,22 @@ export default function ConsoleAnnouncements() {
   }, [])
 
   const load = useCallback(async () => {
-    setLoading(true)
-    const { data } = await supabase
-      .from('announcements')
-      .select('*')
-      .order('created_at', { ascending: false })
-    setList(data ?? [])
-    setLoading(false)
+    setLoading(true); setLoadError('')
+    try {
+      const { data, error } = await supabase
+        .from('announcements')
+        .select('*')
+        .order('created_at', { ascending: false })
+      // An unread error used to render as an empty list, so "we could not look"
+      // and "there are none" looked identical.
+      if (error) throw error
+      setList(data ?? [])
+    } catch (e) {
+      setLoadError(toUserMessage(e, 'Could not load announcements.'))
+      setList([])
+    } finally {
+      setLoading(false)
+    }
   }, [])
 
   useEffect(() => { load() }, [load])
@@ -102,6 +113,7 @@ export default function ConsoleAnnouncements() {
 
   return (
     <div className="space-y-5 max-w-5xl">
+      <ErrorState message={loadError} onRetry={load} />
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>

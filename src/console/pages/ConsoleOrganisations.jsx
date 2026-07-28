@@ -6,6 +6,7 @@ import {
 } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { toUserMessage } from '../../lib/safeError'
+import { ErrorState } from '../components/ui'
 import { useConsoleAuth } from '../ConsoleAuthContext'
 
 const PLANS = ['trial', 'starter', 'professional', 'enterprise']
@@ -26,6 +27,7 @@ export default function ConsoleOrganisations() {
   const { logAction } = useConsoleAuth()
   const [orgs, setOrgs]           = useState([])
   const [loading, setLoading]     = useState(true)
+  const [loadError, setLoadError] = useState('')
   const [search, setSearch]       = useState('')
   const [filterPlan, setFilterPlan] = useState('')
   const [filterStatus, setFilterStatus] = useState('')
@@ -39,13 +41,20 @@ export default function ConsoleOrganisations() {
   const [countrySearch, setCountrySearch] = useState('')
 
   const load = useCallback(async () => {
-    setLoading(true)
-    const { data } = await supabase
-      .from('organisations')
-      .select('*')
-      .order('name')
-    setOrgs(data ?? [])
-    setLoading(false)
+    setLoading(true); setLoadError('')
+    try {
+      const { data, error } = await supabase
+        .from('organisations')
+        .select('*')
+        .order('name')
+      if (error) throw error
+      setOrgs(data ?? [])
+    } catch (e) {
+      setLoadError(toUserMessage(e, 'Could not load organisations.'))
+      setOrgs([])
+    } finally {
+      setLoading(false)
+    }
   }, [])
 
   useEffect(() => { load() }, [load])
@@ -136,6 +145,7 @@ export default function ConsoleOrganisations() {
 
   return (
     <div className="space-y-5 max-w-7xl">
+      <ErrorState message={loadError} onRetry={load} />
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>

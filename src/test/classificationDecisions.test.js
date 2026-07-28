@@ -10,7 +10,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import {
   needsAttention, attentionReason, movementSentence, summariseCountries,
   bucketLabel, reasonLabel, categoryBucket, overrideMovesMoney, decisionKey,
-  OVERRIDE_CATEGORIES,
+  OVERRIDE_CATEGORIES, sortDecisions, SORTS,
 } from '../lib/classificationDecisions'
 
 const row = (o = {}) => ({
@@ -112,6 +112,42 @@ describe('override helpers', () => {
     const a = decisionKey(row({ erp_said: 'spare', we_said: 'tyre' }))
     const b = decisionKey(row({ erp_said: 'tyre', we_said: 'tyre' }))
     expect(a).not.toBe(b)
+  })
+})
+
+describe('sortDecisions', () => {
+  const rows = [
+    row({ item_code: 'B', value: 10, rows: 9, confidence: 0.95 }),
+    row({ item_code: 'A', value: 500, rows: 1, confidence: 0.3 }),
+    row({ item_code: 'C', value: -900, rows: 5, confidence: 0.9 }),
+  ]
+
+  it('puts the biggest money first, credit notes included', () => {
+    // a -900 correction matters as much as a +900 charge
+    expect(sortDecisions(rows, 'value').map((r) => r.item_code)).toEqual(['C', 'A', 'B'])
+  })
+
+  it('sorts least certain first, and an unreadable confidence leads', () => {
+    // the row we know least about must not hide at the bottom
+    const withUnknown = [...rows, row({ item_code: 'Z', confidence: undefined })]
+    expect(sortDecisions(withUnknown, 'confidence')[0].item_code).toBe('Z')
+  })
+
+  it('supports lines and code', () => {
+    expect(sortDecisions(rows, 'lines')[0].item_code).toBe('B')
+    expect(sortDecisions(rows, 'code').map((r) => r.item_code)).toEqual(['A', 'B', 'C'])
+  })
+
+  it('does not mutate the input and tolerates junk', () => {
+    const src = [...rows]
+    sortDecisions(src, 'value')
+    expect(src.map((r) => r.item_code)).toEqual(['B', 'A', 'C'])
+    expect(sortDecisions(null)).toEqual([])
+    expect(sortDecisions(rows, 'nonsense')[0].item_code).toBe('C')  // falls back to value
+  })
+
+  it('offers every sort key it advertises', () => {
+    for (const s of SORTS) expect(sortDecisions(rows, s.key)).toHaveLength(3)
   })
 })
 

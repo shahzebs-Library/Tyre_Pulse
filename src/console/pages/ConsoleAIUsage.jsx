@@ -1,6 +1,8 @@
 import { useEffect, useState, useCallback } from 'react'
 import { Zap, RefreshCw, DollarSign, TrendingUp, Calendar, Filter } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
+import { toUserMessage } from '../../lib/safeError'
+import { ErrorState } from '../components/ui'
 import { useConsoleAuth } from '../ConsoleAuthContext'
 
 const RANGES = [
@@ -13,6 +15,7 @@ export default function ConsoleAIUsage() {
   const { activeOrg } = useConsoleAuth()
   const [logs, setLogs]     = useState([])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState('')
   const [range, setRange]   = useState(30)
   const [filterModel, setFilterModel] = useState('')
   const [filterOrg, setFilterOrg]     = useState(activeOrg?.id ?? '')
@@ -27,7 +30,7 @@ export default function ConsoleAIUsage() {
   }, [])
 
   const load = useCallback(async () => {
-    setLoading(true)
+    setLoading(true); setLoadError('')
     const since = new Date(Date.now() - range * 86400000).toISOString()
     let q = supabase
       .from('ai_usage_log')
@@ -39,10 +42,19 @@ export default function ConsoleAIUsage() {
     if (filterOrg)   q = q.eq('organisation_id', filterOrg)
     if (filterModel) q = q.eq('model', filterModel)
 
-    const { data, count } = await q
-    setLogs(data ?? [])
-    setTotal(count ?? 0)
-    setLoading(false)
+    try {
+      const { data, count, error } = await q
+      // An unread error rendered as an empty page, which reads as "no AI usage"
+      // when it actually means "we could not look".
+      if (error) throw error
+      setLogs(data ?? [])
+      setTotal(count ?? 0)
+    } catch (e) {
+      setLoadError(toUserMessage(e, 'Could not load AI usage.'))
+      setLogs([]); setTotal(0)
+    } finally {
+      setLoading(false)
+    }
   }, [range, filterOrg, filterModel, page])
 
   useEffect(() => { load() }, [load])
@@ -92,6 +104,7 @@ export default function ConsoleAIUsage() {
 
   return (
     <div className="space-y-5 max-w-7xl">
+      <ErrorState message={loadError} onRetry={load} />
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>

@@ -3,6 +3,54 @@
 Durable, committed project knowledge so any session has full context. Keep this
 current. Read it before adding/changing modules. Governing spec: `Tyre pulse enterprise.md`
 
+## SESSION 2026-07-28 CLOSED CLEAN — parts 3-7 ALL MERGED. Migrations through **V405**, next free **V406**.
+Branch `claude/accident-builder-report-ui-2bkwb5` == `origin/main` == **`e41b011`**, nothing uncommitted.
+PRs **#213 · #214 · #215 · #216** all merged. Web build clean, lint 0 errors, **5,855 tests green** (was 5,750).
+For NEW work restart the branch from latest main — merged PRs are terminal.
+
+### WHAT SHIPPED (newest first, detail in the per-part sections below)
+- **V405** an Egypt expense file loaded into UAE — 1,524 rows / EGP 5,392,835 moved, currency and import key
+  corrected. **V404** the import commit reported success for zero rows; `/erp-import`'s promised promotion step
+  does not exist; a mismatched sheet saved 18 empty rows; a blank date aborted whole batches.
+- **V403 + V401c** brands recovered from `removal_reason` (582 rows, Egypt blank brand 475 -> 6) and the price
+  backfill APPLIED for real (KSA 97.2% · Egypt 85.1% · UAE 56.4% priced).
+- **V401/V401b + V402** tyre price backfill with repair/warranty rules; coverage window to 365 days plus
+  per-feed "what file fills this".
+- **V400 (through V400k)** the classifier learns from human corrections.
+
+### **THE STANDING OPEN ITEMS — carried forward, none of it blocking**
+1. **`/erp-import` PROMOTION STEP STILL DOES NOT EXIST.** The page no longer claims it does, but
+   `erp_asset_import` / `erp_tyre_change_import` / `erp_tyre_expense_import` remain the ONLY staging family in
+   the schema with no trigger and nothing reading them. **That page still cannot put assets, tyres or costs into
+   the system.** This is the real remaining gap behind "only expenses upload".
+2. **`work_orders.work_order_no` is GLOBALLY unique while the client dedupe is COUNTRY-scoped** — a number
+   already stored under another country slips through and aborts the whole batch on 23505. Needs a per-country
+   key or a global dedupe scope: a decision, not a patch.
+3. **`erpIntake.existingKeys` pages with `.range()` and NO `.order()`** against 60,099 KSA work orders —
+   violates the repo's own paging rule; one missed row is enough to abort a batch.
+4. `synonyms.js` marks `work_orders.asset_no` `required:false` but the column is **NOT NULL**; and
+   `ENUM_DOMAINS.workorder.work_type` lacks `Service` / `Preventive Maintenance`, which V253 added to the CHECK.
+5. **`removal_reason` still holds a brand on 858 rows — ALL UAE — where `brand` was already populated** (V403
+   only moved the 582 whose brand was blank; measured, not inferred: 0 of the 858 have a blank brand). Harmless
+   to reporting since the brand is present, but the column is still contaminated and any removal-reason
+   analysis must exclude catalog brand values.
+6. Carried from earlier: the 55,606 job cards still carry wrong dates (customer must RE-UPLOAD the same file —
+   re-import is exact, inference is not); a job card with no Production Out AND no Workshop In violates NOT NULL
+   on `opened_at` and aborts its batch; 18 unmapped `store_code` values (Egypt/UAE, blocked on customer
+   knowledge); FX rates still need an administrator to ENTER and APPROVE before any combined total.
+
+### **GIT HYGIENE — the stop-hook "Unverified" loop, so it is not re-diagnosed from scratch**
+The hook checks **`origin/<branch>..HEAD`**. After a squash-merge, realigning local to main WITHOUT pushing the
+branch leaves the branch behind its own remote, and the hook correctly reports the merge commit as unpushed.
+**The fix is to push the branch, not to rewrite anything.** Because a squash creates a NEW commit, that push is
+a force-with-lease — safe here, and verify it first with
+`git diff --stat origin/main origin/<branch>` (empty = the branch holds only already-merged content).
+- **DO NOT amend GitHub's squash-merge commit** (committer `GitHub <noreply@github.com>`, bot `web-flow`). It is
+  GitHub's own merge, already signed by web-flow, and amending it rewrites merged main history.
+- **DO NOT enable GitHub vigilant mode to "fix" it.** It flags UNSIGNED commits as Unverified, and commit
+  signing is broken in this environment (`user.signingkey` -> 0-byte file), so it would flag EVERY Claude commit
+  instead of one merge commit. It would make the problem worse, not better.
+
 ## SESSION 2026-07-28 (part 7) — AN EGYPT EXPENSE FILE WAS LOADED INTO UAE (V405). Migrations through **V405**, next free **V406**.
 
 ### **1,524 rows, EGP 5,392,835, moved UAE -> Egypt**

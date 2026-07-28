@@ -196,4 +196,39 @@ describe('accidentVocab — presentation pills (shared list + detail source)', (
     expect(canonFaultStatus('Bespoke')).toBe('Bespoke')
     expect(canonRepairType('')).toBe('')
   })
+
+  // ── the invariant that was actually violated ───────────────────────────────
+  // Filters and charts key on the DISPLAY label while a row carries the raw DB
+  // token. Every stored value must therefore canonicalise INTO the display list,
+  // or the comparison silently matches nothing: the status funnel drew 0 for
+  // every row and picking a status or severity emptied the register instead of
+  // filtering it. Both directions are pinned so the two vocabularies cannot
+  // drift apart again.
+  it('every DB status token canonicalises to a value the UI actually offers', () => {
+    // exactly the tokens accidents.status is constrained to
+    const dbTokens = ['reported', 'under_review', 'repair_in_progress', 'awaiting_parts',
+      'awaiting_approval', 'insurance_claim', 'closed']
+    for (const t of dbTokens) {
+      expect(STATUSES, t).toContain(canonStatus(t))
+    }
+  })
+
+  it('every DB severity token canonicalises to a value the UI actually offers', () => {
+    // 'severe' is the one that catches people: the DB stores it, the UI shows Major
+    for (const t of ['minor', 'moderate', 'severe']) {
+      expect(SEVERITIES, t).toContain(canonSeverity(t))
+    }
+  })
+
+  it('a display label survives a round trip back to a DB token and out again', () => {
+    for (const label of STATUSES) expect(canonStatus(toDbStatus(label))).toBe(label)
+    for (const label of SEVERITIES) expect(canonSeverity(toDbSeverity(label))).toBe(label)
+  })
+
+  it('a raw token is never equal to its own display label', () => {
+    // This is why comparing r.status directly against the dropdown value failed.
+    expect(canonStatus('closed')).toBe('Closed')
+    expect('closed').not.toBe('Closed')
+    expect(canonSeverity('severe')).toBe('Major')
+  })
 })

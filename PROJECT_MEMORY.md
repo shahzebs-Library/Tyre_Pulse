@@ -73,6 +73,31 @@ abandoned drafts** that read exactly like failures:
 (Imported / Undone / Never approved / Nothing imported / **Unknown** — it admits when it cannot tell rather
 than implying success).
 
+### **ACCIDENTS: A DISPLAY LABEL WAS BEING COMPARED TO A RAW DB TOKEN, IN FIVE PLACES**
+User: "make sure its correct, in open it shows closed and in closed its showing open, charts are not readable".
+The counts were fine (verified live: 35 total, 23 open, 12 closed, and `stats.open` and `wfKpis.open` agree).
+The real defect was a whole FAMILY of the same mistake — the UI hands over a **display label** while the row
+carries a **raw DB token**, so the comparison matched nothing:
+- **`statusCounts` keyed on `STATUSES` ('Reported', 'Closed') but incremented `c[r.status]` ('reported',
+  'closed')** → the **Status Funnel drew 0 for every status**.
+- **`severityMonthlyChart`** same shape → **Monthly Severity Breakdown was all zeros**.
+- **`filterStatus` / `statusFunnel` / `filterSeverity`** compared the dropdown's label to the raw token →
+  **picking any status or severity EMPTIED the register** instead of filtering it.
+- **`r.status !== 'Closed'`** is always true against `'closed'` → "Raise CA" showed on closed cases.
+All fixed by canonicalising at the comparison point (`canonStatus` / `canonSeverity` / `isClosed`).
+- **LIVE VALUES THAT MAKE THIS BITE:** status is `reported|under_review|repair_in_progress|awaiting_parts|
+  awaiting_approval|insurance_claim|closed`; severity is **`minor|moderate|severe`** while the dropdown offers
+  **Minor/Moderate/Major** — `severe` folds to `Major`, so a literal compare can never match.
+- **`accidents.closure_status` is `'open'` on ALL 35 rows, including the 12 that are closed.** It is a dead
+  column; `isClosed` only works because of its `canonStatus(status)==='Closed'` half. Do not trust it alone.
+- **Guarded by tests in `accidentVocab.test.js`**: every DB token must canonicalise INTO the display list, and
+  a label must survive `toDb*` -> `canon*` round trip. That is the invariant that was violated.
+
+### ACCIDENT ANALYTICS PDF — it was unreadable because six charts fit on one page
+A4 landscape / 6 charts gave each ~90mm with a 7.2pt digest and 6.3pt KPI labels. Now **4 per page (2x2,
+~135mm each)**, title 8.5 -> 11pt, digest 7.2 -> 9pt (2 lines allowed), KPI labels 6.3 -> 8pt on **two rows of
+four** with the value auto-shrunk to fit its own tile. Page count is derived rather than capped at 2.
+
 ### CONSOLE UI KIT — the reason everything "looked not good"
 **There was no shared UI in `/console` at all**: 34 pages each hand-rolled cards, tables, tabs and empty
 states. **`src/console/components/ui/index.jsx`** is now the vocabulary (Panel, PanelHeader, Note, StatTile,

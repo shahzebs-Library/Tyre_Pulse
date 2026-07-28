@@ -208,6 +208,8 @@ export const NAV_COMMANDS = [
   { id: 'maintenance-cost-board', label: 'Maintenance Cost & Tasks', path: '/maintenance-cost-board', icon: 'Wrench', roles: ANALYTICS_ROLES },
   { id: 'expense-report', label: 'Expenses & CPK', path: '/expense-report', icon: 'Wallet', roles: ANALYTICS_ROLES,
     keywords: ['expense report', 'real expenses', 'spend', 'cost per km', 'cpk', 'cost per kilometre', 'comparison', 'last year', 'last month'] },
+  { id: 'expense-trends', label: 'Expense Trends', path: '/expense-trends', icon: 'TrendingUp', roles: ANALYTICS_ROLES,
+    keywords: ['expense trends', 'forecast', 'year over year', 'yoy', 'yearly spend', 'tyre spare lubricant', 'trend', 'compare years', 'projection'] },
   { id: 'erp-intake', label: 'Data Intake (ERP)', path: '/erp-intake', icon: 'Layers', roles: ANALYTICS_ROLES },
   { id: 'expense-import', label: 'Expense Import', path: '/expense-import', icon: 'Receipt', roles: ANALYTICS_ROLES },
   { id: 'roi-calculator', label: 'ROI Calculator', path: '/roi-calculator', icon: 'DollarSign', roles: ANALYTICS_ROLES },

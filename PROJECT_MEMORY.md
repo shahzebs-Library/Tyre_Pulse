@@ -51,7 +51,22 @@ a force-with-lease — safe here, and verify it first with
   signing is broken in this environment (`user.signingkey` -> 0-byte file), so it would flag EVERY Claude commit
   instead of one merge commit. It would make the problem worse, not better.
 
-## SESSION 2026-07-28 (part 8) — TELEMATICS UTILIZATION + CURRENT KM + KSA TYRE MERGE + EXACT DEDUP (V406-V412). Migrations through **V412**, next free **V413**.
+## SESSION 2026-07-28 (part 8) — TELEMATICS + CURRENT KM + KSA TYRE MERGE + EXACT DEDUP + EXPENSE TRENDS (V406-V413). Migrations through **V413**, next free **V414**.
+
+### **V413 — EXPENSE TRENDS & FORECAST (multi-year, YoY, tyre/spare/lubricant, currency-safe)**
+User: earlier-year expenses ARE in the system (2018-2026 all present; the file's job-card values matched the
+grid so NOT re-added — would double-count) — the ask was VISIBILITY: compare years + trend + forecast.
+- **RPC `get_expense_yearly_trend(p_country)`** (SECURITY INVOKER, RLS-scoped) -> per (country, year) split into
+  tyre_cost / spare_cost / oil_cost(lubricant), each row carrying its own currency (NEVER blended).
+- Pure engine `src/lib/expenseTrends.js` (16 tests): byCountry, yoyTable, latestShare, linearFit,
+  cagr, **forecast** (least-squares, floored at 0, flagged), insights. Service `src/lib/api/expenseTrends.js`.
+- Page **`/expense-trends`** ("Expense Trends", Reports & Executive nav): per-country stacked bar by year+category
+  with dashed forecast, category trend lines, share doughnut, YoY table (+forecast rows), CAGR, insights,
+  Excel/PDF. Wired nav + route + commandSearch. KSA verified 2018-2026 reconciles to 40.68M SAR.
+- **STILL TODO (user asked to "spread across every module"):** wire the yearly trend into Dashboard / Board
+  Overview / Executive report — the RPC + engine are reusable; not yet embedded there.
+
+
 
 ### **V412 — EXACT-DUPLICATE EXPENSE REMOVAL (owner rule: exact match = duplicate), COST-CERTIFIED + reversible**
 UAE/Egypt `parts_consumption` carried content-identical rows (same store/cost-centre/item/qty/description/date/

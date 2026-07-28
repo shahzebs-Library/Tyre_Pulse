@@ -43,6 +43,8 @@ import { builderReportType } from '../lib/api/scheduledReports'
 import { toUserMessage } from '../lib/safeError'
 import { hasClaim, isClosed as isClaimClosed, claimNet } from '../lib/claimsAnalytics'
 import { captureChartOnPaper } from '../lib/chartCapture'
+import AccidentIntelligencePanel from '../components/accidents/AccidentIntelligencePanel'
+import { buildAccidentIntelligence, basisNote } from '../lib/accidentAnalytics'
 import { WORKFLOW_STAGES, DEFAULT_DEPARTMENTS, stageOf, stageLabel, buildAccidentKpis } from '../lib/accidentWorkflow'
 import { listDepartments } from '../lib/api/accidentWorkflow'
 
@@ -1019,15 +1021,19 @@ export default function Accidents() {
 
       // ── KPI number strip (live page aggregates) ──
       const pendingRelease = records.filter(r => !isClosed(r) && !r.expected_release_date).length
+      // The report states the basis of a money figure for the same reason the
+      // screen does: on the live set the repair total rests on 2 incidents of 35
+      // and printing it bare invites it to be read as the real spend.
+      const intel = buildAccidentIntelligence(records)
       const kpis = [
-        ['Total incidents', String(stats.total)],
-        ['Open', String(stats.open)],
-        ['Closed', String(stats.total - stats.open)],
-        [`Delayed > ${DELAY_THRESHOLD_DAYS}d`, String(stats.delayed)],
-        ['Pending release', String(pendingRelease)],
-        ['Repair cost', String(fmtCurrency(stats.cost))],
-        ['Claimed', String(fmtCurrency(claimAnalytics.totalClaim))],
-        ['Recovered', String(fmtCurrency(claimAnalytics.totalRecovered))],
+        ['Total incidents', String(stats.total), ''],
+        ['Open', String(stats.open), ''],
+        ['Closed', String(stats.total - stats.open), ''],
+        [`Delayed > ${DELAY_THRESHOLD_DAYS}d`, String(stats.delayed), ''],
+        ['Pending release', String(pendingRelease), ''],
+        ['Repair cost', String(fmtCurrency(stats.cost)), basisNote(intel.basis.repairCost)],
+        ['Claimed', String(fmtCurrency(claimAnalytics.totalClaim)), basisNote(intel.basis.claimed)],
+        ['Recovered', String(fmtCurrency(claimAnalytics.totalRecovered)), basisNote(intel.basis.recovered)],
       ]
       // Eight tiles across A4 landscape left ~34mm each and a 6.3pt label, which
       // is below what prints legibly. Two rows of four doubles the width and lets
@@ -1037,8 +1043,8 @@ export default function Accidents() {
       const perRow = 4
       const rows = Math.ceil(kpis.length / perRow)
       const kw = (W - 2 * M) / perRow
-      const kh = 12
-      kpis.forEach(([label, value], i) => {
+      const kh = 15
+      kpis.forEach(([label, value, basis], i) => {
         const col = i % perRow
         const row = Math.floor(i / perRow)
         const x = M + col * kw
@@ -1052,6 +1058,10 @@ export default function Accidents() {
         doc.text(value, x + kw / 2, y + 6, { align: 'center' })
         doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(...MUTED)
         doc.text(label.toUpperCase(), x + kw / 2, y + 10.4, { align: 'center' })
+        if (basis) {
+          doc.setFontSize(6.8); doc.setTextColor(180, 83, 9)
+          doc.text(basis, x + kw / 2, y + 13.8, { align: 'center' })
+        }
       })
       const gridTop = stripY + rows * (kh + 1.5) + 3
 
@@ -1110,7 +1120,57 @@ export default function Accidents() {
           drawGrid(group, 18)
         }
       })
-      return { doc, chartCount: chartList.length, pageCount, company }
+      // A final page for what the figures rest on. The PDF is the copy that gets
+      // forwarded and read out of context, so it has to carry the caveats the
+      // screen shows rather than looking more certain than the screen did.
+      if (intel.caveats.length || intel.repeats.length || intel.duplicates.length) {
+        doc.addPage()
+        doc.setFont('helvetica', 'bold'); doc.setFontSize(13); doc.setTextColor(...INK)
+        doc.text('What these figures rest on', M, 14)
+        doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(...MUTED)
+        doc.text(`${company} | ${stamp} | ${records.length} incidents`, W - M, 14, { align: 'right' })
+        let y = 24
+
+        const para = (text, indent = 0) => {
+          const lines = doc.splitTextToSize(text, W - 2 * M - indent)
+          if (y + lines.length * 4.6 > H - M) return false
+          doc.text(lines, M + indent, y)
+          y += lines.length * 4.6 + 2
+          return true
+        }
+
+        if (intel.caveats.length) {
+          doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.setTextColor(...INK)
+          doc.text('Read these first', M, y); y += 6
+          doc.setFont('helvetica', 'normal'); doc.setFontSize(9.5); doc.setTextColor(...INK)
+          for (const c of intel.caveats) if (!para(`- ${c.text}`)) break
+          y += 3
+        }
+
+        if (intel.repeats.length) {
+          doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.setTextColor(...INK)
+          doc.text('Vehicles in more than one incident', M, y); y += 6
+          doc.setFont('helvetica', 'normal'); doc.setFontSize(9.5)
+          for (const r of intel.repeats.slice(0, 12)) {
+            if (!para(`${r.asset}: ${r.incidents} incidents, ${r.first} to ${r.last}`
+              + (r.meanGapDays != null ? `, about ${r.meanGapDays} days apart` : ''), 2)) break
+          }
+          y += 3
+        }
+
+        if (intel.duplicates.length) {
+          doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.setTextColor(...INK)
+          doc.text('Same vehicle and day, worth a check', M, y); y += 6
+          doc.setFont('helvetica', 'normal'); doc.setFontSize(9.5)
+          para('These are counted in every figure above. They may be genuine repeat events or '
+            + 'the same incident entered twice; nothing was removed automatically.')
+          for (const d of intel.duplicates.slice(0, 12)) {
+            if (!para(`${d.asset} on ${d.date}: ${d.count} records, `
+              + (d.identical ? 'nothing distinguishes them' : `differ on ${d.differingFields.join(', ')}`), 2)) break
+          }
+        }
+      }
+      return { doc, chartCount: chartList.length, pageCount: doc.getNumberOfPages(), company }
   }
 
   async function downloadAnalyticsPdf() {
@@ -2252,6 +2312,10 @@ export default function Accidents() {
               </div>
             </div>
           )}
+
+          {/* Basis first: a reader has to know a figure rests on 2 of 35 records
+              BEFORE they read it, not in a footnote afterwards. */}
+          <AccidentIntelligencePanel records={records} currency={activeCurrency} fmtCurrency={fmtCurrency} />
 
           {/* ===== Accident Workflow KPIs (single engine: buildAccidentKpis) ===== */}
           <div className="card border-l-2 border-l-green-500/60">

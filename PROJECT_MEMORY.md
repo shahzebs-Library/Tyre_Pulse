@@ -3,7 +3,7 @@
 Durable, committed project knowledge so any session has full context. Keep this
 current. Read it before adding/changing modules. Governing spec: `Tyre pulse enterprise.md`
 
-## SESSION 2026-07-28 — CONSOLE UI KIT + UPLOAD COVERAGE PER COUNTRY AND AREA + V395 COUNTRY-NAMED STAGING. Migrations through **V395**, next free **V396**.
+## SESSION 2026-07-28 — CONSOLE UI KIT + COVERAGE PER COUNTRY/AREA + V395 COUNTRY STAGING + ACCIDENT BASIS + V397. Migrations through **V397**, next free **V398**.
 
 ### **V394 — THE COVERAGE PANEL WAS HIDING A TWENTY-DAY HOLE**
 User: "the missing upload section ... which area i am uploading, country wise separate, all with real areas".
@@ -72,6 +72,41 @@ abandoned drafts** that read exactly like failures:
 `importRowSummary` now states which; new `importRowOutcome` + `OUTCOME_META` drive a badge
 (Imported / Undone / Never approved / Nothing imported / **Unknown** — it admits when it cannot tell rather
 than implying success).
+
+### **ACCIDENT ANALYTICS: EVERY FIGURE NOW CARRIES ITS BASIS — because most of them rest on almost nothing**
+User asked for the analytics to be more advanced and corrected. Measured the live 35 incidents FIRST, and the
+data is thin exactly where the page was most confident:
+- **`repair_cost` 2/35** · **`parts_cost` 35/35 BUT EVERY VALUE IS 0.00** — so the "repair cost" headline is
+  really 2 incidents, and a null check counts parts as complete while it contributes nothing. `coverageOf(...,
+  {money:true})` therefore requires a NON-ZERO value; present is not the same as recorded.
+- **`police_report_no` 0/35** — so "Pending Police Reports = 23" just means *we never capture the field*.
+- **`root_cause` 0/35** (also corrective/preventive) — the page can show what and where, never why.
+- `claim_amount` 5/35 · `recovered_amount` 1/35 · `release_date` 11/35 · `driver_name` 7/35 · `vehicle_type` 19/35
+- **NEW `src/lib/accidentAnalytics.js`** (42 tests): `coverageOf`, `basisNote` ("from 2 of 35", "never
+  recorded", and **silent when complete** — saying "35 of 35" on every tile is noise), `METRIC_BASIS`,
+  `analyticsCaveats` (**emits nothing when the data is genuinely complete** — that has to be a statement it can
+  make), plus the analysis the FULL columns do support: `concentration` (+Pareto), `repeatAssets`,
+  `weekdayProfile`, `closureDistribution` (median AND longest, because an average hides the spread),
+  `recoveryRatio`, `possibleDuplicates`.
+- **Real findings it surfaces: NHC holds 20 of 35 incidents (57%)**; 3 vehicles are in repeat incidents.
+- **`possibleDuplicates` REPORTS, NEVER REMOVES** — 3 vehicle-and-date pairs repeat (MP083 2026-07-08 etc.).
+  Two incidents on one vehicle in one day is unusual but possible; only the customer can tell, so the panel
+  lists them, shows what differs, and says every count includes them.
+- Panel `src/components/accidents/AccidentIntelligencePanel.jsx` mounts at the TOP of the Analytics tab —
+  a reader must know a figure rests on 2 of 35 *before* reading it, not in a footnote. The PDF carries the
+  basis on each money tile plus a final "What these figures rest on" page, because the PDF is the copy that
+  gets forwarded and must not look more certain than the screen.
+
+### **V397 — `accidents.asset_no` WAS THE ONE TABLE V337 MISSED**
+V337 normalised asset_no + added a guard trigger to fleet/tyres/work_orders/wo_line_items/parts_consumption.
+`accidents` has `trg_normalize_site` and `trg_normalize_vehicle_type` but **never got the asset_no one**.
+- **4 of 35 incidents carried a lower-case asset number and ALL FOUR failed to join `vehicle_fleet`** — no make,
+  model or register site for those incidents. It also split one asset in two for per-asset analysis (`tm673` vs
+  `TM673`), which is what hid a repeat incident and a probable duplicate.
+- Verified: 4 rows changed, 0 off-canonical, **unjoinable-to-fleet 4 -> 0**. Snapshot
+  `_accident_asset_snapshot_v397`. The function already existed; only the trigger was missing.
+- **RULE: the engine folds case on the asset key anyway** (`concentration(..., {fold:true})`, `repeatAssets`,
+  `possibleDuplicates`) — normalising the column is the fix, but analysis must not depend on it having been run.
 
 ### **ACCIDENTS: A DISPLAY LABEL WAS BEING COMPARED TO A RAW DB TOKEN, IN FIVE PLACES**
 User: "make sure its correct, in open it shows closed and in closed its showing open, charts are not readable".

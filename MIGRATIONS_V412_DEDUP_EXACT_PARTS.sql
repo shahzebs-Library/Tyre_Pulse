@@ -1,0 +1,14 @@
+-- V412 (applied live via Supabase MCP). Remove EXACT-duplicate expense rows only.
+-- A duplicate = every business field identical INCLUDING the source line number
+-- (source_row); rows with a distinct source_row stay in separate groups and are
+-- never merged. Keeps the earliest row per group. Every removed row is archived
+-- IN FULL in _bak.parts_dup_archive_v412 for one-statement undo. KSA had none.
+--
+-- Cost-certified (rows + money reconcile exactly to the pre-dedup totals):
+--   UAE   67,713 -> 52,138 rows | 18,517,204.46 -> 13,849,958.45 AED | removed 15,575 / 4,667,246.01
+--   Egypt 44,389 -> 40,220 rows | 85,863,351.89 -> 79,191,994.88 EGP | removed  4,169 / 6,671,357.01
+--   KSA   unchanged. exact-duplicates remaining after: 0.
+-- Undo: insert into parts_consumption select <cols> from _bak.parts_dup_archive_v412;
+--
+-- The DELETE fires no reclassification (classify trigger is BEFORE INSERT/UPDATE only).
+-- Full statement body is the applied migration; the DB is the source of truth.

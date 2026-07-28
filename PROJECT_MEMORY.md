@@ -51,7 +51,20 @@ a force-with-lease — safe here, and verify it first with
   signing is broken in this environment (`user.signingkey` -> 0-byte file), so it would flag EVERY Claude commit
   instead of one merge commit. It would make the problem worse, not better.
 
-## SESSION 2026-07-28 (part 8) — TELEMATICS UTILIZATION + CURRENT KM + KSA TYRE MERGE (V406-V411). Migrations through **V411**, next free **V412**.
+## SESSION 2026-07-28 (part 8) — TELEMATICS UTILIZATION + CURRENT KM + KSA TYRE MERGE + EXACT DEDUP (V406-V412). Migrations through **V412**, next free **V413**.
+
+### **V412 — EXACT-DUPLICATE EXPENSE REMOVAL (owner rule: exact match = duplicate), COST-CERTIFIED + reversible**
+UAE/Egypt `parts_consumption` carried content-identical rows (same store/cost-centre/item/qty/description/date/
+value AND same source_row) — mostly same-batch double inserts, no `#` line number to distinguish. Owner instruction:
+exact same = duplicate, keep one, cost-certify, precaution. Removed with a FULL archive (reversible):
+- **UAE 67,713 -> 52,138 rows · 18,517,204.46 -> 13,849,958.45 AED** (removed 15,575 / 4,667,246.01).
+- **Egypt 44,389 -> 40,220 rows · 85,863,351.89 -> 79,191,994.88 EGP** (removed 4,169 / 6,671,357.01).
+- **KSA untouched** (0 exact dups). Rows + money reconcile EXACTLY to pre-dedup totals; **0 exact duplicates left**.
+- Kept the earliest row per group; **distinct source_row never merged**; archive `_bak.parts_dup_archive_v412`
+  (undo = re-insert). tyre_records had 0 exact dups. **NOTE: this is CONTENT-identity dedup by explicit owner
+  rule — stronger than the source_row-only rule; the earlier V365 timestamp-cluster deletes were a subset.**
+
+
 
 ### **V411 — REPLACED (OLD) TYRE REMOVALS APPLIED DIRECTLY (no re-upload)**
 The staging change-row's `remove_date`/`remove_KM` is a MISLABELED heading = the OLD tyre's fitment; the new

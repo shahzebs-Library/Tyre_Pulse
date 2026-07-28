@@ -12,6 +12,7 @@ import { COST_MODES, pickCost } from '../lib/costSources'
 import { summarizePmCompliance } from '../lib/pmSchedule'
 import { useAuth } from '../contexts/AuthContext'
 import { useSettings } from '../contexts/SettingsContext'
+import YearlyTrendPanel from '../components/expense/YearlyTrendPanel'
 import { useTenant } from '../contexts/TenantContext'
 import { useLanguage } from '../contexts/LanguageContext'
 import { exportToPptx, exportToExcel, exportToPdf, exportDailyExecutivePdf } from '../lib/exportUtils'
@@ -1444,6 +1445,10 @@ export default function Dashboard() {
       </div>
 
       {/* ── ACTIVITY FEED ────────────────────────────────────────────────── */}
+      <div className="mb-5">
+        <YearlyTrendPanel compact title="Spend by year (tyres / spare / lubricant) + forecast" />
+      </div>
+
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
         {/* Recent tyre records */}
         <div className="card">

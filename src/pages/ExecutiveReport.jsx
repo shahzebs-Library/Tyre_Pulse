@@ -45,6 +45,7 @@ import { captureChartOnPaper, paperChartOptions } from '../lib/chartCapture'
 import { useTenant } from '../contexts/TenantContext'
 import { useLanguage } from '../contexts/LanguageContext'
 import PageHeader from '../components/ui/PageHeader'
+import YearlyTrendPanel from '../components/expense/YearlyTrendPanel'
 import PeriodFilter, { filterByPeriodValue, periodLabel as periodValueLabel } from '../components/ui/PeriodFilter'
 
 ChartJS.register(
@@ -1696,6 +1697,9 @@ export default function ExecutiveReport() {
       </div>
 
       <div className="max-w-[1800px] mx-auto px-4 py-6 flex flex-col gap-8">
+
+        {/* Multi-year expense trend + forecast (on-screen intelligence block). */}
+        <YearlyTrendPanel title="Expense trend by year (tyres / spare / lubricant) + forecast" />
 
         {/* User-added palette widgets, positioned by the shared flex order. */}
         {addedBlocks.map((item) => (

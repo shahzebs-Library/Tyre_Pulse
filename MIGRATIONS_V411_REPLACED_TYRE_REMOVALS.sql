@@ -1,0 +1,22 @@
+-- V411 (applied live via Supabase MCP). Fix the reversed/mislabeled change-row
+-- date/km WITHOUT a re-upload. On a staging change row, the new tyre's fix_date/
+-- fix_KM is when the OLD (replaced) tyre came off; that removal was never applied
+-- to the old tyre's record, so 1,585 replaced KSA tyres still showed no removal.
+--
+-- (1) Fill removal_date / km_at_removal / total_km / status='Removed' on open old-tyre
+--     rows, matched by asset + position + old serial, using the EARLIEST replacement
+--     fitment at or after the tyre's own fitment. A no-reversed-date guard skips the
+--     88 whose replacement predates their recorded fitment. -> 1,497 rows.
+-- (2) Recompute the 7 rows whose total_km was stored with the wrong sign
+--     (km correctly ordered but total = fitment - removal). -> total_km = removal - fitment.
+-- (3) Insert the 12 replaced tyres missing from tyre_records entirely (as Removed):
+--     old tyre fitted at the change row's remove_date/remove_KM (the mislabeled
+--     "old fit" columns), removed at the new fix_date/fix_KM, brand = old_tyrebrand.
+--
+-- Non-destructive; only fills rows whose removal was never recorded. Snapshots:
+--   _bak.old_tyre_removal_v411 (id, prior removal_date/km/total_km/status)
+--   _bak.total_km_fix_v411 (id, old_total_km)
+--   inserts tagged extra_fields->>'import' = 'ksa_staging_v411_oldtyre'
+-- Undo: restore from the snapshots; delete the tagged inserts.
+-- Result verified: KSA reversed dates 0, reversed km 0, negative total_km 0.
+-- Full statement body is the applied migration; the DB is the source of truth.

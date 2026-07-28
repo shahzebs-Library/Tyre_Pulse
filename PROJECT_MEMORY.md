@@ -3,6 +3,150 @@
 Durable, committed project knowledge so any session has full context. Keep this
 current. Read it before adding/changing modules. Governing spec: `Tyre pulse enterprise.md`
 
+## SESSION 2026-07-28 CLOSED CLEAN — parts 3-7 ALL MERGED. Migrations through **V405**, next free **V406**.
+Branch `claude/accident-builder-report-ui-2bkwb5` == `origin/main` == **`e41b011`**, nothing uncommitted.
+PRs **#213 · #214 · #215 · #216** all merged. Web build clean, lint 0 errors, **5,855 tests green** (was 5,750).
+For NEW work restart the branch from latest main — merged PRs are terminal.
+
+### WHAT SHIPPED (newest first, detail in the per-part sections below)
+- **V405** an Egypt expense file loaded into UAE — 1,524 rows / EGP 5,392,835 moved, currency and import key
+  corrected. **V404** the import commit reported success for zero rows; `/erp-import`'s promised promotion step
+  does not exist; a mismatched sheet saved 18 empty rows; a blank date aborted whole batches.
+- **V403 + V401c** brands recovered from `removal_reason` (582 rows, Egypt blank brand 475 -> 6) and the price
+  backfill APPLIED for real (KSA 97.2% · Egypt 85.1% · UAE 56.4% priced).
+- **V401/V401b + V402** tyre price backfill with repair/warranty rules; coverage window to 365 days plus
+  per-feed "what file fills this".
+- **V400 (through V400k)** the classifier learns from human corrections.
+
+### **THE STANDING OPEN ITEMS — carried forward, none of it blocking**
+1. **`/erp-import` PROMOTION STEP STILL DOES NOT EXIST.** The page no longer claims it does, but
+   `erp_asset_import` / `erp_tyre_change_import` / `erp_tyre_expense_import` remain the ONLY staging family in
+   the schema with no trigger and nothing reading them. **That page still cannot put assets, tyres or costs into
+   the system.** This is the real remaining gap behind "only expenses upload".
+2. **`work_orders.work_order_no` is GLOBALLY unique while the client dedupe is COUNTRY-scoped** — a number
+   already stored under another country slips through and aborts the whole batch on 23505. Needs a per-country
+   key or a global dedupe scope: a decision, not a patch.
+3. **`erpIntake.existingKeys` pages with `.range()` and NO `.order()`** against 60,099 KSA work orders —
+   violates the repo's own paging rule; one missed row is enough to abort a batch.
+4. `synonyms.js` marks `work_orders.asset_no` `required:false` but the column is **NOT NULL**; and
+   `ENUM_DOMAINS.workorder.work_type` lacks `Service` / `Preventive Maintenance`, which V253 added to the CHECK.
+5. **`removal_reason` still holds a brand on 858 rows — ALL UAE — where `brand` was already populated** (V403
+   only moved the 582 whose brand was blank; measured, not inferred: 0 of the 858 have a blank brand). Harmless
+   to reporting since the brand is present, but the column is still contaminated and any removal-reason
+   analysis must exclude catalog brand values.
+6. Carried from earlier: the 55,606 job cards still carry wrong dates (customer must RE-UPLOAD the same file —
+   re-import is exact, inference is not); a job card with no Production Out AND no Workshop In violates NOT NULL
+   on `opened_at` and aborts its batch; 18 unmapped `store_code` values (Egypt/UAE, blocked on customer
+   knowledge); FX rates still need an administrator to ENTER and APPROVE before any combined total.
+
+### **GIT HYGIENE — the stop-hook "Unverified" loop, so it is not re-diagnosed from scratch**
+The hook checks **`origin/<branch>..HEAD`**. After a squash-merge, realigning local to main WITHOUT pushing the
+branch leaves the branch behind its own remote, and the hook correctly reports the merge commit as unpushed.
+**The fix is to push the branch, not to rewrite anything.** Because a squash creates a NEW commit, that push is
+a force-with-lease — safe here, and verify it first with
+`git diff --stat origin/main origin/<branch>` (empty = the branch holds only already-merged content).
+- **DO NOT amend GitHub's squash-merge commit** (committer `GitHub <noreply@github.com>`, bot `web-flow`). It is
+  GitHub's own merge, already signed by web-flow, and amending it rewrites merged main history.
+- **DO NOT enable GitHub vigilant mode to "fix" it.** It flags UNSIGNED commits as Unverified, and commit
+  signing is broken in this environment (`user.signingkey` -> 0-byte file), so it would flag EVERY Claude commit
+  instead of one merge commit. It would make the problem worse, not better.
+
+## SESSION 2026-07-28 (part 8) — TELEMATICS + CURRENT KM + KSA TYRE MERGE + EXACT DEDUP + EXPENSE TRENDS (V406-V413). Migrations through **V413**, next free **V414**.
+
+### **V413 — EXPENSE TRENDS & FORECAST (multi-year, YoY, tyre/spare/lubricant, currency-safe)**
+User: earlier-year expenses ARE in the system (2018-2026 all present; the file's job-card values matched the
+grid so NOT re-added — would double-count) — the ask was VISIBILITY: compare years + trend + forecast.
+- **RPC `get_expense_yearly_trend(p_country)`** (SECURITY INVOKER, RLS-scoped) -> per (country, year) split into
+  tyre_cost / spare_cost / oil_cost(lubricant), each row carrying its own currency (NEVER blended).
+- Pure engine `src/lib/expenseTrends.js` (16 tests): byCountry, yoyTable, latestShare, linearFit,
+  cagr, **forecast** (least-squares, floored at 0, flagged), insights. Service `src/lib/api/expenseTrends.js`.
+- Page **`/expense-trends`** ("Expense Trends", Reports & Executive nav): per-country stacked bar by year+category
+  with dashed forecast, category trend lines, share doughnut, YoY table (+forecast rows), CAGR, insights,
+  Excel/PDF. Wired nav + route + commandSearch. KSA verified 2018-2026 reconciles to 40.68M SAR.
+- **V414 — YEAR / QUARTER / MONTH granularity.** `get_expense_period_trend(p_country, p_grain)` buckets by
+  year / quarter ('2024-Q1') / month ('2024-01'), sortable keys. Engine gained `periodLabel`, `nextPeriod`,
+  grain-aware `forecast`/`insights`/`buildCountryTrend` (forecast ahead: year 2 / quarter 4 / month 6). The
+  reusable panel + the /expense-trends page both carry a **Year/Quarter/Month toggle** (so every embed gets it).
+  `getExpenseYearlyTrend` now delegates to `getExpensePeriodTrend`. 15 engine tests.
+- **SPREAD ACROSS MODULES (done):** reusable **`src/components/expense/YearlyTrendPanel.jsx`** (self-fetching,
+  theme-neutral via `var(--text-*)` + mid-gray chart colors so it reads on dark app pages AND white report
+  pages) embedded in **Dashboard** (compact), **Cost Center**, **Engineering KPI**, **Board Overview**
+  (toggleable `yearlyTrend` section), **Executive Report** (on-screen block, NOT wired into PDF/PPTX to avoid
+  breaking those renderers). Build clean, lint 0 errors.
+
+
+
+### **V412 — EXACT-DUPLICATE EXPENSE REMOVAL (owner rule: exact match = duplicate), COST-CERTIFIED + reversible**
+UAE/Egypt `parts_consumption` carried content-identical rows (same store/cost-centre/item/qty/description/date/
+value AND same source_row) — mostly same-batch double inserts, no `#` line number to distinguish. Owner instruction:
+exact same = duplicate, keep one, cost-certify, precaution. Removed with a FULL archive (reversible):
+- **UAE 67,713 -> 52,138 rows · 18,517,204.46 -> 13,849,958.45 AED** (removed 15,575 / 4,667,246.01).
+- **Egypt 44,389 -> 40,220 rows · 85,863,351.89 -> 79,191,994.88 EGP** (removed 4,169 / 6,671,357.01).
+- **KSA untouched** (0 exact dups). Rows + money reconcile EXACTLY to pre-dedup totals; **0 exact duplicates left**.
+- Kept the earliest row per group; **distinct source_row never merged**; archive `_bak.parts_dup_archive_v412`
+  (undo = re-insert). tyre_records had 0 exact dups. **NOTE: this is CONTENT-identity dedup by explicit owner
+  rule — stronger than the source_row-only rule; the earlier V365 timestamp-cluster deletes were a subset.**
+
+
+
+### **V411 — REPLACED (OLD) TYRE REMOVALS APPLIED DIRECTLY (no re-upload)**
+The staging change-row's `remove_date`/`remove_KM` is a MISLABELED heading = the OLD tyre's fitment; the new
+tyre's `fix_date`/`fix_KM` is when the old tyre came off. That removal was never applied, so **1,585 replaced
+KSA tyres still showed NO removal** (looked on-vehicle). User: don't re-upload (slow), fix it in place.
+- **1,497** open old-tyre rows filled with removal_date/km_at_removal/total_km/status='Removed', matched by
+  asset+position+old-serial, using the EARLIEST replacement fitment >= the tyre's own fitment. No-reversed-date
+  guard skipped the 88 whose replacement predates their fitment (ambiguous, left alone).
+- **7** rows with wrong-signed total_km (km ordered right, total stored negative) recomputed = removal - fitment.
+- **12** replaced tyres entirely missing from tyre_records inserted as Removed (old fit = the mislabeled
+  remove_* cols, removal = new fix_*, brand = old_tyrebrand).
+- Verified: KSA reversed dates **0**, reversed km **0**, negative total_km **0**. Snapshots
+  `_bak.old_tyre_removal_v411` / `_bak.total_km_fix_v411`; inserts tagged `extra_fields->>'import'`. Surfaces
+  automatically in tyre records/lifecycle (removal_date/km/status already rendered). **KM_AT_FITMENT=1 is a
+  SOURCE placeholder on some rows -> life overstated; NOT invented, left honest.**
+
+
+User uploaded three raw tables and asked to "link this all", set "last old meter = current km" (telematics only),
+merge the tyre data (new/old serial changes), add policies, and surface it in the frontend.
+
+### **THE 170k "new" STAGING WAS ~98% ALREADY LOADED — measured, not assumed**
+`ksa_country_upload_template_staging` (192,198 rows) is a RE-UPLOAD of the KSA combined export:
+ALL **59,983 job cards already exist** in work_orders; expenses already in parts_consumption; tyre fitments
+**5,990 of 6,087 already in tyre_records** and brand already 97% filled. So processing it into financials would
+DUPLICATE KSA data (the 8,248-row class). It was used ONLY as a meter/tyre source, never re-inserted.
+
+### **THE GENUINELY NEW DATA = TELEMATICS `ksa_kms` (388) + `uae_kms` (171)**
+Per-asset snapshot: Distance, Utilization %, working/idle/driving time, Max speed, and **Odo value end** = latest
+odometer. Fleet had almost NO km before (2 of 1,019 KSA). User chose **telematics-only** for current_km.
+- **V406** new org+country-scoped `asset_utilization` table (556 rows, 402 linked to fleet), RLS mirrors
+  odometer_logs. Populated from both raw tables (KSA intervals -> seconds; UAE text parsed).
+- **V407** fed the latest odometer into `odometer_logs` (source='telematics', 347 rows) so the existing
+  `trg_sync_asset_current_km` advances current_km. Snapshot `_current_km_snapshot_v407`. Result: KSA 248 / UAE 101
+  assets now carry current_km.
+- **V408 — CROSS-COUNTRY CONTAMINATION BUG FOUND + FIXED.** `sync_asset_current_km` (and `flag_meter_regression`)
+  matched on asset_no + org but **NOT country**, so a KSA reading cross-wrote the UAE fleet row of the same code
+  (V376: same code = different machine). 56 rows were contaminated by V407; reset them and made BOTH functions
+  country-aware (fall back to old behaviour when either country is null). **RULE: the odometer pipe is now
+  country-scoped — a same-code asset in another country is never touched.**
+- **V409** the 3 raw tables (staging + both kms) are admin-only: RLS already ON, added elevated-only SELECT,
+  revoked authenticated INSERT/UPDATE/DELETE (one-time import landing zones).
+
+### **V410 — TYRE MERGE: 97 new fitments + brand/size fill, non-destructive**
+Staging tyre rows are job-card-line grained (~8.9 rows/serial); collapsed to fitment grain (asset+pos+serial+
+fix_date). Only **97 genuinely-new fitments** + 6 brand fills. **The change-row convention the user flagged:
+`remove_date` describes the REPLACED (old) tyre, not the new one** (all 97 new rows had remove_date < fix_date),
+so every new fitment loads **Active**. Inserts tagged `extra_fields->>'import'='ksa_staging_v410'`, snapshot
+`_bak.tyre_enrich_v410`. `data_source` CHECK only allows manual/upload/api -> used 'upload'. KSA tyre_records
+6,026 -> 6,123. Remaining blank brand (153) / size (54) have NO source data (honest).
+
+### FRONTEND
+- NEW **`/fleet-utilization`** (`src/pages/FleetUtilization.jsx`, Admin/Manager/Director, Operations nav
+  "Fleet Utilization") = KPI strip, band doughnut, by-country bar, sortable table, top-idle, Excel/PDF.
+  Pure engine `src/lib/fleetUtilization.js` (11 tests) + service `src/lib/api/assetUtilization.js` (merges
+  authoritative fleet current_km). Wired App.jsx route + Layout nav + commandSearch.
+- **Asset Detail** now shows Utilization % + Distance(period) tiles (getAssetUtilization) and its Current KM tile
+  already reflects the new telematics reading. Build clean, lint 0, new + command-search tests green.
+- 140 telematics rows (83 KSA + 57 UAE) do NOT match a fleet asset -> kept as honest unlinked utilization rows.
+
 ## SESSION 2026-07-28 (part 7) — AN EGYPT EXPENSE FILE WAS LOADED INTO UAE (V405). Migrations through **V405**, next free **V406**.
 
 ### **1,524 rows, EGP 5,392,835, moved UAE -> Egypt**

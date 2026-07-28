@@ -146,6 +146,7 @@ const FleetRenewal           = lazy(() => import('./pages/FleetRenewal'))
 const DtcDiagnostics         = lazy(() => import('./pages/DtcDiagnostics'))
 const EngineHours            = lazy(() => import('./pages/EngineHours'))
 const OdometerLogs           = lazy(() => import('./pages/OdometerLogs'))
+const FleetUtilization       = lazy(() => import('./pages/FleetUtilization'))
 const PmPrograms             = lazy(() => import('./pages/PmPrograms'))
 const VehicleWashing         = lazy(() => import('./pages/VehicleWashing'))
 const Trips                  = lazy(() => import('./pages/Trips'))
@@ -229,6 +230,7 @@ const BoardOverview          = lazy(() => import('./pages/BoardOverview'))
 const TyreFailureCpkBoard    = lazy(() => import('./pages/TyreFailureCpkBoard'))
 const MaintenanceCostBoard   = lazy(() => import('./pages/MaintenanceCostBoard'))
 const ExpenseReport          = lazy(() => import('./pages/ExpenseReport'))
+const ExpenseTrends          = lazy(() => import('./pages/ExpenseTrends'))
 const ErpIntake             = lazy(() => import('./pages/ErpIntake'))
 const ExpenseImport          = lazy(() => import('./pages/ExpenseImport'))
 const ReportSharing          = lazy(() => import('./pages/ReportSharing'))
@@ -517,6 +519,7 @@ function MainApp() {
                       <Route path="/tyre-failure-cpk"        element={<Safe><RoleRoute allowed={['Admin', 'Manager', 'Director']}><TyreFailureCpkBoard /></RoleRoute></Safe>} />
                       <Route path="/maintenance-cost-board"  element={<Safe><RoleRoute allowed={['Admin', 'Manager', 'Director']}><MaintenanceCostBoard /></RoleRoute></Safe>} />
                       <Route path="/expense-report"          element={<Safe><RoleRoute allowed={['Admin', 'Manager', 'Director']}><ExpenseReport /></RoleRoute></Safe>} />
+                      <Route path="/expense-trends"          element={<Safe><RoleRoute allowed={['Admin', 'Manager', 'Director']}><ExpenseTrends /></RoleRoute></Safe>} />
                       <Route path="/erp-intake"             element={<Safe><RoleRoute allowed={['Admin', 'Manager', 'Director']}><ErpIntake /></RoleRoute></Safe>} />
                       <Route path="/expense-import"          element={<Safe><RoleRoute allowed={['Admin', 'Manager', 'Director']}><ExpenseImport /></RoleRoute></Safe>} />
                       <Route path="/report-sharing"          element={<Safe><RoleRoute allowed={['Admin', 'Manager', 'Director']}><ReportSharing /></RoleRoute></Safe>} />
@@ -606,6 +609,7 @@ function MainApp() {
                       <Route path="/dtc"                   element={<Safe><RoleRoute allowed={['Admin']}><DtcDiagnostics /></RoleRoute></Safe>} />
                       <Route path="/engine-hours"          element={<Safe><RoleRoute allowed={['Admin']}><EngineHours /></RoleRoute></Safe>} />
                       <Route path="/odometer-logs"         element={<Safe><RoleRoute allowed={['Admin']}><OdometerLogs /></RoleRoute></Safe>} />
+                      <Route path="/fleet-utilization"     element={<Safe><RoleRoute allowed={['Admin', 'Manager', 'Director']}><FleetUtilization /></RoleRoute></Safe>} />
                       <Route path="/pm-programs"           element={<Safe><RoleRoute allowed={['Admin']}><PmPrograms /></RoleRoute></Safe>} />
                       <Route path="/vehicle-washing"       element={<Safe><ModuleRoute moduleKey="vehicle_washing"><VehicleWashing /></ModuleRoute></Safe>} />
                       <Route path="/trips"                 element={<Safe><RoleRoute allowed={['Admin']}><Trips /></RoleRoute></Safe>} />

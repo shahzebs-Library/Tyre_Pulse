@@ -18,6 +18,7 @@ import {
   LayoutDashboard, TrendingUp, PieChart, Lightbulb, Download, RefreshCw, Eye, EyeOff, Wallet,
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
+import YearlyTrendPanel from '../components/expense/YearlyTrendPanel'
 import { useSettings } from '../contexts/SettingsContext'
 import { formatCurrency } from '../lib/formatters'
 import { fetchAllPages } from '../lib/fetchAll'
@@ -47,11 +48,12 @@ const LS_KEY = 'boardOverview.sections.v1'
 const SECTIONS = [
   ['kpis', 'KPIs', LayoutDashboard],
   ['trends', 'Trends', TrendingUp],
+  ['yearlyTrend', 'Yearly Expense', TrendingUp],
   ['charts', 'Charts', PieChart],
   ['costSplit', 'Tyres vs Maintenance', Wallet],
   ['recommendations', 'Recommendations', Lightbulb],
 ]
-const SECTION_DEFAULTS = { kpis: true, trends: true, charts: true, costSplit: true, recommendations: true }
+const SECTION_DEFAULTS = { kpis: true, trends: true, yearlyTrend: true, charts: true, costSplit: true, recommendations: true }
 
 /** 'YYYY-MM' -> 'Mon YY' month label (passthrough for non date keys). */
 const monthLabel = (key) => {
@@ -359,6 +361,14 @@ export default function BoardOverview() {
                 <ChartCard title="Claims: claimed vs recovered" refCb={setRef('trendClaims')}><Line data={stylize(t.claims, 'line')} options={chartBase(true)} /></ChartCard>
                 <ChartCard title="Inspections" refCb={setRef('trendInspections')}><Line data={stylize(t.inspections, 'area')} options={chartBase(false)} /></ChartCard>
               </div>
+            </section>
+          )}
+
+          {/* Yearly expense trend + forecast */}
+          {sections.yearlyTrend && (
+            <section className="space-y-3">
+              <h2 className="text-sm font-bold uppercase tracking-wider text-[var(--text-secondary)] flex items-center gap-2"><TrendingUp size={15} /> Yearly expense trend &amp; forecast</h2>
+              <YearlyTrendPanel title="Expense by year (tyres / spare / lubricant) + forecast" />
             </section>
           )}
 

@@ -25,6 +25,7 @@ import {
 } from 'lucide-react'
 import { motion } from 'framer-motion'
 import PageHeader from '../components/ui/PageHeader'
+import YearlyTrendPanel from '../components/expense/YearlyTrendPanel'
 import SectionTabs, { KPI_TABS } from '../components/ui/SectionTabs'
 import EmailReportModal from '../components/EmailReportModal'
 
@@ -960,6 +961,9 @@ export default function EngineeringKpi() {
           ))}
         </div>
       </div>
+
+      {/* ── Multi-year expense trend + forecast ─────────────────────────────── */}
+      <YearlyTrendPanel title="Expense trend by year (tyres / spare / lubricant) + forecast" />
 
       {/* ── Empty state ──────────────────────────────────────────────────────── */}
       {!kpis && !loading && (

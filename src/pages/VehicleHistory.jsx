@@ -741,6 +741,11 @@ function VehicleDetailPanel({ row, currency, defaultCost, onClose, relatedAction
               <span className="text-muted mr-1">{t('vehiclehistory.detail.operator')}</span>{fleetRecord.operator_name}
             </span>
           )}
+          {fleetRecord.current_km != null && fleetRecord.current_km !== '' && (
+            <span className="text-xs px-2 py-0.5 rounded bg-emerald-900/30 border border-emerald-700/40 text-emerald-300">
+              <span className="text-muted mr-1">{t('vehiclehistory.detail.currentKm')}</span>{Number(fleetRecord.current_km).toLocaleString()} km
+            </span>
+          )}
         </div>
       ) : (
         <p className="text-xs text-dim">

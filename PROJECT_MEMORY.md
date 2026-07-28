@@ -3,10 +3,32 @@
 Durable, committed project knowledge so any session has full context. Keep this
 current. Read it before adding/changing modules. Governing spec: `Tyre pulse enterprise.md`
 
-## SESSION 2026-07-28 CLOSED CLEAN — parts 3-7 ALL MERGED. Migrations through **V405**, next free **V406**.
-Branch `claude/accident-builder-report-ui-2bkwb5` == `origin/main` == **`e41b011`**, nothing uncommitted.
-PRs **#213 · #214 · #215 · #216** all merged. Web build clean, lint 0 errors, **5,855 tests green** (was 5,750).
+## SESSION 2026-07-28 CLOSED CLEAN — parts 3-9 ALL MERGED. Migrations through **V415**, next free **V416**.
+Branch `claude/accident-builder-report-ui-2bkwb5` == `origin/main` == **`5f9e3f7`**, nothing uncommitted.
+PRs **#213-#219** all merged (parts 8-9: #217 telematics/current-km/tyre-merge/dedup/expense-trends,
+#218 erp-import promotion + import dedupe fixes, #219 expense-trends date range). Web build clean, lint 0 errors.
 For NEW work restart the branch from latest main — merged PRs are terminal.
+
+### PARTS 8-9 SUMMARY (detail in the per-part sections below)
+- **V406-V408** telematics `asset_utilization` + current km (KSA 248 / UAE 101) via odometer pipe; fixed the
+  odometer->current_km trigger to be COUNTRY-aware (same code = different machine per country).
+- **V410-V411** KSA tyre lifecycle merged from staging: +97 fitments, +12 old, **1,497 replaced-tyre removals**
+  applied directly (no re-upload). **V412** exact-duplicate expense removal (UAE -15,575 / Egypt -4,169),
+  cost-certified + archived. **V409** RLS on the 3 raw import tables.
+- **V413/V414** Expense Trends & Forecast (year/quarter/month, tyre/spare/lubricant, YoY, CAGR, least-squares
+  forecast) — dedicated `/expense-trends` page + reusable `YearlyTrendPanel` embedded in Dashboard, Cost Center,
+  Engineering KPI, Board Overview, Executive Report. **#219** added a From/To **date-range** (month+year
+  dropdowns, client-side `filterPeriods`) that windows the trend + forecast.
+- **V415 (part 9, 3 agents)** the `/erp-import` PROMOTION step (staging -> master via dry-run/undo RPCs);
+  `work_orders` import dedupe made GLOBAL (work_order_no is globally unique, prefix encodes country); paged
+  dedupe reads `existingKeys`/`existingTyreKeys` now `.order('id')`. Standing open items 1-3 CLOSED.
+
+### Frontend surfaces added this session (record once)
+- **`/fleet-utilization`** (Fleet Utilization) · **`/expense-trends`** (Expense Trends & Forecast) ·
+  reusable `src/components/expense/YearlyTrendPanel.jsx`. Engines: `src/lib/fleetUtilization.js`,
+  `src/lib/expenseTrends.js`. Services: `src/lib/api/assetUtilization.js`, `src/lib/api/expenseTrends.js`.
+  RPCs: `get_expense_period_trend(country, grain)` (V414, year/quarter/month; `get_expense_yearly_trend`
+  delegates to it). Current km shows on Asset register / Asset Detail / Vehicle History / Fleet Utilization.
 
 ### WHAT SHIPPED (newest first, detail in the per-part sections below)
 - **V405** an Egypt expense file loaded into UAE — 1,524 rows / EGP 5,392,835 moved, currency and import key
@@ -77,6 +99,10 @@ grid so NOT re-added — would double-count) — the ask was VISIBILITY: compare
   grain-aware `forecast`/`insights`/`buildCountryTrend` (forecast ahead: year 2 / quarter 4 / month 6). The
   reusable panel + the /expense-trends page both carry a **Year/Quarter/Month toggle** (so every embed gets it).
   `getExpenseYearlyTrend` now delegates to `getExpensePeriodTrend`. 15 engine tests.
+- **#219 — From/To DATE-RANGE (month + year dropdowns).** Client-side `periodBounds`/`filterPeriods`/
+  `availableYears` window the displayed periods so the trend AND forecast are built from the chosen span (the
+  forecast projects from the selected window). On the /expense-trends page + the reusable panel (non-compact
+  embeds). No migration; years auto-populate from the data. 19 engine tests.
 - **SPREAD ACROSS MODULES (done):** reusable **`src/components/expense/YearlyTrendPanel.jsx`** (self-fetching,
   theme-neutral via `var(--text-*)` + mid-gray chart colors so it reads on dark app pages AND white report
   pages) embedded in **Dashboard** (compact), **Cost Center**, **Engineering KPI**, **Board Overview**

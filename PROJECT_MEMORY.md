@@ -4,8 +4,14 @@ Durable, committed project knowledge so any session has full context. Keep this
 current. Read it before adding/changing modules. Governing spec: `Tyre pulse enterprise.md`
 
 ## SESSION 2026-07-28 (part 10) — MATERIAL MASTER EASY/MULTI CONFIRM (V416). Migrations through **V416**, next free **V417**.
-**PR #222** (`claude/accident-builder-report-ui-2bkwb5`), V416 applied live + record file committed. CI: Analytics /
-Mobile / Python CodeQL green; Web build + JS CodeQL running at write time — awaiting green to squash-merge.
+**PR #222 MERGED to main** (squash `0dfb2b2`) — V416 applied live + record file + the erpIntakeMerge test fix
+(the `order()` mock fix below) are all on main.
+**PENDING / not mine:** the shared branch `claude/accident-builder-report-ui-2bkwb5` also carries ~10 commits
+from a PARALLEL session (usePersistedState hook + "Persist view controls across navigation" A-F/G-M/N-R/S-W +
+per-window appearance scoping + login dark theme + light-mode contrast + i18n keys). Those are NOT on main and
+are that session's to merge — do NOT force-push the shared branch or merge it wholesale (would clobber or
+prematurely ship their work). This part-10 doc note reached main via the tiny branch
+`claude/fix-erpintake-merge-mock`.
 **~21,000 codes sat unreviewed** (KSA 9,078 / UAE 9,009 / Egypt 3,352); the only path to confirm a proposal was
 a one-at-a-time modal. Added two fast paths on **`/console/material-master`** (ConsoleMaterialMaster.jsx):
 - **EASY CONFIRM** — a one-click green Confirm on any unreviewed row accepts its CURRENT category (no modal).
@@ -24,6 +30,14 @@ a one-at-a-time modal. Added two fast paths on **`/console/material-master`** (C
   `setMaterialsBulk` in src/lib/api/materialMaster.js. Tests materialMaster.test.js 33 -> 41.
 - **GOTCHA fixed at build:** `CircleCheck`/`CircleHelp` are NOT in this lucide-react version -> used
   `CheckCircle2`/`HelpCircle`. RULE (already in this file): verify every lucide icon before import.
+- **CI RED ON MAIN, PRE-EXISTING, now fixed in #222:** `src/test/erpIntakeMerge.test.js` was failing 2/6 on
+  `origin/main` (verified against the clean base, NOT caused by this PR). Part-9 (V415) added `.order('id')` to
+  `existingTyreKeys`/`existingKeys` in `src/lib/api/erpIntake.js` (the paging-boundary fix), but this OLDER
+  test's hoisted Supabase mock builder had no `order()` method -> the call threw -> was swallowed by
+  `insertTyreRecords`'s `.catch(() => new Set())` -> dedup silently no-oped -> `inserted:1` instead of `0`.
+  Production code was correct; the mock was stale. Fix = added a chainable `order() { return b }` to the mock
+  builder. **RULE: when a service adds a query-chain method (order/limit/filter), update every hoisted supabase
+  mock that exercises that path, or a swallowed TypeError turns into a silent wrong result the test still "runs".**
 
 ## SESSION 2026-07-28 CLOSED CLEAN — parts 3-9 ALL MERGED. Migrations through **V415**, next free **V416**.
 Branch `claude/accident-builder-report-ui-2bkwb5` == `origin/main` == **`5f9e3f7`**, nothing uncommitted.

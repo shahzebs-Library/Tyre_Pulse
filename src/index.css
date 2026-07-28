@@ -863,6 +863,24 @@ html.light {
   --login-input-border: rgba(22,163,74,0.2);
 }
 
+/* The auth screen is a deliberate DARK brand moment. Its card internals are all
+   dark-designed (white ink, green accents), and the half-built light variant
+   rendered white text on a white card (the "Create Account" tab and inputs
+   vanished). Rather than ship a broken light login, pin the --login-* tokens to
+   their dark values for the login shell in light mode too, so the screen is a
+   consistent, legible, premium dark panel regardless of the saved app theme.
+   These override the html.light group above via the higher-specificity scope. */
+html.light .tp-login-shell {
+  --login-bg:           #060e08;
+  --login-card-bg:      rgba(6,16,9,0.88);
+  --login-card-border:  rgba(22,163,74,0.22);
+  --login-card-shadow:  0 0 0 1px rgba(74,222,128,0.04), 0 32px 80px rgba(0,0,0,0.7), 0 0 60px rgba(22,163,74,0.08);
+  --login-text:         #ffffff;
+  --login-text-dim:     rgba(255,255,255,0.55);
+  --login-input-bg:     rgba(255,255,255,0.05);
+  --login-input-border: rgba(255,255,255,0.12);
+}
+
 html.light body {
   /* Flat neutral ground — no grid, no green bloom. */
   background-color: #f6f7f9;

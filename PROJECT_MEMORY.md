@@ -3,7 +3,90 @@
 Durable, committed project knowledge so any session has full context. Keep this
 current. Read it before adding/changing modules. Governing spec: `Tyre pulse enterprise.md`
 
-## SESSION 2026-07-28 (part 3) — THE CLASSIFIER LEARNS FROM CORRECTIONS (V400). Migrations through **V400j**, next free **V401**.
+## SESSION 2026-07-28 (part 4) — TYRE PRICE BACKFILL (V401) + COVERAGE WINDOW & FILE HELP (V402). Migrations through **V402**, next free **V403**.
+
+### **V401 — "if a tyre has zero cost, backfill from previous data; a repair is not a price; warranty is zero"**
+**THREE OF THE REQUEST'S OWN PREMISES NEEDED CORRECTING BY MEASUREMENT FIRST:**
+1. **"ZERO COST" IS NOT ZERO, IT IS NULL.** `cost_per_tyre = 0` matches **ZERO rows in every country**.
+   3,665 tyres have no price: KSA 2,183, and **UAE (1,007) and Egypt (475) are 100% priceless.** The fill
+   condition covers both forms anyway — a literal 0 is the same problem.
+2. **THE DESCRIPTION IS NOT ON THE TYRE.** `tyre_records.description` is **NULL on all 7,508 rows**, so the
+   repair/warranty wording can only come from the expense grid's `item_description` — which is also where the
+   price lives.
+3. **Every priceless tyre HAS a job card** (3,665 of 3,665), so the grid link is available for all of them.
+
+### **THE EXISTING BACKFILL WAS BADLY WRONG — V327 is SUPERSEDED, do not call it**
+`backfill_tyre_prices_from_grid` took `round(avg(tyre_cost))` — the **LINE total** — and wrote it as the
+**per-tyre** price, never dividing by quantity. **4,334 of 14,911 tyre lines (29%) cover more than one tyre,
+up to 20 on one line:** UAE line 2,162.20 vs unit 692.38 = **3.1x**; KSA 2,350.73 vs 940.07 = **2.5x**;
+Egypt 53,865.77 vs 10,508.11 = **5.1x**. No repair exclusion, no dry run, no undo. Left in place but COMMENTed.
+
+### The source ladder (`tyre_price_backfill`, dry run by default)
+1. **warranty -> 0** (outranks even a measured price: if it was replaced free, what an equivalent tyre costs is
+   not what THIS one cost). 2. **own_jobcard** = this tyre's own purchase, **value / quantity**, repairs excluded.
+3. **comparable** = the **MEDIAN** of the same country+brand+size bought EARLIER — a median, not the nearest
+   row, so one mistyped price cannot become the fleet's answer; comparables are drawn only from tyres with a
+   REAL price, **never from ones this process filled**, or one guess seeds the next. 4. **nothing -> stays NULL.**
+- **A REPAIR IS NEVER A PRICE.** Egypt carries **35 lines "Repair TIRE 315/80R22.5" / "Repair TIRE 385/65/R22.5",
+  EGP 155,504**, in the tyre bucket. **Verified live: a tyre whose ONLY grid evidence was a planted repair line
+  priced 99,999 was NOT FILLED AT ALL.**
+- **WARRANTY: honest gap.** No warranty wording exists anywhere in the grid today (probe returns 0 in all three
+  countries), so the rule currently matches nothing and every surface reports the count. **Verified live** by
+  planting one: a tyre pricing 885.83 AED from its job card became **0 via warranty**.
+- **V401b — MONEY PER COUNTRY, NEVER BLENDED.** V401's response carried ONE `by_source.value`/`avg_price` across
+  all three countries = SAR+AED+EGP added, **the exact bug this repo has fixed at four separate reader sites.**
+  It showed instantly: `own_jobcard` avg read **6,348.90**, not a tyre price anywhere — just Egypt's EGP dragging
+  a mixed-currency mean. Counts are currency-free and stay top-level; **every money figure now sits inside a
+  country.**
+- **Dry run today: 2,989 of 3,665 fillable (82%)** — KSA 2,017 SAR 1,904,355 median **900**; UAE 568 AED 424,468
+  median **714.71**; Egypt 404 EGP 5,893,604 median **14,181.29**. own_jobcard 1,001 / comparable 1,988 /
+  warranty 0. Every median is plausible in its own currency.
+- **Round trip verified live, rolled back (UAE): 1,007 priceless -> 568 filled -> 439 -> undo 568 -> 1,007**,
+  and **0 rows had a pre-existing price** so nothing was overwritten. Undo restores the exact prior value
+  **including NULL** from `tyre_price_backfill_log`, never re-derives it.
+- Surfaces: `src/lib/api/tyrePriceBackfill.js` · pure `src/lib/tyrePriceRules.js` (19 tests, **MIRRORS the SQL
+  `tyre_price_is_repair`/`tyre_price_is_warranty` — change both**) · `TyrePriceSection` on **/data-reconciliation**
+  (the existing data-quality hub, no new page).
+
+### **TWO FINDINGS THE MEASUREMENT TURNED UP — worth acting on separately**
+1. **`removal_reason` IS CONTAMINATED WITH BRAND NAMES.** 1,839 tyre rows hold a brand there: ROADX 760,
+   PIRELLI 454, FIREMAX 78, LONGMARCH 58, ROCK HOLDER 31, TRIANGLE 24, VGLORY 14, RADIAL 13, BRIDGESTONE 12,
+   BLACKHAWK 5. A column-misalignment on the UAE/Egypt tyre import.
+2. **THIS CLOSES THE STANDING "Egypt 475 blank brand — needs a re-import" ITEM WITHOUT A RE-IMPORT.** All 475
+   Egypt tyres have a blank brand and **469 of them carry a real brand in `removal_reason`** (PIRELLI 454,
+   BRIDGESTONE 12, SAILUN 2, TEGRYS 1). The data is there, in the wrong column. **NOT MOVED YET** — it is a
+   data migration and worth doing deliberately; it would also unlock `comparable` pricing for Egypt, which
+   currently returns 0 candidates purely because the brand is blank.
+
+### **V402 — a custom coverage window, and RAISING THE CLAMP ALONE WOULD HAVE LIED**
+The panel offered 14/30/60/90 and the function clamped to 180. **The base CTE only pulls `current_date - v_base`
+(180 days) of rows, so a display window longer than the fetch would show days with NO DATA purely because those
+rows were never fetched — inventing gaps on a panel whose whole job is reporting gaps truthfully.** Fix is two
+lines: window to 365, and **`v_base := greatest(180, v_n)`** so the fetch always covers the window while the
+**rhythm baseline stays at least 180 days** (V394b: deriving cadence from the on-screen window makes a feed
+silent for three weeks look "occasional" and stops alarming exactly when it matters). Applied by rewriting the
+existing definition **with guards that RAISE if the expected text is absent** — a blind replace on an 11k-char
+function is how a subtle behaviour change ships unnoticed.
+- **Client: the window always ends TODAY** (the question is "did I forget to upload?", which is about now); a
+  chosen start date converts to the day count the view already understands, and a date further back than 365
+  days **says so rather than silently clamping** — a window that quietly became a different window is how
+  someone concludes a feed is healthy when it is not.
+
+### **"what file we uploading and where to add it" — the other half of a coverage gap**
+"KSA job cards missed 23 days" is half an answer; the reader still had to work out which export, which table,
+and what the headers must say — **all of it already in `IMPORT_TARGETS` and simply never shown beside the gap.**
+`src/lib/coverageSources.js` (18 tests) joins the two **BY DERIVATION from IMPORT_TARGETS**, so adding a target
+surfaces it automatically and the two cannot drift; `FeedFileHelp.jsx` shows the file, the per-country table,
+the exact headers with a copy button, the re-import warning and the gotchas.
+- **`production_m3` deliberately resolves to NOTHING** — `production_logs` has no staging table, so there is
+  genuinely no file for it (those rows are entered in the app). The panel says that instead of pointing at an
+  export that does not exist.
+- The re-import warning **names the consequence**: a `needs-key` file uploaded without its line-number column
+  adds every row a second time — the exact path that produced the 8,248 duplicate expense rows.
+- **`tableForCountry` matches on the SUFFIX, not position** — a positional guess breaks the moment a country is
+  added in a different order.
+
+## SESSION 2026-07-28 (part 3) — THE CLASSIFIER LEARNS FROM CORRECTIONS (V400). Migrations through **V400k**, next free **V401**.
 
 ### **V400 — "each time it should improve with my changes and learn these things"**
 **MEASURED BEFORE BUILDING ANYTHING:** **131,436 lines = 61% of all spend**, across 15,470 item codes, are

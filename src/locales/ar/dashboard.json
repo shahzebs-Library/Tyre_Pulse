@@ -33,12 +33,20 @@
     "openActions": "الإجراءات المفتوحة",
     "highRisk": "خطورة عالية",
     "totalCost": "التكلفة الإجمالية",
-    "recordsSub": "{count} مركبة"
+    "recordsSub": "{count} مركبة",
+    "fleetVehicles": "مركبات الأسطول",
+    "fleetVehiclesSub": "أصول لها سجلات إطارات"
+  },
+  "costView": {
+    "label": "عرض التكلفة"
   },
   "filters": {
     "searchPlaceholder": "ابحث عن أصل أو علامة تجارية أو موقع...",
     "recordsOfTotal": "{count} من {total} سجل",
-    "to": "إلى"
+    "to": "إلى",
+    "site": "الموقع",
+    "allSites": "كل المواقع",
+    "clear": "مسح"
   },
   "granularity": {
     "day": "يوم",
@@ -81,7 +89,41 @@
     "noAssetData": "لا توجد بيانات أصول",
     "topSites": "أعلى المواقع إنفاقًا · {currency}",
     "topSitesSubtitle": "المواقع الأعلى تكلفة",
-    "noSiteData": "لا توجد بيانات مواقع"
+    "noSiteData": "لا توجد بيانات مواقع",
+    "riskMixTrend": "توزيع الخطورة عبر الوقت",
+    "riskMixSubtitle": "حجم الإطارات الشهري حسب مستوى الخطورة، آخر 12 شهرًا",
+    "noRiskTrend": "لا توجد بيانات اتجاه الخطورة",
+    "noRiskTrendDesc": "ستظهر السجلات التي تحمل تواريخ أعطال ومستويات خطورة هنا.",
+    "categorySplit": "توزيع الإنفاق ({currency})",
+    "categorySplitSubtitle": "إنفاق شراء الإطارات الجديدة مقابل المجددة",
+    "noSpendSplit": "لا توجد بيانات إنفاق",
+    "noSpendSplitDesc": "ستظهر السجلات التي تحمل قيم تكلفة هنا."
+  },
+  "recs": {
+    "title": "التوصيات ذات الأولوية",
+    "count": "{count} بحاجة إلى إجراء",
+    "allClear": "كل شيء على ما يرام: لا توجد مشكلات حرجة في العرض الحالي."
+  },
+  "pm": {
+    "title": "الصيانة الوقائية",
+    "view": "عرض",
+    "overdue": "متأخرة",
+    "dueSoon": "مستحقة قريبًا",
+    "compliance": "الامتثال",
+    "activePlans": "{count} خطة نشطة",
+    "na": "N/A"
+  },
+  "workshop": {
+    "title": "الورشة اليوم",
+    "view": "التحكم المباشر",
+    "working": "قيد العمل",
+    "available": "متاح",
+    "openJobs": "بطاقات عمل مفتوحة",
+    "overdue": "متأخرة",
+    "vor": "مركبات متوقفة",
+    "utilization": "معدل الاستخدام",
+    "completed": "مكتملة اليوم",
+    "na": "N/A"
   },
   "legend": {
     "all": "الكل",

@@ -24,6 +24,7 @@ import {
 import {
   getUploadCoverageDetail, feedCadenceLabel, feedProblem, problemAreas, sortCountries,
 } from '../../../lib/api/uploadCoverage'
+import FeedFileHelp from './FeedFileHelp'
 import { toUserMessage } from '../../../lib/safeError'
 import {
   Panel, Note, Badge, Btn, Segmented, Toolbar, LoadingState, EmptyState, ErrorState,
@@ -43,6 +44,11 @@ const fmtShort = (d) => {
   return Number.isNaN(dt.getTime()) ? String(d)
     : dt.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })
 }
+// The database clamps the window to this range; the UI has to agree or a date
+// outside it would silently become a different window.
+const MIN_WINDOW_DAYS = 7
+const MAX_WINDOW_DAYS = 365
+
 const ago = (n) => (n == null ? 'never' : n === 0 ? 'today' : n === 1 ? 'yesterday' : `${n} days ago`)
 
 /** One square per day. Colour carries the meaning; the tooltip carries detail. */
@@ -120,8 +126,9 @@ function AreaList({ src }) {
   )
 }
 
-function FeedCard({ src, today }) {
+function FeedCard({ src, today, country }) {
   const [open, setOpen] = useState(false)
+  const [help, setHelp] = useState(false)
   const problem = feedProblem(src)
   const gaps = problemAreas(src).length
   return (
@@ -158,13 +165,26 @@ function FeedCard({ src, today }) {
         </p>
       )}
 
-      <button onClick={() => setOpen((v) => !v)}
-        className="flex items-center gap-1 text-[11px] text-gray-500 hover:text-gray-300">
-        <ChevronRight size={11} className={`transition-transform ${open ? 'rotate-90' : ''}`} />
-        {open ? 'Hide areas' : `Areas (${(src.sites || []).length})`}
-        {gaps > 0 && !open && <span className="text-amber-400">· {gaps} with gaps</span>}
-      </button>
+      <div className="flex items-center gap-4 flex-wrap">
+        <button onClick={() => setOpen((v) => !v)}
+          className="flex items-center gap-1 text-[11px] text-gray-500 hover:text-gray-300">
+          <ChevronRight size={11} className={`transition-transform ${open ? 'rotate-90' : ''}`} />
+          {open ? 'Hide areas' : `Areas (${(src.sites || []).length})`}
+          {gaps > 0 && !open && <span className="text-amber-400">· {gaps} with gaps</span>}
+        </button>
+        {/* The gap is only half an answer; this is the other half. */}
+        <button onClick={() => setHelp((v) => !v)}
+          className="flex items-center gap-1 text-[11px] text-gray-500 hover:text-gray-300">
+          <ChevronRight size={11} className={`transition-transform ${help ? 'rotate-90' : ''}`} />
+          {help ? 'Hide the file' : 'What fills this?'}
+        </button>
+      </div>
       {open && <div className="pl-4 pt-1"><AreaList src={src} /></div>}
+      {help && (
+        <div className="pl-4 pt-1">
+          <FeedFileHelp src={src.src} country={country} />
+        </div>
+      )}
     </Panel>
   )
 }
@@ -174,7 +194,23 @@ export default function UploadCoveragePanel() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [days, setDays] = useState(30)
+  const [fromDate, setFromDate] = useState('')
+  const [tooFarBack, setTooFarBack] = useState(false)
   const [country, setCountry] = useState('')
+
+  // A preset and a start date are two ways of saying the same thing, so picking
+  // one clears the other rather than leaving both on screen disagreeing.
+  const pickPreset = (n) => { setDays(n); setFromDate(''); setTooFarBack(false) }
+
+  const pickFrom = (value) => {
+    setFromDate(value)
+    if (!value) { setTooFarBack(false); setDays(30); return }
+    const start = new Date(`${value}T00:00:00Z`)
+    if (Number.isNaN(start.getTime())) return
+    const wanted = Math.ceil((Date.now() - start.getTime()) / 86400000) + 1
+    setTooFarBack(wanted > MAX_WINDOW_DAYS)
+    setDays(Math.min(Math.max(wanted, MIN_WINDOW_DAYS), MAX_WINDOW_DAYS))
+  }
 
   const load = useCallback(async () => {
     setLoading(true); setError('')
@@ -207,8 +243,28 @@ export default function UploadCoveragePanel() {
   return (
     <div className="space-y-4">
       <Toolbar>
-        <Segmented value={days} onChange={setDays}
-          options={[14, 30, 60, 90].map((n) => ({ key: n, label: `${n} days` }))} />
+        <Segmented value={days} onChange={pickPreset}
+          options={[14, 30, 60, 90, 180].map((n) => ({ key: n, label: `${n} days` }))} />
+        {/* A custom start date, expressed as the day count the view already
+            understands. The window always ends today, because the question this
+            panel answers is "did I forget to upload?", which is about now. */}
+        <label className="flex items-center gap-1.5 text-[11px] text-gray-500">
+          from
+          <input
+            type="date"
+            value={fromDate}
+            max={cov?.today || undefined}
+            onChange={(e) => pickFrom(e.target.value)}
+            className="bg-gray-900 border border-gray-800 rounded px-2 py-1 text-[11px] text-gray-300"
+          />
+        </label>
+        {tooFarBack && (
+          /* Say it rather than silently clamping - a window that quietly became
+             a different window is how someone concludes a feed is fine. */
+          <span className="text-[11px] text-amber-400">
+            Showing the last {MAX_WINDOW_DAYS} days, the furthest back this goes.
+          </span>
+        )}
         <Segmented value={country} onChange={setCountry}
           options={[{ key: '', label: 'All countries' },
             ...countries.map((c) => ({
@@ -262,7 +318,7 @@ export default function UploadCoveragePanel() {
           </div>
           <div className="space-y-3">
             {(c.sources || []).map((s) => (
-              <FeedCard key={`${c.country}-${s.src}`} src={s} today={cov.today} />
+              <FeedCard key={`${c.country}-${s.src}`} src={s} today={cov.today} country={c.country} />
             ))}
           </div>
         </div>

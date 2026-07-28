@@ -20,6 +20,7 @@ const h = vi.hoisted(() => {
       _table: table,
       select() { return b },
       eq() { return b },
+      order() { return b },  // existing-key reads order by id before paging (V415)
       range(f) {
         // Serve the existing-rows page once, then signal end-of-data.
         const page = f === 0 ? state.existing : []

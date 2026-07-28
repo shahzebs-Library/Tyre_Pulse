@@ -315,6 +315,49 @@ export function masterCoverage(rows = [], master) {
 }
 
 /**
+ * Pure: does the item's own description agree with its assigned category?
+ *
+ * This is the single most useful signal for deciding what is safe to confirm in
+ * bulk. When the description patterns would land on the same cost bucket as the
+ * category on the row, the two agree and the row can be confirmed with
+ * confidence. When they differ, a human should look before confirming.
+ *
+ * Compared at the BUCKET level, not the category, because the description patterns
+ * are deliberately coarse (they only distinguish tyre / oil / everything-else),
+ * so `filter` vs `spare_part` both being `spare` is agreement, not a conflict.
+ *
+ * @param {{item_name?:string, category?:string}} row
+ * @returns {'agree'|'differ'|'unknown'} unknown when there is no description to compare
+ */
+export function descriptionAgreement(row) {
+  const name = String(row?.item_name ?? '').trim()
+  if (!name) return 'unknown'
+  const fromText = costBucketFor(categoryFromDescription(name))
+  const fromCat = costBucketFor(row?.category)
+  return fromText === fromCat ? 'agree' : 'differ'
+}
+
+/**
+ * Pure: split a set of transaction lines by the cost bucket they are booked under,
+ * so a reviewer sees where a code's money actually sits rather than one sample.
+ * @param {Array<{cost_category?:string, line_cost?:number}>} txns
+ * @returns {{tyre:number, spare:number, oil:number, total:number}}
+ */
+export function transactionBucketSplit(txns = []) {
+  const out = { tyre: 0, spare: 0, oil: 0, total: 0 }
+  for (const t of txns || []) {
+    const v = Number(t?.line_cost)
+    const amt = Number.isFinite(v) ? v : 0
+    const raw = String(t?.cost_category ?? '').trim().toLowerCase()
+    const bucket = raw === 'tyre' ? 'tyre' : raw === 'oil' ? 'oil' : 'spare'
+    out[bucket] += amt
+    out.total += amt
+  }
+  for (const k of ['tyre', 'spare', 'oil', 'total']) out[k] = Math.round(out[k] * 100) / 100
+  return out
+}
+
+/**
  * Pure: validate a master row before it is saved.
  * @param {object} row
  * @returns {{ok:boolean, errors:string[]}}

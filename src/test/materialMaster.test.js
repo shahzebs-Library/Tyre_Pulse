@@ -4,6 +4,7 @@ import {
   categoryFlags, costBucketFor, categoryFromDescription, classifyByMaster,
   normaliseItemCode, deriveMasterFromTransactions, mapLegacyCategory,
   masterCoverage, validateMasterRow,
+  descriptionAgreement, transactionBucketSplit,
 } from '../lib/materialMaster'
 
 describe('category vocabulary', () => {
@@ -259,5 +260,63 @@ describe('validateMasterRow', () => {
   it('reports every problem at once rather than one at a time', () => {
     const r = validateMasterRow({})
     expect(r.errors.length).toBe(2)
+  })
+})
+
+describe('descriptionAgreement (the fast-confirm cue)', () => {
+  it('agrees when the description bucket matches the category bucket', () => {
+    // "315/80 R22.5" reads as a tyre; category tyre => same bucket.
+    expect(descriptionAgreement({ item_name: 'TYRE 315/80 R22.5', category: 'tyre' })).toBe('agree')
+  })
+
+  it('agrees at the BUCKET level even when the exact category differs', () => {
+    // filter and spare_part are both the `spare` bucket, so a filter item filed
+    // as a spare part is agreement, not a conflict.
+    expect(descriptionAgreement({ item_name: 'OIL FILTER ELEMENT', category: 'spare_part' })).toBe('agree')
+  })
+
+  it('differs when the description would land in a different bucket', () => {
+    // An oil description filed against a tyre category is a real disagreement.
+    expect(descriptionAgreement({ item_name: 'ENGINE OIL 15W40', category: 'tyre' })).toBe('differ')
+  })
+
+  it('is unknown when there is no description to compare', () => {
+    expect(descriptionAgreement({ item_name: '', category: 'spare_part' })).toBe('unknown')
+    expect(descriptionAgreement({ category: 'spare_part' })).toBe('unknown')
+  })
+})
+
+describe('transactionBucketSplit', () => {
+  it('sums line cost into the tyre / spare / oil buckets', () => {
+    const s = transactionBucketSplit([
+      { cost_category: 'tyre', line_cost: 100 },
+      { cost_category: 'oil', line_cost: 50 },
+      { cost_category: 'spare', line_cost: 25 },
+      { cost_category: 'spare', line_cost: 25 },
+    ])
+    expect(s).toEqual({ tyre: 100, spare: 50, oil: 50, total: 200 })
+  })
+
+  it('treats any non-tyre / non-oil category as spare (matches the cost model default)', () => {
+    const s = transactionBucketSplit([
+      { cost_category: 'filter', line_cost: 40 },
+      { cost_category: '', line_cost: 10 },
+    ])
+    expect(s.spare).toBe(50)
+    expect(s.total).toBe(50)
+  })
+
+  it('ignores non-numeric line costs rather than turning them into NaN', () => {
+    const s = transactionBucketSplit([
+      { cost_category: 'tyre', line_cost: 'oops' },
+      { cost_category: 'tyre', line_cost: 30 },
+    ])
+    expect(s.tyre).toBe(30)
+    expect(Number.isFinite(s.total)).toBe(true)
+  })
+
+  it('returns a zeroed split for empty input', () => {
+    expect(transactionBucketSplit([])).toEqual({ tyre: 0, spare: 0, oil: 0, total: 0 })
+    expect(transactionBucketSplit()).toEqual({ tyre: 0, spare: 0, oil: 0, total: 0 })
   })
 })

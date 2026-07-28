@@ -1,32 +1,41 @@
 /**
- * ConsoleMaterialMaster - review and override what every item code actually IS (V367).
+ * ConsoleMaterialMaster - review and override what every item code actually IS
+ * (V367), now with one-click and bulk confirmation (V416).
  *
- * This is where a guess becomes a decision. Cost category is proposed from the item
- * description, which is unauditable and cannot be corrected for a single item. Here a
- * human confirms or changes it, and from then on the transaction's category comes from
- * that decision with a name and a timestamp attached.
+ * This is where a guess becomes a decision. Cost category is proposed from the
+ * item description, which is unauditable and cannot be corrected for a single
+ * item. Here a human confirms or changes it, and from then on the transaction's
+ * category comes from that decision with a name and a timestamp attached.
  *
- * Two deliberate choices in the UI:
+ * ~21,000 codes sit unreviewed, so reviewing them one modal at a time is not a
+ * realistic path. Two fast paths were added:
+ *   - EASY CONFIRM: a one-click Confirm on any row accepts its current proposed
+ *     category. No modal.
+ *   - MULTI CONFIRM: tick several rows (or all on the page) and confirm them
+ *     together.
+ * Confirming is money-safe by construction: it marks the item reviewed with the
+ * category it ALREADY carries - the one already classifying its rows - so nothing
+ * is re-bucketed. Historical money moves only through the separate
+ * reclassify_from_master lever, which has its own preview and undo.
  *
- *   1. Sorted by VALUE, not alphabetically. Reviewing the top 200 codes by money covers
- *      far more of the spend than 200 codes starting with A, and the coverage figure
- *      shown is the share of MONEY reviewed rather than the share of rows, for the same
- *      reason.
- *   2. Country is always visible and always part of the key. Item codes are NOT unique
- *      across countries in this data (450115-O is "COMPRESSOR OIL 68" in KSA and
- *      "GREASE MISC ITEMS" in UAE), so a decision belongs to one country's code.
+ * The DESCRIPTION-AGREES signal is what makes bulk confirmation safe to use: when
+ * an item's own description lands on the same cost bucket as its category, the two
+ * agree and it can be confirmed with confidence; when they differ, look first.
  *
  * Super-admin only (the whole /console is gated). No raw SQL, no em/en dashes.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
-  Boxes, RefreshCw, AlertTriangle, Loader2, Search, Check, Info, X, Download, ListFilter,
+  Boxes, RefreshCw, AlertTriangle, Loader2, Search, Check, Info, X, Download,
+  ListFilter, CheckCheck, CheckCircle2, HelpCircle, Ban,
 } from 'lucide-react'
 import {
-  listMaterials, deriveMaterials, setMaterial, materialCoverage, listMaterialTransactions,
+  listMaterials, deriveMaterials, setMaterial, setMaterialsBulk, materialCoverage,
+  listMaterialTransactions,
 } from '../../lib/api/materialMaster'
 import {
   MATERIAL_CATEGORIES, MATERIAL_SUBCATEGORIES, costBucketFor,
+  descriptionAgreement, transactionBucketSplit,
 } from '../../lib/materialMaster'
 import { exportToExcel, reportFileName } from '../../lib/exportUtils'
 
@@ -48,12 +57,15 @@ export default function ConsoleMaterialMaster() {
   const [coverage, setCoverage] = useState({})
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
+  const [confirmingId, setConfirmingId] = useState(null)
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
 
   const [country, setCountry] = useState('KSA')
   const [search, setSearch] = useState('')
-  const [view, setView] = useState('all')   // all | unreviewed | reviewed | conflicting
+  const [view, setView] = useState('all')      // all | unreviewed | reviewed | conflicting
+  const [agree, setAgree] = useState('any')     // any | agree | differ
+  const [selected, setSelected] = useState(() => new Set())
 
   const [detail, setDetail] = useState(null)      // the item being reviewed
   const [detailTxns, setDetailTxns] = useState([])
@@ -74,6 +86,7 @@ export default function ConsoleMaterialMaster() {
         materialCoverage(),
       ])
       setRows(list); setCoverage(cov)
+      setSelected(new Set())   // a fresh list invalidates any prior selection
     } catch (e) {
       setError(e?.message || 'Could not load the material master.')
     } finally {
@@ -86,6 +99,38 @@ export default function ConsoleMaterialMaster() {
     return () => clearTimeout(t)
   }, [load, search])
 
+  // Description agreement is derived from the row, so it filters client-side.
+  const visible = useMemo(() => {
+    if (agree === 'any') return rows
+    return rows.filter((r) => descriptionAgreement(r) === agree)
+  }, [rows, agree])
+
+  const selectableIds = useMemo(
+    () => visible.filter((r) => !r.reviewed).map((r) => r.id),
+    [visible],
+  )
+  const allSelected = selectableIds.length > 0 && selectableIds.every((id) => selected.has(id))
+  const selectedRows = useMemo(
+    () => visible.filter((r) => selected.has(r.id)),
+    [visible, selected],
+  )
+
+  function toggleRow(id) {
+    setSelected((s) => {
+      const n = new Set(s)
+      if (n.has(id)) n.delete(id); else n.add(id)
+      return n
+    })
+  }
+  function toggleAll() {
+    setSelected((s) => {
+      if (allSelected) return new Set()
+      const n = new Set(s)
+      selectableIds.forEach((id) => n.add(id))
+      return n
+    })
+  }
+
   async function refresh() {
     setBusy(true); setError(''); setNotice('')
     try {
@@ -96,6 +141,48 @@ export default function ConsoleMaterialMaster() {
       await load()
     } catch (e) {
       setError(e?.message || 'Could not refresh from transactions.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  // EASY CONFIRM: one row, its current category, no modal.
+  async function confirmOne(row) {
+    setConfirmingId(row.id); setError(''); setNotice('')
+    try {
+      await setMaterial({
+        country: row.country, item_code: row.item_code, category: row.category, reviewed: true,
+      })
+      // Update the row in place rather than reloading the whole list.
+      setRows((rs) => rs.map((r) => (r.id === row.id
+        ? { ...r, reviewed: true, conflicting: false } : r)))
+      setSelected((s) => { const n = new Set(s); n.delete(row.id); return n })
+    } catch (e) {
+      setError(e?.message || 'Could not confirm that item.')
+    } finally {
+      setConfirmingId(null)
+    }
+  }
+
+  // MULTI CONFIRM: the current selection, each as its own current category.
+  async function confirmSelected() {
+    if (selectedRows.length === 0) return
+    setBusy(true); setError(''); setNotice('')
+    try {
+      const res = await setMaterialsBulk(selectedRows.map((r) => ({
+        country: r.country, item_code: r.item_code, category: r.category,
+      })))
+      const ids = new Set(selectedRows.map((r) => r.id))
+      setRows((rs) => rs.map((r) => (ids.has(r.id)
+        ? { ...r, reviewed: true, conflicting: false } : r)))
+      setSelected(new Set())
+      setNotice(`Confirmed ${fmtNum(res.confirmed)} item${res.confirmed === 1 ? '' : 's'} as shown.`
+        + `${res.skipped ? ` ${fmtNum(res.skipped)} skipped.` : ''}`
+        + ' Each keeps the category it already had, so no spend was re-bucketed.')
+      // Coverage moved; refresh just the headline figure.
+      materialCoverage().then(setCoverage).catch(() => {})
+    } catch (e) {
+      setError(e?.message || 'Could not confirm the selected items.')
     } finally {
       setBusy(false)
     }
@@ -123,8 +210,12 @@ export default function ConsoleMaterialMaster() {
       })
       setNotice(`${detail.item_code} confirmed as ${labelFor(draft.category)}. `
         + 'Every transaction with this code now uses that decision.')
+      const changed = draft.category !== detail.category
+      setRows((rs) => rs.map((r) => (r.id === detail.id
+        ? { ...r, reviewed: true, conflicting: false, category: draft.category,
+            subcategory: draft.subcategory || null, uom: draft.uom || null } : r)))
       setDetail(null)
-      await load()
+      if (changed) materialCoverage().then(setCoverage).catch(() => {})
     } catch (e) {
       setError(e?.message || 'Could not save that item.')
     } finally {
@@ -140,6 +231,7 @@ export default function ConsoleMaterialMaster() {
       item_name: r.item_name || '',
       category: labelFor(r.category),
       cost_bucket: costBucketFor(r.category),
+      description_agrees: descriptionAgreement(r),
       subcategory: r.subcategory || '',
       brand: r.brand || '',
       uom: r.uom || '',
@@ -154,10 +246,10 @@ export default function ConsoleMaterialMaster() {
   }
 
   const reviewedShare = coverage?.reviewed_value_share
-  const unreviewedCount = useMemo(() => rows.filter((r) => !r.reviewed).length, [rows])
+  const unreviewedCount = useMemo(() => visible.filter((r) => !r.reviewed).length, [visible])
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-5 pb-24">
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div>
           <h1 className="text-lg font-semibold text-white flex items-center gap-2">
@@ -196,9 +288,11 @@ export default function ConsoleMaterialMaster() {
       <div className="flex items-start gap-2 px-4 py-2.5 rounded-xl bg-sky-950/30 border border-sky-800/40">
         <Info size={14} className="text-sky-400 flex-shrink-0 mt-0.5" />
         <p className="text-xs text-sky-200">
-          Items are listed by value, so reviewing the top of this list covers the most
-          spend for the least effort. The same item code can mean different things in
-          different countries, so each country keeps its own decision.
+          Confirming an item accepts the category it already has, so no spend is
+          re-bucketed - it only records the decision with your name on it. The green
+          tick means the item&apos;s own description agrees with that category, so it is
+          safe to confirm quickly; an amber question mark means the two differ, so open
+          it and look first.
         </p>
       </div>
 
@@ -238,6 +332,19 @@ export default function ConsoleMaterialMaster() {
             </button>
           ))}
         </div>
+        {/* Description-agreement filter: the fast lane for confident bulk confirm. */}
+        <div className="flex gap-1.5">
+          {[['any', 'Description any', null],
+            ['agree', 'Agrees', CheckCircle2],
+            ['differ', 'Differs', HelpCircle]].map(([k, label, Icon]) => (
+            <button key={k} onClick={() => setAgree(k)}
+              className={`px-2.5 py-1 rounded-lg text-[11px] border flex items-center gap-1 ${
+                agree === k ? 'bg-gray-700 border-gray-600 text-white'
+                  : 'bg-gray-800 border-gray-700 text-gray-400 hover:text-white'}`}>
+              {Icon && <Icon size={10} />} {label}
+            </button>
+          ))}
+        </div>
         <div className="relative flex-1 min-w-[200px]">
           <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-500" />
           <input value={search} onChange={(e) => setSearch(e.target.value)}
@@ -250,17 +357,23 @@ export default function ConsoleMaterialMaster() {
         <div className="flex items-center justify-center h-48">
           <Loader2 className="w-7 h-7 text-orange-500 animate-spin" />
         </div>
-      ) : rows.length === 0 ? (
+      ) : visible.length === 0 ? (
         <div className="text-center text-sm text-gray-500 py-16 border border-gray-800 rounded-xl">
           {search ? 'No item matches that search.'
-            : 'No items yet. Use "Refresh from transactions" to build the list from your expense data.'}
+            : agree !== 'any' ? 'No item in this list matches that description filter.'
+              : 'No items yet. Use "Refresh from transactions" to build the list from your expense data.'}
         </div>
       ) : (
         <>
-          {unreviewedCount > 0 && view === 'all' && (
+          {unreviewedCount > 0 && (
             <p className="text-[11px] text-gray-500">
-              {fmtNum(unreviewedCount)} of the {fmtNum(rows.length)} shown are still using the
+              {fmtNum(unreviewedCount)} of the {fmtNum(visible.length)} shown are still using the
               description as a guess.
+              {selectableIds.length > 0 && (
+                <button onClick={toggleAll} className="ml-2 text-orange-400 hover:text-orange-300 underline">
+                  {allSelected ? 'Clear selection' : `Select all ${fmtNum(selectableIds.length)} unreviewed here`}
+                </button>
+              )}
             </p>
           )}
           <div className="rounded-xl border border-gray-800 overflow-hidden">
@@ -268,58 +381,119 @@ export default function ConsoleMaterialMaster() {
               <table className="w-full text-left">
                 <thead className="bg-black/30 text-[10px] uppercase tracking-wide text-gray-500 sticky top-0">
                   <tr>
-                    <th className="px-4 py-2.5 font-semibold">Item</th>
+                    <th className="px-3 py-2.5 w-8">
+                      <input type="checkbox" checked={allSelected} onChange={toggleAll}
+                        disabled={selectableIds.length === 0}
+                        className="accent-orange-500 disabled:opacity-30" title="Select all unreviewed on this page" />
+                    </th>
+                    <th className="px-2 py-2.5 font-semibold">Item</th>
                     <th className="px-3 py-2.5 font-semibold">Counted as</th>
+                    <th className="px-3 py-2.5 font-semibold">Description</th>
                     <th className="px-3 py-2.5 font-semibold">Spend</th>
                     <th className="px-3 py-2.5 font-semibold">Status</th>
                     <th className="px-3 py-2.5 font-semibold"></th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-800/60">
-                  {rows.map((r) => (
-                    <tr key={r.id} className={r.conflicting ? 'bg-amber-950/10' : 'hover:bg-black/20'}>
-                      <td className="px-4 py-2.5">
-                        <p className="text-xs text-gray-200 font-mono">{r.item_code}</p>
-                        <p className="text-[10px] text-gray-500 truncate max-w-[280px]" title={r.item_name}>
-                          {r.item_name || 'No description on record'}
-                        </p>
-                      </td>
-                      <td className="px-3 py-2.5">
-                        <span className={`px-1.5 py-0.5 rounded text-[9px] font-semibold border ${
-                          BUCKET_TONE[costBucketFor(r.category)]}`}>
-                          {labelFor(r.category)}
-                        </span>
-                      </td>
-                      <td className="px-3 py-2.5">
-                        <p className="text-[11px] text-gray-300">
-                          {fmtMoney(r.txn_value)} {CURRENCY[r.country] || ''}
-                        </p>
-                        <p className="text-[10px] text-gray-600">{fmtNum(r.txn_rows)} lines</p>
-                      </td>
-                      <td className="px-3 py-2.5">
-                        {r.reviewed ? (
-                          <span className="text-[10px] text-emerald-300 flex items-center gap-1">
-                            <Check size={10} /> Confirmed
+                  {visible.map((r) => {
+                    const ag = descriptionAgreement(r)
+                    const isSel = selected.has(r.id)
+                    return (
+                      <tr key={r.id} className={
+                        isSel ? 'bg-orange-950/20'
+                          : r.conflicting ? 'bg-amber-950/10' : 'hover:bg-black/20'}>
+                        <td className="px-3 py-2.5">
+                          {!r.reviewed && (
+                            <input type="checkbox" checked={isSel} onChange={() => toggleRow(r.id)}
+                              className="accent-orange-500" />
+                          )}
+                        </td>
+                        <td className="px-2 py-2.5">
+                          <p className="text-xs text-gray-200 font-mono">{r.item_code}</p>
+                          <p className="text-[10px] text-gray-500 truncate max-w-[240px]" title={r.item_name}>
+                            {r.item_name || 'No description on record'}
+                          </p>
+                          {(r.brand || r.subcategory) && (
+                            <p className="text-[9px] text-gray-600 mt-0.5">
+                              {[r.brand, r.subcategory].filter(Boolean).join(' · ')}
+                            </p>
+                          )}
+                        </td>
+                        <td className="px-3 py-2.5">
+                          <span className={`px-1.5 py-0.5 rounded text-[9px] font-semibold border ${
+                            BUCKET_TONE[costBucketFor(r.category)]}`}>
+                            {labelFor(r.category)}
                           </span>
-                        ) : r.conflicting ? (
-                          <span className="text-[10px] text-amber-300">Needs a decision</span>
-                        ) : (
-                          <span className="text-[10px] text-gray-600">From description</span>
-                        )}
-                      </td>
-                      <td className="px-3 py-2.5 text-right">
-                        <button onClick={() => openDetail(r)}
-                          className="h-7 px-2.5 rounded-lg bg-gray-800 border border-gray-700 text-[11px] text-gray-300 hover:text-white">
-                          Review
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
+                        </td>
+                        <td className="px-3 py-2.5">
+                          <AgreeBadge agreement={ag} />
+                        </td>
+                        <td className="px-3 py-2.5">
+                          <p className="text-[11px] text-gray-300">
+                            {fmtMoney(r.txn_value)} {CURRENCY[r.country] || ''}
+                          </p>
+                          <p className="text-[10px] text-gray-600">{fmtNum(r.txn_rows)} lines</p>
+                        </td>
+                        <td className="px-3 py-2.5">
+                          {r.reviewed ? (
+                            <span className="text-[10px] text-emerald-300 flex items-center gap-1">
+                              <Check size={10} /> Confirmed
+                            </span>
+                          ) : r.conflicting ? (
+                            <span className="text-[10px] text-amber-300">Needs a decision</span>
+                          ) : (
+                            <span className="text-[10px] text-gray-600">From description</span>
+                          )}
+                        </td>
+                        <td className="px-3 py-2.5 text-right whitespace-nowrap">
+                          {!r.reviewed && (
+                            <button onClick={() => confirmOne(r)} disabled={confirmingId === r.id || busy}
+                              title="Confirm as its current category"
+                              className="h-7 px-2 rounded-lg bg-emerald-700/40 border border-emerald-700/60 text-[11px] text-emerald-200 hover:bg-emerald-700/60 inline-flex items-center gap-1 disabled:opacity-50 mr-1.5">
+                              {confirmingId === r.id
+                                ? <Loader2 size={11} className="animate-spin" />
+                                : <Check size={11} />} Confirm
+                            </button>
+                          )}
+                          <button onClick={() => openDetail(r)}
+                            className="h-7 px-2.5 rounded-lg bg-gray-800 border border-gray-700 text-[11px] text-gray-300 hover:text-white">
+                            {r.reviewed ? 'Edit' : 'Review'}
+                          </button>
+                        </td>
+                      </tr>
+                    )
+                  })}
                 </tbody>
               </table>
             </div>
           </div>
         </>
+      )}
+
+      {/* Multi-confirm action bar - appears only when something is selected. */}
+      {selectedRows.length > 0 && (
+        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-40 w-[min(92vw,640px)]
+          rounded-xl bg-[#12121a] border border-orange-700/50 shadow-xl px-4 py-3
+          flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2 min-w-0">
+            <CheckCheck size={16} className="text-orange-400 flex-shrink-0" />
+            <p className="text-xs text-gray-200">
+              <span className="font-semibold">{fmtNum(selectedRows.length)}</span> selected.
+              Confirm each as the category it already has.
+            </p>
+          </div>
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <button onClick={() => setSelected(new Set())}
+              className="h-9 px-3 rounded-lg bg-gray-800 border border-gray-700 text-xs text-gray-300 hover:text-white flex items-center gap-1.5">
+              <Ban size={12} /> Clear
+            </button>
+            <button onClick={confirmSelected} disabled={busy}
+              className="h-9 px-4 rounded-lg bg-orange-600 hover:bg-orange-500 text-xs font-semibold text-white flex items-center gap-2 disabled:opacity-50">
+              {busy ? <Loader2 size={13} className="animate-spin" /> : <CheckCheck size={13} />}
+              Confirm {fmtNum(selectedRows.length)}
+            </button>
+          </div>
+        </div>
       )}
 
       {/* Review one item */}
@@ -341,6 +515,9 @@ export default function ConsoleMaterialMaster() {
             </div>
 
             <div className="px-5 py-3 overflow-y-auto space-y-4">
+              {/* At-a-glance detail: how this code's money actually splits. */}
+              <MoneySplit txns={detailTxns} country={detail.country} agreement={descriptionAgreement(detail)} />
+
               <div>
                 <label className="block text-[11px] font-semibold text-gray-400 mb-1.5">
                   What is this item?
@@ -401,7 +578,8 @@ export default function ConsoleMaterialMaster() {
               {/* The evidence: what this code was actually used for. */}
               <div>
                 <p className="text-[11px] font-semibold text-gray-400 mb-1.5">
-                  How this code has been used ({fmtNum(detail.txn_rows)} lines)
+                  How this code has been used ({fmtNum(detail.txn_rows)} lines,
+                  {' '}{fmtNum(new Set(detailTxns.map((t) => (t.item_description || '').trim())).size)} distinct descriptions)
                 </p>
                 {detailTxns.length === 0 ? (
                   <p className="text-[11px] text-gray-600">Loading the transactions.</p>
@@ -449,6 +627,67 @@ export default function ConsoleMaterialMaster() {
 
 function labelFor(key) {
   return MATERIAL_CATEGORIES.find((c) => c.key === key)?.label || key || 'Unclassified'
+}
+
+/** The description-agrees signal, the fast-confirm cue. */
+function AgreeBadge({ agreement }) {
+  if (agreement === 'agree') {
+    return (
+      <span className="text-[10px] text-emerald-300 flex items-center gap-1" title="The description agrees with this category">
+        <CheckCircle2 size={11} /> Agrees
+      </span>
+    )
+  }
+  if (agreement === 'differ') {
+    return (
+      <span className="text-[10px] text-amber-300 flex items-center gap-1" title="The description would suggest a different category - look before confirming">
+        <HelpCircle size={11} /> Differs
+      </span>
+    )
+  }
+  return <span className="text-[10px] text-gray-600" title="No description to compare">No description</span>
+}
+
+/** A one-line split of where this code's money is actually booked. */
+function MoneySplit({ txns, country, agreement }) {
+  const split = transactionBucketSplit(txns)
+  const cur = CURRENCY[country] || ''
+  const pct = (v) => (split.total > 0 ? Math.round((v / split.total) * 100) : 0)
+  const parts = [
+    ['tyre', 'Tyre', 'bg-emerald-500'],
+    ['spare', 'Spare', 'bg-sky-500'],
+    ['oil', 'Oil', 'bg-amber-500'],
+  ].filter(([k]) => split[k] > 0)
+  if (split.total <= 0) return null
+  return (
+    <div className="rounded-lg border border-gray-800 bg-black/20 p-3 space-y-2">
+      <div className="flex items-center justify-between">
+        <p className="text-[11px] font-semibold text-gray-400">Where this code&apos;s money sits today</p>
+        {agreement === 'agree' && (
+          <span className="text-[10px] text-emerald-300 flex items-center gap-1">
+            <CheckCircle2 size={11} /> description agrees
+          </span>
+        )}
+        {agreement === 'differ' && (
+          <span className="text-[10px] text-amber-300 flex items-center gap-1">
+            <HelpCircle size={11} /> description differs
+          </span>
+        )}
+      </div>
+      <div className="h-2 rounded-full overflow-hidden flex bg-gray-800">
+        {parts.map(([k, , colour]) => (
+          <div key={k} className={colour} style={{ width: `${pct(split[k])}%` }} title={`${k} ${pct(split[k])}%`} />
+        ))}
+      </div>
+      <div className="flex flex-wrap gap-3">
+        {parts.map(([k, label]) => (
+          <span key={k} className="text-[10px] text-gray-400">
+            {label} {fmtMoney(split[k])} {cur} ({pct(split[k])}%)
+          </span>
+        ))}
+      </div>
+    </div>
+  )
 }
 
 function Stat({ label, value, tone }) {

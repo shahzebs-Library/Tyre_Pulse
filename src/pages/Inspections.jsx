@@ -383,13 +383,16 @@ export default function Inspections() {
   const [masterSites, setMasterSites]   = useState([])
   const [masterAssets, setMasterAssets] = useState([])
 
+  // Country-scoped, and PAGED inside the service: the unpaged read stopped at
+  // PostgREST's 1000-row cap while the fleet holds 1,523, so 523 assets were
+  // simply absent from this picker with nothing to say so.
   useEffect(() => {
-    inspectionsApi.listInspectionVehicles().then(data => {
+    inspectionsApi.listInspectionVehicles({ country: activeCountry }).then(data => {
       if (!data) return
       setMasterSites([...new Set(data.map(r => r.site).filter(Boolean))].sort())
       setMasterAssets(data.filter(r => r.asset_no).sort((a, b) => a.asset_no.localeCompare(b.asset_no)))
     }).catch(() => { /* silent - master data best-effort */ })
-  }, [])
+  }, [activeCountry])
 
   // Geolocation auto-site detection (best-effort) - declared after masterSites
   // so its dependency array is not evaluated before that state exists.

@@ -23,7 +23,12 @@ const h = vi.hoisted(() => {
       or(e) { calls.or.push(e); return b },
       maybeSingle() { return Promise.resolve(state.result) },
       single() { return Promise.resolve(state.result) },
-      then(onF, onR) { return Promise.resolve(state.result).then(onF, onR) },
+      // A test may set `state.result` to a FUNCTION to answer per request, which
+      // is what makes multi-page fetching testable rather than assumed.
+      then(onF, onR) {
+        const r = typeof state.result === 'function' ? state.result(calls) : state.result
+        return Promise.resolve(r).then(onF, onR)
+      },
     }
     state.last = b
     return b
@@ -123,11 +128,14 @@ describe('inspections page service - insert/delete', () => {
 })
 
 describe('inspections page service - vehicle_fleet helpers', () => {
+  // `id` joined the column list when this became paged: it is the unique tiebreak
+  // that keeps page boundaries deterministic, since asset_no is unique per country
+  // rather than globally (V348). It is not rendered anywhere.
   it('listInspectionVehicles reads site/asset_no/vehicle_type from vehicle_fleet', async () => {
     h.state.result = { data: [{ site: 'S1', asset_no: 'A1', vehicle_type: 'Bus' }], error: null }
     const rows = await inspectionsApi.listInspectionVehicles()
     expect(h.state.last._table).toBe('vehicle_fleet')
-    expect(h.state.last._calls.select[0]).toBe('site,asset_no,vehicle_type')
+    expect(h.state.last._calls.select[0]).toBe('site,asset_no,vehicle_type,id')
     expect(rows).toEqual([{ site: 'S1', asset_no: 'A1', vehicle_type: 'Bus' }])
   })
 
@@ -137,5 +145,22 @@ describe('inspections page service - vehicle_fleet helpers', () => {
     expect(h.state.last._table).toBe('vehicle_fleet')
     expect(h.state.last._calls.eq).toContainEqual(['asset_no', 'A1'])
     expect(v).toEqual({ asset_no: 'A1', vehicle_type: 'Bus', site: 'S1' })
+  })
+
+  it('listInspectionVehicles pages past the 1000-row cap', async () => {
+    // Same defect as the accident picker: a bare select stops at 1000 while the
+    // fleet holds 1,523, so 523 assets never appeared in this list.
+    const page = (n, size) => Array.from({ length: size }, (_, i) => ({
+      asset_no: `A${String(n * 1000 + i).padStart(5, '0')}`, site: 'NHC', vehicle_type: 'TR-MIXER',
+    }))
+    h.state.result = (calls) => {
+      const [from] = calls.range || [0]
+      if (from === 0) return { data: page(0, 1000), error: null }
+      if (from === 1000) return { data: page(1, 523), error: null }
+      return { data: [], error: null }
+    }
+    const rows = await inspectionsApi.listInspectionVehicles()
+    expect(rows).toHaveLength(1523)
+    expect(rows[1522].asset_no).toBe('A01522')
   })
 })

@@ -488,12 +488,17 @@ export default function Accidents() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location.state, loading, records])
 
-  // Load fleet assets for search combobox
+  // Load fleet assets for search combobox.
+  //
+  // Country-scoped, because asset_no is unique per COUNTRY and the same code in
+  // two countries is usually a DIFFERENT machine (V376: GN103 is a generator in
+  // KSA and a different generator in UAE). Offering both under one heading in a
+  // KSA form invites attaching the wrong vehicle to an incident.
   useEffect(() => {
-    accidentsApi.listAccidentFleet()
+    accidentsApi.listAccidentFleet({ country: activeCountry })
       .then((data) => setFleetAssets(data ?? []))
       .catch(() => setFleetAssets([]))
-  }, [])
+  }, [activeCountry])
 
   // Close asset dropdown on outside click
   useEffect(() => {
@@ -504,15 +509,30 @@ export default function Accidents() {
     return () => document.removeEventListener('mousedown', handle)
   }, [])
 
-  const assetSuggestions = useMemo(() => {
+  // Whether the loaded fleet spans more than one country. When it does, the
+  // suggestion has to show which one: the same asset number in two countries is
+  // usually two different machines (V376).
+  const multiCountryFleet = useMemo(
+    () => new Set(fleetAssets.map(a => a.country).filter(Boolean)).size > 1,
+    [fleetAssets],
+  )
+
+  const assetMatches = useMemo(() => {
     if (!assetQuery.trim()) return []
     const q = assetQuery.toLowerCase()
     return fleetAssets.filter(a =>
       a.asset_no?.toLowerCase().includes(q) ||
       a.vehicle_type?.toLowerCase().includes(q) ||
       a.site?.toLowerCase().includes(q)
-    ).slice(0, 10)
+    )
   }, [assetQuery, fleetAssets])
+
+  // The list is capped for readability, but a silent cap reads as "that is every
+  // match" - which is exactly how the missing-assets problem stayed invisible.
+  const ASSET_SUGGESTION_CAP = 10
+  const assetSuggestions = useMemo(
+    () => assetMatches.slice(0, ASSET_SUGGESTION_CAP), [assetMatches],
+  )
 
   // Auto-populate related fields from the vehicle master (vehicle_fleet). Only
   // real accidents columns are written (plate_number [shown as Fleet No],
@@ -2812,9 +2832,27 @@ export default function Accidents() {
                           className="w-full text-left px-3 py-2 hover:bg-[var(--input-bg-hover)] transition-colors flex items-center justify-between gap-3"
                         >
                           <span className="text-[var(--text-primary)] font-mono text-sm">{a.asset_no}</span>
-                          <span className="text-[var(--text-muted)] text-xs truncate">{[a.vehicle_type, a.site].filter(Boolean).join(' · ')}</span>
+                          <span className="text-[var(--text-muted)] text-xs truncate">
+                            {[a.vehicle_type, a.site, multiCountryFleet ? a.country : null]
+                              .filter(Boolean).join(' · ')}
+                          </span>
                         </button>
                       ))}
+                      {assetMatches.length > assetSuggestions.length && (
+                        <p className="px-3 py-2 text-[11px] text-[var(--text-muted)] border-t border-[var(--input-border)]">
+                          Showing {assetSuggestions.length} of {assetMatches.length} matches. Type more to
+                          narrow it down.
+                        </p>
+                      )}
+                    </div>
+                  )}
+                  {assetQuery.trim() && assetMatches.length === 0 && showAssetDrop && (
+                    <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg shadow-xl px-3 py-2">
+                      <p className="text-[11px] text-[var(--text-muted)]">
+                        No asset in {activeCountry && activeCountry !== 'All' ? activeCountry : 'the fleet register'}
+                        {' '}matches that. You can still type the number in full and it will be looked up
+                        directly.
+                      </p>
                     </div>
                   )}
                   {assetInfo && (assetInfo.vehicle_type || assetInfo.make || assetInfo.model || assetInfo.fleet_number) && (

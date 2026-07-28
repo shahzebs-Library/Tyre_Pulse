@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   byCountry, yoyTable, latestShare, linearFit, cagr, forecast, insights, buildCountryTrend,
+  periodLabel, nextPeriod,
 } from '../lib/expenseTrends'
 
 const rows = [
@@ -82,5 +83,36 @@ describe('cagr + insights', () => {
     expect(t.yoy).toHaveLength(3)
     expect(t.forecast).toHaveLength(2)
     expect(t.cagr).not.toBeNull()
+  })
+})
+
+describe('period grain (quarter / month)', () => {
+  it('periodLabel formats year, quarter and month', () => {
+    expect(periodLabel('2024')).toBe('2024')
+    expect(periodLabel('2024-Q3')).toBe('Q3 2024')
+    expect(periodLabel('2024-01')).toBe('Jan 2024')
+  })
+  it('nextPeriod steps each grain, rolling over the year', () => {
+    expect(nextPeriod('2024', 'year')).toBe('2025')
+    expect(nextPeriod('2024-Q4', 'quarter')).toBe('2025-Q1')
+    expect(nextPeriod('2024-12', 'month')).toBe('2025-01')
+    expect(nextPeriod('2024-03', 'month')).toBe('2024-04')
+  })
+  it('byCountry accepts a `period` field and sorts + labels it', () => {
+    const g = byCountry([
+      { country: 'KSA', period: '2024-02', currency: 'SAR', tyre: 1, spare: 2, lubricant: 3, total: 6 },
+      { country: 'KSA', period: '2024-01', currency: 'SAR', tyre: 1, spare: 1, lubricant: 1, total: 3 },
+    ])
+    expect(g[0].years.map((y) => y.period)).toEqual(['2024-01', '2024-02'])
+    expect(g[0].years[0].label).toBe('Jan 2024')
+  })
+  it('forecast produces grain-correct future period labels', () => {
+    const years = [
+      { period: '2024-Q1', total: 100, tyre: 100, spare: 0, lubricant: 0 },
+      { period: '2024-Q2', total: 200, tyre: 200, spare: 0, lubricant: 0 },
+    ]
+    const f = forecast(years, 2, 'quarter')
+    expect(f.map((x) => x.period)).toEqual(['2024-Q3', '2024-Q4'])
+    expect(f[0].total).toBe(300)
   })
 })

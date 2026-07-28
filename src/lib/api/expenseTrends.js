@@ -14,9 +14,19 @@ import { supabase, isMissingRelation } from './_client'
  * @returns {Promise<Array>} rows: {country, year, currency, lines, tyre, spare, lubricant, total}
  */
 export async function getExpenseYearlyTrend({ country } = {}) {
+  return getExpensePeriodTrend({ country, grain: 'year' })
+}
+
+/**
+ * Period-flexible expense trend. grain = 'year' | 'quarter' | 'month'.
+ * @returns {Promise<Array>} rows: {country, period, currency, lines, tyre, spare, lubricant, total}
+ */
+export async function getExpensePeriodTrend({ country, grain = 'year' } = {}) {
+  const g = ['year', 'quarter', 'month'].includes(grain) ? grain : 'year'
   try {
-    const { data, error } = await supabase.rpc('get_expense_yearly_trend', {
+    const { data, error } = await supabase.rpc('get_expense_period_trend', {
       p_country: country && country !== 'All' ? country : 'All',
+      p_grain: g,
     })
     if (error) throw error
     return Array.isArray(data) ? data : []

@@ -19,7 +19,7 @@ import {
 import { Bar } from 'react-chartjs-2'
 import { TrendingUp, TrendingDown, Sparkles, AlertTriangle } from 'lucide-react'
 import { useSettings } from '../../contexts/SettingsContext'
-import { getExpenseYearlyTrend } from '../../lib/api/expenseTrends'
+import { getExpensePeriodTrend } from '../../lib/api/expenseTrends'
 import { byCountry, buildCountryTrend, CATEGORIES, CATEGORY_LABEL, num } from '../../lib/expenseTrends'
 import { toUserMessage } from '../../lib/safeError'
 import { withAlpha } from '../../lib/reportColors'
@@ -30,11 +30,11 @@ const CAT_TONE = { tyre: '#3b82f6', spare: '#f59e0b', lubricant: '#10b981' }
 const fmt = (v, cur) => (num(v) == null ? 'N/A' : `${cur ? cur + ' ' : ''}${Math.round(Number(v)).toLocaleString()}`)
 const pct = (v) => (num(v) == null ? 'N/A' : `${v > 0 ? '+' : ''}${Math.round(v * 10) / 10}%`)
 
-function CountryBlock({ entry, compact }) {
-  const t = useMemo(() => buildCountryTrend(entry), [entry])
+function CountryBlock({ entry, compact, grain }) {
+  const t = useMemo(() => buildCountryTrend(entry, grain), [entry, grain])
   const cur = t.currency
-  const histLabels = t.years.map((y) => y.year)
-  const fcLabels = t.forecast.map((y) => y.year)
+  const histLabels = t.years.map((y) => y.label)
+  const fcLabels = t.forecast.map((y) => y.label)
   const labels = [...histLabels, ...fcLabels]
   const last = t.years[t.years.length - 1]
   const prev = t.years[t.years.length - 2]
@@ -71,10 +71,10 @@ function CountryBlock({ entry, compact }) {
         <div className="flex items-center gap-3 text-xs">
           <span className={`inline-flex items-center gap-1 ${yoyPct == null ? 'text-slate-400' : yoyPct > 0 ? 'text-amber-300' : 'text-emerald-300'}`}>
             {yoyPct != null && (yoyPct > 0 ? <TrendingUp className="w-3.5 h-3.5" /> : <TrendingDown className="w-3.5 h-3.5" />)}
-            YoY {pct(yoyPct)}
+            {grain === 'month' ? 'MoM' : grain === 'quarter' ? 'QoQ' : 'YoY'} {pct(yoyPct)}
           </span>
           {fc1 && (
-            <span className="inline-flex items-center gap-1 text-fuchsia-300"><Sparkles className="w-3.5 h-3.5" /> {fc1.year} ~ {fmt(fc1.total, cur)}</span>
+            <span className="inline-flex items-center gap-1 text-fuchsia-300"><Sparkles className="w-3.5 h-3.5" /> {fc1.label} ~ {fmt(fc1.total, cur)}</span>
           )}
         </div>
       </div>
@@ -84,9 +84,12 @@ function CountryBlock({ entry, compact }) {
   )
 }
 
-export default function YearlyTrendPanel({ compact = false, country, title = 'Expense trend by year' }) {
+const GRAIN_OPTS = [['year', 'Year'], ['quarter', 'Quarter'], ['month', 'Month']]
+
+export default function YearlyTrendPanel({ compact = false, country, title = 'Expense trend by year', defaultGrain = 'year' }) {
   const { activeCountry } = useSettings()
   const scope = country ?? activeCountry
+  const [grain, setGrain] = useState(defaultGrain)
   const [rows, setRows] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -94,13 +97,13 @@ export default function YearlyTrendPanel({ compact = false, country, title = 'Ex
   const load = useCallback(async () => {
     setLoading(true); setError('')
     try {
-      setRows(await getExpenseYearlyTrend({ country: scope }))
+      setRows(await getExpensePeriodTrend({ country: scope, grain }))
     } catch (err) {
       setError(toUserMessage(err))
     } finally {
       setLoading(false)
     }
-  }, [scope])
+  }, [scope, grain])
 
   useEffect(() => { load() }, [load])
 
@@ -108,9 +111,20 @@ export default function YearlyTrendPanel({ compact = false, country, title = 'Ex
 
   return (
     <div className="card p-4 space-y-4">
-      <div className="flex items-center gap-2">
-        <TrendingUp className="w-4 h-4 text-emerald-400" />
-        <h3 className="text-sm font-semibold" style={{color:'var(--text-primary)'}}>{title}</h3>
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        <div className="flex items-center gap-2">
+          <TrendingUp className="w-4 h-4 text-emerald-400" />
+          <h3 className="text-sm font-semibold" style={{color:'var(--text-primary)'}}>{title}</h3>
+        </div>
+        <div className="flex items-center gap-1 p-1 rounded-lg" style={{ background: 'var(--input-bg)', border: '1px solid var(--input-border)' }}>
+          {GRAIN_OPTS.map(([g, label]) => (
+            <button key={g} onClick={() => setGrain(g)}
+              className={`px-2.5 py-1 text-xs rounded-md font-medium transition-colors ${grain === g ? 'bg-emerald-600 text-white' : ''}`}
+              style={grain === g ? {} : { color: 'var(--text-muted)' }}>
+              {label}
+            </button>
+          ))}
+        </div>
       </div>
       {loading ? (
         <div style={{color:'var(--text-muted)'}} className="py-8 text-center text-sm">Loading…</div>
@@ -122,7 +136,7 @@ export default function YearlyTrendPanel({ compact = false, country, title = 'Ex
       ) : countries.length === 0 ? (
         <div style={{color:'var(--text-muted)'}} className="py-8 text-center text-sm">No multi-year expense data for this scope.</div>
       ) : (
-        countries.map((c) => <CountryBlock key={c.country} entry={c} compact={compact} />)
+        countries.map((c) => <CountryBlock key={c.country} entry={c} compact={compact} grain={grain} />)
       )}
     </div>
   )

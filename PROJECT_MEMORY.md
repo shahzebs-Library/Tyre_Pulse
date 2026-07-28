@@ -63,6 +63,11 @@ grid so NOT re-added — would double-count) — the ask was VISIBILITY: compare
 - Page **`/expense-trends`** ("Expense Trends", Reports & Executive nav): per-country stacked bar by year+category
   with dashed forecast, category trend lines, share doughnut, YoY table (+forecast rows), CAGR, insights,
   Excel/PDF. Wired nav + route + commandSearch. KSA verified 2018-2026 reconciles to 40.68M SAR.
+- **V414 — YEAR / QUARTER / MONTH granularity.** `get_expense_period_trend(p_country, p_grain)` buckets by
+  year / quarter ('2024-Q1') / month ('2024-01'), sortable keys. Engine gained `periodLabel`, `nextPeriod`,
+  grain-aware `forecast`/`insights`/`buildCountryTrend` (forecast ahead: year 2 / quarter 4 / month 6). The
+  reusable panel + the /expense-trends page both carry a **Year/Quarter/Month toggle** (so every embed gets it).
+  `getExpenseYearlyTrend` now delegates to `getExpensePeriodTrend`. 15 engine tests.
 - **SPREAD ACROSS MODULES (done):** reusable **`src/components/expense/YearlyTrendPanel.jsx`** (self-fetching,
   theme-neutral via `var(--text-*)` + mid-gray chart colors so it reads on dark app pages AND white report
   pages) embedded in **Dashboard** (compact), **Cost Center**, **Engineering KPI**, **Board Overview**

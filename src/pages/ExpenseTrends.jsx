@@ -22,7 +22,7 @@ import {
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
 import { useSettings } from '../contexts/SettingsContext'
-import { getExpenseYearlyTrend } from '../lib/api/expenseTrends'
+import { getExpensePeriodTrend } from '../lib/api/expenseTrends'
 import {
   byCountry, buildCountryTrend, CATEGORIES, CATEGORY_LABEL, num,
 } from '../lib/expenseTrends'
@@ -57,12 +57,14 @@ function Stat({ icon: Icon, label, value, sub, tone = 'text-slate-100' }) {
   )
 }
 
-function CountryTrend({ entry }) {
-  const t = useMemo(() => buildCountryTrend(entry), [entry])
+function CountryTrend({ entry, grain }) {
+  const t = useMemo(() => buildCountryTrend(entry, grain), [entry, grain])
   const cur = t.currency
-  const histLabels = t.years.map((y) => y.year)
-  const fcLabels = t.forecast.map((y) => y.year)
+  const histLabels = t.years.map((y) => y.label)
+  const fcLabels = t.forecast.map((y) => y.label)
   const allLabels = [...histLabels, ...fcLabels]
+  const perLabel = grain === 'month' ? 'Month' : grain === 'quarter' ? 'Quarter' : 'Year'
+  const yoyLabel = grain === 'month' ? 'MoM' : grain === 'quarter' ? 'QoQ' : 'YoY'
   const last = t.years[t.years.length - 1]
   const fc1 = t.forecast[0]
 
@@ -104,21 +106,21 @@ function CountryTrend({ entry }) {
     <div className="space-y-4">
       <div className="flex items-center gap-2">
         <h3 className="text-base font-semibold text-slate-100">{t.country}</h3>
-        <span className="text-xs text-slate-500">{cur} · {t.years.length} years</span>
+        <span className="text-xs text-slate-500">{cur} · {t.years.length} periods</span>
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <Stat icon={Calendar} label={`Latest year (${last?.year ?? '-'})`} value={fmtMoney(last?.total, cur)} />
-        <Stat icon={t.cagr != null && t.cagr >= 0 ? TrendingUp : TrendingDown} label="Avg growth / yr (CAGR)"
+        <Stat icon={Calendar} label={`Latest ${perLabel.toLowerCase()} (${last?.label ?? '-'})`} value={fmtMoney(last?.total, cur)} />
+        <Stat icon={t.cagr != null && t.cagr >= 0 ? TrendingUp : TrendingDown} label={`Avg growth / ${grain === "month" ? "mo" : grain === "quarter" ? "qtr" : "yr"} (CAGR)`}
           value={fmtPct(t.cagr)} tone={t.cagr != null && t.cagr > 0 ? 'text-amber-300' : 'text-emerald-300'} />
-        <Stat icon={Sparkles} label={`Forecast ${fc1?.year ?? ''}`} value={fmtMoney(fc1?.total, cur)} sub="least-squares estimate" tone="text-fuchsia-300" />
-        <Stat icon={Gauge} label={`Tyre share (${last?.year ?? '-'})`}
+        <Stat icon={Sparkles} label={`Forecast ${fc1?.label ?? ''}`} value={fmtMoney(fc1?.total, cur)} sub="least-squares estimate" tone="text-fuchsia-300" />
+        <Stat icon={Gauge} label={`Tyre share (${last?.label ?? '-'})`}
           value={last?.total ? `${Math.round((last.tyre / last.total) * 100)}%` : 'N/A'} />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <div className="card p-4 lg:col-span-2">
-          <div className="text-sm font-medium text-slate-200 mb-3">Spend by year &amp; category (with forecast)</div>
+          <div className="text-sm font-medium text-slate-200 mb-3">Spend by {perLabel.toLowerCase()} &amp; category (with forecast)</div>
           <div className="h-64">
             <Bar data={stacked} options={{
               maintainAspectRatio: false,
@@ -128,7 +130,7 @@ function CountryTrend({ entry }) {
           </div>
         </div>
         <div className="card p-4">
-          <div className="text-sm font-medium text-slate-200 mb-3">Category share ({last?.year ?? '-'})</div>
+          <div className="text-sm font-medium text-slate-200 mb-3">Category share ({last?.label ?? '-'})</div>
           <div className="h-64"><Doughnut data={shareData} options={{ maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { color: '#cbd5e1' } } } }} /></div>
         </div>
       </div>
@@ -150,18 +152,18 @@ function CountryTrend({ entry }) {
           <table className="w-full text-sm">
             <thead className="bg-white/5 text-slate-400">
               <tr>
-                <th className="text-left px-3 py-2">Year</th>
+                <th className="text-left px-3 py-2">{perLabel}</th>
                 <th className="text-right px-3 py-2">Tyres</th>
                 <th className="text-right px-3 py-2">Spare</th>
                 <th className="text-right px-3 py-2">Lubricants</th>
                 <th className="text-right px-3 py-2">Total</th>
-                <th className="text-right px-3 py-2">YoY</th>
+                <th className="text-right px-3 py-2">{yoyLabel}</th>
               </tr>
             </thead>
             <tbody>
               {t.yoy.map((y) => (
-                <tr key={y.year} className="border-t border-white/5">
-                  <td className="px-3 py-2 font-medium text-slate-200">{y.year}</td>
+                <tr key={y.period} className="border-t border-white/5">
+                  <td className="px-3 py-2 font-medium text-slate-200">{y.label}</td>
                   <td className="px-3 py-2 text-right">{fmtMoney(y.tyre, '')}</td>
                   <td className="px-3 py-2 text-right">{fmtMoney(y.spare, '')}</td>
                   <td className="px-3 py-2 text-right">{fmtMoney(y.lubricant, '')}</td>
@@ -170,8 +172,8 @@ function CountryTrend({ entry }) {
                 </tr>
               ))}
               {t.forecast.map((y) => (
-                <tr key={y.year} className="border-t border-fuchsia-500/20 bg-fuchsia-500/5">
-                  <td className="px-3 py-2 font-medium text-fuchsia-300">{y.year} (forecast)</td>
+                <tr key={y.period} className="border-t border-fuchsia-500/20 bg-fuchsia-500/5">
+                  <td className="px-3 py-2 font-medium text-fuchsia-300">{y.label} (forecast)</td>
                   <td className="px-3 py-2 text-right text-fuchsia-200">{fmtMoney(y.tyre, '')}</td>
                   <td className="px-3 py-2 text-right text-fuchsia-200">{fmtMoney(y.spare, '')}</td>
                   <td className="px-3 py-2 text-right text-fuchsia-200">{fmtMoney(y.lubricant, '')}</td>
@@ -198,8 +200,11 @@ function CountryTrend({ entry }) {
   )
 }
 
+const GRAIN_OPTS = [['year', 'Year'], ['quarter', 'Quarter'], ['month', 'Month']]
+
 export default function ExpenseTrends() {
   const { activeCountry } = useSettings()
+  const [grain, setGrain] = useState('year')
   const [rows, setRows] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -207,13 +212,13 @@ export default function ExpenseTrends() {
   const load = useCallback(async () => {
     setLoading(true); setError('')
     try {
-      setRows(await getExpenseYearlyTrend({ country: activeCountry }))
+      setRows(await getExpensePeriodTrend({ country: activeCountry, grain }))
     } catch (err) {
       setError(toUserMessage(err))
     } finally {
       setLoading(false)
     }
-  }, [activeCountry])
+  }, [activeCountry, grain])
 
   useEffect(() => { load() }, [load])
 
@@ -222,8 +227,8 @@ export default function ExpenseTrends() {
   function exportAll() {
     const out = []
     for (const c of countries) {
-      for (const y of c.years) out.push({ country: c.country, currency: c.currency, year: y.year, tyre: y.tyre, spare: y.spare, lubricant: y.lubricant, total: y.total, lines: y.lines })
-      for (const y of buildCountryTrend(c).forecast) out.push({ country: c.country, currency: c.currency, year: `${y.year} (forecast)`, tyre: y.tyre, spare: y.spare, lubricant: y.lubricant, total: y.total, lines: '' })
+      for (const y of c.years) out.push({ country: c.country, currency: c.currency, year: y.label, tyre: y.tyre, spare: y.spare, lubricant: y.lubricant, total: y.total, lines: y.lines })
+      for (const y of buildCountryTrend(c, grain).forecast) out.push({ country: c.country, currency: c.currency, year: `${y.label} (forecast)`, tyre: y.tyre, spare: y.spare, lubricant: y.lubricant, total: y.total, lines: '' })
     }
     return out
   }
@@ -234,10 +239,18 @@ export default function ExpenseTrends() {
     <div className="space-y-5">
       <PageHeader
         title="Expense Trends & Forecast"
-        subtitle="Every year of spend, split by tyres / spare parts / lubricants, with year-on-year comparison and a forward forecast."
+        subtitle="Spend by year, quarter or month, split by tyres / spare parts / lubricants, with period-on-period comparison and a forward forecast."
         icon={TrendingUp}
         actions={
-          <div className="flex gap-2">
+          <div className="flex gap-2 items-center">
+            <div className="flex items-center gap-1 p-1 rounded-lg" style={{ background: 'var(--input-bg)', border: '1px solid var(--input-border)' }}>
+              {GRAIN_OPTS.map(([g, label]) => (
+                <button key={g} onClick={() => setGrain(g)}
+                  className={`px-3 py-1 text-xs rounded-md font-medium transition-colors ${grain === g ? 'bg-emerald-600 text-white' : 'text-slate-400'}`}>
+                  {label}
+                </button>
+              ))}
+            </div>
             <button onClick={load} className="btn-ghost" title="Refresh"><RefreshCcw className="w-4 h-4" /></button>
             <button onClick={() => exportToExcel(exportAll(), cols, heads, 'Expense Trends')} disabled={!countries.length} className="btn-ghost gap-1"><FileSpreadsheet className="w-4 h-4" /> Excel</button>
             <button onClick={() => exportToPdf(exportAll(), cols.map((k, i) => ({ key: k, header: heads[i] })), 'Expense Trends & Forecast', 'Expense Trends', 'landscape')} disabled={!countries.length} className="btn-ghost gap-1"><FileText className="w-4 h-4" /> PDF</button>
@@ -259,7 +272,7 @@ export default function ExpenseTrends() {
       ) : (
         <div className="space-y-8">
           {countries.map((c) => (
-            <div key={c.country} className="space-y-4"><CountryTrend entry={c} /></div>
+            <div key={c.country} className="space-y-4"><CountryTrend entry={c} grain={grain} /></div>
           ))}
         </div>
       )}

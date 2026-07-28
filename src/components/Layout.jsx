@@ -1423,7 +1423,7 @@ export default function Layout({ children }) {
                     transition={{ delay: i * 0.025 }}
                   >
                     <span className="text-[10px] font-bold rounded-lg px-2 py-0.5 flex-shrink-0 min-w-[44px] text-center"
-                      style={{ background: 'rgba(22,163,74,0.1)', border: '1px solid rgba(22,163,74,0.22)', color: '#4ade80' }}>
+                      style={{ background: 'rgba(22,163,74,0.1)', border: '1px solid rgba(22,163,74,0.22)', color: '#16a34a' }}>
                       {r.label}
                     </span>
                     <div className="flex-1 min-w-0">

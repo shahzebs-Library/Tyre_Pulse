@@ -187,18 +187,25 @@ function computeRootCauses(records) {
 }
 
 // ── Number formatters ────────────────────────────────────────────────────────
+// NOTE: use Number.isFinite (not the global isFinite) + an explicit null check.
+// The global isFinite COERCES its argument, so isFinite(null) === true (null -> 0),
+// which let a null value skip the guard and hit null.toFixed() -> whole page crash.
+// Engine KPIs (e.g. an unmeasurable CPK) are legitimately null, so this must be safe.
 function fmtCurrency(n, currency) {
-  if (!isFinite(n) || n === 0) return `${currency} 0`
-  return `${currency} ${Math.round(n).toLocaleString()}`
+  const v = Number(n)
+  if (n == null || !Number.isFinite(v) || v === 0) return `${currency} 0`
+  return `${currency} ${Math.round(v).toLocaleString()}`
 }
 function fmtNum(n, decimals = 0) {
-  if (!isFinite(n)) return '0'
-  return n.toFixed(decimals).replace(/\B(?=(\d{3})+(?!\d))/g, ',')
+  const v = Number(n)
+  if (n == null || !Number.isFinite(v)) return '0'
+  return v.toFixed(decimals).replace(/\B(?=(\d{3})+(?!\d))/g, ',')
 }
 function fmtPct(n) { return `${fmtNum(n, 1)}%` }
 function fmtCpk(n, currency) {
-  if (!isFinite(n) || n === 0) return `${currency} 0.00`
-  return `${currency} ${n.toFixed(4)}`
+  const v = Number(n)
+  if (n == null || !Number.isFinite(v) || v === 0) return `${currency} 0.00`
+  return `${currency} ${v.toFixed(4)}`
 }
 
 // ── Status color helpers ──────────────────────────────────────────────────────

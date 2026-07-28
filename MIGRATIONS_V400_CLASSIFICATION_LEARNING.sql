@@ -157,8 +157,8 @@ create index if not exists classification_feedback_item_idx
 
 alter table public.classification_feedback enable row level security;
 
-drop policy if exists classification_feedback_org_isolation on public.classification_feedback;
-create policy classification_feedback_org_isolation on public.classification_feedback
+drop policy if exists classification_feedback_org on public.classification_feedback;
+create policy classification_feedback_org on public.classification_feedback
   as restrictive for all to authenticated
   using (organisation_id = (select public.app_current_org()) or (select public.is_super_admin()))
   with check (organisation_id = (select public.app_current_org()) or (select public.is_super_admin()));
@@ -166,6 +166,13 @@ create policy classification_feedback_org_isolation on public.classification_fee
 drop policy if exists classification_feedback_read on public.classification_feedback;
 create policy classification_feedback_read on public.classification_feedback
   for select to authenticated using (public.app_is_active());
+
+-- The ledger is written by the DEFINER trigger, which bypasses RLS, so this
+-- policy governs only a direct client insert. Elevated-only: a feedback row is
+-- evidence about the classifier and must not be forgeable by an ordinary user.
+drop policy if exists classification_feedback_write on public.classification_feedback;
+create policy classification_feedback_write on public.classification_feedback
+  for insert to authenticated with check (public.app_is_elevated());
 
 create table if not exists public.classification_learned_rules (
   id uuid primary key default gen_random_uuid(),
@@ -186,15 +193,20 @@ create table if not exists public.classification_learned_rules (
 
 alter table public.classification_learned_rules enable row level security;
 
-drop policy if exists classification_learned_rules_org_isolation on public.classification_learned_rules;
-create policy classification_learned_rules_org_isolation on public.classification_learned_rules
+drop policy if exists learned_rules_org on public.classification_learned_rules;
+create policy learned_rules_org on public.classification_learned_rules
   as restrictive for all to authenticated
   using (organisation_id = (select public.app_current_org()) or (select public.is_super_admin()))
   with check (organisation_id = (select public.app_current_org()) or (select public.is_super_admin()));
 
-drop policy if exists classification_learned_rules_read on public.classification_learned_rules;
-create policy classification_learned_rules_read on public.classification_learned_rules
+drop policy if exists learned_rules_read on public.classification_learned_rules;
+create policy learned_rules_read on public.classification_learned_rules
   for select to authenticated using (public.app_is_active());
+
+drop policy if exists learned_rules_write on public.classification_learned_rules;
+create policy learned_rules_write on public.classification_learned_rules
+  for all to authenticated
+  using (public.app_is_elevated()) with check (public.app_is_elevated());
 
 -- Words that carry no category signal. Mining them produces noise that LOOKS
 -- like a rule because they are common, which is exactly the trap above.
@@ -602,6 +614,10 @@ revoke all on function public.decide_classification_rule(text, text, text, text)
 revoke all on function public.apply_learned_rule(text, text, boolean) from public, anon;
 revoke all on function public.classification_accuracy() from public, anon;
 revoke all on function public.classification_weak_spots(integer) from public, anon;
+-- V400k: a trigger function cannot usefully be called directly and anon holds no
+-- table grants since V281, but a DEFINER function executable by anon is the shape
+-- of the V378 cross-tenant hole and must not be left around to be copied.
+revoke all on function public.capture_classification_feedback() from public, anon;
 
 grant execute on function public.propose_classification_rules(integer, numeric, numeric, integer) to authenticated;
 grant execute on function public.preview_learned_rule(text, text, integer) to authenticated;

@@ -3,7 +3,7 @@ import {
   CheckCircle2, Circle, SkipForward, Loader2, ChevronRight, AlertTriangle,
   Clock, Users, Save, ArrowRight,
 } from 'lucide-react'
-import { caseProgress, STAGE_FIELDS } from '../../lib/accidentStages'
+import { caseProgress } from '../../lib/accidentStages'
 import { listCaseStageEvents, saveStageFields, advanceStage } from '../../lib/api/accidentStages'
 import { nextStages } from '../../lib/accidentWorkflow'
 import { toUserMessage } from '../../lib/safeError'

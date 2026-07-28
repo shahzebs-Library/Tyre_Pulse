@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Users, Clock, SkipForward, AlertTriangle, Info, Hourglass } from 'lucide-react'
+import { Users, SkipForward, AlertTriangle, Info, Hourglass } from 'lucide-react'
 import { buildStageIntelligence } from '../../lib/accidentStages'
 import { listOpenStageEvents } from '../../lib/api/accidentStages'
 import { toUserMessage } from '../../lib/safeError'

@@ -130,6 +130,7 @@ const NAV_GROUPS = [
       { to: '/speed-limiter',       label: 'Speed Limiter',      icon: Gauge, adminOnly: A },
       { to: '/engine-hours',        label: 'Engine Hours',       icon: Gauge, adminOnly: A },
       { to: '/odometer-logs',       label: 'Odometer Logs',      icon: Activity, adminOnly: A },
+      { to: '/fleet-utilization',   label: 'Fleet Utilization',  icon: Gauge, roles: ANALYTICS_ROLES },
       { to: '/trips',               label: 'Trip History',       icon: MapPin, adminOnly: A },
       { to: '/route-optimization',  label: 'Route Optimization', icon: Navigation, adminOnly: A },
       { to: '/charging-sessions',   label: 'EV Charging',        icon: Zap, adminOnly: A },

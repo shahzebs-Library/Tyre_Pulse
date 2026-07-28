@@ -20,6 +20,8 @@ import * as assetApi from '../lib/api/assetManagement'
 import { listPmPrograms, listPmServiceRecords } from '../lib/api/pmPrograms'
 import { loadGridTyreByAsset } from '../lib/api/costSummary'
 import { getAssetMaster, COUNTRY_CURRENCY } from '../lib/api/assetMaster'
+import { getAssetUtilization } from '../lib/api/assetUtilization'
+import { idlePct as utilIdlePct, secondsToHours as utilHours } from '../lib/fleetUtilization'
 import { getAssetOwnershipFor } from '../lib/api/assetOwnership'
 import { basisMeta, ownershipExplanation, UNKNOWN_OWNER } from '../lib/assetOwnership'
 import { toUserMessage } from '../lib/safeError'
@@ -292,6 +294,7 @@ export default function AssetDetail() {
   const [inspections, setInspections] = useState([])
   const [accidents, setAccidents] = useState([])
   const [meter, setMeter] = useState({ odometer: null, engineHours: null })
+  const [assetUtil, setAssetUtil] = useState(null)
   const [pmPlans, setPmPlans] = useState([])
   const [pmServices, setPmServices] = useState([])
   const [overview, setOverview] = useState(null)
@@ -321,7 +324,7 @@ export default function AssetDetail() {
   const load = useCallback(async () => {
     setLoading(true); setError('')
     try {
-      const [assetRes, tyreRes, woRes, ovRes, inspRes, accRes, odoRes, ehRes, pmRes, pmSvcRes] = await Promise.allSettled([
+      const [assetRes, tyreRes, woRes, ovRes, inspRes, accRes, odoRes, ehRes, pmRes, pmSvcRes, utilRes] = await Promise.allSettled([
         // vehicle_fleet is the fleet registry (fleet_master is empty). Alias
         // is_active → active so the page keeps its `active` contract.
         supabase.from('vehicle_fleet')
@@ -338,6 +341,8 @@ export default function AssetDetail() {
         // Both degrade to [] when the pm_* tables are not provisioned yet.
         listPmPrograms({}),
         listPmServiceRecords({ asset_no: assetNo }),
+        // Telematics utilization snapshot for this asset ([] / null when absent).
+        getAssetUtilization(assetNo),
       ])
 
       if (assetRes.status === 'rejected') throw new Error(assetRes.reason?.message || String(assetRes.reason))
@@ -352,6 +357,7 @@ export default function AssetDetail() {
       const ehRow    = ehRes.status === 'fulfilled' ? (ehRes.value.data ?? null) : null
       const pmRows   = pmRes.status === 'fulfilled' ? (pmRes.value ?? []) : []
       const pmSvcRows = pmSvcRes.status === 'fulfilled' ? (pmSvcRes.value ?? []) : []
+      setAssetUtil(utilRes.status === 'fulfilled' ? (utilRes.value ?? null) : null)
       const ov       = ovRows.find(o => o.asset_no === assetNo) ?? null
 
       // Fall back to a synthesized record from the overview when vehicle_fleet
@@ -666,6 +672,16 @@ export default function AssetDetail() {
           <StatTile icon={Fuel} label="Engine Hours"
             value={meter.engineHours?.engine_hours != null ? fmtNum(meter.engineHours.engine_hours) : '-'}
             sub={meter.engineHours?.reading_date ? fmtDate(meter.engineHours.reading_date) : null} color="teal" />
+          {assetUtil && assetUtil.utilization_pct != null && (
+            <StatTile icon={Activity} label="Utilization"
+              value={`${Math.round(Number(assetUtil.utilization_pct) * 10) / 10}%`}
+              sub={(() => { const ip = utilIdlePct(assetUtil); return ip != null ? `idle ${Math.round(ip * 10) / 10}%` : 'telematics' })()}
+              color="teal" />
+          )}
+          {assetUtil && assetUtil.distance_km != null && (
+            <StatTile icon={Gauge} label="Distance (period)" value={`${Number(assetUtil.distance_km).toLocaleString()} km`}
+              sub={assetUtil.working_seconds != null ? `${utilHours(assetUtil.working_seconds)} h worked` : 'telematics'} color="blue" />
+          )}
           <StatTile icon={Activity} label="Active Tyres" value={activeTyres.length}
             sub={`${tyres.length} on record`} color="green" />
           <StatTile icon={Wrench} label="Open Work Orders" value={openWorkOrders}

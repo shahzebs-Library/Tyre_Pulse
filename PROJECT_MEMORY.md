@@ -51,6 +51,49 @@ a force-with-lease — safe here, and verify it first with
   signing is broken in this environment (`user.signingkey` -> 0-byte file), so it would flag EVERY Claude commit
   instead of one merge commit. It would make the problem worse, not better.
 
+## SESSION 2026-07-28 (part 8) — TELEMATICS UTILIZATION + CURRENT KM + KSA TYRE MERGE (V406-V410). Migrations through **V410**, next free **V411**.
+User uploaded three raw tables and asked to "link this all", set "last old meter = current km" (telematics only),
+merge the tyre data (new/old serial changes), add policies, and surface it in the frontend.
+
+### **THE 170k "new" STAGING WAS ~98% ALREADY LOADED — measured, not assumed**
+`ksa_country_upload_template_staging` (192,198 rows) is a RE-UPLOAD of the KSA combined export:
+ALL **59,983 job cards already exist** in work_orders; expenses already in parts_consumption; tyre fitments
+**5,990 of 6,087 already in tyre_records** and brand already 97% filled. So processing it into financials would
+DUPLICATE KSA data (the 8,248-row class). It was used ONLY as a meter/tyre source, never re-inserted.
+
+### **THE GENUINELY NEW DATA = TELEMATICS `ksa_kms` (388) + `uae_kms` (171)**
+Per-asset snapshot: Distance, Utilization %, working/idle/driving time, Max speed, and **Odo value end** = latest
+odometer. Fleet had almost NO km before (2 of 1,019 KSA). User chose **telematics-only** for current_km.
+- **V406** new org+country-scoped `asset_utilization` table (556 rows, 402 linked to fleet), RLS mirrors
+  odometer_logs. Populated from both raw tables (KSA intervals -> seconds; UAE text parsed).
+- **V407** fed the latest odometer into `odometer_logs` (source='telematics', 347 rows) so the existing
+  `trg_sync_asset_current_km` advances current_km. Snapshot `_current_km_snapshot_v407`. Result: KSA 248 / UAE 101
+  assets now carry current_km.
+- **V408 — CROSS-COUNTRY CONTAMINATION BUG FOUND + FIXED.** `sync_asset_current_km` (and `flag_meter_regression`)
+  matched on asset_no + org but **NOT country**, so a KSA reading cross-wrote the UAE fleet row of the same code
+  (V376: same code = different machine). 56 rows were contaminated by V407; reset them and made BOTH functions
+  country-aware (fall back to old behaviour when either country is null). **RULE: the odometer pipe is now
+  country-scoped — a same-code asset in another country is never touched.**
+- **V409** the 3 raw tables (staging + both kms) are admin-only: RLS already ON, added elevated-only SELECT,
+  revoked authenticated INSERT/UPDATE/DELETE (one-time import landing zones).
+
+### **V410 — TYRE MERGE: 97 new fitments + brand/size fill, non-destructive**
+Staging tyre rows are job-card-line grained (~8.9 rows/serial); collapsed to fitment grain (asset+pos+serial+
+fix_date). Only **97 genuinely-new fitments** + 6 brand fills. **The change-row convention the user flagged:
+`remove_date` describes the REPLACED (old) tyre, not the new one** (all 97 new rows had remove_date < fix_date),
+so every new fitment loads **Active**. Inserts tagged `extra_fields->>'import'='ksa_staging_v410'`, snapshot
+`_bak.tyre_enrich_v410`. `data_source` CHECK only allows manual/upload/api -> used 'upload'. KSA tyre_records
+6,026 -> 6,123. Remaining blank brand (153) / size (54) have NO source data (honest).
+
+### FRONTEND
+- NEW **`/fleet-utilization`** (`src/pages/FleetUtilization.jsx`, Admin/Manager/Director, Operations nav
+  "Fleet Utilization") = KPI strip, band doughnut, by-country bar, sortable table, top-idle, Excel/PDF.
+  Pure engine `src/lib/fleetUtilization.js` (11 tests) + service `src/lib/api/assetUtilization.js` (merges
+  authoritative fleet current_km). Wired App.jsx route + Layout nav + commandSearch.
+- **Asset Detail** now shows Utilization % + Distance(period) tiles (getAssetUtilization) and its Current KM tile
+  already reflects the new telematics reading. Build clean, lint 0, new + command-search tests green.
+- 140 telematics rows (83 KSA + 57 UAE) do NOT match a fleet asset -> kept as honest unlinked utilization rows.
+
 ## SESSION 2026-07-28 (part 7) — AN EGYPT EXPENSE FILE WAS LOADED INTO UAE (V405). Migrations through **V405**, next free **V406**.
 
 ### **1,524 rows, EGP 5,392,835, moved UAE -> Egypt**

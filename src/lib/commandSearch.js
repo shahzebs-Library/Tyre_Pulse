@@ -130,6 +130,7 @@ export const NAV_COMMANDS = [
   { id: 'speed-limiter', label: 'Speed Limiter', path: '/speed-limiter', icon: 'Gauge', adminOnly: true },
   { id: 'engine-hours', label: 'Engine Hours', path: '/engine-hours', icon: 'Gauge', adminOnly: true },
   { id: 'odometer-logs', label: 'Odometer Logs', path: '/odometer-logs', icon: 'Activity', adminOnly: true },
+  { id: 'fleet-utilization', label: 'Fleet Utilization', path: '/fleet-utilization', icon: 'Gauge', roles: ANALYTICS_ROLES },
   { id: 'trips', label: 'Trip History', path: '/trips', icon: 'MapPin', adminOnly: true },
   { id: 'route-optimization', label: 'Route Optimization', path: '/route-optimization', icon: 'Navigation', adminOnly: true },
   { id: 'charging-sessions', label: 'EV Charging', path: '/charging-sessions', icon: 'Zap', adminOnly: true },

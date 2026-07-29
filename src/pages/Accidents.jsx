@@ -2,7 +2,20 @@ import { useState, useEffect, useCallback, useMemo, useRef, lazy, Suspense } fro
 import { useNavigate, useLocation, useSearchParams } from 'react-router-dom'
 
 const AccidentReportBuilder = lazy(() => import('../components/accidents/AccidentReportBuilder'))
-import { AlertOctagon, Plus, Search, X, Save, FileText, Download, BarChart2, Eye, Hourglass, ChevronDown, Trash2, AlertTriangle, TrendingUp, Users, DollarSign, ShieldAlert, Lightbulb, ChevronRight, Clock, ShieldCheck, ArrowLeft, Mail, Presentation } from 'lucide-react'
+import { AlertOctagon, Plus, Search, X, Save, FileText, Download, BarChart2, Eye, Hourglass, ChevronDown, Trash2, AlertTriangle, TrendingUp, Users, DollarSign, ShieldAlert, Lightbulb, ChevronRight, Clock, ShieldCheck, ArrowLeft, Mail, Presentation, Paperclip } from 'lucide-react'
+
+// Categorized document slots on the incident form. Each `category` matches the
+// team routing in src/lib/accidentTeams.js (licence/ID/registration/police to
+// Fleet, Najm/Taqdeer to Insurance), so an uploaded file appears under the right
+// team on the Distribute-to-Teams tab.
+const DOC_SLOTS = [
+  { category: 'driving_license', label: 'Driving licence' },
+  { category: 'resident_id', label: 'Resident ID' },
+  { category: 'registration', label: 'Vehicle registration' },
+  { category: 'police_report', label: 'Police report' },
+  { category: 'najm_report', label: 'Najm report' },
+  { category: 'taqdeer_estimation', label: 'Taqdeer estimation' },
+]
 import { motion } from 'framer-motion'
 import PageHeader from '../components/ui/PageHeader'
 import EmptyState from '../components/EmptyState'
@@ -28,7 +41,7 @@ import {
   NAJM_STATUS_OPTS, NAJM_FAULT_OPTS, TAQDEER_STATUS_OPTS, LIABILITY_RATIO_OPTS,
   REPAIR_TYPE_OPTS, CLAIM_STATUS_OPTS, CLAIM_STATUS_LABELS,
   RECOVERY_SOURCE_OPTS, RECOVERY_SOURCE_LABELS, RECOVERY_STATUS_OPTS, RECOVERY_STATUS_LABELS,
-  CASE_STAGE_OPTS, DAMAGE_CONDITION_OPTS, WORKFLOW_STAGE_OPTS, STAGE_TO_CLAIM_STATUS,
+  DAMAGE_CONDITION_OPTS, WORKFLOW_STAGE_OPTS, STAGE_TO_CLAIM_STATUS,
   canonSeverity, canonStatus, canonAccidentType, toDbSeverity, toDbStatus, toDbAccidentType,
   canonFault, canonFaultStatus, canonNajmStatus, canonNajmFault, canonTaqdeerStatus, canonRepairType, canonDamageClass,
   accidentSeverityPill, accidentStatusPill,
@@ -261,6 +274,10 @@ const EMPTY_FORM = {
   release_date: '',
   inspector: '',
   photos: [],
+  // Categorized case documents (driving licence, resident ID, registration,
+  // police report, Najm, Taqdeer). Stored as { category, name, url } so the
+  // Distribute-to-Teams tab routes each to its owning team.
+  documents: [],
   // Unified workflow lifecycle (src/lib/accidentWorkflow.js). workflow_stage is
   // the canonical stage column; reference_no is server-generated (read-only).
   workflow_stage: 'reported',
@@ -1452,6 +1469,7 @@ export default function Accidents() {
       release_date:          d(row.release_date),
       inspector:             row.inspector ?? '',
       photos:                row.photos ?? [],
+      documents:             Array.isArray(row.documents) ? row.documents : [],
       // Unified workflow lifecycle
       workflow_stage:        row.workflow_stage || stageOf(row) || 'reported',
       reference_no:          row.reference_no ?? '',
@@ -1493,6 +1511,33 @@ export default function Accidents() {
 
   function removePhoto(idx) {
     setForm(f => ({ ...f, photos: f.photos.filter((_, i) => i !== idx) }))
+  }
+
+  // One file per named category (licence, registration, Najm, ...). Replaces any
+  // existing file of that category. Stored inline as a data URL (same convention
+  // as photos) in the shape the Distribute-to-Teams engine reads: { category,
+  // name, url }.
+  function handleDocFile(category, e) {
+    const file = (e.target.files ?? [])[0]
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = ev => {
+      setForm(f => ({
+        ...f,
+        documents: [
+          ...(Array.isArray(f.documents) ? f.documents : []).filter(d => d?.category !== category),
+          { category, name: file.name, url: ev.target.result },
+        ],
+      }))
+    }
+    reader.readAsDataURL(file)
+    e.target.value = '' // allow re-selecting the same file after a remove
+  }
+  function removeDoc(category) {
+    setForm(f => ({
+      ...f,
+      documents: (Array.isArray(f.documents) ? f.documents : []).filter(d => d?.category !== category),
+    }))
   }
 
   async function handleSave(e) {
@@ -1538,8 +1583,11 @@ export default function Accidents() {
       recovery_date:         recoveryIsYes(form.recovery_status) ? (form.recovery_date || null) : null,
       recovery_reference:    recoveryIsYes(form.recovery_status) ? (form.recovery_reference || null) : null,
       amount_transfer:       recoveryIsYes(form.recovery_status) ? num(form.amount_transfer) : null,
-      // Parties & liability (controlled dropdowns; stray-case folds to the label)
-      responsible_party:     form.responsible_party || null,
+      // Parties & liability (controlled dropdowns; stray-case folds to the label).
+      // Responsible Party was a free-text duplicate of Liable Party — the form now
+      // asks it once (Liable Party) and mirrors it into the legacy column so every
+      // downstream reader (fault text, exports) stays populated.
+      responsible_party:     canonLiableParty(form.liable_party) || form.responsible_party || null,
       liable_party:          canonLiableParty(form.liable_party) || null,
       payer:                 canonPayer(form.payer) || null,
       // GCC case / liability — canonicalised so a stray-case value still matches
@@ -1551,8 +1599,11 @@ export default function Accidents() {
       najm_fault:            najmHasReport(form.najm_status) ? (canonNajmFault(form.najm_fault) || null) : null,
       taqdeer_status:        canonTaqdeerStatus(form.taqdeer_status) || null,
       taqdeer_no:            taqdeerHasReport(form.taqdeer_status) ? (form.taqdeer_no || null) : null,
-      // Case tracking & workflow
-      case_stage:            form.case_stage || null,
+      // Case tracking & workflow. Case Stage and Current Status shared the exact
+      // same option list (the case condition) — the form now asks it once, as
+      // "Case Stage", and writes BOTH legacy columns so filters/charts/exports and
+      // the claim-status auto-map (which key off either) all keep working.
+      case_stage:            form.current_status || null,
       damage_condition:      canonDamageCondition(form.damage_condition) || null,
       current_status:        form.current_status || null,
       next_step:             form.next_step || null,
@@ -1580,6 +1631,7 @@ export default function Accidents() {
       release_date:          form.release_date || null,
       inspector:             form.inspector || null,
       photos:                form.photos.length ? form.photos : [],  // photos is NOT NULL (DB default '[]') — never send null
+      documents:             Array.isArray(form.documents) ? form.documents : [],
       // Unified workflow lifecycle. workflow_stage is the canonical stage column
       // (DB trigger keeps the legacy status in sync). reference_no is
       // server-generated and vor_since is server-managed, so neither is written.
@@ -3099,10 +3151,9 @@ export default function Accidents() {
                       {withValueOption(LIABLE_PARTY_OPTS, form.liable_party).map(s => <option key={s} value={s}>{s}</option>)}
                     </select>
                   </div>
-                  <div>
-                    <label className="label">Responsible Party</label>
-                    <input className="input" placeholder="Who is at fault" value={form.responsible_party} onChange={e => setForm(f => ({ ...f, responsible_party: e.target.value }))} />
-                  </div>
+                  {/* Responsible Party removed: it was a free-text duplicate of
+                      Liable Party (same question, "who is at fault"). Liable Party
+                      is the controlled dropdown and now feeds both columns. */}
                   <div>
                     <label className="label">Who Pays</label>
                     <select className="input" value={form.payer} onChange={e => setForm(f => ({ ...f, payer: e.target.value }))}>
@@ -3116,17 +3167,13 @@ export default function Accidents() {
               {/* Case tracking & workflow (consolidated from the detail page's Tracker tab) */}
               <FormSection title="Case Tracking & Workflow">
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                  {/* Case Stage: one control for the case condition. It used to be
+                      asked twice (a "Case Stage" and a "Current Workflow Stage"
+                      dropdown with the identical option list). This single field
+                      now writes both legacy columns. The operational stage the
+                      teams work through is the separate "Workflow Stage" below. */}
                   <div>
                     <label className="label">Case Stage</label>
-                    <select className="input" value={form.case_stage} onChange={e => setForm(f => ({ ...f, case_stage: e.target.value }))}>
-                      <option value="">N/A</option>
-                      {withValueOption(CASE_STAGE_OPTS, form.case_stage).map(s => <option key={s} value={s}>{s}</option>)}
-                    </select>
-                  </div>
-                  {/* Damage detail moved up beside Damage Severity, where the
-                      two halves of the same question belong together. */}
-                  <div>
-                    <label className="label">Current Workflow Stage</label>
                     <select className="input" value={form.current_status} onChange={e => setForm(f => ({ ...f, current_status: e.target.value }))}>
                       <option value="">N/A</option>
                       {withValueOption(WORKFLOW_STAGE_OPTS, form.current_status).map(s => <option key={s} value={s}>{s}</option>)}
@@ -3405,8 +3452,47 @@ export default function Accidents() {
                 </div>
               </FormSection>
 
+              {/* Case documents — each routes to its owning team on the
+                  Distribute-to-Teams tab (licence/ID/registration/police to Fleet,
+                  Najm/Taqdeer to Insurance). One file per slot; image or PDF. */}
+              <FormSection title="Documents">
+                <p className="text-xs text-[var(--text-dim)] mb-3">
+                  Attach the driver and vehicle papers and the reports. Each file is routed to the team that owns it.
+                </p>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {DOC_SLOTS.map(slot => {
+                    const doc = (form.documents || []).find(d => d?.category === slot.category)
+                    const isImage = typeof doc?.url === 'string' && doc.url.slice(0, 11).toLowerCase() === 'data:image/'
+                    return (
+                      <div key={slot.category}>
+                        <label className="label">{slot.label}</label>
+                        {doc ? (
+                          <div className="flex items-center gap-2 rounded-lg border border-[var(--input-border)] bg-[var(--input-bg)]/40 px-2 py-1.5">
+                            {isImage
+                              ? <PhotoPreview src={doc.url} alt={slot.label} className="h-10 w-10 object-cover rounded border border-[var(--input-border)]" />
+                              : <Paperclip size={16} className="text-[var(--text-muted)] shrink-0" />}
+                            <span className="text-xs text-[var(--text-secondary)] truncate flex-1">{doc.name || slot.label}</span>
+                            <button
+                              type="button" onClick={() => removeDoc(slot.category)}
+                              className="text-[11px] text-red-300 hover:text-red-200 shrink-0"
+                            >
+                              Remove
+                            </button>
+                          </div>
+                        ) : (
+                          <input
+                            type="file" accept="image/*,application/pdf" className="input text-sm py-1.5"
+                            onChange={e => handleDocFile(slot.category, e)}
+                          />
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              </FormSection>
+
               <div>
-                <label className="label">Photos</label>
+                <label className="label">Accident Photos</label>
                 <input
                   type="file" accept="image/*" multiple className="input text-sm py-1.5"
                   onChange={handlePhotoFiles}

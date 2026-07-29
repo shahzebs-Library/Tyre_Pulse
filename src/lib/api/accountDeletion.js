@@ -125,7 +125,7 @@ export async function listDeletionRequests({ status } = {}) {
  *                         own `reason`; wire it to a real column when one exists.
  * @returns {Promise<object>} the updated row
  */
-export async function setDeletionRequestStatus(id, status, note) { // eslint-disable-line no-unused-vars
+export async function setDeletionRequestStatus(id, status, note) {
   if (!id) throw new Error('A request id is required.')
   if (!DELETION_STATUSES.includes(status)) {
     throw new Error('Invalid status. Use pending, processing, completed or rejected.')

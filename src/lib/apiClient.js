@@ -83,7 +83,6 @@ export async function request(method, path, opts = {}) {
   }
 
   let attempt = 0
-  // eslint-disable-next-line no-constant-condition
   while (true) {
     try {
       const res = await fetch(url, {

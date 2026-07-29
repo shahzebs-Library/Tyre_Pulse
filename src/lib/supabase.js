@@ -26,7 +26,6 @@ const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
     const msg = `[TyrePulse] SECURITY: privileged secret(s) exposed to the client bundle: ${leaked.join(', ')}. ` +
       'Move these to Supabase Edge Function secrets / server-side env and remove them from VITE_ variables.'
     if (import.meta.env.DEV) throw new Error(msg)
-    // eslint-disable-next-line no-console
     console.error(msg)
   }
 })()

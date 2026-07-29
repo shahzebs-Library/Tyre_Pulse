@@ -27,7 +27,7 @@ import { toUserMessage } from '../lib/safeError'
  * make the dark-navy marks look solid black. `surface` is accepted for call-site
  * compatibility but no longer tints the tile.
  */
-function LogoThumb({ src, surface, className = '', style }) { // eslint-disable-line no-unused-vars
+function LogoThumb({ src, surface, className = '', style }) {
   return (
     <div
       className={`checker rounded-lg flex items-center justify-center overflow-hidden ${className}`}

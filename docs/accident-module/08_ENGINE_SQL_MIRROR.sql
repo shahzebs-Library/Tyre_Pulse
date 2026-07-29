@@ -1094,6 +1094,10 @@ $$;
 --     if NEW.case_status = 'closed' and OLD.case_status is distinct from 'closed' then
 --       v_ws := (select coalesce(jsonb_agg(to_jsonb(w)), '[]'::jsonb)
 --                  from public.accident_case_workstreams w where w.accident_id = NEW.id);
+--       -- The physical config table is public.accident_route_profiles
+--       -- (02_DATA_MODEL.sql Part C3 / 07_SEED_CONFIG.sql Part 2); the engine design
+--       -- docs refer to it by the alias workflow_route_profiles. Use the physical
+--       -- name here, matched on (organisation_id, route_key) per its UNIQUE key.
 --       v_prof := (select to_jsonb(p) from public.accident_route_profiles p
 --                   where p.organisation_id = NEW.organisation_id and p.route_key = NEW.route_key
 --                   limit 1);
@@ -1158,17 +1162,17 @@ $$;
 --      from explicit rows (which is why _acc_case_status_for's waiting_* branches
 --      only fire with explicit rows).
 --
--- [W2] WORKSTREAM-KEY SET DIVERGENCE (schema reconciliation needed). accidentCase.js
+-- [W2] WORKSTREAM-KEY SET - RECONCILED (no mapping layer needed). accidentCase.js
 --      uses TEN keys: incident_evidence, fleet_validation, liability, insurance,
 --      assessment, repair, workshop_qc, handover, finance, corrective. The physical
---      table accident_case_workstreams.workstream_key (02_DATA_MODEL.sql B1) allows
---      a DIFFERENT twelve-value set (liability_safety, technical_assessment,
---      repair_decision, repair_planning, fleet_offroad, repair_execution,
---      fleet_handover, finance_settlement, ...). This mirror follows the JS SPEC.
---      When wiring the guard, the caller MUST map the physical workstream_key set
---      onto the JS keys before passing p_ws (e.g. liability_safety -> liability,
---      technical_assessment -> assessment, repair_* -> repair, fleet_handover ->
---      handover, finance_settlement -> finance). Reconcile the two lists.
+--      table accident_case_workstreams.workstream_key (02_DATA_MODEL.sql B1) now
+--      CONSTRAINS to exactly those ten canonical keys, and status CONSTRAINS to the
+--      twelve WORKSTREAM_STATUS tokens (not_required, not_started, assigned,
+--      in_progress, waiting_info, waiting_approval, waiting_external, on_hold,
+--      completed, rejected, reopened, cancelled). The route seeds (07_SEED_CONFIG.sql)
+--      and the completeness engine use the SAME ten-key set, so the schema, the seeds
+--      and this mirror all agree. The caller passes physical workstream_key rows
+--      straight through as p_ws - there is NO mapping layer to build.
 --
 -- [N2] NA envelope — accident_na_envelope_valid requires reason + by + at (and
 --      approved_by only where the route profile flags na_requires_approval). A bare
@@ -1202,13 +1206,13 @@ $$;
 --      after EVERY transition (never increment): a rejected handover legitimately
 --      drops the repair %.
 --
--- [D2] closure_level TOKEN DIVERGENCE (schema reconciliation needed). This engine
---      (and the reconciled accidents.closure_level CHECK in 02_DATA_MODEL.sql)
---      uses 'financially_open'. But accident_closure_reviews.level (B25) still lists
---      'financially_pending'. Also: the ENGINE returns NULL for "open" while the
---      accidents.closure_level column stores the literal 'open' (and 'legacy_closed'
---      for un-verified pre-module rows). The persistence layer maps NULL<->'open';
---      align accident_closure_reviews.level to 'financially_open' too.
+-- [D2] closure_level TOKEN - RECONCILED. This engine, the accidents.closure_level
+--      CHECK, and accident_closure_reviews.level (02_DATA_MODEL.sql) all now use
+--      'financially_open'; 'financially_pending' has been dropped everywhere. The
+--      ENGINE returns NULL for "open" while the accidents.closure_level column stores
+--      the literal 'open' (and 'legacy_closed' for un-verified pre-module rows) as
+--      persistence-only tokens; the persistence layer maps NULL<->'open'. No further
+--      alignment is needed.
 --
 -- [G1] canFullyClose — the blocker list order is FIXED: workstream blockers (pipeline
 --      order) first, then mandatory_task, pending_approval, required_document,

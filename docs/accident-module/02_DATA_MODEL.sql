@@ -1064,6 +1064,14 @@ create table if not exists public.accident_route_profiles (
   required_evidence     text[] not null default '{}',
   required_documents    text[] not null default '{}',
   closure_requirements  text[] not null default '{}',
+  -- When a REQUIRED workstream on this route is marked Not Applicable, does the NA
+  -- waiver need an approver before it can satisfy the closure gate? Default TRUE (an
+  -- unapproved NA never closes a case). The closure engine reads this via
+  -- _acc_closure_satisfied(profile.na_requires_approval); when NO profile is passed
+  -- (p_profile NULL), the engine already defaults to TRUE, so the SAFE behaviour
+  -- holds whether or not a route profile is supplied. This column lets a specific
+  -- route opt a waivable workstream out of approval by setting it FALSE deliberately.
+  na_requires_approval  boolean not null default true,
   is_default       boolean not null default false,
   active           boolean not null default true,
   created_by       uuid default auth.uid(),
@@ -1071,6 +1079,10 @@ create table if not exists public.accident_route_profiles (
   updated_at       timestamptz not null default now(),
   unique (organisation_id, route_key)
 );
+-- Idempotent add for an existing accident_route_profiles table (create-if-not-exists
+-- above is a no-op when the table already exists, so the column is added here too).
+alter table public.accident_route_profiles
+  add column if not exists na_requires_approval boolean not null default true;
 
 -- C4. Accident type profiles - default route + teams + SLA overrides per type (brief 4).
 create table if not exists public.accident_type_profiles (

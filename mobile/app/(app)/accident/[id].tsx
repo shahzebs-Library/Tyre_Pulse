@@ -296,6 +296,22 @@ function AccidentDetailScreen() {
           </View>
         </Card>
 
+        {/* -- Case status (read-only workflow view) ---------------------- */}
+        <TouchableOpacity
+          style={[styles.caseLink, { backgroundColor: c.surface, borderColor: c.border }]}
+          onPress={() => router.push(`/(app)/accident/case?id=${accident.id}`)}
+          activeOpacity={0.8}
+        >
+          <View style={[styles.caseLinkIcon, { backgroundColor: c.info.soft }]}>
+            <Ionicons name="git-branch-outline" size={18} color={c.info.base} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <AppText variant="bodyStrong">{t('accident.case.title')}</AppText>
+            <AppText variant="micro" color="muted">{t('accident.case.linkHint')}</AppText>
+          </View>
+          <Ionicons name={isRTL ? 'chevron-back' : 'chevron-forward'} size={18} color={c.textSecondary} />
+        </TouchableOpacity>
+
         {/* -- Status dropdown (managers / admins) ------------------------ */}
         {canChangeStatus && (
           <SectionCard title={t('accident.detail.investigationStatus')} icon="flag-outline">
@@ -719,6 +735,16 @@ function createStyles(theme: Theme) {
     modalCancel: {
       marginTop: spacing.sm, paddingVertical: spacing.md, borderRadius: radius.md,
       alignItems: 'center',
+    },
+
+    // Case status link (read-only workflow view)
+    caseLink: {
+      flexDirection: 'row', alignItems: 'center', gap: spacing.md,
+      padding: spacing.md, borderRadius: radius.md, borderWidth: 1,
+    },
+    caseLinkIcon: {
+      width: 36, height: 36, borderRadius: radius.sm,
+      alignItems: 'center', justifyContent: 'center',
     },
 
     // Status dropdown (body control)

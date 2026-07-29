@@ -31,12 +31,33 @@
 --      accidents.accident_type CHECK (V222) is narrower - widening it (or mapping the
 --      app's display types onto these tokens) is a SEPARATE phase-later migration.
 --
+-- RELATIONSHIP TO 02_DATA_MODEL.sql PART F (base vs extension)
+--   02 PART F (V417) already seeds the CANONICAL BASE for Company A in three of the
+--   tables below: accident_sla_definitions (11 rows), accident_route_profiles
+--   (minor_no_insurance, external_repair_insurance, total_loss, injury) and
+--   accident_country_rule_profiles (KSA, UAE, Egypt), all in the canonical 10-key
+--   workstream vocabulary. This file is EXTENSION-ONLY: it never re-inserts a row 02
+--   already provides (a silent ON CONFLICT DO NOTHING would just never land and hide
+--   this file's richer columns). Instead it INSERTs only the rows 02 omits (the 6
+--   extra route profiles, all 31 type profiles, the evidence requirements and the 7
+--   email templates) and, where 02's base row must carry extra config this file adds
+--   (route required_evidence / required_documents / closure_requirements, country
+--   required_documents / notes, SLA responsible_role), it uses an explicit UPDATE
+--   scoped to the 02-seeded key, with a comment - never a silent no-op insert. The
+--   result is order-independent: 02 must run first (hard dependency 1) and this file
+--   only adds to it.
+--
 -- DESIGN NOTES
---   * required_workstreams[] uses the 12-key accident_case_workstreams.workstream_key
---     CHECK vocabulary so route-instantiated workstream rows pass that CHECK. The
---     workflow doc's short names (liability/insurance/assessment/repair/handover/
---     finance/corrective) are the logical view only. Corrective actions have no
---     workstream key - they are a CLOSURE REQUIREMENT ('corrective_actions').
+--   * required_workstreams[] uses the 10 canonical accident_case_workstreams.
+--     workstream_key CHECK keys (incident_evidence, fleet_validation, liability,
+--     insurance, assessment, repair, workshop_qc, handover, finance, corrective) so
+--     route-instantiated workstream rows pass that CHECK and accident_required_
+--     workstreams (which silently DROPS any non-canonical token) counts every
+--     required workstream. `corrective` IS a real workstream key. closure_
+--     requirements[] is a SEPARATE closure-milestone vocabulary (repair_route,
+--     insurance_settlement, corrective_actions, closure_review, total_loss_approval,
+--     ...) - not a workstream_key, not validated by the CHECK, so those tokens stay
+--     as descriptive milestones.
 --   * Regulatory windows are GROUNDED in the brief: only KSA carries 9/5/45 working
 --     days (brief 5C). UAE/Egypt regulatory day counts are NULL (brief states none -
 --     not invented). Najm is KSA-only and is NOT placed on UAE/Egypt.
@@ -50,8 +71,11 @@
 --   (org, requirement_key, route_key, accident_type). Re-running inserts nothing new.
 --
 -- NON-DESTRUCTIVE
---   Adds rows only, for Company A only. Never updates/deletes existing config (the 15
---   email templates, 7 routing rules and 12 departments are untouched).
+--   Adds rows for Company A only. The only UPDATEs are the additive enrichments of
+--   02 PART F's own base rows described above (setting columns 02 leaves at their
+--   default: route required_evidence / required_documents / closure_requirements,
+--   country required_documents / notes, SLA responsible_role). It never touches the
+--   pre-module config (the 15 email templates, 7 routing rules and 12 departments).
 --
 -- ROLLBACK
 --   See the commented ROLLBACK block at the very bottom.
@@ -63,147 +87,146 @@ begin;
 -- org = '00000000-0000-0000-0000-000000000001'
 
 -- =============================================================================
--- PART 1 - accident_country_rule_profiles (KSA / UAE / Egypt)
---   Only KSA carries regulatory day-count windows (brief 5C). UAE/Egypt = NULL.
+-- PART 1 - accident_country_rule_profiles (KSA / UAE / Egypt) - ENRICH 02's base
+--   02 PART F already seeds KSA/UAE/Egypt with currency, authority_types, the KSA
+--   9/5/45 regulatory windows and working_days (canonical base). This file only
+--   ADDS the columns 02 leaves at their default: required_documents and notes. It
+--   deliberately does NOT overwrite 02's authority_types / working_days / regulatory
+--   windows (those are the canonical base). holidays already default to '[]' (no
+--   dates invented). UPDATE is idempotent and lands whatever the run order, because
+--   02 is a hard dependency and always seeds the base rows first.
 -- =============================================================================
-insert into public.accident_country_rule_profiles (
-  organisation_id, country, currency, authority_types, required_documents,
-  regulatory_missing_docs_days, regulatory_decision_days, regulatory_settlement_days,
-  working_days, holidays, notes, active
-) values
-  ('00000000-0000-0000-0000-000000000001', 'KSA', 'SAR',
-   array['Najm','Traffic Police','Police','Absher e-Report','Civil Defence','Site Security','Other'],
+update public.accident_country_rule_profiles t
+   set required_documents = v.required_documents,
+       notes              = v.notes
+from (values
+  ('KSA'::text,
    array['authority_report','najm_report','driving_license','vehicle_registration','insurance_policy','driver_statement'],
-   9, 5, 45,
-   array['Sun','Mon','Tue','Wed','Thu'], '[]'::jsonb,
-   'KSA regulator: Insurance Authority (since Nov 2023). Windows 9/5/45 are the unified compulsory motor policy maxima for a juristic person (brief 5C) and are configurable controls - comprehensive/contractual policies may differ. Najm = official accident reporting; Absher = electronic minor-accident reporting. working_days/holidays are configurable defaults - confirm locally; holidays load per country.',
-   true),
-  ('00000000-0000-0000-0000-000000000001', 'UAE', 'AED',
-   array['Traffic Police','Police','Civil Defence','Site Security','Other'],
+   'KSA regulator: Insurance Authority (since Nov 2023). Windows 9/5/45 are the unified compulsory motor policy maxima for a juristic person (brief 5C) and are configurable controls - comprehensive/contractual policies may differ. Najm = official accident reporting; Absher = electronic minor-accident reporting. working_days/holidays are configurable defaults - confirm locally; holidays load per country.'),
+  ('UAE',
    array['authority_report','police_report','driving_license','vehicle_registration','insurance_policy','driver_statement'],
-   null, null, null,
-   array['Mon','Tue','Wed','Thu','Fri'], '[]'::jsonb,
-   'UAE regulatory windows not specified in the brief - left NULL, configure locally. Authority list uses the brief generic categories (Najm excluded - KSA-specific). working_days/holidays are configurable defaults - confirm locally.',
-   true),
-  ('00000000-0000-0000-0000-000000000001', 'Egypt', 'EGP',
-   array['Traffic Police','Police','Civil Defence','Site Security','Other'],
+   'UAE regulatory windows not specified in the brief - left NULL, configure locally. Authority list uses the brief generic categories (Najm excluded - KSA-specific). working_days/holidays are configurable defaults - confirm locally.'),
+  ('Egypt',
    array['authority_report','police_report','driving_license','vehicle_registration','insurance_policy','driver_statement'],
-   null, null, null,
-   array['Sun','Mon','Tue','Wed','Thu'], '[]'::jsonb,
-   'Egypt regulatory windows not specified in the brief - left NULL, configure locally. Authority list uses the brief generic categories (Najm excluded - KSA-specific). working_days/holidays are configurable defaults - confirm locally.',
-   true)
-on conflict (organisation_id, country) do nothing;
+   'Egypt regulatory windows not specified in the brief - left NULL, configure locally. Authority list uses the brief generic categories (Najm excluded - KSA-specific). working_days/holidays are configurable defaults - confirm locally.')
+) as v(country, required_documents, notes)
+where t.organisation_id = '00000000-0000-0000-0000-000000000001'
+  and t.country = v.country;
 
 -- =============================================================================
--- PART 2 - accident_route_profiles (10 routes)
---   required_workstreams[] uses the 12-key CHECK vocabulary. is_default = the
---   deterministic fallback route when no rule/type matches (minor_no_insurance).
+-- PART 2 - accident_route_profiles - EXTEND 02's base with the 6 EXTRA routes
+--   02 PART F already seeds the 4 base routes (minor_no_insurance,
+--   external_repair_insurance, total_loss, injury) with canonical required_
+--   workstreams. This INSERT adds ONLY the 6 routes 02 does NOT seed. Every
+--   required_workstreams[] uses the 10 canonical keys (incident_evidence,
+--   fleet_validation, liability, insurance, assessment, repair, workshop_qc,
+--   handover, finance, corrective) so accident_required_workstreams counts them all
+--   instead of silently dropping non-canonical tokens. closure_requirements[] keeps
+--   its milestone tokens (repair_route, insurance_settlement, corrective_actions,
+--   closure_review, third_party_recovery) but its workstream-key-shaped tokens are
+--   canonicalised too, so no non-canonical workstream token survives anywhere.
+--   ON CONFLICT DO NOTHING is safe here because these 6 keys are NOT in 02.
 -- =============================================================================
 insert into public.accident_route_profiles (
   organisation_id, route_key, name, description,
   match_types, required_workstreams, required_evidence, required_documents,
   closure_requirements, is_default, active
 ) values
-  ('00000000-0000-0000-0000-000000000001', 'minor_no_insurance',
-   'Minor accident without insurance',
-   'Minor own-damage repaired internally, no insurance claim (brief 4/9).',
-   array['minor_road','own_damage','tyre_wheel'],
-   array['incident_evidence','fleet_validation','liability_safety','technical_assessment','repair_decision','repair_planning','repair_execution','fleet_handover','finance_settlement'],
-   array['photo_full_front','photo_full_rear','photo_left_side','photo_right_side','photo_damage_closeup','photo_scene','photo_plate','photo_odometer'],
-   array['driver_statement'],
-   array['incident_evidence','fleet_validation','liability_safety','technical_assessment','repair_route','fleet_handover','finance_settlement','corrective_actions','closure_review'],
-   true, true),
-
   ('00000000-0000-0000-0000-000000000001', 'internal_repair_insurance',
    'Internal repair with insurance',
    'Insured case repaired in the internal workshop (brief 4/9).',
    array['site_collision','equipment_to_vehicle','equipment_to_equipment','loading_unloading','falling_object'],
-   array['incident_evidence','fleet_validation','liability_safety','insurance_claim','technical_assessment','repair_decision','repair_planning','repair_execution','workshop_qc','fleet_handover','finance_settlement'],
+   array['incident_evidence','fleet_validation','liability','insurance','assessment','repair','workshop_qc','handover','finance'],
    array['photo_full_front','photo_full_rear','photo_left_side','photo_right_side','photo_damage_closeup','photo_scene','photo_plate','photo_odometer','photo_dashboard_lights'],
    array['insurance_policy','insurer_ack','driver_statement'],
-   array['incident_evidence','fleet_validation','liability_safety','insurance_claim','technical_assessment','repair_route','workshop_qc','fleet_handover','finance_settlement','insurance_settlement','corrective_actions','closure_review'],
-   false, true),
-
-  ('00000000-0000-0000-0000-000000000001', 'external_repair_insurance',
-   'External repair with insurance',
-   'Insured case repaired at an external / insurer-approved workshop with PO (brief 4/9).',
-   array['major_road','rollover','rental_vehicle','leased_vehicle'],
-   array['incident_evidence','fleet_validation','liability_safety','insurance_claim','technical_assessment','repair_decision','repair_planning','fleet_offroad','repair_execution','workshop_qc','fleet_handover','finance_settlement'],
-   array['photo_full_front','photo_full_rear','photo_left_side','photo_right_side','photo_front_left_corner','photo_front_right_corner','photo_rear_left_corner','photo_rear_right_corner','photo_damage_closeup','photo_scene','photo_plate','photo_odometer','photo_dashboard_lights'],
-   array['insurance_policy','insurer_ack','quotation','purchase_order','invoice','driver_statement'],
-   array['incident_evidence','fleet_validation','liability_safety','insurance_claim','technical_assessment','repair_route','workshop_qc','fleet_handover','finance_settlement','insurance_settlement','corrective_actions','closure_review'],
-   false, true),
-
-  ('00000000-0000-0000-0000-000000000001', 'total_loss',
-   'Total loss',
-   'Economic or technical total loss - disposal/transfer + asset register update (brief 4/9).',
-   array['total_loss'],
-   array['incident_evidence','fleet_validation','liability_safety','insurance_claim','technical_assessment','repair_decision','finance_settlement'],
-   array['photo_full_front','photo_full_rear','photo_left_side','photo_right_side','photo_damage_closeup','photo_scene','photo_plate','photo_chassis_vin'],
-   array['insurance_policy','survey_report','insurer_ack'],
-   array['incident_evidence','fleet_validation','liability_safety','insurance_claim','technical_assessment','total_loss_approval','asset_register_update','insurance_settlement','finance_settlement','closure_review'],
-   false, true),
-
-  ('00000000-0000-0000-0000-000000000001', 'injury',
-   'Injury accident',
-   'Injury/fatality - HSE investigation, medical, management + legal review where required (brief 4/9).',
-   array['injury','fatal'],
-   array['incident_evidence','fleet_validation','liability_safety','insurance_claim','technical_assessment','repair_decision','repair_planning','repair_execution','workshop_qc','fleet_handover','finance_settlement'],
-   array['photo_full_front','photo_full_rear','photo_left_side','photo_right_side','photo_damage_closeup','photo_scene','photo_plate','photo_road_condition','photo_dashboard_lights'],
-   array['authority_report','medical_report','driver_statement'],
-   array['incident_evidence','fleet_validation','liability_safety','hse_investigation','injury_details','insurance_claim','technical_assessment','repair_route','fleet_handover','finance_settlement','management_review','corrective_actions','legal_review','closure_review'],
+   array['incident_evidence','fleet_validation','liability','insurance','assessment','repair_route','workshop_qc','handover','finance','insurance_settlement','corrective_actions','closure_review'],
    false, true),
 
   ('00000000-0000-0000-0000-000000000001', 'third_party',
    'Third-party damage',
    'Third-party involvement with recovery tracking (brief 14).',
    array['vehicle_to_vehicle','third_party_property','customer_property','subcontractor_vehicle'],
-   array['incident_evidence','fleet_validation','liability_safety','insurance_claim','technical_assessment','repair_decision','repair_planning','fleet_offroad','repair_execution','workshop_qc','fleet_handover','finance_settlement'],
+   array['incident_evidence','fleet_validation','liability','insurance','assessment','repair','workshop_qc','handover','finance'],
    array['photo_full_front','photo_full_rear','photo_left_side','photo_right_side','photo_damage_closeup','photo_scene','photo_plate','photo_other_party_vehicle','photo_other_party_plate'],
    array['authority_report','insurance_policy','driver_statement'],
-   array['incident_evidence','fleet_validation','liability_safety','insurance_claim','technical_assessment','repair_route','workshop_qc','fleet_handover','finance_settlement','third_party_recovery','insurance_settlement','closure_review'],
+   array['incident_evidence','fleet_validation','liability','insurance','assessment','repair_route','workshop_qc','handover','finance','third_party_recovery','insurance_settlement','closure_review'],
    false, true),
 
   ('00000000-0000-0000-0000-000000000001', 'hit_and_run',
    'Hit and run',
    'Unknown third party - authority report required, no third-party recovery (brief 14).',
    array['hit_and_run'],
-   array['incident_evidence','fleet_validation','liability_safety','insurance_claim','technical_assessment','repair_decision','repair_planning','repair_execution','workshop_qc','fleet_handover','finance_settlement'],
+   array['incident_evidence','fleet_validation','liability','insurance','assessment','repair','workshop_qc','handover','finance'],
    array['photo_full_front','photo_full_rear','photo_left_side','photo_right_side','photo_damage_closeup','photo_scene','photo_plate','photo_odometer'],
    array['authority_report','police_report','driver_statement'],
-   array['incident_evidence','fleet_validation','liability_safety','insurance_claim','technical_assessment','repair_route','workshop_qc','fleet_handover','finance_settlement','insurance_settlement','closure_review'],
+   array['incident_evidence','fleet_validation','liability','insurance','assessment','repair_route','workshop_qc','handover','finance','insurance_settlement','closure_review'],
    false, true),
 
   ('00000000-0000-0000-0000-000000000001', 'glass_only',
    'Glass-only damage',
    'Windscreen/glass only - lite liability, optional insurance (brief 14).',
    array['glass_only'],
-   array['incident_evidence','liability_safety','repair_decision','repair_execution','finance_settlement'],
+   array['incident_evidence','liability','repair','finance'],
    array['photo_damage_closeup','photo_plate','photo_odometer'],
    array[]::text[],
-   array['incident_evidence','liability_safety','repair_route','finance_settlement','closure_review'],
+   array['incident_evidence','liability','repair_route','finance','closure_review'],
    false, true),
 
   ('00000000-0000-0000-0000-000000000001', 'no_damage',
    'No-damage / near miss',
    'No-damage incident or near miss - evidence + liability + corrective, no repair/finance (brief 14).',
    array['no_damage','near_miss'],
-   array['incident_evidence','liability_safety'],
+   array['incident_evidence','liability'],
    array['photo_scene','photo_plate'],
    array[]::text[],
-   array['incident_evidence','liability_safety','corrective_actions','closure_review'],
+   array['incident_evidence','liability','corrective_actions','closure_review'],
    false, true),
 
   ('00000000-0000-0000-0000-000000000001', 'theft_fire_weather',
    'Theft / fire / weather',
    'Theft, fire or weather damage - authority report, may become total loss (brief 14).',
    array['theft','fire','weather'],
-   array['incident_evidence','fleet_validation','liability_safety','insurance_claim','technical_assessment','repair_decision','finance_settlement'],
+   array['incident_evidence','fleet_validation','liability','insurance','assessment','repair','finance'],
    array['photo_full_front','photo_full_rear','photo_left_side','photo_right_side','photo_damage_closeup','photo_scene','photo_plate'],
    array['authority_report','police_report','insurance_policy'],
-   array['incident_evidence','fleet_validation','liability_safety','insurance_claim','technical_assessment','repair_route','finance_settlement','insurance_settlement','closure_review'],
+   array['incident_evidence','fleet_validation','liability','insurance','assessment','repair_route','finance','insurance_settlement','closure_review'],
    false, true)
 on conflict (organisation_id, route_key) do nothing;
+
+-- ENRICH the 4 routes 02 PART F already seeds (it sets required_workstreams,
+-- match_types, name, description, is_default but leaves required_evidence,
+-- required_documents and closure_requirements at their '{}' default). This UPDATE
+-- fills those three arrays only; it never touches required_workstreams (02's
+-- canonical values are authoritative). closure_requirements tokens are canonicalised
+-- (liability_safety->liability, technical_assessment->assessment, fleet_handover->
+-- handover, finance_settlement->finance) while milestone tokens (repair_route,
+-- insurance_settlement, corrective_actions, closure_review, total_loss_approval,
+-- asset_register_update, hse_investigation, injury_details, management_review,
+-- legal_review) stay. Idempotent (a re-run writes the same arrays).
+update public.accident_route_profiles t
+   set required_evidence    = v.required_evidence,
+       required_documents   = v.required_documents,
+       closure_requirements = v.closure_requirements
+from (values
+  ('minor_no_insurance'::text,
+   array['photo_full_front','photo_full_rear','photo_left_side','photo_right_side','photo_damage_closeup','photo_scene','photo_plate','photo_odometer'],
+   array['driver_statement'],
+   array['incident_evidence','fleet_validation','liability','assessment','repair_route','handover','finance','corrective_actions','closure_review']),
+  ('external_repair_insurance',
+   array['photo_full_front','photo_full_rear','photo_left_side','photo_right_side','photo_front_left_corner','photo_front_right_corner','photo_rear_left_corner','photo_rear_right_corner','photo_damage_closeup','photo_scene','photo_plate','photo_odometer','photo_dashboard_lights'],
+   array['insurance_policy','insurer_ack','quotation','purchase_order','invoice','driver_statement'],
+   array['incident_evidence','fleet_validation','liability','insurance','assessment','repair_route','workshop_qc','handover','finance','insurance_settlement','corrective_actions','closure_review']),
+  ('total_loss',
+   array['photo_full_front','photo_full_rear','photo_left_side','photo_right_side','photo_damage_closeup','photo_scene','photo_plate','photo_chassis_vin'],
+   array['insurance_policy','survey_report','insurer_ack'],
+   array['incident_evidence','fleet_validation','liability','insurance','assessment','total_loss_approval','asset_register_update','insurance_settlement','finance','closure_review']),
+  ('injury',
+   array['photo_full_front','photo_full_rear','photo_left_side','photo_right_side','photo_damage_closeup','photo_scene','photo_plate','photo_road_condition','photo_dashboard_lights'],
+   array['authority_report','medical_report','driver_statement'],
+   array['incident_evidence','fleet_validation','liability','hse_investigation','injury_details','insurance','assessment','repair_route','handover','finance','management_review','corrective_actions','legal_review','closure_review'])
+) as v(route_key, required_evidence, required_documents, closure_requirements)
+where t.organisation_id = '00000000-0000-0000-0000-000000000001'
+  and t.route_key = v.route_key;
 
 -- =============================================================================
 -- PART 3 - accident_type_profiles (31 types, brief section 4)
@@ -280,39 +303,33 @@ insert into public.accident_type_profiles (
 on conflict (organisation_id, accident_type) do nothing;
 
 -- =============================================================================
--- PART 4 - accident_sla_definitions (11 internal timers, brief 10/15)
---   Internal targets - deliberately much shorter than the KSA 9/5/45 working-DAY
---   regulatory maxima. business_hours=false only on the wall-clock registration timer.
---   1 business day = 480 min (8 working hours); 4 working hours = 240; 2 days = 960.
+-- PART 4 - accident_sla_definitions - ENRICH 02's 11 base timers
+--   02 PART F already seeds these 11 sla_keys with canonical workstream_key, name,
+--   activity, target_minutes, business_hours and responsible_team. This file only
+--   ADDS the responsible_role each row should own (02 leaves it NULL); warning_pct
+--   and escalation_pct already default to 80/100. It deliberately does NOT re-set
+--   workstream_key - 02's canonical keys (insurance/assessment/repair/handover/
+--   finance) are authoritative, so no non-canonical SLA workstream_key is written.
+--   sla_key values below are 02's row identifiers (the join key), not workstream
+--   tokens. Idempotent.
 -- =============================================================================
-insert into public.accident_sla_definitions (
-  organisation_id, sla_key, name, activity, workstream_key,
-  target_minutes, business_hours, warning_pct, escalation_pct,
-  responsible_role, responsible_team, active
-) values
-  ('00000000-0000-0000-0000-000000000001','initial_registration','Initial accident registration','Register accident + upload emergency evidence','incident_evidence',
-    120, false, 80, 100, 'Fleet Incident Officer', 'Fleet / PMV', true),
-  ('00000000-0000-0000-0000-000000000001','fleet_validation','Fleet validation','Review asset, driver, report and photographs','fleet_validation',
-    240, true, 80, 100, 'Fleet Supervisor', 'Fleet / PMV', true),
-  ('00000000-0000-0000-0000-000000000001','insurance_review','Insurance review','Determine coverage and required documents','insurance_claim',
-    240, true, 80, 100, 'Insurance Claims Officer', 'Insurance', true),
-  ('00000000-0000-0000-0000-000000000001','claim_submission','Submit complete claim','Register claim and submit complete documents','insurance_claim',
-    480, true, 80, 100, 'Insurance Claims Officer', 'Insurance', true),
-  ('00000000-0000-0000-0000-000000000001','workshop_inspection','Workshop inspection','Inspect vehicle and record damage','technical_assessment',
-    480, true, 80, 100, 'Workshop Planner', 'Workshop', true),
-  ('00000000-0000-0000-0000-000000000001','repair_estimate','Initial repair estimate','Prepare labour, parts and estimated cost','technical_assessment',
-    960, true, 80, 100, 'Workshop Planner', 'Workshop', true),
-  ('00000000-0000-0000-0000-000000000001','repair_decision','Repair-route approval','Select and approve internal/external/insurer/total-loss route','repair_decision',
-    480, true, 80, 100, 'Fleet Manager', 'Fleet / PMV', true),
-  ('00000000-0000-0000-0000-000000000001','po_after_approval','PO after approval','Raise PO after repair route approved','repair_planning',
-    480, true, 80, 100, 'Procurement Officer', 'Procurement', true),
-  ('00000000-0000-0000-0000-000000000001','fleet_inspection','Fleet inspection after repair','Inspect and accept/reject the completed vehicle','fleet_handover',
-    240, true, 80, 100, 'Fleet Inspector', 'Fleet / PMV', true),
-  ('00000000-0000-0000-0000-000000000001','rectification_plan','Rectification plan after rejection','Plan rework after a rejected handover','repair_execution',
-    480, true, 80, 100, 'Workshop Supervisor', 'Workshop', true),
-  ('00000000-0000-0000-0000-000000000001','closure_review','Final closure review','Review all workstreams and corrective actions','closure_review',
-    960, true, 80, 100, 'Fleet Manager', 'Fleet / PMV', true)
-on conflict (organisation_id, sla_key) do nothing;
+update public.accident_sla_definitions t
+   set responsible_role = v.responsible_role
+from (values
+  ('initial_registration'::text, 'Fleet Incident Officer'),
+  ('fleet_validation',           'Fleet Supervisor'),
+  ('insurance_review',           'Insurance Claims Officer'),
+  ('claim_submission',           'Insurance Claims Officer'),
+  ('workshop_inspection',        'Workshop Planner'),
+  ('repair_estimate',            'Workshop Planner'),
+  ('repair_decision',            'Fleet Manager'),
+  ('po_after_approval',          'Procurement Officer'),
+  ('fleet_inspection',           'Fleet Inspector'),
+  ('rectification_plan',         'Workshop Supervisor'),
+  ('closure_review',             'Fleet Manager')
+) as v(sla_key, responsible_role)
+where t.organisation_id = '00000000-0000-0000-0000-000000000001'
+  and t.sla_key = v.sla_key;
 
 -- =============================================================================
 -- PART 5 - accident_evidence_requirements (photo/document checklist, brief 7/10)
@@ -494,9 +511,15 @@ on conflict (organisation_id, key) do nothing;
 commit;
 
 -- =============================================================================
--- ROLLBACK (commented - review artifact only). Deletes ONLY the seeded rows for
--- Company A by the exact key sets. Safe because these config rows are referenced
--- only by phase-later behaviour that is not yet wired.
+-- ROLLBACK (commented - review artifact only). This file is EXTENSION-ONLY, so its
+-- rollback deletes ONLY the rows this file inserts (the 6 extra route profiles, the
+-- 31 type profiles, the evidence requirements and the 7 email templates). The
+-- country / SLA / 4-base-route rows are OWNED by 02 PART F - do NOT delete them
+-- here; 02's own ROLLBACK block removes them. This file's enrichment UPDATEs only
+-- populated columns 02 leaves at their default (route required_evidence /
+-- required_documents / closure_requirements, country required_documents / notes, SLA
+-- responsible_role); to undo them, reset those columns to their defaults (or let
+-- 02's rollback drop the rows entirely).
 -- =============================================================================
 -- begin;
 --   delete from public.accident_email_templates
@@ -515,12 +538,6 @@ commit;
 --        'photo_chassis_vin','photo_property_damage','photo_equipment_attachment',
 --        'photo_chassis_vin_theft','doc_authority_report','doc_driver_statement','video_walkaround');
 --
---   delete from public.accident_sla_definitions
---    where organisation_id = '00000000-0000-0000-0000-000000000001'
---      and sla_key in ('initial_registration','fleet_validation','insurance_review','claim_submission',
---                      'workshop_inspection','repair_estimate','repair_decision','po_after_approval',
---                      'fleet_inspection','rectification_plan','closure_review');
---
 --   delete from public.accident_type_profiles
 --    where organisation_id = '00000000-0000-0000-0000-000000000001'
 --      and accident_type in (
@@ -531,14 +548,13 @@ commit;
 --        'leased_vehicle','subcontractor_vehicle','no_damage','near_miss','total_loss',
 --        'duplicate','reopened','legal_dispute');
 --
+--   -- Only the 6 EXTRA routes this file inserts (02 owns the other 4).
 --   delete from public.accident_route_profiles
 --    where organisation_id = '00000000-0000-0000-0000-000000000001'
---      and route_key in ('minor_no_insurance','internal_repair_insurance','external_repair_insurance',
---                        'total_loss','injury','third_party','hit_and_run','glass_only','no_damage',
---                        'theft_fire_weather');
+--      and route_key in ('internal_repair_insurance','third_party','hit_and_run',
+--                        'glass_only','no_damage','theft_fire_weather');
 --
---   delete from public.accident_country_rule_profiles
---    where organisation_id = '00000000-0000-0000-0000-000000000001'
---      and country in ('KSA','UAE','Egypt');
+--   -- accident_sla_definitions and accident_country_rule_profiles rows are owned by
+--   -- 02 PART F; this file only enriched their columns, so nothing is deleted here.
 -- commit;
 -- =============================================================================

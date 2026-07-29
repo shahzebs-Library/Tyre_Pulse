@@ -659,6 +659,11 @@ begin
   -- accident_can_fully_close (the SQL twin of accidentCase.canFullyClose). Guarded
   -- by to_regprocedure so this file also applies cleanly if the V418 mirror has not
   -- landed yet; when the mirror is absent the V417 trigger stays the floor.
+  -- The profile arg is passed NULL (not '{}'): a NULL profile makes
+  -- _acc_closure_satisfied default na_requires_approval to TRUE, so a waivable
+  -- workstream marked Not Applicable still needs an approver here - the same rule the
+  -- JS client enforces. Passing '{}' would flip that to FALSE and let an unapproved
+  -- NA waiver pass the server gate (server looser than the client).
   if v_decision = 'approved' and v_level = 'fully_closed'
      and to_regprocedure(
            'public.accident_can_fully_close(jsonb,jsonb,text,jsonb,timestamptz)') is not null then
@@ -670,7 +675,7 @@ begin
     execute
       'select public.accident_can_fully_close($1,$2,$3,$4,$5)'
       into v_gate
-      using v_case, v_ws, v_route, '{}'::jsonb, now();
+      using v_case, v_ws, v_route, null::jsonb, now();
 
     if v_gate is not null and coalesce((v_gate ->> 'ok')::boolean, false) is not true then
       raise exception 'Closure gate not satisfied: %',

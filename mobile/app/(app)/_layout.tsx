@@ -204,6 +204,7 @@ export default function AppLayout() {
       <Tabs.Screen name="inspection/approvals/[id]" options={{ href: null }} />
       <Tabs.Screen name="accident/report" options={{ href: null }} />
       <Tabs.Screen name="accident/[id]"   options={{ href: null }} />
+      <Tabs.Screen name="accident/case"   options={{ href: null }} />
       <Tabs.Screen name="admin/ai-chat"   options={{ href: null }} />
       <Tabs.Screen name="admin/access"    options={{ href: null }} />
       <Tabs.Screen name="admin/users"     options={{ href: null }} />

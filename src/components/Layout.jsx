@@ -271,6 +271,7 @@ const NAV_GROUPS = [
     label: 'Accident & Insurance',
     items: [
       { to: '/accidents',      label: 'Accidents',       icon: AlertOctagon },
+      { to: '/accident-cases', label: 'Accident Cases',  icon: Layers, roles: ANALYTICS_ROLES },
       { to: '/claims-summary', label: 'Claims Summary',  icon: BarChart2 },
       { to: '/warranty',       label: 'Warranty Tracker', icon: ShieldCheck },
       { to: '/insurance-claims', label: 'Insurance Claims', icon: ShieldAlert },

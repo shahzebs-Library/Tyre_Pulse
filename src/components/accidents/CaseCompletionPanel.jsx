@@ -83,6 +83,12 @@ function CompletionBar({ row }) {
 export default function CaseCompletionPanel({ caseData }) {
   const view = useMemo(() => {
     if (caseData == null) return { empty: true }
+    // Honesty gate: when the case workflow is not provisioned for this incident
+    // (pre-V417, loadCase returns capabilities.casesModel === false with no
+    // workstreams), there is nothing real to measure. Painting every dimension
+    // "Not started" 0% with a full blocker list is a confident fabrication, so we
+    // stop BEFORE computing completion rows and say plainly that it is not enabled.
+    if (caseData?.capabilities?.casesModel === false) return { notEnabled: true }
     try {
       return {
         rows: completionRows(caseData),
@@ -98,6 +104,22 @@ export default function CaseCompletionPanel({ caseData }) {
     return (
       <div className="card p-4">
         <p className="text-sm text-[var(--text-muted)]">No case selected.</p>
+      </div>
+    )
+  }
+  if (view.notEnabled) {
+    return (
+      <div className="card p-4 space-y-1.5">
+        <div className="flex items-center gap-2">
+          <ShieldCheck size={16} className="text-[var(--text-muted)] shrink-0" />
+          <p className="text-sm font-semibold text-[var(--text-primary)]">Case completion</p>
+        </div>
+        <p className="text-sm text-[var(--text-muted)]">
+          Case workflow not yet enabled for this incident.
+        </p>
+        <p className="text-xs text-[var(--text-dim)]">
+          Completion tracking appears once the case workflow is provisioned for this record.
+        </p>
       </div>
     )
   }

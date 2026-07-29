@@ -236,23 +236,47 @@ create unique index if not exists accidents_org_case_no_uidx
 -- never disagree - the country segment is a render concern (05 sec C.1), not a
 -- second independent row_number() sequence. Rows with no reference_no fall back to
 -- a scoped per-country/year sequence.
-with ranked as (
-  select id,
+-- RE-RUN SAFETY (M5): the only rows numbered here are those still lacking a
+-- case_no (`where case_no is null`), so an already-numbered row is never touched.
+-- But a naive row_number() restarts at 1 on every apply, which on a re-run would
+-- collide with case numbers already persisted on the first run and fail the unique
+-- index accidents_org_case_no_uidx. We therefore offset the fallback sequence PAST
+-- the highest numeric suffix ALREADY in use in each (org, country, year) partition,
+-- so a re-run can only ever assign brand-new, non-colliding numbers (and a first
+-- apply, with no existing case_no, offsets by 0 = the original behaviour).
+with existing_seq as (
+  select organisation_id,
+         coalesce(nullif(upper(btrim(country)), ''), 'GEN') as country_key,
+         extract(year from coalesce(incident_date, created_at::date))::int as yr,
+         max(coalesce((substring(case_no from '(\d+)$'))::bigint, 0)) as max_seq
+    from public.accidents
+   where case_no is not null
+   group by 1, 2, 3
+),
+ranked as (
+  select a.id,
     case
-      when nullif(btrim(reference_no), '') is not null then
-        'TP-ACC-' || coalesce(nullif(upper(btrim(country)), ''), 'GEN') || '-' ||
-        regexp_replace(btrim(reference_no), '^ACC-', '')
+      when nullif(btrim(a.reference_no), '') is not null then
+        'TP-ACC-' || coalesce(nullif(upper(btrim(a.country)), ''), 'GEN') || '-' ||
+        regexp_replace(btrim(a.reference_no), '^ACC-', '')
       else
-        'TP-ACC-' || coalesce(nullif(upper(btrim(country)), ''), 'GEN') || '-' ||
-        to_char(coalesce(incident_date, created_at::date), 'YYYY') || '-' ||
-        lpad(row_number() over (
-          partition by organisation_id,
-                       coalesce(nullif(upper(btrim(country)), ''), 'GEN'),
-                       extract(year from coalesce(incident_date, created_at::date))
-          order by created_at, id)::text, 6, '0')
+        'TP-ACC-' || coalesce(nullif(upper(btrim(a.country)), ''), 'GEN') || '-' ||
+        to_char(coalesce(a.incident_date, a.created_at::date), 'YYYY') || '-' ||
+        lpad((
+          coalesce(es.max_seq, 0) +
+          row_number() over (
+            partition by a.organisation_id,
+                         coalesce(nullif(upper(btrim(a.country)), ''), 'GEN'),
+                         extract(year from coalesce(a.incident_date, a.created_at::date))
+            order by a.created_at, a.id)
+        )::text, 6, '0')
     end as cno
-  from public.accidents
-  where case_no is null
+  from public.accidents a
+  left join existing_seq es
+    on es.organisation_id = a.organisation_id
+   and es.country_key = coalesce(nullif(upper(btrim(a.country)), ''), 'GEN')
+   and es.yr = extract(year from coalesce(a.incident_date, a.created_at::date))::int
+  where a.case_no is null
 )
 update public.accidents a
    set case_no = r.cno

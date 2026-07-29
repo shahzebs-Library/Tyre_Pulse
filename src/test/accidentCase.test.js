@@ -6,7 +6,7 @@ import {
   repairOccurred, correctiveRequired, insuranceInvolved,
   buildCaseRoute, requiredWorkstreams,
   completeness, closureBlockers,
-  closureLevel, canFullyClose,
+  closureLevel, canFullyClose, NON_WAIVABLE,
   CASE_STATUSES, CASE_STATUS_STAGE, CASE_STATUS_TOKENS, caseStatusStage,
   TRANSITIONS, allowedTransitions, canTransition, transitionSpec,
   deriveCaseStatus,
@@ -136,6 +136,20 @@ describe('route detection helpers', () => {
     expect(correctiveRequired({ injury_count: 2 })).toBe(true)
     expect(correctiveRequired({})).toBe(false)
   })
+
+  it('truthy coercion accepts case-insensitive ERP yes/true tokens (bug 5)', () => {
+    // ERP text like injuries:'Yes' must not be silently read as false.
+    expect(correctiveRequired({ injuries: 'Yes' })).toBe(true)
+    expect(correctiveRequired({ injuries: 'yes' })).toBe(true)
+    expect(correctiveRequired({ injuries: 'Y' })).toBe(true)
+    expect(correctiveRequired({ injuries: 'TRUE' })).toBe(true)
+    expect(correctiveRequired({ injuries: 'true' })).toBe(true)
+    // real booleans/numbers still work; genuine "no" stays false
+    expect(correctiveRequired({ injuries: true })).toBe(true)
+    expect(correctiveRequired({ injuries: 'no' })).toBe(false)
+    expect(correctiveRequired({ injuries: false })).toBe(false)
+    expect(correctiveRequired({ injuries: 'n' })).toBe(false)
+  })
 })
 
 describe('buildCaseRoute — fallback classifier', () => {
@@ -182,6 +196,23 @@ describe('buildCaseRoute — config rule profiles win', () => {
   it('an inactive rule never matches', () => {
     const r = buildCaseRoute({ total_loss: false, country: 'KSA', severity: 'minor', insurance_involved: false }, [profiles[2]])
     expect(r.source).toBe('fallback')
+  })
+
+  it('a blank-priority profile sorts LAST, not first (bug 6: num("") is null, not 0)', () => {
+    const withBlank = [
+      { active: true, priority: '', route_key: 'total_loss', country: 'KSA' },
+      { active: true, priority: 10, route_key: 'external_repair_insurance', country: 'KSA' },
+    ]
+    // Both match; the numbered priority must win over the blank one (which used to
+    // coerce to 0 and sort as the highest-precedence rule).
+    const r = buildCaseRoute({ country: 'KSA', insurance_involved: true }, withBlank)
+    expect(r.key).toBe('external_repair_insurance')
+    // a real priority of 0 is still honoured as highest precedence
+    const withZero = [
+      { active: true, priority: 0, route_key: 'total_loss', country: 'KSA' },
+      { active: true, priority: 10, route_key: 'external_repair_insurance', country: 'KSA' },
+    ]
+    expect(buildCaseRoute({ country: 'KSA', insurance_involved: true }, withZero).key).toBe('total_loss')
   })
 })
 
@@ -354,9 +385,11 @@ describe('canFullyClose — the §8.3 boolean AND', () => {
     expect(res.blockers.some((b) => b.workstream === 'insurance')).toBe(true)
   })
 
-  it('a valid NA reason envelope unblocks that workstream', () => {
+  it('a valid + approved NA reason envelope unblocks that workstream', () => {
+    // On a code/fallback route (no profile) an NA waiver of a waivable workstream
+    // requires approval — a bare reason is not enough (see the fallback-route test).
     const r = complete().map((w) => (w.workstream === 'insurance'
-      ? { workstream: 'insurance', status: 'not_required', na_reason: { reason: 'self-insured', by: 'u1', at: '2026-07-01' } }
+      ? { workstream: 'insurance', status: 'not_required', na_reason: { reason: 'self-insured', by: 'u1', at: '2026-07-01', approved_by: 'mgr' } }
       : w))
     expect(canFullyClose(rec, r, route, { now: NOW }).ok).toBe(true)
   })
@@ -400,6 +433,43 @@ describe('canFullyClose — the §8.3 boolean AND', () => {
     expect(res.ok).toBe(false)
     expect(res.blockers.some((b) => b.check === 'closure_review')).toBe(true)
   })
+
+  it('a repair with workshop_qc omitted from the route cannot fully close (bug 1 QC guard)', () => {
+    // A config route whose required set includes repair but NOT workshop_qc — a
+    // repair happened, so QC is mandatory and its absence must block closure.
+    const req = ['incident_evidence', 'fleet_validation', 'liability', 'assessment', 'repair', 'handover', 'finance']
+    const cfgRoute = { key: 'cfg', profile: { required_workstreams: req } }
+    const record = { repair_type: 'Internal', closure_review_approved: true }
+    const done = rows(Object.fromEntries(req.map((ws) => [ws, 'completed'])))
+    const res = canFullyClose(record, done, cfgRoute, { now: NOW })
+    expect(res.ok).toBe(false)
+    expect(res.blockers.some((b) => b.check === 'workshop_qc')).toBe(true)
+  })
+
+  it('an unapproved NA on a fallback (no-profile) route does not satisfy closure (bug 2)', () => {
+    // external_repair_insurance as a bare string => no profile => approval required.
+    const fbRoute = 'external_repair_insurance'
+    const rec2 = { repair_type: 'External', closure_review_approved: true }
+    const req = [...requiredWorkstreams(fbRoute, rec2)]
+    const base = Object.fromEntries(req.map((ws) => [ws, 'completed']))
+    const bare = rows({ ...base, insurance: { status: 'not_required', na_reason: { reason: 'self-insured', by: 'u1', at: '2026-07-01' } } })
+    expect(canFullyClose(rec2, bare, fbRoute, { now: NOW }).ok).toBe(false)
+    // approving the NA on the same fallback route unblocks it
+    const approved = rows({ ...base, insurance: { status: 'not_required', na_reason: { reason: 'self-insured', by: 'u1', at: '2026-07-01', approved_by: 'mgr' } } })
+    expect(canFullyClose(rec2, approved, fbRoute, { now: NOW }).ok).toBe(true)
+  })
+
+  it('a NON_WAIVABLE workstream (incident_evidence) never satisfies closure via NA, even approved (bug 2)', () => {
+    expect(NON_WAIVABLE.has('incident_evidence')).toBe(true)
+    const nwRoute = 'minor_no_insurance'
+    const rec2 = { closure_review_approved: true }
+    const req = [...requiredWorkstreams(nwRoute, rec2)]
+    const base = Object.fromEntries(req.map((ws) => [ws, 'completed']))
+    const na = rows({ ...base, incident_evidence: { status: 'not_required', na_reason: { reason: 'x', by: 'u1', at: '2026-07-01', approved_by: 'mgr' } } })
+    const res = canFullyClose(rec2, na, nwRoute, { now: NOW })
+    expect(res.ok).toBe(false)
+    expect(res.blockers.some((b) => b.workstream === 'incident_evidence')).toBe(true)
+  })
 })
 
 describe('case-status transition machine', () => {
@@ -427,6 +497,20 @@ describe('case-status transition machine', () => {
       expect(valid.has(from)).toBe(true)
       for (const s of specs) expect(valid.has(s.to)).toBe(true)
     }
+  })
+
+  it('a total-loss case can traverse from total_loss_processing to closure (bug 3)', () => {
+    // total_loss_processing used to be a dead end (no outbound transition).
+    expect(allowedTransitions('total_loss_processing').length).toBeGreaterThan(2) // + universal cancel/hold
+    const path = [
+      ['total_loss_processing', 'insurance_settlement_pending'],
+      ['insurance_settlement_pending', 'financial_closure_pending'],
+      ['financial_closure_pending', 'closure_review'],
+      ['closure_review', 'closed'],
+    ]
+    for (const [from, to] of path) expect(canTransition(from, to)).toBe(true)
+    // and the write-off (no claim) branch also leaves the total-loss state
+    expect(canTransition('total_loss_processing', 'financial_closure_pending')).toBe(true)
   })
 })
 
@@ -457,6 +541,13 @@ describe('deriveCaseStatus — the projection (§3)', () => {
     expect(deriveCaseStatus({ reopened: true }, [], route)).toBe('reopened')
     expect(deriveCaseStatus({ total_loss: true }, [], route)).toBe('total_loss_processing')
     expect(deriveCaseStatus({ case_status: 'closed' }, [], route)).toBe('closed')
+  })
+
+  it('a closed case wins over the total_loss / reopened projection (bug 4 precedence)', () => {
+    // The terminal `closed` state must not be dragged back to a live stage by a
+    // still-set total_loss or reopened flag.
+    expect(deriveCaseStatus({ case_status: 'closed', total_loss: true }, [], route)).toBe('closed')
+    expect(deriveCaseStatus({ case_status: 'closed', reopened: true }, [], route)).toBe('closed')
   })
 
   it('draft before submission, evidence_incomplete when returned', () => {

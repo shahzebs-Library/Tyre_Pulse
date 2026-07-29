@@ -32,9 +32,20 @@
 import { stageCompletion } from './accidentStages'
 
 // ── tiny shared helpers (same shapes as the sibling engines) ──────────────────
-const num = (v) => (Number.isFinite(Number(v)) ? Number(v) : null)
+// A BLANK value (null / undefined / '' / whitespace) is "not measured", NOT 0.
+// Number('') and Number('  ') are 0, which would let a profile with an empty
+// priority sort as the highest-precedence rule (num(a.priority) ?? 1e9).
+const num = (v) => {
+  if (v == null) return null
+  if (typeof v === 'string' && v.trim() === '') return null
+  const n = Number(v)
+  return Number.isFinite(n) ? n : null
+}
 const str = (v) => (v == null ? '' : String(v).trim())
-const truthy = (v) => v === true || v === 'true' || v === 1 || v === '1'
+// ERP feeds carry boolean-ish text ('Yes', 'Y', 'TRUE'); accept the whole family
+// case-insensitively so `injuries: 'Yes'` is not silently read as false.
+const TRUTHY_TOKENS = new Set(['true', 't', 'yes', 'y', '1'])
+const truthy = (v) => v === true || v === 1 || TRUTHY_TOKENS.has(str(v).toLowerCase())
 const arr = (v) => (Array.isArray(v) ? v : [])
 const lower = (v) => str(v).toLowerCase()
 
@@ -441,15 +452,31 @@ export function closureBlockers(record, wsRows, route) {
 // ═════════════════════════════════════════════════════════════════════════════
 
 /**
+ * Core workstreams that can NEVER be closed out via a Not-Applicable waiver, no
+ * matter who approves it: the incident record itself, the liability finding, and
+ * the financial settlement are the spine of the case. A case with one of these
+ * "switched off" is not a closed case — it is an unrecorded one (brief §8.3).
+ */
+export const NON_WAIVABLE = new Set(['incident_evidence', 'liability', 'finance'])
+
+/**
  * Closure-grade satisfaction: completed, OR formally NA (valid envelope, and
- * approved where the route profile demands `na_requires_approval`). Stricter than
- * scoring — this is what the fully-closed gate uses.
+ * approved where the route demands it). Stricter than scoring — this is what the
+ * fully-closed gate uses.
+ *
+ * Two guards a bare `profile?.na_requires_approval` read missed:
+ *   - A NON_WAIVABLE workstream is never satisfied by NA, approved or not.
+ *   - A fallback / code route has NO profile, so `na_requires_approval` was
+ *     undefined (falsy) and an NA waived a mandatory workstream with just a bare
+ *     reason. Absent a profile, approval is REQUIRED (default true), not waived.
  */
 function closureGradeSatisfied(record, rows, ws, route) {
   const status = workstreamStatus(record, ws, rows)
   if (status === WORKSTREAM_STATUS.COMPLETED) return true
   if (status === WORKSTREAM_STATUS.NOT_REQUIRED || status === WORKSTREAM_STATUS.CANCELLED) {
-    const requireApproval = truthy(resolveRoute(route)?.profile?.na_requires_approval)
+    if (NON_WAIVABLE.has(ws)) return false
+    const profile = resolveRoute(route)?.profile
+    const requireApproval = profile ? truthy(profile.na_requires_approval) : true
     return markedNA(record, rows, ws, { requireApproval })
   }
   return false
@@ -577,14 +604,12 @@ export function canFullyClose(record, wsRows, route, { now = Date.now() } = {}) 
     })
   }
 
-  // Workshop QC required only where a repair actually occurred (§8.3).
-  if (repairOccurred(record) && required.has('workshop_qc') &&
-      !closureGradeSatisfied(record, rows, 'workshop_qc', route)) {
-    // already captured above if workshop_qc is required; keep the explicit guard
-    // for the case where a repair occurred but QC was mistakenly not required.
-    if (!required.has('workshop_qc')) {
-      blockers.push({ check: 'workshop_qc', reason: 'Workshop quality control required where repair occurred' })
-    }
+  // Workshop QC is mandatory wherever a repair actually occurred (§8.3). When QC
+  // IS a required workstream it is already graded by the loop above; this guard
+  // catches the dangerous case where a repair happened but the route did NOT gate
+  // QC — a vehicle back in service without a quality sign-off.
+  if (repairOccurred(record) && !required.has('workshop_qc')) {
+    blockers.push({ check: 'workshop_qc', reason: 'Workshop quality control required where repair occurred' })
   }
 
   // Meta gates.
@@ -675,6 +700,8 @@ const TRANSITION_ROWS = [
   ['awaiting_insurer_response', 'awaiting_insurer_response', 'Insurer requests documents (loop)', 'edit_insurance', 'missing-doc task created'],
   ['technical_assessment', 'repair_decision_pending', 'Assessment approved', 'assess', 'damage + estimate recorded'],
   ['technical_assessment', 'total_loss_processing', 'Assessment flags total loss', 'assess', 'total-loss possibility set'],
+  ['total_loss_processing', 'insurance_settlement_pending', 'Total loss confirmed, claim proceeds to settlement', 'edit_insurance', 'total loss confirmed; insurance route'],
+  ['total_loss_processing', 'financial_closure_pending', 'Total loss written off without a claim', 'post_cost', 'no insurance recovery; costs to clear'],
   ['repair_decision_pending', 'repair_planning', 'Repair route selected', 'approve_repair', 'route recorded; SoD'],
   ['repair_decision_pending', 'operationally_completed', 'No-repair decision', 'approve_repair', 'route = none/temporary + reason'],
   ['repair_planning', 'awaiting_fleet_approval', 'Plan submitted to Fleet', 'approve_repair', 'plan + dates + off-road present'],
@@ -696,6 +723,7 @@ const TRANSITION_ROWS = [
   ['operationally_completed', 'closure_review', 'All required workstreams complete', 'auto', 'closure gate passes'],
   ['insurance_settlement_pending', 'financial_closure_pending', 'Settlement recorded', 'edit_insurance', 'settlement/recovery posted'],
   ['financial_closure_pending', 'corrective_actions_pending', 'Finance confirms closure', 'post_cost', 'financial complete'],
+  ['financial_closure_pending', 'closure_review', 'Finance confirms closure, no corrective actions', 'post_cost', 'financial complete; no corrective actions'],
   ['corrective_actions_pending', 'closure_review', 'Corrective actions closed', 'approve_liability', 'CAs complete'],
   ['closure_review', 'closed', 'Manager fully closes', 'close_case', 'closure gate true; SoD'],
   ['closed', 'reopened', 'Manager reopens', 'reopen_case', 'reason + new owner + due date'],
@@ -760,12 +788,15 @@ export function deriveCaseStatus(record, wsRows, route) {
   const rec = record || {}
   const rows = arr(wsRows)
 
-  // 0. terminal + cross-cutting overrides win.
+  // 0. overrides win — but the TERMINAL states (closed / cancelled) take
+  // precedence over the cross-cutting projections (total_loss / reopened). A
+  // closed total-loss case is `closed`, not `total_loss_processing`; without this
+  // ordering the total_loss flag would drag a finished case back to a live stage.
   if (truthy(rec.legal_hold_active) || truthy(rec.legal_hold)) return 'legal_hold'
   if (truthy(rec.cancelled) || truthy(rec.cancelled_duplicate)) return 'cancelled_duplicate'
+  if (isClosedCase(rec)) return 'closed'
   if (truthy(rec.reopened_flag) || truthy(rec.reopened)) return 'reopened'
   if (truthy(rec.total_loss_route) || truthy(rec.total_loss)) return 'total_loss_processing'
-  if (isClosedCase(rec)) return 'closed'
 
   const required = requiredWorkstreams(route, rec)
   const statusOf = (ws) => workstreamStatus(rec, ws, rows)

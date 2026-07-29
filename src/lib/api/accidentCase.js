@@ -23,12 +23,11 @@
  * via applyCountry, and org/role/country/site isolation enforced server-side by
  * RLS (not by this layer).
  */
-import { supabase, unwrap, applyCountry, isMissingRelation, ServiceError } from './_client'
+import { supabase, unwrap, applyCountry, isMissingRelation } from './_client'
 import { getAccident } from './accidents'
 import {
   completeness,
   canFullyClose,
-  naEnvelopeValid,
   WORKSTREAM_KEYS,
   WORKSTREAM_STATUS_TOKENS,
 } from '../accidentCase'

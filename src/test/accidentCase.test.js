@@ -9,6 +9,7 @@ import {
   closureLevel, canFullyClose, NON_WAIVABLE,
   CASE_STATUSES, CASE_STATUS_STAGE, CASE_STATUS_TOKENS, caseStatusStage,
   TRANSITIONS, allowedTransitions, canTransition, transitionSpec,
+  TERMINAL_STATUSES, preHoldStatus, reopenTarget,
   deriveCaseStatus,
 } from '../lib/accidentCase'
 import { WORKFLOW_STAGES, STAGE_KEYS } from '../lib/accidentWorkflow'
@@ -85,6 +86,38 @@ describe('workstreamStatus', () => {
     const rec = { insurer: 'X', claim_amount: 0 } // claim_amount required + money
     expect(workstreamStatus(rec, 'insurance')).toBe('in_progress')
   })
+
+  it('corrective derives on its OWN fields, so filling liability does not auto-complete it (bug 4)', () => {
+    // liability + corrective both sit on the hse_investigation stage. Filling the
+    // liability finding (root_cause + corrective_action) completes liability but
+    // must leave the injury corrective gate independently incomplete until a
+    // preventive action is also recorded.
+    const rec = { root_cause: 'driver fatigue', corrective_action: 'retrain driver' }
+    expect(workstreamStatus(rec, 'liability')).toBe('completed')
+    expect(workstreamStatus(rec, 'corrective')).toBe('in_progress')
+    // corrective completes only once its own preventive action is on record
+    expect(workstreamStatus({ ...rec, preventive_action: 'fatigue policy' }, 'corrective')).toBe('completed')
+    // nothing recorded -> corrective not_started
+    expect(workstreamStatus({}, 'corrective')).toBe('not_started')
+    // an explicit team-set row still overrides the derivation
+    expect(workstreamStatus(rec, 'corrective', rows({ corrective: 'completed' }))).toBe('completed')
+  })
+
+  it('the injury corrective gate cannot be bypassed by completing the liability finding (bug 4)', () => {
+    // Injury route ALWAYS requires corrective. Fill everything the injury route
+    // needs except the corrective preventive action; the closure gate must still
+    // block on corrective even though liability is complete.
+    const rec = { injuries: true, closure_review_approved: true, root_cause: 'x', corrective_action: 'y' }
+    const req = [...requiredWorkstreams('injury', rec)]
+    // satisfy every required workstream by explicit row EXCEPT corrective (derived)
+    const explicit = rows(Object.fromEntries(req.filter((w) => w !== 'corrective').map((ws) => [ws, 'completed'])))
+    const res = canFullyClose(rec, explicit, 'injury', { now: NOW })
+    expect(res.ok).toBe(false)
+    expect(res.blockers.some((b) => b.workstream === 'corrective')).toBe(true)
+    // adding the preventive action clears the corrective blocker
+    const done = canFullyClose({ ...rec, preventive_action: 'policy' }, explicit, 'injury', { now: NOW })
+    expect(done.blockers.some((b) => b.workstream === 'corrective')).toBe(false)
+  })
 })
 
 describe('NA envelope', () => {
@@ -120,6 +153,19 @@ describe('route detection helpers', () => {
     expect(insuranceInvolved({ insurer: 'Tawuniya' })).toBe(true)
     expect(insuranceInvolved({ claim_amount: 100 })).toBe(true)
     expect(insuranceInvolved({})).toBe(false)
+  })
+
+  it('insuranceInvolved: a STRING off-toggle turns it off, even with an insurer present (bug 5)', () => {
+    // ERP feeds carry the toggle as text; 'false'/'no'/'0' must not fall through
+    // to inference and re-enable insurance because an insurer field is populated.
+    expect(insuranceInvolved({ insurance_involved: 'false', insurer: 'X' })).toBe(false)
+    expect(insuranceInvolved({ insurance_involved: 'no', insurer: 'X' })).toBe(false)
+    expect(insuranceInvolved({ insurance_involved: 'No', claim_amount: 100 })).toBe(false)
+    expect(insuranceInvolved({ insurance_involved: '0', policy_no: 'P1' })).toBe(false)
+    // a string on-toggle still turns it on; a blank/unknown toggle still infers
+    expect(insuranceInvolved({ insurance_involved: 'yes' })).toBe(true)
+    expect(insuranceInvolved({ insurance_involved: 'TRUE' })).toBe(true)
+    expect(insuranceInvolved({ insurance_involved: '', insurer: 'Tawuniya' })).toBe(true)
   })
 
   it('repairOccurred: repair type / cost signals a real repair, no-repair does not', () => {
@@ -499,6 +545,40 @@ describe('case-status transition machine', () => {
     }
   })
 
+  it('releasing a legal hold returns to the PRE-HOLD status, not a hardcoded closure_review (bug 1)', () => {
+    // A hold applied early (technical_assessment) must resume there on release.
+    const held = { record: { pre_hold_status: 'technical_assessment' } }
+    expect(canTransition('legal_hold', 'technical_assessment', held)).toBe(true)
+    expect(transitionSpec('legal_hold', 'technical_assessment', held).cap).toBe('legal_hold')
+    // it does NOT skip the pipeline straight to the closure gate
+    expect(canTransition('legal_hold', 'closure_review', held)).toBe(false)
+    // `held_from` is honoured as an alternative field name
+    expect(canTransition('legal_hold', 'insurance_review', { record: { held_from: 'insurance_review' } })).toBe(true)
+    // with NO stored prior, release lands on a SAFE non-closure status (route's
+    // first pending stage), never closure_review and never a terminal state
+    const releases = allowedTransitions('legal_hold').filter((t) => t.action === 'Hold released')
+    expect(releases).toHaveLength(1)
+    expect(releases[0].to).not.toBe('closure_review')
+    expect(TERMINAL_STATUSES.has(releases[0].to)).toBe(false)
+    // preHoldStatus is the single source and honours the route's first pending stage
+    expect(preHoldStatus({}, 'total_loss')).not.toBe('closure_review')
+    expect(preHoldStatus({ pre_hold_status: 'repair_in_progress' })).toBe('repair_in_progress')
+  })
+
+  it('a reopen targets the disputed workstream, not always technical_assessment (bug 2)', () => {
+    // explicit target wins
+    expect(canTransition('reopened', 'financial_closure_pending', { record: { reopen_target: 'financial_closure_pending' } })).toBe(true)
+    expect(canTransition('reopened', 'technical_assessment', { record: { reopen_target: 'financial_closure_pending' } })).toBe(false)
+    // derived from the reopen reason keyword
+    expect(reopenTarget({ reopen_reason: 'cost recovery dispute reopened' })).toBe('financial_closure_pending')
+    expect(reopenTarget({ reopen_reason: 'HSE corrective action missed' })).toBe('corrective_actions_pending')
+    expect(reopenTarget({ reopen_reason: 'insurer re-opened the claim' })).toBe('insurance_review')
+    expect(canTransition('reopened', 'corrective_actions_pending', { record: { reopen_reason: 'injury corrective follow-up' } })).toBe(true)
+    // default (no hint) stays the workshop entry, so the existing behaviour holds
+    expect(canTransition('reopened', 'technical_assessment')).toBe(true)
+    expect(reopenTarget({})).toBe('technical_assessment')
+  })
+
   it('a total-loss case can traverse from total_loss_processing to closure (bug 3)', () => {
     // total_loss_processing used to be a dead end (no outbound transition).
     expect(allowedTransitions('total_loss_processing').length).toBeGreaterThan(2) // + universal cancel/hold
@@ -577,5 +657,28 @@ describe('deriveCaseStatus — the projection (§3)', () => {
     expect(deriveCaseStatus(submitted, all, route)).toBe('closure_review')
     // review approved -> closed
     expect(deriveCaseStatus({ ...submitted, closure_review_approved: true }, all, route)).toBe('closed')
+  })
+
+  it('a bare not_required workstream never lets the projection read "closed" while the gate blocks (bug 3)', () => {
+    // The projection must use the SAME satisfaction predicate as canFullyClose.
+    // A bare `not_required` liability (NON_WAIVABLE, no NA envelope) satisfies the
+    // lax token check but not the gate — so deriveCaseStatus must NOT say closed.
+    const r2 = 'minor_no_insurance'
+    const rec = { submitted: true, closure_review_approved: true }
+    const req = [...requiredWorkstreams(r2, rec)]
+    const base = Object.fromEntries(req.map((ws) => [ws, 'completed']))
+    const wsRows = rows({ ...base, liability: { status: 'not_required' } }) // bare, no reason
+    // the strict gate blocks (liability is NON_WAIVABLE)
+    expect(canFullyClose(rec, wsRows, r2, { now: NOW }).ok).toBe(false)
+    // and the projection agrees — it points back at the unsatisfied workstream
+    const projected = deriveCaseStatus(rec, wsRows, r2)
+    expect(projected).not.toBe('closed')
+    expect(projected).toBe('liability_assessment')
+    // a properly waived (valid NA + approved) waivable workstream still projects on
+    const okRows = rows({
+      ...Object.fromEntries(req.map((ws) => [ws, 'completed'])),
+    })
+    expect(canFullyClose(rec, okRows, r2, { now: NOW }).ok).toBe(true)
+    expect(deriveCaseStatus(rec, okRows, r2)).toBe('closed')
   })
 })

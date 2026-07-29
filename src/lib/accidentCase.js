@@ -46,6 +46,11 @@ const str = (v) => (v == null ? '' : String(v).trim())
 // case-insensitively so `injuries: 'Yes'` is not silently read as false.
 const TRUTHY_TOKENS = new Set(['true', 't', 'yes', 'y', '1'])
 const truthy = (v) => v === true || v === 1 || TRUTHY_TOKENS.has(str(v).toLowerCase())
+// The mirror family for an EXPLICIT off-toggle. A stored `insurance_involved`
+// carried as the string 'false'/'no'/'0' must turn the toggle OFF, not fall
+// through to inference — the same case-insensitive discipline as truthy.
+const FALSY_TOKENS = new Set(['false', 'f', 'no', 'n', '0'])
+const explicitlyFalse = (v) => v === false || v === 0 || FALSY_TOKENS.has(str(v).toLowerCase())
 const arr = (v) => (Array.isArray(v) ? v : [])
 const lower = (v) => str(v).toLowerCase()
 
@@ -119,13 +124,29 @@ export const WORKSTREAM_SATISFIED = new Set(['completed', 'not_required', 'cance
 export function workstreamSatisfied(status) { return WORKSTREAM_SATISFIED.has(str(status)) }
 
 /**
+ * Workstreams whose derived status must NOT simply mirror their owning stage's
+ * completion, because a SIBLING workstream shares that same stage. `liability`
+ * and `corrective` both sit on `hse_investigation`; without a distinct basis,
+ * filling liability's root cause auto-completes the injury corrective gate, so
+ * the corrective control could never be independently incomplete (bug 4).
+ *
+ * Corrective is therefore graded on its own corrective/preventive ACTION plan
+ * (distinct from liability's root_cause finding). All fields present -> completed,
+ * some -> in_progress, none -> not_started.
+ */
+const WORKSTREAM_OWN_FIELDS = Object.freeze({
+  corrective: ['corrective_action', 'preventive_action'],
+})
+
+/**
  * The status of one workstream (§2.4).
  *
  * An explicit `accident_case_workstreams` row (team-set truth) wins. Absent one,
  * the status is DERIVED from how much of the workstream's owning stage is filled
  * (reusing stageCompletion): every required field filled -> completed, some ->
  * in_progress, none -> not_started. A stage with no required fields at all is
- * structurally out of scope -> not_required.
+ * structurally out of scope -> not_required. A workstream in WORKSTREAM_OWN_FIELDS
+ * is graded on its own fields instead of the shared stage.
  *
  * @param {object} record accidents row
  * @param {string} workstream one of WORKSTREAM_KEYS
@@ -136,6 +157,14 @@ export function workstreamStatus(record, workstream, rows = []) {
     (w) => w && (w.workstream === workstream || w.key === workstream),
   )
   if (explicit && str(explicit.status)) return str(explicit.status)
+
+  const own = WORKSTREAM_OWN_FIELDS[workstream]
+  if (own) {
+    const rec = record || {}
+    const filled = own.filter((k) => str(rec[k]) !== '')
+    if (filled.length === own.length) return WORKSTREAM_STATUS.COMPLETED
+    return filled.length > 0 ? WORKSTREAM_STATUS.IN_PROGRESS : WORKSTREAM_STATUS.NOT_STARTED
+  }
 
   const stage = WORKSTREAM_STAGE[workstream]
   if (!stage) return WORKSTREAM_STATUS.NOT_REQUIRED
@@ -271,10 +300,16 @@ function isInjury(r) {
   return truthy(r?.injuries) || num(r?.injury_count) > 0 ||
     /injur|fatal/i.test(str(r?.accident_type))
 }
-/** Insurance is in play: explicit toggle, or an insurer/policy/claim on record. */
+/** Insurance is in play: explicit toggle, or an insurer/policy/claim on record.
+ *  The explicit toggle wins in EITHER direction — a string 'false'/'no'/'0'
+ *  turns it off just as `false` does (bug 5). Only a blank / unrecognised toggle
+ *  falls through to inference from insurer/policy/claim. */
 export function insuranceInvolved(r) {
-  if (r?.insurance_involved === false) return false
-  if (truthy(r?.insurance_involved)) return true
+  const raw = r?.insurance_involved
+  if (raw != null && str(raw) !== '') {
+    if (truthy(raw)) return true
+    if (explicitlyFalse(raw)) return false
+  }
   return !!(str(r?.insurer) || str(r?.policy_no) || num(r?.claim_amount) > 0)
 }
 function isMinorSeverity(r) {
@@ -741,22 +776,84 @@ export const TRANSITIONS = (() => {
   return m
 })()
 
+/**
+ * Where releasing a LEGAL HOLD returns the case (bug 1). A hold can be applied
+ * from ANY live status, so it must resume where it left off — never a hardcoded
+ * `closure_review`, which would skip the whole pipeline for a hold applied early.
+ *
+ * The pre-hold status is read from the record (`pre_hold_status` / `held_from`).
+ * When none is stored, it falls back to a SAFE non-closure status — the route's
+ * first pending pipeline stage — so a released hold re-enters the workflow rather
+ * than jumping to the closure gate.
+ *
+ * @param {object} [record] accidents row (carries pre_hold_status / held_from)
+ * @param {object|string} [route] route def / key / buildCaseRoute result
+ */
+export function preHoldStatus(record, route) {
+  const stored = str(record?.pre_hold_status) || str(record?.held_from)
+  if (stored && CASE_STATUS_BY_TOKEN[stored] && stored !== 'legal_hold' && stored !== 'reopened') {
+    return stored
+  }
+  // Fallback: the earliest pending workstream's headline for this route — a live,
+  // non-closure status. Never closure_review.
+  const required = requiredWorkstreams(route, record || {})
+  for (const ws of PIPELINE_ORDER) {
+    if (ws === 'incident_evidence' || !required.has(ws)) continue
+    const map = CASE_STATUS_FOR[ws]
+    if (map && map.default) return map.default
+  }
+  return 'under_fleet_validation'
+}
+
+/**
+ * Where a REOPEN routes the case (bug 2). A case reopened for a finance or
+ * corrective dispute must NOT be forced back into the workshop path. The target
+ * is read from `reopen_target`, else derived from the reopen reason keyword;
+ * the default remains the workshop entry (`technical_assessment`).
+ *
+ * @param {object} [record] accidents row (reopen_target / reopen_reason)
+ */
+export function reopenTarget(record) {
+  const explicit = str(record?.reopen_target)
+  if (explicit && CASE_STATUS_BY_TOKEN[explicit] && !TERMINAL_STATUSES.has(explicit) &&
+    explicit !== 'reopened' && explicit !== 'legal_hold') {
+    return explicit
+  }
+  const reason = lower(record?.reopen_reason || record?.reopen_category || record?.reopen_workstream)
+  if (!reason) return 'technical_assessment'
+  if (/financ|cost|settle|recover|payment|invoice/.test(reason)) return 'financial_closure_pending'
+  if (/insur|claim|policy/.test(reason)) return 'insurance_review'
+  if (/correct|preventive|hse|safety|injur/.test(reason)) return 'corrective_actions_pending'
+  if (/liabil|fault/.test(reason)) return 'liability_assessment'
+  if (/handover|final|inspect|deliver|release/.test(reason)) return 'fleet_inspection'
+  return 'technical_assessment' // repair / workshop / unknown -> workshop entry
+}
+
 /** Transitions leaving a status, including the universal cancel / legal-hold
- *  branches reachable from any non-terminal state (§1.2). */
-export function allowedTransitions(fromStatus) {
+ *  branches reachable from any non-terminal state (§1.2). The legal-hold release
+ *  and reopen targets resolve against `opts.record` / `opts.route` when given, so
+ *  a hold released early resumes its pre-hold status and a reopen enters the
+ *  disputed workstream (bugs 1 & 2). Objects sourced from the shared TRANSITIONS
+ *  map are cloned before their `to` is rewritten so the map is never mutated. */
+export function allowedTransitions(fromStatus, opts = {}) {
   const from = str(fromStatus)
-  const base = (TRANSITIONS.get(from) || []).slice()
+  const { record, route } = opts
+  const base = (TRANSITIONS.get(from) || []).map((t) => {
+    if (from === 'legal_hold' && t.action === 'Hold released') return { ...t, to: preHoldStatus(record, route) }
+    if (from === 'reopened' && t.action === 'Reopen assigns to workstream') return { ...t, to: reopenTarget(record) }
+    return t
+  })
   if (!TERMINAL_STATUSES.has(from)) {
     if (from !== 'cancelled_duplicate') base.push({ to: 'cancelled_duplicate', action: 'Marked duplicate', cap: 'cancel_case', guard: 'primary case linked; never a hard delete' })
     if (from !== 'legal_hold') base.push({ to: 'legal_hold', action: 'Legal hold applied', cap: 'legal_hold', guard: 'reason recorded; SLA timers pause' })
   }
   return base
 }
-export function canTransition(fromStatus, toStatus) {
-  return allowedTransitions(fromStatus).some((t) => t.to === str(toStatus))
+export function canTransition(fromStatus, toStatus, opts = {}) {
+  return allowedTransitions(fromStatus, opts).some((t) => t.to === str(toStatus))
 }
-export function transitionSpec(fromStatus, toStatus) {
-  return allowedTransitions(fromStatus).find((t) => t.to === str(toStatus)) || null
+export function transitionSpec(fromStatus, toStatus, opts = {}) {
+  return allowedTransitions(fromStatus, opts).find((t) => t.to === str(toStatus)) || null
 }
 
 // ── case-status projection (§3) ───────────────────────────────────────────────
@@ -801,17 +898,24 @@ export function deriveCaseStatus(record, wsRows, route) {
   const required = requiredWorkstreams(route, rec)
   const statusOf = (ws) => workstreamStatus(rec, ws, rows)
 
+  // The projection uses the SAME satisfaction predicate as the closure GATE
+  // (closureGradeSatisfied), not the lax bare-token workstreamSatisfied (bug 3).
+  // Otherwise a bare `not_required` workstream — which passes the token check but
+  // NOT the gate (it lacks a valid NA envelope, or is NON_WAIVABLE) — would let
+  // this project 'closed' while canFullyClose blocks. Keeping them aligned
+  // guarantees the headline never reads closed on a case that cannot close.
+
   // 1. draft / submission gate.
   if (!truthy(rec.submitted)) return truthy(rec.returned) ? 'evidence_incomplete' : 'draft'
-  if (required.has('incident_evidence') && !workstreamSatisfied(statusOf('incident_evidence'))) {
+  if (required.has('incident_evidence') && !closureGradeSatisfied(rec, rows, 'incident_evidence', route)) {
     return truthy(rec.returned) ? 'evidence_incomplete' : 'submitted'
   }
 
   // 2. walk the required pipeline; first unsatisfied workstream sets the headline.
   for (const ws of PIPELINE_ORDER) {
     if (ws === 'incident_evidence' || !required.has(ws)) continue
+    if (closureGradeSatisfied(rec, rows, ws, route)) continue
     const s = statusOf(ws)
-    if (workstreamSatisfied(s)) continue
     const map = CASE_STATUS_FOR[ws]
     if (!map) continue
     return map[s] || map.default

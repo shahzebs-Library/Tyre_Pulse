@@ -79,6 +79,9 @@
 --   reopened, cancelled
 -- WORKSTREAM_SATISFIED (accidentCase.WORKSTREAM_SATISFIED): completed |
 --   not_required | cancelled  (everything else BLOCKS completion)
+-- NON_WAIVABLE (accidentCase.NON_WAIVABLE): incident_evidence | liability | finance
+--   — the spine of the case; a NON_WAIVABLE workstream is NEVER satisfied by a
+--   Not-Applicable waiver, approved or not (encoded in _acc_closure_satisfied).
 -- DIMENSIONS (accidentCase.DIMENSIONS): incident, insurance, repair, financial
 -- closure_level tokens (accidentCase.closureLevel return):
 --   NULL (open) | financially_open | operationally_completed | fully_closed
@@ -215,22 +218,25 @@ $$;
 -- These carry the load-bearing edge cases; get them wrong and every decision
 -- above silently drifts. All IMMUTABLE.
 
--- num(v): Number.isFinite(Number(v)) ? Number(v) : null.
--- KEY DISTINCTION mirrored: an ABSENT record key (JS undefined) -> Number(undefined)
--- = NaN -> null; a PRESENT JSON null -> Number(null) = 0. In jsonb, `p_case->'k'`
--- is SQL NULL when the key is absent (-> we return NULL) and jsonb 'null' when
--- present (-> we return 0). Number('') = 0, Number('  ') = 0, Number('12abc') = NaN
--- -> null. (Divergence, documented: JS Number() also accepts '0x1A'/'Infinity';
--- this regex does not — those are vanishingly rare in case data.)
+-- num(v): null/undefined -> null; a string that trims to '' (blank/whitespace) ->
+-- null; else Number.isFinite(Number(v)) ? Number(v) : null.
+-- KEY DISTINCTION mirrored: BOTH an ABSENT record key (JS undefined) AND a PRESENT
+-- JSON null map to NULL. The JS `if (v == null) return null` guard catches undefined
+-- and null alike, so num(null) returns NULL, NOT 0. In jsonb that is SQL NULL when
+-- the key is absent AND jsonb 'null' when present -> both return NULL here. A
+-- blank/whitespace string returns NULL too (the JS `v.trim() === ''` guard). For a
+-- non-blank string, Number('12abc') = NaN -> null. (Divergence, documented: JS
+-- Number() also accepts '0x1A'/'Infinity'; this regex does not — vanishingly rare
+-- in case data.)
 create or replace function public._acc_num(v jsonb)
 returns numeric language sql immutable set search_path to 'public' as $$
   select case
     when v is null then null
-    when jsonb_typeof(v) = 'null'    then 0
+    when jsonb_typeof(v) = 'null'    then null            -- JS num(null) -> null (v == null guard)
     when jsonb_typeof(v) = 'number'  then (v #>> '{}')::numeric
     when jsonb_typeof(v) = 'boolean' then case when v = 'true'::jsonb then 1 else 0 end
     when jsonb_typeof(v) = 'string'  then
-      case when btrim(v #>> '{}') = '' then 0
+      case when btrim(v #>> '{}') = '' then null          -- blank/whitespace -> null
            when btrim(v #>> '{}') ~ '^[+-]?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?$'
                 then btrim(v #>> '{}')::numeric
            else null end
@@ -248,12 +254,15 @@ returns text language sql immutable set search_path to 'public' as $$
     else coalesce(btrim(v #>> '{}'), '') end;
 $$;
 
--- truthy(v): v === true || v === 'true' || v === 1 || v === '1'  (exactly those).
+-- truthy(v): v === true || v === 1 || TRUTHY_TOKENS.has(str(v).toLowerCase()), where
+-- TRUTHY_TOKENS = {true, t, yes, y, 1}. ERP feeds carry boolean-ish text ('Yes',
+-- 'Y', 'TRUE'), so the whole family is accepted case-insensitively (str() also
+-- trims, hence btrim). Boolean false, string 'false'/'no', number 2 stay falsy.
 create or replace function public._acc_truthy(v jsonb)
 returns boolean language sql immutable set search_path to 'public' as $$
   select v is not null and (
        v = 'true'::jsonb
-    or (jsonb_typeof(v) = 'string' and (v #>> '{}') in ('true','1'))
+    or (jsonb_typeof(v) = 'string' and lower(btrim(v #>> '{}')) in ('true','t','yes','y','1'))
     or (jsonb_typeof(v) = 'number' and (v #>> '{}')::numeric = 1)
   );
 $$;
@@ -706,8 +715,17 @@ $$;
 -- =============================================================================
 -- 6. CLOSURE GATE  (accidentCase.js §5)
 -- =============================================================================
--- closureGradeSatisfied(record, rows, ws, route) — L449-457. Stricter than
--- scored: completed OR formally NA (approved where profile.na_requires_approval).
+-- closureGradeSatisfied(record, rows, ws, route) — accidentCase.js closureGrade-
+-- Satisfied. Stricter than scored: completed OR formally NA (valid envelope, and
+-- approved where the route demands it). Two guards a bare
+-- `profile?.na_requires_approval` read missed, both mirrored here:
+--   * A NON_WAIVABLE workstream (incident_evidence / liability / finance — the spine
+--     of the case) is NEVER satisfied by NA, approved or not.
+--   * A fallback / core route has NO profile, so `na_requires_approval` was
+--     undefined (falsy) and an NA would waive a mandatory workstream with just a
+--     bare reason. Absent a profile, approval is REQUIRED (default true), not waived
+--     -> `p_profile is null` maps to requireApproval = true (not the truthy() of a
+--     missing key, which is false).
 create or replace function public._acc_closure_satisfied(p_case jsonb, p_rows jsonb,
                                                          p_ws_key text, p_profile jsonb)
 returns boolean language plpgsql immutable set search_path to 'public' as $$
@@ -716,8 +734,11 @@ declare v_status text := public.accident_workstream_status(p_ws_key, p_case, p_r
 begin
   if v_status = 'completed' then return true; end if;
   if v_status in ('not_required','cancelled') then
-    -- truthy(resolveRoute(route)?.profile?.na_requires_approval); NULL profile -> false
-    v_req_appr := public._acc_truthy(p_profile -> 'na_requires_approval');
+    -- NON_WAIVABLE = {incident_evidence, liability, finance}: never satisfied by NA.
+    if p_ws_key in ('incident_evidence','liability','finance') then return false; end if;
+    -- profile ? truthy(profile.na_requires_approval) : true — NULL profile -> true.
+    v_req_appr := case when p_profile is null then true
+                       else public._acc_truthy(p_profile -> 'na_requires_approval') end;
     return public._acc_marked_na(p_case, p_rows, p_ws_key, v_req_appr);
   end if;
   return false;
@@ -860,9 +881,16 @@ begin
                 || replace(v_status, '_', ' ') || ')');
   end loop;
 
-  -- The JS workshop_qc "extra guard" (L582-589) is DEAD CODE: its inner
-  -- `if (!required.has('workshop_qc'))` can never be true inside the outer
-  -- `required.has('workshop_qc')`. Mirrored as a deliberate no-op.
+  -- Workshop QC is mandatory wherever a repair actually occurred (§8.3). When QC IS
+  -- a required workstream it is already graded by the loop above; this guard catches
+  -- the dangerous case where a repair happened but the route did NOT gate QC — a
+  -- vehicle back in service without a quality sign-off. Mirrors accidentCase.js
+  -- `if (repairOccurred(record) && !required.has('workshop_qc'))`.
+  if public.accident_repair_occurred(p_case)
+     and 'workshop_qc' <> all(coalesce(v_req,'{}')) then
+    v_block := v_block || jsonb_build_object('check','workshop_qc',
+      'reason','Workshop quality control required where repair occurred');
+  end if;
 
   -- (b) meta gates.
   v_overdue := (
@@ -935,6 +963,7 @@ returns text[] language sql immutable set search_path to 'public' as $$
     when 'claim_registration_pending'  then array['awaiting_insurer_response']
     when 'awaiting_insurer_response'   then array['technical_assessment','awaiting_insurer_response']
     when 'technical_assessment'        then array['repair_decision_pending','total_loss_processing']
+    when 'total_loss_processing'       then array['insurance_settlement_pending','financial_closure_pending']
     when 'repair_decision_pending'     then array['repair_planning','operationally_completed']
     when 'repair_planning'             then array['awaiting_fleet_approval']
     when 'awaiting_fleet_approval'     then array['awaiting_parts','awaiting_quotation','repair_in_progress']
@@ -1015,16 +1044,21 @@ create or replace function public.accident_derive_case_status(p_case jsonb,
 returns text language plpgsql immutable set search_path to 'public' as $$
 declare v_req text[]; ws text; v_status text; v_m text;
 begin
-  -- 0. terminal + cross-cutting overrides win (order matters).
+  -- 0. overrides win, and the TERMINAL states (closed / cancelled) take precedence
+  -- over the cross-cutting projections (total_loss / reopened). A closed total-loss
+  -- case is `closed`, not `total_loss_processing`; without this ordering the
+  -- total_loss flag would drag a finished case back to a live stage. Order (mirrors
+  -- accidentCase.deriveCaseStatus): legal_hold -> cancelled -> closed -> reopened
+  -- -> total_loss.
   if public._acc_truthy(p_case -> 'legal_hold_active') or public._acc_truthy(p_case -> 'legal_hold')
      then return 'legal_hold'; end if;
   if public._acc_truthy(p_case -> 'cancelled') or public._acc_truthy(p_case -> 'cancelled_duplicate')
      then return 'cancelled_duplicate'; end if;
+  if public._acc_is_closed_case(p_case) then return 'closed'; end if;
   if public._acc_truthy(p_case -> 'reopened_flag') or public._acc_truthy(p_case -> 'reopened')
      then return 'reopened'; end if;
   if public._acc_truthy(p_case -> 'total_loss_route') or public._acc_truthy(p_case -> 'total_loss')
      then return 'total_loss_processing'; end if;
-  if public._acc_is_closed_case(p_case) then return 'closed'; end if;
 
   v_req := public.accident_required_workstreams(p_route, p_case, p_profile);
 
@@ -1132,19 +1166,23 @@ $$;
 -- Each SQL function above names the exact JS lines it mirrors. The load-bearing
 -- edge cases, grouped:
 --
--- [N1] num()  — _acc_num. Absent record key (JS undefined -> NaN -> null) vs
---      present JSON null (Number(null) = 0). In jsonb that is SQL-NULL vs
---      jsonb 'null'; both are handled distinctly. Number('') / Number('  ') = 0.
---      For every USE here the two forms converge (a money field and every `num()>0`
---      comparison treat null and 0 as "not filled / not > 0"), so the distinction
---      is preserved but never actually changes an outcome — still, keep it, because
---      a future field that tests `num(x) === 0` would depend on it.
+-- [N1] num()  — _acc_num. BOTH an absent record key (JS undefined) AND a present
+--      JSON null return NULL: the JS `if (v == null) return null` guard catches
+--      undefined and null alike (num(null) is null, NOT 0). In jsonb that is
+--      SQL-NULL (absent) and jsonb 'null' (present); both -> NULL here. A blank /
+--      whitespace-only STRING also returns NULL (the JS `v.trim() === ''` guard) —
+--      NOT 0. Every USE here uses `> 0` or `?? 1e9`, so null and 0 converge to the
+--      same outcome; the honest null is kept because a future field testing
+--      `num(x) === 0` would depend on it.
 --      DIVERGENCE (documented): JS Number() also accepts hex ('0x1A') and
 --      'Infinity'; the regex here rejects both -> null. Not present in case data.
 --
--- [T1] truthy()  — _acc_truthy mirrors EXACTLY the four JS accepted forms
---      (true | 'true' | 1 | '1'). String 'false', 'yes', number 2 are all falsy.
---      Do NOT "helpfully" widen it.
+-- [T1] truthy()  — _acc_truthy mirrors `v === true || v === 1 ||
+--      TRUTHY_TOKENS.has(str(v).toLowerCase())` with TRUTHY_TOKENS = {true, t, yes,
+--      y, 1}. ERP feeds carry boolean-ish text ('Yes','Y','TRUE'), so the whole
+--      family is accepted case-insensitively (str() trims -> btrim here). Boolean
+--      false, string 'false'/'no', number 2 stay falsy. Keep the two sides in lock-
+--      step: adding a token to TRUTHY_TOKENS means adding it to the IN-list here.
 --
 -- [E1] str()  — _acc_str returns '' for objects/arrays, whereas JS String() would
 --      give '[object Object]' / '1,2'. str() is only applied to scalar case fields
@@ -1198,8 +1236,11 @@ $$;
 --
 -- [C1] completeness — five percentages from REQUIRED workstreams ONLY. A dimension
 --      with no required items returns NULL (jsonb null), NEVER 100. scored() uses
---      NA-with-reason WITHOUT approval (scoring grade); the closure gate uses
---      NA-with-approval-where-demanded (closure grade). round() (half-away) equals
+--      NA-with-reason WITHOUT approval (scoring grade); the closure gate
+--      (_acc_closure_satisfied) is STRICTER: a NON_WAIVABLE workstream
+--      (incident_evidence / liability / finance) is NEVER satisfied by NA, and NA
+--      needs approval where the route demands it — with a NULL profile approval is
+--      REQUIRED by default (true), not waived. round() (half-away) equals
 --      Math.round (half-up) for the non-negative values here.
 --
 -- [D1] closureLevel — NULL means "open" (vehicle not back in service). Re-derive
@@ -1215,23 +1256,32 @@ $$;
 --      alignment is needed.
 --
 -- [G1] canFullyClose — the blocker list order is FIXED: workstream blockers (pipeline
---      order) first, then mandatory_task, pending_approval, required_document,
---      closure_review. Workstream blockers carry key 'workstream'; meta blockers
---      carry key 'check'. The JS workshop_qc "extra guard" is DEAD CODE (its inner
---      condition contradicts its outer) and is mirrored as a no-op. This is the
---      ONLY reader that touches the clock (now() when p_now is NULL) -> STABLE.
+--      order) first, then the repair-without-QC guard, then mandatory_task,
+--      pending_approval, required_document, closure_review. Workstream blockers carry
+--      key 'workstream'; meta blockers carry key 'check'. The workshop_qc guard
+--      (`repairOccurred && !required.has('workshop_qc')`, check 'workshop_qc') is a
+--      REAL clause — it catches a repair that happened on a route that never gated
+--      QC — so it is mirrored, not skipped. This is the ONLY reader that touches the
+--      clock (now() when p_now is NULL) -> STABLE.
 --
 -- [X1] transitions — accident_can_transition mirrors allowedTransitions: base
 --      targets PLUS the universal cancel / legal-hold branches from any NON-terminal
 --      state (closed and cancelled_duplicate are terminal, so `closed` -> only
 --      [reopened], `cancelled_duplicate` -> [], `legal_hold` -> [closure_review,
---      cancelled_duplicate]).
+--      cancelled_duplicate], `total_loss_processing` -> [insurance_settlement_pending,
+--      financial_closure_pending, cancelled_duplicate, legal_hold], `reopened` ->
+--      [technical_assessment, cancelled_duplicate, legal_hold]).
 --
 -- [S1] deriveCaseStatus — the projection, never written raw. Overrides win in this
---      order: legal_hold -> cancelled_duplicate -> reopened -> total_loss_processing
---      -> closed; then the draft/submission gate; then the earliest unsatisfied
---      required workstream in pipeline order via _acc_case_status_for; then
---      settlement/review/closed. Mirror pinned by a test alongside the others.
+--      order: legal_hold -> cancelled_duplicate -> closed -> reopened ->
+--      total_loss_processing (the TERMINAL closed / cancelled states take precedence
+--      over the cross-cutting total_loss / reopened projections, so a finished case
+--      is never dragged back to a live stage); then the draft/submission gate; then
+--      the earliest unsatisfied required workstream in pipeline order via
+--      _acc_case_status_for; then settlement/review/closed, where the settlement
+--      leg uses the closure-GRADE predicate (accident_financially_complete /
+--      _acc_closure_satisfied), the same one the fully-closed gate uses. Mirror
+--      pinned by a test alongside the others.
 --
 -- MIRROR DISCIPLINE (must hold, pin with a test — 03_WORKFLOW_ENGINE.md §9):
 --   accidentCase.js  <->  accident_required_workstreams / accident_completeness /

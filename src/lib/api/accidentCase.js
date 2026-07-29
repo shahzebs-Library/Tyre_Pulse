@@ -94,10 +94,14 @@ async function readOrEmpty(fn, empty) {
  */
 function hydrateWorkstream(row) {
   if (!row) return row
+  // The table column is `workstream_key`; the pure engine matches on `workstream`
+  // (or `key`). Without this remap a real, completed workstream row is invisible
+  // to the engine and the case reads as 0% "Not started".
+  const out = { ...row, workstream: row.workstream ?? row.workstream_key ?? row.key }
   if (row.not_applicable && (row.na_reason || row.na_by || row.na_at)) {
-    return { ...row, na: { reason: row.na_reason, by: row.na_by, at: row.na_at } }
+    out.na = { reason: row.na_reason, by: row.na_by, at: row.na_at }
   }
-  return row
+  return out
 }
 
 // ═════════════════════════════════════════════════════════════════════════════

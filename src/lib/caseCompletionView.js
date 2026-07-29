@@ -50,12 +50,14 @@ const WS_NAME = Object.fromEntries(WORKSTREAMS.map((w) => [w.key, w.name]))
 // ── tolerant unpack of caseData ───────────────────────────────────────────────
 function unpack(caseData) {
   const cd = caseData && typeof caseData === 'object' ? caseData : {}
-  // If the object explicitly carries a `record`, use it; otherwise treat the whole
-  // object as the accidents row (a bare record is a valid caseData).
-  const hasWrapper = 'record' in cd || 'workstreams' in cd || 'route' in cd || 'now' in cd
-  const record = hasWrapper ? (cd.record || {}) : cd
+  // Three valid shapes: an explicit { record, workstreams, route } wrapper; the
+  // FLATTENED loadCase() result (accident fields at top level + a `workstreams`
+  // key + `route_key`); or a bare accidents row. The old check treated "has a
+  // workstreams key" as a wrapper and set record to cd.record (undefined) -> {},
+  // discarding case_status/documents/approvals and reading a closed case as Open.
+  const record = ('record' in cd && cd.record) ? cd.record : cd
   const workstreams = Array.isArray(cd.workstreams) ? cd.workstreams : []
-  const route = cd.route // undefined -> engine defaults to the standard route
+  const route = cd.route ?? cd.route_key // engine defaults to the standard route
   const now = cd.now
   return { record, workstreams, route, now }
 }

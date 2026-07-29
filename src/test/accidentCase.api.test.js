@@ -64,6 +64,10 @@ describe('accidentCase service - loadCase', () => {
     expect(c.id).toBe('a1')
     expect(c.workstreams).toHaveLength(2)
     expect(c.workstreams.map((w) => w.workstream_key)).toEqual(['incident_evidence', 'repair'])
+    // hydrateWorkstream must also expose the engine key `workstream` (mirrors
+    // workstream_key), or the pure engine sees no completed workstream and the
+    // case reads as 0% "Not started".
+    expect(c.workstreams.map((w) => w.workstream)).toEqual(['incident_evidence', 'repair'])
     expect(c.tasks).toEqual([])
     expect(c.pending_approvals).toEqual([])
     expect(c.capabilities).toEqual({ casesModel: true })

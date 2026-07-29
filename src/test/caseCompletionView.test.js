@@ -156,3 +156,39 @@ describe('blockerList + readyToClose', () => {
     expect(blockers.map((b) => b.key)).toContain('closure_review')
   })
 })
+
+// The shape loadCase() actually returns: accident fields FLATTENED at the top
+// level (no `record` wrapper) plus a `route_key`. The old unpack treated "has a
+// workstreams key" as a wrapper and set record to cd.record (undefined) -> {},
+// discarding case_status/documents/approvals and reading a closed case as Open.
+// (Workstream rows arrive already remapped workstream_key -> workstream by the
+// API layer's hydrateWorkstream; that remap is covered in accidentCase.api.test.)
+describe('real loadCase() flattened shape (route_key, no record wrapper)', () => {
+  const flatCompleted = (route) =>
+    [...requiredWorkstreams(route, {})].map((ws) => ({ workstream: ws, status: 'completed' }))
+
+  it('reads a flattened, closure-approved case as ready to close (not "Open")', () => {
+    const cd = {
+      // accident fields at the top level, exactly as loadCase spreads them
+      closure_review_approved: true,
+      case_status: 'closed',
+      route_key: 'standard',
+      workstreams: flatCompleted('standard'),
+      now: NOW,
+    }
+    expect(readyToClose(cd)).toBe(true)
+    expect(blockerList(cd)).toEqual([])
+    expect(closureBadge(cd).label).not.toBe('Open')
+  })
+
+  it('honours route_key when no explicit route is present', () => {
+    // one workstream completed; with route_key read it must not be a blocker
+    const cd = {
+      route_key: 'standard',
+      workstreams: [{ workstream: 'incident_evidence', status: 'completed' }],
+      now: NOW,
+    }
+    const incident = blockerList(cd).find((b) => b.key === 'incident_evidence')
+    expect(incident).toBeUndefined() // it is done, so it must not be a blocker
+  })
+})

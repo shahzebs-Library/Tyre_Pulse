@@ -1,10 +1,10 @@
 import { describe, it, expect } from 'vitest'
 import {
   WORKSTREAMS, WORKSTREAM_KEYS, WORKSTREAM_STAGE, DIMENSION_OF, DIMENSIONS,
-  WORKSTREAM_STATUS, WORKSTREAM_SATISFIED, workstreamStatus, workstreamSatisfied,
+  WORKSTREAM_SATISFIED, workstreamStatus, workstreamSatisfied,
   naEnvelopeValid, markedNA,
   repairOccurred, correctiveRequired, insuranceInvolved,
-  CASE_ROUTES, buildCaseRoute, requiredWorkstreams,
+  buildCaseRoute, requiredWorkstreams,
   completeness, closureBlockers,
   closureLevel, canFullyClose,
   CASE_STATUSES, CASE_STATUS_STAGE, CASE_STATUS_TOKENS, caseStatusStage,

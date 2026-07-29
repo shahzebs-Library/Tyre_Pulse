@@ -94,3 +94,36 @@ export async function setAccidentEmailsEnabled(enabled) {
       .single(),
   )
 }
+
+// ── fixed-mailbox routing config (system_config) ──────────────────────────────
+// Accident emails are sent from a single verified sender to an admin-configured
+// To + CC list, with a subject prefix. The three keys mirror the SQL consumer in
+// docs/accident-module/19_ACCIDENT_EMAIL_ROUTING.sql.
+const ACCIDENT_EMAIL_SENDER = 'info@tyrepulse.app'
+function cleanConfigStr(v) {
+  return String(v ?? '').trim().replace(/^"|"$/g, '')
+}
+/** Read the fixed-mailbox routing config. Missing keys -> ''. */
+export async function getAccidentEmailConfig() {
+  const { data } = await supabase
+    .from('system_config')
+    .select('key,value')
+    .in('key', ['accident_email_to', 'accident_email_cc', 'accident_email_subject_prefix'])
+  const map = {}
+  for (const row of Array.isArray(data) ? data : []) map[row.key] = cleanConfigStr(row.value)
+  return {
+    to: map.accident_email_to || '',
+    cc: map.accident_email_cc || '',
+    subjectPrefix: map.accident_email_subject_prefix || '',
+    sender: ACCIDENT_EMAIL_SENDER,
+  }
+}
+/** Upsert the fixed-mailbox routing config (stores the raw strings the admin typed). */
+export async function setAccidentEmailConfig({ to = '', cc = '', subjectPrefix = '' } = {}) {
+  const rows = [
+    { key: 'accident_email_to', value: String(to ?? '').trim() },
+    { key: 'accident_email_cc', value: String(cc ?? '').trim() },
+    { key: 'accident_email_subject_prefix', value: String(subjectPrefix ?? '').trim() },
+  ]
+  return unwrap(await supabase.from('system_config').upsert(rows, { onConflict: 'key' }).select('key,value'))
+}

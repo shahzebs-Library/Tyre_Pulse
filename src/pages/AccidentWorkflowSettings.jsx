@@ -29,6 +29,7 @@ import {
   listRoutingRules, createRoutingRule, updateRoutingRule, deleteRoutingRule,
   listEmailTemplates, updateEmailTemplate, createEmailTemplate,
   getAccidentEmailsEnabled, setAccidentEmailsEnabled,
+  getAccidentEmailConfig, setAccidentEmailConfig,
 } from '../lib/api/accidentWorkflow'
 import { SEVERITY_TOKENS, severityLabel } from '../lib/accidentWorkflow'
 import { toUserMessage } from '../lib/safeError'
@@ -890,6 +891,34 @@ function DeliveryTab({ enabled, setEnabled, canWrite, loading, error, onRetry, s
   const [saving, setSaving] = useState(false)
   const [confirmOn, setConfirmOn] = useState(false)
 
+  // Fixed-mailbox routing config (To / CC / subject prefix).
+  const [cfg, setCfg] = useState({ to: '', cc: '', subjectPrefix: '', sender: 'info@tyrepulse.app' })
+  const [cfgLoading, setCfgLoading] = useState(true)
+  const [cfgSaving, setCfgSaving] = useState(false)
+  const [cfgError, setCfgError] = useState('')
+  const [cfgSaved, setCfgSaved] = useState(false)
+
+  useEffect(() => {
+    let alive = true
+    getAccidentEmailConfig()
+      .then((c) => { if (alive) setCfg((prev) => ({ ...prev, ...c })) })
+      .catch((err) => { if (alive) setCfgError(toUserMessage(err, 'Could not load the email recipients.')) })
+      .finally(() => { if (alive) setCfgLoading(false) })
+    return () => { alive = false }
+  }, [])
+
+  const setCfgField = (k, v) => { setCfg((c) => ({ ...c, [k]: v })); setCfgSaved(false) }
+
+  const saveCfg = async () => {
+    setCfgError(''); setCfgSaved(false); setCfgSaving(true)
+    try {
+      await setAccidentEmailConfig({ to: cfg.to, cc: cfg.cc, subjectPrefix: cfg.subjectPrefix })
+      setCfgSaved(true)
+    } catch (err) {
+      setCfgError(toUserMessage(err, 'Could not save the email recipients.'))
+    } finally { setCfgSaving(false) }
+  }
+
   const apply = async (next) => {
     setSectionError('')
     setSaving(true)
@@ -955,6 +984,86 @@ function DeliveryTab({ enabled, setEnabled, canWrite, loading, error, onRetry, s
           {!canWrite && (
             <p className="text-xs text-[var(--text-muted)] mt-3">Only an Admin, Manager or Director can change this setting.</p>
           )}
+
+          {/* Fixed-mailbox routing */}
+          <div className="mt-6 pt-5 border-t border-[var(--input-border)]">
+            <div className="flex items-center gap-2 mb-1">
+              <Mail size={16} className="text-[var(--text-secondary)]" />
+              <h4 className="font-semibold text-[var(--text-primary)]">Accident email recipients</h4>
+            </div>
+            <p className="text-sm text-[var(--text-muted)] mb-4">
+              Accident emails are sent from info@tyrepulse.app to these addresses. The acting user's name is added in the signature.
+            </p>
+
+            {cfgError && (
+              <div className="mb-3 rounded-lg border border-red-800/50 bg-red-500/10 px-3 py-2 text-sm text-red-200">{cfgError}</div>
+            )}
+
+            {cfgLoading ? (
+              <div className="h-40 bg-[var(--input-bg)] rounded animate-pulse" />
+            ) : (
+              <div className="space-y-3">
+                <label className="text-xs text-[var(--text-muted)] space-y-1 block">
+                  <span>Sender</span>
+                  <input value={cfg.sender} readOnly disabled className={`${inputCls} opacity-70 cursor-not-allowed`} />
+                  <span className="text-[11px] text-[var(--text-muted)]">Verified Resend sender. This cannot be changed here.</span>
+                </label>
+                <label className="text-xs text-[var(--text-muted)] space-y-1 block">
+                  <span>To <span className="text-[var(--text-muted)]">(comma or newline separated)</span></span>
+                  <textarea
+                    value={cfg.to}
+                    onChange={(e) => setCfgField('to', e.target.value)}
+                    disabled={!canWrite}
+                    rows={2}
+                    className={`${inputCls} font-mono text-[12px]`}
+                    placeholder="ops@example.com, claims@example.com"
+                  />
+                </label>
+                <label className="text-xs text-[var(--text-muted)] space-y-1 block">
+                  <span>CC <span className="text-[var(--text-muted)]">(optional)</span></span>
+                  <textarea
+                    value={cfg.cc}
+                    onChange={(e) => setCfgField('cc', e.target.value)}
+                    disabled={!canWrite}
+                    rows={2}
+                    className={`${inputCls} font-mono text-[12px]`}
+                    placeholder="manager@example.com"
+                  />
+                </label>
+                <label className="text-xs text-[var(--text-muted)] space-y-1 block">
+                  <span>Subject prefix <span className="text-[var(--text-muted)]">(optional)</span></span>
+                  <input
+                    value={cfg.subjectPrefix}
+                    onChange={(e) => setCfgField('subjectPrefix', e.target.value)}
+                    disabled={!canWrite}
+                    className={inputCls}
+                    placeholder="[Tyre Pulse Accident]"
+                  />
+                </label>
+
+                {canWrite && (
+                  <div className="flex items-center gap-3 pt-1">
+                    <button
+                      onClick={saveCfg}
+                      disabled={cfgSaving}
+                      className="btn-primary text-sm inline-flex items-center gap-1.5 disabled:opacity-60"
+                    >
+                      {cfgSaving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />} Save recipients
+                    </button>
+                    {cfgSaved && (
+                      <span className="inline-flex items-center gap-1.5 text-sm text-emerald-300">
+                        <CheckCircle2 size={15} /> Saved
+                      </span>
+                    )}
+                  </div>
+                )}
+
+                <p className="text-xs text-[var(--text-muted)] pt-1">
+                  If no addresses are set here, no accident email is sent. Emails are only delivered while the master switch above is ON.
+                </p>
+              </div>
+            )}
+          </div>
         </>
       )}
 

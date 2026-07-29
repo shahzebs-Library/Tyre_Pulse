@@ -20,7 +20,7 @@ import { useLanguage } from '../../../contexts/LanguageContext'
 import { useTheme } from '../../../contexts/ThemeContext'
 import { useRoleGuard } from '../../../hooks/useRoleGuard'
 import { withModuleGuard } from '../../../components/ModuleGuard'
-import { Theme, radius, spacing, StatusKind } from '../../../lib/theme'
+import { Theme, spacing, StatusKind } from '../../../lib/theme'
 import { Screen, Card, AppText, Badge, Loading, ErrorState, EmptyState } from '../../../components/ui'
 import { toUserMessage } from '../../../lib/safeError'
 import {

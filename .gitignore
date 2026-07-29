@@ -10,3 +10,6 @@ dist/
 mobile/expo-start*.log
 .mcp.local.json
 build_out.txt
+
+# Personal Claude Code permission overrides (do not commit)
+.claude/settings.local.json

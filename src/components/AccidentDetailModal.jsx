@@ -19,7 +19,7 @@ import {
   X, Plus, Trash2, Send, Lock, CheckCircle2, XCircle,
   ShieldCheck, Hourglass, FileText, Wrench, MessageSquare, Briefcase, History, User, ClipboardList,
   ArrowLeft, AlertOctagon, ChevronRight, Download, Loader2, ShieldAlert, Clock, Pencil,
-  GitBranch, MapPin, Ban, Hash, Users,
+  GitBranch, MapPin, Ban, Hash, Users, FileDown,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
@@ -46,7 +46,9 @@ import CopilotCard from './ai/CopilotCard'
 import EntityApprovalPanel from './workflow/EntityApprovalPanel'
 import CaseProgressPanel from './accidents/CaseProgressPanel'
 import CaseCompletionPanel from './accidents/CaseCompletionPanel'
+import CasePortalShare from './accidents/CasePortalShare'
 import { loadCase } from '../lib/api/accidentCase'
+import { renderAccidentCasePdf } from '../lib/accidentCasePdf'
 import { toUserMessage } from '../lib/safeError'
 
 // Vocabularies + canonicalisation come from the single shared source
@@ -164,6 +166,7 @@ function AccidentDetail({ accidentId, onBack, onClose, onChanged, variant = 'pag
   const isAdmin = String(profile?.role || '').toLowerCase() === 'admin' || profile?.is_super_admin === true
   const fmtCurrency = (v) => _fmtCurrencyBase(v, activeCurrency, 0)
   const [downloading, setDownloading] = useState(false)
+  const [caseDownloading, setCaseDownloading] = useState(false)
 
   const [tab, setTab] = useState('overview')
   const [acc, setAcc] = useState(null)
@@ -257,6 +260,32 @@ function AccidentDetail({ accidentId, onBack, onClose, onChanged, variant = 'pag
       setDownloading(false)
     }
   }, [acc, parts, remarks, branding, company]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // The V417 case model must be provisioned for the case-summary PDF to carry
+  // real workstream completion + closure level; pre-migration loadCase degrades
+  // to the bare accidents row (casesModel === false), so the action is disabled
+  // with an honest tooltip rather than emitting a hollow document.
+  const casesModel = caseData?.capabilities?.casesModel === true
+
+  // "Download case PDF" — the authored accident-case summary renderer
+  // (src/lib/accidentCasePdf.js). Reuses the already-loaded case + workstreams
+  // (no refetch); jsPDF is imported lazily inside the renderer.
+  const downloadCasePdf = useCallback(async () => {
+    if (!caseData) return
+    setCaseDownloading(true); setErr('')
+    try {
+      await renderAccidentCasePdf({
+        case: caseData,
+        workstreams: Array.isArray(caseData.workstreams) ? caseData.workstreams : [],
+        company,
+        save: true,
+      })
+    } catch (e) {
+      setErr(toUserMessage(e, 'Could not generate the case summary PDF.'))
+    } finally {
+      setCaseDownloading(false)
+    }
+  }, [caseData, company])
 
   // Live financial rail — gross cost, recovered, net exposure.
   const money = useMemo(() => {
@@ -353,6 +382,10 @@ function AccidentDetail({ accidentId, onBack, onClose, onChanged, variant = 'pag
                 loadCase degrades to the bare accidents row, and `caseData || acc`
                 guarantees the panel still renders honestly from the incident alone. */}
             <CaseCompletionPanel caseData={caseData || acc} />
+            {/* External insurer / authority read-only portal link for THIS case.
+                Self-gates to elevated roles; degrades to an honest note when the
+                portal RPCs are not yet provisioned. */}
+            <CasePortalShare accidentId={acc.id} />
             <CopilotCard task="summarize_accident" context={{ accident: acc, remarks, parts }} />
             <OverviewTab acc={acc} fmtCurrency={fmtCurrency} />
             <CaseTimelineSection acc={acc} />
@@ -445,6 +478,17 @@ function AccidentDetail({ accidentId, onBack, onClose, onChanged, variant = 'pag
           >
             {downloading ? <Loader2 size={13} className="animate-spin" /> : <Download size={13} />}
             {downloading ? 'Preparing…' : 'Download Case'}
+          </button>
+          <button
+            onClick={downloadCasePdf}
+            disabled={caseDownloading || !casesModel}
+            className="btn-secondary text-xs inline-flex items-center gap-1.5 disabled:opacity-60"
+            title={casesModel
+              ? 'Download the case summary PDF: per team workstream completion and closure level'
+              : 'The case model is not activated yet (pending DB migration), so a case summary is not available'}
+          >
+            {caseDownloading ? <Loader2 size={13} className="animate-spin" /> : <FileDown size={13} />}
+            {caseDownloading ? 'Preparing…' : 'Case PDF'}
           </button>
         </div>
       </div>

@@ -3,6 +3,58 @@
 Durable, committed project knowledge so any session has full context. Keep this
 current. Read it before adding/changing modules. Governing spec: `Tyre pulse enterprise.md`
 
+## SESSION 2026-07-29 — ACCIDENT MODULE REBUILD PHASES 0-4 MERGED TO MAIN. CODE-COMPLETE, INERT (NOT APPLIED).
+**PRs #228 (`8857b52`), #229 (`fca3a09`), #230 (`7bd0d0c`), #231 (`1968d9e`) all MERGED to main.** The whole
+accident/insurance workflow rebuild is CODE-COMPLETE but **SHIP-BEFORE-MIGRATE / INERT**: every DB migration is
+AUTHORED, NOT YET APPLIED, and the JS/UI degrades gracefully (`isMissingRelation`) so nothing breaks until the DB
+is provisioned. **THE ONE REMAINING STEP is live DB activation** (needs explicit user go-ahead + working Supabase
+access; the apply MCP has been flapping and the auth-required `supabase` server can't run non-interactively).
+- **THE SINGLE-SOURCE ENGINE + "change both" RULES:** pure decision engine `src/lib/accidentCase.js` (10
+  workstreams, 30 case statuses, completeness/closure/routing/transitions) is MIRRORED by SQL
+  `docs/accident-module/08_ENGINE_SQL_MIRROR.sql` (V418) — change BOTH together. Analytics
+  `src/lib/accidentCaseAnalytics.js` is mirrored by `17_REPORTING_RPCS.sql` — change BOTH.
+- **FRONTEND SURFACES (merged):** `/accident-cases` page (`src/pages/AccidentCases.jsx` + service
+  `src/lib/api/accidentCaseBoard.js`) = case analytics board (status breakdown, workstream bottleneck, SLA
+  breach, closure level) + team inbox; `CaseCompletionPanel` mounted in `AccidentDetailModal` (Overview tab, fed
+  by `loadCase`); `CaseTeamInbox` (overdue-first, read-only); `src/lib/accidentCasePdf.js` = case-summary PDF
+  (honest completeness, renders "Not in scope" never a fabricated 0). **MOBILE:** read-only Case Status screen
+  `mobile/app/(app)/accident/case.tsx` + `mobile/lib/accidentCase.ts`, reached from accident detail, en+ar,
+  tsc clean, no widened roles. **NOTE:** the PDF lib + external-portal RPCs (16) are authored but NOT yet wired
+  to a UI button (a follow-up — the portal share panel + a "Download case PDF" button in AccidentDetailModal).
+- **AUTHORED SQL ARTIFACTS (in docs/accident-module/, NONE applied):** `02` V417 data model (accidents case
+  columns + `accident_case_workstreams` + `accident_closure_reviews` + route/SLA/country config tables + honest
+  legacy backfill + closure-enforce trigger); `08` V418 engine mirror; `07` seed config (EXTENSION-ONLY vs 02
+  PART F which is the canonical base seed); `10` workstream RPCs (`accident_ws_set_status/mark_na/assign`,
+  `accident_task_create/complete`, `accident_request_closure/decide_closure` + helpers `_accident_rpc_context`,
+  `_accident_ws_cap`); `11` notifications (emit triggers + `consume_event_accident_case_notify`, in-app always,
+  email gated by `system_config.accident_emails_enabled` default off); `12` SLA engine
+  (`accident_sla_start/pause/resume/scan`); `13` evidence; `14` insurance (`accident_claim_register/decision/
+  settlement`); `15` repair/finance (8 RPCs incl. QC-gated repair completion); `16` external portal (PII-lean
+  anon-token view of ONE case; no base table granted to anon; snapshot RPC derives org from the token row; money
+  + driver fields excluded); `17` reporting RPCs (SECURITY INVOKER server-side aggregates mirroring the JS
+  analytics, honest nulls); `18` QA test matrix (rolled-back verify steps for 48 objects).
+- **SECURITY MODEL (uniform across 10-17):** RESTRICTIVE org isolation `organisation_id = app_current_org()`;
+  country/site scoping is SELECT-only; write gate `app_is_elevated() OR app_user_can('accidents', <cap>)`;
+  SECURITY DEFINER RPCs pin `search_path=public` (portal token-minting adds `extensions` for pgcrypto), revoke
+  anon, and re-check org+country+site in-body via `_accident_rpc_context`; the closure gate has NO admin bypass.
+- **ACTIVATION (per `09_ACTIVATION_RUNBOOK.md`):** apply order `02`(V417) -> `08`(V418) -> `07` seed -> `10`
+  -> `11` -> `12` -> `13/14/15/16/17` (10 first, it declares `_accident_rpc_context`) -> legacy backfill.
+  **02=V417 and 08=V418 are RESERVED/fixed; files 10-17 take next-free numbers AT APPLY TIME and MUST be
+  reconciled against the standing V419-V422 staging batch (part 13) which may land first — renumber to whatever
+  is free.** Each file has STATUS AUTHORED header + rolled-back verify + rollback.
+- **PHASE-4 AUDIT FIXES (correctness, would have bitten at activation):** `07` route-profile
+  `required_workstreams` rewritten to the 10 CANONICAL keys (non-canonical tokens were silently dropped,
+  collapsing routes so a near-empty case could pass the closure gate) + made 07 extension-only (02 PART F is the
+  single seed source); closure gate passes `NULL` not `'{}'` so an NA-waived workstream still requires an
+  approver (server was looser than the JS client) + `02` adds `na_requires_approval boolean default true`;
+  `08` `financial_closure_pending` transition now includes `closure_review` (JS parity); analytics counts
+  `legacy_closed` cases as fully_closed not open; runbook gained steps for files 10-17 + the numbering note.
+- **TESTS (all green):** ~107 engine (`accidentCase.test.js`) + `accidentCaseClosure.test.js` (21, NA-approval/
+  closure/transition edge cases) + `accidentCasePdf.test.js` (7) + `accidentCaseBoard.api.test.js` (3) +
+  `accidentCaseAnalytics.test.js` (27). Web build + lint clean, mobile tsc clean, all CI gating checks passed.
+- **WHAT IS DELIBERATELY NOT DONE:** live DB apply (gated); wiring the case PDF + external-portal share into UI
+  buttons; a Phase-19 external insurer/authority portal UI beyond the authored `16` RPCs.
+
 ## SESSION 2026-07-28 (part 13) — 4 READY-TO-APPLY MIGRATIONS AUTHORED (V419-V422) + ESLINT TIDY. NOT APPLIED.
 **Branch `claude/stg-jobcard-opened-at-fix`** (off main). **The Supabase MCP with DB access DISCONNECTED mid-session
 and the remaining `supabase` server needs re-authorization (impossible in a non-interactive session), so NONE of

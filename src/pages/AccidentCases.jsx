@@ -26,7 +26,7 @@ import {
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
 import { useSettings } from '../contexts/SettingsContext'
-import { loadAccidentCaseBoard } from '../lib/api/accidentCaseBoard'
+import { loadAccidentCaseBoard, loadAccidentCaseAnalytics } from '../lib/api/accidentCaseBoard'
 import {
   buildCaseAnalytics, slaBreachRate,
 } from '../lib/accidentCaseAnalytics'
@@ -103,6 +103,9 @@ function ChartCard({ icon: Icon, title, note, empty, emptyReason, children }) {
 export default function AccidentCases() {
   const { activeCountry } = useSettings() || {}
   const [board, setBoard] = useState(null) // { cases, workstreams, inbox, ok }
+  // Server-side aggregate fast path: { server:true, ... } over the FULL dataset,
+  // or null when the RPCs are not provisioned (then the client path is used).
+  const [server, setServer] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
@@ -112,9 +115,20 @@ export default function AccidentCases() {
     try {
       const data = await loadAccidentCaseBoard({ country: activeCountry })
       setBoard(data)
+      // Attempt the server-side aggregates (full dataset, not just the paged
+      // client rows). loadAccidentCaseAnalytics NEVER throws: it returns
+      // { server:false } when the 17_REPORTING_RPCS are absent, in which case we
+      // keep the client-side buildCaseAnalytics path exactly as before.
+      if (data?.ok) {
+        const agg = await loadAccidentCaseAnalytics({ country: activeCountry })
+        setServer(agg?.server ? agg : null)
+      } else {
+        setServer(null)
+      }
     } catch (err) {
       setError(toUserMessage(err))
       setBoard(null)
+      setServer(null)
     } finally {
       setLoading(false)
     }
@@ -124,16 +138,32 @@ export default function AccidentCases() {
 
   const analytics = useMemo(() => {
     if (!board?.ok) return null
-    return buildCaseAnalytics(board.cases, board.workstreams, { now: Date.now() })
-  }, [board])
+    const client = buildCaseAnalytics(board.cases, board.workstreams, { now: Date.now() })
+    // When the server fast path is available, PREFER its figures for the panels it
+    // covers (basis KPIs, status breakdown, workstream bottleneck, time-to-close,
+    // reopen) - they span the FULL dataset rather than the paged client slice.
+    // openByTeam + closureLevel are not computed server-side, so the client values
+    // are kept. Absent the server path, this is the unchanged client analytics.
+    if (!server?.server) return client
+    return {
+      ...client,
+      basis: { ...client.basis, ...server.basis },
+      status: server.status,
+      bottleneck: server.bottleneck,
+      timeToClose: server.timeToClose,
+      reopen: server.reopen,
+    }
+  }, [board, server])
 
-  // SLA is measured over the OPEN tasks (they carry the due dates) rather than the
-  // workstream rows (which do not), so the reading is real when there is task data
-  // and honestly null when there is none.
+  // SLA breach rate. With the server fast path it is measured over every in-scope
+  // case's SLA instances (full dataset). Otherwise it is measured over the OPEN
+  // tasks (they carry the due dates) - real when there is task data, honestly null
+  // when there is none.
   const sla = useMemo(() => {
     if (!board?.ok) return { tracked: 0, breached: 0, rate: null }
+    if (server?.server) return server.sla
     return slaBreachRate(board.inbox, { now: Date.now() })
-  }, [board])
+  }, [board, server])
 
   const statusChart = useMemo(() => {
     const rows = analytics?.status?.rows || []
@@ -260,6 +290,12 @@ export default function AccidentCases() {
       {basis.note && (
         <p className="text-[11px] text-amber-300/80 flex items-center gap-1.5">
           <AlertTriangle size={12} className="shrink-0" /> {basis.note}
+        </p>
+      )}
+
+      {server?.server && (
+        <p className="text-[11px] text-[var(--text-dim)] flex items-center gap-1.5">
+          <Gauge size={12} className="shrink-0" /> Server-computed across the full dataset.
         </p>
       )}
 

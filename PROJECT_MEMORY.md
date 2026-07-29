@@ -3,6 +3,41 @@
 Durable, committed project knowledge so any session has full context. Keep this
 current. Read it before adding/changing modules. Governing spec: `Tyre pulse enterprise.md`
 
+## SESSION 2026-07-28 (part 13) — 4 READY-TO-APPLY MIGRATIONS AUTHORED (V419-V422) + ESLINT TIDY. NOT APPLIED.
+**Branch `claude/stg-jobcard-opened-at-fix`** (off main). **The Supabase MCP with DB access DISCONNECTED mid-session
+and the remaining `supabase` server needs re-authorization (impossible in a non-interactive session), so NONE of
+these were applied or live-tested.** They are reviewed artifacts (same pattern as the accident V417/V418) — each
+file header says STATUS AUTHORED, NOT YET APPLIED, with verify + rollback steps. A DB-authorized session must
+apply + rolled-back-test each and re-confirm the free migration number (V417/V418 are RESERVED for the accident
+model, so this batch claimed V419-V422; renumber if the accident migrations land first).
+- **V419 `MIGRATIONS_V419_STG_JOBCARD_OPENED_AT_FALLBACK.sql`** — the standing-item-6 defect: `process_stg_job_cards`
+  derives `opened_at = coalesce(v_prod_out, v_ws_in)` (no fallback), so a job card with NEITHER Production Out NOR
+  Workshop In sends explicit NULL into the NOT NULL `opened_at` column and ABORTS the whole CSV batch. Fix = one
+  token `coalesce(v_prod_out, v_ws_in, now())`. The JS twin was already fixed (`erpIntake.js` mapCombined/
+  mapComplaints omit the key when blank). File reproduces the LIVE V386 body verbatim + the token change, so it also
+  CLOSES the V386 repo-vs-DB drift (V386's body was applied via execute_sql with no committed migration file).
+- **V420 `..._REMOVAL_REASON_BRAND_CLEANUP.sql`** — standing item 5: clears the ~857 UAE `removal_reason` values that
+  hold a catalog brand while `brand` is already populated. Uses `brain_tokens('tyre_brand')` (same catalog as V403,
+  no second list), excludes RADIAL, snapshots to `_removal_reason_cleanup_v420`, NEVER touches `brand`, reversible.
+- **V421 `..._UNINDEXED_FK_INDEXES.sql`** — the 6 advisor `unindexed_foreign_keys`: `CREATE INDEX IF NOT EXISTS` for
+  work_orders.assigned_owner_id, tech_activity_events.(user_id/job_id/task_id), wo_assignments.(job_id/task_id/
+  user_id), workshop_attendance.(user_id/shift_id), parts_requests.part_id, account_deletion_requests.processed_by
+  (columns confirmed from the V291/V296/V317 CREATE TABLE DDL; parts_requests.requested_by/approved_by left
+  commented pending a live `\d`). IF NOT EXISTS makes any already-covered column a no-op.
+- **V422 `..._FUTURE_REMOVAL_DATE_FIX.sql`** — the 3 UAE tyre_records with a FUTURE removal_date (max 2026-11-10, a
+  typo cluster). Option A (honest): SET removal_date = NULL (never fabricate a date), preserving status/km_at_removal/
+  total_km — verified against tyrePool.js/tyreBay.js that it does NOT re-activate the tyres or change life/CPK.
+  Snapshots to `_bak.tyre_future_removal_v422`, a guard ABORTS unless exactly 3 rows match, reversible.
+- **ESLINT TIDY (applied, real code)** — removed 8 stale `eslint-disable` directives (each suppressed nothing;
+  eslint.config.js does not enable no-alert/no-constant-condition/no-console, and no-unused-vars/no-undef no longer
+  fire there). Lint warnings 124 -> 116, still 0 errors, no logic change. Files: BrandLogoStudio, ConsoleSelfHealing,
+  AccessManager, api/accountDeletion, api/workshopLive, apiClient, supabase.js, approvalComponents.test.jsx.
+- **A LIVE DB audit this session (before the MCP dropped) measured:** currency integrity perfect (1 currency/country,
+  0 nulls: KSA 106,980 SAR / UAE 52,138 AED / Egypt 40,220 EGP); material-master money-weighted review coverage
+  KSA 40% / UAE 32% / Egypt 38% (the easy/multi-confirm has the rest); removal_reason contamination 857 (all UAE);
+  future removal dates 3 (all UAE); 0 reversed dates / 0 negative km. Advisors: all in the known-benign PostgREST
+  buckets, nothing newly critical.
+
 ## SESSION 2026-07-28 (part 10) — MATERIAL MASTER EASY/MULTI CONFIRM (V416). Migrations through **V416**, next free **V417**.
 **PR #222 MERGED to main** (squash `0dfb2b2`) — V416 applied live + record file + the erpIntakeMerge test fix
 (the `order()` mock fix below) are all on main.

@@ -556,7 +556,7 @@ export async function listEvents({ site, country, from, to, user_id } = {}) {
  * @param {{ site?:string }} [opts]
  * @returns {Promise<Object>} { [user_id]: string[] }
  */
-export async function listTechnicianSkills({ site } = {}) { // eslint-disable-line no-unused-vars
+export async function listTechnicianSkills({ site } = {}) {
   try {
     const rows = unwrap(await supabase.from('technician_skills').select('user_id,skill_id')) || []
     const out = {}

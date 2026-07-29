@@ -766,7 +766,6 @@ export default function AccessManager() {
     const enabledKeys = Object.keys(draft.view).filter((k) => draft.view[k] === true)
     const enabledBase = baseKeys.filter((k) => draft.view[k] === true)
     if (!enabledBase.length) { flash('This role has no enabled modules to set.', true); return }
-    // eslint-disable-next-line no-alert
     if (typeof window !== 'undefined' && window.confirm &&
       !window.confirm(`Set every enabled module for ${selectedRole} to ${label}? The ${other} surface is turned off for those modules.`)) {
       return

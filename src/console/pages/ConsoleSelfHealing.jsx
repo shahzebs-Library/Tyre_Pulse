@@ -129,7 +129,6 @@ export default function ConsoleSelfHealing() {
   // ── Safe fix handlers (each confirms first, then re-scans) ──
   async function withFix(key, confirmMsg, fn, okMsg) {
     if (busyKey) return
-    // eslint-disable-next-line no-alert
     if (!window.confirm(confirmMsg)) return
     setBusyKey(key)
     setError(null)

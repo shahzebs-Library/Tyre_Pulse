@@ -40,7 +40,6 @@ describe('ApprovalStatusBadge', () => {
 describe('ApprovalAction', () => {
   beforeEach(() => {
     // Deterministic, denied geolocation so requireGps flows are testable.
-    // eslint-disable-next-line no-undef
     globalThis.navigator = globalThis.navigator || {}
   })
 

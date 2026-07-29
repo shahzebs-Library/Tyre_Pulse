@@ -4,7 +4,8 @@
   "actions": {
     "excel": "Excel",
     "pdf": "PDF",
-    "addAsset": "Add Asset"
+    "addAsset": "Add Asset",
+    "editAsset": "Edit Asset"
   },
   "kpis": {
     "totalActiveAssets": "Total Active Assets",

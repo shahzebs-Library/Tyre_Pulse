@@ -33,12 +33,20 @@
     "openActions": "Open Actions",
     "highRisk": "High Risk",
     "totalCost": "Total Cost",
-    "recordsSub": "{count} vehicles"
+    "recordsSub": "{count} vehicles",
+    "fleetVehicles": "Fleet Vehicles",
+    "fleetVehiclesSub": "assets with tyre records"
+  },
+  "costView": {
+    "label": "Cost view"
   },
   "filters": {
     "searchPlaceholder": "Search asset, brand, site...",
     "recordsOfTotal": "{count} of {total} records",
-    "to": "to"
+    "to": "to",
+    "site": "Site",
+    "allSites": "All sites",
+    "clear": "Clear"
   },
   "granularity": {
     "day": "Day",
@@ -81,7 +89,41 @@
     "noAssetData": "No asset data",
     "topSites": "Top Sites by Spend · {currency}",
     "topSitesSubtitle": "Highest cost locations",
-    "noSiteData": "No site data"
+    "noSiteData": "No site data",
+    "riskMixTrend": "Risk Mix Over Time",
+    "riskMixSubtitle": "Monthly tyre volume by risk level, last 12 months",
+    "noRiskTrend": "No risk trend data",
+    "noRiskTrendDesc": "Records with issue dates and risk levels will chart here.",
+    "categorySplit": "Spend Split ({currency})",
+    "categorySplitSubtitle": "New vs retread purchase spend",
+    "noSpendSplit": "No spend data",
+    "noSpendSplitDesc": "Records with cost values will chart here."
+  },
+  "recs": {
+    "title": "Priority Recommendations",
+    "count": "{count} to act on",
+    "allClear": "All clear: no critical issues in the current view."
+  },
+  "pm": {
+    "title": "Preventive Maintenance",
+    "view": "View",
+    "overdue": "Overdue",
+    "dueSoon": "Due soon",
+    "compliance": "Compliance",
+    "activePlans": "{count} active plans",
+    "na": "N/A"
+  },
+  "workshop": {
+    "title": "Workshop Today",
+    "view": "Live Control",
+    "working": "Working",
+    "available": "Available",
+    "openJobs": "Open job cards",
+    "overdue": "Overdue",
+    "vor": "Vehicles off road",
+    "utilization": "Utilization",
+    "completed": "Completed today",
+    "na": "N/A"
   },
   "legend": {
     "all": "All",

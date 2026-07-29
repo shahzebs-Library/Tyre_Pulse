@@ -32,7 +32,7 @@ import { toUserMessage } from '../lib/safeError'
 const VIEW_ROLES = new Set(['Admin', 'Manager', 'Director'])
 
 const AXIS_LABEL = '#9ca3af'
-const AXIS_STRONG = '#cbd5e1'
+const AXIS_STRONG = '#64748b'
 
 const REASON_LABEL = {
   parts: 'Parts', tools: 'Tools', approval: 'Approval',

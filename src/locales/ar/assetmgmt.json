@@ -4,7 +4,8 @@
   "actions": {
     "excel": "إكسل",
     "pdf": "PDF",
-    "addAsset": "إضافة أصل"
+    "addAsset": "إضافة أصل",
+    "editAsset": "تعديل الأصل"
   },
   "kpis": {
     "totalActiveAssets": "إجمالي الأصول النشطة",

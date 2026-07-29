@@ -16,7 +16,7 @@ function barcodeDetectorSupported() {
 const STATUS_STYLES = {
   available:   { bg: 'rgba(59,130,246,0.12)', border: 'rgba(59,130,246,0.35)', text: '#60a5fa', label: 'Available' },
   assigned:    { bg: 'rgba(234,179,8,0.12)',   border: 'rgba(234,179,8,0.35)',  text: '#facc15', label: 'Assigned' },
-  attached:    { bg: 'rgba(22,163,74,0.12)',   border: 'rgba(22,163,74,0.35)',   text: '#4ade80', label: 'Attached' },
+  attached:    { bg: 'rgba(22,163,74,0.12)',   border: 'rgba(22,163,74,0.35)',   text: '#16a34a', label: 'Attached' },
   removed:     { bg: 'rgba(156,163,175,0.12)', border: 'rgba(156,163,175,0.35)',  text: '#9ca3af', label: 'Removed' },
   lost:        { bg: 'rgba(239,68,68,0.12)',   border: 'rgba(239,68,68,0.35)',  text: '#f87171', label: 'Lost' },
   damaged:     { bg: 'rgba(168,85,247,0.12)',  border: 'rgba(168,85,247,0.35)',  text: '#a78bfa', label: 'Damaged' },
@@ -279,7 +279,7 @@ export default function RfidScanner({ onClose, onResult }) {
             onClick={() => switchMode(id)}
             className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-semibold transition-all"
             style={mode === id
-              ? { background: 'rgba(22,163,74,0.14)', border: '1px solid rgba(22,163,74,0.35)', color: '#4ade80' }
+              ? { background: 'rgba(22,163,74,0.14)', border: '1px solid rgba(22,163,74,0.35)', color: '#16a34a' }
               : { background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)', color: '#6b7280' }}
           >
             <Icon className="w-3.5 h-3.5" /> {label}
@@ -350,7 +350,7 @@ export default function RfidScanner({ onClose, onResult }) {
             {!error && (
               <label
                 className="flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-semibold cursor-pointer active:opacity-70 transition-opacity"
-                style={{ background: 'rgba(22,163,74,0.08)', border: '1px solid rgba(22,163,74,0.25)', color: '#4ade80' }}
+                style={{ background: 'rgba(22,163,74,0.08)', border: '1px solid rgba(22,163,74,0.25)', color: '#16a34a' }}
               >
                 <Radio className="w-4 h-4" />
                 {hasBarcodeApi ? 'Capture Image to Scan' : 'Capture & Scan (iOS)'}

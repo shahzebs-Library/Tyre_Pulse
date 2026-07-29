@@ -572,12 +572,12 @@ function DelayPanel({ delays }) {
         },
       },
       xAxis: { type: 'value', name: 'Hours lost', nameTextStyle: { color: '#9ca3af' }, axisLabel: { color: '#9ca3af' }, splitLine: { lineStyle: { color: 'var(--panel-2)' } } },
-      yAxis: { type: 'category', data: rows.map((d) => labelReason(d.reason)), axisLabel: { color: '#cbd5e1' } },
+      yAxis: { type: 'category', data: rows.map((d) => labelReason(d.reason)), axisLabel: { color: '#64748b' } },
       series: [{
         type: 'bar',
         data: rows.map((d, i) => ({ value: d.hoursLost, itemStyle: { color: colorAt(i), borderRadius: [0, 4, 4, 0] } })),
         barMaxWidth: 22,
-        label: { show: true, position: 'right', color: '#e5e7eb', formatter: (p) => `${p.value}h` },
+        label: { show: true, position: 'right', color: '#64748b', formatter: (p) => `${p.value}h` },
       }],
     }
   }, [delays])

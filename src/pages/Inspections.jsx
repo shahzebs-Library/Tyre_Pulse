@@ -1230,7 +1230,7 @@ export default function Inspections() {
 
               {clApprovalStatus === 'pending_approval' && !showApprovalForm && (
                 <div className="mt-3 px-3 py-2 rounded-xl flex items-center gap-2 text-sm"
-                  style={{ background: 'var(--panel-3)', border: '1px solid #4338ca', color: '#a5b4fc' }}>
+                  style={{ background: 'var(--panel-3)', border: '1px solid #4338ca', color: '#4f46e5' }}>
                   <Send size={14} />
                   <span>
                     {clEmailSent ? t('inspections.approval.sentTo') : t('inspections.approval.awaiting')}{' '}
@@ -1488,7 +1488,7 @@ export default function Inspections() {
                       <button
                         onClick={() => galleryInputRef.current?.click()}
                         className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold"
-                        style={{ background: 'var(--panel-3)', border: '1.5px solid #4338ca', color: '#a5b4fc' }}
+                        style={{ background: 'var(--panel-3)', border: '1.5px solid #4338ca', color: '#4f46e5' }}
                       >
                         <ImageIcon size={13} /> {t('inspections.form.gallery')}
                       </button>
@@ -1733,7 +1733,7 @@ export default function Inspections() {
                   style={{
                     flex: 1, padding: '11px', borderRadius: 10,
                     border: '1.5px solid #ef4444', background: 'transparent',
-                    color: '#f87171', fontSize: 13, fontWeight: 600, cursor: 'pointer',
+                    color: '#dc2626', fontSize: 13, fontWeight: 600, cursor: 'pointer',
                   }}
                 >
                   {t('inspections.approve.reject')}
@@ -1766,7 +1766,7 @@ export default function Inspections() {
               </div>
             )}
             {approveTarget.approval_status === 'approved' && (
-              <div style={{ textAlign: 'center', padding: '12px', borderRadius: 10, background: 'rgba(22,163,74,0.15)', border: '1px solid #16a34a', color: '#4ade80', fontWeight: 600 }}>
+              <div style={{ textAlign: 'center', padding: '12px', borderRadius: 10, background: 'rgba(22,163,74,0.15)', border: '1px solid #16a34a', color: '#16a34a', fontWeight: 600 }}>
                 {t('inspections.approve.alreadyApproved')}
               </div>
             )}

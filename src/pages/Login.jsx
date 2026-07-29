@@ -3,11 +3,10 @@ import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Eye, EyeOff, ArrowRight, Mail, AlertCircle, CheckCircle2,
-  Loader2, User, Zap, Sun, Moon, Wifi, WifiOff, Clock,
+  Loader2, User, Zap, Wifi, WifiOff, Clock,
   BarChart3, Shield, Smartphone, Brain, TrendingUp, Bell,
 } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
-import { useTheme } from '../contexts/ThemeContext'
 import { useLanguage } from '../contexts/LanguageContext'
 import LanguageSwitcher from '../components/LanguageSwitcher'
 import { supabase } from '../lib/supabase'
@@ -191,7 +190,6 @@ const FEATURES = [
 export default function Login() {
   const loginLogo = readCachedLogo('login') || TpLogo
   const { signIn, user, loading: authLoading } = useAuth()
-  const { isDark, toggleTheme } = useTheme()
   const { t }               = useLanguage()
   const navigate            = useNavigate()
 
@@ -454,8 +452,11 @@ export default function Login() {
     <>
       <style>{STYLES}</style>
 
-      {/* Page background follows the theme; the auth card stays a premium panel */}
-      <div style={{ minHeight:'100vh', display:'flex', background:'var(--login-bg)', position:'relative', overflow:'hidden' }}>
+      {/* The auth screen is a fixed premium DARK brand moment in both app themes
+          (see html.light .tp-login-shell in index.css, which pins the --login-*
+          tokens dark). This keeps the card, inputs and Create Account tab fully
+          legible regardless of the user's saved light/dark preference. */}
+      <div className="tp-login-shell" style={{ minHeight:'100vh', display:'flex', background:'var(--login-bg)', position:'relative', overflow:'hidden' }}>
 
         {/* ── Background layers ──────────────────────────────────────────── */}
         {/* Deep radial glow */}
@@ -476,23 +477,6 @@ export default function Login() {
           animation:'tp-scan 9s ease-in-out infinite',
           pointerEvents:'none',
         }}/>
-
-        {/* ── Theme toggle ────────────────────────────────────────────────── */}
-        <button
-          onClick={toggleTheme}
-          title={isDark ? t('auth.login.lightMode') : t('auth.login.darkMode')}
-          style={{
-            position:'fixed', top:16, right:16, zIndex:100,
-            width:40, height:40, borderRadius:12,
-            background:'rgba(22,163,74,0.12)', border:'1.5px solid rgba(22,163,74,0.28)',
-            color:'#4ade80', display:'flex', alignItems:'center', justifyContent:'center',
-            cursor:'pointer', transition:'all 0.2s',
-            boxShadow:'0 4px 20px rgba(0,0,0,0.4)',
-            backdropFilter:'blur(12px)',
-          }}
-        >
-          {isDark ? <Moon size={16}/> : <Sun size={16}/>}
-        </button>
 
         {/* Network status pill */}
         <div style={{
@@ -681,9 +665,9 @@ export default function Login() {
                     <button key={val} onClick={() => switchTab(val)} style={{
                       flex:1, padding:'9px 0', fontSize:13, fontWeight:700,
                       border:'none', borderRadius:10,
-                      background: tab===val ? 'rgba(22,163,74,0.18)' : 'transparent',
-                      boxShadow: tab===val ? 'inset 0 0 0 1.5px rgba(22,163,74,0.38)' : 'inset 0 0 0 1.5px rgba(255,255,255,0.06)',
-                      color: tab===val ? '#4ade80' : 'rgba(255,255,255,0.35)',
+                      background: tab===val ? 'rgba(22,163,74,0.18)' : 'rgba(255,255,255,0.045)',
+                      boxShadow: tab===val ? 'inset 0 0 0 1.5px rgba(22,163,74,0.45)' : 'inset 0 0 0 1.5px rgba(255,255,255,0.16)',
+                      color: tab===val ? '#4ade80' : 'rgba(255,255,255,0.72)',
                       cursor:'pointer', transition:'all 0.2s',
                     }}>
                       {label}

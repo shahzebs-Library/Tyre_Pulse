@@ -37,17 +37,17 @@ const BANNER_TONES = {
   amber: {
     bg: 'rgba(234,179,8,0.12)',
     border: 'rgba(234,179,8,0.35)',
-    text: '#facc15',
+    text: '#ca8a04',
   },
   red: {
     bg: 'rgba(239,68,68,0.12)',
     border: 'rgba(239,68,68,0.35)',
-    text: '#f87171',
+    text: '#dc2626',
   },
   gray: {
     bg: 'rgba(148,163,184,0.12)',
     border: 'rgba(148,163,184,0.35)',
-    text: '#cbd5e1',
+    text: '#475569',
   },
 }
 
@@ -96,7 +96,7 @@ function BlockScreen({ reason, onSignOut }) {
           className="inline-flex items-center justify-center w-16 h-16 rounded-full mb-5"
           style={{ background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.3)' }}
         >
-          <CreditCard className="w-8 h-8" style={{ color: '#f87171' }} />
+          <CreditCard className="w-8 h-8" style={{ color: '#dc2626' }} />
         </div>
         <h2 className="text-xl font-bold text-white mb-3">Subscription required</h2>
         <p className="text-gray-400 text-sm leading-relaxed mb-6">

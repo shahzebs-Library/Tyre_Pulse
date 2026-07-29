@@ -16,7 +16,7 @@ const RISK_STYLE = {
   Critical: { bg: 'rgba(239,68,68,0.12)',   border: 'rgba(239,68,68,0.35)',  text: '#f87171' },
   High:     { bg: 'rgba(249,115,22,0.12)',  border: 'rgba(249,115,22,0.35)', text: '#fb923c' },
   Medium:   { bg: 'rgba(234,179,8,0.12)',   border: 'rgba(234,179,8,0.35)',  text: '#facc15' },
-  Low:      { bg: 'rgba(22,163,74,0.12)',   border: 'rgba(22,163,74,0.35)',  text: '#4ade80' },
+  Low:      { bg: 'rgba(22,163,74,0.12)',   border: 'rgba(22,163,74,0.35)',  text: '#16a34a' },
 }
 
 export default function TyreScanCamera({ onClose, onResult }) {
@@ -234,7 +234,7 @@ export default function TyreScanCamera({ onClose, onResult }) {
             onClick={() => switchMode(id)}
             className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-semibold transition-all"
             style={mode === id
-              ? { background: 'rgba(22,163,74,0.14)', border: '1px solid rgba(22,163,74,0.35)', color: '#4ade80' }
+              ? { background: 'rgba(22,163,74,0.14)', border: '1px solid rgba(22,163,74,0.35)', color: '#16a34a' }
               : { background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)', color: '#6b7280' }}
           >
             <Icon className="w-3.5 h-3.5" /> {label}
@@ -304,7 +304,7 @@ export default function TyreScanCamera({ onClose, onResult }) {
             {!error && (
               <label
                 className="flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-semibold cursor-pointer active:opacity-70 transition-opacity"
-                style={{ background: 'rgba(22,163,74,0.08)', border: '1px solid rgba(22,163,74,0.25)', color: '#4ade80' }}
+                style={{ background: 'rgba(22,163,74,0.08)', border: '1px solid rgba(22,163,74,0.25)', color: '#16a34a' }}
               >
                 <Camera className="w-4 h-4" />
                 {hasBarcodeApi ? 'Capture Image to Scan' : 'Capture & Scan (iOS)'}

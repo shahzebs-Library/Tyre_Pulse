@@ -1249,7 +1249,7 @@ export default function Dashboard() {
               <button key={label} onClick={() => applyShortcut(label)}
                 className="px-3 py-1 rounded-lg text-[11px] font-semibold transition-all duration-200"
                 style={dateShortcut === label
-                  ? { background:'rgba(22,163,74,0.15)', border:'1px solid rgba(22,163,74,0.35)', color:'#86efac' }
+                  ? { background:'rgba(22,163,74,0.15)', border:'1px solid rgba(22,163,74,0.35)', color:'var(--accent-strong)' }
                   : { background:'rgba(255,255,255,0.03)', border:'1px solid rgba(255,255,255,0.07)', color:'#6b7280' }}>
                 {label}
               </button>
@@ -1279,11 +1279,11 @@ export default function Dashboard() {
 
       {/* ── QUICK ACTIONS ────────────────────────────────────────────────── */}
       <div className="flex flex-wrap gap-2">
-        <ActionTile to="/anomalies" icon={AlertTriangle} label={t('dashboard.quickActions.anomalyScan')} color="#fca5a5" bg="rgba(239,68,68,0.08)" border="rgba(239,68,68,0.2)" />
-        <ActionTile to="/alerts"    icon={Bell}          label={t('dashboard.quickActions.viewAlerts')}      color="#fde68a" bg="rgba(245,158,11,0.08)" border="rgba(245,158,11,0.2)" />
-        <ActionTile to="/data-intake" icon={Upload}      label={t('dashboard.quickActions.uploadData')}      color="#93c5fd" bg="rgba(59,130,246,0.08)"  border="rgba(59,130,246,0.2)" />
-        <ActionTile to="/inspections" icon={ClipboardCheck} label={t('dashboard.quickActions.inspections')}   color="#86efac" bg="rgba(22,163,74,0.08)"  border="rgba(22,163,74,0.2)" />
-        <ActionTile to="/ai-command-center" icon={Cpu}   label={t('dashboard.quickActions.aiCommand')}       color="#d8b4fe" bg="rgba(139,92,246,0.08)" border="rgba(139,92,246,0.2)" />
+        <ActionTile to="/anomalies" icon={AlertTriangle} label={t('dashboard.quickActions.anomalyScan')} color="#ef4444" bg="rgba(239,68,68,0.11)" border="rgba(239,68,68,0.32)" />
+        <ActionTile to="/alerts"    icon={Bell}          label={t('dashboard.quickActions.viewAlerts')}      color="#f59e0b" bg="rgba(245,158,11,0.11)" border="rgba(245,158,11,0.32)" />
+        <ActionTile to="/data-intake" icon={Upload}      label={t('dashboard.quickActions.uploadData')}      color="#3b82f6" bg="rgba(59,130,246,0.11)"  border="rgba(59,130,246,0.32)" />
+        <ActionTile to="/inspections" icon={ClipboardCheck} label={t('dashboard.quickActions.inspections')}   color="#22c55e" bg="rgba(22,163,74,0.11)"  border="rgba(22,163,74,0.32)" />
+        <ActionTile to="/ai-command-center" icon={Cpu}   label={t('dashboard.quickActions.aiCommand')}       color="#8b5cf6" bg="rgba(139,92,246,0.11)" border="rgba(139,92,246,0.32)" />
       </div>
 
       {/* ── INTEL ROW - Avg Life + Seasonal ──────────────────────────────── */}

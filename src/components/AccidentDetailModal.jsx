@@ -19,7 +19,7 @@ import {
   X, Plus, Trash2, Send, Lock, CheckCircle2, XCircle,
   ShieldCheck, Hourglass, FileText, Wrench, MessageSquare, Briefcase, History, User, ClipboardList,
   ArrowLeft, AlertOctagon, ChevronRight, Download, Loader2, ShieldAlert, Clock, Pencil,
-  GitBranch, MapPin, Ban, Hash, Users, FileDown, ListChecks,
+  GitBranch, MapPin, Ban, Hash, Users, FileDown, ListChecks, Share2,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
@@ -47,6 +47,7 @@ import EntityApprovalPanel from './workflow/EntityApprovalPanel'
 import CaseProgressPanel from './accidents/CaseProgressPanel'
 import CaseCompletionPanel from './accidents/CaseCompletionPanel'
 import CaseWorkstreamsPanel from './accidents/CaseWorkstreamsPanel'
+import CaseTeamDistributionPanel from './accidents/CaseTeamDistributionPanel'
 import CasePortalShare from './accidents/CasePortalShare'
 import { loadCase } from '../lib/api/accidentCase'
 import { renderAccidentCasePdf } from '../lib/accidentCasePdf'
@@ -126,6 +127,10 @@ const TABS = [
   // each department does its work, and Overview is already a summary of five
   // other sections.
   { key: 'teams',    label: 'Teams & Progress', icon: Users },
+  // Distribute the case to its teams: each team's workstreams (with owner + status),
+  // the structured inputs it owns (present vs still needed), and the files routed to
+  // it. Elevated users assign owners inline; others read-only.
+  { key: 'distribution', label: 'Distribute to Teams', icon: Share2 },
   // Interactive "who owns what" control: assign each workstream, set its status,
   // and mark one Not Applicable. Elevated users get the controls; others read-only.
   { key: 'workstreams', label: 'Workstreams', icon: ListChecks },
@@ -397,6 +402,13 @@ function AccidentDetail({ accidentId, onBack, onClose, onChanged, variant = 'pag
         )}
         {tab === 'teams'     && (
           <CaseProgressPanel
+            record={acc}
+            canEdit={elevated && !editLocked}
+            onChanged={() => { load(); onChanged?.() }}
+          />
+        )}
+        {tab === 'distribution' && (
+          <CaseTeamDistributionPanel
             record={acc}
             canEdit={elevated && !editLocked}
             onChanged={() => { load(); onChanged?.() }}

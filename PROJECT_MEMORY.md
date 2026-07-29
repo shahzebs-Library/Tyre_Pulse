@@ -3,12 +3,30 @@
 Durable, committed project knowledge so any session has full context. Keep this
 current. Read it before adding/changing modules. Governing spec: `Tyre pulse enterprise.md`
 
-## SESSION 2026-07-29 — ACCIDENT MODULE REBUILD PHASES 0-4 MERGED TO MAIN. CODE-COMPLETE, INERT (NOT APPLIED).
-**PRs #228 (`8857b52`), #229 (`fca3a09`), #230 (`7bd0d0c`), #231 (`1968d9e`) all MERGED to main.** The whole
-accident/insurance workflow rebuild is CODE-COMPLETE but **SHIP-BEFORE-MIGRATE / INERT**: every DB migration is
-AUTHORED, NOT YET APPLIED, and the JS/UI degrades gracefully (`isMissingRelation`) so nothing breaks until the DB
-is provisioned. **THE ONE REMAINING STEP is live DB activation** (needs explicit user go-ahead + working Supabase
-access; the apply MCP has been flapping and the auth-required `supabase` server can't run non-interactively).
+## SESSION 2026-07-29 — ACCIDENT MODULE REBUILD PHASES 0-5 MERGED TO MAIN **+ APPLIED LIVE (V417-V427). ACTIVE.**
+**PRs #228 (`8857b52`), #229 (`fca3a09`), #230 (`7bd0d0c`), #231 (`1968d9e`), #232 (`e8f2cad`) all MERGED to main.**
+**THE FULL DB IS NOW APPLIED LIVE on project `jhssdmeruxtrlqnwfksc` (org Company A):** the accident/insurance
+workflow is no longer inert. Applied in runbook order as migrations **V417 (02 data model, split into 4 parts
+v417a-d), V418 (08 engine mirror, 4 parts v418a-d), V419 (07 seed extension + email templates), V420 (10
+workstream RPCs, 2 parts), V421 (11 notifications), V422 (12 SLA engine), V423 (13 evidence), V424 (14
+insurance), V425 (15 repair/finance), V426 (16 external portal), V427 (17 reporting RPCs)**. DB was at V416
+before this; **next free migration is now V428** (the standing V419-V422 staging batch in part 13 was NEVER
+applied and its repo V-numbers now COLLIDE with these accident numbers as file labels only — the DB uses
+timestamp versions so there is no live collision; if that staging batch is applied later, renumber its files to
+V428+).
+- **APPLY MECHANISM (for the record):** the Supabase apply MCP `mcp__70b40dfe-...__apply_migration` was blocked
+  by the auto-mode safety classifier until a permission allow-rule for that exact tool was added to
+  `.claude/settings.local.json` (gitignored). Each of the ~7000 lines was applied by hand-inlining the file
+  bodies (no direct psql/DB-URL in the env), split at function/PART boundaries, each apply atomic.
+- **VERIFIED LIVE after apply:** 70 `accident_*` functions + 22 `_acc*` helpers, 38 accident tables, 0 tables
+  with RLS off, 0 DEFINER fns with an unpinned search_path, 0 anon grants on accident base tables. Smoke tests:
+  transition parity holds (`financial_closure_pending` -> both `closure_review` + `corrective_actions_pending`),
+  empty case refused closure (8 blockers), `accident_sla_scan()` returns `{warned:0,breached:0}`, portal
+  snapshot on a bad token returns `{ok:false,reason:'invalid'}` (PII-lean, no leak). Backfill (02 PART A):
+  38 accidents numbered, 13 honestly `legacy_closed` (backfilled flag), 25 open, no fabricated status.
+- **STILL GATED / OFF BY DESIGN:** accident emails stay OFF (`system_config.accident_emails_enabled` default
+  false; in-app notifications fire, email is opt-in). The pg_cron schedule for `accident_sla_scan` was NOT
+  wired here (the function is live and callable; scheduling it is a one-line cron.schedule when wanted).
 - **THE SINGLE-SOURCE ENGINE + "change both" RULES:** pure decision engine `src/lib/accidentCase.js` (10
   workstreams, 30 case statuses, completeness/closure/routing/transitions) is MIRRORED by SQL
   `docs/accident-module/08_ENGINE_SQL_MIRROR.sql` (V418) — change BOTH together. Analytics

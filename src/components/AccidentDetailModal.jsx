@@ -45,6 +45,8 @@ import CustomFieldsPanel from './CustomFieldsPanel'
 import CopilotCard from './ai/CopilotCard'
 import EntityApprovalPanel from './workflow/EntityApprovalPanel'
 import CaseProgressPanel from './accidents/CaseProgressPanel'
+import CaseCompletionPanel from './accidents/CaseCompletionPanel'
+import { loadCase } from '../lib/api/accidentCase'
 import { toUserMessage } from '../lib/safeError'
 
 // Vocabularies + canonicalisation come from the single shared source
@@ -165,6 +167,7 @@ function AccidentDetail({ accidentId, onBack, onClose, onChanged, variant = 'pag
 
   const [tab, setTab] = useState('overview')
   const [acc, setAcc] = useState(null)
+  const [caseData, setCaseData] = useState(null)
   const [remarks, setRemarks] = useState([])
   const [parts, setParts] = useState([])
   const [loading, setLoading] = useState(true)
@@ -196,6 +199,14 @@ function AccidentDetail({ accidentId, onBack, onClose, onChanged, variant = 'pag
       const a = aR.status === 'fulfilled' ? aR.value : { data: null, error: aR.reason }
       if (a.error || !a.data) { setErr(loadErrMsg(a.error) || 'Accident record not found.'); setLoading(false); return }
       setAcc(a.data)
+      // The V417 case model (workstreams / closure gate) is best-effort and
+      // country-scoped. loadCase NEVER throws for a missing relation — it degrades
+      // to the plain accidents row with capabilities.casesModel === false — so this
+      // renders for the existing rows before the migration lands. A rejection (or
+      // absent module) simply leaves caseData null; the panel then falls back to the
+      // bare accidents row, so it can never wedge the loader.
+      const cR = await Promise.allSettled([loadCase(accidentId, { country: a.data.country })])
+      setCaseData(cR[0].status === 'fulfilled' ? (cR[0].value ?? null) : null)
       // Auxiliary data is best-effort: an error/rejection degrades to empty, the
       // record still renders. A partial-load hint is surfaced non-fatally.
       const rOk = rR.status === 'fulfilled' && !rR.value?.error
@@ -338,6 +349,10 @@ function AccidentDetail({ accidentId, onBack, onClose, onChanged, variant = 'pag
               acc={acc} elevated={elevated} isAdmin={isAdmin}
               locked={editLocked} reload={load} setErr={setErr}
             />
+            {/* Case completion (V417 case model). Inert before the migration lands:
+                loadCase degrades to the bare accidents row, and `caseData || acc`
+                guarantees the panel still renders honestly from the incident alone. */}
+            <CaseCompletionPanel caseData={caseData || acc} />
             <CopilotCard task="summarize_accident" context={{ accident: acc, remarks, parts }} />
             <OverviewTab acc={acc} fmtCurrency={fmtCurrency} />
             <CaseTimelineSection acc={acc} />

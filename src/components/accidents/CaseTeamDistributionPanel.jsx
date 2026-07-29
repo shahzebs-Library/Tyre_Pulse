@@ -8,7 +8,7 @@ import { listWorkstreams, setWorkstreamStatus } from '../../lib/api/accidentCase
 import { listProfiles } from '../../lib/api/users'
 import { isMissingRelation } from '../../lib/api/_client'
 import { resolveStorageUrls } from '../../lib/storageRefs'
-import { safeHref } from '../../lib/safeUrl'
+import { safeHref, safeImageSrc } from '../../lib/safeUrl'
 import { toUserMessage } from '../../lib/safeError'
 
 /**
@@ -207,8 +207,17 @@ function TeamCard({ team, users, usersById, canEdit, fileUrls, onAssign }) {
           </p>
           <div className="flex flex-wrap gap-1.5">
             {team.files.map((f, i) => {
-              const url = fileUrls[f.ref] || null
-              const href = url ? safeHref(url) : ''
+              const url = fileUrls[f.ref] || f.ref || null
+              const img = url ? safeImageSrc(url) : undefined
+              const href = url ? safeHref(url) : undefined
+              if (img) {
+                // Image (incl. inline data URLs): show a thumbnail. Links to a
+                // remote image when the URL is a real http(s) address.
+                const thumb = <img src={img} alt={f.name} className="h-12 w-12 object-cover rounded border border-[var(--input-border)]" />
+                return href
+                  ? <a key={i} href={href} target="_blank" rel="noreferrer" title={f.name}>{thumb}</a>
+                  : <span key={i} title={f.name}>{thumb}</span>
+              }
               return href
                 ? <a key={i} href={href} target="_blank" rel="noreferrer"
                      className="inline-flex items-center gap-1 text-[11px] text-sky-300 border border-sky-800/40 rounded px-1.5 py-0.5 hover:bg-sky-950/30">

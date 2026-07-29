@@ -60,6 +60,19 @@ describe('accidentTeams', () => {
     expect(filesForTeam(rec, 'finance')).toHaveLength(0)
   })
 
+  it('routes the incident-form document slots to their teams', () => {
+    const rec = {
+      documents: [
+        { category: 'driving_license', name: 'Licence', url: 'data:image/png;base64,x' },
+        { category: 'resident_id', name: 'ID', url: 'data:image/png;base64,x' },
+        { category: 'registration', name: 'Reg', url: 'data:image/png;base64,x' },
+        { category: 'taqdeer_estimation', name: 'Taqdeer', url: 'storage://a/t.pdf' },
+      ],
+    }
+    expect(filesForTeam(rec, 'fleet').map((f) => f.name).sort()).toEqual(['ID', 'Licence', 'Reg'])
+    expect(filesForTeam(rec, 'insurance').map((f) => f.name)).toEqual(['Taqdeer'])
+  })
+
   it('honours the route: required workstreams reflect the case, coverage is honest', () => {
     // A minor uninsured case: no insurance workstream required -> insurance team
     // has nothing required and thus a null work coverage (never a flattering 100).

@@ -19,7 +19,7 @@ import {
   X, Plus, Trash2, Send, Lock, CheckCircle2, XCircle,
   ShieldCheck, Hourglass, FileText, Wrench, MessageSquare, Briefcase, History, User, ClipboardList,
   ArrowLeft, AlertOctagon, ChevronRight, Download, Loader2, ShieldAlert, Clock, Pencil,
-  GitBranch, MapPin, Ban, Hash, Users, FileDown,
+  GitBranch, MapPin, Ban, Hash, Users, FileDown, ListChecks,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
@@ -46,6 +46,7 @@ import CopilotCard from './ai/CopilotCard'
 import EntityApprovalPanel from './workflow/EntityApprovalPanel'
 import CaseProgressPanel from './accidents/CaseProgressPanel'
 import CaseCompletionPanel from './accidents/CaseCompletionPanel'
+import CaseWorkstreamsPanel from './accidents/CaseWorkstreamsPanel'
 import CasePortalShare from './accidents/CasePortalShare'
 import { loadCase } from '../lib/api/accidentCase'
 import { renderAccidentCasePdf } from '../lib/accidentCasePdf'
@@ -125,6 +126,9 @@ const TABS = [
   // each department does its work, and Overview is already a summary of five
   // other sections.
   { key: 'teams',    label: 'Teams & Progress', icon: Users },
+  // Interactive "who owns what" control: assign each workstream, set its status,
+  // and mark one Not Applicable. Elevated users get the controls; others read-only.
+  { key: 'workstreams', label: 'Workstreams', icon: ListChecks },
   { key: 'tracker',  label: 'Tracker', icon: ClipboardList },
   { key: 'repair',   label: 'Repair & Insurance', icon: ShieldAlert },
   { key: 'claim',    label: 'Claim & Recovery', icon: Briefcase },
@@ -395,6 +399,14 @@ function AccidentDetail({ accidentId, onBack, onClose, onChanged, variant = 'pag
           <CaseProgressPanel
             record={acc}
             canEdit={elevated && !editLocked}
+            onChanged={() => { load(); onChanged?.() }}
+          />
+        )}
+        {tab === 'workstreams' && (
+          <CaseWorkstreamsPanel
+            accidentId={acc.id}
+            country={acc.country}
+            elevated={elevated}
             onChanged={() => { load(); onChanged?.() }}
           />
         )}

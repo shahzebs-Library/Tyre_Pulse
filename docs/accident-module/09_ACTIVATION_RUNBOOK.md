@@ -22,6 +22,17 @@ independently reversible.
   state before then.
 - Next-free migration number is confirmed **V417** (latest applied is V416). V418
   takes the next slot after V417.
+- **Migration numbering for files 10-17.** Only `02_DATA_MODEL.sql` = **V417** and
+  `08_ENGINE_SQL_MIRROR.sql` = **V418** are fixed. Files `10_WORKSTREAM_RPCS.sql`,
+  `11_NOTIFICATIONS.sql`, `12_SLA_ENGINE.sql`, `13_EVIDENCE.sql`, `14_INSURANCE.sql`,
+  `15_REPAIR_FINANCE.sql`, `16_EXTERNAL_PORTAL.sql` and `17_REPORTING_RPCS.sql` do
+  NOT have fixed numbers - each takes the next free slot AT APPLY TIME. **Reconcile
+  against the standing V419-V422 staging batch (PROJECT_MEMORY part 13), which may
+  land first**: if that batch applies before this one, these files take numbers from
+  V423 up (or whatever is free); if the accident batch lands first, they take V419
+  up. Nothing in files 10-17 depends on its own number. Re-run
+  `select version from supabase_migrations.schema_migrations order by version desc
+  limit 5;` immediately before applying to claim the real next-free number.
 - Run every step inside a transaction where shown. Do a dry run in a branch /
   staging copy first if one is available.
 
@@ -165,7 +176,171 @@ ROLLBACK:
 
 ---
 
-## Step 4 - Legacy case backfill
+## Step 4 - Apply the action / behaviour layers (files 10 to 17)
+
+These eight scripts add the per-team action RPCs, the notification wiring, the SLA
+engine, the evidence / insurance / repair-finance chains, the external portal and
+the server-side analytics. They all depend on V417 (Step 1) and V418 (Step 2), and
+the SLA engine (12) also depends on the Part-4 SLA seeds (Step 3). Apply them in the
+dependency order below: **10 first** (it declares the shared internal context helper
+`public._accident_rpc_context(uuid)` that 13, 14, 15 and 16 REUSE), then 11 and 12
+(both after 10), then 13, 14, 15, 16, 17. Each takes the next free migration number
+at apply time (see the Migration-numbering note above) - re-check the free number
+before EACH file. Every file is idempotent (`create or replace` functions,
+`add column if not exists`, guarded triggers) and carries its own ROLLBACK block.
+
+Common PRE-REQ for all of Step 4:
+- Steps 1 to 3 applied and verified.
+- Re-confirm the next-free migration number immediately before each APPLY.
+
+### Step 4a - `10_WORKSTREAM_RPCS.sql` (per-team workstream / task / closure RPCs)
+
+APPLY: run the whole file in one transaction (it has its own `begin;` / `commit;`).
+It creates `public._accident_rpc_context`, `_accident_ws_cap`, `accident_ws_set_status`,
+`accident_ws_assign`, `accident_ws_mark_na`, `accident_task_create`,
+`accident_task_complete`, `accident_request_closure` and `accident_decide_closure`.
+VERIFY:
+```sql
+-- the 9 workstream RPCs + the shared context helper exist
+select count(*) from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+where n.nspname = 'public'
+  and p.proname in ('_accident_rpc_context','_accident_ws_cap','accident_ws_set_status',
+    'accident_ws_assign','accident_ws_mark_na','accident_task_create','accident_task_complete',
+    'accident_request_closure','accident_decide_closure');
+-- expect 9
+
+-- closure gate is enforced with the SAFE NA-approval default: a fully_closed approval
+-- passes accident_can_fully_close with a NULL profile (na_requires_approval -> TRUE),
+-- so an unapproved Not-Applicable waiver cannot close a case through this RPC.
+```
+ROLLBACK: run the ROLLBACK block at the bottom of the file (`drop function` the 9
+RPCs + the context helper). Files 13/14/15/16 reuse the context helper, so roll those
+back first if they are already live.
+
+### Step 4b - `11_NOTIFICATIONS.sql` (case notification wiring) - AFTER 10
+
+APPLY: run the file. It adds `consume_event_accident_case_notify(domain_events)`,
+registers it in `event_consumers`, and installs the five `trg_*` domain-event
+triggers on the case tables. No new notification machinery - it feeds the existing
+`domain_events -> process_domain_events -> workflow_notifications -> workflow-notify`
+pipeline (V96 / V119). Emails only send when `system_config.accident_emails_enabled`
+is true (default false = in-app only).
+VERIFY:
+```sql
+select 1 from public.event_consumers where consumer = 'consume_event_accident_case_notify';
+-- expect one row
+select count(*) from pg_trigger where tgname in
+  ('trg_ws_assigned_ins','trg_ws_assigned_upd','trg_appr_requested_ins',
+   'trg_closure_requested_ins','trg_closure_decided_upd');
+-- expect 5
+```
+ROLLBACK: `DELETE FROM event_consumers WHERE consumer='consume_event_accident_case_notify';`
+`DROP FUNCTION public.consume_event_accident_case_notify(public.domain_events);` and drop
+the five triggers (see the file's ROLLBACK block).
+
+### Step 4c - `12_SLA_ENGINE.sql` (SLA timers, pause/resume, breach scan) - AFTER 10 and 3
+
+APPLY: run the file. It adds `breached_notified` / `warned_notified` guards to
+`accident_sla_instances` and creates `accident_sla_start`, `accident_sla_pause`,
+`accident_sla_resume` and `accident_sla_scan`. The pg_cron schedule
+(`accident-sla-scan-timers`, `30 6 * * *`) is COMMENTED - enable it deliberately at
+apply time (cron scheduling cannot run inside a transaction block).
+VERIFY:
+```sql
+select count(*) from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+where n.nspname='public' and p.proname in
+  ('accident_sla_start','accident_sla_pause','accident_sla_resume','accident_sla_scan');
+-- expect 4
+-- after enabling the cron line:
+select jobname from cron.job where jobname = 'accident-sla-scan-timers';  -- expect one row
+```
+ROLLBACK: `select cron.unschedule('accident-sla-scan-timers');` if enabled, then run
+the file's ROLLBACK block (`drop function` the 4 RPCs; the `breached_notified` /
+`warned_notified` columns can be dropped too).
+
+### Step 4d - `13_EVIDENCE.sql` (evidence + document workflow) - AFTER 10
+
+APPLY: run the file (own `begin;` / `commit;`). It REUSES `_accident_rpc_context`
+from file 10 (does not redeclare it) and creates `accident_evidence_add`,
+`accident_evidence_verify`, `accident_document_add`, `accident_document_mark_received`
+and `accident_evidence_checklist`.
+VERIFY:
+```sql
+select count(*) from pg_proc p join pg_namespace n on n.oid=p.pronamespace
+where n.nspname='public' and p.proname in ('accident_evidence_add','accident_evidence_verify',
+  'accident_document_add','accident_document_mark_received','accident_evidence_checklist');
+-- expect 5
+```
+ROLLBACK: the file's ROLLBACK block (`drop function` the 5 RPCs). Do NOT drop
+`_accident_rpc_context` here - it is owned by file 10 and shared.
+
+### Step 4e - `14_INSURANCE.sql` (claim register / decision / settlement) - AFTER 10
+
+APPLY: run the file (own `begin;` / `commit;`). REUSES `_accident_rpc_context`.
+Creates `accident_claim_register`, `accident_claim_decision`, `accident_claim_settlement`.
+VERIFY:
+```sql
+select count(*) from pg_proc p join pg_namespace n on n.oid=p.pronamespace
+where n.nspname='public' and p.proname in
+  ('accident_claim_register','accident_claim_decision','accident_claim_settlement');
+-- expect 3
+```
+ROLLBACK: the file's ROLLBACK block (drop the 3 RPCs; leave `_accident_rpc_context`).
+
+### Step 4f - `15_REPAIR_FINANCE.sql` (repair chain + finance ledger) - AFTER 10
+
+APPLY: run the file (own `begin;` / `commit;`). REUSES `_accident_rpc_context`.
+Creates `accident_repair_order_upsert`, `accident_repair_task_add`,
+`accident_repair_task_complete`, `accident_repair_qc`, `accident_repair_complete`,
+`accident_finance_txn_add`, `accident_recovery_record`, `accident_downtime_set`.
+VERIFY:
+```sql
+select count(*) from pg_proc p join pg_namespace n on n.oid=p.pronamespace
+where n.nspname='public' and p.proname in
+  ('accident_repair_order_upsert','accident_repair_task_add','accident_repair_task_complete',
+   'accident_repair_qc','accident_repair_complete','accident_finance_txn_add',
+   'accident_recovery_record','accident_downtime_set');
+-- expect 8
+```
+ROLLBACK: the file's ROLLBACK block (drop the 8 RPCs; leave `_accident_rpc_context`).
+
+### Step 4g - `16_EXTERNAL_PORTAL.sql` (read-only insurer / authority token portal) - AFTER 10
+
+APPLY: run the file (own `begin;` / `commit;`). REUSES `_accident_rpc_context` on the
+mint path. Creates the `accident_portal_shares` table and `accident_portal_create`,
+`accident_portal_revoke`, `get_accident_portal_snapshot` (anon-token read, DEFINER,
+no base table granted to anon).
+VERIFY:
+```sql
+select 1 from information_schema.tables
+where table_schema='public' and table_name='accident_portal_shares';  -- expect one row
+select count(*) from pg_proc p join pg_namespace n on n.oid=p.pronamespace
+where n.nspname='public' and p.proname in
+  ('accident_portal_create','accident_portal_revoke','get_accident_portal_snapshot');
+-- expect 3
+```
+ROLLBACK: the file's ROLLBACK block (drop the 3 RPCs and the `accident_portal_shares`
+table; leave `_accident_rpc_context`).
+
+### Step 4h - `17_REPORTING_RPCS.sql` (server-side fleet-wide analytics) - AFTER 10
+
+APPLY: run the file (own `begin;` / `commit;`). Creates the `get_accident_case_*`
+aggregate RPCs mirroring `src/lib/accidentCaseAnalytics.js` over the full RLS-scoped
+dataset.
+VERIFY:
+```sql
+select count(*) from pg_proc p join pg_namespace n on n.oid=p.pronamespace
+where n.nspname='public' and p.proname like 'get_accident_case%'
+   or p.proname in ('get_accident_workstream_bottleneck');
+-- expect the reporting RPCs (get_accident_case_kpis / _status_breakdown /
+-- get_accident_workstream_bottleneck) present
+```
+ROLLBACK: the file's ROLLBACK block (drop the reporting RPCs; they are side-effect
+free, so leaving them is also harmless).
+
+---
+
+## Step 5 - Legacy case backfill
 
 FILE STATUS: `MIGRATIONS_ACCIDENT_LEGACY_BACKFILL.sql` is the planned Phase-20
 reversible, snapshot-protected legacy migration referenced in `00_MASTER_PLAN.md`.
@@ -181,11 +356,12 @@ runbook. Two facts make this step low-risk:
    a not-started case screen rather than an invented one.
 
 PRE-REQ:
-- Steps 1 to 3 applied and verified.
+- Steps 1 to 3 applied and verified (Step 4 is independent and not a prerequisite
+  for the legacy backfill).
 - Confirm `MIGRATIONS_ACCIDENT_LEGACY_BACKFILL.sql` has been authored and marked
   reviewed-GO before running it. If it is not present, this step is a no-op beyond
   the V417 Part-A backfill already completed in Step 1, and you may proceed to
-  Step 5.
+  Step 6.
 
 APPLY (only when the file exists and is reviewed-GO):
 - Take a snapshot of `accidents` (and any case table the migration writes) first.
@@ -226,14 +402,17 @@ drop table if exists public._bak_accidents_legacy_backfill;
 
 ---
 
-## Step 5 - Go live (UI wiring)
+## Step 6 - Go live (UI wiring)
 
 The foundation code and the UI wiring are already merged and inert. No further code
 change is required to activate; the panel begins reading real data automatically
 once Steps 1 to 3 are live.
 
 PRE-REQ:
-- Steps 1 to 3 applied and verified (Step 4 optional, per its FILE STATUS note).
+- Steps 1 to 3 applied and verified. Step 4 (the action / behaviour layers) is
+  required for the per-team actions, SLA, evidence, insurance, repair-finance,
+  portal and server-side analytics to work; the Case Completion panel itself renders
+  on Steps 1 to 3 alone. Step 5 (legacy backfill) is optional per its FILE STATUS.
 - Confirmed live: `src/lib/accidentCase.js`, `src/lib/caseCompletionView.js`,
   `src/components/accidents/CaseCompletionPanel.jsx`, and its mount point in
   `src/components/AccidentDetailModal.jsx`.

@@ -86,6 +86,7 @@ export const NAV_COMMANDS = [
   { id: 'retread',        label: 'Retread Management',   path: '/retread',      icon: 'RefreshCw',  adminOnly: true },
   // Accident & Insurance
   { id: 'accidents',      label: 'Accidents',            path: '/accidents',    icon: 'AlertTriangle' },
+  { id: 'accident-cases', label: 'Accident Cases',       path: '/accident-cases', icon: 'Layers' },
   { id: 'warranty',       label: 'Warranty Tracker',     path: '/warranty',     icon: 'Shield' },
   { id: 'recall-tracker', label: 'Recall Tracker',       path: '/recall-tracker', icon: 'AlertCircle', adminOnly: true },
   // Reports & Executive

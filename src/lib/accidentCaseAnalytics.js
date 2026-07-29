@@ -363,6 +363,11 @@ export function closureLevelBreakdown(records) {
   let open = 0
   for (const r of list) {
     let level = lower(r?.closure_level)
+    // A legacy backfilled closure carries the honest 'legacy_closed' level (the
+    // migration declined to assert a verified full closure), but it IS closed
+    // everywhere else, so it belongs in the fully_closed bucket here rather than
+    // being miscounted as open.
+    if (level === 'legacy_closed') level = 'fully_closed'
     // A genuinely closed case with no explicit level is still fully closed.
     if (!level && isGenuinelyClosed(r)) level = 'fully_closed'
     if (level && counts.has(level)) counts.set(level, counts.get(level) + 1)

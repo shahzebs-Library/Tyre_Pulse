@@ -646,7 +646,42 @@
     "chooseFromGallery": "اختيار من المعرض",
     "cancel": "إلغاء",
     "filterOpen": "مفتوح",
-    "filterClosed": "مغلق"
+    "filterClosed": "مغلق",
+    "case": {
+      "title": "حالة الحالة",
+      "subtitle": "تقدم سير العمل حسب الفريق",
+      "linkHint": "عرض حالة سير العمل والتقدم لكل فريق",
+      "loadError": "تعذر تحميل حالة الحالة. يرجى المحاولة مرة أخرى.",
+      "notFoundTitle": "الحالة غير موجودة",
+      "notFoundMsg": "تعذر العثور على هذا الحادث.",
+      "notActivatedTitle": "لم يتم تفعيل سير عمل الحالة",
+      "notActivatedMsg": "لم يتم إعداد سير عمل الحالة لهذا الحادث بعد. سيظهر التقدم حسب الفريق هنا بمجرد تفعيله.",
+      "noWorkstreamsTitle": "لا توجد مسارات عمل بعد",
+      "noWorkstreamsMsg": "لم يتم تسجيل أي مسارات عمل للفرق لهذه الحالة بعد.",
+      "workstreamsTitle": "مسارات العمل",
+      "overallStatus": "حالة الحالة",
+      "stage": "المرحلة",
+      "overallCompletion": "نسبة الإنجاز الكلية",
+      "readOnlyNote": "للعرض فقط. تُجرى تحديثات الحالة من وحدة التحكم على الويب.",
+      "chips": {
+        "done": "مكتمل",
+        "in_progress": "قيد التنفيذ",
+        "pending": "قيد الانتظار",
+        "not_required": "غير مطلوب"
+      },
+      "workstreams": {
+        "incident_evidence": "الحادث والأدلة",
+        "fleet_validation": "التحقق من الأسطول",
+        "liability": "السلامة والمسؤولية",
+        "insurance": "التأمين والمطالبة",
+        "assessment": "التقييم الفني",
+        "repair": "الإصلاح",
+        "workshop_qc": "مراقبة جودة الورشة",
+        "handover": "تسليم الأسطول",
+        "finance": "المالية والتسوية",
+        "corrective": "الإجراءات التصحيحية"
+      }
+    }
   },
   "modules": {
     "common": {

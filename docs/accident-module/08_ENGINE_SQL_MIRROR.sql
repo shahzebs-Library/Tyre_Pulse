@@ -977,7 +977,7 @@ returns text[] language sql immutable set search_path to 'public' as $$
     when 'rectification_required'      then array['repair_in_progress']
     when 'operationally_completed'     then array['insurance_settlement_pending','financial_closure_pending','closure_review']
     when 'insurance_settlement_pending' then array['financial_closure_pending']
-    when 'financial_closure_pending'   then array['corrective_actions_pending']
+    when 'financial_closure_pending'   then array['corrective_actions_pending','closure_review']
     when 'corrective_actions_pending'  then array['closure_review']
     when 'closure_review'              then array['closed']
     when 'closed'                      then array['reopened']

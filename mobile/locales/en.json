@@ -612,7 +612,42 @@
     "chooseFromGallery": "Choose from Gallery",
     "cancel": "Cancel",
     "filterOpen": "Open",
-    "filterClosed": "Closed"
+    "filterClosed": "Closed",
+    "case": {
+      "title": "Case Status",
+      "subtitle": "Workflow progress by team",
+      "linkHint": "View workflow case status and per-team progress",
+      "loadError": "Could not load the case status. Please try again.",
+      "notFoundTitle": "Case not found",
+      "notFoundMsg": "This accident could not be found.",
+      "notActivatedTitle": "Case workflow not activated",
+      "notActivatedMsg": "The case workflow has not been set up for this accident yet. Progress by team will appear here once it is activated.",
+      "noWorkstreamsTitle": "No workstreams yet",
+      "noWorkstreamsMsg": "No team workstreams have been recorded for this case yet.",
+      "workstreamsTitle": "Workstreams",
+      "overallStatus": "Case status",
+      "stage": "Stage",
+      "overallCompletion": "Overall completion",
+      "readOnlyNote": "View only. Case updates are made on the web console.",
+      "chips": {
+        "done": "Done",
+        "in_progress": "In progress",
+        "pending": "Pending",
+        "not_required": "Not required"
+      },
+      "workstreams": {
+        "incident_evidence": "Incident & Evidence",
+        "fleet_validation": "Fleet Validation",
+        "liability": "Safety & Liability",
+        "insurance": "Insurance & Claim",
+        "assessment": "Technical Assessment",
+        "repair": "Repair",
+        "workshop_qc": "Workshop Quality Control",
+        "handover": "Fleet Handover",
+        "finance": "Finance & Settlement",
+        "corrective": "Corrective Actions"
+      }
+    }
   },
   "scanner": {
     "title": "Scan Tyre / Asset",

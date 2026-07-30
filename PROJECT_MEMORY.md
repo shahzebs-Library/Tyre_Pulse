@@ -3,7 +3,27 @@
 Durable, committed project knowledge so any session has full context. Keep this
 current. Read it before adding/changing modules. Governing spec: `Tyre pulse enterprise.md`
 
-## SESSION 2026-07-30 — ACCIDENT MODULE UI/WORKFLOW POLISH (PRs #234-#240) + UAE/EGYPT TYRE LOAD (V428-V430 APPLIED LIVE). Migrations through **V430**, next free **V431**.
+## SESSION 2026-07-30 — ACCIDENT MODULE UI/WORKFLOW POLISH (PRs #234-#246) + UAE/EGYPT TYRE LOAD (V428-V430) + VEHICLE_TYPE BACKFILL (V431). Migrations through **V431**, next free **V432**.
+- **ACCIDENT/INCIDENT UI DECLUTTER (PRs #242/#244/#245/#246, code only).** Customer: remove the charts (keep
+  tiles), tidy the always-open filters, make the case page one big clear full-width page with one tab per team
+  and NO colors. Done: Accidents.jsx dropped the "Incidents per Month" bar + the Severity Mix strip + Status
+  funnel pills; the 10 filter selects moved behind a collapsible "Filters (N)" toggle (search + count always
+  visible). IncidentReports.jsx dropped the status doughnut for a full-width lifecycle-status tiles card.
+  AccidentDetailModal.jsx removed the side approvals rail (approval now triggers automatically at closure, not a
+  manual panel) -> full-width body; "Teams & Progress"+"Distribute to Teams" collapsed to ONE "Teams" tab.
+  CaseTeamDistributionPanel.jsx = per-team TAB STRIP (Fleet/HSE/Insurance/Workshop/Finance), one team's view at
+  a time, header "Planned distribution by team", and **FULLY COLORLESS** (no status dots/DOT map; StatusPill is
+  label-only; timestamps + success/error text neutral `var(--text-secondary)`; blocker bullets `var(--text-dim)`;
+  plain `CheckCircle2` ticks). RULE: the team view carries NO semantic color — status is conveyed by text only.
+- **V431 (applied live + `MIGRATIONS_V431_VEHICLE_TYPE_BACKFILL.sql`) - vehicle_type auto-fill DATA gap.**
+  Customer: "only site and fleet no, vehicle type not auto-populated on asset pick." Code was CORRECT
+  (assets.js COLS returns vehicle_type; the form fills it) - the fault was DATA: 921 of the fleet rows had a
+  BLANK `vehicle_fleet.vehicle_type` (Egypt 133/133, KSA 417/1019, UAE 371/371). Recovered from the job cards:
+  for each blank row wrote the MODE non-blank `work_orders.asset_category` for that (org,country,asset_no)
+  (V245 trigger UPPER-cases it). **424 filled** (TR-MIXER 248, PUMPS 71, GENERATOR 31, BT-PLANT 22, ... ),
+  blank 921 -> 497. The 497 remainder have NO asset_category anywhere (tyre_records filled 0) so left NULL,
+  honest. Snapshot `_bak.vehicle_type_backfill_20260730` (424 rows), reversible. Applied via execute_sql (the
+  UPDATE client-timed-out at 60s but COMMITTED server-side, verified 921->497).
 **All merged to main.** Accident work (all applied live + merged): **V428** = fixed-mailbox accident email
 routing (one sender `info@tyrepulse.app` -> admin-set To/CC in `system_config.accident_email_to/_cc/
 _subject_prefix`, acting user in signature; emails still OFF by default). **V429** = accident workstream loop

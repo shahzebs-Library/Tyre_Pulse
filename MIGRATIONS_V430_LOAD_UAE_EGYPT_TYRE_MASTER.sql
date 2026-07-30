@@ -1,0 +1,49 @@
+-- =============================================================================
+-- V430 - Load UAE + Egypt tyre lifecycle from the Table-Editor staging into
+-- tyre_records.  STATUS: APPLIED LIVE (project jhssdmeruxtrlqnwfksc), verified.
+--
+-- WHAT. The customer imported the UAE + Egypt combined job-card/tyre exports into
+-- Supabase Table Editor staging tables (uae_country_upload_template_staging =
+-- 39,456 rows, egypt_country_upload_template_staging = 16,254 rows). These are the
+-- SAME KSA-style export (job cards + tyre-change columns srno/tire_pos/tire_size/
+-- fix_date/fix_KM/remove_*/total_km/tyre_brand/old_serialno). This migration
+-- collapses them to fitment grain and loads the genuinely-new fitments into
+-- tyre_records, so the tyres appear across every tyre surface (records, lifecycle,
+-- serial tracker, brand performance, CPK, scrap register, passport, fleet risk).
+--
+-- RESULT (verified): UAE 1,007 -> 1,979 (+972), Egypt 475 -> 498 (+23). One Active
+-- tyre per (asset, position) = the latest fix_date; earlier fitments Removed with
+-- the next fitment's date. 0 double-active positions, 0 reversed dates. 29 existing
+-- "active" tyres that were actually already replaced were flipped to Removed
+-- (snapshotted for undo), plus one pre-existing double-active (Egypt TM252/LHF1).
+--
+-- KEY GOTCHAS handled (do not lose these on a re-run):
+--   * The staging null token is the literal text "NULL" (and ""), not SQL NULL.
+--   * Two different date formats: UAE fix_date is DD-MM-YY; Egypt fix_date is an
+--     Excel serial (5 digits, e.g. 45292 = 2024-01-01 via date '1899-12-30' + n).
+--     erp_parse_date handles NEITHER, so a bespoke parse is used.
+--   * tyre_records.fitment_date is GENERATED - never insert it; issue_date carries
+--     the fix date. data_source CHECK = manual|upload|api -> 'upload'.
+--   * trg_guard_tyre_active_fitment blocks 2 active tyres on one (asset,position),
+--     so any superseded existing active MUST be flipped to Removed BEFORE inserting
+--     the new Active one.
+--   * organisation_id is stamped to Company A by trg_stamp_import_default_org.
+--
+-- REVERSIBILITY:
+--   Inserted rows tagged extra_fields->>'import' IN ('uae_staging_v430',
+--   'egypt_staging_v430'). Flipped existing rows recorded in
+--   _bak.tyre_country_load_v430 (id, country, prior_status, prior_removal_date).
+--   UNDO:
+--     UPDATE public.tyre_records t SET status=b.prior_status, removal_date=b.prior_removal_date
+--       FROM _bak.tyre_country_load_v430 b WHERE b.id=t.id;
+--     DELETE FROM public.tyre_records WHERE extra_fields->>'import' IN ('uae_staging_v430','egypt_staging_v430');
+--
+-- NOT DONE (deliberate): expenses (Tyre/Spare/Oil Value) and job cards are already
+-- loaded for UAE/Egypt - reprocessing the staging would duplicate them. site /
+-- vehicle_type on the new tyre rows are left NULL (derivable from vehicle_fleet by
+-- asset_no at read time); fill them later if a per-site tyre report needs it.
+--
+-- The exact applied body is in the supabase migration V430_load_uae_egypt_tyre_master.
+-- See that migration for the full CTE (nz -> fit -> allf -> newfit -> scored ->
+-- row_number tie-break -> flip existing active -> insert), run once per country.
+-- =============================================================================

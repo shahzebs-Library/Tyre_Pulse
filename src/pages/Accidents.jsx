@@ -32,7 +32,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { useSettings } from '../contexts/SettingsContext'
 import { exportToExcel, exportToPdf, reportFileName, reportDateLabel } from '../lib/exportUtils'
 import { sendReportEmail } from '../lib/emailService'
-import { formatCurrency as _fmtCurrencyBase, formatDate, formatMonthYear } from '../lib/formatters'
+import { formatCurrency as _fmtCurrencyBase, formatDate } from '../lib/formatters'
 import { resolveStorageUrl } from '../lib/storageRefs'
 import { Bar, Doughnut } from 'react-chartjs-2'
 import {
@@ -343,28 +343,6 @@ const CHART_OPTS_DOUGHNUT = {
 }
 
 
-function monthKey(dateStr) {
-  if (!dateStr) return null
-  const d = new Date(dateStr)
-  if (isNaN(d)) return null
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
-}
-
-function last12MonthKeys() {
-  const keys = []
-  const now = new Date()
-  for (let i = 11; i >= 0; i--) {
-    const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
-    keys.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`)
-  }
-  return keys
-}
-
-function monthLabel(key) {
-  const [year, month] = key.split('-')
-  const d = new Date(Number(year), Number(month) - 1, 1)
-  return formatMonthYear(d)
-}
 
 export default function Accidents() {
   const reportMeta = useReportMeta('Accident & Claims Tracker')
@@ -418,6 +396,7 @@ export default function Accidents() {
   const [filterRepairType, setFilterRepairType] = useState('')
   const [filterWfStage, setFilterWfStage]      = useState('') // canonical workflow_stage key
   const [filterVor, setFilterVor]              = useState(false) // Vehicle-Off-Road only
+  const [showFilters, setShowFilters]          = useState(false) // collapse the advanced filter row
 
   // Row → dedicated detail page (`/accidents/:id`). The former inline modal +
   // companion approval panel now live on that route; the approval engine there
@@ -659,28 +638,6 @@ export default function Accidents() {
   // whole loaded set. Honest: values that cannot be computed stay null (rendered
   // as N/A), never fabricated.
   const wfKpis = useMemo(() => buildAccidentKpis(records, {}), [records])
-
-  // Monthly incidents chart (incidents tab)
-  const chartData = useMemo(() => {
-    const keys = last12MonthKeys()
-    const counts = {}
-    keys.forEach(k => { counts[k] = 0 })
-    records.forEach(r => {
-      const k = monthKey(r.incident_date)
-      if (k && counts[k] !== undefined) counts[k]++
-    })
-    return {
-      labels: keys.map(k => monthLabel(k)),
-      datasets: [{
-        label: 'Incidents',
-        data: keys.map(k => counts[k]),
-        backgroundColor: withAlpha(colorAt(0), 0.7),
-        borderColor: colorAt(0),
-        borderWidth: 1,
-        borderRadius: 3,
-      }],
-    }
-  }, [records])
 
   // The DB stores raw tokens ('closed', 'under_review') while STATUSES holds the
   // display labels. Counting by the raw value never matched a key, so the whole
@@ -2156,14 +2113,6 @@ export default function Accidents() {
             </div>
           </div>
 
-          {/* Bar chart */}
-          <div className="card">
-            <p className="text-sm font-semibold text-[var(--text-dim)] mb-3">Incidents per Month (last 12 months)</p>
-            <div style={{ height: 160 }}>
-              <Bar data={chartData} options={CHART_OPTS_BASE} plugins={[LIGHT_VALUE_LABELS]} />
-            </div>
-          </div>
-
           {/* Status funnel */}
           <div className="flex flex-wrap gap-2">
             {STATUSES.map(s => (
@@ -2186,102 +2135,132 @@ export default function Accidents() {
             )}
           </div>
 
-          {/* Filters */}
-          <div className="flex flex-wrap gap-2">
-            <div className="relative">
-              <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
-              <input
-                className="input pl-8 text-sm w-48"
-                placeholder="Search asset or description"
-                value={search}
-                onChange={e => setSearch(e.target.value)}
-              />
-            </div>
-            <select className="input text-sm w-36" value={filterSite} onChange={e => setFilterSite(e.target.value)}>
-              <option value="">All Sites</option>
-              {sites.map(s => <option key={s} value={s}>{s}</option>)}
-            </select>
-            <select className="input text-sm w-36" value={filterSeverity} onChange={e => setFilterSeverity(e.target.value)}>
-              <option value="">All Severities</option>
-              {SEVERITIES.map(s => <option key={s} value={s}>{s}</option>)}
-            </select>
-            <select className="input text-sm w-44" value={filterStatus} onChange={e => setFilterStatus(e.target.value)}>
-              <option value="">All Statuses</option>
-              {STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
-            </select>
-            {stageOptions.length > 0 && (
-              <select className="input text-sm w-44" value={filterStage} onChange={e => setFilterStage(e.target.value)} title="Case stage / current status">
-                <option value="">All Stages</option>
-                {stageOptions.map(s => <option key={s} value={s}>{s}</option>)}
-              </select>
-            )}
-            <select className="input text-sm w-36" value={filterRepairType} onChange={e => setFilterRepairType(e.target.value)} title="Repair route">
-              <option value="">All Repairs</option>
-              {REPAIR_TYPE_OPTS.map(s => <option key={s} value={s}>{s}</option>)}
-            </select>
-            <select className="input text-sm w-40" value={filterFault} onChange={e => setFilterFault(e.target.value)} title="Fault status">
-              <option value="">All Fault</option>
-              {FAULT_STATUS_OPTS.map(s => <option key={s} value={s}>{s}</option>)}
-            </select>
-            <select className="input text-sm w-48" value={filterWfStage} onChange={e => setFilterWfStage(e.target.value)} title="Unified workflow stage">
-              <option value="">All Workflow Stages</option>
-              {WORKFLOW_STAGES.map(s => <option key={s.key} value={s.key}>{s.label}</option>)}
-            </select>
-            <select className="input text-sm w-40" value={filterAge} onChange={e => setFilterAge(e.target.value)} title="How long open cases have been running (days since incident)">
-              <option value="">Any Days Open</option>
-              <option value="0-15">Open &le; {CASE_AGE_GREEN_DAYS}d</option>
-              <option value="16-30">Open {CASE_AGE_GREEN_DAYS + 1}&ndash;{CASE_AGE_AMBER_DAYS}d</option>
-              <option value="30+">Open &gt; {CASE_AGE_AMBER_DAYS}d</option>
-            </select>
-            <DateField className="text-sm w-40" value={filterFrom} onChange={(v) => setFilterFrom(v)} placeholder="From date" ariaLabel="From date" />
-            <DateField className="text-sm w-40" value={filterTo} onChange={(v) => setFilterTo(v)} placeholder="To date" ariaLabel="To date" />
-            <button
-              onClick={() => setFilterDelayed(v => !v)}
-              className={`px-3 py-1 rounded-lg text-sm font-medium border transition-colors flex items-center gap-1.5 ${
-                filterDelayed
-                  ? 'bg-red-900/40 text-red-300 border-red-600'
-                  : 'bg-[var(--input-bg)] text-[var(--text-muted)] border-[var(--input-border)] hover:text-[var(--text-primary)]'
-              }`}
-              title={`Show only cases delayed over ${DELAY_THRESHOLD_DAYS} days`}
-            >
-              <Clock size={13} /> Delayed only
-            </button>
-            <button
-              onClick={() => setFilterVor(v => !v)}
-              aria-pressed={filterVor}
-              className={`px-3 py-1 rounded-lg text-sm font-medium border transition-colors flex items-center gap-1.5 ${
-                filterVor
-                  ? 'bg-red-900/40 text-red-300 border-red-600'
-                  : 'bg-[var(--input-bg)] text-[var(--text-muted)] border-[var(--input-border)] hover:text-[var(--text-primary)]'
-              }`}
-              title="Show only vehicles currently off road (VOR)"
-            >
-              <AlertOctagon size={13} /> Off road only{wfKpis.vor ? ` (${wfKpis.vor})` : ''}
-            </button>
-            <button
-              onClick={() => setOpenClaims(!filterOpenClaims)}
-              aria-pressed={filterOpenClaims}
-              className={`px-3 py-1 rounded-lg text-sm font-medium border transition-colors flex items-center gap-1.5 ${
-                filterOpenClaims
-                  ? 'bg-blue-900/40 text-blue-300 border-blue-600'
-                  : 'bg-[var(--input-bg)] text-[var(--text-muted)] border-[var(--input-border)] hover:text-[var(--text-primary)]'
-              }`}
-              title="Show only incidents whose insurance claim is still open (not closed / settled / rejected). Linkable as ?claims=open"
-            >
-              <ShieldAlert size={13} /> Open claims only{stats.openClaims ? ` (${stats.openClaims})` : ''}
-            </button>
-            {(search || filterSite || filterSeverity || filterStatus || filterStage || filterRepairType || filterFault || filterAge || filterFrom || filterTo || filterDelayed || filterOpenClaims || filterWfStage || filterVor) && (
-              <button
-                onClick={() => { resetRegisterFilters(); setFilterSite(''); setFilterRepairType(''); setFilterFrom(''); setFilterTo(''); setFilterDelayed(false); setFilterWfStage(''); setFilterVor(false) }}
-                className="text-xs text-[var(--text-muted)] hover:text-[var(--text-primary)] px-2 flex items-center gap-1"
-              >
-                <X size={12} /> Clear filters
-              </button>
-            )}
-            <span className="text-xs text-[var(--text-muted)] ml-auto self-center whitespace-nowrap">
-              {filtered.length}{filtered.length !== records.length ? ` of ${records.length}` : ''} shown
-            </span>
-          </div>
+          {/* Filters - search stays out; everything else collapses behind one toggle */}
+          {(() => {
+            const activeCount = [
+              filterSite, filterSeverity, filterStatus, filterStage, filterRepairType,
+              filterFault, filterWfStage, filterAge, filterFrom, filterTo,
+              filterDelayed, filterVor, filterOpenClaims,
+            ].filter(Boolean).length
+            const anyActive = activeCount > 0 || !!search
+            return (
+              <div className="space-y-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <div className="relative">
+                    <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
+                    <input
+                      className="input pl-8 text-sm w-48"
+                      placeholder="Search asset or description"
+                      value={search}
+                      onChange={e => setSearch(e.target.value)}
+                    />
+                  </div>
+                  <button
+                    onClick={() => setShowFilters(v => !v)}
+                    aria-expanded={showFilters}
+                    className={`px-3 py-1 rounded-lg text-sm font-medium border transition-colors flex items-center gap-1.5 ${
+                      showFilters || activeCount > 0
+                        ? 'bg-[var(--input-bg)] text-[var(--text-primary)] border-[var(--input-border)]'
+                        : 'bg-[var(--input-bg)] text-[var(--text-muted)] border-[var(--input-border)] hover:text-[var(--text-primary)]'
+                    }`}
+                    title="Show or hide the advanced filters"
+                  >
+                    Filters{activeCount > 0 ? ` (${activeCount})` : ''}
+                    <ChevronDown size={13} className={`transition-transform ${showFilters ? 'rotate-180' : ''}`} />
+                  </button>
+                  {anyActive && (
+                    <button
+                      onClick={() => { resetRegisterFilters(); setSearch(''); setFilterSite(''); setFilterRepairType(''); setFilterFrom(''); setFilterTo(''); setFilterDelayed(false); setFilterWfStage(''); setFilterVor(false) }}
+                      className="text-xs text-[var(--text-muted)] hover:text-[var(--text-primary)] px-2 flex items-center gap-1"
+                    >
+                      <X size={12} /> Clear
+                    </button>
+                  )}
+                  <span className="text-xs text-[var(--text-muted)] ml-auto self-center whitespace-nowrap">
+                    {filtered.length}{filtered.length !== records.length ? ` of ${records.length}` : ''} shown
+                  </span>
+                </div>
+
+                {showFilters && (
+                  <div className="flex flex-wrap gap-2 rounded-xl border border-[var(--input-border)] bg-[var(--input-bg)]/40 p-3">
+                    <select className="input text-sm w-36" value={filterSite} onChange={e => setFilterSite(e.target.value)}>
+                      <option value="">All Sites</option>
+                      {sites.map(s => <option key={s} value={s}>{s}</option>)}
+                    </select>
+                    <select className="input text-sm w-36" value={filterSeverity} onChange={e => setFilterSeverity(e.target.value)}>
+                      <option value="">All Severities</option>
+                      {SEVERITIES.map(s => <option key={s} value={s}>{s}</option>)}
+                    </select>
+                    <select className="input text-sm w-44" value={filterStatus} onChange={e => setFilterStatus(e.target.value)}>
+                      <option value="">All Statuses</option>
+                      {STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
+                    </select>
+                    {stageOptions.length > 0 && (
+                      <select className="input text-sm w-44" value={filterStage} onChange={e => setFilterStage(e.target.value)} title="Case stage / current status">
+                        <option value="">All Stages</option>
+                        {stageOptions.map(s => <option key={s} value={s}>{s}</option>)}
+                      </select>
+                    )}
+                    <select className="input text-sm w-36" value={filterRepairType} onChange={e => setFilterRepairType(e.target.value)} title="Repair route">
+                      <option value="">All Repairs</option>
+                      {REPAIR_TYPE_OPTS.map(s => <option key={s} value={s}>{s}</option>)}
+                    </select>
+                    <select className="input text-sm w-40" value={filterFault} onChange={e => setFilterFault(e.target.value)} title="Fault status">
+                      <option value="">All Fault</option>
+                      {FAULT_STATUS_OPTS.map(s => <option key={s} value={s}>{s}</option>)}
+                    </select>
+                    <select className="input text-sm w-48" value={filterWfStage} onChange={e => setFilterWfStage(e.target.value)} title="Unified workflow stage">
+                      <option value="">All Workflow Stages</option>
+                      {WORKFLOW_STAGES.map(s => <option key={s.key} value={s.key}>{s.label}</option>)}
+                    </select>
+                    <select className="input text-sm w-40" value={filterAge} onChange={e => setFilterAge(e.target.value)} title="How long open cases have been running (days since incident)">
+                      <option value="">Any Days Open</option>
+                      <option value="0-15">Open &le; {CASE_AGE_GREEN_DAYS}d</option>
+                      <option value="16-30">Open {CASE_AGE_GREEN_DAYS + 1}&ndash;{CASE_AGE_AMBER_DAYS}d</option>
+                      <option value="30+">Open &gt; {CASE_AGE_AMBER_DAYS}d</option>
+                    </select>
+                    <DateField className="text-sm w-40" value={filterFrom} onChange={(v) => setFilterFrom(v)} placeholder="From date" ariaLabel="From date" />
+                    <DateField className="text-sm w-40" value={filterTo} onChange={(v) => setFilterTo(v)} placeholder="To date" ariaLabel="To date" />
+                    <button
+                      onClick={() => setFilterDelayed(v => !v)}
+                      className={`px-3 py-1 rounded-lg text-sm font-medium border transition-colors flex items-center gap-1.5 ${
+                        filterDelayed
+                          ? 'bg-red-900/40 text-red-300 border-red-600'
+                          : 'bg-[var(--input-bg)] text-[var(--text-muted)] border-[var(--input-border)] hover:text-[var(--text-primary)]'
+                      }`}
+                      title={`Show only cases delayed over ${DELAY_THRESHOLD_DAYS} days`}
+                    >
+                      <Clock size={13} /> Delayed only
+                    </button>
+                    <button
+                      onClick={() => setFilterVor(v => !v)}
+                      aria-pressed={filterVor}
+                      className={`px-3 py-1 rounded-lg text-sm font-medium border transition-colors flex items-center gap-1.5 ${
+                        filterVor
+                          ? 'bg-red-900/40 text-red-300 border-red-600'
+                          : 'bg-[var(--input-bg)] text-[var(--text-muted)] border-[var(--input-border)] hover:text-[var(--text-primary)]'
+                      }`}
+                      title="Show only vehicles currently off road (VOR)"
+                    >
+                      <AlertOctagon size={13} /> Off road only{wfKpis.vor ? ` (${wfKpis.vor})` : ''}
+                    </button>
+                    <button
+                      onClick={() => setOpenClaims(!filterOpenClaims)}
+                      aria-pressed={filterOpenClaims}
+                      className={`px-3 py-1 rounded-lg text-sm font-medium border transition-colors flex items-center gap-1.5 ${
+                        filterOpenClaims
+                          ? 'bg-blue-900/40 text-blue-300 border-blue-600'
+                          : 'bg-[var(--input-bg)] text-[var(--text-muted)] border-[var(--input-border)] hover:text-[var(--text-primary)]'
+                      }`}
+                      title="Show only incidents whose insurance claim is still open (not closed / settled / rejected). Linkable as ?claims=open"
+                    >
+                      <ShieldAlert size={13} /> Open claims only{stats.openClaims ? ` (${stats.openClaims})` : ''}
+                    </button>
+                  </div>
+                )}
+              </div>
+            )
+          })()}
 
           {/* Bulk selection bar (Admin only) */}
           {isAdmin && selectedIds.size > 0 && (

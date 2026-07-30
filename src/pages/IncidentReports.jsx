@@ -11,10 +11,6 @@
  */
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import {
-  Chart as ChartJS, ArcElement, Tooltip, Legend,
-} from 'chart.js'
-import { Doughnut } from 'react-chartjs-2'
-import {
   AlertOctagon, Plus, Trash2, Pencil, X, Search, Filter, ShieldAlert,
   CheckCircle2, Inbox, FileSpreadsheet, FileText, AlertTriangle, Loader2,
 } from 'lucide-react'
@@ -27,8 +23,6 @@ import {
 import { summarizeIncidents, incidentAgeDays } from '../lib/incidents'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import { toUserMessage } from '../lib/safeError'
-
-ChartJS.register(ArcElement, Tooltip, Legend)
 
 const TYPE_META = {
   near_miss: { label: 'Near miss' },
@@ -130,24 +124,6 @@ export default function IncidentReports() {
       return true
     })
   }, [rows, statusFilter, severityFilter, typeFilter, search])
-
-  // Chart: incidents by severity (donut).
-  const chartText = typeof document !== 'undefined'
-    ? (getComputedStyle(document.documentElement).getPropertyValue('--text-muted') || '#9ca3af')
-    : '#9ca3af'
-  const donutData = {
-    labels: INCIDENT_SEVERITIES.map((s) => SEVERITY_META[s].label),
-    datasets: [{
-      data: INCIDENT_SEVERITIES.map((s) => summary.bySeverity[s]),
-      backgroundColor: INCIDENT_SEVERITIES.map((s) => SEVERITY_META[s].color),
-      borderWidth: 0,
-    }],
-  }
-  const donutOpts = {
-    responsive: true, maintainAspectRatio: false,
-    plugins: { legend: { position: 'bottom', labels: { color: chartText, boxWidth: 12, padding: 14 } } },
-  }
-  const hasChartData = INCIDENT_SEVERITIES.some((s) => summary.bySeverity[s] > 0)
 
   const kpis = [
     { label: 'Total incidents', value: summary.total, icon: AlertOctagon, tone: 'text-[var(--text-primary)]' },
@@ -301,36 +277,22 @@ export default function IncidentReports() {
         })}
       </div>
 
-      {/* Chart + status summary */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <div className="card lg:col-span-1">
-          <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-3">Incidents by severity</h3>
-          <div className="h-64">
-            {rows === null ? (
-              <div className="w-full h-full bg-[var(--input-bg)] rounded animate-pulse" />
-            ) : hasChartData ? (
-              <Doughnut data={donutData} options={donutOpts} />
-            ) : (
-              <div className="h-full flex items-center justify-center text-sm text-[var(--text-muted)]">No incidents to chart.</div>
-            )}
-          </div>
+      {/* Lifecycle status summary (tiles only) */}
+      <div className="card">
+        <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-3">Lifecycle status</h3>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          {INCIDENT_STATUSES.map((s) => (
+            <div key={s} className="rounded-lg border border-[var(--input-border)] p-4 text-center">
+              <p className={`text-2xl font-bold ${s === 'open' ? 'text-sky-400' : s === 'investigating' ? 'text-amber-400' : s === 'resolved' ? 'text-green-400' : 'text-[var(--text-muted)]'}`}>
+                {rows === null ? '—' : summary.byStatus[s]}
+              </p>
+              <p className="text-xs text-[var(--text-muted)] mt-1">{STATUS_META[s].label}</p>
+            </div>
+          ))}
         </div>
-        <div className="card lg:col-span-2">
-          <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-3">Lifecycle status</h3>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            {INCIDENT_STATUSES.map((s) => (
-              <div key={s} className="rounded-lg border border-[var(--input-border)] p-4 text-center">
-                <p className={`text-2xl font-bold ${s === 'open' ? 'text-sky-400' : s === 'investigating' ? 'text-amber-400' : s === 'resolved' ? 'text-green-400' : 'text-[var(--text-muted)]'}`}>
-                  {rows === null ? '—' : summary.byStatus[s]}
-                </p>
-                <p className="text-xs text-[var(--text-muted)] mt-1">{STATUS_META[s].label}</p>
-              </div>
-            ))}
-          </div>
-          <p className="text-xs text-[var(--text-muted)] mt-4 flex items-center gap-1.5">
-            <ShieldAlert size={12} /> {summary.open} incident{summary.open === 1 ? '' : 's'} still require attention.
-          </p>
-        </div>
+        <p className="text-xs text-[var(--text-muted)] mt-4 flex items-center gap-1.5">
+          <ShieldAlert size={12} /> {summary.open} incident{summary.open === 1 ? '' : 's'} still require attention.
+        </p>
       </div>
 
       {/* Filters */}

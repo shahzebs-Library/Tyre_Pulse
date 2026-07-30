@@ -27,11 +27,12 @@
 -- (V386's body was applied via execute_sql and this is its committed copy).
 --
 -- ===========================================================================
--- STATUS: AUTHORED, NOT YET APPLIED.
--- Apply + a rolled-back live test are REQUIRED before this is considered done;
--- they need a Supabase-MCP-authorized session against project jhssdmeruxtrlqnwfksc.
--- A blind CREATE OR REPLACE of an ~11k-char function must be proven live, not
--- assumed (see the V402 lesson: guard a subtle behaviour change with a real test).
+-- STATUS: APPLIED LIVE 2026-07-30 (project jhssdmeruxtrlqnwfksc, migration
+-- `stg_jobcard_opened_at_fallback`). Verified: the live function was the exact
+-- V386 base before the replace; a both-null test job card (ZZ-V419-VERIFY) then
+-- routed to work_orders with opened_at = now(), status Open, still_open true, and
+-- the test row was deleted. Fix confirmed live (the token is present in the
+-- deployed definition). Rollback = re-apply the V386 body (this minus `, now()`).
 --
 -- MIGRATION NUMBER: V417 and V418 are RESERVED by the accident-module design
 -- (docs/accident-module/02_DATA_MODEL.sql / 08_ENGINE_SQL_MIRROR.sql). This fix

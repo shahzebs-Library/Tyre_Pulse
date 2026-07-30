@@ -2083,57 +2083,6 @@ export default function Accidents() {
             ))}
           </div>
 
-          {/* Severity mix strip */}
-          <div className="card">
-            <div className="flex items-center justify-between mb-2">
-              <p className="text-sm font-semibold text-[var(--text-dim)]">Severity Mix</p>
-              <span className="text-xs text-[var(--text-muted)]">{stats.total} incidents</span>
-            </div>
-            <div className="flex h-3 w-full rounded-full overflow-hidden bg-[var(--input-border)]">
-              {[
-                { k: 'Minor', c: '#6b7280' },
-                { k: 'Moderate', c: '#eab308' },
-                { k: 'Major', c: '#ea580c' },
-              ].map(s => {
-                const pct = stats.total ? (stats.sevMix[s.k] / stats.total) * 100 : 0
-                return pct > 0 ? <div key={s.k} title={`${s.k}: ${stats.sevMix[s.k]}`} style={{ width: `${pct}%`, background: s.c }} /> : null
-              })}
-            </div>
-            <div className="flex flex-wrap gap-4 mt-2">
-              {[
-                { k: 'Minor', c: 'bg-gray-500' },
-                { k: 'Moderate', c: 'bg-yellow-500' },
-                { k: 'Major', c: 'bg-orange-500' },
-              ].map(s => (
-                <span key={s.k} className="inline-flex items-center gap-1.5 text-xs text-[var(--text-muted)]">
-                  <span className={`w-2.5 h-2.5 rounded-sm ${s.c}`} /> {s.k}
-                  <span className="text-[var(--text-dim)] font-medium">{stats.sevMix[s.k]}</span>
-                </span>
-              ))}
-            </div>
-          </div>
-
-          {/* Status funnel */}
-          <div className="flex flex-wrap gap-2">
-            {STATUSES.map(s => (
-              <button
-                key={s}
-                onClick={() => setStatusFunnel(statusFunnel === s ? '' : s)}
-                className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${
-                  statusFunnel === s
-                    ? accidentStatusPill(s).className + ' ring-1 ring-white/20'
-                    : 'bg-[var(--input-bg)] text-[var(--text-muted)] border-[var(--input-border)] hover:text-[var(--text-primary)]'
-                }`}
-              >
-                {s} <span className="ml-1 opacity-70">{statusCounts[s]}</span>
-              </button>
-            ))}
-            {statusFunnel && (
-              <button onClick={() => setStatusFunnel('')} className="text-xs text-[var(--text-muted)] hover:text-[var(--text-primary)] px-2">
-                <X size={12} className="inline" /> Clear
-              </button>
-            )}
-          </div>
 
           {/* Filters - search stays out; everything else collapses behind one toggle */}
           {(() => {

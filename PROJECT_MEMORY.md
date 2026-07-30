@@ -60,6 +60,23 @@ charts, `ActionMenu` export dropdowns, `.tp-register-pro` table styling.
   +1 refresh test (7), paging-order suite unchanged (both green); build+lint clean. RULE: to upload-everything
   under a unique key you UPSERT (refresh+insert), never insert a duplicate; only tyre_records can carry an exact
   duplicate and those go to Duplicate Control.
+- **ACCIDENT + INCIDENT UI DECLUTTER (PRs #242/#244/#245, all merged to main; code only, no migration).** User
+  asked to strip charts/clutter from the accident + incident surfaces. **#242**: removed the "Incidents per
+  Month" bar from the accident register (`Accidents.jsx`) + the "Incidents by severity" doughnut from
+  `/incidents` (`IncidentReports.jsx`, dropped chart.js import), keeping KPI tiles + lifecycle-status tiles;
+  collapsed the accident register's 10-control filter row behind one "Filters (N)" toggle (search + count stay
+  visible). The Analytics TAB (a deliberate charts destination) is untouched. **#244**: further removed the small
+  per-status filter PILLS (Status funnel) + the Severity Mix bar from the register (statusFunnel state/filter
+  left dormant). **#245 (accident CASE detail, `AccidentDetailModal.jsx` + `CaseTeamDistributionPanel.jsx`)**:
+  per user answers - (a) removed the right-side approval RAIL (`EntityApprovalPanel`) so the case is a FULL-WIDTH
+  page; approval now runs through the Closure tab (at closure), not a side flow; (b) ONE TAB PER TEAM - collapsed
+  the two team tabs ("Teams & Progress"=CaseProgressPanel + "Distribute to Teams") into a single "Teams" tab
+  whose CaseTeamDistributionPanel now has a team-tab strip (Fleet/HSE/Insurance/Workshop/Finance) showing ONE
+  team at a time with its single progress bar + only its work/inputs/files (CaseProgressPanel dropped from the
+  modal, still exists unused); (c) NEUTRAL styling - removed decorative colour (orange tiles, emerald/orange
+  bars, coloured status-pill fills); state kept via small status DOTS + a "ready to close" dot. All build+lint
+  clean, accident/incident tests green. RULE: the accident charts live only in the Analytics tab now; the
+  register + case pages are tiles/neutral.
 
 ## SESSION 2026-07-29 — ACCIDENT MODULE REBUILD PHASES 0-5 MERGED TO MAIN **+ APPLIED LIVE (V417-V427). ACTIVE.**
 **PRs #228 (`8857b52`), #229 (`fca3a09`), #230 (`7bd0d0c`), #231 (`1968d9e`), #232 (`e8f2cad`) all MERGED to main.**

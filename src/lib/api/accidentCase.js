@@ -50,7 +50,12 @@ const CASE_RECORD_COLS =
 const WS_COLS =
   'id,accident_id,country,site,workstream_key,status,required,owner_id,owner_role,team,' +
   'progress_pct,assigned_at,started_at,completed_at,not_applicable,na_reason,na_by,na_at,' +
-  'notes,created_at,updated_at'
+  'notes,created_by,created_at,updated_by,updated_at'
+
+// The append-only workstream audit ledger (V429): who did what, when.
+const WS_EVENT_COLS =
+  'id,accident_id,country,site,workstream_key,action,from_status,to_status,' +
+  'from_owner,to_owner,note,actor_id,at'
 
 const TASK_COLS =
   'id,accident_id,country,site,workstream_key,title,description,assignee_id,assignee_role,' +
@@ -162,6 +167,26 @@ async function listPendingApprovals(caseId, country) {
     return unwrap(await q) || []
   }, [])
   return (data || []).map((a) => ({ ...a, status: a.decision }))
+}
+
+/**
+ * The workstream audit trail for one case, newest first (V429). Every meaningful
+ * change - created / status_changed / assigned / na_marked / reopened - with the
+ * actor and timestamp. Country-scoped; degrades to [] when not provisioned.
+ */
+export async function listWorkstreamEvents(caseId, { country, limit = 200 } = {}) {
+  if (!caseId) return []
+  const { data } = await readOrEmpty(async () => {
+    let q = supabase
+      .from('accident_case_workstream_events')
+      .select(WS_EVENT_COLS)
+      .eq('accident_id', caseId)
+      .order('at', { ascending: false })
+      .limit(limit)
+    q = applyCountry(q, country)
+    return unwrap(await q) || []
+  }, [])
+  return data || []
 }
 
 /** Closure-review rows for one case, newest first. Degrades to []. */

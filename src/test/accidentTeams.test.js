@@ -101,4 +101,18 @@ describe('accidentTeams', () => {
     expect(ins.doneCount).toBe(1)
     expect(ins.workPct).toBe(100)
   })
+
+  it('surfaces the workstream audit timestamps for the trail', () => {
+    const rec = { insurer: 'Tawuniya', policy_no: 'P-1', claim_amount: 5000 }
+    const rows = [{
+      workstream: 'insurance', status: 'completed', owner_id: 'u1',
+      assigned_at: '2026-07-20T08:00:00Z', started_at: '2026-07-20T09:00:00Z',
+      completed_at: '2026-07-21T14:20:00Z', updated_by: 'u1',
+    }]
+    const ws = buildTeamDistribution(rec, rows).find((t) => t.key === 'insurance')
+      .workstreams.find((w) => w.key === 'insurance')
+    expect(ws.assignedAt).toBe('2026-07-20T08:00:00Z')
+    expect(ws.completedAt).toBe('2026-07-21T14:20:00Z')
+    expect(ws.updatedBy).toBe('u1')
+  })
 })

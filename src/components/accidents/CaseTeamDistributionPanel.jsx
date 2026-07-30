@@ -280,7 +280,7 @@ function ClosureLoopHeader({ teams, closure }) {
             {ok ? 'All required areas complete - ready to close' : 'Case stays open until every required area is done'}
           </p>
           <p className="text-[11px] text-[var(--text-muted)]">
-            {pct == null ? 'No required areas for this case yet.' : `${done} of ${required} required areas complete${pct != null ? ` (${pct}%)` : ''}.`}
+            {pct == null ? 'No required areas for this case yet.' : `${done} of ${required} required areas complete (${pct}%).`}
           </p>
         </div>
       </div>

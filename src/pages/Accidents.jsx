@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback, useMemo, useRef, lazy, Suspense } from 'react'
-import { useNavigate, useLocation, useSearchParams } from 'react-router-dom'
+import { useNavigate, useLocation } from 'react-router-dom'
+import { useFilterState } from '../hooks/useFilterState'
 
 const AccidentReportBuilder = lazy(() => import('../components/accidents/AccidentReportBuilder'))
-import { AlertOctagon, Plus, Search, X, Save, FileText, Download, BarChart2, Eye, Hourglass, ChevronDown, Trash2, AlertTriangle, TrendingUp, Users, DollarSign, ShieldAlert, Lightbulb, ChevronRight, Clock, ShieldCheck, ArrowLeft, Mail, Presentation, Paperclip } from 'lucide-react'
+import { AlertOctagon, Plus, Search, X, Save, FileText, Download, BarChart2, Eye, Hourglass, ChevronDown, Trash2, AlertTriangle, TrendingUp, Users, DollarSign, ShieldAlert, Lightbulb, ChevronRight, Clock, ShieldCheck, ArrowLeft, Mail, Presentation, Paperclip, FileSpreadsheet, Share2, CalendarClock } from 'lucide-react'
 
 // Categorized document slots on the incident form. Each `category` matches the
 // team routing in src/lib/accidentTeams.js (licence/ID/registration/police to
@@ -19,6 +20,8 @@ const DOC_SLOTS = [
 ]
 import { motion } from 'framer-motion'
 import PageHeader from '../components/ui/PageHeader'
+import DateField from '../components/ui/DateField'
+import ActionMenu from '../components/ui/ActionMenu'
 import EmptyState from '../components/EmptyState'
 import { supabase } from '../lib/supabase'
 import EnterpriseTable from '../components/ui/EnterpriseTable'
@@ -31,7 +34,7 @@ import { exportToExcel, exportToPdf, reportFileName, reportDateLabel } from '../
 import { sendReportEmail } from '../lib/emailService'
 import { formatCurrency as _fmtCurrencyBase, formatDate, formatMonthYear } from '../lib/formatters'
 import { resolveStorageUrl } from '../lib/storageRefs'
-import { Bar, Doughnut, Line } from 'react-chartjs-2'
+import { Bar, Doughnut } from 'react-chartjs-2'
 import {
   Chart as ChartJS, CategoryScale, LinearScale, BarElement,
   ArcElement, LineElement, PointElement, Filler,
@@ -327,18 +330,6 @@ const CHART_OPTS_H = {
   },
 }
 
-const CHART_OPTS_STACKED = {
-  ...CHART_OPTS_BASE,
-  plugins: {
-    ...CHART_OPTS_BASE.plugins,
-    legend: { display: true, labels: { color: '#9ca3af', font: { size: 11 } } },
-  },
-  scales: {
-    x: { ...CHART_OPTS_BASE.scales.x, stacked: true },
-    y: { ...CHART_OPTS_BASE.scales.y, stacked: true },
-  },
-}
-
 const CHART_OPTS_DOUGHNUT = {
   responsive: true,
   maintainAspectRatio: false,
@@ -351,11 +342,6 @@ const CHART_OPTS_DOUGHNUT = {
   },
 }
 
-const CHART_OPTS_LINE = {
-  ...CHART_OPTS_BASE,
-  plugins: { ...CHART_OPTS_BASE.plugins, legend: { display: false } },
-  elements: { line: { tension: 0.35 }, point: { radius: 3, hoverRadius: 5 } },
-}
 
 function monthKey(dateStr) {
   if (!dateStr) return null
@@ -387,19 +373,30 @@ export default function Accidents() {
   const fmtCurrency = (val) => _fmtCurrencyBase(val, activeCurrency, 0)
   const navigate = useNavigate()
   const location = useLocation()
-  // URL is the single source of truth for the shareable "open claims" filter,
-  // so a saved/shared link (`/accidents?claims=open`) opens the register already
-  // filtered. Deriving straight from the param (no mirrored state) keeps the
-  // toggle, the URL and a pasted link perfectly in sync.
-  const [searchParams, setSearchParams] = useSearchParams()
-  const filterOpenClaims = searchParams.get('claims') === 'open'
-  const setOpenClaims = useCallback((on) => {
-    setSearchParams(prev => {
-      const p = new URLSearchParams(prev)
-      if (on) p.set('claims', 'open'); else p.delete('claims')
-      return p
-    }, { replace: true })
-  }, [setSearchParams])
+  // The register's page-local filters live in the URL search params (via
+  // useFilterState) so they SURVIVE navigating into a detail page and pressing
+  // Back: the row opens `/accidents/:id` as a route, so without this the page
+  // would remount and reset every filter. Keeping them in the URL also makes the
+  // shareable "open claims" link (`/accidents?claims=open`) just one of the keys.
+  const [filters, setFilter, resetRegisterFilters] = useFilterState({
+    search: '', status: '', severity: '', stage: '', fault: '', claims: '', age: '',
+  })
+  // Derived aliases keep every existing call site unchanged; the setters write
+  // straight through to the URL-backed hook.
+  const search = filters.search
+  const setSearch = (v) => setFilter('search', v)
+  const filterStatus = filters.status
+  const setFilterStatus = (v) => setFilter('status', v)
+  const filterSeverity = filters.severity
+  const setFilterSeverity = (v) => setFilter('severity', v)
+  const filterStage = filters.stage
+  const setFilterStage = (v) => setFilter('stage', v)
+  const filterFault = filters.fault
+  const setFilterFault = (v) => setFilter('fault', v)
+  const filterAge = filters.age
+  const setFilterAge = (v) => setFilter('age', v)
+  const filterOpenClaims = filters.claims === 'open'
+  const setOpenClaims = (on) => setFilter('claims', on ? 'open' : '')
 
   const [tab, setTab]                  = useState('incidents')
   const [records, setRecords]          = useState([])
@@ -411,19 +408,14 @@ export default function Accidents() {
   const [formError, setFormError]      = useState('')
   const [form, setForm]                = useState(EMPTY_FORM)
 
-  const [search, setSearch]                    = useState('')
+  // Filters that stay page-local (not in the coordinator's persisted set).
   const [filterSite, setFilterSite]            = useState('')
-  const [filterSeverity, setFilterSeverity]    = useState('')
-  const [filterStatus, setFilterStatus]        = useState('')
   const [filterFrom, setFilterFrom]            = useState('')
   const [filterTo, setFilterTo]                = useState('')
   const [statusFunnel, setStatusFunnel]        = useState('')
   const [onlyPendingClosure, setOnlyPendingClosure] = useState(false)
   const [filterDelayed, setFilterDelayed]      = useState(false)
-  const [filterStage, setFilterStage]          = useState('')
   const [filterRepairType, setFilterRepairType] = useState('')
-  const [filterFault, setFilterFault]          = useState('')
-  const [filterAge, setFilterAge]              = useState('') // '' | '0-15' | '16-30' | '30+' — open cases only
   const [filterWfStage, setFilterWfStage]      = useState('') // canonical workflow_stage key
   const [filterVor, setFilterVor]              = useState(false) // Vehicle-Off-Road only
 
@@ -722,36 +714,6 @@ export default function Accidents() {
     }
   }, [records])
 
-  // Monthly severity stacked bar
-  const severityMonthlyChart = useMemo(() => {
-    const keys = last12MonthKeys()
-    const bySev = {}
-    SEVERITIES.forEach(s => {
-      bySev[s] = {}
-      keys.forEach(k => { bySev[s][k] = 0 })
-    })
-    records.forEach(r => {
-      const k = monthKey(r.incident_date)
-      // canonSeverity folds the DB's 'severe' onto the 'Major' band; keying by
-      // the raw value matched nothing and this chart drew all zeros.
-      const sev = canonSeverity(r.severity)
-      if (k && bySev[sev] && bySev[sev][k] !== undefined) bySev[sev][k]++
-    })
-    const colors = { Minor: 'rgba(107,114,128,0.7)', Moderate: 'rgba(234,179,8,0.7)', Major: 'rgba(234,88,12,0.7)' }
-    const borders = { Minor: '#6b7280', Moderate: '#eab308', Major: '#ea580c' }
-    return {
-      labels: keys.map(k => monthLabel(k)),
-      datasets: SEVERITIES.map(s => ({
-        label: s,
-        data: keys.map(k => bySev[s][k]),
-        backgroundColor: colors[s],
-        borderColor: borders[s],
-        borderWidth: 1,
-        borderRadius: 2,
-      })),
-    }
-  }, [records])
-
   // Incidents by site
   const bySiteChart = useMemo(() => {
     const counts = {}
@@ -879,23 +841,6 @@ export default function Accidents() {
     return {
       labels: entries.map(([k]) => k),
       datasets: [{ data: entries.map(([, v]) => v), backgroundColor: categorical(entries.length), borderWidth: 0 }],
-    }
-  }, [records])
-
-  // Open vs closed monthly trend (last 12 months) — an area line.
-  const monthlyTrendLine = useMemo(() => {
-    const keys = last12MonthKeys()
-    const totals = Object.fromEntries(keys.map(k => [k, 0]))
-    records.forEach(r => { const k = monthKey(r.incident_date); if (k && totals[k] !== undefined) totals[k]++ })
-    return {
-      labels: keys.map(k => monthLabel(k)),
-      datasets: [{
-        label: 'Incidents',
-        data: keys.map(k => totals[k]),
-        borderColor: colorAt(2),
-        backgroundColor: withAlpha(colorAt(2), 0.18),
-        fill: true,
-      }],
     }
   }, [records])
 
@@ -1045,10 +990,8 @@ export default function Accidents() {
         { key: 'severity',    title: 'Severity Distribution',                data: severityDoughnut },
         { key: 'status',      title: 'Status Distribution',                  data: statusDoughnut },
         { key: 'fault',       title: 'Fault Status (GCC)',                   data: faultDoughnut },
-        { key: 'trend',       title: 'Incident Trend (last 12 months)',      data: monthlyTrendLine },
         { key: 'topAssets',   title: 'Top 5 Assets by Incidents',            data: topAssetsChart },
         { key: 'bySite',      title: 'Incidents by Site',                    data: bySiteChart },
-        { key: 'sevMonthly',  title: 'Monthly Severity Breakdown',           data: severityMonthlyChart },
         { key: 'claimStatus', title: 'Claim Status Breakdown',               data: claimStatusChart },
         { key: 'payerCost',   title: 'Cost by Responsible Payer',            data: payerCostChart },
       ]
@@ -1545,6 +1488,14 @@ export default function Accidents() {
     e.preventDefault()
     setSaving(true)
     setFormError('')
+    // Incident Date was a `required` native input; preserve that invariant now
+    // that the field is a custom DateField (a read-only trigger is skipped by
+    // the browser's own constraint validation).
+    if (!form.incident_date) {
+      setFormError('Incident date is required.')
+      setSaving(false)
+      return
+    }
     const num = (v) => (v !== '' && v != null ? Number(v) : null)
     // Keep the insurance claim lifecycle in lockstep with the workflow stage
     // (former Repair & Insurance tab behaviour): a mapped stage fills the claim
@@ -2014,24 +1965,34 @@ export default function Accidents() {
           icon={AlertOctagon}
         />
         <div className="flex gap-2 flex-wrap">
-          <button
-            onClick={() => exportToExcel(exportRows, exportCols, exportHeaders, `TyrePulse_Accidents_${new Date().toISOString().slice(0,10)}`, 'Accidents', {
-              title: 'Accident & Claims Tracker',
-              currency: activeCurrency,
-              company: appSettings?.company_name,
-              dateRange: (filterFrom || filterTo) ? `${filterFrom || '...'} to ${filterTo || '...'}` : 'All dates',
-              meta: { Scope: activeCountry !== 'All' ? activeCountry : 'All countries' },
-            })}
-            className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-1.5"
-          >
-            <Download size={14} /> Excel
-          </button>
-          <button
-            onClick={() => exportToPdf(exportRows, exportPdfCols, 'Accident & Claims Tracker', `TyrePulse_Accidents_${new Date().toISOString().slice(0,10)}`, 'landscape', appSettings?.company_name || '', { currency: activeCurrency })}
-            className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-1.5"
-          >
-            <FileText size={14} /> PDF
-          </button>
+          <ActionMenu
+            label="Export"
+            icon={Download}
+            items={[
+              {
+                label: 'Excel',
+                icon: FileSpreadsheet,
+                onClick: () => exportToExcel(exportRows, exportCols, exportHeaders, `TyrePulse_Accidents_${new Date().toISOString().slice(0,10)}`, 'Accidents', {
+                  title: 'Accident & Claims Tracker',
+                  currency: activeCurrency,
+                  company: appSettings?.company_name,
+                  dateRange: (filterFrom || filterTo) ? `${filterFrom || '...'} to ${filterTo || '...'}` : 'All dates',
+                  meta: { Scope: activeCountry !== 'All' ? activeCountry : 'All countries' },
+                }),
+              },
+              {
+                label: 'PDF',
+                icon: FileText,
+                onClick: () => exportToPdf(exportRows, exportPdfCols, 'Accident & Claims Tracker', `TyrePulse_Accidents_${new Date().toISOString().slice(0,10)}`, 'landscape', appSettings?.company_name || '', { currency: activeCurrency }),
+              },
+              {
+                label: 'Claims Summary (PDF)',
+                icon: ShieldCheck,
+                title: `Insurance claims summary: ${claimsRows.length} claim${claimsRows.length === 1 ? '' : 's'}`,
+                onClick: () => exportClaimsSummary('pdf'),
+              },
+            ]}
+          />
           <button
             onClick={() => { setTab('incidents'); setOpenClaims(true) }}
             title="Filter the register to insurance claims that are still open (shareable link: ?claims=open)"
@@ -2042,13 +2003,6 @@ export default function Accidents() {
             }`}
           >
             <ShieldAlert size={14} /> Open claims{stats.openClaims ? ` (${stats.openClaims})` : ''}
-          </button>
-          <button
-            onClick={() => exportClaimsSummary('pdf')}
-            title={`Insurance claims summary: ${claimsRows.length} claim${claimsRows.length === 1 ? '' : 's'}`}
-            className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-1.5"
-          >
-            <ShieldCheck size={14} /> Claims Summary
           </button>
           <button onClick={openAdd} className="btn-primary flex items-center gap-2 text-sm">
             <Plus size={16} /> New Incident
@@ -2279,8 +2233,8 @@ export default function Accidents() {
               <option value="16-30">Open {CASE_AGE_GREEN_DAYS + 1}&ndash;{CASE_AGE_AMBER_DAYS}d</option>
               <option value="30+">Open &gt; {CASE_AGE_AMBER_DAYS}d</option>
             </select>
-            <input type="date" className="input text-sm w-36" value={filterFrom} onChange={e => setFilterFrom(e.target.value)} title="From date" />
-            <input type="date" className="input text-sm w-36" value={filterTo} onChange={e => setFilterTo(e.target.value)} title="To date" />
+            <DateField className="text-sm w-40" value={filterFrom} onChange={(v) => setFilterFrom(v)} placeholder="From date" ariaLabel="From date" />
+            <DateField className="text-sm w-40" value={filterTo} onChange={(v) => setFilterTo(v)} placeholder="To date" ariaLabel="To date" />
             <button
               onClick={() => setFilterDelayed(v => !v)}
               className={`px-3 py-1 rounded-lg text-sm font-medium border transition-colors flex items-center gap-1.5 ${
@@ -2318,7 +2272,7 @@ export default function Accidents() {
             </button>
             {(search || filterSite || filterSeverity || filterStatus || filterStage || filterRepairType || filterFault || filterAge || filterFrom || filterTo || filterDelayed || filterOpenClaims || filterWfStage || filterVor) && (
               <button
-                onClick={() => { setSearch(''); setFilterSite(''); setFilterSeverity(''); setFilterStatus(''); setFilterStage(''); setFilterRepairType(''); setFilterFault(''); setFilterAge(''); setFilterFrom(''); setFilterTo(''); setFilterDelayed(false); setOpenClaims(false); setFilterWfStage(''); setFilterVor(false) }}
+                onClick={() => { resetRegisterFilters(); setFilterSite(''); setFilterRepairType(''); setFilterFrom(''); setFilterTo(''); setFilterDelayed(false); setFilterWfStage(''); setFilterVor(false) }}
                 className="text-xs text-[var(--text-muted)] hover:text-[var(--text-primary)] px-2 flex items-center gap-1"
               >
                 <X size={12} /> Clear filters
@@ -2366,22 +2320,21 @@ export default function Accidents() {
               description="Adjust your filters or log a new incident to start tracking accidents and claims."
             />
           ) : (
-            <div className="card p-0 overflow-hidden">
-              <EnterpriseTable
-                reportMeta={reportMeta}
-                columns={mainColumns}
-                data={filtered}
-                getRowId={(row) => String(row.id)}
-                onRowClick={(row) => openDetail(row.id)}
-                enableGlobalFilter={false}
-                enableSorting={true}
-                enableExport={false}
-                enableColumnVisibility={false}
-                initialPageSize={25}
-                pageSizeOptions={[10, 25, 50, 100]}
-                emptyMessage="No incidents found"
-              />
-            </div>
+            <EnterpriseTable
+              className="tp-register-pro"
+              reportMeta={reportMeta}
+              columns={mainColumns}
+              data={filtered}
+              getRowId={(row) => String(row.id)}
+              onRowClick={(row) => openDetail(row.id)}
+              enableGlobalFilter={false}
+              enableSorting={true}
+              enableExport={false}
+              enableColumnVisibility={false}
+              initialPageSize={25}
+              pageSizeOptions={[10, 25, 50, 100]}
+              emptyMessage="No incidents found"
+            />
           )}
         </>
       )}
@@ -2389,49 +2342,47 @@ export default function Accidents() {
       {/* ===== ANALYTICS TAB (hidden while the inline editor is open) ===== */}
       {!showForm && tab === 'analytics' && (
         <div className="space-y-4">
-          {/* Download the on-screen analytics as a compact 1-2 page PDF with numbers */}
+          {/* One "Export & Share" menu for the analytics report (PDF / PowerPoint
+              / email now / schedule auto-email) so the tab is not a wall of buttons. */}
           <div className="flex items-center justify-end gap-3 flex-wrap">
             {dlAnalytics.msg && (
               <span className={`text-xs ${dlAnalytics.ok ? 'text-green-400' : 'text-red-400'}`}>{dlAnalytics.msg}</span>
             )}
-            <button
-              onClick={scheduleAnalytics}
-              disabled={schedBusy}
-              title="Auto-email this analytics dashboard on a schedule (daily, weekly or monthly) to chosen recipients"
-              className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-1.5 disabled:opacity-50"
-            >
-              {schedBusy
-                ? <><span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin inline-block" /> Opening scheduler...</>
-                : <><Mail size={14} /> Auto-email</>}
-            </button>
-            <button
-              onClick={downloadAnalyticsPdf}
-              disabled={dlAnalytics.busy || records.length === 0}
-              title={records.length === 0 ? 'No incident data to export' : 'Download these charts and KPIs as a PDF, four charts a page so the legends stay readable'}
-              className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-1.5 disabled:opacity-50"
-            >
-              {dlAnalytics.busy
-                ? <><span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin inline-block" /> Preparing PDF...</>
-                : <><Download size={14} /> Download Analytics PDF</>}
-            </button>
-            <button
-              onClick={downloadAnalyticsPptx}
-              disabled={dlPptx || records.length === 0}
-              title={records.length === 0 ? 'No incident data to export' : 'The same report as a PowerPoint deck, one chart per slide'}
-              className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-1.5 disabled:opacity-50"
-            >
-              {dlPptx
-                ? <><span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin inline-block" /> Preparing deck...</>
-                : <><Presentation size={14} /> Download PowerPoint</>}
-            </button>
-            <button
-              onClick={() => setEmailModal({ open: true, to: '', busy: false, msg: '', ok: true })}
-              disabled={records.length === 0}
-              title={records.length === 0 ? 'No incident data to email' : 'Email this exact analytics report as a PDF attachment to chosen recipients now'}
-              className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-1.5 disabled:opacity-50"
-            >
-              <Mail size={14} /> Email Analytics PDF
-            </button>
+            <ActionMenu
+              label="Export & Share"
+              icon={Share2}
+              busy={dlAnalytics.busy || dlPptx || schedBusy}
+              busyLabel="Working..."
+              items={[
+                {
+                  label: 'Download PDF',
+                  icon: FileText,
+                  disabled: records.length === 0,
+                  title: records.length === 0 ? 'No incident data to export' : 'Download these charts and KPIs as a PDF, four charts a page so the legends stay readable',
+                  onClick: downloadAnalyticsPdf,
+                },
+                {
+                  label: 'Download PowerPoint',
+                  icon: Presentation,
+                  disabled: records.length === 0,
+                  title: records.length === 0 ? 'No incident data to export' : 'The same report as a PowerPoint deck, one chart per slide',
+                  onClick: downloadAnalyticsPptx,
+                },
+                {
+                  label: 'Email now',
+                  icon: Mail,
+                  disabled: records.length === 0,
+                  title: records.length === 0 ? 'No incident data to email' : 'Email this exact analytics report as a PDF attachment to chosen recipients now',
+                  onClick: () => setEmailModal({ open: true, to: '', busy: false, msg: '', ok: true }),
+                },
+                {
+                  label: 'Schedule auto-email',
+                  icon: CalendarClock,
+                  title: 'Auto-email this analytics dashboard on a schedule (daily, weekly or monthly) to chosen recipients',
+                  onClick: scheduleAnalytics,
+                },
+              ]}
+            />
           </div>
 
           {emailModal.open && (
@@ -2562,12 +2513,6 @@ export default function Accidents() {
             </div>
           </div>
 
-          {/* Incident trend line */}
-          <div className="card">
-            <p className="text-sm font-semibold text-[var(--text-dim)] mb-3">Incident Trend (last 12 months)</p>
-            <div style={{ height: 220 }}><Line ref={setChartRef('trend')} data={monthlyTrendLine} options={CHART_OPTS_LINE} plugins={[LIGHT_VALUE_LABELS]} /></div>
-          </div>
-
           {/* Top 5 assets + by site */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="card">
@@ -2589,14 +2534,6 @@ export default function Accidents() {
                   <Bar ref={setChartRef('bySite')} data={bySiteChart} options={CHART_OPTS_H} plugins={[LIGHT_VALUE_LABELS]} />
                 </div>
               )}
-            </div>
-          </div>
-
-          {/* Monthly severity breakdown */}
-          <div className="card">
-            <p className="text-sm font-semibold text-[var(--text-dim)] mb-3">Monthly Severity Breakdown (last 12 months)</p>
-            <div style={{ height: 220 }}>
-              <Bar ref={setChartRef('sevMonthly')} data={severityMonthlyChart} options={CHART_OPTS_STACKED} plugins={[LIGHT_VALUE_LABELS]} />
             </div>
           </div>
 
@@ -2871,10 +2808,11 @@ export default function Accidents() {
               <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                 <div>
                   <label className="label">Incident Date *</label>
-                  <input
-                    type="date" className="input" required
+                  <DateField
                     value={form.incident_date}
-                    onChange={e => setForm(f => ({ ...f, incident_date: e.target.value }))}
+                    onChange={(v) => setForm(f => ({ ...f, incident_date: v }))}
+                    placeholder="Select date"
+                    ariaLabel="Incident date"
                   />
                 </div>
                 <div className="relative" ref={assetDropRef}>
@@ -3208,7 +3146,7 @@ export default function Accidents() {
                   </div>
                   <div>
                     <label className="label">Status Update Date</label>
-                    <input type="date" className="input" value={form.status_update_date} onChange={e => setForm(f => ({ ...f, status_update_date: e.target.value }))} />
+                    <DateField value={form.status_update_date} onChange={(v) => setForm(f => ({ ...f, status_update_date: v }))} ariaLabel="Status update date" />
                   </div>
                   <div className="md:col-span-3">
                     <label className="label">Status Update Note</label>
@@ -3243,7 +3181,7 @@ export default function Accidents() {
                   </div>
                   <div>
                     <label className="label">Target Date</label>
-                    <input type="date" className="input" value={form.target_date} onChange={e => setForm(f => ({ ...f, target_date: e.target.value }))} />
+                    <DateField value={form.target_date} onChange={(v) => setForm(f => ({ ...f, target_date: v }))} ariaLabel="Target date" />
                   </div>
                   <div>
                     <label className="label">Approved Repair Amount</label>
@@ -3365,7 +3303,7 @@ export default function Accidents() {
                       </div>
                       <div>
                         <label className="label">Recovery Date</label>
-                        <input type="date" className="input" value={form.recovery_date} onChange={e => setForm(f => ({ ...f, recovery_date: e.target.value }))} />
+                        <DateField value={form.recovery_date} onChange={(v) => setForm(f => ({ ...f, recovery_date: v }))} ariaLabel="Recovery date" />
                       </div>
                       <div>
                         <label className="label">Recovery Reference</label>
@@ -3457,11 +3395,11 @@ export default function Accidents() {
                   )}
                   <div>
                     <label className="label">Expected Release</label>
-                    <input type="date" className="input" value={form.expected_release_date} onChange={e => setForm(f => ({ ...f, expected_release_date: e.target.value }))} />
+                    <DateField value={form.expected_release_date} onChange={(v) => setForm(f => ({ ...f, expected_release_date: v }))} ariaLabel="Expected release date" />
                   </div>
                   <div>
                     <label className="label">Release Date</label>
-                    <input type="date" className="input" value={form.release_date} onChange={e => setForm(f => ({ ...f, release_date: e.target.value }))} />
+                    <DateField value={form.release_date} onChange={(v) => setForm(f => ({ ...f, release_date: v }))} ariaLabel="Release date" />
                   </div>
                   <div>
                     <label className="label">Inspector</label>

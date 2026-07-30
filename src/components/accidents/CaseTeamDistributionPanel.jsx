@@ -14,14 +14,11 @@ import { safeHref, safeImageSrc } from '../../lib/safeUrl'
 import { toUserMessage } from '../../lib/safeError'
 
 /**
- * CaseTeamDistributionPanel — distributes ONE case's work AND its input files to
- * the five teams (Fleet, HSE/Safety, Insurance, Workshop, Finance).
- *
- * For each team it shows, in one place: the workstreams that team owns for THIS
- * case (with whether the route requires them, their live status, and the assigned
- * owner), the structured inputs that team is responsible for (present vs still
- * needed), and the uploaded files routed to it. An elevated user can assign an
- * owner to any workstream inline. All grouping/coverage comes from the pure
+ * CaseTeamDistributionPanel — one TAB PER TEAM. A row of team tabs (Fleet,
+ * HSE/Safety, Insurance, Workshop, Finance) switches the view; the selected team
+ * shows its single progress bar plus only its own work, inputs and files. The
+ * styling is deliberately neutral (no decorative colour accents) — state is still
+ * readable through small status dots. All grouping/coverage comes from the pure
  * accidentTeams engine; assignment writes go through the validated
  * setWorkstreamStatus service. Honest states: loading, not-provisioned, error.
  */
@@ -42,12 +39,14 @@ const STATUS_META = {
   reopened: { label: 'Reopened', tone: 'danger' },
   cancelled: { label: 'Cancelled', tone: 'quiet' },
 }
-const PILL = {
-  good: 'border-emerald-700/50 bg-emerald-950/25 text-emerald-200',
-  info: 'border-sky-700/50 bg-sky-950/25 text-sky-200',
-  warning: 'border-amber-700/50 bg-amber-950/25 text-amber-200',
-  danger: 'border-red-700/50 bg-red-950/25 text-red-200',
-  quiet: 'border-[var(--input-border)] bg-[var(--input-bg)]/40 text-[var(--text-dim)]',
+// Small status DOTS carry the only colour left on the page — enough to read state
+// at a glance without the decorative fills the customer asked to remove.
+const DOT = {
+  good: 'bg-emerald-400',
+  info: 'bg-sky-400',
+  warning: 'bg-amber-400',
+  danger: 'bg-red-400',
+  quiet: 'bg-[var(--text-dim)]',
 }
 const INPUT =
   'bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg px-2 py-1 text-xs text-[var(--text-primary)]'
@@ -78,10 +77,12 @@ const WS_NAME = {
   finance: 'Finance & Settlement', corrective: 'Corrective Actions',
 }
 
+/** Neutral chip + a small coloured dot for the status (the only colour kept). */
 function StatusPill({ status }) {
   const m = statusMeta(status)
   return (
-    <span className={`inline-flex items-center text-[10px] font-medium px-1.5 py-0.5 rounded-full border ${PILL[m.tone] || PILL.quiet}`}>
+    <span className="inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded-full border border-[var(--input-border)] bg-[var(--input-bg)]/40 text-[var(--text-secondary)]">
+      <span className={`h-1.5 w-1.5 rounded-full ${DOT[m.tone] || DOT.quiet}`} />
       {m.label}
     </span>
   )
@@ -98,7 +99,7 @@ function CoverageBar({ label, pct, done, total }) {
       </div>
       <div className="h-1.5 rounded-full bg-[var(--input-bg)] overflow-hidden">
         <div
-          className={`h-full rounded-full ${known && pct >= 100 ? 'bg-emerald-500' : 'bg-orange-400'}`}
+          className="h-full rounded-full bg-[var(--text-muted)]"
           style={{ width: `${known ? pct : 0}%` }}
         />
       </div>
@@ -106,7 +107,7 @@ function CoverageBar({ label, pct, done, total }) {
   )
 }
 
-/** One workstream line inside a team card, with inline owner assignment. */
+/** One workstream line inside a team view, with inline owner assignment. */
 function WorkRow({ ws, users, usersById, canEdit, onAssign }) {
   const [ownerId, setOwnerId] = useState('')
   const [busy, setBusy] = useState(false)
@@ -130,7 +131,7 @@ function WorkRow({ ws, users, usersById, canEdit, onAssign }) {
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
         <span className="text-xs font-medium text-[var(--text-primary)]">{ws.name}</span>
         {ws.required
-          ? <span className="text-[9px] uppercase tracking-wide text-orange-300 border border-orange-700/40 rounded px-1 py-px">Required</span>
+          ? <span className="text-[9px] uppercase tracking-wide text-[var(--text-secondary)] border border-[var(--input-border)] rounded px-1 py-px">Required</span>
           : <span className="text-[9px] uppercase tracking-wide text-[var(--text-dim)] border border-[var(--input-border)] rounded px-1 py-px">Optional</span>}
         <StatusPill status={ws.status} />
         <span className="ml-auto text-[11px] text-[var(--text-muted)] flex items-center gap-1">
@@ -143,7 +144,7 @@ function WorkRow({ ws, users, usersById, canEdit, onAssign }) {
         <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[10px] text-[var(--text-dim)]">
           {ws.assignedAt && <span className="flex items-center gap-1"><Clock size={9} /> Assigned {fmtWhen(ws.assignedAt)}</span>}
           {ws.startedAt && <span>Started {fmtWhen(ws.startedAt)}</span>}
-          {ws.completedAt && <span className="text-emerald-300">Completed {fmtWhen(ws.completedAt)}</span>}
+          {ws.completedAt && <span className="flex items-center gap-1"><span className="h-1.5 w-1.5 rounded-full bg-emerald-400" /> Completed {fmtWhen(ws.completedAt)}</span>}
         </div>
       )}
       {canEdit && (
@@ -167,19 +168,20 @@ function WorkRow({ ws, users, usersById, canEdit, onAssign }) {
         </div>
       )}
       {msg && !msg.ok && <p className="mt-1 text-[11px] text-red-300">{msg.text}</p>}
-      {msg && msg.ok && <p className="mt-1 text-[11px] text-emerald-300 flex items-center gap-1"><CheckCircle2 size={11} /> Owner assigned.</p>}
+      {msg && msg.ok && <p className="mt-1 text-[11px] text-[var(--text-secondary)] flex items-center gap-1"><CheckCircle2 size={11} className="text-emerald-400" /> Owner assigned.</p>}
     </div>
   )
 }
 
-/** One team card: coverage, workstreams, input checklist, and routed files. */
-function TeamCard({ team, users, usersById, canEdit, fileUrls, onAssign }) {
+/** The selected team's view: one progress pair, its work, its input checklist and
+ *  its routed files. Neutral styling throughout. */
+function TeamView({ team, users, usersById, canEdit, fileUrls, onAssign }) {
   const Icon = TEAM_ICON[team.icon] || Users
   return (
     <div className="card p-3.5 space-y-3">
       <div className="flex items-start gap-2.5">
-        <div className="mt-0.5 h-8 w-8 rounded-lg bg-orange-500/10 border border-orange-700/30 flex items-center justify-center shrink-0">
-          <Icon size={16} className="text-orange-400" />
+        <div className="mt-0.5 h-8 w-8 rounded-lg bg-[var(--input-bg)] border border-[var(--input-border)] flex items-center justify-center shrink-0">
+          <Icon size={16} className="text-[var(--text-muted)]" />
         </div>
         <div className="min-w-0 flex-1">
           <p className="text-sm font-semibold text-[var(--text-primary)]">{team.label}</p>
@@ -238,8 +240,6 @@ function TeamCard({ team, users, usersById, canEdit, fileUrls, onAssign }) {
               const img = url ? safeImageSrc(url) : undefined
               const href = url ? safeHref(url) : undefined
               if (img) {
-                // Image (incl. inline data URLs): show a thumbnail. Links to a
-                // remote image when the URL is a real http(s) address.
                 const thumb = <img src={img} alt={f.name} className="h-12 w-12 object-cover rounded border border-[var(--input-border)]" />
                 return href
                   ? <a key={i} href={href} target="_blank" rel="noreferrer" title={f.name}>{thumb}</a>
@@ -247,7 +247,7 @@ function TeamCard({ team, users, usersById, canEdit, fileUrls, onAssign }) {
               }
               return href
                 ? <a key={i} href={href} target="_blank" rel="noreferrer"
-                     className="inline-flex items-center gap-1 text-[11px] text-sky-300 border border-sky-800/40 rounded px-1.5 py-0.5 hover:bg-sky-950/30">
+                     className="inline-flex items-center gap-1 text-[11px] text-[var(--text-secondary)] border border-[var(--input-border)] rounded px-1.5 py-0.5 hover:bg-[var(--input-bg)]/40">
                     <ExternalLink size={10} /> {f.name}
                   </a>
                 : <span key={i} className="inline-flex items-center gap-1 text-[11px] text-[var(--text-muted)] border border-[var(--input-border)] rounded px-1.5 py-0.5">
@@ -262,7 +262,8 @@ function TeamCard({ team, users, usersById, canEdit, fileUrls, onAssign }) {
 }
 
 /** The closure loop: overall progress across every team, and whether the case can
- *  close yet (with the exact areas still blocking it). */
+ *  close yet (with the exact areas still blocking it). Neutral styling; a single
+ *  dot marks "ready". */
 function ClosureLoopHeader({ teams, closure }) {
   const required = teams.reduce((a, t) => a + t.requiredCount, 0)
   const done = teams.reduce((a, t) => a + t.doneCount, 0)
@@ -270,13 +271,14 @@ function ClosureLoopHeader({ teams, closure }) {
   const ok = closure?.ok === true
   const blockers = Array.isArray(closure?.blockers) ? closure.blockers : []
   return (
-    <div className={`card p-3.5 space-y-2 border ${ok ? 'border-emerald-700/50' : 'border-[var(--input-border)]'}`}>
+    <div className="card p-3.5 space-y-2 border border-[var(--input-border)]">
       <div className="flex items-start gap-2.5">
-        <div className={`mt-0.5 h-8 w-8 rounded-lg flex items-center justify-center shrink-0 border ${ok ? 'bg-emerald-500/10 border-emerald-700/40' : 'bg-orange-500/10 border-orange-700/30'}`}>
-          {ok ? <Unlock size={16} className="text-emerald-400" /> : <Lock size={16} className="text-orange-400" />}
+        <div className="mt-0.5 h-8 w-8 rounded-lg flex items-center justify-center shrink-0 border border-[var(--input-border)] bg-[var(--input-bg)]">
+          {ok ? <Unlock size={16} className="text-emerald-400" /> : <Lock size={16} className="text-[var(--text-muted)]" />}
         </div>
         <div className="min-w-0 flex-1">
-          <p className="text-sm font-semibold text-[var(--text-primary)]">
+          <p className="text-sm font-semibold text-[var(--text-primary)] flex items-center gap-1.5">
+            {ok && <span className="h-2 w-2 rounded-full bg-emerald-400" />}
             {ok ? 'All required areas complete - ready to close' : 'Case stays open until every required area is done'}
           </p>
           <p className="text-[11px] text-[var(--text-muted)]">
@@ -286,7 +288,7 @@ function ClosureLoopHeader({ teams, closure }) {
       </div>
       {pct != null && (
         <div className="h-2 rounded-full bg-[var(--input-bg)] overflow-hidden">
-          <div className={`h-full rounded-full ${ok ? 'bg-emerald-500' : 'bg-orange-400'}`} style={{ width: `${pct}%` }} />
+          <div className="h-full rounded-full bg-[var(--text-muted)]" style={{ width: `${pct}%` }} />
         </div>
       )}
       {!ok && blockers.length > 0 && (
@@ -294,8 +296,8 @@ function ClosureLoopHeader({ teams, closure }) {
           <p className="text-[10px] font-medium text-[var(--text-dim)] uppercase tracking-wide">Still blocking closure</p>
           <ul className="space-y-0.5">
             {blockers.slice(0, 8).map((b, i) => (
-              <li key={i} className="text-[11px] text-amber-200 flex items-start gap-1.5">
-                <Circle size={9} className="mt-1 shrink-0 text-amber-400" />
+              <li key={i} className="text-[11px] text-[var(--text-secondary)] flex items-start gap-1.5">
+                <span className="mt-1.5 h-1.5 w-1.5 rounded-full bg-amber-400 shrink-0" />
                 <span>{b.reason || b.workstream || b.check}</span>
               </li>
             ))}
@@ -313,7 +315,7 @@ function AuditTrail({ events, usersById }) {
   return (
     <div className="card p-3.5 space-y-2">
       <div className="flex items-center gap-2">
-        <History size={15} className="text-orange-400 shrink-0" />
+        <History size={15} className="text-[var(--text-muted)] shrink-0" />
         <p className="text-sm font-semibold text-[var(--text-primary)]">Audit trail</p>
         <span className="text-[11px] text-[var(--text-dim)] ml-auto">Who did what, and when</span>
       </div>
@@ -348,6 +350,7 @@ export default function CaseTeamDistributionPanel({ record, canEdit = false, onC
   const [error, setError] = useState(null)
   const [degraded, setDegraded] = useState(false)
   const [tick, setTick] = useState(0)
+  const [activeTeam, setActiveTeam] = useState(null) // one tab per team
   const reload = useCallback(() => setTick((t) => t + 1), [])
 
   useEffect(() => {
@@ -385,8 +388,11 @@ export default function CaseTeamDistributionPanel({ record, canEdit = false, onC
     [record, rows],
   )
 
+  // The selected team (default: the first). activeTeam may be a key not present
+  // yet while loading, so always fall back to a real team.
+  const currentTeam = teams.find((t) => t.key === activeTeam) || teams[0] || null
+
   // Closure loop: can the case close yet, and if not, exactly what is blocking it.
-  // Pure engine (same guard the server enforces).
   const closure = useMemo(() => {
     if (!record) return { ok: false, blockers: [] }
     try {
@@ -436,10 +442,10 @@ export default function CaseTeamDistributionPanel({ record, canEdit = false, onC
       <div className="card p-4 space-y-1.5">
         <div className="flex items-center gap-2">
           <Share2 size={16} className="text-[var(--text-muted)] shrink-0" />
-          <p className="text-sm font-semibold text-[var(--text-primary)]">Team distribution</p>
+          <p className="text-sm font-semibold text-[var(--text-primary)]">Teams</p>
         </div>
         <p className="text-sm text-[var(--text-muted)]">The case workflow is not yet activated for this incident.</p>
-        <p className="text-xs text-[var(--text-dim)]">Once provisioned, each team's work and files appear here for distribution.</p>
+        <p className="text-xs text-[var(--text-dim)]">Once provisioned, each team's work and files appear here.</p>
       </div>
     )
   }
@@ -448,29 +454,56 @@ export default function CaseTeamDistributionPanel({ record, canEdit = false, onC
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
         <div className="flex items-center gap-2">
-          <Share2 size={16} className="text-orange-400 shrink-0" />
-          <p className="text-sm font-semibold text-[var(--text-primary)]">Distribute work &amp; files to teams</p>
+          <Users size={16} className="text-[var(--text-muted)] shrink-0" />
+          <p className="text-sm font-semibold text-[var(--text-primary)]">Teams</p>
         </div>
         <span className="text-xs text-[var(--text-dim)] ml-auto">
-          {canEdit ? 'Assign each team an owner. Inputs and files are routed automatically.' : 'Read-only view of who owns what.'}
+          {canEdit ? 'Pick a team to see and assign its work, inputs and files.' : 'Pick a team to see who owns what.'}
         </span>
       </div>
 
       {rows == null ? (
         <p className="text-xs text-[var(--text-muted)] flex items-center gap-1.5">
-          <Loader2 size={13} className="animate-spin" /> Loading team distribution...
+          <Loader2 size={13} className="animate-spin" /> Loading teams...
         </p>
       ) : (
         <>
           <ClosureLoopHeader teams={teams} closure={closure} />
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-            {teams.map((team) => (
-              <TeamCard
-                key={team.key} team={team} users={users} usersById={usersById}
-                canEdit={canEdit} fileUrls={fileUrls} onAssign={handleAssign}
-              />
-            ))}
+
+          {/* One tab per team. Each carries its own progress and a state dot. */}
+          <div className="flex flex-wrap gap-1.5">
+            {teams.map((t) => {
+              const Icon = TEAM_ICON[t.icon] || Users
+              const sel = currentTeam && t.key === currentTeam.key
+              const dot = t.workPct == null ? DOT.quiet : (t.workPct >= 100 ? DOT.good : DOT.warning)
+              return (
+                <button
+                  key={t.key}
+                  type="button"
+                  onClick={() => setActiveTeam(t.key)}
+                  aria-pressed={sel}
+                  className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs transition-colors ${
+                    sel
+                      ? 'bg-[var(--input-bg)] text-[var(--text-primary)] border-[var(--text-muted)]'
+                      : 'bg-transparent text-[var(--text-muted)] border-[var(--input-border)] hover:text-[var(--text-primary)]'
+                  }`}
+                >
+                  <Icon size={13} className="shrink-0" />
+                  <span>{t.label}</span>
+                  <span className={`h-1.5 w-1.5 rounded-full ${dot}`} />
+                  <span className="text-[10px] text-[var(--text-dim)]">{t.workPct == null ? 'N/A' : `${t.workPct}%`}</span>
+                </button>
+              )
+            })}
           </div>
+
+          {currentTeam && (
+            <TeamView
+              team={currentTeam} users={users} usersById={usersById}
+              canEdit={canEdit} fileUrls={fileUrls} onAssign={handleAssign}
+            />
+          )}
+
           <AuditTrail events={events} usersById={usersById} />
         </>
       )}

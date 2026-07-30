@@ -20,6 +20,7 @@ import {
   Package, MapPin, Save, ArrowRight, Gauge, ShieldCheck, Sparkles,
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
+import DateField from '../components/ui/DateField'
 import { useSettings, COUNTRY_CURRENCY } from '../contexts/SettingsContext'
 import { useAuth } from '../contexts/AuthContext'
 import { formatCurrency } from '../lib/formatters'
@@ -618,19 +619,19 @@ export default function ExpenseReport() {
           ))}
         </div>
         <div className="flex items-center gap-2 flex-wrap">
-          <input
-            type="date"
+          <DateField
+            className="text-xs w-40"
             value={from}
-            onChange={(e) => { setFrom(e.target.value); setPeriod('') }}
-            className="bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg text-xs px-2 py-1.5 text-[var(--text-secondary)]"
-            aria-label="From date"
+            onChange={(v) => { setFrom(v); setPeriod('') }}
+            placeholder="From date"
+            ariaLabel="From date"
           />
-          <input
-            type="date"
+          <DateField
+            className="text-xs w-40"
             value={to}
-            onChange={(e) => { setTo(e.target.value); setPeriod('') }}
-            className="bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg text-xs px-2 py-1.5 text-[var(--text-secondary)]"
-            aria-label="To date"
+            onChange={(v) => { setTo(v); setPeriod('') }}
+            placeholder="To date"
+            ariaLabel="To date"
           />
           {updatedAt && <span className="text-[11px] text-[var(--text-muted)]">Updated {updatedAt.toLocaleTimeString()}</span>}
           <button onClick={load} disabled={refreshing} className="btn-secondary text-sm px-3 py-1.5 inline-flex items-center gap-1.5 disabled:opacity-50">

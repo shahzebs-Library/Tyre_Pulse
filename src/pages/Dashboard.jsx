@@ -36,6 +36,7 @@ import {
 import { ChartModal } from '../components/ChartModal'
 import EmptyState from '../components/EmptyState'
 import SegmentedControl from '../components/ui/SegmentedControl'
+import DateField from '../components/ui/DateField'
 import StatTile from '../components/ui/StatTile'
 import Gauge from '../components/ui/Gauge'
 import Skeleton, { SkeletonCards, SkeletonChart } from '../components/ui/Skeleton'
@@ -1269,9 +1270,9 @@ export default function Dashboard() {
         <AnimatePresence>
           {showCustom && (
             <motion.div className="flex gap-2 items-center" initial={{ opacity:0, height:0 }} animate={{ opacity:1, height:'auto' }} exit={{ opacity:0, height:0 }}>
-              <input type="date" className="input flex-1" value={dateFrom} onChange={e => setDateFrom(e.target.value)} />
+              <DateField className="flex-1" value={dateFrom} onChange={(v) => setDateFrom(v)} placeholder="From date" ariaLabel="From date" />
               <span className="text-gray-600 text-xs">{t('dashboard.filters.to')}</span>
-              <input type="date" className="input flex-1" value={dateTo} onChange={e => setDateTo(e.target.value)} />
+              <DateField className="flex-1" value={dateTo} onChange={(v) => setDateTo(v)} placeholder="To date" ariaLabel="To date" />
             </motion.div>
           )}
         </AnimatePresence>

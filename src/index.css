@@ -953,6 +953,38 @@ html.light .table-header {
 html.light .table-cell { border-bottom-color: rgba(0,0,0,0.038); color: #374151; }
 html.light tr:hover .table-cell { background: rgba(22,163,74,0.03); }
 
+/* ── Accidents register - professional table variant ─────────────────────────
+   Scoped to `.tp-register-pro` (only the accidents register passes this class),
+   so no other EnterpriseTable caller is affected. Adds a quieter uppercase
+   header, comfortable padding, clean zebra striping and a calm hover highlight.
+   Un-layered on purpose so it reliably wins over the base @layer table rules. */
+.tp-register-pro .table-header {
+  font-size: 10px;
+  letter-spacing: 0.09em;
+  padding-top: 0.75rem;
+  padding-bottom: 0.75rem;
+  color: var(--text-muted);
+}
+.tp-register-pro .table-cell {
+  padding-top: 0.7rem;
+  padding-bottom: 0.7rem;
+  border-bottom-color: var(--table-cell-border);
+}
+/* Zebra striping (subtle, theme-aware). */
+.tp-register-pro tbody tr:nth-child(even) .table-cell {
+  background: rgba(255, 255, 255, 0.022);
+}
+/* Hover wins over the zebra tint (declared after it). */
+.tp-register-pro tbody tr:hover .table-cell {
+  background: rgba(22, 163, 74, 0.06);
+}
+html.light .tp-register-pro tbody tr:nth-child(even) .table-cell {
+  background: rgba(15, 23, 42, 0.022);
+}
+html.light .tp-register-pro tbody tr:hover .table-cell {
+  background: rgba(22, 163, 74, 0.05);
+}
+
 html.light .login-card {
   background: linear-gradient(145deg, #ffffff 0%, #f7fdf9 100%);
   border-color: rgba(22,163,74,0.22);

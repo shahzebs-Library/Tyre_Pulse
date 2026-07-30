@@ -2,9 +2,11 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   Truck, ShieldAlert, FileCheck, Wrench, Wallet, Users, UserPlus, Loader2,
   RefreshCw, AlertCircle, Share2, CheckCircle2, Circle, Paperclip, ExternalLink,
+  Lock, Unlock, Clock, History,
 } from 'lucide-react'
 import { buildTeamDistribution } from '../../lib/accidentTeams'
-import { listWorkstreams, setWorkstreamStatus } from '../../lib/api/accidentCase'
+import { canFullyClose, buildCaseRoute } from '../../lib/accidentCase'
+import { listWorkstreams, setWorkstreamStatus, listWorkstreamEvents } from '../../lib/api/accidentCase'
 import { listProfiles } from '../../lib/api/users'
 import { isMissingRelation } from '../../lib/api/_client'
 import { resolveStorageUrls } from '../../lib/storageRefs'
@@ -57,6 +59,23 @@ function statusMeta(status) {
 function userName(u) {
   if (!u) return ''
   return u.full_name || u.username || u.email || u.id
+}
+/** Short, locale-stable date-time for the audit trail (never a raw ISO string). */
+function fmtWhen(iso) {
+  if (!iso) return ''
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return ''
+  return d.toLocaleString(undefined, { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+}
+const ACTION_LABEL = {
+  created: 'created', assigned: 'assigned an owner', status_changed: 'changed status',
+  na_marked: 'marked not applicable', reopened: 'reopened',
+}
+const WS_NAME = {
+  incident_evidence: 'Incident & Evidence', fleet_validation: 'Fleet Validation',
+  liability: 'Safety & Liability', insurance: 'Insurance & Claim', assessment: 'Technical Assessment',
+  repair: 'Repair', workshop_qc: 'Workshop QC', handover: 'Fleet Handover',
+  finance: 'Finance & Settlement', corrective: 'Corrective Actions',
 }
 
 function StatusPill({ status }) {
@@ -119,6 +138,14 @@ function WorkRow({ ws, users, usersById, canEdit, onAssign }) {
           {ownerLabel || <span className="text-[var(--text-dim)]">Unassigned</span>}
         </span>
       </div>
+      {/* Audit timestamps: when this area was picked up and finished. */}
+      {(ws.assignedAt || ws.startedAt || ws.completedAt) && (
+        <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[10px] text-[var(--text-dim)]">
+          {ws.assignedAt && <span className="flex items-center gap-1"><Clock size={9} /> Assigned {fmtWhen(ws.assignedAt)}</span>}
+          {ws.startedAt && <span>Started {fmtWhen(ws.startedAt)}</span>}
+          {ws.completedAt && <span className="text-emerald-300">Completed {fmtWhen(ws.completedAt)}</span>}
+        </div>
+      )}
       {canEdit && (
         <div className="mt-1.5 flex items-center gap-1.5">
           <select
@@ -234,9 +261,88 @@ function TeamCard({ team, users, usersById, canEdit, fileUrls, onAssign }) {
   )
 }
 
+/** The closure loop: overall progress across every team, and whether the case can
+ *  close yet (with the exact areas still blocking it). */
+function ClosureLoopHeader({ teams, closure }) {
+  const required = teams.reduce((a, t) => a + t.requiredCount, 0)
+  const done = teams.reduce((a, t) => a + t.doneCount, 0)
+  const pct = required === 0 ? null : Math.round((100 * done) / required)
+  const ok = closure?.ok === true
+  const blockers = Array.isArray(closure?.blockers) ? closure.blockers : []
+  return (
+    <div className={`card p-3.5 space-y-2 border ${ok ? 'border-emerald-700/50' : 'border-[var(--input-border)]'}`}>
+      <div className="flex items-start gap-2.5">
+        <div className={`mt-0.5 h-8 w-8 rounded-lg flex items-center justify-center shrink-0 border ${ok ? 'bg-emerald-500/10 border-emerald-700/40' : 'bg-orange-500/10 border-orange-700/30'}`}>
+          {ok ? <Unlock size={16} className="text-emerald-400" /> : <Lock size={16} className="text-orange-400" />}
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-semibold text-[var(--text-primary)]">
+            {ok ? 'All required areas complete - ready to close' : 'Case stays open until every required area is done'}
+          </p>
+          <p className="text-[11px] text-[var(--text-muted)]">
+            {pct == null ? 'No required areas for this case yet.' : `${done} of ${required} required areas complete (${pct}%).`}
+          </p>
+        </div>
+      </div>
+      {pct != null && (
+        <div className="h-2 rounded-full bg-[var(--input-bg)] overflow-hidden">
+          <div className={`h-full rounded-full ${ok ? 'bg-emerald-500' : 'bg-orange-400'}`} style={{ width: `${pct}%` }} />
+        </div>
+      )}
+      {!ok && blockers.length > 0 && (
+        <div className="space-y-0.5">
+          <p className="text-[10px] font-medium text-[var(--text-dim)] uppercase tracking-wide">Still blocking closure</p>
+          <ul className="space-y-0.5">
+            {blockers.slice(0, 8).map((b, i) => (
+              <li key={i} className="text-[11px] text-amber-200 flex items-start gap-1.5">
+                <Circle size={9} className="mt-1 shrink-0 text-amber-400" />
+                <span>{b.reason || b.workstream || b.check}</span>
+              </li>
+            ))}
+            {blockers.length > 8 && <li className="text-[11px] text-[var(--text-dim)]">+{blockers.length - 8} more</li>}
+          </ul>
+        </div>
+      )}
+    </div>
+  )
+}
+
+/** The who-did-what-when trail (V429 ledger), newest first. */
+function AuditTrail({ events, usersById }) {
+  if (!Array.isArray(events) || events.length === 0) return null
+  return (
+    <div className="card p-3.5 space-y-2">
+      <div className="flex items-center gap-2">
+        <History size={15} className="text-orange-400 shrink-0" />
+        <p className="text-sm font-semibold text-[var(--text-primary)]">Audit trail</p>
+        <span className="text-[11px] text-[var(--text-dim)] ml-auto">Who did what, and when</span>
+      </div>
+      <ul className="space-y-1.5 max-h-72 overflow-y-auto">
+        {events.map((e) => {
+          const who = e.actor_id ? (userName(usersById.get(e.actor_id)) || 'A user') : 'System'
+          const area = WS_NAME[e.workstream_key] || e.workstream_key
+          const verb = ACTION_LABEL[e.action] || e.action
+          const detail = e.action === 'status_changed' && e.to_status
+            ? ` to "${String(e.to_status).replace(/_/g, ' ')}"`
+            : (e.action === 'na_marked' && e.note ? ` (${e.note})` : '')
+          return (
+            <li key={e.id} className="text-[11px] flex items-start gap-2">
+              <span className="text-[var(--text-dim)] whitespace-nowrap tabular-nums">{fmtWhen(e.at)}</span>
+              <span className="text-[var(--text-secondary)]">
+                <span className="font-medium text-[var(--text-primary)]">{who}</span> {verb}{detail} - <span className="text-[var(--text-muted)]">{area}</span>
+              </span>
+            </li>
+          )
+        })}
+      </ul>
+    </div>
+  )
+}
+
 export default function CaseTeamDistributionPanel({ record, canEdit = false, onChanged }) {
   const accidentId = record?.id
   const [rows, setRows] = useState(null) // null = loading
+  const [events, setEvents] = useState([])
   const [users, setUsers] = useState([])
   const [fileUrls, setFileUrls] = useState({})
   const [error, setError] = useState(null)
@@ -255,6 +361,10 @@ export default function CaseTeamDistributionPanel({ record, canEdit = false, onC
         if (isMissingRelation(e)) { setDegraded(true); setRows([]) }
         else setError(toUserMessage(e, 'Could not load the team distribution for this case.'))
       })
+    // Audit trail (best-effort: never blocks the board).
+    listWorkstreamEvents(accidentId, { country: record?.country })
+      .then((d) => { if (alive) setEvents(Array.isArray(d) ? d : []) })
+      .catch(() => { if (alive) setEvents([]) })
     return () => { alive = false }
   }, [accidentId, record?.country, tick])
 
@@ -274,6 +384,15 @@ export default function CaseTeamDistributionPanel({ record, canEdit = false, onC
     () => buildTeamDistribution(record || {}, rows || []),
     [record, rows],
   )
+
+  // Closure loop: can the case close yet, and if not, exactly what is blocking it.
+  // Pure engine (same guard the server enforces).
+  const closure = useMemo(() => {
+    if (!record) return { ok: false, blockers: [] }
+    try {
+      return canFullyClose(record, rows || [], buildCaseRoute(record, []))
+    } catch { return { ok: false, blockers: [] } }
+  }, [record, rows])
 
   // Resolve every routed file ref to a real URL (best-effort).
   const allRefs = useMemo(() => {
@@ -342,14 +461,18 @@ export default function CaseTeamDistributionPanel({ record, canEdit = false, onC
           <Loader2 size={13} className="animate-spin" /> Loading team distribution...
         </p>
       ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-          {teams.map((team) => (
-            <TeamCard
-              key={team.key} team={team} users={users} usersById={usersById}
-              canEdit={canEdit} fileUrls={fileUrls} onAssign={handleAssign}
-            />
-          ))}
-        </div>
+        <>
+          <ClosureLoopHeader teams={teams} closure={closure} />
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+            {teams.map((team) => (
+              <TeamCard
+                key={team.key} team={team} users={users} usersById={usersById}
+                canEdit={canEdit} fileUrls={fileUrls} onAssign={handleAssign}
+              />
+            ))}
+          </div>
+          <AuditTrail events={events} usersById={usersById} />
+        </>
       )}
     </div>
   )

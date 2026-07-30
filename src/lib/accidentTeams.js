@@ -206,6 +206,12 @@ export function buildTeamDistribution(record, wsRows = [], route) {
           ownerId: row?.owner_id || null,
           ownerRole: row?.owner_role || row?.team || null,
           na: row?.not_applicable === true || row?.status === 'not_required',
+          // Audit timestamps (V429) — surfaced for the trail.
+          assignedAt: row?.assigned_at || null,
+          startedAt: row?.started_at || null,
+          completedAt: row?.completed_at || null,
+          updatedAt: row?.updated_at || null,
+          updatedBy: row?.updated_by || null,
         }
       })
 

@@ -28,6 +28,18 @@ charts, `ActionMenu` export dropdowns, `.tp-register-pro` table styling.
   neither; fitment_date is GENERATED (insert issue_date not it); trg_guard_tyre_active_fitment needs the old
   active flipped BEFORE inserting the new active. Reversible (import tags + _bak). NOT done: expenses/job cards
   (already loaded for UAE/Egypt - reprocessing would duplicate); site/vehicle_type left NULL on new rows.
+- **V419 STG-JOBCARD opened_at FALLBACK APPLIED LIVE (migration `stg_jobcard_opened_at_fallback`, verified).**
+  Customer: "KSA job card I uploaded still not reflecting." ROOT CAUSE (the standing part-13 open item, finally
+  applied): `process_stg_job_cards` derived `opened_at = coalesce(v_prod_out, v_ws_in)` and put it in the
+  EXPLICIT column list; a job card with NEITHER Production Out NOR Workshop In sent an explicit NULL into the
+  NOT NULL `work_orders.opened_at`, aborting the ENTIRE `stg_job_cards` CSV batch at zero rows. FIX = one token
+  `coalesce(v_prod_out, v_ws_in, now())` (the ON CONFLICT branch already coalesced). Confirmed the live function
+  was the exact V386 base (reads via `_stg_pick`, has waiting_* cols, card_by) before the CREATE OR REPLACE, so
+  no newer version was clobbered. VERIFIED LIVE: a both-null test card `ZZ-V419-VERIFY` routed to work_orders
+  with opened_at=now(), status Open, still_open true; test row deleted; KSA work_orders 60,493. The repo file
+  `MIGRATIONS_V419_STG_JOBCARD_OPENED_AT_FALLBACK.sql` body IS what was applied (its STATUS header can now read
+  APPLIED). Rollback = re-apply the V386 body (this minus the `, now()` token). NOTE: DB uses timestamp
+  migration versions, so the repo V419 label does not collide with the live V420-V430 numbers.
 - **ERP INTAKE NOW UPLOADS EVERYTHING (no migration, code only, `src/lib/api/erpIntake.js` + `ErpIntake.jsx`).**
   Customer: "only the expense report imports complete in ERP intake, the other 3 skip new data even on new
   dates - upload everything, clean exact duplicates from console." ROOT CAUSE: parts_consumption is

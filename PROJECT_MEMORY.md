@@ -3,6 +3,32 @@
 Durable, committed project knowledge so any session has full context. Keep this
 current. Read it before adding/changing modules. Governing spec: `Tyre pulse enterprise.md`
 
+## SESSION 2026-07-30 — ACCIDENT MODULE UI/WORKFLOW POLISH (PRs #234-#240) + UAE/EGYPT TYRE LOAD (V428-V430 APPLIED LIVE). Migrations through **V430**, next free **V431**.
+**All merged to main.** Accident work (all applied live + merged): **V428** = fixed-mailbox accident email
+routing (one sender `info@tyrepulse.app` -> admin-set To/CC in `system_config.accident_email_to/_cc/
+_subject_prefix`, acting user in signature; emails still OFF by default). **V429** = accident workstream loop
+(BEFORE trigger stamps assigned/started/completed + `updated_by`; AFTER SECURITY-DEFINER trigger writes an
+append-only `accident_case_workstream_events` audit ledger). Frontend: `CaseTeamDistributionPanel` (new
+"Distribute to Teams" tab) routes each team its WORKSTREAMS + input files (`accidentTeams.js` engine) + a
+closure-loop header (canFullyClose) + per-workstream timestamps + the audit trail. Incident form: categorized
+document upload slots (licence/resident-id/registration/police/najm/taqdeer/other) into `accidents.documents`
+jsonb routed to teams; removed duplicate fields (Case Stage==Current Status collapsed; Responsible Party==Liable
+Party); Safety fields (root cause/HSE/corrective/preventive) grouped + hidden when HSE stage waived; Recovery
+Source deduped; site+country auto-fill from asset. UI polish: reusable `DateField` calendar (Accidents/Dashboard/
+ExpenseReport), register filters persist via `useFilterState` (URL) across row->detail->back, removed 2 monthly
+charts, `ActionMenu` export dropdowns, `.tp-register-pro` table styling.
+- **V430 (applied live + `MIGRATIONS_V430_...sql`, verified) - UAE + EGYPT TYRE LIFECYCLE LOADED.** Customer
+  imported the combined KSA-style tyre exports into `uae_country_upload_template_staging` (39,456 rows) +
+  `egypt_country_upload_template_staging` (16,254 rows) via Table Editor. Collapsed to fitment grain and loaded
+  genuinely-new fitments into tyre_records: **UAE 1,007 -> 1,979 (+972), Egypt 475 -> 498 (+23)**. One Active
+  tyre per (asset,position)=latest fix_date, earlier Removed with the next fitment date; 0 double-active, 0
+  reversed dates; 29 superseded existing actives flipped (snapshot `_bak.tyre_country_load_v430`) + 1
+  pre-existing Egypt TM252 double-active fixed. GOTCHAS: staging null token is literal text "NULL"; UAE
+  fix_date=DD-MM-YY, Egypt fix_date=Excel serial (5-digit, `date '1899-12-30'+n`) - erp_parse_date handles
+  neither; fitment_date is GENERATED (insert issue_date not it); trg_guard_tyre_active_fitment needs the old
+  active flipped BEFORE inserting the new active. Reversible (import tags + _bak). NOT done: expenses/job cards
+  (already loaded for UAE/Egypt - reprocessing would duplicate); site/vehicle_type left NULL on new rows.
+
 ## SESSION 2026-07-29 — ACCIDENT MODULE REBUILD PHASES 0-5 MERGED TO MAIN **+ APPLIED LIVE (V417-V427). ACTIVE.**
 **PRs #228 (`8857b52`), #229 (`fca3a09`), #230 (`7bd0d0c`), #231 (`1968d9e`), #232 (`e8f2cad`) all MERGED to main.**
 **THE FULL DB IS NOW APPLIED LIVE on project `jhssdmeruxtrlqnwfksc` (org Company A):** the accident/insurance

@@ -15,6 +15,7 @@ const DOC_SLOTS = [
   { category: 'police_report', label: 'Police report' },
   { category: 'najm_report', label: 'Najm report' },
   { category: 'taqdeer_estimation', label: 'Taqdeer estimation' },
+  { category: 'other', label: 'Other document' },
 ]
 import { motion } from 'framer-motion'
 import PageHeader from '../components/ui/PageHeader'
@@ -568,11 +569,11 @@ export default function Accidents() {
       ...f,
       plate_number: f.plate_number || asset.fleet_number || asset.registration_no || f.plate_number,
       vehicle_type: f.vehicle_type || asset.vehicle_type  || f.vehicle_type,
-      site:         f.site         || asset.site          || f.site,
-      // Country FOLLOWS the asset rather than only filling when blank. It is a
-      // fact about the vehicle, not an opinion about the incident, and the
-      // fill-if-empty rule left it null on 3 of 35 records - which then drops
-      // those incidents out of every country-scoped view.
+      // Site AND country FOLLOW the asset (not fill-if-empty). Both are facts about
+      // the vehicle's home base, not opinions about the incident; auto-filling them
+      // keeps every incident inside its country/site-scoped views. A typed asset is
+      // the trigger, so this is the user's own selection, not an override.
+      site:         asset.site     || f.site,
       country:      asset.country  || f.country,
     }))
   }, [])
@@ -3014,10 +3015,11 @@ export default function Accidents() {
               <FormSection title="Classification">
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                   <div>
-                    <label className="label">Severity</label>
+                    <label className="label">Incident Severity</label>
                     <select className="input" value={form.severity} onChange={e => setForm(f => ({ ...f, severity: e.target.value }))}>
                       {SEVERITIES.map(s => <option key={s} value={s}>{s}</option>)}
                     </select>
+                    <p className="text-[11px] text-[var(--text-muted)] mt-1">Overall incident</p>
                   </div>
                   <div>
                     <label className="label">Status</label>
@@ -3105,6 +3107,7 @@ export default function Accidents() {
                       <option value="">N/A</option>
                       {FAULT_STATUS_OPTS.map(s => <option key={s} value={s}>{s}</option>)}
                     </select>
+                    <p className="text-[11px] text-[var(--text-muted)] mt-1">Our internal assessment</p>
                   </div>
                   <div>
                     <label className="label">GCC Liability</label>
@@ -3112,6 +3115,7 @@ export default function Accidents() {
                       <option value="">N/A</option>
                       {LIABILITY_RATIO_OPTS.map(n => <option key={n} value={n}>{n}%</option>)}
                     </select>
+                    <p className="text-[11px] text-[var(--text-muted)] mt-1">Share of liability (%)</p>
                   </div>
                   <div>
                     <label className="label">Najm</label>
@@ -3127,6 +3131,7 @@ export default function Accidents() {
                         <option value="">N/A</option>
                         {NAJM_FAULT_OPTS.map(s => <option key={s} value={s}>{s}</option>)}
                       </select>
+                      <p className="text-[11px] text-[var(--text-muted)] mt-1">Najm's official verdict</p>
                     </div>
                   )}
                   <div>
@@ -3259,24 +3264,35 @@ export default function Accidents() {
                     </label>
                   </div>
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
-                  <div>
-                    <label className="label">Root Cause</label>
-                    <textarea className="input" rows={2} placeholder="Underlying cause of the incident" value={form.root_cause} onChange={e => setForm(f => ({ ...f, root_cause: e.target.value }))} />
+                {/* Safety investigation (HSE): root cause + corrective/preventive
+                    actions belong together, and the whole block is hidden when the
+                    HSE Investigation stage was switched off in "Which teams this
+                    case needs" - a car-park scratch is not asked for a root cause. */}
+                {form.stage_waivers?.hse_investigation?.required !== false && (
+                  <div className="mt-3">
+                    <p className="text-xs font-semibold text-[var(--text-secondary)] mb-2">Safety investigation (HSE)</p>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      <div>
+                        <label className="label">Root Cause</label>
+                        <textarea className="input" rows={2} placeholder="Underlying cause of the incident" value={form.root_cause} onChange={e => setForm(f => ({ ...f, root_cause: e.target.value }))} />
+                      </div>
+                      <div>
+                        <label className="label">HSE Investigation</label>
+                        <textarea className="input" rows={2} placeholder="Safety investigation findings" value={form.hse_investigation} onChange={e => setForm(f => ({ ...f, hse_investigation: e.target.value }))} />
+                      </div>
+                      <div>
+                        <label className="label">Corrective Action</label>
+                        <textarea className="input" rows={2} placeholder="Action taken to fix" value={form.corrective_action} onChange={e => setForm(f => ({ ...f, corrective_action: e.target.value }))} />
+                      </div>
+                      <div>
+                        <label className="label">Preventive Action</label>
+                        <textarea className="input" rows={2} placeholder="Action to prevent recurrence" value={form.preventive_action} onChange={e => setForm(f => ({ ...f, preventive_action: e.target.value }))} />
+                      </div>
+                    </div>
                   </div>
+                )}
+                <div className="grid grid-cols-1 gap-3 mt-3">
                   <div>
-                    <label className="label">HSE Investigation</label>
-                    <textarea className="input" rows={2} placeholder="Safety investigation findings" value={form.hse_investigation} onChange={e => setForm(f => ({ ...f, hse_investigation: e.target.value }))} />
-                  </div>
-                  <div>
-                    <label className="label">Corrective Action</label>
-                    <textarea className="input" rows={2} placeholder="Action taken to fix" value={form.corrective_action} onChange={e => setForm(f => ({ ...f, corrective_action: e.target.value }))} />
-                  </div>
-                  <div>
-                    <label className="label">Preventive Action</label>
-                    <textarea className="input" rows={2} placeholder="Action to prevent recurrence" value={form.preventive_action} onChange={e => setForm(f => ({ ...f, preventive_action: e.target.value }))} />
-                  </div>
-                  <div className="md:col-span-2">
                     <label className="label">Closure Evidence</label>
                     <input className="input" placeholder="Document / reference confirming closure" value={form.closure_evidence} onChange={e => setForm(f => ({ ...f, closure_evidence: e.target.value }))} />
                   </div>
@@ -3342,7 +3358,9 @@ export default function Accidents() {
                         <label className="label">Recovery Source</label>
                         <select className="input" value={form.recovery_source} onChange={e => setForm(f => ({ ...f, recovery_source: e.target.value }))}>
                           <option value="">N/A</option>
-                          {RECOVERY_SOURCE_OPTS.map(s => <option key={s} value={s}>{RECOVERY_SOURCE_LABELS[s]}</option>)}
+                          {/* 'none' is dropped from the list: its label "None" duplicated
+                              the "N/A" placeholder above (two ways to say nothing). */}
+                          {RECOVERY_SOURCE_OPTS.filter(s => s !== 'none').map(s => <option key={s} value={s}>{RECOVERY_SOURCE_LABELS[s]}</option>)}
                         </select>
                       </div>
                       <div>

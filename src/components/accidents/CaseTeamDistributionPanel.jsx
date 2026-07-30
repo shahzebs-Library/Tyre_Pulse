@@ -39,15 +39,6 @@ const STATUS_META = {
   reopened: { label: 'Reopened', tone: 'danger' },
   cancelled: { label: 'Cancelled', tone: 'quiet' },
 }
-// Small status DOTS carry the only colour left on the page — enough to read state
-// at a glance without the decorative fills the customer asked to remove.
-const DOT = {
-  good: 'bg-emerald-400',
-  info: 'bg-sky-400',
-  warning: 'bg-amber-400',
-  danger: 'bg-red-400',
-  quiet: 'bg-[var(--text-dim)]',
-}
 const INPUT =
   'bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg px-2 py-1 text-xs text-[var(--text-primary)]'
 
@@ -77,12 +68,11 @@ const WS_NAME = {
   finance: 'Finance & Settlement', corrective: 'Corrective Actions',
 }
 
-/** Neutral chip + a small coloured dot for the status (the only colour kept). */
+/** Plain neutral chip — the label carries the status, no colour. */
 function StatusPill({ status }) {
   const m = statusMeta(status)
   return (
-    <span className="inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded-full border border-[var(--input-border)] bg-[var(--input-bg)]/40 text-[var(--text-secondary)]">
-      <span className={`h-1.5 w-1.5 rounded-full ${DOT[m.tone] || DOT.quiet}`} />
+    <span className="inline-flex items-center text-[10px] font-medium px-1.5 py-0.5 rounded-full border border-[var(--input-border)] bg-[var(--input-bg)]/40 text-[var(--text-secondary)]">
       {m.label}
     </span>
   )
@@ -144,7 +134,7 @@ function WorkRow({ ws, users, usersById, canEdit, onAssign }) {
         <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[10px] text-[var(--text-dim)]">
           {ws.assignedAt && <span className="flex items-center gap-1"><Clock size={9} /> Assigned {fmtWhen(ws.assignedAt)}</span>}
           {ws.startedAt && <span>Started {fmtWhen(ws.startedAt)}</span>}
-          {ws.completedAt && <span className="flex items-center gap-1"><span className="h-1.5 w-1.5 rounded-full bg-emerald-400" /> Completed {fmtWhen(ws.completedAt)}</span>}
+          {ws.completedAt && <span className="text-[var(--text-secondary)]">Completed {fmtWhen(ws.completedAt)}</span>}
         </div>
       )}
       {canEdit && (
@@ -167,8 +157,8 @@ function WorkRow({ ws, users, usersById, canEdit, onAssign }) {
           </button>
         </div>
       )}
-      {msg && !msg.ok && <p className="mt-1 text-[11px] text-red-300">{msg.text}</p>}
-      {msg && msg.ok && <p className="mt-1 text-[11px] text-[var(--text-secondary)] flex items-center gap-1"><CheckCircle2 size={11} className="text-emerald-400" /> Owner assigned.</p>}
+      {msg && !msg.ok && <p className="mt-1 text-[11px] text-[var(--text-secondary)]">{msg.text}</p>}
+      {msg && msg.ok && <p className="mt-1 text-[11px] text-[var(--text-secondary)] flex items-center gap-1"><CheckCircle2 size={11} /> Owner assigned.</p>}
     </div>
   )
 }
@@ -216,7 +206,7 @@ function TeamView({ team, users, usersById, canEdit, fileUrls, onAssign }) {
             {team.inputs.map((f) => (
               <div key={f.key} className="flex items-center gap-1.5 text-[11px]">
                 {f.present
-                  ? <CheckCircle2 size={12} className="text-emerald-400 shrink-0" />
+                  ? <CheckCircle2 size={12} className="text-[var(--text-secondary)] shrink-0" />
                   : <Circle size={12} className="text-[var(--text-dim)] shrink-0" />}
                 <span className={f.present ? 'text-[var(--text-secondary)]' : 'text-[var(--text-dim)]'}>{f.label}</span>
                 {f.present && f.value && (
@@ -274,11 +264,10 @@ function ClosureLoopHeader({ teams, closure }) {
     <div className="card p-3.5 space-y-2 border border-[var(--input-border)]">
       <div className="flex items-start gap-2.5">
         <div className="mt-0.5 h-8 w-8 rounded-lg flex items-center justify-center shrink-0 border border-[var(--input-border)] bg-[var(--input-bg)]">
-          {ok ? <Unlock size={16} className="text-emerald-400" /> : <Lock size={16} className="text-[var(--text-muted)]" />}
+          {ok ? <Unlock size={16} className="text-[var(--text-secondary)]" /> : <Lock size={16} className="text-[var(--text-muted)]" />}
         </div>
         <div className="min-w-0 flex-1">
-          <p className="text-sm font-semibold text-[var(--text-primary)] flex items-center gap-1.5">
-            {ok && <span className="h-2 w-2 rounded-full bg-emerald-400" />}
+          <p className="text-sm font-semibold text-[var(--text-primary)]">
             {ok ? 'All required areas complete - ready to close' : 'Case stays open until every required area is done'}
           </p>
           <p className="text-[11px] text-[var(--text-muted)]">
@@ -297,7 +286,7 @@ function ClosureLoopHeader({ teams, closure }) {
           <ul className="space-y-0.5">
             {blockers.slice(0, 8).map((b, i) => (
               <li key={i} className="text-[11px] text-[var(--text-secondary)] flex items-start gap-1.5">
-                <span className="mt-1.5 h-1.5 w-1.5 rounded-full bg-amber-400 shrink-0" />
+                <span className="mt-1.5 h-1.5 w-1.5 rounded-full bg-[var(--text-dim)] shrink-0" />
                 <span>{b.reason || b.workstream || b.check}</span>
               </li>
             ))}
@@ -430,7 +419,7 @@ export default function CaseTeamDistributionPanel({ record, canEdit = false, onC
   if (error) {
     return (
       <div className="card p-4 space-y-2">
-        <p className="text-sm text-red-300 flex items-center gap-2"><AlertCircle size={15} className="shrink-0" /> {error}</p>
+        <p className="text-sm text-[var(--text-secondary)] flex items-center gap-2"><AlertCircle size={15} className="shrink-0" /> {error}</p>
         <button type="button" onClick={reload} className="btn-secondary text-xs px-3 py-1.5 flex items-center gap-1.5">
           <RefreshCw size={13} /> Retry
         </button>
@@ -455,10 +444,10 @@ export default function CaseTeamDistributionPanel({ record, canEdit = false, onC
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
         <div className="flex items-center gap-2">
           <Users size={16} className="text-[var(--text-muted)] shrink-0" />
-          <p className="text-sm font-semibold text-[var(--text-primary)]">Teams</p>
+          <p className="text-sm font-semibold text-[var(--text-primary)]">Planned distribution by team</p>
         </div>
         <span className="text-xs text-[var(--text-dim)] ml-auto">
-          {canEdit ? 'Pick a team to see and assign its work, inputs and files.' : 'Pick a team to see who owns what.'}
+          {canEdit ? 'Pick a team to see and assign its planned work, inputs and files.' : 'Pick a team to see its planned work.'}
         </span>
       </div>
 
@@ -470,12 +459,13 @@ export default function CaseTeamDistributionPanel({ record, canEdit = false, onC
         <>
           <ClosureLoopHeader teams={teams} closure={closure} />
 
-          {/* One tab per team. Each carries its own progress and a state dot. */}
+          {/* One tab per team. Each shows its own progress as plain text (no colour);
+              a done team is marked with a tick, not a colour. */}
           <div className="flex flex-wrap gap-1.5">
             {teams.map((t) => {
               const Icon = TEAM_ICON[t.icon] || Users
               const sel = currentTeam && t.key === currentTeam.key
-              const dot = t.workPct == null ? DOT.quiet : (t.workPct >= 100 ? DOT.good : DOT.warning)
+              const done = t.workPct != null && t.workPct >= 100
               return (
                 <button
                   key={t.key}
@@ -490,7 +480,7 @@ export default function CaseTeamDistributionPanel({ record, canEdit = false, onC
                 >
                   <Icon size={13} className="shrink-0" />
                   <span>{t.label}</span>
-                  <span className={`h-1.5 w-1.5 rounded-full ${dot}`} />
+                  {done && <CheckCircle2 size={12} className="shrink-0" />}
                   <span className="text-[10px] text-[var(--text-dim)]">{t.workPct == null ? 'N/A' : `${t.workPct}%`}</span>
                 </button>
               )

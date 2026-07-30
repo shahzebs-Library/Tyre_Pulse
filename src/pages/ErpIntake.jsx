@@ -279,9 +279,12 @@ export default function ErpIntake() {
         out.push({
           ...d,
           inserted: res?.inserted ?? d.rows.length,
+          updated: res?.updated ?? 0,
+          unchanged: res?.unchanged ?? (res?.skipped ?? 0),
           skipped: res?.skipped ?? 0,
           failed: res?.failed ?? 0,
           tyresInserted: tyreRes?.inserted ?? 0,
+          tyresUpdated: tyreRes?.updated ?? 0,
         })
         setResults([...out])
       }
@@ -458,7 +461,7 @@ export default function ErpIntake() {
                       <p>
                         <span className="font-semibold text-[var(--accent,#22c55e)]">{num(d.dup.fresh)}</span> new
                         {d.dup.existing > 0 && (
-                          <span className="text-[var(--warning,#f59e0b)]"> · {num(d.dup.existing)} already in system (skipped)</span>
+                          <span className="text-[var(--text-tertiary)]"> · {num(d.dup.existing)} already in system (refreshed with any new details)</span>
                         )}
                       </p>
                     )}
@@ -558,11 +561,11 @@ export default function ErpIntake() {
                       <div className="flex items-center gap-2 text-sm text-[var(--text-secondary)]">
                         <CheckCircle2 className="h-4 w-4 text-[var(--accent,#22c55e)]" />
                         <span>
-                          Imported {num(done.inserted)}
-                          {done.tyresInserted ? ` + ${num(done.tyresInserted)} tyres` : ''}
+                          {num(done.inserted)} new imported
+                          {done.tyresInserted ? ` (+ ${num(done.tyresInserted)} tyres)` : ''}
                           {d.target === 'open_work_orders'
-                            ? ' (list replaced)'
-                            : `, merged/skipped ${num(done.skipped)} duplicates`}
+                            ? ', list replaced'
+                            : `${done.updated ? `, ${num(done.updated)} existing refreshed` : ''}${done.unchanged ? `, ${num(done.unchanged)} unchanged` : ''}`}
                         </span>
                       </div>
                       {done.failed > 0 && (
@@ -622,10 +625,13 @@ export default function ErpIntake() {
             </div>
           )}
 
-          {/* Merge note */}
+          {/* Merge note - explains why the count differs from the file */}
           <p className="text-xs text-[var(--text-tertiary)]">
-            Same-period re-imports merge - existing tyres/work orders are not duplicated; the open
-            job-card list is replaced.
+            Everything in the file loads. A row with a brand-new ID is added; a row whose ID is
+            already stored is refreshed with any new details you provided (a blank field never
+            overwrites existing data); a row identical to one already stored is left unchanged.
+            The open job-card list is replaced. Only exact duplicate rows are not re-added, and any
+            historical duplicates can be removed in Console, Duplicate Control.
           </p>
 
           {/* This exact file has been loaded before. Say so before the money moves. */}
@@ -687,10 +693,10 @@ export default function ErpIntake() {
                 >
                   <span className="text-[var(--text-secondary)]">{r.label}</span>
                   <span className="text-[var(--text-primary)] whitespace-nowrap">
-                    {num(r.inserted)} imported
+                    {num(r.inserted)} new
                     {r.target === 'open_work_orders'
                       ? ' (replaced)'
-                      : `, ${num(r.skipped)} merged`}
+                      : `${r.updated ? `, ${num(r.updated)} refreshed` : ''}${r.unchanged ? `, ${num(r.unchanged)} unchanged` : ''}`}
                   </span>
                 </div>
               ))}

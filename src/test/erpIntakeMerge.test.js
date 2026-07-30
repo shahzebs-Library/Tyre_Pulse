@@ -11,15 +11,21 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
  * deduping on serial discarded every lifecycle row after the first for any
  * serial already stored, so incremental re-imports silently lost history.
  *
+ * NOTHING GENUINELY NEW IS DROPPED: a new fitment is inserted, an already-stored
+ * fitment that carries new details is UPDATED, and only an exact duplicate is left
+ * alone. These tests pin all three outcomes.
+ *
  * Chainable/thenable Supabase mock mirrors src/test/engineeringKpi.api.test.js.
  */
 const h = vi.hoisted(() => {
-  const state = { existing: [], inserted: [], insertError: null }
+  const state = { existing: [], inserted: [], updated: [], insertError: null }
   function from(table) {
+    let usedIn = false
     const b = {
       _table: table,
       select() { return b },
       eq() { return b },
+      in() { usedIn = true; return b },   // overlap rows fetched by .in(key, values)
       order() { return b },  // existing-key reads order by id before paging (V415)
       range(f) {
         // Serve the existing-rows page once, then signal end-of-data.
@@ -30,7 +36,15 @@ const h = vi.hoisted(() => {
         if (!state.insertError) state.inserted.push(...rows)
         return Promise.resolve({ error: state.insertError, data: null })
       },
-      then(onF, onR) { return Promise.resolve({ data: [], error: null }).then(onF, onR) },
+      update(patch) {
+        // update(patch).eq('id', id) - record the applied patch.
+        return { eq(_c, id) { state.updated.push({ id, patch }); return Promise.resolve({ error: null, data: null }) } }
+      },
+      then(onF, onR) {
+        // A bare await (no .range()) resolves the .in() overlap fetch to the
+        // existing rows; other awaited chains resolve empty.
+        return Promise.resolve({ data: usedIn ? state.existing : [], error: null }).then(onF, onR)
+      },
     }
     return b
   }
@@ -44,6 +58,7 @@ const intake = await import('../lib/api/erpIntake')
 beforeEach(() => {
   h.state.existing = []
   h.state.inserted = []
+  h.state.updated = []
   h.state.insertError = null
 })
 
@@ -68,13 +83,33 @@ describe('insertTyreRecords - merge on the full fitment key', () => {
     expect(h.state.inserted[0].asset_no).toBe('TM901')
   })
 
-  it('still skips a genuine re-upload of the exact same fitment event', async () => {
+  it('leaves an exact re-upload of the same fitment event unchanged (no insert, no update)', async () => {
     h.state.existing = [row()]
     const res = await intake.insertTyreRecords([row()], { country: 'KSA' })
 
     expect(res.inserted).toBe(0)
+    expect(res.updated).toBe(0)
     expect(res.skipped).toBe(1)
     expect(h.state.inserted).toHaveLength(0)
+    expect(h.state.updated).toHaveLength(0)
+  })
+
+  it('REFRESHES a stored fitment when the re-import adds a new detail (removal date/km)', async () => {
+    // The same fitment key, but the later export now carries a removal date/km
+    // and a Removed status - this is new data and must land, not be dropped.
+    h.state.existing = [{ id: 'tr-1', ...row(), removal_date: null, km_at_removal: null, status: 'Active' }]
+    const res = await intake.insertTyreRecords([
+      row({ removal_date: '2026-09-01', km_at_removal: 84000, status: 'Removed' }),
+    ], { country: 'KSA' })
+
+    expect(res.inserted).toBe(0)
+    expect(res.updated).toBe(1)
+    expect(res.skipped).toBe(0)
+    expect(h.state.updated).toHaveLength(1)
+    expect(h.state.updated[0].id).toBe('tr-1')
+    // Only the changed/newly-provided fields are patched; blanks never overwrite.
+    expect(h.state.updated[0].patch).toMatchObject({ removal_date: '2026-09-01', status: 'Removed' })
+    expect(h.state.updated[0].patch.km_at_removal).toBe(84000)
   })
 
   it('matches the stored key case/whitespace-insensitively and ignores a date time part', async () => {

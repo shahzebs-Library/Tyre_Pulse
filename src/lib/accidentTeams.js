@@ -47,7 +47,7 @@ export const TEAM_DEFS = Object.freeze([
     key: 'fleet', label: 'Fleet', icon: 'Truck',
     blurb: 'Captures the incident, validates the record, and takes the vehicle back into service.',
     workstreams: ['incident_evidence', 'fleet_validation', 'handover'],
-    docCategories: ['accident_photo', 'police_report', 'driving_license', 'resident_id', 'registration'],
+    docCategories: ['accident_photo', 'police_report', 'driving_license', 'resident_id', 'registration', 'other'],
     inputs: [
       { key: 'incident_date', label: 'Incident date', get: (r) => r.incident_date },
       { key: 'location', label: 'Location', get: (r) => r.location },

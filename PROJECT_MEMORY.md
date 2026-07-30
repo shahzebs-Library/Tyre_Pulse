@@ -28,6 +28,26 @@ charts, `ActionMenu` export dropdowns, `.tp-register-pro` table styling.
   neither; fitment_date is GENERATED (insert issue_date not it); trg_guard_tyre_active_fitment needs the old
   active flipped BEFORE inserting the new active. Reversible (import tags + _bak). NOT done: expenses/job cards
   (already loaded for UAE/Egypt - reprocessing would duplicate); site/vehicle_type left NULL on new rows.
+- **ERP INTAKE NOW UPLOADS EVERYTHING (no migration, code only, `src/lib/api/erpIntake.js` + `ErpIntake.jsx`).**
+  Customer: "only the expense report imports complete in ERP intake, the other 3 skip new data even on new
+  dates - upload everything, clean exact duplicates from console." ROOT CAUSE: parts_consumption is
+  content-addressed on `import_uid` so every genuinely-new line always lands (why expenses "worked"), but
+  `insertTyreRecords`/`insertWorkOrders`/`insertVehicleFleet` used to DROP any row whose natural key already
+  existed - discarding the newer details. FIX = the three loaders now MERGE via one `mergeRows` helper: a new
+  key is INSERTED, an already-stored key is UPDATED with only the changed/newly-provided fields (`changedFields`
+  never blanks a value the file leaves empty, so curated data survives), an exact duplicate is left UNCHANGED.
+  work_orders.work_order_no + vehicle_fleet (org,country,asset_no) are UNIQUE so a same-key row can only be a
+  refresh, never a 2nd physical row; tyre_records has no such key so an exact-fitment duplicate is simply not
+  re-added (historical ones cleaned in Console -> Duplicate Control). MECHANISM: keep the paged existence-Set
+  reads (`existingKeys`/`existingTyreKeys`, order-by-id, boundary-safe), then `.in()`-fetch the FULL existing
+  rows for ONLY the overlap (bounded by the file) to diff+patch by id (worker-pool `updateById` w/ backoff).
+  `collapseByKey` folds within-file repeats (later non-blank wins) so a unique key is never inserted twice.
+  Return shape now `{inserted, updated, unchanged, failed, noKey, skipped=rows-inserted-updated}`; UI shows
+  "N new, M refreshed, K unchanged" per target + a plain-English merge note. `countExistingRows` preview relabels
+  existing as "refreshed with any new details" and counts tyres by fitment key (not serial). Tests: merge suite
+  +1 refresh test (7), paging-order suite unchanged (both green); build+lint clean. RULE: to upload-everything
+  under a unique key you UPSERT (refresh+insert), never insert a duplicate; only tyre_records can carry an exact
+  duplicate and those go to Duplicate Control.
 
 ## SESSION 2026-07-29 — ACCIDENT MODULE REBUILD PHASES 0-5 MERGED TO MAIN **+ APPLIED LIVE (V417-V427). ACTIVE.**
 **PRs #228 (`8857b52`), #229 (`fca3a09`), #230 (`7bd0d0c`), #231 (`1968d9e`), #232 (`e8f2cad`) all MERGED to main.**

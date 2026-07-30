@@ -1,9 +1,22 @@
 /**
  * ERP intake service - loads the mapped rows from src/lib/erpIntake.js into their
- * destination tables. Same-period re-imports MERGE rather than duplicate: rows whose
- * natural key already exists are skipped (tyre_records by serial+job card, work_orders
- * by work order number). The open-job-card list is a snapshot: it is REPLACED on each
- * import. Cost is never written here (cost comes only from the parts_consumption grid).
+ * destination tables. NOTHING GENUINELY NEW IS EVER DROPPED. A re-import of an ERP
+ * export MERGES by the row's natural key:
+ *   - a brand-new key            -> INSERTED
+ *   - a key already stored, but  -> the existing row is UPDATED with the changed /
+ *     the row carries new details    newly-provided fields (never blanking a value the
+ *                                    file leaves empty, so curated data is preserved)
+ *   - a key already stored, and  -> UNCHANGED (an exact duplicate, nothing to do)
+ *     every field is identical
+ * This is why the expense grid (content-addressed on the ERP line number) always
+ * loaded in full while the other reports appeared to "skip" - they used to drop any
+ * row whose key already existed, discarding the newer details. Now every report loads
+ * everything, and only exact duplicates are left alone. work_orders.work_order_no and
+ * vehicle_fleet (org,country,asset_no) are UNIQUE, so a same-key row can only be a
+ * refresh, never a second physical row; tyre_records has no such key, so a genuine
+ * exact duplicate is simply not re-added (clean historical ones in Duplicate Control).
+ * The open-job-card list is a snapshot: REPLACED on each import. Cost is never written
+ * here (cost comes only from the parts_consumption grid).
  *
  * @module api/erpIntake
  */
@@ -156,24 +169,186 @@ async function existingTyreKeys(country) {
   return keys
 }
 
+/** Lower-cased, trimmed key value for case/whitespace-insensitive matching. */
+const NORM = (v) => String(v ?? '').trim().toLowerCase()
+
 /**
- * Tyre lifecycle rows -> tyre_records. Merge on the full fitment key, so a
- * re-uploaded file adds only genuinely new lifecycle events and never
- * duplicates one, while later fitments of an already-known serial still load.
+ * Fetch the FULL existing rows for a set of key values, so an incoming row that
+ * shares a key can be compared field-by-field and refreshed. Only the OVERLAP
+ * (rows whose key is already known) is fetched, keyed on the ORIGINAL values so
+ * the server-side match is case-exact; the caller indexes results by normalised
+ * key. Chunked to keep the .in() list short; country-scoped when given.
+ */
+async function fetchRowsByIn(table, column, values, { country } = {}) {
+  const uniq = [...new Set((values || []).filter((v) => v != null && String(v).trim() !== ''))]
+  const out = []
+  for (let i = 0; i < uniq.length; i += 200) {
+    const chunk = uniq.slice(i, i + 200)
+    let q = supabase.from(table).select('*').in(column, chunk)
+    if (country) q = q.eq('country', country)
+    const { data, error } = await q
+    if (error) throw error
+    if (data) out.push(...data)
+  }
+  return out
+}
+
+// Columns never compared for "did anything change" and never overwritten on a
+// refresh: identity, tenancy, timestamps, generated, provenance blobs.
+const COMPARE_SKIP = new Set([
+  'id', 'organisation_id', 'organization_id', 'org_id', 'created_at', 'updated_at',
+  'country', 'client_uuid', 'fitment_date', 'extra_fields', 'custom_data', 'asset_extra',
+])
+
+/** Compare value: trimmed + lower-cased; a date-time collapses to its day so a
+ *  time part or timezone suffix is not read as a change. */
+const normCmp = (v) => {
+  if (v == null) return ''
+  const s = String(v).trim().toLowerCase()
+  return /^\d{4}-\d{2}-\d{2}[t ]/.test(s) ? s.slice(0, 10) : s
+}
+
+/** The fields an incoming row would CHANGE on an existing row: only fields the
+ *  file actually provides (non-blank) whose value differs. Empty incoming fields
+ *  are ignored so a sparse re-export never blanks a curated value. Empty object
+ *  means the incoming row is an exact duplicate (nothing to refresh). */
+function changedFields(incoming, existing) {
+  const patch = {}
+  for (const [k, v] of Object.entries(incoming)) {
+    if (COMPARE_SKIP.has(k)) continue
+    if (v == null || String(v).trim() === '') continue
+    if (normCmp(v) !== normCmp(existing[k])) patch[k] = v
+  }
+  return patch
+}
+
+/** Resilient chunked UPDATE-by-id (worker pool + backoff). A row that keeps
+ *  failing is counted, never lost silently. */
+async function updateById(table, updates, onProgress, base = 0, total = 0) {
+  let done = 0
+  let failed = 0
+  let cursor = 0
+  const worker = async () => {
+    for (;;) {
+      const idx = cursor
+      cursor += 1
+      if (idx >= updates.length) return
+      const u = updates[idx]
+      let ok = false
+      for (let a = 1; a <= MAX_ATTEMPTS; a += 1) {
+        const res = await supabase.from(table).update(u.patch).eq('id', u.id)
+        if (!res.error) { ok = true; break }
+        if (isFatalInsertError(res.error)) break
+        if (a < MAX_ATTEMPTS) {
+          await sleep(Math.min(BASE_BACKOFF_MS * 2 ** (a - 1), MAX_BACKOFF_MS) + Math.random() * 300)
+        }
+      }
+      if (!ok) failed += 1
+      done += 1
+      if (onProgress) onProgress(base + done, total)
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(CONCURRENCY, updates.length) }, worker))
+  return { updated: updates.length - failed, failed }
+}
+
+/** Collapse incoming rows to one row per natural key (later non-blank values win),
+ *  so a file that repeats a key does not try to insert it twice under a unique
+ *  constraint. Rows with no usable key are counted (noKey), never dropped silently. */
+function collapseByKey(rows, keyFn) {
+  const collapsed = new Map()
+  let noKey = 0
+  for (const r of rows) {
+    const k = keyFn(r)
+    if (!k) { noKey += 1; continue }
+    const prev = collapsed.get(k)
+    if (!prev) { collapsed.set(k, { ...r }); continue }
+    const merged = { ...prev }
+    for (const [kk, vv] of Object.entries(r)) {
+      if (vv != null && String(vv).trim() !== '') merged[kk] = vv
+    }
+    collapsed.set(k, merged)
+  }
+  return { collapsed, noKey }
+}
+
+/**
+ * Merge a set of incoming rows into a target: INSERT genuinely-new keys, UPDATE
+ * an existing key's row with any changed/newly-provided fields, leave exact
+ * duplicates alone. Nothing genuinely new is dropped.
+ *
+ * @param {string} table
+ * @param {Map} collapsed key -> merged incoming row (from collapseByKey)
+ * @param {Set} seen normalised keys already stored (existence set, paged)
+ * @param {(overlapRows:object[]) => Promise<Map>} loadExisting fetch full existing
+ *   rows for the overlap and return Map(normKey -> row)
+ * @returns {Promise<{inserted,updated,unchanged,failed}>}
+ */
+async function mergeRows(table, collapsed, seen, loadExisting, onProgress) {
+  const toInsert = []
+  const overlap = []
+  for (const [k, r] of collapsed) {
+    if (seen.has(k)) overlap.push({ key: k, row: r })
+    else toInsert.push(r)
+  }
+  const exMap = overlap.length ? await loadExisting(overlap.map((o) => o.row)).catch(() => new Map()) : new Map()
+  const toUpdate = []
+  let unchanged = 0
+  for (const { key, row } of overlap) {
+    const ex = exMap.get(key)
+    // Existence-set said present but the row was not fetched (a race, or a soft
+    // key that no longer resolves): treat as unchanged rather than risk a
+    // duplicate-key insert. Nothing new is added, nothing is lost.
+    if (!ex) { unchanged += 1; continue }
+    const patch = changedFields(row, ex)
+    if (Object.keys(patch).length) toUpdate.push({ id: ex.id, patch })
+    else unchanged += 1
+  }
+  const total = toInsert.length + toUpdate.length
+  const insRes = toInsert.length
+    ? await insertChunked(table, toInsert, (d) => onProgress && onProgress(Math.min(d, total), total))
+    : { inserted: 0, failed: 0 }
+  const updRes = toUpdate.length
+    ? await updateById(table, toUpdate, onProgress, toInsert.length, total)
+    : { updated: 0, failed: 0 }
+  return {
+    inserted: insRes.inserted,
+    updated: updRes.updated,
+    unchanged,
+    failed: (insRes.failed || 0) + (updRes.failed || 0),
+  }
+}
+
+/**
+ * Tyre lifecycle rows -> tyre_records. Merge on the full fitment key: a new
+ * fitment is inserted, an already-stored fitment is REFRESHED with any new
+ * details (e.g. a removal date/km added on a later export), and an exact
+ * duplicate is left alone. Later fitments of an already-known serial still load.
  */
 export async function insertTyreRecords(rows = [], { onProgress, country } = {}) {
+  const usable = rows.filter((r) => String(r.serial_no ?? '').trim() || String(r.asset_no ?? '').trim())
   const seen = await existingTyreKeys(country).catch(() => new Set())
-  const batch = new Set()
-  const fresh = rows.filter((r) => {
-    if (!r.serial_no && !r.asset_no) return false
-    const k = tyreLifecycleKey(r)
-    if (seen.has(k) || batch.has(k)) return false
-    batch.add(k)
-    return true
-  })
-  const skipped = rows.length - fresh.length
-  const res = fresh.length ? await insertChunked('tyre_records', fresh, onProgress) : { inserted: 0, failed: 0 }
-  return { inserted: res.inserted, failed: res.failed || 0, skipped }
+  const { collapsed } = collapseByKey(usable, tyreLifecycleKey)
+  const loadExisting = async (overlapRows) => {
+    const serials = overlapRows.map((r) => r.serial_no)
+    const assets = overlapRows.map((r) => r.asset_no)
+    const found = []
+    if (serials.some((v) => String(v ?? '').trim())) {
+      found.push(...await fetchRowsByIn('tyre_records', 'serial_no', serials, { country }))
+    }
+    if (assets.some((v) => String(v ?? '').trim())) {
+      found.push(...await fetchRowsByIn('tyre_records', 'asset_no', assets, { country }))
+    }
+    const map = new Map()
+    for (const er of found) { const k = tyreLifecycleKey(er); if (!map.has(k)) map.set(k, er) }
+    return map
+  }
+  const res = await mergeRows('tyre_records', collapsed, seen, loadExisting, onProgress)
+  return {
+    ...res,
+    noKey: rows.length - usable.length,
+    skipped: rows.length - res.inserted - res.updated,
+  }
 }
 
 /**
@@ -186,10 +361,15 @@ export async function insertTyreRecords(rows = [], { onProgress, country } = {})
  */
 export async function insertWorkOrders(rows = [], { onProgress, country } = {}) {
   const seen = await existingKeys('work_orders', 'work_order_no').catch(() => new Set())
-  const fresh = rows.filter((r) => r.work_order_no && !seen.has(String(r.work_order_no).trim().toLowerCase()))
-  const skipped = rows.length - fresh.length
-  const res = fresh.length ? await insertChunked('work_orders', fresh, onProgress) : { inserted: 0, failed: 0 }
-  return { inserted: res.inserted, failed: res.failed || 0, skipped }
+  const { collapsed, noKey } = collapseByKey(rows, (r) => (r.work_order_no ? NORM(r.work_order_no) : ''))
+  const loadExisting = async (overlapRows) => {
+    const found = await fetchRowsByIn('work_orders', 'work_order_no', overlapRows.map((r) => r.work_order_no))
+    const map = new Map()
+    for (const er of found) map.set(NORM(er.work_order_no), er)
+    return map
+  }
+  const res = await mergeRows('work_orders', collapsed, seen, loadExisting, onProgress)
+  return { ...res, noKey, skipped: rows.length - res.inserted - res.updated }
 }
 
 /** Open-job-card snapshot -> open_work_orders. REPLACES this country's list only (so
@@ -200,17 +380,25 @@ export async function replaceOpenWorkOrders(rows = [], { onProgress, country } =
   const { error } = await del
   if (error) throw error
   const res = rows.length ? await insertChunked('open_work_orders', rows, onProgress) : { inserted: 0, failed: 0 }
-  return { inserted: res.inserted, failed: res.failed || 0, skipped: 0 }
+  return { inserted: res.inserted, failed: res.failed || 0, skipped: 0, updated: 0, unchanged: 0 }
 }
 
-/** Asset master rows -> vehicle_fleet. Inserts assets not already stored (merge by
- * asset_no); existing assets are left untouched so curated fleet data is preserved. */
+/** Asset master rows -> vehicle_fleet. Inserts new assets and REFRESHES an already
+ * stored asset with any changed/newly-provided fields (odometer, insurance dates,
+ * etc.), but never blanks a curated value the file leaves empty. Merge key is
+ * (org, country, asset_no) - the same asset code in another country is a different
+ * machine, so the check is country-scoped. */
 export async function insertVehicleFleet(rows = [], { onProgress, country } = {}) {
   const seen = await existingKeys('vehicle_fleet', 'asset_no', country).catch(() => new Set())
-  const fresh = rows.filter((r) => r.asset_no && !seen.has(String(r.asset_no).trim().toLowerCase()))
-  const skipped = rows.length - fresh.length
-  const res = fresh.length ? await insertChunked('vehicle_fleet', fresh, onProgress) : { inserted: 0, failed: 0 }
-  return { inserted: res.inserted, failed: res.failed || 0, skipped }
+  const { collapsed, noKey } = collapseByKey(rows, (r) => (r.asset_no ? NORM(r.asset_no) : ''))
+  const loadExisting = async (overlapRows) => {
+    const found = await fetchRowsByIn('vehicle_fleet', 'asset_no', overlapRows.map((r) => r.asset_no), { country })
+    const map = new Map()
+    for (const er of found) map.set(NORM(er.asset_no), er)
+    return map
+  }
+  const res = await mergeRows('vehicle_fleet', collapsed, seen, loadExisting, onProgress)
+  return { ...res, noKey, skipped: rows.length - res.inserted - res.updated }
 }
 
 /** The natural-key column used to merge/dedup each target on re-import. */
@@ -221,15 +409,29 @@ const KEY_COL = {
 }
 
 /**
- * Preview-time duplicate check: given mapped rows for a target, count how many
- * already exist in this country (by the target's natural key) and how many are new.
- * Lets the Data Intake screen FLAG duplicates before importing rather than silently
- * merging. open_work_orders is a replaceable snapshot (no per-row dup concept).
+ * Preview-time merge check: given mapped rows for a target, count how many carry a
+ * brand-new key (will be INSERTED) and how many share a key already stored (will be
+ * REFRESHED with any new details, not dropped). Lets the Data Intake screen show the
+ * split before importing. tyre_records is keyed on the full fitment key (serial alone
+ * is not unique); the unique-keyed targets use their single natural key.
+ * open_work_orders is a replaceable snapshot (no per-row merge concept).
  * @returns {Promise<{ total:number, existing:number, fresh:number, keyed:boolean }>}
  */
 export async function countExistingRows(target, rows = [], { country } = {}) {
-  const col = KEY_COL[target]
   const total = rows.length
+  if (target === 'tyre_records') {
+    const seen = await existingTyreKeys(country).catch(() => new Set())
+    let existing = 0
+    const inFile = new Set()
+    for (const r of rows) {
+      if (!String(r.serial_no ?? '').trim() && !String(r.asset_no ?? '').trim()) continue
+      const k = tyreLifecycleKey(r)
+      if (seen.has(k) || inFile.has(k)) existing += 1
+      else inFile.add(k)
+    }
+    return { total, existing, fresh: total - existing, keyed: true }
+  }
+  const col = KEY_COL[target]
   if (!col) return { total, existing: 0, fresh: total, keyed: false }
   const seen = await existingKeys(target, col, country).catch(() => new Set())
   let existing = 0

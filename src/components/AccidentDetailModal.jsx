@@ -43,8 +43,6 @@ import { setAccidentStage, setAccidentVor } from '../lib/api/accidentWorkflow'
 import { resolveStorageUrls } from '../lib/storageRefs'
 import CustomFieldsPanel from './CustomFieldsPanel'
 import CopilotCard from './ai/CopilotCard'
-import EntityApprovalPanel from './workflow/EntityApprovalPanel'
-import CaseProgressPanel from './accidents/CaseProgressPanel'
 import CaseCompletionPanel from './accidents/CaseCompletionPanel'
 import CaseWorkstreamsPanel from './accidents/CaseWorkstreamsPanel'
 import CaseTeamDistributionPanel from './accidents/CaseTeamDistributionPanel'
@@ -123,14 +121,11 @@ function computeDelay(acc, closure) {
 
 const TABS = [
   { key: 'overview', label: 'Overview', icon: FileText },
-  // The team split lives on its own tab, not folded into Overview: it is where
-  // each department does its work, and Overview is already a summary of five
-  // other sections.
-  { key: 'teams',    label: 'Teams & Progress', icon: Users },
-  // Distribute the case to its teams: each team's workstreams (with owner + status),
-  // the structured inputs it owns (present vs still needed), and the files routed to
-  // it. Elevated users assign owners inline; others read-only.
-  { key: 'distribution', label: 'Distribute to Teams', icon: Share2 },
+  // One tab per team: a row of team tabs (Fleet, HSE, Insurance, Workshop, Finance)
+  // switches the view, and the selected team shows its single progress bar plus only
+  // its own work, inputs and files. Elevated users assign owners inline; others
+  // read-only. (Rendered by CaseTeamDistributionPanel.)
+  { key: 'teams',    label: 'Teams', icon: Users },
   // Interactive "who owns what" control: assign each workstream, set its status,
   // and mark one Not Applicable. Elevated users get the controls; others read-only.
   { key: 'workstreams', label: 'Workstreams', icon: ListChecks },
@@ -401,13 +396,6 @@ function AccidentDetail({ accidentId, onBack, onClose, onChanged, variant = 'pag
           </div>
         )}
         {tab === 'teams'     && (
-          <CaseProgressPanel
-            record={acc}
-            canEdit={elevated && !editLocked}
-            onChanged={() => { load(); onChanged?.() }}
-          />
-        )}
-        {tab === 'distribution' && (
           <CaseTeamDistributionPanel
             record={acc}
             canEdit={elevated && !editLocked}
@@ -552,33 +540,11 @@ function AccidentDetail({ accidentId, onBack, onClose, onChanged, variant = 'pag
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        {/* Main workspace */}
-        <div className="lg:col-span-2 card p-0 flex flex-col overflow-hidden">
-          {body}
-        </div>
-        {/* Approval engine rail */}
-        <div className="lg:col-span-1">
-          <div className="lg:sticky lg:top-4">
-            <EntityApprovalPanel
-              entityType="accident"
-              entityId={acc.id}
-              entityLabel={acc.insurance_claim_no || acc.policy_no || acc.asset_no || acc.id}
-              context={{
-                severity,
-                is_major: ['Major', 'Total Loss'].includes(severity),
-                estimated_cost: Number(acc.estimated_damage_cost) || Number(acc.repair_cost) || 0,
-                repair_cost: Number(acc.repair_cost) || 0,
-                parts_cost: Number(acc.parts_cost) || 0,
-                claim_amount: Number(acc.claim_amount) || 0,
-                country: acc.country || null,
-                site: acc.site || null,
-              }}
-              title="Accident Approval"
-              onStateChange={handleWfStateChange}
-            />
-          </div>
-        </div>
+      {/* Full-width workspace. The approval step is handled through the Closure
+          tab (approval is requested / granted at closure), so there is no separate
+          side approval rail. */}
+      <div className="card p-0 flex flex-col overflow-hidden">
+        {body}
       </div>
     </div>
   )

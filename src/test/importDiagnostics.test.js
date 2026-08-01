@@ -69,11 +69,12 @@ describe('diagnostics - summarizeValidation', () => {
 
   it('derives a default action plan that sums to total', () => {
     expect(s.plan.total).toBe(6)
-    // rows 3,4 error → reject; row 5 liveDuplicate → skip; row 6 conflict → review; rows 1,2 → insert
+    // rows 3,4 error → reject; row 5 liveDuplicate → insert for DB verification;
+    // row 6 conflict → review; rows 1,2 → insert
     expect(s.plan.reject).toBe(2)
-    expect(s.plan.skip).toBe(1)
+    expect(s.plan.skip).toBe(0)
     expect(s.plan.review).toBe(1)
-    expect(s.plan.insert).toBe(2)
+    expect(s.plan.insert).toBe(3)
     const sum = s.plan.insert + s.plan.update + s.plan.skip + s.plan.reject + s.plan.review
     expect(sum).toBe(s.plan.total)
   })
@@ -168,6 +169,15 @@ describe('diagnostics - summarizeCommitResult', () => {
     const res = summarizeCommitResult({ status: 'committed', inserted: 0, merged: 7, failed: 0, remaining: 0 })
     expect(res.level).toBe('ok')
     expect(res.headline).toContain('7 merged')
+    expect(res.successRate).toBe(100)
+  })
+
+  it('reports database-verified exact duplicates as successful dropped rows', () => {
+    const res = summarizeCommitResult({
+      status: 'committed', inserted: 0, skipped: 133, exact_duplicates: 133, failed: 0, remaining: 0,
+    })
+    expect(res.level).toBe('ok')
+    expect(res.headline).toContain('133 exact duplicate(s) dropped')
     expect(res.successRate).toBe(100)
   })
 

@@ -174,7 +174,7 @@ function groupIssues(pairs) {
 function defaultAction(row) {
   if (!row || typeof row !== 'object') return 'insert'
   if (row.validationStatus === 'error') return 'reject'
-  if (row.liveDuplicate) return 'skip'
+  if (row.liveDuplicate) return 'insert'
   if (row.dupStatus === 'duplicate') return 'skip'
   if (row.dupStatus === 'conflict') return 'review'
   if (row.countryConflict) return 'review'
@@ -314,9 +314,9 @@ function buildValidationHealth({ total, counts, plan, forcedThrough, blocking, m
     checks.push({
       id: 'live-duplicates',
       level: 'warn',
-      title: `${fmtInt(counts.liveDuplicate)} row(s) already in the live table`,
-      detail: 'These match existing records and will be skipped by default.',
-      hint: 'Switch matching rows to update if you intend to refresh existing records.',
+      title: `${fmtInt(counts.liveDuplicate)} exact live copy row(s)`,
+      detail: 'These rows will proceed to commit, where the database verifies every supplied value.',
+      hint: 'Verified exact copies are dropped; any row whose values changed is not treated as a duplicate.',
     })
   }
   if (counts.countryConflict > 0) {
@@ -357,12 +357,13 @@ export function summarizeCommitResult(result) {
   const skipped = toNum(r.skipped)
   const failed = toNum(r.failed)
   const merged = toNum(r.merged)
+  const exactDuplicates = toNum(r.exact_duplicates)
   const enriched = toNum(r.enriched)
   const remaining = toNum(r.remaining)
   const errors = toArray(r.errors).filter((e) => e && typeof e === 'object')
 
   const totalProcessed = inserted + skipped + failed + merged
-  const successfulWrites = inserted + merged
+  const successfulWrites = inserted + merged + exactDuplicates
   const successBase = successfulWrites + failed
   const successRate = successBase > 0 ? Math.round((successfulWrites / successBase) * 100) : successfulWrites > 0 ? 100 : 0
 
@@ -374,7 +375,7 @@ export function summarizeCommitResult(result) {
   // drew a green tick reading "Committed - 0 row(s) inserted". V404 gives that
   // case its own status; treat any zero-insert run as a warning even if an older
   // backend still calls it committed.
-  const wroteNothing = inserted === 0 && merged === 0
+  const wroteNothing = inserted === 0 && merged === 0 && exactDuplicates === 0
   let level = 'ok'
   if (status === 'failed' || failed > 0) level = 'error'
   else if (partial || stalled || status === 'already_committed') level = 'warn'
@@ -385,7 +386,8 @@ export function summarizeCommitResult(result) {
   const parts = []
   if (inserted > 0 || (failed === 0 && merged === 0 && skipped === 0)) parts.push(`${fmtInt(inserted)} inserted`)
   if (merged > 0) parts.push(`${fmtInt(merged)} merged`)
-  if (skipped > 0) parts.push(`${fmtInt(skipped)} skipped`)
+  if (exactDuplicates > 0) parts.push(`${fmtInt(exactDuplicates)} exact duplicate(s) dropped`)
+  if (skipped > exactDuplicates) parts.push(`${fmtInt(skipped - exactDuplicates)} skipped`)
   if (failed > 0) parts.push(`${fmtInt(failed)} failed`)
   if (enriched > 0) parts.push(`${fmtInt(enriched)} enriched`)
   let headline = parts.join(', ')

@@ -50,9 +50,8 @@ describe('naturalKey - module key construction', () => {
 })
 
 /**
- * Pure re-implementation of the wizard's skip transformation, kept identical to
- * DataIntakeCenter.runValidation(): a row whose natural key is already live
- * becomes dup_status='duplicate' (unless already 'conflict') and action='skip'.
+ * Pure model of the wizard's live-candidate action: a matching row proceeds as
+ * an insert candidate so commit can verify whether it is an exact duplicate.
  */
 function applyLiveDedup(rows, liveKeys, module) {
   return rows.map((r) => {
@@ -63,26 +62,25 @@ function applyLiveDedup(rows, liveKeys, module) {
       const key = naturalKey(r.transformed, module)
       if (key && liveKeys.has(key)) {
         liveDuplicate = true
-        if (dupStatus !== 'conflict') dupStatus = 'duplicate'
-        action = 'skip'
+        action = 'insert'
       }
     }
     return { ...r, action, liveDuplicate, dupStatus }
   })
 }
 
-describe('live dedup - skip transformation', () => {
+describe('live dedup - commit verification candidate', () => {
   const module = 'fleet'
   const live = new Set([naturalKey({ country: 'KSA', asset_no: 'V-100' }, module)])
 
-  it('marks a row already present in the live table as skip', () => {
+  it('keeps a matching live candidate insertable', () => {
     const rows = [
       { transformed: { country: 'KSA', asset_no: 'V-100' }, validationStatus: 'ready', dupStatus: 'none' },
       { transformed: { country: 'KSA', asset_no: 'V-200' }, validationStatus: 'ready', dupStatus: 'none' },
     ]
     const out = applyLiveDedup(rows, live, module)
-    expect(out[0].action).toBe('skip')
-    expect(out[0].dupStatus).toBe('duplicate')
+    expect(out[0].action).toBe('insert')
+    expect(out[0].dupStatus).toBe('none')
     expect(out[0].liveDuplicate).toBe(true)
     // a row not present live stays insertable
     expect(out[1].action).toBe('insert')
@@ -92,11 +90,11 @@ describe('live dedup - skip transformation', () => {
   it('never overrides a pre-existing conflict status', () => {
     const rows = [{ transformed: { country: 'KSA', asset_no: 'V-100' }, validationStatus: 'warning', dupStatus: 'conflict' }]
     const out = applyLiveDedup(rows, live, module)
-    expect(out[0].action).toBe('skip')
+    expect(out[0].action).toBe('insert')
     expect(out[0].dupStatus).toBe('conflict')
   })
 
-  it('leaves error rows as reject, never skip', () => {
+  it('leaves error rows as reject, never sends them to commit', () => {
     const rows = [{ transformed: { country: 'KSA', asset_no: 'V-100' }, validationStatus: 'error', dupStatus: 'none' }]
     const out = applyLiveDedup(rows, live, module)
     expect(out[0].action).toBe('reject')

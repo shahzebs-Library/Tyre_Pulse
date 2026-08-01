@@ -228,13 +228,13 @@ export default function DataIntakeCenter() {
   // Smart default action for a row, given the current global toggles. This is the
   // system's recommendation; the operator can override it per row (rowActionOverride).
   //  · error            → reject, unless force-include is on (elevated) → insert
-  //  · already live      → skip, unless enrich is on (elevated) → update
+  //  · exact live copy   → insert; commit verifies and drops only an exact copy
   //  · exact whole-row copy inside this file → skip (redundant)
   //  · everything else   → insert
   const smartAction = useCallback((r) => {
     if (r.validationStatus === 'error') return (forceFlagged && isElevated) ? 'insert' : 'reject'
     if (r.liveNeedsUpdate) return isElevated ? 'update' : 'skip'
-    if (r.liveDuplicate) return (enrichExisting && isElevated) ? 'update' : 'skip'
+    if (r.liveDuplicate) return (enrichExisting && isElevated) ? 'update' : 'insert'
     if (r.dupStatus === 'duplicate') return 'skip'
     return 'insert'
   }, [forceFlagged, enrichExisting, isElevated])
@@ -629,9 +629,10 @@ export default function DataIntakeCenter() {
     const withDup = classifyDuplicates(rows.map((r) => r.transformed), module)
     rows.forEach((r, i) => { r.dupStatus = withDup[i]?.dup_status || 'none' })
 
-    // Live-table duplicate detection (V47). Exact repeats are skipped; same-key
-    // rows carrying changed values become update candidates instead of being
-    // mislabeled as already existing.
+    // Live-table duplicate detection (V47). Exact repeats are sent through to
+    // commit with the candidate record id so the database can verify and drop
+    // only a field-for-field copy. Same-key rows carrying changed values become
+    // update candidates instead of being mislabeled as already existing.
     let liveKeys = null
     let liveRecords = null
     try {
@@ -658,6 +659,7 @@ export default function DataIntakeCenter() {
         }
       }
       r.liveDuplicate = isLiveDup
+      r.liveRecordId = isLiveDup ? liveRecords?.get(naturalKey(r.transformed, module))?.id ?? null : null
       r.liveNeedsUpdate = needsUpdate
       if (needsUpdate) {
         if (r.validationStatus === 'ready') r.validationStatus = 'warning'
@@ -728,6 +730,7 @@ export default function DataIntakeCenter() {
           dupStatus: r.dupStatus,
           action,
           fingerprint: r.fingerprint,
+          liveRecordId: action === 'insert' ? r.liveRecordId : null,
         }
       }), {
         // the upload is the long phase of a big import; show it moving
@@ -812,7 +815,7 @@ export default function DataIntakeCenter() {
       const res = await imports.commitBatch(batchId, {
         onProgress: (p) => setCommitProgress({ phase: 'commit', ...p }),
       })
-      const wroteNothing = !Number(res?.inserted || 0) && !Number(res?.merged || 0)
+      const wroteNothing = !Number(res?.inserted || 0) && !Number(res?.merged || 0) && !Number(res?.exact_duplicates || 0)
       if (wroteNothing && (!res.not_eligible || Object.keys(res.not_eligible).length === 0)) {
         try {
           const d = await getBatchDiagnostics(batchId)
@@ -1030,7 +1033,7 @@ export default function DataIntakeCenter() {
           )}
           {counts && (
             <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
-              {[['Total', counts.total, 'text-[var(--text-primary)]'], ['Ready', counts.ready, 'text-green-400'], ['Warning', counts.warning, 'text-amber-400'], ['Error', counts.error, 'text-red-400'], ['Duplicate', counts.duplicate, 'text-purple-400'], ['Already live', counts.liveDuplicate || 0, 'text-sky-400']].map(([l, v, c]) => (
+              {[['Total', counts.total, 'text-[var(--text-primary)]'], ['Ready', counts.ready, 'text-green-400'], ['Warning', counts.warning, 'text-amber-400'], ['Error', counts.error, 'text-red-400'], ['Duplicate', counts.duplicate, 'text-purple-400'], ['Exact live copy', counts.liveDuplicate || 0, 'text-sky-400']].map(([l, v, c]) => (
                 <div key={l} className="bg-[var(--surface-1)] border border-[var(--border-dim)] rounded-xl p-3"><p className="text-xs text-[var(--text-muted)]">{l}</p><p className={`text-2xl font-bold ${c}`}>{v}</p></div>
               ))}
             </div>
@@ -1142,7 +1145,7 @@ export default function DataIntakeCenter() {
                   <tr key={r.sourceRowNo} className="border-t border-[var(--border-dim)]">
                     <td className="px-3 py-1.5 text-[var(--text-muted)]">{r.sourceRowNo}</td>
                     <td className="px-3 py-1.5"><span className={`text-xs px-2 py-0.5 rounded ${statusColor(r.validationStatus)}`}>{r.validationStatus}</span></td>
-                    <td className="px-3 py-1.5 text-xs text-[var(--text-secondary)]">{r.liveDuplicate ? <span className="text-sky-400" title="A record with this key already exists in the live table">already live</span> : r.dupStatus === 'duplicate' ? <span className="text-[var(--text-muted)]" title="Exact whole-row copy of an earlier row in this file">exact copy</span> : r.dupStatus === 'conflict' ? <span className="text-amber-400" title="Same key as another row in this file but different data">conflict</span> : '-'}</td>
+                    <td className="px-3 py-1.5 text-xs text-[var(--text-secondary)]">{r.liveDuplicate ? <span className="text-sky-400" title="Commit will verify and drop this only if every supplied value still matches">exact live copy</span> : r.dupStatus === 'duplicate' ? <span className="text-[var(--text-muted)]" title="Exact whole-row copy of an earlier row in this file">exact copy</span> : r.dupStatus === 'conflict' ? <span className="text-amber-400" title="Same key as another row in this file but different data">conflict</span> : '-'}</td>
                     <td className="px-3 py-1.5 text-xs text-[var(--text-muted)] truncate max-w-[240px]">{r.issues.map((i) => i.message).join('; ') || '-'}</td>
                     <td className="px-3 py-1.5">
                       {isElevated ? (
@@ -1187,7 +1190,7 @@ export default function DataIntakeCenter() {
           )}
           {isElevated && counts?.liveDuplicate > 0 && (
             <div className="bg-sky-900/15 border border-sky-700/40 rounded-xl p-4 space-y-2">
-              <p className="text-sm text-sky-300 flex items-center gap-2"><Database size={16} /> {counts.liveDuplicate} row(s) match records that already exist.</p>
+              <p className="text-sm text-sky-300 flex items-center gap-2"><Database size={16} /> {counts.liveDuplicate} exact live copy row(s) will be verified during commit.</p>
               <label className="flex items-center gap-2 text-sm text-sky-200 cursor-pointer">
                 <input type="checkbox" checked={enrichExisting} onChange={(e) => setEnrichExisting(e.target.checked)} className="accent-sky-500" />
                 Enrich existing records: fill their blank fields from this file (don't skip).

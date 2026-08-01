@@ -313,6 +313,9 @@ export async function stageRows(batchId, rows, { onProgress } = {}) {
     dup_status: r.dupStatus ?? 'none',
     action: r.action ?? 'insert',
     row_fingerprint: r.fingerprint ?? null,
+    // A preview match is only a candidate. The commit RPC re-reads this exact
+    // live row and compares every supplied target field before dropping it.
+    target_record_id: r.liveRecordId ?? null,
   }))
 
   // Size-bounded chunking: grow each chunk until it hits the row cap or the byte
@@ -389,7 +392,9 @@ export async function runPostImportAutomation(batchId, module, opts = {}) {
     const scopeCountry = batch?.country ?? opts.country ?? null
     const rows = await getBatchRows(batchId, 5000)
     // Only act on rows that actually became live records.
-    const live = rows.filter((r) => r.target_record_id != null).map((r) => r.transformed_data || {})
+    const live = rows
+      .filter((r) => r.target_record_id != null && r.dup_status !== 'duplicate')
+      .map((r) => r.transformed_data || {})
     const user = await currentUser()
 
     // ── Alerts: critical risk or low tread ───────────────────────────────────
@@ -485,7 +490,7 @@ export const COMMIT_CHUNK_ROWS = 1000
  * on success). `onProgress` receives the running totals after every chunk.
  */
 export async function commitBatch(batchId, { chunkSize = COMMIT_CHUNK_ROWS, onProgress } = {}) {
-  const totals = { status: 'committed', inserted: 0, skipped: 0, failed: 0, merged: 0, errors: [], remaining: 0, target: null }
+  const totals = { status: 'committed', inserted: 0, skipped: 0, exact_duplicates: 0, failed: 0, merged: 0, errors: [], remaining: 0, target: null }
   let stalls = 0
   for (;;) {
     const { data, error } = await supabase.rpc('import_commit_batch', {
@@ -496,6 +501,7 @@ export async function commitBatch(batchId, { chunkSize = COMMIT_CHUNK_ROWS, onPr
     const d = data || {}
     totals.inserted += d.inserted || 0
     totals.skipped  += d.skipped  || 0
+    totals.exact_duplicates += d.exact_duplicates || 0
     totals.failed   += d.failed   || 0
     totals.merged   += d.merged   || 0
     if (Array.isArray(d.errors) && d.errors.length) totals.errors = totals.errors.concat(d.errors).slice(0, 20)

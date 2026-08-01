@@ -118,8 +118,11 @@ function isExactLiveMatch(transformed, live, module) {
   if (!transformed || !live) return false
   const fields = MODULE_FIELDS[module] || []
   for (const f of fields) {
+    // Compare every field actually supplied by the upload, including an
+    // explicitly blank cell. Fields absent from the file are not evidence that
+    // the live record differs.
+    if (!Object.prototype.hasOwnProperty.call(transformed, f.key)) continue
     const uploaded = transformed[f.key]
-    if (!hasValue(uploaded)) continue
     if (comparableValue(uploaded, f.type) !== comparableValue(live[f.key], f.type)) return false
   }
   return true
@@ -648,7 +651,9 @@ export default function DataIntakeCenter() {
         const key = naturalKey(r.transformed, module)
         if (key && liveKeys.has(key)) {
           const live = liveRecords?.get(key)
-          isLiveDup = live ? isExactLiveMatch(r.transformed, live, module) : true
+          // Never claim "already existed" from the natural key alone. The live
+          // row must have been fetched and its uploaded values must match.
+          isLiveDup = !!live && isExactLiveMatch(r.transformed, live, module)
           needsUpdate = !!live && !isLiveDup
         }
       }

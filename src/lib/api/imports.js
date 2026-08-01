@@ -603,7 +603,10 @@ export async function existingRecords({ module, country, rows = [] }) {
   const values = uniqNonBlank(rows.map((r) => r?.[probe]))
   if (!values.length) return new Map()
 
-  const fieldKeys = (MODULE_FIELDS[module] || []).map((f) => f.key)
+  // Derived fields are available to the preview only and are not guaranteed to
+  // exist in the destination table (for example tyre.total_amount). Selecting
+  // one makes PostgREST reject the whole lookup and prevents value-level dedup.
+  const fieldKeys = (MODULE_FIELDS[module] || []).filter((f) => !f.derived).map((f) => f.key)
   const cols = [...new Set(['id', 'country', probe, ...fieldKeys])].join(',')
   const out = new Map()
 

@@ -107,13 +107,14 @@ describe('import engine - cross-file merge (cost-of-record wins)', () => {
     const merged = mergeCrossFileRows([r1, r2, r3], 'workorder')
     expect(merged).toHaveLength(3)
     expect(merged.map((r) => r.transformed.work_order_no)).toEqual(['JC/A', 'JC/B', 'JC/C'])
-    // Distinct-country rows are also distinct even with the same WO number.
+    // The live table's work_order_no key is global, so even a distinct-country
+    // repeat must collapse before commit instead of hitting a unique violation.
     const cross = mergeCrossFileRows(
       [stageRow({ country: 'KSA', work_order_no: 'JC/X', asset_no: 'X1' }),
         stageRow({ country: 'UAE', work_order_no: 'JC/X', asset_no: 'X9' })],
       'workorder',
     )
-    expect(cross).toHaveLength(2)
+    expect(cross).toHaveLength(1)
   })
 
   it('(e) line-item aggregation is preserved across the merge (no double-counted cost)', () => {

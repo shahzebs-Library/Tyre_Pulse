@@ -104,7 +104,7 @@ describe('workorder adapter - cost-integrity & required validation (validateRow)
 })
 
 describe('workorder adapter - duplicate classification (WO-number identity)', () => {
-  // Natural key = country + work_order_no.
+  // Natural key = work_order_no, matching the live global uniqueness rule.
   const mapping = [
     { sourceHeader: 'WO No', target: 'work_order_no' },
     { sourceHeader: 'Asset No', target: 'asset_no' },
@@ -126,13 +126,13 @@ describe('workorder adapter - duplicate classification (WO-number identity)', ()
     expect(out.map((r) => r.dup_status)).toEqual(['none', 'duplicate'])
   })
 
-  it('same WO across different countries → none (country-scoped)', () => {
+  it('same WO across different countries -> conflict (global work_order_no)', () => {
     const rows = [
       { country: 'KSA', ...make({}) },
       { country: 'UAE', ...make({}) },
     ]
     const out = classifyDuplicates(rows, 'workorder')
-    expect(out.every((r) => r.dup_status === 'none')).toBe(true)
+    expect(out.map((r) => r.dup_status)).toEqual(['none', 'conflict'])
   })
 
   it('same WO + same country but disagreeing conflict field (status) → conflict', () => {
@@ -148,7 +148,7 @@ describe('workorder adapter - duplicate classification (WO-number identity)', ()
 describe('workorder adapter - natural key', () => {
   it('is stable and identical for two rows sharing country + work_order_no', () => {
     const a = naturalKey({ country: 'KSA', work_order_no: 'WO-7' }, 'workorder')
-    const b = naturalKey({ country: 'KSA', work_order_no: 'WO-7' }, 'workorder')
+    const b = naturalKey({ country: 'UAE', work_order_no: 'WO-7' }, 'workorder')
     expect(a).not.toBeNull()
     expect(a).toBe(b)
   })

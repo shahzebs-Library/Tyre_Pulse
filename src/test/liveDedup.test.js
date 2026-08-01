@@ -27,6 +27,11 @@ describe('naturalKey - module key construction', () => {
     expect(naturalKey({ country: 'KSA', site: 'Riyadh', description: 'Filter' }, 'stock')).toBe(`ksa${SEP}riyadh${SEP}filter`)
   })
 
+  it('workorder key = norm(work_order_no), matching the global live uniqueness rule', () => {
+    expect(naturalKey({ country: 'KSA', work_order_no: ' WO-7 ' }, 'workorder')).toBe('wo-7')
+    expect(naturalKey({ country: 'UAE', work_order_no: 'WO-7' }, 'workorder')).toBe('wo-7')
+  })
+
   it('accepts a wrapped { transformed } row as well as a flat row', () => {
     const flat = { country: 'KSA', asset_no: 'V-100' }
     expect(naturalKey({ transformed: flat }, 'fleet')).toBe(naturalKey(flat, 'fleet'))

@@ -8,6 +8,7 @@
  *   - fleet       : country + asset_no
  *   - tyre-master : country + serial_no
  *   - stock       : country + site + description
+ *   - workorder   : work_order_no (global; live table enforces this)
  *
  * A repeated tyre serial across a lifecycle is flagged as an EVENT
  * ('conflict' when key fields disagree), never silently skipped.
@@ -289,8 +290,9 @@ const NATURAL_KEY = {
   accident: (r) => keyParts([r.country, r.insurance_claim_no || r.police_report_no]),
   // Inspection event: asset + type + date + inspector.
   inspection: (r) => keyParts([r.country, r.asset_no, r.inspection_type, r.inspection_date, r.inspector]),
-  // Work order: WO number is the identity.
-  workorder: (r) => keyParts([r.country, r.work_order_no]),
+  // Work order: the live table enforces work_order_no globally, so preview
+  // dedupe must be global too or cross-country duplicates fail at commit.
+  workorder: (r) => keyParts([r.work_order_no]),
   // Warranty: serial + claim ref (serial required).
   warranty: (r) => keyParts([r.country, r.serial_number, r.claim_no]),
   // Gate pass: no pass number column - asset + pass date.
@@ -308,7 +310,7 @@ const CONFLICT_FIELDS = {
   stock: ['stock_qty'],
   accident: ['asset_no', 'incident_date', 'claim_amount'],
   inspection: ['status', 'severity', 'findings'],
-  workorder: ['asset_no', 'status', 'total_cost'],
+  workorder: ['country', 'asset_no', 'status', 'total_cost'],
   warranty: ['asset_no', 'claim_status', 'credit_amount'],
   gatepass: ['site', 'status'],
   supplier: ['supplier_name', 'supplier_type', 'phone', 'email'],
@@ -443,6 +445,7 @@ export function classifyDuplicates(rows, module) {
  *   fleet : country + asset_no
  *   tyre  : country + serial_no
  *   stock : country + site + description
+ *   workorder : work_order_no (global)
  *
  * @param {Record<string,*>} row    Transformed row (flat) or { transformed }.
  * @param {'fleet'|'tyre'|'stock'} module

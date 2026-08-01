@@ -34,7 +34,7 @@ const NATURAL_KEY_FIELDS = {
   stock: ['country', 'site', 'description'],
   accident: ['country', 'insurance_claim_no'],
   inspection: ['country', 'asset_no', 'inspection_type', 'inspection_date', 'inspector'],
-  workorder: ['country', 'work_order_no'],
+  workorder: ['work_order_no'],
   warranty: ['country', 'serial_number', 'claim_no'],
   gatepass: ['country', 'asset_no', 'pass_date'],
   supplier: ['country', 'supplier_code'],

@@ -300,9 +300,9 @@ export async function previewPromotion(dataset, batch_id) {
 }
 
 /**
- * Apply a promotion: move the batch's rows into the master tables (p_dry_run=false).
- * Idempotent - rows already promoted are skipped. Returns the same shape as the
- * preview with the real inserted counts.
+ * Apply a promotion: merge the batch's rows into the master tables
+ * (p_dry_run=false). Exact copies are dropped and changed rows refresh their
+ * matching master record. Returns the same shape as the preview call.
  * @param {'asset'|'change'|'expense'} dataset
  * @param {string} batch_id
  */
@@ -314,8 +314,9 @@ export async function applyPromotion(dataset, batch_id) {
 }
 
 /**
- * Undo a promoted batch: delete exactly the master rows this process inserted and
- * clear the staging promoted flag so the batch can be promoted again cleanly.
+ * Undo a promoted batch: restore updated master rows, delete rows this process
+ * inserted, and clear the staging promoted flag so the batch can be promoted
+ * again cleanly.
  * @param {'asset'|'change'|'expense'} dataset
  * @param {string} batch_id
  */
@@ -327,15 +328,15 @@ export async function undoPromotion(dataset, batch_id) {
 }
 
 /**
- * Current promotion status of a batch: how many rows reached the master tables
- * (inserted vs already present) and when. Degrades to a not-promoted shape on any
- * error so the review grid never breaks over it.
+ * Current promotion status of a batch: how many rows were inserted, refreshed,
+ * or exact copies, and when. Degrades to a not-promoted shape on any error so
+ * the review grid never breaks over it.
  * @param {'asset'|'change'|'expense'} dataset
  * @param {string} batch_id
- * @returns {Promise<{inserted:number, existing:number, total:number, promoted:boolean, promoted_at:?string}>}
+ * @returns {Promise<{inserted:number, updated:number, exact_duplicates:number, existing:number, total:number, promoted:boolean, promoted_at:?string}>}
  */
 export async function promotionStatus(dataset, batch_id) {
-  const fallback = { inserted: 0, existing: 0, total: 0, promoted: false, promoted_at: null }
+  const fallback = { inserted: 0, updated: 0, exact_duplicates: 0, existing: 0, total: 0, promoted: false, promoted_at: null }
   if (!batch_id || !PROMOTE_RPC[dataset]) return fallback
   try {
     const { data, error } = await supabase.rpc('erp_batch_promotion_status', { p_dataset: dataset, p_batch: batch_id })

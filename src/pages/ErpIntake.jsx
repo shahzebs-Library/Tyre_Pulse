@@ -92,7 +92,7 @@ function resultSummary(row) {
   if (row?.target === 'open_work_orders') parts.push('list replaced')
   else {
     if (c.updated) parts.push(`${num(c.updated)} refreshed`)
-    if (c.notAdded) parts.push(`${num(c.notAdded)} already present / no separate row`)
+    if (c.notAdded) parts.push(`${num(c.notAdded)} exact duplicate(s) dropped`)
   }
   if (c.failed) parts.push(`${num(c.failed)} failed`)
   return parts.join(', ')
@@ -133,7 +133,6 @@ export default function ErpIntake() {
   // number was mapped, and today that is true for KSA and almost nothing else
   // (Egypt carries a line number on 78 of 42,531 rows, UAE on 39 of 67,615).
   const [fingerprint, setFingerprint] = useState(null)
-  const [repeatAck, setRepeatAck] = useState(false)
 
   const inputRef = useRef(null)
 
@@ -169,7 +168,6 @@ export default function ErpIntake() {
     setDetected([])
     setResults([])
     setFingerprint(null)
-    setRepeatAck(false)
     try {
       // Ask before parsing: hashing the bytes is cheap and the answer changes
       // whether the operator should commit at all. Never blocks on failure -
@@ -242,8 +240,8 @@ export default function ErpIntake() {
         setPhase('idle')
         return
       }
-      // Flag duplicates BEFORE import: how many rows already exist (by natural key)
-      // so re-uploading the same file adds only the new rows, never duplicates.
+      // Surface same-key rows before import. The database later drops exact copies
+      // and refreshes records when the uploaded values have changed.
       for (const d of found) {
         try {
           d.dup = await countExistingRows(d.target, d.rows, { country })
@@ -491,7 +489,7 @@ export default function ErpIntake() {
                       <p>
                         <span className="font-semibold text-[var(--accent,#22c55e)]">{num(d.dup.fresh)}</span> new
                         {d.dup.existing > 0 && (
-                          <span className="text-[var(--text-tertiary)]"> · {num(d.dup.existing)} already in system (refreshed with any new details)</span>
+                          <span className="text-[var(--text-tertiary)]"> · {num(d.dup.existing)} same-key row(s) to verify or refresh</span>
                         )}
                       </p>
                     )}
@@ -593,7 +591,7 @@ export default function ErpIntake() {
                         <span>
                           {resultSummary(done)}
                           {done.tyresSourceRows
-                            ? `; tyres: ${num(done.tyresSourceRows)} processed, ${num(done.tyresInserted)} new${done.tyresUpdated ? `, ${num(done.tyresUpdated)} refreshed` : ''}${done.tyresNotAdded ? `, ${num(done.tyresNotAdded)} already present / no separate row` : ''}`
+                            ? `; tyres: ${num(done.tyresSourceRows)} processed, ${num(done.tyresInserted)} new${done.tyresUpdated ? `, ${num(done.tyresUpdated)} refreshed` : ''}${done.tyresNotAdded ? `, ${num(done.tyresNotAdded)} exact duplicate(s) dropped` : ''}`
                             : ''}
                         </span>
                       </div>
@@ -656,11 +654,9 @@ export default function ErpIntake() {
 
           {/* Merge note - explains why the count differs from the file */}
           <p className="text-xs text-[var(--text-tertiary)]">
-            Everything in the file loads. A row with a brand-new ID is added; a row whose ID is
-            already stored is refreshed with any new details you provided (a blank field never
-            overwrites existing data); a row identical to one already stored is left unchanged.
-            The open job-card list is replaced. Only exact duplicate rows are not re-added, and any
-            historical duplicates can be removed in Console, Duplicate Control.
+            Every valid row proceeds. New keys are inserted, same-key rows with changed supplied
+            values are refreshed, and only field-for-field copies are dropped. The open job-card
+            list is replaced.
           </p>
 
           {/* This exact file has been loaded before. Say so before the money moves. */}
@@ -677,17 +673,9 @@ export default function ErpIntake() {
                 {fingerprint.filename ? ` as "${fingerprint.filename}"` : ''}
                 {Number.isFinite(Number(fingerprint.rows_imported))
                   ? `, importing ${num(Number(fingerprint.rows_imported))} rows` : ''}.
-                Importing it again adds those rows a second time and overstates your spend,
-                unless every line carries the ERP line number so the system can recognise it.
+                The rows will still proceed. Exact copies are dropped automatically and changed
+                rows are refreshed.
               </p>
-              <label className="flex items-center gap-2 text-xs text-amber-200 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={repeatAck}
-                  onChange={(e) => setRepeatAck(e.target.checked)}
-                />
-                I know this is a repeat and I want to import it anyway
-              </label>
             </div>
           )}
 
@@ -698,7 +686,7 @@ export default function ErpIntake() {
                 type="button"
                 className="btn-primary inline-flex items-center gap-2"
                 onClick={runImport}
-                disabled={busy || !totalRows || (!!fingerprint && !repeatAck)}
+                disabled={busy || !totalRows}
               >
                 <ArrowRight className="h-4 w-4" />
                 Import {num(totalRows)} rows

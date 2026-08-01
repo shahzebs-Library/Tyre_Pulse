@@ -55,7 +55,7 @@ export function updateFieldSynonym(customName, patch) {
 export function listExistingSerials(serials) {
   return supabase
     .from('tyre_records')
-    .select('serial_no, asset_no, issue_date, id')
+    .select('*')
     .in('serial_no', serials)
 }
 

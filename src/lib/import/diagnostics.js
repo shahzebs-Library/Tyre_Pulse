@@ -72,7 +72,7 @@ export const ISSUE_CODE_LABELS = {
   },
   DUPLICATE: {
     label: 'Duplicate row',
-    hint: 'An identical record already exists in this batch or the live table - it is skipped; remove it from the source if unintended.',
+    hint: 'An identical row is dropped automatically; any changed supplied value continues as an import or refresh.',
   },
   CONFLICT: {
     label: 'Conflicting record',
@@ -441,7 +441,7 @@ export function summarizeCommitResult(result) {
       )
     } else if (skippedRows > 0) {
       hints.push(
-        `Nothing was imported: all ${fmtInt(skippedRows)} row(s) already exist in the system, so there was nothing new to add. That is the correct outcome for a repeat file.`
+        `Nothing was inserted: ${fmtInt(skippedRows)} row(s) were excluded before commit. Exact live copies are reported separately as verified duplicates.`
       )
     } else {
       hints.push(

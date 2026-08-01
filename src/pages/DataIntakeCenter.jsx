@@ -179,8 +179,6 @@ export default function DataIntakeCenter() {
   const [countryAck, setCountryAck] = useState(false)
   // Elevated override: force validation-error rows through the commit anyway.
   const [forceFlagged, setForceFlagged] = useState(false)
-  // Cross-file enrichment: fill blanks on existing live records instead of skipping.
-  const [enrichExisting, setEnrichExisting] = useState(false)
   // Per-row action override (approver's final say). Keyed by sourceRowNo →
   // 'insert' | 'update' | 'skip' | 'reject'. Empty ⇒ use the smart default.
   const [rowActionOverride, setRowActionOverride] = useState({})
@@ -234,10 +232,10 @@ export default function DataIntakeCenter() {
   const smartAction = useCallback((r) => {
     if (r.validationStatus === 'error') return (forceFlagged && isElevated) ? 'insert' : 'reject'
     if (r.liveNeedsUpdate) return isElevated ? 'update' : 'skip'
-    if (r.liveDuplicate) return (enrichExisting && isElevated) ? 'update' : 'insert'
+    if (r.liveDuplicate) return 'insert'
     if (r.dupStatus === 'duplicate') return 'skip'
     return 'insert'
-  }, [forceFlagged, enrichExisting, isElevated])
+  }, [forceFlagged, isElevated])
 
   // The action that will actually run: the operator's per-row override wins;
   // otherwise the smart default. Elevated approvers may override any row.
@@ -337,7 +335,7 @@ export default function DataIntakeCenter() {
 
   function reset() {
     setStep(0); setFile(null); setParsed(null); setSheetIdx(0); setBatchId(null); setAppliedProfile(null)
-    setMapping([]); setAnnotated([]); setCounts(null); setResult(null); setAutomation(null); setError(''); setProfiles([]); setCountryAck(false); setForceFlagged(false); setEnrichExisting(false); setAliasMaps(null); setFxRatesMap(null); autoSavedFp.current = null
+    setMapping([]); setAnnotated([]); setCounts(null); setResult(null); setAutomation(null); setError(''); setProfiles([]); setCountryAck(false); setForceFlagged(false); setAliasMaps(null); setFxRatesMap(null); autoSavedFp.current = null
     setAttachItems([]); setAttachWarnings([]); setAttachDone(false); setAttachBusy(false)
     setManualAggregate(false); setCombinedNotice(false)
   }
@@ -642,9 +640,8 @@ export default function DataIntakeCenter() {
       console.warn('Live duplicate detection unavailable; using in-batch dedup only.', err)
     }
 
-    // Default action: reject errors; insert everything else. A row whose natural
-    // key already exists live is skipped only when its uploaded values match the
-    // live row; changed same-key rows are routed to update/enrichment.
+    // Default action: reject errors; process everything else. Exact live copies
+    // are staged for database verification; changed same-key rows are refreshed.
     rows.forEach((r) => {
       let isLiveDup = false
       let needsUpdate = false
@@ -652,8 +649,8 @@ export default function DataIntakeCenter() {
         const key = naturalKey(r.transformed, module)
         if (key && liveKeys.has(key)) {
           const live = liveRecords?.get(key)
-          // Never claim "already existed" from the natural key alone. The live
-          // row must have been fetched and its uploaded values must match.
+          // Never claim an exact copy from the natural key alone. The live row
+          // must have been fetched and every uploaded value must match.
           isLiveDup = !!live && isExactLiveMatch(r.transformed, live, module)
           needsUpdate = !!live && !isLiveDup
         }
@@ -667,11 +664,11 @@ export default function DataIntakeCenter() {
           field: 'natural_key',
           severity: 'warning',
           code: 'LIVE_ROW_DIFFERS',
-          message: 'A live record has this key, but the uploaded values differ. It will update/enrich the existing record instead of being skipped as already existing.',
+          message: 'A live record has this key, but the uploaded values differ. The supplied values will refresh that record.',
         }]
       }
       // dupStatus is kept as the TRUE in-file classification (none/duplicate/
-      // conflict); "already live" is tracked separately as liveDuplicate so the
+      // conflict); an exact live copy is tracked separately as liveDuplicate so the
       // operator can tell a whole-row copy apart from a same-key/different-data
       // conflict. The action itself is derived on demand via effectiveAction().
     })
@@ -828,14 +825,14 @@ export default function DataIntakeCenter() {
           res.diagnosticsError = toUserMessage(e, 'Could not load row diagnostics.')
         }
       }
-      // Cross-file enrichment: fill blanks on existing records from this file.
-      if (isElevated && (enrichExisting || actionPlan.update > 0)) {
+      // Same-key rows with changed supplied values refresh the live record.
+      if (isElevated && actionPlan.update > 0) {
         try {
           const enr = await imports.enrichBatch(batchId, {
             onProgress: (p) => setCommitProgress({ phase: 'enrich', ...p }),
           })
           if (enr) res.enriched = enr.enriched ?? 0
-        } catch (e) { res.enrichError = toUserMessage(e, 'Enrichment failed') }
+        } catch (e) { res.enrichError = toUserMessage(e, 'Refresh failed') }
       }
       setResult(res)
       // Value-producing automation (directive §20). Best-effort - must never
@@ -1191,11 +1188,7 @@ export default function DataIntakeCenter() {
           {isElevated && counts?.liveDuplicate > 0 && (
             <div className="bg-sky-900/15 border border-sky-700/40 rounded-xl p-4 space-y-2">
               <p className="text-sm text-sky-300 flex items-center gap-2"><Database size={16} /> {counts.liveDuplicate} exact live copy row(s) will be verified during commit.</p>
-              <label className="flex items-center gap-2 text-sm text-sky-200 cursor-pointer">
-                <input type="checkbox" checked={enrichExisting} onChange={(e) => setEnrichExisting(e.target.checked)} className="accent-sky-500" />
-                Enrich existing records: fill their blank fields from this file (don't skip).
-              </label>
-              <p className="text-xs text-[var(--text-secondary)]">Combines this file with data already on record: it only fills fields that are currently empty and <span className="text-[var(--text-primary)]">never overwrites</span> a value you already have. Great for stitching together assets/tyres/work orders from different source files. Every change is audited.</p>
+              <p className="text-xs text-[var(--text-secondary)]">Only field-for-field copies are dropped. A same-key row with any changed supplied value is refreshed and audited.</p>
             </div>
           )}
           {isElevated && counts?.error > 0 && (
@@ -1339,7 +1332,7 @@ export default function DataIntakeCenter() {
                     </>
                   ) : (
                     <p className="text-xs text-[var(--text-secondary)]">
-                      Enriching existing records… {(commitProgress.enriched || 0).toLocaleString('en-US')} enriched · {(commitProgress.no_match || 0).toLocaleString('en-US')} no match
+                      Refreshing changed records… {(commitProgress.enriched || 0).toLocaleString('en-US')} refreshed · {(commitProgress.no_match || 0).toLocaleString('en-US')} no match
                     </p>
                   )}
                 </div>
@@ -1370,7 +1363,7 @@ export default function DataIntakeCenter() {
                       {k === 'insert/error'
                         ? 'row(s) were marked failed by an earlier attempt at this batch and are never retried. Fix the file and upload it as a new batch.'
                         : k.startsWith('skip/')
-                          ? 'row(s) already exist in the system, so there was nothing new to add.'
+                          ? 'row(s) were explicitly excluded before commit.'
                           : `row(s) in state ${k}.`}
                     </p>
                   ))}

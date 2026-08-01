@@ -15,6 +15,7 @@ import {
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
 import { toUserMessage } from '../lib/safeError'
+import { duplicateComparable, isExactSuppliedRow } from '../lib/import/exactDuplicate'
 
 // ── Step bar ──────────────────────────────────────────────────────────────────
 
@@ -304,6 +305,7 @@ export const TYRE_FIELDS = [
     guesses: ['total hrs', 'total hours', 'hrs run', 'tyre life hrs', 'إجمالي الساعات'],
   },
 ]
+
 
 // Fields parsed as dates / numbers during row building.
 const DATE_FIELDS    = new Set(['issue_date', 'removal_date'])
@@ -618,7 +620,6 @@ export default function UploadData() {
 
   // Duplicate detection
   const [dupes, setDupes]         = useState([])
-  const [skipDupes, setSkipDupes] = useState(true)
   const [dupCheck, setDupCheck]   = useState(null)
   const [skipIds, setSkipIds]     = useState(new Set())
   const [dupReview, setDupReview] = useState(false)
@@ -869,18 +870,31 @@ export default function UploadData() {
       setDupes([...existingSet])
 
       if (existing.length > 0) {
-        const bySerial = {}
-        existing.forEach(e => { bySerial[e.serial_no] = e })
-        const exactDups = [], conflicts = []
+        const bySerial = new Map()
+        existing.forEach((e) => {
+          const key = String(e.serial_no || '').trim().toLowerCase()
+          if (!bySerial.has(key)) bySerial.set(key, [])
+          bySerial.get(key).push(e)
+        })
+        const exactDups = [], changed = [], conflicts = []
         built.forEach((row, idx) => {
           if (!row.serial_no) return
-          const match = bySerial[row.serial_no]
-          if (!match) return
-          if (match.asset_no === row.asset_no && match.issue_date === row.issue_date) exactDups.push({ idx, row, existing: match })
-          else if (match.asset_no && row.asset_no && match.asset_no !== row.asset_no) conflicts.push({ idx, row, existing: match })
+          const matches = bySerial.get(String(row.serial_no).trim().toLowerCase()) || []
+          if (!matches.length) return
+          const exact = matches.find((match) => isExactSuppliedRow(row, match))
+          if (exact) { exactDups.push({ idx, row, existing: exact }); return }
+          const sameFitment = matches.find((match) => (
+            duplicateComparable(match.asset_no) === duplicateComparable(row.asset_no)
+            && duplicateComparable(match.issue_date) === duplicateComparable(row.issue_date)
+          ))
+          if (sameFitment) changed.push({ idx, row, existing: sameFitment })
+          else conflicts.push({ idx, row, existing: matches[0] })
         })
         const reupload = serials.length > 5 && exactDups.length / serials.length > 0.7
-        if (exactDups.length > 0 || conflicts.length > 0 || reupload) setDupCheck({ exact: exactDups, conflicts, reupload })
+        setSkipIds(new Set(exactDups.map((d) => d.idx)))
+        if (exactDups.length > 0 || changed.length > 0 || conflicts.length > 0 || reupload) {
+          setDupCheck({ exact: exactDups, changed, conflicts, reupload })
+        }
       }
     } else {
       setDupes([])
@@ -1085,11 +1099,6 @@ export default function UploadData() {
     const sourceRows = rows.length
 
     if (skipIds.size > 0) records = records.filter((_, idx) => !skipIds.has(idx))
-    if (skipDupes && dupes.length > 0) {
-      const dupeSet = new Set(dupes)
-      records = records.filter(r => !r.serial_no || !dupeSet.has(r.serial_no))
-    }
-
     const classified  = batchClassify(records.map((r, i) => ({ id: i, description: r.description, remarks: r.remarks })))
     const classMap    = Object.fromEntries(classified.map(c => [c.id, c]))
     const classifyLog = []
@@ -1110,7 +1119,7 @@ export default function UploadData() {
     if (!isAdminUploader) {
       const { error: pErr } = await submitForApproval({ batchId, country: uploadCountry, uploadType: 'tyres', targetTable: 'tyre_records', rows: records })
       if (pErr) { setError(t('uploaddata.errors.approvalError', { message: toUserMessage(pErr, 'unknown error') })); setStep('preview'); return }
-      setResult({ pending: true, sourceRows, submitted: records.length, added: 0, skipped: 0, skipLog: [], autoClassifiedCount, needsReviewCount, dupesSkipped: skipDupes ? dupes.length : 0, extraColCount: unmappedSource.length })
+      setResult({ pending: true, sourceRows, submitted: records.length, added: 0, skipped: 0, skipLog: [], autoClassifiedCount, needsReviewCount, dupesSkipped: skipIds.size, extraColCount: unmappedSource.length })
       setStep('done')
       return
     }
@@ -1141,8 +1150,8 @@ export default function UploadData() {
 
     if (classifyLog.length > 0) await uploads.insertCleaningLog(classifyLog.map((entry, i) => ({ ...entry, tyre_record_id: insertedIds[i] ?? null })))
 
-    await uploads.insertUploadHistory({ file_names: [fileName], records_added: added, records_skipped: skipped + (skipDupes ? dupes.length : 0), skip_log: skipLog, mapping_used: mapping, region: profile?.region ?? uploadCountry, country: uploadCountry, uploaded_by: profile?.id, batch_id: batchId })
-    await logAuditEvent({ action: 'UPLOAD', tableName: 'tyre_records', recordCount: added, details: { filename: fileName, rowCount: added, skippedCount: skipped + (skipDupes ? dupes.length : 0), country: activeCountry, batch_id: batchId } })
+    await uploads.insertUploadHistory({ file_names: [fileName], records_added: added, records_skipped: skipped + skipIds.size, skip_log: skipLog, mapping_used: mapping, region: profile?.region ?? uploadCountry, country: uploadCountry, uploaded_by: profile?.id, batch_id: batchId })
+    await logAuditEvent({ action: 'UPLOAD', tableName: 'tyre_records', recordCount: added, details: { filename: fileName, rowCount: added, skippedCount: skipped + skipIds.size, country: activeCountry, batch_id: batchId } })
 
     // Bump use_count on any synonyms that were exercised in this upload
     const usedHeaders = new Set(Object.values(mapping).filter(Boolean).map(h => normalise(h)))
@@ -1155,14 +1164,14 @@ export default function UploadData() {
 
     // Count unmapped columns saved as extra_fields
     const extraColCount = unmappedSource.length
-    setResult({ sourceRows, attempted: records.length, added, skipped, skipLog, autoClassifiedCount, needsReviewCount, dupesSkipped: skipDupes ? dupes.length : 0, extraColCount })
+    setResult({ sourceRows, attempted: records.length, added, skipped, skipLog, autoClassifiedCount, needsReviewCount, dupesSkipped: skipIds.size, extraColCount })
     setStep('done')
   }
 
   function reset() {
     setStep('idle'); setFileName(''); setHeaders([]); setRows([])
     setMapping({}); setMappingScores({}); setPreview([]); setResult(null); setError('')
-    setSavedMappingId(null); setMappingSource('auto'); setDupes([]); setSkipDupes(true)
+    setSavedMappingId(null); setMappingSource('auto'); setDupes([])
     setDupCheck(null); setSkipIds(new Set()); setDupReview(false)
     setUploadType('tyres'); setSheetOptions([]); setSearchMapping('')
     setRawAoa([]); setHeaderRowIdx(0); setUseAI(false); setQuality([]); setCleanPreview(null)
@@ -1558,19 +1567,18 @@ export default function UploadData() {
               <div className="card border-yellow-600/40">
                 <div className="flex items-center gap-2 mb-3">
                   <AlertTriangle size={18} className="text-yellow-400" />
-                  <span className="font-semibold text-yellow-300">Duplicate Check Results</span>
+                  <span className="font-semibold text-yellow-300">Exact Copy Check</span>
                 </div>
-                {dupCheck.reupload && <p className="text-yellow-300 text-sm mb-2">This looks like data you have already uploaded: {dupCheck.exact.length} matching records found.</p>}
+                {dupCheck.reupload && <p className="text-yellow-300 text-sm mb-2">This file closely matches a previous upload. It will still proceed through exact-row verification.</p>}
                 <div className="flex gap-4 text-sm mb-3">
-                  {dupCheck.exact.length > 0 && <span className="text-red-300">{dupCheck.exact.length} exact duplicate{dupCheck.exact.length !== 1 ? 's' : ''}</span>}
-                  {dupCheck.conflicts.length > 0 && <span className="text-orange-300">{dupCheck.conflicts.length} serial conflict{dupCheck.conflicts.length !== 1 ? 's' : ''}</span>}
+                  {dupCheck.exact.length > 0 && <span className="text-sky-300">{dupCheck.exact.length} exact duplicate{dupCheck.exact.length !== 1 ? 's' : ''} to drop</span>}
+                  {(dupCheck.changed?.length || 0) > 0 && <span className="text-green-300">{dupCheck.changed.length} changed same-fitment row{dupCheck.changed.length !== 1 ? 's' : ''} to import</span>}
+                  {dupCheck.conflicts.length > 0 && <span className="text-orange-300">{dupCheck.conflicts.length} serial history row{dupCheck.conflicts.length !== 1 ? 's' : ''} to import</span>}
                 </div>
                 <div className="flex flex-wrap gap-2">
-                  {dupCheck.exact.length > 0 && <button className="btn-primary text-sm py-1.5 px-3" onClick={() => setSkipIds(new Set(dupCheck.exact.map(d => d.idx)))}>Skip duplicates ({dupCheck.exact.length})</button>}
-                  {(dupCheck.exact.length > 0 || dupCheck.conflicts.length > 0) && <button className="px-3 py-1.5 text-sm rounded-lg border border-gray-600 text-[var(--panel-ink-2)] hover:text-white" onClick={() => setDupReview(true)}>Review individually</button>}
-                  <button className="px-3 py-1.5 text-sm rounded-lg border border-gray-600 text-[var(--panel-ink-3)] hover:text-white" onClick={() => { setSkipIds(new Set()); setDupCheck(null) }}>Upload all anyway</button>
+                  <button className="px-3 py-1.5 text-sm rounded-lg border border-gray-600 text-[var(--panel-ink-2)] hover:text-white" onClick={() => setDupReview(true)}>Review matches</button>
                 </div>
-                {skipIds.size > 0 && <p className="text-xs text-green-400 mt-2">{skipIds.size} row{skipIds.size !== 1 ? 's' : ''} will be skipped</p>}
+                {skipIds.size > 0 && <p className="text-xs text-green-400 mt-2">{skipIds.size} verified exact row{skipIds.size !== 1 ? 's' : ''} will be dropped automatically. All changed rows continue.</p>}
               </div>
             )}
 
@@ -1578,19 +1586,18 @@ export default function UploadData() {
             {dupReview && dupCheck && (
               <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60">
                 <div className="bg-gray-900 border border-gray-700 rounded-xl w-full max-w-2xl max-h-[80vh] overflow-y-auto p-6">
-                  <h3 className="text-lg font-bold text-white mb-4">Review Duplicates</h3>
+                  <h3 className="text-lg font-bold text-white mb-4">Review Row Matches</h3>
                   <div className="space-y-3 mb-4">
-                    {[...dupCheck.exact, ...dupCheck.conflicts].map(({ idx, row, existing }) => (
+                    {[...dupCheck.exact, ...(dupCheck.changed || []), ...dupCheck.conflicts].map(({ idx, row, existing }) => (
                       <div key={idx} className={`rounded-lg p-3 border ${skipIds.has(idx) ? 'border-red-800/50 bg-red-900/10 opacity-60' : 'border-gray-700 bg-gray-800/50'}`}>
                         <div className="flex items-start justify-between gap-3">
                           <div className="text-xs space-y-0.5">
                             <p className="text-white font-mono font-semibold">Row {idx + 1}: {row.serial_no}</p>
                             <p className="text-[var(--panel-ink-3)]">File: {row.asset_no} · {row.issue_date} | DB: {existing.asset_no} · {existing.issue_date}</p>
                           </div>
-                          <div className="flex gap-1.5 flex-shrink-0">
-                            <button onClick={() => setSkipIds(s => { const n = new Set(s); n.add(idx); return n })} className="text-xs px-2 py-1 rounded bg-red-900/30 text-red-400 border border-red-800/50">Skip</button>
-                            <button onClick={() => setSkipIds(s => { const n = new Set(s); n.delete(idx); return n })} className="text-xs px-2 py-1 rounded bg-green-900/30 text-green-400 border border-green-800/50">Keep</button>
-                          </div>
+                          <span className={`text-xs px-2 py-1 rounded border flex-shrink-0 ${skipIds.has(idx) ? 'bg-sky-900/30 text-sky-300 border-sky-800/50' : 'bg-green-900/30 text-green-300 border-green-800/50'}`}>
+                            {skipIds.has(idx) ? 'Exact copy: drop' : 'Changed row: import'}
+                          </span>
                         </div>
                       </div>
                     ))}
@@ -1605,11 +1612,8 @@ export default function UploadData() {
                 <div className="flex items-start gap-3">
                   <AlertTriangle size={18} className="text-yellow-400 flex-shrink-0 mt-0.5" />
                   <div className="flex-1">
-                    <p className="text-yellow-300 font-medium">{dupes.length} potential duplicate serial number{dupes.length !== 1 ? 's' : ''} detected</p>
-                    <label className="flex items-center gap-2 mt-3 cursor-pointer">
-                      <input type="checkbox" className="accent-yellow-500" checked={skipDupes} onChange={e => setSkipDupes(e.target.checked)} />
-                      <span className="text-sm text-yellow-300">Skip duplicate records ({dupes.length} rows)</span>
-                    </label>
+                    <p className="text-yellow-300 font-medium">{dupes.length} serial number{dupes.length !== 1 ? 's' : ''} also appear in history</p>
+                    <p className="text-sm text-yellow-200 mt-1">Serial reuse alone does not block import. Changed lifecycle rows continue; only exact full-row copies are dropped.</p>
                   </div>
                 </div>
               </div>
@@ -1728,7 +1732,7 @@ export default function UploadData() {
                   disabled={activeCountry === 'All'}
                   className="btn-primary flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  <Upload size={16} /> Upload {(skipDupes ? rows.length - dupes.length : rows.length).toLocaleString()} Records
+                  <Upload size={16} /> Upload {(rows.length - skipIds.size).toLocaleString()} Records
                 </button>
                 <button onClick={() => setStep('mapping')} className="btn-secondary">Back</button>
                 <button onClick={reset} className="btn-secondary">Cancel</button>

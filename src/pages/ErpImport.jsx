@@ -539,23 +539,27 @@ function PromoteSummary({ datasetKey, res, applied }) {
   if (!res) return null
   const verb = applied ? 'Promoted' : 'Would promote'
   if (datasetKey === 'asset') {
+    const updated = Number(res.updated || 0)
+    const exact = Number(res.exact_duplicates || 0)
     return (
       <div className="text-sm space-y-0.5">
         <p>{verb} <b>{Number(res.to_insert_total || 0).toLocaleString()}</b> new asset(s) into the fleet register.</p>
+        {updated > 0 && <p className="text-[var(--text-muted)]">{updated.toLocaleString()} same-key asset(s) refreshed with changed supplied values.</p>}
+        {exact > 0 && <p className="text-[var(--text-muted)]">{exact.toLocaleString()} exact duplicate(s) dropped.</p>}
         {fmtPromoMoney(res.to_insert_by_country) && <p className="text-[var(--text-muted)]">By country: {fmtPromoMoney(res.to_insert_by_country)}</p>}
-        {Number(Object.values(res.already_present_by_country || {}).reduce((a, b) => a + Number(b || 0), 0)) > 0 && (
-          <p className="text-[var(--text-muted)]">{fmtPromoMoney(res.already_present_by_country)} already in the fleet (left unchanged).</p>
-        )}
         {res.skipped_no_asset_no > 0 && <p className="text-amber-400">{res.skipped_no_asset_no.toLocaleString()} row(s) skipped - no asset number.</p>}
       </div>
     )
   }
   if (datasetKey === 'change') {
+    const updated = Number(res.updated || 0)
+    const exact = Number(res.exact_duplicates ?? res.already_present ?? 0)
     return (
       <div className="text-sm space-y-0.5">
         <p>{verb} <b>{Number(res.to_insert_total || 0).toLocaleString()}</b> tyre record(s) ({Number(res.to_insert_active || 0).toLocaleString()} current, {Number(res.to_insert_old || 0).toLocaleString()} history).</p>
         {fmtPromoMoney(res.to_insert_by_country) && <p className="text-[var(--text-muted)]">By country: {fmtPromoMoney(res.to_insert_by_country)}</p>}
-        {res.already_present > 0 && <p className="text-[var(--text-muted)]">{res.already_present.toLocaleString()} already in the system (skipped).</p>}
+        {updated > 0 && <p className="text-[var(--text-muted)]">{updated.toLocaleString()} same-fitment row(s) refreshed.</p>}
+        {exact > 0 && <p className="text-[var(--text-muted)]">{exact.toLocaleString()} exact duplicate(s) dropped.</p>}
         {res.skipped_no_key > 0 && <p className="text-amber-400">{res.skipped_no_key.toLocaleString()} row(s) skipped - missing serial or asset.</p>}
         {res.active_position_conflicts > 0 && <p className="text-amber-400">{res.active_position_conflicts.toLocaleString()} landed as history - that asset/position already had an active tyre.</p>}
       </div>
@@ -565,7 +569,7 @@ function PromoteSummary({ datasetKey, res, applied }) {
     <div className="text-sm space-y-0.5">
       <p>{verb} <b>{Number(res.to_insert_total || 0).toLocaleString()}</b> tyre cost line(s) into the expense grid.</p>
       {fmtPromoMoney(res.by_country) && <p className="text-[var(--text-muted)]">{fmtPromoMoney(res.by_country)}</p>}
-      {res.already_present > 0 && <p className="text-[var(--text-muted)]">{res.already_present.toLocaleString()} already in the grid (skipped).</p>}
+      {res.already_present > 0 && <p className="text-[var(--text-muted)]">{res.already_present.toLocaleString()} exact duplicate cost line(s) dropped.</p>}
       {res.skipped_no_cost > 0 && <p className="text-amber-400">{res.skipped_no_cost.toLocaleString()} row(s) skipped - no cost.</p>}
     </div>
   )
@@ -635,12 +639,12 @@ function PromotePanel({ datasetKey, batchId, canWrite, onChanged }) {
         <div className="flex-1">
           <p className="text-sm font-medium text-[var(--text-primary)]">Promote to the {MASTER_LABEL[datasetKey]}</p>
           <p className="text-xs text-[var(--text-muted)] mt-0.5">
-            Move the reviewed rows of this batch into the master tables. Preview the exact counts first. Promotion is idempotent (re-running adds nothing new) and can be undone.
+            Move every valid reviewed row into the master tables. Changed same-key rows refresh; only exact copies are dropped. Preview the counts first.
           </p>
           {isPromoted && (
             <p className="text-xs text-green-300 mt-1.5 flex items-center gap-1.5">
               <CheckCircle2 size={13} />
-              Already promoted: {Number(status.inserted || 0).toLocaleString()} added, {Number(status.existing || 0).toLocaleString()} already present.
+              Promotion complete: {Number(status.inserted || 0).toLocaleString()} added, {Number(status.updated || 0).toLocaleString()} refreshed, {Number(status.exact_duplicates ?? status.existing ?? 0).toLocaleString()} exact duplicate(s) dropped.
             </p>
           )}
         </div>

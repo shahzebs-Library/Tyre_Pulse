@@ -528,9 +528,9 @@ export async function commitBatch(batchId, { chunkSize = COMMIT_CHUNK_ROWS, onPr
 export const ENRICH_CHUNK_ROWS = 400
 
 /**
- * Cross-file enrichment (V79). For the batch's `action='update'` rows (rows whose
- * natural key already exists live), fill ONLY the empty columns on the matching
- * live record from this file — never overwriting existing values. Returns
+ * Cross-file refresh. For the batch's `action='update'` rows (rows whose natural
+ * key exists live but supplied values differ), apply the non-blank supplied
+ * values to the matching record. Returns
  * `{ enriched, skipped, no_match }`.
  * V93: pages through the batch by row id (`p_max_rows` + `p_after_id`) so
  * 50k+ row files never hit the DB statement timeout; a fresh call still
@@ -559,9 +559,10 @@ export async function enrichBatch(batchId, { chunkSize = ENRICH_CHUNK_ROWS, onPr
 
 /**
  * Live-table duplicate detection (V47). Returns the set of natural-key strings
- * already present in the module's live table for the caller's organisation, so
- * the Data Intake Center can skip re-importing an existing record. The key is
- * built server-side identically to validate.naturalKey().
+ * already present in the module's live table for the caller's organisation. The
+ * Data Intake Center uses these to distinguish same-key candidates before the
+ * database verifies exact copies or refreshes changed values. The key is built
+ * server-side identically to validate.naturalKey().
  *
  * @param {{ module: 'fleet'|'tyre'|'stock', country?: string }} params
  * @returns {Promise<Set<string>>}

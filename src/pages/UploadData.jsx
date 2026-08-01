@@ -317,6 +317,16 @@ function parseNumeric(val) {
   return m ? parseFloat(m[0]) : null
 }
 
+function resultNumber(v) {
+  return Number(v || 0)
+}
+
+function rowsHandled(result) {
+  if (!result) return 0
+  if (result.pending) return resultNumber(result.submitted)
+  return resultNumber(result.added) + resultNumber(result.skipped) + resultNumber(result.dupesSkipped)
+}
+
 const STOCK_FIELDS = [
   { key: 'item_code',   label: 'Item Code',    required: true,  guesses: ['item code', 'item_code', 'code', 'part no', 'part number', 'sku', 'item no', 'رمز الصنف', 'كود الصنف'] },
   { key: 'description', label: 'Description',  required: true,  guesses: ['description', 'desc', 'item name', 'product name', 'item description', 'الوصف', 'اسم الصنف'] },
@@ -989,7 +999,7 @@ export default function UploadData() {
       if (!isAdminUploader) {
         const { error: pErr } = await submitForApproval({ batchId, country: uploadCountry, uploadType: 'stock', targetTable: 'stock_records', rows: stockRows })
         if (pErr) { setError(t('uploaddata.errors.approvalError', { message: toUserMessage(pErr, 'unknown error') })); setStep('preview'); return }
-        setResult({ pending: true, submitted: stockRows.length, added: 0, autoClassifiedCount: 0, needsReviewCount: 0, dupesSkipped: 0, skipLog: [] })
+        setResult({ pending: true, sourceRows: rows.length, submitted: stockRows.length, added: 0, autoClassifiedCount: 0, needsReviewCount: 0, dupesSkipped: 0, skipped: 0, skipLog: [] })
         setStep('done')
         return
       }
@@ -1011,7 +1021,7 @@ export default function UploadData() {
         setProgress({ done: Math.min(i + CHUNK, stockRows.length), total: stockRows.length })
       }
       await logAuditEvent({ action: 'upload_stock', table_name: 'stock_records', record_count: added, details: { file: fileName, batch_id: batchId } })
-      setResult({ added, autoClassifiedCount: 0, needsReviewCount: 0, dupesSkipped: 0, skipped: stockSkipped, skipLog: stockSkipLog })
+      setResult({ sourceRows: rows.length, attempted: stockRows.length, added, autoClassifiedCount: 0, needsReviewCount: 0, dupesSkipped: 0, skipped: stockSkipped, skipLog: stockSkipLog })
       setStep('done')
       return
     }
@@ -1072,6 +1082,7 @@ export default function UploadData() {
         upload_batch_id: batchId,
       })
     })
+    const sourceRows = rows.length
 
     if (skipIds.size > 0) records = records.filter((_, idx) => !skipIds.has(idx))
     if (skipDupes && dupes.length > 0) {
@@ -1099,7 +1110,7 @@ export default function UploadData() {
     if (!isAdminUploader) {
       const { error: pErr } = await submitForApproval({ batchId, country: uploadCountry, uploadType: 'tyres', targetTable: 'tyre_records', rows: records })
       if (pErr) { setError(t('uploaddata.errors.approvalError', { message: toUserMessage(pErr, 'unknown error') })); setStep('preview'); return }
-      setResult({ pending: true, submitted: records.length, added: 0, skipped: 0, skipLog: [], autoClassifiedCount, needsReviewCount, dupesSkipped: skipDupes ? dupes.length : 0, extraColCount: unmappedSource.length })
+      setResult({ pending: true, sourceRows, submitted: records.length, added: 0, skipped: 0, skipLog: [], autoClassifiedCount, needsReviewCount, dupesSkipped: skipDupes ? dupes.length : 0, extraColCount: unmappedSource.length })
       setStep('done')
       return
     }
@@ -1144,7 +1155,7 @@ export default function UploadData() {
 
     // Count unmapped columns saved as extra_fields
     const extraColCount = unmappedSource.length
-    setResult({ added, skipped, skipLog, autoClassifiedCount, needsReviewCount, dupesSkipped: skipDupes ? dupes.length : 0, extraColCount })
+    setResult({ sourceRows, attempted: records.length, added, skipped, skipLog, autoClassifiedCount, needsReviewCount, dupesSkipped: skipDupes ? dupes.length : 0, extraColCount })
     setStep('done')
   }
 
@@ -1766,15 +1777,15 @@ export default function UploadData() {
                 <p className="text-[var(--panel-ink-4)] text-sm">
                   {result.pending
                     ? `${(result.submitted ?? 0).toLocaleString()} ${result.pending ? 'records' : ''} sent to an administrator. They will appear once approved.`
-                    : 'Records imported and classified successfully'}
+                    : `${rowsHandled(result).toLocaleString()} of ${(result.sourceRows ?? rowsHandled(result)).toLocaleString()} source rows accounted for`}
                 </p>
               </div>
             </div>
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-              <Tile label={result.pending ? 'Records Submitted' : 'Records Added'} value={result.pending ? result.submitted : result.added} color={result.pending ? 'yellow' : 'green'} />
-              <Tile label="Auto-Classified" value={result.autoClassifiedCount} color="blue" />
-              <Tile label="Need Review"     value={result.needsReviewCount}    color="yellow" />
-              <Tile label="Dupes Skipped"   value={result.dupesSkipped}        color="gray" />
+              <Tile label={result.pending ? 'Rows Submitted' : 'Rows Handled'} value={rowsHandled(result)} color={result.pending ? 'yellow' : 'green'} />
+              <Tile label={result.pending ? 'Rows in File' : 'Records Added'} value={result.pending ? result.sourceRows : result.added} color={result.pending ? 'gray' : 'blue'} />
+              <Tile label="Need Review" value={result.needsReviewCount} color="yellow" />
+              <Tile label="Skipped" value={resultNumber(result.skipped) + resultNumber(result.dupesSkipped)} color="gray" />
             </div>
 
             {/* Extra fields confirmation */}

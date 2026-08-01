@@ -75,6 +75,29 @@ const SAMPLE_COLS = {
 
 const num = (n) => Number(n || 0).toLocaleString('en-US')
 
+function resultCounts(row) {
+  const source = Number(row?.sourceRows ?? row?.rows?.length ?? 0) || 0
+  const inserted = Number(row?.inserted) || 0
+  const updated = Number(row?.updated) || 0
+  const failed = Number(row?.failed) || 0
+  const notAdded = Math.max(0, source - inserted - updated - failed)
+  const processed = Math.max(0, source - failed)
+  return { source, inserted, updated, failed, notAdded, processed }
+}
+
+function resultSummary(row) {
+  const c = resultCounts(row)
+  const parts = [`${num(c.processed)} row${c.processed === 1 ? '' : 's'} processed`]
+  parts.push(`${num(c.inserted)} new`)
+  if (row?.target === 'open_work_orders') parts.push('list replaced')
+  else {
+    if (c.updated) parts.push(`${num(c.updated)} refreshed`)
+    if (c.notAdded) parts.push(`${num(c.notAdded)} already present / no separate row`)
+  }
+  if (c.failed) parts.push(`${num(c.failed)} failed`)
+  return parts.join(', ')
+}
+
 /** One KPI tile. */
 function KpiTile({ label, value, sub }) {
   return (
@@ -278,13 +301,20 @@ export default function ErpIntake() {
         }
         out.push({
           ...d,
+          sourceRows: d.rows.length,
           inserted: res?.inserted ?? d.rows.length,
           updated: res?.updated ?? 0,
           unchanged: res?.unchanged ?? (res?.skipped ?? 0),
           skipped: res?.skipped ?? 0,
           failed: res?.failed ?? 0,
+          notAdded: Math.max(0, d.rows.length - (res?.inserted ?? d.rows.length) - (res?.updated ?? 0) - (res?.failed ?? 0)),
+          tyresSourceRows: Array.isArray(d.tyreRows) ? d.tyreRows.length : 0,
           tyresInserted: tyreRes?.inserted ?? 0,
           tyresUpdated: tyreRes?.updated ?? 0,
+          tyresNotAdded: Math.max(
+            0,
+            (Array.isArray(d.tyreRows) ? d.tyreRows.length : 0) - (tyreRes?.inserted ?? 0) - (tyreRes?.updated ?? 0) - (tyreRes?.failed ?? 0),
+          ),
         })
         setResults([...out])
       }
@@ -561,11 +591,10 @@ export default function ErpIntake() {
                       <div className="flex items-center gap-2 text-sm text-[var(--text-secondary)]">
                         <CheckCircle2 className="h-4 w-4 text-[var(--accent,#22c55e)]" />
                         <span>
-                          {num(done.inserted)} new imported
-                          {done.tyresInserted ? ` (+ ${num(done.tyresInserted)} tyres)` : ''}
-                          {d.target === 'open_work_orders'
-                            ? ', list replaced'
-                            : `${done.updated ? `, ${num(done.updated)} existing refreshed` : ''}${done.unchanged ? `, ${num(done.unchanged)} unchanged` : ''}`}
+                          {resultSummary(done)}
+                          {done.tyresSourceRows
+                            ? `; tyres: ${num(done.tyresSourceRows)} processed, ${num(done.tyresInserted)} new${done.tyresUpdated ? `, ${num(done.tyresUpdated)} refreshed` : ''}${done.tyresNotAdded ? `, ${num(done.tyresNotAdded)} already present / no separate row` : ''}`
+                            : ''}
                         </span>
                       </div>
                       {done.failed > 0 && (
@@ -693,10 +722,7 @@ export default function ErpIntake() {
                 >
                   <span className="text-[var(--text-secondary)]">{r.label}</span>
                   <span className="text-[var(--text-primary)] whitespace-nowrap">
-                    {num(r.inserted)} new
-                    {r.target === 'open_work_orders'
-                      ? ' (replaced)'
-                      : `${r.updated ? `, ${num(r.updated)} refreshed` : ''}${r.unchanged ? `, ${num(r.unchanged)} unchanged` : ''}`}
+                    {resultSummary(r)}
                   </span>
                 </div>
               ))}

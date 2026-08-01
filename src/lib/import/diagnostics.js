@@ -453,6 +453,9 @@ export function summarizeCommitResult(result) {
   if (r.enrichError) {
     hints.push(`Cross-file enrichment reported an error: ${String(r.enrichError)}. The core commit is unaffected; re-run enrichment.`)
   }
+  if (r.diagnosticsError) {
+    hints.push(`Row diagnostics could not be loaded: ${String(r.diagnosticsError)}.`)
+  }
   if (level === 'ok' && hints.length === 0) {
     hints.push('Commit completed cleanly - no action required.')
   }
@@ -487,6 +490,35 @@ export function summarizeCommitResult(result) {
  * @param {{ batch?:Object, rows?:Array, issues?:Array }} input
  * @returns {Array<{id,level,title,detail,hint?}>}
  */
+/**
+ * Rebuild the server's `not_eligible` breakdown from import_rows when an older
+ * RPC response does not include it. Mirrors V404: rows are eligible only when
+ * they are pending insert rows in ready/warning state.
+ */
+export function summarizeNotEligibleRows(rows) {
+  const out = {}
+  for (const r of toArray(rows)) {
+    if (!r || typeof r !== 'object') continue
+    const eligible = r.action === 'insert'
+      && (r.validation_status === 'ready' || r.validation_status === 'warning')
+      && !r.processed_at
+    if (eligible) continue
+    const key = `${r.action || 'unset'}/${r.validation_status || 'unset'}`
+    out[key] = (out[key] || 0) + 1
+  }
+  return out
+}
+
+export function commitErrorsFromIssues(issues, limit = 20) {
+  return toArray(issues)
+    .filter((i) => i && typeof i === 'object')
+    .slice(0, Math.max(0, limit))
+    .map((i) => ({
+      row: i.source_row_no ?? i.row ?? null,
+      message: i.message || i.issue_code || 'Commit failed',
+    }))
+}
+
 export function diagnoseBatchHealth(input) {
   const src = input && typeof input === 'object' ? input : {}
   const batch = src.batch && typeof src.batch === 'object' ? src.batch : {}
@@ -725,6 +757,8 @@ export default {
   issueCodeLabel,
   summarizeValidation,
   summarizeCommitResult,
+  summarizeNotEligibleRows,
+  commitErrorsFromIssues,
   diagnoseBatchHealth,
   formatDiagnosticsReport,
 }

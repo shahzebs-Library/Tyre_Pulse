@@ -4,6 +4,8 @@ import {
   issueCodeLabel,
   summarizeValidation,
   summarizeCommitResult,
+  summarizeNotEligibleRows,
+  commitErrorsFromIssues,
   diagnoseBatchHealth,
   formatDiagnosticsReport,
 } from '../lib/import/diagnostics.js'
@@ -167,6 +169,27 @@ describe('diagnostics - summarizeCommitResult', () => {
     expect(res.level).toBe('ok')
     expect(res.headline).toContain('7 merged')
     expect(res.successRate).toBe(100)
+  })
+
+  it('rebuilds not_eligible from row states when older RPC output is vague', () => {
+    const out = summarizeNotEligibleRows([
+      { action: 'insert', validation_status: 'ready', processed_at: null },
+      { action: 'insert', validation_status: 'error', processed_at: '2026-08-01T10:00:00Z' },
+      { action: 'skip', validation_status: 'ready', processed_at: null },
+      { action: null, validation_status: null, processed_at: null },
+    ])
+    expect(out).toEqual({ 'insert/error': 1, 'skip/ready': 1, 'unset/unset': 1 })
+  })
+
+  it('turns saved row issues into commit error details', () => {
+    const out = commitErrorsFromIssues([
+      { source_row_no: 8, message: 'duplicate key value violates unique constraint' },
+      { source_row_no: 9, issue_code: 'COMMIT_FAILED' },
+    ])
+    expect(out).toEqual([
+      { row: 8, message: 'duplicate key value violates unique constraint' },
+      { row: 9, message: 'COMMIT_FAILED' },
+    ])
   })
 
   it('surfaces enrichment errors and already_committed', () => {

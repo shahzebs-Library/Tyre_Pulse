@@ -20,7 +20,10 @@ import {
 import * as imports from '../lib/api/imports'
 import { checkImportFingerprint, fileSha256 } from '../lib/api/importHistory'
 import { configNum } from '../lib/api/systemConfig'
-import { summarizeValidation, summarizeCommitResult, diagnoseBatchHealth, formatDiagnosticsReport } from '../lib/import/diagnostics'
+import {
+  summarizeValidation, summarizeCommitResult, summarizeNotEligibleRows, commitErrorsFromIssues,
+  diagnoseBatchHealth, formatDiagnosticsReport,
+} from '../lib/import/diagnostics'
 import { getBatchDiagnostics } from '../lib/api/importDiagnostics'
 import MappingProfilesManager from '../components/intake/MappingProfilesManager'
 import DataLinkPanel from '../components/intake/DataLinkPanel'
@@ -756,6 +759,19 @@ export default function DataIntakeCenter() {
       const res = await imports.commitBatch(batchId, {
         onProgress: (p) => setCommitProgress({ phase: 'commit', ...p }),
       })
+      const wroteNothing = !Number(res?.inserted || 0) && !Number(res?.merged || 0)
+      if (wroteNothing && (!res.not_eligible || Object.keys(res.not_eligible).length === 0)) {
+        try {
+          const d = await getBatchDiagnostics(batchId)
+          const notEligible = summarizeNotEligibleRows(d.rows)
+          if (Object.keys(notEligible).length) res.not_eligible = notEligible
+          if ((!Array.isArray(res.errors) || res.errors.length === 0) && Array.isArray(d.issues) && d.issues.length) {
+            res.errors = commitErrorsFromIssues(d.issues)
+          }
+        } catch (e) {
+          res.diagnosticsError = toUserMessage(e, 'Could not load row diagnostics.')
+        }
+      }
       // Cross-file enrichment: fill blanks on existing records from this file.
       if (enrichExisting && isElevated) {
         try {

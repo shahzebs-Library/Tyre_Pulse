@@ -1277,19 +1277,15 @@ export default function DataIntakeCenter() {
             /* A run that wrote nothing is NOT a success. It used to render green
                with a tick reading "Committed - 0 row(s) inserted", because the
                server returned 'committed' for it. */
-            <div className={`rounded-xl p-6 ${result.status === 'failed'
+            <div className={`rounded-xl p-6 ${commitDiag?.level === 'error'
               ? 'bg-red-900/20 border border-red-700/50 text-red-300'
-              : (result.status === 'nothing_to_commit' || (!result.inserted && !result.merged))
+              : commitDiag?.level === 'warn'
                 ? 'bg-amber-900/20 border border-amber-700/50 text-amber-200'
                 : 'bg-green-900/20 border border-green-700/50 text-green-300'}`}>
-              {(result.status === 'failed' || result.status === 'nothing_to_commit' || (!result.inserted && !result.merged))
+              {commitDiag?.level === 'error' || commitDiag?.level === 'warn'
                 ? <AlertTriangle className="mb-2" /> : <CheckCircle2 className="mb-2" />}
               <p className="font-semibold">
-                {result.status === 'committed' && !!result.inserted && `Committed - ${result.inserted} row(s) inserted, ${result.skipped} skipped${result.failed ? `, ${result.failed} failed` : ''}${result.enriched ? `, ${result.enriched} existing record(s) enriched` : ''}.`}
-                {result.status === 'failed' && `No rows could be committed - ${result.failed} row(s) failed. The reasons are listed below.`}
-                {(result.status === 'nothing_to_commit' || (result.status === 'committed' && !result.inserted && !result.merged))
-                  && 'Nothing was imported. No row from this batch was written to the system.'}
-                {result.status !== 'committed' && result.status !== 'failed' && result.status !== 'nothing_to_commit' && `Status: ${result.status}`}
+                {commitDiag?.headline || `Status: ${result.status || 'unknown'}`}
               </p>
               {/* Name the rows that were not even attempted, so the user is not
                   sent round the same loop guessing. */}

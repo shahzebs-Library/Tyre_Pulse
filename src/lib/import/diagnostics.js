@@ -362,8 +362,9 @@ export function summarizeCommitResult(result) {
   const errors = toArray(r.errors).filter((e) => e && typeof e === 'object')
 
   const totalProcessed = inserted + skipped + failed + merged
-  const successBase = inserted + failed
-  const successRate = successBase > 0 ? Math.round((inserted / successBase) * 100) : inserted > 0 ? 100 : 0
+  const successfulWrites = inserted + merged
+  const successBase = successfulWrites + failed
+  const successRate = successBase > 0 ? Math.round((successfulWrites / successBase) * 100) : successfulWrites > 0 ? 100 : 0
 
   const partial = status === 'partial'
   const stalled = status !== 'committed' && remaining > 0

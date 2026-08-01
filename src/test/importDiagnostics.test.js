@@ -162,6 +162,13 @@ describe('diagnostics - summarizeCommitResult', () => {
     expect(res.stalled).toBe(false)
   })
 
+  it('counts merged-only commits as successful work', () => {
+    const res = summarizeCommitResult({ status: 'committed', inserted: 0, merged: 7, failed: 0, remaining: 0 })
+    expect(res.level).toBe('ok')
+    expect(res.headline).toContain('7 merged')
+    expect(res.successRate).toBe(100)
+  })
+
   it('surfaces enrichment errors and already_committed', () => {
     const res = summarizeCommitResult({ status: 'already_committed', inserted: 0, enrichError: 'timeout' })
     expect(res.headline.toLowerCase()).toContain('already committed')

@@ -13,7 +13,7 @@
     },
     "supabase": {
       "type": "http",
-      "url": "https://mcp.supabase.com/mcp?project_ref=jhssdmeruxtrlqnwfksc"
+      "url": "https://mcp.supabase.com/mcp?project_ref=jhssdmeruxtrlqnwfksc&features=docs%2Cdatabase%2Cdebugging%2Cdevelopment%2Cfunctions"
     }
   }
 }

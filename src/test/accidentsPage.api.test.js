@@ -87,9 +87,14 @@ describe('accidents owner page - service layer', () => {
     expect(h.state.last._calls.eq).toContainEqual(['id', 'acc1'])
   })
 
-  it('updateAccidentForPage patches by id (raw pass-through)', async () => {
-    await accidents.updateAccidentForPage('acc1', { status: 'Closed' })
-    expect(h.state.last._calls.update).toEqual({ status: 'Closed' })
+  it('updateAccidentForPage patches by id without direct closure fields', async () => {
+    await accidents.updateAccidentForPage('acc1', {
+      status: 'Closed',
+      workflow_stage: 'closed',
+      closure_status: 'closed',
+      notes: 'checked',
+    })
+    expect(h.state.last._calls.update).toEqual({ notes: 'checked' })
     expect(h.state.last._calls.eq).toContainEqual(['id', 'acc1'])
   })
 

@@ -93,6 +93,12 @@ function FormSection({ title, children }) {
 // dropdown never drops an existing (legacy / bespoke) value from a saved record.
 const withValueOption = (opts, value) =>
   value && !opts.some(o => String(o) === String(value)) ? [value, ...opts] : opts
+const editableAccidentStatuses = (value) =>
+  withValueOption(STATUSES.filter((s) => s !== 'Closed'), value)
+const editableWorkflowStages = (value) =>
+  value && !WORKFLOW_STAGES.some((s) => s.key !== 'closed' && s.key === value)
+    ? [{ key: value, label: stageLabel(value) }, ...WORKFLOW_STAGES.filter((s) => s.key !== 'closed')]
+    : WORKFLOW_STAGES.filter((s) => s.key !== 'closed')
 
 // Compact ranked breakdown (proportional bars) for the workflow analytics.
 // `rows` = [{label, value}] from the single KPI engine; palette from reportColors
@@ -2890,7 +2896,7 @@ export default function Accidents() {
                   <div>
                     <label className="label">Status</label>
                     <select className="input" value={form.status} onChange={e => setForm(f => ({ ...f, status: e.target.value }))}>
-                      {STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
+                      {editableAccidentStatuses(form.status).map(s => <option key={s} value={s}>{s}</option>)}
                     </select>
                   </div>
                   <div>
@@ -3089,7 +3095,7 @@ export default function Accidents() {
                   <div>
                     <label className="label">Workflow Stage</label>
                     <select className="input" value={form.workflow_stage} onChange={e => setForm(f => ({ ...f, workflow_stage: e.target.value }))}>
-                      {WORKFLOW_STAGES.map(s => <option key={s.key} value={s.key}>{s.label}</option>)}
+                      {editableWorkflowStages(form.workflow_stage).map(s => <option key={s.key} value={s.key}>{s.label}</option>)}
                     </select>
                   </div>
                   {editId && form.reference_no && (

@@ -6,6 +6,16 @@
 import { supabase, unwrap, applyCountry, fetchAllPages, ServiceError } from './_client'
 import { toUserMessage } from '../safeError'
 
+const DIRECT_CLOSURE_FIELDS = new Set([
+  'closure_status',
+  'close_requested_by',
+  'close_requested_at',
+  'close_request_note',
+  'closure_approved_by',
+  'closure_approved_at',
+  'closure_rejected_reason',
+])
+
 const COLS =
   'id,asset_no,site,country,incident_date,severity,status,accident_type,claim_amount,claim_status,recovered_amount,recovery_status,repair_cost,estimated_damage_cost,driver_name,location,created_at'
 
@@ -126,12 +136,23 @@ export function createAccidentForPage(values) {
   return supabase.from('accidents').insert(values)
 }
 
+function stripDirectClosurePatch(patch = {}) {
+  const out = {}
+  for (const [key, value] of Object.entries(patch || {})) {
+    if (DIRECT_CLOSURE_FIELDS.has(key)) continue
+    if (key === 'workflow_stage' && String(value || '').toLowerCase() === 'closed') continue
+    if (key === 'status' && String(value || '').toLowerCase() === 'closed') continue
+    out[key] = value
+  }
+  return out
+}
+
 /**
  * Pass-through update by id for the owner page. Returns the raw Supabase
  * `{ data, error }` (the page only checks the error).
  */
 export function updateAccidentForPage(id, patch) {
-  return supabase.from('accidents').update(patch).eq('id', id)
+  return supabase.from('accidents').update(stripDirectClosurePatch(patch)).eq('id', id)
 }
 
 /**

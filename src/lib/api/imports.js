@@ -5,7 +5,8 @@
  */
 import { supabase } from '../supabase'
 import { ServiceError, unwrap } from './_client'
-import { normaliseToken } from '../import/synonyms'
+import { MODULE_FIELDS, MODULE_TABLES, normaliseToken } from '../import/synonyms'
+import { naturalKey } from '../import/validate'
 
 const BUCKET = 'import-files'
 
@@ -568,6 +569,56 @@ export async function existingKeys({ module, country }) {
   // RPC returns SETOF text → array of strings (rows) or array of { import_existing_keys }.
   const keys = (data || []).map((r) => (typeof r === 'string' ? r : r?.import_existing_keys)).filter(Boolean)
   return new Set(keys)
+}
+
+const LIVE_PROBE_FIELD = {
+  fleet: 'asset_no',
+  tyre: 'serial_no',
+  stock: 'description',
+  accident: 'insurance_claim_no',
+  inspection: 'asset_no',
+  workorder: 'work_order_no',
+  warranty: 'serial_number',
+  gatepass: 'asset_no',
+  supplier: 'supplier_code',
+  driver: 'driver_id',
+}
+
+function uniqNonBlank(values) {
+  return [...new Set(values.map((v) => String(v ?? '').trim()).filter(Boolean))]
+}
+
+/**
+ * Fetch live records for the keys present in the upload so the wizard can tell
+ * an exact repeat file apart from a same-key row carrying new values.
+ *
+ * @param {{ module:string, country?:string, rows:Array<Record<string,*>> }} params
+ * @returns {Promise<Map<string,Record<string,*>>>} naturalKey -> live row
+ */
+export async function existingRecords({ module, country, rows = [] }) {
+  const table = MODULE_TABLES[module]
+  const probe = LIVE_PROBE_FIELD[module]
+  if (!table || !probe || !rows.length) return new Map()
+
+  const values = uniqNonBlank(rows.map((r) => r?.[probe]))
+  if (!values.length) return new Map()
+
+  const fieldKeys = (MODULE_FIELDS[module] || []).map((f) => f.key)
+  const cols = [...new Set(['id', 'country', probe, ...fieldKeys])].join(',')
+  const out = new Map()
+
+  for (let i = 0; i < values.length; i += 200) {
+    let q = supabase.from(table).select(cols).in(probe, values.slice(i, i + 200))
+    if (country && country !== 'All' && module !== 'workorder') q = q.eq('country', country)
+    const { data, error } = await q
+    if (error) throw new ServiceError(error.message, error.code, error)
+    for (const rec of data || []) {
+      const key = naturalKey(rec, module)
+      if (key && !out.has(key)) out.set(key, rec)
+    }
+  }
+
+  return out
 }
 
 export async function reverseBatch(batchId) {

@@ -97,6 +97,34 @@ function statusColor(s) {
     : 'text-[var(--text-secondary)] bg-[var(--surface-2)]'
 }
 
+function hasValue(v) {
+  return v != null && String(v).trim() !== ''
+}
+
+function comparableValue(v, type) {
+  if (!hasValue(v)) return ''
+  if (['number', 'integer', 'currency', 'pressure', 'distance', 'mass'].includes(type)) {
+    const n = Number(String(v).replace(/,/g, ''))
+    return Number.isFinite(n) ? String(n) : String(v).trim().toLowerCase()
+  }
+  if (type === 'date') {
+    const d = new Date(v)
+    return Number.isNaN(d.getTime()) ? String(v).trim().toLowerCase() : d.toISOString().slice(0, 10)
+  }
+  return String(v).trim().toLowerCase()
+}
+
+function isExactLiveMatch(transformed, live, module) {
+  if (!transformed || !live) return false
+  const fields = MODULE_FIELDS[module] || []
+  for (const f of fields) {
+    const uploaded = transformed[f.key]
+    if (!hasValue(uploaded)) continue
+    if (comparableValue(uploaded, f.type) !== comparableValue(live[f.key], f.type)) return false
+  }
+  return true
+}
+
 export default function DataIntakeCenter() {
   const { profile } = useAuth()
   const { activeCountry, activeCurrency } = useSettings()
@@ -202,6 +230,7 @@ export default function DataIntakeCenter() {
   //  · everything else   → insert
   const smartAction = useCallback((r) => {
     if (r.validationStatus === 'error') return (forceFlagged && isElevated) ? 'insert' : 'reject'
+    if (r.liveNeedsUpdate) return isElevated ? 'update' : 'skip'
     if (r.liveDuplicate) return (enrichExisting && isElevated) ? 'update' : 'skip'
     if (r.dupStatus === 'duplicate') return 'skip'
     return 'insert'
@@ -597,37 +626,56 @@ export default function DataIntakeCenter() {
     const withDup = classifyDuplicates(rows.map((r) => r.transformed), module)
     rows.forEach((r, i) => { r.dupStatus = withDup[i]?.dup_status || 'none' })
 
-    // Live-table duplicate detection (V47). Fault-tolerant: if the RPC is not yet
-    // deployed or errors, fall back to in-batch dedup only - never break the wizard.
+    // Live-table duplicate detection (V47). Exact repeats are skipped; same-key
+    // rows carrying changed values become update candidates instead of being
+    // mislabeled as already existing.
     let liveKeys = null
+    let liveRecords = null
     try {
       liveKeys = await imports.existingKeys({ module, country: activeCountry })
+      liveRecords = await imports.existingRecords({ module, country: activeCountry, rows: rows.map((r) => r.transformed) })
     } catch (err) {
       console.warn('Live duplicate detection unavailable; using in-batch dedup only.', err)
     }
 
     // Default action: reject errors; insert everything else. A row whose natural
-    // key already exists live is flagged duplicate and switched to 'skip' so the
-    // commit never creates a second live row (conflicts are left for the operator).
+    // key already exists live is skipped only when its uploaded values match the
+    // live row; changed same-key rows are routed to update/enrichment.
     rows.forEach((r) => {
       let isLiveDup = false
+      let needsUpdate = false
       if (liveKeys && r.validationStatus !== 'error') {
         const key = naturalKey(r.transformed, module)
-        if (key && liveKeys.has(key)) isLiveDup = true
+        if (key && liveKeys.has(key)) {
+          const live = liveRecords?.get(key)
+          isLiveDup = live ? isExactLiveMatch(r.transformed, live, module) : true
+          needsUpdate = !!live && !isLiveDup
+        }
       }
       r.liveDuplicate = isLiveDup
+      r.liveNeedsUpdate = needsUpdate
+      if (needsUpdate) {
+        if (r.validationStatus === 'ready') r.validationStatus = 'warning'
+        r.issues = [...(r.issues || []), {
+          field: 'natural_key',
+          severity: 'warning',
+          code: 'LIVE_ROW_DIFFERS',
+          message: 'A live record has this key, but the uploaded values differ. It will update/enrich the existing record instead of being skipped as already existing.',
+        }]
+      }
       // dupStatus is kept as the TRUE in-file classification (none/duplicate/
       // conflict); "already live" is tracked separately as liveDuplicate so the
       // operator can tell a whole-row copy apart from a same-key/different-data
       // conflict. The action itself is derived on demand via effectiveAction().
     })
 
-    const c = { total: rows.length, ready: 0, warning: 0, error: 0, duplicate: 0, conflict: 0, liveDuplicate: 0, countryConflict: 0, keyed: 0, amount: 0, qty: 0 }
+    const c = { total: rows.length, ready: 0, warning: 0, error: 0, duplicate: 0, conflict: 0, liveDuplicate: 0, liveNeedsUpdate: 0, countryConflict: 0, keyed: 0, amount: 0, qty: 0 }
     rows.forEach((r) => {
       c[r.validationStatus] = (c[r.validationStatus] || 0) + 1
       if (r.dupStatus === 'duplicate') c.duplicate++
       if (r.dupStatus === 'conflict') c.conflict++
       if (r.liveDuplicate) c.liveDuplicate++
+      if (r.liveNeedsUpdate) c.liveNeedsUpdate++
       if (r.countryConflict) c.countryConflict++
       // Rows that produce a usable natural key - the denominator for the
       // finer-granularity ("wrong module") duplicate-ratio heuristic.
@@ -773,7 +821,7 @@ export default function DataIntakeCenter() {
         }
       }
       // Cross-file enrichment: fill blanks on existing records from this file.
-      if (enrichExisting && isElevated) {
+      if (isElevated && (enrichExisting || actionPlan.update > 0)) {
         try {
           const enr = await imports.enrichBatch(batchId, {
             onProgress: (p) => setCommitProgress({ phase: 'enrich', ...p }),

@@ -177,7 +177,7 @@ describe('accident adapter - duplicate classification', () => {
     expect(out.map((r) => r.dup_status)).toEqual(['none', 'conflict'])
   })
 
-  it('claim_no on one row and identical police_report_no fallback on the other still group', () => {
+  it('claim_no on one row and identical police_report_no fallback on the other still import both when rows differ', () => {
     // Accident identity = insurance_claim_no || police_report_no. When one row
     // carries the value under claim_no and another carries the SAME value under
     // police_report_no, both resolve to the same natural key and group together.
@@ -186,9 +186,9 @@ describe('accident adapter - duplicate classification', () => {
       { country: 'KSA', police_report_no: 'REF-7', asset_no: 'V-1' },
     ]
     const out = classifyDuplicates(rows, 'accident')
-    // Same accident under claim_no on one row and police_report_no on the other:
-    // complementary, no conflict-field disagreement ⇒ keeper + mergeable duplicate.
-    expect(out.map((r) => r.dup_status)).toEqual(['none', 'duplicate'])
+    // Same natural key is not enough to skip: the full transformed rows differ,
+    // so both rows remain importable unless a protected conflict field disagrees.
+    expect(out.map((r) => r.dup_status)).toEqual(['none', 'none'])
   })
 
   it('same claim_no across different countries → none (country-scoped)', () => {

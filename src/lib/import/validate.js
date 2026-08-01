@@ -346,10 +346,9 @@ function keyParts(parts) {
 
 /**
  * Annotate rows with dup_status by natural key + whole-row fingerprint:
- *   'none'      first row of a key, or a key seen only once (the keeper)
- *   'duplicate' an exact whole-row copy of a row already seen (redundant), OR a
- *               same-key row that only adds complementary data with no conflict-
- *               field disagreement (mergeable)
+ *   'none'      unique rows, including same-key rows that differ without a
+ *               protected conflict-field disagreement
+ *   'duplicate' an exact whole-row copy of a row already seen (redundant)
  *   'conflict'  same natural key AND a designated conflict field disagrees with the
  *               keeper — a genuinely different record for the operator to resolve
  * Sharing a key is NOT enough to be a hard conflict: the keeper is preserved and
@@ -379,15 +378,12 @@ export function classifyDuplicates(rows, module) {
     groups.get(k).push(i)
   })
 
-  // Per-ROW status (not per-key), so one key group can hold both an exact copy
-  // and a genuinely different record. Three realistic tiers:
-  //   · first row of a key                         → 'none'      (the keeper)
-  //   · exact whole-row copy of a row already seen → 'duplicate' (redundant — safe to skip)
-  //   · same key, no conflict-field disagreement   → 'duplicate' (complementary/mergeable —
-  //                                                   e.g. same accident under claim_no on one
-  //                                                   row and police_report_no on another)
-  //   · same key AND a designated conflict field   → 'conflict'  (a real disagreement the
-  //     disagrees with the keeper                     operator must resolve — never a silent skip)
+  // Per-row status (not per-key), so one key group can hold both exact copies
+  // and distinct rows. Only exact full-row repeats are safe to skip:
+  //   - first row of a key                         -> 'none'      (the keeper)
+  //   - exact whole-row copy of a row already seen -> 'duplicate' (redundant, safe to skip)
+  //   - same key, no conflict-field disagreement  -> 'none'      (distinct, import it)
+  //   - same key AND a designated conflict field   -> 'conflict'  (real disagreement for review)
   const status = new Array(list.length).fill('none')
   for (const [, idxs] of groups) {
     if (idxs.length <= 1) continue
@@ -415,8 +411,8 @@ export function classifyDuplicates(rows, module) {
         continue
       }
       // Same key, not an exact copy: a conflict only when a designated conflict
-      // field is present on both and disagrees. Otherwise it is complementary
-      // data on the same record → 'duplicate' (mergeable, not a hard conflict).
+      // field is present on both and disagrees. Otherwise it is distinct data
+      // and should import with the rest of the file.
       let conflict = false
       for (const field of conflictFields) {
         const val = norm(v[field])
@@ -425,7 +421,7 @@ export function classifyDuplicates(rows, module) {
           break
         }
       }
-      status[i] = conflict ? 'conflict' : 'duplicate'
+      status[i] = conflict ? 'conflict' : 'none'
       // Let the keeper accrue any conflict-field values it did not yet carry, so a
       // later row disagreeing with an earlier complementary value is still caught.
       for (const field of conflictFields) {

@@ -9,6 +9,13 @@ const h = vi.hoisted(() => {
   const state = { failFn: null, attempts: [], savedRows: 0 }
   function from() {
     return {
+      select() {
+        return {
+          eq() {
+            return Promise.resolve({ count: state.savedRows, error: null })
+          },
+        }
+      },
       insert(payload) {
         const n = Array.isArray(payload) ? payload.length : 1
         const attemptNo = state.attempts.push(n)

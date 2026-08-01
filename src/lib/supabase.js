@@ -78,8 +78,15 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     // Access-Control-Allow-Headers doesn't list makes the browser block the
     // whole call ("Request header field ... is not allowed"). A prior
     // 'x-app-name' header (read by nothing) caused exactly that on chat-ai.
-    // keepalive keeps connections alive across page visibility changes.
-    fetch: (url, options = {}) => fetch(url, { ...options, keepalive: true }),
+    // keepalive is only safe for tiny, body-less requests. Browsers cap
+    // keepalive request bodies, so applying it to bulk import POSTs can make
+    // wide Excel uploads fail before they ever reach Supabase.
+    fetch: (url, options = {}) => {
+      const method = String(options.method || 'GET').toUpperCase()
+      const hasBody = options.body != null
+      const canKeepAlive = !hasBody && (method === 'GET' || method === 'HEAD')
+      return fetch(url, { ...options, ...(canKeepAlive ? { keepalive: true } : {}) })
+    },
   },
   realtime: {
     params: { eventsPerSecond: 10 },

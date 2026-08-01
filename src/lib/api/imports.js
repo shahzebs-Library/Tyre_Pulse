@@ -279,6 +279,20 @@ async function insertRowChunk(chunk, { attempts = 5, depth = 0 } = {}) {
   }
 }
 
+async function verifyStagedRows(batchId, expectedRows) {
+  if (!expectedRows) return
+  const { count, error } = await supabase.from('import_rows')
+    .select('id', { count: 'exact', head: true })
+    .eq('batch_id', batchId)
+  if (error) throw new ServiceError(error.message, error.code, error)
+  if (Number(count || 0) < expectedRows) {
+    throw new ServiceError(
+      `Only ${Number(count || 0).toLocaleString('en-US')} of ${expectedRows.toLocaleString('en-US')} row(s) reached the database. Retry the upload; no commit was started.`,
+      'IMPORT_STAGING_INCOMPLETE',
+    )
+  }
+}
+
 export async function stageRows(batchId, rows, { onProgress } = {}) {
   // Conservative initial request size — small enough to clear gateway limits and
   // finish well inside the statement timeout on the first try. If a chunk still
@@ -319,6 +333,7 @@ export async function stageRows(batchId, rows, { onProgress } = {}) {
     // can tell apart from a hang.
     onProgress?.(i, payload.length)
   }
+  await verifyStagedRows(batchId, payload.length)
 }
 
 export async function saveRowIssues(issues) {

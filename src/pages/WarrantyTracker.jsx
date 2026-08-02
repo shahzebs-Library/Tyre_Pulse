@@ -158,7 +158,7 @@ function KpiCard({ icon: Icon, label, value, sub, color = 'text-blue-400', warn 
 }
 
 export default function WarrantyTracker() {
-  const { activeCurrency, appSettings } = useSettings()
+  const { activeCurrency, activeCountry, appSettings } = useSettings()
   const { profile } = useAuth()
   const { branding } = useTenant()
   const company = branding?.legal_name || branding?.display_name || appSettings?.company_name || 'TyrePulse'
@@ -257,6 +257,19 @@ export default function WarrantyTracker() {
     load()
   }, [])
 
+  // Country scoping - mirror the app-wide null-safe convention (applyCountry):
+  // "All" shows every country; a specific country shows its own rows plus any
+  // with a NULL country (never silently dropped). warranty.listWarrantyClaims()
+  // returns the full claim set (its API takes no country arg and is out of
+  // scope to edit), so the scope is applied here before any aggregation. This
+  // keeps per-country credit money in a single currency (activeCurrency) rather
+  // than blending SAR + AED + EGP. Numbers for a single-country selection are
+  // exactly the same rows as before - only the scope predicate changed.
+  const scopedClaims = useMemo(() => {
+    if (activeCountry === 'All') return claims
+    return claims.filter(c => c.country == null || c.country === activeCountry)
+  }, [claims, activeCountry])
+
   const cur = activeCurrency
   const fmt = (v) => {
     if (v == null || !isFinite(v)) return `${cur} 0`
@@ -266,23 +279,23 @@ export default function WarrantyTracker() {
   }
 
   const kpis = useMemo(() => {
-    const total = claims.length
-    const open = claims.filter(c => ['Submitted', 'Under Review', 'Approved'].includes(c.claim_status)).length
-    const credited = claims.filter(c => ['Credit Issued', 'Closed'].includes(c.claim_status))
+    const total = scopedClaims.length
+    const open = scopedClaims.filter(c => ['Submitted', 'Under Review', 'Approved'].includes(c.claim_status)).length
+    const credited = scopedClaims.filter(c => ['Credit Issued', 'Closed'].includes(c.claim_status))
     const totalCredits = credited.reduce((s, c) => s + (Number(c.credit_amount) || 0), 0)
-    const approvedCount = claims.filter(c =>
+    const approvedCount = scopedClaims.filter(c =>
       ['Approved', 'Credit Issued', 'Closed'].includes(c.claim_status)
     ).length
     const approvalRate = total > 0 ? (approvedCount / total) * 100 : 0
     const avgCredit = credited.length > 0 ? totalCredits / credited.length : 0
     return { total, open, totalCredits, approvalRate, avgCredit }
-  }, [claims])
+  }, [scopedClaims])
 
-  const brands = useMemo(() => ['All', ...new Set(claims.map(c => c.brand).filter(Boolean))], [claims])
-  const sites  = useMemo(() => ['All', ...new Set(claims.map(c => c.site).filter(Boolean))], [claims])
+  const brands = useMemo(() => ['All', ...new Set(scopedClaims.map(c => c.brand).filter(Boolean))], [scopedClaims])
+  const sites  = useMemo(() => ['All', ...new Set(scopedClaims.map(c => c.site).filter(Boolean))], [scopedClaims])
 
   const filtered = useMemo(() => {
-    return claims.filter(c => {
+    return scopedClaims.filter(c => {
       if (filterBrand !== 'All' && c.brand !== filterBrand) return false
       if (filterStatus !== 'All' && c.claim_status !== filterStatus) return false
       if (filterFailure !== 'All' && c.failure_type !== filterFailure) return false
@@ -301,14 +314,14 @@ export default function WarrantyTracker() {
       }
       return true
     }).sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
-  }, [claims, filterBrand, filterStatus, filterFailure, filterSite, dateFrom, dateTo, search])
+  }, [scopedClaims, filterBrand, filterStatus, filterFailure, filterSite, dateFrom, dateTo, search])
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
   const paginated  = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
 
   const brandPerf = useMemo(() => {
     const map = {}
-    claims.forEach(c => {
+    scopedClaims.forEach(c => {
       const b = c.brand?.trim() || 'Unknown'
       if (!map[b]) map[b] = { brand: b, total: 0, approved: 0, credits: 0, kmList: [] }
       map[b].total++
@@ -322,19 +335,19 @@ export default function WarrantyTracker() {
       avgCredit: b.approved > 0 ? b.credits / b.approved : 0,
       avgKm: b.kmList.length > 0 ? b.kmList.reduce((s, v) => s + v, 0) / b.kmList.length : 0,
     })).sort((a, b) => b.total - a.total)
-  }, [claims])
+  }, [scopedClaims])
 
   const statusCounts = useMemo(() => {
     const map = {}
     CLAIM_STATUSES.forEach(s => { map[s] = 0 })
-    claims.forEach(c => { if (map[c.claim_status] != null) map[c.claim_status]++ })
+    scopedClaims.forEach(c => { if (map[c.claim_status] != null) map[c.claim_status]++ })
     return map
-  }, [claims])
+  }, [scopedClaims])
 
   const failureCounts = useMemo(() => {
     const map = {}
     FAILURE_TYPES.forEach(f => { map[f] = { count: 0, kmList: [] } })
-    claims.forEach(c => {
+    scopedClaims.forEach(c => {
       if (map[c.failure_type]) {
         map[c.failure_type].count++
         if (c.km_run > 0) map[c.failure_type].kmList.push(c.km_run)
@@ -345,12 +358,12 @@ export default function WarrantyTracker() {
       count,
       avgKm: kmList.length > 0 ? Math.round(kmList.reduce((s, v) => s + v, 0) / kmList.length) : 0,
     })).sort((a, b) => b.count - a.count)
-  }, [claims])
+  }, [scopedClaims])
 
   const monthlyCredits = useMemo(() => {
     const now = new Date()
     const arr = Array(12).fill(0)
-    claims.forEach(c => {
+    scopedClaims.forEach(c => {
       if (!['Credit Issued', 'Closed'].includes(c.claim_status)) return
       if (!c.credit_date) return
       const d = new Date(c.credit_date)
@@ -364,20 +377,20 @@ export default function WarrantyTracker() {
       labels.push(MONTHS[d.getMonth()])
     }
     return { labels, data: arr }
-  }, [claims])
+  }, [scopedClaims])
 
   const creditAnalysis = useMemo(() => {
-    const totalCredits = claims
+    const totalCredits = scopedClaims
       .filter(c => ['Credit Issued', 'Closed'].includes(c.claim_status))
       .reduce((s, c) => s + (Number(c.credit_amount) || 0), 0)
-    const openApproved = claims.filter(c => c.claim_status === 'Approved')
-    const avgCreditIssued = claims.filter(c => ['Credit Issued', 'Closed'].includes(c.claim_status) && c.credit_amount)
+    const openApproved = scopedClaims.filter(c => c.claim_status === 'Approved')
+    const avgCreditIssued = scopedClaims.filter(c => ['Credit Issued', 'Closed'].includes(c.claim_status) && c.credit_amount)
     const avg = avgCreditIssued.length > 0
       ? avgCreditIssued.reduce((s, c) => s + Number(c.credit_amount), 0) / avgCreditIssued.length
       : 0
     const estimatedUnclaimed = openApproved.length * avg
     return { totalCredits, estimatedUnclaimed, openApprovedCount: openApproved.length }
-  }, [claims])
+  }, [scopedClaims])
 
   const openForm = useCallback((claim = null) => {
     if (claim) {
@@ -673,7 +686,7 @@ export default function WarrantyTracker() {
     const annualCount = Number(roiAnnualCount) || 0
     const avgCost = Number(roiAvgCost) || 0
     const year = new Date().getFullYear()
-    const thisYearClaims = claims.filter(c => c.claim_no?.startsWith(`WAR-${year}-`))
+    const thisYearClaims = scopedClaims.filter(c => c.claim_no?.startsWith(`WAR-${year}-`))
     const thisYearCredits = thisYearClaims
       .filter(c => ['Credit Issued', 'Closed'].includes(c.claim_status))
       .reduce((s, c) => s + (Number(c.credit_amount) || 0), 0)
@@ -681,7 +694,7 @@ export default function WarrantyTracker() {
     const recoveryRate = totalSpend > 0 ? (thisYearCredits / totalSpend) * 100 : 0
     const eligibleUnclaimed = annualCount > 0 ? Math.round(annualCount * 0.3) * avgCost * 0.4 : 0
     return { thisYearClaims: thisYearClaims.length, thisYearCredits, recoveryRate, eligibleUnclaimed }
-  }, [claims, roiAnnualCount, roiAvgCost])
+  }, [scopedClaims, roiAnnualCount, roiAvgCost])
 
   const brandChartData = useMemo(() => ({
     labels: brandPerf.slice(0, 10).map(b => b.brand),
@@ -762,6 +775,13 @@ export default function WarrantyTracker() {
         </div>
         }
       />
+
+      {activeCountry === 'All' && (
+        <div className="flex items-start gap-2 text-xs text-amber-400/90 bg-amber-900/15 border border-amber-800/40 rounded-lg px-3 py-2">
+          <Info size={13} className="mt-0.5 flex-shrink-0" />
+          <span>Showing all countries. Credit figures below span multiple currencies (SAR, AED, EGP) and are not a single-currency total. Select a country to see credits in that country's currency.</span>
+        </div>
+      )}
 
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
         <KpiCard icon={ShieldCheck} label="Total Claims" value={kpis.total} color="text-blue-400" />
@@ -1034,7 +1054,7 @@ export default function WarrantyTracker() {
             <h3 className="text-sm font-semibold text-[var(--text-secondary)] mb-4 flex items-center gap-2">
               <PieChart size={16} className="text-orange-400" /> Claims by Failure Type
             </h3>
-            {claims.length === 0 ? (
+            {scopedClaims.length === 0 ? (
               <div className="flex items-center justify-center h-52 text-[var(--text-muted)] text-sm">No data available</div>
             ) : (
               <>
@@ -1104,7 +1124,7 @@ export default function WarrantyTracker() {
             <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-5">
               <p className="text-[var(--text-muted)] text-xs mb-1">Total Credits Received</p>
               <p className="text-3xl font-bold text-emerald-400">{fmt(creditAnalysis.totalCredits)}</p>
-              <p className="text-[var(--text-muted)] text-xs mt-1">across {claims.filter(c => ['Credit Issued','Closed'].includes(c.claim_status)).length} claims</p>
+              <p className="text-[var(--text-muted)] text-xs mt-1">across {scopedClaims.filter(c => ['Credit Issued','Closed'].includes(c.claim_status)).length} claims</p>
             </div>
             <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-5">
               <p className="text-[var(--text-muted)] text-xs mb-1">Est. Unclaimed (Approved)</p>

@@ -559,7 +559,7 @@ function DetailRow({ k, v }) {
 
 // ── Main component ─────────────────────────────────────────────────────────────
 export default function PredictiveMaintenance() {
-  const { activeCurrency } = useSettings()
+  const { activeCurrency, activeCountry } = useSettings()
 
   const [records, setRecords]         = useState([])
   const [fleetMaster, setFleetMaster] = useState([])
@@ -584,12 +584,23 @@ export default function PredictiveMaintenance() {
   const loadData = useCallback(async () => {
     setLoading(true)
     setError(null)
+    // Null-safe country scoping (mirrors the app-wide applyCountry convention):
+    // "All" applies no predicate; a specific country returns its own rows plus
+    // rows with a NULL country, never silently dropping uncategorised rows. This
+    // keeps per-country budget/cost figures in a single currency (activeCurrency)
+    // instead of blending SAR + AED + EGP. Applied server-side so a scoped view
+    // fetches only its own rows. For a single-country selection the rows are the
+    // same as before - only the scope predicate changed, no formula changed.
+    const scopeCountry = (q) =>
+      activeCountry && activeCountry !== 'All'
+        ? q.or(`country.eq.${activeCountry},country.is.null`)
+        : q
     try {
       // Load tyre_records
-      const { data: tyreData, error: tyreErr } = await fetchAllPages((from, to) => supabase
+      const { data: tyreData, error: tyreErr } = await fetchAllPages((from, to) => scopeCountry(supabase
         .from('tyre_records')
         .select('id,asset_no,site,brand,size,tyre_serial,position,tread_depth,pressure_reading,total_km,km_at_fitment,km_at_removal,cost_per_tyre,issue_date,fitment_date,removal_date,status,risk_level,category')
-        .order('issue_date', { ascending: false })
+        .order('issue_date', { ascending: false }))
         .range(from, to))
 
       if (tyreErr) throw tyreErr
@@ -598,10 +609,10 @@ export default function PredictiveMaintenance() {
       // Load vehicle_fleet (graceful if missing). Page past the 1000-row cap so
       // the fleet budget total below is not summed over a silently-capped subset.
       try {
-        const { data: fleetData, error: fleetErr } = await fetchAllPages((from, to) => supabase
+        const { data: fleetData, error: fleetErr } = await fetchAllPages((from, to) => scopeCountry(supabase
           .from('vehicle_fleet')
           .select('asset_no,site,vehicle_type,expected_km_per_tyre,monthly_tyre_budget,current_km')
-          .order('asset_no').order('id').range(from, to), { max: 20000 })
+          .order('asset_no').order('id')).range(from, to), { max: 20000 })
 
         if (fleetErr) {
           setFleetMaster([])
@@ -619,7 +630,7 @@ export default function PredictiveMaintenance() {
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [activeCountry])
 
   useEffect(() => { loadData() }, [loadData])
 
@@ -964,6 +975,13 @@ export default function PredictiveMaintenance() {
           </div>
         }
       />
+
+      {activeCountry === 'All' && hasAnyData && (
+        <div className="flex items-start gap-2 text-xs text-amber-400/90 bg-amber-900/15 border border-amber-800/40 rounded-lg px-3 py-2">
+          <Info size={13} className="mt-0.5 flex-shrink-0" />
+          <span>Showing all countries. Cost and budget figures span multiple currencies (SAR, AED, EGP) and are not a single-currency total. Select a country to see figures in that country's currency.</span>
+        </div>
+      )}
 
       {/* ── Empty state ─────────────────────────────────────────────────────── */}
       {!hasAnyData && (

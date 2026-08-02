@@ -103,7 +103,7 @@ function addDays(iso, n) {
 
 export default function DailyOps() {
   const { t } = useLanguage()
-  const { activeCurrency, appSettings } = useSettings()
+  const { activeCurrency, activeCountry, appSettings } = useSettings()
   const { branding } = useTenant()
   const [selectedDate, setSelectedDate] = useState(fmtDate(new Date()))
   const [loading, setLoading] = useState(true)
@@ -120,21 +120,37 @@ export default function DailyOps() {
     const { start: wStart, end: wEnd } = weekRange(date)
     const thirtyDaysAgo = addDays(date, -30)
 
+    // Null-safe country scoping (mirrors the app-wide applyCountry convention):
+    // "All" applies no predicate; a specific country keeps its own rows plus any
+    // with a NULL country, never silently dropped. work_orders/alerts (returned
+    // as chainable query builders) are scoped server-side; the paged tyre reads
+    // (which carry a country column) are scoped in memory. All money on this page
+    // is derived from tyre records, so scoping them keeps the cost figures in a
+    // single currency instead of blending SAR + AED + EGP. For a single-country
+    // selection the rows are the same as before - only the scope predicate changed.
+    const scoped = Boolean(activeCountry && activeCountry !== 'All')
+    const orCountry = `country.eq.${activeCountry},country.is.null`
+    const scopeRows = (rows) =>
+      scoped ? rows.filter(r => r.country == null || r.country === activeCountry) : rows
+
+    const woQuery = dailyOpsApi.listDailyWorkOrders({ thirtyDaysAgo, wEnd })
+    const alQuery = dailyOpsApi.listDailyAlerts({ thirtyDaysAgo, wEnd })
+
     const [trRes, insRes, woRes, alRes, t30Res] = await Promise.allSettled([
       dailyOpsApi.listDailyTyreRecords({ thirtyDaysAgo, wEnd }),
       dailyOpsApi.listDailyInspections({ thirtyDaysAgo, wEnd }),
-      dailyOpsApi.listDailyWorkOrders({ thirtyDaysAgo, wEnd }),
-      dailyOpsApi.listDailyAlerts({ thirtyDaysAgo, wEnd }),
+      scoped ? woQuery.or(orCountry) : woQuery,
+      scoped ? alQuery.or(orCountry) : alQuery,
       dailyOpsApi.listDailyTyreFitments({ thirtyDaysAgo, date }),
     ])
 
-    setTyreRecords(trRes.status === 'fulfilled' && trRes.value.data ? trRes.value.data : [])
+    setTyreRecords(trRes.status === 'fulfilled' && trRes.value.data ? scopeRows(trRes.value.data) : [])
     setInspections(insRes.status === 'fulfilled' && insRes.value.data ? insRes.value.data : [])
     setWorkOrders(woRes.status === 'fulfilled' && woRes.value.data ? woRes.value.data : [])
     setAlerts(alRes.status === 'fulfilled' && alRes.value.data ? alRes.value.data : [])
-    setAllTyres30(t30Res.status === 'fulfilled' && t30Res.value.data ? t30Res.value.data : [])
+    setAllTyres30(t30Res.status === 'fulfilled' && t30Res.value.data ? scopeRows(t30Res.value.data) : [])
     setLoading(false)
-  }, [])
+  }, [activeCountry])
 
   useEffect(() => { fetchData(selectedDate) }, [selectedDate, fetchData])
 
@@ -498,6 +514,13 @@ ${siteActivity.map(([s, c]) => `<tr><td>${esc(s)}</td><td>${esc(c)}</td></tr>`).
 
       {!loading && (
         <>
+          {activeCountry === 'All' && (
+            <div className="flex items-start gap-2 text-xs text-amber-400/90 bg-amber-900/15 border border-amber-800/40 rounded-lg px-3 py-2">
+              <AlertTriangle size={13} className="mt-0.5 flex-shrink-0" />
+              <span>Showing all countries. Cost figures below span multiple currencies (SAR, AED, EGP) and are not a single-currency total. Select a country to see spend in that country's currency.</span>
+            </div>
+          )}
+
           {/* Priority Action Queue */}
           <motion.section initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }}>
             <div className="flex items-center gap-2 mb-3">

@@ -101,6 +101,34 @@ function filterByPeriod(records, period, dateField = 'issue_date') {
   return filterByPeriodValue(records, period, dateField)
 }
 
+// Convert a PeriodFilter value into INCLUSIVE server-side date bounds so the raw
+// pulls fetch only the report's window instead of the whole all-time table.
+// `filterByPeriod` still runs client-side on top, so the bounds only need to be
+// a SUPERSET of the kept rows - the exact set (and every number) stays identical
+// to the client-only result. `toExclusive` is the day after the range end, so
+// `.lt(dateField, toExclusive)` includes the last day for both date and
+// timestamp columns. Returns null for "all time" (no date filter, ceiling only).
+function periodBounds(period) {
+  const v = period || { mode: 'all' }
+  if (v.mode === 'year') {
+    const y = Number(v.year)
+    if (!Number.isFinite(y)) return null
+    return { from: `${y}-01-01`, toExclusive: `${y + 1}-01-01` }
+  }
+  if (v.mode === 'custom') {
+    const from = v.from && /^\d{4}-\d{2}-\d{2}/.test(v.from) ? v.from.slice(0, 10) : null
+    let toExclusive = null
+    if (v.to && /^\d{4}-\d{2}-\d{2}/.test(v.to)) {
+      const d = new Date(`${v.to.slice(0, 10)}T00:00:00Z`)
+      d.setUTCDate(d.getUTCDate() + 1)
+      toExclusive = d.toISOString().slice(0, 10)
+    }
+    if (!from && !toExclusive) return null
+    return { from, toExclusive }
+  }
+  return null // 'all'
+}
+
 // ── Root cause classifier ─────────────────────────────────────────────────────
 const RC_CATEGORIES = [
   {
@@ -387,6 +415,12 @@ export default function ExecutiveReport() {
   const [inspections, setInspections] = useState([])
   const [actions,     setActions]     = useState([])
   const [fleet,       setFleet]       = useState([])
+  // Stable snapshot of the full (all-time) dataset used ONLY to populate the
+  // PeriodFilter year list; refreshed only on an all-time load so narrowing the
+  // period (which now scopes the server read) never collapses the year dropdown.
+  const [periodBasis, setPeriodBasis] = useState([])
+  // Per-dataset truncation flags from fetchAllPages (row ceiling hit).
+  const [truncated,   setTruncated]   = useState({ records: false, inspections: false, actions: false })
   const [loading,     setLoading]     = useState(true)
   const [error,       setError]       = useState(null)
   const [period,      setPeriod]      = useState({ mode: 'all' })
@@ -480,18 +514,28 @@ export default function ExecutiveReport() {
       setLoading(true)
       setError(null)
       try {
-        // Paginate past the PostgREST 1000-row cap so analytics see the FULL
-        // dataset (otherwise totals/KPIs are computed on a 1000-row sample).
+        // Bound every raw pull: country + the report's period window are applied
+        // SERVER-SIDE (never an unbounded all-time scan), each read is capped at a
+        // 50,000-row ceiling, and the client-side filterByPeriod still trims to the
+        // exact window so no total/KPI/export number changes. `scoped` layers the
+        // country filter + inclusive date bounds onto a query for its date column.
+        const bounds = periodBounds(period)
+        const scoped = (query, dateField) => {
+          let s = applyCountry(query, activeCountry)
+          if (bounds?.from) s = s.gte(dateField, bounds.from)
+          if (bounds?.toExclusive) s = s.lt(dateField, bounds.toExclusive)
+          return s
+        }
         const [rRes, iRes, aRes, fRes] = await Promise.all([
-          fetchAllPages((from, to) => applyCountry(supabase.from('tyre_records').select(
+          fetchAllPages((from, to) => scoped(supabase.from('tyre_records').select(
             'id,asset_no,site,brand,position,risk_level,category,findings,km_at_fitment,km_at_removal,cost_per_tyre,qty,issue_date,tread_depth,pressure_reading,country'
-          ), activeCountry).order('issue_date', { ascending: false }).range(from, to), { max: 200000 }),
-          fetchAllPages((from, to) => applyCountry(supabase.from('inspections').select(
+          ), 'issue_date').order('issue_date', { ascending: false }).range(from, to), { max: 50000 }),
+          fetchAllPages((from, to) => scoped(supabase.from('inspections').select(
             'id,asset_no,site,status,scheduled_date,completed_date,findings,country'
-          ), activeCountry).order('scheduled_date', { ascending: false }).range(from, to), { max: 50000 }),
-          fetchAllPages((from, to) => applyCountry(supabase.from('corrective_actions').select(
+          ), 'scheduled_date').order('scheduled_date', { ascending: false }).range(from, to), { max: 50000 }),
+          fetchAllPages((from, to) => scoped(supabase.from('corrective_actions').select(
             'id,site,status,priority,title,created_at,resolved_at,country'
-          ), activeCountry).order('created_at', { ascending: false }).range(from, to), { max: 50000 }),
+          ), 'created_at').order('created_at', { ascending: false }).range(from, to), { max: 50000 }),
           applyCountry(supabase.from('vehicle_fleet').select('asset_no,site,vehicle_type,monthly_tyre_budget,country'), activeCountry).then(
             res => ({ data: res.data || [], error: null })
           ).catch(() => ({ data: [], error: null })),
@@ -504,6 +548,10 @@ export default function ExecutiveReport() {
         setInspections(iRes.data || [])
         setActions(aRes.data || [])
         setFleet(fRes.data || [])
+        setTruncated({ records: !!rRes.truncated, inspections: !!iRes.truncated, actions: !!aRes.truncated })
+        // Only an all-time load refreshes the year list; a narrowed (bounded)
+        // load must not shrink the PeriodFilter dropdown to the chosen window.
+        if (!bounds) setPeriodBasis(rRes.data || [])
       } catch (e) {
         if (!cancelled) setError(toUserMessage(e, 'Failed to load data'))
       } finally {
@@ -512,7 +560,7 @@ export default function ExecutiveReport() {
     }
     load()
     return () => { cancelled = true }
-  }, [activeCountry])
+  }, [activeCountry, period])
 
   // ── Tyres vs Maintenance cost split load (12 calendar months) ──────────────
   useEffect(() => {
@@ -536,6 +584,10 @@ export default function ExecutiveReport() {
   const periodRecords     = useMemo(() => filterByPeriod(records,     period, 'issue_date'),      [records,     period])
   const periodInspections = useMemo(() => filterByPeriod(inspections, period, 'scheduled_date'),  [inspections, period])
   const periodActions     = useMemo(() => filterByPeriod(actions,     period, 'created_at'),      [actions,     period])
+
+  // True when any raw pull hit its 50,000-row ceiling: the report then reflects a
+  // capped sample of the selected period, not the full history.
+  const cappedView = truncated.records || truncated.inspections || truncated.actions
 
   // ── KPIs ──────────────────────────────────────────────────────────────────
   const fleetSize = useMemo(() =>
@@ -1631,7 +1683,7 @@ export default function ExecutiveReport() {
             subtitle={t('execreport.header.subtitle', { company: companyName, date: formatDate(new Date(), 'All', { day: '2-digit', month: 'long', year: 'numeric' }) })}
             icon={FileText}
             actions={<>
-              <PeriodFilter records={records} value={period} onChange={setPeriod} />
+              <PeriodFilter records={periodBasis} value={period} onChange={setPeriod} />
               <button
                 onClick={() => setCustomizeOpen(o => !o)}
                 aria-pressed={customizeOpen}
@@ -1704,6 +1756,18 @@ export default function ExecutiveReport() {
       </div>
 
       <div className="max-w-[1800px] mx-auto px-4 py-6 flex flex-col gap-8">
+
+        {/* Capped-view advisory: shown only when a raw pull hit its row ceiling. */}
+        {cappedView && (
+          <div className="no-print flex items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-2.5 text-xs text-amber-400">
+            <AlertTriangle className="w-4 h-4 mt-0.5 flex-shrink-0" />
+            <span>
+              Capped view: this report shows the most recent 50,000 rows per dataset for the
+              selected period, so totals reflect that capped sample, not the full history. Narrow
+              the period for complete figures.
+            </span>
+          </div>
+        )}
 
         {/* Multi-year expense trend + forecast (on-screen intelligence block). */}
         <YearlyTrendPanel title="Expense trend by year (tyres / spare / lubricant) + forecast" />

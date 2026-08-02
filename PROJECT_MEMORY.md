@@ -57,6 +57,15 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
   RULE: to scale a hot page, prefer the existing server RPC for TOTALS; for a row-level view no RPC covers, keep the
   formula but bound the read (server country+date scope + fetchAllPages {max} + a visible truncation note) — never
   swap a total to a differently-defined source, and never leave an unbounded all-time/all-country fetchAllPages.
+  **SECOND WAVE (4 more pages, same rules, all build-clean, no number change for current data):** Dashboard.jsx
+  (KPIs already report_tyre_summary; chart pull 200k->50k + capped note), KpiCommandCenter.jsx (all 5 tyre/inspection
+  pulls 200k->50k + note; NO KPI repointed — CPK/life/failure/scrap/pressure are per-row kpiEngine, and
+  report_tyre_summary.failure_rate differs by including null-country rows + no site filter), ExecutiveAnalytics.jsx
+  (heatmap/treemap/sankey/risk-matrix stay client but the 3 pulls incl. the all-time open-tyres read capped 50k),
+  ExecutiveReport.jsx (all 3 pulls server period-scoped via a superset periodBounds + capped 50k; totalSpend still
+  sums cost_per_tyre and feeds the PDF/PPTX/Excel exports + savings calcs UNCHANGED — deliberately NOT swapped).
+  NOTE the accepted trade-off: bounded row-level pages now show a "capped view" note past 50k rows in the selected
+  window (widen the date range for full detail); every headline TOTAL that has a server RPC stays full-scope.
 - **`fetchAllPages` PARALLELIZED (app-wide, `src/lib/fetchAll.js`, 113 caller files).** Was strictly serial: page 0,
   then page 1, ... (200k rows = 200 latency-bound round trips). NOW: page 0 alone (a small result stays ONE round
   trip, no regression), then remaining pages fetched in CONCURRENT windows of `concurrency` (default 4) — preserves

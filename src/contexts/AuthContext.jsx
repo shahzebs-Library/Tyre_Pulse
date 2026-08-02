@@ -260,7 +260,24 @@ export function AuthProvider({ children }) {
     )
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (_event, session) => handleSession(session),
+      // Deferred to a fresh macrotask ON PURPOSE. supabase-js invokes this
+      // callback while HOLDING its navigator.locks auth lock - INITIAL_SESSION
+      // is emitted from inside _acquireLock. handleSession awaits hasUnmetMfa()
+      // -> getAuthenticatorAssuranceLevel() -> getSession(), which re-enters
+      // _acquireLock; that nested call is queued in pendingInLock and only
+      // drains AFTER this callback returns, while this callback is itself
+      // awaiting handleSession -> a circular wait that DEADLOCKS. When the
+      // deadlock wins the boot race, hasUnmetMfa never resolves, fetchProfile
+      // never runs, setLoading(false) never runs, and ProtectedRoute is stuck
+      // on the spinner forever - the "blank on first open, fine after a manual
+      // refresh" report (the refresh flips the race so getSession's own
+      // .then(handleSession), which runs OUTSIDE the lock, wins instead).
+      // setTimeout(0) lets this callback return and the lock release first, so
+      // the nested auth call acquires it cleanly. handleSession stays idempotent
+      // via currentUserIdRef, so deferring changes only WHEN it runs, never what
+      // it does. (This mirrors Supabase's own guidance: never call an auth
+      // method synchronously inside onAuthStateChange.)
+      (_event, session) => { setTimeout(() => handleSession(session), 0) },
     )
 
     return () => {

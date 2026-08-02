@@ -5,7 +5,7 @@ import {
   ClipboardList, Zap, Megaphone, Lock, LogOut, ChevronDown,
   Globe, Menu, X, AlertTriangle, Layers, Smartphone, Palette, Activity,
   DatabaseBackup, UserCog, History, BellRing, Boxes, HeartPulse, Search, Truck, Trash2, CopyX, FileClock,
-  LayoutList, Bug, Wand2, LifeBuoy, Eye, UserX, Brain,
+  LayoutList, Bug, Wand2, LifeBuoy, Eye, UserX, Brain, ShieldCheck,
 } from 'lucide-react'
 import { useConsoleAuth } from '../ConsoleAuthContext'
 import Console2FAModal from './Console2FAModal'
@@ -25,6 +25,7 @@ const NAV_GROUPS = [
     label: 'Overview',
     items: [
       { to: '/console',               label: 'Dashboard',      icon: LayoutDashboard, end: true },
+      { to: '/console/control-center', label: 'Data Trust & Control', icon: ShieldCheck },
       { to: '/console/health',        label: 'System Health',  icon: Activity },
       { to: '/console/crash-reports', label: 'Crash Reports',  icon: Bug },
     ],

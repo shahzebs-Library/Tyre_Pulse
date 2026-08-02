@@ -66,8 +66,21 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
   paged read, never a bare `.select()` whose `.length`/`.reduce`/Set is shown.
 - **HONEST N/A FOR UNMEASURED KPIs.** SafetyCompliance scored missing tread/pressure/inspection data as 100/'EXCELLENT'
   (overall blended the fakes) -> now null/'N/A', overall weight-renormalizes over only measured components; TyreScrap
-  fabricated a 100,000 km fleet average -> null/'N/A' with the early-scrap comparison guarded. (Still open, flagged
-  not-clearly-safe: DowntimeTracker availability=100 on empty data; RetreadManagement failureRate masking.)
+  fabricated a 100,000 km fleet average -> null/'N/A' with the early-scrap comparison guarded. ROUND 2: DowntimeTracker
+  availability=100-on-empty -> null/'N/A'/'Not measured' (neutral color, no false below-target rec, PDF null-safe);
+  RetreadManagement failureRate masked a missing success rate as 0% -> null/'N/A' (was mis-ranked best-in-class);
+  FuelEfficiency compliancePct 100-on-no-readings -> null/'N/A'. RULE: a displayed metric with no real data is
+  null/'N/A', never a flattering constant; null-guard every downstream .toFixed / threshold / color / sort.
+- **CURRENCY NO LONGER BLENDED on 3 more pages.** PredictiveMaintenance / DailyOps / WarrantyTracker read fleet-wide
+  with no country filter, so cost/budget/credit totals summed SAR+AED+EGP under the org-default currency. Each now
+  scopes reads to the active country via the null-safe convention (All = no predicate; a country = its rows +
+  NULL-country rows; mirrors _client.applyCountry) and shows an amber "mixed currencies, pick a country" note under
+  'All'. activeCurrency resolution was already correct; only SCOPE changed, so a single-country view is unchanged rows.
+- **QUALITY SWEEP (4 pages): honest states + real counts.** LiveFleetStatus 'Fleet Total' read `fleet_master` with a
+  bare `.select()` (silently capped 1000) and UNDERCOUNTED the ~1523 fleet -> now paged. Vehicle360 EmptyState was
+  passing `message=` while the component reads `description=`, so the real safe error/empty reason was discarded ->
+  fixed + Retry added. FuelEfficiency/VendorIntelligence tyre reads bounded 50k + capped note + Retry. RULE: EmptyState
+  takes `description` (not `message`); any displayed COUNT over a bare `.select()` is wrong past 1000 rows.
 - **HOT-PAGE FULL-TABLE PULLS BOUNDED (3 flagship pages, no formula change).** An audit found the real millions-row
   risk is work_orders (parts_consumption is already fully RPC-served). Conservative fixes, each verified build-clean,
   numbers unchanged for today's data: **Analytics.jsx** — 4 KPI cards now read `report_tyre_summary` (server aggregate,

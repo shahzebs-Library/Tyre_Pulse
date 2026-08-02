@@ -152,6 +152,34 @@ export async function loadCostSplit({ country, now, from, to, site } = {}) {
     } catch { /* grid unavailable for this scope - fall through to legacy sources */ }
   }
 
+  // SERVER-SIDE split for the remaining scopes (site-scoped, or org-wide when the
+  // grid held no spend): ONE aggregate RPC (get_maint_tyre_split, V457) instead of
+  // pulling tyre_records + pm_service_records + work_orders WHOLE into the browser.
+  // Mirrors the legacy JS math exactly. Falls through to the raw-row pulls below
+  // only when the RPC is absent (older DB / migration not applied).
+  try {
+    const first = keys[0]
+    const [ly, lm] = keys[keys.length - 1].split('-').map(Number)
+    const from = `${first}-01`
+    const to = new Date(Date.UTC(ly, lm, 0)).toISOString().slice(0, 10)
+    const { data, error } = await supabase.rpc('get_maint_tyre_split', {
+      p_country: country && country !== 'All' ? country : null,
+      p_site: siteEq,
+      p_from: from,
+      p_to: to,
+    })
+    if (!error && data && data.ok && Array.isArray(data.monthly)) {
+      for (const m of data.monthly) {
+        add(tyreByMonth, m.m, m.tyre)
+        add(maintByMonth, m.m, m.maintenance)
+      }
+      const byMonth = keys.map((k) => ({ month: k, tyre: tyreByMonth[k], maintenance: maintByMonth[k] }))
+      const tyre = byMonth.reduce((s, m) => s + m.tyre, 0)
+      const maintenance = byMonth.reduce((s, m) => s + m.maintenance, 0)
+      return { tyre, maintenance, totals: { tyre, maintenance }, byMonth, source: 'server_rpc' }
+    }
+  } catch { /* RPC absent - fall through to the legacy raw-row pulls below */ }
+
   // TYRE spend: cost_per_tyre x (qty || 1), bucketed by issue_date.
   try {
     const { data, error } = await fetchAllPages((f, t) => {

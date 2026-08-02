@@ -1,0 +1,31 @@
+-- V452 / V452b - DAILY COVERAGE: stop flagging event-driven cost days as "missing"
+-- STATUS: APPLIED LIVE 2026-08-02 (project jhssdmeruxtrlqnwfksc) as
+--   v452_coverage_site_cadence + v452b_coverage_no_persite_event_feeds. Repo record.
+--
+-- PROBLEM (customer: "in daily coverage I still find many empty days not yet uploaded
+-- the cost"): _upload_coverage_detail_for_org computed per-SITE missing days using the
+-- COUNTRY feed's cadence. Since KSA expenses arrive near-daily at country level, every
+-- day a small site had no expense row was flagged "missing" - so a site with 2 cost
+-- rows in a month showed ~28 "empty days", even though the cost feed itself was complete
+-- (country-level missing = 0).
+--
+-- ROOT CAUSE: expenses (and tyre_records) are EVENT-DRIVEN per site - a cost/fitment is
+-- logged when it happens, not on a daily schedule - so "the site missed a day" is not a
+-- real gap for those feeds.
+--
+-- FIX:
+--   V452  - per-site missing-days now require the SITE's own cadence (>=50% of its active
+--           span AND >=5 data days), not the country feed's; adds an `occasional` flag +
+--           first_data_date so sparse sites read as occasional, not missing.
+--   V452b - restrict per-site day-policing to genuinely daily-per-site feeds
+--           (production_m3, job_cards). Expenses + tyre_records are no longer day-policed
+--           per site at all. Country-level feed health (cs_gaps) and dormant-site
+--           detection are UNCHANGED, so a truly un-uploaded cost feed still shows at the
+--           country level.
+--
+-- VERIFIED (org Company A, KSA, 30d): country-level expense missing = 0;
+--   expense sites flagged = 14 -> 0; tyre sites flagged -> 0. Sparse sites now carry
+--   occasional=true instead of a list of "missing" days.
+--
+-- REVERSIBLE: re-apply the prior body (retrievable from git history / the pre-V452
+--   pg_get_functiondef). Function-only change, no data touched.

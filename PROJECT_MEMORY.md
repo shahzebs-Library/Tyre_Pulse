@@ -44,6 +44,30 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
     Data Intake, Import History, Smart Import, Material Master, Reconciliation, Duplicate Control, Teach the
     Classifier) with a live open-issues + volumes headline. ALL under the super-admin `/console` (super-admin gated).
     RULE: the Control Center is the single trust/lineage/diagnostics surface — extend it, never add a parallel one.
+- **BLANK-UNTIL-SECOND-REFRESH FIXED (supabase-js auth-lock reentrancy deadlock, `AuthContext.jsx`).** The three
+  earlier part-11 causes were intact (no regression). NEW cause: `onAuthStateChange` emits `INITIAL_SESSION` from
+  INSIDE supabase-js `_acquireLock`, and `handleSession` `await`ed `hasUnmetMfa()` -> `getSession()` which RE-ENTERS
+  the same lock (queued in `pendingInLock` until the outer callback returns) = circular wait -> the boot `loading`
+  flag never cleared -> ProtectedRoute spinner = blank screen. Only the out-of-lock `getSession().then(handleSession)`
+  path could win the race, which is why a manual refresh loaded it. FIX (one line): run the handler in a fresh
+  macrotask `(_e, session) => { setTimeout(() => handleSession(session), 0) }` so the nested getSession acquires the
+  lock cleanly; handleSession is already idempotent via `currentUserIdRef`. This is Supabase's own documented rule
+  (never call an auth method synchronously inside onAuthStateChange). RULE: never `await` a supabase auth method
+  (getSession/getUser/getAuthenticatorAssuranceLevel/refreshSession) synchronously inside an onAuthStateChange
+  callback — always defer.
+- **SILENTLY-CAPPED (1000-row) COUNT BUGS FIXED across 8 surfaces (wrong numbers, not just speed).** A plain
+  `.select()` with no `.range()`/paging caps at 1000 rows, so a count/total/distinct over it is WRONG once the table
+  exceeds 1000 — the fleet is ~1523, so several were already wrong. Fixed with exact server counts
+  (`{count:'exact',head:true}`) or bounded `fetchAllPages` + honest capped notes: AuditTrail (active-users distinct /
+  uploads-this-month / records-this-month), WidgetRenderer (work-orders-by-status total + total-vehicles/availability
+  gauge/by-site), DisplayDashboard (TV fleet gauge), ExecutiveReport (fleetSize KPI), ExecutiveAnalytics (availability
+  total), PredictiveMaintenance + ForecastingEngine (fleet monthly-budget totals), MaintenanceCalendar
+  (overdue/due-this-week/upcoming-30 KPIs). RULE: any displayed COUNT/TOTAL/distinct must use a server count or a
+  paged read, never a bare `.select()` whose `.length`/`.reduce`/Set is shown.
+- **HONEST N/A FOR UNMEASURED KPIs.** SafetyCompliance scored missing tread/pressure/inspection data as 100/'EXCELLENT'
+  (overall blended the fakes) -> now null/'N/A', overall weight-renormalizes over only measured components; TyreScrap
+  fabricated a 100,000 km fleet average -> null/'N/A' with the early-scrap comparison guarded. (Still open, flagged
+  not-clearly-safe: DowntimeTracker availability=100 on empty data; RetreadManagement failureRate masking.)
 - **HOT-PAGE FULL-TABLE PULLS BOUNDED (3 flagship pages, no formula change).** An audit found the real millions-row
   risk is work_orders (parts_consumption is already fully RPC-served). Conservative fixes, each verified build-clean,
   numbers unchanged for today's data: **Analytics.jsx** — 4 KPI cards now read `report_tyre_summary` (server aggregate,

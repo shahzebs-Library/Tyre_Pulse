@@ -109,7 +109,8 @@ export function fleetTiles(fleet = []) {
     for (const { unit, s } of sides) {
       if (!s) continue
       const cost = num(s.total_cost_matched ?? s.totalCostMatched)
-      const distance = num(s.total ?? s.distance_or_hours)
+      // fleet km/hours sub-objects report distance as total_km / total_hours
+      const distance = num(s.total_km ?? s.total_hours ?? s.total ?? s.distance_or_hours)
       const hasAny = cost > 0 || distance > 0
       if (!hasAny) continue
       out.push({

@@ -300,6 +300,7 @@ export default function RootCauseEngine() {
   const [records, setRecords] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [truncated, setTruncated] = useState(false)
 
   const [datePreset, setDatePreset] = useState('All Time')
   const [siteFilter, setSiteFilter] = useState('all')
@@ -308,6 +309,12 @@ export default function RootCauseEngine() {
 
   const [activeTab, setActiveTab] = useState('Under Inflation')
   const [deepDivePage, setDeepDivePage] = useState(1)
+
+  // ── Date cutoff ─────────────────────────────────────────────────────────────
+  const dateCutoff = useMemo(() => {
+    const preset = DATE_PRESETS.find(p => p.label === datePreset)
+    return preset ? applyDatePreset(preset) : null
+  }, [datePreset])
 
   // ── Data fetch ──────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -326,28 +333,26 @@ export default function RootCauseEngine() {
       if (activeCountry && activeCountry !== 'All') {
         q = q.eq('country', activeCountry)
       }
+      // Server-side date window: mirror the client filter exactly (rows with no
+      // issue_date are kept), so the pull is bounded without changing any count.
+      if (dateCutoff) q = q.or(`issue_date.is.null,issue_date.gte.${dateCutoff}`)
       return q.range(from, to)
-    }).then(({ data, error: err }) => {
+    }, { max: 50000 }).then(({ data, error: err, truncated: trunc }) => {
       if (err) {
         setError(toUserMessage(err, 'Could not load root cause data.'))
       } else {
         setRecords(data || [])
+        setTruncated(!!trunc)
       }
       setLoading(false)
     })
-  }, [activeCountry])
+  }, [activeCountry, dateCutoff])
 
   // ── Sites list ──────────────────────────────────────────────────────────────
   const allSites = useMemo(() => {
     const s = new Set(records.map(r => r.site).filter(Boolean))
     return ['all', ...[...s].sort()]
   }, [records])
-
-  // ── Date cutoff ─────────────────────────────────────────────────────────────
-  const dateCutoff = useMemo(() => {
-    const preset = DATE_PRESETS.find(p => p.label === datePreset)
-    return preset ? applyDatePreset(preset) : null
-  }, [datePreset])
 
   // ── Filtered records ────────────────────────────────────────────────────────
   const filtered = useMemo(() => {
@@ -632,7 +637,9 @@ export default function RootCauseEngine() {
     )
   }
 
-  if (records.length === 0) {
+  // Full-page empty only when the unwindowed pull is genuinely empty. With a date
+  // window active, fall through so the filters stay visible and the user can widen it.
+  if (records.length === 0 && !dateCutoff) {
     return (
       <div className="min-h-screen bg-[var(--surface-1)] flex items-center justify-center">
         <div className="card p-8 text-center max-w-md">
@@ -751,6 +758,17 @@ export default function RootCauseEngine() {
           </div>
         </div>
       </div>
+
+      {/* ── Capped view note ── */}
+      {truncated && (
+        <div className="card p-3 flex items-start gap-2 border border-yellow-800 bg-yellow-900/20 text-xs text-yellow-300">
+          <AlertTriangle size={16} className="shrink-0 mt-0.5" />
+          <span>
+            Capped view: showing the first {(50000).toLocaleString()} records for the selected country and
+            date window. Narrow the date range or country to see the full detail.
+          </span>
+        </div>
+      )}
 
       {/* ── Summary Stats ── */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">

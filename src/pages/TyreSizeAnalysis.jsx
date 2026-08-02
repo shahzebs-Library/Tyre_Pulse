@@ -159,6 +159,7 @@ export default function TyreSizeAnalysis() {
   const [records, setRecords]   = useState([])
   const [loading, setLoading]   = useState(true)
   const [error, setError]       = useState(null)
+  const [truncated, setTruncated] = useState(false)
   const [refreshKey, setRefreshKey] = useState(0)
 
   // Filters
@@ -185,13 +186,18 @@ export default function TyreSizeAnalysis() {
         .from('tyre_records')
         .select('id,asset_no,serial_number:serial_no,size,brand,position,cost_per_tyre,km_at_fitment,km_at_removal,risk_level,site,country,tread_depth,issue_date')
       if (activeCountry !== 'All') q = q.eq('country', activeCountry)
+      // Server-side date window: mirror the client filter exactly (rows with no
+      // issue_date are kept), so the pull is bounded without changing any count.
+      if (dateFrom) q = q.or(`issue_date.is.null,issue_date.gte.${dateFrom}`)
+      if (dateTo)   q = q.or(`issue_date.is.null,issue_date.lte.${dateTo}`)
       return q.range(from, to)
-    }).then(({ data, error: err }) => {
+    }, { max: 50000 }).then(({ data, error: err, truncated: trunc }) => {
       if (err) { setError(toUserMessage(err, 'Could not load tyre data.')); setLoading(false); return }
       setRecords(data || [])
+      setTruncated(!!trunc)
       setLoading(false)
     })
-  }, [activeCountry, refreshKey])
+  }, [activeCountry, dateFrom, dateTo, refreshKey])
 
   // ── Filter options ───────────────────────────────────────────────────────────
   const filterOptions = useMemo(() => {
@@ -821,6 +827,17 @@ export default function TyreSizeAnalysis() {
           </div>
         </div>
       </div>
+
+      {/* ── Capped view note ──────────────────────────────────────────────── */}
+      {truncated && (
+        <div className="flex items-start gap-2 rounded-lg border border-yellow-800 bg-yellow-900/20 px-4 py-2.5 text-xs text-yellow-300">
+          <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+          <span>
+            Capped view: showing the first {(50000).toLocaleString()} records for the selected country and
+            date window. Narrow the date range or country to see the full detail.
+          </span>
+        </div>
+      )}
 
       {/* ── KPI Cards ──────────────────────────────────────────────────────── */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">

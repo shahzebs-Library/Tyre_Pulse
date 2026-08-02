@@ -213,6 +213,11 @@ export default function CpkIntelligence() {
         </span>
       </div>
 
+      <p className="mb-4 text-xs" style={{ color: 'var(--text-secondary)' }}>
+        Distance = total tyre-km (the sum of each tyre's total_km from the uploaded change data),
+        matched to the tyre's change month. Cost is per country in its own currency.
+      </p>
+
       {/* Tabs. Only the open tab's advanced data is fetched. */}
       <div className="mb-4 flex flex-wrap gap-1 border-b border-[var(--border-subtle)]">
         {TABS.map((t) => {

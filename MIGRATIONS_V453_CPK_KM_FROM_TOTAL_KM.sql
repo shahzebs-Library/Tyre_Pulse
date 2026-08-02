@@ -1,0 +1,30 @@
+-- V453 / V453b - CPK km = SUM of uploaded tyre total_km (cost per tyre-km)
+-- STATUS: APPLIED LIVE 2026-08-02 (project jhssdmeruxtrlqnwfksc) as
+--   v453_cpk_km_from_total_km + v453b_cpk_drivers_tyre_km. Repo record.
+--
+-- CUSTOMER DECISION: total_km is each TYRE's own life (fix->remove km), not vehicle km.
+--   A work order can change 2 tyres in different positions, each with its own km, so the
+--   CPK km denominator is the SUM of every tyre row's total_km (cost per tyre-km), matched
+--   to the tyre's realization month (removal_date, else issue_date). This data is all
+--   movable; there is no non-movable engine-hours series in it, so the hours side is
+--   unchanged.
+--
+-- WHAT CHANGED:
+--   V453  - new public.fleet_tyre_km_by_asset(org, country, from, to) -> (country, asset_no,
+--           km_run = sum(total_km)); get_fleet_cpk's `km` CTE now calls it instead of the
+--           odometer-span fleet_km_by_asset. Everything else in get_fleet_cpk is identical.
+--   V453b - get_cpk_drivers km1/km0 repointed to fleet_tyre_km_by_asset so the "why CPK
+--           changed" waterfall uses the same denominator as the headline CPK.
+--
+-- EFFECT (KSA July 2026, org-injected verify): per-asset TM435 June tyre-km = 690,180
+--   (sum of all rows) vs old span 71k; KSA July fleet tyre-km 34,832,739 vs old span
+--   183,325; assets with a km denominator 90 -> 229 (better coverage, since total_km is on
+--   many rows without needing two odometer readings). CPK therefore drops to cost per
+--   tyre-km, the metric the customer asked for.
+--
+-- fleet_km_by_asset (odometer span) is KEPT unchanged for any other caller (cost per km in
+--   costIntelligence etc.); only the two CPK RPCs were repointed.
+--
+-- REVERSIBLE: re-point the `km` CTE in get_fleet_cpk and km1/km0 in get_cpk_drivers back to
+--   public.fleet_km_by_asset (prior bodies in git history / pre-V453 pg_get_functiondef);
+--   drop function public.fleet_tyre_km_by_asset(uuid, text, date, date).

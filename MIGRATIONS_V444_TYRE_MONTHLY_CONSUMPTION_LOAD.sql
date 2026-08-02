@@ -1,0 +1,51 @@
+-- V444 — TYRE MONTHLY CONSUMPTION LOAD (KSA / UAE / Egypt)
+-- (Applied live 2026-08-02 as Supabase migrations v432_ksa_tyre_monthly_consumption_load /
+--  v433_uae_tyre_monthly_consumption_load / v434_egypt_tyre_monthly_consumption_load.
+--  Renumbered to V444 in the repo because a parallel session already used the V432-V442
+--  file numbers; the DB uses timestamp versions so there is no live collision. This file
+--  is the human record; the DB change is already applied.)
+-- STATUS: APPLIED LIVE 2026-08-02 (project jhssdmeruxtrlqnwfksc, org Company A).
+--
+-- PROBLEM (customer: "monthly consumption not taking, supabase not uploading those months;
+-- daily coverage shows the gap; CPK very high"): tyre fitments the customer uploaded into the
+-- manual Supabase landing tables `*_country_upload_template_staging` were NEVER processed into
+-- `tyre_records` for recent months (those tables have no auto-pipe). Result: monthly tyre
+-- consumption showed gaps (Daily Coverage) and CPK was inflated (missing tyres = missing km).
+--
+-- LOADED (genuinely-new fitments absent from tyre_records; dedup key = asset+position+fix_date,
+-- because serials in this data are often BRAND names like "TEGRYS", not unique ids):
+--   KSA   +1,655  (concentrated 2026-01..2026-07)
+--   UAE   +478
+--   Egypt +94
+--   = 2,227 fitments loaded.
+--
+-- METHOD: collapse staging to fitment grain; insert only fitments not already present; proper
+-- fit->remove chaining — latest fix_date per (asset,position) = Active (existing older active
+-- flipped to Removed), earlier fits Removed with removal_date/km = next fitment (real km-run for
+-- CPK). GOTCHAS handled: KSA/UAE fix_date = DD-MM-YY text; Egypt fix_date = Excel serial
+-- (date '1899-12-30' + n); fix_KM column is mixed-case (quote it); fitment_date is GENERATED
+-- (insert issue_date, not it); tyre_size column does not exist. Also fixed one corrupt row:
+-- UAE TM440 LHRO issue_date 2062-06-03 -> 2026-06-03 (digit transposition; serial prefix "26C").
+--
+-- VERIFIED: 0 reversed dates, 0 future dates, 0 NEW double-active wheels (KSA had 38 PRE-EXISTING
+-- double-actives untouched). tyre_records totals: KSA 6,391->8,046, UAE 1,979->2,457,
+-- Egypt 498->592.
+--
+-- REVERSIBLE:
+--   snapshots: _bak.tyre_ksa_load_v432_snapshot / _bak.tyre_uae_load_v433_snapshot /
+--              _bak.tyre_egypt_load_v434_snapshot (full pre-load copy per country)
+--              _bak.tyre_future_date_fix_v432 (the 2062 row prior value)
+--   import tags: extra_fields->>'import' in ('ksa_tyre_load_v432','uae_tyre_load_v433','egypt_tyre_load_v434')
+--
+-- UNDO (per country; repeat for uae/egypt with their snapshot + country):
+--   delete from public.tyre_records where extra_fields->>'import'='ksa_tyre_load_v432';
+--   update public.tyre_records t
+--     set status=b.status, removal_date=b.removal_date, km_at_removal=b.km_at_removal, total_km=b.total_km
+--     from _bak.tyre_ksa_load_v432_snapshot b where b.id=t.id and t.country='KSA';
+--   update public.tyre_records t set issue_date=b.prior_issue_date
+--     from _bak.tyre_future_date_fix_v432 b where b.id=t.id;
+--
+-- The applied SQL bodies (collapse + flip + insert per country) are recorded in the
+-- supabase_migrations history under the v432/v433/v434 names above. Going forward the reliable
+-- path is the app's ERP / Data Intake page (it upserts everything); raw drops into the
+-- *_country_upload_template_staging tables still need a processing step to auto-load.

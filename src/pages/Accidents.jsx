@@ -69,6 +69,7 @@ import { buildAccidentIntelligence, basisNote } from '../lib/accidentAnalytics'
 import { WORKFLOW_STAGES, DEFAULT_DEPARTMENTS, STAGE_FLOW, stageOf, stageLabel, buildAccidentKpis } from '../lib/accidentWorkflow'
 import { stageDepartment } from '../lib/accidentStages'
 import { listDepartments } from '../lib/api/accidentWorkflow'
+import { canSeeSection } from '../lib/accidentFormVisibility'
 
 ChartJS.register(
   CategoryScale, LinearScale, BarElement,
@@ -3004,7 +3005,9 @@ export default function Accidents() {
                 </div>
               </FormSection>
 
-              {/* Which teams this case needs */}
+              {/* Which teams this case needs - the stage toggles are shown only to
+                  the Fleet team (who scope the case) plus admins and the creator. */}
+              {canSeeSection('stageWaivers', { role: profile?.role, isSuperAdmin: profile?.is_super_admin, isCreator: !editId || records.find(r => String(r.id) === String(editId))?.reported_by === profile?.id, stageWaivers: form.stage_waivers }) && (
               <FormSection title="Which teams this case needs">
                 <p className="text-xs text-[var(--text-dim)] mb-3">
                   Switch off any stage this incident does not need - a car park scratch needs no HSE
@@ -3055,6 +3058,7 @@ export default function Accidents() {
                   })}
                 </div>
               </FormSection>
+              )}
 
               {/* GCC case & liability */}
               <FormSection title="Liability & Case (GCC)">
@@ -3215,10 +3219,11 @@ export default function Accidents() {
                   </div>
                 </div>
                 {/* Safety investigation (HSE): root cause + corrective/preventive
-                    actions belong together, and the whole block is hidden when the
-                    HSE Investigation stage was switched off in "Which teams this
-                    case needs" - a car-park scratch is not asked for a root cause. */}
-                {form.stage_waivers?.hse_investigation?.required !== false && (
+                    actions belong together. The block is hidden when the HSE
+                    Investigation stage was switched off in "Which teams this case
+                    needs" (a car-park scratch is not asked for a root cause) AND is
+                    shown only to the HSE/Safety team plus admins and the creator. */}
+                {canSeeSection('hse', { role: profile?.role, isSuperAdmin: profile?.is_super_admin, isCreator: !editId || records.find(r => String(r.id) === String(editId))?.reported_by === profile?.id, stageWaivers: form.stage_waivers }) && (
                   <div className="mt-3">
                     <p className="text-xs font-semibold text-[var(--text-secondary)] mb-2">Safety investigation (HSE)</p>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -3249,7 +3254,9 @@ export default function Accidents() {
                 </div>
               </FormSection>
 
-              {/* Insurance & claim */}
+              {/* Insurance & claim - shown to the Insurance team plus admins and the
+                  creator; hidden when the Insurance Claim stage is switched off. */}
+              {canSeeSection('insurance', { role: profile?.role, isSuperAdmin: profile?.is_super_admin, isCreator: !editId || records.find(r => String(r.id) === String(editId))?.reported_by === profile?.id, stageWaivers: form.stage_waivers }) && (
               <FormSection title="Insurance & Claim">
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                   <div>
@@ -3291,8 +3298,12 @@ export default function Accidents() {
                   </div>
                 </div>
               </FormSection>
+              )}
 
-              {/* Cost recovery (consolidated from the detail page's Claim & Recovery tab) */}
+              {/* Cost recovery (consolidated from the detail page's Claim & Recovery tab)
+                  - shown to Fleet/Finance plus admins and the creator; hidden when the
+                  Cost Recovery stage is switched off. */}
+              {canSeeSection('costRecovery', { role: profile?.role, isSuperAdmin: profile?.is_super_admin, isCreator: !editId || records.find(r => String(r.id) === String(editId))?.reported_by === profile?.id, stageWaivers: form.stage_waivers }) && (
               <FormSection title="Cost Recovery">
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                   <div>
@@ -3318,8 +3329,11 @@ export default function Accidents() {
                   </div>
                 </div>
               </FormSection>
+              )}
 
-              {/* Repair & release */}
+              {/* Repair & release - shown to the Workshop team plus admins and the
+                  creator; hidden when the Repair In Progress stage is switched off. */}
+              {canSeeSection('repair', { role: profile?.role, isSuperAdmin: profile?.is_super_admin, isCreator: !editId || records.find(r => String(r.id) === String(editId))?.reported_by === profile?.id, stageWaivers: form.stage_waivers }) && (
               <FormSection title="Repair & Release">
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                   <div>
@@ -3404,6 +3418,7 @@ export default function Accidents() {
                   </div>
                 </div>
               </FormSection>
+              )}
 
               {/* Case documents — each routes to its owning team on the
                   Distribute-to-Teams tab (licence/ID/registration/police to Fleet,

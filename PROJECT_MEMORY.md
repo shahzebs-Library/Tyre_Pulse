@@ -76,6 +76,16 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
   scopes reads to the active country via the null-safe convention (All = no predicate; a country = its rows +
   NULL-country rows; mirrors _client.applyCountry) and shows an amber "mixed currencies, pick a country" note under
   'All'. activeCurrency resolution was already correct; only SCOPE changed, so a single-country view is unchanged rows.
+- **SCALE + HONESTY SWEEP WAVE 3 (12 pages + 1 service, all build-clean).** Bounded every remaining unbounded/
+  capped read feeding a displayed number and de-blended cross-country money: BoardOverview / CountryComparison /
+  SiteComparison (CountryComparison summary cards blended SAR+AED+EGP across compared countries -> now N/A + per-country
+  table; SiteComparison mixed-currency caption); FleetMaster (loadSites bare .select capped 1000 dropped sites ->
+  paged; loadRecords was swallowing errors -> banner+Retry); DriverManagement / DriverDetail (tyre fetchAllPages had
+  no max AND no order -> id-order + 20k); BudgetPlanner / ForecastingEngine (bound + strict .eq -> null-safe .or
+  country scope + mixed-currency note); TcoCalculator (bound; per-asset cost_per_tyre total kept with a governed-grid
+  footnote); InspectionPlanner (inspections + inspection_schedules were bare .select capped 1000 feeding EVERY KPI ->
+  paged); SupplierManagement / SupplierDetail (bound). SERVICE FIX: `tyreRecords.listTcoFleet` bare .select capped
+  1000 undercounted the ~1523 fleet -> paged (max 20k, resolves {data,error,truncated}).
 - **QUALITY SWEEP (4 pages): honest states + real counts.** LiveFleetStatus 'Fleet Total' read `fleet_master` with a
   bare `.select()` (silently capped 1000) and UNDERCOUNTED the ~1523 fleet -> now paged. Vehicle360 EmptyState was
   passing `message=` while the component reads `description=`, so the real safe error/empty reason was discarded ->

@@ -28,8 +28,9 @@ import { useTenant } from '../contexts/TenantContext'
 import { formatCurrency as _fmtCurrencyBase } from '../lib/formatters'
 import {
   canonSeverity, canonStatus, TERMINAL_STAGES,
-  CLAIM_STATUS_LABELS, RECOVERY_SOURCE_LABELS, RECOVERY_STATUS_LABELS,
+  CLAIM_STATUS_LABELS, CLAIM_STATUS_OPTS, RECOVERY_SOURCE_LABELS, RECOVERY_STATUS_LABELS,
   accidentSeverityPill, accidentStatusPill,
+  SEVERITIES, toDbSeverity,
 } from '../lib/accidentVocab'
 import { exportAccidentCasePdf } from '../lib/exportUtils'
 import { describeAuditRow } from '../lib/auditDiff'
@@ -48,6 +49,7 @@ import CaseWorkstreamsPanel from './accidents/CaseWorkstreamsPanel'
 import CaseTeamDistributionPanel from './accidents/CaseTeamDistributionPanel'
 import CasePortalShare from './accidents/CasePortalShare'
 import { loadCase } from '../lib/api/accidentCase'
+import { updateAccidentForPage } from '../lib/api/accidents'
 import { renderAccidentCasePdf } from '../lib/accidentCasePdf'
 import { toUserMessage } from '../lib/safeError'
 
@@ -162,7 +164,6 @@ function AccidentDetail({ accidentId, onBack, onClose, onChanged, variant = 'pag
   const { profile } = useAuth()
   const { activeCurrency } = useSettings()
   const { branding } = useTenant()
-  const navigate = useNavigate()
   const company = branding?.legal_name || branding?.display_name || 'TyrePulse'
   const elevated = isElevated(profile?.role)
   // Admins (and super-admins) may jump to ANY stage; managers/directors get the
@@ -180,6 +181,10 @@ function AccidentDetail({ accidentId, onBack, onClose, onChanged, variant = 'pag
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
+  // In-place incident edit (stays inside this tabbed case view; no navigation away).
+  const [editing, setEditing] = useState(false)
+  const [editForm, setEditForm] = useState(null)
+  const [savingEdit, setSavingEdit] = useState(false)
   // Approval-engine lock state for this accident (drives the header banner).
   const [wf, setWf] = useState({ isActive: false, isLocked: false, status: null })
   const handleWfStateChange = useCallback((next) => {
@@ -231,14 +236,76 @@ function AccidentDetail({ accidentId, onBack, onClose, onChanged, variant = 'pag
 
   useEffect(() => { setLoading(true); setErr(''); load() }, [load])
 
-  // "Edit Incident" routes to THE one unified create/edit form on the Accidents
-  // page (openEdit via router state) — the detail view stays read-only for the
-  // record's own columns; there is no second update form here any more.
+  // "Edit Incident" opens an in-place editor INSIDE this tabbed case view — the
+  // user keeps the case context (header, financial rail, current tab) and never
+  // bounces back to the flat register form. The workflow stage / closure / VOR
+  // stay owned by the Overview + Closure tabs; this editor covers the record's
+  // own incident, claim and repair columns.
   const editLocked = wf.isActive || wf.isLocked
-  const editIncident = useCallback(() => {
-    onClose?.()
-    navigate('/accidents', { state: { editId: accidentId } })
-  }, [navigate, onClose, accidentId])
+  const startEdit = useCallback(() => {
+    if (!acc || editLocked) return
+    setEditForm({
+      incident_date: String(acc.incident_date || '').slice(0, 10),
+      severity: canonSeverity(acc.severity) || 'Minor',
+      driver_name: acc.driver_name || '',
+      site: acc.site || '',
+      location: acc.location || '',
+      description: acc.description || '',
+      claim_status: acc.claim_status || 'none',
+      insurer: acc.insurer || '',
+      policy_no: acc.policy_no || '',
+      claim_amount: acc.claim_amount ?? '',
+      claim_approved_amount: acc.claim_approved_amount ?? '',
+      deductible: acc.deductible ?? '',
+      recovered_amount: acc.recovered_amount ?? '',
+      repair_cost: acc.repair_cost ?? '',
+      workshop_name: acc.workshop_name || '',
+      workshop_location: acc.workshop_location || '',
+    })
+    setErr('')
+    setEditing(true)
+  }, [acc, editLocked])
+
+  const cancelEdit = useCallback(() => { setEditing(false); setErr('') }, [])
+
+  const saveEdit = useCallback(async () => {
+    if (!editForm || !acc) return
+    // '' -> null; a non-numeric entry drops to null rather than writing NaN.
+    const num = (v) => {
+      const s = String(v ?? '').trim()
+      if (s === '') return null
+      const n = Number(s)
+      return Number.isFinite(n) ? n : null
+    }
+    const trimOrNull = (v) => (String(v ?? '').trim() || null)
+    // severity is a CHECK-constrained lowercase token — always go through toDbSeverity,
+    // never write the display label straight to the column.
+    const patch = {
+      incident_date: editForm.incident_date || null,
+      severity: toDbSeverity(editForm.severity) || null,
+      driver_name: trimOrNull(editForm.driver_name),
+      site: trimOrNull(editForm.site),
+      location: trimOrNull(editForm.location),
+      description: trimOrNull(editForm.description),
+      claim_status: editForm.claim_status || null,
+      insurer: trimOrNull(editForm.insurer),
+      policy_no: trimOrNull(editForm.policy_no),
+      claim_amount: num(editForm.claim_amount),
+      claim_approved_amount: num(editForm.claim_approved_amount),
+      deductible: num(editForm.deductible),
+      recovered_amount: num(editForm.recovered_amount),
+      repair_cost: num(editForm.repair_cost),
+      workshop_name: trimOrNull(editForm.workshop_name),
+      workshop_location: trimOrNull(editForm.workshop_location),
+    }
+    setSavingEdit(true); setErr('')
+    const { error } = await updateAccidentForPage(acc.id, patch)
+    setSavingEdit(false)
+    if (error) { setErr(toUserMessage(error, 'Could not save the incident. Please try again.')); return }
+    setEditing(false)
+    await load()
+    onChanged?.()
+  }, [editForm, acc, load, onChanged])
 
   const closure = acc?.closure_status ?? 'open'
   const partsTotal = parts.reduce((s, p) => s + (Number(p.total_cost) || 0), 0)
@@ -355,7 +422,20 @@ function AccidentDetail({ accidentId, onBack, onClose, onChanged, variant = 'pag
     )
   }
 
-  const body = (
+  const body = editing ? (
+    // In-place incident editor — the case header + financial rail above stay put,
+    // and cancelling drops the user back on the exact tab they were on.
+    <div className="flex-1 overflow-y-auto">
+      <InlineEditForm
+        form={editForm}
+        setForm={setEditForm}
+        onSave={saveEdit}
+        onCancel={cancelEdit}
+        saving={savingEdit}
+        err={err}
+      />
+    </div>
+  ) : (
     <>
       {/* Tabs */}
       <div className="flex gap-1 px-4 border-b border-gray-800 overflow-x-auto">
@@ -410,9 +490,9 @@ function AccidentDetail({ accidentId, onBack, onClose, onChanged, variant = 'pag
             onChanged={() => { load(); onChanged?.() }}
           />
         )}
-        {tab === 'tracker'   && <TrackerTab acc={acc} elevated={elevated} onEditIncident={editIncident} editLocked={editLocked} />}
-        {tab === 'repair'    && <RepairInsuranceTab acc={acc} elevated={elevated} fmtCurrency={fmtCurrency} onEditIncident={editIncident} editLocked={editLocked} />}
-        {tab === 'claim'     && <ClaimTab acc={acc} elevated={elevated} fmtCurrency={fmtCurrency} onEditIncident={editIncident} editLocked={editLocked} />}
+        {tab === 'tracker'   && <TrackerTab acc={acc} elevated={elevated} onEditIncident={startEdit} editLocked={editLocked} />}
+        {tab === 'repair'    && <RepairInsuranceTab acc={acc} elevated={elevated} fmtCurrency={fmtCurrency} onEditIncident={startEdit} editLocked={editLocked} />}
+        {tab === 'claim'     && <ClaimTab acc={acc} elevated={elevated} fmtCurrency={fmtCurrency} onEditIncident={startEdit} editLocked={editLocked} />}
         {tab === 'parts'     && <PartsTab acc={acc} parts={parts} partsTotal={partsTotal} elevated={elevated} profile={profile} reload={() => { load(); onChanged?.() }} setErr={setErr} fmtCurrency={fmtCurrency} />}
         {tab === 'log'       && <LogTab acc={acc} remarks={remarks} profile={profile} reload={load} setErr={setErr} />}
         {tab === 'activity'  && <ActivityTab accidentId={acc.id} />}
@@ -472,12 +552,12 @@ function AccidentDetail({ accidentId, onBack, onClose, onChanged, variant = 'pag
           <span className="text-[var(--text-dim)]">{acc.asset_no || 'Incident'} · #{String(acc.id).slice(0, 8).toUpperCase()}</span>
         </div>
         <div className="flex items-center gap-2">
-          {elevated && (
+          {elevated && !editing && (
             <button
-              onClick={editIncident}
+              onClick={startEdit}
               disabled={editLocked}
               className="btn-secondary text-xs inline-flex items-center gap-1.5 disabled:opacity-60"
-              title={editLocked ? 'Locked while an approval workflow is active' : 'Update every incident, claim and case field in the unified incident form'}
+              title={editLocked ? 'Locked while an approval workflow is active' : 'Edit the incident, claim and repair details right here without leaving the case'}
             >
               <Pencil size={13} /> Edit Incident
             </button>
@@ -1330,9 +1410,95 @@ function Inp({ label, value, onChange, type = 'text', placeholder }) {
   )
 }
 
+// In-place incident editor rendered INSIDE the tabbed case view (no navigation
+// away). Covers the record's own incident / claim / repair columns. Workflow
+// stage, closure and Vehicle-Off-Road stay owned by the Overview + Closure tabs,
+// so they are deliberately absent here. Severity is written back through
+// toDbSeverity (a CHECK-constrained token) in the parent's saveEdit.
+function InlineEditForm({ form, setForm, onSave, onCancel, saving, err }) {
+  if (!form) return null
+  const set = (k, v) => setForm(p => ({ ...p, [k]: v }))
+  return (
+    <div className="p-6 space-y-5">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div className="flex items-center gap-2 min-w-0">
+          <Pencil size={16} className="text-green-400" />
+          <h3 className="text-base font-semibold text-[var(--text-primary)]">Edit incident details</h3>
+        </div>
+        <div className="flex items-center gap-2">
+          <button type="button" onClick={onCancel} disabled={saving} className="btn-secondary text-sm disabled:opacity-60">Cancel</button>
+          <button
+            type="button"
+            onClick={onSave}
+            disabled={saving}
+            className="btn-primary text-sm inline-flex items-center gap-1.5 disabled:opacity-50"
+          >
+            {saving ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle2 size={14} />}
+            {saving ? 'Saving...' : 'Save changes'}
+          </button>
+        </div>
+      </div>
+
+      {err && <div className="bg-red-900/30 border border-red-700 text-red-300 rounded-lg px-4 py-2 text-sm">{err}</div>}
+
+      <section className="space-y-3">
+        <p className="text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)]">Incident</p>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+          <Inp label="Incident date" type="date" value={form.incident_date} onChange={v => set('incident_date', v)} />
+          <div>
+            <label className="label">Severity</label>
+            <select className="input" value={form.severity} onChange={e => set('severity', e.target.value)}>
+              {SEVERITIES.map(s => <option key={s} value={s}>{s}</option>)}
+            </select>
+          </div>
+          <Inp label="Driver" value={form.driver_name} onChange={v => set('driver_name', v)} />
+          <Inp label="Site" value={form.site} onChange={v => set('site', v)} />
+          <Inp label="Location" value={form.location} onChange={v => set('location', v)} />
+        </div>
+        <div>
+          <label className="label">Description</label>
+          <textarea className="input" rows={3} value={form.description} onChange={e => set('description', e.target.value)} />
+        </div>
+      </section>
+
+      <section className="space-y-3 border-t border-[var(--input-border)] pt-4">
+        <p className="text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)]">Claim &amp; recovery</p>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+          <div>
+            <label className="label">Claim status</label>
+            <select className="input" value={form.claim_status} onChange={e => set('claim_status', e.target.value)}>
+              {CLAIM_STATUS_OPTS.map(s => <option key={s} value={s}>{CLAIM_STATUS_LABELS[s] || s}</option>)}
+            </select>
+          </div>
+          <Inp label="Insurer" value={form.insurer} onChange={v => set('insurer', v)} />
+          <Inp label="Policy / Claim no" value={form.policy_no} onChange={v => set('policy_no', v)} />
+          <Inp label="Claim amount" type="number" value={form.claim_amount} onChange={v => set('claim_amount', v)} />
+          <Inp label="Approved amount" type="number" value={form.claim_approved_amount} onChange={v => set('claim_approved_amount', v)} />
+          <Inp label="Deductible" type="number" value={form.deductible} onChange={v => set('deductible', v)} />
+          <Inp label="Recovered amount" type="number" value={form.recovered_amount} onChange={v => set('recovered_amount', v)} />
+        </div>
+      </section>
+
+      <section className="space-y-3 border-t border-[var(--input-border)] pt-4">
+        <p className="text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)]">Repair</p>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+          <Inp label="Repair cost" type="number" value={form.repair_cost} onChange={v => set('repair_cost', v)} />
+          <Inp label="Workshop" value={form.workshop_name} onChange={v => set('workshop_name', v)} />
+          <Inp label="Workshop location" value={form.workshop_location} onChange={v => set('workshop_location', v)} />
+        </div>
+      </section>
+
+      <p className="text-[11px] text-[var(--text-muted)]">
+        Workflow stage, closure and Vehicle Off Road are managed from the Overview and Closure tabs. For the full
+        GCC case form (documents, liability, Najm/Taqdeer) open this record on the Accidents register.
+      </p>
+    </div>
+  )
+}
+
 // "Edit Incident" affordance rendered at the foot of the read-only record tabs.
-// Elevated roles jump to THE one unified create/edit form on the Accidents
-// page; everyone else sees the honest permission note.
+// Elevated roles open the in-place editor right here in the case view (no jump
+// back to the register form); everyone else sees the honest permission note.
 function EditIncidentHint({ elevated, onEdit, locked }) {
   if (!elevated) {
     return <p className="text-xs text-gray-600">Only Admin / Manager / Director can update these details.</p>
@@ -1343,12 +1509,12 @@ function EditIncidentHint({ elevated, onEdit, locked }) {
         type="button"
         onClick={onEdit}
         disabled={locked}
-        title={locked ? 'Locked while an approval workflow is active' : 'Open this record in the unified incident form'}
+        title={locked ? 'Locked while an approval workflow is active' : 'Edit these details in place without leaving the case'}
         className="btn-secondary text-xs inline-flex items-center gap-1.5 disabled:opacity-50"
       >
         <Pencil size={12} /> Edit Incident
       </button>
-      <p className="text-xs text-gray-600">All incident, claim and case fields are updated in the one unified incident form.</p>
+      <p className="text-xs text-gray-600">Edit the incident, claim and repair details in place; you stay on this case.</p>
     </div>
   )
 }

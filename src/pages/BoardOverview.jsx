@@ -16,7 +16,7 @@ import {
 import { Bar, Line, Doughnut } from 'react-chartjs-2'
 import {
   LayoutDashboard, TrendingUp, PieChart, Lightbulb, Download, RefreshCw, Eye, EyeOff, Wallet,
-  Gauge, Clock, Layers,
+  Gauge, Clock, Layers, AlertTriangle,
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
 import YearlyTrendPanel from '../components/expense/YearlyTrendPanel'
@@ -48,6 +48,14 @@ ChartJS.register(
   CategoryScale, LinearScale, BarElement, LineElement, PointElement,
   ArcElement, Filler, Title, Tooltip, Legend,
 )
+
+// Hard row ceilings for the bounded client reads behind the board KPIs/charts.
+// The event tables (tyre_records / inspections / corrective_actions) can grow to
+// millions of rows, so the reads that feed the client-side engines are capped and
+// a truncated read is surfaced as an honest "capped view" note. The fleet register
+// read uses a tighter ceiling.
+const ROW_CAP = 50000
+const FLEET_CAP = 20000
 
 const LS_KEY = 'boardOverview.sections.v1'
 const SECTIONS = [
@@ -124,6 +132,7 @@ export default function BoardOverview() {
   const [refreshing, setRefreshing] = useState(false)
   const [updatedAt, setUpdatedAt] = useState(null)
   const [exporting, setExporting] = useState(false)
+  const [truncated, setTruncated] = useState(false)
 
   const [sections, setSections] = useState(() => {
     try {
@@ -141,10 +150,10 @@ export default function BoardOverview() {
     setRefreshing(true); setError('')
     try {
       const [tyresRes, inspRes, actionsQ, fleetQ, accRes, workOrders, stock] = await Promise.all([
-        fetchAllPages((from, to) => listKpiTyreRecords({ country: activeCountry, from, to })),
-        fetchAllPages((from, to) => listKpiInspections({ country: activeCountry, from, to })),
-        fetchAllPages((from, to) => listKpiCorrectiveActions({ country: activeCountry, from, to })),
-        fetchAllPages((from, to) => listKpiFleet({ country: activeCountry, from, to })),
+        fetchAllPages((from, to) => listKpiTyreRecords({ country: activeCountry, from, to }), { max: ROW_CAP }),
+        fetchAllPages((from, to) => listKpiInspections({ country: activeCountry, from, to }), { max: ROW_CAP }),
+        fetchAllPages((from, to) => listKpiCorrectiveActions({ country: activeCountry, from, to }), { max: ROW_CAP }),
+        fetchAllPages((from, to) => listKpiFleet({ country: activeCountry, from, to }), { max: FLEET_CAP }),
         listAllAccidentsForPage({ country: activeCountry }),
         listWorkOrdersForPage({ country: activeCountry }).catch(() => []),
         listStockRecords({ country: activeCountry }).catch(() => []),
@@ -154,6 +163,7 @@ export default function BoardOverview() {
       const actions = actionsQ?.data ?? []
       const fleetSize = (fleetQ?.data ?? []).length
       const accidents = accRes?.data ?? []
+      setTruncated(Boolean(tyresRes.truncated || inspRes.truncated || actionsQ.truncated || fleetQ.truncated))
       const now = new Date()
       setData({
         kpis: buildBoardKpis({ tyres, inspections, actions, fleetSize, accidents, workOrders: workOrders || [], stock: stock || [], now }),
@@ -163,6 +173,7 @@ export default function BoardOverview() {
       setUpdatedAt(new Date())
     } catch (e) {
       setError(toUserMessage(e, 'Could not load the board overview.'))
+      setTruncated(false)
     } finally {
       setLoading(false); setRefreshing(false)
     }
@@ -378,6 +389,13 @@ export default function BoardOverview() {
         <div className="card text-center text-[var(--text-muted)] py-10">No data yet for the selected scope. Records will appear here as they are captured.</div>
       ) : (
         <>
+          {truncated && (
+            <div className="flex items-center gap-2 text-amber-400 text-xs bg-amber-400/10 border border-amber-400/20 rounded-xl px-4 py-2.5">
+              <AlertTriangle size={13} />
+              Showing a capped view of up to {ROW_CAP.toLocaleString('en-US')} records. KPIs, trends and charts reflect this capped set. Narrow the country scope for full detail.
+            </div>
+          )}
+
           {/* KPIs */}
           {sections.kpis && k && (
             <section className="space-y-3">

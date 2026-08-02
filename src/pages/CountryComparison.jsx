@@ -18,6 +18,18 @@ import { toUserMessage } from '../lib/safeError'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend)
 
+// Hard row ceiling for the bounded client read. tyre_records can grow to millions
+// of rows, so the full-set read that builds the country list + per-country metrics
+// is capped and a truncated read is surfaced as an honest "capped view" note.
+const ROW_CAP = 50000
+
+// Formats whose values carry a currency. A summary card that aggregates one of
+// these across MORE THAN ONE country would blend different currencies (KSA SAR,
+// UAE AED, Egypt EGP) into a single meaningless figure, so those aggregates are
+// shown as N/A on a multi-country comparison. The per-country table columns still
+// show each country's own money value.
+const MONEY_FORMATS = new Set(['currency', 'cpk'])
+
 // KPI rows rendered in the comparison table + summary cards. `field` maps to a
 // property produced by computeCountryMetrics; `format` controls presentation and
 // `lowerIsBetter` drives the "best value" highlight per row.
@@ -48,6 +60,7 @@ export default function CountryComparison() {
   const [records, setRecords] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [truncated, setTruncated] = useState(false)
 
   const fmt = useCallback((format, val) => {
     if (val == null || Number.isNaN(val)) return t('countrycomparison.states.na')
@@ -70,7 +83,7 @@ export default function CountryComparison() {
     setLoading(true)
     setError(null)
     try {
-      const { data, error: e } = await fetchAllPages((from, to) => {
+      const { data, error: e, truncated: tr } = await fetchAllPages((from, to) => {
         let q = supabase
           .from('tyre_records')
           .select('country, brand, site, category, risk_level, cost_per_tyre, qty, km_at_fitment, km_at_removal')
@@ -78,8 +91,9 @@ export default function CountryComparison() {
           .order('country')
         if (activeCountry !== 'All') q = q.eq('country', activeCountry)
         return q.range(from, to)
-      })
+      }, { max: ROW_CAP })
       if (e) throw new Error(e.message || e)
+      setTruncated(Boolean(tr))
       const recs = (data || []).filter(r => r.country && String(r.country).trim())
       setRecords(recs)
 
@@ -95,6 +109,7 @@ export default function CountryComparison() {
       })
     } catch (err) {
       setError(toUserMessage(err, 'Failed to load country data.'))
+      setTruncated(false)
       setRecords([])
       setAllCountries([])
       setCountries([])
@@ -176,12 +191,17 @@ export default function CountryComparison() {
     return cols
   }, [selectedCountries, metrics.length, fmt, t])
 
-  // Summary cards: aggregate each KPI across the compared countries.
+  // Summary cards: aggregate each KPI across the compared countries. A money-format
+  // KPI is NOT aggregated across more than one country - the countries can use
+  // different currencies (SAR / AED / EGP) and a single blended figure would be
+  // meaningless. Those cards show N/A instead; the per-country table keeps each
+  // country's own currency value.
   const summaryCards = useMemo(() => {
     return KPI_ROWS.map(kpi => {
       const vals = metrics.map(m => m[kpi.key]).filter(v => v != null && !Number.isNaN(v))
+      const blendsCurrency = MONEY_FORMATS.has(kpi.format) && metrics.length > 1
       let agg = null
-      if (vals.length > 0) {
+      if (vals.length > 0 && !blendsCurrency) {
         const total = vals.reduce((s, v) => s + v, 0)
         agg = kpi.agg === 'avg' ? total / vals.length : total
       }
@@ -259,6 +279,13 @@ export default function CountryComparison() {
             </div>
           </div>
 
+          {truncated && (
+            <div className="flex items-center gap-2 text-amber-400 text-xs bg-amber-400/10 border border-amber-400/20 rounded-xl px-4 py-2.5">
+              <AlertTriangle size={13} />
+              Showing a capped view of up to {ROW_CAP.toLocaleString('en-US')} records. Narrow the country scope for full detail.
+            </div>
+          )}
+
           {metrics.length === 0 ? (
             <div className="card text-center py-14">
               <BarChart2 size={36} className="text-gray-700 mx-auto mb-3" />
@@ -276,6 +303,11 @@ export default function CountryComparison() {
                   </div>
                 ))}
               </div>
+              {selectedCountries.length > 1 && (
+                <p className="text-[11px] text-gray-500 -mt-2">
+                  Money totals are not combined across countries (currencies may differ). See each country's own value in the table below.
+                </p>
+              )}
 
               {/* Chart */}
               <div className="card">

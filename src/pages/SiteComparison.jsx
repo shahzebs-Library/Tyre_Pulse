@@ -30,6 +30,11 @@ const SITE_COLORS = [
 
 const GRANULARITIES = ['Monthly', 'Quarterly', 'Yearly']
 
+// Hard row ceiling for the bounded client read. tyre_records can grow to millions
+// of rows, so the full-set read that builds the site list + per-site metrics is
+// capped and a truncated read is surfaced as an honest "capped view" note.
+const ROW_CAP = 50000
+
 // ── helpers for granularity bucketing ────────────────────────────────────────
 function getPeriodKey(dateStr, granularity) {
   if (!dateStr) return null
@@ -115,6 +120,7 @@ export default function SiteComparison() {
   const [records, setRecords] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError]     = useState(null)
+  const [truncated, setTruncated] = useState(false)
   const [selectedSites, setSelectedSites] = useState([])
 
   const [period, setPeriod]           = useState({ mode: 'all' })
@@ -126,15 +132,16 @@ export default function SiteComparison() {
   const load = useCallback(async () => {
     setLoading(true); setError(null)
     try {
-      const { data, error: e } = await fetchAllPages((from, to) => {
+      const { data, error: e, truncated: tr } = await fetchAllPages((from, to) => {
         let q = supabase
           .from('tyre_records')
           .select('id,issue_date,brand,site,category,risk_level,cost_per_tyre,qty')
           .order('issue_date')
         if (activeCountry !== 'All') q = q.eq('country', activeCountry)
         return q.range(from, to)
-      })
+      }, { max: ROW_CAP })
       if (e) throw new Error(e.message || e)
+      setTruncated(Boolean(tr))
       const recs = data || []
       setRecords(recs)
       const byCount = {}
@@ -143,6 +150,7 @@ export default function SiteComparison() {
       setSelectedSites(top4)
     } catch (err) {
       setError(toUserMessage(err, 'Failed to load site data.'))
+      setTruncated(false)
       setRecords([])
     } finally {
       setLoading(false)
@@ -340,6 +348,18 @@ export default function SiteComparison() {
               </div>
             </div>
           </div>
+
+          {truncated && (
+            <div className="flex items-center gap-2 text-amber-400 text-xs bg-amber-400/10 border border-amber-400/20 rounded-xl px-4 py-2.5">
+              <AlertTriangle size={13} />
+              Showing a capped view of up to {ROW_CAP.toLocaleString('en-US')} records. Narrow the country scope for full detail.
+            </div>
+          )}
+          {activeCountry === 'All' && (
+            <p className="text-[11px] text-gray-500">
+              Sites may span countries with different currencies (SAR / AED / EGP); pick a country for a like-for-like money comparison.
+            </p>
+          )}
 
           {filteredMetrics.length === 0 ? (
             <div className="card flex flex-col items-center justify-center py-16 text-center">

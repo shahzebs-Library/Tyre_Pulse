@@ -44,6 +44,19 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
     Data Intake, Import History, Smart Import, Material Master, Reconciliation, Duplicate Control, Teach the
     Classifier) with a live open-issues + volumes headline. ALL under the super-admin `/console` (super-admin gated).
     RULE: the Control Center is the single trust/lineage/diagnostics surface — extend it, never add a parallel one.
+- **HOT-PAGE FULL-TABLE PULLS BOUNDED (3 flagship pages, no formula change).** An audit found the real millions-row
+  risk is work_orders (parts_consumption is already fully RPC-served). Conservative fixes, each verified build-clean,
+  numbers unchanged for today's data: **Analytics.jsx** — 4 KPI cards now read `report_tyre_summary` (server aggregate,
+  country+period bounds, exact); monthly-trend/site/brand tables (no RPC covers per-row) keep their formulas but the
+  read is now server date+country scoped + `{max:50000}` + a "capped view" note. **CostCenter.jsx** — grid cost totals
+  already come from loadGovernedCostSplit; the remaining raw tyre_records read (per-brand/vehicle/site/month CPK, no
+  RPC) capped 200k->50k + truncation note (totalSpend deliberately NOT swapped to the grid — it would change the
+  displayed number and desync the per-brand tables). **WorkshopManagement.jsx** — Total Cost + Open Jobs tiles from
+  `get_maintenance_snapshot` (full-scope, client fallback under RPC-inexpressible filters); the work-order grid bounded
+  to 20k with a DEFAULT last-12-month server window + "showing most recent N of M" banner (true M via head-only count).
+  RULE: to scale a hot page, prefer the existing server RPC for TOTALS; for a row-level view no RPC covers, keep the
+  formula but bound the read (server country+date scope + fetchAllPages {max} + a visible truncation note) — never
+  swap a total to a differently-defined source, and never leave an unbounded all-time/all-country fetchAllPages.
 - **`fetchAllPages` PARALLELIZED (app-wide, `src/lib/fetchAll.js`, 113 caller files).** Was strictly serial: page 0,
   then page 1, ... (200k rows = 200 latency-bound round trips). NOW: page 0 alone (a small result stays ONE round
   trip, no regression), then remaining pages fetched in CONCURRENT windows of `concurrency` (default 4) — preserves

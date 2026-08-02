@@ -27,13 +27,14 @@ import { Bar, Line } from 'react-chartjs-2'
 import {
   Cpu, Download, FileText, TrendingUp, TrendingDown, Minus,
   AlertTriangle, CheckCircle, XCircle, Info, Mail,
-  Gauge, Search, Clock, Layers,
+  Gauge, Search, Clock, Layers, SlidersHorizontal,
 } from 'lucide-react'
 import { motion } from 'framer-motion'
 import PageHeader from '../components/ui/PageHeader'
 import YearlyTrendPanel from '../components/expense/YearlyTrendPanel'
 import SectionTabs, { KPI_TABS } from '../components/ui/SectionTabs'
 import EmailReportModal from '../components/EmailReportModal'
+import CpkScenarioPanel from '../components/cpk/CpkScenarioPanel'
 
 ChartJS.register(
   CategoryScale, LinearScale,
@@ -1250,6 +1251,21 @@ export default function EngineeringKpi() {
             </div>
           </>
         )}
+      </div>
+
+      {/* ── CPK Scenario (what-if) ───────────────────────────────────────────── */}
+      <div className="space-y-4">
+        <div className="flex items-center gap-2">
+          <SlidersHorizontal size={18} className="text-blue-400" />
+          <div>
+            <h2 className="text-sm font-semibold text-gray-300">CPK Scenario (what-if)</h2>
+            <p className="text-xs text-gray-500">
+              Include or exclude cases and watch the fleet CPK move live. Example: a wheel loader is hour-metered,
+              so it shows tyre cost with no km - exclude it to see the corrected cost per km.
+            </p>
+          </div>
+        </div>
+        <CpkScenarioPanel perVehicle={fleetCpk.perVehicle} loading={fleetCpkLoading} />
       </div>
 
       {/* ── Empty state ──────────────────────────────────────────────────────── */}

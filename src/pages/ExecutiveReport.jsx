@@ -536,7 +536,9 @@ export default function ExecutiveReport() {
           fetchAllPages((from, to) => scoped(supabase.from('corrective_actions').select(
             'id,site,status,priority,title,created_at,resolved_at,country'
           ), 'created_at').order('created_at', { ascending: false }).range(from, to), { max: 50000 }),
-          applyCountry(supabase.from('vehicle_fleet').select('asset_no,site,vehicle_type,monthly_tyre_budget,country'), activeCountry).then(
+          fetchAllPages((from, to) => applyCountry(
+            supabase.from('vehicle_fleet').select('asset_no,site,vehicle_type,monthly_tyre_budget,country'),
+            activeCountry).order('id').range(from, to), { max: 20000 }).then(
             res => ({ data: res.data || [], error: null })
           ).catch(() => ({ data: [], error: null })),
         ])

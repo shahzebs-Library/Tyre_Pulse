@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useCallback, useMemo } from 'react'
 import { supabase } from '../lib/supabase'
+import { fetchAllPages } from '../lib/fetchAll'
 import { exportToExcel } from '../lib/exportUtils'
 import { toUserMessage } from '../lib/safeError'
 import { useAuth } from '../contexts/AuthContext'
@@ -90,7 +91,7 @@ function SummarySkeleton() {
   return <div className="animate-pulse bg-gray-800/40 rounded h-8 w-24" />
 }
 
-function SummaryCard({ label, value, color, loading }) {
+function SummaryCard({ label, value, color, loading, note }) {
   const colors = {
     blue:   'text-blue-400 border-blue-800 bg-blue-900/20',
     green:  'text-green-400 border-green-800 bg-green-900/20',
@@ -105,6 +106,7 @@ function SummaryCard({ label, value, color, loading }) {
         <p className={`text-3xl font-bold ${colors[color].split(' ')[0]}`}>{value ?? 0}</p>
       )}
       <p className="text-sm mt-1 text-gray-400">{label}</p>
+      {!loading && note ? <p className="text-[11px] mt-0.5 text-gray-500">{note}</p> : null}
     </div>
   )
 }
@@ -114,7 +116,7 @@ export default function AuditTrail() {
   const { profile } = useAuth()
   const [activeTab, setActiveTab] = useState('audit')
 
-  const [stats, setStats] = useState({ totalEvents: 0, uploadsMonth: 0, recordsMonth: 0, activeUsers: 0 })
+  const [stats, setStats] = useState({ totalEvents: 0, uploadsMonth: 0, recordsMonth: 0, activeUsers: 0, recordsCapped: false, activeCapped: false })
   const [statsLoading, setStatsLoading] = useState(true)
 
   const [auditRows, setAuditRows]   = useState([])
@@ -148,17 +150,35 @@ export default function AuditTrail() {
         const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString()
         const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
 
-        const [totalRes, monthRes, activeRes] = await Promise.all([
+        // Bound: a plain select silently caps at 1000 rows, which would undercount
+        // the derived totals below. Page past the cap for the sums / distinct set,
+        // and take the upload count straight from an exact server count.
+        const STAT_MAX = 100000
+        const [totalRes, uploadsCountRes, monthPaged, activePaged] = await Promise.all([
           supabase.from('audit_log_v2').select('id', { count: 'exact', head: true }),
-          supabase.from('audit_log_v2').select('record_count').eq('action', 'UPLOAD').gte('created_at', monthStart),
-          supabase.from('audit_log_v2').select('user_id').gte('created_at', thirtyDaysAgo),
+          supabase.from('audit_log_v2').select('id', { count: 'exact', head: true }).eq('action', 'UPLOAD').gte('created_at', monthStart),
+          fetchAllPages((lo, hi) => supabase
+            .from('audit_log_v2').select('record_count')
+            .eq('action', 'UPLOAD').gte('created_at', monthStart)
+            .order('id', { ascending: true }).range(lo, hi), { max: STAT_MAX }),
+          fetchAllPages((lo, hi) => supabase
+            .from('audit_log_v2').select('user_id')
+            .gte('created_at', thirtyDaysAgo)
+            .order('id', { ascending: true }).range(lo, hi), { max: STAT_MAX }),
         ])
 
-        const uploadsMonth  = (monthRes.data ?? []).length
-        const recordsMonth  = (monthRes.data ?? []).reduce((s, r) => s + (r.record_count ?? 0), 0)
-        const activeUsers   = new Set((activeRes.data ?? []).map(r => r.user_id).filter(Boolean)).size
+        const uploadsMonth  = uploadsCountRes.count ?? (monthPaged.data ?? []).length
+        const recordsMonth  = (monthPaged.data ?? []).reduce((s, r) => s + (r.record_count ?? 0), 0)
+        const activeUsers   = new Set((activePaged.data ?? []).map(r => r.user_id).filter(Boolean)).size
 
-        setStats({ totalEvents: totalRes.count ?? 0, uploadsMonth, recordsMonth, activeUsers })
+        setStats({
+          totalEvents: totalRes.count ?? 0,
+          uploadsMonth,
+          recordsMonth,
+          activeUsers,
+          recordsCapped: monthPaged.truncated,
+          activeCapped: activePaged.truncated,
+        })
       } catch { /* ignore */ }
       setStatsLoading(false)
     }
@@ -434,8 +454,8 @@ export default function AuditTrail() {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <SummaryCard label="Total Events"             value={stats.totalEvents.toLocaleString()}  color="blue"   loading={statsLoading} />
         <SummaryCard label="Uploads This Month"       value={stats.uploadsMonth.toLocaleString()}  color="green"  loading={statsLoading} />
-        <SummaryCard label="Records Added This Month" value={stats.recordsMonth.toLocaleString()}  color="purple" loading={statsLoading} />
-        <SummaryCard label="Active Users (30 days)"   value={stats.activeUsers.toLocaleString()}   color="amber"  loading={statsLoading} />
+        <SummaryCard label="Records Added This Month" value={stats.recordsMonth.toLocaleString()}  color="purple" loading={statsLoading} note={stats.recordsCapped ? 'At least this many (capped)' : undefined} />
+        <SummaryCard label="Active Users (30 days)"   value={stats.activeUsers.toLocaleString()}   color="amber"  loading={statsLoading} note={stats.activeCapped ? 'At least this many (capped)' : undefined} />
       </div>
 
       {/* Tabs */}

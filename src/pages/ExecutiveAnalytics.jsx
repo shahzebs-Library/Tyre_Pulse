@@ -123,11 +123,13 @@ export default function ExecutiveAnalytics() {
         .select('asset_no,site,status,findings,scheduled_date,completed_date')
         .gte('scheduled_date', inspSince)
         .range(f, t), { max: 10000 }),
-      // Feeds: availability gauge
+      // Feeds: availability gauge (available / total). Page past the 1000-row cap
+      // so the total is not silently truncated on a fleet over 1000 rows.
       fleet: async () => {
-        const { data, error } = await supabase
+        const { data, error } = await fetchAllPages((f, t) => supabase
           .from('vehicle_fleet')
           .select('asset_no,site,status')
+          .range(f, t), { max: 20000 })
         return { data: data ?? [], error }
       },
       // Feeds: risk matrix x-axis (currently-fitted High/Critical tyres).

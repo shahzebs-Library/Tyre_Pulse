@@ -291,9 +291,12 @@ export default function DisplayDashboard() {
       {
         set: setFleet,
         run: async () => {
-          const { data, error } = await supabase
+          // Page past the 1000-row cap: feeds the fleet availability gauge total
+          // and vehicles-by-site, which under-report on a fleet over 1000 rows.
+          const { data, error } = await fetchAllPages((from, to) => supabase
             .from('vehicle_fleet')
             .select('asset_no,site,status,vehicle_type')
+            .range(from, to), { max: 20000 })
           if (error) throw error
           return data ?? []
         },

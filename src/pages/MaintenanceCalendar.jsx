@@ -11,6 +11,7 @@ import {
   AlertOctagon, Loader2, Eye, ChevronDown, Lock, ClipboardCheck,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
+import { fetchAllPages } from '../lib/fetchAll'
 import { toUserMessage } from '../lib/safeError'
 import { listPmPrograms } from '../lib/api/pmPrograms'
 import { pmDueStatus } from '../lib/pmPrograms'
@@ -220,15 +221,18 @@ export default function MaintenanceCalendar() {
     setError(null)
     try {
       const [woRes, tyreRes, pmRes] = await Promise.all([
-        (() => {
+        // Page past the 1000-row cap: the KPI cards below (overdue / due this week
+        // / upcoming 30 days) count over these rows, so a silent cap would
+        // undercount scheduled maintenance on a busy fleet.
+        fetchAllPages((from, to) => {
           let q = supabase
             .from('work_orders')
             .select('id,work_order_no,asset_no,work_type,priority,status,target_completion,description,site,country,opened_at')
             .not('target_completion', 'is', null)
             .order('target_completion', { ascending: true })
           if (activeCountry && activeCountry !== 'All') q = q.eq('country', activeCountry)
-          return q
-        })(),
+          return q.range(from, to)
+        }, { max: 20000 }),
         (() => {
           let q = supabase
             .from('tyre_records')

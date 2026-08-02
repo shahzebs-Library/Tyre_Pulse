@@ -84,10 +84,15 @@ const withCreatedRange = (q, from, to) => {
 /** Raw source fetchers keyed by WIDGET_CATALOG data.source. */
 const SOURCE_FETCHERS = {
   fleet: async ({ site, country } = {}) => {
-    let q = supabase.from('vehicle_fleet').select('asset_no,site,status')
-    q = withSite(q, site)
-    q = applyCountry(q, country)
-    const { data, error } = await q
+    // Page past the 1000-row PostgREST cap: this feeds the total-vehicles COUNT
+    // (rows.length) and the fleet-availability / vehicles-by-site breakdowns, all
+    // of which under-report on a fleet over 1000 rows without paging.
+    const { data, error } = await fetchAllPages((lo, hi) => {
+      let q = supabase.from('vehicle_fleet').select('asset_no,site,status')
+      q = withSite(q, site)
+      q = applyCountry(q, country)
+      return q.range(lo, hi)
+    }, { max: 20000 })
     if (error) throw error
     return data ?? []
   },
@@ -175,13 +180,23 @@ const SOURCE_FETCHERS = {
     return data ?? []
   },
   workOrders: async ({ from, to } = {}) => {
-    const { data, error } = await fetchAllPages((lo, hi) => {
+    // work_orders is a millions-row table. The row pull for the status breakdown
+    // is bounded at 10000, so its length is NOT a safe total. Take the displayed
+    // count from an exact server count over the same window instead.
+    const { data, error, truncated } = await fetchAllPages((lo, hi) => {
       let q = supabase.from('work_orders').select('id,status')
       q = withCreatedRange(q, from, to)
       return q.range(lo, hi)
     }, { max: 10000 })
     if (error) throw error
-    return data ?? []
+    let cq = supabase.from('work_orders').select('id', { count: 'exact', head: true })
+    cq = withCreatedRange(cq, from, to)
+    const { count } = await cq
+    const rows = data ?? []
+    // Carry the exact total + truncation alongside the rows the breakdown reads.
+    rows.total = count ?? rows.length
+    rows.truncated = truncated
+    return rows
   },
 }
 
@@ -362,6 +377,7 @@ function CostTrendWidget({ rows, currency }) {
 
 function WorkOrdersByStatusWidget({ rows }) {
   const groups = groupWorkOrdersByStatus(rows)
+  const total = Number.isFinite(rows?.total) ? rows.total : (rows?.length ?? 0)
   if (!groups.length) {
     return (
       <ChartShell title="Work Orders by Status" icon={ClipboardList}>
@@ -378,8 +394,13 @@ function WorkOrdersByStatusWidget({ rows }) {
     }],
   }
   return (
-    <ChartShell title={`Work Orders · ${rows.length}`} icon={ClipboardList}>
+    <ChartShell title={`Work Orders · ${total.toLocaleString()}`} icon={ClipboardList}>
       <Doughnut data={data} options={DONUT_OPTS} />
+      {rows?.truncated ? (
+        <p className="absolute bottom-0 left-0 right-0 text-center text-[10px] text-[var(--text-dim)]">
+          Breakdown based on most recent 10,000
+        </p>
+      ) : null}
     </ChartShell>
   )
 }

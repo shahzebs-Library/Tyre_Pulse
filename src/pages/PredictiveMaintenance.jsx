@@ -595,11 +595,13 @@ export default function PredictiveMaintenance() {
       if (tyreErr) throw tyreErr
       setRecords(tyreData || [])
 
-      // Load vehicle_fleet (graceful if missing)
+      // Load vehicle_fleet (graceful if missing). Page past the 1000-row cap so
+      // the fleet budget total below is not summed over a silently-capped subset.
       try {
-        const { data: fleetData, error: fleetErr } = await supabase
+        const { data: fleetData, error: fleetErr } = await fetchAllPages((from, to) => supabase
           .from('vehicle_fleet')
           .select('asset_no,site,vehicle_type,expected_km_per_tyre,monthly_tyre_budget,current_km')
+          .order('asset_no').order('id').range(from, to), { max: 20000 })
 
         if (fleetErr) {
           setFleetMaster([])

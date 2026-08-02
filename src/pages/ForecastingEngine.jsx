@@ -219,13 +219,13 @@ export default function ForecastingEngine() {
             if (cf) q = q.eq('country', cf)
             return q.range(from, to)
           }),
-          (() => {
+          fetchAllPages((from, to) => {
             let q = supabase
               .from('vehicle_fleet')
               .select('asset_no,site,vehicle_type,expected_km_per_tyre,monthly_tyre_budget,current_km')
             if (cf) q = q.eq('country', cf)
-            return q
-          })(),
+            return q.order('asset_no').order('id').range(from, to)
+          }, { max: 20000 }),
         ])
 
         if (cancelled) return

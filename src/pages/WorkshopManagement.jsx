@@ -7,6 +7,7 @@ import { fetchAllPages } from '../lib/fetchAll'
 import { toUserMessage } from '../lib/safeError'
 import { useSettings } from '../contexts/SettingsContext'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
+import { getMaintenanceSnapshot } from '../lib/api/maintenanceAnalytics'
 import { WO_STATUSES, normalizeWoStatus, isClosedWoStatus } from '../lib/workOrderStatus'
 import { formatDate } from '../lib/formatters'
 import PageHeader from '../components/ui/PageHeader'
@@ -73,6 +74,29 @@ const STATUSES   = WO_STATUSES.filter(s => s !== 'Overdue')
 const OPEN_STATUSES = new Set(WO_STATUSES.filter(s => !isClosedWoStatus(s)))
 const PRIORITIES = ['Critical','High','Medium','Low']
 const PAGE_SIZE  = 20
+
+// work_orders is one of the largest tables in the system (millions of rows at
+// scale), so the browser must never pull it all. The grid fetch is bounded two
+// ways: a server-side date window (defaulting to the last 12 months when the
+// user has not set one, matching the 12-month charts) plus a hard row ceiling.
+const WORK_ORDER_CEILING = 20000
+const DEFAULT_WINDOW_MONTHS = 12
+
+// First day of the month DEFAULT_WINDOW_MONTHS-1 back, so the default window
+// lines up exactly with the last12Months() chart buckets (full coverage, no
+// half-month at the edge). Returns a YYYY-MM-DD string.
+function defaultWindowFrom() {
+  const d = new Date()
+  const from = new Date(d.getFullYear(), d.getMonth() - (DEFAULT_WINDOW_MONTHS - 1), 1)
+  return from.toISOString().slice(0, 10)
+}
+
+function windowFromLabel(iso) {
+  if (!iso) return ''
+  const d = new Date(iso + 'T00:00:00')
+  if (isNaN(d)) return iso
+  return d.toLocaleDateString('en', { month: 'short', year: 'numeric' })
+}
 
 /** True when a job is in a canonical non-terminal (still open) state. */
 const isOpenJob = (o) => OPEN_STATUSES.has(normalizeWoStatus(o?.status))
@@ -253,6 +277,8 @@ export default function WorkshopManagement() {
   const navigate = useNavigate()
 
   const [allOrders, setAllOrders] = useState([])
+  const [snapshot, setSnapshot]   = useState(null)
+  const [loadMeta, setLoadMeta]   = useState({ truncated: false, totalCount: null, windowFrom: null, windowDefault: false })
   const [loading, setLoading]     = useState(true)
   const [tableExists, setTableExists] = useState(true)
   const [error, setError]         = useState(null)
@@ -272,8 +298,25 @@ export default function WorkshopManagement() {
   const fetchData = useCallback(async () => {
     setLoading(true)
     setError(null)
+    // The grid is always bounded by a date window. Honour an explicit range;
+    // otherwise default to the last 12 months so the browser never scans the
+    // whole (potentially millions-row) table. The date controls widen it.
+    const windowDefault = !dateFrom
+    const effFrom = dateFrom || defaultWindowFrom()
+
+    // Headline financial KPIs come from the server aggregate so they stay
+    // correct even when the grid below is capped. The RPC only knows
+    // site/country/date, so it is scoped by the explicit date filter only
+    // (all-time by default, matching the previous behaviour of these tiles).
+    const snapPromise = getMaintenanceSnapshot({
+      site: site || null,
+      country: activeCountry,
+      from: dateFrom || null,
+      to: dateTo || null,
+    }).catch(() => ({ ok: false }))
+
     try {
-      const { data, error: err } = await fetchAllPages((from, to) => {
+      const { data, error: err, truncated } = await fetchAllPages((from, to) => {
         let q = supabase
           .from('work_orders')
           .select('id,work_order_no,asset_no,status,priority,work_type,site,assigned_to:technician_name,labour_cost,parts_cost,total_cost,created_at,completed_at,scheduled_date:target_completion,description,parts_used')
@@ -286,26 +329,51 @@ export default function WorkshopManagement() {
         if (site)     q = q.eq('site', site)
         if (workType) q = q.eq('work_type', workType)
         if (priority) q = q.eq('priority', priority)
-        if (dateFrom) q = q.gte('created_at', dateFrom)
+        q = q.gte('created_at', effFrom)
         if (dateTo)   q = q.lte('created_at', dateTo + 'T23:59:59')
         q = applyCountry(q, activeCountry)
 
         return q.range(from, to)
-      })
+      }, { max: WORK_ORDER_CEILING })
+
       if (err) {
         if (err.code === '42P01' || err.message?.toLowerCase().includes('does not exist')) {
           setTableExists(false)
           setAllOrders([])
-        } else {
-          setError(toUserMessage(err, 'Could not load work orders.'))
+          setSnapshot({ ok: false })
+          setLoadMeta({ truncated: false, totalCount: null, windowFrom: effFrom, windowDefault })
+          return
         }
-      } else {
-        setTableExists(true)
-        // Canonicalise status at the read boundary (same as the Work Orders
-        // page) so every count, chart, badge and filter below speaks the one
-        // vocabulary regardless of which loader wrote the row.
-        setAllOrders((data || []).map(o => ({ ...o, status: normalizeWoStatus(o.status) })))
+        setError(toUserMessage(err, 'Could not load work orders.'))
+        return
       }
+
+      setTableExists(true)
+      // Canonicalise status at the read boundary (same as the Work Orders
+      // page) so every count, chart, badge and filter below speaks the one
+      // vocabulary regardless of which loader wrote the row.
+      setAllOrders((data || []).map(o => ({ ...o, status: normalizeWoStatus(o.status) })))
+
+      // Only when the fetch hit the ceiling do we count the full selection, so
+      // the "showing N of M" note is honest without a count query on every load.
+      let totalCount = null
+      if (truncated) {
+        try {
+          let cq = supabase.from('work_orders').select('id', { count: 'exact', head: true })
+          if (site)     cq = cq.eq('site', site)
+          if (workType) cq = cq.eq('work_type', workType)
+          if (priority) cq = cq.eq('priority', priority)
+          cq = cq.gte('created_at', effFrom)
+          if (dateTo)   cq = cq.lte('created_at', dateTo + 'T23:59:59')
+          cq = applyCountry(cq, activeCountry)
+          const { count } = await cq
+          if (Number.isFinite(count)) totalCount = count
+        } catch { /* best-effort: note falls back to "many" */ }
+      }
+
+      const snap = await snapPromise
+      setSnapshot(snap && snap.ok !== false ? snap : { ok: false })
+      setLoadMeta({ truncated: !!truncated, totalCount, windowFrom: effFrom, windowDefault })
     } catch (e) {
       setError(toUserMessage(e, 'Could not load work orders.'))
     } finally {
@@ -369,6 +437,18 @@ export default function WorkshopManagement() {
       onTimePct,
     }
   }, [orders, thisMonth])
+
+  // Total Cost and Open Jobs are supplied identically by the server aggregate
+  // (sum of total_cost, and the open-job count) over the full selection, so we
+  // read them from the RPC instead of the capped client rows. The RPC cannot
+  // apply the work-type / priority / status filters, so when any of those is
+  // active we fall back to the (filter-respecting) client figures.
+  const num = (v) => (Number.isFinite(Number(v)) ? Number(v) : null)
+  const rpcUsable = !workType && !priority && !status && snapshot && snapshot.ok !== false
+  const rpcTotalSpend = rpcUsable ? num(snapshot?.kpis?.total_spend) : null
+  const rpcOpenJobs   = rpcUsable ? num(snapshot?.kpis?.open_jobs) : null
+  const kpiTotalCost  = rpcTotalSpend != null ? rpcTotalSpend : kpis.totalCost
+  const kpiOpenJobs   = rpcOpenJobs != null ? rpcOpenJobs : kpis.openJobs
 
   // Site performance
   const sitePerf = useMemo(() => {
@@ -789,6 +869,30 @@ export default function WorkshopManagement() {
 
         {!loading && !error && (
           <>
+            {/* Scope / bounding note - the grid is always windowed + capped so the
+                browser never pulls the whole work_orders table. */}
+            {(loadMeta.windowDefault || loadMeta.truncated) && (
+              <div className="bg-blue-500/10 border border-blue-500/30 rounded-xl p-3 text-xs text-[var(--text-secondary)] flex items-start gap-2">
+                <Filter className="w-4 h-4 text-blue-400 flex-shrink-0 mt-0.5" />
+                <div className="space-y-1">
+                  {loadMeta.windowDefault && (
+                    <p>
+                      Showing work orders since {windowFromLabel(loadMeta.windowFrom)} (last {DEFAULT_WINDOW_MONTHS} months).
+                      Set a date range above to change the window.
+                    </p>
+                  )}
+                  {loadMeta.truncated && (
+                    <p>
+                      This selection has more than {WORK_ORDER_CEILING.toLocaleString()} work orders.
+                      Showing the most recent {allOrders.length.toLocaleString()}
+                      {loadMeta.totalCount != null ? ` of ${loadMeta.totalCount.toLocaleString()}` : ''}.
+                      Narrow the filters or date range to see the rest. Total Cost and Open Jobs above still reflect the full selection.
+                    </p>
+                  )}
+                </div>
+              </div>
+            )}
+
             {/* KPI Cards */}
             <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4">
               <KpiCard
@@ -815,16 +919,16 @@ export default function WorkshopManagement() {
               <KpiCard
                 icon={DollarSign}
                 label="Total Cost"
-                value={fmtCurrency(kpis.totalCost, activeCurrency)}
+                value={fmtCurrency(kpiTotalCost, activeCurrency)}
                 sub="labour + parts"
                 color="yellow"
               />
               <KpiCard
                 icon={AlertTriangle}
                 label="Open Jobs"
-                value={kpis.openJobs.toLocaleString()}
+                value={kpiOpenJobs.toLocaleString()}
                 sub="not completed or cancelled"
-                color={kpis.openJobs > 20 ? 'red' : kpis.openJobs > 10 ? 'orange' : 'blue'}
+                color={kpiOpenJobs > 20 ? 'red' : kpiOpenJobs > 10 ? 'orange' : 'blue'}
               />
               <KpiCard
                 icon={Target}
@@ -964,10 +1068,16 @@ export default function WorkshopManagement() {
                   exit={{ opacity: 0, y: -12 }}
                   className="space-y-4"
                 >
-                  <div className="flex items-center justify-between">
+                  <div className="flex items-center justify-between flex-wrap gap-2">
                     <p className="text-sm text-[var(--text-muted)]">
                       {filteredOrders.length.toLocaleString()} jobs | page {page} of {totalPages}
                     </p>
+                    {loadMeta.truncated && (
+                      <p className="text-xs text-blue-400">
+                        Most recent {allOrders.length.toLocaleString()}
+                        {loadMeta.totalCount != null ? ` of ${loadMeta.totalCount.toLocaleString()}` : ''} in this window
+                      </p>
+                    )}
                   </div>
 
                   <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl overflow-hidden">

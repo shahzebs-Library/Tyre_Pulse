@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from 'react'
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 import { fetchAllPages } from '../lib/fetchAll'
 import { toUserMessage } from '../lib/safeError'
@@ -146,6 +146,11 @@ export default function PositionIntelligence() {
   const [records, setRecords] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  // True when the read hit the 50,000-row ceiling (millions-row safety cap).
+  const [capped, setCapped] = useState(false)
+  // Guards against a slow earlier response overwriting a newer one after the
+  // country or date window changes (fetch-race cancellation).
+  const reqIdRef = useRef(0)
 
   // Filters
   const [countryChip, setCountryChip] = useState('All')
@@ -159,27 +164,36 @@ export default function PositionIntelligence() {
 
   // ── Data loading ─────────────────────────────────────────────────────────────
   const load = useCallback(async () => {
+    const myReq = ++reqIdRef.current
     setLoading(true)
     setError(null)
     try {
       const country = countryChip !== 'All' ? countryChip : (activeCountry !== 'All' ? activeCountry : null)
 
-      const { data, error: err } = await fetchAllPages((from, to) => {
+      // Bound the read for millions-row scale: country AND the active date window
+      // are applied SERVER-SIDE, capped at 50,000 rows (most recent first). The
+      // client-side `filtered` memo still applies the same date/site filters, so
+      // displayed numbers are identical for data under the cap.
+      const { data, error: err, truncated } = await fetchAllPages((from, to) => {
         let q = supabase
           .from('tyre_records')
           .select('id,issue_date,asset_no,brand,site,country,cost_per_tyre,qty,risk_level,km_at_fitment,km_at_removal,position,category,remarks')
           .order('issue_date', { ascending: false })
         if (country) q = q.eq('country', country)
+        if (dateFrom) q = q.gte('issue_date', dateFrom)
+        if (dateTo) q = q.lte('issue_date', dateTo)
         return q.range(from, to)
-      })
+      }, { max: 50000 })
+      if (myReq !== reqIdRef.current) return
       if (err) throw err
       setRecords(data || [])
+      setCapped(Boolean(truncated))
     } catch (e) {
-      setError(toUserMessage(e, 'Could not load position data.'))
+      if (myReq === reqIdRef.current) setError(toUserMessage(e, 'Could not load position data.'))
     } finally {
-      setLoading(false)
+      if (myReq === reqIdRef.current) setLoading(false)
     }
-  }, [activeCountry, countryChip])
+  }, [activeCountry, countryChip, dateFrom, dateTo])
 
   useEffect(() => { load() }, [load])
 
@@ -610,6 +624,16 @@ export default function PositionIntelligence() {
 
         <span className="ml-auto text-xs text-gray-500">{totalRecords.toLocaleString()} records</span>
       </div>
+
+      {/* ── Capped-view note (millions-row safety cap) ── */}
+      {capped && (
+        <div className="card py-2.5 flex items-center gap-2 border-yellow-700/40 bg-yellow-950/15">
+          <AlertTriangle size={14} className="text-yellow-400 flex-shrink-0" />
+          <p className="text-xs text-yellow-200/80">
+            Capped view: showing the most recent 50,000 tyre records for this scope. Narrow the country or date range for the full dataset.
+          </p>
+        </div>
+      )}
 
       {/* ── Section 1: Position Summary Cards ──────────────────────────────── */}
       <div>

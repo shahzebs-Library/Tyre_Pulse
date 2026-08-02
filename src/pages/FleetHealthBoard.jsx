@@ -205,6 +205,8 @@ export default function FleetHealthBoard() {
   const [error, setError]             = useState(null)
   const [lastUpdated, setLastUpdated] = useState(null)
   const [refreshing, setRefreshing]   = useState(false)
+  // True when either read hit the 50,000-row ceiling (millions-row safety cap).
+  const [capped, setCapped]           = useState(false)
 
   const [siteFilter, setSiteFilter]     = useState('All')
   const [countryFilter, setCountryFilter] = useState('All')
@@ -230,14 +232,19 @@ export default function FleetHealthBoard() {
     setError(null)
 
     try {
-      const { data, error: err } = await fetchAllPages((from, to) => {
+      // Active tyres (current state). Country is scoped SERVER-SIDE. There is no
+      // date window here (an active fitment can be old), so bound the read with a
+      // 50,000-row ceiling + a stable order so paging never drops or repeats a row
+      // at a page boundary and truncation keeps the most recent records.
+      const { data, error: err, truncated: mainTruncated } = await fetchAllPages((from, to) => {
         let q = supabase
           .from('tyre_records')
           .select('id,asset_no,serial_number:serial_no,position,tread_depth,pressure_reading,risk_level,issue_date,km_at_fitment,km_at_removal,cost_per_tyre,site,country,brand,size')
           .is('km_at_removal', null)
+          .order('id', { ascending: false })
         if (activeCountry !== 'All') q = q.eq('country', activeCountry)
         return q.range(from, to)
-      })
+      }, { max: 50000 })
       if (myReq !== reqIdRef.current) return
       if (err) throw err
 
@@ -255,7 +262,7 @@ export default function FleetHealthBoard() {
       // the trend was drawn from the newest 15% - which bends the shape of the
       // line, not just its height.
       const since = new Date(anchor.getTime() - 365 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
-      const { data: trendRaw } = await fetchAllPages((from, to) => {
+      const { data: trendRaw, truncated: trendTruncated } = await fetchAllPages((from, to) => {
         let q = supabase
           .from('tyre_records')
           .select('issue_date,risk_level,asset_no')
@@ -265,9 +272,10 @@ export default function FleetHealthBoard() {
           .range(from, to)
         if (activeCountry !== 'All') q = q.eq('country', activeCountry)
         return q
-      })
+      }, { max: 50000 })
       if (myReq !== reqIdRef.current) return
       setTrendData(trendRaw ?? [])
+      setCapped(Boolean(mainTruncated) || Boolean(trendTruncated))
     } catch (e) {
       if (myReq === reqIdRef.current) setError(toUserMessage(e, 'Failed to load fleet data'))
     } finally {
@@ -575,6 +583,16 @@ export default function FleetHealthBoard() {
           color="blue"
         />
       </div>
+
+      {/* ── Capped-view note (millions-row safety cap) ── */}
+      {capped && (
+        <div className="card py-2.5 flex items-center gap-2 border-yellow-700/40 bg-yellow-950/15">
+          <AlertTriangle size={14} className="text-yellow-400 flex-shrink-0" />
+          <p className="text-xs text-yellow-200/80">
+            Capped view: showing the most recent 50,000 tyre records for this country. Narrow the country for the full dataset.
+          </p>
+        </div>
+      )}
 
       {/* ── Main layout: board + sidebar ── */}
       <div className="flex gap-6">

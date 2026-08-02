@@ -1,0 +1,56 @@
+-- V445 — UNIT-AWARE FLEET CPK (km + engine-hours), per-vehicle / per-type / total-fleet
+-- STATUS: APPLIED LIVE 2026-08-02 (project jhssdmeruxtrlqnwfksc, org Company A) as Supabase
+-- migrations v432_load_engine_hours_from_tyre_staging / v433_fleet_cpk_hours_and_rpc /
+-- v433b_get_fleet_cpk_fix_ambiguous. Renumbered to V445 in the repo (parallel session used
+-- V432-V444). This file is the human record; the DB change is already applied.
+--
+-- WHY (customer): CPK must follow INDUSTRY STANDARD — per-vehicle AND total-fleet cost per
+-- unit, using BOTH kilometres and engine-hours (km for road assets; hours for generators /
+-- pumps / plant), broken down by asset type, in reports. The consumption files carry both
+-- km (fix_KM/remove_KM/total_km) and hours (fix_HM/remove_HM).
+--
+-- WHAT WAS ADDED LIVE:
+-- 1) ENGINE-HOUR READINGS loaded into public.engine_hours_logs from the tyre-change staging
+--    files' fix_HM/remove_HM (the HM counterpart to the km readings already on tyre_records).
+--    Value must parse > 1 (excludes 0/1/'NULL' placeholders); KSA/UAE date DD-MM-YY, Egypt
+--    Excel-serial; distinct (country, asset, date, hours). LOADED 4,379 rows
+--    (KSA 2,508 / UAE 1,805 / Egypt 66; assets KSA 346 / UAE 169 / Egypt 36), all tagged
+--    source='tyre_change_hm_v432'. REVERSIBLE:
+--        delete from public.engine_hours_logs where source = 'tyre_change_hm_v432';
+--    (engine_hours_logs was empty before this load.)
+--
+-- 2) public.fleet_hours_by_asset(p_org uuid, p_country text, p_from date, p_to date)
+--    -> per-asset hours_run = max(hm) - min(hm) over engine-hour readings in the window
+--    (mirrors fleet_km_by_asset; requires > 1 reading; clamped to 24h/day * window-days).
+--    STABLE, search_path=public.
+--
+-- 3) public.cpk_unit_for_asset_type(text) -> 'km' | 'engine_hours'  (IMMUTABLE)
+--    engine_hours when the vehicle_type matches any of:
+--      pump|water|treatment|concrete|batching|plaster|grout|slurry|generator|genset|
+--      gen set|compressor|excavator|loader|crane|forklift|dozer|grader|roller
+--    else km. MIRROR of JS costIntelligence.cpkUnitForAssetType — CHANGE BOTH TOGETHER.
+--
+-- 4) public.get_fleet_cpk(p_country text default null, p_from date default null,
+--                         p_to date default null) -> jsonb   (SECURITY DEFINER, search_path
+--    pinned, anon revoked, scoped to app_current_org(), default window = last 365 days)
+--    Returns { per_vehicle[], by_type[], fleet[] }:
+--      - per_vehicle: {asset_no, vehicle_type, unit, distance_or_hours, tyre_cost,
+--        maintenance_cost, total_cost, cpk_tyre, cpk_total} — unit from cpk_unit_for_asset_type;
+--        cpk NULL when the denominator is 0 (never fabricated).
+--      - by_type: same rolled up per vehicle_type.
+--      - fleet: PER-COUNTRY array (each in its own currency — SAR/AED/EGP never blended),
+--        km and engine-hours split separately, cpk divides only MATCHED cost by MATCHED
+--        distance/hours with coverage_pct, plus unregistered_cost (spend on assets missing
+--        from vehicle_fleet).
+--
+-- REAL SAMPLES (last 365d): KSA fleet cpk_tyre 0.1345 SAR/km (cov 63.5%, 17.0M km);
+--   KSA hours cpk_tyre 1.4786 SAR/hour (cov 28.2%); PUMPS 2.5179 SAR/hour; SKID LOADER SL020
+--   57.31 SAR/hour; TR-MIXER 0.2132 SAR/km; UAE km cpk_tyre 0.0768 AED/km. GENERATOR has cost
+--   but 0 measured hours -> honest NULL cpk.
+--
+-- JS side: src/lib/costIntelligence.js gained cpkUnitForAssetType / assetCpk / rollupFleetCpk
+-- (pure roll-up the report layer renders), 23 tests. The RPC bodies live in the DB; retrieve
+-- with pg_get_functiondef if the exact text is needed. CAVEAT for reports: hour spans can
+-- overstate for meters that count idle time (only the 24h/day physical clamp is applied) —
+-- surface as a data-quality note, do not silently correct. Egypt engine-hour coverage is
+-- near zero -> Egypt plant CPK reads N/A honestly.

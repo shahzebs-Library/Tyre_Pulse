@@ -43,6 +43,162 @@ export const UNIT_META = {
 }
 
 /**
+ * CPK running unit for an asset type, collapsed to the two units cost-per-km can
+ * actually measure: 'km' for road assets, 'engine_hours' for power / plant assets.
+ * An m3 asset (pumps, batching, water treatment) is measured by engine-hours here
+ * because there is no reliable per-asset m3 series to divide by. This reuses the
+ * keyword map in runningUnitForAssetType so there is ONE keyword truth in JS.
+ *
+ * MIRROR: this MUST stay byte-equivalent to the SQL public.cpk_unit_for_asset_type()
+ * used by get_fleet_cpk (V433). Change BOTH together, and keep the SQL similar-to
+ * keyword list = M3_KEYWORDS + HOUR_KEYWORDS above.
+ *
+ * @param {string} type asset / vehicle type label (any casing)
+ * @returns {'km'|'engine_hours'}
+ */
+export function cpkUnitForAssetType(type) {
+  return runningUnitForAssetType(type) === 'km' ? 'km' : 'engine_hours'
+}
+
+/**
+ * Normalise one raw asset row into a CPK object. The denominator is chosen by the
+ * asset's CPK unit (km for road, engine_hours for plant). CPK is cost / denominator
+ * and is null when the denominator is 0 (honest, never fabricated). Costs and the
+ * denominator can be supplied directly (distance_or_hours), or km / hours passed and
+ * the right one selected by unit.
+ *
+ * @param {{ country?:string, asset_no?:string, vehicle_type?:string, currency?:string,
+ *   unit?:'km'|'engine_hours', distance_or_hours?:number, km?:number, hours?:number,
+ *   tyre_cost?:number, maintenance_cost?:number }} row
+ */
+export function assetCpk(row = {}) {
+  const unit = row.unit === 'km' || row.unit === 'engine_hours'
+    ? row.unit
+    : cpkUnitForAssetType(row.vehicle_type)
+  const denomRaw = row.distance_or_hours != null
+    ? row.distance_or_hours
+    : (unit === 'km' ? row.km : row.hours)
+  const denom = posOrNull(denomRaw)
+  const tyreCost = num(row.tyre_cost)
+  const maintenanceCost = num(row.maintenance_cost)
+  const totalCost = tyreCost + maintenanceCost
+  return {
+    country: row.country ?? null,
+    asset_no: row.asset_no ?? null,
+    vehicle_type: row.vehicle_type ?? null,
+    currency: row.currency ?? row.country ?? null,
+    unit,
+    distanceOrHours: denom == null ? 0 : denom,
+    tyreCost,
+    maintenanceCost,
+    totalCost,
+    cpkTyre: denom == null ? null : tyreCost / denom,
+    cpkTotal: denom == null ? null : totalCost / denom,
+  }
+}
+
+/**
+ * Roll raw per-asset rows up into the per-vehicle / by-type / fleet CPK views the
+ * UI renders. Mirrors the shape of the get_fleet_cpk RPC so a caller can use either
+ * the server aggregate or this client roll-up. Rules that keep it honest:
+ *  - CPK divides ONLY matched cost (assets that have the denominator) by the matched
+ *    distance / hours, and reports coverage - never whole-group cost over part-group
+ *    distance.
+ *  - The fleet view splits km-unit and hour-unit assets (a blended /km+/hour figure
+ *    is meaningless) and never mixes currencies (grouped by country).
+ *
+ * @param {Array<object>} rows raw asset rows (see assetCpk)
+ * @returns {{ perVehicle:Array, byType:Array, fleet:Array }}
+ */
+export function rollupFleetCpk(rows = []) {
+  const assets = (Array.isArray(rows) ? rows : []).map(assetCpk)
+
+  // per-vehicle: cost-bearing assets, richest first
+  const perVehicle = assets
+    .filter((a) => a.totalCost > 0)
+    .sort((a, b) => b.totalCost - a.totalCost)
+
+  // by-type: group by country + vehicle_type + unit
+  const typeMap = new Map()
+  for (const a of assets) {
+    if (!a.vehicle_type) continue
+    const key = `${a.country}\u0000${a.vehicle_type}\u0000${a.unit}`
+    let g = typeMap.get(key)
+    if (!g) {
+      g = {
+        country: a.country, currency: a.currency, vehicle_type: a.vehicle_type, unit: a.unit,
+        assets: 0, assetsMeasured: 0, tyreCost: 0, maintenanceCost: 0, totalCost: 0,
+        distanceOrHours: 0, matchedTyre: 0, matchedTotal: 0,
+      }
+      typeMap.set(key, g)
+    }
+    g.assets += 1
+    g.tyreCost += a.tyreCost
+    g.maintenanceCost += a.maintenanceCost
+    g.totalCost += a.totalCost
+    if (a.distanceOrHours > 0) {
+      g.assetsMeasured += 1
+      g.distanceOrHours += a.distanceOrHours
+      g.matchedTyre += a.tyreCost
+      g.matchedTotal += a.totalCost
+    }
+  }
+  const byType = [...typeMap.values()]
+    .map((g) => ({
+      country: g.country, currency: g.currency, vehicle_type: g.vehicle_type, unit: g.unit,
+      assets: g.assets, assetsMeasured: g.assetsMeasured,
+      tyreCost: g.tyreCost, maintenanceCost: g.maintenanceCost, totalCost: g.totalCost,
+      distanceOrHours: g.distanceOrHours,
+      cpkTyre: g.distanceOrHours > 0 ? g.matchedTyre / g.distanceOrHours : null,
+      cpkTotal: g.distanceOrHours > 0 ? g.matchedTotal / g.distanceOrHours : null,
+    }))
+    .sort((a, b) => b.totalCost - a.totalCost)
+
+  // fleet: group by country, split km vs hours
+  const fleetMap = new Map()
+  const side = () => ({ sum: 0, tyreMatched: 0, totalMatched: 0, costAssets: 0, measuredAssets: 0 })
+  for (const a of assets) {
+    let g = fleetMap.get(a.country)
+    if (!g) {
+      g = { country: a.country, currency: a.currency, tyreCost: 0, maintenanceCost: 0, totalCost: 0, km: side(), hours: side() }
+      fleetMap.set(a.country, g)
+    }
+    g.tyreCost += a.tyreCost
+    g.maintenanceCost += a.maintenanceCost
+    g.totalCost += a.totalCost
+    const s = a.unit === 'km' ? g.km : g.hours
+    if (a.distanceOrHours > 0) s.sum += a.distanceOrHours
+    if (a.totalCost > 0) {
+      s.costAssets += 1
+      if (a.distanceOrHours > 0) {
+        s.measuredAssets += 1
+        s.tyreMatched += a.tyreCost
+        s.totalMatched += a.totalCost
+      }
+    }
+  }
+  const sideOut = (s) => ({
+    total: s.sum,
+    costAssets: s.costAssets,
+    measuredAssets: s.measuredAssets,
+    coveragePct: s.costAssets > 0 ? (100 * s.measuredAssets) / s.costAssets : null,
+    tyreCostMatched: s.tyreMatched,
+    totalCostMatched: s.totalMatched,
+    cpkTyre: s.sum > 0 ? s.tyreMatched / s.sum : null,
+    cpkTotal: s.sum > 0 ? s.totalMatched / s.sum : null,
+  })
+  const fleet = [...fleetMap.values()]
+    .map((g) => ({
+      country: g.country, currency: g.currency,
+      tyreCost: g.tyreCost, maintenanceCost: g.maintenanceCost, totalCost: g.totalCost,
+      km: sideOut(g.km), hours: sideOut(g.hours),
+    }))
+    .sort((a, b) => String(a.country).localeCompare(String(b.country)))
+
+  return { perVehicle, byType, fleet }
+}
+
+/**
  * Cost per running unit for a single unit selection.
  * @param {{ expenses:number, km?:number, hours?:number, m3?:number,
  *   unit:'m3'|'km'|'engine_hours' }} args

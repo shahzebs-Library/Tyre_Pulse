@@ -98,7 +98,7 @@ const CHART_OPTS_NO_SCALES = {
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
 function fmt(n, decimals = 0) {
-  if (n == null || isNaN(n)) return '-'
+  if (n == null || isNaN(n)) return 'N/A'
   return Number(n).toLocaleString(undefined, {
     minimumFractionDigits: decimals,
     maximumFractionDigits: decimals,
@@ -306,7 +306,7 @@ export default function TyreScrapManagement() {
   // ── Fleet average km life ─────────────────────────────────────────────────────
   const fleetAvgKmLife = useMemo(() => {
     const lives = allTyres.map(kmLife).filter(v => v != null && v > 0)
-    if (!lives.length) return 100000
+    if (!lives.length) return null
     return lives.reduce((s, v) => s + v, 0) / lives.length
   }, [allTyres])
 
@@ -384,6 +384,7 @@ export default function TyreScrapManagement() {
 
   // ── Early scrap analysis ──────────────────────────────────────────────────────
   const earlyScrap = useMemo(() => {
+    if (fleetAvgKmLife == null) return []
     const threshold = fleetAvgKmLife * 0.5
     return scrapped.filter(t => {
       const life = kmLife(t)
@@ -425,7 +426,7 @@ export default function TyreScrapManagement() {
         const life = kmLife(t)
         if (life != null && life > 0) map[b].lives.push(life)
         map[b].costs.push(Number(t.cost_per_tyre) || 0)
-        if (life != null && life < fleetAvgKmLife * 0.5) map[b].earlyCount++
+        if (fleetAvgKmLife != null && life != null && life < fleetAvgKmLife * 0.5) map[b].earlyCount++
       }
     })
     return Object.values(map).map(b => {
@@ -823,12 +824,12 @@ export default function TyreScrapManagement() {
             <KpiCard
               icon={Activity}
               label="Avg km Life at Scrap"
-              value={kpis.avgKmLife != null ? `${fmt(kpis.avgKmLife)} km` : '-'}
-              sub={`Fleet avg: ${fmt(fleetAvgKmLife)} km`}
+              value={kpis.avgKmLife != null ? `${fmt(kpis.avgKmLife)} km` : 'N/A'}
+              sub={fleetAvgKmLife != null ? `Fleet avg: ${fmt(fleetAvgKmLife)} km` : 'Fleet avg: N/A'}
               color={
-                kpis.avgKmLife != null && kpis.avgKmLife < fleetAvgKmLife * 0.6
+                fleetAvgKmLife != null && kpis.avgKmLife != null && kpis.avgKmLife < fleetAvgKmLife * 0.6
                   ? 'text-red-400'
-                  : kpis.avgKmLife != null && kpis.avgKmLife < fleetAvgKmLife * 0.8
+                  : fleetAvgKmLife != null && kpis.avgKmLife != null && kpis.avgKmLife < fleetAvgKmLife * 0.8
                   ? 'text-yellow-400'
                   : 'text-green-400'
               }
@@ -1462,8 +1463,8 @@ export default function TyreScrapManagement() {
                               {t.removal_date || t.issue_date || '-'}
                             </td>
                             <td className="px-4 py-2.5 text-right text-xs">
-                              <span className={life != null ? (life < fleetAvgKmLife * 0.5 ? 'text-red-400 font-semibold' : 'text-[var(--text-secondary)]') : 'text-[var(--text-dim)]'}>
-                                {life != null ? `${fmt(life)} km` : '-'}
+                              <span className={life != null ? (fleetAvgKmLife != null && life < fleetAvgKmLife * 0.5 ? 'text-red-400 font-semibold' : 'text-[var(--text-secondary)]') : 'text-[var(--text-dim)]'}>
+                                {life != null ? `${fmt(life)} km` : 'N/A'}
                               </span>
                             </td>
                             <td className="px-4 py-2.5 text-right text-xs text-orange-400">

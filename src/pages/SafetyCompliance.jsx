@@ -60,7 +60,7 @@ function getPosition(pos) {
   return 'default'
 }
 
-function fmtPct(n) { return isNaN(n) ? '-' : n.toFixed(1) + '%' }
+function fmtPct(n) { return (n == null || isNaN(n)) ? 'N/A' : n.toFixed(1) + '%' }
 function fmtDate(d) {
   if (!d) return '-'
   return formatDate(d, 'All', { day: '2-digit', month: 'short', year: 'numeric' })
@@ -117,7 +117,7 @@ export default function SafetyCompliance() {
       const limit = LEGAL_TREAD[pos] || LEGAL_TREAD.default
       return parseFloat(r.tread_depth) < limit
     })
-    const treadCompliance = withTread.length ? ((withTread.length - treadFails.length) / withTread.length) * 100 : 100
+    const treadCompliance = withTread.length ? ((withTread.length - treadFails.length) / withTread.length) * 100 : null
 
     // Pressure compliance
     const withPressure = inspections.filter(r => r.pressure_reading != null && r.recommended_pressure != null)
@@ -125,7 +125,7 @@ export default function SafetyCompliance() {
       const diff = Math.abs((parseFloat(r.pressure_reading) - parseFloat(r.recommended_pressure)) / parseFloat(r.recommended_pressure)) * 100
       return diff > PRESSURE_TOLERANCE
     })
-    const pressureCompliance = withPressure.length ? ((withPressure.length - pressureFails.length) / withPressure.length) * 100 : 100
+    const pressureCompliance = withPressure.length ? ((withPressure.length - pressureFails.length) / withPressure.length) * 100 : null
 
     // Critical risk tyres
     const criticalCount = tyreRecords.filter(r => r.risk_level === 'Critical').length
@@ -135,7 +135,7 @@ export default function SafetyCompliance() {
     // Inspection frequency compliance (vehicles inspected at least once in period)
     const uniqueAssets = new Set(tyreRecords.map(r => r.asset_number || r.asset_no)).size
     const inspectedAssets = new Set(inspections.map(r => r.asset_no)).size
-    const inspectionCompliance = uniqueAssets ? Math.min(100, (inspectedAssets / uniqueAssets) * 100) : 100
+    const inspectionCompliance = uniqueAssets ? Math.min(100, (inspectedAssets / uniqueAssets) * 100) : null
 
     // Risk distribution
     const riskDist = { Critical: 0, High: 0, Medium: 0, Low: 0 }
@@ -177,8 +177,18 @@ export default function SafetyCompliance() {
     })
     const accidentCorrelation = accidents.length ? (accidentsWithTyreIssue.length / accidents.length) * 100 : 0
 
-    // Overall compliance score
-    const overallScore = (treadCompliance * 0.35 + pressureCompliance * 0.25 + inspectionCompliance * 0.30 + Math.max(0, 100 - criticalPct * 5) * 0.10)
+    // Overall compliance score - only measured components count; renormalize weights.
+    // Null (not fabricated 100) when nothing is measurable.
+    const scoreParts = [
+      { value: treadCompliance, weight: 0.35 },
+      { value: pressureCompliance, weight: 0.25 },
+      { value: inspectionCompliance, weight: 0.30 },
+      { value: Math.max(0, 100 - criticalPct * 5), weight: 0.10 },
+    ].filter(p => p.value != null)
+    const scoreWeight = scoreParts.reduce((s, p) => s + p.weight, 0)
+    const overallScore = scoreWeight > 0
+      ? scoreParts.reduce((s, p) => s + p.value * p.weight, 0) / scoreWeight
+      : null
 
     return {
       total, treadCompliance, pressureCompliance, inspectionCompliance,
@@ -260,19 +270,19 @@ export default function SafetyCompliance() {
     if (!compliance) return
     const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
     const brand = await resolvePdfBrand(branding)
-    pdfHeader(doc, 'Safety & Compliance Report', `Overall Score: ${compliance.overallScore.toFixed(1)}%`, company, brand)
+    pdfHeader(doc, 'Safety & Compliance Report', `Overall Score: ${fmtPct(compliance.overallScore)}`, company, brand)
 
     autoTable(doc, {
       ...pdfTableTheme(brand.accent),
       startY: 28,
       head: [['Metric', 'Score', 'Status']],
       body: [
-        ['Tread Depth Compliance', fmtPct(compliance.treadCompliance), compliance.treadCompliance >= 90 ? 'PASS' : compliance.treadCompliance >= 75 ? 'WARNING' : 'FAIL'],
-        ['Pressure Compliance', fmtPct(compliance.pressureCompliance), compliance.pressureCompliance >= 90 ? 'PASS' : 'WARNING'],
-        ['Inspection Compliance', fmtPct(compliance.inspectionCompliance), compliance.inspectionCompliance >= 80 ? 'PASS' : 'WARNING'],
+        ['Tread Depth Compliance', fmtPct(compliance.treadCompliance), compliance.treadCompliance == null ? 'N/A' : compliance.treadCompliance >= 90 ? 'PASS' : compliance.treadCompliance >= 75 ? 'WARNING' : 'FAIL'],
+        ['Pressure Compliance', fmtPct(compliance.pressureCompliance), compliance.pressureCompliance == null ? 'N/A' : compliance.pressureCompliance >= 90 ? 'PASS' : 'WARNING'],
+        ['Inspection Compliance', fmtPct(compliance.inspectionCompliance), compliance.inspectionCompliance == null ? 'N/A' : compliance.inspectionCompliance >= 80 ? 'PASS' : 'WARNING'],
         ['Critical Risk Tyres', compliance.criticalCount + ' tyres (' + fmtPct(compliance.criticalPct) + ')', compliance.criticalCount === 0 ? 'PASS' : 'ACTION REQUIRED'],
         ['Accident-Tyre Correlation', fmtPct(compliance.accidentCorrelation), compliance.accidents === 0 ? 'N/A' : compliance.accidentCorrelation < 30 ? 'LOW' : 'REVIEW'],
-        ['Overall Score', fmtPct(compliance.overallScore), compliance.overallScore >= 90 ? 'EXCELLENT' : compliance.overallScore >= 75 ? 'GOOD' : 'NEEDS ATTENTION'],
+        ['Overall Score', fmtPct(compliance.overallScore), compliance.overallScore == null ? 'N/A' : compliance.overallScore >= 90 ? 'EXCELLENT' : compliance.overallScore >= 75 ? 'GOOD' : 'NEEDS ATTENTION'],
       ],
     })
 
@@ -302,11 +312,11 @@ export default function SafetyCompliance() {
     const XLSX = await import('xlsx')
     if (!compliance) return
     const ws = XLSX.utils.json_to_sheet([
-      { Metric: 'Tread Depth Compliance', Score: compliance.treadCompliance.toFixed(1) + '%' },
-      { Metric: 'Pressure Compliance', Score: compliance.pressureCompliance.toFixed(1) + '%' },
-      { Metric: 'Inspection Compliance', Score: compliance.inspectionCompliance.toFixed(1) + '%' },
+      { Metric: 'Tread Depth Compliance', Score: fmtPct(compliance.treadCompliance) },
+      { Metric: 'Pressure Compliance', Score: fmtPct(compliance.pressureCompliance) },
+      { Metric: 'Inspection Compliance', Score: fmtPct(compliance.inspectionCompliance) },
       { Metric: 'Critical Risk Tyres', Score: compliance.criticalCount },
-      { Metric: 'Overall Score', Score: compliance.overallScore.toFixed(1) + '%' },
+      { Metric: 'Overall Score', Score: fmtPct(compliance.overallScore) },
     ])
     const wb = XLSX.utils.book_new()
     XLSX.utils.book_append_sheet(wb, ws, 'Compliance')
@@ -327,12 +337,14 @@ export default function SafetyCompliance() {
 
   // ── Score color ───────────────────────────────────────────────────────────
   function scoreColor(pct) {
+    if (pct == null || isNaN(pct)) return 'text-[var(--text-muted)]'
     if (pct >= 90) return 'text-green-400'
     if (pct >= 75) return 'text-yellow-400'
     if (pct >= 60) return 'text-orange-400'
     return 'text-red-400'
   }
   function scoreLabel(pct) {
+    if (pct == null || isNaN(pct)) return { text: 'Not measured', color: 'text-[var(--text-muted)]', bg: 'bg-[var(--input-bg)]', border: 'border-[var(--input-border)]' }
     if (pct >= 90) return { text: 'Compliant', color: 'text-green-400', bg: 'bg-green-900/30', border: 'border-green-700' }
     if (pct >= 75) return { text: 'Warning', color: 'text-yellow-400', bg: 'bg-yellow-900/30', border: 'border-yellow-700' }
     if (pct >= 60) return { text: 'Attention', color: 'text-orange-400', bg: 'bg-orange-900/30', border: 'border-orange-700' }
@@ -390,7 +402,7 @@ export default function SafetyCompliance() {
             <div className="flex flex-col lg:flex-row items-start lg:items-center gap-6">
               <div className="text-center min-w-36">
                 <div className={`text-5xl font-bold ${scoreColor(compliance.overallScore)}`}>
-                  {compliance.overallScore.toFixed(0)}<span className="text-2xl">%</span>
+                  {compliance.overallScore == null ? 'N/A' : <>{compliance.overallScore.toFixed(0)}<span className="text-2xl">%</span></>}
                 </div>
                 <div className="text-[var(--text-muted)] text-sm mt-1">Overall Score</div>
                 {(() => { const sl = scoreLabel(compliance.overallScore); return (
@@ -411,10 +423,10 @@ export default function SafetyCompliance() {
                         <Icon size={15} className={scoreColor(value)} />
                         <span className="text-[var(--text-muted)] text-xs">{label}</span>
                       </div>
-                      <div className={`text-2xl font-bold ${scoreColor(value)}`}>{value.toFixed(0)}%</div>
+                      <div className={`text-2xl font-bold ${scoreColor(value)}`}>{value == null ? 'N/A' : `${value.toFixed(0)}%`}</div>
                       <div className="mt-2 h-1.5 bg-[var(--input-border)] rounded-full overflow-hidden">
-                        <div className={`h-full rounded-full ${value >= 90 ? 'bg-green-500' : value >= 75 ? 'bg-yellow-500' : 'bg-red-500'} transition-all duration-700`}
-                          style={{ width: `${value}%` }} />
+                        <div className={`h-full rounded-full ${value == null ? 'bg-[var(--input-border)]' : value >= 90 ? 'bg-green-500' : value >= 75 ? 'bg-yellow-500' : 'bg-red-500'} transition-all duration-700`}
+                          style={{ width: `${value == null ? 0 : value}%` }} />
                       </div>
                       <div className="text-[var(--text-muted)] text-xs mt-1">{detail}</div>
                     </div>
@@ -513,7 +525,7 @@ export default function SafetyCompliance() {
                   <div key={label} className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-5">
                     <div className="text-[var(--text-muted)] text-sm mb-1">{label}</div>
                     <div className={`text-3xl font-bold ${scoreColor(label.includes('Avg') ? (value >= 4 ? 100 : value >= 3 ? 75 : 50) : value)}`}>
-                      {label.includes('Avg') ? value.toFixed(1) + 'mm' : value.toFixed(1) + '%'}
+                      {value == null ? 'N/A' : label.includes('Avg') ? value.toFixed(1) + 'mm' : value.toFixed(1) + '%'}
                     </div>
                   </div>
                 ))}
@@ -572,7 +584,7 @@ export default function SafetyCompliance() {
                   <div className="text-[var(--text-muted)] text-sm mb-1">Pressure Compliance</div>
                   <div className={`text-3xl font-bold ${scoreColor(compliance.pressureCompliance)}`}>{fmtPct(compliance.pressureCompliance)}</div>
                   <div className="mt-2 h-2 bg-[var(--input-border)] rounded-full overflow-hidden">
-                    <div className={`h-full ${compliance.pressureCompliance >= 90 ? 'bg-green-500' : 'bg-yellow-500'}`} style={{ width: `${compliance.pressureCompliance}%` }} />
+                    <div className={`h-full ${compliance.pressureCompliance == null ? 'bg-[var(--input-border)]' : compliance.pressureCompliance >= 90 ? 'bg-green-500' : 'bg-yellow-500'}`} style={{ width: `${compliance.pressureCompliance == null ? 0 : compliance.pressureCompliance}%` }} />
                   </div>
                 </div>
                 <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-5">

@@ -18,7 +18,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   ShieldCheck, RefreshCw, GitBranch, Activity, Database, FileClock,
-  ArrowRight, ChevronRight, Download, FileText,
+  ArrowRight, ChevronRight, Download, FileText, Clock,
 } from 'lucide-react'
 import {
   Panel, PanelHeader, StatTile, Badge, Note, Btn, Segmented, Select,
@@ -66,6 +66,14 @@ function fmtDate(v) {
   const d = new Date(v)
   return Number.isNaN(d.getTime()) ? 'N/A' : d.toLocaleDateString('en-US')
 }
+/** Time-of-day only (for a "last updated" stamp). */
+function fmtTime(v) {
+  if (!v) return 'N/A'
+  const d = v instanceof Date ? v : new Date(v)
+  return Number.isNaN(d.getTime())
+    ? 'N/A'
+    : d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+}
 
 /** Turn a "%_pct" or "%_share" numeric key into human words, else the key. */
 function labelizeKey(k) {
@@ -83,12 +91,14 @@ export default function ConsoleControlCenter() {
   const [refreshing, setRefreshing] = useState(false)
   const [trustError, setTrustError] = useState(null)
   const [diagError, setDiagError] = useState(null)
+  const [lastUpdated, setLastUpdated] = useState(null) // when trust+diagnostics last settled
 
   // ── Lineage (driven by country + domain) ──
   const [domain, setDomain] = useState(LINEAGE_DOMAINS[0])
   const [lineage, setLineage] = useState(null)
   const [lineageLoading, setLineageLoading] = useState(true)
   const [lineageError, setLineageError] = useState(null)
+  const [importSort, setImportSort] = useState({ key: 'at', dir: 'desc' }) // recent-imports table sort
 
   const loadTrustAndDiag = useCallback(async () => {
     setTrustError(null)
@@ -115,6 +125,7 @@ export default function ConsoleControlCenter() {
       setSummary(null)
       setDiagError(toUserMessage(diagRes.reason, 'Could not load diagnostics'))
     }
+    setLastUpdated(new Date())
   }, [country])
 
   const loadLineage = useCallback(async () => {
@@ -139,9 +150,10 @@ export default function ConsoleControlCenter() {
     setLoading(false)
   }, [loadTrustAndDiag, loadLineage])
 
-  // Country change reloads trust + diagnostics.
+  // Country change reloads trust + diagnostics (clear the stale timestamp first).
   useEffect(() => {
     setLoading(true)
+    setLastUpdated(null)
     loadTrustAndDiag().finally(() => setLoading(false))
   }, [loadTrustAndDiag])
 
@@ -178,6 +190,26 @@ export default function ConsoleControlCenter() {
   const actions = useMemo(() => (report?.ok ? topActions(report, 8) : []), [report])
   const openIssues = summary ? openIssueCount(summary.issues) : 0
   const rankedIssues = useMemo(() => (summary ? rankIssues(summary.issues) : []), [summary])
+
+  // Recent imports, sorted by the chosen column (date sortable by default).
+  const sortedImports = useMemo(() => {
+    const rows = Array.isArray(lineage?.recent_imports) ? [...lineage.recent_imports] : []
+    const { key, dir } = importSort
+    const mul = dir === 'asc' ? 1 : -1
+    const numeric = key === 'rows' || key === 'imported' || key === 'duplicates'
+    return rows.sort((a, b) => {
+      if (key === 'at') {
+        const ta = new Date(a?.at || 0).getTime() || 0
+        const tb = new Date(b?.at || 0).getTime() || 0
+        return (ta - tb) * mul
+      }
+      if (numeric) return ((Number(a?.[key]) || 0) - (Number(b?.[key]) || 0)) * mul
+      return String(a?.[key] ?? '').localeCompare(String(b?.[key] ?? '')) * mul
+    })
+  }, [lineage, importSort])
+  const onImportSort = useCallback((key) => {
+    setImportSort((s) => (s.key === key ? { key, dir: s.dir === 'asc' ? 'desc' : 'asc' } : { key, dir: 'desc' }))
+  }, [])
 
   const canExport = Boolean(report || summary || lineage)
   const doExport = useCallback((format) => {
@@ -305,7 +337,19 @@ export default function ConsoleControlCenter() {
       {/* ── 2. Diagnostics feed ── */}
       <Panel>
         <PanelHeader icon={Activity} title="Data-quality diagnostics"
-          subtitle={`${openIssues} open ${openIssues === 1 ? 'issue' : 'issues'} across the current selection`} />
+          subtitle={`${openIssues} open ${openIssues === 1 ? 'issue' : 'issues'} across the current selection`}
+          actions={(
+            <div className="flex items-center gap-2">
+              <span className="hidden sm:inline-flex items-center gap-1 text-[11px] text-gray-600" title="When this feed was last scanned">
+                <Clock size={11} className="text-gray-600" />
+                {loading ? 'Scanning' : lastUpdated ? `Updated ${fmtTime(lastUpdated)}` : 'Not updated yet'}
+              </span>
+              <Btn size="xs" variant="quiet" icon={RefreshCw} onClick={loadTrustAndDiag} busy={loading}
+                title="Re-scan trust and diagnostics for this selection">
+                Recheck
+              </Btn>
+            </div>
+          )} />
         {loading ? (
           <LoadingState label="Scanning for issues" rows={3} />
         ) : diagError ? (
@@ -395,22 +439,29 @@ export default function ConsoleControlCenter() {
 
             {/* Recent imports */}
             <div className="mt-5">
-              <p className="text-[11px] uppercase tracking-wider text-gray-500 font-semibold mb-2 flex items-center gap-1.5">
-                <FileClock size={12} className="text-gray-600" /> Recent imports behind this figure
-              </p>
-              {Array.isArray(lineage.recent_imports) && lineage.recent_imports.length > 0 ? (
+              <div className="flex items-center justify-between gap-2 mb-2">
+                <p className="text-[11px] uppercase tracking-wider text-gray-500 font-semibold flex items-center gap-1.5">
+                  <FileClock size={12} className="text-gray-600" /> Recent imports behind this figure
+                </p>
+                {repeatFileCount(sortedImports) > 0 && (
+                  <Badge tone="warning" title="Files whose content was seen before">
+                    {fmtInt(repeatFileCount(sortedImports))} repeat {repeatFileCount(sortedImports) === 1 ? 'file' : 'files'}
+                  </Badge>
+                )}
+              </div>
+              {sortedImports.length > 0 ? (
                 <Table>
                   <THead>
                     <Th>Module</Th>
                     <Th>File</Th>
-                    <Th align="right">Rows</Th>
-                    <Th align="right">Imported</Th>
-                    <Th align="right">Duplicates</Th>
+                    <Th align="right" sortKey="rows" sort={importSort} onSort={onImportSort}>Rows</Th>
+                    <Th align="right" sortKey="imported" sort={importSort} onSort={onImportSort}>Imported</Th>
+                    <Th align="right" sortKey="duplicates" sort={importSort} onSort={onImportSort}>Duplicates</Th>
                     <Th>Status</Th>
-                    <Th>When</Th>
+                    <Th sortKey="at" sort={importSort} onSort={onImportSort}>When</Th>
                   </THead>
                   <tbody>
-                    {lineage.recent_imports.map((imp, i) => (
+                    {sortedImports.map((imp, i) => (
                       <Tr key={i} tone={imp.repeat_file ? 'warning' : undefined}>
                         <Td nowrap>{imp.module || 'N/A'}</Td>
                         <Td>
@@ -449,16 +500,126 @@ function statusTone(status) {
   return 'default'
 }
 
+/** How many recent imports are repeat-file loads. Pure. */
+function repeatFileCount(rows) {
+  return (rows || []).reduce((n, r) => n + (r?.repeat_file ? 1 : 0), 0)
+}
+
+/** Percent-tone thresholds: a coverage/idempotency figure reads high=good. */
+function pctTone(v) {
+  const n = Number(v)
+  if (!Number.isFinite(n)) return 'muted'
+  if (n >= 90) return 'good'
+  if (n >= 70) return 'warning'
+  return 'danger'
+}
+const METER_BAR = { good: 'bg-emerald-500', warning: 'bg-amber-500', danger: 'bg-red-500', muted: 'bg-gray-700' }
+const METER_TEXT = { good: 'text-emerald-300', warning: 'text-amber-300', danger: 'text-red-300', muted: 'text-gray-500' }
+const BAR_HUE = ['bg-orange-400', 'bg-blue-400', 'bg-emerald-400', 'bg-purple-400', 'bg-amber-400', 'bg-gray-500']
+
+/**
+ * A small labelled trust meter for a 0-100 provenance figure (idempotency,
+ * coverage). Higher reads better; N/A when the figure is not a number.
+ */
+function Meter({ label, value, hint }) {
+  const n = Number(value)
+  const pct = Number.isFinite(n) ? Math.max(0, Math.min(100, n)) : null
+  const tone = pctTone(n)
+  return (
+    <div title={hint}>
+      <div className="flex items-center justify-between gap-2 mb-1">
+        <span className="text-[10px] uppercase tracking-wide text-gray-500 capitalize truncate">{label}</span>
+        <span className={`text-[11px] font-semibold tabular-nums shrink-0 ${METER_TEXT[tone]}`}>
+          {pct == null ? 'N/A' : fmtPct(pct)}
+        </span>
+      </div>
+      <div className="h-1.5 rounded-full bg-gray-800 overflow-hidden">
+        {pct != null && <div className={`h-full ${METER_BAR[tone]}`} style={{ width: `${pct}%` }} />}
+      </div>
+    </div>
+  )
+}
+
+/**
+ * A breakdown object (classified_by / currency / data_source) rendered as
+ * compact labelled bars: each key gets a bar sized to its share of the group,
+ * with its count and share. Sorted biggest first; a long tail is folded into
+ * "Other" so the card stays readable. Non-numeric values fall back to a chip.
+ */
+function BreakdownBars({ title, obj }) {
+  const raw = Object.entries(obj || {})
+  if (raw.length === 0) {
+    return (
+      <div>
+        <p className="text-[10px] uppercase tracking-wide text-gray-600 mb-1 capitalize">{labelizeKey(title)}</p>
+        <p className="text-[11px] text-gray-600">N/A</p>
+      </div>
+    )
+  }
+  const nums = raw.filter(([, v]) => typeof v === 'number' && Number.isFinite(v))
+  if (nums.length === 0) {
+    // Non-numeric provenance (e.g. a coverage flag): show as chips, not bars.
+    return (
+      <div>
+        <p className="text-[10px] uppercase tracking-wide text-gray-600 mb-1 capitalize">{labelizeKey(title)}</p>
+        <div className="flex flex-wrap gap-1">
+          {raw.map(([k, v]) => (
+            <span key={k} className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-gray-800/70 text-[10px]">
+              <span className="text-gray-500 truncate max-w-[8rem]">{k}</span>
+              <span className="text-gray-200 font-medium">{v == null || v === '' ? 'N/A' : String(v)}</span>
+            </span>
+          ))}
+        </div>
+      </div>
+    )
+  }
+  const total = nums.reduce((a, [, v]) => a + v, 0) || 1
+  const sorted = [...nums].sort((a, b) => b[1] - a[1])
+  const head = sorted.slice(0, 5)
+  const tail = sorted.slice(5)
+  const tailSum = tail.reduce((a, [, v]) => a + v, 0)
+  const rows = tailSum > 0 ? [...head, ['Other', tailSum]] : head
+
+  return (
+    <div>
+      <p className="text-[10px] uppercase tracking-wide text-gray-600 mb-1.5 capitalize">{labelizeKey(title)}</p>
+      <div className="space-y-1.5">
+        {rows.map(([k, v], i) => {
+          const share = (v / total) * 100
+          return (
+            <div key={k} title={`${k}: ${fmtInt(v)} (${fmtPct(share)})`}>
+              <div className="flex items-center justify-between gap-2 text-[11px] mb-0.5">
+                <span className="text-gray-400 truncate min-w-0">{k}</span>
+                <span className="text-gray-500 font-medium tabular-nums shrink-0">
+                  {fmtInt(v)} <span className="text-gray-600">| {fmtPct(share)}</span>
+                </span>
+              </div>
+              <div className="h-1.5 rounded-full bg-gray-800 overflow-hidden">
+                <div className={BAR_HUE[Math.min(i, BAR_HUE.length - 1)]}
+                  style={{ width: `${Math.max(2, share)}%`, height: '100%' }} />
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
 /**
  * One source table card. The provenance stats vary by table, so render every
- * key generically: nested objects (currencies / classification / data_source)
- * become compact lists, "%_pct" keys render as percents, everything else as a
- * thousands-separated count. table / role / rows are pulled out to the header.
+ * key generically but with clarity, not raw JSON:
+ *   - a "%_pct" key becomes a small trust Meter (idempotency, coverage),
+ *   - a nested object (classified_by / currency / data_source) becomes compact
+ *     labelled bars showing each value's share,
+ *   - every other scalar stays a chip.
+ * table / role / rows are pulled out to the header.
  */
 function SourceCard({ src }) {
   const SKIP = new Set(['table', 'role', 'rows'])
   const entries = Object.entries(src).filter(([k]) => !SKIP.has(k))
-  const scalars = entries.filter(([, v]) => v == null || typeof v !== 'object')
+  const meters = entries.filter(([k, v]) => /_pct$/.test(k) && (v == null || typeof v !== 'object'))
+  const scalars = entries.filter(([k, v]) => !/_pct$/.test(k) && (v == null || typeof v !== 'object'))
   const objects = entries.filter(([, v]) => v && typeof v === 'object')
 
   return (
@@ -474,44 +635,35 @@ function SourceCard({ src }) {
         </div>
       </div>
 
+      {meters.length > 0 && (
+        <div className="mt-3 space-y-2.5">
+          {meters.map(([k, v]) => (
+            <Meter key={k} label={labelizeKey(k).replace(/\bpct\b/i, 'coverage')} value={v}
+              hint={`${labelizeKey(k)}: higher is better`} />
+          ))}
+        </div>
+      )}
+
       {scalars.length > 0 && (
         <div className="flex flex-wrap gap-1.5 mt-3">
           {scalars.map(([k, v]) => (
             <span key={k} className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-gray-800/70 text-[10px]">
               <span className="text-gray-500 capitalize">{labelizeKey(k)}</span>
               <span className="text-gray-200 font-medium">
-                {/_pct$/.test(k) ? fmtPct(v)
-                  : /_(date|min|max)$/.test(k) ? fmtDate(v)
-                    : typeof v === 'number' ? fmtInt(v)
-                      : (v == null || v === '' ? 'N/A' : String(v))}
+                {/_(date|min|max)$/.test(k) ? fmtDate(v)
+                  : typeof v === 'number' ? fmtInt(v)
+                    : (v == null || v === '' ? 'N/A' : String(v))}
               </span>
             </span>
           ))}
         </div>
       )}
 
-      {objects.map(([k, obj]) => {
-        const rows = Object.entries(obj || {})
-        return (
-          <div key={k} className="mt-3">
-            <p className="text-[10px] uppercase tracking-wide text-gray-600 mb-1 capitalize">{labelizeKey(k)}</p>
-            {rows.length === 0 ? (
-              <p className="text-[11px] text-gray-600">N/A</p>
-            ) : (
-              <div className="space-y-0.5">
-                {rows.map(([rk, rv]) => (
-                  <div key={rk} className="flex items-center justify-between gap-2 text-[11px]">
-                    <span className="text-gray-500 truncate">{rk}</span>
-                    <span className="text-gray-300 font-medium tabular-nums shrink-0">
-                      {typeof rv === 'number' ? fmtInt(rv) : (rv == null ? 'N/A' : String(rv))}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )
-      })}
+      {objects.length > 0 && (
+        <div className="mt-3 space-y-3">
+          {objects.map(([k, obj]) => <BreakdownBars key={k} title={k} obj={obj} />)}
+        </div>
+      )}
     </div>
   )
 }

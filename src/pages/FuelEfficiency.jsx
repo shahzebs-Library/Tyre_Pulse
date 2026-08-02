@@ -43,6 +43,10 @@ const NOMINAL_PRESSURE_PSI = 110                   // typical truck tyre nominal
 const TREAD_NEW_MM = 8
 const TREAD_WORN_MM = 3
 
+// Hard ceiling for the bounded tyre_records read. Country scope stays
+// server-side; a truncated read past this ceiling is surfaced as a capped note.
+const ROW_CAP = 50000
+
 // ── Chart shared defaults ──────────────────────────────────────────────────────
 const CHART_OPTS = {
   responsive: true,
@@ -131,6 +135,7 @@ export default function FuelEfficiency() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [lastRefresh, setLastRefresh] = useState(null)
+  const [capped, setCapped] = useState(false)
 
   // ── Fuel-exception approval state ─────────────────────────────────────────
   // A per-vehicle fuel-waste anomaly (row in "Fuel Savings Opportunities") is
@@ -150,16 +155,18 @@ export default function FuelEfficiency() {
     setLoading(true)
     setError(null)
     try {
-      const { data: recs, error: rErr } = await fetchAllPages((from, to) => {
+      const { data: recs, error: rErr, truncated } = await fetchAllPages((from, to) => {
         let q = supabase
           .from('tyre_records')
           .select('id,asset_no,serial_number:serial_no,position,tread_depth,pressure_reading,risk_level,km_at_fitment,km_at_removal,site,country,brand,issue_date')
+          .order('id')
         // Null-safe country scope - never silently drop uncategorised rows
         if (activeCountry && activeCountry !== 'All') q = q.or(`country.eq.${activeCountry},country.is.null`)
         return q.range(from, to)
-      })
+      }, { max: ROW_CAP })
       if (rErr) throw rErr
       setRecords(recs ?? [])
+      setCapped(Boolean(truncated))
       setLastRefresh(new Date())
     } catch (e) {
       setError(toUserMessage(e, 'Failed to load data'))
@@ -282,14 +289,16 @@ export default function FuelEfficiency() {
     return Object.values(map).map(v => {
       const avgDevPct = v.pressureCount ? (v.totalPressureDev / v.pressureCount) * 100 : 0
       const avgTread = v.treadReadings.length ? v.treadReadings.reduce((s, x) => s + x, 0) / v.treadReadings.length : null
+      // Honest N/A when a vehicle carries no pressure readings - never a
+      // fabricated 100% "perfect compliance" that masks missing data.
       const compliancePct = v.pressureCount
-        ? ((v.pressureCount - Math.round(v.totalPressureDev * 20)) / v.pressureCount) * 100
-        : 100
+        ? Math.max(0, Math.min(100, +(((v.pressureCount - Math.round(v.totalPressureDev * 20)) / v.pressureCount) * 100).toFixed(1)))
+        : null
       return {
         ...v,
         avgDevPct: +avgDevPct.toFixed(1),
         avgTread: avgTread != null ? +avgTread.toFixed(1) : null,
-        compliancePct: Math.max(0, Math.min(100, +compliancePct.toFixed(1))),
+        compliancePct,
         annualExtraCost: +(v.totalExtraCostMonth * 12).toFixed(2),
       }
     }).sort((a, b) => b.totalExtraCostMonth - a.totalExtraCostMonth)
@@ -613,11 +622,26 @@ export default function FuelEfficiency() {
         </div>
       </div>
 
+      {/* ── Capped view note ──────────────────────────────────────────────── */}
+      {capped && !loading && (
+        <div className="bg-[var(--surface-2)] border border-[var(--border-bright)] text-[var(--text-secondary)] rounded-xl px-4 py-2.5 text-xs">
+          Showing a capped view of the most recent {ROW_CAP.toLocaleString()} tyre records for this selection. Narrow the country or date range for the full set.
+        </div>
+      )}
+
       {/* ── Error ─────────────────────────────────────────────────────────── */}
       {error && (
-        <div className="bg-red-900/30 border border-red-700 text-red-300 rounded-xl p-4 flex items-center gap-2">
-          <AlertTriangle className="w-5 h-5 shrink-0" />
-          {error}
+        <div className="bg-red-900/30 border border-red-700 text-red-300 rounded-xl p-4 flex items-center justify-between gap-3">
+          <span className="flex items-center gap-2">
+            <AlertTriangle className="w-5 h-5 shrink-0" />
+            {error}
+          </span>
+          <button
+            onClick={fetchData}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-[var(--surface-2)] hover:bg-[var(--surface-3)] text-[var(--text-primary)] rounded-lg text-xs transition-colors shrink-0"
+          >
+            <RefreshCw className="w-3.5 h-3.5" /> {t('fuel.actions.refresh')}
+          </button>
         </div>
       )}
 
@@ -988,9 +1012,11 @@ export default function FuelEfficiency() {
                         <td className="px-4 py-3 font-semibold text-[var(--text-primary)]">{v.asset_no}</td>
                         <td className="px-4 py-3 text-[var(--text-secondary)]">{v.site}</td>
                         <td className="px-4 py-3 text-right">
-                          <span className={v.compliancePct >= 90 ? 'text-green-400' : v.compliancePct >= 75 ? 'text-amber-400' : 'text-red-400'}>
-                            {v.compliancePct}%
-                          </span>
+                          {v.compliancePct != null
+                            ? <span className={v.compliancePct >= 90 ? 'text-green-400' : v.compliancePct >= 75 ? 'text-amber-400' : 'text-red-400'}>
+                                {v.compliancePct}%
+                              </span>
+                            : <span className="text-[var(--text-muted)]">{t('fuel.na')}</span>}
                         </td>
                         <td className="px-4 py-3 text-right">
                           {v.avgTread != null
@@ -1184,7 +1210,7 @@ export default function FuelEfficiency() {
               <div className="p-6 space-y-5">
                 {/* Anomaly snapshot */}
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                  <ExceptionStat label="Compliance" value={`${reviewException.compliancePct}%`} />
+                  <ExceptionStat label="Compliance" value={reviewException.compliancePct != null ? `${reviewException.compliancePct}%` : t('fuel.na')} />
                   <ExceptionStat label="Avg Tread" value={reviewException.avgTread != null ? `${reviewException.avgTread}mm` : t('fuel.na')} />
                   <ExceptionStat label="Monthly Waste" value={fmtCur(reviewException.totalExtraCostMonth, activeCurrency)} />
                   <ExceptionStat label="Annual Impact" value={fmtCur(reviewException.annualExtraCost, activeCurrency)} />

@@ -38,6 +38,9 @@ ChartJS.register(
 )
 
 // ── Constants ──────────────────────────────────────────────────────────────────
+// Hard ceiling for the bounded tyre_records read. Country scope stays
+// server-side; a truncated read past this ceiling is surfaced as a capped note.
+const ROW_CAP = 50000
 const POSITIONS = ['All', 'Steer', 'Drive', 'Trailer', 'Other']
 // i18n key lookup for POSITIONS labels (constant stays stable for filter value comparisons)
 const POSITION_I18N_KEYS = { All: 'all', Steer: 'steer', Drive: 'drive', Trailer: 'trailer', Other: 'other' }
@@ -189,6 +192,7 @@ export default function VendorIntelligence() {
   const [actions, setActions] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [capped, setCapped] = useState(false)
   // Authoritative fleet-level tyre cost from the classified expense grid.
   const [fleetTyreCost, setFleetTyreCost] = useState(null)
 
@@ -214,8 +218,9 @@ export default function VendorIntelligence() {
       const [recRes, actRes] = await Promise.all([
         fetchAllPages((from, to) => applyCountry(supabase
           .from('tyre_records')
-          .select('id,asset_no,site,brand,supplier,tyre_serial,position,risk_level,category,findings,tread_depth,km_at_fitment,km_at_removal,cost_per_tyre,issue_date,removal_reason'), activeCountry)
-          .range(from, to)),
+          .select('id,asset_no,site,brand,supplier,tyre_serial,position,risk_level,category,findings,tread_depth,km_at_fitment,km_at_removal,cost_per_tyre,issue_date,removal_reason')
+          .order('id'), activeCountry)
+          .range(from, to), { max: ROW_CAP }),
         applyCountry(supabase
           .from('corrective_actions')
           .select('id,site,status,priority,created_at,resolved_at'), activeCountry)
@@ -225,6 +230,7 @@ export default function VendorIntelligence() {
       if (actRes.error) throw actRes.error
       setRecords(recRes.data || [])
       setActions(actRes.data || [])
+      setCapped(Boolean(recRes.truncated))
     } catch (e) {
       setError(toUserMessage(e, t('vendorintel.errors.loadFailed')))
     } finally {
@@ -788,6 +794,13 @@ export default function VendorIntelligence() {
 
         <span className="ml-auto text-xs text-[var(--text-muted)]">{t('vendorintel.filters.recordsCount', { count: filteredRecords.length.toLocaleString() })}</span>
       </div>
+
+      {/* ─── Capped view note ────────────────────────────────────────────────── */}
+      {capped && (
+        <div className="bg-[var(--surface-2)] border border-[var(--border-bright)] text-[var(--text-secondary)] rounded-xl px-4 py-2.5 text-xs">
+          Showing a capped view of the most recent {ROW_CAP.toLocaleString()} tyre records for this selection. Narrow the country or period for the full set.
+        </div>
+      )}
 
       {/* ─── Section Toggle ──────────────────────────────────────────────────── */}
       <div className="flex gap-1 p-1 bg-[var(--surface-1)] border border-[var(--border-dim)] rounded-xl w-fit">

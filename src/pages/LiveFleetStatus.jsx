@@ -31,6 +31,11 @@ ChartJS.register(
 )
 
 // ── Constants ─────────────────────────────────────────────────────────────────
+// Hard ceiling for the bounded fleet/tyre/inspection reads. A bare .select()
+// is silently capped at 1000 rows by PostgREST, so the reads below page with a
+// ceiling; a truncated read past it is surfaced as a capped note.
+const ROW_CAP = 50000
+
 const VEHICLE_EMOJI = {
   'Tri-mixer':     '🚛',
   'Concrete pump': '🏗️',
@@ -431,6 +436,7 @@ export default function LiveFleetStatus() {
 
   const [loading,      setLoading]      = useState(true)
   const [error,        setError]        = useState(null)
+  const [capped,       setCapped]       = useState(false)
   const [lastUpdated,  setLastUpdated]  = useState(null)
   const [refreshing,   setRefreshing]   = useState(false)
   const [autoRefresh,  setAutoRefresh]  = useState(false)
@@ -456,23 +462,28 @@ export default function LiveFleetStatus() {
       const today = new Date().toISOString().slice(0, 10)
       const weekAgo = new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10)
 
-      // Parallel fetch all four tables
+      // Parallel fetch all four tables. Fleet/tyre/inspection reads are paged
+      // with a hard ceiling so the fleet count and grid are never a silent
+      // 1000-row truncation.
       const [fleetRes, tyreRes, inspRes, alertRes] = await Promise.all([
-        supabase
+        fetchAllPages((from, to) => supabase
           .from('fleet_master')
-          .select('asset_no,fleet_number,make,model,vehicle_type,site,status,operator_name'),
+          .select('asset_no,fleet_number,make,model,vehicle_type,site,status,operator_name')
+          .order('asset_no')
+          .range(from, to), { max: ROW_CAP }),
 
         fetchAllPages((from, to) => supabase
           .from('tyre_records')
           .select('asset_no,risk_level,tread_depth,pressure_reading,position,site,issue_date,removal_date,brand,serial_number:serial_no,size')
           .is('removal_date', null)
-          .range(from, to)),
+          .order('asset_no')
+          .range(from, to), { max: ROW_CAP }),
 
         fetchAllPages((from, to) => supabase
           .from('inspections')
           .select('asset_no,scheduled_date,status,inspection_type')
           .order('scheduled_date', { ascending: false })
-          .range(from, to)),
+          .range(from, to), { max: ROW_CAP }),
 
         supabase
           .from('alerts')
@@ -488,6 +499,7 @@ export default function LiveFleetStatus() {
       setTyreRecords(tyreRes.data  ?? [])
       setInspections(inspRes.data  ?? [])
       setAlertsData(alertRes.data  ?? [])
+      setCapped(Boolean(fleetRes.truncated || tyreRes.truncated || inspRes.truncated))
       setLastUpdated(new Date())
     } catch (e) {
       setError(toUserMessage(e, 'Failed to load fleet data'))
@@ -812,6 +824,13 @@ export default function LiveFleetStatus() {
           pulse={kpis.activeAlerts > 0}
         />
       </div>
+
+      {/* ── Capped view note ── */}
+      {capped && (
+        <div className="bg-[var(--surface-2)] border border-[var(--border-bright)] text-[var(--text-secondary)] rounded-xl px-4 py-2.5 text-xs">
+          Showing a capped view of the most recent {ROW_CAP.toLocaleString()} records. Fleet counts above may exclude records beyond this ceiling.
+        </div>
+      )}
 
       {/* ── Main layout ── */}
       <div className="flex gap-4">

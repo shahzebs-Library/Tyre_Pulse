@@ -89,7 +89,7 @@ export default function Vehicle360() {
   if (error) return (
     <div className="p-6 max-w-3xl mx-auto">
       <Link to="/fleet-master" className="text-sm text-[var(--text-muted)] hover:text-[var(--text-primary)] flex items-center gap-1.5 mb-4"><ArrowLeft size={15} /> Back to Fleet</Link>
-      <EmptyState icon={AlertTriangle} title="Vehicle unavailable" message={error} />
+      <EmptyState icon={AlertTriangle} title="Vehicle unavailable" description={error} action={{ label: 'Retry', onClick: load }} />
     </div>
   )
 
@@ -210,7 +210,7 @@ export default function Vehicle360() {
           <div className="card !p-0 overflow-hidden">
             <div className="px-4 py-3 border-b border-[var(--card-border,rgba(0,0,0,0.06))]"><h3 className="text-sm font-semibold text-[var(--text-primary)]">Fitted &amp; historical tyres</h3></div>
             {m.total === 0 ? (
-              <div className="px-4 py-8"><EmptyState illustration="module/tyres" icon={CircleDot} title="No tyre records" message="No tyres are recorded against this vehicle yet." /></div>
+              <div className="px-4 py-8"><EmptyState illustration="module/tyres" icon={CircleDot} title="No tyre records" description="No tyres are recorded against this vehicle yet." /></div>
             ) : (
               <div className="overflow-x-auto max-h-[420px] overflow-y-auto">
                 <table className="w-full text-xs">

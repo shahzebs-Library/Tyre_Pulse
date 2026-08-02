@@ -387,6 +387,7 @@ export default function Accidents() {
   const [tab, setTab]                  = useState('incidents')
   const [records, setRecords]          = useState([])
   const [loading, setLoading]          = useState(true)
+  const [truncated, setTruncated]      = useState(false)
   const [error, setError]              = useState('')
   const [showForm, setShowForm]      = useState(false)
   const [editId, setEditId]            = useState(null)
@@ -443,10 +444,12 @@ export default function Accidents() {
     const token = ++loadReqRef.current   // guard against out-of-order responses on rapid country switches
     setLoading(true)
     // Paginate past the 1000-row cap so the list AND its exports are complete.
-    const { data, error: err } = await accidentsApi.listAllAccidentsForPage({ country: activeCountry })
+    // The service bounds the read at 100,000 rows; surface that cap honestly.
+    const { data, error: err, truncated: tr } = await accidentsApi.listAllAccidentsForPage({ country: activeCountry })
     if (token !== loadReqRef.current) return
     if (err) { setError(toUserMessage(err, 'Could not load incidents.')); setLoading(false); return }
     setError('')
+    setTruncated(!!tr)
     let rows = data ?? []
     // Resilient back-fill: if the accidents API select does not yet expose the
     // new case-tracking columns (parallel PAGE_COLS change), read only those
@@ -2295,6 +2298,14 @@ export default function Accidents() {
                   <Trash2 size={14} /> Delete {selectedIds.size}
                 </button>
               </div>
+            </div>
+          )}
+
+          {/* Capped view note */}
+          {truncated && !loading && !error && (
+            <div className="flex items-center gap-2 text-xs text-[var(--text-dim)]">
+              <AlertTriangle size={13} className="shrink-0" />
+              <span>Capped view: showing the first 100,000 incidents. Narrow the country or filters for the full set.</span>
             </div>
           )}
 

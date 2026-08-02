@@ -180,6 +180,7 @@ export default function TyreScrapManagement() {
   const [allTyres,   setAllTyres]   = useState([])
   const [loading,    setLoading]    = useState(true)
   const [error,      setError]      = useState(null)
+  const [truncated,  setTruncated]  = useState(false)
   const [activeTab,  setActiveTab]  = useState('Overview')
 
   // Filters
@@ -232,10 +233,15 @@ export default function TyreScrapManagement() {
     setLoading(true)
     setError(null)
     try {
-      const { data, error: err } = await fetchAllPages((from, to) =>
-        scrapApi.listScrapTyreRecords({ from, to }))
+      // Bounded read: cap at 50,000 rows with a stable id tiebreak so paging
+      // never drops/repeats a row at a boundary. Surface the cap honestly.
+      const { data, error: err, truncated: tr } = await fetchAllPages(
+        (from, to) => scrapApi.listScrapTyreRecords({ from, to }).order('id'),
+        { max: 50000 },
+      )
       if (err) throw err
       setAllTyres(data ?? [])
+      setTruncated(!!tr)
     } catch (e) {
       setError(toUserMessage(e, 'Failed to load tyre data'))
     } finally {
@@ -798,6 +804,14 @@ export default function TyreScrapManagement() {
           <span>{scrapped.length} scrapped of {filtered.length} tyres</span>
         </div>
       </div>
+
+      {/* ── Capped view note ── */}
+      {truncated && (
+        <div className="flex items-center gap-2 text-xs text-[var(--text-dim)]">
+          <Info size={12} className="shrink-0" />
+          <span>Capped view: showing the first 50,000 tyre records. Narrow the date range or filters for the full set.</span>
+        </div>
+      )}
 
       {/* ── Loading state ── */}
       {loading && <SkeletonTable rows={8} cols={6} />}

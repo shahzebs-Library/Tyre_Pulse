@@ -250,6 +250,7 @@ export default function RetreadManagement() {
   const [records, setRecords]     = useState([])
   const [loading, setLoading]     = useState(true)
   const [error, setError]         = useState(null)
+  const [truncated, setTruncated] = useState(false)
   const [activeTab, setActiveTab] = useState('Overview')
 
   // Filters
@@ -284,17 +285,20 @@ export default function RetreadManagement() {
     setLoading(true)
     setError(null)
     try {
-      const { data, error: err } = await fetchAllPages((from, to) => {
+      // Bounded read: cap at 50,000 rows, country-scoped server-side, with a
+      // stable id tiebreak so paging never drops/repeats a row at a boundary.
+      const { data, error: err, truncated: tr } = await fetchAllPages((from, to) => {
         let query = supabase
           .from('tyre_records')
           .select('id, asset_no, serial_number, brand, size, position, site, country, risk_level, tread_depth, cost_per_tyre, km_at_fitment, km_at_removal, issue_date, removal_date, qty, category')
         if (activeCountry && activeCountry !== 'All') {
           query = query.eq('country', activeCountry)
         }
-        return query.range(from, to)
-      })
+        return query.order('id').range(from, to)
+      }, { max: 50000 })
       if (err) throw err
       setRecords(data ?? [])
+      setTruncated(!!tr)
     } catch (e) {
       setError(toUserMessage(e, 'Failed to load data'))
     } finally {
@@ -909,6 +913,14 @@ export default function RetreadManagement() {
           {enriched.length.toLocaleString()} retread records · {records.length.toLocaleString()} total
         </span>
       </div>
+
+      {/* Capped view note */}
+      {truncated && (
+        <div className="flex items-center gap-2 text-xs text-[var(--text-dim)]">
+          <Info size={12} className="shrink-0" />
+          <span>Capped view: showing the first 50,000 tyre records. Narrow the country or filters for the full set.</span>
+        </div>
+      )}
 
       {/* Error state */}
       {error && (

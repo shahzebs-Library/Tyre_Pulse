@@ -45,6 +45,32 @@ export async function getCostPerM3({ country, from, to } = {}) {
   }
 }
 
+/**
+ * Monthly Cost/M3 trend (date-wise) for a country. Returns { ok, currency,
+ * months:[{month, internal_cost, tyre_cost, sco_cost, sany_cost, production_m3,
+ * grand_total, cost_per_m3}] }. Default = last 12 months. Degrades to empty.
+ * @param {{country?:string, from?:string, to?:string}} [opts]
+ */
+export async function getCostPerM3Trend({ country, from, to } = {}) {
+  try {
+    const { data, error } = await supabase.rpc('get_cost_per_m3_trend', {
+      p_country: country && country !== 'All' ? country : null,
+      p_from: from || null,
+      p_to: to || null,
+    })
+    if (error || !data || data.ok === false) {
+      return { ok: false, currency: country || '', months: [] }
+    }
+    return {
+      ok: true,
+      currency: data.currency ?? country ?? '',
+      months: Array.isArray(data.months) ? data.months : [],
+    }
+  } catch {
+    return { ok: false, currency: country || '', months: [] }
+  }
+}
+
 // ---- SCO cost ledger -------------------------------------------------------
 
 /** List SCO cost rows for a country + period (period_date within [from,to]). */

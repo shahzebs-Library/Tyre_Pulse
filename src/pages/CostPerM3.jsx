@@ -16,7 +16,7 @@ import { useState, useEffect, useMemo, useCallback } from 'react'
 import { Gauge, RefreshCcw, FileSpreadsheet, FileText, Layers } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
 import { useSettings, COUNTRIES } from '../contexts/SettingsContext'
-import { getCostPerM3 } from '../lib/api/costPerM3'
+import { getCostPerM3, getCostPerM3Trend } from '../lib/api/costPerM3'
 import { CPK_PERIODS, DEFAULT_PERIOD, periodBounds, periodLabel } from '../lib/cpkModule'
 import { fmtMoney, fmtM3, fmtCostPerM3 } from '../lib/costPerM3'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
@@ -30,14 +30,20 @@ export default function CostPerM3() {
 
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
+  // Date-wise monthly trend (last 12 months, independent of the period chip).
+  const [trend, setTrend] = useState({ ok: false, months: [] })
 
   const load = useCallback(() => {
     let cancelled = false
     setLoading(true)
-    getCostPerM3({ country, from: bounds.from, to: bounds.to })
-      .then((res) => { if (!cancelled) setData(res) })
-      .catch(() => { if (!cancelled) setData(null) })
-      .finally(() => { if (!cancelled) setLoading(false) })
+    Promise.all([
+      getCostPerM3({ country, from: bounds.from, to: bounds.to }).catch(() => null),
+      getCostPerM3Trend({ country }).catch(() => ({ ok: false, months: [] })),
+    ]).then(([d, t]) => {
+      if (cancelled) return
+      setData(d)
+      setTrend(t || { ok: false, months: [] })
+    }).finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
   }, [country, bounds.from, bounds.to])
 
@@ -82,6 +88,42 @@ export default function CostPerM3() {
       { key: 'grand_total', header: `Grand Total (${currency})` }, { key: 'production_m3', header: 'Production M3' },
       { key: 'cost_per_m3', header: `Cost/M3 (${currency})` },
     ], `${country} Cost per M3 - ${periodLabel(bounds)}`, `TyrePulse_CostPerM3_${country}`, 'landscape')
+  }
+
+  const months = trend?.months || []
+  const maxGrand = months.reduce((m, r) => Math.max(m, Number(r.grand_total) || 0), 0)
+
+  function trendRows() {
+    return months.map((r) => ({
+      month: r.month,
+      internal: Math.round(r.internal_cost || 0),
+      tyre: Math.round(r.tyre_cost || 0),
+      sco: Math.round(r.sco_cost || 0),
+      sany: Math.round(r.sany_cost || 0),
+      grand_total: Math.round(r.grand_total || 0),
+      production_m3: Math.round(r.production_m3 || 0),
+      cost_per_m3: r.cost_per_m3 == null ? 'N/A' : Number(r.cost_per_m3).toFixed(2),
+    }))
+  }
+
+  function exportTrendExcel() {
+    const rows = trendRows()
+    if (!rows.length) return
+    exportToExcel(rows,
+      ['month', 'internal', 'tyre', 'sco', 'sany', 'grand_total', 'production_m3', 'cost_per_m3'],
+      ['Month', `Internal (${currency})`, `Tyre (${currency})`, `SCO (${currency})`, `SANY (${currency})`, `Grand Total (${currency})`, 'Production M3', `Cost/M3 (${currency})`],
+      `TyrePulse_CostPerM3_${country}_monthly`, 'Cost per M3 by month')
+  }
+
+  function exportTrendPdf() {
+    const rows = trendRows()
+    if (!rows.length) return
+    exportToPdf(rows, [
+      { key: 'month', header: 'Month' }, { key: 'internal', header: `Internal (${currency})` },
+      { key: 'sco', header: `SCO (${currency})` }, { key: 'sany', header: `SANY (${currency})` },
+      { key: 'grand_total', header: `Grand Total (${currency})` }, { key: 'production_m3', header: 'Production M3' },
+      { key: 'cost_per_m3', header: `Cost/M3 (${currency})` },
+    ], `${country} Cost per M3 - monthly detail`, `TyrePulse_CostPerM3_${country}_monthly`, 'landscape')
   }
 
   return (
@@ -169,6 +211,53 @@ export default function CostPerM3() {
         <p className="mt-3 text-[11px]" style={{ color: 'var(--text-secondary)' }}>
           Region comes from Site Management (tag each site Central / Western). Untagged sites show as "Unassigned".
         </p>
+      </div>
+
+      {/* Date-wise monthly detail (last 12 months) */}
+      <div className="mt-6 rounded-xl border border-[var(--border-subtle)] p-4">
+        <div className="mb-3 flex items-center justify-between flex-wrap gap-2">
+          <h3 className="flex items-center gap-2 text-sm font-semibold"><Layers size={16} /> Monthly detail (last 12 months)</h3>
+          <div className="flex items-center gap-2">
+            <button type="button" onClick={exportTrendExcel} className="inline-flex items-center gap-1.5 rounded-md border border-[var(--border-subtle)] px-2.5 py-1 text-xs"><FileSpreadsheet size={12} /> Excel</button>
+            <button type="button" onClick={exportTrendPdf} className="inline-flex items-center gap-1.5 rounded-md border border-[var(--border-subtle)] px-2.5 py-1 text-xs"><FileText size={12} /> PDF</button>
+          </div>
+        </div>
+        <div className="overflow-x-auto rounded-lg border border-[var(--border-subtle)]">
+          <table className="w-full text-sm border-collapse">
+            <thead style={{ background: 'var(--surface-raised, var(--bg-elevated))' }}>
+              <tr>
+                {['Month', 'Internal', 'SCO', 'SANY', 'Grand Total', 'Production M3', 'Cost/M3', 'Trend'].map((h, i) => (
+                  <th key={h} className={`px-3 py-2 font-semibold whitespace-nowrap ${i === 0 ? 'text-left' : i === 7 ? 'text-left' : 'text-right'}`} style={{ color: 'var(--text-secondary)' }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {loading ? (
+                <tr><td colSpan={8} className="px-3 py-6 text-center" style={{ color: 'var(--text-secondary)' }}>Loading...</td></tr>
+              ) : months.length === 0 ? (
+                <tr><td colSpan={8} className="px-3 py-6 text-center" style={{ color: 'var(--text-secondary)' }}>No monthly data for {country}.</td></tr>
+              ) : months.map((r) => {
+                const pct = maxGrand > 0 ? Math.round((Number(r.grand_total) || 0) / maxGrand * 100) : 0
+                return (
+                  <tr key={r.month} className="border-t border-[var(--border-subtle)]">
+                    <td className="px-3 py-2 text-left tabular-nums">{r.month}</td>
+                    <td className="px-3 py-2 text-right tabular-nums">{fmtMoney(r.internal_cost, currency)}</td>
+                    <td className="px-3 py-2 text-right tabular-nums">{fmtMoney(r.sco_cost, currency)}</td>
+                    <td className="px-3 py-2 text-right tabular-nums">{fmtMoney(r.sany_cost, currency)}</td>
+                    <td className="px-3 py-2 text-right tabular-nums font-semibold">{fmtMoney(r.grand_total, currency)}</td>
+                    <td className="px-3 py-2 text-right tabular-nums">{Math.round(r.production_m3 || 0).toLocaleString()}</td>
+                    <td className="px-3 py-2 text-right tabular-nums font-semibold">{fmtCostPerM3(r.cost_per_m3, currency)}</td>
+                    <td className="px-3 py-2">
+                      <div className="h-2 w-24 rounded bg-[var(--border-subtle)] overflow-hidden">
+                        <div className="h-full bg-[var(--accent)]" style={{ width: `${pct}%` }} />
+                      </div>
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   )

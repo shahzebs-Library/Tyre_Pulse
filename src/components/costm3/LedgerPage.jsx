@@ -10,12 +10,13 @@
  * import, table, delete, totals, honest states - is generic here.
  */
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
-import { Plus, Upload, Trash2, RefreshCcw, X } from 'lucide-react'
+import { Plus, Upload, Trash2, RefreshCcw, X, FileSpreadsheet } from 'lucide-react'
 import PageHeader from '../ui/PageHeader'
 import { useSettings, COUNTRIES } from '../../contexts/SettingsContext'
 import { CPK_PERIODS, DEFAULT_PERIOD, periodBounds, periodLabel } from '../../lib/cpkModule'
 import { IMPORT_TEMPLATES, mapImportRows } from '../../lib/costPerM3'
 import { parseWorkbook } from '../../lib/import/parseWorkbook'
+import { exportToExcel } from '../../lib/exportUtils'
 import { toUserMessage } from '../../lib/safeError'
 
 const num = (v) => (Number.isFinite(Number(v)) ? Number(v) : null)
@@ -109,6 +110,21 @@ export default function LedgerPage({
     try { await service.remove(id); load() } catch (e) { setError(toUserMessage(e)) }
   }
 
+  function exportExcel() {
+    if (!rows.length) return
+    const keys = columns.map((c) => c.key)
+    const headers = columns.map((c) => c.header)
+    const flat = rows.map((r) => {
+      const o = {}
+      for (const c of columns) {
+        const v = c.render ? c.render(r) : r[c.key]
+        o[c.key] = c.kind === 'money' || c.kind === 'int' ? (num(v) ?? '') : (v ?? '')
+      }
+      return o
+    })
+    exportToExcel(flat, keys, headers, `TyrePulse_${kind}_${country}`, title)
+  }
+
   function fmtCell(col, row) {
     if (col.render) return col.render(row)
     const raw = row[col.key]
@@ -131,6 +147,9 @@ export default function LedgerPage({
             </button>
             <button type="button" onClick={() => fileRef.current?.click()} disabled={importing} className="inline-flex items-center gap-1.5 rounded-md border border-[var(--border-subtle)] px-3 py-1.5 text-sm disabled:opacity-50">
               <Upload size={14} /> {importing ? 'Importing...' : 'Import'}
+            </button>
+            <button type="button" onClick={exportExcel} className="inline-flex items-center gap-1.5 rounded-md border border-[var(--border-subtle)] px-3 py-1.5 text-sm">
+              <FileSpreadsheet size={14} /> Export
             </button>
             <button type="button" onClick={load} className="inline-flex items-center gap-1.5 rounded-md border border-[var(--border-subtle)] px-3 py-1.5 text-sm">
               <RefreshCcw size={14} /> Refresh

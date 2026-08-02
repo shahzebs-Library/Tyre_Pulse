@@ -1,0 +1,19 @@
+-- V451 - COST PER M3 MONTHLY TREND RPC (date-wise detail + exports)
+-- STATUS: APPLIED LIVE 2026-08-02 (project jhssdmeruxtrlqnwfksc) as v451_get_cost_per_m3_trend.
+--
+-- public.get_cost_per_m3_trend(p_country text, p_from date, p_to date) -> jsonb
+--   SECURITY DEFINER, search_path=public, anon revoked / authenticated granted,
+--   scoped to app_current_org(). Same components as get_cost_per_m3 (V450) but
+--   grouped by MONTH instead of region, with a generate_series month spine so gaps
+--   read 0 (not missing). Default window = last 12 months.
+--   Returns { ok, country, currency, from, to,
+--     months:[{ month 'YYYY-MM', internal_cost, tyre_cost, sco_cost, sany_cost,
+--               production_m3, grand_total, cost_per_m3 }] } (ordered oldest->newest).
+--   grand_total = internal + sco + sany; cost_per_m3 = grand_total / production_m3
+--   (NULL when production is 0). Per-country currency, never blended.
+--
+-- Powers the "Monthly detail (last 12 months)" section + date-wise Excel/PDF export
+-- on /cost-per-m3. Verified (org-injected) KSA internal by month Feb..Jul 2026:
+--   387,763 / 353,830 / 478,677 / 517,062 / 581,318 / 606,207 SAR.
+--
+-- REVERSIBLE: drop function if exists public.get_cost_per_m3_trend(text, date, date);

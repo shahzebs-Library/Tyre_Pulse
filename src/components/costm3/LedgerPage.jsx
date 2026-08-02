@@ -96,13 +96,20 @@ export default function LedgerPage({
     if (!file) return
     setImporting(true); setImportPct(0); setError(''); setNotice('')
     try {
-      const wb = await parseWorkbook(file)
-      // Use the sheet with the most rows (some exports carry a title/summary sheet first).
-      const sheets = wb?.sheets || []
-      const sheet = sheets.reduce((best, s) => ((s?.dataRows?.length || 0) > (best?.dataRows?.length || 0) ? s : best), sheets[0])
-      const dataRows = sheet?.dataRows || []
+      const isPdf = /\.pdf$/i.test(file.name) || file.type === 'application/pdf'
+      let dataRows
+      if (isPdf) {
+        const { pdfRowsFor } = await import('../../lib/import/parsePdf')
+        dataRows = await pdfRowsFor(kind, file) // throws a clear message for unsupported kinds
+      } else {
+        const wb = await parseWorkbook(file)
+        // Use the sheet with the most rows (some exports carry a title/summary sheet first).
+        const sheets = wb?.sheets || []
+        const sheet = sheets.reduce((best, s) => ((s?.dataRows?.length || 0) > (best?.dataRows?.length || 0) ? s : best), sheets[0])
+        dataRows = sheet?.dataRows || []
+      }
       if (!dataRows.length) {
-        setError(`No data rows found in ${file.name}. Check the header row and that the file is .xlsx / .csv.`)
+        setError(`No data rows found in ${file.name}. Check the header row and that the file is .xlsx / .csv / .pdf.`)
         return
       }
       const mapped = mapImportRows(kind, dataRows).map((r) => ({ ...r, country: r.country || country }))
@@ -179,7 +186,7 @@ export default function LedgerPage({
             <button type="button" onClick={load} className="inline-flex items-center gap-1.5 rounded-md border border-[var(--border-subtle)] px-3 py-1.5 text-sm">
               <RefreshCcw size={14} /> Refresh
             </button>
-            <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={onFile} />
+            <input ref={fileRef} type="file" accept={kind === 'sany' ? '.xlsx,.xls,.csv,.pdf' : '.xlsx,.xls,.csv'} className="hidden" onChange={onFile} />
           </div>
         }
       />

@@ -35,6 +35,15 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
   (reuses getDataTrustOverview + buildTrustReport + TrustBadge), the diagnostics feed, and the lineage explorer; all
   resolve/scan actions reuse the existing recon/duplicate/material-master surfaces. Tests controlCenter.test.js (5).
   KSA diagnostics verified real: brand_gap 409, unclassified 59,391, no_import_uid 696.
+  - **COMPLETED (3 agents):** the page now also carries `controlCenter/RemediationActions.jsx` (one-click GUARDED
+    fixes — resolve duplicates, backfill orphan assets, resolve duplicate-key tyres, resolve system errors, + route
+    to brand/classification review; reuses the EXISTING self-gating duplicateControl/dataReconciliation/reconDupKeys/
+    reconBrand/materialMaster/systemLogs services, NO new RPC) + an Excel/PDF Export button (`controlCenterExport.js`,
+    11 tests). NEW super-admin hub `ConsoleDataOps.jsx` at `/console/data-ops` ("Data Operations" in the console Data
+    and imports nav) = one launchpad linking every data surface (Control Center, Cost/M3, CPK, Production, SCO, SANY,
+    Data Intake, Import History, Smart Import, Material Master, Reconciliation, Duplicate Control, Teach the
+    Classifier) with a live open-issues + volumes headline. ALL under the super-admin `/console` (super-admin gated).
+    RULE: the Control Center is the single trust/lineage/diagnostics surface — extend it, never add a parallel one.
 - **`fetchAllPages` PARALLELIZED (app-wide, `src/lib/fetchAll.js`, 113 caller files).** Was strictly serial: page 0,
   then page 1, ... (200k rows = 200 latency-bound round trips). NOW: page 0 alone (a small result stays ONE round
   trip, no regression), then remaining pages fetched in CONCURRENT windows of `concurrency` (default 4) — preserves

@@ -40,6 +40,13 @@ ChartJS.register(
 )
 
 // ── Constants ───────────────────────────────────────────────────────────────────
+// Ceiling on the analytical tyre_records pull. This page derives per-tyre CPK by
+// brand / vehicle / site / month (no server RPC covers those), so it needs row
+// level data - but it must never load the whole table into the browser. Country
+// and the date window are applied SERVER-SIDE (see fetchData); this bounds what
+// remains. The authoritative grid cost totals are already server-aggregated via
+// loadGovernedCostSplit (the Tyres vs Maintenance panel and Cost per unit section).
+const TYRE_ROW_CEILING = 50000
 const INDUSTRY_BENCHMARK_CPK = 1.50   // R/km benchmark
 const SAVINGS_OPPORTUNITY_PCT = 0.15  // 15% savings estimate
 const PALETTE = [
@@ -144,6 +151,7 @@ export default function CostCenter() {
   const { t } = useLanguage()
 
   const [records, setRecords]           = useState([])
+  const [truncated, setTruncated]       = useState(false)
   const [loading, setLoading]           = useState(true)
   const [error, setError]               = useState(null)
   const [activeTab, setActiveTab]       = useState(0)
@@ -174,8 +182,13 @@ export default function CostCenter() {
   const fetchData = useCallback(async () => {
     setLoading(true)
     setError(null)
+    setTruncated(false)
     try {
-      const { data, error: err } = await fetchAllPages((from, to) => {
+      // Country + the date window are applied SERVER-SIDE, and the pull is capped
+      // at TYRE_ROW_CEILING so this never loads the whole tyre_records table into
+      // the browser. When the cap is hit `truncated` is surfaced as a note so the
+      // capped totals and CPK below are read as a bounded view, not the full set.
+      const { data, error: err, truncated: trunc } = await fetchAllPages((from, to) => {
         let q = supabase
           .from('tyre_records')
           .select(
@@ -191,9 +204,10 @@ export default function CostCenter() {
         if (dateTo)   q = q.lte('created_at', dateTo + 'T23:59:59')
 
         return q.order('created_at', { ascending: false }).range(from, to)
-      }, { max: 200000 })
+      }, { max: TYRE_ROW_CEILING })
       if (err) throw err
       setRecords(data ?? [])
+      setTruncated(Boolean(trunc))
     } catch (e) {
       setError(toUserMessage(e, 'Failed to load data'))
     } finally {
@@ -695,6 +709,16 @@ export default function CostCenter() {
 
       {!loading && (
         <>
+          {/* ── Capped view note ─────────────────────────────────────────────── */}
+          {truncated && (
+            <div className="flex items-center gap-2 p-3 rounded-lg bg-yellow-900/25 border border-yellow-800/50 text-yellow-200 text-sm">
+              <AlertTriangle size={16} className="flex-shrink-0" />
+              <span>
+                Capped view: showing the most recent {TYRE_ROW_CEILING.toLocaleString()} tyre records for this selection. Totals and CPK below cover this bounded set only. Narrow the country or date range for exact figures.
+              </span>
+            </div>
+          )}
+
           {/* ── 1. KPI Cards ─────────────────────────────────────────────────── */}
           <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
             <KpiCard

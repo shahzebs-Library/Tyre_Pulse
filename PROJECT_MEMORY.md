@@ -76,6 +76,18 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
   scopes reads to the active country via the null-safe convention (All = no predicate; a country = its rows +
   NULL-country rows; mirrors _client.applyCountry) and shows an amber "mixed currencies, pick a country" note under
   'All'. activeCurrency resolution was already correct; only SCOPE changed, so a single-country view is unchanged rows.
+- **SCALE SWEEP WAVE 4 + REGRESSION GUARD.** Last unbounded surfaces bounded: TyreScrapManagement / RetreadManagement
+  (fetchAllPages 50k + id-order + note), Accidents (surfaced the existing 100k cap), inspectionIntelligence.js
+  service (inspections + fleet were bare .select capped 1000 feeding compliance -> paged, test synced),
+  FleetIntelligence fleet enrichment (bare select ~1523, ~523 assets un-enriched under All -> paged 20k). MOBILE:
+  accident/report.tsx pulled the WHOLE vehicle_fleet (capped 1000, assets past 1000 unfindable) -> country-scoped +
+  3000 cap w/ manual-lookup fallback; Home fleet-health tile bare select -> exact server count; AuthContext verified
+  boot-resilient (offline cached profile, loading always clears), tsc 0 / jest 50. NEW `src/test/rowCapGuard.test.js`
+  scans 464 src/pages + src/lib/api files and FAILS on any new unbounded large-table read (bare .select capped 1000,
+  or fetchAllPages with no max on a massive table: parts_consumption/work_orders/wo_line_items/audit_log_v2); a 2nd
+  test keeps the small allowlist honest (single-entity .eq, chunked .in, country-scoped aggregator inputs). PROVEN to
+  fire (stripping a {max} trips it). RULE: this guard is now CI - any new hot-table read must be paged/counted or it
+  fails the build.
 - **SCALE + HONESTY SWEEP WAVE 3 (12 pages + 1 service, all build-clean).** Bounded every remaining unbounded/
   capped read feeding a displayed number and de-blended cross-country money: BoardOverview / CountryComparison /
   SiteComparison (CountryComparison summary cards blended SAR+AED+EGP across compared countries -> now N/A + per-country

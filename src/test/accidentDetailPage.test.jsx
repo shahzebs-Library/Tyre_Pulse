@@ -24,9 +24,11 @@ const PARTS = [{ id: 'p1', part_name: 'Bumper', quantity: 1, unit_cost: 800, tot
 function makeBuilder(result) {
   const b = {
     select: () => b,
+    update: () => b,
     eq: () => b,
     order: () => Promise.resolve(result),
     single: () => Promise.resolve(result),
+    then: (resolve) => resolve(result), // awaitable for update().eq() writes
   }
   return b
 }
@@ -81,24 +83,29 @@ describe('AccidentDetailPage (/accidents/:id)', () => {
     await waitFor(() => expect(screen.getByText('Bumper')).toBeInTheDocument())
   })
 
-  it('routes Edit Incident to the ONE unified form on the Accidents page (no per-tab edit forms)', async () => {
+  it('Edit Incident opens an in-place editor and KEEPS the tabbed case view (no bounce to the register form)', async () => {
     render(<AccidentDetailPage />)
     await screen.findByRole('button', { name: /Download Case/i })
 
-    // The record tabs are read-only now: no per-tab save buttons remain.
+    // The record tabs carry no per-tab save form; editing is one shared editor.
     fireEvent.click(screen.getByRole('button', { name: /Claim & Recovery/i }))
     await waitFor(() => expect(screen.getByText(/Cost Recovery/i)).toBeInTheDocument())
     expect(screen.queryByRole('button', { name: /Save Claim & Recovery/i })).toBeNull()
-    fireEvent.click(screen.getByRole('button', { name: /Repair & Insurance/i }))
-    await waitFor(() => expect(screen.getByText(/Workshop & Financials/i)).toBeInTheDocument())
-    expect(screen.queryByRole('button', { name: /Save Repair & Insurance/i })).toBeNull()
 
-    // Edit Incident (header action, elevated role) deep-links into the unified
-    // inline form on /accidents via router state.
+    // Edit Incident opens the editor INSIDE the case; it must NOT navigate away.
     const editBtns = screen.getAllByRole('button', { name: /Edit Incident/i })
     expect(editBtns.length).toBeGreaterThan(0)
     fireEvent.click(editBtns[0])
-    expect(navSpy).toHaveBeenCalledWith('/accidents', { state: { editId: 'acc-1' } })
+    await screen.findByRole('heading', { name: /Edit incident details/i })
+    expect(navSpy).not.toHaveBeenCalledWith('/accidents', expect.anything())
+    // The case header (asset / financial rail) is still on screen — context kept.
+    expect(screen.getByRole('heading', { name: /MP-1042/i })).toBeInTheDocument()
+
+    // Save writes through the accidents update service and returns to the case
+    // detail (editor closes) — no navigation to /accidents at any point.
+    fireEvent.click(screen.getByRole('button', { name: /Save changes/i }))
+    await waitFor(() => expect(screen.queryByRole('heading', { name: /Edit incident details/i })).toBeNull())
+    expect(navSpy).not.toHaveBeenCalledWith('/accidents', expect.anything())
   })
 
   it('invokes the case PDF export from the Download Case action', async () => {

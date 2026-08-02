@@ -44,6 +44,13 @@ ChartJS.register(
 // ── Constants ─────────────────────────────────────────────────────────────────
 const PAGE_SIZE = 25
 const HOURS_PER_CHANGE = 2
+// Scale guard: cap the row-level analytics pulls so this page never streams a
+// whole multi-million-row table into the browser. Country is applied server-side;
+// the period picker (below) needs the full country set to populate its year list,
+// so the cap is the bound. Beyond this many rows the newest ones are used and a
+// "capped view" note is shown. Every figure here is derived client-side from the
+// same rows, so under the cap (today's data) values are unchanged.
+const ROW_CAP = 50000
 
 const CHART_THEME = {
   textColor: '#9ca3af',
@@ -367,6 +374,7 @@ export default function FleetIntelligence() {
   const [loading, setLoading]         = useState(true)
   const [error, setError]             = useState(null)
   const [fleetMasterAvail, setFleetMasterAvail] = useState(true)
+  const [capped, setCapped]           = useState(false)
 
   const [period, setPeriod]           = useState({ mode: 'all' })
   const [emailModalOpen, setEmailModalOpen] = useState(false)
@@ -382,15 +390,17 @@ export default function FleetIntelligence() {
   const loadData = useCallback(async () => {
     setLoading(true)
     setError(null)
+    setCapped(false)
     try {
-      const { data: tyreData, error: tyreErr } = await fetchAllPages((from, to) => applyCountry(supabase
+      const { data: tyreData, error: tyreErr, truncated: tyreTrunc } = await fetchAllPages((from, to) => applyCountry(supabase
         .from('tyre_records')
         .select('id,asset_no,site,brand,position,risk_level,category,km_at_fitment,km_at_removal,cost_per_tyre,issue_date,tread_depth')
         .order('issue_date', { ascending: false }), activeCountry)
-        .range(from, to))
+        .range(from, to), { max: ROW_CAP })
 
       if (tyreErr) throw tyreErr
       setRecords(tyreData || [])
+      let truncated = !!tyreTrunc
 
       // Fleet master - graceful
       try {
@@ -411,14 +421,17 @@ export default function FleetIntelligence() {
 
       // Inspections - graceful
       try {
-        const { data: inspData } = await fetchAllPages((from, to) => applyCountry(supabase
+        const { data: inspData, truncated: inspTrunc } = await fetchAllPages((from, to) => applyCountry(supabase
           .from('inspections')
           .select('asset_no,site,status,scheduled_date,completed_date'), activeCountry)
-          .range(from, to))
+          .range(from, to), { max: ROW_CAP })
         setInspections(inspData || [])
+        truncated = truncated || !!inspTrunc
       } catch {
         setInspections([])
       }
+
+      setCapped(truncated)
     } catch (err) {
       setError(toUserMessage(err, 'Failed to load fleet intelligence data'))
     } finally {
@@ -1102,6 +1115,16 @@ export default function FleetIntelligence() {
           </div>
         </div>
       </div>
+
+      {/* Capped-view note: shown only when the country holds more rows than the cap. */}
+      {capped && (
+        <div className="flex items-start gap-2 rounded-lg border border-amber-800/40 bg-amber-900/20 px-4 py-2 text-xs text-amber-300">
+          <AlertTriangle size={14} className="mt-0.5 shrink-0" />
+          <span>
+            Capped view: this country holds more than {fmt(ROW_CAP)} tyre records. Showing the most recent {fmt(ROW_CAP)} for performance. Narrow the period for complete detail.
+          </span>
+        </div>
+      )}
 
       {/* ── 3. Fleet Health KPI Cards ───────────────────────────────────────── */}
       <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">

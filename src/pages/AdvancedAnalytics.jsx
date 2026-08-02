@@ -64,6 +64,14 @@ const PALETTE = [
 
 const MONTH_LABELS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
 
+// Scale guard: cap the row-level analytics pull so this page never streams a
+// whole multi-million-row table into the browser. Country and the selected date
+// preset are both pushed server-side; this cap bounds whatever remains. Beyond
+// it the newest rows are used and a "capped view" note is shown. Every tab is
+// derived client-side from the same rows, so under the cap (today's data) values
+// are unchanged.
+const ROW_CAP = 50000
+
 // ── Chart base options ────────────────────────────────────────────────────────
 
 const BASE_OPTS = {
@@ -230,6 +238,7 @@ export default function AdvancedAnalytics() {
   const [records,        setRecords]        = useState([])
   const [loading,        setLoading]        = useState(true)
   const [error,          setError]          = useState(null)
+  const [capped,         setCapped]         = useState(false)
   const [activeTab,      setActiveTab]      = useState('trend')
   const [datePreset,     setDatePreset]     = useState('1yr')
   const [siteFilter,     setSiteFilter]     = useState('all')
@@ -242,17 +251,24 @@ export default function AdvancedAnalytics() {
     async function load() {
       setLoading(true)
       setError(null)
+      setCapped(false)
       try {
-        const { data, error: err } = await fetchAllPages((from, to) => {
+        // Push the selected date preset server-side so a wide history is never
+        // pulled whole. Client-side `filtered` re-applies the same cutoff, so
+        // results are identical; this only bounds the read.
+        const cutoff = cutoffDate(datePreset)
+        const { data, error: err, truncated } = await fetchAllPages((from, to) => {
           let q = supabase
             .from('tyre_records')
             .select('id,asset_no,site,brand,position,risk_level,category,findings,km_at_fitment,km_at_removal,cost_per_tyre,issue_date,tread_depth,pressure_reading')
             .order('issue_date', { ascending: true })
           if (activeCountry !== 'All') q = q.eq('country', activeCountry)
+          if (cutoff) q = q.gte('issue_date', cutoff)
           return q.range(from, to)
-        })
+        }, { max: ROW_CAP })
         if (err) throw err
         setRecords(data || [])
+        setCapped(!!truncated)
       } catch (e) {
         setError(toUserMessage(e, t('advancedanalytics.states.loadFailed')))
       } finally {
@@ -260,7 +276,7 @@ export default function AdvancedAnalytics() {
       }
     }
     load()
-  }, [activeCountry])
+  }, [activeCountry, datePreset])
 
   // ── Derived filter options ─────────────────────────────────────────────────
   const uniqueSites = useMemo(() => {
@@ -741,6 +757,16 @@ export default function AdvancedAnalytics() {
           </select>
         </div>
       </div>
+
+      {/* Capped-view note: shown only when the selected country and period hold more rows than the cap. */}
+      {capped && (
+        <div className="mx-6 flex items-start gap-2 rounded-lg border border-amber-800/40 bg-amber-900/20 px-3 py-2 text-xs text-amber-300">
+          <AlertTriangle size={13} className="mt-0.5 shrink-0" />
+          <span>
+            Capped view: this country and period hold more than {fmt(ROW_CAP)} tyre records. Showing the most recent {fmt(ROW_CAP)} for performance. Narrow the date range or site for complete detail.
+          </span>
+        </div>
+      )}
 
       {/* Tab Navigation */}
       <div className="px-6 pt-4 pb-0 overflow-x-auto">

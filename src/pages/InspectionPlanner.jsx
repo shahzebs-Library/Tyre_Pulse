@@ -15,6 +15,7 @@ import { Bar } from 'react-chartjs-2'
 import { supabase } from '../lib/supabase'
 import { fetchAllPages } from '../lib/fetchAll'
 import { formatDate } from '../lib/formatters'
+import { toUserMessage } from '../lib/safeError'
 import { severityRank } from '../lib/severity'
 import { useSettings } from '../contexts/SettingsContext'
 import { useAuth } from '../contexts/AuthContext'
@@ -501,8 +502,11 @@ export default function InspectionPlanner() {
   const [schedule, setSchedule] = useState([])
   const [scheduleLoading, setScheduleLoading] = useState(true)
   const [scheduleError, setScheduleError] = useState(null)
+  const [scheduleTruncated, setScheduleTruncated] = useState(false)
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
+  const [dataError, setDataError] = useState(null)
+  const [dataTruncated, setDataTruncated] = useState(false)
 
   // Config
   const [interval, setIntervalDays] = useState(30)
@@ -525,15 +529,22 @@ export default function InspectionPlanner() {
   // ── Fetch ────────────────────────────────────────────────────────────────────
   const fetchData = useCallback(async () => {
     setRefreshing(true)
+    setDataError(null)
     try {
-      let inspQ = supabase
-        .from('inspections')
-        .select('id, asset_no, tyre_serial, inspection_date, inspector, site, country, pressure_reading')
-        .order('inspection_date', { ascending: false })
-
-      if (activeCountry && activeCountry !== 'All') {
-        inspQ = inspQ.eq('country', activeCountry)
-      }
+      // Inspections are PAGED: a bare select silently stops at 1,000, so once the
+      // table grows past that the KPIs, overdue queue and gap analysis were
+      // computed from at most the newest 1,000 inspections. Bounded + stable
+      // tiebreak so paging never drops or repeats a row at a page boundary.
+      const inspP = fetchAllPages((from, to) => {
+        let q = supabase
+          .from('inspections')
+          .select('id, asset_no, tyre_serial, inspection_date, inspector, site, country, pressure_reading')
+          .order('inspection_date', { ascending: false })
+          .order('id')
+          .range(from, to)
+        if (activeCountry && activeCountry !== 'All') q = q.eq('country', activeCountry)
+        return q
+      }, { max: 50000 })
 
       // Tyres are PAGED: KSA alone holds 6,026 and a bare select stops at 1,000,
       // so the planner was scheduling against a sixth of the fleet's tyres and
@@ -547,13 +558,18 @@ export default function InspectionPlanner() {
           .range(from, to)
         if (activeCountry && activeCountry !== 'All') q = q.eq('country', activeCountry)
         return q
-      })
+      }, { max: 50000 })
 
-      const [inspRes, tyreRes] = await Promise.all([inspQ, tyreP])
+      const [inspRes, tyreRes] = await Promise.all([inspP, tyreP])
+      if (inspRes.error) throw inspRes.error
+      if (tyreRes.error) throw tyreRes.error
       // Normalise DB column `inspector` to the app-wide `inspector_name` shape so
       // every downstream consumer (schedule, exports, analytics) reads one field.
       setInspections((inspRes.data || []).map(r => ({ ...r, inspector_name: r.inspector })))
       setTyreRecords(tyreRes.data || [])
+      setDataTruncated(!!inspRes.truncated || !!tyreRes.truncated)
+    } catch (err) {
+      setDataError(toUserMessage(err, 'Could not load inspection data.'))
     } finally {
       setRefreshing(false)
       setLoading(false)
@@ -567,21 +583,27 @@ export default function InspectionPlanner() {
     setScheduleLoading(true)
     setScheduleError(null)
     try {
-      let q = supabase
-        .from('inspection_schedules')
-        .select('id, asset_no, site, scheduled_date, inspection_time, inspector_name, inspection_type, priority, status, notes, country, created_at')
-        .order('scheduled_date', { ascending: true })
-
-      if (activeCountry && activeCountry !== 'All') {
-        // Null-safe: include rows tagged for this country OR with no country set.
-        q = q.or(`country.eq.${activeCountry},country.is.null`)
-      }
-
-      const { data, error } = await q
+      // PAGED: the schedule feeds the "upcoming" count, compliance rate and
+      // inspector completion rate, all of which were wrong once schedules grew
+      // past the 1,000-row bare-select cap. Stable tiebreak on id.
+      const { data, error, truncated } = await fetchAllPages((from, to) => {
+        let q = supabase
+          .from('inspection_schedules')
+          .select('id, asset_no, site, scheduled_date, inspection_time, inspector_name, inspection_type, priority, status, notes, country, created_at')
+          .order('scheduled_date', { ascending: true })
+          .order('id')
+          .range(from, to)
+        if (activeCountry && activeCountry !== 'All') {
+          // Null-safe: include rows tagged for this country OR with no country set.
+          q = q.or(`country.eq.${activeCountry},country.is.null`)
+        }
+        return q
+      }, { max: 50000 })
       if (error) throw error
       setSchedule((data || []).map(dbRowToItem))
+      setScheduleTruncated(!!truncated)
     } catch (err) {
-      setScheduleError(err?.message || 'Failed to load inspection schedule.')
+      setScheduleError(toUserMessage(err, 'Failed to load inspection schedule.'))
       setSchedule([])
     } finally {
       setScheduleLoading(false)
@@ -1098,6 +1120,30 @@ export default function InspectionPlanner() {
           >
             <RefreshCw size={12} className={scheduleLoading ? 'animate-spin' : ''} />Retry
           </button>
+        </div>
+      )}
+
+      {/* Inspection data load error banner */}
+      {dataError && (
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-red-950/40 border border-red-800/60 rounded-xl px-4 py-3">
+          <div className="flex items-center gap-2 text-sm text-red-200">
+            <AlertTriangle size={16} className="text-red-400 shrink-0" />
+            <span>{dataError}</span>
+          </div>
+          <button
+            onClick={fetchData}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-red-600 hover:bg-red-500 rounded-lg text-xs font-medium text-[var(--text-primary)] transition-colors whitespace-nowrap self-start sm:self-auto"
+          >
+            <RefreshCw size={12} className={refreshing ? 'animate-spin' : ''} />Retry
+          </button>
+        </div>
+      )}
+
+      {/* Capped view note: totals reflect a bounded read once the data set is very large */}
+      {(dataTruncated || scheduleTruncated) && (
+        <div className="flex items-center gap-2 bg-yellow-950/30 border border-yellow-800/50 rounded-xl px-4 py-2.5 text-xs text-yellow-200">
+          <AlertTriangle size={14} className="text-yellow-400 shrink-0" />
+          <span>Capped view: showing up to 50,000 rows. Some records may be excluded from these totals. Narrow the country filter for a complete view.</span>
         </div>
       )}
 

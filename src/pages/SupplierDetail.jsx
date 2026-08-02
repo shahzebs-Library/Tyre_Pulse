@@ -207,6 +207,7 @@ export default function SupplierDetail() {
   const isAdmin = profile?.role === 'Admin'
 
   const [records, setRecords] = useState([])
+  const [recordsTruncated, setRecordsTruncated] = useState(false)
   const [ratings, setRatings] = useState({})
   const [contracts, setContracts] = useState([])
   const [loading, setLoading] = useState(true)
@@ -229,13 +230,16 @@ export default function SupplierDetail() {
     setError(null)
     setRatingsError(null)
     const [tyresRes, ratingsRes, contractsRes] = await Promise.all([
-      fetchAllPages((from, to) => supplierApi.listSupplierTyres({ from, to, country: activeCountry })),
+      // Bounded read: tyre_records runs into the thousands; cap the paged fetch
+      // and surface a capped-view note rather than pulling an unbounded set.
+      fetchAllPages((from, to) => supplierApi.listSupplierTyres({ from, to, country: activeCountry }), { max: 50000 }),
       supplierApi.listSupplierRatings({ country: activeCountry }),
       supplierApi.listSupplierContracts({ country: activeCountry }),
     ])
     if (tyresRes.error) { setError(toUserMessage(tyresRes.error, 'Could not load supplier tyres.')); setLoading(false); return }
     if (ratingsRes.error) setRatingsError(toUserMessage(ratingsRes.error, 'Could not load supplier ratings.'))
     setRecords(tyresRes.data || [])
+    setRecordsTruncated(!!tyresRes.truncated)
     const map = {}
     ;(ratingsRes.data || []).forEach(row => {
       map[row.brand] = { id: row.id, label: numToRating(row.rating), notes: row.notes || '' }
@@ -462,6 +466,14 @@ export default function SupplierDetail() {
         <div className="flex items-center gap-2 text-sm text-red-400 bg-red-900/20 border border-red-800 rounded-xl px-4 py-2.5">
           <AlertTriangle size={15} className="flex-shrink-0" />
           <span>{t('suppliers.ratingsError', { message: ratingsError })}</span>
+        </div>
+      )}
+
+      {/* Capped view note: metrics reflect a bounded read once the tyre set is very large */}
+      {recordsTruncated && (
+        <div className="flex items-center gap-2 text-xs text-amber-200 bg-amber-900/20 border border-amber-800 rounded-xl px-4 py-2.5">
+          <AlertTriangle size={14} className="flex-shrink-0 text-amber-400" />
+          <span>Capped view: showing up to 50,000 tyre records. Some records may be excluded from these metrics. Narrow the country filter for a complete view.</span>
         </div>
       )}
 

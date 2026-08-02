@@ -449,6 +449,7 @@ export default function SupplierManagement() {
   const { user } = useAuth()
 
   const [records, setRecords] = useState([])
+  const [recordsTruncated, setRecordsTruncated] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [activeTab, setActiveTab] = useState(0)
@@ -479,10 +480,13 @@ export default function SupplierManagement() {
   const fetchData = useCallback(async () => {
     setLoading(true)
     setError(null)
-    const { data, error: err } = await fetchAllPages((from, to) =>
-      supplierApi.listSupplierTyres({ from, to, country: activeCountry }))
+    // Bounded read: tyre_records runs into the thousands, so cap the paged fetch
+    // and surface a capped-view note rather than pulling an unbounded set.
+    const { data, error: err, truncated } = await fetchAllPages((from, to) =>
+      supplierApi.listSupplierTyres({ from, to, country: activeCountry }), { max: 50000 })
     if (err) { setError(toUserMessage(err)); setLoading(false); return }
     setRecords(data || [])
+    setRecordsTruncated(!!truncated)
     setLoading(false)
   }, [activeCountry])
 
@@ -882,6 +886,14 @@ export default function SupplierManagement() {
             <span>{t('suppliers.ratingsError', { message: ratingsError })}</span>
           </div>
           <button onClick={fetchRatings} className="px-3 py-1.5 bg-red-800/40 hover:bg-red-800/60 text-red-200 text-xs rounded-lg flex-shrink-0">{t('suppliers.retry')}</button>
+        </div>
+      )}
+
+      {/* Capped view note: metrics reflect a bounded read once the tyre set is very large */}
+      {recordsTruncated && (
+        <div className="flex items-center gap-2 bg-amber-900/20 border border-amber-800 rounded-xl px-4 py-2.5 text-xs text-amber-200">
+          <AlertTriangle size={14} className="text-amber-400 flex-shrink-0" />
+          <span>Capped view: showing up to 50,000 tyre records. Some records may be excluded from these metrics. Narrow the country filter for a complete view.</span>
         </div>
       )}
 

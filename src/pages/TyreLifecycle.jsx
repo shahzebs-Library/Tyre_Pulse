@@ -100,6 +100,7 @@ export default function TyreLifecycle() {
   const [records, setRecords]       = useState([])
   const [loading, setLoading]       = useState(true)
   const [error, setError]           = useState(null)
+  const [capped, setCapped]         = useState(false)
   const [expandedSerial, setExpandedSerial] = useState(null)
 
   // Filters
@@ -114,19 +115,22 @@ export default function TyreLifecycle() {
     setLoading(true)
     setError(null)
     try {
-      const { data, error: qErr } = await fetchAllPages((from, to) => {
+      const { data, error: qErr, truncated } = await fetchAllPages((from, to) => {
         let q = supabase
           .from('tyre_records')
           .select('id,asset_no,serial_number:serial_no,position,brand,size,tread_depth,cost_per_tyre,issue_date,km_at_fitment,km_at_removal,risk_level,site,country,category')
           .order('issue_date', { ascending: false })
+          .order('id', { ascending: false })
         if (activeCountry !== 'All') q = q.eq('country', activeCountry)
         return q.range(from, to)
-      })
+      }, { max: 50000 })
       if (qErr) throw qErr
       setRecords(data || [])
+      setCapped(Boolean(truncated))
     } catch (err) {
       setError(toUserMessage(err, 'Could not load lifecycle data.'))
       setRecords([])
+      setCapped(false)
     } finally {
       setLoading(false)
     }
@@ -403,6 +407,15 @@ export default function TyreLifecycle() {
           <AlertTriangle size={18} className="text-red-400 shrink-0" />
           <p className="text-sm text-red-300 flex-1">{error}</p>
           <button onClick={fetchData} className="btn-secondary text-xs px-3 py-1.5">Retry</button>
+        </div>
+      )}
+
+      {capped && (
+        <div className="card border border-amber-500/30 flex items-center gap-3">
+          <AlertTriangle size={18} className="text-amber-400 shrink-0" />
+          <p className="text-sm text-amber-300 flex-1">
+            Capped view: showing the most recent 50,000 tyre records. Narrow the country or period for a complete view.
+          </p>
         </div>
       )}
 

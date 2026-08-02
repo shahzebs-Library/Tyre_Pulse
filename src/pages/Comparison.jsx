@@ -146,6 +146,7 @@ export default function Comparison() {
   const [loading, setLoading] = useState(false)
   const [ran, setRan]         = useState(false)
   const [error, setError]     = useState(null)
+  const [capped, setCapped]   = useState(false)
 
   // The fetched dataset is scoped to activeCountry at query time. If the admin
   // switches active country after running, the on-screen comparison no longer
@@ -155,6 +156,7 @@ export default function Comparison() {
     setRan(false)
     setRecords([])
     setError(null)
+    setCapped(false)
   }, [activeCountry])
 
   async function runComparison() {
@@ -166,23 +168,27 @@ export default function Comparison() {
     // Fetch qty so cost math matches recordCost() (cost_per_tyre × qty) used
     // across the rest of the app; scope by activeCountry to stay consistent with
     // Country/Brand/Site pages and respect the admin's active-country filter.
-    const { data, error: fetchErr } = await fetchAllPages((from, to) => {
+    const { data, error: fetchErr, truncated } = await fetchAllPages((from, to) => {
       let q = supabase
         .from('tyre_records')
         .select('issue_date, cost_per_tyre, qty, site, brand')
         .gte('issue_date', `${minYear}-01-01`)
         .lte('issue_date', `${maxYear}-12-31`)
+        .order('issue_date', { ascending: false })
+        .order('id', { ascending: false })
       if (activeCountry !== 'All') q = q.eq('country', activeCountry)
       return q.range(from, to)
-    })
+    }, { max: 50000 })
     if (fetchErr) {
       setError(toUserMessage(fetchErr, 'Failed to load comparison data.'))
       setRecords([])
+      setCapped(false)
       setRan(true)
       setLoading(false)
       return
     }
     setRecords(data ?? [])
+    setCapped(Boolean(truncated))
     setRan(true)
     setLoading(false)
   }
@@ -420,6 +426,15 @@ export default function Comparison() {
       {/* Results */}
       {ran && !error && chartData && tableRows.length > 0 && (
         <>
+          {capped && (
+            <div className="card bg-amber-900/20 border border-amber-700/40 py-3 px-4 flex items-center gap-3">
+              <AlertTriangle size={16} className="text-amber-400 flex-shrink-0" />
+              <p className="text-sm text-amber-300">
+                Capped view: showing the most recent 50,000 tyre records in this range. Narrow the years or country for a complete comparison.
+              </p>
+            </div>
+          )}
+
           {/* Summary KPIs */}
           {totals && (
             <div className="flex gap-3 flex-wrap">

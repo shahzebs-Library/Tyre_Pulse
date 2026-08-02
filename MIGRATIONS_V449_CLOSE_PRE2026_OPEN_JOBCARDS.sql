@@ -1,0 +1,40 @@
+-- V449 — CLOSE ALL PRE-2026 OPEN JOB CARDS (keep 2026 open)
+-- STATUS: APPLIED LIVE 2026-08-02 (project jhssdmeruxtrlqnwfksc, org Company A). Repo record.
+--
+-- FOLLOW-UP to V448. V448 fixed the "out of production" DASHBOARD metric (production_in_at)
+-- but left historical cards at status Open in the REGISTER. Customer: keep 2026 job cards
+-- open, close every older one.
+--
+-- SCOPE: work_orders with status in ('Open','In Progress','On Hold') whose year
+--   (coalesce(production_out_at, opened_at)) < 2026. Counted 169 cards:
+--   2019 x2, 2020 x1, 2021 x10, 2022 x77, 2023 x43, 2024 x14, 2025 x20, corrupt-year "24" x2.
+--   (Also closed the single 2024 still-out card GCKR/JC/0136/0124 in the same pass earlier;
+--    snapshot _bak.jobcard_close_pre2026_20260802.)
+--
+-- FIX: set status='Closed', completed_at = coalesce(completed_at, ref + 1 min),
+--   and production_in_at = production_out_at + 1 min when it was still null (so they also
+--   drop from any "still out of production" view). 2026 cards untouched.
+--
+-- RESULT: open-status cards 249 -> 82 (all 82 remaining are 2026).
+--
+-- REVERSIBLE: _bak.jobcard_close_open_pre2026_20260802 holds every affected id with its
+--   prior status / production_in_at / completed_at. UNDO:
+--     update public.work_orders w
+--       set status=b.status, production_in_at=b.production_in_at, completed_at=b.completed_at
+--       from _bak.jobcard_close_open_pre2026_20260802 b where b.id = w.id;
+--
+-- Body:
+--   with basis as (
+--     select id, coalesce(production_out_at, opened_at) as ref
+--     from public.work_orders
+--     where status in ('Open','In Progress','On Hold')
+--       and extract(year from coalesce(production_out_at, opened_at)) < 2026)
+--   update public.work_orders w
+--     set status='Closed',
+--         completed_at=coalesce(w.completed_at, b.ref + interval '1 minute'),
+--         production_in_at=case when w.production_out_at is not null and w.production_in_at is null
+--                               then w.production_out_at + interval '1 minute' else w.production_in_at end
+--     from basis b where b.id = w.id;
+--
+-- NOT FIXED HERE: the corrupt ABSOLUTE year (0022/0024 vs 2022/2024) still shows on the
+-- register for those historical cards — canonical fix is re-uploading the job-card file.

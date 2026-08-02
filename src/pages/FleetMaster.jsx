@@ -82,7 +82,9 @@ export default function FleetMaster() {
   const [page, setPage]         = useState(0)
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE)
   const [loading, setLoading]   = useState(true)
+  const [loadError, setLoadError] = useState('')
   const [sites, setSites]       = useState([])
+  const [summaryCapped, setSummaryCapped] = useState(false)
 
   // ── filters ──────────────────────────────────────────────────────────────────
   const [search, setSearch]         = useState('')
@@ -125,7 +127,13 @@ export default function FleetMaster() {
   useEffect(() => { loadRecords() }, [page, pageSize, debouncedSearch, siteFilter, statusFilter, activeCountry])
 
   async function loadSites() {
-    const { data } = await supabase.from('vehicle_fleet').select('site').not('site', 'is', null)
+    // PAGED: a bare select is silently capped at 1000, so the distinct site list
+    // feeding the filter dropdown + datalist would drop sites past the cap on a
+    // 1,000+ row register. Page it (bounded, stable order) for a complete list.
+    const { data } = await fetchAllPages((from, to) =>
+      supabase.from('vehicle_fleet').select('site').not('site', 'is', null).order('id').range(from, to),
+      { max: 20000 }
+    )
     setSites([...new Set((data ?? []).map(r => r.site))].sort())
   }
 
@@ -144,10 +152,17 @@ export default function FleetMaster() {
     if (activeCountry !== 'All') q = q.eq('country', activeCountry)
 
     try {
-      const { data, count } = await q
+      const { data, count, error } = await q
       if (myReq !== reqIdRef.current) return   // a newer request superseded this one
+      if (error) throw error
       setRecords(data ?? [])
       setTotal(count ?? 0)
+      setLoadError('')
+    } catch (e) {
+      if (myReq === reqIdRef.current) {
+        setRecords([]); setTotal(0)
+        setLoadError(toUserMessage(e, 'Could not load vehicles.'))
+      }
     } finally {
       if (myReq === reqIdRef.current) setLoading(false)
     }
@@ -163,15 +178,16 @@ export default function FleetMaster() {
       // PAGED: these are the headline counts and the register holds 1,523, so an
       // unpaged read made the "Total" card read 1,000 - a number that is simply
       // wrong rather than merely incomplete.
-      const { data } = await fetchAllPages((from, to) => {
+      const { data, truncated } = await fetchAllPages((from, to) => {
         let q = supabase
           .from('vehicle_fleet')
           .select('status,make,model,expected_km_per_tyre,min_days_between_changes')
           .order('asset_no').order('id').range(from, to)
         if (activeCountry !== 'All') q = q.eq('country', activeCountry)
         return q
-      })
+      }, { max: 20000 })
       const rows = data ?? []
+      setSummaryCapped(!!truncated)
       setSummary({
         total:        rows.length,
         active:       rows.filter(r => r.status === 'Active').length,
@@ -323,7 +339,7 @@ export default function FleetMaster() {
       if (statusFilter) q = q.eq('status', statusFilter)
       if (activeCountry !== 'All') q = q.eq('country', activeCountry)
       return q
-    })
+    }, { max: 20000 })
     return data ?? []
   }
 
@@ -492,11 +508,16 @@ export default function FleetMaster() {
           { label: t('fleetmaster.summary.noPolicySet'),   value: summary.noPolicy,     color: 'text-orange-400' },
         ].map(({ label, value, color }) => (
           <div key={label} className="card text-center">
-            <p className={`text-2xl font-bold ${color}`}>{value}</p>
+            <p className={`text-2xl font-bold ${color}`}>{value.toLocaleString()}</p>
             <p className="text-gray-400 text-sm mt-1">{label}</p>
           </div>
         ))}
       </div>
+      {summaryCapped && (
+        <p className="text-xs text-amber-400">
+          Capped view: summary counts are based on the first 20,000 vehicles. Narrow the filters for exact totals.
+        </p>
+      )}
 
       {/* ── Records ──────────────────────────────────────────────────────── */}
       <>
@@ -534,6 +555,16 @@ export default function FleetMaster() {
                   <Trash2 size={14} /> {t('fleetmaster.bulkBar.delete', { count: selectedIds.size })}
                 </button>
               </div>
+            </div>
+          )}
+
+          {/* Load error */}
+          {loadError && (
+            <div className="flex items-center justify-between gap-3 bg-red-900/30 border border-red-700 text-red-300 rounded-xl px-4 py-2.5 text-sm">
+              <span className="flex items-center gap-2"><AlertTriangle size={15} /> {loadError}</span>
+              <button onClick={() => loadRecords()} className="px-3 py-1 rounded-lg bg-red-600 hover:bg-red-500 text-white text-xs font-medium transition-colors">
+                {t('common.retry') === 'common.retry' ? 'Retry' : t('common.retry')}
+              </button>
             </div>
           )}
 

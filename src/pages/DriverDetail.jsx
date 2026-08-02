@@ -172,6 +172,7 @@ export default function DriverDetail() {
   const [driver, setDriver] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [truncated, setTruncated] = useState(false)
   const [activeTab, setActiveTab] = useState('profile')
   const [recordSort, setRecordSort] = useState({ col: 'issue_date', dir: 'desc' })
 
@@ -192,18 +193,24 @@ export default function DriverDetail() {
       // Fetch the whole fleet's records (respecting the active-country scope) so
       // the driver's fleet-relative rank & composite risk score match the
       // ranking table exactly, then narrow to this driver.
-      const { data, error: err } = await fetchAllPages((from, to) => {
+      // BOUNDED: tyre_records is a large table. Cap the fleet read at 20,000 with
+      // a stable order tiebreak (a paged read without an ORDER can drop/repeat
+      // rows at a page boundary) and note when the ceiling is hit, since the
+      // fleet-relative rank is then computed over a partial fleet.
+      const { data, error: err, truncated: tr } = await fetchAllPages((from, to) => {
         let q = supabase
           .from('tyre_records')
           .select(
             'id,asset_no,asset_number,serial_no,brand,site,country,driver_name,driver_id,' +
             'cost_per_tyre,km_at_fitment,km_at_removal,risk_level,removal_reason,issue_date,category,qty'
           )
+          .order('id')
         if (activeCountry && activeCountry !== 'All') q = q.eq('country', activeCountry)
         return q.range(from, to)
-      })
+      }, { max: 20000 })
       if (myReq !== reqIdRef.current) return
       if (err) throw err
+      setTruncated(!!tr)
 
       const fleet = data || []
       const mine = fleet.filter(r => ((r.driver_name ?? '').trim() || 'Unassigned') === driverName)
@@ -391,6 +398,12 @@ export default function DriverDetail() {
           </button>
         </div>
       </div>
+
+      {truncated && (
+        <p className="text-xs text-amber-400">
+          Capped view: the fleet-relative rank and risk score are based on the first 20,000 tyre records in this scope. Narrow the country to refine.
+        </p>
+      )}
 
       {/* ── Stat summary strip ─────────────────────────────────────────────── */}
       <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3">

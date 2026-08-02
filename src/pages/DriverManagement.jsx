@@ -277,6 +277,7 @@ export default function DriverManagement() {
   const [records, setRecords]   = useState([])
   const [loading, setLoading]   = useState(true)
   const [error, setError]       = useState(null)
+  const [truncated, setTruncated] = useState(false)
 
   // Filters
   const [datePreset, setDatePreset] = useState('1yr')
@@ -301,21 +302,27 @@ export default function DriverManagement() {
     setLoading(true)
     setError(null)
     try {
-      const { data, error: err } = await fetchAllPages((from, to) => {
+      // BOUNDED: tyre_records is a large table, so an unbounded read pulls the
+      // whole table into the browser. Cap at 20,000 with a stable order tiebreak
+      // (a paged read without an ORDER can drop/repeat rows at a page boundary)
+      // and surface a "capped view" note when the ceiling is hit.
+      const { data, error: err, truncated: tr } = await fetchAllPages((from, to) => {
         let q = supabase
           .from('tyre_records')
           .select(
             'id,asset_no,asset_number,serial_no,brand,site,country,driver_name,driver_id,' +
             'cost_per_tyre,km_at_fitment,km_at_removal,risk_level,removal_reason,issue_date,category'
           )
+          .order('id')
         if (activeCountry && activeCountry !== 'All') {
           q = q.eq('country', activeCountry)
         }
         return q.range(from, to)
-      })
+      }, { max: 20000 })
       if (myReq !== reqIdRef.current) return
       if (err) throw err
       setRecords(data || [])
+      setTruncated(!!tr)
     } catch (e) {
       if (myReq === reqIdRef.current) setError(toUserMessage(e, 'Failed to load driver data'))
     } finally {
@@ -591,6 +598,12 @@ export default function DriverManagement() {
           color="#f59e0b"
         />
       </div>
+
+      {truncated && (
+        <p className="text-xs text-amber-400">
+          Capped view: analysis is based on the first 20,000 tyre records in this scope. Narrow the country or date range for the full set.
+        </p>
+      )}
 
       {/* ── Filters bar ──────────────────────────────────────────────────── */}
       <div className="rounded-xl p-4 space-y-3"

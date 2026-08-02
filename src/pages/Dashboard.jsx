@@ -198,6 +198,10 @@ export default function Dashboard() {
   const [siteFilter, setSiteFilter]   = useState('')
   const [loading, setLoading]         = useState(true)
   const [error, setError]             = useState(null)
+  // True when the bounded raw-tyre pull (country + selected date window) hit its
+  // row ceiling, so the client-computed charts render a partial slice. KPIs are
+  // unaffected (they come from the server summary RPC). Surfaced as a note.
+  const [capped, setCapped]           = useState(false)
   const [dateShortcut, setDateShortcut] = useState('This Month')
   const [showCustom, setShowCustom]   = useState(false)
   const [granularity, setGranularity] = useState('monthly')
@@ -283,10 +287,14 @@ export default function Dashboard() {
     try {
       // Null-safe country filter (behind the service layer) never silently
       // drops uncategorised rows; full-fleet aggregates come from the RPC.
+      // The raw pull feeds only the client-computed charts and is bounded: the
+      // service applies country + the selected date window (dateFrom/dateTo)
+      // SERVER-SIDE, and a 50,000-row ceiling caps the worst case. Headline KPIs
+      // never depend on this read - they come from reportTyreSummary below.
       const [tyreRes, stockRes, actionRes, recentRes, openActRes, summaryRes] = await Promise.all([
         fetchAllPages((rangeFrom, rangeTo) =>
           dashboard.listDashboardTyres({ country: activeCountry, from: dateFrom, to: dateTo, rangeFrom, rangeTo })
-        , { max: 200000 }),
+        , { max: 50000 }),
         dashboard.listDashboardStock({ country: activeCountry }),
         dashboard.listDashboardActions({ country: activeCountry }),
         dashboard.listDashboardRecentTyres({ country: activeCountry }),
@@ -298,6 +306,7 @@ export default function Dashboard() {
       const firstErr = [tyreRes, stockRes, actionRes, recentRes, openActRes, summaryRes].find(r => r?.error)?.error
       if (firstErr) throw new Error(firstErr.message || firstErr)
       setRawTyres(tyreRes.data ?? [])
+      setCapped(Boolean(tyreRes.truncated))
       setSummary(summaryRes?.data ?? null)
       setRawStock(stockRes.data ?? [])
       setRawActions(actionRes.data ?? [])
@@ -1266,6 +1275,22 @@ export default function Dashboard() {
             </div>
           )}
         </div>
+
+        {/* Capped-view note: the chart data pull hit its 50,000-row ceiling, so
+            the charts below show a partial slice. The KPI tiles are unaffected
+            (server aggregates). ASCII only; narrow the date window or site to
+            see a complete chart view. */}
+        {capped && (
+          <div className="flex items-start gap-2 rounded-lg px-3 py-2 text-[11px]"
+            style={{ background: 'rgba(202,138,4,0.08)', border: '1px solid rgba(202,138,4,0.22)', color: '#eab308' }}>
+            <AlertTriangle size={13} className="flex-shrink-0 mt-0.5" />
+            <span>
+              {tf('dashboard.filters.cappedView',
+                'Capped view: charts show the first {n} tyre records for this window. KPI totals above are exact. Narrow the date range or site for a complete chart view.',
+                { n: (50000).toLocaleString() })}
+            </span>
+          </div>
+        )}
 
         <AnimatePresence>
           {showCustom && (

@@ -12,7 +12,7 @@
 import { supabase } from './_client'
 
 const SCO_COLS = 'id, country, region, site, period_date, cost_center, description, amount, currency, ref_no, source, notes, created_at'
-const SANY_COLS = 'id, country, region, site, asset_no, invoice_no, invoice_date, period_date, description, amount, currency, status, source, notes, created_at'
+const SANY_COLS = 'id, country, region, site, asset_code, asset_no, invoice_no, invoice_date, period_date, description, amount, currency, status, doc_type, fleet_remarks, maintenance_remarks, source, notes, created_at'
 
 /** Empty, correctly-shaped Cost/M3 result. */
 function emptyCostPerM3() {
@@ -255,6 +255,7 @@ function sanitizeSany(r = {}, isPatch = false) {
   set('country', txt(r.country))
   set('region', txt(r.region))
   set('site', txt(r.site))
+  set('asset_code', txt(r.asset_code))
   set('asset_no', txt(r.asset_no))
   set('invoice_no', txt(r.invoice_no))
   set('invoice_date', r.invoice_date || undefined)
@@ -264,6 +265,9 @@ function sanitizeSany(r = {}, isPatch = false) {
   else if (!isPatch) out.amount = 0
   set('currency', txt(r.currency))
   set('status', txt(r.status))
+  set('doc_type', r.doc_type === 'detail' ? 'detail' : (r.doc_type === 'summary' ? 'summary' : undefined))
+  set('fleet_remarks', txt(r.fleet_remarks))
+  set('maintenance_remarks', txt(r.maintenance_remarks))
   set('notes', txt(r.notes))
   if (!isPatch) out.source = r.source || 'manual'
   return out

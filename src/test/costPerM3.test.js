@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   fmtMoney, fmtM3, fmtCostPerM3, toMonthStart, mapImportRows, IMPORT_TEMPLATES,
-  assetFromTruck, toRejectedBool, toDateDay,
+  assetFromTruck, toRejectedBool, toDateDay, normalizeRegion,
 } from '../lib/costPerM3'
 
 describe('formatters', () => {
@@ -38,12 +38,24 @@ describe('mapImportRows', () => {
     })
   })
 
-  it('maps SANY invoice with alternate headers (Cost -> amount, Location -> site)', () => {
+  it('maps a SANY SUMMARY row (Region/Date/Quotation No/Amount (SAR)) -> summary doc_type', () => {
     const rows = mapImportRows('sany', [
-      { country: 'KSA', location: 'RED SEA', 'Invoice No': 'INV-9', 'Invoice Date': '2026-07-05', Cost: '524186' },
+      { Region: 'Western Region', Date: '06/09/2025', 'Quotation No': '20250906-16Y', 'Amount (SAR)': '1142.41' },
     ])
     expect(rows[0]).toMatchObject({
-      country: 'KSA', site: 'RED SEA', invoice_no: 'INV-9', invoice_date: '2026-07-01', amount: 524186,
+      region: 'Western', invoice_no: '20250906-16Y', invoice_date: '2025-09-01',
+      period_date: '2025-09-01', amount: 1142.41, doc_type: 'summary',
+    })
+  })
+
+  it('maps a SANY DETAIL row (Location/Asset/Parts/Quot. No/Cost/Remarks) -> detail doc_type', () => {
+    const rows = mapImportRows('sany', [
+      { 'Asset Code': 'AC1', 'Asset No': 'TM505', 'Parts Description': 'Filter kit',
+        'Quot. No': 'GCC 10', Cost: '710.36', Remarks: 'ok', 'Fleet Remarks': 'fr', 'Maintenance Remarks': 'mr', Location: 'NHC' },
+    ])
+    expect(rows[0]).toMatchObject({
+      asset_code: 'AC1', asset_no: 'TM505', description: 'Filter kit', invoice_no: 'GCC 10',
+      amount: 710.36, notes: 'ok', fleet_remarks: 'fr', maintenance_remarks: 'mr', site: 'NHC', doc_type: 'detail',
     })
   })
 
@@ -97,5 +109,11 @@ describe('batching helpers', () => {
     expect(toDateDay('01/05/2026')).toBe('2026-05-01')
     expect(toDateDay(new Date(Date.UTC(2026, 4, 1, 12)))).toMatch(/^2026-05-0[12]$/)
     expect(toDateDay('')).toBeNull()
+  })
+  it('normalizeRegion strips " Region" and title-cases', () => {
+    expect(normalizeRegion('Western Region')).toBe('Western')
+    expect(normalizeRegion('central region')).toBe('Central')
+    expect(normalizeRegion('Western')).toBe('Western')
+    expect(normalizeRegion('')).toBeNull()
   })
 })

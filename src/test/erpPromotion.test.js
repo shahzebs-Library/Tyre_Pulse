@@ -86,7 +86,7 @@ describe('guards + degradation', () => {
   it('promotionStatus returns a safe not-promoted shape on error or bad dataset', async () => {
     h.state.error = { message: 'boom' }
     const s = await promotionStatus('asset', 'b')
-    expect(s).toEqual({ inserted: 0, existing: 0, total: 0, promoted: false, promoted_at: null })
+    expect(s).toEqual({ inserted: 0, updated: 0, exact_duplicates: 0, existing: 0, total: 0, promoted: false, promoted_at: null })
 
     // production has no promotion RPC -> never calls the server
     h.state.error = null
@@ -99,6 +99,6 @@ describe('guards + degradation', () => {
   it('promotionStatus merges the server payload over the fallback', async () => {
     h.state.result = { inserted: 5, existing: 2, total: 7, promoted: true, promoted_at: '2026-07-28' }
     const s = await promotionStatus('change', 'b')
-    expect(s).toEqual({ inserted: 5, existing: 2, total: 7, promoted: true, promoted_at: '2026-07-28' })
+    expect(s).toEqual({ inserted: 5, updated: 0, exact_duplicates: 0, existing: 2, total: 7, promoted: true, promoted_at: '2026-07-28' })
   })
 })

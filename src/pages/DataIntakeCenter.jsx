@@ -25,6 +25,10 @@ import {
   diagnoseBatchHealth, formatDiagnosticsReport,
 } from '../lib/import/diagnostics'
 import { getBatchDiagnostics } from '../lib/api/importDiagnostics'
+import ProductionM3 from './ProductionM3'
+import ScoCosts from './ScoCosts'
+import SanyInvoices from './SanyInvoices'
+import SitesIntake from './SitesIntake'
 import MappingProfilesManager from '../components/intake/MappingProfilesManager'
 import DataLinkPanel from '../components/intake/DataLinkPanel'
 import CostControlPanel from '../components/intake/CostControlPanel'
@@ -142,6 +146,7 @@ export default function DataIntakeCenter() {
     return MODULES.some((m) => m.key === requested) ? requested : 'fleet'
   })()
 
+  const [intakeTab, setIntakeTab] = useState('erp')
   const [step, setStep] = useState(0)
   const [module, setModule] = useState(initialModule)
   const [file, setFile] = useState(null)
@@ -848,10 +853,41 @@ export default function DataIntakeCenter() {
     } finally { setBusy(false); setCommitProgress(null) }
   }
 
+  const INTAKE_TABS = [
+    { key: 'erp', label: 'ERP Import' },
+    { key: 'production', label: 'Production' },
+    { key: 'sco', label: 'SCO Cost' },
+    { key: 'sany', label: 'SANY Invoices' },
+    { key: 'sites', label: 'Sites & Regions' },
+  ]
+  const IntakeTabStrip = (
+    <div className="mb-4 flex flex-wrap gap-1 border-b border-[var(--border-subtle)]">
+      {INTAKE_TABS.map((tb) => (
+        <button key={tb.key} type="button" onClick={() => setIntakeTab(tb.key)}
+          className={`px-3 py-2 text-sm border-b-2 -mb-px ${intakeTab === tb.key ? 'border-orange-500 font-semibold text-[var(--text-primary)]' : 'border-transparent'}`}
+          style={intakeTab === tb.key ? undefined : { color: 'var(--text-secondary)' }}>{tb.label}</button>
+      ))}
+    </div>
+  )
+
+  // Cost per M3 uploads live here as tabs (own country + import, so they render
+  // outside the ERP wizard's single-country gate).
+  if (intakeTab !== 'erp') {
+    const Comp = { production: ProductionM3, sco: ScoCosts, sany: SanyInvoices, sites: SitesIntake }[intakeTab]
+    return (
+      <div className="p-4 md:p-6 max-w-[1800px] mx-auto text-[var(--text-primary)]">
+        <h1 className="text-xl font-bold flex items-center gap-2 mb-3"><Database size={20} /> Data Intake Center</h1>
+        {IntakeTabStrip}
+        {Comp ? <Comp /> : null}
+      </div>
+    )
+  }
+
   if (!countryReady) {
     return (
       <div className="p-8 max-w-3xl mx-auto">
         <h1 className="text-2xl font-bold text-[var(--text-primary)] mb-2">Data Intake Center</h1>
+        {IntakeTabStrip}
         <div className="bg-amber-900/20 border border-amber-700/50 rounded-xl p-6 text-amber-300 flex gap-3">
           <AlertTriangle className="shrink-0" />
           <p>Select a single country (top bar) before importing. Every import is scoped to one country, mixing countries is not allowed.</p>
@@ -878,6 +914,8 @@ export default function DataIntakeCenter() {
         </div>
         <button onClick={reset} className="text-sm px-3 py-2 rounded-lg bg-[var(--surface-2)] hover:bg-[var(--surface-3)] flex items-center gap-2"><RefreshCw size={15} /> New import</button>
       </div>
+
+      {IntakeTabStrip}
 
       {/* stepper */}
       <div className="flex items-center gap-2 mb-6">

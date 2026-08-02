@@ -265,6 +265,120 @@ export async function deleteProduction(id) {
   if (error) throw error
 }
 
+// ---- Sites (region map) ----------------------------------------------------
+
+const SITE_COLS = 'id, country, name, site_code, region, city, site_type, active, notes, created_at'
+
+export async function listSites({ country, limit = 2000 } = {}) {
+  try {
+    let q = supabase.from('sites').select(SITE_COLS).order('country').order('name')
+    if (country && country !== 'All') q = q.eq('country', country)
+    const { data, error } = await q.limit(limit)
+    if (error) return []
+    return Array.isArray(data) ? data : []
+  } catch { return [] }
+}
+
+export async function createSite(row) {
+  const { data, error } = await supabase.from('sites').insert([sanitizeSite(row)]).select(SITE_COLS).single()
+  if (error) throw error
+  return data
+}
+
+export async function updateSite(id, patch) {
+  const { data, error } = await supabase.from('sites').update(sanitizeSite(patch, true)).eq('id', id).select(SITE_COLS).single()
+  if (error) throw error
+  return data
+}
+
+export async function deleteSite(id) {
+  const { error } = await supabase.from('sites').delete().eq('id', id)
+  if (error) throw error
+}
+
+/**
+ * Import sites: INSERT new sites, UPDATE region/fields on existing ones (matched by
+ * country + name, case-insensitive - the sites unique key). Small dataset, so the
+ * existing set is fetched once and diffed in JS. Returns {read,inserted,updated,skipped,failed,errors}.
+ */
+export async function importSites(rows = []) {
+  const read = Array.isArray(rows) ? rows.length : 0
+  const clean = (Array.isArray(rows) ? rows : []).map((r) => sanitizeSite(r)).filter((r) => r.country && r.name)
+  const skipped = read - clean.length
+  if (!clean.length) return { read, inserted: 0, updated: 0, skipped, failed: 0, errors: [] }
+  const key = (c, n) => `${String(c).trim().toLowerCase()}|${String(n).trim().toLowerCase()}`
+  const existing = {}
+  for (const s of await listSites({})) existing[key(s.country, s.name)] = s.id
+  let inserted = 0; let updated = 0; let failed = 0
+  const errors = []
+  const toInsert = []
+  for (const r of clean) {
+    const id = existing[key(r.country, r.name)]
+    if (id) {
+      try {
+        const patch = { region: r.region, city: r.city, site_code: r.site_code, site_type: r.site_type, active: r.active, notes: r.notes }
+        const { error } = await supabase.from('sites').update(patch).eq('id', id)
+        if (error) { failed += 1; if (errors.length < 5) errors.push(error.message) } else updated += 1
+      } catch (e) { failed += 1; if (errors.length < 5) errors.push(e?.message || String(e)) }
+    } else {
+      toInsert.push(r)
+    }
+  }
+  if (toInsert.length) {
+    const res = await chunkedInsert('sites', toInsert)
+    inserted += res.inserted; failed += res.failed; errors.push(...res.errors.slice(0, Math.max(0, 5 - errors.length)))
+  }
+  return { read, inserted, updated, skipped, failed, errors }
+}
+
+function sanitizeSite(r = {}, isPatch = false) {
+  const out = {}
+  const set = (k, v) => { if (!isPatch || v !== undefined) out[k] = v }
+  set('country', txt(r.country))
+  set('name', txt(r.name))
+  set('site_code', txt(r.site_code))
+  set('region', txt(r.region))
+  set('city', txt(r.city))
+  set('site_type', txt(r.site_type))
+  if (r.active !== undefined) out.active = !/^(no|false|0|n)$/i.test(String(r.active ?? '').trim())
+  else if (!isPatch) out.active = true
+  set('notes', txt(r.notes))
+  return out
+}
+
+// ---- Import-history logging (so the console sees these uploads) -------------
+
+/**
+ * Best-effort log of a Cost/M3 or Sites upload into the console Import History
+ * (import_files + import_batches), so failures are visible centrally like ERP
+ * imports. Never throws.
+ * @param {{filename:string, sizeBytes?:number, module:string, country?:string, result:object, at:string}} p
+ */
+export async function logIntakeToHistory({ filename, sizeBytes, module, country, result = {}, at }) {
+  try {
+    const failed = Number(result.failed) > 0
+    const { data: f } = await supabase.from('import_files').insert({
+      original_filename: filename || `${module}.xlsx`,
+      size_bytes: sizeBytes || null,
+      country: country || null,
+      source_system: 'cost_m3',
+      validation_status: failed ? 'error' : 'ok',
+    }).select('id').single()
+    await supabase.from('import_batches').insert({
+      country: country || null,
+      module,
+      file_id: f?.id || null,
+      source_system: 'cost_m3',
+      total_rows: Number(result.read) || 0,
+      imported_rows: (Number(result.inserted) || 0) + (Number(result.updated) || 0),
+      skipped_rows: Number(result.skipped) || 0,
+      error_rows: Number(result.failed) || 0,
+      import_status: failed ? 'failed' : 'committed',
+      completed_at: at || null,
+    })
+  } catch { /* logging is best-effort */ }
+}
+
 // ---- sanitizers (whitelist; coerce amounts; never send generated cols) ------
 
 const numOrNull = (v) => {

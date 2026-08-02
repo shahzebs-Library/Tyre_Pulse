@@ -16,6 +16,7 @@ import { useSettings, COUNTRIES } from '../../contexts/SettingsContext'
 import { CPK_PERIODS, DEFAULT_PERIOD, periodBounds, periodLabel } from '../../lib/cpkModule'
 import { IMPORT_TEMPLATES, mapImportRows } from '../../lib/costPerM3'
 import { parseWorkbook } from '../../lib/import/parseWorkbook'
+import { logIntakeToHistory } from '../../lib/api/costPerM3'
 import { exportToExcel } from '../../lib/exportUtils'
 import { toUserMessage } from '../../lib/safeError'
 
@@ -30,6 +31,8 @@ export default function LedgerPage({
   formFields,         // [{ key, label, type:'text'|'number'|'month'|'select', options?, required?, currencyOf? }]
   amountKey = 'amount',
   service,            // { list, create, import, remove }
+  hideTotal = false,  // hide the on-screen sum (e.g. sites have no amount)
+  hidePeriod = false, // hide the month selector (e.g. sites are not period-bound)
 }) {
   const { activeCountry } = useSettings()
   const initialCountry = activeCountry && activeCountry !== 'All' ? activeCountry : COUNTRIES[0]
@@ -113,9 +116,11 @@ export default function LedgerPage({
       const parts = [`Read ${res.read ?? dataRows.length}`, `imported ${res.inserted || 0}`]
       if (res.skipped) parts.push(`${res.skipped} skipped (missing country/amount/date)`)
       if (res.failed) parts.push(`${res.failed} failed`)
+      if (res.updated) parts.splice(2, 0, `${res.updated} updated`)
       let msg = `${file.name}: ${parts.join(', ')}.`
       if (res.failed && res.errors?.length) msg += ` First error: ${res.errors[0]}`
       if (res.failed) setError(msg); else setNotice(msg)
+      logIntakeToHistory({ filename: file.name, sizeBytes: file.size, module: kind, country, result: res, at: new Date().toISOString() })
       load()
     } catch (err) {
       setError(toUserMessage(err))
@@ -188,13 +193,19 @@ export default function LedgerPage({
               style={country === c ? undefined : { color: 'var(--text-secondary)' }}>{c}</button>
           ))}
         </div>
-        <select value={periodKey} onChange={(e) => setPeriodKey(e.target.value)} className="rounded-md border border-[var(--border-subtle)] bg-transparent px-3 py-1.5 text-sm">
-          {CPK_PERIODS.map((p) => <option key={p.key} value={p.key}>{p.label}</option>)}
-        </select>
-        <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>{periodLabel(bounds)}</span>
-        <span className="ml-auto text-sm font-semibold tabular-nums">
-          Total: {Math.round(total).toLocaleString()}
-        </span>
+        {!hidePeriod && (
+          <>
+            <select value={periodKey} onChange={(e) => setPeriodKey(e.target.value)} className="rounded-md border border-[var(--border-subtle)] bg-transparent px-3 py-1.5 text-sm">
+              {CPK_PERIODS.map((p) => <option key={p.key} value={p.key}>{p.label}</option>)}
+            </select>
+            <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>{periodLabel(bounds)}</span>
+          </>
+        )}
+        {!hideTotal && (
+          <span className="ml-auto text-sm font-semibold tabular-nums">
+            Total: {Math.round(total).toLocaleString()}
+          </span>
+        )}
       </div>
 
       {tpl && (

@@ -44,6 +44,7 @@ export default function LedgerPage({
   const [form, setForm] = useState({})
   const [saving, setSaving] = useState(false)
   const [importing, setImporting] = useState(false)
+  const [importPct, setImportPct] = useState(0)
   const [notice, setNotice] = useState('')
   const fileRef = useRef(null)
 
@@ -90,18 +91,37 @@ export default function LedgerPage({
   async function onFile(e) {
     const file = e.target.files?.[0]
     if (!file) return
-    setImporting(true); setError(''); setNotice('')
+    setImporting(true); setImportPct(0); setError(''); setNotice('')
     try {
       const wb = await parseWorkbook(file)
-      const dataRows = wb?.sheets?.[0]?.dataRows || []
+      // Use the sheet with the most rows (some exports carry a title/summary sheet first).
+      const sheets = wb?.sheets || []
+      const sheet = sheets.reduce((best, s) => ((s?.dataRows?.length || 0) > (best?.dataRows?.length || 0) ? s : best), sheets[0])
+      const dataRows = sheet?.dataRows || []
+      if (!dataRows.length) {
+        setError(`No data rows found in ${file.name}. Check the header row and that the file is .xlsx / .csv.`)
+        return
+      }
       const mapped = mapImportRows(kind, dataRows).map((r) => ({ ...r, country: r.country || country }))
-      const res = await service.import(mapped)
-      setNotice(`Imported ${res.inserted || 0} row(s) from ${file.name}.`)
+      if (!mapped.length) {
+        setError(`Read ${dataRows.length} rows but none matched the expected columns. Expected: ${tpl?.headers?.join(', ') || 'see below'}.`)
+        return
+      }
+      const res = await service.import(mapped, (p) => {
+        if (p?.total) setImportPct(Math.round((p.done / p.total) * 100))
+      })
+      const parts = [`Read ${res.read ?? dataRows.length}`, `imported ${res.inserted || 0}`]
+      if (res.skipped) parts.push(`${res.skipped} skipped (missing country/amount/date)`)
+      if (res.failed) parts.push(`${res.failed} failed`)
+      let msg = `${file.name}: ${parts.join(', ')}.`
+      if (res.failed && res.errors?.length) msg += ` First error: ${res.errors[0]}`
+      if (res.failed) setError(msg); else setNotice(msg)
       load()
     } catch (err) {
       setError(toUserMessage(err))
     } finally {
       setImporting(false)
+      setImportPct(0)
       if (fileRef.current) fileRef.current.value = ''
     }
   }
@@ -146,7 +166,7 @@ export default function LedgerPage({
               <Plus size={14} /> Add
             </button>
             <button type="button" onClick={() => fileRef.current?.click()} disabled={importing} className="inline-flex items-center gap-1.5 rounded-md border border-[var(--border-subtle)] px-3 py-1.5 text-sm disabled:opacity-50">
-              <Upload size={14} /> {importing ? 'Importing...' : 'Import'}
+              <Upload size={14} /> {importing ? `Importing... ${importPct}%` : 'Import'}
             </button>
             <button type="button" onClick={exportExcel} className="inline-flex items-center gap-1.5 rounded-md border border-[var(--border-subtle)] px-3 py-1.5 text-sm">
               <FileSpreadsheet size={14} /> Export

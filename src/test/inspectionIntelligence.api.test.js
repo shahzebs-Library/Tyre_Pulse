@@ -13,6 +13,8 @@ const h = vi.hoisted(() => {
       select(cols) { calls.select = cols; return b },
       eq(c, v) { calls.eq.push([c, v]); return b },
       or(e) { calls.or.push(e); return b },
+      order(c, o) { calls.order = [c, o]; return b },
+      range(a, z) { calls.range = [a, z]; return b },
       insert(v) { calls.insert = v; return b },
       then(onF, onR) { return Promise.resolve(state.result).then(onF, onR) },
     }
@@ -59,9 +61,9 @@ describe('service layer - inspectionIntelligence', () => {
     expect(h.state.last._calls.insert).toEqual({ asset_no: 'A1', status: 'Open' })
   })
 
-  it('pass-through surfaces the raw { data, error } the page reads', async () => {
+  it('surfaces the paged { data, error } the page reads', async () => {
     h.state.result = { data: [{ id: 'i1' }], error: null }
     const res = await inspIntelApi.listInspectionIntelInspections({ country: 'All' })
-    expect(res).toEqual({ data: [{ id: 'i1' }], error: null })
+    expect(res).toEqual({ data: [{ id: 'i1' }], error: null, truncated: false })
   })
 })

@@ -3,6 +3,77 @@
 Durable, committed project knowledge so any session has full context. Keep this
 current. Read it before adding/changing modules. Governing spec: `Tyre pulse enterprise.md`
 
+## SESSION 2026-08-02 — CPK INTELLIGENCE + COST PER M3 + PMV INTAKE + SEARCH RBAC. Migrations through **V455**, next free **V456**. ALL MERGED to main (PRs #248-#264). ACTIVE.
+DB uses timestamp migration versions, so repo V-labels V444-V455 do NOT collide with the live V432-V442 numbers a
+PARALLEL session used — the repo files were renumbered to V444+ to avoid file-label collision. Everything below is
+applied live on project `jhssdmeruxtrlqnwfksc` (org Company A) + merged to main. Branch realigned after each squash.
+- **V444 TYRE MONTHLY CONSUMPTION LOAD** — 2,227 genuinely-new fitments from the manual `*_country_upload_template_
+  staging` tables into tyre_records (KSA +1,655 / UAE +478 / Egypt +94), filling the 2026 monthly gap. Dedup key =
+  asset+position+fix_date (serials here are often BRAND names, not ids). Fixed one 2062 date. Reversible (_bak snaps).
+- **V445 UNIT-AWARE FLEET CPK** — km AND engine-hours. Loaded 4,379 engine-hour readings (fix_HM/remove_HM) into
+  engine_hours_logs. `fleet_hours_by_asset`, `cpk_unit_for_asset_type(text)` (km for road / engine_hours for plant —
+  MIRROR of JS costIntelligence.cpkUnitForAssetType, change BOTH), `get_fleet_cpk(country,from,to)` -> per_vehicle/
+  by_type/fleet, per-country currency never blended, cpk NULL when denom 0.
+- **V453 CPK km = SUM of tyre total_km (cost per TYRE-km), per customer decision.** total_km is each tyre's own life
+  (a work order changes 2 tyres in different positions, each its own km) -> new `fleet_tyre_km_by_asset(org,country,
+  from,to)` = sum(total_km) matched to the tyre's change month; get_fleet_cpk + get_cpk_drivers km side repointed to
+  it (odometer-span fleet_km_by_asset KEPT for other callers). This data is all MOVABLE (no non-movable hours in it).
+  KSA July fleet tyre-km 183k(span) -> 34.8M(sum); assets covered 90 -> 229.
+- **V446/V447 CPK brand-value + drivers.** `get_brand_size_cpk` (per country/size/brand lifecycle CPK, best value)
+  + `get_cpk_drivers` (why CPK moved: Bennet price/volume + mix + new/retired equipment + utilization; exact-closing).
+- **CPK INTELLIGENCE = its own module** `/cpk-intelligence` (Reports nav): loads ONE country + ONE bounded period
+  (default CURRENT MONTH, not full history) so it opens fast; splits fleet into **MOVABLE (cost/km)** vs
+  **NON-MOVABLE (cost/hour)** by each row's `unit`; production tables (sort/search/paginate/export); lazy advanced
+  tabs (per-vehicle / what-if scenario / brand value / why-it-changed). Pure `src/lib/cpkModule.js` (periodBounds +
+  splitByMobility + fleetSideFor, 18 tests). CPK moved OUT of Engineering KPI (now a link banner; dead fetches
+  removed). Components under `src/components/cpk/`.
+- **V448/V449 JOB-CARD CLOSE.** 56,399 historical job cards were stuck "out of production" (production_out_at set,
+  production_in_at NULL) -> dashboard read 56,131 out / 732,147 days. V448 closed them (production_in_at = completed_at
+  or out+1min); V449 closed all pre-2026 status-Open cards (169). Result: still-out 47 (all 2026), open-status 82
+  (all 2026). Reversible via _bak.jobcard_close_* snapshots.
+- **COST PER M3 MODULE (V450/V450b/V451/V454/V455)** — matches customer screenshot: (Internal ERP + SCO + SANY) /
+  approved production M3, BY REGION (sites.region), per country, current-month default. Tables `sco_costs`,
+  `sany_invoices`; `production_logs` += approved_m3 + batching cols (dn_number, supplied_m3, rejected, reason,
+  remarks, mix/customer/project, pump_no, batching_at). RPCs `get_cost_per_m3(country,from,to)` (V450b; Internal =
+  parts_consumption.line_cost; tyre_cost is a SUBSET shown separately; SANY counts only doc_type<>'detail' to avoid
+  double count), `get_cost_per_m3_trend` (V451, monthly date-wise), `get_production_rejections` (V454, not-approved
+  m3 by site+reason). Pages: `/cost-per-m3` (headline card + region table + monthly detail + exports), `/sco-costs`,
+  `/sany-invoices`, `/production-m3` (+ ProductionRejectionsPanel), `/sites-intake`. Pure `src/lib/costPerM3.js`
+  (fmt + IMPORT_TEMPLATES + HEADER_SYNONYMS + mapImportRows + normalizeRegion + assetFromTruck/toDateDay/
+  toRejectedBool). Service `src/lib/api/costPerM3.js`. Reusable `src/components/costm3/LedgerPage.jsx`.
+- **PRODUCTION = concrete batching format (V454).** Station->site, Approved/Signed Qty = counted production (the
+  cost/m3 denominator), Rejection Type/Reason/Remarks -> rejections report. Truck Number -> asset (first token).
+- **SANY = TWO formats linked by Quotation No (V455).** Summary (payable: Region|Date|Quotation No|Amount(SAR)) +
+  Detail (parts: Location|Asset|Parts|Quot.No|Cost|Fleet/Maintenance Remarks). doc_type distinguishes; Cost/M3 counts
+  only summary. Region normalised "Western Region"->"Western". **SANY also accepts PDF** (pdfjs-dist lazy;
+  `src/lib/import/parsePdf.js` extractPdfLines + parseSanyPdfRows — robust to one-line-per-record and field-per-line;
+  keeps "GCC 10" quots, integer amounts, ignores TOTAL). Only kind 'sany' parses PDF.
+- **REGION MODEL:** one company -> countries -> sites -> KSA sites belong to **Central / Western** (KSA-only).
+  Cost/M3 region = internal via sites.region (join parts_consumption.site->sites), SCO/SANY carry region on the row.
+  Sites currently all region-blank (customer will fill via the Sites template + import). 64 live sites.
+- **DATA INTAKE now has TABS** (customer ask): DataIntakeCenter got a tab strip = ERP Import (existing wizard) +
+  Production + SCO Cost + SANY Invoices + Sites & Regions. The Cost/M3 uploads render there. `/sites-intake` (Sites &
+  Regions) imports the sites template (Country, Site Name, Site Code, Region, City, Type, Active) — UPDATES existing
+  sites' region (match on country+name, the ux_sites_org_country_name key), inserts new.
+- **IMPORTS are chunked/fast + logged.** LedgerPage import: parseWorkbook OR PDF -> mapImportRows -> `chunkedInsert`
+  (500-row batches, pool of 5) so 65k-row production files upload reliably; shows Read/Imported/Skipped/Failed +
+  progress %. Every upload best-effort logs to `import_files` + `import_batches` so the console Import History shows
+  file/rows/errors. `importSites` upserts in JS (fetch existing, update region / insert new).
+- **SEARCH RBAC FIX (PR #261).** The Ctrl/Cmd+K palette showed modules the user cannot access: `isCommandVisible`
+  only gated when a command had an explicit `moduleKey`. Rewrote it to MIRROR Layout.shouldShowNavItem — keyed
+  commands (moduleKey || NAV_MODULE_KEY[path]) go through hasPermission (matrix+revoke); custom roles deny-by-default;
+  Inspector/DMO/checklist-only scoped; per-user grants open; super-admin sees adminOnly. Threaded grantedModules +
+  isSuperAdmin from useAuth. RULE: search visibility must equal sidebar visibility — reuse governingModuleKey/
+  NAV_MODULE_KEY, never gate only on an explicit moduleKey.
+- **V452 DAILY COVERAGE FIX.** Expenses/tyre_records are EVENT-DRIVEN per site, so per-site "missing day" is noise;
+  the console flagged sites with 2 cost rows/month as missing ~28 days. `_upload_coverage_detail_for_org` now
+  day-polices per site ONLY for daily-per-site feeds (production_m3/job_cards) with a site-cadence gate; country-level
+  feed health + dormant detection unchanged. KSA cost sites flagged 14 -> 0.
+- **OPEN / customer to-do:** fill each site's Region (Central/Western) via the sent Sites template + upload on the
+  Sites & Regions tab; upload Production (65k) + SANY (PDF or Excel) + SCO files; then Cost/M3 fills per region. A
+  stray `sites` row country='Saudi Arabia' (RIY-MET-ST) duplicates the KSA one — remove on request. Other SCO format
+  still pending from customer.
+
 ## SESSION 2026-07-30 — ACCIDENT MODULE UI/WORKFLOW POLISH (PRs #234-#246) + UAE/EGYPT TYRE LOAD (V428-V430) + VEHICLE_TYPE BACKFILL (V431). Migrations through **V431**, next free **V432**.
 - **ACCIDENT/INCIDENT UI DECLUTTER (PRs #242/#244/#245/#246, code only).** Customer: remove the charts (keep
   tiles), tidy the always-open filters, make the case page one big clear full-width page with one tab per team

@@ -11,6 +11,46 @@
  */
 import { supabase } from './_client'
 
+/**
+ * Insert many rows fast and reliably: batches of CHUNK, a small concurrency pool,
+ * per-batch error capture (a bad batch never aborts the whole upload). Handles the
+ * 65k-rows-per-month production files. Returns { inserted, failed, errors } and
+ * reports progress. A batch that errors is NOT retried row-by-row here (kept simple);
+ * its rows count as failed and the first few messages are surfaced.
+ */
+async function chunkedInsert(table, rows, onProgress) {
+  const CHUNK = 500
+  const POOL = 5
+  const batches = []
+  for (let i = 0; i < rows.length; i += CHUNK) batches.push(rows.slice(i, i + CHUNK))
+  let inserted = 0
+  let failed = 0
+  let done = 0
+  const errors = []
+  let cursor = 0
+  async function worker() {
+    while (cursor < batches.length) {
+      const batch = batches[cursor++]
+      try {
+        const { data, error } = await supabase.from(table).insert(batch).select('id')
+        if (error) {
+          failed += batch.length
+          if (errors.length < 5) errors.push(error.message || String(error))
+        } else {
+          inserted += (data || []).length
+        }
+      } catch (e) {
+        failed += batch.length
+        if (errors.length < 5) errors.push(e?.message || String(e))
+      }
+      done += batch.length
+      if (onProgress) onProgress({ done, total: rows.length, inserted, failed })
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(POOL, batches.length) }, worker))
+  return { inserted, failed, errors }
+}
+
 const SCO_COLS = 'id, country, region, site, period_date, cost_center, description, amount, currency, ref_no, source, notes, created_at'
 const SANY_COLS = 'id, country, region, site, asset_code, asset_no, invoice_no, invoice_date, period_date, description, amount, currency, status, doc_type, fleet_remarks, maintenance_remarks, source, notes, created_at'
 
@@ -93,13 +133,14 @@ export async function createScoCost(row) {
   return data
 }
 
-/** Bulk insert SCO cost rows (import). Returns {inserted}. */
-export async function importScoCosts(rows = []) {
-  const clean = (Array.isArray(rows) ? rows : []).map(sanitizeSco).filter((r) => r.country && Number.isFinite(r.amount))
-  if (!clean.length) return { inserted: 0 }
-  const { data, error } = await supabase.from('sco_costs').insert(clean).select('id')
-  if (error) throw error
-  return { inserted: (data || []).length }
+/** Bulk insert SCO cost rows (import). Chunked/fast. Returns {read,inserted,skipped,failed,errors}. */
+export async function importScoCosts(rows = [], onProgress) {
+  const read = Array.isArray(rows) ? rows.length : 0
+  const clean = (Array.isArray(rows) ? rows : []).map((r) => sanitizeSco(r)).filter((r) => r.country && Number.isFinite(r.amount))
+  const skipped = read - clean.length
+  if (!clean.length) return { read, inserted: 0, skipped, failed: 0, errors: [] }
+  const res = await chunkedInsert('sco_costs', clean, onProgress)
+  return { read, skipped, ...res }
 }
 
 export async function updateScoCost(id, patch) {
@@ -133,12 +174,13 @@ export async function createSanyInvoice(row) {
   return data
 }
 
-export async function importSanyInvoices(rows = []) {
-  const clean = (Array.isArray(rows) ? rows : []).map(sanitizeSany).filter((r) => r.country && Number.isFinite(r.amount))
-  if (!clean.length) return { inserted: 0 }
-  const { data, error } = await supabase.from('sany_invoices').insert(clean).select('id')
-  if (error) throw error
-  return { inserted: (data || []).length }
+export async function importSanyInvoices(rows = [], onProgress) {
+  const read = Array.isArray(rows) ? rows.length : 0
+  const clean = (Array.isArray(rows) ? rows : []).map((r) => sanitizeSany(r)).filter((r) => r.country && Number.isFinite(r.amount))
+  const skipped = read - clean.length
+  if (!clean.length) return { read, inserted: 0, skipped, failed: 0, errors: [] }
+  const res = await chunkedInsert('sany_invoices', clean, onProgress)
+  return { read, skipped, ...res }
 }
 
 export async function updateSanyInvoice(id, patch) {
@@ -202,12 +244,13 @@ export async function createProduction(row) {
   return data
 }
 
-export async function importProduction(rows = []) {
-  const clean = (Array.isArray(rows) ? rows : []).map(sanitizeProd).filter((r) => r.country && r.period_date)
-  if (!clean.length) return { inserted: 0 }
-  const { data, error } = await supabase.from('production_logs').insert(clean).select('id')
-  if (error) throw error
-  return { inserted: (data || []).length }
+export async function importProduction(rows = [], onProgress) {
+  const read = Array.isArray(rows) ? rows.length : 0
+  const clean = (Array.isArray(rows) ? rows : []).map((r) => sanitizeProd(r)).filter((r) => r.country && r.period_date)
+  const skipped = read - clean.length
+  if (!clean.length) return { read, inserted: 0, skipped, failed: 0, errors: [] }
+  const res = await chunkedInsert('production_logs', clean, onProgress)
+  return { read, skipped, ...res }
 }
 
 export async function updateProduction(id, patch) {

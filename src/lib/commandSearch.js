@@ -211,6 +211,8 @@ export const NAV_COMMANDS = [
     keywords: ['expense report', 'real expenses', 'spend', 'cost per km', 'cpk', 'cost per kilometre', 'comparison', 'last year', 'last month'] },
   { id: 'expense-trends', label: 'Expense Trends', path: '/expense-trends', icon: 'TrendingUp', roles: ANALYTICS_ROLES,
     keywords: ['expense trends', 'forecast', 'year over year', 'yoy', 'yearly spend', 'tyre spare lubricant', 'trend', 'compare years', 'projection'] },
+  { id: 'cpk-intelligence', label: 'CPK Intelligence', path: '/cpk-intelligence', icon: 'Gauge', roles: ANALYTICS_ROLES,
+    keywords: ['cpk', 'cost per km', 'cost per hour', 'cost per kilometre', 'movable', 'non movable', 'engine hours', 'fleet cpk', 'per vehicle cost', 'scenario', 'brand value', 'why cpk changed'] },
   { id: 'erp-intake', label: 'Data Intake (ERP)', path: '/erp-intake', icon: 'Layers', roles: ANALYTICS_ROLES },
   { id: 'expense-import', label: 'Expense Import', path: '/expense-import', icon: 'Receipt', roles: ANALYTICS_ROLES },
   { id: 'roi-calculator', label: 'ROI Calculator', path: '/roi-calculator', icon: 'DollarSign', roles: ANALYTICS_ROLES },

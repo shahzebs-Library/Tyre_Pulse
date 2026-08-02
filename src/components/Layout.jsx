@@ -288,6 +288,7 @@ const NAV_GROUPS = [
       { to: '/maintenance-cost-board', label: 'Maintenance Cost & Tasks', icon: Wrench, roles: ANALYTICS_ROLES },
       { to: '/expense-report',    label: 'Expenses & CPK',    icon: Wallet, roles: ANALYTICS_ROLES },
       { to: '/expense-trends',    label: 'Expense Trends',    icon: TrendingUp, roles: ANALYTICS_ROLES },
+      { to: '/cpk-intelligence',  label: 'CPK Intelligence',  icon: Gauge,      roles: ANALYTICS_ROLES },
       { to: '/reports',           label: 'Reports',           icon: FileText },
       { to: '/dashboard-builder', label: 'Dashboard Builder', icon: LayoutGrid },
       { to: '/scheduled-reports', label: 'Scheduled Reports', icon: CalendarCheck2 },

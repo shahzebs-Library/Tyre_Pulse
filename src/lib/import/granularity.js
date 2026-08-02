@@ -51,7 +51,7 @@ function prettify(key) {
 
 /**
  * Human-readable description of a module's natural key, e.g.
- *   workorder → "Country + Work Order No."
+ *   workorder → "Work Order No." (globally unique, not country-scoped)
  * Returns null when the module has no meaningful natural key.
  *
  * @param {string} module

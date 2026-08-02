@@ -57,7 +57,8 @@ describe('service layer - uploads', () => {
   it('listExistingSerials filters tyre_records by serial batch', async () => {
     await uploads.listExistingSerials(['S1', 'S2'])
     expect(h.state.last._table).toBe('tyre_records')
-    expect(h.state.last._calls.select).toBe('serial_no, asset_no, issue_date, id')
+    // selects all columns so the live importer can diff full rows for exact-duplicate detection
+    expect(h.state.last._calls.select).toBe('*')
     expect(h.state.last._calls.in).toContainEqual(['serial_no', ['S1', 'S2']])
   })
 

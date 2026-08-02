@@ -148,7 +148,7 @@ describe('a zero-row commit is never reported as a success', () => {
       status: 'nothing_to_commit', inserted: 0, failed: 0,
       not_eligible: { 'skip/ready': 94 },
     })
-    expect(res.hints.join(' ')).toMatch(/already exist/i)
+    expect(res.hints.join(' ')).toMatch(/duplicate/i)
     expect(res.hints.join(' ')).not.toMatch(/earlier attempt/i)
   })
 

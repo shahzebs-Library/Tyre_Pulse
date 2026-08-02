@@ -39,7 +39,8 @@ describe('duplicateRatio', () => {
 describe('naturalKeyLabel', () => {
   it('renders a human-readable key for keyed modules', () => {
     expect(naturalKeyLabel('workorder')).toMatch(/Work Order/i)
-    expect(naturalKeyLabel('workorder')).toMatch(/^Country \+ /)
+    // work_order_no is globally unique, so its natural key is NOT country-scoped
+    expect(naturalKeyLabel('workorder')).not.toMatch(/Country/)
     expect(naturalKeyLabel('fleet')).toMatch(/^Country \+ /)
     expect(naturalKeyLabel('stock')).toContain('+')
   })

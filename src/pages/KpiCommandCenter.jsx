@@ -108,6 +108,14 @@ const PERIOD_PRESETS = [
   { label: 'Custom', value: 'custom' },
 ]
 
+// Hard ceiling on every paged tyre_records / inspections read below. No server
+// aggregate covers the per-row engineering KPIs (CPK, tyre life, failure/scrap
+// rate, pressure/inspection compliance), so the rows are still read and computed
+// client-side, but the fetch is bounded (country + period window applied
+// SERVER-SIDE, plus this ceiling). A truncated read is surfaced as a capped-view
+// note. For today's data (well under the cap) every displayed value is unchanged.
+const ROW_CAP = 50000
+
 const CHART_BASE = {
   responsive: true,
   maintainAspectRatio: false,
@@ -516,6 +524,7 @@ export default function KpiCommandCenter() {
   const [country, setCountry] = useState('All')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
+  const [truncated, setTruncated] = useState(false)
   const [records, setRecords] = useState([])
   const [prevRecords, setPrevRecords] = useState([])
   const [inspections, setInspections] = useState([])
@@ -568,40 +577,40 @@ export default function KpiCommandCenter() {
     setError(null)
     try {
       const [
-        { data: recs, error: e1 },
-        { data: prevRecs, error: e2 },
-        { data: insps, error: e3 },
-        { data: prevInsps, error: e4 },
+        { data: recs, error: e1, truncated: t1 },
+        { data: prevRecs, error: e2, truncated: t2 },
+        { data: insps, error: e3, truncated: t3 },
+        { data: prevInsps, error: e4, truncated: t4 },
         { data: siteRows },
-        { data: histRecs },
+        { data: histRecs, truncated: t6 },
       ] = await Promise.all([
         fetchAllPages((from_, to_) => applyFilters(
           supabase.from('tyre_records')
             .select('id,issue_date,asset_no,brand,site,country,cost_per_tyre,km_at_fitment,km_at_removal,risk_level,category,tread_depth,pressure_reading')
             .gte('issue_date', from).lte('issue_date', to)
-        ).range(from_, to_), { max: 200000 }),
+        ).range(from_, to_), { max: ROW_CAP }),
         fetchAllPages((from_, to_) => applyFilters(
           supabase.from('tyre_records')
             .select('id,issue_date,asset_no,cost_per_tyre,km_at_fitment,km_at_removal,risk_level,category,tread_depth')
             .gte('issue_date', prevFrom).lte('issue_date', prevTo)
-        ).range(from_, to_), { max: 200000 }),
+        ).range(from_, to_), { max: ROW_CAP }),
         fetchAllPages((from_, to_) => applyFilters(
           supabase.from('inspections')
             .select('id,asset_no,site,country,status,scheduled_date,completed_date,findings,inspection_type')
             .gte('inspection_date', from).lte('inspection_date', to)
-        ).range(from_, to_), { max: 200000 }),
+        ).range(from_, to_), { max: ROW_CAP }),
         fetchAllPages((from_, to_) => applyFilters(
           supabase.from('inspections')
             .select('id,status,scheduled_date,completed_date,findings')
             .gte('inspection_date', prevFrom).lte('inspection_date', prevTo)
-        ).range(from_, to_), { max: 200000 }),
+        ).range(from_, to_), { max: ROW_CAP }),
         supabase.from('tyre_records').select('site').not('site', 'is', null).limit(1000),
         // 12 months historical for sparklines + matrix
         fetchAllPages((from_, to_) => applyFilters(
           supabase.from('tyre_records')
             .select('id,issue_date,asset_no,cost_per_tyre,km_at_fitment,km_at_removal,risk_level,category,tread_depth')
             .gte('issue_date', (() => { const d = new Date(dataAnchor ?? Date.now()); d.setFullYear(d.getFullYear() - 1); return fmt(d) })())
-        ).range(from_, to_), { max: 200000 }),
+        ).range(from_, to_), { max: ROW_CAP }),
       ])
 
       if (e1) throw e1
@@ -611,6 +620,7 @@ export default function KpiCommandCenter() {
       setPrevRecords(prevRecs || [])
       setInspections(insps || [])
       setPrevInspections(prevInsps || [])
+      setTruncated(Boolean(t1 || t2 || t3 || t4 || t6))
 
       if (siteRows) {
         const unique = ['All', ...new Set(siteRows.map(r => r.site).filter(Boolean)).values()]
@@ -637,6 +647,7 @@ export default function KpiCommandCenter() {
       }
     } catch (err) {
       setError(toUserMessage(err, 'Could not load KPI data.'))
+      setTruncated(false)
     } finally {
       setLoading(false)
     }
@@ -955,6 +966,13 @@ export default function KpiCommandCenter() {
         <div className="bg-red-900/30 border border-red-700 rounded-xl p-4 text-red-300 text-sm flex items-center gap-2">
           <AlertTriangle size={16} />
           {error}
+        </div>
+      )}
+
+      {truncated && !loading && (
+        <div className="flex items-center gap-2 text-amber-400 text-xs bg-amber-400/10 border border-amber-400/20 rounded-xl px-4 py-2.5">
+          <AlertTriangle size={13} />
+          Showing a capped view of {ROW_CAP.toLocaleString()} records. Narrow the date range, site or country for exact figures across the full history.
         </div>
       )}
 

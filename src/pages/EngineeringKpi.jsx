@@ -5,13 +5,6 @@ import { toUserMessage } from '../lib/safeError'
 import { useSettings, COUNTRIES } from '../contexts/SettingsContext'
 import { loadGridTyreByAsset } from '../lib/api/costSummary'
 import { loadGovernedCostSplit } from '../lib/api/governedCost'
-import { getFleetCpk } from '../lib/api/fleetCpk'
-import { getCpkDrivers } from '../lib/api/cpkDrivers'
-import { getBrandSizeCpk } from '../lib/api/brandSizeCpk'
-import {
-  fmtCpkValue, fmtDistance, fmtMoney, fmtCoverage,
-  unitSuffix, sortByTypeWorstFirst, filterPerVehicle, fleetTiles, byTypeExportRows,
-} from '../lib/fleetCpkView'
 import { COST_MODES, pickCost } from '../lib/costSources'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import {
@@ -36,8 +29,6 @@ import PageHeader from '../components/ui/PageHeader'
 import YearlyTrendPanel from '../components/expense/YearlyTrendPanel'
 import SectionTabs, { KPI_TABS } from '../components/ui/SectionTabs'
 import EmailReportModal from '../components/EmailReportModal'
-import CpkScenarioPanel from '../components/cpk/CpkScenarioPanel'
-import CpkDriversPanel from '../components/cpk/CpkDriversPanel'
 
 ChartJS.register(
   CategoryScale, LinearScale,
@@ -220,14 +211,7 @@ export default function EngineeringKpi() {
   // it matches the page filters.
   const [gridByAsset, setGridByAsset] = useState(null)
 
-  // Unit-aware Fleet CPK (cost per km for road assets / cost per engine-hour for
-  // plant). Server aggregate get_fleet_cpk chooses the unit per asset type and
-  // keeps each country in its own currency. Defaults to the last 365 days when no
-  // explicit date range is set (the rest of the page defaults to all-time).
-  const [fleetCpk, setFleetCpk] = useState({ perVehicle: [], byType: [], fleet: [] })
-  const [fleetCpkLoading, setFleetCpkLoading] = useState(true)
-  const [cpkSearch, setCpkSearch] = useState('')
-
+  // Fleet CPK (cost per km / hour) now lives in its own module at /cpk-intelligence.
   const effectiveCountry = countryChip !== 'All' ? countryChip : (activeCountry !== 'All' ? activeCountry : undefined)
 
   useEffect(() => {
@@ -256,89 +240,6 @@ export default function EngineeringKpi() {
       .catch(() => { if (!cancelled) setGridByAsset(null) })
     return () => { cancelled = true }
   }, [effectiveCountry, dateFrom, dateTo])
-
-  // Fleet CPK load. Uses the page date range when set, else the last 365 days.
-  const cpkFrom = dateFrom || (() => {
-    const d = new Date(); d.setDate(d.getDate() - 365)
-    const p = n => String(n).padStart(2, '0')
-    return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`
-  })()
-  const cpkTo = dateTo || (() => {
-    const d = new Date()
-    const p = n => String(n).padStart(2, '0')
-    return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`
-  })()
-
-  useEffect(() => {
-    let cancelled = false
-    setFleetCpkLoading(true)
-    getFleetCpk({ country: effectiveCountry, from: cpkFrom, to: cpkTo })
-      .then(res => { if (!cancelled) setFleetCpk(res || { perVehicle: [], byType: [], fleet: [] }) })
-      .catch(() => { if (!cancelled) setFleetCpk({ perVehicle: [], byType: [], fleet: [] }) })
-      .finally(() => { if (!cancelled) setFleetCpkLoading(false) })
-    return () => { cancelled = true }
-  }, [effectiveCountry, cpkFrom, cpkTo])
-
-  // CPK drivers ("why did it move?") + brand-value rows for the management card.
-  const [cpkDrivers, setCpkDrivers] = useState({ ok: false, windows: null, segments: [] })
-  const [cpkDriversLoading, setCpkDriversLoading] = useState(true)
-  const [brandSizeRows, setBrandSizeRows] = useState([])
-
-  useEffect(() => {
-    let cancelled = false
-    setCpkDriversLoading(true)
-    getCpkDrivers({ country: effectiveCountry, from: cpkFrom, to: cpkTo })
-      .then(res => { if (!cancelled) setCpkDrivers(res || { ok: false, windows: null, segments: [] }) })
-      .catch(() => { if (!cancelled) setCpkDrivers({ ok: false, windows: null, segments: [] }) })
-      .finally(() => { if (!cancelled) setCpkDriversLoading(false) })
-    return () => { cancelled = true }
-  }, [effectiveCountry, cpkFrom, cpkTo])
-
-  useEffect(() => {
-    let cancelled = false
-    getBrandSizeCpk({ country: effectiveCountry, from: cpkFrom, to: cpkTo })
-      .then(res => { if (!cancelled) setBrandSizeRows(Array.isArray(res) ? res : []) })
-      .catch(() => { if (!cancelled) setBrandSizeRows([]) })
-    return () => { cancelled = true }
-  }, [effectiveCountry, cpkFrom, cpkTo])
-
-  const cpkFleetTiles = useMemo(() => fleetTiles(fleetCpk.fleet), [fleetCpk])
-  const cpkByType = useMemo(() => sortByTypeWorstFirst(fleetCpk.byType), [fleetCpk])
-  const cpkPerVehicle = useMemo(() => filterPerVehicle(fleetCpk.perVehicle, cpkSearch), [fleetCpk, cpkSearch])
-  const cpkHasData = cpkFleetTiles.length > 0 || cpkByType.length > 0 || fleetCpk.perVehicle.length > 0
-
-  function handleCpkExcelExport() {
-    const rows = byTypeExportRows(fleetCpk.byType)
-    if (!rows.length) return
-    exportToExcel(
-      rows,
-      ['country', 'vehicle_type', 'unit', 'distance', 'tyre_cost', 'total_cost', 'cpk_tyre', 'cpk_total'],
-      ['Country', 'Asset Type', 'Unit', 'Distance/Hours', 'Tyre Cost', 'Total Cost', 'CPK Tyre', 'CPK Total'],
-      'TyrePulse_FleetCPK',
-      'Fleet CPK by Type',
-    )
-  }
-
-  function handleCpkPdfExport() {
-    const rows = byTypeExportRows(fleetCpk.byType)
-    if (!rows.length) return
-    exportToPdf(
-      rows,
-      [
-        { key: 'country', header: 'Country' },
-        { key: 'vehicle_type', header: 'Asset Type' },
-        { key: 'unit', header: 'Unit' },
-        { key: 'distance', header: 'Distance/Hours' },
-        { key: 'tyre_cost', header: 'Tyre Cost' },
-        { key: 'total_cost', header: 'Total Cost' },
-        { key: 'cpk_tyre', header: 'CPK Tyre' },
-        { key: 'cpk_total', header: 'CPK Total' },
-      ],
-      'Fleet CPK by Asset Type (cost per km / hour)',
-      'TyrePulse_FleetCPK',
-      'landscape',
-    )
-  }
 
   const costFigure = costSplit ? pickCost(costMode, { tyre: costSplit.tyre, maintenance: costSplit.maintenance }) : 0
   const costModeOptions = COST_MODES.map(m => ({ ...m, label: m.key === 'maintenance' ? 'General' : m.label }))
@@ -1066,255 +967,23 @@ export default function EngineeringKpi() {
       {/* ── Multi-year expense trend + forecast ─────────────────────────────── */}
       <YearlyTrendPanel title="Expense trend by year (tyres / spare / lubricant) + forecast" />
 
-      {/* ── Fleet CPK (cost per km / hour) ───────────────────────────────────── */}
-      <div className="space-y-4">
-        <div className="flex items-start justify-between flex-wrap gap-3">
-          <div className="flex items-center gap-2">
-            <Gauge size={18} className="text-blue-400" />
-            <div>
-              <h2 className="text-sm font-semibold text-gray-300">Fleet CPK (cost per km / hour)</h2>
-              <p className="text-xs text-gray-500">
-                Km for road assets, engine-hours for plant (generators, pumps, loaders). Currency stays per country.
-                {' '}Window: {cpkFrom} to {cpkTo}{!dateFrom && !dateTo ? ' (last 365 days)' : ''}
-              </p>
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={handleCpkExcelExport}
-              disabled={cpkByType.length === 0}
-              className="btn-secondary flex items-center gap-1.5 text-xs px-2.5 py-1.5 disabled:opacity-40"
-            >
-              <Download size={13} /> Excel
-            </button>
-            <button
-              onClick={handleCpkPdfExport}
-              disabled={cpkByType.length === 0}
-              className="btn-secondary flex items-center gap-1.5 text-xs px-2.5 py-1.5 disabled:opacity-40"
-            >
-              <FileText size={13} /> PDF
-            </button>
-          </div>
-        </div>
-
-        {fleetCpkLoading ? (
-          <div className="card flex items-center justify-center py-10 text-gray-500 text-sm gap-3">
-            <div className="w-5 h-5 rounded-full border-2 border-gray-700 border-t-blue-500 animate-spin" />
-            Computing unit-aware CPK...
-          </div>
-        ) : !cpkHasData ? (
-          <div className="card flex flex-col items-center justify-center py-12 gap-3">
-            <Gauge size={32} className="text-gray-600" />
-            <p className="text-gray-400 text-sm font-medium">No CPK data for the selected filters</p>
-            <p className="text-gray-500 text-xs text-center max-w-md">
-              CPK needs measured distance (odometer) or engine-hours plus expense data in this window.
-              Upload meter readings and job-card / tyre expenses to compute cost per km and cost per hour.
-            </p>
-          </div>
-        ) : (
-          <>
-            {/* Fleet summary tiles per country (km side + hour side) */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-              {cpkFleetTiles.map((t, i) => {
-                const isHours = t.unit === 'engine_hours'
-                return (
-                  <div key={`${t.country}-${t.unit}-${i}`} className="card border border-gray-700/60 flex flex-col gap-2">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-1.5 min-w-0">
-                        {isHours ? <Clock size={14} className="text-amber-400 shrink-0" /> : <Gauge size={14} className="text-blue-400 shrink-0" />}
-                        <span className="text-xs text-gray-300 font-medium truncate">
-                          {t.country || 'Fleet'} - {isHours ? 'per hour' : 'per km'}
-                        </span>
-                      </div>
-                      <span className="text-[10px] text-gray-500 uppercase">{t.currency}</span>
-                    </div>
-                    <div className="grid grid-cols-2 gap-2">
-                      <div>
-                        <p className="text-[10px] text-gray-500">Total CPK</p>
-                        <p className="text-base font-bold text-white leading-tight">
-                          {fmtCpkValue(t.cpkTotal, t.currency, t.unit)}
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-[10px] text-gray-500">Tyre CPK</p>
-                        <p className="text-base font-bold text-gray-200 leading-tight">
-                          {fmtCpkValue(t.cpkTyre, t.currency, t.unit)}
-                        </p>
-                      </div>
-                    </div>
-                    <p className="text-[10px] text-gray-500">
-                      {fmtDistance(t.distance, t.unit)} measured | Coverage {fmtCoverage(t.coveragePct)}
-                    </p>
-                  </div>
-                )
-              })}
-            </div>
-
-            {/* Unregistered-spend + caveat note per country */}
-            {(fleetCpk.fleet || []).some(f => Number(f?.unregistered_cost) > 0) && (
-              <div className="text-xs text-gray-500 space-y-1">
-                {(fleetCpk.fleet || []).filter(f => Number(f?.unregistered_cost) > 0).map((f, i) => (
-                  <p key={i}>
-                    {f.country}: {fmtMoney(f.unregistered_cost, f.currency || f.country)} of spend sits on assets not in the fleet register, so it is excluded from per-asset CPK.
-                  </p>
-                ))}
-              </div>
-            )}
-            <p className="text-[11px] text-gray-600">
-              Note: hour meters can include idle time, and Egypt plant-hours coverage is low, so cost per hour is indicative where coverage is small.
-            </p>
-
-            {/* By asset type table (worst CPK first) */}
-            <div className="card overflow-x-auto">
-              <div className="flex items-center gap-2 mb-3">
-                <Layers size={15} className="text-gray-400" />
-                <h3 className="text-sm font-medium text-gray-300">CPK by asset type</h3>
-                <span className="text-xs text-gray-500 ml-auto">{cpkByType.length} types | worst CPK first</span>
-              </div>
-              {cpkByType.length === 0 ? (
-                <p className="text-gray-500 text-sm py-6 text-center">No asset-type data</p>
-              ) : (
-                <table className="w-full text-xs">
-                  <thead>
-                    <tr className="text-left border-b border-gray-800">
-                      <th className="table-header pb-2 pr-3">Asset Type</th>
-                      <th className="table-header pb-2 pr-3">Unit</th>
-                      <th className="table-header pb-2 pr-3 text-right">Distance / Hours</th>
-                      <th className="table-header pb-2 pr-3 text-right">Tyre Cost</th>
-                      <th className="table-header pb-2 pr-3 text-right">Total Cost</th>
-                      <th className="table-header pb-2 pr-3 text-right">CPK Tyre</th>
-                      <th className="table-header pb-2 text-right">CPK Total</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {cpkByType.map((r, i) => {
-                      const cur = r.currency || r.country || ''
-                      return (
-                        <tr key={`${r.country}-${r.vehicle_type}-${r.unit}-${i}`} className="border-b border-gray-800/50 hover:bg-gray-800/30 transition-colors">
-                          <td className="table-cell py-2 pr-3 text-gray-200 font-medium">
-                            {r.vehicle_type}
-                            {r.country ? <span className="text-gray-600"> - {r.country}</span> : null}
-                          </td>
-                          <td className="table-cell py-2 pr-3 text-gray-400">{unitSuffix(r.unit).replace('/', '')}</td>
-                          <td className="table-cell py-2 pr-3 text-right text-gray-300">{fmtDistance(r.distance_or_hours, r.unit)}</td>
-                          <td className="table-cell py-2 pr-3 text-right text-gray-300">{fmtMoney(r.tyre_cost, cur)}</td>
-                          <td className="table-cell py-2 pr-3 text-right text-gray-300">{fmtMoney(r.total_cost, cur)}</td>
-                          <td className="table-cell py-2 pr-3 text-right text-gray-300">{fmtCpkValue(r.cpk_tyre, cur, r.unit)}</td>
-                          <td className="table-cell py-2 text-right">
-                            <span className={r.cpk_total == null ? 'text-gray-600' : 'font-medium text-gray-100'}>
-                              {fmtCpkValue(r.cpk_total, cur, r.unit)}
-                            </span>
-                          </td>
-                        </tr>
-                      )
-                    })}
-                  </tbody>
-                </table>
-              )}
-            </div>
-
-            {/* Per-vehicle table (searchable) */}
-            <div className="card overflow-x-auto">
-              <div className="flex items-center gap-2 mb-3 flex-wrap">
-                <Gauge size={15} className="text-gray-400" />
-                <h3 className="text-sm font-medium text-gray-300">CPK by vehicle</h3>
-                <div className="ml-auto flex items-center gap-2">
-                  <div className="relative">
-                    <Search size={13} className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-500" />
-                    <input
-                      type="text"
-                      value={cpkSearch}
-                      onChange={e => setCpkSearch(e.target.value)}
-                      placeholder="Search asset or type"
-                      className="input text-xs pl-7 w-52"
-                    />
-                  </div>
-                  <span className="text-xs text-gray-500">{cpkPerVehicle.length} vehicles</span>
-                </div>
-              </div>
-              {cpkPerVehicle.length === 0 ? (
-                <p className="text-gray-500 text-sm py-6 text-center">
-                  {cpkSearch ? 'No vehicles match the search' : 'No per-vehicle CPK data'}
-                </p>
-              ) : (
-                <table className="w-full text-xs">
-                  <thead>
-                    <tr className="text-left border-b border-gray-800">
-                      <th className="table-header pb-2 pr-3">Asset</th>
-                      <th className="table-header pb-2 pr-3">Type</th>
-                      <th className="table-header pb-2 pr-3">Unit</th>
-                      <th className="table-header pb-2 pr-3 text-right">Distance / Hours</th>
-                      <th className="table-header pb-2 pr-3 text-right">Total Cost</th>
-                      <th className="table-header pb-2 pr-3 text-right">CPK Tyre</th>
-                      <th className="table-header pb-2 text-right">CPK Total</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {cpkPerVehicle.slice(0, 200).map((r, i) => {
-                      const cur = r.currency || r.country || ''
-                      return (
-                        <tr key={`${r.asset_no}-${i}`} className="border-b border-gray-800/50 hover:bg-gray-800/30 transition-colors">
-                          <td className="table-cell py-2 pr-3 font-mono text-gray-200">{r.asset_no}</td>
-                          <td className="table-cell py-2 pr-3 text-gray-400">{r.vehicle_type || '-'}</td>
-                          <td className="table-cell py-2 pr-3 text-gray-400">{unitSuffix(r.unit).replace('/', '')}</td>
-                          <td className="table-cell py-2 pr-3 text-right text-gray-300">{fmtDistance(r.distance_or_hours, r.unit)}</td>
-                          <td className="table-cell py-2 pr-3 text-right text-gray-300">{fmtMoney(r.total_cost, cur)}</td>
-                          <td className="table-cell py-2 pr-3 text-right text-gray-300">{fmtCpkValue(r.cpk_tyre, cur, r.unit)}</td>
-                          <td className="table-cell py-2 text-right">
-                            <span className={r.cpk_total == null ? 'text-gray-600' : 'font-medium text-gray-100'}>
-                              {fmtCpkValue(r.cpk_total, cur, r.unit)}
-                            </span>
-                          </td>
-                        </tr>
-                      )
-                    })}
-                  </tbody>
-                </table>
-              )}
-              {cpkPerVehicle.length > 200 && (
-                <p className="text-[11px] text-gray-600 mt-2">Showing the 200 highest-cost vehicles. Refine with search or export for the full list.</p>
-              )}
-            </div>
-          </>
-        )}
-      </div>
-
-      {/* ── CPK Scenario (what-if) ───────────────────────────────────────────── */}
-      <div className="space-y-4">
-        <div className="flex items-center gap-2">
-          <SlidersHorizontal size={18} className="text-blue-400" />
-          <div>
-            <h2 className="text-sm font-semibold text-gray-300">CPK Scenario (what-if)</h2>
+      {/* ── Fleet CPK moved to its own module ────────────────────────────────── */}
+      <a
+        href="/cpk-intelligence"
+        className="card flex items-center justify-between gap-3 border border-gray-700/60 hover:border-blue-500/60 transition-colors no-underline"
+      >
+        <div className="flex items-center gap-3 min-w-0">
+          <Gauge size={20} className="text-blue-400 shrink-0" />
+          <div className="min-w-0">
+            <h2 className="text-sm font-semibold text-gray-200">CPK Intelligence (its own module)</h2>
             <p className="text-xs text-gray-500">
-              Include or exclude cases and watch the fleet CPK move live. Example: a wheel loader is hour-metered,
-              so it shows tyre cost with no km - exclude it to see the corrected cost per km.
+              Cost per km (movable) and cost per hour (non-movable), by country and period, with the what-if
+              scenario, brand value and why-it-changed views. Loads one month at a time, not everything.
             </p>
           </div>
         </div>
-        <CpkScenarioPanel perVehicle={fleetCpk.perVehicle} loading={fleetCpkLoading} />
-      </div>
-
-      {/* ── Why CPK changed (drivers) ────────────────────────────────────────── */}
-      <div className="space-y-4">
-        <div className="flex items-center gap-2">
-          <TrendingUp size={18} className="text-amber-400" />
-          <div>
-            <h2 className="text-sm font-semibold text-gray-300">Why CPK changed (drivers)</h2>
-            <p className="text-xs text-gray-500">
-              The current period against the one before it, taken apart into what moved the cost per km / hour:
-              tyre price, brand or size mix, volume, new or retired equipment, and utilization. The parts add up
-              to the change exactly; a thin prior period is flagged coverage limited rather than overstated.
-            </p>
-          </div>
-        </div>
-        <CpkDriversPanel
-          drivers={cpkDrivers}
-          fleetCpk={fleetCpk}
-          brandSizeRows={brandSizeRows}
-          currency={activeCurrency}
-          loading={cpkDriversLoading || fleetCpkLoading}
-        />
-      </div>
+        <span className="text-xs font-medium text-blue-400 whitespace-nowrap">Open &rarr;</span>
+      </a>
 
       {/* ── Empty state ──────────────────────────────────────────────────────── */}
       {!kpis && !loading && (

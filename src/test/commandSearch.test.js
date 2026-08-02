@@ -54,9 +54,44 @@ describe('isCommandVisible', () => {
     expect(isCommandVisible(cmd, manager, denyAll)).toBe(false)
   })
 
-  it('ungated commands are visible to any non-Inspector role', () => {
-    expect(isCommandVisible({ path: '/tyres' }, tyreMan, denyAll)).toBe(true)
-    expect(isCommandVisible({ path: '/tyres' }, manager, denyAll)).toBe(true)
+  it('keyed commands are gated by the access matrix even without an explicit moduleKey', () => {
+    // /tyres maps to NAV_MODULE_KEY 'tyre_records' - hidden when the matrix denies it,
+    // exactly as the sidebar hides it (this was the reported search bug).
+    expect(isCommandVisible({ path: '/tyres' }, manager, denyAll)).toBe(false)
+    expect(isCommandVisible({ path: '/tyres' }, tyreMan, denyAll)).toBe(false)
+    expect(isCommandVisible({ path: '/tyres' }, manager, allowAll)).toBe(true)
+  })
+
+  it('truly ungated commands (no module key) stay visible to any non-Inspector role', () => {
+    expect(isCommandVisible({ path: '/zzz-unmapped' }, tyreMan, denyAll)).toBe(true)
+    expect(isCommandVisible({ path: '/zzz-unmapped' }, manager, denyAll)).toBe(true)
+  })
+
+  it('Data Monitor Officer only sees accidents + settings', () => {
+    const dmo = { role: 'Data Monitor Officer' }
+    expect(isCommandVisible({ path: '/accidents' }, dmo, allowAll)).toBe(true)
+    expect(isCommandVisible({ path: '/settings' }, dmo, allowAll)).toBe(true)
+    expect(isCommandVisible({ path: '/analytics', roles: ['Admin', 'Manager', 'Director'] }, dmo, allowAll)).toBe(false)
+  })
+
+  it('a custom role is deny-by-default, gated through the matrix', () => {
+    const custom = { role: 'Fleet Supervisor' }
+    expect(isCommandVisible({ path: '/tyres' }, custom, denyAll)).toBe(false)
+    expect(isCommandVisible({ path: '/tyres' }, custom, allowAll)).toBe(true)
+    expect(isCommandVisible({ path: '/settings' }, custom, denyAll)).toBe(true) // always-allowed
+  })
+
+  it('a per-user grant opens a denied module', () => {
+    const granted = new Set(['tyre_records'])
+    expect(isCommandVisible({ path: '/tyres' }, manager, denyAll)).toBe(false)
+    expect(isCommandVisible({ path: '/tyres' }, manager, denyAll, granted)).toBe(true)
+  })
+
+  it('super-admin sees adminOnly commands regardless of role', () => {
+    const su = { role: 'Reporter' }
+    const cmd = { path: '/audit', adminOnly: true }
+    expect(isCommandVisible(cmd, su, allowAll)).toBe(false)
+    expect(isCommandVisible(cmd, su, allowAll, undefined, true)).toBe(true)
   })
 })
 

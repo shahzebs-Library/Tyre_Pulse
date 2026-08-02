@@ -126,7 +126,7 @@ function GroupHeader({ label }) {
 export default function CommandPalette() {
   const { open, setOpen } = useCommandPalette()
   const paletteEnabled = useFeatureGate('command_palette')
-  const { profile, hasPermission } = useAuth()
+  const { profile, hasPermission, grantedModules, isSuperAdmin } = useAuth()
   const navigate = useNavigate()
   const { t } = useLanguage()
 
@@ -140,12 +140,12 @@ export default function CommandPalette() {
 
   // ── RBAC-filtered command lists (same rules as the sidebar nav + ModuleRoute)
   const navCommands = useMemo(
-    () => visibleCommands(NAV_COMMANDS, profile, hasPermission),
-    [profile, hasPermission],
+    () => visibleCommands(NAV_COMMANDS, profile, hasPermission, grantedModules, isSuperAdmin),
+    [profile, hasPermission, grantedModules, isSuperAdmin],
   )
   const actionCommands = useMemo(
-    () => visibleCommands(ACTION_COMMANDS, profile, hasPermission),
-    [profile, hasPermission],
+    () => visibleCommands(ACTION_COMMANDS, profile, hasPermission, grantedModules, isSuperAdmin),
+    [profile, hasPermission, grantedModules, isSuperAdmin],
   )
   const allowedPaths = useMemo(
     () => new Set([...navCommands, ...actionCommands].map((c) => c.path)),
@@ -177,7 +177,7 @@ export default function CommandPalette() {
     setSearching(true)
     setSearchError(false)
     const timer = setTimeout(async () => {
-      const sources = visibleRecordSources(RECORD_SOURCES, profile, hasPermission)
+      const sources = visibleRecordSources(RECORD_SOURCES, profile, hasPermission, grantedModules, isSuperAdmin)
       if (sources.length === 0) {
         if (!cancelled) { setRecordGroups([]); setSearching(false) }
         return
@@ -204,7 +204,7 @@ export default function CommandPalette() {
       setSearching(false)
     }, 300)
     return () => { cancelled = true; clearTimeout(timer) }
-  }, [query, open, profile, hasPermission])
+  }, [query, open, profile, hasPermission, grantedModules, isSuperAdmin])
 
   // ── Build the visible group list ────────────────────────────────────────────
   const groups = useMemo(() => {

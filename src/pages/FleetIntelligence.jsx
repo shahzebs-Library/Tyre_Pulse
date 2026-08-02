@@ -402,17 +402,23 @@ export default function FleetIntelligence() {
       setRecords(tyreData || [])
       let truncated = !!tyreTrunc
 
-      // Fleet master - graceful
+      // Fleet master - graceful. Paged: a bare .select caps at 1000 and the fleet
+      // is ~1523, so under All ~523 assets silently lacked fleet-master enrichment.
       try {
-        const { data: fleetData, error: fleetErr } = await applyCountry(supabase
-          .from('vehicle_fleet')
-          .select('asset_no,site,vehicle_type,current_km,expected_km_per_tyre,monthly_tyre_budget,registration_date'), activeCountry)
+        const { data: fleetData, error: fleetErr, truncated: fleetTrunc } = await fetchAllPages(
+          (from, to) => applyCountry(supabase
+            .from('vehicle_fleet')
+            .select('asset_no,site,vehicle_type,current_km,expected_km_per_tyre,monthly_tyre_budget,registration_date')
+            .order('id', { ascending: true }).range(from, to), activeCountry),
+          { max: 20000 },
+        )
         if (fleetErr) {
           setFleetMaster([])
           setFleetMasterAvail(false)
         } else {
           setFleetMaster(fleetData || [])
           setFleetMasterAvail(true)
+          truncated = truncated || !!fleetTrunc
         }
       } catch {
         setFleetMaster([])

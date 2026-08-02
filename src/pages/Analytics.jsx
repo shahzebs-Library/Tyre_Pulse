@@ -46,6 +46,21 @@ export function buildMonthlyTrend(records = []) {
   return Object.values(map).sort((a, b) => a.month.localeCompare(b.month))
 }
 
+/**
+ * Map a PeriodFilter value to inclusive server-side issue_date bounds.
+ * 'all' -> no bounds; 'year' -> that calendar year; 'custom' -> its from/to.
+ * Mirrors filterByPeriodValue so the server window and the client view agree.
+ */
+export function periodBounds(period) {
+  const v = period || { mode: 'all' }
+  if (v.mode === 'year') return { from: `${v.year}-01-01`, to: `${v.year}-12-31` }
+  if (v.mode === 'custom') return { from: v.from || null, to: v.to || null }
+  return { from: null, to: null }
+}
+
+/** Hard row ceiling for the bounded client read behind the trend + tables. */
+const ROW_CAP = 50000
+
 export default function Analytics() {
   const reportMeta = useReportMeta('Fleet Analytics')
   const { t } = useLanguage()
@@ -53,28 +68,72 @@ export default function Analytics() {
   const [records, setRecords] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [truncated, setTruncated] = useState(false)
   const [period, setPeriod] = useState({ mode: 'all' })
 
+  // Period -> server-side date bounds. These drive BOTH the exact KPI RPC and
+  // the bounded row read below, so neither one pulls the whole table.
+  const { from: fromDate, to: toDate } = useMemo(() => periodBounds(period), [period])
+
+  // Exact headline KPIs (Total Tyres / Total Cost / Avg Cost / High Risk) come
+  // from the server-side aggregate RPC (report_tyre_summary), so they stay
+  // accurate for millions of rows and never depend on the capped row read below.
+  // Same country + date scope as the tables.
+  const [summary, setSummary] = useState(null)
+  const [summaryLoading, setSummaryLoading] = useState(true)
+  const [summaryError, setSummaryError] = useState(null)
+
+  useEffect(() => {
+    let cancelled = false
+    setSummaryLoading(true); setSummaryError(null)
+    ;(async () => {
+      try {
+        const { data, error: e } = await supabase.rpc('report_tyre_summary', {
+          p_country: activeCountry, p_from: fromDate, p_to: toDate,
+        })
+        if (cancelled) return
+        if (e) throw new Error(e.message || e)
+        setSummary(data || null)
+      } catch (err) {
+        if (cancelled) return
+        setSummaryError(toUserMessage(err, 'Failed to load summary.'))
+        setSummary(null)
+      } finally {
+        if (!cancelled) setSummaryLoading(false)
+      }
+    })()
+    return () => { cancelled = true }
+  }, [activeCountry, fromDate, toDate])
+
+  // Row read for the Monthly Trend chart + Site/Brand tables ONLY. The RPC above
+  // cannot supply these (per-row avg cost, top category, failure/high-risk rate,
+  // full monthly series), so they keep their exact client computation, but the
+  // read is now bounded: country + period date window applied SERVER-SIDE, plus
+  // a hard row ceiling. A truncated read is surfaced as a "capped view" note.
   const load = useCallback(async () => {
     setLoading(true); setError(null)
     try {
-      const { data, error: e } = await fetchAllPages((from, to) => {
+      const { data, error: e, truncated: tr } = await fetchAllPages((from, to) => {
         let q = supabase
           .from('tyre_records')
           .select('id,issue_date,brand,site,category,risk_level,cost_per_tyre,qty')
           .order('issue_date')
         if (activeCountry !== 'All') q = q.eq('country', activeCountry)
+        if (fromDate) q = q.gte('issue_date', fromDate)
+        if (toDate) q = q.lte('issue_date', toDate)
         return q.range(from, to)
-      })
+      }, { max: ROW_CAP })
       if (e) throw new Error(e.message || e)
       setRecords(data || [])
+      setTruncated(Boolean(tr))
     } catch (err) {
       setError(toUserMessage(err, 'Failed to load data.'))
       setRecords([])
+      setTruncated(false)
     } finally {
       setLoading(false)
     }
-  }, [activeCountry])
+  }, [activeCountry, fromDate, toDate])
 
   useEffect(() => { load() }, [load])
 
@@ -135,9 +194,13 @@ export default function Analytics() {
     [records, period]
   )
 
-  const totalCost = filtered.reduce((s, r) => s + (parseFloat(r.cost_per_tyre) || 0) * (r.qty || 1), 0)
-  const avgCost = filtered.length > 0 ? totalCost / filtered.length : 0
-  const highRiskCount = filtered.filter(r => ['High', 'Critical'].includes(r.risk_level)).length
+  // Exact KPI values from the server aggregate (0 while loading). total_cost is
+  // sum(cost_per_tyre * coalesce(qty,1)); high_risk is Critical + High count -
+  // the same formulas the page computed client-side, now unbounded by row count.
+  const kpiTotal = Number(summary?.total_records) || 0
+  const kpiCost = Number(summary?.total_cost) || 0
+  const kpiAvg = kpiTotal > 0 ? kpiCost / kpiTotal : 0
+  const kpiHighRisk = Number(summary?.high_risk) || 0
 
   const siteMetrics = useMemo(() => computeSiteMetrics(filtered), [filtered])
   const brandMetrics = useMemo(() => computeBrandMetrics(filtered), [filtered])
@@ -215,22 +278,43 @@ export default function Analytics() {
 
       <PeriodFilter records={records} value={period} onChange={setPeriod} />
 
-      {/* KPI cards */}
+      {/* KPI cards - exact server-side aggregates (accurate beyond the row cap) */}
+      {summaryError && !summaryLoading && (
+        <div className="flex items-center gap-2 text-red-400 text-sm bg-red-400/10 border border-red-400/20 rounded-xl px-4 py-3">
+          <AlertTriangle size={14} /> {summaryError}
+        </div>
+      )}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <div className="card text-center">
-          <p className="text-2xl font-bold text-white">{filtered.length.toLocaleString()}</p>
+          <p className="text-2xl font-bold text-white">
+            {summaryLoading
+              ? <span className="inline-block h-7 w-16 rounded bg-white/10 animate-pulse align-middle" />
+              : kpiTotal.toLocaleString()}
+          </p>
           <p className="text-xs text-gray-500 mt-1">{t('analytics.kpi.totalTyres')}</p>
         </div>
         <div className="card text-center">
-          <p className="text-2xl font-bold text-blue-400">{formatCurrencyCompact(totalCost, activeCurrency)}</p>
+          <p className="text-2xl font-bold text-blue-400">
+            {summaryLoading
+              ? <span className="inline-block h-7 w-20 rounded bg-white/10 animate-pulse align-middle" />
+              : formatCurrencyCompact(kpiCost, activeCurrency)}
+          </p>
           <p className="text-xs text-gray-500 mt-1">{t('analytics.kpi.totalCost')}</p>
         </div>
         <div className="card text-center">
-          <p className="text-2xl font-bold text-emerald-400">{formatCurrencyCompact(avgCost, activeCurrency)}</p>
+          <p className="text-2xl font-bold text-emerald-400">
+            {summaryLoading
+              ? <span className="inline-block h-7 w-20 rounded bg-white/10 animate-pulse align-middle" />
+              : formatCurrencyCompact(kpiAvg, activeCurrency)}
+          </p>
           <p className="text-xs text-gray-500 mt-1">{t('analytics.kpi.avgCost')}</p>
         </div>
         <div className="card text-center">
-          <p className="text-2xl font-bold text-red-400">{highRiskCount}</p>
+          <p className="text-2xl font-bold text-red-400">
+            {summaryLoading
+              ? <span className="inline-block h-7 w-12 rounded bg-white/10 animate-pulse align-middle" />
+              : kpiHighRisk.toLocaleString()}
+          </p>
           <p className="text-xs text-gray-500 mt-1">{t('analytics.kpi.highRisk')}</p>
         </div>
       </div>
@@ -291,6 +375,13 @@ export default function Analytics() {
       {error && !loading && (
         <div className="flex items-center gap-2 text-red-400 text-sm bg-red-400/10 border border-red-400/20 rounded-xl px-4 py-3">
           <AlertTriangle size={14} /> {error}
+        </div>
+      )}
+
+      {truncated && !loading && (
+        <div className="flex items-center gap-2 text-amber-400 text-xs bg-amber-400/10 border border-amber-400/20 rounded-xl px-4 py-2.5">
+          <AlertTriangle size={13} />
+          Showing a capped view of {ROW_CAP.toLocaleString()} records in the trend and tables below. The KPI totals above are exact.
         </div>
       )}
 

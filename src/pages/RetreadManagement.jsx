@@ -573,7 +573,9 @@ export default function RetreadManagement() {
       const cpkDiff = (newCpkAvg != null && b.avgCpk != null && b.avgLife != null)
         ? (newCpkAvg - b.avgCpk) * b.avgLife * b.count
         : null
-      const failureRate = 100 - (b.successRate ?? 100)
+      // Unknown success rate = unknown failure rate. Report null (N/A), never a
+      // flattering 0% failure.
+      const failureRate = b.successRate != null ? 100 - b.successRate : null
       const score = scoreVendor(b, range)
       return {
         ...b,
@@ -1210,9 +1212,11 @@ export default function RetreadManagement() {
                                   : <span className="text-[var(--text-dim)]">N/A</span>}
                               </td>
                               <td className="px-4 py-3 text-center">
-                                <span className={`font-semibold ${v.failureRate > 30 ? 'text-red-400' : v.failureRate > 15 ? 'text-yellow-400' : 'text-green-400'}`}>
-                                  {v.failureRate.toFixed(0)}%
-                                </span>
+                                {v.failureRate != null
+                                  ? <span className={`font-semibold ${v.failureRate > 30 ? 'text-red-400' : v.failureRate > 15 ? 'text-yellow-400' : 'text-green-400'}`}>
+                                      {v.failureRate.toFixed(0)}%
+                                    </span>
+                                  : <span className="text-[var(--text-dim)]">N/A</span>}
                               </td>
                               <td className="px-4 py-3 text-center">
                                 {v.savingsVsNew != null ? (

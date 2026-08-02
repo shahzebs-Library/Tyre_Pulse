@@ -361,9 +361,11 @@ export default function DowntimeTracker() {
         })()
 
     const totalVehicleDays = uniqueVehicles * Math.max(daysInPeriod, 1)
+    // No vehicles / no measured period = nothing to measure. Report null (N/A),
+    // never a fabricated perfect 100%.
     const availability     = totalVehicleDays > 0
       ? Math.min(100, ((totalVehicleDays - downDays) / totalVehicleDays) * 100)
-      : 100
+      : null
 
     // MTTR: average hours between events per vehicle
     const byVehicle = {}
@@ -675,8 +677,8 @@ export default function DowntimeTracker() {
       })
     }
 
-    // Availability below target
-    if (kpis.availability < TARGET_AVAILABILITY) {
+    // Availability below target (only when availability is actually measured)
+    if (kpis.availability != null && kpis.availability < TARGET_AVAILABILITY) {
       recs.push({
         type: 'availability',
         severity: kpis.availability < 90 ? 'critical' : 'high',
@@ -734,7 +736,7 @@ export default function DowntimeTracker() {
     doc.setTextColor(200, 200, 200)
     doc.setFontSize(9)
     const kpiText = [
-      `Fleet Availability: ${kpis.availability.toFixed(2)}%`,
+      `Fleet Availability: ${kpis.availability != null ? kpis.availability.toFixed(2) + '%' : 'N/A'}`,
       `Total Downtime Events: ${kpis.totalEvents.toLocaleString()}`,
       `Total Downtime Hours: ${kpis.totalHours.toFixed(1)} h`,
       `Downtime Cost: ${sym} ${Math.round(kpis.totalCost).toLocaleString()}`,
@@ -1031,12 +1033,16 @@ export default function DowntimeTracker() {
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
         <StatCard
           label={t('downtime.kpi.availability')}
-          value={`${kpis.availability.toFixed(2)}%`}
-          sub={kpis.availability >= TARGET_AVAILABILITY
-            ? t('downtime.kpi.availabilityAbove', { pct: TARGET_AVAILABILITY })
-            : t('downtime.kpi.availabilityBelow', { pct: TARGET_AVAILABILITY })}
+          value={kpis.availability != null ? `${kpis.availability.toFixed(2)}%` : 'N/A'}
+          sub={kpis.availability == null
+            ? 'Not measured'
+            : kpis.availability >= TARGET_AVAILABILITY
+              ? t('downtime.kpi.availabilityAbove', { pct: TARGET_AVAILABILITY })
+              : t('downtime.kpi.availabilityBelow', { pct: TARGET_AVAILABILITY })}
           icon={Activity}
-          color={kpis.availability >= TARGET_AVAILABILITY ? 'green' : 'red'}
+          color={kpis.availability == null
+            ? 'blue'
+            : kpis.availability >= TARGET_AVAILABILITY ? 'green' : 'red'}
         />
         <StatCard
           label={t('downtime.kpi.events')}

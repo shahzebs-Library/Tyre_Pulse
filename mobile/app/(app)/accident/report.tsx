@@ -40,6 +40,12 @@ type IconName = React.ComponentProps<typeof Ionicons>['name']
 // The web app is the single source of truth; these replicate its label lists and
 // toDb*/canon* semantics so mobile writes CHECK-constraint-valid tokens.
 
+// Upper bound on the fleet rows pulled onto the device to power the asset
+// search / site fallback. Well above any single country's fleet today, yet a
+// hard ceiling so the read can never scale into an out-of-memory crash on a
+// low-end handset. Assets past the cap remain reachable via manual entry.
+const FLEET_SEARCH_CAP = 3000
+
 const SEVERITY_LABELS = ['Minor', 'Moderate', 'Major'] as const
 type SeverityLabel = (typeof SEVERITY_LABELS)[number]
 const SEV_KIND: Record<SeverityLabel, StatusKind> = {
@@ -331,7 +337,9 @@ function AccidentReportScreen() {
         setSites(sitesData.map((s: any) => s.name as string))
         return
       }
-      const { data: fleetData } = await supabase.from('vehicle_fleet').select('site').order('site')
+      let fleetQ = supabase.from('vehicle_fleet').select('site').not('site', 'is', null).order('site').limit(FLEET_SEARCH_CAP)
+      if (profile?.country) fleetQ = fleetQ.or(`country.eq.${profile.country},country.is.null`)
+      const { data: fleetData } = await fleetQ
       if (fleetData && fleetData.length > 0) {
         setSites([...new Set(fleetData.map((r: any) => r.site).filter(Boolean))] as string[])
         return
@@ -342,15 +350,21 @@ function AccidentReportScreen() {
     if (profile?.site) setSites([profile.site])
   }
 
-  // Whole-fleet load (RLS/org-scoped) so the asset search works BEFORE a site is
-  // chosen - mirrors the web form's fleetAssets list.
+  // Fleet load powering the asset search BEFORE a site is chosen. Scoped to the
+  // operator's OWN country (matches RLS + every other read on this screen) and
+  // capped so a growing fleet can never pull the whole table onto a low-end
+  // handset. Assets outside this bounded list stay reachable via the manual
+  // entry lookup below (lookupAssetByCode, a direct indexed server read).
   async function loadVehicles() {
     setLoadingVehicles(true)
     try {
-      const { data } = await supabase
+      let q = supabase
         .from('vehicle_fleet')
         .select('id, site, asset_no, vehicle_type, make, model, registration_no, fleet_number, country')
         .order('asset_no')
+        .limit(FLEET_SEARCH_CAP)
+      if (profile?.country) q = q.or(`country.eq.${profile.country},country.is.null`)
+      const { data } = await q
       if (data) setVehicles(data as FleetVehicle[])
     } catch (e: any) {
       if (__DEV__) console.warn('[accident/report] loadVehicles failed:', e?.message)

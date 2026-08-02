@@ -206,9 +206,14 @@ export default function HomeScreen() {
       .order('created_at', { ascending: false })
       .limit(5)
 
+    // Server-side COUNT for criticals, not a bare select of every matching row.
+    // The old query pulled every Critical/High tyre_record from the week onto
+    // the device just to count the Criticals - a bare select is silently capped
+    // by PostgREST at 1000 (undercounting) and loads rows for no reason. A head
+    // count is exact and transfers no rows.
     const fleetFetch = elevated
       ? Promise.all([
-          supabase.from('tyre_records').select('risk_level').in('risk_level', ['Critical', 'High']).gte('issue_date', weekStr),
+          supabase.from('tyre_records').select('id', { count: 'exact', head: true }).eq('risk_level', 'Critical').gte('issue_date', weekStr),
           supabase.from('corrective_actions').select('id', { count: 'exact', head: true }).eq('status', 'Open'),
           supabase.from('inspections').select('id', { count: 'exact', head: true }).gte('created_at', weekStr),
           supabase.from('vehicle_fleet').select('id', { count: 'exact', head: true }),
@@ -227,9 +232,8 @@ export default function HomeScreen() {
 
     if (fleetRes) {
       const [riskRes, actRes, inspRes, vehRes] = fleetRes as any[]
-      const recs = (riskRes.data ?? []) as { risk_level: string }[]
       setFleetHealth({
-        criticalCount:  recs.filter(r => r.risk_level === 'Critical').length,
+        criticalCount:  riskRes.count ?? 0,
         openWorkOrders: actRes.count ?? 0,
         inspThisWeek:   inspRes.count ?? 0,
         totalVehicles:  vehRes.count ?? 0,

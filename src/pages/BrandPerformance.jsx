@@ -41,6 +41,7 @@ export default function BrandPerformance() {
   const reportMeta = useReportMeta('Brand Performance')
   const { activeCountry, activeCurrency } = useSettings()
   const [records, setRecords] = useState([])
+  const [recordsTruncated, setRecordsTruncated] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError]     = useState(null)
   const [selected, setSelected]   = useState(null)
@@ -60,19 +61,29 @@ export default function BrandPerformance() {
   const load = useCallback(async () => {
     setLoading(true); setError(null)
     try {
-      const { data, error: e } = await fetchAllPages((from, to) => {
+      // Per-row brand aggregation has no server RPC, so this stays a client pull.
+      // It is BOUNDED: country-scoped, newest-first, and capped at 50,000 rows so
+      // it can never fetch a millions-row table into the browser. A server date
+      // window is deliberately NOT applied: the Period filter defaults to "all"
+      // and is applied client-side over the full set, so narrowing the fetch by
+      // date would change what "all" means. Aggregation is order-independent, so
+      // newest-first only governs which rows survive the cap, never today's
+      // figures (identical while the country holds under 50,000 records).
+      const { data, error: e, truncated } = await fetchAllPages((from, to) => {
         let q = supabase
           .from('tyre_records')
           .select('id,issue_date,brand,site,category,risk_level,cost_per_tyre,qty,description,remarks')
-          .order('issue_date')
+          .order('issue_date', { ascending: false })
         if (activeCountry !== 'All') q = q.eq('country', activeCountry)
         return q.range(from, to)
-      })
+      }, { max: 50000 })
       if (e) throw new Error(e.message || e)
       setRecords(data || [])
+      setRecordsTruncated(!!truncated)
     } catch (err) {
       setError(toUserMessage(err, 'Failed to load brand data.'))
       setRecords([])
+      setRecordsTruncated(false)
     } finally {
       setLoading(false)
     }
@@ -207,6 +218,14 @@ export default function BrandPerformance() {
         subtitle="Failure rates, avg life, cost and ranking by brand"
         icon={BarChart2}
       />
+
+      {recordsTruncated && (
+        <div className="px-3 py-2 rounded-lg border border-amber-500/40 bg-amber-500/10 text-xs text-amber-200">
+          Capped view: showing the most recent 50,000 tyre records for the selected
+          country. Total Fleet Cost is a server aggregate and stays exact. Narrow the
+          country or period for complete per brand detail.
+        </div>
+      )}
 
       {/* KPI summary */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">

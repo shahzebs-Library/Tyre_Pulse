@@ -195,6 +195,7 @@ export default function DowntimeTracker() {
   const rateIsCustom = downtimeRate !== DEFAULT_DOWNTIME_RATE
 
   const [tyreRecords, setTyreRecords]   = useState([])
+  const [tyreTruncated, setTyreTruncated] = useState(false)
   const [workOrders, setWorkOrders]     = useState([])
   const [hasWorkOrders, setHasWorkOrders] = useState(false)
   const [loading, setLoading]           = useState(true)
@@ -234,17 +235,25 @@ export default function DowntimeTracker() {
     else setLoading(true)
     setError(null)
     try {
-      const { data: tyreData, error: tyreErr } = await fetchAllPages((from, to) => {
+      // BOUNDED tyre pull: country-scoped, newest-first, capped at 50,000 rows so
+      // it can never page a millions-row table into the browser. A server date
+      // window is deliberately NOT applied here (unlike the work-order pull below):
+      // the availability trend and its distinct-vehicle denominator read the full
+      // country set, and the period toggle is applied client-side in `filtered`, so
+      // narrowing the fetch by date would change a displayed availability figure.
+      // Under the cap the result is identical to before.
+      const { data: tyreData, error: tyreErr, truncated: tyreTrunc } = await fetchAllPages((from, to) => {
         let q = supabase
           .from('tyre_records')
           .select('id,asset_no,serial_number:serial_no,risk_level,issue_date,km_at_fitment,km_at_removal,cost_per_tyre,site,country,brand,position,reason_for_removal')
           .order('issue_date', { ascending: false })
         if (activeCountry !== 'All') q = q.eq('country', activeCountry)
         return q.range(from, to)
-      })
+      }, { max: 50000 })
       if (myReq !== reqIdRef.current) return
       if (tyreErr) throw tyreErr
       setTyreRecords(tyreData || [])
+      setTyreTruncated(!!tyreTrunc)
 
       // Try work_orders (may be empty). opened_at/completed_at give ACTUAL
       // downtime duration; created_at retained for period filtering.
@@ -897,6 +906,13 @@ export default function DowntimeTracker() {
   return (
     <div className="space-y-6 pb-10">
       {/* A hit ceiling is stated, never hidden - the whole point of this change. */}
+      {tyreTruncated && (
+        <div className="px-3 py-2 rounded-lg border border-amber-500/40 bg-amber-500/10 text-xs text-amber-200">
+          This view reached its limit of 50,000 tyre records, so the figures below cover
+          the most recent ones for the selected country rather than the whole history.
+          Choose a single country to see a complete picture of it.
+        </div>
+      )}
       {woTruncated && (
         <div className="px-3 py-2 rounded-lg border border-amber-500/40 bg-amber-500/10 text-xs text-amber-200">
           This view reached its limit of {WORK_ORDER_CEILING.toLocaleString()} work orders, so the figures

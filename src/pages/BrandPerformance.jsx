@@ -7,7 +7,9 @@ import {
   PointElement, Title, Tooltip, Legend,
 } from 'chart.js'
 import { Bar, Line } from 'react-chartjs-2'
-import { Maximize2, X, BarChart2, Download, FileText, Award, AlertTriangle, RefreshCw } from 'lucide-react'
+import { Maximize2, X, BarChart2, Download, FileText, Award, AlertTriangle, RefreshCw, Ruler, Trophy, Tag } from 'lucide-react'
+import { getBrandSizeCpk } from '../lib/api/brandSizeCpk'
+import { groupBySize, recommendationFor, formatNumber, formatCpk } from '../lib/brandSizeCpk'
 import { SkeletonCards, SkeletonChart } from '../components/ui/Skeleton'
 import { motion } from 'framer-motion'
 import PageHeader from '../components/ui/PageHeader'
@@ -446,6 +448,9 @@ export default function BrandPerformance() {
       {/* Drill-down panel */}
       {selected && <BrandDrillDown brand={selected} records={selectedData} />}
 
+      {/* Brand & price by size - value comparison */}
+      <BrandSizeValuePanel country={activeCountry} />
+
       {/* ChartModal */}
       <ChartModal
         open={modalOpen}
@@ -550,6 +555,240 @@ function BrandDrillDown({ brand, records }) {
             {catEntries.length === 0 && <p className="text-gray-500 text-sm">No category data</p>}
           </div>
         </div>
+      </div>
+    </div>
+  )
+}
+
+/**
+ * BrandSizeValuePanel - the "brand & price by size (value comparison)" section.
+ *
+ * Answers the management question: for the SAME tyre size, which brand is
+ * actually cheapest to RUN (cost per km), not just cheapest to buy? A cheaper
+ * tyre that wears out fast is exposed here as costing more per km than a pricier
+ * long-life tyre. Reads the get_brand_size_cpk RPC (V446) via the service and
+ * ranks with the pure engine. Self-contained fetch so it never blocks the page.
+ */
+function BrandSizeValuePanel({ country }) {
+  const { activeCurrency } = useSettings()
+  const [rows, setRows] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [err, setErr] = useState(null)
+  const [from, setFrom] = useState('')
+  const [to, setTo] = useState('')
+  const [search, setSearch] = useState('')
+  const [minTyres, setMinTyres] = useState(2)
+
+  const load = useCallback(() => {
+    setLoading(true); setErr(null)
+    getBrandSizeCpk({ country, from: from || null, to: to || null })
+      .then(setRows)
+      .catch(() => setErr('Could not load the value comparison.'))
+      .finally(() => setLoading(false))
+  }, [country, from, to])
+
+  useEffect(() => { load() }, [load])
+
+  const groups = useMemo(() => groupBySize(rows, { minTyres }), [rows, minTyres])
+  const visibleGroups = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    if (!q) return groups
+    return groups.filter(g =>
+      g.size.toLowerCase().includes(q) ||
+      g.brands.some(b => b.brand.toLowerCase().includes(q))
+    )
+  }, [groups, search])
+
+  // Flatten every visible (size, brand) row for export.
+  const exportRows = useMemo(() => visibleGroups.flatMap(g =>
+    g.brands.map(b => ({
+      size: g.size,
+      brand: b.brand,
+      tyres: b.tyres,
+      avg_price: b.avgPrice != null ? Number(b.avgPrice.toFixed(2)) : '',
+      median_price: b.medianPrice != null ? Number(b.medianPrice.toFixed(2)) : '',
+      avg_life_km: b.avgLifeKm != null ? b.avgLifeKm : '',
+      cpk: b.cpk != null ? Number(b.cpk.toFixed(5)) : 'N/A',
+      currency: g.currency,
+      best_value: b.isBestValue ? 'Yes' : '',
+    }))
+  ), [visibleGroups])
+
+  const EXPORT_COLS = ['size', 'brand', 'tyres', 'avg_price', 'median_price', 'avg_life_km', 'cpk', 'currency', 'best_value']
+  const EXPORT_HEADERS = ['Size', 'Brand', 'Tyres', 'Avg price', 'Median price', 'Avg life (km)', 'Cost per km', 'Currency', 'Best value']
+
+  const doExcel = () => exportToExcel(exportRows, EXPORT_COLS, EXPORT_HEADERS, 'TyrePulse_BrandValueBySize', 'Value by size')
+  const doPdf = () => exportToPdf(
+    exportRows,
+    EXPORT_COLS.map((k, i) => ({ key: k, header: EXPORT_HEADERS[i] })),
+    'Brand and price by size - value comparison' + (country && country !== 'All' ? ' (' + country + ')' : ''),
+    'TyrePulse_BrandValueBySize',
+    'landscape'
+  )
+
+  return (
+    <div className="card space-y-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="flex items-start gap-2">
+          <Ruler size={18} className="text-blue-400 mt-0.5" />
+          <div>
+            <h3 className="font-semibold text-white">Brand &amp; price by size (value comparison)</h3>
+            <p className="text-xs text-gray-500 mt-0.5 max-w-2xl">
+              For the same size, each brand&apos;s purchase price and the cost per km it actually delivers.
+              A cheaper tyre that wears out fast can cost more per km than a pricier long-life tyre. Cost
+              per km = average price divided by average life km; it reads N/A until life data exists.
+            </p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <button onClick={doExcel} disabled={exportRows.length === 0}
+            className="btn-secondary flex items-center gap-1.5 text-xs px-3 py-1.5 disabled:opacity-40">
+            <Download size={14} /> Excel
+          </button>
+          <button onClick={doPdf} disabled={exportRows.length === 0}
+            className="btn-secondary flex items-center gap-1.5 text-xs px-3 py-1.5 disabled:opacity-40">
+            <FileText size={14} /> PDF
+          </button>
+        </div>
+      </div>
+
+      {/* Controls */}
+      <div className="flex flex-wrap gap-3 items-end">
+        <div className="flex flex-col gap-1">
+          <label className="label text-xs">From</label>
+          <input type="date" value={from} onChange={e => setFrom(e.target.value)}
+            className="input text-sm py-1.5" />
+        </div>
+        <div className="flex flex-col gap-1">
+          <label className="label text-xs">To</label>
+          <input type="date" value={to} onChange={e => setTo(e.target.value)}
+            className="input text-sm py-1.5" />
+        </div>
+        <div className="flex flex-col gap-1">
+          <label className="label text-xs">Min tyres/brand</label>
+          <select value={minTyres} onChange={e => setMinTyres(Number(e.target.value))}
+            className="input text-sm py-1.5">
+            <option value={1}>1+</option>
+            <option value={2}>2+</option>
+            <option value={5}>5+</option>
+            <option value={10}>10+</option>
+            <option value={25}>25+</option>
+          </select>
+        </div>
+        <div className="flex flex-col gap-1 flex-1 min-w-[160px]">
+          <label className="label text-xs">Search size or brand</label>
+          <input type="text" value={search} onChange={e => setSearch(e.target.value)}
+            placeholder="e.g. 315/80 or Techking" className="input text-sm py-1.5" />
+        </div>
+        {(from || to) && (
+          <button onClick={() => { setFrom(''); setTo('') }}
+            className="btn-secondary flex items-center gap-1 text-xs px-3 py-1.5 self-end">
+            <X size={13} /> Clear dates
+          </button>
+        )}
+      </div>
+
+      {loading ? (
+        <p className="text-sm text-gray-500 py-6 text-center">Loading value comparison...</p>
+      ) : err ? (
+        <div className="py-6 flex flex-col items-center gap-2">
+          <AlertTriangle size={26} className="text-red-400" />
+          <p className="text-sm text-red-300">{err}</p>
+          <button onClick={load} className="btn-secondary text-xs px-3 py-1.5 flex items-center gap-1.5">
+            <RefreshCw size={13} /> Retry
+          </button>
+        </div>
+      ) : visibleGroups.length === 0 ? (
+        <div className="py-8 flex flex-col items-center gap-2">
+          <Ruler size={30} className="text-gray-700" />
+          <p className="text-gray-400 text-sm">No priced brand-by-size data for this selection.</p>
+          <p className="text-gray-600 text-xs text-center max-w-md">
+            This needs tyre records that carry a size, a brand and a purchase price. Cost per km also
+            needs life km (fitment to removal). Widen the dates or lower the minimum tyres per brand.
+          </p>
+        </div>
+      ) : (
+        <div className="space-y-5">
+          {visibleGroups.map(g => <SizeValueCard key={g.size} group={g} currency={activeCurrency} />)}
+        </div>
+      )}
+    </div>
+  )
+}
+
+/** One tyre size: a ranked brand table plus a plain-English recommendation. */
+function SizeValueCard({ group, currency }) {
+  const cur = group.currency || currency || ''
+  return (
+    <div className="rounded-lg border border-gray-800 overflow-hidden">
+      <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-2.5 bg-gray-900/40 border-b border-gray-800">
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-semibold text-white">Size {group.size}</span>
+          <span className="text-xs text-gray-500">{group.brands.length} brand{group.brands.length === 1 ? '' : 's'}</span>
+          {cur && <span className="text-[10px] uppercase tracking-wide text-gray-600">prices in {cur}</span>}
+        </div>
+        {group.thin && (
+          <span className="text-[11px] text-amber-400 flex items-center gap-1">
+            <AlertTriangle size={12} /> thin life data
+          </span>
+        )}
+      </div>
+
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="text-left text-[11px] uppercase tracking-wide text-gray-500 border-b border-gray-800">
+              <th className="px-4 py-2 font-medium">Brand</th>
+              <th className="px-3 py-2 font-medium text-right">Avg price</th>
+              <th className="px-3 py-2 font-medium text-right">Median price</th>
+              <th className="px-3 py-2 font-medium text-right">Avg life (km)</th>
+              <th className="px-3 py-2 font-medium text-right">Cost per km</th>
+              <th className="px-3 py-2 font-medium text-right">vs best</th>
+              <th className="px-3 py-2 font-medium text-right">Tyres</th>
+            </tr>
+          </thead>
+          <tbody>
+            {group.brands.map(b => (
+              <tr key={b.brand}
+                className={`border-b border-gray-800/60 ${b.isBestValue ? 'bg-green-900/15' : ''}`}>
+                <td className="px-4 py-2">
+                  <div className="flex items-center gap-1.5">
+                    <span className={`font-medium ${b.isBestValue ? 'text-green-300' : 'text-gray-200'}`}>{b.brand}</span>
+                    {b.isBestValue && (
+                      <span className="inline-flex items-center gap-0.5 text-[10px] text-green-400 bg-green-900/30 px-1.5 py-0.5 rounded-full">
+                        <Trophy size={10} /> best value
+                      </span>
+                    )}
+                    {b.isCheapest && !b.isBestValue && (
+                      <span className="inline-flex items-center gap-0.5 text-[10px] text-blue-300 bg-blue-900/30 px-1.5 py-0.5 rounded-full">
+                        <Tag size={10} /> cheapest
+                      </span>
+                    )}
+                  </div>
+                </td>
+                <td className="px-3 py-2 text-right text-gray-300">{b.avgPrice != null ? formatNumber(b.avgPrice) : 'N/A'}</td>
+                <td className="px-3 py-2 text-right text-gray-400">{b.medianPrice != null ? formatNumber(b.medianPrice) : 'N/A'}</td>
+                <td className="px-3 py-2 text-right text-gray-300">{b.avgLifeKm != null ? formatNumber(b.avgLifeKm) : 'N/A'}</td>
+                <td className={`px-3 py-2 text-right font-mono ${b.isBestValue ? 'text-green-300 font-semibold' : b.cpk == null ? 'text-gray-600' : 'text-gray-200'}`}>
+                  {b.cpk != null ? formatCpk(b.cpk) : 'N/A'}
+                </td>
+                <td className="px-3 py-2 text-right">
+                  {b.cpkGapPct == null ? <span className="text-gray-600">-</span>
+                    : b.cpkGapPct === 0 ? <span className="text-green-400 text-xs">best</span>
+                    : <span className="text-amber-400 text-xs">+{formatNumber(b.cpkGapPct)}%</span>}
+                </td>
+                <td className="px-3 py-2 text-right text-gray-500">{formatNumber(b.tyres)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <div className="px-4 py-2.5 bg-gray-900/30 border-t border-gray-800">
+        <p className="text-xs text-gray-300 leading-relaxed">
+          <span className="text-green-400 font-medium">Recommendation: </span>
+          {recommendationFor(group)}
+        </p>
       </div>
     </div>
   )

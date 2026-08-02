@@ -1,0 +1,245 @@
+/**
+ * cpkScenario.js - pure, no-I/O engine for the Fleet CPK "what-if" simulator.
+ *
+ * Management wants to include / exclude cases (assets, whole asset types, brands,
+ * or "cost-but-no-meter" cases) and see the fleet CPK move LIVE. The classic
+ * distortion: a wheel loader is hour-metered, so under a cost-per-km lens it shows
+ * tyre EXPENSE with no km to divide by - inflating any km CPK. Excluding such cases
+ * should instantly show a corrected figure.
+ *
+ * Input is the per_vehicle array the get_fleet_cpk RPC already returns (see
+ * src/lib/api/fleetCpk.js). Each row:
+ *   { asset_no, vehicle_type, brand?, country?, currency?, unit ('km'|'engine_hours'),
+ *     distance_or_hours, tyre_cost, maintenance_cost, total_cost, cpk_tyre, cpk_total }
+ *
+ * SCENARIO CPK DEFINITION (deliberate, and different from the coverage-matched CPK
+ * shown in the main Fleet CPK section): here CPK = sum(INCLUDED cost) / sum(INCLUDED
+ * distance-or-hours), per country + unit. Because a no-meter asset contributes cost
+ * but zero distance, it INFLATES the CPK - which is exactly the distortion the user
+ * is hunting, and excluding it corrects the figure. CPK is null when the included
+ * denominator is 0 (honest, never a fabricated 0). Currencies are NEVER blended:
+ * every group is a single (country, unit) pair carrying its own currency.
+ */
+
+const num = (v) => (Number.isFinite(Number(v)) ? Number(v) : 0)
+
+/** Normalise a possibly-Set/array/undefined exclusion list into a lookup Set of strings. */
+function toSet(v) {
+  if (v instanceof Set) return v
+  if (Array.isArray(v)) return new Set(v.map((x) => String(x)))
+  return new Set()
+}
+
+/** The two CPK units a cost-per-km view can measure. */
+export const CPK_UNITS = ['km', 'engine_hours']
+
+/** Canonical unit for a per_vehicle row ('km' | 'engine_hours'), defaulting to km. */
+export function rowUnit(row = {}) {
+  return row?.unit === 'engine_hours' ? 'engine_hours' : 'km'
+}
+
+/**
+ * A "no meter" case: it carries cost but has no distance / hours to divide by
+ * (distance_or_hours is 0 / null). This is the wheel-loader-under-km-view case.
+ * @param {object} row a per_vehicle row
+ * @returns {boolean}
+ */
+export function isNoMeter(row = {}) {
+  return num(row?.distance_or_hours) <= 0 && num(row?.total_cost) > 0
+}
+
+/**
+ * Decide whether a row is EXCLUDED from the scenario under the given controls.
+ * A row is excluded when any of these hold:
+ *  - onlyUnit is set and the row's unit differs,
+ *  - excludeNoMeter is on and the row is a no-meter case,
+ *  - its asset_no is in excludedAssets,
+ *  - its vehicle_type is in excludedTypes,
+ *  - its brand is in excludedBrands.
+ * @param {object} row
+ * @param {object} controls see recomputeFleetCpk
+ * @returns {boolean}
+ */
+export function isExcluded(row, controls = {}) {
+  const { excludedAssets, excludedTypes, excludedBrands, onlyUnit, excludeNoMeter } = controls
+  if (onlyUnit === 'km' || onlyUnit === 'engine_hours') {
+    if (rowUnit(row) !== onlyUnit) return true
+  }
+  if (excludeNoMeter && isNoMeter(row)) return true
+  if (toSet(excludedAssets).has(String(row?.asset_no))) return true
+  if (row?.vehicle_type != null && toSet(excludedTypes).has(String(row.vehicle_type))) return true
+  if (row?.brand != null && toSet(excludedBrands).has(String(row.brand))) return true
+  return false
+}
+
+/** Empty accumulator for one (country, unit) side. */
+function emptySide(country, currency, unit) {
+  return {
+    country: country ?? null,
+    currency: currency || country || '',
+    unit,
+    cost: 0,
+    tyreCost: 0,
+    distance: 0,
+    assetCount: 0,
+    noMeterCount: 0,
+    noMeterCost: 0,
+  }
+}
+
+/** Fold one row into a side accumulator. */
+function addRow(side, row) {
+  side.cost += num(row.total_cost)
+  side.tyreCost += num(row.tyre_cost)
+  side.distance += Math.max(0, num(row.distance_or_hours))
+  side.assetCount += 1
+  if (isNoMeter(row)) {
+    side.noMeterCount += 1
+    side.noMeterCost += num(row.total_cost)
+  }
+}
+
+/** Finalise a side accumulator into a CPK view-model (null CPK when denominator 0). */
+function finishSide(side) {
+  const d = side.distance
+  return {
+    cost: side.cost,
+    tyreCost: side.tyreCost,
+    distance: d,
+    assetCount: side.assetCount,
+    noMeterCount: side.noMeterCount,
+    noMeterCost: side.noMeterCost,
+    cpk_total: d > 0 ? side.cost / d : null,
+    cpk_tyre: d > 0 ? side.tyreCost / d : null,
+  }
+}
+
+const pct = (scen, base) => {
+  if (base == null || !Number.isFinite(Number(base)) || Number(base) === 0) return null
+  if (scen == null || !Number.isFinite(Number(scen))) return null
+  return (100 * (Number(scen) - Number(base))) / Number(base)
+}
+const diff = (a, b) => {
+  if (a == null || b == null || !Number.isFinite(Number(a)) || !Number.isFinite(Number(b))) return null
+  return Number(a) - Number(b)
+}
+
+/**
+ * Recompute baseline-vs-scenario fleet CPK for the INCLUDED set of per-vehicle rows.
+ *
+ * Baseline = every row (the untouched fleet), grouped by (country, unit).
+ * Scenario = the rows that survive the exclusion controls, same grouping.
+ *
+ * @param {Array<object>} perVehicle per_vehicle rows from get_fleet_cpk
+ * @param {{ excludedAssets?:Set|Array, excludedTypes?:Set|Array, excludedBrands?:Set|Array,
+ *   onlyUnit?:'km'|'engine_hours'|null, excludeNoMeter?:boolean }} [controls]
+ * @returns {{
+ *   groups: Array<{ country, currency, unit, baseline, scenario,
+ *                   delta:{cpk_total,cpk_tyre,cost,distance,assetCount},
+ *                   pctChange:{cpk_total,cpk_tyre} }>,
+ *   totalCount:number, includedCount:number, excludedCount:number, noMeterCount:number
+ * }}
+ */
+export function recomputeFleetCpk(perVehicle = [], controls = {}) {
+  const rows = Array.isArray(perVehicle) ? perVehicle : []
+  const baseMap = new Map()
+  const scenMap = new Map()
+  let includedCount = 0
+  let noMeterCount = 0
+
+  const keyOf = (country, unit) => `${country ?? ''}\u0000${unit}`
+
+  for (const row of rows) {
+    const unit = rowUnit(row)
+    const country = row?.country ?? null
+    const currency = row?.currency || country || ''
+    const key = keyOf(country, unit)
+    if (isNoMeter(row)) noMeterCount += 1
+
+    if (!baseMap.has(key)) baseMap.set(key, emptySide(country, currency, unit))
+    addRow(baseMap.get(key), row)
+
+    if (!isExcluded(row, controls)) {
+      includedCount += 1
+      if (!scenMap.has(key)) scenMap.set(key, emptySide(country, currency, unit))
+      addRow(scenMap.get(key), row)
+    }
+  }
+
+  const groups = [...baseMap.entries()]
+    .map(([key, baseSide]) => {
+      const baseline = finishSide(baseSide)
+      const scenSide = scenMap.get(key) || emptySide(baseSide.country, baseSide.currency, baseSide.unit)
+      const scenario = finishSide(scenSide)
+      return {
+        country: baseSide.country,
+        currency: baseSide.currency,
+        unit: baseSide.unit,
+        baseline,
+        scenario,
+        delta: {
+          cpk_total: diff(scenario.cpk_total, baseline.cpk_total),
+          cpk_tyre: diff(scenario.cpk_tyre, baseline.cpk_tyre),
+          cost: scenario.cost - baseline.cost,
+          distance: scenario.distance - baseline.distance,
+          assetCount: scenario.assetCount - baseline.assetCount,
+        },
+        pctChange: {
+          cpk_total: pct(scenario.cpk_total, baseline.cpk_total),
+          cpk_tyre: pct(scenario.cpk_tyre, baseline.cpk_tyre),
+        },
+      }
+    })
+    // stable, readable order: country then km before hours
+    .sort((a, b) => {
+      const c = String(a.country ?? '').localeCompare(String(b.country ?? ''))
+      if (c !== 0) return c
+      return a.unit === b.unit ? 0 : a.unit === 'km' ? -1 : 1
+    })
+
+  return {
+    groups,
+    totalCount: rows.length,
+    includedCount,
+    excludedCount: rows.length - includedCount,
+    noMeterCount,
+  }
+}
+
+/**
+ * Distinct vehicle types present in the rows, with a count and how many are
+ * no-meter cases (drives the exclude-by-type chips). Sorted by count desc.
+ * @param {Array<object>} perVehicle
+ * @returns {Array<{ type:string, count:number, noMeterCount:number }>}
+ */
+export function distinctTypes(perVehicle = []) {
+  const map = new Map()
+  for (const r of Array.isArray(perVehicle) ? perVehicle : []) {
+    const t = r?.vehicle_type
+    if (t == null || t === '') continue
+    const key = String(t)
+    let g = map.get(key)
+    if (!g) { g = { type: key, count: 0, noMeterCount: 0 }; map.set(key, g) }
+    g.count += 1
+    if (isNoMeter(r)) g.noMeterCount += 1
+  }
+  return [...map.values()].sort((a, b) => b.count - a.count || a.type.localeCompare(b.type))
+}
+
+/**
+ * Distinct brands present in the rows (only when the rows carry a brand field).
+ * @param {Array<object>} perVehicle
+ * @returns {Array<{ brand:string, count:number }>}
+ */
+export function distinctBrands(perVehicle = []) {
+  const map = new Map()
+  for (const r of Array.isArray(perVehicle) ? perVehicle : []) {
+    const b = r?.brand
+    if (b == null || b === '') continue
+    const key = String(b)
+    map.set(key, (map.get(key) || 0) + 1)
+  }
+  return [...map.entries()]
+    .map(([brand, count]) => ({ brand, count }))
+    .sort((a, b) => b.count - a.count || a.brand.localeCompare(b.brand))
+}

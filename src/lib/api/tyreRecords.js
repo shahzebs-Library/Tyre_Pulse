@@ -83,9 +83,18 @@ export function listTcoActualRecords({ country, from, to } = {}) {
   return applyCountry(q, country)
 }
 
-/** Fleet roster (asset_no → vehicle_type + active state) for the TCO join / active-vehicle count. */
+/**
+ * Fleet roster (asset_no -> vehicle_type + active state) for the TCO join / active-vehicle
+ * count. Paged: a bare .select() caps at 1000 and the fleet is ~1523, which undercounts the
+ * active-vehicle-derived TCO totals. Resolves to { data, error, truncated } (caller-compatible).
+ */
 export function listTcoFleet() {
-  return supabase.from('vehicle_fleet').select('asset_no,vehicle_type,make,model,status,is_active')
+  return fetchAllPages(
+    (from, to) => supabase.from('vehicle_fleet')
+      .select('asset_no,vehicle_type,make,model,status,is_active')
+      .order('id', { ascending: true }).range(from, to),
+    { max: 20000 },
+  )
 }
 
 /** Update a single tyre record by id. */

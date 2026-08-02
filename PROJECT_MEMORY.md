@@ -3,7 +3,7 @@
 Durable, committed project knowledge so any session has full context. Keep this
 current. Read it before adding/changing modules. Governing spec: `Tyre pulse enterprise.md`
 
-## SESSION 2026-08-02 — CPK INTELLIGENCE + COST PER M3 + PMV INTAKE + SEARCH RBAC + ENTERPRISE PERF. Migrations through **V456**, next free **V457**. ALL MERGED to main (PRs #248-#264). ACTIVE.
+## SESSION 2026-08-02 — CPK INTELLIGENCE + COST PER M3 + PMV INTAKE + SEARCH RBAC + ENTERPRISE PERF + CONTROL CENTER. Migrations through **V458**, next free **V459**. ALL MERGED to main (PRs #248-#264). ACTIVE.
 - **V456 ENTERPRISE-SCALE INDEXES (applied live + verified with EXPLAIN ANALYZE).** For millions of rows the Cost/M3 +
   CPK hot RPCs must range-scan the exact (org,country,period) slice, not scan wider and filter. Added: (1)
   `production_logs(organisation_id, country, period_date)` for get_cost_per_m3 / _trend / get_production_rejections
@@ -15,6 +15,26 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
   reading_date) WHERE engine_hours>0` for `fleet_hours_by_asset`. **get_fleet_cpk AND get_cpk_drivers both call
   fleet_tyre_km_by_asset + fleet_hours_by_asset, so both benefit directly.** CPK module service is fully server-side
   (fleetCpk.js/cpkDrivers.js/brandSizeCpk.js call RPCs, no client fetchAllPages loops). Reversible (drop 3 indexes).
+- **V457 SERVER-SIDE TYRE-vs-MAINTENANCE SPLIT (`get_maint_tyre_split`).** `loadCostSplit` (costSummary.js, feeds
+  Dashboard/Analytics/Board/Executive/CostCenter/PM/EngineeringKPI) pulled tyre_records + pm_service_records +
+  work_orders WHOLE into the browser (work_orders is the millions-row table) for its site-scoped / grid-empty path.
+  New RPC aggregates that monthly split server-side (mirrors the JS math EXACTLY: tyre = cost_per_tyre*(qty>0?qty:1)
+  by issue_date UTC month; maintenance = pm total_cost by service_date + work_orders labour+parts+lubricant+outside
+  by coalesce(completed_at,created_at) UTC month). Raw client pulls kept ONLY as fallback when the RPC is absent.
+  DEFINER/STABLE, org+country+site scoped. Verified KSA 12mo: WO 3.26M / tyre 5.47M.
+- **V458 DATA TRUST / LINEAGE / DIAGNOSTICS CONTROL CENTER backend** (the "Advanced Control Center" the customer
+  asked for, built ON TOP of existing pieces — never duplicated). Two DEFINER read RPCs: `get_figure_lineage(domain,
+  country,from,to)` = trace a KPI figure -> source tables (parts_consumption/tyre_records/vehicle_fleet) + their
+  provenance (import_uid idempotency %, classified_by breakdown, currency/brand/fitment/total_km/data_source
+  coverage) + the recent import_batches/import_files load history behind it; `get_control_center_summary(country)` =
+  one-call cheap indexed data-quality counts (orphan assets, brand gaps, future/reversed removal dates, unpriced
+  tyres, unclassified spend, no-import-uid lines) each with severity + drilldown route. Service
+  `src/lib/api/controlCenter.js` (getFigureLineage/getControlCenterSummary + pure rankIssues/openIssueCount +
+  ISSUE_ROUTE/ISSUE_SEVERITY_TONE/DOMAIN_LABELS; degrades to {ok:false}). Page `ConsoleControlCenter.jsx`
+  (/console/control-center, "Data Trust & Control" in the console Overview nav) UNIFIES: trust scores per KPI domain
+  (reuses getDataTrustOverview + buildTrustReport + TrustBadge), the diagnostics feed, and the lineage explorer; all
+  resolve/scan actions reuse the existing recon/duplicate/material-master surfaces. Tests controlCenter.test.js (5).
+  KSA diagnostics verified real: brand_gap 409, unclassified 59,391, no_import_uid 696.
 - **`fetchAllPages` PARALLELIZED (app-wide, `src/lib/fetchAll.js`, 113 caller files).** Was strictly serial: page 0,
   then page 1, ... (200k rows = 200 latency-bound round trips). NOW: page 0 alone (a small result stays ONE round
   trip, no regression), then remaining pages fetched in CONCURRENT windows of `concurrency` (default 4) — preserves

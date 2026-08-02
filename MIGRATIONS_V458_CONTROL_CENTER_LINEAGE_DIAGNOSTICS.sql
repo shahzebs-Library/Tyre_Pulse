@@ -1,0 +1,30 @@
+-- V458 - Data Trust / Lineage / Diagnostics Control Center backend
+-- STATUS: APPLIED LIVE (project jhssdmeruxtrlqnwfksc) + verified.
+--
+-- Two SECURITY DEFINER STABLE read RPCs, org+country scoped, anon revoked, no
+-- writes (every resolve/scan action in the Control Center reuses the existing
+-- self-gating recon_* / admin_dup_* / material_master_* / resolve_system_logs
+-- RPCs). Powers the /console/control-center page.
+--
+-- get_figure_lineage(p_domain, p_country, p_from, p_to):
+--   trace a KPI figure back to its source tables + provenance + import history.
+--   domains: tyre_cost | cost_per_km | tyre_life | brand_performance | fleet_register.
+--   Per source: parts_consumption (rows, with_import_uid, idempotent_pct, currencies,
+--   classification by classified_by, event_date range); tyre_records (rows, with_brand,
+--   with_fitment_date, with_total_km, with_unit_cost, data_source breakdown);
+--   vehicle_fleet (rows, with_type, with_registration, active). Plus recent_imports
+--   from import_batches left join import_files (module/file/rows/imported/duplicates/
+--   status/at + repeat_file when the sha256 was seen more than once).
+--
+-- get_control_center_summary(p_country):
+--   one-call, cheap indexed data-quality counts (volumes + issues[] each with
+--   severity critical|warning|info + a drilldown action key): orphan_assets,
+--   brand_gap, future_removal, reversed_dates, unpriced_tyres, unclassified_spend
+--   (classified_by='default'), no_import_uid.
+--
+-- REVERSIBLE:
+--   drop function public.get_figure_lineage(text,text,date,date);
+--   drop function public.get_control_center_summary(text);
+--
+-- (Full function bodies were applied via apply_migration; see the live definitions
+--  with pg_get_functiondef. This file is the record of intent + rollback.)

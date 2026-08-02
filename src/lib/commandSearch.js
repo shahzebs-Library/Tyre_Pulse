@@ -9,9 +9,16 @@
 //   - ilike or-clause building + record-row mapping for the universal search.
 
 import { sanitizeSearchTerm } from './searchFilter'
+import { NAV_MODULE_KEY, governingModuleKey, ALWAYS_ALLOWED_PATHS } from './navAccess'
+import { isChecklistOnlyRole, isChecklistPathAllowed } from './checklistAccess'
+import { ACCESS_ROLES } from './moduleCatalog'
 
 // Mirrors ANALYTICS_ROLES in Layout.jsx
 export const ANALYTICS_ROLES = ['Admin', 'Manager', 'Director']
+
+// Same set Layout.jsx uses to detect an admin-defined CUSTOM role.
+const BUILTIN_NAV_ROLES = new Set([...ACCESS_ROLES, 'Maintenance Supervisor', 'Store Keeper'])
+const isCustomNavRole = (role) => !!role && !BUILTIN_NAV_ROLES.has(role)
 
 // ── Command registry ─────────────────────────────────────────────────────────
 // access flags copied 1:1 from Layout.jsx NAV_GROUPS (adminOnly / roles) and
@@ -261,20 +268,55 @@ export const ACTION_COMMANDS = [
 // Mirrors Layout.jsx shouldShowNavItem exactly, then additionally enforces the
 // App.jsx ModuleRoute permission gate so the palette never surfaces a route
 // the user's role cannot open.
-export function isCommandVisible(cmd, profile, hasPermission) {
+/**
+ * Is a command visible to the current user? Mirrors Layout.jsx `shouldShowNavItem`
+ * so the command palette shows EXACTLY what the sidebar shows - a module turned off
+ * in the access matrix, revoked for a user, or outside a custom role's grants is
+ * hidden here too. Extra args (grantedModules, isSuperAdmin) are optional so older
+ * 3-arg callers keep working (with grants/super-admin simply unavailable).
+ *
+ * @param {object} cmd  command / access descriptor (path, adminOnly?, roles?, moduleKey?)
+ * @param {object} profile  { role }
+ * @param {(k:string)=>boolean} hasPermission  AuthContext.hasPermission
+ * @param {Set<string>} [grantedModules]  AuthContext.grantedModules
+ * @param {boolean} [isSuperAdmin]  AuthContext.isSuperAdmin
+ */
+export function isCommandVisible(cmd, profile, hasPermission, grantedModules, isSuperAdmin) {
   const role = profile?.role
   if (!role) return false
-  if (role === 'Inspector') {
-    return cmd.path === '/inspections' || cmd.path === '/settings'
+  const path = cmd.path
+  const perm = typeof hasPermission === 'function' ? hasPermission : null
+
+  // Restricted single-purpose roles (same as the sidebar).
+  if (role === 'Inspector') return path === '/inspections' || path === '/settings'
+  if (role === 'Data Monitor Officer') return path === '/accidents' || path === '/settings'
+  if (isChecklistOnlyRole(role)) return isChecklistPathAllowed(path)
+
+  // Per-user GRANT opens visibility for the exact key the route guard resolves.
+  const routeKey = cmd.moduleKey || governingModuleKey(path)
+  if (routeKey && grantedModules && typeof grantedModules.has === 'function' && grantedModules.has(routeKey)) {
+    return true
   }
-  if (cmd.adminOnly && role !== 'Admin') return false
+
+  // Admin-defined custom roles: deny by default, sidebar derived from the matrix.
+  if (isCustomNavRole(role)) {
+    if (ALWAYS_ALLOWED_PATHS.has(path)) return true
+    return perm ? perm(cmd.moduleKey || governingModuleKey(path)) === true : false
+  }
+
+  // Built-in roles: role gate AND module gate must both pass.
+  if (cmd.adminOnly && !(role === 'Admin' || isSuperAdmin === true)) return false
   if (cmd.roles && !cmd.roles.includes(role)) return false
-  if (cmd.moduleKey && typeof hasPermission === 'function' && !hasPermission(cmd.moduleKey)) return false
+  // Gate on the command's explicit moduleKey, else the route's NAV_MODULE_KEY entry
+  // (NOT the slug fallback - permissive built-in roles must not be denied on an
+  // unmapped slug, matching shouldShowNavItem).
+  const gateKey = cmd.moduleKey || NAV_MODULE_KEY[path]
+  if (gateKey && perm && perm(gateKey) !== true) return false
   return true
 }
 
-export function visibleCommands(commands, profile, hasPermission) {
-  return commands.filter((c) => isCommandVisible(c, profile, hasPermission))
+export function visibleCommands(commands, profile, hasPermission, grantedModules, isSuperAdmin) {
+  return commands.filter((c) => isCommandVisible(c, profile, hasPermission, grantedModules, isSuperAdmin))
 }
 
 // ── Command ranking ──────────────────────────────────────────────────────────
@@ -384,8 +426,8 @@ export const RECORD_SOURCES = [
   },
 ]
 
-export function visibleRecordSources(sources, profile, hasPermission) {
-  return sources.filter((s) => isCommandVisible(s.access, profile, hasPermission))
+export function visibleRecordSources(sources, profile, hasPermission, grantedModules, isSuperAdmin) {
+  return sources.filter((s) => isCommandVisible(s.access, profile, hasPermission, grantedModules, isSuperAdmin))
 }
 
 // Builds the PostgREST `.or()` clause. Returns null when the sanitized term is

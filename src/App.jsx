@@ -233,6 +233,10 @@ const MaintenanceCostBoard   = lazy(() => import('./pages/MaintenanceCostBoard')
 const ExpenseReport          = lazy(() => import('./pages/ExpenseReport'))
 const ExpenseTrends          = lazy(() => import('./pages/ExpenseTrends'))
 const CpkIntelligence        = lazy(() => import('./pages/CpkIntelligence'))
+const CostPerM3              = lazy(() => import('./pages/CostPerM3'))
+const ScoCosts               = lazy(() => import('./pages/ScoCosts'))
+const SanyInvoices           = lazy(() => import('./pages/SanyInvoices'))
+const ProductionM3           = lazy(() => import('./pages/ProductionM3'))
 const ErpIntake             = lazy(() => import('./pages/ErpIntake'))
 const ExpenseImport          = lazy(() => import('./pages/ExpenseImport'))
 const ReportSharing          = lazy(() => import('./pages/ReportSharing'))
@@ -524,6 +528,10 @@ function MainApp() {
                       <Route path="/expense-report"          element={<Safe><RoleRoute allowed={['Admin', 'Manager', 'Director']}><ExpenseReport /></RoleRoute></Safe>} />
                       <Route path="/expense-trends"          element={<Safe><RoleRoute allowed={['Admin', 'Manager', 'Director']}><ExpenseTrends /></RoleRoute></Safe>} />
                       <Route path="/cpk-intelligence"        element={<Safe><RoleRoute allowed={['Admin', 'Manager', 'Director']}><CpkIntelligence /></RoleRoute></Safe>} />
+                      <Route path="/cost-per-m3"             element={<Safe><RoleRoute allowed={['Admin', 'Manager', 'Director']}><CostPerM3 /></RoleRoute></Safe>} />
+                      <Route path="/sco-costs"               element={<Safe><RoleRoute allowed={['Admin', 'Manager', 'Director']}><ScoCosts /></RoleRoute></Safe>} />
+                      <Route path="/sany-invoices"           element={<Safe><RoleRoute allowed={['Admin', 'Manager', 'Director']}><SanyInvoices /></RoleRoute></Safe>} />
+                      <Route path="/production-m3"           element={<Safe><RoleRoute allowed={['Admin', 'Manager', 'Director']}><ProductionM3 /></RoleRoute></Safe>} />
                       <Route path="/erp-intake"             element={<Safe><RoleRoute allowed={['Admin', 'Manager', 'Director']}><ErpIntake /></RoleRoute></Safe>} />
                       <Route path="/expense-import"          element={<Safe><RoleRoute allowed={['Admin', 'Manager', 'Director']}><ExpenseImport /></RoleRoute></Safe>} />
                       <Route path="/report-sharing"          element={<Safe><RoleRoute allowed={['Admin', 'Manager', 'Director']}><ReportSharing /></RoleRoute></Safe>} />

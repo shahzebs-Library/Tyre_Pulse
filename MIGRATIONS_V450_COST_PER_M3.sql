@@ -1,0 +1,47 @@
+-- V450 - COST PER M3 MODEL (SCO cost + SANY workshop invoices + approved production + calc RPC)
+-- STATUS: APPLIED LIVE 2026-08-02 (project jhssdmeruxtrlqnwfksc, org Company A) as
+--   supabase migrations v450_cost_per_m3_model + v450b_get_cost_per_m3. Repo record.
+--
+-- WHY (customer screenshot "All KSA"): Cost per cubic metre =
+--   (Internal KSA + SCO KSA + SANY Invoice) / Production M3.
+--   e.g. (597,688 + 252,981 + 524,186) = 1,374,855 SAR / 299,784 M3 = 4.59 SAR/M3.
+--   Needs region-wise (Central / Western via sites.region), current-month default,
+--   per-country currency (never blended), and dedicated data-entry / import pages
+--   for SCO, SANY and Production; Internal reuses the ERP parts_consumption intake.
+--
+-- WHAT WAS ADDED LIVE:
+-- 1) public.sco_costs        - SCO / subcontractor cost ledger (entry + import).
+-- 2) public.sany_invoices    - SANY workshop invoice ledger (entry + import).
+--    Both: org default app_current_org(); RLS = RESTRICTIVE org isolation +
+--    RESTRICTIVE country-visibility SELECT + app_can_see_site SELECT + app_is_elevated
+--    write; anon revoked, authenticated granted; set_updated_at trigger.
+-- 3) public.production_logs.approved_m3 numeric (nullable) - the approved quantity;
+--    the calc falls back to m3 when approved_m3 is null.
+-- 4) public.get_cost_per_m3(p_country text, p_from date, p_to date) -> jsonb
+--    SECURITY DEFINER, search_path=public, anon revoked / authenticated granted,
+--    scoped to app_current_org(). Default window = current month. Returns
+--    { ok, country, currency, from, to,
+--      regions:[{ region, internal_cost, tyre_cost, sco_cost, sany_cost,
+--                 production_m3, grand_total, cost_per_m3 }],
+--      total:{ ...same aggregated } }.
+--    Region resolved by joining parts_consumption.site / production_logs.site to
+--    sites (name OR site_code, case-insensitive) -> sites.region; untagged -> 'Unassigned'.
+--    SCO / SANY carry region on the row. grand_total = internal + sco + sany (tyre_cost
+--    is a SUBSET of internal, surfaced separately for the "tyre expense" view).
+--    cost_per_m3 = grand_total / production_m3, NULL when production is 0 (honest N/A).
+--
+-- VERIFIED (org injected, MCP has no session): KSA July 2026 internal 606,207 SAR,
+--   tyre 332,464, production 61,045 M3; SCO/SANY 0 until entered; formula reproduces
+--   the screenshot. KSA regions tagged = 0 today (customer tags Central/Western in
+--   Site Management), so all rows read 'Unassigned' until then.
+--
+-- REVERSIBLE:
+--   drop function if exists public.get_cost_per_m3(text, date, date);
+--   alter table public.production_logs drop column if exists approved_m3;
+--   drop table if exists public.sco_costs;
+--   drop table if exists public.sany_invoices;
+--
+-- FRONTEND: /cost-per-m3 (dashboard), /sco-costs, /sany-invoices, /production-m3
+--   (entry + Excel/CSV import + list), all current-month default. Service
+--   src/lib/api/costPerM3.js; pure src/lib/costPerM3.js (formatters + import
+--   templates/mapping, 16 tests); reusable src/components/costm3/LedgerPage.jsx.

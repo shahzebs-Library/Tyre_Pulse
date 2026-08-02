@@ -46,9 +46,14 @@ export const IMPORT_TEMPLATES = {
     fields: ['country', 'region', 'site', 'period_date', 'cost_center', 'description', 'amount', 'currency', 'ref_no'],
   },
   sany: {
-    label: 'SANY workshop invoice',
-    headers: ['Country', 'Region', 'Site', 'Asset', 'Invoice No', 'Invoice Date', 'Month', 'Description', 'Amount', 'Currency', 'Status'],
-    fields: ['country', 'region', 'site', 'asset_no', 'invoice_no', 'invoice_date', 'period_date', 'description', 'amount', 'currency', 'status'],
+    label: 'SANY invoice (summary or detail)',
+    // Accepts BOTH SANY formats. Summary: Region | Date | Quotation No | Amount (SAR).
+    // Detail: Location | Asset Code | Asset No | Parts Description | Quot. No | Cost |
+    // Remarks | Fleet Remarks | Maintenance Remarks. They link by Quotation No.
+    headers: ['Country', 'Region', 'Location / Site', 'Asset Code', 'Asset No', 'Quotation No',
+      'Date', 'Parts Description', 'Amount (SAR) / Cost', 'Remarks', 'Fleet Remarks', 'Maintenance Remarks'],
+    fields: ['country', 'region', 'site', 'asset_code', 'asset_no', 'invoice_no',
+      'invoice_date', 'description', 'amount', 'notes', 'fleet_remarks', 'maintenance_remarks'],
   },
   production: {
     label: 'Production (concrete batching)',
@@ -75,13 +80,17 @@ const HEADER_SYNONYMS = {
   pump_no: ['pump number', 'pump no', 'pump'],
   period_date: ['month', 'period', 'date', 'period date', 'batching time', 'batch time', 'batching date'],
   cost_center: ['cost center', 'cost centre', 'cost_center'],
-  description: ['description', 'desc', 'details', 'item'],
-  amount: ['amount', 'cost', 'value', 'total', 'sar'],
+  description: ['description', 'desc', 'details', 'item', 'parts description', 'part description'],
+  amount: ['amount', 'cost', 'value', 'total', 'sar', 'amount (sar)', 'amount sar'],
   currency: ['currency'],
   ref_no: ['ref no', 'ref', 'reference', 'ref_no'],
-  invoice_no: ['invoice no', 'invoice', 'invoice_no', 'inv no'],
-  invoice_date: ['invoice date', 'invoice_date', 'inv date'],
+  invoice_no: ['invoice no', 'invoice', 'invoice_no', 'inv no', 'quotation no', 'quot no', 'quot. no', 'quotation', 'quot no.'],
+  invoice_date: ['invoice date', 'invoice_date', 'inv date', 'date'],
   status: ['status'],
+  asset_code: ['asset code', 'asset_code'],
+  notes: ['remarks', 'remark', 'note', 'notes'],
+  fleet_remarks: ['fleet remarks', 'fleet remark'],
+  maintenance_remarks: ['maintenance remarks', 'maintenance remark', 'maint remarks'],
   m3: ['m3', 'm³', 'produced', 'supplied qty', 'supplied', 'qty', 'quantity'],
   approved_m3: ['approved m3', 'approved_m3', 'approved', 'approved qty', 'approved quantity', 'approved/signed qty', 'approved signed qty', 'signed qty'],
   rejected: ['rejection type', 'rejected', 'rejection'],
@@ -93,6 +102,13 @@ const HEADER_SYNONYMS = {
   mix_description: ['mix description', 'mix desc'],
   customer_name: ['customer name', 'customer'],
   project_name: ['project name', 'project'],
+}
+
+/** Normalise a region label so imports group with tagged sites: "Western Region" -> "Western". */
+export function normalizeRegion(v) {
+  const s = String(v ?? '').trim().replace(/\s+region\s*$/i, '').trim()
+  if (!s) return null
+  return s.charAt(0).toUpperCase() + s.slice(1)
 }
 
 /** Parse an asset id out of a truck/pump cell like "TM505     9772 BSA" -> "TM505". */
@@ -174,6 +190,14 @@ export function mapImportRows(kind, rawRows = []) {
           break
         }
       }
+    }
+    if (kind === 'sco' || kind === 'sany') {
+      if ('region' in out) out.region = normalizeRegion(out.region)
+    }
+    if (kind === 'sany') {
+      // Detail rows carry an asset/parts line; summary rows carry only region/date/quot/amount.
+      out.doc_type = (out.description || out.asset_code || out.asset_no) ? 'detail' : 'summary'
+      if (!out.period_date && out.invoice_date) out.period_date = toMonthStart(out.invoice_date)
     }
     out.source = 'import'
     return out

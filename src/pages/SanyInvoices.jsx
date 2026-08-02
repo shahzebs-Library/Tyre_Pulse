@@ -16,28 +16,24 @@ export default function SanyInvoices() {
       kind="sany"
       service={{ list: listSanyInvoices, create: createSanyInvoice, import: importSanyInvoices, remove: deleteSanyInvoice }}
       columns={[
-        { key: 'period_date', header: 'Month' },
+        { key: 'doc_type', header: 'Type', render: (r) => (r.doc_type === 'detail' ? 'Detail' : 'Summary') },
+        { key: 'invoice_date', header: 'Date' },
         { key: 'region', header: 'Region' },
-        { key: 'site', header: 'Site' },
+        { key: 'invoice_no', header: 'Quotation No' },
         { key: 'asset_no', header: 'Asset' },
-        { key: 'invoice_no', header: 'Invoice No' },
-        { key: 'invoice_date', header: 'Invoice Date' },
-        { key: 'description', header: 'Description' },
-        { key: 'status', header: 'Status' },
+        { key: 'description', header: 'Parts' },
         { key: 'amount', header: 'Amount', align: 'right', kind: 'money' },
         { key: 'currency', header: 'Cur' },
       ]}
       formFields={[
+        { key: 'invoice_date', label: 'Date', type: 'text' },
         { key: 'period_date', label: 'Month', type: 'month', required: true },
-        { key: 'region', label: 'Region', type: 'text' },
-        { key: 'site', label: 'Site', type: 'text' },
-        { key: 'asset_no', label: 'Asset', type: 'text' },
-        { key: 'invoice_no', label: 'Invoice No', type: 'text' },
-        { key: 'invoice_date', label: 'Invoice Date', type: 'text' },
-        { key: 'description', label: 'Description', type: 'text' },
-        { key: 'status', label: 'Status', type: 'select', options: ['received', 'approved', 'paid', 'disputed'] },
-        { key: 'amount', label: 'Amount', type: 'number', required: true },
-        { key: 'currency', label: 'Currency', type: 'text' },
+        { key: 'region', label: 'Region (Western / Central)', type: 'text' },
+        { key: 'invoice_no', label: 'Quotation No', type: 'text' },
+        { key: 'asset_no', label: 'Asset (detail only)', type: 'text' },
+        { key: 'description', label: 'Parts description (detail only)', type: 'text' },
+        { key: 'amount', label: 'Amount (SAR)', type: 'number', required: true },
+        { key: 'doc_type', label: 'Type', type: 'select', options: ['summary', 'detail'] },
       ]}
     />
   )

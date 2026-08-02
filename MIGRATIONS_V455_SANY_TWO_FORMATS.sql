@@ -1,0 +1,31 @@
+-- V455 - SANY invoices: two linked formats (summary + detail)
+-- STATUS: APPLIED LIVE 2026-08-02 (project jhssdmeruxtrlqnwfksc) as v455_sany_two_formats.
+--
+-- SANY sends TWO formats that link by Quotation No:
+--   (1) SUMMARY (PDF): NO | REGION | DATE | QUOTATION NO | AMOUNT (SAR)  = the payable list
+--       (sample: Western Region, dated quotations, TOTAL 65,271.72 SAR).
+--   (2) DETAIL (grid): SR.NO | LOCATION | ASSET CODE | ASSET NO | PARTS DESCRIPTION |
+--       QUOT. NO | COST | REMARKS | FLEET REMARKS | MAINTENANCE REMARKS = per-asset lines.
+--
+-- WHAT WAS ADDED LIVE:
+-- 1) sany_invoices new columns: doc_type text default 'summary', asset_code, fleet_remarks,
+--    maintenance_remarks. Index sany_invoices_quot_idx (org, invoice_no = quotation no).
+-- 2) get_cost_per_m3 (V450b) updated: the SANY sum now excludes doc_type='detail'
+--    (where coalesce(doc_type,'summary') <> 'detail'), so importing the detail breakdown
+--    alongside the summary NEVER double-counts. Only the payable summary amount feeds
+--    Cost/M3. Detail rows are kept for drill-down, linked by invoice_no.
+--
+-- FRONTEND: /sany-invoices auto-detects the format on import (costPerM3.mapImportRows):
+--   summary -> Region/Date/Quotation No/Amount (SAR); detail -> Location/Asset Code/Asset
+--   No/Parts Description/Quot. No/Cost/Remarks/Fleet Remarks/Maintenance Remarks. Region is
+--   normalised ("Western Region" -> "Western") so it groups with sites tagged Central/Western.
+--   Rows land as doc_type summary|detail (detail = has an asset/parts line).
+--
+-- REVERSIBLE:
+--   -- restore get_cost_per_m3 without the doc_type filter (pre-V455 body), then:
+--   alter table public.sany_invoices
+--     drop column if exists doc_type, drop column if exists asset_code,
+--     drop column if exists fleet_remarks, drop column if exists maintenance_remarks;
+--
+-- NOTE: customer will send the SCO format next -> add its header synonyms to
+-- costPerM3.HEADER_SYNONYMS / the sco IMPORT_TEMPLATE when it arrives.

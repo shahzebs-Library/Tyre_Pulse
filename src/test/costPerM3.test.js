@@ -85,6 +85,15 @@ describe('mapImportRows', () => {
     expect(rows).toEqual([])
   })
 
+  it('maps a Sites row (Site Name->name, Region normalised, Active)', () => {
+    const rows = mapImportRows('sites', [
+      { Country: 'KSA', 'Site Name': 'RED SEA', 'Site Code': 'REDSEA-ST', Region: 'Western Region', City: 'Jeddah', 'Site Type': 'plant', Active: 'Yes' },
+    ])
+    expect(rows[0]).toMatchObject({
+      country: 'KSA', name: 'RED SEA', site_code: 'REDSEA-ST', region: 'Western', city: 'Jeddah', site_type: 'plant',
+    })
+  })
+
   it('every template lists matching headers and fields', () => {
     for (const t of Object.values(IMPORT_TEMPLATES)) {
       expect(t.headers.length).toBe(t.fields.length)

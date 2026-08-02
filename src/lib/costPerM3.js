@@ -55,6 +55,13 @@ export const IMPORT_TEMPLATES = {
     fields: ['country', 'region', 'site', 'asset_code', 'asset_no', 'invoice_no',
       'invoice_date', 'description', 'amount', 'notes', 'fleet_remarks', 'maintenance_remarks'],
   },
+  sites: {
+    label: 'Sites (region map)',
+    // One company -> countries -> sites; each KSA site belongs to a Region
+    // (Central / Western). Region drives the Cost per M3 split.
+    headers: ['Country', 'Site Name', 'Site Code', 'Region', 'City', 'Site Type', 'Active', 'Notes'],
+    fields: ['country', 'name', 'site_code', 'region', 'city', 'site_type', 'active', 'notes'],
+  },
   production: {
     label: 'Production (concrete batching)',
     // Matches the real batching export. Station = site; Supplied Qty = produced;
@@ -88,6 +95,11 @@ const HEADER_SYNONYMS = {
   invoice_date: ['invoice date', 'invoice_date', 'inv date', 'date'],
   status: ['status'],
   asset_code: ['asset code', 'asset_code'],
+  name: ['site name', 'name'],
+  site_code: ['site code', 'site_code', 'code'],
+  city: ['city'],
+  site_type: ['site type', 'type'],
+  active: ['active', 'is active'],
   notes: ['remarks', 'remark', 'note', 'notes'],
   fleet_remarks: ['fleet remarks', 'fleet remark'],
   maintenance_remarks: ['maintenance remarks', 'maintenance remark', 'maint remarks'],
@@ -191,7 +203,7 @@ export function mapImportRows(kind, rawRows = []) {
         }
       }
     }
-    if (kind === 'sco' || kind === 'sany') {
+    if (kind === 'sco' || kind === 'sany' || kind === 'sites') {
       if ('region' in out) out.region = normalizeRegion(out.region)
     }
     if (kind === 'sany') {

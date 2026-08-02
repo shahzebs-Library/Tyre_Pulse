@@ -50,7 +50,7 @@ function monthsInRange(from, to) {
   return Math.max(1, Math.min(24, n))
 }
 
-const EMPTY_SLICE = { data: [], error: null }
+const EMPTY_SLICE = { data: [], error: null, truncated: false }
 
 export default function ExecutiveAnalytics() {
   const { profile } = useAuth()
@@ -116,7 +116,7 @@ export default function ExecutiveAnalytics() {
         .select('asset_no,site,brand,size,supplier,cost_per_tyre,qty,issue_date'))
         .gte('issue_date', from)
         .lte('issue_date', to)
-        .range(f, t)),
+        .range(f, t), { max: 50000 }),
       // Feeds: pressure-compliance gauge, risk matrix y-axis (90-day window)
       inspections: () => fetchAllPages((f, t) => supabase
         .from('inspections')
@@ -130,13 +130,18 @@ export default function ExecutiveAnalytics() {
           .select('asset_no,site,status')
         return { data: data ?? [], error }
       },
-      // Feeds: risk matrix x-axis (currently-fitted High/Critical tyres)
+      // Feeds: risk matrix x-axis (currently-fitted High/Critical tyres).
+      // This slice has no natural date column (it is "the tyres on vehicles
+      // right now", removal_date IS NULL), so it cannot be date-windowed without
+      // changing its meaning. Country + the risk_level/removal_date filters run
+      // SERVER-SIDE; the all-time scan is then bounded by a hard row ceiling and
+      // a capped-view note surfaces when the ceiling is hit.
       openTyres: () => fetchAllPages((f, t) => byCountry(supabase
         .from('tyre_records')
         .select('asset_no,site,risk_level'))
         .is('removal_date', null)
         .in('risk_level', ['High', 'Critical'])
-        .range(f, t)),
+        .range(f, t), { max: 50000 }),
     }
 
     const keys = Object.keys(tasks)
@@ -147,10 +152,10 @@ export default function ExecutiveAnalytics() {
     keys.forEach((k, i) => {
       const s = settled[i]
       if (s.status === 'fulfilled' && !s.value?.error) {
-        next[k] = { data: s.value?.data ?? [], error: null }
+        next[k] = { data: s.value?.data ?? [], error: null, truncated: s.value?.truncated === true }
       } else {
         const err = s.status === 'rejected' ? s.reason : s.value?.error
-        next[k] = { data: [], error: err?.message || String(err) || 'Query failed' }
+        next[k] = { data: [], error: err?.message || String(err) || 'Query failed', truncated: false }
       }
     })
     setSlices(next)
@@ -639,6 +644,9 @@ export default function ExecutiveAnalytics() {
 
   const tyresEmpty = !loading && !slices.tyres.error && slices.tyres.data.length === 0
   const heatH = Math.max(280, 130 + heatData.sites.length * 28)
+  // A raw pull hit its server-side row ceiling: tell the reader the view is
+  // capped so a truncated dataset is never mistaken for the full picture.
+  const capped = !loading && (slices.tyres.truncated || slices.inspections.truncated || slices.openTyres.truncated)
 
   return (
     <div className="space-y-6 tp-exec-paper">
@@ -697,6 +705,17 @@ export default function ExecutiveAnalytics() {
           <span>At-risk vehicles <b className="text-[var(--text-primary)]">{riskData.points.length}</b></span>
         </div>
       </div>
+
+      {/* Capped-view note: one raw pull reached its 50,000 row safety ceiling */}
+      {capped && (
+        <div className="card p-3 flex items-start gap-2 text-xs text-[var(--text-secondary)]">
+          <AlertTriangle size={14} className="text-amber-600 shrink-0 mt-0.5" />
+          <span>
+            Capped view: one or more datasets reached the row safety limit and were
+            truncated. Narrow the date range or country for a complete view.
+          </span>
+        </div>
+      )}
 
       {/* Chart grid */}
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">

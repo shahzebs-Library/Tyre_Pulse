@@ -18,13 +18,14 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   ShieldCheck, RefreshCw, GitBranch, Activity, Database, FileClock,
-  ArrowRight, ChevronRight,
+  ArrowRight, ChevronRight, Download, FileText,
 } from 'lucide-react'
 import {
   Panel, PanelHeader, StatTile, Badge, Note, Btn, Segmented, Select,
   Table, THead, Th, Tr, Td, LoadingState, EmptyState, ErrorState, Code,
 } from '../components/ui'
 import TrustBadge from '../../components/trust/TrustBadge'
+import RemediationActions from './controlCenter/RemediationActions'
 import { getDataTrustOverview } from '../../lib/api/dataTrust'
 import { buildTrustReport, topActions, trustBand, DOMAIN_KEYS, DOMAINS } from '../../lib/dataTrust'
 import {
@@ -32,6 +33,7 @@ import {
   LINEAGE_DOMAINS, DOMAIN_LABELS, ISSUE_SEVERITY_TONE, ISSUE_ROUTE,
   rankIssues, openIssueCount,
 } from '../../lib/api/controlCenter'
+import { exportControlCenter } from '../../lib/controlCenterExport'
 import { toUserMessage } from '../../lib/safeError'
 
 const COUNTRIES = ['All', 'KSA', 'UAE', 'Egypt']
@@ -177,6 +179,13 @@ export default function ConsoleControlCenter() {
   const openIssues = summary ? openIssueCount(summary.issues) : 0
   const rankedIssues = useMemo(() => (summary ? rankIssues(summary.issues) : []), [summary])
 
+  const canExport = Boolean(report || summary || lineage)
+  const doExport = useCallback((format) => {
+    try {
+      exportControlCenter({ format, country, trustReport: report, summary, lineage })
+    } catch { /* export helper never throws on missing data; ignore */ }
+  }, [country, report, summary, lineage])
+
   return (
     <div className="space-y-6 max-w-7xl">
       {/* Header + country selector */}
@@ -189,12 +198,22 @@ export default function ConsoleControlCenter() {
             How much to trust every KPI, what is wrong with the data, and where each figure comes from | one place
           </p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 flex-wrap">
           <Segmented
             options={COUNTRIES.map((c) => ({ key: c, label: c }))}
             value={country}
             onChange={setCountry}
           />
+          <button onClick={() => doExport('excel')} disabled={!canExport}
+            title="Download the trust, diagnostics and lineage snapshot as Excel"
+            className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-gray-800 text-gray-400 hover:text-white text-xs border border-gray-700 transition-colors disabled:opacity-50">
+            <Download size={12} /> Excel
+          </button>
+          <button onClick={() => doExport('pdf')} disabled={!canExport}
+            title="Download the diagnostics snapshot as PDF"
+            className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-gray-800 text-gray-400 hover:text-white text-xs border border-gray-700 transition-colors disabled:opacity-50">
+            <FileText size={12} /> PDF
+          </button>
           <button onClick={refreshAll} disabled={refreshing}
             className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-gray-800 text-gray-400 hover:text-white text-xs border border-gray-700 transition-colors disabled:opacity-50">
             <RefreshCw size={12} className={refreshing ? 'animate-spin' : ''} /> Refresh
@@ -338,6 +357,9 @@ export default function ConsoleControlCenter() {
           </>
         )}
       </Panel>
+
+      {/* ── 2b. Advanced remediation (one-click fixes) ── */}
+      <RemediationActions country={country} />
 
       {/* ── 3. Lineage explorer ── */}
       <Panel>

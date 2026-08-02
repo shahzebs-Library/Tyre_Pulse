@@ -33,6 +33,7 @@ const NAV_GROUPS = [
   {
     label: 'Data and imports',
     items: [
+      { to: '/console/data-ops',        label: 'Data Operations',  icon: Layers },
       { to: '/console/import-history',  label: 'Import History',   icon: FileClock },
       { to: '/console/smart-import',    label: 'Smart Import',     icon: Wand2 },
       { to: '/console/material-master', label: 'Material Master',  icon: Boxes },

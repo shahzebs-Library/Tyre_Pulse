@@ -1,0 +1,41 @@
+-- V448 — CLOSE HISTORICAL JOB CARDS STUCK "OUT OF PRODUCTION"
+-- STATUS: APPLIED LIVE 2026-08-02 (project jhssdmeruxtrlqnwfksc, org Company A). Repo record.
+--
+-- PROBLEM (customer screenshot): the "Job Cards Today" dashboard showed
+--   Still out of production = 56,131 (869 assets), Longest one down = 732,147 days (~2000 yr),
+--   Avg repair time = 7,695 days. A card is "still out" when production_out_at IS NOT NULL AND
+--   production_in_at IS NULL (get_daily_job_cards). 56,449 cards matched, on only 958 assets.
+--
+-- ROOT CAUSE: 56,399 of those were already status Closed/Completed (56,329 with a completed_at) —
+--   the job-card import stamped production_out_at but never production_in_at, so every finished
+--   card counted as perpetually out. 27,996 also carried the corrupt two-digit-year date
+--   (year 0022/0026, min out 0022-01-13) which produced the 732,147-day figure. Only 50 cards
+--   were genuinely status='Open'.
+--
+-- FIX (this migration): for the Closed/Completed still-out cards set production_in_at to the
+--   real completion time when valid (completed_at >= production_out_at and year 2015..2027),
+--   else production_out_at + 1 minute (never before out). Then closed the 2 remaining
+--   corrupt-year (< 2015) still-out cards the same way. LEFT the 46 genuinely-recent Open jobs
+--   untouched.
+--
+-- RESULT: still-out 56,449 -> 48 (47 assets); longest-down 732,147 days -> 669 days (a real
+--   long-standing item, not an artifact).
+--
+-- REVERSIBLE: _bak.jobcard_close_20260802 holds every affected id (production_in_at was NULL
+--   on all of them before). UNDO:
+--     update public.work_orders w set production_in_at = null
+--       from _bak.jobcard_close_20260802 b where b.id = w.id;
+--
+-- Body (56,399-row set; the 2 corrupt Open cards were closed by a follow-up statement with the
+-- same rule):
+--   update work_orders w
+--   set production_in_at = case
+--         when w.completed_at is not null and w.completed_at >= w.production_out_at
+--              and extract(year from w.completed_at) between 2015 and 2027 then w.completed_at
+--         else w.production_out_at + interval '1 minute' end
+--   from _bak.jobcard_close_20260802 b
+--   where b.id = w.id and w.production_in_at is null;
+--
+-- NOT FIXED HERE: the corrupt ABSOLUTE year (0022 vs 2022) still shows on the register for the
+-- affected historical cards — the canonical fix is re-uploading that job-card file (re-import is
+-- exact; inference is not). This migration only corrects the "out of production" dashboard.

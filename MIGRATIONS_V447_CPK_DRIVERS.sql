@@ -1,0 +1,27 @@
+-- V447 — CPK DRIVER BREAKDOWN RPC (why did CPK change)
+-- STATUS: APPLIED LIVE 2026-08-02 (project jhssdmeruxtrlqnwfksc) as v447_cpk_drivers. Repo record.
+--
+-- RPC public.get_cpk_drivers(p_country text, p_from date, p_to date, p_prev_from date, p_prev_to date)
+--   SECURITY DEFINER, search_path=public pinned, anon revoked / authenticated granted,
+--   scoped to app_current_org(). Reuses fleet_km_by_asset / fleet_hours_by_asset (same
+--   denominators as get_fleet_cpk) + cpk_unit_for_asset_type. Default windows: current =
+--   last 365 days, prior = the 365 days before that.
+--
+-- Returns, per (country, unit): { c0,d0,c1,d1, matched_prev, matched_now, currency,
+--   causes:{price, volume, mix, new_equipment, stopped_equipment} } + windows.
+--
+-- EXACT-CLOSING METHOD (asserted by src/test/cpkDrivers.test.js): fleet CPK = C/D.
+--   delta = C1/D1 - C0/D0
+--   cost_effect       = (C1 - C0)/D1
+--   utilization_effect = C0 * (1/D1 - 1/D0)          [cost_effect + utilization_effect == delta]
+--   cost effect's numerator dC is split by cause (Bennet symmetric price/volume on brand+size
+--   groups present in both windows, + mix for groups entering/leaving, + new/retired equipment
+--   for assets entering/leaving the measured set); an explicit "other" residual guarantees the
+--   causes sum to the cost effect. Cost from tyre_records.cost_per_tyre (carries brand+size+price
+--   so causes can close); distance from the fleet meter (endpoints stay coverage-honest).
+--
+-- CAVEAT: KSA prior-window meter coverage is thin (meter data is mostly recent), so a
+-- 365-vs-prior-365 comparison is coverage-limited today; the engine/UI flag this rather than
+-- overclaiming. JS: src/lib/cpkDrivers.js + src/lib/api/cpkDrivers.js + CpkDriversPanel.jsx
+-- ("Why CPK changed (drivers)" section on Engineering KPI). Retrieve the exact RPC body with
+-- pg_get_functiondef if needed.

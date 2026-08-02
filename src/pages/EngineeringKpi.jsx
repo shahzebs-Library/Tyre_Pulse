@@ -6,6 +6,8 @@ import { useSettings, COUNTRIES } from '../contexts/SettingsContext'
 import { loadGridTyreByAsset } from '../lib/api/costSummary'
 import { loadGovernedCostSplit } from '../lib/api/governedCost'
 import { getFleetCpk } from '../lib/api/fleetCpk'
+import { getCpkDrivers } from '../lib/api/cpkDrivers'
+import { getBrandSizeCpk } from '../lib/api/brandSizeCpk'
 import {
   fmtCpkValue, fmtDistance, fmtMoney, fmtCoverage,
   unitSuffix, sortByTypeWorstFirst, filterPerVehicle, fleetTiles, byTypeExportRows,
@@ -35,6 +37,7 @@ import YearlyTrendPanel from '../components/expense/YearlyTrendPanel'
 import SectionTabs, { KPI_TABS } from '../components/ui/SectionTabs'
 import EmailReportModal from '../components/EmailReportModal'
 import CpkScenarioPanel from '../components/cpk/CpkScenarioPanel'
+import CpkDriversPanel from '../components/cpk/CpkDriversPanel'
 
 ChartJS.register(
   CategoryScale, LinearScale,
@@ -273,6 +276,29 @@ export default function EngineeringKpi() {
       .then(res => { if (!cancelled) setFleetCpk(res || { perVehicle: [], byType: [], fleet: [] }) })
       .catch(() => { if (!cancelled) setFleetCpk({ perVehicle: [], byType: [], fleet: [] }) })
       .finally(() => { if (!cancelled) setFleetCpkLoading(false) })
+    return () => { cancelled = true }
+  }, [effectiveCountry, cpkFrom, cpkTo])
+
+  // CPK drivers ("why did it move?") + brand-value rows for the management card.
+  const [cpkDrivers, setCpkDrivers] = useState({ ok: false, windows: null, segments: [] })
+  const [cpkDriversLoading, setCpkDriversLoading] = useState(true)
+  const [brandSizeRows, setBrandSizeRows] = useState([])
+
+  useEffect(() => {
+    let cancelled = false
+    setCpkDriversLoading(true)
+    getCpkDrivers({ country: effectiveCountry, from: cpkFrom, to: cpkTo })
+      .then(res => { if (!cancelled) setCpkDrivers(res || { ok: false, windows: null, segments: [] }) })
+      .catch(() => { if (!cancelled) setCpkDrivers({ ok: false, windows: null, segments: [] }) })
+      .finally(() => { if (!cancelled) setCpkDriversLoading(false) })
+    return () => { cancelled = true }
+  }, [effectiveCountry, cpkFrom, cpkTo])
+
+  useEffect(() => {
+    let cancelled = false
+    getBrandSizeCpk({ country: effectiveCountry, from: cpkFrom, to: cpkTo })
+      .then(res => { if (!cancelled) setBrandSizeRows(Array.isArray(res) ? res : []) })
+      .catch(() => { if (!cancelled) setBrandSizeRows([]) })
     return () => { cancelled = true }
   }, [effectiveCountry, cpkFrom, cpkTo])
 
@@ -1266,6 +1292,28 @@ export default function EngineeringKpi() {
           </div>
         </div>
         <CpkScenarioPanel perVehicle={fleetCpk.perVehicle} loading={fleetCpkLoading} />
+      </div>
+
+      {/* ── Why CPK changed (drivers) ────────────────────────────────────────── */}
+      <div className="space-y-4">
+        <div className="flex items-center gap-2">
+          <TrendingUp size={18} className="text-amber-400" />
+          <div>
+            <h2 className="text-sm font-semibold text-gray-300">Why CPK changed (drivers)</h2>
+            <p className="text-xs text-gray-500">
+              The current period against the one before it, taken apart into what moved the cost per km / hour:
+              tyre price, brand or size mix, volume, new or retired equipment, and utilization. The parts add up
+              to the change exactly; a thin prior period is flagged coverage limited rather than overstated.
+            </p>
+          </div>
+        </div>
+        <CpkDriversPanel
+          drivers={cpkDrivers}
+          fleetCpk={fleetCpk}
+          brandSizeRows={brandSizeRows}
+          currency={activeCurrency}
+          loading={cpkDriversLoading || fleetCpkLoading}
+        />
       </div>
 
       {/* ── Empty state ──────────────────────────────────────────────────────── */}

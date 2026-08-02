@@ -154,10 +154,12 @@ export async function deleteSanyInvoice(id) {
 
 // ---- Production (approved M3) ----------------------------------------------
 
+const PROD_COLS = 'id, country, site, asset_no, pump_no, period_date, m3, approved_m3, supplied_m3, rejected, reason, remarks, dn_number, order_number, mix_code, mix_description, customer_name, project_name, source, notes, created_at'
+
 export async function listProduction({ country, from, to, limit = 1000 } = {}) {
   try {
     let q = supabase.from('production_logs')
-      .select('id, country, site, asset_no, period_date, m3, approved_m3, source, notes, created_at')
+      .select(PROD_COLS)
       .order('period_date', { ascending: false }).order('id')
     if (country && country !== 'All') q = q.eq('country', country)
     if (from) q = q.gte('period_date', from)
@@ -168,9 +170,34 @@ export async function listProduction({ country, from, to, limit = 1000 } = {}) {
   } catch { return [] }
 }
 
+/**
+ * Production rejections (concrete sent but not approved) by site + reason for a
+ * country + period. Returns { ok, total:{supplied_m3, approved_m3, not_approved_m3,
+ * rejected_loads}, by_site[], by_reason[] }. Degrades to an empty shape.
+ */
+export async function getProductionRejections({ country, from, to } = {}) {
+  try {
+    const { data, error } = await supabase.rpc('get_production_rejections', {
+      p_country: country && country !== 'All' ? country : null,
+      p_from: from || null, p_to: to || null,
+    })
+    if (error || !data || data.ok === false) {
+      return { ok: false, total: null, by_site: [], by_reason: [] }
+    }
+    return {
+      ok: true,
+      total: data.total ?? null,
+      by_site: Array.isArray(data.by_site) ? data.by_site : [],
+      by_reason: Array.isArray(data.by_reason) ? data.by_reason : [],
+    }
+  } catch {
+    return { ok: false, total: null, by_site: [], by_reason: [] }
+  }
+}
+
 export async function createProduction(row) {
   const { data, error } = await supabase.from('production_logs').insert([sanitizeProd(row)])
-    .select('id, country, site, asset_no, period_date, m3, approved_m3, source, notes, created_at').single()
+    .select(PROD_COLS).single()
   if (error) throw error
   return data
 }
@@ -248,9 +275,20 @@ function sanitizeProd(r = {}, isPatch = false) {
   set('country', txt(r.country))
   set('site', txt(r.site))
   set('asset_no', txt(r.asset_no))
+  set('pump_no', txt(r.pump_no))
   set('period_date', r.period_date || undefined)
   if (r.m3 !== undefined) out.m3 = numOrNull(r.m3)
   if (r.approved_m3 !== undefined) out.approved_m3 = numOrNull(r.approved_m3)
+  if (r.supplied_m3 !== undefined) out.supplied_m3 = numOrNull(r.supplied_m3)
+  if (r.rejected !== undefined) out.rejected = r.rejected === true || r.rejected === 'true'
+  set('reason', txt(r.reason))
+  set('remarks', txt(r.remarks))
+  set('dn_number', txt(r.dn_number))
+  set('order_number', txt(r.order_number))
+  set('mix_code', txt(r.mix_code))
+  set('mix_description', txt(r.mix_description))
+  set('customer_name', txt(r.customer_name))
+  set('project_name', txt(r.project_name))
   set('notes', txt(r.notes))
   if (!isPatch) out.source = r.source || 'manual'
   return out

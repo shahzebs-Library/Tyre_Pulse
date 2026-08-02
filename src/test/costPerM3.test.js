@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   fmtMoney, fmtM3, fmtCostPerM3, toMonthStart, mapImportRows, IMPORT_TEMPLATES,
+  assetFromTruck, toRejectedBool, toDateDay,
 } from '../lib/costPerM3'
 
 describe('formatters', () => {
@@ -46,11 +47,24 @@ describe('mapImportRows', () => {
     })
   })
 
-  it('maps production with approved qty', () => {
+  it('maps the concrete batching format (Station->site, Truck->asset, Approved/Signed->approved)', () => {
     const rows = mapImportRows('production', [
-      { Country: 'KSA', Site: 'NHC', Month: '2026-07', M3: '61045', 'Approved M3': '60000' },
+      { Station: 'Qiddiya-Lower Plateau', 'Batching Time': '2026-05-01 00:00:00',
+        'Truck Number': 'TM505     9772 BSA', 'Pump Number': 'MP-130', 'DN Number': '86-03901',
+        'Supplied Qty': '12', 'Approved/Signed Qty': '12', 'Rejection Type': 'No', Reason: '', Remarks: '' },
     ])
-    expect(rows[0]).toMatchObject({ country: 'KSA', site: 'NHC', m3: 61045, approved_m3: 60000 })
+    expect(rows[0]).toMatchObject({
+      site: 'Qiddiya-Lower Plateau', period_date: '2026-05-01', asset_no: 'TM505', pump_no: 'MP-130',
+      dn_number: '86-03901', m3: 12, approved_m3: 12, rejected: false,
+    })
+  })
+
+  it('maps a rejected batching row (Rejection Type Yes + reason)', () => {
+    const rows = mapImportRows('production', [
+      { Station: 'NHC', 'Batching Time': '2026-05-02', 'Supplied Qty': '10',
+        'Approved/Signed Qty': '7', 'Rejection Type': 'Yes', Reason: 'Slump high' },
+    ])
+    expect(rows[0]).toMatchObject({ site: 'NHC', m3: 10, approved_m3: 7, rejected: true, reason: 'Slump high' })
   })
 
   it('ignores unknown headers and drops empty rows', () => {
@@ -63,5 +77,25 @@ describe('mapImportRows', () => {
     for (const t of Object.values(IMPORT_TEMPLATES)) {
       expect(t.headers.length).toBe(t.fields.length)
     }
+  })
+})
+
+describe('batching helpers', () => {
+  it('assetFromTruck takes the first token, uppercased', () => {
+    expect(assetFromTruck('TM505     9772 BSA')).toBe('TM505')
+    expect(assetFromTruck('mp-130')).toBe('MP-130')
+    expect(assetFromTruck('')).toBeNull()
+  })
+  it('toRejectedBool maps Yes/true/1 to true, No/blank to false', () => {
+    expect(toRejectedBool('Yes')).toBe(true)
+    expect(toRejectedBool('No')).toBe(false)
+    expect(toRejectedBool('')).toBe(false)
+    expect(toRejectedBool('YES')).toBe(true)
+  })
+  it('toDateDay handles datetime string, Date, DMY, and blanks', () => {
+    expect(toDateDay('2026-05-01 00:00:00')).toBe('2026-05-01')
+    expect(toDateDay('01/05/2026')).toBe('2026-05-01')
+    expect(toDateDay(new Date(Date.UTC(2026, 4, 1, 12)))).toMatch(/^2026-05-0[12]$/)
+    expect(toDateDay('')).toBeNull()
   })
 })

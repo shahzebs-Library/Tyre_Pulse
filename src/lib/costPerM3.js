@@ -51,9 +51,16 @@ export const IMPORT_TEMPLATES = {
     fields: ['country', 'region', 'site', 'asset_no', 'invoice_no', 'invoice_date', 'period_date', 'description', 'amount', 'currency', 'status'],
   },
   production: {
-    label: 'Production (approved M3)',
-    headers: ['Country', 'Site', 'Asset', 'Month', 'M3', 'Approved M3'],
-    fields: ['country', 'site', 'asset_no', 'period_date', 'm3', 'approved_m3'],
+    label: 'Production (concrete batching)',
+    // Matches the real batching export. Station = site; Supplied Qty = produced;
+    // Approved/Signed Qty = the counted quantity (cost/m3 denominator); Rejection
+    // Type / Reason / Remarks drive the not-approved (rejection) analytics.
+    headers: ['Station', 'Batching Time', 'Truck Number', 'Pump Number', 'DN Number', 'Order Number',
+      'Mix Code', 'Mix Description', 'Customer Name', 'Project Name',
+      'Supplied Qty', 'Approved/Signed Qty', 'Rejection Type', 'Reason', 'Remarks'],
+    fields: ['site', 'period_date', 'asset_no', 'pump_no', 'dn_number', 'order_number',
+      'mix_code', 'mix_description', 'customer_name', 'project_name',
+      'm3', 'approved_m3', 'rejected', 'reason', 'remarks'],
   },
 }
 
@@ -63,9 +70,10 @@ const norm = (s) => String(s || '').trim().toLowerCase().replace(/\s+/g, ' ')
 const HEADER_SYNONYMS = {
   country: ['country'],
   region: ['region', 'area'],
-  site: ['site', 'location', 'plant'],
-  asset_no: ['asset', 'asset no', 'asset_no', 'equipment'],
-  period_date: ['month', 'period', 'date', 'period date'],
+  site: ['site', 'location', 'plant', 'station'],
+  asset_no: ['asset', 'asset no', 'asset_no', 'equipment', 'truck number', 'truck no', 'truck'],
+  pump_no: ['pump number', 'pump no', 'pump'],
+  period_date: ['month', 'period', 'date', 'period date', 'batching time', 'batch time', 'batching date'],
   cost_center: ['cost center', 'cost centre', 'cost_center'],
   description: ['description', 'desc', 'details', 'item'],
   amount: ['amount', 'cost', 'value', 'total', 'sar'],
@@ -74,8 +82,46 @@ const HEADER_SYNONYMS = {
   invoice_no: ['invoice no', 'invoice', 'invoice_no', 'inv no'],
   invoice_date: ['invoice date', 'invoice_date', 'inv date'],
   status: ['status'],
-  m3: ['m3', 'm³', 'quantity', 'qty', 'produced'],
-  approved_m3: ['approved m3', 'approved_m3', 'approved', 'approved qty', 'approved quantity'],
+  m3: ['m3', 'm³', 'produced', 'supplied qty', 'supplied', 'qty', 'quantity'],
+  approved_m3: ['approved m3', 'approved_m3', 'approved', 'approved qty', 'approved quantity', 'approved/signed qty', 'approved signed qty', 'signed qty'],
+  rejected: ['rejection type', 'rejected', 'rejection'],
+  reason: ['reason'],
+  remarks: ['remarks', 'remark'],
+  dn_number: ['dn number', 'dn no', 'dn', 'delivery note'],
+  order_number: ['order number', 'order no', 'order'],
+  mix_code: ['mix code'],
+  mix_description: ['mix description', 'mix desc'],
+  customer_name: ['customer name', 'customer'],
+  project_name: ['project name', 'project'],
+}
+
+/** Parse an asset id out of a truck/pump cell like "TM505     9772 BSA" -> "TM505". */
+export function assetFromTruck(v) {
+  const s = String(v ?? '').trim()
+  if (!s) return null
+  const first = s.split(/\s+/)[0]
+  return first ? first.toUpperCase() : null
+}
+
+/** Yes/No (or true/1) -> boolean. Blank/No -> false. */
+export function toRejectedBool(v) {
+  const s = String(v ?? '').trim().toLowerCase()
+  return s === 'yes' || s === 'true' || s === '1' || s === 'y' || s === 'rejected'
+}
+
+/** A date cell (Date, 'YYYY-MM-DD[ HH:MM]', DD/MM/YYYY) -> YYYY-MM-DD (day) or null. */
+export function toDateDay(v) {
+  if (v == null || v === '') return null
+  if (v instanceof Date && !Number.isNaN(v.getTime())) {
+    const p = (n) => String(n).padStart(2, '0')
+    return `${v.getFullYear()}-${p(v.getMonth() + 1)}-${p(v.getDate())}`
+  }
+  const s = String(v).trim()
+  const iso = s.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})/)
+  if (iso) return `${iso[1]}-${String(iso[2]).padStart(2, '0')}-${String(iso[3]).padStart(2, '0')}`
+  const dmy = s.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})/)
+  if (dmy) return `${dmy[3]}-${String(dmy[2]).padStart(2, '0')}-${String(dmy[1]).padStart(2, '0')}`
+  return toMonthStart(s)
 }
 
 /** Normalise a month cell to the first day of that month (YYYY-MM-01) or null. */
@@ -112,9 +158,19 @@ export function mapImportRows(kind, rawRows = []) {
       for (const [field, syns] of Object.entries(HEADER_SYNONYMS)) {
         if (!allow.has(field)) continue
         if (syns.includes(nk)) {
-          if (field === 'period_date' || field === 'invoice_date') out[field] = toMonthStart(rawVal) || rawVal
-          else if (field === 'amount' || field === 'm3' || field === 'approved_m3') out[field] = num(rawVal)
-          else out[field] = rawVal == null ? null : String(rawVal).trim()
+          if (field === 'period_date') {
+            out[field] = (kind === 'production' ? toDateDay(rawVal) : toMonthStart(rawVal)) || rawVal
+          } else if (field === 'invoice_date') {
+            out[field] = toMonthStart(rawVal) || rawVal
+          } else if (field === 'amount' || field === 'm3' || field === 'approved_m3') {
+            out[field] = num(rawVal)
+          } else if (field === 'rejected') {
+            out[field] = toRejectedBool(rawVal)
+          } else if (field === 'asset_no' && kind === 'production') {
+            out[field] = assetFromTruck(rawVal)
+          } else {
+            out[field] = rawVal == null ? null : String(rawVal).trim()
+          }
           break
         }
       }

@@ -1,0 +1,45 @@
+-- V454 - Production concrete-batching format + rejections
+-- STATUS: APPLIED LIVE 2026-08-02 (project jhssdmeruxtrlqnwfksc) as
+--   v454_production_batching_and_rejections. Repo record.
+--
+-- WHY (customer's Productions_Sample.xlsx + in-cell comments):
+--   - Station = the site / location (comment J1).
+--   - Approved/Signed Qty is the quantity counted in production and the cost/m3
+--     denominator (comment X1). Supplied Qty is what was sent.
+--   - Rejection Type = Yes means concrete sent but NOT approved (comment W1);
+--     Reason / Remarks explain it (comments Y1/AA1). We report how many m3 were
+--     not approved, by site and by reason, with filter + export.
+--
+-- WHAT WAS ADDED LIVE:
+-- 1) production_logs new columns: dn_number, order_number, supplied_m3, rejected
+--    (bool, default false), reason, remarks, mix_code, mix_description,
+--    customer_name, project_name, pump_no, batching_at. (approved_m3 from V450 =
+--    Approved/Signed Qty; m3 = Supplied Qty; period_date = batching day.)
+--    Index production_logs_rejected_idx (org, country, rejected).
+-- 2) public.get_production_rejections(p_country, p_from, p_to) -> jsonb
+--    SECURITY DEFINER, search_path=public, anon revoked / authenticated granted,
+--    org-scoped, default current month. Returns { ok, total:{supplied_m3,
+--    approved_m3, not_approved_m3, rejected_loads}, by_site[], by_reason[] }.
+--    not_approved_m3 = greatest(supplied - approved, 0) on rows where rejected OR
+--    approved < supplied.
+--
+-- The cost/m3 denominator (get_cost_per_m3, V450) already uses coalesce(approved_m3,
+-- m3), so approved qty drives Cost/M3 exactly as the customer specified.
+--
+-- FRONTEND: /production-m3 imports the batching export (Station->site, Batching
+-- Time->date, Truck Number->asset, Approved/Signed Qty->approved_m3, Rejection Type/
+-- Reason/Remarks) via costPerM3.mapImportRows('production'); a Rejections panel
+-- (by site + by reason, filter + Excel export) sits under the records table.
+--
+-- REVERSIBLE:
+--   drop function if exists public.get_production_rejections(text, date, date);
+--   alter table public.production_logs
+--     drop column if exists dn_number, drop column if exists order_number,
+--     drop column if exists supplied_m3, drop column if exists rejected,
+--     drop column if exists reason, drop column if exists remarks,
+--     drop column if exists mix_code, drop column if exists mix_description,
+--     drop column if exists customer_name, drop column if exists project_name,
+--     drop column if exists pump_no, drop column if exists batching_at;
+--
+-- NOTE: customer said other production formats may come later - add their header
+-- synonyms to costPerM3.HEADER_SYNONYMS / IMPORT_TEMPLATES when they arrive.

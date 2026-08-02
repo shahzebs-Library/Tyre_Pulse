@@ -3,7 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom'
 import { useFilterState } from '../hooks/useFilterState'
 
 const AccidentReportBuilder = lazy(() => import('../components/accidents/AccidentReportBuilder'))
-import { AlertOctagon, Plus, Search, X, Save, FileText, Download, BarChart2, Eye, Hourglass, ChevronDown, Trash2, AlertTriangle, TrendingUp, Users, DollarSign, ShieldAlert, Lightbulb, ChevronRight, Clock, ShieldCheck, ArrowLeft, Mail, Presentation, Paperclip, FileSpreadsheet, Share2, CalendarClock } from 'lucide-react'
+import { AlertOctagon, Plus, Search, X, Save, FileText, Download, BarChart2, Eye, Hourglass, ChevronDown, Trash2, AlertTriangle, TrendingUp, Users, DollarSign, ShieldAlert, Lightbulb, ChevronRight, Clock, ShieldCheck, ArrowLeft, Mail, Presentation, Paperclip, FileSpreadsheet, Share2, CalendarClock, RotateCcw } from 'lucide-react'
 
 // Categorized document slots on the incident form. Each `category` matches the
 // team routing in src/lib/accidentTeams.js (licence/ID/registration/police to
@@ -60,6 +60,7 @@ import { colorAt, categorical, withAlpha } from '../lib/reportColors'
 import { listTemplates as listReportTemplates, createTemplate as createReportTemplate } from '../lib/api/accidentReportTemplates'
 import { builderReportType } from '../lib/api/scheduledReports'
 import { toUserMessage } from '../lib/safeError'
+import { logAuditEvent } from '../lib/auditLogger'
 import { hasClaim, isClosed as isClaimClosed, claimNet } from '../lib/claimsAnalytics'
 import { captureChartOnPaper } from '../lib/chartCapture'
 import AccidentIntelligencePanel from '../components/accidents/AccidentIntelligencePanel'
@@ -425,6 +426,7 @@ export default function Accidents() {
   // context shown under the Asset field). Auto-populate reads from here.
   const [workshopIsOther, setWorkshopIsOther] = useState(false)
   const [assetInfo, setAssetInfo]              = useState(null)
+  const [docPreview, setDocPreview]            = useState(null) // { name, url, category } being previewed
   const loadReqRef                             = useRef(0)
 
   // Active departments for the workflow "Department" picker (free-text fallback
@@ -544,14 +546,15 @@ export default function Accidents() {
     setAssetInfo(asset)
     setForm(f => ({
       ...f,
-      plate_number: f.plate_number || asset.fleet_number || asset.registration_no || f.plate_number,
-      vehicle_type: f.vehicle_type || asset.vehicle_type  || f.vehicle_type,
-      // Site AND country FOLLOW the asset (not fill-if-empty). Both are facts about
-      // the vehicle's home base, not opinions about the incident; auto-filling them
-      // keeps every incident inside its country/site-scoped views. A typed asset is
-      // the trigger, so this is the user's own selection, not an override.
-      site:         asset.site     || f.site,
-      country:      asset.country  || f.country,
+      // Plate, vehicle type, site AND country all FOLLOW the asset (replace, not
+      // fill-if-empty). They are facts about the vehicle, so changing the asset
+      // number must immediately refresh them instead of leaving the previous
+      // asset's values stale. When the asset lacks a value the existing one is
+      // kept (never blanked by a partial master record).
+      plate_number: asset.fleet_number || asset.registration_no || f.plate_number,
+      vehicle_type: asset.vehicle_type || f.vehicle_type,
+      site:         asset.site         || f.site,
+      country:      asset.country      || f.country,
     }))
   }, [])
 
@@ -1433,12 +1436,75 @@ export default function Accidents() {
         ...f,
         documents: [
           ...(Array.isArray(f.documents) ? f.documents : []).filter(d => d?.category !== category),
-          { category, name: file.name, url: ev.target.result },
+          {
+            category, name: file.name, url: ev.target.result,
+            // who added this document and when — so a case shows papers staged
+            // by different people over time (spec: "staged at different times").
+            uploaded_by: profile?.id || null,
+            uploaded_by_name: profile?.full_name || profile?.username || null,
+            uploaded_at: new Date().toISOString(),
+          },
         ],
       }))
     }
     reader.readAsDataURL(file)
     e.target.value = '' // allow re-selecting the same file after a remove
+  }
+
+  // ── Document preview + download (image or PDF) ────────────────────────────
+  // Records who downloaded which file and when (best-effort audit; degrades
+  // silently if the audit table/logger is unavailable).
+  function logDocDownload(doc) {
+    // logAuditEvent stamps user_id + user_email + created_at in audit_log_v2, so
+    // every download is attributable to a person and a time.
+    logAuditEvent({
+      action: 'ACCIDENT_DOC_DOWNLOAD',
+      tableName: 'accidents',
+      recordId: editId || '',
+      newValues: {
+        category: doc?.category, name: doc?.name,
+        by_name: profile?.full_name || profile?.username || null,
+        at: new Date().toISOString(),
+      },
+    })
+  }
+  function downloadDoc(doc) {
+    if (!doc?.url) return
+    const a = document.createElement('a')
+    a.href = doc.url
+    a.download = doc.name || `${doc.category || 'document'}`
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+    logDocDownload(doc)
+  }
+  async function downloadAllDocs() {
+    const docs = (form.documents || []).filter(d => d?.url)
+    if (!docs.length) return
+    try {
+      const { default: JSZip } = await import('jszip')
+      const zip = new JSZip()
+      docs.forEach((d, i) => {
+        const comma = String(d.url).indexOf(',')
+        if (comma < 0) return
+        const b64 = String(d.url).slice(comma + 1)
+        const ext = /pdf/i.test(d.url.slice(0, 30)) ? 'pdf' : (d.name?.split('.').pop() || 'bin')
+        const base = d.name || `${d.category || 'document'}-${i + 1}.${ext}`
+        zip.file(base, b64, { base64: true })
+        logDocDownload(d)
+      })
+      const blob = await zip.generateAsync({ type: 'blob' })
+      const a = document.createElement('a')
+      a.href = URL.createObjectURL(blob)
+      a.download = `accident-documents-${form.reference_no || editId || 'case'}.zip`
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      setTimeout(() => URL.revokeObjectURL(a.href), 4000)
+    } catch {
+      // zip failed -> fall back to individual downloads
+      docs.forEach(downloadDoc)
+    }
   }
   function removeDoc(category) {
     setForm(f => ({
@@ -1491,13 +1557,13 @@ export default function Accidents() {
       // Recovered = Claim - Approved - Deductible (spec formula, kept in sync by
       // the auto-calc effect; still editable, so an explicit override is saved).
       recovered_amount:      num(form.recovered_amount),
-      // Cost recovery gate: detail persists only when Recovery = Yes, else cleared
-      // so a No / N/A case never carries stale source/date/reference/transfer.
+      // Cost recovery (fleet officer): the Recovery Status field was removed; the
+      // detail fields are saved directly as entered.
       recovery_status:       form.recovery_status || 'N/A',
-      recovery_source:       recoveryIsYes(form.recovery_status) ? (form.recovery_source || 'none') : 'none',
-      recovery_date:         recoveryIsYes(form.recovery_status) ? (form.recovery_date || null) : null,
-      recovery_reference:    recoveryIsYes(form.recovery_status) ? (form.recovery_reference || null) : null,
-      amount_transfer:       recoveryIsYes(form.recovery_status) ? num(form.amount_transfer) : null,
+      recovery_source:       form.recovery_source || 'none',
+      recovery_date:         form.recovery_date || null,
+      recovery_reference:    form.recovery_reference || null,
+      amount_transfer:       num(form.amount_transfer),
       // Parties & liability (controlled dropdowns; stray-case folds to the label).
       // Responsible Party was a free-text duplicate of Liable Party — the form now
       // asks it once (Liable Party) and mirrors it into the legacy column so every
@@ -2724,6 +2790,26 @@ export default function Accidents() {
                 </h2>
               </div>
               <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    // Refresh: start a clean new-incident form, or reload the row being
+                    // edited (discarding unsaved changes). Clears every auto-filled field.
+                    if (editId) {
+                      const row = records.find(r => String(r.id) === String(editId))
+                      if (row) { openEdit(row); return }
+                    }
+                    setForm(EMPTY_FORM)
+                    setAssetQuery('')
+                    setAssetInfo(null)
+                    setFormError('')
+                    setDocPreview(null)
+                  }}
+                  title="Refresh the form"
+                  className="btn-ghost flex items-center gap-1.5 text-sm"
+                >
+                  <RotateCcw size={14} /> Refresh
+                </button>
                 <button type="submit" form="accident-inline-form" disabled={saving} className="btn-primary flex items-center gap-2 text-sm disabled:opacity-50">
                   <Save size={15} /> {saving ? 'Saving...' : 'Save'}
                 </button>
@@ -3073,16 +3159,8 @@ export default function Accidents() {
                     Saving this stage sets the claim status to "{CLAIM_STATUS_LABELS[STAGE_TO_CLAIM_STATUS[String(form.current_status).toLowerCase()]]}" (pick a Claim Status below to override).
                   </p>
                 )}
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mt-3">
-                  <div className="md:col-span-2">
-                    <label className="label">Action / Progress</label>
-                    <input className="input" placeholder="Latest action or progress note" value={form.required_action} onChange={e => setForm(f => ({ ...f, required_action: e.target.value }))} />
-                  </div>
+                <div className="grid grid-cols-1 gap-3 mt-3">
                   <div>
-                    <label className="label">Status Update Date</label>
-                    <DateField value={form.status_update_date} onChange={(v) => setForm(f => ({ ...f, status_update_date: v }))} ariaLabel="Status update date" />
-                  </div>
-                  <div className="md:col-span-3">
                     <label className="label">Status Update Note</label>
                     <input className="input" placeholder="Optional note for this update" value={form.status_update_note} onChange={e => setForm(f => ({ ...f, status_update_note: e.target.value }))} />
                   </div>
@@ -3218,37 +3296,26 @@ export default function Accidents() {
               <FormSection title="Cost Recovery">
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                   <div>
-                    <label className="label">Recovery Status</label>
-                    <select className="input" value={form.recovery_status} onChange={e => setForm(f => ({ ...f, recovery_status: e.target.value }))}>
+                    <label className="label">Recovery Source</label>
+                    <select className="input" value={form.recovery_source} onChange={e => setForm(f => ({ ...f, recovery_source: e.target.value }))}>
                       <option value="">N/A</option>
-                      {withValueOption(RECOVERY_DECISION_OPTS, form.recovery_status).map(s => <option key={s} value={s}>{s}</option>)}
+                      {/* 'none' is dropped from the list: its label "None" duplicated
+                          the "N/A" placeholder above (two ways to say nothing). */}
+                      {RECOVERY_SOURCE_OPTS.filter(s => s !== 'none').map(s => <option key={s} value={s}>{RECOVERY_SOURCE_LABELS[s]}</option>)}
                     </select>
                   </div>
-                  {recoveryIsYes(form.recovery_status) && (
-                    <>
-                      <div>
-                        <label className="label">Recovery Source</label>
-                        <select className="input" value={form.recovery_source} onChange={e => setForm(f => ({ ...f, recovery_source: e.target.value }))}>
-                          <option value="">N/A</option>
-                          {/* 'none' is dropped from the list: its label "None" duplicated
-                              the "N/A" placeholder above (two ways to say nothing). */}
-                          {RECOVERY_SOURCE_OPTS.filter(s => s !== 'none').map(s => <option key={s} value={s}>{RECOVERY_SOURCE_LABELS[s]}</option>)}
-                        </select>
-                      </div>
-                      <div>
-                        <label className="label">Recovery Date</label>
-                        <DateField value={form.recovery_date} onChange={(v) => setForm(f => ({ ...f, recovery_date: v }))} ariaLabel="Recovery date" />
-                      </div>
-                      <div>
-                        <label className="label">Recovery Reference</label>
-                        <input className="input" placeholder="Payment / case ref" value={form.recovery_reference} onChange={e => setForm(f => ({ ...f, recovery_reference: e.target.value }))} />
-                      </div>
-                      <div>
-                        <label className="label">Amount Transfer</label>
-                        <input type="number" min="0" step="0.01" className="input" value={form.amount_transfer} onChange={e => setForm(f => ({ ...f, amount_transfer: e.target.value }))} />
-                      </div>
-                    </>
-                  )}
+                  <div>
+                    <label className="label">Recovery Date</label>
+                    <DateField value={form.recovery_date} onChange={(v) => setForm(f => ({ ...f, recovery_date: v }))} ariaLabel="Recovery date" />
+                  </div>
+                  <div>
+                    <label className="label">Recovery Reference</label>
+                    <input className="input" placeholder="Payment / case ref" value={form.recovery_reference} onChange={e => setForm(f => ({ ...f, recovery_reference: e.target.value }))} />
+                  </div>
+                  <div>
+                    <label className="label">Amount Transfer</label>
+                    <input type="number" min="0" step="0.01" className="input" value={form.amount_transfer} onChange={e => setForm(f => ({ ...f, amount_transfer: e.target.value }))} />
+                  </div>
                 </div>
               </FormSection>
 
@@ -3335,10 +3402,6 @@ export default function Accidents() {
                     <label className="label">Release Date</label>
                     <DateField value={form.release_date} onChange={(v) => setForm(f => ({ ...f, release_date: v }))} ariaLabel="Release date" />
                   </div>
-                  <div>
-                    <label className="label">Inspector</label>
-                    <input className="input" value={form.inspector} onChange={e => setForm(f => ({ ...f, inspector: e.target.value }))} />
-                  </div>
                 </div>
               </FormSection>
 
@@ -3346,9 +3409,19 @@ export default function Accidents() {
                   Distribute-to-Teams tab (licence/ID/registration/police to Fleet,
                   Najm/Taqdeer to Insurance). One file per slot; image or PDF. */}
               <FormSection title="Documents">
-                <p className="text-xs text-[var(--text-dim)] mb-3">
-                  Attach the driver and vehicle papers and the reports. Each file is routed to the team that owns it.
-                </p>
+                <div className="flex items-start justify-between gap-3 mb-3">
+                  <p className="text-xs text-[var(--text-dim)]">
+                    Attach the driver and vehicle papers and the reports (image or PDF). Each file is routed to the team that owns it. You can preview and download any file, or download them all together.
+                  </p>
+                  {(form.documents || []).some(d => d?.url) && (
+                    <button
+                      type="button" onClick={downloadAllDocs}
+                      className="btn-ghost text-xs whitespace-nowrap flex items-center gap-1 shrink-0"
+                    >
+                      <Download size={13} /> Download all
+                    </button>
+                  )}
+                </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   {DOC_SLOTS.map(slot => {
                     const doc = (form.documents || []).find(d => d?.category === slot.category)
@@ -3357,17 +3430,21 @@ export default function Accidents() {
                       <div key={slot.category}>
                         <label className="label">{slot.label}</label>
                         {doc ? (
-                          <div className="flex items-center gap-2 rounded-lg border border-[var(--input-border)] bg-[var(--input-bg)]/40 px-2 py-1.5">
-                            {isImage
-                              ? <PhotoPreview src={doc.url} alt={slot.label} className="h-10 w-10 object-cover rounded border border-[var(--input-border)]" />
-                              : <Paperclip size={16} className="text-[var(--text-muted)] shrink-0" />}
-                            <span className="text-xs text-[var(--text-secondary)] truncate flex-1">{doc.name || slot.label}</span>
-                            <button
-                              type="button" onClick={() => removeDoc(slot.category)}
-                              className="text-[11px] text-red-300 hover:text-red-200 shrink-0"
-                            >
-                              Remove
-                            </button>
+                          <div className="rounded-lg border border-[var(--input-border)] bg-[var(--input-bg)]/40 px-2 py-1.5">
+                            <div className="flex items-center gap-2">
+                              {isImage
+                                ? <PhotoPreview src={doc.url} alt={slot.label} className="h-10 w-10 object-cover rounded border border-[var(--input-border)]" />
+                                : <Paperclip size={16} className="text-[var(--text-muted)] shrink-0" />}
+                              <span className="text-xs text-[var(--text-secondary)] truncate flex-1">{doc.name || slot.label}</span>
+                              <button type="button" onClick={() => setDocPreview(doc)} className="text-[11px] text-[var(--text-secondary)] hover:text-white shrink-0">Preview</button>
+                              <button type="button" onClick={() => downloadDoc(doc)} className="text-[11px] text-[var(--text-secondary)] hover:text-white shrink-0">Download</button>
+                              <button type="button" onClick={() => removeDoc(slot.category)} className="text-[11px] text-red-300 hover:text-red-200 shrink-0">Remove</button>
+                            </div>
+                            {doc.uploaded_by_name && (
+                              <div className="text-[10px] text-[var(--text-dim)] mt-1">
+                                Added by {doc.uploaded_by_name}{doc.uploaded_at ? ` · ${new Date(doc.uploaded_at).toLocaleString()}` : ''}
+                              </div>
+                            )}
                           </div>
                         ) : (
                           <input
@@ -3412,6 +3489,26 @@ export default function Accidents() {
                 <button type="button" onClick={() => setShowForm(false)} className="btn-secondary">Cancel</button>
               </div>
             </form>
+        </div>
+      )}
+
+      {/* ── Document preview (image or PDF) ─────────────────────────────────── */}
+      {docPreview && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[60] p-4"
+          onClick={() => setDocPreview(null)}>
+          <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl w-full max-w-3xl max-h-[90vh] flex flex-col overflow-hidden" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center gap-2 px-4 py-2.5 border-b border-[var(--input-border)]">
+              <Paperclip size={15} className="text-[var(--text-muted)] shrink-0" />
+              <span className="text-sm text-[var(--text-primary)] truncate flex-1">{docPreview.name || 'Document'}</span>
+              <button type="button" onClick={() => downloadDoc(docPreview)} className="btn-ghost text-xs flex items-center gap-1"><Download size={13} /> Download</button>
+              <button type="button" onClick={() => setDocPreview(null)} className="text-[var(--text-muted)] hover:text-white"><X size={16} /></button>
+            </div>
+            <div className="flex-1 overflow-auto bg-black/20 flex items-center justify-center">
+              {typeof docPreview.url === 'string' && docPreview.url.slice(0, 11).toLowerCase() === 'data:image/'
+                ? <img src={docPreview.url} alt={docPreview.name || 'Document'} className="max-w-full max-h-[78vh] object-contain" />
+                : <iframe title={docPreview.name || 'Document'} src={docPreview.url} className="w-full h-[78vh] bg-white" />}
+            </div>
+          </div>
         </div>
       )}
 

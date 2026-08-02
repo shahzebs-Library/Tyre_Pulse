@@ -3,7 +3,25 @@
 Durable, committed project knowledge so any session has full context. Keep this
 current. Read it before adding/changing modules. Governing spec: `Tyre pulse enterprise.md`
 
-## SESSION 2026-08-02 — CPK INTELLIGENCE + COST PER M3 + PMV INTAKE + SEARCH RBAC. Migrations through **V455**, next free **V456**. ALL MERGED to main (PRs #248-#264). ACTIVE.
+## SESSION 2026-08-02 — CPK INTELLIGENCE + COST PER M3 + PMV INTAKE + SEARCH RBAC + ENTERPRISE PERF. Migrations through **V456**, next free **V457**. ALL MERGED to main (PRs #248-#264). ACTIVE.
+- **V456 ENTERPRISE-SCALE INDEXES (applied live + verified with EXPLAIN ANALYZE).** For millions of rows the Cost/M3 +
+  CPK hot RPCs must range-scan the exact (org,country,period) slice, not scan wider and filter. Added: (1)
+  `production_logs(organisation_id, country, period_date)` for get_cost_per_m3 / _trend / get_production_rejections
+  (was period-only index + heap filter on org+country); (2) PARTIAL `tyre_records(organisation_id, country,
+  (coalesce(removal_date, issue_date))) WHERE total_km IS NOT NULL AND total_km>0` for `fleet_tyre_km_by_asset`
+  (V453 CPK-km path) — its date predicate is on coalesce(removal_date,issue_date) so the issue_date index could NOT
+  bound it (read the whole org+country slice, 8017 rows removed by filter). **MEASURED KSA current month: 11.7ms/6548
+  buffers -> 0.99ms/23 buffers (~12x time, ~285x buffers).** (3) PARTIAL `engine_hours_logs(organisation_id, country,
+  reading_date) WHERE engine_hours>0` for `fleet_hours_by_asset`. **get_fleet_cpk AND get_cpk_drivers both call
+  fleet_tyre_km_by_asset + fleet_hours_by_asset, so both benefit directly.** CPK module service is fully server-side
+  (fleetCpk.js/cpkDrivers.js/brandSizeCpk.js call RPCs, no client fetchAllPages loops). Reversible (drop 3 indexes).
+- **`fetchAllPages` PARALLELIZED (app-wide, `src/lib/fetchAll.js`, 113 caller files).** Was strictly serial: page 0,
+  then page 1, ... (200k rows = 200 latency-bound round trips). NOW: page 0 alone (a small result stays ONE round
+  trip, no regression), then remaining pages fetched in CONCURRENT windows of `concurrency` (default 4) — preserves
+  row ORDER, the `max` ceiling, and the error short-circuit exactly. ~concurrency-x wall-clock on large exports/
+  analytics. Tests `src/test/fetchAll.test.js` (6: single-round-trip small, order across windows, max+truncated,
+  error short-circuit keeps gathered rows, exact-multiple). RULE: to widen further pass `{concurrency}` per call;
+  default 4 avoids connection storms.
 DB uses timestamp migration versions, so repo V-labels V444-V455 do NOT collide with the live V432-V442 numbers a
 PARALLEL session used — the repo files were renumbered to V444+ to avoid file-label collision. Everything below is
 applied live on project `jhssdmeruxtrlqnwfksc` (org Company A) + merged to main. Branch realigned after each squash.

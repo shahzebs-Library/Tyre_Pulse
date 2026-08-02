@@ -196,6 +196,7 @@ export default function ForecastingEngine() {
   const [fleet, setFleet] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [truncated, setTruncated] = useState(false)
   const [horizon, setHorizon] = useState(12)
   const [siteFilter, setSiteFilter] = useState('all')
   const [emailModalOpen, setEmailModalOpen] = useState(false)
@@ -216,14 +217,16 @@ export default function ForecastingEngine() {
               .from('tyre_records')
               .select('id,asset_no,site,brand,position,km_at_fitment,km_at_removal,cost_per_tyre,issue_date,risk_level,category')
               .order('issue_date', { ascending: true })
-            if (cf) q = q.eq('country', cf)
+              .order('id', { ascending: true })
+            // Null-safe country scope (its rows plus NULL-country rows); All = no predicate.
+            if (cf) q = q.or(`country.eq.${cf},country.is.null`)
             return q.range(from, to)
-          }),
+          }, { max: 50000 }),
           fetchAllPages((from, to) => {
             let q = supabase
               .from('vehicle_fleet')
               .select('asset_no,site,vehicle_type,expected_km_per_tyre,monthly_tyre_budget,current_km')
-            if (cf) q = q.eq('country', cf)
+            if (cf) q = q.or(`country.eq.${cf},country.is.null`)
             return q.order('asset_no').order('id').range(from, to)
           }, { max: 20000 }),
         ])
@@ -233,6 +236,7 @@ export default function ForecastingEngine() {
         if (recRes.error) throw recRes.error
         setRecords(recRes.data || [])
         setFleet(fleetRes.data || [])
+        setTruncated(!!recRes.truncated)
       } catch (err) {
         if (!cancelled) setError(toUserMessage(err, 'Failed to load data'))
       } finally {
@@ -755,6 +759,24 @@ export default function ForecastingEngine() {
           </button>
         ))}
       </div>
+
+      {/* ── Data scope notes ──────────────────────────────────────────────── */}
+      {(!activeCountry || activeCountry === 'All') && (
+        <div className="flex items-start gap-2 bg-amber-950/30 border border-amber-800/50 rounded-xl p-4 text-sm">
+          <AlertTriangle className="w-4 h-4 text-amber-400 flex-shrink-0 mt-0.5" />
+          <span className="text-amber-300">
+            Mixed currencies: spend and budget forecasts across countries are shown under one currency label. Pick a country for a single-currency forecast.
+          </span>
+        </div>
+      )}
+      {truncated && (
+        <div className="flex items-start gap-2 bg-amber-950/30 border border-amber-800/50 rounded-xl p-4 text-sm">
+          <AlertTriangle className="w-4 h-4 text-amber-400 flex-shrink-0 mt-0.5" />
+          <span className="text-amber-300">
+            Capped view: only the most recent 50,000 tyre records were loaded. Forecasts may be incomplete. Narrow the country to see full detail.
+          </span>
+        </div>
+      )}
 
       {/* ── Forecast accuracy alert ───────────────────────────────────────── */}
       {forecastedFailureAlert && (

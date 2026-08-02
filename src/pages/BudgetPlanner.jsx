@@ -112,6 +112,7 @@ export default function BudgetPlanner() {
   const [records, setRecords] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [truncated, setTruncated] = useState(false)
   const [exporting, setExporting] = useState(false)
 
   // Site budget editing - siteBudgets holds ANNUAL amounts keyed by site name
@@ -142,15 +143,20 @@ export default function BudgetPlanner() {
     setLoading(true)
     setError(null)
     try {
-      const { data, error: err } = await fetchAllPages((from, to) => {
+      const { data, error: err, truncated: trunc } = await fetchAllPages((from, to) => {
         let q = supabase
           .from('tyre_records')
           .select('id, asset_no, cost_per_tyre, issue_date, site, country, brand, position, risk_level, km_at_fitment, km_at_removal')
-        if (activeCountry && activeCountry !== 'All') q = q.eq('country', activeCountry)
+          .order('issue_date', { ascending: false })
+          .order('id', { ascending: true })
+        // Null-safe country scope: a country sees its own rows plus NULL-country
+        // rows; All applies no predicate. Mirrors _client.applyCountry.
+        if (activeCountry && activeCountry !== 'All') q = q.or(`country.eq.${activeCountry},country.is.null`)
         return q.range(from, to)
-      })
+      }, { max: 50000 })
       if (err) throw err
       setRecords(data ?? [])
+      setTruncated(!!trunc)
     } catch (e) {
       setError(toUserMessage(e, 'Failed to load tyre records'))
     } finally {
@@ -903,6 +909,24 @@ export default function BudgetPlanner() {
             <X className="w-4 h-4" />
           </button>
         </motion.div>
+      )}
+
+      {/* ── Data scope notes ── */}
+      {(!activeCountry || activeCountry === 'All') && (
+        <div className="bg-amber-900/30 border border-amber-800 rounded-xl px-4 py-3 flex items-start gap-2 text-sm">
+          <AlertTriangle className="w-4 h-4 text-amber-400 mt-0.5 flex-shrink-0" />
+          <span className="text-amber-300">
+            Mixed currencies: budgets and spend across countries are shown under one currency label. Pick a country for a single-currency total.
+          </span>
+        </div>
+      )}
+      {truncated && (
+        <div className="bg-amber-900/30 border border-amber-800 rounded-xl px-4 py-3 flex items-start gap-2 text-sm">
+          <AlertTriangle className="w-4 h-4 text-amber-400 mt-0.5 flex-shrink-0" />
+          <span className="text-amber-300">
+            Capped view: only the most recent 50,000 tyre records were loaded. Figures may be incomplete. Narrow the country to see full detail.
+          </span>
+        </div>
       )}
 
       {/* ── KPI Cards ── */}

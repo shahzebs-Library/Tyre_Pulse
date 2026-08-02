@@ -67,20 +67,25 @@ function FleetActuals() {
   const [fleet, setFleet] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [truncated, setTruncated] = useState(false)
 
   const load = useCallback(async () => {
     setLoading(true)
     setError(null)
     try {
       const country = activeCountry !== 'All' ? activeCountry : null
+      // listTcoActualRecords already scopes country the null-safe way (its rows
+      // plus NULL-country rows) via applyCountry. Bound the paged read so a
+      // displayed total can never silently pull an unbounded set.
       const [recRes, fleetRes] = await Promise.all([
-        fetchAllPages((from, to) => tyreApi.listTcoActualRecords({ country, from, to })),
+        fetchAllPages((from, to) => tyreApi.listTcoActualRecords({ country, from, to }), { max: 50000 }),
         tyreApi.listTcoFleet(),
       ])
       if (recRes.error) throw recRes.error
       if (fleetRes.error) throw fleetRes.error
       setRecords(recRes.data || [])
       setFleet(fleetRes.data || [])
+      setTruncated(!!recRes.truncated)
     } catch (e) {
       setError(toUserMessage(e, 'Failed to load fleet TCO data.'))
     } finally {
@@ -206,6 +211,24 @@ function FleetActuals() {
 
   return (
     <div className="space-y-4">
+      {/* Data scope notes */}
+      {activeCountry === 'All' && (
+        <div className="card border border-amber-500/30 flex items-start gap-2">
+          <AlertTriangle className="h-4 w-4 text-amber-400 shrink-0 mt-0.5" />
+          <p className="text-xs text-amber-300">
+            Mixed currencies: tyre cost of ownership across countries is shown under one currency label. Pick a country for a single-currency total.
+          </p>
+        </div>
+      )}
+      {truncated && (
+        <div className="card border border-amber-500/30 flex items-start gap-2">
+          <AlertTriangle className="h-4 w-4 text-amber-400 shrink-0 mt-0.5" />
+          <p className="text-xs text-amber-300">
+            Capped view: only the most recent 50,000 tyre records were loaded. Figures may be incomplete. Narrow the country to see full detail.
+          </p>
+        </div>
+      )}
+
       {/* Headline KPIs */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         {headline.map((h) => {
@@ -392,7 +415,9 @@ function FleetActuals() {
 
       <p className="text-[11px] text-[var(--text-muted)]">
         Actuals cover recorded TYRE cost only. Labour, fuel and depreciation have no per-asset source in this
-        dataset and are shown in the What-if calculator instead — they are not estimated here.
+        dataset and are shown in the What-if calculator instead; they are not estimated here.
+        Tyre cost of ownership here is summed per asset from tyre_records (cost_per_tyre); for a governed
+        fleet-wide tyre spend total, use the expense grid on the cost pages.
       </p>
     </div>
   )

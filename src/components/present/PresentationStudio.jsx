@@ -336,11 +336,27 @@ export default function PresentationStudio({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showInsights, chart, isSplit, isSeries, valueKind, usePct, title, dimLabel])
 
+  // The copy-able block: title, talking points, AND the underlying numbers, so a
+  // paste into a slide carries the figures, not just the prose.
+  function insightsText() {
+    const dataLines = tableRows.slice(0, 15).map((r) => {
+      const vals = r.cells.map((c) => fmtCell(c)).join('  |  ')
+      return `${r.label ?? 'N/A'}: ${vals}`
+    })
+    const head = valueHeaders.length > 1 ? `Item  |  ${valueHeaders.join('  |  ')}` : ''
+    return [
+      title,
+      ...insights.map((p) => `- ${p}`),
+      '',
+      'Data:',
+      ...(head ? [head] : []),
+      ...dataLines,
+    ].join('\n')
+  }
   async function copyInsights() {
-    if (!insights.length) return
     try {
-      await navigator.clipboard.writeText(`${title}\n${insights.map((p) => `- ${p}`).join('\n')}`)
-      setMsg('Talking points copied.')
+      await navigator.clipboard.writeText(insightsText())
+      setMsg('Talking points + data copied.')
     } catch { setMsg('Copy failed.') }
   }
 

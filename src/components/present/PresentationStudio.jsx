@@ -30,7 +30,7 @@ import {
 } from 'chart.js'
 import { Bar, Line, Doughnut } from 'react-chartjs-2'
 import {
-  BarChart3, Search, Image as ImageIcon, Copy, Plus, Presentation, Trash2,
+  BarChart3, Search, Image as ImageIcon, Copy, Plus, Presentation, Trash2, Save,
 } from 'lucide-react'
 import { PRESETS, PRESET_KEYS, PRESET_LABELS } from '../../lib/reportColors'
 import { makeValueLabelsPlugin } from '../../lib/accidentReport'
@@ -119,6 +119,14 @@ export default function PresentationStudio({
   const [deck, setDeck] = useState([])
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState('')
+
+  // Saved reports: the studio config only (dimension/type/style), so the SAME
+  // report re-runs on whatever data is loaded now. Persisted per page (filePrefix).
+  const SAVE_KEY = `presentStudio.saved.${filePrefix}.v1`
+  const [saved, setSaved] = useState(() => {
+    try { const v = JSON.parse(localStorage.getItem(SAVE_KEY) || '[]'); return Array.isArray(v) ? v : [] } catch { return [] }
+  })
+  const persistSaved = (list) => { setSaved(list); try { localStorage.setItem(SAVE_KEY, JSON.stringify(list)) } catch { /* ignore */ } }
 
   const src = sources.find((s) => s.key === st.dim) || sources[0]
   const isSeries = src?.kind === 'series'
@@ -353,6 +361,31 @@ export default function PresentationStudio({
       ...dataLines,
     ].join('\n')
   }
+  // Save the current setup as a reusable template (config only, no data), so the
+  // same report re-runs on whatever is loaded now. Name = the slide title.
+  function saveReport() {
+    const name = (st.title.trim() || autoTitle).slice(0, 60)
+    const config = {
+      dim: st.dim, type: st.type, palette: st.palette, sort: st.sort, topN: st.topN,
+      pct: st.pct, measure: st.measure, labels: st.labels, legend: st.legend, title: st.title,
+    }
+    persistSaved([...saved.filter((s) => s.name !== name), { name, config }])
+    setMsg(`Saved "${name}".`)
+  }
+  function loadReport(name) {
+    if (!name) return
+    const r = saved.find((s) => s.name === name)
+    if (!r) return
+    const cfg = r.config || {}
+    const dimOk = sources.some((s) => s.key === cfg.dim) ? cfg.dim : (sources[0]?.key || '')
+    setSt((s) => ({ ...s, ...cfg, dim: dimOk }))
+    setMsg(`Loaded "${name}". It now shows the current data.`)
+  }
+  function deleteReport(name) {
+    persistSaved(saved.filter((s) => s.name !== name))
+    setMsg(`Deleted "${name}".`)
+  }
+
   async function copyInsights() {
     try {
       await navigator.clipboard.writeText(insightsText())
@@ -418,6 +451,26 @@ export default function PresentationStudio({
           <span className="text-[11px] font-semibold uppercase tracking-wide text-[var(--text-muted)]">Slide title</span>
           <input value={st.title} onChange={(e) => set({ title: e.target.value })} placeholder={autoTitle}
             className="mt-1 w-full rounded-lg border border-[var(--input-border)] bg-[var(--input-bg)] px-3 py-2 text-sm font-semibold text-[var(--text-primary)]" />
+        </div>
+
+        {/* Saved templates: reuse the same report; it fills with the current data. */}
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-[11px] font-semibold uppercase tracking-wide text-[var(--text-muted)]">Saved reports</span>
+          <select
+            value=""
+            onChange={(e) => { loadReport(e.target.value); e.target.value = '' }}
+            className="rounded-lg border border-[var(--input-border)] bg-[var(--input-bg)] px-2.5 py-1.5 text-sm text-[var(--text-primary)]"
+            disabled={!saved.length}
+          >
+            <option value="">{saved.length ? 'Load a saved report...' : 'No saved reports yet'}</option>
+            {saved.map((s) => <option key={s.name} value={s.name}>{s.name}</option>)}
+          </select>
+          <button type="button" onClick={saveReport} disabled={!hasData}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--input-border)] px-3 py-1.5 text-sm text-[var(--text-primary)] hover:bg-[var(--surface-hover)] disabled:opacity-40"><Save size={14} /> Save this report</button>
+          {saved.length > 0 && (
+            <button type="button" onClick={() => deleteReport(st.title.trim() || autoTitle)}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--input-border)] px-2.5 py-1.5 text-xs text-[var(--text-muted)] hover:bg-[var(--surface-hover)]" title="Delete the saved report with this title"><Trash2 size={13} /> Delete this title</button>
+          )}
         </div>
 
         <div className="flex flex-wrap items-end gap-3">

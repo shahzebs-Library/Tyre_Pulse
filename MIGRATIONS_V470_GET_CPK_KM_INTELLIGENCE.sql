@@ -1,0 +1,8 @@
+-- V470: get_cpk_km_intelligence(country,from,to) RPC. APPLIED LIVE 2026-08-03.
+-- Per asset reconciles the km/hours SOURCES: tyre_km (period, current CPK basis) vs
+-- odometer distance (cpk_asset_meter, smoothed) vs engine-hours, with coverage
+-- (both/tyre_only/odo_only), meter quality (readings/resets/months), an odo confidence
+-- (high/medium/low from months + resets) and odo-vs-tyre %. Verified KSA: 718 assets
+-- with a km source, 353 both, 362 ODOMETER-ONLY (assets tyre-km misses), 451 high-conf;
+-- tyre_km 167.5M vs odometer 66M (different measures). DEFINER + org/country scoped,
+-- anon revoked. ROLLBACK: drop function get_cpk_km_intelligence(text,date,date).

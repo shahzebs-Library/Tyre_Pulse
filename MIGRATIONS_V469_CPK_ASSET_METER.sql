@@ -1,0 +1,9 @@
+-- V469/V469b: per-asset METER summary (cpk_asset_meter) for CPK km intelligence.
+-- APPLIED LIVE 2026-08-03. Cleans the KSA master upload odometer ("Kilometer") +
+-- hour-meter ("Hour Meter") into a per-asset distance using MONTHLY SMOOTHING (max
+-- reading per asset-month, then sum positive month-to-month deltas capped at a
+-- plausible ceiling) - robust to the odometer's heavy sub-day noise + resets (a naive
+-- max-min or delta-sum overcounts: e.g. TM634 has a 75399->7174 reset). Columns:
+-- odo_km, hour_hours, odo_readings/hm_readings, odo_resets/hm_resets, odo_months/hm_months.
+-- RLS org + country read. Result: ~715 KSA assets, ~66M smoothed odometer km.
+-- Repopulate by re-running the V469b populate block. ROLLBACK: drop table cpk_asset_meter.

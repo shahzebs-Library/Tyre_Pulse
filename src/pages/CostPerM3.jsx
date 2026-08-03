@@ -13,7 +13,7 @@
  * /production-m3); Internal reuses parts_consumption (ERP intake).
  */
 import { useState, useEffect, useMemo, useCallback } from 'react'
-import { Gauge, RefreshCcw, FileSpreadsheet, FileText, Layers, ClipboardCheck, Copy } from 'lucide-react'
+import { RefreshCcw, FileSpreadsheet, FileText, Layers, ClipboardCheck, Copy } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
 import ExplainThisNumber from '../components/trust/ExplainThisNumber'
 import { useSettings, COUNTRIES } from '../contexts/SettingsContext'

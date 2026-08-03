@@ -10,6 +10,11 @@ vi.mock('../lib/exportUtils', () => ({
   reportDateLabel: () => '01 Jan 2026',
 }))
 
+// The panel fetches the branch/area map on mount; keep it inert in jsdom.
+vi.mock('../lib/api/fleetCpk', () => ({
+  getFleetAreaMap: () => Promise.resolve([]),
+}))
+
 import CpkScenarioStudioPanel from '../components/cpk/CpkScenarioStudioPanel'
 
 const PV = [

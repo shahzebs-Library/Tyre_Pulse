@@ -107,6 +107,32 @@ export async function getCpkUnitAudit({ country, from, to } = {}) {
   }
 }
 
+/**
+ * AREA (BRANCH) MAP for the Scenario Studio: which BRANCH (vehicle_fleet.site) each
+ * asset belongs to, so the studio can group CPK per real branch (NHC, RED SEA,
+ * KSP-TP, ...) and model moving assets between branch cost rates. Calls the live
+ * `get_fleet_area_map(p_country)` RPC.
+ *
+ * @param {{ country?:string }} [opts]
+ *   country: a single country ('KSA'/'UAE'/'Egypt') or 'All'/null for every country.
+ * @returns {Promise<Array<{ asset_no:string, site:string, region:string,
+ *   vehicle_type:string }>>}
+ *   The parsed `assets` array on success, or [] on any error/degrade.
+ *   Always resolves; never rejects.
+ */
+export async function getFleetAreaMap({ country } = {}) {
+  try {
+    const { data, error } = await supabase.rpc('get_fleet_area_map', {
+      p_country: country && country !== 'All' ? country : null,
+    })
+    if (error || !data) return []
+    const assets = Array.isArray(data.assets) ? data.assets : (Array.isArray(data) ? data : [])
+    return Array.isArray(assets) ? assets : []
+  } catch {
+    return []
+  }
+}
+
 export async function getFleetCpk({ country, from, to } = {}) {
   try {
     const { data, error } = await supabase.rpc('get_fleet_cpk', {

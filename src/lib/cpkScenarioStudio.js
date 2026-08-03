@@ -58,6 +58,9 @@ function cpkOf(cost, distance) {
  * - tyreCostPct / maintCostPct / tyrePricePct: percentage scalers, default 100.
  * - extraCost: absolute money added to the KM-side total cost.
  * - excludedAssets: asset_no strings removed from BOTH sides.
+ * - dropHoursSide: when true, the HOURS side is zeroed out (distance 0, costs 0,
+ *   cpk null) so the studio can show the km-only picture with the hours cost and
+ *   hours removed. The km side is unaffected.
  */
 export const DEFAULT_LEVERS = {
   kmTotalOverride: null,
@@ -67,6 +70,7 @@ export const DEFAULT_LEVERS = {
   extraCost: 0,
   excludedAssets: [],
   tyrePricePct: 100,
+  dropHoursSide: false,
 }
 
 const isHoursRow = (r) => r?.unit === 'engine_hours'
@@ -219,14 +223,19 @@ export function applyLevers(baseline, levers = {}) {
     extraCost: L.extraCost,
     excluded,
   })
-  const hours = applyToSide(base.hours || summariseSide([]), {
-    override: L.hoursTotalOverride,
-    tyreCostPct: L.tyreCostPct,
-    maintCostPct: L.maintCostPct,
-    tyrePricePct: L.tyrePricePct,
-    extraCost: 0, // extraCost is a km-side lump sum only
-    excluded,
-  })
+  // When dropHoursSide is on, the hours side is removed entirely (distance 0,
+  // costs 0, cpk null) to show the km-only picture with the hours cost and hours
+  // taken out. The km side above is untouched.
+  const hours = L.dropHoursSide
+    ? { distance: 0, tyreCost: 0, maintCost: 0, totalCost: 0, cpkTyre: null, cpkTotal: null }
+    : applyToSide(base.hours || summariseSide([]), {
+      override: L.hoursTotalOverride,
+      tyreCostPct: L.tyreCostPct,
+      maintCostPct: L.maintCostPct,
+      tyrePricePct: L.tyrePricePct,
+      extraCost: 0, // extraCost is a km-side lump sum only
+      excluded,
+    })
 
   return {
     km,
@@ -271,4 +280,176 @@ export function scenarioRows(baseline, scenarios = []) {
     })
   }
   return rows
+}
+
+/** Normalise an asset key for joining (UPPER + trim); '' when absent. */
+function assetKey(v) {
+  if (v === null || v === undefined) return ''
+  return String(v).trim().toUpperCase()
+}
+
+/** Aggregate a list of per-asset SIDE rows into one SIDE view-model. */
+function aggregateSide(assets) {
+  const list = Array.isArray(assets) ? assets : []
+  let distance = 0
+  let tyreCost = 0
+  let maintCost = 0
+  let totalCost = 0
+  for (const a of list) {
+    distance += nonNeg(a?.distance)
+    tyreCost += nonNeg(a?.tyreCost)
+    maintCost += nonNeg(a?.maintCost)
+    totalCost += nonNeg(a?.totalCost)
+  }
+  return {
+    distance,
+    tyreCost,
+    maintCost,
+    totalCost,
+    cpkTyre: cpkOf(tyreCost, distance),
+    cpkTotal: cpkOf(totalCost, distance),
+  }
+}
+
+/**
+ * Group the loaded per-asset CPK rows by BRANCH (vehicle_fleet.site), joining each
+ * asset to the area map by asset_no. Produces one row per site with a km SIDE and an
+ * hours SIDE aggregated exactly like buildBaseline (cpk = total / distance, null when
+ * distance <= 0). Assets with no matching site fall into 'Unassigned'.
+ *
+ * @param {Array} [perVehicle] per-asset CPK rows (see file header)
+ * @param {Array} [areaMap]    [{ asset_no, site, region, vehicle_type }]
+ * @returns {Array<{ site:string, region:string, assetCount:number,
+ *   km:object, hours:object }>} sorted by km.totalCost descending.
+ */
+export function groupByArea(perVehicle = [], areaMap = []) {
+  const rows = Array.isArray(perVehicle) ? perVehicle : []
+  const map = Array.isArray(areaMap) ? areaMap : []
+
+  // asset_no -> { site, region } from the area map.
+  const siteOf = new Map()
+  const regionOf = new Map()
+  for (const a of map) {
+    const key = assetKey(a?.asset_no)
+    if (!key) continue
+    if (!siteOf.has(key)) {
+      const site = a?.site == null || String(a.site).trim() === '' ? 'Unassigned' : String(a.site)
+      siteOf.set(key, site)
+      regionOf.set(key, a?.region == null || String(a.region).trim() === '' ? '' : String(a.region))
+    }
+  }
+
+  // Bucket per-asset side rows by site.
+  const buckets = new Map() // site -> { region, km:[], hours:[], assets:Set }
+  const ensure = (site, region) => {
+    if (!buckets.has(site)) buckets.set(site, { region: region || '', km: [], hours: [], assets: new Set() })
+    const b = buckets.get(site)
+    if (!b.region && region) b.region = region
+    return b
+  }
+
+  for (const r of rows) {
+    const key = assetKey(r?.asset_no)
+    const site = siteOf.get(key) || 'Unassigned'
+    const region = regionOf.get(key) || ''
+    const b = ensure(site, region)
+    const d = nonNeg(r?.distance_or_hours)
+    const t = nonNeg(r?.tyre_cost)
+    const m = nonNeg(r?.maintenance_cost)
+    const rawTotal = Number(r?.total_cost)
+    const tot = nonNeg(Number.isFinite(rawTotal) ? rawTotal : t + m)
+    const sideRow = { distance: d, tyreCost: t, maintCost: m, totalCost: tot }
+    if (isHoursRow(r)) b.hours.push(sideRow)
+    else b.km.push(sideRow)
+    if (r?.asset_no != null) b.assets.add(assetKey(r.asset_no))
+  }
+
+  const out = []
+  for (const [site, b] of buckets) {
+    out.push({
+      site,
+      region: b.region || '',
+      assetCount: b.assets.size,
+      km: aggregateSide(b.km),
+      hours: aggregateSide(b.hours),
+    })
+  }
+  out.sort((x, y) => nonNeg(y?.km?.totalCost) - nonNeg(x?.km?.totalCost))
+  return out
+}
+
+/**
+ * Model moving the assets of `fromSite` so they are costed at the `toSite` BRANCH's
+ * km cost-per-unit rate. Answers "why choose another branch and what is the price
+ * impact". Null-safe: when the target branch has no measured km CPK the projection is
+ * null (honest N/A), never a fabricated 0.
+ *
+ * @param {Array} perVehicle per-asset CPK rows
+ * @param {Array} areaMap    [{ asset_no, site, region, vehicle_type }]
+ * @param {{ fromSite?:string, toSite?:string }} sel
+ * @returns {{ fromSite:string|null, toSite:string|null, movedAssets:number,
+ *   movedKm:number, currentCost:number, currentCpk:number|null,
+ *   targetCpk:number|null, projectedCost:number|null, costDelta:number|null,
+ *   costDeltaPct:number|null }}
+ */
+export function branchImpact(perVehicle = [], areaMap = [], { fromSite, toSite } = {}) {
+  const areas = groupByArea(perVehicle, areaMap)
+  const empty = {
+    fromSite: fromSite || null,
+    toSite: toSite || null,
+    movedAssets: 0,
+    movedKm: 0,
+    currentCost: 0,
+    currentCpk: null,
+    targetCpk: null,
+    projectedCost: null,
+    costDelta: null,
+    costDeltaPct: null,
+  }
+  if (!fromSite || !toSite) return empty
+
+  const from = areas.find((a) => a.site === fromSite) || null
+  const to = areas.find((a) => a.site === toSite) || null
+  if (!from) return empty
+
+  const movedKm = nonNeg(from.km?.distance)
+  const currentCost = nonNeg(from.km?.totalCost)
+  const currentCpk = num(from.km?.cpkTotal)
+  const targetCpk = to ? num(to.km?.cpkTotal) : null
+  const projectedCost = targetCpk == null ? null : movedKm * targetCpk
+  const costDelta = projectedCost == null ? null : projectedCost - currentCost
+  const costDeltaPct = pctDelta(projectedCost, currentCost)
+
+  return {
+    fromSite,
+    toSite,
+    movedAssets: from.assetCount,
+    movedKm,
+    currentCost,
+    currentCpk,
+    targetCpk,
+    projectedCost,
+    costDelta,
+    costDeltaPct,
+  }
+}
+
+/**
+ * Flatten per-branch area rows into export rows for Excel / PDF.
+ * @param {Array} [areas] output of groupByArea
+ * @returns {Array<{ site:string, region:string, kmDistance:number|null,
+ *   kmCpkTotal:number|null, hoursDistance:number|null, hoursCpkTotal:number|null,
+ *   assetCount:number|null }>}
+ */
+export function areaExportRows(areas = []) {
+  const list = Array.isArray(areas) ? areas : []
+  return list.map((a) => ({
+    site: a?.site ?? '',
+    region: a?.region ?? '',
+    kmDistance: num(a?.km?.distance),
+    kmCpkTotal: num(a?.km?.cpkTotal),
+    hoursDistance: num(a?.hours?.distance),
+    hoursCpkTotal: num(a?.hours?.cpkTotal),
+    assetCount: num(a?.assetCount),
+  }))
 }

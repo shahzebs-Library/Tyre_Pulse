@@ -4,6 +4,9 @@ import {
   buildBaseline,
   applyLevers,
   scenarioRows,
+  groupByArea,
+  branchImpact,
+  areaExportRows,
   num,
   pctDelta,
 } from '../lib/cpkScenarioStudio'
@@ -248,5 +251,159 @@ describe('scenarioRows', () => {
     expect(rows).toHaveLength(1)
     expect(rows[0].kmCpkTotal).toBe(null)
     expect(rows[0].hoursCpkTotal).toBe(null)
+  })
+})
+
+describe('dropHoursSide lever', () => {
+  it('is in DEFAULT_LEVERS and defaults to false', () => {
+    expect(DEFAULT_LEVERS.dropHoursSide).toBe(false)
+  })
+
+  it('zeroes the hours side (km unchanged) when true', () => {
+    const b = buildBaseline({ perVehicle, fleet })
+    const res = applyLevers(b, { dropHoursSide: true })
+    // hours side removed entirely
+    expect(res.hours.distance).toBe(0)
+    expect(res.hours.tyreCost).toBe(0)
+    expect(res.hours.maintCost).toBe(0)
+    expect(res.hours.totalCost).toBe(0)
+    expect(res.hours.cpkTotal).toBe(null)
+    expect(res.hours.cpkTyre).toBe(null)
+    // km side is completely unaffected
+    expect(res.km.distance).toBe(b.km.distance)
+    expect(res.km.totalCost).toBe(b.km.totalCost)
+    expect(res.km.cpkTotal).toBeCloseTo(b.km.cpkTotal, 10)
+  })
+
+  it('leaves the hours side intact when false (default)', () => {
+    const b = buildBaseline({ perVehicle, fleet })
+    const res = applyLevers(b, {})
+    expect(res.hours.distance).toBe(1200)
+    expect(res.hours.cpkTotal).toBeCloseTo(6000 / 1200, 10)
+  })
+})
+
+// area map joins by asset_no; sites give the branch grouping.
+const areaMap = [
+  { asset_no: 'TM634', site: 'NHC', region: 'Central', vehicle_type: 'TR-MIXER' },
+  { asset_no: 'TM700', site: 'RED SEA', region: 'Western', vehicle_type: 'TR-MIXER' },
+  { asset_no: 'GEN12', site: 'NHC', region: 'Central', vehicle_type: 'GENERATOR' },
+]
+
+describe('groupByArea', () => {
+  it('joins per-asset rows to branches and computes per-site cpk', () => {
+    const areas = groupByArea(perVehicle, areaMap)
+    // two sites: NHC (TM634 km + GEN12 hours) and RED SEA (TM700 km)
+    expect(areas).toHaveLength(2)
+
+    const nhc = areas.find((a) => a.site === 'NHC')
+    expect(nhc.region).toBe('Central')
+    expect(nhc.assetCount).toBe(2)
+    // km side of NHC = TM634 only
+    expect(nhc.km.distance).toBe(187080)
+    expect(nhc.km.totalCost).toBe(12000)
+    expect(nhc.km.cpkTotal).toBeCloseTo(12000 / 187080, 10)
+    // hours side of NHC = GEN12
+    expect(nhc.hours.distance).toBe(1200)
+    expect(nhc.hours.cpkTotal).toBeCloseTo(6000 / 1200, 10)
+
+    const red = areas.find((a) => a.site === 'RED SEA')
+    expect(red.km.distance).toBe(100000)
+    expect(red.km.cpkTotal).toBeCloseTo(7000 / 100000, 10)
+    // no hours side -> null cpk, not 0
+    expect(red.hours.distance).toBe(0)
+    expect(red.hours.cpkTotal).toBe(null)
+  })
+
+  it('sorts sites by km total cost descending', () => {
+    const areas = groupByArea(perVehicle, areaMap)
+    // NHC km total 12000 > RED SEA 7000
+    expect(areas[0].site).toBe('NHC')
+    expect(areas[1].site).toBe('RED SEA')
+  })
+
+  it('joins case/space-insensitively on asset_no', () => {
+    const areas = groupByArea(
+      [{ asset_no: ' tm634 ', unit: 'km', distance_or_hours: 1000, tyre_cost: 100, maintenance_cost: 0, total_cost: 100 }],
+      [{ asset_no: 'TM634', site: 'NHC', region: 'Central' }],
+    )
+    expect(areas).toHaveLength(1)
+    expect(areas[0].site).toBe('NHC')
+  })
+
+  it('buckets assets with no matching site into Unassigned', () => {
+    const areas = groupByArea(
+      [{ asset_no: 'X99', unit: 'km', distance_or_hours: 1000, tyre_cost: 100, maintenance_cost: 0, total_cost: 100 }],
+      areaMap,
+    )
+    expect(areas).toHaveLength(1)
+    expect(areas[0].site).toBe('Unassigned')
+    expect(areas[0].km.cpkTotal).toBeCloseTo(0.1, 10)
+  })
+
+  it('is defensive on empty / bad input', () => {
+    expect(groupByArea()).toEqual([])
+    expect(groupByArea('x', null)).toEqual([])
+    expect(groupByArea([], [])).toEqual([])
+  })
+})
+
+describe('branchImpact', () => {
+  it('projects moved km at the target branch cpk and computes a signed delta', () => {
+    const imp = branchImpact(perVehicle, areaMap, { fromSite: 'RED SEA', toSite: 'NHC' })
+    expect(imp.movedAssets).toBe(1)
+    expect(imp.movedKm).toBe(100000)
+    expect(imp.currentCost).toBe(7000)
+    expect(imp.currentCpk).toBeCloseTo(7000 / 100000, 10)
+    // NHC km cpk = 12000 / 187080
+    const targetCpk = 12000 / 187080
+    expect(imp.targetCpk).toBeCloseTo(targetCpk, 10)
+    // projectedCost = movedKm * targetCpk
+    expect(imp.projectedCost).toBeCloseTo(100000 * targetCpk, 6)
+    expect(imp.costDelta).toBeCloseTo(100000 * targetCpk - 7000, 6)
+    expect(imp.costDeltaPct).toBeCloseTo(((100000 * targetCpk - 7000) / 7000) * 100, 6)
+  })
+
+  it('is null-safe when the target branch has no measured km cpk', () => {
+    // ORPHAN site has only an hours asset -> no km cpk
+    const pv = [
+      { asset_no: 'A', unit: 'km', distance_or_hours: 1000, tyre_cost: 100, maintenance_cost: 0, total_cost: 100 },
+      { asset_no: 'B', unit: 'engine_hours', distance_or_hours: 500, tyre_cost: 0, maintenance_cost: 200, total_cost: 200 },
+    ]
+    const am = [
+      { asset_no: 'A', site: 'FROM', region: '' },
+      { asset_no: 'B', site: 'TO', region: '' },
+    ]
+    const imp = branchImpact(pv, am, { fromSite: 'FROM', toSite: 'TO' })
+    expect(imp.targetCpk).toBe(null)
+    expect(imp.projectedCost).toBe(null)
+    expect(imp.costDelta).toBe(null)
+    expect(imp.costDeltaPct).toBe(null)
+  })
+
+  it('returns an empty shape when a selection is missing', () => {
+    const imp = branchImpact(perVehicle, areaMap, { fromSite: 'NHC' })
+    expect(imp.movedAssets).toBe(0)
+    expect(imp.projectedCost).toBe(null)
+  })
+})
+
+describe('areaExportRows', () => {
+  it('flattens area rows with numbers or null', () => {
+    const areas = groupByArea(perVehicle, areaMap)
+    const rows = areaExportRows(areas)
+    expect(rows).toHaveLength(2)
+    const nhc = rows.find((r) => r.site === 'NHC')
+    expect(nhc.region).toBe('Central')
+    expect(nhc.kmDistance).toBe(187080)
+    expect(nhc.kmCpkTotal).toBeCloseTo(12000 / 187080, 10)
+    expect(nhc.assetCount).toBe(2)
+    const red = rows.find((r) => r.site === 'RED SEA')
+    expect(red.hoursCpkTotal).toBe(null)
+  })
+
+  it('is defensive on bad input', () => {
+    expect(areaExportRows()).toEqual([])
+    expect(areaExportRows(null)).toEqual([])
   })
 })

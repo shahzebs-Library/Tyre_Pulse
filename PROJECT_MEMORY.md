@@ -98,6 +98,17 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
     document picker + live preview + copy / PDF / text / mailto). Per-country currency never blended,
     honest `[to be completed]` placeholders, ASCII only, NOTHING is auto-emailed (copy/download/mailto
     only). Tests insuranceCorrespondence 11.
+  - **INSURER EMAIL/LETTER READER (AI, grounded, no migration).** Upload the insurer's decision as a
+    PDF -> `extractPdfLines` -> `analyzeInsurerEmail` (pure `src/lib/insuranceEmailAnalysis.js`:
+    buildAnalysisPrompt/parseAnalysisResponse/groundAnalysis, runs the secure `chat-ai` edge fn via
+    invokeChatAI) determines outcome (rejected/delayed/information_requested/approved/unclear), cites
+    the exact stored clause the decision maps to, and the clause it SHOULD be approved under. GROUNDING
+    RULE: the model may only reference the policy's numbered conditions we pass it; invented seq numbers
+    are dropped and every citation renders OUR stored clause_text (never the model paraphrase); honest
+    'unclear'/low-confidence when ambiguous, empty clause list when nothing maps. On a rejection it
+    auto-selects the reconsideration reply (buildReconsideration cites the approval clauses). UI:
+    "Analyze insurer email or letter" card on /insurance-policies (Admin only). Tests
+    insuranceEmailAnalysis 9, insuranceCorrespondence 12.
 - **AGENTS + SESSION-LIMIT NOTE:** most of this was built by parallel general-purpose agents (engine/UI/parser splits,
   non-conflicting file ownership). Two agent waves hit the shared account session limit mid-build (resets on the hour) -
   their completed engine/service files were committed WIP and finished after reset. When agents fail on the limit, keep

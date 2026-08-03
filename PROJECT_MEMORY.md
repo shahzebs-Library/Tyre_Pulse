@@ -153,6 +153,27 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
   (shapeSuggestions keeps a `.brand` alias). Live gaps: brand 253 / size 2,279 / removal_reason 7,623; master
   192,198 rows. Next free migration **V473**. STILL open (offered): learning for the old->new serial chain; a
   per-country master completeness cut.
+- **DATA TRUST / LINEAGE PROGRAM - PHASE 1 DONE (V473, applied live, 2-agent build).** The big "Explain This
+  Number / Metric Catalogue / lineage" spec is a MULTI-PHASE program; Phase 1 (Metric Registry + Explain This
+  Number + provenance + freshness) is COMPLETE. NOTE: the earlier task-42 "Control Center" (V458 get_figure_lineage
+  + get_control_center_summary + get_diagnostics_feed + /console/control-center) was a PARTIAL slice of this spec,
+  not the whole thing. Phase 1 adds: `metric_registry` (GLOBAL governed KPI defs: formula owner, source table/cols,
+  date field/logic, unit, currency handling, null/dup handling, included/excluded statuses, refresh SLA,
+  lineage_domain, dashboards-using; RLS authenticated-read + super/Admin-write) + `metric_versions` (versioned
+  formulas). RPCs `explain_metric(metric_id,country,from,to)` (def + latest version + freshness [source row count,
+  last source update, last calc] + lineage via get_figure_lineage) + `get_record_provenance(table,id)` (drill an
+  aggregate to one source row + import batch; whitelisted tables, org-scoped, elevated). **12 KPIs seeded**
+  (fleet_cpk, avg_tyre_life, failure_rate, tyre_spend, maintenance_cost, cost_per_m3, open_work_orders, fleet_size,
+  accidents_total, claims_recovered, inspection_compliance, scrap_rate) each with a v1. Client: pure
+  `src/lib/metricExplain.js` (shapeExplain/freshnessAge, STALE_HOURS=48; 16 tests) + `src/lib/api/metricRegistry.js`
+  + reusable **`src/components/trust/ExplainThisNumber.jsx`** (mounted on EngineeringKpi Fleet CPK/Avg Life/Failure
+  cards via HeadlineCard metricId prop + the Cost per M3 headline - attach more by passing a metricId) + console
+  page **`/console/metric-catalogue`** (`ConsoleMetricCatalogue.jsx`, nav "Metric Catalogue"). Next free migration
+  **V474**. RULE: register every new KPI in metric_registry + a metric_versions row, set lineage_domain to a
+  get_figure_lineage domain where one exists, and mount ExplainThisNumber by metricId - do NOT invent a parallel
+  explain path. STILL OPEN (Phase 2/3): quality_rules/quality_results + reconciliation_runs + pipeline_runs/
+  integration_events monitors + correction_cases workflow + incidents + releases/release_impacts + visual/
+  column-level lineage + dashboard_registry/widget_bindings + cross-layer trace IDs.
 - **STILL OPEN (offered):** a per-column completeness report on the 48-col master file; extending learning to
   repair-reason normalization + the old/new serial chain; switching CPK onto the odometer basis for the 362
   odometer-only assets.

@@ -114,6 +114,7 @@ export default function DailyOps() {
   const [workOrders, setWorkOrders]    = useState([])
   const [alerts, setAlerts]            = useState([])
   const [allTyres30, setAllTyres30]    = useState([])
+  const [capped, setCapped]            = useState(false)
 
   const fetchData = useCallback(async (date) => {
     setLoading(true)
@@ -122,25 +123,24 @@ export default function DailyOps() {
 
     // Null-safe country scoping (mirrors the app-wide applyCountry convention):
     // "All" applies no predicate; a specific country keeps its own rows plus any
-    // with a NULL country, never silently dropped. work_orders/alerts (returned
-    // as chainable query builders) are scoped server-side; the paged tyre reads
-    // (which carry a country column) are scoped in memory. All money on this page
-    // is derived from tyre records, so scoping them keeps the cost figures in a
-    // single currency instead of blending SAR + AED + EGP. For a single-country
-    // selection the rows are the same as before - only the scope predicate changed.
+    // with a NULL country, never silently dropped. work_orders/alerts are now
+    // paged reads that apply the scope SERVER-SIDE (their tables are large enough
+    // to hit PostgREST's 1000-row cap and undercount in a busy 30-day window);
+    // the paged tyre reads (which carry a country column but take no country arg)
+    // are scoped in memory. All money on this page is derived from tyre records,
+    // so scoping them keeps the cost figures in a single currency instead of
+    // blending SAR + AED + EGP. For a single-country selection the rows are the
+    // same as before - only the scope predicate changed.
     const scoped = Boolean(activeCountry && activeCountry !== 'All')
-    const orCountry = `country.eq.${activeCountry},country.is.null`
+    const country = scoped ? activeCountry : 'All'
     const scopeRows = (rows) =>
       scoped ? rows.filter(r => r.country == null || r.country === activeCountry) : rows
-
-    const woQuery = dailyOpsApi.listDailyWorkOrders({ thirtyDaysAgo, wEnd })
-    const alQuery = dailyOpsApi.listDailyAlerts({ thirtyDaysAgo, wEnd })
 
     const [trRes, insRes, woRes, alRes, t30Res] = await Promise.allSettled([
       dailyOpsApi.listDailyTyreRecords({ thirtyDaysAgo, wEnd }),
       dailyOpsApi.listDailyInspections({ thirtyDaysAgo, wEnd }),
-      scoped ? woQuery.or(orCountry) : woQuery,
-      scoped ? alQuery.or(orCountry) : alQuery,
+      dailyOpsApi.listDailyWorkOrders({ thirtyDaysAgo, wEnd, country }),
+      dailyOpsApi.listDailyAlerts({ thirtyDaysAgo, wEnd, country }),
       dailyOpsApi.listDailyTyreFitments({ thirtyDaysAgo, date }),
     ])
 
@@ -149,6 +149,10 @@ export default function DailyOps() {
     setWorkOrders(woRes.status === 'fulfilled' && woRes.value.data ? woRes.value.data : [])
     setAlerts(alRes.status === 'fulfilled' && alRes.value.data ? alRes.value.data : [])
     setAllTyres30(t30Res.status === 'fulfilled' && t30Res.value.data ? scopeRows(t30Res.value.data) : [])
+    setCapped(
+      (woRes.status === 'fulfilled' && woRes.value.truncated === true) ||
+      (alRes.status === 'fulfilled' && alRes.value.truncated === true),
+    )
     setLoading(false)
   }, [activeCountry])
 
@@ -518,6 +522,13 @@ ${siteActivity.map(([s, c]) => `<tr><td>${esc(s)}</td><td>${esc(c)}</td></tr>`).
             <div className="flex items-start gap-2 text-xs text-amber-400/90 bg-amber-900/15 border border-amber-800/40 rounded-lg px-3 py-2">
               <AlertTriangle size={13} className="mt-0.5 flex-shrink-0" />
               <span>Showing all countries. Cost figures below span multiple currencies (SAR, AED, EGP) and are not a single-currency total. Select a country to see spend in that country's currency.</span>
+            </div>
+          )}
+
+          {capped && (
+            <div className="flex items-start gap-2 text-xs text-amber-400/90 bg-amber-900/15 border border-amber-800/40 rounded-lg px-3 py-2">
+              <AlertTriangle size={13} className="mt-0.5 flex-shrink-0" />
+              <span>Capped view. This 30-day window holds more work orders or alerts than the display limit (20,000), so some rows are not shown. Narrow the date or pick a country for a complete view.</span>
             </div>
           )}
 

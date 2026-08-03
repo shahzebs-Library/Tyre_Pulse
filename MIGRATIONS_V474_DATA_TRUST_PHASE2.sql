@@ -1,0 +1,32 @@
+-- V474 DATA TRUST PHASE 2 (STATUS: APPLIED LIVE on jhssdmeruxtrlqnwfksc)
+-- Applied via MCP: v474_data_trust_phase2_tables, v474b_quality_reconciliation_rpcs, v474c_correction_cases_monitors.
+-- Additive only. No existing table/column/RPC/report/route changed.
+--
+-- Tables:
+--   quality_rules        - GLOBAL governed data-quality rule registry (dimension, scope_table, severity,
+--                          threshold, schedule, owner, alert_recipient). RLS authenticated-read + super/Admin-write.
+--   quality_results      - org-scoped check results per run (rule_key, run_id, status pass/warn/fail, measured_value,
+--                          failure_count, severity, message, drilldown). RESTRICTIVE org isolation, definer-written.
+--   reconciliation_runs  - org-scoped expected vs actual vs difference per recon_key (status balanced/variance/...).
+--   correction_cases     - org-scoped governed correction workflow (case_no CC-YYYY-####, frozen dashboard_context,
+--                          original vs corrected value, status reported->investigating->proposed->approved->applied->
+--                          reconciled->closed / rejected, contributing/excluded records, evidence).
+--   correction_case_events - append-only case audit ledger.
+--
+-- RPCs (SECURITY DEFINER, pinned search_path, app_is_elevated gate, anon revoked):
+--   run_quality_checks(country)   - computes 10 org-scoped checks (brand/size/reason gaps, unpriced, future/reversed
+--                                   removal dates, orphan assets, no-import-uid, low-confidence spend, missing vehicle
+--                                   type) and writes quality_results; returns the run summary. Reuses the recon logic.
+--   run_reconciliation(country)   - computes 3 reconciliations (WO total vs labour+parts, tyre-asset-in-fleet link,
+--                                   production supplied vs approved m3) and writes reconciliation_runs.
+--   correction_case_open/_transition/_update - the case workflow (records decisions + original value; the actual
+--                                   data fix is applied through the existing undoable tools, not by this RPC).
+--   get_pipeline_runs(country,limit)   - job monitor: normalized read over import_batches + report_send_log.
+--   get_integration_events(country,limit) - integration monitor: normalized read over ai_token_logs + report_send_log.
+--
+-- Seeded 10 quality_rules. Client: src/lib/api/dataTrustOps.js + pure src/lib/dataTrustOps.js (7 tests) + console
+-- pages Data Quality Center / Reconciliation Center / Pipeline & Integration Monitor / Correction & Investigation
+-- Center. Next free migration V475.
+--
+-- Rollback: drop the 5 read/write RPCs + run_quality_checks + run_reconciliation, then the 5 tables (additive;
+-- no data migration to reverse). See the apply_migration bodies for full DDL.

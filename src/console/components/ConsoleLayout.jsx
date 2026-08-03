@@ -5,7 +5,7 @@ import {
   ClipboardList, Zap, Megaphone, Lock, LogOut, ChevronDown,
   Globe, Menu, X, AlertTriangle, Layers, Smartphone, Palette, Activity,
   DatabaseBackup, UserCog, History, BellRing, Boxes, HeartPulse, Search, Truck, Trash2, CopyX, FileClock,
-  LayoutList, Bug, Wand2, LifeBuoy, Eye, UserX, Brain, ShieldCheck, Sparkles,
+  LayoutList, Bug, Wand2, LifeBuoy, Eye, UserX, Brain, ShieldCheck, Sparkles, Scale,
 } from 'lucide-react'
 import { useConsoleAuth } from '../ConsoleAuthContext'
 import Console2FAModal from './Console2FAModal'
@@ -40,6 +40,9 @@ const NAV_GROUPS = [
       { to: '/console/classification-learning', label: 'Teach the Classifier', icon: Brain },
       { to: '/console/data-learning', label: 'Data Learning', icon: Sparkles },
       { to: '/console/metric-catalogue', label: 'Metric Catalogue', icon: LayoutList },
+      { to: '/console/data-quality', label: 'Data Quality', icon: ShieldCheck },
+      { to: '/console/reconciliation', label: 'Reconciliation', icon: Scale },
+      { to: '/console/pipeline-monitor', label: 'Pipeline Monitor', icon: Activity },
       { to: '/console/duplicates',      label: 'Duplicate Control', icon: CopyX },
       { to: '/console/data-browser',    label: 'Data Browser',     icon: Search },
       { to: '/console/data-cleanup',    label: 'Data Cleanup',     icon: Trash2 },

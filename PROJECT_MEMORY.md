@@ -109,6 +109,26 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
     auto-selects the reconsideration reply (buildReconsideration cites the approval clauses). UI:
     "Analyze insurer email or letter" card on /insurance-policies (Admin only). Tests
     insuranceEmailAnalysis 9, insuranceCorrespondence 12.
+- **AI SURFACE CONSOLIDATED + 2 NEW AGENTS (no migration, code only).** The two AI chat pages did the same job;
+  Smart Analytics (`/ai`, AiAnalytics.jsx) hardcoded dark card backgrounds (`rgba(10,14,20,0.9)`, bg-gray-900) so
+  replies rendered BLACK in light mode. `/ai` now REDIRECTS to the theme-aware AI Command Center
+  (`/ai-command-center`), the single AI surface (nav relabelled "Smart Analytics (AI)"; commandSearch `/ai` entry
+  repointed). AiAnalytics.jsx is now dead (unreferenced). Routing was Analyst-heavy; added **Safety & HSE**
+  (`safety`) and **Procurement** (`procurement`) agents = 6 total. Each registers in `aiRouter.js`
+  (AGENT_TYPES/LABELS/COLORS/DESCRIPTIONS + AGENT_PATTERNS ordered specificity), `agents/index.js`,
+  orchestrator `AGENT_RUNNERS`, and AiCommandCenter (AGENT_ICONS + quick actions). AiCommandCenter now also loads
+  `accidents` into agent context so Safety is real. Agents `src/lib/agents/safetyAgent.js` (inspections/actions/
+  accidents digest) + `procurementAgent.js` (brand value over realized CPK/life/failure via kpiEngine). Tests
+  aiRouterAgents 6. RULE: `chat-ai` edge fn HARD-CODES model = claude-haiku-4-5 and IGNORES the client `model`
+  param, so every AI call runs on Haiku (the user declined a model picker). To add an agent: extend the 4 registries
+  above + write a runner that builds a compact digest from the loaded context and calls callAiEdgeFunction.
+- **OPEN / NEXT (user asked, big):** a MASTER-FILE LEARNING / GAP-FIX layer. The KSA 48-col master upload
+  (`ksa_country_upload_template_staging`) carries tyre lifecycle data - old_serialno + new serial, old_tyrebrand +
+  new brand, remove/add km, repair reasons, preventive-repair info. The user wants: when they CONFIRM data from the
+  master material, an ML/learning layer fills the blank gaps (brand, serial chain, km, repair reason) on the BEST/
+  highest-confidence rows, tied to the material-master confirm workflow (extend V400 classificationLearning + V416
+  material-master confirm). DELIBERATELY NOT cost (they said don't take cost from there, "but you can check").
+  Pair it with a per-column completeness report on the master file so they can see what is trustworthy. NOT STARTED.
 - **AGENTS + SESSION-LIMIT NOTE:** most of this was built by parallel general-purpose agents (engine/UI/parser splits,
   non-conflicting file ownership). Two agent waves hit the shared account session limit mid-build (resets on the hour) -
   their completed engine/service files were committed WIP and finished after reset. When agents fail on the limit, keep

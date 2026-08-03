@@ -43,6 +43,7 @@ const NAV_GROUPS = [
       { to: '/console/data-quality', label: 'Data Quality', icon: ShieldCheck },
       { to: '/console/reconciliation', label: 'Reconciliation', icon: Scale },
       { to: '/console/pipeline-monitor', label: 'Pipeline Monitor', icon: Activity },
+      { to: '/console/correction-center', label: 'Correction Center', icon: ClipboardList },
       { to: '/console/duplicates',      label: 'Duplicate Control', icon: CopyX },
       { to: '/console/data-browser',    label: 'Data Browser',     icon: Search },
       { to: '/console/data-cleanup',    label: 'Data Cleanup',     icon: Trash2 },

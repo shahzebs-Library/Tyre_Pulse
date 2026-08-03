@@ -50,6 +50,7 @@ const ConsoleMetricCatalogue = lazy(() => import('./console/pages/ConsoleMetricC
 const ConsoleDataQuality = lazy(() => import('./console/pages/ConsoleDataQuality'))
 const ConsoleReconciliation = lazy(() => import('./console/pages/ConsoleReconciliation'))
 const ConsolePipelineMonitor = lazy(() => import('./console/pages/ConsolePipelineMonitor'))
+const ConsoleCorrectionCenter = lazy(() => import('./console/pages/ConsoleCorrectionCenter'))
 const ConsoleSmartImport   = lazy(() => import('./console/pages/ConsoleSmartImport'))
 const ConsoleVehicleDesigner = lazy(() => import('./console/pages/ConsoleVehicleDesigner'))
 const ConsoleNavigation    = lazy(() => import('./console/pages/ConsoleNavigation'))
@@ -774,6 +775,7 @@ export default function App() {
           <Route path="data-quality" element={<ConsoleDataQuality />} />
           <Route path="reconciliation" element={<ConsoleReconciliation />} />
           <Route path="pipeline-monitor" element={<ConsolePipelineMonitor />} />
+          <Route path="correction-center" element={<ConsoleCorrectionCenter />} />
           <Route path="smart-import"  element={<ConsoleSmartImport />} />
           <Route path="vehicle-designer" element={<ConsoleVehicleDesigner />} />
           <Route path="navigation"    element={<ConsoleNavigation />} />

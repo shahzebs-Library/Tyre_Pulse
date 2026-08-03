@@ -21,6 +21,7 @@ import { getCostPerM3, getCostPerM3Trend } from '../lib/api/costPerM3'
 import { CPK_PERIODS, DEFAULT_PERIOD, periodBounds, periodLabel } from '../lib/cpkModule'
 import { fmtMoney, fmtM3, fmtCostPerM3 } from '../lib/costPerM3'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
+import PresentationStudio from '../components/present/PresentationStudio'
 
 export default function CostPerM3() {
   const { activeCountry } = useSettings()
@@ -93,6 +94,52 @@ export default function CostPerM3() {
 
   const months = trend?.months || []
   const maxGrand = months.reduce((m, r) => Math.max(m, Number(r.grand_total) || 0), 0)
+
+  // Chart Builder catalog: region and monthly cost / production, presentation-ready.
+  const studioCatalog = useMemo(() => {
+    const out = []
+    if (regions.length) {
+      out.push({
+        key: 'grand_region', label: 'Grand total by region', kind: 'flat', valueKind: 'money',
+        rows: regions.map((r) => ({ label: r.region, value: Number(r.grand_total) || 0 })),
+      })
+      out.push({
+        key: 'cpm3_region', label: 'Cost per M3 by region', kind: 'flat', valueKind: 'money',
+        rows: regions.map((r) => ({ label: r.region, value: Number(r.cost_per_m3) || 0 })),
+      })
+      out.push({
+        key: 'm3_region', label: 'Production M3 by region', kind: 'flat', valueKind: 'count',
+        rows: regions.map((r) => ({ label: r.region, value: Number(r.production_m3) || 0 })),
+      })
+      out.push({
+        key: 'split_region', label: 'Cost source by region (Internal/SCO/SANY)', kind: 'series', valueKind: 'money', allowTotal: true,
+        labels: regions.map((r) => r.region),
+        series: [
+          { name: 'Internal', data: regions.map((r) => Number(r.internal_cost) || 0) },
+          { name: 'SCO', data: regions.map((r) => Number(r.sco_cost) || 0) },
+          { name: 'SANY', data: regions.map((r) => Number(r.sany_cost) || 0) },
+        ],
+      })
+    }
+    if (months.length) {
+      out.push({
+        key: 'grand_month', label: 'Grand total by month', kind: 'series', valueKind: 'money',
+        labels: months.map((r) => r.month),
+        series: [{ name: 'Grand total', data: months.map((r) => Number(r.grand_total) || 0) }],
+      })
+      out.push({
+        key: 'cpm3_month', label: 'Cost per M3 by month', kind: 'series', valueKind: 'money',
+        labels: months.map((r) => r.month),
+        series: [{ name: 'Cost per M3', data: months.map((r) => Number(r.cost_per_m3) || 0) }],
+      })
+      out.push({
+        key: 'm3_month', label: 'Production M3 by month', kind: 'series', valueKind: 'count',
+        labels: months.map((r) => r.month),
+        series: [{ name: 'Production M3', data: months.map((r) => Number(r.production_m3) || 0) }],
+      })
+    }
+    return out
+  }, [regions, months])
 
   function trendRows() {
     return months.map((r) => ({
@@ -263,6 +310,20 @@ export default function CostPerM3() {
           </table>
         </div>
       </div>
+
+      {/* Chart Builder - present cost / production as a chart or PowerPoint */}
+      {!loading && studioCatalog.length > 0 && (
+        <div className="mt-6">
+          <PresentationStudio
+            catalog={studioCatalog}
+            currency={currency}
+            money={(v) => fmtMoney(v, currency)}
+            scope={country}
+            filePrefix="Cost per M3"
+            note="Present cost per M3, cost source and production as a chart, then copy, download a PNG, or export a PowerPoint deck."
+          />
+        </div>
+      )}
     </div>
   )
 }

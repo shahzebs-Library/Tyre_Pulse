@@ -39,6 +39,7 @@ const CpkScenarioStudioPanel = lazy(() => import('../components/cpk/CpkScenarioS
 const CpkDriversPanel = lazy(() => import('../components/cpk/CpkDriversPanel'))
 const KmSourcePanel = lazy(() => import('../components/cpk/KmSourcePanel'))
 const CpkUnitAuditPanel = lazy(() => import('../components/cpk/CpkUnitAuditPanel'))
+const CpkKmIntelligencePanel = lazy(() => import('../components/cpk/CpkKmIntelligencePanel'))
 const CpkReportPanel = lazy(() => import('../components/cpk/CpkReportPanel'))
 
 const MOBILITIES = ['movable', 'non_movable']
@@ -48,6 +49,7 @@ const TABS = [
   { key: 'vehicles', label: 'Per vehicle', icon: Table2 },
   { key: 'km_source', label: 'KM source', icon: Milestone },
   { key: 'units', label: 'Units & why different', icon: Layers },
+  { key: 'km_intel', label: 'Km intelligence', icon: Gauge },
   { key: 'report', label: 'Custom report', icon: FileText },
   { key: 'scenario', label: 'Scenario studio', icon: FlaskConical },
   { key: 'brand', label: 'Brand value', icon: TrendingUp },
@@ -328,6 +330,12 @@ export default function CpkIntelligence() {
       {tab === 'units' && (
         <Suspense fallback={<Loading />}>
           <CpkUnitAuditPanel country={country} from={bounds.from} to={bounds.to} currency={currency} />
+        </Suspense>
+      )}
+
+      {tab === 'km_intel' && (
+        <Suspense fallback={<Loading />}>
+          <CpkKmIntelligencePanel country={country} from={bounds.from} to={bounds.to} currency={currency} />
         </Suspense>
       )}
 

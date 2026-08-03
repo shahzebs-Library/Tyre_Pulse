@@ -34,6 +34,7 @@ vi.mock('../lib/api/fleetCpk', () => ({
   getCpkUnitAudit: () => Promise.resolve({ ok: true, note: 'x', summary: { assets: 2, movable: 1, non_movable: 1, both_present: 1, off_unit_only: 0, used_unit_no_data: 0 }, assets: [
     { asset_no: 'TM634', vehicle_type: 'TR-MIXER', unit: 'km', side: 'movable', km: 187080, hours: 1200, has_km: true, has_hours: true, status: 'both_present' },
   ] }),
+  getCpkKmIntelligence: () => Promise.resolve({ ok: false }),
 }))
 vi.mock('../lib/api/cpkDrivers', () => ({ getCpkDrivers: () => Promise.resolve({ ok: false, windows: null, segments: [] }) }))
 vi.mock('../lib/api/brandSizeCpk', () => ({ getBrandSizeCpk: () => Promise.resolve([]) }))
@@ -51,7 +52,7 @@ describe('CpkIntelligence renders every tab without crashing', () => {
   it('clicking through every tab never throws', async () => {
     renderPage()
     await waitFor(() => expect(screen.getByText(/CPK Intelligence/i)).toBeTruthy())
-    const tabLabels = ['Per vehicle', 'KM source', 'Units & why different', 'Custom report', 'Scenario studio', 'Brand value', 'Why it changed']
+    const tabLabels = ['Per vehicle', 'KM source', 'Units & why different', 'Km intelligence', 'Custom report', 'Scenario studio', 'Brand value', 'Why it changed']
     for (const label of tabLabels) {
       const btn = screen.getAllByRole('button').find((b) => b.textContent?.trim() === label)
       if (!btn) continue

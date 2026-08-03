@@ -108,6 +108,33 @@ export async function getCpkUnitAudit({ country, from, to } = {}) {
 }
 
 /**
+ * KM INTELLIGENCE (Km Intelligence tab): reconcile the km/hours SOURCES per asset
+ * so a user can see and judge CPK km quality. tyre-km (the sum of each tyre's life,
+ * the current CPK basis) is compared against odometer km (the vehicle's actual
+ * distance from the master meter readings, smoothed over all history) - they
+ * measure different things, and the odometer also covers assets with no tyre
+ * changes. Calls the live `get_cpk_km_intelligence(p_country, p_from, p_to)` RPC.
+ *
+ * @param {{ country?:string, from?:string, to?:string }} [opts]
+ * @returns {Promise<object>} the parsed jsonb
+ *   `{ ok, country, from, to, summary:{...}, per_asset:[{...}] }` on success,
+ *   else `{ ok:false }`. Never throws.
+ */
+export async function getCpkKmIntelligence({ country, from, to } = {}) {
+  try {
+    const { data, error } = await supabase.rpc('get_cpk_km_intelligence', {
+      p_country: country && country !== 'All' ? country : 'KSA',
+      p_from: from || null,
+      p_to: to || null,
+    })
+    if (error) return { ok: false }
+    return data || { ok: false }
+  } catch {
+    return { ok: false }
+  }
+}
+
+/**
  * AREA (BRANCH) MAP for the Scenario Studio: which BRANCH (vehicle_fleet.site) each
  * asset belongs to, so the studio can group CPK per real branch (NHC, RED SEA,
  * KSP-TP, ...) and model moving assets between branch cost rates. Calls the live

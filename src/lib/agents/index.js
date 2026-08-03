@@ -9,6 +9,8 @@ export { runAnalystAgent }      from './analystAgent'
 export { runTyreEngineerAgent } from './tyreEngineerAgent'
 export { runQaDataAgent }       from './qaDataAgent'
 export { runPlannerAgent }      from './plannerAgent'
+export { runSafetyAgent }       from './safetyAgent'
+export { runProcurementAgent }  from './procurementAgent'
 
 export async function callAiEdgeFunction(
   systemPrompt,

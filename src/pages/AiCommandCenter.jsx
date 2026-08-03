@@ -9,7 +9,7 @@ import {
   Brain, Send, Trash2, Copy, Check, Download, RefreshCw,
   ChevronDown, ChevronUp, AlertTriangle, Activity, BarChart2,
   ClipboardList, Cpu, Zap, Filter, X, User, Bot, Sparkles,
-  TrendingUp, TrendingDown, Minus, Clock, Database,
+  TrendingUp, TrendingDown, Minus, Clock, Database, ShieldAlert, ShoppingCart,
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
 import { supabase } from '../lib/supabase'
@@ -30,6 +30,8 @@ const QUICK_ACTIONS = [
   { label: 'Cost trend analysis',          query: 'Analyse the monthly cost trend for the last 6 months. Is the fleet getting more or less expensive to maintain?', agent: AGENT_TYPES.ANALYST },
   { label: 'Procurement plan Q3',          query: 'Build a procurement plan for the next quarter. Which brands should I order, in what quantities, and from which sites?', agent: AGENT_TYPES.PLANNER },
   { label: 'Brand performance ranking',    query: 'Rank all tyre brands by CPK, failure rate, and average life. Which brand offers the best value?', agent: AGENT_TYPES.ANALYST },
+  { label: 'Safety & compliance review',   query: 'Review fleet safety: accidents, inspection compliance and open corrective actions. Where is the biggest risk and what should we fix first?', agent: AGENT_TYPES.SAFETY },
+  { label: 'Best value brand to buy',      query: 'Which tyre brand should we buy next based on realized cost per km, life and failure rate? Give a procurement plan.', agent: AGENT_TYPES.PROCUREMENT },
 ]
 
 const AGENT_ICONS = {
@@ -37,6 +39,8 @@ const AGENT_ICONS = {
   [AGENT_TYPES.TYRE_ENGINEER]: Cpu,
   [AGENT_TYPES.QA_DATA]:       Database,
   [AGENT_TYPES.PLANNER]:       ClipboardList,
+  [AGENT_TYPES.SAFETY]:        ShieldAlert,
+  [AGENT_TYPES.PROCUREMENT]:   ShoppingCart,
 }
 
 const TREND_ICON = (trend) => {
@@ -402,6 +406,7 @@ export default function AiCommandCenter() {
   const [records, setRecords]             = useState([])
   const [inspections, setInspections]     = useState([])
   const [actions, setActions]             = useState([])
+  const [accidents, setAccidents]         = useState([])
   const [assets, setAssets]               = useState([])
   const [selectedAsset, setSelectedAsset] = useState('')
   const [selectedSite, setSelectedSite]   = useState('')
@@ -427,7 +432,7 @@ export default function AiCommandCenter() {
       cutoff.setMonth(cutoff.getMonth() - 3)
       const cutoffStr = cutoff.toISOString().split('T')[0]
 
-      const [recordsRes, inspRes, actionsRes, assetsRes] = await Promise.all([
+      const [recordsRes, inspRes, actionsRes, accidentsRes, assetsRes] = await Promise.all([
         supabase
           .from('tyre_changes')
           .select('asset_no, tyre_serial, brand, position, km_at_fitment, km_at_removal, cost_per_tyre, issue_date, removal_date, risk_level, category, site, removal_reason, qty')
@@ -449,6 +454,12 @@ export default function AiCommandCenter() {
           .limit(100),
 
         supabase
+          .from('accidents')
+          .select('asset_no, incident_date, severity, status, site, description')
+          .order('incident_date', { ascending: false })
+          .limit(200),
+
+        supabase
           .from('fleet_master')
           .select('asset_no, vehicle_type, site')
           .order('asset_no')
@@ -458,11 +469,13 @@ export default function AiCommandCenter() {
       const recs = recordsRes.data ?? []
       const insp = inspRes.data ?? []
       const acts = actionsRes.data ?? []
+      const accs = accidentsRes.data ?? []
       const assetList = assetsRes.data ?? []
 
       setRecords(recs)
       setInspections(insp)
       setActions(acts)
+      setAccidents(accs)
       setAssets(assetList)
 
       const uniqueSites = [...new Set([...recs.map(r => r.site), ...assetList.map(a => a.site)].filter(Boolean))].sort()
@@ -499,14 +512,18 @@ export default function AiCommandCenter() {
     const filteredInspections = selectedSite
       ? inspections.filter(i => i.site === selectedSite)
       : inspections
+    const filteredAccidents = selectedSite
+      ? accidents.filter(a => a.site === selectedSite)
+      : accidents
     return {
       records: filteredRecords,
       inspections: filteredInspections,
       actions,
+      accidents: filteredAccidents,
       assetNo: selectedAsset || null,
       site: selectedSite || null,
     }
-  }, [records, inspections, actions, selectedAsset, selectedSite])
+  }, [records, inspections, actions, accidents, selectedAsset, selectedSite])
 
   // ── Send message ─────────────────────────────────────────────────────────────
 

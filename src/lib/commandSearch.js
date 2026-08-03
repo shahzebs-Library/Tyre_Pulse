@@ -64,7 +64,7 @@ export const NAV_COMMANDS = [
   { id: 'tyre-specs',     label: 'Tyre Specifications',  path: '/tyre-specs',   icon: 'FileText',   adminOnly: true },
   { id: 'rotation',       label: 'Rotation Schedule',    path: '/rotation',     icon: 'RefreshCcw', adminOnly: true },
   { id: 'root-cause',     label: 'Root Cause Engine',    path: '/root-cause',   icon: 'Search',     adminOnly: true, moduleKey: 'root_cause_engine' },
-  { id: 'ai',             label: 'Smart Analytics',      path: '/ai',           icon: 'Cpu',        adminOnly: true, moduleKey: 'ai_analytics' },
+  { id: 'ai',             label: 'Smart Analytics',      path: '/ai-command-center', icon: 'Cpu',    adminOnly: true, moduleKey: 'ai_command_center' },
   // Workshop & Downtime
   { id: 'work-orders',    label: 'Work Orders',          path: '/work-orders',  icon: 'Wrench' },
   { id: 'gate-pass',      label: 'Gate Pass',            path: '/gate-pass',    icon: 'ClipboardCheck' },

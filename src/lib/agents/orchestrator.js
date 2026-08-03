@@ -16,6 +16,7 @@
 import { classifyQueryMulti, AGENT_LABELS, AGENT_TYPES } from '../aiRouter'
 import {
   runAnalystAgent, runTyreEngineerAgent, runQaDataAgent, runPlannerAgent,
+  runSafetyAgent, runProcurementAgent,
   callAiEdgeFunction,
 } from './index'
 
@@ -25,6 +26,8 @@ export const AGENT_RUNNERS = {
   [AGENT_TYPES.TYRE_ENGINEER]: runTyreEngineerAgent,
   [AGENT_TYPES.QA_DATA]:       runQaDataAgent,
   [AGENT_TYPES.PLANNER]:       runPlannerAgent,
+  [AGENT_TYPES.SAFETY]:        runSafetyAgent,
+  [AGENT_TYPES.PROCUREMENT]:   runProcurementAgent,
 }
 
 const SYNTHESIS_SYSTEM =

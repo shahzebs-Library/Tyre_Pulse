@@ -204,7 +204,6 @@ const Anomalies              = lazy(() => import('./pages/Anomalies'))
 const CountryComparison      = lazy(() => import('./pages/CountryComparison'))
 const VehicleHistory         = lazy(() => import('./pages/VehicleHistory'))
 const UserManagement         = lazy(() => import('./pages/UserManagement'))
-const AiAnalytics            = lazy(() => import('./pages/AiAnalytics'))
 const FleetMaster            = lazy(() => import('./pages/FleetMaster'))
 const Vehicle360             = lazy(() => import('./pages/Vehicle360'))
 const AuditTrail             = lazy(() => import('./pages/AuditTrail'))
@@ -556,7 +555,8 @@ function MainApp() {
                       <Route path="/erp-sync"                element={<Safe><FlagRoute flag="erp_sync"><ModuleRoute moduleKey="erp_sync"><ErpSync /></ModuleRoute></FlagRoute></Safe>} />
                       <Route path="/anomalies"               element={<Safe><ModuleRoute moduleKey="tyre_records"><Anomalies /></ModuleRoute></Safe>} />
                       <Route path="/vehicle-history"         element={<Safe><ModuleRoute moduleKey="fleet_master"><VehicleHistory /></ModuleRoute></Safe>} />
-                      <Route path="/ai"                      element={<Safe><FlagRoute flag="ai_tools"><ModuleRoute moduleKey="ai_analytics"><AiAnalytics /></ModuleRoute></FlagRoute></Safe>} />
+                      {/* Smart Analytics merged into the theme-aware AI Command Center (fixes the black reply background). */}
+                      <Route path="/ai"                      element={<Navigate to="/ai-command-center" replace />} />
                       {/* ── Data ── */}
                       <Route path="/cleaning"    element={<Safe><ModuleRoute moduleKey="data_cleaning"><DataCleaning /></ModuleRoute></Safe>} />
                       <Route path="/data-reconciliation" element={<Safe><RoleRoute allowed={['Admin','Manager','Director']}><DataReconciliation /></RoleRoute></Safe>} />

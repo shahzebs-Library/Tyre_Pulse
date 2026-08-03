@@ -5,6 +5,7 @@ import {
   DollarSign, TrendingUp, Boxes, Archive, Table2, Activity,
   UploadCloud, History, Wand2, Layers,
   Database, AlertTriangle, RefreshCw,
+  LayoutList, Scale, ClipboardList, GitBranch, BellRing, Rocket, Sparkles,
 } from 'lucide-react'
 import { getControlCenterSummary, openIssueCount } from '../../lib/api/controlCenter'
 import { openConsoleRoute, isConsoleRoute } from '../lib/openRoute'
@@ -41,6 +42,32 @@ const GROUPS = [
         desc: 'Detect and remove re-inserted rows, with a full undo archive.' },
       { icon: Brain, title: 'Teach the Classifier', route: '/console/classification-learning',
         desc: 'Review corrections so the expense classifier learns from your edits.' },
+    ],
+  },
+  {
+    key: 'lineage',
+    title: 'Data trust & lineage',
+    subtitle: 'Governed metric definitions, quality checks and where every number comes from.',
+    icon: ShieldCheck,
+    cards: [
+      { icon: Sparkles, title: 'Data Learning', route: '/console/data-learning',
+        desc: 'Confirm a fact once and fix current plus future data across the fleet.' },
+      { icon: LayoutList, title: 'Metric Catalogue', route: '/console/metric-catalogue',
+        desc: 'Every governed KPI: formula, owner, source and Explain This Number.' },
+      { icon: ShieldCheck, title: 'Data Quality', route: '/console/data-quality',
+        desc: 'Run the registered checks and see failing rows worst-first.' },
+      { icon: Scale, title: 'Reconciliation', route: '/console/reconciliation',
+        desc: 'Expected vs actual across cost, fleet and production, with the gap.' },
+      { icon: Activity, title: 'Pipeline Monitor', route: '/console/pipeline-monitor',
+        desc: 'Import jobs and integration events - what ran and what failed.' },
+      { icon: ClipboardList, title: 'Correction Center', route: '/console/correction-center',
+        desc: 'Governed correction cases from reported through to reconciled.' },
+      { icon: GitBranch, title: 'Lineage Explorer', route: '/console/lineage',
+        desc: 'Visualize where a number comes from and what a change would affect.' },
+      { icon: BellRing, title: 'Trust Alerts', route: '/console/trust-alerts',
+        desc: 'Quality and reconciliation breaches raised for acknowledgement.' },
+      { icon: Rocket, title: 'Releases', route: '/console/releases',
+        desc: 'Recorded releases and the data assets each one impacts.' },
     ],
   },
   {

@@ -23,12 +23,88 @@ import { listDataAssets, getLineageGraph, getDownstreamImpact } from '../../lib/
 import {
   shapeGraph, shapeImpact, assetKindLabel, assetShortName, ASSET_KIND_TONE,
 } from '../../lib/lineageOps'
+import EChart from '../../components/charts/EChart'
 import { toUserMessage } from '../../lib/safeError'
 
 const nf = new Intl.NumberFormat('en-US')
 
 const KIND_ICON = { table: Database, metric: BarChart3, dashboard: LayoutDashboard }
 function kindIcon(kind) { return KIND_ICON[kind] || Database }
+
+/** Node colour by kind, on the dark console surface. */
+const NODE_COLOR = { table: '#38bdf8', metric: '#f59e0b', dashboard: '#34d399' }
+const CENTER_COLOR = '#fb923c'
+const GRAPH_CAP = 16 // per side, to keep the diagram legible
+
+/**
+ * Build an ECharts node-link option from the shaped lineage graph: upstream in
+ * the left column, the selected asset in the centre, downstream on the right,
+ * arrows pointing the way a change propagates. Positions are fixed (layout
+ * 'none') so the three columns read left-to-right; the user can pan/zoom.
+ */
+function buildLineageOption(asset, graph, impact) {
+  const upstream = (graph?.upstream || []).slice(0, GRAPH_CAP)
+  const downSource = impact?.impacted?.length ? impact.impacted : (graph?.downstream || [])
+  const downstream = downSource.slice(0, GRAPH_CAP)
+  const centerId = asset.asset_id
+  const centerName = asset.name || assetShortName(asset.asset_id)
+
+  const colGap = 340
+  const rowGap = 58
+  const nodes = []
+  const seen = new Set()
+  const add = (id, name, kind, col, idx, count, isCenter) => {
+    if (!id || seen.has(id)) return
+    seen.add(id)
+    nodes.push({
+      id,
+      name: name || assetShortName(id),
+      x: col * colGap,
+      y: (idx - (count - 1) / 2) * rowGap,
+      symbolSize: isCenter ? 46 : 28,
+      itemStyle: { color: isCenter ? CENTER_COLOR : (NODE_COLOR[kind] || '#94a3b8') },
+      label: { color: '#e5e7eb', fontSize: isCenter ? 12 : 10 },
+      value: assetKindLabel(kind),
+    })
+  }
+  upstream.forEach((n, i) => add(n.assetId, n.name, n.kind, 0, i, upstream.length || 1, false))
+  add(centerId, centerName, asset.kind, 1, 0, 1, true)
+  downstream.forEach((n, i) => add(n.assetId, n.name, n.kind, 2, i, downstream.length || 1, false))
+
+  const drawn = new Set(nodes.map((n) => n.id))
+  const links = []
+  const linkSeen = new Set()
+  const link = (from, to) => {
+    if (!drawn.has(from) || !drawn.has(to)) return
+    const k = `${from}->${to}`
+    if (linkSeen.has(k)) return
+    linkSeen.add(k)
+    links.push({ source: from, target: to })
+  }
+  for (const e of (graph?.edges || [])) link(e.from, e.to)
+  // Guarantee the centre is connected even when an edge row is absent.
+  upstream.forEach((n) => link(n.assetId, centerId))
+  downstream.forEach((n) => link(centerId, n.assetId))
+
+  return {
+    backgroundColor: 'transparent',
+    animationDuration: 300,
+    tooltip: { trigger: 'item', formatter: (p) => (p.dataType === 'node' ? `${p.name}<br/>${p.value || ''}` : '') },
+    series: [{
+      type: 'graph',
+      layout: 'none',
+      roam: true,
+      draggable: true,
+      edgeSymbol: ['none', 'arrow'],
+      edgeSymbolSize: 9,
+      label: { show: true, position: 'bottom', formatter: '{b}' },
+      lineStyle: { color: '#475569', width: 1.4, curveness: 0.06, opacity: 0.85 },
+      emphasis: { focus: 'adjacency', lineStyle: { width: 2.6, color: '#fb923c' } },
+      data: nodes,
+      links,
+    }],
+  }
+}
 
 /** The engine's ASSET_KIND_TONE vocabulary already lines up with the kit's
  *  Badge tones (quiet/accent/good/info/warning); fall back to quiet. */
@@ -212,6 +288,12 @@ function LineageDetail({ asset, graph, impact, showEdges, onToggleEdges }) {
   }, [graph])
 
   const nothing = upstream.length === 0 && downstream.length === 0 && impacted.length === 0
+  const lineageOption = useMemo(
+    () => (nothing ? null : buildLineageOption(asset, graph, impact)),
+    [nothing, asset, graph, impact],
+  )
+  const capped = upstream.length > GRAPH_CAP
+    || (impacted.length ? impacted.length : downstream.length) > GRAPH_CAP
 
   return (
     <div className="space-y-4">
@@ -253,6 +335,21 @@ function LineageDetail({ asset, graph, impact, showEdges, onToggleEdges }) {
         />
       ) : (
         <>
+          {/* visualization */}
+          <div>
+            <div className="flex items-center gap-2 mb-2">
+              <GitBranch size={14} className="text-orange-400" />
+              <h4 className="text-sm font-semibold text-gray-200">Visualization</h4>
+            </div>
+            <div className="rounded-lg border border-gray-800 bg-gray-950/40 p-2">
+              <EChart option={lineageOption} style={{ height: 360 }} ariaLabel="Lineage diagram" />
+            </div>
+            <p className="text-[11px] text-gray-500 mt-1">
+              Sources on the left feed this asset; arrows point to what a change affects. Drag to pan, scroll to zoom.
+              {capped ? ` Showing the first ${GRAPH_CAP} on each side - the tables below list every one.` : ''}
+            </p>
+          </div>
+
           {/* upstream */}
           <div>
             <div className="flex items-center gap-2 mb-2">

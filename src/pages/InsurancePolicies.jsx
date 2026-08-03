@@ -14,6 +14,7 @@ import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import {
   Shield, FileText, FileSpreadsheet, AlertOctagon, Clock, Info,
   Plus, Pencil, Trash2, X, RefreshCw, Search, Calculator, Save, Upload,
+  Mail, ClipboardList, Copy, Download, Check as CheckIcon,
 } from 'lucide-react'
 import { toUserMessage } from '../lib/safeError'
 import PageHeader from '../components/ui/PageHeader'
@@ -27,7 +28,11 @@ import {
   assessClaim, totalLossAssessment,
   POLICY_TYPE_LABELS, CONDITION_CATEGORY_LABELS, num,
 } from '../lib/insuranceKnowledge'
-import { exportToExcel, exportToPdf, reportFileName } from '../lib/exportUtils'
+import {
+  buildCorrespondence, documentToText, documentMailto,
+  documentKindLabel,
+} from '../lib/insuranceCorrespondence'
+import { exportToExcel, exportToPdf, exportDocumentPdf, reportFileName } from '../lib/exportUtils'
 
 // ── small presentational helpers ─────────────────────────────────────────────
 function money(v, ccy) {
@@ -88,6 +93,14 @@ export default function InsurancePolicies() {
   // total-loss state (defaults seeded from the selected policy)
   const [repairCost, setRepairCost] = useState('')
   const [insuredValue, setInsuredValue] = useState('')
+
+  // correspondence / document generator state
+  const [caseInfo, setCaseInfo] = useState({
+    reference: '', incidentDate: '', location: '', assetNo: '', plateNo: '',
+    vehicleDesc: '', driverName: '', workshop: '', senderName: '',
+  })
+  const [selectedDocKey, setSelectedDocKey] = useState('claim_submission')
+  const [copied, setCopied] = useState(false)
 
   // modals
   const [policyModal, setPolicyModal] = useState(null)   // { mode:'create'|'edit', row }
@@ -199,6 +212,67 @@ export default function InsurancePolicies() {
     insuredValue,
     thresholdPct: detail?.total_loss_threshold_pct,
   }), [repairCost, insuredValue, detail])
+
+  // ── correspondence & documents ────────────────────────────────────────────────
+  const correspondence = useMemo(() => {
+    if (!detail) return { documents: [], recommendedKeys: [] }
+    return buildCorrespondence({
+      policy: detail,
+      findings,
+      ctx,
+      caseInfo: {
+        ...caseInfo,
+        currency: ccy,
+        insuredName: detail.insured_name,
+        company: detail.insured_name,
+        claimAmount: repairCost,
+      },
+      repairCost,
+      insuredValue,
+    })
+  }, [detail, findings, ctx, caseInfo, ccy, repairCost, insuredValue])
+
+  const selectedDoc = useMemo(
+    () => correspondence.documents.find((d) => d.key === selectedDocKey) || correspondence.documents[0] || null,
+    [correspondence, selectedDocKey],
+  )
+  const selectedDocText = useMemo(() => (selectedDoc ? documentToText(selectedDoc) : ''), [selectedDoc])
+
+  async function copyDoc() {
+    if (!selectedDocText) return
+    try {
+      await navigator.clipboard.writeText(selectedDocText)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 1800)
+    } catch {
+      setError('Could not copy to the clipboard. Select the text and copy manually.')
+    }
+  }
+  function downloadDocText() {
+    if (!selectedDoc) return
+    const blob = new Blob([selectedDocText], { type: 'text/plain;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `${reportFileName(selectedDoc.title, detail?.policy_no || '')}.txt`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+  async function downloadDocPdf() {
+    if (!selectedDoc) return
+    try {
+      await exportDocumentPdf({
+        title: selectedDoc.title,
+        subject: selectedDoc.subject,
+        to: selectedDoc.to,
+        sections: selectedDoc.sections,
+        filename: reportFileName(selectedDoc.title, detail?.policy_no || ''),
+        company: detail?.insured_name || '',
+      })
+    } catch (err) {
+      setError(toUserMessage(err))
+    }
+  }
 
   // ── exports ─────────────────────────────────────────────────────────────────
   function exportRows() {
@@ -583,6 +657,81 @@ export default function InsurancePolicies() {
                     {totalLoss.isTotalLoss == null ? totalLoss.note : (totalLoss.isTotalLoss ? `Constructive total loss. ${totalLoss.note}` : `Not a total loss. ${totalLoss.note}`)}
                   </div>
                 </div>
+
+                {/* correspondence & documents */}
+                <div className="rounded-xl border border-slate-800 bg-slate-900/40 p-5">
+                  <div className="mb-1 flex items-center gap-2">
+                    <Mail size={16} className="text-emerald-300" />
+                    <h3 className="text-sm font-semibold text-slate-200">Correspondence &amp; documents</h3>
+                  </div>
+                  <p className="mb-4 text-xs text-slate-500">
+                    Generates insurer emails, notices and checklists from this scenario. Cited reasons come from the case facts above. Fill the case details, pick a document, then copy or download it. Nothing is emailed automatically.
+                  </p>
+
+                  {/* case detail fields */}
+                  <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                    <CaseText label="Claim reference" value={caseInfo.reference} onChange={(v) => setCaseInfo((s) => ({ ...s, reference: v }))} placeholder="e.g. CLM-2026-001" />
+                    <CaseText label="Incident date" type="date" value={caseInfo.incidentDate} onChange={(v) => setCaseInfo((s) => ({ ...s, incidentDate: v }))} />
+                    <CaseText label="Location" value={caseInfo.location} onChange={(v) => setCaseInfo((s) => ({ ...s, location: v }))} placeholder="site / road" />
+                    <CaseText label="Asset number" value={caseInfo.assetNo} onChange={(v) => setCaseInfo((s) => ({ ...s, assetNo: v }))} placeholder="e.g. TM634" />
+                    <CaseText label="Plate number" value={caseInfo.plateNo} onChange={(v) => setCaseInfo((s) => ({ ...s, plateNo: v }))} />
+                    <CaseText label="Vehicle (make / model)" value={caseInfo.vehicleDesc} onChange={(v) => setCaseInfo((s) => ({ ...s, vehicleDesc: v }))} />
+                    <CaseText label="Driver name" value={caseInfo.driverName} onChange={(v) => setCaseInfo((s) => ({ ...s, driverName: v }))} />
+                    <CaseText label="Workshop" value={caseInfo.workshop} onChange={(v) => setCaseInfo((s) => ({ ...s, workshop: v }))} />
+                    <CaseText label="Prepared by" value={caseInfo.senderName} onChange={(v) => setCaseInfo((s) => ({ ...s, senderName: v }))} placeholder="your name" />
+                  </div>
+
+                  {/* document picker */}
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    {correspondence.documents.map((d) => {
+                      const active = selectedDoc && d.key === selectedDoc.key
+                      const rec = correspondence.recommendedKeys.includes(d.key)
+                      return (
+                        <button
+                          key={d.key}
+                          type="button"
+                          onClick={() => setSelectedDocKey(d.key)}
+                          title={d.description}
+                          className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition ${active ? 'border-emerald-500 bg-emerald-500/15 text-emerald-200' : 'border-slate-700 bg-slate-950/40 text-slate-300 hover:border-slate-500'}`}
+                        >
+                          {d.kind === 'email' ? <Mail size={13} /> : d.kind === 'checklist' ? <ClipboardList size={13} /> : <FileText size={13} />}
+                          {d.title}
+                          {rec && <span className="ml-1 rounded-full bg-emerald-500/20 px-1.5 py-0.5 text-[10px] text-emerald-300">Suggested</span>}
+                        </button>
+                      )
+                    })}
+                  </div>
+
+                  {/* preview + actions */}
+                  {selectedDoc && (
+                    <div className="mt-4">
+                      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                        <span className="inline-flex items-center gap-2 text-xs text-slate-400">
+                          <span className="rounded-full border border-slate-700 bg-slate-950/40 px-2 py-0.5">{documentKindLabel(selectedDoc.kind)}</span>
+                          <span className="text-slate-500">{selectedDoc.description}</span>
+                        </span>
+                        <div className="flex flex-wrap gap-2">
+                          <button type="button" onClick={copyDoc} className="inline-flex items-center gap-1 rounded-lg border border-slate-700 px-2.5 py-1.5 text-xs text-slate-200 hover:bg-slate-800">
+                            {copied ? <CheckIcon size={14} className="text-emerald-300" /> : <Copy size={14} />} {copied ? 'Copied' : 'Copy'}
+                          </button>
+                          <button type="button" onClick={downloadDocPdf} className="inline-flex items-center gap-1 rounded-lg border border-slate-700 px-2.5 py-1.5 text-xs text-slate-200 hover:bg-slate-800">
+                            <FileText size={14} /> PDF
+                          </button>
+                          <button type="button" onClick={downloadDocText} className="inline-flex items-center gap-1 rounded-lg border border-slate-700 px-2.5 py-1.5 text-xs text-slate-200 hover:bg-slate-800">
+                            <Download size={14} /> Text
+                          </button>
+                          {selectedDoc.kind === 'email' && (
+                            <a href={documentMailto(selectedDoc)} className="inline-flex items-center gap-1 rounded-lg border border-emerald-500/40 px-2.5 py-1.5 text-xs text-emerald-200 hover:bg-emerald-500/10">
+                              <Mail size={14} /> Open in email
+                            </a>
+                          )}
+                        </div>
+                      </div>
+                      <pre className="max-h-96 overflow-auto whitespace-pre-wrap rounded-lg border border-slate-800 bg-slate-950/60 p-4 font-sans text-sm leading-relaxed text-slate-200">{selectedDocText}</pre>
+                      <p className="mt-2 text-xs text-slate-500">Fields shown as {'[to be completed]'} need a value above or on the policy. Every currency figure stays in {ccy}.</p>
+                    </div>
+                  )}
+                </div>
               </>
             )}
           </div>
@@ -636,6 +785,21 @@ function NumField({ label, value, onChange, placeholder }) {
       <span className="mb-1 block text-xs uppercase tracking-wide text-slate-500">{label}</span>
       <input
         type="number"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        className="w-full rounded-lg border border-slate-700 bg-slate-900/50 px-3 py-2 text-slate-100 placeholder:text-slate-500 focus:border-emerald-500 focus:outline-none"
+      />
+    </label>
+  )
+}
+
+function CaseText({ label, value, onChange, placeholder, type = 'text' }) {
+  return (
+    <label className="block text-sm">
+      <span className="mb-1 block text-xs uppercase tracking-wide text-slate-500">{label}</span>
+      <input
+        type={type}
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}

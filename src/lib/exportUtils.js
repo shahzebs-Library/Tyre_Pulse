@@ -997,6 +997,75 @@ export async function exportToPdf(rows, columns, title, filename = 'report', ori
   doc.save(`${filename}.pdf`)
 }
 
+// ── Single-document (letter / email / checklist) PDF ──────────────────────────
+/**
+ * Render a plain, text-first document (a letter, email or checklist) as a tidy
+ * A4 PDF. Reused by the Insurance correspondence generator. Sections carry an
+ * optional heading, an array of body paragraph lines, and/or a checklist array
+ * (each item rendered with an empty tick box). ASCII only; wraps and paginates.
+ *
+ * @param {object} d
+ * @param {string} d.title    document title (bold header).
+ * @param {string} [d.subject] subject line printed under the title.
+ * @param {string} [d.to]      recipient line.
+ * @param {Array}  d.sections  [{ heading?, body?: string[], checklist?: string[] }]
+ * @param {string} d.filename  download filename (no extension).
+ * @param {string} [d.company] company name for the footer.
+ */
+export async function exportDocumentPdf({ title, subject, to, sections = [], filename = 'document', company = '' } = {}) {
+  guardExport([])
+  await ensurePdf()
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
+  const pw = doc.internal.pageSize.width
+  const ph = doc.internal.pageSize.height
+  const mx = 18
+  const cw = pw - mx * 2
+  let y = 22
+
+  const ensureRoom = (needed) => {
+    if (y + needed > ph - 18) { doc.addPage(); y = 22 }
+  }
+  const writeLines = (str, { size = 10.5, style = 'normal', color = [30, 41, 59], gap = 5.4, indent = 0 } = {}) => {
+    doc.setFont('helvetica', style)
+    doc.setFontSize(size)
+    doc.setTextColor(color[0], color[1], color[2])
+    const lines = doc.splitTextToSize(String(str == null ? '' : str), cw - indent)
+    for (const ln of lines) { ensureRoom(gap); doc.text(ln, mx + indent, y); y += gap }
+  }
+
+  // header
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(15); doc.setTextColor(15, 23, 42)
+  doc.text(String(title || 'Document'), mx, y); y += 8
+  doc.setDrawColor(203, 213, 225); doc.setLineWidth(0.4); doc.line(mx, y - 2, pw - mx, y - 2); y += 3
+  if (subject) writeLines(`Subject: ${subject}`, { style: 'bold', size: 11, color: [15, 23, 42], gap: 6 })
+  if (to) writeLines(`To: ${to}`, { size: 10.5, color: [71, 85, 105], gap: 6 })
+  if (subject || to) y += 2
+
+  for (const s of sections || []) {
+    if (s.heading) { y += 2; writeLines(s.heading, { style: 'bold', size: 11, color: [15, 23, 42], gap: 6 }) }
+    for (const b of s.body || []) writeLines(b, { gap: 5.4 })
+    for (const item of s.checklist || []) {
+      const lines = doc.splitTextToSize(String(item), cw - 8)
+      ensureRoom(5.4 * lines.length)
+      doc.setDrawColor(100, 116, 139); doc.setLineWidth(0.3)
+      doc.rect(mx, y - 3.2, 3.2, 3.2)
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(10.5); doc.setTextColor(30, 41, 59)
+      lines.forEach((ln, i) => { if (i > 0) ensureRoom(5.4); doc.text(ln, mx + 6, y); y += 5.4 })
+    }
+    y += 2.5
+  }
+
+  // footer
+  const pages = doc.internal.getNumberOfPages()
+  for (let p = 1; p <= pages; p++) {
+    doc.setPage(p)
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(148, 163, 184)
+    const foot = [company, nowStr(), `Page ${p} of ${pages}`].filter(Boolean).join('  |  ')
+    doc.text(foot, mx, ph - 10)
+  }
+  doc.save(`${filename}.pdf`)
+}
+
 // ── Inspection Detail PDF - captures DOM SVG if provided ──────────────────────
 /**
  * @param {Object}  row          - inspection record

@@ -104,9 +104,10 @@ export default function LedgerPage({
       } else {
         const wb = await parseWorkbook(file)
         // Use the sheet with the most rows (some exports carry a title/summary sheet first).
+        // parseWorkbook returns each sheet's records under `rows` (not `dataRows`).
         const sheets = wb?.sheets || []
-        const sheet = sheets.reduce((best, s) => ((s?.dataRows?.length || 0) > (best?.dataRows?.length || 0) ? s : best), sheets[0])
-        dataRows = sheet?.dataRows || []
+        const sheet = sheets.reduce((best, s) => ((s?.rows?.length || 0) > (best?.rows?.length || 0) ? s : best), sheets[0])
+        dataRows = sheet?.rows || []
       }
       if (!dataRows.length) {
         setError(`No data rows found in ${file.name}. Check the header row and that the file is .xlsx / .csv / .pdf.`)
@@ -114,7 +115,16 @@ export default function LedgerPage({
       }
       const mapped = mapImportRows(kind, dataRows).map((r) => ({ ...r, country: r.country || country }))
       if (!mapped.length) {
-        setError(`Read ${dataRows.length} rows but none matched the expected columns. Expected: ${tpl?.headers?.join(', ') || 'see below'}.`)
+        // A Ramco parts/expense grid ("griddetails") is an ERP expense file, not a
+        // Cost/M3 ledger - steer it to the Data Intake Center rather than a bare
+        // column-mismatch error.
+        const looksLikeGrid = /grid\s*detail|parts?\s*consumption|trye|item\s*desc/i.test(file.name)
+          || Object.keys(dataRows[0] || {}).join(' ').toLowerCase().includes('trye')
+        setError(
+          looksLikeGrid
+            ? `${file.name} looks like an ERP expense/parts grid. Upload it in the Data Intake Center (ERP Import), not here. This page only takes ${title} files (columns: ${tpl?.headers?.join(', ') || 'see below'}).`
+            : `Read ${dataRows.length} rows but none matched the expected columns. Expected: ${tpl?.headers?.join(', ') || 'see below'}.`,
+        )
         return
       }
       const res = await service.import(mapped, (p) => {

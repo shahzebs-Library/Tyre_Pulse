@@ -1,0 +1,12 @@
+-- V461 - country ABAC on the Cost/M3 DEFINER RPCs.
+-- STATUS: APPLIED LIVE (jhssdmeruxtrlqnwfksc) + verified (all 4 compile, return
+-- no_org/unauthorized in a no-user session).
+-- get_cost_per_m3 / get_cost_per_m3_trend / get_production_rejections /
+-- get_maint_tyre_split bypass RLS (DEFINER) and accepted any p_country, so a
+-- country-restricted user (V226/V269 ABAC) could pass a country they cannot see
+-- and read its aggregates. Added right after the org check:
+--   if p_country is not null and not public.app_can_see_country(p_country) then
+--     return jsonb_build_object('ok', false, 'reason', 'forbidden'); end if;
+-- null/'All' unchanged (consistent with the whole cost-RPC family; the client
+-- only ever passes the user's active country). Bodies otherwise byte-identical.
+-- REVERSIBLE: re-apply the pre-V461 bodies (remove the two guard lines from each).

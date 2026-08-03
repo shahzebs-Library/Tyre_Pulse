@@ -1,0 +1,7 @@
+-- V460 - get_diagnostics_feed(p_country): single-call Control Center aggregator.
+-- STATUS: APPLIED LIVE (jhssdmeruxtrlqnwfksc) + verified.
+-- Composes the two existing super-admin RPCs (get_control_center_summary +
+-- get_figure_lineage default tyre_cost) so the Control Center initial load is ONE
+-- round trip. SECURITY DEFINER STABLE, super-admin gated in-body, execute revoked
+-- from PUBLIC, granted authenticated. Additive - changes no existing function.
+-- REVERSIBLE: drop function public.get_diagnostics_feed(text);
